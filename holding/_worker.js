@@ -308,9 +308,27 @@ async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
     }
   } catch {}
 
-  // bail if neither chunk of data is available — the static HTML's inline
-  // JS will pick up the slack on the client.
-  if (!tracksPayload?.tracks?.length && !photos) return res;
+  // visitor counter — read current, increment, fire-and-forget write.
+  // honest classic-90s-counter behavior: counts every homepage GET, no
+  // session dedup, no cookie. concurrent reads race on the increment so
+  // under heavy contention the count drifts slightly low, which is fine
+  // for a decorative footer pill. seed externally if you want a non-zero
+  // starting point:
+  //   wrangler kv key put --namespace-id="<id>" "counter:visits" 42 --remote
+  let counterStr = null;
+  if (env.RN_KV) {
+    try {
+      const cur  = parseInt(await env.RN_KV.get("counter:visits") || "0", 10) || 0;
+      const next = cur + 1;
+      counterStr = String(next).padStart(6, "0");
+      ctx.waitUntil(env.RN_KV.put("counter:visits", String(next)));
+    } catch {}
+  }
+
+  // bail if no dynamic data is available — the static HTML's inline
+  // JS will pick up the slack on the client (and the hardcoded "000042"
+  // stays in the footer as a graceful fallback).
+  if (!tracksPayload?.tracks?.length && !photos && !counterStr) return res;
 
   const rewriter = new HTMLRewriter();
 
@@ -343,8 +361,8 @@ async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
   // visit. response is uncached at the edge (worker cache-control: no-store
   // by default), so per-request randomness reaches every visitor. the
   // emitted HTML mirrors what the client-side fill JS would produce —
-  // <picture> with WebP source + JPG fallback, data-* attrs for the
-  // hover tooltip, target=_blank + rel=noopener on the anchor.
+  // <picture> with AVIF (primary) + WebP (middle) + JPG fallback, data-*
+  // attrs for the hover tooltip, target=_blank + rel=noopener on the anchor.
   if (photos) {
     const pick = pickRandom(photos, 9);
     const slotsHtml = pick.map(p => {
@@ -357,6 +375,7 @@ async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
              ` target="_blank" rel="noopener"` +
              ` data-full="${escAttr(full)}"${sizeAttr}${upAttr}>` +
         `<picture>` +
+          (p.thumb_avif ? `<source type="image/avif" srcset="/images/${escAttr(p.thumb_avif)}">` : "") +
           (p.thumb_webp ? `<source type="image/webp" srcset="/images/${escAttr(p.thumb_webp)}">` : "") +
           `<img alt="" loading="lazy" decoding="async" src="/images/${escAttr(p.thumb_jpg)}">` +
         `</picture>` +
@@ -364,6 +383,13 @@ async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
     }).join("");
     rewriter.on("section.photos", {
       element(el) { el.setInnerContent(slotsHtml, { html: true }); },
+    });
+  }
+
+  // ── visitor counter → footer .counter pill ──────────────────────
+  if (counterStr) {
+    rewriter.on(".counter", {
+      element(el) { el.setInnerContent(counterStr); },
     });
   }
 
@@ -530,11 +556,13 @@ const R2_EXT_PRIORITY = {
   heif: 1, heic: 1, hif: 1,
 };
 
-// bump to bust all `/images/<stem>.jpg` (and .avif) edge-cache entries at
+// bump to bust all `/images/<stem>.{avif,webp,jpg}` edge-cache entries at
 // once. used as a `?v=<N>` suffix in the manifest's thumb URLs. Cloudflare
 // includes the query string in the cache key by default, so changing this
 // produces a fresh cache lookup that doesn't see prior stale 404s.
-const THUMB_VERSION = 8;
+// (bumped to 9 when switching the <picture> primary back to AVIF — fresh
+// URLs guarantee we don't inherit any cached 404s from the WebP era.)
+const THUMB_VERSION = 9;
 
 async function getImagesManifest(env, ctx) {
   let manifest = null;
@@ -563,13 +591,20 @@ async function getImagesManifest(env, ctx) {
     // the query in the cache key by default). incrementing THUMB_VERSION
     // is the supported way to invalidate all thumbnail caches at once.
     //
-    // dual-source: thumb_webp is the <picture> primary (≈64% smaller
-    // than JPG at equivalent visual quality); thumb_jpg is the universal
-    // fallback for any browser that doesn't advertise image/webp support.
+    // tri-source: thumb_avif is the <picture> primary (typically 20-40%
+    // smaller than WebP at equivalent visual quality); thumb_webp is the
+    // middle-tier <source> for browsers that don't advertise image/avif
+    // (Firefox <93, Safari <16); thumb_jpg is the universal <img src>
+    // fallback. NB: <picture> type-fallback only catches "format not
+    // supported" — it does NOT catch DECODE failures. AVIF decode
+    // failures historically caused broken images here; if they recur,
+    // the fix is to demote AVIF back to a middle tier (or remove it
+    // entirely), not to add more fallback sources.
     const v = THUMB_VERSION;
     manifest = [...byStem.entries()].map(([stem, o]) => ({
       full:       o.key,                     // R2 key, e.g. "XT507333.JPG"
-      thumb_webp: `${stem}.webp?v=${v}`,     // Pages static WebP (primary)
+      thumb_avif: `${stem}.avif?v=${v}`,     // Pages static AVIF (primary)
+      thumb_webp: `${stem}.webp?v=${v}`,     // Pages static WebP (middle)
       thumb_jpg:  `${stem}.jpg?v=${v}`,      // Pages static JPG (fallback)
       stem,
       size:       o.size,                    // R2 object size in bytes
@@ -599,9 +634,16 @@ async function handleImagesIndex(request, env, ctx) {
   }
   if (!entries) {
     // derive thumbnail filenames from the photo manifest. picks up new
-    // uploads automatically (no POOL_COUNT bump needed).
+    // uploads automatically (no POOL_COUNT bump needed). manifest stores
+    // thumb URLs with a `?v=N` cache-bust suffix; strip it for the
+    // human-readable directory listing (the probe still resolves the
+    // underlying static asset regardless of the query string).
     const manifest = await getImagesManifest(env, ctx);
-    const names = manifest.map(p => p.thumb);
+    const stripVer = (s) => String(s || "").replace(/\?.*$/, "");
+    const names = manifest.flatMap(p => [
+      stripVer(p.thumb_jpg),
+      stripVer(p.thumb_webp),
+    ]).filter(Boolean);
     entries = await Promise.all(names.map(async (name) => {
       try {
         const probeUrl = new URL(`/images/${name}`, request.url).toString();
@@ -1059,7 +1101,9 @@ async function signedFetch(targetUrl, env, opts = {}) {
   if (!headers.has("accept")) {
     headers.set("accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
   }
-  headers.set("accept-language", "en-US,en;q=0.9");
+  if (!headers.has("accept-language")) {
+    headers.set("accept-language", "en-US,en;q=0.9");
+  }
 
   if (env.RN_SIGNING_KEY_JWK) {
     try {

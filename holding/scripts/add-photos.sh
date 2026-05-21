@@ -184,13 +184,14 @@ echo ""
 echo "  generated: $T_OK  skipped (current): $T_SKIP  failed: $T_FAIL"
 echo ""
 
-# ── phase 1b: 1200px WebP thumbnails (primary) ───────────────────────
-# WebP is the <picture> primary source — typically 30% smaller than JPG
-# at equivalent visual quality. cwebp -q 80 -sharp_yuv gives the best
-# color fidelity for photo content. encoded from the JPG thumb (not the
-# original) so it's always exactly 1200px on the long edge, matching
-# the JPG fallback in dimensions + crop.
-echo "phase 1b — WebP thumbnails (1200px, picture primary)"
+# ── phase 1b: 1200px WebP thumbnails (middle tier) ───────────────────
+# WebP is the <picture> middle-tier source — for browsers that don't
+# advertise image/avif (Firefox <93, Safari <16) but do advertise
+# image/webp. typically 30% smaller than JPG at equivalent quality.
+# cwebp -q 80 -sharp_yuv gives the best color fidelity for photo content.
+# encoded from the JPG thumb (not the original) so it's always exactly
+# 1200px on the long edge, matching the JPG fallback in dims + crop.
+echo "phase 1b — WebP thumbnails (1200px, picture middle tier)"
 W_OK=0; W_SKIP=0; W_FAIL=0
 while IFS= read -r f; do
   base=$(basename "$f")
@@ -211,6 +212,57 @@ while IFS= read -r f; do
 done < "$SOURCES"
 echo ""
 echo "  generated: $W_OK  skipped (current): $W_SKIP  failed: $W_FAIL"
+echo ""
+
+# ── phase 1c: 1200px AVIF thumbnails (<picture> primary) ─────────────
+# AVIF is the primary source — typically 20–40% smaller than WebP at
+# equivalent visual quality. encoded from the JPG thumb so dims + crop
+# match the other tiers exactly. encoder preference:
+#   1. avifenc (libavif, `brew install libavif`) — best quality/size,
+#      tuned via CQ 30 (≈ JPEG q82 quality, far smaller). preferred.
+#   2. sips    — macOS-native AVIF encoder, no extra dep. formatOptions
+#      60 ≈ visually-lossless for photo content. fallback.
+# NB: <picture>'s type-fallback only catches "format not supported";
+# decode failures will NOT cascade to phase 1b/1a. if browsers start
+# reporting broken images, demote AVIF rather than layering on fallbacks.
+echo "phase 1c — AVIF thumbnails (1200px, picture primary)"
+A_OK=0; A_SKIP=0; A_FAIL=0
+if command -v avifenc >/dev/null 2>&1; then
+  AVIF_ENCODER="avifenc"
+else
+  AVIF_ENCODER="sips"
+fi
+while IFS= read -r f; do
+  base=$(basename "$f")
+  stem="${base%.*}"
+  jpg="$DEST/${stem}.jpg"
+  avif="$DEST/${stem}.avif"
+  if [ ! -f "$jpg" ]; then
+    A_FAIL=$((A_FAIL+1)); printf "✗"
+    continue
+  fi
+  if [ -f "$avif" ] && [ "$avif" -nt "$jpg" ]; then
+    A_SKIP=$((A_SKIP+1)); printf "·"
+    continue
+  fi
+  if [ "$AVIF_ENCODER" = "avifenc" ]; then
+    if avifenc --min 30 --max 30 --speed 4 --jobs 4 --yuv 420 "$jpg" "$avif" >/dev/null 2>&1; then
+      A_OK=$((A_OK+1)); printf "."
+    else
+      A_FAIL=$((A_FAIL+1)); printf "✗"
+    fi
+  else
+    # sips writes via the Apple AVIF encoder (macOS 13+). slower + slightly
+    # larger output than avifenc but no extra brew install.
+    if sips -s format avif --setProperty formatOptions 60 "$jpg" --out "$avif" >/dev/null 2>&1; then
+      A_OK=$((A_OK+1)); printf "."
+    else
+      A_FAIL=$((A_FAIL+1)); printf "✗"
+    fi
+  fi
+done < "$SOURCES"
+echo ""
+echo "  generated: $A_OK  skipped (current): $A_SKIP  failed: $A_FAIL  (encoder: $AVIF_ENCODER)"
 echo ""
 
 # ── phase 2: HIF → full-res JPG export (for click-through) ────────────

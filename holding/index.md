@@ -28,9 +28,11 @@ full playlist on Spotify.
 
 ## Photographs
 
-A random eight JPGs from a curated pool of 34 are rendered on each page load.
-Thumbnails (AVIF only) at `/images/<name>.avif`, full resolution (SOOC
-originals) at `/images/full/<name>.<ext>` via worker-proxied R2.
+A random nine photos from a curated pool of ~120 are rendered on each page
+load. Thumbnails tri-encoded as AVIF (primary, via `<picture>`), WebP
+(middle tier), and JPG (universal fallback) at
+`/images/<stem>.{avif,webp,jpg}`; full-resolution SOOC originals at
+`/images/full/<name>.<ext>` via worker-proxied R2.
 
 ## Links
 
