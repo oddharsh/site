@@ -1023,21 +1023,56 @@ async function scrapePlaylistTracks(playlistId, env, ctx) {
 // blob, and returns the top-level entity. used by tiers 1-3 above.
 // cf.cacheTtl gives us automatic Cloudflare edge caching per URL so concurrent
 // playlist refreshes don't multiply the upstream load.
+//
+// retry behavior: a small fraction of track embeds were returning HTML that
+// parses but lacks visualIdentity/artists (Spotify treating CF egress IPs
+// differently? regional A/B test? unclear). worse, the bad response gets
+// cached at the CF edge for 24h because of cacheEverything+cacheTtl above,
+// so the bad state sticks across worker invocations. on a failed extraction
+// (parse error OR missing both visualIdentity and artists), retry once
+// with cacheTtl: 0 + a cache-busting query param to force a fresh fetch.
 async function scrapeSpotifyEmbed(kindAndId) {
-  const res = await fetch(`https://open.spotify.com/embed/${kindAndId}`, {
-    headers: {
-      "user-agent":      BOT_UA,        // honest: identifies as AadharshBot
-      "accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      "accept-language": "en-US,en;q=0.9",
-    },
-    cf: { cacheTtl: 86400, cacheEverything: true },   // 24h CF edge cache
-  });
-  if (!res.ok) throw new Error(`embed ${kindAndId}: ${res.status}`);
-  const html = await res.text();
-  const m = html.match(/<script[^>]*id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
-  if (!m) throw new Error(`no __NEXT_DATA__ in ${kindAndId}`);
-  const data = JSON.parse(m[1]);
-  return data?.props?.pageProps?.state?.data?.entity || {};
+  const tryOnce = async (bustCache) => {
+    const qs = bustCache ? `?_t=${Date.now()}` : "";
+    const res = await fetch(`https://open.spotify.com/embed/${kindAndId}${qs}`, {
+      headers: {
+        "user-agent":      BOT_UA,        // honest: identifies as AadharshBot
+        "accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "accept-language": "en-US,en;q=0.9",
+      },
+      cf: bustCache
+        ? { cacheTtl: 0, cacheEverything: false }     // bypass CF cache
+        : { cacheTtl: 86400, cacheEverything: true }, // 24h CF edge cache (normal path)
+    });
+    if (!res.ok) throw new Error(`embed ${kindAndId}: ${res.status}`);
+    const html = await res.text();
+    const m = html.match(/<script[^>]*id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
+    if (!m) throw new Error(`no __NEXT_DATA__ in ${kindAndId}`);
+    const data = JSON.parse(m[1]);
+    return data?.props?.pageProps?.state?.data?.entity || {};
+  };
+
+  // first attempt: normal CF-cached path
+  let entity = null;
+  try {
+    entity = await tryOnce(false);
+  } catch (_e) {
+    // fall through to retry
+  }
+
+  // if the entity is empty-ish on a track / artist fetch (no name AND no
+  // visualIdentity), it's almost certainly a bad cached response — retry
+  // once bypassing CF's edge cache. cheap to test, expensive to be wrong.
+  const looksEmpty = !entity || (
+    !entity.name &&
+    !entity.visualIdentity &&
+    !(Array.isArray(entity.artists) && entity.artists.length) &&
+    !(Array.isArray(entity.trackList) && entity.trackList.length)
+  );
+  if (looksEmpty) {
+    entity = await tryOnce(true);
+  }
+  return entity || {};
 }
 
 function jsonResp(obj, status = 200) {

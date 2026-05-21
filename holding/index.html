@@ -887,17 +887,35 @@ footer .signature small { color: oklch(56.93% 0 0); }
         );
       }
 
-      // track tooltip: just the album art with an XP-frame border. all
-      // the textual info (title, artists, duration, explicit) is already
-      // shown in the row itself, so we don't duplicate it here. the
-      // image is decoded lazily — only fetched when the row is hovered.
+      // track tooltip: the album art with an XP-frame border when we have
+      // it. when the cover URL is missing (Spotify embed scrape didn't
+      // return one — happens for a small fraction of tracks), fall back
+      // to a tiny text card so the row still has a hover affordance.
+      // textual info is duplicated from the row by design — without the
+      // cover, the only thing the tooltip can show IS the text, and
+      // showing nothing makes the row feel broken next to its siblings.
       function buildTrackContent(li) {
         const image = li.dataset.trackImage || "";
-        if (!image) return "";   // no cover → no tooltip
+        if (image) {
+          return (
+            `<div class="album-pop">` +
+              `<img class="cover album" src="${esc(image)}" alt="" loading="lazy" decoding="async" width="120" height="120">` +
+            `</div>`
+          );
+        }
+        // text fallback. title + artists + duration; flag explicit if it is.
+        const title    = li.dataset.trackTitle    || "";
+        const artists  = li.dataset.trackArtists  || "";
+        const duration = li.dataset.trackDuration || "";
+        const explicit = li.dataset.trackExplicit === "1";
+        if (!title && !artists) return ""; // truly nothing to show
+        const rows = [];
+        if (artists) rows.push(artists);
+        if (duration) rows.push(duration + (explicit ? " · explicit" : ""));
+        else if (explicit) rows.push("explicit");
         return (
-          `<div class="album-pop">` +
-            `<img class="cover album" src="${esc(image)}" alt="" loading="lazy" decoding="async" width="120" height="120">` +
-          `</div>`
+          `<div class="filename">${esc(title)}</div>` +
+          rows.map(r => `<div class="row">${esc(r)}</div>`).join("")
         );
       }
 
