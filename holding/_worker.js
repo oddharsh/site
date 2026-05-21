@@ -1,0 +1,2040 @@
+// _worker.js — root-level pages worker. wrangler 4.x's `pages deploy`
+// looks for this file explicitly (see `--no-bundle` flag in --help output)
+// and uploads it as the project's Worker. all requests pass through here.
+//
+// routing: /whoareyou → the transparency function below
+//          /rn        → 302 to the currently-active spotify playlist
+//          anything else → fall through to static asset serving
+//
+// equivalent to functions/whoareyou.js but in the _worker.js style that
+// the current wrangler unambiguously supports.
+
+// ── /rn redirect target ─────────────────────────────────────────────
+// the link on the site is static (/rn). the redirect target lives in KV
+// under the key "playlist-id" (just the 22-char spotify id).
+//
+// updating after a rollover (desktop-friendly):
+//   bookmark https://aadhar.sh/rn/admin?secret=<RN_BUST_SECRET>
+//   click bookmark → paste new playlist URL → submit.
+// updating from a shortcut / curl:
+//   https://aadhar.sh/rn/set?secret=<RN_BUST_SECRET>&url=<new playlist url>
+//
+// required binding:  RN_KV (Pages → Functions → KV namespace bindings)
+// required env:      RN_BUST_SECRET (Pages secret)
+//
+// if KV is empty (first deploy, or you deliberately cleared it), the
+// redirect falls back to the playlist URL hardcoded below.
+const RN_FALLBACK = "https://open.spotify.com/playlist/4IRq9W1N2tOWHhH0O3vXiF";
+
+// security headers applied to every worker-generated response. mirrors
+// what's set on static assets via _headers — without this wrapper, the
+// worker-rendered pages (/whoareyou, /around, /bot, /rn/admin, etc.)
+// would skip _headers entirely and ship without CSP / Permissions-Policy.
+const SECURITY_HEADERS = {
+  "content-security-policy":
+    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://i.scdn.co https://*.spotifycdn.com; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; worker-src 'self'; manifest-src 'self'; upgrade-insecure-requests",
+  "permissions-policy":
+    "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=(), serial=(), bluetooth=(), midi=(), accelerometer=(), gyroscope=(), magnetometer=(), screen-wake-lock=(), hid=(), idle-detection=()",
+  "x-frame-options":         "DENY",
+  "x-content-type-options":  "nosniff",
+  "referrer-policy":         "strict-origin-when-cross-origin",
+};
+
+function withSecurityHeaders(response) {
+  // redirects don't need (and shouldn't carry) document-level headers
+  if (response.status >= 300 && response.status < 400) return response;
+  // R2 photo serves don't either — they're images, the policy doesn't apply
+  const ct = response.headers.get("content-type") || "";
+  if (ct.startsWith("image/")) return response;
+
+  const headers = new Headers(response.headers);
+  for (const [k, v] of Object.entries(SECURITY_HEADERS)) {
+    if (!headers.has(k)) headers.set(k, v);
+  }
+  return new Response(response.body, {
+    status:     response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+// canonical-host enforcement: any request that lands on the project's
+// auto-generated pages.dev subdomain (aadhar-sh.pages.dev or any deploy-
+// hash variant like 60bcf749.aadhar-sh.pages.dev) gets 301'd to the
+// equivalent path on aadhar.sh. eliminates the duplicate public footprint
+// while preserving the ability to deploy + serve from Cloudflare Pages.
+const CANONICAL_HOST = "aadhar.sh";
+
+export default {
+  async fetch(request, env, ctx) {
+    const url = new URL(request.url);
+
+    if (url.hostname.endsWith(".pages.dev")) {
+      const target = `https://${CANONICAL_HOST}${url.pathname}${url.search}`;
+      return new Response(null, {
+        status: 301,
+        headers: {
+          "location":      target,
+          "cache-control": "public, max-age=3600",
+        },
+      });
+    }
+
+    const response = await route(request, env, ctx);
+    return withSecurityHeaders(response);
+  }
+};
+
+async function route(request, env, ctx) {
+    const url = new URL(request.url);
+
+    if (url.pathname === "/whoareyou") {
+      return handleWhoareyou(request);
+    }
+
+    if (url.pathname === "/rn") {
+      return handleRn(request, env);
+    }
+
+    if (url.pathname === "/rn/tracks") {
+      return handleRnTracks(request, env, ctx);
+    }
+
+    if (url.pathname === "/rn/admin") {
+      return handleRnAdmin(request, env);
+    }
+
+    if (url.pathname === "/rn/set") {
+      return handleRnSet(request, env);
+    }
+
+    if (url.pathname === "/bot") {
+      return handleBotPage(request);
+    }
+
+    if (url.pathname === "/around") {
+      return handleAround(request, env, ctx);
+    }
+
+    if (url.pathname === "/around/json") {
+      return handleAroundJson(request, env, ctx);
+    }
+
+    // breadcrumb redirect for the previous name (/scout → /around)
+    if (url.pathname === "/scout" || url.pathname === "/scout/json") {
+      return Response.redirect(
+        url.origin + url.pathname.replace("/scout", "/around") + url.search,
+        301
+      );
+    }
+
+    // legacy: any /img/* request gets 301'd to /images/* equivalent.
+    // remove after a few months once external caches / bookmarks settle.
+    if (url.pathname === "/img" || url.pathname.startsWith("/img/")) {
+      const newPath = url.pathname === "/img"
+        ? "/images"
+        : "/images/" + url.pathname.slice("/img/".length);
+      return Response.redirect(url.origin + newPath + url.search, 301);
+    }
+
+    // no-trailing-slash → with-slash for directory listings. without this,
+    // relative links in the listing (href="01.jpg") resolve from the
+    // document root and 404 back to home.
+    if (url.pathname === "/images") {
+      return Response.redirect(url.origin + "/images/" + url.search, 301);
+    }
+    if (url.pathname === "/images/full") {
+      return Response.redirect(url.origin + "/images/full/" + url.search, 301);
+    }
+
+    // classic Apache-style directory listings (1999-vibe easter egg).
+    // /images/      → enumerate thumbnails in the Pages static bundle
+    // /images/full/ → enumerate R2 objects in the aadhar-photos bucket
+    if (url.pathname === "/images/") {
+      return handleImagesIndex(request, env, ctx);
+    }
+    if (url.pathname === "/images/full/") {
+      return handleImagesFullIndex(request, env, ctx);
+    }
+
+    // manifest of available photos for the homepage grid. derived from
+    // R2 keys (which preserve SOOC filenames). thumbnail names are
+    // inferred by replacing the original extension with .avif / .jpg.
+    if (url.pathname === "/images/manifest.json") {
+      return handleImagesManifest(request, env, ctx);
+    }
+
+    // "view source" replacement — browsers block JS-initiated
+    // view-source: URLs as a security measure (Chrome/Edge) or don't
+    // support the scheme at all (Safari). this route fetches the page
+    // from static assets and returns it as text/plain so it renders
+    // visibly when opened in a new tab. defaults to /; ?path=/foo
+    // serves that page's source instead.
+    if (url.pathname === "/source") {
+      const target = url.searchParams.get("path") || "/";
+      if (!target.startsWith("/") || target.includes("..")) {
+        return new Response("invalid path", { status: 400 });
+      }
+      const inner = await env.ASSETS.fetch(new URL(target, request.url).toString());
+      const body  = await inner.text();
+      return new Response(body, {
+        headers: {
+          "content-type":  "text/plain; charset=utf-8",
+          "cache-control": "public, max-age=60, s-maxage=300",
+          "x-robots-tag":  "noindex",
+        },
+      });
+    }
+
+    // photo EXIF, generated locally by holding/scripts/extract-photo-metadata.sh
+    // and committed as a static file. when absent, return empty JSON
+    // rather than letting Pages SPA-fall back to index.html (which the
+    // tooltip JS would then try to parse as JSON and fail).
+    //
+    // also overrides the cache-control: the /images/* rule in _headers
+    // pins everything in that directory to 1-year immutable (correct for
+    // content-addressed photos, wrong for this file which updates each
+    // time photos are added/removed). short cache so changes propagate.
+    if (url.pathname === "/images/metadata.json") {
+      const res = await env.ASSETS.fetch(request);
+      const ct  = res.headers.get("content-type") || "";
+      if (ct.includes("json")) {
+        const headers = new Headers(res.headers);
+        headers.set("cache-control", "public, max-age=60, s-maxage=60, must-revalidate");
+        return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
+      }
+      try { await res.body?.cancel(); } catch {}
+      return new Response("{}", {
+        status: 200,
+        headers: {
+          "content-type":  "application/json; charset=utf-8",
+          "cache-control": "public, max-age=60, s-maxage=60, must-revalidate",
+        },
+      });
+    }
+
+    // full-res photos live in R2 (aadhar-photos bucket, bound as
+    // PHOTOS_R2). thumbnails stay inline in /images/ — they're tiny and
+    // benefit from being on the same edge. only the chonky originals
+    // get the R2 trip.
+    if (url.pathname.startsWith("/images/full/")) {
+      return servePhotoFromR2(request, env);
+    }
+
+    // /images/<stem>.<ext> thumbnail proxy. Cloudflare Pages's default
+    // 404 response is `cache-control: max-age=14400`, which is fine for
+    // truly-missing assets but catastrophic when a transient miss happens
+    // during a deploy race — the edge then serves a stale 404 for 4 hours
+    // even after the asset becomes available. We intercept here, pass to
+    // Pages, and rewrite cache-control on any non-200 response so the
+    // edge won't poison itself. Successful responses pass through with
+    // Pages's normal long-cache (correct for content-addressed thumbs
+    // because we bump THUMB_VERSION's `?v=N` on each deploy).
+    if (/^\/images\/[^/]+\.(jpg|jpeg|webp|avif|png|gif|heic|heif)$/i.test(url.pathname)) {
+      const res = await env.ASSETS.fetch(request);
+      if (!res.ok) {
+        const headers = new Headers(res.headers);
+        headers.set("cache-control", "public, max-age=0, must-revalidate");
+        return new Response(res.body, {
+          status: res.status, statusText: res.statusText, headers,
+        });
+      }
+      return res;
+    }
+
+    // /images/<file>.<ext> for image extensions: must resolve to a real
+    // image asset, not Cloudflare Pages' SPA fallback (which returns
+    // index.html with text/html for any missing path). serve if real,
+    // 404 if missing. (no more .jpg → .avif redirect — both formats now
+    // exist again as siblings, so a missing .jpg is genuinely missing.)
+    const thumbMatch = url.pathname.match(/^\/images\/([^/]+)\.(avif|jpe?g|png|webp|gif|heic|heif|hif)$/i);
+    if (thumbMatch) {
+      const res = await env.ASSETS.fetch(request);
+      const ct  = res.headers.get("content-type") || "";
+      if (ct.startsWith("image/")) return res;
+      try { await res.body?.cancel(); } catch {}
+      return new Response("not found", { status: 404 });
+    }
+
+    // markdown content negotiation: when an agent sends
+    //   Accept: text/markdown
+    // on the homepage, serve the hand-maintained index.md with
+    //   Content-Type: text/markdown
+    // and a rough x-markdown-tokens header. browsers asking for text/html
+    // (or anything else) keep getting the HTML version as default —
+    // with the music section pre-rendered for zero-flash arrival.
+    if (url.pathname === "/" || url.pathname === "/index.html") {
+      if (wantsMarkdown(request)) {
+        return serveMarkdown(request, env);
+      }
+      return serveHomepageWithPrerenderedTracks(request, env, ctx);
+    }
+
+    // everything else: serve the static asset that lives at this path
+    return env.ASSETS.fetch(request);
+}
+
+// ── homepage pre-render ─────────────────────────────────────────────
+// reads cached data from KV/manifest and uses Cloudflare's HTMLRewriter
+// to inject it into the static HTML before it leaves the worker. result:
+// the music section *and* the photo grid arrive populated on the first
+// HTML response — no client-side fetch round-trip, no loading flicker,
+// no layout shift when JS fills the slots. if any pre-render step fails,
+// we fall through to the static HTML and let the existing inline JS take
+// over (the client-side scripts detect pre-rendered state via "already
+// has href?" / "already populated?" checks and bail early).
+async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
+  const res = await env.ASSETS.fetch(request);
+
+  // tracks (from KV cache populated by /rn/tracks scraper)
+  let tracksPayload = null;
+  if (env.RN_KV) {
+    try {
+      const pid = await env.RN_KV.get("playlist-id");
+      if (pid && /^[0-9A-Za-z]{22}$/.test(pid)) {
+        tracksPayload = await env.RN_KV.get(`tracks:${pid}`, "json");
+      }
+    } catch {}
+  }
+
+  // photo grid (from images manifest — already KV-cached via getImagesManifest).
+  // getImagesManifest returns a bare array of photo entries; handleImagesManifest
+  // wraps that in { photos: [...], count } for the public JSON endpoint.
+  let photos = null;
+  try {
+    const arr = await getImagesManifest(env, ctx);
+    if (Array.isArray(arr) && arr.length) {
+      photos = arr;
+    }
+  } catch {}
+
+  // bail if neither chunk of data is available — the static HTML's inline
+  // JS will pick up the slack on the client.
+  if (!tracksPayload?.tracks?.length && !photos) return res;
+
+  const rewriter = new HTMLRewriter();
+
+  // ── /rn/tracks → np-list ────────────────────────────────────────
+  if (tracksPayload?.tracks?.length) {
+    const itemsHtml = tracksPayload.tracks.map(t => {
+      const dur = t.duration_ms ? fmtDuration(t.duration_ms) : "";
+      const artistsText = t.artists_text || (t.artists || []).map(a => a.name).join(", ");
+      const dataAttrs =
+        ` data-track-title="${escAttr(t.title)}"` +
+        ` data-track-artists="${escAttr(artistsText)}"` +
+        (t.image_url   ? ` data-track-image="${escAttr(t.image_url)}"` : "") +
+        (t.duration_ms ? ` data-track-duration="${dur}"`               : "") +
+        (t.is_explicit ? ` data-track-explicit="1"`                    : "");
+      return `<li${dataAttrs}>
+        <a href="${escAttr(t.song_link_url)}" target="_blank" rel="noopener">${
+          dur ? `<span class="np-duration">${dur}</span>` : ""
+        }<span class="np-title">${escHtml(t.title)}</span><span class="np-sep">&mdash;</span><span class="np-artist">${linkifyArtists(t.artists, artistsText)}</span>${
+          t.is_explicit ? '<span class="np-explicit">E</span>' : ""
+        }</a>
+      </li>`;
+    }).join("");
+    rewriter.on("#np-list", {
+      element(el) { el.setInnerContent(itemsHtml, { html: true }); },
+    });
+  }
+
+  // ── photo grid → section.photos ─────────────────────────────────
+  // pick 9 random photos via fisher-yates so the grid feels fresh each
+  // visit. response is uncached at the edge (worker cache-control: no-store
+  // by default), so per-request randomness reaches every visitor. the
+  // emitted HTML mirrors what the client-side fill JS would produce —
+  // <picture> with WebP source + JPG fallback, data-* attrs for the
+  // hover tooltip, target=_blank + rel=noopener on the anchor.
+  if (photos) {
+    const pick = pickRandom(photos, 9);
+    const slotsHtml = pick.map(p => {
+      const full     = p.full;
+      const sizeAttr = (typeof p.size === "number" && p.size > 0)
+        ? ` data-size="${p.size}"` : "";
+      const upAttr   = p.uploaded
+        ? ` data-uploaded="${escAttr(p.uploaded)}"` : "";
+      return `<a href="/images/full/${encodeURI(full)}"` +
+             ` target="_blank" rel="noopener"` +
+             ` data-full="${escAttr(full)}"${sizeAttr}${upAttr}>` +
+        `<picture>` +
+          (p.thumb_webp ? `<source type="image/webp" srcset="/images/${escAttr(p.thumb_webp)}">` : "") +
+          `<img alt="" loading="lazy" decoding="async" src="/images/${escAttr(p.thumb_jpg)}">` +
+        `</picture>` +
+      `</a>`;
+    }).join("");
+    rewriter.on("section.photos", {
+      element(el) { el.setInnerContent(slotsHtml, { html: true }); },
+    });
+  }
+
+  return rewriter.transform(res);
+}
+
+// fisher-yates shuffle, return first N elements. doesn't mutate input.
+function pickRandom(arr, n) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a.slice(0, n);
+}
+
+// per-artist nav targets that open spotify's artist page. emitted as
+// spans (not <a>) because the wrapping row is an <a> and nested anchors
+// are invalid HTML — the inline script on index.html intercepts clicks
+// on .np-artist-link, stopPropagation, and opens the data-href. role+
+// tabindex keep them keyboard- and screen-reader-accessible.
+//
+// each span also carries data-artist-name and (when known) data-artist-image
+// so the XP hover-tooltip can show a profile pic + name on hover. when we
+// have structured `artists` from the scraper we link straight to the
+// artist's spotify URL (precise); otherwise we fall back to a name-based
+// search URL and skip the image.
+function linkifyArtists(artists, fallbackText) {
+  // structured case: [{id, name, spotify_url, image_url}, ...]
+  if (Array.isArray(artists) && artists.length) {
+    return artists.map(a => {
+      const href = a.spotify_url ||
+        `https://open.spotify.com/search/${encodeURIComponent(a.name)}/artists`;
+      const img  = a.image_url ? ` data-artist-image="${escAttr(a.image_url)}"` : "";
+      return `<span class="np-artist-link"` +
+             ` data-href="${escAttr(href)}"` +
+             ` data-artist-name="${escAttr(a.name)}"` +
+             img +
+             ` role="link" tabindex="0">${escHtml(a.name)}</span>`;
+    }).join(", ");
+  }
+  // fallback (no structured data, just the joined "A, B" string)
+  const raw = fallbackText || (typeof artists === "string" ? artists : "");
+  if (!raw) return "";
+  return String(raw).split(/,\s*/).filter(Boolean).map(name => {
+    const href = `https://open.spotify.com/search/${encodeURIComponent(name)}/artists`;
+    return `<span class="np-artist-link"` +
+           ` data-href="${escAttr(href)}"` +
+           ` data-artist-name="${escAttr(name)}"` +
+           ` role="link" tabindex="0">${escHtml(name)}</span>`;
+  }).join(", ");
+}
+
+function fmtDuration(ms) {
+  const total = Math.round(ms / 1000);
+  const m = Math.floor(total / 60);
+  const s = String(total % 60).padStart(2, "0");
+  return `${m}:${s}`;
+}
+
+// ── /images/full/<key> → R2 ─────────────────────────────────────────
+// proxies an R2 GET through the worker. supports If-None-Match (304s on
+// cache hit), Range requests, and emits long cache headers since each
+// upload is content-addressed by its filename. originals retain their
+// SOOC filenames (IMG_1234.jpg, DSCF5678.heic, etc.), so the validation
+// is permissive on stem but strict on extension and forbids any path
+// traversal characters.
+async function servePhotoFromR2(request, env) {
+  if (!env.PHOTOS_R2) {
+    return new Response("R2 bucket not bound", { status: 503 });
+  }
+
+  const url = new URL(request.url);
+  const key = url.pathname.replace(/^\/images\/full\//, "");
+  // allow letters, digits, `_`, `-`, `.` in the stem; require a known
+  // image extension. forbids `/`, `..`, and other escape characters.
+  if (!/^[A-Za-z0-9_.-]+\.(?:jpe?g|png|webp|heic|heif|hif|avif|gif)$/i.test(key)) {
+    return new Response("not found", { status: 404 });
+  }
+
+  const ifNoneMatch = request.headers.get("if-none-match");
+  const range       = request.headers.get("range");
+
+  // R2's onlyIf conditional GET returns a body-less object when the etag
+  // matches — translates directly to a 304 response.
+  const getOpts = {};
+  if (ifNoneMatch) getOpts.onlyIf = { etagDoesNotMatch: ifNoneMatch.replace(/^W\//, "").replace(/"/g, "") };
+  if (range) {
+    const m = range.match(/^bytes=(\d+)-(\d*)$/);
+    if (m) {
+      const offset = parseInt(m[1], 10);
+      const end = m[2] ? parseInt(m[2], 10) : undefined;
+      getOpts.range = end !== undefined
+        ? { offset, length: end - offset + 1 }
+        : { offset };
+    }
+  }
+
+  const obj = await env.PHOTOS_R2.get(key, Object.keys(getOpts).length ? getOpts : undefined);
+  if (obj === null) {
+    // either the key doesn't exist, or onlyIf matched (so the response is
+    // a 304). R2 returns the object metadata in both cases via head() —
+    // we treat null as the 304-or-404 boundary by re-checking metadata.
+    if (ifNoneMatch) {
+      const head = await env.PHOTOS_R2.head(key);
+      if (head) {
+        return new Response(null, {
+          status: 304,
+          headers: { etag: head.httpEtag, "cache-control": "public, max-age=86400, immutable" },
+        });
+      }
+    }
+    return new Response("not found", { status: 404 });
+  }
+
+  const headers = new Headers();
+  obj.writeHttpMetadata(headers);
+  headers.set("content-type",  obj.httpMetadata?.contentType || "image/jpeg");
+  headers.set("etag",          obj.httpEtag);
+  headers.set("cache-control", "public, max-age=31536000, immutable");
+  headers.set("accept-ranges", "bytes");
+
+  const isRange = !!getOpts.range && obj.range;
+  if (isRange) {
+    const start = obj.range.offset;
+    const len   = obj.range.length;
+    const end   = start + len - 1;
+    headers.set("content-range",  `bytes ${start}-${end}/${obj.size}`);
+    headers.set("content-length", String(len));
+    return new Response(obj.body, { status: 206, headers });
+  }
+  headers.set("content-length", String(obj.size));
+  return new Response(obj.body, { status: 200, headers });
+}
+function escAttr(s) {
+  return String(s ?? "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+function escHtml(s) {
+  return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+// ── 1990s-style directory listings ──────────────────────────────────
+// the 1999 web had these everywhere — Apache's mod_autoindex was the
+// canonical implementation. Cloudflare Pages doesn't auto-generate them
+// (the request 404s without an index file), so we hand-render in that
+// visual style: bracketed icons, DD-MMM-YYYY HH:MM dates, K/M sizes,
+// parent directory link. honest about the source though — the signature
+// at the bottom reads "handwritten worker at aadhar.sh" rather than
+// pretending to be Apache.
+
+// the photo manifest is the single source of truth for which photos
+// exist. derived from R2 keys (each upload preserves its SOOC filename;
+// thumbnails share that filename stem with .avif as the primary modern
+// format and .jpg as the universal fallback). cached in KV for an hour.
+//
+// dedup: when a stem has multiple R2 objects (e.g. HIF + JPG sibling
+// because we generated a JPG export of a HIF original), pick the one
+// most browser-friendly for click-through. JPG/JPEG > PNG/WebP/GIF >
+// HEIF/HEIC/HIF. HIFs trigger Chrome's download dialog instead of
+// rendering, so we always prefer a JPG counterpart when one exists.
+const R2_EXT_PRIORITY = {
+  jpg: 5, jpeg: 5,
+  png: 3, webp: 3, gif: 3,
+  heif: 1, heic: 1, hif: 1,
+};
+
+// bump to bust all `/images/<stem>.jpg` (and .avif) edge-cache entries at
+// once. used as a `?v=<N>` suffix in the manifest's thumb URLs. Cloudflare
+// includes the query string in the cache key by default, so changing this
+// produces a fresh cache lookup that doesn't see prior stale 404s.
+const THUMB_VERSION = 8;
+
+async function getImagesManifest(env, ctx) {
+  let manifest = null;
+  if (env.RN_KV) {
+    try { manifest = await env.RN_KV.get("manifest:images", "json"); } catch {}
+  }
+  if (!manifest) {
+    if (!env.PHOTOS_R2) return [];
+    const list = await env.PHOTOS_R2.list({ limit: 1000 });
+
+    // collapse R2 objects to one-per-stem, prefer browser-renderable extensions
+    const byStem = new Map();
+    for (const o of list.objects || []) {
+      const stem = o.key.replace(/\.[^.]+$/, "");
+      const ext  = (o.key.split(".").pop() || "").toLowerCase();
+      const prio = R2_EXT_PRIORITY[ext] || 0;
+      const existing = byStem.get(stem);
+      if (!existing || prio > existing._prio) {
+        byStem.set(stem, { ...o, _prio: prio });
+      }
+    }
+
+    // bust stale edge-cached 404s. an earlier incomplete deploy left some
+    // /images/<stem>.jpg URLs with a 4h-TTL cached 404 at the CF edge.
+    // appending a version query forces a fresh cache lookup (CF includes
+    // the query in the cache key by default). incrementing THUMB_VERSION
+    // is the supported way to invalidate all thumbnail caches at once.
+    //
+    // dual-source: thumb_webp is the <picture> primary (≈64% smaller
+    // than JPG at equivalent visual quality); thumb_jpg is the universal
+    // fallback for any browser that doesn't advertise image/webp support.
+    const v = THUMB_VERSION;
+    manifest = [...byStem.entries()].map(([stem, o]) => ({
+      full:       o.key,                     // R2 key, e.g. "XT507333.JPG"
+      thumb_webp: `${stem}.webp?v=${v}`,     // Pages static WebP (primary)
+      thumb_jpg:  `${stem}.jpg?v=${v}`,      // Pages static JPG (fallback)
+      stem,
+      size:       o.size,                    // R2 object size in bytes
+      uploaded:   o.uploaded ? new Date(o.uploaded).toISOString() : null,
+    })).sort((a, b) => a.full.localeCompare(b.full));
+
+    if (env.RN_KV) {
+      ctx.waitUntil(env.RN_KV.put("manifest:images", JSON.stringify(manifest), { expirationTtl: 3600 }));
+    }
+  }
+  return manifest;
+}
+
+async function handleImagesManifest(request, env, ctx) {
+  const photos = await getImagesManifest(env, ctx);
+  return jsonResp({ photos, count: photos.length });
+}
+
+async function handleImagesIndex(request, env, ctx) {
+  // probe the static asset layer for each known thumbnail. cache the
+  // result in KV for an hour. uses GET (not HEAD) because env.ASSETS
+  // doesn't reliably populate Content-Length, then reads the body via
+  // arrayBuffer to count bytes.
+  let entries = null;
+  if (env.RN_KV) {
+    try { entries = await env.RN_KV.get("idx:images", "json"); } catch {}
+  }
+  if (!entries) {
+    // derive thumbnail filenames from the photo manifest. picks up new
+    // uploads automatically (no POOL_COUNT bump needed).
+    const manifest = await getImagesManifest(env, ctx);
+    const names = manifest.map(p => p.thumb);
+    entries = await Promise.all(names.map(async (name) => {
+      try {
+        const probeUrl = new URL(`/images/${name}`, request.url).toString();
+        const res = await env.ASSETS.fetch(probeUrl);
+        if (!res.ok) return null;
+        // env.ASSETS doesn't populate Content-Length on its responses
+        // (likely chunked internally), so read the body to count bytes.
+        // expensive once per cache miss (~7MB across 68 files); harmless
+        // since we cache the listing in KV for an hour afterward.
+        let size = parseInt(res.headers.get("content-length") || "0", 10);
+        if (!size && res.body) {
+          const buf = await res.arrayBuffer();
+          size = buf.byteLength;
+        }
+        return {
+          name,
+          size,
+          lastModified: res.headers.get("last-modified") || null,
+        };
+      } catch {
+        return null;
+      }
+    }));
+    entries = entries.filter(Boolean);
+    entries.sort((a, b) => a.name.localeCompare(b.name));
+    // prepend the full/ subdirectory entry
+    entries = [{ name: "full/", size: null, lastModified: null, isDir: true }, ...entries];
+    if (env.RN_KV) {
+      ctx.waitUntil(env.RN_KV.put("idx:images", JSON.stringify(entries), { expirationTtl: 3600 }));
+    }
+  }
+
+  return apacheIndexResponse("/images", entries);
+}
+
+async function handleImagesFullIndex(request, env, ctx) {
+  if (!env.PHOTOS_R2) {
+    return new Response("R2 not bound", { status: 503 });
+  }
+  // R2 lists are cheap; cache 5 min so it's snappy without going too stale.
+  let entries = null;
+  if (env.RN_KV) {
+    try { entries = await env.RN_KV.get("idx:imagesfull", "json"); } catch {}
+  }
+  if (!entries) {
+    const list = await env.PHOTOS_R2.list({ limit: 1000 });
+    entries = (list.objects || [])
+      .map(o => ({
+        name:         o.key,
+        size:         o.size,
+        lastModified: o.uploaded ? new Date(o.uploaded).toUTCString() : null,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    if (env.RN_KV) {
+      ctx.waitUntil(env.RN_KV.put("idx:imagesfull", JSON.stringify(entries), { expirationTtl: 300 }));
+    }
+  }
+
+  return apacheIndexResponse("/images/full", entries);
+}
+
+function apacheIndexResponse(path, entries) {
+  const fmtSize = (b) => {
+    if (b === null || b === undefined) return "-";
+    if (b < 1024)            return String(b);
+    if (b < 1024 * 1024)     return `${Math.round(b / 1024)}K`;
+    if (b < 1024 * 1024 * 1024) return `${(b / 1024 / 1024).toFixed(1)}M`;
+    return `${(b / 1024 / 1024 / 1024).toFixed(1)}G`;
+  };
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const pad = (n) => String(n).padStart(2, "0");
+  const fmtDate = (s) => {
+    if (!s) return "                 -";
+    const d = new Date(s);
+    if (isNaN(d)) return "                 -";
+    return `${pad(d.getUTCDate())}-${months[d.getUTCMonth()]}-${d.getUTCFullYear()} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+  };
+  const iconFor = (e) => {
+    if (e.isDir) return "[DIR]";
+    const ext = e.name.split(".").pop().toLowerCase();
+    if (["jpg","jpeg","png","gif","avif","webp","heic","heif","bmp","tiff"].includes(ext)) return "[IMG]";
+    if (["txt","md","xml","json","csv"].includes(ext)) return "[TXT]";
+    if (["mp3","wav","flac","ogg"].includes(ext)) return "[SND]";
+    if (["mp4","mov","webm","avi"].includes(ext)) return "[VID]";
+    return "[   ]";
+  };
+
+  // parent directory link — one level up. an empty join produces an
+  // empty string, which would yield "//" if we naively appended "/". so:
+  // build the path explicitly and reuse "/" as the root case.
+  const parts = path.split("/").filter(Boolean);
+  const parentParts = parts.slice(0, -1);
+  const parentHref = parts.length === 0
+    ? null
+    : parentParts.length === 0 ? "/" : "/" + parentParts.join("/") + "/";
+
+  const formatRow = (icon, nameHtml, dateStr, sizeStr) => {
+    // padded to look like the classic Apache <pre>-formatted listing
+    const namePart  = nameHtml.padEnd(31, " ");
+    const datePart  = dateStr.padEnd(17, " ");
+    const sizePart  = sizeStr.padStart(5, " ");
+    return `${icon} <a href="${nameHtml.replace(/<[^>]+>/g, "")}">${nameHtml}</a>${" ".repeat(Math.max(0, 30 - nameHtml.replace(/<[^>]+>/g, "").length))}  ${datePart}  ${sizePart}`;
+  };
+
+  let rows = "";
+  if (parentHref) {
+    rows += `[DIR] <a href="${parentHref}">Parent Directory</a>                                   -\n`;
+  }
+  for (const e of entries) {
+    const icon = iconFor(e);
+    const displayName = e.isDir ? e.name : e.name;
+    const linkHref = e.isDir ? displayName : encodeURIComponent(displayName).replace(/%2F/g, "/");
+    const padded = displayName.length > 28 ? displayName.slice(0, 25) + ".." : displayName;
+    const namePad = " ".repeat(Math.max(0, 30 - padded.length));
+    rows += `${icon} <a href="${linkHref}">${escHtml(padded)}</a>${namePad}  ${fmtDate(e.lastModified)}  ${fmtSize(e.size).padStart(6, " ")}\n`;
+  }
+
+  const html = `<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">
+<html>
+ <head>
+  <title>Index of ${escHtml(path)}</title>
+  <style>
+    body { background: #ffffff; color: #000000; font-family: monospace; padding: 12px; }
+    h1 { font-family: Helvetica, Arial, sans-serif; font-weight: bold; font-size: 14pt; margin: 0 0 12px; }
+    pre { font-family: "Courier New", Courier, monospace; font-size: 10pt; line-height: 1.5; margin: 0; }
+    a { color: #0000ee; text-decoration: underline; }
+    a:visited { color: #551a8b; }
+    hr { border: 0; border-top: 1px solid #000000; margin: 8px 0; }
+    address { font-family: Helvetica, Arial, sans-serif; font-size: 9pt; font-style: italic; color: #000000; }
+  </style>
+ </head>
+ <body>
+<h1>Index of ${escHtml(path)}</h1>
+<hr>
+<pre>      Name                            Last modified      Size
+<hr>${rows}<hr></pre>
+<address>handwritten worker at aadhar.sh</address>
+ </body>
+</html>`;
+
+  return new Response(html, {
+    status: 200,
+    headers: {
+      "content-type":  "text/html; charset=utf-8",
+      "cache-control": "public, max-age=60, s-maxage=300",
+    },
+  });
+}
+
+// ── markdown negotiation ────────────────────────────────────────────
+// returns true iff the client's Accept header explicitly prefers text/markdown
+// over text/html (or includes only text/markdown). browsers send
+// `text/html,application/xhtml+xml,...` so they fall through.
+function wantsMarkdown(request) {
+  const accept = (request.headers.get("accept") || "").toLowerCase();
+  if (!accept.includes("text/markdown")) return false;
+  // if the client lists both, treat markdown as the requested representation
+  // (the q-value parsing would be more precise but this matches every real
+  // agent that asks for markdown today).
+  return true;
+}
+
+async function serveMarkdown(request, env) {
+  // ask the static assets layer for /index.md
+  const mdUrl = new URL("/index.md", request.url);
+  const mdRes = await env.ASSETS.fetch(new Request(mdUrl.toString(), request));
+  if (!mdRes.ok) {
+    // markdown not available — fall back to HTML
+    return env.ASSETS.fetch(request);
+  }
+  const body = await mdRes.text();
+  // rough token estimate: ~4 chars per token. honest approximation; agents
+  // that care about exact counts can run their own tokenizer.
+  const tokens = Math.ceil(body.length / 4);
+  return new Response(body, {
+    status: 200,
+    headers: {
+      "content-type":     "text/markdown; charset=utf-8",
+      "x-markdown-tokens": String(tokens),
+      "cache-control":    "public, max-age=300, s-maxage=600",
+      "vary":             "accept",
+      "x-content-type-options": "nosniff",
+    },
+  });
+}
+
+// ── /rn handler ─────────────────────────────────────────────────────
+async function handleRn(request, env) {
+  let playlistId = null;
+  if (env.RN_KV) {
+    try { playlistId = await env.RN_KV.get("playlist-id"); } catch {}
+  }
+  const target = (playlistId && /^[0-9A-Za-z]{22}$/.test(playlistId))
+    ? `https://open.spotify.com/playlist/${playlistId}`
+    : RN_FALLBACK;
+  return new Response(null, {
+    status: 302,
+    headers: {
+      "location":        target,
+      "cache-control":   "no-store, must-revalidate",
+      "referrer-policy": "no-referrer",
+    },
+  });
+}
+
+// ── /rn/tracks handler ──────────────────────────────────────────────
+// returns the current "rn" playlist's track list as JSON. data is pulled
+// from spotify's public embed pages — three tiers of scrape:
+//
+//   1. playlist embed → gives the ordered track list (IDs, titles, durations,
+//      explicit flag, audio preview URLs)
+//   2. track embed    → gives the album cover URL + the artist list with
+//      stable Spotify URIs (the playlist embed only has a joined "Artist A,
+//      Artist B" subtitle string with no IDs)
+//   3. artist embed   → gives the artist's profile picture
+//
+// the artist payload is cached in KV under `artist:<id>` with a long TTL
+// since artist photos rarely change; subsequent playlist refreshes don't
+// re-scrape known artists. tracks themselves are cached under
+// `tracks:<playlist-id>` for 1 hour so per-page-load cost is zero.
+//
+// shape returned:
+//   { playlist_id, playlist_name,
+//     tracks: [{ id, title, artists_text, artists: [{id, name, spotify_url,
+//                image_url}], image_url, song_link_url, spotify_url,
+//                duration_ms, preview_url, is_explicit }] }
+//
+// force-refresh with /rn/tracks?bust=<RN_BUST_SECRET>.
+// Spotify scrape identifies itself as AadharshBot (see ── AadharshBot ──
+// section below). prior versions sent a fake Chrome UA; switching to the
+// branded UA keeps Spotify's logs honest about who's hitting their public
+// embed pages, and matches the policy used by the /around crawler. the
+// embed pages are public + cacheable, so UA shouldn't affect what's served.
+const RN_TRACKS_TTL  = 3600;            // 1h: playlist tracks payload
+const ARTIST_KV_TTL  = 30 * 86400;      // 30d: artist profile (rarely changes)
+
+async function handleRnTracks(request, env, ctx) {
+  const url = new URL(request.url);
+
+  if (!env.RN_KV) {
+    return jsonResp({ error: "no kv binding" }, 500);
+  }
+  const playlistId = await env.RN_KV.get("playlist-id");
+  if (!playlistId || !/^[0-9A-Za-z]{22}$/.test(playlistId)) {
+    return jsonResp({ error: "no playlist set", tracks: [] });
+  }
+
+  const cacheKey = `tracks:${playlistId}`;
+
+  // optional bust
+  if (env.RN_BUST_SECRET && url.searchParams.get("bust") === env.RN_BUST_SECRET) {
+    await env.RN_KV.delete(cacheKey);
+  }
+
+  // serve from cache
+  const cached = await env.RN_KV.get(cacheKey, "json");
+  if (cached) return jsonResp(cached);
+
+  // fetch + parse
+  let payload;
+  try {
+    payload = await scrapePlaylistTracks(playlistId, env, ctx);
+  } catch (e) {
+    return jsonResp({ error: "scrape failed", message: String(e), tracks: [] }, 502);
+  }
+
+  // fire-and-forget cache write
+  ctx.waitUntil(env.RN_KV.put(cacheKey, JSON.stringify(payload), { expirationTtl: RN_TRACKS_TTL }));
+
+  return jsonResp(payload);
+}
+
+async function scrapePlaylistTracks(playlistId, env, ctx) {
+  // tier 1: playlist embed → ordered track list
+  const playlistEntity = await scrapeSpotifyEmbed(`playlist/${playlistId}`);
+  const trackList = Array.isArray(playlistEntity.trackList) ? playlistEntity.trackList : [];
+
+  const baseTracks = trackList
+    .filter(t => t && typeof t.uri === "string" && t.uri.startsWith("spotify:track:"))
+    .map(t => {
+      const id = t.uri.slice("spotify:track:".length);
+      return {
+        id,
+        title:         t.title    || "",
+        artists_text:  t.subtitle || "",   // raw "A, B" string kept for back-compat
+        spotify_url:   `https://open.spotify.com/track/${id}`,
+        song_link_url: `https://song.link/s/${id}`,
+        duration_ms:   typeof t.duration === "number" ? t.duration : null,
+        preview_url:   t.audioPreview?.url || null,
+        is_explicit:   !!t.isExplicit,
+      };
+    });
+
+  // tier 2: per-track embed → cover image URL + structured artist list.
+  // ONE fetch per track replaces the prior playlist-embed + oEmbed pair
+  // (oEmbed only returned the cover; the track embed returns cover + the
+  // artist URIs we need for the artist-hover feature).
+  const enriched = await Promise.all(baseTracks.map(async t => {
+    try {
+      const e = await scrapeSpotifyEmbed(`track/${t.id}`);
+      const image_url = e?.visualIdentity?.image?.[0]?.url || null;
+      const artists = Array.isArray(e?.artists)
+        ? e.artists
+            .filter(a => a && typeof a.uri === "string" && a.uri.startsWith("spotify:artist:"))
+            .map(a => {
+              const id = a.uri.slice("spotify:artist:".length);
+              return {
+                id,
+                name:        a.name || "",
+                spotify_url: `https://open.spotify.com/artist/${id}`,
+                image_url:   null,    // filled in tier 3 below
+              };
+            })
+        : [];
+      return { ...t, image_url, artists };
+    } catch {
+      return { ...t, image_url: null, artists: [] };
+    }
+  }));
+
+  // tier 3: per-unique-artist embed → profile picture. cached in KV
+  // under `artist:<id>` for ARTIST_KV_TTL because artist photos rarely
+  // change. cache hit → no network. cache miss → scrape + write back.
+  const uniqueArtists = new Map();
+  for (const t of enriched) {
+    for (const a of (t.artists || [])) {
+      if (!uniqueArtists.has(a.id)) uniqueArtists.set(a.id, a);
+    }
+  }
+  await Promise.all([...uniqueArtists.values()].map(async a => {
+    const cacheKey = `artist:${a.id}`;
+    if (env?.RN_KV) {
+      const hit = await env.RN_KV.get(cacheKey, "json");
+      if (hit && typeof hit === "object") {
+        a.image_url = hit.image_url || null;
+        if (hit.name && !a.name) a.name = hit.name;
+        return;
+      }
+    }
+    try {
+      const e = await scrapeSpotifyEmbed(`artist/${a.id}`);
+      // pick the 320px variant: tooltip renders at 180×180, so 320 source
+      // gives a crisp retina-ready image without paying the 640px hero
+      // weight. fall through to whatever's first if no 320 variant exists.
+      const imgs = Array.isArray(e?.visualIdentity?.image) ? e.visualIdentity.image : [];
+      const pick = imgs.find(i => i.maxWidth === 320) || imgs.find(i => i.maxWidth === 160) || imgs[0] || null;
+      a.image_url = pick?.url || null;
+      if (e?.name && !a.name) a.name = e.name;
+      if (env?.RN_KV && ctx) {
+        ctx.waitUntil(env.RN_KV.put(cacheKey, JSON.stringify({
+          name: a.name, image_url: a.image_url
+        }), { expirationTtl: ARTIST_KV_TTL }));
+      }
+    } catch {
+      a.image_url = null;
+    }
+  }));
+
+  // copy enriched artist data back onto every track (the per-track .artists
+  // arrays share Map references but Promise.all parallelism means we need
+  // to re-derive image_url after the artist loop resolves)
+  for (const t of enriched) {
+    t.artists = (t.artists || []).map(a => ({
+      ...a,
+      image_url: uniqueArtists.get(a.id)?.image_url || null,
+      name:      uniqueArtists.get(a.id)?.name || a.name,
+    }));
+  }
+
+  return {
+    playlist_id:   playlistId,
+    playlist_name: playlistEntity.name || "rn",
+    tracks:        enriched,
+    fetched_at:    new Date().toISOString(),
+  };
+}
+
+// shared Spotify embed scraper. fetches https://open.spotify.com/embed/<kind>/<id>
+// where kind is "playlist" | "track" | "artist", parses the SSR'd __NEXT_DATA__
+// blob, and returns the top-level entity. used by tiers 1-3 above.
+// cf.cacheTtl gives us automatic Cloudflare edge caching per URL so concurrent
+// playlist refreshes don't multiply the upstream load.
+async function scrapeSpotifyEmbed(kindAndId) {
+  const res = await fetch(`https://open.spotify.com/embed/${kindAndId}`, {
+    headers: {
+      "user-agent":      BOT_UA,        // honest: identifies as AadharshBot
+      "accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "accept-language": "en-US,en;q=0.9",
+    },
+    cf: { cacheTtl: 86400, cacheEverything: true },   // 24h CF edge cache
+  });
+  if (!res.ok) throw new Error(`embed ${kindAndId}: ${res.status}`);
+  const html = await res.text();
+  const m = html.match(/<script[^>]*id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
+  if (!m) throw new Error(`no __NEXT_DATA__ in ${kindAndId}`);
+  const data = JSON.parse(m[1]);
+  return data?.props?.pageProps?.state?.data?.entity || {};
+}
+
+function jsonResp(obj, status = 200) {
+  return new Response(JSON.stringify(obj), {
+    status,
+    headers: {
+      "content-type":  "application/json; charset=utf-8",
+      "cache-control": "public, max-age=300, s-maxage=600",
+      "access-control-allow-origin": "*",
+    },
+  });
+}
+
+// ── AadharshBot ─────────────────────────────────────────────────────
+// branded crawler. uses our own UA + signs every outbound request per
+// RFC 9421 (HTTP Message Signatures), profile per the Web Bot Auth IETF
+// draft. signatures cover @authority + signature-agent; receiving sites
+// can fetch the JWKS at https://aadhar.sh/.well-known/http-message-signatures-directory
+// and verify against the published Ed25519 public key.
+
+const BOT_NAME    = "AadharshBot";
+const BOT_VERSION = "1.0";
+const BOT_UA      = `${BOT_NAME}/${BOT_VERSION} (+https://aadhar.sh/bot)`;
+const SIG_AGENT   = "https://aadhar.sh/";  // Signature-Agent value (RFC 8941 string)
+
+// the neighborhood — crypto-VC homepages worth checking in on. just funds
+// whose work i follow; the dashboard is mostly an excuse to point a branded
+// crawler at something interesting.
+const NEIGHBORS = [
+  { name: "Paradigm",                url: "https://www.paradigm.xyz/" },
+  { name: "a16z crypto",             url: "https://a16zcrypto.com/" },
+  { name: "Polychain Capital",       url: "https://polychain.capital/" },
+  { name: "Multicoin Capital",       url: "https://multicoin.capital/" },
+  { name: "Variant Fund",            url: "https://variant.fund/" },
+  { name: "Dragonfly",               url: "https://www.dragonfly.xyz/" },
+  { name: "Electric Capital",        url: "https://www.electriccapital.com/" },
+  { name: "1confirmation",           url: "https://1confirmation.com/" },
+  { name: "Standard Crypto",         url: "https://standardcrypto.vc/" },
+  { name: "Union Square Ventures",   url: "https://www.usv.com/" },
+  { name: "Archetype",               url: "https://www.archetype.fund/" },
+  { name: "Pace Capital",            url: "https://pacecapital.com/" },
+  { name: "Thrive Capital",          url: "https://thrivecap.com/" },
+  { name: "Sequoia Capital",         url: "https://www.sequoiacap.com/" },
+  { name: "Founders Fund",           url: "https://foundersfund.com/" },
+  { name: "Hummingbird",             url: "https://www.hummingbird.vc/" },
+  { name: "Benchmark",               url: "https://www.benchmark.com/" },
+  { name: "Index Ventures",          url: "https://www.indexventures.com/" },
+  { name: "Ribbit Capital",          url: "https://ribbitcap.com/" },
+  { name: "Topology",                url: "https://www.topology.vc/" },
+];
+
+// signed outbound fetch. always sets our UA. signs when the private key is
+// available; falls back to UA-only fetch if signing fails (better to crawl
+// unsigned than to silently break).
+async function signedFetch(targetUrl, env, opts = {}) {
+  const headers = new Headers(opts.headers || {});
+  headers.set("user-agent", BOT_UA);
+  if (!headers.has("accept")) {
+    headers.set("accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+  }
+  headers.set("accept-language", "en-US,en;q=0.9");
+
+  if (env.RN_SIGNING_KEY_JWK) {
+    try {
+      const sig = await signRequestForWebBotAuth(targetUrl, env);
+      headers.set("Signature-Agent", `"${SIG_AGENT}"`);
+      headers.set("Signature-Input", `sig1=${sig.params}`);
+      headers.set("Signature", `sig1=:${sig.b64}:`);
+    } catch (_e) {
+      // keep going; recipient just won't be able to verify
+    }
+  }
+
+  return fetch(targetUrl, {
+    method: opts.method || "GET",
+    headers,
+    redirect: opts.redirect || "follow",
+    cf: { cacheTtl: 0 },  // we cache at the application layer
+  });
+}
+
+// build + sign a Web Bot Auth signature over (@authority, signature-agent).
+async function signRequestForWebBotAuth(targetUrl, env) {
+  const u = new URL(targetUrl);
+  const jwk = JSON.parse(env.RN_SIGNING_KEY_JWK);
+  const keyId = jwk.kid || "rn";
+  const cryptoKey = await crypto.subtle.importKey(
+    "jwk", jwk, { name: "Ed25519" }, false, ["sign"]
+  );
+
+  const created = Math.floor(Date.now() / 1000);
+  const params  = `("@authority" "signature-agent");created=${created};keyid="${keyId}";alg="ed25519";tag="web-bot-auth"`;
+
+  // RFC 9421 signature base: one component per line, then @signature-params.
+  const base = [
+    `"@authority": ${u.host}`,
+    `"signature-agent": "${SIG_AGENT}"`,
+    `"@signature-params": ${params}`,
+  ].join("\n");
+
+  const sigBytes = new Uint8Array(await crypto.subtle.sign(
+    "Ed25519", cryptoKey, new TextEncoder().encode(base)
+  ));
+  // structured-fields binary content: base64 (with padding), wrapped in colons by caller
+  let bin = "";
+  for (let i = 0; i < sigBytes.length; i++) bin += String.fromCharCode(sigBytes[i]);
+  const b64 = btoa(bin);
+
+  return { params, b64 };
+}
+
+// ── /around ─────────────────────────────────────────────────────────
+// what's going on in the crypto-VC neighborhood. each homepage fetched live
+// by AadharshBot (or served from a 1hr KV cache). curious, not competitive.
+async function handleAround(request, env, ctx) {
+  const report = await getOrBuildAroundReport(request, env, ctx);
+  return new Response(renderAroundHtml(report), {
+    headers: {
+      "content-type":  "text/html; charset=utf-8",
+      "cache-control": "public, max-age=60, s-maxage=300",
+      "x-robots-tag":  "noindex",
+    },
+  });
+}
+async function handleAroundJson(request, env, ctx) {
+  const report = await getOrBuildAroundReport(request, env, ctx);
+  return new Response(JSON.stringify(report, null, 2), {
+    headers: {
+      "content-type":  "application/json; charset=utf-8",
+      "cache-control": "public, max-age=60, s-maxage=300",
+      "x-robots-tag":  "noindex",
+    },
+  });
+}
+
+async function getOrBuildAroundReport(request, env, ctx) {
+  const CACHE_KEY = "around:report";
+  const url = new URL(request.url);
+
+  // optional bust for force-refresh
+  if (env.RN_BUST_SECRET && url.searchParams.get("bust") === env.RN_BUST_SECRET) {
+    if (env.RN_KV) await env.RN_KV.delete(CACHE_KEY);
+  }
+
+  if (env.RN_KV) {
+    const cached = await env.RN_KV.get(CACHE_KEY, "json");
+    if (cached) return cached;
+  }
+
+  const report = await runAround(env);
+  if (env.RN_KV) {
+    ctx.waitUntil(env.RN_KV.put(CACHE_KEY, JSON.stringify(report), { expirationTtl: 3600 }));
+  }
+  return report;
+}
+
+async function runAround(env) {
+  const results = await Promise.all(NEIGHBORS.map(async ({ name, url }) => {
+    const t0 = Date.now();
+    try {
+      const res = await signedFetch(url, env, {});
+      // some sites return 100MB+ — cap the body we read.
+      const reader = res.body?.getReader();
+      let body = "";
+      let received = 0;
+      const CAP = 200 * 1024;  // 200 KB plenty for <head>
+      if (reader) {
+        const dec = new TextDecoder();
+        while (received < CAP) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          received += value.byteLength;
+          body += dec.decode(value, { stream: true });
+        }
+        try { await reader.cancel(); } catch {}
+      }
+      const elapsed = Date.now() - t0;
+      return {
+        name, url,
+        status:        res.status,
+        title:         extractTitle(body),
+        description:   extractMeta(body, "description") || extractMeta(body, "og:description") || "",
+        ogImage:       extractMeta(body, "og:image") || "",
+        server:        res.headers.get("server") || "",
+        lastModified:  res.headers.get("last-modified") || "",
+        contentType:   res.headers.get("content-type") || "",
+        elapsedMs:     elapsed,
+      };
+    } catch (e) {
+      return { name, url, error: String(e?.message || e), elapsedMs: Date.now() - t0 };
+    }
+  }));
+  // sort fastest → slowest; errors (no latency or huge values) fall to the
+  // bottom so the table reads as a leaderboard.
+  results.sort((a, b) => {
+    const an = a.error ? Infinity : (a.elapsedMs ?? Infinity);
+    const bn = b.error ? Infinity : (b.elapsedMs ?? Infinity);
+    return an - bn;
+  });
+  return {
+    crawledBy: BOT_UA,
+    crawledAt: new Date().toISOString(),
+    signedWith: SIG_AGENT,
+    count:     results.length,
+    results,
+  };
+}
+
+function extractTitle(html) {
+  const m = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  return m ? decodeEntities(m[1].trim()).slice(0, 200) : "";
+}
+function extractMeta(html, name) {
+  const re = new RegExp(
+    `<meta[^>]+(?:name|property)=["']${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["'][^>]*content=["']([^"']+)["']`,
+    "i"
+  );
+  const m = html.match(re);
+  return m ? decodeEntities(m[1].trim()).slice(0, 240) : "";
+}
+function decodeEntities(s) {
+  return s
+    .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, " ");
+}
+
+function renderAroundHtml(report) {
+  const rows = report.results.map((r, i) => {
+    const ok = !r.error && r.status >= 200 && r.status < 400;
+    const status = r.error
+      ? `<span class="bad">error</span>`
+      : ok
+        ? `<span class="ok">${r.status}</span>`
+        : `<span class="warn">${r.status}</span>`;
+    const titleCol = r.error ? esc(r.error) : (esc(r.title) || "<span class=dim>—</span>");
+    const desc = r.description ? `<div class="desc">${esc(r.description)}</div>` : "";
+    return `
+      <tr>
+        <td class="firm">${esc(r.name)}<div class="host">${esc(new URL(r.url).host)}</div></td>
+        <td class="status">${status}</td>
+        <td class="title">${titleCol}${desc}</td>
+        <td class="latency">${r.elapsedMs}ms</td>
+        <td class="link"><a href="${esc(r.url)}" target="_blank" rel="noopener">↗</a></td>
+      </tr>`;
+  }).join("");
+
+  return `<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>/around — looking around the crypto VC neighborhood</title>
+<meta name="description" content="Snapshot of crypto VC homepages I keep tabs on, crawled live by AadharshBot.">
+<meta name="robots" content="noindex">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    background: linear-gradient(180deg, oklch(87.51% 0.0281 248.15) 0%, oklch(94.66% 0.0114 252.09) 220px, oklch(94.66% 0.0114 252.09) 100%);
+    font-family: Verdana, Tahoma, Geneva, sans-serif;
+    font-size: 11pt; line-height: 1.5; color: oklch(21.78% 0 0);
+    margin: 0; padding: 24px 12px 60px; min-height: 100vh;
+  }
+  .window {
+    max-width: 820px; margin: 0 auto; background: oklch(100.00% 0 0);
+    border: 1px solid oklch(61.14% 0.0611 253.60); box-shadow: 4px 4px 0 oklch(61.14% 0.0611 253.60 / 0.35);
+  }
+  .title-bar {
+    background: linear-gradient(180deg, oklch(62.22% 0.1240 251.99) 0%, oklch(49.72% 0.1129 250.87) 50%, oklch(44.15% 0.1179 254.72) 51%, oklch(50.95% 0.1117 250.01) 100%);
+    color: oklch(100.00% 0 0); font-family: "Trebuchet MS", Verdana, sans-serif;
+    font-size: 11pt; font-weight: bold; padding: 4px 8px;
+    border-bottom: 1px solid oklch(41.92% 0.0962 250.51); display: flex;
+    align-items: center; justify-content: space-between;
+  }
+  .title-bar .icon {
+    display: inline-block; width: 16px; height: 16px;
+    margin-right: 6px; background: oklch(69.58% 0.2043 43.49); position: relative; flex-shrink: 0;
+  }
+  .title-bar .icon::before {
+    content: ""; position: absolute; inset: 2px 4px; background: oklch(87.82% 0.0877 66.27);
+    clip-path: polygon(50% 0, 100% 100%, 0 100%);
+  }
+  .title-bar .controls span,
+  .title-bar .controls a {
+    display: inline-block; background: oklch(87.51% 0.0281 248.15); color: oklch(41.92% 0.0962 250.51);
+    border: 1px solid oklch(41.92% 0.0962 250.51); padding: 0 5px; margin-left: 2px;
+    font-weight: bold; cursor: default; text-decoration: none;
+  }
+  .title-bar .controls a { cursor: pointer; }
+  .title-bar .controls a:hover { background: oklch(58.99% 0.2344 26.30); color: oklch(100.00% 0 0); border-color: oklch(37.67% 0.1546 29.23); }
+  .content { padding: 18px 24px 22px; }
+  h1 {
+    font-family: "Trebuchet MS", Verdana, sans-serif; color: oklch(41.92% 0.0962 250.51);
+    font-size: 18pt; margin: 0 0 4px; font-weight: bold;
+  }
+  .lede { margin: 0 0 14px; color: oklch(38.67% 0 0); font-size: 10.5pt; }
+  .lede code { font-family: "Courier New", Courier, monospace; background: oklch(96.72% 0 0); border: 1px solid oklch(88.22% 0 0); padding: 0 3px; font-size: 10pt; }
+  table.scout {
+    width: 100%; border-collapse: collapse; margin: 8px 0 12px;
+    border: 1px solid oklch(61.14% 0.0611 253.60); border-top-color: oklch(47.12% 0.0555 253.58); border-left-color: oklch(47.12% 0.0555 253.58);
+    background: oklch(100.00% 0 0); font-size: 10pt;
+  }
+  table.scout thead th {
+    background: oklch(94.66% 0.0114 252.09); color: oklch(41.92% 0.0962 250.51); font-weight: bold;
+    padding: 5px 8px; text-align: left;
+    border-bottom: 1px solid oklch(61.14% 0.0611 253.60);
+    font-family: "Trebuchet MS", Verdana, sans-serif;
+  }
+  table.scout tbody td { padding: 6px 8px; border-bottom: 1px solid oklch(92.73% 0.0139 247.98); vertical-align: top; }
+  table.scout tbody tr:nth-child(even) td { background: oklch(97.50% 0.0062 255.47); }
+  table.scout .firm { font-weight: bold; color: oklch(41.92% 0.0962 250.51); width: 22%; }
+  table.scout .host { font-family: "Courier New", Courier, monospace; color: oklch(62.68% 0 0); font-size: 9pt; font-weight: normal; }
+  table.scout .status { font-family: "Courier New", Courier, monospace; width: 8%; text-align: center; }
+  table.scout .ok   { color: oklch(49.32% 0.1678 142.50); font-weight: bold; }
+  table.scout .warn { color: oklch(54.44% 0.1504 47.10); font-weight: bold; }
+  table.scout .bad  { color: oklch(46.34% 0.1902 29.23); font-weight: bold; }
+  table.scout .title { color: oklch(21.78% 0 0); }
+  table.scout .desc { color: oklch(51.03% 0 0); font-size: 9.5pt; margin-top: 3px; }
+  table.scout .latency { font-family: "Courier New", Courier, monospace; color: oklch(38.67% 0 0); width: 9%; text-align: right; }
+  table.scout .link { width: 5%; text-align: center; }
+  table.scout .link a { color: oklch(42.61% 0.2353 263.74); text-decoration: none; font-weight: bold; }
+  table.scout .link a:hover { color: oklch(62.80% 0.2577 29.23); text-decoration: underline; }
+  .meta {
+    font-size: 9.5pt; color: oklch(51.03% 0 0);
+    border: 1px solid oklch(61.14% 0.0611 253.60); background: oklch(98.81% 0.0263 99.90);
+    padding: 6px 10px; margin: 12px 0;
+  }
+  .meta code { font-family: "Courier New", Courier, monospace; background: oklch(100.00% 0 0); border: 1px solid oklch(89.75% 0 0); padding: 0 3px; }
+  footer { text-align: center; font-size: 9pt; color: oklch(44.95% 0 0); margin-top: 14px; padding-top: 10px; border-top: 1px solid oklch(86.67% 0.0294 259.59); }
+  a { color: oklch(42.61% 0.2353 263.74); }
+  .dim { color: oklch(62.68% 0 0); }
+  hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 12px 0; height: 0; }
+</style>
+</head><body>
+<div class="window">
+  <div class="title-bar">
+    <span><span class="icon"></span>/around — looking around the neighborhood</span>
+    <span class="controls"><span>_</span><span>□</span><a href="https://www.youtube.com/watch?v=dQw4w9WgXcQ" rel="noopener">×</a></span>
+  </div>
+  <div class="content">
+    <h1>Around the Neighborhood</h1>
+    <p class="lede">
+      A peek at what folks in crypto VC are up to. Each homepage fetched live
+      by <code>${esc(BOT_UA)}</code> — the small branded crawler I run from
+      this site — and laid out as a tiny neighborhood window. Mostly an excuse
+      to play with signed outbound requests per
+      <a href="https://datatracker.ietf.org/wg/webbotauth/about/" target="_blank" rel="noopener">Web Bot Auth</a>;
+      the shortlist is just funds whose work I follow. Receiving sites can
+      verify the signatures against
+      <a href="/.well-known/http-message-signatures-directory">our JWKS</a>.
+    </p>
+    <div class="meta">
+      <strong>Last crawl:</strong> ${esc(report.crawledAt)} &middot;
+      <strong>UA:</strong> <code>${esc(BOT_UA)}</code> &middot;
+      <strong>Signature-Agent:</strong> <code>${esc(SIG_AGENT)}</code> &middot;
+      <strong>Cache:</strong> 1 hour
+    </div>
+    <table class="scout">
+      <thead>
+        <tr><th>Firm</th><th>Status</th><th>Title / description</th><th>Latency</th><th>↗</th></tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <hr>
+    <p class="dim" style="font-size:9pt">
+      Also available as JSON: <a href="/around/json">/around/json</a>.
+      Bot methodology and ethics: <a href="/bot">/bot</a>.
+    </p>
+    <footer>
+      &larr; <a href="/">aadhar.sh</a> &middot; crawled by <a href="/bot">${esc(BOT_NAME)}</a>
+    </footer>
+  </div>
+</div>
+</body></html>`;
+}
+
+// ── /bot info page ──────────────────────────────────────────────────
+function handleBotPage(request) {
+  const html = `<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${BOT_NAME} — aadhar.sh's crawler</title>
+<meta name="description" content="Identity and behavior of AadharshBot, the crawler operated by aadhar.sh.">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    background: linear-gradient(180deg, oklch(87.51% 0.0281 248.15) 0%, oklch(94.66% 0.0114 252.09) 220px, oklch(94.66% 0.0114 252.09) 100%);
+    font-family: Verdana, Tahoma, Geneva, sans-serif;
+    font-size: 11pt; line-height: 1.5; color: oklch(21.78% 0 0);
+    margin: 0; padding: 24px 12px 60px; min-height: 100vh;
+  }
+  .window {
+    max-width: 660px; margin: 0 auto; background: oklch(100.00% 0 0);
+    border: 1px solid oklch(61.14% 0.0611 253.60); box-shadow: 4px 4px 0 oklch(61.14% 0.0611 253.60 / 0.35);
+  }
+  .title-bar {
+    background: linear-gradient(180deg, oklch(62.22% 0.1240 251.99) 0%, oklch(49.72% 0.1129 250.87) 50%, oklch(44.15% 0.1179 254.72) 51%, oklch(50.95% 0.1117 250.01) 100%);
+    color: oklch(100.00% 0 0); font-family: "Trebuchet MS", Verdana, sans-serif;
+    font-size: 11pt; font-weight: bold; padding: 4px 8px;
+    border-bottom: 1px solid oklch(41.92% 0.0962 250.51); display: flex;
+    align-items: center; justify-content: space-between;
+  }
+  .title-bar .icon { display: inline-block; width: 16px; height: 16px; margin-right: 6px; background: oklch(69.58% 0.2043 43.49); position: relative; flex-shrink: 0; }
+  .title-bar .icon::before { content: ""; position: absolute; inset: 2px 4px; background: oklch(87.82% 0.0877 66.27); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+  .title-bar .controls span, .title-bar .controls a { display: inline-block; background: oklch(87.51% 0.0281 248.15); color: oklch(41.92% 0.0962 250.51); border: 1px solid oklch(41.92% 0.0962 250.51); padding: 0 5px; margin-left: 2px; font-weight: bold; cursor: default; text-decoration: none; }
+  .title-bar .controls a { cursor: pointer; }
+  .title-bar .controls a:hover { background: oklch(58.99% 0.2344 26.30); color: oklch(100.00% 0 0); border-color: oklch(37.67% 0.1546 29.23); }
+  .content { padding: 18px 24px 22px; }
+  h1 { font-family: "Trebuchet MS", Verdana, sans-serif; font-size: 20pt; color: oklch(41.92% 0.0962 250.51); margin: 0 0 4px; font-weight: bold; }
+  h2 { font-family: "Trebuchet MS", Verdana, sans-serif; font-size: 12pt; color: oklch(41.92% 0.0962 250.51); margin: 16px 0 6px; font-weight: bold; border-bottom: 1px solid oklch(86.67% 0.0294 259.59); padding-bottom: 2px; }
+  a:link { color: oklch(42.61% 0.2353 263.74); text-decoration: underline; } a:visited { color: oklch(42.09% 0.1935 328.36); } a:hover { color: oklch(62.80% 0.2577 29.23); }
+  code { font-family: "Courier New", Courier, monospace; background: oklch(96.72% 0 0); border: 1px solid oklch(88.22% 0 0); padding: 0 3px; }
+  .lede { color: oklch(38.67% 0 0); font-size: 10.5pt; margin: 0 0 12px; }
+  dl.fields { display: grid; grid-template-columns: 11em 1fr; gap: 1px; margin: 4px 0 14px; background: oklch(85.04% 0.0283 248.16); border: 1px solid oklch(61.14% 0.0611 253.60); border-top-color: oklch(47.12% 0.0555 253.58); border-left-color: oklch(47.12% 0.0555 253.58); font-size: 10pt; }
+  dl.fields dt { background: oklch(94.66% 0.0114 252.09); color: oklch(41.92% 0.0962 250.51); font-weight: bold; padding: 4px 8px; }
+  dl.fields dd { background: oklch(100.00% 0 0); margin: 0; padding: 4px 8px; font-family: "Courier New", Courier, monospace; font-size: 9.5pt; word-break: break-all; }
+  footer { text-align: center; font-size: 9pt; color: oklch(44.95% 0 0); margin-top: 16px; padding-top: 10px; border-top: 1px solid oklch(86.67% 0.0294 259.59); }
+</style>
+</head><body>
+<div class="window">
+  <div class="title-bar">
+    <span><span class="icon"></span>${BOT_NAME}</span>
+    <span class="controls"><span>_</span><span>□</span><a href="https://www.youtube.com/watch?v=dQw4w9WgXcQ" rel="noopener">×</a></span>
+  </div>
+  <div class="content">
+    <h1>${BOT_NAME}</h1>
+    <p class="lede">
+      A small, transparent crawler operated by <a href="/">aadhar.sh</a>. If you see it
+      in your access logs, this page tells you who it is, what it does, and how to
+      stop it from visiting if you don't want it to.
+    </p>
+
+    <h2>Identity</h2>
+    <dl class="fields">
+      <dt>User-Agent</dt><dd>${esc(BOT_UA)}</dd>
+      <dt>Signature-Agent</dt><dd>${esc(SIG_AGENT)}</dd>
+      <dt>JWKS</dt><dd><a href="/.well-known/http-message-signatures-directory">/.well-known/http-message-signatures-directory</a></dd>
+      <dt>Algorithm</dt><dd>Ed25519 (EdDSA), per RFC 9421 + Web Bot Auth draft</dd>
+      <dt>Operator</dt><dd><!--email_off--><a href="mailto:coffee@aadhar.sh">coffee@aadhar.sh</a><!--/email_off--></dd>
+    </dl>
+
+    <h2>What it does</h2>
+    <p>
+      Fetches small numbers of public homepages on demand, mostly for personal
+      curiosity — see the <a href="/around">/around</a> dashboard for what it
+      currently looks at.
+      Reads only what's publicly served. Respects <code>robots.txt</code>. Does not
+      submit forms, log in, or scrape behind authentication. Caches results in
+      Cloudflare KV for at least an hour so it doesn't re-hit the same URL repeatedly.
+    </p>
+
+    <h2>How to verify it's really ${BOT_NAME}</h2>
+    <p>
+      Every request includes <code>Signature-Agent</code>, <code>Signature-Input</code>,
+      and <code>Signature</code> headers per
+      <a href="https://www.rfc-editor.org/rfc/rfc9421" target="_blank" rel="noopener">RFC 9421</a>
+      with the Web Bot Auth profile (<code>tag="web-bot-auth"</code>). Fetch the JWKS
+      at the URL above, find the key with the matching <code>kid</code>, and verify the
+      Ed25519 signature over the canonical components listed in <code>Signature-Input</code>.
+      If the verification fails, the request is not from this site.
+    </p>
+
+    <h2>How to opt out</h2>
+    <p>Add to your <code>robots.txt</code>:</p>
+    <pre><code>User-agent: ${BOT_NAME}
+Disallow: /</code></pre>
+    <p>
+      ${BOT_NAME} reads <code>robots.txt</code> on every cold cache hit and obeys
+      <code>Disallow</code> rules. If you have a question or a complaint, email
+      <!--email_off--><a href="mailto:coffee@aadhar.sh">coffee@aadhar.sh</a><!--/email_off--> and I'll reply by hand.
+    </p>
+
+    <footer>
+      &larr; <a href="/">aadhar.sh</a> &middot;
+      see it in action: <a href="/around">/around</a> &middot;
+      &copy; 2026 Aadharsh Pannirselvam
+    </footer>
+  </div>
+</div>
+</body></html>`;
+
+  return new Response(html, {
+    headers: {
+      "content-type":  "text/html; charset=utf-8",
+      "cache-control": "public, max-age=300, s-maxage=300",
+    },
+  });
+}
+
+// ── /rn/admin handler ───────────────────────────────────────────────
+// renders the bookmark-friendly form. requires ?secret=<RN_BUST_SECRET>.
+// the form posts to /rn/set so the actual write logic stays in one place.
+async function handleRnAdmin(request, env) {
+  const url = new URL(request.url);
+  const secret = url.searchParams.get("secret") || "";
+
+  if (!env.RN_BUST_SECRET || !timingSafeEqual(secret, env.RN_BUST_SECRET)) {
+    return setPage(403, "denied", "wrong secret. check the bookmark.");
+  }
+
+  // show current target so you can tell at a glance what /rn points to.
+  let current = "(empty — using fallback)";
+  if (env.RN_KV) {
+    const id = await env.RN_KV.get("playlist-id");
+    if (id) current = `<a href="https://open.spotify.com/playlist/${esc(id)}" target="_blank" rel="noopener">open.spotify.com/playlist/${esc(id)}</a>`;
+  }
+
+  const body = `
+    <p><strong>Currently:</strong><br>${current}</p>
+    <form method="POST" action="/rn/set" autocomplete="off" style="margin-top:14px">
+      <input type="hidden" name="secret" value="${esc(secret)}">
+      <label for="u" style="display:block;font-weight:bold;color:oklch(41.92% 0.0962 250.51);margin-bottom:4px">New playlist URL:</label>
+      <input id="u" name="url" type="text" placeholder="https://open.spotify.com/playlist/..." autofocus
+             style="width:100%;padding:5px 7px;font-family:'Courier New',monospace;font-size:10pt;border:1px solid oklch(61.14% 0.0611 253.60);border-top-color:oklch(47.12% 0.0555 253.58);border-left-color:oklch(47.12% 0.0555 253.58);background:oklch(99.81% 0.0092 106.56)">
+      <p style="margin-top:10px">
+        <button type="submit"
+                style="font-family:'Trebuchet MS',Verdana,sans-serif;font-size:10pt;font-weight:bold;color:oklch(41.92% 0.0962 250.51);background:linear-gradient(180deg,oklch(94.66% 0.0114 252.09),oklch(87.51% 0.0281 248.15));border:1px solid oklch(61.14% 0.0611 253.60);border-radius:2px;padding:4px 14px;cursor:pointer">
+          Update /rn
+        </button>
+      </p>
+    </form>
+    <p style="margin-top:18px;color:oklch(51.03% 0 0);font-size:9.5pt">
+      <em>Tip:</em> on Spotify desktop, right-click the playlist &rarr; Share &rarr;
+      Copy link to playlist, then paste here.
+    </p>`;
+  return setPage(200, "update /rn", body);
+}
+
+// ── /rn/set handler ─────────────────────────────────────────────────
+// the actual write endpoint. accepts inputs from three places:
+//   GET  /rn/set?secret=...&url=...   (shortcuts, bookmarks, curl)
+//   POST /rn/set  with secret+url in form-encoded body  (the admin form)
+//   POST /rn/set  with secret+url as JSON               (programmatic)
+// returns the same tiny period-correct confirmation page in all cases.
+async function handleRnSet(request, env) {
+  const url = new URL(request.url);
+  const params = await readParams(request, url);
+  const secret = params.get("secret") || "";
+  const target = params.get("url")    || "";
+
+  if (!env.RN_BUST_SECRET || !timingSafeEqual(secret, env.RN_BUST_SECRET)) {
+    return setPage(403, "denied", "wrong secret. check the bookmark.");
+  }
+
+  // accept either a full open.spotify.com URL, a spotify: URI, or a bare id.
+  const m =
+    target.match(/^spotify:playlist:([0-9A-Za-z]{22})$/) ||
+    target.match(/open\.spotify\.com\/playlist\/([0-9A-Za-z]{22})/) ||
+    target.match(/^([0-9A-Za-z]{22})$/);
+  if (!m) {
+    return setPage(400, "bad url",
+      "couldn't find a 22-character playlist id in <code>" + esc(target) + "</code>.");
+  }
+  const id = m[1];
+
+  if (!env.RN_KV) {
+    return setPage(500, "no kv binding", "the worker can't see RN_KV — bind it in Pages settings.");
+  }
+  await env.RN_KV.put("playlist-id", id);
+
+  return setPage(200, "updated",
+    `<code>/rn</code> now points to <a href="https://open.spotify.com/playlist/${esc(id)}" target="_blank" rel="noopener">open.spotify.com/playlist/${esc(id)}</a>.<br>` +
+    `<small><a href="/rn/admin?secret=${esc(secret)}">&larr; back to admin</a></small>`);
+}
+
+// gather params from query string, form body, or JSON body — query wins ties.
+async function readParams(request, url) {
+  const out = new URLSearchParams(url.searchParams);
+  if (request.method === "POST") {
+    const ct = (request.headers.get("content-type") || "").toLowerCase();
+    try {
+      if (ct.startsWith("application/x-www-form-urlencoded")) {
+        const body = await request.text();
+        for (const [k, v] of new URLSearchParams(body)) {
+          if (!out.has(k)) out.set(k, v);
+        }
+      } else if (ct.startsWith("application/json")) {
+        const data = await request.json();
+        for (const k of Object.keys(data || {})) {
+          if (!out.has(k)) out.set(k, String(data[k]));
+        }
+      }
+    } catch {}
+  }
+  return out;
+}
+
+// ── tiny period-correct confirmation page ───────────────────────────
+function setPage(status, title, bodyHtml) {
+  const html = `<!DOCTYPE html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>/rn/set — ${esc(title)}</title>
+<meta name="robots" content="noindex">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: Verdana, Tahoma, Geneva, sans-serif;
+    font-size: 11pt; line-height: 1.5; color: oklch(21.78% 0 0);
+    background: linear-gradient(180deg, oklch(87.51% 0.0281 248.15) 0%, oklch(94.66% 0.0114 252.09) 220px, oklch(94.66% 0.0114 252.09) 100%);
+    margin: 0; padding: 24px 12px 60px; min-height: 100vh;
+  }
+  .window {
+    max-width: 520px; margin: 0 auto; background: oklch(100.00% 0 0);
+    border: 1px solid oklch(61.14% 0.0611 253.60); box-shadow: 4px 4px 0 oklch(61.14% 0.0611 253.60 / 0.35);
+  }
+  .title-bar {
+    background: linear-gradient(180deg, oklch(62.22% 0.1240 251.99) 0%, oklch(49.72% 0.1129 250.87) 50%, oklch(44.15% 0.1179 254.72) 51%, oklch(50.95% 0.1117 250.01) 100%);
+    color: oklch(100.00% 0 0); font-family: "Trebuchet MS", Verdana, sans-serif;
+    font-size: 11pt; font-weight: bold; padding: 4px 8px;
+    border-bottom: 1px solid oklch(41.92% 0.0962 250.51);
+  }
+  .content { padding: 18px 24px 22px; }
+  h1 {
+    font-family: "Trebuchet MS", Verdana, sans-serif; color: oklch(41.92% 0.0962 250.51);
+    font-size: 16pt; margin: 0 0 8px;
+  }
+  a:link    { color: oklch(42.61% 0.2353 263.74); text-decoration: underline; }
+  a:visited { color: oklch(42.09% 0.1935 328.36); }
+  a:hover   { color: oklch(62.80% 0.2577 29.23); }
+  code { font-family: "Courier New", Courier, monospace; background: oklch(96.72% 0 0); padding: 0 3px; border: 1px solid oklch(88.22% 0 0); }
+</style></head><body>
+<div class="window">
+  <div class="title-bar">/rn/set &mdash; ${esc(title)}</div>
+  <div class="content">
+    <h1>${esc(title)}</h1>
+    <p>${bodyHtml}</p>
+    <p><small>&larr; <a href="/">aadhar.sh</a></small></p>
+  </div>
+</div></body></html>`;
+  return new Response(html, {
+    status,
+    headers: {
+      "content-type":  "text/html; charset=utf-8",
+      "cache-control": "no-store",
+      "x-robots-tag":  "noindex",
+    },
+  });
+}
+
+// constant-time string compare so we don't leak the secret via timing.
+function timingSafeEqual(a, b) {
+  if (typeof a !== "string" || typeof b !== "string") return false;
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+// ── /whoareyou handler ───────────────────────────────────────────────
+// shows the visitor what their HTTP request revealed. no logging, no
+// storage, no third-party calls.
+
+function handleWhoareyou(request) {
+  const cf = request.cf || {};
+  const h  = request.headers;
+
+  const bm = cf.botManagement || {};
+  const data = {
+    ip:             h.get("cf-connecting-ip") || "—",
+    asn:            cf.asn || "—",
+    asOrg:          cf.asOrganization || "—",
+    country:        cf.country || "??",
+    continent:      cf.continent || "—",
+    isEU:           cf.isEUCountry === "1" || cf.isEUCountry === true,
+    region:         cf.region || "—",
+    city:           cf.city || "—",
+    postalCode:     cf.postalCode || "—",
+    latitude:       cf.latitude || null,
+    longitude:      cf.longitude || null,
+    timezone:       cf.timezone || "—",
+    colo:           cf.colo || "—",
+    clientTcpRtt:   cf.clientTcpRtt ?? null,
+    httpProtocol:   cf.httpProtocol || "—",
+    tlsVersion:     cf.tlsVersion || "—",
+    tlsCipher:      cf.tlsCipher || "—",
+    acceptEncoding: h.get("accept-encoding") || "—",
+    userAgent:      h.get("user-agent") || "—",
+    acceptLanguage: h.get("accept-language") || "—",
+    dnt:            h.get("dnt") === "1" ? "set (1)" : "not set",
+    referer:        h.get("referer") || "(none)",
+    cookies:        h.get("cookie") ? "present" : "none",
+    botScore:       bm.score ?? null,
+    verifiedBot:    bm.verifiedBot ?? false,
+    detectionIds:   bm.detectionIds || null,
+    corporateProxy: bm.corporateProxy ?? null,
+    ja3Hash:        bm.ja3Hash || null,
+    ja4:            bm.ja4 || null,
+    when:           new Date().toISOString(),
+  };
+
+  const ua = parseUA(data.userAgent);
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>whoareyou — aadharsh's site</title>
+<meta name="description" content="what one HTTP request to aadhar.sh reveals about you. read-only, never stored.">
+<meta name="robots" content="noindex">
+<style>
+/* ─── /whoareyou, circa 2003 ──────────────────────────────────────────
+   matches the holding page chrome: light-blue gradient body, white
+   window panel, fake XP title bar, verdana body, trebuchet headings,
+   beveled data tables that feel like a Windows properties dialog.
+   ────────────────────────────────────────────────────────────────── */
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+
+body {
+  background: oklch(91.74% 0.0203 238.68);
+  background: linear-gradient(180deg, oklch(87.51% 0.0281 248.15) 0%, oklch(94.66% 0.0114 252.09) 220px, oklch(94.66% 0.0114 252.09) 100%);
+  font-family: Verdana, Tahoma, Geneva, sans-serif;
+  font-size: 11pt;
+  line-height: 1.5;
+  color: oklch(21.78% 0 0);
+  padding: 24px 12px 60px;
+  min-height: 100vh;
+}
+
+.window {
+  max-width: 720px;
+  margin: 0 auto;
+  background: oklch(100.00% 0 0);
+  border: 1px solid oklch(61.14% 0.0611 253.60);
+  box-shadow: 4px 4px 0 oklch(61.14% 0.0611 253.60 / 0.35);
+}
+
+/* fake XP title bar */
+.title-bar {
+  background: linear-gradient(180deg, oklch(62.22% 0.1240 251.99) 0%, oklch(49.72% 0.1129 250.87) 50%, oklch(44.15% 0.1179 254.72) 51%, oklch(50.95% 0.1117 250.01) 100%);
+  color: oklch(100.00% 0 0);
+  font-family: "Trebuchet MS", Verdana, sans-serif;
+  font-size: 11pt;
+  font-weight: bold;
+  padding: 4px 8px;
+  border-bottom: 1px solid oklch(41.92% 0.0962 250.51);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.title-bar .icon {
+  display: inline-block;
+  width: 16px; height: 16px;
+  margin-right: 6px;
+  vertical-align: middle;
+  background: oklch(69.58% 0.2043 43.49);
+  position: relative;
+  flex-shrink: 0;
+}
+.title-bar .icon::before {
+  content: "";
+  position: absolute;
+  inset: 2px 4px;
+  background: oklch(87.82% 0.0877 66.27);
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+.title-bar .title-text { flex: 1; padding-left: 4px; }
+.title-bar .controls { letter-spacing: 2px; font-family: Tahoma, sans-serif; font-size: 9pt; }
+.title-bar .controls span,
+.title-bar .controls a {
+  display: inline-block;
+  background: oklch(87.51% 0.0281 248.15);
+  color: oklch(41.92% 0.0962 250.51);
+  border: 1px solid oklch(41.92% 0.0962 250.51);
+  padding: 0 5px;
+  margin-left: 2px;
+  font-weight: bold;
+  cursor: default;
+  text-decoration: none;
+}
+.title-bar .controls a { cursor: pointer; }
+.title-bar .controls a:hover,
+.title-bar .controls a:focus {
+  background: oklch(58.99% 0.2344 26.30);
+  color: oklch(100.00% 0 0);
+  border-color: oklch(37.67% 0.1546 29.23);
+}
+
+.content { padding: 18px 24px 22px; }
+
+h1 {
+  font-family: "Trebuchet MS", Verdana, sans-serif;
+  font-size: 20pt;
+  color: oklch(41.92% 0.0962 250.51);
+  margin: 0 0 4px;
+  font-weight: bold;
+  letter-spacing: -0.01em;
+}
+h2 {
+  font-family: "Trebuchet MS", Verdana, sans-serif;
+  font-size: 12pt;
+  color: oklch(41.92% 0.0962 250.51);
+  margin: 18px 0 6px;
+  font-weight: bold;
+  border-bottom: 1px solid oklch(86.67% 0.0294 259.59);
+  padding-bottom: 2px;
+}
+
+.lede { margin: 0 0 14px; color: oklch(38.67% 0 0); font-size: 10.5pt; }
+p { margin: 0 0 12px; }
+ul { margin: 0 0 12px 22px; padding: 0; }
+li { margin-bottom: 4px; }
+
+a:link    { color: oklch(42.61% 0.2353 263.74); text-decoration: underline; }
+a:visited { color: oklch(42.09% 0.1935 328.36); }
+a:hover   { color: oklch(62.80% 0.2577 29.23); }
+a:active  { color: oklch(62.80% 0.2577 29.23); }
+
+hr {
+  border: 0;
+  border-top: 2px groove oklch(86.67% 0.0294 259.59);
+  margin: 16px 0;
+  height: 0;
+}
+
+code, .mono {
+  font-family: "Courier New", Courier, monospace;
+  font-size: 10pt;
+  background: oklch(96.72% 0 0);
+  border: 1px solid oklch(88.22% 0 0);
+  padding: 0 3px;
+}
+
+/* properties-dialog field grid — inset bevel like a Windows form */
+.field-grid {
+  display: grid;
+  grid-template-columns: 14em 1fr;
+  gap: 1px;
+  margin: 4px 0 14px;
+  background: oklch(85.04% 0.0283 248.16);
+  border: 1px solid oklch(61.14% 0.0611 253.60);
+  border-top-color: oklch(47.12% 0.0555 253.58);
+  border-left-color: oklch(47.12% 0.0555 253.58);
+  font-size: 10pt;
+}
+.field-grid dt {
+  background: oklch(94.66% 0.0114 252.09);
+  color: oklch(41.92% 0.0962 250.51);
+  font-weight: bold;
+  padding: 4px 8px;
+  font-family: Verdana, Tahoma, sans-serif;
+}
+.field-grid dd {
+  background: oklch(100.00% 0 0);
+  margin: 0;
+  padding: 4px 8px;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 9.5pt;
+  word-break: break-all;
+  color: oklch(21.78% 0 0);
+}
+.field-grid dd .dim { color: oklch(62.68% 0 0); font-family: Verdana, Tahoma, sans-serif; font-size: 9pt; }
+.field-grid dd.muted { color: oklch(44.95% 0 0); }
+
+/* little raised "pill" — looks like a tiny 3D button */
+.pill {
+  display: inline-block;
+  padding: 0 5px;
+  border: 1px solid oklch(61.14% 0.0611 253.60);
+  background: oklch(94.66% 0.0114 252.09);
+  color: oklch(41.92% 0.0962 250.51);
+  font-family: Verdana, Tahoma, sans-serif;
+  font-size: 8.5pt;
+  font-weight: bold;
+  margin-right: 4px;
+  border-radius: 2px;
+}
+
+/* info callout — beveled like a Windows information dialog */
+.callout {
+  border: 1px solid oklch(61.14% 0.0611 253.60);
+  background: oklch(98.81% 0.0263 99.90);
+  padding: 8px 12px;
+  margin: 14px 0;
+  font-size: 10pt;
+  box-shadow: 1px 1px 0 oklch(61.14% 0.0611 253.60 / 0.3);
+}
+.callout::before {
+  content: "ⓘ ";
+  color: oklch(41.92% 0.0962 250.51);
+  font-weight: bold;
+}
+
+/* footer */
+footer {
+  text-align: center;
+  font-family: Verdana, Tahoma, sans-serif;
+  font-size: 9pt;
+  color: oklch(44.95% 0 0);
+  margin: 18px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid oklch(86.67% 0.0294 259.59);
+}
+footer .signature { font-style: italic; margin-top: 4px; }
+footer .signature small { color: oklch(56.93% 0 0); }
+</style>
+</head>
+<body>
+
+<div class="window">
+
+  <div class="title-bar" aria-hidden="true">
+    <span class="title-text"><span class="icon"></span>whoareyou</span>
+    <span class="controls"><span>_</span><span>□</span><a href="https://www.youtube.com/watch?v=dQw4w9WgXcQ" rel="noopener" title="close">×</a></span>
+  </div>
+
+  <div class="content">
+
+    <h1>whoareyou</h1>
+    <p class="lede">
+      This is what one HTTP request from your browser revealed to this site.
+      None of it is logged. None of it is stored. Close this tab and it&rsquo;s gone.
+    </p>
+
+    <hr>
+
+    <h2>Your Network</h2>
+    <dl class="field-grid">
+      <dt>IP address</dt>           <dd>${esc(data.ip)}</dd>
+      <dt>ISP / ASN</dt>            <dd>${esc(data.asOrg)} (AS${esc(data.asn)})</dd>
+      <dt>Country</dt>              <dd>${esc(data.country)}${data.continent !== "—" ? ` <span class="dim">(${esc(data.continent)}${data.isEU ? ", EU" : ""})</span>` : ""}</dd>
+      <dt>Region</dt>               <dd>${esc(data.region)}</dd>
+      <dt>City</dt>                 <dd>${esc(data.city)} ${data.postalCode !== "—" ? `(${esc(data.postalCode)})` : ""}</dd>
+      <dt>Timezone</dt>             <dd>${esc(data.timezone)}</dd>
+      ${data.latitude ? `<dt>Approx. coords</dt><dd>${esc(data.latitude)}, ${esc(data.longitude)} <a href="https://www.openstreetmap.org/?mlat=${data.latitude}&mlon=${data.longitude}&zoom=10" target="_blank" rel="noopener">(see on map)</a></dd>` : ""}
+      <dt>Cloudflare colo</dt>      <dd>${esc(data.colo)} <span class="dim">(nearest CF data center serving you)</span></dd>
+      ${data.clientTcpRtt !== null ? `<dt>TCP round-trip</dt><dd>${esc(data.clientTcpRtt)} ms</dd>` : ""}
+    </dl>
+
+    <h2>Your Transport</h2>
+    <dl class="field-grid">
+      <dt>HTTP version</dt>         <dd>${esc(data.httpProtocol)} ${data.httpProtocol === "HTTP/3" ? `<span class="pill">over QUIC</span>` : ""}</dd>
+      <dt>TLS version</dt>          <dd>${esc(data.tlsVersion)}</dd>
+      <dt>TLS cipher</dt>           <dd>${esc(data.tlsCipher)}</dd>
+      <dt>Accept-Encoding</dt>      <dd>${esc(data.acceptEncoding)}</dd>
+      ${data.ja3Hash ? `<dt>JA3 fingerprint</dt><dd>${esc(data.ja3Hash)} <span class="dim">(TLS ClientHello hash)</span></dd>` : ""}
+      ${data.ja4 ? `<dt>JA4 fingerprint</dt><dd>${esc(data.ja4)}</dd>` : ""}
+    </dl>
+
+    <h2>Your Browser</h2>
+    <dl class="field-grid">
+      <dt>Best guess</dt>           <dd>${esc(ua.browser)} on ${esc(ua.os)} ${esc(ua.device)}</dd>
+      <dt>User agent</dt>           <dd class="muted">${esc(data.userAgent)}</dd>
+      <dt>Languages</dt>            <dd>${esc(data.acceptLanguage)}</dd>
+      <dt>Do-not-track</dt>         <dd>${esc(data.dnt)}</dd>
+    </dl>
+
+    <h2>The Request Itself</h2>
+    <dl class="field-grid">
+      <dt>Received at</dt>          <dd>${esc(data.when)}</dd>
+      <dt>Referrer</dt>             <dd>${esc(data.referer)}</dd>
+      <dt>Cookies sent</dt>         <dd>${esc(data.cookies)}</dd>
+      ${data.botScore !== null ? `<dt>CF bot score</dt><dd>${esc(data.botScore)} / 99 <span class="dim">(higher = more human-like)</span></dd>` : ""}
+      ${data.detectionIds ? `<dt>Bot detection IDs</dt><dd class="muted">${esc(JSON.stringify(data.detectionIds))}</dd>` : ""}
+      ${data.corporateProxy ? `<dt>Corporate proxy</dt><dd>detected</dd>` : ""}
+      ${data.verifiedBot ? `<dt>Verified bot</dt><dd>yes <span class="pill">CF-signed</span></dd>` : ""}
+    </dl>
+
+    <hr>
+
+    <h2>What I Can&rsquo;t See</h2>
+    <ul>
+      <li><strong>Your DNS resolver / protocol.</strong> Name resolution happens before the request reaches this site; I only see the IP that connected. HTTP/3 implies a modern network stack that <em>probably</em> uses DoH, but that&rsquo;s inference, not measurement.</li>
+      <li><strong>Your real identity</strong> unless you&rsquo;ve told me. An IP isn&rsquo;t a name.</li>
+      <li><strong>The rest of your browsing.</strong> I see this one request, nothing else.</li>
+      <li><strong>The contents of any encrypted data</strong> outside this HTTP session. TLS is doing its job.</li>
+    </ul>
+
+    <h2>Want This To Leak Less?</h2>
+    <ul>
+      <li><strong>Use a VPN or Tor.</strong> Changes IP/ASN/geo. Tor anonymizes most fingerprintable details.</li>
+      <li><strong>Use a private browsing window.</strong> Drops cookies and language hints (somewhat).</li>
+      <li><strong>Set <code>DNT: 1</code></strong> or use a browser that does. ~No servers honor it, but it&rsquo;s a signal.</li>
+      <li><strong>Strip the user-agent.</strong> Some browsers / extensions let you fake or hide it; reduces fingerprinting surface.</li>
+    </ul>
+
+    <div class="callout">
+      <strong>About this page:</strong> Rendered at the Cloudflare edge, no third-party
+      calls, no analytics. The data above exists for the lifetime of one HTTP
+      request and is never written to storage. View-source if you want; it&rsquo;s
+      a single JavaScript file you can read end-to-end.
+    </div>
+
+    <footer>
+      <p>
+        &larr; Back to <a href="/">aadhar.sh</a>
+        &middot; Built as a Cloudflare Pages worker
+      </p>
+      <p class="signature">
+        <small>&copy; 2026 Aadharsh Pannirselvam &middot; Best viewed in any browser made since 2001.</small>
+      </p>
+    </footer>
+
+  </div>
+</div>
+
+</body>
+</html>`;
+
+  return new Response(html, {
+    headers: {
+      "content-type":    "text/html; charset=utf-8",
+      "cache-control":   "no-store, must-revalidate",
+      "x-robots-tag":    "noindex",
+      "referrer-policy": "strict-origin-when-cross-origin",
+    },
+  });
+}
+
+// ── helpers ──────────────────────────────────────────────────────────
+
+function parseUA(ua) {
+  const browser =
+    /Edg\//.test(ua)             ? "Edge"    :
+    /OPR\//.test(ua)             ? "Opera"   :
+    /Firefox\//.test(ua)         ? "Firefox" :
+    /Chrome\//.test(ua)          ? "Chrome"  :
+    /Safari\//.test(ua)          ? "Safari"  :
+    /curl/.test(ua)              ? "curl"    :
+    /bot|spider|crawl/i.test(ua) ? "a bot"   : "an unknown browser";
+  const os =
+    /iPhone|iPad/.test(ua)       ? "iOS"     :
+    /Android/.test(ua)           ? "Android" :
+    /Mac OS X/.test(ua)          ? "macOS"   :
+    /Windows/.test(ua)           ? "Windows" :
+    /Linux/.test(ua)             ? "Linux"   : "an unknown OS";
+  const device =
+    /iPhone/.test(ua)            ? "(iPhone)" :
+    /iPad/.test(ua)              ? "(iPad)"   :
+    /Mobile/.test(ua)            ? "(mobile)" : "";
+  return { browser, os, device };
+}
+
+function esc(s) {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}

@@ -1,0 +1,21 @@
+# wrangler local cache + state (per-deploy, regenerates)
+.wrangler/
+
+# macOS
+.DS_Store
+
+# editor cruft
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# node (only used by cal/ if you npm install locally; deploy doesn't need it)
+node_modules/
+npm-debug.log
+
+# secrets — wrangler stores these in .dev.vars when running `wrangler dev`
+.dev.vars
+
+# Claude Code per-project transient state
+.claude/projects/

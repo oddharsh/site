@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  sitemap for aadhar.sh during the holding-page era.
+  add more entries as real pages land (sounds, images, dishes, tinkering,
+  lwe, faq, etc.).
+
+  excluded by design:
+    /rn            — 302 redirect, not a page
+    /rn/tracks     — JSON endpoint (also Disallow'd in robots.txt)
+    /rn/admin      — secret-gated action endpoint
+    /rn/set        — secret-gated action endpoint
+    /around        — meta noindex (live data, not durable content)
+    /around/json   — JSON endpoint
+    /whoareyou     — meta noindex + X-Robots-Tag: noindex
+    /scout         — 301 → /around (legacy alias)
+-->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://aadhar.sh/</loc>
+    <lastmod>2026-05-19</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://aadhar.sh/bot</loc>
+    <lastmod>2026-05-19</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+</urlset>
+<!-- love, aadharsh -->

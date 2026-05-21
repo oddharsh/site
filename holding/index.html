@@ -1,0 +1,1379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>aadharsh's site</title>
+<meta name="description" content="aadharsh's corner of the web — under construction.">
+<link rel="canonical" href="https://aadhar.sh/">
+<link rel="alternate" type="text/plain" title="llms.txt summary" href="/llms.txt">
+
+<!-- preconnect / dns-prefetch: warm DNS + TLS for the destinations a
+     visitor is likely to click. preconnect = full handshake (use sparingly);
+     dns-prefetch = just DNS (cheaper, fan it out). McMaster-Carr school
+     of "fast feels like magic, magic is just preconnect". -->
+<link rel="preconnect" href="https://open.spotify.com" crossorigin>
+<link rel="preconnect" href="https://song.link" crossorigin>
+<link rel="preconnect" href="https://cal.com" crossorigin>
+<link rel="dns-prefetch" href="https://www.archetype.fund">
+<link rel="dns-prefetch" href="https://twitter.com">
+<link rel="dns-prefetch" href="https://curius.app">
+<link rel="dns-prefetch" href="https://beliapp.com">
+<link rel="dns-prefetch" href="https://open.spotifycdn.com">
+<!-- (image-cdn-*.spotifycdn.com + i.scdn.co are only needed when the user
+     hovers a track or artist row to load the album/profile art tooltip;
+     those hints are now injected by the tooltip JS on first hover instead
+     of shipping in every page's initial HTML — saves ~250 bytes upfront
+     and avoids spending DNS lookups on visitors who never hover.) -->
+
+<!-- traffic cone favicon. period-correct for the holding page. swap once
+     the real site lands. -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='4' y='25' width='24' height='3' rx='0.5' fill='%231a1a1a'/><path d='M 16 4 L 9 25 L 23 25 Z' fill='%23ff6600'/><path d='M 11.3 18 L 20.7 18 L 21.7 21 L 10.3 21 Z' fill='%23ffffff'/><path d='M 13.7 11 L 18.3 11 L 19 13 L 13 13 Z' fill='%23ffffff'/></svg>">
+
+<meta property="og:type" content="profile">
+<meta property="og:title" content="aadharsh pannirselvam">
+<meta property="og:description" content="under construction. coming back soon.">
+<meta property="og:url" content="https://aadhar.sh/">
+
+<style>
+/* ─── personal homepage, circa 2003 ────────────────────────────────────
+   period cues: verdana body, trebuchet headings, web-safe blues, 3D
+   borders, raised photo frames, fixed-width centered layout, beveled
+   content panel. colors are written in oklch (perceptually-uniform
+   color space) for resto-mod authenticity — same visual result as the
+   underlying sRGB hex, but the source reads modern.
+   ─────────────────────────────────────────────────────────────────── */
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: oklch(91.74% 0.0203 238.68);
+  background: linear-gradient(180deg, oklch(87.51% 0.0281 248.15) 0%, oklch(94.66% 0.0114 252.09) 220px, oklch(94.66% 0.0114 252.09) 100%);
+  font-family: Verdana, Tahoma, Geneva, sans-serif;
+  font-size: 11pt;
+  line-height: 1.5;
+  color: oklch(21.78% 0 0);
+  padding: 24px 12px 60px;
+  min-height: 100vh;
+}
+
+.window {
+  max-width: 660px;
+  margin: 0 auto;
+  background: oklch(100.00% 0 0);
+  border: 1px solid oklch(61.14% 0.0611 253.60);
+  box-shadow: 4px 4px 0 oklch(61.14% 0.0611 253.60 / 0.35);
+}
+
+/* fake XP title bar */
+.title-bar {
+  background: linear-gradient(180deg, oklch(62.22% 0.1240 251.99) 0%, oklch(49.72% 0.1129 250.87) 50%, oklch(44.15% 0.1179 254.72) 51%, oklch(50.95% 0.1117 250.01) 100%);
+  color: oklch(100.00% 0 0);
+  font-family: "Trebuchet MS", Verdana, sans-serif;
+  font-size: 11pt;
+  font-weight: bold;
+  padding: 4px 8px;
+  border-bottom: 1px solid oklch(41.92% 0.0962 250.51);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.title-bar .icon {
+  display: inline-block;
+  width: 16px; height: 16px;
+  margin-right: 6px;
+  vertical-align: middle;
+  background: oklch(69.58% 0.2043 43.49);
+  position: relative;
+  flex-shrink: 0;
+}
+.title-bar .icon::before {
+  content: "";
+  position: absolute;
+  inset: 2px 4px;
+  background: oklch(87.82% 0.0877 66.27);
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+.title-bar .title-text { flex: 1; padding-left: 4px; }
+.title-bar .controls { letter-spacing: 2px; font-family: Tahoma, sans-serif; font-size: 9pt; }
+.title-bar .controls span,
+.title-bar .controls a {
+  display: inline-block;
+  background: oklch(87.51% 0.0281 248.15);
+  color: oklch(41.92% 0.0962 250.51);
+  border: 1px solid oklch(41.92% 0.0962 250.51);
+  padding: 0 5px;
+  margin-left: 2px;
+  font-weight: bold;
+  cursor: default;
+  text-decoration: none;
+}
+.title-bar .controls a { cursor: pointer; }
+.title-bar .controls a:hover,
+.title-bar .controls a:focus {
+  background: oklch(58.99% 0.2344 26.30);
+  color: oklch(100.00% 0 0);
+  border-color: oklch(37.67% 0.1546 29.23);
+}
+
+.content {
+  padding: 18px 24px 22px;
+}
+
+h1 {
+  font-family: "Trebuchet MS", Verdana, sans-serif;
+  font-size: 20pt;
+  color: oklch(41.92% 0.0962 250.51);
+  margin: 0 0 4px;
+  font-weight: bold;
+  letter-spacing: -0.01em;
+}
+
+.lede {
+  margin: 0 0 14px;
+  color: oklch(38.67% 0 0);
+  font-size: 10.5pt;
+}
+
+p { margin: 0 0 12px; }
+
+a:link    { color: oklch(42.61% 0.2353 263.74); text-decoration: underline; }
+a:visited { color: oklch(42.09% 0.1935 328.36); }
+a:hover   { color: oklch(62.80% 0.2577 29.23); }
+a:active  { color: oklch(62.80% 0.2577 29.23); }
+
+hr {
+  border: 0;
+  border-top: 2px groove oklch(86.67% 0.0294 259.59);
+  margin: 16px 0;
+  height: 0;
+}
+
+/* now-playing list: a section that fetches /rn/tracks and renders each
+   track as a link to song.link (cross-platform redirect). styled like a
+   period-correct Windows-list view — alternating row tint, monospace title
+   column, navy heading, hairline divider. */
+.now-playing {
+  margin: 18px 0 4px;
+  /* (we used to set `content-visibility: auto` here as a "skip rendering
+     when off-screen" optimization, but the viewability checks ran on
+     every scroll and on variable-refresh displays in Low Power mode
+     they cost more than the savings. with the list ~500px tall on a
+     short page, the savings were marginal anyway.) */
+}
+.now-playing h2 {
+  font-family: "Trebuchet MS", Verdana, sans-serif;
+  font-size: 12pt;
+  color: oklch(41.92% 0.0962 250.51);
+  margin: 0 0 6px;
+  font-weight: bold;
+  border-bottom: 1px solid oklch(86.67% 0.0294 259.59);
+  padding-bottom: 2px;
+}
+.now-playing h2 a {
+  color: inherit;
+  text-decoration: none;
+}
+.now-playing h2 a:hover {
+  color: oklch(62.80% 0.2577 29.23);
+  text-decoration: underline;
+}
+.np-meta {
+  font-size: 9.5pt;
+  color: oklch(51.03% 0 0);
+  margin: 0 0 8px;
+}
+.np-meta a { color: oklch(42.61% 0.2353 263.74); }
+.np-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  border: 1px solid oklch(61.14% 0.0611 253.60);
+  border-top-color: oklch(47.12% 0.0555 253.58);
+  border-left-color: oklch(47.12% 0.0555 253.58);
+  background: oklch(100.00% 0 0);
+}
+.np-list li {
+  padding: 5px 8px;
+  border-bottom: 1px solid oklch(92.73% 0.0139 247.98);
+  font-size: 10pt;
+  line-height: 1.35;
+}
+.np-list li:nth-child(even) { background: oklch(97.50% 0.0062 255.47); }
+.np-list li:last-child { border-bottom: none; }
+.np-list .np-loading,
+.np-list .np-empty {
+  color: oklch(62.68% 0 0);
+  font-style: italic;
+  text-align: center;
+  padding: 12px;
+}
+.np-list a {
+  text-decoration: none;
+  color: oklch(21.78% 0 0);
+  display: block;
+}
+.np-list a:hover { background: oklch(97.73% 0.0373 95.44); }
+.np-list a:hover .np-title { color: oklch(62.80% 0.2577 29.23); }
+.np-title {
+  font-weight: bold;
+  color: oklch(41.92% 0.0962 250.51);
+}
+.np-sep {
+  color: oklch(62.68% 0 0);
+  margin: 0 4px;
+}
+.np-artist {
+  color: oklch(38.67% 0 0);
+}
+/* artist names render as spans (not anchors — they live inside the row's
+   outer <a>, where nested anchors are invalid). underline on hover + the
+   row-link color makes their interactivity obvious; cursor: pointer
+   covers the affordance. keyboard focus uses the default outline. */
+.np-artist-link {
+  cursor: pointer;
+}
+.np-artist-link:hover,
+.np-artist-link:focus-visible {
+  color: oklch(42.61% 0.2353 263.74);
+  text-decoration: underline;
+}
+.np-explicit {
+  display: inline-block;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 8pt;
+  font-weight: bold;
+  color: oklch(51.03% 0 0);
+  background: oklch(94.91% 0 0);
+  border: 1px solid oklch(84.52% 0 0);
+  padding: 0 3px;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+.np-duration {
+  font-family: "Courier New", Courier, monospace;
+  font-size: 9pt;
+  color: oklch(62.68% 0 0);
+  float: right;
+  margin-left: 8px;
+}
+
+/* photo grid: each tile in a raised frame, like a contact sheet from
+   a 2003 personal site. */
+.photos {
+  /* fixed 3-column grid → 3×3 = 9 cells; uniform thumbnail size at every
+     viewport width, contact-sheet feel. */
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  /* margin-bottom is larger than -top so there's clear separation from
+     the next section's heading. (we had `contain: layout style` here
+     for desktop hover-recalc perf, but iOS Safari sometimes underbills
+     the section's measured height under containment, causing the next
+     section's heading to render overlapping the bottom row of tiles.
+     containment removed; the perf cost is negligible at 9 cells.) */
+  margin: 14px 0 24px;
+}
+.photos a {
+  display: block;
+  text-decoration: none;
+  background: oklch(100.00% 0 0);
+  padding: 4px;
+  border: 1px solid oklch(61.14% 0.0611 253.60);
+  box-shadow: 1px 1px 0 oklch(61.14% 0.0611 253.60 / 0.3);
+  line-height: 0;
+  /* shape the slot itself so it has size before its <img> has a src.
+     prevents the photos section from going 0px → 380px on first paint,
+     which was shoving everything below it (CLS attributed to .now-playing). */
+  aspect-ratio: 4 / 5;
+}
+.photos a:hover {
+  background: oklch(97.73% 0.0373 95.44);
+  border-color: oklch(41.92% 0.0962 250.51);
+}
+/* <picture> wraps the <img> so the browser can pick WebP vs JPG via the
+   inner <source>. picture is inline by default, so we need to make it
+   block + fill the <a> just like <img> does, otherwise the slot has the
+   right aspect-ratio frame but no visible thumbnail inside. */
+.photos picture {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.photos img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* tracks list loading fallback: most visits get a worker pre-render so the
+   list arrives populated. when KV cache is empty (race after a playlist
+   swap, etc), reserve list height while the JS fetches /rn/tracks so the
+   page below doesn't jump when the items land. */
+.np-list:has(.np-loading) {
+  min-height: 480px;
+}
+
+/* footer: copyright + "best viewed in" — the most reliable IE6-era tells */
+footer {
+  text-align: center;
+  font-family: Verdana, Tahoma, sans-serif;
+  font-size: 9pt;
+  color: oklch(44.95% 0 0);
+  margin: 18px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid oklch(86.67% 0.0294 259.59);
+}
+footer .links { margin-bottom: 6px; }
+footer .links a { margin: 0 2px; }
+footer .signature { font-style: italic; margin-top: 4px; }
+footer .signature small { color: oklch(56.93% 0 0); }
+
+.under-construction {
+  text-align: center;
+  font-family: "Trebuchet MS", Verdana, sans-serif;
+  font-size: 9pt;
+  color: oklch(54.44% 0.1504 47.10);
+  font-weight: bold;
+  letter-spacing: 0.05em;
+  margin: 8px 0 0;
+}
+.under-construction::before, .under-construction::after {
+  content: " ※ ";
+  color: oklch(54.44% 0.1504 47.10);
+}
+
+/* (Tried a custom XP-style SVG cursor here — macOS browsers rasterize
+   the cursor in-page rather than handing off to the OS, so it lagged
+   visibly behind the hardware pointer. native cursors restore the
+   normal hardware-rate movement. window chrome alone carries the
+   resto-mod feel without needing to override the pointer.) */
+
+/* XP-style tooltip for photo grid hover. shows filename + size + dimensions,
+   plus EXIF when /images/metadata.json provides it. positioned near the
+   cursor, hidden by default, never blocks the underlying link.
+   positioned via transform (compositor-only path) at 0,0 + translate3d
+   so mousemove events don't trigger layout. NB: will-change is NOT set
+   here permanently — that would keep a compositor layer allocated even
+   when hidden, which costs GPU memory and matters on Low Power / variable
+   refresh rate (ProMotion 24Hz). the JS sets will-change on hover-in
+   and clears it on hover-out, so the GPU only pays when we're using it. */
+.xp-tooltip {
+  position: fixed;
+  top: 0;
+  left: 0;
+  background: oklch(98.92% 0.0398 96.79);
+  color: oklch(20.00% 0 0);
+  border: 1px solid oklch(15.00% 0 0);
+  font-family: Tahoma, "Microsoft Sans Serif", Verdana, sans-serif;
+  font-size: 11px;
+  padding: 4px 8px;
+  box-shadow: 2px 2px 0 oklch(15.00% 0 0 / 0.15);
+  pointer-events: none;
+  z-index: 10000;
+  display: none;
+  max-width: 280px;
+  line-height: 1.45;
+}
+.xp-tooltip .filename {
+  font-weight: bold;
+  color: oklch(15.00% 0 0);
+}
+.xp-tooltip .row {
+  color: oklch(38.00% 0 0);
+  font-size: 10.5px;
+}
+.xp-tooltip .row + .row { margin-top: 1px; }
+.xp-tooltip .row.dim { color: oklch(55% 0 0); }
+
+/* album popover: just the cover image in a contact-sheet-style raised
+   frame. textual metadata stays in the row itself — no point repeating
+   it in the tooltip. the frame matches the .photos a treatment so the
+   site has one consistent "photo in a paper border" idiom. */
+.xp-tooltip .album-pop {
+  padding: 0;
+  margin: -4px -8px;     /* pull to tooltip edges; no inner padding gap */
+}
+.xp-tooltip .cover.album {
+  display: block;
+  width: 120px;
+  height: 120px;
+  object-fit: cover;
+  background: oklch(94% 0.005 240);
+  /* paper-mat border matching the photo tiles */
+  border: 3px solid oklch(100% 0 0);
+  outline: 1px solid oklch(61.14% 0.0611 253.60);
+  outline-offset: -1px;
+}
+
+/* (the earlier two-column .track-card layout was removed when album and
+   artist tooltips both moved to the .album-pop frame-only treatment.) */
+
+/* XP-style context menu — replaces native right-click for desktop users.
+   shift+right-click bypasses it (falls through to native). touch devices
+   are skipped entirely (iOS long-press → native share/save sheet stays). */
+#xp-menu {
+  position: fixed;
+  background: oklch(99% 0 0);
+  border: 1px solid oklch(45% 0 0);
+  border-top-color: oklch(85% 0 0);
+  border-left-color: oklch(85% 0 0);
+  box-shadow: 3px 3px 6px oklch(0% 0 0 / 0.25);
+  font-family: Tahoma, "Microsoft Sans Serif", Verdana, sans-serif;
+  font-size: 11px;
+  padding: 2px;
+  min-width: 200px;
+  z-index: 20000;
+  user-select: none;
+  -webkit-user-select: none;
+}
+#xp-menu[hidden] { display: none; }
+#xp-menu .item {
+  padding: 4px 22px 4px 26px;
+  color: oklch(20% 0 0);
+  display: block;
+  position: relative;
+  white-space: nowrap;
+  outline: none;
+}
+#xp-menu .item:not(.disabled):hover,
+#xp-menu .item:not(.disabled):focus {
+  background: oklch(43% 0.16 264);  /* XP-era selection blue */
+  color: oklch(100% 0 0);
+}
+#xp-menu .item.disabled {
+  color: oklch(65% 0 0);
+}
+#xp-menu .sep {
+  height: 1px;
+  background: oklch(80% 0 0);
+  margin: 3px 1px;
+}
+
+/* ─── wide-gamut overrides ────────────────────────────────────────────
+   on Display P3 displays, push the user-action accents (links, hovers,
+   the traffic-cone orange, "under construction", context-menu selection)
+   past the sRGB chroma envelope so they actually saturate on capable
+   hardware. XP window chrome (title bar, panel borders, body text)
+   stays sRGB-accurate — keeping the period-correct color intent for the
+   1990s/XP era. fires only when the device reports color-gamut: p3, so
+   sRGB displays see no change at all.
+   ────────────────────────────────────────────────────────────────────── */
+@media (color-gamut: p3) {
+  a:link    { color: oklch(42.61% 0.30 263.74); }
+  a:visited { color: oklch(42.09% 0.27 328.36); }
+  a:hover, a:active { color: oklch(62.80% 0.33 29.23); }
+
+  .title-bar .icon                  { background: oklch(69.58% 0.28 43.49); }
+  .title-bar .controls a:hover,
+  .title-bar .controls a:focus {
+    background:    oklch(58.99% 0.31 26.30);
+    border-color:  oklch(37.67% 0.20 29.23);
+  }
+
+  .under-construction               { color: oklch(54.44% 0.20 47.10); }
+
+  .now-playing h2 a:hover           { color: oklch(62.80% 0.33 29.23); }
+  .np-list a:hover .np-title        { color: oklch(62.80% 0.33 29.23); }
+
+  .photos a:hover                   { border-color: oklch(41.92% 0.13 250.51); }
+
+  #xp-menu .item:not(.disabled):hover,
+  #xp-menu .item:not(.disabled):focus {
+    background: oklch(43% 0.30 264);
+  }
+
+  .counter                          { color: oklch(86.52% 0.22 90.38); }
+}
+
+/* visited-page counter joke — pure decoration */
+.counter {
+  display: inline-block;
+  background: oklch(21.78% 0 0);
+  color: oklch(86.52% 0.1768 90.38);
+  font-family: "Courier New", Courier, monospace;
+  font-size: 9pt;
+  font-weight: bold;
+  padding: 1px 6px;
+  border: 1px solid oklch(44.95% 0 0);
+  letter-spacing: 0.1em;
+}
+</style>
+</head>
+<body>
+
+<div class="window">
+
+  <!-- fake XP title bar — period chrome. the "controls" are decorative. -->
+  <div class="title-bar" aria-hidden="true">
+    <span class="title-text"><span class="icon"></span>aadhar.sh</span>
+    <span class="controls"><span>_</span><span>□</span><a href="https://www.youtube.com/watch?v=dQw4w9WgXcQ" rel="noopener" title="close">×</a></span>
+  </div>
+
+  <div class="content">
+
+    <h1>Aadharsh Pannirselvam</h1>
+    <p class="lede">
+      Researching and investing at <a href="https://archetype.fund" rel="external">Archetype</a>.
+      Building <a href="https://aadhar.sh">this site</a> in the meantime.
+    </p>
+
+    <p class="under-construction">Under Construction</p>
+
+    <hr>
+
+    <p>
+      Hi &mdash; this is a corner of the web I&rsquo;m still building. Handwritten
+      HTML, three eras of theme, a coffee-booking system on Cloudflare,
+      a place to put photographs, a place to put rabbithole posts.
+      None of it&rsquo;s ready yet, all of it&rsquo;s on the way.
+    </p>
+
+    <p>
+      If you&rsquo;d like to grab a coffee in NYC while I finish, write me at
+      <!--email_off--><a href="mailto:coffee@aadhar.sh?subject=%E2%98%95%20coffee&amp;body=Hi%20Aadharsh%20%E2%80%94%0A%0A">coffee@aadhar.sh</a><!--/email_off-->
+      &mdash; I confirm by hand, usually within a day or two.
+      Or pick a slot at
+      <a href="https://cal.com/aadharsh/coffee" rel="external">cal.com/aadharsh/coffee</a>.
+      <!-- (moving in-house to /coffee once secrets are set + worker deployed) -->
+    </p>
+
+    <p>
+      The rest of the site goes live shortly. Check back, or just send a note.
+    </p>
+
+    <!--
+      9 photo slots (3×3) reserved in HTML so the layout has its final
+      shape before JS runs. each <a> has aspect-ratio: 4/5 in CSS so the
+      grid occupies its full height even when the <img>s have no src yet.
+      thumbnails are WebP (≈64% smaller than JPG) with a JPG fallback via
+      <picture> for any browser that doesn't advertise image/webp support.
+      AVIF was tried earlier and dropped — type-based <picture> fallback
+      doesn't catch decode-time failures, which Chrome/Safari both have
+      with AVIF in production. WebP has the same fallback machinery but
+      vastly fewer decode-fail reports, so it's safe to use as primary.
+    -->
+    <!-- XP-style tooltip element, positioned by JS on hover. lives outside
+         the photos section so it can fixed-position over anything. -->
+    <div id="xp-tooltip" class="xp-tooltip" aria-hidden="true"></div>
+
+    <!-- XP-style context menu — populated and positioned by JS on
+         right-click. items adapt to what was clicked (photo / link /
+         empty). shift+right-click bypasses → native browser menu. -->
+    <div id="xp-menu" role="menu" aria-orientation="vertical" hidden></div>
+
+    <section class="photos" aria-label="photographs">
+      <a>
+        <picture>
+          <source type="image/webp">
+          <img alt="" loading="lazy" decoding="async">
+        </picture>
+      </a>
+      <a>
+        <picture>
+          <source type="image/webp">
+          <img alt="" loading="lazy" decoding="async">
+        </picture>
+      </a>
+      <a>
+        <picture>
+          <source type="image/webp">
+          <img alt="" loading="lazy" decoding="async">
+        </picture>
+      </a>
+      <a>
+        <picture>
+          <source type="image/webp">
+          <img alt="" loading="lazy" decoding="async">
+        </picture>
+      </a>
+      <a>
+        <picture>
+          <source type="image/webp">
+          <img alt="" loading="lazy" decoding="async">
+        </picture>
+      </a>
+      <a>
+        <picture>
+          <source type="image/webp">
+          <img alt="" loading="lazy" decoding="async">
+        </picture>
+      </a>
+      <a>
+        <picture>
+          <source type="image/webp">
+          <img alt="" loading="lazy" decoding="async">
+        </picture>
+      </a>
+      <a>
+        <picture>
+          <source type="image/webp">
+          <img alt="" loading="lazy" decoding="async">
+        </picture>
+      </a>
+      <a>
+        <picture>
+          <source type="image/webp">
+          <img alt="" loading="lazy" decoding="async">
+        </picture>
+      </a>
+    </section>
+
+    <!--
+      photo pool — thumbnails live at /images/<stem>.jpg, full-res SOOC
+      originals at /images/full/<filename> (R2-proxied, preserving original
+      filenames). the worker exposes /images/manifest.json listing all
+      available photos; this script fetches it and fills 9 random slots
+      (3×3). to add photos: run holding/scripts/add-photos.sh on a folder
+      or files; it handles thumbnails, R2 upload, metadata, cache bust.
+    -->
+    <script>
+    (async () => {
+      const slots = document.querySelectorAll(".photos a");
+      if (!slots.length) return;
+      // pre-rendered? skip.
+      if (slots[0].hasAttribute("href")) return;
+
+      let photos = [];
+      try {
+        const res = await fetch("/images/manifest.json");
+        const data = await res.json();
+        photos = Array.isArray(data.photos) ? data.photos : [];
+      } catch {}
+      if (!photos.length) return;
+
+      // fisher-yates shuffle, take the first N (= number of slots).
+      for (let i = photos.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [photos[i], photos[j]] = [photos[j], photos[i]];
+      }
+
+      photos.slice(0, slots.length).forEach((p, i) => {
+        const slot = slots[i];
+        if (!slot) return;
+        slot.href   = `/images/full/${encodeURIComponent(p.full)}`;
+        slot.target = "_blank";
+        slot.rel    = "noopener";
+        // stash the manifest entry on the anchor for the tooltip to pick up
+        slot.dataset.full     = p.full;
+        slot.dataset.size     = p.size || "";
+        slot.dataset.uploaded = p.uploaded || "";
+        // dual-source thumbnail: WebP primary, JPG fallback. modern
+        // browsers pick the WebP via the <source type="image/webp"> tag;
+        // older ones fall through to the <img src> JPG. p.thumb_* values
+        // are "<stem>.<ext>?v=<N>" — the worker emits safe ASCII
+        // (alphanumerics, '_', '-', '.', '?', '=', digits), so we use
+        // them directly without encodeURIComponent (which would mangle
+        // the '?' into '%3F' and break the cache-busting query).
+        const source = slot.querySelector("source");
+        const img    = slot.querySelector("img");
+        if (source && p.thumb_webp) source.srcset = `/images/${p.thumb_webp}`;
+        if (img)                    img.src       = `/images/${p.thumb_jpg}`;
+      });
+    })();
+    </script>
+
+    <!--
+      XP-style hover tooltip for the photo grid. shows filename, file size,
+      thumbnail dimensions, and optional EXIF (camera/exposure/date) when
+      /images/metadata.json provides it. positioned near the cursor, never
+      blocks the underlying link, gracefully empty when info is sparse.
+    -->
+    <script>
+    (() => {
+      const tip = document.getElementById("xp-tooltip");
+      if (!tip) return;
+
+      // hover-only feature: long-press on touch devices fires synthetic
+      // mouseover/mouseout events and was causing tooltips to appear
+      // mid-scroll on mobile. opt out entirely when the device doesn't
+      // have a real hover-capable pointer. (`(hover: none)` is the
+      // touch-only signal; combined with `(any-hover: none)` to cover
+      // hybrid devices where the primary pointer is touch.)
+      if (window.matchMedia &&
+          (window.matchMedia("(hover: none)").matches ||
+           window.matchMedia("(pointer: coarse)").matches)) {
+        return;
+      }
+
+      let metadata = null;
+      let metadataLoaded = false;
+      let activeSlot = null;
+
+      // lazy DNS-prefetch for Spotify's image CDNs. these hosts only
+      // matter when the user hovers a track or artist row (to load the
+      // album cover or profile photo). shipping the hints in every page
+      // load is wasteful for visitors who never hover. inject on demand,
+      // exactly once per session.
+      let spotifyHintsInjected = false;
+      const injectSpotifyHints = () => {
+        if (spotifyHintsInjected) return;
+        spotifyHintsInjected = true;
+        const hosts = [
+          "https://image-cdn-ak.spotifycdn.com",
+          "https://image-cdn-fa.spotifycdn.com",
+          "https://i.scdn.co",
+        ];
+        for (const h of hosts) {
+          const link = document.createElement("link");
+          link.rel  = "dns-prefetch";
+          link.href = h;
+          document.head.appendChild(link);
+        }
+      };
+
+      const fmtBytes = (n) => {
+        if (!n) return "";
+        const b = Number(n);
+        if (b < 1024)       return `${b} B`;
+        if (b < 1024*1024)  return `${(b/1024).toFixed(1)} KB`;
+        if (b < 1024**3)    return `${(b/1024/1024).toFixed(1)} MB`;
+        return `${(b/1024**3).toFixed(2)} GB`;
+      };
+      const fmtDate = (iso) => {
+        if (!iso) return "";
+        try {
+          const d = new Date(iso);
+          if (isNaN(d)) return "";
+          return d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+        } catch { return ""; }
+      };
+      const esc = (s) => String(s ?? "")
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+
+      async function ensureMetadata() {
+        if (metadataLoaded) return;
+        metadataLoaded = true;
+        try {
+          const res = await fetch("/images/metadata.json");
+          if (res.ok) metadata = await res.json();
+        } catch {}
+      }
+
+      // unified hover target → "what was hovered?" lookup. one tooltip
+      // element, three content shapes: a photo slot (.photos a), a track
+      // row (.np-list li[data-track-title]), or an artist link inside a
+      // row (.np-artist-link). artist takes precedence over the row when
+      // both match, so hovering an artist's name shows the artist card,
+      // not the track card.
+      const findTarget = (el) =>
+        el?.closest?.(".np-artist-link, .photos a, .np-list li[data-track-title]") || null;
+
+      function buildContent(t) {
+        if (t.matches(".np-artist-link")) {
+          injectSpotifyHints();
+          return buildArtistContent(t);
+        }
+        if (t.matches(".photos a"))   return buildPhotoContent(t);
+        if (t.matches(".np-list li")) {
+          injectSpotifyHints();
+          return buildTrackContent(t);
+        }
+        return "";
+      }
+
+      function buildPhotoContent(slot) {
+        const filename = slot.dataset.full || decodeURIComponent((slot.href || "").split("/").pop());
+        const stem     = filename.replace(/\.[^.]+$/, "");
+        const img      = slot.querySelector("img");
+        // metadata.json is now keyed by stem (stable across format changes).
+        // also try filename fallback for back-compat with older builds.
+        const exif     = (metadata && (metadata[stem] || metadata[filename])) || {};
+
+        const rows = [];
+        // dimensions: prefer full-res from EXIF; fall back to the thumb's
+        // natural dimensions if metadata isn't loaded yet.
+        const physical = [];
+        if (exif.width && exif.height) {
+          physical.push(`${exif.width} × ${exif.height}`);
+        } else if (img?.naturalWidth && img?.naturalHeight) {
+          physical.push(`${img.naturalWidth} × ${img.naturalHeight}`);
+        }
+        if (slot.dataset.size) physical.push(fmtBytes(slot.dataset.size));
+        if (physical.length) rows.push(physical.join(" · "));
+
+        // body/lens row
+        if (exif.camera || exif.lens) {
+          const line = [exif.camera, exif.lens].filter(Boolean).join(" · ");
+          if (line) rows.push(line);
+        }
+        // exposure triplet + optional EV / focal length on the same line
+        if (exif.aperture || exif.shutter || exif.iso || exif.focal) {
+          const parts = [];
+          if (exif.aperture) parts.push(exif.aperture.startsWith("f/") ? exif.aperture : "f/" + exif.aperture);
+          if (exif.shutter)  parts.push(exif.shutter);
+          if (exif.iso)      parts.push("ISO " + exif.iso);
+          if (exif.focal)    parts.push(exif.focal);
+          if (typeof exif.ev === "number" && exif.ev !== 0) {
+            parts.push((exif.ev > 0 ? "+" : "") + exif.ev + " EV");
+          }
+          if (parts.length) rows.push(parts.join(" · "));
+        }
+        // film recipe line (Fuji-specific): film simulation + any non-default
+        // chrome / grain modifiers. shown compactly so the tooltip doesn't
+        // get noisy on the more common Auto/Off cases.
+        const recipe = [];
+        if (exif.film)         recipe.push(exif.film);
+        if (exif.chrome && exif.chrome !== "Off")
+          recipe.push("Chrome " + exif.chrome);
+        if (exif.chrome_blue && exif.chrome_blue !== "Off")
+          recipe.push("Chrome FX Blue " + exif.chrome_blue);
+        if (exif.grain && exif.grain !== "Off") {
+          const g = "Grain " + exif.grain + (exif.grain_size && exif.grain_size !== "Off" ? " " + exif.grain_size : "");
+          recipe.push(g);
+        }
+        if (recipe.length) rows.push(recipe.join(" · "));
+
+        // tone curves + saturation (Fuji): only if any are non-zero / non-default
+        const tone = [];
+        const trimTone = (t) => t && t !== "0 (normal)" ? t.replace(/\s*\(.*\)$/, "") : null;
+        const hi = trimTone(exif.highlight_tone);
+        const sh = trimTone(exif.shadow_tone);
+        const sat = trimTone(exif.saturation);
+        if (hi)  tone.push("HL " + hi);
+        if (sh)  tone.push("SH " + sh);
+        if (sat) tone.push("Sat " + sat);
+        if (tone.length) rows.push(tone.join(" · "));
+
+        // other niceties — only show when non-default
+        const other = [];
+        if (exif.white_balance && exif.white_balance !== "Auto")
+          other.push("WB " + exif.white_balance);
+        if (exif.flash && /\bFired\b|\bOn\b/i.test(exif.flash))
+          other.push("Flash");
+        if (exif.color_space && exif.color_space !== "sRGB")
+          other.push(exif.color_space);
+        if (other.length) rows.push(other.join(" · "));
+
+        // date last
+        if (exif.date) {
+          rows.push(fmtDate(exif.date) || exif.date);
+        } else if (slot.dataset.uploaded) {
+          rows.push("uploaded " + fmtDate(slot.dataset.uploaded));
+        }
+
+        return `<div class="filename">${esc(filename)}</div>` +
+               rows.map(r => `<div class="row">${esc(r)}</div>`).join("");
+      }
+
+      // artist tooltip: just the profile photo in an XP-frame border.
+      // mirrors the album-popover treatment — the name is already in the
+      // row, so the popover is purely visual. graceful: if image_url is
+      // missing, no tooltip at all (mouseover handler suppresses empty).
+      function buildArtistContent(span) {
+        const image = span.dataset.artistImage || "";
+        if (!image) return "";
+        return (
+          `<div class="album-pop">` +
+            `<img class="cover album" src="${esc(image)}" alt="" loading="lazy" decoding="async" width="120" height="120">` +
+          `</div>`
+        );
+      }
+
+      // track tooltip: just the album art with an XP-frame border. all
+      // the textual info (title, artists, duration, explicit) is already
+      // shown in the row itself, so we don't duplicate it here. the
+      // image is decoded lazily — only fetched when the row is hovered.
+      function buildTrackContent(li) {
+        const image = li.dataset.trackImage || "";
+        if (!image) return "";   // no cover → no tooltip
+        return (
+          `<div class="album-pop">` +
+            `<img class="cover album" src="${esc(image)}" alt="" loading="lazy" decoding="async" width="120" height="120">` +
+          `</div>`
+        );
+      }
+
+      // 120fps-friendly tooltip positioning:
+      //  - coalesce mousemove → one rAF tick (no matter the hz, we paint at
+      //    most one tooltip update per frame)
+      //  - cache tip size on show/resize instead of measuring per move
+      //    (skips a forced layout per mousemove)
+      //  - position via transform: translate3d (compositor-only path)
+      //    instead of style.left/top (which would invalidate layout)
+      let tipW = 0, tipH = 0;
+      let pendingX = 0, pendingY = 0, frame = 0;
+      const applyPosition = () => {
+        frame = 0;
+        const offset = 16;
+        let x = pendingX + offset;
+        let y = pendingY + offset;
+        const winW = window.innerWidth, winH = window.innerHeight;
+        if (x + tipW > winW - 8) x = pendingX - tipW - offset;
+        if (y + tipH > winH - 8) y = pendingY - tipH - offset;
+        if (x < 4) x = 4;
+        if (y < 4) y = 4;
+        tip.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+      };
+      const schedulePosition = (e) => {
+        pendingX = e.clientX;
+        pendingY = e.clientY;
+        if (!frame) frame = requestAnimationFrame(applyPosition);
+      };
+      // cache size whenever content / viewport changes
+      const measure = () => {
+        const r = tip.getBoundingClientRect();
+        tipW = r.width;
+        tipH = r.height;
+      };
+
+      document.addEventListener("mouseover", (e) => {
+        const target = findTarget(e.target);
+        if (!target || target === activeSlot) return;
+        activeSlot = target;
+        const isPhoto = target.matches(".photos a");
+        // no delay: show immediately on enter. for photos, metadata.json
+        // is fetched once and cached; first hover shows what's available,
+        // then the tooltip re-renders in place when metadata arrives.
+        const html = buildContent(target);
+        if (!html) {
+          // content-less target (e.g. track with no cover yet) — leave
+          // the tooltip hidden rather than showing an empty box.
+          tip.style.display = "none";
+          activeSlot = null;
+          return;
+        }
+        tip.innerHTML     = html;
+        tip.style.display = "block";
+        // earn the compositor layer only while we'll actually use it.
+        // permanent will-change would keep the GPU layer allocated even
+        // when hidden, which hurts on Low Power / variable refresh rate.
+        tip.style.willChange = "transform";
+        measure();
+        schedulePosition(e);
+        // measure again once the cover image decodes (track tooltip starts
+        // with no <img> dimensions, so the first measure() undercounts).
+        const cover = tip.querySelector(".cover");
+        if (cover && !cover.complete) {
+          cover.addEventListener("load",  () => { if (activeSlot === target) measure(); }, { once: true });
+          cover.addEventListener("error", () => { if (activeSlot === target) measure(); }, { once: true });
+        }
+        if (isPhoto && !metadataLoaded) {
+          ensureMetadata().then(() => {
+            if (activeSlot === target) {
+              tip.innerHTML = buildContent(target);
+              measure();
+            }
+          });
+        }
+      }, { passive: true });
+
+      // passive: skip default-prevention bookkeeping; lets the browser
+      // dispatch mousemove without waiting on our handler to settle.
+      document.addEventListener("mousemove", (e) => {
+        if (tip.style.display === "block") schedulePosition(e);
+      }, { passive: true });
+
+      window.addEventListener("resize", () => {
+        if (tip.style.display === "block") measure();
+      }, { passive: true });
+
+      document.addEventListener("mouseout", (e) => {
+        const fromTarget = findTarget(e.target);
+        if (!fromTarget) return;
+        const toTarget = findTarget(e.relatedTarget);
+        // still inside the same target? ignore.
+        if (toTarget === fromTarget) return;
+        // moving to a *different* valid target (e.g. row → artist link
+        // inside the row, or artist → adjacent artist)? let the next
+        // mouseover swap the content without an intermediate hide+show
+        // flicker. the mouseover handler will reset activeSlot.
+        if (toTarget) return;
+        if (frame) { cancelAnimationFrame(frame); frame = 0; }
+        tip.style.display = "none";
+        // release the compositor layer when not in use
+        tip.style.willChange = "";
+        activeSlot = null;
+      }, { passive: true });
+    })();
+    </script>
+
+    <section class="now-playing" aria-label="music">
+      <h2><a href="/rn" title="opens the playlist on spotify">Music I&rsquo;m listening to right now</a></h2>
+      <ol class="np-list" id="np-list">
+        <li class="np-loading">Loading playlist&hellip;</li>
+      </ol>
+    </section>
+
+    <!--
+      now-playing list — fetches /rn/tracks (worker scrapes spotify's embed
+      page for the current "rn" playlist) and renders each track as a row
+      that links to song.link. fails gracefully: if the worker is down, the
+      footer link to /rn still opens the playlist on spotify directly.
+    -->
+    <script>
+    (async () => {
+      const list = document.getElementById("np-list");
+      if (!list) return;
+
+      // if the worker pre-rendered the list, the loading placeholder is gone
+      // and we can skip the client-side fetch entirely.
+      if (!list.querySelector(".np-loading")) return;
+
+      const escape = (s) => String(s ?? "")
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+
+      // turn the artist list into per-artist nav targets. when the
+      // scraper provides structured artists (with Spotify URIs + profile
+      // images) we link straight to the artist's page and stash the image
+      // URL for the hover-tooltip; otherwise we fall back to a search.
+      // rendered as spans (not <a>) because the row is already an <a> —
+      // nested anchors are invalid HTML. a delegated click handler
+      // (below) intercepts .np-artist-link clicks, stops propagation,
+      // and opens the data-href. role+tabindex restore keyboard + sr.
+      const linkifyArtists = (artists, fallbackText) => {
+        if (Array.isArray(artists) && artists.length) {
+          return artists.map(a => {
+            const href = a.spotify_url ||
+              `https://open.spotify.com/search/${encodeURIComponent(a.name)}/artists`;
+            const img  = a.image_url ? ` data-artist-image="${escape(a.image_url)}"` : "";
+            return `<span class="np-artist-link"` +
+                   ` data-href="${escape(href)}"` +
+                   ` data-artist-name="${escape(a.name)}"` +
+                   img +
+                   ` role="link" tabindex="0">${escape(a.name)}</span>`;
+          }).join(", ");
+        }
+        const raw = fallbackText || (typeof artists === "string" ? artists : "");
+        if (!raw) return "";
+        return String(raw).split(/,\s*/).filter(Boolean).map(name => {
+          const href = `https://open.spotify.com/search/${encodeURIComponent(name)}/artists`;
+          return `<span class="np-artist-link"` +
+                 ` data-href="${escape(href)}"` +
+                 ` data-artist-name="${escape(name)}"` +
+                 ` role="link" tabindex="0">${escape(name)}</span>`;
+        }).join(", ");
+      };
+
+      const fmtDuration = (ms) => {
+        if (!ms || typeof ms !== "number") return "";
+        const total = Math.round(ms / 1000);
+        const m = Math.floor(total / 60);
+        const s = String(total % 60).padStart(2, "0");
+        return `${m}:${s}`;
+      };
+
+      try {
+        const res = await fetch("/rn/tracks", { cache: "default" });
+        if (!res.ok) throw new Error("fetch failed");
+        const data = await res.json();
+
+        if (!data.tracks || data.tracks.length === 0) {
+          list.innerHTML = '<li class="np-empty">No tracks yet. <a href="/rn">Open the playlist on Spotify</a>.</li>';
+          return;
+        }
+
+        list.innerHTML = data.tracks.map(t => {
+          // data-* attrs let the XP hover-tooltip script render album
+          // art + metadata on hover (same framework as the photo grid).
+          const artistsText = t.artists_text || (Array.isArray(t.artists) ? t.artists.map(a => a.name).join(", ") : "");
+          const attrs = [
+            `data-track-title="${escape(t.title)}"`,
+            `data-track-artists="${escape(artistsText)}"`,
+            t.image_url   ? `data-track-image="${escape(t.image_url)}"`     : "",
+            t.duration_ms ? `data-track-duration="${escape(fmtDuration(t.duration_ms))}"` : "",
+            t.is_explicit ? `data-track-explicit="1"`                       : "",
+          ].filter(Boolean).join(" ");
+          return `
+          <li ${attrs}>
+            <a href="${escape(t.song_link_url)}" target="_blank" rel="noopener">
+              ${t.duration_ms ? `<span class="np-duration">${fmtDuration(t.duration_ms)}</span>` : ""}
+              <span class="np-title">${escape(t.title)}</span><span class="np-sep">&mdash;</span><span class="np-artist">${linkifyArtists(t.artists, artistsText)}</span>${t.is_explicit ? '<span class="np-explicit">E</span>' : ""}
+            </a>
+          </li>
+          `;
+        }).join("");
+      } catch {
+        list.innerHTML = '<li class="np-empty">Couldn&rsquo;t load tracks. <a href="/rn">Open the playlist on Spotify</a>.</li>';
+      }
+    })();
+    </script>
+
+    <!--
+      delegated click + keyboard handler for .np-artist-link spans. these
+      live inside the row's outer <a href="song.link">, so we need to
+      stopPropagation to avoid the row navigating away when the user
+      clicks an artist. opens the artist search in a new tab. also wires
+      Enter/Space for keyboard activation (role="link" + tabindex="0"
+      makes them focusable but doesn't synthesize click on Enter).
+    -->
+    <script>
+    (() => {
+      const list = document.getElementById("np-list");
+      if (!list) return;
+      const open = (el) => {
+        const href = el.getAttribute("data-href");
+        if (!href) return;
+        window.open(href, "_blank", "noopener");
+      };
+      list.addEventListener("click", (e) => {
+        const a = e.target?.closest?.(".np-artist-link");
+        if (!a) return;
+        e.preventDefault();
+        e.stopPropagation();
+        open(a);
+      });
+      list.addEventListener("keydown", (e) => {
+        if (e.key !== "Enter" && e.key !== " ") return;
+        const a = e.target?.closest?.(".np-artist-link");
+        if (!a) return;
+        e.preventDefault();
+        open(a);
+      });
+    })();
+    </script>
+
+    <footer>
+      <p class="links">
+        <a href="https://twitter.com/oddhash" rel="external me">Twitter</a> &middot;
+        <a href="https://curius.app/aadharsh-pannirselvam" rel="external me">Curius</a> &middot;
+        <a href="https://beliapp.com/users/aadharsh" rel="external me">Beli</a> &middot;
+        <a href="https://open.spotify.com/user/aadharsh2010" rel="external me">Spotify</a> &middot;
+        <a href="/whoareyou">whoareyou</a> &middot;
+        <a href="/around" title="looking around the crypto VC neighborhood, crawled by AadharshBot">around</a>
+      </p>
+      <p>
+        Last modified <time datetime="2026-05-18">May 18, 2026</time>
+        &middot; You are visitor <span class="counter">000042</span>
+      </p>
+      <p class="signature">
+        <small>&copy; 2026 Aadharsh Pannirselvam &middot; Best viewed in any browser made since 2001.</small>
+      </p>
+    </footer>
+
+  </div>
+</div>
+
+<!--
+  XP-style context menu — site-wide right-click replacement. mirrors the
+  bits of the native menu that matter for a personal photo site (open in
+  new tab, copy, save image as, search on Google Lens) and adds back the
+  globals (reload, view source via /source, print). shift+right-click drops through
+  to the native menu; touch devices skip the override entirely so iOS
+  long-press → native share sheet keeps working. ARIA-correct: arrow
+  keys + Enter + Escape work for keyboard users.
+-->
+<script>
+(() => {
+  // skip on touch devices — long-press → native menu is more useful there
+  if (matchMedia("(pointer: coarse)").matches) return;
+
+  const menu = document.getElementById("xp-menu");
+  if (!menu) return;
+
+  let items   = [];
+  let focusI  = -1;
+
+  const clear = () => { menu.innerHTML = ""; items = []; focusI = -1; };
+
+  const addItem = (label, action, opts = {}) => {
+    const el = document.createElement("div");
+    el.className = "item" + (opts.disabled ? " disabled" : "");
+    el.setAttribute("role", "menuitem");
+    el.tabIndex = -1;
+    el.textContent = label;
+    if (!opts.disabled) {
+      el.addEventListener("click", async () => {
+        hide();
+        try { await action(); } catch (e) { /* swallow; not worth a popup */ }
+      });
+      el.addEventListener("mouseenter", () => el.focus());
+    }
+    menu.appendChild(el);
+    items.push(el);
+  };
+
+  const addSep = () => {
+    const el = document.createElement("div");
+    el.className = "sep";
+    el.setAttribute("role", "separator");
+    menu.appendChild(el);
+  };
+
+  const hide = () => {
+    menu.hidden = true;
+    clear();
+  };
+
+  const show = (x, y) => {
+    menu.hidden = false;
+    requestAnimationFrame(() => {
+      const r  = menu.getBoundingClientRect();
+      const vw = innerWidth, vh = innerHeight;
+      if (x + r.width  > vw - 4) x = vw - r.width  - 4;
+      if (y + r.height > vh - 4) y = vh - r.height - 4;
+      menu.style.left = Math.max(4, x) + "px";
+      menu.style.top  = Math.max(4, y) + "px";
+      const first = items.find(el => !el.classList.contains("disabled"));
+      if (first) { first.focus(); focusI = items.indexOf(first); }
+    });
+  };
+
+  const build = (target) => {
+    clear();
+
+    const photoSlot = target.closest?.(".photos a");
+    if (photoSlot) {
+      const fullUrl  = photoSlot.href;
+      const filename = decodeURIComponent(fullUrl.split("/").pop());
+      const img      = photoSlot.querySelector("img");
+      const imgUrl   = img ? img.src : null;
+
+      addItem("Open original in new tab", () => window.open(fullUrl, "_blank", "noopener"));
+      addSep();
+      addItem("Copy image", async () => {
+        if (!imgUrl) return;
+        const res  = await fetch(imgUrl);
+        const blob = await res.blob();
+        await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+      }, { disabled: !navigator.clipboard?.write });
+      addItem("Copy image address",    () => navigator.clipboard.writeText(imgUrl || fullUrl));
+      addItem("Save image as…",        () => {
+        const a = document.createElement("a");
+        a.href = fullUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      });
+      addSep();
+      addItem("Search on Google Lens", () => window.open(`https://lens.google.com/uploadbyurl?url=${encodeURIComponent(fullUrl)}`, "_blank", "noopener"));
+      return;
+    }
+
+    const link = target.closest?.("a[href]");
+    if (link) {
+      addItem("Open link in new tab", () => window.open(link.href, "_blank", "noopener"));
+      addItem("Copy link address",    () => navigator.clipboard.writeText(link.href));
+      addSep();
+      addItem("Reload",      () => location.reload());
+      addItem("View source", () => window.open("/source?path=" + encodeURIComponent(location.pathname + location.search), "_blank", "noopener"));
+      addItem("Print",       () => window.print());
+      return;
+    }
+
+    addItem("Reload",      () => location.reload());
+    addItem("View source", () => window.open("/source?path=" + encodeURIComponent(location.pathname + location.search), "_blank", "noopener"));
+    addItem("Print",       () => window.print());
+  };
+
+  document.addEventListener("contextmenu", (e) => {
+    if (e.shiftKey) return;  // escape hatch → native menu
+    e.preventDefault();
+    build(e.target);
+    show(e.clientX, e.clientY);
+  });
+
+  document.addEventListener("mousedown", (e) => {
+    if (menu.hidden) return;
+    if (!menu.contains(e.target)) hide();
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (menu.hidden) return;
+    const enabled = items.filter(el => !el.classList.contains("disabled"));
+    if (e.key === "Escape") { e.preventDefault(); hide(); }
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      const cur = enabled.indexOf(document.activeElement);
+      const next = enabled[(cur + 1 + enabled.length) % enabled.length];
+      next?.focus();
+    }
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      const cur = enabled.indexOf(document.activeElement);
+      const prev = enabled[(cur - 1 + enabled.length) % enabled.length];
+      prev?.focus();
+    }
+    if (e.key === "Enter" || e.key === " ") {
+      if (document.activeElement?.classList.contains("item")) {
+        e.preventDefault();
+        document.activeElement.click();
+      }
+    }
+  });
+
+  // close on scroll, blur, or another contextmenu elsewhere.
+  // passive scroll listener: critical for 120Hz scrolling — without it
+  // the browser has to wait on this handler before scrolling, which
+  // can cap frame rate. our handler doesn't preventDefault anyway.
+  document.addEventListener("scroll", hide, { capture: true, passive: true });
+  window.addEventListener("blur", hide);
+  window.addEventListener("resize", hide, { passive: true });
+})();
+</script>
+
+<!--
+  hover-prefetch — when the cursor sits on a link for ~65ms, prefetch its
+  destination so the next click feels instant. cross-origin links get
+  `preconnect` (DNS + TCP + TLS only — no body fetch, no privacy cost);
+  same-origin links get `prefetch` (full body). this is roughly what
+  instant.page does, but ours is 20 lines and we own it.
+-->
+<script>
+(() => {
+  const seen = new Set();
+  const head = document.head;
+  let pending = null;
+  const prefetch = (raw) => {
+    let u; try { u = new URL(raw, location.href); } catch { return; }
+    const key = u.href;
+    if (seen.has(key)) return;
+    seen.add(key);
+    const tag = document.createElement("link");
+    if (u.origin === location.origin) {
+      // same-origin: fetch the document
+      tag.rel  = "prefetch";
+      tag.href = u.href;
+    } else if (u.protocol === "https:" || u.protocol === "http:") {
+      // cross-origin: just warm DNS + TLS, never fetch the body (no leakage)
+      tag.rel         = "preconnect";
+      tag.href        = u.origin;
+      tag.crossOrigin = "";
+    } else {
+      return;  // mailto:, tel:, javascript:, etc.
+    }
+    head.appendChild(tag);
+  };
+  document.addEventListener("mouseover", (e) => {
+    const a = e.target?.closest?.("a[href]");
+    if (!a) return;
+    if (pending) clearTimeout(pending);
+    pending = setTimeout(() => prefetch(a.href), 65);
+    a.addEventListener("mouseleave", () => {
+      if (pending) { clearTimeout(pending); pending = null; }
+    }, { once: true, passive: true });
+  }, { passive: true });
+  // also on first touch (mobile)
+  document.addEventListener("touchstart", (e) => {
+    const a = e.target?.closest?.("a[href]");
+    if (a) prefetch(a.href);
+  }, { passive: true, capture: true });
+})();
+</script>
+
+<!--
+  service worker — cache-first for /images/* (8 random tiles per visit + the
+  full-res counterparts), stale-while-revalidate for the small discovery
+  files. won't touch HTML or worker endpoints; those always go through
+  to the worker so they stay fresh.
+-->
+<script>
+if ("serviceWorker" in navigator) {
+  // register on idle so it doesn't compete with first paint
+  const reg = () => navigator.serviceWorker.register("/sw.js").catch(() => {});
+  "requestIdleCallback" in window ? requestIdleCallback(reg, { timeout: 2000 }) : setTimeout(reg, 1000);
+}
+</script>
+
+<!-- love, aadharsh -->
+</body>
+</html>

@@ -1,0 +1,75 @@
+# aadhar.sh
+
+> Aadharsh Pannirselvam's corner of the web. Researching and investing at
+> Archetype; building this site by hand in the meantime. The page at the
+> root is a holding page styled after a 2003-era personal homepage;
+> sounds, images, dishes, tinkering, and longform writing are all planned.
+
+A handwritten HTML/CSS personal site on Cloudflare Pages. No build step, one
+`_worker.js`, one stylesheet inline per page. This file follows the
+[llmstxt.org](https://llmstxt.org) convention so agents can read a clean
+summary without scraping the page.
+
+## Pages
+
+- [/](https://aadhar.sh/): Holding page. HTML by default; markdown is
+  available via `Accept: text/markdown` content negotiation.
+- [/whoareyou](https://aadhar.sh/whoareyou): Transparency page — shows what
+  a single HTTP request from your client reveals to the site (network,
+  transport, browser, cookies). Nothing is logged or stored. `noindex`.
+- [/bot](https://aadhar.sh/bot): Identity page for `AadharshBot`, the small
+  branded crawler that this site operates. Documents the User-Agent,
+  Signature-Agent URL, signing algorithm, and opt-out instructions.
+- [/around](https://aadhar.sh/around): A small dashboard of crypto-VC
+  homepages I keep tabs on, each fetched live by AadharshBot. Curious
+  rather than competitive. Signed per Web Bot Auth so receiving sites can
+  verify the requests came from this domain. `noindex`.
+
+## JSON endpoints
+
+- [/rn/tracks](https://aadhar.sh/rn/tracks): Current Spotify "rn" playlist
+  as JSON. Each track exposes `title`, `artists`, `song_link_url` (a
+  cross-platform forwarder via [song.link](https://song.link)),
+  `duration_ms`, `preview_url`, and `is_explicit`. Cached one hour in
+  Cloudflare KV; force-refresh with a known secret query param.
+- [/around/json](https://aadhar.sh/around/json): Same data as the /around
+  HTML page, in JSON form. Cached 1 hour.
+
+## Redirects
+
+- [/rn](https://aadhar.sh/rn): 302 to whichever Spotify playlist of mine is
+  currently named `rn`. The target lives in Cloudflare KV and is updated
+  via a secret-gated admin form whenever a new musical era begins.
+
+## Discovery
+
+- [/sitemap.xml](https://aadhar.sh/sitemap.xml): XML sitemap.
+- [/robots.txt](https://aadhar.sh/robots.txt): Bot policy + Content Signals
+  (search yes, AI training no).
+- [/.well-known/http-message-signatures-directory](https://aadhar.sh/.well-known/http-message-signatures-directory):
+  JWKS for Web Bot Auth (an Ed25519 public key the site can use to identify
+  itself when making outbound requests).
+- [/.well-known/security.txt](https://aadhar.sh/.well-known/security.txt):
+  Disclosure contacts + scope statement per RFC 9116.
+
+## Identity
+
+- [Twitter](https://twitter.com/oddhash): Day-to-day thinking out loud.
+- [Spotify](https://open.spotify.com/user/aadharsh2010): My profile;
+  individual eras live as renamed playlists.
+- [Curius](https://curius.app/aadharsh-pannirselvam): Reading I want to
+  remember.
+- [Beli](https://beliapp.com/users/aadharsh): NYC restaurants I've been to.
+- [Cal.com](https://cal.com/aadharsh/coffee): Book a coffee in NYC.
+- Email: <coffee@aadhar.sh>.
+
+## Optional
+
+- [Archetype](https://archetype.fund): The crypto-native venture firm
+  where I research and invest.
+- [song.link](https://song.link): The redirector used in `/rn/tracks` so
+  music links work across Spotify, Apple Music, YouTube Music, Tidal, etc.
+
+—
+
+love, aadharsh
