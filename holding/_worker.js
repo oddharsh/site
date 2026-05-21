@@ -1448,7 +1448,7 @@ function handleBotPage(request) {
   .title-bar .controls a:hover { background: oklch(58.99% 0.2344 26.30); color: oklch(100.00% 0 0); border-color: oklch(37.67% 0.1546 29.23); }
   .content { padding: 18px 24px 22px; }
   h1 { font-family: "Trebuchet MS", Verdana, sans-serif; font-size: 20pt; color: oklch(41.92% 0.0962 250.51); margin: 0 0 4px; font-weight: bold; }
-  h2 { font-family: "Trebuchet MS", Verdana, sans-serif; font-size: 12pt; color: oklch(41.92% 0.0962 250.51); margin: 16px 0 6px; font-weight: bold; border-bottom: 1px solid oklch(86.67% 0.0294 259.59); padding-bottom: 2px; }
+  h2 { font-family: "Trebuchet MS", Verdana, sans-serif; font-size: 12pt; color: oklch(41.92% 0.0962 250.51); margin: 16px 0 6px; font-weight: bold; border-bottom: 1px solid oklch(86.67% 0.0294 259.59); padding-bottom: 6px; line-height: 1.3; }
   a:link { color: oklch(42.61% 0.2353 263.74); text-decoration: underline; } a:visited { color: oklch(42.09% 0.1935 328.36); } a:hover { color: oklch(62.80% 0.2577 29.23); }
   code { font-family: "Courier New", Courier, monospace; background: oklch(96.72% 0 0); border: 1px solid oklch(88.22% 0 0); padding: 0 3px; }
   .lede { color: oklch(38.67% 0 0); font-size: 10.5pt; margin: 0 0 12px; }
@@ -1836,7 +1836,11 @@ h2 {
   margin: 18px 0 6px;
   font-weight: bold;
   border-bottom: 1px solid oklch(86.67% 0.0294 259.59);
-  padding-bottom: 2px;
+  /* 6px instead of 2px so Trebuchet MS descenders ("g", "y") clear the
+     rule on Safari, which uses different font-metric rounding than
+     Chrome/Firefox at this size. */
+  padding-bottom: 6px;
+  line-height: 1.3;
 }
 
 .lede { margin: 0 0 14px; color: oklch(38.67% 0 0); font-size: 10.5pt; }

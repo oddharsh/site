@@ -173,7 +173,12 @@ hr {
   margin: 0 0 6px;
   font-weight: bold;
   border-bottom: 1px solid oklch(86.67% 0.0294 259.59);
-  padding-bottom: 2px;
+  /* enough clearance for the descender of "g" in "listening" to sit
+     above the rule on Safari (which uses slightly different font-metric
+     rounding than Chrome/Firefox at 12pt Trebuchet). 2px wasn't enough;
+     6px gives a comfortable gap everywhere. */
+  padding-bottom: 6px;
+  line-height: 1.3;
 }
 .now-playing h2 a {
   color: inherit;
