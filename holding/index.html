@@ -552,13 +552,13 @@ footer .signature small { color: oklch(56.93% 0 0); }
       9 photo slots (3×3) reserved in HTML so the layout has its final
       shape before JS runs. each <a> has aspect-ratio: 4/5 in CSS so the
       grid occupies its full height even when the <img>s have no src yet.
-      thumbnails are AVIF (primary, typically 20-40% smaller than WebP) →
-      WebP (middle, for Firefox<93 / Safari<16) → JPG (universal <img>
-      fallback). NB: <picture>'s type-based fallback ONLY catches "format
-      not supported"; it does NOT catch decode-time failures, which AVIF
-      has historically been more prone to than WebP. if broken-image
-      reports start coming in, the fix is to demote AVIF — not to layer
-      on more fallbacks.
+      thumbnails are AVIF (primary <source>) → JPG (universal <img>
+      fallback). WebP middle tier was removed — modern browsers (Safari
+      16+, Chrome 85+, Firefox 93+) all advertise image/avif natively,
+      so the WebP middle never actually served anyone in 2026.
+      NB: <picture>'s type-based fallback ONLY catches "format not
+      supported"; it does NOT catch decode-time failures. if broken-
+      image reports start coming in, the fix is to demote AVIF.
     -->
     <!-- XP-style tooltip element, positioned by JS on hover. lives outside
          the photos section so it can fixed-position over anything. -->
@@ -573,63 +573,54 @@ footer .signature small { color: oklch(56.93% 0 0); }
       <a>
         <picture>
           <source type="image/avif">
-          <source type="image/webp">
           <img alt="" loading="lazy" decoding="async">
         </picture>
       </a>
       <a>
         <picture>
           <source type="image/avif">
-          <source type="image/webp">
           <img alt="" loading="lazy" decoding="async">
         </picture>
       </a>
       <a>
         <picture>
           <source type="image/avif">
-          <source type="image/webp">
           <img alt="" loading="lazy" decoding="async">
         </picture>
       </a>
       <a>
         <picture>
           <source type="image/avif">
-          <source type="image/webp">
           <img alt="" loading="lazy" decoding="async">
         </picture>
       </a>
       <a>
         <picture>
           <source type="image/avif">
-          <source type="image/webp">
           <img alt="" loading="lazy" decoding="async">
         </picture>
       </a>
       <a>
         <picture>
           <source type="image/avif">
-          <source type="image/webp">
           <img alt="" loading="lazy" decoding="async">
         </picture>
       </a>
       <a>
         <picture>
           <source type="image/avif">
-          <source type="image/webp">
           <img alt="" loading="lazy" decoding="async">
         </picture>
       </a>
       <a>
         <picture>
           <source type="image/avif">
-          <source type="image/webp">
           <img alt="" loading="lazy" decoding="async">
         </picture>
       </a>
       <a>
         <picture>
           <source type="image/avif">
-          <source type="image/webp">
           <img alt="" loading="lazy" decoding="async">
         </picture>
       </a>
@@ -674,22 +665,20 @@ footer .signature small { color: oklch(56.93% 0 0); }
         slot.dataset.full     = p.full;
         slot.dataset.size     = p.size || "";
         slot.dataset.uploaded = p.uploaded || "";
-        // tri-source thumbnail: AVIF primary, WebP middle, JPG fallback.
-        // modern browsers pick the AVIF via the <source type="image/avif">
-        // tag; ones that don't advertise AVIF fall through to WebP; ones
-        // that don't advertise WebP either fall through to the <img src>
-        // JPG. p.thumb_* values are "<stem>.<ext>?v=<N>" — the worker
-        // emits safe ASCII (alphanumerics, '_', '-', '.', '?', '=',
-        // digits), so we use them directly without encodeURIComponent
-        // (which would mangle the '?' into '%3F' and break the cache-
-        // busting query). sources are matched by type rather than DOM
-        // position so the order in HTML can shift without breaking JS.
+        // dual-source thumbnail: AVIF primary, JPG fallback. modern
+        // browsers pick the AVIF via the <source type="image/avif">
+        // tag; ones that don't advertise AVIF fall through to the
+        // <img src> JPG. p.thumb_* values are "<stem>.<ext>?v=<N>" —
+        // the worker emits safe ASCII (alphanumerics, '_', '-', '.',
+        // '?', '=', digits), so we use them directly without
+        // encodeURIComponent (which would mangle the '?' into '%3F'
+        // and break the cache-busting query). sources are matched by
+        // type rather than DOM position so the order in HTML can
+        // shift without breaking JS.
         const sources = slot.querySelectorAll("source");
         const avifSrc = [...sources].find(s => s.type === "image/avif");
-        const webpSrc = [...sources].find(s => s.type === "image/webp");
         const img     = slot.querySelector("img");
         if (avifSrc && p.thumb_avif) avifSrc.srcset = `/images/${p.thumb_avif}`;
-        if (webpSrc && p.thumb_webp) webpSrc.srcset = `/images/${p.thumb_webp}`;
         if (img)                     img.src        = `/images/${p.thumb_jpg}`;
       });
     })();

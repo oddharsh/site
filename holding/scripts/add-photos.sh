@@ -52,11 +52,10 @@ CJPEGLI="$HOME/.local/bin/cjpegli"
 MOZJPEG_DIR="/opt/homebrew/opt/mozjpeg/bin"
 MOZ_JTRAN="$MOZJPEG_DIR/jpegtran"
 
-for cmd in sips wrangler cwebp exiftool; do
+for cmd in sips wrangler exiftool; do
   if ! command -v "$cmd" >/dev/null 2>&1; then
     echo "error: $cmd not found in PATH" >&2
     case "$cmd" in
-      cwebp)    echo "  install with: brew install webp" >&2 ;;
       exiftool) echo "  install with: brew install exiftool" >&2 ;;
     esac
     exit 1
@@ -184,37 +183,11 @@ echo ""
 echo "  generated: $T_OK  skipped (current): $T_SKIP  failed: $T_FAIL"
 echo ""
 
-# ── phase 1b: 1200px WebP thumbnails (middle tier) ───────────────────
-# WebP is the <picture> middle-tier source — for browsers that don't
-# advertise image/avif (Firefox <93, Safari <16) but do advertise
-# image/webp. typically 30% smaller than JPG at equivalent quality.
-# cwebp -q 80 -sharp_yuv gives the best color fidelity for photo content.
-# encoded from the JPG thumb (not the original) so it's always exactly
-# 1200px on the long edge, matching the JPG fallback in dims + crop.
-echo "phase 1b — WebP thumbnails (1200px, picture middle tier)"
-W_OK=0; W_SKIP=0; W_FAIL=0
-while IFS= read -r f; do
-  base=$(basename "$f")
-  stem="${base%.*}"
-  jpg="$DEST/${stem}.jpg"
-  webp="$DEST/${stem}.webp"
-  if [ ! -f "$jpg" ]; then
-    W_FAIL=$((W_FAIL+1)); printf "✗"
-    continue
-  fi
-  if [ -f "$webp" ] && [ "$webp" -nt "$jpg" ]; then
-    W_SKIP=$((W_SKIP+1)); printf "·"
-  elif cwebp -q 80 -sharp_yuv -mt -quiet "$jpg" -o "$webp" >/dev/null 2>&1; then
-    W_OK=$((W_OK+1)); printf "."
-  else
-    W_FAIL=$((W_FAIL+1)); printf "✗"
-  fi
-done < "$SOURCES"
-echo ""
-echo "  generated: $W_OK  skipped (current): $W_SKIP  failed: $W_FAIL"
-echo ""
+# (WebP middle tier was removed in 2026-05 — every modern browser
+# advertises image/avif natively, so the WebP middle never served
+# anyone. revert this commit to bring it back if needed.)
 
-# ── phase 1c: 1200px AVIF thumbnails (<picture> primary) ─────────────
+# ── phase 1b: 1200px AVIF thumbnails (<picture> primary) ─────────────
 # AVIF is the primary source — typically 20–40% smaller than WebP at
 # equivalent visual quality. encoded from the JPG thumb so dims + crop
 # match the other tiers exactly. encoder preference:
@@ -223,9 +196,9 @@ echo ""
 #   2. sips    — macOS-native AVIF encoder, no extra dep. formatOptions
 #      60 ≈ visually-lossless for photo content. fallback.
 # NB: <picture>'s type-fallback only catches "format not supported";
-# decode failures will NOT cascade to phase 1b/1a. if browsers start
+# decode failures will NOT cascade to phase 1a. if browsers start
 # reporting broken images, demote AVIF rather than layering on fallbacks.
-echo "phase 1c — AVIF thumbnails (1200px, picture primary)"
+echo "phase 1b — AVIF thumbnails (1200px, picture primary)"
 A_OK=0; A_SKIP=0; A_FAIL=0
 if command -v avifenc >/dev/null 2>&1; then
   AVIF_ENCODER="avifenc"

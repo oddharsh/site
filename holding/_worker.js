@@ -361,8 +361,8 @@ async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
   // visit. response is uncached at the edge (worker cache-control: no-store
   // by default), so per-request randomness reaches every visitor. the
   // emitted HTML mirrors what the client-side fill JS would produce —
-  // <picture> with AVIF (primary) + WebP (middle) + JPG fallback, data-*
-  // attrs for the hover tooltip, target=_blank + rel=noopener on the anchor.
+  // <picture> with AVIF (primary) + JPG fallback, data-* attrs for the
+  // hover tooltip, target=_blank + rel=noopener on the anchor.
   if (photos) {
     const pick = pickRandom(photos, 9);
     const slotsHtml = pick.map(p => {
@@ -376,7 +376,6 @@ async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
              ` data-full="${escAttr(full)}"${sizeAttr}${upAttr}>` +
         `<picture>` +
           (p.thumb_avif ? `<source type="image/avif" srcset="/images/${escAttr(p.thumb_avif)}">` : "") +
-          (p.thumb_webp ? `<source type="image/webp" srcset="/images/${escAttr(p.thumb_webp)}">` : "") +
           `<img alt="" loading="lazy" decoding="async" src="/images/${escAttr(p.thumb_jpg)}">` +
         `</picture>` +
       `</a>`;
@@ -556,13 +555,13 @@ const R2_EXT_PRIORITY = {
   heif: 1, heic: 1, hif: 1,
 };
 
-// bump to bust all `/images/<stem>.{avif,webp,jpg}` edge-cache entries at
+// bump to bust all `/images/<stem>.{avif,jpg}` edge-cache entries at
 // once. used as a `?v=<N>` suffix in the manifest's thumb URLs. Cloudflare
 // includes the query string in the cache key by default, so changing this
 // produces a fresh cache lookup that doesn't see prior stale 404s.
-// (bumped to 9 when switching the <picture> primary back to AVIF — fresh
-// URLs guarantee we don't inherit any cached 404s from the WebP era.)
-const THUMB_VERSION = 9;
+// (bumped to 10 when dropping the WebP middle tier — every modern
+// browser advertises image/avif natively, so WebP was dead weight.)
+const THUMB_VERSION = 10;
 
 async function getImagesManifest(env, ctx) {
   let manifest = null;
@@ -591,20 +590,18 @@ async function getImagesManifest(env, ctx) {
     // the query in the cache key by default). incrementing THUMB_VERSION
     // is the supported way to invalidate all thumbnail caches at once.
     //
-    // tri-source: thumb_avif is the <picture> primary (typically 20-40%
-    // smaller than WebP at equivalent visual quality); thumb_webp is the
-    // middle-tier <source> for browsers that don't advertise image/avif
-    // (Firefox <93, Safari <16); thumb_jpg is the universal <img src>
-    // fallback. NB: <picture> type-fallback only catches "format not
-    // supported" — it does NOT catch DECODE failures. AVIF decode
+    // dual-source: thumb_avif is the <picture> primary; thumb_jpg is
+    // the universal <img src> fallback. WebP middle tier was dropped —
+    // modern browsers (Safari 16+, Chrome 85+, Firefox 93+) all
+    // advertise image/avif natively, so the WebP middle never served
+    // anyone in 2026. NB: <picture> type-fallback only catches "format
+    // not supported" — it does NOT catch DECODE failures. AVIF decode
     // failures historically caused broken images here; if they recur,
-    // the fix is to demote AVIF back to a middle tier (or remove it
-    // entirely), not to add more fallback sources.
+    // the fix is to demote AVIF entirely, not to add more sources.
     const v = THUMB_VERSION;
     manifest = [...byStem.entries()].map(([stem, o]) => ({
       full:       o.key,                     // R2 key, e.g. "XT507333.JPG"
       thumb_avif: `${stem}.avif?v=${v}`,     // Pages static AVIF (primary)
-      thumb_webp: `${stem}.webp?v=${v}`,     // Pages static WebP (middle)
       thumb_jpg:  `${stem}.jpg?v=${v}`,      // Pages static JPG (fallback)
       stem,
       size:       o.size,                    // R2 object size in bytes
@@ -641,8 +638,8 @@ async function handleImagesIndex(request, env, ctx) {
     const manifest = await getImagesManifest(env, ctx);
     const stripVer = (s) => String(s || "").replace(/\?.*$/, "");
     const names = manifest.flatMap(p => [
+      stripVer(p.thumb_avif),
       stripVer(p.thumb_jpg),
-      stripVer(p.thumb_webp),
     ]).filter(Boolean);
     entries = await Promise.all(names.map(async (name) => {
       try {

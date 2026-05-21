@@ -55,7 +55,7 @@ Single-page personal site at `aadhar.sh`. Hosted on Cloudflare Pages, with a
 | `holding/index.md` | Markdown source of homepage copy (used by `/llms.txt` and as a fallback). |
 | `holding/sitemap.xml`, `robots.txt` | Standard SEO files. robots.txt explicitly allows AadharshBot. |
 | `holding/.well-known/http-message-signatures-directory` | JWKS for AadharshBot's Ed25519 public key (Web Bot Auth IETF draft). |
-| `holding/images/` | 120 thumbnails (1200px AVIF + WebP + JPG triplets) + `metadata.json` (EXIF index). 120 stems × 3 formats = 360 files. |
+| `holding/images/` | 120 thumbnails (1200px AVIF + JPG pairs) + `metadata.json` (EXIF index). 120 stems × 2 formats = 240 files. |
 | `holding/scripts/` | Photo-pipeline scripts (see below). |
 
 ### The photo pipeline
@@ -68,11 +68,10 @@ SOOC original (in /Users/aadharsh/Downloads/to post (from ssd)/)
    |   1. sips: resize to 1200px + format-convert (handles HEIF/HIF)
    |   2. jpegtran -rotate N (lossless EXIF orientation, mozjpeg's tool)
    |   3. cjpegli -q 82 -p 2 (Google's encoder, ~25% smaller than mozjpeg)
-   |   4. cwebp -q 80 -sharp_yuv (from the corrected JPG; middle tier)
-   |   5. avifenc CQ 30 (or sips formatOptions 60 fallback) — primary
+   |   4. avifenc CQ 30 (or sips formatOptions 60 fallback) — primary
    |
    v
-holding/images/<stem>.{jpg,webp,avif}  +  R2 aadhar-photos/<filename>
+holding/images/<stem>.{avif,jpg}  +  R2 aadhar-photos/<filename>
    |
    v
 [extract-photo-metadata.sh] generates holding/images/metadata.json
@@ -85,7 +84,6 @@ Two encoders + one transform tool, all built from source:
 
 - **mozjpeg** (`brew install mozjpeg`, keg-only at `/opt/homebrew/opt/mozjpeg/`)
   — provides `jpegtran` for lossless EXIF-orientation rotation.
-- **cwebp** (`brew install webp`) — WebP middle-tier thumbnail.
 - **jpegli** (built from `github.com/google/jpegli`, installed at
   `~/.local/bin/cjpegli`) — JPEG universal-fallback encoder.
   See `holding/scripts/build-jpegli.sh` to rebuild.
@@ -96,21 +94,20 @@ Two encoders + one transform tool, all built from source:
 
 ### `<picture>` + cache-busting strategy
 
-Photo thumbnails are tri-encoded AVIF + WebP + JPG, served via `<picture>`:
+Photo thumbnails are dual-encoded AVIF + JPG, served via `<picture>`:
 
 ```html
 <a href="/images/full/<filename>" data-full="..." data-size="..." data-uploaded="...">
   <picture>
-    <source type="image/avif" srcset="/images/<stem>.avif?v=9">
-    <source type="image/webp" srcset="/images/<stem>.webp?v=9">
-    <img src="/images/<stem>.jpg?v=9" loading="lazy" decoding="async">
+    <source type="image/avif" srcset="/images/<stem>.avif?v=10">
+    <img src="/images/<stem>.jpg?v=10" loading="lazy" decoding="async">
   </picture>
 </a>
 ```
 
 **The `?v=N` query is critical.** Cloudflare's edge will cache a 404
 response for 4 hours if any URL gets hit during a deploy race window.
-The `THUMB_VERSION` constant (top of `_worker.js`, currently `9`) is
+The `THUMB_VERSION` constant (top of `_worker.js`, currently `10`) is
 appended as `?v=N` to every thumbnail URL in the pre-rendered HTML.
 **Bump it whenever you suspect cache poisoning** — bumping = fresh URLs =
 fresh edge cache lookup = bypass any poisoned 404.
@@ -267,11 +264,12 @@ npx wrangler deploy
 7. **`<picture>`'s type-based fallback doesn't catch DECODE failures.**
    Only "format not supported by this browser." This bit us with AVIF
    early on (we briefly went WebP-as-primary because of it). Currently
-   back on AVIF-as-primary with WebP as the middle-tier `<source>` and
-   JPG as the universal `<img src>` fallback. If broken-image reports
-   recur, the fix is to demote AVIF — adding more `<source>` tiers
-   does not help, because the browser commits to its chosen format
-   before the decoder runs.
+   AVIF-as-primary with JPG as the universal `<img src>` fallback —
+   the WebP middle tier was dropped because every modern browser
+   (Safari 16+, Chrome 85+, Firefox 93+) advertises image/avif
+   natively. If broken-image reports recur, the fix is to demote
+   AVIF — adding more `<source>` tiers does not help, because the
+   browser commits to its chosen format before the decoder runs.
 
 8. **`<a>` nested inside `<a>` is invalid HTML** — the parser hoists them
    out. For the per-artist clickable spans inside the row-anchor, use
