@@ -172,13 +172,21 @@ hr {
   color: oklch(41.92% 0.0962 250.51);
   margin: 0 0 6px;
   font-weight: bold;
-  border-bottom: 1px solid oklch(86.67% 0.0294 259.59);
-  /* enough clearance for the descender of "g" in "listening" to sit
-     above the rule on Safari (which uses slightly different font-metric
-     rounding than Chrome/Firefox at 12pt Trebuchet). 2px wasn't enough;
-     6px gives a comfortable gap everywhere. */
-  padding-bottom: 6px;
   line-height: 1.3;
+  /* the rule lives on a pseudo-element with an explicit margin-top
+     rather than border-bottom + padding-bottom. Safari's font-metric
+     rounding leaves Trebuchet's "g"/"y" descenders kissing or crossing
+     a border-bottom even at 6-8px padding, because Safari's line-box
+     measurement differs from Chrome/Firefox at 12pt Trebuchet. a
+     block-level pseudo with margin-top sits a fixed distance below
+     the line-box and is immune to that. */
+}
+.now-playing h2::after {
+  content: "";
+  display: block;
+  height: 1px;
+  background: oklch(86.67% 0.0294 259.59);
+  margin-top: 8px;
 }
 .now-playing h2 a {
   color: inherit;
