@@ -159,26 +159,28 @@ hr {
    period-correct Windows-list view — alternating row tint, monospace title
    column, navy heading, hairline divider. */
 .now-playing {
-  /* 24px top + 24px bottom on the h2 below gives the heading symmetric
-     breathing room — visually centered in the gap between the photo grid
-     above (which has margin-bottom: 24px, collapses to 24) and the
-     tracklist below. an earlier 18px top left ascenders almost touching
-     the photo bottoms; a brief 32px top fixed that but left the rule
-     crowded against the tracklist below.
+  /* 32px top + 32px bottom on the h2 below gives the heading symmetric
+     breathing room — visually centered in the gap between the photo
+     grid above and the tracklist below. went through a few iterations:
+       18/6  → ascenders touched photos above
+       32/6  → top good but rule crowded the tracklist below
+       24/24 → both gaps too tight (24px collapses with photos' 24px)
+       32/32 → roomy and symmetric. landed here.
      (we used to set `content-visibility: auto` here as a "skip rendering
      when off-screen" optimization, but the viewability checks ran on
      every scroll and on variable-refresh displays in Low Power mode
      they cost more than the savings. with the list ~500px tall on a
      short page, the savings were marginal anyway.) */
-  margin: 24px 0 4px;
+  margin: 32px 0 4px;
 }
 .now-playing h2 {
   font-family: "Trebuchet MS", Verdana, sans-serif;
   font-size: 12pt;
   color: oklch(41.92% 0.0962 250.51);
-  /* 24px bottom matches the 24px collapsed top margin so the h2 (text +
-     ::after rule) sits visually centered between photos and tracklist. */
-  margin: 0 0 24px;
+  /* 32px bottom matches the 32px top margin on .now-playing so the h2
+     (text + ::after rule) sits visually centered between photos and
+     tracklist. */
+  margin: 0 0 32px;
   font-weight: bold;
   line-height: 1.3;
   /* the rule lives on a pseudo-element with an explicit margin-top
