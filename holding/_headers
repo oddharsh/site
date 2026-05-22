@@ -1,9 +1,13 @@
-# short edge cache while iterating — 60 sec on the apex page so deploys
-# show up on aadhar.sh almost as fast as on the pages.dev preview URLs.
-# bump back up to 600+ later when the site stops changing every hour.
+# IMPORTANT: do NOT put Cache-Control on /*. Pages merges _headers rules
+# from every matching pattern into one combined response, so a /* Cache-
+# Control would merge with /images/*'s Cache-Control into a single header
+# containing TWO max-age values. browsers (and the CF Cache Rule's "respect
+# origin TTL") then pick the most-restrictive max-age per RFC 7234, which
+# is the /* rule's short value — clobbering the 1-year immutable cache on
+# thumbnails. instead: security headers on /*, Cache-Control on explicit
+# paths below.
 
 /*
-  Cache-Control: public, max-age=0, must-revalidate, s-maxage=60
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   # CSP: every resource the site needs is same-origin. inline <style> and
@@ -29,10 +33,15 @@
 /images/*
   Cache-Control: public, max-age=31536000, immutable
 
-# homepage: advertise machine-readable resources for agents.
-# RFC 8288 + RFC 9727 §3. multiple Link headers are valid; using one per
-# resource for readability.
+# homepage: short cache + revalidate, 60s at the edge so deploys show up
+# on aadhar.sh nearly as fast as the pages.dev preview. bump s-maxage to
+# 600+ later when the site stops changing every hour. (Cache-Control
+# explicit here instead of on /* — see comment at top.)
+# Also: advertise machine-readable resources for agents per RFC 8288 +
+# RFC 9727 §3. multiple Link headers are valid; using one per resource
+# for readability.
 /
+  Cache-Control: public, max-age=0, must-revalidate, s-maxage=60
   Link: </sitemap.xml>; rel="sitemap"; type="application/xml"
   Link: </llms.txt>; rel="alternate"; type="text/plain"; title="llms.txt summary"
   Link: </rn/tracks>; rel="service-desc"; type="application/json"; title="current rn playlist as JSON"
