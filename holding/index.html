@@ -159,12 +159,16 @@ hr {
    period-correct Windows-list view — alternating row tint, monospace title
    column, navy heading, hairline divider. */
 .now-playing {
-  margin: 18px 0 4px;
-  /* (we used to set `content-visibility: auto` here as a "skip rendering
+  /* 32px top so the heading sits in a clear gap below the photo grid
+     (which has margin-bottom: 24px — margins collapse to the max). 18px
+     wasn't enough; the ascenders of "Music" almost touched the photo
+     bottoms on Safari.
+     (we used to set `content-visibility: auto` here as a "skip rendering
      when off-screen" optimization, but the viewability checks ran on
      every scroll and on variable-refresh displays in Low Power mode
      they cost more than the savings. with the list ~500px tall on a
      short page, the savings were marginal anyway.) */
+  margin: 32px 0 4px;
 }
 .now-playing h2 {
   font-family: "Trebuchet MS", Verdana, sans-serif;
