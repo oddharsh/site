@@ -1038,6 +1038,68 @@ footer .signature small { color: oklch(56.93% 0 0); }
         tip.style.willChange = "";
         activeSlot = null;
       }, { passive: true });
+
+      // scroll re-evaluation. tooltip is position:fixed and the cursor
+      // is also fixed in viewport coords during scroll — so the tooltip
+      // and cursor stay co-located, but the CONTENT under the cursor
+      // changes. browsers don't reliably fire mouseover/mouseout when
+      // an element shifts under a stationary cursor due to scroll (Safari
+      // especially), so the tooltip would otherwise keep showing data
+      // for a row that's no longer under the pointer. on each scroll
+      // tick we look up what's actually under the cursor via
+      // elementFromPoint and re-target accordingly. coalesced to one
+      // re-evaluation per animation frame to keep scroll smooth.
+      const hideTip = () => {
+        if (frame) { cancelAnimationFrame(frame); frame = 0; }
+        tip.style.display = "none";
+        tip.style.willChange = "";
+        activeSlot = null;
+      };
+      const showTipFor = (target) => {
+        if (target === activeSlot) return;            // nothing to do
+        activeSlot = target;
+        const isPhoto = target.matches(".photos a");
+        const html = buildContent(target);
+        if (!html) { hideTip(); return; }
+        tip.innerHTML = html;
+        tip.style.display = "block";
+        tip.style.willChange = "transform";
+        measure();
+        // position will be re-applied off the cached pendingX/pendingY
+        // on the next rAF tick from the existing mousemove path; if no
+        // mousemove fires (pure scroll-into-new-target case), force one.
+        if (!frame) frame = requestAnimationFrame(applyPosition);
+        const cover = tip.querySelector(".cover");
+        if (cover && !cover.complete) {
+          cover.addEventListener("load",  () => { if (activeSlot === target) measure(); }, { once: true });
+          cover.addEventListener("error", () => { if (activeSlot === target) measure(); }, { once: true });
+        }
+        if (isPhoto && !metadataLoaded) {
+          ensureMetadata().then(() => {
+            if (activeSlot === target) {
+              tip.innerHTML = buildContent(target);
+              measure();
+            }
+          });
+        }
+      };
+      let scrollFrame = 0;
+      const reevaluateAfterScroll = () => {
+        scrollFrame = 0;
+        if (tip.style.display !== "block") return;
+        // pendingX/pendingY is the last cursor position we recorded.
+        // elementFromPoint returns the topmost element AT that viewport
+        // coord — which, after scroll, may be a different element than
+        // the one originally hovered.
+        const under = document.elementFromPoint(pendingX, pendingY);
+        const newTarget = findTarget(under);
+        if (!newTarget) { hideTip(); return; }
+        if (newTarget !== activeSlot) showTipFor(newTarget);
+      };
+      document.addEventListener("scroll", () => {
+        if (tip.style.display !== "block") return;
+        if (!scrollFrame) scrollFrame = requestAnimationFrame(reevaluateAfterScroll);
+      }, { capture: true, passive: true });
     })();
     </script>
 
