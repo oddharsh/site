@@ -40,26 +40,28 @@
   Link: </.well-known/security.txt>; rel="security-policy"; type="text/plain"
   Vary: Accept
 
-# discovery files: short edge cache while the site iterates. bots that
-# care about freshness will see updates within a minute; longer caches
-# don't actually help bots, they only reduce origin scrape frequency
-# (and the origin is a static file with no scrape cost). revisit when
-# the site stabilizes.
+# discovery files: long cache. these all change rarely (sitemap when
+# new public pages land, robots.txt when bot policy shifts, llms.txt
+# when site copy changes, JWKS when the bot's signing key rotates) —
+# and when they do change, `wrangler kv` purges + a redeploy lands new
+# bytes within a minute. Lighthouse's "Use efficient cache lifetimes"
+# audit flags anything < 30 days, so 30d (2592000s) clears the bar
+# while leaving room for manual purge if any of these change urgently.
 /sitemap.xml
-  Cache-Control: public, max-age=0, must-revalidate, s-maxage=60
+  Cache-Control: public, max-age=2592000, s-maxage=2592000
 
 /robots.txt
-  Cache-Control: public, max-age=0, must-revalidate, s-maxage=60
+  Cache-Control: public, max-age=2592000, s-maxage=2592000
 
 /llms.txt
-  Cache-Control: public, max-age=0, must-revalidate, s-maxage=60
+  Cache-Control: public, max-age=2592000, s-maxage=2592000
   Content-Type: text/plain; charset=utf-8
 
 # JWKS at the well-known location for Web Bot Auth. content-type must be
 # explicit because the path has no extension.
 /.well-known/http-message-signatures-directory
   Content-Type: application/jwk-set+json
-  Cache-Control: public, max-age=0, must-revalidate, s-maxage=60
+  Cache-Control: public, max-age=2592000, s-maxage=2592000
 
 # (security.txt is served by Cloudflare's managed Security Center now —
 # no local file, no _headers rule needed. the Link header on / and the

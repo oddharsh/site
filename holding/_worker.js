@@ -173,7 +173,7 @@ async function route(request, env, ctx) {
     if (url.pathname === "/source") {
       const target = url.searchParams.get("path") || "/";
       if (!target.startsWith("/") || target.includes("..")) {
-        return new Response("invalid path", { status: 400 });
+        return errorResp("invalid path", 400);
       }
       const inner = await env.ASSETS.fetch(new URL(target, request.url).toString());
       const body  = await inner.text();
@@ -253,7 +253,7 @@ async function route(request, env, ctx) {
       const ct  = res.headers.get("content-type") || "";
       if (ct.startsWith("image/")) return res;
       try { await res.body?.cancel(); } catch {}
-      return new Response("not found", { status: 404 });
+      return errorResp("not found", 404);
     }
 
     // markdown content negotiation: when an agent sends
@@ -458,7 +458,7 @@ function fmtDuration(ms) {
 // traversal characters.
 async function servePhotoFromR2(request, env) {
   if (!env.PHOTOS_R2) {
-    return new Response("R2 bucket not bound", { status: 503 });
+    return errorResp("R2 bucket not bound", 503);
   }
 
   const url = new URL(request.url);
@@ -466,7 +466,7 @@ async function servePhotoFromR2(request, env) {
   // allow letters, digits, `_`, `-`, `.` in the stem; require a known
   // image extension. forbids `/`, `..`, and other escape characters.
   if (!/^[A-Za-z0-9_.-]+\.(?:jpe?g|png|webp|heic|heif|hif|avif|gif)$/i.test(key)) {
-    return new Response("not found", { status: 404 });
+    return errorResp("not found", 404);
   }
 
   const ifNoneMatch = request.headers.get("if-none-match");
@@ -501,7 +501,7 @@ async function servePhotoFromR2(request, env) {
         });
       }
     }
-    return new Response("not found", { status: 404 });
+    return errorResp("not found", 404);
   }
 
   const headers = new Headers();
@@ -528,6 +528,21 @@ function escAttr(s) {
 }
 function escHtml(s) {
   return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+// short-cache error response. matches the CF Cache Rule that pins edge
+// TTL to 30s on 4xx/5xx — sending max-age=30 makes the browser cache
+// honor the same window, so a transient 404 during a deploy race
+// doesn't get pinned in either CF's edge OR the visitor's browser for
+// CF Pages's default 4h. use everywhere we emit a 4xx/5xx ourselves.
+function errorResp(body, status) {
+  return new Response(body, {
+    status,
+    headers: {
+      "content-type":  "text/plain; charset=utf-8",
+      "cache-control": "public, max-age=30, must-revalidate",
+    },
+  });
 }
 
 // ── 1990s-style directory listings ──────────────────────────────────
@@ -678,7 +693,7 @@ async function handleImagesIndex(request, env, ctx) {
 
 async function handleImagesFullIndex(request, env, ctx) {
   if (!env.PHOTOS_R2) {
-    return new Response("R2 not bound", { status: 503 });
+    return errorResp("R2 not bound", 503);
   }
   // R2 lists are cheap; cache 5 min so it's snappy without going too stale.
   let entries = null;
