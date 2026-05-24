@@ -230,7 +230,7 @@ async function route(request, env, ctx) {
     // edge won't poison itself. Successful responses pass through with
     // Pages's normal long-cache (correct for content-addressed thumbs
     // because we bump THUMB_VERSION's `?v=N` on each deploy).
-    if (/^\/images\/[^/]+\.(jpg|jpeg|webp|avif|png|gif|heic|heif)$/i.test(url.pathname)) {
+    if (/^\/images\/[^/]+\.(jpg|jpeg|avif|png|gif|heic|heif)$/i.test(url.pathname)) {
       const res = await env.ASSETS.fetch(request);
       if (!res.ok) {
         const headers = new Headers(res.headers);
@@ -247,7 +247,7 @@ async function route(request, env, ctx) {
     // index.html with text/html for any missing path). serve if real,
     // 404 if missing. (no more .jpg → .avif redirect — both formats now
     // exist again as siblings, so a missing .jpg is genuinely missing.)
-    const thumbMatch = url.pathname.match(/^\/images\/([^/]+)\.(avif|jpe?g|png|webp|gif|heic|heif|hif)$/i);
+    const thumbMatch = url.pathname.match(/^\/images\/([^/]+)\.(avif|jpe?g|png|gif|heic|heif|hif)$/i);
     if (thumbMatch) {
       const res = await env.ASSETS.fetch(request);
       const ct  = res.headers.get("content-type") || "";
@@ -465,7 +465,7 @@ async function servePhotoFromR2(request, env) {
   const key = url.pathname.replace(/^\/images\/full\//, "");
   // allow letters, digits, `_`, `-`, `.` in the stem; require a known
   // image extension. forbids `/`, `..`, and other escape characters.
-  if (!/^[A-Za-z0-9_.-]+\.(?:jpe?g|png|webp|heic|heif|hif|avif|gif)$/i.test(key)) {
+  if (!/^[A-Za-z0-9_.-]+\.(?:jpe?g|png|heic|heif|hif|avif|gif)$/i.test(key)) {
     return errorResp("not found", 404);
   }
 

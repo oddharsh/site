@@ -18,19 +18,21 @@
 // SW installs, the old caches get cleaned up in `activate`.
 
 // bump on path renames or significant behavioral changes; old SW caches
-// get swept in the next `activate` event. v5 sweeps the v4 cache, which
-// accumulated entries during a stretch where the upstream image URLs
-// kept changing (AVIF → JPG-only → WebP+JPG via <picture>, plus the
-// `?v=N` cache-bust query bumping with each deploy). starting from a
-// clean cache here gets every returning visitor onto the current bytes
-// without manually clearing storage.
-const CACHE_VERSION = "aadhar-v5-webp-jpg";
+// get swept in the next `activate` event. v6 sweeps the v5 webp+jpg
+// cache after the WebP middle tier was removed — leftover entries from
+// the WebP era are now broken URLs (the .webp files were deleted), so
+// returning visitors need a fresh cache to repopulate from AVIF+JPG.
+// `?v=N` bumps on each deploy already cycle individual entries, but a
+// cache-version bump is the only way to sweep stale keys whose URL
+// pattern no longer matches anything we serve.
+const CACHE_VERSION = "aadhar-v6-avif-jpg";
 
 const CACHE_FIRST = [
   // image files only — NOT /images/ or /images/full/ themselves (those are
-  // directory-listing HTML pages, served via the worker, must stay fresh)
-  /^\/images\/[0-9A-Za-z._-]+\.(jpg|jpeg|avif|webp|png|gif|heic|heif)$/i,
-  /^\/images\/full\/[0-9A-Za-z._-]+\.(jpg|jpeg|avif|webp|png|gif|heic|heif)$/i,
+  // directory-listing HTML pages, served via the worker, must stay fresh).
+  // formats limited to what add-photos.sh actually produces + R2 originals.
+  /^\/images\/[0-9A-Za-z._-]+\.(jpg|jpeg|avif|png|gif|heic|heif)$/i,
+  /^\/images\/full\/[0-9A-Za-z._-]+\.(jpg|jpeg|avif|png|gif|heic|heif|hif)$/i,
 ];
 const SWR = [
   /^\/llms\.txt$/,

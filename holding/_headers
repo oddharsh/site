@@ -33,15 +33,20 @@
 /images/*
   Cache-Control: public, max-age=31536000, immutable
 
-# homepage: short cache + revalidate, 60s at the edge so deploys show up
-# on aadhar.sh nearly as fast as the pages.dev preview. bump s-maxage to
-# 600+ later when the site stops changing every hour. (Cache-Control
-# explicit here instead of on /* — see comment at top.)
+# homepage: NO edge caching (s-maxage=0). the worker pre-renders the
+# photo grid by picking 9 random photos from a 120-photo pool, and the
+# visitor counter increments per pageview. both effects depend on the
+# worker running on every request — if the edge caches the response,
+# the same 9 photos persist for the cache window and the counter only
+# updates on cache miss. trade-off accepted: each visit costs ~3 KV
+# reads + 1 KV write (the worker's existing reads). at personal traffic
+# this is well under the free-tier budget. browser still gets max-age=0
+# + must-revalidate so its cache also stays fresh.
 # Also: advertise machine-readable resources for agents per RFC 8288 +
 # RFC 9727 §3. multiple Link headers are valid; using one per resource
 # for readability.
 /
-  Cache-Control: public, max-age=0, must-revalidate, s-maxage=60
+  Cache-Control: public, max-age=0, must-revalidate, s-maxage=0
   Link: </sitemap.xml>; rel="sitemap"; type="application/xml"
   Link: </llms.txt>; rel="alternate"; type="text/plain"; title="llms.txt summary"
   Link: </rn/tracks>; rel="service-desc"; type="application/json"; title="current rn playlist as JSON"
