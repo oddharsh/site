@@ -1740,9 +1740,85 @@ function timingSafeEqual(a, b) {
 
 // ── /whoareyou handler ───────────────────────────────────────────────
 // shows the visitor what their HTTP request revealed. no logging, no
-// storage, no third-party calls.
+// storage. one server-side outbound call to ARIN's RDAP service to
+// enrich the IP with its registration metadata (network name, owner,
+// CIDR) — the visitor's browser never speaks to a third party. RDAP
+// results are CF-edge-cached by URL for 24h so visitors from the same
+// IP block don't re-hit ARIN.
 
-function handleWhoareyou(request) {
+// RDAP returns the registered owner of the IP block — often more
+// specific than the ASN's operator (e.g. "Columbia University" rather
+// than the upstream ISP). ARIN's endpoint handles IANA-bootstrap
+// redirects to whichever RIR is authoritative for the queried IP, so
+// one URL works for all five RIRs as long as we follow redirects.
+async function fetchRdap(ip) {
+  if (!ip || ip === "—") return null;
+  // basic shape check to avoid sending garbage to ARIN
+  if (!/^[0-9a-fA-F:.]+$/.test(ip)) return null;
+  try {
+    const res = await fetch(`https://rdap.arin.net/registry/ip/${encodeURIComponent(ip)}`, {
+      headers: {
+        "user-agent": BOT_UA,                 // identifies as AadharshBot
+        "accept":     "application/rdap+json",
+      },
+      redirect: "follow",
+      cf: { cacheTtl: 86400, cacheEverything: true },  // 24h CF edge cache, keyed by URL
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+
+    // network name — short identifier for the allocated block (e.g.
+    // "COMCAST-1", "COLUMBIA-UNIV"). `handle` falls back to ARIN's
+    // internal NET- handle if `name` isn't populated.
+    const networkName = data.name || data.handle || null;
+
+    // CIDR — prefer the structured cidr0_cidrs[0]; otherwise compose
+    // from startAddress/endAddress (less precise but always present).
+    let cidr = null;
+    const c = Array.isArray(data.cidr0_cidrs) ? data.cidr0_cidrs[0] : null;
+    if (c) {
+      const prefix = c.v4prefix || c.v6prefix;
+      if (prefix && typeof c.length === "number") cidr = `${prefix}/${c.length}`;
+    }
+    if (!cidr && data.startAddress && data.endAddress) {
+      cidr = `${data.startAddress} – ${data.endAddress}`;
+    }
+
+    // registered owner — pulled from the entity with role "registrant".
+    // RDAP encodes entity contact info as a vCard 4.0 jCard structure;
+    // the "fn" (formatted name) property is the human-readable owner.
+    let owner = null;
+    const registrant = (data.entities || []).find(e =>
+      Array.isArray(e.roles) && e.roles.includes("registrant")
+    );
+    const vcard = registrant?.vcardArray;
+    if (Array.isArray(vcard) && Array.isArray(vcard[1])) {
+      const fn = vcard[1].find(v => Array.isArray(v) && v[0] === "fn");
+      if (fn && typeof fn[3] === "string") owner = fn[3];
+    }
+
+    // events — registration date + last changed are most interesting.
+    const events = Array.isArray(data.events) ? data.events : [];
+    const regEvent = events.find(e => e.eventAction === "registration");
+    const lastChanged = events.find(e => e.eventAction === "last changed");
+
+    // allocation type — "DIRECT ASSIGNMENT", "REASSIGNED", "ALLOCATED PORTABLE", etc.
+    const allocType = data.type || null;
+
+    return {
+      networkName,
+      owner,
+      cidr,
+      allocType,
+      registered:  regEvent?.eventDate || null,
+      lastChanged: lastChanged?.eventDate || null,
+    };
+  } catch (_e) {
+    return null;
+  }
+}
+
+async function handleWhoareyou(request) {
   const cf = request.cf || {};
   const h  = request.headers;
 
@@ -1781,6 +1857,10 @@ function handleWhoareyou(request) {
   };
 
   const ua = parseUA(data.userAgent);
+
+  // RDAP enrichment — server-side only, never blocks rendering if it
+  // fails or times out (the page renders fine without these fields).
+  const rdap = await fetchRdap(data.ip);
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -2023,6 +2103,10 @@ footer .signature small { color: oklch(56.93% 0 0); }
     <dl class="field-grid">
       <dt>IP address</dt>           <dd>${esc(data.ip)}</dd>
       <dt>ISP / ASN</dt>            <dd>${esc(data.asOrg)} (AS${esc(data.asn)})</dd>
+      ${rdap?.owner ? `<dt>Registered to</dt>       <dd>${esc(rdap.owner)} <span class="dim">(per RDAP — often more specific than the ASN operator)</span></dd>` : ""}
+      ${rdap?.networkName ? `<dt>Network name</dt>        <dd>${esc(rdap.networkName)}${rdap.allocType ? ` <span class="dim">(${esc(rdap.allocType.toLowerCase())})</span>` : ""}</dd>` : ""}
+      ${rdap?.cidr ? `<dt>Allocated range</dt>     <dd>${esc(rdap.cidr)}</dd>` : ""}
+      ${rdap?.registered ? `<dt>Block registered</dt>    <dd>${esc(rdap.registered.slice(0, 10))}${rdap.lastChanged && rdap.lastChanged.slice(0,10) !== rdap.registered.slice(0,10) ? ` <span class="dim">(last changed ${esc(rdap.lastChanged.slice(0, 10))})</span>` : ""}</dd>` : ""}
       <dt>Country</dt>              <dd>${esc(data.country)}${data.continent !== "—" ? ` <span class="dim">(${esc(data.continent)}${data.isEU ? ", EU" : ""})</span>` : ""}</dd>
       <dt>Region</dt>               <dd>${esc(data.region)}</dd>
       <dt>City</dt>                 <dd>${esc(data.city)} ${data.postalCode !== "—" ? `(${esc(data.postalCode)})` : ""}</dd>
@@ -2080,10 +2164,13 @@ footer .signature small { color: oklch(56.93% 0 0); }
     </ul>
 
     <div class="callout">
-      <strong>About this page:</strong> Rendered at the Cloudflare edge, no third-party
-      calls, no analytics. The data above exists for the lifetime of one HTTP
-      request and is never written to storage. View-source if you want; it&rsquo;s
-      a single JavaScript file you can read end-to-end.
+      <strong>About this page:</strong> Rendered at the Cloudflare edge. Your
+      browser never speaks to a third party — the only outbound call is one
+      server-side RDAP lookup to your IP&rsquo;s registry (cached at the edge for
+      24h so visitors from the same block don&rsquo;t re-hit ARIN). No analytics. The
+      data above exists for the lifetime of one HTTP request and is never written
+      to storage. View-source if you want; it&rsquo;s a single JavaScript file
+      you can read end-to-end.
     </div>
 
     <footer>
