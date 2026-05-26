@@ -297,16 +297,16 @@ async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
     } catch {}
   }
 
-  // photo grid (from images manifest — already KV-cached via getImagesManifest).
-  // getImagesManifest returns a bare array of photo entries; handleImagesManifest
-  // wraps that in { photos: [...], count } for the public JSON endpoint.
-  let photos = null;
-  try {
-    const arr = await getImagesManifest(env, ctx);
-    if (Array.isArray(arr) && arr.length) {
-      photos = arr;
-    }
-  } catch {}
+  // NOTE: photo grid is intentionally NOT pre-rendered server-side. an
+  // earlier version had the worker pick 9 random photos and inject them
+  // via HTMLRewriter, but that meant any layer of caching (CF edge,
+  // browser HTML cache, service worker) would pin the same 9 photos
+  // for the cache window. moving randomization to the client means the
+  // page bytes can be cached freely while the photo selection still
+  // re-rolls on every page load (the inline script at the bottom of
+  // index.html does the fisher-yates pick from /images/manifest.json
+  // on each DOM-ready). slot CSS reserves aspect-ratio so there's no
+  // layout shift while the fill happens.
 
   // visitor counter — read current, increment, fire-and-forget write.
   // honest classic-90s-counter behavior: counts every homepage GET, no
@@ -328,7 +328,7 @@ async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
   // bail if no dynamic data is available — the static HTML's inline
   // JS will pick up the slack on the client (and the hardcoded "000042"
   // stays in the footer as a graceful fallback).
-  if (!tracksPayload?.tracks?.length && !photos && !counterStr) return res;
+  if (!tracksPayload?.tracks?.length && !counterStr) return res;
 
   const rewriter = new HTMLRewriter();
 
@@ -356,34 +356,10 @@ async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
     });
   }
 
-  // ── photo grid → section.photos ─────────────────────────────────
-  // pick 9 random photos via fisher-yates so the grid feels fresh each
-  // visit. response is uncached at the edge (worker cache-control: no-store
-  // by default), so per-request randomness reaches every visitor. the
-  // emitted HTML mirrors what the client-side fill JS would produce —
-  // <picture> with AVIF (primary) + JPG fallback, data-* attrs for the
-  // hover tooltip, target=_blank + rel=noopener on the anchor.
-  if (photos) {
-    const pick = pickRandom(photos, 9);
-    const slotsHtml = pick.map(p => {
-      const full     = p.full;
-      const sizeAttr = (typeof p.size === "number" && p.size > 0)
-        ? ` data-size="${p.size}"` : "";
-      const upAttr   = p.uploaded
-        ? ` data-uploaded="${escAttr(p.uploaded)}"` : "";
-      return `<a href="/images/full/${encodeURI(full)}"` +
-             ` target="_blank" rel="noopener"` +
-             ` data-full="${escAttr(full)}"${sizeAttr}${upAttr}>` +
-        `<picture>` +
-          (p.thumb_avif ? `<source type="image/avif" srcset="/images/${escAttr(p.thumb_avif)}">` : "") +
-          `<img alt="" loading="lazy" decoding="async" src="/images/${escAttr(p.thumb_jpg)}">` +
-        `</picture>` +
-      `</a>`;
-    }).join("");
-    rewriter.on("section.photos", {
-      element(el) { el.setInnerContent(slotsHtml, { html: true }); },
-    });
-  }
+  // (photo grid is filled client-side — see note above. the inline
+  // script in index.html fetches /images/manifest.json on every page
+  // load and picks 9 random photos. that way HTML caching layers can't
+  // pin the same selection across refreshes.)
 
   // ── visitor counter → footer .counter pill ──────────────────────
   if (counterStr) {
