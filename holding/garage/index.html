@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>garage — aadhar.sh</title>
+<meta name="description" content="Prototypes, experiments, and work-in-progress for aadhar.sh. Stuff that hasn't made it to the homepage yet, or won't.">
+<link rel="canonical" href="https://aadhar.sh/garage">
+
+<!-- traffic-cone favicon — same as homepage -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='4' y='25' width='24' height='3' rx='0.5' fill='%231a1a1a'/><path d='M 16 4 L 9 25 L 23 25 Z' fill='%23ff6600'/><path d='M 11.3 18 L 20.7 18 L 21.7 21 L 10.3 21 Z' fill='%23ffffff'/><path d='M 13.7 11 L 18.3 11 L 19 13 L 13 13 Z' fill='%23ffffff'/></svg>">
+
+<meta property="og:type" content="website">
+<meta property="og:title" content="garage — aadhar.sh">
+<meta property="og:description" content="Prototypes, experiments, and work-in-progress.">
+<meta property="og:url" content="https://aadhar.sh/garage">
+
+<style>
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: oklch(91.74% 0.0203 238.68);
+  background: linear-gradient(180deg, oklch(87.51% 0.0281 248.15) 0%, oklch(94.66% 0.0114 252.09) 220px, oklch(94.66% 0.0114 252.09) 100%);
+  font-family: Verdana, Tahoma, Geneva, sans-serif;
+  font-size: 11pt;
+  line-height: 1.5;
+  color: oklch(21.78% 0 0);
+  padding: 24px 12px 60px;
+  min-height: 100vh;
+}
+
+.window {
+  max-width: 660px;
+  margin: 0 auto;
+  background: oklch(100.00% 0 0);
+  border: 1px solid oklch(61.14% 0.0611 253.60);
+  box-shadow: 4px 4px 0 oklch(61.14% 0.0611 253.60 / 0.35);
+}
+
+.title-bar {
+  background: linear-gradient(180deg, oklch(62.22% 0.1240 251.99) 0%, oklch(49.72% 0.1129 250.87) 50%, oklch(44.15% 0.1179 254.72) 51%, oklch(50.95% 0.1117 250.01) 100%);
+  color: oklch(100.00% 0 0);
+  font-family: "Trebuchet MS", Verdana, sans-serif;
+  font-size: 11pt;
+  font-weight: bold;
+  padding: 4px 8px;
+  border-bottom: 1px solid oklch(41.92% 0.0962 250.51);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.title-bar .icon {
+  display: inline-block;
+  width: 16px; height: 16px;
+  margin-right: 6px;
+  vertical-align: middle;
+  /* wrench / spanner — built from CSS instead of an SVG so the title
+     bar stays one HTTP request. silhouette matches a hex-key wrench
+     viewed end-on; not literally a wrench but reads as one at 16px. */
+  background: oklch(87.82% 0.0877 66.27);
+  position: relative;
+  flex-shrink: 0;
+}
+.title-bar .icon::before {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  background: oklch(69.58% 0.2043 43.49);
+  clip-path: polygon(20% 0, 100% 50%, 20% 100%, 0 50%);
+}
+.title-bar .title-text { flex: 1; padding-left: 4px; }
+.title-bar .controls { letter-spacing: 2px; font-family: Tahoma, sans-serif; font-size: 9pt; }
+.title-bar .controls span,
+.title-bar .controls a {
+  display: inline-block;
+  background: oklch(87.51% 0.0281 248.15);
+  color: oklch(41.92% 0.0962 250.51);
+  border: 1px solid oklch(41.92% 0.0962 250.51);
+  padding: 0 5px;
+  margin-left: 2px;
+  font-weight: bold;
+  cursor: default;
+  text-decoration: none;
+}
+.title-bar .controls a { cursor: pointer; }
+.title-bar .controls a:hover {
+  background: oklch(58.99% 0.2344 26.30);
+  color: oklch(100.00% 0 0);
+  border-color: oklch(37.67% 0.1546 29.23);
+}
+
+.content { padding: 18px 24px 22px; }
+
+h1 {
+  font-family: "Trebuchet MS", Verdana, sans-serif;
+  font-size: 20pt;
+  color: oklch(41.92% 0.0962 250.51);
+  margin: 0 0 4px;
+  font-weight: bold;
+  letter-spacing: -0.01em;
+}
+
+.lede {
+  margin: 0 0 14px;
+  color: oklch(38.67% 0 0);
+  font-size: 10.5pt;
+}
+
+p { margin: 0 0 12px; }
+
+a:link    { color: oklch(42.61% 0.2353 263.74); text-decoration: underline; }
+a:visited { color: oklch(42.09% 0.1935 328.36); }
+a:hover   { color: oklch(62.80% 0.2577 29.23); }
+
+hr {
+  border: 0;
+  border-top: 2px groove oklch(86.67% 0.0294 259.59);
+  margin: 16px 0;
+  height: 0;
+}
+
+/* ─── shelf of prototypes ──────────────────────────────────────────── */
+.shelf {
+  list-style: none;
+  padding: 0;
+  margin: 16px 0 6px;
+  border: 1px solid oklch(61.14% 0.0611 253.60);
+  border-top-color: oklch(47.12% 0.0555 253.58);
+  border-left-color: oklch(47.12% 0.0555 253.58);
+  background: oklch(100% 0 0);
+}
+.shelf li {
+  padding: 10px 12px 12px;
+  border-bottom: 1px solid oklch(92.73% 0.0139 247.98);
+}
+.shelf li:last-child { border-bottom: none; }
+.shelf li:nth-child(even) { background: oklch(97.50% 0.0062 255.47); }
+.shelf .title-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+.shelf .name {
+  font-family: "Trebuchet MS", Verdana, sans-serif;
+  font-weight: bold;
+  font-size: 12pt;
+  color: oklch(41.92% 0.0962 250.51);
+}
+.shelf .name a { text-decoration: none; }
+.shelf .name a:hover { text-decoration: underline; }
+.shelf .status {
+  font-family: "Courier New", Courier, monospace;
+  font-size: 8.5pt;
+  font-weight: bold;
+  letter-spacing: 0.05em;
+  padding: 1px 6px;
+  border: 1px solid;
+  border-radius: 2px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.shelf .status.review  { color: oklch(54.44% 0.1504 47.10); border-color: oklch(54.44% 0.1504 47.10); background: oklch(98% 0.03 95); }
+.shelf .status.shipped { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(98% 0.04 142); }
+.shelf .status.idle    { color: oklch(51.03% 0 0); border-color: oklch(70% 0 0); background: oklch(96% 0 0); }
+.shelf .status.dead    { color: oklch(46.34% 0.1902 29.23); border-color: oklch(46.34% 0.1902 29.23); background: oklch(98% 0.03 30); }
+.shelf .desc {
+  font-size: 10.5pt;
+  color: oklch(28% 0 0);
+}
+.shelf .meta {
+  margin-top: 4px;
+  font-size: 9.5pt;
+  color: oklch(51.03% 0 0);
+  font-style: italic;
+}
+
+footer {
+  text-align: center;
+  font-family: Verdana, Tahoma, sans-serif;
+  font-size: 9pt;
+  color: oklch(44.95% 0 0);
+  margin: 18px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid oklch(86.67% 0.0294 259.59);
+}
+</style>
+</head>
+<body>
+
+<div class="window">
+
+  <div class="title-bar" aria-hidden="true">
+    <span class="title-text"><span class="icon"></span>garage</span>
+    <span class="controls"><span>_</span><span>□</span><a href="/" title="back to aadhar.sh">×</a></span>
+  </div>
+
+  <div class="content">
+
+    <h1>Garage</h1>
+    <p class="lede">
+      Prototypes, experiments, and works-in-progress for <a href="/">aadhar.sh</a>.
+      Stuff that hasn&rsquo;t made it to the homepage yet, or never will. Hover around
+      &mdash; most of these are interactive.
+    </p>
+
+    <hr>
+
+    <ul class="shelf">
+
+      <li>
+        <div class="title-row">
+          <span class="name"><a href="/garage/tooltips">Tooltip experiments</a></span>
+          <span class="status review">in review</span>
+        </div>
+        <div class="desc">
+          Four alternative tooltip styles for the photo grid + tracklist:
+          Fuji X-T LCD viewfinder, vinyl sleeve emerging from a track row,
+          polaroid flip, and CSS anchor-positioned popovers. Hover the slots
+          to compare.
+        </div>
+        <div class="meta">
+          shape: visual + interaction · added 2026-05-22
+        </div>
+      </li>
+
+    </ul>
+
+    <p style="margin-top: 18px; font-size: 9.5pt; color: oklch(51.03% 0 0); font-style: italic;">
+      More to come. If something here ships, it moves to the homepage and the
+      status flips to <span class="status shipped" style="display: inline-block; font-style: normal;">shipped</span>;
+      if it doesn&rsquo;t ship, it sits here labelled
+      <span class="status dead" style="display: inline-block; font-style: normal;">dead</span>
+      as a record of what was tried.
+    </p>
+
+    <footer>
+      <p>
+        &larr; back to <a href="/">aadhar.sh</a>
+      </p>
+      <p>
+        <small>&copy; 2026 Aadharsh Pannirselvam &middot; built in the open</small>
+      </p>
+    </footer>
+
+  </div>
+</div>
+
+</body>
+</html>

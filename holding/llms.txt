@@ -24,6 +24,13 @@ summary without scraping the page.
   homepages I keep tabs on, each fetched live by AadharshBot. Curious
   rather than competitive. Signed per Web Bot Auth so receiving sites can
   verify the requests came from this domain. `noindex`.
+- [/garage](https://aadhar.sh/garage): Prototypes and experiments —
+  alternate visual styles, work-in-progress interactions, things that
+  haven't shipped to the homepage yet. Public so people can see what's
+  being tinkered with.
+  - [/garage/tooltips](https://aadhar.sh/garage/tooltips): Four
+    alternative tooltip styles for the photo grid + tracklist (Fuji X-T
+    LCD viewfinder, vinyl sleeve, polaroid flip, CSS anchor positioning).
 
 ## JSON endpoints
 
