@@ -981,12 +981,49 @@ footer .signature small { color: oklch(56.93% 0 0); }
 
     <!--
       now-playing list — worker pre-renders from KV-cached /rn/tracks on
-      every request. previously had a client-side fallback IIFE here
-      that fetched /rn/tracks if SSR didn't run; removed in the
-      lightness pass since SSR is now the only path. failure mode if
-      KV is unavailable: "Loading playlist…" placeholder stays. the
-      footer link to /rn still opens the playlist on spotify directly.
+      every request (the only path under healthy conditions). minimal
+      fallback below catches the case where SSR didn't run for ANY
+      reason: stale cached HTML served before SSR was wired, a CF edge
+      hiccup, a worker exception, KV unavailability, etc. it checks if
+      the "Loading playlist…" placeholder is still present after page
+      load, and if so re-fetches /rn/tracks client-side and fills.
+      ~30 lines as defense-in-depth for what would otherwise be an
+      eternal "Loading…" state.
     -->
+    <script>
+    (async () => {
+      const list = document.getElementById("np-list");
+      // SSR rendered tracks? loader gone → nothing to do.
+      if (!list || !list.querySelector(".np-loading")) return;
+      const esc = (s) => String(s ?? "")
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+      const fmt = (ms) => {
+        if (!ms) return "";
+        const t = Math.round(ms / 1000);
+        return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`;
+      };
+      try {
+        const res = await fetch("/rn/tracks");
+        const data = await res.json();
+        if (!data.tracks?.length) {
+          list.innerHTML = '<li class="np-empty">No tracks yet. <a href="/rn">Open on Spotify</a>.</li>';
+          return;
+        }
+        list.innerHTML = data.tracks.map(t => {
+          const artists = t.artists_text || (Array.isArray(t.artists) ? t.artists.map(a => a.name).join(", ") : "");
+          const dur = fmt(t.duration_ms);
+          return `<li><a href="${esc(t.song_link_url)}" target="_blank" rel="noopener">${
+            dur ? `<span class="np-duration">${dur}</span>` : ""
+          }<span class="np-title">${esc(t.title)}</span><span class="np-sep">&mdash;</span><span class="np-artist">${esc(artists)}</span>${
+            t.is_explicit ? '<span class="np-explicit">E</span>' : ""
+          }</a></li>`;
+        }).join("");
+      } catch {
+        list.innerHTML = '<li class="np-empty">Couldn&rsquo;t load tracks. <a href="/rn">Open on Spotify</a>.</li>';
+      }
+    })();
+    </script>
 
     <!--
       delegated click + keyboard handler for .np-artist-link spans. these
