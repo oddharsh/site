@@ -8,23 +8,12 @@
 <link rel="canonical" href="https://aadhar.sh/">
 <link rel="alternate" type="text/plain" title="llms.txt summary" href="/llms.txt">
 
-<!-- preconnect / dns-prefetch: warm DNS + TLS for the destinations a
-     visitor is likely to click. preconnect = full handshake (use sparingly);
-     dns-prefetch = just DNS (cheaper, fan it out). McMaster-Carr school
-     of "fast feels like magic, magic is just preconnect". -->
-<link rel="preconnect" href="https://open.spotify.com" crossorigin>
+<!-- one preconnect — song.link, the per-track click target that every
+     visitor with a music-playing intention clicks. previous build had a
+     fan of 8 preconnect/dns-prefetch hints across spotify, cal.com,
+     twitter, curius, beli, archetype, scdn — all speculative and most
+     never clicked. Tuthill move: ship the one that earns its place. -->
 <link rel="preconnect" href="https://song.link" crossorigin>
-<link rel="preconnect" href="https://cal.com" crossorigin>
-<link rel="dns-prefetch" href="https://www.archetype.fund">
-<link rel="dns-prefetch" href="https://twitter.com">
-<link rel="dns-prefetch" href="https://curius.app">
-<link rel="dns-prefetch" href="https://beliapp.com">
-<link rel="dns-prefetch" href="https://open.spotifycdn.com">
-<!-- (image-cdn-*.spotifycdn.com + i.scdn.co are only needed when the user
-     hovers a track or artist row to load the album/profile art tooltip;
-     those hints are now injected by the tooltip JS on first hover instead
-     of shipping in every page's initial HTML — saves ~250 bytes upfront
-     and avoids spending DNS lookups on visitors who never hover.) -->
 
 <!-- traffic cone favicon. period-correct for the holding page. swap once
      the real site lands. -->
@@ -438,47 +427,6 @@ footer .signature small { color: oklch(56.93% 0 0); }
 /* (the earlier two-column .track-card layout was removed when album and
    artist tooltips both moved to the .album-pop frame-only treatment.) */
 
-/* XP-style context menu — replaces native right-click for desktop users.
-   shift+right-click bypasses it (falls through to native). touch devices
-   are skipped entirely (iOS long-press → native share/save sheet stays). */
-#xp-menu {
-  position: fixed;
-  background: oklch(99% 0 0);
-  border: 1px solid oklch(45% 0 0);
-  border-top-color: oklch(85% 0 0);
-  border-left-color: oklch(85% 0 0);
-  box-shadow: 3px 3px 6px oklch(0% 0 0 / 0.25);
-  font-family: Tahoma, "Microsoft Sans Serif", Verdana, sans-serif;
-  font-size: 11px;
-  padding: 2px;
-  min-width: 200px;
-  z-index: 20000;
-  user-select: none;
-  -webkit-user-select: none;
-}
-#xp-menu[hidden] { display: none; }
-#xp-menu .item {
-  padding: 4px 22px 4px 26px;
-  color: oklch(20% 0 0);
-  display: block;
-  position: relative;
-  white-space: nowrap;
-  outline: none;
-}
-#xp-menu .item:not(.disabled):hover,
-#xp-menu .item:not(.disabled):focus {
-  background: oklch(43% 0.16 264);  /* XP-era selection blue */
-  color: oklch(100% 0 0);
-}
-#xp-menu .item.disabled {
-  color: oklch(65% 0 0);
-}
-#xp-menu .sep {
-  height: 1px;
-  background: oklch(80% 0 0);
-  margin: 3px 1px;
-}
-
 /* ─── wide-gamut overrides ────────────────────────────────────────────
    on Display P3 displays, push the user-action accents (links, hovers,
    the traffic-cone orange, "under construction", context-menu selection)
@@ -506,11 +454,6 @@ footer .signature small { color: oklch(56.93% 0 0); }
   .np-list a:hover .np-title        { color: oklch(62.80% 0.33 29.23); }
 
   .photos a:hover                   { border-color: oklch(41.92% 0.13 250.51); }
-
-  #xp-menu .item:not(.disabled):hover,
-  #xp-menu .item:not(.disabled):focus {
-    background: oklch(43% 0.30 264);
-  }
 
   .counter                          { color: oklch(86.52% 0.22 90.38); }
 }
@@ -587,11 +530,6 @@ footer .signature small { color: oklch(56.93% 0 0); }
          the photos section so it can fixed-position over anything. -->
     <div id="xp-tooltip" class="xp-tooltip" aria-hidden="true"></div>
 
-    <!-- XP-style context menu — populated and positioned by JS on
-         right-click. items adapt to what was clicked (photo / link /
-         empty). shift+right-click bypasses → native browser menu. -->
-    <div id="xp-menu" role="menu" aria-orientation="vertical" hidden></div>
-
     <section class="photos" aria-label="photographs">
       <a>
         <picture>
@@ -650,62 +588,14 @@ footer .signature small { color: oklch(56.93% 0 0); }
     </section>
 
     <!--
-      photo pool — thumbnails live at /images/<stem>.jpg, full-res SOOC
-      originals at /images/full/<filename> (R2-proxied, preserving original
-      filenames). the worker exposes /images/manifest.json listing all
-      available photos; this script fetches it and fills 9 random slots
-      (3×3). to add photos: run holding/scripts/add-photos.sh on a folder
-      or files; it handles thumbnails, R2 upload, metadata, cache bust.
+      photo pool — worker pre-renders 9 random slots on every request
+      (cache-control: no-store on /, so each visit re-rolls). previously
+      had a client-side fallback IIFE here that fetched
+      /images/manifest.json and filled slots if SSR didn't run; removed
+      in the lightness pass since SSR is now unconditional. failure mode
+      if KV/R2 are unavailable: empty grid. honest. add photos via
+      holding/scripts/add-photos.sh.
     -->
-    <script>
-    (async () => {
-      const slots = document.querySelectorAll(".photos a");
-      if (!slots.length) return;
-      // pre-rendered? skip.
-      if (slots[0].hasAttribute("href")) return;
-
-      let photos = [];
-      try {
-        const res = await fetch("/images/manifest.json");
-        const data = await res.json();
-        photos = Array.isArray(data.photos) ? data.photos : [];
-      } catch {}
-      if (!photos.length) return;
-
-      // fisher-yates shuffle, take the first N (= number of slots).
-      for (let i = photos.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [photos[i], photos[j]] = [photos[j], photos[i]];
-      }
-
-      photos.slice(0, slots.length).forEach((p, i) => {
-        const slot = slots[i];
-        if (!slot) return;
-        slot.href   = `/images/full/${encodeURIComponent(p.full)}`;
-        slot.target = "_blank";
-        slot.rel    = "noopener";
-        // stash the manifest entry on the anchor for the tooltip to pick up
-        slot.dataset.full     = p.full;
-        slot.dataset.size     = p.size || "";
-        slot.dataset.uploaded = p.uploaded || "";
-        // dual-source thumbnail: AVIF primary, JPG fallback. modern
-        // browsers pick the AVIF via the <source type="image/avif">
-        // tag; ones that don't advertise AVIF fall through to the
-        // <img src> JPG. p.thumb_* values are "<stem>.<ext>?v=<N>" —
-        // the worker emits safe ASCII (alphanumerics, '_', '-', '.',
-        // '?', '=', digits), so we use them directly without
-        // encodeURIComponent (which would mangle the '?' into '%3F'
-        // and break the cache-busting query). sources are matched by
-        // type rather than DOM position so the order in HTML can
-        // shift without breaking JS.
-        const sources = slot.querySelectorAll("source");
-        const avifSrc = [...sources].find(s => s.type === "image/avif");
-        const img     = slot.querySelector("img");
-        if (avifSrc && p.thumb_avif) avifSrc.srcset = `/images/${p.thumb_avif}`;
-        if (img)                     img.src        = `/images/${p.thumb_jpg}`;
-      });
-    })();
-    </script>
 
     <!--
       XP-style hover tooltip for the photo grid. shows filename, file size,
@@ -1111,99 +1001,13 @@ footer .signature small { color: oklch(56.93% 0 0); }
     </section>
 
     <!--
-      now-playing list — fetches /rn/tracks (worker scrapes spotify's embed
-      page for the current "rn" playlist) and renders each track as a row
-      that links to song.link. fails gracefully: if the worker is down, the
+      now-playing list — worker pre-renders from KV-cached /rn/tracks on
+      every request. previously had a client-side fallback IIFE here
+      that fetched /rn/tracks if SSR didn't run; removed in the
+      lightness pass since SSR is now the only path. failure mode if
+      KV is unavailable: "Loading playlist…" placeholder stays. the
       footer link to /rn still opens the playlist on spotify directly.
     -->
-    <script>
-    (async () => {
-      const list = document.getElementById("np-list");
-      if (!list) return;
-
-      // if the worker pre-rendered the list, the loading placeholder is gone
-      // and we can skip the client-side fetch entirely.
-      if (!list.querySelector(".np-loading")) return;
-
-      const escape = (s) => String(s ?? "")
-        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-
-      // turn the artist list into per-artist nav targets. when the
-      // scraper provides structured artists (with Spotify URIs + profile
-      // images) we link straight to the artist's page and stash the image
-      // URL for the hover-tooltip; otherwise we fall back to a search.
-      // rendered as spans (not <a>) because the row is already an <a> —
-      // nested anchors are invalid HTML. a delegated click handler
-      // (below) intercepts .np-artist-link clicks, stops propagation,
-      // and opens the data-href. role+tabindex restore keyboard + sr.
-      const linkifyArtists = (artists, fallbackText) => {
-        if (Array.isArray(artists) && artists.length) {
-          return artists.map(a => {
-            const href = a.spotify_url ||
-              `https://open.spotify.com/search/${encodeURIComponent(a.name)}/artists`;
-            const img  = a.image_url ? ` data-artist-image="${escape(a.image_url)}"` : "";
-            return `<span class="np-artist-link"` +
-                   ` data-href="${escape(href)}"` +
-                   ` data-artist-name="${escape(a.name)}"` +
-                   img +
-                   ` role="link" tabindex="0">${escape(a.name)}</span>`;
-          }).join(", ");
-        }
-        const raw = fallbackText || (typeof artists === "string" ? artists : "");
-        if (!raw) return "";
-        return String(raw).split(/,\s*/).filter(Boolean).map(name => {
-          const href = `https://open.spotify.com/search/${encodeURIComponent(name)}/artists`;
-          return `<span class="np-artist-link"` +
-                 ` data-href="${escape(href)}"` +
-                 ` data-artist-name="${escape(name)}"` +
-                 ` role="link" tabindex="0">${escape(name)}</span>`;
-        }).join(", ");
-      };
-
-      const fmtDuration = (ms) => {
-        if (!ms || typeof ms !== "number") return "";
-        const total = Math.round(ms / 1000);
-        const m = Math.floor(total / 60);
-        const s = String(total % 60).padStart(2, "0");
-        return `${m}:${s}`;
-      };
-
-      try {
-        const res = await fetch("/rn/tracks", { cache: "default" });
-        if (!res.ok) throw new Error("fetch failed");
-        const data = await res.json();
-
-        if (!data.tracks || data.tracks.length === 0) {
-          list.innerHTML = '<li class="np-empty">No tracks yet. <a href="/rn">Open the playlist on Spotify</a>.</li>';
-          return;
-        }
-
-        list.innerHTML = data.tracks.map(t => {
-          // data-* attrs let the XP hover-tooltip script render album
-          // art + metadata on hover (same framework as the photo grid).
-          const artistsText = t.artists_text || (Array.isArray(t.artists) ? t.artists.map(a => a.name).join(", ") : "");
-          const attrs = [
-            `data-track-title="${escape(t.title)}"`,
-            `data-track-artists="${escape(artistsText)}"`,
-            t.image_url   ? `data-track-image="${escape(t.image_url)}"`     : "",
-            t.duration_ms ? `data-track-duration="${escape(fmtDuration(t.duration_ms))}"` : "",
-            t.is_explicit ? `data-track-explicit="1"`                       : "",
-          ].filter(Boolean).join(" ");
-          return `
-          <li ${attrs}>
-            <a href="${escape(t.song_link_url)}" target="_blank" rel="noopener">
-              ${t.duration_ms ? `<span class="np-duration">${fmtDuration(t.duration_ms)}</span>` : ""}
-              <span class="np-title">${escape(t.title)}</span><span class="np-sep">&mdash;</span><span class="np-artist">${linkifyArtists(t.artists, artistsText)}</span>${t.is_explicit ? '<span class="np-explicit">E</span>' : ""}
-            </a>
-          </li>
-          `;
-        }).join("");
-      } catch {
-        list.innerHTML = '<li class="np-empty">Couldn&rsquo;t load tracks. <a href="/rn">Open the playlist on Spotify</a>.</li>';
-      }
-    })();
-    </script>
 
     <!--
       delegated click + keyboard handler for .np-artist-link spans. these
@@ -1261,212 +1065,15 @@ footer .signature small { color: oklch(56.93% 0 0); }
 </div>
 
 <!--
-  XP-style context menu — site-wide right-click replacement. mirrors the
-  bits of the native menu that matter for a personal photo site (open in
-  new tab, copy, save image as, search on Google Lens) and adds back the
-  globals (reload, view source via /source, print). shift+right-click drops through
-  to the native menu; touch devices skip the override entirely so iOS
-  long-press → native share sheet keeps working. ARIA-correct: arrow
-  keys + Enter + Escape work for keyboard users.
+  custom right-click context menu lived here. dropped in the lightness
+  pass — it was ~5KB of JS that recreated browser-native behavior
+  (open in new tab, copy image, save as, view source) for a feature
+  most visitors never trigger. browser native menu is enough.
 -->
-<script>
-(() => {
-  // skip on touch devices — long-press → native menu is more useful there
-  if (matchMedia("(pointer: coarse)").matches) return;
-
-  const menu = document.getElementById("xp-menu");
-  if (!menu) return;
-
-  let items   = [];
-  let focusI  = -1;
-
-  const clear = () => { menu.innerHTML = ""; items = []; focusI = -1; };
-
-  const addItem = (label, action, opts = {}) => {
-    const el = document.createElement("div");
-    el.className = "item" + (opts.disabled ? " disabled" : "");
-    el.setAttribute("role", "menuitem");
-    el.tabIndex = -1;
-    el.textContent = label;
-    if (!opts.disabled) {
-      el.addEventListener("click", async () => {
-        hide();
-        try { await action(); } catch (e) { /* swallow; not worth a popup */ }
-      });
-      el.addEventListener("mouseenter", () => el.focus());
-    }
-    menu.appendChild(el);
-    items.push(el);
-  };
-
-  const addSep = () => {
-    const el = document.createElement("div");
-    el.className = "sep";
-    el.setAttribute("role", "separator");
-    menu.appendChild(el);
-  };
-
-  const hide = () => {
-    menu.hidden = true;
-    clear();
-  };
-
-  const show = (x, y) => {
-    menu.hidden = false;
-    requestAnimationFrame(() => {
-      const r  = menu.getBoundingClientRect();
-      const vw = innerWidth, vh = innerHeight;
-      if (x + r.width  > vw - 4) x = vw - r.width  - 4;
-      if (y + r.height > vh - 4) y = vh - r.height - 4;
-      menu.style.left = Math.max(4, x) + "px";
-      menu.style.top  = Math.max(4, y) + "px";
-      const first = items.find(el => !el.classList.contains("disabled"));
-      if (first) { first.focus(); focusI = items.indexOf(first); }
-    });
-  };
-
-  const build = (target) => {
-    clear();
-
-    const photoSlot = target.closest?.(".photos a");
-    if (photoSlot) {
-      const fullUrl  = photoSlot.href;
-      const filename = decodeURIComponent(fullUrl.split("/").pop());
-      const img      = photoSlot.querySelector("img");
-      const imgUrl   = img ? img.src : null;
-
-      addItem("Open original in new tab", () => window.open(fullUrl, "_blank", "noopener"));
-      addSep();
-      addItem("Copy image", async () => {
-        if (!imgUrl) return;
-        const res  = await fetch(imgUrl);
-        const blob = await res.blob();
-        await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
-      }, { disabled: !navigator.clipboard?.write });
-      addItem("Copy image address",    () => navigator.clipboard.writeText(imgUrl || fullUrl));
-      addItem("Save image as…",        () => {
-        const a = document.createElement("a");
-        a.href = fullUrl;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-      });
-      addSep();
-      addItem("Search on Google Lens", () => window.open(`https://lens.google.com/uploadbyurl?url=${encodeURIComponent(fullUrl)}`, "_blank", "noopener"));
-      return;
-    }
-
-    const link = target.closest?.("a[href]");
-    if (link) {
-      addItem("Open link in new tab", () => window.open(link.href, "_blank", "noopener"));
-      addItem("Copy link address",    () => navigator.clipboard.writeText(link.href));
-      addSep();
-      addItem("Reload",      () => location.reload());
-      addItem("View source", () => window.open("/source?path=" + encodeURIComponent(location.pathname + location.search), "_blank", "noopener"));
-      addItem("Print",       () => window.print());
-      return;
-    }
-
-    addItem("Reload",      () => location.reload());
-    addItem("View source", () => window.open("/source?path=" + encodeURIComponent(location.pathname + location.search), "_blank", "noopener"));
-    addItem("Print",       () => window.print());
-  };
-
-  document.addEventListener("contextmenu", (e) => {
-    if (e.shiftKey) return;  // escape hatch → native menu
-    e.preventDefault();
-    build(e.target);
-    show(e.clientX, e.clientY);
-  });
-
-  document.addEventListener("mousedown", (e) => {
-    if (menu.hidden) return;
-    if (!menu.contains(e.target)) hide();
-  });
-
-  document.addEventListener("keydown", (e) => {
-    if (menu.hidden) return;
-    const enabled = items.filter(el => !el.classList.contains("disabled"));
-    if (e.key === "Escape") { e.preventDefault(); hide(); }
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      const cur = enabled.indexOf(document.activeElement);
-      const next = enabled[(cur + 1 + enabled.length) % enabled.length];
-      next?.focus();
-    }
-    if (e.key === "ArrowUp") {
-      e.preventDefault();
-      const cur = enabled.indexOf(document.activeElement);
-      const prev = enabled[(cur - 1 + enabled.length) % enabled.length];
-      prev?.focus();
-    }
-    if (e.key === "Enter" || e.key === " ") {
-      if (document.activeElement?.classList.contains("item")) {
-        e.preventDefault();
-        document.activeElement.click();
-      }
-    }
-  });
-
-  // close on scroll, blur, or another contextmenu elsewhere.
-  // passive scroll listener: critical for 120Hz scrolling — without it
-  // the browser has to wait on this handler before scrolling, which
-  // can cap frame rate. our handler doesn't preventDefault anyway.
-  document.addEventListener("scroll", hide, { capture: true, passive: true });
-  window.addEventListener("blur", hide);
-  window.addEventListener("resize", hide, { passive: true });
-})();
-</script>
-
-<!--
-  hover-prefetch — when the cursor sits on a link for ~65ms, prefetch its
-  destination so the next click feels instant. cross-origin links get
-  `preconnect` (DNS + TCP + TLS only — no body fetch, no privacy cost);
-  same-origin links get `prefetch` (full body). this is roughly what
-  instant.page does, but ours is 20 lines and we own it.
--->
-<script>
-(() => {
-  const seen = new Set();
-  const head = document.head;
-  let pending = null;
-  const prefetch = (raw) => {
-    let u; try { u = new URL(raw, location.href); } catch { return; }
-    const key = u.href;
-    if (seen.has(key)) return;
-    seen.add(key);
-    const tag = document.createElement("link");
-    if (u.origin === location.origin) {
-      // same-origin: fetch the document
-      tag.rel  = "prefetch";
-      tag.href = u.href;
-    } else if (u.protocol === "https:" || u.protocol === "http:") {
-      // cross-origin: just warm DNS + TLS, never fetch the body (no leakage)
-      tag.rel         = "preconnect";
-      tag.href        = u.origin;
-      tag.crossOrigin = "";
-    } else {
-      return;  // mailto:, tel:, javascript:, etc.
-    }
-    head.appendChild(tag);
-  };
-  document.addEventListener("mouseover", (e) => {
-    const a = e.target?.closest?.("a[href]");
-    if (!a) return;
-    if (pending) clearTimeout(pending);
-    pending = setTimeout(() => prefetch(a.href), 65);
-    a.addEventListener("mouseleave", () => {
-      if (pending) { clearTimeout(pending); pending = null; }
-    }, { once: true, passive: true });
-  }, { passive: true });
-  // also on first touch (mobile)
-  document.addEventListener("touchstart", (e) => {
-    const a = e.target?.closest?.("a[href]");
-    if (a) prefetch(a.href);
-  }, { passive: true, capture: true });
-})();
-</script>
+<!-- (hover-prefetch IIFE was here — ~1.5 KB of speculative `preconnect`
+  injection on every link hover. cut in the lightness pass: the
+  saved 30-150ms on actual clicks wasn't paying for the bytes on
+  every page load.) -->
 
 <!--
   service worker — cache-first for /images/* (8 random tiles per visit + the
