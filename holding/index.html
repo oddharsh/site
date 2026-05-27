@@ -598,10 +598,14 @@ footer .signature small { color: oklch(56.93% 0 0); }
     -->
 
     <!--
-      XP-style hover tooltip for the photo grid. shows filename, file size,
-      thumbnail dimensions, and optional EXIF (camera/exposure/date) when
-      /images/metadata.json provides it. positioned near the cursor, never
-      blocks the underlying link, gracefully empty when info is sparse.
+      XP-style cursor-following hover tooltip. shows filename, file size,
+      thumbnail dimensions, and EXIF (camera/exposure/date/film recipe)
+      for photos; album art for track rows; profile photo for artist
+      links. EXIF is inlined per-slot on data-exif (set by the worker
+      pre-render) so the tooltip renders instantly with no fetch
+      round-trip on first hover. cursor-follow positioning is the
+      single bit of JS we couldn't replace with CSS — it's the soul
+      of the interaction.
     -->
     <script>
     (() => {
@@ -620,8 +624,6 @@ footer .signature small { color: oklch(56.93% 0 0); }
         return;
       }
 
-      let metadata = null;
-      let metadataLoaded = false;
       let activeSlot = null;
 
       // lazy DNS-prefetch for Spotify's image CDNs. these hosts only
@@ -666,15 +668,6 @@ footer .signature small { color: oklch(56.93% 0 0); }
         .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
-      async function ensureMetadata() {
-        if (metadataLoaded) return;
-        metadataLoaded = true;
-        try {
-          const res = await fetch("/images/metadata.json");
-          if (res.ok) metadata = await res.json();
-        } catch {}
-      }
-
       // unified hover target → "what was hovered?" lookup. one tooltip
       // element, three content shapes: a photo slot (.photos a), a track
       // row (.np-list li[data-track-title]), or an artist link inside a
@@ -699,11 +692,15 @@ footer .signature small { color: oklch(56.93% 0 0); }
 
       function buildPhotoContent(slot) {
         const filename = slot.dataset.full || decodeURIComponent((slot.href || "").split("/").pop());
-        const stem     = filename.replace(/\.[^.]+$/, "");
         const img      = slot.querySelector("img");
-        // metadata.json is now keyed by stem (stable across format changes).
-        // also try filename fallback for back-compat with older builds.
-        const exif     = (metadata && (metadata[stem] || metadata[filename])) || {};
+        // EXIF is now inlined per-slot as a JSON blob on data-exif (set
+        // by the worker pre-render from the merged manifest). instant
+        // read, no fetch round-trip on first hover. parse defensively —
+        // if the attr is missing or malformed, fall back to empty obj.
+        let exif = {};
+        try {
+          if (slot.dataset.exif) exif = JSON.parse(slot.dataset.exif);
+        } catch {}
 
         const rows = [];
         // dimensions: prefer full-res from EXIF; fall back to the thumb's
@@ -864,10 +861,9 @@ footer .signature small { color: oklch(56.93% 0 0); }
         const target = findTarget(e.target);
         if (!target || target === activeSlot) return;
         activeSlot = target;
-        const isPhoto = target.matches(".photos a");
-        // no delay: show immediately on enter. for photos, metadata.json
-        // is fetched once and cached; first hover shows what's available,
-        // then the tooltip re-renders in place when metadata arrives.
+        // no delay: show immediately on enter. EXIF for photos is now
+        // inlined per-slot via data-exif, so the tooltip renders fully
+        // populated on first hover (no fetch round-trip).
         const html = buildContent(target);
         if (!html) {
           // content-less target (e.g. track with no cover yet) — leave
@@ -890,14 +886,6 @@ footer .signature small { color: oklch(56.93% 0 0); }
         if (cover && !cover.complete) {
           cover.addEventListener("load",  () => { if (activeSlot === target) measure(); }, { once: true });
           cover.addEventListener("error", () => { if (activeSlot === target) measure(); }, { once: true });
-        }
-        if (isPhoto && !metadataLoaded) {
-          ensureMetadata().then(() => {
-            if (activeSlot === target) {
-              tip.innerHTML = buildContent(target);
-              measure();
-            }
-          });
         }
       }, { passive: true });
 
@@ -948,7 +936,6 @@ footer .signature small { color: oklch(56.93% 0 0); }
       const showTipFor = (target) => {
         if (target === activeSlot) return;            // nothing to do
         activeSlot = target;
-        const isPhoto = target.matches(".photos a");
         const html = buildContent(target);
         if (!html) { hideTip(); return; }
         tip.innerHTML = html;
@@ -963,14 +950,6 @@ footer .signature small { color: oklch(56.93% 0 0); }
         if (cover && !cover.complete) {
           cover.addEventListener("load",  () => { if (activeSlot === target) measure(); }, { once: true });
           cover.addEventListener("error", () => { if (activeSlot === target) measure(); }, { once: true });
-        }
-        if (isPhoto && !metadataLoaded) {
-          ensureMetadata().then(() => {
-            if (activeSlot === target) {
-              tip.innerHTML = buildContent(target);
-              measure();
-            }
-          });
         }
       };
       let scrollFrame = 0;
