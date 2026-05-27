@@ -27,9 +27,21 @@ try:
 except ImportError:
     sys.stderr.write(
         "error: Pillow not installed. run:\n"
-        "  pip3 install --user pillow\n"
+        "  pip3 install --user pillow pillow-heif\n"
     )
     sys.exit(2)
+
+# Fuji X-T cameras (and Leica Q) write HEIF with a .HIF extension. base
+# Pillow doesn't know HEIF; pillow-heif registers it as a format. without
+# this, 60%+ of the photos in the SOOC folder would silently fail.
+try:
+    import pillow_heif  # noqa: F401
+    pillow_heif.register_heif_opener()
+except ImportError:
+    sys.stderr.write(
+        "warn: pillow-heif not installed. HIF/HEIF photos will be skipped.\n"
+        "       install with:  pip3 install --user pillow-heif\n"
+    )
 
 EXTS = {".jpg", ".jpeg", ".heic", ".heif", ".hif"}
 BINS = 64
