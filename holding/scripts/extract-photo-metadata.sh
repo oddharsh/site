@@ -9,16 +9,40 @@
 #
 # requires: exiftool (brew install exiftool), jq (brew install jq)
 #
-# what's extracted:
-#   camera   - "<Make> <Model>"  e.g. "Apple iPhone 14 Pro" / "FUJIFILM X-T5"
-#   lens     - LensModel         e.g. "XF35mmF1.4 R"
-#   aperture - FNumber           e.g. "1.8"
-#   shutter  - ExposureTime      e.g. "1/120"
-#   iso      - ISO               e.g. 100
-#   focal    - FocalLengthIn35mmFormat (35mm equivalent)
-#   date     - DateTimeOriginal in ISO-8601
-#   width    - ImageWidth  (full-res pixel dimensions, not thumbnail)
-#   height   - ImageHeight
+# what's extracted (all values are nullable; tooltip skips lines that
+# are null rather than fabricate). discipline: read what the EXIF says,
+# leave blank when it doesn't say. never guess.
+#
+# core EXIF (works on every body):
+#   camera          - "<Make> <Model>"  e.g. "FUJIFILM X-T5"
+#   lens            - LensModel         e.g. "XF35mmF1.4 R"
+#   aperture        - FNumber           e.g. "f/2.8"
+#   shutter         - ExposureTime      e.g. "1/120"
+#   iso             - ISO               e.g. 800
+#   focal           - 35mm-equivalent focal length
+#   ev              - ExposureCompensation
+#   exposure_mode   - "Manual" / "Aperture-priority AE" / etc
+#   meter           - "Multi-segment" / "Spot" / "Center-weighted average"
+#   focus_mode      - "AF-S" / "AF-C" / "Manual"
+#   drive           - "Single" / "Continuous Low" / etc
+#   date            - DateTimeOriginal (Fuji format: "YYYY:MM:DD HH:MM:SS")
+#   width, height   - orientation-corrected pixel dimensions
+#   color_space     - "sRGB" / "Adobe RGB"
+#   white_balance   - "Auto" / "Daylight" / "Kelvin" / etc
+#   color_temp      - when WB is Kelvin, the actual K value
+#   wb_shift        - WhiteBalanceFineTune, when set
+#   flash           - "No Flash" / "Fired, ..." etc
+#   sharpness       - standard EXIF sharpness setting
+#   noise_reduction - Fuji NR setting
+#
+# Fuji-specific film recipe (silently null on Leica/iPhone shots):
+#   film         - FilmMode               e.g. "Classic Negative"
+#   dr           - DynamicRange           e.g. "100%" / "200%" / "Auto"
+#   chrome       - ColorChromeEffect      "Off" / "Weak" / "Strong"
+#   chrome_blue  - ColorChromeFXBlue      same scale
+#   grain        - GrainEffectRoughness   "Off" / "Weak" / "Strong"
+#   grain_size   - GrainEffectSize        "Small" / "Large"
+#   highlight_tone, shadow_tone, saturation
 #
 # GPS data is intentionally NOT included (privacy).
 #
@@ -71,12 +95,16 @@ exiftool -json -q \
   -FNumber -ExposureTime -ISO \
   -FocalLengthIn35mmFormat \
   -ExposureCompensation \
+  -ExposureMode -ExposureProgram -MeteringMode \
   -DateTimeOriginal \
   -ImageWidth -ImageHeight \
   -ColorSpace \
-  -WhiteBalance \
+  -WhiteBalance -ColorTemperature -WhiteBalanceFineTune \
   -FlashMode -Flash \
   -FilmMode \
+  -DynamicRange \
+  -FocusMode -DriveMode \
+  -Sharpness -NoiseReduction \
   -ColorChromeEffect -ColorChromeFXBlue \
   -GrainEffectRoughness -GrainEffectSize \
   -HighlightTone -ShadowTone -Saturation \
@@ -111,9 +139,19 @@ jq 'reduce .[] as $e ({}; . + {
       height:   $dim.h,
       color_space:    ($e.ColorSpace // null),
       white_balance:  ($e.WhiteBalance // null),
+      color_temp:     ($e.ColorTemperature // null),
+      wb_shift:       ($e.WhiteBalanceFineTune // null),
       flash:          ($e.Flash // null),
+      # standard exposure / focus / metering fields. populated on most bodies.
+      exposure_mode:  ($e.ExposureMode // $e.ExposureProgram // null),
+      meter:          ($e.MeteringMode // null),
+      focus_mode:     ($e.FocusMode // null),
+      drive:          ($e.DriveMode // null),
+      sharpness:      ($e.Sharpness // null),
+      noise_reduction:($e.NoiseReduction // null),
       # Fuji-only film-recipe fields. silently null on Leica/iPhone shots.
       film:           ($e.FilmMode // null),
+      dr:             ($e.DynamicRange // null),
       chrome:         ($e.ColorChromeEffect // null),
       chrome_blue:    ($e.ColorChromeFXBlue // null),
       grain:          ($e.GrainEffectRoughness // null),

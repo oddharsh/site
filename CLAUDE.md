@@ -75,9 +75,12 @@ holding/images/<stem>.{avif,jpg}  +  R2 aadhar-photos/<filename>
    |
    v
 [extract-photo-metadata.sh] generates holding/images/metadata.json
-   |   keyed by stem (not filename), orientation-corrected width/height,
-   |   pulls Fuji-specific recipe fields (FilmMode, ColorChrome, Grain,
-   |   tone curves) when present.
+   |   keyed by stem (not filename), orientation-corrected width/height.
+   |   pulls Fuji recipe (FilmMode, DynamicRange, ColorChrome FX +Blue,
+   |   Grain roughness + size, tone curves, saturation) plus standard
+   |   exposure / focus / metering / WB shift / Kelvin temperature.
+   |   discipline: every field is nullable; the tooltip skips lines
+   |   that are null rather than fabricate. never guess metadata.
 ```
 
 Two encoders + one transform tool, all built from source:
