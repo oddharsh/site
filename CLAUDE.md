@@ -79,6 +79,9 @@ holding/images/<stem>.{avif,jpg}  +  R2 aadhar-photos/<filename>
    |   pulls Fuji recipe (FilmMode, DynamicRange, ColorChrome FX +Blue,
    |   Grain roughness + size, tone curves, saturation) plus standard
    |   exposure / focus / metering / WB shift / Kelvin temperature.
+   |   also calls photo-histograms.py to compute a 64-bin luminance
+   |   histogram per photo, inlined as `histogram: [int...]` so the
+   |   Fuji LCD tooltip can draw real bars on hover.
    |   discipline: every field is nullable; the tooltip skips lines
    |   that are null rather than fabricate. never guess metadata.
 ```
@@ -94,6 +97,11 @@ Two encoders + one transform tool, all built from source:
   primary AVIF thumbnail. Falls back to `sips -s format avif` (macOS
   native, no extra dep) when avifenc isn't installed.
 - **exiftool, jq** (`brew install exiftool jq`) — metadata extraction.
+- **Pillow** (`pip3 install --user pillow`) — per-photo luminance
+  histograms via `holding/scripts/photo-histograms.py`. optional;
+  extract-photo-metadata.sh silently skips histograms if Pillow isn't
+  installed, and the Fuji LCD tooltip falls back to a CSS-gradient
+  placeholder.
 
 ### `<picture>` + cache-busting strategy
 

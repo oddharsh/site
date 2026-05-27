@@ -144,6 +144,20 @@ hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px
   position: relative;
   overflow: hidden;
 }
+/* real SVG histogram (drawn from data-histogram when present). when
+   the SVG is rendered, the placeholder ::before/::after pseudo-bars
+   below are visually replaced by it. when there's no histogram data
+   yet, the pseudo-element gradient stands in. */
+.lcd-tip .histogram .hist-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  fill: oklch(95% 0 0);
+  z-index: 1;
+}
+.lcd-tip .histogram:has(.hist-svg)::before,
+.lcd-tip .histogram:has(.hist-svg)::after { display: none; }
 .lcd-tip .histogram::before {
   content: "";
   position: absolute;
@@ -650,7 +664,23 @@ footer {
     }, { passive: true });
   }
 
-  // Fuji LCD: build readout from real data-* attrs.
+  // SVG histogram from a 64-int array of values 0..100. height 32 units
+  // matches the .histogram CSS band height. one <rect> per bar, fill
+  // inherited from CSS. when no data is passed, falls back to the empty
+  // band (CSS gradient placeholder still applies).
+  const renderHistogramSvg = (values) => {
+    if (!Array.isArray(values) || !values.length) return "";
+    const n = values.length;
+    const bars = values.map((v, i) => {
+      const h = (Math.max(0, Math.min(100, v)) * 30) / 100;
+      return `<rect x="${i}" y="${(32 - h).toFixed(1)}" width="1" height="${h.toFixed(1)}"/>`;
+    }).join("");
+    return `<svg class="hist-svg" viewBox="0 0 ${n} 32" preserveAspectRatio="none">${bars}</svg>`;
+  };
+
+  // Fuji LCD: build readout from real data-* attrs. histogram comes
+  // through as a comma-separated string on data-histogram if available;
+  // parsed back to an int array for the SVG.
   const renderFujiLCD = (slot) => {
     const a = slot.dataset;
     const cells = [
@@ -659,8 +689,11 @@ footer {
       ["H-Tn",  a.htn],   ["S-Tn",  a.stn],
       ["COL",   a.col],   ["GRN",   a.grn],
     ].map(([l, v]) => `<div class="cell"><span class="label">${l}</span><span class="val">${v}</span></div>`).join("");
+    const hist = a.histogram
+      ? a.histogram.split(",").map(n => parseInt(n, 10)).filter(n => Number.isFinite(n))
+      : null;
     return `
-      <div class="histogram"></div>
+      <div class="histogram">${renderHistogramSvg(hist)}</div>
       <div class="body">
         <div class="stem">${a.stem}.jpg</div>
         <div class="meta-line">${fmtDate(a.date)} &middot; ${a.dims}</div>
