@@ -215,10 +215,14 @@ footer {
           <span class="status review">in review</span>
         </div>
         <div class="desc">
-          Four alternative tooltip styles for the photo grid + tracklist:
-          Fuji X-T LCD viewfinder, vinyl sleeve emerging from a track row,
-          polaroid flip, and CSS anchor-positioned popovers. Hover the slots
-          to compare.
+          Cursor-following tooltips for the photo grid + tracklist:
+          Fuji X-T LCD readout when hovering photos, vinyl sleeve at the
+          cursor when hovering tracks. Plus a CSS anchor-positioning
+          reference for the JS-disabled case. Built on the modern stack
+          (<code style="font-family:'Courier New',monospace;font-size:9pt">popover</code>
+          API +
+          <code style="font-family:'Courier New',monospace;font-size:9pt">@starting-style</code>
+          + rAF translate3d).
         </div>
         <div class="meta">
           shape: visual + interaction · added 2026-05-22
