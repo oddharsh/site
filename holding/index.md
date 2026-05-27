@@ -7,13 +7,13 @@ Researching and investing at [Archetype](https://archetype.fund). Building
 
 ---
 
-Hi — this is a corner of the web I'm still building. Handwritten HTML, three
+Hi. This is a corner of the web I'm still building. Handwritten HTML, three
 eras of theme, a coffee-booking system on Cloudflare, a place to put
 photographs, a place to put rabbithole posts. None of it's ready yet, all of
 it's on the way.
 
 If you'd like to grab a coffee in NYC while I finish, write me at
-<coffee@aadhar.sh> — I confirm by hand, usually within a day or two. Or pick a
+<coffee@aadhar.sh>. I confirm by hand, usually within a day or two. Or pick a
 slot at [cal.com/aadharsh/coffee](https://cal.com/aadharsh/coffee).
 
 The rest of the site goes live shortly. Check back, or just send a note.
@@ -45,7 +45,5 @@ originals at `/images/full/<name>.<ext>` via worker-proxied R2.
 ---
 
 © 2026 Aadharsh Pannirselvam · Best viewed in any browser made since 2001.
-
-—
 
 *love, aadharsh*

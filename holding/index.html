@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>aadharsh's site</title>
-<meta name="description" content="aadharsh's corner of the web — under construction.">
+<meta name="description" content="aadharsh's corner of the web. under construction.">
 <link rel="canonical" href="https://aadhar.sh/">
 <link rel="alternate" type="text/plain" title="llms.txt summary" href="/llms.txt">
 
@@ -495,17 +495,16 @@ footer .signature small { color: oklch(56.93% 0 0); }
     <hr>
 
     <p>
-      Hi &mdash; this is a corner of the web I&rsquo;m still building. Handwritten
+      Hi. This is a corner of the web I&apos;m still building. Handwritten
       HTML, three eras of theme, a coffee-booking system on Cloudflare,
-      a place to put photographs, a place to put rabbithole posts.
-      None of it&rsquo;s ready yet, all of it&rsquo;s on the way.
+      a place to put photographs, a place to put rabbithole posts. None
+      of it&apos;s ready yet, all of it&apos;s on the way.
     </p>
 
     <p>
-      If you&rsquo;d like to grab a coffee in NYC while I finish, write me at
-      <!--email_off--><a href="mailto:coffee@aadhar.sh?subject=%E2%98%95%20coffee&amp;body=Hi%20Aadharsh%20%E2%80%94%0A%0A">coffee@aadhar.sh</a><!--/email_off-->
-      &mdash; I confirm by hand, usually within a day or two.
-      Or pick a slot at
+      If you&apos;d like to grab a coffee in NYC while I finish, write me at
+      <!--email_off--><a href="mailto:coffee@aadhar.sh?subject=%E2%98%95%20coffee&amp;body=Hi%20Aadharsh%2C%0A%0A">coffee@aadhar.sh</a><!--/email_off-->.
+      I confirm by hand, usually within a day or two. Or pick a slot at
       <a href="https://cal.com/aadharsh/coffee" rel="external">cal.com/aadharsh/coffee</a>.
       <!-- (moving in-house to /coffee once secrets are set + worker deployed) -->
     </p>
@@ -656,13 +655,22 @@ footer .signature small { color: oklch(56.93% 0 0); }
         if (b < 1024**3)    return `${(b/1024/1024).toFixed(1)} MB`;
         return `${(b/1024**3).toFixed(2)} GB`;
       };
-      const fmtDate = (iso) => {
-        if (!iso) return "";
-        try {
-          const d = new Date(iso);
-          if (isNaN(d)) return "";
-          return d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
-        } catch { return ""; }
+      const fmtDate = (raw) => {
+        // accept both ISO ("YYYY-MM-DDTHH:MM:SSZ" from R2 upload
+        // timestamps) and Fuji EXIF format ("YYYY:MM:DD HH:MM:SS" from
+        // exiftool). normalize to ISO before parsing. output is the
+        // site convention: MM-DD-YYYY, HH:MM in 24-hour local time.
+        if (!raw) return "";
+        let s = String(raw).trim()
+          .replace(/^(\d{4}):(\d{2}):(\d{2})/, "$1-$2-$3")
+          .replace(" ", "T");
+        const d = new Date(s);
+        if (isNaN(d)) return "";
+        const mm  = String(d.getMonth() + 1).padStart(2, "0");
+        const dd  = String(d.getDate()).padStart(2, "0");
+        const hh  = String(d.getHours()).padStart(2, "0");
+        const min = String(d.getMinutes()).padStart(2, "0");
+        return `${mm}-${dd}-${d.getFullYear()}, ${hh}:${min}`;
       };
       const esc = (s) => String(s ?? "")
         .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")

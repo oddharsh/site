@@ -4,11 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>tooltip experiments — aadhar.sh garage</title>
-<meta name="description" content="Cursor-following tooltip styles for the photo grid and tracklist — hover the slots and rows to compare.">
+<meta name="description" content="Cursor-following tooltip styles for the photo grid and tracklist. Hover the slots and rows to compare.">
 <link rel="canonical" href="https://aadhar.sh/garage/tooltips">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='4' y='25' width='24' height='3' rx='0.5' fill='%231a1a1a'/><path d='M 16 4 L 9 25 L 23 25 Z' fill='%23ff6600'/><path d='M 11.3 18 L 20.7 18 L 21.7 21 L 10.3 21 Z' fill='%23ffffff'/><path d='M 13.7 11 L 18.3 11 L 19 13 L 13 13 Z' fill='%23ffffff'/></svg>">
 <style>
-/* ─── shared XP window chrome ────────────────────────────────────── */
+/* shared XP window chrome */
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
 body {
@@ -48,10 +48,43 @@ h2 {
   font-size: 13pt;
   color: oklch(41.92% 0.0962 250.51);
   margin: 28px 0 4px;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 .note { color: oklch(44.95% 0 0); font-size: 10pt; margin: 0 0 14px; }
 .note code { background: oklch(96.72% 0 0); border: 1px solid oklch(88.22% 0 0); padding: 0 4px; font-family: "Courier New", monospace; font-size: 9.5pt; }
 hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px 0; }
+
+/* status pills (match garage/index.html styling) */
+.status {
+  display: inline-block;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 8.5pt;
+  font-weight: bold;
+  letter-spacing: 0.05em;
+  padding: 1px 6px;
+  border: 1px solid;
+  border-radius: 2px;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+.status.review  { color: oklch(54.44% 0.1504 47.10); border-color: oklch(54.44% 0.1504 47.10); background: oklch(98% 0.03 95); }
+.status.shipped { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(98% 0.04 142); }
+.status.dead    { color: oklch(46.34% 0.1902 29.23); border-color: oklch(46.34% 0.1902 29.23); background: oklch(98% 0.03 30); }
+.status.ref     { color: oklch(51.03% 0 0); border-color: oklch(70% 0 0); background: oklch(96% 0 0); }
+
+/* rejection callout — small box explaining why a variant didn't ship */
+.rejection {
+  font-size: 10pt;
+  background: oklch(98% 0.02 30);
+  border-left: 3px solid oklch(46.34% 0.1902 29.23);
+  padding: 8px 12px;
+  margin: 0 0 14px;
+  color: oklch(30% 0.03 30);
+}
+.rejection strong { color: oklch(46.34% 0.1902 29.23); }
 
 /* three-slot photo row */
 .row {
@@ -78,18 +111,9 @@ hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px
   object-fit: cover;
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   Fuji X-T LCD readout (photos)
-   floating panel mimicking the camera's image-review screen. NO mini
-   thumbnail — the actual slot is right there. histogram-band on top
-   provides the LCD visual anchor; below that is filename, exposure,
-   recipe grid, and a small footer hint. cursor-follows via the
-   combined approach (popover + rAF translate3d + @starting-style).
-   ═══════════════════════════════════════════════════════════════════ */
+/* Fuji X-T LCD readout (photos), cursor-following */
 .fuji-slot { cursor: crosshair; }
-
 .lcd-tip {
-  /* popover element — override default browser centering */
   position: fixed;
   margin: 0;
   inset: auto;
@@ -108,8 +132,6 @@ hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px
   pointer-events: none;
   z-index: 10000;
   opacity: 1;
-  /* allow-discrete lets `display: block` ↔ `none` transition smoothly
-     with opacity (the popover spec uses display, not visibility). */
   transition: opacity 100ms ease-out, display 100ms allow-discrete;
 }
 .lcd-tip:not(:popover-open) { opacity: 0; }
@@ -151,7 +173,6 @@ hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px
   mask-image: linear-gradient(180deg, transparent 6%, oklch(0% 0 0) 100%);
   -webkit-mask-image: linear-gradient(180deg, transparent 6%, oklch(0% 0 0) 100%);
 }
-
 .lcd-tip .body { padding: 8px 9px 6px; }
 .lcd-tip .stem {
   font-weight: bold;
@@ -204,13 +225,7 @@ hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px
   margin-top: 2px;
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   Vinyl-sleeve tooltip (tracks) — cursor-following
-   instead of the prior "sleeve emerges from row" CSS-only version,
-   the album cover floats at the cursor with a -6° tilt and a paper
-   mat border. uses the same combined-approach architecture as the
-   Fuji LCD: popover API + rAF translate3d + @starting-style.
-   ═══════════════════════════════════════════════════════════════════ */
+/* Vinyl-sleeve tooltip (tracks), cursor-following */
 .vinyl-tip {
   position: fixed;
   margin: 0;
@@ -228,7 +243,7 @@ hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px
   filter: drop-shadow(0 8px 16px oklch(0% 0 0 / 0.35));
 }
 .vinyl-tip:not(:popover-open) { opacity: 0; }
-@starting-style { .vinyl-tip:popover-open { opacity: 0; transform: translate3d(var(--x, 0), var(--y, 0), 0) rotate(0); } }
+@starting-style { .vinyl-tip:popover-open { opacity: 0; } }
 .vinyl-tip .cover {
   width: 100%;
   height: 100%;
@@ -238,7 +253,6 @@ hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px
   background: oklch(50% 0.05 240);
   transform: rotate(-6deg);
   transform-origin: center;
-  transition: transform 240ms cubic-bezier(.2, .8, .3, 1.1);
 }
 .vinyl-tip .cover img {
   width: 100%;
@@ -246,7 +260,6 @@ hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px
   display: block;
   object-fit: cover;
 }
-
 .vinyl-demo {
   list-style: none;
   padding: 0;
@@ -268,10 +281,62 @@ hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px
 .vinyl-demo .artist { color: oklch(38.67% 0 0); }
 .vinyl-demo .duration { float: right; color: oklch(62.68% 0 0); font-family: "Courier New", monospace; font-size: 9.5pt; }
 
-/* ═══════════════════════════════════════════════════════════════════
-   CSS Anchor Positioning — element-anchored (no cursor following)
-   kept for reference / as a JS-disabled fallback path.
-   ═══════════════════════════════════════════════════════════════════ */
+/* Polaroid flip (rejected). Kept as record of the attempt. */
+.polaroid .slot {
+  perspective: 800px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  overflow: visible;
+}
+.polaroid .card {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transition: transform 520ms cubic-bezier(.2, .8, .3, 1);
+  transform-style: preserve-3d;
+}
+.polaroid .slot:hover .card,
+.polaroid .slot:focus-visible .card { transform: rotateY(180deg); }
+.polaroid .face {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  background: oklch(100% 0 0);
+  border: 1px solid oklch(61.14% 0.0611 253.60);
+  box-shadow: 1px 1px 0 oklch(61.14% 0.0611 253.60 / 0.3);
+  padding: 4px;
+  line-height: 0;
+}
+.polaroid .face.back {
+  transform: rotateY(180deg);
+  background: oklch(98% 0.005 80);
+  padding: 14px 14px 18px;
+  font-family: "Georgia", "Times New Roman", serif;
+  font-style: italic;
+  font-size: 9.5pt;
+  line-height: 1.45;
+  color: oklch(20% 0.01 60);
+}
+.polaroid .face.back .stem {
+  font-family: "Courier New", monospace;
+  font-size: 8.5pt;
+  font-style: normal;
+  color: oklch(45% 0 0);
+  margin-bottom: 8px;
+  border-bottom: 1px solid oklch(85% 0.01 60);
+  padding-bottom: 4px;
+}
+.polaroid .face.back .row-line { display: block; margin-top: 3px; }
+.polaroid .face.back .recipe {
+  margin-top: 10px;
+  color: oklch(35% 0.03 50);
+  font-size: 9pt;
+}
+
+/* CSS Anchor Positioning (reference, no cursor-tracking) */
 .anchor-demo .slot {
   anchor-name: var(--anchor-name);
 }
@@ -329,7 +394,7 @@ footer {
 </head>
 <body>
 
-<!-- two shared popovers — JS clones data into them on hover -->
+<!-- two shared popovers, populated on hover -->
 <div id="photo-tip" popover="manual" class="lcd-tip" aria-hidden="true"></div>
 <div id="track-tip" popover="manual" class="vinyl-tip" aria-hidden="true"><div class="cover"><img alt="" src=""></div></div>
 
@@ -339,14 +404,10 @@ footer {
 
     <h1>Tooltip Experiments</h1>
     <p class="lede">
-      Cursor-following tooltip styles for the photo grid + tracklist on
-      <a href="/">aadhar.sh</a>. Hover the slots and rows to see them in
-      motion. All three sections below use the same modern stack:
-      <code style="font-family:'Courier New',monospace;font-size:10pt">popover</code> API
-      for show/hide, <code style="font-family:'Courier New',monospace;font-size:10pt">@starting-style</code>
-      for the entry fade, and a tiny rAF-coalesced
-      <code style="font-family:'Courier New',monospace;font-size:10pt">translate3d</code> loop
-      for cursor tracking — about ~100 lines of JS for the whole system.
+      Variants tried for the photo grid and tracklist on <a href="/">aadhar.sh</a>. Hover the slots and rows. Each style shows its status: <span class="status review">in review</span> are live candidates, <span class="status shipped">shipped</span> made it to the homepage, <span class="status dead">rejected</span> got tried and didn't, <span class="status ref">reference</span> is a comparison point.
+    </p>
+    <p class="lede" style="margin-top: 4px;">
+      The live candidates share one architecture: popover API for show/hide, <code>@starting-style</code> for the entry fade, a small rAF-coalesced <code>translate3d</code> loop for cursor tracking. Roughly 100 lines of JS total.
     </p>
     <p class="lede" style="margin-top: 4px;">
       &larr; back to <a href="/garage">garage</a>
@@ -354,86 +415,134 @@ footer {
 
     <hr>
 
-    <h2>Fuji X-T LCD readout (photos)</h2>
+    <h2>Fuji X-T LCD readout (photos) <span class="status review">in review</span></h2>
     <p class="note">
-      Hover any slot. Floating panel mimics the camera's image-review screen
-      — histogram band on top, then filename, exposure trio, recipe grid,
-      footer. Follows the cursor. The actual photo stays right there in the
-      slot (no mini-thumbnail in the panel — the larger one is already
-      visible).
+      Hover any slot. Floating panel mimics the camera's image-review screen: histogram band on top, filename, exposure trio, recipe grid, footer. Follows the cursor. The slot itself stays untouched (no in-tooltip thumbnail; the larger slot image is already visible).
+    </p>
+    <p class="note">
+      Recipe values are real EXIF, pulled from <code>/images/metadata.json</code>. Earlier preview had fabricated values (XT508756 was tagged ACROS+R, which is B&amp;W only); fixed.
     </p>
     <div class="row" id="photo-row">
       <a class="slot fuji-slot" href="#"
-         data-stem="XT508687" data-date="2025-10-11" data-dims="7728×5152"
-         data-ss="1/250" data-aper="F4.0" data-iso="3200" data-ev="−1.3"
-         data-film="CL-NEG" data-dr="400" data-wb="DAY" data-mode="A"
-         data-htn="0" data-stn="0" data-col="+3" data-sh="0">
+         data-stem="XT508687"
+         data-date="2026:02:01 21:53:14"
+         data-dims="5152&times;7728"
+         data-ss="1/180" data-aper="F5.6" data-iso="3200" data-ev="-0.3"
+         data-film="PROVIA" data-wb="KLVN"
+         data-htn="-1" data-stn="+2" data-col="+3"
+         data-chr="STR" data-chr-b="STR" data-grn="STR-LG">
         <img src="/images/XT508687.avif?v=10" alt="">
       </a>
       <a class="slot fuji-slot" href="#"
-         data-stem="XT508940" data-date="2025-09-04" data-dims="7728×5152"
-         data-ss="1/640" data-aper="F2.0" data-iso="320" data-ev="−0.3"
-         data-film="PROVIA" data-dr="100" data-wb="DAY" data-mode="A"
-         data-htn="0" data-stn="0" data-col="0" data-sh="0">
+         data-stem="XT508940"
+         data-date="2026:02:07 01:46:34"
+         data-dims="5152&times;7728"
+         data-ss="1/500" data-aper="F4.0" data-iso="200" data-ev="-1"
+         data-film="CL.CHR" data-wb="KLVN"
+         data-htn="0" data-stn="0" data-col="+2"
+         data-chr="STR" data-chr-b="OFF" data-grn="WK-SM">
         <img src="/images/XT508940.avif?v=10" alt="">
       </a>
       <a class="slot fuji-slot" href="#"
-         data-stem="XT508756" data-date="2025-08-22" data-dims="7728×5152"
-         data-ss="1/125" data-aper="F5.6" data-iso="800" data-ev="0"
-         data-film="ACROS+R" data-dr="200" data-wb="AUTO" data-mode="M"
-         data-htn="−1" data-stn="+2" data-col="−1" data-sh="0">
+         data-stem="XT508756"
+         data-date="2026:02:03 22:21:12"
+         data-dims="5152&times;7728"
+         data-ss="1/500" data-aper="F10" data-iso="1000" data-ev="0"
+         data-film="CL.NEG" data-wb="KLVN"
+         data-htn="-2" data-stn="-2" data-col="-2"
+         data-chr="STR" data-chr-b="STR" data-grn="STR-SM">
         <img src="/images/XT508756.avif?v=10" alt="">
       </a>
     </div>
 
     <hr>
 
-    <h2>Vinyl sleeve at cursor (tracks)</h2>
+    <h2>Vinyl sleeve at cursor (tracks) <span class="status review">in review</span></h2>
     <p class="note">
-      Hover any row. A square album cover with a paper-mat border and a
-      slight <code>−6°</code> tilt floats at the cursor, like you're pulling
-      a sleeve out and tilting it to read the front. Same architecture as
-      above — popover API + cursor tracking + entry fade. The row text
-      stays put.
+      Hover any row. A square album cover with a paper-mat border and a slight <code>-6&deg;</code> tilt floats at the cursor, like pulling a sleeve out to read the front. Same architecture as the photo tooltip; the row text stays put.
     </p>
     <ol class="vinyl-demo" id="track-row">
       <li data-art="oklch(58% 0.18 28)">
         <span class="duration">3:54</span>
-        <span class="title">Guild (feat. Mac Miller)</span><span class="sep">—</span><span class="artist">Earl Sweatshirt, Mac Miller</span>
+        <span class="title">Guild (feat. Mac Miller)</span><span class="sep">&mdash;</span><span class="artist">Earl Sweatshirt, Mac Miller</span>
       </li>
       <li data-art="oklch(38% 0.08 200)">
         <span class="duration">2:14</span>
-        <span class="title">GAHDAMN</span><span class="sep">—</span><span class="artist">Kairee Doty</span>
+        <span class="title">GAHDAMN</span><span class="sep">&mdash;</span><span class="artist">Kairee Doty</span>
       </li>
       <li data-art="oklch(30% 0.06 60)">
         <span class="duration">4:49</span>
-        <span class="title">1995</span><span class="sep">—</span><span class="artist">Freddie Gibbs, The Alchemist</span>
+        <span class="title">1995</span><span class="sep">&mdash;</span><span class="artist">Freddie Gibbs, The Alchemist</span>
       </li>
       <li data-art="oklch(70% 0.18 90)">
         <span class="duration">3:35</span>
-        <span class="title">TRICERATOPS</span><span class="sep">—</span><span class="artist">Action Bronson, Paul Wall, Lil Yachty</span>
+        <span class="title">TRICERATOPS</span><span class="sep">&mdash;</span><span class="artist">Action Bronson, Paul Wall, Lil Yachty</span>
       </li>
       <li data-art="oklch(45% 0.15 280)">
         <span class="duration">2:04</span>
-        <span class="title">GREEN LIGHT</span><span class="sep">—</span><span class="artist">colle$ttye</span>
+        <span class="title">GREEN LIGHT</span><span class="sep">&mdash;</span><span class="artist">colle$ttye</span>
       </li>
     </ol>
     <p class="note" style="margin-top: -8px;">
-      <em>Note:</em> in production this would use the actual album art URL
-      from each track's <code>data-track-image</code> attr (already inlined
-      server-side). For the demo here we substitute a solid color per row.
+      In production this uses each track's actual <code>data-track-image</code> from the Spotify scrape. For the demo here, a solid color stands in for the album art.
     </p>
 
     <hr>
 
-    <h2>CSS Anchor Positioning (no cursor following)</h2>
+    <h2>Polaroid flip (photos) <span class="status dead">rejected</span></h2>
+    <div class="rejection">
+      <strong>Rejected:</strong> hover flips the slot 180&deg; via <code>transform: rotateY</code>, which means you see the metadata <em>or</em> the photo, never both. The whole point of the grid is the photos, so a tooltip should add to what's visible, not replace it. The same fault killed the first Fuji-LCD overlay design (v1, painted on top of the slot). Kept here as a record.
+    </div>
+    <div class="row polaroid">
+      <a class="slot" href="#">
+        <div class="card">
+          <div class="face front"><img src="/images/XT508687.avif?v=10" alt=""></div>
+          <div class="face back">
+            <div class="stem">XT508687.jpg</div>
+            <span class="row-line">FUJIFILM X-T50</span>
+            <span class="row-line">XF35mmF1.4 R &middot; 53mm</span>
+            <span class="row-line">f/5.6 &middot; 1/180 &middot; ISO 3200</span>
+            <span class="row-line">Kelvin WB &middot; -0.3 EV</span>
+            <div class="recipe">Provia, chrome FX strong with blue strong, grain strong large, +3 saturation. 02-01-2026, 21:53.</div>
+          </div>
+        </div>
+      </a>
+      <a class="slot" href="#">
+        <div class="card">
+          <div class="face front"><img src="/images/XT508940.avif?v=10" alt=""></div>
+          <div class="face back">
+            <div class="stem">XT508940.jpg</div>
+            <span class="row-line">FUJIFILM X-T50</span>
+            <span class="row-line">XF35mmF1.4 R &middot; 53mm</span>
+            <span class="row-line">f/4.0 &middot; 1/500 &middot; ISO 200</span>
+            <span class="row-line">Kelvin WB &middot; -1 EV</span>
+            <div class="recipe">Classic Chrome, chrome FX strong, grain weak small, +2 saturation. 02-07-2026, 01:46.</div>
+          </div>
+        </div>
+      </a>
+      <a class="slot" href="#">
+        <div class="card">
+          <div class="face front"><img src="/images/XT508756.avif?v=10" alt=""></div>
+          <div class="face back">
+            <div class="stem">XT508756.jpg</div>
+            <span class="row-line">FUJIFILM X-T50</span>
+            <span class="row-line">XF35mmF1.4 R &middot; 53mm</span>
+            <span class="row-line">f/10 &middot; 1/500 &middot; ISO 1000</span>
+            <span class="row-line">Kelvin WB &middot; 0 EV &middot; flash fired</span>
+            <div class="recipe">Classic Negative, chrome FX strong with blue strong, grain strong small, -2 saturation. 02-03-2026, 22:21.</div>
+          </div>
+        </div>
+      </a>
+    </div>
+
+    <hr>
+
+    <h2>CSS Anchor Positioning <span class="status ref">reference</span></h2>
     <p class="note">
-      Element-anchored rather than cursor-anchored. Included for comparison
-      — the modern web platform's pure-CSS answer for tooltips that don't
-      need to track the cursor. Useful as a JS-disabled fallback path.
+      Element-anchored rather than cursor-anchored. Included as a comparison: pure-CSS positioning for tooltips that don't need to follow the cursor. Useful as the JS-disabled fallback path on the live candidates above.
     </p>
     <div class="anchor-fallback">
-      ⚠ Your browser doesn't support <code>anchor-name</code> yet — Chrome 125+ or Safari TP required to see this demo.
+      Your browser doesn't support <code>anchor-name</code> yet. Chrome 125+ or Safari TP shows this demo.
     </div>
     <div class="row anchor-demo">
       <a class="slot" href="#"><img src="/images/XT508687.avif?v=10" alt=""></a>
@@ -441,18 +550,21 @@ footer {
       <a class="slot" href="#"><img src="/images/XT508756.avif?v=10" alt=""></a>
       <div class="anchor-pop a">
         <span class="fn">XT508687.jpg</span>
-        <span class="row-line">FUJIFILM X-T50 · XF18mm</span>
-        <span class="row-line">ƒ4.0 · 1/250 · ISO 3200</span>
+        <span class="row-line">FUJIFILM X-T50 &middot; XF35mm 53mm</span>
+        <span class="row-line">f/5.6 &middot; 1/180 &middot; ISO 3200</span>
+        <span class="row-line">Provia &middot; 02-01-2026, 21:53</span>
       </div>
       <div class="anchor-pop b">
         <span class="fn">XT508940.jpg</span>
-        <span class="row-line">FUJIFILM X-T50 · XF35mm</span>
-        <span class="row-line">ƒ2.0 · 1/640 · ISO 320</span>
+        <span class="row-line">FUJIFILM X-T50 &middot; XF35mm 53mm</span>
+        <span class="row-line">f/4.0 &middot; 1/500 &middot; ISO 200</span>
+        <span class="row-line">Classic Chrome &middot; 02-07-2026, 01:46</span>
       </div>
       <div class="anchor-pop c">
         <span class="fn">XT508756.jpg</span>
-        <span class="row-line">FUJIFILM X-T50 · XF56mm</span>
-        <span class="row-line">ƒ5.6 · 1/125 · ISO 800</span>
+        <span class="row-line">FUJIFILM X-T50 &middot; XF35mm 53mm</span>
+        <span class="row-line">f/10 &middot; 1/500 &middot; ISO 1000</span>
+        <span class="row-line">Classic Negative &middot; 02-03-2026, 22:21</span>
       </div>
     </div>
 
@@ -465,18 +577,30 @@ footer {
 
 <script>
 /*
-  cursor-following tooltip factory. one function powers both the Fuji LCD
-  panel (photos) and the vinyl sleeve (tracks). caller supplies:
-    - tip:    the popover element to drive
-    - target: a CSS selector for hoverable items
-    - root:   the containing element whose mouseover/mousemove/mouseout
-              we listen to
-    - render: (slot) => string of HTML to inject before showPopover
-  the same rAF-coalesced translate3d positioning works for any tooltip
-  shape; the difference between LCD and vinyl is purely CSS + content.
+  cursor-following tooltip factory. one helper powers both popovers
+  (LCD for photos, vinyl for tracks). caller supplies the popover
+  element, a CSS selector for hoverable items, the containing root,
+  and a render function that returns either an HTML string (LCD) or
+  a callback that mutates the popover directly (vinyl).
 */
 (() => {
   if (matchMedia("(hover: none)").matches || matchMedia("(pointer: coarse)").matches) return;
+
+  // shared date formatter: accepts Fuji EXIF "YYYY:MM:DD HH:MM:SS"
+  // or ISO. output: MM-DD-YYYY, HH:MM in 24-hour local time.
+  const fmtDate = (raw) => {
+    if (!raw) return "";
+    let s = String(raw).trim()
+      .replace(/^(\d{4}):(\d{2}):(\d{2})/, "$1-$2-$3")
+      .replace(" ", "T");
+    const d = new Date(s);
+    if (isNaN(d)) return "";
+    const mm  = String(d.getMonth() + 1).padStart(2, "0");
+    const dd  = String(d.getDate()).padStart(2, "0");
+    const hh  = String(d.getHours()).padStart(2, "0");
+    const min = String(d.getMinutes()).padStart(2, "0");
+    return `${mm}-${dd}-${d.getFullYear()}, ${hh}:${min}`;
+  };
 
   function attach({ tip, target, root, render }) {
     let pendingX = 0, pendingY = 0, frame = 0, tipW = 0, tipH = 0, activeSlot = null;
@@ -489,7 +613,7 @@ footer {
       frame = 0;
       const off = 18;
       let x = pendingX + off, y = pendingY + off;
-      if (x + tipW > innerWidth - 8) x = pendingX - tipW - off;
+      if (x + tipW > innerWidth - 8)  x = pendingX - tipW - off;
       if (y + tipH > innerHeight - 8) y = pendingY - tipH - off;
       if (x < 4) x = 4;
       if (y < 4) y = 4;
@@ -504,16 +628,9 @@ footer {
       const slot = e.target.closest(target);
       if (!slot || slot === activeSlot) return;
       activeSlot = slot;
-      const html = render(slot);
-      if (html === null) {
-        if (frame) { cancelAnimationFrame(frame); frame = 0; }
-        if (tip.matches(":popover-open")) tip.hidePopover();
-        activeSlot = null;
-        return;
-      }
-      // for the LCD: replace innerHTML. for the vinyl: update <img src>.
-      if (typeof html === "string") tip.innerHTML = html;
-      else html(tip);
+      const out = render(slot);
+      if (typeof out === "string") tip.innerHTML = out;
+      else if (typeof out === "function") out(tip);
       if (!tip.matches(":popover-open")) tip.showPopover();
       measure();
       sched(e);
@@ -533,33 +650,31 @@ footer {
     }, { passive: true });
   }
 
-  // Fuji LCD: build the readout HTML from data-* attrs.
-  const renderFujiLCD = (d => slot => {
+  // Fuji LCD: build readout from real data-* attrs.
+  const renderFujiLCD = (slot) => {
     const a = slot.dataset;
-    const date = a.date.replace(/-/g, ".");
     const cells = [
-      ["MODE", a.mode], ["FILM", a.film], ["DR", a.dr + "%"], ["WB", a.wb],
-      ["H-Tn", a.htn], ["S-Tn", a.stn], ["COL", a.col], ["SH", a.sh],
+      ["FILM",  a.film],  ["WB",    a.wb],
+      ["CHR",   a.chr],   ["CHR-B", a["chr-b"]],
+      ["H-Tn",  a.htn],   ["S-Tn",  a.stn],
+      ["COL",   a.col],   ["GRN",   a.grn],
     ].map(([l, v]) => `<div class="cell"><span class="label">${l}</span><span class="val">${v}</span></div>`).join("");
     return `
       <div class="histogram"></div>
       <div class="body">
         <div class="stem">${a.stem}.jpg</div>
-        <div class="meta-line">${date}  ·  ${a.dims}</div>
+        <div class="meta-line">${fmtDate(a.date)} &middot; ${a.dims}</div>
         <div class="exposure">S.S.${a.ss}  ${a.aper}  ISO${a.iso}</div>
-        <div class="ev-comp">⊞ ${a.ev} EV</div>
+        <div class="ev-comp">&boxbox; ${a.ev} EV</div>
         <div class="recipe-grid">${cells}</div>
-        <div class="footer-row"><span>1/2</span><span>▲ NEXT</span><span>DISP BACK</span></div>
+        <div class="footer-row"><span>1/2</span><span>&blacktriangle; NEXT</span><span>DISP BACK</span></div>
       </div>
     `;
-  })();
+  };
 
-  // vinyl: don't re-render the whole tooltip; update only the cover bg.
-  // (the structure is fixed — a single <div class="cover"><img></div>.)
-  const renderVinyl = slot => (tip) => {
-    const art = slot.dataset.art || "oklch(50% 0.05 240)";
-    const cover = tip.querySelector(".cover");
-    cover.style.background = art;
+  // Vinyl: don't re-render whole tooltip, just swap the cover bg.
+  const renderVinyl = (slot) => (tip) => {
+    tip.querySelector(".cover").style.background = slot.dataset.art || "oklch(50% 0.05 240)";
   };
 
   attach({
