@@ -295,6 +295,110 @@ hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px
 .vinyl-demo .artist { color: oklch(38.67% 0 0); }
 .vinyl-demo .duration { float: right; color: oklch(62.68% 0 0); font-family: "Courier New", monospace; font-size: 9.5pt; }
 
+/* XP-skinned camera readout (photos).
+   same content shape as the Fuji LCD (histogram + exposure trio + recipe
+   grid + date), styled like an XP "Picture Properties" dialog: cream
+   background, thin black border, blue gradient title strip, sunken
+   bevel around the histogram, Tahoma body with Courier numerics. the
+   compromise: keep the camera-back density without breaking the
+   surrounding XP visual vocabulary. */
+.xp-cam-slot { cursor: crosshair; }
+.xp-cam-tip {
+  position: fixed;
+  margin: 0;
+  inset: auto;
+  top: 0; left: 0;
+  width: 260px;
+  background: oklch(98.92% 0.0398 96.79);
+  color: oklch(20% 0 0);
+  border: 1px solid oklch(15% 0 0);
+  font-family: Tahoma, "Microsoft Sans Serif", Verdana, sans-serif;
+  font-size: 11px;
+  padding: 0;
+  box-shadow: 2px 2px 0 oklch(15% 0 0 / 0.15);
+  pointer-events: none;
+  z-index: 10000;
+  opacity: 1;
+  transition: opacity 100ms ease-out, display 100ms allow-discrete;
+}
+.xp-cam-tip:not(:popover-open) { opacity: 0; }
+@starting-style { .xp-cam-tip:popover-open { opacity: 0; } }
+
+.xp-cam-tip .header {
+  background: linear-gradient(180deg, oklch(94.66% 0.0114 252.09), oklch(85.04% 0.0283 248.16));
+  border-bottom: 1px solid oklch(61.14% 0.0611 253.60);
+  padding: 3px 8px;
+  font-weight: bold;
+  color: oklch(41.92% 0.0962 250.51);
+  font-family: "Trebuchet MS", Verdana, sans-serif;
+  font-size: 10.5px;
+  letter-spacing: 0.01em;
+}
+.xp-cam-tip .histogram-frame {
+  margin: 8px 8px 0;
+  border: 1px solid oklch(61.14% 0.0611 253.60);
+  border-top-color: oklch(47.12% 0.0555 253.58);
+  border-left-color: oklch(47.12% 0.0555 253.58);
+  height: 38px;
+  background: oklch(100% 0 0);
+  position: relative;
+  overflow: hidden;
+}
+.xp-cam-tip .histogram-frame .hist-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  fill: oklch(25% 0 0);
+}
+.xp-cam-tip .body {
+  padding: 6px 10px 8px;
+}
+.xp-cam-tip .exposure {
+  font-family: "Courier New", Courier, monospace;
+  font-size: 11.5px;
+  font-weight: bold;
+  color: oklch(20% 0 0);
+  margin: 4px 0 1px;
+  letter-spacing: 0.02em;
+}
+.xp-cam-tip .meta-strip {
+  font-family: "Courier New", monospace;
+  font-size: 10px;
+  color: oklch(45% 0 0);
+  margin-bottom: 8px;
+}
+.xp-cam-tip .recipe-rows {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  gap: 1px 8px;
+  font-size: 10.5px;
+  margin: 0 0 4px;
+}
+.xp-cam-tip .recipe-rows dt {
+  color: oklch(45% 0 0);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 9px;
+  align-self: center;
+}
+.xp-cam-tip .recipe-rows dd {
+  margin: 0;
+  color: oklch(20% 0 0);
+  font-family: "Courier New", monospace;
+  font-size: 10px;
+}
+.xp-cam-tip .footer {
+  font-family: "Courier New", monospace;
+  font-size: 9.5px;
+  color: oklch(45% 0 0);
+  border-top: 1px solid oklch(85% 0.01 80);
+  padding: 4px 10px;
+  background: oklch(96% 0.005 80);
+  display: flex;
+  justify-content: space-between;
+}
+
 /* Polaroid flip (rejected). Kept as record of the attempt. */
 .polaroid .slot {
   perspective: 800px;
@@ -410,6 +514,7 @@ footer {
 
 <!-- two shared popovers, populated on hover -->
 <div id="photo-tip" popover="manual" class="lcd-tip" aria-hidden="true"></div>
+<div id="xp-cam-tip" popover="manual" class="xp-cam-tip" aria-hidden="true"></div>
 <div id="track-tip" popover="manual" class="vinyl-tip" aria-hidden="true"><div class="cover"><img alt="" src=""></div></div>
 
 <div class="window">
@@ -418,7 +523,7 @@ footer {
 
     <h1>Tooltip Experiments</h1>
     <p class="lede">
-      Variants tried for the photo grid and tracklist on <a href="/">aadhar.sh</a>. Hover the slots and rows. Each style shows its status: <span class="status review">in review</span> are live candidates, <span class="status shipped">shipped</span> made it to the homepage, <span class="status dead">rejected</span> got tried and didn't, <span class="status ref">reference</span> is a comparison point.
+      Variants tried for the photo grid and tracklist on <a href="/">aadhar.sh</a>. Hover the slots and rows. The two photo variants below (Fuji LCD and XP-skinned camera readout) carry the same content shape, with different chrome; the third (vinyl) is a track-specific candidate. Status pills: <span class="status review">in review</span> are live candidates, <span class="status shipped">shipped</span> made it to the homepage, <span class="status dead">rejected</span> got tried and didn't, <span class="status ref">reference</span> is a comparison point.
     </p>
     <p class="lede" style="margin-top: 4px;">
       The live candidates share one architecture: popover API for show/hide, <code>@starting-style</code> for the entry fade, a small rAF-coalesced <code>translate3d</code> loop for cursor tracking. Roughly 100 lines of JS total.
@@ -467,6 +572,48 @@ footer {
          data-film="CL.NEG" data-wb="KLVN"
          data-htn="-2" data-stn="-2" data-col="-2"
          data-chr="STR" data-chr-b="STR" data-grn="STR-SM"
+         data-histogram="0,0,0,10,35,54,53,98,99,100,89,71,45,32,30,27,22,20,16,10,9,8,8,9,8,8,7,7,8,8,8,7,7,8,8,9,9,9,10,10,10,9,9,9,10,11,9,8,7,6,5,5,6,5,5,4,5,1,1,0,0,0,0,0">
+        <img src="/images/XT508756.avif?v=10" alt="">
+      </a>
+    </div>
+
+    <hr>
+
+    <h2>XP-skinned camera readout (photos) <span class="status review">in review</span></h2>
+    <p class="note">
+      Same content as the Fuji LCD above (histogram, exposure trio, recipe grid, date) but reskinned in XP visual vocabulary: cream panel, blue gradient title strip, sunken bevel around the histogram, Tahoma body with Courier numerics. Keeps the camera-back density without arguing visually with the surrounding XP shell.
+    </p>
+    <div class="row" id="xp-cam-row">
+      <a class="slot xp-cam-slot" href="#"
+         data-stem="XT508687"
+         data-date="2026:02:01 21:53:14"
+         data-dims="5152&times;7728"
+         data-ss="1/180" data-aper="f/5.6" data-iso="3200" data-ev="-0.3"
+         data-film="Provia" data-dr="Standard" data-wb="Kelvin (4500K)"
+         data-htn="-1" data-stn="+2" data-col="+3"
+         data-chr="Strong" data-chr-b="Strong" data-grn="Strong / Large"
+         data-histogram="37,100,53,18,19,35,31,18,13,10,11,9,6,5,4,3,3,3,2,2,2,2,2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0">
+        <img src="/images/XT508687.avif?v=10" alt="">
+      </a>
+      <a class="slot xp-cam-slot" href="#"
+         data-stem="XT508940"
+         data-date="2026:02:07 01:46:34"
+         data-dims="5152&times;7728"
+         data-ss="1/500" data-aper="f/4.0" data-iso="200" data-ev="-1"
+         data-film="Classic Chrome" data-dr="Standard" data-wb="Kelvin (5900K)"
+         data-htn="0" data-stn="0" data-col="+2"
+         data-chr="Strong" data-chr-b="Off" data-grn="Weak / Small"
+         data-histogram="20,65,100,59,53,52,48,55,54,52,36,38,38,30,47,61,40,31,30,35,42,44,49,56,60,65,74,77,72,57,39,21,10,8,8,7,8,9,11,14,19,19,7,6,9,7,7,8,10,5,4,2,2,0,0,0,0,0,0,0,0,0,0,0">
+        <img src="/images/XT508940.avif?v=10" alt="">
+      </a>
+      <a class="slot xp-cam-slot" href="#"
+         data-stem="XT508756"
+         data-date="2026:02:03 22:21:12"
+         data-dims="5152&times;7728"
+         data-ss="1/500" data-aper="f/10" data-iso="1000" data-ev="0"
+         data-film="Classic Negative" data-dr="Standard" data-wb="Kelvin (4000K)"
+         data-htn="-2" data-stn="-2" data-col="-2"
+         data-chr="Strong" data-chr-b="Strong" data-grn="Strong / Small"
          data-histogram="0,0,0,10,35,54,53,98,99,100,89,71,45,32,30,27,22,20,16,10,9,8,8,9,8,8,7,7,8,8,8,7,7,8,8,9,9,9,10,10,10,9,9,9,10,11,9,8,7,6,5,5,6,5,5,4,5,1,1,0,0,0,0,0">
         <img src="/images/XT508756.avif?v=10" alt="">
       </a>
@@ -708,6 +855,36 @@ footer {
     `;
   };
 
+  // XP-skinned camera readout: same content as Fuji LCD, XP visual
+  // vocabulary. data-* attrs use human-readable values (e.g. "Strong"
+  // not "STR") since the panel isn't pretending to be a tiny LCD.
+  const renderXpCam = (slot) => {
+    const a = slot.dataset;
+    const hist = a.histogram
+      ? a.histogram.split(",").map(n => parseInt(n, 10)).filter(n => Number.isFinite(n))
+      : null;
+    const rows = [
+      ["Film",      a.film],
+      ["Dyn. range",a.dr],
+      ["White bal", a.wb],
+      ["Chrome",    `${a.chr} / blue ${a["chr-b"]}`],
+      ["Grain",     a.grn],
+      ["Tones",     `H ${a.htn}  S ${a.stn}`],
+      ["Color",     a.col],
+    ].filter(([_, v]) => v && v !== "undefined")
+     .map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
+    return `
+      <div class="header">${a.stem}.jpg</div>
+      <div class="histogram-frame">${renderHistogramSvg(hist)}</div>
+      <div class="body">
+        <div class="exposure">${a.ss}  ${a.aper}  ISO ${a.iso}</div>
+        <div class="meta-strip">${a.ev} EV &middot; ${a.dims}</div>
+        <dl class="recipe-rows">${rows}</dl>
+      </div>
+      <div class="footer"><span>${fmtDate(a.date)}</span><span>EXIF</span></div>
+    `;
+  };
+
   // Vinyl: don't re-render whole tooltip, just swap the cover bg.
   const renderVinyl = (slot) => (tip) => {
     tip.querySelector(".cover").style.background = slot.dataset.art || "oklch(50% 0.05 240)";
@@ -718,6 +895,12 @@ footer {
     target: ".fuji-slot",
     root:   document.getElementById("photo-row"),
     render: renderFujiLCD,
+  });
+  attach({
+    tip:    document.getElementById("xp-cam-tip"),
+    target: ".xp-cam-slot",
+    root:   document.getElementById("xp-cam-row"),
+    render: renderXpCam,
   });
   attach({
     tip:    document.getElementById("track-tip"),
