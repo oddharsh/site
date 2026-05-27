@@ -336,8 +336,16 @@ async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
       // JSON.parse(slot.dataset.exif) — instant, no fetch round-trip on
       // first hover. only attached when EXIF is available for this stem
       // (metadata.json may not have everything if generation lagged).
-      const exifAttr = p.exif
-        ? ` data-exif="${escAttr(JSON.stringify(p.exif))}"` : "";
+      // histogram is stripped here because the homepage tooltip (XP
+      // cream style) doesn't render one; that data lives only in
+      // metadata.json + the garage Fuji LCD demo. if the Fuji LCD
+      // ships to the homepage later, drop the destructure to ship the
+      // histogram array through.
+      let exifAttr = "";
+      if (p.exif) {
+        const { histogram: _drop, ...exifLite } = p.exif;
+        exifAttr = ` data-exif="${escAttr(JSON.stringify(exifLite))}"`;
+      }
       return `<a href="/images/full/${encodeURI(full)}"` +
              ` target="_blank" rel="noopener"` +
              ` data-full="${escAttr(full)}"${sizeAttr}${upAttr}${exifAttr}>` +
