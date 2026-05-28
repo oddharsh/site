@@ -883,6 +883,16 @@ footer {
     return `<svg class="hist-svg" viewBox="0 0 ${n - 1} 32" preserveAspectRatio="none">${luma}${r}${g}${b}</svg>`;
   };
 
+  // focal length is stored as the 35mm-equivalent (FocalLengthIn35mmFormat
+  // from exiftool), so "53 mm" on an APS-C body is the FF-equivalent
+  // field of view, not the physical lens focal length (which is already
+  // visible in the lens model: XF35mmF1.4 R). marker makes that explicit
+  // so readers don't see two conflicting focal numbers.
+  const fmtFocal = (raw) => {
+    if (!raw) return "";
+    return String(raw).replace(/\s+mm$/i, " mm") + " FF";
+  };
+
   // small flash bolt icon shown when the EXIF Flash tag matches
   // "Fired" or "On" (the standard strings exiftool emits when the
   // flash actually went off). 7-point path with an arrowhead notch
@@ -911,10 +921,12 @@ footer {
       ["COL",   a.col],   ["GRN",   a.grn],
     ].map(([l, v]) => `<div class="cell"><span class="label">${l}</span><span class="val">${v || "—"}</span></div>`).join("");
     // camera + lens summary line. abbreviate "FUJIFILM" to "FUJI" to
-    // fit the 240px-wide LCD comfortably. focal length tucked in
-    // alongside lens model.
+    // fit the 240px-wide LCD comfortably. focal length is the FF
+    // equivalent (see fmtFocal), shown with an "FF" suffix so it
+    // doesn't look like a second physical focal length next to the
+    // lens model's "35mm".
     const body = (a.camera || "").replace(/^FUJIFILM\b/, "FUJI");
-    const lensLine = [body, a.lens, a.focal].filter(Boolean).join(" · ");
+    const lensLine = [body, a.lens, fmtFocal(a.focal)].filter(Boolean).join(" · ");
     return `
       <div class="histogram">${renderHistogramSvg(a.histogram)}</div>
       <div class="body">
@@ -945,9 +957,11 @@ footer {
     if (isOn(chromeBlue)) chromeParts.push(`blue ${chromeBlue}`);
     const chromeVal = chromeParts.length ? chromeParts.join(" · ") : "off";
 
-    // lens summary glues lens model + focal length into one row value
-    // ("XF35mmF1.4 R · 53 mm"). camera body gets its own row.
-    const lensSummary = [a.lens, a.focal].filter(Boolean).join(" · ");
+    // lens summary: lens model first, then focal length labeled with
+    // FF to mark that exiftool's FocalLengthIn35mmFormat is the
+    // 35mm-equivalent (not the physical focal length, which the lens
+    // model already states).
+    const lensSummary = [a.lens, fmtFocal(a.focal)].filter(Boolean).join(" · ");
     const rows = [
       ["Body",       a.camera],
       ["Lens",       lensSummary],
