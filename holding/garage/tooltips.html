@@ -135,14 +135,9 @@ hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px
     clamp(8px, calc(var(--x) + 16px), calc(100vw - 100% - 8px)),
     clamp(8px, calc(var(--y) + 16px), calc(100vh - 100% - 8px))
   );
-  /* 55ms ease gives a subtle magnetic catch-up to the cursor — present
-     enough to feel alive, short enough not to read as lag. set to 0ms
-     (or delete) for a hard snap. only the position eases; opacity is
-     handled by each tip's own transition. respects reduced-motion below. */
-  transition: --x 55ms linear, --y 55ms linear;
-}
-@media (prefers-reduced-motion: reduce) {
-  .lcd-tip, .xp-cam-tip, .vinyl-tip { transition: none; }
+  /* hard snap: position is NOT transitioned, so the tooltip tracks the
+     cursor with zero lag. (we tried a 55ms ease; the snap reads better.)
+     opacity fade-in is handled by each tip's own transition. */
 }
 
 /* Fuji X-T LCD readout (photos), cursor-following */
@@ -866,22 +861,11 @@ footer {
       const slot = e.target.closest(target);
       if (!slot || slot === activeSlot) return;
       activeSlot = slot;
-      const wasOpen = tip.matches(":popover-open");
       const out = render(slot);
       if (typeof out === "string") tip.innerHTML = out;
       else if (typeof out === "function") out(tip);
-      if (!wasOpen) {
-        // genuine first show: jump straight to the cursor instead of
-        // easing in from wherever it last rested. when already open
-        // (gliding slot → slot) we keep the ease so it tracks smoothly.
-        tip.style.transition = "none";
-        place(tip, e);
-        tip.offsetWidth;               // flush the no-transition jump
-        tip.style.transition = "";     // restore CSS easing for moves
-        tip.showPopover();
-      } else {
-        place(tip, e);
-      }
+      place(tip, e);
+      if (!tip.matches(":popover-open")) tip.showPopover();
     });
     root.addEventListener("pointermove", (e) => {
       if (tip.matches(":popover-open")) place(tip, e);

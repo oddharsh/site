@@ -278,10 +278,13 @@ hr {
 /* photo grid: each tile in a raised frame, like a contact sheet from
    a 2003 personal site. */
 .photos {
-  /* fixed 3-column grid → 3×3 = 9 cells; uniform thumbnail size at every
-     viewport width, contact-sheet feel. */
+  /* responsive contact sheet: auto-fit + minmax keeps the 3×3 grid on
+     the desktop window (interior ~612px → 3 columns) but reflows to 2
+     columns on phones (~336px interior) without a media query. the 155px
+     floor is tuned to the breakpoints: > 147px holds 3 cols at desktop,
+     ≤ 165px drops to 2 at mobile. tiles stay uniform (1fr) at every width. */
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
   gap: 6px;
   /* margin-bottom is larger than -top so there's clear separation from
      the next section's heading. (we had `contain: layout style` here
@@ -367,19 +370,27 @@ footer .signature small { color: oklch(56.93% 0 0); }
    normal hardware-rate movement. window chrome alone carries the
    resto-mod feel without needing to override the pointer.) */
 
-/* XP-style tooltip for photo grid hover. shows filename + size + dimensions,
-   plus EXIF when /images/metadata.json provides it. positioned near the
-   cursor, hidden by default, never blocks the underlying link.
-   positioned via transform (compositor-only path) at 0,0 + translate3d
-   so mousemove events don't trigger layout. NB: will-change is NOT set
-   here permanently — that would keep a compositor layer allocated even
-   when hidden, which costs GPU memory and matters on Low Power / variable
-   refresh rate (ProMotion 24Hz). the JS sets will-change on hover-in
-   and clears it on hover-out, so the GPU only pays when we're using it. */
+/* cursor position, written to --x/--y by the tooltip JS on pointermove.
+   registered as typed <length> so they're valid in calc(); positioning
+   is done entirely in CSS below (no JS rAF, no getBoundingClientRect). */
+@property --x { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@property --y { syntax: "<length>"; inherits: false; initial-value: 0px; }
+
+/* XP-style tooltip for photo + track + artist hover. shows EXIF (photos),
+   album art (tracks), or profile pic (artists), inlined per-element so
+   there's no fetch on first hover. positioned near the cursor with a hard
+   snap — JS writes --x/--y, CSS does translate(clamp(...)). the clamp
+   keeps it on-screen using the element's own size (100%), so it stays
+   correct even as a cover image sizes the box; no JS measuring, no
+   will-change (nothing animates), no resize listener. */
 .xp-tooltip {
   position: fixed;
   top: 0;
   left: 0;
+  transform: translate(
+    clamp(4px, calc(var(--x) + 16px), calc(100vw - 100% - 8px)),
+    clamp(4px, calc(var(--y) + 16px), calc(100vh - 100% - 8px))
+  );
   background: oklch(98.92% 0.0398 96.79);
   color: oklch(20.00% 0 0);
   border: 1px solid oklch(15.00% 0 0);
@@ -869,143 +880,73 @@ footer .signature small { color: oklch(56.93% 0 0); }
         );
       }
 
-      // 120fps-friendly tooltip positioning:
-      //  - coalesce mousemove → one rAF tick (no matter the hz, we paint at
-      //    most one tooltip update per frame)
-      //  - cache tip size on show/resize instead of measuring per move
-      //    (skips a forced layout per mousemove)
-      //  - position via transform: translate3d (compositor-only path)
-      //    instead of style.left/top (which would invalidate layout)
-      let tipW = 0, tipH = 0;
-      let pendingX = 0, pendingY = 0, frame = 0;
-      const applyPosition = () => {
-        frame = 0;
-        const offset = 16;
-        let x = pendingX + offset;
-        let y = pendingY + offset;
-        const winW = window.innerWidth, winH = window.innerHeight;
-        if (x + tipW > winW - 8) x = pendingX - tipW - offset;
-        if (y + tipH > winH - 8) y = pendingY - tipH - offset;
-        if (x < 4) x = 4;
-        if (y < 4) y = 4;
-        tip.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+      // lightweight cursor tracking: JS writes --x/--y (the cursor's
+      // clientX/Y in px); CSS positions the tooltip via translate(clamp())
+      // with a hard snap, zero lag. no rAF, no getBoundingClientRect, no
+      // resize listener — edge-clamping uses the element's own size in CSS,
+      // so it stays correct as a cover image sizes the box. lastX/lastY are
+      // kept only for scroll re-evaluation (elementFromPoint).
+      let lastX = 0, lastY = 0;
+      const place = (e) => {
+        lastX = e.clientX; lastY = e.clientY;
+        tip.style.setProperty("--x", lastX + "px");
+        tip.style.setProperty("--y", lastY + "px");
       };
-      const schedulePosition = (e) => {
-        pendingX = e.clientX;
-        pendingY = e.clientY;
-        if (!frame) frame = requestAnimationFrame(applyPosition);
+      const hideTip = () => {
+        tip.style.display = "none";
+        activeSlot = null;
       };
-      // cache size whenever content / viewport changes
-      const measure = () => {
-        const r = tip.getBoundingClientRect();
-        tipW = r.width;
-        tipH = r.height;
+      const showTipFor = (target, e) => {
+        activeSlot = target;
+        const html = buildContent(target);
+        if (!html) { hideTip(); return; }   // e.g. track with no cover yet
+        tip.innerHTML = html;
+        tip.style.display = "block";
+        if (e) place(e);
       };
 
-      document.addEventListener("mouseover", (e) => {
+      document.addEventListener("pointerover", (e) => {
         const target = findTarget(e.target);
         if (!target || target === activeSlot) return;
-        activeSlot = target;
-        // no delay: show immediately on enter. EXIF for photos is now
-        // inlined per-slot via data-exif, so the tooltip renders fully
-        // populated on first hover (no fetch round-trip).
-        const html = buildContent(target);
-        if (!html) {
-          // content-less target (e.g. track with no cover yet) — leave
-          // the tooltip hidden rather than showing an empty box.
-          tip.style.display = "none";
-          activeSlot = null;
-          return;
-        }
-        tip.innerHTML     = html;
-        tip.style.display = "block";
-        // earn the compositor layer only while we'll actually use it.
-        // permanent will-change would keep the GPU layer allocated even
-        // when hidden, which hurts on Low Power / variable refresh rate.
-        tip.style.willChange = "transform";
-        measure();
-        schedulePosition(e);
-        // measure again once the cover image decodes (track tooltip starts
-        // with no <img> dimensions, so the first measure() undercounts).
-        const cover = tip.querySelector(".cover");
-        if (cover && !cover.complete) {
-          cover.addEventListener("load",  () => { if (activeSlot === target) measure(); }, { once: true });
-          cover.addEventListener("error", () => { if (activeSlot === target) measure(); }, { once: true });
-        }
+        // EXIF/art is inlined per-element, so content renders fully on
+        // first hover with no fetch round-trip.
+        showTipFor(target, e);
       }, { passive: true });
 
-      // passive: skip default-prevention bookkeeping; lets the browser
-      // dispatch mousemove without waiting on our handler to settle.
-      document.addEventListener("mousemove", (e) => {
-        if (tip.style.display === "block") schedulePosition(e);
+      // passive: lets the browser dispatch pointermove without waiting on
+      // our handler. the work is two CSS custom-property writes.
+      document.addEventListener("pointermove", (e) => {
+        if (tip.style.display === "block") place(e);
       }, { passive: true });
 
-      window.addEventListener("resize", () => {
-        if (tip.style.display === "block") measure();
-      }, { passive: true });
-
-      document.addEventListener("mouseout", (e) => {
+      document.addEventListener("pointerout", (e) => {
         const fromTarget = findTarget(e.target);
         if (!fromTarget) return;
         const toTarget = findTarget(e.relatedTarget);
         // still inside the same target? ignore.
         if (toTarget === fromTarget) return;
-        // moving to a *different* valid target (e.g. row → artist link
-        // inside the row, or artist → adjacent artist)? let the next
-        // mouseover swap the content without an intermediate hide+show
-        // flicker. the mouseover handler will reset activeSlot.
+        // moving to a *different* valid target (row → artist link, artist →
+        // adjacent artist)? let the next pointerover swap content without an
+        // intermediate hide+show flicker.
         if (toTarget) return;
-        if (frame) { cancelAnimationFrame(frame); frame = 0; }
-        tip.style.display = "none";
-        // release the compositor layer when not in use
-        tip.style.willChange = "";
-        activeSlot = null;
+        hideTip();
       }, { passive: true });
 
-      // scroll re-evaluation. tooltip is position:fixed and the cursor
-      // is also fixed in viewport coords during scroll — so the tooltip
-      // and cursor stay co-located, but the CONTENT under the cursor
-      // changes. browsers don't reliably fire mouseover/mouseout when
-      // an element shifts under a stationary cursor due to scroll (Safari
-      // especially), so the tooltip would otherwise keep showing data
-      // for a row that's no longer under the pointer. on each scroll
-      // tick we look up what's actually under the cursor via
-      // elementFromPoint and re-target accordingly. coalesced to one
-      // re-evaluation per animation frame to keep scroll smooth.
-      const hideTip = () => {
-        if (frame) { cancelAnimationFrame(frame); frame = 0; }
-        tip.style.display = "none";
-        tip.style.willChange = "";
-        activeSlot = null;
-      };
-      const showTipFor = (target) => {
-        if (target === activeSlot) return;            // nothing to do
-        activeSlot = target;
-        const html = buildContent(target);
-        if (!html) { hideTip(); return; }
-        tip.innerHTML = html;
-        tip.style.display = "block";
-        tip.style.willChange = "transform";
-        measure();
-        // position will be re-applied off the cached pendingX/pendingY
-        // on the next rAF tick from the existing mousemove path; if no
-        // mousemove fires (pure scroll-into-new-target case), force one.
-        if (!frame) frame = requestAnimationFrame(applyPosition);
-        const cover = tip.querySelector(".cover");
-        if (cover && !cover.complete) {
-          cover.addEventListener("load",  () => { if (activeSlot === target) measure(); }, { once: true });
-          cover.addEventListener("error", () => { if (activeSlot === target) measure(); }, { once: true });
-        }
-      };
+      // scroll re-evaluation. the tooltip is position:fixed and the cursor
+      // stays at the same viewport coords during scroll, but the CONTENT
+      // under the cursor changes. browsers don't reliably fire pointer
+      // enter/leave when an element shifts under a stationary cursor due to
+      // scroll (Safari especially), so without this the tooltip would keep
+      // showing data for a row that's no longer under the pointer. on each
+      // scroll tick we look up what's actually under the cursor (at the
+      // last known lastX/lastY) and re-target. coalesced to one rAF tick.
+      // position doesn't change here — the cursor didn't move, so --x/--y
+      // are already correct; we only swap content.
       let scrollFrame = 0;
       const reevaluateAfterScroll = () => {
         scrollFrame = 0;
         if (tip.style.display !== "block") return;
-        // pendingX/pendingY is the last cursor position we recorded.
-        // elementFromPoint returns the topmost element AT that viewport
-        // coord — which, after scroll, may be a different element than
-        // the one originally hovered.
-        const under = document.elementFromPoint(pendingX, pendingY);
+        const under = document.elementFromPoint(lastX, lastY);
         const newTarget = findTarget(under);
         if (!newTarget) { hideTip(); return; }
         if (newTarget !== activeSlot) showTipFor(newTarget);
