@@ -562,11 +562,11 @@ const R2_EXT_PRIORITY = {
 // once. used as a `?v=<N>` suffix in the manifest's thumb URLs. Cloudflare
 // includes the query string in the cache key by default, so changing this
 // produces a fresh cache lookup that doesn't see prior stale 404s.
-// (10 when dropping WebP; 11 when grid thumbs went 1200px → 500px; 12
-// when AVIF re-encoded at higher quality (CQ30 → -q63, ~12KB → ~16KB
-// mean) + 2 stale Leica thumbs finally rebuilt. same filenames each
-// time, so the ?v= bump is what busts the edge cache for the new bytes.)
-const THUMB_VERSION = 12;
+// (10 dropped WebP; 11 grid thumbs 1200px → 500px; 12 AVIF re-encoded at
+// higher quality (CQ30 → -q63); 13 the 3 grayscale Leica thumbs re-encoded
+// as true monochrome (yuv420 → yuv400). same filenames each time, so the
+// ?v= bump is what busts the edge cache for the new bytes.)
+const THUMB_VERSION = 13;
 
 async function getImagesManifest(env, ctx) {
   let manifest = null;

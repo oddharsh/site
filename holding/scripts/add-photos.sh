@@ -227,7 +227,14 @@ while IFS= read -r f; do
     continue
   fi
   if [ "$AVIF_ENCODER" = "avifenc" ]; then
-    if avifenc -q 63 --ignore-icc --speed 4 --jobs 4 --yuv 420 "$jpg" "$avif" >/dev/null 2>&1; then
+    # subsampling by source color space: grayscale sources (e.g. Leica
+    # Monochrom) → 4:0:0 (yuv400, no chroma planes — correct, smaller, and
+    # no risk of a faint chroma cast); color sources → 4:2:0 (yuv420,
+    # standard for photographic thumbnails, visually identical to 4:4:4 at
+    # this size). detected via `sips -g space` (Gray vs RGB).
+    space=$(sips -g space "$jpg" 2>/dev/null | awk '/space:/{print $2}')
+    if [ "$space" = "Gray" ]; then yuv=400; else yuv=420; fi
+    if avifenc -q 63 --ignore-icc --speed 4 --jobs 4 --yuv "$yuv" "$jpg" "$avif" >/dev/null 2>&1; then
       A_OK=$((A_OK+1)); printf "."
     else
       A_FAIL=$((A_FAIL+1)); printf "✗"
