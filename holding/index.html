@@ -396,6 +396,8 @@ footer .signature small { color: oklch(56.93% 0 0); }
 .xp-tooltip .filename {
   font-weight: bold;
   color: oklch(15.00% 0 0);
+  /* reserve space for the flash bolt corner indicator when present */
+  padding-right: 14px;
 }
 .xp-tooltip .row {
   color: oklch(38.00% 0 0);
@@ -403,6 +405,22 @@ footer .signature small { color: oklch(56.93% 0 0); }
 }
 .xp-tooltip .row + .row { margin-top: 1px; }
 .xp-tooltip .row.dim { color: oklch(55% 0 0); }
+
+/* flash bolt: pinned to the top-right corner of the tooltip when the
+   EXIF Flash field matches "Fired" or "On". amber color reads as "lit",
+   small drop-shadow gives a faint glow against the cream background.
+   the <span> wraps an inline SVG path; sized to ~8×12px so it sits
+   beside the filename without dominating it. */
+.xp-tooltip .flash-bolt {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  color: oklch(58% 0.2 75);
+  filter: drop-shadow(0 0 1.5px oklch(58% 0.2 75 / 0.4));
+}
+.xp-tooltip .flash-bolt svg { display: block; }
 
 /* album popover: just the cover image in a contact-sheet-style raised
    frame. textual metadata stays in the row itself — no point repeating
@@ -769,11 +787,12 @@ footer .signature small { color: oklch(56.93% 0 0); }
         const other = [];
         if (exif.white_balance && exif.white_balance !== "Auto")
           other.push("WB " + exif.white_balance);
-        if (exif.flash && /\bFired\b|\bOn\b/i.test(exif.flash))
-          other.push("Flash");
         if (exif.color_space && exif.color_space !== "sRGB")
           other.push(exif.color_space);
         if (other.length) rows.push(other.join(" · "));
+        // (flash is handled separately, as a corner-positioned bolt
+        //  outside the text-row system — see the buildPhotoContent
+        //  return value below.)
 
         // date last
         if (exif.date) {
@@ -782,8 +801,19 @@ footer .signature small { color: oklch(56.93% 0 0); }
           rows.push("uploaded " + fmtDate(slot.dataset.uploaded));
         }
 
+        // small SVG bolt in the top-right corner when flash fired.
+        // sits outside the text-row system so it can be positioned
+        // absolutely without interfering with the esc()-protected
+        // text rendering above.
+        const flashIcon = (exif.flash && /\bFired\b|\bOn\b/i.test(exif.flash))
+          ? `<span class="flash-bolt" title="${esc(exif.flash)}">` +
+              `<svg viewBox="0 0 8 12" width="8" height="12">` +
+                `<path d="M5 0 L0 7 L3.2 7 L2.5 12 L8 5 L5 5 Z" fill="currentColor"/>` +
+              `</svg></span>`
+          : "";
         return `<div class="filename">${esc(filename)}</div>` +
-               rows.map(r => `<div class="row">${esc(r)}</div>`).join("");
+               rows.map(r => `<div class="row">${esc(r)}</div>`).join("") +
+               flashIcon;
       }
 
       // artist tooltip: just the profile photo in an XP-frame border.

@@ -345,7 +345,24 @@ hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px
   font-family: "Trebuchet MS", Verdana, sans-serif;
   font-size: 10.5px;
   letter-spacing: 0.01em;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
+
+/* flash bolt indicator — only renders when EXIF Flash matches Fired/On.
+   bolt is amber-warm and slightly off-vertical, like the indicator on
+   the actual Fuji LCD. drop-shadow gives a faint "lit" feel against
+   either tooltip background. */
+.flash-bolt {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  margin-left: 4px;
+}
+.flash-bolt svg { display: block; }
+.lcd-tip   .flash-bolt { color: oklch(85% 0.18 85); filter: drop-shadow(0 0 2px oklch(85% 0.18 85 / 0.6)); }
+.xp-cam-tip .flash-bolt { color: oklch(58% 0.18 75); }
 .xp-cam-tip .histogram-frame {
   margin: 8px 8px 0;
   border: 1px solid oklch(61.14% 0.0611 253.60);
@@ -575,7 +592,7 @@ footer {
     </p>
     <div class="row" id="photo-row">
       <a class="slot fuji-slot" href="#"
-         data-stem="XT508687"
+         data-stem="XT508687" data-flash="No Flash"
          data-date="2026:02:01 21:53:14"
          data-dims="5152&times;7728"
          data-ss="1/180" data-aper="F5.6" data-iso="3200" data-ev="-0.3"
@@ -586,7 +603,7 @@ footer {
         <img src="/images/XT508687.avif?v=10" alt="">
       </a>
       <a class="slot fuji-slot" href="#"
-         data-stem="XT508940"
+         data-stem="XT508940" data-flash="No Flash"
          data-date="2026:02:07 01:46:34"
          data-dims="5152&times;7728"
          data-ss="1/500" data-aper="F4.0" data-iso="200" data-ev="-1"
@@ -597,7 +614,7 @@ footer {
         <img src="/images/XT508940.avif?v=10" alt="">
       </a>
       <a class="slot fuji-slot" href="#"
-         data-stem="XT508756"
+         data-stem="XT508756" data-flash="Fired, Red-eye reduction"
          data-date="2026:02:03 22:21:12"
          data-dims="5152&times;7728"
          data-ss="1/500" data-aper="F10" data-iso="1000" data-ev="0"
@@ -617,7 +634,7 @@ footer {
     </p>
     <div class="row" id="xp-cam-row">
       <a class="slot xp-cam-slot" href="#"
-         data-stem="XT508687"
+         data-stem="XT508687" data-flash="No Flash"
          data-date="2026:02:01 21:53:14"
          data-dims="5152&times;7728"
          data-ss="1/180" data-aper="f/5.6" data-iso="3200" data-ev="-0.3"
@@ -628,7 +645,7 @@ footer {
         <img src="/images/XT508687.avif?v=10" alt="">
       </a>
       <a class="slot xp-cam-slot" href="#"
-         data-stem="XT508940"
+         data-stem="XT508940" data-flash="No Flash"
          data-date="2026:02:07 01:46:34"
          data-dims="5152&times;7728"
          data-ss="1/500" data-aper="f/4.0" data-iso="200" data-ev="-1"
@@ -639,7 +656,7 @@ footer {
         <img src="/images/XT508940.avif?v=10" alt="">
       </a>
       <a class="slot xp-cam-slot" href="#"
-         data-stem="XT508756"
+         data-stem="XT508756" data-flash="Fired, Red-eye reduction"
          data-date="2026:02:03 22:21:12"
          data-dims="5152&times;7728"
          data-ss="1/500" data-aper="f/10" data-iso="1000" data-ev="0"
@@ -866,6 +883,16 @@ footer {
     return `<svg class="hist-svg" viewBox="0 0 ${n - 1} 32" preserveAspectRatio="none">${luma}${r}${g}${b}</svg>`;
   };
 
+  // small flash bolt icon shown when the EXIF Flash tag matches
+  // "Fired" or "On" (the standard strings exiftool emits when the
+  // flash actually went off). currentColor lets each tooltip skin
+  // pick its own bolt color via CSS. the icon doesn't render at all
+  // when the flash didn't fire — its presence IS the indicator.
+  const flashBolt = (raw) => {
+    if (!raw || !/\bFired\b|\bOn\b/i.test(raw)) return "";
+    return `<span class="flash-bolt" title="${raw.replace(/"/g, "&quot;")}"><svg viewBox="0 0 8 12" width="8" height="12"><path d="M5 0 L0 7 L3.2 7 L2.5 12 L8 5 L5 5 Z" fill="currentColor"/></svg></span>`;
+  };
+
   // Fuji LCD: build readout from real data-* attrs. data-histogram is
   // a JSON blob with {l, r, g, b} channel arrays; renderHistogramSvg
   // parses it directly.
@@ -883,7 +910,7 @@ footer {
     return `
       <div class="histogram">${renderHistogramSvg(a.histogram)}</div>
       <div class="body">
-        <div class="stem">${a.stem}.jpg</div>
+        <div class="stem">${a.stem}.jpg ${flashBolt(a.flash)}</div>
         <div class="meta-line">${fmtDate(a.date)} &middot; ${a.dims}</div>
         <div class="exposure">S.S.${a.ss}  ${a.aper}  ISO${a.iso}</div>
         <div class="ev-comp">&boxbox; ${a.ev} EV</div>
@@ -920,7 +947,7 @@ footer {
     ].filter(([_, v]) => v && v !== "undefined")
      .map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
     return `
-      <div class="header">${a.stem}.jpg</div>
+      <div class="header"><span>${a.stem}.jpg</span>${flashBolt(a.flash)}</div>
       <div class="histogram-frame">${renderHistogramSvg(a.histogram)}</div>
       <div class="body">
         <div class="exposure">${a.ss}  ${a.aper}  ISO ${a.iso}</div>
