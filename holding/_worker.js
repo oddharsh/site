@@ -245,45 +245,49 @@ async function route(request, env, ctx) {
 // over (the client-side scripts detect pre-rendered state via "already
 // has href?" / "already populated?" checks and bail early).
 async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
-  const res = await env.ASSETS.fetch(request);
-
-  // tracks (from KV cache populated by /rn/tracks scraper)
-  let tracksPayload = null;
-  if (env.RN_KV) {
+  // the page is no-store, so the worker runs on every visit. these reads
+  // are mutually independent (the static asset, the tracks payload, the
+  // photo manifest, the counter value), so fire them concurrently instead
+  // of awaiting each in turn — collapses ~3 serial KV round-trips + the
+  // ASSETS fetch into roughly one wall-clock read. the tracks lookup stays
+  // internally sequential because tracks:<pid> needs the playlist-id first.
+  const tracksChain = (async () => {
+    if (!env.RN_KV) return null;
     try {
       const pid = await env.RN_KV.get("playlist-id");
       if (pid && /^[0-9A-Za-z]{22}$/.test(pid)) {
-        tracksPayload = await env.RN_KV.get(`tracks:${pid}`, "json");
+        return await env.RN_KV.get(`tracks:${pid}`, "json");
       }
     } catch {}
-  }
+    return null;
+  })();
+  const manifestP = getImagesManifest(env, ctx).then(
+    arr => (Array.isArray(arr) && arr.length ? arr : null),
+    () => null
+  );
+  const counterReadP = env.RN_KV
+    ? env.RN_KV.get("counter:visits").catch(() => null)
+    : Promise.resolve(null);
 
-  // photo grid (from images manifest — already KV-cached via getImagesManifest).
-  // getImagesManifest returns a bare array of photo entries; handleImagesManifest
-  // wraps that in { photos: [...], count } for the public JSON endpoint.
-  let photos = null;
-  try {
-    const arr = await getImagesManifest(env, ctx);
-    if (Array.isArray(arr) && arr.length) {
-      photos = arr;
-    }
-  } catch {}
+  const [res, tracksPayload, photos, counterRaw] = await Promise.all([
+    env.ASSETS.fetch(request),
+    tracksChain,
+    manifestP,
+    counterReadP,
+  ]);
 
-  // visitor counter — read current, increment, fire-and-forget write.
-  // honest classic-90s-counter behavior: counts every homepage GET, no
-  // session dedup, no cookie. concurrent reads race on the increment so
-  // under heavy contention the count drifts slightly low, which is fine
-  // for a decorative footer pill. seed externally if you want a non-zero
-  // starting point:
+  // visitor counter — increment the value read above + fire-and-forget the
+  // write. honest classic-90s-counter behavior: counts every homepage GET,
+  // no session dedup, no cookie. concurrent visits race on the increment so
+  // under heavy contention the count drifts slightly low, which is fine for
+  // a decorative footer pill. seed with:
   //   wrangler kv key put --namespace-id="<id>" "counter:visits" 42 --remote
   let counterStr = null;
   if (env.RN_KV) {
-    try {
-      const cur  = parseInt(await env.RN_KV.get("counter:visits") || "0", 10) || 0;
-      const next = cur + 1;
-      counterStr = String(next).padStart(6, "0");
-      ctx.waitUntil(env.RN_KV.put("counter:visits", String(next)));
-    } catch {}
+    const cur  = parseInt(counterRaw || "0", 10) || 0;
+    const next = cur + 1;
+    counterStr = String(next).padStart(6, "0");
+    ctx.waitUntil(env.RN_KV.put("counter:visits", String(next)));
   }
 
   // bail if no dynamic data is available — the static HTML's inline
@@ -549,10 +553,11 @@ const R2_EXT_PRIORITY = {
 // once. used as a `?v=<N>` suffix in the manifest's thumb URLs. Cloudflare
 // includes the query string in the cache key by default, so changing this
 // produces a fresh cache lookup that doesn't see prior stale 404s.
-// (bumped to 10 when dropping the WebP middle tier; 11 when grid thumbs
-// were resized 1200px → 500px, which reuses the same filenames so the
-// ?v= bump is what busts the edge cache for the new, smaller bytes.)
-const THUMB_VERSION = 11;
+// (10 when dropping WebP; 11 when grid thumbs went 1200px → 500px; 12
+// when AVIF re-encoded at higher quality (CQ30 → -q63, ~12KB → ~16KB
+// mean) + 2 stale Leica thumbs finally rebuilt. same filenames each
+// time, so the ?v= bump is what busts the edge cache for the new bytes.)
+const THUMB_VERSION = 12;
 
 async function getImagesManifest(env, ctx) {
   let manifest = null;
@@ -601,7 +606,20 @@ async function getImagesManifest(env, ctx) {
     // catches "format not supported" — it does NOT catch DECODE failures.
     // AVIF decode failures historically caused broken images here; if
     // they recur, the fix is to demote AVIF entirely, not add fallbacks.
+    // strip the 64-bin RGB+L histogram out of the EXIF that goes into the
+    // manifest. the manifest is read + JSON-parsed by the worker on EVERY
+    // homepage hit (the page is no-store), and the histograms are ~108KB
+    // of the blob that nothing on the live site consumes — the homepage
+    // tooltip never shows them and the garage demo inlines its own copies.
+    // keeping them here meant parsing 108KB per request only to discard it.
+    // they stay in /images/metadata.json (author-time data) for any future
+    // Fuji-LCD-on-homepage work; they just don't ride the hot path.
     const v = THUMB_VERSION;
+    const stripHistogram = (e) => {
+      if (!e) return null;
+      const { histogram, ...rest } = e;
+      return rest;
+    };
     manifest = [...byStem.entries()].map(([stem, o]) => ({
       full:       o.key,                     // R2 key, e.g. "XT507333.JPG"
       thumb_avif: `${stem}.avif?v=${v}`,     // Pages static AVIF (primary)
@@ -609,7 +627,7 @@ async function getImagesManifest(env, ctx) {
       stem,
       size:       o.size,                    // R2 object size in bytes
       uploaded:   o.uploaded ? new Date(o.uploaded).toISOString() : null,
-      exif:       exifByStem[stem] || null,  // inlined per-photo EXIF
+      exif:       stripHistogram(exifByStem[stem]),  // inlined per-photo EXIF, sans histogram
     })).sort((a, b) => a.full.localeCompare(b.full));
 
     if (env.RN_KV) {

@@ -227,7 +227,7 @@ while IFS= read -r f; do
     continue
   fi
   if [ "$AVIF_ENCODER" = "avifenc" ]; then
-    if avifenc --min 30 --max 30 --speed 4 --jobs 4 --yuv 420 "$jpg" "$avif" >/dev/null 2>&1; then
+    if avifenc -q 63 --ignore-icc --speed 4 --jobs 4 --yuv 420 "$jpg" "$avif" >/dev/null 2>&1; then
       A_OK=$((A_OK+1)); printf "."
     else
       A_FAIL=$((A_FAIL+1)); printf "✗"
