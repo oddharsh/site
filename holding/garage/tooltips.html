@@ -8,6 +8,16 @@
 <link rel="canonical" href="https://aadhar.sh/garage/tooltips">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='4' y='25' width='24' height='3' rx='0.5' fill='%231a1a1a'/><path d='M 16 4 L 9 25 L 23 25 Z' fill='%23ff6600'/><path d='M 11.3 18 L 20.7 18 L 21.7 21 L 10.3 21 Z' fill='%23ffffff'/><path d='M 13.7 11 L 18.3 11 L 19 13 L 13 13 Z' fill='%23ffffff'/></svg>">
 <style>
+/* --x/--y carry the cursor position (clientX/Y in px), written by JS on
+   pointermove. registering them as typed <length> properties (instead of
+   plain custom properties) lets CSS *transition* them — so the tooltip
+   eases toward the cursor instead of hard-snapping, with no JS rAF lerp.
+   the browser interpolates the value; the translate() that consumes it
+   updates each frame. initial-value keeps the first paint sane before
+   the first pointer event lands. */
+@property --x { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@property --y { syntax: "<length>"; inherits: false; initial-value: 0px; }
+
 /* shared XP window chrome */
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
@@ -122,9 +132,17 @@ hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px
    entirely in CSS now; no getBoundingClientRect from JS. */
 .lcd-tip, .xp-cam-tip, .vinyl-tip {
   transform: translate(
-    clamp(8px, calc(var(--x, 0px) + 16px), calc(100vw - 100% - 8px)),
-    clamp(8px, calc(var(--y, 0px) + 16px), calc(100vh - 100% - 8px))
+    clamp(8px, calc(var(--x) + 16px), calc(100vw - 100% - 8px)),
+    clamp(8px, calc(var(--y) + 16px), calc(100vh - 100% - 8px))
   );
+  /* 55ms ease gives a subtle magnetic catch-up to the cursor — present
+     enough to feel alive, short enough not to read as lag. set to 0ms
+     (or delete) for a hard snap. only the position eases; opacity is
+     handled by each tip's own transition. respects reduced-motion below. */
+  transition: --x 55ms linear, --y 55ms linear;
+}
+@media (prefers-reduced-motion: reduce) {
+  .lcd-tip, .xp-cam-tip, .vinyl-tip { transition: none; }
 }
 
 /* Fuji X-T LCD readout (photos), cursor-following */
@@ -844,20 +862,31 @@ footer {
   function attach({ tip, target, root, render }) {
     let activeSlot = null;
 
-    root.addEventListener("mouseover", (e) => {
+    root.addEventListener("pointerover", (e) => {
       const slot = e.target.closest(target);
       if (!slot || slot === activeSlot) return;
       activeSlot = slot;
+      const wasOpen = tip.matches(":popover-open");
       const out = render(slot);
       if (typeof out === "string") tip.innerHTML = out;
       else if (typeof out === "function") out(tip);
-      place(tip, e);
-      if (!tip.matches(":popover-open")) tip.showPopover();
+      if (!wasOpen) {
+        // genuine first show: jump straight to the cursor instead of
+        // easing in from wherever it last rested. when already open
+        // (gliding slot → slot) we keep the ease so it tracks smoothly.
+        tip.style.transition = "none";
+        place(tip, e);
+        tip.offsetWidth;               // flush the no-transition jump
+        tip.style.transition = "";     // restore CSS easing for moves
+        tip.showPopover();
+      } else {
+        place(tip, e);
+      }
     });
-    root.addEventListener("mousemove", (e) => {
+    root.addEventListener("pointermove", (e) => {
       if (tip.matches(":popover-open")) place(tip, e);
     }, { passive: true });
-    root.addEventListener("mouseout", (e) => {
+    root.addEventListener("pointerout", (e) => {
       const stillIn = e.relatedTarget && root.contains(e.relatedTarget);
       if (stillIn) return;
       if (tip.matches(":popover-open")) tip.hidePopover();
