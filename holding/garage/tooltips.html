@@ -592,7 +592,7 @@ footer {
     </p>
     <div class="row" id="photo-row">
       <a class="slot fuji-slot" href="#"
-         data-stem="XT508687" data-flash="No Flash"
+         data-stem="XT508687" data-camera="FUJIFILM X-T50" data-lens="XF35mmF1.4 R" data-focal="53 mm" data-flash="No Flash"
          data-date="2026:02:01 21:53:14"
          data-dims="5152&times;7728"
          data-ss="1/180" data-aper="F5.6" data-iso="3200" data-ev="-0.3"
@@ -603,7 +603,7 @@ footer {
         <img src="/images/XT508687.avif?v=10" alt="">
       </a>
       <a class="slot fuji-slot" href="#"
-         data-stem="XT508940" data-flash="No Flash"
+         data-stem="XT508940" data-camera="FUJIFILM X-T50" data-lens="XF35mmF1.4 R" data-focal="53 mm" data-flash="No Flash"
          data-date="2026:02:07 01:46:34"
          data-dims="5152&times;7728"
          data-ss="1/500" data-aper="F4.0" data-iso="200" data-ev="-1"
@@ -614,7 +614,7 @@ footer {
         <img src="/images/XT508940.avif?v=10" alt="">
       </a>
       <a class="slot fuji-slot" href="#"
-         data-stem="XT508756" data-flash="Fired, Red-eye reduction"
+         data-stem="XT508756" data-camera="FUJIFILM X-T50" data-lens="XF35mmF1.4 R" data-focal="53 mm" data-flash="Fired, Red-eye reduction"
          data-date="2026:02:03 22:21:12"
          data-dims="5152&times;7728"
          data-ss="1/500" data-aper="F10" data-iso="1000" data-ev="0"
@@ -634,7 +634,7 @@ footer {
     </p>
     <div class="row" id="xp-cam-row">
       <a class="slot xp-cam-slot" href="#"
-         data-stem="XT508687" data-flash="No Flash"
+         data-stem="XT508687" data-camera="FUJIFILM X-T50" data-lens="XF35mmF1.4 R" data-focal="53 mm" data-flash="No Flash"
          data-date="2026:02:01 21:53:14"
          data-dims="5152&times;7728"
          data-ss="1/180" data-aper="f/5.6" data-iso="3200" data-ev="-0.3"
@@ -645,7 +645,7 @@ footer {
         <img src="/images/XT508687.avif?v=10" alt="">
       </a>
       <a class="slot xp-cam-slot" href="#"
-         data-stem="XT508940" data-flash="No Flash"
+         data-stem="XT508940" data-camera="FUJIFILM X-T50" data-lens="XF35mmF1.4 R" data-focal="53 mm" data-flash="No Flash"
          data-date="2026:02:07 01:46:34"
          data-dims="5152&times;7728"
          data-ss="1/500" data-aper="f/4.0" data-iso="200" data-ev="-1"
@@ -656,7 +656,7 @@ footer {
         <img src="/images/XT508940.avif?v=10" alt="">
       </a>
       <a class="slot xp-cam-slot" href="#"
-         data-stem="XT508756" data-flash="Fired, Red-eye reduction"
+         data-stem="XT508756" data-camera="FUJIFILM X-T50" data-lens="XF35mmF1.4 R" data-focal="53 mm" data-flash="Fired, Red-eye reduction"
          data-date="2026:02:03 22:21:12"
          data-dims="5152&times;7728"
          data-ss="1/500" data-aper="f/10" data-iso="1000" data-ev="0"
@@ -910,11 +910,17 @@ footer {
       ["H-Tn",  a.htn],   ["S-Tn",  a.stn],
       ["COL",   a.col],   ["GRN",   a.grn],
     ].map(([l, v]) => `<div class="cell"><span class="label">${l}</span><span class="val">${v || "—"}</span></div>`).join("");
+    // camera + lens summary line. abbreviate "FUJIFILM" to "FUJI" to
+    // fit the 240px-wide LCD comfortably. focal length tucked in
+    // alongside lens model.
+    const body = (a.camera || "").replace(/^FUJIFILM\b/, "FUJI");
+    const lensLine = [body, a.lens, a.focal].filter(Boolean).join(" · ");
     return `
       <div class="histogram">${renderHistogramSvg(a.histogram)}</div>
       <div class="body">
         <div class="stem">${a.stem}.jpg ${flashBolt(a.flash)}</div>
         <div class="meta-line">${fmtDate(a.date)} &middot; ${a.dims}</div>
+        ${lensLine ? `<div class="meta-line">${lensLine}</div>` : ""}
         <div class="exposure">S.S.${a.ss}  ${a.aper}  ISO${a.iso}</div>
         <div class="ev-comp">&boxbox; ${a.ev} EV</div>
         <div class="recipe-grid">${cells}</div>
@@ -939,7 +945,12 @@ footer {
     if (isOn(chromeBlue)) chromeParts.push(`blue ${chromeBlue}`);
     const chromeVal = chromeParts.length ? chromeParts.join(" · ") : "off";
 
+    // lens summary glues lens model + focal length into one row value
+    // ("XF35mmF1.4 R · 53 mm"). camera body gets its own row.
+    const lensSummary = [a.lens, a.focal].filter(Boolean).join(" · ");
     const rows = [
+      ["Body",       a.camera],
+      ["Lens",       lensSummary],
       ["Film",       a.film],
       ["Dyn. range", a.dr],
       ["White bal",  a.wb],
