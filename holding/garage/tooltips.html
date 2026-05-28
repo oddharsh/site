@@ -626,30 +626,27 @@ footer {
       Hover any row. A square album cover with a paper-mat border and a slight <code>-6&deg;</code> tilt floats at the cursor, like pulling a sleeve out to read the front. Same architecture as the photo tooltip; the row text stays put.
     </p>
     <ol class="vinyl-demo" id="track-row">
-      <li data-art="oklch(58% 0.18 28)">
+      <li data-art="https://image-cdn-fa.spotifycdn.com/image/ab67616d00001e0246f9bf1154c7205b0e8b1667">
         <span class="duration">3:54</span>
         <span class="title">Guild (feat. Mac Miller)</span><span class="sep">&mdash;</span><span class="artist">Earl Sweatshirt, Mac Miller</span>
       </li>
-      <li data-art="oklch(38% 0.08 200)">
+      <li data-art="https://image-cdn-fa.spotifycdn.com/image/ab67616d00001e02f6d0c96fb83cc95f7853b9f6">
         <span class="duration">2:14</span>
         <span class="title">GAHDAMN</span><span class="sep">&mdash;</span><span class="artist">Kairee Doty</span>
       </li>
-      <li data-art="oklch(30% 0.06 60)">
+      <li data-art="https://image-cdn-fa.spotifycdn.com/image/ab67616d00001e02e098f51a1a2ebb827dc6099a">
         <span class="duration">4:49</span>
         <span class="title">1995</span><span class="sep">&mdash;</span><span class="artist">Freddie Gibbs, The Alchemist</span>
       </li>
-      <li data-art="oklch(70% 0.18 90)">
+      <li data-art="https://image-cdn-fa.spotifycdn.com/image/ab67616d00001e02e70d786c57a3957363561633">
         <span class="duration">3:35</span>
         <span class="title">TRICERATOPS</span><span class="sep">&mdash;</span><span class="artist">Action Bronson, Paul Wall, Lil Yachty</span>
       </li>
-      <li data-art="oklch(45% 0.15 280)">
+      <li data-art="https://image-cdn-fa.spotifycdn.com/image/ab67616d00001e02d269fe9d94eba18fc4a1632d">
         <span class="duration">2:04</span>
         <span class="title">GREEN LIGHT</span><span class="sep">&mdash;</span><span class="artist">colle$ttye</span>
       </li>
     </ol>
-    <p class="note" style="margin-top: -8px;">
-      In production this uses each track's actual <code>data-track-image</code> from the Spotify scrape. For the demo here, a solid color stands in for the album art.
-    </p>
 
     <hr>
 
@@ -885,9 +882,12 @@ footer {
     `;
   };
 
-  // Vinyl: don't re-render whole tooltip, just swap the cover bg.
+  // Vinyl: don't re-render the whole tooltip, just swap the <img> src
+  // on the cover. data-art carries a real Spotify CDN URL per track.
   const renderVinyl = (slot) => (tip) => {
-    tip.querySelector(".cover").style.background = slot.dataset.art || "oklch(50% 0.05 240)";
+    const img = tip.querySelector(".cover img");
+    const url = slot.dataset.art;
+    if (img && url) img.src = url;
   };
 
   attach({
