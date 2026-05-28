@@ -3,10 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>aadharsh's site</title>
-<meta name="description" content="aadharsh's corner of the web. under construction.">
+<title>Aadharsh Pannirselvam</title>
+<meta name="description" content="Aadharsh Pannirselvam — researcher and investor at Archetype, a crypto-native venture firm. Personal site, handwritten, under construction.">
+<meta name="author" content="Aadharsh Pannirselvam">
 <link rel="canonical" href="https://aadhar.sh/">
 <link rel="alternate" type="text/plain" title="llms.txt summary" href="/llms.txt">
+<link rel="alternate" type="text/markdown" title="markdown source" href="/index.md">
 
 <!-- one preconnect — song.link, the per-track click target that every
      visitor with a music-playing intention clicks. previous build had a
@@ -20,9 +22,63 @@
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='4' y='25' width='24' height='3' rx='0.5' fill='%231a1a1a'/><path d='M 16 4 L 9 25 L 23 25 Z' fill='%23ff6600'/><path d='M 11.3 18 L 20.7 18 L 21.7 21 L 10.3 21 Z' fill='%23ffffff'/><path d='M 13.7 11 L 18.3 11 L 19 13 L 13 13 Z' fill='%23ffffff'/></svg>">
 
 <meta property="og:type" content="profile">
-<meta property="og:title" content="aadharsh pannirselvam">
-<meta property="og:description" content="under construction. coming back soon.">
+<meta property="og:title" content="Aadharsh Pannirselvam">
+<meta property="og:description" content="Researcher and investor at Archetype, a crypto-native venture firm. Handwritten personal site.">
 <meta property="og:url" content="https://aadhar.sh/">
+
+<!-- canonical entity graph (schema.org / JSON-LD). this is the machine-
+     readable source of truth for "who is Aadharsh Pannirselvam": one
+     Person node, the WebSite it authors, and the ProfilePage about it,
+     with sameAs consolidating every owned profile so knowledge graphs
+     and answer engines reconcile them to this domain as canonical.
+     non-executable data block — not subject to script-src CSP.
+     keep facts here strictly to what the site actually states; sameAs
+     links must be verified-correct (a wrong one pollutes the graph). -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Person",
+      "@id": "https://aadhar.sh/#person",
+      "name": "Aadharsh Pannirselvam",
+      "url": "https://aadhar.sh/",
+      "jobTitle": "Investor and Researcher",
+      "worksFor": {
+        "@type": "Organization",
+        "name": "Archetype",
+        "url": "https://www.archetype.fund/"
+      },
+      "description": "Researcher and investor at Archetype, a crypto-native venture firm.",
+      "sameAs": [
+        "https://twitter.com/oddhash",
+        "https://open.spotify.com/user/aadharsh2010",
+        "https://curius.app/aadharsh-pannirselvam",
+        "https://beliapp.com/users/aadharsh"
+      ]
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://aadhar.sh/#website",
+      "url": "https://aadhar.sh/",
+      "name": "aadhar.sh",
+      "description": "The handwritten personal site of Aadharsh Pannirselvam.",
+      "inLanguage": "en",
+      "author": { "@id": "https://aadhar.sh/#person" },
+      "publisher": { "@id": "https://aadhar.sh/#person" }
+    },
+    {
+      "@type": "ProfilePage",
+      "@id": "https://aadhar.sh/#webpage",
+      "url": "https://aadhar.sh/",
+      "name": "Aadharsh Pannirselvam",
+      "isPartOf": { "@id": "https://aadhar.sh/#website" },
+      "about": { "@id": "https://aadhar.sh/#person" },
+      "mainEntity": { "@id": "https://aadhar.sh/#person" }
+    }
+  ]
+}
+</script>
 
 <style>
 /* ─── personal homepage, circa 2003 ────────────────────────────────────

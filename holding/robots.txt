@@ -1,21 +1,25 @@
 # robots.txt for aadhar.sh
 #
-# policy follows the Content Signals spec (https://contentsignals.org)
-# preserved from cloudflare's managed default: traditional search welcome,
-# AI training is not.
+# policy follows the Content Signals spec (https://contentsignals.org).
+# the site is meant to be the canonical, machine-readable source of truth
+# about Aadharsh Pannirselvam, so all three signals are open: traditional
+# search, AI input (agents/answer-engines reading at query time to ground
+# a response), and AI training.
 #
-# admin / action / api / transparency endpoints are excluded from indexing.
+# IMPORTANT — Cloudflare dependency: if the zone's managed "Block AI Bots"
+# feature is enabled, Cloudflare prepends a Disallow block for known AI
+# user-agents that OVERRIDES the ai-input/ai-train signals below. for
+# "allow everything" to actually take effect, that feature must be turned
+# OFF in the Cloudflare dashboard (Security -> Bots / AI Crawl Control).
+# this file alone cannot undo a managed block.
 #
-# specific AI-training crawlers are NOT listed below — cloudflare's "Block
-# AI Bots" feature already prepends a managed block disallowing them. this
-# file is left intentionally short so the deployed robots.txt isn't
-# duplicating UA rules.
+# admin / action / per-request transparency endpoints stay out of indexing.
 #
 # sitemap reference at the bottom per
 #   https://www.sitemaps.org/protocol.html
 
 User-agent: *
-Content-Signal: search=yes,ai-train=no
+Content-Signal: search=yes,ai-input=yes,ai-train=yes
 Allow: /
 Disallow: /rn/admin
 Disallow: /rn/set
