@@ -2,7 +2,7 @@
 # add-photos.sh — process one or more SOOC photos into the site.
 #
 # per source file, this script:
-#   1. generates a 1200px JPG thumbnail at holding/images/<stem>.jpg
+#   1. generates a 500px JPG thumbnail at holding/images/<stem>.jpg
 #      (this is what the photo grid displays)
 #   2. uploads the original to R2 as aadhar-photos/<filename>
 #      (preserves SOOC bytes; this is what /images/full/<filename> returns)
@@ -33,6 +33,14 @@ PROJECT_DIR="$( cd "$SCRIPT_DIR/../.." && pwd )"
 DEST="$PROJECT_DIR/holding/images"
 TMP="/tmp/aadhar-add-photos-$$"
 NS="3cb8a107c58e47dc9244e75b33401f36"  # RN_KV namespace
+
+# grid thumbnail long-edge in px. the homepage renders each tile at
+# ~204 CSS px (660px window / 3 cols), so 500px covers 2x retina with
+# headroom. was 1200 historically, which oversampled ~9x by area and
+# bloated cold-load bandwidth (the full-res original is what /images/full
+# serves on click, so the thumbnail is never shown larger than the grid).
+# override with THUMB_PX=N if a future layout needs bigger tiles.
+THUMB_PX="${THUMB_PX:-500}"
 
 # preconditions
 if [ $# -eq 0 ]; then
@@ -102,7 +110,7 @@ echo ""
 
 # ── phase 1a: 1200px progressive JPG thumbnails (fallback) ───────────
 # two-stage encode:
-#   1. sips resizes the source down to 1200px on the long edge and writes
+#   1. sips resizes the source down to THUMB_PX (500px default) on the long edge and writes
 #      a near-lossless intermediate JPEG (formatOptions 100). this is
 #      where HEIF/HIF/HEIC decoding happens — sips handles the formats
 #      Apple makes the camera shoot in.
@@ -136,7 +144,7 @@ exif_to_jpegtran() {
   esac
 }
 
-echo "phase 1a — progressive JPG thumbnails (1200px, jpegli q82, EXIF-rotated)"
+echo "phase 1a — progressive JPG thumbnails (${THUMB_PX}px, jpegli q82, EXIF-rotated)"
 T_OK=0; T_SKIP=0; T_FAIL=0
 INTER="$TMP/jpg_intermediate"
 mkdir -p "$INTER"
@@ -153,7 +161,7 @@ while IFS= read -r f; do
 
   # 1. resize + decode with sips (handles HEIF/HIF natively). near-lossless
   #    JPEG intermediate keeps the bridge between formats clean.
-  if ! sips -Z 1200 -s format jpeg --setProperty formatOptions 100 "$f" --out "$mid" >/dev/null 2>&1; then
+  if ! sips -Z "$THUMB_PX" -s format jpeg --setProperty formatOptions 100 "$f" --out "$mid" >/dev/null 2>&1; then
     T_FAIL=$((T_FAIL+1)); printf "✗"; continue
   fi
 
@@ -198,7 +206,7 @@ echo ""
 # NB: <picture>'s type-fallback only catches "format not supported";
 # decode failures will NOT cascade to phase 1a. if browsers start
 # reporting broken images, demote AVIF rather than layering on fallbacks.
-echo "phase 1b — AVIF thumbnails (1200px, picture primary)"
+echo "phase 1b — AVIF thumbnails (${THUMB_PX}px, picture primary)"
 A_OK=0; A_SKIP=0; A_FAIL=0
 if command -v avifenc >/dev/null 2>&1; then
   AVIF_ENCODER="avifenc"

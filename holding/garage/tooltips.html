@@ -111,6 +111,22 @@ hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px
   object-fit: cover;
 }
 
+/* cursor-following position for all three popovers. JS writes --x/--y
+   (the cursor's clientX/clientY in px) on mousemove; CSS does the rest.
+   the 16px offset trails the tooltip below-right of the cursor. clamp()
+   keeps it on-screen: the upper bound (100vw/vh - 100% - 8px) uses the
+   element's own size via 100%, so the far edge never crosses the
+   viewport. when the cursor is near the right/bottom edge clamp pins
+   the tooltip against it rather than flipping sides — simpler than the
+   old JS flip and good enough at these tooltip sizes. edge-handling is
+   entirely in CSS now; no getBoundingClientRect from JS. */
+.lcd-tip, .xp-cam-tip, .vinyl-tip {
+  transform: translate(
+    clamp(8px, calc(var(--x, 0px) + 16px), calc(100vw - 100% - 8px)),
+    clamp(8px, calc(var(--y, 0px) + 16px), calc(100vh - 100% - 8px))
+  );
+}
+
 /* Fuji X-T LCD readout (photos), cursor-following */
 .fuji-slot { cursor: crosshair; }
 .lcd-tip {
@@ -812,27 +828,21 @@ footer {
     return `${mm}-${dd}-${d.getFullYear()}, ${hh}:${min}`;
   };
 
-  function attach({ tip, target, root, render }) {
-    let pendingX = 0, pendingY = 0, frame = 0, tipW = 0, tipH = 0, activeSlot = null;
+  // cursor tracking is two CSS custom-property writes per move. the
+  // tooltip's CSS positions itself off --x/--y with a clamp() that
+  // keeps it on-screen (see the shared `.lcd-tip, .xp-cam-tip,
+  // .vinyl-tip { transform }` rule). no rAF, no getBoundingClientRect,
+  // no resize listener — the browser batches the custom-property-driven
+  // transform to its own frame cadence, and edge-flipping is pure CSS.
+  // lighter than the prior rAF + measure() approach in both code and
+  // per-move work (no layout reads).
+  const place = (tip, e) => {
+    tip.style.setProperty("--x", e.clientX + "px");
+    tip.style.setProperty("--y", e.clientY + "px");
+  };
 
-    const measure = () => {
-      const r = tip.getBoundingClientRect();
-      tipW = r.width; tipH = r.height;
-    };
-    const applyPosition = () => {
-      frame = 0;
-      const off = 18;
-      let x = pendingX + off, y = pendingY + off;
-      if (x + tipW > innerWidth - 8)  x = pendingX - tipW - off;
-      if (y + tipH > innerHeight - 8) y = pendingY - tipH - off;
-      if (x < 4) x = 4;
-      if (y < 4) y = 4;
-      tip.style.transform = `translate3d(${x}px, ${y}px, 0)`;
-    };
-    const sched = (e) => {
-      pendingX = e.clientX; pendingY = e.clientY;
-      if (!frame) frame = requestAnimationFrame(applyPosition);
-    };
+  function attach({ tip, target, root, render }) {
+    let activeSlot = null;
 
     root.addEventListener("mouseover", (e) => {
       const slot = e.target.closest(target);
@@ -841,23 +851,18 @@ footer {
       const out = render(slot);
       if (typeof out === "string") tip.innerHTML = out;
       else if (typeof out === "function") out(tip);
+      place(tip, e);
       if (!tip.matches(":popover-open")) tip.showPopover();
-      measure();
-      sched(e);
     });
     root.addEventListener("mousemove", (e) => {
-      if (tip.matches(":popover-open")) sched(e);
+      if (tip.matches(":popover-open")) place(tip, e);
     }, { passive: true });
     root.addEventListener("mouseout", (e) => {
       const stillIn = e.relatedTarget && root.contains(e.relatedTarget);
       if (stillIn) return;
-      if (frame) { cancelAnimationFrame(frame); frame = 0; }
       if (tip.matches(":popover-open")) tip.hidePopover();
       activeSlot = null;
     });
-    window.addEventListener("resize", () => {
-      if (tip.matches(":popover-open")) measure();
-    }, { passive: true });
   }
 
   // SVG histogram with RGB + luminance channels. input is either a JSON

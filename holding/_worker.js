@@ -549,9 +549,10 @@ const R2_EXT_PRIORITY = {
 // once. used as a `?v=<N>` suffix in the manifest's thumb URLs. Cloudflare
 // includes the query string in the cache key by default, so changing this
 // produces a fresh cache lookup that doesn't see prior stale 404s.
-// (bumped to 10 when dropping the WebP middle tier — every modern
-// browser advertises image/avif natively, so WebP was dead weight.)
-const THUMB_VERSION = 10;
+// (bumped to 10 when dropping the WebP middle tier; 11 when grid thumbs
+// were resized 1200px → 500px, which reuses the same filenames so the
+// ?v= bump is what busts the edge cache for the new, smaller bytes.)
+const THUMB_VERSION = 11;
 
 async function getImagesManifest(env, ctx) {
   let manifest = null;
@@ -1304,6 +1305,43 @@ function decodeEntities(s) {
     .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, " ");
 }
 
+// shared XP window chrome for the server-rendered pages (/around, /bot,
+// /whoareyou, /rn/set). these four used to each carry their own copy of
+// the body gradient + window panel + title-bar + traffic-cone icon +
+// boxed controls + content padding — identical declarations save for the
+// window max-width. a chrome tweak meant editing four places (which is
+// how the /whoareyou and /bot h2 rules drifted apart earlier). this is
+// the one shared source; page-specific rules (h1 sizes, tables, field
+// grids, the whoareyou title-text + control spacing) stay inline per
+// page after the call. only max-width is parameterized.
+function xpChromeCss(maxWidth) {
+  return `
+  * { box-sizing: border-box; }
+  body {
+    background: linear-gradient(180deg, oklch(87.51% 0.0281 248.15) 0%, oklch(94.66% 0.0114 252.09) 220px, oklch(94.66% 0.0114 252.09) 100%);
+    font-family: Verdana, Tahoma, Geneva, sans-serif;
+    font-size: 11pt; line-height: 1.5; color: oklch(21.78% 0 0);
+    margin: 0; padding: 24px 12px 60px; min-height: 100vh;
+  }
+  .window {
+    max-width: ${maxWidth}px; margin: 0 auto; background: oklch(100.00% 0 0);
+    border: 1px solid oklch(61.14% 0.0611 253.60); box-shadow: 4px 4px 0 oklch(61.14% 0.0611 253.60 / 0.35);
+  }
+  .title-bar {
+    background: linear-gradient(180deg, oklch(62.22% 0.1240 251.99) 0%, oklch(49.72% 0.1129 250.87) 50%, oklch(44.15% 0.1179 254.72) 51%, oklch(50.95% 0.1117 250.01) 100%);
+    color: oklch(100.00% 0 0); font-family: "Trebuchet MS", Verdana, sans-serif;
+    font-size: 11pt; font-weight: bold; padding: 4px 8px;
+    border-bottom: 1px solid oklch(41.92% 0.0962 250.51); display: flex;
+    align-items: center; justify-content: space-between;
+  }
+  .title-bar .icon { display: inline-block; width: 16px; height: 16px; margin-right: 6px; background: oklch(69.58% 0.2043 43.49); position: relative; flex-shrink: 0; }
+  .title-bar .icon::before { content: ""; position: absolute; inset: 2px 4px; background: oklch(87.82% 0.0877 66.27); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+  .title-bar .controls span, .title-bar .controls a { display: inline-block; background: oklch(87.51% 0.0281 248.15); color: oklch(41.92% 0.0962 250.51); border: 1px solid oklch(41.92% 0.0962 250.51); padding: 0 5px; margin-left: 2px; font-weight: bold; cursor: default; text-decoration: none; }
+  .title-bar .controls a { cursor: pointer; }
+  .title-bar .controls a:hover, .title-bar .controls a:focus { background: oklch(58.99% 0.2344 26.30); color: oklch(100.00% 0 0); border-color: oklch(37.67% 0.1546 29.23); }
+  .content { padding: 18px 24px 22px; }`;
+}
+
 function renderAroundHtml(report) {
   const rows = report.results.map((r, i) => {
     const ok = !r.error && r.status >= 200 && r.status < 400;
@@ -1332,41 +1370,7 @@ function renderAroundHtml(report) {
 <meta name="description" content="Snapshot of crypto VC homepages I keep tabs on, crawled live by AadharshBot.">
 <meta name="robots" content="noindex">
 <style>
-  * { box-sizing: border-box; }
-  body {
-    background: linear-gradient(180deg, oklch(87.51% 0.0281 248.15) 0%, oklch(94.66% 0.0114 252.09) 220px, oklch(94.66% 0.0114 252.09) 100%);
-    font-family: Verdana, Tahoma, Geneva, sans-serif;
-    font-size: 11pt; line-height: 1.5; color: oklch(21.78% 0 0);
-    margin: 0; padding: 24px 12px 60px; min-height: 100vh;
-  }
-  .window {
-    max-width: 820px; margin: 0 auto; background: oklch(100.00% 0 0);
-    border: 1px solid oklch(61.14% 0.0611 253.60); box-shadow: 4px 4px 0 oklch(61.14% 0.0611 253.60 / 0.35);
-  }
-  .title-bar {
-    background: linear-gradient(180deg, oklch(62.22% 0.1240 251.99) 0%, oklch(49.72% 0.1129 250.87) 50%, oklch(44.15% 0.1179 254.72) 51%, oklch(50.95% 0.1117 250.01) 100%);
-    color: oklch(100.00% 0 0); font-family: "Trebuchet MS", Verdana, sans-serif;
-    font-size: 11pt; font-weight: bold; padding: 4px 8px;
-    border-bottom: 1px solid oklch(41.92% 0.0962 250.51); display: flex;
-    align-items: center; justify-content: space-between;
-  }
-  .title-bar .icon {
-    display: inline-block; width: 16px; height: 16px;
-    margin-right: 6px; background: oklch(69.58% 0.2043 43.49); position: relative; flex-shrink: 0;
-  }
-  .title-bar .icon::before {
-    content: ""; position: absolute; inset: 2px 4px; background: oklch(87.82% 0.0877 66.27);
-    clip-path: polygon(50% 0, 100% 100%, 0 100%);
-  }
-  .title-bar .controls span,
-  .title-bar .controls a {
-    display: inline-block; background: oklch(87.51% 0.0281 248.15); color: oklch(41.92% 0.0962 250.51);
-    border: 1px solid oklch(41.92% 0.0962 250.51); padding: 0 5px; margin-left: 2px;
-    font-weight: bold; cursor: default; text-decoration: none;
-  }
-  .title-bar .controls a { cursor: pointer; }
-  .title-bar .controls a:hover { background: oklch(58.99% 0.2344 26.30); color: oklch(100.00% 0 0); border-color: oklch(37.67% 0.1546 29.23); }
-  .content { padding: 18px 24px 22px; }
+${xpChromeCss(820)}
   h1 {
     font-family: "Trebuchet MS", Verdana, sans-serif; color: oklch(41.92% 0.0962 250.51);
     font-size: 18pt; margin: 0 0 4px; font-weight: bold;
@@ -1461,30 +1465,7 @@ function handleBotPage(request) {
 <title>${BOT_NAME} — aadhar.sh's crawler</title>
 <meta name="description" content="Identity and behavior of AadharshBot, the crawler operated by aadhar.sh.">
 <style>
-  * { box-sizing: border-box; }
-  body {
-    background: linear-gradient(180deg, oklch(87.51% 0.0281 248.15) 0%, oklch(94.66% 0.0114 252.09) 220px, oklch(94.66% 0.0114 252.09) 100%);
-    font-family: Verdana, Tahoma, Geneva, sans-serif;
-    font-size: 11pt; line-height: 1.5; color: oklch(21.78% 0 0);
-    margin: 0; padding: 24px 12px 60px; min-height: 100vh;
-  }
-  .window {
-    max-width: 660px; margin: 0 auto; background: oklch(100.00% 0 0);
-    border: 1px solid oklch(61.14% 0.0611 253.60); box-shadow: 4px 4px 0 oklch(61.14% 0.0611 253.60 / 0.35);
-  }
-  .title-bar {
-    background: linear-gradient(180deg, oklch(62.22% 0.1240 251.99) 0%, oklch(49.72% 0.1129 250.87) 50%, oklch(44.15% 0.1179 254.72) 51%, oklch(50.95% 0.1117 250.01) 100%);
-    color: oklch(100.00% 0 0); font-family: "Trebuchet MS", Verdana, sans-serif;
-    font-size: 11pt; font-weight: bold; padding: 4px 8px;
-    border-bottom: 1px solid oklch(41.92% 0.0962 250.51); display: flex;
-    align-items: center; justify-content: space-between;
-  }
-  .title-bar .icon { display: inline-block; width: 16px; height: 16px; margin-right: 6px; background: oklch(69.58% 0.2043 43.49); position: relative; flex-shrink: 0; }
-  .title-bar .icon::before { content: ""; position: absolute; inset: 2px 4px; background: oklch(87.82% 0.0877 66.27); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
-  .title-bar .controls span, .title-bar .controls a { display: inline-block; background: oklch(87.51% 0.0281 248.15); color: oklch(41.92% 0.0962 250.51); border: 1px solid oklch(41.92% 0.0962 250.51); padding: 0 5px; margin-left: 2px; font-weight: bold; cursor: default; text-decoration: none; }
-  .title-bar .controls a { cursor: pointer; }
-  .title-bar .controls a:hover { background: oklch(58.99% 0.2344 26.30); color: oklch(100.00% 0 0); border-color: oklch(37.67% 0.1546 29.23); }
-  .content { padding: 18px 24px 22px; }
+${xpChromeCss(660)}
   h1 { font-family: "Trebuchet MS", Verdana, sans-serif; font-size: 20pt; color: oklch(41.92% 0.0962 250.51); margin: 0 0 4px; font-weight: bold; }
   h2 { font-family: "Trebuchet MS", Verdana, sans-serif; font-size: 12pt; color: oklch(41.92% 0.0962 250.51); margin: 16px 0 6px; font-weight: bold; line-height: 1.3; }
   h2::after { content: ""; display: block; height: 1px; background: oklch(86.67% 0.0294 259.59); margin-top: 8px; }
@@ -1672,24 +1653,7 @@ function setPage(status, title, bodyHtml) {
 <title>/rn/set — ${esc(title)}</title>
 <meta name="robots" content="noindex">
 <style>
-  * { box-sizing: border-box; }
-  body {
-    font-family: Verdana, Tahoma, Geneva, sans-serif;
-    font-size: 11pt; line-height: 1.5; color: oklch(21.78% 0 0);
-    background: linear-gradient(180deg, oklch(87.51% 0.0281 248.15) 0%, oklch(94.66% 0.0114 252.09) 220px, oklch(94.66% 0.0114 252.09) 100%);
-    margin: 0; padding: 24px 12px 60px; min-height: 100vh;
-  }
-  .window {
-    max-width: 520px; margin: 0 auto; background: oklch(100.00% 0 0);
-    border: 1px solid oklch(61.14% 0.0611 253.60); box-shadow: 4px 4px 0 oklch(61.14% 0.0611 253.60 / 0.35);
-  }
-  .title-bar {
-    background: linear-gradient(180deg, oklch(62.22% 0.1240 251.99) 0%, oklch(49.72% 0.1129 250.87) 50%, oklch(44.15% 0.1179 254.72) 51%, oklch(50.95% 0.1117 250.01) 100%);
-    color: oklch(100.00% 0 0); font-family: "Trebuchet MS", Verdana, sans-serif;
-    font-size: 11pt; font-weight: bold; padding: 4px 8px;
-    border-bottom: 1px solid oklch(41.92% 0.0962 250.51);
-  }
-  .content { padding: 18px 24px 22px; }
+${xpChromeCss(520)}
   h1 {
     font-family: "Trebuchet MS", Verdana, sans-serif; color: oklch(41.92% 0.0962 250.51);
     font-size: 16pt; margin: 0 0 8px;
@@ -1865,80 +1829,11 @@ async function handleWhoareyou(request) {
    beveled data tables that feel like a Windows properties dialog.
    ────────────────────────────────────────────────────────────────── */
 
-* { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; }
-
-body {
-  background: oklch(91.74% 0.0203 238.68);
-  background: linear-gradient(180deg, oklch(87.51% 0.0281 248.15) 0%, oklch(94.66% 0.0114 252.09) 220px, oklch(94.66% 0.0114 252.09) 100%);
-  font-family: Verdana, Tahoma, Geneva, sans-serif;
-  font-size: 11pt;
-  line-height: 1.5;
-  color: oklch(21.78% 0 0);
-  padding: 24px 12px 60px;
-  min-height: 100vh;
-}
-
-.window {
-  max-width: 720px;
-  margin: 0 auto;
-  background: oklch(100.00% 0 0);
-  border: 1px solid oklch(61.14% 0.0611 253.60);
-  box-shadow: 4px 4px 0 oklch(61.14% 0.0611 253.60 / 0.35);
-}
-
-/* fake XP title bar */
-.title-bar {
-  background: linear-gradient(180deg, oklch(62.22% 0.1240 251.99) 0%, oklch(49.72% 0.1129 250.87) 50%, oklch(44.15% 0.1179 254.72) 51%, oklch(50.95% 0.1117 250.01) 100%);
-  color: oklch(100.00% 0 0);
-  font-family: "Trebuchet MS", Verdana, sans-serif;
-  font-size: 11pt;
-  font-weight: bold;
-  padding: 4px 8px;
-  border-bottom: 1px solid oklch(41.92% 0.0962 250.51);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.title-bar .icon {
-  display: inline-block;
-  width: 16px; height: 16px;
-  margin-right: 6px;
-  vertical-align: middle;
-  background: oklch(69.58% 0.2043 43.49);
-  position: relative;
-  flex-shrink: 0;
-}
-.title-bar .icon::before {
-  content: "";
-  position: absolute;
-  inset: 2px 4px;
-  background: oklch(87.82% 0.0877 66.27);
-  clip-path: polygon(50% 0, 100% 100%, 0 100%);
-}
+${xpChromeCss(720)}
+/* whoareyou-specific title-bar extras: the title text flexes to fill,
+   and the boxed _ □ × controls get a touch more letter-spacing. */
 .title-bar .title-text { flex: 1; padding-left: 4px; }
 .title-bar .controls { letter-spacing: 2px; font-family: Tahoma, sans-serif; font-size: 9pt; }
-.title-bar .controls span,
-.title-bar .controls a {
-  display: inline-block;
-  background: oklch(87.51% 0.0281 248.15);
-  color: oklch(41.92% 0.0962 250.51);
-  border: 1px solid oklch(41.92% 0.0962 250.51);
-  padding: 0 5px;
-  margin-left: 2px;
-  font-weight: bold;
-  cursor: default;
-  text-decoration: none;
-}
-.title-bar .controls a { cursor: pointer; }
-.title-bar .controls a:hover,
-.title-bar .controls a:focus {
-  background: oklch(58.99% 0.2344 26.30);
-  color: oklch(100.00% 0 0);
-  border-color: oklch(37.67% 0.1546 29.23);
-}
-
-.content { padding: 18px 24px 22px; }
 
 h1 {
   font-family: "Trebuchet MS", Verdana, sans-serif;
