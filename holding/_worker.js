@@ -330,8 +330,17 @@ async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
   // hover tooltip; target=_blank + rel=noopener on the anchor.
   if (photos) {
     const pick = pickRandom(photos, 9);
-    const slotsHtml = pick.map(p => {
+    const slotsHtml = pick.map((p, i) => {
       const full     = p.full;
+      // first tile: eager + high fetch priority. it's the topmost photo
+      // and a candidate LCP element (the grid sits below the lede, so
+      // it's a coin-flip with the text — but when the photo is LCP this
+      // removes the lazy-load delay + bumps it from Low to High priority).
+      // the other 8 stay lazy. fetchpriority: Chrome 102+/Safari 17.2+,
+      // ignored harmlessly elsewhere.
+      const imgLoad = i === 0
+        ? `loading="eager" fetchpriority="high"`
+        : `loading="lazy"`;
       const sizeAttr = (typeof p.size === "number" && p.size > 0)
         ? ` data-size="${p.size}"` : "";
       const upAttr   = p.uploaded
@@ -355,7 +364,7 @@ async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
              ` data-full="${escAttr(full)}"${sizeAttr}${upAttr}${exifAttr}>` +
         `<picture>` +
           (p.thumb_avif ? `<source type="image/avif" srcset="/images/${escAttr(p.thumb_avif)}">` : "") +
-          `<img alt="" loading="lazy" decoding="async" src="/images/${escAttr(p.thumb_jpg)}">` +
+          `<img alt="" ${imgLoad} decoding="async" src="/images/${escAttr(p.thumb_jpg)}">` +
         `</picture>` +
       `</a>`;
     }).join("");
@@ -1334,6 +1343,10 @@ function decodeEntities(s) {
 // page after the call. only max-width is parameterized.
 function xpChromeCss(maxWidth) {
   return `
+  /* cross-document View Transition opt-in — mirrors the homepage so
+     navigations across the XP-window shell cross-fade. pure CSS,
+     graceful where unsupported. */
+  @view-transition { navigation: auto; }
   * { box-sizing: border-box; }
   body {
     background: linear-gradient(180deg, oklch(87.51% 0.0281 248.15) 0%, oklch(94.66% 0.0114 252.09) 220px, oklch(94.66% 0.0114 252.09) 100%);

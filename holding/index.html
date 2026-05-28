@@ -91,6 +91,16 @@
    underlying sRGB hex, but the source reads modern.
    ─────────────────────────────────────────────────────────────────── */
 
+/* cross-document View Transitions: same-origin navigations between the
+   XP-window pages (/, /bot, /around, /whoareyou, /garage) cross-fade
+   instead of hard-cutting — the windows dissolve into each other, which
+   suits the desktop-shell conceit. pure CSS, no JS. both the leaving and
+   arriving page must opt in, so this rule is mirrored into every page's
+   stylesheet (incl. the worker's shared xpChromeCss). unsupported engines
+   (Firefox today) just navigate instantly — graceful. Chrome 126+/Safari
+   18+. respects reduced-motion automatically (UA skips the animation). */
+@view-transition { navigation: auto; }
+
 * { box-sizing: border-box; }
 
 html, body {
@@ -185,9 +195,12 @@ h1 {
   margin: 0 0 14px;
   color: oklch(38.67% 0 0);
   font-size: 10.5pt;
+  /* pretty: avoids orphan/short last lines in the prose. supported
+     Chrome 117+/Safari 17.5+; treated as `normal` elsewhere (no harm). */
+  text-wrap: pretty;
 }
 
-p { margin: 0 0 12px; }
+p { margin: 0 0 12px; text-wrap: pretty; }
 
 a:link    { color: oklch(42.61% 0.2353 263.74); text-decoration: underline; }
 a:visited { color: oklch(42.09% 0.1935 328.36); }
@@ -224,6 +237,10 @@ hr {
   font-family: "Trebuchet MS", Verdana, sans-serif;
   font-size: 12pt;
   color: oklch(41.92% 0.0962 250.51);
+  /* balance: evens the two lines this heading wraps to on narrow widths
+     instead of leaving one word on line 2. broadly supported; no-op
+     where unsupported. */
+  text-wrap: balance;
   /* 32px bottom matches the 32px top margin on .now-playing so the h2
      (text + ::after rule) sits visually centered between photos and
      tracklist. */
@@ -443,8 +460,14 @@ footer .signature small { color: oklch(56.93% 0 0); }
    will-change (nothing animates), no resize listener. */
 .xp-tooltip {
   position: fixed;
+  /* the element is a popover (top layer). the UA stylesheet gives open
+     popovers inset:0 + margin:auto, which would center it and fight our
+     cursor anchor — neutralize with inset:auto + margin:0, then re-assert
+     the top-left origin the translate() works from. */
+  inset: auto;
   top: 0;
   left: 0;
+  margin: 0;
   transform: translate(
     clamp(4px, calc(var(--x) + 16px), calc(100vw - 100% - 8px)),
     clamp(4px, calc(var(--y) + 16px), calc(100vh - 100% - 8px))
@@ -458,9 +481,23 @@ footer .signature small { color: oklch(56.93% 0 0); }
   box-shadow: 2px 2px 0 oklch(15.00% 0 0 / 0.15);
   pointer-events: none;
   z-index: 10000;
-  display: none;
+  display: none;          /* base/fallback hidden state (also the closed state) */
   max-width: 280px;
   line-height: 1.45;
+}
+/* popover path: gated on :popover-open support so non-supporting engines
+   fall back cleanly (they keep the plain display:none above; the JS sets
+   inline display:block at full opacity for them). where supported, the
+   tooltip fades opacity 0->1 on open (display animates via allow-discrete)
+   while position still hard-snaps — transform is deliberately NOT in the
+   transition list. ~90ms, subtle. */
+@supports selector(:popover-open) {
+  .xp-tooltip {
+    opacity: 0;
+    transition: opacity 90ms ease-out, display 90ms allow-discrete;
+  }
+  .xp-tooltip:popover-open { display: block; opacity: 1; }
+  @starting-style { .xp-tooltip:popover-open { opacity: 0; } }
 }
 .xp-tooltip .filename {
   font-weight: bold;
@@ -614,7 +651,7 @@ footer .signature small { color: oklch(56.93% 0 0); }
     -->
     <!-- XP-style tooltip element, positioned by JS on hover. lives outside
          the photos section so it can fixed-position over anything. -->
-    <div id="xp-tooltip" class="xp-tooltip" aria-hidden="true"></div>
+    <div id="xp-tooltip" class="xp-tooltip" popover="manual" aria-hidden="true"></div>
 
     <section class="photos" aria-label="photographs">
       <a>
@@ -950,8 +987,25 @@ footer .signature small { color: oklch(56.93% 0 0); }
         tip.style.setProperty("--x", lastX + "px");
         tip.style.setProperty("--y", lastY + "px");
       };
+      // show/hide via the Popover API (top layer — no z-index juggling,
+      // and it unlocks the @starting-style fade). guard the calls because
+      // showPopover()/hidePopover() throw if the element is already in the
+      // target state. on engines without popover support (below the modern
+      // target), fall back to a plain display toggle so nothing breaks.
+      const supportsPopover = "popover" in HTMLElement.prototype;
+      const isOpen = () => supportsPopover
+        ? tip.matches(":popover-open")
+        : tip.style.display === "block";
+      const openTip = () => {
+        if (supportsPopover) { if (!tip.matches(":popover-open")) tip.showPopover(); }
+        else tip.style.display = "block";
+      };
+      const closeTip = () => {
+        if (supportsPopover) { if (tip.matches(":popover-open")) tip.hidePopover(); }
+        else tip.style.display = "none";
+      };
       const hideTip = () => {
-        tip.style.display = "none";
+        closeTip();
         activeSlot = null;
       };
       const showTipFor = (target, e) => {
@@ -959,8 +1013,8 @@ footer .signature small { color: oklch(56.93% 0 0); }
         const html = buildContent(target);
         if (!html) { hideTip(); return; }   // e.g. track with no cover yet
         tip.innerHTML = html;
-        tip.style.display = "block";
-        if (e) place(e);
+        if (e) place(e);                     // position before showing (no glide-in)
+        openTip();
       };
 
       document.addEventListener("pointerover", (e) => {
@@ -974,7 +1028,7 @@ footer .signature small { color: oklch(56.93% 0 0); }
       // passive: lets the browser dispatch pointermove without waiting on
       // our handler. the work is two CSS custom-property writes.
       document.addEventListener("pointermove", (e) => {
-        if (tip.style.display === "block") place(e);
+        if (isOpen()) place(e);
       }, { passive: true });
 
       document.addEventListener("pointerout", (e) => {
@@ -1003,14 +1057,14 @@ footer .signature small { color: oklch(56.93% 0 0); }
       let scrollFrame = 0;
       const reevaluateAfterScroll = () => {
         scrollFrame = 0;
-        if (tip.style.display !== "block") return;
+        if (!isOpen()) return;
         const under = document.elementFromPoint(lastX, lastY);
         const newTarget = findTarget(under);
         if (!newTarget) { hideTip(); return; }
         if (newTarget !== activeSlot) showTipFor(newTarget);
       };
       document.addEventListener("scroll", () => {
-        if (tip.style.display !== "block") return;
+        if (!isOpen()) return;
         if (!scrollFrame) scrollFrame = requestAnimationFrame(reevaluateAfterScroll);
       }, { capture: true, passive: true });
     })();
@@ -1147,6 +1201,25 @@ if ("serviceWorker" in navigator) {
   // register on idle so it doesn't compete with first paint
   const reg = () => navigator.serviceWorker.register("/sw.js").catch(() => {});
   "requestIdleCallback" in window ? requestIdleCallback(reg, { timeout: 2000 }) : setTimeout(reg, 1000);
+}
+</script>
+
+<!--
+  Speculation Rules: prerender the two static footer destinations on
+  hover/pointerdown intent, so clicking them is instant. "moderate"
+  eagerness means nothing prefetches until the cursor lingers, so
+  visitors who never hover the footer pay nothing. only /garage and
+  /bot — NOT /around (a live crawl, expensive to run speculatively)
+  or /whoareyou (per-request transparency, pointless to prerender).
+  Chromium-only; other engines ignore the block. allowed under the
+  'unsafe-inline' script-src already in the CSP.
+-->
+<script type="speculationrules">
+{
+  "prerender": [
+    { "where": { "href_matches": "/garage" }, "eagerness": "moderate" },
+    { "where": { "href_matches": "/bot" }, "eagerness": "moderate" }
+  ]
 }
 </script>
 
