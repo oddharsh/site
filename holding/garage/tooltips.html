@@ -871,12 +871,15 @@ footer {
   // parses it directly.
   const renderFujiLCD = (slot) => {
     const a = slot.dataset;
+    // HTML dataset names map data-chr-b → chrB (camelCase). bracket
+    // access by the dashed form returns undefined; was rendering as
+    // the literal string "undefined" before this fix.
     const cells = [
       ["FILM",  a.film],  ["WB",    a.wb],
-      ["CHR",   a.chr],   ["CHR-B", a["chr-b"]],
+      ["CHR",   a.chr],   ["CHR-B", a.chrB],
       ["H-Tn",  a.htn],   ["S-Tn",  a.stn],
       ["COL",   a.col],   ["GRN",   a.grn],
-    ].map(([l, v]) => `<div class="cell"><span class="label">${l}</span><span class="val">${v}</span></div>`).join("");
+    ].map(([l, v]) => `<div class="cell"><span class="label">${l}</span><span class="val">${v || "—"}</span></div>`).join("");
     return `
       <div class="histogram">${renderHistogramSvg(a.histogram)}</div>
       <div class="body">
@@ -895,14 +898,25 @@ footer {
   // not "STR") since the panel isn't pretending to be a tiny LCD.
   const renderXpCam = (slot) => {
     const a = slot.dataset;
+    // chrome FX has two channels (main + blue). when one is "Off" /
+    // "OFF" it means no effect on that channel, so render the active
+    // ones only and omit the inactive parts. avoids "Strong / blue Off"
+    // reading as if both are active.
+    const isOn = v => v && !/^off$/i.test(v);
+    const chromeBlue = a.chrB;
+    const chromeParts = [];
+    if (isOn(a.chr))      chromeParts.push(a.chr);
+    if (isOn(chromeBlue)) chromeParts.push(`blue ${chromeBlue}`);
+    const chromeVal = chromeParts.length ? chromeParts.join(" · ") : "off";
+
     const rows = [
-      ["Film",      a.film],
-      ["Dyn. range",a.dr],
-      ["White bal", a.wb],
-      ["Chrome",    `${a.chr} / blue ${a["chr-b"]}`],
-      ["Grain",     a.grn],
-      ["Tones",     `H ${a.htn}  S ${a.stn}`],
-      ["Color",     a.col],
+      ["Film",       a.film],
+      ["Dyn. range", a.dr],
+      ["White bal",  a.wb],
+      ["Chrome FX",  chromeVal],
+      ["Grain",      a.grn],
+      ["Tones",      `H ${a.htn}  S ${a.stn}`],
+      ["Color",      a.col],
     ].filter(([_, v]) => v && v !== "undefined")
      .map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
     return `
