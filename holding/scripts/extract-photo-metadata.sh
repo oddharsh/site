@@ -27,7 +27,7 @@
 #   drive           - "Single" / "Continuous Low" / etc
 #   date            - DateTimeOriginal (Fuji format: "YYYY:MM:DD HH:MM:SS")
 #   width, height   - orientation-corrected pixel dimensions
-#   histogram       - 64-bin luminance histogram, normalized 0..100
+#   histogram       - { l, r, g, b } each a 64-bin array normalized 0..100
 #                     (computed by photo-histograms.py via Pillow;
 #                     null if Pillow isn't installed)
 #   color_space     - "sRGB" / "Adobe RGB"

@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 """
-photo-histograms.py — compute 64-bin luminance histograms for a folder
-of photos and emit JSON keyed by stem. used by extract-photo-metadata.sh
-to inline real histograms into metadata.json, which the Fuji LCD tooltip
-renders on hover.
+photo-histograms.py — compute 64-bin RGB + luminance histograms for a
+folder of photos and emit JSON keyed by stem. used by
+extract-photo-metadata.sh to inline real histograms into metadata.json,
+which the Fuji LCD tooltip renders on hover.
 
-output shape: {"<stem>": [0..100, 0..100, ...] (64 values), ...}
-the 64 values are normalized so the tallest bin reads 100; the rest are
-proportional. that matches what a camera-back histogram shows (relative
-distribution, not absolute pixel counts), and keeps the JSON small.
+output shape per photo:
+  {"l": [0..100, ...], "r": [...], "g": [...], "b": [...]}
+each channel is 64 bins, normalized so the tallest bin in that channel
+reads 100. matches what a camera-back RGB histogram shows: relative
+distribution per channel, each scaled independently so a heavily
+blue-shifted shot still reads its red and green channels clearly.
 
-requires: Pillow. install with:
-  pip3 install --user pillow
-  # or, if you prefer a venv:
-  python3 -m venv ~/.venvs/aadhar-sh && source ~/.venvs/aadhar-sh/bin/activate && pip install pillow
+requires: Pillow + pillow-heif (for Fuji .HIF files). install with:
+  pip3 install --user pillow pillow-heif
 
 usage:
   ./photo-histograms.py /path/to/sooc-folder/  > histograms.json
@@ -48,19 +48,31 @@ BINS = 64
 THUMB_MAX = 512  # downsample for speed; histogram shape is preserved
 
 
-def histogram_bars(path: Path) -> list[int]:
-    """64-bin luminance histogram, normalized so the tallest bar reads 100."""
+def _bin_normalize(raw: list[int]) -> list[int]:
+    """take a 256-int channel histogram, return 64 bins normalized 0..100."""
+    bin_size = 256 // BINS
+    binned = [sum(raw[i * bin_size:(i + 1) * bin_size]) for i in range(BINS)]
+    peak = max(binned) or 1
+    return [int(round(100 * b / peak)) for b in binned]
+
+
+def histogram_bars(path: Path) -> dict[str, list[int]]:
+    """RGB + luminance histograms, each 64 bins, each normalized 0..100."""
     with Image.open(path) as img:
         # respect EXIF orientation so the histogram matches what the viewer sees
         oriented = ImageOps.exif_transpose(img)
         # downsample to keep this fast on a folder of 100+ photos
         oriented.thumbnail((THUMB_MAX, THUMB_MAX))
+        rgb = oriented.convert("RGB")
         luma = oriented.convert("L")
-        raw = luma.histogram()  # 256 ints
-    bin_size = 256 // BINS
-    binned = [sum(raw[i * bin_size:(i + 1) * bin_size]) for i in range(BINS)]
-    peak = max(binned) or 1
-    return [int(round(100 * b / peak)) for b in binned]
+        rgb_raw = rgb.histogram()   # 768 ints: R then G then B
+        l_raw = luma.histogram()    # 256 ints
+    return {
+        "l": _bin_normalize(l_raw),
+        "r": _bin_normalize(rgb_raw[0:256]),
+        "g": _bin_normalize(rgb_raw[256:512]),
+        "b": _bin_normalize(rgb_raw[512:768]),
+    }
 
 
 def main():
