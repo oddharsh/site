@@ -154,6 +154,23 @@ per RFC 9421 + Web Bot Auth IETF draft. JWKS at
 - The Spotify scraper (`scrapeSpotifyEmbed()`)
 - Any other outbound fetch where being identifiable matters
 
+### DNS-AID (agent discovery)
+
+DNS record, not in this repo — lives in Cloudflare DNS for the zone.
+`_index._agents.aadhar.sh` is a ServiceMode SVCB record
+(`1 aadhar.sh. alpn="h2,h3" port=443 mandatory=alpn,port`, TTL 3600) per
+draft-mozleywilliams-dnsop-dnsaid + RFC 9460. It points agents at this
+host; `llms.txt` plus the JSON endpoints are the discovery surface. The
+zone is already DNSSEC-signed (ECDSAP256SHA256, DS published at the
+registrar), so the SVCB answer is authenticated automatically.
+
+Deliberately only `_index` is published, not `_a2a`: the site has no
+Agent2Agent server, so an `_a2a` record would be a dangling pointer that
+passes a scanner but breaks any agent that connects. Same honesty rule
+as the `/whoareyou` "no third party" claim — don't advertise capability
+the site doesn't actually serve. To verify:
+`dig _index._agents.aadhar.sh SVCB +dnssec +short`.
+
 ### Cloudflare bindings
 
 - **RN_KV** (KV namespace ID `3cb8a107c58e47dc9244e75b33401f36`) — caches the

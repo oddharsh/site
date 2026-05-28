@@ -58,6 +58,14 @@ summary without scraping the page.
   itself when making outbound requests).
 - [/.well-known/security.txt](https://aadhar.sh/.well-known/security.txt):
   Disclosure contacts + scope statement per RFC 9116.
+- `_index._agents.aadhar.sh` (SVCB): DNS for AI Discovery (DNS-AID)
+  entrypoint per draft-mozleywilliams-dnsop-dnsaid. A ServiceMode SVCB
+  record (`alpn=h2,h3`, port 443) pointing agents at this host, where
+  this `llms.txt` and the JSON endpoints above are the discovery
+  surface. The zone is DNSSEC-signed, so validating resolvers get
+  authenticated answers. No `_a2a` record is published because the
+  site does not run an Agent2Agent server; advertising one would be a
+  dangling pointer.
 
 ## Identity
 
