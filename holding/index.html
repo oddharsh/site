@@ -804,11 +804,13 @@ footer .signature small { color: oklch(56.93% 0 0); }
         // small SVG bolt in the top-right corner when flash fired.
         // sits outside the text-row system so it can be positioned
         // absolutely without interfering with the esc()-protected
-        // text rendering above.
+        // text rendering above. 7-point path includes an arrowhead
+        // notch at the bottom — matches the classic camera-flash
+        // icon shape rather than a plain zigzag.
         const flashIcon = (exif.flash && /\bFired\b|\bOn\b/i.test(exif.flash))
           ? `<span class="flash-bolt" title="${esc(exif.flash)}">` +
-              `<svg viewBox="0 0 8 12" width="8" height="12">` +
-                `<path d="M5 0 L0 7 L3.2 7 L2.5 12 L8 5 L5 5 Z" fill="currentColor"/>` +
+              `<svg viewBox="0 0 12 16" width="9" height="12">` +
+                `<path d="M 8 0 L 0 8 L 4 8 L 2 16 L 5 13 L 12 7 L 7 7 Z" fill="currentColor"/>` +
               `</svg></span>`
           : "";
         return `<div class="filename">${esc(filename)}</div>` +

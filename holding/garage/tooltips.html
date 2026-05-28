@@ -885,12 +885,15 @@ footer {
 
   // small flash bolt icon shown when the EXIF Flash tag matches
   // "Fired" or "On" (the standard strings exiftool emits when the
-  // flash actually went off). currentColor lets each tooltip skin
-  // pick its own bolt color via CSS. the icon doesn't render at all
-  // when the flash didn't fire — its presence IS the indicator.
+  // flash actually went off). 7-point path with an arrowhead notch
+  // at the bottom — matches the classic camera-flash icon shape
+  // rather than a plain zigzag bolt. currentColor lets each tooltip
+  // skin pick its own bolt color via CSS. the icon doesn't render
+  // at all when the flash didn't fire — its presence IS the
+  // indicator.
   const flashBolt = (raw) => {
     if (!raw || !/\bFired\b|\bOn\b/i.test(raw)) return "";
-    return `<span class="flash-bolt" title="${raw.replace(/"/g, "&quot;")}"><svg viewBox="0 0 8 12" width="8" height="12"><path d="M5 0 L0 7 L3.2 7 L2.5 12 L8 5 L5 5 Z" fill="currentColor"/></svg></span>`;
+    return `<span class="flash-bolt" title="${raw.replace(/"/g, "&quot;")}"><svg viewBox="0 0 12 16" width="9" height="12"><path d="M 8 0 L 0 8 L 4 8 L 2 16 L 5 13 L 12 7 L 7 7 Z" fill="currentColor"/></svg></span>`;
   };
 
   // Fuji LCD: build readout from real data-* attrs. data-histogram is
