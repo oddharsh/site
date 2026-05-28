@@ -1101,6 +1101,25 @@ footer .signature small { color: oklch(56.93% 0 0); }
         const t = Math.round(ms / 1000);
         return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`;
       };
+      // build the per-artist .np-artist-link spans, EXACTLY as the worker's
+      // SSR does (linkifyArtists in _worker.js). this is what makes the
+      // artist hover-tooltip + click-through work; bare text would break
+      // both. structured artists link to their Spotify page + carry the
+      // profile image for the tooltip; otherwise fall back to a search.
+      const linkifyArtists = (artists, fallbackText) => {
+        if (Array.isArray(artists) && artists.length) {
+          return artists.map(a => {
+            const href = a.spotify_url || `https://open.spotify.com/search/${encodeURIComponent(a.name)}/artists`;
+            const img = a.image_url ? ` data-artist-image="${esc(a.image_url)}"` : "";
+            return `<span class="np-artist-link" data-href="${esc(href)}" data-artist-name="${esc(a.name)}"${img} role="link" tabindex="0">${esc(a.name)}</span>`;
+          }).join(", ");
+        }
+        const raw = fallbackText || (typeof artists === "string" ? artists : "");
+        if (!raw) return "";
+        return String(raw).split(/,\s*/).filter(Boolean).map(name =>
+          `<span class="np-artist-link" data-href="https://open.spotify.com/search/${encodeURIComponent(name)}/artists" data-artist-name="${esc(name)}" role="link" tabindex="0">${esc(name)}</span>`
+        ).join(", ");
+      };
       try {
         const res = await fetch("/rn/tracks");
         const data = await res.json();
@@ -1108,12 +1127,23 @@ footer .signature small { color: oklch(56.93% 0 0); }
           list.innerHTML = '<li class="np-empty">No tracks yet. <a href="/rn">Open on Spotify</a>.</li>';
           return;
         }
+        // render rows at FULL fidelity, identical to the worker SSR path:
+        // the data-track-* attributes are what the hover-tooltip keys off
+        // (findTarget matches `.np-list li[data-track-title]`). the old
+        // minimal fallback omitted them, so music tooltips silently failed
+        // on any visit where SSR didn't populate (cold tracks:<pid> KV).
         list.innerHTML = data.tracks.map(t => {
-          const artists = t.artists_text || (Array.isArray(t.artists) ? t.artists.map(a => a.name).join(", ") : "");
+          const artistsText = t.artists_text || (Array.isArray(t.artists) ? t.artists.map(a => a.name).join(", ") : "");
           const dur = fmt(t.duration_ms);
-          return `<li><a href="${esc(t.song_link_url)}" target="_blank" rel="noopener">${
+          const attrs =
+            ` data-track-title="${esc(t.title)}"` +
+            ` data-track-artists="${esc(artistsText)}"` +
+            (t.image_url   ? ` data-track-image="${esc(t.image_url)}"`   : "") +
+            (t.duration_ms ? ` data-track-duration="${dur}"`            : "") +
+            (t.is_explicit ? ` data-track-explicit="1"`                 : "");
+          return `<li${attrs}><a href="${esc(t.song_link_url)}" target="_blank" rel="noopener">${
             dur ? `<span class="np-duration">${dur}</span>` : ""
-          }<span class="np-title">${esc(t.title)}</span><span class="np-sep">&mdash;</span><span class="np-artist">${esc(artists)}</span>${
+          }<span class="np-title">${esc(t.title)}</span><span class="np-sep">&mdash;</span><span class="np-artist">${linkifyArtists(t.artists, artistsText)}</span>${
             t.is_explicit ? '<span class="np-explicit">E</span>' : ""
           }</a></li>`;
         }).join("");
