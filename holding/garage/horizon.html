@@ -1,0 +1,2491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>horizon — aadhar.sh garage</title>
+<meta name="description" content="Test-driving upcoming web-platform features (text-box-trim, contrast-color, interestfor, anchor positioning) before any of them touch the live aadhar.sh homepage.">
+<link rel="canonical" href="https://aadhar.sh/garage/horizon">
+
+<!-- traffic-cone favicon — same as the rest of the garage -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='4' y='25' width='24' height='3' rx='0.5' fill='%231a1a1a'/><path d='M 16 4 L 9 25 L 23 25 Z' fill='%23ff6600'/><path d='M 11.3 18 L 20.7 18 L 21.7 21 L 10.3 21 Z' fill='%23ffffff'/><path d='M 13.7 11 L 18.3 11 L 19 13 L 13 13 Z' fill='%23ffffff'/></svg>">
+
+<meta property="og:type" content="website">
+<meta property="og:title" content="horizon — aadhar.sh garage">
+<meta property="og:description" content="Upcoming web-platform features, test-driven before they ship to the homepage.">
+<meta property="og:url" content="https://aadhar.sh/garage/horizon">
+
+<style>
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: oklch(89% 0.03 110);
+  background: linear-gradient(180deg, oklch(79% 0.05 110) 0%, oklch(87% 0.025 110) 220px, oklch(87% 0.025 110) 100%);
+  font-family: Verdana, Tahoma, Geneva, sans-serif;
+  font-size: 11pt;
+  line-height: 1.5;
+  color: oklch(21.78% 0 0);
+  padding: 24px 12px 60px;
+  min-height: 100vh;
+}
+
+.window {
+  max-width: 720px;
+  margin: 0 auto;
+  background: oklch(100.00% 0 0);
+  border: 1px solid oklch(54% 0.07 115);
+  box-shadow: 4px 4px 0 oklch(54% 0.07 115 / 0.35);
+}
+.title-bar {
+  background: linear-gradient(180deg, oklch(73% 0.11 112) 0%, oklch(64% 0.14 110) 8%, oklch(56% 0.16 108) 18%, oklch(55% 0.16 108) 86%, oklch(63% 0.12 110) 100%);
+  color: oklch(100.00% 0 0);
+  font-family: "Trebuchet MS", Verdana, sans-serif;
+  font-size: 11pt; font-weight: bold;
+  padding: 4px 8px;
+  border-bottom: 1px solid oklch(33% 0.12 108);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.title-bar .icon {
+  display: inline-block; width: 16px; height: 16px; margin-right: 6px;
+  vertical-align: middle; background: oklch(87.82% 0.0877 66.27);
+  position: relative; flex-shrink: 0;
+}
+.title-bar .icon::before {
+  content: ""; position: absolute; inset: 3px;
+  background: oklch(69.58% 0.2043 43.49);
+  clip-path: polygon(20% 0, 100% 50%, 20% 100%, 0 50%);
+}
+.title-bar .title-text { flex: 1; padding-left: 4px; }
+.title-bar .controls { display: flex; align-items: center; gap: 2px; letter-spacing: 0; }
+/* authentic Luna caption buttons: 21x21 glossy "gel" lozenges with a top specular
+   highlight + CSS-drawn white glyphs (no text, no images). min/max are blue, CLOSE
+   is RED at rest. CLASS-BASED (.min/.max/.close) so decorative demo windows that use
+   <span class="close"> get the identical skin as a real <a class="close">. sRGB hex
+   traced from the Luna .msstyles bitmap, kept as hex on purpose. */
+.title-bar .controls .min,
+.title-bar .controls .max,
+.title-bar .controls .close {
+  position: relative; box-sizing: border-box;
+  width: 21px; height: 21px; padding: 0; margin: 0;
+  display: inline-block; overflow: hidden; font-size: 0; color: transparent;
+  border: 1px solid #628040; border-radius: 3px;
+  text-decoration: none; cursor: pointer;
+  background-color: #6a8838;
+  background-image: linear-gradient(180deg, #a0c060 0%, #70902e 22%, #689030 55%, #507028 82%, #284018 100%);
+  transition: filter .1s ease;
+}
+/* "wet plastic" gloss band over the top ~45% (close uses ::after for its X stroke) */
+.title-bar .controls .min::after,
+.title-bar .controls .max::after {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 45%;
+  background: linear-gradient(180deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.12) 70%, rgba(255,255,255,0) 100%);
+  pointer-events: none; border-radius: 2px 2px 5px 5px;
+}
+.title-bar .controls .min:hover, .title-bar .controls .min:focus-visible,
+.title-bar .controls .max:hover, .title-bar .controls .max:focus-visible {
+  border-color: #9acc58; background-color: #86b048;
+  background-image: linear-gradient(180deg, #b0d070 0%, #84a840 22%, #92b850 55%, #74a038 82%, #527828 100%);
+  outline: none;
+}
+/* CLOSE = red at rest */
+.title-bar .controls .close {
+  border-color: #d8401c; background-color: #e45f3e;
+  background-image: linear-gradient(180deg, #e8795f 0%, #e45f40 30%, #e45d3d 52%, #e2552a 80%, #ae3110 100%);
+}
+.title-bar .controls .close:hover, .title-bar .controls .close:focus-visible {
+  border-color: #ff7a66; background-color: #ff957c;
+  background-image: linear-gradient(180deg, #ff8b7d 0%, #ff7463 26%, #ff957c 55%, #fd7e64 82%, #d34936 100%);
+  box-shadow: 0 0 4px rgba(255,120,96,.7); outline: none;
+}
+.title-bar .controls .min:active,
+.title-bar .controls .max:active,
+.title-bar .controls .close:active { filter: brightness(.9); }
+/* white glyphs drawn with pseudo-elements */
+.title-bar .controls .min::before {
+  content: ""; position: absolute; left: 5px; right: 5px; bottom: 5px; height: 2px;
+  background: #fff; box-shadow: 0 1px 0 rgba(0,0,0,.35);
+}
+.title-bar .controls .max::before {
+  content: ""; position: absolute; left: 5px; top: 5px; width: 11px; height: 9px;
+  box-sizing: border-box; border: 1px solid #fff; border-top-width: 2px;
+  filter: drop-shadow(0 1px 0 rgba(0,0,0,.35));
+}
+.title-bar .controls .close::before,
+.title-bar .controls .close::after {
+  content: ""; position: absolute; left: 50%; top: 50%;
+  width: 13px; height: 2px; margin: -1px 0 0 -6.5px; background: #fff;
+  box-shadow: 0 1px 0 rgba(0,0,0,.35);
+}
+.title-bar .controls .close::before { transform: rotate(45deg); }
+.title-bar .controls .close::after  { transform: rotate(-45deg); }
+/* --- Luna polish: caption text shadow + rounded top corners + 3px window frame --- */
+.title-bar { text-shadow: 1px 1px #1a2c08; border-top-left-radius: 8px; border-top-right-radius: 7px; }
+.window {
+  border: 1px solid #4c6828; border-right-color: #2e4018; border-bottom-color: #2e4018;
+  border-top-left-radius: 8px; border-top-right-radius: 8px; overflow: hidden;
+  box-shadow: inset 1px 1px 0 #9acc58, inset 2px 2px 0 #6a9838,
+              inset -1px -1px 0 #0e1c04, inset -2px -2px 0 #2a4010,
+              4px 4px 0 rgba(20,38,0,.35);
+}
+
+.content { padding: 18px 24px 22px; }
+h1 {
+  font-family: "Trebuchet MS", Verdana, sans-serif; font-size: 20pt;
+  color: oklch(38% 0.10 115); margin: 0 0 4px; font-weight: bold; letter-spacing: -0.01em;
+}
+.lede { margin: 0 0 14px; color: oklch(38.67% 0 0); font-size: 10.5pt; }
+p { margin: 0 0 12px; }
+a:link    { color: oklch(42% 0.18 115); text-decoration: underline; }
+a:visited { color: oklch(37% 0.09 115); }
+a:hover   { color: oklch(62.80% 0.2577 29.23); }
+hr { border: 0; border-top: 2px groove oklch(84% 0.04 115); margin: 16px 0; height: 0; }
+code, .mono { font-family: "Courier New", Courier, monospace; font-size: 9.5pt; }
+pre {
+  font-family: "Courier New", Courier, monospace; font-size: 9pt; line-height: 1.45;
+  background: oklch(97.5% 0.005 110); border: 1px solid oklch(84% 0.04 115);
+  padding: 8px 10px; margin: 8px 0;
+  /* wrap long code lines instead of forcing a sideways scroll on narrow
+     viewports — that was the "weird horizontal scrollover" on the cards.
+     max-width keeps the block inside its card; overflow-x is a backstop. */
+  white-space: pre-wrap; overflow-wrap: anywhere; max-width: 100%; overflow-x: auto;
+}
+/* long engine-status badges wrap instead of overflowing the card on phones */
+@media (max-width: 520px) { .demo > h2 .stat { white-space: normal; } }
+
+/* ── "your browser" capability strip ─────────────────────────────────── */
+.cap-strip { display: flex; flex-wrap: wrap; gap: 5px; margin: 0 0 18px; }
+.chip {
+  font-family: "Courier New", monospace; font-size: 8.5pt; font-weight: bold;
+  padding: 2px 7px; border: 1px solid; border-radius: 2px; white-space: nowrap;
+  color: oklch(51% 0 0); border-color: oklch(72% 0 0); background: oklch(97% 0 0);
+}
+.chip::before { content: "… "; }
+.chip.yes { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(97% 0.04 142); }
+.chip.yes::before { content: "\2713 "; }
+.chip.no  { color: oklch(51.03% 0 0); border-color: oklch(70% 0 0); background: oklch(96% 0 0); }
+.chip.no::before  { content: "\2717 "; }
+
+/* ── per-feature card ────────────────────────────────────────────────── */
+.demo {
+  border: 1px solid oklch(54% 0.07 115);
+  border-top-color: oklch(43% 0.08 115); border-left-color: oklch(43% 0.08 115);
+  background: oklch(100% 0 0); margin: 0 0 18px; padding: 12px 14px 14px;
+}
+.demo > h2 {
+  font-family: "Trebuchet MS", Verdana, sans-serif; font-size: 13pt; font-weight: bold;
+  color: oklch(38% 0.10 115); margin: 0 0 2px; display: flex; align-items: baseline;
+  justify-content: space-between; gap: 10px; flex-wrap: wrap;
+}
+.demo > h2 .mono { font-size: 10pt; font-weight: normal; color: oklch(40% 0 0); }
+.stat {
+  font-family: "Courier New", monospace; font-size: 8pt; font-weight: bold; letter-spacing: .04em;
+  padding: 1px 6px; border: 1px solid; border-radius: 2px; text-transform: uppercase; white-space: nowrap;
+}
+.stat.cross    { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(98% 0.04 142); }
+.stat.chrome   { color: oklch(54.44% 0.1504 47.10);  border-color: oklch(54.44% 0.1504 47.10);  background: oklch(98% 0.03 95);  }
+.stat.trial    { color: oklch(42% 0.18 115); border-color: oklch(42% 0.18 115); background: oklch(97% 0.02 115); }
+.stat.contested{ color: oklch(46.34% 0.1902 29.23);  border-color: oklch(46.34% 0.1902 29.23);  background: oklch(98% 0.03 30);  }
+/* WebKit standards-position chip — what Safari's team actually said, sourced
+   from webkit.org/standards-positions (the authoritative signal, vs. the
+   secondhand chromestatus "Safari view" column). */
+.wk { font-family: "Courier New", monospace; font-size: 7.5pt; font-weight: bold;
+  padding: 0 4px; border: 1px solid; border-radius: 2px; white-space: nowrap; margin-right: 5px; }
+.wk.sup { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(98% 0.04 142); }
+.wk.opp { color: oklch(46.34% 0.1902 29.23);  border-color: oklch(46.34% 0.1902 29.23);  background: oklch(98% 0.03 30); }
+.wk.non { color: oklch(51% 0 0); border-color: oklch(72% 0 0); background: oklch(97% 0 0); }
+.demo .note { font-size: 9.5pt; color: oklch(40% 0 0); margin: 8px 0 0; }
+.demo .replaces { font-size: 9.5pt; color: oklch(33% 0 0); margin: 8px 0 0; border-left: 3px solid oklch(86% 0.03 115); padding-left: 8px; }
+.unsupported { display: none; font-size: 9.5pt; color: oklch(46% 0.10 50); margin-top: 8px; }
+.demo.no-support .unsupported { display: block; }
+
+/* ── text-box-trim demo ──────────────────────────────────────────────── */
+.tb-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+@media (max-width: 520px) { .tb-grid { grid-template-columns: 1fr; } }
+.tb-cap { font-size: 8.5pt; color: oklch(48% 0 0); margin: 0 0 4px; }
+.tb-line {
+  font-family: "Trebuchet MS", Verdana, sans-serif; font-size: 26px; line-height: 2.4;
+  /* inline-block (NOT inline) so the highlight fills the element's BOX, which
+     includes the line-height's half-leading. an inline background only paints
+     the font content area, so the trim would be invisible — the original bug. */
+  display: inline-block; vertical-align: top;
+  background: oklch(86% 0.06 115);
+}
+.tb-line.trim { text-box-trim: trim-both; text-box-edge: cap alphabetic; }
+/* a real XP title bar, trimmed vs not, to show the practical payoff */
+.tb-bar {
+  background: linear-gradient(180deg, oklch(73% 0.11 112) 0%, oklch(64% 0.14 110) 8%, oklch(56% 0.16 108) 18%, oklch(55% 0.16 108) 86%, oklch(63% 0.12 110) 100%);
+  color: oklch(100% 0 0); font-family: "Trebuchet MS", Verdana, sans-serif; font-weight: bold;
+  font-size: 13pt; padding: 8px; border: 1px solid oklch(38% 0.10 115); margin-top: 6px;
+}
+.tb-bar.trim { text-box-trim: trim-both; text-box-edge: cap alphabetic; }
+
+/* ── contrast-color() demo ───────────────────────────────────────────── */
+.cc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 6px; margin-top: 10px; }
+.swatch {
+  background: var(--bg); aspect-ratio: 5 / 3; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 2px; border: 1px solid oklch(50% 0 0 / .4);
+  font-size: 8.5pt; text-align: center; padding: 4px;
+}
+.swatch .fixed { color: oklch(100% 0 0); }                 /* naive: white always */
+.swatch .auto  { color: oklch(0% 0 0); color: contrast-color(var(--bg)); font-weight: bold; }
+
+/* ── interestfor + anchor positioning demo ───────────────────────────── */
+.ifor-demo a { text-decoration-style: dotted; text-underline-offset: 2px; interest-delay: 0s; }
+.ifor-pop {
+  margin: 0; padding: 0; border: 1px solid oklch(54% 0.07 115);
+  background: oklch(100% 0 0); box-shadow: 3px 3px 0 oklch(61.14% 0.0611 253.60 / .35);
+}
+.ifor-pop .cap {
+  font-size: 8.5pt; color: oklch(38% 0 0); padding: 3px 6px;
+  background: oklch(96% 0.005 110); border-top: 1px solid oklch(54% 0.07 115);
+}
+.ifor-pop .box { width: 200px; height: 120px; display: flex; align-items: center; justify-content: center;
+  font-size: 9pt; color: oklch(45% 0 0); background: oklch(94% 0.01 115); }
+/* anchor positioning: interestfor sets up an implicit anchor on the invoker,
+   so the popover can place itself relative to the link with zero JS. */
+.ifor-pop:popover-open { position-area: bottom span-right; margin-top: 6px; }
+
+/* ── watch-list ──────────────────────────────────────────────────────── */
+.watch { list-style: none; padding: 0; margin: 8px 0 0; }
+.watch li { padding: 7px 0; border-bottom: 1px solid oklch(93% 0.01 110); display: grid; grid-template-columns: auto 1fr; gap: 8px; align-items: baseline; }
+.watch li:last-child { border-bottom: none; }
+.watch .name { font-family: "Courier New", monospace; font-size: 9pt; font-weight: bold; color: oklch(38% 0.04 115); }
+.watch .desc { font-size: 9.5pt; color: oklch(35% 0 0); }
+.watch .desc .s { font-style: italic; color: oklch(48% 0 0); }
+.stat.early { color: oklch(45% 0 0); border-color: oklch(70% 0 0); background: oklch(96% 0 0); }
+.engine { margin: 12px 0 0; padding: 10px 0 0; border-top: 1px solid oklch(93% 0.01 110); }
+.engine h3 {
+  font-family: "Trebuchet MS", Verdana, sans-serif; font-size: 11.5pt; font-weight: bold;
+  color: oklch(38% 0.10 115); margin: 0 0 4px; display: flex; align-items: baseline; gap: 8px;
+}
+.engine p { font-size: 9.5pt; color: oklch(33% 0 0); margin: 0 0 6px; }
+
+footer {
+  text-align: center; font-family: Verdana, Tahoma, sans-serif; font-size: 9pt;
+  color: oklch(44.95% 0 0); margin: 18px 0 0; padding-top: 14px; border-top: 1px solid oklch(84% 0.04 115);
+}
+
+/* ════════ feature-card demos (added by workflow) ════════ */
+/* card: anchor-positioning */
+/* ── anchor positioning demo ─────────────────────────────────────────── */
+.anc-stage {
+  position: relative; margin-top: 12px; padding: 22px;
+  border: 1px solid oklch(84% 0.04 115);
+  background:
+    repeating-linear-gradient(0deg, oklch(97% 0.003 110) 0 11px, oklch(95% 0.005 110) 11px 12px);
+  display: flex; gap: 14px; align-items: center; justify-content: center; flex-wrap: wrap;
+  /* min-height so a flipped popover has somewhere to go */
+  min-height: 120px;
+}
+/* the thing we tether TO — a raised XP button */
+.anc-btn {
+  anchor-name: --anc-btn;
+  font-family: Tahoma, Verdana, sans-serif; font-size: 9.5pt;
+  padding: 5px 14px; cursor: pointer; color: oklch(21.78% 0 0);
+  background: linear-gradient(180deg, oklch(99% 0 0) 0%, oklch(90% 0.01 115) 100%);
+  border: 1px solid oklch(50% 0.02 115);
+  border-top-color: oklch(100% 0 0); border-left-color: oklch(100% 0 0);
+  box-shadow: 1px 1px 0 oklch(40% 0.03 115);
+}
+.anc-btn:active { box-shadow: inset 1px 1px 0 oklch(40% 0.03 115); }
+
+/* the popover we tether — placed purely in CSS, no JS coordinate math */
+.anc-pop {
+  position: absolute;            /* fallback box if anchoring is unsupported */
+  margin: 0; padding: 0; inset: auto;
+  border: 1px solid oklch(38% 0.10 115);
+  background: oklch(100% 0 0);
+  box-shadow: 3px 3px 0 oklch(61.14% 0.0611 253.60 / .35);
+  font-size: 8.5pt; max-width: 200px;
+}
+.anc-pop .hd {
+  font-family: "Trebuchet MS", Verdana, sans-serif; font-weight: bold; color: oklch(100% 0 0);
+  background: linear-gradient(180deg, oklch(73% 0.11 112) 0%, oklch(64% 0.14 110) 8%, oklch(56% 0.16 108) 18%, oklch(55% 0.16 108) 86%, oklch(63% 0.12 110) 100%);
+  padding: 2px 7px;
+}
+.anc-pop .bd { padding: 6px 8px; color: oklch(33% 0 0); }
+
+/* only when the engine supports it: tether to the button + flip on overflow.
+   position-area does the placement; position-try-fallbacks flips to the
+   opposite side when there isn't room (the "position-try flip"). */
+@supports (anchor-name: --a) and (position-anchor: --a) {
+  .anc-pop {
+    position-anchor: --anc-btn;
+    position: fixed;             /* anchored popovers position against the anchor */
+    inset: auto;
+    position-area: top center;
+    margin-bottom: 6px;
+    position-try-fallbacks: flip-block;   /* not enough room above -> flip below */
+    position-visibility: anchors-visible;
+  }
+  /* the second popover deliberately asks for the right edge, then flips left */
+  .anc-pop.side {
+    position-area: right center;
+    margin-bottom: 0; margin-left: 6px;
+    position-try-fallbacks: flip-inline;
+  }
+}
+.anc-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+/* card: scroll-driven */
+/* ── scroll-driven animations demo (scoped: sd-*) ─────────────────────── */
+/* A short scroll container drives two timelines with ZERO JS:
+   1. scroll() progress bar — a faux XP "loading" bevel that fills as you
+      scroll the box, wired via a named scroll-timeline on the scroller.
+   2. view() reveal — each row fades+slides in as it enters the scrollport,
+      driven by its own view-timeline. */
+.sd-wrap { margin-top: 10px; border: 1px solid oklch(54% 0.07 115);
+  border-top-color: oklch(43% 0.08 115); border-left-color: oklch(43% 0.08 115);
+  background: oklch(98% 0.003 115); }
+
+/* the XP-style progress strip, pinned above the scroller */
+.sd-meter { height: 18px; padding: 3px; background: oklch(85% 0.03 110);
+  border-bottom: 1px solid oklch(54% 0.07 115);
+  /* sunken bevel: dark top/left, light bottom/right */
+  border-top: 2px solid oklch(55% 0.02 250); border-left: 2px solid oklch(55% 0.02 250); }
+.sd-meter .bar {
+  height: 100%; width: 100%; transform-origin: left center; transform: scaleX(0);
+  background: repeating-linear-gradient(90deg,
+    oklch(55% 0.13 115) 0 9px, oklch(62% 0.12 115) 9px 11px);
+  /* the timeline lives on the scroller below, referenced by name */
+  animation: sd-fill linear both;
+  animation-timeline: --sd-scroll;
+}
+@keyframes sd-fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
+/* the scroll container — names a scroll-timeline tracking its own y-overflow */
+.sd-scroller {
+  height: 150px; overflow-y: auto; padding: 8px 10px;
+  scroll-timeline-name: --sd-scroll; scroll-timeline-axis: y;
+  scrollbar-width: thin;
+}
+.sd-scroller .filler { font-size: 8.5pt; color: oklch(52% 0 0); text-align: center;
+  padding: 6px 0; font-style: italic; }
+
+/* each row reveals on its own view-timeline as it crosses the scrollport */
+.sd-row {
+  margin: 7px 0; padding: 7px 9px; background: oklch(100% 0 0);
+  border: 1px solid oklch(86% 0.02 115); font-size: 9.5pt; color: oklch(30% 0.02 115);
+  font-family: "Trebuchet MS", Verdana, sans-serif;
+  animation: sd-reveal linear both;
+  animation-timeline: view();
+  animation-range: entry 0% cover 35%;
+}
+@keyframes sd-reveal {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* honour reduced-motion: pin everything to its end state, no animation */
+@media (prefers-reduced-motion: reduce) {
+  .sd-meter .bar { animation: none; transform: scaleX(1); }
+  .sd-row { animation: none; opacity: 1; transform: none; }
+}
+
+/* fallback for engines without animation-timeline: the bar would sit empty
+   and rows would stay invisible, so force the resting state. */
+@supports not (animation-timeline: scroll()) {
+  .sd-meter .bar { transform: scaleX(0.34); }
+  .sd-row { opacity: 1; transform: none; }
+}
+/* card: popover-hint */
+/* ── popover=hint demo ──────────────────────────────────────────────── */
+/* Three popover *types*, shown side by side so the light-dismiss behaviour
+   is the visible difference. All three share the XP-window chrome; only the
+   `popover` attribute value (auto / hint / manual) changes the dismissal
+   semantics. */
+.ph-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; align-items: flex-start; }
+.ph-btn {
+  font-family: "Trebuchet MS", Verdana, sans-serif; font-size: 9.5pt; cursor: pointer;
+  padding: 4px 12px; color: oklch(21.78% 0 0);
+  background: linear-gradient(180deg, oklch(99% 0 0) 0%, oklch(90% 0.01 115) 100%);
+  border: 1px solid oklch(50% 0.02 115);
+  border-top-color: oklch(99% 0 0); border-left-color: oklch(97% 0 0);
+  box-shadow: 1px 1px 0 oklch(45% 0.05 250 / 0.4);
+}
+.ph-btn:active { border-top-color: oklch(50% 0.02 115); border-left-color: oklch(50% 0.02 115);
+  background: linear-gradient(180deg, oklch(86% 0.02 115) 0%, oklch(93% 0.01 115) 100%); }
+.ph-pop {
+  margin: 0; padding: 0; inset: auto; position: fixed; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  border: 1px solid oklch(54% 0.07 115);
+  background: oklch(100% 0 0); box-shadow: 4px 4px 0 oklch(54% 0.07 115 / 0.35);
+  font-size: 9pt; min-width: 150px;
+}
+.ph-pop .ph-bar {
+  background: linear-gradient(180deg, oklch(73% 0.11 112) 0%, oklch(64% 0.14 110) 8%, oklch(56% 0.16 108) 18%, oklch(55% 0.16 108) 86%, oklch(63% 0.12 110) 100%);
+  color: oklch(100% 0 0); font-family: "Trebuchet MS", Verdana, sans-serif; font-weight: bold;
+  font-size: 8.5pt; padding: 2px 6px;
+}
+.ph-pop .ph-body { padding: 6px 8px; color: oklch(35% 0 0); }
+.ph-pop .ph-body code { font-size: 8.5pt; }
+/* card: field-sizing */
+/* ── field-sizing demo ───────────────────────────────────────────────── */
+.fs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+@media (max-width: 520px) { .fs-grid { grid-template-columns: 1fr; } }
+.fs-cap { font-size: 8.5pt; color: oklch(48% 0 0); margin: 0 0 4px; }
+/* sunken XP field: dark top-left, light bottom-right — the inverse of a raised
+   button bevel, exactly like the homepage inputs. */
+.fs-field {
+  display: block; width: 100%; font-family: Verdana, Tahoma, sans-serif; font-size: 10pt;
+  line-height: 1.5; color: oklch(21.78% 0 0); padding: 5px 7px; resize: none;
+  background: oklch(100% 0 0);
+  border: 2px solid;
+  border-top-color: oklch(58% 0 0); border-left-color: oklch(58% 0 0);
+  border-bottom-color: oklch(94% 0 0); border-right-color: oklch(94% 0 0);
+  outline: 1px solid oklch(72% 0 0); outline-offset: -3px;
+}
+.fs-field:focus { outline-color: oklch(45% 0.09 115); }
+/* the whole point: the textarea's box tracks its text content instead of a
+   fixed rows= height. min/max keep it sane. */
+.fs-field.fs-auto { field-sizing: content; min-height: 2.6em; max-height: 9em; }
+/* same single-line input flavour: grows with the value, shrinks the empty box */
+.fs-input {
+  font-family: Verdana, Tahoma, sans-serif; font-size: 10pt; padding: 4px 7px;
+  background: oklch(100% 0 0); border: 2px solid;
+  border-top-color: oklch(58% 0 0); border-left-color: oklch(58% 0 0);
+  border-bottom-color: oklch(94% 0 0); border-right-color: oklch(94% 0 0);
+  field-sizing: content; min-width: 6ch; max-width: 100%;
+}
+.fs-input:focus { outline: 1px solid oklch(45% 0.09 115); }
+/* card: view-transitions */
+placeholder
+/* card: base-select */
+/* ── appearance: base-select demo ────────────────────────────────────── */
+/* Opt the whole control into the customizable-select rendering model. Until
+   BOTH the <select> and ::picker(select) say appearance: base-select, the UA
+   keeps the native widget — so browsers without support just show the OS
+   dropdown, which is the honest fallback. Everything below is scoped to
+   .bsel- to avoid colliding with any future real <select> on the site. */
+.bsel-field {
+  appearance: base-select;
+  /* XP "sunken" combobox: dark top-left, light bottom-right — same bevel
+     language as the cal/ form inputs. */
+  font-family: Verdana, Tahoma, Geneva, sans-serif;
+  font-size: 10.5pt;
+  color: oklch(21.78% 0 0);
+  background: oklch(100% 0 0);
+  border: 2px solid;
+  border-color: oklch(55% 0.02 250) oklch(94% 0.01 115) oklch(94% 0.01 115) oklch(55% 0.02 250);
+  padding: 4px 8px;
+  min-width: 220px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.bsel-field:focus-visible {
+  outline: 1px dotted oklch(38% 0.10 115);
+  outline-offset: 1px;
+}
+/* The drop-arrow gets its own pseudo we can theme into a raised XP button. */
+.bsel-field::picker-icon {
+  margin-left: auto;
+  color: oklch(38% 0.10 115);
+  transition: rotate 0.15s ease;
+}
+.bsel-field:open::picker-icon { rotate: 180deg; }
+
+/* The popup itself — a real XP window dropping out of the field. */
+.bsel-field::picker(select) {
+  appearance: base-select;
+  background: oklch(100% 0 0);
+  border: 1px solid oklch(54% 0.07 115);
+  box-shadow: 3px 3px 0 oklch(54% 0.07 115 / 0.35);
+  padding: 2px;
+  margin-top: 2px;
+}
+.bsel-field option {
+  font-family: Verdana, Tahoma, Geneva, sans-serif;
+  font-size: 10pt;
+  padding: 4px 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+/* Outlook-Express alternating rows — impossible on a native <option>. */
+.bsel-field option:nth-of-type(even) { background: oklch(97.5% 0.005 110); }
+.bsel-field option:hover,
+.bsel-field option:focus {
+  background: linear-gradient(180deg, oklch(73% 0.11 112) 0%, oklch(64% 0.14 110) 8%, oklch(56% 0.16 108) 18%, oklch(55% 0.16 108) 86%, oklch(63% 0.12 110) 100%);
+  color: oklch(100% 0 0);
+}
+/* The selected row gets the blue XP highlight + a checkmark, again only
+   possible once the option is real styleable content. */
+.bsel-field option:checked::before { content: "\2713 "; color: oklch(49.32% 0.1678 142.50); font-weight: bold; }
+.bsel-field option:checked:hover::before,
+.bsel-field option:checked:focus::before { color: oklch(100% 0 0); }
+/* a tiny color swatch we drop INSIDE each option — proof you can put
+   arbitrary markup in an <option> under base-select. */
+.bsel-sw { width: 12px; height: 12px; border: 1px solid oklch(40% 0 0 / 0.5); flex-shrink: 0; }
+/* card: corner-shape */
+/* corner-shape demo — every box reuses the same border-radius; only the
+   corner-shape keyword changes the curve between the two corner points.
+   superellipse(k): k>1 bulges toward a square (squircle family), k<0 scoops
+   inward, the named keywords (notch/bevel/scoop/round) are shorthands. */
+.cs-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; margin-top: 10px; }
+.cs-cell {
+  aspect-ratio: 3 / 2;
+  border-radius: 18px;
+  border: 1px solid oklch(38% 0.10 115);
+  background: linear-gradient(180deg, oklch(73% 0.11 112) 0%, oklch(64% 0.14 110) 8%, oklch(56% 0.16 108) 18%, oklch(55% 0.16 108) 86%, oklch(63% 0.12 110) 100%);
+  color: oklch(100% 0 0);
+  font-family: "Trebuchet MS", Verdana, sans-serif; font-size: 9pt; font-weight: bold;
+  display: flex; align-items: center; justify-content: center; text-align: center; padding: 4px;
+}
+.cs-cell.round    { corner-shape: round; }
+.cs-cell.bevel    { corner-shape: bevel; }
+.cs-cell.notch    { corner-shape: notch; }
+.cs-cell.scoop    { corner-shape: scoop; }
+.cs-cell.squircle { corner-shape: squircle; }
+.cs-cell.super    { corner-shape: superellipse(2.4); }
+
+/* a faux-XP window frame whose two top corners are notched into little tabs —
+   the kind of thing that needed an SVG mask or a clip-path polygon before. */
+.cs-frame {
+  margin-top: 12px;
+  border: 1px solid oklch(38% 0.10 115);
+  border-radius: 14px 14px 0 0;
+  corner-shape: scoop scoop round round;
+  overflow: hidden;
+  background: oklch(100% 0 0);
+}
+.cs-frame .bar {
+  background: linear-gradient(180deg, oklch(73% 0.11 112) 0%, oklch(64% 0.14 110) 8%, oklch(56% 0.16 108) 18%, oklch(55% 0.16 108) 86%, oklch(63% 0.12 110) 100%);
+  color: oklch(100% 0 0); font-family: "Trebuchet MS", Verdana, sans-serif; font-weight: bold;
+  font-size: 11pt; padding: 6px 10px;
+}
+.cs-frame .body { padding: 8px 10px; font-size: 9pt; color: oklch(35% 0 0); }
+
+/* unsupported browsers: the @supports block never applies, so the cells keep
+   their plain rounded border-radius and we surface the fallback note. */
+@supports not (corner-shape: squircle) {
+  .cs-frame { corner-shape: round; }
+}
+@media (color-gamut: p3) {
+  .cs-cell { background: linear-gradient(180deg, oklch(62% 0.18 115) 0%, oklch(45% 0.14 115) 100%); }
+}
+/* card: calc-size */
+/* ── calc-size() / interpolate-size demo ─────────────────────────────── */
+/* the whole trick: one declaration on a wrapper makes ANY transition or
+   animation that touches an intrinsic keyword (auto, min-content, fit-content)
+   interpolate instead of snapping. opt-in by design — turning every legacy
+   `height: auto` transition into an animation site-wide would break layouts,
+   so it's scoped here to .cs-demo only. */
+.cs-demo { interpolate-size: allow-keywords; }
+
+.cs-panel {
+  border: 1px solid oklch(54% 0.07 115);
+  border-top-color: oklch(43% 0.08 115);
+  border-left-color: oklch(43% 0.08 115);
+  background: oklch(100% 0 0); margin-top: 10px;
+}
+/* the XP "group box" header — a clickable summary-style bar */
+.cs-head {
+  display: flex; align-items: center; justify-content: space-between;
+  font-family: "Trebuchet MS", Verdana, sans-serif; font-weight: bold;
+  font-size: 10.5pt; color: oklch(38% 0.10 115);
+  background: linear-gradient(180deg, oklch(97% 0.01 115) 0%, oklch(91% 0.02 115) 100%);
+  padding: 5px 9px; cursor: pointer; user-select: none;
+  border-bottom: 1px solid oklch(86% 0.03 115);
+}
+.cs-head .chev { font-family: "Courier New", monospace; transition: transform .25s ease; }
+.cs-demo[open] .cs-head .chev { transform: rotate(90deg); }
+
+/* collapsed: clip to a real, animatable height. open: grow to the keyword.
+   WITHOUT interpolate-size the `auto` end-state would jump; WITH it the
+   browser computes the resolved auto height and tweens to it. */
+.cs-body {
+  height: 0; overflow: hidden;
+  transition: height .35s cubic-bezier(.22,.61,.36,1);
+}
+.cs-demo[open] .cs-body { height: auto; }
+.cs-body-inner {
+  padding: 9px 11px; font-size: 9.5pt; color: oklch(34% 0 0);
+  border-top: 1px solid oklch(94% 0.01 115);
+}
+.cs-body-inner p { margin: 0 0 7px; }
+.cs-body-inner p:last-child { margin: 0; }
+
+/* native, no-JS variant using ::details-content (also gated on the keyword) */
+.cs-native { margin-top: 10px; }
+.cs-native > summary {
+  font-family: "Trebuchet MS", Verdana, sans-serif; font-weight: bold;
+  font-size: 10pt; color: oklch(38% 0.10 115);
+  cursor: pointer; list-style-position: inside;
+}
+.cs-native::details-content {
+  height: 0; overflow: hidden; content-visibility: hidden;
+  transition: height .35s ease, content-visibility .35s ease allow-discrete;
+}
+.cs-native[open]::details-content { height: auto; content-visibility: visible; }
+/* card: scheduler-yield */
+/* scheduler.yield() is a JS scheduling primitive — nothing visual to render.
+   These rules only style the explanatory card body + code sketch. */
+.sy-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+@media (max-width: 520px) { .sy-grid { grid-template-columns: 1fr; } }
+.sy-col h4 {
+  font-family: "Trebuchet MS", Verdana, sans-serif; font-size: 9.5pt; font-weight: bold;
+  margin: 0 0 4px; color: oklch(38% 0.10 115);
+}
+/* a faux main-thread timeline: a long unbroken bar vs. a yielded one with gaps
+   where input can be serviced. purely illustrative, not measured. */
+.sy-track {
+  height: 16px; border: 1px solid oklch(54% 0.07 115);
+  background: oklch(96% 0.005 110); position: relative; overflow: hidden;
+}
+.sy-track .blk {
+  position: absolute; top: 0; bottom: 0;
+  background: linear-gradient(180deg, oklch(73% 0.11 112) 0%, oklch(64% 0.14 110) 8%, oklch(56% 0.16 108) 18%, oklch(55% 0.16 108) 86%, oklch(63% 0.12 110) 100%);
+}
+/* one solid 100% block = task never yields, input starved */
+.sy-track.blocked .blk { left: 0; width: 100%; }
+/* four chunks with gaps = task yields; gaps are where a tap gets serviced */
+.sy-track.yielded .blk.a { left: 0;   width: 21%; }
+.sy-track.yielded .blk.b { left: 26%; width: 21%; }
+.sy-track.yielded .blk.c { left: 52%; width: 21%; }
+.sy-track.yielded .blk.d { left: 78%; width: 21%; }
+.sy-track .tap {
+  position: absolute; top: -1px; bottom: -1px; width: 2px;
+  background: oklch(58.99% 0.2344 26.30);
+}
+.sy-track.blocked .tap { left: 48%; }
+.sy-track.yielded .tap { left: 48%; }
+.sy-leg { font-size: 8pt; color: oklch(48% 0 0); margin: 3px 0 0; }
+.sy-leg .red { color: oklch(54.44% 0.1504 47.10); font-weight: bold; }
+@media (color-gamut: p3) {
+  .sy-track .tap { background: oklch(58.99% 0.2604 26.30); }
+}
+/* live interactive demo: a rAF-driven dot that freezes when the main thread is
+   blocked vs. keeps gliding when the task yields. measured, not faked. */
+.sy-live { margin-top: 12px; }
+.sy-rail { position: relative; height: 20px; margin-bottom: 6px; background: oklch(96% 0.005 110); border: 1px solid oklch(54% 0.07 115); overflow: hidden; }
+.sy-dot { position: absolute; top: 3px; left: 0; width: 13px; height: 13px; border-radius: 50%; background: linear-gradient(180deg, oklch(73% 0.11 112) 0%, oklch(64% 0.14 110) 8%, oklch(56% 0.16 108) 18%, oklch(55% 0.16 108) 86%, oklch(63% 0.12 110) 100%); }
+.sy-meter { font-size: 8.5pt; color: oklch(45% 0 0); margin: 0; }
+.sy-btns { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 0; }
+.sy-btn { font-family: Tahoma, Verdana, sans-serif; font-size: 9pt; padding: 4px 12px; cursor: pointer; color: oklch(21.78% 0 0); background: linear-gradient(180deg, oklch(99% 0 0), oklch(90% 0.01 115)); border: 1px solid oklch(50% 0.02 115); border-top-color: oklch(100% 0 0); border-left-color: oklch(100% 0 0); box-shadow: 1px 1px 0 oklch(40% 0.03 115); }
+.sy-btn:active { box-shadow: inset 1px 1px 0 oklch(40% 0.03 115); }
+.sy-btn:disabled { opacity: .5; cursor: default; }
+.sy-out { font-size: 8.5pt; color: oklch(38% 0 0); margin: 8px 0 0; min-height: 2.6em; }
+.sy-out .hi { color: oklch(54.44% 0.1504 47.10); font-weight: bold; }
+.sy-out .lo { color: oklch(49.32% 0.1678 142.50); font-weight: bold; }
+/* card: html-in-canvas */
+/* ── HTML-in-Canvas (drawElement) demo ───────────────────────────────── */
+.hic-stage { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; align-items: start; }
+@media (max-width: 520px) { .hic-stage { grid-template-columns: 1fr; } }
+.hic-cap { font-size: 8.5pt; color: oklch(48% 0 0); margin: 0 0 4px; }
+/* the live DOM source: a real XP title bar we will rasterize into canvas */
+.hic-src {
+  background: linear-gradient(180deg, oklch(73% 0.11 112) 0%, oklch(64% 0.14 110) 8%, oklch(56% 0.16 108) 18%, oklch(55% 0.16 108) 86%, oklch(63% 0.12 110) 100%);
+  color: oklch(100% 0 0); font-family: "Trebuchet MS", Verdana, sans-serif; font-weight: bold;
+  font-size: 11pt; padding: 5px 8px; border: 1px solid oklch(38% 0.10 115);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.hic-src .glyphs { font-family: Tahoma, sans-serif; font-size: 9pt; letter-spacing: 2px; }
+.hic-src .glyphs span {
+  display: inline-block; background: oklch(85% 0.03 110); color: oklch(38% 0.10 115);
+  border: 1px solid oklch(38% 0.10 115); padding: 0 4px; margin-left: 2px;
+}
+.hic-canvas {
+  border: 1px solid oklch(54% 0.07 115); background: oklch(97% 0.003 110);
+  display: block; width: 100%; height: auto; image-rendering: auto;
+}
+.hic-note2 { font-size: 8.5pt; color: oklch(48% 0 0); margin: 6px 0 0; }
+.hic-fail { display: none; }
+.demo.no-support .hic-fail { display: block; }
+.demo.no-support .hic-stage { opacity: .5; }
+/* card: masonry */
+/* ── masonry / grid-lanes demo ───────────────────────────────────────────
+   NOT a live masonry layout — the spec ships nowhere by default (mid-2026).
+   This is a CSS multi-column MOCKUP that approximates the intended look:
+   ragged-bottom, gap-filling tiles. The honest caveat: `columns` fills
+   top-to-bottom per column (reading order goes DOWN then ACROSS), whereas
+   true masonry places left-to-right into the shortest track. The visual
+   silhouette is close; the source order semantics are not. */
+.mas-mock {
+  columns: 3 90px;
+  column-gap: 8px;
+  margin-top: 10px;
+}
+@media (max-width: 460px) { .mas-mock { columns: 2 90px; } }
+.mas-mock .tile {
+  break-inside: avoid;
+  margin: 0 0 8px;
+  border: 1px solid oklch(54% 0.07 115);
+  /* contact-sheet frame, same vocabulary as the homepage photo grid */
+  background:
+    linear-gradient(180deg, oklch(96% 0.01 115) 0%, oklch(91% 0.02 115) 100%);
+  box-shadow: 1px 1px 0 oklch(54% 0.07 115 / 0.35);
+  display: flex; align-items: flex-end; justify-content: flex-start;
+  padding: 4px 5px;
+  font-family: "Courier New", monospace; font-size: 8pt;
+  color: oklch(38% 0.04 115);
+}
+/* varied aspect ratios = the whole point of masonry: portrait + landscape
+   Fuji frames packing without the gridlock of equal-height rows */
+.mas-mock .t1 { aspect-ratio: 3 / 4;  background: linear-gradient(160deg, oklch(62% 0.12 115), oklch(50% 0.11 115)); color: oklch(100% 0 0); }
+.mas-mock .t2 { aspect-ratio: 4 / 3;  background: linear-gradient(160deg, oklch(88% 0.088 66), oklch(70% 0.20 43)); }
+.mas-mock .t3 { aspect-ratio: 1 / 1;  background: linear-gradient(160deg, oklch(87% 0.025 110), oklch(72% 0.06 115)); }
+.mas-mock .t4 { aspect-ratio: 2 / 3;  background: linear-gradient(160deg, oklch(59% 0.234 26), oklch(46% 0.19 29)); color: oklch(100% 0 0); }
+.mas-mock .t5 { aspect-ratio: 16 / 9; background: linear-gradient(160deg, oklch(91% 0.02 115), oklch(80% 0.05 115)); }
+.mas-mock .t6 { aspect-ratio: 4 / 5;  background: linear-gradient(160deg, oklch(97% 0.037 95), oklch(85% 0.10 90)); }
+.mas-mock .t7 { aspect-ratio: 1 / 1;  background: linear-gradient(160deg, oklch(50% 0.11 115), oklch(42% 0.12 115)); color: oklch(100% 0 0); }
+.mas-mock .t8 { aspect-ratio: 5 / 4;  background: linear-gradient(160deg, oklch(88% 0.06 115), oklch(75% 0.08 115)); }
+.mas-mock .t9 { aspect-ratio: 3 / 5;  background: linear-gradient(160deg, oklch(70% 0.20 43), oklch(58% 0.23 30)); color: oklch(100% 0 0); }
+
+.mas-mock .cap { opacity: 0.85; }
+
+.mas-flag {
+  font-family: "Courier New", monospace; font-size: 8.5pt;
+  color: oklch(46% 0.10 50);
+  margin-top: 8px;
+}
+@media (color-gamut: p3) {
+  .mas-mock .t4 { background: linear-gradient(160deg, oklch(59% 0.30 26), oklch(46% 0.24 29)); }
+  .mas-mock .t9 { background: linear-gradient(160deg, oklch(70% 0.25 43), oklch(58% 0.29 30)); }
+}
+/* card: jpeg-xl */
+/* JPEG XL card — no live decode demo possible (Chrome can't decode, no JXL
+   asset on the site), so this is a static format-comparison mock + code sketch.
+   All classes prefixed .jxl- to avoid collision with sibling cards. */
+.jxl-compare { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; }
+@media (max-width: 520px) { .jxl-compare { grid-template-columns: 1fr; } }
+.jxl-fmt {
+  border: 1px solid oklch(54% 0.07 115);
+  border-top-color: oklch(43% 0.08 115); border-left-color: oklch(43% 0.08 115);
+  background: oklch(98% 0.003 115); padding: 8px 9px;
+}
+.jxl-fmt h4 {
+  font-family: "Courier New", monospace; font-size: 9.5pt; font-weight: bold;
+  margin: 0 0 5px; color: oklch(38% 0.04 115);
+}
+/* a fake "file-size meter" bar — relative bytes at matched quality, illustrative */
+.jxl-bar { height: 9px; background: oklch(86% 0.06 115); border: 1px solid oklch(54% 0.07 115); margin: 4px 0; }
+.jxl-bar > i { display: block; height: 100%; background: linear-gradient(180deg, oklch(73% 0.11 112) 0%, oklch(64% 0.14 110) 8%, oklch(56% 0.16 108) 18%, oklch(55% 0.16 108) 86%, oklch(63% 0.12 110) 100%); }
+.jxl-fmt .jxl-kb { font-size: 8.5pt; color: oklch(45% 0 0); }
+.jxl-fmt .jxl-ships { font-size: 8pt; font-family: "Courier New", monospace; color: oklch(48% 0 0); margin-top: 3px; }
+.jxl-fmt.win { background: oklch(98% 0.04 142); border-color: oklch(49.32% 0.1678 142.50); }
+.jxl-fmt.win .jxl-bar > i { background: linear-gradient(180deg, oklch(62% 0.16 142), oklch(49.32% 0.1678 142.50)); }
+.jxl-feat { list-style: none; padding: 0; margin: 10px 0 0; }
+.jxl-feat li { font-size: 9pt; color: oklch(35% 0 0); padding: 2px 0 2px 16px; position: relative; }
+.jxl-feat li::before { content: "\25B8"; position: absolute; left: 2px; color: oklch(45% 0.09 115); }
+/* card: hdr-agtm */
+/* ── HDR adaptive tone-mapping (AGTM) mockup ─────────────────────────── */
+.hdr-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+@media (max-width: 520px) { .hdr-grid { grid-template-columns: 1fr; } }
+.hdr-cap { font-size: 8.5pt; color: oklch(48% 0 0); margin: 0 0 4px; }
+.hdr-swatch {
+  aspect-ratio: 5 / 3; border: 1px solid oklch(50% 0 0 / .4);
+  display: flex; align-items: flex-end; justify-content: center;
+  font-size: 8.5pt; color: oklch(100% 0 0); text-shadow: 0 1px 2px oklch(0% 0 0 / .6);
+  padding: 4px; text-align: center;
+}
+/* SDR: the "sun" is a hard radial that clips to flat white at center */
+.hdr-swatch.sdr {
+  background:
+    radial-gradient(circle at 50% 32%, oklch(100% 0 0) 0 14%, oklch(100% 0 0) 14% 22%, transparent 40%),
+    linear-gradient(180deg, oklch(72% 0.10 115) 0%, oklch(55% 0.12 115) 60%, oklch(38% 0.09 115) 100%);
+}
+/* HDR mock: warmer, graded specular core + a subtle bloom ring, evoking
+   the restored headroom. (still SDR pixels — labelled a mockup in copy.) */
+.hdr-swatch.hdr {
+  background:
+    radial-gradient(circle at 50% 32%, oklch(99% 0.06 95) 0 10%, oklch(95% 0.14 80) 10% 20%, oklch(85% 0.16 65 / .55) 20% 34%, transparent 52%),
+    linear-gradient(180deg, oklch(74% 0.12 115) 0%, oklch(56% 0.13 115) 60%, oklch(38% 0.10 115) 100%);
+  box-shadow: inset 0 0 24px oklch(95% 0.12 85 / .35);
+}
+@media (color-gamut: p3) {
+  .hdr-swatch.hdr { background:
+    radial-gradient(circle at 50% 32%, oklch(99% 0.09 95) 0 10%, oklch(95% 0.20 80) 10% 20%, oklch(85% 0.22 65 / .55) 20% 34%, transparent 52%),
+    linear-gradient(180deg, oklch(74% 0.16 115) 0%, oklch(56% 0.17 115) 60%, oklch(38% 0.12 115) 100%); }
+}
+/* headroom bar: SDR ceiling line + hatched "extra nits AGTM maps into" */
+.hdr-room {
+  position: relative; height: 16px; margin-top: 8px;
+  background: linear-gradient(90deg, oklch(82% 0.02 115) 0 60%, transparent 60%);
+  border: 1px solid oklch(70% 0.02 115);
+}
+.hdr-room .head {
+  position: absolute; inset: 0 0 0 60%;
+  background: repeating-linear-gradient(45deg, oklch(88% 0.10 85) 0 4px, oklch(80% 0.14 65) 4px 8px);
+}
+.hdr-room::before {
+  content: "SDR ceiling"; position: absolute; left: 4px; top: 50%; transform: translateY(-50%);
+  font-family: "Courier New", monospace; font-size: 7pt; color: oklch(40% 0 0);
+}
+.hdr-room::after {
+  content: "AGTM headroom"; position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+  font-family: "Courier New", monospace; font-size: 7pt; color: oklch(38% 0.10 60);
+}
+/* card: route-matching */
+/* route-matching — no live demo (flag-gated, no engine ships the CSS side).
+   These rules style a *static mock* of what a route map + active-route
+   styling would look like, scoped under .rm- to avoid collisions. */
+.rm-mock { margin-top: 10px; }
+.rm-bar {
+  display: flex; flex-wrap: wrap; gap: 0; border: 1px solid oklch(43% 0.08 115);
+  background: linear-gradient(180deg, oklch(96% 0.005 115) 0%, oklch(90% 0.01 115) 100%);
+  font-family: "Trebuchet MS", Verdana, sans-serif; font-size: 10pt;
+}
+.rm-bar .rm-tab {
+  padding: 5px 12px; border-right: 1px solid oklch(70% 0.02 115);
+  color: oklch(38% 0.10 115); text-decoration: none; cursor: default;
+  border-top: 1px solid oklch(100% 0 0); /* faux raised bevel */
+}
+.rm-bar .rm-tab:last-child { border-right: none; }
+/* the "active route" — what a :route-active pseudo would paint for you,
+   here hard-coded to the /garage/ tab so the mock reads correctly */
+.rm-bar .rm-tab.rm-active {
+  background: linear-gradient(180deg, oklch(73% 0.11 112) 0%, oklch(64% 0.14 110) 8%, oklch(56% 0.16 108) 18%, oklch(55% 0.16 108) 86%, oklch(63% 0.12 110) 100%);
+  color: oklch(100% 0 0); font-weight: bold;
+  border-top-color: oklch(38% 0.10 115);
+  box-shadow: inset 0 -2px 0 oklch(38% 0.10 115 / .6);
+}
+.rm-cap { font-size: 8.5pt; color: oklch(48% 0 0); margin: 6px 0 0; }
+/* card: install-element */
+/* install-element — described mockup of a declarative <install> button.
+   nothing here is a real install affordance; it's a faux-XP render of what
+   the markup WOULD paint, so the card has something to look at. scoped to
+   .ie- to avoid colliding with the other cards. */
+.ie-mock {
+  margin-top: 10px; padding: 12px; border: 1px solid oklch(54% 0.07 115);
+  background: oklch(96% 0.005 110);
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+}
+.ie-app {
+  display: flex; align-items: center; gap: 8px; font-size: 9.5pt; color: oklch(35% 0 0);
+}
+.ie-app .ico {
+  width: 28px; height: 28px; flex-shrink: 0;
+  background: oklch(87.82% 0.0877 66.27); border: 1px solid oklch(38% 0.10 115);
+  position: relative;
+}
+.ie-app .ico::before {
+  content: ""; position: absolute; inset: 5px;
+  background: oklch(69.58% 0.2043 43.49);
+  clip-path: polygon(20% 0, 100% 50%, 20% 100%, 0 50%);
+}
+/* the raised XP button the <install> element's shadow root would expose */
+.ie-btn {
+  font-family: "Trebuchet MS", Verdana, sans-serif; font-size: 10pt; font-weight: bold;
+  color: oklch(21.78% 0 0); padding: 4px 14px; cursor: default;
+  background: linear-gradient(180deg, oklch(99% 0 0) 0%, oklch(90% 0.01 115) 100%);
+  border: 1px solid oklch(50% 0.02 115);
+  border-top-color: oklch(99% 0 0); border-left-color: oklch(99% 0 0);
+  box-shadow: 1px 1px 0 oklch(38% 0.10 115 / .45);
+}
+.ie-btn::before { content: "\2913  "; /* down-to-bar install glyph */ }
+.ie-note-inline { font-size: 8.5pt; color: oklch(48% 0 0); width: 100%; margin: 4px 0 0; }
+@media (color-gamut: p3) {
+  .ie-app .ico::before { background: oklch(69.58% 0.243 43.49); }
+}
+</style>
+</head>
+<body>
+
+<div class="window">
+
+  <div class="title-bar" aria-hidden="true">
+    <span class="title-text"><span class="icon"></span>horizon</span>
+    <span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/garage/" title="back to the garage" aria-label="back to the garage"></a></span>
+  </div>
+
+  <div class="content">
+
+    <h1>Horizon</h1>
+    <p class="lede">
+      Upcoming web-platform features, test-driven here <em>before</em> any of
+      them touch the live homepage. A flag being on in <strong>my</strong>
+      browser means nothing to real visitors &mdash; so the rule is simple:
+      nothing graduates from this page to <a href="/">aadhar.sh</a> until it
+      ships in more than one engine. Each card says where it actually stands,
+      and the chips below light up for <em>your</em> browser specifically.
+      Cross-engine status triangulates three sources &mdash; Chrome flags,
+      chromestatus, and the green/red <span class="wk sup" style="margin:0">WebKit</span>
+      chips that quote Safari&apos;s team directly from
+      <a href="https://webkit.org/standards-positions/" rel="external">webkit.org/standards-positions</a>,
+      so &quot;will Safari ever do this&quot; is answered by Safari, not inferred.
+    </p>
+
+    <div class="cap-strip" id="caps" aria-label="feature support in your browser"></div>
+
+    <hr>
+
+    <!-- ───────────────────── text-box-trim ───────────────────── -->
+    <section class="demo" data-cap="text-box-trim">
+      <h2>
+        <span>text-box-trim <span class="mono">/ text-box-edge</span></span>
+        <span class="stat cross">Chrome · Safari · Firefox</span>
+      </h2>
+      <p class="note">
+        Trims the half-leading above the cap line and below the baseline, so
+        text sits flush in its box. The highlight shows the line box; on the
+        right it hugs the actual letters.
+      </p>
+      <div class="tb-grid">
+        <div>
+          <p class="tb-cap">default leading</p>
+          <span class="tb-line">Outlook Express</span>
+        </div>
+        <div>
+          <p class="tb-cap"><code>text-box-edge: cap alphabetic</code></p>
+          <span class="tb-line trim">Outlook Express</span>
+        </div>
+      </div>
+      <div class="tb-bar trim">My Documents</div>
+      <p class="replaces">
+        On the site: this is the clean fix for the optical-centering I
+        hand-tuned with magic-number padding on the XP title bars and the
+        long Safari <code>&lt;h2&gt;</code> baseline saga. Now shipped in all
+        three: Chrome&nbsp;133, Safari&nbsp;18.2, Firefox&nbsp;149.
+      </p>
+      <p class="unsupported">Your browser doesn&apos;t support it yet &mdash; the two samples above look identical.</p>
+    </section>
+
+    <!-- ───────────────────── contrast-color() ───────────────────── -->
+    <section class="demo" data-cap="contrast-color">
+      <h2>
+        <span>contrast-color()</span>
+        <span class="stat cross">Safari + Firefox</span>
+      </h2>
+      <p class="note">
+        Auto-picks a legible (black/white) text color for a given background.
+        Top label in each swatch is naive fixed-white; bottom is
+        <code>contrast-color()</code> &mdash; watch it flip to black on the
+        light chips.
+      </p>
+      <div class="cc-grid">
+        <div class="swatch" style="--bg: oklch(45% 0.09 115)"><span class="fixed">white</span><span class="auto">auto</span></div>
+        <div class="swatch" style="--bg: oklch(85% 0.03 110)"><span class="fixed">white</span><span class="auto">auto</span></div>
+        <div class="swatch" style="--bg: oklch(97.73% 0.0373 95.44)"><span class="fixed">white</span><span class="auto">auto</span></div>
+        <div class="swatch" style="--bg: oklch(58.99% 0.2344 26.30)"><span class="fixed">white</span><span class="auto">auto</span></div>
+        <div class="swatch" style="--bg: oklch(87.82% 0.0877 66.27)"><span class="fixed">white</span><span class="auto">auto</span></div>
+        <div class="swatch" style="--bg: oklch(21.78% 0 0)"><span class="fixed">white</span><span class="auto">auto</span></div>
+      </div>
+      <p class="replaces">
+        On the site: everywhere I currently eyeball a text color to sit on a
+        colored bevel, this derives it from the OKLCH background. Funny twist
+        &mdash; here <em>Chrome</em> is the laggard (arriving ~m147); Safari and
+        Firefox already shipped it. Needs a static fallback color until Chrome
+        lands.
+      </p>
+      <p class="unsupported">Your browser doesn&apos;t support it yet &mdash; the &quot;auto&quot; labels fall back to black.</p>
+    </section>
+
+    <!-- ───────────────────── interestfor + anchor positioning ───────────────────── -->
+    <section class="demo ifor-demo" data-cap="interestfor">
+      <h2>
+        <span>interestfor <span class="mono">+ anchor positioning</span></span>
+        <span class="stat contested">Origin trial &middot; Safari opposes</span>
+      </h2>
+      <p class="note">
+        The declarative dream: <code>interestfor="id"</code> shows a popover on
+        hover / focus / long-press, with built-in (configurable) delay and
+        accessibility wiring, and <strong>zero JavaScript</strong>. Anchor
+        positioning places it relative to the link. The demo sets
+        <code>interest-delay: 0s</code> so tooltips spawn instantly &mdash;
+        matching the site&apos;s cursor tooltips (the default is <code>0.5s</code>).
+        Hover a car below:
+      </p>
+      <p>
+        Resto-mods like
+        <a interestfor="pop-singer" href="https://www.google.com/search?q=Singer+Porsche+911" rel="external">Singer</a>,
+        the
+        <a interestfor="pop-hwa" href="https://www.google.com/search?q=HWA+AMG+EVO" rel="external">HWA EVO</a>,
+        or the
+        <a interestfor="pop-evo" href="https://www.google.com/search?q=Evoluto+Automobili+355" rel="external">Evoluto 355</a>.
+      </p>
+      <div id="pop-singer" popover class="ifor-pop"><div class="box">[ Singer 911 ]</div><div class="cap">native popover, no JS</div></div>
+      <div id="pop-hwa" popover class="ifor-pop"><div class="box">[ HWA EVO ]</div><div class="cap">anchored to the link</div></div>
+      <div id="pop-evo" popover class="ifor-pop"><div class="box">[ Evoluto 355 ]</div><div class="cap">interest-delay: 0s</div></div>
+      <p class="note" style="margin-top:10px">
+        Delay is a CSS property, not baked in &mdash; <code>interest-delay-start</code>
+        / <code>interest-delay-end</code> (shorthand <code>interest-delay</code>).
+        <code>0s</code> spawns instantly like ours, but the trade is that every
+        incidental hover-pass over a grid would fire a tooltip (why the 0.5s
+        default exists). The native-menu compromise: a delay for the first, but
+        instant between adjacent invokers once one is already showing &mdash;
+      </p>
+<pre>/* first hover waits; gliding between neighbours is instant */
+.photos:has(:interest-source) .photos a { interest-delay-start: 0s; }</pre>
+      <p class="replaces">
+        On the site: this is the closest native replacement for the ~70-line
+        cursor-tooltip layer &mdash; it natively handles hover/focus detection,
+        the show/hide delay, and accessibility. <strong>But</strong> Safari
+        <em>opposes</em> the current design and it&apos;s Chrome origin-trial
+        only, so it is <em>not</em> a migration path while the site cares about
+        Safari (WebKit standards-position:
+        <a href="https://github.com/WebKit/standards-positions/issues/464" rel="external">oppose, #464</a>).
+        And it anchors to the <em>element</em>, not the cursor &mdash;
+        so even in a perfect world the cursor-following <code>--x/--y</code>
+        loop stays. Strictly a forward-look.
+      </p>
+      <details>
+        <summary class="note" style="cursor:pointer">what it would replace (today &rarr; declarative)</summary>
+<pre>// today: ~70 lines of JS
+pointerover  -&gt; findTarget -&gt; buildContent -&gt; showPopover()
+pointermove  -&gt; write --x/--y
+pointerout   -&gt; hidePopover()
+
+&lt;!-- tomorrow (if it ever lands cross-browser) --&gt;
+&lt;a interestfor="tip"&gt;Singer&lt;/a&gt;
+&lt;div id="tip" popover&gt;...&lt;/div&gt;
+/* CSS: position-area: bottom; interest-delay: 0s; */</pre>
+      </details>
+      <p class="unsupported">
+        Your browser doesn&apos;t support <code>interestfor</code> &mdash; the
+        links above just navigate on click and show no popover. To try it in
+        Chrome: enable <code>chrome://flags#interest-target-attribute</code>
+        (or join the origin trial).
+      </p>
+    </section>
+
+    <!-- ───────────────────── feature cards ───────────────────── -->
+    <section class="demo" data-cap="anchor-positioning">
+      <h2>
+        <span>anchor positioning <span class="mono">/ position-area + position-try</span></span>
+        <span class="stat cross">Chrome · Safari · Firefox</span>
+      </h2>
+      <p class="note">
+        Tether one element to another in pure CSS &mdash; give the target an
+        <code>anchor-name</code>, point a popover at it with
+        <code>position-anchor</code>, and place it with <code>position-area</code>
+        (a 3&times;3 grid around the anchor: <code>top center</code>,
+        <code>bottom span-right</code>&hellip;). No
+        <code>getBoundingClientRect()</code>, no scroll/resize listeners, no JS
+        coordinate loop. The killer feature is <code>position-try-fallbacks</code>:
+        when the chosen side would overflow, the browser <em>flips</em> to the
+        opposite side on its own. Click a button below &mdash; the left popover
+        sits above (and flips below if it runs out of room near the top of the
+        viewport); the right one asks for the right edge and flips inline when
+        crowded.
+      </p>
+      <div class="anc-stage">
+        <div class="anc-row">
+          <button class="anc-btn" popovertarget="anc-pop-a">tooltip &uarr;</button>
+          <button class="anc-btn" popovertarget="anc-pop-b">tooltip &rarr;</button>
+        </div>
+        <div id="anc-pop-a" popover class="anc-pop">
+          <div class="hd">position-area: top</div>
+          <div class="bd">Anchored above the button. Scroll me to the viewport edge and <code>flip-block</code> drops me below &mdash; pure CSS.</div>
+        </div>
+        <div id="anc-pop-b" popover class="anc-pop side">
+          <div class="hd">position-area: right</div>
+          <div class="bd">Asks for the right edge; <code>flip-inline</code> moves me left when there isn&apos;t room.</div>
+        </div>
+      </div>
+      <p class="replaces">
+        On the site: this is <em>already live</em> here in a small dose &mdash;
+        the keyboard-focus path of the homepage tooltip tags the focused element
+        with <code>anchor-name: --xp-tip</code> and the <code>.xp-tooltip.anchored</code>
+        rule uses <code>position-anchor</code> to tether it, so Tab-navigating
+        the photo grid gets a properly-placed Fuji-LCD popover with no cursor to
+        follow. The broader win is everywhere I&apos;d otherwise reach for JS
+        positioning: a future <code>/coffee</code> slot-picker dropdown, the
+        artist popovers, any menu &mdash; all could anchor + auto-flip in CSS.
+        It does <strong>not</strong> replace the pointer-following
+        <code>--x/--y</code> loop (anchors attach to elements, not the cursor),
+        so the two coexist: cursor-tracking for mouse, anchored for keyboard.
+        Now cross-engine &mdash; Chrome&nbsp;125, Safari&nbsp;26,
+        Firefox&nbsp;147 (<code>position-anchor</code> FF&nbsp;151), WebKit
+        support <a href="https://github.com/WebKit/standards-positions/issues/167" rel="external">#167</a>.
+      </p>
+      <p class="unsupported">
+        Your browser doesn&apos;t anchor yet &mdash; the popovers above still
+        open (native Popover API), they just fall back to a fixed corner of the
+        demo box instead of tethering + flipping. Chrome&nbsp;125+, Safari&nbsp;26+,
+        or Firefox&nbsp;147+ shows the real behavior.
+      </p>
+    </section>
+
+    <section class="demo" data-cap="scroll-driven">
+      <h2>
+        <span>scroll-driven animations <span class="mono">animation-timeline: scroll() / view()</span></span>
+        <span class="stat cross">Chrome &middot; Safari &middot; Firefox</span>
+      </h2>
+      <p class="note">
+        Tie a CSS animation&apos;s playback to scroll position instead of the
+        clock &mdash; no <code>scroll</code> listener, no <code>requestAnimationFrame</code>,
+        no JS at all. <code>scroll()</code> tracks a scroller&apos;s offset;
+        <code>view()</code> tracks an element crossing the scrollport. Scroll the
+        box below: the XP progress strip fills via a named scroll-timeline, and
+        each row fades up on its own view-timeline as it enters view.
+      </p>
+      <div class="sd-wrap">
+        <div class="sd-meter" aria-hidden="true"><div class="bar"></div></div>
+        <div class="sd-scroller">
+          <p class="filler">&darr; scroll this box &darr;</p>
+          <div class="sd-row">scroll() drives the strip above &mdash; tracks this scroller&apos;s y-offset.</div>
+          <div class="sd-row">view() drives each row &mdash; one timeline per element, scoped to the scrollport.</div>
+          <div class="sd-row">animation-range: entry 0% cover 35% &mdash; reveal as the row enters.</div>
+          <div class="sd-row">Runs on the compositor; the main thread stays free while you scroll.</div>
+          <div class="sd-row">Degrades cleanly: where it&apos;s missing, rows just sit visible.</div>
+          <div class="sd-row">prefers-reduced-motion pins everything to its end state.</div>
+          <p class="filler">&mdash; end &mdash;</p>
+        </div>
+      </div>
+      <p class="replaces">
+        On the site: this retires any scroll-position JS I&apos;d otherwise hand-write
+        &mdash; a reading-progress strip on <code>/garage</code> long-reads, or
+        lazy fade-up reveals for the 3&times;3 photo grid &mdash; in pure CSS that
+        the compositor runs off the main thread (no jank competing with the
+        cursor-tooltip <code>--x/--y</code> loop). It&apos;s the rare frontier feature
+        that&apos;s already <em>cross-browser</em> (Chrome&nbsp;115, Safari&nbsp;26,
+        Firefox&nbsp;110+; WebKit standards-position
+        <a href="https://github.com/WebKit/standards-positions/issues/152" rel="external">support, #152</a>),
+        so it could graduate to the homepage today &mdash; strictly as decoration,
+        gated behind <code>@supports</code> and <code>prefers-reduced-motion</code>,
+        because the content must read fine with the animation pinned to its end
+        state.
+      </p>
+      <p class="unsupported">
+        Your browser doesn&apos;t support <code>animation-timeline</code> yet
+        &mdash; the progress strip sits at a fixed third and the rows just stay
+        visible instead of revealing on scroll.
+      </p>
+    </section>
+
+    <section class="demo" data-cap="popover-hint">
+      <h2>
+        <span>popover=<span class="mono">hint</span></span>
+        <span class="stat chrome">Chrome 133 · Safari/FF positive</span>
+      </h2>
+      <p class="note">
+        A third popover <em>type</em>, sitting between <code>auto</code> and
+        <code>manual</code>, purpose-built for tooltips. A <code>hint</code>
+        popover is light-dismissed (click outside, <kbd>Esc</kbd>) <strong>and</strong>
+        won&apos;t force-close an open <code>auto</code> popover the way another
+        <code>auto</code> would &mdash; so a hover-tip can float over a menu
+        without nuking it. Open each below and click elsewhere to feel the
+        difference:
+      </p>
+      <div class="ph-row">
+        <button class="ph-btn" popovertarget="ph-auto">popover=auto</button>
+        <button class="ph-btn" popovertarget="ph-hint">popover=hint</button>
+        <button class="ph-btn" popovertarget="ph-manual">popover=manual</button>
+      </div>
+      <div id="ph-auto" popover="auto" class="ph-pop">
+        <div class="ph-bar">auto</div>
+        <div class="ph-body">Light-dismisses on outside click / <code>Esc</code>. Only one <code>auto</code> open at a time &mdash; a second one closes me.</div>
+      </div>
+      <div id="ph-hint" popover="hint" class="ph-pop">
+        <div class="ph-bar">hint</div>
+        <div class="ph-body">Also light-dismisses, but does <em>not</em> close an open <code>auto</code>. Built for transient tooltips.</div>
+      </div>
+      <div id="ph-manual" popover="manual" class="ph-pop">
+        <div class="ph-bar">manual</div>
+        <div class="ph-body">No light-dismiss at all &mdash; only JS <code>hidePopover()</code> closes me. (This is what the homepage tooltip uses today.)</div>
+      </div>
+      <p class="replaces">
+        On the site: the live cursor-tooltip (<code>#xp-tooltip</code> in
+        <code>index.html</code>) is declared <code>popover="manual"</code> and
+        driven entirely by a JS <code>pointerover</code>/<code>pointermove</code>
+        loop that writes <code>--x</code>/<code>--y</code> and calls
+        <code>showPopover()</code>/<code>hidePopover()</code>. Switching it to
+        <code>hint</code> would buy native light-dismiss &mdash; but the site
+        only has <em>one</em> tooltip and it already manages its own lifecycle,
+        so the win is marginal: I&apos;d still run the same JS to follow the
+        cursor and pick the content. <code>hint</code>&apos;s real payoff is the
+        multi-popover case (a tip that coexists with an open menu) the homepage
+        doesn&apos;t have. Filed as &quot;safe to adopt, low value here.&quot;
+      </p>
+      <p class="unsupported">
+        Your browser doesn&apos;t support <code>popover=&quot;hint&quot;</code>
+        &mdash; the middle button falls back to <code>auto</code> semantics
+        (the attribute parses to the default), so it behaves like the first
+        one. To try it in older Chrome, enable
+        <code>chrome://flags#enable-experimental-web-platform-features</code>.
+      </p>
+    </section>
+
+    <section class="demo" data-cap="field-sizing">
+      <h2>
+        <span>field-sizing <span class="mono">: content</span></span>
+        <span class="stat cross">Chrome &middot; Safari</span>
+      </h2>
+      <p class="note">
+        Lets a form control size itself to its <em>content</em> instead of a
+        fixed <code>rows</code>/<code>cols</code> or magic-number height. A
+        <code>&lt;textarea&gt;</code> auto-grows line by line as you type and
+        shrinks back when you delete; an <code>&lt;input&gt;</code> hugs its
+        value. Type into both fields below &mdash; the left one is a stock
+        textarea pinned at <code>rows="2"</code>, the right one tracks the text
+        (<code>min-height</code>/<code>max-height</code> keep it from collapsing
+        or running off the card).
+      </p>
+      <div class="fs-grid">
+        <div>
+          <p class="fs-cap">default &mdash; fixed <code>rows="2"</code>, scrolls</p>
+          <textarea class="fs-field" rows="2" spellcheck="false">Send me a note &mdash; this box stays the same height no matter how much you write, so long messages scroll inside a tiny window.</textarea>
+        </div>
+        <div>
+          <p class="fs-cap"><code>field-sizing: content</code> &mdash; auto-grows</p>
+          <textarea class="fs-field fs-auto" rows="2" spellcheck="false">Send me a note &mdash; this box grows to fit, line by line, and shrinks again when you delete. No JS, no scroll-height bookkeeping.</textarea>
+        </div>
+      </div>
+      <p class="fs-cap" style="margin-top:10px">single-line input that hugs its value:
+        <input class="fs-input" type="text" value="aadharsh@archetype.fund" spellcheck="false"></p>
+      <p class="replaces">
+        On the site: this is the native kill-switch for the classic
+        <code>input</code>/<code>scrollHeight</code> auto-resize handler &mdash;
+        the JS pattern that listens on <code>input</code>, zeroes the height,
+        reads <code>scrollHeight</code>, and writes it back every keystroke. The
+        most direct beneficiary is <code>cal/</code>: the &quot;Your info&quot;
+        message box on the coffee-booking form can drop its resize script
+        entirely and just say <code>field-sizing: content; max-height: 9em</code>
+        on the sunken XP textarea, with the layout reflowing for free. Now
+        shipped in Chrome&nbsp;123 and Safari&nbsp;26.2 (Firefox not yet) &mdash; so it can graduate to the live booking form,
+        not just the garage. Pair it with a static <code>rows</code> attribute
+        as the fallback height and there's nothing to feature-detect.
+      </p>
+      <p class="unsupported">
+        Your browser doesn&apos;t support <code>field-sizing</code> yet &mdash;
+        the right-hand textarea behaves exactly like the left (fixed
+        <code>rows="2"</code>, scrolls), and the email input keeps its default
+        width. The <code>rows</code> attribute is the graceful fallback.
+      </p>
+    </section>
+
+    <section class="demo" data-cap="view-transitions">
+      <h2>
+        <span>View Transitions <span class="mono">/ document.startViewTransition()</span></span>
+        <span class="stat chrome">Chrome &middot; Safari (same-doc) &middot; no Firefox</span>
+      </h2>
+      <p class="note">
+        Wrap a DOM mutation in <code>document.startViewTransition(cb)</code> and
+        the browser snapshots before + after, then cross-fades (or morphs, for
+        same-named elements) between them &mdash; an animated state change with
+        <strong>no manual tweening, no double-buffering, no FLIP math</strong>.
+        Same-document is shipped in Chrome&nbsp;111 and Safari&nbsp;18; the
+        cross-document <code>@view-transition&nbsp;{ navigation: auto }</code>
+        variant (Chrome&nbsp;126, Safari&nbsp;18.2) animates whole navigations.
+        Firefox ships neither. Tap the toggle &mdash; the panel below has its
+        own <code>view-transition-name</code>, so only it animates:
+      </p>
+      <div class="vt-stage">
+        <div class="vt-row">
+          <button type="button" class="vt-btn" id="vt-toggle">Toggle view</button>
+        </div>
+        <div class="vt-panel a" id="vt-panel">
+          <span class="vt-card">My&nbsp;Documents
+            <span class="sub">folder view &mdash; click toggle to swap</span></span>
+        </div>
+      </div>
+      <p class="vt-note-live">
+        Live, self-contained &mdash; the swap is a real
+        <code>startViewTransition()</code> call, gated so unsupported browsers
+        still toggle instantly (just without the morph).
+      </p>
+      <p class="replaces">
+        On the site: the obvious fit is the photo grid &mdash; reshuffling the
+        random 9, or expanding a thumbnail to its full-res
+        <code>/images/full/</code> view, could morph the clicked frame into
+        place by sharing a <code>view-transition-name</code> instead of a hard
+        cut. <strong>But</strong> the cross-document nav cross-fade was
+        deliberately <em>removed</em> site-wide: the
+        <code>@view-transition&nbsp;{ navigation: auto }</code> opt-in softened
+        the McMaster-Carr-style instant snap that the eager Speculation-Rules
+        prerender exists to deliver &mdash; a 200ms fade on top of a
+        zero-latency prerendered page is a regression, not a polish. So the rule
+        here is: same-document morphs on opt-in interactions = yes; automatic
+        navigation cross-fade = no, it fights the prerender. (A leftover
+        <code>@view-transition</code> line still sits in
+        <code>xpChromeCss()</code> in <code>_worker.js</code> with a stale
+        &ldquo;mirrors the homepage&rdquo; comment &mdash; the homepage no
+        longer opts in, so that block is dead and worth pruning.)
+      </p>
+      <p class="unsupported">
+        Your browser doesn&apos;t support <code>document.startViewTransition</code>
+        (Firefox, today) &mdash; the toggle still works, it just swaps the panel
+        instantly with no cross-fade. That instant-swap <em>is</em> the
+        graceful fallback: the feature is purely a progressive enhancement.
+      </p>
+      <script>
+      (function () {
+        var btn = document.getElementById("vt-toggle");
+        var panel = document.getElementById("vt-panel");
+        if (!btn || !panel) return;
+        var states = [
+          { cls: "a", title: "My&nbsp;Documents", sub: "folder view &mdash; click toggle to swap" },
+          { cls: "b", title: "Recycle&nbsp;Bin",  sub: "empty &mdash; same panel, morphed in" }
+        ];
+        var i = 0;
+        function render() {
+          i = i ^ 1;
+          var s = states[i];
+          panel.className = "vt-panel " + s.cls;
+          panel.innerHTML = '<span class="vt-card">' + s.title +
+            '<span class="sub">' + s.sub + '</span></span>';
+        }
+        btn.addEventListener("click", function () {
+          // progressive enhancement: morph if supported, else swap instantly.
+          if (typeof document.startViewTransition === "function") {
+            document.startViewTransition(render);
+          } else {
+            render();
+          }
+        });
+      })();
+      </script>
+    </section>
+
+    <section class="demo" data-cap="base-select">
+      <h2>
+        <span>appearance: base-select <span class="mono">/ customizable &lt;select&gt;</span></span>
+        <span class="stat chrome">Chrome-only · WebKit supports</span>
+      </h2>
+      <p class="note">
+        For two decades the <code>&lt;select&gt;</code> popup has been a sealed
+        OS widget &mdash; you got the trigger, never the list. <code>appearance:
+        base-select</code> opts the control into a fully styleable model: the
+        popup becomes real DOM you can theme, <code>::picker(select)</code> and
+        <code>::picker-icon</code> are addressable, and each <code>&lt;option&gt;</code>
+        can hold arbitrary markup. The select below is a true native control
+        (keyboard, typeahead, form value all intact) reskinned into an XP combobox
+        with alternating Outlook-Express rows, a blue-gradient highlight, a
+        rotating drop-arrow, and a color swatch inside every option. Open it:
+      </p>
+      <p>
+        <select class="bsel-field" aria-label="film simulation" style="appearance: base-select">
+          <button type="button">
+            <selectedcontent></selectedcontent>
+          </button>
+          <option value="classic-chrome"><span class="bsel-sw" style="background:oklch(72% 0.04 115)"></span>Classic Chrome</option>
+          <option value="velvia" selected><span class="bsel-sw" style="background:oklch(58.99% 0.2344 26.30)"></span>Velvia</option>
+          <option value="acros"><span class="bsel-sw" style="background:oklch(40% 0 0)"></span>Acros</option>
+          <option value="nostalgic-neg"><span class="bsel-sw" style="background:oklch(87.82% 0.0877 66.27)"></span>Nostalgic Neg.</option>
+          <option value="classic-neg"><span class="bsel-sw" style="background:oklch(70% 0.10 95)"></span>Classic Neg.</option>
+        </select>
+      </p>
+      <p class="replaces">
+        On the site: this is the native answer for the future <code>cal/</code>
+        booking dropdowns (timezone, slot length, meeting type) &mdash; today
+        those would mean a hand-rolled JS listbox to escape the un-styleable OS
+        popup, or accepting a system widget that shatters the XP illusion.
+        base-select lets one real <code>&lt;select&gt;</code> carry the bevel,
+        the alternating rows, and inline swatches/icons while keeping full
+        keyboard + form semantics for free. <strong>But</strong> it is
+        Chrome-shipped only (~m135); Safari and Firefox render the native widget,
+        so it is strictly progressive enhancement until it lands cross-engine
+        (WebKit standards-position:
+        <a href="https://github.com/WebKit/standards-positions/issues/386" rel="external">support, #386</a>
+        &mdash; positive, not yet shipped).
+      </p>
+      <p class="unsupported">
+        Your browser doesn&apos;t support <code>appearance: base-select</code> yet
+        &mdash; the dropdown above falls back to your OS&apos;s native
+        <code>&lt;select&gt;</code> widget (which is exactly the intended graceful
+        degradation). To try the XP-themed version, open this page in Chrome 135+.
+      </p>
+    </section>
+
+    <section class="demo" data-cap="corner-shape">
+      <h2>
+        <span>corner-shape <span class="mono">+ superellipse()</span></span>
+        <span class="stat chrome">Chrome-only · WebKit supports</span>
+      </h2>
+      <p class="note">
+        A second axis for <code>border-radius</code>. The radius sets <em>where</em>
+        a corner&apos;s two endpoints sit; <code>corner-shape</code> sets the
+        <em>curve drawn between them</em> &mdash; <code>round</code> (the default),
+        <code>bevel</code> (a flat cut), <code>notch</code> (a square step in),
+        <code>scoop</code> (concave bite), or <code>squircle</code> /
+        <code>superellipse(k)</code> for the Apple-style continuous curve. Every
+        box below shares the <em>same</em> <code>border-radius: 18px</code>; only
+        the keyword differs. Resolved via WebKit standards-positions
+        <a href="https://github.com/WebKit/standards-positions/issues/229" rel="external">#229</a>.
+      </p>
+      <div class="cs-grid">
+        <div class="cs-cell round">round<br>(default)</div>
+        <div class="cs-cell bevel">bevel</div>
+        <div class="cs-cell notch">notch</div>
+        <div class="cs-cell scoop">scoop</div>
+        <div class="cs-cell squircle">squircle</div>
+        <div class="cs-cell super">superellipse(2.4)</div>
+      </div>
+      <div class="cs-frame">
+        <div class="bar">My Documents</div>
+        <div class="body">A window frame with <code>scoop</code> top corners &mdash; one declaration, no SVG mask, no <code>clip-path</code> polygon.</div>
+      </div>
+      <p class="replaces">
+        On the site: this is the native replacement for the <code>clip-path:
+        polygon()</code> hack on the title-bar icon and any time I&apos;d reach
+        for an SVG mask to cut a corner. A real squircle on the <code>.window</code>
+        and photo-frame corners reads more 2006-Aqua than the flat
+        <code>border-radius</code> arc does, and it stays a live border (shadow,
+        outline, focus ring all follow the new shape) instead of a clip that eats
+        the box-shadow. <strong>Chrome 139 only</strong> &mdash; Safari and Firefox
+        haven&apos;t shipped it, so it can&apos;t graduate to the homepage yet; it
+        needs a plain <code>border-radius</code> fallback (which every box above
+        already degrades to).
+      </p>
+      <p class="unsupported">
+        Your browser doesn&apos;t support <code>corner-shape</code> yet &mdash; all
+        six boxes above fall back to identical plain rounded corners, and the
+        framed window keeps ordinary rounded tabs. To try it in Chrome 139+:
+        no flag needed; older Chrome via
+        <code>chrome://flags#enable-experimental-web-platform-features</code>.
+      </p>
+    </section>
+
+    <section class="demo cs-demo" data-cap="interpolate-size">
+      <h2>
+        <span>calc-size() <span class="mono">/ interpolate-size</span></span>
+        <span class="stat chrome">Chrome-only</span>
+      </h2>
+      <p class="note">
+        The decades-old missing piece: you <em>cannot</em> transition
+        <code>height: 0 &rarr; auto</code> &mdash; the browser can&apos;t
+        interpolate to an intrinsic keyword, so it snaps. <code>calc-size()</code>
+        makes <code>auto</code>/<code>min-content</code>/<code>fit-content</code>
+        computable, and one declaration &mdash;
+        <code>interpolate-size: allow-keywords</code> &mdash; opts a subtree in,
+        so every keyword transition under it tweens instead of jumping. Click
+        the group box below; in Chrome it eases open, elsewhere it snaps.
+      </p>
+
+      <details class="cs-demo cs-panel" open style="border:0;margin-top:10px">
+        <summary class="cs-head"><span>Now Playing &mdash; details</span><span class="chev">&rsaquo;</span></summary>
+        <div class="cs-body">
+          <div class="cs-body-inner">
+            <p>This panel&apos;s height animates from <code>0</code> to its
+            natural content height &mdash; no <code>max-height</code> guess, no
+            JS <code>scrollHeight</code> measurement, no ResizeObserver.</p>
+            <p>The <code>&lt;details&gt;</code> still works as a real disclosure
+            widget for keyboard and AT; the transition is pure progressive
+            enhancement layered on top.</p>
+          </div>
+        </div>
+      </details>
+
+      <details class="cs-demo cs-native">
+        <summary>&hellip; or fully declarative via <code>::details-content</code></summary>
+        <div style="padding:9px 11px;font-size:9.5pt;color:oklch(34% 0 0)">
+          Same animation with zero extra markup &mdash; just
+          <code>::details-content { height: 0 &rarr; auto }</code> plus
+          <code>interpolate-size</code>. The XP group box above wraps the body in
+          an explicit <code>div</code> only so the bevel clips cleanly.
+        </div>
+      </details>
+
+      <p class="replaces">
+        On the site: this is the native fix for every expand/collapse where I
+        currently animate <code>max-height</code> to a hand-picked
+        too-big number (which makes the easing curve wrong &mdash; the timing is
+        spent on empty space) or measure <code>scrollHeight</code> in JS. The
+        <code>/source</code> viewer&apos;s collapsible sections and any future
+        FAQ-style disclosure would drop their measuring code entirely. But it&apos;s
+        <strong>Chrome 129 only</strong> &mdash; Safari and Firefox have not
+        shipped it and WebKit has taken no position (<a href="https://github.com/WebKit/standards-positions/issues/348" rel="external">#348</a>),
+        so the rule stays in the garage. The honest fallback is fine, though:
+        without the keyword the panel just snaps open instantly, which is exactly
+        how <code>&lt;details&gt;</code> behaves today &mdash; so this can ship as
+        pure enhancement the moment a second engine lands it.
+      </p>
+      <p class="unsupported">
+        Your browser doesn&apos;t support <code>interpolate-size</code> &mdash;
+        the panels above still open and close correctly, they just snap instead
+        of easing. To try the animation in Chrome 129+, no flag needed.
+      </p>
+    </section>
+
+    <section class="demo" data-cap="scheduler-yield">
+      <h2>
+        <span>scheduler.yield() <span class="mono">/ main-thread responsiveness</span></span>
+        <span class="stat chrome">Chrome-only · FF positive</span>
+      </h2>
+      <p class="note">
+        <span class="wk non">WebKit: unstated</span>
+        A promise you <code>await</code> in the middle of a long task: it hands the
+        main thread back to the browser to service pending input/paint, then
+        resumes your loop &mdash; and crucially resumes at the <em>front</em> of
+        the queue, not the back like <code>setTimeout(0)</code>. So you stay
+        responsive without losing your turn to unrelated work. It&apos;s shipped
+        in Chrome (no flag), so the demo below is live &mdash; the concept, then a
+        real measured run, then the code.
+      </p>
+
+      <div class="sy-grid">
+        <div class="sy-col">
+          <h4>one long synchronous task</h4>
+          <div class="sy-track blocked"><span class="blk"></span><span class="tap" title="a tap arrives here"></span></div>
+          <p class="sy-leg">the <span class="red">red</span> tap waits for the whole block to finish &mdash; janky.</p>
+        </div>
+        <div class="sy-col">
+          <h4>broken with <code>await scheduler.yield()</code></h4>
+          <div class="sy-track yielded"><span class="blk a"></span><span class="blk b"></span><span class="blk c"></span><span class="blk d"></span><span class="tap" title="a tap arrives here"></span></div>
+          <p class="sy-leg">the same tap lands in a gap and gets serviced &mdash; smooth.</p>
+        </div>
+      </div>
+
+      <div class="sy-live">
+        <div class="sy-rail"><span class="sy-dot" id="sy-dot"></span></div>
+        <p class="sy-meter">live rAF dot &mdash; it freezes whenever the main thread is blocked &middot; frames: <output id="sy-frames">0</output></p>
+        <div class="sy-btns">
+          <button class="sy-btn" id="sy-block">run one 600ms task</button>
+          <button class="sy-btn" id="sy-yield">run chunked + yield</button>
+        </div>
+        <p class="sy-out" id="sy-out">Click a button and watch the dot. The single 600&nbsp;ms task freezes it; the chunked version yields every ~20&nbsp;ms so it keeps gliding &mdash; same total work, responsive throughout.</p>
+      </div>
+      <script>
+      (function () {
+        var card = document.querySelector('[data-cap="scheduler-yield"]');
+        var dot = document.getElementById('sy-dot'),
+            out = document.getElementById('sy-out'),
+            fc  = document.getElementById('sy-frames'),
+            rail = card && card.querySelector('.sy-rail'),
+            bBtn = document.getElementById('sy-block'),
+            yBtn = document.getElementById('sy-yield');
+        if (!card || !dot || !bBtn || !yBtn) return;
+        var raf = 0, frames = 0, last = 0, longest = 0, x = 0, dir = 1;
+        function loop(now) {
+          if (last) { var g = now - last; if (g > longest) longest = g; }
+          last = now; frames++; if (fc) fc.textContent = frames;
+          var w = (rail.clientWidth || 260) - 13;
+          x += dir * 4; if (x >= w) { x = w; dir = -1; } if (x <= 0) { x = 0; dir = 1; }
+          dot.style.transform = 'translateX(' + x + 'px)';
+          raf = requestAnimationFrame(loop);
+        }
+        // only animate while the card is on screen — no idle main-thread cost.
+        if ('IntersectionObserver' in window) {
+          new IntersectionObserver(function (es) {
+            es.forEach(function (e) {
+              if (e.isIntersecting && !raf) { last = 0; raf = requestAnimationFrame(loop); }
+              else if (!e.isIntersecting && raf) { cancelAnimationFrame(raf); raf = 0; }
+            });
+          }).observe(card);
+        } else { raf = requestAnimationFrame(loop); }
+
+        var hasYield = !!(window.scheduler && scheduler.yield);
+        var yieldNow = hasYield ? function () { return scheduler.yield(); }
+                                : function () { return new Promise(function (r) { setTimeout(r, 0); }); };
+        function busy(ms) { var e = performance.now() + ms; while (performance.now() < e) {} }
+        function tag(n) { var c = n > 100 ? 'hi' : 'lo'; return '<span class="' + c + '">' + Math.round(n) + 'ms</span>'; }
+        function done(label, t) {
+          var dur = Math.round(performance.now() - t);
+          out.innerHTML = label + ' &mdash; ' + dur + 'ms total, longest unbroken block ' + tag(longest) +
+            (longest > 100 ? ' (the dot froze)' : ' (the dot kept gliding)');
+          bBtn.disabled = yBtn.disabled = false;
+        }
+        function afterPaint(cb) {
+          // wait one painted frame so the post-work gap is recorded, but never
+          // hang if rAF is paused (hidden tab / headless) — setTimeout backstop.
+          var fired = false, go = function () { if (!fired) { fired = true; cb(); } };
+          requestAnimationFrame(function () { requestAnimationFrame(go); });
+          setTimeout(go, 150);
+        }
+        function run(label, fn) {
+          bBtn.disabled = yBtn.disabled = true; longest = 0;
+          var t = performance.now();
+          Promise.resolve().then(fn).then(function () { afterPaint(function () { done(label, t); }); });
+        }
+        bBtn.onclick = function () { run('one synchronous task', function () { busy(600); }); };
+        yBtn.onclick = function () { run('chunked + ' + (hasYield ? 'scheduler.yield()' : 'setTimeout fallback'),
+          async function () { for (var i = 0; i < 30; i++) { busy(20); await yieldNow(); } }); };
+      })();
+      </script>
+
+<pre>// today on the site: cold-KV tracklist fallback builds ~50 rows
+// in one go, blocking input on a slow phone.
+for (const t of tracks) renderTrackRow(t);   // one long task
+
+// with scheduler.yield(), guarded so it ships everywhere:
+const yieldNow = (window.scheduler &amp;&amp; scheduler.yield)
+  ? () =&gt; scheduler.yield()
+  : () =&gt; new Promise(r =&gt; setTimeout(r, 0));  // fallback
+
+let i = 0;
+for (const t of tracks) {
+  renderTrackRow(t);
+  if (++i % 8 === 0) await yieldNow();   // breathe every 8 rows,
+}                                        // resume at front of queue</pre>
+
+      <p class="replaces">
+        On the site: the offender is the client-side Spotify tracklist fallback
+        (the cold-KV path that renders full-fidelity rows &mdash; artist links,
+        cover art, tooltip wiring). Today that&apos;s one synchronous burst.
+        <code>scheduler.yield()</code> would let it chunk while keeping taps and
+        scroll alive, without the back-of-queue penalty of a
+        <code>setTimeout(0)</code> shim. It graduates to the homepage trivially
+        because it&apos;s a guarded enhancement &mdash; <code>typeof</code> check,
+        same-shape fallback &mdash; so Safari and Firefox just take the plain loop.
+      </p>
+      <p class="unsupported">
+        Your browser doesn&apos;t expose <code>scheduler.yield()</code> &mdash;
+        the live demo below still runs and stays responsive, it just takes the
+        <code>setTimeout(0)</code> fallback path instead. To get the real
+        primitive: Chrome 129+, shipped, no flag.
+      </p>
+    </section>
+
+    <p class="note" style="margin:22px 0 0">
+      <strong>Even further out</strong> &mdash; flag-gated in Chrome, not shipped
+      by default in any engine. Bleeding edge. (To exercise the supported ones
+      above, flip the master switch in Canary:
+      <code>chrome://flags#enable-experimental-web-platform-features</code>.)
+    </p>
+
+    <section class="demo" data-cap="html-in-canvas">
+      <h2>
+        <span>HTML-in-Canvas <span class="mono">/ ctx.drawElement()</span></span>
+        <span class="stat chrome">Chrome flag · WICG early</span>
+      </h2>
+      <p class="note">
+        <a href="https://github.com/WebKit/standards-positions/issues" rel="external" class="wk non" style="margin:0 6px 0 0">WebKit: no position</a>
+        Draws a <em>live, laid-out</em> DOM subtree straight into a 2D canvas
+        with <code>ctx.drawElement(el, x, y)</code> (and the WebGL twin
+        <code>texElement2D</code>). The element keeps real text layout, fonts,
+        and accessibility &mdash; unlike <code>foreignObject</code>+SVG, it
+        isn&apos;t tainted, doesn&apos;t silently drop styles, and can be
+        composited, transformed, and post-processed pixel-by-pixel. Below: a
+        real XP title bar on the left, rasterized into the canvas on the right
+        and tilted &mdash; one source of truth, two surfaces.
+      </p>
+      <div class="hic-stage">
+        <div>
+          <p class="hic-cap">live DOM (the source element)</p>
+          <div class="hic-src" id="hic-source">
+            <span>My Documents</span>
+            <span class="glyphs"><span>_</span><span>&#9633;</span><span>&times;</span></span>
+          </div>
+        </div>
+        <div>
+          <p class="hic-cap"><code>drawElement</code> &rarr; canvas (skewed)</p>
+          <canvas class="hic-canvas" id="hic-canvas" width="320" height="120" aria-label="the title bar above, rasterized into a canvas and tilted"></canvas>
+          <p class="hic-note2">Same markup, now compositable pixels.</p>
+        </div>
+      </div>
+      <p class="replaces">
+        On the site: this is the only sanctioned way to take the hand-built XP
+        chrome &mdash; the title bars, the contact-sheet photo frames, the Fuji
+        LCD tooltip &mdash; and run it through canvas effects (a tilt, a CRT
+        scanline pass, a drop-shadow bake) <em>without</em> re-drawing any of it
+        in canvas primitives or shipping an html2canvas-style screenshotting
+        library. Picture a one-off &quot;rendered on a 2006 CRT&quot; hero, or
+        baking a share-card OG image of the live now-playing list. But it is a
+        single-engine flag with no WebKit position, so it stays a garage toy:
+        the homepage cannot depend on it for anything Safari/Firefox visitors
+        need to see.
+      </p>
+      <details>
+        <summary class="note" style="cursor:pointer">the call (what the canvas on the right is doing)</summary>
+<pre>const el  = document.getElementById("hic-source");
+const ctx = canvas.getContext("2d");
+
+// tilt the whole surface, then rasterize the LIVE element into it
+ctx.translate(20, 14);
+ctx.transform(1, 0.06, -0.10, 1, 0, 0);   // slight skew
+ctx.drawElement(el, 0, 0);                 // &lt;- the new primitive
+
+// from here it's normal canvas: ctx.filter, getImageData, WebGL texElement2D…</pre>
+      </details>
+      <p class="unsupported">
+        Your browser doesn&apos;t support <code>drawElement</code> yet &mdash;
+        the canvas shows a placeholder instead of the live rasterization. Enable
+        <code>chrome://flags#canvas-draw-element</code> in Chrome Canary to see
+        it for real.
+      </p>
+      <script>
+      (function () {
+        var c = document.getElementById("hic-canvas");
+        if (!c || !c.getContext) return;
+        var ctx = c.getContext("2d"), el = document.getElementById("hic-source");
+        if (ctx && typeof ctx.drawElement === "function" && el) {
+          try {
+            ctx.clearRect(0, 0, c.width, c.height);
+            ctx.save(); ctx.translate(20, 14);
+            ctx.transform(1, 0.06, -0.10, 1, 0, 0);   // slight skew
+            ctx.drawElement(el, 0, 0); ctx.restore(); return;
+          } catch (e) {}
+        }
+        // no drawElement here -> honest placeholder, not a confusing blank box
+        ctx.fillStyle = "#f3f4f8"; ctx.fillRect(0, 0, c.width, c.height);
+        ctx.fillStyle = "#7a808c"; ctx.textAlign = "center";
+        ctx.font = "11px Tahoma, sans-serif";
+        ctx.fillText("ctx.drawElement() unavailable", c.width / 2, c.height / 2 - 6);
+        ctx.fillText("enable #canvas-draw-element", c.width / 2, c.height / 2 + 12);
+      })();
+      </script>
+    </section>
+
+    <section class="demo" data-cap="masonry">
+      <h2>
+        <span>CSS Masonry <span class="mono">/ Grid Lanes</span></span>
+        <span class="stat trial">Not shipped &middot; Canary flag</span>
+      </h2>
+      <p class="note">
+        Lays tiles of <em>uneven height</em> into columns, each new tile dropping
+        into the shortest column so the bottom edge stays ragged and the gaps
+        close &mdash; the Pinterest / contact-sheet look, but native. After years
+        of a syntax fight (a <code>grid-template-rows: masonry</code> shorthand
+        vs. a separate <code>display: masonry</code>), it has converged into
+        <strong>Grid Lanes</strong>: masonry expressed <em>inside</em> CSS Grid so
+        you keep <code>grid-template-columns</code>, gaps, and (eventually)
+        subgrid. The grid below is <strong>a mockup</strong>, faked with CSS
+        multi-column &mdash; it is <em>not</em> live masonry. The silhouette is
+        right; the source-order semantics are not (columns read down-then-across,
+        real masonry packs into the shortest track).
+      </p>
+      <div class="mas-mock" aria-hidden="true">
+        <div class="tile t1"><span class="cap">portrait</span></div>
+        <div class="tile t2"><span class="cap">landscape</span></div>
+        <div class="tile t3"><span class="cap">square</span></div>
+        <div class="tile t4"><span class="cap">tall</span></div>
+        <div class="tile t5"><span class="cap">pano</span></div>
+        <div class="tile t6"><span class="cap">4:5</span></div>
+        <div class="tile t7"><span class="cap">square</span></div>
+        <div class="tile t8"><span class="cap">5:4</span></div>
+        <div class="tile t9"><span class="cap">tall</span></div>
+      </div>
+      <p class="mas-flag">
+        Mockup only &mdash; to try the real thing: Chrome Canary
+        <code>chrome://flags#enable-experimental-web-platform-features</code>
+        (Grid Lanes lives behind the experimental switch; the dedicated
+        <code>#css-grid-lanes-layout</code> entry comes and goes as the
+        prototype churns), or Safari Technology Preview&apos;s masonry build.
+      </p>
+      <details>
+        <summary class="note" style="cursor:pointer">proposed Grid Lanes syntax (vs. today&apos;s fixed 3&times;3)</summary>
+<pre>/* today on aadhar.sh — rigid, every frame the same box */
+.photos {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.photos img { aspect-ratio: 1; object-fit: cover; } /* crops the Fuji frames */
+
+/* tomorrow — Grid Lanes (NOT shipped; syntax still settling) */
+.photos {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: masonry;   /* the contested line; Lanes keeps grid intact */
+  gap: 8px;
+}
+.photos img { height: auto; }    /* native aspect ratio preserved, no crop */</pre>
+      </details>
+      <p class="replaces">
+        On the site: the homepage photo grid is a hard <code>3&times;3</code> of
+        square-cropped thumbnails &mdash; portrait Fuji frames get center-cropped
+        and tall Leica shots lose their composition. Masonry would let each
+        thumbnail keep its native aspect ratio (the orientation-corrected
+        width/height already in <code>metadata.json</code>) and pack with no
+        crop and no row-height gridlock. Until it ships in two engines it stays
+        here: the live grid keeps cropping, because a Canary-flag layout that
+        falls back to a broken stack for every real visitor is exactly what this
+        page exists to <em>avoid</em> shipping.
+      </p>
+      <p class="unsupported">
+        Your browser can&apos;t show real masonry yet &mdash; nothing ships it by
+        default in mid-2026. The grid above is a CSS multi-column
+        <em>approximation</em>, not the live feature; enable the Canary /
+        Safari TP flags above to drive the genuine layout.
+      </p>
+    </section>
+
+    <section class="demo" data-cap="jpeg-xl">
+      <h2>
+        <span>JPEG XL <span class="mono">image/jxl</span></span>
+        <span class="stat contested">Safari ships &middot; Chrome removed &middot; Firefox no</span>
+      </h2>
+      <p class="note">
+        The format the photo pipeline actually wants: smaller than AVIF at the
+        <em>high</em> quality end (where this site lives), genuinely progressive
+        (a low-res preview paints from the first few KB, then sharpens), and it
+        can losslessly <em>re-wrap</em> an existing JPEG ~20% smaller with the
+        original bytes recoverable. No live decode below &mdash; Chrome (my daily
+        driver) can&apos;t decode JXL, and there&apos;s no <code>.jxl</code> asset
+        on the site &mdash; so this is an honest mock plus the wiring it&apos;d take.
+        <a href="https://github.com/WebKit/standards-positions/issues/72" rel="external" class="wk sup" style="margin-left:4px">WebKit: support (shipped)</a>
+      </p>
+
+      <div class="jxl-compare" aria-label="illustrative file size at matched high quality">
+        <div class="jxl-fmt">
+          <h4>JPG (jpegli)</h4>
+          <div class="jxl-bar"><i style="width:100%"></i></div>
+          <p class="jxl-kb">baseline &mdash; today&apos;s universal fallback</p>
+          <p class="jxl-ships">everywhere</p>
+        </div>
+        <div class="jxl-fmt">
+          <h4>AVIF</h4>
+          <div class="jxl-bar"><i style="width:74%"></i></div>
+          <p class="jxl-kb">~25% smaller, but softens fine grain at high q</p>
+          <p class="jxl-ships">Cr 85+ &middot; Saf 16+ &middot; FF 93+</p>
+        </div>
+        <div class="jxl-fmt win">
+          <h4>JPEG XL</h4>
+          <div class="jxl-bar"><i style="width:62%"></i></div>
+          <p class="jxl-kb">smaller still at the high-q end + progressive</p>
+          <p class="jxl-ships">Safari 16.4+ only</p>
+        </div>
+      </div>
+      <p class="note" style="font-size:8.5pt">
+        Bars are illustrative (matched perceptual quality, photographic content) &mdash;
+        not measured on these specific shots.
+      </p>
+
+      <ul class="jxl-feat">
+        <li><strong>Progressive by default</strong> &mdash; the Fuji-grain photos paint a blurry frame from the first KB and resolve as bytes arrive, instead of AVIF&apos;s all-or-nothing decode.</li>
+        <li><strong>Lossless JPEG transcode</strong> &mdash; <code>cjxl in.jpg out.jxl</code> shrinks the existing jpegli output ~20% and is byte-reversible, so no quality decision to re-litigate.</li>
+        <li><strong>High-fidelity sweet spot</strong> &mdash; at the q82-ish quality this site targets, JXL keeps grain and tonal gradients that AVIF starts to smear.</li>
+      </ul>
+
+      <details>
+        <summary class="note" style="cursor:pointer">how it&apos;d slot into the &lt;picture&gt; ladder (a 4th, top-priority source)</summary>
+<pre>&lt;!-- add jxl ABOVE avif; browser picks the first type it claims to support.
+     Safari takes jxl, Chrome/FF skip to avif, ancient takes the jpg src. --&gt;
+&lt;picture&gt;
+  &lt;source type="image/jxl"  srcset="/images/&lt;stem&gt;.jxl?v=11"&gt;
+  &lt;source type="image/avif" srcset="/images/&lt;stem&gt;.avif?v=11"&gt;
+  &lt;img src="/images/&lt;stem&gt;.jpg?v=11" loading="lazy" decoding="async"&gt;
+&lt;/picture&gt;
+
+# pipeline: one more encode step after the jpegli stage in add-photos.sh
+cjxl --lossless_jpeg=1 &lt;stem&gt;.jpg &lt;stem&gt;.jxl   # byte-reversible re-wrap
+# OR re-encode from the 1200px source for max ratio:
+cjxl -q 90 -e 7 &lt;stem&gt;.png &lt;stem&gt;.jxl</pre>
+      </details>
+
+      <p class="replaces">
+        On the site: a <em>third</em> tier above AVIF in every photo-grid
+        <code>&lt;picture&gt;</code>, plus a <code>cjxl</code> step in
+        <code>add-photos.sh</code> after the jpegli encode and another stem
+        format in <code>holding/images/</code> (120 stems &times; <em>3</em>
+        formats). But the <code>&lt;picture&gt;</code> type-fallback decode trap
+        from the CLAUDE.md gotcha applies double here: the format split is
+        wildly uneven &mdash; only Safari decodes it, Chrome dropped it in 2023
+        (a Canary <code>#enable-jxl-image-format</code> decode flag is returning),
+        Firefox has never shipped it. So for now it&apos;d only ever serve to
+        Safari while tripling the asset count and KB on disk. <strong>Not a
+        graduation candidate</strong> until Chrome ships decode again
+        non-flagged; it stays parked here as the format I&apos;d adopt the day
+        that happens, given the SOOC originals already live in R2 to re-encode from.
+      </p>
+
+      <p class="unsupported">
+        Nothing to decode live regardless of your browser &mdash; this card is a
+        static mock by design. To actually <em>view</em> a <code>.jxl</code>
+        today you need Safari 16.4+; in Chrome enable
+        <code>chrome://flags#enable-jxl-image-format</code> in a recent Canary.
+      </p>
+    </section>
+
+    <section class="demo" data-cap="hdr-agtm">
+      <h2>
+        <span>HDR adaptive tone-mapping <span class="mono">/ AGTM &middot; #hdr-agtm</span></span>
+        <span class="stat chrome">Chrome flag · not shipped</span>
+      </h2>
+      <p class="note">
+        A gain-map HDR image carries two things: a normal SDR base picture, plus
+        a per-pixel <em>gain map</em> that says how much extra luminance each
+        spot should gain on a display with headroom. <strong>Adaptive Global
+        Tone Mapping</strong> (AGTM, SMPTE ST&nbsp;2094-50) lets the image author
+        ship a tone-mapping curve so the same file renders correctly across a
+        dim laptop, a bright phone, and a 1600-nit XDR panel &mdash; the highlights
+        bloom on capable screens and fold back gracefully on SDR ones, instead of
+        either clipping to flat white or being globally dimmed. This is the next
+        rung above the P3 wide-gamut already used on the photo grid: P3 buys
+        <em>wider</em> color, HDR buys <em>brighter</em> highlights.
+      </p>
+      <p class="note" style="margin-top:6px">
+        <strong>Can&apos;t be shown live here.</strong> It needs a real gain-map
+        asset, an HDR-capable display, and the experimental flag all at once, and
+        a screenshot would just be SDR pixels lying about it. So the cells below
+        are an honest <em>mockup</em> of the idea, not real HDR: left, an SDR
+        ramp whose sun clips to paper-white; right, the same scene with the
+        specular headroom the gain map would restore. The bar shows where the
+        SDR ceiling sits and the hatched region is the extra headroom AGTM maps
+        into.
+      </p>
+      <div class="hdr-grid">
+        <div>
+          <p class="hdr-cap">SDR &mdash; highlights clip flat</p>
+          <div class="hdr-swatch sdr">base, clipped sun</div>
+        </div>
+        <div>
+          <p class="hdr-cap">HDR + gain map (mock) &mdash; specular headroom</p>
+          <div class="hdr-swatch hdr">base &times; gain map</div>
+        </div>
+      </div>
+      <div class="hdr-room" aria-hidden="true"><span class="head"></span></div>
+      <details>
+        <summary class="note" style="cursor:pointer">pipeline sketch (what add-photos.sh would gain)</summary>
+<pre># today: SOOC -&gt; sips resize -&gt; jpegtran rotate -&gt; cjpegli q82 -&gt; avifenc CQ30
+#         single SDR-tonemapped AVIF + JPG, P3-tagged.
+
+# with AGTM: keep the SDR base, ALSO author a gain map + 2094-50 curve.
+#   X-T5 / Leica raw already holds the highlight data cjpegli throws away.
+avifenc --gainmap hdr.avif base.jpg -o photo-hdr.avif   # gain-map AVIF
+# OR ultra-HDR JPEG (libultrahdr) for the universal &lt;img&gt; fallback:
+ultrahdr_app -m 0 -i base.jpg -g gainmap.jpg -o photo-uhdr.jpg
+
+&lt;picture&gt;
+  &lt;source type="image/avif" srcset="/images/&lt;stem&gt;-hdr.avif?v=N"&gt;
+  &lt;img src="/images/&lt;stem&gt;.jpg?v=N"&gt;  &lt;!-- SDR base = the fallback --&gt;
+&lt;/picture&gt;
+/* gate the glow so SDR panels never see a washed-out frame: */
+@media (dynamic-range: high) { .photos img { /* let it bloom */ } }</pre>
+      </details>
+      <p class="replaces">
+        On the site: this doesn&apos;t replace anything &mdash; it&apos;s a
+        forward-look for the photo grid. The gain-map base layer <em>is</em> the
+        existing SDR JPG/AVIF, so the fallback is free and the pipeline is purely
+        additive: one extra encode step in <code>add-photos.sh</code>, no new
+        client JS. It pairs with the <code>@media (color-gamut: p3)</code>
+        upgrades already in the stylesheet via a sibling
+        <code>@media (dynamic-range: high)</code> gate, so SDR visitors keep the
+        exact frame they have now. Honest blockers: AGTM is a Chrome flag
+        (<code>#hdr-agtm</code>), not shipped anywhere by default, and naive HDR
+        photos in a feed are a known eye-searing UX problem &mdash; so it stays
+        in the garage until it ships cross-engine <em>and</em> the curves can be
+        tuned to glow, not blind.
+      </p>
+      <p class="unsupported">
+        Your browser / display reports no HDR headroom
+        (<code>dynamic-range: high</code> is false), so even a real AGTM asset
+        would render as its plain SDR base &mdash; which is exactly the graceful
+        fallback that makes this safe to ship. The two cells above are a mockup
+        either way.
+      </p>
+    </section>
+
+    <section class="demo" data-cap="route-matching">
+      <h2>
+        <span>Declarative routing <span class="mono">/ route-matching</span></span>
+        <span class="stat trial">Chrome flag · building blocks cross-browser</span>
+      </h2>
+      <p class="note">
+        The pitch: declare your app&apos;s URL space once as a set of
+        <code>URLPattern</code> route rules, then let CSS style whichever route
+        is currently active &mdash; an &quot;active nav tab&quot; with
+        <em>zero</em> JavaScript and no per-link <code>aria-current</code>
+        bookkeeping. The routing flag itself is Chrome-only and still unrated,
+        but it&apos;s assembled from two shipped, cross-engine primitives:
+        <code>URLPattern</code>
+        (<a href="https://github.com/WebKit/standards-positions/issues/61" rel="external" class="wk sup">WebKit #61: support</a>)
+        and the Navigation API
+        (<a href="https://github.com/WebKit/standards-positions/issues/34" rel="external" class="wk sup">WebKit #34: support</a>).
+      </p>
+
+      <div class="rm-mock" aria-hidden="true">
+        <div class="rm-bar">
+          <span class="rm-tab">/</span>
+          <span class="rm-tab rm-active">/garage/</span>
+          <span class="rm-tab">/around</span>
+          <span class="rm-tab">/whoareyou</span>
+          <span class="rm-tab">/bot</span>
+        </div>
+        <p class="rm-cap">
+          mock only &mdash; the highlighted tab is hard-coded. With real
+          route-matching the engine would paint whichever pattern matched
+          <code>location.pathname</code>, live, as you navigate.
+        </p>
+      </div>
+
+      <details>
+        <summary class="note" style="cursor:pointer">code sketch (today&apos;s primitives &rarr; the declarative dream)</summary>
+<pre>// TODAY, cross-browser: URLPattern + Navigation API, ~a dozen lines of JS.
+// This is what aadhar.sh would actually use right now.
+const routes = [
+  { id: "home",   p: new URLPattern({ pathname: "/" }) },
+  { id: "garage", p: new URLPattern({ pathname: "/garage/:rest*" }) },
+  { id: "photo",  p: new URLPattern({ pathname: "/images/full/:file" }) },
+];
+navigation.addEventListener("navigate", (e) =&gt; {
+  const url = new URL(e.destination.url);
+  const hit = routes.find(r =&gt; r.p.test(url));
+  document.documentElement.dataset.route = hit ? hit.id : "404";
+});
+/* CSS picks up the active route via the data-attribute: */
+[data-route="garage"] .nav-garage { font-weight: bold; }
+
+&lt;!-- TOMORROW (Chrome flag #route-matching, not cross-browser): --&gt;
+&lt;!-- routes declared in markup; CSS styles the active one directly,  --&gt;
+&lt;!-- no navigate listener, no data-attribute plumbing.              --&gt;
+&lt;a href="/garage/" class="nav-tab"&gt;garage&lt;/a&gt;
+/* :route-active { font-weight: bold; }  (sketch syntax) */</pre>
+      </details>
+
+      <p class="replaces">
+        On the site: this is overkill <em>today</em> &mdash; aadhar.sh is
+        deliberately one handwritten file per page, with routing that lives in
+        <code>route()</code> at the top of <code>_worker.js</code>, not in the
+        client. There&apos;s no SPA and no active-nav state to track. But it&apos;s
+        the right thing to watch <em>if</em> the garage ever grows a shared
+        client-side nav: the cross-browser half (<code>URLPattern</code> +
+        Navigation API) could already replace any hand-rolled
+        <code>location.pathname</code> string-matching with declared patterns,
+        and the CSS half &mdash; once it ships in more than one engine &mdash;
+        would let the active garage tab style itself with no JS at all. Strictly
+        a forward-look while it&apos;s Chrome-flag-only.
+      </p>
+      <p class="unsupported">
+        Your browser is missing the building blocks (<code>URLPattern</code> or
+        the Navigation API), so even the JS-today version above wouldn&apos;t
+        run. The mock tab-bar is static either way &mdash; no engine ships the
+        declarative CSS side yet. To try the flag in Chrome:
+        <code>chrome://flags#route-matching</code>.
+      </p>
+    </section>
+
+    <section class="demo" data-cap="install-element">
+      <h2>
+        <span>&lt;install&gt; element <span class="mono">/ Web Install API</span></span>
+        <span class="stat contested">Chrome flag &middot; Safari opposes</span>
+      </h2>
+      <p class="note">
+        A declarative install affordance: drop an <code>&lt;install&gt;</code>
+        element (or call <code>navigator.install()</code>) and the browser
+        paints a real &ldquo;install this app&rdquo; button wired to the same
+        flow as the omnibox install icon &mdash; no <code>beforeinstallprompt</code>
+        event plumbing, no stashing the deferred prompt, no custom button that
+        has to guess whether the app is already installed. It can also point at
+        a <em>different</em> origin&apos;s manifest, so one site can offer to
+        install another.
+      </p>
+      <p class="note">
+        There is no live demo here on purpose: it sits behind
+        <code>chrome://flags#web-app-installation-api</code> in Chromium only,
+        and <strong>WebKit opposes the design</strong>
+        (<a href="https://github.com/WebKit/standards-positions/issues/463" rel="external" class="wk opp" style="margin:0">oppose, #463</a>),
+        so it cannot graduate under this page&apos;s &ldquo;two engines&rdquo;
+        rule. Below is the markup it would take, and a faux-XP render of the
+        button it would mint:
+      </p>
+      <div class="ie-mock" aria-hidden="true">
+        <span class="ie-app"><span class="ico"></span>aadhar.sh</span>
+        <span class="ie-btn">Install</span>
+        <p class="ie-note-inline">mockup only &mdash; this button does nothing; the real one is browser-painted from the manifest</p>
+      </div>
+<pre>&lt;!-- declarative: browser paints + wires the button --&gt;
+&lt;install
+  manifest="/manifest.webmanifest"
+  installtext="Install aadhar.sh"&gt;&lt;/install&gt;
+
+// or imperative, behind the same flag:
+const result = await navigator.install();   // current-origin app
+await navigator.install("https://aadhar.sh", manifestUrl); // cross-origin
+
+// what it REPLACES today (the imperative dance):
+let deferred;
+addEventListener("beforeinstallprompt", e =&gt; {
+  e.preventDefault(); deferred = e; showMyButton();
+});
+myButton.onclick = async () =&gt; {
+  deferred.prompt();
+  await deferred.userChoice;   // and you still guess "already installed?"
+};</pre>
+      <p class="replaces">
+        On the site: aadhar.sh isn&apos;t a PWA &mdash; no manifest beyond the
+        favicon, no service-worker install story for the homepage itself
+        (<code>sw.js</code> only caches <code>/images/*</code> and the garage
+        pages). So there is nothing to wire up <em>yet</em>. The honest read is
+        that this is a forward-look for a hypothetical &ldquo;add aadhar.sh /
+        the coffee booker to your dock&rdquo; affordance &mdash; and even then,
+        because WebKit opposes, it would be a Chrome-only enhancement layered
+        on top of a manual fallback button, exactly the situation the
+        cursor-tooltip and <code>interestfor</code> cards describe. Stays in the
+        garage.
+      </p>
+      <p class="unsupported">
+        Your browser doesn&apos;t expose the Web Install API &mdash; the mockup
+        above is a dead button. To try it: Chromium with
+        <code>chrome://flags#web-app-installation-api</code> enabled.
+      </p>
+    </section>
+
+    <!-- ─────────── 2026 frontier batch: carousel · invoker · scope · highlight · until-found ─────────── -->
+    <style>
+      /* --- CSS Carousel (::scroll-marker / ::scroll-button) --- */
+      .cc-rail { display: flex; gap: 8px; overflow-x: auto; scroll-snap-type: x mandatory; scroll-behavior: smooth; padding: 6px; border: 1px solid oklch(80% 0.02 115); background: oklch(96% 0.01 115); border-radius: 4px; scroll-marker-group: after; }
+      .cc-slide { flex: 0 0 100%; height: 130px; scroll-snap-align: center; display: grid; place-items: center; color: #fff; font: bold 16pt "Trebuchet MS", Verdana, sans-serif; text-shadow: 0 1px 3px rgba(0,0,0,.45); background: var(--c); border-radius: 3px; }
+      .cc-rail::scroll-marker-group { display: flex; justify-content: center; align-items: center; gap: 7px; padding-top: 9px; }
+      .cc-slide::scroll-marker { content: ""; width: 10px; height: 10px; border-radius: 50%; border: 1px solid oklch(45% 0.10 115); background: oklch(90% 0.02 115); cursor: pointer; transition: background .12s, transform .12s; }
+      .cc-slide::scroll-marker:hover { transform: scale(1.25); }
+      .cc-slide::scroll-marker:target-current { background: oklch(50% 0.18 115); border-color: oklch(38% 0.18 115); }
+      .cc-rail::scroll-button(left), .cc-rail::scroll-button(right) { border: 1px solid oklch(60% 0.06 115); background: linear-gradient(180deg, #fff, #eceae0); border-radius: 3px; padding: 1px 10px; margin: 9px 4px 0; cursor: pointer; font: bold 12pt Tahoma, sans-serif; color: oklch(40% 0.09 115); }
+      .cc-rail::scroll-button(left):hover, .cc-rail::scroll-button(right):hover { border-color: #e9994a; box-shadow: 0 0 3px 1px rgba(255,199,60,.5); }
+      .cc-rail::scroll-button(left):disabled, .cc-rail::scroll-button(right):disabled { opacity: .35; cursor: default; box-shadow: none; }
+      .cc-rail::scroll-button(left) { content: "\2039 prev"; }
+      .cc-rail::scroll-button(right) { content: "next \203A"; }
+      /* --- shared mini XP button for the demos --- */
+      .xpb { font: 8pt/1.4 Tahoma, Verdana, sans-serif; padding: 3px 12px; border: 1px solid #8a9c58; border-radius: 3px; background: linear-gradient(180deg, #fff 0%, #fdfdfd 45%, #f4f3ee 55%, #eceae0 100%); cursor: pointer; }
+      .xpb:hover { border-color: #e9994a; box-shadow: 0 0 3px 1px rgba(255,199,60,.5); }
+      .xpb:active { background: linear-gradient(180deg, #e1e1d8, #f0efe8); padding: 4px 11px 2px 13px; }
+      /* --- Invoker Commands --- */
+      .ic-pop { max-width: 320px; padding: 12px 14px; font-size: 9.5pt; color: oklch(25% 0 0); background: oklch(99.5% 0.012 100); border: 1px solid oklch(40% 0 0); border-radius: 4px; box-shadow: 0 8px 24px -6px rgba(0,0,0,.4); }
+      .ic-pop::backdrop { background: rgba(0,0,30,.12); }
+      /* --- @scope donut --- */
+      .scope-card { border: 1px dashed oklch(60% 0.06 115); border-radius: 4px; padding: 10px 12px; font-size: 9.5pt; }
+      .scope-card > p { margin: 0 0 8px; }
+      .scope-inner { border: 1px dashed oklch(60% 0.16 30); border-radius: 3px; padding: 8px 10px; }
+      .scope-inner p { margin: 0; }
+      /* --- Custom Highlight --- */
+      .hl-text { font-size: 10pt; line-height: 1.55; color: oklch(28% 0 0); margin: 6px 0 0; }
+      ::highlight(frontier) { background: oklch(88% 0.17 95); color: oklch(28% 0.10 60); text-shadow: 0 1px 0 rgba(255,255,255,.5); }
+      /* --- hidden=until-found --- */
+      .huf { font-size: 9.5pt; color: oklch(30% 0.06 145); background: oklch(96% 0.04 145); border-left: 3px solid oklch(50% 0.15 145); padding: 8px 12px; border-radius: 0 3px 3px 0; margin: 8px 0 0; }
+      kbd { font: 8.5pt "Courier New", monospace; background: oklch(96% 0 0); border: 1px solid oklch(80% 0 0); border-bottom-width: 2px; border-radius: 3px; padding: 0 4px; }
+    </style>
+
+    <section class="demo" data-cap="css-carousel">
+      <h2>
+        <span>CSS Carousel <span class="mono">::scroll-marker &middot; ::scroll-button</span></span>
+        <span class="stat chrome">Chrome 135</span>
+      </h2>
+      <p class="note">
+        A scroll-snap strip that grows its own <strong>prev/next buttons and dot
+        markers in pure CSS</strong> &mdash; <code>scroll-marker-group</code> on the
+        scroller mints a <code>::scroll-marker</code> per item, <code>:target-current</code>
+        lights the active dot, and <code>::scroll-button(left/right)</code> page it.
+        No JS, no library, no <code>scroll</code> listener. Drag, click a dot, or use the buttons:
+      </p>
+      <div class="cc-rail" tabindex="0" aria-label="resto-mod carousel demo">
+        <div class="cc-slide" style="--c: linear-gradient(135deg, oklch(62% 0.20 30), oklch(52% 0.18 20))">resto-mod</div>
+        <div class="cc-slide" style="--c: linear-gradient(135deg, oklch(60% 0.16 115), oklch(48% 0.16 115))">Porsche 911</div>
+        <div class="cc-slide" style="--c: linear-gradient(135deg, oklch(58% 0.15 145), oklch(46% 0.14 150))">Tuthill</div>
+        <div class="cc-slide" style="--c: linear-gradient(135deg, oklch(66% 0.17 80), oklch(54% 0.15 70))">Evoluto 355</div>
+        <div class="cc-slide" style="--c: linear-gradient(135deg, oklch(55% 0.20 320), oklch(44% 0.18 320))">HWA EVO</div>
+      </div>
+      <p class="replaces">
+        On the site: the photo grid could become a swipeable contact sheet with a
+        Luna dot-strip underneath &mdash; the markers and arrows are the browser&apos;s,
+        not mine. Gated behind <code>@supports (scroll-marker-group: after)</code>;
+        where it&apos;s missing the same markup is just a plain scroll-snap rail
+        (still swipeable, minus the dots and arrows).
+      </p>
+      <p class="unsupported">
+        Your browser doesn&apos;t mint <code>::scroll-marker</code> yet &mdash; the strip
+        above still scroll-snaps and swipes, it just has no dots or arrow buttons.
+      </p>
+    </section>
+
+    <section class="demo" data-cap="invoker-commands">
+      <h2>
+        <span>Invoker Commands <span class="mono">command / commandfor</span></span>
+        <span class="stat chrome">Chrome 135 &middot; Safari TP</span>
+      </h2>
+      <p class="note">
+        A button that drives another element declaratively: <code>commandfor</code>
+        points at a target, <code>command</code> says what to do
+        (<code>toggle-popover</code>, <code>show-modal</code>, <code>close</code>&hellip;)
+        &mdash; the sibling of <code>interestfor</code>, but for clicks instead of hover.
+        Zero JavaScript wired below:
+      </p>
+      <p style="margin:10px 0 0"><button class="xpb" commandfor="ic-pop" command="toggle-popover">Show details &#9662;</button></p>
+      <div id="ic-pop" popover class="ic-pop">
+        <strong>No click handler ran.</strong> This panel toggled purely from
+        <code>command="toggle-popover" commandfor="ic-pop"</code>. The same attributes
+        cover <code>&lt;dialog&gt;</code> via <code>show-modal</code>/<code>close</code>,
+        and you can author custom commands (<code>command="--like"</code>) handled by a
+        single <code>commandEvent</code> listener.
+        <p style="margin:8px 0 0"><button class="xpb" commandfor="ic-pop" command="hide-popover">Close</button></p>
+      </div>
+      <p class="replaces">
+        On the site: the caption-bar minimize/close and any future booking dialog in
+        <code>cal/</code> become declarative &mdash; markup is the behavior, so there&apos;s
+        less inline JS to ship and nothing to rehydrate.
+      </p>
+      <p class="unsupported">
+        Your browser doesn&apos;t parse <code>command</code>/<code>commandfor</code> yet
+        &mdash; the button above is inert (no fallback handler is wired, on purpose).
+      </p>
+    </section>
+
+    <section class="demo" data-cap="css-scope">
+      <h2>
+        <span><code>@scope</code> <span class="mono">scoped styles + donut</span></span>
+        <span class="stat cross">Chrome 118 &middot; Safari 17.4</span>
+      </h2>
+      <p class="note">
+        Style a subtree without a naming convention, and stop the styles at an inner
+        boundary &mdash; the &ldquo;donut.&rdquo; <code>@scope (.card) to (.inner)</code>
+        applies between the two. Proximity wins over specificity, so a closer scope
+        beats a more-specific selector. Live:
+      </p>
+      <div class="scope-card">
+        <style>
+          @scope (.scope-card) to (.scope-inner) {
+            p { color: oklch(50% 0.18 115); font-weight: bold; }
+          }
+        </style>
+        <p>Inside the scope root, above the hole &mdash; styled blue + bold.</p>
+        <div class="scope-inner"><p>Inside <code>.scope-inner</code>, the donut hole &mdash; the scoped rule stops here, so this stays default.</p></div>
+      </div>
+      <p class="replaces">
+        On the site: every page is one file of inline CSS, so a stray
+        <code>.controls</code> or <code>.title-bar</code> rule leaks into demo windows
+        (it just bit me wiring the garage prototypes). <code>@scope</code> fences a
+        component&apos;s styles to its own block &mdash; no BEM, no prefixes.
+      </p>
+      <p class="unsupported">
+        Your browser doesn&apos;t support <code>@scope</code> &mdash; the inner line
+        below the hole inherits nothing special; both paragraphs look the same.
+      </p>
+    </section>
+
+    <section class="demo" data-cap="custom-highlight">
+      <h2>
+        <span>Custom Highlight API <span class="mono">CSS.highlights &middot; ::highlight()</span></span>
+        <span class="stat cross">Chrome &middot; Safari &middot; Firefox</span>
+      </h2>
+      <p class="note">
+        Paint arbitrary text ranges &mdash; no wrapper <code>&lt;span&gt;</code>s, no DOM
+        mutation. Build <code>Range</code>s, hand them to a <code>Highlight</code>,
+        register it in <code>CSS.highlights</code>, and style via
+        <code>::highlight(name)</code>. The two phrases below are lit without touching
+        the markup:
+      </p>
+      <p class="hl-text" id="hl-text">This site is modeled after the recent wave of resto-mod cars &mdash; where you take a beloved chassis and formula and modernize it while retaining its soul.</p>
+      <p class="replaces">
+        On the site: the <code>/source</code> viewer could syntax-highlight without
+        wrapping every token in a tag &mdash; cheaper DOM, and search-term highlighting
+        that never disturbs the text it marks.
+      </p>
+      <p class="unsupported">
+        Your browser lacks the Custom Highlight API &mdash; the sentence above renders
+        with no emphasis (the text is identical, just unpainted).
+      </p>
+    </section>
+
+    <section class="demo" data-cap="hidden-until-found">
+      <h2>
+        <span><code>hidden=until-found</code> <span class="mono">+ scroll-to-text</span></span>
+        <span class="stat chrome">Chrome 102</span>
+      </h2>
+      <p class="note">
+        Content that is collapsed <em>but still findable</em>: <code>hidden="until-found"</code>
+        hides a region, yet in-page find (<kbd>Ctrl/&#8984;-F</kbd>) and
+        <code>#:~:text=</code> deep links will auto-expand it, fire
+        <code>beforematch</code>, and scroll it into view. Try it &mdash; search this
+        page for <strong>aircooled</strong>:
+      </p>
+      <p hidden="until-found" id="huf-target" class="huf">&#9679; Found me. This line was <code>hidden="until-found"</code> &mdash; collapsed in the layout, but the browser searched inside it anyway and revealed it. The aircooled keyword lived here the whole time.</p>
+      <p class="replaces">
+        On the site: long <code>/garage</code> write-ups could ship fully collapsed
+        yet stay Ctrl-F-able and deep-linkable &mdash; honest with crawlers (the text
+        is really in the DOM) while keeping the page short.
+      </p>
+      <p class="unsupported">
+        Your browser doesn&apos;t support <code>hidden=until-found</code> &mdash; the
+        line above stays hidden and find-in-page can&apos;t reveal it.
+      </p>
+    </section>
+
+    <script>
+      // Custom Highlight API demo — light two phrases by text, no DOM edits.
+      (function () {
+        try {
+          if (!('highlights' in CSS) || typeof Highlight === 'undefined') return;
+          var p = document.getElementById('hl-text');
+          if (!p) return;
+          var node = p.firstChild; // single text node
+          var text = node.textContent;
+          var phrases = ['resto-mod', 'retaining its soul'];
+          var ranges = [];
+          phrases.forEach(function (ph) {
+            var i = text.indexOf(ph);
+            if (i < 0) return;
+            var r = document.createRange();
+            r.setStart(node, i); r.setEnd(node, i + ph.length);
+            ranges.push(r);
+          });
+          if (ranges.length) CSS.highlights.set('frontier', new Highlight(...ranges));
+        } catch (e) {}
+      })();
+    </script>
+
+
+    <!-- ───────────────────── the long tail ───────────────────── -->
+    <section class="demo">
+      <h2><span>The long tail &mdash; independent engines</span></h2>
+      <p class="note">
+        &quot;The platform&quot; isn&apos;t only Chromium, Gecko, and WebKit. Two
+        engines are being built largely from scratch &mdash; a useful reminder
+        that the frontier above is the <em>front</em>, and most of the web runs
+        well behind it. Both are pre-release and racing toward <em>baseline</em>,
+        not chasing 2026 CSS, so on the features on this page they&apos;re mostly
+        &quot;not yet.&quot; Status as of mid-2026 &mdash; check the live links, this moves fast.
+      </p>
+
+      <div class="engine">
+        <h3>Ladybird <span class="stat early">pre-alpha</span></h3>
+        <p>
+          A from-scratch engine (LibWeb) with no Chromium/WebKit/Gecko code,
+          built by a nonprofit. It&apos;s now on the WPT dashboard (~2.07M
+          subtests passing) and racing to render the real web.
+        </p>
+        <p>
+          On these features: it has the <strong>Popover API</strong>, and added
+          <strong>initial CSS anchor positioning</strong> (<code>position-anchor</code>)
+          in April 2026. The newer/niche ones &mdash; text-box-trim,
+          contrast-color, scroll-driven animations, corner-shape, masonry &mdash;
+          aren&apos;t there yet. Baseline first, frontier later.
+        </p>
+        <p class="s">
+          Live: <a href="https://ladybird.org/news/" rel="external">ladybird.org/news</a>
+          &middot; <a href="https://wpt.fyi/results/?product=ladybird" rel="external">wpt.fyi (ladybird)</a>
+        </p>
+      </div>
+
+      <div class="engine">
+        <h3>Servo <span class="stat early">alpha ~Jul 2026</span></h3>
+        <p>
+          A Rust engine, originally Mozilla&apos;s, now under the Linux
+          Foundation and aimed at embedding. WPT pass rate around 95% in its
+          focus areas; a desktop browser is still years out.
+        </p>
+        <p>
+          Its energy goes to layout fundamentals &mdash; flexbox, grid, tables,
+          floats &mdash; with recent adds like <code>cursor</code> color and
+          <code>content: image()</code>. The frontier CSS here (popover, anchor
+          positioning, text-box-trim) generally isn&apos;t implemented yet.
+        </p>
+        <p class="s">
+          Live: <a href="https://servo.org/blog/" rel="external">servo.org/blog</a>
+          &middot; <a href="https://github.com/servo/servo" rel="external">github.com/servo</a>
+        </p>
+      </div>
+
+      <p class="replaces">
+        The point: these two are <em>why</em> &quot;ship to baseline, prototype
+        the frontier&quot; is the right discipline. Supporting the independent,
+        indie-web engines means leaning on what&apos;s broadly shipped &mdash;
+        not what&apos;s newest in one browser. Good deep-dive comparison:
+        <a href="https://www.youngju.dev/blog/culture/2026-05-14-browser-engines-2026-chromium-gecko-webkit-servo-ladybird-comparison-deep-dive.en" rel="external">Browser Engines 2026</a>.
+      </p>
+    </section>
+
+    <footer>
+      <p>&larr; back to the <a href="/garage/">garage</a> &middot; <a href="/">aadhar.sh</a></p>
+      <p><small>&copy; 2026 Aadharsh Pannirselvam &middot; built in the open &middot; triangulated from chromestatus.com + chrome://flags (Canary) + webkit.org/standards-positions</small></p>
+    </footer>
+
+  </div>
+</div>
+
+<script>
+// Live capability detection — fills the chip strip and flags each card/row
+// as supported or not, in THIS visitor's browser. try/catch because
+// CSS.supports() and IDL probes throw on some engines.
+(function () {
+  var sup = function (fn) { try { return !!fn(); } catch (e) { return false; } };
+  var hintProbe = function () {
+    var d = document.createElement("div");
+    try { d.popover = "hint"; return d.popover === "hint"; } catch (e) { return false; }
+  };
+  var checks = {
+    "text-box-trim": function () { return CSS.supports("text-box-trim: trim-both"); },
+    "contrast-color": function () { return CSS.supports("color: contrast-color(red)"); },
+    "interestfor": function () { return "interestForElement" in HTMLAnchorElement.prototype; },
+    "anchor-positioning": function () { return (CSS.supports('anchor-name: --a') && CSS.supports('position-anchor: --a')); },
+    "scroll-driven": function () { return (CSS.supports('animation-timeline: scroll()')); },
+    "popover-hint": function () { return ((function(){var d=document.createElement('div');try{d.popover='hint';return d.popover==='hint';}catch(e){return false;}})()); },
+    "field-sizing": function () { return (CSS.supports('field-sizing: content')); },
+    "view-transitions": function () { return (typeof document.startViewTransition === "function"); },
+    "base-select": function () { var el = document.querySelector('.bsel-field'); try { return !!(el && getComputedStyle(el).appearance === 'base-select'); } catch (e) { return false; } },
+    "corner-shape": function () { return (CSS.supports('corner-shape: squircle') || CSS.supports('corner-shape: superellipse(1)')); },
+    "interpolate-size": function () { return (CSS.supports('interpolate-size: allow-keywords')); },
+    "scheduler-yield": function () { return (!!(window.scheduler && typeof scheduler.yield === "function")); },
+    "html-in-canvas": function () { return (!!(window.CanvasRenderingContext2D && CanvasRenderingContext2D.prototype && 'drawElement' in CanvasRenderingContext2D.prototype)); },
+    "masonry": function () {
+      // CSS.supports() can return false even when the feature IS live (Chrome
+      // Canary "Grid Lanes" flag gates the value via a different path than
+      // CSS.supports). DOM-style probe: assign + read back to confirm acceptance.
+      if (CSS.supports('grid-template-rows: masonry') || CSS.supports('grid-template-columns: masonry')) return true;
+      if (CSS.supports('masonry-template-tracks: 1fr') || CSS.supports('item-pack: balance')) return true;
+      if (CSS.supports('display: masonry')) return true;
+      try {
+        var p = document.createElement('div');
+        p.style.display = 'grid';
+        p.style.gridTemplateRows = 'masonry';
+        if (p.style.gridTemplateRows === 'masonry') return true;
+        p.style.gridTemplateRows = '';
+        p.style.gridTemplateColumns = 'masonry';
+        if (p.style.gridTemplateColumns === 'masonry') return true;
+        p.style.display = 'masonry';
+        if (p.style.display === 'masonry') return true;
+      } catch (e) {}
+      return false;
+    },
+    "jpeg-xl": function () { return (false); },
+    "hdr-agtm": function () { return (CSS.supports('(dynamic-range: high)') && matchMedia('(dynamic-range: high)').matches); },
+    "route-matching": function () { return (false); },
+    "install-element": function () { return ("install" in navigator); },
+    "css-carousel": function () { return CSS.supports("scroll-marker-group: after"); },
+    "invoker-commands": function () { return ("commandForElement" in HTMLButtonElement.prototype); },
+    "css-scope": function () { return ("CSSScopeRule" in window); },
+    "custom-highlight": function () { return (("highlights" in CSS) && (typeof Highlight !== "undefined")); },
+    "hidden-until-found": function () { return ("onbeforematch" in window); },
+  };
+  var label = {
+    "text-box-trim": "text-box-trim",
+    "contrast-color": "contrast-color()",
+    "interestfor": "interestfor",
+    "anchor-positioning": "anchor-pos",
+    "scroll-driven": "scroll-anim",
+    "popover-hint": "popover=hint",
+    "field-sizing": "field-sizing",
+    "view-transitions": "view-transition",
+    "base-select": "base-select",
+    "corner-shape": "corner-shape",
+    "interpolate-size": "calc-size()",
+    "scheduler-yield": "scheduler.yield",
+    "html-in-canvas": "drawElement",
+    "masonry": "masonry",
+    "jpeg-xl": "jpeg-xl",
+    "hdr-agtm": "HDR-AGTM",
+    "route-matching": "route-match",
+    "install-element": "install",
+    "css-carousel": "CSS carousel",
+    "invoker-commands": "command",
+    "css-scope": "@scope",
+    "custom-highlight": "::highlight()",
+    "hidden-until-found": "until-found",
+  };
+  var state = {};
+  Object.keys(checks).forEach(function (k) { state[k] = sup(checks[k]); });
+
+  // chip strip
+  var strip = document.getElementById("caps");
+  Object.keys(label).forEach(function (k) {
+    var c = document.createElement("span");
+    c.className = "chip " + (state[k] ? "yes" : "no");
+    c.textContent = label[k];
+    strip.appendChild(c);
+  });
+
+  // flag unsupported cards so their fallback note shows
+  document.querySelectorAll(".demo[data-cap]").forEach(function (el) {
+    var k = el.getAttribute("data-cap");
+    if (k && state[k] === false) el.classList.add("no-support");
+  });
+  // dim watch-list rows whose feature is unsupported here
+  document.querySelectorAll("#watch li[data-cap]").forEach(function (el) {
+    var k = el.getAttribute("data-cap");
+    var n = el.querySelector(".name");
+    if (n) n.style.opacity = state[k] ? "1" : "0.55";
+  });
+})();
+</script>
+
+<!-- prerender every internal page eagerly (McMaster-style); same exclusions
+     as the homepage. Chromium-only, ignored elsewhere. -->
+<script type="speculationrules">
+{
+  "prerender": [
+    {
+      "where": {
+        "and": [
+          { "href_matches": "/*" },
+          { "not": { "href_matches": "/" } },
+          { "not": { "href_matches": "/around*" } },
+          { "not": { "href_matches": "/whoareyou*" } }
+        ]
+      },
+      "eagerness": "eager"
+    }
+  ]
+}
+</script>
+
+</body>
+</html>

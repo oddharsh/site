@@ -7,14 +7,25 @@ Researching and investing at [Archetype](https://archetype.fund). Building
 
 ---
 
-Hi. This is a corner of the web I'm still building. Handwritten HTML, three
-eras of theme, a coffee-booking system on Cloudflare, a place to put
-photographs, a place to put rabbithole posts. None of it's ready yet, all of
-it's on the way.
+Hey, welcome to my corner of the internet! This site's modeled after the
+recent (last decade) wave of resto-mod cars like
+[Singer](https://www.google.com/search?q=Singer+Vehicle+Design+Porsche+911) or
+[Tuthill](https://www.google.com/search?q=Tuthill+911K) with aircooled
+Porsche 911's or the
+[HWA AMG EVO](https://www.google.com/search?q=HWA+AMG+EVO) or the
+[355 by Evoluto](https://www.google.com/search?q=Evoluto+Automobili+355),
+where you take a beloved chassis and formula and modernize it while retaining
+its soul.
 
-If you'd like to grab a coffee in NYC while I finish, write me at
-<coffee@aadhar.sh>. I confirm by hand, usually within a day or two. Or pick a
-slot at [cal.com/aadharsh/coffee](https://cal.com/aadharsh/coffee).
+In this case, this site's largely modern HTML with some cursor following
+tooltips and cloudflare workers under CSS skins styled to look like it's ~2006.
+It's all a work in progress and a fun way for me to learn about internet tech,
+but in the meantime, here are some photos i've made and music that's been in my
+head lately.
+
+If you'd like to grab a coffee in NYC, write me at <coffee@aadhar.sh> or pick a
+slot at [cal.com/aadharsh/coffee](https://cal.com/aadharsh/coffee) - it's a
+manual opt-in on my side and i'll try to get back to you.
 
 The rest of the site goes live shortly. Check back, or just send a note.
 
@@ -36,6 +47,7 @@ originals at `/images/full/<name>.<ext>` via worker-proxied R2.
 ## Links
 
 - Twitter: <https://twitter.com/oddhash>
+- Instagram: <https://instagram.com/aadharsh.hif>
 - Curius: <https://curius.app/aadharsh-pannirselvam>
 - Beli: <https://beliapp.com/users/aadharsh>
 - Spotify: <https://open.spotify.com/user/aadharsh2010>

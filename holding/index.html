@@ -50,13 +50,20 @@
         "url": "https://www.archetype.fund/"
       },
       "description": "Researcher and investor at Archetype, a crypto-native venture firm.",
+      "identifier": {
+        "@type": "PropertyValue",
+        "propertyID": "ENS",
+        "value": "aadharsh.eth"
+      },
       "sameAs": [
         "https://twitter.com/oddhash",
+        "https://instagram.com/aadharsh.hif",
         "https://github.com/oddharsh",
         "https://www.linkedin.com/in/aadharsh-pannirselvam/",
         "https://open.spotify.com/user/aadharsh2010",
         "https://curius.app/aadharsh-pannirselvam",
-        "https://beliapp.com/users/aadharsh"
+        "https://beliapp.com/users/aadharsh",
+        "https://app.ens.domains/aadharsh.eth"
       ]
     },
     {
@@ -99,7 +106,6 @@
    stylesheet (incl. the worker's shared xpChromeCss). unsupported engines
    (Firefox today) just navigate instantly — graceful. Chrome 126+/Safari
    18+. respects reduced-motion automatically (UA skips the animation). */
-@view-transition { navigation: auto; }
 
 * { box-sizing: border-box; }
 
@@ -109,8 +115,8 @@ html, body {
 }
 
 body {
-  background: oklch(91.74% 0.0203 238.68);
-  background: linear-gradient(180deg, oklch(87.51% 0.0281 248.15) 0%, oklch(94.66% 0.0114 252.09) 220px, oklch(94.66% 0.0114 252.09) 100%);
+  background: oklch(89% 0.03 110);
+  background: linear-gradient(180deg, oklch(79% 0.05 110) 0%, oklch(87% 0.025 110) 220px, oklch(87% 0.025 110) 100%);
   font-family: Verdana, Tahoma, Geneva, sans-serif;
   font-size: 11pt;
   line-height: 1.5;
@@ -123,22 +129,29 @@ body {
   max-width: 660px;
   margin: 0 auto;
   background: oklch(100.00% 0 0);
-  border: 1px solid oklch(61.14% 0.0611 253.60);
-  box-shadow: 4px 4px 0 oklch(61.14% 0.0611 253.60 / 0.35);
+  border: 1px solid oklch(54% 0.07 115);
+  box-shadow: 4px 4px 0 oklch(54% 0.07 115 / 0.35);
 }
 
 /* fake XP title bar */
 .title-bar {
-  background: linear-gradient(180deg, oklch(62.22% 0.1240 251.99) 0%, oklch(49.72% 0.1129 250.87) 50%, oklch(44.15% 0.1179 254.72) 51%, oklch(50.95% 0.1117 250.01) 100%);
+  background: linear-gradient(180deg, oklch(73% 0.11 112) 0%, oklch(64% 0.14 110) 8%, oklch(56% 0.16 108) 18%, oklch(55% 0.16 108) 86%, oklch(63% 0.12 110) 100%);
   color: oklch(100.00% 0 0);
   font-family: "Trebuchet MS", Verdana, sans-serif;
   font-size: 11pt;
   font-weight: bold;
   padding: 4px 8px;
-  border-bottom: 1px solid oklch(41.92% 0.0962 250.51);
+  border-bottom: 1px solid oklch(33% 0.12 108);
   display: flex;
   align-items: center;
   justify-content: space-between;
+  /* trim the half-leading so the title glyphs optically center in the bar
+     instead of the (asymmetric) line box. shipped Chrome 133 / Safari 18.2 /
+     Firefox 149; older engines keep the pre-trim leading — neutral, no
+     regression. (the .now-playing h2 keeps its Safari-specific pseudo-rule
+     hack untouched — that bug can't be regression-tested from here.) */
+  text-box-trim: trim-both;
+  text-box-edge: cap alphabetic;
 }
 .title-bar .icon {
   display: inline-block;
@@ -157,25 +170,76 @@ body {
   clip-path: polygon(50% 0, 100% 100%, 0 100%);
 }
 .title-bar .title-text { flex: 1; padding-left: 4px; }
-.title-bar .controls { letter-spacing: 2px; font-family: Tahoma, sans-serif; font-size: 9pt; }
-.title-bar .controls span,
-.title-bar .controls a {
-  display: inline-block;
-  background: oklch(87.51% 0.0281 248.15);
-  color: oklch(41.92% 0.0962 250.51);
-  border: 1px solid oklch(41.92% 0.0962 250.51);
-  padding: 0 5px;
-  margin-left: 2px;
-  font-weight: bold;
-  cursor: default;
-  text-decoration: none;
+.title-bar .controls { display: flex; align-items: center; gap: 2px; letter-spacing: 0; }
+/* authentic Luna caption buttons: 21x21 glossy "gel" lozenges with a top specular
+   highlight + CSS-drawn white glyphs (no text, no images). min/max are blue, CLOSE
+   is RED at rest. CLASS-BASED (.min/.max/.close) so decorative demo windows that use
+   <span class="close"> get the identical skin as a real <a class="close">. sRGB hex
+   traced from the Luna .msstyles bitmap, kept as hex on purpose. */
+.title-bar .controls .min,
+.title-bar .controls .max,
+.title-bar .controls .close {
+  position: relative; box-sizing: border-box;
+  width: 21px; height: 21px; padding: 0; margin: 0;
+  display: inline-block; overflow: hidden; font-size: 0; color: transparent;
+  border: 1px solid #628040; border-radius: 3px;
+  text-decoration: none; cursor: pointer;
+  background-color: #6a8838;
+  background-image: linear-gradient(180deg, #a0c060 0%, #70902e 22%, #689030 55%, #507028 82%, #284018 100%);
+  transition: filter .1s ease;
 }
-.title-bar .controls a { cursor: pointer; }
-.title-bar .controls a:hover,
-.title-bar .controls a:focus {
-  background: oklch(58.99% 0.2344 26.30);
-  color: oklch(100.00% 0 0);
-  border-color: oklch(37.67% 0.1546 29.23);
+/* "wet plastic" gloss band over the top ~45% (close uses ::after for its X stroke) */
+.title-bar .controls .min::after,
+.title-bar .controls .max::after {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 45%;
+  background: linear-gradient(180deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.12) 70%, rgba(255,255,255,0) 100%);
+  pointer-events: none; border-radius: 2px 2px 5px 5px;
+}
+.title-bar .controls .min:hover, .title-bar .controls .min:focus-visible,
+.title-bar .controls .max:hover, .title-bar .controls .max:focus-visible {
+  border-color: #9acc58; background-color: #86b048;
+  background-image: linear-gradient(180deg, #b0d070 0%, #84a840 22%, #92b850 55%, #74a038 82%, #527828 100%);
+  outline: none;
+}
+/* CLOSE = red at rest */
+.title-bar .controls .close {
+  border-color: #d8401c; background-color: #e45f3e;
+  background-image: linear-gradient(180deg, #e8795f 0%, #e45f40 30%, #e45d3d 52%, #e2552a 80%, #ae3110 100%);
+}
+.title-bar .controls .close:hover, .title-bar .controls .close:focus-visible {
+  border-color: #ff7a66; background-color: #ff957c;
+  background-image: linear-gradient(180deg, #ff8b7d 0%, #ff7463 26%, #ff957c 55%, #fd7e64 82%, #d34936 100%);
+  box-shadow: 0 0 4px rgba(255,120,96,.7); outline: none;
+}
+.title-bar .controls .min:active,
+.title-bar .controls .max:active,
+.title-bar .controls .close:active { filter: brightness(.9); }
+/* white glyphs drawn with pseudo-elements */
+.title-bar .controls .min::before {
+  content: ""; position: absolute; left: 5px; right: 5px; bottom: 5px; height: 2px;
+  background: #fff; box-shadow: 0 1px 0 rgba(0,0,0,.35);
+}
+.title-bar .controls .max::before {
+  content: ""; position: absolute; left: 5px; top: 5px; width: 11px; height: 9px;
+  box-sizing: border-box; border: 1px solid #fff; border-top-width: 2px;
+  filter: drop-shadow(0 1px 0 rgba(0,0,0,.35));
+}
+.title-bar .controls .close::before,
+.title-bar .controls .close::after {
+  content: ""; position: absolute; left: 50%; top: 50%;
+  width: 13px; height: 2px; margin: -1px 0 0 -6.5px; background: #fff;
+  box-shadow: 0 1px 0 rgba(0,0,0,.35);
+}
+.title-bar .controls .close::before { transform: rotate(45deg); }
+.title-bar .controls .close::after  { transform: rotate(-45deg); }
+/* --- Luna polish: caption text shadow + rounded top corners + 3px window frame --- */
+.title-bar { text-shadow: 1px 1px #1a2c08; border-top-left-radius: 8px; border-top-right-radius: 7px; }
+.window {
+  border: 1px solid #4c6828; border-right-color: #2e4018; border-bottom-color: #2e4018;
+  border-top-left-radius: 8px; border-top-right-radius: 8px; overflow: hidden;
+  box-shadow: inset 1px 1px 0 #9acc58, inset 2px 2px 0 #6a9838,
+              inset -1px -1px 0 #0e1c04, inset -2px -2px 0 #2a4010,
+              4px 4px 0 rgba(20,38,0,.35);
 }
 
 .content {
@@ -185,7 +249,7 @@ body {
 h1 {
   font-family: "Trebuchet MS", Verdana, sans-serif;
   font-size: 20pt;
-  color: oklch(41.92% 0.0962 250.51);
+  color: oklch(38% 0.10 115);
   margin: 0 0 4px;
   font-weight: bold;
   letter-spacing: -0.01em;
@@ -202,14 +266,14 @@ h1 {
 
 p { margin: 0 0 12px; text-wrap: pretty; }
 
-a:link    { color: oklch(42.61% 0.2353 263.74); text-decoration: underline; }
-a:visited { color: oklch(42.09% 0.1935 328.36); }
+a:link    { color: oklch(42% 0.18 115); text-decoration: underline; }
+a:visited { color: oklch(37% 0.09 115); }
 a:hover   { color: oklch(62.80% 0.2577 29.23); }
 a:active  { color: oklch(62.80% 0.2577 29.23); }
 
 hr {
   border: 0;
-  border-top: 2px groove oklch(86.67% 0.0294 259.59);
+  border-top: 2px groove oklch(84% 0.04 115);
   margin: 16px 0;
   height: 0;
 }
@@ -236,7 +300,7 @@ hr {
 .now-playing h2 {
   font-family: "Trebuchet MS", Verdana, sans-serif;
   font-size: 12pt;
-  color: oklch(41.92% 0.0962 250.51);
+  color: oklch(38% 0.10 115);
   /* balance: evens the two lines this heading wraps to on narrow widths
      instead of leaving one word on line 2. broadly supported; no-op
      where unsupported. */
@@ -259,7 +323,7 @@ hr {
   content: "";
   display: block;
   height: 1px;
-  background: oklch(86.67% 0.0294 259.59);
+  background: oklch(84% 0.04 115);
   margin-top: 8px;
 }
 .now-playing h2 a {
@@ -275,23 +339,23 @@ hr {
   color: oklch(51.03% 0 0);
   margin: 0 0 8px;
 }
-.np-meta a { color: oklch(42.61% 0.2353 263.74); }
+.np-meta a { color: oklch(42% 0.18 115); }
 .np-list {
   list-style: none;
   padding: 0;
   margin: 0;
-  border: 1px solid oklch(61.14% 0.0611 253.60);
-  border-top-color: oklch(47.12% 0.0555 253.58);
-  border-left-color: oklch(47.12% 0.0555 253.58);
+  border: 1px solid oklch(54% 0.07 115);
+  border-top-color: oklch(43% 0.08 115);
+  border-left-color: oklch(43% 0.08 115);
   background: oklch(100.00% 0 0);
 }
 .np-list li {
   padding: 5px 8px;
-  border-bottom: 1px solid oklch(92.73% 0.0139 247.98);
+  border-bottom: 1px solid oklch(91% 0.02 110);
   font-size: 10pt;
   line-height: 1.35;
 }
-.np-list li:nth-child(even) { background: oklch(97.50% 0.0062 255.47); }
+.np-list li:nth-child(even) { background: oklch(97% 0.01 110); }
 .np-list li:last-child { border-bottom: none; }
 .np-list .np-loading,
 .np-list .np-empty {
@@ -309,7 +373,7 @@ hr {
 .np-list a:hover .np-title { color: oklch(62.80% 0.2577 29.23); }
 .np-title {
   font-weight: bold;
-  color: oklch(41.92% 0.0962 250.51);
+  color: oklch(38% 0.10 115);
 }
 .np-sep {
   color: oklch(62.68% 0 0);
@@ -327,7 +391,7 @@ hr {
 }
 .np-artist-link:hover,
 .np-artist-link:focus-visible {
-  color: oklch(42.61% 0.2353 263.74);
+  color: oklch(42% 0.18 115);
   text-decoration: underline;
 }
 .np-explicit {
@@ -353,43 +417,33 @@ hr {
 /* photo grid: each tile in a raised frame, like a contact sheet from
    a 2003 personal site. */
 .photos {
-  /* responsive contact sheet: auto-fit + minmax keeps the 3×3 grid on
-     the desktop window (interior ~612px → 3 columns) but reflows to 2
-     columns on phones (~336px interior) without a media query. the 155px
-     floor is tuned to the breakpoints: > 147px holds 3 cols at desktop,
-     ≤ 165px drops to 2 at mobile. tiles stay uniform (1fr) at every width. */
+  /* 3-column equal-area grid: every photo gets the same 1:1 cell regardless
+     of its native aspect ratio. object-fit:cover centers the crop. this keeps
+     all thumbnails at the same display size (~200px per side), so no photo is
+     rendered at more pixels than the 1200px thumbnail can support cleanly. */
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+  grid-template-columns: repeat(3, 1fr);
   gap: 6px;
-  /* margin-bottom is larger than -top so there's clear separation from
-     the next section's heading. (we had `contain: layout style` here
-     for desktop hover-recalc perf, but iOS Safari sometimes underbills
-     the section's measured height under containment, causing the next
-     section's heading to render overlapping the bottom row of tiles.
-     containment removed; the perf cost is negligible at 9 cells.) */
   margin: 14px 0 24px;
 }
 .photos a {
   display: block;
+  box-sizing: border-box;
   text-decoration: none;
   background: oklch(100.00% 0 0);
   padding: 4px;
-  border: 1px solid oklch(61.14% 0.0611 253.60);
-  box-shadow: 1px 1px 0 oklch(61.14% 0.0611 253.60 / 0.3);
+  border: 1px solid oklch(54% 0.07 115);
+  box-shadow: 1px 1px 0 oklch(54% 0.07 115 / 0.3);
   line-height: 0;
-  /* shape the slot itself so it has size before its <img> has a src.
-     prevents the photos section from going 0px → 380px on first paint,
-     which was shoving everything below it (CLS attributed to .now-playing). */
-  aspect-ratio: 4 / 5;
+  aspect-ratio: 1;
+  overflow: hidden;
 }
 .photos a:hover {
   background: oklch(97.73% 0.0373 95.44);
-  border-color: oklch(41.92% 0.0962 250.51);
+  border-color: oklch(38% 0.10 115);
 }
-/* <picture> wraps the <img> so the browser can pick AVIF vs JPG via the
-   inner <source>. picture is inline by default, so we need to make it
-   block + fill the <a> just like <img> does, otherwise the slot has the
-   right aspect-ratio frame but no visible thumbnail inside. */
+/* <picture> + <img> fill the aspect-ratio'd frame. box aspect ≈ native aspect,
+   so object-fit: cover only trims sub-pixel rounding — no real crop. */
 .photos picture {
   display: block;
   width: 100%;
@@ -418,7 +472,7 @@ footer {
   color: oklch(44.95% 0 0);
   margin: 18px 0 0;
   padding-top: 14px;
-  border-top: 1px solid oklch(86.67% 0.0294 259.59);
+  border-top: 1px solid oklch(84% 0.04 115);
 }
 footer .links { margin-bottom: 6px; }
 footer .links a { margin: 0 2px; }
@@ -485,6 +539,21 @@ footer .signature small { color: oklch(56.93% 0 0); }
   max-width: 280px;
   line-height: 1.45;
 }
+/* keyboard-focus fallback placement: cursor-follow needs a live pointer, so
+   when a target is focused via keyboard there's nothing to track. JS adds
+   .anchored (only on engines with anchor positioning) and tethers the tooltip
+   to the focused element instead of the cursor — overriding the translate.
+   Chrome 125+ / Safari 26 / Firefox 147; unsupported engines never get the
+   class, so keyboard users there are no worse off than before (no tooltip). */
+.xp-tooltip.anchored {
+  position-anchor: --xp-tip;
+  position-area: bottom span-right;
+  top: auto;
+  left: auto;
+  transform: none;
+  margin: 6px 0 0;
+  position-try-fallbacks: flip-block, flip-inline;
+}
 /* popover path: gated on :popover-open support so non-supporting engines
    fall back cleanly (they keep the plain display:none above; the JS sets
    inline display:block at full opacity for them). where supported, the
@@ -528,6 +597,46 @@ footer .signature small { color: oklch(56.93% 0 0); }
 }
 .xp-tooltip .flash-bolt svg { display: block; }
 
+/* ── photo tooltip → XP camera-back review readout ─────────────────────
+   header strip (filename + flash), sunken histogram band (lazy-loaded),
+   exposure trio, the full Fuji recipe as rows, date footer. ported from
+   /garage/tooltips. fixed width so the header/frame span edge-to-edge. */
+.xp-tooltip:has(.cam) { width: 250px; max-width: 250px; }
+.xp-tooltip .cam { margin: -4px -8px; }
+.xp-tooltip .cam .header {
+  background: linear-gradient(180deg, oklch(90% 0.025 110), oklch(78% 0.05 110));
+  border-bottom: 1px solid oklch(54% 0.07 115);
+  padding: 3px 8px; font-weight: bold; color: oklch(38% 0.10 115);
+  font-family: "Trebuchet MS", Verdana, sans-serif; font-size: 10.5px;
+  display: flex; align-items: center; justify-content: space-between; gap: 6px;
+}
+.xp-tooltip .cam .header span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* flash bolt sits inline in the header here, not in the tooltip corner */
+.xp-tooltip .cam .flash-bolt { position: static; top: auto; right: auto; flex-shrink: 0; color: oklch(58% 0.18 75); filter: none; }
+.xp-tooltip .cam .histogram-frame {
+  margin: 6px 8px 0; height: 36px; position: relative; overflow: hidden;
+  border: 1px solid oklch(54% 0.07 115);
+  border-top-color: oklch(43% 0.08 115); border-left-color: oklch(43% 0.08 115);
+  background: oklch(100% 0 0);
+}
+.xp-tooltip .cam .hist-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.xp-tooltip .cam .hist-svg .luma { fill: oklch(35% 0 0); opacity: 0.35; }
+.xp-tooltip .cam .hist-svg polyline { fill: none; stroke-width: 1; vector-effect: non-scaling-stroke; mix-blend-mode: multiply; }
+.xp-tooltip .cam .hist-svg .r { stroke: oklch(45% 0.22 25); }
+.xp-tooltip .cam .hist-svg .g { stroke: oklch(50% 0.20 145); }
+.xp-tooltip .cam .hist-svg .b { stroke: oklch(45% 0.18 115); }
+.xp-tooltip .cam .body { padding: 6px 9px 4px; }
+.xp-tooltip .cam .exposure { font-variant-numeric: tabular-nums; font-size: 12.5px; font-weight: bold; color: oklch(15% 0 0); letter-spacing: 0.02em; }
+.xp-tooltip .cam .meta-strip { font-size: 9.5px; color: oklch(48% 0 0); margin: 1px 0 5px; }
+.xp-tooltip .cam .recipe-rows { display: grid; grid-template-columns: auto 1fr; column-gap: 8px; row-gap: 1px; margin: 0; font-size: 10.5px; }
+.xp-tooltip .cam .recipe-rows dt { color: oklch(48% 0 0); white-space: nowrap; }
+.xp-tooltip .cam .recipe-rows dd { margin: 0; color: oklch(18% 0 0); text-align: right; }
+.xp-tooltip .cam .footer {
+  display: flex; justify-content: space-between; padding: 3px 9px 4px;
+  border-top: 1px solid oklch(84% 0.04 115); margin-top: 5px;
+  font-size: 9px; color: oklch(52% 0 0); font-family: "Courier New", monospace;
+}
+
 /* album popover: just the cover image in a contact-sheet-style raised
    frame. textual metadata stays in the row itself — no point repeating
    it in the tooltip. the frame matches the .photos a treatment so the
@@ -541,15 +650,59 @@ footer .signature small { color: oklch(56.93% 0 0); }
   width: 120px;
   height: 120px;
   object-fit: cover;
-  background: oklch(94% 0.005 240);
+  background: oklch(94% 0.006 110);
   /* paper-mat border matching the photo tiles */
   border: 3px solid oklch(100% 0 0);
-  outline: 1px solid oklch(61.14% 0.0611 253.60);
+  outline: 1px solid oklch(54% 0.07 115);
   outline-offset: -1px;
 }
 
 /* (the earlier two-column .track-card layout was removed when album and
    artist tooltips both moved to the .album-pop frame-only treatment.) */
+
+/* resto-mod car popover: a landscape photo of the car a text link names,
+   in the same paper-mat frame as the photo tiles, with a small caption
+   strip underneath. reuses the cursor-following tooltip plumbing — the
+   car links are just another findTarget shape. */
+.xp-tooltip .car-pop {
+  padding: 0;
+  margin: -4px -8px;
+}
+.xp-tooltip .car-pop img {
+  display: block;
+  width: 240px;
+  height: 160px;
+  object-fit: cover;
+  background: oklch(94% 0.006 110);
+  border: 3px solid oklch(100% 0 0);
+  outline: 1px solid oklch(54% 0.07 115);
+  outline-offset: -1px;
+}
+.xp-tooltip .car-cap {
+  width: 240px;
+  margin: 0 3px 3px;
+  padding: 3px 5px;
+  font-size: 8.5pt;
+  color: oklch(38% 0 0);
+  background: oklch(96% 0.005 110);
+  border: 1px solid oklch(54% 0.07 115);
+  border-top: none;
+  box-sizing: border-box;
+}
+/* photographer attribution for the CC BY-SA Commons photos. quiet — it's a
+   credit, not a headline — but present at the point the image is shown. */
+.xp-tooltip .car-credit {
+  display: block;
+  margin-top: 1px;
+  font-size: 7.5pt;
+  color: oklch(58% 0 0);
+}
+/* the car links read as ordinary text links; a dotted underline marks
+   them as "hover for a picture" without shouting. needs to out-specify the
+   `a:link { text-decoration: underline }` rule, whose shorthand resets the
+   style to solid — so match on a.car-link:link/:visited. */
+a.car-link:link,
+a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; }
 
 /* ─── wide-gamut overrides ────────────────────────────────────────────
    on Display P3 displays, push the user-action accents (links, hovers,
@@ -561,23 +714,18 @@ footer .signature small { color: oklch(56.93% 0 0); }
    sRGB displays see no change at all.
    ────────────────────────────────────────────────────────────────────── */
 @media (color-gamut: p3) {
-  a:link    { color: oklch(42.61% 0.30 263.74); }
+  a:link    { color: oklch(42% 0.24 115); }
   a:visited { color: oklch(42.09% 0.27 328.36); }
   a:hover, a:active { color: oklch(62.80% 0.33 29.23); }
 
   .title-bar .icon                  { background: oklch(69.58% 0.28 43.49); }
-  .title-bar .controls a:hover,
-  .title-bar .controls a:focus {
-    background:    oklch(58.99% 0.31 26.30);
-    border-color:  oklch(37.67% 0.20 29.23);
-  }
 
   .under-construction               { color: oklch(54.44% 0.20 47.10); }
 
   .now-playing h2 a:hover           { color: oklch(62.80% 0.33 29.23); }
   .np-list a:hover .np-title        { color: oklch(62.80% 0.33 29.23); }
 
-  .photos a:hover                   { border-color: oklch(41.92% 0.13 250.51); }
+  .photos a:hover                   { border-color: oklch(38% 0.14 115); }
 
   .counter                          { color: oklch(86.52% 0.22 90.38); }
 }
@@ -603,7 +751,7 @@ footer .signature small { color: oklch(56.93% 0 0); }
   <!-- fake XP title bar — period chrome. the "controls" are decorative. -->
   <div class="title-bar" aria-hidden="true">
     <span class="title-text"><span class="icon"></span>aadhar.sh</span>
-    <span class="controls"><span>_</span><span>□</span><a href="https://www.youtube.com/watch?v=dQw4w9WgXcQ" rel="noopener" title="close">×</a></span>
+    <span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="https://www.youtube.com/watch?v=dQw4w9WgXcQ" rel="noopener" title="close" aria-label="close"></a></span>
   </div>
 
   <div class="content">
@@ -619,17 +767,45 @@ footer .signature small { color: oklch(56.93% 0 0); }
     <hr>
 
     <p>
-      Hi. This is a corner of the web I&apos;m still building. Handwritten
-      HTML, three eras of theme, a coffee-booking system on Cloudflare,
-      a place to put photographs, a place to put rabbithole posts. None
-      of it&apos;s ready yet, all of it&apos;s on the way.
+      Hey, welcome to my corner of the internet! This site&apos;s modeled after
+      the recent (last decade) wave of resto-mod cars like
+      <a class="car-link" href="https://www.google.com/search?q=Singer+Vehicle+Design+Porsche+911" rel="external"
+         data-car-avif="/cars/singer.avif?v=1" data-car-jpg="/cars/singer.jpg?v=1"
+         data-car-caption="Singer · reimagined aircooled 911"
+         data-car-credit="photo: Matti Blume, CC BY-SA">Singer</a>
+      or
+      <a class="car-link" href="https://www.google.com/search?q=Tuthill+911K" rel="external"
+         data-car-avif="/cars/tuthill.avif?v=2" data-car-jpg="/cars/tuthill.jpg?v=2"
+         data-car-caption="Tuthill · 911K"
+         data-car-credit="© Tuthill">Tuthill</a>
+      with aircooled Porsche 911&apos;s or the
+      <a class="car-link" href="https://www.google.com/search?q=HWA+AMG+EVO" rel="external"
+         data-car-avif="/cars/hwa-evo.avif?v=1" data-car-jpg="/cars/hwa-evo.jpg?v=1"
+         data-car-caption="HWA EVO · reborn 190E EVO II"
+         data-car-credit="photo: Matti Blume, CC BY-SA">HWA AMG EVO</a>
+      or the
+      <a class="car-link" href="https://www.google.com/search?q=Evoluto+Automobili+355" rel="external"
+         data-car-avif="/cars/f355.avif?v=2" data-car-jpg="/cars/f355.jpg?v=2"
+         data-car-caption="Evoluto · reimagined F355"
+         data-car-credit="photo: MrWalkr, CC BY-SA">355 by Evoluto</a>,
+      where you take a beloved chassis and formula and modernize it while
+      retaining its soul.
     </p>
 
     <p>
-      If you&apos;d like to grab a coffee in NYC while I finish, write me at
-      <!--email_off--><a href="mailto:coffee@aadhar.sh?subject=%E2%98%95%20coffee&amp;body=Hi%20Aadharsh%2C%0A%0A">coffee@aadhar.sh</a><!--/email_off-->.
-      I confirm by hand, usually within a day or two. Or pick a slot at
-      <a href="https://cal.com/aadharsh/coffee" rel="external">cal.com/aadharsh/coffee</a>.
+      In this case, this site&apos;s largely modern HTML with some cursor
+      following tooltips and cloudflare workers under CSS skins styled to look
+      like it&apos;s ~2006. It&apos;s all a work in progress and a fun way for
+      me to learn about internet tech, but in the meantime, here are some
+      photos i&apos;ve made and music that&apos;s been in my head lately.
+    </p>
+
+    <p>
+      If you&apos;d like to grab a coffee in NYC, write me at
+      <!--email_off--><a href="mailto:coffee@aadhar.sh?subject=%E2%98%95%20coffee&amp;body=Hi%20Aadharsh%2C%0A%0A">coffee@aadhar.sh</a><!--/email_off-->
+      or pick a slot at
+      <a href="https://cal.com/aadharsh/coffee" rel="external">cal.com/aadharsh/coffee</a>
+      - it&apos;s a manual opt-in on my side and i&apos;ll try to get back to you.
       <!-- (moving in-house to /coffee once secrets are set + worker deployed) -->
     </p>
 
@@ -800,6 +976,36 @@ footer .signature small { color: oklch(56.93% 0 0); }
         .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
+      // ── camera-readout helpers (photo tooltip = XP camera-back review) ──
+      const fmtFocal = (raw) => raw ? String(raw).replace(/\s+mm$/i, " mm") + " FF" : "";
+      const flashBolt = (raw) => (raw && /\bFired\b|\bOn\b/i.test(raw))
+        ? `<span class="flash-bolt" title="${esc(raw)}"><svg viewBox="0 0 12 16" width="11" height="14"><path d="M10 1 L4 1 L2 9 L6 9 L3 15 L11 7 L7 7 Z" fill="currentColor"/></svg></span>`
+        : "";
+      // RGB+luminance histogram → SVG. {l,r,g,b}, each 64 ints (0..100): luma
+      // a filled polygon, R/G/B colored polylines (colors via CSS classes).
+      const renderHistogramSvg = (h) => {
+        if (!h || !Array.isArray(h.l) || !h.l.length) return "";
+        const yFor = v => (32 - (Math.max(0, Math.min(100, v)) * 30) / 100).toFixed(1);
+        const pts = a => a.map((v, i) => `${i},${yFor(v)}`).join(" ");
+        const n = h.l.length;
+        const luma = `<polygon class="luma" points="0,32 ${pts(h.l)} ${n - 1},32"/>`;
+        const r = Array.isArray(h.r) ? `<polyline class="r" points="${pts(h.r)}"/>` : "";
+        const g = Array.isArray(h.g) ? `<polyline class="g" points="${pts(h.g)}"/>` : "";
+        const b = Array.isArray(h.b) ? `<polyline class="b" points="${pts(h.b)}"/>` : "";
+        return `<svg class="hist-svg" viewBox="0 0 ${n - 1} 32" preserveAspectRatio="none">${luma}${r}${g}${b}</svg>`;
+      };
+      // histograms are stripped from the inlined EXIF to keep the no-store
+      // homepage lean — lazy-fetch the dedicated file on first photo hover
+      // (immutable, SW-cached), then re-render if a photo tip is still open.
+      let histMap = null, histLoading = false;
+      const loadHistograms = () => {
+        if (histLoading) return; histLoading = true;
+        fetch("/images/histograms.json").then(r => r.ok ? r.json() : {}).then(m => {
+          histMap = m || {};
+          if (activeSlot && activeSlot.matches && activeSlot.matches(".photos a")) showTipFor(activeSlot);
+        }).catch(() => { histMap = {}; });
+      };
+
       // unified hover target → "what was hovered?" lookup. one tooltip
       // element, three content shapes: a photo slot (.photos a), a track
       // row (.np-list li[data-track-title]), or an artist link inside a
@@ -807,9 +1013,10 @@ footer .signature small { color: oklch(56.93% 0 0); }
       // both match, so hovering an artist's name shows the artist card,
       // not the track card.
       const findTarget = (el) =>
-        el?.closest?.(".np-artist-link, .photos a, .np-list li[data-track-title]") || null;
+        el?.closest?.(".np-artist-link, .photos a, .np-list li[data-track-title], .car-link") || null;
 
       function buildContent(t) {
+        if (t.matches(".car-link"))   return buildCarContent(t);
         if (t.matches(".np-artist-link")) {
           injectSpotifyHints();
           return buildArtistContent(t);
@@ -822,111 +1029,89 @@ footer .signature small { color: oklch(56.93% 0 0); }
         return "";
       }
 
+      // resto-mod car tooltip: a landscape photo of the car the link names,
+      // in the paper-mat frame, with a small caption strip. graceful — if the
+      // image attrs are missing the tooltip suppresses itself and the link
+      // still click-throughs to its Google search.
+      function buildCarContent(a) {
+        const avif = a.dataset.carAvif || "";
+        const jpg  = a.dataset.carJpg  || "";
+        if (!avif && !jpg) return "";
+        const cap = a.dataset.carCaption || "";
+        const credit = a.dataset.carCredit || "";
+        return (
+          `<div class="car-pop">` +
+            `<picture>` +
+              (avif ? `<source type="image/avif" srcset="${esc(avif)}">` : ``) +
+              `<img src="${esc(jpg || avif)}" alt="" loading="lazy" decoding="async" width="240" height="160">` +
+            `</picture>` +
+            (cap || credit
+              ? `<div class="car-cap">` +
+                  (cap ? esc(cap) : ``) +
+                  (credit ? `<span class="car-credit">${esc(credit)}</span>` : ``) +
+                `</div>`
+              : ``) +
+          `</div>`
+        );
+      }
+
+      // XP camera-back review readout: a Luna header strip (filename + flash),
+      // a sunken histogram band (lazy-loaded), the exposure trio, the full Fuji
+      // recipe as label/value rows, and a date footer. EXIF is inlined per-slot
+      // on data-exif (instant); only the histogram is fetched.
       function buildPhotoContent(slot) {
         const filename = slot.dataset.full || decodeURIComponent((slot.href || "").split("/").pop());
-        const img      = slot.querySelector("img");
-        // EXIF is now inlined per-slot as a JSON blob on data-exif (set
-        // by the worker pre-render from the merged manifest). instant
-        // read, no fetch round-trip on first hover. parse defensively —
-        // if the attr is missing or malformed, fall back to empty obj.
+        const stem = filename.replace(/\.[^.]+$/, "");
+        const img  = slot.querySelector("img");
         let exif = {};
-        try {
-          if (slot.dataset.exif) exif = JSON.parse(slot.dataset.exif);
-        } catch {}
+        try { if (slot.dataset.exif) exif = JSON.parse(slot.dataset.exif); } catch {}
+        if (histMap === null) loadHistograms();   // kick the lazy fetch on first photo hover
 
-        const rows = [];
-        // dimensions: prefer full-res from EXIF; fall back to the thumb's
-        // natural dimensions if metadata isn't loaded yet.
-        const physical = [];
-        if (exif.width && exif.height) {
-          physical.push(`${exif.width} × ${exif.height}`);
-        } else if (img?.naturalWidth && img?.naturalHeight) {
-          physical.push(`${img.naturalWidth} × ${img.naturalHeight}`);
-        }
-        if (slot.dataset.size) physical.push(fmtBytes(slot.dataset.size));
-        if (physical.length) rows.push(physical.join(" · "));
+        // exposure trio
+        const aper = exif.aperture ? (String(exif.aperture).startsWith("f/") ? exif.aperture : "f/" + exif.aperture) : "";
+        const expo = [exif.shutter, aper, exif.iso ? "ISO " + exif.iso : ""].filter(Boolean).join(" ");
 
-        // body/lens row
-        if (exif.camera || exif.lens) {
-          const line = [exif.camera, exif.lens].filter(Boolean).join(" · ");
-          if (line) rows.push(line);
-        }
-        // exposure triplet + optional EV / focal length on the same line
-        if (exif.aperture || exif.shutter || exif.iso || exif.focal) {
-          const parts = [];
-          if (exif.aperture) parts.push(exif.aperture.startsWith("f/") ? exif.aperture : "f/" + exif.aperture);
-          if (exif.shutter)  parts.push(exif.shutter);
-          if (exif.iso)      parts.push("ISO " + exif.iso);
-          // focal is FocalLengthIn35mmFormat (35mm-equivalent), so
-          // mark it FF to distinguish from the physical focal length
-          // that's already in the lens model.
-          if (exif.focal)    parts.push(
-            String(exif.focal).replace(/\s+mm$/i, " mm") + " FF"
-          );
-          if (typeof exif.ev === "number" && exif.ev !== 0) {
-            parts.push((exif.ev > 0 ? "+" : "") + exif.ev + " EV");
-          }
-          if (parts.length) rows.push(parts.join(" · "));
-        }
-        // film recipe line (Fuji-specific): film simulation + any non-default
-        // chrome / grain modifiers. shown compactly so the tooltip doesn't
-        // get noisy on the more common Auto/Off cases.
-        const recipe = [];
-        if (exif.film)         recipe.push(exif.film);
-        if (exif.chrome && exif.chrome !== "Off")
-          recipe.push("Chrome " + exif.chrome);
-        if (exif.chrome_blue && exif.chrome_blue !== "Off")
-          recipe.push("Chrome FX Blue " + exif.chrome_blue);
-        if (exif.grain && exif.grain !== "Off") {
-          const g = "Grain " + exif.grain + (exif.grain_size && exif.grain_size !== "Off" ? " " + exif.grain_size : "");
-          recipe.push(g);
-        }
-        if (recipe.length) rows.push(recipe.join(" · "));
+        // EV · dimensions · size strip
+        const w = exif.width || img?.naturalWidth, h = exif.height || img?.naturalHeight;
+        const dims = (w && h) ? `${w} × ${h}` : "";
+        const evStr = (typeof exif.ev === "number" && exif.ev !== 0) ? ((exif.ev > 0 ? "+" : "") + exif.ev + " EV") : "";
+        const metaStrip = [evStr, dims, slot.dataset.size ? fmtBytes(slot.dataset.size) : ""].filter(Boolean).join(" · ");
 
-        // tone curves + saturation (Fuji): only if any are non-zero / non-default
-        const tone = [];
-        const trimTone = (t) => t && t !== "0 (normal)" ? t.replace(/\s*\(.*\)$/, "") : null;
-        const hi = trimTone(exif.highlight_tone);
-        const sh = trimTone(exif.shadow_tone);
-        const sat = trimTone(exif.saturation);
-        if (hi)  tone.push("HL " + hi);
-        if (sh)  tone.push("SH " + sh);
-        if (sat) tone.push("Sat " + sat);
-        if (tone.length) rows.push(tone.join(" · "));
+        // Fuji recipe rows — only the populated/non-default ones
+        const isOn = v => v && !/^off$/i.test(String(v));
+        const trimTone = t => (t && t !== "0 (normal)") ? t.replace(/\s*\(.*\)$/, "") : "";
+        const chromeParts = [];
+        if (isOn(exif.chrome))      chromeParts.push(exif.chrome);
+        if (isOn(exif.chrome_blue)) chromeParts.push("blue " + exif.chrome_blue);
+        const grainVal = isOn(exif.grain) ? (exif.grain + (isOn(exif.grain_size) ? " " + exif.grain_size : "")) : "";
+        const toneVal = (trimTone(exif.highlight_tone) || trimTone(exif.shadow_tone))
+          ? `H ${trimTone(exif.highlight_tone) || "0"}  S ${trimTone(exif.shadow_tone) || "0"}` : "";
+        const recipe = [
+          ["Body",       exif.camera],
+          ["Lens",       [exif.lens, fmtFocal(exif.focal)].filter(Boolean).join(" · ")],
+          ["Film",       exif.film],
+          ["Dyn range",  exif.dr],
+          ["White bal",  exif.white_balance],
+          ["Chrome FX",  chromeParts.join(" · ")],
+          ["Grain",      grainVal],
+          ["Tones",      toneVal],
+          ["Color",      trimTone(exif.saturation)],
+        ].filter(([, v]) => v && v !== "undefined")
+         .map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("");
 
-        // other niceties — only show when non-default
-        const other = [];
-        if (exif.white_balance && exif.white_balance !== "Auto")
-          other.push("WB " + exif.white_balance);
-        if (exif.color_space && exif.color_space !== "sRGB")
-          other.push(exif.color_space);
-        if (other.length) rows.push(other.join(" · "));
-        // (flash is handled separately, as a corner-positioned bolt
-        //  outside the text-row system — see the buildPhotoContent
-        //  return value below.)
+        const histSvg = (histMap && histMap[stem]) ? renderHistogramSvg(histMap[stem]) : "";
+        const dateStr = fmtDate(exif.date) || (slot.dataset.uploaded ? "up " + fmtDate(slot.dataset.uploaded) : "");
 
-        // date last
-        if (exif.date) {
-          rows.push(fmtDate(exif.date) || exif.date);
-        } else if (slot.dataset.uploaded) {
-          rows.push("uploaded " + fmtDate(slot.dataset.uploaded));
-        }
-
-        // small SVG bolt in the top-right corner when flash fired.
-        // sits outside the text-row system so it can be positioned
-        // absolutely without interfering with the esc()-protected
-        // text rendering above. 7-point path includes an arrowhead
-        // notch at the bottom — matches the classic camera-flash
-        // icon shape rather than a plain zigzag.
-        const flashIcon = (exif.flash && /\bFired\b|\bOn\b/i.test(exif.flash))
-          ? `<span class="flash-bolt" title="${esc(exif.flash)}">` +
-              `<svg viewBox="0 0 12 16" width="9" height="12">` +
-                `<path d="M 8 0 L 0 8 L 4 8 L 2 16 L 5 13 L 12 7 L 7 7 Z" fill="currentColor"/>` +
-              `</svg></span>`
-          : "";
-        return `<div class="filename">${esc(filename)}</div>` +
-               rows.map(r => `<div class="row">${esc(r)}</div>`).join("") +
-               flashIcon;
+        return `<div class="cam">` +
+            `<div class="header"><span>${esc(stem)}.jpg</span>${flashBolt(exif.flash)}</div>` +
+            `<div class="histogram-frame">${histSvg}</div>` +
+            `<div class="body">` +
+              (expo ? `<div class="exposure">${esc(expo)}</div>` : "") +
+              (metaStrip ? `<div class="meta-strip">${esc(metaStrip)}</div>` : "") +
+              (recipe ? `<dl class="recipe-rows">${recipe}</dl>` : "") +
+            `</div>` +
+            `<div class="footer"><span>${esc(dateStr)}</span><span>EXIF</span></div>` +
+          `</div>`;
       }
 
       // artist tooltip: just the profile photo in an XP-frame border.
@@ -996,19 +1181,37 @@ footer .signature small { color: oklch(56.93% 0 0); }
       const isOpen = () => supportsPopover
         ? tip.matches(":popover-open")
         : tip.style.display === "block";
+      // will-change is an "earn it" hint, not a permanent set (see the gotcha
+      // log): leaving it on while the tooltip is display:none would pin a
+      // compositor layer for an invisible element. so we promote it to its own
+      // layer ONLY while open — that makes the per-pointermove translate a pure
+      // compositor transform (off the main thread, no box repaint), which is
+      // what keeps tracking smooth on ProMotion / Low-Power VRR displays — then
+      // release the layer the instant it closes.
       const openTip = () => {
+        tip.style.willChange = "transform";
         if (supportsPopover) { if (!tip.matches(":popover-open")) tip.showPopover(); }
         else tip.style.display = "block";
       };
       const closeTip = () => {
         if (supportsPopover) { if (tip.matches(":popover-open")) tip.hidePopover(); }
         else tip.style.display = "none";
+        tip.style.willChange = "auto";
+      };
+      // anchoredEl tracks the element a keyboard-focus tooltip is tethered to
+      // (via CSS anchor positioning) so we can release its anchor-name on hide.
+      let anchoredEl = null;
+      const dropAnchor = () => {
+        if (anchoredEl) { anchoredEl.style.removeProperty("anchor-name"); anchoredEl = null; }
+        tip.classList.remove("anchored");
       };
       const hideTip = () => {
         closeTip();
+        dropAnchor();
         activeSlot = null;
       };
       const showTipFor = (target, e) => {
+        dropAnchor();                        // pointer entry always uses cursor-follow
         activeSlot = target;
         const html = buildContent(target);
         if (!html) { hideTip(); return; }   // e.g. track with no cover yet
@@ -1067,6 +1270,37 @@ footer .signature small { color: oklch(56.93% 0 0); }
         if (!isOpen()) return;
         if (!scrollFrame) scrollFrame = requestAnimationFrame(reevaluateAfterScroll);
       }, { capture: true, passive: true });
+
+      // ── keyboard-focus fallback ────────────────────────────────────────
+      // mouse users get the cursor-following tooltip above; keyboard users had
+      // nothing (no pointer to track). when the engine supports CSS anchor
+      // positioning, tether the tooltip to the focused element instead. gated
+      // on support, so it's a clean no-op (and no tooltip, exactly as before)
+      // where unsupported. only fires for :focus-visible — a mouse click that
+      // focuses a link doesn't trigger it, leaving cursor-follow in charge.
+      if (window.CSS && CSS.supports &&
+          (CSS.supports("position-area: bottom") || CSS.supports("inset-area: bottom"))) {
+        const showAnchored = (target) => {
+          const html = buildContent(target);
+          if (!html) return;
+          dropAnchor();
+          activeSlot = target;
+          tip.innerHTML = html;
+          target.style.setProperty("anchor-name", "--xp-tip");
+          anchoredEl = target;
+          tip.classList.add("anchored");
+          openTip();
+        };
+        document.addEventListener("focusin", (e) => {
+          const target = findTarget(e.target);
+          if (!target) return;
+          try { if (!target.matches(":focus-visible")) return; } catch (_) {}
+          showAnchored(target);
+        });
+        document.addEventListener("focusout", (e) => {
+          if (anchoredEl && findTarget(e.target) === anchoredEl) hideTip();
+        });
+      }
     })();
     </script>
 
@@ -1132,7 +1366,7 @@ footer .signature small { color: oklch(56.93% 0 0); }
         // (findTarget matches `.np-list li[data-track-title]`). the old
         // minimal fallback omitted them, so music tooltips silently failed
         // on any visit where SSR didn't populate (cold tracks:<pid> KV).
-        list.innerHTML = data.tracks.map(t => {
+        const renderRow = (t) => {
           const artistsText = t.artists_text || (Array.isArray(t.artists) ? t.artists.map(a => a.name).join(", ") : "");
           const dur = fmt(t.duration_ms);
           const attrs =
@@ -1146,7 +1380,22 @@ footer .signature small { color: oklch(56.93% 0 0); }
           }<span class="np-title">${esc(t.title)}</span><span class="np-sep">&mdash;</span><span class="np-artist">${linkifyArtists(t.artists, artistsText)}</span>${
             t.is_explicit ? '<span class="np-explicit">E</span>' : ""
           }</a></li>`;
-        }).join("");
+        };
+        // chunked insert: build + flush ~8 rows at a time, yielding to the main
+        // thread between batches so taps/scroll stay live while a long playlist
+        // renders on a slow phone. scheduler.yield() resumes at the FRONT of the
+        // task queue (no setTimeout back-of-queue penalty); guarded so engines
+        // without it take a setTimeout(0) shim — same shape, ships everywhere.
+        const yieldNow = (window.scheduler && typeof scheduler.yield === "function")
+          ? () => scheduler.yield()
+          : () => new Promise(r => setTimeout(r, 0));
+        list.innerHTML = "";
+        let batch = "";
+        for (let i = 0; i < data.tracks.length; i++) {
+          batch += renderRow(data.tracks[i]);
+          if ((i + 1) % 8 === 0) { list.insertAdjacentHTML("beforeend", batch); batch = ""; await yieldNow(); }
+        }
+        if (batch) list.insertAdjacentHTML("beforeend", batch);
       } catch {
         list.innerHTML = '<li class="np-empty">Couldn&rsquo;t load tracks. <a href="/rn">Open on Spotify</a>.</li>';
       }
@@ -1190,12 +1439,13 @@ footer .signature small { color: oklch(56.93% 0 0); }
     <footer>
       <p class="links">
         <a href="https://twitter.com/oddhash" rel="external me">Twitter</a> &middot;
+        <a href="https://instagram.com/aadharsh.hif" rel="external me">Instagram</a> &middot;
         <a href="https://curius.app/aadharsh-pannirselvam" rel="external me">Curius</a> &middot;
         <a href="https://beliapp.com/users/aadharsh" rel="external me">Beli</a> &middot;
         <a href="https://open.spotify.com/user/aadharsh2010" rel="external me">Spotify</a> &middot;
         <a href="/whoareyou">whoareyou</a> &middot;
         <a href="/around" title="looking around the crypto VC neighborhood, crawled by AadharshBot">around</a> &middot;
-        <a href="/garage" title="prototypes + experiments">garage</a>
+        <a href="/garage/" title="prototypes + experiments">garage</a>
       </p>
       <p>
         Last modified <time datetime="2026-05-18">May 18, 2026</time>
@@ -1235,20 +1485,37 @@ if ("serviceWorker" in navigator) {
 </script>
 
 <!--
-  Speculation Rules: prerender the two static footer destinations on
-  hover/pointerdown intent, so clicking them is instant. "moderate"
-  eagerness means nothing prefetches until the cursor lingers, so
-  visitors who never hover the footer pay nothing. only /garage and
-  /bot — NOT /around (a live crawl, expensive to run speculatively)
-  or /whoareyou (per-request transparency, pointless to prerender).
-  Chromium-only; other engines ignore the block. allowed under the
-  'unsafe-inline' script-src already in the CSP.
+  Speculation Rules: McMaster-Carr-style — prerender EVERY internal page,
+  eagerly, so navigations activate an already-built page with no network and
+  no loading bar. a document rule matches all same-origin links on the page,
+  minus three that genuinely can't be prerendered:
+    /          — no-store; re-randomizes photos + ticks the counter per visit
+    /around    — a live crawl; prerendering would fire crawls on page load
+    /whoareyou — per-request fingerprint must reflect the real click, not a
+                 speculative prerender request
+  cross-origin links (Twitter, Spotify, ENS, …) are skipped automatically.
+  Chromium-only; other engines ignore the block. "eager" prerenders on load
+  (Chrome is the daily driver here, so we lean in); pages are tiny + static so
+  the speculative cost is small. allowed under the existing 'unsafe-inline'
+  script-src in the CSP.
 -->
 <script type="speculationrules">
 {
   "prerender": [
-    { "where": { "href_matches": "/garage" }, "eagerness": "moderate" },
-    { "where": { "href_matches": "/bot" }, "eagerness": "moderate" }
+    {
+      "where": {
+        "and": [
+          { "href_matches": "/*" },
+          { "not": { "href_matches": "/" } },
+          { "not": { "href_matches": "/around*" } },
+          { "not": { "href_matches": "/whoareyou*" } },
+          { "not": { "href_matches": "/rn*" } },
+          { "not": { "href_matches": "/index.md" } },
+          { "not": { "href_matches": "/llms.txt" } }
+        ]
+      },
+      "eagerness": "eager"
+    }
   ]
 }
 </script>

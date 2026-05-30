@@ -1,0 +1,26 @@
+Resto-mod reference photos used in the homepage car-link tooltips.
+All sourced from Wikimedia Commons under CC BY-SA. Reused with attribution;
+derivatives (the downscaled AVIF/JPG thumbnails here) remain under CC BY-SA.
+
+singer.{avif,jpg}
+  Singer Vehicle Design 911 (reimagined aircooled 911)
+  "Singer 911, Auto 2024, Zurich (PANA0943).jpg" by Matti Blume, CC BY-SA
+  https://commons.wikimedia.org/wiki/File:Singer_911,_Auto_2024,_Zurich_(PANA0943).jpg
+
+tuthill.{avif,jpg}
+  Tuthill 911K (the 11,000rpm carbon-bodied restomod)
+  Official Tuthill press photo. (c) Tuthill - https://www.tuthill.uk/special-projects/911k
+  NOTE: this is the ONLY copyrighted image in this set; the other three are
+  CC BY-SA from Wikimedia Commons. Used as editorial reference with credit.
+  No 911K photo exists under a free license (Commons/Openverse checked).
+
+hwa-evo.{avif,jpg}
+  HWA EVO (reborn Mercedes 190E EVO II)
+  "HWA Evo, TC25, Essen (P1045560).jpg" by Matti Blume, CC BY-SA
+  https://commons.wikimedia.org/wiki/File:HWA_Evo,_TC25,_Essen_(P1045560).jpg
+
+f355.{avif,jpg}
+  Evoluto 355 (Evoluto Automobili's reimagined Ferrari F355)
+  "2024 Evoluto 355 HCC24.jpg" by MrWalkr, CC BY-SA 4.0
+  https://commons.wikimedia.org/wiki/File:2024_Evoluto_355_HCC24.jpg
+  (stem stays "f355" — it's the F355 platform — but the link/caption are Evoluto.)

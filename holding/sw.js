@@ -25,7 +25,7 @@
 // `?v=N` bumps on each deploy already cycle individual entries, but a
 // cache-version bump is the only way to sweep stale keys whose URL
 // pattern no longer matches anything we serve.
-const CACHE_VERSION = "aadhar-v6-avif-jpg";
+const CACHE_VERSION = "aadhar-v18-luna-olive";
 
 const CACHE_FIRST = [
   // image files only — NOT /images/ or /images/full/ themselves (those are
@@ -40,11 +40,34 @@ const SWR = [
   /^\/robots\.txt$/,
   /^\/\.well-known\/http-message-signatures-directory$/,
   /^\/favicon\.ico$/,
+  // static, content-stable pages: pre-cached on install (below) + served
+  // stale-while-revalidate, so navigations are instant cache hits even in
+  // engines that don't (yet) run our Speculation Rules prerender — i.e.
+  // Safari + Firefox. this is the cross-browser half of the McMaster snap.
+  // dynamic pages stay network-only and are deliberately NOT here:
+  //   /          — no-store (re-randomizes photos + ticks the counter)
+  //   /around    — a live crawl
+  //   /whoareyou — per-request fingerprint
+  /^\/garage\/$/,
+  /^\/garage\/(horizon|tooltips|scroll)$/,
+  /^\/bot$/,
+  // photo-tooltip histograms — small, content-stable, fetched on first hover.
+  /^\/images\/histograms\.json$/,
 ];
 
-self.addEventListener("install", () => {
+// URLs warmed on SW install so the FIRST navigation is already a hit (the
+// 200-returning forms — /garage 308-redirects to /garage/, so cache the slash).
+const PRECACHE_PAGES = ["/garage/", "/garage/horizon", "/garage/tooltips", "/garage/scroll", "/bot"];
+
+self.addEventListener("install", (event) => {
   // new SW takes over immediately on next reload
   self.skipWaiting();
+  // warm the cache with the static pages so the first nav to them is a hit
+  // (no loading bar). allSettled so one failed fetch can't block install.
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE_VERSION);
+    await Promise.allSettled(PRECACHE_PAGES.map((u) => cache.add(u)));
+  })());
 });
 
 self.addEventListener("activate", (event) => {
@@ -100,7 +123,9 @@ async function cacheFirst(req) {
 
 async function staleWhileRevalidate(req) {
   const cache = await caches.open(CACHE_VERSION);
-  const cached = cache.match(req);
+  // ignoreVary: a navigation request's headers differ from the bare GET that
+  // cache.add() stored on install; without this they wouldn't match.
+  const cached = cache.match(req, { ignoreVary: true });
   const network = fetch(req).then(res => {
     if (res && res.ok) cache.put(req, res.clone());
     return res;
