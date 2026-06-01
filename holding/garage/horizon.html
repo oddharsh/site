@@ -19,10 +19,10 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
 body {
-  background: oklch(89% 0.03 110);
-  background: linear-gradient(180deg, oklch(79% 0.05 110) 0%, oklch(87% 0.025 110) 220px, oklch(87% 0.025 110) 100%);
-  font-family: Verdana, Tahoma, Geneva, sans-serif;
-  font-size: 11pt;
+  background: oklch(91.74% 0.0203 238.68);
+  background: linear-gradient(180deg, oklch(87.51% 0.0281 248.15) 0%, oklch(94.66% 0.0114 252.09) 220px, oklch(94.66% 0.0114 252.09) 100%);
+  font-family: Tahoma, Verdana, Geneva, sans-serif;
+  font-size: 10.5pt;
   line-height: 1.5;
   color: oklch(21.78% 0 0);
   padding: 24px 12px 60px;
@@ -33,16 +33,16 @@ body {
   max-width: 720px;
   margin: 0 auto;
   background: oklch(100.00% 0 0);
-  border: 1px solid oklch(54% 0.07 115);
-  box-shadow: 4px 4px 0 oklch(54% 0.07 115 / 0.35);
+  border: 1px solid oklch(61.14% 0.0611 253.60);
+  box-shadow: 4px 4px 0 oklch(61.14% 0.0611 253.60 / 0.35);
 }
 .title-bar {
-  background: linear-gradient(180deg, oklch(73% 0.11 112) 0%, oklch(64% 0.14 110) 8%, oklch(56% 0.16 108) 18%, oklch(55% 0.16 108) 86%, oklch(63% 0.12 110) 100%);
+  background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
   color: oklch(100.00% 0 0);
   font-family: "Trebuchet MS", Verdana, sans-serif;
-  font-size: 11pt; font-weight: bold;
+  font-size: 10pt; font-weight: bold;
   padding: 4px 8px;
-  border-bottom: 1px solid oklch(33% 0.12 108);
+  border-bottom: 1px solid oklch(41.92% 0.0962 250.51);
   display: flex; align-items: center; justify-content: space-between;
 }
 .title-bar .icon {
@@ -68,10 +68,10 @@ body {
   position: relative; box-sizing: border-box;
   width: 21px; height: 21px; padding: 0; margin: 0;
   display: inline-block; overflow: hidden; font-size: 0; color: transparent;
-  border: 1px solid #628040; border-radius: 3px;
+  border: 1px solid #6696eb; border-radius: 3px;
   text-decoration: none; cursor: pointer;
-  background-color: #6a8838;
-  background-image: linear-gradient(180deg, #a0c060 0%, #70902e 22%, #689030 55%, #507028 82%, #284018 100%);
+  background-color: #3e73f5;
+  background-image: linear-gradient(180deg, #5f8cf7 0%, #3a71f5 22%, #3e73f5 55%, #2a70f2 82%, #1045be 100%);
   transition: filter .1s ease;
 }
 /* "wet plastic" gloss band over the top ~45% (close uses ::after for its X stroke) */
@@ -83,8 +83,8 @@ body {
 }
 .title-bar .controls .min:hover, .title-bar .controls .min:focus-visible,
 .title-bar .controls .max:hover, .title-bar .controls .max:focus-visible {
-  border-color: #9acc58; background-color: #86b048;
-  background-image: linear-gradient(180deg, #b0d070 0%, #84a840 22%, #92b850 55%, #74a038 82%, #527828 100%);
+  border-color: #8fb4ff; background-color: #4fa4ff;
+  background-image: linear-gradient(180deg, #689bff 0%, #468aff 22%, #4fa4ff 55%, #3990fc 82%, #1858c8 100%);
   outline: none;
 }
 /* CLOSE = red at rest */
@@ -119,30 +119,30 @@ body {
 .title-bar .controls .close::before { transform: rotate(45deg); }
 .title-bar .controls .close::after  { transform: rotate(-45deg); }
 /* --- Luna polish: caption text shadow + rounded top corners + 3px window frame --- */
-.title-bar { text-shadow: 1px 1px #1a2c08; border-top-left-radius: 8px; border-top-right-radius: 7px; }
+.title-bar { text-shadow: 1px 1px #0f1089; border-top-left-radius: 8px; border-top-right-radius: 7px; }
 .window {
-  border: 1px solid #4c6828; border-right-color: #2e4018; border-bottom-color: #2e4018;
+  border: 2px solid #0831d9; border-right-color: #001ea0; border-bottom-color: #001ea0;
   border-top-left-radius: 8px; border-top-right-radius: 8px; overflow: hidden;
-  box-shadow: inset 1px 1px 0 #9acc58, inset 2px 2px 0 #6a9838,
-              inset -1px -1px 0 #0e1c04, inset -2px -2px 0 #2a4010,
-              4px 4px 0 rgba(20,38,0,.35);
+  box-shadow: inset 1px 1px 0 #166aee, inset 2px 2px 0 #0855dd,
+              inset -1px -1px 0 #00138c, inset -2px -2px 0 #003bda,
+              4px 4px 0 rgba(0,30,160,.35);
 }
 
-.content { padding: 18px 24px 22px; }
+.content { padding: 12px 16px 16px; }
 h1 {
-  font-family: "Trebuchet MS", Verdana, sans-serif; font-size: 20pt;
-  color: oklch(38% 0.10 115); margin: 0 0 4px; font-weight: bold; letter-spacing: -0.01em;
+  font-family: "Franklin Gothic Medium", "Franklin Gothic", "Trebuchet MS", Verdana, sans-serif; font-size: 14pt;
+  color: oklch(41.92% 0.0962 250.51); margin: 0 0 4px; font-weight: bold; letter-spacing: -0.01em;
 }
 .lede { margin: 0 0 14px; color: oklch(38.67% 0 0); font-size: 10.5pt; }
 p { margin: 0 0 12px; }
-a:link    { color: oklch(42% 0.18 115); text-decoration: underline; }
-a:visited { color: oklch(37% 0.09 115); }
+a:link    { color: oklch(42.61% 0.2353 263.74); text-decoration: underline; }
+a:visited { color: oklch(42.09% 0.1935 328.36); }
 a:hover   { color: oklch(62.80% 0.2577 29.23); }
-hr { border: 0; border-top: 2px groove oklch(84% 0.04 115); margin: 16px 0; height: 0; }
+hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 16px 0; height: 0; }
 code, .mono { font-family: "Courier New", Courier, monospace; font-size: 9.5pt; }
 pre {
-  font-family: "Courier New", Courier, monospace; font-size: 9pt; line-height: 1.45;
-  background: oklch(97.5% 0.005 110); border: 1px solid oklch(84% 0.04 115);
+  font-family: "Courier New", Courier, monospace; font-size: 10.5pt; line-height: 1.5;
+  background: oklch(97.5% 0.006 255); border: 1px solid oklch(86.67% 0.0294 259.59);
   padding: 8px 10px; margin: 8px 0;
   /* wrap long code lines instead of forcing a sideways scroll on narrow
      viewports — that was the "weird horizontal scrollover" on the cards.
@@ -167,13 +167,13 @@ pre {
 
 /* ── per-feature card ────────────────────────────────────────────────── */
 .demo {
-  border: 1px solid oklch(54% 0.07 115);
-  border-top-color: oklch(43% 0.08 115); border-left-color: oklch(43% 0.08 115);
+  border: 1px solid oklch(61.14% 0.0611 253.60);
+  border-top-color: oklch(47.12% 0.0555 253.58); border-left-color: oklch(47.12% 0.0555 253.58);
   background: oklch(100% 0 0); margin: 0 0 18px; padding: 12px 14px 14px;
 }
 .demo > h2 {
-  font-family: "Trebuchet MS", Verdana, sans-serif; font-size: 13pt; font-weight: bold;
-  color: oklch(38% 0.10 115); margin: 0 0 2px; display: flex; align-items: baseline;
+  font-family: "Franklin Gothic Medium", "Franklin Gothic", "Trebuchet MS", Verdana, sans-serif; font-size: 13pt; font-weight: bold;
+  color: oklch(41.92% 0.0962 250.51); margin: 0 0 2px; display: flex; align-items: baseline;
   justify-content: space-between; gap: 10px; flex-wrap: wrap;
 }
 .demo > h2 .mono { font-size: 10pt; font-weight: normal; color: oklch(40% 0 0); }
@@ -183,7 +183,7 @@ pre {
 }
 .stat.cross    { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(98% 0.04 142); }
 .stat.chrome   { color: oklch(54.44% 0.1504 47.10);  border-color: oklch(54.44% 0.1504 47.10);  background: oklch(98% 0.03 95);  }
-.stat.trial    { color: oklch(42% 0.18 115); border-color: oklch(42% 0.18 115); background: oklch(97% 0.02 115); }
+.stat.trial    { color: oklch(42.61% 0.2353 263.74); border-color: oklch(42.61% 0.2353 263.74); background: oklch(97% 0.03 264); }
 .stat.contested{ color: oklch(46.34% 0.1902 29.23);  border-color: oklch(46.34% 0.1902 29.23);  background: oklch(98% 0.03 30);  }
 /* WebKit standards-position chip — what Safari's team actually said, sourced
    from webkit.org/standards-positions (the authoritative signal, vs. the
@@ -194,7 +194,7 @@ pre {
 .wk.opp { color: oklch(46.34% 0.1902 29.23);  border-color: oklch(46.34% 0.1902 29.23);  background: oklch(98% 0.03 30); }
 .wk.non { color: oklch(51% 0 0); border-color: oklch(72% 0 0); background: oklch(97% 0 0); }
 .demo .note { font-size: 9.5pt; color: oklch(40% 0 0); margin: 8px 0 0; }
-.demo .replaces { font-size: 9.5pt; color: oklch(33% 0 0); margin: 8px 0 0; border-left: 3px solid oklch(86% 0.03 115); padding-left: 8px; }
+.demo .replaces { font-size: 9.5pt; color: oklch(33% 0 0); margin: 8px 0 0; border-left: 3px solid oklch(86% 0.03 250); padding-left: 8px; }
 .unsupported { display: none; font-size: 9.5pt; color: oklch(46% 0.10 50); margin-top: 8px; }
 .demo.no-support .unsupported { display: block; }
 
@@ -208,14 +208,14 @@ pre {
      includes the line-height's half-leading. an inline background only paints
      the font content area, so the trim would be invisible — the original bug. */
   display: inline-block; vertical-align: top;
-  background: oklch(86% 0.06 115);
+  background: oklch(86% 0.06 250);
 }
 .tb-line.trim { text-box-trim: trim-both; text-box-edge: cap alphabetic; }
 /* a real XP title bar, trimmed vs not, to show the practical payoff */
 .tb-bar {
-  background: linear-gradient(180deg, oklch(73% 0.11 112) 0%, oklch(64% 0.14 110) 8%, oklch(56% 0.16 108) 18%, oklch(55% 0.16 108) 86%, oklch(63% 0.12 110) 100%);
+  background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
   color: oklch(100% 0 0); font-family: "Trebuchet MS", Verdana, sans-serif; font-weight: bold;
-  font-size: 13pt; padding: 8px; border: 1px solid oklch(38% 0.10 115); margin-top: 6px;
+  font-size: 13pt; padding: 8px; border: 1px solid oklch(41.92% 0.0962 250.51); margin-top: 6px;
 }
 .tb-bar.trim { text-box-trim: trim-both; text-box-edge: cap alphabetic; }
 
@@ -232,37 +232,37 @@ pre {
 /* ── interestfor + anchor positioning demo ───────────────────────────── */
 .ifor-demo a { text-decoration-style: dotted; text-underline-offset: 2px; interest-delay: 0s; }
 .ifor-pop {
-  margin: 0; padding: 0; border: 1px solid oklch(54% 0.07 115);
+  margin: 0; padding: 0; border: 1px solid oklch(61.14% 0.0611 253.60);
   background: oklch(100% 0 0); box-shadow: 3px 3px 0 oklch(61.14% 0.0611 253.60 / .35);
 }
 .ifor-pop .cap {
   font-size: 8.5pt; color: oklch(38% 0 0); padding: 3px 6px;
-  background: oklch(96% 0.005 110); border-top: 1px solid oklch(54% 0.07 115);
+  background: oklch(96% 0.004 240); border-top: 1px solid oklch(61.14% 0.0611 253.60);
 }
 .ifor-pop .box { width: 200px; height: 120px; display: flex; align-items: center; justify-content: center;
-  font-size: 9pt; color: oklch(45% 0 0); background: oklch(94% 0.01 115); }
+  font-size: 9pt; color: oklch(45% 0 0); background: oklch(94% 0.01 250); }
 /* anchor positioning: interestfor sets up an implicit anchor on the invoker,
    so the popover can place itself relative to the link with zero JS. */
 .ifor-pop:popover-open { position-area: bottom span-right; margin-top: 6px; }
 
 /* ── watch-list ──────────────────────────────────────────────────────── */
 .watch { list-style: none; padding: 0; margin: 8px 0 0; }
-.watch li { padding: 7px 0; border-bottom: 1px solid oklch(93% 0.01 110); display: grid; grid-template-columns: auto 1fr; gap: 8px; align-items: baseline; }
+.watch li { padding: 7px 0; border-bottom: 1px solid oklch(93% 0.01 248); display: grid; grid-template-columns: auto 1fr; gap: 8px; align-items: baseline; }
 .watch li:last-child { border-bottom: none; }
-.watch .name { font-family: "Courier New", monospace; font-size: 9pt; font-weight: bold; color: oklch(38% 0.04 115); }
+.watch .name { font-family: "Courier New", monospace; font-size: 9pt; font-weight: bold; color: oklch(38% 0.04 250); }
 .watch .desc { font-size: 9.5pt; color: oklch(35% 0 0); }
 .watch .desc .s { font-style: italic; color: oklch(48% 0 0); }
 .stat.early { color: oklch(45% 0 0); border-color: oklch(70% 0 0); background: oklch(96% 0 0); }
-.engine { margin: 12px 0 0; padding: 10px 0 0; border-top: 1px solid oklch(93% 0.01 110); }
+.engine { margin: 12px 0 0; padding: 10px 0 0; border-top: 1px solid oklch(93% 0.01 248); }
 .engine h3 {
-  font-family: "Trebuchet MS", Verdana, sans-serif; font-size: 11.5pt; font-weight: bold;
-  color: oklch(38% 0.10 115); margin: 0 0 4px; display: flex; align-items: baseline; gap: 8px;
+  font-family: "Franklin Gothic Medium", "Franklin Gothic", "Trebuchet MS", Verdana, sans-serif; font-size: 11.5pt; font-weight: bold;
+  color: oklch(41.92% 0.0962 250.51); margin: 0 0 4px; display: flex; align-items: baseline; gap: 8px;
 }
 .engine p { font-size: 9.5pt; color: oklch(33% 0 0); margin: 0 0 6px; }
 
 footer {
-  text-align: center; font-family: Verdana, Tahoma, sans-serif; font-size: 9pt;
-  color: oklch(44.95% 0 0); margin: 18px 0 0; padding-top: 14px; border-top: 1px solid oklch(84% 0.04 115);
+  text-align: center; font-family: Tahoma, Verdana, sans-serif; font-size: 9pt;
+  color: oklch(44.95% 0 0); margin: 18px 0 0; padding-top: 14px; border-top: 1px solid oklch(86.67% 0.0294 259.59);
 }
 
 /* ════════ feature-card demos (added by workflow) ════════ */
@@ -270,9 +270,9 @@ footer {
 /* ── anchor positioning demo ─────────────────────────────────────────── */
 .anc-stage {
   position: relative; margin-top: 12px; padding: 22px;
-  border: 1px solid oklch(84% 0.04 115);
+  border: 1px solid oklch(86.67% 0.0294 259.59);
   background:
-    repeating-linear-gradient(0deg, oklch(97% 0.003 110) 0 11px, oklch(95% 0.005 110) 11px 12px);
+    repeating-linear-gradient(0deg, oklch(97% 0.004 240) 0 11px, oklch(95% 0.006 240) 11px 12px);
   display: flex; gap: 14px; align-items: center; justify-content: center; flex-wrap: wrap;
   /* min-height so a flipped popover has somewhere to go */
   min-height: 120px;
@@ -282,25 +282,25 @@ footer {
   anchor-name: --anc-btn;
   font-family: Tahoma, Verdana, sans-serif; font-size: 9.5pt;
   padding: 5px 14px; cursor: pointer; color: oklch(21.78% 0 0);
-  background: linear-gradient(180deg, oklch(99% 0 0) 0%, oklch(90% 0.01 115) 100%);
-  border: 1px solid oklch(50% 0.02 115);
+  background: linear-gradient(180deg, oklch(99% 0 0) 0%, oklch(90% 0.01 250) 100%);
+  border: 1px solid oklch(50% 0.02 250);
   border-top-color: oklch(100% 0 0); border-left-color: oklch(100% 0 0);
-  box-shadow: 1px 1px 0 oklch(40% 0.03 115);
+  box-shadow: 1px 1px 0 oklch(40% 0.03 250);
 }
-.anc-btn:active { box-shadow: inset 1px 1px 0 oklch(40% 0.03 115); }
+.anc-btn:active { box-shadow: inset 1px 1px 0 oklch(40% 0.03 250); }
 
 /* the popover we tether — placed purely in CSS, no JS coordinate math */
 .anc-pop {
   position: absolute;            /* fallback box if anchoring is unsupported */
   margin: 0; padding: 0; inset: auto;
-  border: 1px solid oklch(38% 0.10 115);
+  border: 1px solid oklch(41.92% 0.0962 250.51);
   background: oklch(100% 0 0);
   box-shadow: 3px 3px 0 oklch(61.14% 0.0611 253.60 / .35);
   font-size: 8.5pt; max-width: 200px;
 }
 .anc-pop .hd {
   font-family: "Trebuchet MS", Verdana, sans-serif; font-weight: bold; color: oklch(100% 0 0);
-  background: linear-gradient(180deg, oklch(73% 0.11 112) 0%, oklch(64% 0.14 110) 8%, oklch(56% 0.16 108) 18%, oklch(55% 0.16 108) 86%, oklch(63% 0.12 110) 100%);
+  background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
   padding: 2px 7px;
 }
 .anc-pop .bd { padding: 6px 8px; color: oklch(33% 0 0); }
@@ -333,19 +333,19 @@ footer {
       scroll the box, wired via a named scroll-timeline on the scroller.
    2. view() reveal — each row fades+slides in as it enters the scrollport,
       driven by its own view-timeline. */
-.sd-wrap { margin-top: 10px; border: 1px solid oklch(54% 0.07 115);
-  border-top-color: oklch(43% 0.08 115); border-left-color: oklch(43% 0.08 115);
-  background: oklch(98% 0.003 115); }
+.sd-wrap { margin-top: 10px; border: 1px solid oklch(61.14% 0.0611 253.60);
+  border-top-color: oklch(47.12% 0.0555 253.58); border-left-color: oklch(47.12% 0.0555 253.58);
+  background: oklch(98% 0.004 250); }
 
 /* the XP-style progress strip, pinned above the scroller */
-.sd-meter { height: 18px; padding: 3px; background: oklch(85% 0.03 110);
-  border-bottom: 1px solid oklch(54% 0.07 115);
+.sd-meter { height: 18px; padding: 3px; background: oklch(87.51% 0.0281 248.15);
+  border-bottom: 1px solid oklch(61.14% 0.0611 253.60);
   /* sunken bevel: dark top/left, light bottom/right */
   border-top: 2px solid oklch(55% 0.02 250); border-left: 2px solid oklch(55% 0.02 250); }
 .sd-meter .bar {
   height: 100%; width: 100%; transform-origin: left center; transform: scaleX(0);
   background: repeating-linear-gradient(90deg,
-    oklch(55% 0.13 115) 0 9px, oklch(62% 0.12 115) 9px 11px);
+    oklch(55.0% 0.135 251) 0 9px, oklch(62% 0.124 252) 9px 11px);
   /* the timeline lives on the scroller below, referenced by name */
   animation: sd-fill linear both;
   animation-timeline: --sd-scroll;
@@ -364,7 +364,7 @@ footer {
 /* each row reveals on its own view-timeline as it crosses the scrollport */
 .sd-row {
   margin: 7px 0; padding: 7px 9px; background: oklch(100% 0 0);
-  border: 1px solid oklch(86% 0.02 115); font-size: 9.5pt; color: oklch(30% 0.02 115);
+  border: 1px solid oklch(86% 0.02 250); font-size: 9.5pt; color: oklch(30% 0.02 250);
   font-family: "Trebuchet MS", Verdana, sans-serif;
   animation: sd-reveal linear both;
   animation-timeline: view();
@@ -397,22 +397,22 @@ footer {
 .ph-btn {
   font-family: "Trebuchet MS", Verdana, sans-serif; font-size: 9.5pt; cursor: pointer;
   padding: 4px 12px; color: oklch(21.78% 0 0);
-  background: linear-gradient(180deg, oklch(99% 0 0) 0%, oklch(90% 0.01 115) 100%);
-  border: 1px solid oklch(50% 0.02 115);
+  background: linear-gradient(180deg, oklch(99% 0 0) 0%, oklch(90% 0.01 250) 100%);
+  border: 1px solid oklch(50% 0.02 250);
   border-top-color: oklch(99% 0 0); border-left-color: oklch(97% 0 0);
   box-shadow: 1px 1px 0 oklch(45% 0.05 250 / 0.4);
 }
-.ph-btn:active { border-top-color: oklch(50% 0.02 115); border-left-color: oklch(50% 0.02 115);
-  background: linear-gradient(180deg, oklch(86% 0.02 115) 0%, oklch(93% 0.01 115) 100%); }
+.ph-btn:active { border-top-color: oklch(50% 0.02 250); border-left-color: oklch(50% 0.02 250);
+  background: linear-gradient(180deg, oklch(86% 0.02 250) 0%, oklch(93% 0.01 250) 100%); }
 .ph-pop {
   margin: 0; padding: 0; inset: auto; position: fixed; top: 50%; left: 50%;
   transform: translate(-50%, -50%);
-  border: 1px solid oklch(54% 0.07 115);
-  background: oklch(100% 0 0); box-shadow: 4px 4px 0 oklch(54% 0.07 115 / 0.35);
+  border: 1px solid oklch(61.14% 0.0611 253.60);
+  background: oklch(100% 0 0); box-shadow: 4px 4px 0 oklch(61.14% 0.0611 253.60 / 0.35);
   font-size: 9pt; min-width: 150px;
 }
 .ph-pop .ph-bar {
-  background: linear-gradient(180deg, oklch(73% 0.11 112) 0%, oklch(64% 0.14 110) 8%, oklch(56% 0.16 108) 18%, oklch(55% 0.16 108) 86%, oklch(63% 0.12 110) 100%);
+  background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
   color: oklch(100% 0 0); font-family: "Trebuchet MS", Verdana, sans-serif; font-weight: bold;
   font-size: 8.5pt; padding: 2px 6px;
 }
@@ -426,7 +426,7 @@ footer {
 /* sunken XP field: dark top-left, light bottom-right — the inverse of a raised
    button bevel, exactly like the homepage inputs. */
 .fs-field {
-  display: block; width: 100%; font-family: Verdana, Tahoma, sans-serif; font-size: 10pt;
+  display: block; width: 100%; font-family: Tahoma, Verdana, sans-serif; font-size: 10pt;
   line-height: 1.5; color: oklch(21.78% 0 0); padding: 5px 7px; resize: none;
   background: oklch(100% 0 0);
   border: 2px solid;
@@ -434,19 +434,19 @@ footer {
   border-bottom-color: oklch(94% 0 0); border-right-color: oklch(94% 0 0);
   outline: 1px solid oklch(72% 0 0); outline-offset: -3px;
 }
-.fs-field:focus { outline-color: oklch(45% 0.09 115); }
+.fs-field:focus { outline-color: oklch(49.72% 0.1129 250.87); }
 /* the whole point: the textarea's box tracks its text content instead of a
    fixed rows= height. min/max keep it sane. */
 .fs-field.fs-auto { field-sizing: content; min-height: 2.6em; max-height: 9em; }
 /* same single-line input flavour: grows with the value, shrinks the empty box */
 .fs-input {
-  font-family: Verdana, Tahoma, sans-serif; font-size: 10pt; padding: 4px 7px;
+  font-family: Tahoma, Verdana, sans-serif; font-size: 10pt; padding: 4px 7px;
   background: oklch(100% 0 0); border: 2px solid;
   border-top-color: oklch(58% 0 0); border-left-color: oklch(58% 0 0);
   border-bottom-color: oklch(94% 0 0); border-right-color: oklch(94% 0 0);
   field-sizing: content; min-width: 6ch; max-width: 100%;
 }
-.fs-input:focus { outline: 1px solid oklch(45% 0.09 115); }
+.fs-input:focus { outline: 1px solid oklch(49.72% 0.1129 250.87); }
 /* card: view-transitions */
 placeholder
 /* card: base-select */
@@ -460,12 +460,12 @@ placeholder
   appearance: base-select;
   /* XP "sunken" combobox: dark top-left, light bottom-right — same bevel
      language as the cal/ form inputs. */
-  font-family: Verdana, Tahoma, Geneva, sans-serif;
+  font-family: Tahoma, Verdana, Geneva, sans-serif;
   font-size: 10.5pt;
   color: oklch(21.78% 0 0);
   background: oklch(100% 0 0);
   border: 2px solid;
-  border-color: oklch(55% 0.02 250) oklch(94% 0.01 115) oklch(94% 0.01 115) oklch(55% 0.02 250);
+  border-color: oklch(55% 0.02 250) oklch(94% 0.01 250) oklch(94% 0.01 250) oklch(55% 0.02 250);
   padding: 4px 8px;
   min-width: 220px;
   display: inline-flex;
@@ -473,13 +473,13 @@ placeholder
   gap: 8px;
 }
 .bsel-field:focus-visible {
-  outline: 1px dotted oklch(38% 0.10 115);
+  outline: 1px dotted oklch(41.92% 0.0962 250.51);
   outline-offset: 1px;
 }
 /* The drop-arrow gets its own pseudo we can theme into a raised XP button. */
 .bsel-field::picker-icon {
   margin-left: auto;
-  color: oklch(38% 0.10 115);
+  color: oklch(41.92% 0.0962 250.51);
   transition: rotate 0.15s ease;
 }
 .bsel-field:open::picker-icon { rotate: 180deg; }
@@ -488,13 +488,13 @@ placeholder
 .bsel-field::picker(select) {
   appearance: base-select;
   background: oklch(100% 0 0);
-  border: 1px solid oklch(54% 0.07 115);
-  box-shadow: 3px 3px 0 oklch(54% 0.07 115 / 0.35);
+  border: 1px solid oklch(61.14% 0.0611 253.60);
+  box-shadow: 3px 3px 0 oklch(61.14% 0.0611 253.60 / 0.35);
   padding: 2px;
   margin-top: 2px;
 }
 .bsel-field option {
-  font-family: Verdana, Tahoma, Geneva, sans-serif;
+  font-family: Tahoma, Verdana, Geneva, sans-serif;
   font-size: 10pt;
   padding: 4px 8px;
   display: flex;
@@ -503,10 +503,10 @@ placeholder
   cursor: pointer;
 }
 /* Outlook-Express alternating rows — impossible on a native <option>. */
-.bsel-field option:nth-of-type(even) { background: oklch(97.5% 0.005 110); }
+.bsel-field option:nth-of-type(even) { background: oklch(97.5% 0.006 255); }
 .bsel-field option:hover,
 .bsel-field option:focus {
-  background: linear-gradient(180deg, oklch(73% 0.11 112) 0%, oklch(64% 0.14 110) 8%, oklch(56% 0.16 108) 18%, oklch(55% 0.16 108) 86%, oklch(63% 0.12 110) 100%);
+  background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
   color: oklch(100% 0 0);
 }
 /* The selected row gets the blue XP highlight + a checkmark, again only
@@ -526,8 +526,8 @@ placeholder
 .cs-cell {
   aspect-ratio: 3 / 2;
   border-radius: 18px;
-  border: 1px solid oklch(38% 0.10 115);
-  background: linear-gradient(180deg, oklch(73% 0.11 112) 0%, oklch(64% 0.14 110) 8%, oklch(56% 0.16 108) 18%, oklch(55% 0.16 108) 86%, oklch(63% 0.12 110) 100%);
+  border: 1px solid oklch(41.92% 0.0962 250.51);
+  background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
   color: oklch(100% 0 0);
   font-family: "Trebuchet MS", Verdana, sans-serif; font-size: 9pt; font-weight: bold;
   display: flex; align-items: center; justify-content: center; text-align: center; padding: 4px;
@@ -543,14 +543,14 @@ placeholder
    the kind of thing that needed an SVG mask or a clip-path polygon before. */
 .cs-frame {
   margin-top: 12px;
-  border: 1px solid oklch(38% 0.10 115);
+  border: 1px solid oklch(41.92% 0.0962 250.51);
   border-radius: 14px 14px 0 0;
   corner-shape: scoop scoop round round;
   overflow: hidden;
   background: oklch(100% 0 0);
 }
 .cs-frame .bar {
-  background: linear-gradient(180deg, oklch(73% 0.11 112) 0%, oklch(64% 0.14 110) 8%, oklch(56% 0.16 108) 18%, oklch(55% 0.16 108) 86%, oklch(63% 0.12 110) 100%);
+  background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
   color: oklch(100% 0 0); font-family: "Trebuchet MS", Verdana, sans-serif; font-weight: bold;
   font-size: 11pt; padding: 6px 10px;
 }
@@ -562,7 +562,7 @@ placeholder
   .cs-frame { corner-shape: round; }
 }
 @media (color-gamut: p3) {
-  .cs-cell { background: linear-gradient(180deg, oklch(62% 0.18 115) 0%, oklch(45% 0.14 115) 100%); }
+  .cs-cell { background: linear-gradient(180deg, oklch(62.22% 0.18 251.99) 0%, oklch(49.72% 0.16 250.87) 100%); }
 }
 /* card: calc-size */
 /* ── calc-size() / interpolate-size demo ─────────────────────────────── */
@@ -574,19 +574,19 @@ placeholder
 .cs-demo { interpolate-size: allow-keywords; }
 
 .cs-panel {
-  border: 1px solid oklch(54% 0.07 115);
-  border-top-color: oklch(43% 0.08 115);
-  border-left-color: oklch(43% 0.08 115);
+  border: 1px solid oklch(61.14% 0.0611 253.60);
+  border-top-color: oklch(47.12% 0.0555 253.58);
+  border-left-color: oklch(47.12% 0.0555 253.58);
   background: oklch(100% 0 0); margin-top: 10px;
 }
 /* the XP "group box" header — a clickable summary-style bar */
 .cs-head {
   display: flex; align-items: center; justify-content: space-between;
   font-family: "Trebuchet MS", Verdana, sans-serif; font-weight: bold;
-  font-size: 10.5pt; color: oklch(38% 0.10 115);
-  background: linear-gradient(180deg, oklch(97% 0.01 115) 0%, oklch(91% 0.02 115) 100%);
+  font-size: 10.5pt; color: oklch(41.92% 0.0962 250.51);
+  background: linear-gradient(180deg, oklch(97% 0.012 250) 0%, oklch(91% 0.02 250) 100%);
   padding: 5px 9px; cursor: pointer; user-select: none;
-  border-bottom: 1px solid oklch(86% 0.03 115);
+  border-bottom: 1px solid oklch(86% 0.03 250);
 }
 .cs-head .chev { font-family: "Courier New", monospace; transition: transform .25s ease; }
 .cs-demo[open] .cs-head .chev { transform: rotate(90deg); }
@@ -601,7 +601,7 @@ placeholder
 .cs-demo[open] .cs-body { height: auto; }
 .cs-body-inner {
   padding: 9px 11px; font-size: 9.5pt; color: oklch(34% 0 0);
-  border-top: 1px solid oklch(94% 0.01 115);
+  border-top: 1px solid oklch(94% 0.01 250);
 }
 .cs-body-inner p { margin: 0 0 7px; }
 .cs-body-inner p:last-child { margin: 0; }
@@ -610,7 +610,7 @@ placeholder
 .cs-native { margin-top: 10px; }
 .cs-native > summary {
   font-family: "Trebuchet MS", Verdana, sans-serif; font-weight: bold;
-  font-size: 10pt; color: oklch(38% 0.10 115);
+  font-size: 10pt; color: oklch(41.92% 0.0962 250.51);
   cursor: pointer; list-style-position: inside;
 }
 .cs-native::details-content {
@@ -625,17 +625,17 @@ placeholder
 @media (max-width: 520px) { .sy-grid { grid-template-columns: 1fr; } }
 .sy-col h4 {
   font-family: "Trebuchet MS", Verdana, sans-serif; font-size: 9.5pt; font-weight: bold;
-  margin: 0 0 4px; color: oklch(38% 0.10 115);
+  margin: 0 0 4px; color: oklch(41.92% 0.0962 250.51);
 }
 /* a faux main-thread timeline: a long unbroken bar vs. a yielded one with gaps
    where input can be serviced. purely illustrative, not measured. */
 .sy-track {
-  height: 16px; border: 1px solid oklch(54% 0.07 115);
-  background: oklch(96% 0.005 110); position: relative; overflow: hidden;
+  height: 16px; border: 1px solid oklch(61.14% 0.0611 253.60);
+  background: oklch(96% 0.004 240); position: relative; overflow: hidden;
 }
 .sy-track .blk {
   position: absolute; top: 0; bottom: 0;
-  background: linear-gradient(180deg, oklch(73% 0.11 112) 0%, oklch(64% 0.14 110) 8%, oklch(56% 0.16 108) 18%, oklch(55% 0.16 108) 86%, oklch(63% 0.12 110) 100%);
+  background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
 }
 /* one solid 100% block = task never yields, input starved */
 .sy-track.blocked .blk { left: 0; width: 100%; }
@@ -658,12 +658,12 @@ placeholder
 /* live interactive demo: a rAF-driven dot that freezes when the main thread is
    blocked vs. keeps gliding when the task yields. measured, not faked. */
 .sy-live { margin-top: 12px; }
-.sy-rail { position: relative; height: 20px; margin-bottom: 6px; background: oklch(96% 0.005 110); border: 1px solid oklch(54% 0.07 115); overflow: hidden; }
-.sy-dot { position: absolute; top: 3px; left: 0; width: 13px; height: 13px; border-radius: 50%; background: linear-gradient(180deg, oklch(73% 0.11 112) 0%, oklch(64% 0.14 110) 8%, oklch(56% 0.16 108) 18%, oklch(55% 0.16 108) 86%, oklch(63% 0.12 110) 100%); }
+.sy-rail { position: relative; height: 20px; margin-bottom: 6px; background: oklch(96% 0.004 240); border: 1px solid oklch(61.14% 0.0611 253.60); overflow: hidden; }
+.sy-dot { position: absolute; top: 3px; left: 0; width: 13px; height: 13px; border-radius: 50%; background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%); }
 .sy-meter { font-size: 8.5pt; color: oklch(45% 0 0); margin: 0; }
 .sy-btns { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 0; }
-.sy-btn { font-family: Tahoma, Verdana, sans-serif; font-size: 9pt; padding: 4px 12px; cursor: pointer; color: oklch(21.78% 0 0); background: linear-gradient(180deg, oklch(99% 0 0), oklch(90% 0.01 115)); border: 1px solid oklch(50% 0.02 115); border-top-color: oklch(100% 0 0); border-left-color: oklch(100% 0 0); box-shadow: 1px 1px 0 oklch(40% 0.03 115); }
-.sy-btn:active { box-shadow: inset 1px 1px 0 oklch(40% 0.03 115); }
+.sy-btn { font-family: Tahoma, Verdana, sans-serif; font-size: 9pt; padding: 4px 12px; cursor: pointer; color: oklch(21.78% 0 0); background: linear-gradient(180deg, oklch(99% 0 0), oklch(90% 0.01 250)); border: 1px solid oklch(50% 0.02 250); border-top-color: oklch(100% 0 0); border-left-color: oklch(100% 0 0); box-shadow: 1px 1px 0 oklch(40% 0.03 250); }
+.sy-btn:active { box-shadow: inset 1px 1px 0 oklch(40% 0.03 250); }
 .sy-btn:disabled { opacity: .5; cursor: default; }
 .sy-out { font-size: 8.5pt; color: oklch(38% 0 0); margin: 8px 0 0; min-height: 2.6em; }
 .sy-out .hi { color: oklch(54.44% 0.1504 47.10); font-weight: bold; }
@@ -675,18 +675,18 @@ placeholder
 .hic-cap { font-size: 8.5pt; color: oklch(48% 0 0); margin: 0 0 4px; }
 /* the live DOM source: a real XP title bar we will rasterize into canvas */
 .hic-src {
-  background: linear-gradient(180deg, oklch(73% 0.11 112) 0%, oklch(64% 0.14 110) 8%, oklch(56% 0.16 108) 18%, oklch(55% 0.16 108) 86%, oklch(63% 0.12 110) 100%);
+  background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
   color: oklch(100% 0 0); font-family: "Trebuchet MS", Verdana, sans-serif; font-weight: bold;
-  font-size: 11pt; padding: 5px 8px; border: 1px solid oklch(38% 0.10 115);
+  font-size: 11pt; padding: 5px 8px; border: 1px solid oklch(41.92% 0.0962 250.51);
   display: flex; align-items: center; justify-content: space-between;
 }
 .hic-src .glyphs { font-family: Tahoma, sans-serif; font-size: 9pt; letter-spacing: 2px; }
 .hic-src .glyphs span {
-  display: inline-block; background: oklch(85% 0.03 110); color: oklch(38% 0.10 115);
-  border: 1px solid oklch(38% 0.10 115); padding: 0 4px; margin-left: 2px;
+  display: inline-block; background: oklch(87.51% 0.0281 248.15); color: oklch(41.92% 0.0962 250.51);
+  border: 1px solid oklch(41.92% 0.0962 250.51); padding: 0 4px; margin-left: 2px;
 }
 .hic-canvas {
-  border: 1px solid oklch(54% 0.07 115); background: oklch(97% 0.003 110);
+  border: 1px solid oklch(61.14% 0.0611 253.60); background: oklch(97% 0.004 240);
   display: block; width: 100%; height: auto; image-rendering: auto;
 }
 .hic-note2 { font-size: 8.5pt; color: oklch(48% 0 0); margin: 6px 0 0; }
@@ -707,29 +707,36 @@ placeholder
   margin-top: 10px;
 }
 @media (max-width: 460px) { .mas-mock { columns: 2 90px; } }
+@supports (display: grid-lanes) {
+  /* real masonry where the engine ships it (Safari 26): keep grid columns,
+     drop the multi-column mockup, tiles pack into the shortest lane. */
+  .mas-mock { columns: unset; display: grid-lanes; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .mas-mock .tile { break-inside: auto; margin: 0; }
+  @media (max-width: 460px) { .mas-mock { grid-template-columns: repeat(2, 1fr); } }
+}
 .mas-mock .tile {
   break-inside: avoid;
   margin: 0 0 8px;
-  border: 1px solid oklch(54% 0.07 115);
+  border: 1px solid oklch(61.14% 0.0611 253.60);
   /* contact-sheet frame, same vocabulary as the homepage photo grid */
   background:
-    linear-gradient(180deg, oklch(96% 0.01 115) 0%, oklch(91% 0.02 115) 100%);
-  box-shadow: 1px 1px 0 oklch(54% 0.07 115 / 0.35);
+    linear-gradient(180deg, oklch(96% 0.01 250) 0%, oklch(91% 0.02 250) 100%);
+  box-shadow: 1px 1px 0 oklch(61.14% 0.0611 253.60 / 0.35);
   display: flex; align-items: flex-end; justify-content: flex-start;
   padding: 4px 5px;
   font-family: "Courier New", monospace; font-size: 8pt;
-  color: oklch(38% 0.04 115);
+  color: oklch(38% 0.04 250);
 }
 /* varied aspect ratios = the whole point of masonry: portrait + landscape
    Fuji frames packing without the gridlock of equal-height rows */
-.mas-mock .t1 { aspect-ratio: 3 / 4;  background: linear-gradient(160deg, oklch(62% 0.12 115), oklch(50% 0.11 115)); color: oklch(100% 0 0); }
+.mas-mock .t1 { aspect-ratio: 3 / 4;  background: linear-gradient(160deg, oklch(62% 0.124 252), oklch(50% 0.113 251)); color: oklch(100% 0 0); }
 .mas-mock .t2 { aspect-ratio: 4 / 3;  background: linear-gradient(160deg, oklch(88% 0.088 66), oklch(70% 0.20 43)); }
-.mas-mock .t3 { aspect-ratio: 1 / 1;  background: linear-gradient(160deg, oklch(87% 0.025 110), oklch(72% 0.06 115)); }
+.mas-mock .t3 { aspect-ratio: 1 / 1;  background: linear-gradient(160deg, oklch(94.66% 0.0114 252.09), oklch(72% 0.06 250)); }
 .mas-mock .t4 { aspect-ratio: 2 / 3;  background: linear-gradient(160deg, oklch(59% 0.234 26), oklch(46% 0.19 29)); color: oklch(100% 0 0); }
-.mas-mock .t5 { aspect-ratio: 16 / 9; background: linear-gradient(160deg, oklch(91% 0.02 115), oklch(80% 0.05 115)); }
+.mas-mock .t5 { aspect-ratio: 16 / 9; background: linear-gradient(160deg, oklch(91% 0.02 250), oklch(80% 0.05 250)); }
 .mas-mock .t6 { aspect-ratio: 4 / 5;  background: linear-gradient(160deg, oklch(97% 0.037 95), oklch(85% 0.10 90)); }
-.mas-mock .t7 { aspect-ratio: 1 / 1;  background: linear-gradient(160deg, oklch(50% 0.11 115), oklch(42% 0.12 115)); color: oklch(100% 0 0); }
-.mas-mock .t8 { aspect-ratio: 5 / 4;  background: linear-gradient(160deg, oklch(88% 0.06 115), oklch(75% 0.08 115)); }
+.mas-mock .t7 { aspect-ratio: 1 / 1;  background: linear-gradient(160deg, oklch(50% 0.113 251), oklch(42% 0.118 255)); color: oklch(100% 0 0); }
+.mas-mock .t8 { aspect-ratio: 5 / 4;  background: linear-gradient(160deg, oklch(88% 0.06 250), oklch(75% 0.08 250)); }
 .mas-mock .t9 { aspect-ratio: 3 / 5;  background: linear-gradient(160deg, oklch(70% 0.20 43), oklch(58% 0.23 30)); color: oklch(100% 0 0); }
 
 .mas-mock .cap { opacity: 0.85; }
@@ -750,24 +757,24 @@ placeholder
 .jxl-compare { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; }
 @media (max-width: 520px) { .jxl-compare { grid-template-columns: 1fr; } }
 .jxl-fmt {
-  border: 1px solid oklch(54% 0.07 115);
-  border-top-color: oklch(43% 0.08 115); border-left-color: oklch(43% 0.08 115);
-  background: oklch(98% 0.003 115); padding: 8px 9px;
+  border: 1px solid oklch(61.14% 0.0611 253.60);
+  border-top-color: oklch(47.12% 0.0555 253.58); border-left-color: oklch(47.12% 0.0555 253.58);
+  background: oklch(98% 0.004 250); padding: 8px 9px;
 }
 .jxl-fmt h4 {
   font-family: "Courier New", monospace; font-size: 9.5pt; font-weight: bold;
-  margin: 0 0 5px; color: oklch(38% 0.04 115);
+  margin: 0 0 5px; color: oklch(38% 0.04 250);
 }
 /* a fake "file-size meter" bar — relative bytes at matched quality, illustrative */
-.jxl-bar { height: 9px; background: oklch(86% 0.06 115); border: 1px solid oklch(54% 0.07 115); margin: 4px 0; }
-.jxl-bar > i { display: block; height: 100%; background: linear-gradient(180deg, oklch(73% 0.11 112) 0%, oklch(64% 0.14 110) 8%, oklch(56% 0.16 108) 18%, oklch(55% 0.16 108) 86%, oklch(63% 0.12 110) 100%); }
+.jxl-bar { height: 9px; background: oklch(86% 0.06 250); border: 1px solid oklch(61.14% 0.0611 253.60); margin: 4px 0; }
+.jxl-bar > i { display: block; height: 100%; background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%); }
 .jxl-fmt .jxl-kb { font-size: 8.5pt; color: oklch(45% 0 0); }
 .jxl-fmt .jxl-ships { font-size: 8pt; font-family: "Courier New", monospace; color: oklch(48% 0 0); margin-top: 3px; }
 .jxl-fmt.win { background: oklch(98% 0.04 142); border-color: oklch(49.32% 0.1678 142.50); }
 .jxl-fmt.win .jxl-bar > i { background: linear-gradient(180deg, oklch(62% 0.16 142), oklch(49.32% 0.1678 142.50)); }
 .jxl-feat { list-style: none; padding: 0; margin: 10px 0 0; }
 .jxl-feat li { font-size: 9pt; color: oklch(35% 0 0); padding: 2px 0 2px 16px; position: relative; }
-.jxl-feat li::before { content: "\25B8"; position: absolute; left: 2px; color: oklch(45% 0.09 115); }
+.jxl-feat li::before { content: "\25B8"; position: absolute; left: 2px; color: oklch(49.72% 0.1129 250.87); }
 /* card: hdr-agtm */
 /* ── HDR adaptive tone-mapping (AGTM) mockup ─────────────────────────── */
 .hdr-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
@@ -783,26 +790,26 @@ placeholder
 .hdr-swatch.sdr {
   background:
     radial-gradient(circle at 50% 32%, oklch(100% 0 0) 0 14%, oklch(100% 0 0) 14% 22%, transparent 40%),
-    linear-gradient(180deg, oklch(72% 0.10 115) 0%, oklch(55% 0.12 115) 60%, oklch(38% 0.09 115) 100%);
+    linear-gradient(180deg, oklch(72% 0.10 250) 0%, oklch(55% 0.12 250) 60%, oklch(38% 0.09 250) 100%);
 }
 /* HDR mock: warmer, graded specular core + a subtle bloom ring, evoking
    the restored headroom. (still SDR pixels — labelled a mockup in copy.) */
 .hdr-swatch.hdr {
   background:
     radial-gradient(circle at 50% 32%, oklch(99% 0.06 95) 0 10%, oklch(95% 0.14 80) 10% 20%, oklch(85% 0.16 65 / .55) 20% 34%, transparent 52%),
-    linear-gradient(180deg, oklch(74% 0.12 115) 0%, oklch(56% 0.13 115) 60%, oklch(38% 0.10 115) 100%);
+    linear-gradient(180deg, oklch(74% 0.12 250) 0%, oklch(56% 0.13 250) 60%, oklch(41.92% 0.0962 250.51) 100%);
   box-shadow: inset 0 0 24px oklch(95% 0.12 85 / .35);
 }
 @media (color-gamut: p3) {
   .hdr-swatch.hdr { background:
     radial-gradient(circle at 50% 32%, oklch(99% 0.09 95) 0 10%, oklch(95% 0.20 80) 10% 20%, oklch(85% 0.22 65 / .55) 20% 34%, transparent 52%),
-    linear-gradient(180deg, oklch(74% 0.16 115) 0%, oklch(56% 0.17 115) 60%, oklch(38% 0.12 115) 100%); }
+    linear-gradient(180deg, oklch(74% 0.16 250) 0%, oklch(56% 0.17 250) 60%, oklch(38% 0.12 250) 100%); }
 }
 /* headroom bar: SDR ceiling line + hatched "extra nits AGTM maps into" */
 .hdr-room {
   position: relative; height: 16px; margin-top: 8px;
-  background: linear-gradient(90deg, oklch(82% 0.02 115) 0 60%, transparent 60%);
-  border: 1px solid oklch(70% 0.02 115);
+  background: linear-gradient(90deg, oklch(82% 0.02 250) 0 60%, transparent 60%);
+  border: 1px solid oklch(70% 0.02 250);
 }
 .hdr-room .head {
   position: absolute; inset: 0 0 0 60%;
@@ -822,23 +829,23 @@ placeholder
    styling would look like, scoped under .rm- to avoid collisions. */
 .rm-mock { margin-top: 10px; }
 .rm-bar {
-  display: flex; flex-wrap: wrap; gap: 0; border: 1px solid oklch(43% 0.08 115);
-  background: linear-gradient(180deg, oklch(96% 0.005 115) 0%, oklch(90% 0.01 115) 100%);
+  display: flex; flex-wrap: wrap; gap: 0; border: 1px solid oklch(47.12% 0.0555 253.58);
+  background: linear-gradient(180deg, oklch(96% 0.006 250) 0%, oklch(90% 0.01 250) 100%);
   font-family: "Trebuchet MS", Verdana, sans-serif; font-size: 10pt;
 }
 .rm-bar .rm-tab {
-  padding: 5px 12px; border-right: 1px solid oklch(70% 0.02 115);
-  color: oklch(38% 0.10 115); text-decoration: none; cursor: default;
+  padding: 5px 12px; border-right: 1px solid oklch(70% 0.02 250);
+  color: oklch(41.92% 0.0962 250.51); text-decoration: none; cursor: default;
   border-top: 1px solid oklch(100% 0 0); /* faux raised bevel */
 }
 .rm-bar .rm-tab:last-child { border-right: none; }
 /* the "active route" — what a :route-active pseudo would paint for you,
    here hard-coded to the /garage/ tab so the mock reads correctly */
 .rm-bar .rm-tab.rm-active {
-  background: linear-gradient(180deg, oklch(73% 0.11 112) 0%, oklch(64% 0.14 110) 8%, oklch(56% 0.16 108) 18%, oklch(55% 0.16 108) 86%, oklch(63% 0.12 110) 100%);
+  background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
   color: oklch(100% 0 0); font-weight: bold;
-  border-top-color: oklch(38% 0.10 115);
-  box-shadow: inset 0 -2px 0 oklch(38% 0.10 115 / .6);
+  border-top-color: oklch(41.92% 0.0962 250.51);
+  box-shadow: inset 0 -2px 0 oklch(41.92% 0.0962 250.51 / .6);
 }
 .rm-cap { font-size: 8.5pt; color: oklch(48% 0 0); margin: 6px 0 0; }
 /* card: install-element */
@@ -847,8 +854,8 @@ placeholder
    the markup WOULD paint, so the card has something to look at. scoped to
    .ie- to avoid colliding with the other cards. */
 .ie-mock {
-  margin-top: 10px; padding: 12px; border: 1px solid oklch(54% 0.07 115);
-  background: oklch(96% 0.005 110);
+  margin-top: 10px; padding: 12px; border: 1px solid oklch(61.14% 0.0611 253.60);
+  background: oklch(96% 0.004 240);
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
 }
 .ie-app {
@@ -856,7 +863,7 @@ placeholder
 }
 .ie-app .ico {
   width: 28px; height: 28px; flex-shrink: 0;
-  background: oklch(87.82% 0.0877 66.27); border: 1px solid oklch(38% 0.10 115);
+  background: oklch(87.82% 0.0877 66.27); border: 1px solid oklch(41.92% 0.0962 250.51);
   position: relative;
 }
 .ie-app .ico::before {
@@ -868,16 +875,19 @@ placeholder
 .ie-btn {
   font-family: "Trebuchet MS", Verdana, sans-serif; font-size: 10pt; font-weight: bold;
   color: oklch(21.78% 0 0); padding: 4px 14px; cursor: default;
-  background: linear-gradient(180deg, oklch(99% 0 0) 0%, oklch(90% 0.01 115) 100%);
-  border: 1px solid oklch(50% 0.02 115);
+  background: linear-gradient(180deg, oklch(99% 0 0) 0%, oklch(90% 0.01 250) 100%);
+  border: 1px solid oklch(50% 0.02 250);
   border-top-color: oklch(99% 0 0); border-left-color: oklch(99% 0 0);
-  box-shadow: 1px 1px 0 oklch(38% 0.10 115 / .45);
+  box-shadow: 1px 1px 0 oklch(41.92% 0.0962 250.51 / .45);
 }
 .ie-btn::before { content: "\2913  "; /* down-to-bar install glyph */ }
 .ie-note-inline { font-size: 8.5pt; color: oklch(48% 0 0); width: 100%; margin: 4px 0 0; }
 @media (color-gamut: p3) {
   .ie-app .ico::before { background: oklch(69.58% 0.243 43.49); }
 }
+  /* standard scrollbar tint (Chrome + Safari 26 + Firefox): Luna-blue thumb,
+     pale track. the garage/scroll demo styles its own element separately. */
+  html { scrollbar-color: oklch(62% 0.14 255) oklch(91% 0.02 248); }
 </style>
 </head>
 <body>
@@ -954,8 +964,8 @@ placeholder
         light chips.
       </p>
       <div class="cc-grid">
-        <div class="swatch" style="--bg: oklch(45% 0.09 115)"><span class="fixed">white</span><span class="auto">auto</span></div>
-        <div class="swatch" style="--bg: oklch(85% 0.03 110)"><span class="fixed">white</span><span class="auto">auto</span></div>
+        <div class="swatch" style="--bg: oklch(49.72% 0.1129 250.87)"><span class="fixed">white</span><span class="auto">auto</span></div>
+        <div class="swatch" style="--bg: oklch(87.51% 0.0281 248.15)"><span class="fixed">white</span><span class="auto">auto</span></div>
         <div class="swatch" style="--bg: oklch(97.73% 0.0373 95.44)"><span class="fixed">white</span><span class="auto">auto</span></div>
         <div class="swatch" style="--bg: oklch(58.99% 0.2344 26.30)"><span class="fixed">white</span><span class="auto">auto</span></div>
         <div class="swatch" style="--bg: oklch(87.82% 0.0877 66.27)"><span class="fixed">white</span><span class="auto">auto</span></div>
@@ -1248,7 +1258,7 @@ pointerout   -&gt; hidePopover()
     <section class="demo" data-cap="view-transitions">
       <h2>
         <span>View Transitions <span class="mono">/ document.startViewTransition()</span></span>
-        <span class="stat chrome">Chrome &middot; Safari (same-doc) &middot; no Firefox</span>
+        <span class="stat chrome">Chrome &middot; Safari &middot; no Firefox</span>
       </h2>
       <p class="note">
         Wrap a DOM mutation in <code>document.startViewTransition(cb)</code> and
@@ -1331,7 +1341,7 @@ pointerout   -&gt; hidePopover()
     <section class="demo" data-cap="base-select">
       <h2>
         <span>appearance: base-select <span class="mono">/ customizable &lt;select&gt;</span></span>
-        <span class="stat chrome">Chrome-only · WebKit supports</span>
+        <span class="stat chrome">Chrome · Safari TP/flag</span>
       </h2>
       <p class="note">
         For two decades the <code>&lt;select&gt;</code> popup has been a sealed
@@ -1349,7 +1359,7 @@ pointerout   -&gt; hidePopover()
           <button type="button">
             <selectedcontent></selectedcontent>
           </button>
-          <option value="classic-chrome"><span class="bsel-sw" style="background:oklch(72% 0.04 115)"></span>Classic Chrome</option>
+          <option value="classic-chrome"><span class="bsel-sw" style="background:oklch(72% 0.04 250)"></span>Classic Chrome</option>
           <option value="velvia" selected><span class="bsel-sw" style="background:oklch(58.99% 0.2344 26.30)"></span>Velvia</option>
           <option value="acros"><span class="bsel-sw" style="background:oklch(40% 0 0)"></span>Acros</option>
           <option value="nostalgic-neg"><span class="bsel-sw" style="background:oklch(87.82% 0.0877 66.27)"></span>Nostalgic Neg.</option>
@@ -1381,7 +1391,7 @@ pointerout   -&gt; hidePopover()
     <section class="demo" data-cap="corner-shape">
       <h2>
         <span>corner-shape <span class="mono">+ superellipse()</span></span>
-        <span class="stat chrome">Chrome-only · WebKit supports</span>
+        <span class="stat chrome">Chrome · Safari TP/flag</span>
       </h2>
       <p class="note">
         A second axis for <code>border-radius</code>. The radius sets <em>where</em>
@@ -1710,7 +1720,7 @@ ctx.drawElement(el, 0, 0);                 // &lt;- the new primitive
     <section class="demo" data-cap="masonry">
       <h2>
         <span>CSS Masonry <span class="mono">/ Grid Lanes</span></span>
-        <span class="stat trial">Not shipped &middot; Canary flag</span>
+        <span class="stat trial">Safari 26 ships &middot; Chrome flag</span>
       </h2>
       <p class="note">
         Lays tiles of <em>uneven height</em> into columns, each new tile dropping
@@ -1720,10 +1730,7 @@ ctx.drawElement(el, 0, 0);                 // &lt;- the new primitive
         vs. a separate <code>display: masonry</code>), it has converged into
         <strong>Grid Lanes</strong>: masonry expressed <em>inside</em> CSS Grid so
         you keep <code>grid-template-columns</code>, gaps, and (eventually)
-        subgrid. The grid below is <strong>a mockup</strong>, faked with CSS
-        multi-column &mdash; it is <em>not</em> live masonry. The silhouette is
-        right; the source-order semantics are not (columns read down-then-across,
-        real masonry packs into the shortest track).
+        subgrid. <strong>Safari&nbsp;26 shipped it</strong> as <code>display: grid-lanes</code> (on by default); Chrome keeps it behind the experimental flag. The grid below is <em>real</em> grid-lanes where the engine supports it (you, on Safari&nbsp;26) and falls back to a CSS multi-column mockup elsewhere &mdash; the mockup reads down-then-across, true masonry packs into the shortest lane.
       </p>
       <div class="mas-mock" aria-hidden="true">
         <div class="tile t1"><span class="cap">portrait</span></div>
@@ -1737,11 +1744,9 @@ ctx.drawElement(el, 0, 0);                 // &lt;- the new primitive
         <div class="tile t9"><span class="cap">tall</span></div>
       </div>
       <p class="mas-flag">
-        Mockup only &mdash; to try the real thing: Chrome Canary
-        <code>chrome://flags#enable-experimental-web-platform-features</code>
-        (Grid Lanes lives behind the experimental switch; the dedicated
-        <code>#css-grid-lanes-layout</code> entry comes and goes as the
-        prototype churns), or Safari Technology Preview&apos;s masonry build.
+        Live in Safari&nbsp;26 (<code>display: grid-lanes</code>, on by default). In Chrome
+        it&apos;s behind <code>chrome://flags#enable-experimental-web-platform-features</code>
+        (the <code>#css-grid-lanes-layout</code> entry). Everywhere else: the mockup above.
       </p>
       <details>
         <summary class="note" style="cursor:pointer">proposed Grid Lanes syntax (vs. today&apos;s fixed 3&times;3)</summary>
@@ -1757,7 +1762,7 @@ ctx.drawElement(el, 0, 0);                 // &lt;- the new primitive
 .photos {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  grid-template-rows: masonry;   /* the contested line; Lanes keeps grid intact */
+  display: grid-lanes;           /* Safari 26 ships this; grid-template-rows:masonry is the spec form */
   gap: 8px;
 }
 .photos img { height: auto; }    /* native aspect ratio preserved, no crop */</pre>
@@ -2095,26 +2100,26 @@ myButton.onclick = async () =&gt; {
     <!-- ─────────── 2026 frontier batch: carousel · invoker · scope · highlight · until-found ─────────── -->
     <style>
       /* --- CSS Carousel (::scroll-marker / ::scroll-button) --- */
-      .cc-rail { display: flex; gap: 8px; overflow-x: auto; scroll-snap-type: x mandatory; scroll-behavior: smooth; padding: 6px; border: 1px solid oklch(80% 0.02 115); background: oklch(96% 0.01 115); border-radius: 4px; scroll-marker-group: after; }
+      .cc-rail { display: flex; gap: 8px; overflow-x: auto; scroll-snap-type: x mandatory; scroll-behavior: smooth; padding: 6px; border: 1px solid oklch(80% 0.02 250); background: oklch(96% 0.01 250); border-radius: 4px; scroll-marker-group: after; }
       .cc-slide { flex: 0 0 100%; height: 130px; scroll-snap-align: center; display: grid; place-items: center; color: #fff; font: bold 16pt "Trebuchet MS", Verdana, sans-serif; text-shadow: 0 1px 3px rgba(0,0,0,.45); background: var(--c); border-radius: 3px; }
       .cc-rail::scroll-marker-group { display: flex; justify-content: center; align-items: center; gap: 7px; padding-top: 9px; }
-      .cc-slide::scroll-marker { content: ""; width: 10px; height: 10px; border-radius: 50%; border: 1px solid oklch(45% 0.10 115); background: oklch(90% 0.02 115); cursor: pointer; transition: background .12s, transform .12s; }
+      .cc-slide::scroll-marker { content: ""; width: 10px; height: 10px; border-radius: 50%; border: 1px solid oklch(45% 0.10 250); background: oklch(90% 0.02 250); cursor: pointer; transition: background .12s, transform .12s; }
       .cc-slide::scroll-marker:hover { transform: scale(1.25); }
-      .cc-slide::scroll-marker:target-current { background: oklch(50% 0.18 115); border-color: oklch(38% 0.18 115); }
-      .cc-rail::scroll-button(left), .cc-rail::scroll-button(right) { border: 1px solid oklch(60% 0.06 115); background: linear-gradient(180deg, #fff, #eceae0); border-radius: 3px; padding: 1px 10px; margin: 9px 4px 0; cursor: pointer; font: bold 12pt Tahoma, sans-serif; color: oklch(40% 0.09 115); }
+      .cc-slide::scroll-marker:target-current { background: oklch(50% 0.22 263); border-color: oklch(38% 0.18 263); }
+      .cc-rail::scroll-button(left), .cc-rail::scroll-button(right) { border: 1px solid oklch(60% 0.06 254); background: linear-gradient(180deg, #fff, #eceae0); border-radius: 3px; padding: 1px 10px; margin: 9px 4px 0; cursor: pointer; font: bold 12pt Tahoma, sans-serif; color: oklch(40% 0.09 250); }
       .cc-rail::scroll-button(left):hover, .cc-rail::scroll-button(right):hover { border-color: #e9994a; box-shadow: 0 0 3px 1px rgba(255,199,60,.5); }
       .cc-rail::scroll-button(left):disabled, .cc-rail::scroll-button(right):disabled { opacity: .35; cursor: default; box-shadow: none; }
       .cc-rail::scroll-button(left) { content: "\2039 prev"; }
       .cc-rail::scroll-button(right) { content: "next \203A"; }
       /* --- shared mini XP button for the demos --- */
-      .xpb { font: 8pt/1.4 Tahoma, Verdana, sans-serif; padding: 3px 12px; border: 1px solid #8a9c58; border-radius: 3px; background: linear-gradient(180deg, #fff 0%, #fdfdfd 45%, #f4f3ee 55%, #eceae0 100%); cursor: pointer; }
+      .xpb { font: 8pt/1.4 Tahoma, Verdana, sans-serif; padding: 3px 12px; border: 1px solid #8e9dad; border-radius: 3px; background: linear-gradient(180deg, #fff 0%, #fdfdfd 45%, #f4f3ee 55%, #eceae0 100%); cursor: pointer; }
       .xpb:hover { border-color: #e9994a; box-shadow: 0 0 3px 1px rgba(255,199,60,.5); }
       .xpb:active { background: linear-gradient(180deg, #e1e1d8, #f0efe8); padding: 4px 11px 2px 13px; }
       /* --- Invoker Commands --- */
       .ic-pop { max-width: 320px; padding: 12px 14px; font-size: 9.5pt; color: oklch(25% 0 0); background: oklch(99.5% 0.012 100); border: 1px solid oklch(40% 0 0); border-radius: 4px; box-shadow: 0 8px 24px -6px rgba(0,0,0,.4); }
       .ic-pop::backdrop { background: rgba(0,0,30,.12); }
       /* --- @scope donut --- */
-      .scope-card { border: 1px dashed oklch(60% 0.06 115); border-radius: 4px; padding: 10px 12px; font-size: 9.5pt; }
+      .scope-card { border: 1px dashed oklch(60% 0.06 254); border-radius: 4px; padding: 10px 12px; font-size: 9.5pt; }
       .scope-card > p { margin: 0 0 8px; }
       .scope-inner { border: 1px dashed oklch(60% 0.16 30); border-radius: 3px; padding: 8px 10px; }
       .scope-inner p { margin: 0; }
@@ -2140,7 +2145,7 @@ myButton.onclick = async () =&gt; {
       </p>
       <div class="cc-rail" tabindex="0" aria-label="resto-mod carousel demo">
         <div class="cc-slide" style="--c: linear-gradient(135deg, oklch(62% 0.20 30), oklch(52% 0.18 20))">resto-mod</div>
-        <div class="cc-slide" style="--c: linear-gradient(135deg, oklch(60% 0.16 115), oklch(48% 0.16 115))">Porsche 911</div>
+        <div class="cc-slide" style="--c: linear-gradient(135deg, oklch(60% 0.16 250), oklch(48% 0.16 260))">Porsche 911</div>
         <div class="cc-slide" style="--c: linear-gradient(135deg, oklch(58% 0.15 145), oklch(46% 0.14 150))">Tuthill</div>
         <div class="cc-slide" style="--c: linear-gradient(135deg, oklch(66% 0.17 80), oklch(54% 0.15 70))">Evoluto 355</div>
         <div class="cc-slide" style="--c: linear-gradient(135deg, oklch(55% 0.20 320), oklch(44% 0.18 320))">HWA EVO</div>
@@ -2161,7 +2166,7 @@ myButton.onclick = async () =&gt; {
     <section class="demo" data-cap="invoker-commands">
       <h2>
         <span>Invoker Commands <span class="mono">command / commandfor</span></span>
-        <span class="stat chrome">Chrome 135 &middot; Safari TP</span>
+        <span class="stat cross">Chrome 135 &middot; Safari 26</span>
       </h2>
       <p class="note">
         A button that drives another element declaratively: <code>commandfor</code>
@@ -2204,7 +2209,7 @@ myButton.onclick = async () =&gt; {
       <div class="scope-card">
         <style>
           @scope (.scope-card) to (.scope-inner) {
-            p { color: oklch(50% 0.18 115); font-weight: bold; }
+            p { color: oklch(50% 0.22 263); font-weight: bold; }
           }
         </style>
         <p>Inside the scope root, above the hole &mdash; styled blue + bold.</p>
@@ -2249,7 +2254,7 @@ myButton.onclick = async () =&gt; {
     <section class="demo" data-cap="hidden-until-found">
       <h2>
         <span><code>hidden=until-found</code> <span class="mono">+ scroll-to-text</span></span>
-        <span class="stat chrome">Chrome 102</span>
+        <span class="stat cross">Chrome 102 &middot; Safari 26</span>
       </h2>
       <p class="note">
         Content that is collapsed <em>but still findable</em>: <code>hidden="until-found"</code>
@@ -2290,6 +2295,407 @@ myButton.onclick = async () =&gt; {
           });
           if (ranges.length) CSS.highlights.set('frontier', new Highlight(...ranges));
         } catch (e) {}
+      })();
+    </script>
+
+    <style>
+      /* ───── frontier batch 2 — demo styles ───── */
+      .rc-row { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+      .rc-row .rc { --c: oklch(51% 0.225 263); background: var(--c); color: #fff; padding: 12px 8px; border-radius: 4px; font-size: 9pt; flex: 1 1 78px; text-align: center; text-shadow: 0 1px 1px rgba(0,0,0,.4); }
+      .rc-row .lite { background: oklch(from var(--c) calc(l + 0.30) c h); color: oklch(from var(--c) calc(l - 0.30) c h); text-shadow: none; }
+      .rc-row .dark { background: oklch(from var(--c) calc(l - 0.24) c h); }
+      .rc-row .hue  { background: oklch(from var(--c) l c calc(h + 130)); }
+      .rc-row .chr  { background: oklch(from var(--c) l calc(c + 0.12) h); }
+
+      @property --hz-ang { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+      .prop-demo { margin-top: 10px; height: 54px; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 9.5pt; text-shadow: 0 1px 2px rgba(0,0,0,.45); --hz-ang: 0deg; background: linear-gradient(var(--hz-ang), oklch(51% 0.225 263), oklch(72% 0.16 200), oklch(60% 0.2 320)); animation: hz-spin 5s linear infinite; }
+      @keyframes hz-spin { to { --hz-ang: 360deg; } }
+      .demo.no-support .prop-demo { animation: none; }
+
+      .ss-pop { margin: 0; border: 2px solid #0831d9; background: oklch(97% 0.01 250); color: oklch(20% 0 0); padding: 12px 14px; border-radius: 4px; max-width: 300px; font-size: 9.5pt; opacity: 0; translate: 0 -10px; transition: opacity .35s ease, translate .35s ease, overlay .35s allow-discrete, display .35s allow-discrete; }
+      .ss-pop:popover-open { opacity: 1; translate: 0 0; }
+      @starting-style { .ss-pop:popover-open { opacity: 0; translate: 0 -10px; } }
+
+      .ld-row { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+      .ld-row .ld { flex: 1 1 130px; padding: 16px 12px; border-radius: 4px; font-size: 9.5pt; border: 1px solid oklch(70% 0.03 250); background: light-dark(oklch(93% 0.03 255), oklch(26% 0.05 255)); color: light-dark(oklch(22% 0 0), oklch(95% 0 0)); }
+      .ld-row .ld.l { color-scheme: light; }
+      .ld-row .ld.d { color-scheme: dark; }
+
+      .dsd-host { margin-top: 10px; display: block; }
+      .model-mock { margin-top: 10px; height: 88px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 9.5pt; color: oklch(38% 0.02 250); background: repeating-linear-gradient(45deg, oklch(92% 0.02 250) 0 10px, oklch(88% 0.02 250) 10px 20px); border: 1px dashed oklch(60% 0.05 250); }
+
+      .cw-panel { margin-top: 10px; border: 2px solid #0831d9; background: oklch(97% 0.01 250); padding: 12px; border-radius: 4px; font-size: 9.5pt; display: flex; align-items: center; gap: 10px; justify-content: space-between; }
+      .cw-panel[hidden] { display: none; }
+
+      .sw-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 9.5pt; }
+      .sw-row input[switch], .sw-row input { width: 40px; height: 24px; }
+
+      .si-list { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+      .si-list li { background: oklch(93% 0.03 255); border-left: 3px solid oklch(51% 0.225 263); padding: 6px 10px; font-size: 9.5pt; animation: si-fade .5s backwards; animation-delay: calc(sibling-index() * 90ms); }
+      @keyframes si-fade { from { opacity: 0; translate: -14px 0; } to { opacity: 1; translate: 0 0; } }
+
+      .sst-scroll { margin-top: 10px; max-height: 120px; overflow: auto; border: 1px solid oklch(75% 0.03 250); border-radius: 4px; container-type: scroll-state; }
+      .sst-sticky { position: sticky; top: 0; background: oklch(90% 0.02 250); color: oklch(25% 0 0); padding: 8px 10px; font-size: 9.5pt; font-weight: bold; border-bottom: 1px solid oklch(75% 0.03 250); transition: background .2s, color .2s; }
+      @container scroll-state(stuck: top) { .sst-sticky { background: oklch(51% 0.225 263); color: #fff; } }
+      .sst-scroll p { margin: 8px 10px; font-size: 9pt; color: oklch(42% 0 0); }
+
+      .rf-row { display: flex; gap: 6px; margin-top: 10px; reading-flow: flex-visual; }
+      .rf-row a { flex: 1; text-align: center; padding: 10px; border-radius: 4px; background: oklch(93% 0.03 255); font-size: 9.5pt; color: oklch(30% 0.10 263); text-decoration: none; border: 1px solid oklch(75% 0.03 250); }
+      .rf-row a:focus-visible { outline: 2px solid #e45f3e; }
+      .rf-row a:nth-child(1) { order: 3; } .rf-row a:nth-child(2) { order: 1; } .rf-row a:nth-child(3) { order: 2; }
+
+      .pip-content { margin-top: 10px; background: oklch(95% 0.02 255); border: 1px solid oklch(75% 0.03 250); border-radius: 4px; padding: 12px; font-size: 9.5pt; }
+      .tmp-out { margin-top: 10px; font-family: "Courier New", monospace; font-size: 9.5pt; background: oklch(96% 0.01 250); border: 1px solid oklch(80% 0.02 250); border-radius: 4px; padding: 10px 12px; color: oklch(25% 0 0); white-space: pre-line; }
+    </style>
+
+    <!-- ───────────────────── relative color syntax ───────────────────── -->
+    <section class="demo" data-cap="relative-color">
+      <h2>
+        <span>relative color syntax <span class="mono">oklch(from &hellip;)</span></span>
+        <span class="stat cross">Chrome 119 &middot; Safari 16.4 &middot; FF 128</span>
+      </h2>
+      <p class="note">
+        Derive a color <em>from another color</em>: pull out its <code>l c h</code>
+        channels and recombine them. One base &mdash; every tint, shade, and
+        hue-rotation computed from it. All five chips below descend from the same
+        leftmost Luna blue.
+      </p>
+      <div class="rc-row">
+        <span class="rc base">base</span>
+        <span class="rc lite">+L</span>
+        <span class="rc dark">&minus;L</span>
+        <span class="rc hue">+130&deg;h</span>
+        <span class="rc chr">+chroma</span>
+      </div>
+      <p class="replaces">
+        On the site: the hover/active/border shades of every bevel are currently
+        hand-picked OKLCH values. This computes them from one token &mdash; change the
+        base, the whole bevel set follows.
+      </p>
+      <p class="unsupported">Your browser doesn&apos;t support relative color syntax &mdash; the derived chips fall back to the base blue.</p>
+    </section>
+
+    <!-- ───────────────────── @property ───────────────────── -->
+    <section class="demo" data-cap="at-property">
+      <h2>
+        <span>@property <span class="mono">/ registered custom props</span></span>
+        <span class="stat cross">Chrome &middot; Safari &middot; Firefox</span>
+      </h2>
+      <p class="note">
+        Registering a custom property with a <code>syntax</code> type makes it
+        <em>animatable</em>. The gradient angle below is a <code>&lt;angle&gt;</code>
+        custom prop being keyframed &mdash; impossible with a plain unregistered
+        variable (the browser can&apos;t interpolate an untyped string).
+      </p>
+      <div class="prop-demo">--hz-ang animating 0&deg; &rarr; 360&deg;</div>
+      <p class="replaces">
+        On the site: lets the OKLCH palette tokens (and the <code>--ab</code> avatar
+        hue over on serendipity) transition smoothly instead of snapping.
+      </p>
+      <p class="unsupported">Your browser doesn&apos;t support <code>@property</code> &mdash; the gradient sits static (the angle can&apos;t animate).</p>
+    </section>
+
+    <!-- ───────────────────── @starting-style ───────────────────── -->
+    <section class="demo" data-cap="starting-style">
+      <h2>
+        <span>@starting-style <span class="mono">+ transition-behavior: allow-discrete</span></span>
+        <span class="stat cross">Chrome 117 &middot; Safari 18 &middot; FF 129</span>
+      </h2>
+      <p class="note">
+        Animate an element <em>as it appears</em> from <code>display: none</code> &mdash; no
+        JS, no double-rAF hacks. <code>@starting-style</code> gives the entry its
+        &quot;before&quot; values; <code>allow-discrete</code> lets <code>display</code> itself
+        participate in the transition so the exit animates too. Toggle it:
+      </p>
+      <p><button class="xp-button" popovertarget="ss-pop">Toggle box</button></p>
+      <div id="ss-pop" popover class="ss-pop">I fade + slide in from <code>display:none</code>, and back out &mdash; purely declarative.</div>
+      <p class="replaces">
+        On the site: the cursor tooltips and any popover could ease in/out instead
+        of hard-cutting, with zero animation JS.
+      </p>
+      <p class="unsupported">Your browser doesn&apos;t support it &mdash; the box snaps in and out with no transition.</p>
+    </section>
+
+    <!-- ───────────────────── light-dark() ───────────────────── -->
+    <section class="demo" data-cap="light-dark">
+      <h2>
+        <span>light-dark()</span>
+        <span class="stat cross">Chrome 123 &middot; Safari 17.5 &middot; FF 120</span>
+      </h2>
+      <p class="note">
+        One declaration, both schemes: <code>color: light-dark(black, white)</code>
+        resolves by the element&apos;s <code>color-scheme</code>. The two panels share the
+        <em>exact same</em> background + color rules &mdash; only their
+        <code>color-scheme</code> differs.
+      </p>
+      <div class="ld-row">
+        <div class="ld l">color-scheme: light</div>
+        <div class="ld d">color-scheme: dark</div>
+      </div>
+      <p class="replaces">
+        On the site: a single XP &quot;High Contrast&quot;/dark variant becomes a
+        one-token flip instead of a parallel stylesheet.
+      </p>
+      <p class="unsupported">Your browser doesn&apos;t support <code>light-dark()</code> &mdash; both panels fall back to unstyled colors.</p>
+    </section>
+
+    <!-- ───────────────────── declarative shadow DOM ───────────────────── -->
+    <section class="demo" data-cap="dsd">
+      <h2>
+        <span>declarative shadow DOM <span class="mono">&lt;template shadowrootmode&gt;</span></span>
+        <span class="stat cross">Chrome &middot; Safari 16.4 &middot; FF 123</span>
+      </h2>
+      <p class="note">
+        A shadow root written in <em>markup</em> &mdash; the parser attaches it with no
+        JavaScript. The pill below is a component whose styles are fully
+        encapsulated (a page-level <code>span</code> rule can&apos;t touch them) and
+        whose label is <code>&lt;slot&gt;</code>-projected from the light DOM.
+      </p>
+      <xp-chip class="dsd-host">
+        <template shadowrootmode="open">
+          <style>:host { display: inline-block; } .c { background: oklch(51% 0.225 263); color: #fff; padding: 6px 12px; border-radius: 11px; font: bold 9.5pt Tahoma, sans-serif; box-shadow: inset 0 1px 0 rgba(255,255,255,.4); }</style>
+          <span class="c"><slot>chip</slot></span>
+        </template>
+        rendered server-side, zero JS
+      </xp-chip>
+      <p class="replaces">
+        On the site: the XP window chrome is copy-pasted across ~6 files. As a
+        DSD <code>&lt;xp-window&gt;</code> it&apos;d be defined once, encapsulated, and
+        still render on first paint with JS off.
+      </p>
+      <p class="unsupported">Your browser doesn&apos;t support declarative shadow DOM &mdash; you see the raw light-DOM text (&quot;rendered server-side&hellip;&quot;) instead of the styled pill.</p>
+    </section>
+
+    <!-- ───────────────────── <model> ───────────────────── -->
+    <section class="demo" data-cap="model">
+      <h2>
+        <span>&lt;model&gt; element</span>
+        <span class="stat trial">Safari 26 (Testable)</span>
+      </h2>
+      <p class="note">
+        A native, declarative 3D viewer &mdash; <code>&lt;model src="scene.usdz"&gt;</code>
+        with built-in orbit/zoom and AR hand-off, no WebGL/three.js. Currently a
+        WebKit prototype (the &quot;HTML &lt;model&gt; element&quot; flag in your Safari&nbsp;26
+        screenshot). No live model is loaded here &mdash; just the placeholder it
+        would occupy:
+      </p>
+      <div class="model-mock">&lt;model&gt; &mdash; native 3D / AR viewer (no asset loaded)</div>
+      <p class="replaces">
+        On the site: a SOOC lens or a camera body could spin in 3D in the photo
+        tooltip &mdash; declaratively, the way <code>&lt;video&gt;</code> handles motion.
+      </p>
+      <p class="unsupported">Your browser doesn&apos;t expose <code>HTMLModelElement</code> &mdash; the element is inert here (placeholder only).</p>
+    </section>
+
+    <!-- ───────────────────── CloseWatcher ───────────────────── -->
+    <section class="demo" data-cap="close-watcher">
+      <h2>
+        <span>CloseWatcher API</span>
+        <span class="stat chrome">Chrome 120 &middot; Safari 26</span>
+      </h2>
+      <p class="note">
+        One abstraction for &quot;close requests&quot; &mdash; <kbd>Esc</kbd> on desktop
+        <em>and</em> the Android back gesture &mdash; so custom UI (sidebars, lightboxes)
+        dismisses the same way native dialogs do. Open the panel, then press
+        <kbd>Esc</kbd>:
+      </p>
+      <p><button class="xp-button" id="cw-open">Open panel</button></p>
+      <div id="cw-panel" class="cw-panel" hidden><span>Press <kbd>Esc</kbd> (or Android back) to close &mdash; one handler covers both.</span> <button class="xp-button" id="cw-close">close</button></div>
+      <p class="replaces">
+        On the site: the full-res photo lightbox could register a CloseWatcher so
+        Esc and mobile back both dismiss it, with the platform managing the stack.
+      </p>
+      <p class="unsupported">Your browser lacks <code>CloseWatcher</code> &mdash; the demo falls back to a manual <kbd>Esc</kbd> key listener.</p>
+    </section>
+
+    <!-- ───────────────────── <input switch> ───────────────────── -->
+    <section class="demo" data-cap="switch-control">
+      <h2>
+        <span>HTML switch control <span class="mono">&lt;input type=checkbox switch&gt;</span></span>
+        <span class="stat trial">Safari 17.4 &middot; Apple-led</span>
+      </h2>
+      <p class="note">
+        A native toggle switch &mdash; just a <code>switch</code> attribute on a
+        checkbox. Same form semantics, switch affordance, no ARIA plumbing. Shipped
+        in Safari (the &quot;HTML switch control&quot; flag in your screenshot); not yet in
+        Chromium/Gecko, where it degrades to a normal checkbox:
+      </p>
+      <label class="sw-row"><input type="checkbox" switch checked> native switch (or checkbox fallback)</label>
+      <p class="replaces">
+        On the site: a real switch for any future toggle (sound on/off, reduced
+        motion) instead of a faux-CSS slider.
+      </p>
+      <p class="unsupported">Your browser ignores the <code>switch</code> attribute &mdash; you see a standard checkbox above (the graceful fallback).</p>
+    </section>
+
+    <!-- ───────────────────── if() + sibling-index() ───────────────────── -->
+    <section class="demo" data-cap="css-if">
+      <h2>
+        <span>if() &amp; sibling-index() <span class="mono">/ CSS Values 5</span></span>
+        <span class="stat trial">Chrome 137+ &middot; flag</span>
+      </h2>
+      <p class="note">
+        Two bleeding-edge CSS primitives: <code>if()</code> for inline conditionals
+        (<code>style()</code>/<code>media()</code> queries as values) and
+        <code>sibling-index()</code>, which yields an element&apos;s position among its
+        siblings &mdash; so a staggered animation needs <em>no</em> per-item variables.
+        Each row below delays by <code>sibling-index() &times; 90ms</code> (reload to replay):
+      </p>
+      <ul class="si-list"><li>row one</li><li>row two</li><li>row three</li><li>row four</li><li>row five</li></ul>
+      <p class="replaces">
+        On the site: the photo grid or tracklist could cascade in on load with one
+        rule, and <code>if()</code> could fold tiny media-query overrides inline.
+      </p>
+      <p class="unsupported">Your browser doesn&apos;t support <code>sibling-index()</code> &mdash; the delay resolves to 0, so all rows appear at once (no stagger).</p>
+    </section>
+
+    <!-- ───────────────────── scroll-state container queries ───────────────────── -->
+    <section class="demo" data-cap="scroll-state">
+      <h2>
+        <span>scroll-state container queries <span class="mono">@container scroll-state(stuck)</span></span>
+        <span class="stat chrome">Chrome 133 &middot; others no</span>
+      </h2>
+      <p class="note">
+        Style an element by its <em>scroll condition</em> &mdash; e.g. whether a
+        <code>position: sticky</code> header is currently stuck. The header below
+        turns Luna-blue the moment it pins to the top. Scroll the inner box:
+      </p>
+      <div class="sst-scroll">
+        <div class="sst-sticky">sticky header &mdash; blue when stuck</div>
+        <p>scroll down&hellip;</p><p>&hellip;and the header above detects that it&apos;s pinned</p><p>via <code>@container scroll-state(stuck: top)</code></p><p>no scroll-event JavaScript involved</p><p>keep going</p><p>nearly there</p><p>bottom.</p>
+      </div>
+      <p class="replaces">
+        On the site: the page title bar could shed its shadow / tighten when it
+        sticks &mdash; declaratively, no scroll listener.
+      </p>
+      <p class="unsupported">Your browser doesn&apos;t support scroll-state queries &mdash; the sticky header stays grey even when pinned.</p>
+    </section>
+
+    <!-- ───────────────────── reading-flow ───────────────────── -->
+    <section class="demo" data-cap="reading-flow">
+      <h2>
+        <span>reading-flow / reading-order</span>
+        <span class="stat chrome">Chrome 137 &middot; others no</span>
+      </h2>
+      <p class="note">
+        Decouples <em>focus order</em> from source order for flex/grid. The three
+        links below are reordered visually with <code>order</code> (DOM is 1-2-3,
+        you see 2-3-1). With <code>reading-flow: flex-visual</code>, <kbd>Tab</kbd>
+        follows what you <em>see</em> &mdash; left to right &mdash; not the DOM. Tab through them:
+      </p>
+      <div class="rf-row"><a href="#rf" tabindex="0">DOM #1</a><a href="#rf" tabindex="0">DOM #2</a><a href="#rf" tabindex="0">DOM #3</a></div>
+      <p class="replaces">
+        On the site: lets CSS-driven responsive reordering stay keyboard-accessible
+        without ARIA gymnastics &mdash; the long-standing tension between visual and
+        focus order, resolved.
+      </p>
+      <p class="unsupported">Your browser doesn&apos;t support <code>reading-flow</code> &mdash; Tab follows DOM order (1&rarr;2&rarr;3) regardless of the visual shuffle.</p>
+    </section>
+
+    <!-- ───────────────────── Document Picture-in-Picture ───────────────────── -->
+    <section class="demo" data-cap="doc-pip">
+      <h2>
+        <span>Document Picture-in-Picture</span>
+        <span class="stat chrome">Chrome 116 &middot; others no</span>
+      </h2>
+      <p class="note">
+        An <em>always-on-top window you fill with arbitrary HTML</em> &mdash; not just a
+        video frame. Click below to pop this box into a floating mini-window
+        (close it to bring it home):
+      </p>
+      <p><button class="xp-button" id="pip-btn">Pop out &#8599;</button></p>
+      <div id="pip-content" class="pip-content">A real DOM node living in a Picture-in-Picture window. Peak resto-mod desktop-OS energy.</div>
+      <p class="replaces">
+        On the site: pop the <strong>now-playing</strong> tracklist into a floating
+        window that survives tab-switching &mdash; a literal always-on-top Outlook-Express
+        widget.
+      </p>
+      <p class="unsupported">Your browser lacks <code>documentPictureInPicture</code> &mdash; the button is disabled.</p>
+    </section>
+
+    <!-- ───────────────────── Temporal ───────────────────── -->
+    <section class="demo" data-cap="temporal">
+      <h2>
+        <span>Temporal <span class="mono">/ the date/time rewrite</span></span>
+        <span class="stat trial">FF 139 &middot; Safari TP &middot; Chrome flag</span>
+      </h2>
+      <p class="note">
+        The long-awaited replacement for <code>Date</code>: immutable objects,
+        first-class time zones and calendars, no more month-zero footguns. Live
+        output from <code>Temporal.Now.zonedDateTimeISO()</code> in your browser:
+      </p>
+      <div class="tmp-out" id="tmp-out">checking for Temporal&hellip;</div>
+      <p class="replaces">
+        On the site: photo &quot;uploaded&quot; stamps and serendipity event times become
+        zone-correct and DST-safe without a date library.
+      </p>
+      <p class="unsupported">Your browser doesn&apos;t expose <code>Temporal</code> yet &mdash; the box above says so.</p>
+    </section>
+
+    <script>
+      // CloseWatcher demo (graceful Esc fallback) + Document PiP + Temporal readout.
+      (function () {
+        // ── CloseWatcher ──
+        var cwOpen = document.getElementById("cw-open"),
+            cwPanel = document.getElementById("cw-panel"),
+            cwClose = document.getElementById("cw-close"),
+            cwWatcher = null,
+            hasCW = ("CloseWatcher" in window);
+        function cwShow() {
+          if (!cwPanel) return;
+          cwPanel.hidden = false;
+          if (hasCW) { try { cwWatcher = new CloseWatcher(); cwWatcher.onclose = cwHide; } catch (e) {} }
+        }
+        function cwHide() {
+          if (!cwPanel) return;
+          cwPanel.hidden = true;
+          if (cwWatcher) { try { cwWatcher.destroy(); } catch (e) {} cwWatcher = null; }
+        }
+        if (cwOpen) cwOpen.addEventListener("click", cwShow);
+        if (cwClose) cwClose.addEventListener("click", cwHide);
+        // fallback only where CloseWatcher is absent (else it handles Esc itself)
+        if (!hasCW) document.addEventListener("keydown", function (e) {
+          if (e.key === "Escape" && cwPanel && !cwPanel.hidden) cwHide();
+        });
+
+        // ── Document Picture-in-Picture ──
+        var pipBtn = document.getElementById("pip-btn"),
+            pipContent = document.getElementById("pip-content");
+        if (pipBtn && pipContent) {
+          if (!("documentPictureInPicture" in window)) {
+            pipBtn.disabled = true; pipBtn.textContent = "Document PiP unsupported";
+          } else {
+            pipBtn.addEventListener("click", function () {
+              documentPictureInPicture.requestWindow({ width: 320, height: 170 }).then(function (pip) {
+                // clone page styles so the popped node looks identical
+                Array.prototype.forEach.call(document.styleSheets, function (ss) {
+                  try {
+                    var css = Array.prototype.map.call(ss.cssRules, function (r) { return r.cssText; }).join("");
+                    var st = pip.document.createElement("style"); st.textContent = css; pip.document.head.appendChild(st);
+                  } catch (e) { /* cross-origin sheet — skip */ }
+                });
+                var holder = document.createComment("pip-placeholder");
+                pipContent.replaceWith(holder);
+                pip.document.body.style.margin = "10px";
+                pip.document.body.appendChild(pipContent);
+                pip.addEventListener("pagehide", function () { holder.replaceWith(pipContent); });
+              }).catch(function () {});
+            });
+          }
+        }
+
+        // ── Temporal ──
+        var tmp = document.getElementById("tmp-out");
+        if (tmp) {
+          if (typeof Temporal === "undefined") {
+            tmp.textContent = "Temporal isn't available in this browser yet.";
+          } else {
+            try {
+              var z = Temporal.Now.zonedDateTimeISO();
+              tmp.textContent = z.toString() + "\n" + z.timeZoneId + " · " + z.calendarId;
+            } catch (e) { tmp.textContent = "Temporal present but threw: " + e; }
+          }
+        }
       })();
     </script>
 
@@ -2393,6 +2799,7 @@ myButton.onclick = async () =&gt; {
       if (CSS.supports('grid-template-rows: masonry') || CSS.supports('grid-template-columns: masonry')) return true;
       if (CSS.supports('masonry-template-tracks: 1fr') || CSS.supports('item-pack: balance')) return true;
       if (CSS.supports('display: masonry')) return true;
+      if (CSS.supports('display: grid-lanes')) return true;  // Safari 26 shipped this syntax
       try {
         var p = document.createElement('div');
         p.style.display = 'grid';
@@ -2415,6 +2822,19 @@ myButton.onclick = async () =&gt; {
     "css-scope": function () { return ("CSSScopeRule" in window); },
     "custom-highlight": function () { return (("highlights" in CSS) && (typeof Highlight !== "undefined")); },
     "hidden-until-found": function () { return ("onbeforematch" in window); },
+    "relative-color": function () { return CSS.supports("color: rgb(from white r g b)"); },
+    "at-property": function () { return ("registerProperty" in CSS); },
+    "starting-style": function () { return CSS.supports("transition-behavior: allow-discrete"); },
+    "light-dark": function () { return CSS.supports("color: light-dark(#000, #fff)"); },
+    "dsd": function () { return ("shadowRootMode" in HTMLTemplateElement.prototype); },
+    "model": function () { return ("HTMLModelElement" in window); },
+    "close-watcher": function () { return ("CloseWatcher" in window); },
+    "switch-control": function () { return ("switch" in document.createElement("input")); },
+    "css-if": function () { return (CSS.supports("top: calc(sibling-index() * 1px)") || CSS.supports("width: if(style(--x: 1): 1px; else: 2px)")); },
+    "scroll-state": function () { return CSS.supports("container-type: scroll-state"); },
+    "reading-flow": function () { return (CSS.supports("reading-flow: flex-visual") || CSS.supports("reading-order: 1")); },
+    "doc-pip": function () { return ("documentPictureInPicture" in window); },
+    "temporal": function () { return (typeof Temporal !== "undefined"); },
   };
   var label = {
     "text-box-trim": "text-box-trim",
@@ -2440,6 +2860,19 @@ myButton.onclick = async () =&gt; {
     "css-scope": "@scope",
     "custom-highlight": "::highlight()",
     "hidden-until-found": "until-found",
+    "relative-color": "oklch(from)",
+    "at-property": "@property",
+    "starting-style": "@starting-style",
+    "light-dark": "light-dark()",
+    "dsd": "decl shadow DOM",
+    "model": "<model>",
+    "close-watcher": "CloseWatcher",
+    "switch-control": "<input switch>",
+    "css-if": "if() · sibling-index()",
+    "scroll-state": "scroll-state()",
+    "reading-flow": "reading-flow",
+    "doc-pip": "Document PiP",
+    "temporal": "Temporal",
   };
   var state = {};
   Object.keys(checks).forEach(function (k) { state[k] = sup(checks[k]); });
@@ -2486,6 +2919,5 @@ myButton.onclick = async () =&gt; {
   ]
 }
 </script>
-
 </body>
 </html>

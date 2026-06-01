@@ -35,12 +35,13 @@ TMP="/tmp/aadhar-add-photos-$$"
 NS="3cb8a107c58e47dc9244e75b33401f36"  # RN_KV namespace
 
 # grid thumbnail long-edge in px. the homepage renders each tile at
-# ~204 CSS px (660px window / 3 cols), so 500px covers 2x retina with
-# headroom. was 1200 historically, which oversampled ~9x by area and
-# bloated cold-load bandwidth (the full-res original is what /images/full
-# serves on click, so the thumbnail is never shown larger than the grid).
-# override with THUMB_PX=N if a future layout needs bigger tiles.
-THUMB_PX="${THUMB_PX:-500}"
+# ~204 CSS px (660px window / 3 cols), so 800px covers ~3–4x retina with
+# headroom for larger viewports + crisper detail. was 500 (2x-only), and
+# 1200 before that (oversampled ~9x by area). the full-res original is what
+# /images/full serves on click, so the thumbnail is never shown larger than
+# the grid. override with THUMB_PX=N per run. NB: re-encoding ALL existing
+# thumbnails after changing this is reencode-thumbnails.sh's job.
+THUMB_PX="${THUMB_PX:-800}"
 
 # preconditions
 if [ $# -eq 0 ]; then

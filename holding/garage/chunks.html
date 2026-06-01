@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>content-addressed chunking — aadhar.sh garage</title>
+<meta name="description" content="Live FastCDC content-defined chunking + content-addressing in the browser — pure JS + crypto.subtle. Why a one-byte edit re-sends the whole file under fixed chunks but almost nothing under content-defined ones.">
+<link rel="canonical" href="https://aadhar.sh/garage/chunks">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='3' y='6' width='7' height='20' rx='1' fill='%230855dd'/><rect x='12' y='6' width='5' height='20' rx='1' fill='%23166aee'/><rect x='19' y='6' width='10' height='20' rx='1' fill='%23003bda'/></svg>">
+<style>
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+html { scrollbar-color: oklch(62% 0.14 255) oklch(91% 0.02 248); }
+body {
+  background: linear-gradient(180deg, oklch(87.51% 0.0281 248.15) 0%, oklch(94.66% 0.0114 252.09) 220px, oklch(94.66% 0.0114 252.09) 100%);
+  font-family: Tahoma, Verdana, Geneva, sans-serif;
+  font-size: 10.5pt;
+  line-height: 1.5;
+  color: oklch(21.78% 0 0);
+  padding: 24px 12px 60px;
+  min-height: 100vh;
+}
+.window {
+  max-width: 760px;
+  margin: 0 auto;
+  background: oklch(100% 0 0);
+  border: 2px solid #0831d9; border-right-color: #001ea0; border-bottom-color: #001ea0;
+  border-top-left-radius: 8px; border-top-right-radius: 8px; overflow: hidden;
+  box-shadow: inset 1px 1px 0 #166aee, inset 2px 2px 0 #0855dd,
+              inset -1px -1px 0 #00138c, inset -2px -2px 0 #003bda,
+              4px 4px 0 rgba(0,30,160,.35);
+}
+.title-bar {
+  background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
+  color: oklch(100% 0 0);
+  font-family: "Trebuchet MS", Verdana, sans-serif;
+  font-size: 10pt;
+  font-weight: bold;
+  padding: 4px 10px;
+  text-shadow: 0 1px 1px rgba(0,0,0,.4);
+}
+.content { padding: 12px 16px 18px; }
+h1 {
+  font-family: "Franklin Gothic Medium", "Franklin Gothic", "Trebuchet MS", Verdana, sans-serif;
+  font-size: 14pt;
+  color: oklch(41.92% 0.0962 250.51);
+  margin: 0 0 6px;
+}
+.lede { color: oklch(38.67% 0 0); font-size: 10.5pt; margin: 0 0 4px; }
+h2 {
+  font-family: "Franklin Gothic Medium", "Franklin Gothic", "Trebuchet MS", Verdana, sans-serif;
+  font-size: 13pt;
+  color: oklch(41.92% 0.0962 250.51);
+  margin: 28px 0 4px;
+}
+.note { color: oklch(44.95% 0 0); font-size: 10pt; margin: 0 0 14px; }
+.note code, p code, li code { background: oklch(96.72% 0 0); border: 1px solid oklch(88.22% 0 0); padding: 0 4px; font-family: "Courier New", monospace; font-size: 9.5pt; }
+hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px 0; }
+a { color: oklch(41.92% 0.0962 250.51); }
+.status {
+  display: inline-block; font-family: "Courier New", Courier, monospace; font-size: 8.5pt;
+  font-weight: bold; letter-spacing: 0.05em; padding: 1px 6px; border: 1px solid;
+  border-radius: 2px; text-transform: uppercase; vertical-align: middle;
+}
+.status.review { color: oklch(54.44% 0.1504 47.10); border-color: oklch(54.44% 0.1504 47.10); background: oklch(98% 0.03 95); }
+
+/* ── demo ── */
+.cas-controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 10px 0; }
+.cas-ta { width: 100%; min-height: 88px; font-family: "Courier New", monospace; font-size: 10pt; line-height: 1.45; padding: 8px; border: 2px solid; border-color: #808080 #fff #fff #808080; background: oklch(99% 0 0); field-sizing: content; max-height: 38vh; resize: vertical; }
+.xp-btn { font-family: Tahoma, Verdana, sans-serif; font-size: 9.5pt; padding: 3px 12px; background: linear-gradient(#fff, #ece9d8); border: 1px solid #707070; border-radius: 3px; box-shadow: inset 1px 1px 0 #fff; cursor: pointer; }
+.xp-btn:active { box-shadow: inset 1px 1px 2px rgba(0,0,0,.3); }
+.method { margin: 16px 0; }
+.method h3 { font-size: 10.5pt; margin: 0 0 4px; font-family: "Franklin Gothic Medium", "Trebuchet MS", sans-serif; color: oklch(41.92% 0.0962 250.51); display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.method h3 small { font-weight: normal; font-size: 9pt; color: oklch(50% 0 0); font-family: Tahoma, sans-serif; }
+.chunks { display: flex; flex-wrap: wrap; gap: 3px; padding: 8px; background: oklch(97% 0.005 250); border: 1px solid oklch(85% 0.02 250); border-radius: 4px; min-height: 30px; }
+.chunk { height: 26px; border-radius: 2px; display: flex; align-items: center; justify-content: center; font: 8px/1 "Courier New", monospace; color: #fff; text-shadow: 0 1px 1px rgba(0,0,0,.45); padding: 0 3px; overflow: hidden; white-space: nowrap; cursor: default; transition: background .18s; }
+.chunk.shared { background: oklch(52% 0.13 150); }
+.chunk.changed { background: oklch(58% 0.19 38); }
+.chunk.neutral { background: oklch(53% 0.10 255); }
+.stats { font-size: 9.5pt; color: oklch(42% 0 0); margin: 6px 0 0; font-family: "Courier New", monospace; }
+.stats b { color: oklch(22% 0 0); }
+.delta-good { color: oklch(43% 0.16 150); font-weight: bold; }
+.delta-bad { color: oklch(50% 0.19 38); font-weight: bold; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 9pt; color: oklch(45% 0 0); margin: 8px 0 0; }
+.legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+.legend .sh::before { background: oklch(52% 0.13 150); }
+.legend .ch::before { background: oklch(58% 0.19 38); }
+.legend .nu::before { background: oklch(53% 0.10 255); }
+.callout { font-size: 10pt; background: oklch(97% 0.025 255); border-left: 3px solid oklch(51% 0.225 263); padding: 8px 12px; margin: 14px 0; color: oklch(28% 0.04 255); }
+.replaces { font-size: 9.5pt; color: oklch(33% 0 0); margin: 8px 0 0; border-left: 3px solid oklch(86% 0.03 250); padding-left: 8px; }
+.drop { border: 2px dashed oklch(62% 0.05 255); border-radius: 6px; padding: 16px; text-align: center; color: oklch(45% 0.03 255); font-size: 10pt; cursor: pointer; background: oklch(98% 0.01 255); }
+.drop.over { background: oklch(94% 0.04 255); border-color: oklch(51% 0.225 263); }
+footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67% 0.0294 259.59); font-size: 9.5pt; color: oklch(45% 0 0); }
+@media (prefers-reduced-motion: reduce) { .chunk { transition: none; } }
+</style>
+</head>
+<body>
+<div class="window">
+  <div class="title-bar">content-addressed chunking — chunk · address · diff · verify</div>
+  <div class="content">
+    <h1>Chunking &amp; content-addressing <span class="status review">in review</span></h1>
+    <p class="lede">
+      How big files get stored and synced by their <em>content</em>, not their
+      name &mdash; and why a one-byte edit means re-sending the whole file under
+      naïve chunking, but almost nothing under content-defined chunking.
+    </p>
+
+    <hr>
+
+    <p class="note">
+      This site already runs on content-addressing: every photo is served at a
+      content-stable URL with a <code>?v=N</code> cache-bust, the service worker
+      treats <code>/images/*</code> as immutable (cache-first), and the originals
+      live in R2. That&apos;s the <em>idea</em>. The systems-grade version &mdash;
+      chunk a file by content, address each chunk by its hash, ship only the
+      chunks that changed, and verify a slice without the whole &mdash; is what
+      <a href="https://github.com/officialunofficial/mkit" rel="external">mkit</a>
+      does. Everything below is a self-contained, dependency-free re-creation of
+      those primitives, running in your browser.
+    </p>
+
+    <h2>1 · The boundary problem</h2>
+    <p class="note">
+      Type in the box, then hit <strong>Snapshot as v1</strong> to freeze the
+      current chunks. Now edit &mdash; especially <strong>Insert a line at the
+      top</strong>. Watch the two strategies diverge: under
+      <strong>fixed-size</strong> chunks every boundary shifts and almost every
+      chunk&apos;s hash changes (so you&apos;d re-upload the whole file); under
+      <strong>FastCDC</strong> the boundaries ride the content, so only the
+      chunks near your edit change.
+    </p>
+
+    <div class="cas-controls">
+      <button class="xp-btn" id="snap">Snapshot as v1</button>
+      <button class="xp-btn" id="insert">Insert a line at the top</button>
+      <button class="xp-btn" id="reset">Reset text</button>
+    </div>
+    <textarea class="cas-ta" id="ta" spellcheck="false"></textarea>
+
+    <div class="method">
+      <h3>Fixed-size chunks <small>every 40 bytes &mdash; the naïve approach</small></h3>
+      <div class="chunks" id="fixed-chunks"></div>
+      <p class="stats" id="fixed-stats"></p>
+    </div>
+
+    <div class="method">
+      <h3>FastCDC <small>content-defined: min 16 · avg 40 · max 120 bytes</small></h3>
+      <div class="chunks" id="cdc-chunks"></div>
+      <p class="stats" id="cdc-stats"></p>
+    </div>
+
+    <div class="legend">
+      <span class="nu">unhashed yet / no snapshot</span>
+      <span class="sh">shared with v1 (free to skip)</span>
+      <span class="ch">changed (must re-send)</span>
+    </div>
+
+    <div class="callout" id="insight">
+      Snapshot, then insert at the top: that&apos;s the whole argument for
+      content-defined chunking in one gesture.
+    </div>
+
+    <h2>2 · FastCDC, briefly</h2>
+    <p class="note">
+      A rolling <em>gear hash</em> slides over the bytes; wherever the hash&apos;s
+      low bits hit a target pattern, that&apos;s a chunk boundary. Because the cut
+      points are decided by the <em>data</em>, inserting or deleting bytes only
+      disturbs the boundaries you touched &mdash; the rest line up exactly as
+      before. <code>min</code>/<code>max</code> clamp pathological sizes;
+      &quot;normalized&quot; chunking tightens the mask before the average and
+      loosens it after, so sizes cluster near the target. ~60 lines, no deps:
+    </p>
+
+    <h2>3 · Big files</h2>
+    <p class="note">
+      Content-addressing earns its keep on large blobs. Drop any file &mdash; it
+      never leaves your machine &mdash; and it&apos;s FastCDC-chunked locally
+      (avg 8&nbsp;KB), each chunk SHA-256&apos;d into a content ID. The blocks are
+      drawn proportional to size so you can see the variable-length cuts; identical
+      chunks (a <code>ChunkedBlob</code>&apos;s dedup win) are counted out.
+    </p>
+    <div class="drop" id="drop" tabindex="0" role="button">
+      Drop a file here, or click to choose &mdash; stays local
+      <input type="file" id="file" hidden>
+    </div>
+    <div class="chunks" id="file-chunks" style="margin-top:10px;display:none"></div>
+    <p class="stats" id="file-stats"></p>
+
+    <h2>4 · Delta wire format &amp; verified slices</h2>
+    <p class="note">
+      Once both sides address chunks by hash, sync is a set difference: the
+      sender lists its chunk IDs, the receiver names the few it lacks, and only
+      those bytes cross the wire &mdash; the <strong>delta wire format</strong>.
+      The last piece is trust: <strong>Bao verified slices</strong> wrap a
+      BLAKE3 tree so you can stream-verify <em>any</em> byte range against the
+      root hash without fetching the whole file. <code>crypto.subtle</code> has
+      no BLAKE3, so the demos above use SHA-256 for the content IDs; the shape of
+      the argument is identical &mdash; mkit uses BLAKE3 + Bao for the real thing.
+    </p>
+
+    <p class="replaces">
+      On the site: this is the same instinct as the <code>?v=N</code> immutable
+      image URLs and the cache-first service worker &mdash; identity by content,
+      not by name. If the photo originals ever needed incremental sync to R2,
+      content-defined chunking is how you&apos;d ship only what changed.
+    </p>
+
+    <p class="note" style="margin-top:14px">
+      Inspired by <a href="https://mkit.makechain.net/streaming" rel="external">mkit&apos;s streaming demo</a>
+      and <a href="https://docs.makechain.net/" rel="external">MakeChain</a> &mdash;
+      a protocol for cryptographically-signed, permissionless version control.
+    </p>
+
+    <footer>
+      <p>&larr; back to the <a href="/garage/">garage</a> &middot; <a href="/">aadhar.sh</a></p>
+      <p><small>FastCDC + content-addressing re-created in pure JS + Web Crypto · concepts credit officialunofficial/mkit</small></p>
+    </footer>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var enc = new TextEncoder();
+
+  var SAMPLE =
+    "A resto-mod keeps the soul and swaps the guts: a 1973 air-cooled body over " +
+    "a modern flat-six, period dials lit by hidden LEDs. This site is the same " +
+    "idea applied to a personal homepage — a 2003 Outlook-Express shell over a " +
+    "2026 edge runtime. Content-addressing is the quiet engine underneath: every " +
+    "photo is named by what it is, not where it lives, so the cache can trust it " +
+    "forever and an edit only touches what actually changed.";
+
+  // deterministic 256-entry gear table (xorshift32) — no Math.random (stable build)
+  var GEAR = (function () {
+    var s = 0x1bf52 >>> 0, g = new Uint32Array(256);
+    for (var i = 0; i < 256; i++) {
+      s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0;
+      g[i] = s >>> 0;
+    }
+    return g;
+  })();
+
+  function fixedChunks(bytes, size) {
+    var out = [];
+    for (var i = 0; i < bytes.length; i += size) out.push({ off: i, len: Math.min(size, bytes.length - i) });
+    if (!out.length) out.push({ off: 0, len: 0 });
+    return out;
+  }
+
+  // FastCDC with normalized chunking (two masks around the average size)
+  function fastcdc(bytes, minS, avgS, maxS) {
+    var out = [], n = bytes.length, off = 0;
+    var bits = Math.floor(Math.log2(avgS));
+    var maskS = (Math.pow(2, bits + 2) - 1) >>> 0;  // before avg: rarer cuts
+    var maskL = (Math.pow(2, bits - 2) - 1) >>> 0;  // after avg: commoner cuts
+    if (!n) return [{ off: 0, len: 0 }];
+    while (off < n) {
+      var remaining = n - off;
+      if (remaining <= minS) { out.push({ off: off, len: remaining }); break; }
+      var normal = Math.min(off + avgS, n);
+      var max = Math.min(off + maxS, n);
+      var hash = 0, i = off + minS, found = false;
+      for (; i < max; i++) {
+        hash = ((hash << 1) + GEAR[bytes[i]]) >>> 0;
+        var mask = i < normal ? maskS : maskL;
+        if ((hash & mask) === 0) { i++; found = true; break; }
+      }
+      var cut = found ? i : max;
+      out.push({ off: off, len: cut - off });
+      off = cut;
+    }
+    return out;
+  }
+
+  async function hashChunks(bytes, chunks) {
+    for (var k = 0; k < chunks.length; k++) {
+      var c = chunks[k];
+      var slice = bytes.subarray(c.off, c.off + c.len);
+      var buf = await crypto.subtle.digest("SHA-256", slice);
+      var u = new Uint8Array(buf), hex = "";
+      for (var b = 0; b < 6; b++) hex += u[b].toString(16).padStart(2, "0");
+      c.hash = hex;
+    }
+    return chunks;
+  }
+
+  function pxWidth(len) { return Math.max(12, Math.min(160, Math.round(len * 1.4))); }
+
+  function render(container, chunks, v1set) {
+    container.textContent = "";
+    var frag = document.createDocumentFragment();
+    chunks.forEach(function (c) {
+      var el = document.createElement("span");
+      var cls = "chunk ";
+      if (!v1set) cls += "neutral";
+      else if (v1set.has(c.hash)) cls += "shared";
+      else cls += "changed";
+      el.className = cls;
+      el.style.width = pxWidth(c.len) + "px";
+      el.textContent = (c.hash || "").slice(0, 4);
+      el.title = c.len + " bytes · sha256:" + (c.hash || "?") + "…";
+      frag.appendChild(el);
+    });
+    container.appendChild(frag);
+  }
+
+  function deltaStats(chunks, v1set, totalBytes) {
+    if (!v1set) return chunks.length + " chunks · " + totalBytes + " B · snapshot to compare";
+    var changed = 0, dbytes = 0;
+    chunks.forEach(function (c) { if (!v1set.has(c.hash)) { changed++; dbytes += c.len; } });
+    var pct = totalBytes ? Math.round((dbytes / totalBytes) * 100) : 0;
+    var cls = pct > 50 ? "delta-bad" : "delta-good";
+    return chunks.length + " chunks · " + (chunks.length - changed) + " shared · " +
+      "<span class='" + cls + "'>re-send " + dbytes + " B (" + pct + "%)</span>";
+  }
+
+  var ta = document.getElementById("ta");
+  var fixedC = document.getElementById("fixed-chunks"), cdcC = document.getElementById("cdc-chunks");
+  var fixedS = document.getElementById("fixed-stats"), cdcS = document.getElementById("cdc-stats");
+  var v1 = null; // { fixed:Set, cdc:Set }
+  var token = 0;
+
+  async function refresh() {
+    var my = ++token;
+    var bytes = enc.encode(ta.value);
+    var fx = fixedChunks(bytes, 40);
+    var cd = fastcdc(bytes, 16, 40, 120);
+    await hashChunks(bytes, fx);
+    if (my !== token) return;
+    await hashChunks(bytes, cd);
+    if (my !== token) return;
+    render(fixedC, fx, v1 && v1.fixed);
+    render(cdcC, cd, v1 && v1.cdc);
+    fixedS.innerHTML = deltaStats(fx, v1 && v1.fixed, bytes.length);
+    cdcS.innerHTML = deltaStats(cd, v1 && v1.cdc, bytes.length);
+  }
+
+  document.getElementById("snap").addEventListener("click", async function () {
+    var bytes = enc.encode(ta.value);
+    var fx = fixedChunks(bytes, 40), cd = fastcdc(bytes, 16, 40, 120);
+    await hashChunks(bytes, fx); await hashChunks(bytes, cd);
+    v1 = { fixed: new Set(fx.map(function (c) { return c.hash; })), cdc: new Set(cd.map(function (c) { return c.hash; })) };
+    refresh();
+  });
+  document.getElementById("insert").addEventListener("click", function () {
+    ta.value = "// edit " + Date.now().toString(36) + ": one new line up top.\n" + ta.value;
+    refresh();
+  });
+  document.getElementById("reset").addEventListener("click", function () {
+    ta.value = SAMPLE; v1 = null; refresh();
+  });
+
+  var t;
+  ta.addEventListener("input", function () { clearTimeout(t); t = setTimeout(refresh, 160); });
+
+  ta.value = SAMPLE;
+  refresh();
+
+  // ── big-file demo ──
+  var drop = document.getElementById("drop"), fileInput = document.getElementById("file");
+  var fileC = document.getElementById("file-chunks"), fileS = document.getElementById("file-stats");
+
+  async function handleFile(file) {
+    if (!file) return;
+    fileS.textContent = "chunking " + file.name + " …";
+    var buf = new Uint8Array(await file.arrayBuffer());
+    var cd = fastcdc(buf, 2048, 8192, 32768);
+    await hashChunks(buf, cd);
+    var seen = new Set(), unique = 0, dupBytes = 0;
+    cd.forEach(function (c) { if (seen.has(c.hash)) dupBytes += c.len; else { seen.add(c.hash); unique++; } });
+    fileC.style.display = "flex";
+    fileC.textContent = "";
+    var frag = document.createDocumentFragment();
+    var shown = cd.slice(0, 80);
+    shown.forEach(function (c) {
+      var el = document.createElement("span");
+      el.className = "chunk neutral";
+      el.style.width = Math.max(4, Math.min(90, Math.round(c.len / 360))) + "px";
+      el.title = c.len + " bytes · sha256:" + c.hash + "…";
+      frag.appendChild(el);
+    });
+    fileC.appendChild(frag);
+    var avg = Math.round(buf.length / cd.length);
+    fileS.innerHTML = "<b>" + file.name + "</b> · " + (buf.length / 1024).toFixed(1) + " KB · " +
+      cd.length + " chunks (avg " + avg + " B) · " + unique + " unique" +
+      (dupBytes ? " · <span class='delta-good'>dedup saves " + (dupBytes / 1024).toFixed(1) + " KB</span>" : "") +
+      (cd.length > 80 ? " · showing first 80" : "");
+  }
+
+  drop.addEventListener("click", function () { fileInput.click(); });
+  drop.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileInput.click(); } });
+  fileInput.addEventListener("change", function () { handleFile(fileInput.files[0]); });
+  ["dragenter", "dragover"].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add("over"); }); });
+  ["dragleave", "drop"].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove("over"); }); });
+  drop.addEventListener("drop", function (e) { if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); });
+})();
+</script>
+
+<script type="speculationrules">
+{
+  "prerender": [
+    {
+      "where": {
+        "and": [
+          { "href_matches": "/*" },
+          { "not": { "href_matches": "/" } },
+          { "not": { "href_matches": "/around*" } },
+          { "not": { "href_matches": "/whoareyou*" } }
+        ]
+      },
+      "eagerness": "eager"
+    }
+  ]
+}
+</script>
+
+<script>
+if ("serviceWorker" in navigator) {
+  const reg = () => navigator.serviceWorker.register("/sw.js").catch(() => {});
+  "requestIdleCallback" in window ? requestIdleCallback(reg, { timeout: 2000 }) : setTimeout(reg, 1000);
+}
+</script>
+</body>
+</html>

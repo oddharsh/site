@@ -19,10 +19,10 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
 body {
-  background: oklch(89% 0.03 110);
-  background: linear-gradient(180deg, oklch(79% 0.05 110) 0%, oklch(87% 0.025 110) 220px, oklch(87% 0.025 110) 100%);
-  font-family: Verdana, Tahoma, Geneva, sans-serif;
-  font-size: 11pt;
+  background: oklch(91.74% 0.0203 238.68);
+  background: linear-gradient(180deg, oklch(87.51% 0.0281 248.15) 0%, oklch(94.66% 0.0114 252.09) 220px, oklch(94.66% 0.0114 252.09) 100%);
+  font-family: Tahoma, Verdana, Geneva, sans-serif;
+  font-size: 10.5pt;
   line-height: 1.5;
   color: oklch(21.78% 0 0);
   padding: 24px 12px 60px;
@@ -33,18 +33,18 @@ body {
   max-width: 660px;
   margin: 0 auto;
   background: oklch(100.00% 0 0);
-  border: 1px solid oklch(54% 0.07 115);
-  box-shadow: 4px 4px 0 oklch(54% 0.07 115 / 0.35);
+  border: 1px solid oklch(61.14% 0.0611 253.60);
+  box-shadow: 4px 4px 0 oklch(61.14% 0.0611 253.60 / 0.35);
 }
 
 .title-bar {
-  background: linear-gradient(180deg, oklch(73% 0.11 112) 0%, oklch(64% 0.14 110) 8%, oklch(56% 0.16 108) 18%, oklch(55% 0.16 108) 86%, oklch(63% 0.12 110) 100%);
+  background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
   color: oklch(100.00% 0 0);
   font-family: "Trebuchet MS", Verdana, sans-serif;
-  font-size: 11pt;
+  font-size: 10pt;
   font-weight: bold;
   padding: 4px 8px;
-  border-bottom: 1px solid oklch(33% 0.12 108);
+  border-bottom: 1px solid oklch(41.92% 0.0962 250.51);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -81,10 +81,10 @@ body {
   position: relative; box-sizing: border-box;
   width: 21px; height: 21px; padding: 0; margin: 0;
   display: inline-block; overflow: hidden; font-size: 0; color: transparent;
-  border: 1px solid #628040; border-radius: 3px;
+  border: 1px solid #6696eb; border-radius: 3px;
   text-decoration: none; cursor: pointer;
-  background-color: #6a8838;
-  background-image: linear-gradient(180deg, #a0c060 0%, #70902e 22%, #689030 55%, #507028 82%, #284018 100%);
+  background-color: #3e73f5;
+  background-image: linear-gradient(180deg, #5f8cf7 0%, #3a71f5 22%, #3e73f5 55%, #2a70f2 82%, #1045be 100%);
   transition: filter .1s ease;
 }
 /* "wet plastic" gloss band over the top ~45% (close uses ::after for its X stroke) */
@@ -96,8 +96,8 @@ body {
 }
 .title-bar .controls .min:hover, .title-bar .controls .min:focus-visible,
 .title-bar .controls .max:hover, .title-bar .controls .max:focus-visible {
-  border-color: #9acc58; background-color: #86b048;
-  background-image: linear-gradient(180deg, #b0d070 0%, #84a840 22%, #92b850 55%, #74a038 82%, #527828 100%);
+  border-color: #8fb4ff; background-color: #4fa4ff;
+  background-image: linear-gradient(180deg, #689bff 0%, #468aff 22%, #4fa4ff 55%, #3990fc 82%, #1858c8 100%);
   outline: none;
 }
 /* CLOSE = red at rest */
@@ -132,21 +132,21 @@ body {
 .title-bar .controls .close::before { transform: rotate(45deg); }
 .title-bar .controls .close::after  { transform: rotate(-45deg); }
 /* --- Luna polish: caption text shadow + rounded top corners + 3px window frame --- */
-.title-bar { text-shadow: 1px 1px #1a2c08; border-top-left-radius: 8px; border-top-right-radius: 7px; }
+.title-bar { text-shadow: 1px 1px #0f1089; border-top-left-radius: 8px; border-top-right-radius: 7px; }
 .window {
-  border: 1px solid #4c6828; border-right-color: #2e4018; border-bottom-color: #2e4018;
+  border: 2px solid #0831d9; border-right-color: #001ea0; border-bottom-color: #001ea0;
   border-top-left-radius: 8px; border-top-right-radius: 8px; overflow: hidden;
-  box-shadow: inset 1px 1px 0 #9acc58, inset 2px 2px 0 #6a9838,
-              inset -1px -1px 0 #0e1c04, inset -2px -2px 0 #2a4010,
-              4px 4px 0 rgba(20,38,0,.35);
+  box-shadow: inset 1px 1px 0 #166aee, inset 2px 2px 0 #0855dd,
+              inset -1px -1px 0 #00138c, inset -2px -2px 0 #003bda,
+              4px 4px 0 rgba(0,30,160,.35);
 }
 
-.content { padding: 18px 24px 22px; }
+.content { padding: 12px 16px 16px; }
 
 h1 {
-  font-family: "Trebuchet MS", Verdana, sans-serif;
-  font-size: 20pt;
-  color: oklch(38% 0.10 115);
+  font-family: "Franklin Gothic Medium", "Franklin Gothic", "Trebuchet MS", Verdana, sans-serif;
+  font-size: 14pt;
+  color: oklch(41.92% 0.0962 250.51);
   margin: 0 0 4px;
   font-weight: bold;
   letter-spacing: -0.01em;
@@ -160,13 +160,13 @@ h1 {
 
 p { margin: 0 0 12px; }
 
-a:link    { color: oklch(42% 0.18 115); text-decoration: underline; }
-a:visited { color: oklch(37% 0.09 115); }
+a:link    { color: oklch(42.61% 0.2353 263.74); text-decoration: underline; }
+a:visited { color: oklch(42.09% 0.1935 328.36); }
 a:hover   { color: oklch(62.80% 0.2577 29.23); }
 
 hr {
   border: 0;
-  border-top: 2px groove oklch(84% 0.04 115);
+  border-top: 2px groove oklch(86.67% 0.0294 259.59);
   margin: 16px 0;
   height: 0;
 }
@@ -176,17 +176,17 @@ hr {
   list-style: none;
   padding: 0;
   margin: 16px 0 6px;
-  border: 1px solid oklch(54% 0.07 115);
-  border-top-color: oklch(43% 0.08 115);
-  border-left-color: oklch(43% 0.08 115);
+  border: 1px solid oklch(61.14% 0.0611 253.60);
+  border-top-color: oklch(47.12% 0.0555 253.58);
+  border-left-color: oklch(47.12% 0.0555 253.58);
   background: oklch(100% 0 0);
 }
 .shelf li {
   padding: 10px 12px 12px;
-  border-bottom: 1px solid oklch(91% 0.02 110);
+  border-bottom: 1px solid oklch(92.73% 0.0139 247.98);
 }
 .shelf li:last-child { border-bottom: none; }
-.shelf li:nth-child(even) { background: oklch(97% 0.01 110); }
+.shelf li:nth-child(even) { background: oklch(97.50% 0.0062 255.47); }
 .shelf .title-row {
   display: flex;
   align-items: baseline;
@@ -195,10 +195,10 @@ hr {
   margin-bottom: 4px;
 }
 .shelf .name {
-  font-family: "Trebuchet MS", Verdana, sans-serif;
+  font-family: "Franklin Gothic Medium", "Franklin Gothic", "Trebuchet MS", Verdana, sans-serif;
   font-weight: bold;
   font-size: 12pt;
-  color: oklch(38% 0.10 115);
+  color: oklch(41.92% 0.0962 250.51);
 }
 .shelf .name a { text-decoration: none; }
 .shelf .name a:hover { text-decoration: underline; }
@@ -230,13 +230,16 @@ hr {
 
 footer {
   text-align: center;
-  font-family: Verdana, Tahoma, sans-serif;
+  font-family: Tahoma, Verdana, sans-serif;
   font-size: 9pt;
   color: oklch(44.95% 0 0);
   margin: 18px 0 0;
   padding-top: 14px;
-  border-top: 1px solid oklch(84% 0.04 115);
+  border-top: 1px solid oklch(86.67% 0.0294 259.59);
 }
+  /* standard scrollbar tint (Chrome + Safari 26 + Firefox): Luna-blue thumb,
+     pale track. the garage/scroll demo styles its own element separately. */
+  html { scrollbar-color: oklch(62% 0.14 255) oklch(91% 0.02 248); }
 </style>
 </head>
 <body>
@@ -260,6 +263,25 @@ footer {
     <hr>
 
     <ul class="shelf">
+
+      <li>
+        <div class="title-row">
+          <span class="name"><a href="/garage/chunks">Content-addressed chunking</a></span>
+          <span class="status review">in review</span>
+        </div>
+        <div class="desc">
+          The quiet engine under the photo grid, made visible: FastCDC
+          content-defined chunking + content-addressing, live in the browser
+          (pure JS + <code style="font-family:'Courier New',monospace;font-size:9pt">crypto.subtle</code>).
+          Snapshot a file, edit a byte, and watch fixed-size chunks re-send the
+          whole thing while content-defined chunks barely flinch &mdash; plus a
+          drop-a-file dedup demo. Concepts credit
+          <a href="https://github.com/officialunofficial/mkit" rel="external">mkit</a>.
+        </div>
+        <div class="meta">
+          shape: interactive systems demo · added 2026-06-01
+        </div>
+      </li>
 
       <li>
         <div class="title-row">
@@ -361,6 +383,5 @@ if ("serviceWorker" in navigator) {
   "requestIdleCallback" in window ? requestIdleCallback(reg, { timeout: 2000 }) : setTimeout(reg, 1000);
 }
 </script>
-
 </body>
 </html>

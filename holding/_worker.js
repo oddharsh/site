@@ -572,7 +572,7 @@ const R2_EXT_PRIORITY = {
 // higher quality (CQ30 → -q63); 13 the 3 grayscale Leica thumbs re-encoded
 // as true monochrome (yuv420 → yuv400). same filenames each time, so the
 // ?v= bump is what busts the edge cache for the new bytes.)
-const THUMB_VERSION = 13;
+const THUMB_VERSION = 14;
 
 async function getImagesManifest(env, ctx) {
   let manifest = null;
@@ -1349,26 +1349,22 @@ function decodeEntities(s) {
 // page after the call. only max-width is parameterized.
 function xpChromeCss(maxWidth) {
   return `
-  /* cross-document View Transition opt-in — mirrors the homepage so
-     navigations across the XP-window shell cross-fade. pure CSS,
-     graceful where unsupported. */
-  @view-transition { navigation: auto; }
   * { box-sizing: border-box; }
   body {
-    background: linear-gradient(180deg, oklch(79% 0.05 110) 0%, oklch(87% 0.025 110) 220px, oklch(87% 0.025 110) 100%);
-    font-family: Verdana, Tahoma, Geneva, sans-serif;
-    font-size: 11pt; line-height: 1.5; color: oklch(21.78% 0 0);
+    background: linear-gradient(180deg, oklch(87.51% 0.0281 248.15) 0%, oklch(94.66% 0.0114 252.09) 220px, oklch(94.66% 0.0114 252.09) 100%);
+    font-family: Tahoma, Verdana, Geneva, sans-serif;
+    font-size: 10.5pt; line-height: 1.5; color: oklch(21.78% 0 0);
     margin: 0; padding: 24px 12px 60px; min-height: 100vh;
   }
   .window {
     max-width: ${maxWidth}px; margin: 0 auto; background: oklch(100.00% 0 0);
-    border: 1px solid oklch(54% 0.07 115); box-shadow: 4px 4px 0 oklch(54% 0.07 115 / 0.35);
+    border: 1px solid oklch(61.14% 0.0611 253.60); box-shadow: 4px 4px 0 oklch(61.14% 0.0611 253.60 / 0.35);
   }
   .title-bar {
-    background: linear-gradient(180deg, oklch(73% 0.11 112) 0%, oklch(64% 0.14 110) 8%, oklch(56% 0.16 108) 18%, oklch(55% 0.16 108) 86%, oklch(63% 0.12 110) 100%);
+    background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
     color: oklch(100.00% 0 0); font-family: "Trebuchet MS", Verdana, sans-serif;
-    font-size: 11pt; font-weight: bold; padding: 4px 8px;
-    border-bottom: 1px solid oklch(33% 0.12 108); display: flex;
+    font-size: 10pt; font-weight: bold; padding: 4px 8px;
+    border-bottom: 1px solid oklch(41.92% 0.0962 250.51); display: flex;
     align-items: center; justify-content: space-between;
     text-box-trim: trim-both; text-box-edge: cap alphabetic;
   }
@@ -1386,10 +1382,10 @@ function xpChromeCss(maxWidth) {
   position: relative; box-sizing: border-box;
   width: 21px; height: 21px; padding: 0; margin: 0;
   display: inline-block; overflow: hidden; font-size: 0; color: transparent;
-  border: 1px solid #628040; border-radius: 3px;
+  border: 1px solid #6696eb; border-radius: 3px;
   text-decoration: none; cursor: pointer;
-  background-color: #6a8838;
-  background-image: linear-gradient(180deg, #a0c060 0%, #70902e 22%, #689030 55%, #507028 82%, #284018 100%);
+  background-color: #3e73f5;
+  background-image: linear-gradient(180deg, #5f8cf7 0%, #3a71f5 22%, #3e73f5 55%, #2a70f2 82%, #1045be 100%);
   transition: filter .1s ease;
 }
 /* "wet plastic" gloss band over the top ~45% (close uses ::after for its X stroke) */
@@ -1401,8 +1397,8 @@ function xpChromeCss(maxWidth) {
 }
 .title-bar .controls .min:hover, .title-bar .controls .min:focus-visible,
 .title-bar .controls .max:hover, .title-bar .controls .max:focus-visible {
-  border-color: #9acc58; background-color: #86b048;
-  background-image: linear-gradient(180deg, #b0d070 0%, #84a840 22%, #92b850 55%, #74a038 82%, #527828 100%);
+  border-color: #8fb4ff; background-color: #4fa4ff;
+  background-image: linear-gradient(180deg, #689bff 0%, #468aff 22%, #4fa4ff 55%, #3990fc 82%, #1858c8 100%);
   outline: none;
 }
 /* CLOSE = red at rest */
@@ -1437,27 +1433,27 @@ function xpChromeCss(maxWidth) {
 .title-bar .controls .close::before { transform: rotate(45deg); }
 .title-bar .controls .close::after  { transform: rotate(-45deg); }
 /* --- Luna polish: caption text shadow + rounded top corners + 3px window frame --- */
-.title-bar { text-shadow: 1px 1px #1a2c08; border-top-left-radius: 8px; border-top-right-radius: 7px; }
+.title-bar { text-shadow: 1px 1px #0f1089; border-top-left-radius: 8px; border-top-right-radius: 7px; }
 .window {
-  border: 1px solid #4c6828; border-right-color: #2e4018; border-bottom-color: #2e4018;
+  border: 2px solid #0831d9; border-right-color: #001ea0; border-bottom-color: #001ea0;
   border-top-left-radius: 8px; border-top-right-radius: 8px; overflow: hidden;
-  box-shadow: inset 1px 1px 0 #9acc58, inset 2px 2px 0 #6a9838,
-              inset -1px -1px 0 #0e1c04, inset -2px -2px 0 #2a4010,
-              4px 4px 0 rgba(20,38,0,.35);
+  box-shadow: inset 1px 1px 0 #166aee, inset 2px 2px 0 #0855dd,
+              inset -1px -1px 0 #00138c, inset -2px -2px 0 #003bda,
+              4px 4px 0 rgba(0,30,160,.35);
 }
 /* reusable Luna command button + sunken field (used by the /rn form) */
 .xp-button {
-  display: inline-block; min-width: 73px; padding: 3px 12px;
+  display: inline-block; min-width: 75px; padding: 3px 12px;
   font: 8pt/1.4 Tahoma, Verdana, sans-serif; color: #000;
   text-align: center; text-decoration: none; cursor: pointer; user-select: none;
-  border: 1px solid #8a9c58; border-radius: 3px;
+  border: 1px solid #8e9dad; border-radius: 3px;
   background: linear-gradient(180deg, #ffffff 0%, #fdfdfd 45%, #f4f3ee 55%, #eceae0 100%);
   box-shadow: inset 0 0 0 1px #ffffff, 0 0 0 1px rgba(255,255,255,.4);
 }
 .xp-button:hover { border-color: #e9994a; box-shadow: inset 0 0 0 1px #fdd78b, 0 0 3px 1px rgba(255,199,60,.55); }
 .xp-button.default, .xp-button:focus-visible {
-  border-color: #1a3a10; outline: none;
-  box-shadow: inset 0 0 0 1px #ffffff, 0 0 0 1px #3a6820, 0 0 3px 1px rgba(44,98,139,.45);
+  border-color: #003c74; outline: none;
+  box-shadow: inset 0 0 0 1px #ffffff, 0 0 0 1px #2c628b, 0 0 3px 1px rgba(44,98,139,.45);
 }
 .xp-button:active {
   background: linear-gradient(180deg, #e1e1d8 0%, #e9e8e0 50%, #f0efe8 100%);
@@ -1468,10 +1464,12 @@ function xpChromeCss(maxWidth) {
   box-sizing: border-box; width: 100%;
   font-family: Tahoma, Verdana, Geneva, sans-serif; font-size: 10.5pt;
   color: #181818; background: #ffffff; padding: 3px 6px; border-radius: 0;
-  border: 1px solid #7a9050; box-shadow: inset 1px 1px 0 rgba(0,0,0,.20), inset -1px -1px 0 #ffffff;
+  border: 1px solid #7f9db9; box-shadow: inset 1px 1px 0 rgba(0,0,0,.20), inset -1px -1px 0 #ffffff;
 }
-.xp-input:focus { outline: none; border-color: #4a7828; box-shadow: inset 1px 1px 0 rgba(0,0,0,.20), inset -1px -1px 0 #ffffff, 0 0 0 1px #4a7828; }
-  .content { padding: 18px 24px 22px; }`;
+.xp-input:focus { outline: none; border-color: #316ac5; box-shadow: inset 1px 1px 0 rgba(0,0,0,.20), inset -1px -1px 0 #ffffff, 0 0 0 1px #316ac5; }
+  html { scrollbar-color: oklch(62% 0.14 255) oklch(91% 0.02 248); }
+  .content { padding: 12px 16px 16px; }
+`;
 }
 
 function renderAroundHtml(report) {
@@ -1504,25 +1502,25 @@ function renderAroundHtml(report) {
 <style>
 ${xpChromeCss(820)}
   h1 {
-    font-family: "Trebuchet MS", Verdana, sans-serif; color: oklch(38% 0.10 115);
+    font-family: "Franklin Gothic Medium", "Franklin Gothic", "Trebuchet MS", Verdana, sans-serif; color: oklch(41.92% 0.0962 250.51);
     font-size: 18pt; margin: 0 0 4px; font-weight: bold;
   }
   .lede { margin: 0 0 14px; color: oklch(38.67% 0 0); font-size: 10.5pt; }
   .lede code { font-family: "Courier New", Courier, monospace; background: oklch(96.72% 0 0); border: 1px solid oklch(88.22% 0 0); padding: 0 3px; font-size: 10pt; }
   table.scout {
     width: 100%; border-collapse: collapse; margin: 8px 0 12px;
-    border: 1px solid oklch(54% 0.07 115); border-top-color: oklch(43% 0.08 115); border-left-color: oklch(43% 0.08 115);
+    border: 1px solid oklch(61.14% 0.0611 253.60); border-top-color: oklch(47.12% 0.0555 253.58); border-left-color: oklch(47.12% 0.0555 253.58);
     background: oklch(100.00% 0 0); font-size: 10pt;
   }
   table.scout thead th {
-    background: oklch(92% 0.02 110); color: oklch(38% 0.10 115); font-weight: bold;
+    background: oklch(94.66% 0.0114 252.09); color: oklch(41.92% 0.0962 250.51); font-weight: bold;
     padding: 5px 8px; text-align: left;
-    border-bottom: 1px solid oklch(54% 0.07 115);
+    border-bottom: 1px solid oklch(61.14% 0.0611 253.60);
     font-family: "Trebuchet MS", Verdana, sans-serif;
   }
-  table.scout tbody td { padding: 6px 8px; border-bottom: 1px solid oklch(91% 0.02 110); vertical-align: top; }
-  table.scout tbody tr:nth-child(even) td { background: oklch(97% 0.01 110); }
-  table.scout .firm { font-weight: bold; color: oklch(38% 0.10 115); width: 22%; }
+  table.scout tbody td { padding: 6px 8px; border-bottom: 1px solid oklch(92.73% 0.0139 247.98); vertical-align: top; }
+  table.scout tbody tr:nth-child(even) td { background: oklch(97.50% 0.0062 255.47); }
+  table.scout .firm { font-weight: bold; color: oklch(41.92% 0.0962 250.51); width: 22%; }
   table.scout .host { font-family: "Courier New", Courier, monospace; color: oklch(62.68% 0 0); font-size: 9pt; font-weight: normal; }
   table.scout .status { font-family: "Courier New", Courier, monospace; width: 8%; text-align: center; }
   table.scout .ok   { color: oklch(49.32% 0.1678 142.50); font-weight: bold; }
@@ -1532,24 +1530,24 @@ ${xpChromeCss(820)}
   table.scout .desc { color: oklch(51.03% 0 0); font-size: 9.5pt; margin-top: 3px; }
   table.scout .latency { font-family: "Courier New", Courier, monospace; color: oklch(38.67% 0 0); width: 9%; text-align: right; }
   table.scout .link { width: 5%; text-align: center; }
-  table.scout .link a { color: oklch(42% 0.18 115); text-decoration: none; font-weight: bold; }
+  table.scout .link a { color: oklch(42.61% 0.2353 263.74); text-decoration: none; font-weight: bold; }
   table.scout .link a:hover { color: oklch(62.80% 0.2577 29.23); text-decoration: underline; }
   .meta {
     font-size: 9.5pt; color: oklch(51.03% 0 0);
-    border: 1px solid oklch(54% 0.07 115); background: oklch(98.81% 0.0263 99.90);
+    border: 1px solid oklch(61.14% 0.0611 253.60); background: oklch(98.81% 0.0263 99.90);
     padding: 6px 10px; margin: 12px 0;
   }
   .meta code { font-family: "Courier New", Courier, monospace; background: oklch(100.00% 0 0); border: 1px solid oklch(89.75% 0 0); padding: 0 3px; }
-  footer { text-align: center; font-size: 9pt; color: oklch(44.95% 0 0); margin-top: 14px; padding-top: 10px; border-top: 1px solid oklch(84% 0.04 115); }
-  a { color: oklch(42% 0.18 115); }
+  footer { text-align: center; font-size: 9pt; color: oklch(44.95% 0 0); margin-top: 14px; padding-top: 10px; border-top: 1px solid oklch(86.67% 0.0294 259.59); }
+  a { color: oklch(42.61% 0.2353 263.74); }
   .dim { color: oklch(62.68% 0 0); }
-  hr { border: 0; border-top: 2px groove oklch(84% 0.04 115); margin: 12px 0; height: 0; }
+  hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 12px 0; height: 0; }
 </style>
 </head><body>
 <div class="window">
   <div class="title-bar">
     <span><span class="icon"></span>/around — looking around the neighborhood</span>
-    <span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="https://www.youtube.com/watch?v=dQw4w9WgXcQ" rel="noopener" title="close" aria-label="close"></a></span>
+    <span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/" title="back to aadhar.sh" aria-label="back to aadhar.sh"></a></span>
   </div>
   <div class="content">
     <h1>Around the Neighborhood</h1>
@@ -1598,22 +1596,22 @@ function handleBotPage(request) {
 <meta name="description" content="Identity and behavior of AadharshBot, the crawler operated by aadhar.sh.">
 <style>
 ${xpChromeCss(660)}
-  h1 { font-family: "Trebuchet MS", Verdana, sans-serif; font-size: 20pt; color: oklch(38% 0.10 115); margin: 0 0 4px; font-weight: bold; }
-  h2 { font-family: "Trebuchet MS", Verdana, sans-serif; font-size: 12pt; color: oklch(38% 0.10 115); margin: 16px 0 6px; font-weight: bold; line-height: 1.3; }
-  h2::after { content: ""; display: block; height: 1px; background: oklch(84% 0.04 115); margin-top: 8px; }
-  a:link { color: oklch(42% 0.18 115); text-decoration: underline; } a:visited { color: oklch(37% 0.09 115); } a:hover { color: oklch(62.80% 0.2577 29.23); }
+  h1 { font-family: "Franklin Gothic Medium", "Franklin Gothic", "Trebuchet MS", Verdana, sans-serif; font-size: 14pt; color: oklch(41.92% 0.0962 250.51); margin: 0 0 4px; font-weight: bold; }
+  h2 { font-family: "Franklin Gothic Medium", "Franklin Gothic", "Trebuchet MS", Verdana, sans-serif; font-size: 12pt; color: oklch(41.92% 0.0962 250.51); margin: 16px 0 6px; font-weight: bold; line-height: 1.3; }
+  h2::after { content: ""; display: block; height: 1px; background: oklch(86.67% 0.0294 259.59); margin-top: 8px; }
+  a:link { color: oklch(42.61% 0.2353 263.74); text-decoration: underline; } a:visited { color: oklch(42.09% 0.1935 328.36); } a:hover { color: oklch(62.80% 0.2577 29.23); }
   code { font-family: "Courier New", Courier, monospace; background: oklch(96.72% 0 0); border: 1px solid oklch(88.22% 0 0); padding: 0 3px; }
   .lede { color: oklch(38.67% 0 0); font-size: 10.5pt; margin: 0 0 12px; }
-  dl.fields { display: grid; grid-template-columns: 11em 1fr; gap: 1px; margin: 4px 0 14px; background: oklch(83% 0.03 110); border: 1px solid oklch(54% 0.07 115); border-top-color: oklch(43% 0.08 115); border-left-color: oklch(43% 0.08 115); font-size: 10pt; }
-  dl.fields dt { background: oklch(92% 0.02 110); color: oklch(38% 0.10 115); font-weight: bold; padding: 4px 8px; }
+  dl.fields { display: grid; grid-template-columns: 11em 1fr; gap: 1px; margin: 4px 0 14px; background: oklch(85.04% 0.0283 248.16); border: 1px solid oklch(61.14% 0.0611 253.60); border-top-color: oklch(47.12% 0.0555 253.58); border-left-color: oklch(47.12% 0.0555 253.58); font-size: 10pt; }
+  dl.fields dt { background: oklch(94.66% 0.0114 252.09); color: oklch(41.92% 0.0962 250.51); font-weight: bold; padding: 4px 8px; }
   dl.fields dd { background: oklch(100.00% 0 0); margin: 0; padding: 4px 8px; font-family: "Courier New", Courier, monospace; font-size: 9.5pt; word-break: break-all; }
-  footer { text-align: center; font-size: 9pt; color: oklch(44.95% 0 0); margin-top: 16px; padding-top: 10px; border-top: 1px solid oklch(84% 0.04 115); }
+  footer { text-align: center; font-size: 9pt; color: oklch(44.95% 0 0); margin-top: 16px; padding-top: 10px; border-top: 1px solid oklch(86.67% 0.0294 259.59); }
 </style>
 </head><body>
 <div class="window">
   <div class="title-bar">
     <span><span class="icon"></span>${BOT_NAME}</span>
-    <span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="https://www.youtube.com/watch?v=dQw4w9WgXcQ" rel="noopener" title="close" aria-label="close"></a></span>
+    <span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/" title="back to aadhar.sh" aria-label="back to aadhar.sh"></a></span>
   </div>
   <div class="content">
     <h1>${BOT_NAME}</h1>
@@ -1702,7 +1700,7 @@ async function handleRnAdmin(request, env) {
     <p><strong>Currently:</strong><br>${current}</p>
     <form method="POST" action="/rn/set" autocomplete="off" style="margin-top:14px">
       <input type="hidden" name="secret" value="${esc(secret)}">
-      <label for="u" style="display:block;font-weight:bold;color:oklch(38% 0.10 115);margin-bottom:4px">New playlist URL:</label>
+      <label for="u" style="display:block;font-weight:bold;color:oklch(41.92% 0.0962 250.51);margin-bottom:4px">New playlist URL:</label>
       <input id="u" name="url" type="text" placeholder="https://open.spotify.com/playlist/..." autofocus class="xp-input" style="font-family:'Courier New',monospace">
       <p style="margin-top:10px">
         <button type="submit" class="xp-button default">
@@ -1785,11 +1783,11 @@ function setPage(status, title, bodyHtml) {
 <style>
 ${xpChromeCss(520)}
   h1 {
-    font-family: "Trebuchet MS", Verdana, sans-serif; color: oklch(38% 0.10 115);
+    font-family: "Franklin Gothic Medium", "Franklin Gothic", "Trebuchet MS", Verdana, sans-serif; color: oklch(41.92% 0.0962 250.51);
     font-size: 16pt; margin: 0 0 8px;
   }
-  a:link    { color: oklch(42% 0.18 115); text-decoration: underline; }
-  a:visited { color: oklch(37% 0.09 115); }
+  a:link    { color: oklch(42.61% 0.2353 263.74); text-decoration: underline; }
+  a:visited { color: oklch(42.09% 0.1935 328.36); }
   a:hover   { color: oklch(62.80% 0.2577 29.23); }
   code { font-family: "Courier New", Courier, monospace; background: oklch(96.72% 0 0); padding: 0 3px; border: 1px solid oklch(88.22% 0 0); }
 </style></head><body>
@@ -1966,17 +1964,17 @@ ${xpChromeCss(720)}
 .title-bar .controls { letter-spacing: 2px; font-family: Tahoma, sans-serif; font-size: 9pt; }
 
 h1 {
-  font-family: "Trebuchet MS", Verdana, sans-serif;
-  font-size: 20pt;
-  color: oklch(38% 0.10 115);
+  font-family: "Franklin Gothic Medium", "Franklin Gothic", "Trebuchet MS", Verdana, sans-serif;
+  font-size: 14pt;
+  color: oklch(41.92% 0.0962 250.51);
   margin: 0 0 4px;
   font-weight: bold;
   letter-spacing: -0.01em;
 }
 h2 {
-  font-family: "Trebuchet MS", Verdana, sans-serif;
+  font-family: "Franklin Gothic Medium", "Franklin Gothic", "Trebuchet MS", Verdana, sans-serif;
   font-size: 12pt;
-  color: oklch(38% 0.10 115);
+  color: oklch(41.92% 0.0962 250.51);
   margin: 18px 0 6px;
   font-weight: bold;
   line-height: 1.3;
@@ -1990,7 +1988,7 @@ h2::after {
   content: "";
   display: block;
   height: 1px;
-  background: oklch(84% 0.04 115);
+  background: oklch(86.67% 0.0294 259.59);
   margin-top: 8px;
 }
 
@@ -1999,14 +1997,14 @@ p { margin: 0 0 12px; }
 ul { margin: 0 0 12px 22px; padding: 0; }
 li { margin-bottom: 4px; }
 
-a:link    { color: oklch(42% 0.18 115); text-decoration: underline; }
-a:visited { color: oklch(37% 0.09 115); }
+a:link    { color: oklch(42.61% 0.2353 263.74); text-decoration: underline; }
+a:visited { color: oklch(42.09% 0.1935 328.36); }
 a:hover   { color: oklch(62.80% 0.2577 29.23); }
 a:active  { color: oklch(62.80% 0.2577 29.23); }
 
 hr {
   border: 0;
-  border-top: 2px groove oklch(84% 0.04 115);
+  border-top: 2px groove oklch(86.67% 0.0294 259.59);
   margin: 16px 0;
   height: 0;
 }
@@ -2025,18 +2023,18 @@ code, .mono {
   grid-template-columns: 14em 1fr;
   gap: 1px;
   margin: 4px 0 14px;
-  background: oklch(83% 0.03 110);
-  border: 1px solid oklch(54% 0.07 115);
-  border-top-color: oklch(43% 0.08 115);
-  border-left-color: oklch(43% 0.08 115);
+  background: oklch(85.04% 0.0283 248.16);
+  border: 1px solid oklch(61.14% 0.0611 253.60);
+  border-top-color: oklch(47.12% 0.0555 253.58);
+  border-left-color: oklch(47.12% 0.0555 253.58);
   font-size: 10pt;
 }
 .field-grid dt {
-  background: oklch(92% 0.02 110);
-  color: oklch(38% 0.10 115);
+  background: oklch(94.66% 0.0114 252.09);
+  color: oklch(41.92% 0.0962 250.51);
   font-weight: bold;
   padding: 4px 8px;
-  font-family: Verdana, Tahoma, sans-serif;
+  font-family: Tahoma, Verdana, sans-serif;
 }
 .field-grid dd {
   background: oklch(100.00% 0 0);
@@ -2047,17 +2045,17 @@ code, .mono {
   word-break: break-all;
   color: oklch(21.78% 0 0);
 }
-.field-grid dd .dim { color: oklch(62.68% 0 0); font-family: Verdana, Tahoma, sans-serif; font-size: 9pt; }
+.field-grid dd .dim { color: oklch(62.68% 0 0); font-family: Tahoma, Verdana, sans-serif; font-size: 9pt; }
 .field-grid dd.muted { color: oklch(44.95% 0 0); }
 
 /* little raised "pill" — looks like a tiny 3D button */
 .pill {
   display: inline-block;
   padding: 0 5px;
-  border: 1px solid oklch(54% 0.07 115);
-  background: oklch(92% 0.02 110);
-  color: oklch(38% 0.10 115);
-  font-family: Verdana, Tahoma, sans-serif;
+  border: 1px solid oklch(61.14% 0.0611 253.60);
+  background: oklch(94.66% 0.0114 252.09);
+  color: oklch(41.92% 0.0962 250.51);
+  font-family: Tahoma, Verdana, sans-serif;
   font-size: 8.5pt;
   font-weight: bold;
   margin-right: 4px;
@@ -2066,28 +2064,28 @@ code, .mono {
 
 /* info callout — beveled like a Windows information dialog */
 .callout {
-  border: 1px solid oklch(54% 0.07 115);
+  border: 1px solid oklch(61.14% 0.0611 253.60);
   background: oklch(98.81% 0.0263 99.90);
   padding: 8px 12px;
   margin: 14px 0;
   font-size: 10pt;
-  box-shadow: 1px 1px 0 oklch(54% 0.07 115 / 0.3);
+  box-shadow: 1px 1px 0 oklch(61.14% 0.0611 253.60 / 0.3);
 }
 .callout::before {
   content: "ⓘ ";
-  color: oklch(38% 0.10 115);
+  color: oklch(41.92% 0.0962 250.51);
   font-weight: bold;
 }
 
 /* footer */
 footer {
   text-align: center;
-  font-family: Verdana, Tahoma, sans-serif;
+  font-family: Tahoma, Verdana, sans-serif;
   font-size: 9pt;
   color: oklch(44.95% 0 0);
   margin: 18px 0 0;
   padding-top: 14px;
-  border-top: 1px solid oklch(84% 0.04 115);
+  border-top: 1px solid oklch(86.67% 0.0294 259.59);
 }
 footer .signature { font-style: italic; margin-top: 4px; }
 footer .signature small { color: oklch(56.93% 0 0); }
@@ -2099,7 +2097,7 @@ footer .signature small { color: oklch(56.93% 0 0); }
 
   <div class="title-bar" aria-hidden="true">
     <span class="title-text"><span class="icon"></span>whoareyou</span>
-    <span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="https://www.youtube.com/watch?v=dQw4w9WgXcQ" rel="noopener" title="close" aria-label="close"></a></span>
+    <span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/" title="back to aadhar.sh" aria-label="back to aadhar.sh"></a></span>
   </div>
 
   <div class="content">

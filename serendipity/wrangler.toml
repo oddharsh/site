@@ -1,0 +1,20 @@
+# Serendipity — standalone Cloudflare Worker. Reached at aadhar.sh/serendipity/*
+# via the route below (added once verified). Lifts into its own zone by changing
+# PREFIX in serendipity.js to "" and pointing the route at the apex.
+name = "serendipity"
+main = "serendipity.js"
+compatibility_date = "2025-05-01"
+workers_dev = true
+account_id = "1c99acdb6141579023fb97d24261ea58"
+
+# served as a subpage of aadhar.sh. one trailing-wildcard pattern catches the
+# bare /serendipity AND /serendipity/* and takes precedence over the Pages site
+# (a bare non-wildcard route does NOT override Pages — the * is required).
+routes = [
+  { pattern = "aadhar.sh/serendipity*", zone_name = "aadhar.sh" },
+]
+
+[[d1_databases]]
+binding = "SERENDIPITY_DB"
+database_name = "serendipity"
+database_id = "d3aa3215-17c3-4389-b224-cf465ddbb786"
