@@ -25,7 +25,7 @@
 // `?v=N` bumps on each deploy already cycle individual entries, but a
 // cache-version bump is the only way to sweep stale keys whose URL
 // pattern no longer matches anything we serve.
-const CACHE_VERSION = "aadhar-v37-garage-chrome";
+const CACHE_VERSION = "aadhar-v38-garage-fresh";
 
 const CACHE_FIRST = [
   // image files only — NOT /images/ or /images/full/ themselves (those are
@@ -40,17 +40,14 @@ const SWR = [
   /^\/robots\.txt$/,
   /^\/\.well-known\/http-message-signatures-directory$/,
   /^\/favicon\.ico$/,
-  // static, content-stable pages: pre-cached on install (below) + served
-  // stale-while-revalidate, so navigations are instant cache hits even in
-  // engines that don't (yet) run our Speculation Rules prerender — i.e.
-  // Safari + Firefox. this is the cross-browser half of the McMaster snap.
-  // dynamic pages stay network-only and are deliberately NOT here:
+  // /bot is content-stable — SWR for instant repeat nav.
+  // NB: /garage/* are deliberately NOT cached here. they're active development
+  // mules that change constantly; SWR served the owner (and returning visitors)
+  // a stale copy until a SECOND load, which kept hiding fresh edits. they're now
+  // network-only — always fresh — and still fast via the edge cache + Chromium's
+  // Speculation Rules prerender. other dynamic pages stay network-only too:
   //   /          — no-store (re-randomizes photos + ticks the counter)
-  //   /around    — a live crawl
-  //   /whoareyou — per-request fingerprint
-  /^\/garage\/$/,
-  /^\/garage\/(horizon|tooltips|scroll|chunks|pretext)$/,
-  /^\/garage\/pretext\.lib\.js$/,   // vendored pretext bundle (this page only)
+  //   /around    — a live crawl  ·  /whoareyou — per-request fingerprint
   /^\/bot$/,
   // photo-tooltip metadata (EXIF + histogram) + histograms — content-stable,
   // fetched on first photo hover. SWR so the first hover after a photo-set
@@ -59,9 +56,9 @@ const SWR = [
   /^\/images\/histograms\.json$/,
 ];
 
-// URLs warmed on SW install so the FIRST navigation is already a hit (the
-// 200-returning forms — /garage 308-redirects to /garage/, so cache the slash).
-const PRECACHE_PAGES = ["/garage/", "/garage/horizon", "/garage/tooltips", "/garage/scroll", "/garage/chunks", "/garage/pretext", "/bot"];
+// URLs warmed on SW install so the FIRST navigation is already a hit.
+// (garage pages are intentionally network-only now — see SWR note above.)
+const PRECACHE_PAGES = ["/bot"];
 
 self.addEventListener("install", (event) => {
   // new SW takes over immediately on next reload
