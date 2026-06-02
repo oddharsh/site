@@ -25,7 +25,7 @@
 // `?v=N` bumps on each deploy already cycle individual entries, but a
 // cache-version bump is the only way to sweep stale keys whose URL
 // pattern no longer matches anything we serve.
-const CACHE_VERSION = "aadhar-v30-perf";
+const CACHE_VERSION = "aadhar-v32-srcset";
 
 const CACHE_FIRST = [
   // image files only — NOT /images/ or /images/full/ themselves (those are
@@ -49,7 +49,7 @@ const SWR = [
   //   /around    — a live crawl
   //   /whoareyou — per-request fingerprint
   /^\/garage\/$/,
-  /^\/garage\/(horizon|tooltips|scroll|chunks)$/,
+  /^\/garage\/(horizon|tooltips|scroll|chunks|pretext)$/,
   /^\/bot$/,
   // photo-tooltip metadata (EXIF + histogram) + histograms — content-stable,
   // fetched on first photo hover. SWR so the first hover after a photo-set
@@ -60,7 +60,7 @@ const SWR = [
 
 // URLs warmed on SW install so the FIRST navigation is already a hit (the
 // 200-returning forms — /garage 308-redirects to /garage/, so cache the slash).
-const PRECACHE_PAGES = ["/garage/", "/garage/horizon", "/garage/tooltips", "/garage/scroll", "/garage/chunks", "/bot"];
+const PRECACHE_PAGES = ["/garage/", "/garage/horizon", "/garage/tooltips", "/garage/scroll", "/garage/chunks", "/garage/pretext", "/bot"];
 
 self.addEventListener("install", (event) => {
   // new SW takes over immediately on next reload

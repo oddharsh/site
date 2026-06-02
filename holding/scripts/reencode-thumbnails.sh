@@ -26,6 +26,10 @@ PROJECT_DIR="$( cd "$SCRIPT_DIR/../.." && pwd )"
 DEST="$PROJECT_DIR/holding/images"
 SRC="${1:-/Users/aadharsh/Downloads/to post (from ssd)}"
 THUMB_PX="${THUMB_PX:-800}"
+# small AVIF tier for mobile (<=560px viewport), served via <source media>. at the
+# ~99-130px mobile render box this matches the density 800px gives the ~197px
+# desktop box. AVIF only — the rare no-AVIF browser falls back to the 800 JPG.
+SMALL_PX="${SMALL_PX:-400}"
 TMP="/tmp/aadhar-reencode-$$"
 mkdir -p "$TMP"
 trap 'rm -rf "$TMP"' EXIT
@@ -74,8 +78,8 @@ while IFS= read -r stem; do
   [ -n "$stem" ] || continue
   if ! src=$(find_source "$stem"); then MISS=$((MISS+1)); printf "?"; continue; fi
 
-  mid="$INTER/${stem}.jpg"; rot="$INTER/${stem}.rot.jpg"
-  jpg="$DEST/${stem}.jpg"; avif="$DEST/${stem}.avif"
+  mid="$INTER/${stem}.jpg"; rot="$INTER/${stem}.rot.jpg"; smid="$INTER/${stem}.sm.jpg"
+  jpg="$DEST/${stem}.jpg"; avif="$DEST/${stem}.avif"; smavif="$DEST/${stem}-${SMALL_PX}.avif"
 
   # 1. sips resize/decode → near-lossless JPG intermediate
   if ! sips -Z "$THUMB_PX" -s format jpeg --setProperty formatOptions 100 "$src" --out "$mid" >/dev/null 2>&1; then
@@ -97,7 +101,17 @@ while IFS= read -r stem; do
     [ "$space" = "Gray" ] && yuv=400 || yuv=420
     avifenc -q 63 --ignore-icc --speed 4 --jobs 4 --yuv "$yuv" "$jpg" "$avif" >/dev/null 2>&1 || { FAIL=$((FAIL+1)); printf "✗"; continue; }
   else
+    yuv=420
     sips -s format avif --setProperty formatOptions 60 "$jpg" --out "$avif" >/dev/null 2>&1 || { FAIL=$((FAIL+1)); printf "✗"; continue; }
+  fi
+  # 5. small mobile AVIF tier — downscale the finished (rotated, cropped) 800 JPG
+  #    so the small tier matches the large one's crop/orientation exactly.
+  if sips -Z "$SMALL_PX" "$jpg" --out "$smid" >/dev/null 2>&1; then
+    if [ "$AVIF_ENCODER" = "avifenc" ]; then
+      avifenc -q 63 --ignore-icc --speed 4 --jobs 4 --yuv "$yuv" "$smid" "$smavif" >/dev/null 2>&1 || printf "~"
+    else
+      sips -s format avif --setProperty formatOptions 60 "$smid" --out "$smavif" >/dev/null 2>&1 || printf "~"
+    fi
   fi
   OK=$((OK+1)); printf "."
 done <<< "$STEMS"

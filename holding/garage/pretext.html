@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pretext — DOM-free text measurement — aadhar.sh garage</title>
+<meta name="description" content="chenglou/pretext measures and lays out multiline text with canvas as ground truth instead of the DOM — sidestepping reflow. A live demo, where it'd help aadhar.sh, and the tradeoffs.">
+<link rel="canonical" href="https://aadhar.sh/garage/pretext">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='9' y='6' width='17' height='2.6' rx='1' fill='%230855dd'/><rect x='9' y='11.5' width='17' height='2.6' rx='1' fill='%23166aee'/><rect x='9' y='17' width='17' height='2.6' rx='1' fill='%23166aee'/><rect x='9' y='22.5' width='10' height='2.6' rx='1' fill='%23166aee'/><path d='M5 6.3 L5 24.8' stroke='%23ff9500' stroke-width='1.6' stroke-linecap='round'/><path d='M3.2 6.3 L6.8 6.3 M3.2 24.8 L6.8 24.8' stroke='%23ff9500' stroke-width='1.6' stroke-linecap='round'/></svg>">
+<style>
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+html { scrollbar-color: oklch(62% 0.14 255) oklch(91% 0.02 248); }
+body {
+  background: linear-gradient(180deg, oklch(87.51% 0.0281 248.15) 0%, oklch(94.66% 0.0114 252.09) 220px, oklch(94.66% 0.0114 252.09) 100%);
+  font-family: Tahoma, Verdana, Geneva, sans-serif;
+  font-size: 10.5pt; line-height: 1.5; color: oklch(21.78% 0 0);
+  padding: 24px 12px 60px; min-height: 100vh;
+}
+.window {
+  max-width: 760px; margin: 0 auto; background: oklch(100% 0 0);
+  border: 2px solid #0831d9; border-right-color: #001ea0; border-bottom-color: #001ea0;
+  border-top-left-radius: 8px; border-top-right-radius: 8px; overflow: hidden;
+  box-shadow: inset 1px 1px 0 #166aee, inset 2px 2px 0 #0855dd,
+              inset -1px -1px 0 #00138c, inset -2px -2px 0 #003bda, 4px 4px 0 rgba(0,30,160,.35);
+}
+.title-bar {
+  background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
+  color: oklch(100% 0 0); font-family: "Trebuchet MS", Verdana, sans-serif;
+  font-size: 10pt; font-weight: bold; padding: 4px 10px; text-shadow: 0 1px 1px rgba(0,0,0,.4);
+}
+.content { padding: 12px 16px 18px; }
+h1 { font-family: "Franklin Gothic Medium", "Franklin Gothic", "Trebuchet MS", Verdana, sans-serif; font-size: 14pt; color: oklch(41.92% 0.0962 250.51); margin: 0 0 6px; }
+.lede { color: oklch(38.67% 0 0); font-size: 10.5pt; margin: 0 0 4px; }
+h2 { font-family: "Franklin Gothic Medium", "Franklin Gothic", "Trebuchet MS", Verdana, sans-serif; font-size: 13pt; color: oklch(41.92% 0.0962 250.51); margin: 28px 0 4px; }
+.note { color: oklch(44.95% 0 0); font-size: 10pt; margin: 0 0 14px; }
+.note code, p code, li code { background: oklch(96.72% 0 0); border: 1px solid oklch(88.22% 0 0); padding: 0 4px; font-family: "Courier New", monospace; font-size: 9.5pt; }
+hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px 0; }
+a { color: oklch(41.92% 0.0962 250.51); }
+ul { margin: 0 0 14px; padding-left: 20px; font-size: 10pt; color: oklch(40% 0 0); }
+li { margin: 3px 0; }
+.status { display: inline-block; font-family: "Courier New", Courier, monospace; font-size: 8.5pt; font-weight: bold; letter-spacing: 0.05em; padding: 1px 6px; border: 1px solid; border-radius: 2px; text-transform: uppercase; vertical-align: middle; }
+.status.idle { color: oklch(45% 0.05 250); border-color: oklch(62% 0.06 250); background: oklch(96% 0.01 250); }
+
+/* demo */
+.dm-controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 10px 0; font-size: 9.5pt; color: oklch(42% 0 0); }
+.dm-controls input[type=range] { flex: 1; min-width: 160px; accent-color: #0855dd; }
+.xp-btn { font-family: Tahoma, Verdana, sans-serif; font-size: 9.5pt; padding: 3px 12px; background: linear-gradient(#fff, #ece9d8); border: 1px solid #707070; border-radius: 3px; box-shadow: inset 1px 1px 0 #fff; cursor: pointer; }
+.xp-btn:active { box-shadow: inset 1px 1px 2px rgba(0,0,0,.3); }
+.measure-wrap { position: relative; border: 1px solid oklch(80% 0.02 250); border-radius: 4px; background: oklch(98% 0.005 250); padding: 0; overflow: hidden; }
+/* the SAME text rendered two ways at the chosen width, for visual A/B + validation */
+.col { padding: 10px 12px; }
+.col h3 { margin: 0 0 6px; font-size: 9.5pt; font-family: "Franklin Gothic Medium", "Trebuchet MS", sans-serif; color: oklch(42% 0.06 250); display: flex; justify-content: space-between; gap: 8px; }
+.col h3 .n { font-family: "Courier New", monospace; color: oklch(35% 0 0); font-weight: normal; }
+.flow { font-family: Tahoma, Verdana, sans-serif; font-size: 15px; line-height: 22px; color: oklch(22% 0 0); }
+#dom-flow { white-space: normal; overflow-wrap: break-word; }
+#cv-lines div { white-space: pre; overflow: hidden; }
+.ruler { height: 6px; background: repeating-linear-gradient(90deg, oklch(70% 0.04 250) 0 1px, transparent 1px 20px); border-bottom: 1px solid oklch(80% 0.02 250); }
+.race-out { font-family: "Courier New", monospace; font-size: 9.5pt; background: oklch(96% 0.01 250); border: 1px solid oklch(80% 0.02 250); border-radius: 4px; padding: 10px 12px; margin-top: 8px; color: oklch(25% 0 0); min-height: 1.5em; }
+.race-out b { color: oklch(40% 0.16 150); }
+.callout { font-size: 10pt; background: oklch(97% 0.025 255); border-left: 3px solid oklch(51% 0.225 263); padding: 8px 12px; margin: 14px 0; color: oklch(28% 0.04 255); }
+.verdict { font-size: 10pt; background: oklch(98% 0.02 95); border-left: 3px solid oklch(60% 0.13 75); padding: 8px 12px; margin: 14px 0; color: oklch(32% 0.05 75); }
+.replaces { font-size: 9.5pt; color: oklch(33% 0 0); margin: 8px 0 0; border-left: 3px solid oklch(86% 0.03 250); padding-left: 8px; }
+footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67% 0.0294 259.59); font-size: 9.5pt; color: oklch(45% 0 0); }
+@media (max-width: 560px) { .grid2 { grid-template-columns: 1fr !important; } }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; }
+.grid2 > .col + .col { border-left: 1px solid oklch(85% 0.02 250); }
+</style>
+</head>
+<body>
+<div class="window">
+  <div class="title-bar">pretext — measure text without the DOM</div>
+  <div class="content">
+    <h1>pretext — text measurement off the DOM <span class="status idle">watching</span></h1>
+    <p class="lede">
+      <a href="https://github.com/chenglou/pretext" rel="external">chenglou/pretext</a>
+      measures &amp; lays out multiline text using the <strong>canvas</strong> as
+      ground truth instead of the DOM &mdash; so you never trigger a reflow to
+      ask &quot;how tall is this paragraph at 320px?&quot;
+    </p>
+
+    <hr>
+
+    <h2>1 · Why the DOM is the slow path</h2>
+    <p class="note">
+      The browser-native way to measure text is to put it in an element and read
+      <code>offsetHeight</code> / <code>getBoundingClientRect()</code>. But those
+      reads <em>force a synchronous reflow</em> &mdash; the browser must lay out
+      the page right then to answer. Do it once and it&apos;s fine; do it in a
+      loop (virtualized lists, measuring hundreds of items, re-measuring on every
+      resize frame) and reflow is one of the most expensive things on the main
+      thread. pretext splits the work in two:
+    </p>
+    <ul>
+      <li><strong><code>prepare(text, font)</code></strong> &mdash; the one-time
+        cost: normalize whitespace, segment (graphemes, not just chars &mdash; it
+        handles CJK, Arabic, emoji, ZWJ), then measure each segment with canvas
+        <code>measureText</code>. Cache it. Never re-run for the same text+font.</li>
+      <li><strong><code>layout(prepared, width, lineHeight)</code></strong> &mdash;
+        the cheap part: <em>pure arithmetic</em> over the cached widths. Re-run
+        it free on every resize tick &mdash; no DOM, no reflow.</li>
+    </ul>
+
+    <h2>2 · The technique, live</h2>
+    <p class="note">
+      Below is a <em>from-scratch, ~30-line</em> re-creation of the idea (canvas
+      word-measure &rarr; greedy line-break arithmetic) &mdash; not pretext itself
+      (which does grapheme segmentation, bidi, glue rules, emoji that this toy
+      skips). Left: the browser laying the text out for real and reporting its
+      <code>offsetHeight</code> (a reflow). Right: the canvas-measured layout,
+      computed with zero DOM. Drag the width &mdash; the numbers track:
+    </p>
+
+    <div class="dm-controls">
+      <label>width <b id="wlabel">320</b>px</label>
+      <input type="range" id="width" min="180" max="620" value="320">
+    </div>
+    <div class="measure-wrap">
+      <div class="ruler"></div>
+      <div class="grid2">
+        <div class="col">
+          <h3><span>DOM &mdash; offsetHeight (reflow)</span><span class="n" id="dom-n">–</span></h3>
+          <div class="flow" id="dom-flow"></div>
+        </div>
+        <div class="col">
+          <h3><span>canvas &mdash; arithmetic</span><span class="n" id="cv-n">–</span></h3>
+          <div class="flow" id="cv-lines"></div>
+        </div>
+      </div>
+    </div>
+    <p class="note" style="margin-top:8px" id="agree"></p>
+
+    <h2>3 · The payoff: re-layout cost</h2>
+    <p class="note">
+      Same paragraph, re-laid-out at many widths (the resize / virtualization
+      pattern). The DOM path forces a reflow each time; the canvas path is
+      arithmetic over the prepared widths (prepared <em>once</em>, outside the
+      loop). Run it:
+    </p>
+    <p><button class="xp-btn" id="race">Race 2,000 re-layouts</button></p>
+    <div class="race-out" id="race-out">— press the button —</div>
+
+    <h2>4 · Where it&apos;d actually help aadhar.sh</h2>
+    <ul>
+      <li><strong>Honestly: not much yet.</strong> The site&apos;s text is tiny
+        &mdash; a dozen track rows, a 3&times;4 photo grid, one tooltip at a time.
+        A handful of one-off measurements is exactly the case where the DOM is
+        fine. pretext earns its keep at <em>volume</em>, which this homepage
+        doesn&apos;t have.</li>
+      <li><strong>The real candidate is serendipity.</strong> If the event /
+        attendee lists ever get <em>virtualized</em> (only render what&apos;s
+        on-screen), you need accurate row heights without mounting every row &mdash;
+        that&apos;s pretext&apos;s home turf.</li>
+      <li><strong>CLS / scroll anchoring</strong> &mdash; measure incoming text
+        before it paints to reserve the exact box, instead of <code>aspect-ratio</code>
+        guesses. Niche here, but real.</li>
+      <li><strong>The Fuji-LCD tooltip</strong> could pre-size itself to its
+        recipe text without a measure-then-reposition reflow on hover &mdash; a
+        micro-win, probably below the noise floor.</li>
+    </ul>
+
+    <h2>5 · Tradeoffs (why it&apos;s &quot;watching,&quot; not &quot;shipped&quot;)</h2>
+    <ul>
+      <li><strong>Fonts must be loaded first.</strong> Measure before the webfont
+        swaps and every number is wrong. (aadhar.sh dodges this &mdash; it uses
+        system Tahoma/Verdana, no webfont &mdash; which is also why the demo above
+        agrees so closely.)</li>
+      <li><strong>Canvas widths ≠ glyph-exact.</strong> Good enough for line
+        breaking; not a font-rendering engine. <code>system-ui</code> is
+        explicitly unsafe for accuracy on macOS.</li>
+      <li><strong>CSS subset.</strong> Only <code>white-space: normal/pre-wrap</code>,
+        a few break modes, pixel <code>letter-spacing</code>; no
+        <code>font-feature-settings</code> / optical sizing.</li>
+      <li><strong>It&apos;s a JS layout path</strong> that must mirror the
+        browser&apos;s CSS line-breaker. That cuts against this site&apos;s whole
+        &quot;let CSS do layout&quot; ethos &mdash; you&apos;re taking on a model
+        that can drift from the real engine.</li>
+      <li><strong>Deps:</strong> <code>Intl.Segmenter</code> + Canvas 2D (both
+        broadly shipped now, incl. Safari).</li>
+    </ul>
+
+    <div class="verdict">
+      <strong>Verdict:</strong> a genuinely clever inversion &mdash; treat the
+      canvas as the measurement oracle and keep re-layout in pure arithmetic. But
+      its win scales with how often you measure, and aadhar.sh measures almost
+      nothing. Filed under <em>watching</em>: the moment a virtualized list shows
+      up (most likely in serendipity), this is the tool to reach for.
+    </div>
+
+    <p class="replaces">
+      Inspired by <a href="https://github.com/chenglou/pretext" rel="external">github.com/chenglou/pretext</a>.
+      The demo is a self-contained re-creation of the core idea (no external dep,
+      respects the site&apos;s <code>'self'</code> CSP); the real library is far
+      more thorough about scripts, segmentation, and edge cases.
+    </p>
+
+    <footer>
+      <p>&larr; back to the <a href="/garage/">garage</a> &middot; <a href="/">aadhar.sh</a></p>
+      <p><small>canvas-measured text layout · the technique re-created in pure JS · concept credit chenglou/pretext</small></p>
+    </footer>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var SAMPLE =
+    "A resto-mod keeps the soul and swaps the guts. This paragraph is being " +
+    "measured two ways at once: the browser lays it out and reports offsetHeight " +
+    "(which forces a reflow), while a canvas measures each word and the line " +
+    "breaks fall out of plain arithmetic — no DOM touched, no layout flushed.";
+  var FONT = '15px Tahoma, Verdana, Geneva, sans-serif';
+  var LINE_H = 22;
+
+  // canvas measurement (ground truth, no DOM)
+  var cx = document.createElement("canvas").getContext("2d");
+  function prepare(text, font) {
+    cx.font = font;
+    var spaceW = cx.measureText(" ").width;
+    var words = text.split(/\s+/).filter(Boolean).map(function (w) {
+      return { w: w, width: cx.measureText(w).width };
+    });
+    return { words: words, spaceW: spaceW };
+  }
+  // pure arithmetic: greedy line-break over cached widths → array of line strings
+  function layout(prep, maxWidth) {
+    var lines = [], cur = [], curW = 0;
+    for (var i = 0; i < prep.words.length; i++) {
+      var t = prep.words[i];
+      var add = (cur.length ? prep.spaceW : 0) + t.width;
+      if (cur.length && curW + add > maxWidth) { lines.push(cur); cur = [t]; curW = t.width; }
+      else { cur.push(t); curW += add; }
+    }
+    if (cur.length) lines.push(cur);
+    return lines.map(function (ws) { return ws.map(function (t) { return t.w; }).join(" "); });
+  }
+
+  var prep = prepare(SAMPLE, FONT);
+  var slider = document.getElementById("width");
+  var wlabel = document.getElementById("wlabel");
+  var domFlow = document.getElementById("dom-flow");
+  var cvLines = document.getElementById("cv-lines");
+  var domN = document.getElementById("dom-n");
+  var cvN = document.getElementById("cv-n");
+  var agree = document.getElementById("agree");
+  domFlow.textContent = SAMPLE;
+
+  function render() {
+    var width = +slider.value;
+    wlabel.textContent = width;
+    // DOM side: set width, read offsetHeight (this is the reflow-forcing read)
+    domFlow.style.width = width + "px";
+    var domH = domFlow.offsetHeight;
+    var domLines = Math.round(domH / LINE_H);
+    domN.textContent = domLines + " lines · " + domH + "px";
+    // canvas side: arithmetic only
+    var lines = layout(prep, width);
+    var cvH = lines.length * LINE_H;
+    cvN.textContent = lines.length + " lines · " + cvH + "px";
+    cvLines.innerHTML = "";
+    cvLines.style.width = width + "px";
+    lines.forEach(function (ln) {
+      var d = document.createElement("div");
+      d.style.height = LINE_H + "px";
+      d.textContent = ln;
+      cvLines.appendChild(d);
+    });
+    var dl = Math.abs(domLines - lines.length);
+    agree.innerHTML = dl === 0
+      ? "&#10003; both agree: <b>" + lines.length + " lines</b> — the canvas estimate matched the browser's real layout with zero reflow."
+      : "&approx; off by " + dl + " line" + (dl > 1 ? "s" : "") + " at this width (canvas widths aren't glyph-exact — the honest caveat).";
+    agree.style.color = dl === 0 ? "oklch(40% 0.14 150)" : "oklch(50% 0.14 60)";
+  }
+  slider.addEventListener("input", render);
+  render();
+
+  // the race: re-layout many times at varying widths
+  document.getElementById("race").addEventListener("click", function () {
+    var out = document.getElementById("race-out");
+    var N = 2000, i, w, sink = 0;
+    // DOM: vary width + read offsetHeight = forced reflow each iteration
+    var t0 = performance.now();
+    for (i = 0; i < N; i++) { domFlow.style.width = (220 + (i * 7) % 360) + "px"; sink += domFlow.offsetHeight; }
+    var domMs = performance.now() - t0;
+    // canvas: arithmetic only (prep already computed once, above)
+    var t1 = performance.now();
+    for (i = 0; i < N; i++) { sink += layout(prep, 220 + (i * 7) % 360).length; }
+    var canMs = performance.now() - t1;
+    render(); // restore the visible width
+    var x = canMs > 0 ? (domMs / canMs) : 0;
+    out.innerHTML = "DOM reflow: " + domMs.toFixed(1) + " ms &nbsp;·&nbsp; canvas arithmetic: " +
+      canMs.toFixed(1) + " ms &nbsp;·&nbsp; <b>" + x.toFixed(0) + "× faster</b> &nbsp;(" + N + " re-layouts)";
+  });
+})();
+</script>
+
+<script type="speculationrules">
+{
+  "prerender": [
+    { "where": { "and": [ { "href_matches": "/*" }, { "not": { "href_matches": "/" } }, { "not": { "href_matches": "/around*" } }, { "not": { "href_matches": "/whoareyou*" } } ] }, "eagerness": "eager" }
+  ]
+}
+</script>
+<script>
+if ("serviceWorker" in navigator) {
+  const reg = () => navigator.serviceWorker.register("/sw.js").catch(() => {});
+  "requestIdleCallback" in window ? requestIdleCallback(reg, { timeout: 2000 }) : setTimeout(reg, 1000);
+}
+</script>
+</body>
+</html>

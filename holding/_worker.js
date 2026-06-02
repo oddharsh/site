@@ -303,7 +303,7 @@ async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
   if (!tracksPayload?.tracks?.length && !photos && !counterStr) return res;
 
   const rewriter = new HTMLRewriter();
-  let lcpAvif = null;  // first photo tile's AVIF URL → preloaded via Link header
+  let lcpAvif = null, lcpStem = null;  // first photo tile → responsive preload Link
 
   // ── /rn/tracks → np-list ────────────────────────────────────────
   if (tracksPayload?.tracks?.length) {
@@ -339,6 +339,7 @@ async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
   if (photos) {
     const pick = pickRandom(photos, 12);   // ~12 fills the justified rows into a fuller rectangle
     lcpAvif = pick[0] && pick[0].thumb_avif ? pick[0].thumb_avif : null;
+    lcpStem = pick[0] && pick[0].stem ? pick[0].stem : null;
     const slotsHtml = pick.map((p, i) => {
       const full     = p.full;
       // first tile: eager + high fetch priority. it's the topmost photo
@@ -364,6 +365,10 @@ async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
              ` target="_blank" rel="noopener"` +
              ` data-full="${escAttr(full)}"${sizeAttr}${upAttr}>` +
         `<picture>` +
+          // mobile (<=560px) gets the 400px tile — at the ~100px mobile box that's
+          // the same density 800px gives the ~197px desktop box, at ~1/3 the bytes.
+          // ordered first: <picture> uses the first source whose media matches.
+          (p.stem ? `<source type="image/avif" media="(max-width: 560px)" srcset="/images/${escAttr(p.stem)}-${THUMB_SMALL_PX}.avif?v=${THUMB_VERSION}">` : "") +
           (p.thumb_avif ? `<source type="image/avif" srcset="/images/${escAttr(p.thumb_avif)}">` : "") +
           `<img alt="" ${imgLoad} decoding="async" src="/images/${escAttr(p.thumb_jpg)}">` +
         `</picture>` +
@@ -388,7 +393,10 @@ async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
   // hint means non-AVIF browsers skip the preload (they'll use the JPG).
   if (lcpAvif) {
     const h = new Headers(out.headers);
-    h.append("Link", `</images/${lcpAvif}>; rel=preload; as=image; type=image/avif; fetchpriority=high`);
+    // responsive preload: desktop preloads the 800 tile, mobile the 400 — `media`
+    // on the Link header keeps either viewport from fetching the wrong one.
+    h.append("Link", `</images/${lcpAvif}>; rel=preload; as=image; type=image/avif; fetchpriority=high; media="(min-width: 561px)"`);
+    if (lcpStem) h.append("Link", `</images/${lcpStem}-${THUMB_SMALL_PX}.avif?v=${THUMB_VERSION}>; rel=preload; as=image; type=image/avif; fetchpriority=high; media="(max-width: 560px)"`);
     return new Response(out.body, { status: out.status, statusText: out.statusText, headers: h });
   }
   return out;
@@ -577,7 +585,9 @@ const R2_EXT_PRIORITY = {
 // higher quality (CQ30 → -q63); 13 the 3 grayscale Leica thumbs re-encoded
 // as true monochrome (yuv420 → yuv400). same filenames each time, so the
 // ?v= bump is what busts the edge cache for the new bytes.)
-const THUMB_VERSION = 14;
+const THUMB_VERSION = 15;
+// small mobile AVIF tier (stem-400.avif), served via <source media> at <=560px.
+const THUMB_SMALL_PX = 400;
 
 async function getImagesManifest(env, ctx) {
   let manifest = null;

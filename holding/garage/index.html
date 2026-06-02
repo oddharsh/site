@@ -266,6 +266,25 @@ footer {
 
       <li>
         <div class="title-row">
+          <span class="name"><a href="/garage/pretext">pretext — text measurement off the DOM</a></span>
+          <span class="status idle">watching</span>
+        </div>
+        <div class="desc">
+          <a href="https://github.com/chenglou/pretext" rel="external">chenglou/pretext</a>
+          measures multiline text with the canvas as ground truth instead of the
+          DOM, so asking &quot;how tall at 320px?&quot; never forces a reflow. A
+          from-scratch re-creation of the technique (drag-to-rewrap, plus a
+          2,000-re-layout race vs <code style="font-family:'Courier New',monospace;font-size:9pt">offsetHeight</code>),
+          where it&apos;d help the site, and why it&apos;s &quot;watching&quot;
+          not &quot;shipped.&quot;
+        </div>
+        <div class="meta">
+          shape: technique study + benchmark · added 2026-06-01
+        </div>
+      </li>
+
+      <li>
+        <div class="title-row">
           <span class="name"><a href="/garage/chunks">Content-addressed chunking</a></span>
           <span class="status review">in review</span>
         </div>
