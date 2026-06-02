@@ -3,9 +3,11 @@ All sourced from Wikimedia Commons under CC BY-SA. Reused with attribution;
 derivatives (the downscaled AVIF/JPG thumbnails here) remain under CC BY-SA.
 
 singer.{avif,jpg}
-  Singer Vehicle Design 911 (reimagined aircooled 911)
-  "Singer 911, Auto 2024, Zurich (PANA0943).jpg" by Matti Blume, CC BY-SA
-  https://commons.wikimedia.org/wiki/File:Singer_911,_Auto_2024,_Zurich_(PANA0943).jpg
+  Singer DLS — Dynamics and Lightweighting Study (carbon-bodied, weight-obsessed
+  911; chosen over the standard Singer 911 because the lightweighting focus is
+  more analogous to this site's ethos).
+  "1990 Porsche 911 Singer DLS 1.jpg" by Calreyn88, CC BY 4.0 (downscaled)
+  https://commons.wikimedia.org/wiki/File:1990_Porsche_911_Singer_DLS_1.jpg
 
 tuthill.{avif,jpg}
   Tuthill 911K (the 11,000rpm carbon-bodied restomod)

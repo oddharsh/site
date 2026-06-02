@@ -432,7 +432,11 @@ hr {
   text-decoration: none;
   background: oklch(100.00% 0 0);
   padding: 4px;
-  border: 1px solid oklch(61.14% 0.0611 253.60);
+  /* one base token for the contact-sheet frame. the hover shade is DERIVED from
+     it below with relative color — oklch(from var(--photo-frame) …) — so retuning
+     this one value retunes the hover automatically. */
+  --photo-frame: oklch(61.14% 0.0611 253.60);
+  border: 1px solid var(--photo-frame);
   box-shadow: 1px 1px 0 oklch(61.14% 0.0611 253.60 / 0.3);
   line-height: 0;
   aspect-ratio: 1;
@@ -440,7 +444,10 @@ hr {
 }
 .photos a:hover {
   background: oklch(97.73% 0.0373 95.44);
+  /* derived from --photo-frame: darker + a touch more saturated. the hand-tuned
+     value is the fallback for engines without relative color (pre-2024). */
   border-color: oklch(41.92% 0.0962 250.51);
+  border-color: oklch(from var(--photo-frame) calc(l - 0.19) calc(c + 0.035) h);
 }
 /* <picture> + <img> fill the aspect-ratio'd frame. box aspect ≈ native aspect,
    so object-fit: cover only trims sub-pixel rounding — no real crop. */
@@ -725,7 +732,7 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
   .now-playing h2 a:hover           { color: oklch(62.80% 0.33 29.23); }
   .np-list a:hover .np-title        { color: oklch(62.80% 0.33 29.23); }
 
-  .photos a:hover                   { border-color: oklch(41.92% 0.13 250.51); }
+  .photos a:hover                   { border-color: oklch(41.92% 0.13 250.51); border-color: oklch(from var(--photo-frame) calc(l - 0.19) calc(c + 0.07) h); }
 
   .counter                          { color: oklch(86.52% 0.22 90.38); }
 }
@@ -773,10 +780,10 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
     <p>
       Hey, welcome to my corner of the internet! This site&apos;s modeled after
       the recent (last decade) wave of resto-mod cars like
-      <a class="car-link" href="https://www.google.com/search?q=Singer+Vehicle+Design+Porsche+911" rel="external"
-         data-car-avif="/cars/singer.avif?v=1" data-car-jpg="/cars/singer.jpg?v=1"
-         data-car-caption="Singer · reimagined aircooled 911"
-         data-car-credit="photo: Matti Blume, CC BY-SA">Singer</a>
+      <a class="car-link" href="https://www.google.com/search?q=Singer+DLS+Dynamics+and+Lightweighting+Study" rel="external"
+         data-car-avif="/cars/singer.avif?v=2" data-car-jpg="/cars/singer.jpg?v=2"
+         data-car-caption="Singer DLS · carbon-bodied lightweighting study"
+         data-car-credit="photo: Calreyn88, CC BY 4.0">Singer</a>
       or
       <a class="car-link" href="https://www.google.com/search?q=Tuthill+911K" rel="external"
          data-car-avif="/cars/tuthill.avif?v=2" data-car-jpg="/cars/tuthill.jpg?v=2"
