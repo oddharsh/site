@@ -31,3 +31,9 @@ t50-mule.{avif,jpg}
   used Ultima mules ("Albert"/"Edward") on the McLaren F1 too.
   "Ultima GTR T50 Test Mule George.jpg" by Calreyn88, CC BY-SA 4.0 (downscaled)
   https://commons.wikimedia.org/wiki/File:Ultima_GTR_T50_Test_Mule_George.jpg
+
+saab-paddan.{avif,jpg}
+  Saab "Paddan" — the 99's development mule (the new body grafted onto a Saab 96),
+  shown beside a regular 96. Second /garage mule exhibit.
+  "Saab Paddan and regular Saab 96.jpg" by Jelger Groeneveld, CC BY 2.0 (downscaled)
+  https://commons.wikimedia.org/wiki/File:Saab_Paddan_and_regular_Saab_96.jpg

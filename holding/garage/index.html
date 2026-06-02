@@ -240,8 +240,9 @@ footer {
   /* standard scrollbar tint (Chrome + Safari 26 + Firefox): Luna-blue thumb,
      pale track. the garage/scroll demo styles its own element separately. */
   html { scrollbar-color: oklch(62% 0.14 255) oklch(91% 0.02 248); }
-  /* mule lore figure — contact-sheet framing like the photo grid */
-  .mule-fig { margin: 14px 0 0; max-width: 460px; }
+  /* mule lore gallery — contact-sheet framing like the photo grid */
+  .mule-gallery { display: flex; gap: 12px; flex-wrap: wrap; margin: 14px 0 0; }
+  .mule-fig { margin: 0; flex: 1 1 280px; max-width: 360px; }
   .mule-fig img { display: block; width: 100%; height: auto; border: 1px solid oklch(61% 0.0611 253.60); padding: 4px; background: #fff; box-shadow: 1px 1px 0 oklch(61% 0.0611 253.60 / 0.3); }
   .mule-fig figcaption { font-size: 8.5pt; color: oklch(50% 0 0); margin-top: 5px; line-height: 1.45; }
 </style>
@@ -275,19 +276,34 @@ footer {
       Same spirit here &mdash; fewer cones.
     </p>
 
-    <figure class="mule-fig">
-      <picture>
-        <source type="image/avif" srcset="/cars/t50-mule.avif?v=1">
-        <img src="/cars/t50-mule.jpg?v=1" width="600" height="338" alt="Gordon Murray Automotive T.50 development mule — an Ultima GTR nicknamed George" loading="lazy" decoding="async">
-      </picture>
-      <figcaption>
-        Exhibit A: Gordon Murray&apos;s T.50 &mdash; the F1&apos;s spiritual heir &mdash;
-        was developed in Ultima GTR mules, this one nicknamed <em>George</em>. (Murray ran the
-        same play on the F1 with <em>Albert</em> &amp; <em>Edward</em>.) Photo
-        <a href="https://commons.wikimedia.org/wiki/File:Ultima_GTR_T50_Test_Mule_George.jpg" rel="external">Calreyn88</a>,
-        <a href="https://creativecommons.org/licenses/by-sa/4.0" rel="external">CC BY-SA 4.0</a>, resized.
-      </figcaption>
-    </figure>
+    <div class="mule-gallery">
+      <figure class="mule-fig">
+        <picture>
+          <source type="image/avif" srcset="/cars/t50-mule.avif?v=1">
+          <img src="/cars/t50-mule.jpg?v=1" width="600" height="338" alt="Gordon Murray Automotive T.50 development mule — an Ultima GTR nicknamed George" loading="lazy" decoding="async">
+        </picture>
+        <figcaption>
+          GMA T.50, the F1&apos;s spiritual heir, was developed in Ultima GTR mules &mdash;
+          this one nicknamed <em>George</em>. (Murray ran the same play on the F1:
+          <em>Albert</em> &amp; <em>Edward</em>.) Photo
+          <a href="https://commons.wikimedia.org/wiki/File:Ultima_GTR_T50_Test_Mule_George.jpg" rel="external">Calreyn88</a>,
+          <a href="https://creativecommons.org/licenses/by-sa/4.0" rel="external">CC BY-SA 4.0</a>.
+        </figcaption>
+      </figure>
+      <figure class="mule-fig">
+        <picture>
+          <source type="image/avif" srcset="/cars/saab-paddan.avif?v=1">
+          <img src="/cars/saab-paddan.jpg?v=1" width="600" height="402" alt="Saab 99 test mule the Paddan, beside a regular Saab 96" loading="lazy" decoding="async">
+        </picture>
+        <figcaption>
+          Saab&apos;s 99 mule, the <em>Paddan</em> (&quot;toad&quot;): the new car&apos;s body
+          grafted onto a 96 (right) so it could test on public roads without tipping the
+          design. Photo
+          <a href="https://commons.wikimedia.org/wiki/File:Saab_Paddan_and_regular_Saab_96.jpg" rel="external">Jelger Groeneveld</a>,
+          <a href="https://creativecommons.org/licenses/by/2.0" rel="external">CC BY 2.0</a>.
+        </figcaption>
+      </figure>
+    </div>
 
     <hr>
 
