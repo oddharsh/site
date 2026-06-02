@@ -362,10 +362,19 @@ async function renderContribute(d, path, uid, msg) {
   let cnt = 0;
   if (own) { const c = await d.prepare("SELECT count(*) AS n FROM event_contributions WHERE user_key = ?").get(uid); cnt = c ? Number(c.n) : 0; }
   const body = `<h1 class="page">Contribute</h1>
-    <p class="lede">Serendipity pools everyone&apos;s Luma feed into one public view of what&apos;s worth going to and who&apos;s going. Drop your Luma cookies once to add your events &mdash; ${n} active contributor${n == 1 ? "" : "s"} so far.</p>
+    <p class="lede">Serendipity pools events worth going to &mdash; and who&apos;s going &mdash; into one public view. Add an event by link, or connect your Luma feed to sync everything. ${n} active contributor${n == 1 ? "" : "s"} so far.</p>
     ${banner(msg)}
     ${own ? `<div class="connected">&#10003; You&apos;re contributing as <b>${esc(own.label || "unnamed")}</b> &mdash; ${cnt} event${cnt == 1 ? "" : "s"} from your feed are in the pool. Re-paste below to refresh your Luma session.</div>` : ""}
-    <div class="grp">How to connect</div>
+
+    <div class="grp">Add an event by link</div>
+    <p class="note" style="margin:0 0 8px">Paste public Luma event links (<code>lu.ma/&hellip;</code> or <code>luma.com/&hellip;</code>) &mdash; one per line. No login needed; we pull each event&apos;s details into the pool. The full guest list fills in once someone going syncs their feed.</p>
+    <form method="POST" action="${PREFIX}/add-event">
+      <textarea class="xp-field" name="links" rows="3" placeholder="https://lu.ma/your-event&#10;https://luma.com/another-one" autocomplete="off" spellcheck="false"></textarea>
+      <button class="xp-button" type="submit">Add to the pool</button>
+    </form>
+
+    <div class="grp">Sync your whole Luma feed</div>
+    <p class="note" style="margin:0 0 8px">Connect once to keep <em>all</em> your events in sync &mdash; including the guest lists a single link can&apos;t see.</p>
     <ol class="steps note">
       <li>Install the <a href="https://cookie-editor.com/" rel="noopener external">Cookie-Editor</a> extension.</li>
       <li>Open <a href="https://lu.ma" rel="noopener external">lu.ma</a> and sign in.</li>
@@ -572,6 +581,59 @@ async function fetchEventDescription(eventId, cookieHeader) {
   return txt || null;
 }
 
+// resolve a pasted Luma link/slug/id to an evt- id. direct match if the input
+// already contains one (e.g. .../event/evt-XXX or a raw id); otherwise pull the
+// slug and scrape the public event page (lu.ma 301s to luma.com), which carries
+// the evt- id in its markup. one subrequest only when scraping is needed.
+async function resolveLumaEventId(input) {
+  const s = (input || "").trim();
+  if (!s) return null;
+  const direct = s.match(/evt-[A-Za-z0-9]{6,}/);
+  if (direct) return direct[0];
+  let slug = s;
+  const um = s.match(/(?:lu\.ma|luma\.com)\/([A-Za-z0-9][A-Za-z0-9._-]*)/i);
+  if (um) slug = um[1];
+  slug = slug.replace(/[?#].*$/, "");
+  if (!/^[A-Za-z0-9._-]+$/.test(slug)) return null;
+  try {
+    const r = await fetch(`https://luma.com/${encodeURIComponent(slug)}`, {
+      headers: { "user-agent": "AadharshBot/1.0 (+https://aadhar.sh/bot)" }, redirect: "follow",
+    });
+    if (!r.ok) return null;
+    const m = (await r.text()).match(/evt-[A-Za-z0-9]{6,}/);
+    return m ? m[0] : null;
+  } catch { return null; }
+}
+
+// fetch one public event by link → our event shape (no cookies; /event/get is
+// public). brings event details + hosts; the full guest list still needs a
+// contributor going to that event (it requires auth + a ticket_key).
+async function fetchEventByLink(input) {
+  const id = await resolveLumaEventId(input);
+  if (!id) return { error: "no Luma event found at that link" };
+  let res;
+  try { res = await lumaFetch(`${LUMA_API}/event/get?event_api_id=${id}`, ""); }
+  catch (e) { return { error: e instanceof Error ? e.message : String(e) }; }
+  const data = await res.json();
+  const e = data.event || {};
+  if (!e.api_id) return { error: "event not found" };
+  const geo = e.geo_address_info || {};
+  let desc = data.description_md || e.description_md || "";
+  if (!desc && data.description_mirror) desc = pmToText(data.description_mirror);
+  desc = String(desc || "").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim() || null;
+  const hosts = (data.hosts || []).map((h) => parseGuest(h.api_id, h)).filter((g) => g.id);
+  return { event: {
+    id: e.api_id, name: e.name || "", description: desc,
+    start_at: e.start_at || null, end_at: e.end_at || null,
+    location: geo.full_address || geo.address || null,
+    cover_url: e.cover_url || (e.cover_image && e.cover_image.url) || null,
+    url: e.url ? toLumaUrl(e.url, e.api_id) : `https://lu.ma/${e.api_id}`,
+    geo_latitude: (e.coordinate && e.coordinate.latitude) || null,
+    geo_longitude: (e.coordinate && e.coordinate.longitude) || null,
+    hosts,
+  } };
+}
+
 // single-statement attendee upsert (batch-friendly — no read-then-write).
 // preserves email/first_seen_at/times_seen on conflict; refreshes profile fields.
 const UPSERT_ATTENDEE = `INSERT INTO attendees (id,name,email,avatar_url,bio_short,website,twitter_handle,linkedin_handle,instagram_handle,tiktok_handle,youtube_handle,first_seen_at,times_seen)
@@ -615,6 +677,47 @@ async function syncEvents(d, userKey, cookiesJson) {
     await d.batch(S);
     return { synced: events.length, statements: S.length };
   } catch (err) { return { error: err instanceof Error ? err.message : String(err) }; }
+}
+
+// add events to the pool from pasted Luma links (no cookies needed). caps at 8
+// links/submission so 2 subrequests each (resolve + fetch) stays under the limit.
+// records the event + its hosts + a contribution by this uid. Returns {added,names,failed}.
+async function addEventsByLink(d, uid, raw) {
+  const urls = (raw || "").split(/[\s,]+/).map((s) => s.trim()).filter(Boolean).slice(0, 8);
+  const S = [], names = [], failed = [];
+  for (const u of urls) {
+    let r;
+    try { r = await fetchEventByLink(u); } catch (e) { r = { error: String(e) }; }
+    if (!r || r.error || !r.event) { failed.push(u.replace(/^https?:\/\//, "").slice(0, 32)); continue; }
+    const e = r.event;
+    // link-added events are user_status 'unknown' (the submitter isn't necessarily
+    // going); a later cookie-sync by an attendee upgrades it + fills the guest list.
+    S.push(d.stmt(UPSERT_EVENT, e.id, e.name, e.description, e.start_at, e.end_at, e.location, e.cover_url, e.url, e.geo_latitude, e.geo_longitude, null, "unknown"));
+    S.push(d.stmt(`INSERT INTO event_contributions (event_id,user_key,contributed_at) VALUES (?,?,datetime('now')) ON CONFLICT(event_id,user_key) DO UPDATE SET contributed_at=datetime('now')`, e.id, uid));
+    for (const h of e.hosts) {
+      if (!h.id) continue;
+      S.push(attendeeStmt(d, h));
+      S.push(d.stmt(`INSERT INTO event_attendees (event_id,attendee_id,is_host) VALUES (?,?,1) ON CONFLICT(event_id,attendee_id) DO UPDATE SET is_host=1`, e.id, h.id));
+    }
+    names.push(e.name || e.id);
+  }
+  if (S.length) await d.batch(S);
+  return { added: names.length, names, failed };
+}
+
+// POST /serendipity/add-event — public: add events to the pool by Luma link.
+async function handleAddEvent(request, env, d, uid) {
+  const back = (msg, toDash) => new Response(null, { status: 303, headers: { location: `${PREFIX}${toDash ? "" : "/contribute"}?msg=${encodeURIComponent(msg)}` } });
+  let form;
+  try { form = await request.formData(); } catch { return back("Couldn't read the form"); }
+  const raw = (form.get("links") || "").toString();
+  if (!raw.trim()) return back("Paste at least one Luma event link");
+  let r;
+  try { r = await addEventsByLink(d, uid, raw); } catch (e) { return back("Add failed: " + (e instanceof Error ? e.message : String(e))); }
+  if (!r.added) return back("Couldn't resolve those — make sure they're public Luma event links");
+  let msg = `Added ${r.added} event${r.added === 1 ? "" : "s"} to the pool` + (r.names[0] ? `: ${r.names.slice(0, 2).join(", ")}${r.names.length > 2 ? " …" : ""}` : "");
+  if (r.failed.length) msg += ` · ${r.failed.length} couldn't be resolved`;
+  return back(msg, true);
 }
 
 // sync one event's full guest list (batched writes). Returns {synced} or {error}.
@@ -852,7 +955,7 @@ export async function handleSerendipity(request, env, ctx) {
   // any mutation (sync / enrich / contribute) invalidates the cached dashboard
   if (request.method === "POST" &&
       (path === `${PREFIX}/sync` || path === `${PREFIX}/sync-descriptions` ||
-       path === `${PREFIX}/enrich` || path === `${PREFIX}/cookies`)) {
+       path === `${PREFIX}/enrich` || path === `${PREFIX}/cookies` || path === `${PREFIX}/add-event`)) {
     ctx.waitUntil(caches.default.delete(dashKey));
   }
 
@@ -863,6 +966,7 @@ export async function handleSerendipity(request, env, ctx) {
 
   let res;
   if (request.method === "POST" && path === `${PREFIX}/cookies`) res = await handleCookies(request, env, d, uid);
+  else if (request.method === "POST" && path === `${PREFIX}/add-event`) res = await handleAddEvent(request, env, d, uid);
   else if (path === PREFIX) {
     // public pool — data changes only on sync/contribute (which bust above).
     // cache the rendered HTML at the edge for 60s so repeat + agent hits skip
