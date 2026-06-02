@@ -274,14 +274,17 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
   }
 
   async function hashChunks(bytes, chunks) {
-    for (var k = 0; k < chunks.length; k++) {
-      var c = chunks[k];
-      var slice = bytes.subarray(c.off, c.off + c.len);
-      var buf = await crypto.subtle.digest("SHA-256", slice);
-      var u = new Uint8Array(buf), hex = "";
+    // hash all chunks concurrently so the engine can overlap the (off-thread)
+    // digests, instead of one serial round-trip to the crypto thread per chunk
+    // — matters on the dropped-big-file path (hundreds of chunks).
+    var bufs = await Promise.all(chunks.map(function (c) {
+      return crypto.subtle.digest("SHA-256", bytes.subarray(c.off, c.off + c.len));
+    }));
+    chunks.forEach(function (c, i) {
+      var u = new Uint8Array(bufs[i]), hex = "";
       for (var b = 0; b < 6; b++) hex += u[b].toString(16).padStart(2, "0");
       c.hash = hex;
-    }
+    });
     return chunks;
   }
 

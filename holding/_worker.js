@@ -282,12 +282,19 @@ async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
   // under heavy contention the count drifts slightly low, which is fine for
   // a decorative footer pill. seed with:
   //   wrangler kv key put --namespace-id="<id>" "counter:visits" 42 --remote
+  // increment + fire-and-forget write, but ONLY for humans. this site
+  // advertises itself to agents (DNS-AID + llms.txt), so crawler volume is
+  // real — counting them would dominate the KV write budget and inflate the
+  // pill. bots still see the current value; they just don't bump or write it.
   let counterStr = null;
   if (env.RN_KV) {
+    const ua = request.headers.get("user-agent") || "";
+    const isBot = request.cf?.botManagement?.verifiedBot === true ||
+      /bot|crawl|spider|slurp|crawler|bingpreview|facebookexternalhit|embedly|slackbot|whatsapp|telegrambot|discordbot|redditbot|petalbot|gptbot|claudebot|ccbot|perplexity|bytespider|google-extended/i.test(ua);
     const cur  = parseInt(counterRaw || "0", 10) || 0;
-    const next = cur + 1;
+    const next = isBot ? cur : cur + 1;
     counterStr = String(next).padStart(6, "0");
-    ctx.waitUntil(env.RN_KV.put("counter:visits", String(next)));
+    if (!isBot) ctx.waitUntil(env.RN_KV.put("counter:visits", String(next)));
   }
 
   // bail if no dynamic data is available — the static HTML's inline
@@ -296,6 +303,7 @@ async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
   if (!tracksPayload?.tracks?.length && !photos && !counterStr) return res;
 
   const rewriter = new HTMLRewriter();
+  let lcpAvif = null;  // first photo tile's AVIF URL → preloaded via Link header
 
   // ── /rn/tracks → np-list ────────────────────────────────────────
   if (tracksPayload?.tracks?.length) {
@@ -330,6 +338,7 @@ async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
   // hover tooltip; target=_blank + rel=noopener on the anchor.
   if (photos) {
     const pick = pickRandom(photos, 12);   // ~12 fills the justified rows into a fuller rectangle
+    lcpAvif = pick[0] && pick[0].thumb_avif ? pick[0].thumb_avif : null;
     const slotsHtml = pick.map((p, i) => {
       const full     = p.full;
       // first tile: eager + high fetch priority. it's the topmost photo
@@ -345,29 +354,15 @@ async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
         ? ` data-size="${p.size}"` : "";
       const upAttr   = p.uploaded
         ? ` data-uploaded="${escAttr(p.uploaded)}"` : "";
-      // EXIF inlined as a JSON blob on data-exif. tooltip JS parses with
-      // JSON.parse(slot.dataset.exif) — instant, no fetch round-trip on
-      // first hover. only attached when EXIF is available for this stem
-      // (metadata.json may not have everything if generation lagged).
-      // histogram is stripped here because the homepage tooltip (XP
-      // cream style) doesn't render one; that data lives only in
-      // metadata.json + the garage Fuji LCD demo. if the Fuji LCD
-      // ships to the homepage later, drop the destructure to ship the
-      // histogram array through.
-      let exifAttr = "";
-      if (p.exif) {
-        const { histogram: _drop, ...exifLite } = p.exif;
-        exifAttr = ` data-exif="${escAttr(JSON.stringify(exifLite))}"`;
-      }
-      // native aspect ratio (orientation-corrected EXIF W/H) inlined as --ar on
-      // the <a> — drives the flexbin justified-rows layout (flex-grow/basis) and
-      // reserves the box at native shape before the thumb decodes (zero CLS).
-      // falls back to the CSS default (--ar:1) when EXIF is missing.
-      const arStyle = (p.exif && p.exif.width && p.exif.height)
-        ? ` style="--ar:${(p.exif.width / p.exif.height).toFixed(4)}"` : "";
+      // EXIF is NOT inlined. the tooltip lazy-fetches /images/metadata.json
+      // (EXIF + histogram in one SW-cached file) on first photo hover and
+      // looks the photo up by stem (derivable from data-full). inlining it
+      // shipped ~14KB raw of EXIF on every no-store visit for a hover most
+      // visitors never make — lazy keeps the hot path lean. (the grid is a
+      // square 3-col CSS grid via aspect-ratio:1, so no per-tile --ar needed.)
       return `<a href="/images/full/${encodeURI(full)}"` +
-             ` target="_blank" rel="noopener"${arStyle}` +
-             ` data-full="${escAttr(full)}"${sizeAttr}${upAttr}${exifAttr}>` +
+             ` target="_blank" rel="noopener"` +
+             ` data-full="${escAttr(full)}"${sizeAttr}${upAttr}>` +
         `<picture>` +
           (p.thumb_avif ? `<source type="image/avif" srcset="/images/${escAttr(p.thumb_avif)}">` : "") +
           `<img alt="" ${imgLoad} decoding="async" src="/images/${escAttr(p.thumb_jpg)}">` +
@@ -386,7 +381,17 @@ async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
     });
   }
 
-  return rewriter.transform(res);
+  const out = rewriter.transform(res);
+  // preload the LCP photo tile (slot 0): the worker knows its exact URL at
+  // SSR time, so a Link: rel=preload lets the browser fetch it in parallel
+  // with HTML parse instead of waiting to reach the streamed <img>. type
+  // hint means non-AVIF browsers skip the preload (they'll use the JPG).
+  if (lcpAvif) {
+    const h = new Headers(out.headers);
+    h.append("Link", `</images/${lcpAvif}>; rel=preload; as=image; type=image/avif; fetchpriority=high`);
+    return new Response(out.body, { status: out.status, statusText: out.statusText, headers: h });
+  }
+  return out;
 }
 
 // fisher-yates shuffle, return first N elements. doesn't mutate input.
@@ -597,20 +602,6 @@ async function getImagesManifest(env, ctx) {
 
     // EXIF metadata, keyed by stem. read once from the static asset
     // /images/metadata.json (generated by extract-photo-metadata.sh) and
-    // merge into each manifest entry. previously the tooltip JS fetched
-    // metadata.json client-side on first hover — inlining it here means
-    // each pre-rendered photo slot already has its EXIF in a data-exif
-    // attribute, so the tooltip can render instantly from the DOM with
-    // no fetch round-trip.
-    let exifByStem = {};
-    try {
-      const metaRes = await env.ASSETS.fetch(new URL("/images/metadata.json", "https://aadhar.sh/").toString());
-      if (metaRes.ok) {
-        const ct = metaRes.headers.get("content-type") || "";
-        if (ct.includes("json")) exifByStem = await metaRes.json();
-      }
-    } catch {}
-
     // bust stale edge-cached 404s. appending a `?v=N` to thumb URLs
     // forces a fresh cache lookup (CF includes the query in the cache
     // key by default). incrementing THUMB_VERSION is the supported way
@@ -621,20 +612,13 @@ async function getImagesManifest(env, ctx) {
     // catches "format not supported" — it does NOT catch DECODE failures.
     // AVIF decode failures historically caused broken images here; if
     // they recur, the fix is to demote AVIF entirely, not add fallbacks.
-    // strip the 64-bin RGB+L histogram out of the EXIF that goes into the
-    // manifest. the manifest is read + JSON-parsed by the worker on EVERY
-    // homepage hit (the page is no-store), and the histograms are ~108KB
-    // of the blob that nothing on the live site consumes — the homepage
-    // tooltip never shows them and the garage demo inlines its own copies.
-    // keeping them here meant parsing 108KB per request only to discard it.
-    // they stay in /images/metadata.json (author-time data) for any future
-    // Fuji-LCD-on-homepage work; they just don't ride the hot path.
+    // slim hot-path manifest: ONLY the fields the SSR slot-builder reads.
+    // EXIF used to be merged in here (and shipped inline per slot) — the
+    // manifest is read + JSON-parsed by the worker on EVERY no-store homepage
+    // hit, and the EXIF was the bulk of the blob. the tooltip now lazy-fetches
+    // /images/metadata.json (EXIF + histogram, SW-cached) on first hover
+    // instead, so none of it needs to ride the hot path.
     const v = THUMB_VERSION;
-    const stripHistogram = (e) => {
-      if (!e) return null;
-      const { histogram, ...rest } = e;
-      return rest;
-    };
     manifest = [...byStem.entries()].map(([stem, o]) => ({
       full:       o.key,                     // R2 key, e.g. "XT507333.JPG"
       thumb_avif: `${stem}.avif?v=${v}`,     // Pages static AVIF (primary)
@@ -642,7 +626,6 @@ async function getImagesManifest(env, ctx) {
       stem,
       size:       o.size,                    // R2 object size in bytes
       uploaded:   o.uploaded ? new Date(o.uploaded).toISOString() : null,
-      exif:       stripHistogram(exifByStem[stem]),  // inlined per-photo EXIF, sans histogram
     })).sort((a, b) => a.full.localeCompare(b.full));
 
     if (env.RN_KV) {

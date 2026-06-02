@@ -817,9 +817,11 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
     </p>
 
     <!--
-      9 photo slots (3×3) reserved in HTML so the layout has its final
-      shape before JS runs. each <a> has aspect-ratio: 4/5 in CSS so the
-      grid occupies its full height even when the <img>s have no src yet.
+      12 photo slots (3 cols × 4 rows) reserved in HTML so the layout has
+      its final shape before JS runs — matches the 12 the worker injects, so
+      the grid height doesn't shift when SSR content lands. each <a> is a
+      square (aspect-ratio: 1) in CSS so the grid occupies its full height
+      even when the <img>s have no src yet.
       thumbnails are AVIF (primary <source>) → JPG (universal <img>
       fallback). WebP middle tier was removed — modern browsers (Safari
       16+, Chrome 85+, Firefox 93+) all advertise image/avif natively,
@@ -833,6 +835,24 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
     <div id="xp-tooltip" class="xp-tooltip" popover="manual" aria-hidden="true"></div>
 
     <section class="photos" aria-label="photographs">
+      <a>
+        <picture>
+          <source type="image/avif">
+          <img alt="" loading="lazy" decoding="async">
+        </picture>
+      </a>
+      <a>
+        <picture>
+          <source type="image/avif">
+          <img alt="" loading="lazy" decoding="async">
+        </picture>
+      </a>
+      <a>
+        <picture>
+          <source type="image/avif">
+          <img alt="" loading="lazy" decoding="async">
+        </picture>
+      </a>
       <a>
         <picture>
           <source type="image/avif">
@@ -903,11 +923,11 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
       XP-style cursor-following hover tooltip. shows filename, file size,
       thumbnail dimensions, and EXIF (camera/exposure/date/film recipe)
       for photos; album art for track rows; profile photo for artist
-      links. EXIF is inlined per-slot on data-exif (set by the worker
-      pre-render) so the tooltip renders instantly with no fetch
-      round-trip on first hover. cursor-follow positioning is the
-      single bit of JS we couldn't replace with CSS — it's the soul
-      of the interaction.
+      links. EXIF + histogram are lazy-fetched from /images/metadata.json
+      on first photo hover (SW-cached) rather than inlined per-slot — keeps
+      the no-store homepage lean for the majority who never hover. cursor-
+      follow positioning is the single bit of JS we couldn't replace with
+      CSS — it's the soul of the interaction.
     -->
     <script>
     (() => {
@@ -997,16 +1017,17 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
         const b = Array.isArray(h.b) ? `<polyline class="b" points="${pts(h.b)}"/>` : "";
         return `<svg class="hist-svg" viewBox="0 0 ${n - 1} 32" preserveAspectRatio="none">${luma}${r}${g}${b}</svg>`;
       };
-      // histograms are stripped from the inlined EXIF to keep the no-store
-      // homepage lean — lazy-fetch the dedicated file on first photo hover
+      // EXIF + histogram are NOT inlined on the no-store homepage (keeps the
+      // hot path lean). lazy-fetch the metadata index on first photo hover
       // (immutable, SW-cached), then re-render if a photo tip is still open.
-      let histMap = null, histLoading = false;
-      const loadHistograms = () => {
-        if (histLoading) return; histLoading = true;
-        fetch("/images/histograms.json").then(r => r.ok ? r.json() : {}).then(m => {
-          histMap = m || {};
+      // one file gives both the EXIF text and the {l,r,g,b} histogram, by stem.
+      let metaMap = null, metaLoading = false;
+      const loadMeta = () => {
+        if (metaLoading) return; metaLoading = true;
+        fetch("/images/metadata.json").then(r => r.ok ? r.json() : {}).then(m => {
+          metaMap = m || {};
           if (activeSlot && activeSlot.matches && activeSlot.matches(".photos a")) showTipFor(activeSlot);
-        }).catch(() => { histMap = {}; });
+        }).catch(() => { metaMap = {}; });
       };
 
       // unified hover target → "what was hovered?" lookup. one tooltip
@@ -1059,16 +1080,16 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
       }
 
       // XP camera-back review readout: a Luna header strip (filename + flash),
-      // a sunken histogram band (lazy-loaded), the exposure trio, the full Fuji
-      // recipe as label/value rows, and a date footer. EXIF is inlined per-slot
-      // on data-exif (instant); only the histogram is fetched.
+      // a sunken histogram band, the exposure trio, the full Fuji recipe as
+      // label/value rows, and a date footer. EXIF + histogram are lazy-loaded
+      // from metadata.json on first hover (see loadMeta); the first hover may
+      // render text-only for a beat, then re-renders when the fetch lands.
       function buildPhotoContent(slot) {
         const filename = slot.dataset.full || decodeURIComponent((slot.href || "").split("/").pop());
         const stem = filename.replace(/\.[^.]+$/, "");
         const img  = slot.querySelector("img");
-        let exif = {};
-        try { if (slot.dataset.exif) exif = JSON.parse(slot.dataset.exif); } catch {}
-        if (histMap === null) loadHistograms();   // kick the lazy fetch on first photo hover
+        if (metaMap === null) loadMeta();          // kick the lazy fetch on first photo hover
+        const exif = (metaMap && metaMap[stem]) || {};
 
         // exposure trio
         const aper = exif.aperture ? (String(exif.aperture).startsWith("f/") ? exif.aperture : "f/" + exif.aperture) : "";
@@ -1102,7 +1123,8 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
         ].filter(([, v]) => v && v !== "undefined")
          .map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("");
 
-        const histSvg = (histMap && histMap[stem]) ? renderHistogramSvg(histMap[stem]) : "";
+        const hist = (metaMap && metaMap[stem] && metaMap[stem].histogram) || null;
+        const histSvg = hist ? renderHistogramSvg(hist) : "";
         const dateStr = fmtDate(exif.date) || (slot.dataset.uploaded ? "up " + fmtDate(slot.dataset.uploaded) : "");
 
         return `<div class="cam">` +

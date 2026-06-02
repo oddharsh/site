@@ -8,7 +8,7 @@
 <link rel="canonical" href="https://aadhar.sh/garage/horizon">
 
 <!-- traffic-cone favicon — same as the rest of the garage -->
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='4' y='25' width='24' height='3' rx='0.5' fill='%231a1a1a'/><path d='M 16 4 L 9 25 L 23 25 Z' fill='%23ff6600'/><path d='M 11.3 18 L 20.7 18 L 21.7 21 L 10.3 21 Z' fill='%23ffffff'/><path d='M 13.7 11 L 18.3 11 L 19 13 L 13 13 Z' fill='%23ffffff'/></svg>">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><path d='M5 21 A11 11 0 0 1 27 21 Z' fill='%23ff9500'/><g stroke='%23ff9500' stroke-width='1.8' stroke-linecap='round'><line x1='16' y1='2.5' x2='16' y2='6'/><line x1='6.5' y1='6' x2='8.8' y2='8.5'/><line x1='25.5' y1='6' x2='23.2' y2='8.5'/></g><rect x='2' y='21' width='28' height='2.4' rx='1.2' fill='%230855dd'/><rect x='2' y='25.5' width='28' height='1.6' rx='0.8' fill='%23166aee'/></svg>">
 
 <meta property="og:type" content="website">
 <meta property="og:title" content="horizon — aadhar.sh garage">
@@ -379,7 +379,14 @@ footer {
 @media (prefers-reduced-motion: reduce) {
   .sd-meter .bar { animation: none; transform: scaleX(1); }
   .sd-row { animation: none; opacity: 1; transform: none; }
+  /* the @property gradient spin can't be composited (repaints every frame
+     forever) — pin it for reduced-motion users. */
+  .prop-demo { animation: none; }
 }
+/* pause the perpetual gradient spin while the card is off-screen so it isn't
+   repainting for the whole length of this long page when unseen. */
+.prop-demo { animation-play-state: paused; }
+.prop-demo.in-view { animation-play-state: running; }
 
 /* fallback for engines without animation-timeline: the bar would sit empty
    and rows would stay invisible, so force the resting state. */
@@ -2897,6 +2904,19 @@ myButton.onclick = async () =&gt; {
     var n = el.querySelector(".name");
     if (n) n.style.opacity = state[k] ? "1" : "0.55";
   });
+})();
+</script>
+
+<script>
+// pause the @property gradient spin (uncompositable, repaints every frame)
+// unless its card is on-screen. reduced-motion users already get animation:none.
+(function () {
+  var el = document.querySelector(".prop-demo");
+  if (!el) return;
+  if (!("IntersectionObserver" in window)) { el.classList.add("in-view"); return; }
+  new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) { el.classList.toggle("in-view", e.isIntersecting); });
+  }, { rootMargin: "100px" }).observe(el);
 })();
 </script>
 

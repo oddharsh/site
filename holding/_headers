@@ -39,11 +39,18 @@
 /cars/*
   Cache-Control: public, max-age=31536000, immutable
 
-# homepage: hard no-store. the worker pre-renders a fresh 9-photo
+# garage experiment pages — change only on redeploy (which purges the edge).
+# short browser TTL + long edge + SWR means repeat navs are instant with no
+# revalidation round-trip, which matters most in Safari/Firefox (they skip the
+# Speculation Rules prerender). these are static HTML, never per-request.
+/garage/*
+  Cache-Control: public, max-age=300, s-maxage=86400, stale-while-revalidate=604800
+
+# homepage: hard no-store. the worker pre-renders a fresh 12-photo
 # random pick on every request, and the visitor counter increments per
-# pageview. both effects require the worker to run on each visit —
+# human pageview. both effects require the worker to run on each visit —
 # any cache (CF edge, browser, intermediary proxy, service worker)
-# that stores the response would pin the same 9 photos and freeze the
+# that stores the response would pin the same 12 photos and freeze the
 # counter for as long as it serves the cached copy.
 # `no-store` is the strongest directive: caches MUST NOT store. we
 # pair it with `s-maxage=0` belt-and-suspenders for any cache that

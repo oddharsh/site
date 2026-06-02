@@ -25,7 +25,7 @@
 // `?v=N` bumps on each deploy already cycle individual entries, but a
 // cache-version bump is the only way to sweep stale keys whose URL
 // pattern no longer matches anything we serve.
-const CACHE_VERSION = "aadhar-v29-thumbs800";
+const CACHE_VERSION = "aadhar-v30-perf";
 
 const CACHE_FIRST = [
   // image files only — NOT /images/ or /images/full/ themselves (those are
@@ -51,7 +51,10 @@ const SWR = [
   /^\/garage\/$/,
   /^\/garage\/(horizon|tooltips|scroll|chunks)$/,
   /^\/bot$/,
-  // photo-tooltip histograms — small, content-stable, fetched on first hover.
+  // photo-tooltip metadata (EXIF + histogram) + histograms — content-stable,
+  // fetched on first photo hover. SWR so the first hover after a photo-set
+  // change still revalidates in the background.
+  /^\/images\/metadata\.json$/,
   /^\/images\/histograms\.json$/,
 ];
 

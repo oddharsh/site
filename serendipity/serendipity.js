@@ -306,13 +306,15 @@ async function renderDashboard(d, path, msg) {
       </div>`;
   } else {
     const now = Date.now();
+    const PAST_CAP = 30;  // past-event cards were ~88% of the payload, mostly unscrolled
     const upcoming = events.filter((e) => !e.start_at || new Date(e.start_at).getTime() >= now);
-    const past = events.filter((e) => e.start_at && new Date(e.start_at).getTime() < now)
-                       .sort((a, b) => new Date(b.start_at) - new Date(a.start_at));
+    const pastAll = events.filter((e) => e.start_at && new Date(e.start_at).getTime() < now)
+                          .sort((a, b) => new Date(b.start_at) - new Date(a.start_at));
+    const past = pastAll.slice(0, PAST_CAP);
     body = `<h1 class="page">Events</h1>
       <p class="lede">${events.length} event${events.length == 1 ? "" : "s"} in the pool, fed by ${contribCount} contributor${contribCount == 1 ? "" : "s"}. Click any event to see who&apos;s going.</p>
       ${upcoming.length ? `<div class="grp">Upcoming (${upcoming.length})</div>${upcoming.map((e) => eventCard(e, false)).join("")}` : ""}
-      ${past.length ? `<div class="grp">Past (${past.length})</div>${past.map((e) => eventCard(e, true)).join("")}` : ""}`;
+      ${pastAll.length ? `<div class="grp">Past ${pastAll.length > PAST_CAP ? `(${PAST_CAP} most recent of ${pastAll.length})` : `(${pastAll.length})`}</div>${past.map((e) => eventCard(e, true)).join("")}` : ""}`;
   }
   return html(200, shell("Events", path, banner(msg) + body));
 }
@@ -845,6 +847,14 @@ export async function handleSerendipity(request, env, ctx) {
   }
   const d = db(env);
   const msg = url.searchParams.get("msg");
+  const dashKey = new Request(`${url.origin}${PREFIX}`);  // shared public-dashboard cache key
+
+  // any mutation (sync / enrich / contribute) invalidates the cached dashboard
+  if (request.method === "POST" &&
+      (path === `${PREFIX}/sync` || path === `${PREFIX}/sync-descriptions` ||
+       path === `${PREFIX}/enrich` || path === `${PREFIX}/cookies`)) {
+    ctx.waitUntil(caches.default.delete(dashKey));
+  }
 
   // secret-gated triggers (admin/cron): pull from cookies + Exa-enrich attendees
   if (request.method === "POST" && path === `${PREFIX}/sync`) return handleSync(request, env, d);
@@ -853,7 +863,25 @@ export async function handleSerendipity(request, env, ctx) {
 
   let res;
   if (request.method === "POST" && path === `${PREFIX}/cookies`) res = await handleCookies(request, env, d, uid);
-  else if (path === PREFIX) res = await renderDashboard(d, path, msg);
+  else if (path === PREFIX) {
+    // public pool — data changes only on sync/contribute (which bust above).
+    // cache the rendered HTML at the edge for 60s so repeat + agent hits skip
+    // the D1 GROUP BY. skip when a flash msg is present (just-acted view).
+    if (request.method === "GET" && !msg) {
+      let hit = await caches.default.match(dashKey);
+      if (!hit) {
+        const rendered = await renderDashboard(d, path, msg);
+        const h = new Headers(rendered.headers);
+        h.set("cache-control", "public, max-age=60, s-maxage=60");
+        h.delete("set-cookie");  // never store a per-visitor uid cookie in a shared cache
+        hit = new Response(rendered.body, { status: rendered.status, headers: h });
+        ctx.waitUntil(caches.default.put(dashKey, hit.clone()));
+      }
+      res = hit;
+    } else {
+      res = await renderDashboard(d, path, msg);
+    }
+  }
   else if (path === `${PREFIX}/contribute`) res = await renderContribute(d, path, uid, msg);
   else if (path === `${PREFIX}/mcp-info`) res = renderMcpInfo(path);
   else if (path.startsWith(`${PREFIX}/event/`)) res = await renderEvent(d, decodeURIComponent(path.slice(`${PREFIX}/event/`.length)), path);
