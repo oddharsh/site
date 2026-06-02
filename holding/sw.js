@@ -25,7 +25,7 @@
 // `?v=N` bumps on each deploy already cycle individual entries, but a
 // cache-version bump is the only way to sweep stale keys whose URL
 // pattern no longer matches anything we serve.
-const CACHE_VERSION = "aadhar-v38-garage-fresh";
+const CACHE_VERSION = "aadhar-v39-meta-fresh";
 
 const CACHE_FIRST = [
   // image files only — NOT /images/ or /images/full/ themselves (those are
@@ -49,11 +49,11 @@ const SWR = [
   //   /          — no-store (re-randomizes photos + ticks the counter)
   //   /around    — a live crawl  ·  /whoareyou — per-request fingerprint
   /^\/bot$/,
-  // photo-tooltip metadata (EXIF + histogram) + histograms — content-stable,
-  // fetched on first photo hover. SWR so the first hover after a photo-set
-  // change still revalidates in the background.
-  /^\/images\/metadata\.json$/,
-  /^\/images\/histograms\.json$/,
+  // NB: /images/metadata.json + histograms.json are NOT cached here. they feed
+  // the photo-hover tooltip; SW-caching them risked a stale/odd copy slipping in,
+  // after which the tooltip falls back to thumbnail dims (800px) with no EXIF.
+  // network-only = always the right data. they're small (~22KB br) and the
+  // browser HTTP-caches them for the session anyway.
 ];
 
 // URLs warmed on SW install so the FIRST navigation is already a hit.
