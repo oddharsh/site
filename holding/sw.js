@@ -25,7 +25,7 @@
 // `?v=N` bumps on each deploy already cycle individual entries, but a
 // cache-version bump is the only way to sweep stale keys whose URL
 // pattern no longer matches anything we serve.
-const CACHE_VERSION = "aadhar-v32-srcset";
+const CACHE_VERSION = "aadhar-v33-pretext-lib";
 
 const CACHE_FIRST = [
   // image files only — NOT /images/ or /images/full/ themselves (those are
@@ -50,6 +50,7 @@ const SWR = [
   //   /whoareyou — per-request fingerprint
   /^\/garage\/$/,
   /^\/garage\/(horizon|tooltips|scroll|chunks|pretext)$/,
+  /^\/garage\/pretext\.lib\.js$/,   // vendored pretext bundle (this page only)
   /^\/bot$/,
   // photo-tooltip metadata (EXIF + histogram) + histograms — content-stable,
   // fetched on first photo hover. SWR so the first hover after a photo-set
