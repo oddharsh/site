@@ -24,3 +24,10 @@ f355.{avif,jpg}
   "2024 Evoluto 355 HCC24.jpg" by MrWalkr, CC BY-SA 4.0
   https://commons.wikimedia.org/wiki/File:2024_Evoluto_355_HCC24.jpg
   (stem stays "f355" — it's the F355 platform — but the link/caption are Evoluto.)
+
+t50-mule.{avif,jpg}
+  Gordon Murray Automotive T.50 development mule (an Ultima GTR), nicknamed "George".
+  Used on the /garage page to illustrate the "development mule" framing — Murray
+  used Ultima mules ("Albert"/"Edward") on the McLaren F1 too.
+  "Ultima GTR T50 Test Mule George.jpg" by Calreyn88, CC BY-SA 4.0 (downscaled)
+  https://commons.wikimedia.org/wiki/File:Ultima_GTR_T50_Test_Mule_George.jpg

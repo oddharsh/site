@@ -240,6 +240,10 @@ footer {
   /* standard scrollbar tint (Chrome + Safari 26 + Firefox): Luna-blue thumb,
      pale track. the garage/scroll demo styles its own element separately. */
   html { scrollbar-color: oklch(62% 0.14 255) oklch(91% 0.02 248); }
+  /* mule lore figure — contact-sheet framing like the photo grid */
+  .mule-fig { margin: 14px 0 0; max-width: 460px; }
+  .mule-fig img { display: block; width: 100%; height: auto; border: 1px solid oklch(61% 0.0611 253.60); padding: 4px; background: #fff; box-shadow: 1px 1px 0 oklch(61% 0.0611 253.60 / 0.3); }
+  .mule-fig figcaption { font-size: 8.5pt; color: oklch(50% 0 0); margin-top: 5px; line-height: 1.45; }
 </style>
 </head>
 <body>
@@ -255,10 +259,35 @@ footer {
 
     <h1>Garage</h1>
     <p class="lede">
-      Prototypes for <a href="/">aadhar.sh</a>. Some made it to the homepage,
-      some didn&apos;t, some are still being figured out. Most are interactive,
-      so hover around.
+      Development mules for <a href="/">aadhar.sh</a> &mdash; deliberately rough
+      rigs where a tool or an idea gets validated under real load before any of it
+      touches the production car. Some graduate to the homepage, some get scrapped
+      (and stay parked here as data points), some are still on the dyno. Most are
+      interactive, so poke around.
     </p>
+    <p class="lede" style="font-size: 9.5pt; color: oklch(46% 0.02 250);">
+      Good cars get learned on mules first: McLaren developed the
+      <a href="https://en.wikipedia.org/wiki/McLaren_F1" rel="external">F1</a> in
+      two Ultima kit cars nicknamed <em>Albert</em> and <em>Edward</em>; the
+      mid-engine Corvette spent years disguised in a stretched last-gen body to
+      hide the V8 behind the seats. (More:
+      <a href="https://www.topgear.com/car-news/top-gears-top-9/nine-weird-secret-test-mules-youve-never-heard" rel="external">weird secret mules</a>.)
+      Same spirit here &mdash; fewer cones.
+    </p>
+
+    <figure class="mule-fig">
+      <picture>
+        <source type="image/avif" srcset="/cars/t50-mule.avif?v=1">
+        <img src="/cars/t50-mule.jpg?v=1" width="600" height="338" alt="Gordon Murray Automotive T.50 development mule — an Ultima GTR nicknamed George" loading="lazy" decoding="async">
+      </picture>
+      <figcaption>
+        Exhibit A: Gordon Murray&apos;s T.50 &mdash; the F1&apos;s spiritual heir &mdash;
+        was developed in Ultima GTR mules, this one nicknamed <em>George</em>. (Murray ran the
+        same play on the F1 with <em>Albert</em> &amp; <em>Edward</em>.) Photo
+        <a href="https://commons.wikimedia.org/wiki/File:Ultima_GTR_T50_Test_Mule_George.jpg" rel="external">Calreyn88</a>,
+        <a href="https://creativecommons.org/licenses/by-sa/4.0" rel="external">CC BY-SA 4.0</a>, resized.
+      </figcaption>
+    </figure>
 
     <hr>
 
@@ -359,7 +388,7 @@ footer {
     </ul>
 
     <p style="margin-top: 18px; font-size: 9.5pt; color: oklch(51.03% 0 0); font-style: italic;">
-      More to come. Shipped variants get the <span class="status shipped" style="display: inline-block; font-style: normal;">shipped</span> tag and stay listed as a record. Rejected variants stay too, tagged <span class="status dead" style="display: inline-block; font-style: normal;">rejected</span>, so the page reads as a working museum rather than a curated highlight reel.
+      More to come. Mules that graduate get the <span class="status shipped" style="display: inline-block; font-style: normal;">shipped</span> tag; the ones that don&apos;t stay parked here tagged <span class="status dead" style="display: inline-block; font-style: normal;">rejected</span> &mdash; a scrapped test rig is still a data point, not a deletion. A motor pool, not a highlight reel.
     </p>
 
     <footer>
