@@ -31,7 +31,7 @@ body {
   min-height: 100vh;
 }
 .window {
-  max-width: 760px;
+  max-width: 720px;
   margin: 0 auto;
   background: oklch(100% 0 0);
   border: 2px solid #0831d9; border-right-color: #001ea0; border-bottom-color: #001ea0;
@@ -42,12 +42,88 @@ body {
 }
 .title-bar {
   background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
-  color: oklch(100% 0 0);
+  color: oklch(100.00% 0 0);
   font-family: "Trebuchet MS", Verdana, sans-serif;
-  font-size: 10pt;
-  font-weight: bold;
-  padding: 4px 10px;
+  font-size: 10pt; font-weight: bold;
+  padding: 4px 8px;
+  border-bottom: 1px solid oklch(41.92% 0.0962 250.51);
+  display: flex; align-items: center; justify-content: space-between;
 }
+.title-bar .icon {
+  display: inline-block; width: 16px; height: 16px; margin-right: 6px;
+  vertical-align: middle; background: oklch(87.82% 0.0877 66.27);
+  position: relative; flex-shrink: 0;
+}
+.title-bar .icon::before {
+  content: ""; position: absolute; inset: 3px;
+  background: oklch(69.58% 0.2043 43.49);
+  clip-path: polygon(20% 0, 100% 50%, 20% 100%, 0 50%);
+}
+.title-bar .title-text { flex: 1; padding-left: 4px; }
+.title-bar .controls { display: flex; align-items: center; gap: 2px; letter-spacing: 0; }
+/* authentic Luna caption buttons: 21x21 glossy "gel" lozenges with a top specular
+   highlight + CSS-drawn white glyphs (no text, no images). min/max are blue, CLOSE
+   is RED at rest. CLASS-BASED (.min/.max/.close) so decorative demo windows that use
+   <span class="close"> get the identical skin as a real <a class="close">. sRGB hex
+   traced from the Luna .msstyles bitmap, kept as hex on purpose. */
+.title-bar .controls .min,
+.title-bar .controls .max,
+.title-bar .controls .close {
+  position: relative; box-sizing: border-box;
+  width: 21px; height: 21px; padding: 0; margin: 0;
+  display: inline-block; overflow: hidden; font-size: 0; color: transparent;
+  border: 1px solid #6696eb; border-radius: 3px;
+  text-decoration: none; cursor: pointer;
+  background-color: #3e73f5;
+  background-image: linear-gradient(180deg, #5f8cf7 0%, #3a71f5 22%, #3e73f5 55%, #2a70f2 82%, #1045be 100%);
+  transition: filter .1s ease;
+}
+/* "wet plastic" gloss band over the top ~45% (close uses ::after for its X stroke) */
+.title-bar .controls .min::after,
+.title-bar .controls .max::after {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 45%;
+  background: linear-gradient(180deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.12) 70%, rgba(255,255,255,0) 100%);
+  pointer-events: none; border-radius: 2px 2px 5px 5px;
+}
+.title-bar .controls .min:hover, .title-bar .controls .min:focus-visible,
+.title-bar .controls .max:hover, .title-bar .controls .max:focus-visible {
+  border-color: #8fb4ff; background-color: #4fa4ff;
+  background-image: linear-gradient(180deg, #689bff 0%, #468aff 22%, #4fa4ff 55%, #3990fc 82%, #1858c8 100%);
+  outline: none;
+}
+/* CLOSE = red at rest */
+.title-bar .controls .close {
+  border-color: #d8401c; background-color: #e45f3e;
+  background-image: linear-gradient(180deg, #e8795f 0%, #e45f40 30%, #e45d3d 52%, #e2552a 80%, #ae3110 100%);
+}
+.title-bar .controls .close:hover, .title-bar .controls .close:focus-visible {
+  border-color: #ff7a66; background-color: #ff957c;
+  background-image: linear-gradient(180deg, #ff8b7d 0%, #ff7463 26%, #ff957c 55%, #fd7e64 82%, #d34936 100%);
+  box-shadow: 0 0 4px rgba(255,120,96,.7); outline: none;
+}
+.title-bar .controls .min:active,
+.title-bar .controls .max:active,
+.title-bar .controls .close:active { filter: brightness(.9); }
+/* white glyphs drawn with pseudo-elements */
+.title-bar .controls .min::before {
+  content: ""; position: absolute; left: 5px; right: 5px; bottom: 5px; height: 2px;
+  background: #fff; box-shadow: 0 1px 0 rgba(0,0,0,.35);
+}
+.title-bar .controls .max::before {
+  content: ""; position: absolute; left: 5px; top: 5px; width: 11px; height: 9px;
+  box-sizing: border-box; border: 1px solid #fff; border-top-width: 2px;
+  filter: drop-shadow(0 1px 0 rgba(0,0,0,.35));
+}
+.title-bar .controls .close::before,
+.title-bar .controls .close::after {
+  content: ""; position: absolute; left: 50%; top: 50%;
+  width: 13px; height: 2px; margin: -1px 0 0 -6.5px; background: #fff;
+  box-shadow: 0 1px 0 rgba(0,0,0,.35);
+}
+.title-bar .controls .close::before { transform: rotate(45deg); }
+.title-bar .controls .close::after  { transform: rotate(-45deg); }
+/* --- Luna polish: caption text shadow (matches horizon/scroll) --- */
+.title-bar { text-shadow: 1px 1px #0f1089; }
 .content { padding: 12px 16px 18px; }
 h1 {
   font-family: "Franklin Gothic Medium", "Franklin Gothic", "Trebuchet MS", Verdana, sans-serif;
@@ -632,7 +708,7 @@ footer {
 <div id="balloon-tip" popover="manual" class="balloon-tip" aria-hidden="true"></div>
 
 <div class="window">
-  <div class="title-bar">tooltip experiments — cursor-following + popover API</div>
+  <div class="title-bar" aria-hidden="true"><span class="title-text"><span class="icon"></span>tooltip experiments</span><span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/garage/" title="back to the garage" aria-label="back to the garage"></a></span></div>
   <div class="content">
 
     <h1>Tooltip Experiments</h1>
