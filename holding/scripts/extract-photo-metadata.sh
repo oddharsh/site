@@ -27,9 +27,6 @@
 #   drive           - "Single" / "Continuous Low" / etc
 #   date            - DateTimeOriginal (Fuji format: "YYYY:MM:DD HH:MM:SS")
 #   width, height   - orientation-corrected pixel dimensions
-#   histogram       - { l, r, g, b } each a 64-bin array normalized 0..100
-#                     (computed by photo-histograms.py via Pillow;
-#                     null if Pillow isn't installed)
 #   color_space     - "sRGB" / "Adobe RGB"
 #   white_balance   - "Auto" / "Daylight" / "Kelvin" / etc
 #   color_temp      - when WB is Kelvin, the actual K value
@@ -114,22 +111,11 @@ exiftool -json -q \
   '-Orientation#' \
   "$SRC_DIR" > "$TMP"
 
-# compute 64-bin luminance histograms via Pillow (one-time per upload,
-# stored in metadata.json so the Fuji LCD tooltip can render real bars
-# instead of a faked CSS gradient). silently degrades to {} if Pillow
-# isn't installed or python3 fails — the tooltip already handles a null
-# histogram by skipping the bar render. install with:
-#   pip3 install --user pillow
-HISTOGRAMS=$(mktemp)
-echo "{}" > "$HISTOGRAMS"
-if command -v python3 >/dev/null 2>&1; then
-  if python3 "$SCRIPT_DIR/photo-histograms.py" "$SRC_DIR" > "$HISTOGRAMS.tmp" 2>/dev/null; then
-    mv "$HISTOGRAMS.tmp" "$HISTOGRAMS"
-  else
-    rm -f "$HISTOGRAMS.tmp"
-    echo "  (histograms skipped: Pillow not installed; install with: pip3 install --user pillow)" >&2
-  fi
-fi
+# NB: histograms are no longer stored here. the Fuji LCD tooltip now computes the
+# {l,r,g,b} bars CLIENT-SIDE from the already-decoded thumbnail (canvas), which
+# dropped ~half of metadata.json and removed the Pillow dependency. photo-
+# histograms.py is kept on disk but unused. (when full-frame thumbnails ship, the
+# client-side bars become whole-image histograms for free.)
 
 # transform into {stem: {camera, lens, aperture, shutter, iso, focal, date,
 # width, height}} keyed by stem (filename without extension). orientation-
@@ -139,12 +125,10 @@ fi
 # dims (5152×7728 here) so they match what the user actually sees.
 #   Orientation 5/6/7/8 → 90° transforms → swap w/h
 #   Orientation 1/2/3/4 → identity/180/flip → keep w/h as-is
-jq --slurpfile hists "$HISTOGRAMS" '
-  ($hists[0] // {}) as $H |
+jq '
   reduce .[] as $e ({}; . + {
   ($e.FileName | tostring | sub("\\.[^.]+$"; "")):
     (($e.Orientation // 1) as $o |
-     ($e.FileName | tostring | sub("\\.[^.]+$"; "")) as $stem |
      (if ($o == 5 or $o == 6 or $o == 7 or $o == 8)
        then { w: ($e.ImageHeight // null), h: ($e.ImageWidth // null) }
        else { w: ($e.ImageWidth // null),  h: ($e.ImageHeight // null) }
@@ -160,7 +144,6 @@ jq --slurpfile hists "$HISTOGRAMS" '
       date:     ($e.DateTimeOriginal // null),
       width:    $dim.w,
       height:   $dim.h,
-      histogram: ($H[$stem] // null),
       color_space:    ($e.ColorSpace // null),
       white_balance:  ($e.WhiteBalance // null),
       color_temp:     ($e.ColorTemperature // null),
@@ -186,7 +169,7 @@ jq --slurpfile hists "$HISTOGRAMS" '
     })
 })' "$TMP" > "$OUT"
 
-rm -f "$TMP" "$HISTOGRAMS"
+rm -f "$TMP"
 
 COUNT=$(jq 'keys | length' "$OUT")
 echo "✓ extracted metadata for $COUNT photos → $OUT"

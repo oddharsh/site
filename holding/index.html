@@ -931,9 +931,10 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
       XP-style cursor-following hover tooltip. shows filename, file size,
       thumbnail dimensions, and EXIF (camera/exposure/date/film recipe)
       for photos; album art for track rows; profile photo for artist
-      links. EXIF + histogram are lazy-fetched from /images/metadata.json
-      on first photo hover (SW-cached) rather than inlined per-slot — keeps
-      the no-store homepage lean for the majority who never hover. cursor-
+      links. EXIF is lazy-fetched from /images/metadata.json on first photo
+      hover (SW-cached) rather than inlined per-slot — keeps the no-store
+      homepage lean for the majority who never hover; the histogram is computed
+      client-side from the thumbnail, not stored. cursor-
       follow positioning is the single bit of JS we couldn't replace with
       CSS — it's the soul of the interaction.
     -->
@@ -1025,11 +1026,40 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
         const b = Array.isArray(h.b) ? `<polyline class="b" points="${pts(h.b)}"/>` : "";
         return `<svg class="hist-svg" viewBox="0 0 ${n - 1} 32" preserveAspectRatio="none">${luma}${r}${g}${b}</svg>`;
       };
-      // EXIF + histogram are NOT inlined on the no-store homepage (keeps the
-      // hot path lean). the metadata index (one file: EXIF text + {l,r,g,b}
-      // histogram, by stem) is fetched once — eagerly on idle (below) so it's
-      // already in hand before the first hover, with a lazy fallback in
-      // buildPhotoContent. on arrival, re-render any open photo tip.
+      // histogram bins are computed CLIENT-SIDE from the already-decoded
+      // thumbnail (it's on screen anyway), not shipped in metadata.json. downsample
+      // to 128px, tally {l,r,g,b} into 64 bins, normalize 0..100 for
+      // renderHistogramSvg; memoized per stem. same-origin image → canvas isn't
+      // tainted, so getImageData works. NB: today's thumbnail is a square center-
+      // crop, so the bars reflect the cropped view; when full-frame thumbnails ship
+      // this becomes the whole-image histogram for free.
+      const histCache = Object.create(null);
+      let histCanvas = null;
+      const computeHistogram = (img) => {
+        if (!img || !img.complete || !img.naturalWidth) return null;
+        const S = 128;
+        histCanvas = histCanvas || document.createElement("canvas");
+        histCanvas.width = histCanvas.height = S;
+        const ctx = histCanvas.getContext("2d", { willReadFrequently: true });
+        if (!ctx) return null;
+        let data;
+        try { ctx.drawImage(img, 0, 0, S, S); data = ctx.getImageData(0, 0, S, S).data; }
+        catch { return null; }
+        const N = 64, l = new Array(N).fill(0), r = new Array(N).fill(0), g = new Array(N).fill(0), b = new Array(N).fill(0);
+        for (let i = 0; i < data.length; i += 4) {
+          const R = data[i], G = data[i + 1], B = data[i + 2];
+          r[R >> 2]++; g[G >> 2]++; b[B >> 2]++;
+          l[((R * 54 + G * 183 + B * 19) >> 8) >> 2]++;   // Rec.709 luma → 64 bins
+        }
+        const norm = a => { const m = Math.max(1, ...a); return a.map(v => Math.round(v / m * 100)); };
+        return { l: norm(l), r: norm(r), g: norm(g), b: norm(b) };
+      };
+      const histFor = (stem, img) => histCache[stem] || (histCache[stem] = computeHistogram(img)) || null;
+      // EXIF is NOT inlined on the no-store homepage (keeps the hot path lean).
+      // the metadata index (one file, EXIF text keyed by stem — histograms are
+      // now computed client-side, so this is ~half its old size) is fetched once,
+      // eagerly on idle (below) so it's already in hand before the first hover,
+      // with a lazy fallback in buildPhotoContent. on arrival, re-render any open tip.
       let metaMap = null, metaLoading = false;
       const loadMeta = () => {
         if (metaLoading) return; metaLoading = true;
@@ -1037,7 +1067,7 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
         // prior session can't satisfy a key it's never seen, so this always pulls
         // a fresh, complete copy (the recurring "fallback path / 800px / no
         // histogram" was a poisoned cached metadata.json). bump on metadata changes.
-        fetch("/images/metadata.json?mv=2").then(r => r.ok ? r.json() : null).then(m => {
+        fetch("/images/metadata.json?mv=3").then(r => r.ok ? r.json() : null).then(m => {
           // guard: only accept a non-empty object — a truncated/empty body would
           // otherwise lock the tooltip onto the fallback path for the whole session.
           if (m && typeof m === "object" && Object.keys(m).length) {
@@ -1048,7 +1078,7 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
           }
         }).catch(() => { metaLoading = false; });
       };
-      // prefetch on idle (~22KB brotli, off the critical path) so the first
+      // prefetch on idle (~13KB brotli now — histograms dropped, off the critical path) so the first
       // hover already has full EXIF — no thin-then-fill flash, no race.
       ("requestIdleCallback" in window) ? requestIdleCallback(loadMeta, { timeout: 2500 }) : setTimeout(loadMeta, 1200);
 
@@ -1103,9 +1133,10 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
 
       // XP camera-back review readout: a Luna header strip (filename + flash),
       // a sunken histogram band, the exposure trio, the full Fuji recipe as
-      // label/value rows, and a date footer. EXIF + histogram are lazy-loaded
-      // from metadata.json on first hover (see loadMeta); the first hover may
-      // render text-only for a beat, then re-renders when the fetch lands.
+      // label/value rows, and a date footer. EXIF is lazy-loaded from
+      // metadata.json on first hover (see loadMeta); the histogram is computed
+      // client-side from the thumbnail. first hover may render text-only for a
+      // beat, then re-renders when the EXIF fetch (or image decode) lands.
       function buildPhotoContent(slot) {
         const filename = slot.dataset.full || decodeURIComponent((slot.href || "").split("/").pop());
         const stem = filename.replace(/\.[^.]+$/, "");
@@ -1145,8 +1176,11 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
         ].filter(([, v]) => v && v !== "undefined")
          .map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("");
 
-        const hist = (metaMap && metaMap[stem] && metaMap[stem].histogram) || null;
+        const hist = histFor(stem, img);
         const histSvg = hist ? renderHistogramSvg(hist) : "";
+        // thumbnail not decoded yet? re-render this tip once it loads.
+        if (!hist && img && !img.complete) img.addEventListener("load",
+          () => { if (activeSlot === slot && activeSlot.matches?.(".photos a")) showTipFor(activeSlot); }, { once: true });
         const dateStr = fmtDate(exif.date) || (slot.dataset.uploaded ? "up " + fmtDate(slot.dataset.uploaded) : "");
 
         return `<div class="cam">` +
