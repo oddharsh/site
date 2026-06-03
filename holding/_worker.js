@@ -585,7 +585,7 @@ const R2_EXT_PRIORITY = {
 // higher quality (CQ30 → -q63); 13 the 3 grayscale Leica thumbs re-encoded
 // as true monochrome (yuv420 → yuv400). same filenames each time, so the
 // ?v= bump is what busts the edge cache for the new bytes.)
-const THUMB_VERSION = 15;
+const THUMB_VERSION = 16;
 // small mobile AVIF tier (stem-400.avif), served via <source media> at <=560px.
 const THUMB_SMALL_PX = 400;
 

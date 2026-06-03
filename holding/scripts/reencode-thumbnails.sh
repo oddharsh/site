@@ -3,21 +3,21 @@
 # reencode-thumbnails.sh — re-encode ALL published grid thumbnails from the
 # canonical source folder at a new resolution, in place.
 #
-# Use this after changing the thumbnail long-edge (THUMB_PX). It runs ONLY the
-# two thumbnail encode passes from add-photos.sh (jpegli JPG + AVIF), reusing
-# the identical commands so output matches the canonical pipeline exactly.
+# Re-encodes the grid thumbnails as PRE-CROPPED CENTER SQUARES — exactly what the
+# homepage grid shows (aspect-ratio:1 + object-fit:cover). The file IS the
+# displayed pixels, so no off-square bytes are shipped. Two square tiers:
+#   SQ    desktop square (default 600 — the ~197px tile at DPR-3; 800 would be
+#         MORE pixels than the old 800-long-edge and bigger for no visible gain)
+#   SQ_SM mobile square  (default 400 — the ~100px tile, served via <source media>)
+# AVIF for both; a single SQ JPG is the no-AVIF fallback. NB: SQ_SM must match
+# THUMB_SMALL_PX in _worker.js (the -<N>.avif suffix).
 #
-# Deliberately does NOT touch:
-#   - R2 originals (thumbnail size is independent of the stored original)
-#   - metadata.json (its width/height are the ORIGINAL orientation-corrected
-#     dims, not the thumbnail's, so they don't change)
-#   - the HIF → full-res click export (unchanged)
+# Deliberately does NOT touch R2 originals, metadata.json (its width/height are
+# the ORIGINAL dims), or the HIF → full-res click export.
 #
-# After running, bump THUMB_VERSION in _worker.js so the new pixels bust the
-# edge + browser + service-worker caches (the ?v=N on every thumbnail URL).
-#
-#   THUMB_PX=800 ./holding/scripts/reencode-thumbnails.sh
-#   THUMB_PX=800 ./holding/scripts/reencode-thumbnails.sh "/path/to/source/folder"
+# After running, bump THUMB_VERSION in _worker.js to bust caches.
+#   SQ=600 ./holding/scripts/reencode-thumbnails.sh
+#   SQ=600 SQ_SM=400 ./holding/scripts/reencode-thumbnails.sh "/path/to/source/folder"
 #
 set -euo pipefail
 
@@ -25,11 +25,8 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_DIR="$( cd "$SCRIPT_DIR/../.." && pwd )"
 DEST="$PROJECT_DIR/holding/images"
 SRC="${1:-/Users/aadharsh/Downloads/to post (from ssd)}"
-THUMB_PX="${THUMB_PX:-800}"
-# small AVIF tier for mobile (<=560px viewport), served via <source media>. at the
-# ~99-130px mobile render box this matches the density 800px gives the ~197px
-# desktop box. AVIF only — the rare no-AVIF browser falls back to the 800 JPG.
-SMALL_PX="${SMALL_PX:-400}"
+SQ="${SQ:-600}"        # desktop square edge
+SQ_SM="${SQ_SM:-400}"  # mobile square edge (filename suffix; must match THUMB_SMALL_PX)
 TMP="/tmp/aadhar-reencode-$$"
 mkdir -p "$TMP"
 trap 'rm -rf "$TMP"' EXIT
@@ -68,7 +65,7 @@ find_source() {
 
 STEMS=$(for j in "$DEST"/*.jpg; do basename "$j" .jpg; done)
 TOTAL=$(echo "$STEMS" | grep -c . || true)
-echo "re-encoding $TOTAL thumbnails at ${THUMB_PX}px  (jpegli q82 + AVIF via $AVIF_ENCODER)"
+echo "re-encoding $TOTAL thumbnails as ${SQ}×${SQ} / ${SQ_SM}×${SQ_SM} center squares  (jpegli q82 + AVIF via $AVIF_ENCODER)"
 echo "  source: $SRC"
 echo ""
 
@@ -78,39 +75,42 @@ while IFS= read -r stem; do
   [ -n "$stem" ] || continue
   if ! src=$(find_source "$stem"); then MISS=$((MISS+1)); printf "?"; continue; fi
 
-  mid="$INTER/${stem}.jpg"; rot="$INTER/${stem}.rot.jpg"; smid="$INTER/${stem}.sm.jpg"
-  jpg="$DEST/${stem}.jpg"; avif="$DEST/${stem}.avif"; smavif="$DEST/${stem}-${SMALL_PX}.avif"
+  work="$INTER/${stem}.jpg"; rot="$INTER/${stem}.rot.jpg"
+  sqjpg="$INTER/${stem}.sq.jpg"; smtmp="$INTER/${stem}.sm.jpg"
+  jpg="$DEST/${stem}.jpg"; avif="$DEST/${stem}.avif"; smavif="$DEST/${stem}-${SQ_SM}.avif"
 
-  # 1. sips resize/decode → near-lossless JPG intermediate
-  if ! sips -Z "$THUMB_PX" -s format jpeg --setProperty formatOptions 100 "$src" --out "$mid" >/dev/null 2>&1; then
+  # 1. decode source → working JPG (long edge 2000 — ample to crop a sharp square)
+  if ! sips -Z 2000 -s format jpeg --setProperty formatOptions 100 "$src" --out "$work" >/dev/null 2>&1; then
     FAIL=$((FAIL+1)); printf "✗"; continue
   fi
-  # 2. lossless EXIF-orientation rotation (cjpegli strips EXIF, so bake it in)
+  # 2. lossless EXIF-orientation rotation (cjpegli/avifenc strip EXIF, bake it in)
   rot_flag=$(exif_to_jpegtran "$src")
   if [ -n "$rot_flag" ]; then
-    if "$MOZ_JTRAN" -copy none $rot_flag "$mid" > "$rot" 2>/dev/null; then mid="$rot"; fi
+    if "$MOZ_JTRAN" -copy none $rot_flag "$work" > "$rot" 2>/dev/null; then work="$rot"; fi
   fi
-  # 3. jpegli q82, max-progressive
-  if ! "$CJPEGLI" "$mid" "$jpg" -q 82 -p 2 >/dev/null 2>&1; then
-    FAIL=$((FAIL+1)); printf "✗"; continue
-  fi
-  # 4. AVIF primary (yuv400 for grayscale sources, else yuv420) — from the JPG
-  #    so crop/dims match exactly.
+  # 3. center-crop to a square — what the grid actually shows. resize the SHORT
+  #    edge up to SQ (keeping aspect), then crop SQ×SQ centered (sips object-
+  #    position is center, matching object-fit:cover's default).
+  W=$(sips -g pixelWidth "$work" 2>/dev/null | awk '/pixelWidth/{print $2}')
+  H=$(sips -g pixelHeight "$work" 2>/dev/null | awk '/pixelHeight/{print $2}')
+  if [ -z "$W" ] || [ -z "$H" ] || [ "$W" -lt 1 ] || [ "$H" -lt 1 ]; then FAIL=$((FAIL+1)); printf "✗"; continue; fi
+  if [ "$W" -le "$H" ]; then tl=$(( (SQ*H + W-1)/W )); else tl=$(( (SQ*W + H-1)/H )); fi
+  sips -Z "$tl" "$work" >/dev/null 2>&1
+  if ! sips -c "$SQ" "$SQ" "$work" --out "$sqjpg" >/dev/null 2>&1; then FAIL=$((FAIL+1)); printf "✗"; continue; fi
+  # 4. desktop square: jpegli q82 + AVIF (yuv400 for grayscale, else yuv420)
+  if ! "$CJPEGLI" "$sqjpg" "$jpg" -q 82 -p 2 >/dev/null 2>&1; then FAIL=$((FAIL+1)); printf "✗"; continue; fi
+  space=$(sips -g space "$sqjpg" 2>/dev/null | awk '/space:/{print $2}'); [ "$space" = "Gray" ] && yuv=400 || yuv=420
   if [ "$AVIF_ENCODER" = "avifenc" ]; then
-    space=$(sips -g space "$jpg" 2>/dev/null | awk '/space:/{print $2}')
-    [ "$space" = "Gray" ] && yuv=400 || yuv=420
-    avifenc -q 63 --ignore-icc --speed 4 --jobs 4 --yuv "$yuv" "$jpg" "$avif" >/dev/null 2>&1 || { FAIL=$((FAIL+1)); printf "✗"; continue; }
+    avifenc -q 63 --ignore-icc --speed 4 --jobs 4 --yuv "$yuv" "$sqjpg" "$avif" >/dev/null 2>&1 || { FAIL=$((FAIL+1)); printf "✗"; continue; }
   else
-    yuv=420
-    sips -s format avif --setProperty formatOptions 60 "$jpg" --out "$avif" >/dev/null 2>&1 || { FAIL=$((FAIL+1)); printf "✗"; continue; }
+    sips -s format avif --setProperty formatOptions 60 "$sqjpg" --out "$avif" >/dev/null 2>&1 || { FAIL=$((FAIL+1)); printf "✗"; continue; }
   fi
-  # 5. small mobile AVIF tier — downscale the finished (rotated, cropped) 800 JPG
-  #    so the small tier matches the large one's crop/orientation exactly.
-  if sips -Z "$SMALL_PX" "$jpg" --out "$smid" >/dev/null 2>&1; then
+  # 5. mobile square: downscale the SQ square to SQ_SM (square→square, no distortion)
+  if sips -Z "$SQ_SM" "$sqjpg" --out "$smtmp" >/dev/null 2>&1; then
     if [ "$AVIF_ENCODER" = "avifenc" ]; then
-      avifenc -q 63 --ignore-icc --speed 4 --jobs 4 --yuv "$yuv" "$smid" "$smavif" >/dev/null 2>&1 || printf "~"
+      avifenc -q 63 --ignore-icc --speed 4 --jobs 4 --yuv "$yuv" "$smtmp" "$smavif" >/dev/null 2>&1 || printf "~"
     else
-      sips -s format avif --setProperty formatOptions 60 "$smid" --out "$smavif" >/dev/null 2>&1 || printf "~"
+      sips -s format avif --setProperty formatOptions 60 "$smtmp" --out "$smavif" >/dev/null 2>&1 || printf "~"
     fi
   fi
   OK=$((OK+1)); printf "."
