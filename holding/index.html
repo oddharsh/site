@@ -1026,9 +1026,10 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
         return `<svg class="hist-svg" viewBox="0 0 ${n - 1} 32" preserveAspectRatio="none">${luma}${r}${g}${b}</svg>`;
       };
       // EXIF + histogram are NOT inlined on the no-store homepage (keeps the
-      // hot path lean). lazy-fetch the metadata index on first photo hover
-      // (immutable, SW-cached), then re-render if a photo tip is still open.
-      // one file gives both the EXIF text and the {l,r,g,b} histogram, by stem.
+      // hot path lean). the metadata index (one file: EXIF text + {l,r,g,b}
+      // histogram, by stem) is fetched once — eagerly on idle (below) so it's
+      // already in hand before the first hover, with a lazy fallback in
+      // buildPhotoContent. on arrival, re-render any open photo tip.
       let metaMap = null, metaLoading = false;
       const loadMeta = () => {
         if (metaLoading) return; metaLoading = true;
@@ -1037,6 +1038,9 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
           if (activeSlot && activeSlot.matches && activeSlot.matches(".photos a")) showTipFor(activeSlot);
         }).catch(() => { metaMap = {}; });
       };
+      // prefetch on idle (~22KB brotli, off the critical path) so the first
+      // hover already has full EXIF — no thin-then-fill flash, no race.
+      ("requestIdleCallback" in window) ? requestIdleCallback(loadMeta, { timeout: 2500 }) : setTimeout(loadMeta, 1200);
 
       // unified hover target → "what was hovered?" lookup. one tooltip
       // element, three content shapes: a photo slot (.photos a), a track
