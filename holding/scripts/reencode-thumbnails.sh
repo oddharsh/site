@@ -27,6 +27,19 @@
 # scale with its DISPLAY area, not be a fixed long-edge. So that variant wants a
 # per-photo target size (area-aware), not one global SQ.
 #
+# Relative TILE AREA = (pixel area) × (sensor area):
+#   - pixel area  = metadata.json width × height (already stored).
+#   - sensor area = camera model → mm² lookup. Today's bodies:
+#       FUJIFILM X-T50            APS-C  ~367 mm²  (40 MP)
+#       Leica M Monochrom Typ 246 full   ~864 mm²  (24 MP)
+#     so Leica frames land ~1.4× the Fuji tiles — a gentle premium for the
+#     bigger sensor, NOT "more megapixels wins" (pure-MP would invert this).
+# Normalize the metric into a few DISCRETE area tiers (e.g. 1× / 1.4× / 2×),
+# never literal-proportional (that's what caused the earlier imbalance). SHAPE
+# comes from native aspect (don't crop); this metric only sets relative AREA.
+# With just two bodies it's near-binary today — the visual variety will come
+# from aspect ratios, not this — but it future-proofs the moment a 3rd body lands.
+#
 # After running, bump THUMB_VERSION in _worker.js to bust caches.
 #   SQ=600 ./holding/scripts/reencode-thumbnails.sh
 #   SQ=600 SQ_SM=400 ./holding/scripts/reencode-thumbnails.sh "/path/to/source/folder"
