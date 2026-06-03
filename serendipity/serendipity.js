@@ -299,7 +299,7 @@ function eventCard(e, isPast) {
   if (Number(e.host_count) > 0) counts.push(`${e.host_count} host${e.host_count == 1 ? "" : "s"}`);
   if (Number(e.attendee_count) > 0) counts.push(`${e.attendee_count} going`);
   const d = e.start_at ? new Date(e.start_at) : null;
-  return `<a class="ev" href="${PREFIX}/event/${esc(e.id)}" data-start="${esc(e.start_at || "")}"${e.cover_url ? ` data-cover="${esc(e.cover_url)}"` : ""}>
+  return `<a class="ev" href="${PREFIX}/event/${esc(e.id)}" data-start="${esc(e.start_at || "")}"${e.cover_url ? ` data-cover="${esc(`${PREFIX}/cover?u=${encodeURIComponent(e.cover_url)}`)}"` : ""}>
     <div class="nm">${esc(e.name)}</div>
     <div class="meta">${d ? esc(fmtDateTime(e.start_at)) : "date TBD"}${isPast && d ? ` · ${esc(relativeTime(d))}` : ""}${e.location ? " · " + esc(e.location) : ""}</div>
     <div class="row">
@@ -1012,6 +1012,52 @@ async function handleEnrich(request, env, d) {
 }
 
 // ── router ────────────────────────────────────────────────────────────────────
+// GET /serendipity/cover?u=<encoded image url> — same-origin cover proxy.
+// Resizes via Cloudflare Image Transformations (cf.image) so the hover tooltip
+// pulls a ~520px thumbnail instead of the multi-MB original (covers ran up to
+// 6.4 MB). Two wins: covers become same-origin (any organizer-chosen host loads
+// without widening CSP), and the bytes shrink. If Transformations aren't enabled
+// on the zone, cf.image is silently ignored and the original is streamed through
+// — still same-origin, just full-size, so nothing breaks before the toggle flips.
+async function handleCover(request, ctx) {
+  const url = new URL(request.url);
+  const raw = url.searchParams.get("u");
+  if (!raw) return new Response("missing u", { status: 400 });
+  let target;
+  try { target = new URL(raw); } catch { return new Response("bad u", { status: 400 }); }
+  if (target.protocol !== "https:") return new Response("https only", { status: 400 });
+
+  const hit = await caches.default.match(request);
+  if (hit) return hit;
+
+  const ua = { "user-agent": "AadharshBot/1.0 (+https://aadhar.sh/bot)" };
+  let upstream;
+  try {
+    upstream = await fetch(target.toString(), {
+      headers: ua,
+      // format:'webp' (not 'auto') so every client gets one format — keeps the
+      // shared edge cache key correct without a Vary:Accept dance. webp is
+      // supported everywhere the site targets (Safari 16+, all evergreen).
+      cf: { image: { width: 520, quality: 72, fit: "scale-down", format: "webp" } },
+    });
+    if (!upstream.ok) throw new Error("upstream " + upstream.status);
+  } catch {
+    // Transformations off / transform error → plain fetch, original bytes.
+    try { upstream = await fetch(target.toString(), { headers: ua }); }
+    catch { return new Response("upstream fetch failed", { status: 502 }); }
+  }
+  const ct = upstream.headers.get("content-type") || "";
+  if (!upstream.ok || !ct.startsWith("image/")) return new Response("not an image", { status: 415 });
+
+  const h = new Headers();
+  h.set("content-type", ct);
+  h.set("cache-control", "public, max-age=86400, s-maxage=604800");
+  h.set("x-content-type-options", "nosniff");
+  const out = new Response(upstream.body, { status: 200, headers: h });
+  ctx.waitUntil(caches.default.put(request, out.clone()));
+  return out;
+}
+
 export async function handleSerendipity(request, env, ctx) {
   const url = new URL(request.url);
   let path = url.pathname.replace(/\/+$/, "") || PREFIX;
@@ -1038,6 +1084,10 @@ export async function handleSerendipity(request, env, ctx) {
   if (request.method === "POST" && path === `${PREFIX}/sync`) return handleSync(request, env, d);
   if (request.method === "POST" && path === `${PREFIX}/sync-descriptions`) return handleSyncDescriptions(request, env, d);
   if (request.method === "POST" && path === `${PREFIX}/enrich`) return handleEnrich(request, env, d);
+
+  // same-origin cover proxy (resizes via cf.image) — early return, no uid cookie
+  // so the response stays cacheable at the edge.
+  if ((request.method === "GET" || request.method === "HEAD") && path === `${PREFIX}/cover`) return handleCover(request, ctx);
 
   let res;
   if (request.method === "POST" && path === `${PREFIX}/cookies`) res = await handleCookies(request, env, d, uid);
@@ -1078,7 +1128,12 @@ export async function handleSerendipity(request, env, ctx) {
 // Self-contained: own security headers, no dependency on the Pages _worker.js.
 const SECURITY_HEADERS = {
   "content-security-policy":
-    "default-src 'self'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data: https://images.lumacdn.com; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; object-src 'none'",
+    // img-src is `https:` (any host) because Luma lets organizers point covers
+    // at arbitrary CDNs (lumacdn, unsplash, …); allow-listing hosts was whack-a-
+    // mole and silently broke the odd external cover. Covers now route through the
+    // same-origin /cover proxy anyway, so 'self' carries them — `https:` is the
+    // belt-and-suspenders net for the proxy's full-size fallback redirect path.
+    "default-src 'self'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; object-src 'none'",
   "x-content-type-options": "nosniff",
   "referrer-policy": "strict-origin-when-cross-origin",
   "x-frame-options": "DENY",
