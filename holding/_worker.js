@@ -386,20 +386,24 @@ async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
     });
   }
 
-  const out = rewriter.transform(res);
-  // preload the LCP photo tile (slot 0): the worker knows its exact URL at
-  // SSR time, so a Link: rel=preload lets the browser fetch it in parallel
-  // with HTML parse instead of waiting to reach the streamed <img>. type
-  // hint means non-AVIF browsers skip the preload (they'll use the JPG).
+  // preload the LCP photo tile (slot 0) as an in-document <link rel=preload> in
+  // <head> — deliberately NOT an HTTP `Link:` header. The grid is random + the
+  // response is no-store, so a Link header gets harvested by Cloudflare Early
+  // Hints and replayed as a stale 103 on the NEXT visitor — always one pick
+  // behind, so it preloads a photo that isn't on the page (~26-52KB wasted every
+  // visit) while the real hero goes un-preloaded. CF Early Hints only collects
+  // HTTP Link headers, never HTML <link> elements, so an injected head preload is
+  // correct per-response AND immune to the cross-request staleness. The preload
+  // scanner finds it at parse start, ~as early as the old 200 Link header would
+  // arrive. Responsive: desktop the 800 tile, mobile the 400 (media-gated); the
+  // type=image/avif hint makes non-AVIF browsers skip it (they use the JPG).
   if (lcpAvif) {
-    const h = new Headers(out.headers);
-    // responsive preload: desktop preloads the 800 tile, mobile the 400 — `media`
-    // on the Link header keeps either viewport from fetching the wrong one.
-    h.append("Link", `</images/${lcpAvif}>; rel=preload; as=image; type=image/avif; fetchpriority=high; media="(min-width: 561px)"`);
-    if (lcpStem) h.append("Link", `</images/${lcpStem}-${THUMB_SMALL_PX}.avif?v=${THUMB_VERSION}>; rel=preload; as=image; type=image/avif; fetchpriority=high; media="(max-width: 560px)"`);
-    return new Response(out.body, { status: out.status, statusText: out.statusText, headers: h });
+    const links =
+      `<link rel="preload" as="image" type="image/avif" fetchpriority="high" media="(min-width: 561px)" href="/images/${escAttr(lcpAvif)}">` +
+      (lcpStem ? `<link rel="preload" as="image" type="image/avif" fetchpriority="high" media="(max-width: 560px)" href="/images/${escAttr(lcpStem)}-${THUMB_SMALL_PX}.avif?v=${THUMB_VERSION}">` : "");
+    rewriter.on("head", { element(el) { el.prepend(links, { html: true }); } });
   }
-  return out;
+  return rewriter.transform(res);
 }
 
 // fisher-yates shuffle, return first N elements. doesn't mutate input.
