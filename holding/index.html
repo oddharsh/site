@@ -1055,32 +1055,30 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
         return { l: norm(l), r: norm(r), g: norm(g), b: norm(b) };
       };
       const histFor = (stem, img) => histCache[stem] || (histCache[stem] = computeHistogram(img)) || null;
-      // EXIF is NOT inlined on the no-store homepage (keeps the hot path lean).
-      // the metadata index (one file, EXIF text keyed by stem — histograms are
-      // now computed client-side, so this is ~half its old size) is fetched once,
-      // eagerly on idle (below) so it's already in hand before the first hover,
-      // with a lazy fallback in buildPhotoContent. on arrival, re-render any open tip.
-      let metaMap = null, metaLoading = false;
-      const loadMeta = () => {
-        if (metaLoading) return; metaLoading = true;
-        // ?mv= versions the URL: a stale service-worker / HTTP cache entry from a
-        // prior session can't satisfy a key it's never seen, so this always pulls
-        // a fresh, complete copy (the recurring "fallback path / 800px / no
-        // histogram" was a poisoned cached metadata.json). bump on metadata changes.
-        fetch("/images/metadata.json?mv=3").then(r => r.ok ? r.json() : null).then(m => {
-          // guard: only accept a non-empty object — a truncated/empty body would
-          // otherwise lock the tooltip onto the fallback path for the whole session.
-          if (m && typeof m === "object" && Object.keys(m).length) {
-            metaMap = m;
-            if (activeSlot && activeSlot.matches && activeSlot.matches(".photos a")) showTipFor(activeSlot);
-          } else {
-            metaLoading = false;  // let a later hover retry rather than cache the failure
-          }
-        }).catch(() => { metaLoading = false; });
+      // EXIF is NOT inlined on the no-store homepage, and not shipped as one big
+      // index either — it's fetched PER PHOTO on hover from /images/meta/<stem>.json
+      // (tiny, immutable, content-addressed → edge + browser cached forever, busted
+      // by ?mv). so a visitor only pulls EXIF for the handful of photos they actually
+      // hover, not all 119; repeat hovers and repeat visits are served from the
+      // browser's HTTP cache with no network at all. histograms are client-side
+      // (above), so a hovered photo shows its bars + dimensions instantly and the
+      // EXIF text fills in a beat later when its little file lands.
+      const metaMap = Object.create(null);   // stem → exif object | null (fetched, none) | absent (not fetched)
+      const META_V = "mv=3";                 // bump when metadata is regenerated
+      const fetchMeta = (stem) => {
+        if (stem in metaMap) return;         // already fetched or in flight
+        metaMap[stem] = null;                // mark in flight (renders as "no exif yet")
+        fetch(`/images/meta/${encodeURIComponent(stem)}.json?${META_V}`)
+          .then(r => (r.ok && (r.headers.get("content-type") || "").includes("json")) ? r.json() : null)
+          .then(m => {
+            if (!m || typeof m !== "object") return;   // 404 / SPA-fallback html / junk → leave null
+            metaMap[stem] = m;
+            // re-render if this photo's tip is still the open one
+            if (activeSlot && activeSlot.matches?.(".photos a") &&
+                (activeSlot.dataset.full || "").replace(/\.[^.]+$/, "") === stem) showTipFor(activeSlot);
+          })
+          .catch(() => {});
       };
-      // prefetch on idle (~13KB brotli now — histograms dropped, off the critical path) so the first
-      // hover already has full EXIF — no thin-then-fill flash, no race.
-      ("requestIdleCallback" in window) ? requestIdleCallback(loadMeta, { timeout: 2500 }) : setTimeout(loadMeta, 1200);
 
       // unified hover target → "what was hovered?" lookup. one tooltip
       // element, three content shapes: a photo slot (.photos a), a track
@@ -1133,16 +1131,16 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
 
       // XP camera-back review readout: a Luna header strip (filename + flash),
       // a sunken histogram band, the exposure trio, the full Fuji recipe as
-      // label/value rows, and a date footer. EXIF is lazy-loaded from
-      // metadata.json on first hover (see loadMeta); the histogram is computed
-      // client-side from the thumbnail. first hover may render text-only for a
-      // beat, then re-renders when the EXIF fetch (or image decode) lands.
+      // label/value rows, and a date footer. EXIF is lazy-fetched per-photo from
+      // /images/meta/<stem>.json on first hover (see fetchMeta); the histogram is
+      // computed client-side from the thumbnail. first hover may render text-only
+      // for a beat, then re-renders when the EXIF fetch (or image decode) lands.
       function buildPhotoContent(slot) {
         const filename = slot.dataset.full || decodeURIComponent((slot.href || "").split("/").pop());
         const stem = filename.replace(/\.[^.]+$/, "");
         const img  = slot.querySelector("img");
-        if (metaMap === null) loadMeta();          // kick the lazy fetch on first photo hover
-        const exif = (metaMap && metaMap[stem]) || {};
+        fetchMeta(stem);                           // per-photo lazy fetch (no-op if already in hand)
+        const exif = metaMap[stem] || {};
 
         // exposure trio
         const aper = exif.aperture ? (String(exif.aperture).startsWith("f/") ? exif.aperture : "f/" + exif.aperture) : "";

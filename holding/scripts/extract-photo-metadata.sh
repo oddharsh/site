@@ -171,6 +171,20 @@ jq '
 
 rm -f "$TMP"
 
+# also emit one file per photo for the tooltip's per-photo lazy fetch:
+# /images/meta/<stem>.json. these are immutable + content-addressed, so a visitor
+# only pulls EXIF for the photos they actually hover (not the whole index), and
+# repeat visits are served from the browser cache. metadata.json stays as the full
+# index (the /images/metadata.json endpoint + a fallback). bump the ?mv version in
+# index.html (META_V) whenever this regenerates so caches refresh.
+META_DIR="$SCRIPT_DIR/../images/meta"
+mkdir -p "$META_DIR"
+rm -f "$META_DIR"/*.json   # drop stale per-stem files (e.g. removed photos)
+jq -c 'to_entries[]' "$OUT" | while IFS= read -r entry; do
+  stem=$(printf '%s' "$entry" | jq -r '.key')
+  printf '%s' "$entry" | jq -c '.value' > "$META_DIR/$stem.json"
+done
+
 COUNT=$(jq 'keys | length' "$OUT")
-echo "✓ extracted metadata for $COUNT photos → $OUT"
+echo "✓ extracted metadata for $COUNT photos → $OUT (+ $COUNT per-stem files in images/meta/)"
 echo "  next: commit + deploy. the hover tooltip on aadhar.sh will pick it up."
