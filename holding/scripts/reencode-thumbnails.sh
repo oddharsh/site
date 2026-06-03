@@ -122,18 +122,25 @@ while IFS= read -r stem; do
   if [ "$W" -le "$H" ]; then tl=$(( (SQ*H + W-1)/W )); else tl=$(( (SQ*W + H-1)/H )); fi
   sips -Z "$tl" "$work" >/dev/null 2>&1
   if ! sips -c "$SQ" "$SQ" "$work" --out "$sqjpg" >/dev/null 2>&1; then FAIL=$((FAIL+1)); printf "✗"; continue; fi
-  # 4. desktop square: jpegli q82 + AVIF (yuv400 for grayscale, else yuv420)
+  # 4. desktop square: jpegli q82 + AVIF (yuv400 for grayscale, else yuv420).
+  #    metadata is stripped: the grid reads EXIF/histogram from metadata.json, so
+  #    embedded EXIF/XMP/ICC in the thumbnail files is dead weight (~1.5KB/AVIF
+  #    avg, up to ~5KB). avifenc gets --ignore-exif/--ignore-xmp (below); cjpegli
+  #    already emits clean JPGs, but sips can leave a grayscale ICC on B&W frames,
+  #    so strip the JPG too. assumes sRGB display (the AVIF primary has no profile
+  #    either, so this keeps the two formats consistent).
   if ! "$CJPEGLI" "$sqjpg" "$jpg" -q 82 -p 2 >/dev/null 2>&1; then FAIL=$((FAIL+1)); printf "✗"; continue; fi
+  exiftool -all= -overwrite_original "$jpg" >/dev/null 2>&1 || true
   space=$(sips -g space "$sqjpg" 2>/dev/null | awk '/space:/{print $2}'); [ "$space" = "Gray" ] && yuv=400 || yuv=420
   if [ "$AVIF_ENCODER" = "avifenc" ]; then
-    avifenc -q 63 --ignore-icc --speed 4 --jobs 4 --yuv "$yuv" "$sqjpg" "$avif" >/dev/null 2>&1 || { FAIL=$((FAIL+1)); printf "✗"; continue; }
+    avifenc -q 63 --ignore-icc --ignore-exif --ignore-xmp --speed 4 --jobs 4 --yuv "$yuv" "$sqjpg" "$avif" >/dev/null 2>&1 || { FAIL=$((FAIL+1)); printf "✗"; continue; }
   else
     sips -s format avif --setProperty formatOptions 60 "$sqjpg" --out "$avif" >/dev/null 2>&1 || { FAIL=$((FAIL+1)); printf "✗"; continue; }
   fi
   # 5. mobile square: downscale the SQ square to SQ_SM (square→square, no distortion)
   if sips -Z "$SQ_SM" "$sqjpg" --out "$smtmp" >/dev/null 2>&1; then
     if [ "$AVIF_ENCODER" = "avifenc" ]; then
-      avifenc -q 63 --ignore-icc --speed 4 --jobs 4 --yuv "$yuv" "$smtmp" "$smavif" >/dev/null 2>&1 || printf "~"
+      avifenc -q 63 --ignore-icc --ignore-exif --ignore-xmp --speed 4 --jobs 4 --yuv "$yuv" "$smtmp" "$smavif" >/dev/null 2>&1 || printf "~"
     else
       sips -s format avif --setProperty formatOptions 60 "$smtmp" --out "$smavif" >/dev/null 2>&1 || printf "~"
     fi
