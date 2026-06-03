@@ -1066,24 +1066,34 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
       const metaMap = Object.create(null);   // stem → exif object | null (fetched, none) | absent (not fetched)
       const META_V = "mv=3";                 // bump when metadata is regenerated
       const fetchMeta = (stem) => {
-        if (stem in metaMap) return;         // already fetched or in flight
-        metaMap[stem] = null;                // mark in flight (renders as "no exif yet")
+        if (stem in metaMap) return;         // already in hand, or a fetch is in flight
+        metaMap[stem] = null;                // in-flight sentinel (renders as "no exif yet")
         fetch(`/images/meta/${encodeURIComponent(stem)}.json?${META_V}`)
-          .then(r => (r.ok && (r.headers.get("content-type") || "").includes("json")) ? r.json() : null)
+          .then(r => {
+            // non-200, SPA-fallback html, or a transient bot-challenge → treat as a
+            // failure and fall to .catch (which clears the sentinel so we can retry).
+            if (!r.ok || !(r.headers.get("content-type") || "").includes("json")) throw 0;
+            return r.json();
+          })
           .then(m => {
-            if (!m || typeof m !== "object") return;   // 404 / SPA-fallback html / junk → leave null
+            if (!m || typeof m !== "object") throw 0;
             metaMap[stem] = m;
             // re-render if this photo's tip is still the open one
             if (activeSlot && activeSlot.matches?.(".photos a") &&
                 (activeSlot.dataset.full || "").replace(/\.[^.]+$/, "") === stem) showTipFor(activeSlot);
           })
-          .catch(() => {});
+          // CRUCIAL: drop the sentinel on failure so a later hover RE-FETCHES rather
+          // than the photo being stuck empty for the whole session. self-healing.
+          .catch(() => { delete metaMap[stem]; });
       };
       // warm EXIF for the photos actually on the page (≤12) once idle, so the first
-      // hover is instant rather than flashing the empty/late fields. still per-stem
-      // (only what's shown — scales as the library grows), immutable-cached after.
-      const warmShownMeta = () => document.querySelectorAll(".photos a[data-full]").forEach(a => {
-        const s = (a.dataset.full || "").replace(/\.[^.]+$/, ""); if (s) fetchMeta(s);
+      // hover is instant rather than showing empty fields for a beat. staggered (not a
+      // 12-wide burst) to stay gentle on the edge / any rate limit. still per-stem
+      // (only what's shown — scales as the library grows), immutable-cached after; a
+      // failed warm just retries on hover, since fetchMeta self-heals.
+      const warmShownMeta = () => [...document.querySelectorAll(".photos a[data-full]")].forEach((a, i) => {
+        const s = (a.dataset.full || "").replace(/\.[^.]+$/, "");
+        if (s) setTimeout(() => fetchMeta(s), i * 60);
       });
       ("requestIdleCallback" in window) ? requestIdleCallback(warmShownMeta, { timeout: 2500 }) : setTimeout(warmShownMeta, 1200);
 
