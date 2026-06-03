@@ -15,6 +15,18 @@
 # Deliberately does NOT touch R2 originals, metadata.json (its width/height are
 # the ORIGINAL dims), or the HIF → full-res click export.
 #
+# FUTURE — native-aspect layout (when CSS masonry / grid-lanes ships in 2+
+# engines; today it's Safari 26 only, Chrome behind a flag — see /garage/horizon).
+# The square crop here is a CURRENT-ENGINES compromise; the long-term intent is to
+# stop cropping and lay photos out at their native aspect, packed creatively
+# (masonry) and scaled by SOOC pixel area. To get there: re-encode full-frame
+# (NOT square) thumbnails from the R2 originals — nothing is lost, the crop only
+# ever lived in these files — and drive the layout from metadata.json's original
+# width/height. Key gotcha (this bit us before): if a tile is shown LARGER than
+# its thumbnail's resolution it pixelates, so the thumbnail's encoded size must
+# scale with its DISPLAY area, not be a fixed long-edge. So that variant wants a
+# per-photo target size (area-aware), not one global SQ.
+#
 # After running, bump THUMB_VERSION in _worker.js to bust caches.
 #   SQ=600 ./holding/scripts/reencode-thumbnails.sh
 #   SQ=600 SQ_SM=400 ./holding/scripts/reencode-thumbnails.sh "/path/to/source/folder"
