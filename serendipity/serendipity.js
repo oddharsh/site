@@ -344,15 +344,25 @@ const DASHBOARD_JS = `
     apply();
   });
   if(tip&&!matchMedia('(hover: none)').matches){
-    var cur=null;
+    var cur=null,lastX=0,lastY=0;
+    function show(a){ cur=a; var img=new Image(); img.loading='lazy'; img.decoding='async'; img.alt=''; img.src=a.getAttribute('data-cover'); tip.textContent=''; tip.appendChild(img); tip.classList.add('on'); }
+    function hide(){ cur=null; tip.classList.remove('on'); tip.textContent=''; }
     document.addEventListener('pointerover',function(e){
-      var a=e.target.closest&&e.target.closest('.ev[data-cover]'); if(a===cur)return; cur=a;
-      if(!a){tip.classList.remove('on');tip.textContent='';return;}
-      var img=new Image(); img.loading='lazy'; img.decoding='async'; img.alt=''; img.src=a.getAttribute('data-cover');
-      tip.textContent=''; tip.appendChild(img); tip.classList.add('on');
+      lastX=e.clientX; lastY=e.clientY;
+      var a=e.target.closest&&e.target.closest('.ev[data-cover]'); if(a===cur)return;
+      if(!a){hide();return;} show(a);
     });
-    document.addEventListener('pointermove',function(e){ if(!cur)return; tip.style.setProperty('--x',e.clientX+'px'); tip.style.setProperty('--y',e.clientY+'px'); },{passive:true});
-    document.addEventListener('pointerout',function(e){ if(cur&&!e.relatedTarget){cur=null;tip.classList.remove('on');} });
+    document.addEventListener('pointermove',function(e){ lastX=e.clientX; lastY=e.clientY; if(!cur)return; tip.style.setProperty('--x',lastX+'px'); tip.style.setProperty('--y',lastY+'px'); },{passive:true});
+    document.addEventListener('pointerout',function(e){ if(cur&&!e.relatedTarget)hide(); });
+    // scroll re-evaluation (ported from the homepage tooltip): the tip is
+    // position:fixed and the cursor stays put during scroll, but the CARD under
+    // it shifts — browsers (Safari esp.) don't reliably fire pointer enter/leave
+    // for that, so without this the cover stays stuck on a row no longer under
+    // the pointer. each scroll tick (rAF-coalesced) we look up what's actually
+    // under the cursor and re-target or hide. --x/--y stay correct (no cursor move).
+    var sf=0;
+    function reeval(){ sf=0; if(!cur)return; var u=document.elementFromPoint(lastX,lastY); var a=u&&u.closest&&u.closest('.ev[data-cover]'); if(!a){hide();return;} if(a!==cur)show(a); }
+    document.addEventListener('scroll',function(){ if(!cur)return; if(!sf)sf=requestAnimationFrame(reeval); },{capture:true,passive:true});
   }
 })();
 `;
