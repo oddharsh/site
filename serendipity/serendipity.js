@@ -253,7 +253,11 @@ function shellCss() {
   #ev-tip{position:fixed;z-index:9999;top:0;left:0;display:none;pointer-events:none;
     transform:translate(clamp(4px,calc(var(--x) + 18px),calc(100vw - 100% - 8px)),clamp(4px,calc(var(--y) + 18px),calc(100vh - 100% - 8px)))}
   #ev-tip.on{display:block}
-  #ev-tip img{display:block;width:248px;height:140px;object-fit:cover;background:oklch(94% 0.005 240);border:3px solid #fff;outline:1px solid oklch(61% 0.061 253);outline-offset:-1px;box-shadow:2px 3px 12px -2px rgba(0,20,90,.55)}
+  /* show the WHOLE banner — fixed width, natural aspect (no crop): Luma covers
+     often place text/faces near an edge that object-fit:cover would chop. height:
+     auto follows the image; max-height caps a rare portrait cover, with contain
+     letterboxing inside it (bg fills) rather than distorting. */
+  #ev-tip img{display:block;width:300px;height:auto;max-height:340px;object-fit:contain;background:oklch(94% 0.005 240);border:3px solid #fff;outline:1px solid oklch(61% 0.061 253);outline-offset:-1px;box-shadow:2px 3px 12px -2px rgba(0,20,90,.55)}
   @media(max-width:640px){.body{flex-direction:column}.pane{width:auto;border-right:0;border-bottom:2px solid #7a96c8}}`;
 }
 
