@@ -586,6 +586,10 @@ const R2_EXT_PRIORITY = {
 // as true monochrome (yuv420 → yuv400). same filenames each time, so the
 // ?v= bump is what busts the edge cache for the new bytes.)
 const THUMB_VERSION = 16;
+// stems removed from the pool — excluded from the rebuilt manifest even if their
+// original still lingers in R2's eventually-consistent list(). prune once R2
+// list() drops them (and the entry here is harmless to keep as a record).
+const REMOVED_STEMS = new Set(["XT509360"]);
 // small mobile AVIF tier (stem-400.avif), served via <source media> at <=560px.
 const THUMB_SMALL_PX = 400;
 
@@ -602,6 +606,9 @@ async function getImagesManifest(env, ctx) {
     const byStem = new Map();
     for (const o of list.objects || []) {
       const stem = o.key.replace(/\.[^.]+$/, "");
+      if (REMOVED_STEMS.has(stem)) continue;  // tombstoned (R2 list() is eventually
+                                              // consistent, so a deleted original can
+                                              // linger in list() for a while)
       const ext  = (o.key.split(".").pop() || "").toLowerCase();
       const prio = R2_EXT_PRIORITY[ext] || 0;
       const existing = byStem.get(stem);
