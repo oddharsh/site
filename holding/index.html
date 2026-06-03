@@ -1033,10 +1033,20 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
       let metaMap = null, metaLoading = false;
       const loadMeta = () => {
         if (metaLoading) return; metaLoading = true;
-        fetch("/images/metadata.json").then(r => r.ok ? r.json() : {}).then(m => {
-          metaMap = m || {};
-          if (activeSlot && activeSlot.matches && activeSlot.matches(".photos a")) showTipFor(activeSlot);
-        }).catch(() => { metaMap = {}; });
+        // ?mv= versions the URL: a stale service-worker / HTTP cache entry from a
+        // prior session can't satisfy a key it's never seen, so this always pulls
+        // a fresh, complete copy (the recurring "fallback path / 800px / no
+        // histogram" was a poisoned cached metadata.json). bump on metadata changes.
+        fetch("/images/metadata.json?mv=2").then(r => r.ok ? r.json() : null).then(m => {
+          // guard: only accept a non-empty object — a truncated/empty body would
+          // otherwise lock the tooltip onto the fallback path for the whole session.
+          if (m && typeof m === "object" && Object.keys(m).length) {
+            metaMap = m;
+            if (activeSlot && activeSlot.matches && activeSlot.matches(".photos a")) showTipFor(activeSlot);
+          } else {
+            metaLoading = false;  // let a later hover retry rather than cache the failure
+          }
+        }).catch(() => { metaLoading = false; });
       };
       // prefetch on idle (~22KB brotli, off the critical path) so the first
       // hover already has full EXIF — no thin-then-fill flash, no race.
