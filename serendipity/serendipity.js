@@ -117,7 +117,7 @@ function db(env) {
 // ── query layer — the SINGLE source of truth (HTML now; MCP + JSON reuse it) ─
 async function queryEvents(d) {
   return d.prepare(
-    `SELECT e.id, e.name, e.start_at, e.location, e.url, e.user_status,
+    `SELECT e.id, e.name, e.start_at, e.location, e.url, e.user_status, e.cover_url,
             SUM(CASE WHEN ea.is_host = 0 THEN 1 ELSE 0 END) AS attendee_count,
             SUM(CASE WHEN ea.is_host = 1 THEN 1 ELSE 0 END) AS host_count,
             (SELECT GROUP_CONCAT(COALESCE(uc.label, 'unnamed-' || substr(ec.user_key,1,4)), ', ')
@@ -237,6 +237,23 @@ function shellCss() {
   .banner.ok{border-color:oklch(60% 0.12 145);background:oklch(95% 0.05 145);color:oklch(30% 0.10 145)}
   .banner.err{border-color:oklch(58% 0.16 28);background:oklch(96% 0.04 28);color:oklch(40% 0.16 28)}
   .connected{border:1px solid oklch(60% 0.12 145);background:oklch(96% 0.04 145);border-radius:3px;padding:10px 12px;margin:0 0 14px;font-size:11px;color:oklch(28% 0.08 145)}
+  /* browse toolbar — client-side search + date-filter chips over the rendered list */
+  .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 14px}
+  .toolbar .search{flex:1;min-width:170px;margin:0}
+  .chips{display:flex;gap:4px;flex-wrap:wrap}
+  .chip{font:8.5pt Tahoma;padding:3px 11px;border:1px solid #8e9dad;border-radius:11px;background:linear-gradient(180deg,#fff,#f3f2ec);color:#222;cursor:pointer}
+  .chip.on{color:#fff;border-color:#2c4d7e;font-weight:bold;background:linear-gradient(180deg,#5b9bf0,#2f6fde 60%,#2a60cc)}
+  .ev[hidden],.grp[hidden]{display:none}
+  .empty-filter{display:none;color:oklch(50% 0.01 250);padding:24px 12px;border:1px dashed oklch(78% 0.04 250);border-radius:3px;background:oklch(98% 0.01 250);text-align:center;font-size:11px}
+  /* cursor-following cover tooltip — ported from the homepage photo/car-link tooltip.
+     --x/--y are typed <length> so the translate() positions it with no JS rAF; clamp
+     keeps it on-screen. only events with a cover_url get one. */
+  @property --x { syntax:"<length>"; inherits:false; initial-value:0px }
+  @property --y { syntax:"<length>"; inherits:false; initial-value:0px }
+  #ev-tip{position:fixed;z-index:9999;top:0;left:0;display:none;pointer-events:none;
+    transform:translate(clamp(4px,calc(var(--x) + 18px),calc(100vw - 100% - 8px)),clamp(4px,calc(var(--y) + 18px),calc(100vh - 100% - 8px)))}
+  #ev-tip.on{display:block}
+  #ev-tip img{display:block;width:248px;height:140px;object-fit:cover;background:oklch(94% 0.005 240);border:3px solid #fff;outline:1px solid oklch(61% 0.061 253);outline-offset:-1px;box-shadow:2px 3px 12px -2px rgba(0,20,90,.55)}
   @media(max-width:640px){.body{flex-direction:column}.pane{width:auto;border-right:0;border-bottom:2px solid #7a96c8}}`;
 }
 
@@ -282,7 +299,7 @@ function eventCard(e, isPast) {
   if (Number(e.host_count) > 0) counts.push(`${e.host_count} host${e.host_count == 1 ? "" : "s"}`);
   if (Number(e.attendee_count) > 0) counts.push(`${e.attendee_count} going`);
   const d = e.start_at ? new Date(e.start_at) : null;
-  return `<a class="ev" href="${PREFIX}/event/${esc(e.id)}">
+  return `<a class="ev" href="${PREFIX}/event/${esc(e.id)}" data-start="${esc(e.start_at || "")}"${e.cover_url ? ` data-cover="${esc(e.cover_url)}"` : ""}>
     <div class="nm">${esc(e.name)}</div>
     <div class="meta">${d ? esc(fmtDateTime(e.start_at)) : "date TBD"}${isPast && d ? ` · ${esc(relativeTime(d))}` : ""}${e.location ? " · " + esc(e.location) : ""}</div>
     <div class="row">
@@ -292,6 +309,53 @@ function eventCard(e, isPast) {
     </div>
   </a>`;
 }
+
+// client-side dashboard interactivity: live search, date-filter chips, and the
+// cursor-following cover tooltip (homepage idiom). all over the rendered cards —
+// no extra requests, works with the 60s edge-cached HTML.
+const DASHBOARD_JS = `
+(function(){
+  var cards=[].slice.call(document.querySelectorAll('.ev'));
+  var grps=[].slice.call(document.querySelectorAll('.grp[data-grp]'));
+  var search=document.getElementById('ev-search'), chips=document.getElementById('ev-chips');
+  var none=document.getElementById('ev-none'), tip=document.getElementById('ev-tip'), when='all';
+  function isWeekend(s,now){ if(s<now||s>now+8*864e5)return false; var w=new Date(s).getDay(); return w===0||w===6; }
+  function apply(){
+    var q=((search&&search.value)||'').trim().toLowerCase(), now=Date.now(), wk=now+7*864e5, shown=0;
+    cards.forEach(function(c){
+      var okq=!q||c.textContent.toLowerCase().indexOf(q)!==-1;
+      var s=c.dataset.start?new Date(c.dataset.start).getTime():NaN, okw=true;
+      if(when==='week')okw=!isNaN(s)&&s>=now&&s<=wk;
+      else if(when==='weekend')okw=!isNaN(s)&&isWeekend(s,now);
+      var v=okq&&okw; c.hidden=!v; if(v)shown++;
+    });
+    grps.forEach(function(g){
+      var any=false,n=g.nextElementSibling;
+      while(n&&!(n.classList&&n.classList.contains('grp'))){ if(n.classList&&n.classList.contains('ev')&&!n.hidden){any=true;break;} n=n.nextElementSibling; }
+      g.hidden=!any;
+    });
+    if(none)none.style.display=shown?'none':'block';
+  }
+  if(search)search.addEventListener('input',apply);
+  if(chips)chips.addEventListener('click',function(e){
+    var b=e.target.closest&&e.target.closest('.chip'); if(!b)return;
+    when=b.getAttribute('data-when');
+    [].forEach.call(chips.children,function(c){c.classList.toggle('on',c===b);});
+    apply();
+  });
+  if(tip&&!matchMedia('(hover: none)').matches){
+    var cur=null;
+    document.addEventListener('pointerover',function(e){
+      var a=e.target.closest&&e.target.closest('.ev[data-cover]'); if(a===cur)return; cur=a;
+      if(!a){tip.classList.remove('on');tip.textContent='';return;}
+      var img=new Image(); img.loading='lazy'; img.decoding='async'; img.alt=''; img.src=a.getAttribute('data-cover');
+      tip.textContent=''; tip.appendChild(img); tip.classList.add('on');
+    });
+    document.addEventListener('pointermove',function(e){ if(!cur)return; tip.style.setProperty('--x',e.clientX+'px'); tip.style.setProperty('--y',e.clientY+'px'); },{passive:true});
+    document.addEventListener('pointerout',function(e){ if(cur&&!e.relatedTarget){cur=null;tip.classList.remove('on');} });
+  }
+})();
+`;
 
 async function renderDashboard(d, path, msg) {
   const events = await queryEvents(d);
@@ -313,8 +377,19 @@ async function renderDashboard(d, path, msg) {
     const past = pastAll.slice(0, PAST_CAP);
     body = `<h1 class="page">Events</h1>
       <p class="lede">${events.length} event${events.length == 1 ? "" : "s"} in the pool, fed by ${contribCount} contributor${contribCount == 1 ? "" : "s"}. Click any event to see who&apos;s going.</p>
-      ${upcoming.length ? `<div class="grp">Upcoming (${upcoming.length})</div>${upcoming.map((e) => eventCard(e, false)).join("")}` : ""}
-      ${pastAll.length ? `<div class="grp">Past ${pastAll.length > PAST_CAP ? `(${PAST_CAP} most recent of ${pastAll.length})` : `(${pastAll.length})`}</div>${past.map((e) => eventCard(e, true)).join("")}` : ""}`;
+      <div class="toolbar">
+        <input class="xp-field search" id="ev-search" type="search" placeholder="Search events, places, contributors…" autocomplete="off">
+        <div class="chips" id="ev-chips">
+          <button type="button" class="chip on" data-when="all">All</button>
+          <button type="button" class="chip" data-when="week">This week</button>
+          <button type="button" class="chip" data-when="weekend">This weekend</button>
+        </div>
+      </div>
+      ${upcoming.length ? `<div class="grp" data-grp>Upcoming (${upcoming.length})</div>${upcoming.map((e) => eventCard(e, false)).join("")}` : ""}
+      ${pastAll.length ? `<div class="grp" data-grp>Past ${pastAll.length > PAST_CAP ? `(${PAST_CAP} most recent of ${pastAll.length})` : `(${pastAll.length})`}</div>${past.map((e) => eventCard(e, true)).join("")}` : ""}
+      <p class="empty-filter" id="ev-none">No events match — clear the search or pick a wider range.</p>
+      <div id="ev-tip" aria-hidden="true"></div>
+      <script>${DASHBOARD_JS}</script>`;
   }
   return html(200, shell("Events", path, banner(msg) + body));
 }
@@ -1003,7 +1078,7 @@ export async function handleSerendipity(request, env, ctx) {
 // Self-contained: own security headers, no dependency on the Pages _worker.js.
 const SECURITY_HEADERS = {
   "content-security-policy":
-    "default-src 'self'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; object-src 'none'",
+    "default-src 'self'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data: https://images.lumacdn.com; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; object-src 'none'",
   "x-content-type-options": "nosniff",
   "referrer-policy": "strict-origin-when-cross-origin",
   "x-frame-options": "DENY",
