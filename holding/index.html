@@ -1079,6 +1079,13 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
           })
           .catch(() => {});
       };
+      // warm EXIF for the photos actually on the page (≤12) once idle, so the first
+      // hover is instant rather than flashing the empty/late fields. still per-stem
+      // (only what's shown — scales as the library grows), immutable-cached after.
+      const warmShownMeta = () => document.querySelectorAll(".photos a[data-full]").forEach(a => {
+        const s = (a.dataset.full || "").replace(/\.[^.]+$/, ""); if (s) fetchMeta(s);
+      });
+      ("requestIdleCallback" in window) ? requestIdleCallback(warmShownMeta, { timeout: 2500 }) : setTimeout(warmShownMeta, 1200);
 
       // unified hover target → "what was hovered?" lookup. one tooltip
       // element, three content shapes: a photo slot (.photos a), a track
@@ -1147,7 +1154,9 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
         const expo = [exif.shutter, aper, exif.iso ? "ISO " + exif.iso : ""].filter(Boolean).join(" ");
 
         // EV · dimensions · size strip
-        const w = exif.width || img?.naturalWidth, h = exif.height || img?.naturalHeight;
+        // real EXIF dims only — a square thumbnail's naturalWidth is just 600, not
+        // the photo's size, so the old fallback flashed "600 × 600" before EXIF landed.
+        const w = exif.width, h = exif.height;
         const dims = (w && h) ? `${w} × ${h}` : "";
         const evStr = (typeof exif.ev === "number" && exif.ev !== 0) ? ((exif.ev > 0 ? "+" : "") + exif.ev + " EV") : "";
         const metaStrip = [evStr, dims, slot.dataset.size ? fmtBytes(slot.dataset.size) : ""].filter(Boolean).join(" · ");
