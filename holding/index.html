@@ -1180,16 +1180,23 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
         const grainVal = isOn(exif.grain) ? (exif.grain + (isOn(exif.grain_size) ? " " + exif.grain_size : "")) : "";
         const toneVal = (trimTone(exif.highlight_tone) || trimTone(exif.shadow_tone))
           ? `H ${trimTone(exif.highlight_tone) || "0"}  S ${trimTone(exif.shadow_tone) || "0"}` : "";
+        // Fuji stores B&W film sims (Acros / Monochrome, optionally with a Ye/R/G
+        // contrast filter) in the Saturation EXIF tag and leaves FilmMode blank — so
+        // "Acros Green Filter" is the FILM, not a color setting. route it to the Film
+        // row and drop the Color row for B&W frames; color shots keep "+3" etc.
+        const bwSim    = !!exif.saturation && /\b(acros|monochrome|b\s*&\s*w|bw|sepia)\b/i.test(String(exif.saturation));
+        const filmVal  = exif.film || (bwSim ? exif.saturation : "");
+        const colorVal = bwSim ? "" : trimTone(exif.saturation);
         const recipe = [
           ["Body",       exif.camera],
           ["Lens",       [exif.lens, fmtFocal(exif.focal)].filter(Boolean).join(" · ")],
-          ["Film",       exif.film],
+          ["Film",       filmVal],
           ["Dyn range",  exif.dr],
           ["White bal",  exif.white_balance],
           ["Chrome FX",  chromeParts.join(" · ")],
           ["Grain",      grainVal],
           ["Tones",      toneVal],
-          ["Color",      trimTone(exif.saturation)],
+          ["Color",      colorVal],
         ].filter(([, v]) => v && v !== "undefined")
          .map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("");
 
