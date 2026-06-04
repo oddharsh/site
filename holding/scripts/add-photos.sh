@@ -2,8 +2,10 @@
 # add-photos.sh — process one or more SOOC photos into the site.
 #
 # per source file, this script:
-#   1. generates a 500px JPG thumbnail at holding/images/<stem>.jpg
-#      (this is what the photo grid displays)
+#   1. generates the grid thumbnails at holding/images/<stem>.{jpg,avif} +
+#      <stem>-<SQ_SM>.avif — PRE-CROPPED CENTER SQUARES (what the grid shows:
+#      aspect-ratio:1 + object-fit:cover), metadata-stripped. mirrors
+#      reencode-thumbnails.sh exactly (keep the two encode paths in sync).
 #   2. uploads the original to R2 as aadhar-photos/<filename>
 #      (preserves SOOC bytes; this is what /images/full/<filename> returns)
 #   3. if the original is HEIF (.hif/.heic/.heif), also generates a full-
@@ -13,15 +15,20 @@
 #      .jpg over the .HIF, so click-through opens in the browser.
 #
 # post-processing:
-#   4. regenerates holding/images/metadata.json (EXIF for the tooltip)
+#   4. regenerates holding/images/metadata.json + per-stem images/meta/<stem>.json
+#      (EXIF for the tooltip; histograms are computed client-side, not stored)
 #   5. busts the manifest:images KV key so the worker re-derives from R2
 #
-# safe to re-run. skips local thumbnail generation if the thumbnail is
-# already newer than the source. always uploads to R2 (wrangler r2 put
-# is idempotent — overwrites with same content).
+# safe to re-run. skips thumbnail generation when all three thumb files are
+# already newer than the source. always uploads to R2 (wrangler r2 put is
+# idempotent). to add only new shots, pass just their paths (not the whole
+# folder) so the 100+ existing originals aren't re-uploaded.
+#
+# NB: this only ADDS at the current SQ/SQ_SM. to change the square size for the
+# whole library, that's reencode-thumbnails.sh's job (+ a THUMB_VERSION bump).
 #
 # usage:
-#   ./holding/scripts/add-photos.sh /path/to/photo.JPG
+#   ./holding/scripts/add-photos.sh /path/to/photo.HIF
 #   ./holding/scripts/add-photos.sh /path/to/folder/
 #   ./holding/scripts/add-photos.sh /path/a.jpg /path/b.HIF /path/folder/
 
@@ -34,29 +41,20 @@ DEST="$PROJECT_DIR/holding/images"
 TMP="/tmp/aadhar-add-photos-$$"
 NS="3cb8a107c58e47dc9244e75b33401f36"  # RN_KV namespace
 
-# grid thumbnail long-edge in px. the homepage renders each tile at
-# ~204 CSS px (660px window / 3 cols), so 800px covers ~3–4x retina with
-# headroom for larger viewports + crisper detail. was 500 (2x-only), and
-# 1200 before that (oversampled ~9x by area). the full-res original is what
-# /images/full serves on click, so the thumbnail is never shown larger than
-# the grid. override with THUMB_PX=N per run. NB: re-encoding ALL existing
-# thumbnails after changing this is reencode-thumbnails.sh's job.
-THUMB_PX="${THUMB_PX:-800}"
+# square thumbnail edges (px). the file IS the displayed pixels (center square),
+# so no off-square bytes ship. MUST match reencode-thumbnails.sh + THUMB_SMALL_PX
+# in _worker.js (the -<N>.avif suffix). override per run with SQ=/SQ_SM=.
+SQ="${SQ:-600}"        # desktop square edge (~197px tile at DPR-3)
+SQ_SM="${SQ_SM:-400}"  # mobile square edge (served via <source media> ≤560px)
 
 # preconditions
 if [ $# -eq 0 ]; then
   echo "usage: $0 <file-or-dir>..." >&2
   exit 1
 fi
-# jpegli is the primary JPEG encoder — built locally from
-# github.com/google/jpegli and copied to ~/.local/bin/. it produces ~25%
-# smaller JPEGs than mozjpeg at indistinguishable visual quality and is
-# Google's active heir to mozjpeg. install steps in
-# holding/scripts/build-jpegli.sh.
-#
-# mozjpeg's jpegtran is still used for the EXIF-orientation step (lossless
-# rotation of the intermediate). that's structural, not an encode, so the
-# jpegli/mozjpeg choice doesn't affect output quality here.
+# jpegli is the primary JPEG encoder (github.com/google/jpegli → ~/.local/bin/);
+# ~25% smaller than mozjpeg at indistinguishable quality. mozjpeg's jpegtran does
+# the lossless EXIF-orientation step (structural, not an encode).
 CJPEGLI="$HOME/.local/bin/cjpegli"
 MOZJPEG_DIR="/opt/homebrew/opt/mozjpeg/bin"
 MOZ_JTRAN="$MOZJPEG_DIR/jpegtran"
@@ -80,6 +78,7 @@ if [ ! -x "$MOZ_JTRAN" ]; then
   echo "  install with: brew install mozjpeg" >&2
   exit 1
 fi
+if command -v avifenc >/dev/null 2>&1; then AVIF_ENCODER="avifenc"; else AVIF_ENCODER="sips"; fi
 
 mkdir -p "$DEST" "$TMP"
 trap 'rm -rf "$TMP"' EXIT
@@ -109,149 +108,75 @@ fi
 echo "found $TOTAL source file(s) to process"
 echo ""
 
-# ── phase 1a: 1200px progressive JPG thumbnails (fallback) ───────────
-# two-stage encode:
-#   1. sips resizes the source down to THUMB_PX (500px default) on the long edge and writes
-#      a near-lossless intermediate JPEG (formatOptions 100). this is
-#      where HEIF/HIF/HEIC decoding happens — sips handles the formats
-#      Apple makes the camera shoot in.
-#   2. mozjpeg's djpeg → cjpeg recompresses with progressive scanning,
-#      trellis optimization, and tuned Q tables. ≈18–22% smaller than
-#      the sips default JPEG output at indistinguishable visual quality,
-#      AND progressive means slow networks paint a low-res pass first
-#      instead of revealing top-down.
-# tuning notes:
-#   -quality 82           sweet spot for photo content with mozjpeg
-#   -progressive          (default in mozjpeg) multi-pass decode
-#   -optimize             (default) custom Huffman tables
-#   -tune-ssim            optimize trellis search for structural similarity
-# helper: read EXIF Orientation off a file and return the jpegtran flag
-# that brings the pixels upright. empty string means no rotation needed.
-# common camera values: 1=normal, 3=180°, 6=90° CW, 8=270° CW (= 90° CCW).
+# read EXIF Orientation → the jpegtran flag that brings the pixels upright.
+# empty = no rotation. 1=normal, 3=180°, 6=90°CW, 8=270°CW, etc.
 exif_to_jpegtran() {
-  local f="$1"
-  local o
-  o=$(exiftool -s -s -s -n -Orientation "$f" 2>/dev/null || echo "")
+  local o; o=$(exiftool -s -s -s -n -Orientation "$1" 2>/dev/null || echo "")
   case "$o" in
-    "" | "1") echo "" ;;
-    "2")      echo "-flip horizontal" ;;
-    "3")      echo "-rotate 180" ;;
-    "4")      echo "-flip vertical" ;;
-    "5")      echo "-transpose" ;;
-    "6")      echo "-rotate 90" ;;
-    "7")      echo "-transverse" ;;
-    "8")      echo "-rotate 270" ;;
-    *)        echo "" ;;
+    ""|"1") echo "" ;;  "2") echo "-flip horizontal" ;;  "3") echo "-rotate 180" ;;
+    "4") echo "-flip vertical" ;;  "5") echo "-transpose" ;;  "6") echo "-rotate 90" ;;
+    "7") echo "-transverse" ;;  "8") echo "-rotate 270" ;;  *) echo "" ;;
   esac
 }
 
-echo "phase 1a — progressive JPG thumbnails (${THUMB_PX}px, jpegli q82, EXIF-rotated)"
-T_OK=0; T_SKIP=0; T_FAIL=0
-INTER="$TMP/jpg_intermediate"
-mkdir -p "$INTER"
-while IFS= read -r f; do
-  base=$(basename "$f")
-  stem="${base%.*}"
-  thumb="$DEST/${stem}.jpg"
-  if [ -f "$thumb" ] && [ "$thumb" -nt "$f" ]; then
-    T_SKIP=$((T_SKIP+1)); printf "·"
-    continue
+avif_encode() {  # avif_encode <src.jpg> <out.avif>
+  if [ "$AVIF_ENCODER" = "avifenc" ]; then
+    # 4:0:0 for grayscale (Leica Monochrom — no chroma planes), else 4:2:0.
+    # strip ICC/EXIF/XMP: the grid reads EXIF from metadata.json, so embedded
+    # metadata is dead weight (and avifenc copies source EXIF by default).
+    local space; space=$(sips -g space "$1" 2>/dev/null | awk '/space:/{print $2}')
+    local yuv; [ "$space" = "Gray" ] && yuv=400 || yuv=420
+    avifenc -q 63 --ignore-icc --ignore-exif --ignore-xmp --speed 4 --jobs 4 --yuv "$yuv" "$1" "$2" >/dev/null 2>&1
+  else
+    sips -s format avif --setProperty formatOptions 60 "$1" --out "$2" >/dev/null 2>&1
   fi
-  mid="$INTER/${stem}.jpg"
-  rot_mid="$INTER/${stem}.rot.jpg"
+}
 
-  # 1. resize + decode with sips (handles HEIF/HIF natively). near-lossless
-  #    JPEG intermediate keeps the bridge between formats clean.
-  if ! sips -Z "$THUMB_PX" -s format jpeg --setProperty formatOptions 100 "$f" --out "$mid" >/dev/null 2>&1; then
+# ── phase 1: square thumbnails (jpegli q82 JPG + AVIF, + mobile AVIF) ──
+echo "phase 1 — square thumbnails (${SQ}×${SQ} / ${SQ_SM}×${SQ_SM}, jpegli q82 + AVIF via $AVIF_ENCODER, metadata-stripped)"
+T_OK=0; T_SKIP=0; T_FAIL=0
+INTER="$TMP/inter"; mkdir -p "$INTER"
+while IFS= read -r f; do
+  base=$(basename "$f"); stem="${base%.*}"
+  jpg="$DEST/${stem}.jpg"; avif="$DEST/${stem}.avif"; smavif="$DEST/${stem}-${SQ_SM}.avif"
+  if [ -f "$jpg" ] && [ -f "$avif" ] && [ -f "$smavif" ] && [ "$jpg" -nt "$f" ]; then
+    T_SKIP=$((T_SKIP+1)); printf "·"; continue
+  fi
+  work="$INTER/${stem}.jpg"; rot="$INTER/${stem}.rot.jpg"
+  sq="$INTER/${stem}.sq.jpg"; sm="$INTER/${stem}.sm.jpg"
+
+  # 1. decode source → working JPG (long edge 2000; ample to crop a sharp square).
+  #    sips handles HEIF/HIF/HEIC decode natively.
+  if ! sips -Z 2000 -s format jpeg --setProperty formatOptions 100 "$f" --out "$work" >/dev/null 2>&1; then
     T_FAIL=$((T_FAIL+1)); printf "✗"; continue
   fi
-
-  # 2. apply EXIF orientation losslessly with jpegtran. portrait shots
-  #    from the camera have landscape pixels + an "Orientation: Rotate
-  #    90 CW" tag — viewers that read EXIF render them right. but our
-  #    next stage (cjpegli) strips EXIF, so we must physically rotate
-  #    the pixels here. jpegtran's transform is lossless when dims are
-  #    MCU-aligned (always true for our 1200px-long-edge thumbs).
+  # 2. lossless EXIF-orientation rotation (cjpegli/avifenc strip EXIF, bake it in)
   rot_flag=$(exif_to_jpegtran "$f")
   if [ -n "$rot_flag" ]; then
-    if "$MOZ_JTRAN" -copy none $rot_flag "$mid" > "$rot_mid" 2>/dev/null; then
-      mid="$rot_mid"
-    fi
+    if "$MOZ_JTRAN" -copy none $rot_flag "$work" > "$rot" 2>/dev/null; then work="$rot"; fi
   fi
-
-  # 3. jpegli recompression: psychovisually-tuned Q tables, adaptive per-
-  #    block quantization, max-progressive scan (-p 2). ~25% smaller than
-  #    mozjpeg at the same nominal quality, indistinguishable visually.
-  if "$CJPEGLI" "$mid" "$thumb" -q 82 -p 2 >/dev/null 2>&1; then
-    T_OK=$((T_OK+1)); printf "."
-  else
-    T_FAIL=$((T_FAIL+1)); printf "✗"
+  # 3. center-crop to a square: resize the SHORT edge to SQ, then crop SQ×SQ
+  #    centered (sips object-position is center, matching object-fit:cover).
+  W=$(sips -g pixelWidth "$work" 2>/dev/null | awk '/pixelWidth/{print $2}')
+  H=$(sips -g pixelHeight "$work" 2>/dev/null | awk '/pixelHeight/{print $2}')
+  if [ -z "$W" ] || [ -z "$H" ] || [ "$W" -lt 1 ] || [ "$H" -lt 1 ]; then T_FAIL=$((T_FAIL+1)); printf "✗"; continue; fi
+  if [ "$W" -le "$H" ]; then tl=$(( (SQ*H + W-1)/W )); else tl=$(( (SQ*W + H-1)/H )); fi
+  sips -Z "$tl" "$work" >/dev/null 2>&1
+  if ! sips -c "$SQ" "$SQ" "$work" --out "$sq" >/dev/null 2>&1; then T_FAIL=$((T_FAIL+1)); printf "✗"; continue; fi
+  # 4. desktop square JPG (jpegli q82) + strip any residual metadata (sips can
+  #    leave a grayscale ICC on B&W frames; keep formats consistent / sRGB).
+  if ! "$CJPEGLI" "$sq" "$jpg" -q 82 -p 2 >/dev/null 2>&1; then T_FAIL=$((T_FAIL+1)); printf "✗"; continue; fi
+  exiftool -all= -overwrite_original "$jpg" >/dev/null 2>&1 || true
+  # 5. desktop square AVIF
+  if ! avif_encode "$sq" "$avif"; then T_FAIL=$((T_FAIL+1)); printf "✗"; continue; fi
+  # 6. mobile square AVIF (downscale the SQ square → SQ_SM, square→square)
+  if sips -Z "$SQ_SM" "$sq" --out "$sm" >/dev/null 2>&1; then
+    avif_encode "$sm" "$smavif" || printf "~"
   fi
+  T_OK=$((T_OK+1)); printf "."
 done < "$SOURCES"
 echo ""
 echo "  generated: $T_OK  skipped (current): $T_SKIP  failed: $T_FAIL"
-echo ""
-
-# (WebP middle tier was removed in 2026-05 — every modern browser
-# advertises image/avif natively, so the WebP middle never served
-# anyone. revert this commit to bring it back if needed.)
-
-# ── phase 1b: 1200px AVIF thumbnails (<picture> primary) ─────────────
-# AVIF is the primary source — typically 20–40% smaller than WebP at
-# equivalent visual quality. encoded from the JPG thumb so dims + crop
-# match the other tiers exactly. encoder preference:
-#   1. avifenc (libavif, `brew install libavif`) — best quality/size,
-#      tuned via CQ 30 (≈ JPEG q82 quality, far smaller). preferred.
-#   2. sips    — macOS-native AVIF encoder, no extra dep. formatOptions
-#      60 ≈ visually-lossless for photo content. fallback.
-# NB: <picture>'s type-fallback only catches "format not supported";
-# decode failures will NOT cascade to phase 1a. if browsers start
-# reporting broken images, demote AVIF rather than layering on fallbacks.
-echo "phase 1b — AVIF thumbnails (${THUMB_PX}px, picture primary)"
-A_OK=0; A_SKIP=0; A_FAIL=0
-if command -v avifenc >/dev/null 2>&1; then
-  AVIF_ENCODER="avifenc"
-else
-  AVIF_ENCODER="sips"
-fi
-while IFS= read -r f; do
-  base=$(basename "$f")
-  stem="${base%.*}"
-  jpg="$DEST/${stem}.jpg"
-  avif="$DEST/${stem}.avif"
-  if [ ! -f "$jpg" ]; then
-    A_FAIL=$((A_FAIL+1)); printf "✗"
-    continue
-  fi
-  if [ -f "$avif" ] && [ "$avif" -nt "$jpg" ]; then
-    A_SKIP=$((A_SKIP+1)); printf "·"
-    continue
-  fi
-  if [ "$AVIF_ENCODER" = "avifenc" ]; then
-    # subsampling by source color space: grayscale sources (e.g. Leica
-    # Monochrom) → 4:0:0 (yuv400, no chroma planes — correct, smaller, and
-    # no risk of a faint chroma cast); color sources → 4:2:0 (yuv420,
-    # standard for photographic thumbnails, visually identical to 4:4:4 at
-    # this size). detected via `sips -g space` (Gray vs RGB).
-    space=$(sips -g space "$jpg" 2>/dev/null | awk '/space:/{print $2}')
-    if [ "$space" = "Gray" ]; then yuv=400; else yuv=420; fi
-    if avifenc -q 63 --ignore-icc --speed 4 --jobs 4 --yuv "$yuv" "$jpg" "$avif" >/dev/null 2>&1; then
-      A_OK=$((A_OK+1)); printf "."
-    else
-      A_FAIL=$((A_FAIL+1)); printf "✗"
-    fi
-  else
-    # sips writes via the Apple AVIF encoder (macOS 13+). slower + slightly
-    # larger output than avifenc but no extra brew install.
-    if sips -s format avif --setProperty formatOptions 60 "$jpg" --out "$avif" >/dev/null 2>&1; then
-      A_OK=$((A_OK+1)); printf "."
-    else
-      A_FAIL=$((A_FAIL+1)); printf "✗"
-    fi
-  fi
-done < "$SOURCES"
-echo ""
-echo "  generated: $A_OK  skipped (current): $A_SKIP  failed: $A_FAIL  (encoder: $AVIF_ENCODER)"
 echo ""
 
 # ── phase 2: HIF → full-res JPG export (for click-through) ────────────
@@ -297,10 +222,8 @@ upload() {
   fi
 }
 
-# originals — normalize extension to lowercase so R2 keys are stable
-# (camera SOOC files come in as .JPG; we don't want to mix with .jpg
-# exports of HIFs and end up with a case-split bucket). stem case is
-# preserved.
+# originals — normalize extension to lowercase so R2 keys are stable. stem
+# case is preserved.
 PENDING=0
 while IFS= read -r f; do
   base=$(basename "$f")
@@ -334,11 +257,10 @@ if [ "$(ls -A "$EXPORTS" 2>/dev/null)" ]; then
 fi
 echo ""
 
-# ── phase 4: metadata.json + cache bust ──────────────────────────────
+# ── phase 4: metadata.json + per-stem files + cache bust ─────────────
 echo "phase 4 — metadata regen + cache bust"
-# regenerate from the FIRST input dir if it was a directory; else from
-# the default source folder. (metadata script needs one canonical dir
-# to walk; per-file regen would be awkward.)
+# regenerate from the FIRST input dir if it was a directory; else from the
+# parent dir of the first file (metadata script walks one canonical dir).
 META_SRC=""
 for arg in "$@"; do
   if [ -d "$arg" ]; then META_SRC="$arg"; break; fi
@@ -349,7 +271,7 @@ fi
 if command -v exiftool >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
   "$SCRIPT_DIR/extract-photo-metadata.sh" "$META_SRC" 2>&1 | tail -1
 else
-  echo "  exiftool or jq missing — skipping metadata.json regen"
+  echo "  exiftool or jq missing — skipping metadata regen"
 fi
 
 wrangler kv key delete --namespace-id="$NS" "manifest:images"  --remote >/dev/null 2>&1 || true
@@ -359,4 +281,4 @@ echo "  manifest + index caches busted"
 echo ""
 
 echo "✓ done. deploy with:"
-echo "    wrangler pages deploy holding --project-name aadhar-sh --branch holding"
+echo "    wrangler pages deploy holding --project-name aadhar-sh --branch holding --commit-dirty=true"
