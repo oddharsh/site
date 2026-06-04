@@ -1321,7 +1321,7 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
       // cursor instead comes to rest in the gap, the tooltip still clears after the
       // delay, so the dead space between entries shows nothing. shared by every
       // hover target here (photos, tracks, artists, car links) — one tooltip engine.
-      const TIP_DISMISS_MS = 10;
+      const TIP_DISMISS_MS = 50;
       let hideTimer = 0;
       const cancelHide   = () => { clearTimeout(hideTimer); hideTimer = 0; };
       const scheduleHide = () => { clearTimeout(hideTimer); hideTimer = setTimeout(hideTip, TIP_DISMISS_MS); };

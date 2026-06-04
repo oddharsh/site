@@ -354,7 +354,7 @@ const DASHBOARD_JS = `
     // cursor rests in the gap the cover still clears after the delay (no tooltip in
     // dead space). mirrors the homepage tooltip's TIP_DISMISS_MS — separate deploy,
     // same setting (keep the two in sync).
-    var TIP_DISMISS_MS=10;
+    var TIP_DISMISS_MS=50;
     function cancelHide(){ clearTimeout(hideT); hideT=0; }
     function scheduleHide(){ clearTimeout(hideT); hideT=setTimeout(hide, TIP_DISMISS_MS); }
     function show(a){ cancelHide(); cur=a; var img=new Image(); img.loading='lazy'; img.decoding='async'; img.alt=''; img.src=a.getAttribute('data-cover'); tip.textContent=''; tip.appendChild(img); tip.classList.add('on'); }
