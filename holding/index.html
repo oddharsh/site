@@ -1315,7 +1315,18 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
         dropAnchor();
         activeSlot = null;
       };
+      // dismissal is deferred by a hair (TIP_DISMISS_MS) so hopping from one hover
+      // target straight across the small gap to the NEXT one doesn't flash the
+      // tooltip off-then-on. a fresh pointerover cancels the pending hide; if the
+      // cursor instead comes to rest in the gap, the tooltip still clears after the
+      // delay, so the dead space between entries shows nothing. shared by every
+      // hover target here (photos, tracks, artists, car links) — one tooltip engine.
+      const TIP_DISMISS_MS = 10;
+      let hideTimer = 0;
+      const cancelHide   = () => { clearTimeout(hideTimer); hideTimer = 0; };
+      const scheduleHide = () => { clearTimeout(hideTimer); hideTimer = setTimeout(hideTip, TIP_DISMISS_MS); };
       const showTipFor = (target, e) => {
+        cancelHide();                        // a fresh show cancels any pending gap-dismissal
         dropAnchor();                        // pointer entry always uses cursor-follow
         activeSlot = target;
         const html = buildContent(target);
@@ -1327,9 +1338,9 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
 
       document.addEventListener("pointerover", (e) => {
         const target = findTarget(e.target);
-        if (!target || target === activeSlot) return;
-        // EXIF/art is inlined per-element, so content renders fully on
-        // first hover with no fetch round-trip.
+        if (!target) return;
+        cancelHide();                        // re-entered a target (same or next) → keep it up
+        if (target === activeSlot) return;   // same target already shown
         showTipFor(target, e);
       }, { passive: true });
 
@@ -1349,7 +1360,7 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
         // adjacent artist)? let the next pointerover swap content without an
         // intermediate hide+show flicker.
         if (toTarget) return;
-        hideTip();
+        scheduleHide();                      // left to a gap — defer the hide briefly (TIP_DISMISS_MS)
       }, { passive: true });
 
       // scroll re-evaluation. the tooltip is position:fixed and the cursor
@@ -1368,7 +1379,7 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
         if (!isOpen()) return;
         const under = document.elementFromPoint(lastX, lastY);
         const newTarget = findTarget(under);
-        if (!newTarget) { hideTip(); return; }
+        if (!newTarget) { scheduleHide(); return; }   // debounced, same as pointer-leave
         if (newTarget !== activeSlot) showTipFor(newTarget);
       };
       document.addEventListener("scroll", () => {

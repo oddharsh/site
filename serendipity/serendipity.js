@@ -348,16 +348,25 @@ const DASHBOARD_JS = `
     apply();
   });
   if(tip&&!matchMedia('(hover: none)').matches){
-    var cur=null,lastX=0,lastY=0;
-    function show(a){ cur=a; var img=new Image(); img.loading='lazy'; img.decoding='async'; img.alt=''; img.src=a.getAttribute('data-cover'); tip.textContent=''; tip.appendChild(img); tip.classList.add('on'); }
+    var cur=null,lastX=0,lastY=0,hideT=0;
+    // dismissal is deferred by TIP_DISMISS_MS so hopping card→card across the gap
+    // doesn't flash the cover off-then-on; a fresh pointerover cancels it, but if the
+    // cursor rests in the gap the cover still clears after the delay (no tooltip in
+    // dead space). mirrors the homepage tooltip's TIP_DISMISS_MS — separate deploy,
+    // same setting (keep the two in sync).
+    var TIP_DISMISS_MS=10;
+    function cancelHide(){ clearTimeout(hideT); hideT=0; }
+    function scheduleHide(){ clearTimeout(hideT); hideT=setTimeout(hide, TIP_DISMISS_MS); }
+    function show(a){ cancelHide(); cur=a; var img=new Image(); img.loading='lazy'; img.decoding='async'; img.alt=''; img.src=a.getAttribute('data-cover'); tip.textContent=''; tip.appendChild(img); tip.classList.add('on'); }
     function hide(){ cur=null; tip.classList.remove('on'); tip.textContent=''; }
     document.addEventListener('pointerover',function(e){
       lastX=e.clientX; lastY=e.clientY;
-      var a=e.target.closest&&e.target.closest('.ev[data-cover]'); if(a===cur)return;
-      if(!a){hide();return;} show(a);
+      var a=e.target.closest&&e.target.closest('.ev[data-cover]');
+      if(a){ cancelHide(); if(a!==cur)show(a); return; }
+      scheduleHide();   // entered a gap / non-card → defer dismissal so a quick hop cancels it
     });
     document.addEventListener('pointermove',function(e){ lastX=e.clientX; lastY=e.clientY; if(!cur)return; tip.style.setProperty('--x',lastX+'px'); tip.style.setProperty('--y',lastY+'px'); },{passive:true});
-    document.addEventListener('pointerout',function(e){ if(cur&&!e.relatedTarget)hide(); });
+    document.addEventListener('pointerout',function(e){ if(cur&&!e.relatedTarget)scheduleHide(); });
     // scroll re-evaluation (ported from the homepage tooltip): the tip is
     // position:fixed and the cursor stays put during scroll, but the CARD under
     // it shifts — browsers (Safari esp.) don't reliably fire pointer enter/leave
@@ -365,7 +374,7 @@ const DASHBOARD_JS = `
     // the pointer. each scroll tick (rAF-coalesced) we look up what's actually
     // under the cursor and re-target or hide. --x/--y stay correct (no cursor move).
     var sf=0;
-    function reeval(){ sf=0; if(!cur)return; var u=document.elementFromPoint(lastX,lastY); var a=u&&u.closest&&u.closest('.ev[data-cover]'); if(!a){hide();return;} if(a!==cur)show(a); }
+    function reeval(){ sf=0; if(!cur)return; var u=document.elementFromPoint(lastX,lastY); var a=u&&u.closest&&u.closest('.ev[data-cover]'); if(!a){scheduleHide();return;} if(a!==cur)show(a); }
     document.addEventListener('scroll',function(){ if(!cur)return; if(!sf)sf=requestAnimationFrame(reeval); },{capture:true,passive:true});
   }
 })();
