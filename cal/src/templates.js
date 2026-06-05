@@ -247,7 +247,7 @@ button.xp-button {
   color: var(--xp-text);
   background: linear-gradient(to bottom, oklch(99% 0 0) 0%, oklch(92% 0.005 240) 100%);
   border: 1px solid var(--xp-edge-sh);
-  border-radius: 3px;
+  border-radius: 0;
   cursor: pointer;
   /* raised bevel */
   box-shadow:

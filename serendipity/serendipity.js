@@ -171,10 +171,10 @@ function shellCss() {
   .wrap{max-width:980px;margin:22px auto;padding:0 12px 48px}
   .window{background:#fff;border:2px solid #0831d9;border-right-color:#001ea0;border-bottom-color:#001ea0;border-top-left-radius:8px;border-top-right-radius:8px;overflow:hidden;box-shadow:inset 1px 1px 0 #166aee,inset 2px 2px 0 #0855dd,inset -1px -1px 0 #00138c,inset -2px -2px 0 #003bda,6px 6px 24px -6px rgba(0,20,90,.5)}
   .titlebar{display:flex;align-items:center;gap:6px;padding:4px 6px 4px 8px;font:bold 10pt "Trebuchet MS",Verdana,sans-serif;color:#fff;text-shadow:1px 1px #0f1089;border-bottom:1px solid #00138c;background:linear-gradient(180deg,oklch(70% 0.15 258) 0%,oklch(60% 0.20 261) 8%,oklch(51% 0.225 263) 18%,oklch(50% 0.225 263) 86%,oklch(58% 0.18 260) 100%)}
-  .titlebar .ico{width:18px;height:18px;flex:0 0 auto;background:oklch(69.58% 0.2043 43.49);border-radius:3px;position:relative}
+  .titlebar .ico{width:18px;height:18px;flex:0 0 auto;background:oklch(69.58% 0.2043 43.49);border-radius:0;position:relative}
   .titlebar .ico::before{content:"";position:absolute;inset:3px 4px;background:oklch(87.82% 0.0877 66.27);clip-path:polygon(50% 0,100% 100%,0 100%)}
   .titlebar .t{flex:1}
-  .titlebar .x{width:21px;height:21px;border-radius:3px;position:relative;border:1px solid #d8401c;text-decoration:none;background:linear-gradient(180deg,#e8795f,#e45f40 30%,#e45d3d 52%,#e2552a 80%,#ae3110)}
+  .titlebar .x{width:21px;height:21px;border-radius:0;position:relative;border:1px solid #d8401c;text-decoration:none;background:linear-gradient(180deg,#e8795f,#e45f40 30%,#e45d3d 52%,#e2552a 80%,#ae3110)}
   .titlebar .x::before,.titlebar .x::after{content:"";position:absolute;left:50%;top:50%;width:13px;height:2px;margin:-1px 0 0 -6.5px;background:#fff;box-shadow:0 1px 0 rgba(0,0,0,.35)}
   .titlebar .x::before{transform:rotate(45deg)}.titlebar .x::after{transform:rotate(-45deg)}
   .body{display:flex;min-height:520px}
@@ -184,7 +184,7 @@ function shellCss() {
   .pane .brand span{font-size:10px;color:oklch(45% 0.01 250)}
   .pane-head{font:bold 8.5pt "Trebuchet MS",Verdana,sans-serif;color:#fff;padding:3px 10px;border-radius:3px 3px 0 0;text-shadow:0 1px 1px rgba(0,30,90,.5);background:linear-gradient(180deg,oklch(66% 0.16 255),oklch(54% 0.20 260))}
   .pane-body{border:1px solid #bcd0ec;border-top:0;background:rgba(255,255,255,.55);padding:4px;display:flex;flex-direction:column}
-  .pane-body a{padding:3px 8px;border-radius:2px;text-decoration:none;color:oklch(42% 0.235 264)}
+  .pane-body a{padding:3px 8px;border-radius:0;text-decoration:none;color:oklch(42% 0.235 264)}
   .pane-body a:hover{background:#2f6fde;color:#fff}
   .pane-body a.current{background:#3a6ea5;color:#fff;font-weight:bold}
   .pane .foot{margin-top:14px;padding-top:8px;border-top:1px solid #a8c0e0;font-size:10px;color:oklch(45% 0.01 250)}
@@ -194,17 +194,17 @@ function shellCss() {
   hr.sep{border:0;border-top:1px solid oklch(85% 0.03 250);margin:14px 0}
   .grp{font:bold 8.5pt "Trebuchet MS";text-transform:uppercase;letter-spacing:.06em;color:oklch(45% 0.02 255);margin:18px 0 8px}
   /* event card — sunken-bevel list item */
-  .ev{display:block;text-decoration:none;color:inherit;border:1px solid oklch(80% 0.035 250);border-top-color:oklch(70% 0.05 250);border-left-color:oklch(70% 0.05 250);background:#fff;padding:10px 12px;margin:0 0 7px;border-radius:2px}
+  .ev{display:block;text-decoration:none;color:inherit;border:1px solid oklch(80% 0.035 250);border-top-color:oklch(70% 0.05 250);border-left-color:oklch(70% 0.05 250);background:#fff;padding:10px 12px;margin:0 0 7px;border-radius:0}
   .ev:hover{border-color:oklch(50% 0.18 263);background:oklch(98% 0.02 250)}
   .ev .nm{font-weight:bold;color:oklch(20% 0.02 255);font-size:13px}
   .ev .meta{color:oklch(45% 0.01 250);font-size:11px;margin-top:2px}
   .ev .row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px}
   .count{font-size:11px;color:oklch(42% 0.02 255)}
-  .badge{display:inline-block;font:bold 9px Tahoma;padding:1px 6px;border:1px solid;border-radius:2px;text-transform:uppercase;letter-spacing:.04em}
+  .badge{display:inline-block;font:bold 9px Tahoma;padding:1px 6px;border:1px solid;border-radius:0;text-transform:uppercase;letter-spacing:.04em}
   .badge.via{background:oklch(96% 0.02 250);color:oklch(42% 0.03 255);border-color:oklch(80% 0.04 250);font-weight:normal;text-transform:none}
   .badge.past{background:oklch(95% 0 0);color:oklch(45% 0 0);border-color:oklch(78% 0 0)}
   /* attendee row */
-  .alist{border:1px solid oklch(80% 0.035 250);border-radius:2px;background:#fff}
+  .alist{border:1px solid oklch(80% 0.035 250);border-radius:0;background:#fff}
   .att{display:flex;align-items:center;gap:10px;padding:8px 12px;border-top:1px solid oklch(92% 0.02 250)}
   .att:first-child{border-top:0}
   .ava{display:inline-flex;align-items:center;justify-content:center;border-radius:0;background:var(--ab);color:#fff;font-weight:bold;flex:0 0 auto;text-shadow:0 1px 1px rgba(0,0,0,.3)}
@@ -221,22 +221,22 @@ function shellCss() {
   .att .who .sub{font-size:11px;color:oklch(45% 0.01 250);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .att .soc{display:flex;gap:6px;flex:0 0 auto}
   .att .soc a{font-size:10px}
-  .empty{text-align:center;color:oklch(50% 0.01 250);padding:34px 12px;border:1px dashed oklch(78% 0.04 250);border-radius:3px;background:oklch(98% 0.01 250)}
-  .xp-button{display:inline-block;min-width:73px;padding:4px 14px;font:8pt/1.3 Tahoma;color:#000;cursor:pointer;border:1px solid #8e9dad;border-radius:3px;text-decoration:none;background:linear-gradient(180deg,#fff,#fdfdfd 45%,#f3f2ec 55%,#e9e7dc)}
+  .empty{text-align:center;color:oklch(50% 0.01 250);padding:34px 12px;border:1px dashed oklch(78% 0.04 250);border-radius:0;background:oklch(98% 0.01 250)}
+  .xp-button{display:inline-block;min-width:73px;padding:4px 14px;font:8pt/1.3 Tahoma;color:#000;cursor:pointer;border:1px solid #8e9dad;border-radius:0;text-decoration:none;background:linear-gradient(180deg,#fff,#fdfdfd 45%,#f3f2ec 55%,#e9e7dc)}
   .xp-button:hover{border-color:#e9994a;box-shadow:inset 0 0 0 1px #fdd78b,0 0 3px 1px rgba(255,199,60,.55)}
   .xp-button.primary{color:#fff;border-color:#2c4d7e;font-weight:bold;background:linear-gradient(180deg,#5b9bf0,#3f81e8 12%,#2f6fde 50%,#2a64d4 88%,#2a60cc)}
   .note{font-size:11px;color:oklch(42% 0.01 250)}
-  code{font-family:var(--font-mono);font-size:11px;background:oklch(96% 0.01 250);border:1px solid oklch(88% 0.02 250);padding:0 3px;border-radius:2px}
+  code{font-family:var(--font-mono);font-size:11px;background:oklch(96% 0.01 250);border:1px solid oklch(88% 0.02 250);padding:0 3px;border-radius:0}
   ol.steps{margin:8px 0;padding-left:20px}ol.steps li{margin:4px 0}
   .xp-field{box-sizing:border-box;width:100%;font-family:var(--font-ui);font-size:11px;color:#181818;background:#fff;padding:5px 7px;border:1px solid #7f9db9;border-radius:0;box-shadow:inset 1px 1px 0 rgba(0,0,0,.18),inset -1px -1px 0 #fff;margin:0 0 8px}
   .xp-field:focus{outline:none;border-color:#316ac5;box-shadow:inset 1px 1px 0 rgba(0,0,0,.18),inset -1px -1px 0 #fff,0 0 0 1px #316ac5}
   /* field-sizing:content (Chrome + Safari 26) auto-grows the textarea as the cookie
      JSON is pasted, capped so a huge blob can't run off-screen; resize stays manual. */
   textarea.xp-field{font-family:var(--font-mono);resize:vertical;field-sizing:content;min-height:6lh;max-height:60vh}
-  .banner{margin:0 0 14px;padding:8px 12px;border:1px solid oklch(62% 0.10 250);background:oklch(95% 0.04 250);border-radius:3px;font-size:11px;color:oklch(32% 0.08 250)}
+  .banner{margin:0 0 14px;padding:8px 12px;border:1px solid oklch(62% 0.10 250);background:oklch(95% 0.04 250);border-radius:0;font-size:11px;color:oklch(32% 0.08 250)}
   .banner.ok{border-color:oklch(60% 0.12 145);background:oklch(95% 0.05 145);color:oklch(30% 0.10 145)}
   .banner.err{border-color:oklch(58% 0.16 28);background:oklch(96% 0.04 28);color:oklch(40% 0.16 28)}
-  .connected{border:1px solid oklch(60% 0.12 145);background:oklch(96% 0.04 145);border-radius:3px;padding:10px 12px;margin:0 0 14px;font-size:11px;color:oklch(28% 0.08 145)}
+  .connected{border:1px solid oklch(60% 0.12 145);background:oklch(96% 0.04 145);border-radius:0;padding:10px 12px;margin:0 0 14px;font-size:11px;color:oklch(28% 0.08 145)}
   /* browse toolbar — client-side search + date-filter chips over the rendered list */
   .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 14px}
   .toolbar .search{flex:1;min-width:170px;margin:0}
@@ -244,7 +244,7 @@ function shellCss() {
   .chip{font:8.5pt Tahoma;padding:3px 11px;border:1px solid #8e9dad;border-radius:0;background:linear-gradient(180deg,#fff,#f3f2ec);color:#222;cursor:pointer}
   .chip.on{color:#fff;border-color:#2c4d7e;font-weight:bold;background:linear-gradient(180deg,#5b9bf0,#2f6fde 60%,#2a60cc)}
   .ev[hidden],.grp[hidden]{display:none}
-  .empty-filter{display:none;color:oklch(50% 0.01 250);padding:24px 12px;border:1px dashed oklch(78% 0.04 250);border-radius:3px;background:oklch(98% 0.01 250);text-align:center;font-size:11px}
+  .empty-filter{display:none;color:oklch(50% 0.01 250);padding:24px 12px;border:1px dashed oklch(78% 0.04 250);border-radius:0;background:oklch(98% 0.01 250);text-align:center;font-size:11px}
   /* cursor-following cover tooltip — ported from the homepage photo/car-link tooltip.
      --x/--y are typed <length> so the translate() positions it with no JS rAF; clamp
      keeps it on-screen. only events with a cover_url get one. */
