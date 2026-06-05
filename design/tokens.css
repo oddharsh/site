@@ -1,0 +1,93 @@
+/* ============================================================================
+   aadhar.sh — Windows XP "Luna" (Blue) design tokens
+   ----------------------------------------------------------------------------
+   Single source of truth for the Luna resto-mod. See DESIGN.md for the brief.
+
+   Usage: these are meant to be INLINED into each page's <style>:root{…} (the
+   site keeps CSS inline per page for CSP + the one-request perf design — this
+   file is the canonical copy, not an external stylesheet to <link>). Serendipity
+   and cal mirror these by hand (separate Worker deploys); keep them in sync.
+
+   Encoding: saturated accents (the Luna blue) use OKLCH for wide-gamut depth;
+   low-chroma chrome (the beige face, greys) stays hex — OKLCH buys it nothing.
+   Canonical Luna system-palette hex is noted in comments as the period-correct
+   ground truth (source: XP system-colours reference + Wikipedia visual styles).
+   ============================================================================ */
+
+:root {
+  /* ── Typography — canonical Luna: captions=Trebuchet MS, UI=Tahoma ───────
+     Native-availability order: Tahoma isn't reliably on macOS, so --font-ui
+     falls through to Verdana (mac-native, metrically close); Trebuchet IS on
+     macOS so captions render true on both. Every stack ends generic so it
+     never lands on Arial/Helvetica. These three ONLY — see DESIGN.md. */
+  --font-caption: "Trebuchet MS", Verdana, Geneva, sans-serif;  /* title bars, h1–h3 */
+  --font-ui:      Tahoma, Verdana, Geneva, sans-serif;          /* body, controls, labels, tooltips */
+  --font-mono:    "Courier New", Courier, monospace;            /* numerics, EXIF readout, /source, code */
+
+  /* ── Title bar — active caption ─────────────────────────────────────────
+     Canonical: ActiveTitle #0054E3 → GradientActiveTitle #3D95FF (horizontal).
+     Resto-mod: a brighter, more-saturated VERTICAL 5-stop (vivid is in-spirit
+     for Luna). This is the homepage's title-bar gradient — the canonical one. */
+  --luna-title-grad: linear-gradient(180deg,
+      oklch(70% 0.15  258)  0%,
+      oklch(60% 0.20  261)  8%,
+      oklch(51% 0.225 263) 18%,
+      oklch(50% 0.225 263) 86%,
+      oklch(58% 0.18  260) 100%);
+  --luna-title-text:    #ffffff;                 /* caption text (Trebuchet, white) */
+  --luna-title-radius:  3px;                      /* Luna rounds the TOP corners ONLY */
+  --luna-inactive:      oklch(66% 0.09 263);      /* InactiveTitle ≈ #7A96DF */
+
+  /* ── Control chrome — the beige Luna "face" ─────────────────────────────
+     Low-chroma → hex is authoritative + matches canonical exactly. */
+  --luna-face:        #ece9d8;   /* ButtonFace / window + menu chrome */
+  --luna-face-light:  #f1efe2;   /* ButtonLight (gradient top of raised chrome) */
+  --luna-highlight:   #ffffff;   /* 3D highlight (raised: TL · sunken: BR) */
+  --luna-shadow:      #aca899;   /* ButtonShadow (raised: BR · sunken: TL) */
+  --luna-darkshadow:  #716f64;   /* 3D dark shadow (outer edge / strong sunken) */
+  --luna-window:      #ffffff;   /* content + input-field background */
+  --luna-text:        #000000;   /* window text */
+  --luna-text-dim:    oklch(45% 0 0);            /* secondary/disabled label grey */
+  --luna-selection:   #316ac5;   /* highlighted/selected (Highlight) */
+  --luna-selection-text: #ffffff;
+  --luna-close-red:   oklch(58% 0.20 25);        /* close-button red tint (× on hover) */
+
+  /* ── Frame / divider lines ──────────────────────────────────────────────
+     The blue used for window outlines, group-box rules, the photo frame. */
+  --luna-line:        oklch(61.14% 0.0611 253.60);  /* 1px window/frame border (== --photo-frame) */
+  --luna-line-strong: oklch(47.12% 0.0555 253.58);  /* inner top/left of a sunken bevel */
+
+  /* ── Workspace gradients (the "desktop"/panel fills) ────────────────────
+     Raised chrome reads as a near-white → cream vertical wash; a sunken well
+     is its inverse. Match these so panels don't drift between surfaces. */
+  --grad-raised: linear-gradient(180deg, #ffffff, #fdfdfd 45%, #f3f2ec 55%, #e9e7dc);
+  --grad-face:   linear-gradient(180deg, #ffffff, #f3f2ec);
+
+  /* ── Bevels — the 1px 3D rule (ready-to-use box-shadows) ────────────────
+     RAISED = highlight top-left, shadow bottom-right (buttons, raised chrome).
+     SUNKEN = the inverse (text inputs, wells, histogram band, group insets).
+     Held/active button → swap raised for sunken. */
+  --bevel-raised: inset  1px  1px 0 var(--luna-highlight),
+                  inset -1px -1px 0 var(--luna-shadow);
+  --bevel-sunken: inset  1px  1px 0 var(--luna-shadow),
+                  inset -1px -1px 0 var(--luna-highlight);
+  --bevel-sunken-deep: inset 1px 1px 0 var(--luna-darkshadow),
+                       inset -1px -1px 0 var(--luna-highlight);
+
+  /* ── Radii — XP is squared; ONLY title-bar tops round ───────────────────
+     No pills, no circles. Controls/cards/inputs stay 0. */
+  --radius-control: 0;            /* buttons, inputs, cards, badges */
+  --radius-title:   var(--luna-title-radius);  /* title-bar top corners only */
+
+  /* ── Float shadow — the ONE allowed soft shadow ─────────────────────────
+     A small flat drop under a floating tooltip/popover. Not for inline chrome. */
+  --shadow-float: 2px 3px 12px -2px rgba(0, 20, 90, 0.55);
+
+  /* ── Motion — XP is instant ─────────────────────────────────────────────
+     Keep transitions short/snappy; no long modern easing. */
+  --xp-transition: 60ms ease-out;
+
+  /* ── Wide-gamut upgrade ─────────────────────────────────────────────────
+     On P3 displays, nudge the saturated blues a touch richer. Mirror the
+     existing `@media (color-gamut: p3)` blocks; tokens here are the sRGB base. */
+}

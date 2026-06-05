@@ -182,6 +182,12 @@ the site doesn't actually serve. To verify:
 
 ### XP visual vocabulary (CSS)
 
+**Design system:** [`design/DESIGN.md`](design/DESIGN.md) is the Luna brief (canonical
+reference + DON'T-modernize guardrails); [`design/tokens.css`](design/tokens.css) is the
+canonical token set (fonts, Luna palette, bevels, radii). Pull from those before
+hardcoding any color/font/bevel. Captions = Trebuchet MS, UI/body = Tahoma→Verdana,
+mono = Courier New — those three stacks only.
+
 Reusable classes that show up across the site (homepage + future `/coffee`):
 
 - `.title-bar` — blue gradient strip with icon + title + boxed `_ □ ×` controls
