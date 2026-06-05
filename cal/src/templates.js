@@ -51,7 +51,7 @@ body {
      period-correct sub-pixel rendering. Tahoma is the XP UI font but
      reads too "modern" on macOS (which falls back to Arial). Verdana
      is web-installed everywhere and gives the bolder 2003 weight. */
-  font-family: Verdana, Tahoma, Geneva, sans-serif;
+  font-family: var(--font-ui);
   font-size: 11pt;
   line-height: 1.4;
   margin: 0;
@@ -87,7 +87,7 @@ body {
       var(--xp-blue-1) 100%
     );
   color: oklch(100% 0 0);
-  font-family: "Trebuchet MS", Verdana, sans-serif;
+  font-family: var(--font-caption);
   font-weight: bold;
   font-size: 11pt;
   padding: 4px 5px 4px 8px;
@@ -125,7 +125,7 @@ body {
   display: inline-flex;
   gap: 2px;
   letter-spacing: 2px;
-  font-family: Tahoma, Verdana, Geneva, sans-serif;
+  font-family: var(--font-ui);
   font-size: 9pt;
 }
 .xp-controls span,
@@ -164,7 +164,7 @@ body {
 h1 {
   /* matches the aadhar.sh main-site h1 stack so the two pages feel
      like the same site visited at a different window. */
-  font-family: "Trebuchet MS", Verdana, sans-serif;
+  font-family: var(--font-caption);
   font-size: 18pt;
   font-weight: bold;
   color: var(--xp-blue-1);
@@ -172,7 +172,7 @@ h1 {
   letter-spacing: -0.01em;
 }
 .lead {
-  font-family: "Trebuchet MS", Verdana, sans-serif;
+  font-family: var(--font-caption);
   font-size: 10.5pt;
   color: var(--xp-dim);
   margin: 0 0 12px;
@@ -216,7 +216,7 @@ a:hover { color: var(--xp-link-hov); }
      than "Windows XP UI". Trebuchet MS *is* installed on Mac and is
      period-correct (it was the Microsoft Office / Control Panel display
      font in the XP era). Verdana fallback for systems missing it. */
-  font-family: "Trebuchet MS", Verdana, Geneva, sans-serif;
+  font-family: var(--font-caption);
   font-weight: bold;
   font-size: 10pt;
   text-transform: uppercase;
@@ -242,7 +242,7 @@ button.xp-button {
   display: inline-block;
   padding: 3px 12px;
   min-width: 70px;
-  font-family: Tahoma, Verdana, Geneva, sans-serif;
+  font-family: var(--font-ui);
   font-size: 10pt;
   color: var(--xp-text);
   background: linear-gradient(to bottom, oklch(99% 0 0) 0%, oklch(92% 0.005 240) 100%);
@@ -315,7 +315,7 @@ form.book label {
 form.book input[type="text"],
 form.book input[type="email"],
 form.book textarea {
-  font-family: Tahoma, Verdana, Geneva, sans-serif;
+  font-family: var(--font-ui);
   font-size: 10.5pt;
   padding: 3px 6px;
   background: oklch(100% 0 0);
@@ -412,7 +412,7 @@ function shell(title, body, env) {
 <title>${esc(title)} — ${esc(env.HOST_NAME)}</title>
 <meta name="description" content="let's grab coffee or a bagel with ${esc(env.HOST_NAME)} in NYC. requests are reviewed by hand.">
 <meta name="theme-color" content="#0858a3">
-<style>${STYLES}</style>
+<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}${STYLES}</style>
 </head>
 <body>
 <div class="xp-window">

@@ -7,7 +7,7 @@
 <meta name="description" content="Cursor-following tooltip styles for the photo grid and tracklist. Hover the slots and rows to compare.">
 <link rel="canonical" href="https://aadhar.sh/garage/tooltips">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='2.5' y='4' width='20' height='13' rx='2.5' fill='%230855dd'/><path d='M8 16 L8 21.5 L13 16 Z' fill='%230855dd'/><rect x='5.5' y='8' width='14' height='1.8' rx='0.9' fill='%23cfe0fb'/><rect x='5.5' y='11.5' width='9.5' height='1.8' rx='0.9' fill='%23cfe0fb'/><path d='M17.5 18.5 L17.5 29 L20.2 26.3 L22.3 31.2 L24.1 30.4 L22 25.7 L25.5 25.7 Z' fill='%23ffffff' stroke='%23001ea0' stroke-width='1' stroke-linejoin='round'/></svg>">
-<style>
+<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}
 /* --x/--y carry the cursor position (clientX/Y in px), written by JS on
    pointermove. registering them as typed <length> properties (instead of
    plain custom properties) lets CSS *transition* them — so the tooltip
@@ -23,7 +23,7 @@
 html, body { margin: 0; padding: 0; }
 body {
   background: linear-gradient(180deg, oklch(87.51% 0.0281 248.15) 0%, oklch(94.66% 0.0114 252.09) 220px, oklch(94.66% 0.0114 252.09) 100%);
-  font-family: Tahoma, Verdana, Geneva, sans-serif;
+  font-family: var(--font-ui);
   font-size: 10.5pt;
   line-height: 1.5;
   color: oklch(21.78% 0 0);
@@ -43,7 +43,7 @@ body {
 .title-bar {
   background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
   color: oklch(100.00% 0 0);
-  font-family: "Trebuchet MS", Verdana, sans-serif;
+  font-family: var(--font-caption);
   font-size: 10pt; font-weight: bold;
   padding: 4px 8px;
   border-bottom: 1px solid oklch(41.92% 0.0962 250.51);
@@ -126,14 +126,14 @@ body {
 .title-bar { text-shadow: 1px 1px #0f1089; }
 .content { padding: 12px 16px 18px; }
 h1 {
-  font-family: "Franklin Gothic Medium", "Franklin Gothic", "Trebuchet MS", Verdana, sans-serif;
+  font-family: var(--font-caption);
   font-size: 14pt;
   color: oklch(41.92% 0.0962 250.51);
   margin: 0 0 6px;
 }
 .lede { color: oklch(38.67% 0 0); font-size: 10.5pt; margin: 0 0 4px; }
 h2 {
-  font-family: "Franklin Gothic Medium", "Franklin Gothic", "Trebuchet MS", Verdana, sans-serif;
+  font-family: var(--font-caption);
   font-size: 13pt;
   color: oklch(41.92% 0.0962 250.51);
   margin: 28px 0 4px;
@@ -143,13 +143,13 @@ h2 {
   flex-wrap: wrap;
 }
 .note { color: oklch(44.95% 0 0); font-size: 10pt; margin: 0 0 14px; }
-.note code { background: oklch(96.72% 0 0); border: 1px solid oklch(88.22% 0 0); padding: 0 4px; font-family: "Courier New", monospace; font-size: 9.5pt; }
+.note code { background: oklch(96.72% 0 0); border: 1px solid oklch(88.22% 0 0); padding: 0 4px; font-family: var(--font-mono); font-size: 9.5pt; }
 hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px 0; }
 
 /* status pills (match garage/index.html styling) */
 .status {
   display: inline-block;
-  font-family: "Courier New", Courier, monospace;
+  font-family: var(--font-mono);
   font-size: 8.5pt;
   font-weight: bold;
   letter-spacing: 0.05em;
@@ -230,7 +230,7 @@ hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px
   background: oklch(8% 0 0);
   border: 1px solid oklch(35% 0 0);
   color: oklch(96% 0.01 80);
-  font-family: ui-monospace, "SF Mono", "Courier New", monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   line-height: 1.3;
   padding: 0;
@@ -413,7 +413,7 @@ hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px
 .vinyl-demo .title { font-weight: bold; color: oklch(41.92% 0.0962 250.51); }
 .vinyl-demo .sep { color: oklch(62.68% 0 0); margin: 0 6px; }
 .vinyl-demo .artist { color: oklch(38.67% 0 0); }
-.vinyl-demo .duration { float: right; color: oklch(62.68% 0 0); font-family: "Courier New", monospace; font-size: 9.5pt; }
+.vinyl-demo .duration { float: right; color: oklch(62.68% 0 0); font-family: var(--font-mono); font-size: 9.5pt; }
 
 /* XP-skinned camera readout (photos).
    same content shape as the Fuji LCD (histogram + exposure trio + recipe
@@ -432,7 +432,7 @@ hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px
   background: oklch(98.92% 0.0398 96.79);
   color: oklch(20% 0 0);
   border: 1px solid oklch(15% 0 0);
-  font-family: Tahoma, "Microsoft Sans Serif", Verdana, sans-serif;
+  font-family: var(--font-ui);
   font-size: 11px;
   padding: 0;
   box-shadow: 2px 2px 0 oklch(15% 0 0 / 0.15);
@@ -455,7 +455,7 @@ hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px
   border: 1px solid oklch(52% 0.05 90);
   border-radius: 10px;
   color: oklch(24% 0 0);
-  font-family: Tahoma, Verdana, Geneva, sans-serif; font-size: 11px; line-height: 1.42;
+  font-family: var(--font-ui); font-size: 11px; line-height: 1.42;
   box-shadow: 2px 4px 12px -3px oklch(0% 0 0 / 0.4);
   pointer-events: none; z-index: 10000;
   opacity: 1; transition: opacity 110ms ease-out, display 110ms allow-discrete;
@@ -479,7 +479,7 @@ hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px
   padding: 3px 8px;
   font-weight: bold;
   color: oklch(41.92% 0.0962 250.51);
-  font-family: "Trebuchet MS", Verdana, sans-serif;
+  font-family: var(--font-caption);
   font-size: 10.5px;
   letter-spacing: 0.01em;
   display: flex;
@@ -537,7 +537,7 @@ hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px
    forcing monospace overall — keeps the XP Tahoma look while the
    numeric exposure trio still aligns cleanly. */
 .xp-cam-tip .exposure {
-  font-family: Tahoma, "Microsoft Sans Serif", Verdana, sans-serif;
+  font-family: var(--font-ui);
   font-variant-numeric: tabular-nums;
   font-size: 12.5px;
   font-weight: bold;
@@ -546,7 +546,7 @@ hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px
   letter-spacing: 0;
 }
 .xp-cam-tip .meta-strip {
-  font-family: Tahoma, "Microsoft Sans Serif", Verdana, sans-serif;
+  font-family: var(--font-ui);
   font-variant-numeric: tabular-nums;
   font-size: 10.5px;
   color: oklch(45% 0 0);
@@ -569,12 +569,12 @@ hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px
 .xp-cam-tip .recipe-rows dd {
   margin: 0;
   color: oklch(20% 0 0);
-  font-family: Tahoma, "Microsoft Sans Serif", Verdana, sans-serif;
+  font-family: var(--font-ui);
   font-variant-numeric: tabular-nums;
   font-size: 11px;
 }
 .xp-cam-tip .footer {
-  font-family: Tahoma, "Microsoft Sans Serif", Verdana, sans-serif;
+  font-family: var(--font-ui);
   font-variant-numeric: tabular-nums;
   font-size: 9.5px;
   color: oklch(45% 0 0);
@@ -625,7 +625,7 @@ hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px
   color: oklch(20% 0.01 60);
 }
 .polaroid .face.back .stem {
-  font-family: "Courier New", monospace;
+  font-family: var(--font-mono);
   font-size: 8.5pt;
   font-style: normal;
   color: oklch(45% 0 0);
@@ -653,7 +653,7 @@ hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px
   background: oklch(98.92% 0.0398 96.79);
   color: oklch(20% 0 0);
   border: 1px solid oklch(15% 0 0);
-  font-family: Tahoma, "Microsoft Sans Serif", Verdana, sans-serif;
+  font-family: var(--font-ui);
   font-size: 11px;
   padding: 5px 9px;
   box-shadow: 2px 2px 0 oklch(15% 0 0 / 0.15);

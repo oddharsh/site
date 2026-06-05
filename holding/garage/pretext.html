@@ -7,13 +7,13 @@
 <meta name="description" content="chenglou/pretext measures and lays out multiline text with canvas as ground truth instead of the DOM — sidestepping reflow. A live demo, where it'd help aadhar.sh, and the tradeoffs.">
 <link rel="canonical" href="https://aadhar.sh/garage/pretext">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='9' y='6' width='17' height='2.6' rx='1' fill='%230855dd'/><rect x='9' y='11.5' width='17' height='2.6' rx='1' fill='%23166aee'/><rect x='9' y='17' width='17' height='2.6' rx='1' fill='%23166aee'/><rect x='9' y='22.5' width='10' height='2.6' rx='1' fill='%23166aee'/><path d='M5 6.3 L5 24.8' stroke='%23ff9500' stroke-width='1.6' stroke-linecap='round'/><path d='M3.2 6.3 L6.8 6.3 M3.2 24.8 L6.8 24.8' stroke='%23ff9500' stroke-width='1.6' stroke-linecap='round'/></svg>">
-<style>
+<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
 html { scrollbar-color: oklch(62% 0.14 255) oklch(91% 0.02 248); }
 body {
   background: linear-gradient(180deg, oklch(87.51% 0.0281 248.15) 0%, oklch(94.66% 0.0114 252.09) 220px, oklch(94.66% 0.0114 252.09) 100%);
-  font-family: Tahoma, Verdana, Geneva, sans-serif;
+  font-family: var(--font-ui);
   font-size: 10.5pt; line-height: 1.5; color: oklch(21.78% 0 0);
   padding: 24px 12px 60px; min-height: 100vh;
 }
@@ -27,7 +27,7 @@ body {
 .title-bar {
   background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
   color: oklch(100.00% 0 0);
-  font-family: "Trebuchet MS", Verdana, sans-serif;
+  font-family: var(--font-caption);
   font-size: 10pt; font-weight: bold;
   padding: 4px 8px;
   border-bottom: 1px solid oklch(41.92% 0.0962 250.51);
@@ -109,33 +109,33 @@ body {
 /* --- Luna polish: caption text shadow (matches horizon/scroll) --- */
 .title-bar { text-shadow: 1px 1px #0f1089; }
 .content { padding: 12px 16px 18px; }
-h1 { font-family: "Franklin Gothic Medium", "Franklin Gothic", "Trebuchet MS", Verdana, sans-serif; font-size: 14pt; color: oklch(41.92% 0.0962 250.51); margin: 0 0 6px; }
+h1 { font-family: var(--font-caption); font-size: 14pt; color: oklch(41.92% 0.0962 250.51); margin: 0 0 6px; }
 .lede { color: oklch(38.67% 0 0); font-size: 10.5pt; margin: 0 0 4px; }
-h2 { font-family: "Franklin Gothic Medium", "Franklin Gothic", "Trebuchet MS", Verdana, sans-serif; font-size: 13pt; color: oklch(41.92% 0.0962 250.51); margin: 28px 0 4px; }
+h2 { font-family: var(--font-caption); font-size: 13pt; color: oklch(41.92% 0.0962 250.51); margin: 28px 0 4px; }
 .note { color: oklch(44.95% 0 0); font-size: 10pt; margin: 0 0 14px; }
-.note code, p code, li code { background: oklch(96.72% 0 0); border: 1px solid oklch(88.22% 0 0); padding: 0 4px; font-family: "Courier New", monospace; font-size: 9.5pt; }
+.note code, p code, li code { background: oklch(96.72% 0 0); border: 1px solid oklch(88.22% 0 0); padding: 0 4px; font-family: var(--font-mono); font-size: 9.5pt; }
 hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px 0; }
 a { color: oklch(41.92% 0.0962 250.51); }
 ul { margin: 0 0 14px; padding-left: 20px; font-size: 10pt; color: oklch(40% 0 0); }
 li { margin: 3px 0; }
-.status { display: inline-block; font-family: "Courier New", Courier, monospace; font-size: 8.5pt; font-weight: bold; letter-spacing: 0.05em; padding: 1px 6px; border: 1px solid; border-radius: 2px; text-transform: uppercase; vertical-align: middle; }
+.status { display: inline-block; font-family: var(--font-mono); font-size: 8.5pt; font-weight: bold; letter-spacing: 0.05em; padding: 1px 6px; border: 1px solid; border-radius: 2px; text-transform: uppercase; vertical-align: middle; }
 .status.idle { color: oklch(45% 0.05 250); border-color: oklch(62% 0.06 250); background: oklch(96% 0.01 250); }
 
 /* demo */
 .dm-controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 10px 0; font-size: 9.5pt; color: oklch(42% 0 0); }
 .dm-controls input[type=range] { flex: 1; min-width: 160px; accent-color: #0855dd; }
-.xp-btn { font-family: Tahoma, Verdana, sans-serif; font-size: 9.5pt; padding: 3px 12px; background: linear-gradient(#fff, #ece9d8); border: 1px solid #707070; border-radius: 3px; box-shadow: inset 1px 1px 0 #fff; cursor: pointer; }
+.xp-btn { font-family: var(--font-ui); font-size: 9.5pt; padding: 3px 12px; background: linear-gradient(#fff, #ece9d8); border: 1px solid #707070; border-radius: 3px; box-shadow: inset 1px 1px 0 #fff; cursor: pointer; }
 .xp-btn:active { box-shadow: inset 1px 1px 2px rgba(0,0,0,.3); }
 .measure-wrap { position: relative; border: 1px solid oklch(80% 0.02 250); border-radius: 4px; background: oklch(98% 0.005 250); padding: 0; overflow: hidden; }
 /* the SAME text rendered two ways at the chosen width, for visual A/B + validation */
 .col { padding: 10px 12px; }
-.col h3 { margin: 0 0 6px; font-size: 9.5pt; font-family: "Franklin Gothic Medium", "Trebuchet MS", sans-serif; color: oklch(42% 0.06 250); display: flex; justify-content: space-between; gap: 8px; }
-.col h3 .n { font-family: "Courier New", monospace; color: oklch(35% 0 0); font-weight: normal; }
-.flow { font-family: Tahoma, Verdana, sans-serif; font-size: 15px; line-height: 22px; color: oklch(22% 0 0); }
+.col h3 { margin: 0 0 6px; font-size: 9.5pt; font-family: var(--font-caption); color: oklch(42% 0.06 250); display: flex; justify-content: space-between; gap: 8px; }
+.col h3 .n { font-family: var(--font-mono); color: oklch(35% 0 0); font-weight: normal; }
+.flow { font-family: var(--font-ui); font-size: 15px; line-height: 22px; color: oklch(22% 0 0); }
 #dom-flow { white-space: normal; overflow-wrap: break-word; }
 #cv-lines div { white-space: pre; overflow: hidden; }
 .ruler { height: 6px; background: repeating-linear-gradient(90deg, oklch(70% 0.04 250) 0 1px, transparent 1px 20px); border-bottom: 1px solid oklch(80% 0.02 250); }
-.race-out { font-family: "Courier New", monospace; font-size: 9.5pt; background: oklch(96% 0.01 250); border: 1px solid oklch(80% 0.02 250); border-radius: 4px; padding: 10px 12px; margin-top: 8px; color: oklch(25% 0 0); min-height: 1.5em; }
+.race-out { font-family: var(--font-mono); font-size: 9.5pt; background: oklch(96% 0.01 250); border: 1px solid oklch(80% 0.02 250); border-radius: 4px; padding: 10px 12px; margin-top: 8px; color: oklch(25% 0 0); min-height: 1.5em; }
 .race-out b { color: oklch(40% 0.16 150); }
 .callout { font-size: 10pt; background: oklch(97% 0.025 255); border-left: 3px solid oklch(51% 0.225 263); padding: 8px 12px; margin: 14px 0; color: oklch(28% 0.04 255); }
 .verdict { font-size: 10pt; background: oklch(98% 0.02 95); border-left: 3px solid oklch(60% 0.13 75); padding: 8px 12px; margin: 14px 0; color: oklch(32% 0.05 75); }

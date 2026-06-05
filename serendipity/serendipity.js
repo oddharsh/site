@@ -164,10 +164,10 @@ function shellCss() {
   return `
   *{box-sizing:border-box}
   html,body{margin:0;padding:0;min-height:100%}
-  body{background:linear-gradient(160deg,oklch(70% 0.11 240) 0%,oklch(78% 0.075 235) 45%,oklch(85% 0.045 235) 100%);background-attachment:fixed;font-family:Tahoma,Verdana,Geneva,sans-serif;font-size:12px;line-height:1.5;color:oklch(16% 0 0);font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased;scrollbar-color:oklch(64% 0.13 255) oklch(90% 0.025 250)}
+  body{background:linear-gradient(160deg,oklch(70% 0.11 240) 0%,oklch(78% 0.075 235) 45%,oklch(85% 0.045 235) 100%);background-attachment:fixed;font-family:var(--font-ui);font-size:12px;line-height:1.5;color:oklch(16% 0 0);font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased;scrollbar-color:oklch(64% 0.13 255) oklch(90% 0.025 250)}
   a{color:oklch(42% 0.235 264);text-decoration:underline}
   a:hover{color:oklch(60% 0.25 29)}
-  h1,h2,h3{font-family:"Trebuchet MS",Verdana,sans-serif;margin:0}
+  h1,h2,h3{font-family:var(--font-caption);margin:0}
   .wrap{max-width:980px;margin:22px auto;padding:0 12px 48px}
   .window{background:#fff;border:2px solid #0831d9;border-right-color:#001ea0;border-bottom-color:#001ea0;border-top-left-radius:8px;border-top-right-radius:8px;overflow:hidden;box-shadow:inset 1px 1px 0 #166aee,inset 2px 2px 0 #0855dd,inset -1px -1px 0 #00138c,inset -2px -2px 0 #003bda,6px 6px 24px -6px rgba(0,20,90,.5)}
   .titlebar{display:flex;align-items:center;gap:6px;padding:4px 6px 4px 8px;font:bold 10pt "Trebuchet MS",Verdana,sans-serif;color:#fff;text-shadow:1px 1px #0f1089;border-bottom:1px solid #00138c;background:linear-gradient(180deg,oklch(70% 0.15 258) 0%,oklch(60% 0.20 261) 8%,oklch(51% 0.225 263) 18%,oklch(50% 0.225 263) 86%,oklch(58% 0.18 260) 100%)}
@@ -207,7 +207,7 @@ function shellCss() {
   .alist{border:1px solid oklch(80% 0.035 250);border-radius:2px;background:#fff}
   .att{display:flex;align-items:center;gap:10px;padding:8px 12px;border-top:1px solid oklch(92% 0.02 250)}
   .att:first-child{border-top:0}
-  .ava{display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:var(--ab);color:#fff;font-weight:bold;flex:0 0 auto;text-shadow:0 1px 1px rgba(0,0,0,.3)}
+  .ava{display:inline-flex;align-items:center;justify-content:center;border-radius:0;background:var(--ab);color:#fff;font-weight:bold;flex:0 0 auto;text-shadow:0 1px 1px rgba(0,0,0,.3)}
   /* contrast-color() (Safari 26 + Firefox) auto-picks black/white per hue — fixes
      low-contrast white initials on light hues (yellow/green ~90-150). Chrome lacks
      it today, so it falls back to the #fff above. */
@@ -215,7 +215,7 @@ function shellCss() {
   /* event description, collapsed-but-findable. hidden="until-found" keeps the text
      in the DOM (Ctrl-F + #:~:text= deep-links auto-reveal it on Chrome/Safari) while
      the page stays compact; the button is the manual reveal. */
-  .evdesc{white-space:pre-wrap;margin:0 0 16px;padding:10px 12px;background:oklch(98% 0.005 250);border:1px solid oklch(85% 0.015 250);border-radius:4px;font-size:12px;color:oklch(28% 0.01 250);max-width:64ch}
+  .evdesc{white-space:pre-wrap;margin:0 0 16px;padding:10px 12px;background:oklch(98% 0.005 250);border:1px solid oklch(85% 0.015 250);border-radius:0;font-size:12px;color:oklch(28% 0.01 250);max-width:64ch}
   .att .who{min-width:0;flex:1}
   .att .who .n{font-weight:bold;color:oklch(20% 0.02 255)}
   .att .who .sub{font-size:11px;color:oklch(45% 0.01 250);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -226,13 +226,13 @@ function shellCss() {
   .xp-button:hover{border-color:#e9994a;box-shadow:inset 0 0 0 1px #fdd78b,0 0 3px 1px rgba(255,199,60,.55)}
   .xp-button.primary{color:#fff;border-color:#2c4d7e;font-weight:bold;background:linear-gradient(180deg,#5b9bf0,#3f81e8 12%,#2f6fde 50%,#2a64d4 88%,#2a60cc)}
   .note{font-size:11px;color:oklch(42% 0.01 250)}
-  code{font-family:"Courier New",monospace;font-size:11px;background:oklch(96% 0.01 250);border:1px solid oklch(88% 0.02 250);padding:0 3px;border-radius:2px}
+  code{font-family:var(--font-mono);font-size:11px;background:oklch(96% 0.01 250);border:1px solid oklch(88% 0.02 250);padding:0 3px;border-radius:2px}
   ol.steps{margin:8px 0;padding-left:20px}ol.steps li{margin:4px 0}
-  .xp-field{box-sizing:border-box;width:100%;font-family:Tahoma,Verdana,sans-serif;font-size:11px;color:#181818;background:#fff;padding:5px 7px;border:1px solid #7f9db9;border-radius:0;box-shadow:inset 1px 1px 0 rgba(0,0,0,.18),inset -1px -1px 0 #fff;margin:0 0 8px}
+  .xp-field{box-sizing:border-box;width:100%;font-family:var(--font-ui);font-size:11px;color:#181818;background:#fff;padding:5px 7px;border:1px solid #7f9db9;border-radius:0;box-shadow:inset 1px 1px 0 rgba(0,0,0,.18),inset -1px -1px 0 #fff;margin:0 0 8px}
   .xp-field:focus{outline:none;border-color:#316ac5;box-shadow:inset 1px 1px 0 rgba(0,0,0,.18),inset -1px -1px 0 #fff,0 0 0 1px #316ac5}
   /* field-sizing:content (Chrome + Safari 26) auto-grows the textarea as the cookie
      JSON is pasted, capped so a huge blob can't run off-screen; resize stays manual. */
-  textarea.xp-field{font-family:"Courier New",monospace;resize:vertical;field-sizing:content;min-height:6lh;max-height:60vh}
+  textarea.xp-field{font-family:var(--font-mono);resize:vertical;field-sizing:content;min-height:6lh;max-height:60vh}
   .banner{margin:0 0 14px;padding:8px 12px;border:1px solid oklch(62% 0.10 250);background:oklch(95% 0.04 250);border-radius:3px;font-size:11px;color:oklch(32% 0.08 250)}
   .banner.ok{border-color:oklch(60% 0.12 145);background:oklch(95% 0.05 145);color:oklch(30% 0.10 145)}
   .banner.err{border-color:oklch(58% 0.16 28);background:oklch(96% 0.04 28);color:oklch(40% 0.16 28)}
@@ -241,7 +241,7 @@ function shellCss() {
   .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 14px}
   .toolbar .search{flex:1;min-width:170px;margin:0}
   .chips{display:flex;gap:4px;flex-wrap:wrap}
-  .chip{font:8.5pt Tahoma;padding:3px 11px;border:1px solid #8e9dad;border-radius:11px;background:linear-gradient(180deg,#fff,#f3f2ec);color:#222;cursor:pointer}
+  .chip{font:8.5pt Tahoma;padding:3px 11px;border:1px solid #8e9dad;border-radius:0;background:linear-gradient(180deg,#fff,#f3f2ec);color:#222;cursor:pointer}
   .chip.on{color:#fff;border-color:#2c4d7e;font-weight:bold;background:linear-gradient(180deg,#5b9bf0,#2f6fde 60%,#2a60cc)}
   .ev[hidden],.grp[hidden]{display:none}
   .empty-filter{display:none;color:oklch(50% 0.01 250);padding:24px 12px;border:1px dashed oklch(78% 0.04 250);border-radius:3px;background:oklch(98% 0.01 250);text-align:center;font-size:11px}
@@ -271,7 +271,7 @@ function shell(title, currentPath, bodyHtml) {
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(title)} — Serendipity</title>
 <meta name="description" content="A public, shared database of events worth going to and who's going — fed by the collective, queryable by humans and agents.">
-<style>${shellCss()}</style></head><body>
+<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}${shellCss()}</style></head><body>
 <div class="wrap"><div class="window">
   <div class="titlebar"><span class="ico" aria-hidden="true"></span>
     <span class="t">Serendipity Collective — aadhar.sh</span>

@@ -7,13 +7,13 @@
 <meta name="description" content="Live FastCDC content-defined chunking + content-addressing in the browser — pure JS + crypto.subtle. Why a one-byte edit re-sends the whole file under fixed chunks but almost nothing under content-defined ones.">
 <link rel="canonical" href="https://aadhar.sh/garage/chunks">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='3' y='6' width='7' height='20' rx='1' fill='%230855dd'/><rect x='12' y='6' width='5' height='20' rx='1' fill='%23166aee'/><rect x='19' y='6' width='10' height='20' rx='1' fill='%23003bda'/></svg>">
-<style>
+<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
 html { scrollbar-color: oklch(62% 0.14 255) oklch(91% 0.02 248); }
 body {
   background: linear-gradient(180deg, oklch(87.51% 0.0281 248.15) 0%, oklch(94.66% 0.0114 252.09) 220px, oklch(94.66% 0.0114 252.09) 100%);
-  font-family: Tahoma, Verdana, Geneva, sans-serif;
+  font-family: var(--font-ui);
   font-size: 10.5pt;
   line-height: 1.5;
   color: oklch(21.78% 0 0);
@@ -33,7 +33,7 @@ body {
 .title-bar {
   background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
   color: oklch(100.00% 0 0);
-  font-family: "Trebuchet MS", Verdana, sans-serif;
+  font-family: var(--font-caption);
   font-size: 10pt; font-weight: bold;
   padding: 4px 8px;
   border-bottom: 1px solid oklch(41.92% 0.0962 250.51);
@@ -116,24 +116,24 @@ body {
 .title-bar { text-shadow: 1px 1px #0f1089; }
 .content { padding: 12px 16px 18px; }
 h1 {
-  font-family: "Franklin Gothic Medium", "Franklin Gothic", "Trebuchet MS", Verdana, sans-serif;
+  font-family: var(--font-caption);
   font-size: 14pt;
   color: oklch(41.92% 0.0962 250.51);
   margin: 0 0 6px;
 }
 .lede { color: oklch(38.67% 0 0); font-size: 10.5pt; margin: 0 0 4px; }
 h2 {
-  font-family: "Franklin Gothic Medium", "Franklin Gothic", "Trebuchet MS", Verdana, sans-serif;
+  font-family: var(--font-caption);
   font-size: 13pt;
   color: oklch(41.92% 0.0962 250.51);
   margin: 28px 0 4px;
 }
 .note { color: oklch(44.95% 0 0); font-size: 10pt; margin: 0 0 14px; }
-.note code, p code, li code { background: oklch(96.72% 0 0); border: 1px solid oklch(88.22% 0 0); padding: 0 4px; font-family: "Courier New", monospace; font-size: 9.5pt; }
+.note code, p code, li code { background: oklch(96.72% 0 0); border: 1px solid oklch(88.22% 0 0); padding: 0 4px; font-family: var(--font-mono); font-size: 9.5pt; }
 hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px 0; }
 a { color: oklch(41.92% 0.0962 250.51); }
 .status {
-  display: inline-block; font-family: "Courier New", Courier, monospace; font-size: 8.5pt;
+  display: inline-block; font-family: var(--font-mono); font-size: 8.5pt;
   font-weight: bold; letter-spacing: 0.05em; padding: 1px 6px; border: 1px solid;
   border-radius: 2px; text-transform: uppercase; vertical-align: middle;
 }
@@ -141,18 +141,18 @@ a { color: oklch(41.92% 0.0962 250.51); }
 
 /* ── demo ── */
 .cas-controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 10px 0; }
-.cas-ta { width: 100%; min-height: 88px; font-family: "Courier New", monospace; font-size: 10pt; line-height: 1.45; padding: 8px; border: 2px solid; border-color: #808080 #fff #fff #808080; background: oklch(99% 0 0); field-sizing: content; max-height: 38vh; resize: vertical; }
-.xp-btn { font-family: Tahoma, Verdana, sans-serif; font-size: 9.5pt; padding: 3px 12px; background: linear-gradient(#fff, #ece9d8); border: 1px solid #707070; border-radius: 3px; box-shadow: inset 1px 1px 0 #fff; cursor: pointer; }
+.cas-ta { width: 100%; min-height: 88px; font-family: var(--font-mono); font-size: 10pt; line-height: 1.45; padding: 8px; border: 2px solid; border-color: #808080 #fff #fff #808080; background: oklch(99% 0 0); field-sizing: content; max-height: 38vh; resize: vertical; }
+.xp-btn { font-family: var(--font-ui); font-size: 9.5pt; padding: 3px 12px; background: linear-gradient(#fff, #ece9d8); border: 1px solid #707070; border-radius: 3px; box-shadow: inset 1px 1px 0 #fff; cursor: pointer; }
 .xp-btn:active { box-shadow: inset 1px 1px 2px rgba(0,0,0,.3); }
 .method { margin: 16px 0; }
-.method h3 { font-size: 10.5pt; margin: 0 0 4px; font-family: "Franklin Gothic Medium", "Trebuchet MS", sans-serif; color: oklch(41.92% 0.0962 250.51); display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
-.method h3 small { font-weight: normal; font-size: 9pt; color: oklch(50% 0 0); font-family: Tahoma, sans-serif; }
+.method h3 { font-size: 10.5pt; margin: 0 0 4px; font-family: var(--font-caption); color: oklch(41.92% 0.0962 250.51); display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.method h3 small { font-weight: normal; font-size: 9pt; color: oklch(50% 0 0); font-family: var(--font-ui); }
 .chunks { display: flex; flex-wrap: wrap; gap: 3px; padding: 8px; background: oklch(97% 0.005 250); border: 1px solid oklch(85% 0.02 250); border-radius: 4px; min-height: 30px; }
 .chunk { height: 26px; border-radius: 2px; display: flex; align-items: center; justify-content: center; font: 8px/1 "Courier New", monospace; color: #fff; text-shadow: 0 1px 1px rgba(0,0,0,.45); padding: 0 3px; overflow: hidden; white-space: nowrap; cursor: default; transition: background .18s; }
 .chunk.shared { background: oklch(52% 0.13 150); }
 .chunk.changed { background: oklch(58% 0.19 38); }
 .chunk.neutral { background: oklch(53% 0.10 255); }
-.stats { font-size: 9.5pt; color: oklch(42% 0 0); margin: 6px 0 0; font-family: "Courier New", monospace; }
+.stats { font-size: 9.5pt; color: oklch(42% 0 0); margin: 6px 0 0; font-family: var(--font-mono); }
 .stats b { color: oklch(22% 0 0); }
 .delta-good { color: oklch(43% 0.16 150); font-weight: bold; }
 .delta-bad { color: oklch(50% 0.19 38); font-weight: bold; }
