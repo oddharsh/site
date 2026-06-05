@@ -88,6 +88,16 @@ export default {
 async function route(request, env, ctx) {
     const url = new URL(request.url);
 
+    // /favicon.ico — serve the inline traffic-cone SVG directly. without this,
+    // legacy/bot probes for /favicon.ico SPA-fall-back to the full ~75KB homepage.
+    // (modern browsers use the inline <link rel=icon> data-URI and never hit this.)
+    if (url.pathname === "/favicon.ico") {
+      return new Response(
+        `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='4' y='25' width='24' height='3' rx='0.5' fill='#1a1a1a'/><path d='M 16 4 L 9 25 L 23 25 Z' fill='#ff6600'/><path d='M 11.3 18 L 20.7 18 L 21.7 21 L 10.3 21 Z' fill='#ffffff'/><path d='M 13.7 11 L 18.3 11 L 19 13 L 13 13 Z' fill='#ffffff'/></svg>`,
+        { headers: { "content-type": "image/svg+xml; charset=utf-8", "cache-control": "public, max-age=31536000, immutable" } }
+      );
+    }
+
     if (url.pathname === "/whoareyou") {
       return handleWhoareyou(request);
     }

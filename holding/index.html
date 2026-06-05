@@ -15,7 +15,7 @@
      fan of 8 preconnect/dns-prefetch hints across spotify, cal.com,
      twitter, curius, beli, archetype, scdn — all speculative and most
      never clicked. Tuthill move: ship the one that earns its place. -->
-<link rel="preconnect" href="https://song.link" crossorigin>
+<link rel="preconnect" href="https://song.link">
 
 <!-- traffic cone favicon. period-correct for the holding page. swap once
      the real site lands. -->
@@ -1620,10 +1620,11 @@ if ("serviceWorker" in navigator) {
     /whoareyou — per-request fingerprint must reflect the real click, not a
                  speculative prerender request
   cross-origin links (Twitter, Spotify, ENS, …) are skipped automatically.
-  Chromium-only; other engines ignore the block. "eager" prerenders on load
-  (Chrome is the daily driver here, so we lean in); pages are tiny + static so
-  the speculative cost is small. allowed under the existing 'unsafe-inline'
-  script-src in the CSP.
+  Chromium-only; other engines ignore the block. "moderate" prerenders on
+  hover / pointerdown (not on load), so visitors who never click /garage or
+  /serendipity don't pay the prerender transfer + worker invocations; the
+  on-intent cost is tiny (pages are small + static) and adds no click latency.
+  allowed under the existing 'unsafe-inline' script-src in the CSP.
 -->
 <script type="speculationrules">
 {
@@ -1640,7 +1641,7 @@ if ("serviceWorker" in navigator) {
           { "not": { "href_matches": "/llms.txt" } }
         ]
       },
-      "eagerness": "eager"
+      "eagerness": "moderate"
     }
   ]
 }

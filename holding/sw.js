@@ -10,7 +10,7 @@
 //     thumbnails + full-res photos. immutable in practice, but we still
 //     refresh in the background so renamed files surface eventually.
 //   - stale-while-revalidate: /llms.txt, /sitemap.xml, /robots.txt,
-//     /.well-known/http-message-signatures-directory, /favicon.ico
+//     /.well-known/http-message-signatures-directory
 //     small static files. show stale instantly, refresh in background.
 //   - network-only: everything else (html, json apis, /rn/*, /around/*).
 //
@@ -25,7 +25,7 @@
 // `?v=N` bumps on each deploy already cycle individual entries, but a
 // cache-version bump is the only way to sweep stale keys whose URL
 // pattern no longer matches anything we serve.
-const CACHE_VERSION = "aadhar-v41-sq-thumbs";
+const CACHE_VERSION = "aadhar-v42-favicon-fix";
 
 const CACHE_FIRST = [
   // image files only — NOT /images/ or /images/full/ themselves (those are
@@ -39,7 +39,10 @@ const SWR = [
   /^\/sitemap\.xml$/,
   /^\/robots\.txt$/,
   /^\/\.well-known\/http-message-signatures-directory$/,
-  /^\/favicon\.ico$/,
+  // NB: /favicon.ico is NOT SWR'd — it used to SPA-fall-back to the 75KB
+  // homepage, so caching it here stored a 75KB HTML blob under the favicon key.
+  // the worker now serves a real SVG at /favicon.ico (immutable), so the browser
+  // HTTP-caches it; no SW entry needed.
   // /bot is content-stable — SWR for instant repeat nav.
   // NB: /garage/* are deliberately NOT cached here. they're active development
   // mules that change constantly; SWR served the owner (and returning visitors)
@@ -49,11 +52,10 @@ const SWR = [
   //   /          — no-store (re-randomizes photos + ticks the counter)
   //   /around    — a live crawl  ·  /whoareyou — per-request fingerprint
   /^\/bot$/,
-  // NB: /images/metadata.json + histograms.json are NOT cached here. they feed
-  // the photo-hover tooltip; SW-caching them risked a stale/odd copy slipping in,
-  // after which the tooltip falls back to thumbnail dims (800px) with no EXIF.
-  // network-only = always the right data. they're small (~22KB br) and the
-  // browser HTTP-caches them for the session anyway.
+  // NB: /images/meta/<stem>.json (per-photo EXIF for the tooltip) + the full
+  // /images/metadata.json index are network-only — never SW-cached — so a stale
+  // copy can't slip in. they're tiny + immutable, and the browser HTTP-caches
+  // them anyway. (histograms are computed client-side now; no histograms.json.)
 ];
 
 // URLs warmed on SW install so the FIRST navigation is already a hit.

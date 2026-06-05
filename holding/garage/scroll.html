@@ -422,7 +422,7 @@ if ("serviceWorker" in navigator) {
 </script>
 <!-- prerender internal pages eagerly (McMaster-style); same exclusions as homepage -->
 <script type="speculationrules">
-{ "prerender": [ { "where": { "and": [ { "href_matches": "/*" }, { "not": { "href_matches": "/" } }, { "not": { "href_matches": "/around*" } }, { "not": { "href_matches": "/whoareyou*" } } ] }, "eagerness": "eager" } ] }
+{ "prerender": [ { "where": { "and": [ { "href_matches": "/*" }, { "not": { "href_matches": "/" } }, { "not": { "href_matches": "/around*" } }, { "not": { "href_matches": "/whoareyou*" } } ] }, "eagerness": "moderate" } ] }
 </script>
 </body>
 </html>

@@ -363,8 +363,8 @@ const DASHBOARD_JS = `
       lastX=e.clientX; lastY=e.clientY;
       var a=e.target.closest&&e.target.closest('.ev[data-cover]');
       if(a){ cancelHide(); if(a!==cur)show(a); return; }
-      scheduleHide();   // entered a gap / non-card → defer dismissal so a quick hop cancels it
-    });
+      if(cur)scheduleHide();   // only when a cover is open — no timer churn on plain mouse moves
+    },{passive:true});
     document.addEventListener('pointermove',function(e){ lastX=e.clientX; lastY=e.clientY; if(!cur)return; tip.style.setProperty('--x',lastX+'px'); tip.style.setProperty('--y',lastY+'px'); },{passive:true});
     document.addEventListener('pointerout',function(e){ if(cur&&!e.relatedTarget)scheduleHide(); });
     // scroll re-evaluation (ported from the homepage tooltip): the tip is
@@ -381,8 +381,7 @@ const DASHBOARD_JS = `
 `;
 
 async function renderDashboard(d, path, msg) {
-  const events = await queryEvents(d);
-  const contribCount = await countContributors(d);
+  const [events, contribCount] = await Promise.all([queryEvents(d), countContributors(d)]);
   let body;
   if (!events.length) {
     body = `<h1 class="page">Events</h1>
@@ -431,11 +430,12 @@ function attendeeRow(a) {
 }
 
 async function renderEvent(d, id, path) {
-  const ev = await queryEvent(d, id);
+  // all three reads in parallel — one fewer serial D1 round-trip per view. the
+  // attendee/contributor reads run even on a 404 (rare), worth it for the common case.
+  const [ev, rows, contributors] = await Promise.all([queryEvent(d, id), queryEventAttendees(d, id), queryContributors(d, id)]);
   if (!ev) {
     return html(404, shell("Not found", path, `<h1 class="page">Event not found</h1><p class="lede">No event with that id is in the pool.</p><p><a class="xp-button" href="${PREFIX}">&larr; All events</a></p>`));
   }
-  const [rows, contributors] = await Promise.all([queryEventAttendees(d, id), queryContributors(d, id)]);
   const hosts = rows.filter((a) => a.is_host);
   const guests = rows.filter((a) => !a.is_host).map((a) => ({ ...a, _s: attendeeScore(a) }))
                      .sort((a, b) => b._s - a._s || a.name.localeCompare(b.name));
