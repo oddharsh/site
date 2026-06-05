@@ -90,6 +90,25 @@
 </script>
 
 <style>
+/* ── Luna design tokens — canonical set in design/tokens/ (keep in sync).
+   inlined (no external sheet) for the one-request perf design; the --hue-luna /
+   --chroma-luna knobs retune the blue, and every value resolves period-correct.
+   folded in incrementally — more literals migrate to var() over time. */
+:root{
+  --font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;
+  --font-ui:Tahoma,Verdana,Geneva,sans-serif;
+  --font-mono:"Courier New",Courier,monospace;
+  --hue-luna:263; --chroma-luna:.225;
+  --blue-95:oklch(70% .15 calc(var(--hue-luna) - 5));
+  --blue-80:oklch(60% .20 calc(var(--hue-luna) - 2));
+  --blue-65:oklch(51% var(--chroma-luna) var(--hue-luna));
+  --blue-60:oklch(50% var(--chroma-luna) var(--hue-luna));
+  --blue-55:oklch(58% .18 calc(var(--hue-luna) - 3));
+  --blue-45:oklch(47.12% .0555 253.58); --blue-40:oklch(41.92% .0962 250.51);
+  --frame:oklch(61.14% .0611 253.60); --ink:var(--ink);
+  --surface-desktop:oklch(94.66% .0114 252.09);
+  --grad-title:linear-gradient(180deg,var(--blue-95) 0%,var(--blue-80) 8%,var(--blue-65) 18%,var(--blue-60) 86%,var(--blue-55) 100%);
+}
 /* ─── personal homepage, circa 2003 ────────────────────────────────────
    period cues: verdana body, trebuchet headings, web-safe blues, 3D
    borders, raised photo frames, fixed-width centered layout, beveled
@@ -116,11 +135,11 @@ html, body {
 
 body {
   background: oklch(91.74% 0.0203 238.68);
-  background: linear-gradient(180deg, oklch(87.51% 0.0281 248.15) 0%, oklch(94.66% 0.0114 252.09) 220px, oklch(94.66% 0.0114 252.09) 100%);
-  font-family: Tahoma, Verdana, Geneva, sans-serif;
+  background: linear-gradient(180deg, oklch(87.51% 0.0281 248.15) 0%, var(--surface-desktop) 220px, var(--surface-desktop) 100%);
+  font-family: var(--font-ui);
   font-size: 10.5pt;
   line-height: 1.5;
-  color: oklch(21.78% 0 0);
+  color: var(--ink);
   padding: 24px 12px 60px;
   min-height: 100vh;
 }
@@ -129,19 +148,19 @@ body {
   max-width: 660px;
   margin: 0 auto;
   background: oklch(100.00% 0 0);
-  border: 1px solid oklch(61.14% 0.0611 253.60);
+  border: 1px solid var(--frame);
   box-shadow: 4px 4px 0 oklch(61.14% 0.0611 253.60 / 0.35);
 }
 
 /* fake XP title bar */
 .title-bar {
-  background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
+  background: var(--grad-title);
   color: oklch(100.00% 0 0);
-  font-family: "Trebuchet MS", Verdana, sans-serif;
+  font-family: var(--font-caption);
   font-size: 10pt;
   font-weight: bold;
   padding: 4px 8px;
-  border-bottom: 1px solid oklch(41.92% 0.0962 250.51);
+  border-bottom: 1px solid var(--blue-40);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -247,9 +266,9 @@ body {
 }
 
 h1 {
-  font-family: "Franklin Gothic Medium", "Franklin Gothic", "Trebuchet MS", Verdana, sans-serif;
+  font-family: var(--font-caption);
   font-size: 14pt;
-  color: oklch(41.92% 0.0962 250.51);
+  color: var(--blue-40);
   margin: 0 0 4px;
   font-weight: bold;
   letter-spacing: -0.01em;
@@ -298,9 +317,9 @@ hr {
   margin: 32px 0 4px;
 }
 .now-playing h2 {
-  font-family: "Franklin Gothic Medium", "Franklin Gothic", "Trebuchet MS", Verdana, sans-serif;
+  font-family: var(--font-caption);
   font-size: 12pt;
-  color: oklch(41.92% 0.0962 250.51);
+  color: var(--blue-40);
   /* balance: evens the two lines this heading wraps to on narrow widths
      instead of leaving one word on line 2. broadly supported; no-op
      where unsupported. */
@@ -344,9 +363,9 @@ hr {
   list-style: none;
   padding: 0;
   margin: 0;
-  border: 1px solid oklch(61.14% 0.0611 253.60);
-  border-top-color: oklch(47.12% 0.0555 253.58);
-  border-left-color: oklch(47.12% 0.0555 253.58);
+  border: 1px solid var(--frame);
+  border-top-color: var(--blue-45);
+  border-left-color: var(--blue-45);
   background: oklch(100.00% 0 0);
 }
 .np-list li {
@@ -366,14 +385,14 @@ hr {
 }
 .np-list a {
   text-decoration: none;
-  color: oklch(21.78% 0 0);
+  color: var(--ink);
   display: block;
 }
 .np-list a:hover { background: oklch(97.73% 0.0373 95.44); }
 .np-list a:hover .np-title { color: oklch(62.80% 0.2577 29.23); }
 .np-title {
   font-weight: bold;
-  color: oklch(41.92% 0.0962 250.51);
+  color: var(--blue-40);
 }
 .np-sep {
   color: oklch(62.68% 0 0);
@@ -396,7 +415,7 @@ hr {
 }
 .np-explicit {
   display: inline-block;
-  font-family: "Courier New", Courier, monospace;
+  font-family: var(--font-mono);
   font-size: 8pt;
   font-weight: bold;
   color: oklch(51.03% 0 0);
@@ -407,7 +426,7 @@ hr {
   vertical-align: middle;
 }
 .np-duration {
-  font-family: "Courier New", Courier, monospace;
+  font-family: var(--font-mono);
   font-size: 9pt;
   color: oklch(62.68% 0 0);
   float: right;
@@ -435,7 +454,7 @@ hr {
   /* one base token for the contact-sheet frame. the hover shade is DERIVED from
      it below with relative color — oklch(from var(--photo-frame) …) — so retuning
      this one value retunes the hover automatically. */
-  --photo-frame: oklch(61.14% 0.0611 253.60);
+  --photo-frame: var(--frame);
   border: 1px solid var(--photo-frame);
   box-shadow: 1px 1px 0 oklch(61.14% 0.0611 253.60 / 0.3);
   line-height: 0;
@@ -446,7 +465,7 @@ hr {
   background: oklch(97.73% 0.0373 95.44);
   /* derived from --photo-frame: darker + a touch more saturated. the hand-tuned
      value is the fallback for engines without relative color (pre-2024). */
-  border-color: oklch(41.92% 0.0962 250.51);
+  border-color: var(--blue-40);
   border-color: oklch(from var(--photo-frame) calc(l - 0.19) calc(c + 0.035) h);
 }
 /* <picture> + <img> fill the aspect-ratio'd frame. box aspect ≈ native aspect,
@@ -474,7 +493,7 @@ hr {
 /* footer: copyright + "best viewed in" — the most reliable IE6-era tells */
 footer {
   text-align: center;
-  font-family: Tahoma, Verdana, sans-serif;
+  font-family: var(--font-ui);
   font-size: 9pt;
   color: oklch(44.95% 0 0);
   margin: 18px 0 0;
@@ -488,7 +507,7 @@ footer .signature small { color: oklch(56.93% 0 0); }
 
 .under-construction {
   text-align: center;
-  font-family: "Trebuchet MS", Verdana, sans-serif;
+  font-family: var(--font-caption);
   font-size: 9pt;
   color: oklch(54.44% 0.1504 47.10);
   font-weight: bold;
@@ -536,7 +555,7 @@ footer .signature small { color: oklch(56.93% 0 0); }
   background: oklch(98.92% 0.0398 96.79);
   color: oklch(20.00% 0 0);
   border: 1px solid oklch(15.00% 0 0);
-  font-family: Tahoma, "Microsoft Sans Serif", Verdana, sans-serif;
+  font-family: var(--font-ui);
   font-size: 11px;
   padding: 4px 8px;
   box-shadow: 2px 2px 0 oklch(15.00% 0 0 / 0.15);
@@ -611,10 +630,10 @@ footer .signature small { color: oklch(56.93% 0 0); }
 .xp-tooltip:has(.cam) { width: 250px; max-width: 250px; }
 .xp-tooltip .cam { margin: -4px -8px; }
 .xp-tooltip .cam .header {
-  background: linear-gradient(180deg, oklch(94.66% 0.0114 252.09), oklch(85.04% 0.0283 248.16));
-  border-bottom: 1px solid oklch(61.14% 0.0611 253.60);
-  padding: 3px 8px; font-weight: bold; color: oklch(41.92% 0.0962 250.51);
-  font-family: "Trebuchet MS", Verdana, sans-serif; font-size: 10.5px;
+  background: linear-gradient(180deg, var(--surface-desktop), oklch(85.04% 0.0283 248.16));
+  border-bottom: 1px solid var(--frame);
+  padding: 3px 8px; font-weight: bold; color: var(--blue-40);
+  font-family: var(--font-caption); font-size: 10.5px;
   display: flex; align-items: center; justify-content: space-between; gap: 6px;
 }
 .xp-tooltip .cam .header span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -622,8 +641,8 @@ footer .signature small { color: oklch(56.93% 0 0); }
 .xp-tooltip .cam .flash-bolt { position: static; top: auto; right: auto; flex-shrink: 0; color: oklch(58% 0.18 75); filter: none; }
 .xp-tooltip .cam .histogram-frame {
   margin: 6px 8px 0; height: 36px; position: relative; overflow: hidden;
-  border: 1px solid oklch(61.14% 0.0611 253.60);
-  border-top-color: oklch(47.12% 0.0555 253.58); border-left-color: oklch(47.12% 0.0555 253.58);
+  border: 1px solid var(--frame);
+  border-top-color: var(--blue-45); border-left-color: var(--blue-45);
   background: oklch(100% 0 0);
 }
 .xp-tooltip .cam .hist-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
@@ -641,7 +660,7 @@ footer .signature small { color: oklch(56.93% 0 0); }
 .xp-tooltip .cam .footer {
   display: flex; justify-content: space-between; padding: 3px 9px 4px;
   border-top: 1px solid oklch(86.67% 0.0294 259.59); margin-top: 5px;
-  font-size: 9px; color: oklch(52% 0 0); font-family: "Courier New", monospace;
+  font-size: 9px; color: oklch(52% 0 0); font-family: var(--font-mono);
 }
 
 /* album popover: just the cover image in a contact-sheet-style raised
@@ -660,7 +679,7 @@ footer .signature small { color: oklch(56.93% 0 0); }
   background: oklch(94% 0.005 240);
   /* paper-mat border matching the photo tiles */
   border: 3px solid oklch(100% 0 0);
-  outline: 1px solid oklch(61.14% 0.0611 253.60);
+  outline: 1px solid var(--frame);
   outline-offset: -1px;
 }
 
@@ -682,7 +701,7 @@ footer .signature small { color: oklch(56.93% 0 0); }
   object-fit: cover;
   background: oklch(94% 0.005 240);
   border: 3px solid oklch(100% 0 0);
-  outline: 1px solid oklch(61.14% 0.0611 253.60);
+  outline: 1px solid var(--frame);
   outline-offset: -1px;
 }
 .xp-tooltip .car-cap {
@@ -692,7 +711,7 @@ footer .signature small { color: oklch(56.93% 0 0); }
   font-size: 8.5pt;
   color: oklch(38% 0 0);
   background: oklch(96% 0.004 240);
-  border: 1px solid oklch(61.14% 0.0611 253.60);
+  border: 1px solid var(--frame);
   border-top: none;
   box-sizing: border-box;
 }
@@ -740,9 +759,9 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
 /* visited-page counter joke — pure decoration */
 .counter {
   display: inline-block;
-  background: oklch(21.78% 0 0);
+  background: var(--ink);
   color: oklch(86.52% 0.1768 90.38);
-  font-family: "Courier New", Courier, monospace;
+  font-family: var(--font-mono);
   font-size: 9pt;
   font-weight: bold;
   padding: 1px 6px;

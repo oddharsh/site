@@ -1,0 +1,45 @@
+/* ============================================================================
+   aadhar.sh — Typography tokens · canonical Luna stacks
+   ----------------------------------------------------------------------------
+   Three stacks, and ONLY these three (see DESIGN.md). Native-available fonts
+   only — no @font-face, no web fonts. That is a hard brand rule: the lightest
+   possible footprint is part of the resto-mod thesis.
+
+   Native-availability order: Tahoma isn't reliably on macOS, so --font-ui falls
+   through to Verdana (mac-native, metrically close); Trebuchet MS IS on macOS so
+   captions render true on both. Every stack ends generic so it never lands on
+   Arial/Helvetica.
+   ============================================================================ */
+
+:root {
+  /* ── FAMILIES ────────────────────────────────────────────────────────────*/
+  --font-caption: "Trebuchet MS", Verdana, Geneva, sans-serif; /* title bars, h1–h3      */
+  --font-ui:      Tahoma, Verdana, Geneva, sans-serif;         /* body, controls, labels */
+  --font-mono:    "Courier New", Courier, monospace;           /* numerics, EXIF, /source*/
+
+  /* ── SIZE SCALE — authored in pt, the period-correct unit for XP UI ──────
+     The site sets body at 10.5pt and scales headings up; control text is 10pt.
+     Kept in pt so it reads like a 2003 dialog, not a 2026 rem grid. */
+  --text-h1:    14pt;   /* page heading (homepage h1)                          */
+  --text-h1-lg: 18pt;   /* large heading (coffee page h1)                      */
+  --text-h2:    12pt;   /* section heading                                     */
+  --text-body:  10.5pt; /* prose / lede                                        */
+  --text-ui:    10pt;   /* buttons, labels, list rows                          */
+  --text-sm:    9.5pt;  /* meta, captions                                      */
+  --text-xs:    9pt;    /* footer, status bar                                  */
+  --text-mono:  9pt;    /* mono readouts, badges                               */
+  --text-micro: 8.5pt;  /* status pills, fine print                            */
+
+  /* ── WEIGHTS — XP UI is normal or bold, nothing in between ───────────────*/
+  --weight-normal: 400;
+  --weight-bold:   700;
+
+  /* ── LINE HEIGHTS ────────────────────────────────────────────────────────*/
+  --leading-tight: 1.3;   /* headings                                          */
+  --leading-ui:    1.35;  /* list rows, controls                               */
+  --leading-body:  1.5;   /* prose                                             */
+
+  /* ── TRACKING — the two intentional letter-spacings in the system ────────*/
+  --tracking-heading: -0.01em;  /* tight on the navy headings                  */
+  --tracking-caps:     0.05em;   /* uppercase labels / "UNDER CONSTRUCTION"     */
+}

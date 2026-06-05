@@ -1,0 +1,102 @@
+/* ============================================================================
+   aadhar.sh — Color tokens · Windows XP "Luna" (Blue), resto-mod
+   ----------------------------------------------------------------------------
+   Everything is OKLCH and mapped RELATIVELY so the whole theme tone-shifts from
+   a handful of knobs. This goes one step past the site's canonical tokens.css
+   (which deliberately keeps the beige/grey chrome in hex): here the low-chroma
+   chrome is OKLCH too, anchored on a shared warm hue, so a single hue/chroma
+   nudge retunes the entire control face. Canonical Luna hex is noted in comments
+   as the period-correct ground truth.
+
+   Render like 2003, author like 2026: these resolve to period-correct Luna
+   blues and beiges, but the source reads modern and gets wide-gamut depth on P3.
+   ============================================================================ */
+
+:root {
+  /* ── TONE KNOBS — turn these to shift the whole theme ────────────────────
+     Change --hue-luna to recolor every blue (title bar, links, selection,
+     frames) at once; --hue-chrome to warm/cool the beige control face; the
+     -boost knobs push saturation on P3. This is the "toneshift later" surface. */
+  --hue-luna:    263;     /* @kind other */ /* the Luna blue family (title, frames, links) */
+  --hue-chrome:   95;     /* @kind other */ /* warm hue of the beige ButtonFace + greys     */
+  --hue-danger:   25;     /* @kind other */ /* close-button / error red                     */
+  --hue-go:      145;     /* @kind other */ /* success / shipped green                       */
+  --hue-warn:     75;     /* @kind other */ /* warning / "under construction" amber          */
+  --chroma-luna: 0.225;   /* @kind other */ /* peak chroma of the saturated blue             */
+  --chroma-chrome: 0.018; /* @kind other */ /* how warm the beige chrome reads               */
+
+  /* ── BLUE RAMP — the saturated Luna accent, derived off --hue-luna ───────
+     Canonical: ActiveTitle #0054E3 · GradientActiveTitle #3D95FF ·
+     InactiveTitle #7A96DF · Highlight #316AC5. */
+  --blue-95: oklch(70% 0.150 calc(var(--hue-luna) - 5));   /* title-grad top, bright   */
+  --blue-80: oklch(60% 0.200 calc(var(--hue-luna) - 2));   /* title-grad upper         */
+  --blue-65: oklch(51% var(--chroma-luna) var(--hue-luna));/* title-grad core ≈ #0054E3*/
+  --blue-60: oklch(50% var(--chroma-luna) var(--hue-luna));/* title-grad lower         */
+  --blue-55: oklch(58% 0.180 calc(var(--hue-luna) - 3));   /* title-grad bottom lip    */
+  --blue-50: oklch(52% 0.160 var(--hue-luna));             /* Highlight/selection ≈ #316AC5 */
+  --blue-45: oklch(47.12% 0.0555 253.58);                  /* strong frame / sunken TL */
+  --blue-40: oklch(41.92% 0.0962 250.51);                  /* navy heading / inner edge*/
+  --blue-inactive: oklch(66% 0.090 var(--hue-luna));       /* InactiveTitle ≈ #7A96DF  */
+  --frame:   oklch(61.14% 0.0611 253.60);                  /* 1px window/photo frame   */
+
+  /* ── CHROME RAMP — the beige Luna "face", derived off --hue-chrome ───────
+     Canonical: ButtonFace #ECE9D8 · ButtonLight #F1EFE2 · ButtonShadow #ACA899
+     · 3D dark shadow #716F64. */
+  --face:        oklch(92.5% var(--chroma-chrome) var(--hue-chrome));  /* #ECE9D8 */
+  --face-light:  oklch(94.0% calc(var(--chroma-chrome) - 0.002) var(--hue-chrome)); /* #F1EFE2 */
+  --highlight:   oklch(100% 0 0);                                       /* #FFFFFF */
+  --shadow:      oklch(71.5% 0.014 var(--hue-chrome));                  /* #ACA899 */
+  --darkshadow:  oklch(50.0% 0.012 var(--hue-chrome));                  /* #716F64 */
+
+  /* ── NEUTRALS — window/field background + text greys ─────────────────────*/
+  --window:    oklch(100% 0 0);          /* #FFFFFF content + input field bg   */
+  --paper:     oklch(99% 0.005 var(--hue-chrome)); /* faint-warm workspace bg  */
+  --ink:       oklch(21.78% 0 0);        /* primary window text (near-black)   */
+  --ink-soft:  oklch(38.67% 0 0);        /* body prose / secondary             */
+  --ink-dim:   oklch(51.03% 0 0);        /* meta, captions, disabled label     */
+  --ink-faint: oklch(62.68% 0 0);        /* placeholder / loading text         */
+  --rule:      oklch(86.67% 0.0294 calc(var(--hue-luna) - 4)); /* hairline divider */
+  --row-alt:   oklch(97.50% 0.0062 calc(var(--hue-luna) - 8)); /* zebra row tint */
+  --row-hover: oklch(97.73% 0.0373 var(--hue-warn));          /* warm hover tint */
+
+  /* ── SEMANTIC ACCENTS — status + interactive color ───────────────────────*/
+  --danger:      oklch(58% 0.200 var(--hue-danger));   /* close red / error      */
+  --danger-deep: oklch(46.34% 0.190 var(--hue-danger));/* error text             */
+  --go:          oklch(49.32% 0.168 var(--hue-go));    /* success / shipped      */
+  --warn:        oklch(54.44% 0.150 var(--hue-warn));  /* under-construction amber*/
+  --gold:        oklch(86.52% 0.177 90.38);            /* counter / odometer LCD  */
+
+  /* link states — canonical web-safe blue/purple/red, OKLCH'd */
+  --link:         oklch(42.61% 0.235 263.74);
+  --link-visited: oklch(42.09% 0.194 328.36);
+  --link-hover:   oklch(62.80% 0.258 29.23);
+
+  /* selection */
+  --selection:      var(--blue-50);
+  --selection-text: oklch(100% 0 0);
+
+  /* ── SEMANTIC SURFACE / ROLE ALIASES — author against these ──────────────*/
+  --surface-desktop:  oklch(94.66% 0.0114 252.09); /* the page "desktop" wash  */
+  --surface-window:   var(--window);               /* white content area       */
+  --surface-chrome:   var(--face);                 /* beige control face        */
+  --surface-field:    var(--window);               /* inputs / wells           */
+  --text-title:       oklch(100% 0 0);             /* caption text (white)      */
+  --text-heading:     var(--blue-40);              /* navy h1–h3                */
+  --text-body:        var(--ink);
+  --text-muted:       var(--ink-dim);
+  --border-window:    var(--frame);
+  --border-field:     var(--frame);
+}
+
+/* ── WIDE-GAMUT UPGRADE — push the user-action accents past the sRGB chroma
+   envelope on P3 displays; XP chrome stays period-accurate. ──────────────── */
+@media (color-gamut: p3) {
+  :root {
+    --chroma-luna: 0.30;     /* @kind other */
+    --link:        oklch(42.61% 0.30 263.74);
+    --link-visited:oklch(42.09% 0.27 328.36);
+    --link-hover:  oklch(62.80% 0.33 29.23);
+    --danger:      oklch(58% 0.26 var(--hue-danger));
+    --gold:        oklch(86.52% 0.22 90.38);
+  }
+}
