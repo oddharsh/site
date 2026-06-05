@@ -138,8 +138,6 @@ body {
   max-width: 660px;
   margin: 0 auto;
   background: oklch(100.00% 0 0);
-  border: 1px solid oklch(61.14% 0.0611 253.60);
-  box-shadow: 4px 4px 0 oklch(61.14% 0.0611 253.60 / 0.35);
 }
 
 /* fake XP title bar */
@@ -277,8 +275,7 @@ p { margin: 0 0 12px; text-wrap: pretty; }
 
 a:link    { color: oklch(42.61% 0.2353 263.74); text-decoration: underline; }
 a:visited { color: oklch(42.09% 0.1935 328.36); }
-a:hover   { color: oklch(62.80% 0.2577 29.23); }
-a:active  { color: oklch(62.80% 0.2577 29.23); }
+a:hover, a:active { color: oklch(62.80% 0.2577 29.23); }
 
 hr {
   border: 0;
@@ -343,12 +340,6 @@ hr {
   color: oklch(62.80% 0.2577 29.23);
   text-decoration: underline;
 }
-.np-meta {
-  font-size: 9.5pt;
-  color: oklch(51.03% 0 0);
-  margin: 0 0 8px;
-}
-.np-meta a { color: oklch(42.61% 0.2353 263.74); }
 .np-list {
   list-style: none;
   padding: 0;
@@ -429,7 +420,7 @@ hr {
   /* 3-column equal-area grid: every photo gets the same 1:1 cell regardless
      of its native aspect ratio. object-fit:cover centers the crop. this keeps
      all thumbnails at the same display size (~200px per side), so no photo is
-     rendered at more pixels than the 1200px thumbnail can support cleanly. */
+     rendered at more pixels than the 600px square thumbnail can support cleanly. */
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 6px;
@@ -595,7 +586,6 @@ footer .signature small { color: oklch(56.93% 0 0); }
   font-size: 10.5px;
 }
 .xp-tooltip .row + .row { margin-top: 1px; }
-.xp-tooltip .row.dim { color: oklch(55% 0 0); }
 
 /* flash bolt: pinned to the top-right corner of the tooltip when the
    EXIF Flash field matches "Fired" or "On". amber color reads as "lit",
