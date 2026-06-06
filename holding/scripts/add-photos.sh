@@ -6,13 +6,15 @@
 #      <stem>-<SQ_SM>.avif — PRE-CROPPED CENTER SQUARES (what the grid shows:
 #      aspect-ratio:1 + object-fit:cover), metadata-stripped. mirrors
 #      reencode-thumbnails.sh exactly (keep the two encode paths in sync).
-#   2. uploads the original to R2 as aadhar-photos/<filename>
-#      (preserves SOOC bytes; this is what /images/full/<filename> returns)
-#   3. if the original is HEIF (.hif/.heic/.heif), also generates a full-
-#      resolution JPG export (q92) and uploads as aadhar-photos/<stem>.jpg
-#      — Chrome/Firefox can't natively render HEIF and would trigger a
-#      download dialog otherwise. the worker's manifest dedup prefers the
-#      .jpg over the .HIF, so click-through opens in the browser.
+#   2. uploads a BROWSER-RENDERABLE JPG to R2 as aadhar-photos/<stem>.jpg —
+#      this is what /images/full/<stem>.jpg returns on click, and the shareable
+#      R2 copy. for a JPG-source photo that's the original; for a HEIF source
+#      it's the q100 export from step 3.
+#   3. if the original is HEIF (.hif/.heic/.heif), generates a MAXIMAL-quality
+#      (formatOptions 100, full-res, EXIF-preserved) JPG export and uploads THAT.
+#      the .HIF original is NOT uploaded — it stays local-only (your drive + SSD
+#      are the archive). Chrome/Firefox can't render HEIF anyway, and R2 is for
+#      serving/sharing, not cold storage of originals.
 #
 # post-processing:
 #   4. regenerates holding/images/metadata.json + per-stem images/meta/<stem>.json
@@ -201,7 +203,10 @@ while IFS= read -r f; do
     continue
   fi
   out="$EXPORTS/${stem}.jpg"
-  if sips -s format jpeg --setProperty formatOptions 92 "$f" --out "$out" >/dev/null 2>&1; then
+  # formatOptions 100 = MAXIMAL JPEG quality (near-lossless, full-res, EXIF +
+  # orientation preserved). this export IS the R2 copy now — the .HIF original
+  # is NOT uploaded (stays on your drive/SSD), so make the JPG share-worthy.
+  if sips -s format jpeg --setProperty formatOptions 100 "$f" --out "$out" >/dev/null 2>&1; then
     H_OK=$((H_OK+1)); printf "."
   else
     H_FAIL=$((H_FAIL+1)); printf "✗"
@@ -222,19 +227,20 @@ upload() {
   fi
 }
 
-# originals — normalize extension to lowercase so R2 keys are stable. stem
-# case is preserved.
+# originals → R2. NB: HIF/HEIF originals are NOT uploaded — they stay local-only
+# (your drive + SSD are the archive); R2 gets their q100 JPG export instead
+# (phase 2 / below), which is browser-renderable + shareable. only JPG-source
+# originals (already max-quality SOOC) go up as-is. extension lowercased so keys
+# are stable; stem case preserved.
 PENDING=0
 while IFS= read -r f; do
   base=$(basename "$f")
   stem="${base%.*}"
   ext_lc=$(echo "${base##*.}" | tr '[:upper:]' '[:lower:]')
-  key="${stem}.${ext_lc}"
-  ct="image/jpeg"
   case "$ext_lc" in
-    heic|heif|hif) ct="image/heic" ;;
+    heic|heif|hif) continue ;;   # local-only; the q100 JPG export is the R2 copy
   esac
-  upload "$key" "$f" "$ct" &
+  upload "${stem}.${ext_lc}" "$f" "image/jpeg" &
   PENDING=$((PENDING+1))
   if [ $PENDING -ge 4 ]; then wait; PENDING=0; fi
 done < "$SOURCES"

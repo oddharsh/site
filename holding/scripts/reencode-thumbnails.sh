@@ -12,16 +12,19 @@
 # AVIF for both; a single SQ JPG is the no-AVIF fallback. NB: SQ_SM must match
 # THUMB_SMALL_PX in _worker.js (the -<N>.avif suffix).
 #
-# Deliberately does NOT touch R2 originals, metadata.json (its width/height are
-# the ORIGINAL dims), or the HIF → full-res click export.
+# Deliberately does NOT touch R2 (it now holds only q100 JPG share copies, not
+# originals), metadata.json (its width/height are the ORIGINAL dims), or the
+# full-res click export. The true SOOC originals (.HIF) live in the local source
+# folder ($SRC) + your drive/SSD — that's the re-encode source, not R2.
 #
 # FUTURE — native-aspect layout (when CSS masonry / grid-lanes ships in 2+
 # engines; today it's Safari 26 only, Chrome behind a flag — see /garage/horizon).
 # The square crop here is a CURRENT-ENGINES compromise; the long-term intent is to
 # stop cropping and lay photos out at their native aspect, packed creatively
 # (masonry) and scaled by SOOC pixel area. To get there: re-encode full-frame
-# (NOT square) thumbnails from the R2 originals — nothing is lost, the crop only
-# ever lived in these files — and drive the layout from metadata.json's original
+# (NOT square) thumbnails from the local SOOC originals in $SRC (the .HIF files)
+# — nothing is lost, the crop only ever lived in these files — and drive the
+# layout from metadata.json's original
 # width/height. Key gotcha (this bit us before): if a tile is shown LARGER than
 # its thumbnail's resolution it pixelates, so the thumbnail's encoded size must
 # scale with its DISPLAY area, not be a fixed long-edge. So that variant wants a
