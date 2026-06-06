@@ -766,9 +766,9 @@ footer {
 
     <hr>
 
-    <h2>XP-skinned camera readout (photos) <span class="status review">in review</span></h2>
+    <h2>XP-skinned camera readout (photos) <span class="status shipped">shipped</span></h2>
     <p class="note">
-      Same content as the Fuji LCD above (histogram, exposure trio, recipe grid, date) but reskinned in XP visual vocabulary: cream panel, blue gradient title strip, sunken bevel around the histogram, Tahoma body with Courier numerics. Keeps the camera-back density without arguing visually with the surrounding XP shell.
+      <b>This is the one that shipped</b> &mdash; it's the live photo-grid tooltip on <a href="/">the homepage</a> (the <code>.cam</code> markup out of <code>buildContent()</code>). Same content as the Fuji LCD above (histogram, exposure trio, recipe grid, date) but reskinned in XP visual vocabulary: cream panel, blue gradient title strip, sunken bevel around the histogram, Tahoma body with Courier numerics. Keeps the camera-back density without arguing visually with the surrounding XP shell &mdash; the Fuji LCD lost on exactly that (too dark a panel against the Luna page).
     </p>
     <div class="row" id="xp-cam-row">
       <a class="slot xp-cam-slot" href="#"
@@ -805,9 +805,9 @@ footer {
 
     <hr>
 
-    <h2>Vinyl sleeve at cursor (tracks) <span class="status review">in review</span></h2>
+    <h2>Vinyl sleeve at cursor (tracks) <span class="status shipped">shipped</span></h2>
     <p class="note">
-      Hover any row. A square album cover with a paper-mat border and a slight <code>-6&deg;</code> tilt floats at the cursor, like pulling a sleeve out to read the front. Same architecture as the photo tooltip; the row text stays put.
+      <b>The cover-at-cursor idea shipped</b> as the live tracklist tooltip on <a href="/">the homepage</a> &mdash; in a contact-sheet-style raised frame rather than this paper-mat <code>-6&deg;</code> tilt, but the same move: hover a row, the square album cover floats at the cursor like pulling a sleeve out to read the front. Same architecture as the photo tooltip; the row text stays put.
     </p>
     <ol class="vinyl-demo" id="track-row">
       <li data-art="https://image-cdn-fa.spotifycdn.com/image/ab67616d00001e0246f9bf1154c7205b0e8b1667">
@@ -903,9 +903,12 @@ footer {
 
     <hr>
 
-    <h2>CSS Anchor Positioning <span class="status ref">reference</span></h2>
+    <h2>CSS Anchor Positioning <span class="status shipped">shipped</span></h2>
     <p class="note">
-      Element-anchored rather than cursor-anchored. Included as a comparison: pure-CSS positioning for tooltips that don't need to follow the cursor. Useful as the JS-disabled fallback path on the live candidates above.
+      Element-anchored rather than cursor-anchored. <b>This shipped</b> &mdash; it's the <a href="/">homepage</a>'s <em>keyboard-focus</em> tooltip path: mouse users get the cursor-follower, but a keyboard user tabbing to a slot has no cursor to track, so on <code>:focus-visible</code> the JS sets <code>anchor-name</code> on the focused element and the popover tethers to it via <code>position-anchor</code> / <code>position-area</code> (gated on <code>CSS.supports</code>, a clean no-op where unsupported).
+    </p>
+    <p class="note">
+      <b>Note &mdash; this is a keyboard fallback, not a JS-disabled one.</b> Every live tooltip (here and on serendipity) is JS-orchestrated: JS populates the popover, calls <code>showPopover()</code>, and sets the <code>anchor-name</code>. With JS off, the popover stays empty and is never shown &mdash; no tooltip at all. This pure-CSS <code>:has(:hover)</code> demo below <em>would</em> work without JS, but it isn't wired into any live page; tooltips are progressive enhancement that simply vanish without script (the photos and links still work).
     </p>
     <div class="anchor-fallback">
       Your browser doesn't support <code>anchor-name</code> yet. Chrome 125+ or Safari TP shows this demo.

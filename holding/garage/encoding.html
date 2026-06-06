@@ -187,12 +187,17 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
 <div class="window">
   <div class="title-bar" aria-hidden="true"><span class="title-text"><span class="icon"></span>thumbnail encoding study</span><span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/garage/" title="back to the garage" aria-label="back to the garage"></a></span></div>
   <div class="content">
-    <h1>Thumbnail encoding study <span class="status review">in review</span></h1>
+    <h1>Thumbnail encoding study <span class="status shipped">shipped</span></h1>
     <p class="lede">
       Every grid thumbnail is the end of a chain of choices &mdash; <em>format,
       quality, chroma subsampling, resolution</em>. Here's one photo run through all
       of them with real byte counts, so the tradeoffs are visible instead of folklore.
       All numbers are from the actual encoders the site uses (avifenc, jpegli, cwebp, sips).
+    </p>
+    <p class="lede" style="margin-top:4px">
+      <b>The verdict shipped:</b> the live pipeline (<code>holding/scripts/add-photos.sh</code>)
+      encodes every thumbnail as AVIF-primary + a <b>jpegli q82</b> JPG fallback &mdash; the
+      winning combination below. That's why the site builds jpegli from source.
     </p>
 
     <h2>Format showdown</h2>
