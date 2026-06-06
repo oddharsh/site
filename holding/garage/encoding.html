@@ -181,28 +181,39 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
    glass centred ON the cursor; image-rendering:pixelated so the actual encoded
    pixels (JPEG 8×8 blocking vs AVIF's smoothing) read crisp instead of being
    re-smoothed by the browser's upscaler. */
+/* squared XP "Luna" mini-window: blue double-bevel frame + 5-stop title strip,
+   the magnified image sunken in a 3D well below. matches the page's own .window /
+   .title-bar literals. fixed geometry (184 frame · 18 bar · 180 glass) so the glass
+   centre lands exactly on the cursor via the translate offset below. */
 .loupe {
   position: fixed; margin: 0; inset: auto; top: 0; left: 0;
-  width: 180px; height: 180px; border-radius: 50%;
-  background-repeat: no-repeat; background-color: oklch(100% 0 0);
-  image-rendering: pixelated;
-  border: 3px solid oklch(100% 0 0);
-  outline: 2px solid oklch(41.92% 0.0962 250.51);
-  box-shadow: 0 6px 20px -4px oklch(0% 0 0 / 0.5), inset 0 0 0 1px oklch(0% 0 0 / 0.25);
+  width: 184px;
+  background: oklch(100% 0 0);
+  border: 2px solid #0831d9; border-right-color: #001ea0; border-bottom-color: #001ea0;
+  box-shadow: inset 1px 1px 0 #166aee, inset -1px -1px 0 #00138c, 3px 3px 0 oklch(46% 0.16 263 / 0.35);
   pointer-events: none; z-index: 10000;
   opacity: 1; transition: opacity 90ms ease-out, display 90ms allow-discrete;
-  transform: translate(calc(var(--lx, 0px) - 90px), calc(var(--ly, 0px) - 90px));
+  /* glass centre on the cursor: 2px border + 90px to glass mid (x); 2 + 18 bar + 90 (y) */
+  transform: translate(calc(var(--lx, 0px) - 92px), calc(var(--ly, 0px) - 110px));
 }
-/* zoom badge + a centre crosshair so you know exactly what's under the glass */
-.loupe::after {
-  content: attr(data-z); position: absolute; left: 50%; bottom: 7px; transform: translateX(-50%);
-  font: bold 8.5pt var(--font-mono); color: oklch(100% 0 0);
-  background: oklch(41.92% 0.0962 250.51 / 0.85); padding: 0 5px; border-radius: 2px;
+.loupe .bar {
+  height: 18px; box-sizing: border-box; display: flex; align-items: center; gap: 5px;
+  padding: 0 6px; border-bottom: 1px solid oklch(41.92% 0.0962 250.51);
+  font: bold 8.5pt var(--font-caption); color: oklch(100% 0 0); text-shadow: 1px 1px #0f1089;
+  background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
 }
-.loupe::before {
-  content: ""; position: absolute; left: 50%; top: 50%; width: 9px; height: 9px;
-  transform: translate(-50%, -50%); border: 1px solid oklch(100% 0 0 / 0.8);
-  box-shadow: 0 0 0 1px oklch(0% 0 0 / 0.5); border-radius: 50%;
+.loupe .bar .z { margin-left: auto; font: bold 8pt var(--font-mono); text-shadow: none; color: oklch(96% 0.03 250); }
+.loupe .glass {
+  width: 180px; height: 180px; box-sizing: border-box; position: relative;
+  background-repeat: no-repeat; background-color: oklch(100% 0 0);
+  image-rendering: pixelated;
+  box-shadow: inset 1px 1px 0 #808080, inset -1px -1px 0 oklch(100% 0 0);  /* sunken well */
+}
+/* squared centre reticle so you know exactly what's under the glass */
+.loupe .glass::after {
+  content: ""; position: absolute; left: 50%; top: 50%; width: 11px; height: 11px;
+  transform: translate(-50%, -50%); box-sizing: border-box;
+  border: 1px solid oklch(100% 0 0 / 0.85); box-shadow: 0 0 0 1px oklch(0% 0 0 / 0.55);
 }
 .loupe:not(:popover-open) { opacity: 0; }
 @starting-style { .loupe:popover-open { opacity: 0; } }
@@ -218,7 +229,7 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
 </style>
 </head>
 <body>
-<div id="loupe" popover="manual" class="loupe" aria-hidden="true" data-z="3.2×"></div>
+<div id="loupe" popover="manual" class="loupe" aria-hidden="true"><div class="bar"><span>loupe</span><span class="z">3.2&times;</span></div><div class="glass" id="loupe-glass"></div></div>
 <div class="window">
   <div class="title-bar" aria-hidden="true"><span class="title-text"><span class="icon"></span>thumbnail encoding study</span><span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/garage/" title="back to the garage" aria-label="back to the garage"></a></span></div>
   <div class="content">
@@ -319,21 +330,23 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
   "use strict";
   if (matchMedia("(hover: none)").matches || matchMedia("(pointer: coarse)").matches) return;
   var loupe = document.getElementById("loupe");
-  if (!loupe || typeof loupe.showPopover !== "function") return;  // needs popover support
-  var Z = 3.2, L = 180, active = null;   // L must match the CSS width/height
+  var glass = document.getElementById("loupe-glass");
+  if (!loupe || !glass || typeof loupe.showPopover !== "function") return;  // needs popover support
+  var Z = 3.2, L = 180, active = null;   // L must match the .glass width/height in CSS
 
   function load(img) {
     active = img;
-    loupe.style.backgroundImage = "url('" + img.currentSrc.replace(/'/g, "%27") + "')";
-    loupe.style.backgroundSize = (img.naturalWidth * Z) + "px " + (img.naturalHeight * Z) + "px";
+    glass.style.backgroundImage = "url('" + img.currentSrc.replace(/'/g, "%27") + "')";
+    glass.style.backgroundSize = (img.naturalWidth * Z) + "px " + (img.naturalHeight * Z) + "px";
   }
   function place(e) {
+    // --lx/--ly = raw cursor; the CSS translate offsets so the glass centre lands here
     loupe.style.setProperty("--lx", e.clientX + "px");
     loupe.style.setProperty("--ly", e.clientY + "px");
     var r = active.getBoundingClientRect();
     var rx = (e.clientX - r.left) / r.width, ry = (e.clientY - r.top) / r.height;
-    // centre the spot under the cursor in the L×L glass
-    loupe.style.backgroundPosition =
+    // centre the spot under the cursor in the L×L glass well
+    glass.style.backgroundPosition =
       (L / 2 - rx * active.naturalWidth * Z) + "px " + (L / 2 - ry * active.naturalHeight * Z) + "px";
   }
   var root = document.querySelector(".content") || document.body;
