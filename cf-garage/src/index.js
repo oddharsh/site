@@ -64,40 +64,57 @@ export default {
         return json({ ok: true, stem, caption });
       }
 
-      // Feature #3 — Browser Rendering: headless-Chromium screenshot
+      // Feature #3 — Browser Rendering: headless-Chromium screenshot. PARKED (see
+      // /garage/cloudflare). A bare GET no-ops WITHOUT launching, so crawlers,
+      // prerenders, and cache-busted probes can't burn the free 10-min/day budget or
+      // leak sessions — only ?go=1 drives a real browser. Every path is BOUNDED and
+      // ALWAYS releases the browser:
+      //   • the launch is raced against a 25s timeout; if it resolves late, the browser
+      //     is reaped via waitUntil rather than stranded (the old code abandoned a live
+      //     browser on timeout → the isolate tore down its pending websocket → the
+      //     "Websocket error: SessionID …" log noise, and the un-close()d session ate
+      //     one of the 2 free concurrent slots, erroring the next launch).
+      //   • NO session reuse: connecting to an "idle" session is unbounded, and a dead
+      //     orphan reads as idle, so reuse just hangs on the corpse. A fresh launch each
+      //     time is slower but always bounded.
+      //   • close() in finally frees the slot + stops the per-session time meter.
       if (path === "/garage/cf/screenshot") {
+        if (url.searchParams.get("go") !== "1") {
+          log({ feature: "browser-rendering", step: "parked-noop", ms: Date.now() - t0 });
+          return json({ ok: false, parked: true,
+            error: "Browser Rendering is parked — append ?go=1 to actually launch a browser. See /garage/cloudflare." }, 503);
+        }
         let target = url.searchParams.get("url") || ORIGIN;
-        // SSRF guard: only screenshot aadhar.sh itself
-        if (!/^https:\/\/(www\.)?aadhar\.sh(\/|$)/.test(target)) target = ORIGIN;
-        const shot = (async () => {
-          log({ feature: "browser-rendering", step: "import" });
-          const puppeteer = (await import("@cloudflare/puppeteer")).default;
-          log({ feature: "browser-rendering", step: "launching" });
-          const browser = await puppeteer.launch(env.BROWSER);
-          log({ feature: "browser-rendering", step: "launched", ms: Date.now() - t0 });
-          try {
-            const page = await browser.newPage();
-            await page.setViewport({ width: 900, height: 600, deviceScaleFactor: 1 });
-            log({ feature: "browser-rendering", step: "goto" });
-            await page.goto(target, { waitUntil: "domcontentloaded", timeout: 15000 });
-            await new Promise((r) => setTimeout(r, 1200)); // brief paint settle
-            log({ feature: "browser-rendering", step: "screenshot", ms: Date.now() - t0 });
-            return await page.screenshot({ type: "png" });
-          } finally { try { await browser.close(); } catch {} }
-        })();
-        // hard ceiling so a non-provisioning browser can't hang the request
-        const png = await Promise.race([
-          shot,
-          new Promise((_, rej) => setTimeout(() => rej(new Error("browser timed out (25s)")), 25000)),
-        ]);
-        log({ feature: "browser-rendering", target, bytes: png.length, ms: Date.now() - t0 });
-        return new Response(png, {
-          headers: {
-            "content-type": "image/png",
-            "access-control-allow-origin": ORIGIN,
-            "cache-control": "public, max-age=300",
-          },
-        });
+        if (!/^https:\/\/(www\.)?aadhar\.sh(\/|$)/.test(target)) target = ORIGIN; // SSRF guard
+        const puppeteer = (await import("@cloudflare/puppeteer")).default;
+        const launch = puppeteer.launch(env.BROWSER);
+        let browser;
+        try {
+          browser = await Promise.race([
+            launch,
+            new Promise((_, rej) => setTimeout(() => rej(new Error("launch timed out (25s) — free tier didn't provision a browser in time")), 25000)),
+          ]);
+        } catch (e) {
+          ctx.waitUntil(launch.then((b) => b.close()).catch(() => {})); // reap a late launch
+          log({ feature: "browser-rendering", step: "launch-timeout", ms: Date.now() - t0 });
+          return json({ ok: false, error: String(e.message || e) }, 502);
+        }
+        log({ feature: "browser-rendering", step: "launched", ms: Date.now() - t0 });
+        try {
+          const page = await browser.newPage();
+          await page.setViewport({ width: 900, height: 600, deviceScaleFactor: 1 });
+          await page.goto(target, { waitUntil: "domcontentloaded", timeout: 15000 });
+          await new Promise((r) => setTimeout(r, 800)); // brief paint settle
+          const png = await page.screenshot({ type: "png" });
+          log({ feature: "browser-rendering", target, bytes: png.length, ms: Date.now() - t0 });
+          return new Response(png, {
+            headers: {
+              "content-type": "image/png",
+              "access-control-allow-origin": ORIGIN,
+              "cache-control": "public, max-age=300",
+            },
+          });
+        } finally { try { await browser.close(); } catch {} }
       }
 
       log({ feature: "none", status: 404 });

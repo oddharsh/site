@@ -238,12 +238,13 @@ code.m, .m { font-family: var(--font-mono); font-size: 9.2pt; }
       (Puppeteer) &mdash; <code class="m">puppeteer.launch(env.BROWSER) → page.goto() →
       page.screenshot()</code>, the basis for on-the-fly <code class="m">og:image</code> cards. The
       binding is bound and the worker deploys; there&apos;s <em>no</em> enable toggle (the binding
-      is the access). But the free tier meters it at <b>10 browser-minutes/day</b>, and the
-      endpoint&apos;s step-logs show <code class="m">launch()</code> hanging when that budget is
-      spent (reaches <code class="m">launching</code>, never <code class="m">launched</code>). So
-      rather than hand every visitor a button that stalls ~25s, it&apos;s wired but unbuttoned here
-      until the OG-image use case earns the daily budget. The endpoint still lives at
-      <code class="m">/garage/cf/screenshot</code>.</div>
+      is the access). The browser <em>does</em> provision &mdash; the catch was on my side: a
+      timeout race that abandoned the in-flight browser stranded its websocket session (the free
+      plan caps concurrency at 2), so each probe leaked a session and the next launch errored. The
+      handler now bounds every launch and always releases the browser, and a bare hit no-ops instead
+      of launching &mdash; so crawlers can&apos;t burn the <b>10 browser-minutes/day</b> budget. It&apos;s
+      unbuttoned here until the OG-image use case earns that budget; trigger it by hand at
+      <code class="m">/garage/cf/screenshot?go=1</code>.</div>
 
     <footer>
       <p>&larr; back to the <a href="/garage/">garage</a> &middot; <a href="/">aadhar.sh</a></p>
