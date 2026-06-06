@@ -88,7 +88,7 @@ export default {
         // hard ceiling so a non-provisioning browser can't hang the request
         const png = await Promise.race([
           shot,
-          new Promise((_, rej) => setTimeout(() => rej(new Error("browser timed out (25s)")), 45000)),
+          new Promise((_, rej) => setTimeout(() => rej(new Error("browser timed out (25s)")), 25000)),
         ]);
         log({ feature: "browser-rendering", target, bytes: png.length, ms: Date.now() - t0 });
         return new Response(png, {
