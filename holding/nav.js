@@ -89,6 +89,19 @@
 
   // ── styles (injected once) ──────────────────────────────────────────────────
   var CSS =
+// shared XP "Bliss" desktop wallpaper on EVERY page (continuity), drawn in pure CSS
+// (no image bytes — the site ships none for chrome): blue sky + soft clouds + a
+// rolling green hill. fixed so it sits still like a real desktop while windows scroll
+// over it. !important so it overrides each page's own body background regardless of
+// specificity (e.g. body.np-page). no-JS pages keep their own background — graceful.
+"body{background:" +
+"radial-gradient(58px 20px at 19% 23%,oklch(100% 0 0 / .92),transparent 72%)," +
+"radial-gradient(104px 30px at 27% 28%,oklch(100% 0 0 / .80),transparent 74%)," +
+"radial-gradient(46px 15px at 69% 16%,oklch(100% 0 0 / .85),transparent 72%)," +
+"radial-gradient(78px 22px at 77% 20%,oklch(100% 0 0 / .72),transparent 74%)," +
+"radial-gradient(150% 82% at 50% 138%,oklch(76% 0.17 134) 0%,oklch(67% 0.18 137) 24%,oklch(55% 0.18 140) 42%,transparent 56%)," +
+"linear-gradient(180deg,oklch(51% 0.14 252) 0%,oklch(60% 0.13 246) 26%,oklch(76% 0.09 236) 50%,oklch(89% 0.04 230) 61%,oklch(70% 0.14 139) 61.4%,oklch(56% 0.17 140) 78%,oklch(46% 0.16 143) 100%)" +
+" fixed !important;background-repeat:no-repeat !important;background-size:cover !important}" +
 "#axp-taskbar{position:fixed;left:0;right:0;bottom:0;height:30px;z-index:99999;display:flex;align-items:stretch;" +
 "font-family:var(--font-ui,Tahoma,Verdana,Geneva,sans-serif);font-size:11px;user-select:none;" +
 "background:linear-gradient(180deg,oklch(67% 0.15 256) 0%,oklch(58% 0.19 257) 4%,oklch(51% 0.20 258) 9%,oklch(49% 0.20 258) 50%,oklch(46% 0.20 259) 92%,oklch(40% 0.18 260) 100%);" +
