@@ -29,7 +29,6 @@
     { label: "serendipity", path: "/serendipity", hint: "events worth going to" },
     { label: "music", path: "/rn", hint: "what I'm listening to right now" },
     { label: "coffee", path: "/coffee", hint: "book a coffee / bagel" },
-    { label: "source", path: "/source", hint: "view this site's source" },
     { label: "writing", path: "/writing", hint: "notes, in flux — an editable notepad" },
     { label: "garage · chunks", path: "/garage/chunks", hint: "content-addressed chunking" },
     { label: "garage · cloudflare", path: "/garage/cloudflare", hint: "free Cloudflare features" },
@@ -101,17 +100,23 @@
 "background:linear-gradient(180deg,oklch(72% 0.17 142) 0%,oklch(63% 0.18 143) 8%,oklch(54% 0.18 144) 46%,oklch(50% 0.18 145) 52%,oklch(58% 0.17 143) 92%,oklch(45% 0.16 146) 100%);" +
 "box-shadow:inset 1px 1px 0 oklch(86% 0.13 140),inset -1px -1px 0 oklch(38% 0.13 147)}" +
 "#axp-start:hover{filter:brightness(1.08)}#axp-start:active,#axp-start[aria-expanded=true]{filter:brightness(.92);box-shadow:inset 1px 1px 0 oklch(38% 0.13 147),inset -1px -1px 0 oklch(86% 0.13 140)}" +
-// the Windows flag, drawn as 4 CSS squares (no logo asset)
-"#axp-flag{flex:0 0 auto;width:14px;height:14px;display:grid;grid-template:1fr 1fr/1fr 1fr;gap:1px;transform:perspective(20px) rotateY(-12deg);filter:drop-shadow(1px 1px 0 oklch(30% 0.07 145))}" +
-"#axp-flag i{display:block;border-radius:1px}#axp-flag i:nth-child(1){background:oklch(64% 0.21 25)}#axp-flag i:nth-child(2){background:oklch(80% 0.18 130)}" +
-"#axp-flag i:nth-child(3){background:oklch(68% 0.17 250)}#axp-flag i:nth-child(4){background:oklch(83% 0.18 90)}" +
-// pinned profile apps
-"#axp-pins{display:flex;align-items:center;gap:3px;padding:3px 0}" +
-".axp-pin{display:flex;align-items:center;gap:5px;height:100%;padding:0 9px;border:1px solid transparent;cursor:pointer;color:oklch(100% 0 0);" +
-"font-family:inherit;font-size:11px;background:oklch(60% 0.16 257);border-radius:2px;text-decoration:none;" +
-"box-shadow:inset 1px 1px 0 oklch(74% 0.13 252),inset -1px -1px 0 oklch(40% 0.16 260)}" +
-".axp-pin:hover{background:oklch(66% 0.16 256)}.axp-pin:active{box-shadow:inset 1px 1px 0 oklch(40% 0.16 260),inset -1px -1px 0 oklch(74% 0.13 252)}" +
-".axp-pin b{width:9px;height:9px;border-radius:2px;flex:0 0 auto;box-shadow:inset 0 0 0 1px oklch(100% 0 0 / .4)}" +
+// the site's traffic cone, drawn as CSS (the only mark the site uses) — orange
+// triangle with two white bands + a base, matching the /favicon.ico cone.
+"#axp-cone{flex:0 0 auto;width:15px;height:15px;position:relative;margin-right:1px;filter:drop-shadow(1px 1px 1px oklch(25% 0.05 30 / .5))}" +
+"#axp-cone::before{content:'';position:absolute;left:0;right:0;top:0;bottom:2px;clip-path:polygon(50% 0,100% 100%,0 100%);background:linear-gradient(180deg,oklch(64% 0.22 38) 0 34%,oklch(97% 0.02 80) 34% 48%,oklch(64% 0.22 38) 48% 70%,oklch(97% 0.02 80) 70% 82%,oklch(64% 0.22 38) 82% 100%)}" +
+"#axp-cone::after{content:'';position:absolute;left:1px;right:1px;bottom:0;height:3px;border-radius:1px;background:oklch(70% 0.19 55)}" +
+// pinned profile apps. NB: these are <a> tags, so the host page's a:hover /
+// a:visited rules would otherwise bleed in (red/purple text, underlines) — pin
+// every link state explicitly to white + no underline.
+"#axp-pins{display:flex;align-items:center;gap:4px;padding:4px 0}" +
+".axp-pin,.axp-pin:link,.axp-pin:visited,.axp-pin:hover,.axp-pin:active{color:oklch(100% 0 0);text-decoration:none}" +
+".axp-pin{display:flex;align-items:center;gap:6px;padding:0 10px;cursor:pointer;font-family:inherit;font-size:11px;border-radius:2px;" +
+"border:1px solid oklch(72% 0.12 254);border-bottom-color:oklch(42% 0.17 261);" +
+"background:linear-gradient(180deg,oklch(70% 0.15 255) 0%,oklch(60% 0.17 257) 48%,oklch(54% 0.18 259) 52%,oklch(58% 0.17 257) 100%);" +
+"box-shadow:inset 0 1px 0 oklch(82% 0.11 250)}" +
+".axp-pin:hover{background:linear-gradient(180deg,oklch(76% 0.14 254) 0%,oklch(66% 0.17 256) 48%,oklch(60% 0.18 258) 52%,oklch(64% 0.16 256) 100%);border-color:oklch(84% 0.10 250)}" +
+".axp-pin:active{background:linear-gradient(180deg,oklch(52% 0.18 260),oklch(60% 0.16 257));box-shadow:inset 1px 1px 2px oklch(36% 0.16 263);border-top-color:oklch(42% 0.17 261)}" +
+".axp-pin b{width:9px;height:9px;border-radius:2px;flex:0 0 auto;box-shadow:inset 0 0 0 1px oklch(100% 0 0 / .5),0 1px 0 oklch(0% 0 0 / .25)}" +
 "#axp-spacer{flex:1}" +
 // tray + clock
 "#axp-tray{display:flex;align-items:center;padding:0 12px 0 10px;margin:3px 4px 3px 0;color:oklch(100% 0 0);" +
@@ -177,7 +182,7 @@
 
   function buildTaskbar() {
     var bar = el('<div id="axp-taskbar" role="navigation" aria-label="taskbar"></div>');
-    var start = el('<button id="axp-start" type="button" aria-haspopup="dialog" aria-expanded="false" title="Run — navigate the site (⌘K)"><span id="axp-flag" aria-hidden="true"><i></i><i></i><i></i><i></i></span>start</button>');
+    var start = el('<button id="axp-start" type="button" aria-haspopup="dialog" aria-expanded="false" title="Run — navigate the site (⌘K)"><span id="axp-cone" aria-hidden="true"></span>start</button>');
     start.addEventListener("click", function () { openRun(); });
     bar.appendChild(start);
     var pins = el('<div id="axp-pins"></div>');
@@ -284,7 +289,9 @@
   }
   function move(d) {
     if (!results.length) return;
-    sel = (sel + d + results.length) % results.length;
+    // clamp, don't wrap — XP's Run combobox (and Windows list controls) stop at
+    // the ends rather than looping; wrapping reads as janky.
+    sel = Math.max(0, Math.min(results.length - 1, sel + d));
     [].forEach.call(list.querySelectorAll(".opt"), function (o) { o.setAttribute("aria-selected", +o.dataset.i === sel); });
     ensureVisible();
   }

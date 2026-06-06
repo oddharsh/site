@@ -789,7 +789,7 @@ const R2_EXT_PRIORITY = {
 // higher quality (CQ30 → -q63); 13 the 3 grayscale Leica thumbs re-encoded
 // as true monochrome (yuv420 → yuv400). same filenames each time, so the
 // ?v= bump is what busts the edge cache for the new bytes.)
-const THUMB_VERSION = 17;
+const THUMB_VERSION = 18;
 // stems removed from the pool — excluded from the rebuilt manifest even if their
 // original still lingers in R2's eventually-consistent list(). prune once R2
 // list() drops them (and the entry here is harmless to keep as a record).

@@ -124,13 +124,24 @@ html, body {
 }
 
 body {
-  background: oklch(91.74% 0.0203 238.68);
-  background: linear-gradient(180deg, oklch(87.51% 0.0281 248.15) 0%, oklch(94.66% 0.0114 252.09) 220px, oklch(94.66% 0.0114 252.09) 100%);
+  /* XP "dawn" desktop: deep indigo upper sky → violet → a warm sunrise glow at the
+     horizon. fixed so it sits still like a desktop wallpaper while the window scrolls
+     over it; the taskbar pins it at the bottom. (the window below floats on top.) */
+  background: oklch(55% 0.12 320);
+  background:
+    linear-gradient(180deg,
+      oklch(40% 0.10 270) 0%,
+      oklch(48% 0.12 288) 18%,
+      oklch(60% 0.13 318) 38%,
+      oklch(70% 0.13 350) 54%,
+      oklch(80% 0.12 28) 72%,
+      oklch(87% 0.11 55) 88%,
+      oklch(91% 0.09 78) 100%) fixed;
   font-family: var(--font-ui);
   font-size: 10.5pt;
   line-height: 1.5;
   color: oklch(21.78% 0 0);
-  padding: 24px 12px 60px;
+  padding: 30px 14px 64px;
   min-height: 100vh;
 }
 
@@ -246,7 +257,8 @@ body {
   border-top-left-radius: 8px; border-top-right-radius: 8px; overflow: hidden;
   box-shadow: inset 1px 1px 0 #166aee, inset 2px 2px 0 #0855dd,
               inset -1px -1px 0 #00138c, inset -2px -2px 0 #003bda,
-              4px 4px 0 rgba(0,30,160,.35);
+              4px 4px 0 rgba(0,30,160,.35),
+              0 10px 34px -10px oklch(22% 0.09 285 / 0.6);  /* float on the dawn desktop */
 }
 
 .content {
@@ -1552,18 +1564,9 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
     </script>
 
     <footer>
-      <p class="links">
-        <a href="https://twitter.com/oddhash" rel="external me">Twitter</a> &middot;
-        <a href="https://instagram.com/aadharsh.hif" rel="external me">Instagram</a> &middot;
-        <a href="https://curius.app/aadharsh-pannirselvam" rel="external me">Curius</a> &middot;
-        <a href="https://beliapp.com/users/aadharsh" rel="external me">Beli</a> &middot;
-        <a href="https://open.spotify.com/user/aadharsh2010" rel="external me">Spotify</a> &middot;
-        <a href="/whoareyou">whoareyou</a> &middot;
-        <a href="/around" title="looking around the crypto VC neighborhood, crawled by AadharshBot">around</a> &middot;
-        <a href="/garage/" title="prototypes + experiments">garage</a> &middot;
-        <a href="/serendipity" title="a public pool of events worth going to and who's going">serendipity</a> &middot;
-        <a href="/writing" title="notes, in flux — an editable Notepad that reverts on reload">writing</a>
-      </p>
+      <!-- trimmed: the profiles + page nav now live in the taskbar (pinned apps) and
+           Run (⌘K). kept in <noscript> so a no-JS visitor — who gets no taskbar — still
+           has every link. -->
       <p>
         Last modified <time datetime="2026-05-18">May 18, 2026</time>
         &middot; You are visitor <span class="counter">000042</span>
@@ -1571,6 +1574,20 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
       <p class="signature">
         <small>&copy; 2026 Aadharsh Pannirselvam &middot; Best viewed in any browser made since 2001.</small>
       </p>
+      <noscript>
+        <p class="links">
+          <a href="https://twitter.com/oddhash" rel="external me">Twitter</a> &middot;
+          <a href="https://instagram.com/aadharsh.hif" rel="external me">Instagram</a> &middot;
+          <a href="https://curius.app/aadharsh-pannirselvam" rel="external me">Curius</a> &middot;
+          <a href="https://beliapp.com/users/aadharsh" rel="external me">Beli</a> &middot;
+          <a href="https://open.spotify.com/user/aadharsh2010" rel="external me">Spotify</a> &middot;
+          <a href="/whoareyou">whoareyou</a> &middot;
+          <a href="/around">around</a> &middot;
+          <a href="/garage/">garage</a> &middot;
+          <a href="/serendipity">serendipity</a> &middot;
+          <a href="/writing">writing</a>
+        </p>
+      </noscript>
     </footer>
 
   </div>
