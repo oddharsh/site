@@ -616,12 +616,19 @@ background:linear-gradient(180deg,oklch(70% 0.15 258) 0%,oklch(60% 0.20 261) 8%,
 .np-ico::before{content:"";position:absolute;left:2px;right:3px;top:3px;height:1px;background:oklch(55% 0.16 258);box-shadow:0 3px 0 oklch(55% 0.16 258),0 6px 0 oklch(55% 0.16 258),0 9px 0 oklch(55% 0.16 258)}
 .np-title{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .np-controls{display:flex;gap:2px}
-.np-controls .min,.np-controls .max{width:18px;height:16px;border:1px solid oklch(100% 0 0 / .6);border-radius:2px;background:oklch(60% 0.16 258);position:relative}
-.np-controls .min::before{content:"";position:absolute;left:4px;right:4px;bottom:3px;height:2px;background:oklch(100% 0 0)}
-.np-controls .max::before{content:"";position:absolute;left:4px;top:3px;width:9px;height:7px;border:1px solid oklch(100% 0 0);border-top-width:2px}
-.np-controls .close{width:18px;height:16px;border:1px solid oklch(100% 0 0 / .6);border-radius:2px;display:flex;align-items:center;justify-content:center;
-color:oklch(100% 0 0);text-decoration:none;font:bold 10px var(--font-ui);background:oklch(64% 0.21 25)}
-.np-controls .close:hover{background:oklch(72% 0.22 25)}
+/* canonical Luna caption buttons (design system): 21x21 glossy "gel" lozenges,
+   min/max blue + close red, CSS-drawn white glyphs. matches .title-bar .controls
+   site-wide; hex traced from the Luna .msstyles bitmap, kept hex on purpose. */
+.np-controls .min,.np-controls .max,.np-controls .close{position:relative;box-sizing:border-box;width:21px;height:21px;padding:0;display:inline-block;overflow:hidden;font-size:0;color:transparent;text-decoration:none;cursor:pointer;border:1px solid #6696eb;border-radius:3px;background-color:#3e73f5;background-image:linear-gradient(180deg,#5f8cf7 0%,#3a71f5 22%,#3e73f5 55%,#2a70f2 82%,#1045be 100%);transition:filter .1s ease}
+.np-controls .min::after,.np-controls .max::after{content:"";position:absolute;left:0;right:0;top:0;height:45%;background:linear-gradient(180deg,rgba(255,255,255,.55) 0%,rgba(255,255,255,.12) 70%,rgba(255,255,255,0) 100%);pointer-events:none;border-radius:2px 2px 5px 5px}
+.np-controls .min:hover,.np-controls .max:hover{border-color:#8fb4ff;background-color:#4fa4ff;background-image:linear-gradient(180deg,#689bff 0%,#468aff 22%,#4fa4ff 55%,#3990fc 82%,#1858c8 100%)}
+.np-controls .min:active,.np-controls .max:active,.np-controls .close:active{filter:brightness(.9)}
+.np-controls .min::before{content:"";position:absolute;left:5px;right:5px;bottom:5px;height:2px;background:#fff;box-shadow:0 1px 0 rgba(0,0,0,.35)}
+.np-controls .max::before{content:"";position:absolute;left:5px;top:5px;width:11px;height:9px;box-sizing:border-box;border:1px solid #fff;border-top-width:2px;filter:drop-shadow(0 1px 0 rgba(0,0,0,.35))}
+.np-controls .close{border-color:#d8401c;background-color:#e45f3e;background-image:linear-gradient(180deg,#e8795f 0%,#e45f40 30%,#e45d3d 52%,#e2552a 80%,#ae3110 100%)}
+.np-controls .close:hover{border-color:#ff7a66;background-color:#ff957c;background-image:linear-gradient(180deg,#ff8b7d 0%,#ff7463 26%,#ff957c 55%,#fd7e64 82%,#d34936 100%);box-shadow:0 0 4px rgba(255,120,96,.7)}
+.np-controls .close::before,.np-controls .close::after{content:"";position:absolute;left:50%;top:50%;width:13px;height:2px;margin:-1px 0 0 -6.5px;background:#fff;box-shadow:0 1px 0 rgba(0,0,0,.35)}
+.np-controls .close::before{transform:rotate(45deg)}.np-controls .close::after{transform:rotate(-45deg)}
 .np-menubar{flex:0 0 auto;display:flex;align-items:stretch;gap:0;padding:1px 2px;font-size:11px;position:relative;
 background:oklch(93% 0.012 90);border-bottom:1px solid oklch(78% 0.02 90)}
 .np-menu{border:0;background:none;font:11px var(--font-ui);color:oklch(20% 0 0);padding:3px 8px;cursor:pointer;border-radius:2px}

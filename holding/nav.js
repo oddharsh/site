@@ -134,9 +134,13 @@
 "font-family:var(--font-caption,'Trebuchet MS',Verdana,sans-serif);font-weight:bold;font-size:12px;text-shadow:1px 1px oklch(28% 0.12 263);" +
 "border-radius:5px 5px 0 0;border-bottom:1px solid oklch(41% 0.10 251);" +
 "background:linear-gradient(180deg,oklch(70% 0.15 258) 0%,oklch(60% 0.20 261) 8%,oklch(51% 0.225 263) 18%,oklch(50% 0.225 263) 86%,oklch(58% 0.18 260) 100%)}" +
-"#axp-run .tb .x{margin-left:auto;width:20px;height:18px;border:1px solid oklch(100% 0 0 / .6);border-radius:3px;cursor:pointer;color:oklch(100% 0 0);" +
-"background:oklch(64% 0.21 25);font:bold 11px var(--font-ui,Tahoma);line-height:1;display:flex;align-items:center;justify-content:center}" +
-"#axp-run .tb .x:hover{background:oklch(72% 0.22 25)}" +
+// the canonical Luna caption CLOSE button (design system): 21x21 red "gel" lozenge,
+// glossy gradient, CSS-drawn white X. matches .title-bar .controls .close site-wide.
+"#axp-run .tb .x{position:relative;box-sizing:border-box;margin-left:auto;width:21px;height:21px;padding:0;overflow:hidden;font-size:0;color:transparent;cursor:pointer;border:1px solid #d8401c;border-radius:3px;background-color:#e45f3e;background-image:linear-gradient(180deg,#e8795f 0%,#e45f40 30%,#e45d3d 52%,#e2552a 80%,#ae3110 100%);transition:filter .1s ease}" +
+"#axp-run .tb .x:hover{border-color:#ff7a66;background-color:#ff957c;background-image:linear-gradient(180deg,#ff8b7d 0%,#ff7463 26%,#ff957c 55%,#fd7e64 82%,#d34936 100%);box-shadow:0 0 4px rgba(255,120,96,.7)}" +
+"#axp-run .tb .x:active{filter:brightness(.9)}" +
+"#axp-run .tb .x::before,#axp-run .tb .x::after{content:'';position:absolute;left:50%;top:50%;width:13px;height:2px;margin:-1px 0 0 -6.5px;background:#fff;box-shadow:0 1px 0 rgba(0,0,0,.35)}" +
+"#axp-run .tb .x::before{transform:rotate(45deg)}#axp-run .tb .x::after{transform:rotate(-45deg)}" +
 "#axp-run .body{display:flex;gap:11px;padding:14px 13px 6px}" +
 "#axp-run .ico{flex:0 0 auto;width:34px;height:34px;position:relative;margin-top:2px}" +
 // run "document with green swoosh" icon, pure CSS
