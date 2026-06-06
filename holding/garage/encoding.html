@@ -171,7 +171,41 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
 /* encoding study */
 .enc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin: 12px 0 20px; }
 .enc-card { margin: 0; background: oklch(97% 0.004 250); border: 1px solid oklch(61.14% 0.0611 253.60); padding: 4px; }
-.enc-card img { display: block; width: 100%; height: auto; background: #fff; }
+.enc-card img { display: block; width: 100%; height: auto; background: #fff; cursor: crosshair; }
+@media (hover: none) { .enc-card img { cursor: default; } }
+
+/* ── loupe / magnifier ──────────────────────────────────────────────────────
+   Mouse over any sample to inspect compression artifacts at zoom. Reuses the
+   site's cursor-following tooltip architecture: a popover positioned off --lx/--ly
+   (cursor clientX/Y), shown on pointer enter / hidden on leave, hover-gated. Round
+   glass centred ON the cursor; image-rendering:pixelated so the actual encoded
+   pixels (JPEG 8×8 blocking vs AVIF's smoothing) read crisp instead of being
+   re-smoothed by the browser's upscaler. */
+.loupe {
+  position: fixed; margin: 0; inset: auto; top: 0; left: 0;
+  width: 180px; height: 180px; border-radius: 50%;
+  background-repeat: no-repeat; background-color: oklch(100% 0 0);
+  image-rendering: pixelated;
+  border: 3px solid oklch(100% 0 0);
+  outline: 2px solid oklch(41.92% 0.0962 250.51);
+  box-shadow: 0 6px 20px -4px oklch(0% 0 0 / 0.5), inset 0 0 0 1px oklch(0% 0 0 / 0.25);
+  pointer-events: none; z-index: 10000;
+  opacity: 1; transition: opacity 90ms ease-out, display 90ms allow-discrete;
+  transform: translate(calc(var(--lx, 0px) - 90px), calc(var(--ly, 0px) - 90px));
+}
+/* zoom badge + a centre crosshair so you know exactly what's under the glass */
+.loupe::after {
+  content: attr(data-z); position: absolute; left: 50%; bottom: 7px; transform: translateX(-50%);
+  font: bold 8.5pt var(--font-mono); color: oklch(100% 0 0);
+  background: oklch(41.92% 0.0962 250.51 / 0.85); padding: 0 5px; border-radius: 2px;
+}
+.loupe::before {
+  content: ""; position: absolute; left: 50%; top: 50%; width: 9px; height: 9px;
+  transform: translate(-50%, -50%); border: 1px solid oklch(100% 0 0 / 0.8);
+  box-shadow: 0 0 0 1px oklch(0% 0 0 / 0.5); border-radius: 50%;
+}
+.loupe:not(:popover-open) { opacity: 0; }
+@starting-style { .loupe:popover-open { opacity: 0; } }
 .enc-card figcaption { font: 8.5pt var(--font-ui); color: oklch(30% 0.01 250); padding: 4px 2px 1px; line-height: 1.4; }
 .enc-card figcaption b { color: oklch(41.92% 0.0962 250.51); }
 .enc-sz { float: right; font-family: var(--font-mono); font-weight: bold; }
@@ -184,6 +218,7 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
 </style>
 </head>
 <body>
+<div id="loupe" popover="manual" class="loupe" aria-hidden="true" data-z="3.2×"></div>
 <div class="window">
   <div class="title-bar" aria-hidden="true"><span class="title-text"><span class="icon"></span>thumbnail encoding study</span><span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/garage/" title="back to the garage" aria-label="back to the garage"></a></span></div>
   <div class="content">
@@ -273,6 +308,53 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
   </div>
 </div>
 
+<script>
+/* loupe / magnifier — same cursor-following architecture as the site's tooltips:
+   popover API for show/hide, pointer events for tracking, hover-gated, no rAF
+   (the browser batches the custom-property-driven transform to its own cadence).
+   the glass is centred ON the cursor and shows that exact spot of THIS card's
+   encoded file (img.currentSrc — avif for avif cards, jpeg for jpeg) magnified
+   with image-rendering:pixelated, so you can A/B the artifacts spot-for-spot. */
+(function () {
+  "use strict";
+  if (matchMedia("(hover: none)").matches || matchMedia("(pointer: coarse)").matches) return;
+  var loupe = document.getElementById("loupe");
+  if (!loupe || typeof loupe.showPopover !== "function") return;  // needs popover support
+  var Z = 3.2, L = 180, active = null;   // L must match the CSS width/height
+
+  function load(img) {
+    active = img;
+    loupe.style.backgroundImage = "url('" + img.currentSrc.replace(/'/g, "%27") + "')";
+    loupe.style.backgroundSize = (img.naturalWidth * Z) + "px " + (img.naturalHeight * Z) + "px";
+  }
+  function place(e) {
+    loupe.style.setProperty("--lx", e.clientX + "px");
+    loupe.style.setProperty("--ly", e.clientY + "px");
+    var r = active.getBoundingClientRect();
+    var rx = (e.clientX - r.left) / r.width, ry = (e.clientY - r.top) / r.height;
+    // centre the spot under the cursor in the L×L glass
+    loupe.style.backgroundPosition =
+      (L / 2 - rx * active.naturalWidth * Z) + "px " + (L / 2 - ry * active.naturalHeight * Z) + "px";
+  }
+  var root = document.querySelector(".content") || document.body;
+  root.addEventListener("pointerover", function (e) {
+    var img = e.target.closest && e.target.closest(".enc-card img");
+    if (!img || img === active) return;
+    if (!img.naturalWidth) { img.addEventListener("load", function () {}, { once: true }); return; }
+    load(img); place(e);
+    if (!loupe.matches(":popover-open")) loupe.showPopover();
+  });
+  root.addEventListener("pointermove", function (e) {
+    if (active && loupe.matches(":popover-open")) place(e);
+  }, { passive: true });
+  root.addEventListener("pointerout", function (e) {
+    var to = e.relatedTarget;
+    if (to && to.closest && to.closest(".enc-card img")) return;  // moving onto another card
+    if (loupe.matches(":popover-open")) loupe.hidePopover();
+    active = null;
+  });
+})();
+</script>
 
 <script type="speculationrules">
 {
