@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>four free Cloudflare features, live — aadhar.sh garage</title>
+<meta name="description" content="Live demos of four free Cloudflare Workers platform features — Durable Objects (atomic counter), Workers AI (photo captioning), Browser Rendering (screenshot), Workers Logs — behind a tiny worker.">
+<link rel="canonical" href="https://aadhar.sh/garage/cloudflare">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><path d='M9 22 a6 6 0 0 1 0-12 a8 8 0 0 1 15 2 a5 5 0 0 1-1 10 z' fill='%23166aee'/></svg>"><rect x='3' y='6' width='7' height='20' rx='1' fill='%230855dd'/><rect x='12' y='6' width='5' height='20' rx='1' fill='%23166aee'/><rect x='19' y='6' width='10' height='20' rx='1' fill='%23003bda'/></svg>">
+<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+html { scrollbar-color: oklch(62% 0.14 255) oklch(91% 0.02 248); }
+body {
+  background: linear-gradient(180deg, oklch(87.51% 0.0281 248.15) 0%, oklch(94.66% 0.0114 252.09) 220px, oklch(94.66% 0.0114 252.09) 100%);
+  font-family: var(--font-ui);
+  font-size: 10.5pt;
+  line-height: 1.5;
+  color: oklch(21.78% 0 0);
+  padding: 24px 12px 60px;
+  min-height: 100vh;
+}
+.window {
+  max-width: 720px;
+  margin: 0 auto;
+  background: oklch(100% 0 0);
+  border: 2px solid #0831d9; border-right-color: #001ea0; border-bottom-color: #001ea0;
+  border-top-left-radius: 8px; border-top-right-radius: 8px; overflow: hidden;
+  box-shadow: inset 1px 1px 0 #166aee, inset 2px 2px 0 #0855dd,
+              inset -1px -1px 0 #00138c, inset -2px -2px 0 #003bda,
+              4px 4px 0 rgba(0,30,160,.35);
+}
+.title-bar {
+  background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
+  color: oklch(100.00% 0 0);
+  font-family: var(--font-caption);
+  font-size: 10pt; font-weight: bold;
+  padding: 4px 8px;
+  border-bottom: 1px solid oklch(41.92% 0.0962 250.51);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.title-bar .icon {
+  display: inline-block; width: 16px; height: 16px; margin-right: 6px;
+  vertical-align: middle; background: oklch(87.82% 0.0877 66.27);
+  position: relative; flex-shrink: 0;
+}
+.title-bar .icon::before {
+  content: ""; position: absolute; inset: 3px;
+  background: oklch(69.58% 0.2043 43.49);
+  clip-path: polygon(20% 0, 100% 50%, 20% 100%, 0 50%);
+}
+.title-bar .title-text { flex: 1; padding-left: 4px; }
+.title-bar .controls { display: flex; align-items: center; gap: 2px; letter-spacing: 0; }
+/* authentic Luna caption buttons: 21x21 glossy "gel" lozenges with a top specular
+   highlight + CSS-drawn white glyphs (no text, no images). min/max are blue, CLOSE
+   is RED at rest. CLASS-BASED (.min/.max/.close) so decorative demo windows that use
+   <span class="close"> get the identical skin as a real <a class="close">. sRGB hex
+   traced from the Luna .msstyles bitmap, kept as hex on purpose. */
+.title-bar .controls .min,
+.title-bar .controls .max,
+.title-bar .controls .close {
+  position: relative; box-sizing: border-box;
+  width: 21px; height: 21px; padding: 0; margin: 0;
+  display: inline-block; overflow: hidden; font-size: 0; color: transparent;
+  border: 1px solid #6696eb; border-radius: 3px;
+  text-decoration: none; cursor: pointer;
+  background-color: #3e73f5;
+  background-image: linear-gradient(180deg, #5f8cf7 0%, #3a71f5 22%, #3e73f5 55%, #2a70f2 82%, #1045be 100%);
+  transition: filter .1s ease;
+}
+/* "wet plastic" gloss band over the top ~45% (close uses ::after for its X stroke) */
+.title-bar .controls .min::after,
+.title-bar .controls .max::after {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 45%;
+  background: linear-gradient(180deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.12) 70%, rgba(255,255,255,0) 100%);
+  pointer-events: none; border-radius: 2px 2px 5px 5px;
+}
+.title-bar .controls .min:hover, .title-bar .controls .min:focus-visible,
+.title-bar .controls .max:hover, .title-bar .controls .max:focus-visible {
+  border-color: #8fb4ff; background-color: #4fa4ff;
+  background-image: linear-gradient(180deg, #689bff 0%, #468aff 22%, #4fa4ff 55%, #3990fc 82%, #1858c8 100%);
+  outline: none;
+}
+/* CLOSE = red at rest */
+.title-bar .controls .close {
+  border-color: #d8401c; background-color: #e45f3e;
+  background-image: linear-gradient(180deg, #e8795f 0%, #e45f40 30%, #e45d3d 52%, #e2552a 80%, #ae3110 100%);
+}
+.title-bar .controls .close:hover, .title-bar .controls .close:focus-visible {
+  border-color: #ff7a66; background-color: #ff957c;
+  background-image: linear-gradient(180deg, #ff8b7d 0%, #ff7463 26%, #ff957c 55%, #fd7e64 82%, #d34936 100%);
+  box-shadow: 0 0 4px rgba(255,120,96,.7); outline: none;
+}
+.title-bar .controls .min:active,
+.title-bar .controls .max:active,
+.title-bar .controls .close:active { filter: brightness(.9); }
+/* white glyphs drawn with pseudo-elements */
+.title-bar .controls .min::before {
+  content: ""; position: absolute; left: 5px; right: 5px; bottom: 5px; height: 2px;
+  background: #fff; box-shadow: 0 1px 0 rgba(0,0,0,.35);
+}
+.title-bar .controls .max::before {
+  content: ""; position: absolute; left: 5px; top: 5px; width: 11px; height: 9px;
+  box-sizing: border-box; border: 1px solid #fff; border-top-width: 2px;
+  filter: drop-shadow(0 1px 0 rgba(0,0,0,.35));
+}
+.title-bar .controls .close::before,
+.title-bar .controls .close::after {
+  content: ""; position: absolute; left: 50%; top: 50%;
+  width: 13px; height: 2px; margin: -1px 0 0 -6.5px; background: #fff;
+  box-shadow: 0 1px 0 rgba(0,0,0,.35);
+}
+.title-bar .controls .close::before { transform: rotate(45deg); }
+.title-bar .controls .close::after  { transform: rotate(-45deg); }
+/* --- Luna polish: caption text shadow (matches horizon/scroll) --- */
+.title-bar { text-shadow: 1px 1px #0f1089; }
+.content { padding: 12px 16px 18px; }
+h1 {
+  font-family: var(--font-caption);
+  font-size: 14pt;
+  color: oklch(41.92% 0.0962 250.51);
+  margin: 0 0 6px;
+}
+.lede { color: oklch(38.67% 0 0); font-size: 10.5pt; margin: 0 0 4px; }
+h2 {
+  font-family: var(--font-caption);
+  font-size: 13pt;
+  color: oklch(41.92% 0.0962 250.51);
+  margin: 28px 0 4px;
+}
+.note { color: oklch(44.95% 0 0); font-size: 10pt; margin: 0 0 14px; }
+.note code, p code, li code { background: oklch(96.72% 0 0); border: 1px solid oklch(88.22% 0 0); padding: 0 4px; font-family: var(--font-mono); font-size: 9.5pt; }
+hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px 0; }
+a { color: oklch(41.92% 0.0962 250.51); }
+.status {
+  display: inline-block; font-family: var(--font-mono); font-size: 8.5pt;
+  font-weight: bold; letter-spacing: 0.05em; padding: 1px 6px; border: 1px solid;
+  border-radius: 2px; text-transform: uppercase; vertical-align: middle;
+}
+.status.review { color: oklch(54.44% 0.1504 47.10); border-color: oklch(54.44% 0.1504 47.10); background: oklch(98% 0.03 95); }
+
+/* ── demo ── */
+.cas-controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 10px 0; }
+.cas-ta { width: 100%; min-height: 88px; font-family: var(--font-mono); font-size: 10pt; line-height: 1.45; padding: 8px; border: 2px solid; border-color: #808080 #fff #fff #808080; background: oklch(99% 0 0); field-sizing: content; max-height: 38vh; resize: vertical; }
+.xp-btn { font-family: var(--font-ui); font-size: 9.5pt; padding: 3px 12px; background: linear-gradient(#fff, #ece9d8); border: 1px solid #707070; border-radius: 3px; box-shadow: inset 1px 1px 0 #fff; cursor: pointer; }
+.xp-btn:active { box-shadow: inset 1px 1px 2px rgba(0,0,0,.3); }
+.method { margin: 16px 0; }
+.method h3 { font-size: 10.5pt; margin: 0 0 4px; font-family: var(--font-caption); color: oklch(41.92% 0.0962 250.51); display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.method h3 small { font-weight: normal; font-size: 9pt; color: oklch(50% 0 0); font-family: var(--font-ui); }
+.chunks { display: flex; flex-wrap: wrap; gap: 3px; padding: 8px; background: oklch(97% 0.005 250); border: 1px solid oklch(85% 0.02 250); border-radius: 4px; min-height: 30px; }
+.chunk { height: 26px; border-radius: 2px; display: flex; align-items: center; justify-content: center; font: 8px/1 "Courier New", monospace; color: #fff; text-shadow: 0 1px 1px rgba(0,0,0,.45); padding: 0 3px; overflow: hidden; white-space: nowrap; cursor: default; transition: background .18s; }
+.chunk.shared { background: oklch(52% 0.13 150); }
+.chunk.changed { background: oklch(58% 0.19 38); }
+.chunk.neutral { background: oklch(53% 0.10 255); }
+.stats { font-size: 9.5pt; color: oklch(42% 0 0); margin: 6px 0 0; font-family: var(--font-mono); }
+.stats b { color: oklch(22% 0 0); }
+.delta-good { color: oklch(43% 0.16 150); font-weight: bold; }
+.delta-bad { color: oklch(50% 0.19 38); font-weight: bold; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 9pt; color: oklch(45% 0 0); margin: 8px 0 0; }
+.legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+.legend .sh::before { background: oklch(52% 0.13 150); }
+.legend .ch::before { background: oklch(58% 0.19 38); }
+.legend .nu::before { background: oklch(53% 0.10 255); }
+.callout { font-size: 10pt; background: oklch(97% 0.025 255); border-left: 3px solid oklch(51% 0.225 263); padding: 8px 12px; margin: 14px 0; color: oklch(28% 0.04 255); }
+.replaces { font-size: 9.5pt; color: oklch(33% 0 0); margin: 8px 0 0; border-left: 3px solid oklch(86% 0.03 250); padding-left: 8px; }
+.drop { border: 2px dashed oklch(62% 0.05 255); border-radius: 6px; padding: 16px; text-align: center; color: oklch(45% 0.03 255); font-size: 10pt; cursor: pointer; background: oklch(98% 0.01 255); }
+.drop.over { background: oklch(94% 0.04 255); border-color: oklch(51% 0.225 263); }
+footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67% 0.0294 259.59); font-size: 9.5pt; color: oklch(45% 0 0); }
+@media (prefers-reduced-motion: reduce) { .chunk { transition: none; } }
+
+/* cloudflare features demo */
+.cf-feat { border: 1px solid oklch(61.14% 0.0611 253.60); background: oklch(98% 0.004 250); padding: 4px 14px 14px; margin: 14px 0; }
+.cf-feat h2 { margin-top: 12px; }
+.cf-btn { font: bold 10pt var(--font-ui); padding: 4px 14px; margin: 4px 0; cursor: pointer; color: oklch(21.78% 0 0);
+  background: linear-gradient(180deg, oklch(99% 0 0), oklch(92% 0.005 263)); border: 1px solid oklch(50% 0.05 263);
+  box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 #aca899; }
+.cf-btn:hover { background: linear-gradient(180deg, oklch(99% 0.015 263), oklch(90% 0.03 263)); }
+.cf-btn:active { box-shadow: inset 1px 1px 0 #aca899, inset -1px -1px 0 #fff; }
+.cf-btn:disabled { opacity: .6; cursor: default; }
+.cf-out { font: 10pt var(--font-mono); color: oklch(30% 0.02 250); background: #fff; border: 1px solid #aca899;
+  box-shadow: inset 1px 1px 0 #d8d4c8; padding: 6px 8px; margin: 6px 0; min-height: 1.4em; word-break: break-word; }
+.cf-code { font: 9pt var(--font-mono); color: oklch(40% 0.04 145); background: oklch(95% 0.01 145); border: 1px solid oklch(80% 0.03 145);
+  padding: 5px 8px; margin: 6px 0 0; overflow-x: auto; }
+code.m, .m { font-family: var(--font-mono); font-size: 9.2pt; }
+</style>
+</head>
+<body>
+<div class="window">
+  <div class="title-bar" aria-hidden="true"><span class="title-text"><span class="icon"></span>four free Cloudflare features</span><span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/garage/" title="back to the garage" aria-label="back to the garage"></a></span></div>
+  <div class="content">
+    <h1>Four free Cloudflare features, live <span class="status review">in review</span></h1>
+    <p class="lede">
+      The free Workers plan quietly bundles four things that used to cost money or
+      a separate service: <b>Durable Objects</b>, <b>Workers&nbsp;AI</b>,
+      <b>Browser&nbsp;Rendering</b>, and <b>Workers&nbsp;Logs</b>. This page wires one
+      live demo to each, behind a tiny worker (<code class="m">cf-garage</code>) routed at
+      <code class="m">/garage/cf/*</code>. Buttons hit real endpoints &mdash; nothing is faked.
+    </p>
+
+    <div class="cf-feat">
+      <h2>1 &middot; Durable Objects &mdash; an atomic counter</h2>
+      <p>A <b>strongly-consistent, single-instance</b> stateful object. The homepage&apos;s
+        visitor counter uses KV, which is eventually-consistent and capped at 1,000 writes/day
+        &mdash; so a busy day silently stalls it. A DO increments <em>exactly once</em>, no race,
+        100k writes/day. It used to be paid; it&apos;s free now, and it&apos;s the correct fix
+        for that counter.</p>
+      <button class="cf-btn" id="do-btn" type="button">increment the global counter</button>
+      <div class="cf-out" id="do-out">&mdash;</div>
+      <pre class="cf-code">env.COUNTER.get(id).fetch()  // SQLite-backed, atomic put</pre>
+    </div>
+
+    <div class="cf-feat">
+      <h2>2 &middot; Workers AI &mdash; caption a photo</h2>
+      <p>Every model in the catalog, <b>10,000 neurons/day free</b>. This runs
+        <code class="m">@cf/llava-1.5-7b</code> over a real grid photo to generate alt-text.
+        It&apos;s a small, fast vision model &mdash; expect the occasional charming hallucination
+        (it once called a cloudy sky a UFO). The point is it&apos;s one binding call, no GPU, no key.</p>
+      <button class="cf-btn" id="ai-btn" type="button">caption a random grid photo</button>
+      <div class="cf-out" id="ai-out">&mdash;</div>
+      <pre class="cf-code">env.AI.run("@cf/llava-1.5-7b", { image, prompt })</pre>
+    </div>
+
+    <div class="cf-feat">
+      <h2>3 &middot; Browser Rendering &mdash; screenshot the homepage</h2>
+      <p>Headless Chromium inside a Worker (Puppeteer). Here it loads
+        <code class="m">aadhar.sh</code> and screenshots it &mdash; the basis for on-the-fly
+        <code class="m">og:image</code> cards. <b>Heads-up:</b> the binding deploys, but the
+        headless instance only provisions once <b>Browser Rendering is enabled on the account</b>.
+        If the button below times out, that toggle is why (one click in the dashboard).</p>
+      <button class="cf-btn" id="shot-btn" type="button">screenshot aadhar.sh</button>
+      <div class="cf-out" id="shot-out">&mdash;</div>
+      <pre class="cf-code">puppeteer.launch(env.BROWSER) → page.goto() → page.screenshot()</pre>
+    </div>
+
+    <div class="cf-feat">
+      <h2>4 &middot; Workers Logs &mdash; structured observability</h2>
+      <p><b>200,000 events/day, 3-day retention, free.</b> Every button above emitted a
+        structured log line from the worker &mdash;
+        <code class="m">{ feature, ms, &hellip; }</code> &mdash; filterable and searchable in the
+        dashboard. It can&apos;t be shown <em>here</em> (the logs live in Cloudflare, not the page),
+        but it&apos;s on: <code class="m">[observability] enabled = true</code> in
+        <code class="m">wrangler.toml</code>. Click around, then watch them stream in
+        <code class="m">Workers &amp; Pages → cf-garage → Logs</code>.</p>
+      <pre class="cf-code">console.log(JSON.stringify({ path, feature, ms }))</pre>
+    </div>
+
+    <h2>The honest scorecard</h2>
+    <p class="note">All four ride the free Workers plan. <b>Durable Objects, Workers AI, and
+      Workers Logs work live above</b> &mdash; click them. <b>Browser Rendering</b> is fully wired
+      (binding bound, worker deployed) but needs the account-level Browser Rendering toggle before
+      the headless instance will provision; until then the screenshot button returns a graceful
+      &quot;needs enabling&quot; after ~25s rather than hanging. That&apos;s the whole catch.</p>
+
+    <footer>
+      <p>&larr; back to the <a href="/garage/">garage</a> &middot; <a href="/">aadhar.sh</a></p>
+      <p><small>demos hit a real worker (<code style="font-family:var(--font-mono);font-size:9pt">cf-garage</code>) on the free Workers plan. nothing mocked.</small></p>
+    </footer>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var set=function(id,t){ var el=document.getElementById(id); if(el) el.textContent=t; };
+  var doBtn=document.getElementById("do-btn");
+  if(doBtn) doBtn.addEventListener("click", async function(){
+    set("do-out","…"); doBtn.disabled=true;
+    try{ var r=await fetch("/garage/cf/counter"); var d=await r.json();
+      set("do-out", d.ok ? ("you are increment #"+d.count+" — atomic, no race") : ("error: "+d.error)); }
+    catch(e){ set("do-out","error: "+e); } finally{ doBtn.disabled=false; }
+  });
+  var STEMS=["XT508165","XT508199","XT507333","XT508940","XT509491","XT508169"];
+  var aiBtn=document.getElementById("ai-btn");
+  if(aiBtn) aiBtn.addEventListener("click", async function(){
+    var s=STEMS[Math.floor(Math.random()*STEMS.length)];
+    set("ai-out","running llava on "+s+"… (a few seconds)"); aiBtn.disabled=true;
+    try{ var r=await fetch("/garage/cf/caption?img="+s); var d=await r.json();
+      set("ai-out", d.ok ? ("“"+d.caption+"”  — llava on "+s) : ("error: "+d.error)); }
+    catch(e){ set("ai-out","error: "+e); } finally{ aiBtn.disabled=false; }
+  });
+  var shotBtn=document.getElementById("shot-btn");
+  if(shotBtn) shotBtn.addEventListener("click", async function(){
+    var out=document.getElementById("shot-out");
+    out.textContent="launching headless chromium… (up to ~25s)"; shotBtn.disabled=true;
+    try{
+      var r=await fetch("/garage/cf/screenshot");
+      if(r.ok && (r.headers.get("content-type")||"").indexOf("image")===0){
+        var b=await r.blob(); out.textContent="";
+        var img=new Image(); img.alt="screenshot of aadhar.sh"; img.style.maxWidth="100%";
+        img.style.border="1px solid #888"; img.src=URL.createObjectURL(b); out.appendChild(img);
+      } else {
+        var d=await r.json().catch(function(){return{};});
+        out.textContent="Browser Rendering not available yet: "+(d.error||("HTTP "+r.status))+
+          "  — enable it in Workers & Pages → Browser Rendering, then retry.";
+      }
+    }catch(e){ out.textContent="error: "+e; } finally{ shotBtn.disabled=false; }
+  });
+})();
+</script>
+
+<script type="speculationrules">
+{
+  "prerender": [
+    {
+      "where": {
+        "and": [
+          { "href_matches": "/*" },
+          { "not": { "href_matches": "/" } },
+          { "not": { "href_matches": "/around*" } },
+          { "not": { "href_matches": "/whoareyou*" } }
+        ]
+      },
+      "eagerness": "moderate"
+    }
+  ]
+}
+</script>
+
+<script>
+if ("serviceWorker" in navigator) {
+  const reg = () => navigator.serviceWorker.register("/sw.js").catch(() => {});
+  "requestIdleCallback" in window ? requestIdleCallback(reg, { timeout: 2000 }) : setTimeout(reg, 1000);
+}
+</script>
+</body>
+</html>

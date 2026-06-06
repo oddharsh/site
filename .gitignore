@@ -19,3 +19,6 @@ npm-debug.log
 
 # Claude Code per-project transient state
 .claude/projects/
+
+# cf-garage worker deps (not committed)
+cf-garage/node_modules/
