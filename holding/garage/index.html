@@ -331,6 +331,23 @@ footer {
 
       <li>
         <div class="title-row">
+          <span class="name"><a href="/garage/encoding">Thumbnail encoding study</a></span>
+          <span class="status review">in review</span>
+        </div>
+        <div class="desc">
+          One photo run through every thumbnail choice &mdash; AVIF / WebP / JPEG,
+          jpegli vs the system encoder, chroma subsampling, quality, resolution &mdash;
+          with real byte counts. Why <code style="font-family: var(--font-mono);font-size:9pt">cjpegli</code>
+          gets built from source (~47% smaller JPEGs at the same quality), why grayscale
+          drops to 4:0:0, and what the grid actually ships.
+        </div>
+        <div class="meta">
+          shape: encoder benchmark + the pipeline&apos;s reasoning &middot; added 2026-06-06
+        </div>
+      </li>
+
+      <li>
+        <div class="title-row">
           <span class="name"><a href="/garage/pretext">pretext — text measurement off the DOM</a></span>
           <span class="status idle">watching</span>
         </div>

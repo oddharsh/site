@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>thumbnail encoding study — aadhar.sh garage</title>
+<meta name="description" content="The same photo run through every thumbnail encoding choice — AVIF/WebP/JPEG, jpegli vs system, chroma subsampling, quality, resolution — with real byte counts and the tradeoffs the site actually makes.">
+<link rel="canonical" href="https://aadhar.sh/garage/encoding">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='5' y='5' width='15' height='15' rx='1' fill='%23166aee'/><rect x='12' y='12' width='15' height='15' rx='1' fill='%230855dd'/></svg>"><rect x='3' y='6' width='7' height='20' rx='1' fill='%230855dd'/><rect x='12' y='6' width='5' height='20' rx='1' fill='%23166aee'/><rect x='19' y='6' width='10' height='20' rx='1' fill='%23003bda'/></svg>">
+<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+html { scrollbar-color: oklch(62% 0.14 255) oklch(91% 0.02 248); }
+body {
+  background: linear-gradient(180deg, oklch(87.51% 0.0281 248.15) 0%, oklch(94.66% 0.0114 252.09) 220px, oklch(94.66% 0.0114 252.09) 100%);
+  font-family: var(--font-ui);
+  font-size: 10.5pt;
+  line-height: 1.5;
+  color: oklch(21.78% 0 0);
+  padding: 24px 12px 60px;
+  min-height: 100vh;
+}
+.window {
+  max-width: 720px;
+  margin: 0 auto;
+  background: oklch(100% 0 0);
+  border: 2px solid #0831d9; border-right-color: #001ea0; border-bottom-color: #001ea0;
+  border-top-left-radius: 8px; border-top-right-radius: 8px; overflow: hidden;
+  box-shadow: inset 1px 1px 0 #166aee, inset 2px 2px 0 #0855dd,
+              inset -1px -1px 0 #00138c, inset -2px -2px 0 #003bda,
+              4px 4px 0 rgba(0,30,160,.35);
+}
+.title-bar {
+  background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
+  color: oklch(100.00% 0 0);
+  font-family: var(--font-caption);
+  font-size: 10pt; font-weight: bold;
+  padding: 4px 8px;
+  border-bottom: 1px solid oklch(41.92% 0.0962 250.51);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.title-bar .icon {
+  display: inline-block; width: 16px; height: 16px; margin-right: 6px;
+  vertical-align: middle; background: oklch(87.82% 0.0877 66.27);
+  position: relative; flex-shrink: 0;
+}
+.title-bar .icon::before {
+  content: ""; position: absolute; inset: 3px;
+  background: oklch(69.58% 0.2043 43.49);
+  clip-path: polygon(20% 0, 100% 50%, 20% 100%, 0 50%);
+}
+.title-bar .title-text { flex: 1; padding-left: 4px; }
+.title-bar .controls { display: flex; align-items: center; gap: 2px; letter-spacing: 0; }
+/* authentic Luna caption buttons: 21x21 glossy "gel" lozenges with a top specular
+   highlight + CSS-drawn white glyphs (no text, no images). min/max are blue, CLOSE
+   is RED at rest. CLASS-BASED (.min/.max/.close) so decorative demo windows that use
+   <span class="close"> get the identical skin as a real <a class="close">. sRGB hex
+   traced from the Luna .msstyles bitmap, kept as hex on purpose. */
+.title-bar .controls .min,
+.title-bar .controls .max,
+.title-bar .controls .close {
+  position: relative; box-sizing: border-box;
+  width: 21px; height: 21px; padding: 0; margin: 0;
+  display: inline-block; overflow: hidden; font-size: 0; color: transparent;
+  border: 1px solid #6696eb; border-radius: 3px;
+  text-decoration: none; cursor: pointer;
+  background-color: #3e73f5;
+  background-image: linear-gradient(180deg, #5f8cf7 0%, #3a71f5 22%, #3e73f5 55%, #2a70f2 82%, #1045be 100%);
+  transition: filter .1s ease;
+}
+/* "wet plastic" gloss band over the top ~45% (close uses ::after for its X stroke) */
+.title-bar .controls .min::after,
+.title-bar .controls .max::after {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 45%;
+  background: linear-gradient(180deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.12) 70%, rgba(255,255,255,0) 100%);
+  pointer-events: none; border-radius: 2px 2px 5px 5px;
+}
+.title-bar .controls .min:hover, .title-bar .controls .min:focus-visible,
+.title-bar .controls .max:hover, .title-bar .controls .max:focus-visible {
+  border-color: #8fb4ff; background-color: #4fa4ff;
+  background-image: linear-gradient(180deg, #689bff 0%, #468aff 22%, #4fa4ff 55%, #3990fc 82%, #1858c8 100%);
+  outline: none;
+}
+/* CLOSE = red at rest */
+.title-bar .controls .close {
+  border-color: #d8401c; background-color: #e45f3e;
+  background-image: linear-gradient(180deg, #e8795f 0%, #e45f40 30%, #e45d3d 52%, #e2552a 80%, #ae3110 100%);
+}
+.title-bar .controls .close:hover, .title-bar .controls .close:focus-visible {
+  border-color: #ff7a66; background-color: #ff957c;
+  background-image: linear-gradient(180deg, #ff8b7d 0%, #ff7463 26%, #ff957c 55%, #fd7e64 82%, #d34936 100%);
+  box-shadow: 0 0 4px rgba(255,120,96,.7); outline: none;
+}
+.title-bar .controls .min:active,
+.title-bar .controls .max:active,
+.title-bar .controls .close:active { filter: brightness(.9); }
+/* white glyphs drawn with pseudo-elements */
+.title-bar .controls .min::before {
+  content: ""; position: absolute; left: 5px; right: 5px; bottom: 5px; height: 2px;
+  background: #fff; box-shadow: 0 1px 0 rgba(0,0,0,.35);
+}
+.title-bar .controls .max::before {
+  content: ""; position: absolute; left: 5px; top: 5px; width: 11px; height: 9px;
+  box-sizing: border-box; border: 1px solid #fff; border-top-width: 2px;
+  filter: drop-shadow(0 1px 0 rgba(0,0,0,.35));
+}
+.title-bar .controls .close::before,
+.title-bar .controls .close::after {
+  content: ""; position: absolute; left: 50%; top: 50%;
+  width: 13px; height: 2px; margin: -1px 0 0 -6.5px; background: #fff;
+  box-shadow: 0 1px 0 rgba(0,0,0,.35);
+}
+.title-bar .controls .close::before { transform: rotate(45deg); }
+.title-bar .controls .close::after  { transform: rotate(-45deg); }
+/* --- Luna polish: caption text shadow (matches horizon/scroll) --- */
+.title-bar { text-shadow: 1px 1px #0f1089; }
+.content { padding: 12px 16px 18px; }
+h1 {
+  font-family: var(--font-caption);
+  font-size: 14pt;
+  color: oklch(41.92% 0.0962 250.51);
+  margin: 0 0 6px;
+}
+.lede { color: oklch(38.67% 0 0); font-size: 10.5pt; margin: 0 0 4px; }
+h2 {
+  font-family: var(--font-caption);
+  font-size: 13pt;
+  color: oklch(41.92% 0.0962 250.51);
+  margin: 28px 0 4px;
+}
+.note { color: oklch(44.95% 0 0); font-size: 10pt; margin: 0 0 14px; }
+.note code, p code, li code { background: oklch(96.72% 0 0); border: 1px solid oklch(88.22% 0 0); padding: 0 4px; font-family: var(--font-mono); font-size: 9.5pt; }
+hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px 0; }
+a { color: oklch(41.92% 0.0962 250.51); }
+.status {
+  display: inline-block; font-family: var(--font-mono); font-size: 8.5pt;
+  font-weight: bold; letter-spacing: 0.05em; padding: 1px 6px; border: 1px solid;
+  border-radius: 2px; text-transform: uppercase; vertical-align: middle;
+}
+.status.review { color: oklch(54.44% 0.1504 47.10); border-color: oklch(54.44% 0.1504 47.10); background: oklch(98% 0.03 95); }
+
+/* ── demo ── */
+.cas-controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 10px 0; }
+.cas-ta { width: 100%; min-height: 88px; font-family: var(--font-mono); font-size: 10pt; line-height: 1.45; padding: 8px; border: 2px solid; border-color: #808080 #fff #fff #808080; background: oklch(99% 0 0); field-sizing: content; max-height: 38vh; resize: vertical; }
+.xp-btn { font-family: var(--font-ui); font-size: 9.5pt; padding: 3px 12px; background: linear-gradient(#fff, #ece9d8); border: 1px solid #707070; border-radius: 3px; box-shadow: inset 1px 1px 0 #fff; cursor: pointer; }
+.xp-btn:active { box-shadow: inset 1px 1px 2px rgba(0,0,0,.3); }
+.method { margin: 16px 0; }
+.method h3 { font-size: 10.5pt; margin: 0 0 4px; font-family: var(--font-caption); color: oklch(41.92% 0.0962 250.51); display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.method h3 small { font-weight: normal; font-size: 9pt; color: oklch(50% 0 0); font-family: var(--font-ui); }
+.chunks { display: flex; flex-wrap: wrap; gap: 3px; padding: 8px; background: oklch(97% 0.005 250); border: 1px solid oklch(85% 0.02 250); border-radius: 4px; min-height: 30px; }
+.chunk { height: 26px; border-radius: 2px; display: flex; align-items: center; justify-content: center; font: 8px/1 "Courier New", monospace; color: #fff; text-shadow: 0 1px 1px rgba(0,0,0,.45); padding: 0 3px; overflow: hidden; white-space: nowrap; cursor: default; transition: background .18s; }
+.chunk.shared { background: oklch(52% 0.13 150); }
+.chunk.changed { background: oklch(58% 0.19 38); }
+.chunk.neutral { background: oklch(53% 0.10 255); }
+.stats { font-size: 9.5pt; color: oklch(42% 0 0); margin: 6px 0 0; font-family: var(--font-mono); }
+.stats b { color: oklch(22% 0 0); }
+.delta-good { color: oklch(43% 0.16 150); font-weight: bold; }
+.delta-bad { color: oklch(50% 0.19 38); font-weight: bold; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 9pt; color: oklch(45% 0 0); margin: 8px 0 0; }
+.legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+.legend .sh::before { background: oklch(52% 0.13 150); }
+.legend .ch::before { background: oklch(58% 0.19 38); }
+.legend .nu::before { background: oklch(53% 0.10 255); }
+.callout { font-size: 10pt; background: oklch(97% 0.025 255); border-left: 3px solid oklch(51% 0.225 263); padding: 8px 12px; margin: 14px 0; color: oklch(28% 0.04 255); }
+.replaces { font-size: 9.5pt; color: oklch(33% 0 0); margin: 8px 0 0; border-left: 3px solid oklch(86% 0.03 250); padding-left: 8px; }
+.drop { border: 2px dashed oklch(62% 0.05 255); border-radius: 6px; padding: 16px; text-align: center; color: oklch(45% 0.03 255); font-size: 10pt; cursor: pointer; background: oklch(98% 0.01 255); }
+.drop.over { background: oklch(94% 0.04 255); border-color: oklch(51% 0.225 263); }
+footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67% 0.0294 259.59); font-size: 9.5pt; color: oklch(45% 0 0); }
+@media (prefers-reduced-motion: reduce) { .chunk { transition: none; } }
+
+/* encoding study */
+.enc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin: 12px 0 20px; }
+.enc-card { margin: 0; background: oklch(97% 0.004 250); border: 1px solid oklch(61.14% 0.0611 253.60); padding: 4px; }
+.enc-card img { display: block; width: 100%; height: auto; background: #fff; }
+.enc-card figcaption { font: 8.5pt var(--font-ui); color: oklch(30% 0.01 250); padding: 4px 2px 1px; line-height: 1.4; }
+.enc-card figcaption b { color: oklch(41.92% 0.0962 250.51); }
+.enc-sz { float: right; font-family: var(--font-mono); font-weight: bold; }
+.enc-bpp { display: block; font-family: var(--font-mono); color: oklch(55% 0 0); font-size: 8pt; }
+.enc-table { border-collapse: collapse; margin: 8px 0 20px; font-size: 10pt; width: 100%; max-width: 460px; }
+.enc-table th, .enc-table td { border: 1px solid oklch(80% 0.02 250); padding: 4px 10px; text-align: left; }
+.enc-table th { background: oklch(92.5% 0.018 95); font-family: var(--font-caption); }
+.enc-table td.num { font-family: var(--font-mono); text-align: right; }
+.enc-ships { line-height: 1.6; }
+</style>
+</head>
+<body>
+<div class="window">
+  <div class="title-bar" aria-hidden="true"><span class="title-text"><span class="icon"></span>thumbnail encoding study</span><span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/garage/" title="back to the garage" aria-label="back to the garage"></a></span></div>
+  <div class="content">
+    <h1>Thumbnail encoding study <span class="status review">in review</span></h1>
+    <p class="lede">
+      Every grid thumbnail is the end of a chain of choices &mdash; <em>format,
+      quality, chroma subsampling, resolution</em>. Here's one photo run through all
+      of them with real byte counts, so the tradeoffs are visible instead of folklore.
+      All numbers are from the actual encoders the site uses (avifenc, jpegli, cwebp, sips).
+    </p>
+
+    <h2>Format showdown</h2>
+    <p class="note">The same detailed color frame at 400&times;266px. PNG is the lossless
+      baseline; everything below it is lossy. Eyeball the quality, then read the bytes
+      &mdash; <code>b/px</code> = bytes per pixel, the size-density that actually scales.</p>
+    <div class="enc-grid">
+        <figure class="enc-card"><img src="/garage/enc/c-png.png" alt="" width="400" height="266" loading="lazy" decoding="async"><figcaption><b>PNG</b> lossless<span class="enc-sz">193.4 KB</span><span class="enc-bpp">1.86 b/px</span></figcaption></figure>
+        <figure class="enc-card"><img src="/garage/enc/c-sips82.jpg" alt="" width="400" height="266" loading="lazy" decoding="async"><figcaption><b>JPG·sips</b> q82 · 4:2:0<span class="enc-sz">54.7 KB</span><span class="enc-bpp">0.53 b/px</span></figcaption></figure>
+        <figure class="enc-card"><img src="/garage/enc/c-jl60.jpg" alt="" width="400" height="266" loading="lazy" decoding="async"><figcaption><b>JPG·jpegli</b> q60 · 4:2:0<span class="enc-sz">19.1 KB</span><span class="enc-bpp">0.18 b/px</span></figcaption></figure>
+        <figure class="enc-card"><img src="/garage/enc/c-jl82.jpg" alt="" width="400" height="266" loading="lazy" decoding="async"><figcaption><b>JPG·jpegli</b> q82 · 4:2:0<span class="enc-sz">28.8 KB</span><span class="enc-bpp">0.28 b/px</span></figcaption></figure>
+        <figure class="enc-card"><img src="/garage/enc/c-jl95.jpg" alt="" width="400" height="266" loading="lazy" decoding="async"><figcaption><b>JPG·jpegli</b> q95 · 4:2:0<span class="enc-sz">49.3 KB</span><span class="enc-bpp">0.47 b/px</span></figcaption></figure>
+        <figure class="enc-card"><img src="/garage/enc/c-wp60.webp" alt="" width="400" height="266" loading="lazy" decoding="async"><figcaption><b>WebP</b> q60 · 4:2:0<span class="enc-sz">19.3 KB</span><span class="enc-bpp">0.19 b/px</span></figcaption></figure>
+        <figure class="enc-card"><img src="/garage/enc/c-wp80.webp" alt="" width="400" height="266" loading="lazy" decoding="async"><figcaption><b>WebP</b> q80 · 4:2:0<span class="enc-sz">25.9 KB</span><span class="enc-bpp">0.25 b/px</span></figcaption></figure>
+        <figure class="enc-card"><img src="/garage/enc/c-av40.avif" alt="" width="400" height="266" loading="lazy" decoding="async"><figcaption><b>AVIF</b> q40 · 4:2:0<span class="enc-sz">16.0 KB</span><span class="enc-bpp">0.15 b/px</span></figcaption></figure>
+        <figure class="enc-card"><img src="/garage/enc/c-av63.avif" alt="" width="400" height="266" loading="lazy" decoding="async"><figcaption><b>AVIF</b> q63 · 4:2:0<span class="enc-sz">26.6 KB</span><span class="enc-bpp">0.26 b/px</span></figcaption></figure>
+        <figure class="enc-card"><img src="/garage/enc/c-av85.avif" alt="" width="400" height="266" loading="lazy" decoding="async"><figcaption><b>AVIF</b> q85 · 4:2:0<span class="enc-sz">40.6 KB</span><span class="enc-bpp">0.39 b/px</span></figcaption></figure>
+        <figure class="enc-card"><img src="/garage/enc/c-av63-444.avif" alt="" width="400" height="266" loading="lazy" decoding="async"><figcaption><b>AVIF</b> q63 · 4:4:4<span class="enc-sz">26.7 KB</span><span class="enc-bpp">0.26 b/px</span></figcaption></figure>
+    </div>
+
+    <h2>Why the site builds jpegli from source</h2>
+    <p>Look at the two q82 JPEGs above: <b>system/sips</b> lands at 54.7 KB,
+      <b>jpegli</b> at 28.8 KB &mdash; <em>same nominal
+      quality, ~47% fewer bytes</em>.
+      Google's jpegli is a psychovisually-tuned re-implementation of libjpeg; that win is
+      the entire reason <code>~/.local/bin/cjpegli</code> exists and the pipeline shells out
+      to it instead of using the OS encoder. AVIF beats both, but JPEG is the universal
+      <code>&lt;img&gt;</code> fallback, so making it small still matters.</p>
+
+    <h2>Grayscale: drop the chroma planes</h2>
+    <p class="note">A black-and-white Leica frame (400&times;267). For a grayscale image the
+      two chroma planes carry almost nothing, so AVIF <b>4:0:0</b> (luma only) is both the
+      honest encode and rules out any faint color cast. The byte saving over 4:2:0 is tiny
+      <em>because there was nothing in those planes to begin with</em> &mdash; the point is
+      correctness, not size. The pipeline auto-detects <code>sips -g space → Gray</code> and
+      switches to <code>--yuv 400</code>.</p>
+    <div class="enc-grid">
+        <figure class="enc-card"><img src="/garage/enc/g-png.png" alt="" width="400" height="267" loading="lazy" decoding="async"><figcaption><b>PNG</b> lossless<span class="enc-sz">51.0 KB</span><span class="enc-bpp">0.49 b/px</span></figcaption></figure>
+        <figure class="enc-card"><img src="/garage/enc/g-jl82.jpg" alt="" width="400" height="267" loading="lazy" decoding="async"><figcaption><b>JPG·jpegli</b> q82<span class="enc-sz">10.4 KB</span><span class="enc-bpp">0.10 b/px</span></figcaption></figure>
+        <figure class="enc-card"><img src="/garage/enc/g-av63-420.avif" alt="" width="400" height="267" loading="lazy" decoding="async"><figcaption><b>AVIF</b> q63 · 4:2:0<span class="enc-sz">10.6 KB</span><span class="enc-bpp">0.10 b/px</span></figcaption></figure>
+        <figure class="enc-card"><img src="/garage/enc/g-av63-400.avif" alt="" width="400" height="267" loading="lazy" decoding="async"><figcaption><b>AVIF</b> q63 · 4:0:0<span class="enc-sz">10.5 KB</span><span class="enc-bpp">0.10 b/px</span></figcaption></figure>
+    </div>
+
+    <h2>Resolution scales bytes ~quadratically</h2>
+    <p class="note">The color frame at three long edges, AVIF q63 vs jpegli q82. 4&times; the
+      pixels ≈ 3&ndash;4&times; the bytes &mdash; and AVIF's lead over JPEG <em>widens</em> as
+      resolution climbs, which is why the grid is AVIF-primary and kept to a small square.</p>
+    <table class="enc-table">
+      <thead><tr><th>resolution</th><th>AVIF q63</th><th>jpegli q82</th><th>AVIF saves</th></tr></thead>
+      <tbody>
+        <tr><td>400×266</td><td class="num">26.6 KB</td><td class="num">28.8 KB</td><td class="num">8%</td></tr>
+        <tr><td>800×533</td><td class="num">79.0 KB</td><td class="num">106.0 KB</td><td class="num">25%</td></tr>
+        <tr><td>1200×800</td><td class="num">175.8 KB</td><td class="num">247.1 KB</td><td class="num">29%</td></tr>
+      </tbody>
+    </table>
+
+    <h2>What aadhar.sh actually ships</h2>
+    <ul class="enc-ships">
+      <li><b>AVIF primary</b> (<code>q63</code>, <code>4:2:0</code> color / <code>4:0:0</code> gray) +
+        <b>jpegli JPG q82</b> as the universal fallback &mdash; via <code>&lt;picture&gt;</code>.</li>
+      <li><b>Pre-cropped 600/400 squares</b>, metadata-stripped: the file <em>is</em> the displayed
+        pixels, so no off-square or EXIF bytes ride along.</li>
+      <li><b>4:2:0 over 4:4:4</b> for color &mdash; at thumbnail size the difference is a rounding
+        error (see the two AVIF q63 cards above), so the chroma subsampling is free quality.</li>
+      <li><b>Full-res share copies in R2 at JPEG q95</b> &mdash; visually lossless, half the bytes
+        of q100; the true HEIF originals stay on local disk.</li>
+    </ul>
+
+    <footer>
+      <p>&larr; back to the <a href="/garage/">garage</a> &middot; <a href="/">aadhar.sh</a></p>
+      <p><small>all byte counts are real output from <code style="font-family:var(--font-mono);font-size:9pt">avifenc · cjpegli · cwebp · sips</code>, run locally.</small></p>
+    </footer>
+  </div>
+</div>
+
+
+<script type="speculationrules">
+{
+  "prerender": [
+    {
+      "where": {
+        "and": [
+          { "href_matches": "/*" },
+          { "not": { "href_matches": "/" } },
+          { "not": { "href_matches": "/around*" } },
+          { "not": { "href_matches": "/whoareyou*" } }
+        ]
+      },
+      "eagerness": "moderate"
+    }
+  ]
+}
+</script>
+
+<script>
+if ("serviceWorker" in navigator) {
+  const reg = () => navigator.serviceWorker.register("/sw.js").catch(() => {});
+  "requestIdleCallback" in window ? requestIdleCallback(reg, { timeout: 2000 }) : setTimeout(reg, 1000);
+}
+</script>
+</body>
+</html>
