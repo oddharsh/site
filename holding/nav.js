@@ -121,9 +121,9 @@
 // pinned profile apps. NB: these are <a> tags, so the host page's a:hover /
 // a:visited rules would otherwise bleed in (red/purple text, underlines) — pin
 // every link state explicitly to white + no underline.
-"#axp-pins{display:flex;align-items:center;gap:4px;padding:4px 0}" +
+"#axp-pins{display:flex;align-items:center;gap:3px;padding:0 3px}" +
 ".axp-pin,.axp-pin:link,.axp-pin:visited,.axp-pin:hover,.axp-pin:active{color:oklch(100% 0 0);text-decoration:none}" +
-".axp-pin{display:flex;align-items:center;gap:6px;padding:0 10px;cursor:pointer;font-family:inherit;font-size:11px;border-radius:2px;" +
+".axp-pin{display:flex;align-items:center;gap:6px;height:23px;padding:0 10px;cursor:pointer;font-family:inherit;font-size:11px;border-radius:2px;" +
 "border:1px solid oklch(72% 0.12 254);border-bottom-color:oklch(42% 0.17 261);" +
 "background:linear-gradient(180deg,oklch(70% 0.15 255) 0%,oklch(60% 0.17 257) 48%,oklch(54% 0.18 259) 52%,oklch(58% 0.17 257) 100%);" +
 "box-shadow:inset 0 1px 0 oklch(82% 0.11 250)}" +
@@ -131,10 +131,10 @@
 ".axp-pin:active{background:linear-gradient(180deg,oklch(52% 0.18 260),oklch(60% 0.16 257));box-shadow:inset 1px 1px 2px oklch(36% 0.16 263);border-top-color:oklch(42% 0.17 261)}" +
 ".axp-pin b{width:9px;height:9px;border-radius:2px;flex:0 0 auto;box-shadow:inset 0 0 0 1px oklch(100% 0 0 / .5),0 1px 0 oklch(0% 0 0 / .25)}" +
 "#axp-spacer{flex:1}" +
-// tray + clock
-"#axp-tray{display:flex;align-items:center;padding:0 12px 0 10px;margin:3px 4px 3px 0;color:oklch(100% 0 0);" +
-"font-size:11px;letter-spacing:.02em;border-radius:3px;background:oklch(46% 0.15 256);" +
-"box-shadow:inset 1px 1px 0 oklch(38% 0.15 260),inset -1px -1px 0 oklch(66% 0.13 252)}" +
+// tray + clock — flat, NOT a sunken box (the real XP clock is just text on the bar);
+// the only chrome is an engraved vertical separator on the tray's left edge.
+"#axp-tray{display:flex;align-items:center;padding:0 14px 0 13px;color:oklch(100% 0 0);" +
+"font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);box-shadow:inset 1px 0 0 oklch(64% 0.15 254)}" +
 // ── Run dialog ──
 "#axp-run-back{position:fixed;inset:0;z-index:99998;display:none}" +
 "#axp-run-back.open{display:block}" +

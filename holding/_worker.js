@@ -606,7 +606,7 @@ function escHtml(s) {
 const NOTEPAD_CSS = `
 body.np-page{margin:0;min-height:100vh;padding:16px 12px 54px;color:oklch(21% 0 0);font-family:var(--font-ui);font-size:12px;
 background:linear-gradient(180deg,oklch(87.5% 0.028 248) 0%,oklch(94.7% 0.011 252) 220px,oklch(94.7% 0.011 252) 100%)}
-.np-window{max-width:860px;margin:0 auto;height:calc(100dvh - 78px);min-height:340px;display:flex;flex-direction:column;background:oklch(100% 0 0);
+.np-window{max-width:860px;margin:0 auto;max-height:calc(100dvh - 78px);display:flex;flex-direction:column;background:oklch(100% 0 0);
 border:2px solid #0831d9;border-right-color:#001ea0;border-bottom-color:#001ea0;border-top-left-radius:8px;border-top-right-radius:8px;overflow:hidden;
 box-shadow:inset 1px 1px 0 #166aee,inset 2px 2px 0 #0855dd,inset -1px -1px 0 #00138c,inset -2px -2px 0 #003bda,4px 4px 0 rgba(0,30,160,.35)}
 .np-titlebar{flex:0 0 auto;display:flex;align-items:center;gap:5px;padding:4px 6px 4px 7px;color:oklch(100% 0 0);
@@ -640,7 +640,7 @@ font:11px var(--font-ui);color:oklch(20% 0 0);padding:4px 8px 4px 2px;text-align
 .np-item:hover{background:oklch(50% 0.22 263);color:oklch(100% 0 0)}
 .np-chk{text-align:center;font-size:10px}.np-acc{color:oklch(52% 0 0)}.np-item:hover .np-acc{color:oklch(90% 0.02 263)}
 .np-sep{height:0;border-top:1px solid oklch(80% 0.01 90);margin:2px 1px}
-.np-text{flex:1 1 auto;width:100%;box-sizing:border-box;border:0;outline:none;resize:none;padding:9px 11px;background:oklch(100% 0 0);
+.np-text{flex:0 1 auto;field-sizing:content;min-height:8em;max-height:calc(100dvh - 150px);width:100%;box-sizing:border-box;border:0;outline:none;resize:none;padding:9px 11px;background:oklch(100% 0 0);
 color:oklch(16% 0 0);font-family:var(--font-mono);font-size:13px;line-height:1.55;white-space:pre-wrap;overflow:auto;tab-size:4}
 .np-text.nowrap{white-space:pre;overflow:auto}
 .np-status{flex:0 0 auto;display:flex;align-items:center;gap:4px;padding:2px 3px;font-size:11px;color:oklch(28% 0 0);
@@ -1041,6 +1041,7 @@ function apacheIndexResponse(path, entries) {
 <pre>      Name                            Last modified      Size
 <hr>${rows}<hr></pre>
 <address>handwritten worker at aadhar.sh</address>
+<script src="/nav.js" defer></script>
  </body>
 </html>`;
 
@@ -2026,7 +2027,7 @@ ${xpChromeCss(520)}
     <p>${bodyHtml}</p>
     <p><small>&larr; <a href="/">aadhar.sh</a></small></p>
   </div>
-</div></body></html>`;
+</div><script src="/nav.js" defer></script></body></html>`;
   return new Response(html, {
     status,
     headers: {
