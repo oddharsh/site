@@ -121,8 +121,8 @@
 "html,body{background:transparent !important}" +
 "#axp-desktop{position:fixed;inset:0;z-index:-1;view-transition-name:axp-desktop;background:url(\"" + blissUrl + "\") center center/cover no-repeat}" +
 // windows drag by their title bar
-".title-bar,.np-titlebar,#axp-run .tb{cursor:move}" +
-".axp-dragging{user-select:none}.axp-dragging .title-bar,.axp-dragging .np-titlebar,#axp-run.axp-dragging .tb{cursor:grabbing}" +
+".title-bar,.np-titlebar,.titlebar,#axp-run .tb{cursor:move}" +
+".axp-dragging{user-select:none;will-change:transform}.axp-dragging .title-bar,.axp-dragging .np-titlebar,.axp-dragging .titlebar,#axp-run.axp-dragging .tb{cursor:grabbing}" +
 "::view-transition-old(root){animation:axp-vo .18s ease both}::view-transition-new(root){animation:axp-vi .24s ease both}" +
 "@keyframes axp-vo{to{opacity:0;transform:scale(.975)}}@keyframes axp-vi{from{opacity:0;transform:scale(1.025)}}" +
 "@media (prefers-reduced-motion:reduce){::view-transition-old(root),::view-transition-new(root){animation:none}}" +
@@ -387,20 +387,26 @@
   // desktop. cosmetic + per-page (resets on navigation), like shoving a window around.
   // caption buttons + links are skipped so close/min/max keep working.
   function initDrag() {
-    var win = null, sx = 0, sy = 0, sl = 0, st = 0;
-    function move(e) { if (win) { win.style.left = (sl + e.clientX - sx) + "px"; win.style.top = (st + e.clientY - sy) + "px"; } }
+    var win = null, sx = 0, sy = 0;
+    // compositor-only: drag with transform (not left/top) so each pointermove is a
+    // GPU transform, no layout/paint. re-based on every grab so it never accumulates.
+    function move(e) { if (win) win.style.transform = "translate(" + (e.clientX - sx) + "px," + (e.clientY - sy) + "px)"; }
     function up() { if (win) { win.classList.remove("axp-dragging"); D.removeEventListener("pointermove", move); win = null; } }
     D.addEventListener("pointerdown", function (e) {
+      if (e.pointerType === "touch") return;                       // let touch scroll the page, not drag
       if (e.pointerType === "mouse" && e.button !== 0) return;
-      var b = e.target.closest && e.target.closest(".title-bar,.np-titlebar,#axp-run .tb");
+      var b = e.target.closest && e.target.closest(".title-bar,.np-titlebar,.titlebar,#axp-run .tb");
       if (!b || e.target.closest("a,button,.controls,.np-controls,.x")) return;
       var w = b.closest(".window,.np-window,#axp-run");
       if (!w) return;
+      // pin to its current spot (fixed) — rect already includes any prior drag offset,
+      // so set left/top there and zero the transform → no jump, fresh relative drag.
       var r = w.getBoundingClientRect();
-      w.style.position = "fixed"; w.style.margin = "0"; w.style.transform = "none";
+      w.style.position = "fixed"; w.style.margin = "0";
       w.style.left = r.left + "px"; w.style.top = r.top + "px"; w.style.width = r.width + "px"; w.style.maxWidth = "none";
+      w.style.transform = "translate(0,0)";
       w.classList.add("axp-dragging");
-      win = w; sx = e.clientX; sy = e.clientY; sl = r.left; st = r.top;
+      win = w; sx = e.clientX; sy = e.clientY;
       try { b.setPointerCapture(e.pointerId); } catch (_) {}
       e.preventDefault();
       D.addEventListener("pointermove", move);
@@ -409,8 +415,18 @@
     });
   }
 
+  // ensure page content clears the fixed 30px taskbar on EVERY page — raise the body's
+  // bottom padding to a floor only where it's too low; never reduce a page that already
+  // spaces itself generously (homepage 64, garage 60, writing 54, serendipity wrap 48).
+  function clearForTaskbar() {
+    try {
+      var pb = parseFloat(getComputedStyle(D.body).paddingBottom) || 0;
+      if (pb < 38) D.body.style.paddingBottom = "38px";
+    } catch (e) {}
+  }
+
   // ── boot ────────────────────────────────────────────────────────────────────
-  function boot() { injectCSS(); buildDesktop(); buildTaskbar(); initDrag(); }
+  function boot() { injectCSS(); buildDesktop(); buildTaskbar(); initDrag(); clearForTaskbar(); }
   if (D.readyState === "loading") D.addEventListener("DOMContentLoaded", boot);
   else boot();
 })();
