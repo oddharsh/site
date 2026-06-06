@@ -25,7 +25,7 @@
 // `?v=N` bumps on each deploy already cycle individual entries, but a
 // cache-version bump is the only way to sweep stale keys whose URL
 // pattern no longer matches anything we serve.
-const CACHE_VERSION = "aadhar-v42-favicon-fix";
+const CACHE_VERSION = "aadhar-v43-taskbar";
 
 const CACHE_FIRST = [
   // image files only — NOT /images/ or /images/full/ themselves (those are
@@ -39,6 +39,9 @@ const SWR = [
   /^\/sitemap\.xml$/,
   /^\/robots\.txt$/,
   /^\/\.well-known\/http-message-signatures-directory$/,
+  // /nav.js — the site-wide taskbar + Run palette. stable + shared across every
+  // page; SWR makes repeat nav instant and picks up updates on the next load.
+  /^\/nav\.js$/,
   // NB: /favicon.ico is NOT SWR'd — it used to SPA-fall-back to the 75KB
   // homepage, so caching it here stored a 75KB HTML blob under the favicon key.
   // the worker now serves a real SVG at /favicon.ico (immutable), so the browser

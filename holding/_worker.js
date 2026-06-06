@@ -1645,6 +1645,7 @@ ${xpChromeCss(820)}
     </footer>
   </div>
 </div>
+  <script src="/nav.js" defer></script>
 </body></html>`;
 }
 
@@ -1730,6 +1731,7 @@ Disallow: /</code></pre>
     </footer>
   </div>
 </div>
+  <script src="/nav.js" defer></script>
 </body></html>`;
 
   return new Response(html, {
@@ -2259,6 +2261,7 @@ footer .signature small { color: oklch(56.93% 0 0); }
   </div>
 </div>
 
+  <script src="/nav.js" defer></script>
 </body>
 </html>`;
 

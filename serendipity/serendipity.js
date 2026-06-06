@@ -293,6 +293,7 @@ function shell(title, currentPath, bodyHtml) {
     <main class="content">${bodyHtml}</main>
   </div>
 </div></div>
+  <script src="/nav.js" defer></script>
 </body></html>`;
 }
 
