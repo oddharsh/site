@@ -275,36 +275,52 @@ async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
     arr => (Array.isArray(arr) && arr.length ? arr : null),
     () => null
   );
-  const counterReadP = env.RN_KV
-    ? env.RN_KV.get("counter:visits").catch(() => null)
-    : Promise.resolve(null);
+  // visitor counter source — prefer the Durable Object (atomic increment, 100k
+  // writes/day) when its binding is present; else fall back to KV (eventually-
+  // consistent, 1k writes/day). bot status is request-only, so compute it up front
+  // and let the counter fetch ride the concurrent batch below — no serial round-trip
+  // either way. humans bump the count; bots read it (DO: ?peek; KV: read-no-write).
+  const counterUA = request.headers.get("user-agent") || "";
+  const counterIsBot = request.cf?.botManagement?.verifiedBot === true ||
+    /bot|crawl|spider|slurp|crawler|bingpreview|facebookexternalhit|embedly|slackbot|whatsapp|telegrambot|discordbot|redditbot|petalbot|gptbot|claudebot|ccbot|perplexity|bytespider|google-extended/i.test(counterUA);
+  const counterP = env.COUNTER
+    ? env.COUNTER.get(env.COUNTER.idFromName("homepage-visits"))
+        .fetch(`https://do/${counterIsBot ? "?peek=1" : ""}`)
+        .then((r) => r.json())
+        .catch(() => null)
+    : env.RN_KV
+      ? env.RN_KV.get("counter:visits").catch(() => null)
+      : Promise.resolve(null);
 
-  const [res, tracksPayload, photos, counterRaw] = await Promise.all([
+  const [res, tracksPayload, photos, counterData] = await Promise.all([
     env.ASSETS.fetch(request),
     tracksChain,
     manifestP,
-    counterReadP,
+    counterP,
   ]);
 
-  // visitor counter — increment the value read above + fire-and-forget the
-  // write. honest classic-90s-counter behavior: counts every homepage GET,
-  // no session dedup, no cookie. concurrent visits race on the increment so
-  // under heavy contention the count drifts slightly low, which is fine for
-  // a decorative footer pill. seed with:
-  //   wrangler kv key put --namespace-id="<id>" "counter:visits" 42 --remote
-  // increment + fire-and-forget write, but ONLY for humans. this site
-  // advertises itself to agents (DNS-AID + llms.txt), so crawler volume is
-  // real — counting them would dominate the KV write budget and inflate the
-  // pill. bots still see the current value; they just don't bump or write it.
+  // honest classic-90s-counter behavior: counts every homepage GET, no session
+  // dedup, no cookie. derive the footer pill from whichever backend answered:
+  //   • DO  — counterData is { n }. humans already incremented atomically inside
+  //     the DO (no read-modify-write race, no 1k/day write cap); bots peeked.
+  //     on a transient DO error counterData is null → leave the pill null (the
+  //     static "000042" placeholder shows) rather than touch KV, so an error
+  //     can't clobber the migrated count. KV `counter:visits` (last value 891)
+  //     stays frozen as a record; the DO is the source of truth once bound.
+  //   • KV  — fallback until the COUNTER binding is added: counterData is the raw
+  //     string; increment + fire-and-forget write, humans only. this site
+  //     advertises to agents (DNS-AID + llms.txt), so counting crawlers would
+  //     dominate the write budget and inflate the pill — bots read, don't bump.
   let counterStr = null;
-  if (env.RN_KV) {
-    const ua = request.headers.get("user-agent") || "";
-    const isBot = request.cf?.botManagement?.verifiedBot === true ||
-      /bot|crawl|spider|slurp|crawler|bingpreview|facebookexternalhit|embedly|slackbot|whatsapp|telegrambot|discordbot|redditbot|petalbot|gptbot|claudebot|ccbot|perplexity|bytespider|google-extended/i.test(ua);
-    const cur  = parseInt(counterRaw || "0", 10) || 0;
-    const next = isBot ? cur : cur + 1;
+  if (env.COUNTER) {
+    if (counterData && typeof counterData.n === "number") {
+      counterStr = String(counterData.n).padStart(6, "0");
+    }
+  } else if (env.RN_KV) {
+    const cur  = parseInt(counterData || "0", 10) || 0;
+    const next = counterIsBot ? cur : cur + 1;
     counterStr = String(next).padStart(6, "0");
-    if (!isBot) ctx.waitUntil(env.RN_KV.put("counter:visits", String(next)));
+    if (!counterIsBot) ctx.waitUntil(env.RN_KV.put("counter:visits", String(next)));
   }
 
   // bail if no dynamic data is available — the static HTML's inline

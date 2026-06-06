@@ -20,8 +20,23 @@ const json = (obj, status = 200) =>
 // once per call with no race — the canonical DO use case.
 export class Counter {
   constructor(state) { this.state = state; }
-  async fetch() {
-    const n = ((await this.state.storage.get("n")) || 0) + 1;
+  async fetch(request) {
+    const url = new URL(request.url);
+    let n = (await this.state.storage.get("n")) || 0;
+    // one-time idempotent seed — migrate a starting value (e.g. the old KV count)
+    // in without ever clobbering a counter that's already live.
+    if (url.searchParams.has("seed")) {
+      if (!(await this.state.storage.get("seeded"))) {
+        n = parseInt(url.searchParams.get("seed"), 10) || 0;
+        await this.state.storage.put("n", n);
+        await this.state.storage.put("seeded", true);
+      }
+      return Response.json({ n, seeded: true });
+    }
+    // read-only — bots/peekers see the value without bumping it
+    if (url.searchParams.has("peek")) return Response.json({ n });
+    // default — atomic increment (the canonical counter behaviour)
+    n += 1;
     await this.state.storage.put("n", n);
     return Response.json({ n });
   }
@@ -46,6 +61,20 @@ export default {
         const { n } = await res.json();
         log({ feature: "durable-object", n, ms: Date.now() - t0 });
         return json({ ok: true, count: n });
+      }
+
+      // One-time migration helper: seed the "homepage-visits" Counter instance from
+      // the old KV count, so when the homepage's COUNTER binding goes live it picks up
+      // where KV left off instead of resetting to zero. Idempotent — the DO only seeds
+      // once, so re-calls are no-ops. Same DO instance the homepage _worker.js addresses
+      // (DO identity = namespace + name), so seeding here lands there.
+      if (path === "/garage/cf/seed-homepage") {
+        const seed = parseInt(url.searchParams.get("n") || "0", 10) || 0;
+        const id = env.COUNTER.idFromName("homepage-visits");
+        const res = await env.COUNTER.get(id).fetch(`https://do/?seed=${seed}`);
+        const out = await res.json();
+        log({ feature: "do-seed", seed, n: out.n, ms: Date.now() - t0 });
+        return json({ ok: true, ...out });
       }
 
       // Feature #2 — Workers AI: caption a real grid photo (10k neurons/day free)
