@@ -9,9 +9,9 @@
 #   2. uploads a BROWSER-RENDERABLE JPG to R2 as aadhar-photos/<stem>.jpg —
 #      this is what /images/full/<stem>.jpg returns on click, and the shareable
 #      R2 copy. for a JPG-source photo that's the original; for a HEIF source
-#      it's the q100 export from step 3.
-#   3. if the original is HEIF (.hif/.heic/.heif), generates a MAXIMAL-quality
-#      (formatOptions 100, full-res, EXIF-preserved) JPG export and uploads THAT.
+#      it's the q95 export from step 3.
+#   3. if the original is HEIF (.hif/.heic/.heif), generates a visually-lossless
+#      (formatOptions 95, full-res, EXIF-preserved) JPG export and uploads THAT.
 #      the .HIF original is NOT uploaded — it stays local-only (your drive + SSD
 #      are the archive). Chrome/Firefox can't render HEIF anyway, and R2 is for
 #      serving/sharing, not cold storage of originals.
@@ -203,10 +203,11 @@ while IFS= read -r f; do
     continue
   fi
   out="$EXPORTS/${stem}.jpg"
-  # formatOptions 100 = MAXIMAL JPEG quality (near-lossless, full-res, EXIF +
-  # orientation preserved). this export IS the R2 copy now — the .HIF original
-  # is NOT uploaded (stays on your drive/SSD), so make the JPG share-worthy.
-  if sips -s format jpeg --setProperty formatOptions 100 "$f" --out "$out" >/dev/null 2>&1; then
+  # formatOptions 95 = visually-lossless JPEG (full-res, EXIF + orientation
+  # preserved) at ~half the bytes of q100. this export IS the R2 share/click copy
+  # — the .HIF original is NOT uploaded (stays on your drive/SSD), so it's
+  # share-worthy without being needlessly huge.
+  if sips -s format jpeg --setProperty formatOptions 95 "$f" --out "$out" >/dev/null 2>&1; then
     H_OK=$((H_OK+1)); printf "."
   else
     H_FAIL=$((H_FAIL+1)); printf "✗"
