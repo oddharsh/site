@@ -48,6 +48,7 @@ Single-page personal site at `aadhar.sh`. Hosted on Cloudflare Pages, with a
 | file | role |
 |---|---|
 | `holding/index.html` | The whole page in one file. Inline CSS + JS. ~65KB uncompressed, ~19KB brotli. Comments deliberately kept for the `/source` view. |
+| `holding/nav.js` | Site-wide XP **taskbar + Run command palette**. The ONE shared external asset (deferred, SW-cached) — every page includes `<script src="/nav.js" defer>`; it injects its own `<style>` + builds the taskbar (Start orb → Run, pinned footer profiles, clock) and the Run dialog into `<body>`. Opens via ⌘K / Start / taskbar. Destinations: pages + profiles inline; 131 photos lazy-loaded from `/images/manifest.json` with `/images/alt.json` captions as search labels. Wired into homepage + all garage pages + worker-gen `/around`,`/whoareyou`,`/bot` + serendipity shell. |
 | `holding/_worker.js` | Pages-Worker hybrid. Owns routing, photo serving from R2, manifest building, Spotify playlist scraping, AadharshBot crawler, /source viewer, /coffee redirect, cache-control overrides. |
 | `holding/_headers` | Static-asset cache + security headers (CSP, Permissions-Policy, etc.). Applied to direct static-asset requests; the worker overrides cache-control for select paths. |
 | `holding/sw.js` | Service worker. `CACHE_VERSION = "aadhar-v5-webp-jpg"`. Cache-first for `/images/*` (content-addressed via `?v=N`), SWR for static text files, network-only for everything else. Bumping `CACHE_VERSION` sweeps old caches. |
