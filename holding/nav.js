@@ -87,22 +87,46 @@
     return writingPromise;
   }
 
+  // XP "Bliss" desktop, drawn as an inline VECTOR SVG (no raster bytes — the site
+  // ships none for chrome): blue sky, soft blurred clouds, a rolling green hill with a
+  // sunlit rim. encodeURIComponent keeps the markup readable here + safe in the URI.
+  var BLISS_SVG =
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 120" preserveAspectRatio="xMidYMid slice">' +
+    '<defs>' +
+    '<linearGradient id="s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3f7fcc"/><stop offset=".42" stop-color="#6ba3e0"/><stop offset=".62" stop-color="#bcdcf4"/><stop offset=".67" stop-color="#dfeefb"/></linearGradient>' +
+    '<linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#95c43d"/><stop offset=".35" stop-color="#74af2d"/><stop offset="1" stop-color="#3c7d1a"/></linearGradient>' +
+    '<radialGradient id="sn" cx=".5" cy=".64" r=".55"><stop offset="0" stop-color="#fffbe6" stop-opacity=".5"/><stop offset="1" stop-color="#fffbe6" stop-opacity="0"/></radialGradient>' +
+    '<filter id="bl" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="1.1"/></filter>' +
+    '</defs>' +
+    '<rect width="200" height="120" fill="url(#s)"/><rect width="200" height="120" fill="url(#sn)"/>' +
+    '<g fill="#fff" filter="url(#bl)">' +
+    '<g opacity=".92"><ellipse cx="34" cy="25" rx="18" ry="4.6"/><ellipse cx="41" cy="20" rx="11" ry="4.2"/><ellipse cx="25" cy="22" rx="8" ry="3.6"/></g>' +
+    '<g opacity=".8"><ellipse cx="151" cy="18" rx="14" ry="3.8"/><ellipse cx="158" cy="14" rx="7" ry="3.2"/></g>' +
+    '<g opacity=".6"><ellipse cx="98" cy="31" rx="22" ry="3"/></g>' +
+    '<g opacity=".75"><ellipse cx="123" cy="42" rx="11" ry="2.6"/></g>' +
+    '</g>' +
+    '<path d="M0,79 C36,69 70,85 104,76 C140,67 172,78 200,72 L200,120 L0,120 Z" fill="url(#g)"/>' +
+    '<path d="M0,79 C36,69 70,85 104,76 C140,67 172,78 200,72" fill="none" stroke="#bcde66" stroke-width="1.1" opacity=".5"/>' +
+    '</svg>';
+  var blissUrl = "data:image/svg+xml," + encodeURIComponent(BLISS_SVG);
+
   // ── styles (injected once) ──────────────────────────────────────────────────
   var CSS =
-// shared XP "Bliss" desktop wallpaper on EVERY page (continuity), drawn in pure CSS
-// (no image bytes — the site ships none for chrome): blue sky + soft clouds + a
-// rolling green hill. fixed so it sits still like a real desktop while windows scroll
-// over it. !important so it overrides each page's own body background regardless of
-// specificity (e.g. body.np-page). no-JS pages keep their own background — graceful.
-"body{background:" +
-"radial-gradient(58px 20px at 19% 23%,oklch(100% 0 0 / .92),transparent 72%)," +
-"radial-gradient(104px 30px at 27% 28%,oklch(100% 0 0 / .80),transparent 74%)," +
-"radial-gradient(46px 15px at 69% 16%,oklch(100% 0 0 / .85),transparent 72%)," +
-"radial-gradient(78px 22px at 77% 20%,oklch(100% 0 0 / .72),transparent 74%)," +
-"radial-gradient(150% 82% at 50% 138%,oklch(76% 0.17 134) 0%,oklch(67% 0.18 137) 24%,oklch(55% 0.18 140) 42%,transparent 56%)," +
-"linear-gradient(180deg,oklch(51% 0.14 252) 0%,oklch(60% 0.13 246) 26%,oklch(76% 0.09 236) 50%,oklch(89% 0.04 230) 61%,oklch(70% 0.14 139) 61.4%,oklch(56% 0.17 140) 78%,oklch(46% 0.16 143) 100%)" +
-" fixed !important;background-repeat:no-repeat !important;background-size:cover !important}" +
-"#axp-taskbar{position:fixed;left:0;right:0;bottom:0;height:30px;z-index:99999;display:flex;align-items:stretch;" +
+// View Transitions: animate window open/close across real navigations while the
+// desktop + taskbar stay put (named = persistent). progressive — a no-op where the
+// browser doesn't support it (Firefox just navigates instantly).
+"@view-transition{navigation:auto}" +
+// the shared Bliss desktop on a fixed layer behind everything; page bodies forced
+// transparent so it shows through (overriding each page's own body background).
+"html,body{background:transparent !important}" +
+"#axp-desktop{position:fixed;inset:0;z-index:-1;view-transition-name:axp-desktop;background:url(\"" + blissUrl + "\") center center/cover no-repeat}" +
+// windows drag by their title bar
+".title-bar,.np-titlebar,#axp-run .tb{cursor:move}" +
+".axp-dragging{user-select:none}.axp-dragging .title-bar,.axp-dragging .np-titlebar,#axp-run.axp-dragging .tb{cursor:grabbing}" +
+"::view-transition-old(root){animation:axp-vo .18s ease both}::view-transition-new(root){animation:axp-vi .24s ease both}" +
+"@keyframes axp-vo{to{opacity:0;transform:scale(.975)}}@keyframes axp-vi{from{opacity:0;transform:scale(1.025)}}" +
+"@media (prefers-reduced-motion:reduce){::view-transition-old(root),::view-transition-new(root){animation:none}}" +
+"#axp-taskbar{position:fixed;left:0;right:0;bottom:0;height:30px;z-index:99999;view-transition-name:axp-taskbar;display:flex;align-items:stretch;" +
 "font-family:var(--font-ui,Tahoma,Verdana,Geneva,sans-serif);font-size:11px;user-select:none;" +
 "background:linear-gradient(180deg,oklch(67% 0.15 256) 0%,oklch(58% 0.19 257) 4%,oklch(51% 0.20 258) 9%,oklch(49% 0.20 258) 50%,oklch(46% 0.20 259) 92%,oklch(40% 0.18 260) 100%);" +
 "box-shadow:inset 0 1px 0 oklch(82% 0.09 250),inset 0 2px 0 oklch(62% 0.16 255)}" +
@@ -353,8 +377,40 @@
     }
   });
 
+  // ── desktop layer + dragging ─────────────────────────────────────────────────
+  function buildDesktop() {
+    if (D.getElementById("axp-desktop")) return;
+    var d = D.createElement("div"); d.id = "axp-desktop"; d.setAttribute("aria-hidden", "true");
+    D.body.insertBefore(d, D.body.firstChild);
+  }
+  // grab a title bar → pin the window to its current spot (fixed) and let it roam the
+  // desktop. cosmetic + per-page (resets on navigation), like shoving a window around.
+  // caption buttons + links are skipped so close/min/max keep working.
+  function initDrag() {
+    var win = null, sx = 0, sy = 0, sl = 0, st = 0;
+    function move(e) { if (win) { win.style.left = (sl + e.clientX - sx) + "px"; win.style.top = (st + e.clientY - sy) + "px"; } }
+    function up() { if (win) { win.classList.remove("axp-dragging"); D.removeEventListener("pointermove", move); win = null; } }
+    D.addEventListener("pointerdown", function (e) {
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      var b = e.target.closest && e.target.closest(".title-bar,.np-titlebar,#axp-run .tb");
+      if (!b || e.target.closest("a,button,.controls,.np-controls,.x")) return;
+      var w = b.closest(".window,.np-window,#axp-run");
+      if (!w) return;
+      var r = w.getBoundingClientRect();
+      w.style.position = "fixed"; w.style.margin = "0"; w.style.transform = "none";
+      w.style.left = r.left + "px"; w.style.top = r.top + "px"; w.style.width = r.width + "px"; w.style.maxWidth = "none";
+      w.classList.add("axp-dragging");
+      win = w; sx = e.clientX; sy = e.clientY; sl = r.left; st = r.top;
+      try { b.setPointerCapture(e.pointerId); } catch (_) {}
+      e.preventDefault();
+      D.addEventListener("pointermove", move);
+      D.addEventListener("pointerup", up, { once: true });
+      D.addEventListener("pointercancel", up, { once: true });
+    });
+  }
+
   // ── boot ────────────────────────────────────────────────────────────────────
-  function boot() { injectCSS(); buildTaskbar(); }
+  function boot() { injectCSS(); buildDesktop(); buildTaskbar(); initDrag(); }
   if (D.readyState === "loading") D.addEventListener("DOMContentLoaded", boot);
   else boot();
 })();
