@@ -247,9 +247,9 @@ code.m, .m { font-family: var(--font-mono); font-size: 9.2pt; }
     <h2>The honest scorecard</h2>
     <p class="note">All four ride the free Workers plan. <b>Durable Objects, Workers AI, and
       Workers Logs work live above</b> &mdash; click them. <b>Browser Rendering</b> is fully wired
-      (binding bound, worker deployed) but needs the account-level Browser Rendering toggle before
-      the headless instance will provision; until then the screenshot button returns a graceful
-      &quot;needs enabling&quot; after ~25s rather than hanging. That&apos;s the whole catch.</p>
+      (binding bound, worker deployed) but is metered at 10 browser-minutes/day on the free plan; once that&apos;s spent the launch can&apos;t
+      get an instance and the button returns a graceful timeout after ~25s rather than hanging
+      (budget resets at 00:00 UTC). No toggle needed &mdash; the binding is the access.</p>
 
     <footer>
       <p>&larr; back to the <a href="/garage/">garage</a> &middot; <a href="/">aadhar.sh</a></p>
@@ -290,8 +290,8 @@ code.m, .m { font-family: var(--font-mono); font-size: 9.2pt; }
         img.style.border="1px solid #888"; img.src=URL.createObjectURL(b); out.appendChild(img);
       } else {
         var d=await r.json().catch(function(){return{};});
-        out.textContent="Browser Rendering not available yet: "+(d.error||("HTTP "+r.status))+
-          "  — enable it in Workers & Pages → Browser Rendering, then retry.";
+        out.textContent="Browser Rendering didn’t provision: "+(d.error||("HTTP "+r.status))+
+          "  — likely the free 10-min/day browser cap (resets 00:00 UTC). usage: Workers → Browser Rendering.";
       }
     }catch(e){ out.textContent="error: "+e; } finally{ shotBtn.disabled=false; }
   });

@@ -70,20 +70,25 @@ export default {
         // SSRF guard: only screenshot aadhar.sh itself
         if (!/^https:\/\/(www\.)?aadhar\.sh(\/|$)/.test(target)) target = ORIGIN;
         const shot = (async () => {
+          log({ feature: "browser-rendering", step: "import" });
           const puppeteer = (await import("@cloudflare/puppeteer")).default;
+          log({ feature: "browser-rendering", step: "launching" });
           const browser = await puppeteer.launch(env.BROWSER);
+          log({ feature: "browser-rendering", step: "launched", ms: Date.now() - t0 });
           try {
             const page = await browser.newPage();
             await page.setViewport({ width: 900, height: 600, deviceScaleFactor: 1 });
+            log({ feature: "browser-rendering", step: "goto" });
             await page.goto(target, { waitUntil: "domcontentloaded", timeout: 15000 });
             await new Promise((r) => setTimeout(r, 1200)); // brief paint settle
+            log({ feature: "browser-rendering", step: "screenshot", ms: Date.now() - t0 });
             return await page.screenshot({ type: "png" });
           } finally { try { await browser.close(); } catch {} }
         })();
         // hard ceiling so a non-provisioning browser can't hang the request
         const png = await Promise.race([
           shot,
-          new Promise((_, rej) => setTimeout(() => rej(new Error("browser timed out (25s) — Browser Rendering may need enabling on the zone")), 25000)),
+          new Promise((_, rej) => setTimeout(() => rej(new Error("browser timed out (25s)")), 45000)),
         ]);
         log({ feature: "browser-rendering", target, bytes: png.length, ms: Date.now() - t0 });
         return new Response(png, {
