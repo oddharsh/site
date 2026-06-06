@@ -30,6 +30,7 @@
     { label: "music", path: "/rn", hint: "what I'm listening to right now" },
     { label: "coffee", path: "/coffee", hint: "book a coffee / bagel" },
     { label: "source", path: "/source", hint: "view this site's source" },
+    { label: "writing", path: "/writing", hint: "notes, in flux — an editable notepad" },
     { label: "garage · chunks", path: "/garage/chunks", hint: "content-addressed chunking" },
     { label: "garage · cloudflare", path: "/garage/cloudflare", hint: "free Cloudflare features" },
     { label: "garage · encoding", path: "/garage/encoding", hint: "thumbnail encoding study" },
@@ -46,7 +47,8 @@
     { label: "Spotify", url: "https://open.spotify.com/user/aadharsh2010" }
   ];
   var PHOTOS = null;          // lazy: [{ label, path, hint, kind:'photo' }]
-  var photosPromise = null;
+  var WRITING = null;         // lazy: [{ label, path, hint, kind:'writing' }]
+  var photosPromise = null, writingPromise = null;
 
   function tag(kind, o) { o.kind = kind; return o; }
   PAGES.forEach(function (p) { tag("page", p); });
@@ -71,6 +73,19 @@
       return photos;
     });
     return photosPromise;
+  }
+
+  // writing posts (for /writing/<slug> entries) — same lazy pattern as photos
+  function loadWriting() {
+    if (writingPromise) return writingPromise;
+    writingPromise = fetch("/writing/posts.json").then(function (r) { return r.ok ? r.json() : []; }).catch(function () { return []; })
+      .then(function (posts) {
+        WRITING = (posts || []).map(function (p) {
+          return tag("writing", { label: p.title || p.slug, path: "/writing/" + p.slug, hint: p.date ? "note · " + p.date : "note" });
+        });
+        return WRITING;
+      });
+    return writingPromise;
   }
 
   // ── styles (injected once) ──────────────────────────────────────────────────
@@ -218,7 +233,7 @@
   }
 
   // ── filtering + render ────────────────────────────────────────────────────────
-  function pool() { return PAGES.concat(PROFILES, PHOTOS || []); }
+  function pool() { return PAGES.concat(WRITING || [], PROFILES, PHOTOS || []); }
 
   function score(item, q) {
     var l = item.label.toLowerCase(), h = (item.hint || "").toLowerCase(), p = (item.path || "").toLowerCase();
@@ -240,11 +255,11 @@
         .map(function (x) { return x.it; })
         .slice(0, 40);
     } else {
-      // empty: show pages + profiles + a handful of photos as a "directory"
-      items = PAGES.concat(PROFILES, (PHOTOS || []).slice(0, 8));
+      // empty: show pages + writing + profiles + a handful of photos as a "directory"
+      items = PAGES.concat(WRITING || [], PROFILES, (PHOTOS || []).slice(0, 8));
     }
     results = items; sel = items.length ? 0 : -1;
-    var groups = { page: [], profile: [], photo: [] }, order = ["page", "profile", "photo"], names = { page: "Pages", profile: "Profiles", photo: "Photos" };
+    var groups = { page: [], writing: [], profile: [], photo: [] }, order = ["page", "writing", "profile", "photo"], names = { page: "Pages", writing: "Writing", profile: "Profiles", photo: "Photos" };
     items.forEach(function (it, i) { groups[it.kind].push({ it: it, i: i }); });
     var html = "";
     order.forEach(function (k) {
@@ -290,6 +305,7 @@
     if (!run) buildRun();
     if (run.classList.contains("open")) return;
     if (!PHOTOS) loadPhotos().then(function () { if (run.classList.contains("open")) render(); });
+    if (!WRITING) loadWriting().then(function () { if (run.classList.contains("open")) render(); });
     lastFocus = D.activeElement;
     backdrop.classList.add("open"); run.classList.add("open");
     var s = D.getElementById("axp-start"); if (s) s.setAttribute("aria-expanded", "true");

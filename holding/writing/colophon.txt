@@ -1,0 +1,34 @@
+colophon
+────────
+
+this site is a resto-mod. the look is Windows XP "Luna" — blue title
+bars, raised 3D bevels, Tahoma and Trebuchet and Courier — but the
+guts are 2026: it's served from the edge, the colors are authored in
+OKLCH and read period-correct, and there isn't a single font file
+shipped over the wire (everything's a system font you already have).
+
+a few of the moving parts:
+
+  · the homepage is one HTML file. inline CSS, inline JS, no build
+    step, no framework. you're meant to be able to read the whole
+    thing — that's what /source is for.
+
+  · photos are shot on a Fujifilm X-T50 and a Leica, then run through
+    a little pipeline: resized, EXIF-rotated, and encoded twice —
+    AVIF first, with a jpegli JPEG as the fallback. jpegli (Google's
+    encoder, built from source) lands ~25% smaller than the system
+    one at the same quality. see /garage/encoding for the byte counts.
+
+  · the visitor counter is a Durable Object now, not a spreadsheet
+    cell. the "now playing" list is scraped from a Spotify playlist by
+    a little crawler that signs its own requests.
+
+  · this page is a Notepad window. you can edit it. it won't save.
+    see the note in flux for why.
+
+the whole thing is a slow project — a place to learn how the modern
+web actually works by dressing it up like the web i grew up on.
+
+built in public. always under construction, on purpose.
+
+— aadharsh
