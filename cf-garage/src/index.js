@@ -83,13 +83,21 @@ export default {
         const img = await fetch(`${ORIGIN}/images/${stem}.jpg?v=17`);
         if (!img.ok) { log({ feature: "workers-ai", err: "thumb-missing" }); return json({ ok: false, error: "thumbnail not found" }, 404); }
         const bytes = [...new Uint8Array(await img.arrayBuffer())];
+        // ?mode=alt → tight, factual alt text (used to bake <img alt> for the grid).
+        // default → the vivid demo caption. alt text shouldn't editorialize or guess.
+        const prompt = url.searchParams.get("mode") === "alt"
+          ? "Write alt text for this photo: one plain, factual sentence naming only what is clearly visible (main subject and setting). No mood, no interpretation, no guessing, no 'image of'. Under 16 words."
+          : "Describe this photograph in one vivid sentence suitable as alt text. Be concrete about subject, light, and mood.";
         const out = await env.AI.run("@cf/llava-hf/llava-1.5-7b-hf", {
           image: bytes,
-          prompt: "Describe this photograph in one vivid sentence suitable as alt text. Be concrete about subject, light, and mood.",
+          prompt,
           max_tokens: 64,
         });
-        const caption = (out.description || out.response || "").trim();
-        log({ feature: "workers-ai", stem, chars: caption.length, ms: Date.now() - t0 });
+        let caption = (out.description || out.response || "").trim()
+          .replace(/^(an? |the )?(image|photo|photograph|picture) (of|shows|depicts|captures)\s*/i, "")
+          .replace(/\s+/g, " ").trim();
+        if (caption) caption = caption[0].toUpperCase() + caption.slice(1);
+        log({ feature: "workers-ai", stem, mode: url.searchParams.get("mode") || "demo", chars: caption.length, ms: Date.now() - t0 });
         return json({ ok: true, stem, caption });
       }
 

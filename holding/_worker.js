@@ -80,7 +80,23 @@ export default {
       });
     }
 
+    // Workers Logs (observability): one compact structured line per request —
+    // path / method / status / ms / country / bot — queryable + filterable in the
+    // dashboard once observability is enabled on the Pages project. lean and fully
+    // strippable: delete this wrapper (keep `return withSecurityHeaders(await
+    // route(...))`) to revert. short keys keep each event tiny.
+    const t0 = Date.now();
     const response = await route(request, env, ctx);
+    try {
+      console.log(JSON.stringify({
+        p: url.pathname,
+        m: request.method,
+        s: response.status,
+        ms: Date.now() - t0,
+        co: request.cf?.country,
+        bot: request.cf?.botManagement?.verifiedBot || undefined,
+      }));
+    } catch {}
     return withSecurityHeaders(response);
   }
 };
@@ -366,6 +382,7 @@ async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
     const pick = pickRandom(photos, 12);   // ~12 fills the justified rows into a fuller rectangle
     lcpAvif = pick[0] && pick[0].thumb_avif ? pick[0].thumb_avif : null;
     lcpStem = pick[0] && pick[0].stem ? pick[0].stem : null;
+    const altMap = await getAltMap(env);   // AI alt text for the rendered slots (lean: ~12 strings)
     const slotsHtml = pick.map((p, i) => {
       const full     = p.full;
       // first tile: eager + high fetch priority. it's the topmost photo
@@ -396,7 +413,7 @@ async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
           // ordered first: <picture> uses the first source whose media matches.
           (p.stem ? `<source type="image/avif" media="(max-width: 560px)" srcset="/images/${escAttr(p.stem)}-${THUMB_SMALL_PX}.avif?v=${THUMB_VERSION}">` : "") +
           (p.thumb_avif ? `<source type="image/avif" srcset="/images/${escAttr(p.thumb_avif)}">` : "") +
-          `<img alt="" ${imgLoad} decoding="async" src="/images/${escAttr(p.thumb_jpg)}">` +
+          `<img alt="${escAttr(altMap[p.stem] || "")}" ${imgLoad} decoding="async" src="/images/${escAttr(p.thumb_jpg)}">` +
         `</picture>` +
       `</a>`;
     }).join("");
@@ -622,6 +639,21 @@ const THUMB_VERSION = 17;
 const REMOVED_STEMS = new Set(["XT509360"]);
 // small mobile AVIF tier (stem-400.avif), served via <source media> at <=560px.
 const THUMB_SMALL_PX = 400;
+
+// AI alt text (cf-garage Workers AI, ?mode=alt) generated offline into the static
+// asset /images/alt.json {stem: alt}. loaded once per isolate and cached in a module
+// var — deliberately NOT folded into the hot-path manifest (which is JSON-parsed on
+// every no-store homepage hit; alt would bloat it). only the alt strings for the ~12
+// rendered slots ship per page. strippable: delete alt.json + these lookups to revert.
+let _altMap;
+async function getAltMap(env) {
+  if (_altMap) return _altMap;
+  try {
+    const r = await env.ASSETS.fetch("https://assets.local/images/alt.json");
+    _altMap = r.ok ? await r.json() : {};
+  } catch { _altMap = {}; }
+  return _altMap;
+}
 
 async function getImagesManifest(env, ctx) {
   let manifest = null;
