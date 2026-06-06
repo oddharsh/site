@@ -303,7 +303,7 @@ function eventCard(e, isPast) {
   if (Number(e.host_count) > 0) counts.push(`${e.host_count} host${e.host_count == 1 ? "" : "s"}`);
   if (Number(e.attendee_count) > 0) counts.push(`${e.attendee_count} going`);
   const d = e.start_at ? new Date(e.start_at) : null;
-  return `<a class="ev" href="${PREFIX}/event/${esc(e.id)}" data-start="${esc(e.start_at || "")}"${e.cover_url ? ` data-cover="${esc(`${PREFIX}/cover?u=${encodeURIComponent(e.cover_url)}`)}"` : ""}>
+  return `<a class="ev" href="${PREFIX}/event/${esc(e.id)}" data-start="${esc(e.start_at || "")}"${e._coverHref ? ` data-cover="${esc(e._coverHref)}"` : ""}>
     <div class="nm">${esc(e.name)}</div>
     <div class="meta">${d ? esc(fmtDateTime(e.start_at)) : "date TBD"}${isPast && d ? ` · ${esc(relativeTime(d))}` : ""}${e.location ? " · " + esc(e.location) : ""}</div>
     <div class="row">
@@ -380,7 +380,7 @@ const DASHBOARD_JS = `
 })();
 `;
 
-async function renderDashboard(d, path, msg) {
+async function renderDashboard(d, path, msg, env) {
   const [events, contribCount] = await Promise.all([queryEvents(d), countContributors(d)]);
   let body;
   if (!events.length) {
@@ -397,6 +397,11 @@ async function renderDashboard(d, path, msg) {
     const pastAll = events.filter((e) => e.start_at && new Date(e.start_at).getTime() < now)
                           .sort((a, b) => new Date(b.start_at) - new Date(a.start_at));
     const past = pastAll.slice(0, PAST_CAP);
+    // sign the cover-proxy URL for every card we actually render (upcoming + the
+    // capped past slice) — not all of pastAll. eventCard reads e._coverHref.
+    await Promise.all(
+      [...upcoming, ...past].filter((e) => e.cover_url).map(async (e) => { e._coverHref = await coverProxyUrl(e.cover_url, env); })
+    );
     body = `<h1 class="page">Events</h1>
       <p class="lede">${events.length} event${events.length == 1 ? "" : "s"} in the pool, fed by ${contribCount} contributor${contribCount == 1 ? "" : "s"}. Click any event to see who&apos;s going.</p>
       <div class="toolbar">
@@ -1034,21 +1039,66 @@ async function handleEnrich(request, env, d) {
   return new Response(JSON.stringify({ ok: true, enriched: out }, null, 2), { headers: { "content-type": "application/json" } });
 }
 
+// ── cover-proxy request signing ─────────────────────────────────────────────
+// The /cover proxy fetches a caller-supplied URL and edge-caches it (s-maxage 7d).
+// Left open that's an SSRF-shaped vector: any third party could point ?u= at an
+// arbitrary host that returns image/* (incl. internal/metadata endpoints) and have
+// aadhar.sh fetch + cache it. We deliberately do NOT allowlist hosts — covers come
+// from arbitrary CDNs (lumacdn, unsplash, organizer-chosen), and allowlisting was
+// whack-a-mole that silently broke external covers. Instead the worker HMAC-signs
+// every cover URL it emits and only honours requests carrying a valid signature for
+// their exact ?u= value. Any external CDN still works; an attacker can't forge the
+// MAC, so attacker-chosen URLs are rejected. Secret reuses SYNC_SECRET (override
+// with a dedicated COVER_SECRET). If neither is set the proxy degrades to open —
+// that's an unconfigured deploy only, not anything an attacker can induce.
+const _enc = new TextEncoder();
+function _b64url(buf) {
+  return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+function coverSecret(env) { return (env && (env.COVER_SECRET || env.SYNC_SECRET)) || null; }
+function coverKey(secret) {
+  return crypto.subtle.importKey("raw", _enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"]);
+}
+async function signCoverUrl(rawUrl, secret) {
+  return _b64url(await crypto.subtle.sign("HMAC", await coverKey(secret), _enc.encode(rawUrl)));
+}
+async function verifyCoverUrl(rawUrl, sig, secret) {
+  if (!sig) return false;
+  let bytes;
+  try { bytes = Uint8Array.from(atob(sig.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0)); }
+  catch { return false; }
+  return crypto.subtle.verify("HMAC", await coverKey(secret), bytes, _enc.encode(rawUrl));
+}
+// Same-origin, signed cover-proxy URL for a raw cover_url ("" when there's none).
+async function coverProxyUrl(rawUrl, env) {
+  if (!rawUrl) return "";
+  const base = `${PREFIX}/cover?u=${encodeURIComponent(rawUrl)}`;
+  const secret = coverSecret(env);
+  return secret ? `${base}&s=${await signCoverUrl(rawUrl, secret)}` : base;
+}
+
 // ── router ────────────────────────────────────────────────────────────────────
-// GET /serendipity/cover?u=<encoded image url> — same-origin cover proxy.
+// GET /serendipity/cover?u=<encoded image url>[&s=<hmac>] — same-origin cover proxy.
 // Resizes via Cloudflare Image Transformations (cf.image) so the hover tooltip
 // pulls a ~520px thumbnail instead of the multi-MB original (covers ran up to
 // 6.4 MB). Two wins: covers become same-origin (any organizer-chosen host loads
 // without widening CSP), and the bytes shrink. If Transformations aren't enabled
 // on the zone, cf.image is silently ignored and the original is streamed through
 // — still same-origin, just full-size, so nothing breaks before the toggle flips.
-async function handleCover(request, ctx) {
+// The &s= signature (see above) gates which URLs are honoured — verified before the
+// cache lookup so a forged/unsigned URL can neither be served from nor written to
+// the shared edge cache.
+async function handleCover(request, env, ctx) {
   const url = new URL(request.url);
   const raw = url.searchParams.get("u");
   if (!raw) return new Response("missing u", { status: 400 });
   let target;
   try { target = new URL(raw); } catch { return new Response("bad u", { status: 400 }); }
   if (target.protocol !== "https:") return new Response("https only", { status: 400 });
+  const secret = coverSecret(env);
+  if (secret && !(await verifyCoverUrl(raw, url.searchParams.get("s"), secret))) {
+    return new Response("bad or missing signature", { status: 403 });
+  }
 
   const hit = await caches.default.match(request);
   if (hit) return hit;
@@ -1110,7 +1160,7 @@ export async function handleSerendipity(request, env, ctx) {
 
   // same-origin cover proxy (resizes via cf.image) — early return, no uid cookie
   // so the response stays cacheable at the edge.
-  if ((request.method === "GET" || request.method === "HEAD") && path === `${PREFIX}/cover`) return handleCover(request, ctx);
+  if ((request.method === "GET" || request.method === "HEAD") && path === `${PREFIX}/cover`) return handleCover(request, env, ctx);
 
   let res;
   if (request.method === "POST" && path === `${PREFIX}/cookies`) res = await handleCookies(request, env, d, uid);
@@ -1122,7 +1172,7 @@ export async function handleSerendipity(request, env, ctx) {
     if (request.method === "GET" && !msg) {
       let hit = await caches.default.match(dashKey);
       if (!hit) {
-        const rendered = await renderDashboard(d, path, msg);
+        const rendered = await renderDashboard(d, path, msg, env);
         const h = new Headers(rendered.headers);
         h.set("cache-control", "public, max-age=60, s-maxage=60");
         h.delete("set-cookie");  // never store a per-visitor uid cookie in a shared cache
@@ -1131,7 +1181,7 @@ export async function handleSerendipity(request, env, ctx) {
       }
       res = hit;
     } else {
-      res = await renderDashboard(d, path, msg);
+      res = await renderDashboard(d, path, msg, env);
     }
   }
   else if (path === `${PREFIX}/contribute`) res = await renderContribute(d, path, uid, msg);
