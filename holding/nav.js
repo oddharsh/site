@@ -208,11 +208,14 @@
 // wallpaper + taskbar never cross-fade (that root cross-fade was the white flash).
 ".window,.np-window{view-transition-name:axp-window}" +
 "::view-transition-group(root),::view-transition-group(axp-desktop),::view-transition-group(axp-taskbar),::view-transition-group(axp-icons){animation:none !important}" +
-// snappy: retime the box-morph (the group geometry tween, otherwise the UA's
-// ~0.25s default) + trim the content cross-fades, with less zoom.
-"::view-transition-group(axp-window){animation-duration:.16s;animation-timing-function:ease-out}" +
-"::view-transition-old(axp-window){animation:axp-vo .12s ease-out both}::view-transition-new(axp-window){animation:axp-vi .16s ease-out both}" +
-"@keyframes axp-vo{to{opacity:0;transform:scale(.992)}}@keyframes axp-vi{from{opacity:0;transform:scale(1.008)}}" +
+// map to XP's "animate windows when minimizing/maximizing": the outgoing window
+// zooms DOWN toward the taskbar and the incoming one zooms UP out of it — scale
+// origin biased below-centre (toward the bar at the bottom), fast + near-linear,
+// minimize easing in, restore easing out. no modern in-place cross-zoom.
+"::view-transition-group(axp-window){animation-duration:.2s;animation-timing-function:ease-out}" +
+"::view-transition-old(axp-window){transform-origin:50% 130%;animation:axp-min .18s cubic-bezier(.4,0,1,1) both}" +
+"::view-transition-new(axp-window){transform-origin:50% 130%;animation:axp-res .2s cubic-bezier(0,0,.2,1) both}" +
+"@keyframes axp-min{to{opacity:0;transform:scale(.66)}}@keyframes axp-res{from{opacity:0;transform:scale(.66)}}" +
 "@media (prefers-reduced-motion:reduce){::view-transition-old(axp-window),::view-transition-new(axp-window){animation:none}}" +
 "#axp-taskbar{position:fixed;left:0;right:0;bottom:0;height:30px;z-index:99999;view-transition-name:axp-taskbar;display:flex;align-items:stretch;" +
 "font-family:var(--font-ui,Tahoma,Verdana,Geneva,sans-serif);font-size:11px;user-select:none;" +
