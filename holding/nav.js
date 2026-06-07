@@ -56,14 +56,28 @@
 
   // first-level subpages — the full-fledged "apps" pinned to the taskbar.
   var SUBPAGES = [
-    { label: "garage", path: "/garage/", hint: "prototypes + experiments", color: "oklch(70% 0.17 50)" },
-    { label: "writing", path: "/writing", hint: "notes, in flux — an editable notepad", color: "oklch(82% 0.14 95)" },
-    { label: "serendipity", path: "/serendipity", hint: "events worth going to", color: "oklch(62% 0.18 300)" },
-    { label: "around", path: "/around", hint: "the crypto-VC neighborhood", color: "oklch(70% 0.12 200)" },
-    { label: "whoareyou", path: "/whoareyou", hint: "for agents + the curious", color: "oklch(64% 0.16 250)" },
-    { label: "music", path: "/rn", hint: "what I'm listening to right now", color: "oklch(68% 0.18 145)" },
-    { label: "coffee", path: "/coffee", hint: "book a coffee / bagel", color: "oklch(58% 0.10 60)" }
+    { label: "garage", path: "/garage/", hint: "prototypes + experiments" },
+    { label: "writing", path: "/writing", hint: "notes, in flux — an editable notepad" },
+    { label: "serendipity", path: "/serendipity", hint: "events worth going to" },
+    { label: "around", path: "/around", hint: "the crypto-VC neighborhood" },
+    { label: "whoareyou", path: "/whoareyou", hint: "for agents + the curious" },
+    { label: "music", path: "/rn", hint: "what I'm listening to right now" },
+    { label: "coffee", path: "/coffee", hint: "book a coffee / bagel" }
   ];
+
+  // per-section icons — original CSS/SVG glyphs (colored tile + white pictogram,
+  // so they read on the blue taskbar button AND a white browser tab). Used BOTH as
+  // each first-level route's tab favicon (set by setFavicon below) and its taskbar
+  // app-button icon — the favicons and the desktop shell finally share one language.
+  var SECTION_ICONS = {
+    garage: "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='#e8851f'/><g fill='#fff'><rect x='14' y='5' width='4' height='22' rx='1.5'/><rect x='5' y='14' width='22' height='4' rx='1.5'/><rect x='14' y='5' width='4' height='22' rx='1.5' transform='rotate(45 16 16)'/><rect x='14' y='5' width='4' height='22' rx='1.5' transform='rotate(-45 16 16)'/><circle cx='16' cy='16' r='6.5'/></g><circle cx='16' cy='16' r='2.8' fill='#e8851f'/></svg>",
+    writing: "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='#2f6bd6'/><g fill='#fff'><rect x='8' y='8' width='16' height='2.6' rx='1.3'/><rect x='8' y='14.7' width='16' height='2.6' rx='1.3'/><rect x='8' y='21.4' width='10' height='2.6' rx='1.3'/></g></svg>",
+    serendipity: "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='#7c4dd6'/><rect x='6' y='8' width='20' height='18' rx='2' fill='#fff'/><rect x='6' y='8' width='20' height='5' rx='2' fill='#dccff5'/><g fill='#7c4dd6'><rect x='9' y='16' width='3.4' height='3.4'/><rect x='14.3' y='16' width='3.4' height='3.4'/><rect x='19.6' y='16' width='3.4' height='3.4'/><rect x='9' y='21' width='3.4' height='3.4'/><rect x='14.3' y='21' width='3.4' height='3.4'/></g></svg>",
+    around: "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='#1f9b8e'/><path d='M16 6 C11.6 6 8 9.3 8 13.6 C8 19 16 26 16 26 C16 26 24 19 24 13.6 C24 9.3 20.4 6 16 6 Z' fill='#fff'/><circle cx='16' cy='13.6' r='3.2' fill='#1f9b8e'/></svg>",
+    whoareyou: "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='#4a5bd0'/><rect x='15' y='4' width='2' height='4' fill='#fff'/><circle cx='16' cy='4' r='2' fill='#fff'/><rect x='8' y='9' width='16' height='14' rx='3.5' fill='#fff'/><circle cx='12.5' cy='15' r='2.1' fill='#4a5bd0'/><circle cx='19.5' cy='15' r='2.1' fill='#4a5bd0'/><rect x='12' y='19' width='8' height='1.8' rx='0.9' fill='#4a5bd0'/></svg>",
+    music: "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='#2faa55'/><g fill='#fff'><rect x='17' y='7' width='2.6' height='14'/><path d='M19.6 7 C23 8 25 10 24.4 13.6 C23 11 21 11 19.6 11.8 Z'/><ellipse cx='14' cy='21' rx='4.4' ry='3.5'/></g></svg>",
+    coffee: "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='#7a5230'/><path d='M8 12 h13 v6 a6.5 6.5 0 0 1-13 0 Z' fill='#fff'/><path d='M21 13 h3 a2.6 2.6 0 0 1 0 5.2 h-3' fill='none' stroke='#fff' stroke-width='2.2'/><g stroke='#fff' stroke-width='1.8' stroke-linecap='round'><path d='M11 5.5 v3'/><path d='M14.5 5 v3.5'/></g></svg>"
+  };
   var PHOTOS = null;          // lazy: [{ label, path, hint, kind:'photo' }]
   var WRITING = null;         // lazy: [{ label, path, hint, kind:'writing' }]
   var photosPromise = null, writingPromise = null;
@@ -226,9 +240,6 @@
 // label: white text with the classic XP desktop drop shadow, up to two lines
 ".axp-ico .t{font-size:11px;line-height:1.18;text-align:center;color:oklch(100% 0 0);text-shadow:0 1px 2px oklch(18% 0.04 263),0 0 3px oklch(18% 0.04 263);max-width:82px;overflow-wrap:anywhere}" +
 // My Pictures glyph: a tiny framed Bliss — sky, sun, rolling hill
-".axp-ico .pic{background:linear-gradient(180deg,oklch(72% 0.14 233) 0 56%,oklch(64% 0.17 140) 56% 100%);position:relative;overflow:hidden}" +
-".axp-ico .pic::before{content:'';position:absolute;left:6px;top:5px;width:7px;height:7px;border-radius:50%;background:oklch(95% 0.13 95);box-shadow:0 0 3px oklch(92% 0.16 95)}" +
-".axp-ico .pic::after{content:'';position:absolute;left:-3px;right:-3px;bottom:-4px;height:13px;border-radius:50% 60% 0 0/100% 100% 0 0;background:oklch(57% 0.18 142)}" +
 // Notepad glyph: white ruled page with a folded corner
 ".axp-ico .note{background:linear-gradient(135deg,oklch(99% 0 0) 0 80%,oklch(82% 0.02 250) 80% 100%);position:relative}" +
 ".axp-ico .note::before{content:'';position:absolute;left:7px;right:7px;top:9px;height:1px;background:oklch(58% 0.13 250);box-shadow:0 4px 0 oklch(58% 0.13 250),0 8px 0 oklch(58% 0.13 250),0 12px 0 oklch(58% 0.13 250)}" +
@@ -251,7 +262,7 @@
 "box-shadow:inset 0 1px 0 oklch(82% 0.11 250)}" +
 ".axp-pin:hover{background:linear-gradient(180deg,oklch(76% 0.14 254) 0%,oklch(66% 0.17 256) 48%,oklch(60% 0.18 258) 52%,oklch(64% 0.16 256) 100%);border-color:oklch(84% 0.10 250)}" +
 ".axp-pin:active{background:linear-gradient(180deg,oklch(52% 0.18 260),oklch(60% 0.16 257));box-shadow:inset 1px 1px 2px oklch(36% 0.16 263);border-top-color:oklch(42% 0.17 261)}" +
-".axp-pin b{width:9px;height:9px;border-radius:2px;flex:0 0 auto;box-shadow:inset 0 0 0 1px oklch(100% 0 0 / .5),0 1px 0 oklch(0% 0 0 / .25)}" +
+".axp-pin .fav{width:15px;height:15px;flex:0 0 auto;display:flex;line-height:0;filter:drop-shadow(0 1px 1px oklch(0% 0 0 / .3))}.axp-pin .fav svg{width:100%;height:100%;display:block}" +
 "#axp-spacer{flex:1}" +
 // tray + clock — flat, NOT a sunken box (the real XP clock is just text on the bar);
 // the only chrome is an engraved vertical separator on the tray's left edge.
@@ -330,7 +341,7 @@
     // (qlColor/qlGlyph are kept: the desktop profile icons reuse them.)
     var pins = el('<div id="axp-pins"></div>');
     SUBPAGES.forEach(function (s) {
-      var b = el('<a class="axp-pin" title="' + s.hint + '"><b style="background:' + s.color + '"></b><span class="lbl">' + s.label + '</span></a>');
+      var b = el('<a class="axp-pin" title="' + s.hint + '"><span class="fav" aria-hidden="true">' + (SECTION_ICONS[s.label] || "") + '</span><span class="lbl">' + s.label + '</span></a>');
       b.href = s.path; pins.appendChild(b);
     });
     bar.appendChild(pins);
@@ -342,9 +353,6 @@
     setInterval(tickClock, 15000);
   }
 
-  function pinColor(name) {
-    return { Twitter: "oklch(70% 0.14 233)", Instagram: "oklch(63% 0.2 9)", Curius: "oklch(64% 0.17 145)", Beli: "oklch(72% 0.18 60)", Spotify: "oklch(68% 0.18 145)" }[name] || "oklch(70% 0.05 255)";
-  }
 
   // Quick Launch tile gradients — brand-evoking colours (Instagram gets the
   // retro tan→brown of its original skeuomorphic camera, not the modern ramp).
@@ -383,7 +391,7 @@
       var p = saved[it.label];
       a.style.left = (p ? p.x : 9) + "px";
       a.style.top = (p ? p.y : 9 + i * 86) + "px";
-      var cls = it.kind === "pics" ? "pic" : it.kind === "note" ? "note" : "";
+      var cls = it.kind === "note" ? "note" : "";
       var style = ext ? ' style="background:' + qlColor(it.label) + '"' : "";
       var inner = ext ? qlGlyph(it.label) : "";
       a.innerHTML = '<span class="ic ' + cls + '"' + style + " aria-hidden=\"true\">" + inner + "</span><span class=\"t\">" + esc(it.label) + "</span>";
@@ -705,7 +713,20 @@
   }
 
   // ── boot ────────────────────────────────────────────────────────────────────
-  function boot() { injectCSS(); buildDesktop(); buildIcons(); buildTaskbar(); initDrag(); initIconDrag(); initScrollbars(); initResize(); }
+  // set the tab favicon to the current first-level section's icon, so the favicon
+  // matches its taskbar button. exact-match only — /garage/<sub> + /writing/<slug>
+  // + home keep their own page favicons (e.g. each garage demo's distinct icon).
+  function setFavicon() {
+    var np = location.pathname.replace(/\/+$/, "") || "/";
+    var sec = SUBPAGES.filter(function (s) { return (s.path.replace(/\/+$/, "") || "/") === np; })[0];
+    if (!sec || !SECTION_ICONS[sec.label]) return;
+    var link = D.querySelector('link[rel~="icon"]');
+    if (!link) { link = D.createElement("link"); link.rel = "icon"; (D.head || D.documentElement).appendChild(link); }
+    link.type = "image/svg+xml";
+    link.href = "data:image/svg+xml," + encodeURIComponent(SECTION_ICONS[sec.label]);
+  }
+
+  function boot() { injectCSS(); buildDesktop(); buildIcons(); buildTaskbar(); initDrag(); initIconDrag(); initScrollbars(); initResize(); setFavicon(); }
   if (D.readyState === "loading") D.addEventListener("DOMContentLoaded", boot);
   else boot();
 })();

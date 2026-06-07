@@ -18,7 +18,7 @@ colors that read modern in source but render period-correct.
 # deploy the homepage
 wrangler pages deploy holding --project-name aadhar-sh --branch holding --commit-dirty=true
 
-# add new photos (resize, EXIF-rotate, encode to JPG+WebP, upload to R2,
+# add new photos (resize, EXIF-rotate, encode to AVIF+JPG, upload to R2,
 # regenerate metadata.json, bust manifest cache)
 ./holding/scripts/add-photos.sh "/path/to/photo.HIF" /path/to/folder/
 
@@ -47,18 +47,18 @@ Single-page personal site at `aadhar.sh`. Hosted on Cloudflare Pages, with a
 
 | file | role |
 |---|---|
-| `holding/index.html` | The whole page in one file. Inline CSS + JS. ~65KB uncompressed, ~19KB brotli. Comments deliberately kept for the `/source` view. |
+| `holding/index.html` | The whole page in one file. Inline CSS + JS. ~65KB uncompressed, ~19KB brotli. Comments deliberately kept readable for View Source. |
 | `holding/writing/` | Written content as plain `.txt` files + `posts.json` registry `[{slug,title,date}]`. The worker renders each as an XP **Notepad** window at `/writing/<slug>` (a server-rendered `<textarea>` seeded with the canonical text — editable by nature, ephemeral by nature: no save → reload restores canonical, "writing in flux"), plus a "My Writing" folder index at `/writing`. Raw `.txt` stays fetchable at `/writing/<slug>.txt`. Author a post = drop a `.txt` + a `posts.json` entry. Render code (`handleWritingIndex`/`handleWritingPost`/`NOTEPAD_CSS`) lives in `_worker.js`. |
-| `holding/notepad.js` | Behavior for the `/writing` Notepad view (deferred, SW-cached): working File/Edit/Format/View/Help menus, live Ln/Col + word-count status bar, Word-Wrap toggle, the classic **F5 time/date** stamp, Select All, Print, About. Chrome itself is SSR'd by `_worker.js`; this only wires interactions. No-op without a `.np-window`. |
-| `holding/nav.js` | Site-wide XP **taskbar + Run command palette**. The ONE shared external asset (deferred, SW-cached) — every page includes `<script src="/nav.js" defer>`; it injects its own `<style>` + builds the taskbar (Start orb → Run, pinned footer profiles, clock) and the Run dialog into `<body>`. Opens via ⌘K / Start / taskbar. Destinations: pages + profiles inline; 131 photos lazy-loaded from `/images/manifest.json` with `/images/alt.json` captions as search labels. Wired into homepage + all garage pages + worker-gen `/around`,`/whoareyou`,`/bot` + serendipity shell. |
-| `holding/_worker.js` | Pages-Worker hybrid. Owns routing, photo serving from R2, manifest building, Spotify playlist scraping, AadharshBot crawler, /source viewer, /coffee redirect, cache-control overrides. |
+| `holding/notepad.js` | Behavior for the `/writing` Notepad view (deferred, SW-cached): per-window `enhance()` wiring File/Edit/Format/View/Help menus, live Ln/Col + word-count status bar, Word-Wrap toggle, the classic **F5 time/date** stamp (Temporal w/ Date fallback), Select All, Print, About. Also opens folder notes as **popovers** that composite over the folder index (+ `pushState` to `/writing/<slug>`, Back closes). Chrome itself is SSR'd by `_worker.js`. No-op without a `.np-window`. |
+| `holding/nav.js` | Site-wide XP **desktop shell**. The ONE shared external asset (deferred, SW-cached) — every page includes `<script src="/nav.js" defer>`; it injects its own `<style>` + builds, into `<body>`: the **Bliss desktop** wallpaper, **draggable desktop icons** (Notepad + the 5 profiles, positions persisted in localStorage), the **taskbar** (Start orb → Run, first-level-subpage app buttons each with a per-section SVG icon, clock via Temporal), and the **Run** command palette (⌘K / Start). Also owns the **OS-window model**: body is a clipping flex desktop, each `.window`/`.np-window` is pinned + its content scrolls internally behind a **custom XP scrollbar**, windows are **draggable** (top is a hard boundary) + **resizable**, and View Transitions animate only the window. Sets each first-level route's **tab favicon** to its section icon. Run destinations: pages + profiles inline; 146 photos lazy-loaded from `/images/manifest.json` with `/images/alt.json` captions. Wired into homepage + all garage pages + worker-gen `/around`,`/whoareyou`,`/bot` + serendipity shell. |
+| `holding/_worker.js` | Pages-Worker hybrid. Owns routing, photo serving from R2, manifest building, Spotify playlist scraping, AadharshBot crawler, the `/writing` Notepad pages, cache-control overrides. |
 | `holding/_headers` | Static-asset cache + security headers (CSP, Permissions-Policy, etc.). Applied to direct static-asset requests; the worker overrides cache-control for select paths. |
-| `holding/sw.js` | Service worker. `CACHE_VERSION = "aadhar-v5-webp-jpg"`. Cache-first for `/images/*` (content-addressed via `?v=N`), SWR for static text files, network-only for everything else. Bumping `CACHE_VERSION` sweeps old caches. |
+| `holding/sw.js` | Service worker. `CACHE_VERSION = "aadhar-v56-favicons"` (bump on every nav.js/notepad.js change). Cache-first for `/images/*` (content-addressed via `?v=N`), SWR for static text files, network-only for everything else. Bumping `CACHE_VERSION` sweeps old caches. |
 | `holding/llms.txt` | The llms.txt format — concise site summary for LLMs. Linked from `<link rel="alternate">`. |
 | `holding/index.md` | Markdown source of homepage copy (used by `/llms.txt` and as a fallback). |
 | `holding/sitemap.xml`, `robots.txt` | Standard SEO files. robots.txt explicitly allows AadharshBot. |
 | `holding/.well-known/http-message-signatures-directory` | JWKS for AadharshBot's Ed25519 public key (Web Bot Auth IETF draft). |
-| `holding/images/` | 120 thumbnails (1200px AVIF + JPG pairs) + `metadata.json` (EXIF index). 120 stems × 2 formats = 240 files. |
+| `holding/images/` | 146 thumbnails (1200px AVIF + JPG pairs) + `metadata.json` (EXIF index). 146 stems × 2 formats = 292 files. |
 | `holding/scripts/` | Photo-pipeline scripts (see below). |
 
 ### The photo pipeline
@@ -121,7 +121,7 @@ Photo thumbnails are dual-encoded AVIF + JPG, served via `<picture>`:
 
 **The `?v=N` query is critical.** Cloudflare's edge will cache a 404
 response for 4 hours if any URL gets hit during a deploy race window.
-The `THUMB_VERSION` constant (top of `_worker.js`, currently `10`) is
+The `THUMB_VERSION` constant (top of `_worker.js`, currently `18`) is
 appended as `?v=N` to every thumbnail URL in the pre-rendered HTML.
 **Bump it whenever you suspect cache poisoning** — bumping = fresh URLs =
 fresh edge cache lookup = bypass any poisoned 404.
@@ -180,13 +180,13 @@ the site doesn't actually serve. To verify:
   playlist tracks, photo manifest, artist profile pics, and a few crawler
   results. ~10K writes/day budget; we use a handful.
 - **PHOTOS_R2** — R2 bucket `aadhar-photos`, holds the SOOC originals
-  (~3 GB / 120 photos at FUJIFILM X-T5 + Leica resolution).
+  (~3 GB / 146 photos at FUJIFILM X-T5 + Leica resolution).
 - **ASSETS** — auto-bound by Pages, serves static files from the project.
 
 ### XP visual vocabulary (CSS)
 
 **Design system:** [`design/DESIGN.md`](design/DESIGN.md) is the Luna brief (canonical
-reference + DON'T-modernize guardrails); [`design/tokens.css`](design/tokens.css) is the
+reference + DON'T-modernize guardrails); [`design/tokens/`](design/tokens/) is the
 canonical token set (fonts, Luna palette, bevels, radii). Pull from those before
 hardcoding any color/font/bevel. Captions = Trebuchet MS, UI/body = Tahoma→Verdana,
 mono = Courier New — those three stacks only.

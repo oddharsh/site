@@ -11,7 +11,7 @@ a few of the moving parts:
 
   · the homepage is one HTML file. inline CSS, inline JS, no build
     step, no framework. you're meant to be able to read the whole
-    thing — that's what /source is for.
+    thing — just View Source.
 
   · photos are shot on a Fujifilm X-T50 and a Leica, then run through
     a little pipeline: resized, EXIF-rotated, and encoded twice —

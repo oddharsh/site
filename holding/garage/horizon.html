@@ -1505,8 +1505,8 @@ pointerout   -&gt; hidePopover()
         currently animate <code>max-height</code> to a hand-picked
         too-big number (which makes the easing curve wrong &mdash; the timing is
         spent on empty space) or measure <code>scrollHeight</code> in JS. The
-        <code>/source</code> viewer&apos;s collapsible sections and any future
-        FAQ-style disclosure would drop their measuring code entirely. But it&apos;s
+        collapsible disclosure sections (a code viewer, an FAQ, the garage
+        cards here) would drop their measuring code entirely. But it&apos;s
         <strong>Chrome 129 only</strong> &mdash; Safari and Firefox have not
         shipped it and WebKit has taken no position (<a href="https://github.com/WebKit/standards-positions/issues/348" rel="external">#348</a>),
         so the rule stays in the garage. The honest fallback is fine, though:
@@ -2264,7 +2264,7 @@ myButton.onclick = async () =&gt; {
       </p>
       <p class="hl-text" id="hl-text">This site is modeled after the recent wave of resto-mod cars &mdash; where you take a beloved chassis and formula and modernize it while retaining its soul.</p>
       <p class="replaces">
-        On the site: the <code>/source</code> viewer could syntax-highlight without
+        On the site: a code viewer could syntax-highlight without
         wrapping every token in a tag &mdash; cheaper DOM, and search-term highlighting
         that never disturbs the text it marks.
       </p>
