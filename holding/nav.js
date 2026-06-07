@@ -45,6 +45,17 @@
     { label: "Beli", url: "https://beliapp.com/users/aadharsh" },
     { label: "Spotify", url: "https://open.spotify.com/user/aadharsh2010" }
   ];
+
+  // first-level subpages — the full-fledged "apps" pinned to the taskbar.
+  var SUBPAGES = [
+    { label: "garage", path: "/garage/", hint: "prototypes + experiments", color: "oklch(70% 0.17 50)" },
+    { label: "writing", path: "/writing", hint: "notes, in flux — an editable notepad", color: "oklch(82% 0.14 95)" },
+    { label: "serendipity", path: "/serendipity", hint: "events worth going to", color: "oklch(62% 0.18 300)" },
+    { label: "around", path: "/around", hint: "the crypto-VC neighborhood", color: "oklch(70% 0.12 200)" },
+    { label: "whoareyou", path: "/whoareyou", hint: "for agents + the curious", color: "oklch(64% 0.16 250)" },
+    { label: "music", path: "/rn", hint: "what I'm listening to right now", color: "oklch(68% 0.18 145)" },
+    { label: "coffee", path: "/coffee", hint: "book a coffee / bagel", color: "oklch(58% 0.10 60)" }
+  ];
   var PHOTOS = null;          // lazy: [{ label, path, hint, kind:'photo' }]
   var WRITING = null;         // lazy: [{ label, path, hint, kind:'writing' }]
   var photosPromise = null, writingPromise = null;
@@ -152,10 +163,27 @@
 "#axp-cone{flex:0 0 auto;width:15px;height:15px;position:relative;margin-right:1px;filter:drop-shadow(1px 1px 1px oklch(25% 0.05 30 / .5))}" +
 "#axp-cone::before{content:'';position:absolute;left:0;right:0;top:0;bottom:2px;clip-path:polygon(50% 0,100% 100%,0 100%);background:linear-gradient(180deg,oklch(64% 0.22 38) 0 34%,oklch(97% 0.02 80) 34% 48%,oklch(64% 0.22 38) 48% 70%,oklch(97% 0.02 80) 70% 82%,oklch(64% 0.22 38) 82% 100%)}" +
 "#axp-cone::after{content:'';position:absolute;left:1px;right:1px;bottom:0;height:3px;border-radius:1px;background:oklch(70% 0.19 55)}" +
-// pinned profile apps. NB: these are <a> tags, so the host page's a:hover /
-// a:visited rules would otherwise bleed in (red/purple text, underlines) — pin
-// every link state explicitly to white + no underline.
-"#axp-pins{display:flex;align-items:center;gap:3px;padding:0 3px}" +
+// ── Quick Launch ── profiles as small era-evoking app icons (right of Start).
+// Stylized CSS glyphs + brand colours — deliberately NOT pixel-repros of the
+// trademarked marks (a generic camera, an @, a music note, lettermarks); keeps
+// the strip image-byte-free and out of trademark territory.
+"#axp-ql{display:flex;align-items:center;gap:1px;padding:0 3px}" +
+".axp-qi,.axp-qi:link,.axp-qi:visited,.axp-qi:hover,.axp-qi:active{text-decoration:none}" +
+".axp-qi{display:flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:2px;border:1px solid transparent;cursor:pointer;position:relative}" +
+".axp-qi:hover{border-color:oklch(86% 0.07 250 / .65);background:oklch(100% 0 0 / .14);box-shadow:inset 1px 1px 0 oklch(100% 0 0 / .35),inset -1px -1px 0 oklch(40% 0.14 260 / .4)}" +
+".axp-qi:active{box-shadow:inset 1px 1px 2px oklch(30% 0.12 261 / .6)}" +
+".axp-qi .ic{width:16px;height:16px;border-radius:3px;display:flex;align-items:center;justify-content:center;color:oklch(100% 0 0);font-weight:bold;font-size:11px;line-height:1;font-family:var(--font-caption,'Trebuchet MS',Verdana,sans-serif);text-shadow:0 1px 1px oklch(0% 0 0 / .35);box-shadow:inset 0 1px 0 oklch(100% 0 0 / .5),inset 0 -1px 1px oklch(0% 0 0 / .25),0 1px 1px oklch(0% 0 0 / .4)}" +
+// generic camera glyph for the photo app (rounded body + lens + flash nub)
+".axp-qi .cam{width:11px;height:8px;border:1.4px solid oklch(100% 0 0);border-radius:2px;position:relative;box-sizing:border-box}" +
+".axp-qi .cam::before{content:'';position:absolute;left:50%;top:50%;width:4px;height:4px;margin:-2px 0 0 -2px;border:1.4px solid oklch(100% 0 0);border-radius:50%;box-sizing:border-box}" +
+".axp-qi .cam::after{content:'';position:absolute;right:0;top:-3px;width:3px;height:1.6px;background:oklch(100% 0 0);border-radius:1px}" +
+// engraved vertical divider between Quick Launch and the app buttons
+".axp-sep{flex:0 0 auto;width:0;height:18px;margin:0 5px;border-left:1px solid oklch(38% 0.16 262);border-right:1px solid oklch(66% 0.15 254)}" +
+// app buttons (first-level subpages). NB: these are <a> tags, so the host page's
+// a:hover / a:visited rules would otherwise bleed in (red/purple text,
+// underlines) — pin every link state explicitly to white + no underline.
+"#axp-pins{display:flex;align-items:center;gap:3px;padding:0 3px;min-width:0}" +
+".axp-pin .lbl{overflow:hidden;text-overflow:ellipsis;max-width:92px}" +
 ".axp-pin,.axp-pin:link,.axp-pin:visited,.axp-pin:hover,.axp-pin:active{color:oklch(100% 0 0);text-decoration:none}" +
 ".axp-pin{display:flex;align-items:center;gap:6px;height:23px;padding:0 10px;cursor:pointer;font-family:inherit;font-size:11px;border-radius:2px;" +
 "border:1px solid oklch(72% 0.12 254);border-bottom-color:oklch(42% 0.17 261);" +
@@ -236,10 +264,21 @@
     var start = el('<button id="axp-start" type="button" aria-haspopup="dialog" aria-expanded="false" title="Run — navigate the site (⌘K)"><span id="axp-cone" aria-hidden="true"></span>start</button>');
     start.addEventListener("click", function () { openRun(); });
     bar.appendChild(start);
-    var pins = el('<div id="axp-pins"></div>');
+    // Quick Launch — profiles as small app icons
+    var ql = el('<div id="axp-ql" aria-label="quick launch"></div>');
     PROFILES.forEach(function (p) {
-      var b = el('<a class="axp-pin" target="_blank" rel="noopener me external" title="' + p.label + ' — opens in a new tab"><b style="background:' + pinColor(p.label) + '"></b><span class="lbl">' + p.label + '</span></a>');
-      b.href = p.url; pins.appendChild(b);
+      var a = el('<a class="axp-qi" target="_blank" rel="noopener me external" title="' + p.label + ' — opens in a new tab"></a>');
+      a.href = p.url;
+      a.innerHTML = '<span class="ic" style="background:' + qlColor(p.label) + '">' + qlGlyph(p.label) + '</span>';
+      ql.appendChild(a);
+    });
+    bar.appendChild(ql);
+    bar.appendChild(el('<div class="axp-sep"></div>'));
+    // app buttons — first-level subpages (internal nav → View-Transition windows)
+    var pins = el('<div id="axp-pins"></div>');
+    SUBPAGES.forEach(function (s) {
+      var b = el('<a class="axp-pin" title="' + s.hint + '"><b style="background:' + s.color + '"></b><span class="lbl">' + s.label + '</span></a>');
+      b.href = s.path; pins.appendChild(b);
     });
     bar.appendChild(pins);
     bar.appendChild(el('<div id="axp-spacer"></div>'));
@@ -252,6 +291,25 @@
 
   function pinColor(name) {
     return { Twitter: "oklch(70% 0.14 233)", Instagram: "oklch(63% 0.2 9)", Curius: "oklch(64% 0.17 145)", Beli: "oklch(72% 0.18 60)", Spotify: "oklch(68% 0.18 145)" }[name] || "oklch(70% 0.05 255)";
+  }
+
+  // Quick Launch tile gradients — brand-evoking colours (Instagram gets the
+  // retro tan→brown of its original skeuomorphic camera, not the modern ramp).
+  function qlColor(name) {
+    return {
+      Twitter: "linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))",
+      Instagram: "linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))",
+      Curius: "linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))",
+      Beli: "linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))",
+      Spotify: "linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))"
+    }[name] || "linear-gradient(180deg,oklch(72% 0.05 255),oklch(60% 0.07 257))";
+  }
+
+  // generic, non-trademark glyphs: a CSS camera for the photo app, @ for the
+  // microblog, a music note for the player, lettermarks for the rest.
+  function qlGlyph(name) {
+    if (name === "Instagram") return '<i class="cam" aria-hidden="true"></i>';
+    return { Twitter: "@", Spotify: "♪", Curius: "C", Beli: "B" }[name] || name.charAt(0);
   }
 
   function tickClock() {
