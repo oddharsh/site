@@ -36,7 +36,15 @@ function avatar(name, size = 30) {
 }
 
 function relativeTime(date) {
-  const days = Math.floor((Date.now() - date.getTime()) / 86400000);
+  // whole-days elapsed, via Temporal when the runtime ships it (enable_temporal
+  // compat flag), else the plain epoch-ms delta. same output either way.
+  let days;
+  try {
+    if (typeof Temporal !== "undefined" && date.toTemporalInstant) {
+      days = Math.floor(Temporal.Now.instant().since(date.toTemporalInstant()).total({ unit: "hour" }) / 24);
+    }
+  } catch (e) {}
+  if (days === undefined) days = Math.floor((Date.now() - date.getTime()) / 86400000);
   if (days <= 0) return "today";
   if (days === 1) return "yesterday";
   if (days < 7) return `${days}d ago`;
@@ -47,10 +55,22 @@ function relativeTime(date) {
 
 function fmtDateTime(s) {
   if (!s) return "";
+  const opt = { weekday: "short", month: "short", day: "numeric" };
+  const topt = { hour: "numeric", minute: "2-digit" };
+  // Temporal when available: a wall-clock string shows as recorded; an instant
+  // shows in UTC (matching this Worker's clock). falls back to Date otherwise.
+  try {
+    if (typeof Temporal !== "undefined") {
+      const z = s.replace(" ", "T");
+      const pdt = /[zZ]|[+-]\d{2}:?\d{2}$/.test(z)
+        ? Temporal.Instant.from(z).toZonedDateTimeISO("UTC").toPlainDateTime()
+        : Temporal.PlainDateTime.from(z);
+      return pdt.toLocaleString("en-US", opt) + " · " + pdt.toLocaleString("en-US", topt);
+    }
+  } catch (e) {}
   const d = new Date(s);
   if (isNaN(d)) return "";
-  return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) +
-         " · " + d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  return d.toLocaleDateString("en-US", opt) + " · " + d.toLocaleTimeString("en-US", topt);
 }
 
 // influence/seniority proxy — ported verbatim from the Next app's attendeeScore.

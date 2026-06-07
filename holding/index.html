@@ -1001,21 +1001,39 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
         return `${(b/1024**3).toFixed(2)} GB`;
       };
       const fmtDate = (raw) => {
-        // accept both ISO ("YYYY-MM-DDTHH:MM:SSZ" from R2 upload
-        // timestamps) and Fuji EXIF format ("YYYY:MM:DD HH:MM:SS" from
-        // exiftool). normalize to ISO before parsing. output is the
-        // site convention: MM-DD-YYYY, HH:MM in 24-hour local time.
+        // accept both ISO ("YYYY-MM-DDTHH:MM:SSZ" from R2 upload timestamps) and
+        // Fuji EXIF format ("YYYY:MM:DD HH:MM:SS" from exiftool). output is the
+        // site convention: MM-DD-YYYY, HH:MM.
+        // EXIF capture time is a WALL CLOCK with no zone — `new Date()` would
+        // reinterpret it in the viewer's timezone and shift it. So we use
+        // Temporal.PlainDateTime (shows it exactly as recorded, everywhere), and
+        // even the no-Temporal fallback parses the parts directly rather than via
+        // Date. Upload timestamps ARE instants → shown in the viewer's local zone.
         if (!raw) return "";
-        let s = String(raw).trim()
+        const s = String(raw).trim()
           .replace(/^(\d{4}):(\d{2}):(\d{2})/, "$1-$2-$3")
           .replace(" ", "T");
-        const d = new Date(s);
-        if (isNaN(d)) return "";
-        const mm  = String(d.getMonth() + 1).padStart(2, "0");
-        const dd  = String(d.getDate()).padStart(2, "0");
-        const hh  = String(d.getHours()).padStart(2, "0");
-        const min = String(d.getMinutes()).padStart(2, "0");
-        return `${mm}-${dd}-${d.getFullYear()}, ${hh}:${min}`;
+        const p2 = (n) => String(n).padStart(2, "0");
+        const isInstant = /[zZ]|[+-]\d{2}:?\d{2}$/.test(s);
+        if (isInstant) {
+          try {
+            if (typeof Temporal !== "undefined") {
+              const z = Temporal.Instant.from(s).toZonedDateTimeISO(Temporal.Now.timeZoneId());
+              return `${p2(z.month)}-${p2(z.day)}-${z.year}, ${p2(z.hour)}:${p2(z.minute)}`;
+            }
+          } catch (e) {}
+          const d = new Date(s);
+          if (isNaN(d)) return "";
+          return `${p2(d.getMonth() + 1)}-${p2(d.getDate())}-${d.getFullYear()}, ${p2(d.getHours())}:${p2(d.getMinutes())}`;
+        }
+        try {
+          if (typeof Temporal !== "undefined") {
+            const t = Temporal.PlainDateTime.from(s);
+            return `${p2(t.month)}-${p2(t.day)}-${t.year}, ${p2(t.hour)}:${p2(t.minute)}`;
+          }
+        } catch (e) {}
+        const m = s.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+        return m ? `${m[2]}-${m[3]}-${m[1]}, ${m[4]}:${m[5]}` : "";
       };
       const esc = (s) => String(s ?? "")
         .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
