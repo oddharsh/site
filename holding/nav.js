@@ -153,7 +153,7 @@
 // scrolling body above. the fixed taskbar/desktop/icons/run sit outside this flow.)
 "body:has(.window),body:has(.np-window),body:has(.wrap){overflow:hidden !important;display:flex !important;flex-direction:column !important;align-items:center !important;padding:8px !important}" +
 // window frame: bounded to the desktop, sized to content but never taller than it.
-".window,.np-window,.wrap{flex:0 1 auto !important;min-height:0;max-height:100% !important;width:100%;margin:0 auto !important;box-sizing:border-box}" +
+".window,.np-window,.wrap{position:relative;z-index:2;flex:0 1 auto !important;min-height:0;max-height:100% !important;width:100%;margin:0 auto !important;box-sizing:border-box}" +
 ".window,.np-window{display:flex;flex-direction:column}" +
 ".window>.title-bar,.window>.titlebar,.np-window>.np-titlebar{flex:0 0 auto}" +
 // the scrolling region inside the frame (Notepad's .np-text already scrolls)
@@ -215,7 +215,7 @@
 // full-desktop layer (pointer-events pass through to the window EXCEPT on icons),
 // so icons can be dragged anywhere on the wallpaper. positions persist in
 // localStorage; default layout is a left column.
-"#axp-icons{position:fixed;inset:0;z-index:6;pointer-events:none;view-transition-name:axp-icons}" +
+"#axp-icons{position:fixed;inset:0;z-index:1;pointer-events:none;view-transition-name:axp-icons}" +
 ".axp-ico,.axp-ico:link,.axp-ico:visited,.axp-ico:hover,.axp-ico:active{color:oklch(100% 0 0);text-decoration:none}" +
 ".axp-ico{position:absolute;pointer-events:auto;display:flex;flex-direction:column;align-items:center;gap:4px;width:76px;padding:5px 3px 4px;box-sizing:border-box;border:1px solid transparent;border-radius:2px;cursor:pointer}" +
 ".axp-ico.axp-dragging{opacity:.8;z-index:7}" +

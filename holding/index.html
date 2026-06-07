@@ -428,14 +428,17 @@ hr {
 /* photo grid: each tile in a raised frame, like a contact sheet from
    a 2003 personal site. */
 .photos {
-  /* 3-column equal-area grid: every photo gets the same 1:1 cell regardless
-     of its native aspect ratio. object-fit:cover centers the crop. this keeps
-     all thumbnails at the same display size (~200px per side), so no photo is
-     rendered at more pixels than the 600px square thumbnail can support cleanly. */
+  /* equal-area grid of FIXED-size 1:1 cells (object-fit:cover centers the crop).
+     fixed columns (not 1fr) so thumbnails never rescale when the window is
+     resized — they reflow count instead. auto-fill + justify-content:center
+     keeps ~3 across in the default window and leaves a hover-safe gutter on each
+     side (so you can wheel-scroll there without tripping the photo tooltips). */
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fill, 184px);
+  justify-content: center;
   gap: 6px;
   margin: 14px 0 24px;
+  padding: 0 6px;
 }
 .photos a {
   display: block;
@@ -1333,9 +1336,15 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
       // hover target here (photos, tracks, artists, car links) — one tooltip engine.
       const TIP_DISMISS_MS = 50;
       let hideTimer = 0;
+      // while the content is actively scrolling (and a hair after it settles) we
+      // suppress tooltips entirely — scrolling shouldn't trip a popover just
+      // because the cursor happens to pass over a photo or track. tooltips return
+      // on the next intentional hover-move.
+      let scrolling = false, scrollIdle = 0;
       const cancelHide   = () => { clearTimeout(hideTimer); hideTimer = 0; };
       const scheduleHide = () => { clearTimeout(hideTimer); hideTimer = setTimeout(hideTip, TIP_DISMISS_MS); };
       const showTipFor = (target, e) => {
+        if (scrolling) return;               // don't pop a tooltip mid-scroll
         cancelHide();                        // a fresh show cancels any pending gap-dismissal
         dropAnchor();                        // pointer entry always uses cursor-follow
         activeSlot = target;
@@ -1383,18 +1392,15 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
       // last known lastX/lastY) and re-target. coalesced to one rAF tick.
       // position doesn't change here — the cursor didn't move, so --x/--y
       // are already correct; we only swap content.
-      let scrollFrame = 0;
-      const reevaluateAfterScroll = () => {
-        scrollFrame = 0;
-        if (!isOpen()) return;
-        const under = document.elementFromPoint(lastX, lastY);
-        const newTarget = findTarget(under);
-        if (!newTarget) { scheduleHide(); return; }   // debounced, same as pointer-leave
-        if (newTarget !== activeSlot) showTipFor(newTarget);
-      };
+      // any scroll (the window's internal content scroller bubbles to here in the
+      // capture phase) hides the tooltip and suppresses new ones until scrolling
+      // settles — so you can wheel over the photo grid / tracklist freely. the
+      // fixed-grid side gutters give a dead lane to rest the cursor in too.
       document.addEventListener("scroll", () => {
-        if (!isOpen()) return;
-        if (!scrollFrame) scrollFrame = requestAnimationFrame(reevaluateAfterScroll);
+        scrolling = true;
+        if (isOpen()) hideTip();
+        clearTimeout(scrollIdle);
+        scrollIdle = setTimeout(() => { scrolling = false; }, 220);
       }, { capture: true, passive: true });
 
       // ── keyboard-focus fallback ────────────────────────────────────────
