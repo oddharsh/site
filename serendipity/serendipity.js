@@ -184,6 +184,10 @@ function shellCss() {
   return `
   *{box-sizing:border-box}
   html,body{margin:0;padding:0;min-height:100%}
+  /* Bliss tone on the root so the cross-document View Transition (which freezes
+     the root group) shows the desktop colour, not a frame of white, before
+     nav.js paints the real wallpaper. */
+  html{background:linear-gradient(180deg,oklch(56% 0.13 250) 0%,oklch(73% 0.10 236) 50%,oklch(88% 0.05 232) 60%,oklch(60% 0.16 140) 100%)}
   body{background:linear-gradient(160deg,oklch(70% 0.11 240) 0%,oklch(78% 0.075 235) 45%,oklch(85% 0.045 235) 100%);background-attachment:fixed;font-family:var(--font-ui);font-size:12px;line-height:1.5;color:oklch(16% 0 0);font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased;scrollbar-color:oklch(64% 0.13 255) oklch(90% 0.025 250)}
   a{color:oklch(42% 0.235 264);text-decoration:underline}
   a:hover{color:oklch(60% 0.25 29)}

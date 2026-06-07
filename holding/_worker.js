@@ -630,8 +630,9 @@ function escHtml(s) {
 // the canonical copy). The prose ships in the HTML, so it's readable/crawlable with
 // JS off; notepad.js only adds the menus + Ln/Col status + the F5 date stamp.
 const NOTEPAD_CSS = `
+html{background:linear-gradient(180deg,oklch(56% 0.13 250) 0%,oklch(73% 0.10 236) 50%,oklch(88% 0.05 232) 60%,oklch(60% 0.16 140) 100%)}
 body.np-page{margin:0;min-height:100vh;padding:16px 12px 54px;color:oklch(21% 0 0);font-family:var(--font-ui);font-size:12px;
-background:linear-gradient(180deg,oklch(87.5% 0.028 248) 0%,oklch(94.7% 0.011 252) 220px,oklch(94.7% 0.011 252) 100%)}
+background:linear-gradient(180deg,oklch(56% 0.13 250) 0%,oklch(73% 0.10 236) 50%,oklch(88% 0.05 232) 60%,oklch(60% 0.16 140) 100%)}
 .np-window{max-width:860px;margin:0 auto;max-height:calc(100dvh - 78px);display:flex;flex-direction:column;background:oklch(100% 0 0);
 border:2px solid #0831d9;border-right-color:#001ea0;border-bottom-color:#001ea0;border-top-left-radius:8px;border-top-right-radius:8px;overflow:hidden;
 box-shadow:inset 1px 1px 0 #166aee,inset 2px 2px 0 #0855dd,inset -1px -1px 0 #00138c,inset -2px -2px 0 #003bda,4px 4px 0 rgba(0,30,160,.35)}
@@ -1626,8 +1627,14 @@ function decodeEntities(s) {
 function xpChromeCss(maxWidth) {
   return `
   * { box-sizing: border-box; }
+  /* first-paint background is the Bliss desktop tone on the ROOT (html) too —
+     the cross-document View-Transition freezes the root group, so if html were
+     white you'd get a frame of white flash before nav.js paints the real desktop.
+     matching html+body to the Bliss gradient kills that flash. */
+  html, body {
+    background: linear-gradient(180deg, oklch(56% 0.13 250) 0%, oklch(73% 0.10 236) 50%, oklch(88% 0.05 232) 60%, oklch(60% 0.16 140) 100%);
+  }
   body {
-    background: linear-gradient(180deg, oklch(87.51% 0.0281 248.15) 0%, oklch(94.66% 0.0114 252.09) 220px, oklch(94.66% 0.0114 252.09) 100%);
     font-family: Tahoma, Verdana, Geneva, sans-serif;
     font-size: 10.5pt; line-height: 1.5; color: oklch(21.78% 0 0);
     margin: 0; padding: 24px 12px 60px; min-height: 100vh;
