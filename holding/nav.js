@@ -143,7 +143,29 @@
 // it and never flows under the bar. html doesn't scroll. dvh tracks the mobile URL bar;
 // vh is the fallback. !important to beat each page's own min-height:100vh / overflow.
 "html{height:100dvh;overflow:hidden}" +
-"body{min-height:0 !important;height:calc(100vh - 30px) !important;height:calc(100dvh - 30px) !important;overflow-x:hidden !important;overflow-y:auto !important}" +
+// base: the desktop area is the viewport minus the taskbar (the hard floor).
+// windowless pages (e.g. the raw directory index) keep normal scrolling here.
+"body{min-height:0 !important;height:calc(100vh - 30px) !important;height:calc(100dvh - 30px) !important;overflow-x:hidden !important;overflow-y:auto !important;box-sizing:border-box}" +
+// OS-window model — only on pages that actually have a window. body becomes a
+// flex column that centres the single window and CLIPS overflow, so the window
+// is pinned: it never scrolls the page and can't slide under the taskbar. its
+// inner region scrolls instead. (:has gates this; old browsers fall back to the
+// scrolling body above. the fixed taskbar/desktop/icons/run sit outside this flow.)
+"body:has(.window),body:has(.np-window),body:has(.wrap){overflow:hidden !important;display:flex !important;flex-direction:column !important;align-items:center !important;padding:8px !important}" +
+// window frame: bounded to the desktop, sized to content but never taller than it.
+".window,.np-window,.wrap{flex:0 1 auto !important;min-height:0;max-height:100% !important;width:100%;margin:0 auto !important;box-sizing:border-box}" +
+".window,.np-window{display:flex;flex-direction:column}" +
+".window>.title-bar,.window>.titlebar,.np-window>.np-titlebar{flex:0 0 auto}" +
+// the scrolling region inside the frame (Notepad's .np-text already scrolls)
+".window>.content,.window>.body{flex:1 1 auto;min-height:0;overflow:auto}" +
+// serendipity nests its window in .wrap — make it a transparent flex pass-through
+".wrap{display:flex;flex-direction:column;padding-bottom:0 !important}.wrap>.window{flex:0 1 auto;max-height:100%}" +
+// skeuomorphic XP scrollbar inside the scrolling regions
+".window>.content,.window>.body,.np-text,#axp-run .list{scrollbar-color:oklch(62% 0.14 255) oklch(90% 0.02 250)}" +
+".window>.content::-webkit-scrollbar,.window>.body::-webkit-scrollbar,.np-text::-webkit-scrollbar{width:16px;height:16px}" +
+".window>.content::-webkit-scrollbar-track,.window>.body::-webkit-scrollbar-track,.np-text::-webkit-scrollbar-track{background:oklch(91% 0.02 250)}" +
+".window>.content::-webkit-scrollbar-thumb,.window>.body::-webkit-scrollbar-thumb,.np-text::-webkit-scrollbar-thumb{background:linear-gradient(90deg,oklch(74% 0.10 256),oklch(60% 0.16 257));border:1px solid oklch(48% 0.16 260);border-radius:2px}" +
+".window>.content::-webkit-scrollbar-thumb:hover,.window>.body::-webkit-scrollbar-thumb:hover,.np-text::-webkit-scrollbar-thumb:hover{background:linear-gradient(90deg,oklch(78% 0.11 256),oklch(64% 0.17 257))}" +
 "#axp-desktop{position:fixed;inset:0;z-index:-1;transform:translateZ(0);view-transition-name:axp-desktop;background:url(\"" + blissUrl + "\") center center/cover no-repeat}" +
 // windows drag by their title bar
 ".title-bar,.np-titlebar,.titlebar,#axp-run .tb{cursor:move}" +
