@@ -699,7 +699,7 @@ function writingShell(o) {
 // so it can composite over the folder index instead of being its own page.
 function notepadWindow(filename, text, closeHref, date, popId) {
   var open = popId
-    ? "<div class=\"np-window np-note\" id=\"" + escAttr(popId) + "\" popover=\"auto\">"
+    ? "<div class=\"np-window np-note\" id=\"" + escAttr(popId) + "\" popover=\"manual\">"
     : "<div class=\"np-window\">";
   return open +
     "<div class=\"np-titlebar\"><span class=\"np-ico\" aria-hidden=\"true\"></span>" +

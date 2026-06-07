@@ -158,50 +158,45 @@
   }
 
   // ── folder: open notes as popovers over the "selecting menu" ───────────────────
+  // notes are popover="manual" (NOT auto) so several can stay open at once like
+  // real windows — opening one doesn't light-dismiss the others. they cascade
+  // down-and-right so each new one is offset; close with ✕ or Esc (topmost first).
   function initFolder() {
     var files = D.querySelector(".np-files");
-    var supported = "showPopover" in HTMLElement.prototype;
-    if (!files || !supported) return;   // no-JS / old browsers just follow the links
+    if (!files || !("showPopover" in HTMLElement.prototype)) return;   // no-JS / old → follow links
 
     files.addEventListener("click", function (e) {
       var a = e.target.closest("a[data-note]"); if (!a) return;
       var pop = D.getElementById("note-" + a.dataset.note); if (!pop) return;
       e.preventDefault();
-      openNote(pop, a.dataset.note);
+      openNote(pop);
     });
 
-    // restore URL + close on Back/Forward
-    window.addEventListener("popstate", function (e) {
-      hideAllNotes();
-      var slug = e.state && e.state.note;
-      if (slug) { var p = D.getElementById("note-" + slug); if (p && !p.matches(":popover-open")) try { p.showPopover(); } catch (_) {} }
-    });
-
-    // when a note is dismissed (✕, Esc, click-away), step the URL back to /writing
-    [].forEach.call(D.querySelectorAll(".np-note"), function (pop) {
-      pop.addEventListener("toggle", function (ev) {
-        if (ev.newState === "closed" && history.state && history.state.note) { try { history.back(); } catch (_) {} }
-      });
+    // manual popovers don't close on Esc — wire it to close the topmost note
+    D.addEventListener("keydown", function (e) {
+      if (e.key !== "Escape") return;
+      var open = D.querySelectorAll(".np-note:popover-open");
+      if (open.length) { e.preventDefault(); open[open.length - 1].hidePopover(); }
     });
   }
-  function openNote(pop, slug) {
-    try { pop.showPopover(); } catch (_) { return; }
-    try { history.pushState({ note: slug }, "", "/writing/" + slug); } catch (_) {}
-    // cascade the note down-and-right of the folder so the "selecting menu"
-    // stays visible alongside it (clamped to the desktop).
-    var folder = D.querySelector(".np-folder");
-    if (folder) {
-      var fr = folder.getBoundingClientRect();
-      var nx = Math.max(8, Math.min(fr.left + 38, innerWidth - pop.offsetWidth - 8));
-      var ny = Math.max(8, Math.min(fr.top + 34, innerHeight - 30 - 80));
-      pop.style.margin = "0"; pop.style.right = "auto"; pop.style.left = nx + "px"; pop.style.top = ny + "px";
+  function openNote(pop) {
+    var ta = pop.querySelector(".np-text");
+    if (pop.matches(":popover-open")) {                 // already open → raise + focus
+      try { pop.hidePopover(); pop.showPopover(); } catch (_) {}
+      if (ta) ta.focus();
+      return;
     }
-    var t = pop.querySelector(".np-title"); if (t) D.title = t.textContent.replace(/ — Notepad$/, "") + " — Notepad · aadhar.sh";
-    var ta = pop.querySelector(".np-text"); if (ta) ta.focus();
+    var n = D.querySelectorAll(".np-note:popover-open").length;   // # already open → cascade step
+    try { pop.showPopover(); } catch (_) { return; }
+    var folder = D.querySelector(".np-folder");
+    var bx = (folder ? folder.getBoundingClientRect().left : 16) + 32;
+    var by = (folder ? folder.getBoundingClientRect().top : 8) + 30;
+    var step = 26;
+    var x = Math.max(8, Math.min(bx + n * step, innerWidth - pop.offsetWidth - 8));
+    var y = Math.max(8, Math.min(by + n * step, innerHeight - 30 - 90));
+    pop.style.margin = "0"; pop.style.right = "auto"; pop.style.left = x + "px"; pop.style.top = y + "px";
+    if (ta) ta.focus();
     window.dispatchEvent(new Event("resize"));   // nudge the custom scrollbar to (re)measure now it's visible
-  }
-  function hideAllNotes() {
-    [].forEach.call(D.querySelectorAll(".np-note"), function (p) { if (p.matches && p.matches(":popover-open")) p.hidePopover(); });
   }
 
   [].forEach.call(D.querySelectorAll(".np-window"), enhance);
