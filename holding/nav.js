@@ -47,10 +47,10 @@
   ];
 
   // desktop shortcuts — launchers that live on the wallpaper (not the taskbar).
-  // My Pictures + Notepad are "system folders"; profiles are internet shortcuts.
-  // (PROFILES objects are shared by reference — they get .path/.kind tagged below.)
+  // Notepad is a "system folder"; profiles are internet shortcuts. (PROFILES
+  // objects are shared by reference — they get .path/.kind tagged below.)
+  // (My Pictures was removed: there's no Apache-style R2 bucket view to open.)
   var DESKTOP = [
-    { label: "My Pictures", path: "/", kind: "pics", hint: "the photo grid" },
     { label: "Notepad", path: "/writing", kind: "note", hint: "writing, in flux" }
   ].concat(PROFILES);
 
@@ -160,12 +160,26 @@
 ".window>.content,.window>.body{flex:1 1 auto;min-height:0;overflow:auto}" +
 // serendipity nests its window in .wrap — make it a transparent flex pass-through
 ".wrap{display:flex;flex-direction:column;padding-bottom:0 !important}.wrap>.window{flex:0 1 auto;max-height:100%}" +
-// skeuomorphic XP scrollbar inside the scrolling regions
-".window>.content,.window>.body,.np-text,#axp-run .list{scrollbar-color:oklch(62% 0.14 255) oklch(90% 0.02 250)}" +
-".window>.content::-webkit-scrollbar,.window>.body::-webkit-scrollbar,.np-text::-webkit-scrollbar{width:16px;height:16px}" +
-".window>.content::-webkit-scrollbar-track,.window>.body::-webkit-scrollbar-track,.np-text::-webkit-scrollbar-track{background:oklch(91% 0.02 250)}" +
-".window>.content::-webkit-scrollbar-thumb,.window>.body::-webkit-scrollbar-thumb,.np-text::-webkit-scrollbar-thumb{background:linear-gradient(90deg,oklch(74% 0.10 256),oklch(60% 0.16 257));border:1px solid oklch(48% 0.16 260);border-radius:2px}" +
-".window>.content::-webkit-scrollbar-thumb:hover,.window>.body::-webkit-scrollbar-thumb:hover,.np-text::-webkit-scrollbar-thumb:hover{background:linear-gradient(90deg,oklch(78% 0.11 256),oklch(64% 0.17 257))}" +
+// strict windowing: HIDE the native scrollbar on the scroll regions — a custom
+// XP scrollbar (mounted by JS) rides the window's right edge instead. (the Run
+// list keeps a normal styled bar; it isn't a window.)
+".window>.content,.window>.body,.np-text{scrollbar-width:none;-ms-overflow-style:none}" +
+".window>.content::-webkit-scrollbar,.window>.body::-webkit-scrollbar,.np-text::-webkit-scrollbar{width:0;height:0;display:none}" +
+"#axp-run .list{scrollbar-color:oklch(62% 0.14 255) oklch(90% 0.02 250)}" +
+// reserve room on the right so content clears the custom bar (toggled when it shows)
+".axp-sb-pad{padding-right:20px !important}" +
+// the custom scrollbar widget: sunken track, raised thumb, raised arrow buttons
+".axp-sb{position:absolute;width:16px;display:flex;flex-direction:column;z-index:3;user-select:none;touch-action:none}" +
+".axp-sb-track{flex:1 1 auto;position:relative;background:oklch(92% 0.015 250);box-shadow:inset 1px 0 0 oklch(72% 0.03 250),inset -1px 0 0 oklch(100% 0 0)}" +
+".axp-sb-thumb{position:absolute;left:1px;right:1px;top:0;min-height:18px;border:1px solid;border-color:oklch(88% 0.05 256) oklch(46% 0.15 260) oklch(46% 0.15 260) oklch(88% 0.05 256);background:linear-gradient(90deg,oklch(80% 0.08 256),oklch(63% 0.16 257));box-shadow:inset 1px 1px 0 oklch(92% 0.06 250)}" +
+".axp-sb-thumb:hover{background:linear-gradient(90deg,oklch(84% 0.09 256),oklch(67% 0.17 257))}" +
+".axp-sb-up,.axp-sb-down{flex:0 0 auto;height:16px;border:1px solid;border-color:oklch(100% 0 0) oklch(50% 0.04 260) oklch(50% 0.04 260) oklch(100% 0 0);background:linear-gradient(180deg,oklch(98% 0.01 255),oklch(86% 0.03 256));padding:0;cursor:pointer;position:relative}" +
+".axp-sb-up:active,.axp-sb-down:active{border-color:oklch(50% 0.04 260) oklch(100% 0 0) oklch(100% 0 0) oklch(50% 0.04 260);background:linear-gradient(180deg,oklch(86% 0.03 256),oklch(94% 0.02 255))}" +
+".axp-sb-up::before,.axp-sb-down::before{content:'';position:absolute;left:50%;top:50%;width:0;height:0;border:3px solid transparent}" +
+".axp-sb-up::before{margin:-4px 0 0 -3px;border-bottom-color:oklch(28% 0.04 260)}" +
+".axp-sb-down::before{margin:-1px 0 0 -3px;border-top-color:oklch(28% 0.04 260)}" +
+// resize grip (bottom-right corner of every window)
+".axp-resize{position:absolute;right:1px;bottom:1px;width:14px;height:14px;cursor:nwse-resize;z-index:4;background:linear-gradient(135deg,transparent 0 38%,oklch(72% 0.04 256) 38% 50%,transparent 50% 60%,oklch(72% 0.04 256) 60% 72%,transparent 72% 84%,oklch(72% 0.04 256) 84% 96%,transparent 96%)}" +
 "#axp-desktop{position:fixed;inset:0;z-index:-1;transform:translateZ(0);view-transition-name:axp-desktop;background:url(\"" + blissUrl + "\") center center/cover no-repeat}" +
 // windows drag by their title bar
 ".title-bar,.np-titlebar,.titlebar,#axp-run .tb{cursor:move}" +
@@ -198,9 +212,13 @@
 // runnable apps. They sit ABOVE content (z-index) but only show on wide screens
 // where the centred window leaves a wallpaper gutter — so they don't overlap.
 // Stylized CSS glyphs + brand colours, no image bytes, no trademark repros.
-"#axp-icons{position:fixed;left:9px;top:9px;z-index:6;display:flex;flex-direction:column;align-items:flex-start;gap:11px;width:84px;view-transition-name:axp-icons}" +
+// full-desktop layer (pointer-events pass through to the window EXCEPT on icons),
+// so icons can be dragged anywhere on the wallpaper. positions persist in
+// localStorage; default layout is a left column.
+"#axp-icons{position:fixed;inset:0;z-index:6;pointer-events:none;view-transition-name:axp-icons}" +
 ".axp-ico,.axp-ico:link,.axp-ico:visited,.axp-ico:hover,.axp-ico:active{color:oklch(100% 0 0);text-decoration:none}" +
-".axp-ico{display:flex;flex-direction:column;align-items:center;gap:4px;width:100%;padding:5px 3px 4px;box-sizing:border-box;border:1px solid transparent;border-radius:2px;cursor:pointer}" +
+".axp-ico{position:absolute;pointer-events:auto;display:flex;flex-direction:column;align-items:center;gap:4px;width:76px;padding:5px 3px 4px;box-sizing:border-box;border:1px solid transparent;border-radius:2px;cursor:pointer}" +
+".axp-ico.axp-dragging{opacity:.8;z-index:7}" +
 ".axp-ico:hover{background:oklch(60% 0.20 263 / .26);border-color:oklch(74% 0.10 263 / .5)}" +
 ".axp-ico:focus-visible{outline:1px dotted oklch(100% 0 0);outline-offset:1px;background:oklch(60% 0.20 263 / .34)}" +
 ".axp-ico:active .ic{transform:translateY(1px)}" +
@@ -347,15 +365,24 @@
     return { Twitter: "@", Spotify: "♪", Curius: "C", Beli: "B" }[name] || name.charAt(0);
   }
 
+  // remembered desktop-icon positions (per label)
+  function iconPos() { try { return JSON.parse(localStorage.getItem("axp-icons-pos") || "{}"); } catch (_) { return {}; } }
+  function saveIconPos(p) { try { localStorage.setItem("axp-icons-pos", JSON.stringify(p)); } catch (_) {} }
+
   // build the desktop-shortcut layer on the wallpaper
   function buildIcons() {
     if (D.getElementById("axp-icons")) return;
     var wrap = el('<nav id="axp-icons" aria-label="desktop shortcuts"></nav>');
-    DESKTOP.forEach(function (it) {
+    var saved = iconPos();
+    DESKTOP.forEach(function (it, i) {
       var ext = it.kind === "profile";
       var a = el('<a class="axp-ico"' + (ext ? ' target="_blank" rel="noopener me external"' : "") +
         ' title="' + esc(it.hint || it.label) + (ext ? " — opens in a new tab" : "") + '"></a>');
       a.href = it.path;
+      a.dataset.key = it.label;
+      var p = saved[it.label];
+      a.style.left = (p ? p.x : 9) + "px";
+      a.style.top = (p ? p.y : 9 + i * 86) + "px";
       var cls = it.kind === "pics" ? "pic" : it.kind === "note" ? "note" : "";
       var style = ext ? ' style="background:' + qlColor(it.label) + '"' : "";
       var inner = ext ? qlGlyph(it.label) : "";
@@ -363,6 +390,44 @@
       wrap.appendChild(a);
     });
     D.body.appendChild(wrap);
+  }
+
+  // drag desktop icons around the wallpaper (transform-free: left/top, persisted).
+  // a movement threshold distinguishes a drag from a click so links still open.
+  function initIconDrag() {
+    var icons = D.getElementById("axp-icons"); if (!icons) return;
+    var cur = null, sx = 0, sy = 0, ox = 0, oy = 0, moved = false;
+    function mv(e) {
+      if (!cur) return;
+      var dx = e.clientX - sx, dy = e.clientY - sy;
+      if (!moved && Math.abs(dx) + Math.abs(dy) < 4) return;
+      moved = true; cur.classList.add("axp-dragging");
+      var nx = Math.max(0, Math.min(ox + dx, innerWidth - 76));
+      var ny = Math.max(0, Math.min(oy + dy, innerHeight - 30 - 72));
+      cur.style.left = nx + "px"; cur.style.top = ny + "px";
+    }
+    function up() {
+      D.removeEventListener("pointermove", mv);
+      if (cur && moved) {
+        cur.classList.remove("axp-dragging");
+        var p = iconPos(); p[cur.dataset.key] = { x: parseFloat(cur.style.left), y: parseFloat(cur.style.top) }; saveIconPos(p);
+      }
+      cur = null;
+    }
+    icons.addEventListener("pointerdown", function (e) {
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      var a = e.target.closest(".axp-ico"); if (!a) return;
+      cur = a; moved = false; sx = e.clientX; sy = e.clientY;
+      ox = parseFloat(a.style.left) || 0; oy = parseFloat(a.style.top) || 0;
+      try { a.setPointerCapture(e.pointerId); } catch (_) {}
+      D.addEventListener("pointermove", mv);
+      D.addEventListener("pointerup", up, { once: true });
+      D.addEventListener("pointercancel", up, { once: true });
+    });
+    // swallow the click that follows a real drag so the link doesn't navigate
+    icons.addEventListener("click", function (e) {
+      if (moved) { e.preventDefault(); e.stopPropagation(); moved = false; }
+    }, true);
   }
 
   // local wall-clock parts via Temporal when the browser ships it, else Date.
@@ -529,8 +594,18 @@
   // so it composes instead of jumping, which also makes the Run dialog draggable.
   // caption buttons + links are skipped so close/min/max keep working; touch scrolls.
   function initDrag() {
-    var win = null, sx = 0, sy = 0, base = "";
-    function move(e) { if (win) win.style.transform = base + "translate(" + (e.clientX - sx) + "px," + (e.clientY - sy) + "px)"; }
+    var win = null, sx = 0, sy = 0, base = "", r = null;
+    // clamp so the title bar can't leave the desktop: the TOP is a hard wall (you
+    // can't retrieve a window dragged off the top — there's no menu up there), and
+    // the bar can't slide under the taskbar or fully off the sides either.
+    function move(e) {
+      if (!win) return;
+      var dx = e.clientX - sx, dy = e.clientY - sy;
+      var vw = innerWidth, vh = innerHeight;
+      dy = Math.max(8 - r.top, Math.min(dy, (vh - 30 - 24) - r.top));
+      dx = Math.max((60 - r.width) - r.left, Math.min(dx, (vw - 60) - r.left));
+      win.style.transform = base + "translate(" + dx + "px," + dy + "px)";
+    }
     function up() { if (win) { win.classList.remove("axp-dragging"); D.removeEventListener("pointermove", move); win = null; } }
     D.addEventListener("pointerdown", function (e) {
       if (e.pointerType === "touch") return;                       // let touch scroll the page, not drag
@@ -541,6 +616,7 @@
       if (!w) return;
       var t = getComputedStyle(w).transform;
       base = (t && t !== "none") ? t + " " : "";
+      r = w.getBoundingClientRect();
       w.classList.add("axp-dragging");
       win = w; sx = e.clientX; sy = e.clientY;
       try { b.setPointerCapture(e.pointerId); } catch (_) {}
@@ -551,8 +627,85 @@
     });
   }
 
+  // ── custom XP scrollbar on the window frame ───────────────────────────────────
+  function mountScrollbar(frame, scroller) {
+    if (frame.querySelector(":scope > .axp-sb")) return;
+    if (getComputedStyle(frame).position === "static") frame.style.position = "relative";
+    var sb = el('<div class="axp-sb" aria-hidden="true"><button class="axp-sb-up" tabindex="-1"></button><div class="axp-sb-track"><div class="axp-sb-thumb"></div></div><button class="axp-sb-down" tabindex="-1"></button></div>');
+    frame.appendChild(sb);
+    var track = sb.querySelector(".axp-sb-track"), thumb = sb.querySelector(".axp-sb-thumb");
+    function place() { sb.style.top = scroller.offsetTop + "px"; sb.style.height = scroller.offsetHeight + "px"; sb.style.right = "2px"; }
+    function update() {
+      var sh = scroller.scrollHeight, ch = scroller.clientHeight;
+      if (sh - ch <= 1) { sb.style.display = "none"; scroller.classList.remove("axp-sb-pad"); return; }
+      sb.style.display = "flex"; scroller.classList.add("axp-sb-pad");
+      var th = track.clientHeight;
+      var thumbH = Math.max(18, Math.round(th * ch / sh));
+      var maxTop = th - thumbH;
+      thumb.style.height = thumbH + "px";
+      thumb.style.top = Math.round(maxTop * (scroller.scrollTop / (sh - ch))) + "px";
+    }
+    function refresh() { place(); update(); }
+    scroller.addEventListener("scroll", update, { passive: true });
+    thumb.addEventListener("pointerdown", function (e) {
+      e.preventDefault(); e.stopPropagation();
+      var startY = e.clientY, startScroll = scroller.scrollTop;
+      var sh = scroller.scrollHeight, ch = scroller.clientHeight;
+      var maxTop = track.clientHeight - thumb.offsetHeight;
+      function mv(ev) { var frac = maxTop > 0 ? (ev.clientY - startY) / maxTop : 0; scroller.scrollTop = startScroll + frac * (sh - ch); }
+      function done() { D.removeEventListener("pointermove", mv); }
+      try { thumb.setPointerCapture(e.pointerId); } catch (_) {}
+      D.addEventListener("pointermove", mv); D.addEventListener("pointerup", done, { once: true });
+    });
+    sb.querySelector(".axp-sb-up").addEventListener("click", function (e) { e.stopPropagation(); scroller.scrollBy({ top: -48 }); });
+    sb.querySelector(".axp-sb-down").addEventListener("click", function (e) { e.stopPropagation(); scroller.scrollBy({ top: 48 }); });
+    track.addEventListener("pointerdown", function (e) {
+      if (e.target !== track) return;
+      var rel = e.clientY - track.getBoundingClientRect().top;
+      var dir = rel < (thumb.offsetTop + thumb.offsetHeight / 2) ? -1 : 1;
+      scroller.scrollBy({ top: dir * scroller.clientHeight * 0.9 });
+    });
+    if (window.ResizeObserver) { var ro = new ResizeObserver(refresh); ro.observe(scroller); ro.observe(frame); }
+    window.addEventListener("resize", refresh);
+    window.addEventListener("load", refresh);
+    refresh();
+  }
+  function initScrollbars() {
+    [].forEach.call(D.querySelectorAll(".window"), function (w) {
+      var sc = w.querySelector(":scope > .content, :scope > .body");
+      if (sc) mountScrollbar(w, sc);
+    });
+    [].forEach.call(D.querySelectorAll(".np-window"), function (w) {
+      var sc = w.querySelector(".np-text");
+      if (sc) mountScrollbar(w, sc);
+    });
+  }
+
+  // ── resizable windows (bottom-right grip) ─────────────────────────────────────
+  function initResize() {
+    [].forEach.call(D.querySelectorAll(".window,.np-window"), function (f) {
+      if (f.querySelector(":scope > .axp-resize")) return;
+      if (getComputedStyle(f).position === "static") f.style.position = "relative";
+      var g = el('<div class="axp-resize" aria-hidden="true"></div>');
+      f.appendChild(g);
+      g.addEventListener("pointerdown", function (e) {
+        e.preventDefault(); e.stopPropagation();
+        var sx = e.clientX, sy = e.clientY, rc = f.getBoundingClientRect(), w0 = rc.width, h0 = rc.height;
+        f.classList.add("axp-dragging");
+        function mv(ev) {
+          var nw = Math.max(260, Math.min(w0 + (ev.clientX - sx), innerWidth - 16));
+          var nh = Math.max(140, Math.min(h0 + (ev.clientY - sy), innerHeight - 30 - 16));
+          f.style.width = nw + "px"; f.style.maxWidth = "none"; f.style.height = nh + "px";
+        }
+        function done() { D.removeEventListener("pointermove", mv); f.classList.remove("axp-dragging"); }
+        try { g.setPointerCapture(e.pointerId); } catch (_) {}
+        D.addEventListener("pointermove", mv); D.addEventListener("pointerup", done, { once: true });
+      });
+    });
+  }
+
   // ── boot ────────────────────────────────────────────────────────────────────
-  function boot() { injectCSS(); buildDesktop(); buildIcons(); buildTaskbar(); initDrag(); }
+  function boot() { injectCSS(); buildDesktop(); buildIcons(); buildTaskbar(); initDrag(); initIconDrag(); initScrollbars(); initResize(); }
   if (D.readyState === "loading") D.addEventListener("DOMContentLoaded", boot);
   else boot();
 })();
