@@ -465,31 +465,47 @@ placeholder
    .bsel- to avoid colliding with any future real <select> on the site. */
 .bsel-field {
   appearance: base-select;
-  /* XP "sunken" combobox: dark top-left, light bottom-right — same bevel
-     language as the cal/ form inputs. */
+  /* XP "sunken" combobox: dark top-left, light bottom-right + an inner shadow,
+     same bevel language as the cal/ form inputs. */
   font-family: var(--font-ui);
   font-size: 10.5pt;
   color: oklch(21.78% 0 0);
   background: oklch(100% 0 0);
   border: 2px solid;
   border-color: oklch(55% 0.02 250) oklch(94% 0.01 250) oklch(94% 0.01 250) oklch(55% 0.02 250);
-  padding: 4px 8px;
+  box-shadow: inset 1px 1px 1px oklch(0% 0 0 / 0.12);
+  /* tight right padding so the drop-button can hug the edge, like XP */
+  padding: 3px 3px 3px 8px;
   min-width: 220px;
   display: inline-flex;
-  align-items: center;
+  align-items: stretch;
   gap: 8px;
 }
 .bsel-field:focus-visible {
   outline: 1px dotted oklch(41.92% 0.0962 250.51);
   outline-offset: 1px;
 }
-/* The drop-arrow gets its own pseudo we can theme into a raised XP button. */
+/* The drop-arrow becomes the classic raised XP combobox button — a beveled
+   grey face (light TL / dark BR) that depresses (bevel inverts) when open. */
 .bsel-field::picker-icon {
   margin-left: auto;
-  color: oklch(41.92% 0.0962 250.51);
+  align-self: stretch;
+  width: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: oklch(24% 0.02 255);
+  background: linear-gradient(180deg, oklch(99% 0 0) 0%, oklch(91% 0.01 255) 46%, oklch(84% 0.02 255) 100%);
+  border: 1px solid;
+  border-color: oklch(100% 0 0) oklch(52% 0.03 255) oklch(52% 0.03 255) oklch(100% 0 0);
+  border-radius: 1px;
   transition: rotate 0.15s ease;
 }
-.bsel-field:open::picker-icon { rotate: 180deg; }
+.bsel-field:open::picker-icon {
+  rotate: 180deg;
+  background: linear-gradient(180deg, oklch(84% 0.02 255), oklch(93% 0.01 255));
+  border-color: oklch(52% 0.03 255) oklch(100% 0 0) oklch(100% 0 0) oklch(52% 0.03 255);
+}
 
 /* The popup itself — a real XP window dropping out of the field. */
 .bsel-field::picker(select) {

@@ -46,6 +46,14 @@
     { label: "Spotify", url: "https://open.spotify.com/user/aadharsh2010" }
   ];
 
+  // desktop shortcuts — launchers that live on the wallpaper (not the taskbar).
+  // My Pictures + Notepad are "system folders"; profiles are internet shortcuts.
+  // (PROFILES objects are shared by reference — they get .path/.kind tagged below.)
+  var DESKTOP = [
+    { label: "My Pictures", path: "/", kind: "pics", hint: "the photo grid" },
+    { label: "Notepad", path: "/writing", kind: "note", hint: "writing, in flux" }
+  ].concat(PROFILES);
+
   // first-level subpages — the full-fledged "apps" pinned to the taskbar.
   var SUBPAGES = [
     { label: "garage", path: "/garage/", hint: "prototypes + experiments", color: "oklch(70% 0.17 50)" },
@@ -143,7 +151,7 @@
 // transition ONLY the window — freeze the desktop, taskbar AND root groups so the
 // wallpaper + taskbar never cross-fade (that root cross-fade was the white flash).
 ".window,.np-window{view-transition-name:axp-window}" +
-"::view-transition-group(root),::view-transition-group(axp-desktop),::view-transition-group(axp-taskbar){animation:none !important}" +
+"::view-transition-group(root),::view-transition-group(axp-desktop),::view-transition-group(axp-taskbar),::view-transition-group(axp-icons){animation:none !important}" +
 "::view-transition-old(axp-window){animation:axp-vo .2s ease both}::view-transition-new(axp-window){animation:axp-vi .24s ease both}" +
 "@keyframes axp-vo{to{opacity:0;transform:scale(.985)}}@keyframes axp-vi{from{opacity:0;transform:scale(1.015)}}" +
 "@media (prefers-reduced-motion:reduce){::view-transition-old(axp-window),::view-transition-new(axp-window){animation:none}}" +
@@ -163,22 +171,34 @@
 "#axp-cone{flex:0 0 auto;width:15px;height:15px;position:relative;margin-right:1px;filter:drop-shadow(1px 1px 1px oklch(25% 0.05 30 / .5))}" +
 "#axp-cone::before{content:'';position:absolute;left:0;right:0;top:0;bottom:2px;clip-path:polygon(50% 0,100% 100%,0 100%);background:linear-gradient(180deg,oklch(64% 0.22 38) 0 34%,oklch(97% 0.02 80) 34% 48%,oklch(64% 0.22 38) 48% 70%,oklch(97% 0.02 80) 70% 82%,oklch(64% 0.22 38) 82% 100%)}" +
 "#axp-cone::after{content:'';position:absolute;left:1px;right:1px;bottom:0;height:3px;border-radius:1px;background:oklch(70% 0.19 55)}" +
-// ── Quick Launch ── profiles as small era-evoking app icons (right of Start).
-// Stylized CSS glyphs + brand colours — deliberately NOT pixel-repros of the
-// trademarked marks (a generic camera, an @, a music note, lettermarks); keeps
-// the strip image-byte-free and out of trademark territory.
-"#axp-ql{display:flex;align-items:center;gap:1px;padding:0 3px}" +
-".axp-qi,.axp-qi:link,.axp-qi:visited,.axp-qi:hover,.axp-qi:active{text-decoration:none}" +
-".axp-qi{display:flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:2px;border:1px solid transparent;cursor:pointer;position:relative}" +
-".axp-qi:hover{border-color:oklch(86% 0.07 250 / .65);background:oklch(100% 0 0 / .14);box-shadow:inset 1px 1px 0 oklch(100% 0 0 / .35),inset -1px -1px 0 oklch(40% 0.14 260 / .4)}" +
-".axp-qi:active{box-shadow:inset 1px 1px 2px oklch(30% 0.12 261 / .6)}" +
-".axp-qi .ic{width:16px;height:16px;border-radius:3px;display:flex;align-items:center;justify-content:center;color:oklch(100% 0 0);font-weight:bold;font-size:11px;line-height:1;font-family:var(--font-caption,'Trebuchet MS',Verdana,sans-serif);text-shadow:0 1px 1px oklch(0% 0 0 / .35);box-shadow:inset 0 1px 0 oklch(100% 0 0 / .5),inset 0 -1px 1px oklch(0% 0 0 / .25),0 1px 1px oklch(0% 0 0 / .4)}" +
+// ── Desktop shortcuts ── icons on the wallpaper (top-left, XP-style). The
+// philosophy: desktop = launchers (profiles + Pictures + Notepad), taskbar =
+// runnable apps. They sit ABOVE content (z-index) but only show on wide screens
+// where the centred window leaves a wallpaper gutter — so they don't overlap.
+// Stylized CSS glyphs + brand colours, no image bytes, no trademark repros.
+"#axp-icons{position:fixed;left:9px;top:9px;z-index:6;display:flex;flex-direction:column;align-items:flex-start;gap:11px;width:84px;view-transition-name:axp-icons}" +
+".axp-ico,.axp-ico:link,.axp-ico:visited,.axp-ico:hover,.axp-ico:active{color:oklch(100% 0 0);text-decoration:none}" +
+".axp-ico{display:flex;flex-direction:column;align-items:center;gap:4px;width:100%;padding:5px 3px 4px;box-sizing:border-box;border:1px solid transparent;border-radius:2px;cursor:pointer}" +
+".axp-ico:hover{background:oklch(60% 0.20 263 / .26);border-color:oklch(74% 0.10 263 / .5)}" +
+".axp-ico:focus-visible{outline:1px dotted oklch(100% 0 0);outline-offset:1px;background:oklch(60% 0.20 263 / .34)}" +
+".axp-ico:active .ic{transform:translateY(1px)}" +
+".axp-ico .ic{width:31px;height:31px;border-radius:5px;display:flex;align-items:center;justify-content:center;color:oklch(100% 0 0);font-weight:bold;font-size:18px;line-height:1;font-family:var(--font-caption,'Trebuchet MS',Verdana,sans-serif);text-shadow:0 1px 1px oklch(0% 0 0 / .4);box-shadow:inset 0 1px 0 oklch(100% 0 0 / .5),inset 0 -2px 2px oklch(0% 0 0 / .22),0 1px 2px oklch(0% 0 0 / .5)}" +
+// label: white text with the classic XP desktop drop shadow, up to two lines
+".axp-ico .t{font-size:11px;line-height:1.18;text-align:center;color:oklch(100% 0 0);text-shadow:0 1px 2px oklch(18% 0.04 263),0 0 3px oklch(18% 0.04 263);max-width:82px;overflow-wrap:anywhere}" +
+// My Pictures glyph: a tiny framed Bliss — sky, sun, rolling hill
+".axp-ico .pic{background:linear-gradient(180deg,oklch(72% 0.14 233) 0 56%,oklch(64% 0.17 140) 56% 100%);position:relative;overflow:hidden}" +
+".axp-ico .pic::before{content:'';position:absolute;left:6px;top:5px;width:7px;height:7px;border-radius:50%;background:oklch(95% 0.13 95);box-shadow:0 0 3px oklch(92% 0.16 95)}" +
+".axp-ico .pic::after{content:'';position:absolute;left:-3px;right:-3px;bottom:-4px;height:13px;border-radius:50% 60% 0 0/100% 100% 0 0;background:oklch(57% 0.18 142)}" +
+// Notepad glyph: white ruled page with a folded corner
+".axp-ico .note{background:linear-gradient(135deg,oklch(99% 0 0) 0 80%,oklch(82% 0.02 250) 80% 100%);position:relative}" +
+".axp-ico .note::before{content:'';position:absolute;left:7px;right:7px;top:9px;height:1px;background:oklch(58% 0.13 250);box-shadow:0 4px 0 oklch(58% 0.13 250),0 8px 0 oklch(58% 0.13 250),0 12px 0 oklch(58% 0.13 250)}" +
+".axp-ico .note::after{content:'';position:absolute;right:0;top:0;border-width:6px;border-style:solid;border-color:oklch(82% 0.02 250) oklch(99% 0 0) oklch(99% 0 0) oklch(82% 0.02 250)}" +
 // generic camera glyph for the photo app (rounded body + lens + flash nub)
-".axp-qi .cam{width:11px;height:8px;border:1.4px solid oklch(100% 0 0);border-radius:2px;position:relative;box-sizing:border-box}" +
-".axp-qi .cam::before{content:'';position:absolute;left:50%;top:50%;width:4px;height:4px;margin:-2px 0 0 -2px;border:1.4px solid oklch(100% 0 0);border-radius:50%;box-sizing:border-box}" +
-".axp-qi .cam::after{content:'';position:absolute;right:0;top:-3px;width:3px;height:1.6px;background:oklch(100% 0 0);border-radius:1px}" +
-// engraved vertical divider between Quick Launch and the app buttons
-".axp-sep{flex:0 0 auto;width:0;height:18px;margin:0 5px;border-left:1px solid oklch(38% 0.16 262);border-right:1px solid oklch(66% 0.15 254)}" +
+".axp-ico .cam{width:15px;height:11px;border:1.8px solid oklch(100% 0 0);border-radius:2px;position:relative;box-sizing:border-box}" +
+".axp-ico .cam::before{content:'';position:absolute;left:50%;top:50%;width:5px;height:5px;margin:-2.5px 0 0 -2.5px;border:1.8px solid oklch(100% 0 0);border-radius:50%;box-sizing:border-box}" +
+".axp-ico .cam::after{content:'';position:absolute;right:0;top:-4px;width:4px;height:2px;background:oklch(100% 0 0);border-radius:1px}" +
+// only show desktop icons when the centred window leaves a wallpaper gutter
+"@media (max-width:1023px){#axp-icons{display:none}}" +
 // app buttons (first-level subpages). NB: these are <a> tags, so the host page's
 // a:hover / a:visited rules would otherwise bleed in (red/purple text,
 // underlines) — pin every link state explicitly to white + no underline.
@@ -264,17 +284,10 @@
     var start = el('<button id="axp-start" type="button" aria-haspopup="dialog" aria-expanded="false" title="Run — navigate the site (⌘K)"><span id="axp-cone" aria-hidden="true"></span>start</button>');
     start.addEventListener("click", function () { openRun(); });
     bar.appendChild(start);
-    // Quick Launch — profiles as small app icons
-    var ql = el('<div id="axp-ql" aria-label="quick launch"></div>');
-    PROFILES.forEach(function (p) {
-      var a = el('<a class="axp-qi" target="_blank" rel="noopener me external" title="' + p.label + ' — opens in a new tab"></a>');
-      a.href = p.url;
-      a.innerHTML = '<span class="ic" style="background:' + qlColor(p.label) + '">' + qlGlyph(p.label) + '</span>';
-      ql.appendChild(a);
-    });
-    bar.appendChild(ql);
-    bar.appendChild(el('<div class="axp-sep"></div>'));
-    // app buttons — first-level subpages (internal nav → View-Transition windows)
+    // app buttons — first-level subpages (internal nav → View-Transition windows).
+    // profiles used to live here as Quick Launch; they're desktop shortcuts now —
+    // the taskbar holds only runnable "apps".
+    // (qlColor/qlGlyph are kept: the desktop profile icons reuse them.)
     var pins = el('<div id="axp-pins"></div>');
     SUBPAGES.forEach(function (s) {
       var b = el('<a class="axp-pin" title="' + s.hint + '"><b style="background:' + s.color + '"></b><span class="lbl">' + s.label + '</span></a>');
@@ -312,9 +325,37 @@
     return { Twitter: "@", Spotify: "♪", Curius: "C", Beli: "B" }[name] || name.charAt(0);
   }
 
+  // build the desktop-shortcut layer on the wallpaper
+  function buildIcons() {
+    if (D.getElementById("axp-icons")) return;
+    var wrap = el('<nav id="axp-icons" aria-label="desktop shortcuts"></nav>');
+    DESKTOP.forEach(function (it) {
+      var ext = it.kind === "profile";
+      var a = el('<a class="axp-ico"' + (ext ? ' target="_blank" rel="noopener me external"' : "") +
+        ' title="' + esc(it.hint || it.label) + (ext ? " — opens in a new tab" : "") + '"></a>');
+      a.href = it.path;
+      var cls = it.kind === "pics" ? "pic" : it.kind === "note" ? "note" : "";
+      var style = ext ? ' style="background:' + qlColor(it.label) + '"' : "";
+      var inner = ext ? qlGlyph(it.label) : "";
+      a.innerHTML = '<span class="ic ' + cls + '"' + style + " aria-hidden=\"true\">" + inner + "</span><span class=\"t\">" + esc(it.label) + "</span>";
+      wrap.appendChild(a);
+    });
+    D.body.appendChild(wrap);
+  }
+
+  // local wall-clock parts via Temporal when the browser ships it, else Date.
+  function nowHM() {
+    try {
+      if (typeof Temporal !== "undefined" && Temporal.Now && Temporal.Now.plainTimeISO) {
+        var t = Temporal.Now.plainTimeISO();
+        return { h: t.hour, m: t.minute };
+      }
+    } catch (e) {}
+    var d = new Date(); return { h: d.getHours(), m: d.getMinutes() };
+  }
   function tickClock() {
     var c = D.getElementById("axp-clock"); if (!c) return;
-    var d = new Date(), h = d.getHours(), m = d.getMinutes();
+    var t = nowHM(), h = t.h, m = t.m;
     var ap = h < 12 ? "AM" : "PM", hh = h % 12; if (hh === 0) hh = 12;
     c.textContent = hh + ":" + (m < 10 ? "0" + m : m) + " " + ap;
   }
@@ -343,6 +384,14 @@
     list.addEventListener("click", function (e) {
       var o = e.target.closest(".opt"); if (!o) return;
       go(results[+o.dataset.i]);
+    });
+    // XP list controls hot-track: the row under the cursor becomes the selection,
+    // so OK / Enter act on whatever you're hovering (not a stale keyboard pick).
+    list.addEventListener("mouseover", function (e) {
+      var o = e.target.closest(".opt"); if (!o) return;
+      var i = +o.dataset.i; if (i === sel) return;
+      sel = i;
+      [].forEach.call(list.querySelectorAll(".opt"), function (x) { x.setAttribute("aria-selected", +x.dataset.i === sel); });
     });
   }
 
@@ -481,7 +530,7 @@
   }
 
   // ── boot ────────────────────────────────────────────────────────────────────
-  function boot() { injectCSS(); buildDesktop(); buildTaskbar(); initDrag(); }
+  function boot() { injectCSS(); buildDesktop(); buildIcons(); buildTaskbar(); initDrag(); }
   if (D.readyState === "loading") D.addEventListener("DOMContentLoaded", boot);
   else boot();
 })();

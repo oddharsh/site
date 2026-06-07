@@ -47,10 +47,20 @@
   }
   function selectAll() { ta.focus(); ta.select(); }
   function insertDate() {
-    // classic Notepad F5: "h:mm AM/PM M/D/YYYY"
-    var d = new Date(), h = d.getHours(), ap = h < 12 ? "AM" : "PM", hh = h % 12 || 12;
-    var stamp = hh + ":" + String(d.getMinutes()).padStart(2, "0") + " " + ap + " " +
-      (d.getMonth() + 1) + "/" + d.getDate() + "/" + d.getFullYear();
+    // classic Notepad F5: "h:mm AM/PM M/D/YYYY". Prefer Temporal where the
+    // browser ships it; fall back to Date everywhere else.
+    var Y, Mo, Da, H, Mi;
+    try {
+      if (typeof Temporal !== "undefined" && Temporal.Now && Temporal.Now.plainDateTimeISO) {
+        var z = Temporal.Now.plainDateTimeISO();
+        Y = z.year; Mo = z.month; Da = z.day; H = z.hour; Mi = z.minute;
+      }
+    } catch (e) {}
+    if (Y === undefined) {
+      var d = new Date(); Y = d.getFullYear(); Mo = d.getMonth() + 1; Da = d.getDate(); H = d.getHours(); Mi = d.getMinutes();
+    }
+    var ap = H < 12 ? "AM" : "PM", hh = H % 12 || 12;
+    var stamp = hh + ":" + String(Mi).padStart(2, "0") + " " + ap + " " + Mo + "/" + Da + "/" + Y;
     var s = ta.selectionStart, e = ta.selectionEnd;
     ta.value = ta.value.slice(0, s) + stamp + ta.value.slice(e);
     ta.selectionStart = ta.selectionEnd = s + stamp.length;

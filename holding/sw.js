@@ -25,7 +25,7 @@
 // `?v=N` bumps on each deploy already cycle individual entries, but a
 // cache-version bump is the only way to sweep stale keys whose URL
 // pattern no longer matches anything we serve.
-const CACHE_VERSION = "aadhar-v50-quicklaunch";
+const CACHE_VERSION = "aadhar-v51-desktop";
 
 const CACHE_FIRST = [
   // image files only — NOT /images/ or /images/full/ themselves (those are
