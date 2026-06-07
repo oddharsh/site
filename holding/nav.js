@@ -162,6 +162,9 @@
 // base: the desktop area is the viewport minus the taskbar (the hard floor).
 // windowless pages (e.g. the raw directory index) keep normal scrolling here.
 "body{min-height:0 !important;height:calc(100vh - 30px) !important;height:calc(100dvh - 30px) !important;overflow-x:hidden !important;overflow-y:auto !important;box-sizing:border-box}" +
+// frontier typography, site-wide (headings with their own text-wrap:balance win):
+// prettier paragraph ragging where supported, normal wrapping where not.
+"body{text-wrap:pretty}" +
 // OS-window model — only on pages that actually have a window. body becomes a
 // flex column that centres the single window and CLIPS overflow, so the window
 // is pinned: it never scrolls the page and can't slide under the taskbar. its
@@ -730,7 +733,38 @@
     link.href = "data:image/svg+xml," + encodeURIComponent(SECTION_ICONS[sec.label]);
   }
 
-  function boot() { injectCSS(); buildDesktop(); buildIcons(); buildTaskbar(); initDrag(); initIconDrag(); initScrollbars(); initResize(); setFavicon(); }
+  // shell-wide Speculation Rules: prerender the shell's safe destinations on
+  // hover-intent (eagerness "moderate"), so opening a "window" (garage, writing,
+  // serendipity…) is near-instant and the View Transition plays on already-loaded
+  // content. excludes the homepage (counter), /around (live crawl), /whoareyou
+  // (transient), /rn (redirect), /coffee (transactional), images + raw text.
+  // unsupported browsers ignore the script → plain navigation. skips the homepage,
+  // which ships its own inline ruleset earlier in the HTML.
+  function injectSpeculation() {
+    if (D.querySelector('script[type="speculationrules"]')) return;
+    if (typeof HTMLScriptElement === "undefined" || !HTMLScriptElement.supports || !HTMLScriptElement.supports("speculationrules")) return;
+    var s = D.createElement("script");
+    s.type = "speculationrules";
+    s.textContent = JSON.stringify({
+      prerender: [{
+        where: { and: [
+          { href_matches: "/*" },
+          { not: { href_matches: "/" } },
+          { not: { href_matches: "/around*" } },
+          { not: { href_matches: "/whoareyou*" } },
+          { not: { href_matches: "/rn*" } },
+          { not: { href_matches: "/coffee*" } },
+          { not: { href_matches: "/images*" } },
+          { not: { href_matches: "/index.md" } },
+          { not: { href_matches: "/llms.txt" } }
+        ] },
+        eagerness: "moderate"
+      }]
+    });
+    D.body.appendChild(s);
+  }
+
+  function boot() { injectCSS(); buildDesktop(); buildIcons(); buildTaskbar(); initDrag(); initIconDrag(); initScrollbars(); initResize(); setFavicon(); injectSpeculation(); }
   if (D.readyState === "loading") D.addEventListener("DOMContentLoaded", boot);
   else boot();
 })();

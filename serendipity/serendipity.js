@@ -197,7 +197,12 @@ function shellCss() {
   .titlebar .x{width:21px;height:21px;border-radius:0;position:relative;border:1px solid #d8401c;text-decoration:none;background:linear-gradient(180deg,#e8795f,#e45f40 30%,#e45d3d 52%,#e2552a 80%,#ae3110)}
   .titlebar .x::before,.titlebar .x::after{content:"";position:absolute;left:50%;top:50%;width:13px;height:2px;margin:-1px 0 0 -6.5px;background:#fff;box-shadow:0 1px 0 rgba(0,0,0,.35)}
   .titlebar .x::before{transform:rotate(45deg)}.titlebar .x::after{transform:rotate(-45deg)}
+  /* windows are resizable now, so stack the master-detail on WINDOW width, not
+     just viewport. container query keys on .window; the @media below stays as the
+     viewport / no-container-support fallback. */
+  .window{container:serendipity-win / inline-size}
   .body{display:flex;min-height:520px}
+  @container serendipity-win (max-width:560px){.body{flex-direction:column}.pane{width:auto;border-right:0;border-bottom:2px solid #7a96c8}}
   /* under the shared OS-window model nav.js scrolls .window>.body; for this
      master-detail layout, scroll the main .content instead so the sidebar
      fills the full window height (no mid-scroll cutoff / "weird spot"). */
