@@ -648,6 +648,13 @@ background:oklch(93% 0.012 90);border-top:1px solid oklch(80% 0.02 90)}
 .np-status>span:not(.np-flex){padding:1px 8px;box-shadow:inset 1px 1px 0 oklch(78% 0.02 90),inset -1px -1px 0 oklch(100% 0 0)}
 .np-flex{flex:1;box-shadow:none}
 .np-edited{color:oklch(46% 0 0)}
+/* a note opened as a popover — floats over the folder ("selecting menu"),
+   clears the taskbar, and keeps the window chrome (drag/resize/scrollbar). */
+.np-note[popover]{position:fixed;left:0;right:0;top:10px;margin:0 auto;width:min(720px,calc(100vw - 32px));max-height:calc(100dvh - 48px) !important}
+.np-note[popover]::backdrop{background:transparent}
+/* CRITICAL: our .np-window{display:flex} would otherwise beat the UA
+   [popover]:not(:popover-open){display:none}, leaking closed notes into flow. */
+.np-note:not(:popover-open){display:none !important}
 /* folder index ("My Writing") */
 .np-folder{height:auto;min-height:0;max-width:560px}
 .np-folder-body{padding:14px 16px 6px}
@@ -688,12 +695,17 @@ function writingShell(o) {
     "<script src=\"/notepad.js\" defer></script><script src=\"/nav.js\" defer></script></body></html>";
 }
 
-function notepadWindow(filename, text, closeHref, date) {
-  return "<div class=\"np-window\">" +
+// popId (optional): render the window as an inline popover (id + popover="auto")
+// so it can composite over the folder index instead of being its own page.
+function notepadWindow(filename, text, closeHref, date, popId) {
+  var open = popId
+    ? "<div class=\"np-window np-note\" id=\"" + escAttr(popId) + "\" popover=\"auto\">"
+    : "<div class=\"np-window\">";
+  return open +
     "<div class=\"np-titlebar\"><span class=\"np-ico\" aria-hidden=\"true\"></span>" +
       "<span class=\"np-title\">" + escHtml(filename) + " — Notepad</span>" +
       "<span class=\"np-controls\"><span class=\"min\" aria-hidden=\"true\"></span><span class=\"max\" aria-hidden=\"true\"></span>" +
-      "<a class=\"close\" href=\"" + escAttr(closeHref) + "\" title=\"back to writing\" aria-label=\"Close\">✕</a></span></div>" +
+      "<a class=\"close\" href=\"" + escAttr(closeHref) + "\"" + (popId ? " data-pop" : "") + " title=\"back to writing\" aria-label=\"Close\">✕</a></span></div>" +
     "<div class=\"np-menubar\" role=\"menubar\" aria-label=\"menu\">" +
       "<span class=\"np-menu\">File</span><span class=\"np-menu\">Edit</span><span class=\"np-menu\">Format</span><span class=\"np-menu\">View</span><span class=\"np-menu\">Help</span></div>" +
     "<textarea class=\"np-text\" spellcheck=\"false\" aria-label=\"" + escAttr(filename) + "\">" + escHtml(text) + "</textarea>" +
@@ -732,10 +744,20 @@ async function handleWritingPost(slug, env, ctx) {
 async function handleWritingIndex(env, ctx) {
   const posts = await readPosts(env);
   const files = posts.map(function (p) {
-    return "<li><a href=\"/writing/" + escAttr(p.slug) + "\"><span class=\"np-file-ico\" aria-hidden=\"true\"></span>" +
+    const safe = String(p.slug).replace(/[^a-z0-9-]/gi, "");
+    return "<li><a href=\"/writing/" + escAttr(p.slug) + "\" data-note=\"" + escAttr(safe) + "\"><span class=\"np-file-ico\" aria-hidden=\"true\"></span>" +
       "<span class=\"np-file-name\">" + escHtml(p.title || p.slug) + ".txt</span>" +
       "<span class=\"np-file-meta\">Text Document" + (p.date ? " · " + escHtml(p.date) : "") + "</span></a></li>";
   }).join("");
+  // inline every note as a popover Notepad window, so opening one composites it
+  // over the folder (the "selecting menu") with no navigation. notes are tiny
+  // .txt — cheap to inline. the list <a>'s real href is the no-JS / permalink path.
+  const notes = (await Promise.all(posts.map(async function (p) {
+    const safe = String(p.slug).replace(/[^a-z0-9-]/gi, "");
+    let text = "";
+    try { const r = await env.ASSETS.fetch("https://a/writing/" + safe + ".txt"); if (r.ok) text = await r.text(); } catch {}
+    return notepadWindow((p.title || safe) + ".txt", text, "/writing", p.date, "note-" + safe);
+  }))).join("");
   const body = "<div class=\"np-window np-folder\">" +
     "<div class=\"np-titlebar\"><span class=\"np-ico\" aria-hidden=\"true\"></span>" +
       "<span class=\"np-title\">My Writing — aadhar.sh</span>" +
@@ -743,7 +765,8 @@ async function handleWritingIndex(env, ctx) {
       "<a class=\"close\" href=\"/\" title=\"back home\" aria-label=\"Close\">✕</a></span></div>" +
     "<div class=\"np-folder-body\"><p class=\"np-folder-intro\">Notes, in flux. Open one — it's a real text field you can edit, but it reverts to my canonical version on reload.</p>" +
       "<ul class=\"np-files\">" + (files || "<li><a><span class=\"np-file-name\">(nothing written yet)</span></a></li>") + "</ul></div>" +
-    "<div class=\"np-status\"><span>" + posts.length + (posts.length === 1 ? " document" : " documents") + "</span></div></div>";
+    "<div class=\"np-status\"><span>" + posts.length + (posts.length === 1 ? " document" : " documents") + "</span></div></div>" +
+    notes;
   return new Response(writingShell({ title: "Writing — aadhar.sh", path: "/writing", desc: "Notes in flux — an editable Notepad of writing that reverts to canonical on reload.", body: body }),
     { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=120" } });
 }
