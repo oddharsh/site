@@ -129,9 +129,13 @@
 // windows drag by their title bar
 ".title-bar,.np-titlebar,.titlebar,#axp-run .tb{cursor:move}" +
 ".axp-dragging{user-select:none;will-change:transform}.axp-dragging .title-bar,.axp-dragging .np-titlebar,.axp-dragging .titlebar,#axp-run.axp-dragging .tb{cursor:grabbing}" +
-"::view-transition-old(root){animation:axp-vo .18s ease both}::view-transition-new(root){animation:axp-vi .24s ease both}" +
-"@keyframes axp-vo{to{opacity:0;transform:scale(.975)}}@keyframes axp-vi{from{opacity:0;transform:scale(1.025)}}" +
-"@media (prefers-reduced-motion:reduce){::view-transition-old(root),::view-transition-new(root){animation:none}}" +
+// transition ONLY the window — freeze the desktop, taskbar AND root groups so the
+// wallpaper + taskbar never cross-fade (that root cross-fade was the white flash).
+".window,.np-window{view-transition-name:axp-window}" +
+"::view-transition-group(root),::view-transition-group(axp-desktop),::view-transition-group(axp-taskbar){animation:none !important}" +
+"::view-transition-old(axp-window){animation:axp-vo .2s ease both}::view-transition-new(axp-window){animation:axp-vi .24s ease both}" +
+"@keyframes axp-vo{to{opacity:0;transform:scale(.985)}}@keyframes axp-vi{from{opacity:0;transform:scale(1.015)}}" +
+"@media (prefers-reduced-motion:reduce){::view-transition-old(axp-window),::view-transition-new(axp-window){animation:none}}" +
 "#axp-taskbar{position:fixed;left:0;right:0;bottom:0;height:30px;z-index:99999;view-transition-name:axp-taskbar;display:flex;align-items:stretch;" +
 "font-family:var(--font-ui,Tahoma,Verdana,Geneva,sans-serif);font-size:11px;user-select:none;" +
 "background:linear-gradient(180deg,oklch(67% 0.15 256) 0%,oklch(58% 0.19 257) 4%,oklch(51% 0.20 258) 9%,oklch(49% 0.20 258) 50%,oklch(46% 0.20 259) 92%,oklch(40% 0.18 260) 100%);" +
