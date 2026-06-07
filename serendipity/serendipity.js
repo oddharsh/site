@@ -178,6 +178,11 @@ function shellCss() {
   .titlebar .x::before,.titlebar .x::after{content:"";position:absolute;left:50%;top:50%;width:13px;height:2px;margin:-1px 0 0 -6.5px;background:#fff;box-shadow:0 1px 0 rgba(0,0,0,.35)}
   .titlebar .x::before{transform:rotate(45deg)}.titlebar .x::after{transform:rotate(-45deg)}
   .body{display:flex;min-height:520px}
+  /* under the shared OS-window model nav.js scrolls .window>.body; for this
+     master-detail layout, scroll the main .content instead so the sidebar
+     fills the full window height (no mid-scroll cutoff / "weird spot"). */
+  .window>.body{overflow:hidden !important}
+  .body>.content{overflow:auto;min-height:0}
   .pane{width:200px;flex:0 0 auto;border-right:2px solid #7a96c8;background:linear-gradient(180deg,oklch(90% 0.055 245),oklch(93% 0.038 245));padding:12px}
   .pane .brand{display:block;padding:2px 4px 10px;color:oklch(16% 0 0);text-decoration:none}
   .pane .brand b{font:600 16pt "Trebuchet MS",Verdana,sans-serif;display:block;line-height:1}

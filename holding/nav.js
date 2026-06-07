@@ -174,6 +174,7 @@
 ".window>.title-bar,.window>.titlebar,.np-window>.np-titlebar{flex:0 0 auto}" +
 // the scrolling region inside the frame (Notepad's .np-text already scrolls)
 ".window>.content,.window>.body{flex:1 1 auto;min-height:0;overflow:auto}" +
+".np-window .np-text{flex:1 1 auto;min-height:0}" +   // textarea fills the window (so resizing a note grows the editor, not empty space)
 // serendipity nests its window in .wrap — make it a transparent flex pass-through
 ".wrap{display:flex;flex-direction:column;padding-bottom:0 !important}.wrap>.window{flex:0 1 auto;max-height:100%}" +
 // strict windowing: HIDE the native scrollbar on the scroll regions — a custom
@@ -694,6 +695,7 @@
   // ── resizable windows (bottom-right grip) ─────────────────────────────────────
   function initResize() {
     [].forEach.call(D.querySelectorAll(".window,.np-window"), function (f) {
+      if (f.classList.contains("np-folder")) return;   // folder hugs its content — not resizable
       if (f.querySelector(":scope > .axp-resize")) return;
       if (getComputedStyle(f).position === "static") f.style.position = "relative";
       var g = el('<div class="axp-resize" aria-hidden="true"></div>');
