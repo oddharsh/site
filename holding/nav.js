@@ -38,12 +38,14 @@
     { label: "garage · scroll", path: "/garage/scroll", hint: "XP scroll chrome" },
     { label: "garage · tooltips", path: "/garage/tooltips", hint: "tooltip experiments" }
   ];
+  // `icon` (when present) keys the tile colour + glyph; `hint` doubles as a Run
+  // search alias + tooltip, so "Photos"/"Music" still resolve to insta/spotify.
   var PROFILES = [
     { label: "Twitter", url: "https://twitter.com/oddhash" },
-    { label: "Instagram", url: "https://instagram.com/aadharsh.hif" },
+    { label: "Photos", icon: "Instagram", hint: "Instagram", url: "https://instagram.com/aadharsh.hif" },
     { label: "Curius", url: "https://curius.app/aadharsh-pannirselvam" },
     { label: "Beli", url: "https://beliapp.com/users/aadharsh" },
-    { label: "Spotify", url: "https://open.spotify.com/user/aadharsh2010" }
+    { label: "Music", icon: "Spotify", hint: "Spotify", url: "https://open.spotify.com/user/aadharsh2010" }
   ];
 
   // desktop shortcuts — launchers that live on the wallpaper (not the taskbar).
@@ -392,8 +394,8 @@
       a.style.left = (p ? p.x : 9) + "px";
       a.style.top = (p ? p.y : 9 + i * 86) + "px";
       var cls = it.kind === "note" ? "note" : "";
-      var style = ext ? ' style="background:' + qlColor(it.label) + '"' : "";
-      var inner = ext ? qlGlyph(it.label) : "";
+      var style = ext ? ' style="background:' + qlColor(it.icon || it.label) + '"' : "";
+      var inner = ext ? qlGlyph(it.icon || it.label) : "";
       a.innerHTML = '<span class="ic ' + cls + '"' + style + " aria-hidden=\"true\">" + inner + "</span><span class=\"t\">" + esc(it.label) + "</span>";
       wrap.appendChild(a);
     });
