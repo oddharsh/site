@@ -352,10 +352,26 @@ async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
     if (!counterIsBot) ctx.waitUntil(env.RN_KV.put("counter:visits", String(next)));
   }
 
+  // footer "Last modified" → the most recently added photo (a real, datable
+  // content change; the pool grows often). Pages assets are content-addressed
+  // (ETag, no Last-Modified) and there's no build step, so this is the cleanest
+  // auto-advancing source. floored by the hardcoded date in index.html (so a
+  // copy-only edit can still bump it by hand). null → hardcoded date stays.
+  let lastModStr = null, lastModISO = null;
+  if (photos && photos.length) {
+    let newest = 0;
+    for (const p of photos) { const t = p.uploaded ? Date.parse(p.uploaded) : NaN; if (!isNaN(t) && t > newest) newest = t; }
+    if (newest > 0) {
+      const d = new Date(newest);
+      lastModISO = d.toISOString().slice(0, 10);
+      lastModStr = d.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" });
+    }
+  }
+
   // bail if no dynamic data is available — the static HTML's inline
   // JS will pick up the slack on the client (and the hardcoded "000042"
   // stays in the footer as a graceful fallback).
-  if (!tracksPayload?.tracks?.length && !photos && !counterStr) return res;
+  if (!tracksPayload?.tracks?.length && !photos && !counterStr && !lastModStr) return res;
 
   const rewriter = new HTMLRewriter();
   let lcpAvif = null, lcpStem = null;  // first photo tile → responsive preload Link
@@ -439,6 +455,16 @@ async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
   if (counterStr) {
     rewriter.on(".counter", {
       element(el) { el.setInnerContent(counterStr); },
+    });
+  }
+
+  // ── footer "Last modified" → newest photo, floored by the hardcoded date ──
+  if (lastModStr) {
+    rewriter.on("footer time", {
+      element(el) {
+        const floor = el.getAttribute("datetime") || "";   // hardcoded date in index.html
+        if (lastModISO >= floor) { el.setAttribute("datetime", lastModISO); el.setInnerContent(lastModStr); }
+      },
     });
   }
 
