@@ -119,6 +119,12 @@
 // the shared Bliss desktop on a fixed layer behind everything; page bodies forced
 // transparent so it shows through (overriding each page's own body background).
 "html,body{background:transparent !important}" +
+// app-shell: the taskbar is a HARD FLOOR. the body is the scroll container and ends at
+// the taskbar's top (height = viewport − 30px taskbar), so page content scrolls within
+// it and never flows under the bar. html doesn't scroll. dvh tracks the mobile URL bar;
+// vh is the fallback. !important to beat each page's own min-height:100vh / overflow.
+"html{height:100dvh;overflow:hidden}" +
+"body{min-height:0 !important;height:calc(100vh - 30px) !important;height:calc(100dvh - 30px) !important;overflow-x:hidden !important;overflow-y:auto !important}" +
 "#axp-desktop{position:fixed;inset:0;z-index:-1;transform:translateZ(0);view-transition-name:axp-desktop;background:url(\"" + blissUrl + "\") center center/cover no-repeat}" +
 // windows drag by their title bar
 ".title-bar,.np-titlebar,.titlebar,#axp-run .tb{cursor:move}" +
@@ -383,14 +389,15 @@
     var d = D.createElement("div"); d.id = "axp-desktop"; d.setAttribute("aria-hidden", "true");
     D.body.insertBefore(d, D.body.firstChild);
   }
-  // grab a title bar → pin the window to its current spot (fixed) and let it roam the
-  // desktop. cosmetic + per-page (resets on navigation), like shoving a window around.
-  // caption buttons + links are skipped so close/min/max keep working.
+  // grab a title bar → drag the window with TRANSFORM ONLY (no position change), so it
+  // stays in normal flow and the page keeps scrolling. (the old version popped the
+  // window to position:fixed, which collapsed a content page's flow and broke its
+  // scroll.) base preserves any existing transform — e.g. the Run dialog's centering —
+  // so it composes instead of jumping, which also makes the Run dialog draggable.
+  // caption buttons + links are skipped so close/min/max keep working; touch scrolls.
   function initDrag() {
-    var win = null, sx = 0, sy = 0;
-    // compositor-only: drag with transform (not left/top) so each pointermove is a
-    // GPU transform, no layout/paint. re-based on every grab so it never accumulates.
-    function move(e) { if (win) win.style.transform = "translate(" + (e.clientX - sx) + "px," + (e.clientY - sy) + "px)"; }
+    var win = null, sx = 0, sy = 0, base = "";
+    function move(e) { if (win) win.style.transform = base + "translate(" + (e.clientX - sx) + "px," + (e.clientY - sy) + "px)"; }
     function up() { if (win) { win.classList.remove("axp-dragging"); D.removeEventListener("pointermove", move); win = null; } }
     D.addEventListener("pointerdown", function (e) {
       if (e.pointerType === "touch") return;                       // let touch scroll the page, not drag
@@ -399,12 +406,8 @@
       if (!b || e.target.closest("a,button,.controls,.np-controls,.x")) return;
       var w = b.closest(".window,.np-window,#axp-run");
       if (!w) return;
-      // pin to its current spot (fixed) — rect already includes any prior drag offset,
-      // so set left/top there and zero the transform → no jump, fresh relative drag.
-      var r = w.getBoundingClientRect();
-      w.style.position = "fixed"; w.style.margin = "0";
-      w.style.left = r.left + "px"; w.style.top = r.top + "px"; w.style.width = r.width + "px"; w.style.maxWidth = "none";
-      w.style.transform = "translate(0,0)";
+      var t = getComputedStyle(w).transform;
+      base = (t && t !== "none") ? t + " " : "";
       w.classList.add("axp-dragging");
       win = w; sx = e.clientX; sy = e.clientY;
       try { b.setPointerCapture(e.pointerId); } catch (_) {}
@@ -415,18 +418,8 @@
     });
   }
 
-  // ensure page content clears the fixed 30px taskbar on EVERY page — raise the body's
-  // bottom padding to a floor only where it's too low; never reduce a page that already
-  // spaces itself generously (homepage 64, garage 60, writing 54, serendipity wrap 48).
-  function clearForTaskbar() {
-    try {
-      var pb = parseFloat(getComputedStyle(D.body).paddingBottom) || 0;
-      if (pb < 38) D.body.style.paddingBottom = "38px";
-    } catch (e) {}
-  }
-
   // ── boot ────────────────────────────────────────────────────────────────────
-  function boot() { injectCSS(); buildDesktop(); buildTaskbar(); initDrag(); clearForTaskbar(); }
+  function boot() { injectCSS(); buildDesktop(); buildTaskbar(); initDrag(); }
   if (D.readyState === "loading") D.addEventListener("DOMContentLoaded", boot);
   else boot();
 })();
