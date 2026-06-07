@@ -119,7 +119,7 @@
 // the shared Bliss desktop on a fixed layer behind everything; page bodies forced
 // transparent so it shows through (overriding each page's own body background).
 "html,body{background:transparent !important}" +
-"#axp-desktop{position:fixed;inset:0;z-index:-1;view-transition-name:axp-desktop;background:url(\"" + blissUrl + "\") center center/cover no-repeat}" +
+"#axp-desktop{position:fixed;inset:0;z-index:-1;transform:translateZ(0);view-transition-name:axp-desktop;background:url(\"" + blissUrl + "\") center center/cover no-repeat}" +
 // windows drag by their title bar
 ".title-bar,.np-titlebar,.titlebar,#axp-run .tb{cursor:move}" +
 ".axp-dragging{user-select:none;will-change:transform}.axp-dragging .title-bar,.axp-dragging .np-titlebar,.axp-dragging .titlebar,#axp-run.axp-dragging .tb{cursor:grabbing}" +
