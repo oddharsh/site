@@ -654,7 +654,10 @@
     var sb = el('<div class="axp-sb" aria-hidden="true"><button class="axp-sb-up" tabindex="-1"></button><div class="axp-sb-track"><div class="axp-sb-thumb"></div></div><button class="axp-sb-down" tabindex="-1"></button></div>');
     frame.appendChild(sb);
     var track = sb.querySelector(".axp-sb-track"), thumb = sb.querySelector(".axp-sb-thumb");
-    function place() { sb.style.top = scroller.offsetTop + "px"; sb.style.height = scroller.offsetHeight + "px"; sb.style.right = "2px"; }
+    // inset the bar off the window's inner bevel (right + 1px top) and stop it
+    // 15px above the bottom so it doesn't pile onto the bevel or the resize grip
+    // in the bottom-right corner — like XP, where the corner is the sizing grip.
+    function place() { sb.style.top = (scroller.offsetTop + 1) + "px"; sb.style.height = Math.max(0, scroller.offsetHeight - 16) + "px"; sb.style.right = "3px"; }
     function update() {
       var sh = scroller.scrollHeight, ch = scroller.clientHeight;
       if (sh - ch <= 1) { sb.style.display = "none"; scroller.classList.remove("axp-sb-pad"); return; }
