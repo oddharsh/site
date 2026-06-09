@@ -803,21 +803,27 @@ async function handleWritingPost(slug, env, ctx) {
 
 async function handleWritingIndex(env, ctx) {
   const posts = await readPosts(env);
-  const files = posts.map(function (p) {
-    const safe = String(p.slug).replace(/[^a-z0-9-]/gi, "");
-    return "<li><a href=\"/writing/" + escAttr(p.slug) + "\" data-note=\"" + escAttr(safe) + "\"><span class=\"np-file-ico\" aria-hidden=\"true\"></span>" +
-      "<span class=\"np-file-name\">" + escHtml(p.title || p.slug) + ".txt</span>" +
-      "<span class=\"np-file-meta\">Text Document" + (p.date ? " · " + escHtml(p.date) : "") + "</span></a></li>";
-  }).join("");
-  // inline every note as a popover Notepad window, so opening one composites it
-  // over the folder (the "selecting menu") with no navigation. notes are tiny
-  // .txt — cheap to inline. the list <a>'s real href is the no-JS / permalink path.
-  const notes = (await Promise.all(posts.map(async function (p) {
+  // fetch each note's .txt once: the same text feeds the char count shown in
+  // the folder listing (so you see a file's size before you open it) AND the
+  // inline popover Notepad window below. notes are tiny — cheap to inline.
+  const fmtNum = function (n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ","); };
+  const entries = await Promise.all(posts.map(async function (p) {
     const safe = String(p.slug).replace(/[^a-z0-9-]/gi, "");
     let text = "";
     try { const r = await env.ASSETS.fetch("https://a/writing/" + safe + ".txt"); if (r.ok) text = await r.text(); } catch {}
-    return notepadWindow((p.title || safe) + ".txt", text, "/writing", p.date, "note-" + safe);
-  }))).join("");
+    return { p: p, safe: safe, text: text, chars: text.length };
+  }));
+  const files = entries.map(function (e) {
+    const size = fmtNum(e.chars) + (e.chars === 1 ? " character" : " characters");
+    return "<li><a href=\"/writing/" + escAttr(e.p.slug) + "\" data-note=\"" + escAttr(e.safe) + "\"><span class=\"np-file-ico\" aria-hidden=\"true\"></span>" +
+      "<span class=\"np-file-name\">" + escHtml(e.p.title || e.p.slug) + ".txt</span>" +
+      "<span class=\"np-file-meta\">Text Document · " + size + (e.p.date ? " · " + escHtml(e.p.date) : "") + "</span></a></li>";
+  }).join("");
+  // the list <a>'s real href is the no-JS / permalink path; opening one composites
+  // its popover Notepad over the folder (the "selecting menu") with no navigation.
+  const notes = entries.map(function (e) {
+    return notepadWindow((e.p.title || e.safe) + ".txt", e.text, "/writing", e.p.date, "note-" + e.safe);
+  }).join("");
   const body = "<div class=\"np-window np-folder\">" +
     "<div class=\"np-titlebar\"><span class=\"np-ico\" aria-hidden=\"true\"></span>" +
       "<span class=\"np-title\">aadhar.sh/writing</span>" +
@@ -825,7 +831,8 @@ async function handleWritingIndex(env, ctx) {
       "<a class=\"close\" href=\"/\" title=\"back home\" aria-label=\"Close\">✕</a></span></div>" +
     "<div class=\"np-folder-body\"><p class=\"np-folder-intro\">Notes, in flux. Open one — it's a real text field you can edit, but it reverts to my canonical version on reload.</p>" +
       "<ul class=\"np-files\">" + (files || "<li><a><span class=\"np-file-name\">(nothing written yet)</span></a></li>") + "</ul></div>" +
-    "<div class=\"np-status\"><span>" + posts.length + (posts.length === 1 ? " document" : " documents") + "</span></div></div>" +
+    "<div class=\"np-status\"><span>" + posts.length + (posts.length === 1 ? " document" : " documents") + "</span>" +
+      "<span>" + fmtNum(entries.reduce(function (a, e) { return a + e.chars; }, 0)) + " characters</span></div></div>" +
     notes;
   return new Response(writingShell({ title: "aadhar.sh/writing", path: "/writing", desc: "Notes in flux — an editable Notepad of writing that reverts to canonical on reload.", body: body }),
     { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=120" } });
