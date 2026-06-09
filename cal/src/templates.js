@@ -448,7 +448,7 @@ function shell(title, body, env) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${esc(env.HOST_NAME)} / coffee / ${esc(title)}</title>
+<title>${esc(env.HOST_NAME)}/coffee/${esc(title)}</title>
 <meta name="description" content="let's grab coffee or a bagel with ${esc(env.HOST_NAME)} in NYC. requests are reviewed by hand.">
 <meta name="theme-color" content="#0858a3">
 <style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}${STYLES}</style>
@@ -457,7 +457,7 @@ function shell(title, body, env) {
 <div class="xp-window">
   <div class="xp-title-bar">
     <span class="icon" aria-hidden="true"></span>
-    <span class="title">${esc(env.HOST_NAME)} / coffee / ${esc(title)}</span>
+    <span class="title">${esc(env.HOST_NAME)}/coffee/${esc(title)}</span>
     <span class="xp-controls"
       ><span class="min" title="minimize" aria-hidden="true"></span
       ><span class="max" title="maximize" aria-hidden="true"></span

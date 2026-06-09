@@ -303,12 +303,12 @@ function shell(title, currentPath, bodyHtml) {
   };
   return `<!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${esc(title) === "Serendipity" ? "aadhar.sh / serendipity" : "aadhar.sh / serendipity / " + esc(title)}</title>
+<title>${esc(title) === "Serendipity" ? "aadhar.sh/serendipity" : "aadhar.sh/serendipity/" + esc(title)}</title>
 <meta name="description" content="A public, shared database of events worth going to and who's going — fed by the collective, queryable by humans and agents.">
 <style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}${shellCss()}</style></head><body>
 <div class="wrap"><div class="window">
   <div class="titlebar"><span class="ico" aria-hidden="true"></span>
-    <span class="t">aadhar.sh / serendipity</span>
+    <span class="t">aadhar.sh/serendipity</span>
     <a class="x" href="/" title="back to aadhar.sh" aria-label="back to aadhar.sh"></a>
   </div>
   <div class="body">
