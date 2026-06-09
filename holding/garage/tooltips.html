@@ -713,7 +713,7 @@ footer {
 
     <h1>Tooltip Experiments</h1>
     <p class="lede">
-      Variants tried for the photo grid and tracklist on <a href="/">aadhar.sh</a>. Hover the slots and rows. The two photo variants below (Fuji LCD and XP-skinned camera readout) carry the same content shape, with different chrome; the third (vinyl) is a track-specific candidate. Status pills: <span class="status review">in review</span> are live candidates, <span class="status shipped">shipped</span> made it to the homepage, <span class="status dead">rejected</span> got tried and didn't, <span class="status ref">reference</span> is a comparison point.
+      Variants I tried for the photo grid and tracklist on <a href="/">aadhar.sh</a>. Hover the slots and rows. The two photo variants below (Fuji LCD and XP-skinned camera readout) carry the same content shape under different chrome; the third (vinyl) targets tracks only. Status pills: <span class="status review">in review</span> marks a live candidate, <span class="status shipped">shipped</span> reached the homepage, <span class="status dead">rejected</span> got tried and lost, <span class="status ref">reference</span> sits here as a comparison point.
     </p>
     <p class="lede" style="margin-top: 4px;">
       The live candidates share one architecture: popover API for show/hide, <code>@starting-style</code> for the entry fade, a small rAF-coalesced <code>translate3d</code> loop for cursor tracking. Roughly 100 lines of JS total.
@@ -726,10 +726,10 @@ footer {
 
     <h2>Fuji X-T LCD readout (photos) <span class="status review">in review</span></h2>
     <p class="note">
-      Hover any slot. Floating panel mimics the camera's image-review screen: histogram band on top, filename, exposure trio, recipe grid, footer. Follows the cursor. The slot itself stays untouched (no in-tooltip thumbnail; the larger slot image is already visible).
+      Hover any slot. The floating panel mimics the camera's image-review screen: histogram band on top, filename, exposure trio, recipe grid, footer. It follows the cursor. The slot itself stays untouched (no in-tooltip thumbnail; you can already see the larger slot image).
     </p>
     <p class="note">
-      Recipe values are real EXIF, pulled from <code>/images/metadata.json</code>. Earlier preview had fabricated values (XT508756 was tagged ACROS+R, which is B&amp;W only); fixed.
+      Each recipe value is real EXIF, pulled from <code>/images/metadata.json</code>. An earlier preview fabricated values (it tagged XT508756 ACROS+R, which shoots B&amp;W only); fixed.
     </p>
     <div class="row" id="photo-row">
       <a class="slot fuji-slot" href="#"
@@ -807,7 +807,7 @@ footer {
 
     <h2>Vinyl sleeve at cursor (tracks) <span class="status shipped">shipped</span></h2>
     <p class="note">
-      <b>The cover-at-cursor idea shipped</b> as the live tracklist tooltip on <a href="/">the homepage</a>, in a contact-sheet-style raised frame rather than this paper-mat <code>-6&deg;</code> tilt, but the same move: hover a row, the square album cover floats at the cursor like pulling a sleeve out to read the front. Same architecture as the photo tooltip; the row text stays put.
+      <b>The cover-at-cursor idea shipped</b> as the live tracklist tooltip on <a href="/">the homepage</a>, in a contact-sheet-style raised frame rather than this paper-mat <code>-6&deg;</code> tilt, but it makes the same move: hover a row, and the square album cover floats at the cursor like a sleeve you pull out to read the front. Same architecture as the photo tooltip; the row text stays put.
     </p>
     <ol class="vinyl-demo" id="track-row">
       <li data-art="https://image-cdn-fa.spotifycdn.com/image/ab67616d00001e0246f9bf1154c7205b0e8b1667">
@@ -857,7 +857,7 @@ footer {
 
     <h2>Polaroid flip (photos) <span class="status dead">rejected</span></h2>
     <div class="rejection">
-      <strong>Rejected:</strong> hover flips the slot 180&deg; via <code>transform: rotateY</code>, which means you see the metadata <em>or</em> the photo, never both. The whole point of the grid is the photos, so a tooltip should add to what's visible, not replace it. The same fault killed the first Fuji-LCD overlay design (v1, painted on top of the slot). Kept here as a record.
+      <strong>Rejected:</strong> hover flips the slot 180&deg; via <code>transform: rotateY</code>, so you see the metadata <em>or</em> the photo, never both. The grid exists to show the photos, so a tooltip should add to what you can see, not replace it. The same fault killed the first Fuji-LCD overlay (v1, painted on top of the slot). I kept this one as a record.
     </div>
     <div class="row polaroid">
       <a class="slot" href="#">
@@ -908,7 +908,7 @@ footer {
       Element-anchored rather than cursor-anchored. <b>This shipped.</b> It's the <a href="/">homepage</a>'s <em>keyboard-focus</em> tooltip path: mouse users get the cursor-follower, but a keyboard user tabbing to a slot has no cursor to track, so on <code>:focus-visible</code> the JS sets <code>anchor-name</code> on the focused element and the popover tethers to it via <code>position-anchor</code> / <code>position-area</code> (gated on <code>CSS.supports</code>, a clean no-op where unsupported).
     </p>
     <p class="note">
-      <b>Note: this is a keyboard fallback, and a keyboard fallback only, not a JS-disabled one.</b> Every live tooltip (here and on serendipity) is JS-orchestrated: JS populates the popover, calls <code>showPopover()</code>, and sets the <code>anchor-name</code>. With JS off, the popover stays empty and is never shown: no tooltip at all. This pure-CSS <code>:has(:hover)</code> demo below <em>would</em> work without JS, but it isn't wired into any live page; tooltips are progressive enhancement that simply vanish without script (the photos and links still work).
+      <b>Note: this is a keyboard fallback, and a keyboard fallback only, not a JS-disabled one.</b> JS orchestrates every live tooltip (here and on serendipity): it populates the popover, calls <code>showPopover()</code>, and sets the <code>anchor-name</code>. With JS off, the popover stays empty and never opens: no tooltip at all. This pure-CSS <code>:has(:hover)</code> demo below <em>would</em> work without JS, but it isn't wired into any live page; tooltips are progressive enhancement that simply vanish without script (the photos and links still work).
     </p>
     <div class="anchor-fallback">
       Your browser doesn't support <code>anchor-name</code> yet. Chrome 125+ or Safari TP shows this demo.

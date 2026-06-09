@@ -169,12 +169,12 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
 
     <h2>1 · Why the DOM is the slow path</h2>
     <p class="note">
-      The browser-native way to measure text is to put it in an element and read
+      To measure text the browser-native way, you put it in an element and read
       <code>offsetHeight</code> / <code>getBoundingClientRect()</code>. But those
       reads <em>force a synchronous reflow</em>: the browser must lay out
       the page right then to answer. Do it once and it&apos;s fine; do it in a
       loop (virtualized lists, measuring hundreds of items, re-measuring on every
-      resize frame) and reflow is one of the most expensive things on the main
+      resize frame) and a reflow becomes one of the costliest things on the main
       thread. pretext splits the work in two:
     </p>
     <ul>
@@ -250,8 +250,8 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
     <h2>5 · The payoff: re-layout cost</h2>
     <p class="note">
       Same paragraph, re-laid-out at many widths (the resize / virtualization
-      pattern). The DOM path forces a reflow each time; the canvas path is
-      arithmetic over the prepared widths (prepared <em>once</em>, outside the
+      pattern). The DOM path forces a reflow each time; the canvas path just
+      crunches arithmetic over the prepared widths (prepared <em>once</em>, outside the
       loop). Run it:
     </p>
     <p><button class="xp-btn" id="race">Race 2,000 re-layouts</button></p>

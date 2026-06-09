@@ -175,8 +175,8 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
   <div class="content">
     <h1>Chunking &amp; content-addressing <span class="status review">in review</span></h1>
     <p class="lede">
-      How big files get stored and synced by their <em>content</em>, not their
-      name, and why a one-byte edit means re-sending the whole file under
+      How systems store and sync big files by their <em>content</em>, not their
+      name, and why a one-byte edit re-sends the whole file under
       naïve chunking, but almost nothing under content-defined chunking.
     </p>
 
@@ -190,8 +190,8 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
       file by content, address each chunk by its hash, ship only the chunks that
       changed, and verify a slice without the whole) is what
       <a href="https://github.com/officialunofficial/mkit" rel="external">mkit</a>
-      does. Everything below is a self-contained, dependency-free re-creation of
-      those primitives, running in your browser.
+      does. Everything below re-creates those primitives, self-contained and
+      dependency-free, right in your browser.
     </p>
 
     <h2>1 · The boundary problem</h2>
@@ -239,7 +239,7 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
     <p class="note">
       A rolling <em>gear hash</em> slides over the bytes; wherever the hash's
       low bits hit a target pattern, that's a chunk boundary. Because the cut
-      points are decided by the <em>data</em>, inserting or deleting bytes only
+      points follow the <em>data</em>, inserting or deleting bytes only
       disturbs the boundaries you touched. The rest line up exactly as
       before. <code>min</code>/<code>max</code> clamp pathological sizes;
       "normalized" chunking tightens the mask before the average and
@@ -249,10 +249,10 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
     <h2>3 · Big files</h2>
     <p class="note">
       Content-addressing earns its keep on large blobs. Drop any file (it
-      never leaves your machine) and it's FastCDC-chunked locally
-      (avg 8&nbsp;KB), each chunk SHA-256'd into a content ID. The blocks are
-      drawn proportional to size so you can see the variable-length cuts; identical
-      chunks (a <code>ChunkedBlob</code>'s dedup win) are counted out.
+      never leaves your machine) and your browser FastCDC-chunks it locally
+      (avg 8&nbsp;KB), then SHA-256's each chunk into a content ID. The blocks
+      run proportional to size so you can see the variable-length cuts; the
+      demo counts out identical chunks (a <code>ChunkedBlob</code>'s dedup win).
     </p>
     <div class="drop" id="drop" tabindex="0" role="button">
       Drop a file here, or click to choose. Stays local.

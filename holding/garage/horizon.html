@@ -936,7 +936,7 @@ placeholder
       chromestatus, and the green/red <span class="wk sup" style="margin:0">WebKit</span>
       chips that quote Safari&apos;s team directly from
       <a href="https://webkit.org/standards-positions/" rel="external">webkit.org/standards-positions</a>,
-      so &quot;will Safari ever do this&quot; is answered by Safari, not inferred.
+      so Safari answers &quot;will Safari ever do this&quot;, instead of me inferring it.
     </p>
 
     <div class="cap-strip" id="caps" aria-label="feature support in your browser"></div>
@@ -966,8 +966,8 @@ placeholder
       </div>
       <div class="tb-bar trim">My Documents</div>
       <p class="replaces">
-        On the site: this is the clean fix for the optical-centering I
-        hand-tuned with magic-number padding on the XP title bars and the
+        On the site: this cleanly fixes the optical-centering I
+        hand-tuned with magic-number padding on the XP title bars, and ends the
         long Safari <code>&lt;h2&gt;</code> baseline saga. Now shipped in all
         three: Chrome&nbsp;133, Safari&nbsp;18.2, Firefox&nbsp;149.
       </p>
@@ -1041,9 +1041,9 @@ placeholder
 <pre>/* first hover waits; gliding between neighbours is instant */
 .photos:has(:interest-source) .photos a { interest-delay-start: 0s; }</pre>
       <p class="replaces">
-        On the site: this is the closest native replacement for the ~70-line
-        cursor-tooltip layer: it natively handles hover/focus detection,
-        the show/hide delay, and accessibility. <strong>But</strong> Safari
+        On the site: this comes closest to natively replacing the ~70-line
+        cursor-tooltip layer: it handles hover/focus detection,
+        the show/hide delay, and accessibility on its own. <strong>But</strong> Safari
         <em>opposes</em> the current design and it&apos;s Chrome origin-trial
         only, so it is <em>not</em> a migration path while the site cares about
         Safari (WebKit standards-position:
@@ -1112,7 +1112,7 @@ pointerout   -&gt; hidePopover()
         with <code>anchor-name: --xp-tip</code> and the <code>.xp-tooltip.anchored</code>
         rule uses <code>position-anchor</code> to tether it, so Tab-navigating
         the photo grid gets a properly-placed Fuji-LCD popover with no cursor to
-        follow. The broader win is everywhere I&apos;d otherwise reach for JS
+        follow. It wins everywhere I&apos;d otherwise reach for JS
         positioning: a future <code>/coffee</code> slot-picker dropdown, the
         artist popovers, any menu, all could anchor + auto-flip in CSS.
         It does <strong>not</strong> replace the pointer-following
@@ -1217,7 +1217,7 @@ pointerout   -&gt; hidePopover()
         <code>hint</code> would buy native light-dismiss, but the site
         only has <em>one</em> tooltip and it already manages its own lifecycle,
         so the win is marginal: I&apos;d still run the same JS to follow the
-        cursor and pick the content. <code>hint</code>&apos;s real payoff is the
+        cursor and pick the content. <code>hint</code> really pays off in the
         multi-popover case (a tip that coexists with an open menu) the homepage
         doesn&apos;t have. Filed as &quot;safe to adopt, low value here.&quot;
       </p>
@@ -1262,8 +1262,8 @@ pointerout   -&gt; hidePopover()
         <code>input</code>/<code>scrollHeight</code> auto-resize handler:
         the JS pattern that listens on <code>input</code>, zeroes the height,
         reads <code>scrollHeight</code>, and writes it back every keystroke. The
-        most direct beneficiary is <code>cal/</code>: the &quot;Your info&quot;
-        message box on the coffee-booking form can drop its resize script
+        coffee booker benefits most directly: <code>cal/</code>&apos;s &quot;Your info&quot;
+        message box on the booking form can drop its resize script
         entirely and just say <code>field-sizing: content; max-height: 9em</code>
         on the sunken XP textarea, with the layout reflowing for free. Now
         shipped in Chrome&nbsp;123 and Safari&nbsp;26.2 (Firefox not yet), so it can graduate to the live booking form,
@@ -1309,7 +1309,7 @@ pointerout   -&gt; hidePopover()
         still toggle instantly (just without the morph).
       </p>
       <p class="replaces">
-        On the site: the obvious fit is the photo grid: reshuffling the
+        On the site: the photo grid fits most obviously. Reshuffling the
         random 9, or expanding a thumbnail to its full-res
         <code>/images/full/</code> view, could morph the clicked frame into
         place by sharing a <code>view-transition-name</code> instead of a hard
@@ -1390,10 +1390,10 @@ pointerout   -&gt; hidePopover()
         </select>
       </p>
       <p class="replaces">
-        On the site: this is the native answer for the future <code>cal/</code>
+        On the site: this natively answers the future <code>cal/</code>
         booking dropdowns (timezone, slot length, meeting type): today
         those would mean a hand-rolled JS listbox to escape the un-styleable OS
-        popup, or accepting a system widget that shatters the XP illusion.
+        popup, or a system widget that shatters the XP illusion.
         base-select lets one real <code>&lt;select&gt;</code> carry the bevel,
         the alternating rows, and inline swatches/icons while keeping full
         keyboard + form semantics for free. <strong>But</strong> it is
@@ -1440,8 +1440,8 @@ pointerout   -&gt; hidePopover()
         <div class="body">A window frame with <code>scoop</code> top corners: one declaration, no SVG mask, no <code>clip-path</code> polygon.</div>
       </div>
       <p class="replaces">
-        On the site: this is the native replacement for the <code>clip-path:
-        polygon()</code> hack on the title-bar icon and any time I&apos;d reach
+        On the site: this natively replaces the <code>clip-path:
+        polygon()</code> hack on the title-bar icon, and any time I&apos;d reach
         for an SVG mask to cut a corner. A real squircle on the <code>.window</code>
         and photo-frame corners reads more 2006-Aqua than the flat
         <code>border-radius</code> arc does, and it stays a live border (shadow,
@@ -1501,10 +1501,10 @@ pointerout   -&gt; hidePopover()
       </details>
 
       <p class="replaces">
-        On the site: this is the native fix for every expand/collapse where I
+        On the site: this natively fixes every expand/collapse where I
         currently animate <code>max-height</code> to a hand-picked
-        too-big number (which makes the easing curve wrong: the timing is
-        spent on empty space) or measure <code>scrollHeight</code> in JS. The
+        too-big number (which throws off the easing curve: the timing
+        spends itself on empty space) or measure <code>scrollHeight</code> in JS. The
         collapsible disclosure sections (a code viewer, an FAQ, the garage
         cards here) would drop their measuring code entirely. But it&apos;s
         <strong>Chrome 129 only</strong>: Safari and Firefox have not
@@ -2728,7 +2728,7 @@ myButton.onclick = async () =&gt; {
       <h2><span>The long tail: independent engines</span></h2>
       <p class="note">
         &quot;The platform&quot; isn&apos;t only Chromium, Gecko, and WebKit. Two
-        engines are being built largely from scratch, a useful reminder
+        teams are building new engines largely from scratch, a useful reminder
         that the frontier above is the <em>front</em>, and most of the web runs
         well behind it. Both are pre-release and racing toward <em>baseline</em>,
         not chasing 2026 CSS, so on the features on this page they&apos;re mostly
@@ -2763,10 +2763,10 @@ myButton.onclick = async () =&gt; {
           focus areas; a desktop browser is still years out.
         </p>
         <p>
-          Its energy goes to layout fundamentals (flexbox, grid, tables,
-          floats) with recent adds like <code>cursor</code> color and
-          <code>content: image()</code>. The frontier CSS here (popover, anchor
-          positioning, text-box-trim) generally isn&apos;t implemented yet.
+          It spends its energy on layout fundamentals (flexbox, grid, tables,
+          floats), with recent adds like <code>cursor</code> color and
+          <code>content: image()</code>. It generally hasn&apos;t implemented the
+          frontier CSS here yet (popover, anchor positioning, text-box-trim).
         </p>
         <p class="s">
           Live: <a href="https://servo.org/blog/" rel="external">servo.org/blog</a>
@@ -2776,8 +2776,8 @@ myButton.onclick = async () =&gt; {
 
       <p class="replaces">
         The point: these two are <em>why</em> &quot;ship to baseline, prototype
-        the frontier&quot; is the right discipline. Supporting the independent,
-        indie-web engines means leaning on what&apos;s broadly shipped,
+        the frontier&quot; is the right discipline. To support the independent,
+        indie-web engines, I lean on what&apos;s broadly shipped,
         not what&apos;s newest in one browser. Good deep-dive comparison:
         <a href="https://www.youngju.dev/blog/culture/2026-05-14-browser-engines-2026-chromium-gecko-webkit-servo-ladybird-comparison-deep-dive.en" rel="external">Browser Engines 2026</a>.
       </p>
