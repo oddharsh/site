@@ -7,7 +7,8 @@ target — the goal is to stay tight and consistent with Luna, not to "modernize
 a 2020s SaaS app (rounded cards, soft blurred shadows, Inter/system-ui,
 flat-design gradients), it is **wrong by definition** here.
 
-Canonical token values live in [`tokens.css`](./tokens.css). Reusable class
+Canonical token values live in [`tokens/`](./tokens/) (colors, typography,
+bevels, fonts — one file each). Reusable class
 vocabulary (`.title-bar`, `.window`, `.content`, …) is documented in the root
 `CLAUDE.md` "XP visual vocabulary" section.
 

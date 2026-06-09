@@ -213,6 +213,27 @@ async function route(request, env, ctx) {
       });
     }
 
+    // /images/meta/<stem>.json — per-photo EXIF for the hover tooltip.
+    // same SPA-fallback hazard as metadata.json above, but worse: a
+    // missing file would fall through to Pages' index.html fallback
+    // (200 text/html) and the /images/* _headers rule would stamp it
+    // 1-year immutable — poisoning that photo's tooltip in the browser
+    // HTTP cache until META_V is bumped. guard: real JSON passes
+    // through, anything else becomes an uncacheable 404.
+    if (/^\/images\/meta\/[^/]+\.json$/i.test(url.pathname)) {
+      const res = await env.ASSETS.fetch(request);
+      const ct  = res.headers.get("content-type") || "";
+      if (ct.includes("json")) return res;
+      try { await res.body?.cancel(); } catch {}
+      return new Response('{"error":"not found"}', {
+        status: 404,
+        headers: {
+          "content-type":  "application/json; charset=utf-8",
+          "cache-control": "public, max-age=0, must-revalidate",
+        },
+      });
+    }
+
     // full-res photos live in R2 (aadhar-photos bucket, bound as
     // PHOTOS_R2). thumbnails stay inline in /images/ — they're tiny and
     // benefit from being on the same edge. only the chonky originals
@@ -263,7 +284,16 @@ async function route(request, env, ctx) {
     // and a rough x-markdown-tokens header. browsers asking for text/html
     // (or anything else) keep getting the HTML version as default —
     // with the music section pre-rendered for zero-flash arrival.
-    if (url.pathname === "/" || url.pathname === "/index.html") {
+    // /index.html → / — the _headers no-store rule matches the literal "/"
+    // path only, so serving the randomized homepage at this alias would let
+    // browsers heuristically cache a page that's supposed to re-randomize
+    // (and tick the counter) per visit. canonicalize instead.
+    if (url.pathname === "/index.html") {
+      url.pathname = "/";
+      return Response.redirect(url.toString(), 301);
+    }
+
+    if (url.pathname === "/") {
       if (wantsMarkdown(request)) {
         return serveMarkdown(request, env);
       }
@@ -288,12 +318,15 @@ async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
   // are mutually independent (the static asset, the tracks payload, the
   // photo manifest, the counter value), so fire them concurrently instead
   // of awaiting each in turn — collapses ~3 serial KV round-trips + the
-  // ASSETS fetch into roughly one wall-clock read. the tracks lookup stays
-  // internally sequential because tracks:<pid> needs the playlist-id first.
+  // ASSETS fetch into roughly one wall-clock read. the tracks lookup needs
+  // tracks:<pid> keyed off playlist-id, but the id changes ~never — so it's
+  // cached in a module var (like _altMap) and the chain costs two serial KV
+  // reads only on a cold isolate; warm isolates do a single read.
   const tracksChain = (async () => {
     if (!env.RN_KV) return null;
     try {
-      const pid = await env.RN_KV.get("playlist-id");
+      const pid = _playlistId ??
+        (_playlistId = await env.RN_KV.get("playlist-id"));
       if (pid && /^[0-9A-Za-z]{22}$/.test(pid)) {
         return await env.RN_KV.get(`tracks:${pid}`, "json");
       }
@@ -321,11 +354,12 @@ async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
       ? env.RN_KV.get("counter:visits").catch(() => null)
       : Promise.resolve(null);
 
-  const [res, tracksPayload, photos, counterData] = await Promise.all([
+  const [res, tracksPayload, photos, counterData, altMap] = await Promise.all([
     env.ASSETS.fetch(request),
     tracksChain,
     manifestP,
     counterP,
+    getAltMap(env),   // AI alt text; module-cached, so this is free on warm isolates
   ]);
 
   // honest classic-90s-counter behavior: counts every homepage GET, no session
@@ -411,7 +445,6 @@ async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
     const pick = pickRandom(photos, 12);   // ~12 fills the justified rows into a fuller rectangle
     lcpAvif = pick[0] && pick[0].thumb_avif ? pick[0].thumb_avif : null;
     lcpStem = pick[0] && pick[0].stem ? pick[0].stem : null;
-    const altMap = await getAltMap(env);   // AI alt text for the rendered slots (lean: ~12 strings)
     const slotsHtml = pick.map((p, i) => {
       const full     = p.full;
       // first tile: eager + high fetch priority. it's the topmost photo
@@ -427,9 +460,9 @@ async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
         ? ` data-size="${p.size}"` : "";
       const upAttr   = p.uploaded
         ? ` data-uploaded="${escAttr(p.uploaded)}"` : "";
-      // EXIF is NOT inlined. the tooltip lazy-fetches /images/metadata.json
-      // (EXIF + histogram in one SW-cached file) on first photo hover and
-      // looks the photo up by stem (derivable from data-full). inlining it
+      // EXIF is NOT inlined. the tooltip lazy-fetches /images/meta/<stem>.json
+      // (per-photo EXIF; histogram is computed client-side) on first photo
+      // hover, keyed by stem (derivable from data-full). inlining it
       // shipped ~14KB raw of EXIF on every no-store visit for a hover most
       // visitors never make — lazy keeps the hot path lean. (the grid is a
       // square 3-col CSS grid via aspect-ratio:1, so no per-tile --ar needed.)
@@ -860,6 +893,9 @@ const THUMB_SMALL_PX = 400;
 // every no-store homepage hit; alt would bloat it). only the alt strings for the ~12
 // rendered slots ship per page. strippable: delete alt.json + these lookups to revert.
 let _altMap;
+// the Spotify playlist id (KV "playlist-id") changes ~never; module-cached so
+// the homepage tracks lookup is one KV read on warm isolates instead of two.
+let _playlistId;
 async function getAltMap(env) {
   if (_altMap) return _altMap;
   try {
@@ -909,8 +945,8 @@ async function getImagesManifest(env, ctx) {
     // EXIF used to be merged in here (and shipped inline per slot) — the
     // manifest is read + JSON-parsed by the worker on EVERY no-store homepage
     // hit, and the EXIF was the bulk of the blob. the tooltip now lazy-fetches
-    // /images/metadata.json (EXIF + histogram, SW-cached) on first hover
-    // instead, so none of it needs to ride the hot path.
+    // /images/meta/<stem>.json per photo on first hover (histogram computed
+    // client-side), so none of it needs to ride the hot path.
     const v = THUMB_VERSION;
     manifest = [...byStem.entries()].map(([stem, o]) => ({
       full:       o.key,                     // R2 key, e.g. "XT507333.JPG"
@@ -1785,7 +1821,7 @@ function renderAroundHtml(report) {
 <style>
 ${xpChromeCss(820)}
   h1 {
-    font-family: "Franklin Gothic Medium", "Franklin Gothic", "Trebuchet MS", Verdana, sans-serif; color: oklch(41.92% 0.0962 250.51);
+    font-family: "Trebuchet MS", Verdana, Geneva, sans-serif; color: oklch(41.92% 0.0962 250.51);
     font-size: 18pt; margin: 0 0 4px; font-weight: bold;
   }
   .lede { margin: 0 0 14px; color: oklch(38.67% 0 0); font-size: 10.5pt; }
@@ -1880,8 +1916,8 @@ function handleBotPage(request) {
 <meta name="description" content="Identity and behavior of AadharshBot, the crawler operated by aadhar.sh.">
 <style>
 ${xpChromeCss(660)}
-  h1 { font-family: "Franklin Gothic Medium", "Franklin Gothic", "Trebuchet MS", Verdana, sans-serif; font-size: 14pt; color: oklch(41.92% 0.0962 250.51); margin: 0 0 4px; font-weight: bold; }
-  h2 { font-family: "Franklin Gothic Medium", "Franklin Gothic", "Trebuchet MS", Verdana, sans-serif; font-size: 12pt; color: oklch(41.92% 0.0962 250.51); margin: 16px 0 6px; font-weight: bold; line-height: 1.3; }
+  h1 { font-family: "Trebuchet MS", Verdana, Geneva, sans-serif; font-size: 14pt; color: oklch(41.92% 0.0962 250.51); margin: 0 0 4px; font-weight: bold; }
+  h2 { font-family: "Trebuchet MS", Verdana, Geneva, sans-serif; font-size: 12pt; color: oklch(41.92% 0.0962 250.51); margin: 16px 0 6px; font-weight: bold; line-height: 1.3; }
   h2::after { content: ""; display: block; height: 1px; background: oklch(86.67% 0.0294 259.59); margin-top: 8px; }
   a:link { color: oklch(42.61% 0.2353 263.74); text-decoration: underline; } a:visited { color: oklch(42.09% 0.1935 328.36); } a:hover { color: oklch(62.80% 0.2577 29.23); }
   code { font-family: "Courier New", Courier, monospace; background: oklch(96.72% 0 0); border: 1px solid oklch(88.22% 0 0); padding: 0 3px; }
@@ -2068,7 +2104,7 @@ function setPage(status, title, bodyHtml) {
 <style>
 ${xpChromeCss(520)}
   h1 {
-    font-family: "Franklin Gothic Medium", "Franklin Gothic", "Trebuchet MS", Verdana, sans-serif; color: oklch(41.92% 0.0962 250.51);
+    font-family: "Trebuchet MS", Verdana, Geneva, sans-serif; color: oklch(41.92% 0.0962 250.51);
     font-size: 16pt; margin: 0 0 8px;
   }
   a:link    { color: oklch(42.61% 0.2353 263.74); text-decoration: underline; }
@@ -2249,7 +2285,7 @@ ${xpChromeCss(720)}
 .title-bar .controls { letter-spacing: 2px; font-family: Tahoma, sans-serif; font-size: 9pt; }
 
 h1 {
-  font-family: "Franklin Gothic Medium", "Franklin Gothic", "Trebuchet MS", Verdana, sans-serif;
+  font-family: "Trebuchet MS", Verdana, Geneva, sans-serif;
   font-size: 14pt;
   color: oklch(41.92% 0.0962 250.51);
   margin: 0 0 4px;
@@ -2257,7 +2293,7 @@ h1 {
   letter-spacing: -0.01em;
 }
 h2 {
-  font-family: "Franklin Gothic Medium", "Franklin Gothic", "Trebuchet MS", Verdana, sans-serif;
+  font-family: "Trebuchet MS", Verdana, Geneva, sans-serif;
   font-size: 12pt;
   color: oklch(41.92% 0.0962 250.51);
   margin: 18px 0 6px;

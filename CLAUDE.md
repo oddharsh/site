@@ -47,18 +47,18 @@ Single-page personal site at `aadhar.sh`. Hosted on Cloudflare Pages, with a
 
 | file | role |
 |---|---|
-| `holding/index.html` | The whole page in one file. Inline CSS + JS. ~65KB uncompressed, ~19KB brotli. Comments deliberately kept readable for View Source. |
+| `holding/index.html` | The whole page in one file. Inline CSS + JS. ~78KB uncompressed, ~22KB brotli. Comments deliberately kept readable for View Source. |
 | `holding/writing/` | Written content as plain `.txt` files + `posts.json` registry `[{slug,title,date}]`. The worker renders each as an XP **Notepad** window at `/writing/<slug>` (a server-rendered `<textarea>` seeded with the canonical text — editable by nature, ephemeral by nature: no save → reload restores canonical, "writing in flux"), plus a "My Writing" folder index at `/writing`. Raw `.txt` stays fetchable at `/writing/<slug>.txt`. Author a post = drop a `.txt` + a `posts.json` entry. Render code (`handleWritingIndex`/`handleWritingPost`/`NOTEPAD_CSS`) lives in `_worker.js`. |
 | `holding/notepad.js` | Behavior for the `/writing` Notepad view (deferred, SW-cached): per-window `enhance()` wiring File/Edit/Format/View/Help menus, live Ln/Col + word-count status bar, Word-Wrap toggle, the classic **F5 time/date** stamp (Temporal w/ Date fallback), Select All, Print, About. Also opens folder notes as **popovers** that composite over the folder index (+ `pushState` to `/writing/<slug>`, Back closes). Chrome itself is SSR'd by `_worker.js`. No-op without a `.np-window`. |
 | `holding/nav.js` | Site-wide XP **desktop shell**. The ONE shared external asset (deferred, SW-cached) — every page includes `<script src="/nav.js" defer>`; it injects its own `<style>` + builds, into `<body>`: the **Bliss desktop** wallpaper, **draggable desktop icons** (Notepad + the 5 profiles, positions persisted in localStorage), the **taskbar** (Start orb → Run, first-level-subpage app buttons each with a per-section SVG icon, clock via Temporal), and the **Run** command palette (⌘K / Start). Also owns the **OS-window model**: body is a clipping flex desktop, each `.window`/`.np-window` is pinned + its content scrolls internally behind a **custom XP scrollbar**, windows are **draggable** (top is a hard boundary) + **resizable**, and View Transitions animate only the window. Sets each first-level route's **tab favicon** to its section icon. Run destinations: pages + profiles inline; 146 photos lazy-loaded from `/images/manifest.json` with `/images/alt.json` captions. Wired into homepage + all garage pages + worker-gen `/around`,`/whoareyou`,`/bot` + serendipity shell. |
 | `holding/_worker.js` | Pages-Worker hybrid. Owns routing, photo serving from R2, manifest building, Spotify playlist scraping, AadharshBot crawler, the `/writing` Notepad pages, cache-control overrides. |
 | `holding/_headers` | Static-asset cache + security headers (CSP, Permissions-Policy, etc.). Applied to direct static-asset requests; the worker overrides cache-control for select paths. |
-| `holding/sw.js` | Service worker. `CACHE_VERSION = "aadhar-v56-favicons"` (bump on every nav.js/notepad.js change). Cache-first for `/images/*` (content-addressed via `?v=N`), SWR for static text files, network-only for everything else. Bumping `CACHE_VERSION` sweeps old caches. |
+| `holding/sw.js` | Service worker. `CACHE_VERSION = "aadhar-v66-luna-perf"` (bump on every nav.js/notepad.js change). Cache-first for `/images/*` thumbnails only (content-addressed via `?v=N`; full-res `/images/full/*` deliberately excluded — browser HTTP cache holds those immutable), SWR for static text files + nav.js/notepad.js, network-only for everything else. Bumping `CACHE_VERSION` sweeps old caches. |
 | `holding/llms.txt` | The llms.txt format — concise site summary for LLMs. Linked from `<link rel="alternate">`. |
 | `holding/index.md` | Markdown source of homepage copy (used by `/llms.txt` and as a fallback). |
 | `holding/sitemap.xml`, `robots.txt` | Standard SEO files. robots.txt explicitly allows AadharshBot. |
 | `holding/.well-known/http-message-signatures-directory` | JWKS for AadharshBot's Ed25519 public key (Web Bot Auth IETF draft). |
-| `holding/images/` | 146 thumbnails (1200px AVIF + JPG pairs) + `metadata.json` (EXIF index). 146 stems × 2 formats = 292 files. |
+| `holding/images/` | 146 thumbnails (1200px AVIF + JPG pairs + 400px mobile AVIF tier) + `metadata.json` (EXIF index) + `meta/<stem>.json` per-photo EXIF for the hover tooltip. |
 | `holding/scripts/` | Photo-pipeline scripts (see below). |
 
 ### The photo pipeline
@@ -82,9 +82,11 @@ holding/images/<stem>.{avif,jpg}  +  R2 aadhar-photos/<filename>
    |   pulls Fuji recipe (FilmMode, DynamicRange, ColorChrome FX +Blue,
    |   Grain roughness + size, tone curves, saturation) plus standard
    |   exposure / focus / metering / WB shift / Kelvin temperature.
-   |   also calls photo-histograms.py to compute a 64-bin luminance
-   |   histogram per photo, inlined as `histogram: [int...]` so the
-   |   Fuji LCD tooltip can draw real bars on hover.
+   |   also writes per-photo /images/meta/<stem>.json files (what the
+   |   tooltip actually fetches on hover). histograms are NO LONGER
+   |   stored — the Fuji LCD tooltip computes the 64-bin luminance
+   |   histogram client-side from the on-screen thumbnail
+   |   (photo-histograms.py is kept on disk but unused).
    |   discipline: every field is nullable; the tooltip skips lines
    |   that are null rather than fabricate. never guess metadata.
 ```
@@ -100,11 +102,8 @@ Two encoders + one transform tool, all built from source:
   primary AVIF thumbnail. Falls back to `sips -s format avif` (macOS
   native, no extra dep) when avifenc isn't installed.
 - **exiftool, jq** (`brew install exiftool jq`) — metadata extraction.
-- **Pillow** (`pip3 install --user pillow`) — per-photo luminance
-  histograms via `holding/scripts/photo-histograms.py`. optional;
-  extract-photo-metadata.sh silently skips histograms if Pillow isn't
-  installed, and the Fuji LCD tooltip falls back to a CSS-gradient
-  placeholder.
+- **Pillow** — no longer needed: histograms are computed client-side
+  from the thumbnail; `photo-histograms.py` is kept on disk but unused.
 
 ### `<picture>` + cache-busting strategy
 
@@ -140,7 +139,7 @@ and uses `HTMLRewriter` to inject them into the static HTML:
    `embed/track/<id>` (for album cover + artist IDs), then
    `embed/artist/<id>` (for artist profile pics, KV-cached 30d).
    Identifies as `AadharshBot/1.0 (+https://aadhar.sh/bot)` UA.
-2. **Photo grid** — random 9 from manifest, emitted as
+2. **Photo grid** — random 12 from manifest, emitted as
    `<a><picture><source><img></picture></a>` slots inside `<section class="photos">`.
 
 If either chunk fails (KV empty, R2 missing, etc.), the rewriter silently

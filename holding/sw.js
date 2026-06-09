@@ -25,14 +25,16 @@
 // `?v=N` bumps on each deploy already cycle individual entries, but a
 // cache-version bump is the only way to sweep stale keys whose URL
 // pattern no longer matches anything we serve.
-const CACHE_VERSION = "aadhar-v65-masonry";
+const CACHE_VERSION = "aadhar-v67-luna-perf";
 
 const CACHE_FIRST = [
-  // image files only — NOT /images/ or /images/full/ themselves (those are
-  // directory-listing HTML pages, served via the worker, must stay fresh).
-  // formats limited to what add-photos.sh actually produces + R2 originals.
+  // thumbnail image files only — NOT /images/ itself (a directory-listing
+  // HTML page, served via the worker, must stay fresh) and NOT /images/full/*:
+  // the ~20MB R2 originals are already held by the browser HTTP cache under
+  // max-age=31536000 immutable, so copying them into Cache Storage doubled
+  // disk/quota cost (plus a background re-fetch per hit) for zero hit-rate
+  // gain. formats limited to what add-photos.sh actually produces.
   /^\/images\/[0-9A-Za-z._-]+\.(jpg|jpeg|avif|png|gif|heic|heif)$/i,
-  /^\/images\/full\/[0-9A-Za-z._-]+\.(jpg|jpeg|avif|png|gif|heic|heif|hif)$/i,
 ];
 const SWR = [
   /^\/llms\.txt$/,

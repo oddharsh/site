@@ -193,7 +193,7 @@ function shellCss() {
   a:hover{color:oklch(60% 0.25 29)}
   h1,h2,h3{font-family:var(--font-caption);margin:0}
   .wrap{max-width:980px;margin:22px auto;padding:0 12px 48px}
-  .window{background:#fff;border:2px solid #0831d9;border-right-color:#001ea0;border-bottom-color:#001ea0;border-top-left-radius:8px;border-top-right-radius:8px;overflow:hidden;box-shadow:inset 1px 1px 0 #166aee,inset 2px 2px 0 #0855dd,inset -1px -1px 0 #00138c,inset -2px -2px 0 #003bda,6px 6px 24px -6px rgba(0,20,90,.5)}
+  .window{background:#fff;border:2px solid #0831d9;border-right-color:#001ea0;border-bottom-color:#001ea0;border-top-left-radius:8px;border-top-right-radius:8px;overflow:hidden;box-shadow:inset 1px 1px 0 #166aee,inset 2px 2px 0 #0855dd,inset -1px -1px 0 #00138c,inset -2px -2px 0 #003bda,4px 4px 0 rgba(0,30,160,.35)}
   .titlebar{display:flex;align-items:center;gap:6px;padding:4px 6px 4px 8px;font:bold 10pt "Trebuchet MS",Verdana,sans-serif;color:#fff;text-shadow:1px 1px #0f1089;border-bottom:1px solid #00138c;background:linear-gradient(180deg,oklch(70% 0.15 258) 0%,oklch(60% 0.20 261) 8%,oklch(51% 0.225 263) 18%,oklch(50% 0.225 263) 86%,oklch(58% 0.18 260) 100%)}
   .titlebar .ico{width:18px;height:18px;flex:0 0 auto;background:oklch(69.58% 0.2043 43.49);border-radius:0;position:relative}
   .titlebar .ico::before{content:"";position:absolute;inset:3px 4px;background:oklch(87.82% 0.0877 66.27);clip-path:polygon(50% 0,100% 100%,0 100%)}

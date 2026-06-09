@@ -265,8 +265,7 @@ body {
   border-top-left-radius: 8px; border-top-right-radius: 8px; overflow: hidden;
   box-shadow: inset 1px 1px 0 #166aee, inset 2px 2px 0 #0855dd,
               inset -1px -1px 0 #00138c, inset -2px -2px 0 #003bda,
-              4px 4px 0 rgba(0,30,160,.35),
-              0 10px 34px -10px oklch(22% 0.09 285 / 0.6);  /* float on the dawn desktop */
+              4px 4px 0 rgba(0,30,160,.35);
 }
 
 .content {
@@ -953,8 +952,8 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
       XP-style cursor-following hover tooltip. shows filename, file size,
       thumbnail dimensions, and EXIF (camera/exposure/date/film recipe)
       for photos; album art for track rows; profile photo for artist
-      links. EXIF is lazy-fetched from /images/metadata.json on first photo
-      hover (SW-cached) rather than inlined per-slot — keeps the no-store
+      links. EXIF is lazy-fetched per photo from /images/meta/&lt;stem&gt;.json
+      on first hover rather than inlined per-slot — keeps the no-store
       homepage lean for the majority who never hover; the histogram is computed
       client-side from the thumbnail, not stored. cursor-
       follow positioning is the single bit of JS we couldn't replace with
@@ -1677,6 +1676,8 @@ if ("serviceWorker" in navigator) {
           { "not": { "href_matches": "/around*" } },
           { "not": { "href_matches": "/whoareyou*" } },
           { "not": { "href_matches": "/rn*" } },
+          { "not": { "href_matches": "/coffee*" } },
+          { "not": { "href_matches": "/images*" } },
           { "not": { "href_matches": "/index.md" } },
           { "not": { "href_matches": "/llms.txt" } }
         ]
