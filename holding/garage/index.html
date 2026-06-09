@@ -331,6 +331,24 @@ footer {
 
       <li>
         <div class="title-row">
+          <span class="name"><a href="/garage/masonry">A masonry contact sheet</a></span>
+          <span class="status idle">prototype</span>
+        </div>
+        <div class="desc">
+          The homepage photo grid is fixed 1:1 squares (cropped). This tries
+          <code style="font-family: var(--font-mono);font-size:9pt">display: grid-lanes</code> &mdash; CSS Grid Lanes, shipped in
+          Safari&nbsp;27 &mdash; for a ragged-height contact sheet where portrait and
+          landscape sit at their true heights, no JS. Per-photo aspect ratios are
+          reserved from EXIF (no reflow); a toggle A/Bs it against the squares, and
+          browsers without Grid Lanes get the square fallback.
+        </div>
+        <div class="meta">
+          shape: layout prototype · added 2026-06-09
+        </div>
+      </li>
+
+      <li>
+        <div class="title-row">
           <span class="name"><a href="/garage/safari27">Safari 27, through this site&apos;s lens</a></span>
           <span class="status idle">watching</span>
         </div>
