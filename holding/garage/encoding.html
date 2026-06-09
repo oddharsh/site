@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>thumbnail encoding study — aadhar.sh garage</title>
-<meta name="description" content="The same photo run through every thumbnail encoding choice — AVIF/WebP/JPEG, jpegli vs system, chroma subsampling, quality, resolution — with real byte counts and the tradeoffs the site actually makes.">
+<meta name="description" content="The same photo run through every thumbnail encoding choice (AVIF/WebP/JPEG, jpegli vs system, chroma subsampling, quality, resolution), with real byte counts and the tradeoffs the site actually makes.">
 <link rel="canonical" href="https://aadhar.sh/garage/encoding">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='3' y='6' width='7' height='20' rx='1' fill='%230855dd'/><rect x='12' y='6' width='5' height='20' rx='1' fill='%23166aee'/><rect x='19' y='6' width='10' height='20' rx='1' fill='%23003bda'/></svg>">
 <style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}
@@ -235,21 +235,21 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
   <div class="content">
     <h1>Thumbnail encoding study <span class="status shipped">shipped</span></h1>
     <p class="lede">
-      Every grid thumbnail is the end of a chain of choices &mdash; <em>format,
+      Every grid thumbnail is the end of a chain of choices: <em>format,
       quality, chroma subsampling, resolution</em>. Here's one photo run through all
       of them with real byte counts, so the tradeoffs are visible instead of folklore.
       All numbers are from the actual encoders the site uses (avifenc, jpegli, cwebp, sips).
     </p>
     <p class="lede" style="margin-top:4px">
       <b>The verdict shipped:</b> the live pipeline (<code>holding/scripts/add-photos.sh</code>)
-      encodes every thumbnail as AVIF-primary + a <b>jpegli q82</b> JPG fallback &mdash; the
-      winning combination below. That's why the site builds jpegli from source.
+      encodes every thumbnail as AVIF-primary + a <b>jpegli q82</b> JPG fallback. That's the
+      winning combination below, and why the site builds jpegli from source.
     </p>
 
     <h2>Format showdown</h2>
     <p class="note">The same detailed color frame at 400&times;266px. PNG is the lossless
-      baseline; everything below it is lossy. Eyeball the quality, then read the bytes
-      &mdash; <code>b/px</code> = bytes per pixel, the size-density that actually scales.</p>
+      baseline; everything below it is lossy. Eyeball the quality, then read the bytes.
+      <code>b/px</code> = bytes per pixel, the size-density that actually scales.</p>
     <div class="enc-grid">
         <figure class="enc-card"><img src="/garage/enc/c-png.png?v=2" alt="" width="400" height="266" loading="lazy" decoding="async"><figcaption><b>PNG</b> lossless<span class="enc-sz">178.7 KB</span><span class="enc-bpp">1.72 b/px</span></figcaption></figure>
         <figure class="enc-card"><img src="/garage/enc/c-sips82.jpg?v=2" alt="" width="400" height="266" loading="lazy" decoding="async"><figcaption><b>JPG·sips</b> q82 · 4:2:0<span class="enc-sz">31.7 KB</span><span class="enc-bpp">0.31 b/px</span></figcaption></figure>
@@ -266,7 +266,7 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
 
     <h2>Why the site builds jpegli from source</h2>
     <p>Look at the two q82 JPEGs above: <b>system/sips</b> lands at 31.7 KB,
-      <b>jpegli</b> at 16.8 KB &mdash; <em>same nominal
+      <b>jpegli</b> at 16.8 KB: <em>same nominal
       quality, ~47% fewer bytes</em>.
       Google's jpegli is a psychovisually-tuned re-implementation of libjpeg; that win is
       the entire reason <code>~/.local/bin/cjpegli</code> exists and the pipeline shells out
@@ -277,7 +277,7 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
     <p class="note">A black-and-white Leica frame (400&times;267). For a grayscale image the
       two chroma planes carry almost nothing, so AVIF <b>4:0:0</b> (luma only) is both the
       honest encode and rules out any faint color cast. The byte saving over 4:2:0 is tiny
-      <em>because there was nothing in those planes to begin with</em> &mdash; the point is
+      <em>because there was nothing in those planes to begin with</em>. The point is
       correctness, not size. The pipeline auto-detects <code>sips -g space → Gray</code> and
       switches to <code>--yuv 400</code>.</p>
     <div class="enc-grid">
@@ -290,7 +290,7 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
     <h2>Resolution scales bytes ~quadratically</h2>
     <p class="note">The color frame at three long edges, AVIF q63 vs jpegli q82. 2&times; the long edge
       ≈ 3&times; the bytes, and AVIF holds a steady <em>~35&ndash;38%</em> lead over JPEG at
-      every size &mdash; which is why the grid is AVIF-primary and kept to a small square.</p>
+      every size, which is why the grid is AVIF-primary and kept to a small square.</p>
     <table class="enc-table">
       <thead><tr><th>resolution</th><th>AVIF q63</th><th>jpegli q82</th><th>AVIF saves</th></tr></thead>
       <tbody>
@@ -303,12 +303,12 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
     <h2>What aadhar.sh actually ships</h2>
     <ul class="enc-ships">
       <li><b>AVIF primary</b> (<code>q63</code>, <code>4:2:0</code> color / <code>4:0:0</code> gray) +
-        <b>jpegli JPG q82</b> as the universal fallback &mdash; via <code>&lt;picture&gt;</code>.</li>
+        <b>jpegli JPG q82</b> as the universal fallback, via <code>&lt;picture&gt;</code>.</li>
       <li><b>Pre-cropped 600/400 squares</b>, metadata-stripped: the file <em>is</em> the displayed
         pixels, so no off-square or EXIF bytes ride along.</li>
-      <li><b>4:2:0 over 4:4:4</b> for color &mdash; 4:4:4 stores the full chroma and costs ~8% more
+      <li><b>4:2:0 over 4:4:4</b> for color: 4:4:4 stores the full chroma and costs ~8% more
         bytes (the two AVIF q63 cards above) for no visible gain at thumbnail size, so 4:2:0 is free quality.</li>
-      <li><b>Full-res share copies in R2 at JPEG q95</b> &mdash; visually lossless, half the bytes
+      <li><b>Full-res share copies in R2 at JPEG q95</b>: visually lossless, half the bytes
         of q100; the true HEIF originals stay on local disk.</li>
     </ul>
 
@@ -320,11 +320,11 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
 </div>
 
 <script>
-/* loupe / magnifier — same cursor-following architecture as the site's tooltips:
+/* loupe / magnifier: same cursor-following architecture as the site's tooltips:
    popover API for show/hide, pointer events for tracking, hover-gated, no rAF
    (the browser batches the custom-property-driven transform to its own cadence).
    the glass is centred ON the cursor and shows that exact spot of THIS card's
-   encoded file (img.currentSrc — avif for avif cards, jpeg for jpeg) magnified
+   encoded file (img.currentSrc, avif for avif cards, jpeg for jpeg) magnified
    with image-rendering:pixelated, so you can A/B the artifacts spot-for-spot. */
 (function () {
   "use strict";

@@ -10,7 +10,7 @@
 <style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}
 /* --x/--y carry the cursor position (clientX/Y in px), written by JS on
    pointermove. registering them as typed <length> properties (instead of
-   plain custom properties) lets CSS *transition* them — so the tooltip
+   plain custom properties) lets CSS *transition* them, so the tooltip
    eases toward the cursor instead of hard-snapping, with no JS rAF lerp.
    the browser interpolates the value; the translate() that consumes it
    updates each frame. initial-value keeps the first paint sane before
@@ -164,7 +164,7 @@ hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px
 .status.dead    { color: oklch(46.34% 0.1902 29.23); border-color: oklch(46.34% 0.1902 29.23); background: oklch(98% 0.03 30); }
 .status.ref     { color: oklch(51.03% 0 0); border-color: oklch(70% 0 0); background: oklch(96% 0 0); }
 
-/* rejection callout — small box explaining why a variant didn't ship */
+/* rejection callout: small box explaining why a variant didn't ship */
 .rejection {
   font-size: 10pt;
   background: oklch(98% 0.02 30);
@@ -206,7 +206,7 @@ hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px
    keeps it on-screen: the upper bound (100vw/vh - 100% - 8px) uses the
    element's own size via 100%, so the far edge never crosses the
    viewport. when the cursor is near the right/bottom edge clamp pins
-   the tooltip against it rather than flipping sides — simpler than the
+   the tooltip against it rather than flipping sides. simpler than the
    old JS flip and good enough at these tooltip sizes. edge-handling is
    entirely in CSS now; no getBoundingClientRect from JS. */
 .lcd-tip, .xp-cam-tip, .vinyl-tip, .balloon-tip {
@@ -444,7 +444,7 @@ hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px
 .xp-cam-tip:not(:popover-open) { opacity: 0; }
 @starting-style { .xp-cam-tip:popover-open { opacity: 0; } }
 
-/* Luna balloon (the XP "speech balloon" notification shape) — the
+/* Luna balloon (the XP "speech balloon" notification shape): the
    period-correct skin for the SIMPLE track/artist tooltips. cream
    infotip-yellow fill (#FFFFE1), 1px outline, rounded, with a CSS-drawn
    pointer tail aimed up toward the cursor. */
@@ -487,7 +487,7 @@ hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px
   justify-content: space-between;
 }
 
-/* flash bolt indicator — only renders when EXIF Flash matches Fired/On.
+/* flash bolt indicator: only renders when EXIF Flash matches Fired/On.
    bolt is amber-warm and slightly off-vertical, like the indicator on
    the actual Fuji LCD. drop-shadow gives a faint "lit" feel against
    either tooltip background. */
@@ -534,7 +534,7 @@ hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px
   padding: 6px 10px 8px;
 }
 /* font-variant-numeric: tabular-nums gives column-aligned digits without
-   forcing monospace overall — keeps the XP Tahoma look while the
+   forcing monospace overall. keeps the XP Tahoma look while the
    numeric exposure trio still aligns cleanly. */
 .xp-cam-tip .exposure {
   font-family: var(--font-ui);
@@ -768,7 +768,7 @@ footer {
 
     <h2>XP-skinned camera readout (photos) <span class="status shipped">shipped</span></h2>
     <p class="note">
-      <b>This is the one that shipped</b> &mdash; it's the live photo-grid tooltip on <a href="/">the homepage</a> (the <code>.cam</code> markup out of <code>buildContent()</code>). Same content as the Fuji LCD above (histogram, exposure trio, recipe grid, date) but reskinned in XP visual vocabulary: cream panel, blue gradient title strip, sunken bevel around the histogram, Tahoma body with Courier numerics. Keeps the camera-back density without arguing visually with the surrounding XP shell &mdash; the Fuji LCD lost on exactly that (too dark a panel against the Luna page).
+      <b>This is the one that shipped.</b> It's the live photo-grid tooltip on <a href="/">the homepage</a> (the <code>.cam</code> markup out of <code>buildContent()</code>). Same content as the Fuji LCD above (histogram, exposure trio, recipe grid, date) but reskinned in XP visual vocabulary: cream panel, blue gradient title strip, sunken bevel around the histogram, Tahoma body with Courier numerics. Keeps the camera-back density without arguing visually with the surrounding XP shell. The Fuji LCD lost on exactly that (too dark a panel against the Luna page).
     </p>
     <div class="row" id="xp-cam-row">
       <a class="slot xp-cam-slot" href="#"
@@ -807,7 +807,7 @@ footer {
 
     <h2>Vinyl sleeve at cursor (tracks) <span class="status shipped">shipped</span></h2>
     <p class="note">
-      <b>The cover-at-cursor idea shipped</b> as the live tracklist tooltip on <a href="/">the homepage</a> &mdash; in a contact-sheet-style raised frame rather than this paper-mat <code>-6&deg;</code> tilt, but the same move: hover a row, the square album cover floats at the cursor like pulling a sleeve out to read the front. Same architecture as the photo tooltip; the row text stays put.
+      <b>The cover-at-cursor idea shipped</b> as the live tracklist tooltip on <a href="/">the homepage</a>, in a contact-sheet-style raised frame rather than this paper-mat <code>-6&deg;</code> tilt, but the same move: hover a row, the square album cover floats at the cursor like pulling a sleeve out to read the front. Same architecture as the photo tooltip; the row text stays put.
     </p>
     <ol class="vinyl-demo" id="track-row">
       <li data-art="https://image-cdn-fa.spotifycdn.com/image/ab67616d00001e0246f9bf1154c7205b0e8b1667">
@@ -836,7 +836,7 @@ footer {
 
     <h2>Luna balloon (tracks) <span class="status review">in review</span></h2>
     <p class="note">
-      The authentic XP <em>balloon</em> &mdash; the rounded, pale-yellow info bubble with a pointer tail (the &ldquo;Your files are ready to burn&rdquo; taskbar popup). Cream <code>#FFFFE1</code> infotip fill, 1px outline, a CSS-drawn tail aimed back at the cursor. This is the period-correct shape for the <em>simple</em> track/artist tooltips; the camera readout stays a Fuji LCD on purpose &mdash; an XP machine never had a tooltip that rich, so calling it XP would be dishonest.
+      The authentic XP <em>balloon</em>: the rounded, pale-yellow info bubble with a pointer tail (the "Your files are ready to burn" taskbar popup). Cream <code>#FFFFE1</code> infotip fill, 1px outline, a CSS-drawn tail aimed back at the cursor. This is the period-correct shape for the <em>simple</em> track/artist tooltips; the camera readout stays a Fuji LCD on purpose, because an XP machine never had a tooltip that rich, so calling it XP would be dishonest.
     </p>
     <ol class="vinyl-demo" id="balloon-row">
       <li>
@@ -905,10 +905,10 @@ footer {
 
     <h2>CSS Anchor Positioning <span class="status shipped">shipped</span></h2>
     <p class="note">
-      Element-anchored rather than cursor-anchored. <b>This shipped</b> &mdash; it's the <a href="/">homepage</a>'s <em>keyboard-focus</em> tooltip path: mouse users get the cursor-follower, but a keyboard user tabbing to a slot has no cursor to track, so on <code>:focus-visible</code> the JS sets <code>anchor-name</code> on the focused element and the popover tethers to it via <code>position-anchor</code> / <code>position-area</code> (gated on <code>CSS.supports</code>, a clean no-op where unsupported).
+      Element-anchored rather than cursor-anchored. <b>This shipped.</b> It's the <a href="/">homepage</a>'s <em>keyboard-focus</em> tooltip path: mouse users get the cursor-follower, but a keyboard user tabbing to a slot has no cursor to track, so on <code>:focus-visible</code> the JS sets <code>anchor-name</code> on the focused element and the popover tethers to it via <code>position-anchor</code> / <code>position-area</code> (gated on <code>CSS.supports</code>, a clean no-op where unsupported).
     </p>
     <p class="note">
-      <b>Note &mdash; this is a keyboard fallback, not a JS-disabled one.</b> Every live tooltip (here and on serendipity) is JS-orchestrated: JS populates the popover, calls <code>showPopover()</code>, and sets the <code>anchor-name</code>. With JS off, the popover stays empty and is never shown &mdash; no tooltip at all. This pure-CSS <code>:has(:hover)</code> demo below <em>would</em> work without JS, but it isn't wired into any live page; tooltips are progressive enhancement that simply vanish without script (the photos and links still work).
+      <b>Note: this is a keyboard fallback, and a keyboard fallback only, not a JS-disabled one.</b> Every live tooltip (here and on serendipity) is JS-orchestrated: JS populates the popover, calls <code>showPopover()</code>, and sets the <code>anchor-name</code>. With JS off, the popover stays empty and is never shown: no tooltip at all. This pure-CSS <code>:has(:hover)</code> demo below <em>would</em> work without JS, but it isn't wired into any live page; tooltips are progressive enhancement that simply vanish without script (the photos and links still work).
     </p>
     <div class="anchor-fallback">
       Your browser doesn't support <code>anchor-name</code> yet. Chrome 125+ or Safari TP shows this demo.
@@ -975,7 +975,7 @@ footer {
   // tooltip's CSS positions itself off --x/--y with a clamp() that
   // keeps it on-screen (see the shared `.lcd-tip, .xp-cam-tip,
   // .vinyl-tip { transform }` rule). no rAF, no getBoundingClientRect,
-  // no resize listener — the browser batches the custom-property-driven
+  // no resize listener. the browser batches the custom-property-driven
   // transform to its own frame cadence, and edge-flipping is pure CSS.
   // lighter than the prior rAF + measure() approach in both code and
   // per-move work (no layout reads).
@@ -1052,10 +1052,10 @@ footer {
   // small flash bolt icon shown when the EXIF Flash tag matches
   // "Fired" or "On" (the standard strings exiftool emits when the
   // flash actually went off). the bolt terminates in a downward
-  // arrowhead — the camera auto-flash glyph — and stays legible at
+  // arrowhead (the camera auto-flash glyph) and stays legible at
   // ~12px where a plain zigzag turns to mush. currentColor lets each tooltip
   // skin pick its own bolt color via CSS. the icon doesn't render
-  // at all when the flash didn't fire — its presence IS the
+  // at all when the flash didn't fire. its presence IS the
   // indicator.
   const flashBolt = (raw) => {
     if (!raw || !/\bFired\b|\bOn\b/i.test(raw)) return "";
@@ -1162,7 +1162,7 @@ footer {
     root:   document.getElementById("xp-cam-row"),
     render: renderXpCam,
   });
-  // Luna balloon: simple track tooltip — title + artist, text only.
+  // Luna balloon: simple track tooltip, title + artist, text only.
   const esc = (v) => String(v == null ? "" : v).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const renderBalloon = (slot) => {
     const title  = slot.querySelector(".title")?.textContent || "";

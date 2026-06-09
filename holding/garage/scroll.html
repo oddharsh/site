@@ -23,7 +23,7 @@ body {
 }
 .window {
   max-width: 680px; margin: 0 auto; background: oklch(100% 0 0);
-  /* NO overflow:hidden here — it would steal the view() scroll source from the
+  /* NO overflow:hidden here: it would steal the view() scroll source from the
      root, breaking animation-timeline:view() on .maxi descendants. The title-bar
      has its own matching border-radius so corners look correct without it. */
   border: 2px solid #0831d9; border-right-color: #001ea0; border-bottom-color: #001ea0;
@@ -148,7 +148,7 @@ code { font-family: var(--font-mono); font-size: 9.5pt; }
 .xp-paper { width: 12px; height: 15px; background: oklch(99% 0 0); border: 1px solid oklch(60% 0 0); position: relative; }
 .xp-paper::after { content: ""; position: absolute; inset: 3px 2px auto 2px; height: 1px; background: oklch(70% 0 0); box-shadow: 0 3px 0 oklch(70% 0 0), 0 6px 0 oklch(70% 0 0); }
 .xp-meta { font-size: 8.5pt; color: oklch(45% 0 0); margin: 0 0 4px; }
-/* the green segmented bar — sunken trough + bright Luna-green blocks */
+/* the green segmented bar: sunken trough + bright Luna-green blocks */
 .xp-progress { height: 19px; background: oklch(100% 0 0); border: 1px solid; border-color: oklch(50% 0 0) oklch(100% 0 0) oklch(100% 0 0) oklch(50% 0 0); padding: 2px; overflow: hidden; }
 .xp-progress-fill {
   height: 100%; width: 0;
@@ -185,14 +185,14 @@ code { font-family: var(--font-mono); font-size: 9.5pt; }
   }
 }
 
-/* ── prototype 3: the Luna scrollbar — faithful XP recreation ── */
+/* ── prototype 3: the Luna scrollbar, a faithful XP recreation ── */
 /* Firefox two-tone (thumb / track) */
 .luna-scroller { height: 150px; overflow-y: scroll; border: 1px solid oklch(61.14% 0.0611 253.60); background: oklch(99% 0.004 250); padding: 8px 12px; font-size: 9.5pt; margin-top: 4px; scrollbar-color: #6898d0 #c0d4ec; }
 
 .luna-scroller::-webkit-scrollbar { width: 17px; }
 
 /* track: pale blue-grey with the classic XP 2×2 checker dither.
-   Lighter "dots" on a slightly darker base — the pattern XP used on all
+   Lighter "dots" on a slightly darker base: the pattern XP used on all
    unfilled scroll areas since Windows 3.1, kept in Luna. */
 .luna-scroller::-webkit-scrollbar-track {
   background-color: #c0d4ec;
@@ -208,7 +208,7 @@ code { font-family: var(--font-mono); font-size: 9.5pt; }
 
 /* thumb: the raised Luna-blue ridge everyone remembers.
    Three-layer build-up:
-   1. Horizontal grip ridges — repeating dark+light line pairs (the
+   1. Horizontal grip ridges: repeating dark+light line pairs (the
       grooved elevator-grip look). Start at row 3 so the first ridge
       isn't flush with the top border.
    2. Left-to-right convex bevel: bright edge → blue body → blue body → bright edge
@@ -274,7 +274,7 @@ code { font-family: var(--font-mono); font-size: 9.5pt; }
   background-position: center center, center center;
   background-size: 7px 5px, auto;
 }
-/* up arrow — layered: SVG glyph on top of blue gradient */
+/* up arrow, layered: SVG glyph on top of blue gradient */
 .luna-scroller::-webkit-scrollbar-button:vertical:decrement {
   background-image:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 7 4'%3E%3Cpath d='M3.5 0 L7 4 L0 4 Z' fill='%23122858'/%3E%3C/svg%3E"),
@@ -313,7 +313,7 @@ footer { text-align: center; font-family: var(--font-ui); font-size: 9pt; color:
 
     <h1>Scroll, the XP way</h1>
     <p class="lede">
-      Scroll-driven animation, but in a period-correct Luna idiom &mdash; the
+      Scroll-driven animation, but in a period-correct Luna idiom: the
       file-copy progress bar, windows that maximize as they open, the blue
       gradient scrollbar. All <code>animation-timeline</code>, no scroll
       listeners, no JS. Your browser: <span id="cap-scroll" class="chip no">animation-timeline: scroll()</span>
@@ -323,10 +323,10 @@ footer { text-align: center; font-family: var(--font-ui); font-size: 9pt; color:
 
     <!-- prototype 1 -->
     <section class="proto">
-      <h2>1 &middot; &quot;Copying&hellip;&quot; <span class="scroll-hint">— scroll the page to fill it</span></h2>
+      <h2>1 &middot; &quot;Copying&hellip;&quot; <span class="scroll-hint">(scroll the page to fill it)</span></h2>
       <p class="note">
         The most XP thing imaginable: the green segmented file-copy bar. Here
-        the fill is tied to your scroll through the page &mdash; your scroll
+        the fill is tied to your scroll through the page. Your scroll
         <em>is</em> the copy. It&apos;d make a perfect reading-progress indicator.
       </p>
       <div class="xp-dialog">
@@ -344,8 +344,8 @@ footer { text-align: center; font-family: var(--font-ui); font-size: 9pt; color:
         </div>
       </div>
       <p class="how">
-        <code>.xp-progress-fill { animation: xp-fill linear both; animation-timeline: scroll(root block); }</code>
-        &mdash; the keyframes just animate <code>width: 0 &rarr; 100%</code>; the
+        <code>.xp-progress-fill { animation: xp-fill linear both; animation-timeline: scroll(root block); }</code>.
+        The keyframes just animate <code>width: 0 &rarr; 100%</code>; the
         browser maps it to document scroll. Where unsupported it falls back to a
         static 60%-filled frame.
       </p>
@@ -353,16 +353,16 @@ footer { text-align: center; font-family: var(--font-ui); font-size: 9pt; color:
 
     <!-- prototype 2 -->
     <section class="proto">
-      <h2>2 &middot; Maximize on open <span class="scroll-hint">— scroll so each window enters</span></h2>
+      <h2>2 &middot; Maximize on open <span class="scroll-hint">(scroll so each window enters)</span></h2>
       <p class="note">
         XP windows opened with a quick zoom-from-small. Each card below plays
-        that as it rises into the viewport &mdash; fast and snappy like the real
+        that as it rises into the viewport, fast and snappy like the real
         Luna animation, driven by <code>animation-timeline: view()</code>.
       </p>
       <div class="maxi-stack">
         <div class="maxi"><div class="title-bar bar"><span class="title-text">My Documents</span><span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><span class="close" aria-hidden="true"></span></span></div><div class="pane">Opened as it entered the viewport.</div></div>
         <div class="maxi"><div class="title-bar bar"><span class="title-text">My Pictures</span><span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><span class="close" aria-hidden="true"></span></span></div><div class="pane">Scale from 0.86 + fade, origin at the bottom.</div></div>
-        <div class="maxi"><div class="title-bar bar"><span class="title-text">My Music</span><span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><span class="close" aria-hidden="true"></span></span></div><div class="pane">animation-range: entry 5% &rarr; cover 32% — done quick, then it sits still.</div></div>
+        <div class="maxi"><div class="title-bar bar"><span class="title-text">My Music</span><span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><span class="close" aria-hidden="true"></span></span></div><div class="pane">animation-range: entry 5% &rarr; cover 32%. Done quick, then it sits still.</div></div>
       </div>
       <p class="how">
         <code>animation-timeline: view(); animation-range: entry 5% cover 32%;</code>
@@ -374,20 +374,20 @@ footer { text-align: center; font-family: var(--font-ui); font-size: 9pt; color:
 
     <!-- prototype 3 -->
     <section class="proto">
-      <h2>3 &middot; The Luna scrollbar <span class="scroll-hint">— scroll inside the box</span></h2>
+      <h2>3 &middot; The Luna scrollbar <span class="scroll-hint">(scroll inside the box)</span></h2>
       <p class="note">
-        Not an animation, but the most-missed bit of XP scroll chrome: the blue
+        No animation here, just the most-missed bit of XP scroll chrome: the blue
         gradient scrollbar. Pure CSS (<code>::-webkit-scrollbar</code> +
-        <code>scrollbar-color</code> for Firefox). <b>Shipped</b> &mdash; the
+        <code>scrollbar-color</code> for Firefox). <b>Shipped.</b> The
         <code>scrollbar-color</code> tint is applied site-wide (<a href="/">the homepage</a>,
         this garage, serendipity), so this one graduated out of the lab.
       </p>
       <div class="luna-scroller">
         <p>The Windows XP scrollbar: a Luna-blue gradient thumb with a 3D bevel, a lighter track, and square arrow buttons top and bottom.</p>
         <p>Scroll this box to drive it. WebKit/Blink get the full gradient thumb + buttons; Firefox gets the two-tone <code>scrollbar-color</code> (thumb + track), no buttons.</p>
-        <p>On the homepage this would mean the photo wall and tracklist scroll inside windows that actually look like windows &mdash; right down to the chrome.</p>
+        <p>On the homepage this would mean the photo wall and tracklist scroll inside windows that actually look like windows, right down to the chrome.</p>
         <p>Keep scrolling&hellip; the thumb is the gradient, the track is the lighter channel beside it.</p>
-        <p>That&apos;s the whole trick. No images, no JS &mdash; just a styled native scrollbar.</p>
+        <p>That&apos;s the whole trick. No images, no JS, just a styled native scrollbar.</p>
       </div>
       <p class="how">
         <code>::-webkit-scrollbar-thumb { background: linear-gradient(90deg, &hellip;); }</code>

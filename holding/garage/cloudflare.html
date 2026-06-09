@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>three free Cloudflare features, live — aadhar.sh garage</title>
-<meta name="description" content="Live demos of three free Cloudflare Workers platform features — Durable Objects (atomic counter), Workers AI (photo captioning), and Workers Logs (structured observability) — behind a tiny worker. A fourth, Browser Rendering, is wired but parked on the free tier's daily cap.">
+<meta name="description" content="Live demos of three free Cloudflare Workers platform features (Durable Objects atomic counter, Workers AI photo captioning, and Workers Logs structured observability) behind a tiny worker. A fourth, Browser Rendering, is wired but parked on the free tier's daily cap.">
 <link rel="canonical" href="https://aadhar.sh/garage/cloudflare">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><path d='M9 22 a6 6 0 0 1 0-12 a8 8 0 0 1 15 2 a5 5 0 0 1-1 10 z' fill='%23166aee'/></svg>">
 <style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}
@@ -185,19 +185,19 @@ code.m, .m { font-family: var(--font-mono); font-size: 9.2pt; }
     <h1>Three free Cloudflare features, live</h1>
     <p class="lede">
       The free Workers plan quietly bundles things that used to cost money or
-      a separate service. Three of them are wired to live demos here &mdash;
-      <b>Durable Objects</b>, <b>Workers&nbsp;AI</b>, and <b>Workers&nbsp;Logs</b> &mdash;
+      a separate service. Three of them are wired to live demos here
+      (<b>Durable Objects</b>, <b>Workers&nbsp;AI</b>, and <b>Workers&nbsp;Logs</b>),
       behind a tiny worker (<code class="m">cf-garage</code>) routed at
       <code class="m">/garage/cf/*</code>. The buttons hit real endpoints; nothing is faked.
       A fourth, <b>Browser&nbsp;Rendering</b>, is bound and deployed but parked on the free
-      tier&apos;s daily cap &mdash; <a href="#parked">noted honestly below</a>.
+      tier&apos;s daily cap. <a href="#parked">Noted honestly below.</a>
     </p>
 
     <div class="cf-feat">
-      <h2>1 &middot; Durable Objects &mdash; an atomic counter</h2>
+      <h2>1 &middot; Durable Objects: an atomic counter</h2>
       <p>A <b>strongly-consistent, single-instance</b> stateful object. The homepage&apos;s
-        visitor counter uses KV, which is eventually-consistent and capped at 1,000 writes/day
-        &mdash; so a busy day silently stalls it. A DO increments <em>exactly once</em>, no race,
+        visitor counter uses KV, which is eventually-consistent and capped at 1,000 writes/day,
+        so a busy day silently stalls it. A DO increments <em>exactly once</em>, no race,
         100k writes/day. It used to be paid; it&apos;s free now, and it&apos;s the correct fix
         for that counter.</p>
       <button class="cf-btn" id="do-btn" type="button">increment the global counter</button>
@@ -206,10 +206,10 @@ code.m, .m { font-family: var(--font-mono); font-size: 9.2pt; }
     </div>
 
     <div class="cf-feat">
-      <h2>2 &middot; Workers AI &mdash; caption a photo</h2>
+      <h2>2 &middot; Workers AI: caption a photo</h2>
       <p>Every model in the catalog, <b>10,000 neurons/day free</b>. This runs
         <code class="m">@cf/llava-1.5-7b</code> over a real grid photo to generate alt-text.
-        It&apos;s a small, fast vision model &mdash; expect the occasional charming hallucination
+        It&apos;s a small, fast vision model, so expect the occasional charming hallucination
         (it once called a cloudy sky a UFO). The point is it&apos;s one binding call, no GPU, no key.</p>
       <button class="cf-btn" id="ai-btn" type="button">caption a random grid photo</button>
       <div class="cf-out" id="ai-out">&mdash;</div>
@@ -217,10 +217,10 @@ code.m, .m { font-family: var(--font-mono); font-size: 9.2pt; }
     </div>
 
     <div class="cf-feat">
-      <h2>3 &middot; Workers Logs &mdash; structured observability</h2>
+      <h2>3 &middot; Workers Logs: structured observability</h2>
       <p><b>200,000 events/day, 3-day retention, free.</b> Every button above emitted a
-        structured log line from the worker &mdash;
-        <code class="m">{ feature, ms, &hellip; }</code> &mdash; filterable and searchable in the
+        structured log line from the worker
+        (<code class="m">{ feature, ms, &hellip; }</code>), filterable and searchable in the
         dashboard. It can&apos;t be shown <em>here</em> (the logs live in Cloudflare, not the page),
         but it&apos;s on: <code class="m">[observability] enabled = true</code> in
         <code class="m">wrangler.toml</code>. Click around, then watch them stream in
@@ -229,20 +229,20 @@ code.m, .m { font-family: var(--font-mono); font-size: 9.2pt; }
     </div>
 
     <h2>The honest scorecard</h2>
-    <p class="note">All three ride the free Workers plan and <b>work live above</b> &mdash; click
+    <p class="note">All three ride the free Workers plan and <b>work live above</b>. Click
       them. They&apos;re shipped: a Durable Object increments with no race, Workers AI captions a
       real photo on a free GPU, and every click leaves a structured log line in the dashboard.</p>
 
     <div class="callout" id="parked">
       <b>The fourth, parked honestly: Browser Rendering.</b> Headless Chromium in a Worker
-      (Puppeteer) &mdash; <code class="m">puppeteer.launch(env.BROWSER) → page.goto() →
+      (Puppeteer): <code class="m">puppeteer.launch(env.BROWSER) → page.goto() →
       page.screenshot()</code>, the basis for on-the-fly <code class="m">og:image</code> cards. The
       binding is bound and the worker deploys; there&apos;s <em>no</em> enable toggle (the binding
-      is the access). The browser <em>does</em> provision &mdash; the catch was on my side: a
+      is the access). The browser <em>does</em> provision. The catch was on my side: a
       timeout race that abandoned the in-flight browser stranded its websocket session (the free
       plan caps concurrency at 2), so each probe leaked a session and the next launch errored. The
       handler now bounds every launch and always releases the browser, and a bare hit no-ops instead
-      of launching &mdash; so crawlers can&apos;t burn the <b>10 browser-minutes/day</b> budget. It&apos;s
+      of launching, so crawlers can&apos;t burn the <b>10 browser-minutes/day</b> budget. It&apos;s
       unbuttoned here until the OG-image use case earns that budget; trigger it by hand at
       <code class="m">/garage/cf/screenshot?go=1</code>.</div>
 
@@ -261,7 +261,7 @@ code.m, .m { font-family: var(--font-mono); font-size: 9.2pt; }
   if(doBtn) doBtn.addEventListener("click", async function(){
     set("do-out","…"); doBtn.disabled=true;
     try{ var r=await fetch("/garage/cf/counter"); var d=await r.json();
-      set("do-out", d.ok ? ("you are increment #"+d.count+" — atomic, no race") : ("error: "+d.error)); }
+      set("do-out", d.ok ? ("you are increment #"+d.count+", atomic, no race") : ("error: "+d.error)); }
     catch(e){ set("do-out","error: "+e); } finally{ doBtn.disabled=false; }
   });
   var STEMS=["XT508165","XT508199","XT507333","XT508940","XT509491","XT508169"];
@@ -270,7 +270,7 @@ code.m, .m { font-family: var(--font-mono); font-size: 9.2pt; }
     var s=STEMS[Math.floor(Math.random()*STEMS.length)];
     set("ai-out","running llava on "+s+"… (a few seconds)"); aiBtn.disabled=true;
     try{ var r=await fetch("/garage/cf/caption?img="+s); var d=await r.json();
-      set("ai-out", d.ok ? ("“"+d.caption+"”  — llava on "+s) : ("error: "+d.error)); }
+      set("ai-out", d.ok ? ("\""+d.caption+"\" llava on "+s) : ("error: "+d.error)); }
     catch(e){ set("ai-out","error: "+e); } finally{ aiBtn.disabled=false; }
   });
 })();
