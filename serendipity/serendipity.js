@@ -571,9 +571,26 @@ async function handleCookies(request, env, d, uid) {
 }
 
 function renderMcpInfo(path) {
+  const ep = `https://aadhar.sh${PREFIX}/mcp`;
+  const tool = (n, args, desc) =>
+    `<div class="att"><div class="who"><div class="n"><code>${n}</code>${args ? ` <span class="sub" style="display:inline">(${args})</span>` : ""}</div><div class="sub">${desc}</div></div></div>`;
   const body = `<h1 class="page">For agents</h1>
-    <p class="lede">Serendipity is built to be queried by agents, not just people. A read-only MCP (Model Context Protocol) endpoint is coming at <code>${PREFIX}/mcp</code> — point an MCP client at it and call tools like <code>list_events</code>, <code>get_event</code>, and <code>search_people</code> to ask "what events are good and who's going."</p>
-    <div class="empty" style="text-align:left"><p class="note" style="margin:0">The MCP + JSON endpoints land in a later build phase. The data model and query layer that back them already exist.</p></div>`;
+    <p class="lede">Serendipity is built to be queried by agents, not just people. A read-only MCP (Model Context Protocol) endpoint is live at <code>${ep}</code>. Point any MCP client at it (Streamable-HTTP transport, JSON-RPC over POST) and ask "what events are good, and who's going." Public data only: no auth, no writes, and never private contact details.</p>
+    <div class="grp">Tools</div>
+    <div class="alist">
+      ${tool("list_events", "when, q, limit", "Events in the pool with a head count of who&apos;s going. Defaults to upcoming, soonest first.")}
+      ${tool("get_event", "id", "One event in full: description, hosts, the guest list, contributors.")}
+      ${tool("search_people", "q, limit", "Find people by name and the events they&apos;re going to.")}
+      ${tool("stats", "", "Pool overview: event counts, distinct people, active contributors.")}
+    </div>
+    <div class="grp">Connect</div>
+    <p class="note" style="margin:0 0 8px">Add it to an MCP client config:</p>
+    <pre class="code-block" style="font-family:var(--font-mono);font-size:12px;white-space:pre-wrap;background:oklch(97% 0 0);border:1px solid oklch(82% 0.02 250);border-radius:3px;padding:10px;overflow:auto;margin:0 0 12px">{
+  "mcpServers": {
+    "serendipity": { "url": "${ep}" }
+  }
+}</pre>
+    <p class="note">It exposes exactly what the dashboard shows: event details and who&apos;s going, with names, roles, companies, and public social links. The email and phone columns behind the pool never leave the database.</p>`;
   return html(200, shell("For agents", path, body));
 }
 
@@ -1166,6 +1183,244 @@ async function handleCover(request, env, ctx) {
   return out;
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// MCP — read-only Model Context Protocol surface at /serendipity/mcp.
+// Streamable-HTTP transport (JSON-RPC 2.0 over POST), stateless + dependency-
+// free — the same hand-rolled style as the rest of this Worker. It reuses the
+// query layer above and exposes ONLY the public read surface the dashboard
+// renders. The email / phone_numbers / raw_json columns on attendees+enrichments
+// never cross this boundary. No auth, no writes — the same data, for agents.
+// ════════════════════════════════════════════════════════════════════════════
+
+const MCP_PROTOCOL = "2025-06-18";                              // the version we author against
+const MCP_SUPPORTED = ["2025-06-18", "2025-03-26", "2024-11-05"];
+
+// public-safe projection of an attendee row — mirrors what attendeeRow renders.
+// NO email / phone / raw_json: those columns aren't even SELECT'd by the query
+// layer, and this mapper is the second guardrail.
+function mcpAttendee(a) {
+  const socials = {};
+  if (a.twitter_handle) socials.x = "https://x.com/" + String(a.twitter_handle).replace(/^@/, "");
+  if (a.linkedin_url) socials.linkedin = a.linkedin_url;
+  else if (a.linkedin_handle) socials.linkedin = "https://linkedin.com/in/" + a.linkedin_handle;
+  if (a.instagram_handle) socials.instagram = "https://instagram.com/" + String(a.instagram_handle).replace(/^@/, "");
+  if (a.website) socials.website = a.website;
+  const o = {
+    name: a.name,
+    role: a.role || null,
+    company: a.company || null,
+    location: a.location || null,
+    bio: a.bio_short || null,
+    times_seen: a.times_seen != null ? Number(a.times_seen) : null,
+  };
+  if (a.is_host != null) o.is_host = !!Number(a.is_host);
+  if (Object.keys(socials).length) o.socials = socials;
+  return o;
+}
+
+function mcpEventSummary(e) {
+  return {
+    id: e.id,
+    name: e.name,
+    start_at: e.start_at || null,
+    location: e.location || null,
+    url: e.url || (e.id ? "https://lu.ma/" + e.id : null),
+    going: Number(e.attendee_count || 0),
+    hosts: Number(e.host_count || 0),
+    contributors: e.contributors || null,
+  };
+}
+
+// people search: one query for the matches, one IN(...) query for their events
+// (two D1 subrequests total, no N+1).
+async function mcpSearchPeople(d, q, limit) {
+  const term = "%" + String(q).replace(/[\\%_]/g, "\\$&") + "%";
+  const people = await d.prepare(
+    `SELECT a.id, a.name, a.bio_short, a.times_seen, a.website,
+            a.twitter_handle, a.linkedin_handle, a.instagram_handle,
+            en.company, en.role, en.location, en.linkedin_url
+       FROM attendees a LEFT JOIN enrichments en ON en.attendee_id = a.id
+      WHERE a.name LIKE ? ESCAPE '\\'
+      ORDER BY a.times_seen DESC, a.name ASC
+      LIMIT ?`
+  ).all(term, limit);
+  if (!people.length) return [];
+  const ids = people.map((p) => p.id);
+  const ph = ids.map(() => "?").join(",");
+  const memberships = await d.prepare(
+    `SELECT ea.attendee_id, e.id AS event_id, e.name AS event_name, e.start_at, ea.is_host
+       FROM event_attendees ea JOIN events e ON e.id = ea.event_id
+      WHERE ea.attendee_id IN (${ph})
+      ORDER BY e.start_at DESC`
+  ).all(...ids);
+  const byPerson = new Map();
+  for (const m of memberships) {
+    if (!byPerson.has(m.attendee_id)) byPerson.set(m.attendee_id, []);
+    byPerson.get(m.attendee_id).push({ id: m.event_id, name: m.event_name, start_at: m.start_at || null, is_host: !!Number(m.is_host) });
+  }
+  return people.map((p) => { const o = mcpAttendee(p); o.events = byPerson.get(p.id) || []; return o; });
+}
+
+const MCP_TOOLS = [
+  {
+    name: "list_events",
+    description: "List events in the Serendipity pool — community-curated events worth going to, each with a head count of who's going. Defaults to upcoming events, soonest first.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        when: { type: "string", enum: ["upcoming", "past", "all"], description: "which slice to return (default \"upcoming\")" },
+        q: { type: "string", description: "optional case-insensitive filter on event name, location, or contributor" },
+        limit: { type: "integer", minimum: 1, maximum: 200, description: "max events to return (default 50)" },
+      },
+    },
+  },
+  {
+    name: "get_event",
+    description: "Full detail for one event by id: description, time, location, Luma link, hosts, the guest list (who's going, with role/company/socials when known), and which contributors added it.",
+    inputSchema: {
+      type: "object",
+      properties: { id: { type: "string", description: "the event id, as returned by list_events" } },
+      required: ["id"],
+    },
+  },
+  {
+    name: "search_people",
+    description: "Search people across all events by name. Returns who they are (role/company/socials when known), how many events they've turned up at, and which events they're going to.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        q: { type: "string", description: "a name or partial name to search for" },
+        limit: { type: "integer", minimum: 1, maximum: 100, description: "max people to return (default 25)" },
+      },
+      required: ["q"],
+    },
+  },
+  {
+    name: "stats",
+    description: "Overview of the pool: upcoming/past event counts, distinct people seen, and active contributors.",
+    inputSchema: { type: "object", properties: {} },
+  },
+];
+
+// run a tool. returns a plain object on success, or { _error } for a tool-level
+// error (bad args / not found) the caller surfaces as an MCP isError result.
+async function mcpCallTool(d, name, args) {
+  args = args || {};
+  if (name === "list_events") {
+    const when = ["upcoming", "past", "all"].includes(args.when) ? args.when : "upcoming";
+    const limit = Math.min(Math.max(parseInt(args.limit, 10) || 50, 1), 200);
+    const q = args.q != null && String(args.q).trim() ? String(args.q).toLowerCase() : null;
+    const now = Date.now();
+    let rows = await queryEvents(d);
+    if (when === "upcoming") rows = rows.filter((e) => !e.start_at || new Date(e.start_at).getTime() >= now);
+    else if (when === "past") rows = rows.filter((e) => e.start_at && new Date(e.start_at).getTime() < now)
+                                         .sort((a, b) => new Date(b.start_at) - new Date(a.start_at));
+    if (q) rows = rows.filter((e) => [e.name, e.location, e.contributors].some((v) => v && String(v).toLowerCase().includes(q)));
+    const total = rows.length;
+    const events = rows.slice(0, limit).map(mcpEventSummary);
+    return { when, total, returned: events.length, events };
+  }
+  if (name === "get_event") {
+    const id = String(args.id || "").trim();
+    if (!id) return { _error: "id is required" };
+    const [ev, rows, contributors] = await Promise.all([queryEvent(d, id), queryEventAttendees(d, id), queryContributors(d, id)]);
+    if (!ev) return { _error: "no event with id \"" + id + "\" is in the pool" };
+    const hosts = rows.filter((a) => a.is_host).map(mcpAttendee);
+    const guests = rows.filter((a) => !a.is_host).map((a) => ({ ...a, _s: attendeeScore(a) }))
+                       .sort((a, b) => b._s - a._s || a.name.localeCompare(b.name)).map(mcpAttendee);
+    return {
+      event: {
+        id: ev.id, name: ev.name, description: ev.description || null,
+        start_at: ev.start_at || null, end_at: ev.end_at || null,
+        location: ev.location || null, url: ev.url || (ev.id ? "https://lu.ma/" + ev.id : null),
+        status: ev.user_status || null,
+      },
+      hosts, going: guests.length, attendees: guests,
+      contributors: contributors.map((c) => c.label),
+    };
+  }
+  if (name === "search_people") {
+    const q = String(args.q || "").trim();
+    if (!q) return { _error: "q is required" };
+    const limit = Math.min(Math.max(parseInt(args.limit, 10) || 25, 1), 100);
+    const people = await mcpSearchPeople(d, q, limit);
+    return { query: q, returned: people.length, people };
+  }
+  if (name === "stats") {
+    const [events, contributors, attRow] = await Promise.all([
+      queryEvents(d), countContributors(d), d.prepare("SELECT COUNT(*) AS n FROM attendees").get(),
+    ]);
+    const now = Date.now();
+    const upcoming = events.filter((e) => !e.start_at || new Date(e.start_at).getTime() >= now).length;
+    return { events_total: events.length, events_upcoming: upcoming, events_past: events.length - upcoming,
+             people: attRow ? Number(attRow.n) : 0, contributors };
+  }
+  return { _unknown: true };
+}
+
+async function handleMcp(request, env, d) {
+  const cors = {
+    "access-control-allow-origin": "*",
+    "access-control-allow-methods": "POST, OPTIONS",
+    "access-control-allow-headers": "content-type, mcp-protocol-version, mcp-session-id, authorization",
+    "access-control-max-age": "86400",
+  };
+  if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
+  const respond = (obj, status = 200) => new Response(obj === null ? null : JSON.stringify(obj), {
+    status, headers: { ...cors, "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
+  });
+  if (request.method !== "POST") {
+    // stateless server: no server-initiated SSE stream, POST JSON-RPC only.
+    return respond({ error: "Use POST with JSON-RPC 2.0. Docs: " + PREFIX + "/mcp-info" }, 405);
+  }
+  const rpcErr = (id, code, message) => ({ jsonrpc: "2.0", id: id === undefined ? null : id, error: { code, message } });
+
+  let payload;
+  try { payload = await request.json(); }
+  catch { return respond(rpcErr(null, -32700, "Parse error")); }
+
+  const handleOne = async (msg) => {
+    const hasId = msg && typeof msg === "object" && "id" in msg;
+    if (!msg || msg.jsonrpc !== "2.0" || typeof msg.method !== "string") {
+      return hasId ? rpcErr(msg.id, -32600, "Invalid Request") : null;
+    }
+    const id = msg.id, m = msg.method;
+    try {
+      if (m === "initialize") {
+        const reqV = msg.params && msg.params.protocolVersion;
+        return { jsonrpc: "2.0", id, result: {
+          protocolVersion: MCP_SUPPORTED.includes(reqV) ? reqV : MCP_PROTOCOL,
+          capabilities: { tools: {} },
+          serverInfo: { name: "serendipity", title: "Serendipity", version: "1.0.0" },
+          instructions: "Read-only access to the Serendipity event pool: community-curated events and who's going. Start with stats or list_events, drill in with get_event, find people with search_people. Public data only.",
+        } };
+      }
+      if (m === "ping") return { jsonrpc: "2.0", id, result: {} };
+      if (m === "tools/list") return { jsonrpc: "2.0", id, result: { tools: MCP_TOOLS } };
+      if (m === "resources/list") return { jsonrpc: "2.0", id, result: { resources: [] } };
+      if (m === "prompts/list") return { jsonrpc: "2.0", id, result: { prompts: [] } };
+      if (m.startsWith("notifications/")) return null;  // client notification — ack only
+      if (m === "tools/call") {
+        const name = msg.params && msg.params.name;
+        const out = await mcpCallTool(d, name, (msg.params && msg.params.arguments) || {});
+        if (out && out._unknown) return rpcErr(id, -32602, "Unknown tool: " + name);
+        if (out && out._error) return { jsonrpc: "2.0", id, result: { content: [{ type: "text", text: out._error }], isError: true } };
+        return { jsonrpc: "2.0", id, result: { content: [{ type: "text", text: JSON.stringify(out, null, 2) }] } };
+      }
+      return hasId ? rpcErr(id, -32601, "Method not found: " + m) : null;
+    } catch (e) {
+      return hasId ? rpcErr(id, -32603, "Internal error: " + (e && e.message ? e.message : String(e))) : null;
+    }
+  };
+
+  if (Array.isArray(payload)) {
+    const out = (await Promise.all(payload.map(handleOne))).filter((x) => x !== null);
+    return out.length ? respond(out) : respond(null, 202);
+  }
+  const one = await handleOne(payload);
+  return one === null ? respond(null, 202) : respond(one);
+}
+
 export async function handleSerendipity(request, env, ctx) {
   const url = new URL(request.url);
   let path = url.pathname.replace(/\/+$/, "") || PREFIX;
@@ -1178,6 +1433,11 @@ export async function handleSerendipity(request, env, ctx) {
     return html(500, shell("Setup", path, `<h1 class="page">Database not bound</h1><p class="lede">The <code>SERENDIPITY_DB</code> D1 binding isn&apos;t attached to this deployment yet.</p>`));
   }
   const d = db(env);
+
+  // MCP — stateless JSON-RPC, read-only, no uid cookie. early-return like /cover
+  // so the response stays cookie-free (and CORS-clean for cross-origin clients).
+  if (path === `${PREFIX}/mcp`) return handleMcp(request, env, d);
+
   const msg = url.searchParams.get("msg");
   const dashKey = new Request(`${url.origin}${PREFIX}`);  // shared public-dashboard cache key
 
