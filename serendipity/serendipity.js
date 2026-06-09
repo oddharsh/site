@@ -194,7 +194,7 @@ function shellCss() {
   h1,h2,h3{font-family:var(--font-caption);margin:0}
   .wrap{max-width:980px;margin:22px auto;padding:0 12px 48px}
   .window{background:#fff;border:2px solid #0831d9;border-right-color:#001ea0;border-bottom-color:#001ea0;border-top-left-radius:8px;border-top-right-radius:8px;overflow:hidden;box-shadow:inset 1px 1px 0 #166aee,inset 2px 2px 0 #0855dd,inset -1px -1px 0 #00138c,inset -2px -2px 0 #003bda,4px 4px 0 rgba(0,30,160,.35)}
-  .titlebar{display:flex;align-items:center;gap:6px;padding:4px 6px 4px 8px;font:bold 10pt "Trebuchet MS",Verdana,sans-serif;color:#fff;text-shadow:1px 1px #0f1089;border-bottom:1px solid #00138c;background:linear-gradient(180deg,oklch(70% 0.15 258) 0%,oklch(60% 0.20 261) 8%,oklch(51% 0.225 263) 18%,oklch(50% 0.225 263) 86%,oklch(58% 0.18 260) 100%)}
+  .titlebar{display:flex;align-items:center;gap:6px;padding:4px 6px 4px 8px;font:bold 10pt var(--font-caption);color:#fff;text-shadow:1px 1px #0f1089;border-bottom:1px solid #00138c;background:linear-gradient(180deg,oklch(70% 0.15 258) 0%,oklch(60% 0.20 261) 8%,oklch(51% 0.225 263) 18%,oklch(50% 0.225 263) 86%,oklch(58% 0.18 260) 100%)}
   .titlebar .ico{width:18px;height:18px;flex:0 0 auto;background:oklch(69.58% 0.2043 43.49);border-radius:0;position:relative}
   .titlebar .ico::before{content:"";position:absolute;inset:3px 4px;background:oklch(87.82% 0.0877 66.27);clip-path:polygon(50% 0,100% 100%,0 100%)}
   .titlebar .t{flex:1}
@@ -214,9 +214,9 @@ function shellCss() {
   .body>.content{overflow:auto;min-height:0}
   .pane{width:200px;flex:0 0 auto;border-right:2px solid #7a96c8;background:linear-gradient(180deg,oklch(90% 0.055 245),oklch(93% 0.038 245));padding:12px}
   .pane .brand{display:block;padding:2px 4px 10px;color:oklch(16% 0 0);text-decoration:none}
-  .pane .brand b{font:600 16pt "Trebuchet MS",Verdana,sans-serif;display:block;line-height:1}
+  .pane .brand b{font:600 16pt var(--font-caption);display:block;line-height:1}
   .pane .brand span{font-size:10px;color:oklch(45% 0.01 250)}
-  .pane-head{font:bold 8.5pt "Trebuchet MS",Verdana,sans-serif;color:#fff;padding:3px 10px;border-radius:3px 3px 0 0;text-shadow:0 1px 1px rgba(0,30,90,.5);background:linear-gradient(180deg,oklch(66% 0.16 255),oklch(54% 0.20 260))}
+  .pane-head{font:bold 8.5pt var(--font-caption);color:#fff;padding:3px 10px;border-radius:3px 3px 0 0;text-shadow:0 1px 1px rgba(0,30,90,.5);background:linear-gradient(180deg,oklch(66% 0.16 255),oklch(54% 0.20 260))}
   .pane-body{border:1px solid #bcd0ec;border-top:0;background:rgba(255,255,255,.55);padding:4px;display:flex;flex-direction:column}
   .pane-body a{padding:3px 8px;border-radius:0;text-decoration:none;color:oklch(42% 0.235 264)}
   .pane-body a:hover{background:#2f6fde;color:#fff}
@@ -226,7 +226,7 @@ function shellCss() {
   h1.page{font-size:19pt;font-weight:bold;color:oklch(33% 0.10 255);margin:0 0 2px;letter-spacing:-.01em}
   .lede{color:oklch(40% 0.01 250);font-size:11px;margin:0 0 16px;max-width:62ch}
   hr.sep{border:0;border-top:1px solid oklch(85% 0.03 250);margin:14px 0}
-  .grp{font:bold 8.5pt "Trebuchet MS";text-transform:uppercase;letter-spacing:.06em;color:oklch(45% 0.02 255);margin:18px 0 8px}
+  .grp{font:bold 8.5pt var(--font-caption);text-transform:uppercase;letter-spacing:.06em;color:oklch(45% 0.02 255);margin:18px 0 8px}
   /* event card — sunken-bevel list item */
   .ev{display:block;text-decoration:none;color:inherit;border:1px solid oklch(80% 0.035 250);border-top-color:oklch(70% 0.05 250);border-left-color:oklch(70% 0.05 250);background:#fff;padding:10px 12px;margin:0 0 7px;border-radius:0}
   .ev:hover{border-color:oklch(50% 0.18 263);background:oklch(98% 0.02 250)}
@@ -234,7 +234,7 @@ function shellCss() {
   .ev .meta{color:oklch(45% 0.01 250);font-size:11px;margin-top:2px}
   .ev .row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px}
   .count{font-size:11px;color:oklch(42% 0.02 255)}
-  .badge{display:inline-block;font:bold 9px Tahoma;padding:1px 6px;border:1px solid;border-radius:0;text-transform:uppercase;letter-spacing:.04em}
+  .badge{display:inline-block;font:bold 9px var(--font-ui);padding:1px 6px;border:1px solid;border-radius:0;text-transform:uppercase;letter-spacing:.04em}
   .badge.via{background:oklch(96% 0.02 250);color:oklch(42% 0.03 255);border-color:oklch(80% 0.04 250);font-weight:normal;text-transform:none}
   .badge.past{background:oklch(95% 0 0);color:oklch(45% 0 0);border-color:oklch(78% 0 0)}
   /* attendee row */
@@ -256,7 +256,7 @@ function shellCss() {
   .att .soc{display:flex;gap:6px;flex:0 0 auto}
   .att .soc a{font-size:10px}
   .empty{text-align:center;color:oklch(50% 0.01 250);padding:34px 12px;border:1px dashed oklch(78% 0.04 250);border-radius:0;background:oklch(98% 0.01 250)}
-  .xp-button{display:inline-block;min-width:73px;padding:4px 14px;font:8pt/1.3 Tahoma;color:#000;cursor:pointer;border:1px solid #8e9dad;border-radius:0;text-decoration:none;background:linear-gradient(180deg,#fff,#fdfdfd 45%,#f3f2ec 55%,#e9e7dc)}
+  .xp-button{display:inline-block;min-width:73px;padding:4px 14px;font:8pt/1.3 var(--font-ui);color:#000;cursor:pointer;border:1px solid #8e9dad;border-radius:0;text-decoration:none;background:linear-gradient(180deg,#fff,#fdfdfd 45%,#f3f2ec 55%,#e9e7dc)}
   .xp-button:hover{border-color:#e9994a;box-shadow:inset 0 0 0 1px #fdd78b,0 0 3px 1px rgba(255,199,60,.55)}
   .xp-button.primary{color:#fff;border-color:#2c4d7e;font-weight:bold;background:linear-gradient(180deg,#5b9bf0,#3f81e8 12%,#2f6fde 50%,#2a64d4 88%,#2a60cc)}
   .note{font-size:11px;color:oklch(42% 0.01 250)}
@@ -275,7 +275,7 @@ function shellCss() {
   .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 14px}
   .toolbar .search{flex:1;min-width:170px;margin:0}
   .chips{display:flex;gap:4px;flex-wrap:wrap}
-  .chip{font:8.5pt Tahoma;padding:3px 11px;border:1px solid #8e9dad;border-radius:0;background:linear-gradient(180deg,#fff,#f3f2ec);color:#222;cursor:pointer}
+  .chip{font:8.5pt var(--font-ui);padding:3px 11px;border:1px solid #8e9dad;border-radius:0;background:linear-gradient(180deg,#fff,#f3f2ec);color:#222;cursor:pointer}
   .chip.on{color:#fff;border-color:#2c4d7e;font-weight:bold;background:linear-gradient(180deg,#5b9bf0,#2f6fde 60%,#2a60cc)}
   .ev[hidden],.grp[hidden]{display:none}
   .empty-filter{display:none;color:oklch(50% 0.01 250);padding:24px 12px;border:1px dashed oklch(78% 0.04 250);border-radius:0;background:oklch(98% 0.01 250);text-align:center;font-size:11px}

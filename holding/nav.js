@@ -225,7 +225,7 @@
 "box-shadow:inset 0 1px 0 oklch(82% 0.09 250),inset 0 2px 0 oklch(62% 0.16 255)}" +
 // start orb
 "#axp-start{display:flex;align-items:center;gap:6px;padding:0 16px 2px 9px;border:0;cursor:pointer;color:oklch(100% 0 0);" +
-"font-family:var(--font-caption,'Trebuchet MS',Verdana,sans-serif);font-style:italic;font-weight:bold;font-size:14px;text-shadow:1px 1px 1px oklch(22% 0.07 145);" +
+"font-family:var(--font-caption,'Trebuchet MS',Verdana,Geneva,sans-serif);font-style:italic;font-weight:bold;font-size:14px;text-shadow:1px 1px 1px oklch(22% 0.07 145);" +
 "border-radius:0 9px 9px 0/0 14px 14px 0;margin-right:6px;" +
 "background:linear-gradient(180deg,oklch(72% 0.17 142) 0%,oklch(63% 0.18 143) 8%,oklch(54% 0.18 144) 46%,oklch(50% 0.18 145) 52%,oklch(58% 0.17 143) 92%,oklch(45% 0.16 146) 100%);" +
 "box-shadow:inset 1px 1px 0 oklch(86% 0.13 140),inset -1px -1px 0 oklch(38% 0.13 147)}" +
@@ -250,7 +250,7 @@
 ".axp-ico:hover{background:oklch(60% 0.20 263 / .26);border-color:oklch(74% 0.10 263 / .5)}" +
 ".axp-ico:focus-visible{outline:1px dotted oklch(100% 0 0);outline-offset:1px;background:oklch(60% 0.20 263 / .34)}" +
 ".axp-ico:active .ic{transform:translateY(1px)}" +
-".axp-ico .ic{width:31px;height:31px;border-radius:5px;display:flex;align-items:center;justify-content:center;color:oklch(100% 0 0);font-weight:bold;font-size:18px;line-height:1;font-family:var(--font-caption,'Trebuchet MS',Verdana,sans-serif);text-shadow:0 1px 1px oklch(0% 0 0 / .4);box-shadow:inset 0 1px 0 oklch(100% 0 0 / .5),inset 0 -2px 2px oklch(0% 0 0 / .22),0 1px 2px oklch(0% 0 0 / .5)}" +
+".axp-ico .ic{width:31px;height:31px;border-radius:3px;display:flex;align-items:center;justify-content:center;color:oklch(100% 0 0);font-weight:bold;font-size:18px;line-height:1;font-family:var(--font-caption,'Trebuchet MS',Verdana,Geneva,sans-serif);text-shadow:0 1px 1px oklch(0% 0 0 / .4);box-shadow:inset 0 1px 0 oklch(100% 0 0 / .5),inset 0 -2px 2px oklch(0% 0 0 / .22),0 1px 2px oklch(0% 0 0 / .5)}" +
 // label: white text with the classic XP desktop drop shadow, up to two lines
 ".axp-ico .t{font-size:11px;line-height:1.18;text-align:center;color:oklch(100% 0 0);text-shadow:0 1px 2px oklch(18% 0.04 263),0 0 3px oklch(18% 0.04 263);max-width:82px;overflow-wrap:anywhere}" +
 // My Pictures glyph: a tiny framed Bliss — sky, sun, rolling hill
@@ -288,15 +288,15 @@
 "#axp-run{position:fixed;left:50%;top:38%;transform:translate(-50%,-50%);z-index:100000;width:min(440px,calc(100vw - 24px));display:none;" +
 "font-family:var(--font-ui,Tahoma,Verdana,Geneva,sans-serif);font-size:12px;color:oklch(21% 0 0);background:oklch(100% 0 0);" +
 "border:2px solid oklch(45% 0.22 263);border-right-color:oklch(33% 0.16 263);border-bottom-color:oklch(33% 0.16 263);" +
-"box-shadow:inset 1px 1px 0 oklch(58% 0.16 258),inset -1px -1px 0 oklch(33% 0.16 263),4px 4px 0 oklch(46% 0.16 263 / .35),6px 8px 24px -6px oklch(0% 0 0 / .5)}" +
+"box-shadow:inset 1px 1px 0 oklch(58% 0.16 258),inset -1px -1px 0 oklch(33% 0.16 263),4px 4px 0 oklch(46% 0.16 263 / .35),2px 3px 12px -2px oklch(30% 0.12 263 / .55)}" +
 "#axp-run.open{display:block}" +
 "#axp-run .tb{display:flex;align-items:center;gap:6px;padding:3px 4px 4px 7px;color:oklch(100% 0 0);" +
-"font-family:var(--font-caption,'Trebuchet MS',Verdana,sans-serif);font-weight:bold;font-size:12px;text-shadow:1px 1px oklch(28% 0.12 263);" +
-"border-radius:5px 5px 0 0;border-bottom:1px solid oklch(41% 0.10 251);" +
+"font-family:var(--font-caption,'Trebuchet MS',Verdana,Geneva,sans-serif);font-weight:bold;font-size:12px;text-shadow:1px 1px oklch(28% 0.12 263);" +
+"border-radius:3px 3px 0 0;border-bottom:1px solid oklch(41% 0.10 251);" +
 "background:linear-gradient(180deg,oklch(70% 0.15 258) 0%,oklch(60% 0.20 261) 8%,oklch(51% 0.225 263) 18%,oklch(50% 0.225 263) 86%,oklch(58% 0.18 260) 100%)}" +
 // the canonical Luna caption CLOSE button (design system): 21x21 red "gel" lozenge,
 // glossy gradient, CSS-drawn white X. matches .title-bar .controls .close site-wide.
-"#axp-run .tb .x{position:relative;box-sizing:border-box;margin-left:auto;width:21px;height:21px;padding:0;overflow:hidden;font-size:0;color:transparent;cursor:pointer;border:1px solid #d8401c;border-radius:3px;background-color:#e45f3e;background-image:linear-gradient(180deg,#e8795f 0%,#e45f40 30%,#e45d3d 52%,#e2552a 80%,#ae3110 100%);transition:filter .1s ease}" +
+"#axp-run .tb .x{position:relative;box-sizing:border-box;margin-left:auto;width:21px;height:21px;padding:0;overflow:hidden;font-size:0;color:transparent;cursor:pointer;border:1px solid #d8401c;border-radius:3px;background-color:#e45f3e;background-image:linear-gradient(180deg,#e8795f 0%,#e45f40 30%,#e45d3d 52%,#e2552a 80%,#ae3110 100%);transition:filter 60ms ease-out}" +
 "#axp-run .tb .x:hover{border-color:#ff7a66;background-color:#ff957c;background-image:linear-gradient(180deg,#ff8b7d 0%,#ff7463 26%,#ff957c 55%,#fd7e64 82%,#d34936 100%);box-shadow:0 0 4px rgba(255,120,96,.7)}" +
 "#axp-run .tb .x:active{filter:brightness(.9)}" +
 "#axp-run .tb .x::before,#axp-run .tb .x::after{content:'';position:absolute;left:50%;top:50%;width:13px;height:2px;margin:-1px 0 0 -6.5px;background:#fff;box-shadow:0 1px 0 rgba(0,0,0,.35)}" +
@@ -310,7 +310,7 @@
 "#axp-run .prompt{flex:1;line-height:1.45;color:oklch(28% 0 0)}" +
 "#axp-run .open-row{display:flex;align-items:center;gap:8px;padding:4px 13px 2px}" +
 "#axp-run .open-row label{flex:0 0 auto}" +
-"#axp-run input{flex:1;font-family:var(--font-ui,Tahoma,Verdana,sans-serif);font-size:12px;padding:3px 5px;color:oklch(18% 0 0);background:oklch(100% 0 0);" +
+"#axp-run input{flex:1;font-family:var(--font-ui,Tahoma,Verdana,Geneva,sans-serif);font-size:12px;padding:3px 5px;color:oklch(18% 0 0);background:oklch(100% 0 0);" +
 "border:2px solid;border-color:oklch(55% 0 0) oklch(86% 0 0) oklch(86% 0 0) oklch(55% 0 0)}" +
 "#axp-run input:focus{outline:1px dotted oklch(45% 0.10 263);outline-offset:1px}" +
 "#axp-run .list{margin:6px 13px 0;border:1px solid oklch(72% 0.02 250);max-height:40vh;overflow:auto;background:oklch(100% 0 0)}" +

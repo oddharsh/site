@@ -5,7 +5,7 @@
 //
 // design vocab:
 //   - .xp-window           outer panel, blue title bar + chrome buttons
-//   - .xp-title-bar        title strip with [ - ] [ ☐ ] [ X ] controls
+//   - .xp-title-bar        title strip with glossy gel min/max/close controls
 //   - .xp-body             inner workspace (white)
 //   - .xp-group            sunken group-box ("Available slots", "Your info")
 //   - .xp-day-label        day header in the slot list
@@ -20,12 +20,12 @@
 
 const STYLES = `
 :root {
-  /* core XP palette */
-  --xp-blue-1:   oklch(45% 0.18 260);   /* dark navy edge */
-  --xp-blue-2:   oklch(54% 0.20 255);   /* mid */
-  --xp-blue-3:   oklch(68% 0.18 245);   /* bright */
-  --xp-blue-4:   oklch(75% 0.13 235);   /* pale stripe */
-  --xp-tan:      oklch(94% 0.02 95);    /* desktop / app bg */
+  /* core XP palette — hand-mirrors design/tokens/colors.css (keep in sync) */
+  --xp-blue-1:   oklch(41.92% 0.0962 250.51); /* dark navy edge ≈ --blue-40   */
+  --xp-blue-2:   oklch(51% 0.225 263);        /* mid ≈ --blue-65 (title core) */
+  --xp-blue-3:   oklch(70% 0.15 258);         /* bright ≈ --blue-95 (grad top)*/
+  --xp-blue-4:   oklch(66% 0.09 263);         /* pale ≈ --blue-inactive       */
+  --xp-tan:      oklch(92.5% 0.018 95);       /* ButtonFace #ECE9D8 ≈ --face  */
   --xp-paper:    oklch(99% 0.005 95);   /* workspace bg */
   --xp-edge-dk:  oklch(46% 0.02 260);   /* sunken dark edge */
   --xp-edge-md:  oklch(70% 0.02 260);   /* mid bevel */
@@ -74,17 +74,19 @@ body {
 }
 /* title bar — mirrors the aadhar.sh main-site convention: a single
    gradient strip with a tiny icon block + the page title on the left,
-   and three boxed control glyphs (_, □, ×) on the right. the glyphs
-   are real Unicode characters so they render the same on every system
-   (no Marlett dependency that fell back ugly). visually consistent
-   with index.html's .title-bar styling. */
+   and three glossy gel control buttons (min/max/close) on the right.
+   the glyphs are CSS-drawn (no text, no Marlett dependency), matching
+   the canonical .title-bar .controls .min/.max/.close site-wide. */
 .xp-title-bar {
+  /* the canonical site-wide 5-stop title gradient (≈ --grad-title) */
   background:
     linear-gradient(
-      to bottom,
-      var(--xp-blue-3)  0%,
-      var(--xp-blue-2) 40%,
-      var(--xp-blue-1) 100%
+      180deg,
+      oklch(70% 0.15 258)  0%,
+      oklch(60% 0.20 261)  8%,
+      oklch(51% 0.225 263) 18%,
+      oklch(50% 0.225 263) 86%,
+      oklch(58% 0.18 260)  100%
     );
   color: oklch(100% 0 0);
   font-family: var(--font-caption);
@@ -123,32 +125,69 @@ body {
 }
 .xp-controls {
   display: inline-flex;
+  align-items: center;
   gap: 2px;
-  letter-spacing: 2px;
-  font-family: var(--font-ui);
-  font-size: 9pt;
 }
-.xp-controls span,
-.xp-controls a {
-  display: inline-block;
-  background: oklch(87.51% 0.0281 248.15);
-  color: var(--xp-blue-1);
-  border: 1px solid var(--xp-blue-1);
-  padding: 0 5px;
-  font-weight: bold;
-  cursor: default;
-  text-decoration: none;
-  text-shadow: none;
-  line-height: 1.3;
+/* authentic Luna caption buttons — 21px glossy "gel" lozenges with a top
+   specular highlight + CSS-drawn white glyphs, ported from the main site.
+   sRGB hex traced from the Luna .msstyles bitmap, kept as hex on purpose.
+   min/max are blue; CLOSE is RED at rest. */
+.xp-controls .min,
+.xp-controls .max,
+.xp-controls .close {
+  position: relative; box-sizing: border-box;
+  width: 21px; height: 21px; padding: 0; margin: 0;
+  display: inline-block; overflow: hidden; font-size: 0; color: transparent;
+  border: 1px solid #6696eb; border-radius: 3px;
+  text-decoration: none; cursor: pointer; text-shadow: none;
+  background-color: #3e73f5;
+  background-image: linear-gradient(180deg, #5f8cf7 0%, #3a71f5 22%, #3e73f5 55%, #2a70f2 82%, #1045be 100%);
+  transition: filter 60ms ease-out;
 }
-.xp-controls a { cursor: pointer; }
-.xp-controls a:hover,
-.xp-controls a:focus {
-  background: oklch(58.99% 0.2344 26.30);
-  color: oklch(100% 0 0);
-  border-color: oklch(37.67% 0.1546 29.23);
+/* "wet plastic" gloss band over the top ~45% (close uses ::after for its X stroke) */
+.xp-controls .min::after,
+.xp-controls .max::after {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 45%;
+  background: linear-gradient(180deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.12) 70%, rgba(255,255,255,0) 100%);
+  pointer-events: none; border-radius: 2px 2px 5px 5px;
+}
+.xp-controls .min:hover, .xp-controls .min:focus-visible,
+.xp-controls .max:hover, .xp-controls .max:focus-visible {
+  border-color: #8fb4ff; background-color: #4fa4ff;
+  background-image: linear-gradient(180deg, #689bff 0%, #468aff 22%, #4fa4ff 55%, #3990fc 82%, #1858c8 100%);
   outline: none;
 }
+/* CLOSE = red at rest */
+.xp-controls .close {
+  border-color: #d8401c; background-color: #e45f3e;
+  background-image: linear-gradient(180deg, #e8795f 0%, #e45f40 30%, #e45d3d 52%, #e2552a 80%, #ae3110 100%);
+}
+.xp-controls .close:hover, .xp-controls .close:focus-visible {
+  border-color: #ff7a66; background-color: #ff957c;
+  background-image: linear-gradient(180deg, #ff8b7d 0%, #ff7463 26%, #ff957c 55%, #fd7e64 82%, #d34936 100%);
+  box-shadow: 0 0 4px rgba(255,120,96,.7); outline: none;
+}
+.xp-controls .min:active,
+.xp-controls .max:active,
+.xp-controls .close:active { filter: brightness(.9); }
+/* white glyphs drawn with pseudo-elements */
+.xp-controls .min::before {
+  content: ""; position: absolute; left: 5px; right: 5px; bottom: 5px; height: 2px;
+  background: #fff; box-shadow: 0 1px 0 rgba(0,0,0,.35);
+}
+.xp-controls .max::before {
+  content: ""; position: absolute; left: 5px; top: 5px; width: 11px; height: 9px;
+  box-sizing: border-box; border: 1px solid #fff; border-top-width: 2px;
+  filter: drop-shadow(0 1px 0 rgba(0,0,0,.35));
+}
+.xp-controls .close::before,
+.xp-controls .close::after {
+  content: ""; position: absolute; left: 50%; top: 50%;
+  width: 13px; height: 2px; margin: -1px 0 0 -6.5px; background: #fff;
+  box-shadow: 0 1px 0 rgba(0,0,0,.35);
+}
+.xp-controls .close::before { transform: rotate(45deg); }
+.xp-controls .close::after  { transform: rotate(-45deg); }
 
 /* ── workspace body ─────────────────────────────────────────────────── */
 .xp-body {
@@ -419,10 +458,10 @@ function shell(title, body, env) {
   <div class="xp-title-bar">
     <span class="icon" aria-hidden="true"></span>
     <span class="title">${esc(title)} — ${esc(env.HOST_NAME)}</span>
-    <span class="xp-controls" aria-hidden="true"
-      ><span title="minimize">_</span
-      ><span title="maximize">□</span
-      ><a href="${esc(home)}" title="close">×</a
+    <span class="xp-controls"
+      ><span class="min" title="minimize" aria-hidden="true"></span
+      ><span class="max" title="maximize" aria-hidden="true"></span
+      ><a class="close" href="${esc(home)}" title="close" aria-label="close — back to ${esc(env.HOST_NAME)}"></a
     ></span>
   </div>
   <div class="xp-body">

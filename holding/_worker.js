@@ -679,7 +679,7 @@ background:linear-gradient(180deg,oklch(70% 0.15 258) 0%,oklch(60% 0.20 261) 8%,
 /* canonical Luna caption buttons (design system): 21x21 glossy "gel" lozenges,
    min/max blue + close red, CSS-drawn white glyphs. matches .title-bar .controls
    site-wide; hex traced from the Luna .msstyles bitmap, kept hex on purpose. */
-.np-controls .min,.np-controls .max,.np-controls .close{position:relative;box-sizing:border-box;width:21px;height:21px;padding:0;display:inline-block;overflow:hidden;font-size:0;color:transparent;text-decoration:none;cursor:pointer;border:1px solid #6696eb;border-radius:3px;background-color:#3e73f5;background-image:linear-gradient(180deg,#5f8cf7 0%,#3a71f5 22%,#3e73f5 55%,#2a70f2 82%,#1045be 100%);transition:filter .1s ease}
+.np-controls .min,.np-controls .max,.np-controls .close{position:relative;box-sizing:border-box;width:21px;height:21px;padding:0;display:inline-block;overflow:hidden;font-size:0;color:transparent;text-decoration:none;cursor:pointer;border:1px solid #6696eb;border-radius:3px;background-color:#3e73f5;background-image:linear-gradient(180deg,#5f8cf7 0%,#3a71f5 22%,#3e73f5 55%,#2a70f2 82%,#1045be 100%);transition:filter 60ms ease-out}
 .np-controls .min::after,.np-controls .max::after{content:"";position:absolute;left:0;right:0;top:0;height:45%;background:linear-gradient(180deg,rgba(255,255,255,.55) 0%,rgba(255,255,255,.12) 70%,rgba(255,255,255,0) 100%);pointer-events:none;border-radius:2px 2px 5px 5px}
 .np-controls .min:hover,.np-controls .max:hover{border-color:#8fb4ff;background-color:#4fa4ff;background-image:linear-gradient(180deg,#689bff 0%,#468aff 22%,#4fa4ff 55%,#3990fc 82%,#1858c8 100%)}
 .np-controls .min:active,.np-controls .max:active,.np-controls .close:active{filter:brightness(.9)}
@@ -906,12 +906,49 @@ async function getAltMap(env) {
 }
 
 async function getImagesManifest(env, ctx) {
-  let manifest = null;
+  // two-key stale-while-revalidate: the manifest itself is stored WITHOUT a
+  // TTL (persistent), and a tiny sentinel key carries the 1h freshness TTL.
+  // when the sentinel lapses, the visitor on the hot path gets the stale
+  // manifest immediately and the R2 list() rebuild rides ctx.waitUntil in
+  // the background — nobody pays the rebuild inline except the true first
+  // run (or after `wrangler kv key delete "manifest:images"`, which is
+  // still the documented manual cache-bust and still forces a rebuild).
   if (env.RN_KV) {
-    try { manifest = await env.RN_KV.get("manifest:images", "json"); } catch {}
+    let manifest = null, fresh = null;
+    try {
+      [manifest, fresh] = await Promise.all([
+        env.RN_KV.get("manifest:images", "json"),
+        env.RN_KV.get("manifest:images:fresh"),
+      ]);
+    } catch {}
+    if (manifest) {
+      if (!fresh && ctx) {
+        ctx.waitUntil(
+          buildImagesManifest(env)
+            .then(m => m && storeImagesManifest(env, m))
+            .catch(() => {})
+        );
+      }
+      return manifest;
+    }
   }
-  if (!manifest) {
-    if (!env.PHOTOS_R2) return [];
+  // no cached manifest at all — build inline (first run / manual bust)
+  const manifest = await buildImagesManifest(env);
+  if (!manifest) return [];
+  if (env.RN_KV && ctx) ctx.waitUntil(storeImagesManifest(env, manifest));
+  return manifest;
+}
+
+async function storeImagesManifest(env, manifest) {
+  await Promise.all([
+    env.RN_KV.put("manifest:images", JSON.stringify(manifest)),
+    env.RN_KV.put("manifest:images:fresh", "1", { expirationTtl: 3600 }),
+  ]);
+}
+
+async function buildImagesManifest(env) {
+  {
+    if (!env.PHOTOS_R2) return null;
     const list = await env.PHOTOS_R2.list({ limit: 1000 });
 
     // collapse R2 objects to one-per-stem, prefer browser-renderable extensions
@@ -948,7 +985,7 @@ async function getImagesManifest(env, ctx) {
     // /images/meta/<stem>.json per photo on first hover (histogram computed
     // client-side), so none of it needs to ride the hot path.
     const v = THUMB_VERSION;
-    manifest = [...byStem.entries()].map(([stem, o]) => ({
+    return [...byStem.entries()].map(([stem, o]) => ({
       full:       o.key,                     // R2 key, e.g. "XT507333.JPG"
       thumb_avif: `${stem}.avif?v=${v}`,     // Pages static AVIF (primary)
       thumb_jpg:  `${stem}.jpg?v=${v}`,      // Pages static JPG (fallback)
@@ -956,12 +993,7 @@ async function getImagesManifest(env, ctx) {
       size:       o.size,                    // R2 object size in bytes
       uploaded:   o.uploaded ? new Date(o.uploaded).toISOString() : null,
     })).sort((a, b) => a.full.localeCompare(b.full));
-
-    if (env.RN_KV) {
-      ctx.waitUntil(env.RN_KV.put("manifest:images", JSON.stringify(manifest), { expirationTtl: 3600 }));
-    }
   }
-  return manifest;
 }
 
 async function handleImagesManifest(request, env, ctx) {
@@ -1681,7 +1713,7 @@ function xpChromeCss(maxWidth) {
   }
   .title-bar {
     background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
-    color: oklch(100.00% 0 0); font-family: "Trebuchet MS", Verdana, sans-serif;
+    color: oklch(100.00% 0 0); font-family: "Trebuchet MS", Verdana, Geneva, sans-serif;
     font-size: 10pt; font-weight: bold; padding: 4px 8px;
     border-bottom: 1px solid oklch(41.92% 0.0962 250.51); display: flex;
     align-items: center; justify-content: space-between;
@@ -1705,7 +1737,7 @@ function xpChromeCss(maxWidth) {
   text-decoration: none; cursor: pointer;
   background-color: #3e73f5;
   background-image: linear-gradient(180deg, #5f8cf7 0%, #3a71f5 22%, #3e73f5 55%, #2a70f2 82%, #1045be 100%);
-  transition: filter .1s ease;
+  transition: filter 60ms ease-out;
 }
 /* "wet plastic" gloss band over the top ~45% (close uses ::after for its X stroke) */
 .title-bar .controls .min::after,
@@ -1752,7 +1784,7 @@ function xpChromeCss(maxWidth) {
 .title-bar .controls .close::before { transform: rotate(45deg); }
 .title-bar .controls .close::after  { transform: rotate(-45deg); }
 /* --- Luna polish: caption text shadow + rounded top corners + 3px window frame --- */
-.title-bar { text-shadow: 1px 1px #0f1089; border-top-left-radius: 8px; border-top-right-radius: 7px; }
+.title-bar { text-shadow: 1px 1px #0f1089; border-top-left-radius: 8px; border-top-right-radius: 8px; }
 .window {
   border: 2px solid #0831d9; border-right-color: #001ea0; border-bottom-color: #001ea0;
   border-top-left-radius: 8px; border-top-right-radius: 8px; overflow: hidden;
@@ -1763,7 +1795,7 @@ function xpChromeCss(maxWidth) {
 /* reusable Luna command button + sunken field (used by the /rn form) */
 .xp-button {
   display: inline-block; min-width: 75px; padding: 3px 12px;
-  font: 8pt/1.4 Tahoma, Verdana, sans-serif; color: #000;
+  font: 8pt/1.4 Tahoma, Verdana, Geneva, sans-serif; color: #000;
   text-align: center; text-decoration: none; cursor: pointer; user-select: none;
   border: 1px solid #8e9dad; border-radius: 3px;
   background: linear-gradient(180deg, #ffffff 0%, #fdfdfd 45%, #f4f3ee 55%, #eceae0 100%);
@@ -1835,7 +1867,7 @@ ${xpChromeCss(820)}
     background: oklch(94.66% 0.0114 252.09); color: oklch(41.92% 0.0962 250.51); font-weight: bold;
     padding: 5px 8px; text-align: left;
     border-bottom: 1px solid oklch(61.14% 0.0611 253.60);
-    font-family: "Trebuchet MS", Verdana, sans-serif;
+    font-family: "Trebuchet MS", Verdana, Geneva, sans-serif;
   }
   table.scout tbody td { padding: 6px 8px; border-bottom: 1px solid oklch(92.73% 0.0139 247.98); vertical-align: top; }
   table.scout tbody tr:nth-child(even) td { background: oklch(97.50% 0.0062 255.47); }
@@ -2282,7 +2314,7 @@ ${xpChromeCss(720)}
 /* whoareyou-specific title-bar extras: the title text flexes to fill,
    and the boxed _ □ × controls get a touch more letter-spacing. */
 .title-bar .title-text { flex: 1; padding-left: 4px; }
-.title-bar .controls { letter-spacing: 2px; font-family: Tahoma, sans-serif; font-size: 9pt; }
+.title-bar .controls { letter-spacing: 2px; font-family: Tahoma, Verdana, Geneva, sans-serif; font-size: 9pt; }
 
 h1 {
   font-family: "Trebuchet MS", Verdana, Geneva, sans-serif;
@@ -2355,7 +2387,7 @@ code, .mono {
   color: oklch(41.92% 0.0962 250.51);
   font-weight: bold;
   padding: 4px 8px;
-  font-family: Tahoma, Verdana, sans-serif;
+  font-family: Tahoma, Verdana, Geneva, sans-serif;
 }
 .field-grid dd {
   background: oklch(100.00% 0 0);
@@ -2366,7 +2398,7 @@ code, .mono {
   word-break: break-all;
   color: oklch(21.78% 0 0);
 }
-.field-grid dd .dim { color: oklch(62.68% 0 0); font-family: Tahoma, Verdana, sans-serif; font-size: 9pt; }
+.field-grid dd .dim { color: oklch(62.68% 0 0); font-family: Tahoma, Verdana, Geneva, sans-serif; font-size: 9pt; }
 .field-grid dd.muted { color: oklch(44.95% 0 0); }
 
 /* little raised "pill" — looks like a tiny 3D button */
@@ -2376,7 +2408,7 @@ code, .mono {
   border: 1px solid oklch(61.14% 0.0611 253.60);
   background: oklch(94.66% 0.0114 252.09);
   color: oklch(41.92% 0.0962 250.51);
-  font-family: Tahoma, Verdana, sans-serif;
+  font-family: Tahoma, Verdana, Geneva, sans-serif;
   font-size: 8.5pt;
   font-weight: bold;
   margin-right: 4px;
@@ -2401,7 +2433,7 @@ code, .mono {
 /* footer */
 footer {
   text-align: center;
-  font-family: Tahoma, Verdana, sans-serif;
+  font-family: Tahoma, Verdana, Geneva, sans-serif;
   font-size: 9pt;
   color: oklch(44.95% 0 0);
   margin: 18px 0 0;

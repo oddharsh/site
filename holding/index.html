@@ -212,7 +212,7 @@ body {
   text-decoration: none; cursor: pointer;
   background-color: #3e73f5;
   background-image: linear-gradient(180deg, #5f8cf7 0%, #3a71f5 22%, #3e73f5 55%, #2a70f2 82%, #1045be 100%);
-  transition: filter .1s ease;
+  transition: filter 60ms ease-out;
 }
 /* "wet plastic" gloss band over the top ~45% (close uses ::after for its X stroke) */
 .title-bar .controls .min::after,
@@ -259,7 +259,7 @@ body {
 .title-bar .controls .close::before { transform: rotate(45deg); }
 .title-bar .controls .close::after  { transform: rotate(-45deg); }
 /* --- Luna polish: caption text shadow + rounded top corners + 3px window frame --- */
-.title-bar { text-shadow: 1px 1px #0f1089; border-top-left-radius: 8px; border-top-right-radius: 7px; }
+.title-bar { text-shadow: 1px 1px #0f1089; border-top-left-radius: 8px; border-top-right-radius: 8px; }
 .window {
   border: 2px solid #0831d9; border-right-color: #001ea0; border-bottom-color: #001ea0;
   border-top-left-radius: 8px; border-top-right-radius: 8px; overflow: hidden;
@@ -948,6 +948,240 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
       holding/scripts/add-photos.sh.
     -->
 
+
+    <section class="now-playing" aria-label="music">
+      <h2><a href="/rn" title="opens the playlist on spotify">Music I&rsquo;m listening to right now</a></h2>
+      <ol class="np-list" id="np-list">
+        <li class="np-loading">Loading playlist&hellip;</li>
+      </ol>
+    </section>
+
+    <!--
+      now-playing list — worker pre-renders from KV-cached /rn/tracks on
+      every request (the only path under healthy conditions). minimal
+      fallback below catches the case where SSR didn't run for ANY
+      reason: stale cached HTML served before SSR was wired, a CF edge
+      hiccup, a worker exception, KV unavailability, etc. it checks if
+      the "Loading playlist…" placeholder is still present after page
+      load, and if so re-fetches /rn/tracks client-side and fills.
+      ~30 lines as defense-in-depth for what would otherwise be an
+      eternal "Loading…" state.
+    -->
+    <script>
+    (async () => {
+      const list = document.getElementById("np-list");
+      // SSR rendered tracks? loader gone → nothing to do.
+      if (!list || !list.querySelector(".np-loading")) return;
+      const esc = (s) => String(s ?? "")
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+      const fmt = (ms) => {
+        if (!ms) return "";
+        const t = Math.round(ms / 1000);
+        return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`;
+      };
+      // build the per-artist .np-artist-link spans, EXACTLY as the worker's
+      // SSR does (linkifyArtists in _worker.js). this is what makes the
+      // artist hover-tooltip + click-through work; bare text would break
+      // both. structured artists link to their Spotify page + carry the
+      // profile image for the tooltip; otherwise fall back to a search.
+      const linkifyArtists = (artists, fallbackText) => {
+        if (Array.isArray(artists) && artists.length) {
+          return artists.map(a => {
+            const href = a.spotify_url || `https://open.spotify.com/search/${encodeURIComponent(a.name)}/artists`;
+            const img = a.image_url ? ` data-artist-image="${esc(a.image_url)}"` : "";
+            return `<span class="np-artist-link" data-href="${esc(href)}" data-artist-name="${esc(a.name)}"${img} role="link" tabindex="0">${esc(a.name)}</span>`;
+          }).join(", ");
+        }
+        const raw = fallbackText || (typeof artists === "string" ? artists : "");
+        if (!raw) return "";
+        return String(raw).split(/,\s*/).filter(Boolean).map(name =>
+          `<span class="np-artist-link" data-href="https://open.spotify.com/search/${encodeURIComponent(name)}/artists" data-artist-name="${esc(name)}" role="link" tabindex="0">${esc(name)}</span>`
+        ).join(", ");
+      };
+      try {
+        const res = await fetch("/rn/tracks");
+        const data = await res.json();
+        if (!data.tracks?.length) {
+          list.innerHTML = '<li class="np-empty">No tracks yet. <a href="/rn">Open on Spotify</a>.</li>';
+          return;
+        }
+        // render rows at FULL fidelity, identical to the worker SSR path:
+        // the data-track-* attributes are what the hover-tooltip keys off
+        // (findTarget matches `.np-list li[data-track-title]`). the old
+        // minimal fallback omitted them, so music tooltips silently failed
+        // on any visit where SSR didn't populate (cold tracks:<pid> KV).
+        const renderRow = (t) => {
+          const artistsText = t.artists_text || (Array.isArray(t.artists) ? t.artists.map(a => a.name).join(", ") : "");
+          const dur = fmt(t.duration_ms);
+          const attrs =
+            ` data-track-title="${esc(t.title)}"` +
+            ` data-track-artists="${esc(artistsText)}"` +
+            (t.image_url   ? ` data-track-image="${esc(t.image_url)}"`   : "") +
+            (t.duration_ms ? ` data-track-duration="${dur}"`            : "") +
+            (t.is_explicit ? ` data-track-explicit="1"`                 : "");
+          return `<li${attrs}><a href="${esc(t.song_link_url)}" target="_blank" rel="noopener">${
+            dur ? `<span class="np-duration">${dur}</span>` : ""
+          }<span class="np-title">${esc(t.title)}</span><span class="np-sep">&mdash;</span><span class="np-artist">${linkifyArtists(t.artists, artistsText)}</span>${
+            t.is_explicit ? '<span class="np-explicit">E</span>' : ""
+          }</a></li>`;
+        };
+        // chunked insert: build + flush ~8 rows at a time, yielding to the main
+        // thread between batches so taps/scroll stay live while a long playlist
+        // renders on a slow phone. scheduler.yield() resumes at the FRONT of the
+        // task queue (no setTimeout back-of-queue penalty); guarded so engines
+        // without it take a setTimeout(0) shim — same shape, ships everywhere.
+        const yieldNow = (window.scheduler && typeof scheduler.yield === "function")
+          ? () => scheduler.yield()
+          : () => new Promise(r => setTimeout(r, 0));
+        list.innerHTML = "";
+        let batch = "";
+        for (let i = 0; i < data.tracks.length; i++) {
+          batch += renderRow(data.tracks[i]);
+          if ((i + 1) % 8 === 0) { list.insertAdjacentHTML("beforeend", batch); batch = ""; await yieldNow(); }
+        }
+        if (batch) list.insertAdjacentHTML("beforeend", batch);
+      } catch {
+        list.innerHTML = '<li class="np-empty">Couldn&rsquo;t load tracks. <a href="/rn">Open on Spotify</a>.</li>';
+      }
+    })();
+    </script>
+
+    <!--
+      delegated click + keyboard handler for .np-artist-link spans. these
+      live inside the row's outer <a href="song.link">, so we need to
+      stopPropagation to avoid the row navigating away when the user
+      clicks an artist. opens the artist search in a new tab. also wires
+      Enter/Space for keyboard activation (role="link" + tabindex="0"
+      makes them focusable but doesn't synthesize click on Enter).
+    -->
+    <script>
+    (() => {
+      const list = document.getElementById("np-list");
+      if (!list) return;
+      const open = (el) => {
+        const href = el.getAttribute("data-href");
+        if (!href) return;
+        window.open(href, "_blank", "noopener");
+      };
+      list.addEventListener("click", (e) => {
+        const a = e.target?.closest?.(".np-artist-link");
+        if (!a) return;
+        e.preventDefault();
+        e.stopPropagation();
+        open(a);
+      });
+      list.addEventListener("keydown", (e) => {
+        if (e.key !== "Enter" && e.key !== " ") return;
+        const a = e.target?.closest?.(".np-artist-link");
+        if (!a) return;
+        e.preventDefault();
+        open(a);
+      });
+    })();
+    </script>
+
+    <footer>
+      <!-- trimmed: the profiles + page nav now live in the taskbar (pinned apps) and
+           Run (⌘K). kept in <noscript> so a no-JS visitor — who gets no taskbar — still
+           has every link. -->
+      <p>
+        Last modified <time datetime="2026-06-07">June 7, 2026</time>
+        &middot; You are visitor <span class="counter">000042</span>
+      </p>
+      <p class="signature">
+        <small>&copy; 2026 Aadharsh Pannirselvam &middot; Best viewed in any browser made since 2001.</small>
+      </p>
+      <noscript>
+        <p class="links">
+          <a href="https://twitter.com/oddhash" rel="external me">Twitter</a> &middot;
+          <a href="https://instagram.com/aadharsh.hif" rel="external me">Instagram</a> &middot;
+          <a href="https://curius.app/aadharsh-pannirselvam" rel="external me">Curius</a> &middot;
+          <a href="https://beliapp.com/users/aadharsh" rel="external me">Beli</a> &middot;
+          <a href="https://open.spotify.com/user/aadharsh2010" rel="external me">Spotify</a> &middot;
+          <a href="/whoareyou">whoareyou</a> &middot;
+          <a href="/around">around</a> &middot;
+          <a href="/garage/">garage</a> &middot;
+          <a href="/serendipity">serendipity</a> &middot;
+          <a href="/writing">writing</a>
+        </p>
+      </noscript>
+    </footer>
+
+  </div>
+</div>
+
+<!--
+  custom right-click context menu lived here. dropped in the lightness
+  pass — it was ~5KB of JS that recreated browser-native behavior
+  (open in new tab, copy image, save as, view source) for a feature
+  most visitors never trigger. browser native menu is enough.
+-->
+<!-- (hover-prefetch IIFE was here — ~1.5 KB of speculative `preconnect`
+  injection on every link hover. cut in the lightness pass: the
+  saved 30-150ms on actual clicks wasn't paying for the bytes on
+  every page load.) -->
+
+<!--
+  service worker — cache-first for /images/* (8 random tiles per visit + the
+  full-res counterparts), stale-while-revalidate for the small discovery
+  files. won't touch HTML or worker endpoints; those always go through
+  to the worker so they stay fresh.
+-->
+<script>
+if ("serviceWorker" in navigator) {
+  // register on idle so it doesn't compete with first paint
+  const reg = () => navigator.serviceWorker.register("/sw.js").catch(() => {});
+  "requestIdleCallback" in window ? requestIdleCallback(reg, { timeout: 2000 }) : setTimeout(reg, 1000);
+}
+</script>
+
+<!--
+  Speculation Rules: McMaster-Carr-style — prerender EVERY internal page,
+  eagerly, so navigations activate an already-built page with no network and
+  no loading bar. a document rule matches all same-origin links on the page,
+  minus three that genuinely can't be prerendered:
+    /          — no-store; re-randomizes photos + ticks the counter per visit
+    /around    — a live crawl; prerendering would fire crawls on page load
+    /whoareyou — per-request fingerprint must reflect the real click, not a
+                 speculative prerender request
+  cross-origin links (Twitter, Spotify, ENS, …) are skipped automatically.
+  Chromium-only; other engines ignore the block. "moderate" prerenders on
+  hover / pointerdown (not on load), so visitors who never click /garage or
+  /serendipity don't pay the prerender transfer + worker invocations; the
+  on-intent cost is tiny (pages are small + static) and adds no click latency.
+  allowed under the existing 'unsafe-inline' script-src in the CSP.
+-->
+<script type="speculationrules">
+{
+  "prerender": [
+    {
+      "where": {
+        "and": [
+          { "href_matches": "/*" },
+          { "not": { "href_matches": "/" } },
+          { "not": { "href_matches": "/around*" } },
+          { "not": { "href_matches": "/whoareyou*" } },
+          { "not": { "href_matches": "/rn*" } },
+          { "not": { "href_matches": "/coffee*" } },
+          { "not": { "href_matches": "/images*" } },
+          { "not": { "href_matches": "/index.md" } },
+          { "not": { "href_matches": "/llms.txt" } }
+        ]
+      },
+      "eagerness": "moderate"
+    }
+  ]
+}
+</script>
+
+    <!--
+      NB: this script block lives at the END of the body (it used to sit
+      mid-page, before the now-playing section) — it is ~27KB of inline JS
+      and the HTML parser blocks on it, so everything below it painted
+      late. all its handlers are document-delegated and it only needs
+      #xp-tooltip to exist, so the bottom is the correct home.
+    -->
     <!--
       XP-style cursor-following hover tooltip. shows filename, file size,
       thumbnail dimensions, and EXIF (camera/exposure/date/film recipe)
@@ -1461,232 +1695,6 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
       }
     })();
     </script>
-
-    <section class="now-playing" aria-label="music">
-      <h2><a href="/rn" title="opens the playlist on spotify">Music I&rsquo;m listening to right now</a></h2>
-      <ol class="np-list" id="np-list">
-        <li class="np-loading">Loading playlist&hellip;</li>
-      </ol>
-    </section>
-
-    <!--
-      now-playing list — worker pre-renders from KV-cached /rn/tracks on
-      every request (the only path under healthy conditions). minimal
-      fallback below catches the case where SSR didn't run for ANY
-      reason: stale cached HTML served before SSR was wired, a CF edge
-      hiccup, a worker exception, KV unavailability, etc. it checks if
-      the "Loading playlist…" placeholder is still present after page
-      load, and if so re-fetches /rn/tracks client-side and fills.
-      ~30 lines as defense-in-depth for what would otherwise be an
-      eternal "Loading…" state.
-    -->
-    <script>
-    (async () => {
-      const list = document.getElementById("np-list");
-      // SSR rendered tracks? loader gone → nothing to do.
-      if (!list || !list.querySelector(".np-loading")) return;
-      const esc = (s) => String(s ?? "")
-        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-      const fmt = (ms) => {
-        if (!ms) return "";
-        const t = Math.round(ms / 1000);
-        return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`;
-      };
-      // build the per-artist .np-artist-link spans, EXACTLY as the worker's
-      // SSR does (linkifyArtists in _worker.js). this is what makes the
-      // artist hover-tooltip + click-through work; bare text would break
-      // both. structured artists link to their Spotify page + carry the
-      // profile image for the tooltip; otherwise fall back to a search.
-      const linkifyArtists = (artists, fallbackText) => {
-        if (Array.isArray(artists) && artists.length) {
-          return artists.map(a => {
-            const href = a.spotify_url || `https://open.spotify.com/search/${encodeURIComponent(a.name)}/artists`;
-            const img = a.image_url ? ` data-artist-image="${esc(a.image_url)}"` : "";
-            return `<span class="np-artist-link" data-href="${esc(href)}" data-artist-name="${esc(a.name)}"${img} role="link" tabindex="0">${esc(a.name)}</span>`;
-          }).join(", ");
-        }
-        const raw = fallbackText || (typeof artists === "string" ? artists : "");
-        if (!raw) return "";
-        return String(raw).split(/,\s*/).filter(Boolean).map(name =>
-          `<span class="np-artist-link" data-href="https://open.spotify.com/search/${encodeURIComponent(name)}/artists" data-artist-name="${esc(name)}" role="link" tabindex="0">${esc(name)}</span>`
-        ).join(", ");
-      };
-      try {
-        const res = await fetch("/rn/tracks");
-        const data = await res.json();
-        if (!data.tracks?.length) {
-          list.innerHTML = '<li class="np-empty">No tracks yet. <a href="/rn">Open on Spotify</a>.</li>';
-          return;
-        }
-        // render rows at FULL fidelity, identical to the worker SSR path:
-        // the data-track-* attributes are what the hover-tooltip keys off
-        // (findTarget matches `.np-list li[data-track-title]`). the old
-        // minimal fallback omitted them, so music tooltips silently failed
-        // on any visit where SSR didn't populate (cold tracks:<pid> KV).
-        const renderRow = (t) => {
-          const artistsText = t.artists_text || (Array.isArray(t.artists) ? t.artists.map(a => a.name).join(", ") : "");
-          const dur = fmt(t.duration_ms);
-          const attrs =
-            ` data-track-title="${esc(t.title)}"` +
-            ` data-track-artists="${esc(artistsText)}"` +
-            (t.image_url   ? ` data-track-image="${esc(t.image_url)}"`   : "") +
-            (t.duration_ms ? ` data-track-duration="${dur}"`            : "") +
-            (t.is_explicit ? ` data-track-explicit="1"`                 : "");
-          return `<li${attrs}><a href="${esc(t.song_link_url)}" target="_blank" rel="noopener">${
-            dur ? `<span class="np-duration">${dur}</span>` : ""
-          }<span class="np-title">${esc(t.title)}</span><span class="np-sep">&mdash;</span><span class="np-artist">${linkifyArtists(t.artists, artistsText)}</span>${
-            t.is_explicit ? '<span class="np-explicit">E</span>' : ""
-          }</a></li>`;
-        };
-        // chunked insert: build + flush ~8 rows at a time, yielding to the main
-        // thread between batches so taps/scroll stay live while a long playlist
-        // renders on a slow phone. scheduler.yield() resumes at the FRONT of the
-        // task queue (no setTimeout back-of-queue penalty); guarded so engines
-        // without it take a setTimeout(0) shim — same shape, ships everywhere.
-        const yieldNow = (window.scheduler && typeof scheduler.yield === "function")
-          ? () => scheduler.yield()
-          : () => new Promise(r => setTimeout(r, 0));
-        list.innerHTML = "";
-        let batch = "";
-        for (let i = 0; i < data.tracks.length; i++) {
-          batch += renderRow(data.tracks[i]);
-          if ((i + 1) % 8 === 0) { list.insertAdjacentHTML("beforeend", batch); batch = ""; await yieldNow(); }
-        }
-        if (batch) list.insertAdjacentHTML("beforeend", batch);
-      } catch {
-        list.innerHTML = '<li class="np-empty">Couldn&rsquo;t load tracks. <a href="/rn">Open on Spotify</a>.</li>';
-      }
-    })();
-    </script>
-
-    <!--
-      delegated click + keyboard handler for .np-artist-link spans. these
-      live inside the row's outer <a href="song.link">, so we need to
-      stopPropagation to avoid the row navigating away when the user
-      clicks an artist. opens the artist search in a new tab. also wires
-      Enter/Space for keyboard activation (role="link" + tabindex="0"
-      makes them focusable but doesn't synthesize click on Enter).
-    -->
-    <script>
-    (() => {
-      const list = document.getElementById("np-list");
-      if (!list) return;
-      const open = (el) => {
-        const href = el.getAttribute("data-href");
-        if (!href) return;
-        window.open(href, "_blank", "noopener");
-      };
-      list.addEventListener("click", (e) => {
-        const a = e.target?.closest?.(".np-artist-link");
-        if (!a) return;
-        e.preventDefault();
-        e.stopPropagation();
-        open(a);
-      });
-      list.addEventListener("keydown", (e) => {
-        if (e.key !== "Enter" && e.key !== " ") return;
-        const a = e.target?.closest?.(".np-artist-link");
-        if (!a) return;
-        e.preventDefault();
-        open(a);
-      });
-    })();
-    </script>
-
-    <footer>
-      <!-- trimmed: the profiles + page nav now live in the taskbar (pinned apps) and
-           Run (⌘K). kept in <noscript> so a no-JS visitor — who gets no taskbar — still
-           has every link. -->
-      <p>
-        Last modified <time datetime="2026-06-07">June 7, 2026</time>
-        &middot; You are visitor <span class="counter">000042</span>
-      </p>
-      <p class="signature">
-        <small>&copy; 2026 Aadharsh Pannirselvam &middot; Best viewed in any browser made since 2001.</small>
-      </p>
-      <noscript>
-        <p class="links">
-          <a href="https://twitter.com/oddhash" rel="external me">Twitter</a> &middot;
-          <a href="https://instagram.com/aadharsh.hif" rel="external me">Instagram</a> &middot;
-          <a href="https://curius.app/aadharsh-pannirselvam" rel="external me">Curius</a> &middot;
-          <a href="https://beliapp.com/users/aadharsh" rel="external me">Beli</a> &middot;
-          <a href="https://open.spotify.com/user/aadharsh2010" rel="external me">Spotify</a> &middot;
-          <a href="/whoareyou">whoareyou</a> &middot;
-          <a href="/around">around</a> &middot;
-          <a href="/garage/">garage</a> &middot;
-          <a href="/serendipity">serendipity</a> &middot;
-          <a href="/writing">writing</a>
-        </p>
-      </noscript>
-    </footer>
-
-  </div>
-</div>
-
-<!--
-  custom right-click context menu lived here. dropped in the lightness
-  pass — it was ~5KB of JS that recreated browser-native behavior
-  (open in new tab, copy image, save as, view source) for a feature
-  most visitors never trigger. browser native menu is enough.
--->
-<!-- (hover-prefetch IIFE was here — ~1.5 KB of speculative `preconnect`
-  injection on every link hover. cut in the lightness pass: the
-  saved 30-150ms on actual clicks wasn't paying for the bytes on
-  every page load.) -->
-
-<!--
-  service worker — cache-first for /images/* (8 random tiles per visit + the
-  full-res counterparts), stale-while-revalidate for the small discovery
-  files. won't touch HTML or worker endpoints; those always go through
-  to the worker so they stay fresh.
--->
-<script>
-if ("serviceWorker" in navigator) {
-  // register on idle so it doesn't compete with first paint
-  const reg = () => navigator.serviceWorker.register("/sw.js").catch(() => {});
-  "requestIdleCallback" in window ? requestIdleCallback(reg, { timeout: 2000 }) : setTimeout(reg, 1000);
-}
-</script>
-
-<!--
-  Speculation Rules: McMaster-Carr-style — prerender EVERY internal page,
-  eagerly, so navigations activate an already-built page with no network and
-  no loading bar. a document rule matches all same-origin links on the page,
-  minus three that genuinely can't be prerendered:
-    /          — no-store; re-randomizes photos + ticks the counter per visit
-    /around    — a live crawl; prerendering would fire crawls on page load
-    /whoareyou — per-request fingerprint must reflect the real click, not a
-                 speculative prerender request
-  cross-origin links (Twitter, Spotify, ENS, …) are skipped automatically.
-  Chromium-only; other engines ignore the block. "moderate" prerenders on
-  hover / pointerdown (not on load), so visitors who never click /garage or
-  /serendipity don't pay the prerender transfer + worker invocations; the
-  on-intent cost is tiny (pages are small + static) and adds no click latency.
-  allowed under the existing 'unsafe-inline' script-src in the CSP.
--->
-<script type="speculationrules">
-{
-  "prerender": [
-    {
-      "where": {
-        "and": [
-          { "href_matches": "/*" },
-          { "not": { "href_matches": "/" } },
-          { "not": { "href_matches": "/around*" } },
-          { "not": { "href_matches": "/whoareyou*" } },
-          { "not": { "href_matches": "/rn*" } },
-          { "not": { "href_matches": "/coffee*" } },
-          { "not": { "href_matches": "/images*" } },
-          { "not": { "href_matches": "/index.md" } },
-          { "not": { "href_matches": "/llms.txt" } }
-        ]
-      },
-      "eagerness": "moderate"
-    }
-  ]
-}
-</script>
 
 <!-- love, aadharsh -->
   <script src="/nav.js" defer></script>
