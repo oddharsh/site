@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>safari 27 — aadhar.sh garage</title>
-<meta name="description" content="What WWDC26's Safari 27 (macOS 27 Golden Gate) ships that this site already leans on — base-select going stable, anchor-positioning upgrades, scroll anchoring — with live 'does your browser have it' checks.">
+<meta name="description" content="What WWDC26's Safari 27 (macOS 27 Golden Gate) ships that this site already leans on: base-select going stable, anchor-positioning upgrades, scroll anchoring, plus live 'does your browser have it' checks.">
 <link rel="canonical" href="https://aadhar.sh/garage/safari27">
 
 <!-- generic compass needle favicon (not Apple's mark) -->
@@ -77,6 +77,9 @@ pre { font-family: var(--font-mono); font-size: 10pt; line-height: 1.5; backgrou
   background: oklch(100% 0 0); margin: 0 0 18px; padding: 12px 14px 14px; }
 .demo > h2 { font-family: var(--font-caption); font-size: 13pt; font-weight: bold; color: oklch(41.92% 0.0962 250.51); margin: 0 0 2px;
   display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+/* let the title shrink/break so it wraps below the stat badge on narrow windows
+   instead of overlapping it (flex items don't shrink past min-content w/o this) */
+.demo > h2 > span { min-width: 0; overflow-wrap: anywhere; }
 .demo > h2 .mono { font-size: 10pt; font-weight: normal; color: oklch(40% 0 0); }
 .demo .sub { margin: 2px 0 10px; color: oklch(40% 0 0); font-size: 9.5pt; }
 .demo .ours { font-size: 9.5pt; color: oklch(38% 0.07 145); border-left: 3px solid oklch(60% 0.13 145); padding: 2px 0 2px 9px; margin: 8px 0 0; }
@@ -87,7 +90,7 @@ pre { font-family: var(--font-mono); font-size: 10pt; line-height: 1.5; backgrou
 /* base-select demo (scoped .s27- so it can't touch any real future select) */
 .s27-sel { appearance: base-select; font-family: var(--font-ui); font-size: 10.5pt; color: oklch(21.78% 0 0); background: oklch(100% 0 0);
   border: 2px solid; border-color: oklch(55% 0.02 250) oklch(94% 0.01 250) oklch(94% 0.01 250) oklch(55% 0.02 250); box-shadow: inset 1px 1px 1px oklch(0% 0 0 / .12);
-  padding: 3px 3px 3px 8px; min-width: 220px; display: inline-flex; align-items: stretch; gap: 8px; }
+  padding: 3px 3px 3px 8px; min-width: 0; max-width: 100%; display: inline-flex; align-items: stretch; gap: 8px; }
 .s27-sel::picker-icon { margin-left: auto; align-self: stretch; width: 16px; display: inline-flex; align-items: center; justify-content: center; color: oklch(24% 0.02 255);
   background: linear-gradient(180deg, oklch(99% 0 0), oklch(84% 0.02 255)); border: 1px solid; border-color: oklch(100% 0 0) oklch(52% 0.03 255) oklch(52% 0.03 255) oklch(100% 0 0); border-radius: 1px; transition: rotate .15s ease; }
 .s27-sel:open::picker-icon { rotate: 180deg; }
@@ -124,9 +127,9 @@ pre { font-family: var(--font-mono); font-size: 10pt; line-height: 1.5; backgrou
   </div>
   <div class="content">
     <h1>Safari 27, through this site&apos;s lens</h1>
-    <p class="lede">WWDC26 shipped <strong>Safari 27</strong> (in macOS&nbsp;27 &ldquo;Golden Gate,&rdquo; iOS/iPadOS&nbsp;27, visionOS&nbsp;27) &mdash; ~58 new web-platform features. A bunch of them are things this site already leans on, so this page is the &ldquo;the platform caught up&rdquo; cut, not the full changelog. Authoritative source: the WebKit team&apos;s <a href="https://webkit.org/blog/17967/news-from-wwdc26-webkit-in-safari-27-beta/" rel="external">News from WWDC26: WebKit in Safari&nbsp;27 beta</a>.</p>
+    <p class="lede">WWDC26 shipped <strong>Safari 27</strong> (macOS&nbsp;27 "Golden Gate," iOS/iPadOS&nbsp;27, visionOS&nbsp;27): ~58 new web-platform features. A bunch are things this site already leans on, so this is the platform-caught-up cut, not the whole changelog. Source: the WebKit team&apos;s <a href="https://webkit.org/blog/17967/news-from-wwdc26-webkit-in-safari-27-beta/" rel="external">News from WWDC26: WebKit in Safari&nbsp;27 beta</a>.</p>
 
-    <p class="lede" style="font-size:9.5pt">Each card is tagged with what Safari&nbsp;27 brings, plus a <strong>live check of <em>your</em> browser</strong> below. The site&apos;s whole bet is high-octane fuel: when the engine supports a feature it burns it, otherwise it falls back &mdash; so &ldquo;not in your browser&rdquo; never means broken.</p>
+    <p class="lede" style="font-size:9.5pt">Every card says what Safari&nbsp;27 brings, and the strip below runs a <strong>live check of <em>your</em> browser</strong>. The bet this whole site makes is high-octane fuel: when the engine has a feature it burns it, otherwise it falls back. "Not in your browser" never means broken.</p>
 
     <div class="cap-strip" id="caps" aria-label="what your browser supports right now"></div>
 
@@ -134,7 +137,7 @@ pre { font-family: var(--font-mono); font-size: 10pt; line-height: 1.5; backgrou
 
     <section class="demo">
       <h2><span><code>appearance: base-select</code></span> <span class="stat stable" data-feat="base-select">now stable</span></h2>
-      <p class="sub">Style a real <code>&lt;select&gt;</code> &mdash; and its dropdown &mdash; with CSS, no JS rebuild and no accessibility loss. Safari&nbsp;27 takes it stable and adds the <code>::picker-icon</code> and <code>::checkmark</code> pseudo-elements.</p>
+      <p class="sub">Style a real <code>&lt;select&gt;</code>, dropdown and all, with CSS. No JS rebuild, no accessibility loss. Safari&nbsp;27 takes it stable and adds the <code>::picker-icon</code> and <code>::checkmark</code> pseudo-elements.</p>
       <label>Film simulation:
         <select class="s27-sel" aria-label="film simulation">
           <option>Provia / Standard</option>
@@ -144,20 +147,20 @@ pre { font-family: var(--font-mono); font-size: 10pt; line-height: 1.5; backgrou
           <option>Nostalgic Neg.</option>
         </select>
       </label>
-      <p class="ours">On this site: the homepage and the <a href="/garage/horizon">horizon</a> demo already ship a Luna-styled base-select with a beveled drop-button &mdash; behind an <code>@supports</code> guard, so non-supporting browsers get the native dropdown. Safari going stable means more visitors see the styled one with zero code change here.</p>
+      <p class="ours">On this site: the homepage and the <a href="/garage/horizon">horizon</a> demo already ship a Luna-styled base-select with a beveled drop-button, behind an <code>@supports</code> guard, so browsers without it get the native dropdown. Safari going stable just means more visitors see the styled one, with zero code change here.</p>
     </section>
 
     <section class="demo">
       <h2><span>Anchor positioning upgrades</span> <span class="stat" data-feat="anchor">Safari 27</span></h2>
       <p class="sub">Safari&nbsp;27 makes anchored elements follow <em>transformed</em> positions, and adds <code>position-anchor: normal | none</code> plus refined <code>anchor-valid</code> / <code>anchor-visible</code> matching.</p>
-      <p class="s27-anchor-wrap"><button type="button" class="s27-anchor-btn">hover me</button><span class="s27-note" role="note">I&apos;m pinned to that button with <code>position-anchor</code> + <code>anchor()</code> &mdash; no JS measuring. In Safari&nbsp;27 I&apos;d track it even through CSS transforms.</span></p>
-      <p class="ours">On this site: the photo/track tooltips use CSS anchor positioning as the JS-free keyboard fallback. Transform-aware anchoring matters here because windows move via <code>transform</code> (drag) &mdash; an anchored popover can now stay glued to a dragged element.</p>
+      <p class="s27-anchor-wrap"><button type="button" class="s27-anchor-btn">hover me</button><span class="s27-note" role="note">I&apos;m pinned to that button with <code>position-anchor</code> + <code>anchor()</code>, no JS measuring. In Safari&nbsp;27 I&apos;d track it even through CSS transforms.</span></p>
+      <p class="ours">On this site: the photo and track tooltips use CSS anchor positioning as the JS-free keyboard fallback. Transform-aware anchoring matters here because windows move via <code>transform</code> when you drag them, so an anchored popover can stay glued to a window mid-drag.</p>
     </section>
 
     <section class="demo">
       <h2><span>Scroll anchoring</span> <span class="stat" data-feat="scroll-anchor">Safari 27</span></h2>
       <p class="sub">When content loads <em>above</em> the viewport, the browser keeps your scroll position instead of jumping. Controlled with <code>overflow-anchor</code>.</p>
-      <p class="ours">On this site: every page is a pinned window whose <code>.content</code> scrolls internally. Late-arriving content above the fold (a lazy image, the server-injected tracklist) is exactly the jump scroll anchoring prevents &mdash; now native in Safari, no JS scroll-restoration needed.</p>
+      <p class="ours">On this site: every page is a pinned window whose <code>.content</code> scrolls internally. Content that lands above the fold late (a lazy image, the server-injected tracklist) is exactly the jump scroll anchoring kills, native in Safari now, no JS scroll-restoration to hand-write.</p>
     </section>
 
     <section class="demo">
@@ -165,10 +168,10 @@ pre { font-family: var(--font-mono); font-size: 10pt; line-height: 1.5; backgrou
       <p class="sub">Match <code>&lt;h1&gt;</code>&ndash;<code>&lt;h6&gt;</code> in one selector instead of enumerating them (and one day <code>:heading(2,3)</code> for levels).</p>
       <div class="s27-headings">
         <h3>If your browser has <code>:heading</code>, this is green.</h3>
-        <h4>So is this one &mdash; one rule, every level.</h4>
+        <h4>So is this one. One rule, every level.</h4>
         <p style="margin:6px 0 0;font-size:9.5pt">(Body text stays the default color.)</p>
       </div>
-      <p class="ours">On this site: a small win &mdash; the design tokens style captions/headings with one stack today; <code>:heading</code> would let the shared nav.js CSS touch every page&apos;s headings without knowing their tag.</p>
+      <p class="ours">On this site: a small win. The design tokens already style captions and headings off one font stack; <code>:heading</code> would let the shared nav.js CSS reach every page&apos;s headings without knowing the tag.</p>
     </section>
 
     <section class="demo">
@@ -185,40 +188,40 @@ color: oklch(... );      /* + new srgb-linear / display-p3-linear spaces */</pre
       <h2><span>Platform &amp; worker upgrades</span> <span class="stat" data-feat="platform">Safari 27</span></h2>
       <p class="sub">Less visible, more structural:</p>
       <ul style="margin:0 0 8px 0; padding-left:20px; font-size:9.5pt">
-        <li><strong>Top-level <code>await</code></strong> &mdash; full ESM loader rewrite for standards compliance.</li>
-        <li><strong>WebAssembly JSPI</strong> &mdash; synchronous Wasm can suspend and await JS promises.</li>
-        <li><strong>Service Worker static routing</strong> &mdash; declare routing rules that bypass the SW entirely.</li>
-        <li><strong>Transferable streams</strong> + <code>ReadableStream.from()</code> + async iteration.</li>
+        <li><strong>Top-level <code>await</code></strong>, off a full ESM-loader rewrite for standards compliance.</li>
+        <li><strong>WebAssembly JSPI</strong>, so synchronous Wasm can suspend and await JS promises.</li>
+        <li><strong>Service Worker static routing</strong>, routing rules that skip the SW entirely.</li>
+        <li><strong>Transferable streams</strong>, plus <code>ReadableStream.from()</code> and async iteration.</li>
         <li><strong>Cookie Store API <code>maxAge</code></strong>.</li>
       </ul>
-      <p class="ours">On this site: Service Worker static routing is interesting for <code>sw.js</code> &mdash; the cache-first/SWR/network-only split is currently JS in the fetch handler; static routes could declare some of it and skip waking the worker at all.</p>
+      <p class="ours">On this site: Service Worker static routing is the one I keep eyeing for <code>sw.js</code>. The cache-first / SWR / network-only split lives in JS in the fetch handler today; static routes could declare some of it and skip waking the worker at all.</p>
     </section>
 
     <section class="demo">
       <h2><span>Spatial web</span> <span class="stat" data-feat="model">Safari 27</span></h2>
       <p class="sub">The <code>&lt;model&gt;</code> element graduates from visionOS-only to iOS, iPadOS, and macOS; visionOS&nbsp;27 adds immersive website environments and spatial-photo <code>controls</code> on <code>&lt;img&gt;</code>.</p>
-      <p class="ours">On this site: not used (no 3D), but filed &mdash; a resto-mod car site has obvious one-day uses for a real <code>&lt;model&gt;</code> viewer.</p>
+      <p class="ours">On this site: not used (no 3D), but filed. A resto-mod car site has obvious one-day uses for a real <code>&lt;model&gt;</code> viewer.</p>
     </section>
 
     <section class="demo">
       <h2><span>The talks</span> <span class="stat">WWDC26</span></h2>
-      <p class="sub">WebKit&apos;s <a href="https://webkit.org/blog/17974/web-technology-sessions-at-wwdc26/" rel="external">web-technology sessions roundup</a> &mdash; the six worth a watch, with the two that land squarely on this site flagged.</p>
+      <p class="sub">WebKit&apos;s <a href="https://webkit.org/blog/17974/web-technology-sessions-at-wwdc26/" rel="external">web-technology sessions roundup</a>. Six worth a watch; the two that land squarely on this site are flagged.</p>
       <ul style="margin:0; padding-left:20px; font-size:9.5pt">
-        <li><a href="https://developer.apple.com/videos/play/wwdc2026/314/" rel="external"><strong>Grid Lanes</strong></a> &mdash; CSS-only masonry, no JavaScript.
-          <span class="ours" style="display:block;margin:3px 0 8px">On this site: the <a href="/garage/horizon">horizon</a> page flagged masonry as &ldquo;not shipped&rdquo; mid-2026 &mdash; Grid Lanes is it shipping. A direct fit for the photo grid (ragged-height contact sheet without the fixed-square crop).</span>
+        <li><a href="https://developer.apple.com/videos/play/wwdc2026/314/" rel="external"><strong>Grid Lanes</strong></a>: CSS-only masonry, no JavaScript.
+          <span class="ours" style="display:block;margin:3px 0 8px">On this site: the <a href="/garage/horizon">horizon</a> page flagged masonry as "not shipped" mid-2026, and here it is shipping. A direct fit for the photo grid: a ragged-height contact sheet, no fixed-square crop.</span>
         </li>
-        <li><a href="https://developer.apple.com/videos/play/wwdc2026/315/" rel="external"><strong>Customizable Select</strong></a> &mdash; the full <code>appearance: base-select</code> deep dive.
-          <span class="ours" style="display:block;margin:3px 0 8px">On this site: this is the talk behind the first card above &mdash; the Luna combobox we already ship.</span>
+        <li><a href="https://developer.apple.com/videos/play/wwdc2026/315/" rel="external"><strong>Customizable Select</strong></a>: the full <code>appearance: base-select</code> deep dive.
+          <span class="ours" style="display:block;margin:3px 0 8px">On this site: the talk behind the first card above, the Luna combobox we already ship.</span>
         </li>
-        <li><a href="https://developer.apple.com/videos/play/wwdc2026/204/" rel="external">What&apos;s New in Safari 27</a> &mdash; the overview (everything on this page, from the source).</li>
-        <li><a href="https://developer.apple.com/videos/play/wwdc2026/215/" rel="external">Meet the <code>model</code> element</a> &mdash; embedding 3D, now cross-platform.</li>
-        <li><a href="https://developer.apple.com/videos/play/wwdc2026/320/" rel="external">Immersive website environments</a> &mdash; spatial experiences on visionOS.</li>
-        <li><a href="https://developer.apple.com/videos/play/wwdc2026/216/" rel="external">Web Extensions</a> &mdash; building + distributing browser extensions.</li>
+        <li><a href="https://developer.apple.com/videos/play/wwdc2026/204/" rel="external">What&apos;s New in Safari 27</a>: the overview (everything on this page, from the source).</li>
+        <li><a href="https://developer.apple.com/videos/play/wwdc2026/215/" rel="external">Meet the <code>model</code> element</a>: embedding 3D, now cross-platform.</li>
+        <li><a href="https://developer.apple.com/videos/play/wwdc2026/320/" rel="external">Immersive website environments</a>: spatial experiences on visionOS.</li>
+        <li><a href="https://developer.apple.com/videos/play/wwdc2026/216/" rel="external">Web Extensions</a>: building and distributing browser extensions.</li>
       </ul>
     </section>
 
     <hr>
-    <p style="font-size:9pt;color:oklch(45% 0 0)">Feature names + scope paraphrased from the WebKit post linked up top; the live chips are <code>CSS.supports()</code> / interface probes run in your browser. Drag this window by its title bar; ⌘K to jump anywhere.</p>
+    <p style="font-size:9pt;color:oklch(45% 0 0)">Feature names and scope are paraphrased from the WebKit post up top; the chips are real <code>CSS.supports()</code> and interface probes run in your browser. Drag this window by its title bar; ⌘K jumps anywhere.</p>
   </div>
   <div class="status" aria-hidden="true">
     <span>safari 27 / macOS 27</span>

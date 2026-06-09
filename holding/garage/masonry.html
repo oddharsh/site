@@ -108,7 +108,7 @@ hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px
   </div>
   <div class="content">
     <h1>A masonry contact sheet</h1>
-    <p class="lede">The homepage grid is fixed 1:1 squares with <code>object-fit: cover</code> &mdash; every photo gets the same cell, cropped. <strong>CSS Grid Lanes</strong> (<code>display: grid-lanes</code>, shipped in Safari&nbsp;27 &mdash; see <a href="/garage/safari27">the Safari 27 notes</a>) lays the columns out on a grid but stacks the rows masonry-style, so a portrait and a landscape can sit side by side at their true heights. No JavaScript layout, no media queries.</p>
+    <p class="lede">The homepage grid is fixed 1:1 squares with <code>object-fit: cover</code>, so every photo gets the same cell, cropped. <strong>CSS Grid Lanes</strong> (<code>display: grid-lanes</code>, shipped in Safari&nbsp;27; see <a href="/garage/safari27">the Safari 27 notes</a>) lays the columns out on a grid but stacks the rows masonry-style, so a portrait and a landscape sit side by side at their true heights. No JavaScript layout, no media queries.</p>
 
     <div class="bar">
       <span class="chip" id="cap">checking <code>display: grid-lanes</code>…</span>
@@ -122,7 +122,7 @@ hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px
     <div class="sheet masonry" id="sheet" aria-label="photo contact sheet"><p class="empty">Loading the pool…</p></div>
 
     <hr>
-    <p style="font-size:9pt;color:oklch(45% 0 0)">Same markup both ways &mdash; the only difference is <code>display: grid-lanes</code> behind an <code>@supports</code> guard, with per-photo <code>aspect-ratio</code> reserved from EXIF so nothing reflows as images load. Where the engine lacks Grid Lanes, you always get the square fallback. This is a prototype; the live homepage still ships the squares.</p>
+    <p style="font-size:9pt;color:oklch(45% 0 0)">Same markup both ways. The only difference is <code>display: grid-lanes</code> behind an <code>@supports</code> guard, with per-photo <code>aspect-ratio</code> reserved from EXIF so nothing reflows as images load. Where the engine lacks Grid Lanes, you always get the square fallback. It&apos;s a prototype; the live homepage still ships the squares.</p>
   </div>
   <div class="status" aria-hidden="true">
     <span>display: grid-lanes</span>
@@ -144,7 +144,7 @@ hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px
   cap.className = "chip " + (supported ? "yes" : "no");
   cap.innerHTML = "<code>display: grid-lanes</code> " + (supported ? "in your browser" : "not in your browser");
   if (!supported) {
-    note.textContent = "Your browser doesn't have Grid Lanes yet, so both buttons show the fixed-square fallback — same as the homepage. Try Safari 27 (or Chrome/Firefox with the flag) to see the ragged version.";
+    note.textContent = "Your browser doesn't have Grid Lanes yet, so both buttons show the fixed-square fallback, same as the homepage. Open it in Safari 27 (or Chrome/Firefox with the flag) to see the ragged version.";
     bM.disabled = true; // the toggle can't do anything without support
   } else {
     note.textContent = "Toggle to A/B the ragged masonry against the cropped squares the homepage ships.";

@@ -476,7 +476,7 @@ placeholder
   box-shadow: inset 1px 1px 1px oklch(0% 0 0 / 0.12);
   /* tight right padding so the drop-button can hug the edge, like XP */
   padding: 3px 3px 3px 8px;
-  min-width: 220px;
+  min-width: 0; max-width: 100%;   /* shrink on narrow windows instead of overflowing */
   display: inline-flex;
   align-items: stretch;
   gap: 8px;
