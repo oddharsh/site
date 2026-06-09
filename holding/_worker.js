@@ -791,13 +791,13 @@ async function handleWritingPost(slug, env, ctx) {
   }
   if (!post || text == null) {
     const body = notepadWindow("(not found).txt", "This note doesn't exist — or it hasn't been written yet.\n\nThe index lives at /writing.", "/writing");
-    return new Response(writingShell({ title: "Not found — Notepad · aadhar.sh", path: "/writing/" + safe, desc: "No such note.", body: body }),
+    return new Response(writingShell({ title: "aadhar.sh / writing / not found", path: "/writing/" + safe, desc: "No such note.", body: body }),
       { status: 404, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=30, must-revalidate" } });
   }
   const title = post.title || safe;
   const desc = text.replace(/\s+/g, " ").trim().slice(0, 155);
   const body = notepadWindow(title + ".txt", text, "/writing", post.date);
-  return new Response(writingShell({ title: title + ".txt — Notepad · aadhar.sh", path: "/writing/" + safe, desc: desc, body: body }),
+  return new Response(writingShell({ title: "aadhar.sh / writing / " + title + ".txt", path: "/writing/" + safe, desc: desc, body: body }),
     { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=300" } });
 }
 
@@ -820,14 +820,14 @@ async function handleWritingIndex(env, ctx) {
   }))).join("");
   const body = "<div class=\"np-window np-folder\">" +
     "<div class=\"np-titlebar\"><span class=\"np-ico\" aria-hidden=\"true\"></span>" +
-      "<span class=\"np-title\">My Writing — aadhar.sh</span>" +
+      "<span class=\"np-title\">aadhar.sh / writing</span>" +
       "<span class=\"np-controls\"><span class=\"min\" aria-hidden=\"true\"></span><span class=\"max\" aria-hidden=\"true\"></span>" +
       "<a class=\"close\" href=\"/\" title=\"back home\" aria-label=\"Close\">✕</a></span></div>" +
     "<div class=\"np-folder-body\"><p class=\"np-folder-intro\">Notes, in flux. Open one — it's a real text field you can edit, but it reverts to my canonical version on reload.</p>" +
       "<ul class=\"np-files\">" + (files || "<li><a><span class=\"np-file-name\">(nothing written yet)</span></a></li>") + "</ul></div>" +
     "<div class=\"np-status\"><span>" + posts.length + (posts.length === 1 ? " document" : " documents") + "</span></div></div>" +
     notes;
-  return new Response(writingShell({ title: "Writing — aadhar.sh", path: "/writing", desc: "Notes in flux — an editable Notepad of writing that reverts to canonical on reload.", body: body }),
+  return new Response(writingShell({ title: "aadhar.sh / writing", path: "/writing", desc: "Notes in flux — an editable Notepad of writing that reverts to canonical on reload.", body: body }),
     { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=120" } });
 }
 
@@ -1847,7 +1847,7 @@ function renderAroundHtml(report) {
 <html lang="en"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>/around — looking around the crypto VC neighborhood</title>
+<title>aadhar.sh / around</title>
 <meta name="description" content="Snapshot of crypto VC homepages I keep tabs on, crawled live by AadharshBot.">
 <meta name="robots" content="noindex">
 <style>
@@ -1897,7 +1897,7 @@ ${xpChromeCss(820)}
 </head><body>
 <div class="window">
   <div class="title-bar">
-    <span><span class="icon"></span>/around — looking around the neighborhood</span>
+    <span><span class="icon"></span>aadhar.sh / around</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/" title="back to aadhar.sh" aria-label="back to aadhar.sh"></a></span>
   </div>
   <div class="content">
@@ -1944,7 +1944,7 @@ function handleBotPage(request) {
 <html lang="en"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${BOT_NAME} — aadhar.sh's crawler</title>
+<title>aadhar.sh / bot</title>
 <meta name="description" content="Identity and behavior of AadharshBot, the crawler operated by aadhar.sh.">
 <style>
 ${xpChromeCss(660)}
@@ -2131,7 +2131,7 @@ async function readParams(request, url) {
 function setPage(status, title, bodyHtml) {
   const html = `<!DOCTYPE html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>/rn/set — ${esc(title)}</title>
+<title>aadhar.sh / rn/set / ${esc(title)}</title>
 <meta name="robots" content="noindex">
 <style>
 ${xpChromeCss(520)}
@@ -2145,7 +2145,7 @@ ${xpChromeCss(520)}
   code { font-family: "Courier New", Courier, monospace; background: oklch(96.72% 0 0); padding: 0 3px; border: 1px solid oklch(88.22% 0 0); }
 </style></head><body>
 <div class="window">
-  <div class="title-bar">/rn/set &mdash; ${esc(title)}</div>
+  <div class="title-bar">aadhar.sh / rn/set / ${esc(title)}</div>
   <div class="content">
     <h1>${esc(title)}</h1>
     <p>${bodyHtml}</p>
@@ -2300,7 +2300,7 @@ async function handleWhoareyou(request) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>whoareyou — aadharsh's site</title>
+<title>aadhar.sh / whoareyou</title>
 <meta name="description" content="what one HTTP request to aadhar.sh reveals about you. read-only, never stored.">
 <meta name="robots" content="noindex">
 <style>
