@@ -35,6 +35,7 @@
     { label: "garage · encoding", path: "/garage/encoding", hint: "thumbnail encoding study" },
     { label: "garage · horizon", path: "/garage/horizon", hint: "web-platform horizon" },
     { label: "garage · pretext", path: "/garage/pretext", hint: "DOM-free text measurement" },
+    { label: "garage · safari 27", path: "/garage/safari27", hint: "WWDC26 Safari 27 features, through this site's lens" },
     { label: "garage · scroll", path: "/garage/scroll", hint: "XP scroll chrome" },
     { label: "garage · tooltips", path: "/garage/tooltips", hint: "tooltip experiments" }
   ];
