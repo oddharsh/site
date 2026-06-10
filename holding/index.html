@@ -1698,5 +1698,39 @@ if ("serviceWorker" in navigator) {
 
 <!-- love, aadharsh -->
   <script src="/nav.js" defer></script>
+  <!-- WebMCP: when a browser/agent supports navigator.modelContext, register
+       a couple of read-only tools that wrap the site's own JSON surfaces. pure
+       E85: feature-detected, so it's a no-op everywhere it isn't supported. the
+       tools just proxy same-origin endpoints (CSP connect-src 'self'). -->
+  <script>
+  (function () {
+    var mc = navigator.modelContext;
+    if (!mc || typeof mc.registerTool !== "function") return;
+    var ok = function (text) { return { content: [{ type: "text", text: text }] }; };
+    try {
+      mc.registerTool({
+        name: "whats_playing",
+        description: "What Aadharsh is listening to right now — the live playlist on aadhar.sh.",
+        inputSchema: { type: "object", properties: {} },
+        execute: async function () {
+          var r = await fetch("/rn/tracks", { headers: { accept: "application/json" } });
+          return ok(await r.text());
+        }
+      });
+      mc.registerTool({
+        name: "find_events",
+        description: "Search the Serendipity event pool (community events worth going to, and who's going) by keyword.",
+        inputSchema: { type: "object", properties: { q: { type: "string", description: "optional keyword filter on event name, place, or contributor" } } },
+        execute: async function (args) {
+          var body = { jsonrpc: "2.0", id: 1, method: "tools/call",
+            params: { name: "list_events", arguments: { q: (args && args.q) || undefined, limit: 20 } } };
+          var r = await fetch("/serendipity/mcp", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+          var j = await r.json();
+          return ok((j && j.result && j.result.content && j.result.content[0] && j.result.content[0].text) || "no events found");
+        }
+      });
+    } catch (e) {}
+  })();
+  </script>
 </body>
 </html>

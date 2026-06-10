@@ -579,8 +579,10 @@ function renderMcpInfo(path) {
     <div class="grp">Tools</div>
     <div class="alist">
       ${tool("list_events", "when, q, limit", "Events in the pool with a head count of who&apos;s going. Defaults to upcoming, soonest first.")}
-      ${tool("get_event", "id", "One event in full: description, hosts, the guest list, contributors.")}
-      ${tool("search_people", "q, limit", "Find people by name and the events they&apos;re going to.")}
+      ${tool("get_event", "id", "One event in full: description, hosts, the guest list (who&apos;s going), contributors.")}
+      ${tool("search_people", "q, limit", "Find people by name; returns role/company/socials and their events split into going_to and been_to.")}
+      ${tool("list_contributors", "", "The people feeding the pool: a label, an id prefix, and how many events each fed in.")}
+      ${tool("contributor_events", "contributor", "One contributor&apos;s whole footprint (by cookie id, id prefix, or label), split into going_to and been_to.")}
       ${tool("stats", "", "Pool overview: event counts, distinct people, active contributors.")}
     </div>
     <div class="grp">Connect</div>
@@ -1258,7 +1260,59 @@ async function mcpSearchPeople(d, q, limit) {
     if (!byPerson.has(m.attendee_id)) byPerson.set(m.attendee_id, []);
     byPerson.get(m.attendee_id).push({ id: m.event_id, name: m.event_name, start_at: m.start_at || null, is_host: !!Number(m.is_host) });
   }
-  return people.map((p) => { const o = mcpAttendee(p); o.events = byPerson.get(p.id) || []; return o; });
+  const now = Date.now();
+  return people.map((p) => {
+    const o = mcpAttendee(p);
+    const evs = byPerson.get(p.id) || [];
+    // split each person's events into what they're going to (upcoming) vs have
+    // been to (past), so a caller can read both their trajectory and their reach.
+    o.going_to = evs.filter((e) => !e.start_at || new Date(e.start_at).getTime() >= now)
+                    .sort((a, b) => new Date(a.start_at || 0) - new Date(b.start_at || 0));
+    o.been_to = evs.filter((e) => e.start_at && new Date(e.start_at).getTime() < now);  // already DESC
+    return o;
+  });
+}
+
+// resolve a contributor (by their cookie id / user_key, a user_key prefix, or
+// their label) and return every event they fed into the pool, split into
+// upcoming (going to) and past (been to). the contributor->events mapping is
+// already public on the dashboard ("Contributed by <label>" per event); this
+// just lets you pivot on it. only an 8-char key prefix is ever echoed back.
+async function mcpContributorEvents(d, contributor) {
+  const key = String(contributor || "").trim();
+  if (!key) return null;
+  const c = await d.prepare(
+    `SELECT user_key, label, luma_user_id, enabled FROM user_cookies
+      WHERE user_key = ?1 OR label = ?1 OR user_key LIKE ?2 ESCAPE '\\' LIMIT 1`
+  ).get(key, key.replace(/[\\%_]/g, "\\$&") + "%");
+  if (!c) return null;
+  const rows = await d.prepare(
+    `SELECT e.id, e.name, e.start_at, e.location, e.url,
+            (SELECT COUNT(*) FROM event_attendees ea WHERE ea.event_id = e.id AND ea.is_host = 0) AS attendee_count,
+            (SELECT COUNT(*) FROM event_attendees ea WHERE ea.event_id = e.id AND ea.is_host = 1) AS host_count
+       FROM event_contributions ec JOIN events e ON e.id = ec.event_id
+      WHERE ec.user_key = ? ORDER BY e.start_at`
+  ).all(c.user_key);
+  const now = Date.now();
+  const summaries = rows.map(mcpEventSummary);
+  return {
+    contributor: { label: c.label || null, id_prefix: String(c.user_key).slice(0, 8),
+                   luma_user_id: c.luma_user_id || null, enabled: Number(c.enabled) === 1 },
+    total: rows.length,
+    going_to: summaries.filter((e) => !e.start_at || new Date(e.start_at).getTime() >= now),
+    been_to: summaries.filter((e) => e.start_at && new Date(e.start_at).getTime() < now)
+                      .sort((a, b) => new Date(b.start_at) - new Date(a.start_at)),
+  };
+}
+
+async function mcpListContributors(d) {
+  const rows = await d.prepare(
+    `SELECT uc.label, uc.enabled, uc.luma_user_id, substr(uc.user_key, 1, 8) AS id_prefix,
+            (SELECT COUNT(*) FROM event_contributions ec WHERE ec.user_key = uc.user_key) AS events
+       FROM user_cookies uc ORDER BY events DESC, uc.updated_at DESC`
+  ).all();
+  return rows.map((r) => ({ label: r.label || null, id_prefix: r.id_prefix, luma_user_id: r.luma_user_id || null,
+                            enabled: Number(r.enabled) === 1, events: Number(r.events) }));
 }
 
 const MCP_TOOLS = [
@@ -1285,7 +1339,7 @@ const MCP_TOOLS = [
   },
   {
     name: "search_people",
-    description: "Search people across all events by name. Returns who they are (role/company/socials when known), how many events they've turned up at, and which events they're going to.",
+    description: "Search people across all events by name. Returns who they are (role/company/socials when known), how many events they've turned up at, and their events split into going_to (upcoming) and been_to (past), so you see both trajectory and reach.",
     inputSchema: {
       type: "object",
       properties: {
@@ -1293,6 +1347,20 @@ const MCP_TOOLS = [
         limit: { type: "integer", minimum: 1, maximum: 100, description: "max people to return (default 25)" },
       },
       required: ["q"],
+    },
+  },
+  {
+    name: "list_contributors",
+    description: "List the contributors feeding the pool (the people who synced a Luma feed): their label, an 8-char id prefix, and how many events each has fed in. Use the label or id prefix with contributor_events.",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "contributor_events",
+    description: "Given a contributor (their cookie id / user_key, an id prefix, or their label), return every event they fed into the pool, split into going_to (upcoming) and been_to (past). This is one contributor's whole event footprint.",
+    inputSchema: {
+      type: "object",
+      properties: { contributor: { type: "string", description: "a contributor's cookie id (user_key), an id prefix from list_contributors, or their label" } },
+      required: ["contributor"],
     },
   },
   {
@@ -1345,6 +1413,16 @@ async function mcpCallTool(d, name, args) {
     const limit = Math.min(Math.max(parseInt(args.limit, 10) || 25, 1), 100);
     const people = await mcpSearchPeople(d, q, limit);
     return { query: q, returned: people.length, people };
+  }
+  if (name === "list_contributors") {
+    return { contributors: await mcpListContributors(d) };
+  }
+  if (name === "contributor_events") {
+    const c = String(args.contributor || "").trim();
+    if (!c) return { _error: "contributor is required (a cookie id / user_key, an id prefix, or a label)" };
+    const out = await mcpContributorEvents(d, c);
+    if (!out) return { _error: "no contributor matching \"" + c + "\" (try list_contributors)" };
+    return out;
   }
   if (name === "stats") {
     const [events, contributors, attRow] = await Promise.all([

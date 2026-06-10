@@ -114,6 +114,17 @@ async function route(request, env, ctx) {
       );
     }
 
+    // agent-discovery docs (auth.md + the RFC 9727 api-catalog). these are
+    // static files, but they're extensionless / iterated, and a long Cache-
+    // Control once poisoned the read-through asset cache for the canonical URL
+    // (a ?query bust returned fresh while the bare URL served a stale copy).
+    // serve them through a per-request cache-bust so the canonical URL is
+    // always the freshly-deployed bytes, with the right content-type + a short
+    // edge cache. (the .json cards under /.well-known/ are extension-typed and
+    // served straight from ASSETS.)
+    if (url.pathname === "/auth.md") return serveFreshAsset(request, env, "text/markdown; charset=utf-8");
+    if (url.pathname === "/.well-known/api-catalog") return serveFreshAsset(request, env, "application/linkset+json");
+
     if (url.pathname === "/whoareyou") {
       return handleWhoareyou(request);
     }
@@ -836,6 +847,20 @@ async function handleWritingIndex(env, ctx) {
     notes;
   return new Response(writingShell({ title: "aadhar.sh/writing", path: "/writing", desc: "Notes in flux — an editable Notepad of writing that reverts to canonical on reload.", body: body }),
     { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=120" } });
+}
+
+// read a bundled static asset bypassing the read-through asset cache (a unique
+// query string forces a cache miss), then re-emit it under the canonical URL
+// with the given content-type + a short, deploy-purgeable edge cache. used for
+// the agent-discovery docs whose canonical URL a long Cache-Control had pinned.
+async function serveFreshAsset(request, env, contentType) {
+  const u = new URL(request.url);
+  u.searchParams.set("__r", Date.now().toString(36));
+  const res = await env.ASSETS.fetch(new Request(u.toString(), { headers: request.headers }));
+  const headers = new Headers(res.headers);
+  if (contentType) headers.set("content-type", contentType);
+  headers.set("cache-control", "public, max-age=0, must-revalidate, s-maxage=300");
+  return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
 }
 
 // short-cache error response. matches the CF Cache Rule that pins edge

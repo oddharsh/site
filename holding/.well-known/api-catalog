@@ -1,0 +1,37 @@
+{
+  "linkset": [
+    {
+      "anchor": "https://aadhar.sh/serendipity/mcp",
+      "service-desc": [
+        { "href": "https://aadhar.sh/.well-known/mcp.json", "type": "application/json", "title": "Serendipity MCP server card" }
+      ],
+      "service-doc": [
+        { "href": "https://aadhar.sh/serendipity/mcp-info", "type": "text/html", "title": "Serendipity MCP, for agents" }
+      ]
+    },
+    {
+      "anchor": "https://aadhar.sh/rn/tracks",
+      "service-desc": [
+        { "href": "https://aadhar.sh/rn/tracks", "type": "application/json", "title": "Currently-playing playlist, as JSON" }
+      ]
+    },
+    {
+      "anchor": "https://aadhar.sh/images/manifest.json",
+      "service-desc": [
+        { "href": "https://aadhar.sh/images/manifest.json", "type": "application/json", "title": "Photo manifest (the homepage grid source)" }
+      ]
+    },
+    {
+      "anchor": "https://aadhar.sh/around/json",
+      "service-desc": [
+        { "href": "https://aadhar.sh/around/json", "type": "application/json", "title": "Neighborhood crawl, as JSON" }
+      ]
+    },
+    {
+      "anchor": "https://aadhar.sh/",
+      "service-doc": [
+        { "href": "https://aadhar.sh/llms.txt", "type": "text/plain", "title": "llms.txt site summary" }
+      ]
+    }
+  ]
+}

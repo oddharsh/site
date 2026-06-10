@@ -1,0 +1,33 @@
+[
+  {
+    "version": "1.0",
+    "protocolVersion": "2025-06-18",
+    "serverInfo": {
+      "name": "serendipity",
+      "title": "Serendipity",
+      "version": "1.0.0",
+      "description": "Read-only access to the Serendipity event pool on aadhar.sh: community-curated events worth going to, and who's going. Public data only."
+    },
+    "transport": {
+      "type": "streamable-http",
+      "url": "https://aadhar.sh/serendipity/mcp"
+    },
+    "capabilities": {
+      "tools": true,
+      "resources": false,
+      "prompts": false
+    },
+    "authentication": {
+      "required": false
+    },
+    "documentationUrl": "https://aadhar.sh/serendipity/mcp-info",
+    "tools": [
+      { "name": "list_events", "description": "List events in the pool with a head count of who's going. Args: when, q, limit." },
+      { "name": "get_event", "description": "One event in full: description, hosts, the guest list (who's going), contributors. Args: id." },
+      { "name": "search_people", "description": "Find people by name; returns role/company/socials and their events split into going_to and been_to. Args: q, limit." },
+      { "name": "list_contributors", "description": "List contributors feeding the pool, with an id prefix and event count." },
+      { "name": "contributor_events", "description": "Every event one contributor fed in, split into going_to and been_to. Args: contributor (cookie id, id prefix, or label)." },
+      { "name": "stats", "description": "Pool overview: event counts, distinct people, active contributors." }
+    ]
+  }
+]
