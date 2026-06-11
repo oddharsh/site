@@ -30,7 +30,12 @@
     {
       "anchor": "https://aadhar.sh/",
       "service-doc": [
-        { "href": "https://aadhar.sh/llms.txt", "type": "text/plain", "title": "llms.txt site summary" }
+        { "href": "https://aadhar.sh/llms.txt", "type": "text/plain", "title": "llms.txt site summary" },
+        { "href": "https://aadhar.sh/auth.md", "type": "text/markdown", "title": "Auth.md agent registration" }
+      ],
+      "service-desc": [
+        { "href": "https://aadhar.sh/.well-known/oauth-protected-resource", "type": "application/json", "title": "OAuth protected resource metadata" },
+        { "href": "https://aadhar.sh/.well-known/oauth-authorization-server", "type": "application/json", "title": "OAuth authorization server metadata" }
       ]
     }
   ]

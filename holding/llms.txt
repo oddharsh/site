@@ -98,7 +98,7 @@ aggregations.
 - [Beli](https://beliapp.com/users/aadharsh): NYC restaurants I've been to.
 - [ENS](https://app.ens.domains/aadharsh.eth): `aadharsh.eth`, my on-chain
   identity (resolves to 0xbad1db91276988883f9c66a698c18406ced4f109).
-- [Cal.com](https://cal.com/aadharsh/coffee): Book a coffee in NYC.
+- [Coffee](https://aadhar.sh/coffee): Book a coffee in NYC.
 - Email: <coffee@aadhar.sh>.
 
 ## Optional

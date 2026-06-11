@@ -781,7 +781,7 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
 <div class="window">
 
   <!-- fake XP title bar — period chrome. the "controls" are decorative. -->
-  <div class="title-bar" aria-hidden="true">
+  <div class="title-bar">
     <span class="title-text"><span class="icon"></span>aadhar.sh</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="https://www.youtube.com/watch?v=dQw4w9WgXcQ" title="close" aria-label="close"></a></span>
   </div>
@@ -836,9 +836,9 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
       If you&apos;d like to grab a coffee in NYC, write me at
       <!--email_off--><a href="mailto:coffee@aadhar.sh?subject=%E2%98%95%20coffee&amp;body=Hi%20Aadharsh%2C%0A%0A">coffee@aadhar.sh</a><!--/email_off-->
       or pick a slot at
-      <a href="https://cal.com/aadharsh/coffee" rel="external">cal.com/aadharsh/coffee</a>
+      <a href="/coffee">aadhar.sh/coffee</a>
       - it&apos;s a manual opt-in on my side and i&apos;ll try to get back to you.
-      <!-- (moving in-house to /coffee once secrets are set + worker deployed) -->
+      <!-- /coffee redirects to cal.com until the in-house worker is deployed. -->
     </p>
 
     <p>
@@ -939,7 +939,7 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
     </section>
 
     <!--
-      photo pool — worker pre-renders 9 random slots on every request
+      photo pool — worker pre-renders 12 random slots on every request
       (cache-control: no-store on /, so each visit re-rolls). previously
       had a client-side fallback IIFE here that fetched
       /images/manifest.json and filled slots if SSR didn't run; removed
@@ -1123,7 +1123,7 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
   every page load.) -->
 
 <!--
-  service worker — cache-first for /images/* (8 random tiles per visit + the
+  service worker — cache-first for /images/* (12 random tiles per visit + the
   full-res counterparts), stale-while-revalidate for the small discovery
   files. won't touch HTML or worker endpoints; those always go through
   to the worker so they stay fresh.

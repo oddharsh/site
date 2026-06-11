@@ -1583,6 +1583,9 @@ const SECURITY_HEADERS = {
   "x-content-type-options": "nosniff",
   "referrer-policy": "strict-origin-when-cross-origin",
   "x-frame-options": "DENY",
+  // parity with the Pages _headers set: this is a first-class page of the site
+  // (the shared XP shell runs here too), so deny the same unused browser APIs.
+  "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=(), serial=(), bluetooth=(), midi=(), accelerometer=(), gyroscope=(), magnetometer=(), screen-wake-lock=(), hid=(), idle-detection=()",
 };
 
 export default {

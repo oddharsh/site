@@ -24,8 +24,8 @@ but in the meantime, here are some photos i've made and music that's been in my
 head lately.
 
 If you'd like to grab a coffee in NYC, write me at <coffee@aadhar.sh> or pick a
-slot at [cal.com/aadharsh/coffee](https://cal.com/aadharsh/coffee) - it's a
-manual opt-in on my side and i'll try to get back to you.
+slot at [aadhar.sh/coffee](https://aadhar.sh/coffee) - it's a manual opt-in on
+my side and i'll try to get back to you.
 
 The rest of the site goes live shortly. Check back, or just send a note.
 

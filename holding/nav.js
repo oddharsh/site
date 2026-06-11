@@ -218,7 +218,7 @@
 "::view-transition-old(axp-window){transform-origin:50% 130%;animation:axp-min .18s cubic-bezier(.4,0,1,1) both}" +
 "::view-transition-new(axp-window){transform-origin:50% 130%;animation:axp-res .2s cubic-bezier(0,0,.2,1) both}" +
 "@keyframes axp-min{to{opacity:0;transform:scale(.66)}}@keyframes axp-res{from{opacity:0;transform:scale(.66)}}" +
-"@media (prefers-reduced-motion:reduce){::view-transition-old(axp-window),::view-transition-new(axp-window){animation:none}}" +
+"@media (prefers-reduced-motion:reduce){::view-transition-old(axp-window),::view-transition-new(axp-window),::view-transition-group(axp-window){animation:none !important}}" +
 "#axp-taskbar{position:fixed;left:0;right:0;bottom:0;height:30px;z-index:99999;view-transition-name:axp-taskbar;display:flex;align-items:stretch;" +
 "font-family:var(--font-ui,Tahoma,Verdana,Geneva,sans-serif);font-size:11px;user-select:none;" +
 "background:linear-gradient(180deg,oklch(67% 0.15 256) 0%,oklch(58% 0.19 257) 4%,oklch(51% 0.20 258) 9%,oklch(49% 0.20 258) 50%,oklch(46% 0.20 259) 92%,oklch(40% 0.18 260) 100%);" +
@@ -653,7 +653,7 @@
   function mountScrollbar(frame, scroller) {
     if (frame.querySelector(":scope > .axp-sb")) return;
     if (getComputedStyle(frame).position === "static") frame.style.position = "relative";
-    var sb = el('<div class="axp-sb" aria-hidden="true"><button class="axp-sb-up" tabindex="-1"></button><div class="axp-sb-track"><div class="axp-sb-thumb"></div></div><button class="axp-sb-down" tabindex="-1"></button></div>');
+    var sb = el('<div class="axp-sb" aria-hidden="true"><span class="axp-sb-up"></span><div class="axp-sb-track"><div class="axp-sb-thumb"></div></div><span class="axp-sb-down"></span></div>');
     frame.appendChild(sb);
     var track = sb.querySelector(".axp-sb-track"), thumb = sb.querySelector(".axp-sb-thumb");
     // inset the bar off the window's inner bevel (right + 1px top) and stop it

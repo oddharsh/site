@@ -25,7 +25,7 @@
 // `?v=N` bumps on each deploy already cycle individual entries, but a
 // cache-version bump is the only way to sweep stale keys whose URL
 // pattern no longer matches anything we serve.
-const CACHE_VERSION = "aadhar-v68-luna-polish";
+const CACHE_VERSION = "aadhar-v70-perf-audit";
 
 const CACHE_FIRST = [
   // thumbnail image files only — NOT /images/ itself (a directory-listing
@@ -120,10 +120,10 @@ async function cacheFirst(req) {
   const cache = await caches.open(CACHE_VERSION);
   const hit = await cache.match(req);
   if (hit) {
-    // background revalidate (don't await)
-    fetch(req).then(res => {
-      if (isImage(res)) cache.put(req, res.clone());
-    }).catch(() => {});
+    // NO background revalidate: thumbnails are content-addressed (?v=N,
+    // 1-year immutable) — a refetch can never observe new bytes, so it'd
+    // be a pure redundant disk write per view. invalidation is the ?v
+    // bump (new URL) + the activate-event sweep of old cache versions.
     return hit;
   }
   const res = await fetch(req);

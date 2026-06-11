@@ -40,6 +40,20 @@ const SECURITY_HEADERS = {
   "referrer-policy":         "strict-origin-when-cross-origin",
 };
 
+const HOMEPAGE_DISCOVERY_LINKS = [
+  '</sitemap.xml>; rel="sitemap"; type="application/xml"',
+  '</llms.txt>; rel="alternate"; type="text/plain"; title="llms.txt summary"',
+  '</auth.md>; rel="service-doc"; type="text/markdown"; title="Auth.md agent registration"',
+  '</.well-known/oauth-protected-resource>; rel="service-desc"; type="application/json"; title="OAuth protected resource metadata"',
+  '</.well-known/oauth-authorization-server>; rel="service-desc"; type="application/json"; title="OAuth authorization server metadata"',
+  '</rn/tracks>; rel="service-desc"; type="application/json"; title="current rn playlist as JSON"',
+  '</.well-known/http-message-signatures-directory>; rel="http-message-signatures-directory"; type="application/jwk-set+json"',
+  '</.well-known/security.txt>; rel="security-policy"; type="text/plain"',
+  '</.well-known/api-catalog>; rel="api-catalog"; type="application/linkset+json"',
+];
+const HOMEPAGE_DISCOVERY_LINK = HOMEPAGE_DISCOVERY_LINKS.join(", ");
+const AGENT_AUTH_SCOPES = ["public.read", "mcp.read", "rn.read", "photos.read", "around.read"];
+
 function withSecurityHeaders(response) {
   // redirects don't need (and shouldn't carry) document-level headers
   if (response.status >= 300 && response.status < 400) return response;
@@ -55,6 +69,47 @@ function withSecurityHeaders(response) {
     status:     response.status,
     statusText: response.statusText,
     headers,
+  });
+}
+
+function withHomepageDiscoveryHeaders(response) {
+  const headers = new Headers(response.headers);
+  headers.set("link", HOMEPAGE_DISCOVERY_LINK);
+  appendVary(headers, "accept");
+  return new Response(response.body, {
+    status:     response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+function appendVary(headers, token) {
+  const current = headers.get("vary");
+  if (!current) {
+    headers.set("vary", token);
+    return;
+  }
+  const tokens = current.split(",").map(s => s.trim().toLowerCase());
+  if (!tokens.includes(token.toLowerCase())) {
+    headers.set("vary", `${current}, ${token}`);
+  }
+}
+
+function homepageHeadResponse(request) {
+  const markdown = wantsMarkdown(request);
+  return new Response(null, {
+    status: 200,
+    headers: {
+      "content-type": markdown
+        ? "text/markdown; charset=utf-8"
+        : "text/html; charset=utf-8",
+      "cache-control": markdown
+        ? "no-store, must-revalidate"
+        : "no-store, must-revalidate, s-maxage=0",
+      "vary": "accept",
+      "link": HOMEPAGE_DISCOVERY_LINK,
+      "x-content-type-options": "nosniff",
+    },
   });
 }
 
@@ -124,6 +179,12 @@ async function route(request, env, ctx) {
     // served straight from ASSETS.)
     if (url.pathname === "/auth.md") return serveFreshAsset(request, env, "text/markdown; charset=utf-8");
     if (url.pathname === "/.well-known/api-catalog") return serveFreshAsset(request, env, "application/linkset+json");
+    if (url.pathname === "/.well-known/oauth-protected-resource") return serveFreshAsset(request, env, "application/json; charset=utf-8");
+    if (url.pathname === "/.well-known/oauth-authorization-server") return serveFreshAsset(request, env, "application/json; charset=utf-8");
+    if (url.pathname === "/agent/auth") return handleAgentAuthRegister(request);
+    if (url.pathname === "/agent/auth/claim") return handleAgentAuthClaim(request);
+    if (url.pathname === "/oauth2/token") return handleAgentAuthToken(request);
+    if (url.pathname === "/oauth2/revoke") return handleAgentAuthRevoke(request);
 
     if (url.pathname === "/whoareyou") {
       return handleWhoareyou(request);
@@ -156,6 +217,13 @@ async function route(request, env, ctx) {
 
     if (url.pathname === "/rn/set") {
       return handleRnSet(request, env);
+    }
+
+    // /coffee is first-party in the shell, but the custom booking worker is not
+    // deployed yet. Make the route intentional instead of letting Pages fall back
+    // to the homepage for a path that looks like an app.
+    if (url.pathname === "/coffee" || url.pathname === "/coffee/") {
+      return handleCoffeeRedirect();
     }
 
     if (url.pathname === "/bot") {
@@ -262,28 +330,16 @@ async function route(request, env, ctx) {
     // edge won't poison itself. Successful responses pass through with
     // Pages's normal long-cache (correct for content-addressed thumbs
     // because we bump THUMB_VERSION's `?v=N` on each deploy).
-    if (/^\/images\/[^/]+\.(jpg|jpeg|avif|png|gif|heic|heif)$/i.test(url.pathname)) {
-      const res = await env.ASSETS.fetch(request);
-      if (!res.ok) {
-        const headers = new Headers(res.headers);
-        headers.set("cache-control", "public, max-age=0, must-revalidate");
-        return new Response(res.body, {
-          status: res.status, statusText: res.statusText, headers,
-        });
-      }
-      return res;
-    }
-
-    // /images/<file>.<ext> for image extensions: must resolve to a real
-    // image asset, not Cloudflare Pages' SPA fallback (which returns
-    // index.html with text/html for any missing path). serve if real,
-    // 404 if missing. (no more .jpg → .avif redirect — both formats now
-    // exist again as siblings, so a missing .jpg is genuinely missing.)
-    const thumbMatch = url.pathname.match(/^\/images\/([^/]+)\.(avif|jpe?g|png|gif|heic|heif|hif)$/i);
-    if (thumbMatch) {
+    // gate on CONTENT-TYPE, not res.ok: Cloudflare Pages' SPA fallback
+    // returns a missing /images/* asset as a 200 text/html (index.html),
+    // which would sail through an ok-check and get stamped with the
+    // _headers 1-year immutable cache — poisoning that thumb URL at the
+    // edge with homepage HTML until a THUMB_VERSION bump. a real thumb
+    // always serves image/*; anything else becomes an uncacheable 404.
+    if (/^\/images\/[^/]+\.(avif|jpe?g|png|gif|heic|heif|hif)$/i.test(url.pathname)) {
       const res = await env.ASSETS.fetch(request);
       const ct  = res.headers.get("content-type") || "";
-      if (ct.startsWith("image/")) return res;
+      if (res.ok && ct.startsWith("image/")) return res;
       try { await res.body?.cancel(); } catch {}
       return errorResp("not found", 404);
     }
@@ -305,6 +361,9 @@ async function route(request, env, ctx) {
     }
 
     if (url.pathname === "/") {
+      if (request.method === "HEAD") {
+        return homepageHeadResponse(request);
+      }
       if (wantsMarkdown(request)) {
         return serveMarkdown(request, env);
       }
@@ -339,7 +398,7 @@ async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
       const pid = _playlistId ??
         (_playlistId = await env.RN_KV.get("playlist-id"));
       if (pid && /^[0-9A-Za-z]{22}$/.test(pid)) {
-        return await env.RN_KV.get(`tracks:${pid}`, "json");
+        return await getTracksSWR(env, ctx, pid);
       }
     } catch {}
     return null;
@@ -354,9 +413,14 @@ async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
   // and let the counter fetch ride the concurrent batch below — no serial round-trip
   // either way. humans bump the count; bots read it (DO: ?peek; KV: read-no-write).
   const counterUA = request.headers.get("user-agent") || "";
-  const counterIsBot = request.cf?.botManagement?.verifiedBot === true ||
+  // speculative loads (Speculation Rules prefetch/prerender, Speed Brain,
+  // any Sec-Purpose-honest prefetcher) must not tick the counter — the page
+  // may never be seen. peek instead of increment, same as bots.
+  const counterIsSpeculative = /prefetch|prerender/i.test(request.headers.get("sec-purpose") || "");
+  const counterIsBot = counterIsSpeculative ||
+    request.cf?.botManagement?.verifiedBot === true ||
     /bot|crawl|spider|slurp|crawler|bingpreview|facebookexternalhit|embedly|slackbot|whatsapp|telegrambot|discordbot|redditbot|petalbot|gptbot|claudebot|ccbot|perplexity|bytespider|google-extended/i.test(counterUA);
-  const counterP = env.COUNTER
+  const counterRaw = env.COUNTER
     ? env.COUNTER.get(env.COUNTER.idFromName("homepage-visits"))
         .fetch(`https://do/${counterIsBot ? "?peek=1" : ""}`)
         .then((r) => r.json())
@@ -364,6 +428,15 @@ async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
     : env.RN_KV
       ? env.RN_KV.get("counter:visits").catch(() => null)
       : Promise.resolve(null);
+  // don't let the counter gate first byte: the DO is single-homed, so a
+  // far-from-home visitor pays a cross-region RTT for a footer pill that has
+  // a static fallback. race it against a short timeout — on a miss the pill
+  // keeps the placeholder and the increment still completes via waitUntil.
+  const counterP = Promise.race([
+    counterRaw,
+    new Promise((resolve) => setTimeout(() => resolve(null), 75)),
+  ]);
+  ctx.waitUntil(counterRaw.catch(() => {}));
 
   const [res, tracksPayload, photos, counterData, altMap] = await Promise.all([
     env.ASSETS.fetch(request),
@@ -390,7 +463,10 @@ async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
     if (counterData && typeof counterData.n === "number") {
       counterStr = String(counterData.n).padStart(6, "0");
     }
-  } else if (env.RN_KV) {
+  } else if (env.RN_KV && counterData != null) {
+    // counterData null here means the 75ms race timed out (or KV errored) —
+    // skip the increment entirely rather than read-modify-write from zero
+    // and clobber the real count. the pill shows the static placeholder.
     const cur  = parseInt(counterData || "0", 10) || 0;
     const next = counterIsBot ? cur : cur + 1;
     counterStr = String(next).padStart(6, "0");
@@ -416,7 +492,7 @@ async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
   // bail if no dynamic data is available — the static HTML's inline
   // JS will pick up the slack on the client (and the hardcoded "000042"
   // stays in the footer as a graceful fallback).
-  if (!tracksPayload?.tracks?.length && !photos && !counterStr && !lastModStr) return res;
+  if (!tracksPayload?.tracks?.length && !photos && !counterStr && !lastModStr) return withHomepageDiscoveryHeaders(res);
 
   const rewriter = new HTMLRewriter();
   let lcpAvif = null, lcpStem = null;  // first photo tile → responsive preload Link
@@ -446,7 +522,7 @@ async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
   }
 
   // ── photo grid → section.photos ─────────────────────────────────
-  // pick 9 random photos via fisher-yates so the grid feels fresh each
+  // pick 12 random photos via fisher-yates so the grid feels fresh each
   // visit. response carries Cache-Control: no-store via _headers (see
   // comment on / in _headers explaining the strong no-cache choice), so
   // CF/browser/intermediaries don't pin this selection across refreshes.
@@ -462,7 +538,7 @@ async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
       // and a candidate LCP element (the grid sits below the lede, so
       // it's a coin-flip with the text — but when the photo is LCP this
       // removes the lazy-load delay + bumps it from Low to High priority).
-      // the other 8 stay lazy. fetchpriority: Chrome 102+/Safari 17.2+,
+      // the other 11 stay lazy. fetchpriority: Chrome 102+/Safari 17.2+,
       // ignored harmlessly elsewhere.
       const imgLoad = i === 0
         ? `loading="eager" fetchpriority="high"`
@@ -529,7 +605,7 @@ async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
       (lcpStem ? `<link rel="preload" as="image" type="image/avif" fetchpriority="high" media="(max-width: 560px)" href="/images/${escAttr(lcpStem)}-${THUMB_SMALL_PX}.avif?v=${THUMB_VERSION}">` : "");
     rewriter.on("head", { element(el) { el.prepend(links, { html: true }); } });
   }
-  return rewriter.transform(res);
+  return withHomepageDiscoveryHeaders(rewriter.transform(res));
 }
 
 // fisher-yates shuffle, return first N elements. doesn't mutate input.
@@ -724,8 +800,14 @@ background:oklch(93% 0.012 90);border-top:1px solid oklch(80% 0.02 90)}
 .np-note[popover]{position:fixed;left:0;right:0;top:10px;margin:0 auto;width:min(720px,calc(100vw - 32px));max-height:calc(100dvh - 48px) !important}
 .np-note[popover]::backdrop{background:transparent}
 /* CRITICAL: our .np-window{display:flex} would otherwise beat the UA
-   [popover]:not(:popover-open){display:none}, leaking closed notes into flow. */
-.np-note:not(:popover-open){display:none !important}
+   [popover]:not(:popover-open){display:none}, leaking closed notes into flow.
+   INVERTED on purpose: in a pre-Popover engine, :popover-open is an unknown
+   pseudo-class — a rule hiding via :not(:popover-open) would DROP entirely
+   (non-forgiving :not()), stacking every note over the folder with no UA
+   rule to save us. hide-by-default survives any parser; only an engine that
+   understands :popover-open (and therefore popovers) can reveal a note. */
+.np-note{display:none !important}
+.np-note:popover-open{display:flex !important}
 /* folder index ("My Writing") */
 .np-folder{height:auto;min-height:0;max-width:560px}
 .np-folder-body{padding:14px 16px 6px}
@@ -863,6 +945,125 @@ async function serveFreshAsset(request, env, contentType) {
   return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
 }
 
+async function handleAgentAuthRegister(request) {
+  if (request.method === "OPTIONS") return methodResponse(null, 204, "POST, OPTIONS");
+  if (request.method !== "POST") return methodResponse({ error: "method_not_allowed" }, 405, "POST, OPTIONS");
+
+  let payload = {};
+  const ct = request.headers.get("content-type") || "";
+  if (ct.includes("application/json")) {
+    try {
+      payload = await request.json();
+    } catch {
+      return jsonResponse({ error: "invalid_request", error_description: "Request body must be valid JSON." }, 400);
+    }
+  }
+
+  const type = payload.type || "anonymous";
+  if (type !== "anonymous") {
+    return jsonResponse({
+      error: "unsupported_identity_type",
+      error_description: "aadhar.sh currently supports anonymous public agent registration only.",
+      identity_types_supported: ["anonymous"],
+    }, 400);
+  }
+
+  const origin = new URL(request.url).origin;
+  const scope = AGENT_AUTH_SCOPES.join(" ");
+  return jsonResponse({
+    registration_id: randomAgentId("reg"),
+    registration_type: "anonymous",
+    identity_type: "anonymous",
+    credential_type: "bearer_token",
+    token_type: "Bearer",
+    access_token: randomAgentId("aadhar_public"),
+    expires_in: 3600,
+    scope,
+    scopes: AGENT_AUTH_SCOPES,
+    resource: "https://aadhar.sh/",
+    claim_uri: `${origin}/agent/auth/claim`,
+    revocation_uri: `${origin}/oauth2/revoke`,
+    note: "This public bearer credential is optional; current aadhar.sh agent resources are already public and read-only.",
+  }, 201, { "cache-control": "no-store" });
+}
+
+async function handleAgentAuthClaim(request) {
+  if (request.method === "OPTIONS") return methodResponse(null, 204, "GET, POST, OPTIONS");
+  if (request.method !== "GET" && request.method !== "POST") {
+    return methodResponse({ error: "method_not_allowed" }, 405, "GET, POST, OPTIONS");
+  }
+  return jsonResponse({
+    status: "not_required",
+    identity_type: "anonymous",
+    message: "Anonymous public credentials on aadhar.sh do not require a human claim ceremony.",
+  }, 200, { "cache-control": "no-store" });
+}
+
+async function handleAgentAuthToken(request) {
+  if (request.method === "OPTIONS") return methodResponse(null, 204, "POST, OPTIONS");
+  if (request.method !== "POST") return methodResponse({ error: "method_not_allowed" }, 405, "POST, OPTIONS");
+
+  let grantType = "";
+  const ct = request.headers.get("content-type") || "";
+  if (ct.includes("application/x-www-form-urlencoded")) {
+    const form = new URLSearchParams(await request.text());
+    grantType = form.get("grant_type") || "";
+  } else if (ct.includes("application/json")) {
+    try {
+      const payload = await request.json();
+      grantType = payload.grant_type || "";
+    } catch {
+      return oauthError("invalid_request", "Request body must be valid JSON or form data.", 400);
+    }
+  }
+
+  if (grantType !== "urn:workos:agent-auth:grant-type:anonymous") {
+    return oauthError("unsupported_grant_type", "Supported grant_type: urn:workos:agent-auth:grant-type:anonymous.", 400);
+  }
+
+  return jsonResponse({
+    access_token: randomAgentId("aadhar_public"),
+    token_type: "Bearer",
+    expires_in: 3600,
+    scope: AGENT_AUTH_SCOPES.join(" "),
+  }, 200, { "cache-control": "no-store" });
+}
+
+async function handleAgentAuthRevoke(request) {
+  if (request.method === "OPTIONS") return methodResponse(null, 204, "POST, OPTIONS");
+  if (request.method !== "POST") return methodResponse({ error: "method_not_allowed" }, 405, "POST, OPTIONS");
+  return new Response(null, {
+    status: 200,
+    headers: {
+      "cache-control": "no-store",
+    },
+  });
+}
+
+function methodResponse(body, status, allow) {
+  const headers = { allow, "cache-control": "no-store" };
+  return body ? jsonResponse(body, status, headers) : new Response(null, { status, headers });
+}
+
+function oauthError(error, errorDescription, status) {
+  return jsonResponse({ error, error_description: errorDescription }, status, { "cache-control": "no-store" });
+}
+
+function jsonResponse(body, status = 200, extraHeaders = {}) {
+  return new Response(JSON.stringify(body, null, 2) + "\n", {
+    status,
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "cache-control": "no-store",
+      ...extraHeaders,
+    },
+  });
+}
+
+function randomAgentId(prefix) {
+  return `${prefix}_${crypto.randomUUID().replace(/-/g, "")}${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
+}
+
 // short-cache error response. matches the CF Cache Rule that pins edge
 // TTL to 30s on 4xx/5xx — sending max-age=30 makes the browser cache
 // honor the same window, so a transient 404 during a deploy race
@@ -911,7 +1112,7 @@ const R2_EXT_PRIORITY = {
 // higher quality (CQ30 → -q63); 13 the 3 grayscale Leica thumbs re-encoded
 // as true monochrome (yuv420 → yuv400). same filenames each time, so the
 // ?v= bump is what busts the edge cache for the new bytes.)
-const THUMB_VERSION = 18;
+const THUMB_VERSION = 19;
 // stems removed from the pool — excluded from the rebuilt manifest even if their
 // original still lingers in R2's eventually-consistent list(). prune once R2
 // list() drops them (and the entry here is harmless to keep as a record).
@@ -1205,16 +1406,38 @@ function apacheIndexResponse(path, entries) {
 }
 
 // ── markdown negotiation ────────────────────────────────────────────
-// returns true iff the client's Accept header explicitly prefers text/markdown
-// over text/html (or includes only text/markdown). browsers send
-// `text/html,application/xhtml+xml,...` so they fall through.
+// returns true iff the client's Accept header explicitly asks for text/markdown
+// and prefers it over HTML. Do not let generic */* negotiate to Markdown: the
+// root URL is primarily a browser page, and /index.md is the stable cacheable
+// Markdown URL for agents that do not send a precise Accept header.
 function wantsMarkdown(request) {
   const accept = (request.headers.get("accept") || "").toLowerCase();
-  if (!accept.includes("text/markdown")) return false;
-  // if the client lists both, treat markdown as the requested representation
-  // (the q-value parsing would be more precise but this matches every real
-  // agent that asks for markdown today).
-  return true;
+  if (!/(^|,)\s*text\/markdown\s*(?:;|,|$)/i.test(accept)) return false;
+  const markdownQ = acceptQ(accept, "text/markdown");
+  const htmlQ = Math.max(
+    acceptQ(accept, "text/html"),
+    acceptQ(accept, "application/xhtml+xml")
+  );
+  return markdownQ > 0 && markdownQ > htmlQ;
+}
+
+function acceptQ(accept, type) {
+  const [wantType, wantSub] = type.split("/");
+  let best = 0;
+  for (const raw of accept.split(",")) {
+    const parts = raw.trim().split(";").map(s => s.trim());
+    const media = parts.shift();
+    if (!media || !media.includes("/")) continue;
+    const [gotType, gotSub] = media.split("/");
+    if (!((gotType === wantType || gotType === "*") && (gotSub === wantSub || gotSub === "*"))) continue;
+    let q = 1;
+    for (const p of parts) {
+      const m = p.match(/^q=([0-9.]+)$/);
+      if (m) q = Math.max(0, Math.min(1, Number(m[1]) || 0));
+    }
+    if (q > best) best = q;
+  }
+  return best;
 }
 
 async function serveMarkdown(request, env) {
@@ -1234,14 +1457,29 @@ async function serveMarkdown(request, env) {
     headers: {
       "content-type":     "text/markdown; charset=utf-8",
       "x-markdown-tokens": String(tokens),
-      "cache-control":    "public, max-age=300, s-maxage=600",
+      // Cloudflare's edge can serve a cached negotiated root variant to clients
+      // with a different Accept header. /index.md remains the cacheable Markdown
+      // resource; negotiated "/" Markdown must stay uncacheable.
+      "cache-control":    "no-store, must-revalidate",
       "vary":             "accept",
+      "link":             HOMEPAGE_DISCOVERY_LINK,
       "x-content-type-options": "nosniff",
     },
   });
 }
 
 // ── /rn handler ─────────────────────────────────────────────────────
+function handleCoffeeRedirect() {
+  return new Response(null, {
+    status: 302,
+    headers: {
+      "location":        "https://cal.com/aadharsh/coffee",
+      "cache-control":   "public, max-age=300, s-maxage=300",
+      "referrer-policy": "strict-origin-when-cross-origin",
+    },
+  });
+}
+
 async function handleRn(request, env) {
   let playlistId = null;
   if (env.RN_KV) {
@@ -1304,13 +1542,15 @@ async function handleRnTracks(request, env, ctx) {
 
   const cacheKey = `tracks:${playlistId}`;
 
-  // optional bust
+  // optional bust — drop both the value and its freshness sentinel
   if (env.RN_BUST_SECRET && url.searchParams.get("bust") === env.RN_BUST_SECRET) {
-    await env.RN_KV.delete(cacheKey);
+    await Promise.all([env.RN_KV.delete(cacheKey), env.RN_KV.delete(`${cacheKey}:fresh`)]);
   }
 
-  // serve from cache
-  const cached = await env.RN_KV.get(cacheKey, "json");
+  // two-key SWR (same shape as the photo manifest): stale serves instantly,
+  // a lapsed sentinel refreshes in the background. only a true cold start
+  // (or a bust) pays the 3-tier Spotify scrape inline.
+  const cached = await getTracksSWR(env, ctx, playlistId);
   if (cached) return jsonResp(cached);
 
   // fetch + parse
@@ -1321,10 +1561,41 @@ async function handleRnTracks(request, env, ctx) {
     return jsonResp({ error: "scrape failed", message: String(e), tracks: [] }, 502);
   }
 
-  // fire-and-forget cache write
-  ctx.waitUntil(env.RN_KV.put(cacheKey, JSON.stringify(payload), { expirationTtl: RN_TRACKS_TTL }));
+  ctx.waitUntil(storeTracks(env, playlistId, payload));
 
   return jsonResp(payload);
+}
+
+// two-key stale-while-revalidate for the playlist payload, mirroring
+// getImagesManifest: `tracks:<pid>` persists with NO TTL (a visitor never
+// catches an empty hole when the hour lapses), and `tracks:<pid>:fresh`
+// carries the freshness window. lapsed sentinel → serve stale now, rescrape
+// on ctx.waitUntil. used by both /rn/tracks and the homepage prerender, so
+// whichever gets hit keeps the payload warm.
+async function getTracksSWR(env, ctx, pid) {
+  const cacheKey = `tracks:${pid}`;
+  let payload = null, fresh = null;
+  try {
+    [payload, fresh] = await Promise.all([
+      env.RN_KV.get(cacheKey, "json"),
+      env.RN_KV.get(`${cacheKey}:fresh`),
+    ]);
+  } catch {}
+  if (payload && !fresh && ctx) {
+    ctx.waitUntil(
+      scrapePlaylistTracks(pid, env, ctx)
+        .then((p) => p && storeTracks(env, pid, p))
+        .catch(() => {})
+    );
+  }
+  return payload;
+}
+
+async function storeTracks(env, pid, payload) {
+  await Promise.all([
+    env.RN_KV.put(`tracks:${pid}`, JSON.stringify(payload)),
+    env.RN_KV.put(`tracks:${pid}:fresh`, "1", { expirationTtl: RN_TRACKS_TTL }),
+  ]);
 }
 
 async function scrapePlaylistTracks(playlistId, env, ctx) {
@@ -1494,7 +1765,11 @@ function jsonResp(obj, status = 200) {
     status,
     headers: {
       "content-type":  "application/json; charset=utf-8",
-      "cache-control": "public, max-age=300, s-maxage=600",
+      // errors get the errorResp() discipline (30s), never the 5-minute
+      // success TTL — a transient scrape 502 must not pin in browsers.
+      "cache-control": status >= 400
+        ? "public, max-age=30, must-revalidate"
+        : "public, max-age=300, s-maxage=600",
       "access-control-allow-origin": "*",
     },
   });
@@ -2480,7 +2755,7 @@ footer .signature small { color: oklch(56.93% 0 0); }
 
 <div class="window">
 
-  <div class="title-bar" aria-hidden="true">
+  <div class="title-bar">
     <span class="title-text"><span class="icon"></span>whoareyou</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/" title="back to aadhar.sh" aria-label="back to aadhar.sh"></a></span>
   </div>

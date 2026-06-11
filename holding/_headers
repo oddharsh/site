@@ -64,6 +64,9 @@
   Cache-Control: no-store, must-revalidate, s-maxage=0
   Link: </sitemap.xml>; rel="sitemap"; type="application/xml"
   Link: </llms.txt>; rel="alternate"; type="text/plain"; title="llms.txt summary"
+  Link: </auth.md>; rel="service-doc"; type="text/markdown"; title="Auth.md agent registration"
+  Link: </.well-known/oauth-protected-resource>; rel="service-desc"; type="application/json"; title="OAuth protected resource metadata"
+  Link: </.well-known/oauth-authorization-server>; rel="service-desc"; type="application/json"; title="OAuth authorization server metadata"
   Link: </rn/tracks>; rel="service-desc"; type="application/json"; title="current rn playlist as JSON"
   Link: </.well-known/http-message-signatures-directory>; rel="http-message-signatures-directory"; type="application/jwk-set+json"
   Link: </.well-known/security.txt>; rel="security-policy"; type="text/plain"
@@ -102,9 +105,18 @@
 /.well-known/api-catalog
   Content-Type: application/linkset+json
   Cache-Control: public, max-age=0, must-revalidate, s-maxage=86400
+  Link: </.well-known/api-catalog>; rel="api-catalog"; type="application/linkset+json"
 
 /auth.md
   Content-Type: text/markdown; charset=utf-8
+  Cache-Control: public, max-age=0, must-revalidate, s-maxage=86400
+
+/.well-known/oauth-protected-resource
+  Content-Type: application/json; charset=utf-8
+  Cache-Control: public, max-age=0, must-revalidate, s-maxage=86400
+
+/.well-known/oauth-authorization-server
+  Content-Type: application/json; charset=utf-8
   Cache-Control: public, max-age=0, must-revalidate, s-maxage=86400
 
 /.well-known/agent-skills/serendipity-events/SKILL.md

@@ -1,28 +1,95 @@
-# auth.md
+# Auth.md
 
-Authentication at aadhar.sh: a short, honest map of the auth posture for agents
-and humans. The short
-version: the public agent surfaces need no credentials, and there is no OAuth
-because there is no protected resource to gate.
+Agent registration metadata for `aadhar.sh`.
 
-## The Serendipity MCP server
+This site exposes public, read-only resources for agents. Registration is
+available for agents that want an explicit bearer credential and scope list, but
+the credential does not unlock private account data: the current resources are
+already public.
 
-`https://aadhar.sh/serendipity/mcp` is public, read-only, and unauthenticated.
-Connect with any MCP client over the Streamable-HTTP transport and call its
-tools. It serves only the data the website already shows in public, so no auth
-is required and none is offered. See https://aadhar.sh/serendipity/mcp-info.
+## Audience
 
-## Why there is no OAuth / OIDC
+Use this file if you are an agent or MCP client trying to understand how to
+access public `aadhar.sh` resources, including:
 
-This site deliberately does not publish `oauth-authorization-server`,
-`openid-configuration`, or `oauth-protected-resource` (RFC 9728) metadata. There
-is no authorization server and no OAuth-protected resource here, so advertising
-that machinery would be a dangling pointer: it would pass a scanner and then
-break any agent that tried to use it. The same honesty rule keeps the `_a2a`
-DNS-AID record unpublished, since there is no Agent2Agent server to answer it.
+- `https://aadhar.sh/serendipity/mcp`
+- `https://aadhar.sh/rn/tracks`
+- `https://aadhar.sh/images/manifest.json`
+- `https://aadhar.sh/around/json`
 
-If a future endpoint here does require OAuth, this file and the matching
-`/.well-known/` metadata will land together.
+## Discovery
+
+Fetch the OAuth Protected Resource Metadata:
+
+```http
+GET https://aadhar.sh/.well-known/oauth-protected-resource
+```
+
+Then fetch the advertised Authorization Server metadata:
+
+```http
+GET https://aadhar.sh/.well-known/oauth-authorization-server
+```
+
+The Authorization Server metadata includes an `agent_auth` block with the
+registration URI, supported identity type, credential type, claim URI, and
+revocation URI.
+
+## Supported Registration Method
+
+`aadhar.sh` currently supports anonymous agent registration only.
+
+```http
+POST https://aadhar.sh/agent/auth
+Content-Type: application/json
+
+{ "type": "anonymous" }
+```
+
+Successful responses issue a short-lived public bearer credential:
+
+```json
+{
+  "registration_type": "anonymous",
+  "credential_type": "bearer_token",
+  "token_type": "Bearer",
+  "scope": "public.read mcp.read rn.read photos.read around.read"
+}
+```
+
+The bearer credential is optional for today's public endpoints. If you send it,
+use the standard header form:
+
+```http
+Authorization: Bearer <access_token>
+```
+
+## Unsupported Methods
+
+Identity assertion registration is not accepted yet. In particular, this site
+does not currently accept ID-JAG or verified-email assertions for private user
+delegation.
+
+## Claim and Revocation
+
+Anonymous public credentials do not require a human claim ceremony. The metadata
+still publishes `claim_uri` so agents have a stable place to check that status:
+
+```http
+POST https://aadhar.sh/agent/auth/claim
+```
+
+Credential revocation is idempotent:
+
+```http
+POST https://aadhar.sh/oauth2/revoke
+Content-Type: application/x-www-form-urlencoded
+
+token=<access_token>&token_type_hint=access_token
+```
+
+Because the current public credentials are stateless and do not gate private
+data, revocation returns success without revealing whether a token was known.
 
 ## Outbound: AadharshBot
 
