@@ -293,7 +293,20 @@ function shellCss() {
      auto follows the image; max-height caps a rare portrait cover, with contain
      letterboxing inside it (bg fills) rather than distorting. */
   #ev-tip img{display:block;width:300px;height:auto;max-height:340px;object-fit:contain;background:oklch(94% 0.005 240);border:3px solid #fff;outline:1px solid oklch(61% 0.061 253);outline-offset:-1px;box-shadow:2px 3px 12px -2px rgba(0,20,90,.55)}
-  @media(max-width:640px){.body{flex-direction:column}.pane{width:auto;border-right:0;border-bottom:2px solid #7a96c8}}`;
+  @media(max-width:640px){.body{flex-direction:column}.pane{width:auto;border-right:0;border-bottom:2px solid #7a96c8}}
+  /* OS-window geometry inlined so first paint matches nav.js (no shell "pop"
+     when the deferred desktop arrives). byte-identical to nav.js's app-shell
+     rules; !important beats this page's own body rule. serendipity's own
+     .window>.body{overflow:hidden !important} + .pane-body scroll still win. */
+  html{height:100dvh;overflow:hidden}
+  body{min-height:0 !important;height:calc(100vh - 30px) !important;height:calc(100dvh - 30px) !important;overflow-x:hidden !important;overflow-y:auto !important;box-sizing:border-box}
+  body:has(.window),body:has(.np-window),body:has(.wrap){overflow:hidden !important;display:flex !important;flex-direction:column !important;align-items:center !important;padding:8px !important}
+  .window,.np-window,.wrap{position:relative;z-index:2;flex:0 1 auto !important;min-height:0;max-height:100% !important;width:100%;margin:0 auto !important;box-sizing:border-box}
+  .window,.np-window{display:flex;flex-direction:column}
+  .window>.title-bar,.window>.titlebar,.np-window>.np-titlebar{flex:0 0 auto}
+  .window>.content,.window>.body{flex:1 1 auto;min-height:0;overflow:auto}
+  .wrap{display:flex;flex-direction:column;padding-bottom:0 !important}.wrap>.window{flex:0 1 auto;max-height:100%}
+  body::after{content:"";position:fixed;left:0;right:0;bottom:0;height:30px;z-index:1;background:linear-gradient(180deg,oklch(67% 0.15 256) 0%,oklch(58% 0.19 257) 4%,oklch(51% 0.20 258) 9%,oklch(49% 0.20 258) 50%,oklch(46% 0.20 259) 92%,oklch(40% 0.18 260) 100%)}`;
 }
 
 function shell(title, currentPath, bodyHtml) {

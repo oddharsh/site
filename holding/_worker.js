@@ -833,6 +833,19 @@ background:linear-gradient(180deg,oklch(99% 0 0),oklch(92% 0.005 263));box-shado
 .np-btn:active{box-shadow:inset 1px 1px 0 oklch(84% 0.02 90),inset -1px -1px 0 oklch(100% 0 0)}
 @media print{body.np-page{padding:0;background:none}#axp-taskbar,.np-titlebar,.np-menubar,.np-status{display:none}
 .np-window{border:0;box-shadow:none;height:auto;max-width:none}.np-text{font-size:11pt;color:#000}}
+/* OS-window geometry inlined so first paint matches nav.js (no shell "pop").
+   byte-identical to nav.js's app-shell rules; !important beats body.np-page's
+   own padding/min-height; degrades with JS off. */
+html{height:100dvh;overflow:hidden}
+body{min-height:0 !important;height:calc(100vh - 30px) !important;height:calc(100dvh - 30px) !important;overflow-x:hidden !important;overflow-y:auto !important;box-sizing:border-box}
+body:has(.window),body:has(.np-window),body:has(.wrap){overflow:hidden !important;display:flex !important;flex-direction:column !important;align-items:center !important;padding:8px !important}
+.window,.np-window,.wrap{position:relative;z-index:2;flex:0 1 auto !important;min-height:0;max-height:100% !important;width:100%;margin:0 auto !important;box-sizing:border-box}
+.window,.np-window{display:flex;flex-direction:column}
+.window>.title-bar,.window>.titlebar,.np-window>.np-titlebar{flex:0 0 auto}
+.window>.content,.window>.body{flex:1 1 auto;min-height:0;overflow:auto}
+.np-window .np-text{flex:1 1 auto;min-height:0}
+.wrap{display:flex;flex-direction:column;padding-bottom:0 !important}.wrap>.window{flex:0 1 auto;max-height:100%}
+body.np-page::after{content:"";position:fixed;left:0;right:0;bottom:0;height:30px;z-index:1;background:linear-gradient(180deg,oklch(67% 0.15 256) 0%,oklch(58% 0.19 257) 4%,oklch(51% 0.20 258) 9%,oklch(49% 0.20 258) 50%,oklch(46% 0.20 259) 92%,oklch(40% 0.18 260) 100%)}
 `;
 
 function writingShell(o) {
@@ -2128,6 +2141,20 @@ function xpChromeCss(maxWidth) {
 .xp-input:focus { outline: none; border-color: #316ac5; box-shadow: inset 1px 1px 0 rgba(0,0,0,.20), inset -1px -1px 0 #ffffff, 0 0 0 1px #316ac5; }
   html { scrollbar-color: oklch(62% 0.14 255) oklch(91% 0.02 248); }
   .content { padding: 12px 16px 16px; }
+  /* OS-window geometry inlined so FIRST PAINT matches nav.js (no shell "pop"
+     when the deferred desktop arrives). byte-identical to nav.js's app-shell
+     rules; !important beats each page's own body rule; degrades with JS off
+     (.content scrolls natively, the ::after strip stands in for the taskbar). */
+  html{height:100dvh;overflow:hidden}
+  body{min-height:0 !important;height:calc(100vh - 30px) !important;height:calc(100dvh - 30px) !important;overflow-x:hidden !important;overflow-y:auto !important;box-sizing:border-box}
+  body:has(.window),body:has(.np-window),body:has(.wrap){overflow:hidden !important;display:flex !important;flex-direction:column !important;align-items:center !important;padding:8px !important}
+  .window,.np-window,.wrap{position:relative;z-index:2;flex:0 1 auto !important;min-height:0;max-height:100% !important;width:100%;margin:0 auto !important;box-sizing:border-box}
+  .window,.np-window{display:flex;flex-direction:column}
+  .window>.title-bar,.window>.titlebar,.np-window>.np-titlebar{flex:0 0 auto}
+  .window>.content,.window>.body{flex:1 1 auto;min-height:0;overflow:auto}
+  .np-window .np-text{flex:1 1 auto;min-height:0}
+  .wrap{display:flex;flex-direction:column;padding-bottom:0 !important}.wrap>.window{flex:0 1 auto;max-height:100%}
+  body::after{content:"";position:fixed;left:0;right:0;bottom:0;height:30px;z-index:1;background:linear-gradient(180deg,oklch(67% 0.15 256) 0%,oklch(58% 0.19 257) 4%,oklch(51% 0.20 258) 9%,oklch(49% 0.20 258) 50%,oklch(46% 0.20 259) 92%,oklch(40% 0.18 260) 100%)}
 `;
 }
 
