@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>aadhar.sh/garage/teardown</title>
+<meta name="description" content="What Fable 5's multi-agent audit found and fixed across aadhar.sh: a live cache-poisoning hole, a frontier feature whose fallback broke old browsers, and a stack of make-it-feel-instant changes. Before and after, side by side.">
+<link rel="canonical" href="https://aadhar.sh/garage/teardown">
+<meta property="og:type" content="website">
+<meta property="og:title" content="aadhar.sh/garage/teardown">
+<meta property="og:description" content="What Fable 5's multi-agent audit found and fixed across aadhar.sh: a live cache-poisoning hole, a frontier feature whose fallback broke old browsers, and a stack of make-it-feel-instant changes. Before and after, side by side.">
+<meta property="og:url" content="https://aadhar.sh/garage/teardown">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='3' y='6' width='7' height='20' rx='1' fill='%230855dd'/><rect x='12' y='6' width='5' height='20' rx='1' fill='%23166aee'/><rect x='19' y='6' width='10' height='20' rx='1' fill='%23003bda'/></svg>">
+<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; } html{background:linear-gradient(180deg,oklch(56% 0.13 250) 0%,oklch(73% 0.10 236) 50%,oklch(88% 0.05 232) 60%,oklch(60% 0.16 140) 100%)}
+html { scrollbar-color: oklch(62% 0.14 255) oklch(91% 0.02 248); }
+body {
+  background: linear-gradient(180deg, oklch(56% 0.13 250) 0%, oklch(73% 0.10 236) 50%, oklch(88% 0.05 232) 60%, oklch(60% 0.16 140) 100%);
+  font-family: var(--font-ui);
+  font-size: 10.5pt;
+  line-height: 1.5;
+  color: oklch(21.78% 0 0);
+  padding: 24px 12px 60px;
+  min-height: 100vh;
+}
+.window {
+  max-width: 720px;
+  margin: 0 auto;
+  background: oklch(100% 0 0);
+  border: 2px solid #0831d9; border-right-color: #001ea0; border-bottom-color: #001ea0;
+  border-top-left-radius: 8px; border-top-right-radius: 8px; overflow: hidden;
+  box-shadow: inset 1px 1px 0 #166aee, inset 2px 2px 0 #0855dd,
+              inset -1px -1px 0 #00138c, inset -2px -2px 0 #003bda,
+              4px 4px 0 rgba(0,30,160,.35);
+}
+.title-bar {
+  background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
+  color: oklch(100.00% 0 0);
+  font-family: var(--font-caption);
+  font-size: 10pt; font-weight: bold;
+  padding: 4px 8px;
+  border-bottom: 1px solid oklch(41.92% 0.0962 250.51);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.title-bar .icon {
+  display: inline-block; width: 16px; height: 16px; margin-right: 6px;
+  vertical-align: middle; background: oklch(87.82% 0.0877 66.27);
+  position: relative; flex-shrink: 0;
+}
+.title-bar .icon::before {
+  content: ""; position: absolute; inset: 3px;
+  background: oklch(69.58% 0.2043 43.49);
+  clip-path: polygon(20% 0, 100% 50%, 20% 100%, 0 50%);
+}
+.title-bar .title-text { flex: 1; padding-left: 4px; }
+.title-bar .controls { display: flex; align-items: center; gap: 2px; letter-spacing: 0; }
+/* authentic Luna caption buttons: 21x21 glossy "gel" lozenges with a top specular
+   highlight + CSS-drawn white glyphs (no text, no images). min/max are blue, CLOSE
+   is RED at rest. CLASS-BASED (.min/.max/.close) so decorative demo windows that use
+   <span class="close"> get the identical skin as a real <a class="close">. sRGB hex
+   traced from the Luna .msstyles bitmap, kept as hex on purpose. */
+.title-bar .controls .min,
+.title-bar .controls .max,
+.title-bar .controls .close {
+  position: relative; box-sizing: border-box;
+  width: 21px; height: 21px; padding: 0; margin: 0;
+  display: inline-block; overflow: hidden; font-size: 0; color: transparent;
+  border: 1px solid #6696eb; border-radius: 3px;
+  text-decoration: none; cursor: pointer;
+  background-color: #3e73f5;
+  background-image: linear-gradient(180deg, #5f8cf7 0%, #3a71f5 22%, #3e73f5 55%, #2a70f2 82%, #1045be 100%);
+  transition: filter 60ms ease-out;
+}
+/* "wet plastic" gloss band over the top ~45% (close uses ::after for its X stroke) */
+.title-bar .controls .min::after,
+.title-bar .controls .max::after {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 45%;
+  background: linear-gradient(180deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.12) 70%, rgba(255,255,255,0) 100%);
+  pointer-events: none; border-radius: 2px 2px 5px 5px;
+}
+.title-bar .controls .min:hover, .title-bar .controls .min:focus-visible,
+.title-bar .controls .max:hover, .title-bar .controls .max:focus-visible {
+  border-color: #8fb4ff; background-color: #4fa4ff;
+  background-image: linear-gradient(180deg, #689bff 0%, #468aff 22%, #4fa4ff 55%, #3990fc 82%, #1858c8 100%);
+  outline: none;
+}
+/* CLOSE = red at rest */
+.title-bar .controls .close {
+  border-color: #d8401c; background-color: #e45f3e;
+  background-image: linear-gradient(180deg, #e8795f 0%, #e45f40 30%, #e45d3d 52%, #e2552a 80%, #ae3110 100%);
+}
+.title-bar .controls .close:hover, .title-bar .controls .close:focus-visible {
+  border-color: #ff7a66; background-color: #ff957c;
+  background-image: linear-gradient(180deg, #ff8b7d 0%, #ff7463 26%, #ff957c 55%, #fd7e64 82%, #d34936 100%);
+  box-shadow: 0 0 4px rgba(255,120,96,.7); outline: none;
+}
+.title-bar .controls .min:active,
+.title-bar .controls .max:active,
+.title-bar .controls .close:active { filter: brightness(.9); }
+/* white glyphs drawn with pseudo-elements */
+.title-bar .controls .min::before {
+  content: ""; position: absolute; left: 5px; right: 5px; bottom: 5px; height: 2px;
+  background: #fff; box-shadow: 0 1px 0 rgba(0,0,0,.35);
+}
+.title-bar .controls .max::before {
+  content: ""; position: absolute; left: 5px; top: 5px; width: 11px; height: 9px;
+  box-sizing: border-box; border: 1px solid #fff; border-top-width: 2px;
+  filter: drop-shadow(0 1px 0 rgba(0,0,0,.35));
+}
+.title-bar .controls .close::before,
+.title-bar .controls .close::after {
+  content: ""; position: absolute; left: 50%; top: 50%;
+  width: 13px; height: 2px; margin: -1px 0 0 -6.5px; background: #fff;
+  box-shadow: 0 1px 0 rgba(0,0,0,.35);
+}
+.title-bar .controls .close::before { transform: rotate(45deg); }
+.title-bar .controls .close::after  { transform: rotate(-45deg); }
+/* --- Luna polish: caption text shadow (matches horizon/scroll) --- */
+.title-bar { text-shadow: 1px 1px #0f1089; }
+.content { padding: 12px 16px 18px; }
+h1 {
+  font-family: var(--font-caption);
+  font-size: 14pt;
+  color: oklch(41.92% 0.0962 250.51);
+  margin: 0 0 6px;
+}
+.lede { color: oklch(38.67% 0 0); font-size: 10.5pt; margin: 0 0 4px; }
+h2 {
+  font-family: var(--font-caption);
+  font-size: 13pt;
+  color: oklch(41.92% 0.0962 250.51);
+  margin: 28px 0 4px;
+}
+.note { color: oklch(44.95% 0 0); font-size: 10pt; margin: 0 0 14px; }
+.note code, p code, li code { background: oklch(96.72% 0 0); border: 1px solid oklch(88.22% 0 0); padding: 0 4px; font-family: var(--font-mono); font-size: 9.5pt; }
+hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px 0; }
+a { color: oklch(41.92% 0.0962 250.51); }
+.status {
+  display: inline-block; font-family: var(--font-mono); font-size: 8.5pt;
+  font-weight: bold; letter-spacing: 0.05em; padding: 1px 6px; border: 1px solid;
+  border-radius: 2px; text-transform: uppercase; vertical-align: middle;
+}
+.status.review { color: oklch(54.44% 0.1504 47.10); border-color: oklch(54.44% 0.1504 47.10); background: oklch(98% 0.03 95); }
+
+/* ── demo ── */
+.cas-controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 10px 0; }
+.cas-ta { width: 100%; min-height: 88px; font-family: var(--font-mono); font-size: 10pt; line-height: 1.45; padding: 8px; border: 2px solid; border-color: #808080 #fff #fff #808080; background: oklch(99% 0 0); field-sizing: content; max-height: 38vh; resize: vertical; }
+.xp-btn { font-family: var(--font-ui); font-size: 9.5pt; padding: 3px 12px; background: linear-gradient(#fff, #ece9d8); border: 1px solid #707070; border-radius: 3px; box-shadow: inset 1px 1px 0 #fff; cursor: pointer; }
+.xp-btn:active { box-shadow: inset 1px 1px 2px rgba(0,0,0,.3); }
+.method { margin: 16px 0; }
+.method h3 { font-size: 10.5pt; margin: 0 0 4px; font-family: var(--font-caption); color: oklch(41.92% 0.0962 250.51); display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.method h3 small { font-weight: normal; font-size: 9pt; color: oklch(50% 0 0); font-family: var(--font-ui); }
+.chunks { display: flex; flex-wrap: wrap; gap: 3px; padding: 8px; background: oklch(97% 0.005 250); border: 1px solid oklch(85% 0.02 250); border-radius: 4px; min-height: 30px; }
+.chunk { height: 26px; border-radius: 2px; display: flex; align-items: center; justify-content: center; font: 8px/1 "Courier New", monospace; color: #fff; text-shadow: 0 1px 1px rgba(0,0,0,.45); padding: 0 3px; overflow: hidden; white-space: nowrap; cursor: default; transition: background .18s; }
+.chunk.shared { background: oklch(52% 0.13 150); }
+.chunk.changed { background: oklch(58% 0.19 38); }
+.chunk.neutral { background: oklch(53% 0.10 255); }
+.stats { font-size: 9.5pt; color: oklch(42% 0 0); margin: 6px 0 0; font-family: var(--font-mono); }
+.stats b { color: oklch(22% 0 0); }
+.delta-good { color: oklch(43% 0.16 150); font-weight: bold; }
+.delta-bad { color: oklch(50% 0.19 38); font-weight: bold; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 9pt; color: oklch(45% 0 0); margin: 8px 0 0; }
+.legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+.legend .sh::before { background: oklch(52% 0.13 150); }
+.legend .ch::before { background: oklch(58% 0.19 38); }
+.legend .nu::before { background: oklch(53% 0.10 255); }
+.callout { font-size: 10pt; background: oklch(97% 0.025 255); border-left: 3px solid oklch(51% 0.225 263); padding: 8px 12px; margin: 14px 0; color: oklch(28% 0.04 255); }
+.replaces { font-size: 9.5pt; color: oklch(33% 0 0); margin: 8px 0 0; border-left: 3px solid oklch(86% 0.03 250); padding-left: 8px; }
+.drop { border: 2px dashed oklch(62% 0.05 255); border-radius: 6px; padding: 16px; text-align: center; color: oklch(45% 0.03 255); font-size: 10pt; cursor: pointer; background: oklch(98% 0.01 255); }
+.drop.over { background: oklch(94% 0.04 255); border-color: oklch(51% 0.225 263); }
+footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67% 0.0294 259.59); font-size: 9.5pt; color: oklch(45% 0 0); }
+@media (prefers-reduced-motion: reduce) { .chunk { transition: none; } }
+
+  /* OS-window geometry inlined so FIRST PAINT matches nav.js (no shell "pop"
+     when the deferred desktop arrives). keep in sync with nav.js (search
+     "app-shell"); degrades with JS off (.content scrolls natively). */
+  html { height: 100dvh; overflow: hidden; }
+  body { min-height: 0; height: calc(100vh - 30px); height: calc(100dvh - 30px);
+    overflow: hidden; box-sizing: border-box; display: flex; flex-direction: column;
+    align-items: center; padding: 8px; }
+  .window { flex: 0 1 auto; min-height: 0; max-height: 100%; width: 100%;
+    display: flex; flex-direction: column; }
+  .window > .title-bar { flex: 0 0 auto; }
+  .window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; }
+  body::after { content: ""; position: fixed; left: 0; right: 0; bottom: 0; height: 30px;
+    z-index: 1; background: linear-gradient(180deg, oklch(67% 0.15 256) 0%, oklch(58% 0.19 257) 4%,
+    oklch(51% 0.20 258) 9%, oklch(49% 0.20 258) 50%, oklch(46% 0.20 259) 92%, oklch(40% 0.18 260) 100%); }
+
+
+  /* ── teardown: before/after comparison cards ─────────────────────────── */
+  .content hr { border: 0; border-top: 1px solid oklch(86% 0.02 255); margin: 18px 0; }
+  .content h2 { font-family: var(--font-caption); font-size: 13pt; color: oklch(41.92% 0.0962 250.51);
+    margin: 24px 0 4px; font-weight: bold; }
+  .sev { font: bold 7.5pt var(--font-mono); text-transform: uppercase; letter-spacing: .04em;
+    padding: 1px 6px; border-radius: 2px; vertical-align: 2px; margin-left: 8px; }
+  .sev.high { color: oklch(46% 0.19 25); background: oklch(95.5% 0.035 25); border: 1px solid oklch(72% 0.15 25); }
+  .sev.perf { color: oklch(38% 0.13 250); background: oklch(96% 0.03 250); border: 1px solid oklch(66% 0.12 250); }
+  .sev.low  { color: oklch(45% 0 0); background: oklch(96.5% 0 0); border: 1px solid oklch(78% 0 0); }
+  .tg { margin: 0 0 22px; }
+  .tg h3 { font-family: var(--font-ui); font-size: 11pt; font-weight: bold; color: oklch(22% 0 0);
+    margin: 14px 0 2px; }
+  .diff { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0 0; }
+  @media (max-width: 540px) { .diff { grid-template-columns: 1fr; } }
+  .diff > figure { margin: 0; min-width: 0; }
+  .diff figcaption { font: bold 8pt var(--font-mono); text-transform: uppercase; letter-spacing: .05em;
+    padding: 3px 9px; border-radius: 3px 3px 0 0; }
+  .diff .before figcaption { color: oklch(40% 0.15 25); background: oklch(93.5% 0.045 25); }
+  .diff .after  figcaption { color: oklch(36% 0.14 150); background: oklch(93.5% 0.05 150); }
+  .diff pre { margin: 0; font-family: var(--font-mono); font-size: 8.5pt; line-height: 1.5;
+    padding: 8px 10px; overflow-x: auto; white-space: pre; border: 1px solid; border-top: 0; }
+  .diff .before pre { background: oklch(99% 0.01 25); border-color: oklch(88% 0.04 25); }
+  .diff .after  pre { background: oklch(99% 0.012 150); border-color: oklch(88% 0.04 150); }
+  .diff pre .c { color: oklch(52% 0.03 145); }   /* code comment */
+  .what { font-size: 9.5pt; color: oklch(30% 0 0); margin: 7px 0 0; }
+  .what b { color: oklch(41.92% 0.0962 250.51); }
+  .rest { width: 100%; border-collapse: collapse; font-size: 9pt; margin: 6px 0 0; }
+  .rest th, .rest td { text-align: left; padding: 5px 8px; border-bottom: 1px solid oklch(89% 0.02 255); vertical-align: top; }
+  .rest th { font: bold 8pt var(--font-mono); text-transform: uppercase; letter-spacing: .04em; color: oklch(40% 0.05 255); }
+  .rest td:first-child { white-space: nowrap; font-family: var(--font-mono); font-size: 8.5pt; color: oklch(35% 0.06 255); }
+
+</style>
+</head>
+<body>
+<div class="window">
+  <div class="title-bar" aria-hidden="true"><span class="title-text"><span class="icon"></span>aadhar.sh/garage/teardown</span><span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/garage/" title="back to the garage" aria-label="back to the garage"></a></span></div>
+  <div class="content">
+    <h1>Teardown</h1>
+    <p class="lede">A resto-mod gets pulled apart on a lift before anyone trusts it on the road. This site got the same treatment. Fable 5 ran a multi-agent audit over the whole thing, eight finders sweeping in parallel, and handed every finding to a skeptic that tried to refute it before it counted. Here is what came back, and what changed. Before on the left, after on the right.</p>
+    <p class="note">The harness: eight finders (payload, caching, two consistency passes, compatibility fallbacks, frontier adoption, perceived speed, live behavior), then one adversarial verifier per finding that re-read the code or re-hit the live URL and tried to prove it wrong. Sixty agents in all. Every claim below survived a second pass.</p>
+
+    <hr>
+
+    <h2>Actually broken<span class="sev high">2 &times; correctness</span></h2>
+
+    <div class="tg">
+      <h3>Missing thumbnails were serving the homepage as a 200, cached for a year</h3>
+      <div class="diff">
+        <figure class="before"><figcaption>before</figcaption><pre>const res = await env.ASSETS.fetch(request);
+<span class="c">// only rewrote the cache header on a 4xx/5xx</span>
+if (!res.ok) { <span class="c">/* short cache */</span> }
+return res;  <span class="c">// a 200 text/html sails through</span></pre></figure>
+        <figure class="after"><figcaption>after</figcaption><pre>const res = await env.ASSETS.fetch(request);
+const ct = res.headers.get("content-type") || "";
+if (res.ok &amp;&amp; ct.startsWith("image/")) return res;
+return errorResp("not found", 404);  <span class="c">// no masquerade</span></pre></figure>
+      </div>
+      <p class="what"><b>What it does.</b> Cloudflare Pages answers a missing <code>/images/x.jpg</code> with its SPA fallback: a 200 carrying the whole homepage HTML. Gating on <code>res.ok</code> let that HTML through, and the headers rule then stamped it <code>max-age=31536000, immutable</code>, so a real thumbnail URL could end up pinned to homepage HTML at the edge for a year. Gating on the content-type instead means only <code>image/*</code> passes and everything else becomes an uncacheable 404. This one was confirmed live before the fix: a made-up thumbnail URL really was returning 79KB of HTML with a 1-year cache.</p>
+    </div>
+
+    <div class="tg">
+      <h3>The /writing notes broke in any browser without the Popover API</h3>
+      <div class="diff">
+        <figure class="before"><figcaption>before</figcaption><pre>.np-note:not(:popover-open) {
+  display: none !important;
+}</pre></figure>
+        <figure class="after"><figcaption>after</figcaption><pre>.np-note { display: none !important; }
+.np-note:popover-open { display: flex !important; }</pre></figure>
+      </div>
+      <p class="what"><b>What it does.</b> In an engine that has not shipped the Popover API, <code>:popover-open</code> is an unknown pseudo-class. <code>:not()</code> is non-forgiving, so the entire rule is thrown away, and with no UA rule to hide them, all three Notepad windows render stacked on top of the folder. Inverting it to hide-by-default means any parser hides the notes. Only an engine that understands <code>:popover-open</code> (and therefore actually supports popovers) reveals one. The fallback now degrades the right direction.</p>
+    </div>
+
+    <h2>Made it feel faster<span class="sev perf">perceived speed</span></h2>
+
+    <div class="tg">
+      <h3>The window shell popped into place after first paint</h3>
+      <div class="diff">
+        <figure class="before"><figcaption>before</figcaption><pre><span class="c">// page paints in document-scroll mode;
+// the deferred nav.js flips it to the
+// windowed model AFTER first paint, so
+// the window visibly jumps + the taskbar
+// pops in a frame or two later</span></pre></figure>
+        <figure class="after"><figcaption>after</figcaption><pre><span class="c">/* inline, in every page's &lt;style&gt; */</span>
+html { height: 100dvh; overflow: hidden; }
+body { height: calc(100dvh - 30px); overflow: hidden;
+  display: flex; flex-direction: column; padding: 8px; }
+.window &gt; .content { flex: 1; min-height: 0; overflow: auto; }</pre></figure>
+      </div>
+      <p class="what"><b>What it does.</b> The shared shell script is deferred, so it used to apply the OS-window geometry (clip the body, pin the window, reserve the taskbar strip) a beat after the page first painted. The result was a visible two-stage pop on the very first load. Inlining the exact same geometry into each page means first paint is already the windowed layout. nav.js's later rules are byte-identical, so when it runs, nothing moves. It still degrades with JS off: the content scrolls natively and a CSS strip stands in for the taskbar.</p>
+    </div>
+
+    <div class="tg">
+      <h3>The homepage first byte waited on a single-homed counter</h3>
+      <div class="diff">
+        <figure class="before"><figcaption>before</figcaption><pre>const counterP = DO.fetch(...).then(r =&gt; r.json());
+await Promise.all([assets, tracks, photos,
+                   counterP, alt]);
+<span class="c">// every visit blocks on a cross-region RTT
+// for a footer pill that has a static fallback</span></pre></figure>
+        <figure class="after"><figcaption>after</figcaption><pre>const raw = DO.fetch(...).then(r =&gt; r.json());
+const counterP = Promise.race([raw,
+  new Promise(r =&gt; setTimeout(() =&gt; r(null), 75))]);
+ctx.waitUntil(raw);  <span class="c">// increment still lands</span></pre></figure>
+      </div>
+      <p class="what"><b>What it does.</b> The homepage is <code>no-store</code>, so the worker runs on every visit and the visitor counter is a single-homed Durable Object. A visitor far from its home region paid a cross-region round trip before the first byte, just to fill in a hit-counter pill that already has a static placeholder. Racing it against 75ms means on a miss the pill keeps the placeholder and the real increment still completes in the background. Measured TTFB dropped from ~0.12-0.25s back toward the ~0.07s the static pages serve.</p>
+    </div>
+
+    <div class="tg">
+      <h3>One visitor an hour ate the full Spotify scrape</h3>
+      <div class="diff">
+        <figure class="before"><figcaption>before</figcaption><pre>const hit = await KV.get(key, "json");
+if (hit) return hit;
+return await scrapeSpotify(pid);  <span class="c">// 1-3s inline</span>
+<span class="c">// one key, expires hourly: when it lapses the
+// next visitor pays the 3-tier scrape on the hot path</span></pre></figure>
+        <figure class="after"><figcaption>after</figcaption><pre><span class="c">// value persists; a :fresh sentinel holds the hour</span>
+const hit = await getTracksSWR(env, ctx, pid);
+if (hit) return hit;  <span class="c">// stale serves now,
+                       // rescrape rides waitUntil</span></pre></figure>
+      </div>
+      <p class="what"><b>What it does.</b> The tracklist lived in a single KV key with a one-hour TTL. The moment it expired, the next visitor triggered the inline three-tier scrape of Spotify (one to three seconds, and a transient failure showed no music at all). The photo manifest already solved this shape, so the tracks got the same two-key stale-while-revalidate: the value persists with no TTL, a tiny <code>:fresh</code> sentinel carries the hour, and a lapsed sentinel serves the stale list instantly while a rescrape rides <code>ctx.waitUntil</code>. Nobody waits on Spotify anymore.</p>
+    </div>
+
+    <div class="tg">
+      <h3>The service worker rewrote immutable photos on every view</h3>
+      <div class="diff">
+        <figure class="before"><figcaption>before</figcaption><pre>if (hit) {
+  fetch(req).then(res =&gt; cache.put(req, res.clone()));
+  return hit;  <span class="c">// background refetch, every view</span>
+}</pre></figure>
+        <figure class="after"><figcaption>after</figcaption><pre>if (hit) return hit;
+<span class="c">// thumbnails are ?v=N + immutable: a refetch can
+// never see new bytes, so the write was pure waste</span></pre></figure>
+      </div>
+      <p class="what"><b>What it does.</b> Thumbnails are content-addressed: their URL carries a <code>?v=N</code> version and they are served immutable. The cache-first handler still fired a background refetch and <code>cache.put</code> on every single photo view, which could never observe new bytes because the HTTP cache absorbs it. It was a redundant disk write per thumbnail, felt most on low-power devices. Invalidation already comes from the <code>?v</code> bump and the activate-event cache sweep, so the background write just had to go.</p>
+    </div>
+
+    <h2>Polish<span class="sev low">low severity</span></h2>
+
+    <div class="tg">
+      <h3>The Run palette yanked your keyboard selection to the top</h3>
+      <div class="diff">
+        <figure class="before"><figcaption>before</figcaption><pre>results = items;
+sel = items.length ? 0 : -1;
+<span class="c">// the async photo/writing load re-renders and
+// resets sel to 0, mid-aim, under your arrow keys</span></pre></figure>
+        <figure class="after"><figcaption>after</figcaption><pre>var keep = (q === lastQuery &amp;&amp; sel &gt;= 0) ? results[sel] : null;
+results = items;
+sel = keep ? indexOfIdentity(items, keep)
+           : (items.length ? 0 : -1);
+<span class="c">// only reset to top on an actual keystroke</span></pre></figure>
+      </div>
+      <p class="what"><b>What it does.</b> Open the palette with the keyboard, arrow down to a row, and the lazy photo and writing lists would finish loading, re-render, and snap your selection back to row 0 right as you pressed Enter. Now the selection is preserved by item identity across an async re-render with the same query, and only resets to the top when the query actually changes, which is the one case where selecting the new best match is correct.</p>
+    </div>
+
+    <h2>The rest<span class="sev low">verified, shipped</span></h2>
+    <p class="note" style="margin-top:2px">Smaller findings that did not need a diagram, each confirmed and fixed:</p>
+    <table class="rest">
+      <tr><th>where</th><th>what</th></tr>
+      <tr><td>_worker.js</td><td>Speculative loads (prefetch, prerender, Speed Brain) now <em>peek</em> the visitor counter instead of ticking it, via a <code>Sec-Purpose</code> guard. A page that may never be seen no longer counts as a visit.</td></tr>
+      <tr><td>_worker.js</td><td>The JSON helper caps a transient Spotify 5xx at a 30s browser cache instead of pinning the error for 5 minutes, matching the rest of the codebase's error discipline.</td></tr>
+      <tr><td>nav.js</td><td><code>prefers-reduced-motion</code> now also stills the view-transition <em>group</em> that morphs the window, not just the old and new snapshots.</td></tr>
+      <tr><td>serendipity</td><td>The standalone events worker now sends the same locked-down <code>Permissions-Policy</code> every Pages route carries. It is a first-class page of the site, so it should deny the same unused APIs.</td></tr>
+      <tr><td>_headers</td><td>The shared shell scripts (<code>nav.js</code>, <code>notepad.js</code>) gained a short cache plus stale-while-revalidate, so a first-visit or SW-less session stops paying a conditional request for them on every navigation.</td></tr>
+      <tr><td>chrome</td><td>cal, serendipity, and the worker-rendered windows were realigned to the canonical Luna design tokens (window frame, link colors, caption-button gel skin, font stacks, focus-visible parity). A duplicate token in the canon itself was de-duped.</td></tr>
+      <tr><td>docs</td><td>CLAUDE.md stopped hardcoding a stale cache version and a wrong "no git remote" claim; the sitemap, llms.txt, and the garage pages' social-share tags were brought back in sync with reality.</td></tr>
+    </table>
+
+    <hr>
+
+    <p class="note">Two findings were left on the bench on purpose, the same honesty rule the rest of the site follows: no OAuth metadata where there is no authorization server, no A2A agent card where there is no Agent2Agent server. You do not advertise an engine the car does not have.</p>
+    <p class="note">Every change above is live and committed. The harness is a workflow of finders plus adversarial verifiers, and the interesting part is that nothing reached this page until a second agent tried to tear the finding apart and failed.</p>
+    <p style="margin-top:14px"><a href="/garage/">&larr; back to the garage</a></p>
+  </div>
+</div>
+
+<script type="speculationrules">
+{
+  "prerender": [
+    {
+      "where": {
+        "and": [
+          { "href_matches": "/*" },
+          { "not": { "href_matches": "/" } },
+          { "not": { "href_matches": "/around*" } },
+          { "not": { "href_matches": "/whoareyou*" } }
+        ]
+      },
+      "eagerness": "moderate"
+    }
+  ]
+}
+</script>
+
+<script>
+if ("serviceWorker" in navigator) {
+  const reg = () => navigator.serviceWorker.register("/sw.js").catch(() => {});
+  "requestIdleCallback" in window ? requestIdleCallback(reg, { timeout: 2000 }) : setTimeout(reg, 1000);
+}
+</script>
+  <script src="/nav.js" defer></script>
+</body>
+</html>

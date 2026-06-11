@@ -347,6 +347,24 @@ footer {
 
       <li>
         <div class="title-row">
+          <span class="name"><a href="/garage/teardown">Teardown: what Fable 5 found</a></span>
+          <span class="status shipped">shipped</span>
+        </div>
+        <div class="desc">
+          A multi-agent audit, eight finders sweeping in parallel with one adversarial
+          verifier per finding, went over the whole site. Two things were actually broken:
+          a live cache-poisoning hole serving homepage HTML at thumbnail URLs, and a
+          popover fallback that stacked the <a href="/writing">/writing</a> notes in any
+          browser without the Popover API. The rest made it feel faster. Every finding,
+          with the code before and after, side by side.
+        </div>
+        <div class="meta">
+          shape: audit writeup · added 2026-06-11
+        </div>
+      </li>
+
+      <li>
+        <div class="title-row">
           <span class="name"><a href="/garage/masonry">A masonry contact sheet</a></span>
           <span class="status idle">prototype</span>
         </div>
