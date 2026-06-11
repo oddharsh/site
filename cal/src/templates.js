@@ -33,8 +33,9 @@ const STYLES = `
   --xp-edge-sh:  oklch(56% 0.02 260);   /* button shadow */
   --xp-text:     oklch(18% 0 0);
   --xp-dim:      oklch(50% 0 0);
-  --xp-link:     oklch(40% 0.20 260);
-  --xp-link-hov: oklch(58% 0.25 30);
+  --xp-link:     oklch(42.61% 0.235 263.74);
+  --xp-link-hov: oklch(62.80% 0.258 29.23);
+  --xp-link-vis: oklch(42.09% 0.194 328.36);
   --xp-row-alt:  oklch(96% 0.01 240);   /* alternating row tint */
   --xp-disabled: oklch(80% 0 0);
 }
@@ -64,13 +65,13 @@ body {
   max-width: 720px;
   margin: 0 auto;
   background: var(--xp-tan);
-  border: 1px solid var(--xp-blue-1);
-  /* outer raised bevel */
+  /* canonical Luna window frame — byte-identical to holding/index.html .window */
+  border: 2px solid #0831d9; border-right-color: #001ea0; border-bottom-color: #001ea0;
+  border-top-left-radius: 8px; border-top-right-radius: 8px; overflow: hidden;
   box-shadow:
-    inset  1px  1px 0 var(--xp-blue-3),
-    inset -1px -1px 0 var(--xp-blue-1),
-    2px 2px 0 oklch(0% 0 0 / 0.18);
-  padding: 3px;
+    inset 1px 1px 0 #166aee, inset 2px 2px 0 #0855dd,
+    inset -1px -1px 0 #00138c, inset -2px -2px 0 #003bda,
+    4px 4px 0 rgba(0,30,160,.35);
 }
 /* title bar — mirrors the aadhar.sh main-site convention: a single
    gradient strip with a tiny icon block + the page title on the left,
@@ -96,7 +97,7 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  text-shadow: 1px 1px 0 oklch(20% 0.05 260 / 0.6);
+  text-shadow: 1px 1px #0f1089;
   user-select: none;
 }
 .xp-title-bar .icon { /* tiny app icon */
@@ -211,13 +212,13 @@ h1 {
   letter-spacing: -0.01em;
 }
 .lead {
-  font-family: var(--font-caption);
   font-size: 10.5pt;
-  color: var(--xp-dim);
+  color: oklch(38.67% 0 0);
   margin: 0 0 12px;
 }
 
 a { color: var(--xp-link); text-decoration: underline; }
+a:visited { color: var(--xp-link-vis); }
 a:hover { color: var(--xp-link-hov); }
 
 /* ── group boxes (Windows GroupBox controls) ────────────────────────── */

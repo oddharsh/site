@@ -85,7 +85,7 @@
   --text-heading:     var(--blue-40);              /* navy h1–h3                */
   --text-body:        var(--ink);
   --text-muted:       var(--ink-dim);
-  --border-window:    var(--frame);
+  --border-window-color: var(--frame);
   --border-field:     var(--frame);
 }
 

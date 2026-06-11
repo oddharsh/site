@@ -53,13 +53,13 @@ Single-page personal site at `aadhar.sh`. Hosted on Cloudflare Pages, with a
 | `holding/nav.js` | Site-wide XP **desktop shell**. The ONE shared external asset (deferred, SW-cached) — every page includes `<script src="/nav.js" defer>`; it injects its own `<style>` + builds, into `<body>`: the **Bliss desktop** wallpaper, **draggable desktop icons** (Notepad + the 5 profiles, positions persisted in localStorage), the **taskbar** (Start orb → Run, first-level-subpage app buttons each with a per-section SVG icon, clock via Temporal), and the **Run** command palette (⌘K / Start). Also owns the **OS-window model**: body is a clipping flex desktop, each `.window`/`.np-window` is pinned + its content scrolls internally behind a **custom XP scrollbar**, windows are **draggable** (top is a hard boundary) + **resizable**, and View Transitions animate only the window. Sets each first-level route's **tab favicon** to its section icon. Run destinations: pages + profiles inline; 146 photos lazy-loaded from `/images/manifest.json` with `/images/alt.json` captions. Wired into homepage + all garage pages + worker-gen `/around`,`/whoareyou`,`/bot` + serendipity shell. |
 | `holding/_worker.js` | Pages-Worker hybrid. Owns routing, photo serving from R2, manifest building, Spotify playlist scraping, AadharshBot crawler, the `/writing` Notepad pages, cache-control overrides. |
 | `holding/_headers` | Static-asset cache + security headers (CSP, Permissions-Policy, etc.). Applied to direct static-asset requests; the worker overrides cache-control for select paths. |
-| `holding/sw.js` | Service worker. `CACHE_VERSION = "aadhar-v66-luna-perf"` (bump on every nav.js/notepad.js change). Cache-first for `/images/*` thumbnails only (content-addressed via `?v=N`; full-res `/images/full/*` deliberately excluded — browser HTTP cache holds those immutable), SWR for static text files + nav.js/notepad.js, network-only for everything else. Bumping `CACHE_VERSION` sweeps old caches. |
+| `holding/sw.js` | Service worker. `CACHE_VERSION` (see holding/sw.js line ~28 for the current version) bumps on every nav.js/notepad.js change. Cache-first for `/images/*` thumbnails only (content-addressed via `?v=N`; full-res `/images/full/*` deliberately excluded — browser HTTP cache holds those immutable), SWR for static text files + nav.js/notepad.js, network-only for everything else. Bumping `CACHE_VERSION` sweeps old caches. |
 | `holding/llms.txt` | The llms.txt format — concise site summary for LLMs. Linked from `<link rel="alternate">`. |
 | `holding/index.md` | Markdown source of homepage copy (used by `/llms.txt` and as a fallback). |
 | `holding/sitemap.xml`, `robots.txt` | Standard SEO files. robots.txt explicitly allows AadharshBot. |
 | `holding/.well-known/http-message-signatures-directory` | JWKS for AadharshBot's Ed25519 public key (Web Bot Auth IETF draft). |
 | `holding/images/` | 146 thumbnails (1200px AVIF + JPG pairs + 400px mobile AVIF tier) + `metadata.json` (EXIF index) + `meta/<stem>.json` per-photo EXIF for the hover tooltip. |
-| `holding/scripts/` | Photo-pipeline scripts (see below). |
+| `holding/scripts/` | Photo-pipeline + asset scripts (see below). Beyond the core pipeline (`add-photos.sh`, `extract-photo-metadata.sh`, `build-jpegli.sh`): `add-car-photo.sh` (one resto-mod reference photo into the dual AVIF+JPG pair the car-link tooltips expect, output `holding/cars/<stem>.{avif,jpg}`, no EXIF/R2); `gen-alt-text.py` (AI alt text for every grid photo via the cf-garage Workers-AI caption endpoint, writes `holding/images/alt.json` `{stem: alt}`, resumable); `gen-encoding-samples.sh` (regenerates the color sample set for the `/garage/encoding` study through every encoder, prints byte counts + bytes-per-pixel); `reencode-thumbnails.sh` (re-encodes all published grid thumbnails as pre-cropped center squares from the canonical source folder, two square tiers); `photo-histograms.py` (kept on disk but unused: histograms are now computed client-side). |
 
 ### The photo pipeline
 
@@ -353,8 +353,6 @@ curated this folder; treat it as the canonical photo source.
   worktree still exists (branched off `oddharsh/serendipity` on GitHub). It
   has the same code in it but is no longer the source of truth. Future work
   should happen in this directory.
-- No GitHub remote yet — user wants this to be a private repo eventually.
-  Run `gh repo create aadhar-sh --private --source=. --remote=origin --push`
-  when ready.
+- The GitHub remote exists: `origin` points at `git@github.com:oddharsh/site.git`.
 - `node_modules/`, `.wrangler/` build cache, and `.DS_Store` files were
   intentionally not copied. They'll regenerate as needed.

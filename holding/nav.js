@@ -287,8 +287,8 @@
 "#axp-run-back.open{display:block}" +
 "#axp-run{position:fixed;left:50%;top:38%;transform:translate(-50%,-50%);z-index:100000;width:min(440px,calc(100vw - 24px));display:none;" +
 "font-family:var(--font-ui,Tahoma,Verdana,Geneva,sans-serif);font-size:12px;color:oklch(21% 0 0);background:oklch(100% 0 0);" +
-"border:2px solid oklch(45% 0.22 263);border-right-color:oklch(33% 0.16 263);border-bottom-color:oklch(33% 0.16 263);" +
-"box-shadow:inset 1px 1px 0 oklch(58% 0.16 258),inset -1px -1px 0 oklch(33% 0.16 263),4px 4px 0 oklch(46% 0.16 263 / .35),2px 3px 12px -2px oklch(30% 0.12 263 / .55)}" +
+"border:2px solid #0831d9;border-right-color:#001ea0;border-bottom-color:#001ea0;" +
+"box-shadow:inset 1px 1px 0 #166aee,inset 2px 2px 0 #0855dd,inset -1px -1px 0 #00138c,inset -2px -2px 0 #003bda,4px 4px 0 rgba(0,30,160,.35),2px 3px 12px -2px oklch(30% 0.12 263 / .55)}" +
 "#axp-run.open{display:block}" +
 "#axp-run .tb{display:flex;align-items:center;gap:6px;padding:3px 4px 4px 7px;color:oklch(100% 0 0);" +
 "font-family:var(--font-caption,'Trebuchet MS',Verdana,Geneva,sans-serif);font-weight:bold;font-size:12px;text-shadow:1px 1px oklch(28% 0.12 263);" +
@@ -297,7 +297,7 @@
 // the canonical Luna caption CLOSE button (design system): 21x21 red "gel" lozenge,
 // glossy gradient, CSS-drawn white X. matches .title-bar .controls .close site-wide.
 "#axp-run .tb .x{position:relative;box-sizing:border-box;margin-left:auto;width:21px;height:21px;padding:0;overflow:hidden;font-size:0;color:transparent;cursor:pointer;border:1px solid #d8401c;border-radius:3px;background-color:#e45f3e;background-image:linear-gradient(180deg,#e8795f 0%,#e45f40 30%,#e45d3d 52%,#e2552a 80%,#ae3110 100%);transition:filter 60ms ease-out}" +
-"#axp-run .tb .x:hover{border-color:#ff7a66;background-color:#ff957c;background-image:linear-gradient(180deg,#ff8b7d 0%,#ff7463 26%,#ff957c 55%,#fd7e64 82%,#d34936 100%);box-shadow:0 0 4px rgba(255,120,96,.7)}" +
+"#axp-run .tb .x:hover,#axp-run .tb .x:focus-visible{border-color:#ff7a66;background-color:#ff957c;background-image:linear-gradient(180deg,#ff8b7d 0%,#ff7463 26%,#ff957c 55%,#fd7e64 82%,#d34936 100%);box-shadow:0 0 4px rgba(255,120,96,.7);outline:none}" +
 "#axp-run .tb .x:active{filter:brightness(.9)}" +
 "#axp-run .tb .x::before,#axp-run .tb .x::after{content:'';position:absolute;left:50%;top:50%;width:13px;height:2px;margin:-1px 0 0 -6.5px;background:#fff;box-shadow:0 1px 0 rgba(0,0,0,.35)}" +
 "#axp-run .tb .x::before{transform:rotate(45deg)}#axp-run .tb .x::after{transform:rotate(-45deg)}" +
@@ -340,7 +340,7 @@
   }
 
   // ── build DOM ────────────────────────────────────────────────────────────────
-  var run, input, list, backdrop, results = [], sel = -1;
+  var run, input, list, backdrop, results = [], sel = -1, lastQuery = null;
 
   function el(html) { var t = D.createElement("template"); t.innerHTML = html.trim(); return t.content.firstChild; }
 
@@ -530,7 +530,23 @@
       // empty: show pages + writing + profiles + a handful of photos as a "directory"
       items = PAGES.concat(WRITING || [], PROFILES, (PHOTOS || []).slice(0, 8));
     }
-    results = items; sel = items.length ? 0 : -1;
+    // preserve the selection across an async re-render (loadPhotos/loadWriting
+    // resolve and re-render with the SAME query, growing the list) — otherwise a
+    // keyboard-first user who arrow-selected a row would have it yanked back to
+    // the top mid-aim. only reset to the top when the query actually changed (a
+    // keystroke), where selecting the new best match IS correct.
+    var keep = (q === lastQuery && sel >= 0 && results[sel]) ? results[sel] : null;
+    results = items;
+    if (keep) {
+      sel = -1;
+      for (var si = 0; si < items.length; si++) {
+        if (items[si].kind === keep.kind && items[si].path === keep.path && items[si].label === keep.label) { sel = si; break; }
+      }
+      if (sel < 0) sel = items.length ? 0 : -1;
+    } else {
+      sel = items.length ? 0 : -1;
+    }
+    lastQuery = q;
     var groups = { page: [], writing: [], profile: [], photo: [] }, order = ["page", "writing", "profile", "photo"], names = { page: "Pages", writing: "Writing", profile: "Profiles", photo: "Photos" };
     items.forEach(function (it, i) { groups[it.kind].push({ it: it, i: i }); });
     var html = "";

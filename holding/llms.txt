@@ -37,10 +37,8 @@ aggregations.
 - [/garage](https://aadhar.sh/garage): Prototypes and experiments —
   alternate visual styles, work-in-progress interactions, things that
   haven't shipped to the homepage yet. Public so people can see what's
-  being tinkered with.
-  - [/garage/tooltips](https://aadhar.sh/garage/tooltips): Four
-    alternative tooltip styles for the photo grid + tracklist (Fuji X-T
-    LCD viewfinder, vinyl sleeve, polaroid flip, CSS anchor positioning).
+  being tinkered with. Individual subpages are enumerated in
+  [sitemap.xml](https://aadhar.sh/sitemap.xml).
 - [/writing](https://aadhar.sh/writing): Longform notes rendered as XP
   Notepad windows. Each note (e.g. `/writing/<slug>`) is a real, editable
   textarea seeded with the canonical text — edits never save, so a reload
