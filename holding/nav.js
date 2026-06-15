@@ -189,7 +189,10 @@
 ".window>.content::-webkit-scrollbar,.window>.body::-webkit-scrollbar,.np-text::-webkit-scrollbar{width:0;height:0;display:none}" +
 "#axp-run .list{scrollbar-color:oklch(62% 0.14 255) oklch(90% 0.02 250)}" +
 // reserve room on the right so content clears the custom bar (toggled when it shows)
-".axp-sb-pad{padding-right:20px !important}" +
+/* 24px (not 20) so content children clear the scrollbar with a ~5px gutter:
+   the bar is 16px + right:3px, so padding must exceed 19 or a full-width panel
+   border (the now-playing list, the photo grid) kisses the scrollbar's edge. */
+".axp-sb-pad{padding-right:24px !important}" +
 // the custom scrollbar widget: sunken track, raised thumb, raised arrow buttons
 ".axp-sb{position:absolute;width:16px;display:flex;flex-direction:column;z-index:3;user-select:none;touch-action:none}" +
 ".axp-sb-track{flex:1 1 auto;position:relative;background:oklch(92% 0.015 250);box-shadow:inset 1px 0 0 oklch(72% 0.03 250),inset -1px 0 0 oklch(100% 0 0)}" +

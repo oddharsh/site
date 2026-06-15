@@ -595,17 +595,12 @@ footer .signature small { color: oklch(56.93% 0 0); }
 }
 /* popover path: gated on :popover-open support so non-supporting engines
    fall back cleanly (they keep the plain display:none above; the JS sets
-   inline display:block at full opacity for them). where supported, the
-   tooltip fades opacity 0->1 on open (display animates via allow-discrete)
-   while position still hard-snaps — transform is deliberately NOT in the
-   transition list. ~90ms, subtle. */
+   inline display:block for them). the tooltip is hover-only (the JS bails on
+   touch), so on desktop it snaps in the instant the cursor lands on a thumb
+   or row — no fade-in delay. position hard-snaps too (transform never
+   transitions). */
 @supports selector(:popover-open) {
-  .xp-tooltip {
-    opacity: 0;
-    transition: opacity 90ms ease-out, display 90ms allow-discrete;
-  }
-  .xp-tooltip:popover-open { display: block; opacity: 1; }
-  @starting-style { .xp-tooltip:popover-open { opacity: 0; } }
+  .xp-tooltip:popover-open { display: block; }
 }
 .xp-tooltip .filename {
   font-weight: bold;
