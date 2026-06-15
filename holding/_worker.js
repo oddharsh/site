@@ -842,7 +842,7 @@ body:has(.window),body:has(.np-window),body:has(.wrap){overflow:hidden !importan
 .window,.np-window,.wrap{position:relative;z-index:2;flex:0 1 auto !important;min-height:0;max-height:100% !important;width:100%;margin:0 auto !important;box-sizing:border-box}
 .window,.np-window{display:flex;flex-direction:column}
 .window>.title-bar,.window>.titlebar,.np-window>.np-titlebar{flex:0 0 auto}
-.window>.content,.window>.body{flex:1 1 auto;min-height:0;overflow:auto}
+.window>.content,.window>.body{flex:1 1 auto;min-height:0;overflow:auto;padding-right:24px}
 .np-window .np-text{flex:1 1 auto;min-height:0}
 .wrap{display:flex;flex-direction:column;padding-bottom:0 !important}.wrap>.window{flex:0 1 auto;max-height:100%}
 body.np-page::after{content:"";position:fixed;left:0;right:0;bottom:0;height:30px;z-index:1;background:linear-gradient(180deg,oklch(67% 0.15 256) 0%,oklch(58% 0.19 257) 4%,oklch(51% 0.20 258) 9%,oklch(49% 0.20 258) 50%,oklch(46% 0.20 259) 92%,oklch(40% 0.18 260) 100%)}
@@ -2151,7 +2151,7 @@ function xpChromeCss(maxWidth) {
   .window,.np-window,.wrap{position:relative;z-index:2;flex:0 1 auto !important;min-height:0;max-height:100% !important;width:100%;margin:0 auto !important;box-sizing:border-box}
   .window,.np-window{display:flex;flex-direction:column}
   .window>.title-bar,.window>.titlebar,.np-window>.np-titlebar{flex:0 0 auto}
-  .window>.content,.window>.body{flex:1 1 auto;min-height:0;overflow:auto}
+  .window>.content,.window>.body{flex:1 1 auto;min-height:0;overflow:auto;padding-right:24px}
   .np-window .np-text{flex:1 1 auto;min-height:0}
   .wrap{display:flex;flex-direction:column;padding-bottom:0 !important}.wrap>.window{flex:0 1 auto;max-height:100%}
   body::after{content:"";position:fixed;left:0;right:0;bottom:0;height:30px;z-index:1;background:linear-gradient(180deg,oklch(67% 0.15 256) 0%,oklch(58% 0.19 257) 4%,oklch(51% 0.20 258) 9%,oklch(49% 0.20 258) 50%,oklch(46% 0.20 259) 92%,oklch(40% 0.18 260) 100%)}
