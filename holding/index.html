@@ -355,6 +355,16 @@ hr {
   color: inherit;
   text-decoration: none;
 }
+/* the "open the playlist" cue on the heading: small + muted so the link reads
+   as "this opens the playlist" rather than as a second generic music link. the
+   profile links (footer Spotify, taskbar Music) stay distinct = my profile. */
+.now-playing h2 .np-open {
+  font-family: var(--font-ui);
+  font-size: 9pt;
+  font-weight: normal;
+  color: oklch(52% 0.03 255);
+  white-space: nowrap;
+}
 .now-playing h2 a:hover {
   color: oklch(62.80% 0.2577 29.23);
   text-decoration: underline;
@@ -977,7 +987,7 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
 
 
     <section class="now-playing" aria-label="music">
-      <h2><a href="/rn" title="opens the playlist on spotify">Music I&rsquo;m listening to right now</a></h2>
+      <h2><a href="/rn" title="open this playlist on Spotify">Music I&rsquo;m listening to right now <span class="np-open">&#x2197;&#xFE0E; the playlist</span></a></h2>
       <ol class="np-list" id="np-list">
         <li class="np-loading">Loading playlist&hellip;</li>
       </ol>
@@ -1125,7 +1135,7 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
           <a href="https://instagram.com/aadharsh.hif" rel="external me">Instagram</a> &middot;
           <a href="https://curius.app/aadharsh-pannirselvam" rel="external me">Curius</a> &middot;
           <a href="https://beliapp.com/users/aadharsh" rel="external me">Beli</a> &middot;
-          <a href="https://open.spotify.com/user/aadharsh2010" rel="external me">Spotify</a> &middot;
+          <a href="https://open.spotify.com/user/aadharsh2010" rel="external me" title="my Spotify profile">Spotify</a> &middot;
           <a href="/whoareyou">whoareyou</a> &middot;
           <a href="/around">around</a> &middot;
           <a href="/garage/">garage</a> &middot;
