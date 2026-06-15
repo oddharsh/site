@@ -9,6 +9,10 @@ the deploy root (not a placeholder; there is no separate `site/` build).
 wrangler pages deploy holding --project-name aadhar-sh --branch holding --commit-dirty=true
 ```
 
+Recurring chores (add photos, swap the playlist, bust caches, version bumps,
+what every script in `scripts/` does) live in the ops runbook:
+[../MAINTENANCE.md](../MAINTENANCE.md).
+
 ## what's here
 
 - `index.html` — the whole homepage in one file (inline CSS + JS): an XP

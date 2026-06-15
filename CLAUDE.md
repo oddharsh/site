@@ -14,6 +14,9 @@ colors that read modern in source but render period-correct.
 
 ## Quick reference
 
+> Full task-by-task ops runbook (add photos, swap the now-playing playlist,
+> bust caches, version bumps, what every script does): [MAINTENANCE.md](MAINTENANCE.md).
+
 ```bash
 # deploy the homepage
 wrangler pages deploy holding --project-name aadhar-sh --branch holding --commit-dirty=true
