@@ -797,7 +797,16 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
     display: flex; flex-direction: column;
   }
   .window > .title-bar { flex: 0 0 auto; }
-  .window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; }
+  /* reserve the custom-scrollbar gutter at FIRST PAINT. nav.js adds .axp-sb-pad
+     (padding-right:24px) once it measures overflow + mounts the XP scrollbar —
+     but that runtime bump from .content's base 16px to 24px is just enough, at
+     widths near a photo-grid column boundary (~800px, ~1180px), to drop a 184px
+     column and reflow the grid ~190px taller. measurable CLS for any viewport
+     sitting on a boundary. matching the gutter here (24px == axp-sb-pad) means
+     the grid lays out at its final width immediately and the deferred shell
+     moves nothing. higher specificity than `.content` so it wins the right edge;
+     top/left/bottom keep .content's 12/16/16. */
+  .window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 24px; }
   /* pre-JS taskbar strip — the real #axp-taskbar (z 99999) covers it once nav.js
      mounts; gradient matches it so there's no colour pop either. */
   body::after {
