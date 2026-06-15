@@ -1674,25 +1674,33 @@ if ("serviceWorker" in navigator) {
         scheduleHide();                      // left to a gap — defer the hide briefly (TIP_DISMISS_MS)
       }, { passive: true });
 
-      // scroll re-evaluation. the tooltip is position:fixed and the cursor
-      // stays at the same viewport coords during scroll, but the CONTENT
-      // under the cursor changes. browsers don't reliably fire pointer
-      // enter/leave when an element shifts under a stationary cursor due to
-      // scroll (Safari especially), so without this the tooltip would keep
-      // showing data for a row that's no longer under the pointer. on each
-      // scroll tick we look up what's actually under the cursor (at the
-      // last known lastX/lastY) and re-target. coalesced to one rAF tick.
-      // position doesn't change here — the cursor didn't move, so --x/--y
-      // are already correct; we only swap content.
-      // any scroll (the window's internal content scroller bubbles to here in the
-      // capture phase) hides the tooltip and suppresses new ones until scrolling
-      // settles — so you can wheel over the photo grid / tracklist freely. the
-      // fixed-grid side gutters give a dead lane to rest the cursor in too.
+      // scroll handling. any scroll (the window's internal content scroller
+      // bubbles to here in the capture phase) hides the tooltip and suppresses
+      // new ones WHILE scrolling — so you can wheel over the photo grid /
+      // tracklist freely without tooltip noise as rows fly past.
+      //
+      // the moment scrolling settles we re-show instantly. two reasons the old
+      // 120ms timer felt laggy on desktop: (1) the window itself, and (2) the
+      // tooltip is position:fixed — a wheel/trackpad scroll leaves the cursor
+      // dead still, so NO pointerover fires when a new photo slides under it,
+      // and the tooltip only came back if you jiggled the mouse. so on settle
+      // we actively re-target: elementFromPoint(lastX,lastY) → findTarget →
+      // show. position needs no update (cursor didn't move; --x/--y are already
+      // correct from the last place()), so we pass no event and only swap
+      // content. SCROLL_SETTLE_MS is just long enough to ride out trackpad
+      // momentum (events keep firing ~every frame until it fully stops) without
+      // flashing the tooltip back mid-decel — short enough to read as instant.
+      const SCROLL_SETTLE_MS = 60;
+      const reshowUnderCursor = () => {
+        if (!lastX && !lastY) return;            // pointer never moved → nothing to re-target
+        const target = findTarget(document.elementFromPoint(lastX, lastY));
+        if (target) showTipFor(target);          // no event: reuse the existing --x/--y
+      };
       document.addEventListener("scroll", () => {
         scrolling = true;
         if (isOpen()) hideTip();
         clearTimeout(scrollIdle);
-        scrollIdle = setTimeout(() => { scrolling = false; }, 120);
+        scrollIdle = setTimeout(() => { scrolling = false; reshowUnderCursor(); }, SCROLL_SETTLE_MS);
       }, { capture: true, passive: true });
 
       // ── keyboard-focus fallback ────────────────────────────────────────
