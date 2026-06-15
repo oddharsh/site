@@ -597,6 +597,10 @@ function renderMcpInfo(path) {
       ${tool("search_people", "q, limit", "Find people by name; returns role/company/socials and their events split into going_to and been_to.")}
       ${tool("list_contributors", "", "The people feeding the pool: a label, an id prefix, and how many events each fed in.")}
       ${tool("contributor_events", "contributor", "One contributor&apos;s whole footprint (by cookie id, id prefix, or label), split into going_to and been_to.")}
+      ${tool("frequent_people", "when, limit", "Who shows up across the most events (who you&apos;re seeing a lot), with an event count.")}
+      ${tool("co_attendees", "q, limit", "Who one person crosses paths with most, with the shared event names. Pass your own name for &quot;who am I seeing a lot&quot;.")}
+      ${tool("connections", "min_shared, limit", "The tightest co-attendance pairs pool-wide (who&apos;s seeing who), with shared counts + event names.")}
+      ${tool("shared_events", "a, b", "The events two named people both attended (did they cross paths, and where).")}
       ${tool("stats", "", "Pool overview: event counts, distinct people, active contributors.")}
     </div>
     <div class="grp">Connect</div>
@@ -1329,6 +1333,114 @@ async function mcpListContributors(d) {
                             enabled: Number(r.enabled) === 1, events: Number(r.events) }));
 }
 
+// ── social graph: frequency + co-attendance ──────────────────────────────────
+// all read-only, public surface only (same projection as search_people; the
+// who-overlaps-with-whom is already implicit in the public guest lists, this
+// just computes it). co-attendance counts hosts and guests alike: being at the
+// same event is the edge.
+const PUB_COLS = `a.id, a.name, a.bio_short, a.times_seen, a.website,
+            a.twitter_handle, a.linkedin_handle, a.instagram_handle,
+            en.company, en.role, en.location, en.linkedin_url`;
+
+// best-match attendee for a name (most-seen wins ties).
+async function mcpResolvePerson(d, q) {
+  const term = "%" + String(q || "").replace(/[\\%_]/g, "\\$&") + "%";
+  return d.prepare(
+    `SELECT ${PUB_COLS} FROM attendees a LEFT JOIN enrichments en ON en.attendee_id = a.id
+      WHERE a.name LIKE ? ESCAPE '\\' ORDER BY a.times_seen DESC, a.name ASC LIMIT 1`
+  ).get(term);
+}
+
+// who shows up across the most events (who you're seeing a lot); optional slice.
+async function mcpFrequentPeople(d, when, limit) {
+  let filter = "", binds = [];
+  if (when === "upcoming" || when === "past") {
+    const nowIso = new Date().toISOString();
+    filter = when === "upcoming"
+      ? `AND (e.start_at IS NULL OR e.start_at >= ?)`
+      : `AND (e.start_at IS NOT NULL AND e.start_at < ?)`;
+    binds.push(nowIso);
+  }
+  binds.push(limit);
+  const rows = await d.prepare(
+    `SELECT ${PUB_COLS}, COUNT(DISTINCT ea.event_id) AS events
+       FROM attendees a
+       JOIN event_attendees ea ON ea.attendee_id = a.id
+       JOIN events e ON e.id = ea.event_id
+       LEFT JOIN enrichments en ON en.attendee_id = a.id
+      WHERE 1=1 ${filter}
+      GROUP BY a.id ORDER BY events DESC, a.name ASC LIMIT ?`
+  ).all(...binds);
+  return rows.map((r) => { const o = mcpAttendee(r); o.events = Number(r.events); return o; });
+}
+
+// one person's strongest co-attendees + the events they share.
+async function mcpCoAttendees(d, q, limit) {
+  const person = await mcpResolvePerson(d, q);
+  if (!person) return null;
+  const rows = await d.prepare(
+    `SELECT ${PUB_COLS}, COUNT(*) AS shared, GROUP_CONCAT(e.name, '|||') AS shared_names
+       FROM event_attendees ea
+       JOIN attendees a ON a.id = ea.attendee_id
+       JOIN events e ON e.id = ea.event_id
+       LEFT JOIN enrichments en ON en.attendee_id = a.id
+      WHERE ea.event_id IN (SELECT event_id FROM event_attendees WHERE attendee_id = ?1)
+        AND ea.attendee_id != ?1
+      GROUP BY a.id ORDER BY shared DESC, a.times_seen DESC, a.name ASC LIMIT ?2`
+  ).all(person.id, limit);
+  const tot = await d.prepare(`SELECT COUNT(DISTINCT event_id) AS n FROM event_attendees WHERE attendee_id = ?`).get(person.id);
+  return {
+    person: mcpAttendee(person),
+    events_attended: tot ? Number(tot.n) : 0,
+    co_attendees: rows.map((r) => { const o = mcpAttendee(r); o.shared = Number(r.shared);
+      o.shared_events = (r.shared_names || "").split("|||").filter(Boolean); return o; }),
+  };
+}
+
+// the tightest co-attendance pairs pool-wide (who's seeing who).
+async function mcpConnections(d, minShared, limit) {
+  const rows = await d.prepare(
+    `SELECT a1.attendee_id AS id1, a2.attendee_id AS id2,
+            COUNT(*) AS shared, GROUP_CONCAT(e.name, '|||') AS shared_names
+       FROM event_attendees a1
+       JOIN event_attendees a2 ON a1.event_id = a2.event_id AND a1.attendee_id < a2.attendee_id
+       JOIN events e ON e.id = a1.event_id
+      GROUP BY a1.attendee_id, a2.attendee_id
+     HAVING shared >= ?1 ORDER BY shared DESC LIMIT ?2`
+  ).all(minShared, limit);
+  if (!rows.length) return [];
+  const ids = [...new Set(rows.flatMap((r) => [r.id1, r.id2]))];
+  const ph = ids.map(() => "?").join(",");
+  const people = await d.prepare(
+    `SELECT a.id, a.name, en.company, en.role FROM attendees a LEFT JOIN enrichments en ON en.attendee_id = a.id WHERE a.id IN (${ph})`
+  ).all(...ids);
+  const byId = new Map(people.map((p) => [p.id, { name: p.name, role: p.role || null, company: p.company || null }]));
+  return rows.map((r) => ({
+    a: byId.get(r.id1) || { name: "?" },
+    b: byId.get(r.id2) || { name: "?" },
+    shared: Number(r.shared),
+    shared_events: (r.shared_names || "").split("|||").filter(Boolean),
+  }));
+}
+
+// the events two named people both attended (did they cross paths, and where).
+async function mcpSharedEvents(d, qa, qb) {
+  const a = await mcpResolvePerson(d, qa);
+  const b = await mcpResolvePerson(d, qb);
+  if (!a) return { _missing: qa };
+  if (!b) return { _missing: qb };
+  const rows = await d.prepare(
+    `SELECT e.id, e.name, e.start_at, e.location, e.url,
+            (SELECT COUNT(*) FROM event_attendees x WHERE x.event_id = e.id AND x.is_host = 0) AS attendee_count,
+            (SELECT COUNT(*) FROM event_attendees x WHERE x.event_id = e.id AND x.is_host = 1) AS host_count
+       FROM events e
+      WHERE e.id IN (SELECT event_id FROM event_attendees WHERE attendee_id = ?1)
+        AND e.id IN (SELECT event_id FROM event_attendees WHERE attendee_id = ?2)
+      ORDER BY e.start_at DESC`
+  ).all(a.id, b.id);
+  return { a: mcpAttendee(a), b: mcpAttendee(b), shared_count: rows.length, shared_events: rows.map(mcpEventSummary) };
+}
+
 const MCP_TOOLS = [
   {
     name: "list_events",
@@ -1375,6 +1487,52 @@ const MCP_TOOLS = [
       type: "object",
       properties: { contributor: { type: "string", description: "a contributor's cookie id (user_key), an id prefix from list_contributors, or their label" } },
       required: ["contributor"],
+    },
+  },
+  {
+    name: "frequent_people",
+    description: "The people who show up across the most events in the pool (who you're seeing a lot), each with an event count. Optionally restrict the count to upcoming or past.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        when: { type: "string", enum: ["upcoming", "past", "all"], description: "restrict the count to a slice (default all)" },
+        limit: { type: "integer", minimum: 1, maximum: 100, description: "max people (default 25)" },
+      },
+    },
+  },
+  {
+    name: "co_attendees",
+    description: "Given a person by name, who they cross paths with most: the people most often at the same events, with a shared-event count and the names of those shared events. Pass your own name to answer \"who am I seeing a lot\".",
+    inputSchema: {
+      type: "object",
+      properties: {
+        q: { type: "string", description: "a name or partial name" },
+        limit: { type: "integer", minimum: 1, maximum: 100, description: "max co-attendees (default 25)" },
+      },
+      required: ["q"],
+    },
+  },
+  {
+    name: "connections",
+    description: "The tightest co-attendance pairs in the whole pool (who's seeing who): pairs of people who keep turning up at the same events, with the shared count and the shared event names. The relationship graph's strongest edges.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        min_shared: { type: "integer", minimum: 1, description: "only pairs sharing at least this many events (default 2)" },
+        limit: { type: "integer", minimum: 1, maximum: 100, description: "max pairs (default 25)" },
+      },
+    },
+  },
+  {
+    name: "shared_events",
+    description: "Given two people by name, the events they both attended (did these two cross paths, and where).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        a: { type: "string", description: "first person's name" },
+        b: { type: "string", description: "second person's name" },
+      },
+      required: ["a", "b"],
     },
   },
   {
@@ -1436,6 +1594,32 @@ async function mcpCallTool(d, name, args) {
     if (!c) return { _error: "contributor is required (a cookie id / user_key, an id prefix, or a label)" };
     const out = await mcpContributorEvents(d, c);
     if (!out) return { _error: "no contributor matching \"" + c + "\" (try list_contributors)" };
+    return out;
+  }
+  if (name === "frequent_people") {
+    const when = ["upcoming", "past", "all"].includes(args.when) ? args.when : "all";
+    const limit = Math.min(Math.max(parseInt(args.limit, 10) || 25, 1), 100);
+    const people = await mcpFrequentPeople(d, when, limit);
+    return { when, returned: people.length, people };
+  }
+  if (name === "co_attendees") {
+    const q = String(args.q || "").trim();
+    if (!q) return { _error: "q is required (a person's name)" };
+    const limit = Math.min(Math.max(parseInt(args.limit, 10) || 25, 1), 100);
+    const out = await mcpCoAttendees(d, q, limit);
+    if (!out) return { _error: "no person matching \"" + q + "\" (try search_people)" };
+    return out;
+  }
+  if (name === "connections") {
+    const minShared = Math.max(parseInt(args.min_shared, 10) || 2, 1);
+    const limit = Math.min(Math.max(parseInt(args.limit, 10) || 25, 1), 100);
+    return { min_shared: minShared, pairs: await mcpConnections(d, minShared, limit) };
+  }
+  if (name === "shared_events") {
+    const a = String(args.a || "").trim(), b = String(args.b || "").trim();
+    if (!a || !b) return { _error: "both a and b (person names) are required" };
+    const out = await mcpSharedEvents(d, a, b);
+    if (out._missing) return { _error: "no person matching \"" + out._missing + "\"" };
     return out;
   }
   if (name === "stats") {

@@ -22,12 +22,46 @@
     },
     "documentationUrl": "https://aadhar.sh/serendipity/mcp-info",
     "tools": [
-      { "name": "list_events", "description": "List events in the pool with a head count of who's going. Args: when, q, limit." },
-      { "name": "get_event", "description": "One event in full: description, hosts, the guest list (who's going), contributors. Args: id." },
-      { "name": "search_people", "description": "Find people by name; returns role/company/socials and their events split into going_to and been_to. Args: q, limit." },
-      { "name": "list_contributors", "description": "List contributors feeding the pool, with an id prefix and event count." },
-      { "name": "contributor_events", "description": "Every event one contributor fed in, split into going_to and been_to. Args: contributor (cookie id, id prefix, or label)." },
-      { "name": "stats", "description": "Pool overview: event counts, distinct people, active contributors." }
+      {
+        "name": "list_events",
+        "description": "List events in the pool with a head count of who's going. Args: when, q, limit."
+      },
+      {
+        "name": "get_event",
+        "description": "One event in full: description, hosts, the guest list (who's going), contributors. Args: id."
+      },
+      {
+        "name": "search_people",
+        "description": "Find people by name; returns role/company/socials and their events split into going_to and been_to. Args: q, limit."
+      },
+      {
+        "name": "list_contributors",
+        "description": "List contributors feeding the pool, with an id prefix and event count."
+      },
+      {
+        "name": "contributor_events",
+        "description": "Every event one contributor fed in, split into going_to and been_to. Args: contributor (cookie id, id prefix, or label)."
+      },
+      {
+        "name": "frequent_people",
+        "description": "Who shows up across the most events (who you're seeing a lot), with an event count. Args: when, limit."
+      },
+      {
+        "name": "co_attendees",
+        "description": "Who one person crosses paths with most, with shared event names. Pass your own name for \"who am I seeing a lot\". Args: q, limit."
+      },
+      {
+        "name": "connections",
+        "description": "The tightest co-attendance pairs pool-wide (who's seeing who), with shared counts + event names. Args: min_shared, limit."
+      },
+      {
+        "name": "shared_events",
+        "description": "The events two named people both attended (did they cross paths, and where). Args: a, b."
+      },
+      {
+        "name": "stats",
+        "description": "Pool overview: event counts, distinct people, active contributors."
+      }
     ]
   }
 ]

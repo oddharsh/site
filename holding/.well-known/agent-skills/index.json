@@ -6,7 +6,7 @@
       "type": "skill-md",
       "description": "Query the Serendipity event pool on aadhar.sh (community-curated events and who's going) over a public, read-only MCP server.",
       "url": "https://aadhar.sh/.well-known/agent-skills/serendipity-events/SKILL.md",
-      "digest": "sha256:2c51390c19280b3b7b860d6881d38a984e7a263e57f6e308b809507c05612403"
+      "digest": "sha256:39e8845bc1ef2d1f168dc4fd9e3988764a192ced3c6820124ce6c8bb3fa97761"
     }
   ]
 }

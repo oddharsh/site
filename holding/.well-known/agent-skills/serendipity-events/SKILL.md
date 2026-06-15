@@ -36,6 +36,15 @@ database).
 - `contributor_events` takes one contributor (a cookie id / `user_key`, an id
   prefix, or a label) and returns their whole event footprint, split into
   `going_to` and `been_to`. Args: `contributor`.
+- `frequent_people` lists the people who show up across the most events (who
+  you are seeing a lot), each with an event count. Args: `when`, `limit`.
+- `co_attendees` takes a person by name and returns who they cross paths with
+  most, with the names of the shared events. Pass your own name to answer "who
+  am I seeing a lot". Args: `q`, `limit`.
+- `connections` returns the tightest co-attendance pairs in the whole pool (who
+  is seeing who), with shared counts and event names. Args: `min_shared`, `limit`.
+- `shared_events` takes two people by name and returns the events they both
+  attended. Args: `a`, `b`.
 - `stats` returns a pool overview: event counts, distinct people, contributors.
 
 ## Typical flow
