@@ -62,6 +62,12 @@
     <priority>0.4</priority>
   </url>
   <url>
+    <loc>https://aadhar.sh/garage/iroh</loc>
+    <lastmod>2026-06-15</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
     <loc>https://aadhar.sh/garage/teardown</loc>
     <lastmod>2026-06-11</lastmod>
     <changefreq>monthly</changefreq>
