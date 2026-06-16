@@ -407,15 +407,16 @@ async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
     arr => (Array.isArray(arr) && arr.length ? arr : null),
     () => null
   );
-  // visitor counter source — prefer the Durable Object (atomic increment, 100k
-  // writes/day) when its binding is present; else fall back to KV (eventually-
-  // consistent, 1k writes/day). bot status is request-only, so compute it up front
-  // and let the counter fetch ride the concurrent batch below — no serial round-trip
-  // either way. humans bump the count; bots read it (DO: ?peek; KV: read-no-write).
+  // visitor counter — atomic increment in the "homepage-visits" Durable Object
+  // (cf-garage's Counter class, bound here as COUNTER). humans increment; bots
+  // and speculative loads (Speculation Rules prefetch/prerender, Speed Brain, any
+  // Sec-Purpose-honest prefetcher) peek (?peek=1) so crawlers + prefetches don't
+  // inflate the count. fired NOW so the read rides concurrently with the asset +
+  // tracks fetches — but it's AWAITED later, inside the footer .counter rewriter
+  // handler. the stream reaches .counter only at the very end of <body>, so the
+  // read overlaps the whole page and never gates first byte. no timeout race
+  // (that race is exactly what intermittently shipped the static "000042").
   const counterUA = request.headers.get("user-agent") || "";
-  // speculative loads (Speculation Rules prefetch/prerender, Speed Brain,
-  // any Sec-Purpose-honest prefetcher) must not tick the counter — the page
-  // may never be seen. peek instead of increment, same as bots.
   const counterIsSpeculative = /prefetch|prerender/i.test(request.headers.get("sec-purpose") || "");
   const counterIsBot = counterIsSpeculative ||
     request.cf?.botManagement?.verifiedBot === true ||
@@ -425,53 +426,21 @@ async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
         .fetch(`https://do/${counterIsBot ? "?peek=1" : ""}`)
         .then((r) => r.json())
         .catch(() => null)
-    : env.RN_KV
-      ? env.RN_KV.get("counter:visits").catch(() => null)
-      : Promise.resolve(null);
-  // don't let the counter gate first byte: the DO is single-homed, so a
-  // far-from-home visitor pays a cross-region RTT for a footer pill that has
-  // a static fallback. race it against a short timeout — on a miss the pill
-  // keeps the placeholder and the increment still completes via waitUntil.
-  const counterP = Promise.race([
-    counterRaw,
-    new Promise((resolve) => setTimeout(() => resolve(null), 75)),
-  ]);
+    : Promise.resolve(null);
+  // ensure the increment lands even if the response bails early (below) before
+  // the rewriter runs.
   ctx.waitUntil(counterRaw.catch(() => {}));
 
-  const [res, tracksPayload, photos, counterData, altMap] = await Promise.all([
+  const [res, tracksPayload, photos, altMap] = await Promise.all([
     env.ASSETS.fetch(request),
     tracksChain,
     manifestP,
-    counterP,
     getAltMap(env),   // AI alt text; module-cached, so this is free on warm isolates
   ]);
 
   // honest classic-90s-counter behavior: counts every homepage GET, no session
-  // dedup, no cookie. derive the footer pill from whichever backend answered:
-  //   • DO  — counterData is { n }. humans already incremented atomically inside
-  //     the DO (no read-modify-write race, no 1k/day write cap); bots peeked.
-  //     on a transient DO error counterData is null → leave the pill null (the
-  //     static "000042" placeholder shows) rather than touch KV, so an error
-  //     can't clobber the migrated count. KV `counter:visits` (last value 891)
-  //     stays frozen as a record; the DO is the source of truth once bound.
-  //   • KV  — fallback until the COUNTER binding is added: counterData is the raw
-  //     string; increment + fire-and-forget write, humans only. this site
-  //     advertises to agents (DNS-AID + llms.txt), so counting crawlers would
-  //     dominate the write budget and inflate the pill — bots read, don't bump.
-  let counterStr = null;
-  if (env.COUNTER) {
-    if (counterData && typeof counterData.n === "number") {
-      counterStr = String(counterData.n).padStart(6, "0");
-    }
-  } else if (env.RN_KV && counterData != null) {
-    // counterData null here means the 75ms race timed out (or KV errored) —
-    // skip the increment entirely rather than read-modify-write from zero
-    // and clobber the real count. the pill shows the static placeholder.
-    const cur  = parseInt(counterData || "0", 10) || 0;
-    const next = counterIsBot ? cur : cur + 1;
-    counterStr = String(next).padStart(6, "0");
-    if (!counterIsBot) ctx.waitUntil(env.RN_KV.put("counter:visits", String(next)));
-  }
+  // dedup, no cookie. the count itself is injected later, in the footer .counter
+  // rewriter handler (which awaits the DO read) — see below.
 
   // footer "Last modified" → the most recently added photo (a real, datable
   // content change; the pool grows often). Pages assets are content-addressed
@@ -492,7 +461,7 @@ async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
   // bail if no dynamic data is available — the static HTML's inline
   // JS will pick up the slack on the client (and the hardcoded "000042"
   // stays in the footer as a graceful fallback).
-  if (!tracksPayload?.tracks?.length && !photos && !counterStr && !lastModStr) return withHomepageDiscoveryHeaders(res);
+  if (!tracksPayload?.tracks?.length && !photos && !env.COUNTER && !lastModStr) return withHomepageDiscoveryHeaders(res);
 
   const rewriter = new HTMLRewriter();
   let lcpAvif = null, lcpStem = null;  // first photo tile → responsive preload Link
@@ -572,9 +541,18 @@ async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
   }
 
   // ── visitor counter → footer .counter pill ──────────────────────
-  if (counterStr) {
+  // async handler: the rewriter reaches .counter only at the end of <body>, so
+  // awaiting the DO read here overlaps it with the full page stream instead of
+  // gating first byte — no timeout race. on a null read (DO error/unbound) the
+  // static placeholder stays put, never a misleading number.
+  if (env.COUNTER) {
     rewriter.on(".counter", {
-      element(el) { el.setInnerContent(counterStr); },
+      async element(el) {
+        const data = await counterRaw;
+        if (data && typeof data.n === "number") {
+          el.setInnerContent(String(data.n).padStart(6, "0"));
+        }
+      },
     });
   }
 
