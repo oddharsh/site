@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>aadhar.sh/garage/three free Cloudflare features, live</title>
-<meta name="description" content="Live demos of three free Cloudflare Workers platform features (Durable Objects atomic counter, Workers AI photo captioning, and Workers Logs structured observability) behind a tiny worker. A fourth, Browser Rendering, is wired but parked on the free tier's daily cap.">
+<title>aadhar.sh/garage/four free Cloudflare features, live</title>
+<meta name="description" content="Live demos of four free Cloudflare Workers platform features (Durable Objects atomic counter, Workers AI photo captioning, Workers Logs structured observability, and custom trace spans) behind a tiny worker. A fifth, Browser Rendering, is wired but parked on the free tier's daily cap.">
 <link rel="canonical" href="https://aadhar.sh/garage/cloudflare">
 <meta property="og:type" content="website">
-<meta property="og:title" content="aadhar.sh/garage/three free Cloudflare features, live">
-<meta property="og:description" content="Live demos of three free Cloudflare Workers platform features (Durable Objects atomic counter, Workers AI photo captioning, and Workers Logs structured observability) behind a tiny worker. A fourth, Browser Rendering, is wired but parked on the free tier's daily cap.">
+<meta property="og:title" content="aadhar.sh/garage/four free Cloudflare features, live">
+<meta property="og:description" content="Live demos of four free Cloudflare Workers platform features (Durable Objects atomic counter, Workers AI photo captioning, Workers Logs structured observability, and custom trace spans) behind a tiny worker. A fifth, Browser Rendering, is wired but parked on the free tier's daily cap.">
 <meta property="og:url" content="https://aadhar.sh/garage/cloudflare">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><path d='M9 22 a6 6 0 0 1 0-12 a8 8 0 0 1 15 2 a5 5 0 0 1-1 10 z' fill='%23166aee'/></svg>">
 <style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}
@@ -180,6 +180,14 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
 .cf-code { font: 9pt var(--font-mono); color: oklch(40% 0.04 145); background: oklch(95% 0.01 145); border: 1px solid oklch(80% 0.03 145);
   padding: 5px 8px; margin: 6px 0 0; overflow-x: auto; }
 code.m, .m { font-family: var(--font-mono); font-size: 9.2pt; }
+/* tracing waterfall */
+.tr-wf { margin: 8px 0 2px; }
+.tr-root { font: bold 9pt var(--font-mono); color: oklch(30% 0.02 250); margin: 2px 0 5px; }
+.tr-row { display: grid; grid-template-columns: 124px 1fr 50px; gap: 8px; align-items: center; margin: 3px 0; font: 9pt var(--font-mono); }
+.tr-name { color: oklch(30% 0.02 250); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tr-track { position: relative; height: 16px; background: oklch(96% 0.005 250); border: 1px solid oklch(85% 0.02 250); border-radius: 2px; }
+.tr-bar { position: absolute; top: -1px; bottom: -1px; min-width: 2px; border-radius: 2px; background: linear-gradient(180deg, oklch(64% 0.18 255), oklch(50% 0.20 258)); }
+.tr-dur { text-align: right; color: oklch(40% 0 0); }
 
   /* OS-window geometry inlined so FIRST PAINT matches nav.js (no shell "pop"
      when the deferred desktop arrives). keep in sync with nav.js (search
@@ -200,16 +208,16 @@ code.m, .m { font-family: var(--font-mono); font-size: 9.2pt; }
 </head>
 <body>
 <div class="window">
-  <div class="title-bar" aria-hidden="true"><span class="title-text"><span class="icon"></span>aadhar.sh/garage/three free Cloudflare features, live</span><span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/garage/" title="back to the garage" aria-label="back to the garage"></a></span></div>
+  <div class="title-bar" aria-hidden="true"><span class="title-text"><span class="icon"></span>aadhar.sh/garage/four free Cloudflare features, live</span><span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/garage/" title="back to the garage" aria-label="back to the garage"></a></span></div>
   <div class="content">
-    <h1>Three free Cloudflare features, live</h1>
+    <h1>Four free Cloudflare features, live</h1>
     <p class="lede">
       The free Workers plan quietly bundles things that used to cost money or
-      a separate service. I wired three of them to live demos here
-      (<b>Durable Objects</b>, <b>Workers&nbsp;AI</b>, and <b>Workers&nbsp;Logs</b>),
+      a separate service. I wired four of them to live demos here
+      (<b>Durable Objects</b>, <b>Workers&nbsp;AI</b>, <b>Workers&nbsp;Logs</b>, and <b>custom trace spans</b>),
       behind a tiny worker (<code class="m">cf-garage</code>) routed at
       <code class="m">/garage/cf/*</code>. The buttons hit real endpoints; nothing is faked.
-      A fourth, <b>Browser&nbsp;Rendering</b>, I bound and deployed, then parked on the free
+      A fifth, <b>Browser&nbsp;Rendering</b>, I bound and deployed, then parked on the free
       tier&apos;s daily cap. <a href="#parked">Noted honestly below.</a>
     </p>
 
@@ -248,13 +256,29 @@ code.m, .m { font-family: var(--font-mono); font-size: 9.2pt; }
       <pre class="cf-code">console.log(JSON.stringify({ path, feature, ms }))</pre>
     </div>
 
+    <div class="cf-feat">
+      <h2>4 &middot; Custom spans: trace a request</h2>
+      <p>Workers <b>auto-trace</b> every platform call (each <code class="m">fetch</code>, KV read, DO
+        call) into a waterfall in Observability. As of <b>Jun&nbsp;16&nbsp;2026</b> you can wrap your
+        <em>own</em> logic in spans with <code class="m">ctx.tracing.enterSpan()</code>, nested correctly.
+        This endpoint runs a three-step pipeline &mdash; a Durable&nbsp;Object peek, a subrequest, and a
+        compute loop &mdash; each in its own span with attributes. The canonical trace lands in
+        Observability; the waterfall below is reconstructed live from the same span timings. (Run it twice:
+        a cold Durable&nbsp;Object shows up as a fat first bar, then the warm path collapses to a few ms.)</p>
+      <button class="cf-btn" id="tr-btn" type="button">run a traced request</button>
+      <div class="cf-out" id="tr-out">&mdash;</div>
+      <div class="tr-wf" id="tr-wf" aria-live="polite"></div>
+      <pre class="cf-code">ctx.tracing.enterSpan("do.counter.peek", async (span) =&gt; { span.setAttribute("counter.value", n) })</pre>
+    </div>
+
     <h2>The honest scorecard</h2>
-    <p class="note">All three ride the free Workers plan and <b>work live above</b>. Click
+    <p class="note">All four ride the free Workers plan and <b>work live above</b>. Click
       them. They&apos;re shipped: a Durable Object increments with no race, Workers AI captions a
-      real photo on a free GPU, and every click leaves a structured log line in the dashboard.</p>
+      real photo on a free GPU, every click leaves a structured log line, and a hand-instrumented
+      request shows its own spans in the trace waterfall.</p>
 
     <div class="callout" id="parked">
-      <b>The fourth, parked honestly: Browser Rendering.</b> Headless Chromium in a Worker
+      <b>The fifth, parked honestly: Browser Rendering.</b> Headless Chromium in a Worker
       (Puppeteer): <code class="m">puppeteer.launch(env.BROWSER) → page.goto() →
       page.screenshot()</code>, the basis for on-the-fly <code class="m">og:image</code> cards. I bind
       it and the worker deploys; no enable toggle exists (the binding
@@ -292,6 +316,27 @@ code.m, .m { font-family: var(--font-mono); font-size: 9.2pt; }
     try{ var r=await fetch("/garage/cf/caption?img="+s); var d=await r.json();
       set("ai-out", d.ok ? ("\""+d.caption+"\" llava on "+s) : ("error: "+d.error)); }
     catch(e){ set("ai-out","error: "+e); } finally{ aiBtn.disabled=false; }
+  });
+  var trBtn=document.getElementById("tr-btn");
+  if(trBtn) trBtn.addEventListener("click", async function(){
+    set("tr-out","tracing a request…"); trBtn.disabled=true;
+    var wf=document.getElementById("tr-wf"); wf.innerHTML="";
+    try{
+      var r=await fetch("/garage/cf/trace?cb="+Date.now()); var d=await r.json();
+      if(!d.ok){ set("tr-out","error: "+d.error); return; }
+      var t=Math.max(d.total,1);
+      var html='<div class="tr-root">handleTrace &middot; '+d.total+'ms total</div>';
+      d.spans.forEach(function(s){
+        var left=(100*s.start/t).toFixed(1), w=Math.max(2,100*s.dur/t).toFixed(1);
+        html+='<div class="tr-row"><div class="tr-name">'+s.name+'</div>'+
+          '<div class="tr-track"><div class="tr-bar" style="left:'+left+'%;width:'+w+'%"></div></div>'+
+          '<div class="tr-dur">'+s.dur+'ms</div></div>';
+      });
+      wf.innerHTML=html;
+      set("tr-out", d.spans.length+" custom spans · "+(d.available
+        ? ("sent to Workers Observability"+(d.traced?" (sampled this hit)":""))
+        : "tracing API unavailable on this deploy"));
+    }catch(e){ set("tr-out","error: "+e); } finally{ trBtn.disabled=false; }
   });
 })();
 </script>

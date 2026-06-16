@@ -1,6 +1,6 @@
 name = "cf-garage"
 main = "src/index.js"
-compatibility_date = "2026-06-01"
+compatibility_date = "2026-06-16"
 compatibility_flags = ["nodejs_compat"]
 
 # intercepts /garage/cf/* ahead of the Pages project (which serves the rest of /garage/*)
@@ -9,6 +9,12 @@ routes = [{ pattern = "aadhar.sh/garage/cf/*", zone_name = "aadhar.sh" }]
 # Workers Logs — free observability (200k events/day)
 [observability]
 enabled = true
+
+# Workers tracing — records request traces (incl. our custom spans) in the
+# Observability dashboard. powers the /garage/cf/trace custom-spans demo.
+[observability.tracing]
+enabled = true
+head_sampling_rate = 1
 
 # Workers AI (image captioning demo)
 [ai]
