@@ -797,16 +797,17 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
     display: flex; flex-direction: column;
   }
   .window > .title-bar { flex: 0 0 auto; }
-  /* reserve the custom-scrollbar gutter at FIRST PAINT. nav.js adds .axp-sb-pad
-     (padding-right:24px) once it measures overflow + mounts the XP scrollbar —
-     but that runtime bump from .content's base 16px to 24px is just enough, at
-     widths near a photo-grid column boundary (~800px, ~1180px), to drop a 184px
-     column and reflow the grid ~190px taller. measurable CLS for any viewport
-     sitting on a boundary. matching the gutter here (24px == axp-sb-pad) means
-     the grid lays out at its final width immediately and the deferred shell
-     moves nothing. higher specificity than `.content` so it wins the right edge;
-     top/left/bottom keep .content's 12/16/16. */
-  .window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 24px; }
+  /* reserve the custom-scrollbar gutter at FIRST PAINT, and make it AUTHORITATIVE.
+     nav.js also pads the scroller via .axp-sb-pad once it mounts the XP scrollbar,
+     but nav.js is service-worker-cached: during a version bump a STALE cached
+     nav.js (its .axp-sb-pad is !important) would override a non-important reserve
+     here and shrink the gutter — the panel-kisses-scrollbar bug. So this rule is
+     !important AND more specific (.window > .content = 0,2,0 beats .axp-sb-pad =
+     0,1,0), making the deployed HTML the single source of truth for the gutter,
+     regardless of which nav.js a visitor has cached. 28px → a ~9px gap to the
+     scrollbar. Also kills the paint→mount reflow (the grid lays out at its final
+     width immediately). top/left/bottom keep .content's 12/16/16. */
+  .window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 28px !important; }
   /* pre-JS taskbar strip — the real #axp-taskbar (z 99999) covers it once nav.js
      mounts; gradient matches it so there's no colour pop either. */
   body::after {
