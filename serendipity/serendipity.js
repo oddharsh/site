@@ -592,7 +592,7 @@ function renderMcpInfo(path) {
     <p class="lede">Serendipity is built to be queried by agents, not just people. A read-only MCP (Model Context Protocol) endpoint is live at <code>${ep}</code>. Point any MCP client at it (Streamable-HTTP transport, JSON-RPC over POST) and ask "what events are good, and who's going." Public data only: no auth, no writes, and never private contact details.</p>
     <div class="grp">Tools</div>
     <div class="alist">
-      ${tool("list_events", "when, q, limit", "Events in the pool with a head count of who&apos;s going. Defaults to upcoming, soonest first.")}
+      ${tool("list_events", "when, rsvp, q, limit", "Events in the pool with a head count + an RSVP tier. By default returns only events a contributor actually RSVP&apos;d to / hosts (the ones with rosters), plus a count of browsed-but-not-RSVP&apos;d events hidden; rsvp:&quot;all&quot; includes those (first-class first), rsvp:&quot;discovered&quot; returns only them.")}
       ${tool("get_event", "id", "One event in full: description, hosts, the guest list (who&apos;s going), contributors.")}
       ${tool("search_people", "q, limit", "Find people by name; returns role/company/socials and their events split into going_to and been_to.")}
       ${tool("list_contributors", "", "The people feeding the pool: a label, an id prefix, and how many events each fed in.")}
@@ -1247,6 +1247,11 @@ function mcpEventSummary(e) {
     url: e.url || (e.id ? "https://lu.ma/" + e.id : null),
     going: Number(e.attendee_count || 0),
     hosts: Number(e.host_count || 0),
+    // RSVP tier: "going" means a contributor actually RSVP'd / is hosting — the
+    // first-class events. "invited"/"pending"/"waitlisted"/unknown are synced from
+    // browsing a Luma feed without RSVPing — no roster, second-class.
+    attending: e.user_status === "going",
+    rsvp: e.user_status || "unknown",
     contributors: e.contributors || null,
   };
 }
@@ -1444,11 +1449,12 @@ async function mcpSharedEvents(d, qa, qb) {
 const MCP_TOOLS = [
   {
     name: "list_events",
-    description: "List events in the Serendipity pool — community-curated events worth going to, each with a head count of who's going. Defaults to upcoming events, soonest first.",
+    description: "List events in the Serendipity pool, each with a head count of who's going and an RSVP tier. The pool mixes events a contributor actually RSVP'd to or hosts (rsvp:\"going\" — first-class, the ones with real rosters) with events synced from just browsing a Luma feed (rsvp:\"invited\"/\"pending\"/etc — no roster, second-class). By default only the going (RSVP'd) events are returned, with a discovered_hidden count noting how many browsed events were omitted; pass rsvp:\"all\" to include them (first-class first) or rsvp:\"discovered\" for only the browsed ones. Each event carries attending (bool) + rsvp (raw status). Defaults to upcoming, soonest first.",
     inputSchema: {
       type: "object",
       properties: {
-        when: { type: "string", enum: ["upcoming", "past", "all"], description: "which slice to return (default \"upcoming\")" },
+        when: { type: "string", enum: ["upcoming", "past", "all"], description: "which time slice to return (default \"upcoming\")" },
+        rsvp: { type: "string", enum: ["going", "all", "discovered"], description: "RSVP tier: \"going\" = only events a contributor RSVP'd to / hosts (default); \"all\" = include browsed-but-not-RSVP'd events, first-class first; \"discovered\" = only the browsed ones" },
         q: { type: "string", description: "optional case-insensitive filter on event name, location, or contributor" },
         limit: { type: "integer", minimum: 1, maximum: 200, description: "max events to return (default 50)" },
       },
@@ -1550,15 +1556,28 @@ async function mcpCallTool(d, name, args) {
     const when = ["upcoming", "past", "all"].includes(args.when) ? args.when : "upcoming";
     const limit = Math.min(Math.max(parseInt(args.limit, 10) || 50, 1), 200);
     const q = args.q != null && String(args.q).trim() ? String(args.q).toLowerCase() : null;
+    // rsvp tier: the pool mixes events a contributor actually RSVP'd to / hosts
+    // ("going" — first-class, the ones with rosters) with events synced from just
+    // browsing a Luma feed ("invited"/"pending"/etc — no roster, second-class).
+    // default to the real ones; "all" includes the discovered pile (first-class
+    // first), "discovered" returns only the not-RSVP'd ones.
+    const rsvp = ["going", "all", "discovered"].includes(args.rsvp) ? args.rsvp : "going";
     const now = Date.now();
     let rows = await queryEvents(d);
     if (when === "upcoming") rows = rows.filter((e) => !e.start_at || new Date(e.start_at).getTime() >= now);
     else if (when === "past") rows = rows.filter((e) => e.start_at && new Date(e.start_at).getTime() < now)
                                          .sort((a, b) => new Date(b.start_at) - new Date(a.start_at));
     if (q) rows = rows.filter((e) => [e.name, e.location, e.contributors].some((v) => v && String(v).toLowerCase().includes(q)));
+    const matched = rows.length;                                            // after when + q, before rsvp tier
+    const goingCount = rows.filter((e) => e.user_status === "going").length;
+    if (rsvp === "going") rows = rows.filter((e) => e.user_status === "going");
+    else if (rsvp === "discovered") rows = rows.filter((e) => e.user_status !== "going");
+    else rows = rows.slice().sort((a, b) => (b.user_status === "going") - (a.user_status === "going")); // stable: first-class first, date order kept within tier
     const total = rows.length;
     const events = rows.slice(0, limit).map(mcpEventSummary);
-    return { when, total, returned: events.length, events };
+    const out = { when, rsvp, total, returned: events.length, events };
+    if (rsvp === "going") out.discovered_hidden = matched - goingCount;      // transparency: not-RSVP'd events omitted from this view
+    return out;
   }
   if (name === "get_event") {
     const id = String(args.id || "").trim();

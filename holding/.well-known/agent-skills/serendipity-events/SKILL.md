@@ -24,8 +24,15 @@ database).
 ## Tools
 
 - `list_events` lists events in the pool, each with a head count of who is
-  going. Args: `when` (`upcoming` | `past` | `all`, default `upcoming`), `q`
-  (filter on name, location, or contributor), `limit`.
+  going and an RSVP tier. The pool mixes events a contributor actually RSVP'd
+  to / hosts (first-class, with real rosters) and events synced from just
+  browsing a Luma feed (second-class, no roster). By default it returns only
+  the RSVP'd events plus a `discovered_hidden` count; pass `rsvp: "all"` to
+  include the browsed ones (first-class first) or `rsvp: "discovered"` for only
+  them. Each event carries `attending` (bool) + `rsvp` (raw status). Args:
+  `when` (`upcoming` | `past` | `all`, default `upcoming`), `rsvp`
+  (`going` | `all` | `discovered`, default `going`), `q` (filter on name,
+  location, or contributor), `limit`.
 - `get_event` returns one event in full: description, hosts, the guest list (who
   is going), and which contributors added it. Args: `id` (from `list_events`).
 - `search_people` finds people by name. It returns role, company, and socials
