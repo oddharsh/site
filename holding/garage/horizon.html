@@ -2672,6 +2672,251 @@ myButton.onclick = async () =&gt; {
       <p class="unsupported">Your browser doesn&apos;t expose <code>Temporal</code> yet, the box above says so.</p>
     </section>
 
+    <hr>
+    <p class="lede" style="margin-top:4px">Newer arrivals &mdash; the bleeding edge (shipped or not), plus the networking layer the rest of this page was missing.</p>
+
+    <!-- ───────────────────── Element.moveBefore() ───────────────────── -->
+    <section class="demo" data-cap="move-before">
+      <h2>
+        <span>Element.moveBefore() <span class="mono">state-preserving move</span></span>
+        <span class="stat chrome">Chrome 133 &middot; FF/Safari positive</span>
+      </h2>
+      <p class="note">
+        Reparenting a node with <code>appendChild</code> tears its state down: iframes reload,
+        running animations restart, focus and form state reset. <code>moveBefore()</code> moves
+        it <em>without</em> the teardown. The iframe below counts its own uptime &mdash; move it
+        between the trays and watch the counter survive a <code>moveBefore()</code> but reset on
+        the <code>appendChild</code> fallback.
+      </p>
+      <div style="display:flex;gap:10px;margin:8px 0">
+        <div id="mb-a" style="flex:1;border:1px solid oklch(61% 0.0611 253.6);padding:8px;min-height:56px;background:oklch(98% 0.004 250)">tray A</div>
+        <div id="mb-b" style="flex:1;border:1px solid oklch(61% 0.0611 253.6);padding:8px;min-height:56px;background:oklch(98% 0.004 250)">tray B</div>
+      </div>
+      <iframe id="mb-frame" title="uptime counter" style="width:170px;height:38px;border:1px solid oklch(50% 0 0);vertical-align:middle" srcdoc="&lt;body style='font:12px Courier New,monospace;margin:5px;color:#0831d9'&gt;iframe uptime: &lt;b id=c&gt;0&lt;/b&gt;s&lt;script&gt;let n=0;setInterval(()=&gt;{n++;document.getElementById('c').textContent=n},1000)&lt;/script&gt;&lt;/body&gt;"></iframe>
+      <button class="xp-button" id="mb-go" type="button" style="margin-left:8px">move it &rarr;</button>
+      <p class="replaces">
+        On the site: the desktop shell reparents <code>.window</code> nodes when you drag them or
+        pop content into a popover. <code>moveBefore()</code> does that without reloading their
+        contents or interrupting a running View Transition.
+      </p>
+      <p class="unsupported">No <code>moveBefore()</code> here, so the button falls back to <code>appendChild</code> &mdash; the counter resets to 0 each move.</p>
+    </section>
+
+    <!-- ───────────────────── cross-document view transitions ───────────────────── -->
+    <section class="demo" data-cap="cross-doc-vt">
+      <h2>
+        <span>Cross-document transitions <span class="mono">@view-transition</span></span>
+        <span class="stat cross">Chrome 126 &middot; Safari 18.2 &middot; FF building</span>
+      </h2>
+      <p class="note">
+        The multi-page sibling of the View Transitions already used in the window shell. One
+        rule &mdash; <code>@view-transition { navigation: auto }</code> on both pages &mdash; and the
+        browser animates a <em>real</em> navigation between two separate documents, no SPA, no JS.
+        (Can&apos;t demo it inside one page; it fires on the navigation itself.)
+      </p>
+      <p class="replaces">
+        On the site: every route here is its own document, so this would animate home &rarr;
+        <code>/writing</code> &rarr; <code>/garage</code> natively instead of a hard cut. Already
+        two engines &mdash; adoptable, not just watchable.
+      </p>
+    </section>
+
+    <!-- ───────────────────── shape() ───────────────────── -->
+    <section class="demo" data-cap="css-shape">
+      <h2>
+        <span>shape() <span class="mono">responsive clip-path</span></span>
+        <span class="stat cross">Chrome 119 &middot; Safari 18.2 &middot; Firefox 136</span>
+      </h2>
+      <p class="note">
+        A <code>path()</code> you can write with percentages and any length unit, so the clip
+        scales with the box instead of being frozen at one pixel size. The pennant below is a
+        single <code>clip-path: shape(&hellip;)</code> &mdash; resize the window and it stays sharp.
+      </p>
+      <div style="width:140px;height:96px;margin:8px 0;color:#fff;font:bold 9pt var(--font-caption);display:flex;align-items:center;justify-content:center;text-align:center;background:linear-gradient(180deg, oklch(60% 0.20 261), oklch(50% 0.225 263));clip-path:shape(from 0 0, line to 100% 0, line to 100% 70%, line to 50% 100%, line to 0 70%, close)">shape()</div>
+      <p class="replaces">
+        On the site: the hand-written polygon <code>clip-path</code>s (the title-bar icon, notched
+        frames, the cone mark) could become resolution-independent shapes. Baseline since Feb 2026.
+      </p>
+      <p class="unsupported">No <code>shape()</code> here, so the pennant falls back to its plain rectangle.</p>
+    </section>
+
+    <!-- ───────────────────── text-wrap: pretty ───────────────────── -->
+    <section class="demo" data-cap="text-wrap-pretty">
+      <h2>
+        <span>text-wrap <span class="mono">: pretty</span></span>
+        <span class="stat cross">Chrome 117 &middot; Safari 26 &middot; FF no</span>
+      </h2>
+      <p class="note">
+        The browser looks at the whole paragraph and avoids ugly last lines &mdash; orphans, a
+        lonely single word, rivers. Left is default wrapping; right is <code>text-wrap: pretty</code>.
+        Same text, same width:
+      </p>
+      <div style="display:flex;gap:14px;flex-wrap:wrap;margin:8px 0">
+        <div style="flex:1;min-width:210px;max-width:280px"><p class="tb-cap">default</p><p style="border:1px solid oklch(85% 0.02 250);padding:6px;margin:0;text-wrap:wrap">The browser breaks lines greedily and can leave one lonely word stranded on the final line.</p></div>
+        <div style="flex:1;min-width:210px;max-width:280px"><p class="tb-cap"><code>text-wrap: pretty</code></p><p style="border:1px solid oklch(85% 0.02 250);padding:6px;margin:0;text-wrap:pretty">The browser breaks lines greedily and can leave one lonely word stranded on the final line.</p></div>
+      </div>
+      <p class="replaces">
+        On the site: the <code>/writing</code> Notepad text and the photo captions get tidier last
+        lines for free. Pure progressive enhancement &mdash; older engines just wrap as before.
+      </p>
+    </section>
+
+    <!-- ───────────────────── @function ───────────────────── -->
+    <section class="demo" data-cap="css-function">
+      <h2>
+        <span>@function <span class="mono">custom CSS functions</span></span>
+        <span class="stat chrome">Chrome 139 &middot; Safari/FF building</span>
+      </h2>
+      <p class="note">
+        Reusable, parameterised CSS logic &mdash; Sass mixins, but native and live:
+        <code>@function --bevel(--l) { result: oklch(from var(--c) calc(l - var(--l)) c h) }</code>.
+        Chrome-only so far; the others have it in progress.
+      </p>
+      <p class="replaces">
+        On the site: the repeated <code>oklch(from &hellip; calc(l &minus; 0.19) &hellip;)</code> bevel
+        math (every raised/sunken edge derives its shade this way) would collapse into one named
+        function. A &quot;watch it&quot; card until a second engine lands.
+      </p>
+      <p class="unsupported">No <code>@function</code> here yet &mdash; Chrome leads.</p>
+    </section>
+
+    <hr>
+    <p class="lede" style="margin-top:4px">Networking &mdash; the transport + delivery layer, the part of the platform a static site usually never touches.</p>
+
+    <!-- ───────────────────── WebTransport ───────────────────── -->
+    <section class="demo" data-cap="webtransport">
+      <h2>
+        <span>WebTransport <span class="mono">HTTP/3 + QUIC</span></span>
+        <span class="stat cross">Baseline 2026 &middot; Chrome &middot; Firefox &middot; Safari 26.4</span>
+      </h2>
+      <p class="note">
+        WebSocket&apos;s successor: bidirectional streams <em>and</em> unreliable datagrams over
+        HTTP/3, multiplexed on QUIC so one slow stream doesn&apos;t head-of-line-block the rest.
+        Went Baseline in March 2026 once Safari&nbsp;26.4 shipped it. (No live demo &mdash; it needs
+        an HTTP/3 server endpoint to dial.)
+      </p>
+      <p class="replaces">
+        On the site: overkill for a mostly-static page today, but it&apos;s the right transport the
+        day anything here goes real-time &mdash; a live <code>/serendipity</code> presence feed, or
+        streaming a long crawl in <code>/around</code> instead of buffering it.
+      </p>
+      <p class="unsupported">No <code>WebTransport</code> constructor in this browser.</p>
+    </section>
+
+    <!-- ───────────────────── Service Worker static routing ───────────────────── -->
+    <section class="demo" data-cap="sw-static-routing">
+      <h2>
+        <span>SW static routing <span class="mono">InstallEvent.addRoutes()</span></span>
+        <span class="stat chrome">Chrome &middot; Gecko positive &middot; WebKit no-signal</span>
+      </h2>
+      <p class="note">
+        Declare routing rules at install time so the browser can <em>skip booting the service
+        worker entirely</em> for paths that always go the same place &mdash; straight to network or
+        straight to cache &mdash; shaving the SW startup cost off those requests.
+      </p>
+      <p class="replaces">
+        On the site: <code>sw.js</code> is cache-first for <code>/images/*</code> and network-only
+        for everything dynamic. A static route would serve thumbnails from cache without ever
+        waking the worker, and send <code>/</code> and the JSON APIs straight to network &mdash; the
+        same policy, minus the boot latency.
+      </p>
+      <p class="unsupported">No <code>addRoutes()</code> on <code>InstallEvent</code> here.</p>
+    </section>
+
+    <!-- ───────────────────── 103 Early Hints ───────────────────── -->
+    <section class="demo" data-cap="early-hints">
+      <h2>
+        <span>103 Early Hints <span class="mono">server-side</span></span>
+        <span class="stat cross">Chrome &middot; Firefox &middot; Safari (preconnect)</span>
+      </h2>
+      <p class="note">
+        A response the server sends <em>before</em> the real one (status <code>103</code>), carrying
+        <code>Link: rel=preload/preconnect</code> hints so the browser starts fetching critical
+        assets during server think-time. It&apos;s a header game, not a JS API &mdash; hence no chip
+        above. Cloudflare can emit it from the edge.
+      </p>
+      <p class="replaces">
+        On the site: the homepage&apos;s one shared asset is <code>/nav.js</code>; a 103 could
+        <code>preload</code> it (and preconnect the photo R2 origin) while the worker is still
+        assembling the page. Firefox + Chrome honor preload; Safari does preconnect only.
+      </p>
+    </section>
+
+    <hr>
+    <p class="lede" style="margin-top:4px">And two from the far edge &mdash; one perfectly on-brand, one just because.</p>
+
+    <!-- ───────────────────── Local Font Access ───────────────────── -->
+    <section class="demo" data-cap="local-fonts">
+      <h2>
+        <span>Local Font Access <span class="mono">queryLocalFonts()</span></span>
+        <span class="stat contested">Chrome desktop &middot; Safari &amp; Firefox oppose</span>
+      </h2>
+      <p class="note">
+        Enumerate the fonts actually installed on the machine (with permission). The thematically
+        perfect feature for a site that ships <em>zero</em> font bytes and leans entirely on local
+        Verdana / Tahoma / Trebuchet. Apple and Mozilla oppose it on fingerprinting grounds, so it
+        may stay Chrome-only forever &mdash; a fitting horizon entry.
+      </p>
+      <button class="xp-button" id="lf-go" type="button">enumerate my local fonts</button>
+      <div class="cf-out" id="lf-out" style="margin-top:6px;font:10pt var(--font-mono)">&mdash;</div>
+      <p class="replaces">
+        On the site: it could verify a visitor actually has the XP stacks installed before relying
+        on them &mdash; and gracefully swap if not. Mostly it&apos;s here because a no-web-fonts site
+        asking the OS what fonts exist is too on-the-nose to skip.
+      </p>
+      <p class="unsupported">No <code>queryLocalFonts()</code> here &mdash; the button will say so.</p>
+    </section>
+
+    <!-- ───────────────────── WebGPU ───────────────────── -->
+    <section class="demo" data-cap="webgpu">
+      <h2>
+        <span>WebGPU <span class="mono">navigator.gpu</span></span>
+        <span class="stat cross">Chrome &middot; Safari 26 &middot; Firefox 141</span>
+      </h2>
+      <p class="note">
+        Modern GPU compute + render in the browser &mdash; the WebGL successor, built on Metal /
+        Vulkan / D3D12. Crossed into all three engines in 2026 (Safari&nbsp;26, Firefox&nbsp;141).
+        Wildly overpowered for an XP homage, which is exactly why it belongs on the horizon.
+      </p>
+      <p class="replaces">
+        On the site: realistically nothing &mdash; the whole aesthetic is CSS gradients and 2003
+        restraint. But a GPU-rendered Bliss wallpaper or a procedural dithered backdrop is the kind
+        of thing you&apos;d reach for it. Filed under &quot;because we can.&quot;
+      </p>
+      <p class="unsupported">No <code>navigator.gpu</code> in this browser.</p>
+    </section>
+
+    <script>
+      // moveBefore reparent demo + Local Font Access enumeration.
+      (function () {
+        var go = document.getElementById("mb-go"), frame = document.getElementById("mb-frame"),
+            a = document.getElementById("mb-a"), b = document.getElementById("mb-b");
+        if (go && frame && a && b) {
+          a.appendChild(frame);
+          var inTray = a;
+          go.addEventListener("click", function () {
+            var dest = inTray === a ? b : a;
+            if (typeof dest.moveBefore === "function") { try { dest.moveBefore(frame, null); } catch (e) { dest.appendChild(frame); } }
+            else dest.appendChild(frame);
+            inTray = dest;
+          });
+        }
+        var lf = document.getElementById("lf-go"), lfout = document.getElementById("lf-out");
+        if (lf && lfout) lf.addEventListener("click", async function () {
+          if (!("queryLocalFonts" in window)) { lfout.textContent = "queryLocalFonts() isn't available in this browser (Chrome desktop only)."; return; }
+          lf.disabled = true; lfout.textContent = "asking the OS…";
+          try {
+            var fonts = await window.queryLocalFonts();
+            var fams = new Set(fonts.map(function (f) { return f.family; }));
+            var want = ["Verdana", "Tahoma", "Trebuchet MS", "Courier New"];
+            var have = want.filter(function (n) { return fams.has(n); });
+            lfout.textContent = fonts.length + " local fonts · the site's stacks present: " + (have.join(", ") || "none");
+          } catch (e) { lfout.textContent = "blocked or denied: " + (e && e.message || e); }
+          finally { lf.disabled = false; }
+        });
+      })();
+    </script>
+
     <script>
       // CloseWatcher demo (graceful Esc fallback) + Document PiP + Temporal readout.
       (function () {
@@ -2875,6 +3120,15 @@ myButton.onclick = async () =&gt; {
     "reading-flow": function () { return (CSS.supports("reading-flow: flex-visual") || CSS.supports("reading-order: 1")); },
     "doc-pip": function () { return ("documentPictureInPicture" in window); },
     "temporal": function () { return (typeof Temporal !== "undefined"); },
+    "move-before": function () { return ("moveBefore" in Element.prototype); },
+    "cross-doc-vt": function () { return ("startViewTransition" in document); },
+    "css-shape": function () { return CSS.supports("clip-path: shape(from 0 0, line to 10px 10px)"); },
+    "text-wrap-pretty": function () { return CSS.supports("text-wrap: pretty"); },
+    "css-function": function () { return ("CSSFunctionRule" in window); },
+    "webtransport": function () { return ("WebTransport" in window); },
+    "sw-static-routing": function () { return (typeof InstallEvent !== "undefined" && "addRoutes" in InstallEvent.prototype); },
+    "local-fonts": function () { return ("queryLocalFonts" in window); },
+    "webgpu": function () { return ("gpu" in navigator); },
   };
   var label = {
     "text-box-trim": "text-box-trim",
@@ -2913,6 +3167,15 @@ myButton.onclick = async () =&gt; {
     "reading-flow": "reading-flow",
     "doc-pip": "Document PiP",
     "temporal": "Temporal",
+    "move-before": "moveBefore()",
+    "cross-doc-vt": "cross-doc VT",
+    "css-shape": "shape()",
+    "text-wrap-pretty": "text-wrap:pretty",
+    "css-function": "@function",
+    "webtransport": "WebTransport",
+    "sw-static-routing": "SW routing",
+    "local-fonts": "local fonts",
+    "webgpu": "WebGPU",
   };
   var state = {};
   Object.keys(checks).forEach(function (k) { state[k] = sup(checks[k]); });
