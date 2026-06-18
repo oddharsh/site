@@ -238,6 +238,9 @@ function shellCss() {
   .badge{display:inline-block;font:bold 9px var(--font-ui);padding:1px 6px;border:1px solid;border-radius:0;text-transform:uppercase;letter-spacing:.04em}
   .badge.via{background:oklch(96% 0.02 250);color:oklch(42% 0.03 255);border-color:oklch(80% 0.04 250);font-weight:normal;text-transform:none}
   .badge.past{background:oklch(95% 0 0);color:oklch(45% 0 0);border-color:oklch(78% 0 0)}
+  .badge.browsed{background:oklch(95% 0.03 75);color:oklch(46% 0.08 60);border-color:oklch(83% 0.06 75);font-weight:normal;text-transform:none}
+  .ev.disc{opacity:.5;background:oklch(98.5% 0 0)}
+  .ev.disc:hover{opacity:1}
   /* attendee row */
   .alist{border:1px solid oklch(80% 0.035 250);border-radius:0;background:#fff}
   .att{display:flex;align-items:center;gap:10px;padding:8px 12px;border-top:1px solid oklch(92% 0.02 250)}
@@ -348,15 +351,20 @@ function shell(title, currentPath, bodyHtml) {
 // ── pages ────────────────────────────────────────────────────────────────────
 function eventCard(e, isPast) {
   const contributors = (e.contributors || "").split(", ").filter(Boolean);
+  // first-class = a contributor actually RSVP'd / hosts (user_status 'going');
+  // everything else was synced from browsing a feed — demote it (dimmed + a
+  // "browsed" badge) so the real events stand out.
+  const going = e.user_status === "going";
   const counts = [];
   if (Number(e.host_count) > 0) counts.push(`${e.host_count} host${e.host_count == 1 ? "" : "s"}`);
   if (Number(e.attendee_count) > 0) counts.push(`${e.attendee_count} going`);
   const d = e.start_at ? new Date(e.start_at) : null;
-  return `<a class="ev" href="${PREFIX}/event/${esc(e.id)}" data-start="${esc(e.start_at || "")}"${e._coverHref ? ` data-cover="${esc(e._coverHref)}"` : ""}>
+  return `<a class="ev${going ? "" : " disc"}" data-tier="${going ? "going" : "browsed"}" href="${PREFIX}/event/${esc(e.id)}" data-start="${esc(e.start_at || "")}"${e._coverHref ? ` data-cover="${esc(e._coverHref)}"` : ""}>
     <div class="nm">${esc(e.name)}</div>
     <div class="meta">${d ? esc(fmtDateTime(e.start_at)) : "date TBD"}${isPast && d ? ` · ${esc(relativeTime(d))}` : ""}${e.location ? " · " + esc(e.location) : ""}</div>
     <div class="row">
-      ${counts.length ? `<span class="count">${counts.join(" · ")}</span>` : `<span class="count" style="color:oklch(60% 0 0)">no guest list yet</span>`}
+      ${going ? "" : `<span class="badge browsed" title="synced from a browsed feed — not RSVP'd">browsed</span>`}
+      ${counts.length ? `<span class="count">${counts.join(" · ")}</span>` : `<span class="count" style="color:oklch(60% 0 0)">${going ? "no guest list yet" : "not RSVP&rsquo;d"}</span>`}
       ${contributors.slice(0, 3).map((c) => `<span class="badge via">via ${esc(c)}</span>`).join("")}
       ${contributors.length > 3 ? `<span class="count">+${contributors.length - 3}</span>` : ""}
     </div>
@@ -442,10 +450,13 @@ async function renderDashboard(d, path, msg, env) {
   } else {
     const now = Date.now();
     const PAST_CAP = 30;  // past-event cards were ~88% of the payload, mostly unscrolled
+    // stable: surface RSVP'd ('going') events first within each section, so the
+    // real events lead and a past one isn't buried below the cap by the browsed pile.
+    const goingFirst = (arr) => arr.slice().sort((a, b) => (b.user_status === "going") - (a.user_status === "going"));
     const upcoming = events.filter((e) => !e.start_at || new Date(e.start_at).getTime() >= now);
     const pastAll = events.filter((e) => e.start_at && new Date(e.start_at).getTime() < now)
                           .sort((a, b) => new Date(b.start_at) - new Date(a.start_at));
-    const past = pastAll.slice(0, PAST_CAP);
+    const past = goingFirst(pastAll).slice(0, PAST_CAP);
     // sign the cover-proxy URL for every card we actually render (upcoming + the
     // capped past slice) — not all of pastAll. eventCard reads e._coverHref.
     await Promise.all(
@@ -461,8 +472,8 @@ async function renderDashboard(d, path, msg, env) {
           <button type="button" class="chip" data-when="weekend">This weekend</button>
         </div>
       </div>
-      ${upcoming.length ? `<div class="grp" data-grp>Upcoming (${upcoming.length})</div>${upcoming.map((e) => eventCard(e, false)).join("")}` : ""}
-      ${pastAll.length ? `<div class="grp" data-grp>Past ${pastAll.length > PAST_CAP ? `(${PAST_CAP} most recent of ${pastAll.length})` : `(${pastAll.length})`}</div>${past.map((e) => eventCard(e, true)).join("")}` : ""}
+      ${upcoming.length ? `<div class="grp" data-grp>Upcoming (${upcoming.length})</div>${goingFirst(upcoming).map((e) => eventCard(e, false)).join("")}` : ""}
+      ${pastAll.length ? `<div class="grp" data-grp>Past ${pastAll.length > PAST_CAP ? `(${PAST_CAP} of ${pastAll.length})` : `(${pastAll.length})`}</div>${past.map((e) => eventCard(e, true)).join("")}` : ""}
       <p class="empty-filter" id="ev-none">No events match — clear the search or pick a wider range.</p>
       <div id="ev-tip" aria-hidden="true"></div>
       <script>${DASHBOARD_JS}</script>`;
@@ -1086,13 +1097,68 @@ async function enrichViaExa(d, key, attendee, force) {
   return { outcome: found ? "success" : "not_found", profile: { company, role: p.role, location: p.location, linkedin_url: linkedinUrl, bio } };
 }
 
+// ── Parallel (parallel.ai) enrichment — the optional second provider ────────
+// Synchronous Search API: POST /v1beta/search → ranked web excerpts. Unlike Exa
+// (whose summary feature returns a structured ROLE/COMPANY block we parse), this
+// returns raw excerpts, so role/company are best-effort regex'd out of a "<Title>
+// at <Company>" pattern. Good enough to A/B against Exa; if Parallel wins the
+// eval, the structured upgrade is its Task API (server-side output schema).
+async function parallelSearch(key, objective, queries) {
+  const r = await fetch("https://api.parallel.ai/v1beta/search", {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-api-key": key, "parallel-beta": "search-extract-2025-10-10" },
+    body: JSON.stringify({ objective, search_queries: queries, max_results: 5, max_chars_per_result: 1500 }),
+  });
+  if (!r.ok) throw new Error(`Parallel ${r.status}: ${(await r.text().catch(() => "")).slice(0, 160)}`);
+  return r.json();
+}
+function guessRoleCompany(text) {
+  if (!text) return { role: null, company: null };
+  const m = text.match(/\b([A-Z][A-Za-z0-9/&+. -]{2,40}?(?:Engineer|Developer|Founder|Co-?founder|CEO|CTO|COO|CFO|CPO|President|VP|Director|Head|Manager|Lead|Designer|Researcher|Scientist|Partner|Investor|Analyst|Officer))\s+(?:at|@|,|\bof\b)\s+([A-Z][A-Za-z0-9/&+.' -]{1,40})/);
+  return m ? { role: m[1].trim(), company: m[2].trim() } : { role: null, company: null };
+}
+async function enrichViaParallel(d, key, attendee, force) {
+  if (!key) return { outcome: "not_found", error: "PARALLEL_NOT_CONFIGURED" };
+  if (!force) {
+    const ex = await d.prepare("SELECT source FROM enrichments WHERE attendee_id = ?").get(attendee.id);
+    if (ex && ex.source === "parallel") return { outcome: "already_enriched" };
+  }
+  const objective = `Identify the professional profile of ${attendee.name}${attendee.bio_short ? " (" + attendee.bio_short + ")" : ""}: current job title/role, current company or organization, and city/location. Prefer LinkedIn, company pages, and recent reputable sources.`;
+  const queries = [`${attendee.name} LinkedIn`, `${attendee.name} ${attendee.bio_short || "role company"}`.trim(), `${attendee.name} founder OR engineer OR investor`];
+  let results;
+  try { results = (await parallelSearch(key, objective, queries)).results || []; }
+  catch (err) { return { outcome: "not_found", error: err instanceof Error ? err.message : String(err) }; }
+
+  const linkedinUrl = (results.find((r) => /linkedin\.com\/in\//i.test(r.url || "")) || {}).url || null;
+  const context = results.flatMap((r) => r.excerpts || []).join(" ").replace(/\s+/g, " ").trim();
+  const g = guessRoleCompany(context);
+  const bio = context ? context.slice(0, 600) : null;
+  const found = !!(linkedinUrl || g.role || g.company || bio);
+  await d.prepare(`INSERT INTO enrichments (attendee_id,linkedin_url,company,role,bio,location,work_history,education,emails,phone_numbers,source,raw_json,enriched_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'))
+    ON CONFLICT(attendee_id) DO UPDATE SET linkedin_url=excluded.linkedin_url,company=excluded.company,role=excluded.role,bio=excluded.bio,
+      location=excluded.location,work_history=excluded.work_history,source=excluded.source,raw_json=excluded.raw_json,enriched_at=datetime('now')`)
+    .run(attendee.id, linkedinUrl, g.company, g.role, bio, null, "[]", "[]", "[]", "[]", "parallel", JSON.stringify({ objective, results: results.slice(0, 3) }).slice(0, 4000));
+  return { outcome: found ? "success" : "not_found", profile: { company: g.company, role: g.role, location: null, linkedin_url: linkedinUrl, bio } };
+}
+
 // secret-gated: POST /serendipity/enrich?key=SECRET&attendee=<id>  (single)
 //                                         &event=<id>&limit=6      (bulk, un-enriched)
+// provider=exa (default) | parallel — both optional; only the one whose API key
+// is set will run. No agentcash / payment layer: each provider is a direct key.
+const ENRICH_PROVIDERS = {
+  exa:      { keyEnv: "EXA_API_KEY",      fn: enrichViaExa },
+  parallel: { keyEnv: "PARALLEL_API_KEY", fn: enrichViaParallel },
+};
 async function handleEnrich(request, env, d) {
   const url = new URL(request.url);
   if (!env.SYNC_SECRET || url.searchParams.get("key") !== env.SYNC_SECRET) return new Response("forbidden", { status: 403 });
-  const key = env.EXA_API_KEY;
-  if (!key) return new Response(JSON.stringify({ error: "EXA_API_KEY not set" }), { status: 400, headers: { "content-type": "application/json" } });
+  const jerr = (msg, code) => new Response(JSON.stringify({ error: msg }), { status: code, headers: { "content-type": "application/json" } });
+  const provider = (url.searchParams.get("provider") || "exa").toLowerCase();
+  const P = ENRICH_PROVIDERS[provider];
+  if (!P) return jerr(`unknown provider "${provider}" (use exa | parallel)`, 400);
+  const key = env[P.keyEnv];
+  if (!key) return jerr(`${P.keyEnv} not set — add it with: wrangler secret put ${P.keyEnv}`, 400);
   const COLS = "id, name, linkedin_handle, email, bio_short";
   let targets;
   const aid = url.searchParams.get("attendee"), eid = url.searchParams.get("event");
@@ -1104,11 +1170,11 @@ async function handleEnrich(request, env, d) {
        LEFT JOIN enrichments en ON en.attendee_id = a.id
       WHERE ea.event_id = ? AND ea.is_host = 0 AND en.attendee_id IS NULL
       ORDER BY a.times_seen DESC LIMIT ?`).all(eid, limit);
-  } else return new Response(JSON.stringify({ error: "pass ?attendee= or ?event=" }), { status: 400, headers: { "content-type": "application/json" } });
+  } else return jerr("pass ?attendee= or ?event=", 400);
 
   const out = [];
-  for (const a of targets) out.push({ name: a.name, ...(await enrichViaExa(d, key, a, !!aid)) });
-  return new Response(JSON.stringify({ ok: true, enriched: out }, null, 2), { headers: { "content-type": "application/json" } });
+  for (const a of targets) out.push({ name: a.name, ...(await P.fn(d, key, a, !!aid)) });
+  return new Response(JSON.stringify({ ok: true, provider, enriched: out }, null, 2), { headers: { "content-type": "application/json" } });
 }
 
 // ── cover-proxy request signing ─────────────────────────────────────────────
