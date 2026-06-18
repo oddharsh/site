@@ -994,7 +994,7 @@ placeholder
     <section class="demo" data-cap="contrast-color">
       <h2>
         <span>contrast-color()</span>
-        <span class="stat cross">Safari + Firefox</span>
+        <span class="stat cross">Chrome 147 &middot; Safari &middot; Firefox</span>
       </h2>
       <p class="note">
         Auto-picks a legible (black/white) text color for a given background.
@@ -1011,11 +1011,12 @@ placeholder
         <div class="swatch" style="--bg: oklch(21.78% 0 0)"><span class="fixed">white</span><span class="auto">auto</span></div>
       </div>
       <p class="replaces">
-        On the site: everywhere I currently eyeball a text color to sit on a
-        colored bevel, this derives it from the OKLCH background. Funny twist:
-        here <em>Chrome</em> is the laggard (arriving ~m147); Safari and
-        Firefox already shipped it. Needs a static fallback color until Chrome
-        lands.
+        On the site: text that sits on a colored bevel (title bars, the taskbar,
+        badges) used to be a hand-picked white-or-black; now it&apos;s derived from
+        the OKLCH background with <code>contrast-color()</code>. It went Baseline
+        in April&nbsp;2026 &mdash; Chrome&nbsp;147, Safari&nbsp;26,
+        Firefox&nbsp;146 &mdash; so the literal color stays only as a
+        belt-and-suspenders fallback for old engines.
       </p>
       <p class="unsupported">Your browser doesn&apos;t support it yet, so the &quot;auto&quot; labels fall back to black.</p>
     </section>
@@ -1149,7 +1150,7 @@ pointerout   -&gt; hidePopover()
     <section class="demo" data-cap="scroll-driven">
       <h2>
         <span>scroll-driven animations <span class="mono">animation-timeline: scroll() / view()</span></span>
-        <span class="stat cross">Chrome &middot; Safari &middot; Firefox</span>
+        <span class="stat cross">Chrome &middot; Safari &middot; FF flag</span>
       </h2>
       <p class="note">
         Tie a CSS animation&apos;s playback to scroll position instead of the
@@ -1249,7 +1250,7 @@ pointerout   -&gt; hidePopover()
     <section class="demo" data-cap="field-sizing">
       <h2>
         <span>field-sizing <span class="mono">: content</span></span>
-        <span class="stat cross">Chrome &middot; Safari</span>
+        <span class="stat cross">Chrome &middot; Safari &middot; Firefox 152</span>
       </h2>
       <p class="note">
         Lets a form control size itself to its <em>content</em> instead of a
@@ -2205,7 +2206,7 @@ myButton.onclick = async () =&gt; {
     <section class="demo" data-cap="invoker-commands">
       <h2>
         <span>Invoker Commands <span class="mono">command / commandfor</span></span>
-        <span class="stat cross">Chrome 135 &middot; Safari 26</span>
+        <span class="stat cross">Chrome 135 &middot; Safari 26 &middot; FF 144</span>
       </h2>
       <p class="note">
         A button that drives another element declaratively: <code>commandfor</code>
@@ -2656,7 +2657,7 @@ myButton.onclick = async () =&gt; {
     <section class="demo" data-cap="temporal">
       <h2>
         <span>Temporal <span class="mono">/ the date/time rewrite</span></span>
-        <span class="stat trial">FF 139 &middot; Safari TP &middot; Chrome flag</span>
+        <span class="stat cross">Chrome 144 &middot; FF 139 &middot; Safari TP</span>
       </h2>
       <p class="note">
         The long-awaited replacement for <code>Date</code>: immutable objects,
