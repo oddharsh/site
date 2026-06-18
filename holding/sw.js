@@ -25,7 +25,7 @@
 // `?v=N` bumps on each deploy already cycle individual entries, but a
 // cache-version bump is the only way to sweep stale keys whose URL
 // pattern no longer matches anything we serve.
-const CACHE_VERSION = "aadhar-v73-gutter";
+const CACHE_VERSION = "aadhar-v74-swroute";
 
 const CACHE_FIRST = [
   // thumbnail image files only — NOT /images/ itself (a directory-listing
@@ -72,6 +72,31 @@ const PRECACHE_PAGES = ["/bot"];
 self.addEventListener("install", (event) => {
   // new SW takes over immediately on next reload
   self.skipWaiting();
+
+  // Service Worker static routing (Chrome; progressive). Declare the
+  // "always-the-network" paths so the browser serves them WITHOUT cold-booting
+  // this worker — these are network-only in the fetch handler below, so today
+  // they wake the SW just to fall through to the network. A static route skips
+  // that boot tax (notably on `/`, which is no-store + hit every visit). The
+  // SWR + cache-first paths are deliberately NOT routed here — they need the
+  // handler's logic. Unsupported browsers ignore addRoutes() and behave as before.
+  if ("addRoutes" in event) {
+    const net = (pathname) => ({
+      condition: { urlPattern: new URLPattern({ pathname }), requestMethod: "GET" },
+      source: "network",
+    });
+    try {
+      event.addRoutes([
+        net("/"),                 // homepage — no-store, re-rendered every visit
+        net("/around*"),          // live crawl
+        net("/whoareyou*"),       // per-request fingerprint
+        net("/rn*"),              // playlist redirect + /rn/tracks JSON
+        net("/images/*.json"),    // manifest.json / alt.json
+        net("/images/meta/*"),    // per-photo EXIF JSON (network-only by design)
+      ]);
+    } catch (e) { /* older addRoutes shape / bad pattern — fall back to the handler */ }
+  }
+
   // warm the cache with the static pages so the first nav to them is a hit
   // (no loading bar). allSettled so one failed fetch can't block install.
   event.waitUntil((async () => {

@@ -183,6 +183,11 @@ async function countContributors(d) {
 function shellCss() {
   return `
   *{box-sizing:border-box}
+/* cross-document View Transitions: a fast, reduced-motion-safe crossfade on real
+   navigations between same-origin pages. inline (not JS-injected) so the incoming
+   page has opted in by parse time. the persistent shell (wallpaper/taskbar) is
+   identical across pages, so visually only the changing window content fades. */
+@media (prefers-reduced-motion:no-preference){@view-transition{navigation:auto}::view-transition-old(root),::view-transition-new(root){animation-duration:140ms}}
   html,body{margin:0;padding:0;min-height:100%}
   /* Bliss tone on the root so the cross-document View Transition (which freezes
      the root group) shows the desktop colour, not a frame of white, before

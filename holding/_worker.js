@@ -1994,6 +1994,11 @@ function xpChromeCss(maxWidth) {
   return `
   :root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}
   * { box-sizing: border-box; }
+/* cross-document View Transitions: a fast, reduced-motion-safe crossfade on real
+   navigations between same-origin pages. inline (not JS-injected) so the incoming
+   page has opted in by parse time. the persistent shell (wallpaper/taskbar) is
+   identical across pages, so visually only the changing window content fades. */
+@media (prefers-reduced-motion:no-preference){@view-transition{navigation:auto}::view-transition-old(root),::view-transition-new(root){animation-duration:140ms}}
   /* first-paint background is the Bliss desktop tone on the ROOT (html) too —
      the cross-document View-Transition freezes the root group, so if html were
      white you'd get a frame of white flash before nav.js paints the real desktop.
