@@ -5,11 +5,15 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "deploy": "wrangler deploy",
     "tail": "wrangler tail",
     "secret:set": "wrangler secret put"
   },
   "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.16.15",
+    "vitest": "^4.1.9",
     "wrangler": "^3.0.0"
   }
 }
