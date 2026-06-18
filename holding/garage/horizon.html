@@ -175,6 +175,12 @@ pre {
   border: 1px solid oklch(61.14% 0.0611 253.60);
   border-top-color: oklch(47.12% 0.0555 253.58); border-left-color: oklch(47.12% 0.0555 253.58);
   background: oklch(100% 0 0); margin: 0 0 18px; padding: 12px 14px 14px;
+  /* skip rendering off-screen cards (this page is 48 of them, several with their
+     own demos/animations). contain-intrinsic-size reserves a placeholder height so
+     the scrollbar stays stable; the `auto` keyword remembers each card's real
+     height after its first render, so re-scrolling never shifts. Baseline 2026. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 360px;
 }
 .demo > h2 {
   font-family: var(--font-caption); font-size: 13pt; font-weight: bold;
@@ -2875,6 +2881,27 @@ myButton.onclick = async () =&gt; {
         crawlers), which is most of why navigation here feels instant.
       </p>
       <p class="unsupported">No Speculation Rules here &mdash; links just load on click.</p>
+    </section>
+
+    <!-- ───────────────────── Compression Dictionary Transport ───────────────────── -->
+    <section class="demo" data-cap="compression-dict">
+      <h2>
+        <span>Compression dictionaries <span class="mono">dcb / dcz</span></span>
+        <span class="stat chrome">Chrome 130 &middot; Firefox building &middot; transport-level</span>
+      </h2>
+      <p class="note">
+        Use a file you&apos;ve already downloaded (or a shipped static dictionary) as the
+        Brotli/Zstandard <em>dictionary</em> for later fetches, so an updated asset arrives as a
+        tiny <strong>delta</strong> against the old copy instead of the whole thing. Shipped in
+        Chrome&nbsp;130; it&apos;s an <code>Accept-Encoding: dcb/dcz</code> + <code>Use-As-Dictionary</code>
+        negotiation, not a JS API &mdash; so no chip above.
+      </p>
+      <p class="replaces">
+        On the site: marginal, honestly &mdash; the homepage is ~22&nbsp;KB brotli and
+        <code>nav.js</code> is small, so the delta savings are tiny in absolute terms. It&apos;d earn
+        its keep if those grew. Cloudflare&apos;s support is in open beta (Apr&nbsp;2026); the natural
+        use is shipping a <code>nav.js</code> update as a diff against the cached copy.
+      </p>
     </section>
 
     <hr>

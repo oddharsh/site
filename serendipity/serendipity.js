@@ -234,7 +234,7 @@ function shellCss() {
   hr.sep{border:0;border-top:1px solid oklch(85% 0.03 250);margin:14px 0}
   .grp{font:bold 8.5pt var(--font-caption);text-transform:uppercase;letter-spacing:.06em;color:oklch(45% 0.02 255);margin:18px 0 8px}
   /* event card — sunken-bevel list item */
-  .ev{display:block;text-decoration:none;color:inherit;border:1px solid oklch(80% 0.035 250);border-top-color:oklch(70% 0.05 250);border-left-color:oklch(70% 0.05 250);background:#fff;padding:10px 12px;margin:0 0 7px;border-radius:0}
+  .ev{display:block;text-decoration:none;color:inherit;border:1px solid oklch(80% 0.035 250);border-top-color:oklch(70% 0.05 250);border-left-color:oklch(70% 0.05 250);background:#fff;padding:10px 12px;margin:0 0 7px;border-radius:0;content-visibility:auto;contain-intrinsic-size:auto 66px}
   .ev:hover{border-color:oklch(50% 0.18 263);background:oklch(98% 0.02 250)}
   .ev .nm{font-weight:bold;color:oklch(20% 0.02 255);font-size:13px}
   .ev .meta{color:oklch(45% 0.01 250);font-size:11px;margin-top:2px}
