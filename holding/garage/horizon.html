@@ -202,6 +202,14 @@ pre {
 .demo .replaces { font-size: 9.5pt; color: oklch(33% 0 0); margin: 8px 0 0; border-left: 3px solid oklch(86% 0.03 250); padding-left: 8px; }
 .unsupported { display: none; font-size: 9.5pt; color: oklch(46% 0.10 50); margin-top: 8px; }
 .demo.no-support .unsupported { display: block; }
+/* "shipped" = not just feasible, but actually live in production on the real
+   site (homepage / shell / worker / serendipity), not only demoed here. Filled
+   translucent green + a green edge + a labeled pill (so it reads without relying
+   on colour alone). The .shipped class + .ship-tag are added by the cap-strip
+   script from a hand-kept list of what's genuinely adopted. */
+.demo.shipped { background: oklch(95% 0.055 150 / 0.62); border-color: oklch(70% 0.12 150); box-shadow: inset 3px 0 0 oklch(58% 0.16 150); }
+.ship-tag { display: inline-block; margin: 0 0 10px; padding: 1px 8px; font: bold 8pt var(--font-ui); letter-spacing: .05em; text-transform: uppercase; color: oklch(36% 0.13 150); background: oklch(90% 0.10 150); border: 1px solid oklch(66% 0.13 150); }
+@media (color-gamut: p3) { .demo.shipped { background: oklch(95% 0.08 150 / 0.62); } }
 
 /* ── text-box-trim demo ──────────────────────────────────────────────── */
 .tb-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
@@ -1016,12 +1024,12 @@ placeholder
         <div class="swatch" style="--bg: oklch(21.78% 0 0)"><span class="fixed">white</span><span class="auto">auto</span></div>
       </div>
       <p class="replaces">
-        On the site: text that sits on a colored bevel (title bars, the taskbar,
-        badges) used to be a hand-picked white-or-black; now it&apos;s derived from
-        the OKLCH background with <code>contrast-color()</code>. It went Baseline
-        in April&nbsp;2026 &mdash; Chrome&nbsp;147, Safari&nbsp;26,
-        Firefox&nbsp;146 &mdash; so the literal color stays only as a
-        belt-and-suspenders fallback for old engines.
+        On the site: serendipity derives each attendee avatar&apos;s text colour from
+        its hue with <code>contrast-color()</code> (behind an <code>@supports</code>
+        guard). Baseline since April&nbsp;2026 &mdash; Chrome&nbsp;147,
+        Safari&nbsp;26, Firefox&nbsp;146. The homepage title bars deliberately
+        <em>don&apos;t</em> use it: that Luna blue sits right on the black/white
+        contrast crossover, so the hand-picked white is the safer call there.
       </p>
       <p class="unsupported">Your browser doesn&apos;t support it yet, so the &quot;auto&quot; labels fall back to black.</p>
     </section>
@@ -2720,9 +2728,10 @@ myButton.onclick = async () =&gt; {
         (Can&apos;t demo it inside one page; it fires on the navigation itself.)
       </p>
       <p class="replaces">
-        On the site: every route here is its own document, so this would animate home &rarr;
-        <code>/writing</code> &rarr; <code>/garage</code> natively instead of a hard cut. Already
-        two engines &mdash; adoptable, not just watchable.
+        On the site: live now &mdash; every route is its own document, so navigating home &rarr;
+        <code>/writing</code> &rarr; <code>/garage</code> crossfades natively (a fast 140ms,
+        reduced-motion-safe) instead of a hard cut. Opted in via inline
+        <code>@view-transition { navigation: auto }</code> on every page.
       </p>
     </section>
 
@@ -2820,10 +2829,11 @@ myButton.onclick = async () =&gt; {
         straight to cache &mdash; shaving the SW startup cost off those requests.
       </p>
       <p class="replaces">
-        On the site: <code>sw.js</code> is cache-first for <code>/images/*</code> and network-only
-        for everything dynamic. A static route would serve thumbnails from cache without ever
-        waking the worker, and send <code>/</code> and the JSON APIs straight to network &mdash; the
-        same policy, minus the boot latency.
+        On the site: live now &mdash; <code>sw.js</code> declares static routes that send
+        <code>/</code>, the crawlers, and the JSON APIs straight to the network without booting
+        the worker (they were network-only anyway, so the SW was waking just to no-op). Same
+        caching policy as before, minus the boot latency &mdash; biggest win on <code>/</code>,
+        which is no-store + hit every visit.
       </p>
       <p class="unsupported">No <code>addRoutes()</code> on <code>InstallEvent</code> here.</p>
     </section>
@@ -2845,6 +2855,26 @@ myButton.onclick = async () =&gt; {
         <code>preload</code> it (and preconnect the photo R2 origin) while the worker is still
         assembling the page. Firefox + Chrome honor preload; Safari does preconnect only.
       </p>
+    </section>
+
+    <!-- ───────────────────── Speculation Rules ───────────────────── -->
+    <section class="demo" data-cap="speculation-rules">
+      <h2>
+        <span>Speculation Rules <span class="mono">prefetch / prerender</span></span>
+        <span class="stat chrome">Chrome &middot; Safari 26.2 (off) &middot; FF no</span>
+      </h2>
+      <p class="note">
+        A <code>&lt;script type="speculationrules"&gt;</code> JSON block tells the browser which
+        links to prefetch or fully <em>prerender</em> ahead of the click, so the next page is
+        already painted by the time you navigate &mdash; the trick behind McMaster-Carr feeling
+        instant.
+      </p>
+      <p class="replaces">
+        On the site: live already &mdash; the homepage and garage pages prerender internal links
+        (eagerness &quot;moderate&quot;, minus the live <code>/around</code> + <code>/whoareyou</code>
+        crawlers), which is most of why navigation here feels instant.
+      </p>
+      <p class="unsupported">No Speculation Rules here &mdash; links just load on click.</p>
     </section>
 
     <hr>
@@ -3134,6 +3164,7 @@ myButton.onclick = async () =&gt; {
     "sw-static-routing": function () { return (typeof InstallEvent !== "undefined" && "addRoutes" in InstallEvent.prototype); },
     "local-fonts": function () { return ("queryLocalFonts" in window); },
     "webgpu": function () { return ("gpu" in navigator); },
+    "speculation-rules": function () { return (typeof HTMLScriptElement !== "undefined" && HTMLScriptElement.supports && HTMLScriptElement.supports("speculationrules")); },
   };
   var label = {
     "text-box-trim": "text-box-trim",
@@ -3181,6 +3212,7 @@ myButton.onclick = async () =&gt; {
     "sw-static-routing": "SW routing",
     "local-fonts": "local fonts",
     "webgpu": "WebGPU",
+    "speculation-rules": "speculation",
   };
   var state = {};
   Object.keys(checks).forEach(function (k) { state[k] = sup(checks[k]); });
@@ -3204,6 +3236,25 @@ myButton.onclick = async () =&gt; {
     var k = el.getAttribute("data-cap");
     var n = el.querySelector(".name");
     if (n) n.style.opacity = state[k] ? "1" : "0.55";
+  });
+
+  // mark the cards that are actually LIVE on the real site (not just feasible /
+  // demoed here) — fill them green + tag them. hand-kept list; audited against
+  // production usage in index.html / nav.js / _worker.js / sw.js / serendipity.
+  var shipped = ["text-box-trim", "anchor-positioning", "view-transitions", "cross-doc-vt",
+    "relative-color", "at-property", "starting-style", "temporal", "speculation-rules",
+    "sw-static-routing", "hidden-until-found", "contrast-color"];
+  shipped.forEach(function (k) {
+    var el = document.querySelector('.demo[data-cap="' + k + '"]');
+    if (!el) return;
+    el.classList.add("shipped");
+    var h2 = el.querySelector("h2");
+    if (h2 && !el.querySelector(".ship-tag")) {
+      var tag = document.createElement("p");
+      tag.className = "ship-tag";
+      tag.textContent = "✓ shipped on the site";
+      h2.insertAdjacentElement("afterend", tag);
+    }
   });
 })();
 </script>
