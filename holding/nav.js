@@ -38,7 +38,14 @@
     { label: "garage · pretext", path: "/garage/pretext", hint: "DOM-free text measurement" },
     { label: "garage · safari 27", path: "/garage/safari27", hint: "WWDC26 Safari 27 features, through this site's lens" },
     { label: "garage · scroll", path: "/garage/scroll", hint: "XP scroll chrome" },
-    { label: "garage · tooltips", path: "/garage/tooltips", hint: "tooltip experiments" }
+    { label: "garage · tooltips", path: "/garage/tooltips", hint: "tooltip experiments" },
+    // Raycast deep-link easter eggs — fire built-in Raycast commands (every Raycast
+    // user has these). kind "raycast" → location.href to the protocol URL: the OS
+    // hands it to Raycast and the page stays put. Without Raycast it's a harmless
+    // no-op / "open Raycast?" prompt, so they're explicitly labeled. Naturally
+    // excluded from the prerender ruleset (the href isn't a "/*" path).
+    { label: "confetti 🎉", path: "raycast://extensions/raycast/raycast/confetti", hint: "fire Raycast confetti — needs Raycast installed", kind: "raycast" },
+    { label: "toggle bounce", path: "raycast://extensions/raycast/raycast/toggle-bounce-animation", hint: "toggle Raycast's window bounce — needs Raycast", kind: "raycast" }
   ];
   // `icon` (when present) keys the tile colour + glyph; `hint` doubles as a Run
   // search alias + tooltip, so "Photos"/"Music" still resolve to insta/spotify.
@@ -87,7 +94,7 @@
   var photosPromise = null, writingPromise = null;
 
   function tag(kind, o) { o.kind = kind; return o; }
-  PAGES.forEach(function (p) { tag("page", p); });
+  PAGES.forEach(function (p) { if (!p.kind) tag("page", p); });   // preserve a pre-set kind (e.g. "raycast")
   PROFILES.forEach(function (p) { p.path = p.url; tag("profile", p); });
 
   // pull the photo manifest (for /images/full/<file> paths) + alt captions (labels)
@@ -560,7 +567,7 @@
         html += '<div class="opt" role="option" data-i="' + g.i + '" aria-selected="' + (g.i === sel) + '">' +
           '<span class="nm">' + esc(g.it.label) + "</span>" +
           (g.it.hint ? '<span class="ht">' + esc(g.it.hint) + "</span>" : "") +
-          '<span class="pa">' + esc(g.it.kind === "profile" ? "↗" : g.it.path) + "</span></div>";
+          '<span class="pa">' + esc(g.it.kind === "profile" ? "↗" : g.it.kind === "raycast" ? "↗ raycast" : g.it.path) + "</span></div>";
       });
     });
     list.innerHTML = html || '<div class="empty">No match. Try a page name, a photo stem, or a profile.</div>';
@@ -588,7 +595,8 @@
   function go(item) {
     if (!item) return;
     closeRun();
-    if (item.kind === "profile") window.open(item.url, "_blank", "noopener");
+    if (item.kind === "raycast") location.href = item.path;   // protocol deep link → OS hands it to Raycast; page stays
+    else if (item.kind === "profile") window.open(item.url, "_blank", "noopener");
     else location.assign(item.path);
   }
 
