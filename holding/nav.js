@@ -731,6 +731,34 @@
       var sc = w.querySelector(".np-text");
       if (sc) mountScrollbar(w, sc);
     });
+    // remember the primary window's scroll across quick reloads
+    var main = D.querySelector("body > .window > .content, body > .window > .body");
+    if (!main) { var npw = D.querySelector("body > .np-window"); if (npw) main = npw.querySelector(".np-text"); }
+    if (main) rememberScroll(main);
+  }
+
+  // The OS model scrolls .content internally, which browsers don't reliably
+  // restore on reload (the no-store homepage re-renders; the geometry is JS-aware).
+  // So persist scrollTop per-path in sessionStorage (per tab, survives reload,
+  // clears on close) and restore it — but ONLY on a reload. Fresh navigations
+  // start at top, and back/forward is left to the browser's bfcache. Cheap:
+  // scrollend (or a throttle) to write, one read on boot.
+  function rememberScroll(sc) {
+    var key = "axp-scroll:" + location.pathname;
+    var save = function () { try { sessionStorage.setItem(key, String(sc.scrollTop)); } catch (e) {} };
+    var nav = (performance.getEntriesByType && performance.getEntriesByType("navigation")[0]) || {};
+    if (nav.type === "reload") {
+      var y = parseInt(sessionStorage.getItem(key), 10);
+      if (y > 0) {
+        var done = false;
+        var restore = function () { if (done) return; sc.scrollTop = y; if (sc.scrollTop > 0) done = true; };   // fires scroll → thumb syncs
+        requestAnimationFrame(restore);                      // once the scroller is laid out
+        addEventListener("load", restore, { once: true });   // re-assert after images/fonts settle (scrollHeight final)
+      }
+    }
+    if ("onscrollend" in sc) sc.addEventListener("scrollend", save, { passive: true });
+    else { var t; sc.addEventListener("scroll", function () { clearTimeout(t); t = setTimeout(save, 200); }, { passive: true }); }
+    addEventListener("pagehide", save);   // catch a reload/close before scrollend fires
   }
 
   // ── resizable windows (bottom-right grip) ─────────────────────────────────────
