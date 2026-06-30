@@ -1009,13 +1009,54 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
 
     <!--
       photo pool — worker pre-renders 12 random slots on every request
-      (cache-control: no-store on /, so each visit re-rolls). previously
-      had a client-side fallback IIFE here that fetched
-      /images/manifest.json and filled slots if SSR didn't run; removed
-      in the lightness pass since SSR is now unconditional. failure mode
-      if KV/R2 are unavailable: empty grid. honest. add photos via
-      holding/scripts/add-photos.sh.
+      (cache-control: no-store on /, so each visit re-rolls). the script
+      below is defense-in-depth, mirroring the now-playing fallback: if SSR
+      did NOT fill the slots for ANY reason (worker down, an edge-cached
+      static copy of this template, KV/R2 hiccup), the empty <picture> slots
+      render as broken images. it fetches /images/manifest.json + alt.json
+      and fills the grid client-side, matching the worker's markup. add
+      photos via holding/scripts/add-photos.sh.
     -->
+    <script>
+    (async () => {
+      const grid = document.querySelector("section.photos");
+      if (!grid) return;
+      // SSR already filled the slots? first <img> has a real src → done.
+      const firstImg = grid.querySelector("a picture img");
+      if (firstImg && firstImg.getAttribute("src")) return;
+      const esc = (s) => String(s ?? "")
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+      try {
+        const [mRes, aRes] = await Promise.all([
+          fetch("/images/manifest.json", { headers: { accept: "application/json" } }),
+          fetch("/images/alt.json").catch(() => null),
+        ]);
+        const data = await mRes.json();
+        const photos = (data && data.photos) || [];
+        if (!photos.length) return;                       // no manifest → honest empty grid
+        const alt = aRes && aRes.ok ? await aRes.json().catch(() => ({})) : {};
+        // shuffle, take 12 — same count + intent as the worker's pickRandom.
+        const pool = photos.slice();
+        for (let i = pool.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [pool[i], pool[j]] = [pool[j], pool[i]];
+        }
+        grid.innerHTML = pool.slice(0, 12).map((p, i) => {
+          const vq = p.thumb_avif && p.thumb_avif.includes("?") ? "?" + p.thumb_avif.split("?")[1] : "";
+          const small = `/images/${esc(p.stem)}-400.avif${vq}`;   // mobile tier (THUMB_SMALL_PX)
+          const load = i === 0 ? 'loading="eager" fetchpriority="high"' : 'loading="lazy"';
+          const sz = (typeof p.size === "number" && p.size > 0) ? ` data-size="${p.size}"` : "";
+          const up = p.uploaded ? ` data-uploaded="${esc(p.uploaded)}"` : "";
+          return `<a href="/images/full/${encodeURI(p.full)}" target="_blank" rel="noopener" data-full="${esc(p.full)}"${sz}${up}>` +
+            `<picture>` +
+              `<source type="image/avif" media="(max-width: 560px)" srcset="${small}">` +
+              `<source type="image/avif" srcset="/images/${esc(p.thumb_avif)}">` +
+              `<img alt="${esc(alt[p.stem] || "")}" ${load} decoding="async" src="/images/${esc(p.thumb_jpg)}">` +
+            `</picture></a>`;
+        }).join("");
+      } catch (e) { /* leave the slots empty rather than guess — honest */ }
+    })();
+    </script>
 
 
     <section class="now-playing" aria-label="music">
