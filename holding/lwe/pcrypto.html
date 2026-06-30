@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>aadhar.sh/lwe/pcrypto</title>
+<meta name="description" content="Programmable cryptography explained at the pace of a 2009 MSN chat: 2PC and garbled circuits, SNARKs, FHE, and ORAM as one toolkit. A fair-use walkthrough of the 0xPARC primer, with a live SHA-256 preimage demo.">
+<link rel="canonical" href="https://aadhar.sh/lwe/pcrypto">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%239a6bd0'/><text x='16' y='23' font-size='20' font-family='Trebuchet MS,sans-serif' fill='%23fff' text-anchor='middle'>λ</text></svg>">
+<meta property="og:type" content="article">
+<meta property="og:title" content="aadhar.sh/lwe/pcrypto — programmable crypto">
+<meta property="og:url" content="https://aadhar.sh/lwe/pcrypto">
+
+<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace; --accent:#9a6bd0; --accent-soft:#f3edfb}
+* { box-sizing: border-box; }
+@media (prefers-reduced-motion:no-preference){@view-transition{navigation:auto}::view-transition-old(root),::view-transition-new(root){animation-duration:140ms}}
+html, body { margin: 0; padding: 0; } html{background:linear-gradient(180deg,oklch(56% 0.13 250) 0%,oklch(73% 0.10 236) 50%,oklch(88% 0.05 232) 60%,oklch(60% 0.16 140) 100%)}
+body { background: linear-gradient(180deg, oklch(56% 0.13 250) 0%, oklch(73% 0.10 236) 50%, oklch(88% 0.05 232) 60%, oklch(60% 0.16 140) 100%); font-family: var(--font-ui); font-size: 10.5pt; line-height: 1.5; color: oklch(21.78% 0 0); padding: 24px 12px 60px; min-height: 100vh; }
+.window { max-width: 640px; margin: 0 auto; background: oklch(100% 0 0); border: 2px solid #0831d9; border-right-color: #001ea0; border-bottom-color: #001ea0; border-top-left-radius: 8px; border-top-right-radius: 8px; overflow: hidden; box-shadow: inset 1px 1px 0 #166aee, inset 2px 2px 0 #0855dd, inset -1px -1px 0 #00138c, inset -2px -2px 0 #003bda, 4px 4px 0 rgba(0,30,160,.35); }
+.title-bar { background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%); color: #fff; font-family: var(--font-caption); font-weight: bold; font-size: 11pt; padding: 4px 5px 4px 8px; display: flex; align-items: center; gap: 6px; text-shadow: 1px 1px #0f1089; user-select: none; }
+.title-bar .title-text { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.title-bar .icon { width: 14px; height: 14px; flex: 0 0 14px; background: #fff; border: 1px solid #7a4eb0; position: relative; }
+.title-bar .icon::before { content: "λ"; position: absolute; inset: 0; display: grid; place-items: center; font-size: 10px; color: var(--accent); font-weight: bold; text-shadow: none; }
+.controls { display: inline-flex; align-items: center; gap: 2px; }
+.controls .min, .controls .max, .controls .close { position: relative; box-sizing: border-box; width: 21px; height: 21px; display: inline-block; overflow: hidden; font-size: 0; color: transparent; border: 1px solid #6696eb; border-radius: 3px; text-decoration: none; cursor: pointer; background-image: linear-gradient(180deg, #5f8cf7 0%, #3a71f5 22%, #3e73f5 55%, #2a70f2 82%, #1045be 100%); }
+.controls .close { border-color: #d8401c; background-image: linear-gradient(180deg, #e8795f 0%, #e45f40 30%, #e45d3d 52%, #e2552a 80%, #ae3110 100%); }
+.controls .min::before { content: ""; position: absolute; left: 5px; right: 5px; bottom: 5px; height: 2px; background: #fff; }
+.controls .max::before { content: ""; position: absolute; left: 5px; top: 5px; width: 11px; height: 9px; box-sizing: border-box; border: 1px solid #fff; border-top-width: 2px; }
+.controls .close::before, .controls .close::after { content: ""; position: absolute; left: 50%; top: 50%; width: 13px; height: 2px; margin: -1px 0 0 -6.5px; background: #fff; }
+.controls .close::before { transform: rotate(45deg); } .controls .close::after { transform: rotate(-45deg); }
+.content { background: oklch(99% 0.005 95); border-top: 1px solid oklch(46% 0.02 260); border-left: 1px solid oklch(46% 0.02 260); padding: 0; }
+html { height: 100dvh; overflow: hidden; }
+body { min-height: 0; height: calc(100vh - 30px); height: calc(100dvh - 30px); overflow: hidden; display: flex; flex-direction: column; align-items: center; padding: 8px; }
+.window { flex: 0 1 auto; min-height: 0; max-height: 100%; display: flex; flex-direction: column; }
+.window > .title-bar { flex: 0 0 auto; }
+.window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 28px; }
+body::after { content: ""; position: fixed; left: 0; right: 0; bottom: 0; height: 30px; z-index: 1; background: linear-gradient(180deg, oklch(67% 0.15 256) 0%, oklch(58% 0.19 257) 4%, oklch(51% 0.20 258) 9%, oklch(49% 0.20 258) 50%, oklch(46% 0.20 259) 92%, oklch(40% 0.18 260) 100%); }
+.msgr { display: flex; flex-direction: column; }
+.msgr-head { display: flex; align-items: center; gap: 9px; padding: 8px 12px; background: linear-gradient(180deg, #fffdf6, #f6edd6); border-bottom: 1px solid #e0cf9e; }
+.msgr-head .ava { width: 34px; height: 34px; flex: 0 0 34px; border-radius: 4px; border: 1px solid #7a4eb0; background: linear-gradient(180deg,#c9a8e0,#9a6bd0); position: relative; }
+.msgr-head .ava::before { content: "λ"; position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-weight: bold; font-size: 19px; font-family: var(--font-caption); }
+.msgr-head .who { flex: 1; min-width: 0; }
+.msgr-head .who b { font-family: var(--font-caption); font-size: 11pt; color: #7a4eb0; }
+.msgr-head .who .stat { display: block; font-size: 8.5pt; color: oklch(46% 0.02 145); }
+.msgr-head .who .stat::before { content: "● "; color: oklch(60% 0.18 145); }
+.msgr-head .pets { font-size: 8pt; color: #6b7280; text-align: right; line-height: 1.35; }
+.disclosure { font-size: 8.5pt; color: #5a6679; background: #fcfbe9; border-bottom: 1px solid #e6dfa8; padding: 5px 12px; }
+.disclosure b { color: #7a4eb0; } .disclosure a { color: #1a4fc4; }
+.log { padding: 10px 12px 4px; display: flex; flex-direction: column; gap: 11px; }
+.msg { display: grid; grid-template-columns: 26px 1fr; gap: 8px; align-items: start; content-visibility: auto; contain-intrinsic-size: auto 90px; }
+.msg .pic { width: 26px; height: 26px; border-radius: 4px; border: 1px solid #99a; position: relative; overflow: hidden; }
+.msg.bot .pic { background: linear-gradient(180deg,#c9a8e0,#9a6bd0); border-color:#7a4eb0; }
+.msg.bot .pic::before { content: "λ"; position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-weight: bold; font-size: 13px; font-family: var(--font-caption); }
+.msg.you .pic { background: linear-gradient(180deg,#ffb35a,#f08a25); border-color:#c96a10; }
+.msg.you .pic::before { content: ":)"; position: absolute; inset: 0; display: grid; place-items: center; color: #7a3d00; font-weight: bold; font-size: 9px; transform: rotate(90deg); }
+.msg .who { font-size: 8.5pt; margin-bottom: 1px; } .msg .who b { font-family: var(--font-caption); }
+.msg.bot .who b { color: #7a4eb0; } .msg.you .who b { color: #b5560c; }
+.msg .who time { color: #9aa3b2; font-family: var(--font-mono); font-size: 8pt; margin-left: 5px; }
+.msg .bubble { font-size: 10.5pt; } .msg.bot .bubble { color: #15243f; } .msg.you .bubble { color: #3a2a12; }
+.msg .bubble p { margin: 0 0 7px; } .msg .bubble p:last-child { margin-bottom: 0; } .msg .bubble em { font-style: italic; }
+.msg .bubble code { font-family: var(--font-mono); font-size: 9.5pt; background: #f1ece0; padding: 0 3px; border-radius: 2px; }
+.msg a { color: #1a4fc4; }
+.demo { grid-column: 1 / -1; border: 1px solid var(--accent); border-radius: 4px; background: var(--accent-soft); margin: 2px 0; overflow: hidden; box-shadow: inset 0 1px 0 #fff; }
+.demo > .bar { display: flex; align-items: center; gap: 6px; padding: 4px 8px; font-size: 8.5pt; color: #7a4eb0; background: linear-gradient(180deg,#f6edd6,#ecdfb8); border-bottom: 1px solid var(--accent); font-weight: bold; }
+.demo > .bar::before { content: "🖥"; filter: grayscale(.2); }
+.demo > .pad { padding: 11px 12px 13px; background:#fff; }
+.demo .lead { font-size: 9pt; color: #4a5568; margin: 0 0 10px; } .demo .lead b { color: #15243f; }
+.mono { font-family: var(--font-mono); }
+.btn { font-family: var(--font-ui); font-size: 9pt; padding: 3px 9px; cursor: pointer; background: linear-gradient(to bottom,#fff,#e9edf5); border: 1px solid #7d8aa3; border-radius: 2px; box-shadow: inset 1px 1px 0 #fff; }
+.btn:hover { border-color: var(--accent); }
+.scrollnote { text-align: center; font-size: 8pt; color: #9aa3b2; padding: 3px 0 9px; }
+.compose { border-top: 1px solid #e0cf9e; background: linear-gradient(180deg,#fffdf6,#f3ead0); padding: 7px 10px; }
+.compose .box { display: flex; gap: 7px; }
+.compose .ta { flex: 1; min-height: 30px; border: 1px solid #7d8aa3; background: #fff; box-shadow: inset 1px 1px 0 #c3cbdb; padding: 4px 6px; font-family: var(--font-ui); font-size: 9.5pt; color: #9aa3b2; }
+@media (max-width: 520px){ body { padding: 8px 4px 32px; } .msgr-head .pets { display:none } }
+.snk-row{display:flex;gap:7px;align-items:center;margin-bottom:8px}.snk-row label{font-size:8.5pt;color:#6b7280;flex:0 0 auto}.snk-in{font-family:var(--font-mono);font-size:12pt;padding:4px 8px;flex:1;min-width:0;border:1px solid #7d8aa3;box-shadow:inset 1px 1px 0 #c3cbdb}.snk-lab{font-size:8pt;color:#7a4eb0;margin-bottom:3px}.snk-out{font-family:var(--font-mono);font-size:9pt;word-break:break-all;color:#7a4eb0;background:#faf7fe;border:1px solid #d9c9ef;border-radius:3px;padding:6px 8px}</style>
+</head>
+<body>
+<div class="window">
+  <div class="title-bar" aria-hidden="true">
+    <span class="title-text"><span class="icon"></span>aadhar.sh/lwe — programmable crypto</span>
+    <span class="controls"><span class="min" title="minimize"></span><span class="max" title="maximize"></span><a class="close" href="/lwe/" title="back to Learning With Errors" aria-label="back to Learning With Errors"></a></span>
+  </div>
+  <div class="content">
+    <div class="msgr">
+
+      <div class="msgr-head">
+        <div class="ava" aria-hidden="true"></div>
+        <div class="who"><b>programmable crypto</b><span class="stat">Online, programmable cryptography</span></div>
+        <div class="pets">Learning&nbsp;With&nbsp;Errors<br>one toolkit, four pieces</div>
+      </div>
+
+      <p class="disclosure"><b>How to read this:</b> a first-pass walkthrough of <a href="https://otavi.ooo/files/programmable-cryptography.pdf" rel="external">"Programmable Cryptography: Four Easy Pieces"</a> by Evan Chen, Brian Lawrence, and Yan X Zhang (0xPARC, 2025), summarized under fair use with credit. The learner lines and pacing are AI; the SHA-256 demo hashes for real.</p>
+
+      <div class="log">
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>22:30</time></div>
+        <div class="bubble"><p>people keep saying "programmable cryptography" like it's one thing. RSA is cryptography, MPC is cryptography. what's the second word doing?</p></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>programmable crypto</b><time>22:30</time></div>
+        <div class="bubble"><p>0xPARC coined it for the <b>second generation</b> of crypto, roughly the last 15 years. First-generation crypto hand-builds a protocol per problem: RSA signs a message, and Yao's millionaire problem gets its own bespoke protocol to compare two incomes. Second-generation crypto hands you primitives you can <em>program</em> for any function you can write as code.</p> <a href="https://otavi.ooo/files/programmable-cryptography.pdf" rel="external" title="Programmable Cryptography: Four Easy Pieces (0xPARC, 2025)">[src]</a></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>programmable crypto</b><time>22:30</time></div>
+        <div class="bubble"><p>Their analogy: it's the jump from single-purpose hardware (a digital alarm clock) to a general-purpose one (a smartphone that runs whatever you compile for it). You stop inventing a new algorithm per problem and start compiling the problem you have.</p></div></div></div>
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>22:31</time></div>
+        <div class="bubble"><p>ok, what are the pieces?</p></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>programmable crypto</b><time>22:31</time></div>
+        <div class="bubble"><p>The primer picks four: <b>2PC</b> (two-party computation), <b>SNARKs</b> (succinct proofs), <b>FHE</b> (compute on encrypted data), and <b>ORAM</b> (hide which data you touch). Two of those already have rooms here, so I'll wire them up as we go.</p></div></div></div>
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>22:32</time></div>
+        <div class="bubble"><p>start with 2PC.</p></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>programmable crypto</b><time>22:32</time></div>
+        <div class="bubble"><p>Two people compute F(x1, x2) where each knows only their own input, and neither learns the other's. Yao's millionaire problem is the classic: F is "who earns more," the inputs are the two incomes, and both walk away knowing the winner but not the number. The engine underneath is a <b>garbled circuit</b> (one party encrypts a boolean circuit gate by gate, the other evaluates it blind) plus <b>oblivious transfer</b>. Scale 2PC past two parties and you land on the <a href="/lwe/mpc">MPC one room over</a>.</p> <a href="https://otavi.ooo/files/programmable-cryptography.pdf" rel="external" title="Programmable Cryptography: Four Easy Pieces (0xPARC, 2025)">[src]</a></div></div></div>
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>22:33</time></div>
+        <div class="bubble"><p>you keep saying proofs. what's a SNARK?</p></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>programmable crypto</b><time>22:33</time></div>
+        <div class="bubble"><p>Read a signature as a proof: Alice's signature proves "I know Alice's private key." A <b>SNARK</b> generalizes that to a proof of any statement shaped like "I know X such that F(X, Y) = Z," with F, Y, Z public, once you encode F as equations. The primer's headline example is "I know M such that sha(M) = Y." PLONK is one such scheme. Try the hash half live:</p> <a href="https://otavi.ooo/files/programmable-cryptography.pdf" rel="external" title="Programmable Cryptography: Four Easy Pieces (0xPARC, 2025)">[src]</a></div></div></div>
+
+      <div class="demo" id="demo-snark">
+        <div class="bar">SNARK · prove you know a preimage</div>
+        <div class="pad"><p class="lead">A <b>SNARK</b> proves "I know X such that F(X) = Y" while revealing nothing about X. Here F is <b>SHA-256</b>. Type a secret M and the page hashes it live (real Web Crypto). A SNARK would let you prove you know <em>some</em> M with this exact digest, without ever showing M.</p><div class="snk-row"><label for="snk-in">secret M</label><input id="snk-in" class="snk-in" value="attack at dawn" spellcheck="false" autocomplete="off"></div><div class="snk-lab">sha256(M) =</div><div class="snk-out" id="snk-out">…</div></div>
+      </div>
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>22:34</time></div>
+        <div class="bubble"><p>so the hash is public but the M behind it stays secret. and FHE + ORAM?</p></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>programmable crypto</b><time>22:34</time></div>
+        <div class="bubble"><p><b>FHE</b> you've met: <a href="/lwe/fhe">encrypt your data, let a server compute on the ciphertext, decrypt the result</a>, and the server reads nothing. The primer's example is private machine translation: send Enc(x), get back Enc(translation). <b>ORAM</b> is the piece with no room here yet. Even with the data encrypted, the server still watches your <em>access pattern</em>: which records you read, how often, which ones together. Oblivious RAM scrambles each request into a batch of reads and writes, so the server can't tell which one you actually wanted.</p> <a href="https://otavi.ooo/files/programmable-cryptography.pdf" rel="external" title="Programmable Cryptography: Four Easy Pieces (0xPARC, 2025)">[src]</a></div></div></div>
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>22:35</time></div>
+        <div class="bubble"><p>if it does all that, why isn't it everywhere?</p></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>programmable crypto</b><time>22:35</time></div>
+        <div class="bubble"><p>Cost, and the primer is blunt about it: proving a computation in a SNARK can run millions of times the cost of just doing the computation. For a decade it was mostly theory with little implementation, until blockchains and other decentralized systems started demanding it and pulled the practical work forward.</p> <a href="https://otavi.ooo/files/programmable-cryptography.pdf" rel="external" title="Programmable Cryptography: Four Easy Pieces (0xPARC, 2025)">[src]</a></div></div></div>
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>22:36</time></div>
+        <div class="bubble"><p>so the throughline is: one toolkit, privacy and proofs from math instead of trusted hardware.</p></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>programmable crypto</b><time>22:36</time></div>
+        <div class="bubble"><p>That's the frame. 2PC and MPC, SNARKs, FHE, and ORAM are different tools, but each earns its guarantee from <b>protocols and math</b> rather than a chip you have to trust, the far end from a <a href="/lwe/tee">TEE</a>. Same goal, compute on data nobody should see, with a different bet on where the trust lives.</p></div></div></div>
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>22:37</time></div>
+        <div class="bubble"><p>got it. the four pieces are one compiler target, not four gadgets. thanks.</p><p>→ <a href="https://otavi.ooo/files/programmable-cryptography.pdf" rel="external">the 0xPARC primer (PDF)</a> · <a href="/lwe/fhe">FHE</a> · <a href="/lwe/mpc">MPC</a> · <a href="/lwe/tee">TEEs</a> · <a href="/lwe/">back to Learning With Errors</a></p></div></div></div>
+
+      <div class="scrollnote">end of first pass</div>
+
+      </div>
+      <div class="compose"><div class="box"><div class="ta">This is a recorded conversation. Hash a secret in the demo above.</div></div></div>
+    </div>
+  </div>
+</div>
+
+<script type="speculationrules">
+{ "prerender": [ { "where": { "and": [ { "href_matches": "/*" }, { "not": { "href_matches": "/" } }, { "not": { "href_matches": "/around*" } }, { "not": { "href_matches": "/whoareyou*" } } ] }, "eagerness": "moderate" } ], "prefetch": [ { "where": { "and": [ { "or": [ { "href_matches": "/garage/*" }, { "href_matches": "/lwe/*" } ] }, { "not": { "href_matches": "/lwe/ask*" } } ] }, "eagerness": "eager" } ] }
+</script>
+<script>
+if ("serviceWorker" in navigator) { var reg = function () { navigator.serviceWorker.register("/sw.js").catch(function () {}); }; "requestIdleCallback" in window ? requestIdleCallback(reg, { timeout: 2000 }) : setTimeout(reg, 1000); }
+</script>
+<script>
+(function(){var inp=document.getElementById('snk-in'),out=document.getElementById('snk-out');if(!inp||!out)return;function hex(b){return Array.prototype.map.call(new Uint8Array(b),function(x){return x.toString(16).padStart(2,'0')}).join('')}function go(){Promise.resolve(crypto.subtle.digest('SHA-256',new TextEncoder().encode(inp.value))).then(function(d){out.textContent='0x'+hex(d)})}inp.addEventListener('input',go);go();})();
+</script>
+<script src="/lwe/ask.js" defer></script>
+<script src="/nav.js" defer></script>
+</body>
+</html>

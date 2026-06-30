@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>aadhar.sh/lwe</title>
+<meta name="description" content="Learning With Errors. here are some explainers and interactive demos on stuff i've been learning about lately, stylized as interactive msn conversations.">
+<link rel="canonical" href="https://aadhar.sh/lwe">
+
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%234b53c9'/><path d='M6 9 h20 a2 2 0 0 1 2 2 v9 a2 2 0 0 1-2 2 H14 l-5 4 v-4 H6 a2 2 0 0 1-2-2 v-9 a2 2 0 0 1 2-2 Z' fill='%23fff'/><g stroke='%234b53c9' stroke-width='1.7' stroke-linecap='round' fill='none'><path d='M8.5 13.5 q2 -2.4 4 0 t4 0 t4 0'/><path d='M8.5 18 q2 -2.4 4 0 t4 0'/></g></svg>">
+
+<meta property="og:type" content="website">
+<meta property="og:title" content="aadhar.sh/lwe — Learning With Errors">
+<meta property="og:description" content="here are some explainers and interactive demos on stuff i've been learning about lately, stylized as interactive msn conversations">
+<meta property="og:url" content="https://aadhar.sh/lwe">
+
+<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}
+* { box-sizing: border-box; }
+@media (prefers-reduced-motion:no-preference){@view-transition{navigation:auto}::view-transition-old(root),::view-transition-new(root){animation-duration:140ms}}
+html, body { margin: 0; padding: 0; } html{background:linear-gradient(180deg,oklch(56% 0.13 250) 0%,oklch(73% 0.10 236) 50%,oklch(88% 0.05 232) 60%,oklch(60% 0.16 140) 100%)}
+body {
+  background: linear-gradient(180deg, oklch(56% 0.13 250) 0%, oklch(73% 0.10 236) 50%, oklch(88% 0.05 232) 60%, oklch(60% 0.16 140) 100%);
+  font-family: var(--font-ui); font-size: 10.5pt; line-height: 1.5; color: oklch(21.78% 0 0);
+  padding: 24px 12px 60px; min-height: 100vh;
+}
+.window {
+  max-width: 560px; margin: 0 auto; background: oklch(100% 0 0);
+  border: 2px solid #0831d9; border-right-color: #001ea0; border-bottom-color: #001ea0;
+  border-top-left-radius: 8px; border-top-right-radius: 8px; overflow: hidden;
+  box-shadow: inset 1px 1px 0 #166aee, inset 2px 2px 0 #0855dd, inset -1px -1px 0 #00138c, inset -2px -2px 0 #003bda, 4px 4px 0 rgba(0,30,160,.35);
+}
+.title-bar {
+  background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
+  color: #fff; font-family: var(--font-caption); font-weight: bold; font-size: 11pt;
+  padding: 4px 5px 4px 8px; display: flex; align-items: center; gap: 6px; text-shadow: 1px 1px #0f1089; user-select: none;
+}
+.title-bar .title-text { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.title-bar .icon { width: 14px; height: 14px; flex: 0 0 14px; background: #fff; border: 1px solid #2a4bbf; position: relative; }
+.title-bar .icon::before { content: "≈"; position: absolute; inset: 0; display: grid; place-items: center; font-size: 10px; color: #4b53c9; font-weight: bold; text-shadow: none; }
+.controls { display: inline-flex; align-items: center; gap: 2px; }
+.controls .min, .controls .max, .controls .close {
+  position: relative; box-sizing: border-box; width: 21px; height: 21px; display: inline-block; overflow: hidden;
+  font-size: 0; color: transparent; border: 1px solid #6696eb; border-radius: 3px; text-decoration: none; cursor: pointer;
+  background-image: linear-gradient(180deg, #5f8cf7 0%, #3a71f5 22%, #3e73f5 55%, #2a70f2 82%, #1045be 100%);
+}
+.controls .close { border-color: #d8401c; background-image: linear-gradient(180deg, #e8795f 0%, #e45f40 30%, #e45d3d 52%, #e2552a 80%, #ae3110 100%); }
+.controls .min::before { content: ""; position: absolute; left: 5px; right: 5px; bottom: 5px; height: 2px; background: #fff; }
+.controls .max::before { content: ""; position: absolute; left: 5px; top: 5px; width: 11px; height: 9px; box-sizing: border-box; border: 1px solid #fff; border-top-width: 2px; }
+.controls .close::before, .controls .close::after { content: ""; position: absolute; left: 50%; top: 50%; width: 13px; height: 2px; margin: -1px 0 0 -6.5px; background: #fff; }
+.controls .close::before { transform: rotate(45deg); } .controls .close::after { transform: rotate(-45deg); }
+.content { background: oklch(99% 0.005 95); border-top: 1px solid oklch(46% 0.02 260); border-left: 1px solid oklch(46% 0.02 260); padding: 0; }
+
+html { height: 100dvh; overflow: hidden; }
+body { min-height: 0; height: calc(100vh - 30px); height: calc(100dvh - 30px); overflow: hidden; display: flex; flex-direction: column; align-items: center; padding: 8px; }
+.window { flex: 0 1 auto; min-height: 0; max-height: 100%; display: flex; flex-direction: column; }
+.window > .title-bar { flex: 0 0 auto; }
+.window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 28px; }
+body::after { content: ""; position: fixed; left: 0; right: 0; bottom: 0; height: 30px; z-index: 1; background: linear-gradient(180deg, oklch(67% 0.15 256) 0%, oklch(58% 0.19 257) 4%, oklch(51% 0.20 258) 9%, oklch(49% 0.20 258) 50%, oklch(46% 0.20 259) 92%, oklch(40% 0.18 260) 100%); }
+
+/* ── "my account" header (MSN-style) ──────────────────────────────────── */
+.me { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: linear-gradient(180deg,#fbfdff,#e8f0fb); border-bottom: 1px solid #b9cbe6; }
+.me .ava { width: 40px; height: 40px; flex: 0 0 40px; border-radius: 4px; border: 1px solid #3a40a8; background: linear-gradient(180deg,#6d74e0,#4b53c9); position: relative; }
+.me .ava::before { content: "≈"; position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-weight: bold; font-size: 22px; }
+.me .who b { font-family: var(--font-caption); font-size: 13pt; color: #1d3a8a; }
+.me .who .tag { display: block; font-size: 9pt; color: #6b7280; font-style: italic; }
+.me .who .tag::before { content: "♪ "; color: #4b53c9; font-style: normal; }
+
+.intro { font-size: 9.5pt; color: #3a4255; padding: 10px 13px; border-bottom: 1px solid #e2e8f3; line-height: 1.55; }
+.intro b { color: #15243f; }
+.intro .lwe { color: #4b53c9; font-weight: bold; }
+
+.grp { font-size: 8.5pt; font-weight: bold; color: #4a5568; text-transform: uppercase; letter-spacing: .04em; padding: 8px 13px 3px; }
+.grp .n { color: #9aa3b2; font-weight: normal; }
+.buddies { list-style: none; margin: 0; padding: 0 6px 8px; }
+.buddy { display: grid; grid-template-columns: 30px 1fr auto; gap: 9px; align-items: center; padding: 6px 8px; border-radius: 4px; text-decoration: none; color: inherit; }
+a.buddy:hover { background: #e9f1fc; outline: 1px solid #bcd3f3; }
+.buddy .pic { width: 30px; height: 30px; border-radius: 4px; border: 1px solid #99a; position: relative; overflow: hidden; }
+.buddy .pic::before { position: absolute; inset: 0; display: grid; place-items: center; font-weight: bold; }
+.buddy.fhe .pic { background: linear-gradient(180deg,#6d74e0,#4b53c9); border-color:#3a40a8; } .buddy.fhe .pic::before { content: "≈"; color: #fff; font-size: 16px; }
+.buddy.vig .pic { background: linear-gradient(180deg,#b4912e,#7a5c1e); border-color:#5e4716; } .buddy.vig .pic::before { content: "⚷"; color: #fff; font-size: 15px; }
+.buddy.vig .nm b { color: #5e4716; }
+.buddy.enc .pic { background: linear-gradient(180deg,#9fb3c9,#5f7da3); border-color:#46617f; } .buddy.enc .pic::before { content: "▦"; color: #fff; font-size: 14px; }
+.buddy.pk .pic { background: linear-gradient(180deg,#c9a8e0,#9a6bd0); border-color:#7a4eb0; } .buddy.pk .pic::before { content: "λ"; color: #fff; font-size: 14px; }
+.buddy.tee .pic { background: linear-gradient(180deg,#b9c2cf,#8b97a8); border-color:#6f7b8c; } .buddy.tee .pic::before { content: "🔒"; font-size: 12px; filter: grayscale(.4); }
+.buddy.mpc .pic { background: linear-gradient(180deg,#bcc6bd,#8ba08e); border-color:#6f846f; } .buddy.mpc .pic::before { content: "⋔"; color: #fff; font-size: 16px; }
+.buddy.utf8 .pic { background: linear-gradient(180deg,#d8a32e,#b8860b); border-color:#7a5410; } .buddy.utf8 .pic::before { content: "字"; color: #fff; font-size: 14px; font-family: Georgia, serif; }
+.buddy.utf8 .nm b { color: #7a5410; }
+.buddy.dac .pic { background: linear-gradient(180deg,#cf7a3a,#a8541f); border-color:#83400f; } .buddy.dac .pic::before { content: "∿"; color: #fff; font-size: 17px; }
+.buddy.dac .nm b { color: #83400f; }
+.buddy.drv .pic { background: linear-gradient(180deg,#c95f8e,#a23b6c); border-color:#7c2a50; } .buddy.drv .pic::before { content: "◎"; color: #fff; font-size: 16px; }
+.buddy.drv .nm b { color: #7c2a50; }
+.buddy.knot .pic { background: linear-gradient(180deg,#5fa372,#3f7d52); border-color:#2c5c3b; } .buddy.knot .pic::before { content: "∞"; color: #fff; font-size: 17px; }
+.buddy.knot .nm b { color: #2c5c3b; }
+.buddy .nm { min-width: 0; }
+.buddy .nm b { font-family: var(--font-caption); font-size: 10.5pt; }
+.buddy.fhe .nm b { color: #1d3a8a; }
+.buddy .nm .pm { display: block; font-size: 8.5pt; color: #6b7280; font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.buddy .st { font-size: 8pt; font-weight: bold; padding: 1px 7px; border-radius: 9px; white-space: nowrap; }
+.buddy .st.on { color: #2c7a36; background: #e3f5e6; } .buddy .st.on::before { content: "● "; color: #3a9a45; }
+.buddy .st.soon { color: #9a6a16; background: #fbf3dd; }
+.buddy.offline { opacity: .72; }
+
+.footnote { font-size: 8.5pt; color: #6b7280; padding: 9px 13px 12px; border-top: 1px solid #e2e8f3; line-height: 1.5; }
+.footnote a { color: #1a4fc4; }
+.footnote .why { color: #15243f; font-weight: bold; }
+
+@media (max-width: 520px) { body { padding: 8px 4px 32px; } .buddy .nm .pm { white-space: normal; } }
+</style>
+</head>
+<body>
+<div class="window">
+  <div class="title-bar" aria-hidden="true">
+    <span class="title-text"><span class="icon"></span>aadhar.sh/lwe</span>
+    <span class="controls"
+      ><span class="min" title="minimize"></span
+      ><span class="max" title="maximize"></span
+      ><a class="close" href="/" title="back to aadhar.sh" aria-label="back to aadhar.sh"></a
+    ></span>
+  </div>
+  <div class="content">
+
+    <div class="me">
+      <div class="ava" aria-hidden="true"></div>
+      <div class="who"><b>Learning With Errors</b><span class="tag">explaining hard things, one conversation at a time</span></div>
+    </div>
+
+    <p class="intro"><span class="lwe">Learning With Errors</span> (yes, <a href="/lwe/fhe" style="color:#4b53c9">the lattice assumption</a>) is a corner of the site where I explain technical concepts the way you'd actually pick them up: as a <b>chat</b>, at a human pace, with <b>inline demos</b> you can poke. The hard explanations are <b>real and sourced</b> (often verbatim from people who know); the conversational framing and the demos are AI. Pick a buddy to start a conversation.</p>
+
+    <!-- generated:buddies:start -->
+    <div class="grp">Online <span class="n">· 10</span></div>
+    <ul class="buddies">
+      <li><a class="buddy fhe" href="/lwe/fhe">
+        <span class="pic" aria-hidden="true"></span>
+        <span class="nm"><b>FHE</b><span class="pm">compute on encrypted data without ever decrypting it</span></span>
+        <span class="st on">chat</span>
+      </a></li>
+      <li><a class="buddy mpc" href="/lwe/mpc">
+        <span class="pic" aria-hidden="true"></span>
+        <span class="nm"><b>MPC</b><span class="pm">split a secret across nodes: honest majority, traitors and all</span></span>
+        <span class="st on">chat</span>
+      </a></li>
+      <li><a class="buddy tee" href="/lwe/tee">
+        <span class="pic" aria-hidden="true"></span>
+        <span class="nm"><b>TEEs</b><span class="pm">a secret room inside the chip, and the side-channels that leak it</span></span>
+        <span class="st on">chat</span>
+      </a></li>
+      <li><a class="buddy utf8" href="/lwe/utf8">
+        <span class="pic" aria-hidden="true"></span>
+        <span class="nm"><b>UTF-8</b><span class="pm">ASCII vs UTF-32 vs UTF-8: bytes, code points, 中文</span></span>
+        <span class="st on">chat</span>
+      </a></li>
+      <li><a class="buddy vig" href="/lwe/vigenere">
+        <span class="pic" aria-hidden="true"></span>
+        <span class="nm"><b>Vigenère</b><span class="pm">the cipher behind Kryptos K1-K3: keystreams, autokeys, cranking the noise</span></span>
+        <span class="st on">chat</span>
+      </a></li>
+      <li><a class="buddy enc" href="/lwe/encoding">
+        <span class="pic" aria-hidden="true"></span>
+        <span class="nm"><b>thumbnail encoding</b><span class="pm">AVIF vs JPEG vs jpegli: bytes-per-pixel, from the garage study</span></span>
+        <span class="st on">read</span>
+      </a></li>
+      <li><a class="buddy pk" href="/lwe/pcrypto">
+        <span class="pic" aria-hidden="true"></span>
+        <span class="nm"><b>programmable crypto</b><span class="pm">ZK, MPC and FHE as one toolkit: the 0xPARC view</span></span>
+        <span class="st on">read</span>
+      </a></li>
+      <li><a class="buddy dac" href="/lwe/dac">
+        <span class="pic" aria-hidden="true"></span>
+        <span class="nm"><b>DACs</b><span class="pm">numbers into sound: ladder DACs vs noise-shaping, and the audiophile fight</span></span>
+        <span class="st on">read</span>
+      </a></li>
+      <li><a class="buddy drv" href="/lwe/drivers">
+        <span class="pic" aria-hidden="true"></span>
+        <span class="nm"><b>drivers</b><span class="pm">planar magnetic vs dynamic: point drive, distributed drive, cone breakup</span></span>
+        <span class="st on">chat</span>
+      </a></li>
+      <li><a class="buddy knot" href="/lwe/knots">
+        <span class="pic" aria-hidden="true"></span>
+        <span class="nm"><b>knots</b><span class="pm">granny vs square, the Ian knot, and why your shoelaces slip</span></span>
+        <span class="st on">chat</span>
+      </a></li>
+    </ul>
+<!-- generated:buddies:end -->
+
+    <p class="footnote"><span class="why">why "Learning With Errors"?</span> it's the lattice hardness assumption that FHE and modern lattice crypto are built on: secrets hidden in deliberately-added <em>noise</em> (errors). it's also just how learning works. &middot; <a href="/garage/">more experiments live in the garage →</a></p>
+
+  </div>
+</div>
+
+<script type="speculationrules">
+{
+  "prerender": [
+    { "where": { "and": [ { "href_matches": "/*" }, { "not": { "href_matches": "/" } }, { "not": { "href_matches": "/around*" } }, { "not": { "href_matches": "/whoareyou*" } } ] }, "eagerness": "moderate" }
+  ],
+  "prefetch": [
+    { "where": { "and": [ { "or": [ { "href_matches": "/garage/*" }, { "href_matches": "/lwe/*" } ] }, { "not": { "href_matches": "/lwe/ask*" } } ] }, "eagerness": "eager" }
+  ]
+}
+</script>
+<script>
+if ("serviceWorker" in navigator) {
+  var reg = function () { navigator.serviceWorker.register("/sw.js").catch(function () {}); };
+  "requestIdleCallback" in window ? requestIdleCallback(reg, { timeout: 2000 }) : setTimeout(reg, 1000);
+}
+</script>
+<script src="/nav.js" defer></script>
+</body>
+</html>

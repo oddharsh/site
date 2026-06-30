@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>aadhar.sh/lwe/drivers</title>
+<meta name="description" content="Planar magnetic versus dynamic headphone drivers, explained at MSN-chat pace. A live diaphragm-motion demo: a dynamic cone driven at one point breaks up at high frequency, while a planar film driven everywhere stays flat.">
+<link rel="canonical" href="https://aadhar.sh/lwe/drivers">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23a23b6c'/><text x='16' y='23' font-size='20' font-family='Trebuchet MS,sans-serif' fill='%23fff' text-anchor='middle'>◎</text></svg>">
+<meta property="og:type" content="article">
+<meta property="og:title" content="aadhar.sh/lwe/drivers — drivers">
+<meta property="og:url" content="https://aadhar.sh/lwe/drivers">
+
+<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace; --accent:#a23b6c; --accent-soft:#f6e6ee}
+* { box-sizing: border-box; }
+@media (prefers-reduced-motion:no-preference){@view-transition{navigation:auto}::view-transition-old(root),::view-transition-new(root){animation-duration:140ms}}
+html, body { margin: 0; padding: 0; } html{background:linear-gradient(180deg,oklch(56% 0.13 250) 0%,oklch(73% 0.10 236) 50%,oklch(88% 0.05 232) 60%,oklch(60% 0.16 140) 100%)}
+body { background: linear-gradient(180deg, oklch(56% 0.13 250) 0%, oklch(73% 0.10 236) 50%, oklch(88% 0.05 232) 60%, oklch(60% 0.16 140) 100%); font-family: var(--font-ui); font-size: 10.5pt; line-height: 1.5; color: oklch(21.78% 0 0); padding: 24px 12px 60px; min-height: 100vh; }
+.window { max-width: 640px; margin: 0 auto; background: oklch(100% 0 0); border: 2px solid #0831d9; border-right-color: #001ea0; border-bottom-color: #001ea0; border-top-left-radius: 8px; border-top-right-radius: 8px; overflow: hidden; box-shadow: inset 1px 1px 0 #166aee, inset 2px 2px 0 #0855dd, inset -1px -1px 0 #00138c, inset -2px -2px 0 #003bda, 4px 4px 0 rgba(0,30,160,.35); }
+.title-bar { background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%); color: #fff; font-family: var(--font-caption); font-weight: bold; font-size: 11pt; padding: 4px 5px 4px 8px; display: flex; align-items: center; gap: 6px; text-shadow: 1px 1px #0f1089; user-select: none; }
+.title-bar .title-text { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.title-bar .icon { width: 14px; height: 14px; flex: 0 0 14px; background: #fff; border: 1px solid #7c2a50; position: relative; }
+.title-bar .icon::before { content: "◎"; position: absolute; inset: 0; display: grid; place-items: center; font-size: 10px; color: var(--accent); font-weight: bold; text-shadow: none; }
+.controls { display: inline-flex; align-items: center; gap: 2px; }
+.controls .min, .controls .max, .controls .close { position: relative; box-sizing: border-box; width: 21px; height: 21px; display: inline-block; overflow: hidden; font-size: 0; color: transparent; border: 1px solid #6696eb; border-radius: 3px; text-decoration: none; cursor: pointer; background-image: linear-gradient(180deg, #5f8cf7 0%, #3a71f5 22%, #3e73f5 55%, #2a70f2 82%, #1045be 100%); }
+.controls .close { border-color: #d8401c; background-image: linear-gradient(180deg, #e8795f 0%, #e45f40 30%, #e45d3d 52%, #e2552a 80%, #ae3110 100%); }
+.controls .min::before { content: ""; position: absolute; left: 5px; right: 5px; bottom: 5px; height: 2px; background: #fff; }
+.controls .max::before { content: ""; position: absolute; left: 5px; top: 5px; width: 11px; height: 9px; box-sizing: border-box; border: 1px solid #fff; border-top-width: 2px; }
+.controls .close::before, .controls .close::after { content: ""; position: absolute; left: 50%; top: 50%; width: 13px; height: 2px; margin: -1px 0 0 -6.5px; background: #fff; }
+.controls .close::before { transform: rotate(45deg); } .controls .close::after { transform: rotate(-45deg); }
+.content { background: oklch(99% 0.005 95); border-top: 1px solid oklch(46% 0.02 260); border-left: 1px solid oklch(46% 0.02 260); padding: 0; }
+html { height: 100dvh; overflow: hidden; }
+body { min-height: 0; height: calc(100vh - 30px); height: calc(100dvh - 30px); overflow: hidden; display: flex; flex-direction: column; align-items: center; padding: 8px; }
+.window { flex: 0 1 auto; min-height: 0; max-height: 100%; display: flex; flex-direction: column; }
+.window > .title-bar { flex: 0 0 auto; }
+.window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 28px; }
+body::after { content: ""; position: fixed; left: 0; right: 0; bottom: 0; height: 30px; z-index: 1; background: linear-gradient(180deg, oklch(67% 0.15 256) 0%, oklch(58% 0.19 257) 4%, oklch(51% 0.20 258) 9%, oklch(49% 0.20 258) 50%, oklch(46% 0.20 259) 92%, oklch(40% 0.18 260) 100%); }
+.msgr { display: flex; flex-direction: column; }
+.msgr-head { display: flex; align-items: center; gap: 9px; padding: 8px 12px; background: linear-gradient(180deg, #fffdf6, #f6edd6); border-bottom: 1px solid #e0cf9e; }
+.msgr-head .ava { width: 34px; height: 34px; flex: 0 0 34px; border-radius: 4px; border: 1px solid #7c2a50; background: linear-gradient(180deg,#c95f8e,#a23b6c); position: relative; }
+.msgr-head .ava::before { content: "◎"; position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-weight: bold; font-size: 19px; font-family: var(--font-caption); }
+.msgr-head .who { flex: 1; min-width: 0; }
+.msgr-head .who b { font-family: var(--font-caption); font-size: 11pt; color: #7c2a50; }
+.msgr-head .who .stat { display: block; font-size: 8.5pt; color: oklch(46% 0.02 145); }
+.msgr-head .who .stat::before { content: "● "; color: oklch(60% 0.18 145); }
+.msgr-head .pets { font-size: 8pt; color: #6b7280; text-align: right; line-height: 1.35; }
+.disclosure { font-size: 8.5pt; color: #5a6679; background: #fcfbe9; border-bottom: 1px solid #e6dfa8; padding: 5px 12px; }
+.disclosure b { color: #7c2a50; } .disclosure a { color: #1a4fc4; }
+.log { padding: 10px 12px 4px; display: flex; flex-direction: column; gap: 11px; }
+.msg { display: grid; grid-template-columns: 26px 1fr; gap: 8px; align-items: start; content-visibility: auto; contain-intrinsic-size: auto 90px; }
+.msg .pic { width: 26px; height: 26px; border-radius: 4px; border: 1px solid #99a; position: relative; overflow: hidden; }
+.msg.bot .pic { background: linear-gradient(180deg,#c95f8e,#a23b6c); border-color:#7c2a50; }
+.msg.bot .pic::before { content: "◎"; position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-weight: bold; font-size: 13px; font-family: var(--font-caption); }
+.msg.you .pic { background: linear-gradient(180deg,#ffb35a,#f08a25); border-color:#c96a10; }
+.msg.you .pic::before { content: ":)"; position: absolute; inset: 0; display: grid; place-items: center; color: #7a3d00; font-weight: bold; font-size: 9px; transform: rotate(90deg); }
+.msg .who { font-size: 8.5pt; margin-bottom: 1px; } .msg .who b { font-family: var(--font-caption); }
+.msg.bot .who b { color: #7c2a50; } .msg.you .who b { color: #b5560c; }
+.msg .who time { color: #9aa3b2; font-family: var(--font-mono); font-size: 8pt; margin-left: 5px; }
+.msg .bubble { font-size: 10.5pt; } .msg.bot .bubble { color: #15243f; } .msg.you .bubble { color: #3a2a12; }
+.msg .bubble p { margin: 0 0 7px; } .msg .bubble p:last-child { margin-bottom: 0; } .msg .bubble em { font-style: italic; }
+.msg .bubble code { font-family: var(--font-mono); font-size: 9.5pt; background: #f1ece0; padding: 0 3px; border-radius: 2px; }
+.msg a { color: #1a4fc4; }
+.demo { grid-column: 1 / -1; border: 1px solid var(--accent); border-radius: 4px; background: var(--accent-soft); margin: 2px 0; overflow: hidden; box-shadow: inset 0 1px 0 #fff; }
+.demo > .bar { display: flex; align-items: center; gap: 6px; padding: 4px 8px; font-size: 8.5pt; color: #7c2a50; background: linear-gradient(180deg,#f6edd6,#ecdfb8); border-bottom: 1px solid var(--accent); font-weight: bold; }
+.demo > .bar::before { content: "🖥"; filter: grayscale(.2); }
+.demo > .pad { padding: 11px 12px 13px; background:#fff; }
+.demo .lead { font-size: 9pt; color: #4a5568; margin: 0 0 10px; } .demo .lead b { color: #15243f; }
+.mono { font-family: var(--font-mono); }
+.btn { font-family: var(--font-ui); font-size: 9pt; padding: 3px 9px; cursor: pointer; background: linear-gradient(to bottom,#fff,#e9edf5); border: 1px solid #7d8aa3; border-radius: 2px; box-shadow: inset 1px 1px 0 #fff; }
+.btn:hover { border-color: var(--accent); }
+.scrollnote { text-align: center; font-size: 8pt; color: #9aa3b2; padding: 3px 0 9px; }
+.compose { border-top: 1px solid #e0cf9e; background: linear-gradient(180deg,#fffdf6,#f3ead0); padding: 7px 10px; }
+.compose .box { display: flex; gap: 7px; }
+.compose .ta { flex: 1; min-height: 30px; border: 1px solid #7d8aa3; background: #fff; box-shadow: inset 1px 1px 0 #c3cbdb; padding: 4px 6px; font-family: var(--font-ui); font-size: 9.5pt; color: #9aa3b2; }
+@media (max-width: 520px){ body { padding: 8px 4px 32px; } .msgr-head .pets { display:none } }
+.lead{font-size:9.5pt;color:#5a4250;margin:0 0 9px;line-height:1.5}.drv-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:4px 0 10px}.drv-row label{display:flex;align-items:center;gap:8px;font-size:9pt;color:#6b4658}.drv-row input[type=range]{accent-color:#a23b6c}canvas#drvCanvas{width:100%;max-width:560px;height:auto;border:1px solid #e0cdd6;border-radius:4px;background:#fffafc;display:block}.demo .mono{font-family:var(--font-mono)}</style>
+</head>
+<body>
+<div class="window">
+  <div class="title-bar" aria-hidden="true">
+    <span class="title-text"><span class="icon"></span>aadhar.sh/lwe — drivers</span>
+    <span class="controls"><span class="min" title="minimize"></span><span class="max" title="maximize"></span><a class="close" href="/lwe/" title="back to Learning With Errors" aria-label="back to Learning With Errors"></a></span>
+  </div>
+  <div class="content">
+    <div class="msgr">
+
+      <div class="msgr-head">
+        <div class="ava" aria-hidden="true"></div>
+        <div class="who"><b>drivers</b><span class="stat">Online, point drive vs distributed drive</span></div>
+        <div class="pets">Learning&nbsp;With&nbsp;Errors<br>cones &amp; films</div>
+      </div>
+
+      <p class="disclosure"><b>Starter draft.</b> The mechanism is standard driver physics; the demo is a real phase-lag model (a cone driven at one point against a film driven everywhere), not a measurement. Background paraphrased from <a href="https://en.wikipedia.org/wiki/Planar_magnetic_loudspeaker" rel="external">Wikipedia</a> and the usual headphone references.</p>
+
+      <div class="log">
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>19:40</time></div>
+        <div class="bubble"><p>planar magnetic vs dynamic drivers. audiophiles talk about planars like a different species. what actually changes between them?</p></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>drivers</b><time>19:40</time></div>
+        <div class="bubble"><p>How the diaphragm gets pushed. A dynamic driver glues a voice coil to a cone and parks it in a magnet gap; current through the coil makes a force at that one spot, and the cone has to carry that push out to its edges. A planar driver etches the conductor across a thin flat film hung between two magnet arrays, so the force lands evenly over the whole surface.</p></div></div></div>
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>19:41</time></div>
+        <div class="bubble"><p>so one pushes at a point, the other pushes everywhere. why does that matter?</p></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>drivers</b><time>19:41</time></div>
+        <div class="bubble"><p>At low frequencies it barely does; the cone moves as one piston either way. The split shows up high, where the wavelength inside the diaphragm gets short. A point-driven cone has to propagate that motion outward, so the rim starts lagging the center and the surface stops moving as one piece. It breaks into modes. The flat film, driven everywhere at once, stays flat.</p></div></div></div>
+
+      <div class="demo" id="demo-motion">
+        <div class="bar">watch the diaphragm move &middot; drag the frequency</div>
+        <div class="pad"><p class="lead">Top: a dynamic cone driven at one point (the voice coil, the dark bar at the center). Bottom: a planar membrane driven evenly across its area (the row of bars). Drag the frequency: the cone's rim lags its center and the surface breaks up, while the planar sheet stays flat.</p><div class="drv-row"><label>frequency <input type="range" id="drvFreq" min="1" max="9" value="2" step="0.1"> <span id="drvFreqL" class="mono">low</span></label></div><canvas id="drvCanvas" width="560" height="240"></canvas></div>
+      </div>
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>19:43</time></div>
+        <div class="bubble"><p>so those ripples in the top one are the cone breaking up. that's distortion?</p></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>drivers</b><time>19:43</time></div>
+        <div class="bubble"><p>It is. When different parts of the diaphragm move out of step, they radiate sound that was not in the signal, which shows up as resonance peaks and extra distortion in the treble. Spreading the drive is how planars keep distortion low up high. It is also why a planar diaphragm can be so thin and light: it never has to be stiff enough to stay rigid under a point load.</p></div></div></div>
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>19:44</time></div>
+        <div class="bubble"><p>if planars are cleaner, why isn't everything planar?</p></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>drivers</b><time>19:44</time></div>
+        <div class="bubble"><p>Tradeoffs. Those magnet arrays are heavy and the big flat diaphragm is inefficient, so planars tend to be bigger, heavier on your head, and hungry for amp power. Dynamic drivers are light, cheap, efficient, and move a lot of air easily, which makes deep bass simple and lets them run off a phone. Most headphones in the world are dynamic for exactly those reasons.</p></div></div></div>
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>19:45</time></div>
+        <div class="bubble"><p>so planar trades weight and power for low distortion, and dynamic trades some treble cleanliness for efficiency and easy bass.</p></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>drivers</b><time>19:45</time></div>
+        <div class="bubble"><p>That is the honest summary. Neither wins outright. A well-engineered dynamic driver can sound excellent, and a sloppy planar can sound worse than a good dynamic. The mechanism sets the tendencies; the tuning and the build decide the result.</p></div></div></div>
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>19:46</time></div>
+        <div class="bubble"><p>point drive versus spread-out drive, and the rest follows. thanks.</p><p>&rarr; <a href="https://en.wikipedia.org/wiki/Planar_magnetic_loudspeaker" rel="external">planar magnetic on Wikipedia</a> &middot; <a href="https://en.wikipedia.org/wiki/Headphones" rel="external">headphones on Wikipedia</a> &middot; <a href="/lwe/">back to Learning With Errors</a></p></div></div></div>
+
+      <div class="scrollnote">end of first pass</div>
+
+      </div>
+      <div class="compose"><div class="box"><div class="ta">This is a recorded conversation. Drag the frequency in the demo above.</div></div></div>
+    </div>
+  </div>
+</div>
+
+<script type="speculationrules">
+{ "prerender": [ { "where": { "and": [ { "href_matches": "/*" }, { "not": { "href_matches": "/" } }, { "not": { "href_matches": "/around*" } }, { "not": { "href_matches": "/whoareyou*" } } ] }, "eagerness": "moderate" } ], "prefetch": [ { "where": { "and": [ { "or": [ { "href_matches": "/garage/*" }, { "href_matches": "/lwe/*" } ] }, { "not": { "href_matches": "/lwe/ask*" } } ] }, "eagerness": "eager" } ] }
+</script>
+<script>
+if ("serviceWorker" in navigator) { var reg = function () { navigator.serviceWorker.register("/sw.js").catch(function () {}); }; "requestIdleCallback" in window ? requestIdleCallback(reg, { timeout: 2000 }) : setTimeout(reg, 1000); }
+</script>
+<script>
+// ── Demo: diaphragm motion, point drive vs distributed drive ──────────
+// Honest physical model: a dynamic cone is driven at its center, so a bending
+// wave propagates outward with a phase lag proportional to frequency; at high
+// frequency the rim lags the center and the surface breaks up. A planar membrane
+// is driven evenly across its area, so every point moves in phase (pistonic).
+(function(){
+  var c = document.getElementById('drvCanvas'); if (!c) return;
+  var ctx = c.getContext('2d'), fr = document.getElementById('drvFreq'), frL = document.getElementById('drvFreqL');
+  var W = c.width, H = c.height, N = 120, amp = 24, t = 0;
+  var reduce = (window.matchMedia && matchMedia('(prefers-reduced-motion:reduce)').matches);
+  function panel(cy, dynamic, f) {
+    ctx.strokeStyle = '#ece0e6'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(18, cy); ctx.lineTo(W - 18, cy); ctx.stroke();
+    ctx.strokeStyle = dynamic ? '#7d8794' : '#a23b6c'; ctx.lineWidth = 2.3; ctx.beginPath();
+    for (var i = 0; i <= N; i++) {
+      var x = i / N, xp = 18 + (W - 36) * x, d = Math.abs(x - 0.5) * 2;
+      var disp = dynamic ? Math.sin(t - f * d) * amp * (1 - 0.18 * d) : Math.sin(t) * amp;
+      var y = cy - disp;
+      i ? ctx.lineTo(xp, y) : ctx.moveTo(xp, y);
+    }
+    ctx.stroke();
+    // drive indicator: a single coil at center (dynamic) vs evenly spaced points (planar)
+    var ctr = cy - Math.sin(t) * amp;
+    if (dynamic) { ctx.fillStyle = '#5a6470'; ctx.fillRect(W / 2 - 3, ctr - 5, 6, 10); }
+    else { ctx.fillStyle = '#a23b6c'; for (var k = 0; k < 9; k++) { var xx = 18 + (W - 36) * (k + 0.5) / 9; ctx.fillRect(xx - 2, ctr - 4, 4, 8); } }
+  }
+  function draw() {
+    var f = +fr.value;
+    if (frL) frL.textContent = (f < 2.5 ? 'low' : f < 5 ? 'mid' : 'high') + ' (lag ' + (f).toFixed(1) + ' rad at the rim)';
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#9aa3b2'; ctx.font = '10px monospace';
+    ctx.fillText('dynamic cone (driven at the coil)', 18, 14);
+    ctx.fillText('planar membrane (driven everywhere)', 18, H / 2 + 12);
+    panel(H * 0.30, true, f);
+    panel(H * 0.80, false, f);
+  }
+  fr.addEventListener('input', draw);
+  var running = false, raf = 0; function loop() { if (!running) return; t += 0.08; draw(); raf = requestAnimationFrame(loop); }
+  if (reduce) { t = 1.2; draw(); } else if ('IntersectionObserver' in window) { new IntersectionObserver(function (es) { es.forEach(function (e) { if (e.isIntersecting) { if (!running) { running = true; loop(); } } else { running = false; if (raf) cancelAnimationFrame(raf); } }); }, { threshold: 0.1 }).observe(c); } else { running = true; loop(); }
+})();
+</script>
+<script src="/lwe/ask.js" defer></script>
+<script src="/nav.js" defer></script>
+</body>
+</html>
