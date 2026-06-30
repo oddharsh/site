@@ -82,8 +82,8 @@
         '<div class="np-about" role="dialog" aria-label="About Notepad">' +
           '<div class="np-titlebar"><span class="np-ico"></span><span class="np-title">About Notepad</span>' +
             '<span class="np-controls"><a class="close" href="#" aria-label="Close">✕</a></span></div>' +
-          '<div class="np-about-body"><p><b>Notepad</b> — a resto-mod of the Windows&nbsp;XP app.</p>' +
-          '<p>This is a real text field: edit it however you like. Nothing saves — reload and the page restores my canonical version. The writing here is always in flux.</p>' +
+          '<div class="np-about-body"><p><b>Notepad</b>, a resto-mod of the Windows&nbsp;XP app.</p>' +
+          '<p>This is a real text field: edit it however you like. Nothing saves, so a reload restores my canonical version. The writing here is always in flux.</p>' +
           '<div class="np-about-btns"><button type="button" class="np-btn">OK</button></div></div></div>'
       );
       var back = el('<div class="np-modal-back"></div>');

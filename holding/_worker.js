@@ -103,9 +103,13 @@ function homepageHeadResponse(request) {
       "content-type": markdown
         ? "text/markdown; charset=utf-8"
         : "text/html; charset=utf-8",
+      // HTML mirrors the GET path's bfcache-friendly policy (see _headers "/"):
+      // private + no-cache keeps every real fetch fresh while leaving the page
+      // eligible for the browser's back/forward cache. markdown rep stays no-store
+      // (it is a content-negotiated representation, never a back/forward target).
       "cache-control": markdown
         ? "no-store, must-revalidate"
-        : "no-store, must-revalidate, s-maxage=0",
+        : "private, no-cache, must-revalidate",
       "vary": "accept",
       "link": HOMEPAGE_DISCOVERY_LINK,
       "x-content-type-options": "nosniff",
@@ -189,6 +193,37 @@ async function route(request, env, ctx) {
     if (url.pathname === "/whoareyou") {
       return handleWhoareyou(request);
     }
+    // fields-only JSON for the taskbar's System Properties popout (nav.js fetches
+    // it on open). same data the /whoareyou page shows, minus all the prose.
+    if (url.pathname === "/whoareyou.json") {
+      return handleWhoareyouJson(request);
+    }
+    if (url.pathname === "/security") {
+      return handleSecurityCenter(request);
+    }
+    if (url.pathname === "/reading") {
+      return handleReading(request, env, ctx);
+    }
+    if (url.pathname === "/updates") {
+      return handleWindowsUpdate(request, env);
+    }
+    // brief build + changelog JSON for the Windows Update tray balloon (nav.js)
+    if (url.pathname === "/updates.json") {
+      return handleUpdatesJson(request, env);
+    }
+    if (url.pathname === "/restore") {
+      return handleSystemRestore(request, env);
+    }
+    // /lens — "the other web": see any URL the way a machine does.
+    if (url.pathname === "/lens" || url.pathname === "/lens/") {
+      return handleLens(request, env, ctx);
+    }
+    if (url.pathname === "/lens/fetch") {
+      return handleLensFetch(request, env, ctx);
+    }
+    if (url.pathname === "/lens/shot") {
+      return handleLensShot(request, env, ctx);
+    }
 
     // /writing — the Notepad-view writing index + per-post pages. The .txt + posts.json
     // static assets (paths with a dot) fall through to ASSETS untouched, so the raw
@@ -219,12 +254,10 @@ async function route(request, env, ctx) {
       return handleRnSet(request, env);
     }
 
-    // /coffee is first-party in the shell, but the custom booking worker is not
-    // deployed yet. Make the route intentional instead of letting Pages fall back
-    // to the homepage for a path that looks like an app.
-    if (url.pathname === "/coffee" || url.pathname === "/coffee/") {
-      return handleCoffeeRedirect();
-    }
+    // NB: /coffee is owned by the standalone cal-aadhar-sh Worker (route
+    // aadhar.sh/coffee*). It used to 302 to cal.com here while that worker was
+    // unbuilt; the native booking app is deployed now, so this Pages worker no
+    // longer touches /coffee — the Worker route serves it directly.
 
     if (url.pathname === "/bot") {
       return handleBotPage(request);
@@ -874,7 +907,7 @@ async function handleWritingPost(slug, env, ctx) {
     try { const r = await env.ASSETS.fetch("https://a/writing/" + safe + ".txt"); if (r.ok) text = await r.text(); } catch {}
   }
   if (!post || text == null) {
-    const body = notepadWindow("(not found).txt", "This note doesn't exist — or it hasn't been written yet.\n\nThe index lives at /writing.", "/writing");
+    const body = notepadWindow("(not found).txt", "This note doesn't exist yet. Maybe I haven't written it.\n\nThe index lives at /writing.", "/writing");
     return new Response(writingShell({ title: "aadhar.sh/writing/not found", path: "/writing/" + safe, desc: "No such note.", body: body }),
       { status: 404, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=30, must-revalidate" } });
   }
@@ -913,12 +946,12 @@ async function handleWritingIndex(env, ctx) {
       "<span class=\"np-title\">aadhar.sh/writing</span>" +
       "<span class=\"np-controls\"><span class=\"min\" aria-hidden=\"true\"></span><span class=\"max\" aria-hidden=\"true\"></span>" +
       "<a class=\"close\" href=\"/\" title=\"back home\" aria-label=\"Close\">✕</a></span></div>" +
-    "<div class=\"np-folder-body\"><p class=\"np-folder-intro\">Notes, in flux. Open one — it's a real text field you can edit, but it reverts to my canonical version on reload.</p>" +
+    "<div class=\"np-folder-body\"><p class=\"np-folder-intro\">Notes, in flux. Open one: it's a real text field you can edit, though it reverts to my canonical version on reload.</p>" +
       "<ul class=\"np-files\">" + (files || "<li><a><span class=\"np-file-name\">(nothing written yet)</span></a></li>") + "</ul></div>" +
     "<div class=\"np-status\"><span>" + posts.length + (posts.length === 1 ? " document" : " documents") + "</span>" +
       "<span>" + fmtNum(entries.reduce(function (a, e) { return a + e.chars; }, 0)) + " characters</span></div></div>" +
     notes;
-  return new Response(writingShell({ title: "aadhar.sh/writing", path: "/writing", desc: "Notes in flux — an editable Notepad of writing that reverts to canonical on reload.", body: body }),
+  return new Response(writingShell({ title: "aadhar.sh/writing", path: "/writing", desc: "Notes in flux: an editable Notepad of writing that reverts to canonical on reload.", body: body }),
     { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=120" } });
 }
 
@@ -1460,17 +1493,6 @@ async function serveMarkdown(request, env) {
 }
 
 // ── /rn handler ─────────────────────────────────────────────────────
-function handleCoffeeRedirect() {
-  return new Response(null, {
-    status: 302,
-    headers: {
-      "location":        "https://cal.com/aadharsh/coffee",
-      "cache-control":   "public, max-age=300, s-maxage=300",
-      "referrer-policy": "strict-origin-when-cross-origin",
-    },
-  });
-}
-
 async function handleRn(request, env) {
   let playlistId = null;
   if (env.RN_KV) {
@@ -2009,6 +2031,7 @@ function xpChromeCss(maxWidth) {
   body {
     font-family: var(--font-ui);
     font-size: 10.5pt; line-height: 1.5; color: oklch(21.78% 0 0);
+    text-wrap: pretty;  /* modern line-breaking; progressive, ignored where unsupported */
     margin: 0; padding: 24px 12px 60px; min-height: 100vh;
   }
   .window {
@@ -2221,12 +2244,12 @@ ${xpChromeCss(820)}
   <div class="content">
     <h1>Around the Neighborhood</h1>
     <p class="lede">
-      A peek at what folks in crypto VC are up to. Each homepage fetched live
-      by <code>${esc(BOT_UA)}</code> — the small branded crawler I run from
-      this site — and laid out as a tiny neighborhood window. Mostly an excuse
-      to play with signed outbound requests per
+      A peek at what folks in crypto VC are up to. <code>${esc(BOT_UA)}</code>, the
+      small branded crawler I run from this site, fetches each homepage live and
+      lays it out as a tiny neighborhood window. I built this mostly to play with
+      signed outbound requests per
       <a href="https://datatracker.ietf.org/wg/webbotauth/about/" target="_blank" rel="noopener">Web Bot Auth</a>;
-      the shortlist is just funds whose work I follow. Receiving sites can
+      the shortlist is funds whose work I follow. Receiving sites can
       verify the signatures against
       <a href="/.well-known/http-message-signatures-directory">our JWKS</a>.
     </p>
@@ -2302,11 +2325,11 @@ ${xpChromeCss(660)}
 
     <h2>What it does</h2>
     <p>
-      Fetches small numbers of public homepages on demand, mostly for personal
-      curiosity — see the <a href="/around">/around</a> dashboard for what it
+      It fetches small numbers of public homepages on demand, mostly because I'm
+      curious. The <a href="/around">/around</a> dashboard shows what it
       currently looks at.
-      Reads only what's publicly served. Respects <code>robots.txt</code>. Does not
-      submit forms, log in, or scrape behind authentication. Caches results in
+      It reads only what's publicly served. It respects <code>robots.txt</code>. It does not
+      submit forms, log in, or scrape behind a login. It caches results in
       Cloudflare KV for at least an hour so it doesn't re-hit the same URL repeatedly.
     </p>
 
@@ -2489,6 +2512,725 @@ function timingSafeEqual(a, b) {
   return diff === 0;
 }
 
+// ── /reading — a native, Luna-styled mirror of my Curius reading list ──
+// Curius (the social reading-list app) exposes a clean JSON API per user. We
+// pull it through AadharshBot (the same signed, identified crawler the rest of
+// the site uses), normalize it down to what we render, and KV-cache the result
+// so a page load costs zero Curius hits. The canonical list still lives at
+// curius.app; this is the on-site, view-source-able copy.
+const CURIUS_USER_ID = 5766;
+const CURIUS_HANDLE   = "aadharsh-pannirselvam";
+const CURIUS_CACHE_KEY = "curius:links";
+const CURIUS_TTL = 21600;   // 6h — the list moves a few times a day at most
+
+async function fetchCuriusLinks(env) {
+  const out = [];
+  const PER = 30, MAX_PAGES = 8;   // 30/page; cap the crawl so a runaway can't loop
+  for (let p = 0; p < MAX_PAGES; p++) {
+    let data;
+    try {
+      const res = await signedFetch(`https://curius.app/api/users/${CURIUS_USER_ID}/links?page=${p}`, env, {
+        headers: { accept: "application/json" },
+      });
+      if (!res.ok) break;
+      data = await res.json();
+    } catch (_e) { break; }
+    const saved = Array.isArray(data && data.userSaved) ? data.userSaved : [];
+    if (!saved.length) break;
+    for (const it of saved) {
+      if (!it || !it.link) continue;
+      let domain = "";
+      try { domain = new URL(it.link).hostname.replace(/^www\./, ""); } catch (_e) {}
+      out.push({
+        title:   (it.title || it.link).replace(/\s+/g, " ").trim().slice(0, 200),
+        link:    it.link,
+        domain,
+        snippet: (it.snippet || "").replace(/\s+/g, " ").trim().slice(0, 280),
+        favorite: !!it.favorite,
+        created: it.createdDate || it.modifiedDate || null,
+        // the passages I highlighted while reading — the best part to surface
+        highlights: (Array.isArray(it.highlights) ? it.highlights : [])
+          .map((h) => (h && h.highlight ? h.highlight.replace(/\s+/g, " ").trim() : ""))
+          .filter(Boolean).slice(0, 3),
+      });
+    }
+    if (saved.length < PER) break;   // short page = last page
+  }
+  out.sort((a, b) => String(b.created || "").localeCompare(String(a.created || "")));  // newest first
+  return out;
+}
+
+async function getCuriusCached(request, env, ctx) {
+  const url = new URL(request.url);
+  if (env.RN_BUST_SECRET && url.searchParams.get("bust") === env.RN_BUST_SECRET) {
+    if (env.RN_KV) await env.RN_KV.delete(CURIUS_CACHE_KEY);
+  }
+  if (env.RN_KV) {
+    const cached = await env.RN_KV.get(CURIUS_CACHE_KEY, "json");
+    if (cached && Array.isArray(cached.items)) return cached;
+  }
+  const items = await fetchCuriusLinks(env);
+  const payload = { items, fetchedAt: new Date().toISOString() };
+  // only cache a non-empty result, so a transient Curius failure doesn't pin an
+  // empty list for 6h — the next request retries instead.
+  if (env.RN_KV && items.length) {
+    ctx.waitUntil(env.RN_KV.put(CURIUS_CACHE_KEY, JSON.stringify(payload), { expirationTtl: CURIUS_TTL }));
+  }
+  return payload;
+}
+
+async function handleReading(request, env, ctx) {
+  let payload;
+  try { payload = await getCuriusCached(request, env, ctx); }
+  catch (_e) { payload = { items: [], fetchedAt: new Date().toISOString() }; }
+  return new Response(renderReadingPage(payload), {
+    headers: {
+      "content-type":    "text/html; charset=utf-8",
+      "cache-control":   "no-store, must-revalidate",
+      "referrer-policy": "strict-origin-when-cross-origin",
+    },
+  });
+}
+
+function renderReadingPage(payload) {
+  const items = Array.isArray(payload.items) ? payload.items : [];
+  const count = items.length;
+  const fetched = payload.fetchedAt ? esc(payload.fetchedAt.slice(0, 10)) : "";
+  const profile = `https://curius.app/${CURIUS_HANDLE}`;
+
+  let listHtml;
+  if (!count) {
+    listHtml = `<div class="rd-empty">Couldn't reach Curius just now — the list refills on the next sync. It always lives at <a href="${esc(profile)}" rel="external" target="_blank">curius.app/${esc(CURIUS_HANDLE)}</a>.</div>`;
+  } else {
+    let curMonth = "", parts = [];
+    for (const it of items) {
+      const d = it.created ? new Date(it.created) : null;
+      const valid = d && !isNaN(d.getTime());
+      const key = valid ? `${d.getUTCFullYear()}-${d.getUTCMonth()}` : "x";
+      if (key !== curMonth) {
+        curMonth = key;
+        const label = valid ? d.toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" }) : "Undated";
+        parts.push(`<div class="rd-month">${esc(label)}</div>`);
+      }
+      const dateStr = valid ? d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }) : "";
+      const star = it.favorite ? ` <span class="rd-star" title="favorite">&#9733;</span>` : "";
+      const snip = it.snippet ? `<div class="rd-snip">${esc(it.snippet)}</div>` : "";
+      const hls = (it.highlights || []).map((h) => `<blockquote class="rd-hl">${esc(h)}</blockquote>`).join("");
+      parts.push(
+        `<div class="rd-item">` +
+          `<div class="rd-head"><a class="rd-title" href="${esc(it.link)}" target="_blank" rel="noopener noreferrer">${esc(it.title)}</a>${star}</div>` +
+          `<div class="rd-meta"><span class="rd-dom">${esc(it.domain)}</span>${dateStr ? `<span class="rd-date">${esc(dateStr)}</span>` : ""}</div>` +
+          snip + hls +
+        `</div>`
+      );
+    }
+    listHtml = parts.join("");
+  }
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My Reading &middot; aadhar.sh</title>
+<meta name="description" content="What I've been reading, saved to Curius and mirrored natively here. ${count} link${count === 1 ? "" : "s"}, newest first.">
+<link rel="icon" href="/favicon.ico">
+<style>
+${xpChromeCss(720)}
+h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:14pt; color:oklch(41.92% 0.0962 250.51); margin:0 0 4px; font-weight:bold; }
+.rd-lede { margin:0 0 12px; color:oklch(38.67% 0 0); font-size:10.5pt; }
+.rd-lede a { color:oklch(42.61% 0.2353 263.74); }
+.rd-bar { font-size:9pt; color:oklch(51.03% 0 0); border:1px solid oklch(61.14% 0.0611 253.60); background:oklch(98.81% 0.0263 99.90); padding:5px 9px; margin:0 0 6px; }
+.rd-month { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:9.5pt; font-weight:bold; text-transform:uppercase; letter-spacing:.05em; color:oklch(41.92% 0.0962 250.51); background:oklch(94.66% 0.0114 252.09); border:1px solid oklch(82% 0.03 250); border-radius:3px; padding:3px 9px; margin:16px 0 8px; }
+.rd-item { padding:7px 2px 9px; border-bottom:1px solid oklch(92.73% 0.0139 247.98); }
+.rd-head { display:flex; align-items:baseline; gap:5px; flex-wrap:wrap; }
+.rd-title { color:oklch(33% 0.09 263); font-weight:bold; font-size:11pt; text-decoration:none; }
+.rd-title:hover { color:oklch(62.80% 0.2577 29.23); text-decoration:underline; }
+.rd-star { color:oklch(72% 0.15 75); font-size:10pt; }
+.rd-meta { display:flex; align-items:center; gap:8px; margin:3px 0 0; }
+.rd-dom { font-family:"Courier New",Courier,monospace; font-size:8.5pt; color:oklch(41.92% 0.0962 250.51); background:oklch(94.66% 0.0114 252.09); border:1px solid oklch(82% 0.03 250); border-radius:2px; padding:0 5px; }
+.rd-date { font-size:9pt; color:oklch(62.68% 0 0); }
+.rd-snip { margin:5px 0 0; color:oklch(45% 0 0); font-size:9.5pt; line-height:1.5; }
+.rd-hl { margin:6px 0 0; padding:3px 0 3px 9px; border-left:3px solid oklch(72% 0.10 250); color:oklch(33% 0.02 255); font-size:9.5pt; font-style:italic; line-height:1.45; }
+.rd-empty { padding:16px 4px; color:oklch(45% 0 0); font-size:10pt; }
+.rd-empty a { color:oklch(42.61% 0.2353 263.74); }
+footer { text-align:center; font-size:9pt; color:oklch(44.95% 0 0); margin-top:16px; padding-top:12px; border-top:1px solid oklch(86.67% 0.0294 259.59); }
+footer a { color:oklch(42.61% 0.2353 263.74); }
+</style>
+</head>
+<body>
+<div class="window">
+  <div class="title-bar">
+    <span><span class="icon"></span>My Reading</span>
+    <span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/" title="back to aadhar.sh" aria-label="back to aadhar.sh"></a></span>
+  </div>
+  <div class="content">
+    <h1>My Reading</h1>
+    <p class="rd-lede">Things I've saved to read, pulled from my <a href="${esc(profile)}" rel="external me" target="_blank">Curius</a>. Newest first.</p>
+    <div class="rd-bar">${count} link${count === 1 ? "" : "s"}${fetched ? ` &middot; last synced ${fetched}` : ""} &middot; source: Curius, via AadharshBot</div>
+    ${listHtml}
+    <footer>&larr; <a href="/">aadhar.sh</a> &middot; saved on <a href="${esc(profile)}" rel="external" target="_blank">Curius</a> &middot; fetched by <a href="/bot">${esc(BOT_NAME)}</a></footer>
+  </div>
+</div>
+<script src="/nav.js" defer></script>
+</body>
+</html>`;
+}
+
+// ── /lens — "the other web" -----------------------------------------------
+// A URL goes in; what a MACHINE sees comes out, across four lenses: page
+// anatomy (raw HTML, headers, headings, stripped text), structured/semantic
+// data (JSON-LD, microdata, RDFa, microformats, OG/Twitter), the LLM/AI view
+// (a markdown rendering + crawler directives), and site-level discovery files
+// (robots.txt, sitemap.xml, llms.txt, feeds). The fetch is server-side (CORS
+// blocks the browser), guarded against SSRF, capped in time + size, and made
+// honestly as AadharshBot. Engine here; the /lens page (handleLens) is the UI.
+
+// /lens — the SSR shell: IE6 address bar, a Human/Machine view toggle, the
+// four lens tabs, two panes, seeded examples. The renderer lives in /lens.js
+// (a real static file, SW-cached like nav.js) so it can use normal JS without
+// fighting this template literal's ${} and backticks.
+function handleLens(request, env, ctx) {
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Other Web &middot; aadhar.sh</title>
+<meta name="description" content="Paste any URL and see it the way a machine does: raw HTML, headers, JSON-LD and microformats, an LLM-style markdown render, and the site's robots.txt / sitemap / llms.txt — side by side with the human view.">
+<meta name="robots" content="index, nofollow">
+<link rel="icon" href="/favicon.ico">
+<style>
+${xpChromeCss(980)}
+h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color:oklch(41.92% 0.0962 250.51); margin:0 0 2px; font-weight:bold; }
+.lx-lede { margin:0 0 10px; color:oklch(40% 0 0); font-size:10pt; }
+.lx-lede a { color:oklch(42.61% 0.2353 263.74); }
+
+/* IE6 address bar */
+.lx-addr { display:flex; align-items:center; gap:6px; background:oklch(94.66% 0.0114 252.09); border:1px solid oklch(72% 0.03 250); border-radius:3px; padding:5px 6px; }
+.lx-addr-label { font-size:9pt; color:oklch(45% 0 0); padding:0 2px; }
+.lx-globe { width:15px; height:15px; flex:0 0 auto; border-radius:50%; background:radial-gradient(circle at 35% 30%, oklch(78% 0.13 230), oklch(48% 0.16 250)); box-shadow:inset 0 0 0 1px oklch(100% 0 0 / .4); }
+.lx-url { flex:1 1 auto; min-width:0; font-family:"Courier New",Courier,monospace; font-size:10pt; padding:3px 6px; border:2px solid; border-color:oklch(55% 0 0) oklch(85% 0 0) oklch(85% 0 0) oklch(55% 0 0); background:#fff; color:oklch(25% 0.02 255); }
+.lx-url:focus { outline:1px dotted oklch(42.61% 0.2353 263.74); }
+.lx-go, .lx-seg, .lx-tab, .lx-chip { font-family:Tahoma,Verdana,sans-serif; cursor:pointer; }
+.lx-go { font-size:9.5pt; font-weight:bold; padding:3px 14px; color:oklch(20% 0 0); background:linear-gradient(180deg,#fdfdfd,#dcdcd2); border:1px solid; border-color:#fff oklch(45% 0 0) oklch(45% 0 0) #fff; border-radius:3px; }
+.lx-go:active { border-color:oklch(45% 0 0) #fff #fff oklch(45% 0 0); }
+
+/* example chips */
+.lx-chips { display:flex; align-items:center; flex-wrap:wrap; gap:5px; margin:7px 0 9px; }
+.lx-chips-label { font-size:9pt; color:oklch(48% 0 0); }
+.lx-chip { font-size:8.8pt; padding:2px 8px; color:oklch(35% 0.06 255); background:oklch(97% 0.006 250); border:1px solid oklch(74% 0.03 250); border-radius:10px; }
+.lx-chip:hover { background:oklch(90% 0.04 250); }
+
+/* toolbar: view toggle + lens tabs */
+.lx-toolbar { display:flex; align-items:flex-end; justify-content:space-between; gap:10px; flex-wrap:wrap; border-bottom:2px solid oklch(58% 0.10 250); margin-top:2px; }
+.lx-view { display:inline-flex; margin-bottom:5px; }
+.lx-seg { font-size:9pt; padding:3px 11px; color:oklch(28% 0 0); background:linear-gradient(180deg,#fbfbfb,#e3e3da); border:1px solid oklch(55% 0 0); border-right-width:0; }
+.lx-seg:first-child { border-radius:3px 0 0 3px; }
+.lx-seg:last-child { border-right-width:1px; border-radius:0 3px 3px 0; }
+.lx-seg.is-on { color:#fff; background:linear-gradient(180deg, oklch(58% 0.15 255), oklch(44% 0.18 257)); }
+.lx-lenses { display:inline-flex; gap:2px; }
+.lx-tab { font-size:9.2pt; padding:5px 12px 6px; color:oklch(35% 0.04 255); background:linear-gradient(180deg, oklch(96% 0.01 250), oklch(88% 0.02 250)); border:1px solid oklch(60% 0.05 250); border-bottom:none; border-radius:5px 5px 0 0; position:relative; top:1px; }
+.lx-tab.is-on { color:oklch(33% 0.10 263); font-weight:bold; background:#fff; top:2px; padding-bottom:7px; }
+
+/* panes */
+.lx-panes { display:flex; gap:8px; margin-top:8px; min-height:560px; }
+.lx-panes.is-human .lx-pane-machine, .lx-panes.is-machine .lx-pane-human { display:none; }
+.lx-pane { flex:1 1 0; min-width:0; display:flex; flex-direction:column; border:1px solid oklch(70% 0.03 250); border-radius:0 3px 3px 3px; background:#fff; }
+.lx-pane-h { font-family:"Trebuchet MS",Verdana,sans-serif; font-size:8.5pt; font-weight:bold; text-transform:uppercase; letter-spacing:.05em; color:#fff; background:linear-gradient(180deg, oklch(56% 0.12 252), oklch(45% 0.15 255)); padding:4px 8px; border-radius:0 2px 0 0; }
+.lx-pane-human .lx-pane-h { background:linear-gradient(180deg, oklch(58% 0.06 150), oklch(46% 0.09 155)); }
+.lx-body { flex:1 1 auto; overflow:auto; padding:10px 11px; }
+.lx-empty { color:oklch(55% 0 0); font-size:9.5pt; padding:18px 6px; text-align:center; }
+.lx-spin { color:oklch(42.61% 0.2353 263.74); font-size:9.5pt; padding:18px 6px; text-align:center; }
+.lx-body.is-bleed { padding:0; }
+.lx-frame { width:100%; height:100%; min-height:520px; border:0; display:block; background:#fff; }
+.lx-shot { width:100%; height:auto; display:block; }
+.lx-fallback-note { font-size:8.8pt; color:oklch(42% 0.11 60); background:oklch(96% 0.045 92); border:1px solid oklch(82% 0.09 80); border-radius:3px; padding:5px 9px; margin:0 0 10px; }
+.lx-mode { font-family:"Courier New",monospace; font-size:7.6pt; font-weight:normal; text-transform:none; letter-spacing:0; color:oklch(38% 0.09 150); background:#fff; border-radius:7px; padding:1px 7px; vertical-align:middle; }
+.lx-mode-sub { font-weight:normal; text-transform:none; letter-spacing:0; opacity:.85; font-size:8pt; }
+
+/* rendered machine content */
+.lx-h-title { font-family:"Trebuchet MS",Verdana,sans-serif; font-size:13pt; font-weight:bold; color:oklch(30% 0.06 255); margin:0 0 8px; }
+.lx-h-text { font-size:10pt; line-height:1.55; color:oklch(28% 0 0); white-space:pre-wrap; }
+.lx-h-outline { margin:0 0 12px; padding:8px 10px; background:oklch(98% 0.01 250); border:1px solid oklch(90% 0.02 250); border-radius:3px; font-size:9pt; }
+.lx-h-outline a { color:oklch(42.61% 0.2353 263.74); text-decoration:none; }
+.lx-pre { font-family:"Courier New",Courier,monospace; font-size:8.6pt; line-height:1.45; white-space:pre-wrap; word-break:break-word; background:oklch(20% 0.02 255); color:oklch(92% 0.02 150); padding:9px 10px; border-radius:3px; overflow:auto; max-height:520px; }
+.lx-pre-light { background:oklch(98.5% 0.008 250); color:oklch(25% 0.02 255); border:1px solid oklch(90% 0.02 250); }
+.lx-sec { margin:0 0 15px; }
+.lx-sec-h { font-family:"Trebuchet MS",Verdana,sans-serif; font-size:10pt; font-weight:bold; color:oklch(33% 0.09 263); margin:0 0 2px; display:flex; align-items:center; gap:7px; }
+.lx-badge { font-family:"Courier New",monospace; font-size:7.6pt; font-weight:normal; color:#fff; background:oklch(52% 0.13 255); border-radius:8px; padding:1px 7px; }
+.lx-badge.warn { background:oklch(60% 0.16 50); }
+.lx-badge.ok { background:oklch(52% 0.13 150); }
+.lx-badge.off { background:oklch(60% 0 0); }
+.lx-cap { font-size:8.4pt; color:oklch(50% 0 0); margin:0 0 6px; font-style:italic; }
+.lx-kv { width:100%; border-collapse:collapse; font-size:8.8pt; }
+.lx-kv td { border-bottom:1px solid oklch(93% 0.01 250); padding:3px 6px 3px 0; vertical-align:top; }
+.lx-kv td:first-child { font-family:"Courier New",monospace; color:oklch(42% 0.08 255); white-space:nowrap; width:1%; padding-right:12px; }
+.lx-kv td:last-child { color:oklch(28% 0 0); word-break:break-word; }
+.lx-tags { display:flex; flex-wrap:wrap; gap:4px; margin:4px 0 0; }
+.lx-tag { font-family:"Courier New",monospace; font-size:8.2pt; color:oklch(33% 0.06 255); background:oklch(95% 0.02 255); border:1px solid oklch(80% 0.03 255); border-radius:3px; padding:1px 6px; }
+.lx-none { font-size:8.8pt; color:oklch(58% 0 0); padding:2px 0; }
+.lx-ogcard { display:flex; gap:9px; border:1px solid oklch(85% 0.02 250); border-radius:4px; padding:8px; background:oklch(99% 0.004 250); }
+.lx-ogcard img { width:96px; height:96px; object-fit:cover; border-radius:3px; flex:0 0 auto; background:oklch(92% 0 0); }
+.lx-ogcard .t { font-weight:bold; font-size:9.6pt; color:oklch(28% 0.04 255); }
+.lx-ogcard .d { font-size:8.8pt; color:oklch(45% 0 0); margin-top:3px; }
+.lx-ogcard .u { font-family:"Courier New",monospace; font-size:8pt; color:oklch(50% 0.05 150); margin-top:4px; }
+
+/* status bar */
+.lx-status { margin-top:9px; border-top:1px solid oklch(86% 0.03 260); padding-top:6px; display:flex; flex-wrap:wrap; gap:5px 14px; font-size:8.6pt; color:oklch(45% 0 0); }
+.lx-status b { color:oklch(30% 0.04 255); font-weight:bold; }
+.lx-status .err { color:oklch(55% 0.2 27); font-weight:bold; }
+footer { text-align:center; font-size:9pt; color:oklch(45% 0 0); margin-top:14px; padding-top:11px; border-top:1px solid oklch(86.67% 0.0294 259.59); }
+footer a { color:oklch(42.61% 0.2353 263.74); }
+@media (max-width:720px){ .lx-panes{ flex-direction:column; } .lx-panes.is-both .lx-pane{ min-height:280px; } }
+</style>
+</head>
+<body>
+<div class="window">
+  <div class="title-bar">
+    <span><span class="icon"></span>The Other Web</span>
+    <span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/" title="back to aadhar.sh" aria-label="back to aadhar.sh"></a></span>
+  </div>
+  <div class="content">
+    <h1>The Other Web</h1>
+    <p class="lx-lede">Every page has a second life as data. Paste a URL to see it the way a crawler, a model, or a link-preview bot does: the markup, the metadata, the machine directives, next to the human read. Fetched server-side, honestly, as <a href="/bot">AadharshBot</a>.</p>
+
+    <form class="lx-addr" id="lx-form">
+      <span class="lx-globe" aria-hidden="true"></span>
+      <label class="lx-addr-label" for="lx-url">Address</label>
+      <input id="lx-url" class="lx-url" type="text" inputmode="url" placeholder="https://example.com  —  paste any URL" autocomplete="off" spellcheck="false">
+      <button class="lx-go" type="submit">Go</button>
+    </form>
+    <div class="lx-chips">
+      <span class="lx-chips-label">Try:</span>
+      <button class="lx-chip" data-url="https://aadhar.sh/">aadhar.sh</button>
+      <button class="lx-chip" data-url="https://daringfireball.net/">a hand-built blog</button>
+      <button class="lx-chip" data-url="https://stripe.com/">a modern marketing site</button>
+      <button class="lx-chip" data-url="https://en.wikipedia.org/wiki/Semantic_Web">a Wikipedia article</button>
+      <button class="lx-chip" data-url="https://example.com/">the bare minimum</button>
+    </div>
+
+    <div class="lx-toolbar">
+      <div class="lx-view" role="group" aria-label="view layout">
+        <button class="lx-seg is-on" data-view="both" type="button">Both</button>
+        <button class="lx-seg" data-view="human" type="button">Human</button>
+        <button class="lx-seg" data-view="machine" type="button">Machine</button>
+      </div>
+      <div class="lx-lenses" role="tablist" aria-label="machine lens">
+        <button class="lx-tab is-on" data-lens="anatomy" type="button">Anatomy</button>
+        <button class="lx-tab" data-lens="structured" type="button">Structured</button>
+        <button class="lx-tab" data-lens="ai" type="button">AI view</button>
+        <button class="lx-tab" data-lens="discovery" type="button">Discovery</button>
+      </div>
+    </div>
+
+    <div class="lx-panes is-both" id="lx-panes">
+      <section class="lx-pane lx-pane-human" id="lx-human">
+        <div class="lx-pane-h" id="lx-human-h">Human view &middot; the live page</div>
+        <div class="lx-body" id="lx-human-body"><div class="lx-empty">Paste a URL above to see it through both eyes.</div></div>
+      </section>
+      <section class="lx-pane lx-pane-machine" id="lx-machine">
+        <div class="lx-pane-h" id="lx-machine-h">Machine view &middot; Anatomy</div>
+        <div class="lx-body" id="lx-machine-body"><div class="lx-empty">The markup, metadata, and machine directives land here.</div></div>
+      </section>
+    </div>
+
+    <div class="lx-status" id="lx-status"><span>Idle. Nothing is fetched until you ask, and then just once, server-side, with no logging.</span></div>
+    <footer>&larr; <a href="/">aadhar.sh</a> &middot; a research toy about how machines read the web &middot; fetched by <a href="/bot">AadharshBot</a></footer>
+  </div>
+</div>
+<script src="/lens.js" defer></script>
+<script src="/nav.js" defer></script>
+</body>
+</html>`;
+  return new Response(html, {
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "public, max-age=60, s-maxage=300",
+      "x-robots-tag": "noindex",
+      // /lens embeds arbitrary sites in the Human view, so it needs a looser
+      // policy than the site default (which has no frame-src → falls back to
+      // default-src 'self' and blocks every cross-origin iframe). This relaxes
+      // ONLY frame-src (any https origin, for the live iframe) and img-src
+      // (blob: for the Browser Rendering screenshot, https: for OG-card art);
+      // everything else stays locked down. withSecurityHeaders sees a CSP is
+      // already present and leaves it alone. frame-ancestors 'none' keeps OTHER
+      // sites from embedding /lens itself.
+      "content-security-policy":
+        "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self'; font-src 'self'; frame-src https:; child-src https:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; worker-src 'self'",
+    },
+  });
+}
+
+// /lens/fetch?url=… → one JSON envelope with every lens. no-store.
+async function handleLensFetch(request, env, ctx) {
+  const v = validateLensTarget(new URL(request.url).searchParams.get("url") || "");
+  if (!v.ok) return jsonResponse({ ok: false, error: v.error }, 400);
+
+  // best-effort per-IP rate limit so the proxy can't be turned into a firehose.
+  const ip = request.headers.get("cf-connecting-ip") || "0.0.0.0";
+  if (env.RN_KV) {
+    const bucket = `lens:rl:${ip}:${Math.floor(Date.now() / 60000)}`;
+    const n = parseInt((await env.RN_KV.get(bucket)) || "0", 10);
+    if (n >= 30) return jsonResponse({ ok: false, error: "Slow down — 30 lookups a minute. Try again shortly." }, 429);
+    ctx.waitUntil(env.RN_KV.put(bucket, String(n + 1), { expirationTtl: 120 }));
+  }
+
+  try {
+    return jsonResponse(await lensInspect(v.url, env), 200);
+  } catch (e) {
+    const msg = e && e.name === "AbortError" ? "The site took too long to answer (8s timeout)." : (e && e.message) || String(e);
+    return jsonResponse({ ok: false, error: msg }, 502);
+  }
+}
+
+// /lens/shot?url=… → a faithful PNG of the page, rendered by Cloudflare
+// Browser Rendering (real headless Chrome, server-side). The Human view uses
+// this only when a site forbids live framing. Needs CF_ACCOUNT_ID +
+// BROWSER_RENDER_TOKEN in env; degrades to a clear 503 when unconfigured.
+async function handleLensShot(request, env, ctx) {
+  const v = validateLensTarget(new URL(request.url).searchParams.get("url") || "");
+  if (!v.ok) return jsonResponse({ ok: false, error: v.error }, 400);
+  if (!env.BROWSER_RENDER_TOKEN || !env.CF_ACCOUNT_ID) {
+    const missing = [];
+    if (!env.CF_ACCOUNT_ID) missing.push("CF_ACCOUNT_ID");
+    if (!env.BROWSER_RENDER_TOKEN) missing.push("BROWSER_RENDER_TOKEN");
+    return jsonResponse({ ok: false, missing, error: "Snapshot rendering isn't configured: this deployment can't see " + missing.join(" + ") + ". Check the exact variable name(s) (case-sensitive) and that they're set on the same environment this branch deploys to, then redeploy." }, 503);
+  }
+
+  // screenshots are the expensive path — tighter per-IP limit + a KV cache.
+  const ip = request.headers.get("cf-connecting-ip") || "0.0.0.0";
+  if (env.RN_KV) {
+    const bucket = `lens:shotrl:${ip}:${Math.floor(Date.now() / 60000)}`;
+    const n = parseInt((await env.RN_KV.get(bucket)) || "0", 10);
+    if (n >= 8) return jsonResponse({ ok: false, error: "Snapshots are rate-limited to 8/min. Hang on a moment." }, 429);
+    ctx.waitUntil(env.RN_KV.put(bucket, String(n + 1), { expirationTtl: 120 }));
+  }
+
+  const cacheKey = "lens:shot:" + (await lensSha256Hex(v.url));
+  if (env.RN_KV) {
+    const hit = await env.RN_KV.get(cacheKey, "arrayBuffer");
+    if (hit) return new Response(hit, { headers: lensPngHeaders(true) });
+  }
+
+  const api = `https://api.cloudflare.com/client/v4/accounts/${env.CF_ACCOUNT_ID}/browser-rendering/screenshot`;
+  const payload = {
+    url: v.url,
+    viewport: { width: 1280, height: 800, deviceScaleFactor: 1 },
+    screenshotOptions: { fullPage: true, type: "png" },
+    gotoOptions: { waitUntil: "networkidle0", timeout: 18000 },
+    userAgent: BOT_UA,
+  };
+  let r;
+  try {
+    r = await fetch(api, { method: "POST", headers: { authorization: "Bearer " + env.BROWSER_RENDER_TOKEN, "content-type": "application/json" }, body: JSON.stringify(payload) });
+  } catch (e) {
+    return jsonResponse({ ok: false, error: "Render request failed: " + ((e && e.message) || e) }, 502);
+  }
+  const ctype = r.headers.get("content-type") || "";
+  if (!r.ok || !ctype.startsWith("image/")) {
+    let detail = "";
+    try { detail = (await r.text()).slice(0, 300); } catch (_e) {}
+    return jsonResponse({ ok: false, error: "Browser Rendering returned " + r.status + ".", detail }, 502);
+  }
+  const buf = await r.arrayBuffer();
+  if (env.RN_KV) ctx.waitUntil(env.RN_KV.put(cacheKey, buf, { expirationTtl: 3600 }));
+  return new Response(buf, { headers: lensPngHeaders(false) });
+}
+
+function lensPngHeaders(cached) {
+  return { "content-type": "image/png", "cache-control": "public, max-age=3600", "x-robots-tag": "noindex", "x-lens-cache": cached ? "hit" : "miss" };
+}
+async function lensSha256Hex(s) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+// X-Frame-Options / CSP frame-ancestors → can a browser embed this live?
+function lensFramable(headers) {
+  const xfo = (headers["x-frame-options"] || "").toLowerCase();
+  if (xfo.includes("deny") || xfo.includes("sameorigin") || xfo.includes("allow-from")) {
+    return { framable: false, reason: "X-Frame-Options: " + xfo.trim() };
+  }
+  const csp = headers["content-security-policy"] || "";
+  const m = csp.match(/frame-ancestors([^;]*)/i);
+  if (m) {
+    const val = m[1].toLowerCase();
+    if (/'none'/.test(val)) return { framable: false, reason: "CSP frame-ancestors 'none'" };
+    if (!/\*/.test(val)) return { framable: false, reason: "CSP frame-ancestors restricts embedding" };
+  }
+  return { framable: true, reason: null };
+}
+
+// Only public http(s). Reject loopback / private / link-local / cloud-metadata
+// literals + non-standard ports. (Workers can't egress to the internal network
+// anyway, but blocking the obvious literals is cheap hygiene.)
+function validateLensTarget(raw) {
+  const s0 = String(raw || "").trim();
+  if (!s0) return { ok: false, error: "Type a URL to inspect." };
+  const s = /^https?:\/\//i.test(s0) ? s0 : "https://" + s0;
+  let url;
+  try { url = new URL(s); } catch { return { ok: false, error: "That doesn't parse as a URL." }; }
+  if (url.protocol !== "http:" && url.protocol !== "https:") return { ok: false, error: "Only http and https URLs." };
+  if (url.port && url.port !== "80" && url.port !== "443") return { ok: false, error: "Only ports 80 and 443 are allowed." };
+  if (lensHostBlocked(url.hostname.toLowerCase())) return { ok: false, error: "That host is on the no-fetch list (localhost / private / link-local)." };
+  return { ok: true, url: url.toString() };
+}
+
+function lensHostBlocked(host) {
+  const h = host.replace(/^\[|\]$/g, "");
+  if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".local") || h.endsWith(".internal") || h.endsWith(".onion")) return true;
+  if (h === "::1" || h.startsWith("fc") || h.startsWith("fd") || h.startsWith("fe80:")) return true;
+  const m = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (m) {
+    const a = +m[1], b = +m[2];
+    if (a === 0 || a === 10 || a === 127) return true;
+    if (a === 169 && b === 254) return true;        // link-local incl. 169.254.169.254 metadata
+    if (a === 192 && b === 168) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT
+    if (a >= 224) return true;                        // multicast / reserved
+  }
+  return false;
+}
+
+// the orchestrator: fetch the target, parse it, then probe the origin's
+// site-level files in parallel. returns the full lens envelope.
+async function lensInspect(targetUrl, env) {
+  const started = Date.now();
+  const ctrl = new AbortController();
+  const to = setTimeout(() => ctrl.abort(), 8000);
+  let res;
+  try { res = await lensFetch(targetUrl, env, ctrl.signal); }
+  finally { clearTimeout(to); }
+
+  const finalUrl = res.url || targetUrl;
+  const ct = res.headers.get("content-type") || "";
+  const headers = {};
+  for (const [k, val] of res.headers) headers[k] = val;
+  const isTextual = ct === "" || /text|html|xml|json|javascript|\+xml|\+json/i.test(ct);
+  const isHtml = /html/i.test(ct) || (ct === "" && false);
+
+  let body = "", truncated = false;
+  if (isTextual) { const r = await lensReadCapped(res, 2 * 1024 * 1024); body = r.text; truncated = r.truncated; }
+
+  const out = {
+    ok: true, url: targetUrl, finalUrl, redirected: finalUrl !== targetUrl,
+    status: res.status, contentType: ct, binary: !isTextual, truncated,
+    elapsedMs: Date.now() - started, fetchedBy: BOT_UA, headers,
+  };
+
+  // can the browser embed this URL live in an <iframe>, or does the site
+  // forbid framing (so the Human view must fall back to a screenshot)?
+  var fr = lensFramable(headers);
+  out.framable = fr.framable;
+  out.frameReason = fr.reason;
+
+  if (isHtml && body) {
+    const attrs = await lensExtractAttrs(body);
+    const jsonld = attrs.jsonld.map(lensParseJsonld);
+    out.anatomy = {
+      rawHtml: body.length > 80000 ? body.slice(0, 80000) : body,
+      rawBytes: body.length,
+      headings: lensHeadings(body),
+      text: lensText(body).slice(0, 24000),
+      imgTotal: attrs.imgTotal, imgNoAlt: attrs.imgNoAlt,
+    };
+    out.anatomy.wordCount = out.anatomy.text ? out.anatomy.text.split(/\s+/).filter(Boolean).length : 0;
+    out.structured = {
+      title: (body.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [, ""])[1].replace(/\s+/g, " ").trim(),
+      meta: attrs.meta, og: attrs.og, twitter: attrs.twitter, jsonld,
+      microdata: { itemtypes: [...attrs.microItemtypes], props: [...attrs.microProps] },
+      rdfa: { typeof: [...attrs.rdfaTypeof], properties: [...attrs.rdfaProps] },
+      microformats: [...attrs.mf],
+      relLinks: attrs.relLinks.map((l) => ({ ...l, href: lensAbs(l.href, finalUrl) })),
+    };
+    out.ai = { markdown: lensMarkdown(body, finalUrl) };
+  } else if (isTextual && body) {
+    // non-HTML text (xml/json/txt/markdown): show it raw, no parsing.
+    out.anatomy = { rawHtml: body.slice(0, 80000), rawBytes: body.length, text: lensText(body).slice(0, 24000), headings: [], imgTotal: 0, imgNoAlt: 0 };
+    out.anatomy.wordCount = out.anatomy.text ? out.anatomy.text.split(/\s+/).filter(Boolean).length : 0;
+  }
+
+  // site-level discovery — probe the origin's well-known files in parallel.
+  const origin = (() => { try { return new URL(finalUrl).origin; } catch { return null; } })();
+  if (origin) {
+    const [robots, sitemap, llms, llmsFull, aiTxt, secTxt] = await Promise.all([
+      lensProbe(origin + "/robots.txt", env), lensProbe(origin + "/sitemap.xml", env),
+      lensProbe(origin + "/llms.txt", env), lensProbe(origin + "/llms-full.txt", env),
+      lensProbe(origin + "/ai.txt", env), lensProbe(origin + "/.well-known/security.txt", env),
+    ]);
+    const feeds = (out.structured?.relLinks || []).filter((l) =>
+      /alternate/.test(l.rel) && /(rss|atom|feed|\+xml|\+json)/i.test((l.type || "") + " " + (l.href || "")));
+    out.discovery = { origin, robotsTxt: robots, sitemapXml: sitemap, llmsTxt: llms, llmsFullTxt: llmsFull, aiTxt, securityTxt: secTxt, feeds };
+    out.ai = out.ai || {};
+    out.ai.llmsTxtPresent = llms.ok;
+    out.ai.directives = {
+      metaRobots: out.structured?.meta?.robots || null,
+      xRobotsTag: headers["x-robots-tag"] || null,
+      namesAiCrawlers: robots.ok ? /GPTBot|ClaudeBot|Claude-Web|Google-Extended|CCBot|PerplexityBot|anthropic-ai|OAI-SearchBot|Bytespider|Amazonbot/i.test(robots.body || "") : false,
+    };
+  }
+  return out;
+}
+
+// honest, identified fetch — AadharshBot UA + (when the key is set) a Web Bot
+// Auth signature, same identity the rest of the site crawls under.
+async function lensFetch(targetUrl, env, signal) {
+  const headers = new Headers({
+    "user-agent": BOT_UA,
+    "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.7",
+    "accept-language": "en-US,en;q=0.9",
+  });
+  if (env.RN_SIGNING_KEY_JWK) {
+    try {
+      const sig = await signRequestForWebBotAuth(targetUrl, env);
+      headers.set("Signature-Agent", `"${SIG_AGENT}"`);
+      headers.set("Signature-Input", `sig1=${sig.params}`);
+      headers.set("Signature", `sig1=:${sig.b64}:`);
+    } catch (_e) { /* recipient just can't verify */ }
+  }
+  return fetch(targetUrl, { method: "GET", headers, redirect: "follow", signal, cf: { cacheTtl: 0 } });
+}
+
+// read a response body but stop at `max` bytes so a giant page can't blow memory.
+async function lensReadCapped(res, max) {
+  const reader = res.body && res.body.getReader ? res.body.getReader() : null;
+  if (!reader) { const t = await res.text(); return { text: t.length > max ? t.slice(0, max) : t, truncated: t.length > max }; }
+  const chunks = []; let total = 0, truncated = false;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (total + value.length > max) { chunks.push(value.subarray(0, max - total)); truncated = true; try { await reader.cancel(); } catch (_e) {} break; }
+    chunks.push(value); total += value.length;
+  }
+  let len = 0; for (const c of chunks) len += c.length;
+  const merged = new Uint8Array(len); let off = 0;
+  for (const c of chunks) { merged.set(c, off); off += c.length; }
+  return { text: new TextDecoder("utf-8").decode(merged), truncated };
+}
+
+// small, forgiving probe for a single site-level file.
+async function lensProbe(url, env) {
+  try {
+    const ctrl = new AbortController();
+    const to = setTimeout(() => ctrl.abort(), 5000);
+    let res;
+    try { res = await lensFetch(url, env, ctrl.signal); } finally { clearTimeout(to); }
+    if (!res.ok) { try { await res.body?.cancel(); } catch (_e) {} return { ok: false, status: res.status, url }; }
+    const cap = await lensReadCapped(res, 256 * 1024);
+    return { ok: true, status: res.status, url, contentType: res.headers.get("content-type") || "", body: cap.text, truncated: cap.truncated };
+  } catch (e) { return { ok: false, error: (e && e.message) || String(e), url }; }
+}
+
+// HTMLRewriter pass for the attribute-driven extraction it's robust at:
+// meta/OG/Twitter, JSON-LD script bodies, rel-links, img alt coverage,
+// microdata, RDFa, and microformats class tokens.
+async function lensExtractAttrs(html) {
+  const acc = {
+    meta: {}, og: {}, twitter: {}, relLinks: [], jsonld: [],
+    microItemtypes: new Set(), microProps: new Set(), mf: new Set(),
+    rdfaTypeof: new Set(), rdfaProps: new Set(), imgTotal: 0, imgNoAlt: 0,
+  };
+  let jbuf = null;
+  const MF = /^(h|p|u|dt|e)-[a-z0-9]+(?:-[a-z0-9]+)*$/;
+  const MF_CLASSIC = /^(vcard|hcard|hcalendar|hentry|hfeed|hreview|hrecipe|hatom|hresume|hproduct|adr|geo)$/;
+  const rw = new HTMLRewriter()
+    .on("meta", { element(el) {
+      const name = (el.getAttribute("name") || "").toLowerCase();
+      const prop = (el.getAttribute("property") || "").toLowerCase();
+      const content = el.getAttribute("content") || "";
+      if (prop.startsWith("og:")) acc.og[prop.slice(3)] = content;
+      else if (/^(article|product|book|profile|video|music):/.test(prop)) acc.og[prop] = content;
+      else if (name.startsWith("twitter:")) acc.twitter[name.slice(8)] = content;
+      else if (name) acc.meta[name] = content;
+      else if (prop) acc.meta[prop] = content;
+    } })
+    .on("script", {
+      element(el) { jbuf = (el.getAttribute("type") || "").toLowerCase() === "application/ld+json" ? [] : null; },
+      text(t) { if (jbuf) { jbuf.push(t.text); if (t.lastInTextNode) { acc.jsonld.push(jbuf.join("")); jbuf = null; } } },
+    })
+    .on("link", { element(el) {
+      const rel = (el.getAttribute("rel") || "").toLowerCase();
+      if (!rel || acc.relLinks.length >= 80) return;
+      acc.relLinks.push({ rel, href: el.getAttribute("href") || "", type: el.getAttribute("type") || "", title: el.getAttribute("title") || "", hreflang: el.getAttribute("hreflang") || "" });
+    } })
+    .on("img", { element(el) { acc.imgTotal++; const alt = el.getAttribute("alt"); if (alt === null || alt.trim() === "") acc.imgNoAlt++; } })
+    .on("[itemtype]", { element(el) { const v = el.getAttribute("itemtype"); if (v && acc.microItemtypes.size < 100) acc.microItemtypes.add(v); } })
+    .on("[itemprop]", { element(el) { const v = el.getAttribute("itemprop"); if (v && acc.microProps.size < 200) v.split(/\s+/).forEach((x) => x && acc.microProps.add(x)); } })
+    .on("[typeof]", { element(el) { const v = el.getAttribute("typeof"); if (v && acc.rdfaTypeof.size < 100) v.split(/\s+/).forEach((x) => x && acc.rdfaTypeof.add(x)); } })
+    .on("[property]", { element(el) { const v = (el.getAttribute("property") || ""); if (acc.rdfaProps.size >= 200) return; v.split(/\s+/).forEach((x) => { if (x && !/^(og|twitter|article|product|book|profile|video|music):/.test(x)) acc.rdfaProps.add(x); }); } })
+    .on("[class]", { element(el) { if (acc.mf.size >= 60) return; (el.getAttribute("class") || "").split(/\s+/).forEach((tok) => { if (MF.test(tok) || MF_CLASSIC.test(tok)) acc.mf.add(tok); }); } });
+  await rw.transform(new Response(html)).arrayBuffer();
+  return acc;
+}
+
+function lensParseJsonld(raw) {
+  const trimmed = String(raw || "").trim();
+  try {
+    const obj = JSON.parse(trimmed);
+    const types = new Set();
+    (function walk(o) {
+      if (!o || typeof o !== "object") return;
+      if (Array.isArray(o)) return o.forEach(walk);
+      if (o["@type"]) [].concat(o["@type"]).forEach((t) => types.add(String(t)));
+      for (const k in o) walk(o[k]);
+    })(obj);
+    return { valid: true, types: [...types], json: JSON.stringify(obj, null, 2).slice(0, 12000) };
+  } catch (e) { return { valid: false, error: (e && e.message) || "parse error", raw: trimmed.slice(0, 3000) }; }
+}
+
+function lensHeadings(html) {
+  const out = []; const re = /<h([1-6])[^>]*>([\s\S]*?)<\/h\1>/gi; let m;
+  while ((m = re.exec(html)) && out.length < 250) { const txt = lensStripInline(m[2]).trim(); if (txt) out.push({ level: +m[1], text: txt.slice(0, 300) }); }
+  return out;
+}
+
+function lensText(html) {
+  let s = html;
+  const b = s.match(/<body[^>]*>([\s\S]*)<\/body>/i); if (b) s = b[1];
+  s = s.replace(/<(script|style|noscript|template|svg)[\s\S]*?<\/\1>/gi, " ").replace(/<[^>]+>/g, " ");
+  return lensDecode(s).replace(/\s+/g, " ").trim();
+}
+
+// best-effort, dependency-free HTML→Markdown — roughly what a basic LLM
+// scraper ingests. High-fidelity Readability/Turndown is a deliberate v2.
+function lensMarkdown(html, baseUrl) {
+  let s = html;
+  const b = s.match(/<body[^>]*>([\s\S]*)<\/body>/i); if (b) s = b[1];
+  s = s.replace(/<!--[\s\S]*?-->/g, "");
+  s = s.replace(/<(script|style|noscript|template|svg|head|nav|footer|aside)[\s\S]*?<\/\1>/gi, "");
+  s = s.replace(/<pre[^>]*>([\s\S]*?)<\/pre>/gi, (m, i) => "\n\n```\n" + lensDecode(i.replace(/<[^>]+>/g, "")).replace(/\n+$/g, "") + "\n```\n\n");
+  s = s.replace(/<code[^>]*>([\s\S]*?)<\/code>/gi, (m, i) => "`" + lensStripInline(i).trim() + "`");
+  s = s.replace(/<br\s*\/?>/gi, "\n");
+  s = s.replace(/<hr\s*\/?>/gi, "\n\n---\n\n");
+  s = s.replace(/<h([1-6])[^>]*>([\s\S]*?)<\/h\1>/gi, (m, l, i) => "\n\n" + "#".repeat(+l) + " " + lensStripInline(i).trim() + "\n\n");
+  s = s.replace(/<blockquote[^>]*>([\s\S]*?)<\/blockquote>/gi, (m, i) => "\n\n> " + lensStripInline(i).trim().replace(/\n+/g, "\n> ") + "\n\n");
+  s = s.replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, (m, i) => "- " + lensStripInline(i).trim() + "\n");
+  s = s.replace(/<img\b[^>]*>/gi, (m) => { const alt = lensTagAttr(m, "alt"); const src = lensAbs(lensTagAttr(m, "src"), baseUrl); return src ? `![${alt}](${src})` : ""; });
+  s = s.replace(/<a\b[^>]*>([\s\S]*?)<\/a>/gi, (m, i) => { const href = lensAbs(lensTagAttr(m, "href"), baseUrl); const txt = lensStripInline(i).trim(); if (!txt) return ""; return href ? `[${txt}](${href})` : txt; });
+  s = s.replace(/<(strong|b)\b[^>]*>([\s\S]*?)<\/\1>/gi, (m, t, i) => "**" + lensStripInline(i).trim() + "**");
+  s = s.replace(/<(em|i)\b[^>]*>([\s\S]*?)<\/\1>/gi, (m, t, i) => "*" + lensStripInline(i).trim() + "*");
+  s = s.replace(/<\/(p|div|section|article|header|main|ul|ol|table|tr|h[1-6])>/gi, "\n\n");
+  s = s.replace(/<[^>]+>/g, "");
+  s = lensDecode(s);
+  s = s.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").replace(/[ \t]{2,}/g, " ");
+  return s.trim();
+}
+
+function lensStripInline(h) { return lensDecode(String(h).replace(/<[^>]+>/g, " ")).replace(/\s+/g, " "); }
+function lensTagAttr(tag, name) { const m = String(tag).match(new RegExp(name + "\\s*=\\s*(\"([^\"]*)\"|'([^']*)'|([^\\s>]+))", "i")); return m ? (m[2] ?? m[3] ?? m[4] ?? "") : ""; }
+function lensAbs(href, base) { if (!href) return href; try { return new URL(href, base).toString(); } catch { return href; } }
+function lensDecode(s) {
+  return String(s)
+    .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"')
+    .replace(/&#0*39;|&apos;/g, "'").replace(/&nbsp;/g, " ")
+    .replace(/&mdash;/g, "—").replace(/&ndash;/g, "–").replace(/&hellip;/g, "…")
+    .replace(/&#(\d+);/g, (m, n) => { try { return String.fromCodePoint(+n); } catch { return m; } })
+    .replace(/&#x([0-9a-f]+);/gi, (m, n) => { try { return String.fromCodePoint(parseInt(n, 16)); } catch { return m; } })
+    .replace(/&amp;/g, "&");
+}
+
 // ── /whoareyou handler ───────────────────────────────────────────────
 // shows the visitor what their HTTP request revealed. no logging, no
 // storage. one server-side outbound call to ARIN's RDAP service to
@@ -2569,7 +3311,10 @@ async function fetchRdap(ip) {
   }
 }
 
-async function handleWhoareyou(request) {
+// gather everything one HTTP request revealed: the cf.* edge signals, the
+// request headers, a parsed UA, and the (optional, cached) RDAP enrichment.
+// shared by the /whoareyou page and the /whoareyou.json popout feed.
+async function gatherWhoareyou(request) {
   const cf = request.cf || {};
   const h  = request.headers;
 
@@ -2613,12 +3358,81 @@ async function handleWhoareyou(request) {
   // fails or times out (the page renders fine without these fields).
   const rdap = await fetchRdap(data.ip);
 
+  return { data, ua, rdap };
+}
+
+// the fields-only model behind the System Properties views. values are plain
+// strings; extra detail that is itself DATA (continent, allocation type,
+// last-changed date, QUIC) rides inline. pure explanation (what a field means,
+// why it matters) is omitted — the popout shows fields, the page carries prose.
+function buildWhoareyouGroups(data, ua, rdap) {
+  const net = [
+    { k: "IP address", v: data.ip },
+    { k: "ISP / ASN", v: `${data.asOrg} (AS${data.asn})` },
+    rdap && rdap.owner ? { k: "Registered to", v: rdap.owner } : null,
+    rdap && rdap.networkName ? { k: "Network name", v: rdap.networkName + (rdap.allocType ? ` (${rdap.allocType.toLowerCase()})` : "") } : null,
+    rdap && rdap.cidr ? { k: "Allocated range", v: rdap.cidr } : null,
+    rdap && rdap.registered ? { k: "Block registered", v: rdap.registered.slice(0, 10) + (rdap.lastChanged && rdap.lastChanged.slice(0, 10) !== rdap.registered.slice(0, 10) ? ` (changed ${rdap.lastChanged.slice(0, 10)})` : "") } : null,
+    { k: "Country", v: data.country + (data.continent !== "—" ? ` (${data.continent}${data.isEU ? ", EU" : ""})` : "") },
+    { k: "Region", v: data.region },
+    { k: "City", v: data.city + (data.postalCode !== "—" ? ` (${data.postalCode})` : "") },
+    { k: "Timezone", v: data.timezone },
+    data.latitude ? { k: "Approx. coords", v: `${data.latitude}, ${data.longitude}` } : null,
+    { k: "Cloudflare colo", v: data.colo },
+    data.clientTcpRtt !== null ? { k: "TCP round-trip", v: `${data.clientTcpRtt} ms` } : null,
+  ];
+  const transport = [
+    { k: "HTTP version", v: data.httpProtocol + (data.httpProtocol === "HTTP/3" ? " (over QUIC)" : "") },
+    { k: "TLS version", v: data.tlsVersion },
+    { k: "TLS cipher", v: data.tlsCipher },
+    { k: "Accept-Encoding", v: data.acceptEncoding },
+    data.ja3Hash ? { k: "JA3", v: data.ja3Hash } : null,
+    data.ja4 ? { k: "JA4", v: data.ja4 } : null,
+  ];
+  const computer = [
+    { k: "Best guess", v: `${ua.browser} on ${ua.os} ${ua.device}` },
+    { k: "User agent", v: data.userAgent, mono: true },
+    { k: "Languages", v: data.acceptLanguage },
+    { k: "Do-not-track", v: data.dnt },
+  ];
+  const session = [
+    { k: "Received at", v: data.when },
+    { k: "Referrer", v: data.referer },
+    { k: "Cookies sent", v: data.cookies },
+    data.botScore !== null ? { k: "CF bot score", v: `${data.botScore} / 99` } : null,
+    data.verifiedBot ? { k: "Verified bot", v: "yes" } : null,
+    data.corporateProxy ? { k: "Corporate proxy", v: "detected" } : null,
+  ];
+  return [
+    { title: "Network adapter", fields: net.filter(Boolean) },
+    { title: "Transport & security", fields: transport.filter(Boolean) },
+    { title: "Computer", fields: computer.filter(Boolean) },
+    { title: "This session", fields: session.filter(Boolean) },
+  ];
+}
+
+async function handleWhoareyouJson(request) {
+  const { data, ua, rdap } = await gatherWhoareyou(request);
+  const body = JSON.stringify({ groups: buildWhoareyouGroups(data, ua, rdap) });
+  return new Response(body, {
+    headers: {
+      "content-type":    "application/json; charset=utf-8",
+      "cache-control":   "no-store, must-revalidate",
+      "x-robots-tag":    "noindex",
+      "referrer-policy": "strict-origin-when-cross-origin",
+    },
+  });
+}
+
+async function handleWhoareyou(request) {
+  const { data, ua, rdap } = await gatherWhoareyou(request);
+
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>aadhar.sh/whoareyou</title>
+<title>System Properties · aadhar.sh/whoareyou</title>
 <meta name="description" content="what one HTTP request to aadhar.sh reveals about you. read-only, never stored.">
 <meta name="robots" content="noindex">
 <style>
@@ -2767,25 +3581,37 @@ footer .signature small { color: oklch(56.93% 0 0); }
 <div class="window">
 
   <div class="title-bar">
-    <span class="title-text"><span class="icon"></span>whoareyou</span>
+    <span class="title-text"><span class="icon"></span>System Properties</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/" title="back to aadhar.sh" aria-label="back to aadhar.sh"></a></span>
   </div>
 
   <div class="content">
 
-    <h1>whoareyou</h1>
+    <h1>System Properties</h1>
     <p class="lede">
-      This is what one HTTP request from your browser revealed to this site.
-      None of it is logged. None of it is stored. Close this tab and it&rsquo;s gone.
+      Your machine as the edge sees it: everything one HTTP request from your browser
+      revealed to this site. None of it is logged, none of it is stored. Close this tab and it's gone.
     </p>
+
+    <div style="border:1px solid #9aa7bd;background:#fff;box-shadow:inset 1px 1px 0 #eef2f8;margin:8px 0 2px">
+      <div style="background:linear-gradient(#fbfdff,#eaf0f9);border-bottom:1px solid #cfd8e6;padding:5px 9px;font-weight:bold;color:#0a246a">🖥 Device Manager &middot; this connection</div>
+      <ul style="list-style:none;margin:0;padding:7px 12px;line-height:1.95;font-size:9.5pt">
+        <li>🖧 <b>Network adapter</b> &nbsp;Anycast edge, colo <b>${esc(data.colo)}</b> <span class="dim">(${esc(data.asOrg)}, AS${esc(data.asn)})</span></li>
+        <li>🔒 <b>Security coprocessor</b> &nbsp;<b>${esc(data.tlsVersion)}</b> <span class="dim">${esc(data.tlsCipher)}</span></li>
+        <li>🌐 <b>Transport</b> &nbsp;<b>${esc(data.httpProtocol)}</b>${data.httpProtocol === "HTTP/3" ? ` <span class="dim">over QUIC</span>` : ""}</li>
+        <li>🌍 <b>Region</b> &nbsp;${esc(data.city)}, ${esc(data.country)} <span class="dim">(${esc(data.timezone)})</span></li>
+        <li>🖥 <b>Client</b> &nbsp;${esc(ua.browser)} on ${esc(ua.os)} <span class="dim">${esc(ua.device)}</span></li>
+      </ul>
+      <div style="border-top:1px solid #cfd8e6;padding:5px 10px;font-size:8.5pt;color:#6b7280">What guards all this: <a href="/security">Security Center</a></div>
+    </div>
 
     <hr>
 
-    <h2>Your Network</h2>
+    <h2>Network adapter</h2>
     <dl class="field-grid">
       <dt>IP address</dt>           <dd>${esc(data.ip)}</dd>
       <dt>ISP / ASN</dt>            <dd>${esc(data.asOrg)} (AS${esc(data.asn)})</dd>
-      ${rdap?.owner ? `<dt>Registered to</dt>       <dd>${esc(rdap.owner)} <span class="dim">(per RDAP — often more specific than the ASN operator)</span></dd>` : ""}
+      ${rdap?.owner ? `<dt>Registered to</dt>       <dd>${esc(rdap.owner)} <span class="dim">(per RDAP, usually more specific than the ASN operator)</span></dd>` : ""}
       ${rdap?.networkName ? `<dt>Network name</dt>        <dd>${esc(rdap.networkName)}${rdap.allocType ? ` <span class="dim">(${esc(rdap.allocType.toLowerCase())})</span>` : ""}</dd>` : ""}
       ${rdap?.cidr ? `<dt>Allocated range</dt>     <dd>${esc(rdap.cidr)}</dd>` : ""}
       ${rdap?.registered ? `<dt>Block registered</dt>    <dd>${esc(rdap.registered.slice(0, 10))}${rdap.lastChanged && rdap.lastChanged.slice(0,10) !== rdap.registered.slice(0,10) ? ` <span class="dim">(last changed ${esc(rdap.lastChanged.slice(0, 10))})</span>` : ""}</dd>` : ""}
@@ -2798,7 +3624,7 @@ footer .signature small { color: oklch(56.93% 0 0); }
       ${data.clientTcpRtt !== null ? `<dt>TCP round-trip</dt><dd>${esc(data.clientTcpRtt)} ms</dd>` : ""}
     </dl>
 
-    <h2>Your Transport</h2>
+    <h2>Transport and security</h2>
     <dl class="field-grid">
       <dt>HTTP version</dt>         <dd>${esc(data.httpProtocol)} ${data.httpProtocol === "HTTP/3" ? `<span class="pill">over QUIC</span>` : ""}</dd>
       <dt>TLS version</dt>          <dd>${esc(data.tlsVersion)}</dd>
@@ -2808,7 +3634,7 @@ footer .signature small { color: oklch(56.93% 0 0); }
       ${data.ja4 ? `<dt>JA4 fingerprint</dt><dd>${esc(data.ja4)}</dd>` : ""}
     </dl>
 
-    <h2>Your Browser</h2>
+    <h2>Computer</h2>
     <dl class="field-grid">
       <dt>Best guess</dt>           <dd>${esc(ua.browser)} on ${esc(ua.os)} ${esc(ua.device)}</dd>
       <dt>User agent</dt>           <dd class="muted">${esc(data.userAgent)}</dd>
@@ -2816,7 +3642,7 @@ footer .signature small { color: oklch(56.93% 0 0); }
       <dt>Do-not-track</dt>         <dd>${esc(data.dnt)}</dd>
     </dl>
 
-    <h2>The Request Itself</h2>
+    <h2>This session</h2>
     <dl class="field-grid">
       <dt>Received at</dt>          <dd>${esc(data.when)}</dd>
       <dt>Referrer</dt>             <dd>${esc(data.referer)}</dd>
@@ -2829,29 +3655,29 @@ footer .signature small { color: oklch(56.93% 0 0); }
 
     <hr>
 
-    <h2>What I Can&rsquo;t See</h2>
+    <h2>What I Can't See</h2>
     <ul>
-      <li><strong>Your DNS resolver / protocol.</strong> Name resolution happens before the request reaches this site; I only see the IP that connected. HTTP/3 implies a modern network stack that <em>probably</em> uses DoH, but that&rsquo;s inference, not measurement.</li>
-      <li><strong>Your real identity</strong> unless you&rsquo;ve told me. An IP isn&rsquo;t a name.</li>
+      <li><strong>Your DNS resolver or protocol.</strong> Your resolver answers the name before the request reaches this site, so I only see the IP that connected. HTTP/3 implies a modern network stack that <em>probably</em> speaks DoH, though I can only infer that; the request itself never carries your resolver.</li>
+      <li><strong>Your real identity</strong> unless you've told me. An IP isn't a name.</li>
       <li><strong>The rest of your browsing.</strong> I see this one request, nothing else.</li>
       <li><strong>The contents of any encrypted data</strong> outside this HTTP session. TLS is doing its job.</li>
     </ul>
 
     <h2>Want This To Leak Less?</h2>
     <ul>
-      <li><strong>Use a VPN or Tor.</strong> Changes IP/ASN/geo. Tor anonymizes most fingerprintable details.</li>
-      <li><strong>Use a private browsing window.</strong> Drops cookies and language hints (somewhat).</li>
-      <li><strong>Set <code>DNT: 1</code></strong> or use a browser that does. ~No servers honor it, but it&rsquo;s a signal.</li>
-      <li><strong>Strip the user-agent.</strong> Some browsers / extensions let you fake or hide it; reduces fingerprinting surface.</li>
+      <li><strong>Use a VPN or Tor.</strong> Either one changes your IP, ASN, and geo. Tor also anonymizes most fingerprintable details.</li>
+      <li><strong>Use a private browsing window.</strong> It drops cookies and language hints, somewhat.</li>
+      <li><strong>Set <code>DNT: 1</code></strong> or use a browser that does. Almost no servers honor it, though it's still a signal.</li>
+      <li><strong>Strip the user-agent.</strong> Some browsers and extensions let you fake or hide it, which shrinks your fingerprinting surface.</li>
     </ul>
 
     <div class="callout">
-      <strong>About this page:</strong> Rendered at the Cloudflare edge. Your
-      browser never speaks to a third party — the only outbound call is one
-      server-side RDAP lookup to your IP&rsquo;s registry (cached at the edge for
-      24h so visitors from the same block don&rsquo;t re-hit ARIN). No analytics. The
-      data above exists for the lifetime of one HTTP request and is never written
-      to storage. View-source if you want; it&rsquo;s a single JavaScript file
+      <strong>About this page:</strong> The Cloudflare edge renders it. Your
+      browser never speaks to a third party. The only outbound call is one
+      server-side RDAP lookup to your IP's registry, which the edge caches for
+      24h so visitors from the same block don't re-hit ARIN. No analytics. The
+      data above lives for one HTTP request, then nothing writes
+      it to storage. View-source if you want, since it's a single JavaScript file
       you can read end-to-end.
     </div>
 
@@ -2868,6 +3694,373 @@ footer .signature small { color: oklch(56.93% 0 0); }
   </div>
 </div>
 
+  <script src="/nav.js" defer></script>
+</body>
+</html>`;
+
+  return new Response(html, {
+    headers: {
+      "content-type":    "text/html; charset=utf-8",
+      "cache-control":   "no-store, must-revalidate",
+      "x-robots-tag":    "noindex",
+      "referrer-policy": "strict-origin-when-cross-origin",
+    },
+  });
+}
+
+// ── /security handler (Windows Security Center reskin) ───────────────
+function handleSecurityCenter(request) {
+  const cf = request.cf || {};
+  const tls = esc(cf.tlsVersion || "—");
+  const proto = esc(cf.httpProtocol || "—");
+  const colo = esc(cf.colo || "—");
+  const shield = `<svg class="shield" viewBox="0 0 16 16" fill="#fff" aria-hidden="true"><path d="M8 1.2 2 3.3v4.2c0 3.8 2.5 6.2 6 7.5 3.5-1.3 6-3.7 6-7.5V3.3z"/><path d="M5.4 8.2 7 9.8l3.4-3.6" fill="none" stroke="#3c8f24" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Security Center · aadhar.sh</title>
+<meta name="description" content="This site's security posture in a Windows Security Center reskin. Read-only.">
+<meta name="robots" content="noindex">
+<style>
+${xpChromeCss(620)}
+h1{margin:0 0 4px}
+.sc-lede{font-size:9.5pt;color:#4a5568;margin:0 0 13px}
+.sc-panel{border:1px solid #b7c0d0;border-radius:4px;margin:0 0 9px;overflow:hidden;box-shadow:inset 0 1px 0 #fff}
+.sc-bar{display:flex;align-items:center;gap:8px;padding:6px 11px;font-weight:bold;font-family:var(--font-caption);font-size:10.5pt;color:#fff;background:linear-gradient(180deg,#62b043,#3c8f24);text-shadow:0 1px 1px rgba(0,0,0,.25)}
+.sc-bar .shield{width:17px;height:17px;flex:0 0 17px}
+.sc-bar .state{margin-left:auto;font-size:8.5pt;font-weight:normal;background:rgba(255,255,255,.24);padding:1px 9px;border-radius:9px;letter-spacing:.04em}
+.sc-body{padding:8px 12px;background:#fbfdff;font-size:9.5pt;color:#33415c;line-height:1.5}
+.sc-body b{color:#15243f}
+.sc-body code,.sc-body .mono{font-family:var(--font-mono);font-size:8.5pt}
+dl.sc-grid{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;margin:6px 0 0;font-size:9pt}
+dl.sc-grid dt{color:#6b7280}
+dl.sc-grid dd{margin:0;color:#15243f;font-family:var(--font-mono);font-size:8.5pt;word-break:break-word}
+.sc-foot{font-size:8.5pt;color:#6b7280;border-top:1px solid #e2e8f0;padding-top:8px;margin-top:10px}
+</style>
+</head>
+<body>
+<div class="window">
+  <div class="title-bar">
+    <span class="title-text"><span class="icon"></span>Security Center</span>
+    <span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/whoareyou" title="back to System Properties" aria-label="back to System Properties"></a></span>
+  </div>
+  <div class="content">
+    <h1>Security Center</h1>
+    <p class="sc-lede">Windows used to greet you with three green shields. Here is the honest version for this site: what actually guards it, and what each layer really does.</p>
+
+    <div class="sc-panel">
+      <div class="sc-bar">${shield} Firewall <span class="state">ON</span></div>
+      <div class="sc-body"><b>Cloudflare edge.</b> Every request hits Cloudflare's network before it reaches the origin, so the edge filters traffic, terminates TLS, and absorbs DDoS attempts before they get near me. You reached this page through colo <b>${colo}</b> over <b>${proto}</b>, <b>${tls}</b>.</div>
+    </div>
+
+    <div class="sc-panel">
+      <div class="sc-bar">${shield} Automatic Updates <span class="state">ON</span></div>
+      <div class="sc-body"><b>Service worker.</b> A versioned service worker caches the shared assets and sweeps the old versions whenever its version string bumps, so a return visit picks up changes without a hard reload. The worker-rendered pages stay network-only, so they always render fresh. See the recent installs in <a href="/updates">Windows Update</a>.</div>
+    </div>
+
+    <div class="sc-panel">
+      <div class="sc-bar">${shield} Threat &amp; identity protection <span class="state">ON</span></div>
+      <div class="sc-body"><b>Bot management and Web Bot Auth.</b> Cloudflare scores incoming bots. This site signs its <em>own</em> crawler's outbound requests per RFC 9421 and publishes the key at <code>/.well-known/http-message-signatures-directory</code>, so a site receiving a request can verify it really came from here.</div>
+    </div>
+
+    <h2>Header &amp; transport details</h2>
+    <dl class="sc-grid">
+      <dt>Content-Security-Policy</dt><dd>default-src 'self'; object-src 'none'; frame-ancestors 'none'; upgrade-insecure-requests</dd>
+      <dt>Permissions-Policy</dt><dd>camera, microphone, geolocation, USB, FLoC + 10 more: all denied</dd>
+      <dt>X-Frame-Options</dt><dd>DENY</dd>
+      <dt>X-Content-Type-Options</dt><dd>nosniff</dd>
+      <dt>Referrer-Policy</dt><dd>strict-origin-when-cross-origin</dd>
+      <dt>DNSSEC</dt><dd>signed (ECDSAP256SHA256, DS at the registrar)</dd>
+      <dt>Content Signals</dt><dd>search, ai-input, ai-train: all yes (deliberately open)</dd>
+      <dt>This connection</dt><dd>${proto} · ${tls}</dd>
+    </dl>
+    <p class="sc-foot">Read-only, nothing logged or stored. <a href="/whoareyou">System Properties</a> shows what your specific request revealed.</p>
+  </div>
+</div>
+  <script src="/nav.js" defer></script>
+</body>
+</html>`;
+
+  return new Response(html, {
+    headers: {
+      "content-type":    "text/html; charset=utf-8",
+      "cache-control":   "no-store, must-revalidate",
+      "x-robots-tag":    "noindex",
+      "referrer-policy": "strict-origin-when-cross-origin",
+    },
+  });
+}
+
+// ── /updates handler (Windows Update reskin) ────────────────────────
+// The service worker's named CACHE_VERSION suffixes ARE the changelog;
+// this list is curated by hand, newest first. Update it when you bump SW.
+async function handleWindowsUpdate(request, env) {
+  // Single source of truth: the same D1 `checkpoints` table that backs /restore.
+  // One row per real deploy (a SW CACHE_VERSION bump); the newest row is the
+  // running build, and the recent rows ARE the changelog. /updates and /restore
+  // now read this one log, so a single insert (scripts/bump-version.sh) keeps both
+  // current and they cannot drift apart. Degrades gracefully when RESTORE_DB is
+  // unbound, mirroring /restore.
+  let build = "aadhar.sh", log = [], state = "ok";
+  try {
+    if (env && env.RESTORE_DB) {
+      const r = await env.RESTORE_DB
+        .prepare("SELECT version, slug, title FROM checkpoints ORDER BY vnum DESC LIMIT 18").all();
+      const pts = (r && r.results) || [];
+      if (pts.length) { build = pts[0].version; log = pts.map(p => [p.slug, p.title]); }
+      else { state = "empty"; }
+    } else { state = "unbound"; }
+  } catch (e) { state = "error"; }
+  const rows = log.length
+    ? log.map(([tag, desc]) =>
+        `<li><span class="wu-tag">${esc(tag)}</span><span class="wu-desc">${esc(desc)}</span></li>`).join("\n      ")
+    : `<li><span class="wu-desc">${esc(
+        state === "unbound" ? "The update log lives in a Cloudflare D1 database (aadhar-restore) being connected to this page."
+        : state === "error" ? "The update log did not answer just now; it is backed by Cloudflare D1 and this page stays read-only either way."
+        : "No updates recorded yet."
+      )}</span></li>`;
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Windows Update · aadhar.sh</title>
+<meta name="description" content="What has shipped to this site lately, in a Windows Update reskin. Read-only.">
+<meta name="robots" content="noindex">
+<style>
+${xpChromeCss(620)}
+h1{margin:0 0 4px}
+.wu-ok{display:flex;align-items:center;gap:11px;border:1px solid #9cc97f;background:linear-gradient(180deg,#f0f8ea,#e2f1d6);border-radius:4px;padding:11px 13px;margin:0 0 13px}
+.wu-ok .ck{width:34px;height:34px;flex:0 0 34px;border-radius:50%;background:linear-gradient(180deg,#62b043,#3c8f24);display:grid;place-items:center}
+.wu-ok .ck svg{width:20px;height:20px}
+.wu-ok b{font-family:var(--font-caption);font-size:11.5pt;color:#2c6a1e}
+.wu-ok .sub{font-size:8.5pt;color:#5a7a4a}
+.wu-ok .sub .mono{font-family:var(--font-mono)}
+.wu-list{list-style:none;margin:6px 0 0;padding:0}
+.wu-list li{display:flex;gap:9px;align-items:baseline;padding:6px 2px;border-bottom:1px solid #eef2f7;font-size:9.5pt;color:#33415c}
+.wu-tag{flex:0 0 92px;font-family:var(--font-mono);font-size:8pt;color:#7a4eb0;background:#f3edfb;border:1px solid #e0d4f3;border-radius:3px;padding:1px 5px;text-align:center}
+.wu-desc{flex:1}
+.wu-foot{font-size:8.5pt;color:#6b7280;border-top:1px solid #e2e8f0;padding-top:8px;margin-top:11px}
+</style>
+</head>
+<body>
+<div class="window">
+  <div class="title-bar">
+    <span class="title-text"><span class="icon"></span>Windows Update</span>
+    <span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/security" title="back to Security Center" aria-label="back to Security Center"></a></span>
+  </div>
+  <div class="content">
+    <h1>Windows Update</h1>
+    <div class="wu-ok">
+      <span class="ck"><svg viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5 6.5 11.5 12.5 4.5"/></svg></span>
+      <div><b>aadhar.sh is up to date.</b><div class="sub">running build <span class="mono">${esc(build)}</span>. updates install themselves through the service worker, so you never click "restart now."</div></div>
+    </div>
+    <h2>Recently installed</h2>
+    <ul class="wu-list">
+      ${rows}
+    </ul>
+    <p class="wu-foot">No reboot, no nagging. Each item shipped when the service worker's version bumped; see how that auto-update works in <a href="/security">Security Center</a>, or roll the whole system back through every past build in <a href="/restore">System Restore</a>.</p>
+  </div>
+</div>
+  <script src="/nav.js" defer></script>
+</body>
+</html>`;
+
+  return new Response(html, {
+    headers: {
+      "content-type":    "text/html; charset=utf-8",
+      "cache-control":   "no-store, must-revalidate",
+      "x-robots-tag":    "noindex",
+      "referrer-policy": "strict-origin-when-cross-origin",
+    },
+  });
+}
+
+// brief JSON for the Windows Update tray balloon: running build + recent changelog,
+// read from the same D1 checkpoints log as /updates and /restore.
+async function handleUpdatesJson(request, env) {
+  let build = "aadhar.sh", items = [];
+  try {
+    if (env && env.RESTORE_DB) {
+      const r = await env.RESTORE_DB
+        .prepare("SELECT version, slug, title FROM checkpoints ORDER BY vnum DESC LIMIT 8").all();
+      const pts = (r && r.results) || [];
+      if (pts.length) { build = pts[0].version; items = pts.map(p => ({ slug: p.slug, title: p.title })); }
+    }
+  } catch (e) {}
+  return new Response(JSON.stringify({ build, items }), {
+    headers: {
+      "content-type":    "application/json; charset=utf-8",
+      "cache-control":   "no-store, must-revalidate",
+      "x-robots-tag":    "noindex",
+      "referrer-policy": "strict-origin-when-cross-origin",
+    },
+  });
+}
+
+// ── /restore handler (Windows System Restore reskin, backed by D1) ───
+// Restore points live in the aadhar-restore D1 database, one row per real
+// deploy (a SW CACHE_VERSION bump), seeded from this repo's git history. The
+// scrubber previews the recorded state at any past point; it changes nothing.
+// A real rollback is a destructive D1 Time Travel restore run from the CLI
+// (7-day window on the free plan), never exposed to a visitor. env.RESTORE_DB
+// is a dashboard binding; this page degrades gracefully when it is absent.
+async function handleSystemRestore(request, env) {
+  let points = [], state = "ok";
+  try {
+    if (env && env.RESTORE_DB) {
+      const r = await env.RESTORE_DB
+        .prepare("SELECT vnum, ymd, version, title FROM checkpoints ORDER BY vnum").all();
+      points = (r && r.results) || [];
+    } else { state = "unbound"; }
+  } catch (e) { state = "error"; }
+  if (state === "ok" && !points.length) state = "empty";
+  // "You are here" tracks the newest checkpoint in D1, so it can't go stale on deploy
+  // the way a hardcoded constant did. Backfill recent deploys into the log to keep it current.
+  const newest = points.length ? points[points.length - 1] : null;
+  const live = newest
+    ? { version: newest.version, title: newest.title, ymd: newest.ymd }
+    : { version: "aadhar.sh", title: "live build", ymd: "" };
+
+  const liveBar =
+    `<div class="sr-now"><span class="pin"></span><div><b>You are here.</b>` +
+    `<div class="sub">current system: <span class="mono">${esc(live.version)}</span>` +
+    ` &middot; ${esc(live.title)} &middot; shipped ${esc(live.ymd)}</div></div></div>`;
+
+  let main;
+  if (state === "ok") {
+    const data = points.map(p => ({ v: p.vnum, d: p.ymd, ver: p.version, t: p.title }));
+    main =
+`    <p class="sr-lede">Windows kept a calendar of restore points so you could roll the system back to an earlier day. These are real: one point per deploy, logged in a Cloudflare D1 database and seeded from this site's own git history. Drag the scrubber to preview the system as it stood at any point. Nothing here changes anything.</p>
+    <div class="sr-stage">
+      <div class="sr-listwrap"><div class="sr-listhead">Restore points</div><div class="sr-list" id="srList"></div></div>
+      <div class="sr-detail" id="srDetail"></div>
+    </div>
+    <div class="sr-scrub">
+      <span class="sr-scrub-end">${esc(points[0].ymd)}</span>
+      <input type="range" id="srRange" min="0" max="${points.length - 1}" value="${points.length - 1}" step="1" aria-label="restore point">
+      <span class="sr-scrub-end">${esc(points[points.length - 1].ymd)}</span>
+    </div>
+    <p class="sr-foot">Restoring for real is a destructive <b>D1 Time Travel</b> operation: a point-in-time restore run from the CLI, with a 7-day window on the free plan. This page never fires it; it only reads the log. See what shipped at each point in <a href="/updates">Windows Update</a>.</p>
+    <script>
+var POINTS = ${JSON.stringify(data)};
+(function(){
+  var R = document.getElementById('srRange'), L = document.getElementById('srList'), D = document.getElementById('srDetail');
+  if (!R || !L || !D) return;
+  function esc(s){ return String(s).replace(/[&<>]/g, function(c){ return c=='&'?'&amp;':c=='<'?'&lt;':'&gt;'; }); }
+  function dfmt(d){ var x = new Date(d + 'T12:00:00'); try { return x.toLocaleDateString(undefined, {weekday:'long', year:'numeric', month:'long', day:'numeric'}); } catch(e){ return d; } }
+  function mfmt(d){ var x = new Date(d + 'T12:00:00'); try { return x.toLocaleDateString(undefined, {year:'numeric', month:'long'}); } catch(e){ return d.slice(0,7); } }
+  var html = '', lastM = '';
+  for (var i = 0; i < POINTS.length; i++) {
+    var m = mfmt(POINTS[i].d);
+    if (m !== lastM) { html += '<div class="sr-mon">' + esc(m) + '</div>'; lastM = m; }
+    html += '<button class="sr-pt" type="button" data-i="' + i + '"><span class="rv">v' + POINTS[i].v + '</span><span class="rt">' + esc(POINTS[i].t) + '</span><span class="rd">' + POINTS[i].d.slice(5) + '</span></button>';
+  }
+  L.innerHTML = html;
+  function render(i){
+    var p = POINTS[i], recent = '';
+    for (var j = i; j >= 0 && j > i - 6; j--) recent += '<li><span class="rv">v' + POINTS[j].v + '</span>' + esc(POINTS[j].t) + '</li>';
+    D.innerHTML = '<div class="sr-dt">Restore point</div><div class="sr-date">' + dfmt(p.d) + '</div>' +
+      '<div class="sr-ver"><span class="mono">' + esc(p.ver) + '</span></div>' +
+      '<div class="sr-meta">point ' + (i + 1) + ' of ' + POINTS.length + ' &middot; ' + esc(p.t) + '</div>' +
+      '<div class="sr-changes-h">Installed up to this point</div><ul class="sr-changes">' + recent + '</ul>' +
+      '<button class="sr-btn" type="button" id="srGo">Restore to this point</button>' +
+      '<div class="sr-note" id="srNote" hidden>Preview only. A real rollback is a destructive D1 Time Travel restore run from the CLI, not something a visitor page should ever fire.</div>';
+    var go = document.getElementById('srGo'), note = document.getElementById('srNote');
+    if (go) go.onclick = function(){ if (note) note.hidden = !note.hidden; };
+    var items = L.querySelectorAll('.sr-pt');
+    for (var k = 0; k < items.length; k++) items[k].setAttribute('aria-current', k == i ? 'true' : 'false');
+    if (items[i] && items[i].scrollIntoView) items[i].scrollIntoView({block:'nearest'});
+  }
+  L.addEventListener('click', function(e){
+    var b = e.target.closest ? e.target.closest('.sr-pt') : null;
+    if (!b) return; var i = +b.getAttribute('data-i'); R.value = i; render(i);
+  });
+  R.addEventListener('input', function(){ render(+R.value); });
+  render(POINTS.length - 1);
+})();
+    </script>`;
+  } else {
+    const msg = state === "unbound"
+      ? "The restore-point log lives in a Cloudflare D1 database (aadhar-restore) that's being connected to this page. Once the binding lands, the scrubber lights up with 48 real restore points."
+      : state === "empty"
+        ? "The restore-point database is connected but empty. It seeds from this site's git history on the next publish."
+        : "The restore-point database didn't answer just now. It's backed by Cloudflare D1, and this page stays read-only either way.";
+    main =
+`    <p class="sr-lede">Windows kept a calendar of restore points so you could roll the system back to an earlier day.</p>
+    <div class="sr-pending"><span class="sr-gear"></span><div><b>System Restore is finishing setup.</b><div class="sub">${esc(msg)}</div></div></div>
+    <p class="sr-foot">Backed by <b>Cloudflare D1</b>, with a 7-day Time Travel window underneath for real recovery. See what's shipped in <a href="/updates">Windows Update</a>.</p>`;
+  }
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>System Restore · aadhar.sh</title>
+<meta name="description" content="Roll the site back through its real deploy history, in a Windows System Restore reskin backed by Cloudflare D1. Read-only.">
+<meta name="robots" content="noindex">
+<style>
+${xpChromeCss(680)}
+h1{margin:0 0 4px}
+.sr-lede{font-size:9.5pt;color:#4a5568;margin:0 0 12px;line-height:1.5}
+.sr-now{display:flex;align-items:center;gap:11px;border:1px solid #9db8e0;background:linear-gradient(180deg,#eef5fe,#dceafe);border-radius:4px;padding:10px 13px;margin:0 0 13px}
+.sr-now .pin{width:30px;height:30px;flex:0 0 30px;border-radius:50%;background:linear-gradient(180deg,#5b9bf0,#2f6fd0);box-shadow:inset 0 1px 0 rgba(255,255,255,.55);position:relative}
+.sr-now .pin::after{content:"";position:absolute;inset:0;margin:auto;width:10px;height:10px;border-radius:50%;background:#fff}
+.sr-now b{font-family:var(--font-caption);font-size:11pt;color:#1c3f78}
+.sr-now .sub{font-size:8.5pt;color:#46618c}
+.mono{font-family:var(--font-mono)}
+.sr-stage{display:flex;gap:11px;align-items:stretch}
+.sr-listwrap{flex:0 0 220px;border:1px solid #b7c0d0;border-radius:4px;overflow:hidden;display:flex;flex-direction:column;background:#fff}
+.sr-listhead{padding:5px 10px;font-family:var(--font-caption);font-size:9pt;font-weight:bold;color:#fff;background:linear-gradient(180deg,#4f8bd8,#2f6fd0)}
+.sr-list{overflow-y:auto;max-height:308px}
+.sr-mon{position:sticky;top:0;background:#eef2f8;color:#5a6b85;font-size:8pt;font-weight:bold;padding:3px 10px;border-bottom:1px solid #dde5f0;text-transform:uppercase;letter-spacing:.04em}
+.sr-pt{display:flex;align-items:baseline;gap:7px;width:100%;text-align:left;border:0;background:transparent;padding:5px 10px;font:inherit;font-size:8.5pt;color:#33415c;cursor:pointer;border-bottom:1px solid #f0f3f8}
+.sr-pt:hover{background:#f3f7fd}
+.sr-pt[aria-current=true]{background:#dceafe;box-shadow:inset 2px 0 0 #2f6fd0}
+.sr-pt .rv{font-family:var(--font-mono);font-size:7.5pt;color:#7a4eb0;flex:0 0 auto}
+.sr-pt .rt{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sr-pt .rd{font-family:var(--font-mono);font-size:7.5pt;color:#9aa6b8;flex:0 0 auto}
+.sr-detail{flex:1;border:1px solid #b7c0d0;border-radius:4px;background:#fbfdff;padding:12px 14px;min-height:308px}
+.sr-dt{font-size:8pt;color:#6b7280;text-transform:uppercase;letter-spacing:.05em}
+.sr-date{font-family:var(--font-caption);font-size:13pt;color:#15243f;margin:1px 0 2px}
+.sr-ver{margin:0 0 7px}.sr-ver .mono{font-size:9pt;color:#2f6fd0}
+.sr-meta{font-size:8.5pt;color:#6b7280;margin:0 0 11px}
+.sr-changes-h{font-size:8.5pt;font-weight:bold;color:#15243f;margin:0 0 4px}
+.sr-changes{list-style:none;margin:0;padding:0}
+.sr-changes li{font-size:9pt;color:#33415c;padding:3px 0;border-bottom:1px solid #eef2f7}
+.sr-changes .rv{font-family:var(--font-mono);font-size:7.5pt;color:#7a4eb0;margin-right:6px}
+.sr-btn{margin-top:11px;font:inherit;font-size:9pt;padding:4px 14px;cursor:pointer;border:1px solid #7c93b8;border-radius:3px;background:linear-gradient(180deg,#fdfefe,#dce6f4);box-shadow:inset 0 1px 0 #fff}
+.sr-btn:hover{background:linear-gradient(180deg,#fff,#e8f0fb)}
+.sr-note{margin-top:8px;font-size:8.5pt;color:#6b7280;background:#fffbe6;border:1px solid #f0e3a8;border-radius:3px;padding:6px 9px;line-height:1.5}
+.sr-scrub{display:flex;align-items:center;gap:10px;margin:14px 0 4px}
+.sr-scrub input[type=range]{flex:1;accent-color:#2f6fd0}
+.sr-scrub-end{font-family:var(--font-mono);font-size:8pt;color:#9aa6b8;flex:0 0 auto}
+.sr-foot{font-size:8.5pt;color:#6b7280;border-top:1px solid #e2e8f0;padding-top:8px;margin-top:12px;line-height:1.5}
+.sr-foot b{color:#15243f}
+.sr-pending{display:flex;align-items:center;gap:12px;border:1px solid #d8c98a;background:linear-gradient(180deg,#fffdf2,#fcf4d8);border-radius:4px;padding:13px 15px;margin:0 0 13px}
+.sr-gear{width:24px;height:24px;flex:0 0 24px;border-radius:50%;border:3px solid #c9b25e;border-top-color:transparent;animation:srspin 1.1s linear infinite}
+@keyframes srspin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.sr-gear{animation:none}}
+.sr-pending b{font-family:var(--font-caption);font-size:11pt;color:#7a5c12}
+.sr-pending .sub{font-size:8.5pt;color:#8a7430}
+@media (max-width:560px){.sr-stage{flex-direction:column}.sr-listwrap{flex:none}.sr-list{max-height:170px}}
+</style>
+</head>
+<body>
+<div class="window">
+  <div class="title-bar">
+    <span class="title-text"><span class="icon"></span>System Restore</span>
+    <span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/updates" title="back to Windows Update" aria-label="back to Windows Update"></a></span>
+  </div>
+  <div class="content">
+    <h1>System Restore</h1>
+    ${liveBar}
+${main}
+  </div>
+</div>
   <script src="/nav.js" defer></script>
 </body>
 </html>`;

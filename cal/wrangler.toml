@@ -10,8 +10,11 @@ compatibility_date = "2026-05-01"
 # the worker auto-detects which prefix was used and emits matching form
 # actions and redirect targets (see BASE_PATH handling in src/index.js).
 routes = [
-  { pattern = "aadhar.sh/coffee",   zone_name = "aadhar.sh" },
-  { pattern = "aadhar.sh/coffee/*", zone_name = "aadhar.sh" },
+  # `/coffee*` (not the bare exact path) so query-bearing URLs — shared links
+  # with ?utm_*, etc. — are owned by this worker too. An exact `aadhar.sh/coffee`
+  # pattern does NOT match `/coffee?x`, which then escaped to the Pages project.
+  # The trailing `*` also subsumes `/coffee/` and `/coffee/<sub>`.
+  { pattern = "aadhar.sh/coffee*",  zone_name = "aadhar.sh" },
   { pattern = "cal.aadhar.sh",      custom_domain = true }
 ]
 
@@ -24,7 +27,7 @@ id = "37acb65118fe485583a90a94cb89365e"
 # weekly sweep — expire pending bookings older than the configured TTL,
 # and reclaim slots that were never approved/declined.
 [triggers]
-crons = ["0 4 * * 0"]   # sunday 04:00 UTC
+crons = ["0 4 * * 7"]   # sunday 04:00 UTC (7=Sun; CF's parser rejects 0 here)
 
 [vars]
 # everything host-specific lives here. all times in IANA tz names so DST is handled.

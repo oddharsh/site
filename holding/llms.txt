@@ -2,7 +2,7 @@
 
 > Aadharsh Pannirselvam's corner of the web. Researching and investing at
 > Archetype; building this site by hand in the meantime. The root is a
-> personal homepage styled after the 2003 Windows-XP era; photographs (a
+> personal homepage styled after the 2003 Windows-XP era. Photographs (a
 > live photo grid) and longform writing (an editable Notepad at /writing)
 > are live. Sounds, dishes, and tinkering are still planned.
 
@@ -44,8 +44,23 @@ aggregations.
   textarea seeded with the canonical text — edits never save, so a reload
   restores the canonical version. "Writing in flux." Raw text is also at
   `/writing/<slug>.txt`.
+- [/reading](https://aadhar.sh/reading): A native, Luna-styled mirror of my
+  Curius reading list (curius.app/aadharsh-pannirselvam), pulled live through
+  AadharshBot and KV-cached. Saved articles newest-first, with my highlights.
 - [/serendipity](https://aadhar.sh/serendipity): A public pool of events
   worth going to (and who's going), contributed and browsable.
+- [/lwe](https://aadhar.sh/lwe): "Learning With Errors" — interactive,
+  chat-styled explainers of technical concepts, framed as MSN-Messenger
+  conversations with live inline demos. Concepts: `/lwe/fhe` (fully
+  homomorphic encryption), `/lwe/mpc` (multi-party computation), `/lwe/tee`
+  (trusted execution environments), `/lwe/utf8` (text encoding),
+  `/lwe/vigenere` (the Vigenère cipher & Kryptos), `/lwe/encoding` (image
+  encoding, AVIF vs JPEG vs jpegli with a live bytes-per-pixel demo), and
+  `/lwe/pcrypto` (programmable cryptography, a fair-use summary of the 0xPARC
+  primer that cross-links the FHE/MPC/TEE pages). The cryptography pages
+  quote a verbatim Archetype essay; FHE/MPC/TEE pages also have a live
+  "ask a follow-up" box (Workers AI + Vectorize RAG, grounded in the
+  source, gated by a homemade photo-CAPTCHA at `/lwe/ask`).
 
 ## JSON endpoints
 

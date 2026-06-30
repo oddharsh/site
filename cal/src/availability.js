@@ -83,9 +83,21 @@ function parseICSDate(value, params = "") {
   return ms;
 }
 
-// generate bookable slots from now+min_notice through max_lookahead, filtering
-// out conflicts with busy intervals. returns [{start, end}, ...] in unix-ms.
-export function generateSlots(env, busy) {
+// generate bookable slots from now+min_notice through max_lookahead.
+//
+// two distinct inputs, deliberately NOT merged:
+//   busy     — the host's real calendar (free/busy ICS). ONLY used to filter
+//              out overlapping slots. a packed calendar shrinks availability
+//              but must never trip the booking caps below.
+//   bookings — coffee bookings this system owns (pending + confirmed). these
+//              block their own slot AND count toward DAILY/WEEKLY_LIMIT, which
+//              cap how many *coffees* the host agrees to — not how many
+//              meetings they already have.
+//
+// conflating the two was a real bug: counting every calendar event toward the
+// daily limit zeroed out availability for anyone with a busy calendar.
+// returns [{start, end}, ...] in unix-ms.
+export function generateSlots(env, busy, bookings = []) {
   const tz       = env.HOST_TIMEZONE;
   const minNotice = +env.MIN_NOTICE_HOURS * 3600_000;
   const lookahead = +env.MAX_LOOKAHEAD_DAYS * 86400_000;
@@ -108,11 +120,15 @@ export function generateSlots(env, busy) {
   // build slots by walking each day in the lookahead window in HOST_TIMEZONE.
   // for each day, generate slot starts at every (slotMin+bufferMin) interval
   // between workStart and workEnd, filter conflicts.
+  // a slot is unbookable if it overlaps EITHER a real calendar event or an
+  // existing coffee booking. limits, below, only count the coffee bookings.
+  const conflicts = [...busy, ...bookings];
+
   const slots = [];
-  const dayCounts = {};   // YYYY-MM-DD → count of pending+confirmed
+  const dayCounts = {};   // YYYY-MM-DD → count of coffee bookings (pending+confirmed)
   const weekCounts = {};  // YYYY-WW → count
 
-  for (const b of busy) {
+  for (const b of bookings) {
     const k = ymd(b.start, tz);
     dayCounts[k]  = (dayCounts[k]  || 0) + 1;
     weekCounts[yw(b.start, tz)] = (weekCounts[yw(b.start, tz)] || 0) + 1;
@@ -140,7 +156,7 @@ export function generateSlots(env, busy) {
       t += stepMs;
 
       if (slotStart < earliest || slotEnd > latest) continue;
-      if (intersectsAny(slotStart, slotEnd, busy)) continue;
+      if (intersectsAny(slotStart, slotEnd, conflicts)) continue;
       slots.push({ start: slotStart, end: slotEnd });
     }
   }
