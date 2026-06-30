@@ -22,39 +22,37 @@ Key facts (don't hardcode these elsewhere, they drift):
 
 ## Route map (where each URL's code lives)
 
-Every dynamic route is dispatched from the top of `holding/_worker.js` (the
-`fetch` handler, ~line 163 on). Lines are approximate; grep the handler name.
+`holding/_worker.js/` is a **directory** bundled by Cloudflare at deploy. The
+dispatcher lives in `index.js`; each route's handler lives in a per-section
+module (search the module name to find it). `lib/` holds shared helpers.
 Static sections (`/garage/*`, `/lwe/*`, `/cars/*`, photos, `.well-known` docs)
 are served straight from disk and are already URL=folder.
 
-| URL | Handler / mechanism | `_worker.js` |
+| URL | Handler / mechanism | module (`holding/_worker.js/`) |
 |---|---|---|
-| `/` | homepage prerender (HTMLRewriter over `index.html`) + markdown negotiation | ~396 |
-| `/index.html` | 301 -> `/` | ~391 |
-| `/favicon.ico` | inline traffic-cone SVG | ~169 |
-| `/auth.md`, `/.well-known/api-catalog`, `/.well-known/oauth-*` | `serveFreshAsset` (static cards) | 184-187 |
-| `/agent/auth`, `/agent/auth/claim`, `/oauth2/token`, `/oauth2/revoke` | `handleAgentAuth*` | 188-191 |
-| `/whoareyou`, `/whoareyou.json` | `handleWhoareyou` / `handleWhoareyouJson` | 193, 198 |
-| `/security` | `handleSecurityCenter` | 201 |
-| `/reading` | `handleReading` (Curius) | 204 |
-| `/updates`, `/updates.json` | `handleWindowsUpdate` / `handleUpdatesJson` (D1) | 207, 211 |
-| `/restore` | `handleSystemRestore` (D1 `RESTORE_DB`) | 214 |
-| `/lens`, `/lens/` | `handleLens` ("The Other Web" shell) | 218 |
-| `/lens/fetch` | `handleLensFetch` (machine-view JSON engine) | 221 |
-| `/lens/shot` | `handleLensShot` (Browser Rendering PNG) | 224 |
-| `/lens.js` | static client renderer (`holding/lens.js`) | n/a |
-| `/writing`, `/writing/` | `handleWritingIndex` (Notepad folder) | 231 |
-| `/writing/<slug>` | `handleWritingPost` (Notepad over `.txt`) | 234 |
+| `/` | homepage prerender (HTMLRewriter over `index.html`) + markdown negotiation | `home.js` |
+| `/index.html` | 301 -> `/` | `index.js` |
+| `/favicon.ico` | inline traffic-cone SVG | `index.js` |
+| `/auth.md`, `/.well-known/api-catalog`, `/.well-known/oauth-*` | `serveFreshAsset` (static cards) | `lib/assets.js` |
+| `/agent/auth`, `/agent/auth/claim`, `/oauth2/token`, `/oauth2/revoke` | `handleAgentAuth*` | `agent.js` |
+| `/whoareyou`, `/whoareyou.json` | `handleWhoareyou` / `handleWhoareyouJson` | `whoareyou.js` |
+| `/security` | `handleSecurityCenter` | `security.js` |
+| `/reading` | `handleReading` (Curius) | `reading.js` |
+| `/updates`, `/updates.json`, `/restore` | `handleWindowsUpdate` / `handleUpdatesJson` / `handleSystemRestore` (D1) | `updates.js` |
+| `/lens`, `/lens/`, `/lens/fetch`, `/lens/shot` | `handleLens` / `handleLensFetch` / `handleLensShot` | `lens.js` |
+| `/lens.js` | static client renderer | `holding/lens.js` (served asset) |
+| `/writing`, `/writing/`, `/writing/<slug>` | `handleWritingIndex` / `handleWritingPost` (Notepad) | `writing.js` |
 | `/writing/<slug>.txt`, `/writing/posts.json` | ASSETS passthrough (dotted paths fall through) | n/a |
-| `/rn`, `/rn/tracks`, `/rn/admin`, `/rn/set` | `handleRn` / `handleRnTracks` / `handleRnAdmin` / `handleRnSet` | 241-253 |
-| `/bot` | `handleBotPage` | 262 |
-| `/around`, `/around/json` | `handleAround` / `handleAroundJson` (AadharshBot crawl) | 266, 270 |
-| `/images`, `/images/full` | 301 -> trailing slash | 277, 280 |
-| `/images/`, `/images/full/` | `handleImagesIndex` / `handleImagesFullIndex` (Apache-style listings) | 287, 290 |
-| `/images/manifest.json` | `handleImagesManifest` (from R2 keys) | 297 |
-| `/images/metadata.json`, `/images/meta/<stem>.json` | inline EXIF index + poison guard | 310, 335 |
-| `/images/full/<key>` | `servePhotoFromR2` (R2 originals) | 353 |
-| `/images/<stem>.<ext>` | thumbnail content-type guard | 372 |
+| `/rn`, `/rn/tracks`, `/rn/admin`, `/rn/set` | `handleRn` / `handleRnTracks` / `handleRnAdmin` / `handleRnSet` | `rn.js` |
+| `/bot` | `handleBotPage` | `bot.js` |
+| `/around`, `/around/json` | `handleAround` / `handleAroundJson` (AadharshBot crawl) | `around.js` |
+| `/images`, `/images/full` | 301 -> trailing slash | `index.js` |
+| `/images/*` (listings, manifest, metadata, R2 originals, thumb guard) | `handleImages*` / `servePhotoFromR2` + inline metadata in `index.js` | `photos.js` (+ `index.js`) |
+
+The shared toolbox: `lib/const.js` (THUMB_VERSION, CANONICAL_HOST), `lib/http.js`
+(esc, json/error responses, markdown negotiation), `lib/security.js` (security +
+discovery headers), `lib/chrome.js` (the XP window CSS), `lib/botauth.js`
+(AadharshBot signed fetch), `lib/assets.js` (`serveFreshAsset`).
 
 ### Bindings the worker reads (`env.*`)
 
@@ -76,8 +74,9 @@ dashboard. Every use is guarded, so a missing binding degrades, it doesn't crash
 
 `node verify-routes.mjs [baseUrl]` curls every route and asserts status +
 content-type (+ markers). All-green ("0 hard failure(s)") is the gate before and
-after any deploy. The repo reorg toward a skeuomorphic `_worker.js/` module tree
-(see [REORG-PROPOSAL.md](REORG-PROPOSAL.md)) uses this as its regression tripwire.
+after any deploy. The skeuomorphic `_worker.js/` module tree
+(see [REORG-PROPOSAL.md](REORG-PROPOSAL.md)) was extracted with this as the
+regression tripwire; keep it green on every future change.
 
 ---
 
