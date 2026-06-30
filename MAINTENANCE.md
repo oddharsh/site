@@ -5,9 +5,11 @@ with the exact command and the gotcha that bit me last time. Deep design notes
 and the full conventions list live in [CLAUDE.md](CLAUDE.md); this is the ops sheet.
 
 Three deploy targets:
-- **holding/** (the Pages site, aadhar.sh): `wrangler pages deploy holding --project-name aadhar-sh --branch holding --commit-dirty=true` (run from the repo root, never from a subdir, or wrangler ENOENTs scanning `images/holding/`).
+- **holding/** (the Pages site, aadhar.sh): **git-connected.** `git push origin main` triggers the Cloudflare Pages build, which bundles `holding/_worker.js` (and its imports, via wrangler's built-in esbuild) and ships it as the Worker Function. No build step we own; no `package.json`. Verify after every deploy with `node verify-routes.mjs https://aadhar.sh`. Break-glass only if the git pipeline is down: `wrangler pages deploy holding --project-name aadhar-sh --branch main --commit-dirty=true` (run from the repo root, never a subdir, or wrangler ENOENTs scanning `images/holding/`).
 - **serendipity/** (separate Worker, aadhar.sh/serendipity): `cd serendipity && wrangler deploy`.
 - **cal/** (coffee booker): source-complete, NOT deployed. Needs secrets first (see [cal/README.md](cal/README.md)).
+
+**Outage signature:** if static assets (`/`, `/nav.js`, `/lens.js`) return 200 but every worker route (`/lens`, `/around`, `/bot`, `/writing`) returns 404, the build shipped **static-only, no Function**. Confirm with `wrangler pages deployment tail <id>` (error `8000098` = "does not have a Pages Function"). Fix: redeploy; check the dashboard build output directory resolves so `_worker.js` is at the output root. This is the failure that took the site down once.
 
 Key facts (don't hardcode these elsewhere, they drift):
 - RN_KV namespace id: `3cb8a107c58e47dc9244e75b33401f36`
@@ -15,6 +17,67 @@ Key facts (don't hardcode these elsewhere, they drift):
 - `THUMB_VERSION` lives at the top of `holding/_worker.js` (the `?v=N` on every thumbnail).
 - `CACHE_VERSION` lives at `holding/sw.js` line ~28 (the service-worker cache key).
 - Canonical photo source folder: `/Users/aadharsh/Downloads/to post (from ssd)/`. Privacy rule: nothing else from elsewhere on disk feeds the pipeline.
+
+---
+
+## Route map (where each URL's code lives)
+
+Every dynamic route is dispatched from the top of `holding/_worker.js` (the
+`fetch` handler, ~line 163 on). Lines are approximate; grep the handler name.
+Static sections (`/garage/*`, `/lwe/*`, `/cars/*`, photos, `.well-known` docs)
+are served straight from disk and are already URL=folder.
+
+| URL | Handler / mechanism | `_worker.js` |
+|---|---|---|
+| `/` | homepage prerender (HTMLRewriter over `index.html`) + markdown negotiation | ~396 |
+| `/index.html` | 301 -> `/` | ~391 |
+| `/favicon.ico` | inline traffic-cone SVG | ~169 |
+| `/auth.md`, `/.well-known/api-catalog`, `/.well-known/oauth-*` | `serveFreshAsset` (static cards) | 184-187 |
+| `/agent/auth`, `/agent/auth/claim`, `/oauth2/token`, `/oauth2/revoke` | `handleAgentAuth*` | 188-191 |
+| `/whoareyou`, `/whoareyou.json` | `handleWhoareyou` / `handleWhoareyouJson` | 193, 198 |
+| `/security` | `handleSecurityCenter` | 201 |
+| `/reading` | `handleReading` (Curius) | 204 |
+| `/updates`, `/updates.json` | `handleWindowsUpdate` / `handleUpdatesJson` (D1) | 207, 211 |
+| `/restore` | `handleSystemRestore` (D1 `RESTORE_DB`) | 214 |
+| `/lens`, `/lens/` | `handleLens` ("The Other Web" shell) | 218 |
+| `/lens/fetch` | `handleLensFetch` (machine-view JSON engine) | 221 |
+| `/lens/shot` | `handleLensShot` (Browser Rendering PNG) | 224 |
+| `/lens.js` | static client renderer (`holding/lens.js`) | n/a |
+| `/writing`, `/writing/` | `handleWritingIndex` (Notepad folder) | 231 |
+| `/writing/<slug>` | `handleWritingPost` (Notepad over `.txt`) | 234 |
+| `/writing/<slug>.txt`, `/writing/posts.json` | ASSETS passthrough (dotted paths fall through) | n/a |
+| `/rn`, `/rn/tracks`, `/rn/admin`, `/rn/set` | `handleRn` / `handleRnTracks` / `handleRnAdmin` / `handleRnSet` | 241-253 |
+| `/bot` | `handleBotPage` | 262 |
+| `/around`, `/around/json` | `handleAround` / `handleAroundJson` (AadharshBot crawl) | 266, 270 |
+| `/images`, `/images/full` | 301 -> trailing slash | 277, 280 |
+| `/images/`, `/images/full/` | `handleImagesIndex` / `handleImagesFullIndex` (Apache-style listings) | 287, 290 |
+| `/images/manifest.json` | `handleImagesManifest` (from R2 keys) | 297 |
+| `/images/metadata.json`, `/images/meta/<stem>.json` | inline EXIF index + poison guard | 310, 335 |
+| `/images/full/<key>` | `servePhotoFromR2` (R2 originals) | 353 |
+| `/images/<stem>.<ext>` | thumbnail content-type guard | 372 |
+
+### Bindings the worker reads (`env.*`)
+
+KV/R2/D1/DO are resource bindings; the rest are secrets. All live in the Pages
+dashboard. Every use is guarded, so a missing binding degrades, it doesn't crash.
+
+| `env.*` | Kind | What |
+|---|---|---|
+| `ASSETS` | (auto) | static assets, auto-bound by Pages |
+| `RN_KV` | KV | tracks, manifest, artist pics, crawler caches (`3cb8a107c58e47dc9244e75b33401f36`) |
+| `PHOTOS_R2` | R2 | bucket `aadhar-photos`, SOOC originals |
+| `RESTORE_DB` | D1 | `/restore` + `/updates` changelog store |
+| `COUNTER` | Durable Object | cross-script binding to cf-garage's Counter (homepage visits) |
+| `RN_SIGNING_KEY_JWK` | secret | AadharshBot Ed25519 signing key (RFC 9421) |
+| `BROWSER_RENDER_TOKEN`, `CF_ACCOUNT_ID` | secret | Browser Rendering for `/lens/shot` |
+| `RN_BUST_SECRET` | secret | guards `/rn/admin` + `/rn/set` |
+
+### Verify the whole route surface
+
+`node verify-routes.mjs [baseUrl]` curls every route and asserts status +
+content-type (+ markers). All-green ("0 hard failure(s)") is the gate before and
+after any deploy. The repo reorg toward a skeuomorphic `_worker.js/` module tree
+(see [REORG-PROPOSAL.md](REORG-PROPOSAL.md)) uses this as its regression tripwire.
 
 ---
 
@@ -152,4 +215,5 @@ curl -s "https://aadhar.sh/images/manifest.json" | jq length          # photo co
 - **`jpegtran` / mozjpeg strip EXIF.** Rotate losslessly with `jpegtran -copy none -rotate N` *before* recompressing, and send its binary stdout to a file (`2>/dev/null > out.jpg`), not through a pipe that could mix in stderr.
 - **`wrangler pages deploy` runs from the repo root**, never from inside `holding/images/` etc.
 - **`_playlistId` is module-cached per isolate.** After changing `playlist-id`, redeploy to flush it (see the playlist section).
-- **A worker change is committed, not deployed.** `git commit` does not push to Cloudflare; run the deploy command. Live can lag the repo otherwise.
+- **A worker change deploys on `git push origin main`** (git-connected Pages). A local commit alone does not deploy; push it. After pushing, run `node verify-routes.mjs https://aadhar.sh` and wait for the build to go Active before trusting live.
+- **The worker is bundled, not hand-concatenated.** `_worker.js` may `import` sibling modules; wrangler/Cloudflare bundle them at deploy via built-in esbuild. Do not add a `package.json`/build script for this; the platform does it. The site stays no-build.
