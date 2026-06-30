@@ -1,6 +1,6 @@
 // _worker.js/index.js — request dispatcher + entry. The per-route handlers and
 // shared helpers live in sibling modules; wrangler/Cloudflare bundle this
-// directory at deploy (no build step). See REORG-PROPOSAL.md / MAINTENANCE.md.
+// directory at deploy (no build step). See MAINTENANCE.md for the route map.
 
 import { handleAgentAuthClaim, handleAgentAuthRegister, handleAgentAuthRevoke, handleAgentAuthToken } from "./agent.js";
 import { handleAround, handleAroundJson } from "./around.js";

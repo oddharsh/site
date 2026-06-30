@@ -74,9 +74,8 @@ dashboard. Every use is guarded, so a missing binding degrades, it doesn't crash
 
 `node verify-routes.mjs [baseUrl]` curls every route and asserts status +
 content-type (+ markers). All-green ("0 hard failure(s)") is the gate before and
-after any deploy. The skeuomorphic `_worker.js/` module tree
-(see [REORG-PROPOSAL.md](REORG-PROPOSAL.md)) was extracted with this as the
-regression tripwire; keep it green on every future change.
+after any deploy. The skeuomorphic `_worker.js/` module tree was extracted with
+this as the regression tripwire; keep it green on every future change.
 
 ---
 
