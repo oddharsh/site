@@ -1,0 +1,98 @@
+// bot.js — extracted from the worker (no-build reorg). Bundled by
+// wrangler/Cloudflare at deploy; not served (inside _worker.js/).
+import { BOT_NAME, BOT_UA, SIG_AGENT } from "./lib/botauth.js";
+import { xpChromeCss } from "./lib/chrome.js";
+import { esc } from "./lib/http.js";
+
+// ── /bot info page ──────────────────────────────────────────────────
+export function handleBotPage(request) {
+  const html = `<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>aadhar.sh/bot</title>
+<meta name="description" content="Identity and behavior of AadharshBot, the crawler operated by aadhar.sh.">
+<style>
+${xpChromeCss(660)}
+  h1 { font-family: "Trebuchet MS", Verdana, Geneva, sans-serif; font-size: 14pt; color: oklch(41.92% 0.0962 250.51); margin: 0 0 4px; font-weight: bold; }
+  h2 { font-family: "Trebuchet MS", Verdana, Geneva, sans-serif; font-size: 12pt; color: oklch(41.92% 0.0962 250.51); margin: 16px 0 6px; font-weight: bold; line-height: 1.3; }
+  h2::after { content: ""; display: block; height: 1px; background: oklch(86.67% 0.0294 259.59); margin-top: 8px; }
+  a:link { color: oklch(42.61% 0.2353 263.74); text-decoration: underline; } a:visited { color: oklch(42.09% 0.1935 328.36); } a:hover { color: oklch(62.80% 0.2577 29.23); }
+  code { font-family: "Courier New", Courier, monospace; background: oklch(96.72% 0 0); border: 1px solid oklch(88.22% 0 0); padding: 0 3px; }
+  .lede { color: oklch(38.67% 0 0); font-size: 10.5pt; margin: 0 0 12px; }
+  dl.fields { display: grid; grid-template-columns: 11em 1fr; gap: 1px; margin: 4px 0 14px; background: oklch(85.04% 0.0283 248.16); border: 1px solid oklch(61.14% 0.0611 253.60); border-top-color: oklch(47.12% 0.0555 253.58); border-left-color: oklch(47.12% 0.0555 253.58); font-size: 10pt; }
+  dl.fields dt { background: oklch(94.66% 0.0114 252.09); color: oklch(41.92% 0.0962 250.51); font-weight: bold; padding: 4px 8px; }
+  dl.fields dd { background: oklch(100.00% 0 0); margin: 0; padding: 4px 8px; font-family: "Courier New", Courier, monospace; font-size: 9.5pt; word-break: break-all; }
+  footer { text-align: center; font-size: 9pt; color: oklch(44.95% 0 0); margin-top: 16px; padding-top: 10px; border-top: 1px solid oklch(86.67% 0.0294 259.59); }
+</style>
+</head><body>
+<div class="window">
+  <div class="title-bar">
+    <span><span class="icon"></span>${BOT_NAME}</span>
+    <span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/" title="back to aadhar.sh" aria-label="back to aadhar.sh"></a></span>
+  </div>
+  <div class="content">
+    <h1>${BOT_NAME}</h1>
+    <p class="lede">
+      A small, transparent crawler operated by <a href="/">aadhar.sh</a>. If you see it
+      in your access logs, this page tells you who it is, what it does, and how to
+      stop it from visiting if you don't want it to.
+    </p>
+
+    <h2>Identity</h2>
+    <dl class="fields">
+      <dt>User-Agent</dt><dd>${esc(BOT_UA)}</dd>
+      <dt>Signature-Agent</dt><dd>${esc(SIG_AGENT)}</dd>
+      <dt>JWKS</dt><dd><a href="/.well-known/http-message-signatures-directory">/.well-known/http-message-signatures-directory</a></dd>
+      <dt>Algorithm</dt><dd>Ed25519 (EdDSA), per RFC 9421 + Web Bot Auth draft</dd>
+      <dt>Operator</dt><dd><!--email_off--><a href="mailto:coffee@aadhar.sh">coffee@aadhar.sh</a><!--/email_off--></dd>
+    </dl>
+
+    <h2>What it does</h2>
+    <p>
+      It fetches small numbers of public homepages on demand, mostly because I'm
+      curious. The <a href="/around">/around</a> dashboard shows what it
+      currently looks at.
+      It reads only what's publicly served. It respects <code>robots.txt</code>. It does not
+      submit forms, log in, or scrape behind a login. It caches results in
+      Cloudflare KV for at least an hour so it doesn't re-hit the same URL repeatedly.
+    </p>
+
+    <h2>How to verify it's really ${BOT_NAME}</h2>
+    <p>
+      Every request includes <code>Signature-Agent</code>, <code>Signature-Input</code>,
+      and <code>Signature</code> headers per
+      <a href="https://www.rfc-editor.org/rfc/rfc9421" target="_blank" rel="noopener">RFC 9421</a>
+      with the Web Bot Auth profile (<code>tag="web-bot-auth"</code>). Fetch the JWKS
+      at the URL above, find the key with the matching <code>kid</code>, and verify the
+      Ed25519 signature over the canonical components listed in <code>Signature-Input</code>.
+      If the verification fails, the request is not from this site.
+    </p>
+
+    <h2>How to opt out</h2>
+    <p>Add to your <code>robots.txt</code>:</p>
+    <pre><code>User-agent: ${BOT_NAME}
+Disallow: /</code></pre>
+    <p>
+      ${BOT_NAME} reads <code>robots.txt</code> on every cold cache hit and obeys
+      <code>Disallow</code> rules. If you have a question or a complaint, email
+      <!--email_off--><a href="mailto:coffee@aadhar.sh">coffee@aadhar.sh</a><!--/email_off--> and I'll reply by hand.
+    </p>
+
+    <footer>
+      &larr; <a href="/">aadhar.sh</a> &middot;
+      see it in action: <a href="/around">/around</a> &middot;
+      &copy; 2026 Aadharsh Pannirselvam
+    </footer>
+  </div>
+</div>
+  <script src="/nav.js" defer></script>
+</body></html>`;
+
+  return new Response(html, {
+    headers: {
+      "content-type":  "text/html; charset=utf-8",
+      "cache-control": "public, max-age=300, s-maxage=300",
+    },
+  });
+}
