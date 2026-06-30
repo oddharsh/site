@@ -1,0 +1,67 @@
+[
+  {
+    "text": "Programmable cryptography is 0xPARC's name for the second generation of cryptography, roughly the last 15 years. First-generation crypto hand-builds a bespoke protocol for each problem: RSA signs a message, and Yao's millionaire problem gets its own dedicated protocol to compare two incomes. Second-generation crypto instead hands you primitives you can program for any function you can express as code.",
+    "source": "https://aadhar.sh/lwe/pcrypto",
+    "title": "aadhar.sh: programmable crypto"
+  },
+  {
+    "text": "The shift to programmable cryptography is like going from single-purpose hardware (a digital alarm clock) to a general-purpose machine (a smartphone that runs whatever you compile for it). You stop inventing a new algorithm for each problem and start compiling the problem you already have into a primitive.",
+    "source": "https://aadhar.sh/lwe/pcrypto",
+    "title": "aadhar.sh: programmable crypto"
+  },
+  {
+    "text": "The 0xPARC primer organizes programmable cryptography into four pieces: 2PC (two-party computation), SNARKs (succinct proofs), FHE (computing on encrypted data), and ORAM (hiding which data you touch). The throughline is that all four compose into one toolkit and share a single compiler target, so each problem becomes something you encode rather than a fresh gadget you invent.",
+    "source": "https://aadhar.sh/lwe/pcrypto",
+    "title": "aadhar.sh: programmable crypto"
+  },
+  {
+    "text": "In two-party computation (2PC), two people compute F(x1, x2) where each knows only their own input and neither learns the other's. Yao's millionaire problem is the classic case: F is 'who earns more,' the inputs are the two incomes, and both walk away knowing the winner without learning the actual numbers. The engine underneath is a garbled circuit (one party encrypts a boolean circuit gate by gate, the other evaluates it blind) plus oblivious transfer; scaling 2PC past two parties leads to MPC.",
+    "source": "https://aadhar.sh/lwe/pcrypto",
+    "title": "aadhar.sh: programmable crypto"
+  },
+  {
+    "text": "A SNARK generalizes the idea of a signature into a proof of any statement shaped like 'I know X such that F(X, Y) = Z,' with F, Y, and Z public, once you encode F as equations. A signature already proves 'I know Alice's private key'; the headline SNARK example in the 0xPARC primer is 'I know M such that sha(M) = Y.' PLONK is one such proving scheme.",
+    "source": "https://aadhar.sh/lwe/pcrypto",
+    "title": "aadhar.sh: programmable crypto"
+  },
+  {
+    "text": "Fully homomorphic encryption (FHE) lets you encrypt your data, have a server compute on the ciphertext, and decrypt the result, while the server reads nothing. The 0xPARC primer's example is private machine translation: you send Enc(x) and get back Enc(translation), and the server never sees the plaintext.",
+    "source": "https://aadhar.sh/lwe/pcrypto",
+    "title": "aadhar.sh: programmable crypto"
+  },
+  {
+    "text": "ORAM (Oblivious RAM) addresses a leak that encryption alone leaves open: even with the data encrypted, a server still observes the access pattern, meaning which records you read, how often, and which ones together. ORAM scrambles each request into a batch of reads and writes so the server cannot tell which record you actually wanted.",
+    "source": "https://aadhar.sh/lwe/pcrypto",
+    "title": "aadhar.sh: programmable crypto"
+  },
+  {
+    "text": "The main reason programmable cryptography is not yet everywhere is cost. Proving a computation in a SNARK can run millions of times the cost of just doing the computation, so for a decade it stayed mostly theory with little implementation, until blockchains and other decentralized systems demanded it and pulled the practical work forward.",
+    "source": "https://aadhar.sh/lwe/pcrypto",
+    "title": "aadhar.sh: programmable crypto"
+  },
+  {
+    "text": "The unifying frame for programmable cryptography is that 2PC, MPC, SNARKs, FHE, and ORAM each earn their security guarantee from protocols and math rather than a hardware chip you have to trust. That puts them at the opposite end of the spectrum from a trusted execution environment (TEE): the same goal of computing on data nobody should see, with a different bet on where the trust lives.",
+    "source": "https://aadhar.sh/lwe/pcrypto",
+    "title": "aadhar.sh: programmable crypto"
+  },
+  {
+    "text": "A zero-knowledge proof is a protocol where a prover convinces a verifier that a statement is true without revealing anything beyond the fact of its truth. It must satisfy three properties: completeness (an honest prover convinces an honest verifier of a true statement), soundness (a cheating prover cannot convince the verifier of a false statement except with negligible probability), and zero-knowledge (the verifier learns nothing other than that the statement holds).",
+    "source": "https://en.wikipedia.org/wiki/Zero-knowledge_proof",
+    "title": "Zero-knowledge proof (Wikipedia)"
+  },
+  {
+    "text": "Secure multi-party computation lets several parties jointly compute a function over their inputs while keeping each input private. Its core security goals are input privacy (a party learns nothing about others' data beyond what the final output reveals) and correctness (honest parties either get the right result or detect cheating and abort). The adversary is modeled as a corrupt participant inside the protocol, one of the parties itself, who may collude with other corrupt parties.",
+    "source": "https://en.wikipedia.org/wiki/Secure_multi-party_computation",
+    "title": "Secure multi-party computation (Wikipedia)"
+  },
+  {
+    "text": "Homomorphic encryption allows computation on encrypted data without first decrypting it, with results that, once decrypted, match the outcome of computing on the plaintext. Fully homomorphic encryption is the strongest variant, supporting arbitrary circuits of unbounded depth built from multiple gate types, so any computation can in principle run on encrypted inputs by an untrusted party.",
+    "source": "https://en.wikipedia.org/wiki/Homomorphic_encryption",
+    "title": "Homomorphic encryption (Wikipedia)"
+  },
+  {
+    "text": "A garbled circuit, introduced by Andrew Yao, lets two mutually distrusting parties jointly evaluate a function expressed as a Boolean circuit without a trusted third party. One party encrypts the circuit by assigning random labels to each wire; the other obtains the labels for its own inputs through oblivious transfer (the sender learns nothing about which input the receiver chose) and then evaluates the garbled circuit to recover the output, so neither party learns the other's input.",
+    "source": "https://en.wikipedia.org/wiki/Garbled_circuit",
+    "title": "Garbled circuit (Wikipedia)"
+  }
+]

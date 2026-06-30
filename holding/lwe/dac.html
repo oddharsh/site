@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>aadhar.sh/lwe/dac</title>
+<meta name="description" content="Why DAC nerds fight about multibit versus delta-sigma, explained at MSN-chat pace. An R-2R ladder you can mismatch, a multibit staircase, a live noise-shaping DFT, an audible bit-depth demo, and a reconstruction filter showing the time-frequency tradeoff. Leans on Schiit Happened and head-fi, cited.">
+<link rel="canonical" href="https://aadhar.sh/lwe/dac">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23a8541f'/><text x='16' y='23' font-size='20' font-family='Trebuchet MS,sans-serif' fill='%23fff' text-anchor='middle'>∿</text></svg>">
+<meta property="og:type" content="article">
+<meta property="og:title" content="aadhar.sh/lwe/dac — DACs">
+<meta property="og:url" content="https://aadhar.sh/lwe/dac">
+
+<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace; --accent:#a8541f; --accent-soft:#f6ece1}
+* { box-sizing: border-box; }
+@media (prefers-reduced-motion:no-preference){@view-transition{navigation:auto}::view-transition-old(root),::view-transition-new(root){animation-duration:140ms}}
+html, body { margin: 0; padding: 0; } html{background:linear-gradient(180deg,oklch(56% 0.13 250) 0%,oklch(73% 0.10 236) 50%,oklch(88% 0.05 232) 60%,oklch(60% 0.16 140) 100%)}
+body { background: linear-gradient(180deg, oklch(56% 0.13 250) 0%, oklch(73% 0.10 236) 50%, oklch(88% 0.05 232) 60%, oklch(60% 0.16 140) 100%); font-family: var(--font-ui); font-size: 10.5pt; line-height: 1.5; color: oklch(21.78% 0 0); padding: 24px 12px 60px; min-height: 100vh; }
+.window { max-width: 640px; margin: 0 auto; background: oklch(100% 0 0); border: 2px solid #0831d9; border-right-color: #001ea0; border-bottom-color: #001ea0; border-top-left-radius: 8px; border-top-right-radius: 8px; overflow: hidden; box-shadow: inset 1px 1px 0 #166aee, inset 2px 2px 0 #0855dd, inset -1px -1px 0 #00138c, inset -2px -2px 0 #003bda, 4px 4px 0 rgba(0,30,160,.35); }
+.title-bar { background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%); color: #fff; font-family: var(--font-caption); font-weight: bold; font-size: 11pt; padding: 4px 5px 4px 8px; display: flex; align-items: center; gap: 6px; text-shadow: 1px 1px #0f1089; user-select: none; }
+.title-bar .title-text { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.title-bar .icon { width: 14px; height: 14px; flex: 0 0 14px; background: #fff; border: 1px solid #83400f; position: relative; }
+.title-bar .icon::before { content: "∿"; position: absolute; inset: 0; display: grid; place-items: center; font-size: 10px; color: var(--accent); font-weight: bold; text-shadow: none; }
+.controls { display: inline-flex; align-items: center; gap: 2px; }
+.controls .min, .controls .max, .controls .close { position: relative; box-sizing: border-box; width: 21px; height: 21px; display: inline-block; overflow: hidden; font-size: 0; color: transparent; border: 1px solid #6696eb; border-radius: 3px; text-decoration: none; cursor: pointer; background-image: linear-gradient(180deg, #5f8cf7 0%, #3a71f5 22%, #3e73f5 55%, #2a70f2 82%, #1045be 100%); }
+.controls .close { border-color: #d8401c; background-image: linear-gradient(180deg, #e8795f 0%, #e45f40 30%, #e45d3d 52%, #e2552a 80%, #ae3110 100%); }
+.controls .min::before { content: ""; position: absolute; left: 5px; right: 5px; bottom: 5px; height: 2px; background: #fff; }
+.controls .max::before { content: ""; position: absolute; left: 5px; top: 5px; width: 11px; height: 9px; box-sizing: border-box; border: 1px solid #fff; border-top-width: 2px; }
+.controls .close::before, .controls .close::after { content: ""; position: absolute; left: 50%; top: 50%; width: 13px; height: 2px; margin: -1px 0 0 -6.5px; background: #fff; }
+.controls .close::before { transform: rotate(45deg); } .controls .close::after { transform: rotate(-45deg); }
+.content { background: oklch(99% 0.005 95); border-top: 1px solid oklch(46% 0.02 260); border-left: 1px solid oklch(46% 0.02 260); padding: 0; }
+html { height: 100dvh; overflow: hidden; }
+body { min-height: 0; height: calc(100vh - 30px); height: calc(100dvh - 30px); overflow: hidden; display: flex; flex-direction: column; align-items: center; padding: 8px; }
+.window { flex: 0 1 auto; min-height: 0; max-height: 100%; display: flex; flex-direction: column; }
+.window > .title-bar { flex: 0 0 auto; }
+.window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 28px; }
+body::after { content: ""; position: fixed; left: 0; right: 0; bottom: 0; height: 30px; z-index: 1; background: linear-gradient(180deg, oklch(67% 0.15 256) 0%, oklch(58% 0.19 257) 4%, oklch(51% 0.20 258) 9%, oklch(49% 0.20 258) 50%, oklch(46% 0.20 259) 92%, oklch(40% 0.18 260) 100%); }
+.msgr { display: flex; flex-direction: column; }
+.msgr-head { display: flex; align-items: center; gap: 9px; padding: 8px 12px; background: linear-gradient(180deg, #fffdf6, #f6edd6); border-bottom: 1px solid #e0cf9e; }
+.msgr-head .ava { width: 34px; height: 34px; flex: 0 0 34px; border-radius: 4px; border: 1px solid #83400f; background: linear-gradient(180deg,#cf7a3a,#a8541f); position: relative; }
+.msgr-head .ava::before { content: "∿"; position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-weight: bold; font-size: 19px; font-family: var(--font-caption); }
+.msgr-head .who { flex: 1; min-width: 0; }
+.msgr-head .who b { font-family: var(--font-caption); font-size: 11pt; color: #83400f; }
+.msgr-head .who .stat { display: block; font-size: 8.5pt; color: oklch(46% 0.02 145); }
+.msgr-head .who .stat::before { content: "● "; color: oklch(60% 0.18 145); }
+.msgr-head .pets { font-size: 8pt; color: #6b7280; text-align: right; line-height: 1.35; }
+.disclosure { font-size: 8.5pt; color: #5a6679; background: #fcfbe9; border-bottom: 1px solid #e6dfa8; padding: 5px 12px; }
+.disclosure b { color: #83400f; } .disclosure a { color: #1a4fc4; }
+.log { padding: 10px 12px 4px; display: flex; flex-direction: column; gap: 11px; }
+.msg { display: grid; grid-template-columns: 26px 1fr; gap: 8px; align-items: start; content-visibility: auto; contain-intrinsic-size: auto 90px; }
+.msg .pic { width: 26px; height: 26px; border-radius: 4px; border: 1px solid #99a; position: relative; overflow: hidden; }
+.msg.bot .pic { background: linear-gradient(180deg,#cf7a3a,#a8541f); border-color:#83400f; }
+.msg.bot .pic::before { content: "∿"; position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-weight: bold; font-size: 13px; font-family: var(--font-caption); }
+.msg.you .pic { background: linear-gradient(180deg,#ffb35a,#f08a25); border-color:#c96a10; }
+.msg.you .pic::before { content: ":)"; position: absolute; inset: 0; display: grid; place-items: center; color: #7a3d00; font-weight: bold; font-size: 9px; transform: rotate(90deg); }
+.msg .who { font-size: 8.5pt; margin-bottom: 1px; } .msg .who b { font-family: var(--font-caption); }
+.msg.bot .who b { color: #83400f; } .msg.you .who b { color: #b5560c; }
+.msg .who time { color: #9aa3b2; font-family: var(--font-mono); font-size: 8pt; margin-left: 5px; }
+.msg .bubble { font-size: 10.5pt; } .msg.bot .bubble { color: #15243f; } .msg.you .bubble { color: #3a2a12; }
+.msg .bubble p { margin: 0 0 7px; } .msg .bubble p:last-child { margin-bottom: 0; } .msg .bubble em { font-style: italic; }
+.msg .bubble code { font-family: var(--font-mono); font-size: 9.5pt; background: #f1ece0; padding: 0 3px; border-radius: 2px; }
+.msg a { color: #1a4fc4; }
+.demo { grid-column: 1 / -1; border: 1px solid var(--accent); border-radius: 4px; background: var(--accent-soft); margin: 2px 0; overflow: hidden; box-shadow: inset 0 1px 0 #fff; }
+.demo > .bar { display: flex; align-items: center; gap: 6px; padding: 4px 8px; font-size: 8.5pt; color: #83400f; background: linear-gradient(180deg,#f6edd6,#ecdfb8); border-bottom: 1px solid var(--accent); font-weight: bold; }
+.demo > .bar::before { content: "🖥"; filter: grayscale(.2); }
+.demo > .pad { padding: 11px 12px 13px; background:#fff; }
+.demo .lead { font-size: 9pt; color: #4a5568; margin: 0 0 10px; } .demo .lead b { color: #15243f; }
+.mono { font-family: var(--font-mono); }
+.btn { font-family: var(--font-ui); font-size: 9pt; padding: 3px 9px; cursor: pointer; background: linear-gradient(to bottom,#fff,#e9edf5); border: 1px solid #7d8aa3; border-radius: 2px; box-shadow: inset 1px 1px 0 #fff; }
+.btn:hover { border-color: var(--accent); }
+.scrollnote { text-align: center; font-size: 8pt; color: #9aa3b2; padding: 3px 0 9px; }
+.compose { border-top: 1px solid #e0cf9e; background: linear-gradient(180deg,#fffdf6,#f3ead0); padding: 7px 10px; }
+.compose .box { display: flex; gap: 7px; }
+.compose .ta { flex: 1; min-height: 30px; border: 1px solid #7d8aa3; background: #fff; box-shadow: inset 1px 1px 0 #c3cbdb; padding: 4px 6px; font-family: var(--font-ui); font-size: 9.5pt; color: #9aa3b2; }
+@media (max-width: 520px){ body { padding: 8px 4px 32px; } .msgr-head .pets { display:none } }
+.lead{font-size:9.5pt;color:#5a4a38;margin:0 0 9px;line-height:1.5}.dac-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:4px 0 10px}.dac-row label{display:flex;align-items:center;gap:8px;font-size:9pt;color:#6b5640}.dac-row input[type=range]{accent-color:#a8541f}.dac-btn{font:inherit;font-size:9pt;padding:4px 12px;cursor:pointer;border:1px solid #c79a6a;border-radius:3px;background:linear-gradient(180deg,#fdf6ee,#f0dcc6);box-shadow:inset 0 1px 0 #fff;color:#6b3f17}.dac-btn:hover{background:linear-gradient(180deg,#fff,#f6e6d2)}.dac-btn:active{background:#e9d2b6}canvas#stairCanvas,canvas#nsCanvas{width:100%;max-width:560px;height:auto;border:1px solid #e0d3c2;border-radius:4px;background:#fffdf9;display:block}.dac-cap{font-size:8.5pt;color:#8a7a64;margin:6px 0 0;line-height:1.5}.demo .mono{font-family:var(--font-mono)}.demo .dim{color:#9aa3b2}.dac-bit{font:inherit;font-size:8.5pt;padding:4px 8px;cursor:pointer;border:1px solid #c79a6a;border-radius:3px;background:#f6ece1;color:#6b3f17;display:flex;flex-direction:column;align-items:center;line-height:1.2;min-width:46px}.dac-bit span{font-family:var(--font-mono);font-size:7pt;color:#9a7a55}.dac-bit[aria-pressed=true]{background:linear-gradient(180deg,#cf7a3a,#a8541f);color:#fff;border-color:#83400f}.dac-bit[aria-pressed=true] span{color:#f6ddc6}canvas#ladderXfer{width:100%;max-width:560px;height:auto;border:1px solid #e0d3c2;border-radius:4px;background:#fffdf9;display:block}.filt-wrap{display:flex;gap:8px;flex-wrap:wrap}.filt-wrap canvas{flex:1;min-width:160px;max-width:276px;height:auto;border:1px solid #e0d3c2;border-radius:4px;background:#fffdf9}.mu-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:4px 0 2px}.mu-col{min-width:0}.mu-h{font-size:8.5pt;font-weight:bold;color:#6b3f17;margin:0 0 3px}canvas#muMbCanvas,canvas#muDsCanvas{width:100%;height:auto;border:1px solid #e0d3c2;border-radius:3px;background:#fffdf9;display:block}</style>
+</head>
+<body>
+<div class="window">
+  <div class="title-bar" aria-hidden="true">
+    <span class="title-text"><span class="icon"></span>aadhar.sh/lwe — DACs</span>
+    <span class="controls"><span class="min" title="minimize"></span><span class="max" title="maximize"></span><a class="close" href="/lwe/" title="back to Learning With Errors" aria-label="back to Learning With Errors"></a></span>
+  </div>
+  <div class="content">
+    <div class="msgr">
+
+      <div class="msgr-head">
+        <div class="ava" aria-hidden="true"></div>
+        <div class="who"><b>DACs</b><span class="stat">Online, ladders vs noise shaping</span></div>
+        <div class="pets">Learning&nbsp;With&nbsp;Errors<br>bits &amp; voltages</div>
+      </div>
+
+      <p class="disclosure"><b>Starter draft.</b> The explanations lean on <a href="http://lucasbosch.de/schiit/jason-stoddard-shiit-happened-tablet-lblb.pdf" rel="external">Schiit Happened</a> (Jason Stoddard's book, shared free by the author) and the <a href="https://www.head-fi.org/threads/schiit-happened-the-story-of-the-gods-of-noise.701900/" rel="external">head-fi threads</a>, paraphrased and cited. The five demos run real math: a quantized staircase, an R-2R ladder you can mismatch, an actual DFT of a noise-shaped signal, a Web Audio tone you can hear at each bit depth, and a reconstruction filter showing the time-frequency tradeoff.</p>
+
+      <div class="log">
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>14:20</time></div>
+        <div class="bubble"><p>every dac debate online collapses into multibit versus delta-sigma, and everyone gets religious about it. what's the actual engineering difference, underneath the tribalism?</p></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>DACs</b><time>14:20</time></div>
+        <div class="bubble"><p>Both turn a stream of numbers into a voltage. They split on how to rebuild the wave from the samples. Multibit builds each sample as one exact level. Delta-sigma approximates that level with a coarse switch running very fast, then hides the leftover error where your ears can't reach. Two roads to the same clean output.</p></div></div></div>
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>14:21</time></div>
+        <div class="bubble"><p>start with multibit. that's the one that works the way I'd naively guess.</p></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>DACs</b><time>14:21</time></div>
+        <div class="bubble"><p>It does. An N-bit value selects one of 2<sup>N</sup> voltages, and a resistor ladder (R-2R) sums the bits into exactly that level. A 16-bit sample picks one of 65,536 voltages. The raw output is a staircase, one flat step per sample, which a filter then smooths into a curve.</p></div></div></div>
+
+      <div class="demo" id="demo-stair">
+        <div class="bar">the staircase &middot; drag the bit depth</div>
+        <div class="pad"><p class="lead">A multibit DAC builds each sample as one exact voltage, chosen from 2<sup>N</sup> levels a resistor ladder defines. Drag the bit depth: more bits means a finer staircase, closer to the smooth wave underneath.</p><div class="dac-row"><label>bit depth <input type="range" id="stairBits" min="3" max="10" value="4"> <span id="stairN" class="mono">4-bit &middot; 16 levels</span></label></div><canvas id="stairCanvas" width="560" height="180"></canvas></div>
+      </div>
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>14:22</time></div>
+        <div class="bubble"><p>back up. how does a ladder of resistors actually turn the bits into that exact voltage?</p></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>DACs</b><time>14:22</time></div>
+        <div class="bubble"><p>It is a chain of voltage dividers built from only two resistor values, R and 2R, one rung per bit. The trick: from any rung, the resistance looking back toward the smaller bits always works out to R, so each rung halves the contribution of the one above it. The most significant bit lands Vref/2 at the output, the next Vref/4, then Vref/8, on down. Switch a bit to Vref and it adds its rung's share, so the total is Vref times the binary value over 2<sup>N</sup>, all from two resistor values repeated.</p></div></div></div>
+
+      <div class="demo" id="demo-ladder">
+        <div class="bar">the R-2R ladder &middot; toggle bits, then add resistor error</div>
+        <div class="pad"><p class="lead">An R-2R ladder turns N bits into one voltage from just two resistor values. Each raised bit adds half the previous bit's share: the MSB adds Vref/2, the next Vref/4, and so on. Toggle the bits, then crank the resistor tolerance and watch the transfer curve bend.</p><div class="dac-row" id="ladderBits"></div><div class="dac-row"><span class="mono" id="ladderOut">Vout = 0.500 Vref</span></div><div class="dac-row"><label>resistor tolerance <input type="range" id="ladderTol" min="0" max="10" value="0" step="0.5"> <span class="mono" id="ladderTolL">0.0%</span></label></div><canvas id="ladderXfer" width="560" height="150"></canvas><p class="dac-cap">The transfer curve over all 64 codes, ideal (straight) against actual. Errors in the big bits bend the line; push the tolerance and a step can run backward (red), a non-monotonic glitch. That is why a 20-bit ladder wants parts matched to about 1 part per million: the MSB resistor alone has to beat the size of the smallest step.</p></div>
+      </div>
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>14:23</time></div>
+        <div class="bubble"><p>so a tiny error in the big bits wrecks it. that's where the cost goes.</p></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>DACs</b><time>14:23</time></div>
+        <div class="bubble"><p>Exactly. Those resistors have to be matched to brutal tolerances, which is instrumentation hardware, not audio-grade parts. Schiit's Yggdrasil runs a quad of 20-bit Analog Devices AD5791 ladders, the same parts that sit in MRI machines, because ordinary chips can't hold that line.</p> <a href="https://darko.audio/2018/04/dial-m-for-multi-bit-schiits-yggdrasil-analog-2-dac/" rel="external" title="Darko.Audio on the Yggdrasil">[src]</a></div></div></div>
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>14:24</time></div>
+        <div class="bubble"><p>ok, delta-sigma. how do you get clean audio out of a switch that's basically on or off?</p></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>DACs</b><time>14:24</time></div>
+        <div class="bubble"><p>Speed plus a feedback loop. Run a 1-bit quantizer at 64 to 256 times the audio rate, and feed the quantization error back so the output works out to <code>X(z)&middot;z<sup>-1</sup> + E(z)&middot;(1 - z<sup>-1</sup>)</code>. That <code>(1 - z<sup>-1</sup>)</code> is a high-pass filter on the error: it shoves the noise up into ultrasonic frequencies, out of the band you hear, where a cheap analog filter wipes it. You trade amplitude precision for timing precision, which is exactly what digital is good at.</p> <a href="https://en.wikipedia.org/wiki/Delta-sigma_modulation" rel="external" title="Delta-sigma modulation">[src]</a></div></div></div>
+
+      <div class="demo" id="demo-noise">
+        <div class="bar">noise shaping &middot; a live DFT</div>
+        <div class="pad"><p class="lead">A delta-sigma DAC runs a coarse quantizer fast, with a feedback loop that shapes the quantization noise. Toggle it: the same 3-bit quantizer either way, but shaping pushes the error up out of the band you can hear (shaded).</p><div class="dac-row"><button id="nsToggle" class="dac-btn">noise shaping: ON</button> <span class="mono dim" id="nsInfo">3-bit quantizer, 1st-order shaping</span></div><canvas id="nsCanvas" width="560" height="200"></canvas><p class="dac-cap">Spectrum of the quantizer output. The spike is the tone; the floor is quantization noise. Shaping tilts that floor up and away from the shaded audible band.</p></div>
+      </div>
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>14:25</time></div>
+        <div class="bubble"><p>huh. same coarse quantizer either way, but shaping pulls the floor down inside the band. that's the whole move?</p></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>DACs</b><time>14:25</time></div>
+        <div class="bubble"><p>That's the whole move. Stack more integrators and the term becomes <code>(1 - z<sup>-1</sup>)<sup>2</sup></code> or <code><sup>3</sup></code> for a steeper tilt. Because the quantizer is just a fast switch, it stays cheap and very linear, which is why nearly every DAC chip on the market (ESS, AKM, Cirrus) is delta-sigma and posts excellent THD and SNR.</p></div></div></div>
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>14:26</time></div>
+        <div class="bubble"><p>both end up as a stairstep or a 1-bit stream. how does that become a smooth analog wave? something filters it, right?</p></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>DACs</b><time>14:26</time></div>
+        <div class="bubble"><p>The reconstruction filter, and it carries the other big optimization. The ideal one is a sinc, a perfect brick wall at 20 kHz, but a brick wall in frequency is an endless ripple in time. That is the Fourier tradeoff: you get sharpness in frequency or cleanliness in time, and tightening one loosens the other. A fast, sharp filter kills the images just above the band but rings; a slow filter rings less but rolls off some treble and lets a little imaging through. NOS DACs skip the filter (no ringing, images and all); oversampling first pushes the images far up, so a gentle filter can finish without ringing much.</p></div></div></div>
+
+      <div class="demo" id="demo-filter">
+        <div class="bar">reconstruction filter &middot; time against frequency</div>
+        <div class="pad"><p class="lead">A windowed-sinc reconstruction filter. Drag the sharpness: more taps steepen the frequency wall on the right, and the impulse response on the left rings longer to pay for it. You cannot tighten both at once.</p><div class="dac-row"><label>sharpness <input type="range" id="filtSharp" min="1" max="9" value="3" step="0.1"> <span class="mono" id="filtSharpL"></span></label></div><div class="filt-wrap"><canvas id="filtTime" width="276" height="150"></canvas><canvas id="filtFreq" width="276" height="150"></canvas></div><p class="dac-cap">Left: the impulse response in time, the sinc and its ringing. Right: the frequency response, flat through the shaded audio band and rolling off near Nyquist. A sharper wall on the right means longer ringing on the left.</p></div>
+      </div>
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>14:27</time></div>
+        <div class="bubble"><p>so the filter shape is a taste call as much as a number on a spec sheet.</p></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>DACs</b><time>14:27</time></div>
+        <div class="bubble"><p>Largely yes, and a lot of the audible gap between two competent DACs lives right here, more than in the last decimal of THD. It is also Mike Moffat's whole angle: instead of the stock windowed-sinc he ships a custom closed-form filter, the kind of choice a measurement cannot fully settle.</p></div></div></div>
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>14:28</time></div>
+        <div class="bubble"><p>so if delta-sigma measures better and costs less, why does multibit still have a cult around it?</p></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>DACs</b><time>14:28</time></div>
+        <div class="bubble"><p>Two honest reasons. First, coarse bits are audible when nothing shapes them away, and some listeners argue the modulator's behavior on quiet passages and decay sounds different in ways a steady-tone measurement won't show. Second, Mike Moffat, the digital half of Schiit, bet a company on multibit, the ladders plus that closed-form filter, and built a following that hears a difference. The measurable gap is tiny and often below audibility; the preference is real to the people who hold it and hard to reduce to one number.</p> <a href="http://lucasbosch.de/schiit/jason-stoddard-shiit-happened-tablet-lblb.pdf" rel="external" title="Schiit Happened, Jason Stoddard">[src]</a></div></div></div>
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>14:30</time></div>
+        <div class="bubble"><p>I get the theory, but I still can't reconcile what people MEAN by the multibit sound versus delta-sigma. can you make that difference concrete?</p></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>DACs</b><time>14:30</time></div>
+        <div class="bubble"><p>The honest place it lives is low-level linearity: the soft tail of a note, where only the bottom bits are working. Multibit rounds to its nearest exact level, which down there bends the wave into harmonic distortion. Delta-sigma keeps the level honest on average and trades that for a shaped noise floor. Same quiet tone, two different imperfections. Here they are side by side, as spectra you can also play.</p></div></div></div>
+
+      <div class="demo" id="demo-music">
+        <div class="bar">the contested ground · low-level linearity</div>
+        <div class="pad"><p class="lead">Where the multibit-versus-delta-sigma argument actually lives: a quiet tone, the soft tail of a note, where only the lowest bits are working. Drag the bit depth. Multibit rounds to its nearest exact level, which at low level bends the wave into harmonic distortion; delta-sigma keeps the level honest on average but rides a shaped noise floor. Same tone, two flavors of imperfection.</p><div class="dac-row"><label>bit depth <input type="range" id="muBits" min="4" max="16" value="6" step="1"> <span id="muBitsL" class="mono">6-bit</span></label></div><div class="mu-grid"><div class="mu-col"><div class="mu-h">multibit (round to level)</div><canvas id="muMbCanvas" width="270" height="150"></canvas><div class="dac-row"><button class="dac-btn" data-topo="mb">play</button> <span class="mono dim" id="muMbInfo"></span></div></div><div class="mu-col"><div class="mu-h">delta-sigma (noise-shaped)</div><canvas id="muDsCanvas" width="270" height="150"></canvas><div class="dac-row"><button class="dac-btn" data-topo="ds">play</button> <span class="mono dim" id="muDsInfo"></span></div></div></div><p class="dac-cap">Both spectra are the same quiet tone. Multibit sprouts harmonic spikes at the tone's multiples (distortion); delta-sigma stays a single clean spike on a raised noise floor (no harmonics). Push the bit depth toward 16 and both shrink below hearing.</p></div>
+      </div>
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>14:31</time></div>
+        <div class="bubble"><p>so multibit adds harmonics, delta-sigma adds noise, and by 16-bit both basically vanish.</p></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>DACs</b><time>14:31</time></div>
+        <div class="bubble"><p>That is the whole reconciliation: pick your imperfection. Harmonic distortion can read as warmth or as grit; a noise floor reads as clean, though some hear it as veiling. On good 24-bit gear both sit below audibility, so the preference comes down to taste and system matching rather than a measurement. Real multibit DACs usually dither as well, which trades their distortion for a noise floor of their own and narrows the gap further.</p></div></div></div>
+
+      <div class="demo" id="demo-hear">
+        <div class="bar">hear the bit depth</div>
+        <div class="pad"><p class="lead">Quantization noise is audible when the bit depth is low. Click to hear a 440 Hz tone quantized to each depth (about a second each, through your speakers).</p><div class="dac-row" id="hearBtns"><button class="dac-btn" data-bits="2">2-bit</button><button class="dac-btn" data-bits="4">4-bit</button><button class="dac-btn" data-bits="6">6-bit</button><button class="dac-btn" data-bits="16">16-bit</button></div><p class="dac-cap">Same tone, fewer levels. At 2-bit the error is loud hash; by 16-bit it's gone. Delta-sigma keeps the bits low and moves that hash above 20 kHz instead.</p></div>
+      </div>
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>14:29</time></div>
+        <div class="bubble"><p>yeah, I can hear the hash at 2-bit, and it's gone by 16. and delta-sigma just shoves that hash above 20k instead of spending money to delete it.</p></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>DACs</b><time>14:29</time></div>
+        <div class="bubble"><p>Right. Multibit pays in hardware to make every level physically exact. Delta-sigma pays in cleverness to make the errors inaudible. Both arrive at clean sound; they just disagree about where to put the hard part, and the filter is where a lot of the audible character is decided.</p></div></div></div>
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>14:30</time></div>
+        <div class="bubble"><p>clearest version of this I've read. thanks.</p><p>&rarr; <a href="http://lucasbosch.de/schiit/jason-stoddard-shiit-happened-tablet-lblb.pdf" rel="external">Schiit Happened (Jason Stoddard)</a> &middot; <a href="https://www.head-fi.org/threads/schiit-happened-the-story-of-the-gods-of-noise.701900/" rel="external">the head-fi thread</a> &middot; <a href="https://en.wikipedia.org/wiki/Delta-sigma_modulation" rel="external">delta-sigma on Wikipedia</a> &middot; <a href="/lwe/">back to Learning With Errors</a></p></div></div></div>
+
+      <div class="scrollnote">end of first pass</div>
+
+      </div>
+      <div class="compose"><div class="box"><div class="ta">This is a recorded conversation. The demos above run live: drag, toggle, and click to hear.</div></div></div>
+    </div>
+  </div>
+</div>
+
+<script type="speculationrules">
+{ "prerender": [ { "where": { "and": [ { "href_matches": "/*" }, { "not": { "href_matches": "/" } }, { "not": { "href_matches": "/around*" } }, { "not": { "href_matches": "/whoareyou*" } } ] }, "eagerness": "moderate" } ], "prefetch": [ { "where": { "and": [ { "or": [ { "href_matches": "/garage/*" }, { "href_matches": "/lwe/*" } ] }, { "not": { "href_matches": "/lwe/ask*" } } ] }, "eagerness": "eager" } ] }
+</script>
+<script>
+if ("serviceWorker" in navigator) { var reg = function () { navigator.serviceWorker.register("/sw.js").catch(function () {}); }; "requestIdleCallback" in window ? requestIdleCallback(reg, { timeout: 2000 }) : setTimeout(reg, 1000); }
+</script>
+<script>
+// ── Demo A: multibit staircase ───────────────────────────────────────
+(function(){
+  var c=document.getElementById('stairCanvas'); if(!c) return;
+  var ctx=c.getContext('2d'), bits=document.getElementById('stairBits'), lbl=document.getElementById('stairN');
+  var W=c.width, H=c.height, mid=H/2, amp=H*0.40, cycles=2, samples=48;
+  function draw(){
+    var N=+bits.value, L=Math.pow(2,N), maxv=L/2-1;
+    lbl.textContent=N+'-bit · '+L.toLocaleString()+' levels';
+    ctx.clearRect(0,0,W,H);
+    if(N<=5){ ctx.strokeStyle='#efe6d8'; ctx.lineWidth=1; for(var k=-maxv;k<=maxv;k++){ var yy=mid-(k/maxv)*amp; ctx.beginPath(); ctx.moveTo(0,yy); ctx.lineTo(W,yy); ctx.stroke(); } }
+    ctx.strokeStyle='#cbb89e'; ctx.lineWidth=1.5; ctx.beginPath();
+    for(var x=0;x<=W;x++){ var t=x/W*cycles*2*Math.PI, y=mid-Math.sin(t)*amp; x?ctx.lineTo(x,y):ctx.moveTo(x,y); }
+    ctx.stroke();
+    ctx.strokeStyle='#a8541f'; ctx.lineWidth=2; ctx.beginPath();
+    for(var i=0;i<samples;i++){ var s=Math.sin(i/samples*cycles*2*Math.PI), q=Math.round(s*maxv)/maxv, x0=i/samples*W, x1=(i+1)/samples*W, yq=mid-q*amp; i?ctx.lineTo(x0,yq):ctx.moveTo(x0,yq); ctx.lineTo(x1,yq); }
+    ctx.stroke();
+  }
+  bits.addEventListener('input',draw); draw();
+})();
+
+// ── Demo B: delta-sigma noise shaping (real DFT) ──────────────────────
+(function(){
+  var c=document.getElementById('nsCanvas'); if(!c) return;
+  var ctx=c.getContext('2d'), btn=document.getElementById('nsToggle'), info=document.getElementById('nsInfo');
+  var W=c.width, H=c.height, N=512, shape=true, BITS=3;
+  function clamp(v){ return v>1?1:(v<-1?-1:v); }
+  function spectrum(){
+    var maxv=Math.pow(2,BITS)/2-1, k0=6, y=new Array(N), e=0;
+    for(var n=0;n<N;n++){
+      var s=0.7*Math.sin(2*Math.PI*k0*n/N), q;
+      if(shape){ var w=s-e; q=clamp(Math.round(w*maxv)/maxv); e=q-w; }
+      else { q=clamp(Math.round(s*maxv)/maxv); }
+      y[n]=q;
+    }
+    var half=N/2, mag=new Array(half);
+    for(var k=0;k<half;k++){ var re=0,im=0; for(var m=0;m<N;m++){ var a=2*Math.PI*k*m/N; re+=y[m]*Math.cos(a); im-=y[m]*Math.sin(a); } mag[k]=Math.sqrt(re*re+im*im)/N; }
+    return mag;
+  }
+  function draw(){
+    info.textContent=BITS+'-bit quantizer, '+(shape?'1st-order shaping':'no shaping');
+    btn.textContent='noise shaping: '+(shape?'ON':'OFF');
+    var mag=spectrum(), half=mag.length, band=Math.floor(half*0.25);
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle='#f3ece1'; ctx.fillRect(0,0,band/half*W,H);
+    var top=0, bot=-120;
+    function py(db){ return H-((db-bot)/(top-bot))*H; }
+    ctx.strokeStyle=shape?'#a8541f':'#8a93a0'; ctx.lineWidth=1.5; ctx.beginPath();
+    for(var k=0;k<half;k++){ var x=k/half*W, db=20*Math.log10(mag[k]+1e-9), yy=py(db); k?ctx.lineTo(x,yy):ctx.moveTo(x,yy); }
+    ctx.stroke();
+  }
+  btn.addEventListener('click',function(){ shape=!shape; draw(); }); draw();
+})();
+
+// ── Demo C: hear the bit depth (Web Audio, user gesture) ──────────────
+(function(){
+  var wrap=document.getElementById('hearBtns'); if(!wrap) return; var actx=null;
+  wrap.addEventListener('click',function(ev){
+    var b=ev.target.closest&&ev.target.closest('button[data-bits]'); if(!b) return;
+    var bits=+b.getAttribute('data-bits');
+    try{ actx=actx||new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ return; }
+    if(actx.resume) actx.resume();
+    var sr=actx.sampleRate, len=Math.floor(sr*1.1), buf=actx.createBuffer(1,len,sr), ch=buf.getChannelData(0);
+    var maxv=Math.pow(2,bits)/2-1, f=440;
+    for(var i=0;i<len;i++){
+      var env=Math.min(1, i/(sr*0.02), (len-i)/(sr*0.06)), s=Math.sin(2*Math.PI*f*i/sr)*0.25;
+      ch[i]=(maxv>0?Math.round(s*maxv)/maxv:0)*env;
+    }
+    var src=actx.createBufferSource(); src.buffer=buf; src.connect(actx.destination); src.start();
+  });
+})();
+// ── Demo: the R-2R ladder (binary weighting + why precision matters) ──
+// An N-bit voltage-mode R-2R ladder. Each bit i contributes Vref * 2^i / 2^N,
+// so the MSB is half of Vref, the next a quarter, and so on, built from just
+// two resistor values. A tolerance on those resistors perturbs each bit's
+// weight; errors in the big bits bend the transfer curve and can break
+// monotonicity (a higher code yields a lower voltage), the failure a real
+// ladder must engineer away. Per-bit error directions are fixed so the slider
+// only scales them.
+(function(){
+  var wrap = document.getElementById('ladderBits'); if (!wrap) return;
+  var out = document.getElementById('ladderOut'), tol = document.getElementById('ladderTol'), tolL = document.getElementById('ladderTolL');
+  var xfer = document.getElementById('ladderXfer'), xctx = xfer && xfer.getContext('2d');
+  var N = 6, MAX = (1 << N) - 1, code = 1 << (N - 1);
+  var dir = [0.7, -0.9, 0.4, -0.6, 0.85, -0.3]; // fixed error direction per bit (index = bit i, LSB..MSB)
+  var html = '';
+  for (var b = N - 1; b >= 0; b--) html += '<button class="dac-bit" type="button" data-b="' + b + '" aria-pressed="false">b' + b + '<span>Vref/' + Math.pow(2, N - b) + '</span></button>';
+  wrap.innerHTML = html;
+  function weights(t) { var w = []; for (var i = 0; i < N; i++) w[i] = (Math.pow(2, i) / Math.pow(2, N)) * (1 + dir[i] * t); return w; }
+  function vout(c, w) { var v = 0; for (var i = 0; i < N; i++) if (c & (1 << i)) v += w[i]; return v; }
+  function render() {
+    var t = (+tol.value) / 100; if (tolL) tolL.textContent = (+tol.value).toFixed(1) + '%';
+    var w = weights(t);
+    if (out) out.textContent = 'Vout = ' + vout(code, w).toFixed(3) + ' Vref   (code ' + code + ' of ' + MAX + ')';
+    var btns = wrap.querySelectorAll('.dac-bit');
+    for (var k = 0; k < btns.length; k++) { var bb = +btns[k].getAttribute('data-b'); btns[k].setAttribute('aria-pressed', (code & (1 << bb)) ? 'true' : 'false'); }
+    if (!xctx) return;
+    var W = xfer.width, H = xfer.height; xctx.clearRect(0, 0, W, H);
+    xctx.strokeStyle = '#cbb89e'; xctx.lineWidth = 1.2; xctx.beginPath();
+    for (var c = 0; c <= MAX; c++) { var x = 5 + c / MAX * (W - 10), y = H - 5 - (c / MAX) * (H - 10); c ? xctx.lineTo(x, y) : xctx.moveTo(x, y); }
+    xctx.stroke();
+    var vfull = vout(MAX, w) || 1, px = null, pv = 0;
+    for (var c2 = 0; c2 <= MAX; c2++) {
+      var v = vout(c2, w), X = 5 + c2 / MAX * (W - 10), Y = H - 5 - (v / vfull) * (H - 10);
+      if (px) { var nm = v < pv - 1e-9; xctx.strokeStyle = nm ? '#c0392b' : '#a8541f'; xctx.lineWidth = nm ? 2.4 : 1.6; xctx.beginPath(); xctx.moveTo(px.x, px.y); xctx.lineTo(X, Y); xctx.stroke(); }
+      px = { x: X, y: Y }; pv = v;
+    }
+  }
+  wrap.addEventListener('click', function(e) { var b = e.target.closest && e.target.closest('.dac-bit'); if (!b) return; code ^= (1 << +b.getAttribute('data-b')); render(); });
+  if (tol) tol.addEventListener('input', render);
+  render();
+})();
+
+// ── Demo: the reconstruction filter, a time vs frequency tradeoff ─────
+// A windowed-sinc reconstruction filter. Raising the tap count sharpens the
+// frequency roll-off near Nyquist but lengthens the impulse response, so the
+// ringing in time grows. You cannot be arbitrarily sharp in both domains: that
+// is the Fourier uncertainty tradeoff that NOS, oversampling, apodizing, and
+// closed-form filters each answer differently.
+(function(){
+  var sh = document.getElementById('filtSharp'); if (!sh) return;
+  var shL = document.getElementById('filtSharpL');
+  var tC = document.getElementById('filtTime'), fC = document.getElementById('filtFreq');
+  var tctx = tC && tC.getContext('2d'), fctx = fC && fC.getContext('2d');
+  function sinc(x) { return x === 0 ? 1 : Math.sin(Math.PI * x) / (Math.PI * x); }
+  function build(s) {
+    var L = Math.round(7 + s * 7) * 2 + 1, c = (L - 1) / 2, fc = 0.45, h = [];
+    for (var n = 0; n < L; n++) {
+      var win = 0.5 - 0.5 * Math.cos(2 * Math.PI * n / (L - 1)); // Hann
+      h.push(sinc(2 * fc * (n - c)) * win);
+    }
+    return h;
+  }
+  function dft(h, M) {
+    var mag = [];
+    for (var k = 0; k < M; k++) {
+      var re = 0, im = 0, f = 0.5 * k / (M - 1); // 0..Nyquist
+      for (var n = 0; n < h.length; n++) { var a = 2 * Math.PI * f * n; re += h[n] * Math.cos(a); im -= h[n] * Math.sin(a); }
+      mag.push(Math.sqrt(re * re + im * im));
+    }
+    var peak = Math.max.apply(null, mag) || 1;
+    return mag.map(function(m) { return m / peak; });
+  }
+  function draw() {
+    var s = +sh.value; if (shL) shL.textContent = (s < 3 ? 'gentle' : s < 6 ? 'medium' : 'sharp') + ' (' + (Math.round(7 + s * 7) * 2 + 1) + ' taps)';
+    var h = build(s);
+    if (tctx) {
+      var W = tC.width, H = tC.height, mid = H / 2; tctx.clearRect(0, 0, W, H);
+      tctx.strokeStyle = '#efe6d8'; tctx.beginPath(); tctx.moveTo(0, mid); tctx.lineTo(W, mid); tctx.stroke();
+      tctx.strokeStyle = '#a8541f'; tctx.lineWidth = 1.6; tctx.beginPath();
+      for (var n = 0; n < h.length; n++) { var x = n / (h.length - 1) * W, y = mid - h[n] * (H * 0.40); n ? tctx.lineTo(x, y) : tctx.moveTo(x, y); }
+      tctx.stroke();
+    }
+    if (fctx) {
+      var W2 = fC.width, H2 = fC.height, mag = dft(h, 160); fctx.clearRect(0, 0, W2, H2);
+      fctx.fillStyle = '#f3ece1'; fctx.fillRect(0, 0, 0.9 * W2, H2); // passband shade to ~0.45 Nyquist
+      fctx.strokeStyle = '#a8541f'; fctx.lineWidth = 1.6; fctx.beginPath();
+      for (var k = 0; k < mag.length; k++) { var db = 20 * Math.log10(mag[k] + 1e-6), x2 = k / (mag.length - 1) * W2, y2 = H2 - ((db + 80) / 80) * H2; k ? fctx.lineTo(x2, y2) : fctx.moveTo(x2, y2); }
+      fctx.stroke();
+    }
+  }
+  sh.addEventListener('input', draw); draw();
+})();
+
+// ── Demo: the contested ground — low-level linearity, multibit vs delta-sigma ──
+// Where the "musicality" argument actually lives: a QUIET tone (the soft tail of a
+// note), where only the lowest bits are working. Multibit rounds to its nearest
+// exact level, which at low level bends the wave into harmonic DISTORTION. Delta-
+// sigma keeps the average level honest but rides a shaped NOISE floor. Same tone,
+// two flavors of imperfection, shown as spectra and playable. Crank the bits toward
+// 16 and both fall below hearing: the honest reason the debate never settles.
+(function(){
+  var bits = document.getElementById('muBits'); if (!bits) return;
+  var bitsL = document.getElementById('muBitsL');
+  var mbC = document.getElementById('muMbCanvas'), dsC = document.getElementById('muDsCanvas');
+  var mbCtx = mbC && mbC.getContext('2d'), dsCtx = dsC && dsC.getContext('2d');
+  var mbInfo = document.getElementById('muMbInfo'), dsInfo = document.getElementById('muDsInfo');
+  var N = 512, K0 = 5, AMP = 0.08, actx = null; // a quiet tone at bin K0
+  function clamp(v){ return v > 1 ? 1 : v < -1 ? -1 : v; }
+  function quantize(B, shape){
+    var maxv = Math.pow(2, B - 1) - 1, y = new Array(N), e = 0;
+    for (var n = 0; n < N; n++){
+      var x = AMP * Math.sin(2 * Math.PI * K0 * n / N), q;
+      if (shape){ var w = x - e; q = clamp(Math.round(w * maxv) / maxv); e = q - w; }
+      else { q = clamp(Math.round(x * maxv) / maxv); }
+      y[n] = q;
+    }
+    return y;
+  }
+  function spectrum(y){
+    var half = N / 2, mag = new Array(half);
+    for (var k = 0; k < half; k++){ var re = 0, im = 0; for (var n = 0; n < N; n++){ var a = 2 * Math.PI * k * n / N; re += y[n] * Math.cos(a); im -= y[n] * Math.sin(a); } mag[k] = Math.sqrt(re * re + im * im) / N; }
+    return mag;
+  }
+  function drawSpec(ctx, C, mag, accent){
+    var W = C.width, H = C.height, half = mag.length;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#f3ece1'; ctx.fillRect((K0 - 1) / half * W, 0, 3 / half * W, H); // tone band
+    function py(db){ return H - ((db + 120) / 120) * H; }
+    ctx.strokeStyle = accent; ctx.lineWidth = 1.4; ctx.beginPath();
+    for (var k = 0; k < half; k++){ var x = k / half * W, db = 20 * Math.log10(mag[k] + 1e-9), y = py(db); k ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+    ctx.stroke();
+  }
+  function render(){
+    var B = +bits.value; if (bitsL) bitsL.textContent = B + '-bit';
+    var sm = spectrum(quantize(B, false)), sd = spectrum(quantize(B, true));
+    if (mbCtx) drawSpec(mbCtx, mbC, sm, '#a8541f');
+    if (dsCtx) drawSpec(dsCtx, dsC, sd, '#2f6fd0');
+    var harm = 0; for (var h = 2; h * K0 < N / 2; h++) harm += sm[h * K0] * sm[h * K0];      // multibit distortion
+    var noise = 0; for (var k = 1; k < N / 2; k++){ if (Math.abs(k - K0) <= 1) continue; noise += sd[k] * sd[k]; } // ds noise
+    if (mbInfo) mbInfo.textContent = harm > 2e-6 ? 'harmonic distortion' : 'clean';
+    if (dsInfo) dsInfo.textContent = noise > 2e-6 ? 'shaped noise floor' : 'clean';
+  }
+  function play(shape){
+    try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; }
+    if (actx.resume) actx.resume();
+    var B = +bits.value, sr = actx.sampleRate, len = Math.floor(sr * 1.3), buf = actx.createBuffer(1, len, sr), ch = buf.getChannelData(0);
+    var maxv = Math.pow(2, B - 1) - 1, f = 440, e = 0;
+    for (var i = 0; i < len; i++){
+      var env = Math.min(1, i / (sr * 0.02), (len - i) / (sr * 0.06)), x = AMP * Math.sin(2 * Math.PI * f * i / sr), q;
+      if (shape){ var w = x - e; q = clamp(Math.round(w * maxv) / maxv); e = q - w; }
+      else { q = clamp(Math.round(x * maxv) / maxv); }
+      ch[i] = q * env * 2.2; // gain the quiet tone up so the imperfection is audible (kept gentle)
+    }
+    var s = actx.createBufferSource(); s.buffer = buf; s.connect(actx.destination); s.start();
+  }
+  bits.addEventListener('input', render);
+  var grid = document.querySelector('.mu-grid');
+  if (grid) grid.addEventListener('click', function(ev){ var b = ev.target.closest && ev.target.closest('[data-topo]'); if (b) play(b.getAttribute('data-topo') === 'ds'); });
+  render();
+})();
+</script>
+<script src="/lwe/ask.js" defer></script>
+<script src="/nav.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>aadhar.sh/lwe/knots</title>
+<meta name="description" content="Why your shoelaces come undone, explained at MSN-chat pace. Granny versus square, the Ian knot, and bunny ears, with a live demo: toggle the second crossing's handedness and pull to watch one lock and the other slip.">
+<link rel="canonical" href="https://aadhar.sh/lwe/knots">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%233f7d52'/><text x='16' y='23' font-size='20' font-family='Trebuchet MS,sans-serif' fill='%23fff' text-anchor='middle'>∞</text></svg>">
+<meta property="og:type" content="article">
+<meta property="og:title" content="aadhar.sh/lwe/knots — knots">
+<meta property="og:url" content="https://aadhar.sh/lwe/knots">
+
+<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace; --accent:#3f7d52; --accent-soft:#e6f0e8}
+* { box-sizing: border-box; }
+@media (prefers-reduced-motion:no-preference){@view-transition{navigation:auto}::view-transition-old(root),::view-transition-new(root){animation-duration:140ms}}
+html, body { margin: 0; padding: 0; } html{background:linear-gradient(180deg,oklch(56% 0.13 250) 0%,oklch(73% 0.10 236) 50%,oklch(88% 0.05 232) 60%,oklch(60% 0.16 140) 100%)}
+body { background: linear-gradient(180deg, oklch(56% 0.13 250) 0%, oklch(73% 0.10 236) 50%, oklch(88% 0.05 232) 60%, oklch(60% 0.16 140) 100%); font-family: var(--font-ui); font-size: 10.5pt; line-height: 1.5; color: oklch(21.78% 0 0); padding: 24px 12px 60px; min-height: 100vh; }
+.window { max-width: 640px; margin: 0 auto; background: oklch(100% 0 0); border: 2px solid #0831d9; border-right-color: #001ea0; border-bottom-color: #001ea0; border-top-left-radius: 8px; border-top-right-radius: 8px; overflow: hidden; box-shadow: inset 1px 1px 0 #166aee, inset 2px 2px 0 #0855dd, inset -1px -1px 0 #00138c, inset -2px -2px 0 #003bda, 4px 4px 0 rgba(0,30,160,.35); }
+.title-bar { background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%); color: #fff; font-family: var(--font-caption); font-weight: bold; font-size: 11pt; padding: 4px 5px 4px 8px; display: flex; align-items: center; gap: 6px; text-shadow: 1px 1px #0f1089; user-select: none; }
+.title-bar .title-text { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.title-bar .icon { width: 14px; height: 14px; flex: 0 0 14px; background: #fff; border: 1px solid #2c5c3b; position: relative; }
+.title-bar .icon::before { content: "∞"; position: absolute; inset: 0; display: grid; place-items: center; font-size: 10px; color: var(--accent); font-weight: bold; text-shadow: none; }
+.controls { display: inline-flex; align-items: center; gap: 2px; }
+.controls .min, .controls .max, .controls .close { position: relative; box-sizing: border-box; width: 21px; height: 21px; display: inline-block; overflow: hidden; font-size: 0; color: transparent; border: 1px solid #6696eb; border-radius: 3px; text-decoration: none; cursor: pointer; background-image: linear-gradient(180deg, #5f8cf7 0%, #3a71f5 22%, #3e73f5 55%, #2a70f2 82%, #1045be 100%); }
+.controls .close { border-color: #d8401c; background-image: linear-gradient(180deg, #e8795f 0%, #e45f40 30%, #e45d3d 52%, #e2552a 80%, #ae3110 100%); }
+.controls .min::before { content: ""; position: absolute; left: 5px; right: 5px; bottom: 5px; height: 2px; background: #fff; }
+.controls .max::before { content: ""; position: absolute; left: 5px; top: 5px; width: 11px; height: 9px; box-sizing: border-box; border: 1px solid #fff; border-top-width: 2px; }
+.controls .close::before, .controls .close::after { content: ""; position: absolute; left: 50%; top: 50%; width: 13px; height: 2px; margin: -1px 0 0 -6.5px; background: #fff; }
+.controls .close::before { transform: rotate(45deg); } .controls .close::after { transform: rotate(-45deg); }
+.content { background: oklch(99% 0.005 95); border-top: 1px solid oklch(46% 0.02 260); border-left: 1px solid oklch(46% 0.02 260); padding: 0; }
+html { height: 100dvh; overflow: hidden; }
+body { min-height: 0; height: calc(100vh - 30px); height: calc(100dvh - 30px); overflow: hidden; display: flex; flex-direction: column; align-items: center; padding: 8px; }
+.window { flex: 0 1 auto; min-height: 0; max-height: 100%; display: flex; flex-direction: column; }
+.window > .title-bar { flex: 0 0 auto; }
+.window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 28px; }
+body::after { content: ""; position: fixed; left: 0; right: 0; bottom: 0; height: 30px; z-index: 1; background: linear-gradient(180deg, oklch(67% 0.15 256) 0%, oklch(58% 0.19 257) 4%, oklch(51% 0.20 258) 9%, oklch(49% 0.20 258) 50%, oklch(46% 0.20 259) 92%, oklch(40% 0.18 260) 100%); }
+.msgr { display: flex; flex-direction: column; }
+.msgr-head { display: flex; align-items: center; gap: 9px; padding: 8px 12px; background: linear-gradient(180deg, #fffdf6, #f6edd6); border-bottom: 1px solid #e0cf9e; }
+.msgr-head .ava { width: 34px; height: 34px; flex: 0 0 34px; border-radius: 4px; border: 1px solid #2c5c3b; background: linear-gradient(180deg,#5fa372,#3f7d52); position: relative; }
+.msgr-head .ava::before { content: "∞"; position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-weight: bold; font-size: 19px; font-family: var(--font-caption); }
+.msgr-head .who { flex: 1; min-width: 0; }
+.msgr-head .who b { font-family: var(--font-caption); font-size: 11pt; color: #2c5c3b; }
+.msgr-head .who .stat { display: block; font-size: 8.5pt; color: oklch(46% 0.02 145); }
+.msgr-head .who .stat::before { content: "● "; color: oklch(60% 0.18 145); }
+.msgr-head .pets { font-size: 8pt; color: #6b7280; text-align: right; line-height: 1.35; }
+.disclosure { font-size: 8.5pt; color: #5a6679; background: #fcfbe9; border-bottom: 1px solid #e6dfa8; padding: 5px 12px; }
+.disclosure b { color: #2c5c3b; } .disclosure a { color: #1a4fc4; }
+.log { padding: 10px 12px 4px; display: flex; flex-direction: column; gap: 11px; }
+.msg { display: grid; grid-template-columns: 26px 1fr; gap: 8px; align-items: start; content-visibility: auto; contain-intrinsic-size: auto 90px; }
+.msg .pic { width: 26px; height: 26px; border-radius: 4px; border: 1px solid #99a; position: relative; overflow: hidden; }
+.msg.bot .pic { background: linear-gradient(180deg,#5fa372,#3f7d52); border-color:#2c5c3b; }
+.msg.bot .pic::before { content: "∞"; position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-weight: bold; font-size: 13px; font-family: var(--font-caption); }
+.msg.you .pic { background: linear-gradient(180deg,#ffb35a,#f08a25); border-color:#c96a10; }
+.msg.you .pic::before { content: ":)"; position: absolute; inset: 0; display: grid; place-items: center; color: #7a3d00; font-weight: bold; font-size: 9px; transform: rotate(90deg); }
+.msg .who { font-size: 8.5pt; margin-bottom: 1px; } .msg .who b { font-family: var(--font-caption); }
+.msg.bot .who b { color: #2c5c3b; } .msg.you .who b { color: #b5560c; }
+.msg .who time { color: #9aa3b2; font-family: var(--font-mono); font-size: 8pt; margin-left: 5px; }
+.msg .bubble { font-size: 10.5pt; } .msg.bot .bubble { color: #15243f; } .msg.you .bubble { color: #3a2a12; }
+.msg .bubble p { margin: 0 0 7px; } .msg .bubble p:last-child { margin-bottom: 0; } .msg .bubble em { font-style: italic; }
+.msg .bubble code { font-family: var(--font-mono); font-size: 9.5pt; background: #f1ece0; padding: 0 3px; border-radius: 2px; }
+.msg a { color: #1a4fc4; }
+.demo { grid-column: 1 / -1; border: 1px solid var(--accent); border-radius: 4px; background: var(--accent-soft); margin: 2px 0; overflow: hidden; box-shadow: inset 0 1px 0 #fff; }
+.demo > .bar { display: flex; align-items: center; gap: 6px; padding: 4px 8px; font-size: 8.5pt; color: #2c5c3b; background: linear-gradient(180deg,#f6edd6,#ecdfb8); border-bottom: 1px solid var(--accent); font-weight: bold; }
+.demo > .bar::before { content: "🖥"; filter: grayscale(.2); }
+.demo > .pad { padding: 11px 12px 13px; background:#fff; }
+.demo .lead { font-size: 9pt; color: #4a5568; margin: 0 0 10px; } .demo .lead b { color: #15243f; }
+.mono { font-family: var(--font-mono); }
+.btn { font-family: var(--font-ui); font-size: 9pt; padding: 3px 9px; cursor: pointer; background: linear-gradient(to bottom,#fff,#e9edf5); border: 1px solid #7d8aa3; border-radius: 2px; box-shadow: inset 1px 1px 0 #fff; }
+.btn:hover { border-color: var(--accent); }
+.scrollnote { text-align: center; font-size: 8pt; color: #9aa3b2; padding: 3px 0 9px; }
+.compose { border-top: 1px solid #e0cf9e; background: linear-gradient(180deg,#fffdf6,#f3ead0); padding: 7px 10px; }
+.compose .box { display: flex; gap: 7px; }
+.compose .ta { flex: 1; min-height: 30px; border: 1px solid #7d8aa3; background: #fff; box-shadow: inset 1px 1px 0 #c3cbdb; padding: 4px 6px; font-family: var(--font-ui); font-size: 9.5pt; color: #9aa3b2; }
+@media (max-width: 520px){ body { padding: 8px 4px 32px; } .msgr-head .pets { display:none } }
+.lead{font-size:9.5pt;color:#3f5244;margin:0 0 9px;line-height:1.5}.knot-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:4px 0 9px}.knot-btn{font:inherit;font-size:9pt;padding:4px 12px;cursor:pointer;border:1px solid #7aa888;border-radius:3px;background:linear-gradient(180deg,#f3f9f4,#dcebe0);box-shadow:inset 0 1px 0 #fff;color:#2c5c3b}.knot-btn:hover{background:linear-gradient(180deg,#fff,#e8f3eb)}canvas#knotCanvas{width:100%;max-width:560px;height:auto;border:1px solid #cfe0d4;border-radius:4px;background:#fbfdfb;display:block}.knot-verdict{font-size:8.5pt;color:#4a5a4f;margin:7px 0 0;line-height:1.5}.knot-verdict b{color:#2c5c3b}</style>
+</head>
+<body>
+<div class="window">
+  <div class="title-bar" aria-hidden="true">
+    <span class="title-text"><span class="icon"></span>aadhar.sh/lwe — knots</span>
+    <span class="controls"><span class="min" title="minimize"></span><span class="max" title="maximize"></span><a class="close" href="/lwe/" title="back to Learning With Errors" aria-label="back to Learning With Errors"></a></span>
+  </div>
+  <div class="content">
+    <div class="msgr">
+
+      <div class="msgr-head">
+        <div class="ava" aria-hidden="true"></div>
+        <div class="who"><b>knots</b><span class="stat">Online, granny vs square, and the Ian knot</span></div>
+        <div class="pets">Learning&nbsp;With&nbsp;Errors<br>two crossings</div>
+      </div>
+
+      <p class="disclosure"><b>Starter draft.</b> The granny-versus-square structure is standard knot lore; the demo is a schematic of the two crossings, not a rope simulation. Background paraphrased from <a href="https://www.fieggen.com/shoelace/ianknot.htm" rel="external">Ian's Shoelace Site</a> and Wikipedia.</p>
+
+      <div class="log">
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>21:10</time></div>
+        <div class="bubble"><p>people swear by the "Ian knot" as the world's fastest shoelace knot, and that it stops their laces coming undone. is there real structure here or is it folklore?</p></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>knots</b><time>21:10</time></div>
+        <div class="bubble"><p>Real structure, and it is the same argument as the oldest knot in the book: granny versus square. A knot like this is basically two crossings. If the second crossing mirrors the first you get a square (reef) knot that seats flat and holds. If the second repeats the first you get a granny that capsizes and slips. Most people whose laces fall open are unknowingly tying a granny bow.</p></div></div></div>
+
+      <div class="demo" id="demo-knot">
+        <div class="bar">granny vs square &middot; toggle the second crossing, then pull</div>
+        <div class="pad"><p class="lead">Two ropes, two crossings. The only difference between a square knot and a granny is the handedness of the second crossing. Toggle it, then pull the ends.</p><div class="knot-row"><button id="knotToggle" class="knot-btn">knot: square (reef)</button><button id="knotPull" class="knot-btn">pull the ends</button></div><canvas id="knotCanvas" width="560" height="200"></canvas><div class="knot-verdict" id="knotVerdict"></div></div>
+      </div>
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>21:12</time></div>
+        <div class="bubble"><p>huh, the only difference is the handedness of the second crossing. so my laces slip because I cross the same way twice?</p></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>knots</b><time>21:12</time></div>
+        <div class="bubble"><p>Exactly. The standard bow is cross, loop, wrap, pull. If your starting cross and your wrapping loop go the same way, you have built a granny bow: it sits diagonally across the shoe and works loose. Reverse just one of the two and you get a square bow that sits straight across and stays put. Same moves, opposite handedness on the second step.</p></div></div></div>
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>21:13</time></div>
+        <div class="bubble"><p>ok so where does the Ian knot come in?</p></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>knots</b><time>21:13</time></div>
+        <div class="bubble"><p>The Ian knot (Ian Fieggen's) is a speed method that lands on the same knot. You form a loop in each hand at the same time and pass them through each other in one motion, where the standard bow makes one loop and wraps the other lace around it. Tied with the right handedness it gives the same square bow, just much faster. His Secure variant adds a tuck for laces that still wander.</p> <a href="https://www.fieggen.com/shoelace/ianknot.htm" rel="external" title="Ian's Shoelace Site">[src]</a></div></div></div>
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>21:14</time></div>
+        <div class="bubble"><p>and bunny ears? that's what I learned as a kid.</p></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>knots</b><time>21:14</time></div>
+        <div class="bubble"><p>Bunny ears makes both loops first, then ties the two like ropes. It is easy to learn and just as prone to the granny trap: tie the two ears with the same handedness you started with and you get a granny bow. The knot does not care which method got you to the two crossings; only their handedness decides whether it holds.</p></div></div></div>
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>21:15</time></div>
+        <div class="bubble"><p>so the whole thing reduces to: make the two crossings oppose.</p></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>knots</b><time>21:15</time></div>
+        <div class="bubble"><p>That is the entire trick, from a reef knot on a sail to the bow on your shoe. Cross one way, then cross back the other. Match the handedness and it slips; oppose it and it holds. Everything else is speed and style.</p></div></div></div>
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>21:16</time></div>
+        <div class="bubble"><p>I'm going to go re-tie my shoes. thanks.</p><p>&rarr; <a href="https://www.fieggen.com/shoelace/ianknot.htm" rel="external">Ian's Shoelace Site</a> &middot; <a href="https://en.wikipedia.org/wiki/Reef_knot" rel="external">reef knot on Wikipedia</a> &middot; <a href="https://en.wikipedia.org/wiki/Shoelace_knot" rel="external">shoelace knot on Wikipedia</a> &middot; <a href="/lwe/">back to Learning With Errors</a></p></div></div></div>
+
+      <div class="scrollnote">end of first pass</div>
+
+      </div>
+      <div class="compose"><div class="box"><div class="ta">This is a recorded conversation. Toggle and pull in the demo above.</div></div></div>
+    </div>
+  </div>
+</div>
+
+<script type="speculationrules">
+{ "prerender": [ { "where": { "and": [ { "href_matches": "/*" }, { "not": { "href_matches": "/" } }, { "not": { "href_matches": "/around*" } }, { "not": { "href_matches": "/whoareyou*" } } ] }, "eagerness": "moderate" } ], "prefetch": [ { "where": { "and": [ { "or": [ { "href_matches": "/garage/*" }, { "href_matches": "/lwe/*" } ] }, { "not": { "href_matches": "/lwe/ask*" } } ] }, "eagerness": "eager" } ] }
+</script>
+<script>
+if ("serviceWorker" in navigator) { var reg = function () { navigator.serviceWorker.register("/sw.js").catch(function () {}); }; "requestIdleCallback" in window ? requestIdleCallback(reg, { timeout: 2000 }) : setTimeout(reg, 1000); }
+</script>
+<script>
+// ── Demo: granny vs square (reef) knot ────────────────────────────────
+// Two ropes tied with two crossings. The only difference between the knots is
+// the handedness of the SECOND crossing: opposite to the first gives a square
+// (reef) knot that seats flat and holds; the same as the first gives a granny
+// that capsizes and slips. Toggle the handedness, then pull the ends: the
+// square cinches and locks, the granny slides apart.
+(function(){
+  var c = document.getElementById('knotCanvas'); if (!c) return;
+  var ctx = c.getContext('2d');
+  var btn = document.getElementById('knotToggle'), verdict = document.getElementById('knotVerdict');
+  var pull = document.getElementById('knotPull');
+  var W = c.width, H = c.height, topY = H * 0.36, botY = H * 0.64;
+  var square = true, t = 0, anim = 0; // t: pull progress 0..1
+  var RED = '#b03a4a', BLUE = '#2f6fd0';
+  function ss(a, b, u) { u = u < 0 ? 0 : u > 1 ? 1 : u; u = u * u * (3 - 2 * u); return a + (b - a) * u; }
+  function crossings() {
+    // pull cinches the two crossings; a granny also slides them apart (slipping)
+    if (square) return [ss(0.34, 0.44, t), ss(0.66, 0.56, t)];
+    return [ss(0.34, 0.16, t), ss(0.66, 0.84, t)];
+  }
+  function yOf(which, x, c1, c2) {
+    var sw = 0.06, lane = which === 'A' ? [topY, botY] : [botY, topY];
+    if (x < c1 - sw) return lane[0];
+    if (x < c1 + sw) return ss(lane[0], lane[1], (x - (c1 - sw)) / (2 * sw));
+    if (x < c2 - sw) return lane[1];
+    if (x < c2 + sw) return ss(lane[1], lane[0], (x - (c2 - sw)) / (2 * sw));
+    return lane[0];
+  }
+  function path(which, c1, c2) {
+    ctx.beginPath();
+    for (var i = 0; i <= 200; i++) { var x = i / 200, X = 16 + x * (W - 32), Y = yOf(which, x, c1, c2); i ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y); }
+  }
+  function overSeg(which, xc, c1, c2) {
+    // redraw a short segment of `which` over the crossing, with a background gap under it
+    ctx.lineWidth = 11; ctx.strokeStyle = '#fffafa'; ctx.beginPath();
+    for (var i = -10; i <= 10; i++) { var x = xc + i / 200, X = 16 + x * (W - 32), Y = yOf(which, x, c1, c2); i === -10 ? ctx.moveTo(X, Y) : ctx.lineTo(X, Y); }
+    ctx.stroke();
+    ctx.lineWidth = 7; ctx.strokeStyle = which === 'A' ? RED : BLUE; ctx.beginPath();
+    for (var j = -10; j <= 10; j++) { var x2 = xc + j / 200, X2 = 16 + x2 * (W - 32), Y2 = yOf(which, x2, c1, c2); j === -10 ? ctx.moveTo(X2, Y2) : ctx.lineTo(X2, Y2); }
+    ctx.stroke();
+  }
+  function draw() {
+    var cr = crossings(), c1 = cr[0], c2 = cr[1];
+    ctx.clearRect(0, 0, W, H); ctx.lineCap = 'round'; ctx.lineWidth = 7;
+    ctx.strokeStyle = RED; path('A', c1, c2); ctx.stroke();
+    ctx.strokeStyle = BLUE; path('B', c1, c2); ctx.stroke();
+    overSeg('A', c1, c1, c2);                       // crossing 1: A over (fixed)
+    overSeg(square ? 'B' : 'A', c2, c1, c2);        // crossing 2: opposite (square) or same (granny)
+    if (btn) btn.textContent = square ? 'knot: square (reef)' : 'knot: granny';
+    if (verdict) verdict.innerHTML = square
+      ? '<b>Square (reef).</b> The second crossing mirrors the first, so the knot seats flat and each rope nips the other. Pull and it locks.'
+      : '<b>Granny.</b> The second crossing repeats the first, so the knot is unbalanced. Pull and it capsizes and slides apart, a slip waiting to happen.';
+  }
+  function loop() { if (t < 1) { t = Math.min(1, t + 0.03); draw(); anim = requestAnimationFrame(loop); } }
+  function startPull() { if (anim) cancelAnimationFrame(anim); t = 0; draw(); anim = requestAnimationFrame(loop); }
+  if (btn) btn.addEventListener('click', function () { square = !square; t = 0; draw(); });
+  if (pull) pull.addEventListener('click', startPull);
+  draw();
+})();
+</script>
+<script src="/lwe/ask.js" defer></script>
+<script src="/nav.js" defer></script>
+</body>
+</html>

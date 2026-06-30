@@ -1,0 +1,82 @@
+{
+  "id": "knots",
+  "description": "Why your shoelaces come undone, explained at MSN-chat pace. Granny versus square, the Ian knot, and bunny ears, with a live demo: toggle the second crossing's handedness and pull to watch one lock and the other slip.",
+  "buddyStat": "granny vs square, and the Ian knot",
+  "petsLine": "Learning&nbsp;With&nbsp;Errors<br>two crossings",
+  "composeNote": "This is a recorded conversation. Toggle and pull in the demo above.",
+  "hasAsk": true,
+  "disclosure": "<b>Starter draft.</b> The granny-versus-square structure is standard knot lore; the demo is a schematic of the two crossings, not a rope simulation. Background paraphrased from <a href=\"https://www.fieggen.com/shoelace/ianknot.htm\" rel=\"external\">Ian's Shoelace Site</a> and Wikipedia.",
+  "messages": [
+    {
+      "who": "you",
+      "time": "21:10",
+      "html": "<p>people swear by the \"Ian knot\" as the world's fastest shoelace knot, and that it stops their laces coming undone. is there real structure here or is it folklore?</p>"
+    },
+    {
+      "who": "bot",
+      "time": "21:10",
+      "html": "<p>Real structure, and it is the same argument as the oldest knot in the book: granny versus square. A knot like this is basically two crossings. If the second crossing mirrors the first you get a square (reef) knot that seats flat and holds. If the second repeats the first you get a granny that capsizes and slips. Most people whose laces fall open are unknowingly tying a granny bow.</p>"
+    },
+    {
+      "demo": {
+        "id": "demo-knot",
+        "bar": "granny vs square &middot; toggle the second crossing, then pull",
+        "html": "<p class=\"lead\">Two ropes, two crossings. The only difference between a square knot and a granny is the handedness of the second crossing. Toggle it, then pull the ends.</p><div class=\"knot-row\"><button id=\"knotToggle\" class=\"knot-btn\">knot: square (reef)</button><button id=\"knotPull\" class=\"knot-btn\">pull the ends</button></div><canvas id=\"knotCanvas\" width=\"560\" height=\"200\"></canvas><div class=\"knot-verdict\" id=\"knotVerdict\"></div>"
+      }
+    },
+    {
+      "who": "you",
+      "time": "21:12",
+      "html": "<p>huh, the only difference is the handedness of the second crossing. so my laces slip because I cross the same way twice?</p>"
+    },
+    {
+      "who": "bot",
+      "time": "21:12",
+      "html": "<p>Exactly. The standard bow is cross, loop, wrap, pull. If your starting cross and your wrapping loop go the same way, you have built a granny bow: it sits diagonally across the shoe and works loose. Reverse just one of the two and you get a square bow that sits straight across and stays put. Same moves, opposite handedness on the second step.</p>"
+    },
+    {
+      "who": "you",
+      "time": "21:13",
+      "html": "<p>ok so where does the Ian knot come in?</p>"
+    },
+    {
+      "who": "bot",
+      "time": "21:13",
+      "cite": {
+        "url": "https://www.fieggen.com/shoelace/ianknot.htm",
+        "title": "Ian's Shoelace Site"
+      },
+      "html": "<p>The Ian knot (Ian Fieggen's) is a speed method that lands on the same knot. You form a loop in each hand at the same time and pass them through each other in one motion, where the standard bow makes one loop and wraps the other lace around it. Tied with the right handedness it gives the same square bow, just much faster. His Secure variant adds a tuck for laces that still wander.</p>"
+    },
+    {
+      "who": "you",
+      "time": "21:14",
+      "html": "<p>and bunny ears? that's what I learned as a kid.</p>"
+    },
+    {
+      "who": "bot",
+      "time": "21:14",
+      "html": "<p>Bunny ears makes both loops first, then ties the two like ropes. It is easy to learn and just as prone to the granny trap: tie the two ears with the same handedness you started with and you get a granny bow. The knot does not care which method got you to the two crossings; only their handedness decides whether it holds.</p>"
+    },
+    {
+      "who": "you",
+      "time": "21:15",
+      "html": "<p>so the whole thing reduces to: make the two crossings oppose.</p>"
+    },
+    {
+      "who": "bot",
+      "time": "21:15",
+      "html": "<p>That is the entire trick, from a reef knot on a sail to the bow on your shoe. Cross one way, then cross back the other. Match the handedness and it slips; oppose it and it holds. Everything else is speed and style.</p>"
+    },
+    {
+      "who": "you",
+      "time": "21:16",
+      "html": "<p>I'm going to go re-tie my shoes. thanks.</p><p>&rarr; <a href=\"https://www.fieggen.com/shoelace/ianknot.htm\" rel=\"external\">Ian's Shoelace Site</a> &middot; <a href=\"https://en.wikipedia.org/wiki/Reef_knot\" rel=\"external\">reef knot on Wikipedia</a> &middot; <a href=\"https://en.wikipedia.org/wiki/Shoelace_knot\" rel=\"external\">shoelace knot on Wikipedia</a> &middot; <a href=\"/lwe/\">back to Learning With Errors</a></p>"
+    },
+    {
+      "scrollnote": "end of first pass"
+    }
+  ],
+  "demoCss": ".lead{font-size:9.5pt;color:#3f5244;margin:0 0 9px;line-height:1.5}.knot-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:4px 0 9px}.knot-btn{font:inherit;font-size:9pt;padding:4px 12px;cursor:pointer;border:1px solid #7aa888;border-radius:3px;background:linear-gradient(180deg,#f3f9f4,#dcebe0);box-shadow:inset 0 1px 0 #fff;color:#2c5c3b}.knot-btn:hover{background:linear-gradient(180deg,#fff,#e8f3eb)}canvas#knotCanvas{width:100%;max-width:560px;height:auto;border:1px solid #cfe0d4;border-radius:4px;background:#fbfdfb;display:block}.knot-verdict{font-size:8.5pt;color:#4a5a4f;margin:7px 0 0;line-height:1.5}.knot-verdict b{color:#2c5c3b}",
+  "demoJs": "// ── Demo: granny vs square (reef) knot ────────────────────────────────\n// Two ropes tied with two crossings. The only difference between the knots is\n// the handedness of the SECOND crossing: opposite to the first gives a square\n// (reef) knot that seats flat and holds; the same as the first gives a granny\n// that capsizes and slips. Toggle the handedness, then pull the ends: the\n// square cinches and locks, the granny slides apart.\n(function(){\n  var c = document.getElementById('knotCanvas'); if (!c) return;\n  var ctx = c.getContext('2d');\n  var btn = document.getElementById('knotToggle'), verdict = document.getElementById('knotVerdict');\n  var pull = document.getElementById('knotPull');\n  var W = c.width, H = c.height, topY = H * 0.36, botY = H * 0.64;\n  var square = true, t = 0, anim = 0; // t: pull progress 0..1\n  var RED = '#b03a4a', BLUE = '#2f6fd0';\n  function ss(a, b, u) { u = u < 0 ? 0 : u > 1 ? 1 : u; u = u * u * (3 - 2 * u); return a + (b - a) * u; }\n  function crossings() {\n    // pull cinches the two crossings; a granny also slides them apart (slipping)\n    if (square) return [ss(0.34, 0.44, t), ss(0.66, 0.56, t)];\n    return [ss(0.34, 0.16, t), ss(0.66, 0.84, t)];\n  }\n  function yOf(which, x, c1, c2) {\n    var sw = 0.06, lane = which === 'A' ? [topY, botY] : [botY, topY];\n    if (x < c1 - sw) return lane[0];\n    if (x < c1 + sw) return ss(lane[0], lane[1], (x - (c1 - sw)) / (2 * sw));\n    if (x < c2 - sw) return lane[1];\n    if (x < c2 + sw) return ss(lane[1], lane[0], (x - (c2 - sw)) / (2 * sw));\n    return lane[0];\n  }\n  function path(which, c1, c2) {\n    ctx.beginPath();\n    for (var i = 0; i <= 200; i++) { var x = i / 200, X = 16 + x * (W - 32), Y = yOf(which, x, c1, c2); i ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y); }\n  }\n  function overSeg(which, xc, c1, c2) {\n    // redraw a short segment of `which` over the crossing, with a background gap under it\n    ctx.lineWidth = 11; ctx.strokeStyle = '#fffafa'; ctx.beginPath();\n    for (var i = -10; i <= 10; i++) { var x = xc + i / 200, X = 16 + x * (W - 32), Y = yOf(which, x, c1, c2); i === -10 ? ctx.moveTo(X, Y) : ctx.lineTo(X, Y); }\n    ctx.stroke();\n    ctx.lineWidth = 7; ctx.strokeStyle = which === 'A' ? RED : BLUE; ctx.beginPath();\n    for (var j = -10; j <= 10; j++) { var x2 = xc + j / 200, X2 = 16 + x2 * (W - 32), Y2 = yOf(which, x2, c1, c2); j === -10 ? ctx.moveTo(X2, Y2) : ctx.lineTo(X2, Y2); }\n    ctx.stroke();\n  }\n  function draw() {\n    var cr = crossings(), c1 = cr[0], c2 = cr[1];\n    ctx.clearRect(0, 0, W, H); ctx.lineCap = 'round'; ctx.lineWidth = 7;\n    ctx.strokeStyle = RED; path('A', c1, c2); ctx.stroke();\n    ctx.strokeStyle = BLUE; path('B', c1, c2); ctx.stroke();\n    overSeg('A', c1, c1, c2);                       // crossing 1: A over (fixed)\n    overSeg(square ? 'B' : 'A', c2, c1, c2);        // crossing 2: opposite (square) or same (granny)\n    if (btn) btn.textContent = square ? 'knot: square (reef)' : 'knot: granny';\n    if (verdict) verdict.innerHTML = square\n      ? '<b>Square (reef).</b> The second crossing mirrors the first, so the knot seats flat and each rope nips the other. Pull and it locks.'\n      : '<b>Granny.</b> The second crossing repeats the first, so the knot is unbalanced. Pull and it capsizes and slides apart, a slip waiting to happen.';\n  }\n  function loop() { if (t < 1) { t = Math.min(1, t + 0.03); draw(); anim = requestAnimationFrame(loop); } }\n  function startPull() { if (anim) cancelAnimationFrame(anim); t = 0; draw(); anim = requestAnimationFrame(loop); }\n  if (btn) btn.addEventListener('click', function () { square = !square; t = 0; draw(); });\n  if (pull) pull.addEventListener('click', startPull);\n  draw();\n})();"
+}

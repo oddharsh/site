@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>aadhar.sh/lwe/fhe</title>
+<meta name="description" content="Fully Homomorphic Encryption, explained at the pace of a 2009 MSN conversation. The teacher's lines are verbatim from an Archetype essay; the learner and demos are AI.">
+<link rel="canonical" href="https://aadhar.sh/lwe/fhe">
+
+<!-- LWE section icon: a messenger speech bubble with noise inside -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%234b53c9'/><path d='M6 9 h20 a2 2 0 0 1 2 2 v9 a2 2 0 0 1-2 2 H14 l-5 4 v-4 H6 a2 2 0 0 1-2-2 v-9 a2 2 0 0 1 2-2 Z' fill='%23fff'/><g stroke='%234b53c9' stroke-width='1.7' stroke-linecap='round' fill='none'><path d='M8.5 13.5 q2 -2.4 4 0 t4 0 t4 0'/><path d='M8.5 18 q2 -2.4 4 0 t4 0'/></g></svg>">
+
+<meta property="og:type" content="article">
+<meta property="og:title" content="aadhar.sh/lwe/fhe · Fully Homomorphic Encryption">
+<meta property="og:description" content="FHE explained at the pace of a 2009 MSN chat. Teacher lines verbatim from Archetype; learner + demos are AI.">
+<meta property="og:url" content="https://aadhar.sh/lwe/fhe">
+
+<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}
+* { box-sizing: border-box; }
+@media (prefers-reduced-motion:no-preference){@view-transition{navigation:auto}::view-transition-old(root),::view-transition-new(root){animation-duration:140ms}}
+html, body { margin: 0; padding: 0; } html{background:linear-gradient(180deg,oklch(56% 0.13 250) 0%,oklch(73% 0.10 236) 50%,oklch(88% 0.05 232) 60%,oklch(60% 0.16 140) 100%)}
+body {
+  background: linear-gradient(180deg, oklch(56% 0.13 250) 0%, oklch(73% 0.10 236) 50%, oklch(88% 0.05 232) 60%, oklch(60% 0.16 140) 100%);
+  font-family: var(--font-ui);
+  font-size: 10.5pt;
+  line-height: 1.5;
+  color: oklch(21.78% 0 0);
+  padding: 24px 12px 60px;
+  min-height: 100vh;
+}
+
+/* ── window chrome (mirrors the site-wide Luna shell) ─────────────────── */
+.window {
+  max-width: 640px; margin: 0 auto; background: oklch(100% 0 0);
+  border: 2px solid #0831d9; border-right-color: #001ea0; border-bottom-color: #001ea0;
+  border-top-left-radius: 8px; border-top-right-radius: 8px; overflow: hidden;
+  box-shadow: inset 1px 1px 0 #166aee, inset 2px 2px 0 #0855dd, inset -1px -1px 0 #00138c, inset -2px -2px 0 #003bda, 4px 4px 0 rgba(0,30,160,.35);
+}
+.title-bar {
+  background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
+  color: #fff; font-family: var(--font-caption); font-weight: bold; font-size: 11pt;
+  padding: 4px 5px 4px 8px; display: flex; align-items: center; gap: 6px;
+  text-shadow: 1px 1px #0f1089; user-select: none;
+}
+.title-bar .title-text { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.title-bar .icon { width: 14px; height: 14px; flex: 0 0 14px; background: #fff; border: 1px solid #2a4bbf; position: relative; }
+.title-bar .icon::before { content: "≈"; position: absolute; inset: 0; display: grid; place-items: center; font-size: 10px; color: #4b53c9; font-weight: bold; text-shadow: none; }
+.controls { display: inline-flex; align-items: center; gap: 2px; }
+.controls .min, .controls .max, .controls .close {
+  position: relative; box-sizing: border-box; width: 21px; height: 21px; display: inline-block; overflow: hidden;
+  font-size: 0; color: transparent; border: 1px solid #6696eb; border-radius: 3px; text-decoration: none; cursor: pointer;
+  background-image: linear-gradient(180deg, #5f8cf7 0%, #3a71f5 22%, #3e73f5 55%, #2a70f2 82%, #1045be 100%);
+}
+.controls .close { border-color: #d8401c; background-image: linear-gradient(180deg, #e8795f 0%, #e45f40 30%, #e45d3d 52%, #e2552a 80%, #ae3110 100%); }
+.controls .min::before { content: ""; position: absolute; left: 5px; right: 5px; bottom: 5px; height: 2px; background: #fff; }
+.controls .max::before { content: ""; position: absolute; left: 5px; top: 5px; width: 11px; height: 9px; box-sizing: border-box; border: 1px solid #fff; border-top-width: 2px; }
+.controls .close::before, .controls .close::after { content: ""; position: absolute; left: 50%; top: 50%; width: 13px; height: 2px; margin: -1px 0 0 -6.5px; background: #fff; }
+.controls .close::before { transform: rotate(45deg); } .controls .close::after { transform: rotate(-45deg); }
+.content { background: oklch(99% 0.005 95); border-top: 1px solid oklch(46% 0.02 260); border-left: 1px solid oklch(46% 0.02 260); padding: 0; }
+
+/* OS-window geometry — first paint matches nav.js (no shell pop). */
+html { height: 100dvh; overflow: hidden; }
+body { min-height: 0; height: calc(100vh - 30px); height: calc(100dvh - 30px); overflow: hidden; display: flex; flex-direction: column; align-items: center; padding: 8px; }
+.window { flex: 0 1 auto; min-height: 0; max-height: 100%; display: flex; flex-direction: column; }
+.window > .title-bar { flex: 0 0 auto; }
+.window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 28px; }
+body::after { content: ""; position: fixed; left: 0; right: 0; bottom: 0; height: 30px; z-index: 1; background: linear-gradient(180deg, oklch(67% 0.15 256) 0%, oklch(58% 0.19 257) 4%, oklch(51% 0.20 258) 9%, oklch(49% 0.20 258) 50%, oklch(46% 0.20 259) 92%, oklch(40% 0.18 260) 100%); }
+
+/* ── MSN-Messenger conversation ───────────────────────────────────────── */
+.msgr { display: flex; flex-direction: column; }
+.msgr-head {
+  display: flex; align-items: center; gap: 9px; padding: 8px 12px;
+  background: linear-gradient(180deg, #fbfdff, #e8f0fb); border-bottom: 1px solid #b9cbe6;
+}
+.msgr-head .ava { width: 34px; height: 34px; flex: 0 0 34px; border-radius: 4px; border: 1px solid #4b53c9; background: linear-gradient(180deg,#6d74e0,#4b53c9); position: relative; }
+.msgr-head .ava::before { content: "≈"; position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-weight: bold; font-size: 18px; }
+.msgr-head .who { flex: 1; min-width: 0; }
+.msgr-head .who b { font-family: var(--font-caption); font-size: 11pt; color: #1d3a8a; }
+.msgr-head .who .stat { display: block; font-size: 8.5pt; color: oklch(46% 0.02 145); }
+.msgr-head .who .stat::before { content: "● "; color: oklch(60% 0.18 145); }
+.msgr-head .pets { font-size: 8pt; color: #6b7280; text-align: right; line-height: 1.35; }
+
+.disclosure { font-size: 8.5pt; color: #5a6679; background: #fcfbe9; border-bottom: 1px solid #e6dfa8; padding: 5px 12px; }
+.disclosure b { color: #7a6a16; }
+.disclosure a { color: var(--xp-link, #1a4fc4); }
+
+.log { padding: 10px 12px 4px; display: flex; flex-direction: column; gap: 11px; }
+
+.msg { display: grid; grid-template-columns: 26px 1fr; gap: 8px; align-items: start; content-visibility: auto; contain-intrinsic-size: auto 90px; }
+.msg .pic { width: 26px; height: 26px; border-radius: 4px; border: 1px solid #99a; position: relative; overflow: hidden; }
+.msg.bot .pic { background: linear-gradient(180deg,#6d74e0,#4b53c9); border-color:#3a40a8; }
+.msg.bot .pic::before { content: "≈"; position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-weight: bold; font-size: 14px; }
+.msg.you .pic { background: linear-gradient(180deg,#ffb35a,#f08a25); border-color:#c96a10; }
+.msg.you .pic::before { content: ":)"; position: absolute; inset: 0; display: grid; place-items: center; color: #7a3d00; font-weight: bold; font-size: 9px; transform: rotate(90deg); }
+.msg .who { font-size: 8.5pt; margin-bottom: 1px; }
+.msg .who b { font-family: var(--font-caption); }
+.msg.bot .who b { color: #1d3a8a; }
+.msg.you .who b { color: #b5560c; }
+.msg .who time { color: #9aa3b2; font-family: var(--font-mono); font-size: 8pt; margin-left: 5px; }
+.msg .bubble { font-size: 10.5pt; }
+.msg.bot .bubble { color: #15243f; }
+.msg.you .bubble { color: #3a2a12; }
+.msg .bubble p { margin: 0 0 7px; } .msg .bubble p:last-child { margin-bottom: 0; }
+.msg .bubble em { font-style: italic; }
+.msg .cite { display: inline-block; margin-top: 4px; font-size: 8pt; color: #6b7280; text-decoration: none; border-bottom: 1px dotted #9aa3b2; }
+.msg .cite::before { content: "▸ "; }
+.msg .cite:hover { color: #b5560c; border-color: #b5560c; }
+.msg a { color: #1a4fc4; }
+
+/* a "shared a demo" inline applet */
+.demo { grid-column: 1 / -1; border: 1px solid #9fb4d6; border-radius: 4px; background: #f4f8fe; margin: 2px 0; overflow: hidden; box-shadow: inset 0 1px 0 #fff; }
+.demo > .bar { display: flex; align-items: center; gap: 6px; padding: 4px 8px; font-size: 8.5pt; color: #1d3a8a; background: linear-gradient(180deg,#e9f1fc,#d6e4f7); border-bottom: 1px solid #9fb4d6; font-weight: bold; }
+.demo > .bar::before { content: "🖥"; filter: grayscale(.2); }
+.demo > .pad { padding: 11px 12px 13px; }
+.demo .lead { font-size: 9pt; color: #4a5568; margin: 0 0 10px; }
+.demo .lead b { color: #15243f; }
+
+/* generic demo bits */
+.btn { font-family: var(--font-ui); font-size: 9.5pt; padding: 3px 11px; cursor: pointer; color: #1a2030;
+  background: linear-gradient(to bottom, #fff 0%, #e9edf5 100%); border: 1px solid #7d8aa3; border-radius: 0;
+  box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 #b9c2d4; }
+.btn:hover { border-color: #3a71f5; background: linear-gradient(to bottom, #fff, #dce8fb); }
+.btn:active { box-shadow: inset 1px 1px 0 #b9c2d4, inset -1px -1px 0 #fff; }
+.btn.go { font-weight: bold; background: linear-gradient(to bottom, #eaf6ec 0%, #cdeccf 100%); border-color: #4a9a52; }
+.btn:disabled { color: #aab; background: linear-gradient(to bottom,#f3f3f3,#e6e6e6); border-color:#bbb; cursor: not-allowed; }
+.mono { font-family: var(--font-mono); }
+.kbd-step { display: inline-flex; align-items: center; border: 1px solid #7d8aa3; background: #fff; }
+.kbd-step button { border: 0; background: linear-gradient(to bottom,#fff,#e3e8f1); width: 22px; height: 22px; cursor: pointer; font-weight: bold; color: #1a2030; }
+.kbd-step button:active { background: linear-gradient(to bottom,#dfe5ef,#fff); }
+.kbd-step .v { min-width: 30px; text-align: center; font-family: var(--font-mono); font-weight: bold; border-left: 1px solid #c3cbdb; border-right: 1px solid #c3cbdb; padding: 2px 0; }
+
+/* demo 1 — homomorphic add */
+.he-row { display: grid; grid-template-columns: 88px 1fr; gap: 6px 10px; align-items: center; margin: 4px 0; font-size: 9pt; }
+.he-row .lbl { color: #4a5568; text-align: right; }
+.he-ct { font-family: var(--font-mono); font-size: 9pt; background: #1a2030; color: #7ee0a0; padding: 3px 7px; border-radius: 3px; word-break: break-all; }
+.he-ct.bad { color: #ff8a8a; }
+.he-server { margin: 9px 0; padding: 8px 10px; border: 1px dashed #9fb4d6; border-radius: 4px; background: #eef4fd; font-size: 8.5pt; color: #4a5568; }
+.he-server b { color: #15243f; }
+.he-out { margin-top: 9px; padding: 7px 10px; border: 1px solid #4a9a52; border-radius: 4px; background: #eaf6ec; font-size: 9.5pt; }
+.he-out .ok { color: #2c7a36; font-weight: bold; }
+.he-noise { color: #9a6a16; }
+
+/* demo 2 — noise + bootstrapping meter */
+.nz-wrap { margin: 2px 0 4px; }
+.nz-bar { position: relative; height: 24px; border: 1px solid #7d8aa3; background: #fff; box-shadow: inset 1px 1px 0 #c3cbdb; overflow: hidden; }
+.nz-fill { position: absolute; inset: 0 auto 0 0; width: 8%; background: linear-gradient(180deg,#8fd49a,#4a9a52); transition: width .18s ease-out, background .18s; }
+.nz-fill.warn { background: linear-gradient(180deg,#f3d27a,#d89a2a); }
+.nz-fill.bad { background: linear-gradient(180deg,#f08a8a,#c43636); }
+.nz-thresh { position: absolute; top: -2px; bottom: -2px; left: 100%; width: 2px; background: #c43636; }
+.nz-thresh::after { content: "corrupt →"; position: absolute; right: 4px; top: -13px; font-size: 7.5pt; color: #c43636; white-space: nowrap; }
+.nz-data { font-family: var(--font-mono); font-size: 10pt; letter-spacing: 1px; margin: 9px 0 4px; color: #15243f; }
+.nz-data.bad { color: #c43636; }
+.nz-meta { font-size: 8pt; color: #6b7280; font-family: var(--font-mono); margin-top: 2px; }
+.nz-ops { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+.nz-gap { position: absolute; top: -3px; bottom: -3px; left: 50%; width: 2px; background: #9a6a16; }
+.nz-gap::after { content: "gap (½ scale)"; position: absolute; left: 4px; top: -13px; font-size: 7.5pt; color: #9a6a16; white-space: nowrap; }
+.dc-pick { font-size: 9pt; color: #4a5568; margin: 2px 0 7px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.dc-line { font-size: 9.5pt; margin: 4px 0 7px; font-family: var(--font-mono); }
+.dc-line .hi { color: #1a7d4a; font-weight: bold; } .dc-line .lo { color: #c43636; }
+.dc-decode { font-size: 9.5pt; margin: 9px 0 4px; padding: 7px 10px; border: 1px solid #c3cbdb; border-radius: 4px; background: #f7f9fc; }
+.dc-decode .dc-rec { font-size: 14pt; font-family: var(--font-mono); }
+.dc-decode .ok { color: #2c7a36; font-weight: bold; } .dc-decode .no { color: #c43636; font-weight: bold; }
+
+/* compose bar (decorative, period-correct) */
+.compose { border-top: 1px solid #b9cbe6; background: linear-gradient(180deg,#f3f8ff,#e3edfb); padding: 7px 10px; }
+.compose .fmt { display: flex; gap: 6px; margin-bottom: 5px; font-size: 9pt; color: #6b7280; }
+.compose .fmt span { width: 19px; height: 18px; display: grid; place-items: center; border: 1px solid #bcccea; background: #fff; border-radius: 2px; }
+.compose .box { display: flex; gap: 7px; }
+.compose .ta { flex: 1; min-height: 30px; border: 1px solid #7d8aa3; background: #fff; box-shadow: inset 1px 1px 0 #c3cbdb; padding: 4px 6px; font-family: var(--font-ui); font-size: 9.5pt; color: #9aa3b2; }
+.compose .send { align-self: stretch; }
+
+.scrollnote { text-align: center; font-size: 8pt; color: #9aa3b2; padding: 3px 0 9px; }
+
+@media (max-width: 520px) {
+  body { padding: 8px 4px 32px; }
+  .msgr-head .pets { display: none; }
+  .he-row { grid-template-columns: 1fr; }
+  .he-row .lbl { text-align: left; }
+}
+</style>
+</head>
+<body>
+<div class="window">
+  <div class="title-bar" aria-hidden="true">
+    <span class="title-text"><span class="icon"></span>aadhar.sh/lwe &middot; FHE</span>
+    <span class="controls"
+      ><span class="min" title="minimize"></span
+      ><span class="max" title="maximize"></span
+      ><a class="close" href="/lwe/" title="back to Learning With Errors" aria-label="back to Learning With Errors"></a
+    ></span>
+  </div>
+  <div class="content">
+    <div class="msgr">
+
+      <div class="msgr-head">
+        <div class="ava" aria-hidden="true"></div>
+        <div class="who"><b>FHE</b><span class="stat">Online, Fully Homomorphic Encryption</span></div>
+        <div class="pets">Learning&nbsp;With&nbsp;Errors<br>a chat about PETs</div>
+      </div>
+
+      <p class="disclosure"><b>How to read this:</b> the <b>FHE</b> teacher's messages are <b>verbatim</b> excerpts from
+        <a href="https://www.archetype.fund/media/privacy-2-0-pets-and-the-promise-of-private-shared-state-i" rel="external">&ldquo;Privacy 2.0: PETs and the Promise of Private Shared State&rdquo;</a> by Aadharsh Pannirselvam.
+        The learner's lines and the demos are AI-generated to pace the read. Scroll the conversation. ↓</p>
+
+      <div class="log">
+
+        <div class="msg you">
+          <div class="pic" aria-hidden="true"></div>
+          <div><div class="who"><b>aadharsh</b><time>20:41</time></div>
+          <div class="bubble"><p>everyone keeps calling FHE magic. explain it like it's 2009 and we're on MSN. what is it, actually?</p></div></div>
+        </div>
+
+        <div class="msg bot">
+          <div class="pic" aria-hidden="true"></div>
+          <div><div class="who"><b>FHE</b><time>20:41</time></div>
+          <div class="bubble"><p>Fully Homomorphic Encryption (FHE) is a form of encryption which uses a bunch of addition and multiplication on lattices and really high order polynomials with random noise and rounding to perform actions on encrypted data without ever decrypting it.</p>
+          <a class="cite" href="https://www.archetype.fund/media/privacy-2-0-pets-and-the-promise-of-private-shared-state-i" rel="external">from the article</a></div></div>
+        </div>
+
+        <div class="msg you">
+          <div class="pic" aria-hidden="true"></div>
+          <div><div class="who"><b>aadharsh</b><time>20:42</time></div>
+          <div class="bubble"><p>wait. a server runs math on the encrypted data and never decrypts it? that sounds fake. show me.</p></div></div>
+        </div>
+
+        <!-- DEMO 1 — homomorphic add -->
+        <div class="msg bot">
+          <div class="pic" aria-hidden="true"></div>
+          <div style="min-width:0"><div class="who"><b>FHE</b><time>20:42</time></div>
+          <div class="demo" id="demo-add">
+            <div class="bar">FHE shared a demo: add two secret numbers</div>
+            <div class="pad">
+              <p class="lead">Pick two numbers. We <b>encrypt</b> each as a big noisy value, hand <b>only the ciphertexts</b> to a server, let it <b>add them</b>, and decrypt the result. The server never sees your numbers. <span class="mono" style="font-size:8pt;color:#9a6a16">(toy LWE: c = m&times;1000 + small noise; rounding recovers m)</span></p>
+              <div class="he-row"><span class="lbl">your secrets</span>
+                <span><span class="kbd-step"><button data-add-a="-1">&minus;</button><span class="v" id="add-a">5</span><button data-add-a="1">+</button></span>
+                &nbsp;and&nbsp;
+                <span class="kbd-step"><button data-add-b="-1">&minus;</button><span class="v" id="add-b">8</span><button data-add-b="1">+</button></span>
+                <button class="btn" id="add-reroll" style="margin-left:8px">re-roll noise</button></span>
+              </div>
+              <div class="he-row"><span class="lbl">Enc(a)</span><span class="he-ct" id="ct-a">—</span></div>
+              <div class="he-row"><span class="lbl">Enc(b)</span><span class="he-ct" id="ct-b">—</span></div>
+              <div class="he-server">🖧 the <b>server</b> sees only the ciphertexts. it computes <span class="mono">Enc(a) + Enc(b)</span> with no key and no plaintext:<br>
+                <span class="he-ct" id="ct-sum" style="margin-top:4px;display:inline-block">—</span></div>
+              <div class="he-out">🔑 you decrypt (round &divide;1000): <span class="ok" id="dec-out">—</span>
+                &nbsp;<span class="he-noise mono" id="dec-noise"></span></div>
+            </div>
+          </div></div>
+        </div>
+
+        <div class="msg you">
+          <div class="pic" aria-hidden="true"></div>
+          <div><div class="who"><b>aadharsh</b><time>20:44</time></div>
+          <div class="bubble"><p>ok, that's wild. the server adds my scrambled numbers and never sees the real ones. who figured this out?</p></div></div>
+        </div>
+
+        <div class="msg bot">
+          <div class="pic" aria-hidden="true"></div>
+          <div><div class="who"><b>FHE</b><time>20:44</time></div>
+          <div class="bubble"><p>The concept of homomorphic encryption was first theorized in the late 1970s with &ldquo;privacy homomorphisms&rdquo; which could enable untrusted computers to perform operations on sensitive data without needing to reveal it in plaintext. However, homomorphic encryption would remain an open problem until 2009, when cryptographer Craig Gentry described a feasible homomorphic encryption scheme using lattices to express arbitrary circuits&mdash;a <em>fully</em> homomorphic encryption scheme.</p>
+          <a class="cite" href="https://www.archetype.fund/media/privacy-2-0-pets-and-the-promise-of-private-shared-state-i" rel="external">from the article</a></div></div>
+        </div>
+
+        <div class="msg you">
+          <div class="pic" aria-hidden="true"></div>
+          <div><div class="who"><b>aadharsh</b><time>20:45</time></div>
+          <div class="bubble"><p>2009, lattices, got it. so why doesn't <em>everything</em> run on FHE already? what's the catch?</p></div></div>
+        </div>
+
+        <div class="msg bot">
+          <div class="pic" aria-hidden="true"></div>
+          <div><div class="who"><b>FHE</b><time>20:45</time></div>
+          <div class="bubble"><p>However, a core challenge in implementing this scheme came from the randomly distributed noise that enabled Gentry&rsquo;s implementation of homomorphic addition and multiplication operations. Specifically, homomorphic <em>additions</em> add small amounts of randomly generated noise to the noise accumulated over a circuit&rsquo;s execution, while homomorphic <em>multiplications</em> multiply the same accumulated noise. Critically, when an FHE program&rsquo;s noise accumulates past a certain threshold in binary, it becomes indistinguishable from the encrypted data used for the underlying computation. Simply put, adding too much noise will corrupt the encrypted data, and homomorphic multiplication will do this faster than homomorphic addition.</p>
+          <a class="cite" href="https://www.archetype.fund/media/privacy-2-0-pets-and-the-promise-of-private-shared-state-i" rel="external">from the article</a></div></div>
+        </div>
+
+        <div class="msg you">
+          <div class="pic" aria-hidden="true"></div>
+          <div><div class="who"><b>aadharsh</b><time>20:46</time></div>
+          <div class="bubble"><p>so the noise <em>eats</em> the data if I pile on too much math? and multiply is the dangerous op. let me try to break it.</p></div></div>
+        </div>
+
+        <!-- DEMO 2 — noise + bootstrapping -->
+        <div class="msg bot">
+          <div class="pic" aria-hidden="true"></div>
+          <div style="min-width:0"><div class="who"><b>FHE</b><time>20:46</time></div>
+          <div class="demo" id="demo-noise">
+            <div class="bar">FHE shared a demo: noise vs the plaintext (encode → operate → decode)</div>
+            <div class="pad">
+              <p class="lead">Your <b>secret</b> rides in the HIGH bits; <b>noise</b> fills the LOW bits, with a gap between them. Every op grows the noise: <b>add</b> nudges it, <b>multiply</b> blows it up. Once the noise climbs past the gap, <b>decoding rounds to the WRONG number</b> and corrupts the plaintext. <span class="mono" style="font-size:8pt;color:#9a6a16">(toy: ciphertext = m&times;256 + noise; decode = round(&divide;256))</span></p>
+              <div class="dc-pick">secret <b>m</b> =
+                <span class="kbd-step"><button id="dc-mdn">&minus;</button><span class="v" id="dc-m">9</span><button id="dc-mup">+</button></span>
+                <span class="mono" style="font-size:8pt;color:#9aa3b2">&nbsp;encode → ciphertext below</span>
+              </div>
+              <div class="dc-line">ciphertext <span class="mono" id="dc-ct">2307</span> = <span class="hi" id="dc-hi">9&times;256</span> &nbsp;+&nbsp; <span class="lo" id="dc-lo">noise 3</span></div>
+              <div class="nz-wrap">
+                <div class="nz-bar"><div class="nz-fill" id="nz-fill"></div><div class="nz-gap"></div></div>
+              </div>
+              <div class="dc-decode">🔑 <b>decode</b>: round(<span class="mono" id="dc-ctn">2307</span> &divide; 256) = <b class="dc-rec" id="dc-rec">9</b> &nbsp;<span id="dc-verdict" class="ok">✓ matches the secret</span></div>
+              <div class="nz-meta" id="nz-meta">noise 3 / 128 &middot; ops 0 &middot; bootstraps 0</div>
+              <div class="nz-ops">
+                <button class="btn" id="nz-add">+ add &nbsp;<span class="mono" style="font-size:8pt">(+noise)</span></button>
+                <button class="btn" id="nz-mul">&times; multiply &nbsp;<span class="mono" style="font-size:8pt">(&times;noise, faster)</span></button>
+                <button class="btn go" id="nz-boot">⟳ bootstrap</button>
+                <button class="btn" id="nz-reset" style="margin-left:auto">reset</button>
+              </div>
+            </div>
+          </div></div>
+        </div>
+
+        <div class="msg you">
+          <div class="pic" aria-hidden="true"></div>
+          <div><div class="who"><b>aadharsh</b><time>20:48</time></div>
+          <div class="bubble"><p>I corrupted it in 3 multiplies. so how does a real program ever finish?</p></div></div>
+        </div>
+
+        <div class="msg bot">
+          <div class="pic" aria-hidden="true"></div>
+          <div><div class="who"><b>FHE</b><time>20:48</time></div>
+          <div class="bubble"><p>To mitigate this, Gentry proposed <em>bootstrapping</em>, a process that &ldquo;refreshes&rdquo; ciphertexts by homomorphically re-encrypting them using a different private key, effectively resetting a program&rsquo;s noise before it can bleed into the critical data and corrupt it. However, bootstrapping came at the cost of speed and computational resources&mdash;it made FHE theoretically limitless but enshrined a structural tradeoff between security and usability for complicated programs. With the rate of noise accumulation and the computational overhead in bootstrapping, this tradeoff was initially massive, as Gentry&rsquo;s initial scheme needed 30 minutes to evaluate each bit operation when it was finally implemented two years later.</p>
+          <a class="cite" href="https://www.archetype.fund/media/privacy-2-0-pets-and-the-promise-of-private-shared-state-i" rel="external">from the article</a></div></div>
+        </div>
+
+        <div class="msg you">
+          <div class="pic" aria-hidden="true"></div>
+          <div><div class="who"><b>aadharsh</b><time>20:49</time></div>
+          <div class="bubble"><p>30 minutes. per bit. in 2011. please tell me it got faster.</p></div></div>
+        </div>
+
+        <div class="msg bot">
+          <div class="pic" aria-hidden="true"></div>
+          <div><div class="who"><b>FHE</b><time>20:49</time></div>
+          <div class="bubble"><p>Given all of this, early FHE research largely focused on improving efficiency by way of noise management, both by increasing the separation between noise and information to reduce the number of bootstrapping operations and by speeding up the actual process of managing noise. The 2013 Gentry-Sahai-Waters (GSW) scheme was a prime example of this as it accelerated FHE operations from minutes to milliseconds via &ldquo;leveled&rdquo; circuits. However, like some of the FHE schemes that followed, such as BGV and CKKS, it fragmented FHE into standards based on differing compilers and problem spaces. This fragmentation ultimately forced developers to trade a single standard of FHE for lower levels of friction. That being said, at this stage homomorphic millisecond-level logic gates remained a million times slower than traditional computing&rsquo;s nanosecond-level operations, and as such, these early schemes were impractical for use in crypto.</p>
+          <a class="cite" href="https://www.archetype.fund/media/privacy-2-0-pets-and-the-promise-of-private-shared-state-i" rel="external">from the article</a></div></div>
+        </div>
+
+        <div class="msg you">
+          <div class="pic" aria-hidden="true"></div>
+          <div><div class="who"><b>aadharsh</b><time>20:50</time></div>
+          <div class="bubble"><p>a million times slower. ok, but even if it gets fast enough one day, can't I just read the answer out at the end?</p></div></div>
+        </div>
+
+        <div class="msg bot">
+          <div class="pic" aria-hidden="true"></div>
+          <div><div class="who"><b>FHE</b><time>20:50</time></div>
+          <div class="bubble"><p>Another caveat with practically applying FHE to shared state lies in decrypting outputs for use in non-FHE applications&mdash;to do so one naturally needs a decryption key. This decryption key becomes a limiter of trust assumptions and, in practice, is either controlled by a single party or a set of nodes in an MPC setting, which brings FHE back to the trust assumptions of MPC whilst being slower.</p>
+          <a class="cite" href="https://www.archetype.fund/media/privacy-2-0-pets-and-the-promise-of-private-shared-state-i" rel="external">from the article</a></div></div>
+        </div>
+
+        <div class="msg you">
+          <div class="pic" aria-hidden="true"></div>
+          <div><div class="who"><b>aadharsh</b><time>20:51</time></div>
+          <div class="bubble"><p>so you still need a key to read the answer, and <em>that</em> key is the whole trust catch. the server computes on the ciphertext fine, but the moment you want a plaintext answer you're back to trusting whoever holds the key. ok, I get FHE now. thanks.</p>
+          <p>→ <a href="https://www.archetype.fund/media/privacy-2-0-pets-and-the-promise-of-private-shared-state-i" rel="external">read the whole essay (Privacy 2.0, part 1)</a> · <a href="/lwe/">back to Learning With Errors</a> · <a href="/lwe/pcrypto">FHE in 0xPARC's "four pieces"</a></p></div></div>
+        </div>
+
+      </div>
+
+      <div class="scrollnote">end of conversation</div>
+
+      <div class="compose">
+        <div class="fmt" aria-hidden="true"><span style="font-style:italic">A</span><span style="font-weight:bold">B</span><span>😊</span><span>🔒</span></div>
+        <div class="box">
+          <div class="ta">This is a recorded conversation. Start your own with the demos above.</div>
+          <button class="btn send" disabled>Send</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Demo 1: homomorphic addition (toy LWE) ─────────────────────────────────
+(function () {
+  var root = document.getElementById("demo-add"); if (!root) return;
+  var BIG = 1000;
+  var a = 5, b = 8, ea = 0, eb = 0;
+  var $ = function (id) { return document.getElementById(id); };
+  function noise() { return Math.floor(Math.random() * 41); } // 0..40, well under BIG/2
+  function roll() { ea = noise(); eb = noise(); render(); }
+  function render() {
+    var ca = a * BIG + ea, cb = b * BIG + eb, cs = ca + cb;
+    var dec = Math.round(cs / BIG), tot = ea + eb;
+    $("add-a").textContent = a; $("add-b").textContent = b;
+    $("ct-a").textContent = ca.toLocaleString();
+    $("ct-b").textContent = cb.toLocaleString();
+    $("ct-sum").textContent = cs.toLocaleString();
+    $("dec-out").textContent = a + " + " + b + " = " + dec + (dec === a + b ? " ✓" : " ✗");
+    $("dec-noise").textContent = "(combined noise " + tot + ", rounded away)";
+  }
+  root.addEventListener("click", function (e) {
+    var t = e.target.closest("button"); if (!t) return;
+    if (t.id === "add-reroll") { roll(); return; }
+    if (t.dataset.addA) { a = Math.max(0, Math.min(20, a + (+t.dataset.addA))); ea = noise(); render(); }
+    if (t.dataset.addB) { b = Math.max(0, Math.min(20, b + (+t.dataset.addB))); eb = noise(); render(); }
+  });
+  roll();
+})();
+
+// ── Demo 2: noise corrupts the plaintext (encode → operate → decode) ────────
+(function () {
+  var root = document.getElementById("demo-noise"); if (!root) return;
+  var SCALE = 256, HALF = 128, FLOOR = 3;       // decode rounds wrong once noise ≥ HALF
+  var m = 9, noise = FLOOR, ops = 0, boots = 0;
+  var $ = function (id) { return document.getElementById(id); };
+  function render() {
+    var ct = m * SCALE + noise, rec = Math.round(ct / SCALE), ok = rec === m;
+    $("dc-m").textContent = m;
+    $("dc-ct").textContent = ct;
+    $("dc-hi").innerHTML = m + "&times;256";
+    $("dc-lo").textContent = "noise " + noise;
+    $("dc-ctn").textContent = ct;
+    var rc = $("dc-rec"); rc.textContent = rec; rc.style.color = ok ? "#2c7a36" : "#c43636";
+    var v = $("dc-verdict");
+    v.className = ok ? "ok" : "no";
+    v.innerHTML = ok ? "✓ matches the secret" : "✗ CORRUPTED: decoded " + rec + ", not " + m;
+    var fill = $("nz-fill");
+    fill.style.width = Math.min(100, noise / SCALE * 100) + "%";
+    fill.className = "nz-fill" + (!ok ? " bad" : noise >= HALF * 0.7 ? " warn" : "");
+    $("nz-meta").textContent = "noise " + noise + " / " + HALF + " (corrupt point) · ops " + ops + " · bootstraps " + boots;
+  }
+  function op(grow) { ops++; noise = Math.round(grow(noise)); if (noise > SCALE) noise = SCALE; render(); }
+  $("dc-mup").addEventListener("click", function () { m = Math.min(15, m + 1); render(); });
+  $("dc-mdn").addEventListener("click", function () { m = Math.max(0, m - 1); render(); });
+  $("nz-add").addEventListener("click", function () { op(function (n) { return n + 16; }); });        // add: small bump
+  $("nz-mul").addEventListener("click", function () { op(function (n) { return n * 3; }); });          // multiply: blows up faster
+  $("nz-boot").addEventListener("click", function () { boots++; noise = FLOOR; render(); });           // bootstrap: refresh noise
+  $("nz-reset").addEventListener("click", function () { m = 9; noise = FLOOR; ops = 0; boots = 0; render(); });
+  render();
+})();
+</script>
+
+<!-- prerender every internal page eagerly (McMaster-style); same exclusions as the homepage. -->
+<script type="speculationrules">
+{
+  "prerender": [
+    { "where": { "and": [ { "href_matches": "/*" }, { "not": { "href_matches": "/" } }, { "not": { "href_matches": "/around*" } }, { "not": { "href_matches": "/whoareyou*" } } ] }, "eagerness": "moderate" }
+  ],
+  "prefetch": [
+    { "where": { "and": [ { "or": [ { "href_matches": "/garage/*" }, { "href_matches": "/lwe/*" } ] }, { "not": { "href_matches": "/lwe/ask*" } } ] }, "eagerness": "eager" }
+  ]
+}
+</script>
+<script>
+if ("serviceWorker" in navigator) {
+  var reg = function () { navigator.serviceWorker.register("/sw.js").catch(function () {}); };
+  "requestIdleCallback" in window ? requestIdleCallback(reg, { timeout: 2000 }) : setTimeout(reg, 1000);
+}
+</script>
+<script src="/lwe/ask.js" defer></script>
+<script src="/nav.js" defer></script>
+</body>
+</html>
