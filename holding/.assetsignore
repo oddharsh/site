@@ -1,0 +1,4 @@
+# Files in holding/ that must NOT be uploaded as public static assets.
+# Cloudflare warns that uploading the worker as an asset exposes server-side
+# source. The _worker.js directory is the worker bundle entry, not an asset.
+_worker.js

@@ -1,13 +1,15 @@
-// _worker.js — root-level pages worker. wrangler 4.x's `pages deploy`
-// looks for this file explicitly (see `--no-bundle` flag in --help output)
-// and uploads it as the project's Worker. all requests pass through here.
+// _worker.js/index.js — root-level pages worker entry. This is now a DIRECTORY
+// (_worker.js/), so wrangler/Cloudflare bundle this entry + its relative imports
+// at deploy via built-in esbuild. No build step of ours; the site stays no-build.
+// All requests pass through here.
 //
 // routing: /whoareyou → the transparency function below
 //          /rn        → 302 to the currently-active spotify playlist
 //          anything else → fall through to static asset serving
 //
-// equivalent to functions/whoareyou.js but in the _worker.js style that
-// the current wrangler unambiguously supports.
+// Mid-reorg toward per-route modules under this directory (see REORG-PROPOSAL.md);
+// the dispatcher + handlers are still inline here for now.
+import { THUMB_VERSION } from "./lib/const.js";
 
 // ── /rn redirect target ─────────────────────────────────────────────
 // the link on the site is static (/rn). the redirect target lives in KV
@@ -1136,7 +1138,8 @@ const R2_EXT_PRIORITY = {
 // higher quality (CQ30 → -q63); 13 the 3 grayscale Leica thumbs re-encoded
 // as true monochrome (yuv420 → yuv400). same filenames each time, so the
 // ?v= bump is what busts the edge cache for the new bytes.)
-const THUMB_VERSION = 19;
+// THUMB_VERSION now lives in ./lib/const.js (imported at the top) — the first
+// extracted module proving the no-build directory bundle.
 // stems removed from the pool — excluded from the rebuilt manifest even if their
 // original still lingers in R2's eventually-consistent list(). prune once R2
 // list() drops them (and the entry here is harmless to keep as a record).
