@@ -1,8 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  sitemap for aadhar.sh during the holding-page era.
-  add more entries as real pages land (sounds, images, dishes, tinkering,
-  lwe, faq, etc.).
+  sitemap for aadhar.sh. lists the durable, indexable pages.
 
   excluded by design:
     /rn            — 302 redirect, not a page
@@ -12,11 +10,12 @@
     /around        — meta noindex (live data, not durable content)
     /around/json   — JSON endpoint
     /whoareyou     — meta noindex + X-Robots-Tag: noindex
+    /coffee        — booking app (cal/), thin + transactional
 -->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://aadhar.sh/</loc>
-    <lastmod>2026-05-22</lastmod>
+    <lastmod>2026-06-07</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
@@ -27,15 +26,105 @@
     <priority>0.5</priority>
   </url>
   <url>
+    <loc>https://aadhar.sh/serendipity</loc>
+    <lastmod>2026-06-07</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://aadhar.sh/writing</loc>
+    <lastmod>2026-06-07</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://aadhar.sh/writing/education-in-tech</loc>
+    <lastmod>2026-06-09</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://aadhar.sh/writing/in-flux</loc>
+    <lastmod>2026-06-06</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://aadhar.sh/writing/colophon</loc>
+    <lastmod>2026-06-06</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
     <loc>https://aadhar.sh/garage</loc>
-    <lastmod>2026-05-22</lastmod>
+    <lastmod>2026-06-07</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.4</priority>
   </url>
   <url>
+    <loc>https://aadhar.sh/garage/iroh</loc>
+    <lastmod>2026-06-15</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://aadhar.sh/garage/teardown</loc>
+    <lastmod>2026-06-11</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://aadhar.sh/garage/chunks</loc>
+    <lastmod>2026-06-07</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://aadhar.sh/garage/cloudflare</loc>
+    <lastmod>2026-06-07</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://aadhar.sh/garage/encoding</loc>
+    <lastmod>2026-06-07</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://aadhar.sh/garage/horizon</loc>
+    <lastmod>2026-06-07</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://aadhar.sh/garage/masonry</loc>
+    <lastmod>2026-06-09</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://aadhar.sh/garage/pretext</loc>
+    <lastmod>2026-06-07</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://aadhar.sh/garage/safari27</loc>
+    <lastmod>2026-06-09</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://aadhar.sh/garage/scroll</loc>
+    <lastmod>2026-06-07</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
     <loc>https://aadhar.sh/garage/tooltips</loc>
-    <lastmod>2026-05-22</lastmod>
-    <changefreq>weekly</changefreq>
+    <lastmod>2026-06-07</lastmod>
+    <changefreq>monthly</changefreq>
     <priority>0.3</priority>
   </url>
 </urlset>

@@ -40,6 +40,20 @@ const SECURITY_HEADERS = {
   "referrer-policy":         "strict-origin-when-cross-origin",
 };
 
+const HOMEPAGE_DISCOVERY_LINKS = [
+  '</sitemap.xml>; rel="sitemap"; type="application/xml"',
+  '</llms.txt>; rel="alternate"; type="text/plain"; title="llms.txt summary"',
+  '</auth.md>; rel="service-doc"; type="text/markdown"; title="Auth.md agent registration"',
+  '</.well-known/oauth-protected-resource>; rel="service-desc"; type="application/json"; title="OAuth protected resource metadata"',
+  '</.well-known/oauth-authorization-server>; rel="service-desc"; type="application/json"; title="OAuth authorization server metadata"',
+  '</rn/tracks>; rel="service-desc"; type="application/json"; title="current rn playlist as JSON"',
+  '</.well-known/http-message-signatures-directory>; rel="http-message-signatures-directory"; type="application/jwk-set+json"',
+  '</.well-known/security.txt>; rel="security-policy"; type="text/plain"',
+  '</.well-known/api-catalog>; rel="api-catalog"; type="application/linkset+json"',
+];
+const HOMEPAGE_DISCOVERY_LINK = HOMEPAGE_DISCOVERY_LINKS.join(", ");
+const AGENT_AUTH_SCOPES = ["public.read", "mcp.read", "rn.read", "photos.read", "around.read"];
+
 function withSecurityHeaders(response) {
   // redirects don't need (and shouldn't carry) document-level headers
   if (response.status >= 300 && response.status < 400) return response;
@@ -55,6 +69,47 @@ function withSecurityHeaders(response) {
     status:     response.status,
     statusText: response.statusText,
     headers,
+  });
+}
+
+function withHomepageDiscoveryHeaders(response) {
+  const headers = new Headers(response.headers);
+  headers.set("link", HOMEPAGE_DISCOVERY_LINK);
+  appendVary(headers, "accept");
+  return new Response(response.body, {
+    status:     response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+function appendVary(headers, token) {
+  const current = headers.get("vary");
+  if (!current) {
+    headers.set("vary", token);
+    return;
+  }
+  const tokens = current.split(",").map(s => s.trim().toLowerCase());
+  if (!tokens.includes(token.toLowerCase())) {
+    headers.set("vary", `${current}, ${token}`);
+  }
+}
+
+function homepageHeadResponse(request) {
+  const markdown = wantsMarkdown(request);
+  return new Response(null, {
+    status: 200,
+    headers: {
+      "content-type": markdown
+        ? "text/markdown; charset=utf-8"
+        : "text/html; charset=utf-8",
+      "cache-control": markdown
+        ? "no-store, must-revalidate"
+        : "no-store, must-revalidate, s-maxage=0",
+      "vary": "accept",
+      "link": HOMEPAGE_DISCOVERY_LINK,
+      "x-content-type-options": "nosniff",
+    },
   });
 }
 
@@ -114,6 +169,23 @@ async function route(request, env, ctx) {
       );
     }
 
+    // agent-discovery docs (auth.md + the RFC 9727 api-catalog). these are
+    // static files, but they're extensionless / iterated, and a long Cache-
+    // Control once poisoned the read-through asset cache for the canonical URL
+    // (a ?query bust returned fresh while the bare URL served a stale copy).
+    // serve them through a per-request cache-bust so the canonical URL is
+    // always the freshly-deployed bytes, with the right content-type + a short
+    // edge cache. (the .json cards under /.well-known/ are extension-typed and
+    // served straight from ASSETS.)
+    if (url.pathname === "/auth.md") return serveFreshAsset(request, env, "text/markdown; charset=utf-8");
+    if (url.pathname === "/.well-known/api-catalog") return serveFreshAsset(request, env, "application/linkset+json");
+    if (url.pathname === "/.well-known/oauth-protected-resource") return serveFreshAsset(request, env, "application/json; charset=utf-8");
+    if (url.pathname === "/.well-known/oauth-authorization-server") return serveFreshAsset(request, env, "application/json; charset=utf-8");
+    if (url.pathname === "/agent/auth") return handleAgentAuthRegister(request);
+    if (url.pathname === "/agent/auth/claim") return handleAgentAuthClaim(request);
+    if (url.pathname === "/oauth2/token") return handleAgentAuthToken(request);
+    if (url.pathname === "/oauth2/revoke") return handleAgentAuthRevoke(request);
+
     if (url.pathname === "/whoareyou") {
       return handleWhoareyou(request);
     }
@@ -145,6 +217,13 @@ async function route(request, env, ctx) {
 
     if (url.pathname === "/rn/set") {
       return handleRnSet(request, env);
+    }
+
+    // /coffee is first-party in the shell, but the custom booking worker is not
+    // deployed yet. Make the route intentional instead of letting Pages fall back
+    // to the homepage for a path that looks like an app.
+    if (url.pathname === "/coffee" || url.pathname === "/coffee/") {
+      return handleCoffeeRedirect();
     }
 
     if (url.pathname === "/bot") {
@@ -213,6 +292,27 @@ async function route(request, env, ctx) {
       });
     }
 
+    // /images/meta/<stem>.json — per-photo EXIF for the hover tooltip.
+    // same SPA-fallback hazard as metadata.json above, but worse: a
+    // missing file would fall through to Pages' index.html fallback
+    // (200 text/html) and the /images/* _headers rule would stamp it
+    // 1-year immutable — poisoning that photo's tooltip in the browser
+    // HTTP cache until META_V is bumped. guard: real JSON passes
+    // through, anything else becomes an uncacheable 404.
+    if (/^\/images\/meta\/[^/]+\.json$/i.test(url.pathname)) {
+      const res = await env.ASSETS.fetch(request);
+      const ct  = res.headers.get("content-type") || "";
+      if (ct.includes("json")) return res;
+      try { await res.body?.cancel(); } catch {}
+      return new Response('{"error":"not found"}', {
+        status: 404,
+        headers: {
+          "content-type":  "application/json; charset=utf-8",
+          "cache-control": "public, max-age=0, must-revalidate",
+        },
+      });
+    }
+
     // full-res photos live in R2 (aadhar-photos bucket, bound as
     // PHOTOS_R2). thumbnails stay inline in /images/ — they're tiny and
     // benefit from being on the same edge. only the chonky originals
@@ -230,28 +330,16 @@ async function route(request, env, ctx) {
     // edge won't poison itself. Successful responses pass through with
     // Pages's normal long-cache (correct for content-addressed thumbs
     // because we bump THUMB_VERSION's `?v=N` on each deploy).
-    if (/^\/images\/[^/]+\.(jpg|jpeg|avif|png|gif|heic|heif)$/i.test(url.pathname)) {
-      const res = await env.ASSETS.fetch(request);
-      if (!res.ok) {
-        const headers = new Headers(res.headers);
-        headers.set("cache-control", "public, max-age=0, must-revalidate");
-        return new Response(res.body, {
-          status: res.status, statusText: res.statusText, headers,
-        });
-      }
-      return res;
-    }
-
-    // /images/<file>.<ext> for image extensions: must resolve to a real
-    // image asset, not Cloudflare Pages' SPA fallback (which returns
-    // index.html with text/html for any missing path). serve if real,
-    // 404 if missing. (no more .jpg → .avif redirect — both formats now
-    // exist again as siblings, so a missing .jpg is genuinely missing.)
-    const thumbMatch = url.pathname.match(/^\/images\/([^/]+)\.(avif|jpe?g|png|gif|heic|heif|hif)$/i);
-    if (thumbMatch) {
+    // gate on CONTENT-TYPE, not res.ok: Cloudflare Pages' SPA fallback
+    // returns a missing /images/* asset as a 200 text/html (index.html),
+    // which would sail through an ok-check and get stamped with the
+    // _headers 1-year immutable cache — poisoning that thumb URL at the
+    // edge with homepage HTML until a THUMB_VERSION bump. a real thumb
+    // always serves image/*; anything else becomes an uncacheable 404.
+    if (/^\/images\/[^/]+\.(avif|jpe?g|png|gif|heic|heif|hif)$/i.test(url.pathname)) {
       const res = await env.ASSETS.fetch(request);
       const ct  = res.headers.get("content-type") || "";
-      if (ct.startsWith("image/")) return res;
+      if (res.ok && ct.startsWith("image/")) return res;
       try { await res.body?.cancel(); } catch {}
       return errorResp("not found", 404);
     }
@@ -263,7 +351,19 @@ async function route(request, env, ctx) {
     // and a rough x-markdown-tokens header. browsers asking for text/html
     // (or anything else) keep getting the HTML version as default —
     // with the music section pre-rendered for zero-flash arrival.
-    if (url.pathname === "/" || url.pathname === "/index.html") {
+    // /index.html → / — the _headers no-store rule matches the literal "/"
+    // path only, so serving the randomized homepage at this alias would let
+    // browsers heuristically cache a page that's supposed to re-randomize
+    // (and tick the counter) per visit. canonicalize instead.
+    if (url.pathname === "/index.html") {
+      url.pathname = "/";
+      return Response.redirect(url.toString(), 301);
+    }
+
+    if (url.pathname === "/") {
+      if (request.method === "HEAD") {
+        return homepageHeadResponse(request);
+      }
       if (wantsMarkdown(request)) {
         return serveMarkdown(request, env);
       }
@@ -288,14 +388,17 @@ async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
   // are mutually independent (the static asset, the tracks payload, the
   // photo manifest, the counter value), so fire them concurrently instead
   // of awaiting each in turn — collapses ~3 serial KV round-trips + the
-  // ASSETS fetch into roughly one wall-clock read. the tracks lookup stays
-  // internally sequential because tracks:<pid> needs the playlist-id first.
+  // ASSETS fetch into roughly one wall-clock read. the tracks lookup needs
+  // tracks:<pid> keyed off playlist-id, but the id changes ~never — so it's
+  // cached in a module var (like _altMap) and the chain costs two serial KV
+  // reads only on a cold isolate; warm isolates do a single read.
   const tracksChain = (async () => {
     if (!env.RN_KV) return null;
     try {
-      const pid = await env.RN_KV.get("playlist-id");
+      const pid = _playlistId ??
+        (_playlistId = await env.RN_KV.get("playlist-id"));
       if (pid && /^[0-9A-Za-z]{22}$/.test(pid)) {
-        return await env.RN_KV.get(`tracks:${pid}`, "json");
+        return await getTracksSWR(env, ctx, pid);
       }
     } catch {}
     return null;
@@ -304,58 +407,61 @@ async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
     arr => (Array.isArray(arr) && arr.length ? arr : null),
     () => null
   );
-  // visitor counter source — prefer the Durable Object (atomic increment, 100k
-  // writes/day) when its binding is present; else fall back to KV (eventually-
-  // consistent, 1k writes/day). bot status is request-only, so compute it up front
-  // and let the counter fetch ride the concurrent batch below — no serial round-trip
-  // either way. humans bump the count; bots read it (DO: ?peek; KV: read-no-write).
+  // visitor counter — atomic increment in the "homepage-visits" Durable Object
+  // (cf-garage's Counter class, bound here as COUNTER). humans increment; bots
+  // and speculative loads (Speculation Rules prefetch/prerender, Speed Brain, any
+  // Sec-Purpose-honest prefetcher) peek (?peek=1) so crawlers + prefetches don't
+  // inflate the count. fired NOW so the read rides concurrently with the asset +
+  // tracks fetches — but it's AWAITED later, inside the footer .counter rewriter
+  // handler. the stream reaches .counter only at the very end of <body>, so the
+  // read overlaps the whole page and never gates first byte. no timeout race
+  // (that race is exactly what intermittently shipped the static "000042").
   const counterUA = request.headers.get("user-agent") || "";
-  const counterIsBot = request.cf?.botManagement?.verifiedBot === true ||
+  const counterIsSpeculative = /prefetch|prerender/i.test(request.headers.get("sec-purpose") || "");
+  const counterIsBot = counterIsSpeculative ||
+    request.cf?.botManagement?.verifiedBot === true ||
     /bot|crawl|spider|slurp|crawler|bingpreview|facebookexternalhit|embedly|slackbot|whatsapp|telegrambot|discordbot|redditbot|petalbot|gptbot|claudebot|ccbot|perplexity|bytespider|google-extended/i.test(counterUA);
-  const counterP = env.COUNTER
+  const counterRaw = env.COUNTER
     ? env.COUNTER.get(env.COUNTER.idFromName("homepage-visits"))
         .fetch(`https://do/${counterIsBot ? "?peek=1" : ""}`)
         .then((r) => r.json())
         .catch(() => null)
-    : env.RN_KV
-      ? env.RN_KV.get("counter:visits").catch(() => null)
-      : Promise.resolve(null);
+    : Promise.resolve(null);
+  // ensure the increment lands even if the response bails early (below) before
+  // the rewriter runs.
+  ctx.waitUntil(counterRaw.catch(() => {}));
 
-  const [res, tracksPayload, photos, counterData] = await Promise.all([
+  const [res, tracksPayload, photos, altMap] = await Promise.all([
     env.ASSETS.fetch(request),
     tracksChain,
     manifestP,
-    counterP,
+    getAltMap(env),   // AI alt text; module-cached, so this is free on warm isolates
   ]);
 
   // honest classic-90s-counter behavior: counts every homepage GET, no session
-  // dedup, no cookie. derive the footer pill from whichever backend answered:
-  //   • DO  — counterData is { n }. humans already incremented atomically inside
-  //     the DO (no read-modify-write race, no 1k/day write cap); bots peeked.
-  //     on a transient DO error counterData is null → leave the pill null (the
-  //     static "000042" placeholder shows) rather than touch KV, so an error
-  //     can't clobber the migrated count. KV `counter:visits` (last value 891)
-  //     stays frozen as a record; the DO is the source of truth once bound.
-  //   • KV  — fallback until the COUNTER binding is added: counterData is the raw
-  //     string; increment + fire-and-forget write, humans only. this site
-  //     advertises to agents (DNS-AID + llms.txt), so counting crawlers would
-  //     dominate the write budget and inflate the pill — bots read, don't bump.
-  let counterStr = null;
-  if (env.COUNTER) {
-    if (counterData && typeof counterData.n === "number") {
-      counterStr = String(counterData.n).padStart(6, "0");
+  // dedup, no cookie. the count itself is injected later, in the footer .counter
+  // rewriter handler (which awaits the DO read) — see below.
+
+  // footer "Last modified" → the most recently added photo (a real, datable
+  // content change; the pool grows often). Pages assets are content-addressed
+  // (ETag, no Last-Modified) and there's no build step, so this is the cleanest
+  // auto-advancing source. floored by the hardcoded date in index.html (so a
+  // copy-only edit can still bump it by hand). null → hardcoded date stays.
+  let lastModStr = null, lastModISO = null;
+  if (photos && photos.length) {
+    let newest = 0;
+    for (const p of photos) { const t = p.uploaded ? Date.parse(p.uploaded) : NaN; if (!isNaN(t) && t > newest) newest = t; }
+    if (newest > 0) {
+      const d = new Date(newest);
+      lastModISO = d.toISOString().slice(0, 10);
+      lastModStr = d.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" });
     }
-  } else if (env.RN_KV) {
-    const cur  = parseInt(counterData || "0", 10) || 0;
-    const next = counterIsBot ? cur : cur + 1;
-    counterStr = String(next).padStart(6, "0");
-    if (!counterIsBot) ctx.waitUntil(env.RN_KV.put("counter:visits", String(next)));
   }
 
   // bail if no dynamic data is available — the static HTML's inline
   // JS will pick up the slack on the client (and the hardcoded "000042"
   // stays in the footer as a graceful fallback).
-  if (!tracksPayload?.tracks?.length && !photos && !counterStr) return res;
+  if (!tracksPayload?.tracks?.length && !photos && !env.COUNTER && !lastModStr) return withHomepageDiscoveryHeaders(res);
 
   const rewriter = new HTMLRewriter();
   let lcpAvif = null, lcpStem = null;  // first photo tile → responsive preload Link
@@ -385,7 +491,7 @@ async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
   }
 
   // ── photo grid → section.photos ─────────────────────────────────
-  // pick 9 random photos via fisher-yates so the grid feels fresh each
+  // pick 12 random photos via fisher-yates so the grid feels fresh each
   // visit. response carries Cache-Control: no-store via _headers (see
   // comment on / in _headers explaining the strong no-cache choice), so
   // CF/browser/intermediaries don't pin this selection across refreshes.
@@ -395,14 +501,13 @@ async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
     const pick = pickRandom(photos, 12);   // ~12 fills the justified rows into a fuller rectangle
     lcpAvif = pick[0] && pick[0].thumb_avif ? pick[0].thumb_avif : null;
     lcpStem = pick[0] && pick[0].stem ? pick[0].stem : null;
-    const altMap = await getAltMap(env);   // AI alt text for the rendered slots (lean: ~12 strings)
     const slotsHtml = pick.map((p, i) => {
       const full     = p.full;
       // first tile: eager + high fetch priority. it's the topmost photo
       // and a candidate LCP element (the grid sits below the lede, so
       // it's a coin-flip with the text — but when the photo is LCP this
       // removes the lazy-load delay + bumps it from Low to High priority).
-      // the other 8 stay lazy. fetchpriority: Chrome 102+/Safari 17.2+,
+      // the other 11 stay lazy. fetchpriority: Chrome 102+/Safari 17.2+,
       // ignored harmlessly elsewhere.
       const imgLoad = i === 0
         ? `loading="eager" fetchpriority="high"`
@@ -411,9 +516,9 @@ async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
         ? ` data-size="${p.size}"` : "";
       const upAttr   = p.uploaded
         ? ` data-uploaded="${escAttr(p.uploaded)}"` : "";
-      // EXIF is NOT inlined. the tooltip lazy-fetches /images/metadata.json
-      // (EXIF + histogram in one SW-cached file) on first photo hover and
-      // looks the photo up by stem (derivable from data-full). inlining it
+      // EXIF is NOT inlined. the tooltip lazy-fetches /images/meta/<stem>.json
+      // (per-photo EXIF; histogram is computed client-side) on first photo
+      // hover, keyed by stem (derivable from data-full). inlining it
       // shipped ~14KB raw of EXIF on every no-store visit for a hover most
       // visitors never make — lazy keeps the hot path lean. (the grid is a
       // square 3-col CSS grid via aspect-ratio:1, so no per-tile --ar needed.)
@@ -436,9 +541,28 @@ async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
   }
 
   // ── visitor counter → footer .counter pill ──────────────────────
-  if (counterStr) {
+  // async handler: the rewriter reaches .counter only at the end of <body>, so
+  // awaiting the DO read here overlaps it with the full page stream instead of
+  // gating first byte — no timeout race. on a null read (DO error/unbound) the
+  // static placeholder stays put, never a misleading number.
+  if (env.COUNTER) {
     rewriter.on(".counter", {
-      element(el) { el.setInnerContent(counterStr); },
+      async element(el) {
+        const data = await counterRaw;
+        if (data && typeof data.n === "number") {
+          el.setInnerContent(String(data.n).padStart(6, "0"));
+        }
+      },
+    });
+  }
+
+  // ── footer "Last modified" → newest photo, floored by the hardcoded date ──
+  if (lastModStr) {
+    rewriter.on("footer time", {
+      element(el) {
+        const floor = el.getAttribute("datetime") || "";   // hardcoded date in index.html
+        if (lastModISO >= floor) { el.setAttribute("datetime", lastModISO); el.setInnerContent(lastModStr); }
+      },
     });
   }
 
@@ -459,7 +583,7 @@ async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
       (lcpStem ? `<link rel="preload" as="image" type="image/avif" fetchpriority="high" media="(max-width: 560px)" href="/images/${escAttr(lcpStem)}-${THUMB_SMALL_PX}.avif?v=${THUMB_VERSION}">` : "");
     rewriter.on("head", { element(el) { el.prepend(links, { html: true }); } });
   }
-  return rewriter.transform(res);
+  return withHomepageDiscoveryHeaders(rewriter.transform(res));
 }
 
 // fisher-yates shuffle, return first N elements. doesn't mutate input.
@@ -604,8 +728,9 @@ function escHtml(s) {
 // the canonical copy). The prose ships in the HTML, so it's readable/crawlable with
 // JS off; notepad.js only adds the menus + Ln/Col status + the F5 date stamp.
 const NOTEPAD_CSS = `
+html{background:linear-gradient(180deg,oklch(56% 0.13 250) 0%,oklch(73% 0.10 236) 50%,oklch(88% 0.05 232) 60%,oklch(60% 0.16 140) 100%)}
 body.np-page{margin:0;min-height:100vh;padding:16px 12px 54px;color:oklch(21% 0 0);font-family:var(--font-ui);font-size:12px;
-background:linear-gradient(180deg,oklch(87.5% 0.028 248) 0%,oklch(94.7% 0.011 252) 220px,oklch(94.7% 0.011 252) 100%)}
+background:linear-gradient(180deg,oklch(56% 0.13 250) 0%,oklch(73% 0.10 236) 50%,oklch(88% 0.05 232) 60%,oklch(60% 0.16 140) 100%)}
 .np-window{max-width:860px;margin:0 auto;max-height:calc(100dvh - 78px);display:flex;flex-direction:column;background:oklch(100% 0 0);
 border:2px solid #0831d9;border-right-color:#001ea0;border-bottom-color:#001ea0;border-top-left-radius:8px;border-top-right-radius:8px;overflow:hidden;
 box-shadow:inset 1px 1px 0 #166aee,inset 2px 2px 0 #0855dd,inset -1px -1px 0 #00138c,inset -2px -2px 0 #003bda,4px 4px 0 rgba(0,30,160,.35)}
@@ -619,14 +744,14 @@ background:linear-gradient(180deg,oklch(70% 0.15 258) 0%,oklch(60% 0.20 261) 8%,
 /* canonical Luna caption buttons (design system): 21x21 glossy "gel" lozenges,
    min/max blue + close red, CSS-drawn white glyphs. matches .title-bar .controls
    site-wide; hex traced from the Luna .msstyles bitmap, kept hex on purpose. */
-.np-controls .min,.np-controls .max,.np-controls .close{position:relative;box-sizing:border-box;width:21px;height:21px;padding:0;display:inline-block;overflow:hidden;font-size:0;color:transparent;text-decoration:none;cursor:pointer;border:1px solid #6696eb;border-radius:3px;background-color:#3e73f5;background-image:linear-gradient(180deg,#5f8cf7 0%,#3a71f5 22%,#3e73f5 55%,#2a70f2 82%,#1045be 100%);transition:filter .1s ease}
+.np-controls .min,.np-controls .max,.np-controls .close{position:relative;box-sizing:border-box;width:21px;height:21px;padding:0;display:inline-block;overflow:hidden;font-size:0;color:transparent;text-decoration:none;cursor:pointer;border:1px solid #6696eb;border-radius:3px;background-color:#3e73f5;background-image:linear-gradient(180deg,#5f8cf7 0%,#3a71f5 22%,#3e73f5 55%,#2a70f2 82%,#1045be 100%);transition:filter 60ms ease-out}
 .np-controls .min::after,.np-controls .max::after{content:"";position:absolute;left:0;right:0;top:0;height:45%;background:linear-gradient(180deg,rgba(255,255,255,.55) 0%,rgba(255,255,255,.12) 70%,rgba(255,255,255,0) 100%);pointer-events:none;border-radius:2px 2px 5px 5px}
-.np-controls .min:hover,.np-controls .max:hover{border-color:#8fb4ff;background-color:#4fa4ff;background-image:linear-gradient(180deg,#689bff 0%,#468aff 22%,#4fa4ff 55%,#3990fc 82%,#1858c8 100%)}
+.np-controls .min:hover,.np-controls .min:focus-visible,.np-controls .max:hover,.np-controls .max:focus-visible{border-color:#8fb4ff;background-color:#4fa4ff;background-image:linear-gradient(180deg,#689bff 0%,#468aff 22%,#4fa4ff 55%,#3990fc 82%,#1858c8 100%);outline:none}
 .np-controls .min:active,.np-controls .max:active,.np-controls .close:active{filter:brightness(.9)}
 .np-controls .min::before{content:"";position:absolute;left:5px;right:5px;bottom:5px;height:2px;background:#fff;box-shadow:0 1px 0 rgba(0,0,0,.35)}
 .np-controls .max::before{content:"";position:absolute;left:5px;top:5px;width:11px;height:9px;box-sizing:border-box;border:1px solid #fff;border-top-width:2px;filter:drop-shadow(0 1px 0 rgba(0,0,0,.35))}
 .np-controls .close{border-color:#d8401c;background-color:#e45f3e;background-image:linear-gradient(180deg,#e8795f 0%,#e45f40 30%,#e45d3d 52%,#e2552a 80%,#ae3110 100%)}
-.np-controls .close:hover{border-color:#ff7a66;background-color:#ff957c;background-image:linear-gradient(180deg,#ff8b7d 0%,#ff7463 26%,#ff957c 55%,#fd7e64 82%,#d34936 100%);box-shadow:0 0 4px rgba(255,120,96,.7)}
+.np-controls .close:hover,.np-controls .close:focus-visible{border-color:#ff7a66;background-color:#ff957c;background-image:linear-gradient(180deg,#ff8b7d 0%,#ff7463 26%,#ff957c 55%,#fd7e64 82%,#d34936 100%);box-shadow:0 0 4px rgba(255,120,96,.7);outline:none}
 .np-controls .close::before,.np-controls .close::after{content:"";position:absolute;left:50%;top:50%;width:13px;height:2px;margin:-1px 0 0 -6.5px;background:#fff;box-shadow:0 1px 0 rgba(0,0,0,.35)}
 .np-controls .close::before{transform:rotate(45deg)}.np-controls .close::after{transform:rotate(-45deg)}
 .np-menubar{flex:0 0 auto;display:flex;align-items:stretch;gap:0;padding:1px 2px;font-size:11px;position:relative;
@@ -648,6 +773,19 @@ background:oklch(93% 0.012 90);border-top:1px solid oklch(80% 0.02 90)}
 .np-status>span:not(.np-flex){padding:1px 8px;box-shadow:inset 1px 1px 0 oklch(78% 0.02 90),inset -1px -1px 0 oklch(100% 0 0)}
 .np-flex{flex:1;box-shadow:none}
 .np-edited{color:oklch(46% 0 0)}
+/* a note opened as a popover — floats over the folder ("selecting menu"),
+   clears the taskbar, and keeps the window chrome (drag/resize/scrollbar). */
+.np-note[popover]{position:fixed;left:0;right:0;top:10px;margin:0 auto;width:min(720px,calc(100vw - 32px));max-height:calc(100dvh - 48px) !important}
+.np-note[popover]::backdrop{background:transparent}
+/* CRITICAL: our .np-window{display:flex} would otherwise beat the UA
+   [popover]:not(:popover-open){display:none}, leaking closed notes into flow.
+   INVERTED on purpose: in a pre-Popover engine, :popover-open is an unknown
+   pseudo-class — a rule hiding via :not(:popover-open) would DROP entirely
+   (non-forgiving :not()), stacking every note over the folder with no UA
+   rule to save us. hide-by-default survives any parser; only an engine that
+   understands :popover-open (and therefore popovers) can reveal a note. */
+.np-note{display:none !important}
+.np-note:popover-open{display:flex !important}
 /* folder index ("My Writing") */
 .np-folder{height:auto;min-height:0;max-width:560px}
 .np-folder-body{padding:14px 16px 6px}
@@ -673,6 +811,19 @@ background:linear-gradient(180deg,oklch(99% 0 0),oklch(92% 0.005 263));box-shado
 .np-btn:active{box-shadow:inset 1px 1px 0 oklch(84% 0.02 90),inset -1px -1px 0 oklch(100% 0 0)}
 @media print{body.np-page{padding:0;background:none}#axp-taskbar,.np-titlebar,.np-menubar,.np-status{display:none}
 .np-window{border:0;box-shadow:none;height:auto;max-width:none}.np-text{font-size:11pt;color:#000}}
+/* OS-window geometry inlined so first paint matches nav.js (no shell "pop").
+   byte-identical to nav.js's app-shell rules; !important beats body.np-page's
+   own padding/min-height; degrades with JS off. */
+html{height:100dvh;overflow:hidden}
+body{min-height:0 !important;height:calc(100vh - 30px) !important;height:calc(100dvh - 30px) !important;overflow-x:hidden !important;overflow-y:auto !important;box-sizing:border-box}
+body:has(.window),body:has(.np-window),body:has(.wrap){overflow:hidden !important;display:flex !important;flex-direction:column !important;align-items:center !important;padding:8px !important}
+.window,.np-window,.wrap{position:relative;z-index:2;flex:0 1 auto !important;min-height:0;max-height:100% !important;width:100%;margin:0 auto !important;box-sizing:border-box}
+.window,.np-window{display:flex;flex-direction:column}
+.window>.title-bar,.window>.titlebar,.np-window>.np-titlebar{flex:0 0 auto}
+.window>.content,.window>.body{flex:1 1 auto;min-height:0;overflow:auto;padding-right:28px!important}
+.np-window .np-text{flex:1 1 auto;min-height:0}
+.wrap{display:flex;flex-direction:column;padding-bottom:0 !important}.wrap>.window{flex:0 1 auto;max-height:100%}
+body.np-page::after{content:"";position:fixed;left:0;right:0;bottom:0;height:30px;z-index:1;background:linear-gradient(180deg,oklch(67% 0.15 256) 0%,oklch(58% 0.19 257) 4%,oklch(51% 0.20 258) 9%,oklch(49% 0.20 258) 50%,oklch(46% 0.20 259) 92%,oklch(40% 0.18 260) 100%)}
 `;
 
 function writingShell(o) {
@@ -688,12 +839,17 @@ function writingShell(o) {
     "<script src=\"/notepad.js\" defer></script><script src=\"/nav.js\" defer></script></body></html>";
 }
 
-function notepadWindow(filename, text, closeHref, date) {
-  return "<div class=\"np-window\">" +
+// popId (optional): render the window as an inline popover (id + popover="auto")
+// so it can composite over the folder index instead of being its own page.
+function notepadWindow(filename, text, closeHref, date, popId) {
+  var open = popId
+    ? "<div class=\"np-window np-note\" id=\"" + escAttr(popId) + "\" popover=\"manual\">"
+    : "<div class=\"np-window\">";
+  return open +
     "<div class=\"np-titlebar\"><span class=\"np-ico\" aria-hidden=\"true\"></span>" +
       "<span class=\"np-title\">" + escHtml(filename) + " — Notepad</span>" +
       "<span class=\"np-controls\"><span class=\"min\" aria-hidden=\"true\"></span><span class=\"max\" aria-hidden=\"true\"></span>" +
-      "<a class=\"close\" href=\"" + escAttr(closeHref) + "\" title=\"back to writing\" aria-label=\"Close\">✕</a></span></div>" +
+      "<a class=\"close\" href=\"" + escAttr(closeHref) + "\"" + (popId ? " data-pop" : "") + " title=\"back to writing\" aria-label=\"Close\">✕</a></span></div>" +
     "<div class=\"np-menubar\" role=\"menubar\" aria-label=\"menu\">" +
       "<span class=\"np-menu\">File</span><span class=\"np-menu\">Edit</span><span class=\"np-menu\">Format</span><span class=\"np-menu\">View</span><span class=\"np-menu\">Help</span></div>" +
     "<textarea class=\"np-text\" spellcheck=\"false\" aria-label=\"" + escAttr(filename) + "\">" + escHtml(text) + "</textarea>" +
@@ -719,33 +875,184 @@ async function handleWritingPost(slug, env, ctx) {
   }
   if (!post || text == null) {
     const body = notepadWindow("(not found).txt", "This note doesn't exist — or it hasn't been written yet.\n\nThe index lives at /writing.", "/writing");
-    return new Response(writingShell({ title: "Not found — Notepad · aadhar.sh", path: "/writing/" + safe, desc: "No such note.", body: body }),
+    return new Response(writingShell({ title: "aadhar.sh/writing/not found", path: "/writing/" + safe, desc: "No such note.", body: body }),
       { status: 404, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=30, must-revalidate" } });
   }
   const title = post.title || safe;
   const desc = text.replace(/\s+/g, " ").trim().slice(0, 155);
   const body = notepadWindow(title + ".txt", text, "/writing", post.date);
-  return new Response(writingShell({ title: title + ".txt — Notepad · aadhar.sh", path: "/writing/" + safe, desc: desc, body: body }),
+  return new Response(writingShell({ title: "aadhar.sh/writing/" + title + ".txt", path: "/writing/" + safe, desc: desc, body: body }),
     { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=300" } });
 }
 
 async function handleWritingIndex(env, ctx) {
   const posts = await readPosts(env);
-  const files = posts.map(function (p) {
-    return "<li><a href=\"/writing/" + escAttr(p.slug) + "\"><span class=\"np-file-ico\" aria-hidden=\"true\"></span>" +
-      "<span class=\"np-file-name\">" + escHtml(p.title || p.slug) + ".txt</span>" +
-      "<span class=\"np-file-meta\">Text Document" + (p.date ? " · " + escHtml(p.date) : "") + "</span></a></li>";
+  // fetch each note's .txt once: the same text feeds the char count shown in
+  // the folder listing (so you see a file's size before you open it) AND the
+  // inline popover Notepad window below. notes are tiny — cheap to inline.
+  const fmtNum = function (n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ","); };
+  const entries = await Promise.all(posts.map(async function (p) {
+    const safe = String(p.slug).replace(/[^a-z0-9-]/gi, "");
+    let text = "";
+    try { const r = await env.ASSETS.fetch("https://a/writing/" + safe + ".txt"); if (r.ok) text = await r.text(); } catch {}
+    return { p: p, safe: safe, text: text, chars: text.length };
+  }));
+  const files = entries.map(function (e) {
+    const size = fmtNum(e.chars) + (e.chars === 1 ? " character" : " characters");
+    return "<li><a href=\"/writing/" + escAttr(e.p.slug) + "\" data-note=\"" + escAttr(e.safe) + "\"><span class=\"np-file-ico\" aria-hidden=\"true\"></span>" +
+      "<span class=\"np-file-name\">" + escHtml(e.p.title || e.p.slug) + ".txt</span>" +
+      "<span class=\"np-file-meta\">Text Document · " + size + (e.p.date ? " · " + escHtml(e.p.date) : "") + "</span></a></li>";
+  }).join("");
+  // the list <a>'s real href is the no-JS / permalink path; opening one composites
+  // its popover Notepad over the folder (the "selecting menu") with no navigation.
+  const notes = entries.map(function (e) {
+    return notepadWindow((e.p.title || e.safe) + ".txt", e.text, "/writing", e.p.date, "note-" + e.safe);
   }).join("");
   const body = "<div class=\"np-window np-folder\">" +
     "<div class=\"np-titlebar\"><span class=\"np-ico\" aria-hidden=\"true\"></span>" +
-      "<span class=\"np-title\">My Writing — aadhar.sh</span>" +
+      "<span class=\"np-title\">aadhar.sh/writing</span>" +
       "<span class=\"np-controls\"><span class=\"min\" aria-hidden=\"true\"></span><span class=\"max\" aria-hidden=\"true\"></span>" +
       "<a class=\"close\" href=\"/\" title=\"back home\" aria-label=\"Close\">✕</a></span></div>" +
     "<div class=\"np-folder-body\"><p class=\"np-folder-intro\">Notes, in flux. Open one — it's a real text field you can edit, but it reverts to my canonical version on reload.</p>" +
       "<ul class=\"np-files\">" + (files || "<li><a><span class=\"np-file-name\">(nothing written yet)</span></a></li>") + "</ul></div>" +
-    "<div class=\"np-status\"><span>" + posts.length + (posts.length === 1 ? " document" : " documents") + "</span></div></div>";
-  return new Response(writingShell({ title: "Writing — aadhar.sh", path: "/writing", desc: "Notes in flux — an editable Notepad of writing that reverts to canonical on reload.", body: body }),
+    "<div class=\"np-status\"><span>" + posts.length + (posts.length === 1 ? " document" : " documents") + "</span>" +
+      "<span>" + fmtNum(entries.reduce(function (a, e) { return a + e.chars; }, 0)) + " characters</span></div></div>" +
+    notes;
+  return new Response(writingShell({ title: "aadhar.sh/writing", path: "/writing", desc: "Notes in flux — an editable Notepad of writing that reverts to canonical on reload.", body: body }),
     { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=120" } });
+}
+
+// read a bundled static asset bypassing the read-through asset cache (a unique
+// query string forces a cache miss), then re-emit it under the canonical URL
+// with the given content-type + a short, deploy-purgeable edge cache. used for
+// the agent-discovery docs whose canonical URL a long Cache-Control had pinned.
+async function serveFreshAsset(request, env, contentType) {
+  const u = new URL(request.url);
+  u.searchParams.set("__r", Date.now().toString(36));
+  const res = await env.ASSETS.fetch(new Request(u.toString(), { headers: request.headers }));
+  const headers = new Headers(res.headers);
+  if (contentType) headers.set("content-type", contentType);
+  headers.set("cache-control", "public, max-age=0, must-revalidate, s-maxage=300");
+  return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
+}
+
+async function handleAgentAuthRegister(request) {
+  if (request.method === "OPTIONS") return methodResponse(null, 204, "POST, OPTIONS");
+  if (request.method !== "POST") return methodResponse({ error: "method_not_allowed" }, 405, "POST, OPTIONS");
+
+  let payload = {};
+  const ct = request.headers.get("content-type") || "";
+  if (ct.includes("application/json")) {
+    try {
+      payload = await request.json();
+    } catch {
+      return jsonResponse({ error: "invalid_request", error_description: "Request body must be valid JSON." }, 400);
+    }
+  }
+
+  const type = payload.type || "anonymous";
+  if (type !== "anonymous") {
+    return jsonResponse({
+      error: "unsupported_identity_type",
+      error_description: "aadhar.sh currently supports anonymous public agent registration only.",
+      identity_types_supported: ["anonymous"],
+    }, 400);
+  }
+
+  const origin = new URL(request.url).origin;
+  const scope = AGENT_AUTH_SCOPES.join(" ");
+  return jsonResponse({
+    registration_id: randomAgentId("reg"),
+    registration_type: "anonymous",
+    identity_type: "anonymous",
+    credential_type: "bearer_token",
+    token_type: "Bearer",
+    access_token: randomAgentId("aadhar_public"),
+    expires_in: 3600,
+    scope,
+    scopes: AGENT_AUTH_SCOPES,
+    resource: "https://aadhar.sh/",
+    claim_uri: `${origin}/agent/auth/claim`,
+    revocation_uri: `${origin}/oauth2/revoke`,
+    note: "This public bearer credential is optional; current aadhar.sh agent resources are already public and read-only.",
+  }, 201, { "cache-control": "no-store" });
+}
+
+async function handleAgentAuthClaim(request) {
+  if (request.method === "OPTIONS") return methodResponse(null, 204, "GET, POST, OPTIONS");
+  if (request.method !== "GET" && request.method !== "POST") {
+    return methodResponse({ error: "method_not_allowed" }, 405, "GET, POST, OPTIONS");
+  }
+  return jsonResponse({
+    status: "not_required",
+    identity_type: "anonymous",
+    message: "Anonymous public credentials on aadhar.sh do not require a human claim ceremony.",
+  }, 200, { "cache-control": "no-store" });
+}
+
+async function handleAgentAuthToken(request) {
+  if (request.method === "OPTIONS") return methodResponse(null, 204, "POST, OPTIONS");
+  if (request.method !== "POST") return methodResponse({ error: "method_not_allowed" }, 405, "POST, OPTIONS");
+
+  let grantType = "";
+  const ct = request.headers.get("content-type") || "";
+  if (ct.includes("application/x-www-form-urlencoded")) {
+    const form = new URLSearchParams(await request.text());
+    grantType = form.get("grant_type") || "";
+  } else if (ct.includes("application/json")) {
+    try {
+      const payload = await request.json();
+      grantType = payload.grant_type || "";
+    } catch {
+      return oauthError("invalid_request", "Request body must be valid JSON or form data.", 400);
+    }
+  }
+
+  if (grantType !== "urn:workos:agent-auth:grant-type:anonymous") {
+    return oauthError("unsupported_grant_type", "Supported grant_type: urn:workos:agent-auth:grant-type:anonymous.", 400);
+  }
+
+  return jsonResponse({
+    access_token: randomAgentId("aadhar_public"),
+    token_type: "Bearer",
+    expires_in: 3600,
+    scope: AGENT_AUTH_SCOPES.join(" "),
+  }, 200, { "cache-control": "no-store" });
+}
+
+async function handleAgentAuthRevoke(request) {
+  if (request.method === "OPTIONS") return methodResponse(null, 204, "POST, OPTIONS");
+  if (request.method !== "POST") return methodResponse({ error: "method_not_allowed" }, 405, "POST, OPTIONS");
+  return new Response(null, {
+    status: 200,
+    headers: {
+      "cache-control": "no-store",
+    },
+  });
+}
+
+function methodResponse(body, status, allow) {
+  const headers = { allow, "cache-control": "no-store" };
+  return body ? jsonResponse(body, status, headers) : new Response(null, { status, headers });
+}
+
+function oauthError(error, errorDescription, status) {
+  return jsonResponse({ error, error_description: errorDescription }, status, { "cache-control": "no-store" });
+}
+
+function jsonResponse(body, status = 200, extraHeaders = {}) {
+  return new Response(JSON.stringify(body, null, 2) + "\n", {
+    status,
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "cache-control": "no-store",
+      ...extraHeaders,
+    },
+  });
+}
+
+function randomAgentId(prefix) {
+  return `${prefix}_${crypto.randomUUID().replace(/-/g, "")}${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
 }
 
 // short-cache error response. matches the CF Cache Rule that pins edge
@@ -796,7 +1103,7 @@ const R2_EXT_PRIORITY = {
 // higher quality (CQ30 → -q63); 13 the 3 grayscale Leica thumbs re-encoded
 // as true monochrome (yuv420 → yuv400). same filenames each time, so the
 // ?v= bump is what busts the edge cache for the new bytes.)
-const THUMB_VERSION = 18;
+const THUMB_VERSION = 19;
 // stems removed from the pool — excluded from the rebuilt manifest even if their
 // original still lingers in R2's eventually-consistent list(). prune once R2
 // list() drops them (and the entry here is harmless to keep as a record).
@@ -810,6 +1117,9 @@ const THUMB_SMALL_PX = 400;
 // every no-store homepage hit; alt would bloat it). only the alt strings for the ~12
 // rendered slots ship per page. strippable: delete alt.json + these lookups to revert.
 let _altMap;
+// the Spotify playlist id (KV "playlist-id") changes ~never; module-cached so
+// the homepage tracks lookup is one KV read on warm isolates instead of two.
+let _playlistId;
 async function getAltMap(env) {
   if (_altMap) return _altMap;
   try {
@@ -820,12 +1130,49 @@ async function getAltMap(env) {
 }
 
 async function getImagesManifest(env, ctx) {
-  let manifest = null;
+  // two-key stale-while-revalidate: the manifest itself is stored WITHOUT a
+  // TTL (persistent), and a tiny sentinel key carries the 1h freshness TTL.
+  // when the sentinel lapses, the visitor on the hot path gets the stale
+  // manifest immediately and the R2 list() rebuild rides ctx.waitUntil in
+  // the background — nobody pays the rebuild inline except the true first
+  // run (or after `wrangler kv key delete "manifest:images"`, which is
+  // still the documented manual cache-bust and still forces a rebuild).
   if (env.RN_KV) {
-    try { manifest = await env.RN_KV.get("manifest:images", "json"); } catch {}
+    let manifest = null, fresh = null;
+    try {
+      [manifest, fresh] = await Promise.all([
+        env.RN_KV.get("manifest:images", "json"),
+        env.RN_KV.get("manifest:images:fresh"),
+      ]);
+    } catch {}
+    if (manifest) {
+      if (!fresh && ctx) {
+        ctx.waitUntil(
+          buildImagesManifest(env)
+            .then(m => m && storeImagesManifest(env, m))
+            .catch(() => {})
+        );
+      }
+      return manifest;
+    }
   }
-  if (!manifest) {
-    if (!env.PHOTOS_R2) return [];
+  // no cached manifest at all — build inline (first run / manual bust)
+  const manifest = await buildImagesManifest(env);
+  if (!manifest) return [];
+  if (env.RN_KV && ctx) ctx.waitUntil(storeImagesManifest(env, manifest));
+  return manifest;
+}
+
+async function storeImagesManifest(env, manifest) {
+  await Promise.all([
+    env.RN_KV.put("manifest:images", JSON.stringify(manifest)),
+    env.RN_KV.put("manifest:images:fresh", "1", { expirationTtl: 3600 }),
+  ]);
+}
+
+async function buildImagesManifest(env) {
+  {
+    if (!env.PHOTOS_R2) return null;
     const list = await env.PHOTOS_R2.list({ limit: 1000 });
 
     // collapse R2 objects to one-per-stem, prefer browser-renderable extensions
@@ -859,10 +1206,10 @@ async function getImagesManifest(env, ctx) {
     // EXIF used to be merged in here (and shipped inline per slot) — the
     // manifest is read + JSON-parsed by the worker on EVERY no-store homepage
     // hit, and the EXIF was the bulk of the blob. the tooltip now lazy-fetches
-    // /images/metadata.json (EXIF + histogram, SW-cached) on first hover
-    // instead, so none of it needs to ride the hot path.
+    // /images/meta/<stem>.json per photo on first hover (histogram computed
+    // client-side), so none of it needs to ride the hot path.
     const v = THUMB_VERSION;
-    manifest = [...byStem.entries()].map(([stem, o]) => ({
+    return [...byStem.entries()].map(([stem, o]) => ({
       full:       o.key,                     // R2 key, e.g. "XT507333.JPG"
       thumb_avif: `${stem}.avif?v=${v}`,     // Pages static AVIF (primary)
       thumb_jpg:  `${stem}.jpg?v=${v}`,      // Pages static JPG (fallback)
@@ -870,12 +1217,7 @@ async function getImagesManifest(env, ctx) {
       size:       o.size,                    // R2 object size in bytes
       uploaded:   o.uploaded ? new Date(o.uploaded).toISOString() : null,
     })).sort((a, b) => a.full.localeCompare(b.full));
-
-    if (env.RN_KV) {
-      ctx.waitUntil(env.RN_KV.put("manifest:images", JSON.stringify(manifest), { expirationTtl: 3600 }));
-    }
   }
-  return manifest;
 }
 
 async function handleImagesManifest(request, env, ctx) {
@@ -1055,16 +1397,38 @@ function apacheIndexResponse(path, entries) {
 }
 
 // ── markdown negotiation ────────────────────────────────────────────
-// returns true iff the client's Accept header explicitly prefers text/markdown
-// over text/html (or includes only text/markdown). browsers send
-// `text/html,application/xhtml+xml,...` so they fall through.
+// returns true iff the client's Accept header explicitly asks for text/markdown
+// and prefers it over HTML. Do not let generic */* negotiate to Markdown: the
+// root URL is primarily a browser page, and /index.md is the stable cacheable
+// Markdown URL for agents that do not send a precise Accept header.
 function wantsMarkdown(request) {
   const accept = (request.headers.get("accept") || "").toLowerCase();
-  if (!accept.includes("text/markdown")) return false;
-  // if the client lists both, treat markdown as the requested representation
-  // (the q-value parsing would be more precise but this matches every real
-  // agent that asks for markdown today).
-  return true;
+  if (!/(^|,)\s*text\/markdown\s*(?:;|,|$)/i.test(accept)) return false;
+  const markdownQ = acceptQ(accept, "text/markdown");
+  const htmlQ = Math.max(
+    acceptQ(accept, "text/html"),
+    acceptQ(accept, "application/xhtml+xml")
+  );
+  return markdownQ > 0 && markdownQ > htmlQ;
+}
+
+function acceptQ(accept, type) {
+  const [wantType, wantSub] = type.split("/");
+  let best = 0;
+  for (const raw of accept.split(",")) {
+    const parts = raw.trim().split(";").map(s => s.trim());
+    const media = parts.shift();
+    if (!media || !media.includes("/")) continue;
+    const [gotType, gotSub] = media.split("/");
+    if (!((gotType === wantType || gotType === "*") && (gotSub === wantSub || gotSub === "*"))) continue;
+    let q = 1;
+    for (const p of parts) {
+      const m = p.match(/^q=([0-9.]+)$/);
+      if (m) q = Math.max(0, Math.min(1, Number(m[1]) || 0));
+    }
+    if (q > best) best = q;
+  }
+  return best;
 }
 
 async function serveMarkdown(request, env) {
@@ -1084,14 +1448,29 @@ async function serveMarkdown(request, env) {
     headers: {
       "content-type":     "text/markdown; charset=utf-8",
       "x-markdown-tokens": String(tokens),
-      "cache-control":    "public, max-age=300, s-maxage=600",
+      // Cloudflare's edge can serve a cached negotiated root variant to clients
+      // with a different Accept header. /index.md remains the cacheable Markdown
+      // resource; negotiated "/" Markdown must stay uncacheable.
+      "cache-control":    "no-store, must-revalidate",
       "vary":             "accept",
+      "link":             HOMEPAGE_DISCOVERY_LINK,
       "x-content-type-options": "nosniff",
     },
   });
 }
 
 // ── /rn handler ─────────────────────────────────────────────────────
+function handleCoffeeRedirect() {
+  return new Response(null, {
+    status: 302,
+    headers: {
+      "location":        "https://cal.com/aadharsh/coffee",
+      "cache-control":   "public, max-age=300, s-maxage=300",
+      "referrer-policy": "strict-origin-when-cross-origin",
+    },
+  });
+}
+
 async function handleRn(request, env) {
   let playlistId = null;
   if (env.RN_KV) {
@@ -1154,13 +1533,15 @@ async function handleRnTracks(request, env, ctx) {
 
   const cacheKey = `tracks:${playlistId}`;
 
-  // optional bust
+  // optional bust — drop both the value and its freshness sentinel
   if (env.RN_BUST_SECRET && url.searchParams.get("bust") === env.RN_BUST_SECRET) {
-    await env.RN_KV.delete(cacheKey);
+    await Promise.all([env.RN_KV.delete(cacheKey), env.RN_KV.delete(`${cacheKey}:fresh`)]);
   }
 
-  // serve from cache
-  const cached = await env.RN_KV.get(cacheKey, "json");
+  // two-key SWR (same shape as the photo manifest): stale serves instantly,
+  // a lapsed sentinel refreshes in the background. only a true cold start
+  // (or a bust) pays the 3-tier Spotify scrape inline.
+  const cached = await getTracksSWR(env, ctx, playlistId);
   if (cached) return jsonResp(cached);
 
   // fetch + parse
@@ -1171,10 +1552,41 @@ async function handleRnTracks(request, env, ctx) {
     return jsonResp({ error: "scrape failed", message: String(e), tracks: [] }, 502);
   }
 
-  // fire-and-forget cache write
-  ctx.waitUntil(env.RN_KV.put(cacheKey, JSON.stringify(payload), { expirationTtl: RN_TRACKS_TTL }));
+  ctx.waitUntil(storeTracks(env, playlistId, payload));
 
   return jsonResp(payload);
+}
+
+// two-key stale-while-revalidate for the playlist payload, mirroring
+// getImagesManifest: `tracks:<pid>` persists with NO TTL (a visitor never
+// catches an empty hole when the hour lapses), and `tracks:<pid>:fresh`
+// carries the freshness window. lapsed sentinel → serve stale now, rescrape
+// on ctx.waitUntil. used by both /rn/tracks and the homepage prerender, so
+// whichever gets hit keeps the payload warm.
+async function getTracksSWR(env, ctx, pid) {
+  const cacheKey = `tracks:${pid}`;
+  let payload = null, fresh = null;
+  try {
+    [payload, fresh] = await Promise.all([
+      env.RN_KV.get(cacheKey, "json"),
+      env.RN_KV.get(`${cacheKey}:fresh`),
+    ]);
+  } catch {}
+  if (payload && !fresh && ctx) {
+    ctx.waitUntil(
+      scrapePlaylistTracks(pid, env, ctx)
+        .then((p) => p && storeTracks(env, pid, p))
+        .catch(() => {})
+    );
+  }
+  return payload;
+}
+
+async function storeTracks(env, pid, payload) {
+  await Promise.all([
+    env.RN_KV.put(`tracks:${pid}`, JSON.stringify(payload)),
+    env.RN_KV.put(`tracks:${pid}:fresh`, "1", { expirationTtl: RN_TRACKS_TTL }),
+  ]);
 }
 
 async function scrapePlaylistTracks(playlistId, env, ctx) {
@@ -1344,7 +1756,11 @@ function jsonResp(obj, status = 200) {
     status,
     headers: {
       "content-type":  "application/json; charset=utf-8",
-      "cache-control": "public, max-age=300, s-maxage=600",
+      // errors get the errorResp() discipline (30s), never the 5-minute
+      // success TTL — a transient scrape 502 must not pin in browsers.
+      "cache-control": status >= 400
+        ? "public, max-age=30, must-revalidate"
+        : "public, max-age=300, s-maxage=600",
       "access-control-allow-origin": "*",
     },
   });
@@ -1576,10 +1992,22 @@ function decodeEntities(s) {
 // page after the call. only max-width is parameterized.
 function xpChromeCss(maxWidth) {
   return `
+  :root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}
   * { box-sizing: border-box; }
+/* cross-document View Transitions: a fast, reduced-motion-safe crossfade on real
+   navigations between same-origin pages. inline (not JS-injected) so the incoming
+   page has opted in by parse time. the persistent shell (wallpaper/taskbar) is
+   identical across pages, so visually only the changing window content fades. */
+@media (prefers-reduced-motion:no-preference){@view-transition{navigation:auto}::view-transition-old(root),::view-transition-new(root){animation-duration:140ms}}
+  /* first-paint background is the Bliss desktop tone on the ROOT (html) too —
+     the cross-document View-Transition freezes the root group, so if html were
+     white you'd get a frame of white flash before nav.js paints the real desktop.
+     matching html+body to the Bliss gradient kills that flash. */
+  html, body {
+    background: linear-gradient(180deg, oklch(56% 0.13 250) 0%, oklch(73% 0.10 236) 50%, oklch(88% 0.05 232) 60%, oklch(60% 0.16 140) 100%);
+  }
   body {
-    background: linear-gradient(180deg, oklch(87.51% 0.0281 248.15) 0%, oklch(94.66% 0.0114 252.09) 220px, oklch(94.66% 0.0114 252.09) 100%);
-    font-family: Tahoma, Verdana, Geneva, sans-serif;
+    font-family: var(--font-ui);
     font-size: 10.5pt; line-height: 1.5; color: oklch(21.78% 0 0);
     margin: 0; padding: 24px 12px 60px; min-height: 100vh;
   }
@@ -1589,7 +2017,7 @@ function xpChromeCss(maxWidth) {
   }
   .title-bar {
     background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
-    color: oklch(100.00% 0 0); font-family: "Trebuchet MS", Verdana, sans-serif;
+    color: oklch(100.00% 0 0); font-family: var(--font-caption);
     font-size: 10pt; font-weight: bold; padding: 4px 8px;
     border-bottom: 1px solid oklch(41.92% 0.0962 250.51); display: flex;
     align-items: center; justify-content: space-between;
@@ -1613,7 +2041,7 @@ function xpChromeCss(maxWidth) {
   text-decoration: none; cursor: pointer;
   background-color: #3e73f5;
   background-image: linear-gradient(180deg, #5f8cf7 0%, #3a71f5 22%, #3e73f5 55%, #2a70f2 82%, #1045be 100%);
-  transition: filter .1s ease;
+  transition: filter 60ms ease-out;
 }
 /* "wet plastic" gloss band over the top ~45% (close uses ::after for its X stroke) */
 .title-bar .controls .min::after,
@@ -1660,7 +2088,7 @@ function xpChromeCss(maxWidth) {
 .title-bar .controls .close::before { transform: rotate(45deg); }
 .title-bar .controls .close::after  { transform: rotate(-45deg); }
 /* --- Luna polish: caption text shadow + rounded top corners + 3px window frame --- */
-.title-bar { text-shadow: 1px 1px #0f1089; border-top-left-radius: 8px; border-top-right-radius: 7px; }
+.title-bar { text-shadow: 1px 1px #0f1089; border-top-left-radius: 8px; border-top-right-radius: 8px; }
 .window {
   border: 2px solid #0831d9; border-right-color: #001ea0; border-bottom-color: #001ea0;
   border-top-left-radius: 8px; border-top-right-radius: 8px; overflow: hidden;
@@ -1671,10 +2099,10 @@ function xpChromeCss(maxWidth) {
 /* reusable Luna command button + sunken field (used by the /rn form) */
 .xp-button {
   display: inline-block; min-width: 75px; padding: 3px 12px;
-  font: 8pt/1.4 Tahoma, Verdana, sans-serif; color: #000;
+  font: 8pt/1.4 var(--font-ui); color: #000;
   text-align: center; text-decoration: none; cursor: pointer; user-select: none;
   border: 1px solid #8e9dad; border-radius: 3px;
-  background: linear-gradient(180deg, #ffffff 0%, #fdfdfd 45%, #f4f3ee 55%, #eceae0 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #fdfdfd 45%, #f3f2ec 55%, #e9e7dc 100%);
   box-shadow: inset 0 0 0 1px #ffffff, 0 0 0 1px rgba(255,255,255,.4);
 }
 .xp-button:hover { border-color: #e9994a; box-shadow: inset 0 0 0 1px #fdd78b, 0 0 3px 1px rgba(255,199,60,.55); }
@@ -1689,13 +2117,27 @@ function xpChromeCss(maxWidth) {
 }
 .xp-input {
   box-sizing: border-box; width: 100%;
-  font-family: Tahoma, Verdana, Geneva, sans-serif; font-size: 10.5pt;
+  font-family: var(--font-ui); font-size: 10.5pt;
   color: #181818; background: #ffffff; padding: 3px 6px; border-radius: 0;
   border: 1px solid #7f9db9; box-shadow: inset 1px 1px 0 rgba(0,0,0,.20), inset -1px -1px 0 #ffffff;
 }
 .xp-input:focus { outline: none; border-color: #316ac5; box-shadow: inset 1px 1px 0 rgba(0,0,0,.20), inset -1px -1px 0 #ffffff, 0 0 0 1px #316ac5; }
   html { scrollbar-color: oklch(62% 0.14 255) oklch(91% 0.02 248); }
   .content { padding: 12px 16px 16px; }
+  /* OS-window geometry inlined so FIRST PAINT matches nav.js (no shell "pop"
+     when the deferred desktop arrives). byte-identical to nav.js's app-shell
+     rules; !important beats each page's own body rule; degrades with JS off
+     (.content scrolls natively, the ::after strip stands in for the taskbar). */
+  html{height:100dvh;overflow:hidden}
+  body{min-height:0 !important;height:calc(100vh - 30px) !important;height:calc(100dvh - 30px) !important;overflow-x:hidden !important;overflow-y:auto !important;box-sizing:border-box}
+  body:has(.window),body:has(.np-window),body:has(.wrap){overflow:hidden !important;display:flex !important;flex-direction:column !important;align-items:center !important;padding:8px !important}
+  .window,.np-window,.wrap{position:relative;z-index:2;flex:0 1 auto !important;min-height:0;max-height:100% !important;width:100%;margin:0 auto !important;box-sizing:border-box}
+  .window,.np-window{display:flex;flex-direction:column}
+  .window>.title-bar,.window>.titlebar,.np-window>.np-titlebar{flex:0 0 auto}
+  .window>.content,.window>.body{flex:1 1 auto;min-height:0;overflow:auto;padding-right:28px!important}
+  .np-window .np-text{flex:1 1 auto;min-height:0}
+  .wrap{display:flex;flex-direction:column;padding-bottom:0 !important}.wrap>.window{flex:0 1 auto;max-height:100%}
+  body::after{content:"";position:fixed;left:0;right:0;bottom:0;height:30px;z-index:1;background:linear-gradient(180deg,oklch(67% 0.15 256) 0%,oklch(58% 0.19 257) 4%,oklch(51% 0.20 258) 9%,oklch(49% 0.20 258) 50%,oklch(46% 0.20 259) 92%,oklch(40% 0.18 260) 100%)}
 `;
 }
 
@@ -1723,13 +2165,13 @@ function renderAroundHtml(report) {
 <html lang="en"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>/around — looking around the crypto VC neighborhood</title>
+<title>aadhar.sh/around</title>
 <meta name="description" content="Snapshot of crypto VC homepages I keep tabs on, crawled live by AadharshBot.">
 <meta name="robots" content="noindex">
 <style>
 ${xpChromeCss(820)}
   h1 {
-    font-family: "Franklin Gothic Medium", "Franklin Gothic", "Trebuchet MS", Verdana, sans-serif; color: oklch(41.92% 0.0962 250.51);
+    font-family: "Trebuchet MS", Verdana, Geneva, sans-serif; color: oklch(41.92% 0.0962 250.51);
     font-size: 18pt; margin: 0 0 4px; font-weight: bold;
   }
   .lede { margin: 0 0 14px; color: oklch(38.67% 0 0); font-size: 10.5pt; }
@@ -1743,7 +2185,7 @@ ${xpChromeCss(820)}
     background: oklch(94.66% 0.0114 252.09); color: oklch(41.92% 0.0962 250.51); font-weight: bold;
     padding: 5px 8px; text-align: left;
     border-bottom: 1px solid oklch(61.14% 0.0611 253.60);
-    font-family: "Trebuchet MS", Verdana, sans-serif;
+    font-family: "Trebuchet MS", Verdana, Geneva, sans-serif;
   }
   table.scout tbody td { padding: 6px 8px; border-bottom: 1px solid oklch(92.73% 0.0139 247.98); vertical-align: top; }
   table.scout tbody tr:nth-child(even) td { background: oklch(97.50% 0.0062 255.47); }
@@ -1773,7 +2215,7 @@ ${xpChromeCss(820)}
 </head><body>
 <div class="window">
   <div class="title-bar">
-    <span><span class="icon"></span>/around — looking around the neighborhood</span>
+    <span><span class="icon"></span>aadhar.sh/around</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/" title="back to aadhar.sh" aria-label="back to aadhar.sh"></a></span>
   </div>
   <div class="content">
@@ -1820,12 +2262,12 @@ function handleBotPage(request) {
 <html lang="en"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${BOT_NAME} — aadhar.sh's crawler</title>
+<title>aadhar.sh/bot</title>
 <meta name="description" content="Identity and behavior of AadharshBot, the crawler operated by aadhar.sh.">
 <style>
 ${xpChromeCss(660)}
-  h1 { font-family: "Franklin Gothic Medium", "Franklin Gothic", "Trebuchet MS", Verdana, sans-serif; font-size: 14pt; color: oklch(41.92% 0.0962 250.51); margin: 0 0 4px; font-weight: bold; }
-  h2 { font-family: "Franklin Gothic Medium", "Franklin Gothic", "Trebuchet MS", Verdana, sans-serif; font-size: 12pt; color: oklch(41.92% 0.0962 250.51); margin: 16px 0 6px; font-weight: bold; line-height: 1.3; }
+  h1 { font-family: "Trebuchet MS", Verdana, Geneva, sans-serif; font-size: 14pt; color: oklch(41.92% 0.0962 250.51); margin: 0 0 4px; font-weight: bold; }
+  h2 { font-family: "Trebuchet MS", Verdana, Geneva, sans-serif; font-size: 12pt; color: oklch(41.92% 0.0962 250.51); margin: 16px 0 6px; font-weight: bold; line-height: 1.3; }
   h2::after { content: ""; display: block; height: 1px; background: oklch(86.67% 0.0294 259.59); margin-top: 8px; }
   a:link { color: oklch(42.61% 0.2353 263.74); text-decoration: underline; } a:visited { color: oklch(42.09% 0.1935 328.36); } a:hover { color: oklch(62.80% 0.2577 29.23); }
   code { font-family: "Courier New", Courier, monospace; background: oklch(96.72% 0 0); border: 1px solid oklch(88.22% 0 0); padding: 0 3px; }
@@ -2007,12 +2449,12 @@ async function readParams(request, url) {
 function setPage(status, title, bodyHtml) {
   const html = `<!DOCTYPE html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>/rn/set — ${esc(title)}</title>
+<title>aadhar.sh/rn/set/${esc(title)}</title>
 <meta name="robots" content="noindex">
 <style>
 ${xpChromeCss(520)}
   h1 {
-    font-family: "Franklin Gothic Medium", "Franklin Gothic", "Trebuchet MS", Verdana, sans-serif; color: oklch(41.92% 0.0962 250.51);
+    font-family: "Trebuchet MS", Verdana, Geneva, sans-serif; color: oklch(41.92% 0.0962 250.51);
     font-size: 16pt; margin: 0 0 8px;
   }
   a:link    { color: oklch(42.61% 0.2353 263.74); text-decoration: underline; }
@@ -2021,7 +2463,7 @@ ${xpChromeCss(520)}
   code { font-family: "Courier New", Courier, monospace; background: oklch(96.72% 0 0); padding: 0 3px; border: 1px solid oklch(88.22% 0 0); }
 </style></head><body>
 <div class="window">
-  <div class="title-bar">/rn/set &mdash; ${esc(title)}</div>
+  <div class="title-bar">aadhar.sh/rn/set/${esc(title)}</div>
   <div class="content">
     <h1>${esc(title)}</h1>
     <p>${bodyHtml}</p>
@@ -2176,7 +2618,7 @@ async function handleWhoareyou(request) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>whoareyou — aadharsh's site</title>
+<title>aadhar.sh/whoareyou</title>
 <meta name="description" content="what one HTTP request to aadhar.sh reveals about you. read-only, never stored.">
 <meta name="robots" content="noindex">
 <style>
@@ -2190,10 +2632,10 @@ ${xpChromeCss(720)}
 /* whoareyou-specific title-bar extras: the title text flexes to fill,
    and the boxed _ □ × controls get a touch more letter-spacing. */
 .title-bar .title-text { flex: 1; padding-left: 4px; }
-.title-bar .controls { letter-spacing: 2px; font-family: Tahoma, sans-serif; font-size: 9pt; }
+.title-bar .controls { letter-spacing: 2px; font-family: Tahoma, Verdana, Geneva, sans-serif; font-size: 9pt; }
 
 h1 {
-  font-family: "Franklin Gothic Medium", "Franklin Gothic", "Trebuchet MS", Verdana, sans-serif;
+  font-family: "Trebuchet MS", Verdana, Geneva, sans-serif;
   font-size: 14pt;
   color: oklch(41.92% 0.0962 250.51);
   margin: 0 0 4px;
@@ -2201,7 +2643,7 @@ h1 {
   letter-spacing: -0.01em;
 }
 h2 {
-  font-family: "Franklin Gothic Medium", "Franklin Gothic", "Trebuchet MS", Verdana, sans-serif;
+  font-family: "Trebuchet MS", Verdana, Geneva, sans-serif;
   font-size: 12pt;
   color: oklch(41.92% 0.0962 250.51);
   margin: 18px 0 6px;
@@ -2263,7 +2705,7 @@ code, .mono {
   color: oklch(41.92% 0.0962 250.51);
   font-weight: bold;
   padding: 4px 8px;
-  font-family: Tahoma, Verdana, sans-serif;
+  font-family: Tahoma, Verdana, Geneva, sans-serif;
 }
 .field-grid dd {
   background: oklch(100.00% 0 0);
@@ -2274,7 +2716,7 @@ code, .mono {
   word-break: break-all;
   color: oklch(21.78% 0 0);
 }
-.field-grid dd .dim { color: oklch(62.68% 0 0); font-family: Tahoma, Verdana, sans-serif; font-size: 9pt; }
+.field-grid dd .dim { color: oklch(62.68% 0 0); font-family: Tahoma, Verdana, Geneva, sans-serif; font-size: 9pt; }
 .field-grid dd.muted { color: oklch(44.95% 0 0); }
 
 /* little raised "pill" — looks like a tiny 3D button */
@@ -2284,7 +2726,7 @@ code, .mono {
   border: 1px solid oklch(61.14% 0.0611 253.60);
   background: oklch(94.66% 0.0114 252.09);
   color: oklch(41.92% 0.0962 250.51);
-  font-family: Tahoma, Verdana, sans-serif;
+  font-family: Tahoma, Verdana, Geneva, sans-serif;
   font-size: 8.5pt;
   font-weight: bold;
   margin-right: 4px;
@@ -2309,7 +2751,7 @@ code, .mono {
 /* footer */
 footer {
   text-align: center;
-  font-family: Tahoma, Verdana, sans-serif;
+  font-family: Tahoma, Verdana, Geneva, sans-serif;
   font-size: 9pt;
   color: oklch(44.95% 0 0);
   margin: 18px 0 0;
@@ -2324,7 +2766,7 @@ footer .signature small { color: oklch(56.93% 0 0); }
 
 <div class="window">
 
-  <div class="title-bar" aria-hidden="true">
+  <div class="title-bar">
     <span class="title-text"><span class="icon"></span>whoareyou</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/" title="back to aadhar.sh" aria-label="back to aadhar.sh"></a></span>
   </div>

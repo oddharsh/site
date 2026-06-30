@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>aadhar.sh/garage/four free Cloudflare features, live</title>
-<meta name="description" content="Live demos of four free Cloudflare Workers platform features (Durable Objects atomic counter, Workers AI photo captioning, Workers Logs structured observability, and custom trace spans) behind a tiny worker. A fifth, Browser Rendering, is wired but parked on the free tier's daily cap.">
-<link rel="canonical" href="https://aadhar.sh/garage/cloudflare">
+<title>aadhar.sh/garage/iroh</title>
+<meta name="description" content="iroh hit 1.0: dial a machine by its public key, not its IP. A garage look at the P2P library, a native in-browser NodeId generator you can run, and an honest verdict on why a megabyte of wasm does not ride a lean static site.">
+<link rel="canonical" href="https://aadhar.sh/garage/iroh">
 <meta property="og:type" content="website">
-<meta property="og:title" content="aadhar.sh/garage/four free Cloudflare features, live">
-<meta property="og:description" content="Live demos of four free Cloudflare Workers platform features (Durable Objects atomic counter, Workers AI photo captioning, Workers Logs structured observability, and custom trace spans) behind a tiny worker. A fifth, Browser Rendering, is wired but parked on the free tier's daily cap.">
-<meta property="og:url" content="https://aadhar.sh/garage/cloudflare">
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><path d='M9 22 a6 6 0 0 1 0-12 a8 8 0 0 1 15 2 a5 5 0 0 1-1 10 z' fill='%23166aee'/></svg>">
+<meta property="og:title" content="aadhar.sh/garage/iroh">
+<meta property="og:description" content="iroh hit 1.0: dial a machine by its public key, not its IP. A garage look at the P2P library, a native in-browser NodeId generator you can run, and an honest verdict on why a megabyte of wasm does not ride a lean static site.">
+<meta property="og:url" content="https://aadhar.sh/garage/iroh">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='3' y='6' width='7' height='20' rx='1' fill='%230855dd'/><rect x='12' y='6' width='5' height='20' rx='1' fill='%23166aee'/><rect x='19' y='6' width='10' height='20' rx='1' fill='%23003bda'/></svg>">
 <style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}
 * { box-sizing: border-box; }
 /* cross-document View Transitions: a fast, reduced-motion-safe crossfade on real
@@ -141,6 +141,12 @@ h2 {
 .note code, p code, li code { background: oklch(96.72% 0 0); border: 1px solid oklch(88.22% 0 0); padding: 0 4px; font-family: var(--font-mono); font-size: 9.5pt; }
 hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px 0; }
 a { color: oklch(41.92% 0.0962 250.51); }
+.status {
+  display: inline-block; font-family: var(--font-mono); font-size: 8.5pt;
+  font-weight: bold; letter-spacing: 0.05em; padding: 1px 6px; border: 1px solid;
+  border-radius: 2px; text-transform: uppercase; vertical-align: middle;
+}
+.status.review { color: oklch(54.44% 0.1504 47.10); border-color: oklch(54.44% 0.1504 47.10); background: oklch(98% 0.03 95); }
 
 /* ── demo ── */
 .cas-controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 10px 0; }
@@ -171,29 +177,6 @@ a { color: oklch(41.92% 0.0962 250.51); }
 footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67% 0.0294 259.59); font-size: 9.5pt; color: oklch(45% 0 0); }
 @media (prefers-reduced-motion: reduce) { .chunk { transition: none; } }
 
-/* cloudflare features demo */
-.cf-feat { border: 1px solid oklch(61.14% 0.0611 253.60); background: oklch(98% 0.004 250); padding: 4px 14px 14px; margin: 14px 0; }
-.cf-feat h2 { margin-top: 12px; }
-.cf-btn { font: bold 10pt var(--font-ui); padding: 4px 14px; margin: 4px 0; cursor: pointer; color: oklch(21.78% 0 0);
-  background: linear-gradient(180deg, oklch(99% 0 0), oklch(92% 0.005 263)); border: 1px solid oklch(50% 0.05 263);
-  box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 #aca899; }
-.cf-btn:hover { background: linear-gradient(180deg, oklch(99% 0.015 263), oklch(90% 0.03 263)); }
-.cf-btn:active { box-shadow: inset 1px 1px 0 #aca899, inset -1px -1px 0 #fff; }
-.cf-btn:disabled { opacity: .6; cursor: default; }
-.cf-out { font: 10pt var(--font-mono); color: oklch(30% 0.02 250); background: #fff; border: 1px solid #aca899;
-  box-shadow: inset 1px 1px 0 #d8d4c8; padding: 6px 8px; margin: 6px 0; min-height: 1.4em; word-break: break-word; }
-.cf-code { font: 9pt var(--font-mono); color: oklch(40% 0.04 145); background: oklch(95% 0.01 145); border: 1px solid oklch(80% 0.03 145);
-  padding: 5px 8px; margin: 6px 0 0; overflow-x: auto; }
-code.m, .m { font-family: var(--font-mono); font-size: 9.2pt; }
-/* tracing waterfall */
-.tr-wf { margin: 8px 0 2px; }
-.tr-root { font: bold 9pt var(--font-mono); color: oklch(30% 0.02 250); margin: 2px 0 5px; }
-.tr-row { display: grid; grid-template-columns: 124px 1fr 50px; gap: 8px; align-items: center; margin: 3px 0; font: 9pt var(--font-mono); }
-.tr-name { color: oklch(30% 0.02 250); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tr-track { position: relative; height: 16px; background: oklch(96% 0.005 250); border: 1px solid oklch(85% 0.02 250); border-radius: 2px; }
-.tr-bar { position: absolute; top: -1px; bottom: -1px; min-width: 2px; border-radius: 2px; background: linear-gradient(180deg, oklch(64% 0.18 255), oklch(50% 0.20 258)); }
-.tr-dur { text-align: right; color: oklch(40% 0 0); }
-
   /* OS-window geometry inlined so FIRST PAINT matches nav.js (no shell "pop"
      when the deferred desktop arrives). keep in sync with nav.js (search
      "app-shell"); degrades with JS off (.content scrolls natively). */
@@ -209,139 +192,106 @@ code.m, .m { font-family: var(--font-mono); font-size: 9.2pt; }
     z-index: 1; background: linear-gradient(180deg, oklch(67% 0.15 256) 0%, oklch(58% 0.19 257) 4%,
     oklch(51% 0.20 258) 9%, oklch(49% 0.20 258) 50%, oklch(46% 0.20 259) 92%, oklch(40% 0.18 260) 100%); }
 
+
+  /* ── iroh: native NodeId generator + article ─────────────────── */
+  .content h2 { font-family: var(--font-caption); font-size: 13pt; color: oklch(41.92% 0.0962 250.51);
+    margin: 24px 0 4px; font-weight: bold; }
+  .content ul { margin: 8px 0 12px; padding-left: 22px; }
+  .content li { margin: 0 0 7px; }
+  .idbox { border: 1px solid oklch(61% 0.061 253); border-top-color: oklch(47% 0.055 254); border-left-color: oklch(47% 0.055 254);
+    background: oklch(99% 0.005 250); padding: 14px; margin: 14px 0 18px; }
+  .idbox .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .idbtn { font: bold 9.5pt var(--font-ui); padding: 4px 14px; cursor: pointer; color: oklch(18% 0 0);
+    border: 1px solid oklch(50% 0.04 263); border-radius: 3px;
+    background: linear-gradient(180deg, oklch(99% 0 0), oklch(92% 0.005 263));
+    box-shadow: inset 1px 1px 0 oklch(100% 0 0), inset -1px -1px 0 oklch(84% 0.02 90); }
+  .idbtn:active { box-shadow: inset 1px 1px 0 oklch(84% 0.02 90), inset -1px -1px 0 oklch(100% 0 0); }
+  .idmode { font-size: 9pt; color: oklch(46% 0 0); }
+  .idout { display: none; margin: 12px 0 0; }
+  .idout.on { display: block; }
+  .idlabel { font: bold 8pt var(--font-mono); text-transform: uppercase; letter-spacing: .05em; color: oklch(40% 0.05 255); margin: 10px 0 2px; }
+  .idval { font-family: var(--font-mono); font-size: 9.5pt; word-break: break-all; background: oklch(100% 0 0);
+    border: 1px solid oklch(80% 0.02 255); padding: 7px 9px; user-select: all; }
+  .idnote { font-size: 9pt; color: oklch(42% 0 0); margin: 10px 0 0; }
+  .idnote b { color: oklch(41.92% 0.0962 250.51); }
+  .idcopy { font: 8.5pt var(--font-mono); cursor: pointer; border: 0; background: none; color: oklch(42% 0.18 255); text-decoration: underline; padding: 0; }
 </style>
 </head>
 <body>
 <div class="window">
-  <div class="title-bar" aria-hidden="true"><span class="title-text"><span class="icon"></span>aadhar.sh/garage/four free Cloudflare features, live</span><span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/garage/" title="back to the garage" aria-label="back to the garage"></a></span></div>
+  <div class="title-bar" aria-hidden="true"><span class="title-text"><span class="icon"></span>aadhar.sh/garage/iroh</span><span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/garage/" title="back to the garage" aria-label="back to the garage"></a></span></div>
   <div class="content">
-    <h1>Four free Cloudflare features, live</h1>
-    <p class="lede">
-      The free Workers plan quietly bundles things that used to cost money or
-      a separate service. I wired four of them to live demos here
-      (<b>Durable Objects</b>, <b>Workers&nbsp;AI</b>, <b>Workers&nbsp;Logs</b>, and <b>custom trace spans</b>),
-      behind a tiny worker (<code class="m">cf-garage</code>) routed at
-      <code class="m">/garage/cf/*</code>. The buttons hit real endpoints; nothing is faked.
-      A fifth, <b>Browser&nbsp;Rendering</b>, I bound and deployed, then parked on the free
-      tier&apos;s daily cap. <a href="#parked">Noted honestly below.</a>
-    </p>
+    <h1>Dial by key</h1>
+    <p class="lede">iroh hit 1.0. It is a networking library where you reach another machine by its public key, not its IP address: a 32-byte ed25519 identity that stays put while the network under it changes, with QUIC hole-punching for a direct encrypted link and a relay only as a fallback. I went looking for a way to use it here. This is where I landed, plus a small piece of it you can run right now.</p>
 
-    <div class="cf-feat">
-      <h2>1 &middot; Durable Objects: an atomic counter</h2>
-      <p>A <b>strongly-consistent, single-instance</b> stateful object. The homepage&apos;s
-        visitor counter uses KV, which is eventually-consistent and capped at 1,000 writes/day,
-        so a busy day silently stalls it. A DO increments <em>exactly once</em>, no race,
-        100k writes/day. It used to cost money; it&apos;s free now, and it fixes that counter
-        cleanly.</p>
-      <button class="cf-btn" id="do-btn" type="button">increment the global counter</button>
-      <div class="cf-out" id="do-out">&mdash;</div>
-      <pre class="cf-code">env.COUNTER.get(id).fetch()  // SQLite-backed, atomic put</pre>
+    <h2>The core idea, natively</h2>
+    <p>An iroh <code>NodeId</code> is just an ed25519 public key, printed in base32. You do not dial <code>203.0.113.7</code>; you dial the key, and iroh finds a path to it. The browser can mint that identity with no library at all. Press the button: it generates a real key with the Web Crypto API (a true ed25519 keypair where your browser supports it, a 256-bit random identity where it does not), then encodes the public half the way iroh prints a NodeId.</p>
+
+    <div class="idbox">
+      <div class="row">
+        <button class="idbtn" id="gen" type="button">Mint a NodeId</button>
+        <span class="idmode" id="genmode"></span>
+      </div>
+      <div class="idout" id="out">
+        <div class="idlabel">NodeId &middot; base32 &middot; what iroh dials</div>
+        <div class="idval" id="b32"></div>
+        <div class="idlabel">the same key, in hex</div>
+        <div class="idval" id="hex"></div>
+        <p class="idnote"><b>That string is the address.</b> A real iroh ticket wraps this NodeId with a relay URL and any known direct addresses, postcard-serialized, so a peer can start dialing before discovery even finishes. Nothing left your machine to make this. <button class="idcopy" id="copy" type="button">copy NodeId</button></p>
+      </div>
     </div>
 
-    <div class="cf-feat">
-      <h2>2 &middot; Workers AI: caption a photo</h2>
-      <p>Every model in the catalog, <b>10,000 neurons/day free</b>. This runs
-        <code class="m">@cf/llava-1.5-7b</code> over a real grid photo to generate alt-text.
-        A small, fast vision model hallucinates charmingly now and then
-        (it once called a cloudy sky a UFO). One binding call does it: no GPU, no key.</p>
-      <button class="cf-btn" id="ai-btn" type="button">caption a random grid photo</button>
-      <div class="cf-out" id="ai-out">&mdash;</div>
-      <pre class="cf-code">env.AI.run("@cf/llava-1.5-7b", { image, prompt })</pre>
-    </div>
+    <h2>Can it live on this site?</h2>
+    <p>Short version: not without weighing the place down, so it does not. The honest reasons:</p>
+    <ul>
+      <li><b>It needs a build this site does not have.</b> There is no drop-in browser package for iroh. You write a small Rust wrapper crate and compile it with <code>wasm-bindgen</code> (the <code>wasm32-unknown-unknown</code> target, then a release build whose stated job is to <em>shrink the wasm</em>). aadhar.sh has no build step on purpose. Every page is hand-written and inlined.</li>
+      <li><b>The payload is a megabyte-class wasm blob.</b> The whole bet here is the opposite: pages around 20KB brotli, zero font bytes, nothing loaded that the page does not use. A multi-MB binary, even lazy-loaded on one page, is the wrong shape for it.</li>
+      <li><b>It wants infrastructure the edge cannot host.</b> Browser endpoints cannot hole-punch on their own, so they lean on a relay. Cloudflare Workers are request-and-response with no long-lived QUIC socket, so the site cannot be its own relay. You would borrow iroh's public one or stand up a box elsewhere.</li>
+      <li><b>There is no second peer.</b> A personal homepage is one-to-many: you read it, the photos come from a CDN, which is exactly what a CDN is for. P2P shines when two devices talk to each other, not when a thousand readers fetch the same gallery.</li>
+    </ul>
+    <p>So iroh stays a library I admire from across the room. It is the right tool the day this becomes something genuinely peer-to-peer (a "beam this photo straight to your phone, no server in the middle" trick, or a private channel between two of my own machines) and the wrong tool for a lean content site. The garage rule holds: an experiment that would make every <em>other</em> page heavier does not get to ship. This page is plain HTML and a few lines of native crypto. It loads nothing iroh, and it changed nothing about how the rest of the site is served.</p>
 
-    <div class="cf-feat">
-      <h2>3 &middot; Workers Logs: structured observability</h2>
-      <p><b>200,000 events/day, 3-day retention, free.</b> Every button above emitted a
-        structured log line from the worker
-        (<code class="m">{ feature, ms, &hellip; }</code>), filterable and searchable in the
-        dashboard. I can&apos;t show it <em>here</em> (the logs live in Cloudflare, not the page),
-        but it&apos;s on: <code class="m">[observability] enabled = true</code> in
-        <code class="m">wrangler.toml</code>. Click around, then watch them stream in
-        <code class="m">Workers &amp; Pages → cf-garage → Logs</code>.</p>
-      <pre class="cf-code">console.log(JSON.stringify({ path, feature, ms }))</pre>
-    </div>
-
-    <div class="cf-feat">
-      <h2>4 &middot; Custom spans: trace a request</h2>
-      <p>Workers <b>auto-trace</b> every platform call (each <code class="m">fetch</code>, KV read, DO
-        call) into a waterfall in Observability. As of <b>Jun&nbsp;16&nbsp;2026</b> you can wrap your
-        <em>own</em> logic in spans with <code class="m">ctx.tracing.enterSpan()</code>, nested correctly.
-        This endpoint runs a three-step pipeline &mdash; a Durable&nbsp;Object peek, a subrequest, and a
-        compute loop &mdash; each in its own span with attributes. The canonical trace lands in
-        Observability; the waterfall below is reconstructed live from the same span timings. (Run it twice:
-        a cold Durable&nbsp;Object shows up as a fat first bar, then the warm path collapses to a few ms.)</p>
-      <button class="cf-btn" id="tr-btn" type="button">run a traced request</button>
-      <div class="cf-out" id="tr-out">&mdash;</div>
-      <div class="tr-wf" id="tr-wf" aria-live="polite"></div>
-      <pre class="cf-code">ctx.tracing.enterSpan("do.counter.peek", async (span) =&gt; { span.setAttribute("counter.value", n) })</pre>
-    </div>
-
-    <h2>The honest scorecard</h2>
-    <p class="note">All four ride the free Workers plan and <b>work live above</b>. Click
-      them. They&apos;re shipped: a Durable Object increments with no race, Workers AI captions a
-      real photo on a free GPU, every click leaves a structured log line, and a hand-instrumented
-      request shows its own spans in the trace waterfall.</p>
-
-    <div class="callout" id="parked">
-      <b>The fifth, parked honestly: Browser Rendering.</b> Headless Chromium in a Worker
-      (Puppeteer): <code class="m">puppeteer.launch(env.BROWSER) → page.goto() →
-      page.screenshot()</code>, the basis for on-the-fly <code class="m">og:image</code> cards. I bind
-      it and the worker deploys; no enable toggle exists (the binding
-      is the access). The browser <em>does</em> provision. The catch was on my side: a
-      timeout race that abandoned the in-flight browser stranded its websocket session (the free
-      plan caps concurrency at 2), so each probe leaked a session and the next launch errored. The
-      handler now bounds every launch and always releases the browser, and a bare hit no-ops instead
-      of launching, so crawlers can&apos;t burn the <b>10 browser-minutes/day</b> budget. It&apos;s
-      unbuttoned here until the OG-image use case earns that budget; trigger it by hand at
-      <code class="m">/garage/cf/screenshot?go=1</code>.</div>
-
-    <footer>
-      <p>&larr; back to the <a href="/garage/">garage</a> &middot; <a href="/">aadhar.sh</a></p>
-      <p><small>demos hit a real worker (<code style="font-family:var(--font-mono);font-size:9pt">cf-garage</code>) on the free Workers plan. nothing mocked.</small></p>
-    </footer>
+    <p style="margin-top:14px"><a href="/garage/">&larr; back to the garage</a></p>
   </div>
 </div>
 
 <script>
-(function(){
-  "use strict";
-  var set=function(id,t){ var el=document.getElementById(id); if(el) el.textContent=t; };
-  var doBtn=document.getElementById("do-btn");
-  if(doBtn) doBtn.addEventListener("click", async function(){
-    set("do-out","…"); doBtn.disabled=true;
-    try{ var r=await fetch("/garage/cf/counter"); var d=await r.json();
-      set("do-out", d.ok ? ("you are increment #"+d.count+", atomic, no race") : ("error: "+d.error)); }
-    catch(e){ set("do-out","error: "+e); } finally{ doBtn.disabled=false; }
+(function () {
+  var gen = document.getElementById("gen");
+  if (!gen) return;
+  var B32 = "abcdefghijklmnopqrstuvwxyz234567";
+  function base32(bytes) {
+    var out = "", bits = 0, val = 0;
+    for (var i = 0; i < bytes.length; i++) {
+      val = (val << 8) | bytes[i]; bits += 8;
+      while (bits >= 5) { out += B32[(val >>> (bits - 5)) & 31]; bits -= 5; }
+    }
+    if (bits > 0) out += B32[(val << (5 - bits)) & 31];
+    return out;
+  }
+  function hex(bytes) {
+    return Array.prototype.map.call(bytes, function (b) { return ("0" + b.toString(16)).slice(-2); }).join("");
+  }
+  gen.addEventListener("click", async function () {
+    var pub, mode;
+    try {
+      var kp = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
+      pub = new Uint8Array(await crypto.subtle.exportKey("raw", kp.publicKey));
+      mode = "real ed25519 keypair, via Web Crypto";
+    } catch (e) {
+      pub = crypto.getRandomValues(new Uint8Array(32));
+      mode = "256-bit random identity (no Web Crypto ed25519 here, so this shows the shape)";
+    }
+    document.getElementById("b32").textContent = base32(pub);
+    document.getElementById("hex").textContent = hex(pub);
+    document.getElementById("genmode").textContent = mode;
+    document.getElementById("out").classList.add("on");
   });
-  var STEMS=["XT508165","XT508199","XT507333","XT508940","XT509491","XT508169"];
-  var aiBtn=document.getElementById("ai-btn");
-  if(aiBtn) aiBtn.addEventListener("click", async function(){
-    var s=STEMS[Math.floor(Math.random()*STEMS.length)];
-    set("ai-out","running llava on "+s+"… (a few seconds)"); aiBtn.disabled=true;
-    try{ var r=await fetch("/garage/cf/caption?img="+s); var d=await r.json();
-      set("ai-out", d.ok ? ("\""+d.caption+"\" llava on "+s) : ("error: "+d.error)); }
-    catch(e){ set("ai-out","error: "+e); } finally{ aiBtn.disabled=false; }
-  });
-  var trBtn=document.getElementById("tr-btn");
-  if(trBtn) trBtn.addEventListener("click", async function(){
-    set("tr-out","tracing a request…"); trBtn.disabled=true;
-    var wf=document.getElementById("tr-wf"); wf.innerHTML="";
-    try{
-      var r=await fetch("/garage/cf/trace?cb="+Date.now()); var d=await r.json();
-      if(!d.ok){ set("tr-out","error: "+d.error); return; }
-      var t=Math.max(d.total,1);
-      var html='<div class="tr-root">handleTrace &middot; '+d.total+'ms total</div>';
-      d.spans.forEach(function(s){
-        var left=(100*s.start/t).toFixed(1), w=Math.max(2,100*s.dur/t).toFixed(1);
-        html+='<div class="tr-row"><div class="tr-name">'+s.name+'</div>'+
-          '<div class="tr-track"><div class="tr-bar" style="left:'+left+'%;width:'+w+'%"></div></div>'+
-          '<div class="tr-dur">'+s.dur+'ms</div></div>';
-      });
-      wf.innerHTML=html;
-      set("tr-out", d.spans.length+" custom spans · "+(d.available
-        ? ("sent to Workers Observability"+(d.traced?" (sampled this hit)":""))
-        : "tracing API unavailable on this deploy"));
-    }catch(e){ set("tr-out","error: "+e); } finally{ trBtn.disabled=false; }
+  var copy = document.getElementById("copy");
+  if (copy) copy.addEventListener("click", function () {
+    var t = document.getElementById("b32").textContent;
+    if (navigator.clipboard) navigator.clipboard.writeText(t);
+    copy.textContent = "copied"; setTimeout(function () { copy.textContent = "copy NodeId"; }, 1200);
   });
 })();
 </script>

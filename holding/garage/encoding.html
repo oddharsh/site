@@ -3,13 +3,22 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>thumbnail encoding study — aadhar.sh garage</title>
-<meta name="description" content="The same photo run through every thumbnail encoding choice — AVIF/WebP/JPEG, jpegli vs system, chroma subsampling, quality, resolution — with real byte counts and the tradeoffs the site actually makes.">
+<title>aadhar.sh/garage/thumbnail encoding study</title>
+<meta name="description" content="The same photo run through every thumbnail encoding choice (AVIF/WebP/JPEG, jpegli vs system, chroma subsampling, quality, resolution), with real byte counts and the tradeoffs the site actually makes.">
 <link rel="canonical" href="https://aadhar.sh/garage/encoding">
+<meta property="og:type" content="website">
+<meta property="og:title" content="aadhar.sh/garage/thumbnail encoding study">
+<meta property="og:description" content="The same photo run through every thumbnail encoding choice (AVIF/WebP/JPEG, jpegli vs system, chroma subsampling, quality, resolution), with real byte counts and the tradeoffs the site actually makes.">
+<meta property="og:url" content="https://aadhar.sh/garage/encoding">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='3' y='6' width='7' height='20' rx='1' fill='%230855dd'/><rect x='12' y='6' width='5' height='20' rx='1' fill='%23166aee'/><rect x='19' y='6' width='10' height='20' rx='1' fill='%23003bda'/></svg>">
 <style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}
 * { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; }
+/* cross-document View Transitions: a fast, reduced-motion-safe crossfade on real
+   navigations between same-origin pages. inline (not JS-injected) so the incoming
+   page has opted in by parse time. the persistent shell (wallpaper/taskbar) is
+   identical across pages, so visually only the changing window content fades. */
+@media (prefers-reduced-motion:no-preference){@view-transition{navigation:auto}::view-transition-old(root),::view-transition-new(root){animation-duration:140ms}}
+html, body { margin: 0; padding: 0; } html{background:linear-gradient(180deg,oklch(56% 0.13 250) 0%,oklch(73% 0.10 236) 50%,oklch(88% 0.05 232) 60%,oklch(60% 0.16 140) 100%)}
 html { scrollbar-color: oklch(62% 0.14 255) oklch(91% 0.02 248); }
 body {
   background: linear-gradient(180deg, oklch(56% 0.13 250) 0%, oklch(73% 0.10 236) 50%, oklch(88% 0.05 232) 60%, oklch(60% 0.16 140) 100%);
@@ -66,7 +75,7 @@ body {
   text-decoration: none; cursor: pointer;
   background-color: #3e73f5;
   background-image: linear-gradient(180deg, #5f8cf7 0%, #3a71f5 22%, #3e73f5 55%, #2a70f2 82%, #1045be 100%);
-  transition: filter .1s ease;
+  transition: filter 60ms ease-out;
 }
 /* "wet plastic" gloss band over the top ~45% (close uses ::after for its X stroke) */
 .title-bar .controls .min::after,
@@ -226,30 +235,46 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
 .enc-table th { background: oklch(92.5% 0.018 95); font-family: var(--font-caption); }
 .enc-table td.num { font-family: var(--font-mono); text-align: right; }
 .enc-ships { line-height: 1.6; }
+
+  /* OS-window geometry inlined so FIRST PAINT matches nav.js (no shell "pop"
+     when the deferred desktop arrives). keep in sync with nav.js (search
+     "app-shell"); degrades with JS off (.content scrolls natively). */
+  html { height: 100dvh; overflow: hidden; }
+  body { min-height: 0; height: calc(100vh - 30px); height: calc(100dvh - 30px);
+    overflow: hidden; box-sizing: border-box; display: flex; flex-direction: column;
+    align-items: center; padding: 8px; }
+  .window { flex: 0 1 auto; min-height: 0; max-height: 100%; width: 100%;
+    display: flex; flex-direction: column; }
+  .window > .title-bar { flex: 0 0 auto; }
+  .window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 28px !important; }
+  body::after { content: ""; position: fixed; left: 0; right: 0; bottom: 0; height: 30px;
+    z-index: 1; background: linear-gradient(180deg, oklch(67% 0.15 256) 0%, oklch(58% 0.19 257) 4%,
+    oklch(51% 0.20 258) 9%, oklch(49% 0.20 258) 50%, oklch(46% 0.20 259) 92%, oklch(40% 0.18 260) 100%); }
+
 </style>
 </head>
 <body>
 <div id="loupe" popover="manual" class="loupe" aria-hidden="true"><div class="bar"><span>loupe</span><span class="z">3.2&times;</span></div><div class="glass" id="loupe-glass"></div></div>
 <div class="window">
-  <div class="title-bar" aria-hidden="true"><span class="title-text"><span class="icon"></span>thumbnail encoding study</span><span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/garage/" title="back to the garage" aria-label="back to the garage"></a></span></div>
+  <div class="title-bar" aria-hidden="true"><span class="title-text"><span class="icon"></span>aadhar.sh/garage/thumbnail encoding study</span><span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/garage/" title="back to the garage" aria-label="back to the garage"></a></span></div>
   <div class="content">
     <h1>Thumbnail encoding study <span class="status shipped">shipped</span></h1>
     <p class="lede">
-      Every grid thumbnail is the end of a chain of choices &mdash; <em>format,
-      quality, chroma subsampling, resolution</em>. Here's one photo run through all
-      of them with real byte counts, so the tradeoffs are visible instead of folklore.
-      All numbers are from the actual encoders the site uses (avifenc, jpegli, cwebp, sips).
+      Every grid thumbnail ends a chain of choices: <em>format,
+      quality, chroma subsampling, resolution</em>. Here I run one photo through all
+      of them with real byte counts, so you can see the tradeoffs instead of taking them on faith.
+      The actual encoders the site uses (avifenc, jpegli, cwebp, sips) produced every number.
     </p>
     <p class="lede" style="margin-top:4px">
       <b>The verdict shipped:</b> the live pipeline (<code>holding/scripts/add-photos.sh</code>)
-      encodes every thumbnail as AVIF-primary + a <b>jpegli q82</b> JPG fallback &mdash; the
-      winning combination below. That's why the site builds jpegli from source.
+      encodes every thumbnail as AVIF-primary + a <b>jpegli q82</b> JPG fallback. That combination
+      wins below, and it's why the site builds jpegli from source.
     </p>
 
     <h2>Format showdown</h2>
-    <p class="note">The same detailed color frame at 400&times;266px. PNG is the lossless
-      baseline; everything below it is lossy. Eyeball the quality, then read the bytes
-      &mdash; <code>b/px</code> = bytes per pixel, the size-density that actually scales.</p>
+    <p class="note">The same detailed color frame at 400&times;266px. PNG holds the lossless
+      baseline; everything below it throws bits away. Eyeball the quality, then read the bytes.
+      <code>b/px</code> = bytes per pixel, the size-density that actually scales.</p>
     <div class="enc-grid">
         <figure class="enc-card"><img src="/garage/enc/c-png.png?v=2" alt="" width="400" height="266" loading="lazy" decoding="async"><figcaption><b>PNG</b> lossless<span class="enc-sz">178.7 KB</span><span class="enc-bpp">1.72 b/px</span></figcaption></figure>
         <figure class="enc-card"><img src="/garage/enc/c-sips82.jpg?v=2" alt="" width="400" height="266" loading="lazy" decoding="async"><figcaption><b>JPG·sips</b> q82 · 4:2:0<span class="enc-sz">31.7 KB</span><span class="enc-bpp">0.31 b/px</span></figcaption></figure>
@@ -266,19 +291,19 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
 
     <h2>Why the site builds jpegli from source</h2>
     <p>Look at the two q82 JPEGs above: <b>system/sips</b> lands at 31.7 KB,
-      <b>jpegli</b> at 16.8 KB &mdash; <em>same nominal
+      <b>jpegli</b> at 16.8 KB: <em>same nominal
       quality, ~47% fewer bytes</em>.
-      Google's jpegli is a psychovisually-tuned re-implementation of libjpeg; that win is
-      the entire reason <code>~/.local/bin/cjpegli</code> exists and the pipeline shells out
-      to it instead of using the OS encoder. AVIF beats both, but JPEG is the universal
-      <code>&lt;img&gt;</code> fallback, so making it small still matters.</p>
+      Google's jpegli re-implements libjpeg and tunes it psychovisually; that win alone
+      is why <code>~/.local/bin/cjpegli</code> exists and the pipeline shells out
+      to it instead of the OS encoder. AVIF beats both, but JPEG still backs up
+      every <code>&lt;img&gt;</code> as the universal fallback, so shrinking it still pays off.</p>
 
     <h2>Grayscale: drop the chroma planes</h2>
-    <p class="note">A black-and-white Leica frame (400&times;267). For a grayscale image the
-      two chroma planes carry almost nothing, so AVIF <b>4:0:0</b> (luma only) is both the
-      honest encode and rules out any faint color cast. The byte saving over 4:2:0 is tiny
-      <em>because there was nothing in those planes to begin with</em> &mdash; the point is
-      correctness, not size. The pipeline auto-detects <code>sips -g space → Gray</code> and
+    <p class="note">A black-and-white Leica frame (400&times;267). In a grayscale image the
+      two chroma planes carry almost nothing, so AVIF <b>4:0:0</b> (luma only) both encodes it
+      honestly and rules out any faint color cast. Dropping to 4:0:0 saves barely any bytes over 4:2:0
+      <em>because nothing lived in those planes to begin with</em>. Correctness drives this,
+      not size. The pipeline detects <code>sips -g space → Gray</code> and
       switches to <code>--yuv 400</code>.</p>
     <div class="enc-grid">
         <figure class="enc-card"><img src="/garage/enc/g-png.png" alt="" width="400" height="267" loading="lazy" decoding="async"><figcaption><b>PNG</b> lossless<span class="enc-sz">51.0 KB</span><span class="enc-bpp">0.49 b/px</span></figcaption></figure>
@@ -288,9 +313,9 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
     </div>
 
     <h2>Resolution scales bytes ~quadratically</h2>
-    <p class="note">The color frame at three long edges, AVIF q63 vs jpegli q82. 2&times; the long edge
-      ≈ 3&times; the bytes, and AVIF holds a steady <em>~35&ndash;38%</em> lead over JPEG at
-      every size &mdash; which is why the grid is AVIF-primary and kept to a small square.</p>
+    <p class="note">The color frame at three long edges, AVIF q63 vs jpegli q82. Doubling the long edge
+      roughly triples the bytes, and AVIF holds a steady <em>~35&ndash;38%</em> lead over JPEG at
+      every size, which is why the grid stays AVIF-primary and small and square.</p>
     <table class="enc-table">
       <thead><tr><th>resolution</th><th>AVIF q63</th><th>jpegli q82</th><th>AVIF saves</th></tr></thead>
       <tbody>
@@ -303,12 +328,12 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
     <h2>What aadhar.sh actually ships</h2>
     <ul class="enc-ships">
       <li><b>AVIF primary</b> (<code>q63</code>, <code>4:2:0</code> color / <code>4:0:0</code> gray) +
-        <b>jpegli JPG q82</b> as the universal fallback &mdash; via <code>&lt;picture&gt;</code>.</li>
-      <li><b>Pre-cropped 600/400 squares</b>, metadata-stripped: the file <em>is</em> the displayed
+        <b>jpegli JPG q82</b> as the universal fallback, via <code>&lt;picture&gt;</code>.</li>
+      <li><b>Pre-cropped 600/400 squares</b>, metadata-stripped: the file <em>holds exactly</em> the displayed
         pixels, so no off-square or EXIF bytes ride along.</li>
-      <li><b>4:2:0 over 4:4:4</b> for color &mdash; 4:4:4 stores the full chroma and costs ~8% more
-        bytes (the two AVIF q63 cards above) for no visible gain at thumbnail size, so 4:2:0 is free quality.</li>
-      <li><b>Full-res share copies in R2 at JPEG q95</b> &mdash; visually lossless, half the bytes
+      <li><b>4:2:0 over 4:4:4</b> for color: storing the full chroma at 4:4:4 costs ~8% more
+        bytes (the two AVIF q63 cards above) and buys no visible gain at thumbnail size, so 4:2:0 hands you free quality.</li>
+      <li><b>Full-res share copies in R2 at JPEG q95</b>: visually lossless, half the bytes
         of q100; the true HEIF originals stay on local disk.</li>
     </ul>
 
@@ -320,11 +345,11 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
 </div>
 
 <script>
-/* loupe / magnifier — same cursor-following architecture as the site's tooltips:
+/* loupe / magnifier: same cursor-following architecture as the site's tooltips:
    popover API for show/hide, pointer events for tracking, hover-gated, no rAF
    (the browser batches the custom-property-driven transform to its own cadence).
    the glass is centred ON the cursor and shows that exact spot of THIS card's
-   encoded file (img.currentSrc — avif for avif cards, jpeg for jpeg) magnified
+   encoded file (img.currentSrc, avif for avif cards, jpeg for jpeg) magnified
    with image-rendering:pixelated, so you can A/B the artifacts spot-for-spot. */
 (function () {
   "use strict";

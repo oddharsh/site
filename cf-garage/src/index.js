@@ -14,6 +14,22 @@ const json = (obj, status = 200) =>
     },
   });
 
+// ── custom-span helpers (Workers tracing) ─────────────────────────────────
+// ctx.tracing.enterSpan(name, fn) records a span (with parent-child nesting)
+// when tracing is enabled in wrangler.toml; the span lands in the Observability
+// trace viewer. We degrade to running fn with a no-op span if the API isn't
+// present, and we time every span locally too — so /garage/cf/trace can return
+// the waterfall and the demo page can draw it without the dashboard.
+async function inSpan(tr, name, fn) {
+  if (tr && typeof tr.enterSpan === "function") return tr.enterSpan(name, fn);
+  return fn({ setAttribute() {}, isTraced: false });
+}
+async function timedSpan(tr, name, t0, spans, fn) {
+  const start = Date.now() - t0;
+  try { return await inSpan(tr, name, fn); }
+  finally { spans.push({ name, start, dur: Date.now() - t0 - start }); }
+}
+
 // ── Durable Object: an atomic, strongly-consistent counter ────────────────
 // SQLite-backed (the free-tier DO flavour). Unlike the KV counter on the
 // homepage (eventually consistent + 1k writes/day cap), this increments exactly
@@ -152,6 +168,49 @@ export default {
             },
           });
         } finally { try { await browser.close(); } catch {} }
+      }
+
+      // Feature #5 — Workers tracing: custom spans around our OWN logic.
+      // Auto-tracing already captures platform calls (fetch/KV/DO); enterSpan
+      // lets us name + time our application steps, nested correctly, so they
+      // show in the same trace waterfall. We run a 3-step pipeline (a DO peek,
+      // a subrequest, a compute loop), each in its own span with attributes,
+      // and return the locally-timed waterfall for the demo page to render.
+      if (path === "/garage/cf/trace") {
+        const tr = ctx && ctx.tracing;                 // present when the runtime supports it
+        const available = !!(tr && typeof tr.enterSpan === "function");
+        const tt = Date.now();
+        const spans = [];
+        const facts = {};
+        const out = await inSpan(tr, "handleTrace", async (root) => {
+          if (root.setAttribute) root.setAttribute("url.path", path);
+          // 1 — Durable Object peek (read-only, no increment)
+          facts.counter = await timedSpan(tr, "do.counter.peek", tt, spans, async (s) => {
+            if (s.setAttribute) s.setAttribute("do.name", "garage-global");
+            const r = await env.COUNTER.get(env.COUNTER.idFromName("garage-global")).fetch("https://do/?peek=1");
+            const { n } = await r.json();
+            if (s.setAttribute) s.setAttribute("counter.value", n);
+            return n;
+          });
+          // 2 — a real subrequest
+          facts.bytes = await timedSpan(tr, "fetch.llms_txt", tt, spans, async (s) => {
+            const r = await fetch(`${ORIGIN}/llms.txt`, { cf: { cacheTtl: 60 } });
+            const txt = await r.text();
+            if (s.setAttribute) { s.setAttribute("http.status", r.status); s.setAttribute("bytes", txt.length); }
+            return txt.length;
+          });
+          // 3 — pure compute, no IO (shows a non-network span in the waterfall)
+          facts.checksum = await timedSpan(tr, "compute.checksum", tt, spans, async (s) => {
+            let acc = 0;
+            for (let i = 0; i < 250000; i++) acc = (acc + i * 2654435761) % 4294967296;
+            if (s.setAttribute) s.setAttribute("iterations", 250000);
+            return acc >>> 0;
+          });
+          return { traced: !!root.isTraced };
+        });
+        const total = Date.now() - tt;
+        log({ feature: "tracing", available, traced: out.traced, spans: spans.length, ms: total });
+        return json({ ok: true, available, traced: out.traced, total, spans, facts });
       }
 
       log({ feature: "none", status: 404 });

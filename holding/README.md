@@ -1,46 +1,37 @@
 # holding/
 
-A single-page "under construction" placeholder for aadhar.sh while the
-full `site/` build is in progress. Deploy this directory to Cloudflare
-Pages first; swap to `site/` when ready.
+The live **aadhar.sh** homepage — a resto-mod Windows-XP / Luna personal
+site on Cloudflare Pages, server-enhanced by `_worker.js`. This directory is
+the deploy root (not a placeholder; there is no separate `site/` build).
 
-## what you need to do
+```bash
+# deploy
+wrangler pages deploy holding --project-name aadhar-sh --branch holding --commit-dirty=true
+```
 
-1. Drop 4–8 photos into `img/holding/` named `01.jpg` through `08.jpg`
-   (any subset works — the page hides missing ones via `onerror`)
-2. Cloudflare Pages → create a project pointed at this directory
-3. Custom domain → `aadhar.sh`
-4. Done
+Recurring chores (add photos, swap the playlist, bust caches, version bumps,
+what every script in `scripts/` does) live in the ops runbook:
+[../MAINTENANCE.md](../MAINTENANCE.md).
 
-## file budget
+## what's here
 
-- `index.html` — 5KB, self-contained (inline CSS, inline JS)
-- `_headers` — short cache so swapping in the real site is fast
-- `img/holding/` — your photos
+- `index.html` — the whole homepage in one file (inline CSS + JS): an XP
+  window over a Bliss-style desktop, a photo grid, and a "now playing"
+  tracklist.
+- `_worker.js` — Pages-Worker hybrid: routing, R2 photo serving + manifest,
+  Spotify scrape, AadharshBot crawler, `/around` + `/whoareyou` + `/bot`,
+  and the `/writing` Notepad pages.
+- `nav.js` — the shared desktop shell injected on every page: taskbar (with
+  per-section app icons), Start → Run palette, desktop shortcut icons,
+  draggable/resizable windows, the custom XP scrollbar, and per-route
+  favicons. One external asset, deferred + SW-cached.
+- `notepad.js` — behavior for the `/writing` Notepad view (menus, status
+  bar, F5 stamp), incl. opening notes as popovers over the folder.
+- `sw.js` — service worker (cache-first images, SWR for static text).
+- `writing/` — `.txt` notes + `posts.json`; rendered as Notepad windows.
+- `images/` — dual-encoded AVIF+JPG thumbnails + `metadata.json` EXIF index.
+- `scripts/` — the photo pipeline (resize → rotate → jpegli/avif → R2).
+- `llms.txt`, `sitemap.xml`, `robots.txt`, `.well-known/` — discovery + SEO.
 
-That's it.
-
-## swapping to the real site later
-
-When `site/` is ready:
-
-1. Cloudflare Pages → project settings → change build output directory from `holding` to `site`
-2. Redeploy
-3. The holding page is replaced atomically
-
-Or just leave `holding/` in the repo as a fallback you can flip back to
-if anything goes wrong with the main site.
-
-## what's intentional in the design
-
-- **Hazard-yellow construction stripe at top** — a one-line nod to the
-  1960s theme's signature element. Tells visitors "yes this is intentional,
-  yes the rest is coming."
-- **Dark mode only** — no theme switcher here. Visitors land, get the
-  message, leave (or send a coffee request). Theme work belongs in the
-  real site.
-- **Coffee CTA front and center** — the one path that already works
-  (cal.com routes are live). Bookings can keep flowing while the rest
-  of the site builds.
-- **Photo grid that gracefully degrades** — if you don't have photos to
-  drop in yet, the grid hides itself. Ship the page even with zero photos.
+See the repo-root `CLAUDE.md` for the full architecture, the photo pipeline,
+and the hard-won gotchas.

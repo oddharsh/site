@@ -21,7 +21,8 @@
   --hue-chrome:   95;     /* @kind other */ /* warm hue of the beige ButtonFace + greys     */
   --hue-danger:   25;     /* @kind other */ /* close-button / error red                     */
   --hue-go:      145;     /* @kind other */ /* success / shipped green                       */
-  --hue-warn:     75;     /* @kind other */ /* warning / "under construction" amber          */
+  --hue-warn:  47.10;     /* @kind other */ /* warning / "under construction" amber (matches shipped) */
+  --hue-rowhover: 95.44;  /* @kind other */ /* warm-yellow row hover tint (distinct from amber)        */
   --chroma-luna: 0.225;   /* @kind other */ /* peak chroma of the saturated blue             */
   --chroma-chrome: 0.018; /* @kind other */ /* how warm the beige chrome reads               */
 
@@ -57,7 +58,7 @@
   --ink-faint: oklch(62.68% 0 0);        /* placeholder / loading text         */
   --rule:      oklch(86.67% 0.0294 calc(var(--hue-luna) - 4)); /* hairline divider */
   --row-alt:   oklch(97.50% 0.0062 calc(var(--hue-luna) - 8)); /* zebra row tint */
-  --row-hover: oklch(97.73% 0.0373 var(--hue-warn));          /* warm hover tint */
+  --row-hover: oklch(97.73% 0.0373 var(--hue-rowhover));      /* warm hover tint */
 
   /* ── SEMANTIC ACCENTS — status + interactive color ───────────────────────*/
   --danger:      oklch(58% 0.200 var(--hue-danger));   /* close red / error      */
@@ -84,7 +85,7 @@
   --text-heading:     var(--blue-40);              /* navy h1–h3                */
   --text-body:        var(--ink);
   --text-muted:       var(--ink-dim);
-  --border-window:    var(--frame);
+  --border-window-color: var(--frame);
   --border-field:     var(--frame);
 }
 

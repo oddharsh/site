@@ -25,14 +25,16 @@
 // `?v=N` bumps on each deploy already cycle individual entries, but a
 // cache-version bump is the only way to sweep stale keys whose URL
 // pattern no longer matches anything we serve.
-const CACHE_VERSION = "aadhar-v49-vtflash";
+const CACHE_VERSION = "aadhar-v76-scroll";
 
 const CACHE_FIRST = [
-  // image files only — NOT /images/ or /images/full/ themselves (those are
-  // directory-listing HTML pages, served via the worker, must stay fresh).
-  // formats limited to what add-photos.sh actually produces + R2 originals.
+  // thumbnail image files only — NOT /images/ itself (a directory-listing
+  // HTML page, served via the worker, must stay fresh) and NOT /images/full/*:
+  // the ~20MB R2 originals are already held by the browser HTTP cache under
+  // max-age=31536000 immutable, so copying them into Cache Storage doubled
+  // disk/quota cost (plus a background re-fetch per hit) for zero hit-rate
+  // gain. formats limited to what add-photos.sh actually produces.
   /^\/images\/[0-9A-Za-z._-]+\.(jpg|jpeg|avif|png|gif|heic|heif)$/i,
-  /^\/images\/full\/[0-9A-Za-z._-]+\.(jpg|jpeg|avif|png|gif|heic|heif|hif)$/i,
 ];
 const SWR = [
   /^\/llms\.txt$/,
@@ -70,6 +72,31 @@ const PRECACHE_PAGES = ["/bot"];
 self.addEventListener("install", (event) => {
   // new SW takes over immediately on next reload
   self.skipWaiting();
+
+  // Service Worker static routing (Chrome; progressive). Declare the
+  // "always-the-network" paths so the browser serves them WITHOUT cold-booting
+  // this worker — these are network-only in the fetch handler below, so today
+  // they wake the SW just to fall through to the network. A static route skips
+  // that boot tax (notably on `/`, which is no-store + hit every visit). The
+  // SWR + cache-first paths are deliberately NOT routed here — they need the
+  // handler's logic. Unsupported browsers ignore addRoutes() and behave as before.
+  if ("addRoutes" in event) {
+    const net = (pathname) => ({
+      condition: { urlPattern: new URLPattern({ pathname }), requestMethod: "GET" },
+      source: "network",
+    });
+    try {
+      event.addRoutes([
+        net("/"),                 // homepage — no-store, re-rendered every visit
+        net("/around*"),          // live crawl
+        net("/whoareyou*"),       // per-request fingerprint
+        net("/rn*"),              // playlist redirect + /rn/tracks JSON
+        net("/images/*.json"),    // manifest.json / alt.json
+        net("/images/meta/*"),    // per-photo EXIF JSON (network-only by design)
+      ]);
+    } catch (e) { /* older addRoutes shape / bad pattern — fall back to the handler */ }
+  }
+
   // warm the cache with the static pages so the first nav to them is a hit
   // (no loading bar). allSettled so one failed fetch can't block install.
   event.waitUntil((async () => {
@@ -118,10 +145,10 @@ async function cacheFirst(req) {
   const cache = await caches.open(CACHE_VERSION);
   const hit = await cache.match(req);
   if (hit) {
-    // background revalidate (don't await)
-    fetch(req).then(res => {
-      if (isImage(res)) cache.put(req, res.clone());
-    }).catch(() => {});
+    // NO background revalidate: thumbnails are content-addressed (?v=N,
+    // 1-year immutable) — a refetch can never observe new bytes, so it'd
+    // be a pure redundant disk write per view. invalidation is the ?v
+    // bump (new URL) + the activate-event sweep of old cache versions.
     return hit;
   }
   const res = await fetch(req);

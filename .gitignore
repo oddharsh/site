@@ -22,3 +22,5 @@ npm-debug.log
 
 # cf-garage worker deps (not committed)
 cf-garage/node_modules/
+.claude/launch.json
+.claude/worktrees/

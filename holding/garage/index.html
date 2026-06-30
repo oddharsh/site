@@ -3,21 +3,26 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>garage — aadhar.sh</title>
+<title>aadhar.sh/garage</title>
 <meta name="description" content="Prototypes, experiments, and work-in-progress for aadhar.sh. Stuff that hasn't made it to the homepage yet, or won't.">
 <link rel="canonical" href="https://aadhar.sh/garage">
 
-<!-- traffic-cone favicon — same as homepage -->
+<!-- traffic-cone favicon, same as homepage -->
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='4' y='5' width='24' height='23' rx='1.5' fill='%230855dd'/><rect x='6.5' y='8.5' width='19' height='3' rx='0.6' fill='%23cfe0fb'/><rect x='6.5' y='13' width='19' height='3' rx='0.6' fill='%23cfe0fb'/><rect x='6.5' y='17.5' width='19' height='3' rx='0.6' fill='%23cfe0fb'/><rect x='6.5' y='22' width='19' height='3' rx='0.6' fill='%23cfe0fb'/></svg>">
 
 <meta property="og:type" content="website">
-<meta property="og:title" content="garage — aadhar.sh">
+<meta property="og:title" content="aadhar.sh/garage">
 <meta property="og:description" content="Prototypes, experiments, and work-in-progress.">
 <meta property="og:url" content="https://aadhar.sh/garage">
 
 <style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}
 * { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; }
+/* cross-document View Transitions: a fast, reduced-motion-safe crossfade on real
+   navigations between same-origin pages. inline (not JS-injected) so the incoming
+   page has opted in by parse time. the persistent shell (wallpaper/taskbar) is
+   identical across pages, so visually only the changing window content fades. */
+@media (prefers-reduced-motion:no-preference){@view-transition{navigation:auto}::view-transition-old(root),::view-transition-new(root){animation-duration:140ms}}
+html, body { margin: 0; padding: 0; } html{background:linear-gradient(180deg,oklch(56% 0.13 250) 0%,oklch(73% 0.10 236) 50%,oklch(88% 0.05 232) 60%,oklch(60% 0.16 140) 100%)}
 body {
   background: oklch(91.74% 0.0203 238.68);
   background: linear-gradient(180deg, oklch(56% 0.13 250) 0%, oklch(73% 0.10 236) 50%, oklch(88% 0.05 232) 60%, oklch(60% 0.16 140) 100%);
@@ -54,9 +59,9 @@ body {
   width: 16px; height: 16px;
   margin-right: 6px;
   vertical-align: middle;
-  /* wrench / spanner — built from CSS instead of an SVG so the title
+  /* wrench / spanner, built from CSS instead of an SVG so the title
      bar stays one HTTP request. silhouette matches a hex-key wrench
-     viewed end-on; not literally a wrench but reads as one at 16px. */
+     viewed end-on; reads as one at 16px even though it isn't literally a wrench. */
   background: oklch(87.82% 0.0877 66.27);
   position: relative;
   flex-shrink: 0;
@@ -85,7 +90,7 @@ body {
   text-decoration: none; cursor: pointer;
   background-color: #3e73f5;
   background-image: linear-gradient(180deg, #5f8cf7 0%, #3a71f5 22%, #3e73f5 55%, #2a70f2 82%, #1045be 100%);
-  transition: filter .1s ease;
+  transition: filter 60ms ease-out;
 }
 /* "wet plastic" gloss band over the top ~45% (close uses ::after for its X stroke) */
 .title-bar .controls .min::after,
@@ -132,7 +137,7 @@ body {
 .title-bar .controls .close::before { transform: rotate(45deg); }
 .title-bar .controls .close::after  { transform: rotate(-45deg); }
 /* --- Luna polish: caption text shadow + rounded top corners + 3px window frame --- */
-.title-bar { text-shadow: 1px 1px #0f1089; border-top-left-radius: 8px; border-top-right-radius: 7px; }
+.title-bar { text-shadow: 1px 1px #0f1089; border-top-left-radius: 8px; border-top-right-radius: 8px; }
 .window {
   border: 2px solid #0831d9; border-right-color: #001ea0; border-bottom-color: #001ea0;
   border-top-left-radius: 8px; border-top-right-radius: 8px; overflow: hidden;
@@ -240,7 +245,7 @@ footer {
   /* standard scrollbar tint (Chrome + Safari 26 + Firefox): Luna-blue thumb,
      pale track. the garage/scroll demo styles its own element separately. */
   html { scrollbar-color: oklch(62% 0.14 255) oklch(91% 0.02 248); }
-  /* mule lore gallery — contact-sheet framing like the photo grid */
+  /* mule lore gallery: contact-sheet framing like the photo grid */
   .mule-gallery { display: flex; gap: 12px; flex-wrap: wrap; margin: 14px 0 0; }
   .mule-fig { margin: 0; flex: 1 1 280px; max-width: 360px; }
   .mule-fig img { display: block; width: 100%; height: auto; border: 1px solid oklch(61% 0.0611 253.60); padding: 4px; background: #fff; box-shadow: 1px 1px 0 oklch(61% 0.0611 253.60 / 0.3); }
@@ -250,6 +255,22 @@ footer {
   .mule-hof ol { margin: 8px 0 0; padding-left: 22px; color: oklch(38% 0 0); }
   .mule-hof li { margin: 5px 0; line-height: 1.5; }
   .mule-hof .src { font-size: 8.5pt; color: oklch(52% 0 0); font-style: italic; margin: 8px 0 0; }
+
+  /* OS-window geometry inlined so FIRST PAINT matches nav.js (no shell "pop"
+     when the deferred desktop arrives). keep in sync with nav.js (search
+     "app-shell"); degrades with JS off (.content scrolls natively). */
+  html { height: 100dvh; overflow: hidden; }
+  body { min-height: 0; height: calc(100vh - 30px); height: calc(100dvh - 30px);
+    overflow: hidden; box-sizing: border-box; display: flex; flex-direction: column;
+    align-items: center; padding: 8px; }
+  .window { flex: 0 1 auto; min-height: 0; max-height: 100%; width: 100%;
+    display: flex; flex-direction: column; }
+  .window > .title-bar { flex: 0 0 auto; }
+  .window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 28px !important; }
+  body::after { content: ""; position: fixed; left: 0; right: 0; bottom: 0; height: 30px;
+    z-index: 1; background: linear-gradient(180deg, oklch(67% 0.15 256) 0%, oklch(58% 0.19 257) 4%,
+    oklch(51% 0.20 258) 9%, oklch(49% 0.20 258) 50%, oklch(46% 0.20 259) 92%, oklch(40% 0.18 260) 100%); }
+
 </style>
 </head>
 <body>
@@ -257,7 +278,7 @@ footer {
 <div class="window">
 
   <div class="title-bar" aria-hidden="true">
-    <span class="title-text"><span class="icon"></span>garage</span>
+    <span class="title-text"><span class="icon"></span>aadhar.sh/garage</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/" title="back to aadhar.sh" aria-label="back to aadhar.sh"></a></span>
   </div>
 
@@ -265,29 +286,29 @@ footer {
 
     <h1>Garage</h1>
     <p class="lede">
-      Development mules for <a href="/">aadhar.sh</a> &mdash; deliberately rough
-      rigs where a tool or an idea gets validated under real load before any of it
+      Development mules for <a href="/">aadhar.sh</a>: deliberately rough
+      rigs where I run a tool or an idea under real load before any of it
       touches the production car. Some graduate to the homepage, some get scrapped
-      (and stay parked here as data points), some are still on the dyno. Most are
-      interactive, so poke around.
+      (and stay parked here as data points), some still sit on the dyno. Most run
+      live, so poke around.
     </p>
     <p class="lede" style="font-size: 9.5pt; color: oklch(46% 0.02 250);">
-      Good cars get learned on mules first: McLaren developed the
+      Carmakers learn the good cars on mules first: McLaren developed the
       <a href="https://en.wikipedia.org/wiki/McLaren_F1" rel="external">F1</a> in
       two Ultima kit cars nicknamed <em>Albert</em> and <em>Edward</em>; the
       mid-engine Corvette hid its chassis under the bones of a Holden HSV ute (and
       came out better-looking than the real C8). A few more in the hall of fame
-      below. Same spirit here &mdash; fewer cones.
+      below. Same spirit here, fewer cones.
     </p>
 
     <div class="mule-gallery">
       <figure class="mule-fig">
         <picture>
           <source type="image/avif" srcset="/cars/t50-mule.avif?v=1">
-          <img src="/cars/t50-mule.jpg?v=1" width="600" height="338" alt="Gordon Murray Automotive T.50 development mule — an Ultima GTR nicknamed George" loading="lazy" decoding="async">
+          <img src="/cars/t50-mule.jpg?v=1" width="600" height="338" alt="Gordon Murray Automotive T.50 development mule, an Ultima GTR nicknamed George" loading="lazy" decoding="async">
         </picture>
         <figcaption>
-          GMA T.50, the F1&apos;s spiritual heir, was developed in Ultima GTR mules &mdash;
+          GMA developed the T.50, the F1&apos;s spiritual heir, in Ultima GTR mules,
           this one nicknamed <em>George</em>. (Murray ran the same play on the F1:
           <em>Albert</em> &amp; <em>Edward</em>.) Photo
           <a href="https://commons.wikimedia.org/wiki/File:Ultima_GTR_T50_Test_Mule_George.jpg" rel="external">Calreyn88</a>,
@@ -300,8 +321,8 @@ footer {
           <img src="/cars/saab-paddan.jpg?v=1" width="600" height="402" alt="Saab 99 test mule the Paddan, beside a regular Saab 96" loading="lazy" decoding="async">
         </picture>
         <figcaption>
-          Saab&apos;s 99 mule, the <em>Paddan</em> (&quot;toad&quot;): the new car&apos;s body
-          grafted onto a 96 (right) so it could test on public roads without tipping the
+          Saab&apos;s 99 mule, the <em>Paddan</em> (&quot;toad&quot;): Saab grafted the new car&apos;s
+          body onto a 96 (right) so it could test on public roads without tipping the
           design. Photo
           <a href="https://commons.wikimedia.org/wiki/File:Saab_Paddan_and_regular_Saab_96.jpg" rel="external">Jelger Groeneveld</a>,
           <a href="https://creativecommons.org/licenses/by/2.0" rel="external">CC BY 2.0</a>.
@@ -310,19 +331,19 @@ footer {
     </div>
 
     <details class="mule-hof">
-      <summary>The mule hall of fame &mdash; nine that hid in plain sight</summary>
+      <summary>The mule hall of fame: nine that hid in plain sight</summary>
       <ol>
-        <li><strong>HSV &lsquo;Corvette&rsquo;</strong> &mdash; the mid-engine C8&apos;s chassis wrapped in the bones of a Holden HSV ute. Accidentally better-looking than the real C8.</li>
-        <li><strong>McLaren F1 &mdash; &lsquo;Albert&rsquo; &amp; &lsquo;Edward&rsquo;</strong> &mdash; two Ultima kit cars: Albert ran a Chevy V8 to mimic the BMW V12&apos;s torque, Edward bedded in the real V12. Both crushed afterward. Murray rebooted the trick for the T.50 &mdash; an Ultima called <em>George</em>.</li>
-        <li><strong>Lotus Esprit &lsquo;458&rsquo;</strong> &mdash; Lotus&apos;s homegrown V8 reportedly bolted into a salvaged Ferrari 458, prowling Norfolk before the project was canned.</li>
-        <li><strong>Ferrari 348 &lsquo;Enzo&rsquo;</strong> &mdash; a 348 stretched 250mm to swallow the Enzo&apos;s 6.5-litre V12. A proper Franken-rarri.</li>
-        <li><strong>Rolls-Royce Phantom &lsquo;high-rider&rsquo;</strong> &mdash; the Cullinan SUV honed as a jacked-up, shortened Phantom, rear wing loading the suspension for spring/damper rates.</li>
-        <li><strong>MG Maestro Freelander</strong> &mdash; the Land Rover Freelander hidden under a tall MG Maestro van. One survives at the Dunsfold Collection.</li>
-        <li><strong>Porsche 918 Spyder</strong> &mdash; a naked 918 powertrain mule wearing 991-era 911 panels; Porsche let journalists ride it at Nardo. (918 units, production from 9/18.)</li>
-        <li><strong>Jaguar XJ220 &lsquo;van&rsquo;</strong> &mdash; 542bhp plumbed into a Ford Transit&apos;s load bay. Nobody suspects a white van.</li>
-        <li><strong>Lamborghini Countach Evoluzione</strong> &mdash; a carbon/Kevlar Countach, crash-tested once the autoclave got too dear. Its young engineer left to start his own marque &mdash; Horacio Pagani.</li>
+        <li><strong>HSV &apos;Corvette&apos;</strong>: the mid-engine C8&apos;s chassis wrapped in the bones of a Holden HSV ute. Accidentally better-looking than the real C8.</li>
+        <li><strong>McLaren F1, &apos;Albert&apos; &amp; &apos;Edward&apos;</strong>: two Ultima kit cars. Albert ran a Chevy V8 to mimic the BMW V12&apos;s torque, Edward bedded in the real V12. Both crushed afterward. Murray rebooted the trick for the T.50, an Ultima called <em>George</em>.</li>
+        <li><strong>Lotus Esprit &apos;458&apos;</strong>: Lotus reportedly bolted its homegrown V8 into a salvaged Ferrari 458 and prowled Norfolk in it, until the company canned the project.</li>
+        <li><strong>Ferrari 348 &apos;Enzo&apos;</strong>: a 348 stretched 250mm to swallow the Enzo&apos;s 6.5-litre V12. A proper Franken-rarri.</li>
+        <li><strong>Rolls-Royce Phantom &apos;high-rider&apos;</strong>: Rolls honed the Cullinan SUV inside a jacked-up, shortened Phantom, a rear wing loading the suspension to dial in spring and damper rates.</li>
+        <li><strong>MG Maestro Freelander</strong>: Land Rover hid the Freelander under a tall MG Maestro van. One survives at the Dunsfold Collection.</li>
+        <li><strong>Porsche 918 Spyder</strong>: a naked 918 powertrain mule wearing 991-era 911 panels; Porsche let journalists ride it at Nardo. (918 units, production from 9/18.)</li>
+        <li><strong>Jaguar XJ220 &apos;van&apos;</strong>: Jaguar plumbed 542bhp into a Ford Transit&apos;s load bay. Nobody suspects a white van.</li>
+        <li><strong>Lamborghini Countach Evoluzione</strong>: a carbon/Kevlar Countach that Lamborghini crashed once the autoclave got too dear. Its young engineer left to start his own marque: Horacio Pagani.</li>
       </ol>
-      <p class="src">Lore via Top Gear, <a href="https://www.topgear.com/car-news/top-gears-top-9/nine-weird-secret-test-mules-youve-never-heard" rel="external">&ldquo;Nine weird secret test mules&rdquo;</a> (Ollie Kew). The two photos above are the only ones in the set that exist under a free license; the rest are best enjoyed at the source.</p>
+      <p class="src">Lore via Top Gear, <a href="https://www.topgear.com/car-news/top-gears-top-9/nine-weird-secret-test-mules-youve-never-heard" rel="external">&quot;Nine weird secret test mules&quot;</a> (Ollie Kew). The two photos above are the only ones in the set that exist under a free license; the rest are best enjoyed at the source.</p>
     </details>
 
     <hr>
@@ -331,12 +352,82 @@ footer {
 
       <li>
         <div class="title-row">
+          <span class="name"><a href="/garage/iroh">iroh, and why it stays across the room</a></span>
+          <span class="status idle">watching</span>
+        </div>
+        <div class="desc">
+          iroh hit 1.0 (dial a machine by its public key, not its IP). I went looking
+          for a way to use it here. The page has a native in-browser NodeId generator you
+          can run, no library and no wasm, plus the honest reason a megabyte-class wasm
+          blob, a Rust build step, and a relay do not belong on a lean static site. The
+          garage rule: an experiment that would make every other page heavier does not ship.
+        </div>
+        <div class="meta">
+          shape: evaluation + native demo &middot; added 2026-06-15
+        </div>
+      </li>
+
+      <li>
+        <div class="title-row">
+          <span class="name"><a href="/garage/teardown">Teardown: what Fable 5 found</a></span>
+          <span class="status shipped">shipped</span>
+        </div>
+        <div class="desc">
+          A multi-agent audit, eight finders sweeping in parallel with one adversarial
+          verifier per finding, went over the whole site. Two things were actually broken:
+          a live cache-poisoning hole serving homepage HTML at thumbnail URLs, and a
+          popover fallback that stacked the <a href="/writing">/writing</a> notes in any
+          browser without the Popover API. The rest made it feel faster. Every finding,
+          with the code before and after, side by side.
+        </div>
+        <div class="meta">
+          shape: audit writeup · added 2026-06-11
+        </div>
+      </li>
+
+      <li>
+        <div class="title-row">
+          <span class="name"><a href="/garage/masonry">A masonry contact sheet</a></span>
+          <span class="status idle">prototype</span>
+        </div>
+        <div class="desc">
+          The homepage grid crops every photo to a 1:1 square. This page tries
+          <code style="font-family: var(--font-mono);font-size:9pt">display: grid-lanes</code> (CSS Grid Lanes, shipped in
+          Safari&nbsp;27) for a ragged-height contact sheet where portrait and
+          landscape sit at their true heights, no JS. EXIF pins each photo&apos;s aspect
+          ratio up front, so nothing reflows; a toggle A/Bs it against the squares, and
+          browsers without Grid Lanes fall back to the squares.
+        </div>
+        <div class="meta">
+          shape: layout prototype · added 2026-06-09
+        </div>
+      </li>
+
+      <li>
+        <div class="title-row">
+          <span class="name"><a href="/garage/safari27">Safari 27, through this site&apos;s lens</a></span>
+          <span class="status idle">watching</span>
+        </div>
+        <div class="desc">
+          WWDC26&apos;s Safari&nbsp;27 (macOS&nbsp;27 Golden Gate) shipped ~58 web features.
+          I pulled the &quot;platform caught up&quot; cut: <code style="font-family: var(--font-mono);font-size:9pt">appearance: base-select</code>
+          going stable, transform-aware anchor positioning, scroll anchoring, the
+          <code style="font-family: var(--font-mono);font-size:9pt">:heading</code> pseudo-class, and mapped each one to what this
+          site already ships, with live per-browser support chips.
+        </div>
+        <div class="meta">
+          shape: platform tracker · added 2026-06-09
+        </div>
+      </li>
+
+      <li>
+        <div class="title-row">
           <span class="name"><a href="/garage/cloudflare">Three free Cloudflare features, live</a></span>
           <span class="status shipped">shipped</span>
         </div>
         <div class="desc">
           Durable Objects (an atomic counter), Workers AI (it captions a real grid
-          photo), and Workers Logs (structured observability) &mdash; one <em>live</em> demo
+          photo), and Workers Logs (structured observability): one <em>live</em> demo
           each, behind a tiny worker at
           <code style="font-family: var(--font-mono);font-size:9pt">/garage/cf/*</code>. The
           free Workers plan quietly bundles them; all three work the moment you click. A fourth,
@@ -353,10 +444,10 @@ footer {
           <span class="status shipped">shipped</span>
         </div>
         <div class="desc">
-          One photo run through every thumbnail choice &mdash; AVIF / WebP / JPEG,
-          jpegli vs the system encoder, chroma subsampling, quality, resolution &mdash;
-          with real byte counts. Why <code style="font-family: var(--font-mono);font-size:9pt">cjpegli</code>
-          gets built from source (~47% smaller JPEGs at the same quality), why grayscale
+          One photo run through every thumbnail choice (AVIF / WebP / JPEG,
+          jpegli vs the system encoder, chroma subsampling, quality, resolution),
+          with real byte counts. Why the pipeline builds <code style="font-family: var(--font-mono);font-size:9pt">cjpegli</code>
+          from source (~47% smaller JPEGs at the same quality), why grayscale
           drops to 4:0:0, and what the grid actually ships.
         </div>
         <div class="meta">
@@ -366,7 +457,7 @@ footer {
 
       <li>
         <div class="title-row">
-          <span class="name"><a href="/garage/pretext">pretext — text measurement off the DOM</a></span>
+          <span class="name"><a href="/garage/pretext">pretext: text measurement off the DOM</a></span>
           <span class="status idle">watching</span>
         </div>
         <div class="desc">
@@ -393,7 +484,7 @@ footer {
           content-defined chunking + content-addressing, live in the browser
           (pure JS + <code style="font-family: var(--font-mono);font-size:9pt">crypto.subtle</code>).
           Snapshot a file, edit a byte, and watch fixed-size chunks re-send the
-          whole thing while content-defined chunks barely flinch &mdash; plus a
+          whole thing while content-defined chunks barely flinch, plus a
           drop-a-file dedup demo. Concepts credit
           <a href="https://github.com/officialunofficial/mkit" rel="external">mkit</a>.
         </div>
@@ -421,7 +512,7 @@ footer {
 
       <li>
         <div class="title-row">
-          <span class="name"><a href="/garage/horizon">Horizon — upcoming web platform</a></span>
+          <span class="name"><a href="/garage/horizon">Horizon: upcoming web platform</a></span>
           <span class="status idle">watching</span>
         </div>
         <div class="desc">
@@ -460,7 +551,7 @@ footer {
     </ul>
 
     <p style="margin-top: 18px; font-size: 9.5pt; color: oklch(51.03% 0 0); font-style: italic;">
-      More to come. Mules that graduate get the <span class="status shipped" style="display: inline-block; font-style: normal;">shipped</span> tag; the ones that don&apos;t stay parked here tagged <span class="status dead" style="display: inline-block; font-style: normal;">rejected</span> &mdash; a scrapped test rig is still a data point, not a deletion. A motor pool, not a highlight reel.
+      More to come. Mules that graduate get the <span class="status shipped" style="display: inline-block; font-style: normal;">shipped</span> tag; the ones that don&apos;t stay parked here tagged <span class="status dead" style="display: inline-block; font-style: normal;">rejected</span>. Scrapping a rig still leaves a data point; I never delete one. A motor pool, not a highlight reel.
     </p>
 
     <footer>

@@ -3,18 +3,23 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>scroll — aadhar.sh garage</title>
+<title>aadhar.sh/garage/scroll</title>
 <meta name="description" content="Scroll-driven animations done in a period-correct Windows XP idiom: the Luna file-copy progress bar, window maximize-on-enter, and the blue gradient scrollbar. animation-timeline, no scroll listeners.">
 <link rel="canonical" href="https://aadhar.sh/garage/scroll">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='11' y='3' width='10' height='26' rx='1.5' fill='%23dbe7fb' stroke='%230855dd' stroke-width='1.2'/><path d='M13 7.5 L19 7.5 L16 4.5 Z' fill='%23003bda'/><path d='M13 24.5 L19 24.5 L16 27.5 Z' fill='%23003bda'/><rect x='12.6' y='11' width='6.8' height='10' rx='1' fill='%23166aee'/><line x1='14' y1='16' x2='18' y2='16' stroke='%23dbe7fb' stroke-width='0.9'/></svg>">
 <meta property="og:type" content="website">
-<meta property="og:title" content="scroll — aadhar.sh garage">
+<meta property="og:title" content="aadhar.sh/garage/scroll">
 <meta property="og:description" content="Scroll-driven animation in a period-correct Windows XP idiom.">
 <meta property="og:url" content="https://aadhar.sh/garage/scroll">
 
 <style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}
 * { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; }
+/* cross-document View Transitions: a fast, reduced-motion-safe crossfade on real
+   navigations between same-origin pages. inline (not JS-injected) so the incoming
+   page has opted in by parse time. the persistent shell (wallpaper/taskbar) is
+   identical across pages, so visually only the changing window content fades. */
+@media (prefers-reduced-motion:no-preference){@view-transition{navigation:auto}::view-transition-old(root),::view-transition-new(root){animation-duration:140ms}}
+html, body { margin: 0; padding: 0; } html{background:linear-gradient(180deg,oklch(56% 0.13 250) 0%,oklch(73% 0.10 236) 50%,oklch(88% 0.05 232) 60%,oklch(60% 0.16 140) 100%)}
 body {
   background: linear-gradient(180deg, oklch(56% 0.13 250) 0%, oklch(73% 0.10 236) 50%, oklch(88% 0.05 232) 60%, oklch(60% 0.16 140) 100%);
   font-family: var(--font-ui);
@@ -23,7 +28,7 @@ body {
 }
 .window {
   max-width: 680px; margin: 0 auto; background: oklch(100% 0 0);
-  /* NO overflow:hidden here — it would steal the view() scroll source from the
+  /* NO overflow:hidden here: it would steal the view() scroll source from the
      root, breaking animation-timeline:view() on .maxi descendants. The title-bar
      has its own matching border-radius so corners look correct without it. */
   border: 2px solid #0831d9; border-right-color: #001ea0; border-bottom-color: #001ea0;
@@ -59,7 +64,7 @@ body {
   text-decoration: none; cursor: pointer;
   background-color: #3e73f5;
   background-image: linear-gradient(180deg, #5f8cf7 0%, #3a71f5 22%, #3e73f5 55%, #2a70f2 82%, #1045be 100%);
-  transition: filter .1s ease;
+  transition: filter 60ms ease-out;
 }
 /* "wet plastic" gloss band over the top ~45% (close uses ::after for its X stroke) */
 .title-bar .controls .min::after,
@@ -106,7 +111,7 @@ body {
 .title-bar .controls .close::before { transform: rotate(45deg); }
 .title-bar .controls .close::after  { transform: rotate(-45deg); }
 /* --- Luna polish: caption text shadow + rounded top corners + 3px window frame --- */
-.title-bar { text-shadow: 1px 1px #0f1089; border-top-left-radius: 8px; border-top-right-radius: 7px; }
+.title-bar { text-shadow: 1px 1px #0f1089; border-top-left-radius: 8px; border-top-right-radius: 8px; }
 .window {
   border: 2px solid #0831d9; border-right-color: #001ea0; border-bottom-color: #001ea0;
   border-top-left-radius: 8px; border-top-right-radius: 8px;
@@ -148,7 +153,7 @@ code { font-family: var(--font-mono); font-size: 9.5pt; }
 .xp-paper { width: 12px; height: 15px; background: oklch(99% 0 0); border: 1px solid oklch(60% 0 0); position: relative; }
 .xp-paper::after { content: ""; position: absolute; inset: 3px 2px auto 2px; height: 1px; background: oklch(70% 0 0); box-shadow: 0 3px 0 oklch(70% 0 0), 0 6px 0 oklch(70% 0 0); }
 .xp-meta { font-size: 8.5pt; color: oklch(45% 0 0); margin: 0 0 4px; }
-/* the green segmented bar — sunken trough + bright Luna-green blocks */
+/* the green segmented bar: sunken trough + bright Luna-green blocks */
 .xp-progress { height: 19px; background: oklch(100% 0 0); border: 1px solid; border-color: oklch(50% 0 0) oklch(100% 0 0) oklch(100% 0 0) oklch(50% 0 0); padding: 2px; overflow: hidden; }
 .xp-progress-fill {
   height: 100%; width: 0;
@@ -185,14 +190,14 @@ code { font-family: var(--font-mono); font-size: 9.5pt; }
   }
 }
 
-/* ── prototype 3: the Luna scrollbar — faithful XP recreation ── */
+/* ── prototype 3: the Luna scrollbar, a faithful XP recreation ── */
 /* Firefox two-tone (thumb / track) */
 .luna-scroller { height: 150px; overflow-y: scroll; border: 1px solid oklch(61.14% 0.0611 253.60); background: oklch(99% 0.004 250); padding: 8px 12px; font-size: 9.5pt; margin-top: 4px; scrollbar-color: #6898d0 #c0d4ec; }
 
 .luna-scroller::-webkit-scrollbar { width: 17px; }
 
 /* track: pale blue-grey with the classic XP 2×2 checker dither.
-   Lighter "dots" on a slightly darker base — the pattern XP used on all
+   Lighter "dots" on a slightly darker base: the pattern XP used on all
    unfilled scroll areas since Windows 3.1, kept in Luna. */
 .luna-scroller::-webkit-scrollbar-track {
   background-color: #c0d4ec;
@@ -208,7 +213,7 @@ code { font-family: var(--font-mono); font-size: 9.5pt; }
 
 /* thumb: the raised Luna-blue ridge everyone remembers.
    Three-layer build-up:
-   1. Horizontal grip ridges — repeating dark+light line pairs (the
+   1. Horizontal grip ridges: repeating dark+light line pairs (the
       grooved elevator-grip look). Start at row 3 so the first ridge
       isn't flush with the top border.
    2. Left-to-right convex bevel: bright edge → blue body → blue body → bright edge
@@ -274,7 +279,7 @@ code { font-family: var(--font-mono); font-size: 9.5pt; }
   background-position: center center, center center;
   background-size: 7px 5px, auto;
 }
-/* up arrow — layered: SVG glyph on top of blue gradient */
+/* up arrow, layered: SVG glyph on top of blue gradient */
 .luna-scroller::-webkit-scrollbar-button:vertical:decrement {
   background-image:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 7 4'%3E%3Cpath d='M3.5 0 L7 4 L0 4 Z' fill='%23122858'/%3E%3C/svg%3E"),
@@ -300,20 +305,36 @@ footer { text-align: center; font-family: var(--font-ui); font-size: 9pt; color:
   /* standard scrollbar tint (Chrome + Safari 26 + Firefox): Luna-blue thumb,
      pale track. the garage/scroll demo styles its own element separately. */
   html { scrollbar-color: oklch(62% 0.14 255) oklch(91% 0.02 248); }
+
+  /* OS-window geometry inlined so FIRST PAINT matches nav.js (no shell "pop"
+     when the deferred desktop arrives). keep in sync with nav.js (search
+     "app-shell"); degrades with JS off (.content scrolls natively). */
+  html { height: 100dvh; overflow: hidden; }
+  body { min-height: 0; height: calc(100vh - 30px); height: calc(100dvh - 30px);
+    overflow: hidden; box-sizing: border-box; display: flex; flex-direction: column;
+    align-items: center; padding: 8px; }
+  .window { flex: 0 1 auto; min-height: 0; max-height: 100%; width: 100%;
+    display: flex; flex-direction: column; }
+  .window > .title-bar { flex: 0 0 auto; }
+  .window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 28px !important; }
+  body::after { content: ""; position: fixed; left: 0; right: 0; bottom: 0; height: 30px;
+    z-index: 1; background: linear-gradient(180deg, oklch(67% 0.15 256) 0%, oklch(58% 0.19 257) 4%,
+    oklch(51% 0.20 258) 9%, oklch(49% 0.20 258) 50%, oklch(46% 0.20 259) 92%, oklch(40% 0.18 260) 100%); }
+
 </style>
 </head>
 <body>
 
 <div class="window">
   <div class="title-bar" aria-hidden="true">
-    <span class="title-text"><span class="icon"></span>scroll</span>
+    <span class="title-text"><span class="icon"></span>aadhar.sh/garage/scroll</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/garage/" title="back to the garage" aria-label="back to the garage"></a></span>
   </div>
   <div class="content">
 
     <h1>Scroll, the XP way</h1>
     <p class="lede">
-      Scroll-driven animation, but in a period-correct Luna idiom &mdash; the
+      Scroll-driven animation, but in a period-correct Luna idiom: the
       file-copy progress bar, windows that maximize as they open, the blue
       gradient scrollbar. All <code>animation-timeline</code>, no scroll
       listeners, no JS. Your browser: <span id="cap-scroll" class="chip no">animation-timeline: scroll()</span>
@@ -323,10 +344,10 @@ footer { text-align: center; font-family: var(--font-ui); font-size: 9pt; color:
 
     <!-- prototype 1 -->
     <section class="proto">
-      <h2>1 &middot; &quot;Copying&hellip;&quot; <span class="scroll-hint">— scroll the page to fill it</span></h2>
+      <h2>1 &middot; &quot;Copying&hellip;&quot; <span class="scroll-hint">(scroll the page to fill it)</span></h2>
       <p class="note">
         The most XP thing imaginable: the green segmented file-copy bar. Here
-        the fill is tied to your scroll through the page &mdash; your scroll
+        your scroll through the page drives the fill. Your scroll
         <em>is</em> the copy. It&apos;d make a perfect reading-progress indicator.
       </p>
       <div class="xp-dialog">
@@ -344,8 +365,8 @@ footer { text-align: center; font-family: var(--font-ui); font-size: 9pt; color:
         </div>
       </div>
       <p class="how">
-        <code>.xp-progress-fill { animation: xp-fill linear both; animation-timeline: scroll(root block); }</code>
-        &mdash; the keyframes just animate <code>width: 0 &rarr; 100%</code>; the
+        <code>.xp-progress-fill { animation: xp-fill linear both; animation-timeline: scroll(root block); }</code>.
+        The keyframes just animate <code>width: 0 &rarr; 100%</code>; the
         browser maps it to document scroll. Where unsupported it falls back to a
         static 60%-filled frame.
       </p>
@@ -353,16 +374,16 @@ footer { text-align: center; font-family: var(--font-ui); font-size: 9pt; color:
 
     <!-- prototype 2 -->
     <section class="proto">
-      <h2>2 &middot; Maximize on open <span class="scroll-hint">— scroll so each window enters</span></h2>
+      <h2>2 &middot; Maximize on open <span class="scroll-hint">(scroll so each window enters)</span></h2>
       <p class="note">
         XP windows opened with a quick zoom-from-small. Each card below plays
-        that as it rises into the viewport &mdash; fast and snappy like the real
+        that as it rises into the viewport, fast and snappy like the real
         Luna animation, driven by <code>animation-timeline: view()</code>.
       </p>
       <div class="maxi-stack">
         <div class="maxi"><div class="title-bar bar"><span class="title-text">My Documents</span><span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><span class="close" aria-hidden="true"></span></span></div><div class="pane">Opened as it entered the viewport.</div></div>
         <div class="maxi"><div class="title-bar bar"><span class="title-text">My Pictures</span><span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><span class="close" aria-hidden="true"></span></span></div><div class="pane">Scale from 0.86 + fade, origin at the bottom.</div></div>
-        <div class="maxi"><div class="title-bar bar"><span class="title-text">My Music</span><span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><span class="close" aria-hidden="true"></span></span></div><div class="pane">animation-range: entry 5% &rarr; cover 32% — done quick, then it sits still.</div></div>
+        <div class="maxi"><div class="title-bar bar"><span class="title-text">My Music</span><span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><span class="close" aria-hidden="true"></span></span></div><div class="pane">animation-range: entry 5% &rarr; cover 32%. Done quick, then it sits still.</div></div>
       </div>
       <p class="how">
         <code>animation-timeline: view(); animation-range: entry 5% cover 32%;</code>
@@ -374,20 +395,20 @@ footer { text-align: center; font-family: var(--font-ui); font-size: 9pt; color:
 
     <!-- prototype 3 -->
     <section class="proto">
-      <h2>3 &middot; The Luna scrollbar <span class="scroll-hint">— scroll inside the box</span></h2>
+      <h2>3 &middot; The Luna scrollbar <span class="scroll-hint">(scroll inside the box)</span></h2>
       <p class="note">
-        Not an animation, but the most-missed bit of XP scroll chrome: the blue
+        No animation here, just the most-missed bit of XP scroll chrome: the blue
         gradient scrollbar. Pure CSS (<code>::-webkit-scrollbar</code> +
-        <code>scrollbar-color</code> for Firefox). <b>Shipped</b> &mdash; the
-        <code>scrollbar-color</code> tint is applied site-wide (<a href="/">the homepage</a>,
+        <code>scrollbar-color</code> for Firefox). <b>Shipped.</b> The
+        <code>scrollbar-color</code> tint now paints every page site-wide (<a href="/">the homepage</a>,
         this garage, serendipity), so this one graduated out of the lab.
       </p>
       <div class="luna-scroller">
         <p>The Windows XP scrollbar: a Luna-blue gradient thumb with a 3D bevel, a lighter track, and square arrow buttons top and bottom.</p>
         <p>Scroll this box to drive it. WebKit/Blink get the full gradient thumb + buttons; Firefox gets the two-tone <code>scrollbar-color</code> (thumb + track), no buttons.</p>
-        <p>On the homepage this would mean the photo wall and tracklist scroll inside windows that actually look like windows &mdash; right down to the chrome.</p>
+        <p>On the homepage the photo wall and tracklist would scroll inside windows that actually look like windows, right down to the chrome.</p>
         <p>Keep scrolling&hellip; the thumb is the gradient, the track is the lighter channel beside it.</p>
-        <p>That&apos;s the whole trick. No images, no JS &mdash; just a styled native scrollbar.</p>
+        <p>That&apos;s the whole trick. No images, no JS, just a styled native scrollbar.</p>
       </div>
       <p class="how">
         <code>::-webkit-scrollbar-thumb { background: linear-gradient(90deg, &hellip;); }</code>

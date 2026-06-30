@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>aadhar.sh/garage/masonry</title>
+<meta name="description" content="Prototype: a ragged-height contact-sheet photo grid with CSS Grid Lanes (display: grid-lanes), falling back to the fixed-square grid the homepage ships today.">
+<link rel="canonical" href="https://aadhar.sh/garage/masonry">
+
+<!-- masonry-bricks favicon -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='3' fill='%23ffffff' stroke='%230831d9' stroke-width='2'/><rect x='5' y='5' width='9' height='12' fill='%23166aee'/><rect x='17' y='5' width='10' height='7' fill='%23ff9500'/><rect x='17' y='15' width='10' height='12' fill='%23166aee'/><rect x='5' y='20' width='9' height='7' fill='%23ff9500'/></svg>">
+
+<meta property="og:type" content="website">
+<meta property="og:title" content="aadhar.sh/garage/masonry">
+<meta property="og:description" content="A Grid Lanes (display: grid-lanes) contact sheet, with a fixed-square fallback.">
+<meta property="og:url" content="https://aadhar.sh/garage/masonry">
+
+<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}
+* { box-sizing: border-box; }
+/* cross-document View Transitions: a fast, reduced-motion-safe crossfade on real
+   navigations between same-origin pages. inline (not JS-injected) so the incoming
+   page has opted in by parse time. the persistent shell (wallpaper/taskbar) is
+   identical across pages, so visually only the changing window content fades. */
+@media (prefers-reduced-motion:no-preference){@view-transition{navigation:auto}::view-transition-old(root),::view-transition-new(root){animation-duration:140ms}}
+html, body { margin: 0; padding: 0; } html{background:linear-gradient(180deg,oklch(56% 0.13 250) 0%,oklch(73% 0.10 236) 50%,oklch(88% 0.05 232) 60%,oklch(60% 0.16 140) 100%)}
+body {
+  background: oklch(91.74% 0.0203 238.68);
+  background: linear-gradient(180deg, oklch(56% 0.13 250) 0%, oklch(73% 0.10 236) 50%, oklch(88% 0.05 232) 60%, oklch(60% 0.16 140) 100%);
+  font-family: var(--font-ui); font-size: 10.5pt; line-height: 1.5;
+  color: oklch(21.78% 0 0); padding: 24px 12px 60px; min-height: 100vh;
+}
+.window { max-width: 720px; margin: 0 auto; background: oklch(100% 0 0);
+  border: 2px solid #0831d9; border-right-color: #001ea0; border-bottom-color: #001ea0;
+  border-top-left-radius: 8px; border-top-right-radius: 8px; overflow: hidden;
+  box-shadow: inset 1px 1px 0 #166aee, inset 2px 2px 0 #0855dd, inset -1px -1px 0 #00138c, inset -2px -2px 0 #003bda, 4px 4px 0 rgba(0,30,160,.35); }
+.title-bar {
+  background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
+  color: oklch(100% 0 0); font-family: var(--font-caption); font-size: 10pt; font-weight: bold;
+  padding: 4px 8px; border-bottom: 1px solid oklch(41.92% 0.0962 250.51);
+  display: flex; align-items: center; justify-content: space-between;
+  text-shadow: 1px 1px #0f1089; border-top-left-radius: 8px; border-top-right-radius: 8px; }
+.title-bar .icon { display:inline-block; width:14px; height:14px; margin-right:6px; vertical-align:middle; flex-shrink:0;
+  background: linear-gradient(135deg, #166aee 0 50%, #ff9500 50% 100%); border:1px solid #001ea0; }
+.title-bar .title-text { flex: 1; padding-left: 4px; }
+.title-bar .controls { display: flex; align-items: center; gap: 2px; }
+.title-bar .controls .min, .title-bar .controls .max, .title-bar .controls .close {
+  position: relative; box-sizing: border-box; width: 21px; height: 21px; display: inline-block; overflow: hidden;
+  font-size: 0; color: transparent; border: 1px solid #6696eb; border-radius: 3px; text-decoration: none; cursor: pointer;
+  background-color: #3e73f5; background-image: linear-gradient(180deg, #5f8cf7 0%, #3a71f5 22%, #3e73f5 55%, #2a70f2 82%, #1045be 100%); transition: filter 60ms ease-out; }
+.title-bar .controls .min::after, .title-bar .controls .max::after { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 45%;
+  background: linear-gradient(180deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.12) 70%, rgba(255,255,255,0) 100%); pointer-events: none; border-radius: 2px 2px 5px 5px; }
+.title-bar .controls .close { border-color: #d8401c; background-color: #e45f3e; background-image: linear-gradient(180deg, #e8795f 0%, #e45f40 30%, #e45d3d 52%, #e2552a 80%, #ae3110 100%); }
+.title-bar .controls .close:hover { border-color: #ff7a66; background-image: linear-gradient(180deg, #ff8b7d 0%, #ff7463 26%, #ff957c 55%, #fd7e64 82%, #d34936 100%); box-shadow: 0 0 4px rgba(255,120,96,.7); }
+.title-bar .controls .min::before { content: ""; position: absolute; left: 5px; right: 5px; bottom: 5px; height: 2px; background: #fff; box-shadow: 0 1px 0 rgba(0,0,0,.35); }
+.title-bar .controls .max::before { content: ""; position: absolute; left: 5px; top: 5px; width: 11px; height: 9px; box-sizing: border-box; border: 1px solid #fff; border-top-width: 2px; filter: drop-shadow(0 1px 0 rgba(0,0,0,.35)); }
+.title-bar .controls .close::before, .title-bar .controls .close::after { content: ""; position: absolute; left: 50%; top: 50%; width: 13px; height: 2px; margin: -1px 0 0 -6.5px; background: #fff; box-shadow: 0 1px 0 rgba(0,0,0,.35); }
+.title-bar .controls .close::before { transform: rotate(45deg); } .title-bar .controls .close::after { transform: rotate(-45deg); }
+
+.content { padding: 12px 16px 16px; }
+h1 { font-family: var(--font-caption); font-size: 14pt; color: oklch(41.92% 0.0962 250.51); margin: 0 0 4px; font-weight: bold; letter-spacing: -0.01em; }
+.lede { margin: 0 0 12px; color: oklch(38.67% 0 0); font-size: 10.5pt; }
+p { margin: 0 0 12px; }
+a:link { color: oklch(42.61% 0.2353 263.74); text-decoration: underline; } a:visited { color: oklch(42.09% 0.1935 328.36); } a:hover { color: oklch(62.80% 0.2577 29.23); }
+code, .mono { font-family: var(--font-mono); font-size: 9.5pt; }
+hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px 0; height: 0; }
+
+/* ── controls row: chip + a segmented toggle ─────────────────────────── */
+.bar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 0 0 14px; }
+.chip { font-family: var(--font-mono); font-size: 8.5pt; font-weight: bold; padding: 2px 7px; border: 1px solid; border-radius: 2px; white-space: nowrap;
+  color: oklch(51% 0 0); border-color: oklch(72% 0 0); background: oklch(97% 0 0); }
+.chip.yes { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(97% 0.04 142); }
+.chip.yes::before { content: "\2713 "; } .chip.no::before { content: "\2717 "; }
+.seg { display: inline-flex; border: 1px solid oklch(50% 0.04 263); border-radius: 3px; overflow: hidden; }
+.seg button { font: inherit; font-size: 9.5pt; padding: 3px 12px; border: 0; cursor: pointer; color: oklch(20% 0 0);
+  background: linear-gradient(180deg, oklch(99% 0 0), oklch(92% 0.005 263)); }
+.seg button + button { border-left: 1px solid oklch(70% 0.03 263); }
+.seg button[aria-pressed="true"] { color: oklch(100% 0 0);
+  background: linear-gradient(180deg, oklch(60% 0.20 261), oklch(50% 0.225 263)); box-shadow: inset 1px 1px 2px oklch(36% 0.16 263); }
+.seg button:disabled { color: oklch(62% 0 0); cursor: not-allowed; }
+.note { font-size: 9pt; color: oklch(45% 0 0); margin: -6px 0 14px; }
+
+/* ── the contact sheet ───────────────────────────────────────────────── */
+/* FALLBACK (everywhere): fixed-area squares, object-fit:cover — what the
+   homepage ships today. one row-height, every photo cropped to 1:1. */
+.sheet { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; }
+.tile { display: block; background: oklch(100% 0 0); padding: 4px; line-height: 0; overflow: hidden;
+  border: 1px solid oklch(61.14% 0.0611 253.60); box-shadow: 1px 1px 0 oklch(61.14% 0.0611 253.60 / 0.3); aspect-ratio: 1; }
+.tile:hover { border-color: oklch(41.92% 0.13 250.51); }
+.tile picture { display: block; width: 100%; height: 100%; }
+.tile img { display: block; width: 100%; height: 100%; object-fit: cover; background: oklch(94% 0.01 255); }
+
+/* MASONRY (where the engine has it): real Grid Lanes. columns stay fixed,
+   the masonry algorithm stacks the rows. each tile takes its photo's true
+   aspect ratio (EXIF pins it up front, so nothing reflows) → a ragged
+   contact sheet, no crop. flip the toggle to A/B it against the squares above. */
+@supports (display: grid-lanes) {
+  .sheet.masonry { display: grid-lanes; flow-tolerance: 1em; }
+  .sheet.masonry .tile { aspect-ratio: var(--ar, 1); }
+  /* a correctly-proportioned box means object-fit:cover shows the WHOLE frame */
+}
+
+.empty { color: oklch(50% 0 0); font-style: italic; padding: 18px 0; }
+.status { font-family: var(--font-ui); font-size: 8.5pt; color: oklch(45% 0 0); border-top: 1px solid oklch(86% 0.02 259); background: oklch(96.5% 0.006 255);
+  padding: 4px 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+.status span::after { content: "·"; margin-left: 8px; color: oklch(72% 0 0); } .status span:last-child::after { content: ""; }
+
+  /* OS-window geometry inlined so FIRST PAINT matches nav.js (no shell "pop"
+     when the deferred desktop arrives). keep in sync with nav.js (search
+     "app-shell"); degrades with JS off (.content scrolls natively). */
+  html { height: 100dvh; overflow: hidden; }
+  body { min-height: 0; height: calc(100vh - 30px); height: calc(100dvh - 30px);
+    overflow: hidden; box-sizing: border-box; display: flex; flex-direction: column;
+    align-items: center; padding: 8px; }
+  .window { flex: 0 1 auto; min-height: 0; max-height: 100%; width: 100%;
+    display: flex; flex-direction: column; }
+  .window > .title-bar { flex: 0 0 auto; }
+  .window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 28px !important; }
+  body::after { content: ""; position: fixed; left: 0; right: 0; bottom: 0; height: 30px;
+    z-index: 1; background: linear-gradient(180deg, oklch(67% 0.15 256) 0%, oklch(58% 0.19 257) 4%,
+    oklch(51% 0.20 258) 9%, oklch(49% 0.20 258) 50%, oklch(46% 0.20 259) 92%, oklch(40% 0.18 260) 100%); }
+
+</style>
+</head>
+<body>
+<div class="window">
+  <div class="title-bar" aria-hidden="true">
+    <span class="title-text"><span class="icon"></span>aadhar.sh/garage/masonry</span>
+    <span class="controls"><span class="min"></span><span class="max"></span><a class="close" href="/garage/" title="back to the garage" aria-label="back to the garage"></a></span>
+  </div>
+  <div class="content">
+    <h1>A masonry contact sheet</h1>
+    <p class="lede">The homepage grid crops every photo to a 1:1 square: <code>object-fit: cover</code> drops each one into the same cell. <strong>CSS Grid Lanes</strong> (<code>display: grid-lanes</code>, shipped in Safari&nbsp;27; see <a href="/garage/safari27">the Safari 27 notes</a>) lays the columns on a grid but stacks the rows masonry-style, so a portrait and a landscape sit side by side at their true heights. No JavaScript lays anything out, no media queries fire.</p>
+
+    <div class="bar">
+      <span class="chip" id="cap">checking <code>display: grid-lanes</code>…</span>
+      <span class="seg" role="group" aria-label="layout">
+        <button type="button" id="bMasonry" aria-pressed="true">Masonry</button>
+        <button type="button" id="bSquares" aria-pressed="false">Fixed squares</button>
+      </span>
+    </div>
+    <p class="note" id="note"></p>
+
+    <div class="sheet masonry" id="sheet" aria-label="photo contact sheet"><p class="empty">Loading the pool…</p></div>
+
+    <hr>
+    <p style="font-size:9pt;color:oklch(45% 0 0)">Same markup both ways. One line differs: <code>display: grid-lanes</code> behind an <code>@supports</code> guard, with EXIF pinning each photo's <code>aspect-ratio</code> so nothing reflows as the images load. Browsers without Grid Lanes fall back to the squares. Still a prototype: the live homepage ships the squares.</p>
+  </div>
+  <div class="status" aria-hidden="true">
+    <span>display: grid-lanes</span>
+    <span>fallback: 1:1 grid</span>
+    <span>octane + fallback</span>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var sheet = document.getElementById("sheet");
+  var cap = document.getElementById("cap"), note = document.getElementById("note");
+  var bM = document.getElementById("bMasonry"), bS = document.getElementById("bSquares");
+  var THUMBV = ""; // thumb URLs from the manifest already carry ?v=N
+
+  var supported = false;
+  try { supported = CSS.supports("display: grid-lanes"); } catch (e) {}
+  cap.className = "chip " + (supported ? "yes" : "no");
+  cap.innerHTML = "<code>display: grid-lanes</code> " + (supported ? "in your browser" : "not in your browser");
+  if (!supported) {
+    note.textContent = "Your browser doesn't have Grid Lanes yet, so both buttons show the fixed-square fallback, same as the homepage. Open it in Safari 27 (or Chrome/Firefox with the flag) to see the ragged version.";
+    bM.disabled = true; // the toggle can't do anything without support
+  } else {
+    note.textContent = "Toggle to A/B the ragged masonry against the cropped squares the homepage ships.";
+  }
+
+  function setMode(masonry) {
+    sheet.classList.toggle("masonry", masonry);
+    bM.setAttribute("aria-pressed", String(masonry));
+    bS.setAttribute("aria-pressed", String(!masonry));
+  }
+  bM.addEventListener("click", function () { if (!bM.disabled) setMode(true); });
+  bS.addEventListener("click", function () { setMode(false); });
+
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+
+  Promise.all([
+    fetch("/images/manifest.json").then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }),
+    fetch("/images/metadata.json").then(function (r) { return r.ok ? r.json() : {}; }).catch(function () { return {}; })
+  ]).then(function (res) {
+    var man = res[0], meta = res[1] || {};
+    var photos = (man && man.photos) || [];
+    if (!photos.length) { sheet.innerHTML = '<p class="empty">No photos in the manifest right now.</p>'; return; }
+    // shuffle, take up to 40 for a full-but-light sheet
+    for (var i = photos.length - 1; i > 0; i--) { var j = (Math.random() * (i + 1)) | 0; var t = photos[i]; photos[i] = photos[j]; photos[j] = t; }
+    photos = photos.slice(0, 40);
+
+    var html = photos.map(function (p) {
+      var m = meta[p.stem] || {};
+      var ar = (m.width && m.height) ? (m.width + " / " + m.height) : "1";
+      var avif = "/images/" + (p.thumb_avif || (p.stem + ".avif"));
+      var jpg = "/images/" + (p.thumb_jpg || (p.stem + ".jpg"));
+      var full = "/images/full/" + encodeURI(p.full || (p.stem + ".jpg"));
+      return '<a class="tile" href="' + esc(full) + '" style="--ar:' + esc(ar) + '" title="' + esc(p.stem) + '">' +
+        '<picture><source type="image/avif" srcset="' + esc(avif) + '">' +
+        '<img src="' + esc(jpg) + '" alt="' + esc(p.stem) + '" loading="lazy" decoding="async"></picture></a>';
+    }).join("");
+    sheet.innerHTML = html;
+  });
+})();
+</script>
+<script src="/nav.js" defer></script>
+</body>
+</html>

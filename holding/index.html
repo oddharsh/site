@@ -117,10 +117,24 @@
    18+. respects reduced-motion automatically (UA skips the animation). */
 
 * { box-sizing: border-box; }
+/* cross-document View Transitions: a fast, reduced-motion-safe crossfade on real
+   navigations between same-origin pages. inline (not JS-injected) so the incoming
+   page has opted in by parse time. the persistent shell (wallpaper/taskbar) is
+   identical across pages, so visually only the changing window content fades. */
+@media (prefers-reduced-motion:no-preference){@view-transition{navigation:auto}::view-transition-old(root),::view-transition-new(root){animation-duration:140ms}}
 
 html, body {
   margin: 0;
   padding: 0;
+  /* Bliss tone on the ROOT too: the cross-document View Transition freezes the
+     root group, so a white <html> flashes for a frame before nav.js paints the
+     desktop. matching html to the desktop gradient removes that flash. */
+  background:
+    linear-gradient(180deg,
+      oklch(56% 0.13 250) 0%,
+      oklch(73% 0.10 236) 50%,
+      oklch(88% 0.05 232) 60%,
+      oklch(60% 0.16 140) 100%);
 }
 
 body {
@@ -203,7 +217,7 @@ body {
   text-decoration: none; cursor: pointer;
   background-color: #3e73f5;
   background-image: linear-gradient(180deg, #5f8cf7 0%, #3a71f5 22%, #3e73f5 55%, #2a70f2 82%, #1045be 100%);
-  transition: filter .1s ease;
+  transition: filter 60ms ease-out;
 }
 /* "wet plastic" gloss band over the top ~45% (close uses ::after for its X stroke) */
 .title-bar .controls .min::after,
@@ -250,14 +264,13 @@ body {
 .title-bar .controls .close::before { transform: rotate(45deg); }
 .title-bar .controls .close::after  { transform: rotate(-45deg); }
 /* --- Luna polish: caption text shadow + rounded top corners + 3px window frame --- */
-.title-bar { text-shadow: 1px 1px #0f1089; border-top-left-radius: 8px; border-top-right-radius: 7px; }
+.title-bar { text-shadow: 1px 1px #0f1089; border-top-left-radius: 8px; border-top-right-radius: 8px; }
 .window {
   border: 2px solid #0831d9; border-right-color: #001ea0; border-bottom-color: #001ea0;
   border-top-left-radius: 8px; border-top-right-radius: 8px; overflow: hidden;
   box-shadow: inset 1px 1px 0 #166aee, inset 2px 2px 0 #0855dd,
               inset -1px -1px 0 #00138c, inset -2px -2px 0 #003bda,
-              4px 4px 0 rgba(0,30,160,.35),
-              0 10px 34px -10px oklch(22% 0.09 285 / 0.6);  /* float on the dawn desktop */
+              4px 4px 0 rgba(0,30,160,.35);
 }
 
 .content {
@@ -347,6 +360,16 @@ hr {
   color: inherit;
   text-decoration: none;
 }
+/* the "open the playlist" cue on the heading: small + muted so the link reads
+   as "this opens the playlist" rather than as a second generic music link. the
+   profile links (footer Spotify, taskbar Music) stay distinct = my profile. */
+.now-playing h2 .np-open {
+  font-family: var(--font-ui);
+  font-size: 9pt;
+  font-weight: normal;
+  color: oklch(52% 0.03 255);
+  white-space: nowrap;
+}
 .now-playing h2 a:hover {
   color: oklch(62.80% 0.2577 29.23);
   text-decoration: underline;
@@ -428,14 +451,17 @@ hr {
 /* photo grid: each tile in a raised frame, like a contact sheet from
    a 2003 personal site. */
 .photos {
-  /* 3-column equal-area grid: every photo gets the same 1:1 cell regardless
-     of its native aspect ratio. object-fit:cover centers the crop. this keeps
-     all thumbnails at the same display size (~200px per side), so no photo is
-     rendered at more pixels than the 600px square thumbnail can support cleanly. */
+  /* equal-area grid of FIXED-size 1:1 cells (object-fit:cover centers the crop).
+     fixed columns (not 1fr) so thumbnails never rescale when the window is
+     resized — they reflow count instead. auto-fill + justify-content:center
+     keeps ~3 across in the default window and leaves a hover-safe gutter on each
+     side (so you can wheel-scroll there without tripping the photo tooltips). */
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fill, 184px);
+  justify-content: center;
   gap: 6px;
   margin: 14px 0 24px;
+  padding: 0 6px;
 }
 .photos a {
   display: block;
@@ -574,17 +600,12 @@ footer .signature small { color: oklch(56.93% 0 0); }
 }
 /* popover path: gated on :popover-open support so non-supporting engines
    fall back cleanly (they keep the plain display:none above; the JS sets
-   inline display:block at full opacity for them). where supported, the
-   tooltip fades opacity 0->1 on open (display animates via allow-discrete)
-   while position still hard-snaps — transform is deliberately NOT in the
-   transition list. ~90ms, subtle. */
+   inline display:block for them). the tooltip is hover-only (the JS bails on
+   touch), so on desktop it snaps in the instant the cursor lands on a thumb
+   or row — no fade-in delay. position hard-snaps too (transform never
+   transitions). */
 @supports selector(:popover-open) {
-  .xp-tooltip {
-    opacity: 0;
-    transition: opacity 90ms ease-out, display 90ms allow-discrete;
-  }
-  .xp-tooltip:popover-open { display: block; opacity: 1; }
-  @starting-style { .xp-tooltip:popover-open { opacity: 0; } }
+  .xp-tooltip:popover-open { display: block; }
 }
 .xp-tooltip .filename {
   font-weight: bold;
@@ -763,6 +784,43 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
      pale track. the garage/scroll demo styles its own element separately. */
   html { scrollbar-color: oklch(62% 0.14 255) oklch(91% 0.02 248); }
 
+  /* ── OS-window geometry, inlined so FIRST PAINT already matches the windowed
+     model nav.js produces — no two-stage "pop" when the deferred shell lands.
+     KEEP IN SYNC with the body/html/.window rules in nav.js (search "app-shell").
+     Degrades with JS off: .content scrolls natively and ::after stands in for
+     the taskbar, so the page stays usable. nav.js's !important versions are
+     byte-identical, so when it runs nothing moves. ── */
+  html { height: 100dvh; overflow: hidden; }
+  body {
+    min-height: 0; height: calc(100vh - 30px); height: calc(100dvh - 30px);
+    overflow: hidden; box-sizing: border-box;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 8px;
+  }
+  .window {
+    flex: 0 1 auto; min-height: 0; max-height: 100%; width: 100%;
+    display: flex; flex-direction: column;
+  }
+  .window > .title-bar { flex: 0 0 auto; }
+  /* reserve the custom-scrollbar gutter at FIRST PAINT, and make it AUTHORITATIVE.
+     nav.js also pads the scroller via .axp-sb-pad once it mounts the XP scrollbar,
+     but nav.js is service-worker-cached: during a version bump a STALE cached
+     nav.js (its .axp-sb-pad is !important) would override a non-important reserve
+     here and shrink the gutter — the panel-kisses-scrollbar bug. So this rule is
+     !important AND more specific (.window > .content = 0,2,0 beats .axp-sb-pad =
+     0,1,0), making the deployed HTML the single source of truth for the gutter,
+     regardless of which nav.js a visitor has cached. 28px → a ~9px gap to the
+     scrollbar. Also kills the paint→mount reflow (the grid lays out at its final
+     width immediately). top/left/bottom keep .content's 12/16/16. */
+  .window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 28px !important; }
+  /* pre-JS taskbar strip — the real #axp-taskbar (z 99999) covers it once nav.js
+     mounts; gradient matches it so there's no colour pop either. */
+  body::after {
+    content: ""; position: fixed; left: 0; right: 0; bottom: 0; height: 30px; z-index: 1;
+    background: linear-gradient(180deg, oklch(67% 0.15 256) 0%, oklch(58% 0.19 257) 4%,
+      oklch(51% 0.20 258) 9%, oklch(49% 0.20 258) 50%, oklch(46% 0.20 259) 92%, oklch(40% 0.18 260) 100%);
+  }
+
 </style>
 </head>
 <body>
@@ -770,7 +828,7 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
 <div class="window">
 
   <!-- fake XP title bar — period chrome. the "controls" are decorative. -->
-  <div class="title-bar" aria-hidden="true">
+  <div class="title-bar">
     <span class="title-text"><span class="icon"></span>aadhar.sh</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="https://www.youtube.com/watch?v=dQw4w9WgXcQ" title="close" aria-label="close"></a></span>
   </div>
@@ -825,9 +883,9 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
       If you&apos;d like to grab a coffee in NYC, write me at
       <!--email_off--><a href="mailto:coffee@aadhar.sh?subject=%E2%98%95%20coffee&amp;body=Hi%20Aadharsh%2C%0A%0A">coffee@aadhar.sh</a><!--/email_off-->
       or pick a slot at
-      <a href="https://cal.com/aadharsh/coffee" rel="external">cal.com/aadharsh/coffee</a>
+      <a href="/coffee">aadhar.sh/coffee</a>
       - it&apos;s a manual opt-in on my side and i&apos;ll try to get back to you.
-      <!-- (moving in-house to /coffee once secrets are set + worker deployed) -->
+      <!-- /coffee redirects to cal.com until the in-house worker is deployed. -->
     </p>
 
     <p>
@@ -928,7 +986,7 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
     </section>
 
     <!--
-      photo pool — worker pre-renders 9 random slots on every request
+      photo pool — worker pre-renders 12 random slots on every request
       (cache-control: no-store on /, so each visit re-rolls). previously
       had a client-side fallback IIFE here that fetched
       /images/manifest.json and filled slots if SSR didn't run; removed
@@ -937,12 +995,246 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
       holding/scripts/add-photos.sh.
     -->
 
+
+    <section class="now-playing" aria-label="music">
+      <h2><a href="/rn" title="open this playlist on Spotify">Music I&rsquo;m listening to right now <span class="np-open">&#x2197;&#xFE0E; the playlist</span></a></h2>
+      <ol class="np-list" id="np-list">
+        <li class="np-loading">Loading playlist&hellip;</li>
+      </ol>
+    </section>
+
+    <!--
+      now-playing list — worker pre-renders from KV-cached /rn/tracks on
+      every request (the only path under healthy conditions). minimal
+      fallback below catches the case where SSR didn't run for ANY
+      reason: stale cached HTML served before SSR was wired, a CF edge
+      hiccup, a worker exception, KV unavailability, etc. it checks if
+      the "Loading playlist…" placeholder is still present after page
+      load, and if so re-fetches /rn/tracks client-side and fills.
+      ~30 lines as defense-in-depth for what would otherwise be an
+      eternal "Loading…" state.
+    -->
+    <script>
+    (async () => {
+      const list = document.getElementById("np-list");
+      // SSR rendered tracks? loader gone → nothing to do.
+      if (!list || !list.querySelector(".np-loading")) return;
+      const esc = (s) => String(s ?? "")
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+      const fmt = (ms) => {
+        if (!ms) return "";
+        const t = Math.round(ms / 1000);
+        return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`;
+      };
+      // build the per-artist .np-artist-link spans, EXACTLY as the worker's
+      // SSR does (linkifyArtists in _worker.js). this is what makes the
+      // artist hover-tooltip + click-through work; bare text would break
+      // both. structured artists link to their Spotify page + carry the
+      // profile image for the tooltip; otherwise fall back to a search.
+      const linkifyArtists = (artists, fallbackText) => {
+        if (Array.isArray(artists) && artists.length) {
+          return artists.map(a => {
+            const href = a.spotify_url || `https://open.spotify.com/search/${encodeURIComponent(a.name)}/artists`;
+            const img = a.image_url ? ` data-artist-image="${esc(a.image_url)}"` : "";
+            return `<span class="np-artist-link" data-href="${esc(href)}" data-artist-name="${esc(a.name)}"${img} role="link" tabindex="0">${esc(a.name)}</span>`;
+          }).join(", ");
+        }
+        const raw = fallbackText || (typeof artists === "string" ? artists : "");
+        if (!raw) return "";
+        return String(raw).split(/,\s*/).filter(Boolean).map(name =>
+          `<span class="np-artist-link" data-href="https://open.spotify.com/search/${encodeURIComponent(name)}/artists" data-artist-name="${esc(name)}" role="link" tabindex="0">${esc(name)}</span>`
+        ).join(", ");
+      };
+      try {
+        const res = await fetch("/rn/tracks");
+        const data = await res.json();
+        if (!data.tracks?.length) {
+          list.innerHTML = '<li class="np-empty">No tracks yet. <a href="/rn">Open on Spotify</a>.</li>';
+          return;
+        }
+        // render rows at FULL fidelity, identical to the worker SSR path:
+        // the data-track-* attributes are what the hover-tooltip keys off
+        // (findTarget matches `.np-list li[data-track-title]`). the old
+        // minimal fallback omitted them, so music tooltips silently failed
+        // on any visit where SSR didn't populate (cold tracks:<pid> KV).
+        const renderRow = (t) => {
+          const artistsText = t.artists_text || (Array.isArray(t.artists) ? t.artists.map(a => a.name).join(", ") : "");
+          const dur = fmt(t.duration_ms);
+          const attrs =
+            ` data-track-title="${esc(t.title)}"` +
+            ` data-track-artists="${esc(artistsText)}"` +
+            (t.image_url   ? ` data-track-image="${esc(t.image_url)}"`   : "") +
+            (t.duration_ms ? ` data-track-duration="${dur}"`            : "") +
+            (t.is_explicit ? ` data-track-explicit="1"`                 : "");
+          return `<li${attrs}><a href="${esc(t.song_link_url)}" target="_blank" rel="noopener">${
+            dur ? `<span class="np-duration">${dur}</span>` : ""
+          }<span class="np-title">${esc(t.title)}</span><span class="np-sep">&mdash;</span><span class="np-artist">${linkifyArtists(t.artists, artistsText)}</span>${
+            t.is_explicit ? '<span class="np-explicit">E</span>' : ""
+          }</a></li>`;
+        };
+        // chunked insert: build + flush ~8 rows at a time, yielding to the main
+        // thread between batches so taps/scroll stay live while a long playlist
+        // renders on a slow phone. scheduler.yield() resumes at the FRONT of the
+        // task queue (no setTimeout back-of-queue penalty); guarded so engines
+        // without it take a setTimeout(0) shim — same shape, ships everywhere.
+        const yieldNow = (window.scheduler && typeof scheduler.yield === "function")
+          ? () => scheduler.yield()
+          : () => new Promise(r => setTimeout(r, 0));
+        list.innerHTML = "";
+        let batch = "";
+        for (let i = 0; i < data.tracks.length; i++) {
+          batch += renderRow(data.tracks[i]);
+          if ((i + 1) % 8 === 0) { list.insertAdjacentHTML("beforeend", batch); batch = ""; await yieldNow(); }
+        }
+        if (batch) list.insertAdjacentHTML("beforeend", batch);
+      } catch {
+        list.innerHTML = '<li class="np-empty">Couldn&rsquo;t load tracks. <a href="/rn">Open on Spotify</a>.</li>';
+      }
+    })();
+    </script>
+
+    <!--
+      delegated click + keyboard handler for .np-artist-link spans. these
+      live inside the row's outer <a href="song.link">, so we need to
+      stopPropagation to avoid the row navigating away when the user
+      clicks an artist. opens the artist search in a new tab. also wires
+      Enter/Space for keyboard activation (role="link" + tabindex="0"
+      makes them focusable but doesn't synthesize click on Enter).
+    -->
+    <script>
+    (() => {
+      const list = document.getElementById("np-list");
+      if (!list) return;
+      const open = (el) => {
+        const href = el.getAttribute("data-href");
+        if (!href) return;
+        window.open(href, "_blank", "noopener");
+      };
+      list.addEventListener("click", (e) => {
+        const a = e.target?.closest?.(".np-artist-link");
+        if (!a) return;
+        e.preventDefault();
+        e.stopPropagation();
+        open(a);
+      });
+      list.addEventListener("keydown", (e) => {
+        if (e.key !== "Enter" && e.key !== " ") return;
+        const a = e.target?.closest?.(".np-artist-link");
+        if (!a) return;
+        e.preventDefault();
+        open(a);
+      });
+    })();
+    </script>
+
+    <footer>
+      <!-- trimmed: the profiles + page nav now live in the taskbar (pinned apps) and
+           Run (⌘K). kept in <noscript> so a no-JS visitor — who gets no taskbar — still
+           has every link. -->
+      <p>
+        Last modified <time datetime="2026-06-07">June 7, 2026</time>
+        &middot; You are visitor <span class="counter">000042</span>
+      </p>
+      <p class="signature">
+        <small>&copy; 2026 Aadharsh Pannirselvam &middot; Best viewed in any browser made since 2001.</small>
+      </p>
+      <noscript>
+        <p class="links">
+          <a href="https://twitter.com/oddhash" rel="external me">Twitter</a> &middot;
+          <a href="https://instagram.com/aadharsh.hif" rel="external me">Instagram</a> &middot;
+          <a href="https://curius.app/aadharsh-pannirselvam" rel="external me">Curius</a> &middot;
+          <a href="https://beliapp.com/users/aadharsh" rel="external me">Beli</a> &middot;
+          <a href="https://open.spotify.com/user/aadharsh2010" rel="external me" title="my Spotify profile">Spotify</a> &middot;
+          <a href="/whoareyou">whoareyou</a> &middot;
+          <a href="/around">around</a> &middot;
+          <a href="/garage/">garage</a> &middot;
+          <a href="/serendipity">serendipity</a> &middot;
+          <a href="/writing">writing</a>
+        </p>
+      </noscript>
+    </footer>
+
+  </div>
+</div>
+
+<!--
+  custom right-click context menu lived here. dropped in the lightness
+  pass — it was ~5KB of JS that recreated browser-native behavior
+  (open in new tab, copy image, save as, view source) for a feature
+  most visitors never trigger. browser native menu is enough.
+-->
+<!-- (hover-prefetch IIFE was here — ~1.5 KB of speculative `preconnect`
+  injection on every link hover. cut in the lightness pass: the
+  saved 30-150ms on actual clicks wasn't paying for the bytes on
+  every page load.) -->
+
+<!--
+  service worker — cache-first for /images/* (12 random tiles per visit + the
+  full-res counterparts), stale-while-revalidate for the small discovery
+  files. won't touch HTML or worker endpoints; those always go through
+  to the worker so they stay fresh.
+-->
+<script>
+if ("serviceWorker" in navigator) {
+  // register on idle so it doesn't compete with first paint
+  const reg = () => navigator.serviceWorker.register("/sw.js").catch(() => {});
+  "requestIdleCallback" in window ? requestIdleCallback(reg, { timeout: 2000 }) : setTimeout(reg, 1000);
+}
+</script>
+
+<!--
+  Speculation Rules: McMaster-Carr-style — prerender EVERY internal page,
+  eagerly, so navigations activate an already-built page with no network and
+  no loading bar. a document rule matches all same-origin links on the page,
+  minus three that genuinely can't be prerendered:
+    /          — no-store; re-randomizes photos + ticks the counter per visit
+    /around    — a live crawl; prerendering would fire crawls on page load
+    /whoareyou — per-request fingerprint must reflect the real click, not a
+                 speculative prerender request
+  cross-origin links (Twitter, Spotify, ENS, …) are skipped automatically.
+  Chromium-only; other engines ignore the block. "moderate" prerenders on
+  hover / pointerdown (not on load), so visitors who never click /garage or
+  /serendipity don't pay the prerender transfer + worker invocations; the
+  on-intent cost is tiny (pages are small + static) and adds no click latency.
+  allowed under the existing 'unsafe-inline' script-src in the CSP.
+-->
+<script type="speculationrules">
+{
+  "prerender": [
+    {
+      "where": {
+        "and": [
+          { "href_matches": "/*" },
+          { "not": { "href_matches": "/" } },
+          { "not": { "href_matches": "/around*" } },
+          { "not": { "href_matches": "/whoareyou*" } },
+          { "not": { "href_matches": "/rn*" } },
+          { "not": { "href_matches": "/coffee*" } },
+          { "not": { "href_matches": "/images*" } },
+          { "not": { "href_matches": "/index.md" } },
+          { "not": { "href_matches": "/llms.txt" } }
+        ]
+      },
+      "eagerness": "moderate"
+    }
+  ]
+}
+</script>
+
+    <!--
+      NB: this script block lives at the END of the body (it used to sit
+      mid-page, before the now-playing section) — it is ~27KB of inline JS
+      and the HTML parser blocks on it, so everything below it painted
+      late. all its handlers are document-delegated and it only needs
+      #xp-tooltip to exist, so the bottom is the correct home.
+    -->
     <!--
       XP-style cursor-following hover tooltip. shows filename, file size,
       thumbnail dimensions, and EXIF (camera/exposure/date/film recipe)
       for photos; album art for track rows; profile photo for artist
-      links. EXIF is lazy-fetched from /images/metadata.json on first photo
-      hover (SW-cached) rather than inlined per-slot — keeps the no-store
+      links. EXIF is lazy-fetched per photo from /images/meta/&lt;stem&gt;.json
+      on first hover rather than inlined per-slot — keeps the no-store
       homepage lean for the majority who never hover; the histogram is computed
       client-side from the thumbnail, not stored. cursor-
       follow positioning is the single bit of JS we couldn't replace with
@@ -998,21 +1290,39 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
         return `${(b/1024**3).toFixed(2)} GB`;
       };
       const fmtDate = (raw) => {
-        // accept both ISO ("YYYY-MM-DDTHH:MM:SSZ" from R2 upload
-        // timestamps) and Fuji EXIF format ("YYYY:MM:DD HH:MM:SS" from
-        // exiftool). normalize to ISO before parsing. output is the
-        // site convention: MM-DD-YYYY, HH:MM in 24-hour local time.
+        // accept both ISO ("YYYY-MM-DDTHH:MM:SSZ" from R2 upload timestamps) and
+        // Fuji EXIF format ("YYYY:MM:DD HH:MM:SS" from exiftool). output is the
+        // site convention: MM-DD-YYYY, HH:MM.
+        // EXIF capture time is a WALL CLOCK with no zone — `new Date()` would
+        // reinterpret it in the viewer's timezone and shift it. So we use
+        // Temporal.PlainDateTime (shows it exactly as recorded, everywhere), and
+        // even the no-Temporal fallback parses the parts directly rather than via
+        // Date. Upload timestamps ARE instants → shown in the viewer's local zone.
         if (!raw) return "";
-        let s = String(raw).trim()
+        const s = String(raw).trim()
           .replace(/^(\d{4}):(\d{2}):(\d{2})/, "$1-$2-$3")
           .replace(" ", "T");
-        const d = new Date(s);
-        if (isNaN(d)) return "";
-        const mm  = String(d.getMonth() + 1).padStart(2, "0");
-        const dd  = String(d.getDate()).padStart(2, "0");
-        const hh  = String(d.getHours()).padStart(2, "0");
-        const min = String(d.getMinutes()).padStart(2, "0");
-        return `${mm}-${dd}-${d.getFullYear()}, ${hh}:${min}`;
+        const p2 = (n) => String(n).padStart(2, "0");
+        const isInstant = /[zZ]|[+-]\d{2}:?\d{2}$/.test(s);
+        if (isInstant) {
+          try {
+            if (typeof Temporal !== "undefined") {
+              const z = Temporal.Instant.from(s).toZonedDateTimeISO(Temporal.Now.timeZoneId());
+              return `${p2(z.month)}-${p2(z.day)}-${z.year}, ${p2(z.hour)}:${p2(z.minute)}`;
+            }
+          } catch (e) {}
+          const d = new Date(s);
+          if (isNaN(d)) return "";
+          return `${p2(d.getMonth() + 1)}-${p2(d.getDate())}-${d.getFullYear()}, ${p2(d.getHours())}:${p2(d.getMinutes())}`;
+        }
+        try {
+          if (typeof Temporal !== "undefined") {
+            const t = Temporal.PlainDateTime.from(s);
+            return `${p2(t.month)}-${p2(t.day)}-${t.year}, ${p2(t.hour)}:${p2(t.minute)}`;
+          }
+        } catch (e) {}
+        const m = s.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+        return m ? `${m[2]}-${m[3]}-${m[1]}, ${m[4]}:${m[5]}` : "";
       };
       const esc = (s) => String(s ?? "")
         .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
@@ -1225,7 +1535,7 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
               (metaStrip ? `<div class="meta-strip">${esc(metaStrip)}</div>` : "") +
               (recipe ? `<dl class="recipe-rows">${recipe}</dl>` : "") +
             `</div>` +
-            `<div class="footer"><span>${esc(dateStr)}</span><span>EXIF</span></div>` +
+            `<div class="footer"><span>${esc(dateStr)}</span></div>` +
           `</div>`;
       }
 
@@ -1333,9 +1643,15 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
       // hover target here (photos, tracks, artists, car links) — one tooltip engine.
       const TIP_DISMISS_MS = 50;
       let hideTimer = 0;
+      // while the content is actively scrolling (and a hair after it settles) we
+      // suppress tooltips entirely — scrolling shouldn't trip a popover just
+      // because the cursor happens to pass over a photo or track. tooltips return
+      // on the next intentional hover-move.
+      let scrolling = false, scrollIdle = 0;
       const cancelHide   = () => { clearTimeout(hideTimer); hideTimer = 0; };
       const scheduleHide = () => { clearTimeout(hideTimer); hideTimer = setTimeout(hideTip, TIP_DISMISS_MS); };
       const showTipFor = (target, e) => {
+        if (scrolling) return;               // don't pop a tooltip mid-scroll
         cancelHide();                        // a fresh show cancels any pending gap-dismissal
         dropAnchor();                        // pointer entry always uses cursor-follow
         activeSlot = target;
@@ -1373,28 +1689,33 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
         scheduleHide();                      // left to a gap — defer the hide briefly (TIP_DISMISS_MS)
       }, { passive: true });
 
-      // scroll re-evaluation. the tooltip is position:fixed and the cursor
-      // stays at the same viewport coords during scroll, but the CONTENT
-      // under the cursor changes. browsers don't reliably fire pointer
-      // enter/leave when an element shifts under a stationary cursor due to
-      // scroll (Safari especially), so without this the tooltip would keep
-      // showing data for a row that's no longer under the pointer. on each
-      // scroll tick we look up what's actually under the cursor (at the
-      // last known lastX/lastY) and re-target. coalesced to one rAF tick.
-      // position doesn't change here — the cursor didn't move, so --x/--y
-      // are already correct; we only swap content.
-      let scrollFrame = 0;
-      const reevaluateAfterScroll = () => {
-        scrollFrame = 0;
-        if (!isOpen()) return;
-        const under = document.elementFromPoint(lastX, lastY);
-        const newTarget = findTarget(under);
-        if (!newTarget) { scheduleHide(); return; }   // debounced, same as pointer-leave
-        if (newTarget !== activeSlot) showTipFor(newTarget);
+      // scroll handling. any scroll (the window's internal content scroller
+      // bubbles to here in the capture phase) hides the tooltip and suppresses
+      // new ones WHILE scrolling — so you can wheel over the photo grid /
+      // tracklist freely without tooltip noise as rows fly past.
+      //
+      // the moment scrolling settles we re-show instantly. two reasons the old
+      // 120ms timer felt laggy on desktop: (1) the window itself, and (2) the
+      // tooltip is position:fixed — a wheel/trackpad scroll leaves the cursor
+      // dead still, so NO pointerover fires when a new photo slides under it,
+      // and the tooltip only came back if you jiggled the mouse. so on settle
+      // we actively re-target: elementFromPoint(lastX,lastY) → findTarget →
+      // show. position needs no update (cursor didn't move; --x/--y are already
+      // correct from the last place()), so we pass no event and only swap
+      // content. SCROLL_SETTLE_MS is just long enough to ride out trackpad
+      // momentum (events keep firing ~every frame until it fully stops) without
+      // flashing the tooltip back mid-decel — short enough to read as instant.
+      const SCROLL_SETTLE_MS = 60;
+      const reshowUnderCursor = () => {
+        if (!lastX && !lastY) return;            // pointer never moved → nothing to re-target
+        const target = findTarget(document.elementFromPoint(lastX, lastY));
+        if (target) showTipFor(target);          // no event: reuse the existing --x/--y
       };
       document.addEventListener("scroll", () => {
-        if (!isOpen()) return;
-        if (!scrollFrame) scrollFrame = requestAnimationFrame(reevaluateAfterScroll);
+        scrolling = true;
+        if (isOpen()) hideTip();
+        clearTimeout(scrollIdle);
+        scrollIdle = setTimeout(() => { scrolling = false; reshowUnderCursor(); }, SCROLL_SETTLE_MS);
       }, { capture: true, passive: true });
 
       // ── keyboard-focus fallback ────────────────────────────────────────
@@ -1430,231 +1751,41 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
     })();
     </script>
 
-    <section class="now-playing" aria-label="music">
-      <h2><a href="/rn" title="opens the playlist on spotify">Music I&rsquo;m listening to right now</a></h2>
-      <ol class="np-list" id="np-list">
-        <li class="np-loading">Loading playlist&hellip;</li>
-      </ol>
-    </section>
-
-    <!--
-      now-playing list — worker pre-renders from KV-cached /rn/tracks on
-      every request (the only path under healthy conditions). minimal
-      fallback below catches the case where SSR didn't run for ANY
-      reason: stale cached HTML served before SSR was wired, a CF edge
-      hiccup, a worker exception, KV unavailability, etc. it checks if
-      the "Loading playlist…" placeholder is still present after page
-      load, and if so re-fetches /rn/tracks client-side and fills.
-      ~30 lines as defense-in-depth for what would otherwise be an
-      eternal "Loading…" state.
-    -->
-    <script>
-    (async () => {
-      const list = document.getElementById("np-list");
-      // SSR rendered tracks? loader gone → nothing to do.
-      if (!list || !list.querySelector(".np-loading")) return;
-      const esc = (s) => String(s ?? "")
-        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-      const fmt = (ms) => {
-        if (!ms) return "";
-        const t = Math.round(ms / 1000);
-        return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`;
-      };
-      // build the per-artist .np-artist-link spans, EXACTLY as the worker's
-      // SSR does (linkifyArtists in _worker.js). this is what makes the
-      // artist hover-tooltip + click-through work; bare text would break
-      // both. structured artists link to their Spotify page + carry the
-      // profile image for the tooltip; otherwise fall back to a search.
-      const linkifyArtists = (artists, fallbackText) => {
-        if (Array.isArray(artists) && artists.length) {
-          return artists.map(a => {
-            const href = a.spotify_url || `https://open.spotify.com/search/${encodeURIComponent(a.name)}/artists`;
-            const img = a.image_url ? ` data-artist-image="${esc(a.image_url)}"` : "";
-            return `<span class="np-artist-link" data-href="${esc(href)}" data-artist-name="${esc(a.name)}"${img} role="link" tabindex="0">${esc(a.name)}</span>`;
-          }).join(", ");
-        }
-        const raw = fallbackText || (typeof artists === "string" ? artists : "");
-        if (!raw) return "";
-        return String(raw).split(/,\s*/).filter(Boolean).map(name =>
-          `<span class="np-artist-link" data-href="https://open.spotify.com/search/${encodeURIComponent(name)}/artists" data-artist-name="${esc(name)}" role="link" tabindex="0">${esc(name)}</span>`
-        ).join(", ");
-      };
-      try {
-        const res = await fetch("/rn/tracks");
-        const data = await res.json();
-        if (!data.tracks?.length) {
-          list.innerHTML = '<li class="np-empty">No tracks yet. <a href="/rn">Open on Spotify</a>.</li>';
-          return;
-        }
-        // render rows at FULL fidelity, identical to the worker SSR path:
-        // the data-track-* attributes are what the hover-tooltip keys off
-        // (findTarget matches `.np-list li[data-track-title]`). the old
-        // minimal fallback omitted them, so music tooltips silently failed
-        // on any visit where SSR didn't populate (cold tracks:<pid> KV).
-        const renderRow = (t) => {
-          const artistsText = t.artists_text || (Array.isArray(t.artists) ? t.artists.map(a => a.name).join(", ") : "");
-          const dur = fmt(t.duration_ms);
-          const attrs =
-            ` data-track-title="${esc(t.title)}"` +
-            ` data-track-artists="${esc(artistsText)}"` +
-            (t.image_url   ? ` data-track-image="${esc(t.image_url)}"`   : "") +
-            (t.duration_ms ? ` data-track-duration="${dur}"`            : "") +
-            (t.is_explicit ? ` data-track-explicit="1"`                 : "");
-          return `<li${attrs}><a href="${esc(t.song_link_url)}" target="_blank" rel="noopener">${
-            dur ? `<span class="np-duration">${dur}</span>` : ""
-          }<span class="np-title">${esc(t.title)}</span><span class="np-sep">&mdash;</span><span class="np-artist">${linkifyArtists(t.artists, artistsText)}</span>${
-            t.is_explicit ? '<span class="np-explicit">E</span>' : ""
-          }</a></li>`;
-        };
-        // chunked insert: build + flush ~8 rows at a time, yielding to the main
-        // thread between batches so taps/scroll stay live while a long playlist
-        // renders on a slow phone. scheduler.yield() resumes at the FRONT of the
-        // task queue (no setTimeout back-of-queue penalty); guarded so engines
-        // without it take a setTimeout(0) shim — same shape, ships everywhere.
-        const yieldNow = (window.scheduler && typeof scheduler.yield === "function")
-          ? () => scheduler.yield()
-          : () => new Promise(r => setTimeout(r, 0));
-        list.innerHTML = "";
-        let batch = "";
-        for (let i = 0; i < data.tracks.length; i++) {
-          batch += renderRow(data.tracks[i]);
-          if ((i + 1) % 8 === 0) { list.insertAdjacentHTML("beforeend", batch); batch = ""; await yieldNow(); }
-        }
-        if (batch) list.insertAdjacentHTML("beforeend", batch);
-      } catch {
-        list.innerHTML = '<li class="np-empty">Couldn&rsquo;t load tracks. <a href="/rn">Open on Spotify</a>.</li>';
-      }
-    })();
-    </script>
-
-    <!--
-      delegated click + keyboard handler for .np-artist-link spans. these
-      live inside the row's outer <a href="song.link">, so we need to
-      stopPropagation to avoid the row navigating away when the user
-      clicks an artist. opens the artist search in a new tab. also wires
-      Enter/Space for keyboard activation (role="link" + tabindex="0"
-      makes them focusable but doesn't synthesize click on Enter).
-    -->
-    <script>
-    (() => {
-      const list = document.getElementById("np-list");
-      if (!list) return;
-      const open = (el) => {
-        const href = el.getAttribute("data-href");
-        if (!href) return;
-        window.open(href, "_blank", "noopener");
-      };
-      list.addEventListener("click", (e) => {
-        const a = e.target?.closest?.(".np-artist-link");
-        if (!a) return;
-        e.preventDefault();
-        e.stopPropagation();
-        open(a);
-      });
-      list.addEventListener("keydown", (e) => {
-        if (e.key !== "Enter" && e.key !== " ") return;
-        const a = e.target?.closest?.(".np-artist-link");
-        if (!a) return;
-        e.preventDefault();
-        open(a);
-      });
-    })();
-    </script>
-
-    <footer>
-      <!-- trimmed: the profiles + page nav now live in the taskbar (pinned apps) and
-           Run (⌘K). kept in <noscript> so a no-JS visitor — who gets no taskbar — still
-           has every link. -->
-      <p>
-        Last modified <time datetime="2026-05-18">May 18, 2026</time>
-        &middot; You are visitor <span class="counter">000042</span>
-      </p>
-      <p class="signature">
-        <small>&copy; 2026 Aadharsh Pannirselvam &middot; Best viewed in any browser made since 2001.</small>
-      </p>
-      <noscript>
-        <p class="links">
-          <a href="https://twitter.com/oddhash" rel="external me">Twitter</a> &middot;
-          <a href="https://instagram.com/aadharsh.hif" rel="external me">Instagram</a> &middot;
-          <a href="https://curius.app/aadharsh-pannirselvam" rel="external me">Curius</a> &middot;
-          <a href="https://beliapp.com/users/aadharsh" rel="external me">Beli</a> &middot;
-          <a href="https://open.spotify.com/user/aadharsh2010" rel="external me">Spotify</a> &middot;
-          <a href="/whoareyou">whoareyou</a> &middot;
-          <a href="/around">around</a> &middot;
-          <a href="/garage/">garage</a> &middot;
-          <a href="/serendipity">serendipity</a> &middot;
-          <a href="/writing">writing</a>
-        </p>
-      </noscript>
-    </footer>
-
-  </div>
-</div>
-
-<!--
-  custom right-click context menu lived here. dropped in the lightness
-  pass — it was ~5KB of JS that recreated browser-native behavior
-  (open in new tab, copy image, save as, view source) for a feature
-  most visitors never trigger. browser native menu is enough.
--->
-<!-- (hover-prefetch IIFE was here — ~1.5 KB of speculative `preconnect`
-  injection on every link hover. cut in the lightness pass: the
-  saved 30-150ms on actual clicks wasn't paying for the bytes on
-  every page load.) -->
-
-<!--
-  service worker — cache-first for /images/* (8 random tiles per visit + the
-  full-res counterparts), stale-while-revalidate for the small discovery
-  files. won't touch HTML or worker endpoints; those always go through
-  to the worker so they stay fresh.
--->
-<script>
-if ("serviceWorker" in navigator) {
-  // register on idle so it doesn't compete with first paint
-  const reg = () => navigator.serviceWorker.register("/sw.js").catch(() => {});
-  "requestIdleCallback" in window ? requestIdleCallback(reg, { timeout: 2000 }) : setTimeout(reg, 1000);
-}
-</script>
-
-<!--
-  Speculation Rules: McMaster-Carr-style — prerender EVERY internal page,
-  eagerly, so navigations activate an already-built page with no network and
-  no loading bar. a document rule matches all same-origin links on the page,
-  minus three that genuinely can't be prerendered:
-    /          — no-store; re-randomizes photos + ticks the counter per visit
-    /around    — a live crawl; prerendering would fire crawls on page load
-    /whoareyou — per-request fingerprint must reflect the real click, not a
-                 speculative prerender request
-  cross-origin links (Twitter, Spotify, ENS, …) are skipped automatically.
-  Chromium-only; other engines ignore the block. "moderate" prerenders on
-  hover / pointerdown (not on load), so visitors who never click /garage or
-  /serendipity don't pay the prerender transfer + worker invocations; the
-  on-intent cost is tiny (pages are small + static) and adds no click latency.
-  allowed under the existing 'unsafe-inline' script-src in the CSP.
--->
-<script type="speculationrules">
-{
-  "prerender": [
-    {
-      "where": {
-        "and": [
-          { "href_matches": "/*" },
-          { "not": { "href_matches": "/" } },
-          { "not": { "href_matches": "/around*" } },
-          { "not": { "href_matches": "/whoareyou*" } },
-          { "not": { "href_matches": "/rn*" } },
-          { "not": { "href_matches": "/index.md" } },
-          { "not": { "href_matches": "/llms.txt" } }
-        ]
-      },
-      "eagerness": "moderate"
-    }
-  ]
-}
-</script>
-
 <!-- love, aadharsh -->
   <script src="/nav.js" defer></script>
+  <!-- WebMCP: when a browser/agent supports navigator.modelContext, register
+       a couple of read-only tools that wrap the site's own JSON surfaces. pure
+       E85: feature-detected, so it's a no-op everywhere it isn't supported. the
+       tools just proxy same-origin endpoints (CSP connect-src 'self'). -->
+  <script>
+  (function () {
+    var mc = navigator.modelContext;
+    if (!mc || typeof mc.registerTool !== "function") return;
+    var ok = function (text) { return { content: [{ type: "text", text: text }] }; };
+    try {
+      mc.registerTool({
+        name: "whats_playing",
+        description: "What Aadharsh is listening to right now — the live playlist on aadhar.sh.",
+        inputSchema: { type: "object", properties: {} },
+        execute: async function () {
+          var r = await fetch("/rn/tracks", { headers: { accept: "application/json" } });
+          return ok(await r.text());
+        }
+      });
+      mc.registerTool({
+        name: "find_events",
+        description: "Search the Serendipity event pool (community events worth going to, and who's going) by keyword.",
+        inputSchema: { type: "object", properties: { q: { type: "string", description: "optional keyword filter on event name, place, or contributor" } } },
+        execute: async function (args) {
+          var body = { jsonrpc: "2.0", id: 1, method: "tools/call",
+            params: { name: "list_events", arguments: { q: (args && args.q) || undefined, limit: 20 } } };
+          var r = await fetch("/serendipity/mcp", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+          var j = await r.json();
+          return ok((j && j.result && j.result.content && j.result.content[0] && j.result.content[0].text) || "no events found");
+        }
+      });
+    } catch (e) {}
+  })();
+  </script>
 </body>
 </html>

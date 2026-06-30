@@ -3,13 +3,22 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>pretext — DOM-free text measurement — aadhar.sh garage</title>
-<meta name="description" content="chenglou/pretext measures and lays out multiline text with canvas as ground truth instead of the DOM — sidestepping reflow. A live demo, where it'd help aadhar.sh, and the tradeoffs.">
+<title>aadhar.sh/garage/pretext: DOM-free text measurement</title>
+<meta name="description" content="chenglou/pretext measures and lays out multiline text with canvas as ground truth instead of the DOM, sidestepping reflow. A live demo, where it'd help aadhar.sh, and the tradeoffs.">
 <link rel="canonical" href="https://aadhar.sh/garage/pretext">
+<meta property="og:type" content="website">
+<meta property="og:title" content="aadhar.sh/garage/pretext: DOM-free text measurement">
+<meta property="og:description" content="chenglou/pretext measures and lays out multiline text with canvas as ground truth instead of the DOM, sidestepping reflow. A live demo, where it'd help aadhar.sh, and the tradeoffs.">
+<meta property="og:url" content="https://aadhar.sh/garage/pretext">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='9' y='6' width='17' height='2.6' rx='1' fill='%230855dd'/><rect x='9' y='11.5' width='17' height='2.6' rx='1' fill='%23166aee'/><rect x='9' y='17' width='17' height='2.6' rx='1' fill='%23166aee'/><rect x='9' y='22.5' width='10' height='2.6' rx='1' fill='%23166aee'/><path d='M5 6.3 L5 24.8' stroke='%23ff9500' stroke-width='1.6' stroke-linecap='round'/><path d='M3.2 6.3 L6.8 6.3 M3.2 24.8 L6.8 24.8' stroke='%23ff9500' stroke-width='1.6' stroke-linecap='round'/></svg>">
 <style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}
 * { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; }
+/* cross-document View Transitions: a fast, reduced-motion-safe crossfade on real
+   navigations between same-origin pages. inline (not JS-injected) so the incoming
+   page has opted in by parse time. the persistent shell (wallpaper/taskbar) is
+   identical across pages, so visually only the changing window content fades. */
+@media (prefers-reduced-motion:no-preference){@view-transition{navigation:auto}::view-transition-old(root),::view-transition-new(root){animation-duration:140ms}}
+html, body { margin: 0; padding: 0; } html{background:linear-gradient(180deg,oklch(56% 0.13 250) 0%,oklch(73% 0.10 236) 50%,oklch(88% 0.05 232) 60%,oklch(60% 0.16 140) 100%)}
 html { scrollbar-color: oklch(62% 0.14 255) oklch(91% 0.02 248); }
 body {
   background: linear-gradient(180deg, oklch(56% 0.13 250) 0%, oklch(73% 0.10 236) 50%, oklch(88% 0.05 232) 60%, oklch(60% 0.16 140) 100%);
@@ -60,7 +69,7 @@ body {
   text-decoration: none; cursor: pointer;
   background-color: #3e73f5;
   background-image: linear-gradient(180deg, #5f8cf7 0%, #3a71f5 22%, #3e73f5 55%, #2a70f2 82%, #1045be 100%);
-  transition: filter .1s ease;
+  transition: filter 60ms ease-out;
 }
 /* "wet plastic" gloss band over the top ~45% (close uses ::after for its X stroke) */
 .title-bar .controls .min::after,
@@ -151,17 +160,33 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
 /* i18n demo line rows */
 .i18n-out .ln { white-space: nowrap; overflow: hidden; font-size: 15px; line-height: 22px; }
 .i18n-out.naive .ln.over { background: oklch(93% 0.07 30); color: oklch(46% 0.19 29); border-radius: 2px; }
+
+  /* OS-window geometry inlined so FIRST PAINT matches nav.js (no shell "pop"
+     when the deferred desktop arrives). keep in sync with nav.js (search
+     "app-shell"); degrades with JS off (.content scrolls natively). */
+  html { height: 100dvh; overflow: hidden; }
+  body { min-height: 0; height: calc(100vh - 30px); height: calc(100dvh - 30px);
+    overflow: hidden; box-sizing: border-box; display: flex; flex-direction: column;
+    align-items: center; padding: 8px; }
+  .window { flex: 0 1 auto; min-height: 0; max-height: 100%; width: 100%;
+    display: flex; flex-direction: column; }
+  .window > .title-bar { flex: 0 0 auto; }
+  .window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 28px !important; }
+  body::after { content: ""; position: fixed; left: 0; right: 0; bottom: 0; height: 30px;
+    z-index: 1; background: linear-gradient(180deg, oklch(67% 0.15 256) 0%, oklch(58% 0.19 257) 4%,
+    oklch(51% 0.20 258) 9%, oklch(49% 0.20 258) 50%, oklch(46% 0.20 259) 92%, oklch(40% 0.18 260) 100%); }
+
 </style>
 </head>
 <body>
 <div class="window">
-  <div class="title-bar" aria-hidden="true"><span class="title-text"><span class="icon"></span>pretext — text measurement</span><span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/garage/" title="back to the garage" aria-label="back to the garage"></a></span></div>
+  <div class="title-bar" aria-hidden="true"><span class="title-text"><span class="icon"></span>aadhar.sh/garage/pretext: DOM-free text measurement</span><span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/garage/" title="back to the garage" aria-label="back to the garage"></a></span></div>
   <div class="content">
-    <h1>pretext — text measurement off the DOM <span class="status idle">watching</span></h1>
+    <h1>pretext: text measurement off the DOM <span class="status idle">watching</span></h1>
     <p class="lede">
       <a href="https://github.com/chenglou/pretext" rel="external">chenglou/pretext</a>
       measures &amp; lays out multiline text using the <strong>canvas</strong> as
-      ground truth instead of the DOM &mdash; so you never trigger a reflow to
+      ground truth instead of the DOM, so you never trigger a reflow to
       ask &quot;how tall is this paragraph at 320px?&quot;
     </p>
 
@@ -169,31 +194,31 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
 
     <h2>1 · Why the DOM is the slow path</h2>
     <p class="note">
-      The browser-native way to measure text is to put it in an element and read
+      To measure text the browser-native way, you put it in an element and read
       <code>offsetHeight</code> / <code>getBoundingClientRect()</code>. But those
-      reads <em>force a synchronous reflow</em> &mdash; the browser must lay out
+      reads <em>force a synchronous reflow</em>: the browser must lay out
       the page right then to answer. Do it once and it&apos;s fine; do it in a
       loop (virtualized lists, measuring hundreds of items, re-measuring on every
-      resize frame) and reflow is one of the most expensive things on the main
+      resize frame) and a reflow becomes one of the costliest things on the main
       thread. pretext splits the work in two:
     </p>
     <ul>
-      <li><strong><code>prepare(text, font)</code></strong> &mdash; the one-time
-        cost: normalize whitespace, segment (graphemes, not just chars &mdash; it
+      <li><strong><code>prepare(text, font)</code></strong>: the one-time
+        cost: normalize whitespace, segment (graphemes, not just chars, since it
         handles CJK, Arabic, emoji, ZWJ), then measure each segment with canvas
         <code>measureText</code>. Cache it. Never re-run for the same text+font.</li>
-      <li><strong><code>layout(prepared, width, lineHeight)</code></strong> &mdash;
+      <li><strong><code>layout(prepared, width, lineHeight)</code></strong>:
         the cheap part: <em>pure arithmetic</em> over the cached widths. Re-run
-        it free on every resize tick &mdash; no DOM, no reflow.</li>
+        it free on every resize tick. No DOM, no reflow.</li>
     </ul>
 
     <h2>2 · The technique, live</h2>
     <p class="note">
       This runs <strong>the real <a href="https://github.com/chenglou/pretext" rel="external">pretext</a></strong>
-      (v0.0.7, vendored locally &mdash; see the closing note on keeping its bytes
+      (v0.0.7, vendored locally; see the closing note on keeping its bytes
       off every other page). Left: the browser laying the text out and reporting
       <code>offsetHeight</code> (a reflow). Right: pretext&apos;s <code>layout()</code>
-      over a one-time <code>prepare()</code> &mdash; same line count, zero DOM. Drag
+      over a one-time <code>prepare()</code>, same line count, zero DOM. Drag
       the width:
     </p>
 
@@ -205,24 +230,24 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
       <div class="ruler"></div>
       <div class="grid2">
         <div class="col">
-          <h3><span>DOM &mdash; offsetHeight (reflow)</span><span class="n" id="dom-n">–</span></h3>
+          <h3><span>DOM: offsetHeight (reflow)</span><span class="n" id="dom-n">–</span></h3>
           <div class="flow" id="dom-flow"></div>
         </div>
         <div class="col">
-          <h3><span>pretext &mdash; layout()</span><span class="n" id="cv-n">–</span></h3>
+          <h3><span>pretext: layout()</span><span class="n" id="cv-n">–</span></h3>
           <div class="flow" id="cv-lines"></div>
         </div>
       </div>
     </div>
     <p class="note" style="margin-top:8px" id="agree"></p>
 
-    <h2>3 · Dynamic wrapping &mdash; flow around a float</h2>
+    <h2>3 · Dynamic wrapping: flow around a float</h2>
     <p class="note">
       The thing a width-only measure can&apos;t do: text whose available width
       <em>changes per line</em>. pretext&apos;s <code>layoutNextLine(prepared,
       cursor, width)</code> lays out one line at a time, so you feed it a narrow
       width while the line sits beside the floated box and the full width once the
-      text clears it &mdash; real shaped wrapping, drawn to a canvas, no DOM. Drag
+      text clears it: real shaped wrapping, drawn to a canvas, no DOM. Drag
       the box bigger and watch the text reflow around it:
     </p>
     <div class="dm-controls">
@@ -234,10 +259,10 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
       <canvas id="float-canvas"></canvas>
     </div>
 
-    <h2>4 · International text &mdash; why a toy isn&apos;t enough</h2>
+    <h2>4 · International text: why a toy isn&apos;t enough</h2>
     <p class="note">
       Here&apos;s the gap a 30-line re-creation falls into. A naïve
-      <code>split(/\s+/)</code> assumes spaces separate words &mdash; so CJK (which
+      <code>split(/\s+/)</code> assumes spaces separate words, so CJK (which
       has none) becomes one giant token that overflows, and scripts it can&apos;t
       segment get mangled. pretext segments by grapheme via
       <code>Intl.Segmenter</code> and breaks the same string correctly:
@@ -250,37 +275,37 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
     <h2>5 · The payoff: re-layout cost</h2>
     <p class="note">
       Same paragraph, re-laid-out at many widths (the resize / virtualization
-      pattern). The DOM path forces a reflow each time; the canvas path is
-      arithmetic over the prepared widths (prepared <em>once</em>, outside the
+      pattern). The DOM path forces a reflow each time; the canvas path just
+      crunches arithmetic over the prepared widths (prepared <em>once</em>, outside the
       loop). Run it:
     </p>
     <p><button class="xp-btn" id="race">Race 2,000 re-layouts</button></p>
-    <div class="race-out" id="race-out">— press the button —</div>
+    <div class="race-out" id="race-out">press the button</div>
 
     <h2>6 · Where it&apos;d actually help aadhar.sh</h2>
     <ul>
-      <li><strong>Honestly: not much yet.</strong> The site&apos;s text is tiny
-        &mdash; a dozen track rows, a 3&times;4 photo grid, one tooltip at a time.
+      <li><strong>Honestly: not much yet.</strong> The site&apos;s text is tiny:
+        a dozen track rows, a 3&times;4 photo grid, one tooltip at a time.
         A handful of one-off measurements is exactly the case where the DOM is
         fine. pretext earns its keep at <em>volume</em>, which this homepage
         doesn&apos;t have.</li>
       <li><strong>The real candidate is serendipity.</strong> If the event /
         attendee lists ever get <em>virtualized</em> (only render what&apos;s
-        on-screen), you need accurate row heights without mounting every row &mdash;
-        that&apos;s pretext&apos;s home turf.</li>
-      <li><strong>CLS / scroll anchoring</strong> &mdash; measure incoming text
+        on-screen), you need accurate row heights without mounting every row.
+        That&apos;s pretext&apos;s home turf.</li>
+      <li><strong>CLS / scroll anchoring:</strong> measure incoming text
         before it paints to reserve the exact box, instead of <code>aspect-ratio</code>
         guesses. Niche here, but real.</li>
       <li><strong>The Fuji-LCD tooltip</strong> could pre-size itself to its
-        recipe text without a measure-then-reposition reflow on hover &mdash; a
+        recipe text without a measure-then-reposition reflow on hover: a
         micro-win, probably below the noise floor.</li>
     </ul>
 
     <h2>7 · Tradeoffs (why it&apos;s &quot;watching,&quot; not &quot;shipped&quot;)</h2>
     <ul>
       <li><strong>Fonts must be loaded first.</strong> Measure before the webfont
-        swaps and every number is wrong. (aadhar.sh dodges this &mdash; it uses
-        system Tahoma/Verdana, no webfont &mdash; which is also why the demo above
+        swaps and every number is wrong. (aadhar.sh dodges this: it uses
+        system Tahoma/Verdana, no webfont, which is also why the demo above
         agrees so closely.)</li>
       <li><strong>Canvas widths ≠ glyph-exact.</strong> Good enough for line
         breaking; not a font-rendering engine. <code>system-ui</code> is
@@ -290,14 +315,14 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
         <code>font-feature-settings</code> / optical sizing.</li>
       <li><strong>It&apos;s a JS layout path</strong> that must mirror the
         browser&apos;s CSS line-breaker. That cuts against this site&apos;s whole
-        &quot;let CSS do layout&quot; ethos &mdash; you&apos;re taking on a model
+        &quot;let CSS do layout&quot; ethos: you&apos;re taking on a model
         that can drift from the real engine.</li>
       <li><strong>Deps:</strong> <code>Intl.Segmenter</code> + Canvas 2D (both
         broadly shipped now, incl. Safari).</li>
     </ul>
 
     <div class="verdict">
-      <strong>Verdict:</strong> a genuinely clever inversion &mdash; treat the
+      <strong>Verdict:</strong> a genuinely clever inversion. Treat the
       canvas as the measurement oracle and keep re-layout in pure arithmetic. But
       its win scales with how often you measure, and aadhar.sh measures almost
       nothing. Filed under <em>watching</em>: the moment a virtualized list shows
@@ -309,7 +334,7 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
       <a href="https://github.com/chenglou/pretext" rel="external">github.com/chenglou/pretext</a>,
       bundled to a single 12&nbsp;KB-brotli ES module and <em>vendored same-origin</em>
       at <code>/garage/pretext.lib.js</code>. Because it&apos;s served from
-      <code>'self'</code>, the existing CSP needs <em>no change</em> &mdash; so
+      <code>'self'</code>, the existing CSP needs <em>no change</em>, so
       pretext&apos;s bytes load only when you open this page and never touch the
       homepage or any other page. The only other demo here that&apos;s mine is the
       naïve <code>split(/\\s+/)</code> wrapper in section 4, kept deliberately bad
@@ -333,7 +358,7 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
   const setNote = (id, msg) => { const e = document.getElementById(id); if (e) e.textContent = msg; };
   const esc = (s) => s.replace(/[&<]/g, c => c === "&" ? "&amp;" : "&lt;");
 
-  if (!("Segmenter" in Intl)) { setNote("agree", "Intl.Segmenter isn't available in this browser — pretext can't run here."); return; }
+  if (!("Segmenter" in Intl)) { setNote("agree", "Intl.Segmenter isn't available in this browser, so pretext can't run here."); return; }
   let PT;
   try { PT = await import("./pretext.lib.js"); }
   catch (e) { setNote("agree", "pretext failed to load (" + e + ")."); return; }
@@ -341,7 +366,7 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
   const { prepare, prepareWithSegments, layout, layoutWithLines, layoutNextLine } = PT;
 
   // ── demo 1: height / line-count vs the DOM ──
-  const SAMPLE = "A resto-mod keeps the soul and swaps the guts. The browser lays this paragraph out and reports offsetHeight (a reflow); pretext measures it on a canvas and the line breaks fall out of arithmetic — no DOM, no layout flushed.";
+  const SAMPLE = "A resto-mod keeps the soul and swaps the guts. The browser lays this paragraph out and reports offsetHeight (a reflow); pretext measures it on a canvas and the line breaks fall out of arithmetic, with no DOM and no layout flushed.";
   const slider = document.getElementById("width"), wlabel = document.getElementById("wlabel");
   const domFlow = document.getElementById("dom-flow"), cvLines = document.getElementById("cv-lines");
   const domN = document.getElementById("dom-n"), cvN = document.getElementById("cv-n"), agree = document.getElementById("agree");
@@ -353,20 +378,20 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
     domFlow.style.width = width + "px";
     const domH = domFlow.offsetHeight, domLines = Math.round(domH / LINE_H);
     domN.textContent = domLines + " lines · " + domH + "px";
-    const r = layout(prep, width, LINE_H);              // {lineCount, height} — no DOM
+    const r = layout(prep, width, LINE_H);              // {lineCount, height}, no DOM
     cvN.textContent = r.lineCount + " lines · " + r.height + "px";
     const lr = layoutWithLines(prepSeg, width, LINE_H);
     cvLines.style.width = width + "px"; cvLines.innerHTML = "";
     lr.lines.forEach(l => { const d = document.createElement("div"); d.style.height = LINE_H + "px"; d.textContent = l.text; cvLines.appendChild(d); });
     const dl = Math.abs(domLines - r.lineCount);
     agree.innerHTML = dl === 0
-      ? "&#10003; pretext and the browser agree: <b>" + r.lineCount + " lines</b> — measured with zero reflow."
-      : "&approx; off by " + dl + " line(s) here (sub-pixel canvas rounding — the honest caveat).";
+      ? "&#10003; pretext and the browser agree: <b>" + r.lineCount + " lines</b>, measured with zero reflow."
+      : "&approx; off by " + dl + " line(s) here (sub-pixel canvas rounding, the honest caveat).";
     agree.style.color = dl === 0 ? "oklch(40% 0.14 150)" : "oklch(50% 0.14 60)";
   }
   slider.addEventListener("input", render1); render1();
 
-  // ── demo 2: race — re-layout many times (resize / virtualization pattern) ──
+  // ── demo 2: race, re-layout many times (resize / virtualization pattern) ──
   document.getElementById("race").addEventListener("click", () => {
     const out = document.getElementById("race-out"), N = 2000; let i, sink = 0;
     let t0 = performance.now();
@@ -380,8 +405,8 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
       " ms &nbsp;·&nbsp; <b>" + (ptMs > 0 ? (domMs / ptMs).toFixed(0) : "∞") + "× faster</b> &nbsp;(" + N + " re-layouts)";
   });
 
-  // ── demo 3: dynamic wrap — flow around a floated box (variable width per line) ──
-  const FSAMPLE = "Pretext lays out one line at a time via layoutNextLine, so the available width can change per line. The first lines wrap beside the floated box at a narrower width; once the text clears it, they reclaim the full width below — shaped wrapping with no DOM, recomputed live as you resize the float.";
+  // ── demo 3: dynamic wrap, flow around a floated box (variable width per line) ──
+  const FSAMPLE = "Pretext lays out one line at a time via layoutNextLine, so the available width can change per line. The first lines wrap beside the floated box at a narrower width; once the text clears it, they reclaim the full width below: shaped wrapping with no DOM, recomputed live as you resize the float.";
   const fcanvas = document.getElementById("float-canvas"), fbox = document.getElementById("float-box");
   const fslider = document.getElementById("fwidth"), fwlabel = document.getElementById("fwlabel");
   const fctx = fcanvas.getContext("2d"), fprep = prepareWithSegments(FSAMPLE, FONT);
@@ -411,7 +436,7 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
   fslider.addEventListener("input", renderFloat); renderFloat();
   window.addEventListener("resize", renderFloat);
 
-  // ── demo 4: international text — naïve split(/\s+/) vs pretext segmentation ──
+  // ── demo 4: international text, naïve split(/\s+/) vs pretext segmentation ──
   const I18N = "AGI 春天到了，万物复苏，处处生机盎然。بدأت الرحلة 🚀 done.";
   const W18 = 220;
   const mcx = document.createElement("canvas").getContext("2d"); mcx.font = FONT;

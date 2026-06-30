@@ -49,7 +49,7 @@ export async function sendInvite(env, booking) {
     html,
     attachments: [{
       filename:    "coffee.ics",
-      content:     btoa(ics),
+      content:     utf8ToBase64(ics),
       content_type: "text/calendar; method=REQUEST",
     }],
   });
@@ -108,7 +108,7 @@ function buildICS(env, booking) {
     `DTSTART:${fmt(start)}`,
     `DTEND:${fmt(end)}`,
     `SUMMARY:${escICS(env.EVENT_TITLE)}`,
-    `DESCRIPTION:${escICS(`requested: ${topic}\\n\\nbooked via cal.aadhar.sh`)}`,
+    `DESCRIPTION:${escICS(`requested: ${topic}\n\nbooked via cal.aadhar.sh`)}`,
     `ORGANIZER;CN=${escICS(env.HOST_NAME)}:mailto:${env.HOST_EMAIL}`,
     `ATTENDEE;CN=${escICS(name)};RSVP=TRUE:mailto:${email}`,
     "END:VEVENT",
@@ -118,15 +118,37 @@ function buildICS(env, booking) {
   // for our short events this isn't usually triggered, but fold defensively.
   return lines.flatMap(foldLine).join("\r\n");
 }
+// fold to ≤75 OCTETS (not chars), and never split a code point — a topic with
+// an emoji (☕) or accented name shouldn't be cut mid-character, which would
+// corrupt it once the whole ICS is UTF-8 encoded for the attachment.
 function foldLine(line) {
-  if (line.length <= 75) return [line];
+  const enc = new TextEncoder();
+  if (enc.encode(line).length <= 75) return [line];
   const out = [];
-  while (line.length > 75) {
-    out.push(line.slice(0, 75));
-    line = " " + line.slice(75);
+  let cur = "", curBytes = 0, first = true;
+  for (const ch of line) {                 // iterate by code point, not UTF-16 unit
+    const chBytes = enc.encode(ch).length;
+    const limit = first ? 75 : 74;          // continuation lines lead with a space (1 octet)
+    if (curBytes + chBytes > limit) {
+      out.push(first ? cur : " " + cur);
+      first = false;
+      cur = ch; curBytes = chBytes;
+    } else {
+      cur += ch; curBytes += chBytes;
+    }
   }
-  out.push(line);
+  out.push(first ? cur : " " + cur);
   return out;
+}
+// base64 of the UTF-8 bytes. plain btoa() throws on any code point > 255, so a
+// booking topic/name with an emoji or non-Latin char would otherwise make
+// sendInvite throw — and since it runs in ctx.waitUntil, the confirmation email
+// would silently never send.
+function utf8ToBase64(str) {
+  const bytes = new TextEncoder().encode(str);
+  let bin = "";
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin);
 }
 function escICS(s) {
   return String(s).replace(/[\\;,]/g, m => "\\" + m).replace(/\n/g, "\\n");

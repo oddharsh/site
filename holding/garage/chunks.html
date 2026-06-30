@@ -3,13 +3,22 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>content-addressed chunking — aadhar.sh garage</title>
-<meta name="description" content="Live FastCDC content-defined chunking + content-addressing in the browser — pure JS + crypto.subtle. Why a one-byte edit re-sends the whole file under fixed chunks but almost nothing under content-defined ones.">
+<title>aadhar.sh/garage/content-addressed chunking</title>
+<meta name="description" content="Live FastCDC content-defined chunking + content-addressing in the browser: pure JS + crypto.subtle. Why a one-byte edit re-sends the whole file under fixed chunks but almost nothing under content-defined ones.">
 <link rel="canonical" href="https://aadhar.sh/garage/chunks">
+<meta property="og:type" content="website">
+<meta property="og:title" content="aadhar.sh/garage/content-addressed chunking">
+<meta property="og:description" content="Live FastCDC content-defined chunking + content-addressing in the browser: pure JS + crypto.subtle. Why a one-byte edit re-sends the whole file under fixed chunks but almost nothing under content-defined ones.">
+<meta property="og:url" content="https://aadhar.sh/garage/chunks">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='3' y='6' width='7' height='20' rx='1' fill='%230855dd'/><rect x='12' y='6' width='5' height='20' rx='1' fill='%23166aee'/><rect x='19' y='6' width='10' height='20' rx='1' fill='%23003bda'/></svg>">
 <style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}
 * { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; }
+/* cross-document View Transitions: a fast, reduced-motion-safe crossfade on real
+   navigations between same-origin pages. inline (not JS-injected) so the incoming
+   page has opted in by parse time. the persistent shell (wallpaper/taskbar) is
+   identical across pages, so visually only the changing window content fades. */
+@media (prefers-reduced-motion:no-preference){@view-transition{navigation:auto}::view-transition-old(root),::view-transition-new(root){animation-duration:140ms}}
+html, body { margin: 0; padding: 0; } html{background:linear-gradient(180deg,oklch(56% 0.13 250) 0%,oklch(73% 0.10 236) 50%,oklch(88% 0.05 232) 60%,oklch(60% 0.16 140) 100%)}
 html { scrollbar-color: oklch(62% 0.14 255) oklch(91% 0.02 248); }
 body {
   background: linear-gradient(180deg, oklch(56% 0.13 250) 0%, oklch(73% 0.10 236) 50%, oklch(88% 0.05 232) 60%, oklch(60% 0.16 140) 100%);
@@ -66,7 +75,7 @@ body {
   text-decoration: none; cursor: pointer;
   background-color: #3e73f5;
   background-image: linear-gradient(180deg, #5f8cf7 0%, #3a71f5 22%, #3e73f5 55%, #2a70f2 82%, #1045be 100%);
-  transition: filter .1s ease;
+  transition: filter 60ms ease-out;
 }
 /* "wet plastic" gloss band over the top ~45% (close uses ::after for its X stroke) */
 .title-bar .controls .min::after,
@@ -167,16 +176,32 @@ a { color: oklch(41.92% 0.0962 250.51); }
 .drop.over { background: oklch(94% 0.04 255); border-color: oklch(51% 0.225 263); }
 footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67% 0.0294 259.59); font-size: 9.5pt; color: oklch(45% 0 0); }
 @media (prefers-reduced-motion: reduce) { .chunk { transition: none; } }
+
+  /* OS-window geometry inlined so FIRST PAINT matches nav.js (no shell "pop"
+     when the deferred desktop arrives). keep in sync with nav.js (search
+     "app-shell"); degrades with JS off (.content scrolls natively). */
+  html { height: 100dvh; overflow: hidden; }
+  body { min-height: 0; height: calc(100vh - 30px); height: calc(100dvh - 30px);
+    overflow: hidden; box-sizing: border-box; display: flex; flex-direction: column;
+    align-items: center; padding: 8px; }
+  .window { flex: 0 1 auto; min-height: 0; max-height: 100%; width: 100%;
+    display: flex; flex-direction: column; }
+  .window > .title-bar { flex: 0 0 auto; }
+  .window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 28px !important; }
+  body::after { content: ""; position: fixed; left: 0; right: 0; bottom: 0; height: 30px;
+    z-index: 1; background: linear-gradient(180deg, oklch(67% 0.15 256) 0%, oklch(58% 0.19 257) 4%,
+    oklch(51% 0.20 258) 9%, oklch(49% 0.20 258) 50%, oklch(46% 0.20 259) 92%, oklch(40% 0.18 260) 100%); }
+
 </style>
 </head>
 <body>
 <div class="window">
-  <div class="title-bar" aria-hidden="true"><span class="title-text"><span class="icon"></span>content-addressed chunking</span><span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/garage/" title="back to the garage" aria-label="back to the garage"></a></span></div>
+  <div class="title-bar" aria-hidden="true"><span class="title-text"><span class="icon"></span>aadhar.sh/garage/content-addressed chunking</span><span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/garage/" title="back to the garage" aria-label="back to the garage"></a></span></div>
   <div class="content">
     <h1>Chunking &amp; content-addressing <span class="status review">in review</span></h1>
     <p class="lede">
-      How big files get stored and synced by their <em>content</em>, not their
-      name &mdash; and why a one-byte edit means re-sending the whole file under
+      How systems store and sync big files by their <em>content</em>, not their
+      name, and why a one-byte edit re-sends the whole file under
       naïve chunking, but almost nothing under content-defined chunking.
     </p>
 
@@ -186,21 +211,21 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
       This site already runs on content-addressing: every photo is served at a
       content-stable URL with a <code>?v=N</code> cache-bust, the service worker
       treats <code>/images/*</code> as immutable (cache-first), and the originals
-      live in R2. That&apos;s the <em>idea</em>. The systems-grade version &mdash;
-      chunk a file by content, address each chunk by its hash, ship only the
-      chunks that changed, and verify a slice without the whole &mdash; is what
+      live in R2. That's the <em>idea</em>. The systems-grade version (chunk a
+      file by content, address each chunk by its hash, ship only the chunks that
+      changed, and verify a slice without the whole) is what
       <a href="https://github.com/officialunofficial/mkit" rel="external">mkit</a>
-      does. Everything below is a self-contained, dependency-free re-creation of
-      those primitives, running in your browser.
+      does. Everything below re-creates those primitives, self-contained and
+      dependency-free, right in your browser.
     </p>
 
     <h2>1 · The boundary problem</h2>
     <p class="note">
       Type in the box, then hit <strong>Snapshot as v1</strong> to freeze the
-      current chunks. Now edit &mdash; especially <strong>Insert a line at the
+      current chunks. Now edit, especially <strong>Insert a line at the
       top</strong>. Watch the two strategies diverge: under
       <strong>fixed-size</strong> chunks every boundary shifts and almost every
-      chunk&apos;s hash changes (so you&apos;d re-upload the whole file); under
+      chunk's hash changes (so you'd re-upload the whole file); under
       <strong>FastCDC</strong> the boundaries ride the content, so only the
       chunks near your edit change.
     </p>
@@ -213,7 +238,7 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
     <textarea class="cas-ta" id="ta" spellcheck="false"></textarea>
 
     <div class="method">
-      <h3>Fixed-size chunks <small>every 40 bytes &mdash; the naïve approach</small></h3>
+      <h3>Fixed-size chunks <small>every 40 bytes: the naïve approach</small></h3>
       <div class="chunks" id="fixed-chunks"></div>
       <p class="stats" id="fixed-stats"></p>
     </div>
@@ -231,31 +256,31 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
     </div>
 
     <div class="callout" id="insight">
-      Snapshot, then insert at the top: that&apos;s the whole argument for
+      Snapshot, then insert at the top: that's the whole argument for
       content-defined chunking in one gesture.
     </div>
 
     <h2>2 · FastCDC, briefly</h2>
     <p class="note">
-      A rolling <em>gear hash</em> slides over the bytes; wherever the hash&apos;s
-      low bits hit a target pattern, that&apos;s a chunk boundary. Because the cut
-      points are decided by the <em>data</em>, inserting or deleting bytes only
-      disturbs the boundaries you touched &mdash; the rest line up exactly as
+      A rolling <em>gear hash</em> slides over the bytes; wherever the hash's
+      low bits hit a target pattern, that's a chunk boundary. Because the cut
+      points follow the <em>data</em>, inserting or deleting bytes only
+      disturbs the boundaries you touched. The rest line up exactly as
       before. <code>min</code>/<code>max</code> clamp pathological sizes;
-      &quot;normalized&quot; chunking tightens the mask before the average and
+      "normalized" chunking tightens the mask before the average and
       loosens it after, so sizes cluster near the target. ~60 lines, no deps:
     </p>
 
     <h2>3 · Big files</h2>
     <p class="note">
-      Content-addressing earns its keep on large blobs. Drop any file &mdash; it
-      never leaves your machine &mdash; and it&apos;s FastCDC-chunked locally
-      (avg 8&nbsp;KB), each chunk SHA-256&apos;d into a content ID. The blocks are
-      drawn proportional to size so you can see the variable-length cuts; identical
-      chunks (a <code>ChunkedBlob</code>&apos;s dedup win) are counted out.
+      Content-addressing earns its keep on large blobs. Drop any file (it
+      never leaves your machine) and your browser FastCDC-chunks it locally
+      (avg 8&nbsp;KB), then SHA-256's each chunk into a content ID. The blocks
+      run proportional to size so you can see the variable-length cuts; the
+      demo counts out identical chunks (a <code>ChunkedBlob</code>'s dedup win).
     </p>
     <div class="drop" id="drop" tabindex="0" role="button">
-      Drop a file here, or click to choose &mdash; stays local
+      Drop a file here, or click to choose. Stays local.
       <input type="file" id="file" hidden>
     </div>
     <div class="chunks" id="file-chunks" style="margin-top:10px;display:none"></div>
@@ -265,24 +290,24 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
     <p class="note">
       Once both sides address chunks by hash, sync is a set difference: the
       sender lists its chunk IDs, the receiver names the few it lacks, and only
-      those bytes cross the wire &mdash; the <strong>delta wire format</strong>.
+      those bytes cross the wire: the <strong>delta wire format</strong>.
       The last piece is trust: <strong>Bao verified slices</strong> wrap a
       BLAKE3 tree so you can stream-verify <em>any</em> byte range against the
       root hash without fetching the whole file. <code>crypto.subtle</code> has
       no BLAKE3, so the demos above use SHA-256 for the content IDs; the shape of
-      the argument is identical &mdash; mkit uses BLAKE3 + Bao for the real thing.
+      the argument is identical, and mkit uses BLAKE3 + Bao for the real thing.
     </p>
 
     <p class="replaces">
       On the site: this is the same instinct as the <code>?v=N</code> immutable
-      image URLs and the cache-first service worker &mdash; identity by content,
+      image URLs and the cache-first service worker: identity by content,
       not by name. If the photo originals ever needed incremental sync to R2,
-      content-defined chunking is how you&apos;d ship only what changed.
+      content-defined chunking is how you'd ship only what changed.
     </p>
 
     <p class="note" style="margin-top:14px">
-      Inspired by <a href="https://mkit.makechain.net/streaming" rel="external">mkit&apos;s streaming demo</a>
-      and <a href="https://docs.makechain.net/" rel="external">MakeChain</a> &mdash;
+      Inspired by <a href="https://mkit.makechain.net/streaming" rel="external">mkit's streaming demo</a>
+      and <a href="https://docs.makechain.net/" rel="external">MakeChain</a>:
       a protocol for cryptographically-signed, permissionless version control.
     </p>
 
@@ -301,12 +326,12 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
   var SAMPLE =
     "A resto-mod keeps the soul and swaps the guts: a 1973 air-cooled body over " +
     "a modern flat-six, period dials lit by hidden LEDs. This site is the same " +
-    "idea applied to a personal homepage — a 2003 Outlook-Express shell over a " +
+    "idea applied to a personal homepage, a 2003 Outlook-Express shell over a " +
     "2026 edge runtime. Content-addressing is the quiet engine underneath: every " +
     "photo is named by what it is, not where it lives, so the cache can trust it " +
     "forever and an edit only touches what actually changed.";
 
-  // deterministic 256-entry gear table (xorshift32) — no Math.random (stable build)
+  // deterministic 256-entry gear table (xorshift32), no Math.random (stable build)
   var GEAR = (function () {
     var s = 0x1bf52 >>> 0, g = new Uint32Array(256);
     for (var i = 0; i < 256; i++) {
@@ -350,8 +375,8 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
 
   async function hashChunks(bytes, chunks) {
     // hash all chunks concurrently so the engine can overlap the (off-thread)
-    // digests, instead of one serial round-trip to the crypto thread per chunk
-    // — matters on the dropped-big-file path (hundreds of chunks).
+    // digests, instead of one serial round-trip to the crypto thread per chunk.
+    // Matters on the dropped-big-file path (hundreds of chunks).
     var bufs = await Promise.all(chunks.map(function (c) {
       return crypto.subtle.digest("SHA-256", bytes.subarray(c.off, c.off + c.len));
     }));

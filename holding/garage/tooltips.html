@@ -3,14 +3,18 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>tooltip experiments — aadhar.sh garage</title>
+<title>aadhar.sh/garage/tooltip experiments</title>
 <meta name="description" content="Cursor-following tooltip styles for the photo grid and tracklist. Hover the slots and rows to compare.">
 <link rel="canonical" href="https://aadhar.sh/garage/tooltips">
+<meta property="og:type" content="website">
+<meta property="og:title" content="aadhar.sh/garage/tooltip experiments">
+<meta property="og:description" content="Cursor-following tooltip styles for the photo grid and tracklist. Hover the slots and rows to compare.">
+<meta property="og:url" content="https://aadhar.sh/garage/tooltips">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='2.5' y='4' width='20' height='13' rx='2.5' fill='%230855dd'/><path d='M8 16 L8 21.5 L13 16 Z' fill='%230855dd'/><rect x='5.5' y='8' width='14' height='1.8' rx='0.9' fill='%23cfe0fb'/><rect x='5.5' y='11.5' width='9.5' height='1.8' rx='0.9' fill='%23cfe0fb'/><path d='M17.5 18.5 L17.5 29 L20.2 26.3 L22.3 31.2 L24.1 30.4 L22 25.7 L25.5 25.7 Z' fill='%23ffffff' stroke='%23001ea0' stroke-width='1' stroke-linejoin='round'/></svg>">
 <style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}
 /* --x/--y carry the cursor position (clientX/Y in px), written by JS on
    pointermove. registering them as typed <length> properties (instead of
-   plain custom properties) lets CSS *transition* them — so the tooltip
+   plain custom properties) lets CSS *transition* them, so the tooltip
    eases toward the cursor instead of hard-snapping, with no JS rAF lerp.
    the browser interpolates the value; the translate() that consumes it
    updates each frame. initial-value keeps the first paint sane before
@@ -20,7 +24,12 @@
 
 /* shared XP window chrome */
 * { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; }
+/* cross-document View Transitions: a fast, reduced-motion-safe crossfade on real
+   navigations between same-origin pages. inline (not JS-injected) so the incoming
+   page has opted in by parse time. the persistent shell (wallpaper/taskbar) is
+   identical across pages, so visually only the changing window content fades. */
+@media (prefers-reduced-motion:no-preference){@view-transition{navigation:auto}::view-transition-old(root),::view-transition-new(root){animation-duration:140ms}}
+html, body { margin: 0; padding: 0; } html{background:linear-gradient(180deg,oklch(56% 0.13 250) 0%,oklch(73% 0.10 236) 50%,oklch(88% 0.05 232) 60%,oklch(60% 0.16 140) 100%)}
 body {
   background: linear-gradient(180deg, oklch(56% 0.13 250) 0%, oklch(73% 0.10 236) 50%, oklch(88% 0.05 232) 60%, oklch(60% 0.16 140) 100%);
   font-family: var(--font-ui);
@@ -76,7 +85,7 @@ body {
   text-decoration: none; cursor: pointer;
   background-color: #3e73f5;
   background-image: linear-gradient(180deg, #5f8cf7 0%, #3a71f5 22%, #3e73f5 55%, #2a70f2 82%, #1045be 100%);
-  transition: filter .1s ease;
+  transition: filter 60ms ease-out;
 }
 /* "wet plastic" gloss band over the top ~45% (close uses ::after for its X stroke) */
 .title-bar .controls .min::after,
@@ -164,7 +173,7 @@ hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px
 .status.dead    { color: oklch(46.34% 0.1902 29.23); border-color: oklch(46.34% 0.1902 29.23); background: oklch(98% 0.03 30); }
 .status.ref     { color: oklch(51.03% 0 0); border-color: oklch(70% 0 0); background: oklch(96% 0 0); }
 
-/* rejection callout — small box explaining why a variant didn't ship */
+/* rejection callout: small box explaining why a variant didn't ship */
 .rejection {
   font-size: 10pt;
   background: oklch(98% 0.02 30);
@@ -206,7 +215,7 @@ hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px
    keeps it on-screen: the upper bound (100vw/vh - 100% - 8px) uses the
    element's own size via 100%, so the far edge never crosses the
    viewport. when the cursor is near the right/bottom edge clamp pins
-   the tooltip against it rather than flipping sides — simpler than the
+   the tooltip against it rather than flipping sides. simpler than the
    old JS flip and good enough at these tooltip sizes. edge-handling is
    entirely in CSS now; no getBoundingClientRect from JS. */
 .lcd-tip, .xp-cam-tip, .vinyl-tip, .balloon-tip {
@@ -444,7 +453,7 @@ hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px
 .xp-cam-tip:not(:popover-open) { opacity: 0; }
 @starting-style { .xp-cam-tip:popover-open { opacity: 0; } }
 
-/* Luna balloon (the XP "speech balloon" notification shape) — the
+/* Luna balloon (the XP "speech balloon" notification shape): the
    period-correct skin for the SIMPLE track/artist tooltips. cream
    infotip-yellow fill (#FFFFE1), 1px outline, rounded, with a CSS-drawn
    pointer tail aimed up toward the cursor. */
@@ -487,7 +496,7 @@ hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px
   justify-content: space-between;
 }
 
-/* flash bolt indicator — only renders when EXIF Flash matches Fired/On.
+/* flash bolt indicator: only renders when EXIF Flash matches Fired/On.
    bolt is amber-warm and slightly off-vertical, like the indicator on
    the actual Fuji LCD. drop-shadow gives a faint "lit" feel against
    either tooltip background. */
@@ -534,7 +543,7 @@ hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px
   padding: 6px 10px 8px;
 }
 /* font-variant-numeric: tabular-nums gives column-aligned digits without
-   forcing monospace overall — keeps the XP Tahoma look while the
+   forcing monospace overall. keeps the XP Tahoma look while the
    numeric exposure trio still aligns cleanly. */
 .xp-cam-tip .exposure {
   font-family: var(--font-ui);
@@ -697,6 +706,22 @@ footer {
   /* standard scrollbar tint (Chrome + Safari 26 + Firefox): Luna-blue thumb,
      pale track. the garage/scroll demo styles its own element separately. */
   html { scrollbar-color: oklch(62% 0.14 255) oklch(91% 0.02 248); }
+
+  /* OS-window geometry inlined so FIRST PAINT matches nav.js (no shell "pop"
+     when the deferred desktop arrives). keep in sync with nav.js (search
+     "app-shell"); degrades with JS off (.content scrolls natively). */
+  html { height: 100dvh; overflow: hidden; }
+  body { min-height: 0; height: calc(100vh - 30px); height: calc(100dvh - 30px);
+    overflow: hidden; box-sizing: border-box; display: flex; flex-direction: column;
+    align-items: center; padding: 8px; }
+  .window { flex: 0 1 auto; min-height: 0; max-height: 100%; width: 100%;
+    display: flex; flex-direction: column; }
+  .window > .title-bar { flex: 0 0 auto; }
+  .window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 28px !important; }
+  body::after { content: ""; position: fixed; left: 0; right: 0; bottom: 0; height: 30px;
+    z-index: 1; background: linear-gradient(180deg, oklch(67% 0.15 256) 0%, oklch(58% 0.19 257) 4%,
+    oklch(51% 0.20 258) 9%, oklch(49% 0.20 258) 50%, oklch(46% 0.20 259) 92%, oklch(40% 0.18 260) 100%); }
+
 </style>
 </head>
 <body>
@@ -708,12 +733,12 @@ footer {
 <div id="balloon-tip" popover="manual" class="balloon-tip" aria-hidden="true"></div>
 
 <div class="window">
-  <div class="title-bar" aria-hidden="true"><span class="title-text"><span class="icon"></span>tooltip experiments</span><span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/garage/" title="back to the garage" aria-label="back to the garage"></a></span></div>
+  <div class="title-bar" aria-hidden="true"><span class="title-text"><span class="icon"></span>aadhar.sh/garage/tooltip experiments</span><span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/garage/" title="back to the garage" aria-label="back to the garage"></a></span></div>
   <div class="content">
 
     <h1>Tooltip Experiments</h1>
     <p class="lede">
-      Variants tried for the photo grid and tracklist on <a href="/">aadhar.sh</a>. Hover the slots and rows. The two photo variants below (Fuji LCD and XP-skinned camera readout) carry the same content shape, with different chrome; the third (vinyl) is a track-specific candidate. Status pills: <span class="status review">in review</span> are live candidates, <span class="status shipped">shipped</span> made it to the homepage, <span class="status dead">rejected</span> got tried and didn't, <span class="status ref">reference</span> is a comparison point.
+      Variants I tried for the photo grid and tracklist on <a href="/">aadhar.sh</a>. Hover the slots and rows. The two photo variants below (Fuji LCD and XP-skinned camera readout) carry the same content shape under different chrome; the third (vinyl) targets tracks only. Status pills: <span class="status review">in review</span> marks a live candidate, <span class="status shipped">shipped</span> reached the homepage, <span class="status dead">rejected</span> got tried and lost, <span class="status ref">reference</span> sits here as a comparison point.
     </p>
     <p class="lede" style="margin-top: 4px;">
       The live candidates share one architecture: popover API for show/hide, <code>@starting-style</code> for the entry fade, a small rAF-coalesced <code>translate3d</code> loop for cursor tracking. Roughly 100 lines of JS total.
@@ -726,10 +751,10 @@ footer {
 
     <h2>Fuji X-T LCD readout (photos) <span class="status review">in review</span></h2>
     <p class="note">
-      Hover any slot. Floating panel mimics the camera's image-review screen: histogram band on top, filename, exposure trio, recipe grid, footer. Follows the cursor. The slot itself stays untouched (no in-tooltip thumbnail; the larger slot image is already visible).
+      Hover any slot. The floating panel mimics the camera's image-review screen: histogram band on top, filename, exposure trio, recipe grid, footer. It follows the cursor. The slot itself stays untouched (no in-tooltip thumbnail; you can already see the larger slot image).
     </p>
     <p class="note">
-      Recipe values are real EXIF, pulled from <code>/images/metadata.json</code>. Earlier preview had fabricated values (XT508756 was tagged ACROS+R, which is B&amp;W only); fixed.
+      Each recipe value is real EXIF, pulled from <code>/images/metadata.json</code>. An earlier preview fabricated values (it tagged XT508756 ACROS+R, which shoots B&amp;W only); fixed.
     </p>
     <div class="row" id="photo-row">
       <a class="slot fuji-slot" href="#"
@@ -768,7 +793,7 @@ footer {
 
     <h2>XP-skinned camera readout (photos) <span class="status shipped">shipped</span></h2>
     <p class="note">
-      <b>This is the one that shipped</b> &mdash; it's the live photo-grid tooltip on <a href="/">the homepage</a> (the <code>.cam</code> markup out of <code>buildContent()</code>). Same content as the Fuji LCD above (histogram, exposure trio, recipe grid, date) but reskinned in XP visual vocabulary: cream panel, blue gradient title strip, sunken bevel around the histogram, Tahoma body with Courier numerics. Keeps the camera-back density without arguing visually with the surrounding XP shell &mdash; the Fuji LCD lost on exactly that (too dark a panel against the Luna page).
+      <b>This is the one that shipped.</b> It's the live photo-grid tooltip on <a href="/">the homepage</a> (the <code>.cam</code> markup out of <code>buildContent()</code>). Same content as the Fuji LCD above (histogram, exposure trio, recipe grid, date) but reskinned in XP visual vocabulary: cream panel, blue gradient title strip, sunken bevel around the histogram, Tahoma body with Courier numerics. Keeps the camera-back density without arguing visually with the surrounding XP shell. The Fuji LCD lost on exactly that (too dark a panel against the Luna page).
     </p>
     <div class="row" id="xp-cam-row">
       <a class="slot xp-cam-slot" href="#"
@@ -807,7 +832,7 @@ footer {
 
     <h2>Vinyl sleeve at cursor (tracks) <span class="status shipped">shipped</span></h2>
     <p class="note">
-      <b>The cover-at-cursor idea shipped</b> as the live tracklist tooltip on <a href="/">the homepage</a> &mdash; in a contact-sheet-style raised frame rather than this paper-mat <code>-6&deg;</code> tilt, but the same move: hover a row, the square album cover floats at the cursor like pulling a sleeve out to read the front. Same architecture as the photo tooltip; the row text stays put.
+      <b>The cover-at-cursor idea shipped</b> as the live tracklist tooltip on <a href="/">the homepage</a>, in a contact-sheet-style raised frame rather than this paper-mat <code>-6&deg;</code> tilt, but it makes the same move: hover a row, and the square album cover floats at the cursor like a sleeve you pull out to read the front. Same architecture as the photo tooltip; the row text stays put.
     </p>
     <ol class="vinyl-demo" id="track-row">
       <li data-art="https://image-cdn-fa.spotifycdn.com/image/ab67616d00001e0246f9bf1154c7205b0e8b1667">
@@ -836,7 +861,7 @@ footer {
 
     <h2>Luna balloon (tracks) <span class="status review">in review</span></h2>
     <p class="note">
-      The authentic XP <em>balloon</em> &mdash; the rounded, pale-yellow info bubble with a pointer tail (the &ldquo;Your files are ready to burn&rdquo; taskbar popup). Cream <code>#FFFFE1</code> infotip fill, 1px outline, a CSS-drawn tail aimed back at the cursor. This is the period-correct shape for the <em>simple</em> track/artist tooltips; the camera readout stays a Fuji LCD on purpose &mdash; an XP machine never had a tooltip that rich, so calling it XP would be dishonest.
+      The authentic XP <em>balloon</em>: the rounded, pale-yellow info bubble with a pointer tail (the "Your files are ready to burn" taskbar popup). Cream <code>#FFFFE1</code> infotip fill, 1px outline, a CSS-drawn tail aimed back at the cursor. This is the period-correct shape for the <em>simple</em> track/artist tooltips; the camera readout stays a Fuji LCD on purpose, because an XP machine never had a tooltip that rich, so calling it XP would be dishonest.
     </p>
     <ol class="vinyl-demo" id="balloon-row">
       <li>
@@ -857,7 +882,7 @@ footer {
 
     <h2>Polaroid flip (photos) <span class="status dead">rejected</span></h2>
     <div class="rejection">
-      <strong>Rejected:</strong> hover flips the slot 180&deg; via <code>transform: rotateY</code>, which means you see the metadata <em>or</em> the photo, never both. The whole point of the grid is the photos, so a tooltip should add to what's visible, not replace it. The same fault killed the first Fuji-LCD overlay design (v1, painted on top of the slot). Kept here as a record.
+      <strong>Rejected:</strong> hover flips the slot 180&deg; via <code>transform: rotateY</code>, so you see the metadata <em>or</em> the photo, never both. The grid exists to show the photos, so a tooltip should add to what you can see, not replace it. The same fault killed the first Fuji-LCD overlay (v1, painted on top of the slot). I kept this one as a record.
     </div>
     <div class="row polaroid">
       <a class="slot" href="#">
@@ -905,10 +930,10 @@ footer {
 
     <h2>CSS Anchor Positioning <span class="status shipped">shipped</span></h2>
     <p class="note">
-      Element-anchored rather than cursor-anchored. <b>This shipped</b> &mdash; it's the <a href="/">homepage</a>'s <em>keyboard-focus</em> tooltip path: mouse users get the cursor-follower, but a keyboard user tabbing to a slot has no cursor to track, so on <code>:focus-visible</code> the JS sets <code>anchor-name</code> on the focused element and the popover tethers to it via <code>position-anchor</code> / <code>position-area</code> (gated on <code>CSS.supports</code>, a clean no-op where unsupported).
+      Element-anchored rather than cursor-anchored. <b>This shipped.</b> It's the <a href="/">homepage</a>'s <em>keyboard-focus</em> tooltip path: mouse users get the cursor-follower, but a keyboard user tabbing to a slot has no cursor to track, so on <code>:focus-visible</code> the JS sets <code>anchor-name</code> on the focused element and the popover tethers to it via <code>position-anchor</code> / <code>position-area</code> (gated on <code>CSS.supports</code>, a clean no-op where unsupported).
     </p>
     <p class="note">
-      <b>Note &mdash; this is a keyboard fallback, not a JS-disabled one.</b> Every live tooltip (here and on serendipity) is JS-orchestrated: JS populates the popover, calls <code>showPopover()</code>, and sets the <code>anchor-name</code>. With JS off, the popover stays empty and is never shown &mdash; no tooltip at all. This pure-CSS <code>:has(:hover)</code> demo below <em>would</em> work without JS, but it isn't wired into any live page; tooltips are progressive enhancement that simply vanish without script (the photos and links still work).
+      <b>Note: this is a keyboard fallback, and a keyboard fallback only, not a JS-disabled one.</b> JS orchestrates every live tooltip (here and on serendipity): it populates the popover, calls <code>showPopover()</code>, and sets the <code>anchor-name</code>. With JS off, the popover stays empty and never opens: no tooltip at all. This pure-CSS <code>:has(:hover)</code> demo below <em>would</em> work without JS, but it isn't wired into any live page; tooltips are progressive enhancement that simply vanish without script (the photos and links still work).
     </p>
     <div class="anchor-fallback">
       Your browser doesn't support <code>anchor-name</code> yet. Chrome 125+ or Safari TP shows this demo.
@@ -975,7 +1000,7 @@ footer {
   // tooltip's CSS positions itself off --x/--y with a clamp() that
   // keeps it on-screen (see the shared `.lcd-tip, .xp-cam-tip,
   // .vinyl-tip { transform }` rule). no rAF, no getBoundingClientRect,
-  // no resize listener — the browser batches the custom-property-driven
+  // no resize listener. the browser batches the custom-property-driven
   // transform to its own frame cadence, and edge-flipping is pure CSS.
   // lighter than the prior rAF + measure() approach in both code and
   // per-move work (no layout reads).
@@ -1052,10 +1077,10 @@ footer {
   // small flash bolt icon shown when the EXIF Flash tag matches
   // "Fired" or "On" (the standard strings exiftool emits when the
   // flash actually went off). the bolt terminates in a downward
-  // arrowhead — the camera auto-flash glyph — and stays legible at
+  // arrowhead (the camera auto-flash glyph) and stays legible at
   // ~12px where a plain zigzag turns to mush. currentColor lets each tooltip
   // skin pick its own bolt color via CSS. the icon doesn't render
-  // at all when the flash didn't fire — its presence IS the
+  // at all when the flash didn't fire. its presence IS the
   // indicator.
   const flashBolt = (raw) => {
     if (!raw || !/\bFired\b|\bOn\b/i.test(raw)) return "";
@@ -1162,7 +1187,7 @@ footer {
     root:   document.getElementById("xp-cam-row"),
     render: renderXpCam,
   });
-  // Luna balloon: simple track tooltip — title + artist, text only.
+  // Luna balloon: simple track tooltip, title + artist, text only.
   const esc = (v) => String(v == null ? "" : v).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const renderBalloon = (slot) => {
     const title  = slot.querySelector(".title")?.textContent || "";

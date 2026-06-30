@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>aadhar.sh/garage/safari 27</title>
+<meta name="description" content="What WWDC26's Safari 27 (macOS 27 Golden Gate) ships that this site already leans on: base-select going stable, anchor-positioning upgrades, scroll anchoring, plus live 'does your browser have it' checks.">
+<link rel="canonical" href="https://aadhar.sh/garage/safari27">
+
+<!-- generic compass needle favicon (not Apple's mark) -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='13' fill='%23ffffff' stroke='%230831d9' stroke-width='2'/><polygon points='16,5 19.5,16 16,16' fill='%23e45f3e'/><polygon points='16,5 12.5,16 16,16' fill='%23ae3110'/><polygon points='16,27 19.5,16 16,16' fill='%23c9d6ee'/><polygon points='16,27 12.5,16 16,16' fill='%238fa6d8'/><circle cx='16' cy='16' r='1.6' fill='%230831d9'/></svg>">
+
+<meta property="og:type" content="website">
+<meta property="og:title" content="aadhar.sh/garage/safari 27">
+<meta property="og:description" content="WWDC26's Safari 27 features, through the lens of what this site already ships.">
+<meta property="og:url" content="https://aadhar.sh/garage/safari27">
+
+<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}
+* { box-sizing: border-box; }
+/* cross-document View Transitions: a fast, reduced-motion-safe crossfade on real
+   navigations between same-origin pages. inline (not JS-injected) so the incoming
+   page has opted in by parse time. the persistent shell (wallpaper/taskbar) is
+   identical across pages, so visually only the changing window content fades. */
+@media (prefers-reduced-motion:no-preference){@view-transition{navigation:auto}::view-transition-old(root),::view-transition-new(root){animation-duration:140ms}}
+html, body { margin: 0; padding: 0; } html{background:linear-gradient(180deg,oklch(56% 0.13 250) 0%,oklch(73% 0.10 236) 50%,oklch(88% 0.05 232) 60%,oklch(60% 0.16 140) 100%)}
+body {
+  background: oklch(91.74% 0.0203 238.68);
+  background: linear-gradient(180deg, oklch(56% 0.13 250) 0%, oklch(73% 0.10 236) 50%, oklch(88% 0.05 232) 60%, oklch(60% 0.16 140) 100%);
+  font-family: var(--font-ui); font-size: 10.5pt; line-height: 1.5;
+  color: oklch(21.78% 0 0); padding: 24px 12px 60px; min-height: 100vh;
+}
+.window { max-width: 720px; margin: 0 auto; background: oklch(100% 0 0);
+  border: 2px solid #0831d9; border-right-color: #001ea0; border-bottom-color: #001ea0;
+  border-top-left-radius: 8px; border-top-right-radius: 8px; overflow: hidden;
+  box-shadow: inset 1px 1px 0 #166aee, inset 2px 2px 0 #0855dd, inset -1px -1px 0 #00138c, inset -2px -2px 0 #003bda, 4px 4px 0 rgba(0,30,160,.35); }
+.title-bar {
+  background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
+  color: oklch(100% 0 0); font-family: var(--font-caption); font-size: 10pt; font-weight: bold;
+  padding: 4px 8px; border-bottom: 1px solid oklch(41.92% 0.0962 250.51);
+  display: flex; align-items: center; justify-content: space-between;
+  text-shadow: 1px 1px #0f1089; border-top-left-radius: 8px; border-top-right-radius: 8px; }
+.title-bar .icon { display: inline-block; width: 16px; height: 16px; margin-right: 6px; vertical-align: middle;
+  position: relative; flex-shrink: 0; border-radius: 50%; background: oklch(100% 0 0); border: 1.5px solid #001ea0; }
+.title-bar .icon::before { content: ""; position: absolute; left: 6.5px; top: 2px; width: 0; height: 0;
+  border: 3px solid transparent; border-bottom-color: #e45f3e; }
+.title-bar .icon::after { content: ""; position: absolute; left: 6.5px; bottom: 2px; width: 0; height: 0;
+  border: 3px solid transparent; border-top-color: #8fa6d8; }
+.title-bar .title-text { flex: 1; padding-left: 4px; }
+.title-bar .controls { display: flex; align-items: center; gap: 2px; }
+.title-bar .controls .min, .title-bar .controls .max, .title-bar .controls .close {
+  position: relative; box-sizing: border-box; width: 21px; height: 21px; display: inline-block; overflow: hidden;
+  font-size: 0; color: transparent; border: 1px solid #6696eb; border-radius: 3px; text-decoration: none; cursor: pointer;
+  background-color: #3e73f5; background-image: linear-gradient(180deg, #5f8cf7 0%, #3a71f5 22%, #3e73f5 55%, #2a70f2 82%, #1045be 100%); transition: filter 60ms ease-out; }
+.title-bar .controls .min::after, .title-bar .controls .max::after { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 45%;
+  background: linear-gradient(180deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.12) 70%, rgba(255,255,255,0) 100%); pointer-events: none; border-radius: 2px 2px 5px 5px; }
+.title-bar .controls .close { border-color: #d8401c; background-color: #e45f3e; background-image: linear-gradient(180deg, #e8795f 0%, #e45f40 30%, #e45d3d 52%, #e2552a 80%, #ae3110 100%); }
+.title-bar .controls .close:hover { border-color: #ff7a66; background-image: linear-gradient(180deg, #ff8b7d 0%, #ff7463 26%, #ff957c 55%, #fd7e64 82%, #d34936 100%); box-shadow: 0 0 4px rgba(255,120,96,.7); }
+.title-bar .controls .min::before { content: ""; position: absolute; left: 5px; right: 5px; bottom: 5px; height: 2px; background: #fff; box-shadow: 0 1px 0 rgba(0,0,0,.35); }
+.title-bar .controls .max::before { content: ""; position: absolute; left: 5px; top: 5px; width: 11px; height: 9px; box-sizing: border-box; border: 1px solid #fff; border-top-width: 2px; filter: drop-shadow(0 1px 0 rgba(0,0,0,.35)); }
+.title-bar .controls .close::before, .title-bar .controls .close::after { content: ""; position: absolute; left: 50%; top: 50%; width: 13px; height: 2px; margin: -1px 0 0 -6.5px; background: #fff; box-shadow: 0 1px 0 rgba(0,0,0,.35); }
+.title-bar .controls .close::before { transform: rotate(45deg); } .title-bar .controls .close::after { transform: rotate(-45deg); }
+
+.content { padding: 12px 16px 16px; }
+h1 { font-family: var(--font-caption); font-size: 14pt; color: oklch(41.92% 0.0962 250.51); margin: 0 0 4px; font-weight: bold; letter-spacing: -0.01em; }
+.lede { margin: 0 0 14px; color: oklch(38.67% 0 0); font-size: 10.5pt; }
+p { margin: 0 0 12px; }
+a:link { color: oklch(42.61% 0.2353 263.74); text-decoration: underline; } a:visited { color: oklch(42.09% 0.1935 328.36); } a:hover { color: oklch(62.80% 0.2577 29.23); }
+hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 16px 0; height: 0; }
+code, .mono { font-family: var(--font-mono); font-size: 9.5pt; }
+pre { font-family: var(--font-mono); font-size: 10pt; line-height: 1.5; background: oklch(97.5% 0.006 255); border: 1px solid oklch(86.67% 0.0294 259.59); padding: 8px 10px; margin: 8px 0; white-space: pre-wrap; overflow-wrap: anywhere; max-width: 100%; }
+
+.cap-strip { display: flex; flex-wrap: wrap; gap: 5px; margin: 0 0 18px; }
+.chip { font-family: var(--font-mono); font-size: 8.5pt; font-weight: bold; padding: 2px 7px; border: 1px solid; border-radius: 2px; white-space: nowrap;
+  color: oklch(51% 0 0); border-color: oklch(72% 0 0); background: oklch(97% 0 0); }
+.chip::before { content: "… "; }
+.chip.yes { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(97% 0.04 142); }
+.chip.yes::before { content: "\2713 "; }
+.chip.no { color: oklch(51.03% 0 0); border-color: oklch(70% 0 0); background: oklch(96% 0 0); }
+.chip.no::before { content: "\2717 "; }
+
+.demo { content-visibility: auto; contain-intrinsic-size: auto 320px; border: 1px solid oklch(61.14% 0.0611 253.60); border-top-color: oklch(47.12% 0.0555 253.58); border-left-color: oklch(47.12% 0.0555 253.58);
+  background: oklch(100% 0 0); margin: 0 0 18px; padding: 12px 14px 14px; }
+.demo > h2 { font-family: var(--font-caption); font-size: 13pt; font-weight: bold; color: oklch(41.92% 0.0962 250.51); margin: 0 0 2px;
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+/* let the title shrink/break so it wraps below the stat badge on narrow windows
+   instead of overlapping it (flex items don't shrink past min-content w/o this) */
+.demo > h2 > span { min-width: 0; overflow-wrap: anywhere; }
+.demo > h2 .mono { font-size: 10pt; font-weight: normal; color: oklch(40% 0 0); }
+.demo .sub { margin: 2px 0 10px; color: oklch(40% 0 0); font-size: 9.5pt; }
+.demo .ours { font-size: 9.5pt; color: oklch(38% 0.07 145); border-left: 3px solid oklch(60% 0.13 145); padding: 2px 0 2px 9px; margin: 8px 0 0; }
+.stat { font-family: var(--font-mono); font-size: 8pt; font-weight: bold; letter-spacing: .04em; padding: 1px 6px; border: 1px solid; border-radius: 2px; text-transform: uppercase; white-space: nowrap;
+  color: oklch(42.61% 0.2353 263.74); border-color: oklch(42.61% 0.2353 263.74); background: oklch(97% 0.03 264); }
+.stat.stable { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(98% 0.04 142); }
+
+/* base-select demo (scoped .s27- so it can't touch any real future select) */
+.s27-sel { appearance: base-select; font-family: var(--font-ui); font-size: 10.5pt; color: oklch(21.78% 0 0); background: oklch(100% 0 0);
+  border: 2px solid; border-color: oklch(55% 0.02 250) oklch(94% 0.01 250) oklch(94% 0.01 250) oklch(55% 0.02 250); box-shadow: inset 1px 1px 1px oklch(0% 0 0 / .12);
+  padding: 3px 3px 3px 8px; min-width: 0; max-width: 100%; display: inline-flex; align-items: stretch; gap: 8px; }
+.s27-sel::picker-icon { margin-left: auto; align-self: stretch; width: 16px; display: inline-flex; align-items: center; justify-content: center; color: oklch(24% 0.02 255);
+  background: linear-gradient(180deg, oklch(99% 0 0), oklch(84% 0.02 255)); border: 1px solid; border-color: oklch(100% 0 0) oklch(52% 0.03 255) oklch(52% 0.03 255) oklch(100% 0 0); border-radius: 1px; transition: rotate .15s ease; }
+.s27-sel:open::picker-icon { rotate: 180deg; }
+.s27-sel::picker(select) { appearance: base-select; background: oklch(100% 0 0); border: 1px solid oklch(61% 0.06 254); box-shadow: 3px 3px 0 oklch(61% 0.06 254 / .35); padding: 2px; margin-top: 2px; }
+.s27-sel option { font-family: var(--font-ui); font-size: 10pt; padding: 4px 8px; cursor: pointer; }
+.s27-sel option:nth-of-type(even) { background: oklch(97.5% 0.006 255); }
+.s27-sel option:hover { background: linear-gradient(180deg, oklch(60% 0.20 261), oklch(50% 0.225 263)); color: oklch(100% 0 0); }
+.s27-sel option:checked::before { content: "\2713 "; color: oklch(49.32% 0.1678 142.50); font-weight: bold; }
+
+/* anchor-positioning demo */
+.s27-anchor-btn { anchor-name: --s27a; font: inherit; padding: 4px 10px; cursor: pointer; border: 1px solid oklch(50% 0.04 263);
+  background: linear-gradient(180deg, oklch(99% 0 0), oklch(92% 0.005 263)); border-radius: 3px; box-shadow: inset 1px 1px 0 oklch(100% 0 0); }
+.s27-note { position: absolute; position-anchor: --s27a; top: anchor(bottom); left: anchor(left); margin-top: 6px;
+  background: oklch(99% 0.02 95); border: 1px solid oklch(60% 0.13 90); padding: 6px 9px; font-size: 9.5pt; max-width: 240px; box-shadow: 2px 2px 0 oklch(60% 0.13 90 / .3); }
+.s27-anchor-wrap { position: relative; }
+.s27-anchor-btn:not(:hover):not(:focus) + .s27-note { display: none; }
+
+/* :heading demo box */
+.s27-headings :is(h3, h4, h5) { color: inherit; }
+@supports selector(:heading) { .s27-headings :heading { color: oklch(49.32% 0.1678 142.50); } }
+.s27-headings { border: 1px dashed oklch(72% 0.02 250); padding: 6px 12px; }
+.s27-headings h3, .s27-headings h4 { margin: 6px 0; font-family: var(--font-caption); }
+
+.status { font-family: var(--font-ui); font-size: 8.5pt; color: oklch(45% 0 0); border-top: 1px solid oklch(86% 0.02 259); background: oklch(96.5% 0.006 255);
+  padding: 4px 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+.status span::after { content: "·"; margin-left: 8px; color: oklch(72% 0 0); } .status span:last-child::after { content: ""; }
+
+  /* OS-window geometry inlined so FIRST PAINT matches nav.js (no shell "pop"
+     when the deferred desktop arrives). keep in sync with nav.js (search
+     "app-shell"); degrades with JS off (.content scrolls natively). */
+  html { height: 100dvh; overflow: hidden; }
+  body { min-height: 0; height: calc(100vh - 30px); height: calc(100dvh - 30px);
+    overflow: hidden; box-sizing: border-box; display: flex; flex-direction: column;
+    align-items: center; padding: 8px; }
+  .window { flex: 0 1 auto; min-height: 0; max-height: 100%; width: 100%;
+    display: flex; flex-direction: column; }
+  .window > .title-bar { flex: 0 0 auto; }
+  .window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 28px !important; }
+  body::after { content: ""; position: fixed; left: 0; right: 0; bottom: 0; height: 30px;
+    z-index: 1; background: linear-gradient(180deg, oklch(67% 0.15 256) 0%, oklch(58% 0.19 257) 4%,
+    oklch(51% 0.20 258) 9%, oklch(49% 0.20 258) 50%, oklch(46% 0.20 259) 92%, oklch(40% 0.18 260) 100%); }
+
+</style>
+</head>
+<body>
+<div class="window">
+  <div class="title-bar" aria-hidden="true">
+    <span class="title-text"><span class="icon"></span>aadhar.sh/garage/safari 27</span>
+    <span class="controls"><span class="min"></span><span class="max"></span><a class="close" href="/garage/" title="back to the garage" aria-label="back to the garage"></a></span>
+  </div>
+  <div class="content">
+    <h1>Safari 27, through this site&apos;s lens</h1>
+    <p class="lede">WWDC26 shipped <strong>Safari 27</strong> (macOS&nbsp;27 "Golden Gate," iOS/iPadOS&nbsp;27, visionOS&nbsp;27): ~58 new web-platform features. This site already leans on a bunch of them, so this cut shows where the platform caught up, not the whole changelog. Source: the WebKit team&apos;s <a href="https://webkit.org/blog/17967/news-from-wwdc26-webkit-in-safari-27-beta/" rel="external">News from WWDC26: WebKit in Safari&nbsp;27 beta</a>.</p>
+
+    <p class="lede" style="font-size:9.5pt">Every card says what Safari&nbsp;27 brings, and the strip below runs a <strong>live check of <em>your</em> browser</strong>. This whole site bets on high-octane fuel: when the engine has a feature it burns it, otherwise it falls back. "Not in your browser" never means broken.</p>
+
+    <div class="cap-strip" id="caps" aria-label="what your browser supports right now"></div>
+
+    <hr>
+
+    <section class="demo">
+      <h2><span><code>appearance: base-select</code></span> <span class="stat stable" data-feat="base-select">now stable</span></h2>
+      <p class="sub">Style a real <code>&lt;select&gt;</code>, dropdown and all, with CSS. No JS rebuild, no accessibility loss. Safari&nbsp;27 takes it stable and adds the <code>::picker-icon</code> and <code>::checkmark</code> pseudo-elements.</p>
+      <label>Film simulation:
+        <select class="s27-sel" aria-label="film simulation">
+          <option>Provia / Standard</option>
+          <option selected>Classic Chrome</option>
+          <option>Velvia / Vivid</option>
+          <option>Acros</option>
+          <option>Nostalgic Neg.</option>
+        </select>
+      </label>
+      <p class="ours">On this site: the homepage and the <a href="/garage/horizon">horizon</a> demo already ship a Luna-styled base-select with a beveled drop-button, behind an <code>@supports</code> guard, so browsers without it get the native dropdown. Safari going stable just means more visitors see the styled one, with zero code change here.</p>
+    </section>
+
+    <section class="demo">
+      <h2><span>Anchor positioning upgrades</span> <span class="stat" data-feat="anchor">Safari 27</span></h2>
+      <p class="sub">Safari&nbsp;27 makes anchored elements follow <em>transformed</em> positions, and adds <code>position-anchor: normal | none</code> plus refined <code>anchor-valid</code> / <code>anchor-visible</code> matching.</p>
+      <p class="s27-anchor-wrap"><button type="button" class="s27-anchor-btn">hover me</button><span class="s27-note" role="note">I&apos;m pinned to that button with <code>position-anchor</code> + <code>anchor()</code>, no JS measuring. In Safari&nbsp;27 I&apos;d track it even through CSS transforms.</span></p>
+      <p class="ours">On this site: the photo and track tooltips use CSS anchor positioning as the JS-free keyboard fallback. Transform-aware anchoring matters here because windows move via <code>transform</code> when you drag them, so an anchored popover can stay glued to a window mid-drag.</p>
+    </section>
+
+    <section class="demo">
+      <h2><span>Scroll anchoring</span> <span class="stat" data-feat="scroll-anchor">Safari 27</span></h2>
+      <p class="sub">When content loads <em>above</em> the viewport, the browser keeps your scroll position instead of jumping. Controlled with <code>overflow-anchor</code>.</p>
+      <p class="ours">On this site: every page is a pinned window whose <code>.content</code> scrolls internally. When content lands above the fold late (a lazy image, the server-injected tracklist), scroll anchoring kills exactly that jump, native in Safari now, no JS scroll-restoration to hand-write.</p>
+    </section>
+
+    <section class="demo">
+      <h2><span>The <code>:heading</code> pseudo-class</span> <span class="stat" data-feat="heading">Safari 27</span></h2>
+      <p class="sub">Match <code>&lt;h1&gt;</code>&ndash;<code>&lt;h6&gt;</code> in one selector instead of enumerating them (and one day <code>:heading(2,3)</code> for levels).</p>
+      <div class="s27-headings">
+        <h3>If your browser has <code>:heading</code>, this is green.</h3>
+        <h4>So is this one. One rule, every level.</h4>
+        <p style="margin:6px 0 0;font-size:9.5pt">(Body text stays the default color.)</p>
+      </div>
+      <p class="ours">On this site: a small win. The design tokens already style captions and headings off one font stack; <code>:heading</code> would let the shared nav.js CSS reach every page&apos;s headings without knowing the tag.</p>
+    </section>
+
+    <section class="demo">
+      <h2><span>CSS odds &amp; ends</span> <span class="stat" data-feat="css-misc">Safari 27</span></h2>
+      <p class="sub">A grab-bag that tidies things we hand-roll:</p>
+      <pre>width: stretch;          /* fill the container, margins accounted for  */
+color: revert-rule;      /* roll one cascade rule back, not the whole property */
+contain: style;          /* scope CSS counters / quotes to a subtree    */
+color: oklch(... );      /* + new srgb-linear / display-p3-linear spaces */</pre>
+      <p class="ours">On this site: <code>contain: style</code> is the honest version of the quote/counter scoping we avoid; the linear color spaces pair with the OKLCH + P3 work already in the homepage.</p>
+    </section>
+
+    <section class="demo">
+      <h2><span>Platform &amp; worker upgrades</span> <span class="stat" data-feat="platform">Safari 27</span></h2>
+      <p class="sub">Less visible, more structural:</p>
+      <ul style="margin:0 0 8px 0; padding-left:20px; font-size:9.5pt">
+        <li><strong>Top-level <code>await</code></strong>, off a full ESM-loader rewrite for standards compliance.</li>
+        <li><strong>WebAssembly JSPI</strong>, so synchronous Wasm can suspend and await JS promises.</li>
+        <li><strong>Service Worker static routing</strong>, routing rules that skip the SW entirely.</li>
+        <li><strong>Transferable streams</strong>, plus <code>ReadableStream.from()</code> and async iteration.</li>
+        <li><strong>Cookie Store API <code>maxAge</code></strong>.</li>
+      </ul>
+      <p class="ours">On this site: Service Worker static routing is the one I keep eyeing for <code>sw.js</code>. The cache-first / SWR / network-only split lives in JS in the fetch handler today; static routes could declare some of it and skip waking the worker at all.</p>
+    </section>
+
+    <section class="demo">
+      <h2><span>Spatial web</span> <span class="stat" data-feat="model">Safari 27</span></h2>
+      <p class="sub">The <code>&lt;model&gt;</code> element graduates from visionOS-only to iOS, iPadOS, and macOS; visionOS&nbsp;27 adds immersive website environments and spatial-photo <code>controls</code> on <code>&lt;img&gt;</code>.</p>
+      <p class="ours">On this site: not used (no 3D), but filed. A resto-mod car site has obvious one-day uses for a real <code>&lt;model&gt;</code> viewer.</p>
+    </section>
+
+    <section class="demo">
+      <h2><span>The talks</span> <span class="stat">WWDC26</span></h2>
+      <p class="sub">WebKit&apos;s <a href="https://webkit.org/blog/17974/web-technology-sessions-at-wwdc26/" rel="external">web-technology sessions roundup</a>. Six worth a watch; I flag the two that land squarely on this site.</p>
+      <ul style="margin:0; padding-left:20px; font-size:9.5pt">
+        <li><a href="https://developer.apple.com/videos/play/wwdc2026/314/" rel="external"><strong>Grid Lanes</strong></a>: CSS-only masonry, no JavaScript.
+          <span class="ours" style="display:block;margin:3px 0 8px">On this site: the <a href="/garage/horizon">horizon</a> page flagged masonry as "not shipped" mid-2026, and here it is shipping. A direct fit for the photo grid: a ragged-height contact sheet, no fixed-square crop.</span>
+        </li>
+        <li><a href="https://developer.apple.com/videos/play/wwdc2026/315/" rel="external"><strong>Customizable Select</strong></a>: the full <code>appearance: base-select</code> deep dive.
+          <span class="ours" style="display:block;margin:3px 0 8px">On this site: the talk behind the first card above, the Luna combobox we already ship.</span>
+        </li>
+        <li><a href="https://developer.apple.com/videos/play/wwdc2026/204/" rel="external">What&apos;s New in Safari 27</a>: the overview (everything on this page, from the source).</li>
+        <li><a href="https://developer.apple.com/videos/play/wwdc2026/215/" rel="external">Meet the <code>model</code> element</a>: embedding 3D, now cross-platform.</li>
+        <li><a href="https://developer.apple.com/videos/play/wwdc2026/320/" rel="external">Immersive website environments</a>: spatial experiences on visionOS.</li>
+        <li><a href="https://developer.apple.com/videos/play/wwdc2026/216/" rel="external">Web Extensions</a>: building and distributing browser extensions.</li>
+      </ul>
+    </section>
+
+    <hr>
+    <p style="font-size:9pt;color:oklch(45% 0 0)">I paraphrase the feature names and scope from the WebKit post up top; the chips run real <code>CSS.supports()</code> and interface probes in your browser. Drag this window by its title bar; ⌘K jumps anywhere.</p>
+  </div>
+  <div class="status" aria-hidden="true">
+    <span>safari 27 / macOS 27</span>
+    <span>WWDC26</span>
+    <span>octane + fallback</span>
+  </div>
+</div>
+
+<script>
+// live "does YOUR browser have it" probes. CSS.supports / interface checks can
+// throw on some engines, so each is wrapped; unknown → neutral chip.
+(function () {
+  var sup = function (fn) { try { return !!fn(); } catch (e) { return null; } };
+  var FEATS = [
+    ["base-select",  "appearance: base-select", function () { return CSS.supports("appearance: base-select"); }],
+    ["anchor",       "anchor positioning",      function () { return CSS.supports("anchor-name: --a") && CSS.supports("position-anchor: --a"); }],
+    ["scroll-anchor","overflow-anchor",         function () { return CSS.supports("overflow-anchor: auto"); }],
+    ["heading",      ":heading",                function () { return CSS.supports("selector(:heading)"); }],
+    ["revert-rule",  "revert-rule",             function () { return CSS.supports("color: revert-rule"); }],
+    ["stretch",      "width: stretch",          function () { return CSS.supports("width: stretch"); }],
+    ["contain-style","contain: style",          function () { return CSS.supports("contain: style"); }],
+    ["p3-linear",    "display-p3-linear",       function () { return CSS.supports("color: color(display-p3-linear 1 0 0)"); }],
+    ["jspi",         "Wasm JSPI",               function () { return typeof WebAssembly !== "undefined" && typeof WebAssembly.Suspending === "function"; }],
+    ["stream-from",  "ReadableStream.from",     function () { return typeof ReadableStream !== "undefined" && typeof ReadableStream.from === "function"; }],
+    ["model",        "<model>",                 function () { return "HTMLModelElement" in window; }]
+  ];
+  var strip = document.getElementById("caps");
+  FEATS.forEach(function (f) {
+    var ok = sup(f[2]);
+    var c = document.createElement("span");
+    c.className = "chip " + (ok === true ? "yes" : ok === false ? "no" : "");
+    c.textContent = f[1];
+    strip.appendChild(c);
+  });
+})();
+</script>
+<script src="/nav.js" defer></script>
+</body>
+</html>

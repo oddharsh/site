@@ -36,7 +36,15 @@ function avatar(name, size = 30) {
 }
 
 function relativeTime(date) {
-  const days = Math.floor((Date.now() - date.getTime()) / 86400000);
+  // whole-days elapsed, via Temporal when the runtime ships it (enable_temporal
+  // compat flag), else the plain epoch-ms delta. same output either way.
+  let days;
+  try {
+    if (typeof Temporal !== "undefined" && date.toTemporalInstant) {
+      days = Math.floor(Temporal.Now.instant().since(date.toTemporalInstant()).total({ unit: "hour" }) / 24);
+    }
+  } catch (e) {}
+  if (days === undefined) days = Math.floor((Date.now() - date.getTime()) / 86400000);
   if (days <= 0) return "today";
   if (days === 1) return "yesterday";
   if (days < 7) return `${days}d ago`;
@@ -47,10 +55,22 @@ function relativeTime(date) {
 
 function fmtDateTime(s) {
   if (!s) return "";
+  const opt = { weekday: "short", month: "short", day: "numeric" };
+  const topt = { hour: "numeric", minute: "2-digit" };
+  // Temporal when available: a wall-clock string shows as recorded; an instant
+  // shows in UTC (matching this Worker's clock). falls back to Date otherwise.
+  try {
+    if (typeof Temporal !== "undefined") {
+      const z = s.replace(" ", "T");
+      const pdt = /[zZ]|[+-]\d{2}:?\d{2}$/.test(z)
+        ? Temporal.Instant.from(z).toZonedDateTimeISO("UTC").toPlainDateTime()
+        : Temporal.PlainDateTime.from(z);
+      return pdt.toLocaleString("en-US", opt) + " · " + pdt.toLocaleString("en-US", topt);
+    }
+  } catch (e) {}
   const d = new Date(s);
   if (isNaN(d)) return "";
-  return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) +
-         " · " + d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  return d.toLocaleDateString("en-US", opt) + " · " + d.toLocaleTimeString("en-US", topt);
 }
 
 // influence/seniority proxy — ported verbatim from the Next app's attendeeScore.
@@ -163,26 +183,46 @@ async function countContributors(d) {
 function shellCss() {
   return `
   *{box-sizing:border-box}
+/* cross-document View Transitions: a fast, reduced-motion-safe crossfade on real
+   navigations between same-origin pages. inline (not JS-injected) so the incoming
+   page has opted in by parse time. the persistent shell (wallpaper/taskbar) is
+   identical across pages, so visually only the changing window content fades. */
+@media (prefers-reduced-motion:no-preference){@view-transition{navigation:auto}::view-transition-old(root),::view-transition-new(root){animation-duration:140ms}}
   html,body{margin:0;padding:0;min-height:100%}
+  /* Bliss tone on the root so the cross-document View Transition (which freezes
+     the root group) shows the desktop colour, not a frame of white, before
+     nav.js paints the real wallpaper. */
+  html{background:linear-gradient(180deg,oklch(56% 0.13 250) 0%,oklch(73% 0.10 236) 50%,oklch(88% 0.05 232) 60%,oklch(60% 0.16 140) 100%)}
   body{background:linear-gradient(160deg,oklch(70% 0.11 240) 0%,oklch(78% 0.075 235) 45%,oklch(85% 0.045 235) 100%);background-attachment:fixed;font-family:var(--font-ui);font-size:12px;line-height:1.5;color:oklch(16% 0 0);font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased;scrollbar-color:oklch(64% 0.13 255) oklch(90% 0.025 250)}
   a{color:oklch(42% 0.235 264);text-decoration:underline}
   a:hover{color:oklch(60% 0.25 29)}
   h1,h2,h3{font-family:var(--font-caption);margin:0}
   .wrap{max-width:980px;margin:22px auto;padding:0 12px 48px}
-  .window{background:#fff;border:2px solid #0831d9;border-right-color:#001ea0;border-bottom-color:#001ea0;border-top-left-radius:8px;border-top-right-radius:8px;overflow:hidden;box-shadow:inset 1px 1px 0 #166aee,inset 2px 2px 0 #0855dd,inset -1px -1px 0 #00138c,inset -2px -2px 0 #003bda,6px 6px 24px -6px rgba(0,20,90,.5)}
-  .titlebar{display:flex;align-items:center;gap:6px;padding:4px 6px 4px 8px;font:bold 10pt "Trebuchet MS",Verdana,sans-serif;color:#fff;text-shadow:1px 1px #0f1089;border-bottom:1px solid #00138c;background:linear-gradient(180deg,oklch(70% 0.15 258) 0%,oklch(60% 0.20 261) 8%,oklch(51% 0.225 263) 18%,oklch(50% 0.225 263) 86%,oklch(58% 0.18 260) 100%)}
+  .window{background:#fff;border:2px solid #0831d9;border-right-color:#001ea0;border-bottom-color:#001ea0;border-top-left-radius:8px;border-top-right-radius:8px;overflow:hidden;box-shadow:inset 1px 1px 0 #166aee,inset 2px 2px 0 #0855dd,inset -1px -1px 0 #00138c,inset -2px -2px 0 #003bda,4px 4px 0 rgba(0,30,160,.35)}
+  .titlebar{display:flex;align-items:center;gap:6px;padding:4px 6px 4px 8px;font:bold 10pt var(--font-caption);color:#fff;text-shadow:1px 1px #0f1089;border-bottom:1px solid oklch(41.92% 0.0962 250.51);background:linear-gradient(180deg,oklch(70% 0.15 258) 0%,oklch(60% 0.20 261) 8%,oklch(51% 0.225 263) 18%,oklch(50% 0.225 263) 86%,oklch(58% 0.18 260) 100%)}
   .titlebar .ico{width:18px;height:18px;flex:0 0 auto;background:oklch(69.58% 0.2043 43.49);border-radius:0;position:relative}
   .titlebar .ico::before{content:"";position:absolute;inset:3px 4px;background:oklch(87.82% 0.0877 66.27);clip-path:polygon(50% 0,100% 100%,0 100%)}
   .titlebar .t{flex:1}
-  .titlebar .x{width:21px;height:21px;border-radius:0;position:relative;border:1px solid #d8401c;text-decoration:none;background:linear-gradient(180deg,#e8795f,#e45f40 30%,#e45d3d 52%,#e2552a 80%,#ae3110)}
+  .titlebar .x{width:21px;height:21px;border-radius:3px;position:relative;border:1px solid #d8401c;text-decoration:none;background:linear-gradient(180deg,#e8795f,#e45f40 30%,#e45d3d 52%,#e2552a 80%,#ae3110);transition:filter 60ms ease-out}
+  .titlebar .x:hover,.titlebar .x:focus-visible{border-color:#ff7a66;background:linear-gradient(180deg,#ff8b7d 0%,#ff7463 26%,#ff957c 55%,#fd7e64 82%,#d34936 100%);box-shadow:0 0 4px rgba(255,120,96,.7);outline:none}
   .titlebar .x::before,.titlebar .x::after{content:"";position:absolute;left:50%;top:50%;width:13px;height:2px;margin:-1px 0 0 -6.5px;background:#fff;box-shadow:0 1px 0 rgba(0,0,0,.35)}
   .titlebar .x::before{transform:rotate(45deg)}.titlebar .x::after{transform:rotate(-45deg)}
+  /* windows are resizable now, so stack the master-detail on WINDOW width, not
+     just viewport. container query keys on .window; the @media below stays as the
+     viewport / no-container-support fallback. */
+  .window{container:serendipity-win / inline-size}
   .body{display:flex;min-height:520px}
+  @container serendipity-win (max-width:560px){.body{flex-direction:column}.pane{width:auto;border-right:0;border-bottom:2px solid #7a96c8}}
+  /* under the shared OS-window model nav.js scrolls .window>.body; for this
+     master-detail layout, scroll the main .content instead so the sidebar
+     fills the full window height (no mid-scroll cutoff / "weird spot"). */
+  .window>.body{overflow:hidden !important}
+  .body>.content{overflow:auto;min-height:0}
   .pane{width:200px;flex:0 0 auto;border-right:2px solid #7a96c8;background:linear-gradient(180deg,oklch(90% 0.055 245),oklch(93% 0.038 245));padding:12px}
   .pane .brand{display:block;padding:2px 4px 10px;color:oklch(16% 0 0);text-decoration:none}
-  .pane .brand b{font:600 16pt "Trebuchet MS",Verdana,sans-serif;display:block;line-height:1}
+  .pane .brand b{font:600 16pt var(--font-caption);display:block;line-height:1}
   .pane .brand span{font-size:10px;color:oklch(45% 0.01 250)}
-  .pane-head{font:bold 8.5pt "Trebuchet MS",Verdana,sans-serif;color:#fff;padding:3px 10px;border-radius:3px 3px 0 0;text-shadow:0 1px 1px rgba(0,30,90,.5);background:linear-gradient(180deg,oklch(66% 0.16 255),oklch(54% 0.20 260))}
+  .pane-head{font:bold 8.5pt var(--font-caption);color:#fff;padding:3px 10px;border-radius:3px 3px 0 0;text-shadow:0 1px 1px rgba(0,30,90,.5);background:linear-gradient(180deg,oklch(66% 0.16 255),oklch(54% 0.20 260))}
   .pane-body{border:1px solid #bcd0ec;border-top:0;background:rgba(255,255,255,.55);padding:4px;display:flex;flex-direction:column}
   .pane-body a{padding:3px 8px;border-radius:0;text-decoration:none;color:oklch(42% 0.235 264)}
   .pane-body a:hover{background:#2f6fde;color:#fff}
@@ -192,17 +232,20 @@ function shellCss() {
   h1.page{font-size:19pt;font-weight:bold;color:oklch(33% 0.10 255);margin:0 0 2px;letter-spacing:-.01em}
   .lede{color:oklch(40% 0.01 250);font-size:11px;margin:0 0 16px;max-width:62ch}
   hr.sep{border:0;border-top:1px solid oklch(85% 0.03 250);margin:14px 0}
-  .grp{font:bold 8.5pt "Trebuchet MS";text-transform:uppercase;letter-spacing:.06em;color:oklch(45% 0.02 255);margin:18px 0 8px}
+  .grp{font:bold 8.5pt var(--font-caption);text-transform:uppercase;letter-spacing:.06em;color:oklch(45% 0.02 255);margin:18px 0 8px}
   /* event card — sunken-bevel list item */
-  .ev{display:block;text-decoration:none;color:inherit;border:1px solid oklch(80% 0.035 250);border-top-color:oklch(70% 0.05 250);border-left-color:oklch(70% 0.05 250);background:#fff;padding:10px 12px;margin:0 0 7px;border-radius:0}
+  .ev{display:block;text-decoration:none;color:inherit;border:1px solid oklch(80% 0.035 250);border-top-color:oklch(70% 0.05 250);border-left-color:oklch(70% 0.05 250);background:#fff;padding:10px 12px;margin:0 0 7px;border-radius:0;content-visibility:auto;contain-intrinsic-size:auto 66px}
   .ev:hover{border-color:oklch(50% 0.18 263);background:oklch(98% 0.02 250)}
   .ev .nm{font-weight:bold;color:oklch(20% 0.02 255);font-size:13px}
   .ev .meta{color:oklch(45% 0.01 250);font-size:11px;margin-top:2px}
   .ev .row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px}
   .count{font-size:11px;color:oklch(42% 0.02 255)}
-  .badge{display:inline-block;font:bold 9px Tahoma;padding:1px 6px;border:1px solid;border-radius:0;text-transform:uppercase;letter-spacing:.04em}
+  .badge{display:inline-block;font:bold 9px var(--font-ui);padding:1px 6px;border:1px solid;border-radius:0;text-transform:uppercase;letter-spacing:.04em}
   .badge.via{background:oklch(96% 0.02 250);color:oklch(42% 0.03 255);border-color:oklch(80% 0.04 250);font-weight:normal;text-transform:none}
   .badge.past{background:oklch(95% 0 0);color:oklch(45% 0 0);border-color:oklch(78% 0 0)}
+  .badge.browsed{background:oklch(95% 0.03 75);color:oklch(46% 0.08 60);border-color:oklch(83% 0.06 75);font-weight:normal;text-transform:none}
+  .ev.disc{opacity:.5;background:oklch(98.5% 0 0)}
+  .ev.disc:hover{opacity:1}
   /* attendee row */
   .alist{border:1px solid oklch(80% 0.035 250);border-radius:0;background:#fff}
   .att{display:flex;align-items:center;gap:10px;padding:8px 12px;border-top:1px solid oklch(92% 0.02 250)}
@@ -222,7 +265,7 @@ function shellCss() {
   .att .soc{display:flex;gap:6px;flex:0 0 auto}
   .att .soc a{font-size:10px}
   .empty{text-align:center;color:oklch(50% 0.01 250);padding:34px 12px;border:1px dashed oklch(78% 0.04 250);border-radius:0;background:oklch(98% 0.01 250)}
-  .xp-button{display:inline-block;min-width:73px;padding:4px 14px;font:8pt/1.3 Tahoma;color:#000;cursor:pointer;border:1px solid #8e9dad;border-radius:0;text-decoration:none;background:linear-gradient(180deg,#fff,#fdfdfd 45%,#f3f2ec 55%,#e9e7dc)}
+  .xp-button{display:inline-block;min-width:73px;padding:4px 14px;font:8pt/1.3 var(--font-ui);color:#000;cursor:pointer;border:1px solid #8e9dad;border-radius:0;text-decoration:none;background:linear-gradient(180deg,#fff,#fdfdfd 45%,#f3f2ec 55%,#e9e7dc)}
   .xp-button:hover{border-color:#e9994a;box-shadow:inset 0 0 0 1px #fdd78b,0 0 3px 1px rgba(255,199,60,.55)}
   .xp-button.primary{color:#fff;border-color:#2c4d7e;font-weight:bold;background:linear-gradient(180deg,#5b9bf0,#3f81e8 12%,#2f6fde 50%,#2a64d4 88%,#2a60cc)}
   .note{font-size:11px;color:oklch(42% 0.01 250)}
@@ -241,7 +284,7 @@ function shellCss() {
   .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 14px}
   .toolbar .search{flex:1;min-width:170px;margin:0}
   .chips{display:flex;gap:4px;flex-wrap:wrap}
-  .chip{font:8.5pt Tahoma;padding:3px 11px;border:1px solid #8e9dad;border-radius:0;background:linear-gradient(180deg,#fff,#f3f2ec);color:#222;cursor:pointer}
+  .chip{font:8.5pt var(--font-ui);padding:3px 11px;border:1px solid #8e9dad;border-radius:0;background:linear-gradient(180deg,#fff,#f3f2ec);color:#222;cursor:pointer}
   .chip.on{color:#fff;border-color:#2c4d7e;font-weight:bold;background:linear-gradient(180deg,#5b9bf0,#2f6fde 60%,#2a60cc)}
   .ev[hidden],.grp[hidden]{display:none}
   .empty-filter{display:none;color:oklch(50% 0.01 250);padding:24px 12px;border:1px dashed oklch(78% 0.04 250);border-radius:0;background:oklch(98% 0.01 250);text-align:center;font-size:11px}
@@ -258,7 +301,20 @@ function shellCss() {
      auto follows the image; max-height caps a rare portrait cover, with contain
      letterboxing inside it (bg fills) rather than distorting. */
   #ev-tip img{display:block;width:300px;height:auto;max-height:340px;object-fit:contain;background:oklch(94% 0.005 240);border:3px solid #fff;outline:1px solid oklch(61% 0.061 253);outline-offset:-1px;box-shadow:2px 3px 12px -2px rgba(0,20,90,.55)}
-  @media(max-width:640px){.body{flex-direction:column}.pane{width:auto;border-right:0;border-bottom:2px solid #7a96c8}}`;
+  @media(max-width:640px){.body{flex-direction:column}.pane{width:auto;border-right:0;border-bottom:2px solid #7a96c8}}
+  /* OS-window geometry inlined so first paint matches nav.js (no shell "pop"
+     when the deferred desktop arrives). byte-identical to nav.js's app-shell
+     rules; !important beats this page's own body rule. serendipity's own
+     .window>.body{overflow:hidden !important} + .pane-body scroll still win. */
+  html{height:100dvh;overflow:hidden}
+  body{min-height:0 !important;height:calc(100vh - 30px) !important;height:calc(100dvh - 30px) !important;overflow-x:hidden !important;overflow-y:auto !important;box-sizing:border-box}
+  body:has(.window),body:has(.np-window),body:has(.wrap){overflow:hidden !important;display:flex !important;flex-direction:column !important;align-items:center !important;padding:8px !important}
+  .window,.np-window,.wrap{position:relative;z-index:2;flex:0 1 auto !important;min-height:0;max-height:100% !important;width:100%;margin:0 auto !important;box-sizing:border-box}
+  .window,.np-window{display:flex;flex-direction:column}
+  .window>.title-bar,.window>.titlebar,.np-window>.np-titlebar{flex:0 0 auto}
+  .window>.content,.window>.body{flex:1 1 auto;min-height:0;overflow:auto}
+  .wrap{display:flex;flex-direction:column;padding-bottom:0 !important}.wrap>.window{flex:0 1 auto;max-height:100%}
+  body::after{content:"";position:fixed;left:0;right:0;bottom:0;height:30px;z-index:1;background:linear-gradient(180deg,oklch(67% 0.15 256) 0%,oklch(58% 0.19 257) 4%,oklch(51% 0.20 258) 9%,oklch(49% 0.20 258) 50%,oklch(46% 0.20 259) 92%,oklch(40% 0.18 260) 100%)}`;
 }
 
 function shell(title, currentPath, bodyHtml) {
@@ -269,12 +325,12 @@ function shell(title, currentPath, bodyHtml) {
   };
   return `<!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${esc(title)} — Serendipity</title>
+<title>${esc(title) === "Serendipity" ? "aadhar.sh/serendipity" : "aadhar.sh/serendipity/" + esc(title)}</title>
 <meta name="description" content="A public, shared database of events worth going to and who's going — fed by the collective, queryable by humans and agents.">
 <style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}${shellCss()}</style></head><body>
 <div class="wrap"><div class="window">
   <div class="titlebar"><span class="ico" aria-hidden="true"></span>
-    <span class="t">Serendipity Collective — aadhar.sh</span>
+    <span class="t">aadhar.sh/serendipity</span>
     <a class="x" href="/" title="back to aadhar.sh" aria-label="back to aadhar.sh"></a>
   </div>
   <div class="body">
@@ -300,15 +356,20 @@ function shell(title, currentPath, bodyHtml) {
 // ── pages ────────────────────────────────────────────────────────────────────
 function eventCard(e, isPast) {
   const contributors = (e.contributors || "").split(", ").filter(Boolean);
+  // first-class = a contributor actually RSVP'd / hosts (user_status 'going');
+  // everything else was synced from browsing a feed — demote it (dimmed + a
+  // "browsed" badge) so the real events stand out.
+  const going = e.user_status === "going";
   const counts = [];
   if (Number(e.host_count) > 0) counts.push(`${e.host_count} host${e.host_count == 1 ? "" : "s"}`);
   if (Number(e.attendee_count) > 0) counts.push(`${e.attendee_count} going`);
   const d = e.start_at ? new Date(e.start_at) : null;
-  return `<a class="ev" href="${PREFIX}/event/${esc(e.id)}" data-start="${esc(e.start_at || "")}"${e._coverHref ? ` data-cover="${esc(e._coverHref)}"` : ""}>
+  return `<a class="ev${going ? "" : " disc"}" data-tier="${going ? "going" : "browsed"}" href="${PREFIX}/event/${esc(e.id)}" data-start="${esc(e.start_at || "")}"${e._coverHref ? ` data-cover="${esc(e._coverHref)}"` : ""}>
     <div class="nm">${esc(e.name)}</div>
     <div class="meta">${d ? esc(fmtDateTime(e.start_at)) : "date TBD"}${isPast && d ? ` · ${esc(relativeTime(d))}` : ""}${e.location ? " · " + esc(e.location) : ""}</div>
     <div class="row">
-      ${counts.length ? `<span class="count">${counts.join(" · ")}</span>` : `<span class="count" style="color:oklch(60% 0 0)">no guest list yet</span>`}
+      ${going ? "" : `<span class="badge browsed" title="synced from a browsed feed — not RSVP'd">browsed</span>`}
+      ${counts.length ? `<span class="count">${counts.join(" · ")}</span>` : `<span class="count" style="color:oklch(60% 0 0)">${going ? "no guest list yet" : "not RSVP&rsquo;d"}</span>`}
       ${contributors.slice(0, 3).map((c) => `<span class="badge via">via ${esc(c)}</span>`).join("")}
       ${contributors.length > 3 ? `<span class="count">+${contributors.length - 3}</span>` : ""}
     </div>
@@ -394,10 +455,13 @@ async function renderDashboard(d, path, msg, env) {
   } else {
     const now = Date.now();
     const PAST_CAP = 30;  // past-event cards were ~88% of the payload, mostly unscrolled
+    // stable: surface RSVP'd ('going') events first within each section, so the
+    // real events lead and a past one isn't buried below the cap by the browsed pile.
+    const goingFirst = (arr) => arr.slice().sort((a, b) => (b.user_status === "going") - (a.user_status === "going"));
     const upcoming = events.filter((e) => !e.start_at || new Date(e.start_at).getTime() >= now);
     const pastAll = events.filter((e) => e.start_at && new Date(e.start_at).getTime() < now)
                           .sort((a, b) => new Date(b.start_at) - new Date(a.start_at));
-    const past = pastAll.slice(0, PAST_CAP);
+    const past = goingFirst(pastAll).slice(0, PAST_CAP);
     // sign the cover-proxy URL for every card we actually render (upcoming + the
     // capped past slice) — not all of pastAll. eventCard reads e._coverHref.
     await Promise.all(
@@ -413,8 +477,8 @@ async function renderDashboard(d, path, msg, env) {
           <button type="button" class="chip" data-when="weekend">This weekend</button>
         </div>
       </div>
-      ${upcoming.length ? `<div class="grp" data-grp>Upcoming (${upcoming.length})</div>${upcoming.map((e) => eventCard(e, false)).join("")}` : ""}
-      ${pastAll.length ? `<div class="grp" data-grp>Past ${pastAll.length > PAST_CAP ? `(${PAST_CAP} most recent of ${pastAll.length})` : `(${pastAll.length})`}</div>${past.map((e) => eventCard(e, true)).join("")}` : ""}
+      ${upcoming.length ? `<div class="grp" data-grp>Upcoming (${upcoming.length})</div>${goingFirst(upcoming).map((e) => eventCard(e, false)).join("")}` : ""}
+      ${pastAll.length ? `<div class="grp" data-grp>Past ${pastAll.length > PAST_CAP ? `(${PAST_CAP} of ${pastAll.length})` : `(${pastAll.length})`}</div>${past.map((e) => eventCard(e, true)).join("")}` : ""}
       <p class="empty-filter" id="ev-none">No events match — clear the search or pick a wider range.</p>
       <div id="ev-tip" aria-hidden="true"></div>
       <script>${DASHBOARD_JS}</script>`;
@@ -537,9 +601,32 @@ async function handleCookies(request, env, d, uid) {
 }
 
 function renderMcpInfo(path) {
+  const ep = `https://aadhar.sh${PREFIX}/mcp`;
+  const tool = (n, args, desc) =>
+    `<div class="att"><div class="who"><div class="n"><code>${n}</code>${args ? ` <span class="sub" style="display:inline">(${args})</span>` : ""}</div><div class="sub">${desc}</div></div></div>`;
   const body = `<h1 class="page">For agents</h1>
-    <p class="lede">Serendipity is built to be queried by agents, not just people. A read-only MCP (Model Context Protocol) endpoint is coming at <code>${PREFIX}/mcp</code> — point an MCP client at it and call tools like <code>list_events</code>, <code>get_event</code>, and <code>search_people</code> to ask "what events are good and who's going."</p>
-    <div class="empty" style="text-align:left"><p class="note" style="margin:0">The MCP + JSON endpoints land in a later build phase. The data model and query layer that back them already exist.</p></div>`;
+    <p class="lede">Serendipity is built to be queried by agents, not just people. A read-only MCP (Model Context Protocol) endpoint is live at <code>${ep}</code>. Point any MCP client at it (Streamable-HTTP transport, JSON-RPC over POST) and ask "what events are good, and who's going." Public data only: no auth, no writes, and never private contact details.</p>
+    <div class="grp">Tools</div>
+    <div class="alist">
+      ${tool("list_events", "when, rsvp, q, limit", "Events in the pool with a head count + an RSVP tier. By default returns only events a contributor actually RSVP&apos;d to / hosts (the ones with rosters), plus a count of browsed-but-not-RSVP&apos;d events hidden; rsvp:&quot;all&quot; includes those (first-class first), rsvp:&quot;discovered&quot; returns only them.")}
+      ${tool("get_event", "id", "One event in full: description, hosts, the guest list (who&apos;s going), contributors.")}
+      ${tool("search_people", "q, limit", "Find people by name; returns role/company/socials and their events split into going_to and been_to.")}
+      ${tool("list_contributors", "", "The people feeding the pool: a label, an id prefix, and how many events each fed in.")}
+      ${tool("contributor_events", "contributor", "One contributor&apos;s whole footprint (by cookie id, id prefix, or label), split into going_to and been_to.")}
+      ${tool("frequent_people", "when, limit", "Who shows up across the most events (who you&apos;re seeing a lot), with an event count.")}
+      ${tool("co_attendees", "q, limit", "Who one person crosses paths with most, with the shared event names. Pass your own name for &quot;who am I seeing a lot&quot;.")}
+      ${tool("connections", "min_shared, limit", "The tightest co-attendance pairs pool-wide (who&apos;s seeing who), with shared counts + event names.")}
+      ${tool("shared_events", "a, b", "The events two named people both attended (did they cross paths, and where).")}
+      ${tool("stats", "", "Pool overview: event counts, distinct people, active contributors.")}
+    </div>
+    <div class="grp">Connect</div>
+    <p class="note" style="margin:0 0 8px">Add it to an MCP client config:</p>
+    <pre class="code-block" style="font-family:var(--font-mono);font-size:12px;white-space:pre-wrap;background:oklch(97% 0 0);border:1px solid oklch(82% 0.02 250);border-radius:3px;padding:10px;overflow:auto;margin:0 0 12px">{
+  "mcpServers": {
+    "serendipity": { "url": "${ep}" }
+  }
+}</pre>
+    <p class="note">It exposes exactly what the dashboard shows: event details and who&apos;s going, with names, roles, companies, and public social links. The email and phone columns behind the pool never leave the database.</p>`;
   return html(200, shell("For agents", path, body));
 }
 
@@ -1015,13 +1102,68 @@ async function enrichViaExa(d, key, attendee, force) {
   return { outcome: found ? "success" : "not_found", profile: { company, role: p.role, location: p.location, linkedin_url: linkedinUrl, bio } };
 }
 
+// ── Parallel (parallel.ai) enrichment — the optional second provider ────────
+// Synchronous Search API: POST /v1beta/search → ranked web excerpts. Unlike Exa
+// (whose summary feature returns a structured ROLE/COMPANY block we parse), this
+// returns raw excerpts, so role/company are best-effort regex'd out of a "<Title>
+// at <Company>" pattern. Good enough to A/B against Exa; if Parallel wins the
+// eval, the structured upgrade is its Task API (server-side output schema).
+async function parallelSearch(key, objective, queries) {
+  const r = await fetch("https://api.parallel.ai/v1beta/search", {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-api-key": key, "parallel-beta": "search-extract-2025-10-10" },
+    body: JSON.stringify({ objective, search_queries: queries, max_results: 5, max_chars_per_result: 1500 }),
+  });
+  if (!r.ok) throw new Error(`Parallel ${r.status}: ${(await r.text().catch(() => "")).slice(0, 160)}`);
+  return r.json();
+}
+function guessRoleCompany(text) {
+  if (!text) return { role: null, company: null };
+  const m = text.match(/\b([A-Z][A-Za-z0-9/&+. -]{2,40}?(?:Engineer|Developer|Founder|Co-?founder|CEO|CTO|COO|CFO|CPO|President|VP|Director|Head|Manager|Lead|Designer|Researcher|Scientist|Partner|Investor|Analyst|Officer))\s+(?:at|@|,|\bof\b)\s+([A-Z][A-Za-z0-9/&+.' -]{1,40})/);
+  return m ? { role: m[1].trim(), company: m[2].trim() } : { role: null, company: null };
+}
+async function enrichViaParallel(d, key, attendee, force) {
+  if (!key) return { outcome: "not_found", error: "PARALLEL_NOT_CONFIGURED" };
+  if (!force) {
+    const ex = await d.prepare("SELECT source FROM enrichments WHERE attendee_id = ?").get(attendee.id);
+    if (ex && ex.source === "parallel") return { outcome: "already_enriched" };
+  }
+  const objective = `Identify the professional profile of ${attendee.name}${attendee.bio_short ? " (" + attendee.bio_short + ")" : ""}: current job title/role, current company or organization, and city/location. Prefer LinkedIn, company pages, and recent reputable sources.`;
+  const queries = [`${attendee.name} LinkedIn`, `${attendee.name} ${attendee.bio_short || "role company"}`.trim(), `${attendee.name} founder OR engineer OR investor`];
+  let results;
+  try { results = (await parallelSearch(key, objective, queries)).results || []; }
+  catch (err) { return { outcome: "not_found", error: err instanceof Error ? err.message : String(err) }; }
+
+  const linkedinUrl = (results.find((r) => /linkedin\.com\/in\//i.test(r.url || "")) || {}).url || null;
+  const context = results.flatMap((r) => r.excerpts || []).join(" ").replace(/\s+/g, " ").trim();
+  const g = guessRoleCompany(context);
+  const bio = context ? context.slice(0, 600) : null;
+  const found = !!(linkedinUrl || g.role || g.company || bio);
+  await d.prepare(`INSERT INTO enrichments (attendee_id,linkedin_url,company,role,bio,location,work_history,education,emails,phone_numbers,source,raw_json,enriched_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'))
+    ON CONFLICT(attendee_id) DO UPDATE SET linkedin_url=excluded.linkedin_url,company=excluded.company,role=excluded.role,bio=excluded.bio,
+      location=excluded.location,work_history=excluded.work_history,source=excluded.source,raw_json=excluded.raw_json,enriched_at=datetime('now')`)
+    .run(attendee.id, linkedinUrl, g.company, g.role, bio, null, "[]", "[]", "[]", "[]", "parallel", JSON.stringify({ objective, results: results.slice(0, 3) }).slice(0, 4000));
+  return { outcome: found ? "success" : "not_found", profile: { company: g.company, role: g.role, location: null, linkedin_url: linkedinUrl, bio } };
+}
+
 // secret-gated: POST /serendipity/enrich?key=SECRET&attendee=<id>  (single)
 //                                         &event=<id>&limit=6      (bulk, un-enriched)
+// provider=exa (default) | parallel — both optional; only the one whose API key
+// is set will run. No agentcash / payment layer: each provider is a direct key.
+const ENRICH_PROVIDERS = {
+  exa:      { keyEnv: "EXA_API_KEY",      fn: enrichViaExa },
+  parallel: { keyEnv: "PARALLEL_API_KEY", fn: enrichViaParallel },
+};
 async function handleEnrich(request, env, d) {
   const url = new URL(request.url);
   if (!env.SYNC_SECRET || url.searchParams.get("key") !== env.SYNC_SECRET) return new Response("forbidden", { status: 403 });
-  const key = env.EXA_API_KEY;
-  if (!key) return new Response(JSON.stringify({ error: "EXA_API_KEY not set" }), { status: 400, headers: { "content-type": "application/json" } });
+  const jerr = (msg, code) => new Response(JSON.stringify({ error: msg }), { status: code, headers: { "content-type": "application/json" } });
+  const provider = (url.searchParams.get("provider") || "exa").toLowerCase();
+  const P = ENRICH_PROVIDERS[provider];
+  if (!P) return jerr(`unknown provider "${provider}" (use exa | parallel)`, 400);
+  const key = env[P.keyEnv];
+  if (!key) return jerr(`${P.keyEnv} not set — add it with: wrangler secret put ${P.keyEnv}`, 400);
   const COLS = "id, name, linkedin_handle, email, bio_short";
   let targets;
   const aid = url.searchParams.get("attendee"), eid = url.searchParams.get("event");
@@ -1033,11 +1175,11 @@ async function handleEnrich(request, env, d) {
        LEFT JOIN enrichments en ON en.attendee_id = a.id
       WHERE ea.event_id = ? AND ea.is_host = 0 AND en.attendee_id IS NULL
       ORDER BY a.times_seen DESC LIMIT ?`).all(eid, limit);
-  } else return new Response(JSON.stringify({ error: "pass ?attendee= or ?event=" }), { status: 400, headers: { "content-type": "application/json" } });
+  } else return jerr("pass ?attendee= or ?event=", 400);
 
   const out = [];
-  for (const a of targets) out.push({ name: a.name, ...(await enrichViaExa(d, key, a, !!aid)) });
-  return new Response(JSON.stringify({ ok: true, enriched: out }, null, 2), { headers: { "content-type": "application/json" } });
+  for (const a of targets) out.push({ name: a.name, ...(await P.fn(d, key, a, !!aid)) });
+  return new Response(JSON.stringify({ ok: true, provider, enriched: out }, null, 2), { headers: { "content-type": "application/json" } });
 }
 
 // ── cover-proxy request signing ─────────────────────────────────────────────
@@ -1132,6 +1274,519 @@ async function handleCover(request, env, ctx) {
   return out;
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// MCP — read-only Model Context Protocol surface at /serendipity/mcp.
+// Streamable-HTTP transport (JSON-RPC 2.0 over POST), stateless + dependency-
+// free — the same hand-rolled style as the rest of this Worker. It reuses the
+// query layer above and exposes ONLY the public read surface the dashboard
+// renders. The email / phone_numbers / raw_json columns on attendees+enrichments
+// never cross this boundary. No auth, no writes — the same data, for agents.
+// ════════════════════════════════════════════════════════════════════════════
+
+const MCP_PROTOCOL = "2025-06-18";                              // the version we author against
+const MCP_SUPPORTED = ["2025-06-18", "2025-03-26", "2024-11-05"];
+
+// public-safe projection of an attendee row — mirrors what attendeeRow renders.
+// NO email / phone / raw_json: those columns aren't even SELECT'd by the query
+// layer, and this mapper is the second guardrail.
+function mcpAttendee(a) {
+  const socials = {};
+  if (a.twitter_handle) socials.x = "https://x.com/" + String(a.twitter_handle).replace(/^@/, "");
+  if (a.linkedin_url) socials.linkedin = a.linkedin_url;
+  else if (a.linkedin_handle) socials.linkedin = "https://linkedin.com/in/" + a.linkedin_handle;
+  if (a.instagram_handle) socials.instagram = "https://instagram.com/" + String(a.instagram_handle).replace(/^@/, "");
+  if (a.website) socials.website = a.website;
+  const o = {
+    name: a.name,
+    role: a.role || null,
+    company: a.company || null,
+    location: a.location || null,
+    bio: a.bio_short || null,
+    times_seen: a.times_seen != null ? Number(a.times_seen) : null,
+  };
+  if (a.is_host != null) o.is_host = !!Number(a.is_host);
+  if (Object.keys(socials).length) o.socials = socials;
+  return o;
+}
+
+function mcpEventSummary(e) {
+  return {
+    id: e.id,
+    name: e.name,
+    start_at: e.start_at || null,
+    location: e.location || null,
+    url: e.url || (e.id ? "https://lu.ma/" + e.id : null),
+    going: Number(e.attendee_count || 0),
+    hosts: Number(e.host_count || 0),
+    // RSVP tier: "going" means a contributor actually RSVP'd / is hosting — the
+    // first-class events. "invited"/"pending"/"waitlisted"/unknown are synced from
+    // browsing a Luma feed without RSVPing — no roster, second-class.
+    attending: e.user_status === "going",
+    rsvp: e.user_status || "unknown",
+    contributors: e.contributors || null,
+  };
+}
+
+// people search: one query for the matches, one IN(...) query for their events
+// (two D1 subrequests total, no N+1).
+async function mcpSearchPeople(d, q, limit) {
+  const term = "%" + String(q).replace(/[\\%_]/g, "\\$&") + "%";
+  const people = await d.prepare(
+    `SELECT a.id, a.name, a.bio_short, a.times_seen, a.website,
+            a.twitter_handle, a.linkedin_handle, a.instagram_handle,
+            en.company, en.role, en.location, en.linkedin_url
+       FROM attendees a LEFT JOIN enrichments en ON en.attendee_id = a.id
+      WHERE a.name LIKE ? ESCAPE '\\'
+      ORDER BY a.times_seen DESC, a.name ASC
+      LIMIT ?`
+  ).all(term, limit);
+  if (!people.length) return [];
+  const ids = people.map((p) => p.id);
+  const ph = ids.map(() => "?").join(",");
+  const memberships = await d.prepare(
+    `SELECT ea.attendee_id, e.id AS event_id, e.name AS event_name, e.start_at, ea.is_host
+       FROM event_attendees ea JOIN events e ON e.id = ea.event_id
+      WHERE ea.attendee_id IN (${ph})
+      ORDER BY e.start_at DESC`
+  ).all(...ids);
+  const byPerson = new Map();
+  for (const m of memberships) {
+    if (!byPerson.has(m.attendee_id)) byPerson.set(m.attendee_id, []);
+    byPerson.get(m.attendee_id).push({ id: m.event_id, name: m.event_name, start_at: m.start_at || null, is_host: !!Number(m.is_host) });
+  }
+  const now = Date.now();
+  return people.map((p) => {
+    const o = mcpAttendee(p);
+    const evs = byPerson.get(p.id) || [];
+    // split each person's events into what they're going to (upcoming) vs have
+    // been to (past), so a caller can read both their trajectory and their reach.
+    o.going_to = evs.filter((e) => !e.start_at || new Date(e.start_at).getTime() >= now)
+                    .sort((a, b) => new Date(a.start_at || 0) - new Date(b.start_at || 0));
+    o.been_to = evs.filter((e) => e.start_at && new Date(e.start_at).getTime() < now);  // already DESC
+    return o;
+  });
+}
+
+// resolve a contributor (by their cookie id / user_key, a user_key prefix, or
+// their label) and return every event they fed into the pool, split into
+// upcoming (going to) and past (been to). the contributor->events mapping is
+// already public on the dashboard ("Contributed by <label>" per event); this
+// just lets you pivot on it. only an 8-char key prefix is ever echoed back.
+async function mcpContributorEvents(d, contributor) {
+  const key = String(contributor || "").trim();
+  if (!key) return null;
+  const c = await d.prepare(
+    `SELECT user_key, label, luma_user_id, enabled FROM user_cookies
+      WHERE user_key = ?1 OR label = ?1 OR user_key LIKE ?2 ESCAPE '\\' LIMIT 1`
+  ).get(key, key.replace(/[\\%_]/g, "\\$&") + "%");
+  if (!c) return null;
+  const rows = await d.prepare(
+    `SELECT e.id, e.name, e.start_at, e.location, e.url,
+            (SELECT COUNT(*) FROM event_attendees ea WHERE ea.event_id = e.id AND ea.is_host = 0) AS attendee_count,
+            (SELECT COUNT(*) FROM event_attendees ea WHERE ea.event_id = e.id AND ea.is_host = 1) AS host_count
+       FROM event_contributions ec JOIN events e ON e.id = ec.event_id
+      WHERE ec.user_key = ? ORDER BY e.start_at`
+  ).all(c.user_key);
+  const now = Date.now();
+  const summaries = rows.map(mcpEventSummary);
+  return {
+    contributor: { label: c.label || null, id_prefix: String(c.user_key).slice(0, 8),
+                   luma_user_id: c.luma_user_id || null, enabled: Number(c.enabled) === 1 },
+    total: rows.length,
+    going_to: summaries.filter((e) => !e.start_at || new Date(e.start_at).getTime() >= now),
+    been_to: summaries.filter((e) => e.start_at && new Date(e.start_at).getTime() < now)
+                      .sort((a, b) => new Date(b.start_at) - new Date(a.start_at)),
+  };
+}
+
+async function mcpListContributors(d) {
+  const rows = await d.prepare(
+    `SELECT uc.label, uc.enabled, uc.luma_user_id, substr(uc.user_key, 1, 8) AS id_prefix,
+            (SELECT COUNT(*) FROM event_contributions ec WHERE ec.user_key = uc.user_key) AS events
+       FROM user_cookies uc ORDER BY events DESC, uc.updated_at DESC`
+  ).all();
+  return rows.map((r) => ({ label: r.label || null, id_prefix: r.id_prefix, luma_user_id: r.luma_user_id || null,
+                            enabled: Number(r.enabled) === 1, events: Number(r.events) }));
+}
+
+// ── social graph: frequency + co-attendance ──────────────────────────────────
+// all read-only, public surface only (same projection as search_people; the
+// who-overlaps-with-whom is already implicit in the public guest lists, this
+// just computes it). co-attendance counts hosts and guests alike: being at the
+// same event is the edge.
+const PUB_COLS = `a.id, a.name, a.bio_short, a.times_seen, a.website,
+            a.twitter_handle, a.linkedin_handle, a.instagram_handle,
+            en.company, en.role, en.location, en.linkedin_url`;
+
+// best-match attendee for a name (most-seen wins ties).
+async function mcpResolvePerson(d, q) {
+  const term = "%" + String(q || "").replace(/[\\%_]/g, "\\$&") + "%";
+  return d.prepare(
+    `SELECT ${PUB_COLS} FROM attendees a LEFT JOIN enrichments en ON en.attendee_id = a.id
+      WHERE a.name LIKE ? ESCAPE '\\' ORDER BY a.times_seen DESC, a.name ASC LIMIT 1`
+  ).get(term);
+}
+
+// who shows up across the most events (who you're seeing a lot); optional slice.
+async function mcpFrequentPeople(d, when, limit) {
+  let filter = "", binds = [];
+  if (when === "upcoming" || when === "past") {
+    const nowIso = new Date().toISOString();
+    filter = when === "upcoming"
+      ? `AND (e.start_at IS NULL OR e.start_at >= ?)`
+      : `AND (e.start_at IS NOT NULL AND e.start_at < ?)`;
+    binds.push(nowIso);
+  }
+  binds.push(limit);
+  const rows = await d.prepare(
+    `SELECT ${PUB_COLS}, COUNT(DISTINCT ea.event_id) AS events
+       FROM attendees a
+       JOIN event_attendees ea ON ea.attendee_id = a.id
+       JOIN events e ON e.id = ea.event_id
+       LEFT JOIN enrichments en ON en.attendee_id = a.id
+      WHERE 1=1 ${filter}
+      GROUP BY a.id ORDER BY events DESC, a.name ASC LIMIT ?`
+  ).all(...binds);
+  return rows.map((r) => { const o = mcpAttendee(r); o.events = Number(r.events); return o; });
+}
+
+// one person's strongest co-attendees + the events they share.
+async function mcpCoAttendees(d, q, limit) {
+  const person = await mcpResolvePerson(d, q);
+  if (!person) return null;
+  const rows = await d.prepare(
+    `SELECT ${PUB_COLS}, COUNT(*) AS shared, GROUP_CONCAT(e.name, '|||') AS shared_names
+       FROM event_attendees ea
+       JOIN attendees a ON a.id = ea.attendee_id
+       JOIN events e ON e.id = ea.event_id
+       LEFT JOIN enrichments en ON en.attendee_id = a.id
+      WHERE ea.event_id IN (SELECT event_id FROM event_attendees WHERE attendee_id = ?1)
+        AND ea.attendee_id != ?1
+      GROUP BY a.id ORDER BY shared DESC, a.times_seen DESC, a.name ASC LIMIT ?2`
+  ).all(person.id, limit);
+  const tot = await d.prepare(`SELECT COUNT(DISTINCT event_id) AS n FROM event_attendees WHERE attendee_id = ?`).get(person.id);
+  return {
+    person: mcpAttendee(person),
+    events_attended: tot ? Number(tot.n) : 0,
+    co_attendees: rows.map((r) => { const o = mcpAttendee(r); o.shared = Number(r.shared);
+      o.shared_events = (r.shared_names || "").split("|||").filter(Boolean); return o; }),
+  };
+}
+
+// the tightest co-attendance pairs pool-wide (who's seeing who).
+async function mcpConnections(d, minShared, limit) {
+  const rows = await d.prepare(
+    `SELECT a1.attendee_id AS id1, a2.attendee_id AS id2,
+            COUNT(*) AS shared, GROUP_CONCAT(e.name, '|||') AS shared_names
+       FROM event_attendees a1
+       JOIN event_attendees a2 ON a1.event_id = a2.event_id AND a1.attendee_id < a2.attendee_id
+       JOIN events e ON e.id = a1.event_id
+      GROUP BY a1.attendee_id, a2.attendee_id
+     HAVING shared >= ?1 ORDER BY shared DESC LIMIT ?2`
+  ).all(minShared, limit);
+  if (!rows.length) return [];
+  const ids = [...new Set(rows.flatMap((r) => [r.id1, r.id2]))];
+  const ph = ids.map(() => "?").join(",");
+  const people = await d.prepare(
+    `SELECT a.id, a.name, en.company, en.role FROM attendees a LEFT JOIN enrichments en ON en.attendee_id = a.id WHERE a.id IN (${ph})`
+  ).all(...ids);
+  const byId = new Map(people.map((p) => [p.id, { name: p.name, role: p.role || null, company: p.company || null }]));
+  return rows.map((r) => ({
+    a: byId.get(r.id1) || { name: "?" },
+    b: byId.get(r.id2) || { name: "?" },
+    shared: Number(r.shared),
+    shared_events: (r.shared_names || "").split("|||").filter(Boolean),
+  }));
+}
+
+// the events two named people both attended (did they cross paths, and where).
+async function mcpSharedEvents(d, qa, qb) {
+  const a = await mcpResolvePerson(d, qa);
+  const b = await mcpResolvePerson(d, qb);
+  if (!a) return { _missing: qa };
+  if (!b) return { _missing: qb };
+  const rows = await d.prepare(
+    `SELECT e.id, e.name, e.start_at, e.location, e.url,
+            (SELECT COUNT(*) FROM event_attendees x WHERE x.event_id = e.id AND x.is_host = 0) AS attendee_count,
+            (SELECT COUNT(*) FROM event_attendees x WHERE x.event_id = e.id AND x.is_host = 1) AS host_count
+       FROM events e
+      WHERE e.id IN (SELECT event_id FROM event_attendees WHERE attendee_id = ?1)
+        AND e.id IN (SELECT event_id FROM event_attendees WHERE attendee_id = ?2)
+      ORDER BY e.start_at DESC`
+  ).all(a.id, b.id);
+  return { a: mcpAttendee(a), b: mcpAttendee(b), shared_count: rows.length, shared_events: rows.map(mcpEventSummary) };
+}
+
+const MCP_TOOLS = [
+  {
+    name: "list_events",
+    description: "List events in the Serendipity pool, each with a head count of who's going and an RSVP tier. The pool mixes events a contributor actually RSVP'd to or hosts (rsvp:\"going\" — first-class, the ones with real rosters) with events synced from just browsing a Luma feed (rsvp:\"invited\"/\"pending\"/etc — no roster, second-class). By default only the going (RSVP'd) events are returned, with a discovered_hidden count noting how many browsed events were omitted; pass rsvp:\"all\" to include them (first-class first) or rsvp:\"discovered\" for only the browsed ones. Each event carries attending (bool) + rsvp (raw status). Defaults to upcoming, soonest first.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        when: { type: "string", enum: ["upcoming", "past", "all"], description: "which time slice to return (default \"upcoming\")" },
+        rsvp: { type: "string", enum: ["going", "all", "discovered"], description: "RSVP tier: \"going\" = only events a contributor RSVP'd to / hosts (default); \"all\" = include browsed-but-not-RSVP'd events, first-class first; \"discovered\" = only the browsed ones" },
+        q: { type: "string", description: "optional case-insensitive filter on event name, location, or contributor" },
+        limit: { type: "integer", minimum: 1, maximum: 200, description: "max events to return (default 50)" },
+      },
+    },
+  },
+  {
+    name: "get_event",
+    description: "Full detail for one event by id: description, time, location, Luma link, hosts, the guest list (who's going, with role/company/socials when known), and which contributors added it.",
+    inputSchema: {
+      type: "object",
+      properties: { id: { type: "string", description: "the event id, as returned by list_events" } },
+      required: ["id"],
+    },
+  },
+  {
+    name: "search_people",
+    description: "Search people across all events by name. Returns who they are (role/company/socials when known), how many events they've turned up at, and their events split into going_to (upcoming) and been_to (past), so you see both trajectory and reach.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        q: { type: "string", description: "a name or partial name to search for" },
+        limit: { type: "integer", minimum: 1, maximum: 100, description: "max people to return (default 25)" },
+      },
+      required: ["q"],
+    },
+  },
+  {
+    name: "list_contributors",
+    description: "List the contributors feeding the pool (the people who synced a Luma feed): their label, an 8-char id prefix, and how many events each has fed in. Use the label or id prefix with contributor_events.",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "contributor_events",
+    description: "Given a contributor (their cookie id / user_key, an id prefix, or their label), return every event they fed into the pool, split into going_to (upcoming) and been_to (past). This is one contributor's whole event footprint.",
+    inputSchema: {
+      type: "object",
+      properties: { contributor: { type: "string", description: "a contributor's cookie id (user_key), an id prefix from list_contributors, or their label" } },
+      required: ["contributor"],
+    },
+  },
+  {
+    name: "frequent_people",
+    description: "The people who show up across the most events in the pool (who you're seeing a lot), each with an event count. Optionally restrict the count to upcoming or past.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        when: { type: "string", enum: ["upcoming", "past", "all"], description: "restrict the count to a slice (default all)" },
+        limit: { type: "integer", minimum: 1, maximum: 100, description: "max people (default 25)" },
+      },
+    },
+  },
+  {
+    name: "co_attendees",
+    description: "Given a person by name, who they cross paths with most: the people most often at the same events, with a shared-event count and the names of those shared events. Pass your own name to answer \"who am I seeing a lot\".",
+    inputSchema: {
+      type: "object",
+      properties: {
+        q: { type: "string", description: "a name or partial name" },
+        limit: { type: "integer", minimum: 1, maximum: 100, description: "max co-attendees (default 25)" },
+      },
+      required: ["q"],
+    },
+  },
+  {
+    name: "connections",
+    description: "The tightest co-attendance pairs in the whole pool (who's seeing who): pairs of people who keep turning up at the same events, with the shared count and the shared event names. The relationship graph's strongest edges.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        min_shared: { type: "integer", minimum: 1, description: "only pairs sharing at least this many events (default 2)" },
+        limit: { type: "integer", minimum: 1, maximum: 100, description: "max pairs (default 25)" },
+      },
+    },
+  },
+  {
+    name: "shared_events",
+    description: "Given two people by name, the events they both attended (did these two cross paths, and where).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        a: { type: "string", description: "first person's name" },
+        b: { type: "string", description: "second person's name" },
+      },
+      required: ["a", "b"],
+    },
+  },
+  {
+    name: "stats",
+    description: "Overview of the pool: upcoming/past event counts, distinct people seen, and active contributors.",
+    inputSchema: { type: "object", properties: {} },
+  },
+];
+
+// run a tool. returns a plain object on success, or { _error } for a tool-level
+// error (bad args / not found) the caller surfaces as an MCP isError result.
+async function mcpCallTool(d, name, args) {
+  args = args || {};
+  if (name === "list_events") {
+    const when = ["upcoming", "past", "all"].includes(args.when) ? args.when : "upcoming";
+    const limit = Math.min(Math.max(parseInt(args.limit, 10) || 50, 1), 200);
+    const q = args.q != null && String(args.q).trim() ? String(args.q).toLowerCase() : null;
+    // rsvp tier: the pool mixes events a contributor actually RSVP'd to / hosts
+    // ("going" — first-class, the ones with rosters) with events synced from just
+    // browsing a Luma feed ("invited"/"pending"/etc — no roster, second-class).
+    // default to the real ones; "all" includes the discovered pile (first-class
+    // first), "discovered" returns only the not-RSVP'd ones.
+    const rsvp = ["going", "all", "discovered"].includes(args.rsvp) ? args.rsvp : "going";
+    const now = Date.now();
+    let rows = await queryEvents(d);
+    if (when === "upcoming") rows = rows.filter((e) => !e.start_at || new Date(e.start_at).getTime() >= now);
+    else if (when === "past") rows = rows.filter((e) => e.start_at && new Date(e.start_at).getTime() < now)
+                                         .sort((a, b) => new Date(b.start_at) - new Date(a.start_at));
+    if (q) rows = rows.filter((e) => [e.name, e.location, e.contributors].some((v) => v && String(v).toLowerCase().includes(q)));
+    const matched = rows.length;                                            // after when + q, before rsvp tier
+    const goingCount = rows.filter((e) => e.user_status === "going").length;
+    if (rsvp === "going") rows = rows.filter((e) => e.user_status === "going");
+    else if (rsvp === "discovered") rows = rows.filter((e) => e.user_status !== "going");
+    else rows = rows.slice().sort((a, b) => (b.user_status === "going") - (a.user_status === "going")); // stable: first-class first, date order kept within tier
+    const total = rows.length;
+    const events = rows.slice(0, limit).map(mcpEventSummary);
+    const out = { when, rsvp, total, returned: events.length, events };
+    if (rsvp === "going") out.discovered_hidden = matched - goingCount;      // transparency: not-RSVP'd events omitted from this view
+    return out;
+  }
+  if (name === "get_event") {
+    const id = String(args.id || "").trim();
+    if (!id) return { _error: "id is required" };
+    const [ev, rows, contributors] = await Promise.all([queryEvent(d, id), queryEventAttendees(d, id), queryContributors(d, id)]);
+    if (!ev) return { _error: "no event with id \"" + id + "\" is in the pool" };
+    const hosts = rows.filter((a) => a.is_host).map(mcpAttendee);
+    const guests = rows.filter((a) => !a.is_host).map((a) => ({ ...a, _s: attendeeScore(a) }))
+                       .sort((a, b) => b._s - a._s || a.name.localeCompare(b.name)).map(mcpAttendee);
+    return {
+      event: {
+        id: ev.id, name: ev.name, description: ev.description || null,
+        start_at: ev.start_at || null, end_at: ev.end_at || null,
+        location: ev.location || null, url: ev.url || (ev.id ? "https://lu.ma/" + ev.id : null),
+        status: ev.user_status || null,
+      },
+      hosts, going: guests.length, attendees: guests,
+      contributors: contributors.map((c) => c.label),
+    };
+  }
+  if (name === "search_people") {
+    const q = String(args.q || "").trim();
+    if (!q) return { _error: "q is required" };
+    const limit = Math.min(Math.max(parseInt(args.limit, 10) || 25, 1), 100);
+    const people = await mcpSearchPeople(d, q, limit);
+    return { query: q, returned: people.length, people };
+  }
+  if (name === "list_contributors") {
+    return { contributors: await mcpListContributors(d) };
+  }
+  if (name === "contributor_events") {
+    const c = String(args.contributor || "").trim();
+    if (!c) return { _error: "contributor is required (a cookie id / user_key, an id prefix, or a label)" };
+    const out = await mcpContributorEvents(d, c);
+    if (!out) return { _error: "no contributor matching \"" + c + "\" (try list_contributors)" };
+    return out;
+  }
+  if (name === "frequent_people") {
+    const when = ["upcoming", "past", "all"].includes(args.when) ? args.when : "all";
+    const limit = Math.min(Math.max(parseInt(args.limit, 10) || 25, 1), 100);
+    const people = await mcpFrequentPeople(d, when, limit);
+    return { when, returned: people.length, people };
+  }
+  if (name === "co_attendees") {
+    const q = String(args.q || "").trim();
+    if (!q) return { _error: "q is required (a person's name)" };
+    const limit = Math.min(Math.max(parseInt(args.limit, 10) || 25, 1), 100);
+    const out = await mcpCoAttendees(d, q, limit);
+    if (!out) return { _error: "no person matching \"" + q + "\" (try search_people)" };
+    return out;
+  }
+  if (name === "connections") {
+    const minShared = Math.max(parseInt(args.min_shared, 10) || 2, 1);
+    const limit = Math.min(Math.max(parseInt(args.limit, 10) || 25, 1), 100);
+    return { min_shared: minShared, pairs: await mcpConnections(d, minShared, limit) };
+  }
+  if (name === "shared_events") {
+    const a = String(args.a || "").trim(), b = String(args.b || "").trim();
+    if (!a || !b) return { _error: "both a and b (person names) are required" };
+    const out = await mcpSharedEvents(d, a, b);
+    if (out._missing) return { _error: "no person matching \"" + out._missing + "\"" };
+    return out;
+  }
+  if (name === "stats") {
+    const [events, contributors, attRow] = await Promise.all([
+      queryEvents(d), countContributors(d), d.prepare("SELECT COUNT(*) AS n FROM attendees").get(),
+    ]);
+    const now = Date.now();
+    const upcoming = events.filter((e) => !e.start_at || new Date(e.start_at).getTime() >= now).length;
+    return { events_total: events.length, events_upcoming: upcoming, events_past: events.length - upcoming,
+             people: attRow ? Number(attRow.n) : 0, contributors };
+  }
+  return { _unknown: true };
+}
+
+async function handleMcp(request, env, d) {
+  const cors = {
+    "access-control-allow-origin": "*",
+    "access-control-allow-methods": "POST, OPTIONS",
+    "access-control-allow-headers": "content-type, mcp-protocol-version, mcp-session-id, authorization",
+    "access-control-max-age": "86400",
+  };
+  if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
+  const respond = (obj, status = 200) => new Response(obj === null ? null : JSON.stringify(obj), {
+    status, headers: { ...cors, "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
+  });
+  if (request.method !== "POST") {
+    // stateless server: no server-initiated SSE stream, POST JSON-RPC only.
+    return respond({ error: "Use POST with JSON-RPC 2.0. Docs: " + PREFIX + "/mcp-info" }, 405);
+  }
+  const rpcErr = (id, code, message) => ({ jsonrpc: "2.0", id: id === undefined ? null : id, error: { code, message } });
+
+  let payload;
+  try { payload = await request.json(); }
+  catch { return respond(rpcErr(null, -32700, "Parse error")); }
+
+  const handleOne = async (msg) => {
+    const hasId = msg && typeof msg === "object" && "id" in msg;
+    if (!msg || msg.jsonrpc !== "2.0" || typeof msg.method !== "string") {
+      return hasId ? rpcErr(msg.id, -32600, "Invalid Request") : null;
+    }
+    const id = msg.id, m = msg.method;
+    try {
+      if (m === "initialize") {
+        const reqV = msg.params && msg.params.protocolVersion;
+        return { jsonrpc: "2.0", id, result: {
+          protocolVersion: MCP_SUPPORTED.includes(reqV) ? reqV : MCP_PROTOCOL,
+          capabilities: { tools: {} },
+          serverInfo: { name: "serendipity", title: "Serendipity", version: "1.0.0" },
+          instructions: "Read-only access to the Serendipity event pool: community-curated events and who's going. Start with stats or list_events, drill in with get_event, find people with search_people. Public data only.",
+        } };
+      }
+      if (m === "ping") return { jsonrpc: "2.0", id, result: {} };
+      if (m === "tools/list") return { jsonrpc: "2.0", id, result: { tools: MCP_TOOLS } };
+      if (m === "resources/list") return { jsonrpc: "2.0", id, result: { resources: [] } };
+      if (m === "prompts/list") return { jsonrpc: "2.0", id, result: { prompts: [] } };
+      if (m.startsWith("notifications/")) return null;  // client notification — ack only
+      if (m === "tools/call") {
+        const name = msg.params && msg.params.name;
+        const out = await mcpCallTool(d, name, (msg.params && msg.params.arguments) || {});
+        if (out && out._unknown) return rpcErr(id, -32602, "Unknown tool: " + name);
+        if (out && out._error) return { jsonrpc: "2.0", id, result: { content: [{ type: "text", text: out._error }], isError: true } };
+        return { jsonrpc: "2.0", id, result: { content: [{ type: "text", text: JSON.stringify(out, null, 2) }] } };
+      }
+      return hasId ? rpcErr(id, -32601, "Method not found: " + m) : null;
+    } catch (e) {
+      return hasId ? rpcErr(id, -32603, "Internal error: " + (e && e.message ? e.message : String(e))) : null;
+    }
+  };
+
+  if (Array.isArray(payload)) {
+    const out = (await Promise.all(payload.map(handleOne))).filter((x) => x !== null);
+    return out.length ? respond(out) : respond(null, 202);
+  }
+  const one = await handleOne(payload);
+  return one === null ? respond(null, 202) : respond(one);
+}
+
 export async function handleSerendipity(request, env, ctx) {
   const url = new URL(request.url);
   let path = url.pathname.replace(/\/+$/, "") || PREFIX;
@@ -1144,6 +1799,11 @@ export async function handleSerendipity(request, env, ctx) {
     return html(500, shell("Setup", path, `<h1 class="page">Database not bound</h1><p class="lede">The <code>SERENDIPITY_DB</code> D1 binding isn&apos;t attached to this deployment yet.</p>`));
   }
   const d = db(env);
+
+  // MCP — stateless JSON-RPC, read-only, no uid cookie. early-return like /cover
+  // so the response stays cookie-free (and CORS-clean for cross-origin clients).
+  if (path === `${PREFIX}/mcp`) return handleMcp(request, env, d);
+
   const msg = url.searchParams.get("msg");
   const dashKey = new Request(`${url.origin}${PREFIX}`);  // shared public-dashboard cache key
 
@@ -1211,6 +1871,9 @@ const SECURITY_HEADERS = {
   "x-content-type-options": "nosniff",
   "referrer-policy": "strict-origin-when-cross-origin",
   "x-frame-options": "DENY",
+  // parity with the Pages _headers set: this is a first-class page of the site
+  // (the shared XP shell runs here too), so deny the same unused browser APIs.
+  "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=(), serial=(), bluetooth=(), midi=(), accelerometer=(), gyroscope=(), magnetometer=(), screen-wake-lock=(), hid=(), idle-detection=()",
 };
 
 export default {

@@ -1,9 +1,10 @@
 # aadhar.sh
 
 > Aadharsh Pannirselvam's corner of the web. Researching and investing at
-> Archetype; building this site by hand in the meantime. The page at the
-> root is a holding page styled after a 2003-era personal homepage;
-> sounds, images, dishes, tinkering, and longform writing are all planned.
+> Archetype; building this site by hand in the meantime. The root is a
+> personal homepage styled after the 2003 Windows-XP era; photographs (a
+> live photo grid) and longform writing (an editable Notepad at /writing)
+> are live. Sounds, dishes, and tinkering are still planned.
 
 A handwritten HTML/CSS personal site on Cloudflare Pages. No build step, one
 `_worker.js`, one stylesheet inline per page. This file follows the
@@ -19,8 +20,10 @@ aggregations.
 
 ## Pages
 
-- [/](https://aadhar.sh/): Holding page. HTML by default; markdown is
-  available via `Accept: text/markdown` content negotiation.
+- [/](https://aadhar.sh/): Homepage — a Windows-XP-styled window over a
+  desktop shell, with a photo grid and a "now playing" tracklist. HTML by
+  default; markdown is available via `Accept: text/markdown` content
+  negotiation.
 - [/whoareyou](https://aadhar.sh/whoareyou): Transparency page — shows what
   a single HTTP request from your client reveals to the site (network,
   transport, browser, cookies). Nothing is logged or stored. `noindex`.
@@ -34,10 +37,15 @@ aggregations.
 - [/garage](https://aadhar.sh/garage): Prototypes and experiments —
   alternate visual styles, work-in-progress interactions, things that
   haven't shipped to the homepage yet. Public so people can see what's
-  being tinkered with.
-  - [/garage/tooltips](https://aadhar.sh/garage/tooltips): Four
-    alternative tooltip styles for the photo grid + tracklist (Fuji X-T
-    LCD viewfinder, vinyl sleeve, polaroid flip, CSS anchor positioning).
+  being tinkered with. Individual subpages are enumerated in
+  [sitemap.xml](https://aadhar.sh/sitemap.xml).
+- [/writing](https://aadhar.sh/writing): Longform notes rendered as XP
+  Notepad windows. Each note (e.g. `/writing/<slug>`) is a real, editable
+  textarea seeded with the canonical text — edits never save, so a reload
+  restores the canonical version. "Writing in flux." Raw text is also at
+  `/writing/<slug>.txt`.
+- [/serendipity](https://aadhar.sh/serendipity): A public pool of events
+  worth going to (and who's going), contributed and browsable.
 
 ## JSON endpoints
 
@@ -88,7 +96,7 @@ aggregations.
 - [Beli](https://beliapp.com/users/aadharsh): NYC restaurants I've been to.
 - [ENS](https://app.ens.domains/aadharsh.eth): `aadharsh.eth`, my on-chain
   identity (resolves to 0xbad1db91276988883f9c66a698c18406ced4f109).
-- [Cal.com](https://cal.com/aadharsh/coffee): Book a coffee in NYC.
+- [Coffee](https://aadhar.sh/coffee): Book a coffee in NYC.
 - Email: <coffee@aadhar.sh>.
 
 ## Optional
