@@ -8,3 +8,10 @@
 // the ?v=N appended to every thumbnail URL in pre-rendered HTML. bump on a full
 // thumbnail re-encode or to route around edge 404 poisoning.
 export const THUMB_VERSION = 19;
+
+// canonical-host enforcement: any request that lands on the project's
+// auto-generated pages.dev subdomain (aadhar-sh.pages.dev or any deploy-
+// hash variant like 60bcf749.aadhar-sh.pages.dev) gets 301'd to the
+// equivalent path on aadhar.sh. eliminates the duplicate public footprint
+// while preserving the ability to deploy + serve from Cloudflare Pages.
+export const CANONICAL_HOST = "aadhar.sh";
