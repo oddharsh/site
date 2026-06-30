@@ -25,7 +25,7 @@
 // `?v=N` bumps on each deploy already cycle individual entries, but a
 // cache-version bump is the only way to sweep stale keys whose URL
 // pattern no longer matches anything we serve.
-const CACHE_VERSION = "aadhar-v76-scroll";
+const CACHE_VERSION = "aadhar-v125-lens-live-window";
 
 const CACHE_FIRST = [
   // thumbnail image files only — NOT /images/ itself (a directory-listing
@@ -46,6 +46,10 @@ const SWR = [
   /^\/nav\.js$/,
   // /notepad.js — behavior for the /writing Notepad view. same deal.
   /^\/notepad\.js$/,
+  // /lwe/ask.js — the live "ask a follow-up" widget on the LWE concept pages.
+  /^\/lwe\/ask\.js$/,
+  // /lens.js — the /lens ("the other web") machine-view renderer. SWR like nav.js.
+  /^\/lens\.js$/,
   // NB: /favicon.ico is NOT SWR'd — it used to SPA-fall-back to the 75KB
   // homepage, so caching it here stored a 75KB HTML blob under the favicon key.
   // the worker now serves a real SVG at /favicon.ico (immutable), so the browser

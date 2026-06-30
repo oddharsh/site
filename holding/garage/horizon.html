@@ -971,7 +971,7 @@ placeholder
       chromestatus, and the green/red <span class="wk sup" style="margin:0">WebKit</span>
       chips that quote Safari&apos;s team directly from
       <a href="https://webkit.org/standards-positions/" rel="external">webkit.org/standards-positions</a>,
-      so Safari answers &quot;will Safari ever do this&quot;, instead of me inferring it.
+      so Safari answers &quot;will Safari ever do this&quot; instead of me inferring it.
     </p>
 
     <div class="cap-strip" id="caps" aria-label="feature support in your browser"></div>
@@ -1032,7 +1032,7 @@ placeholder
       <p class="replaces">
         On the site: serendipity derives each attendee avatar&apos;s text colour from
         its hue with <code>contrast-color()</code> (behind an <code>@supports</code>
-        guard). Baseline since April&nbsp;2026 &mdash; Chrome&nbsp;147,
+        guard). Baseline since April&nbsp;2026: Chrome&nbsp;147,
         Safari&nbsp;26, Firefox&nbsp;146. The homepage title bars deliberately
         <em>don&apos;t</em> use it: that Luna blue sits right on the black/white
         contrast crossover, so the hand-picked white is the safer call there.
@@ -1067,7 +1067,7 @@ placeholder
       <div id="pop-hwa" popover class="ifor-pop"><div class="box">[ HWA EVO ]</div><div class="cap">anchored to the link</div></div>
       <div id="pop-evo" popover class="ifor-pop"><div class="box">[ Evoluto 355 ]</div><div class="cap">interest-delay: 0s</div></div>
       <p class="note" style="margin-top:10px">
-        Delay is a CSS property, not baked in: <code>interest-delay-start</code>
+        Delay lives in CSS, not baked into the element: <code>interest-delay-start</code>
         / <code>interest-delay-end</code> (shorthand <code>interest-delay</code>).
         <code>0s</code> spawns instantly like ours, but the trade is that every
         incidental hover-pass over a grid would fire a tooltip (why the 0.5s
@@ -1354,7 +1354,7 @@ pointerout   -&gt; hidePopover()
         <code>@view-transition&nbsp;{ navigation: auto }</code> opt-in softened
         the McMaster-Carr-style instant snap that the eager Speculation-Rules
         prerender exists to deliver. A 200ms fade on top of a
-        zero-latency prerendered page is a regression, not a polish. So the rule
+        zero-latency prerendered page regresses the experience. So the rule
         here is: same-document morphs on opt-in interactions = yes; automatic
         navigation cross-fade = no, it fights the prerender. (A leftover
         <code>@view-transition</code> line still sits in
@@ -2658,7 +2658,7 @@ myButton.onclick = async () =&gt; {
         <span class="stat chrome">Chrome 116 &middot; others no</span>
       </h2>
       <p class="note">
-        An <em>always-on-top window you fill with arbitrary HTML</em>, not just a
+        An <em>always-on-top window you fill with arbitrary HTML</em>, going beyond a
         video frame. Click below to pop this box into a floating mini-window
         (close it to bring it home):
       </p>
@@ -2692,7 +2692,7 @@ myButton.onclick = async () =&gt; {
     </section>
 
     <hr>
-    <p class="lede" style="margin-top:4px">Newer arrivals &mdash; the bleeding edge (shipped or not), plus the networking layer the rest of this page was missing.</p>
+    <p class="lede" style="margin-top:4px">Newer arrivals: the bleeding edge (shipped or not), plus the networking layer the rest of this page was missing.</p>
 
     <!-- ───────────────────── Element.moveBefore() ───────────────────── -->
     <section class="demo" data-cap="move-before">
@@ -2703,7 +2703,7 @@ myButton.onclick = async () =&gt; {
       <p class="note">
         Reparenting a node with <code>appendChild</code> tears its state down: iframes reload,
         running animations restart, focus and form state reset. <code>moveBefore()</code> moves
-        it <em>without</em> the teardown. The iframe below counts its own uptime &mdash; move it
+        it <em>without</em> the teardown. The iframe below counts its own uptime: move it
         between the trays and watch the counter survive a <code>moveBefore()</code> but reset on
         the <code>appendChild</code> fallback.
       </p>
@@ -2718,7 +2718,7 @@ myButton.onclick = async () =&gt; {
         pop content into a popover. <code>moveBefore()</code> does that without reloading their
         contents or interrupting a running View Transition.
       </p>
-      <p class="unsupported">No <code>moveBefore()</code> here, so the button falls back to <code>appendChild</code> &mdash; the counter resets to 0 each move.</p>
+      <p class="unsupported">No <code>moveBefore()</code> here, so the button falls back to <code>appendChild</code>: the counter resets to 0 each move.</p>
     </section>
 
     <!-- ───────────────────── cross-document view transitions ───────────────────── -->
@@ -2729,12 +2729,12 @@ myButton.onclick = async () =&gt; {
       </h2>
       <p class="note">
         The multi-page sibling of the View Transitions already used in the window shell. One
-        rule &mdash; <code>@view-transition { navigation: auto }</code> on both pages &mdash; and the
-        browser animates a <em>real</em> navigation between two separate documents, no SPA, no JS.
+        rule (<code>@view-transition { navigation: auto }</code> on both pages) animates a
+        <em>real</em> navigation between two separate documents, no SPA, no JS.
         (Can&apos;t demo it inside one page; it fires on the navigation itself.)
       </p>
       <p class="replaces">
-        On the site: live now &mdash; every route is its own document, so navigating home &rarr;
+        On the site: live now. Every route is its own document, so navigating home &rarr;
         <code>/writing</code> &rarr; <code>/garage</code> crossfades natively (a fast 140ms,
         reduced-motion-safe) instead of a hard cut. Opted in via inline
         <code>@view-transition { navigation: auto }</code> on every page.
@@ -2750,7 +2750,7 @@ myButton.onclick = async () =&gt; {
       <p class="note">
         A <code>path()</code> you can write with percentages and any length unit, so the clip
         scales with the box instead of being frozen at one pixel size. The pennant below is a
-        single <code>clip-path: shape(&hellip;)</code> &mdash; resize the window and it stays sharp.
+        single <code>clip-path: shape(&hellip;)</code>: resize the window and it stays sharp.
       </p>
       <div style="width:140px;height:96px;margin:8px 0;color:#fff;font:bold 9pt var(--font-caption);display:flex;align-items:center;justify-content:center;text-align:center;background:linear-gradient(180deg, oklch(60% 0.20 261), oklch(50% 0.225 263));clip-path:shape(from 0 0, line to 100% 0, line to 100% 70%, line to 50% 100%, line to 0 70%, close)">shape()</div>
       <p class="replaces">
@@ -2767,7 +2767,7 @@ myButton.onclick = async () =&gt; {
         <span class="stat cross">Chrome 117 &middot; Safari 26 &middot; FF no</span>
       </h2>
       <p class="note">
-        The browser looks at the whole paragraph and avoids ugly last lines &mdash; orphans, a
+        The browser looks at the whole paragraph and avoids ugly last lines: orphans, a
         lonely single word, rivers. Left is default wrapping; right is <code>text-wrap: pretty</code>.
         Same text, same width:
       </p>
@@ -2777,7 +2777,7 @@ myButton.onclick = async () =&gt; {
       </div>
       <p class="replaces">
         On the site: the <code>/writing</code> Notepad text and the photo captions get tidier last
-        lines for free. Pure progressive enhancement &mdash; older engines just wrap as before.
+        lines for free. Pure progressive enhancement, since older engines just wrap as before.
       </p>
     </section>
 
@@ -2788,7 +2788,7 @@ myButton.onclick = async () =&gt; {
         <span class="stat chrome">Chrome 139 &middot; Safari/FF building</span>
       </h2>
       <p class="note">
-        Reusable, parameterised CSS logic &mdash; Sass mixins, but native and live:
+        Reusable, parameterised CSS logic, like Sass mixins but native and live:
         <code>@function --bevel(--l) { result: oklch(from var(--c) calc(l - var(--l)) c h) }</code>.
         Chrome-only so far; the others have it in progress.
       </p>
@@ -2797,11 +2797,11 @@ myButton.onclick = async () =&gt; {
         math (every raised/sunken edge derives its shade this way) would collapse into one named
         function. A &quot;watch it&quot; card until a second engine lands.
       </p>
-      <p class="unsupported">No <code>@function</code> here yet &mdash; Chrome leads.</p>
+      <p class="unsupported">No <code>@function</code> here yet; Chrome leads.</p>
     </section>
 
     <hr>
-    <p class="lede" style="margin-top:4px">Networking &mdash; the transport + delivery layer, the part of the platform a static site usually never touches.</p>
+    <p class="lede" style="margin-top:4px">Networking: the transport + delivery layer, the part of the platform a static site usually never touches.</p>
 
     <!-- ───────────────────── WebTransport ───────────────────── -->
     <section class="demo" data-cap="webtransport">
@@ -2812,12 +2812,12 @@ myButton.onclick = async () =&gt; {
       <p class="note">
         WebSocket&apos;s successor: bidirectional streams <em>and</em> unreliable datagrams over
         HTTP/3, multiplexed on QUIC so one slow stream doesn&apos;t head-of-line-block the rest.
-        Went Baseline in March 2026 once Safari&nbsp;26.4 shipped it. (No live demo &mdash; it needs
+        Went Baseline in March 2026 once Safari&nbsp;26.4 shipped it. (No live demo, because it needs
         an HTTP/3 server endpoint to dial.)
       </p>
       <p class="replaces">
         On the site: overkill for a mostly-static page today, but it&apos;s the right transport the
-        day anything here goes real-time &mdash; a live <code>/serendipity</code> presence feed, or
+        day anything here goes real-time, whether a live <code>/serendipity</code> presence feed or
         streaming a long crawl in <code>/around</code> instead of buffering it.
       </p>
       <p class="unsupported">No <code>WebTransport</code> constructor in this browser.</p>
@@ -2831,14 +2831,14 @@ myButton.onclick = async () =&gt; {
       </h2>
       <p class="note">
         Declare routing rules at install time so the browser can <em>skip booting the service
-        worker entirely</em> for paths that always go the same place &mdash; straight to network or
-        straight to cache &mdash; shaving the SW startup cost off those requests.
+        worker entirely</em> for paths that always go the same place (straight to network or
+        straight to cache), shaving the SW startup cost off those requests.
       </p>
       <p class="replaces">
-        On the site: live now &mdash; <code>sw.js</code> declares static routes that send
+        On the site: live now. <code>sw.js</code> declares static routes that send
         <code>/</code>, the crawlers, and the JSON APIs straight to the network without booting
         the worker (they were network-only anyway, so the SW was waking just to no-op). Same
-        caching policy as before, minus the boot latency &mdash; biggest win on <code>/</code>,
+        caching policy as before, minus the boot latency. The biggest win lands on <code>/</code>,
         which is no-store + hit every visit.
       </p>
       <p class="unsupported">No <code>addRoutes()</code> on <code>InstallEvent</code> here.</p>
@@ -2853,7 +2853,7 @@ myButton.onclick = async () =&gt; {
       <p class="note">
         A response the server sends <em>before</em> the real one (status <code>103</code>), carrying
         <code>Link: rel=preload/preconnect</code> hints so the browser starts fetching critical
-        assets during server think-time. It&apos;s a header game, not a JS API &mdash; hence no chip
+        assets during server think-time. It plays entirely at the header level, so there&apos;s no chip
         above. Cloudflare can emit it from the edge.
       </p>
       <p class="replaces">
@@ -2872,15 +2872,15 @@ myButton.onclick = async () =&gt; {
       <p class="note">
         A <code>&lt;script type="speculationrules"&gt;</code> JSON block tells the browser which
         links to prefetch or fully <em>prerender</em> ahead of the click, so the next page is
-        already painted by the time you navigate &mdash; the trick behind McMaster-Carr feeling
+        already painted by the time you navigate: the trick behind McMaster-Carr feeling
         instant.
       </p>
       <p class="replaces">
-        On the site: live already &mdash; the homepage and garage pages prerender internal links
+        On the site: live already. The homepage and garage pages prerender internal links
         (eagerness &quot;moderate&quot;, minus the live <code>/around</code> + <code>/whoareyou</code>
         crawlers), which is most of why navigation here feels instant.
       </p>
-      <p class="unsupported">No Speculation Rules here &mdash; links just load on click.</p>
+      <p class="unsupported">No Speculation Rules here; links just load on click.</p>
     </section>
 
     <!-- ───────────────────── Compression Dictionary Transport ───────────────────── -->
@@ -2893,19 +2893,19 @@ myButton.onclick = async () =&gt; {
         Use a file you&apos;ve already downloaded (or a shipped static dictionary) as the
         Brotli/Zstandard <em>dictionary</em> for later fetches, so an updated asset arrives as a
         tiny <strong>delta</strong> against the old copy instead of the whole thing. Shipped in
-        Chrome&nbsp;130; it&apos;s an <code>Accept-Encoding: dcb/dcz</code> + <code>Use-As-Dictionary</code>
-        negotiation, not a JS API &mdash; so no chip above.
+        Chrome&nbsp;130; it negotiates entirely through <code>Accept-Encoding: dcb/dcz</code> +
+        <code>Use-As-Dictionary</code> headers, so there&apos;s no chip above.
       </p>
       <p class="replaces">
-        On the site: marginal, honestly &mdash; the homepage is ~22&nbsp;KB brotli and
-        <code>nav.js</code> is small, so the delta savings are tiny in absolute terms. It&apos;d earn
+        On the site: marginal, honestly. The homepage is ~22&nbsp;KB brotli and
+        <code>nav.js</code> is small, so the delta savings stay tiny in absolute terms. It&apos;d earn
         its keep if those grew. Cloudflare&apos;s support is in open beta (Apr&nbsp;2026); the natural
         use is shipping a <code>nav.js</code> update as a diff against the cached copy.
       </p>
     </section>
 
     <hr>
-    <p class="lede" style="margin-top:4px">And two from the far edge &mdash; one perfectly on-brand, one just because.</p>
+    <p class="lede" style="margin-top:4px">And two from the far edge: one perfectly on-brand, one just because.</p>
 
     <!-- ───────────────────── Local Font Access ───────────────────── -->
     <section class="demo" data-cap="local-fonts">
@@ -2917,16 +2917,16 @@ myButton.onclick = async () =&gt; {
         Enumerate the fonts actually installed on the machine (with permission). The thematically
         perfect feature for a site that ships <em>zero</em> font bytes and leans entirely on local
         Verdana / Tahoma / Trebuchet. Apple and Mozilla oppose it on fingerprinting grounds, so it
-        may stay Chrome-only forever &mdash; a fitting horizon entry.
+        may stay Chrome-only forever: a fitting horizon entry.
       </p>
       <button class="xp-button" id="lf-go" type="button">enumerate my local fonts</button>
       <div class="cf-out" id="lf-out" style="margin-top:6px;font:10pt var(--font-mono)">&mdash;</div>
       <p class="replaces">
         On the site: it could verify a visitor actually has the XP stacks installed before relying
-        on them &mdash; and gracefully swap if not. Mostly it&apos;s here because a no-web-fonts site
+        on them, then gracefully swap when they don&apos;t. Mostly it&apos;s here because a no-web-fonts site
         asking the OS what fonts exist is too on-the-nose to skip.
       </p>
-      <p class="unsupported">No <code>queryLocalFonts()</code> here &mdash; the button will say so.</p>
+      <p class="unsupported">No <code>queryLocalFonts()</code> here; the button will say so.</p>
     </section>
 
     <!-- ───────────────────── WebGPU ───────────────────── -->
@@ -2936,12 +2936,12 @@ myButton.onclick = async () =&gt; {
         <span class="stat cross">Chrome &middot; Safari 26 &middot; Firefox 141</span>
       </h2>
       <p class="note">
-        Modern GPU compute + render in the browser &mdash; the WebGL successor, built on Metal /
+        Modern GPU compute + render in the browser: the WebGL successor, built on Metal /
         Vulkan / D3D12. Crossed into all three engines in 2026 (Safari&nbsp;26, Firefox&nbsp;141).
         Wildly overpowered for an XP homage, which is exactly why it belongs on the horizon.
       </p>
       <p class="replaces">
-        On the site: realistically nothing &mdash; the whole aesthetic is CSS gradients and 2003
+        On the site: realistically nothing, since the whole aesthetic is CSS gradients and 2003
         restraint. But a GPU-rendered Bliss wallpaper or a procedural dithered backdrop is the kind
         of thing you&apos;d reach for it. Filed under &quot;because we can.&quot;
       </p>
@@ -3053,9 +3053,9 @@ myButton.onclick = async () =&gt; {
       <p class="note">
         &quot;The platform&quot; isn&apos;t only Chromium, Gecko, and WebKit. Two
         teams are building new engines largely from scratch, a useful reminder
-        that the frontier above is the <em>front</em>, and most of the web runs
-        well behind it. Both are pre-release and racing toward <em>baseline</em>,
-        not chasing 2026 CSS, so on the features on this page they&apos;re mostly
+        that the frontier above is the <em>front</em>, while most of the web runs
+        well behind it. Both are pre-release and racing toward <em>baseline</em>
+        rather than 2026 CSS, so on the features on this page they&apos;re mostly
         &quot;not yet.&quot; Status as of mid-2026: check the live links, this moves fast.
       </p>
 
@@ -3101,8 +3101,8 @@ myButton.onclick = async () =&gt; {
       <p class="replaces">
         The point: these two are <em>why</em> &quot;ship to baseline, prototype
         the frontier&quot; is the right discipline. To support the independent,
-        indie-web engines, I lean on what&apos;s broadly shipped,
-        not what&apos;s newest in one browser. Good deep-dive comparison:
+        indie-web engines, I lean on what&apos;s broadly shipped and leave
+        what&apos;s newest in one browser parked here. Good deep-dive comparison:
         <a href="https://www.youngju.dev/blog/culture/2026-05-14-browser-engines-2026-chromium-gecko-webkit-servo-ladybird-comparison-deep-dive.en" rel="external">Browser Engines 2026</a>.
       </p>
     </section>

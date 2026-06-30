@@ -266,8 +266,8 @@ code.m, .m { font-family: var(--font-mono); font-size: 9.2pt; }
       <p>Workers <b>auto-trace</b> every platform call (each <code class="m">fetch</code>, KV read, DO
         call) into a waterfall in Observability. As of <b>Jun&nbsp;16&nbsp;2026</b> you can wrap your
         <em>own</em> logic in spans with <code class="m">ctx.tracing.enterSpan()</code>, nested correctly.
-        This endpoint runs a three-step pipeline &mdash; a Durable&nbsp;Object peek, a subrequest, and a
-        compute loop &mdash; each in its own span with attributes. The canonical trace lands in
+        This endpoint runs a three-step pipeline (a Durable&nbsp;Object peek, a subrequest, and a
+        compute loop), each in its own span with attributes. The canonical trace lands in
         Observability; the waterfall below is reconstructed live from the same span timings. (Run it twice:
         a cold Durable&nbsp;Object shows up as a fat first bar, then the warm path collapses to a few ms.)</p>
       <button class="cf-btn" id="tr-btn" type="button">run a traced request</button>

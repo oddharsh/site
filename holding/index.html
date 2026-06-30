@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Aadharsh Pannirselvam</title>
-<meta name="description" content="Aadharsh Pannirselvam — researcher and investor at Archetype, a crypto-native venture firm. Personal site, handwritten, under construction.">
+<meta name="description" content="Aadharsh Pannirselvam. I research and invest in interesting tech-oriented stuff and the people that make them.">
 <meta name="author" content="Aadharsh Pannirselvam">
 <link rel="canonical" href="https://aadhar.sh/">
 <link rel="alternate" type="text/plain" title="llms.txt summary" href="/llms.txt">
@@ -23,7 +23,7 @@
 
 <meta property="og:type" content="profile">
 <meta property="og:title" content="Aadharsh Pannirselvam">
-<meta property="og:description" content="Researcher and investor at Archetype, a crypto-native venture firm. Handwritten personal site.">
+<meta property="og:description" content="Hey! I research and invest in interesting tech-oriented stuff and the people that make them.">
 <meta property="og:url" content="https://aadhar.sh/">
 
 <!-- canonical entity graph (schema.org / JSON-LD). this is the machine-
@@ -46,10 +46,29 @@
       "jobTitle": "Investor and Researcher",
       "worksFor": {
         "@type": "Organization",
+        "@id": "https://www.archetype.fund/#organization",
         "name": "Archetype",
         "url": "https://www.archetype.fund/"
       },
       "description": "Researcher and investor at Archetype, a crypto-native venture firm.",
+      "email": "coffee@aadhar.sh",
+      "knowsAbout": [
+        "cryptography",
+        "privacy-enhancing technologies",
+        "fully homomorphic encryption",
+        "multi-party computation",
+        "trusted execution environments",
+        "zero-knowledge proofs",
+        "venture capital",
+        "cryptocurrency",
+        "economics",
+        "data science"
+      ],
+      "alumniOf": {
+        "@type": "CollegeOrUniversity",
+        "name": "University of Chicago",
+        "sameAs": "https://www.uchicago.edu/"
+      },
       "identifier": {
         "@type": "PropertyValue",
         "propertyID": "ENS",
@@ -71,7 +90,7 @@
       "@id": "https://aadhar.sh/#website",
       "url": "https://aadhar.sh/",
       "name": "aadhar.sh",
-      "description": "The handwritten personal site of Aadharsh Pannirselvam.",
+      "description": "Aadharsh's resto-modded corner of the internet",
       "inLanguage": "en",
       "author": { "@id": "https://aadhar.sh/#person" },
       "publisher": { "@id": "https://aadhar.sh/#person" }
@@ -153,6 +172,9 @@ body {
   font-family: var(--font-ui);
   font-size: 10.5pt;
   line-height: 1.5;
+  /* modern line-breaking: fewer orphans + less ragged last lines. progressive —
+     ignored where unsupported. (also set globally via nav.js for every page.) */
+  text-wrap: pretty;
   color: oklch(21.78% 0 0);
   padding: 30px 14px 64px;
   min-height: 100vh;
@@ -883,9 +905,9 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
       If you&apos;d like to grab a coffee in NYC, write me at
       <!--email_off--><a href="mailto:coffee@aadhar.sh?subject=%E2%98%95%20coffee&amp;body=Hi%20Aadharsh%2C%0A%0A">coffee@aadhar.sh</a><!--/email_off-->
       or pick a slot at
-      <a href="/coffee">aadhar.sh/coffee</a>
-      - it&apos;s a manual opt-in on my side and i&apos;ll try to get back to you.
-      <!-- /coffee redirects to cal.com until the in-house worker is deployed. -->
+      <a href="/coffee">aadhar.sh/coffee</a>.
+      It&apos;s a manual opt-in on my side, so i&apos;ll try to get back to you.
+      <!-- /coffee is the native booking worker (cal-aadhar-sh), first-party on aadhar.sh. -->
     </p>
 
     <p>
@@ -997,7 +1019,7 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
 
 
     <section class="now-playing" aria-label="music">
-      <h2><a href="/rn" title="open this playlist on Spotify">Music I&rsquo;m listening to right now <span class="np-open">&#x2197;&#xFE0E; the playlist</span></a></h2>
+      <h2><a href="/rn" title="open this playlist on Spotify">Music I'm listening to right now <span class="np-open">&#x2197;&#xFE0E; the playlist</span></a></h2>
       <ol class="np-list" id="np-list">
         <li class="np-loading">Loading playlist&hellip;</li>
       </ol>
@@ -1089,7 +1111,7 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
         }
         if (batch) list.insertAdjacentHTML("beforeend", batch);
       } catch {
-        list.innerHTML = '<li class="np-empty">Couldn&rsquo;t load tracks. <a href="/rn">Open on Spotify</a>.</li>';
+        list.innerHTML = '<li class="np-empty">Couldn&#39;t load tracks. <a href="/rn">Open on Spotify</a>.</li>';
       }
     })();
     </script>
@@ -1210,13 +1232,23 @@ if ("serviceWorker" in navigator) {
           { "not": { "href_matches": "/around*" } },
           { "not": { "href_matches": "/whoareyou*" } },
           { "not": { "href_matches": "/rn*" } },
-          { "not": { "href_matches": "/coffee*" } },
           { "not": { "href_matches": "/images*" } },
           { "not": { "href_matches": "/index.md" } },
           { "not": { "href_matches": "/llms.txt" } }
         ]
       },
       "eagerness": "moderate"
+    }
+  ],
+  "prefetch": [
+    {
+      "where": {
+        "and": [
+          { "or": [ { "href_matches": "/garage/*" }, { "href_matches": "/lwe/*" } ] },
+          { "not": { "href_matches": "/lwe/ask*" } }
+        ]
+      },
+      "eagerness": "eager"
     }
   ]
 }
@@ -1512,7 +1544,7 @@ if ("serviceWorker" in navigator) {
           ["Lens",       [exif.lens, fmtFocal(exif.focal)].filter(Boolean).join(" · ")],
           ["Film",       filmVal],
           ["Dyn range",  exif.dr],
-          ["White bal",  exif.white_balance],
+          ["White bal",  exif.white_balance === "Kelvin" && exif.color_temp ? exif.color_temp + "K" : exif.white_balance],
           ["Chrome FX",  chromeParts.join(" · ")],
           ["Grain",      grainVal],
           ["Tones",      toneVal],
@@ -1765,7 +1797,7 @@ if ("serviceWorker" in navigator) {
     try {
       mc.registerTool({
         name: "whats_playing",
-        description: "What Aadharsh is listening to right now — the live playlist on aadhar.sh.",
+        description: "What Aadharsh is listening to right now: the live playlist on aadhar.sh.",
         inputSchema: { type: "object", properties: {} },
         execute: async function () {
           var r = await fetch("/rn/tracks", { headers: { accept: "application/json" } });

@@ -186,7 +186,10 @@ async function listOpenSlots(env) {
     getRecent(env, "pending"),
   ]);
   const pendingIntervals = pending.map(b => ({ start: b.start, end: b.end }));
-  return generateSlots(env, [...busy, ...pendingIntervals]);
+  // busy → conflict-only (your real calendar); pending coffee bookings →
+  // conflict + count toward DAILY/WEEKLY_LIMIT. keeping them separate is what
+  // stops a packed calendar from zeroing out availability.
+  return generateSlots(env, busy, pendingIntervals);
 }
 
 function htmlHeaders() {

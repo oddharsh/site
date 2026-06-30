@@ -268,7 +268,7 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
     <p class="lede" style="margin-top:4px">
       <b>The verdict shipped:</b> the live pipeline (<code>holding/scripts/add-photos.sh</code>)
       encodes every thumbnail as AVIF-primary + a <b>jpegli q82</b> JPG fallback. That combination
-      wins below, and it's why the site builds jpegli from source.
+      wins below, which is why the site builds jpegli from source.
     </p>
 
     <h2>Format showdown</h2>
@@ -302,8 +302,8 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
     <p class="note">A black-and-white Leica frame (400&times;267). In a grayscale image the
       two chroma planes carry almost nothing, so AVIF <b>4:0:0</b> (luma only) both encodes it
       honestly and rules out any faint color cast. Dropping to 4:0:0 saves barely any bytes over 4:2:0
-      <em>because nothing lived in those planes to begin with</em>. Correctness drives this,
-      not size. The pipeline detects <code>sips -g space → Gray</code> and
+      <em>because nothing lived in those planes to begin with</em>. Correctness is the reason here,
+      since the byte savings are negligible. The pipeline detects <code>sips -g space → Gray</code> and
       switches to <code>--yuv 400</code>.</p>
     <div class="enc-grid">
         <figure class="enc-card"><img src="/garage/enc/g-png.png" alt="" width="400" height="267" loading="lazy" decoding="async"><figcaption><b>PNG</b> lossless<span class="enc-sz">51.0 KB</span><span class="enc-bpp">0.49 b/px</span></figcaption></figure>

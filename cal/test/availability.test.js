@@ -77,16 +77,31 @@ describe("generateSlots — invariants", () => {
     }
   });
 
-  it("skips a whole day once DAILY_LIMIT busy events land on it", () => {
+  it("skips a whole day once DAILY_LIMIT coffee bookings land on it", () => {
     const free = generateSlots(baseEnv, []);
     const target = free[Math.floor(free.length / 2)];
     const day = localDay(target.start);
-    // three busy entries on that local day → dayCounts hits DAILY_LIMIT (3)
-    const busy = [0, 1, 2].map(() => ({ start: target.start, end: target.end }));
+    // three BOOKINGS on that local day → dayCounts hits DAILY_LIMIT (3).
+    // (bookings are the 3rd arg; busy calendar events must NOT count here.)
+    const bookings = [0, 1, 2].map(() => ({ start: target.start, end: target.end }));
 
-    const after = generateSlots(baseEnv, busy);
+    const after = generateSlots(baseEnv, [], bookings);
     const sameDay = after.filter((s) => localDay(s.start) === day);
     expect(sameDay).toHaveLength(0);
+  });
+
+  it("a packed busy calendar shrinks but never zeroes availability", () => {
+    // regression: busy events must NOT count toward DAILY/WEEKLY_LIMIT.
+    // fill a day with far more than DAILY_LIMIT busy blocks; OTHER days stay open.
+    const free = generateSlots(baseEnv, []);
+    const target = free[Math.floor(free.length / 2)];
+    const day = localDay(target.start);
+    const busy = Array.from({ length: 10 }, () => ({ start: target.start, end: target.end }));
+
+    const after = generateSlots(baseEnv, busy);
+    expect(after.length).toBeGreaterThan(0);                       // not zeroed
+    expect(after.find((s) => s.start === target.start)).toBeUndefined(); // that slot blocked
+    expect(after.some((s) => localDay(s.start) !== day)).toBe(true);     // other days survive
   });
 
   it("honors MIN_NOTICE_HOURS — a longer notice removes near-term slots", () => {
