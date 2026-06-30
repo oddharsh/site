@@ -250,7 +250,7 @@ const ct = res.headers.get("content-type") || "";
 if (res.ok &amp;&amp; ct.startsWith("image/")) return res;
 return errorResp("not found", 404);  <span class="c">// no masquerade</span></pre></figure>
       </div>
-      <p class="what"><b>What it does.</b> Cloudflare Pages answers a missing <code>/images/x.jpg</code> with its SPA fallback: a 200 carrying the whole homepage HTML. Gating on <code>res.ok</code> let that HTML through, and the headers rule then stamped it <code>max-age=31536000, immutable</code>, so a real thumbnail URL could end up pinned to homepage HTML at the edge for a year. Gating on the content-type instead means only <code>image/*</code> passes and everything else becomes an uncacheable 404. This one was confirmed live before the fix: a made-up thumbnail URL really was returning 79KB of HTML with a 1-year cache.</p>
+      <p class="what"><b>What it does.</b> Cloudflare Pages answers a missing <code>/images/x.jpg</code> with its SPA fallback: a 200 carrying the whole homepage HTML. Gating on <code>res.ok</code> let that HTML through, and the headers rule then stamped it <code>max-age=31536000, immutable</code>, so a real thumbnail URL could end up pinned to homepage HTML at the edge for a year. Gating on the content-type instead lets only <code>image/*</code> pass and turns everything else into an uncacheable 404. I confirmed this one live before the fix: a made-up thumbnail URL really was returning 79KB of HTML with a 1-year cache.</p>
     </div>
 
     <div class="tg">
@@ -262,7 +262,7 @@ return errorResp("not found", 404);  <span class="c">// no masquerade</span></pr
         <figure class="after"><figcaption>after</figcaption><pre>.np-note { display: none !important; }
 .np-note:popover-open { display: flex !important; }</pre></figure>
       </div>
-      <p class="what"><b>What it does.</b> In an engine that has not shipped the Popover API, <code>:popover-open</code> is an unknown pseudo-class. <code>:not()</code> is non-forgiving, so the entire rule is thrown away, and with no UA rule to hide them, all three Notepad windows render stacked on top of the folder. Inverting it to hide-by-default means any parser hides the notes. Only an engine that understands <code>:popover-open</code> (and therefore actually supports popovers) reveals one. The fallback now degrades the right direction.</p>
+      <p class="what"><b>What it does.</b> In an engine that has not shipped the Popover API, <code>:popover-open</code> is an unknown pseudo-class. <code>:not()</code> is non-forgiving, so the engine throws the entire rule away, and with no UA rule to hide them, all three Notepad windows render stacked on top of the folder. Inverting it to hide-by-default means any parser hides the notes. Only an engine that understands <code>:popover-open</code> (and therefore actually supports popovers) reveals one. The fallback now degrades the right direction.</p>
     </div>
 
     <h2>Made it feel faster<span class="sev perf">perceived speed</span></h2>
@@ -281,7 +281,7 @@ body { height: calc(100dvh - 30px); overflow: hidden;
   display: flex; flex-direction: column; padding: 8px; }
 .window &gt; .content { flex: 1; min-height: 0; overflow: auto; }</pre></figure>
       </div>
-      <p class="what"><b>What it does.</b> The shared shell script is deferred, so it used to apply the OS-window geometry (clip the body, pin the window, reserve the taskbar strip) a beat after the page first painted. The result was a visible two-stage pop on the very first load. Inlining the exact same geometry into each page means first paint is already the windowed layout. nav.js's later rules are byte-identical, so when it runs, nothing moves. It still degrades with JS off: the content scrolls natively and a CSS strip stands in for the taskbar.</p>
+      <p class="what"><b>What it does.</b> The shared shell script is deferred, so it used to apply the OS-window geometry (clip the body, pin the window, reserve the taskbar strip) a beat after the page first painted. The very first load visibly popped in two stages. Inlining the exact same geometry into each page makes first paint already the windowed layout. nav.js's later rules are byte-identical, so when it runs, nothing moves. It still degrades with JS off: the content scrolls natively and a CSS strip stands in for the taskbar.</p>
     </div>
 
     <div class="tg">

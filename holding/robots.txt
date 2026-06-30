@@ -27,6 +27,7 @@ Disallow: /rn/tracks
 Disallow: /whoareyou
 Disallow: /around
 Disallow: /around/json
+Disallow: /lwe/ask
 
 Sitemap: https://aadhar.sh/sitemap.xml
 

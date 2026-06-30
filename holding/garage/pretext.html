@@ -186,7 +186,7 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
     <p class="lede">
       <a href="https://github.com/chenglou/pretext" rel="external">chenglou/pretext</a>
       measures &amp; lays out multiline text using the <strong>canvas</strong> as
-      ground truth instead of the DOM, so you never trigger a reflow to
+      ground truth instead of the DOM, so you never trigger a reflow just to
       ask &quot;how tall is this paragraph at 320px?&quot;
     </p>
 
@@ -247,7 +247,7 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
       <em>changes per line</em>. pretext&apos;s <code>layoutNextLine(prepared,
       cursor, width)</code> lays out one line at a time, so you feed it a narrow
       width while the line sits beside the floated box and the full width once the
-      text clears it: real shaped wrapping, drawn to a canvas, no DOM. Drag
+      text clears it. The result is real shaped wrapping, drawn to a canvas, no DOM. Drag
       the box bigger and watch the text reflow around it:
     </p>
     <div class="dm-controls">
@@ -301,7 +301,7 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
         micro-win, probably below the noise floor.</li>
     </ul>
 
-    <h2>7 · Tradeoffs (why it&apos;s &quot;watching,&quot; not &quot;shipped&quot;)</h2>
+    <h2>7 · Tradeoffs (why it stays &quot;watching&quot;)</h2>
     <ul>
       <li><strong>Fonts must be loaded first.</strong> Measure before the webfont
         swaps and every number is wrong. (aadhar.sh dodges this: it uses

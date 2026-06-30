@@ -5,8 +5,8 @@
 //
 // design vocab:
 //   - .xp-window           outer panel, blue title bar + chrome buttons
-//   - .xp-title-bar        title strip with glossy gel min/max/close controls
-//   - .xp-body             inner workspace (white)
+//   - .title-bar        title strip with glossy gel min/max/close controls
+//   - .content             inner workspace (white)
 //   - .xp-group            sunken group-box ("Available slots", "Your info")
 //   - .xp-day-label        day header in the slot list
 //   - .slot-btn            individual time slot (raised → pressed when picked)
@@ -42,6 +42,13 @@ const STYLES = `
 
 * { box-sizing: border-box; }
 
+/* cross-document view transitions — animate the window on nav, matching the
+   homepage + garage. nav.js tags the window 'axp-window'; this opts the page in. */
+@media (prefers-reduced-motion: no-preference) {
+  @view-transition { navigation: auto; }
+  ::view-transition-old(root), ::view-transition-new(root) { animation-duration: 140ms; }
+}
+
 html {
   background: var(--xp-tan);
   color: var(--xp-text);
@@ -61,7 +68,7 @@ body {
 }
 
 /* ── window chrome ──────────────────────────────────────────────────── */
-.xp-window {
+.window {
   max-width: 720px;
   margin: 0 auto;
   background: var(--xp-tan);
@@ -78,7 +85,7 @@ body {
    and three glossy gel control buttons (min/max/close) on the right.
    the glyphs are CSS-drawn (no text, no Marlett dependency), matching
    the canonical .title-bar .controls .min/.max/.close site-wide. */
-.xp-title-bar {
+.title-bar {
   /* the canonical site-wide 5-stop title gradient (≈ --grad-title) */
   background:
     linear-gradient(
@@ -100,7 +107,7 @@ body {
   text-shadow: 1px 1px #0f1089;
   user-select: none;
 }
-.xp-title-bar .icon { /* tiny app icon */
+.title-bar .icon { /* tiny app icon */
   width: 14px; height: 14px;
   background: var(--xp-paper);
   border: 1px solid var(--xp-blue-1);
@@ -108,7 +115,7 @@ body {
   position: relative;
   flex: 0 0 14px;
 }
-.xp-title-bar .icon::before {
+.title-bar .icon::before {
   content: "☕";
   position: absolute;
   inset: 0;
@@ -118,13 +125,17 @@ body {
   filter: grayscale(0.2);
   text-shadow: none;
 }
-.xp-title-bar .title {
+.title-bar .title-text {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.xp-controls {
+.controls {
   display: inline-flex;
   align-items: center;
   gap: 2px;
@@ -133,9 +144,9 @@ body {
    specular highlight + CSS-drawn white glyphs, ported from the main site.
    sRGB hex traced from the Luna .msstyles bitmap, kept as hex on purpose.
    min/max are blue; CLOSE is RED at rest. */
-.xp-controls .min,
-.xp-controls .max,
-.xp-controls .close {
+.controls .min,
+.controls .max,
+.controls .close {
   position: relative; box-sizing: border-box;
   width: 21px; height: 21px; padding: 0; margin: 0;
   display: inline-block; overflow: hidden; font-size: 0; color: transparent;
@@ -146,52 +157,52 @@ body {
   transition: filter 60ms ease-out;
 }
 /* "wet plastic" gloss band over the top ~45% (close uses ::after for its X stroke) */
-.xp-controls .min::after,
-.xp-controls .max::after {
+.controls .min::after,
+.controls .max::after {
   content: ""; position: absolute; left: 0; right: 0; top: 0; height: 45%;
   background: linear-gradient(180deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.12) 70%, rgba(255,255,255,0) 100%);
   pointer-events: none; border-radius: 2px 2px 5px 5px;
 }
-.xp-controls .min:hover, .xp-controls .min:focus-visible,
-.xp-controls .max:hover, .xp-controls .max:focus-visible {
+.controls .min:hover, .controls .min:focus-visible,
+.controls .max:hover, .controls .max:focus-visible {
   border-color: #8fb4ff; background-color: #4fa4ff;
   background-image: linear-gradient(180deg, #689bff 0%, #468aff 22%, #4fa4ff 55%, #3990fc 82%, #1858c8 100%);
   outline: none;
 }
 /* CLOSE = red at rest */
-.xp-controls .close {
+.controls .close {
   border-color: #d8401c; background-color: #e45f3e;
   background-image: linear-gradient(180deg, #e8795f 0%, #e45f40 30%, #e45d3d 52%, #e2552a 80%, #ae3110 100%);
 }
-.xp-controls .close:hover, .xp-controls .close:focus-visible {
+.controls .close:hover, .controls .close:focus-visible {
   border-color: #ff7a66; background-color: #ff957c;
   background-image: linear-gradient(180deg, #ff8b7d 0%, #ff7463 26%, #ff957c 55%, #fd7e64 82%, #d34936 100%);
   box-shadow: 0 0 4px rgba(255,120,96,.7); outline: none;
 }
-.xp-controls .min:active,
-.xp-controls .max:active,
-.xp-controls .close:active { filter: brightness(.9); }
+.controls .min:active,
+.controls .max:active,
+.controls .close:active { filter: brightness(.9); }
 /* white glyphs drawn with pseudo-elements */
-.xp-controls .min::before {
+.controls .min::before {
   content: ""; position: absolute; left: 5px; right: 5px; bottom: 5px; height: 2px;
   background: #fff; box-shadow: 0 1px 0 rgba(0,0,0,.35);
 }
-.xp-controls .max::before {
+.controls .max::before {
   content: ""; position: absolute; left: 5px; top: 5px; width: 11px; height: 9px;
   box-sizing: border-box; border: 1px solid #fff; border-top-width: 2px;
   filter: drop-shadow(0 1px 0 rgba(0,0,0,.35));
 }
-.xp-controls .close::before,
-.xp-controls .close::after {
+.controls .close::before,
+.controls .close::after {
   content: ""; position: absolute; left: 50%; top: 50%;
   width: 13px; height: 2px; margin: -1px 0 0 -6.5px; background: #fff;
   box-shadow: 0 1px 0 rgba(0,0,0,.35);
 }
-.xp-controls .close::before { transform: rotate(45deg); }
-.xp-controls .close::after  { transform: rotate(-45deg); }
+.controls .close::before { transform: rotate(45deg); }
+.controls .close::after  { transform: rotate(-45deg); }
 
 /* ── workspace body ─────────────────────────────────────────────────── */
-.xp-body {
+.content {
   background: var(--xp-paper);
   /* sunken inner bevel */
   border-top:    1px solid var(--xp-edge-dk);
@@ -210,11 +221,13 @@ h1 {
   color: var(--xp-blue-1);
   margin: 4px 0 8px;
   letter-spacing: -0.01em;
+  text-wrap: balance;   /* horizon: even heading line breaks, no JS */
 }
 .lead {
   font-size: 10.5pt;
   color: oklch(38.67% 0 0);
   margin: 0 0 12px;
+  text-wrap: pretty;    /* horizon: avoids orphans/ragged last line */
 }
 
 a { color: var(--xp-link); text-decoration: underline; }
@@ -368,7 +381,7 @@ form.book textarea {
   border-radius: 0;
   width: 100%;
 }
-form.book textarea { min-height: 5.5em; resize: vertical; }
+form.book textarea { min-height: 5.5em; max-height: 40vh; resize: vertical; field-sizing: content; }  /* horizon: auto-grows with input, no JS */
 form.book input:focus,
 form.book textarea:focus {
   outline: none;
@@ -435,37 +448,64 @@ form.book .actions {
 /* tighter on phones */
 @media (max-width: 540px) {
   body { padding: 8px 4px 32px; }
-  .xp-body { padding: 10px 10px 12px; }
+  .content { padding: 10px 10px 12px; }
   form.book .row { grid-template-columns: 1fr; gap: 2px; }
   form.book label { font-size: 9.5pt; color: var(--xp-dim); text-transform: uppercase; letter-spacing: 0.04em; }
 }
 `;
 
+// OS-window geometry — emitted only under aadhar.sh/coffee, where /nav.js is
+// same-origin and turns this into a real desktop window (Bliss wallpaper,
+// taskbar, draggable + resizable) like the garage. Inlined so FIRST PAINT
+// matches nav.js (no shell "pop" when the deferred desktop arrives); keep in
+// sync with nav.js. The bottom strip is a taskbar placeholder until the real
+// one builds. On the cal.aadhar.sh fallback /nav.js 404s, so this is skipped
+// and the page stays a standalone centered window (degrades cleanly).
+const SHELL_GEOMETRY = `
+html { height: 100dvh; overflow: hidden; }
+body { min-height: 0; height: calc(100vh - 30px); height: calc(100dvh - 30px);
+  overflow: hidden; display: flex; flex-direction: column; align-items: center; padding: 8px; }
+.window { flex: 0 1 auto; min-height: 0; max-height: 100%; display: flex; flex-direction: column; }
+.window > .title-bar { flex: 0 0 auto; }
+.window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 28px; }
+body::after { content: ""; position: fixed; left: 0; right: 0; bottom: 0; height: 30px; z-index: 1;
+  background: linear-gradient(180deg, oklch(67% 0.15 256) 0%, oklch(58% 0.19 257) 4%,
+  oklch(51% 0.20 258) 9%, oklch(49% 0.20 258) 50%, oklch(46% 0.20 259) 92%, oklch(40% 0.18 260) 100%); }
+`;
+
+// the coffee section glyph — mirrors nav.js SECTION_ICONS.coffee + the taskbar
+// app button, so the tab favicon is right on first paint (and on cal.aadhar.sh,
+// where nav.js never loads to set it). hex colors %23-encoded for the data URI.
+const COFFEE_FAVICON = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%237a5230'/><path d='M8 12 h13 v6 a6.5 6.5 0 0 1-13 0 Z' fill='%23fff'/><path d='M21 13 h3 a2.6 2.6 0 0 1 0 5.2 h-3' fill='none' stroke='%23fff' stroke-width='2.2'/><g stroke='%23fff' stroke-width='1.8' stroke-linecap='round'><path d='M11 5.5 v3'/><path d='M14.5 5 v3.5'/></g></svg>";
+
 function shell(title, body, env) {
-  const base = env.BASE_PATH || "";
   const home = env.HOST_PUBLIC_URL || "https://aadhar.sh";
+  // Under aadhar.sh/coffee, /nav.js is same-origin → join the desktop shell.
+  // On the bare cal.aadhar.sh fallback it isn't, so stay a standalone window.
+  const onShell = (env.BASE_PATH || "") === "/coffee";
+  const fullTitle = `${env.HOST_NAME}/coffee/${title}`;
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${esc(env.HOST_NAME)}/coffee/${esc(title)}</title>
+<title>${esc(fullTitle)}</title>
 <meta name="description" content="let's grab coffee or a bagel with ${esc(env.HOST_NAME)} in NYC. requests are reviewed by hand.">
 <meta name="theme-color" content="#0858a3">
-<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}${STYLES}</style>
+<link rel="icon" type="image/svg+xml" href="${COFFEE_FAVICON}">
+<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}${STYLES}${onShell ? SHELL_GEOMETRY : ""}</style>
 </head>
 <body>
-<div class="xp-window">
-  <div class="xp-title-bar">
-    <span class="icon" aria-hidden="true"></span>
-    <span class="title">${esc(env.HOST_NAME)}/coffee/${esc(title)}</span>
-    <span class="xp-controls"
-      ><span class="min" title="minimize" aria-hidden="true"></span
-      ><span class="max" title="maximize" aria-hidden="true"></span
+<div class="window">
+  <div class="title-bar" aria-hidden="true">
+    <span class="title-text"><span class="icon"></span>${esc(fullTitle)}</span>
+    <span class="controls"
+      ><span class="min" title="minimize"></span
+      ><span class="max" title="maximize"></span
       ><a class="close" href="${esc(home)}" title="close" aria-label="close, up to ${esc(env.HOST_NAME)}"></a
     ></span>
   </div>
-  <div class="xp-body">
+  <div class="content">
     ${body}
     <div class="xp-statusbar">
       <span>← <a href="${esc(home)}">${esc(home.replace(/^https?:\/\//, ""))}</a></span>
@@ -473,7 +513,8 @@ function shell(title, body, env) {
       <span>cloudflare workers · ${esc(env.HOST_TIMEZONE || "UTC").replace(/_/g, " ")}</span>
     </div>
   </div>
-</div>
+</div>${onShell ? `
+<script src="/nav.js" defer></script>` : ""}
 </body>
 </html>`;
 }
@@ -505,8 +546,8 @@ export function bookingPage(slots, env) {
       `).join("");
 
   const body = `
-    <h1>Let&rsquo;s grab coffee or a bagel</h1>
-    <p class="lead">if you&rsquo;re in NYC and working on something interesting, pick a slot below. i confirm by hand &mdash; nothing lands on your calendar until you see the confirmation email.</p>
+    <h1>Let's grab coffee or a bagel</h1>
+    <p class="lead">if you're in NYC and working on something interesting, pick a slot below. i confirm every request by hand, so nothing lands on your calendar until you see the confirmation email.</p>
 
     <div class="xp-group">
       <span class="legend">Available slots</span>

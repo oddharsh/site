@@ -50,7 +50,7 @@ Single-page personal site at `aadhar.sh`. Hosted on Cloudflare Pages, with a
 
 | file | role |
 |---|---|
-| `holding/index.html` | The whole page in one file. Inline CSS + JS. ~78KB uncompressed, ~22KB brotli. Comments deliberately kept readable for View Source. |
+| `holding/index.html` | The whole page in one file. Inline CSS + JS. ~83KB uncompressed, ~24KB brotli (measured 2026-06; served `no-store`, so every visit pays it). Comments deliberately kept readable for View Source. |
 | `holding/writing/` | Written content as plain `.txt` files + `posts.json` registry `[{slug,title,date}]`. The worker renders each as an XP **Notepad** window at `/writing/<slug>` (a server-rendered `<textarea>` seeded with the canonical text — editable by nature, ephemeral by nature: no save → reload restores canonical, "writing in flux"), plus a "My Writing" folder index at `/writing`. Raw `.txt` stays fetchable at `/writing/<slug>.txt`. Author a post = drop a `.txt` + a `posts.json` entry. Render code (`handleWritingIndex`/`handleWritingPost`/`NOTEPAD_CSS`) lives in `_worker.js`. |
 | `holding/notepad.js` | Behavior for the `/writing` Notepad view (deferred, SW-cached): per-window `enhance()` wiring File/Edit/Format/View/Help menus, live Ln/Col + word-count status bar, Word-Wrap toggle, the classic **F5 time/date** stamp (Temporal w/ Date fallback), Select All, Print, About. Also opens folder notes as **popovers** that composite over the folder index (+ `pushState` to `/writing/<slug>`, Back closes). Chrome itself is SSR'd by `_worker.js`. No-op without a `.np-window`. |
 | `holding/nav.js` | Site-wide XP **desktop shell**. The ONE shared external asset (deferred, SW-cached) — every page includes `<script src="/nav.js" defer>`; it injects its own `<style>` + builds, into `<body>`: the **Bliss desktop** wallpaper, **draggable desktop icons** (Notepad + the 5 profiles, positions persisted in localStorage), the **taskbar** (Start orb → Run, first-level-subpage app buttons each with a per-section SVG icon, clock via Temporal), and the **Run** command palette (⌘K / Start). Also owns the **OS-window model**: body is a clipping flex desktop, each `.window`/`.np-window` is pinned + its content scrolls internally behind a **custom XP scrollbar**, windows are **draggable** (top is a hard boundary) + **resizable**, and View Transitions animate only the window. Sets each first-level route's **tab favicon** to its section icon. Run destinations: pages + profiles inline; 146 photos lazy-loaded from `/images/manifest.json` with `/images/alt.json` captions. Wired into homepage + all garage pages + worker-gen `/around`,`/whoareyou`,`/bot` + serendipity shell. |
@@ -184,6 +184,34 @@ the site doesn't actually serve. To verify:
 - **PHOTOS_R2** — R2 bucket `aadhar-photos`, holds the SOOC originals
   (~3 GB / 146 photos at FUJIFILM X-T5 + Leica resolution).
 - **ASSETS** — auto-bound by Pages, serves static files from the project.
+- **RESTORE_DB** — D1 database `aadhar-restore` (id `88c8daf1-3a36-4f8e-a2ad-dba8a74e1b9f`),
+  the **single source of truth for the deploy log**. One row per real deploy (a SW
+  `CACHE_VERSION` bump), seeded from git history. BOTH `/restore` (the restore-point
+  scrubber + "You are here" banner) AND `/updates` (Windows Update changelog + running
+  build) read this one `checkpoints` table, so they cannot drift apart. Schema:
+  `checkpoints(vnum INTEGER PK, ts INTEGER, ymd TEXT, version TEXT, slug TEXT, title TEXT)`
+  — `slug` is the version suffix / changelog tag, `title` is the human description.
+  **Configured as a dashboard binding** (Pages → Settings → Bindings), NOT in a
+  `wrangler.toml` — holding/ has no toml, so all its bindings live in the dashboard.
+  **Bump + log a deploy in one step** (do this instead of hand-editing `CACHE_VERSION`,
+  so both pages stay current): `./holding/scripts/bump-version.sh <slug> "<title>"`,
+  then deploy. It increments the SW version string AND inserts the matching checkpoint.
+- **CF_ACCOUNT_ID + BROWSER_RENDER_TOKEN** — env vars (Pages → Settings → Variables
+  and Secrets, NOT in code, NOT in a `wrangler.toml`) that power `/lens/shot`, the
+  Browser Rendering screenshot fallback inside **`/lens`** ("The Other Web", which shows
+  any URL the way a machine does). `/lens`'s Human view embeds framable sites in a live
+  cross-origin `<iframe>` (loaded by the visitor's own browser) and screenshots the rest
+  server-side via Cloudflare Browser Rendering's REST API (`POST /accounts/<id>/browser-rendering/screenshot`,
+  returns raw PNG bytes). `CF_ACCOUNT_ID` is the plain account id; `BROWSER_RENDER_TOKEN`
+  is a secret API token scoped to **Account · Browser Rendering · Edit**. Without both,
+  `/lens/shot` returns a clean 503 and the Human view falls back to the readable-text
+  reader, so the live iframe + all four machine lenses keep working regardless.
+  Screenshots are KV-cached 1h (`lens:shot:<sha256(url)>` in RN_KV) and rate-limited to
+  8/min/IP; `/lens/fetch` (the parsing engine) is rate-limited 30/min/IP. Both `/lens/*`
+  fetch routes guard against SSRF (http(s) only, no localhost / private / link-local /
+  `169.254.169.254` hosts, ports 80/443 only, 8s timeout, 2MB cap) and identify honestly
+  as AadharshBot. Framability is read from the target's `X-Frame-Options` /
+  `Content-Security-Policy: frame-ancestors` in the `/lens/fetch` pass, so no extra probe.
 
 ### XP visual vocabulary (CSS)
 
