@@ -43,6 +43,13 @@
     if (!url) { urlInput.focus(); return; }
     busy = true;
     urlInput.value = url;
+    // reflect the scanned URL in the address bar so every scan is a shareable link.
+    // replaceState (not pushState): no reload, and repeated scans don't spam the
+    // history stack, so Back still leaves /lens cleanly. Pairs with the ?url= autorun
+    // at the bottom: open or share /lens?url=<site> and it re-runs the same scan.
+    try {
+      history.replaceState(null, "", "/lens?url=" + encodeURIComponent(url));
+    } catch (e) {}
     humanBody.innerHTML = '<div class="lx-spin">Fetching as AadharshBot&hellip;</div>';
     machineBody.innerHTML = '<div class="lx-spin">Reading the markup&hellip;</div>';
     statusBar.innerHTML = "<span>Fetching <b>" + esc(url) + "</b> server-side&hellip;</span>";
