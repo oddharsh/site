@@ -5,11 +5,11 @@ with the exact command and the gotcha that bit me last time. Deep design notes
 and the full conventions list live in [CLAUDE.md](CLAUDE.md); this is the ops sheet.
 
 Three deploy targets:
-- **holding/** (the Pages site, aadhar.sh): **git-connected.** `git push origin main` triggers the Cloudflare Pages build, which bundles `holding/_worker.js` (and its imports, via wrangler's built-in esbuild) and ships it as the Worker Function. No build step we own; no `package.json`. Verify after every deploy with `node verify-routes.mjs https://aadhar.sh`. Break-glass only if the git pipeline is down: `wrangler pages deploy holding --project-name aadhar-sh --branch main --commit-dirty=true` (run from the repo root, never a subdir, or wrangler ENOENTs scanning `images/holding/`).
+- **holding/** (aadhar.sh): a **Cloudflare Worker with static assets** (migrated off Pages 2026-06-30). Config is `wrangler.jsonc` at the repo root: `assets.directory=holding`, `main=holding/_worker.js/index.js`, `run_worker_first:true` (worker sees every request and forwards static to `env.ASSETS`, same as the old advanced mode), `workers_dev:false` (custom domain only). **Deploy: `wrangler deploy` from the repo root.** No git auto-deploy (Pages git sync retired); a `git push` is version control only. Verify after every deploy with `node verify-routes.mjs https://aadhar.sh`. Bindings live in `wrangler.jsonc` (KV/R2/D1/DO); secrets via `wrangler secret put` (`RN_SIGNING_KEY_JWK`, `BROWSER_RENDER_TOKEN`, `RN_BUST_SECRET`).
 - **serendipity/** (separate Worker, aadhar.sh/serendipity): `cd serendipity && wrangler deploy`.
 - **cal/** (coffee booker): source-complete, NOT deployed. Needs secrets first (see [cal/README.md](cal/README.md)).
 
-**Outage signature:** if static assets (`/`, `/nav.js`, `/lens.js`) return 200 but every worker route (`/lens`, `/around`, `/bot`, `/writing`) returns 404, the build shipped **static-only, no Function**. Confirm with `wrangler pages deployment tail <id>` (error `8000098` = "does not have a Pages Function"). Fix: redeploy; check the dashboard build output directory resolves so `_worker.js` is at the output root. This is the failure that took the site down once.
+**Deploy sanity:** after `wrangler deploy`, run the oracle. `_headers` and `.assetsignore` (which excludes `_worker.js` from being served) both work natively on Workers static assets, same as Pages. `_worker.js/` is the bundled Worker entry, not a served asset. The old Pages "static-only, no Function" outage class no longer applies (a Worker deploy is atomic).
 
 Key facts (don't hardcode these elsewhere, they drift):
 - RN_KV namespace id: `3cb8a107c58e47dc9244e75b33401f36`
@@ -97,7 +97,7 @@ wrangler login                                         # Cloudflare auth (deploy
 # regenerate metadata.json (calls extract-photo-metadata.sh) -> bust the manifest KV keys.
 ./holding/scripts/add-photos.sh "/path/to/photo.HIF" [more files...]
 # then it prints the deploy line; run it:
-wrangler pages deploy holding --project-name aadhar-sh --branch holding --commit-dirty=true
+wrangler deploy   # from the repo root; deploys the aadhar-sh Worker (holding/ as static assets)
 ```
 - Accepts JPG/PNG/HEIF/HIF. For HEIF it also uploads a visually-lossless JPG export as the `/images/full/<stem>.jpg` click target.
 - It busts `manifest:images`, `idx:images`, `idx:imagesfull` so the worker re-derives the grid from R2 on the next request.
@@ -149,7 +149,7 @@ wrangler kv key put --namespace-id="$NS" playlist-id "<NEW_22_CHAR_ID>" --remote
 wrangler kv key delete --namespace-id="$NS" "tracks:${OLD}" --remote
 wrangler kv key delete --namespace-id="$NS" "tracks:${OLD}:fresh" --remote
 curl -s "https://aadhar.sh/rn/tracks" >/dev/null                       # warms tracks:<new> by scraping
-wrangler pages deploy holding --project-name aadhar-sh --branch holding --commit-dirty=true
+wrangler deploy   # from the repo root; deploys the aadhar-sh Worker (holding/ as static assets)
 ```
 - The id is the 22 chars after `/playlist/` in the share URL (drop `?si=...`).
 - **Why the redeploy:** the worker caches `playlist-id` in a module variable (`_playlistId`) per warm isolate. A redeploy recycles isolates so the homepage *prerenders* the new list immediately instead of waiting for them to age out.
@@ -211,7 +211,7 @@ curl -s "https://aadhar.sh/images/manifest.json" | jq length          # photo co
 - **Cloudflare edge caches 404s for ~4 hours.** A transient miss at a thumb URL during a deploy gets pinned. Mitigations: `THUMB_VERSION` bump (fresh URLs) + the worker rewrites cache-control on non-image responses to uncacheable.
 - **zsh eats `${var}:something`.** Brace-quote KV key names with colons (`"tracks:${OLD}:fresh"`), and use `${=flag}` if you need word-splitting in ad-hoc snippets (the scripts use `#!/usr/bin/env bash` so they are safe internally).
 - **`jpegtran` / mozjpeg strip EXIF.** Rotate losslessly with `jpegtran -copy none -rotate N` *before* recompressing, and send its binary stdout to a file (`2>/dev/null > out.jpg`), not through a pipe that could mix in stderr.
-- **`wrangler pages deploy` runs from the repo root**, never from inside `holding/images/` etc.
+- **`wrangler deploy` runs from the repo root** (where `wrangler.jsonc` lives), so it targets the `aadhar-sh` Worker and picks up all of `holding/`.
 - **`_playlistId` is module-cached per isolate.** After changing `playlist-id`, redeploy to flush it (see the playlist section).
-- **A worker change deploys on `git push origin main`** (git-connected Pages). A local commit alone does not deploy; push it. After pushing, run `node verify-routes.mjs https://aadhar.sh` and wait for the build to go Active before trusting live.
-- **The worker is bundled, not hand-concatenated.** `_worker.js` may `import` sibling modules; wrangler/Cloudflare bundle them at deploy via built-in esbuild. Do not add a `package.json`/build script for this; the platform does it. The site stays no-build.
+- **A worker change is not live until `wrangler deploy`.** A local commit or `git push` does NOT deploy (Pages git sync was retired at the migration). Deploy explicitly, then run `node verify-routes.mjs https://aadhar.sh`.
+- **The worker is bundled, not hand-concatenated.** `_worker.js/` imports sibling modules; wrangler bundles them at deploy via built-in esbuild. Do not add a `package.json`/build script for this; the platform does it. The site stays no-build.

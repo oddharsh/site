@@ -1,0 +1,40 @@
+{
+  // Cloudflare Workers (static assets) config for aadhar.sh.
+  // Migrated from the Pages project of the same name. The whole holding/ dir is
+  // uploaded as static assets; holding/_worker.js/ is the bundled Worker entry
+  // (excluded from assets by holding/.assetsignore). run_worker_first mirrors
+  // Pages advanced mode (the worker sees every request and forwards static ones
+  // to env.ASSETS via index.js:302). Compression is left to the platform default
+  // for now (no precompression / q11 change in this migration).
+  "name": "aadhar-sh",
+  "main": "holding/_worker.js/index.js",
+  "compatibility_date": "2026-06-01",
+  // serve only on the custom domain (aadhar.sh); no public *.workers.dev URL.
+  "workers_dev": false,
+  "assets": {
+    "directory": "holding",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  },
+  "observability": { "enabled": true },
+  "kv_namespaces": [
+    { "binding": "RN_KV", "id": "3cb8a107c58e47dc9244e75b33401f36" }
+  ],
+  "r2_buckets": [
+    { "binding": "PHOTOS_R2", "bucket_name": "aadhar-photos" }
+  ],
+  "d1_databases": [
+    { "binding": "RESTORE_DB", "database_name": "aadhar-restore", "database_id": "88c8daf1-3a36-4f8e-a2ad-dba8a74e1b9f" }
+  ],
+  "durable_objects": {
+    "bindings": [
+      { "name": "COUNTER", "class_name": "Counter", "script_name": "cf-garage" }
+    ]
+  },
+  "vars": {
+    // account id for the /lens/shot Browser Rendering REST call. not secret.
+    "CF_ACCOUNT_ID": "1c99acdb6141579023fb97d24261ea58"
+  }
+  // Secrets are NOT here (set on the Worker with `wrangler secret put`):
+  //   RN_SIGNING_KEY_JWK, BROWSER_RENDER_TOKEN, RN_BUST_SECRET
+}
