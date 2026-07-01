@@ -1400,7 +1400,7 @@ pointerout   -&gt; hidePopover()
     <section class="demo" data-cap="base-select">
       <h2>
         <span>appearance: base-select <span class="mono">/ customizable &lt;select&gt;</span></span>
-        <span class="stat chrome">Chrome · Safari TP/flag</span>
+        <span class="stat cross">Chrome &middot; Safari 27</span>
       </h2>
       <p class="note">
         For two decades the <code>&lt;select&gt;</code> popup has been a sealed
@@ -1432,18 +1432,22 @@ pointerout   -&gt; hidePopover()
         popup, or a system widget that shatters the XP illusion.
         base-select lets one real <code>&lt;select&gt;</code> carry the bevel,
         the alternating rows, and inline swatches/icons while keeping full
-        keyboard + form semantics for free. <strong>But</strong> it is
-        Chrome-shipped only (~m135); Safari and Firefox render the native widget,
-        so it is strictly progressive enhancement until it lands cross-engine
-        (WebKit standards-position:
-        <a href="https://github.com/WebKit/standards-positions/issues/386" rel="external">support, #386</a>,
-        positive, not yet shipped).
+        keyboard + form semantics for free. It went cross-engine in 2026:
+        Chrome shipped it (~m135) and <strong>Safari&nbsp;27</strong> now ships it
+        too (<a href="https://github.com/WebKit/standards-positions/issues/386" rel="external">WebKit #386</a>).
+        Firefox still renders the native widget, so keep it progressive: wrap the
+        enhancement in <code>@supports (appearance: base-select)</code>. WebKit&apos;s
+        <strong>golden rule</strong>: always give every <code>&lt;option&gt;</code>
+        real text content or an accessible text attribute, because a base-select
+        stays a genuine native <code>&lt;select&gt;</code> underneath (keyboard,
+        typeahead, form value, screen-reader text all intact) and the options are
+        display-only, never a place to nest buttons or links.
       </p>
       <p class="unsupported">
         Your browser doesn&apos;t support <code>appearance: base-select</code> yet,
         the dropdown above falls back to your OS&apos;s native
         <code>&lt;select&gt;</code> widget (which is exactly the intended graceful
-        degradation). To try the XP-themed version, open this page in Chrome 135+.
+        degradation). To try the XP-themed version, open this page in Chrome 135+ or Safari 27.
       </p>
     </section>
 
@@ -1695,14 +1699,16 @@ for (const t of tracks) {
 
     <section class="demo" data-cap="html-in-canvas">
       <h2>
-        <span>HTML-in-Canvas <span class="mono">/ ctx.drawElement()</span></span>
-        <span class="stat chrome">Chrome flag · WICG early</span>
+        <span>HTML-in-Canvas <span class="mono">/ ctx.drawElementImage()</span></span>
+        <span class="stat trial">Origin trial Ch148-150 &middot; WICG</span>
       </h2>
       <p class="note">
         <a href="https://github.com/WebKit/standards-positions/issues" rel="external" class="wk non" style="margin:0 6px 0 0">WebKit: no position</a>
         Draws a <em>live, laid-out</em> DOM subtree straight into a 2D canvas
-        with <code>ctx.drawElement(el, x, y)</code> (and the WebGL twin
-        <code>texElement2D</code>). The element keeps real text layout, fonts,
+        with <code>ctx.drawElementImage(el, x, y)</code> (WebGL gets
+        <code>texElementImage2D</code>, WebGPU <code>copyElementImageToTexture</code>),
+        after opting the element in with a <code>layoutsubtree</code> attribute.
+        The element keeps real text layout, fonts,
         and accessibility, unlike <code>foreignObject</code>+SVG, it
         isn&apos;t tainted, doesn&apos;t silently drop styles, and can be
         composited, transformed, and post-processed pixel-by-pixel. Below: a
@@ -1743,34 +1749,38 @@ const ctx = canvas.getContext("2d");
 // tilt the whole surface, then rasterize the LIVE element into it
 ctx.translate(20, 14);
 ctx.transform(1, 0.06, -0.10, 1, 0, 0);   // slight skew
-ctx.drawElement(el, 0, 0);                 // &lt;- the new primitive
+ctx.drawElementImage(el, 0, 0);            // &lt;- the new primitive (el has layoutsubtree)
 
-// from here it's normal canvas: ctx.filter, getImageData, WebGL texElement2D…</pre>
+// from here it's normal canvas: ctx.filter, getImageData, WebGL texElementImage2D…</pre>
       </details>
       <p class="unsupported">
-        Your browser doesn&apos;t support <code>drawElement</code> yet,
-        the canvas shows a placeholder instead of the live rasterization. Enable
-        <code>chrome://flags#canvas-draw-element</code> in Chrome Canary to see
-        it for real.
+        Your browser doesn&apos;t support <code>drawElementImage</code> yet,
+        the canvas shows a placeholder instead of the live rasterization. It is in
+        origin trial in Chrome&nbsp;148 through 150; enable
+        <code>chrome://flags#canvas-draw-element</code> to see it for real.
       </p>
       <script>
       (function () {
         var c = document.getElementById("hic-canvas");
         if (!c || !c.getContext) return;
         var ctx = c.getContext("2d"), el = document.getElementById("hic-source");
-        if (ctx && typeof ctx.drawElement === "function" && el) {
+        // the primitive was renamed drawElement -> drawElementImage in the OT;
+        // prefer the new name, fall back to the old for pre-OT builds.
+        var draw = ctx && (typeof ctx.drawElementImage === "function" ? "drawElementImage"
+                 : typeof ctx.drawElement === "function" ? "drawElement" : null);
+        if (ctx && draw && el) {
           try {
             ctx.clearRect(0, 0, c.width, c.height);
             ctx.save(); ctx.translate(20, 14);
             ctx.transform(1, 0.06, -0.10, 1, 0, 0);   // slight skew
-            ctx.drawElement(el, 0, 0); ctx.restore(); return;
+            ctx[draw](el, 0, 0); ctx.restore(); return;
           } catch (e) {}
         }
-        // no drawElement here -> honest placeholder, not a confusing blank box
+        // unavailable here -> honest placeholder, not a confusing blank box
         ctx.fillStyle = "#f3f4f8"; ctx.fillRect(0, 0, c.width, c.height);
         ctx.fillStyle = "#7a808c"; ctx.textAlign = "center";
         ctx.font = "11px Tahoma, sans-serif";
-        ctx.fillText("ctx.drawElement() unavailable", c.width / 2, c.height / 2 - 6);
+        ctx.fillText("ctx.drawElementImage() unavailable", c.width / 2, c.height / 2 - 6);
         ctx.fillText("enable #canvas-draw-element", c.width / 2, c.height / 2 + 12);
       })();
       </script>
@@ -1779,7 +1789,7 @@ ctx.drawElement(el, 0, 0);                 // &lt;- the new primitive
     <section class="demo" data-cap="masonry">
       <h2>
         <span>CSS Masonry <span class="mono">/ Grid Lanes</span></span>
-        <span class="stat trial">Safari 26 ships &middot; Chrome flag</span>
+        <span class="stat trial">Safari 26.4 &middot; Chrome flag</span>
       </h2>
       <p class="note">
         Lays tiles of <em>uneven height</em> into columns, each new tile dropping
@@ -1789,7 +1799,7 @@ ctx.drawElement(el, 0, 0);                 // &lt;- the new primitive
         vs. a separate <code>display: masonry</code>), it has converged into
         <strong>Grid Lanes</strong>: masonry expressed <em>inside</em> CSS Grid so
         you keep <code>grid-template-columns</code>, gaps, and (eventually)
-        subgrid. <strong>Safari&nbsp;26 shipped it</strong> as <code>display: grid-lanes</code> (on by default); Chrome keeps it behind the experimental flag. The grid below is <em>real</em> grid-lanes where the engine supports it (you, on Safari&nbsp;26) and falls back to a CSS multi-column mockup elsewhere: the mockup reads down-then-across, true masonry packs into the shortest lane.
+        subgrid. <strong>Safari&nbsp;26.4 shipped it</strong> as <code>display: grid-lanes</code> (on by default) with a <code>flow-tolerance</code> knob (the old <code>item-tolerance</code>, renamed); Chrome keeps it behind the experimental flag. The grid below is <em>real</em> grid-lanes where the engine supports it (you, on Safari&nbsp;26.4+) and falls back to a CSS multi-column mockup elsewhere: the mockup reads down-then-across, true masonry packs into the shortest lane.
       </p>
       <div class="mas-mock" aria-hidden="true">
         <div class="tile t1"><span class="cap">portrait</span></div>
@@ -1803,12 +1813,12 @@ ctx.drawElement(el, 0, 0);                 // &lt;- the new primitive
         <div class="tile t9"><span class="cap">tall</span></div>
       </div>
       <p class="mas-flag">
-        Live in Safari&nbsp;26 (<code>display: grid-lanes</code>, on by default). In Chrome
+        Live in Safari&nbsp;26.4+ (<code>display: grid-lanes</code>, on by default). In Chrome
         it&apos;s behind <code>chrome://flags#enable-experimental-web-platform-features</code>
         (the <code>#css-grid-lanes-layout</code> entry). Everywhere else: the mockup above.
       </p>
       <details>
-        <summary class="note" style="cursor:pointer">proposed Grid Lanes syntax (vs. today&apos;s fixed 3&times;3)</summary>
+        <summary class="note" style="cursor:pointer">Grid Lanes syntax (vs. today&apos;s fixed 3&times;3)</summary>
 <pre>/* today on aadhar.sh — rigid, every frame the same box */
 .photos {
   display: grid;
@@ -1817,12 +1827,13 @@ ctx.drawElement(el, 0, 0);                 // &lt;- the new primitive
 }
 .photos img { aspect-ratio: 1; object-fit: cover; } /* crops the Fuji frames */
 
-/* tomorrow — Grid Lanes (NOT shipped; syntax still settling) */
+/* now shipping: Grid Lanes (Safari 26.4; Chrome + Firefox behind a flag) */
 .photos {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  display: grid-lanes;           /* Safari 26 ships this; grid-template-rows:masonry is the spec form */
+  display: grid-lanes;           /* Safari 26.4 ships this; grid-lanes won the naming, not grid-template-rows:masonry */
   gap: 8px;
+  flow-tolerance: 2em;           /* how ragged a lane may get before reflow (was item-tolerance) */
 }
 .photos img { height: auto; }    /* native aspect ratio preserved, no crop */</pre>
       </details>
@@ -1838,8 +1849,8 @@ ctx.drawElement(el, 0, 0);                 // &lt;- the new primitive
         page exists to <em>avoid</em> shipping.
       </p>
       <p class="unsupported">
-        Your browser can&apos;t show real masonry yet, nothing ships it by
-        default in mid-2026. The grid above is a CSS multi-column
+        Your browser can&apos;t show real masonry yet (only Safari&nbsp;26.4+ ships
+        it by default in mid-2026). The grid above is a CSS multi-column
         <em>approximation</em>, not the live feature; enable the Canary /
         Safari TP flags above to drive the genuine layout.
       </p>
@@ -1848,7 +1859,7 @@ ctx.drawElement(el, 0, 0);                 // &lt;- the new primitive
     <section class="demo" data-cap="jpeg-xl">
       <h2>
         <span>JPEG XL <span class="mono">image/jxl</span></span>
-        <span class="stat contested">Safari ships &middot; Chrome removed &middot; Firefox no</span>
+        <span class="stat contested">Safari &middot; Chrome 145 flag &middot; Firefox 152 flag</span>
       </h2>
       <p class="note">
         The format the photo pipeline actually wants: smaller than AVIF at the
@@ -1856,8 +1867,8 @@ ctx.drawElement(el, 0, 0);                 // &lt;- the new primitive
         (a low-res preview paints from the first few KB, then sharpens), and it
         can losslessly <em>re-wrap</em> an existing JPEG ~20% smaller with the
         original bytes recoverable. No live decode below: Chrome (my daily
-        driver) can&apos;t decode JXL, and there&apos;s no <code>.jxl</code> asset
-        on the site, so this is an honest mock plus the wiring it&apos;d take.
+        driver) won&apos;t decode JXL without a flag, and there&apos;s no
+        <code>.jxl</code> asset on the site, so this is an honest mock plus the wiring it&apos;d take.
         <a href="https://github.com/WebKit/standards-positions/issues/72" rel="external" class="wk sup" style="margin-left:4px">WebKit: support (shipped)</a>
       </p>
 
@@ -1915,11 +1926,13 @@ cjxl -q 90 -e 7 &lt;stem&gt;.png &lt;stem&gt;.jxl</pre>
         format in <code>holding/images/</code> (120 stems &times; <em>3</em>
         formats). But the <code>&lt;picture&gt;</code> type-fallback decode trap
         from the CLAUDE.md gotcha applies double here: the format split is
-        wildly uneven: only Safari decodes it, Chrome dropped it in 2023
-        (a Canary <code>#enable-jxl-image-format</code> decode flag is returning),
-        Firefox has never shipped it. So for now it&apos;d only ever serve to
+        wildly uneven. Only Safari decodes it by default. Chrome dropped it in 2023
+        but reintroduced a decoder (the Rust <code>jxl-rs</code>) behind
+        <code>#enable-jxl-image-format</code> in Chrome&nbsp;145 (default-on targeted
+        H2&nbsp;2026), and Firefox&nbsp;152 shipped the same <code>jxl-rs</code> decoder
+        behind a Labs flag. So for now it&apos;d still only serve by default to
         Safari while tripling the asset count and KB on disk. <strong>Not a
-        graduation candidate</strong> until Chrome ships decode again
+        graduation candidate</strong> until Chrome and Firefox decode it
         non-flagged; it stays parked here as the format I&apos;d adopt the day
         that happens, given the SOOC originals already live in R2 to re-encode from.
       </p>
@@ -1927,8 +1940,8 @@ cjxl -q 90 -e 7 &lt;stem&gt;.png &lt;stem&gt;.jxl</pre>
       <p class="unsupported">
         Nothing to decode live regardless of your browser, this card is a
         static mock by design. To actually <em>view</em> a <code>.jxl</code>
-        today you need Safari 16.4+; in Chrome enable
-        <code>chrome://flags#enable-jxl-image-format</code> in a recent Canary.
+        today you need Safari 16.4+; in Chrome&nbsp;145+ or Firefox&nbsp;152+ enable
+        <code>chrome://flags#enable-jxl-image-format</code> (or the Firefox Labs pref).
       </p>
     </section>
 
@@ -2529,14 +2542,14 @@ myButton.onclick = async () =&gt; {
     <section class="demo" data-cap="model">
       <h2>
         <span>&lt;model&gt; element</span>
-        <span class="stat trial">Safari 26 (Testable)</span>
+        <span class="stat trial">Safari 27 &middot; Apple-led</span>
       </h2>
       <p class="note">
         A native, declarative 3D viewer: <code>&lt;model src="scene.usdz"&gt;</code>
-        with built-in orbit/zoom and AR hand-off, no WebGL/three.js. Currently a
-        WebKit prototype (the &quot;HTML &lt;model&gt; element&quot; flag in your Safari&nbsp;26
-        screenshot). No live model is loaded here, just the placeholder it
-        would occupy:
+        with built-in orbit/zoom and AR hand-off, no WebGL/three.js. Shipped in
+        <strong>Safari&nbsp;27</strong> on iOS, iPadOS, and macOS (a flagged prototype
+        back in Safari&nbsp;26); no Chromium or Gecko signal. No live model is loaded
+        here, just the placeholder it would occupy:
       </p>
       <div class="model-mock">&lt;model&gt;: native 3D / AR viewer (no asset loaded)</div>
       <p class="replaces">
@@ -2693,6 +2706,88 @@ myButton.onclick = async () =&gt; {
 
     <hr>
     <p class="lede" style="margin-top:4px">Newer arrivals: the bleeding edge (shipped or not), plus the networking layer the rest of this page was missing.</p>
+
+    <!-- ───────────────────── Built-in AI ───────────────────── -->
+    <section class="demo">
+      <h2>
+        <span>Built-in AI <span class="mono">/ Prompt + Summarizer API</span></span>
+        <span class="stat chrome">Chrome 148 &middot; on-device</span>
+      </h2>
+      <p class="note">
+        On-device AI as a plain web primitive. <code>window.LanguageModel</code> (the
+        Prompt API, stable in Chrome&nbsp;148) takes text, image, and audio input plus
+        sampling params and runs Gemini Nano locally; <code>window.Summarizer</code>
+        (stable Chrome&nbsp;138) does key-points / tl;dr / teaser / headline. No server,
+        no key, no GPU bill. Chrome-only for now: Mozilla and Apple both objected to
+        shipping it, so there is no Safari or Firefox implementation.
+      </p>
+      <p class="replaces">
+        On the site: it could caption the 146-photo grid or summarize a
+        <a href="/lens">/lens</a> reader page entirely client-side, with no
+        cf-garage Workers-AI round trip. Chrome-only, so it would ride on top of the
+        server path as an enhancement, never replace it.
+      </p>
+    </section>
+
+    <!-- ───────────────────── Document patching ───────────────────── -->
+    <section class="demo">
+      <h2>
+        <span>Document patching <span class="mono">/ declarative partial updates</span></span>
+        <span class="stat early">Chrome 148 flag</span>
+      </h2>
+      <p class="note">
+        Out-of-order HTML streaming and in-place DOM patching as a browser primitive
+        instead of a framework feature. A <code>&lt;template for&gt;</code> element plus
+        <code>&lt;?marker&gt;</code> / <code>&lt;?start&gt;</code> / <code>&lt;?end&gt;</code>
+        processing instructions stream HTML into named targets with no script, and new
+        <code>setHTML()</code> / <code>appendHTML()</code> / <code>streamHTML()</code>
+        methods apply patches imperatively. Announced at I/O&nbsp;2026, testable in
+        Chrome&nbsp;148 behind <code>#enable-experimental-web-platform-features</code>.
+      </p>
+      <p class="replaces">
+        On the site: the <code>_worker.js</code> HTMLRewriter injection of the
+        now-playing tracks and the random photo grid into <code>index.html</code> is
+        exactly this server-side partial render, done by hand. This would make it a
+        declared contract instead. It shares a WICG repo with the route-matching work above.
+      </p>
+    </section>
+
+    <!-- ───────────────────── WebMCP ───────────────────── -->
+    <section class="demo">
+      <h2>
+        <span>WebMCP <span class="mono">/ page tools for agents</span></span>
+        <span class="stat trial">Origin trial Ch149</span>
+      </h2>
+      <p class="note">
+        A proposed open standard that lets a page expose structured tools (JavaScript
+        functions and HTML forms) to browser-resident agents, so an in-browser agent
+        calls a site&apos;s own actions instead of scraping the DOM. The origin trial
+        began in Chrome&nbsp;149. Early and Chrome-led, no other engine yet.
+      </p>
+      <p class="replaces">
+        On the site: a machine-facing sibling to the <a href="/bot">AadharshBot</a>
+        crawler and the <code>_index._agents</code> DNS-AID discovery record, exposing
+        the <a href="/coffee">/coffee</a> booking or photo search as callable tools
+        rather than pages to parse.
+      </p>
+    </section>
+
+    <!-- ───────────────────── WebNN ───────────────────── -->
+    <section class="demo">
+      <h2>
+        <span>WebNN <span class="mono">/ navigator.ml</span></span>
+        <span class="stat trial">Origin trial Ch147-149</span>
+      </h2>
+      <p class="note">
+        A graph API that runs ML inference on the client&apos;s NPU or GPU through the
+        OS ML stack (DirectML, Core&nbsp;ML), the acceleration layer beneath ONNX Runtime
+        Web and TensorFlow.js. The origin trial slipped twice and now runs
+        Chrome&nbsp;147 through 149 on all Blink platforms; Edge ships alongside Chromium
+        and Firefox has stated intent, so it is cross-engine-bound rather than
+        Chrome-locked. Distinct from WebGPU: WebNN targets the neural accelerator, not
+        the GPU compute path.
+      </p>
+    </section>
 
     <!-- ───────────────────── Element.moveBefore() ───────────────────── -->
     <section class="demo" data-cap="move-before">
