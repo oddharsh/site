@@ -1101,6 +1101,7 @@
       if (!b || e.target.closest("a,button,.controls,.np-controls,.x")) return;
       var w = b.closest(".window,.np-window,#axp-run");
       if (!w) return;
+      if (w.classList.contains("axp-max")) return;   // a maximized window is pinned, not draggable
       var t = getComputedStyle(w).transform;
       base = (t && t !== "none") ? t + " " : "";
       r = w.getBoundingClientRect();
@@ -1208,6 +1209,7 @@
       var g = el('<div class="axp-resize" aria-hidden="true"></div>');
       f.appendChild(g);
       g.addEventListener("pointerdown", function (e) {
+        if (f.classList.contains("axp-max")) return;   // no resizing a maximized window
         e.preventDefault(); e.stopPropagation();
         var sx = e.clientX, sy = e.clientY, rc = f.getBoundingClientRect(), w0 = rc.width, h0 = rc.height;
         f.classList.add("axp-dragging");
@@ -1297,7 +1299,83 @@
     });
   }
 
-  function boot() { injectCSS(); buildDesktop(); buildIcons(); buildTaskbar(); initDrag(); initIconDrag(); initScrollbars(); initResize(); setFavicon(); injectSpeculation(); initCloseBack(); }
+  // ── back/forward + close-to-home + a working maximize, on the page window ──
+  // additive and site-wide from the shared shell; no per-page markup change.
+  // history nav uses history.back()/forward() so it rides the browser's bfcache
+  // (instant, no white flash); the homepage is no-cache-not-no-store precisely to
+  // stay bfcache-eligible, and this shell already leaned on that for back/forward.
+  // maximize is an in-page state toggle (no navigation, so no view transition), and
+  // the frame's ResizeObserver (mountScrollbar) re-fits the custom scrollbar for free.
+  function initWindowControls() {
+    var win = D.querySelector("body > .window, body > .np-window");
+    if (!win) return;
+    var bar = win.querySelector(":scope > .title-bar, :scope > .np-titlebar, :scope > .titlebar");
+    if (!bar) return;
+    var home = (location.pathname.replace(/\/+$/, "") || "/") === "/";
+
+    if (!D.getElementById("axp-wc-css")) {
+      var st = D.createElement("style"); st.id = "axp-wc-css";
+      st.textContent =
+        // maximized: cover the whole desktop (wallpaper + icons), stop at the 30px taskbar floor
+        ".window.axp-max,.np-window.axp-max{position:fixed!important;inset:0 0 30px 0!important;width:auto!important;height:auto!important;max-width:none!important;max-height:none!important;margin:0!important;border-radius:0!important;transform:none!important;z-index:9998!important}" +
+        // history-nav buttons, at the head of the title bar
+        ".axp-histnav{display:inline-flex;gap:3px;margin-right:7px;flex:0 0 auto;align-items:center}" +
+        ".axp-histnav button{-webkit-appearance:none;appearance:none;width:19px;height:18px;padding:0;margin:0;cursor:pointer;font:0/0 a;color:transparent;position:relative;border:1px solid #274b8f;border-radius:3px;background:linear-gradient(180deg,#6f9bf9,#3a71f5 55%,#255fd6);box-shadow:inset 0 1px 0 rgba(255,255,255,.45)}" +
+        ".axp-histnav button:hover:not([disabled]){filter:brightness(1.1)}" +
+        ".axp-histnav button:active:not([disabled]){filter:brightness(.88)}" +
+        ".axp-histnav button[disabled]{opacity:.4;cursor:default}" +
+        ".axp-histnav button::before{content:'';position:absolute;top:50%;left:50%;width:0;height:0;border:4px solid transparent}" +
+        ".axp-histnav .axp-back::before{margin-top:-4px;margin-left:-5px;border-right-color:#fff;border-left-width:0}" +
+        ".axp-histnav .axp-fwd::before{margin-top:-4px;margin-left:-3px;border-left-color:#fff;border-right-width:0}";
+      D.head.appendChild(st);
+    }
+
+    // close -> aadhar.sh on every non-home page. initCloseBack still upgrades the
+    // click to history.back() when you actually arrived from home (bfcache, no flash).
+    if (!home) {
+      var closeA = bar.querySelector("a.close");
+      if (closeA) { closeA.setAttribute("href", "/"); closeA.title = "close to aadhar.sh"; closeA.setAttribute("aria-label", "close to aadhar.sh"); }
+    }
+
+    // back / forward, injected at the head of the title bar (excluded from title-bar
+    // drag because they're <button>, which initDrag already skips).
+    if (!bar.querySelector(".axp-histnav")) {
+      var hn = el('<span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>');
+      bar.insertBefore(hn, bar.firstChild);
+      var bBtn = hn.querySelector(".axp-back"), fBtn = hn.querySelector(".axp-fwd");
+      bBtn.addEventListener("click", function () { history.back(); });
+      fBtn.addEventListener("click", function () { history.forward(); });
+      var sync = function () {
+        if (!window.navigation) return;                 // no Navigation API -> leave both enabled
+        bBtn.disabled = !navigation.canGoBack;
+        fBtn.disabled = !navigation.canGoForward;
+      };
+      sync();
+      if (window.navigation) navigation.addEventListener("currententrychange", sync);
+      addEventListener("pageshow", sync);               // re-sync after a bfcache restore
+    }
+
+    // maximize / restore the page window
+    var maxBtn = bar.querySelector(".max");
+    if (maxBtn && !maxBtn.dataset.axpWired) {
+      maxBtn.dataset.axpWired = "1";
+      maxBtn.setAttribute("role", "button");
+      maxBtn.setAttribute("tabindex", "0");
+      maxBtn.removeAttribute("aria-hidden");
+      maxBtn.setAttribute("aria-label", "Maximize");
+      maxBtn.title = "Maximize";
+      maxBtn.style.cursor = "pointer";
+      var toggle = function () {
+        var on = win.classList.toggle("axp-max");
+        maxBtn.setAttribute("aria-label", on ? "Restore" : "Maximize");
+        maxBtn.title = on ? "Restore" : "Maximize";
+      };
+      maxBtn.addEventListener("click", toggle);
+      maxBtn.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } });
+    }
+  }
+
+  function boot() { injectCSS(); buildDesktop(); buildIcons(); buildTaskbar(); initDrag(); initIconDrag(); initScrollbars(); initResize(); setFavicon(); injectSpeculation(); initCloseBack(); initWindowControls(); }
   if (D.readyState === "loading") D.addEventListener("DOMContentLoaded", boot);
   else boot();
 })();
