@@ -2,3 +2,9 @@
 # Cloudflare warns that uploading the worker as an asset exposes server-side
 # source. The _worker.js directory is the worker bundle entry, not an asset.
 _worker.js
+
+# The photo-pipeline + asset build scripts are dev tooling, not site content.
+# Left uploaded they served as public 200s (exposing deploy mechanics + the
+# hardcoded RN_KV namespace id + the /garage/cf/caption endpoint). Nothing
+# secret, but there's no reason to ship them.
+scripts

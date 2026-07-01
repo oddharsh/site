@@ -270,6 +270,13 @@ export async function scrapeSpotifyEmbed(kindAndId) {
         "accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "accept-language": "en-US,en;q=0.9",
       },
+      // bound the embed fetch to 5s. scrapePlaylistTracks fans out to dozens of
+      // these (playlist + N tracks + M artists, all Promise.all); without a
+      // deadline a single stuck embed hangs its branch indefinitely. on timeout
+      // this throws, degrading to the same empty-entity path any embed failure
+      // already takes (callers catch: rn.js getTracksSWR .catch, per-track/artist
+      // try/catch). the last unbounded outbound path on the site.
+      signal: AbortSignal.timeout(5000),
       cf: bustCache
         ? { cacheTtl: 0, cacheEverything: false }     // bypass CF cache
         : { cacheTtl: 86400, cacheEverything: true }, // 24h CF edge cache (normal path)

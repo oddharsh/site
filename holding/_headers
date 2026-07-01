@@ -147,6 +147,14 @@
 /notepad.js
   Cache-Control: public, max-age=300, stale-while-revalidate=86400, s-maxage=86400
 
+# lens.js — the /lens shell script. same class as nav.js/notepad.js (deferred,
+# SW-cached, one page loads it), but it had no rule so it shipped the platform
+# default (max-age=0, must-revalidate), paying a conditional 304 on every cold /
+# SW-less navigation to /lens. give it the same short-cache + SWR the other two
+# shell scripts get.
+/lens.js
+  Cache-Control: public, max-age=300, stale-while-revalidate=86400, s-maxage=86400
+
 # service worker — short cache so a bumped CACHE_VERSION propagates fast.
 # Service-Worker-Allowed lets the worker control the full site (default
 # scope is its own path, but root scope is what we want).

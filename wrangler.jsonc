@@ -36,6 +36,13 @@
       "!/nav.js", "!/lens.js", "!/notepad.js", "!/sw.js",
       "!/garage/*", "!/lwe/*", "!/cars/*",
       "!/images/*.avif",
+      // static agent-discovery cards: pure files the worker only passed through.
+      // edge-direct drops a worker invocation per crawler / Web-Bot-Auth verifier
+      // hit (all serve cf-cache-status=HIT already, so no latency change). NB: the
+      // api-catalog + oauth-* + auth.md cards are NOT here — those go through
+      // serveFreshAsset (a live per-request cache-bust guard) and MUST stay worker-first.
+      "!/.well-known/http-message-signatures-directory",
+      "!/.well-known/mcp.json", "!/.well-known/mcp/*", "!/.well-known/agent-skills/*",
       "!/sitemap.xml", "!/robots.txt", "!/llms.txt", "!/index.md", "!/bimi.svg", "!/README.md"
     ]
   },

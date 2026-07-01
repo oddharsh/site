@@ -57,32 +57,63 @@ export async function handleAroundJson(request, env, ctx) {
   });
 }
 
+const AROUND_KEY = "around:report";
+const AROUND_FRESH = "around:report:fresh";
+
 export async function getOrBuildAroundReport(request, env, ctx) {
-  const CACHE_KEY = "around:report";
   const url = new URL(request.url);
 
   // optional bust for force-refresh
   if (env.RN_BUST_SECRET && url.searchParams.get("bust") === env.RN_BUST_SECRET) {
-    if (env.RN_KV) await env.RN_KV.delete(CACHE_KEY);
+    if (env.RN_KV) await Promise.all([env.RN_KV.delete(AROUND_KEY), env.RN_KV.delete(AROUND_FRESH)]);
   }
 
+  // two-key stale-while-revalidate, matching the manifest / tracks / curius
+  // caches (photos.js:140). the report is stored WITHOUT a TTL (persistent);
+  // a tiny sentinel carries the 1h freshness. when the sentinel lapses the
+  // visitor gets the stale report instantly and the 20-neighbor crawl rebuilds
+  // in the background on ctx.waitUntil — so nobody waits on the crawl except
+  // the true first run. this is what lets /around stay lazy without ever
+  // blocking a visitor on a multi-second (formerly unbounded) crawl.
   if (env.RN_KV) {
-    const cached = await env.RN_KV.get(CACHE_KEY, "json");
-    if (cached) return cached;
+    let report = null, fresh = null;
+    try {
+      [report, fresh] = await Promise.all([
+        env.RN_KV.get(AROUND_KEY, "json"),
+        env.RN_KV.get(AROUND_FRESH),
+      ]);
+    } catch {}
+    if (report) {
+      if (!fresh && ctx) {
+        ctx.waitUntil(runAround(env).then(r => storeAroundReport(env, r)).catch(() => {}));
+      }
+      return report;
+    }
   }
 
+  // no cached report at all — build inline (true first run / manual bust)
   const report = await runAround(env);
-  if (env.RN_KV) {
-    ctx.waitUntil(env.RN_KV.put(CACHE_KEY, JSON.stringify(report), { expirationTtl: 3600 }));
-  }
+  if (env.RN_KV && ctx) ctx.waitUntil(storeAroundReport(env, report));
   return report;
+}
+
+async function storeAroundReport(env, report) {
+  await Promise.all([
+    env.RN_KV.put(AROUND_KEY, JSON.stringify(report)),
+    env.RN_KV.put(AROUND_FRESH, "1", { expirationTtl: 3600 }),
+  ]);
 }
 
 export async function runAround(env) {
   const results = await Promise.all(NEIGHBORS.map(async ({ name, url }) => {
     const t0 = Date.now();
     try {
-      const res = await signedFetch(url, env, {});
+      // bound each neighbor to 4s (connect + TTFB + the 200KB body read).
+      // signedFetch forwards opts.signal (botauth.js:45); on timeout it aborts
+      // into the catch below as an {error} row instead of a hung neighbor
+      // stalling the whole Promise.all. body cap alone (200KB) didn't bound
+      // a slow/tar-pit connection.
+      const res = await signedFetch(url, env, { signal: AbortSignal.timeout(4000) });
       // some sites return 100MB+ — cap the body we read.
       const reader = res.body?.getReader();
       let body = "";
