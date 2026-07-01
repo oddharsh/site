@@ -26,6 +26,8 @@ const FULL = "L1000069_3.jpg";         // /images/full/<key>
 
 // status: a number, or an array of acceptable numbers.
 // ct: a content-type prefix the response must start with (skipped for redirects).
+//     may be an array of acceptable prefixes (e.g. Pages says application/javascript,
+//     Workers-assets says text/javascript for the same .js file — both are valid).
 // marker: a substring that must appear in the body (text routes only).
 // flaky: true = record the result but never fail the run (external/rate-limited).
 const ROUTES = [
@@ -45,7 +47,7 @@ const ROUTES = [
   { path: "/restore", status: 200, ct: "text/html" },
   { path: "/lens", status: 200, ct: "text/html", marker: "The Other Web" },
   { path: "/lens/", status: 200, ct: "text/html" },
-  { path: "/lens.js", status: 200, ct: "application/javascript", marker: "replaceState" },
+  { path: "/lens.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "replaceState" },
   { path: "/lens/fetch?url=https://example.com", status: 200, ct: "application/json" },
   { path: "/lens/shot?url=https://example.com", status: [200, 503], flaky: true },
   { path: "/writing", status: 200, ct: "text/html" },
@@ -92,7 +94,7 @@ async function probe(r) {
       body = (await res.text()).slice(0, 200000);
     }
     const okStatus = statusOk(r.status, res.status);
-    const okCt = !r.ct || ct.startsWith(r.ct);
+    const okCt = !r.ct || (Array.isArray(r.ct) ? r.ct.some(c => ct.startsWith(c)) : ct.startsWith(r.ct));
     const okMarker = !r.marker || body.includes(r.marker);
     const pass = okStatus && okCt && okMarker;
     return { path: r.path, status: res.status, ct, pass, flaky: !!r.flaky, okStatus, okCt, okMarker, want: r.status, wantCt: r.ct, marker: r.marker };
