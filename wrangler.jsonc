@@ -15,15 +15,27 @@
     "directory": "holding",
     "binding": "ASSETS",
     // granular routing (safe cut): worker runs for everything EXCEPT the clearly-
-    // static shell JS + content/SEO files, which serve edge-direct (no worker
-    // invocation). /images/* stays worker-first for now (thumbnails vs R2 full/
-    // vs worker-generated manifest/meta overlap needs its own careful pass).
-    // negatives win over "/*"; the worker only ran a pass-through to ASSETS for
-    // these anyway, so bytes + _headers are unchanged.
+    // static shell JS + content/SEO files + avif thumbnails, which serve edge-
+    // direct (no worker invocation). negatives win over "/*".
+    //
+    // /images/*.avif: the primary + highest-volume image format (every modern
+    // browser takes the avif <source>; jpg is only the ancient-browser fallback).
+    // avif exists ONLY as thumbnails here — the R2 full-res originals under
+    // /images/full/ are SOOC jpg/HIF, never avif — so this negation can't collide
+    // with servePhotoFromR2. jpg is deliberately NOT excluded: "/images/*.jpg"
+    // would (deep-wildcard) also match "/images/full/*.jpg" and starve the R2
+    // route. The worker's thumbnail proxy was a Pages-era guard against the SPA
+    // 200-html-stamped-immutable poison; Workers' default not_found_handling
+    // returns a real 404, so that vector is gone. The only cost of going edge-
+    // direct is a genuinely-missing avif getting the raw asset 404 (s-maxage=86400,
+    // 24h edge cache) instead of the worker's 30s; acceptable because thumbs are
+    // content-addressed (?v=N) and deploys are atomic (no transient miss of a real
+    // file). manifest/meta/metadata/full stay worker-first (still guarded).
     "run_worker_first": [
       "/*",
       "!/nav.js", "!/lens.js", "!/notepad.js", "!/sw.js",
       "!/garage/*", "!/lwe/*", "!/cars/*",
+      "!/images/*.avif",
       "!/sitemap.xml", "!/robots.txt", "!/llms.txt", "!/index.md", "!/bimi.svg", "!/README.md"
     ]
   },
