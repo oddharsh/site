@@ -185,7 +185,7 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
           // ordered first: <picture> uses the first source whose media matches.
           (p.stem ? `<source type="image/avif" media="(max-width: 560px)" srcset="/images/${escAttr(p.stem)}-${THUMB_SMALL_PX}.avif?v=${THUMB_VERSION}">` : "") +
           (p.thumb_avif ? `<source type="image/avif" srcset="/images/${escAttr(p.thumb_avif)}">` : "") +
-          `<img alt="${escAttr(altMap[p.stem] || "")}" ${imgLoad} decoding="async" src="/images/${escAttr(p.thumb_jpg)}">` +
+          `<img alt="${escAttr(altMap[p.stem] || "")}" width="600" height="600" ${imgLoad} decoding="async" src="/images/${escAttr(p.thumb_jpg)}">` +
         `</picture>` +
       `</a>`;
     }).join("");

@@ -936,73 +936,73 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
       <a>
         <picture>
           <source type="image/avif">
-          <img alt="" loading="lazy" decoding="async">
+          <img alt="" width="600" height="600" loading="lazy" decoding="async">
         </picture>
       </a>
       <a>
         <picture>
           <source type="image/avif">
-          <img alt="" loading="lazy" decoding="async">
+          <img alt="" width="600" height="600" loading="lazy" decoding="async">
         </picture>
       </a>
       <a>
         <picture>
           <source type="image/avif">
-          <img alt="" loading="lazy" decoding="async">
+          <img alt="" width="600" height="600" loading="lazy" decoding="async">
         </picture>
       </a>
       <a>
         <picture>
           <source type="image/avif">
-          <img alt="" loading="lazy" decoding="async">
+          <img alt="" width="600" height="600" loading="lazy" decoding="async">
         </picture>
       </a>
       <a>
         <picture>
           <source type="image/avif">
-          <img alt="" loading="lazy" decoding="async">
+          <img alt="" width="600" height="600" loading="lazy" decoding="async">
         </picture>
       </a>
       <a>
         <picture>
           <source type="image/avif">
-          <img alt="" loading="lazy" decoding="async">
+          <img alt="" width="600" height="600" loading="lazy" decoding="async">
         </picture>
       </a>
       <a>
         <picture>
           <source type="image/avif">
-          <img alt="" loading="lazy" decoding="async">
+          <img alt="" width="600" height="600" loading="lazy" decoding="async">
         </picture>
       </a>
       <a>
         <picture>
           <source type="image/avif">
-          <img alt="" loading="lazy" decoding="async">
+          <img alt="" width="600" height="600" loading="lazy" decoding="async">
         </picture>
       </a>
       <a>
         <picture>
           <source type="image/avif">
-          <img alt="" loading="lazy" decoding="async">
+          <img alt="" width="600" height="600" loading="lazy" decoding="async">
         </picture>
       </a>
       <a>
         <picture>
           <source type="image/avif">
-          <img alt="" loading="lazy" decoding="async">
+          <img alt="" width="600" height="600" loading="lazy" decoding="async">
         </picture>
       </a>
       <a>
         <picture>
           <source type="image/avif">
-          <img alt="" loading="lazy" decoding="async">
+          <img alt="" width="600" height="600" loading="lazy" decoding="async">
         </picture>
       </a>
       <a>
         <picture>
           <source type="image/avif">
-          <img alt="" loading="lazy" decoding="async">
+          <img alt="" width="600" height="600" loading="lazy" decoding="async">
         </picture>
       </a>
     </section>
@@ -1051,7 +1051,7 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
             `<picture>` +
               `<source type="image/avif" media="(max-width: 560px)" srcset="${small}">` +
               `<source type="image/avif" srcset="/images/${esc(p.thumb_avif)}">` +
-              `<img alt="${esc(alt[p.stem] || "")}" ${load} decoding="async" src="/images/${esc(p.thumb_jpg)}">` +
+              `<img alt="${esc(alt[p.stem] || "")}" width="600" height="600" ${load} decoding="async" src="/images/${esc(p.thumb_jpg)}">` +
             `</picture></a>`;
         }).join("");
       } catch (e) { /* leave the slots empty rather than guess — honest */ }
@@ -1064,6 +1064,7 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
       <ol class="np-list" id="np-list">
         <li class="np-loading">Loading playlist&hellip;</li>
       </ol>
+      <noscript><p class="np-nojs">Playlist loads with JavaScript. <a href="/rn">Open it on Spotify &#x2197;&#xFE0E;</a></p></noscript>
     </section>
 
     <!--
