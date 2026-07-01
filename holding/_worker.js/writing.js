@@ -1,5 +1,6 @@
 // writing.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
+import { cachedRender } from "./lib/edgecache.js";
 import { escAttr, escHtml } from "./lib/http.js";
 
 // ── /writing — the Notepad view ───────────────────────────────────────────────
@@ -146,7 +147,14 @@ export async function readPosts(env) {
   return [];
 }
 
-export async function handleWritingPost(slug, env, ctx) {
+// both /writing views are shared-content renders (no per-visitor bytes), so they
+// ride the caches.default layer: edge TTL = each response's max-age (120s index /
+// 300s post). the 404 post path is excluded by cachedRender's 200-only put.
+export function handleWritingPost(request, slug, env, ctx) {
+  return cachedRender(request, ctx, () => renderWritingPost(slug, env));
+}
+
+async function renderWritingPost(slug, env) {
   const safe = String(slug).replace(/[^a-z0-9-]/gi, "");
   const posts = await readPosts(env);
   const post = posts.find(function (p) { return p.slug === safe; });
@@ -166,7 +174,12 @@ export async function handleWritingPost(slug, env, ctx) {
     { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=300" } });
 }
 
-export async function handleWritingIndex(env, ctx) {
+export function handleWritingIndex(request, env, ctx) {
+  // keyed on the bare path so /writing and /writing/ share one edge entry
+  return cachedRender(request, ctx, () => renderWritingIndex(env), "/writing");
+}
+
+async function renderWritingIndex(env) {
   const posts = await readPosts(env);
   // fetch each note's .txt once: the same text feeds the char count shown in
   // the folder listing (so you see a file's size before you open it) AND the

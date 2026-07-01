@@ -2,6 +2,7 @@
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
 import { BOT_UA, SIG_AGENT, signRequestForWebBotAuth } from "./lib/botauth.js";
 import { xpChromeCss } from "./lib/chrome.js";
+import { cachedRender } from "./lib/edgecache.js";
 import { jsonResponse } from "./lib/http.js";
 
 // ── /lens — "the other web" -----------------------------------------------
@@ -17,7 +18,16 @@ import { jsonResponse } from "./lib/http.js";
 // four lens tabs, two panes, seeded examples. The renderer lives in /lens.js
 // (a real static file, SW-cached like nav.js) so it can use normal JS without
 // fighting this template literal's ${} and backticks.
+// the /lens shell is a fully static template (all per-request work lives in
+// /lens/fetch + /lens/shot), so repeat hits per colo serve from caches.default
+// instead of re-assembling it. keyed on the bare path: the ?url= share param is
+// read client-side by lens.js, the shell bytes are identical for every query.
+// edge TTL = the s-maxage below (300s); 200-only put inside cachedRender.
 export function handleLens(request, env, ctx) {
+  return cachedRender(request, ctx, () => renderLensShell(), "/lens");
+}
+
+function renderLensShell() {
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>

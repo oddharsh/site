@@ -2,6 +2,7 @@
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
 import { BOT_NAME, signedFetch } from "./lib/botauth.js";
 import { xpChromeCss } from "./lib/chrome.js";
+import { cachedRender } from "./lib/edgecache.js";
 import { esc } from "./lib/http.js";
 
 // ── /reading — a native, Luna-styled mirror of my Curius reading list ──
@@ -119,14 +120,26 @@ export async function getCuriusCached(request, env, ctx) {
   return payload;
 }
 
+// shared-content render (no per-visitor bytes): was no-store out of conservatism,
+// now short public caching + the caches.default layer (owner call, 2026-07-01).
+// edge TTL = the max-age below (300s). a valid ?bust=SECRET evicts the edge entry
+// too, so the existing bust workflow still forces a full rebuild end to end.
 export async function handleReading(request, env, ctx) {
+  const url = new URL(request.url);
+  if (env.RN_BUST_SECRET && url.searchParams.get("bust") === env.RN_BUST_SECRET) {
+    try { await caches.default.delete(new Request(url.origin + "/reading", { method: "GET" })); } catch {}
+  }
+  return cachedRender(request, ctx, () => renderReading(request, env, ctx), "/reading");
+}
+
+async function renderReading(request, env, ctx) {
   let payload;
   try { payload = await getCuriusCached(request, env, ctx); }
   catch (_e) { payload = { items: [], fetchedAt: new Date().toISOString() }; }
   return new Response(renderReadingPage(payload), {
     headers: {
       "content-type":    "text/html; charset=utf-8",
-      "cache-control":   "no-store, must-revalidate",
+      "cache-control":   "public, max-age=300",
       "referrer-policy": "strict-origin-when-cross-origin",
     },
   });

@@ -1,0 +1,13 @@
+{
+  "name": "aadhar-sh",
+  "private": true,
+  "description": "aadhar.sh - deploy-time transform only (authoring stays buildless; see build.mjs)",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "deploy": "node build.mjs && wrangler deploy -c .build/wrangler.jsonc"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}

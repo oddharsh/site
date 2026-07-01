@@ -128,12 +128,12 @@ async function route(request, env, ctx) {
     // static assets (paths with a dot) fall through to ASSETS untouched, so the raw
     // canonical text is always fetchable too.
     if (url.pathname === "/writing" || url.pathname === "/writing/") {
-      return handleWritingIndex(env, ctx);
+      return handleWritingIndex(request, env, ctx);
     }
     if (url.pathname.startsWith("/writing/")) {
       const slug = url.pathname.slice("/writing/".length);
       if (slug && slug.indexOf("/") === -1 && slug.indexOf(".") === -1) {
-        return handleWritingPost(slug, env, ctx);
+        return handleWritingPost(request, slug, env, ctx);
       }
     }
 

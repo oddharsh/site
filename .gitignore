@@ -1,6 +1,9 @@
 # wrangler local cache + state (per-deploy, regenerates)
 .wrangler/
 
+# deploy-time build staging (build.mjs output; regenerated every build)
+.build/
+
 # macOS
 .DS_Store
 
@@ -10,7 +13,7 @@
 .vscode/
 .idea/
 
-# node (only used by cal/ if you npm install locally; deploy doesn't need it)
+# node (root: esbuild for build.mjs; cal/ + cf-garage have their own)
 node_modules/
 npm-debug.log
 
