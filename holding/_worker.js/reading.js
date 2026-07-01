@@ -22,15 +22,22 @@ export const CURIUS_TTL = 21600;
 export async function fetchCuriusLinks(env) {
   const out = [];
   const PER = 30, MAX_PAGES = 8;   // 30/page; cap the crawl so a runaway can't loop
+  // ONE shared deadline across the whole crawl (not per-page): Curius measured
+  // ~3s/page, so a full 8-page serial crawl could otherwise hang ~13s. This
+  // aborts the whole thing at ~3.5s and returns whatever pages arrived. In
+  // steady state the crawl runs in ctx.waitUntil (SWR), so no visitor waits on
+  // it regardless; this just bounds the first-run inline path + the background task.
+  const signal = AbortSignal.timeout(3500);
   for (let p = 0; p < MAX_PAGES; p++) {
     let data;
     try {
       const res = await signedFetch(`https://curius.app/api/users/${CURIUS_USER_ID}/links?page=${p}`, env, {
         headers: { accept: "application/json" },
+        signal,
       });
       if (!res.ok) break;
       data = await res.json();
-    } catch (_e) { break; }
+    } catch (_e) { break; }   // abort (deadline) or network error → stop, return what we have
     const saved = Array.isArray(data && data.userSaved) ? data.userSaved : [];
     if (!saved.length) break;
     for (const it of saved) {
@@ -56,22 +63,59 @@ export async function fetchCuriusLinks(env) {
   return out;
 }
 
+// two-key stale-while-revalidate (mirrors photos.getImagesManifest / rn.getTracksSWR):
+// the list is stored WITHOUT a TTL (persistent value key) and a tiny sentinel key
+// carries the 6h freshness window. When the sentinel lapses, the visitor gets the
+// stale list instantly and the Curius crawl rides ctx.waitUntil in the background —
+// so nobody ever waits on the ~3.5s (bounded) crawl except the true first run.
+async function buildCuriusPayload(env) {
+  const items = await fetchCuriusLinks(env);
+  return { items, fetchedAt: new Date().toISOString() };
+}
+
+async function storeCurius(env, payload) {
+  if (!env.RN_KV) return;
+  await Promise.all([
+    env.RN_KV.put(CURIUS_CACHE_KEY, JSON.stringify(payload)),               // persistent value
+    env.RN_KV.put(`${CURIUS_CACHE_KEY}:fresh`, "1", { expirationTtl: CURIUS_TTL }),  // 6h sentinel
+  ]);
+}
+
+async function refreshCurius(env) {
+  try {
+    const payload = await buildCuriusPayload(env);
+    // only overwrite on a non-empty result, so a transient Curius failure leaves
+    // the good stale value intact instead of blanking the list.
+    if (payload.items.length) await storeCurius(env, payload);
+  } catch (_e) {}
+}
+
 export async function getCuriusCached(request, env, ctx) {
   const url = new URL(request.url);
-  if (env.RN_BUST_SECRET && url.searchParams.get("bust") === env.RN_BUST_SECRET) {
-    if (env.RN_KV) await env.RN_KV.delete(CURIUS_CACHE_KEY);
+  if (env.RN_BUST_SECRET && url.searchParams.get("bust") === env.RN_BUST_SECRET && env.RN_KV) {
+    // clear BOTH keys, or a bust would leave the persistent value in place and never rebuild.
+    await Promise.all([
+      env.RN_KV.delete(CURIUS_CACHE_KEY),
+      env.RN_KV.delete(`${CURIUS_CACHE_KEY}:fresh`),
+    ]);
   }
   if (env.RN_KV) {
-    const cached = await env.RN_KV.get(CURIUS_CACHE_KEY, "json");
-    if (cached && Array.isArray(cached.items)) return cached;
+    let payload = null, fresh = null;
+    try {
+      [payload, fresh] = await Promise.all([
+        env.RN_KV.get(CURIUS_CACHE_KEY, "json"),
+        env.RN_KV.get(`${CURIUS_CACHE_KEY}:fresh`),
+      ]);
+    } catch (_e) {}
+    if (payload && Array.isArray(payload.items)) {
+      if (!fresh && ctx) ctx.waitUntil(refreshCurius(env));   // stale → serve now, refresh in background
+      return payload;
+    }
   }
-  const items = await fetchCuriusLinks(env);
-  const payload = { items, fetchedAt: new Date().toISOString() };
-  // only cache a non-empty result, so a transient Curius failure doesn't pin an
-  // empty list for 6h — the next request retries instead.
-  if (env.RN_KV && items.length) {
-    ctx.waitUntil(env.RN_KV.put(CURIUS_CACHE_KEY, JSON.stringify(payload), { expirationTtl: CURIUS_TTL }));
-  }
+  // no cached value at all — true first run or right after a bust — build inline
+  // (now bounded to ~3.5s by the crawl deadline instead of the old ~13s).
+  const payload = await buildCuriusPayload(env);
+  if (env.RN_KV && ctx && payload.items.length) ctx.waitUntil(storeCurius(env, payload));
   return payload;
 }
 

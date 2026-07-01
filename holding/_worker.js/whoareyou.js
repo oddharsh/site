@@ -28,6 +28,11 @@ export async function fetchRdap(ip) {
         "accept":     "application/rdap+json",
       },
       redirect: "follow",
+      // cap the enrichment: a slow/unreachable RIR must not block the page.
+      // on abort the catch below returns null and the page renders without the
+      // optional owner/CIDR/registration lines (they refill once the 24h edge
+      // cache warms). RDAP is non-essential enrichment, so 2s is deliberate.
+      signal: AbortSignal.timeout(2000),
       cf: { cacheTtl: 86400, cacheEverything: true },  // 24h CF edge cache, keyed by URL
     });
     if (!res.ok) return null;

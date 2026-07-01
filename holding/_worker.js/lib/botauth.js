@@ -42,6 +42,7 @@ export async function signedFetch(targetUrl, env, opts = {}) {
     method: opts.method || "GET",
     headers,
     redirect: opts.redirect || "follow",
+    signal: opts.signal,  // optional caller-supplied deadline (AbortSignal)
     cf: { cacheTtl: 0 },  // we cache at the application layer
   });
 }
