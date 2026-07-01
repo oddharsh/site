@@ -352,6 +352,26 @@ footer {
 
       <li>
         <div class="title-row">
+          <span class="name"><a href="/garage/wire">Bytes on the wire</a></span>
+          <span class="status shipped">shipped</span>
+        </div>
+        <div class="desc">
+          The site's first build step, and the brotli rabbit hole that led there. Where
+          Cloudflare actually compresses (edge quality vs q11, with the four roads to q11
+          that all closed), deploy-time minification with readable
+          <code style="font-family: var(--font-mono);font-size:9pt">/&lt;name&gt;.src.js</code>
+          twins (nav.js went ~33KB to 20.4KB on the wire; sw.js turned out to be 64%
+          comments), and the Cache API layer that finally made
+          <code style="font-family: var(--font-mono);font-size:9pt">s-maxage</code> true.
+          With a live edge-cache prober.
+        </div>
+        <div class="meta">
+          shape: measurements + the build's reasoning &middot; added 2026-07-01
+        </div>
+      </li>
+
+      <li>
+        <div class="title-row">
           <span class="name"><a href="/garage/workers">Off Pages, onto Workers</a></span>
           <span class="status shipped">shipped</span>
         </div>

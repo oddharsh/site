@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>aadhar.sh/garage/bytes on the wire</title>
+<meta name="description" content="The site's first build step, and the brotli rabbit hole that led there: where Cloudflare actually compresses (edge quality vs q11), the four paths to q11 that all lost, deploy-time minification with readable-source twins, and the Cache API layer that finally made s-maxage true. Real numbers, live probes.">
+<link rel="canonical" href="https://aadhar.sh/garage/wire">
+<meta property="og:type" content="website">
+<meta property="og:title" content="aadhar.sh/garage/bytes on the wire">
+<meta property="og:description" content="The site's first build step and the brotli rabbit hole that led there: edge compression quality, deploy-time minification with readable-source twins, and making s-maxage true with the Cache API. Real numbers, live probes.">
+<meta property="og:url" content="https://aadhar.sh/garage/wire">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><path d='M3 20 C8 10 12 26 16 16 S24 8 29 14' stroke='%23166aee' stroke-width='2.6' fill='none' stroke-linecap='round'/><circle cx='3' cy='20' r='2.4' fill='%23166aee'/><circle cx='29' cy='14' r='2.4' fill='%23166aee'/></svg>">
+<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}
+* { box-sizing: border-box; }
+/* cross-document View Transitions: a fast, reduced-motion-safe crossfade on real
+   navigations between same-origin pages. inline (not JS-injected) so the incoming
+   page has opted in by parse time. */
+@media (prefers-reduced-motion:no-preference){@view-transition{navigation:auto}::view-transition-old(root),::view-transition-new(root){animation-duration:140ms}}
+html, body { margin: 0; padding: 0; } html{background:linear-gradient(180deg,oklch(56% 0.13 250) 0%,oklch(73% 0.10 236) 50%,oklch(88% 0.05 232) 60%,oklch(60% 0.16 140) 100%)}
+html { scrollbar-color: oklch(62% 0.14 255) oklch(91% 0.02 248); }
+body {
+  background: linear-gradient(180deg, oklch(56% 0.13 250) 0%, oklch(73% 0.10 236) 50%, oklch(88% 0.05 232) 60%, oklch(60% 0.16 140) 100%);
+  font-family: var(--font-ui);
+  font-size: 10.5pt;
+  line-height: 1.5;
+  color: oklch(21.78% 0 0);
+  padding: 24px 12px 60px;
+  min-height: 100vh;
+}
+.window {
+  max-width: 720px;
+  margin: 0 auto;
+  background: oklch(100% 0 0);
+  border: 2px solid #0831d9; border-right-color: #001ea0; border-bottom-color: #001ea0;
+  border-top-left-radius: 8px; border-top-right-radius: 8px; overflow: hidden;
+  box-shadow: inset 1px 1px 0 #166aee, inset 2px 2px 0 #0855dd,
+              inset -1px -1px 0 #00138c, inset -2px -2px 0 #003bda,
+              4px 4px 0 rgba(0,30,160,.35);
+}
+.title-bar {
+  background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
+  color: oklch(100.00% 0 0);
+  font-family: var(--font-caption);
+  font-size: 10pt; font-weight: bold;
+  padding: 4px 8px;
+  border-bottom: 1px solid oklch(41.92% 0.0962 250.51);
+  display: flex; align-items: center; justify-content: space-between;
+  text-shadow: 1px 1px #0f1089;
+}
+.title-bar .icon {
+  display: inline-block; width: 16px; height: 16px; margin-right: 6px;
+  vertical-align: middle; background: oklch(87.82% 0.0877 66.27);
+  position: relative; flex-shrink: 0;
+}
+.title-bar .icon::before {
+  content: ""; position: absolute; inset: 3px;
+  background: oklch(69.58% 0.2043 43.49);
+  clip-path: polygon(20% 0, 100% 50%, 20% 100%, 0 50%);
+}
+.title-bar .title-text { flex: 1; padding-left: 4px; }
+.title-bar .controls { display: flex; align-items: center; gap: 2px; letter-spacing: 0; }
+.title-bar .controls .min,
+.title-bar .controls .max,
+.title-bar .controls .close {
+  position: relative; box-sizing: border-box;
+  width: 21px; height: 21px; padding: 0; margin: 0;
+  display: inline-block; overflow: hidden; font-size: 0; color: transparent;
+  border: 1px solid #6696eb; border-radius: 3px;
+  text-decoration: none; cursor: pointer;
+  background-color: #3e73f5;
+  background-image: linear-gradient(180deg, #5f8cf7 0%, #3a71f5 22%, #3e73f5 55%, #2a70f2 82%, #1045be 100%);
+  transition: filter 60ms ease-out;
+}
+.title-bar .controls .min::after,
+.title-bar .controls .max::after {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 45%;
+  background: linear-gradient(180deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.12) 70%, rgba(255,255,255,0) 100%);
+  pointer-events: none; border-radius: 2px 2px 5px 5px;
+}
+.title-bar .controls .min:hover, .title-bar .controls .min:focus-visible,
+.title-bar .controls .max:hover, .title-bar .controls .max:focus-visible {
+  border-color: #8fb4ff; background-color: #4fa4ff;
+  background-image: linear-gradient(180deg, #689bff 0%, #468aff 22%, #4fa4ff 55%, #3990fc 82%, #1858c8 100%);
+  outline: none;
+}
+.title-bar .controls .close {
+  border-color: #d8401c; background-color: #e45f3e;
+  background-image: linear-gradient(180deg, #e8795f 0%, #e45f40 30%, #e45d3d 52%, #e2552a 80%, #ae3110 100%);
+}
+.title-bar .controls .close:hover, .title-bar .controls .close:focus-visible {
+  border-color: #ff7a66; background-color: #ff957c;
+  background-image: linear-gradient(180deg, #ff8b7d 0%, #ff7463 26%, #ff957c 55%, #fd7e64 82%, #d34936 100%);
+  box-shadow: 0 0 4px rgba(255,120,96,.7); outline: none;
+}
+.title-bar .controls .min:active,
+.title-bar .controls .max:active,
+.title-bar .controls .close:active { filter: brightness(.9); }
+.title-bar .controls .min::before {
+  content: ""; position: absolute; left: 5px; right: 5px; bottom: 5px; height: 2px;
+  background: #fff; box-shadow: 0 1px 0 rgba(0,0,0,.35);
+}
+.title-bar .controls .max::before {
+  content: ""; position: absolute; left: 5px; top: 5px; width: 11px; height: 9px;
+  box-sizing: border-box; border: 1px solid #fff; border-top-width: 2px;
+  filter: drop-shadow(0 1px 0 rgba(0,0,0,.35));
+}
+.title-bar .controls .close::before,
+.title-bar .controls .close::after {
+  content: ""; position: absolute; left: 50%; top: 50%;
+  width: 13px; height: 2px; margin: -1px 0 0 -6.5px; background: #fff;
+  box-shadow: 0 1px 0 rgba(0,0,0,.35);
+}
+.title-bar .controls .close::before { transform: rotate(45deg); }
+.title-bar .controls .close::after  { transform: rotate(-45deg); }
+.content { padding: 12px 16px 18px; }
+h1 { font-family: var(--font-caption); font-size: 14pt; color: oklch(41.92% 0.0962 250.51); margin: 0 0 6px; }
+.lede { color: oklch(38.67% 0 0); font-size: 10.5pt; margin: 0 0 4px; }
+h2 { font-family: var(--font-caption); font-size: 13pt; color: oklch(41.92% 0.0962 250.51); margin: 28px 0 4px; }
+.note { color: oklch(44.95% 0 0); font-size: 10pt; margin: 0 0 14px; }
+.note code, p code, li code, td code { background: oklch(96.72% 0 0); border: 1px solid oklch(88.22% 0 0); padding: 0 4px; font-family: var(--font-mono); font-size: 9.5pt; }
+hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px 0; }
+a { color: oklch(41.92% 0.0962 250.51); }
+p { margin: 8px 0; }
+ul.tight { margin: 8px 0; padding-left: 22px; }
+ul.tight li { margin: 5px 0; }
+code.m, .m { font-family: var(--font-mono); font-size: 9.2pt; }
+
+.cf-feat { border: 1px solid oklch(61.14% 0.0611 253.60); background: oklch(98% 0.004 250); padding: 4px 14px 14px; margin: 14px 0; }
+.cf-feat h2 { margin-top: 12px; font-size: 12pt; }
+.cf-btn { font: bold 10pt var(--font-ui); padding: 4px 14px; margin: 4px 0; cursor: pointer; color: oklch(21.78% 0 0);
+  background: linear-gradient(180deg, oklch(99% 0 0), oklch(92% 0.005 263)); border: 1px solid oklch(50% 0.05 263);
+  box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 #aca899; }
+.cf-btn:hover { background: linear-gradient(180deg, oklch(99% 0.015 263), oklch(90% 0.03 263)); }
+.cf-btn:active { box-shadow: inset 1px 1px 0 #aca899, inset -1px -1px 0 #fff; }
+.cf-btn:disabled { opacity: .6; cursor: default; }
+.cf-code { font: 9pt var(--font-mono); color: oklch(40% 0.04 145); background: oklch(95% 0.01 145); border: 1px solid oklch(80% 0.03 145);
+  padding: 5px 8px; margin: 8px 0 0; overflow-x: auto; white-space: pre; }
+.callout { font-size: 10pt; background: oklch(97% 0.025 255); border-left: 3px solid oklch(51% 0.225 263); padding: 8px 12px; margin: 14px 0; color: oklch(28% 0.04 255); }
+
+/* byte bars (kin to the encoding study's comparison bars) */
+.bars { margin: 10px 0 2px; }
+.bar-row { display: grid; grid-template-columns: 168px 1fr 76px; gap: 8px; align-items: center; margin: 4px 0; font-size: 9.5pt; }
+.bar-row .lbl { font-family: var(--font-mono); font-size: 8.5pt; color: oklch(35% 0.02 250); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bar-row .track { height: 15px; background: oklch(96% 0.005 250); border: 1px solid oklch(85% 0.02 250); border-radius: 2px; position: relative; }
+.bar-row .fill { position: absolute; inset: -1px auto -1px -1px; border-radius: 2px; background: linear-gradient(180deg, oklch(64% 0.18 255), oklch(50% 0.20 258)); }
+.bar-row.win .fill { background: linear-gradient(180deg, oklch(62% 0.15 150), oklch(46% 0.16 150)); }
+.bar-row.dead .fill { background: linear-gradient(180deg, oklch(70% 0.02 250), oklch(56% 0.02 250)); }
+.bar-row .val { text-align: right; font-family: var(--font-mono); font-size: 8.5pt; color: oklch(35% 0 0); }
+.bar-cap { font-size: 8.5pt; color: oklch(50% 0 0); margin: 4px 0 0; }
+
+.cmp { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 9.5pt; }
+.cmp th, .cmp td { border: 1px solid oklch(85% 0.02 250); padding: 5px 8px; text-align: left; vertical-align: top; }
+.cmp th { background: oklch(96% 0.01 250); font-family: var(--font-caption); color: oklch(41.92% 0.0962 250.51); font-weight: normal; }
+.cmp td:first-child { font-family: var(--font-caption); color: oklch(33% 0 0); }
+.cmp .y { color: oklch(43% 0.16 150); font-weight: bold; }
+.cmp .n { color: oklch(50% 0.19 38); font-weight: bold; }
+.cmp caption { caption-side: bottom; font-size: 9pt; color: oklch(50% 0 0); padding-top: 6px; text-align: left; }
+
+footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67% 0.0294 259.59); font-size: 9.5pt; color: oklch(45% 0 0); }
+
+  /* OS-window geometry inlined so FIRST PAINT matches nav.js (no shell "pop"
+     when the deferred desktop arrives). keep in sync with nav.js (search
+     "app-shell"); degrades with JS off (.content scrolls natively). */
+  html { height: 100dvh; overflow: hidden; }
+  body { min-height: 0; height: calc(100vh - 30px); height: calc(100dvh - 30px);
+    overflow: hidden; box-sizing: border-box; display: flex; flex-direction: column;
+    align-items: center; padding: 8px; }
+  .window { flex: 0 1 auto; min-height: 0; max-height: 100%; width: 100%;
+    display: flex; flex-direction: column; }
+  .window > .title-bar { flex: 0 0 auto; }
+  .window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 28px !important; }
+  body::after { content: ""; position: fixed; left: 0; right: 0; bottom: 0; height: 30px;
+    z-index: 1; background: linear-gradient(180deg, oklch(67% 0.15 256) 0%, oklch(58% 0.19 257) 4%,
+    oklch(51% 0.20 258) 9%, oklch(49% 0.20 258) 50%, oklch(46% 0.20 259) 92%, oklch(40% 0.18 260) 100%); }
+</style>
+</head>
+<body>
+<div class="window">
+  <div class="title-bar" aria-hidden="true"><span class="title-text"><span class="icon"></span>aadhar.sh/garage/bytes on the wire</span><span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/garage/" title="back to the garage" aria-label="back to the garage"></a></span></div>
+  <div class="content">
+    <h1>Bytes on the wire</h1>
+    <p class="lede">
+      This site was no-build on principle: every page inline, every byte committed
+      the way it ships. This is the story of the first build step that earned its
+      place anyway, the brotli rabbit hole that led there, and the cache layer that
+      finally made a header the site had been sending for months actually do
+      something. Every number below was measured on this site, most of them twice.
+    </p>
+
+    <h2>Where compression actually happens</h2>
+    <p>The naive model says "Cloudflare serves brotli, so the bytes are as small as
+      brotli gets." The real model has tiers. Brotli has quality levels 0 to 11:
+      level 11 is the slow, offline, squeeze-everything setting, and no CDN runs it
+      on the fly, because compressing at q11 costs more time than it saves.
+      Cloudflare's edge compresses dynamic and pass-through responses at roughly
+      <strong>gzip quality</strong>. Measured on the homepage: the edge served
+      <code class="m">31,360</code> bytes as brotli and <code class="m">31,188</code>
+      as gzip, nearly identical. A local brotli q11 of the same document:
+      <code class="m">25,099</code>. That gap, roughly 12 to 16% on every text asset,
+      is the room between what the edge does in microseconds and what q11 does
+      offline.</p>
+
+    <div class="callout">
+      The lesson that reframed the whole exercise: <strong>on this stack you do not
+      choose your compressor, you choose your bytes.</strong> The edge compresses
+      everything at its own fixed quality. The only lever the origin really owns is
+      how many bytes go INTO the compressor.
+    </div>
+
+    <h2>Four roads to q11, all closed</h2>
+    <ul class="tight">
+      <li><strong>Native brotli in the Worker.</strong> There is none. Workers'
+        <code>CompressionStream</code> speaks gzip and deflate only. Dead end by
+        platform design.</li>
+      <li><strong>wasm brotli at q11, per request.</strong> The homepage re-renders
+        per visit (random photo grid + live counter), so it would compress on the hot
+        path: multi-ms of CPU per request plus a wasm blob in the bundle to save
+        ~6KB. Rejected on arithmetic.</li>
+      <li><strong>Worker-side gzip level 9.</strong> Measured a local gzip-9 of the
+        homepage at <code class="m">31,204</code> bytes vs the edge's
+        <code class="m">31,207</code>. Three bytes. The edge's gzip is already at the
+        ceiling; only brotli has headroom, and see above. Rejected as a no-op.</li>
+      <li><strong>Precompressed .br twins.</strong> The interesting one. Pages
+        ignored uploaded <code class="m">.br</code> files (tested, it served the
+        plain twin). Workers CAN do it: fetch the twin from assets and return it with
+        <code class="m">content-encoding: br</code> and
+        <code class="m">encodeBody: "manual"</code>, which tells the runtime the body
+        is already compressed. But that means the asset goes back through the worker
+        (undoing the zero-invocation edge-direct routing), plus Accept-Encoding
+        negotiation and Vary correctness, to beat the edge's own brotli by ~3KB on a
+        file that was about to get much smaller anyway. Rejected, narrowly, with the
+        next section as the reason.</li>
+    </ul>
+
+    <h2>The build step that earned its place</h2>
+    <p>The shell scripts are the one external asset class: <code class="m">nav.js</code>
+      (the whole XP desktop: taskbar, draggable windows, Run palette) rides on every
+      page. It is written the way this site writes everything: essay-grade comments,
+      because the comments are the documentation and half the voice. That costs
+      nothing in git and ~23KB of the 107KB file on the wire. Compression does not
+      forgive prose: the served brotli was ~33KB.</p>
+    <p>So the split, and the compromise that finally justified a build: <strong>the
+      authoring stays buildless, the serving gets minified.</strong> One script
+      (<code class="m">build.mjs</code>, one dependency, esbuild) stages a copy of the
+      site, minifies exactly four files, and deploys from the copy. The repo never
+      changes; a bare <code class="m">wrangler deploy</code> still works and just
+      ships the readable versions.</p>
+
+    <div class="bars" aria-label="nav.js size at each stage, bytes">
+      <div class="bar-row dead"><span class="lbl">nav.js raw (committed)</span><span class="track"><span class="fill" style="width:100%"></span></span><span class="val">107,353</span></div>
+      <div class="bar-row"><span class="lbl">served, before (edge brotli)</span><span class="track"><span class="fill" style="width:31%"></span></span><span class="val">~33,000</span></div>
+      <div class="bar-row win"><span class="lbl">served, now (minified + edge)</span><span class="track"><span class="fill" style="width:19%"></span></span><span class="val">20,376</span></div>
+      <div class="bar-row dead"><span class="lbl">the rejected .br twin (q11)</span><span class="track"><span class="fill" style="width:16.2%"></span></span><span class="val">17,403</span></div>
+      <p class="bar-cap">Minification captured ~80% of what q11 twins would have given, at zero serving
+        complexity: the edge just compresses a smaller file. The last ~3KB was not worth a second
+        serving path.</p>
+    </div>
+
+    <p>The rest of the four: <code class="m">sw.js</code> turned out to be
+      <strong>64% comments</strong> and dropped from 3.8KB to under 1KB on the wire;
+      <code class="m">lens.js</code> 6.3 to 5.0KB; <code class="m">notepad.js</code>
+      4.0 to 2.4KB. <code class="m">index.html</code> and every garage page are
+      deliberately NOT touched: View Source on this site is supposed to read like
+      source.</p>
+
+    <div class="cf-feat">
+      <h2>Keeping View Source honest</h2>
+      <p>Minified JS is hostile to the one person a personal site should welcome: the
+        curious reader. So the build deploys every readable original alongside as
+        <code class="m">/&lt;name&gt;.src.js</code>, and the minified file opens with a
+        pointer:</p>
+      <pre class="cf-code">/*! minified at deploy - readable source: /nav.src.js */</pre>
+      <p>Two details I did not expect to enjoy this much. The build has
+        <strong>tripwires</strong>: it fails the deploy if minification ever eats the
+        service worker's version string or the marker the route oracle greps for, so
+        "the transform broke something silently" is structurally impossible. And
+        Cloudflare's asset storage is content-addressed, so on the first minified
+        deploy the four <code class="m">.src.js</code> twins uploaded as "already
+        uploaded": their bytes were identical to the shells the previous deploy had
+        shipped. The readable originals were already in storage, just under a
+        different name.</p>
+    </div>
+
+    <h2>Making s-maxage true</h2>
+    <p>The second shipment in this batch fixed a quieter embarrassment. Worker-rendered
+      pages here sent <code class="m">s-maxage=300</code>, and the edge ignored it:
+      Cloudflare does not automatically cache worker output, so
+      <code class="m">cf-cache-status</code> read <code class="m">none</code> and the
+      header was decorative. Every visit to <a href="/lens">/lens</a> re-assembled a
+      byte-identical shell; every visit to <a href="/writing">/writing</a> re-fetched
+      every post's text just to print character counts.</p>
+    <p>The fix is the Workers Cache API, <code class="m">caches.default</code>: on miss,
+      render and store; on hit, serve from the colo. Three rules carried over from
+      this site's scar tissue: <strong>only status 200 is ever stored</strong> (this
+      site once served homepage HTML at thumbnail URLs with a year-long cache header,
+      and does not repeat mistakes it has written down), TTLs stay short and honest
+      because deploys do NOT flush this cache, and every response says which path it
+      took in an <code class="m">x-edge-cache</code> header. The reading page also
+      dropped its <code class="m">no-store</code> (it was conservatism, not
+      necessity), and the manual refresh hook evicts the edge copy too, so a bust
+      still busts.</p>
+
+    <div class="cf-feat">
+      <h2>Watch it happen</h2>
+      <p>This fetches <code class="m">/lens</code> and <code class="m">/reading</code>
+        twice each and prints the <code class="m">x-edge-cache</code> header from
+        your nearest Cloudflare colo. A fresh colo shows <code class="m">miss</code>
+        then <code class="m">hit</code>; a warm one may say
+        <code class="m">hit</code> twice. Your browser hitting production, nothing
+        mocked.</p>
+      <button class="cf-btn" id="probe-btn" type="button">probe the edge cache</button>
+      <div id="probe-out"></div>
+    </div>
+
+    <h2>The honest scorecard</h2>
+    <table class="cmp">
+      <thead><tr><th>&nbsp;</th><th>before</th><th>after</th><th>mechanism</th></tr></thead>
+      <tbody>
+        <tr><td>nav.js on the wire</td><td class="n">~33KB</td><td class="y">20.4KB</td><td>minify at deploy, edge compresses less prose</td></tr>
+        <tr><td>sw.js on the wire</td><td class="n">3.8KB</td><td class="y">0.98KB</td><td>it was 64% comments</td></tr>
+        <tr><td>repeat /lens, /writing, /reading</td><td class="n">full re-render</td><td class="y">colo cache hit</td><td>caches.default, 200-only, short TTLs</td></tr>
+        <tr><td>readable source</td><td>served as written</td><td class="y">/&lt;name&gt;.src.js twins</td><td>the build ships both</td></tr>
+        <tr><td>authoring workflow</td><td>no build</td><td>no build</td><td>the transform lives in deploy, not in writing</td></tr>
+        <tr><td>homepage bytes</td><td>~31KB</td><td>~31KB</td><td>accepted floor: it re-renders per visit, by design</td></tr>
+      </tbody>
+      <caption>The homepage line is the point of the whole page: per-visit randomization and a live
+        counter are worth more here than 6KB of q11. Performance is a budget, and that is what this
+        site chooses to spend it on.</caption>
+    </table>
+
+    <footer>
+      <p>&larr; back to the <a href="/garage/">garage</a> &middot; <a href="/">aadhar.sh</a> &middot; kin: <a href="/garage/workers">off Pages, onto Workers</a> &middot; <a href="/garage/encoding">the thumbnail encoding study</a></p>
+      <p><small>measured 2026-07-01 on this site; the prober reads live production headers.</small></p>
+    </footer>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var btn = document.getElementById("probe-btn");
+  var out = document.getElementById("probe-out");
+  function esc(s){ return String(s == null ? "" : s).replace(/[&<>]/g, function(c){ return c === "&" ? "&amp;" : c === "<" ? "&lt;" : "&gt;"; }); }
+  if (btn) btn.addEventListener("click", async function(){
+    btn.disabled = true;
+    out.innerHTML = "<p class=\"note\" style=\"margin:6px 0\">two GETs each against /lens and /reading&hellip;</p>";
+    var rows = "";
+    for (var path of ["/lens", "/reading"]) {
+      var vals = [];
+      for (var i = 0; i < 2; i++) {
+        try {
+          var r = await fetch(path, { cache: "no-store" });
+          vals.push(r.headers.get("x-edge-cache") || "(none)");
+        } catch (e) { vals.push("error"); }
+        if (i === 0) await new Promise(function(res){ setTimeout(res, 800); });
+      }
+      rows += "<tr><td class=\"m\">" + esc(path) + "</td><td class=\"m\">" + esc(vals[0]) + "</td><td class=\"m\">" + esc(vals[1]) + "</td></tr>";
+    }
+    out.innerHTML = "<table class=\"cmp\"><thead><tr><th>path</th><th>1st GET</th><th>2nd GET</th></tr></thead><tbody>" + rows + "</tbody></table>" +
+      "<p class=\"note\" style=\"margin:6px 0 0\">On a hit the worker never re-rendered the page; the colo answered. The header is set by the site's <code>cachedRender</code> wrapper, so <code>(none)</code> means a route outside the cache layer.</p>";
+    btn.disabled = false;
+  });
+})();
+</script>
+
+<script type="speculationrules">
+{
+  "prerender": [
+    {
+      "where": {
+        "and": [
+          { "href_matches": "/*" },
+          { "not": { "href_matches": "/" } },
+          { "not": { "href_matches": "/around*" } },
+          { "not": { "href_matches": "/whoareyou*" } }
+        ]
+      },
+      "eagerness": "moderate"
+    }
+  ]
+}
+</script>
+
+<script>
+if ("serviceWorker" in navigator) {
+  const reg = () => navigator.serviceWorker.register("/sw.js").catch(() => {});
+  "requestIdleCallback" in window ? requestIdleCallback(reg, { timeout: 2000 }) : setTimeout(reg, 1000);
+}
+</script>
+  <script src="/nav.js" defer></script>
+</body>
+</html>
