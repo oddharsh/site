@@ -10,7 +10,7 @@ import { errorResp, escHtml, jsonResp } from "./lib/http.js";
 // SOOC filenames (IMG_1234.jpg, DSCF5678.heic, etc.), so the validation
 // is permissive on stem but strict on extension and forbids any path
 // traversal characters.
-export async function servePhotoFromR2(request, env) {
+export async function servePhotoFromR2(request, env, ctx) {
   if (!env.PHOTOS_R2) {
     return errorResp("R2 bucket not bound", 503);
   }
@@ -25,6 +25,23 @@ export async function servePhotoFromR2(request, env) {
 
   const ifNoneMatch = request.headers.get("if-none-match");
   const range       = request.headers.get("range");
+
+  // edge-cache full (non-range, non-conditional) GETs in caches.default, so a
+  // repeat view of a multi-MB original is served from the colo instead of a
+  // fresh R2 round-trip. originals are content-addressed + immutable, so there
+  // is zero staleness risk. range + conditional requests bypass this: they need
+  // R2's range / onlyIf handling and must not populate the full-body entry.
+  // x-photo-cache: hit|miss makes the layer observable (and was the gate check).
+  const cacheable = request.method === "GET" && !range && !ifNoneMatch;
+  const cache = caches.default;
+  if (cacheable) {
+    const hit = await cache.match(request);
+    if (hit) {
+      const r = new Response(hit.body, hit);
+      r.headers.set("x-photo-cache", "hit");
+      return r;
+    }
+  }
 
   // R2's onlyIf conditional GET returns a body-less object when the etag
   // matches — translates directly to a 304 response.
@@ -75,7 +92,14 @@ export async function servePhotoFromR2(request, env) {
     return new Response(obj.body, { status: 206, headers });
   }
   headers.set("content-length", String(obj.size));
-  return new Response(obj.body, { status: 200, headers });
+  const resp = new Response(obj.body, { status: 200, headers });
+  if (cacheable && ctx) {
+    // store a clean clone (no x-photo-cache marker) for future hits, then mark
+    // THIS response a miss. resp.clone() tees the R2 stream to both consumers.
+    ctx.waitUntil(cache.put(request, resp.clone()));
+    resp.headers.set("x-photo-cache", "miss");
+  }
+  return resp;
 }
 
 // ── 1990s-style directory listings ──────────────────────────────────

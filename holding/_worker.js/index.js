@@ -250,7 +250,7 @@ async function route(request, env, ctx) {
     // benefit from being on the same edge. only the chonky originals
     // get the R2 trip.
     if (url.pathname.startsWith("/images/full/")) {
-      return servePhotoFromR2(request, env);
+      return servePhotoFromR2(request, env, ctx);
     }
 
     // /images/<stem>.<ext> thumbnail proxy. Cloudflare Pages's default
