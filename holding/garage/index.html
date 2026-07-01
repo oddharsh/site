@@ -352,6 +352,24 @@ footer {
 
       <li>
         <div class="title-row">
+          <span class="name"><a href="/garage/workers">Off Pages, onto Workers</a></span>
+          <span class="status shipped">shipped</span>
+        </div>
+        <div class="desc">
+          Why this site left Cloudflare Pages for Workers with static assets: same bytes,
+          but an <em>atomic</em> deploy and the whole config (bindings, routing, the Durable
+          Object) as one checked-in <code style="font-family: var(--font-mono);font-size:9pt">wrangler.jsonc</code>
+          instead of dashboard clicks. What that opened up (edge-direct avif thumbnails, an
+          in-house counter DO, cron in reach) with a live routing prober that reads production
+          headers in your browser.
+        </div>
+        <div class="meta">
+          shape: platform migration + live prober &middot; added 2026-07-01
+        </div>
+      </li>
+
+      <li>
+        <div class="title-row">
           <span class="name"><a href="/garage/iroh">iroh, and why it stays across the room</a></span>
           <span class="status idle">watching</span>
         </div>

@@ -70,6 +70,7 @@ const ROUTES = [
   // static section pages that are already URL-skeuomorphic (must not regress)
   { path: "/garage/", status: 200, ct: "text/html" },
   { path: "/garage/scroll", status: 200, ct: "text/html" },
+  { path: "/garage/workers", status: 200, ct: "text/html", marker: "run_worker_first" },
   { path: "/garage/enc/z-jl90.jpg", status: 200, ct: "image/jpeg" },
   { path: "/lwe/utf8", status: 200, ct: "text/html" },
 ];
