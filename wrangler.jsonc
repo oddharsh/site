@@ -39,12 +39,21 @@
   ],
   "durable_objects": {
     "bindings": [
-      { "name": "COUNTER", "class_name": "Counter", "script_name": "cf-garage" }
+      // in-house now (no script_name) — the Counter class is defined + exported
+      // by this worker (counter.js -> index.js). was cross-script to cf-garage.
+      { "name": "COUNTER", "class_name": "Counter" }
     ]
   },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["Counter"] }
+  ],
   "vars": {
     // account id for the /lens/shot Browser Rendering REST call. not secret.
-    "CF_ACCOUNT_ID": "1c99acdb6141579023fb97d24261ea58"
+    "CF_ACCOUNT_ID": "1c99acdb6141579023fb97d24261ea58",
+    // one-time continuity: the new in-house Counter DO self-seeds to this on first
+    // wake (carried over from cf-garage's counter, ~2375 at migration). idempotent;
+    // safe to remove once the DO is seeded.
+    "COUNTER_SEED": "2375"
   }
   // Secrets are NOT here (set on the Worker with `wrangler secret put`):
   //   RN_SIGNING_KEY_JWK, BROWSER_RENDER_TOKEN, RN_BUST_SECRET

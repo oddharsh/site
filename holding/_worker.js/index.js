@@ -19,6 +19,10 @@ import { handleSystemRestore, handleUpdatesJson, handleWindowsUpdate } from "./u
 import { handleWhoareyou, handleWhoareyouJson } from "./whoareyou.js";
 import { handleWritingIndex, handleWritingPost } from "./writing.js";
 
+// the homepage visit-counter Durable Object, hosted in-house (see counter.js).
+// must be a named export of the entry so the COUNTER binding can resolve it.
+export { Counter } from "./counter.js";
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);

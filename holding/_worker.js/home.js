@@ -62,7 +62,7 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
     () => null
   );
   // visitor counter — atomic increment in the "homepage-visits" Durable Object
-  // (cf-garage's Counter class, bound here as COUNTER). humans increment; bots
+  // (in-house Counter class, see counter.js, bound here as COUNTER). humans increment; bots
   // and speculative loads (Speculation Rules prefetch/prerender, Speed Brain, any
   // Sec-Purpose-honest prefetcher) peek (?peek=1) so crawlers + prefetches don't
   // inflate the count. fired NOW so the read rides concurrently with the asset +
