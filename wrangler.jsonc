@@ -14,7 +14,18 @@
   "assets": {
     "directory": "holding",
     "binding": "ASSETS",
-    "run_worker_first": true
+    // granular routing (safe cut): worker runs for everything EXCEPT the clearly-
+    // static shell JS + content/SEO files, which serve edge-direct (no worker
+    // invocation). /images/* stays worker-first for now (thumbnails vs R2 full/
+    // vs worker-generated manifest/meta overlap needs its own careful pass).
+    // negatives win over "/*"; the worker only ran a pass-through to ASSETS for
+    // these anyway, so bytes + _headers are unchanged.
+    "run_worker_first": [
+      "/*",
+      "!/nav.js", "!/lens.js", "!/notepad.js", "!/sw.js",
+      "!/garage/*", "!/lwe/*", "!/cars/*",
+      "!/sitemap.xml", "!/robots.txt", "!/llms.txt", "!/index.md", "!/bimi.svg", "!/README.md"
+    ]
   },
   "observability": { "enabled": true },
   "kv_namespaces": [
