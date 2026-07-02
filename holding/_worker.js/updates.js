@@ -63,7 +63,7 @@ h1{margin:0 0 4px}
     </ul>
     <p class="wu-foot">No reboot, no nagging. Each item shipped when the service worker's version bumped; see how that auto-update works in <a href="/security">Security Center</a>, or roll the whole system back through every past build in <a href="/restore">System Restore</a>.</p>
 `,
-    cache: "no-store, must-revalidate",
+    cache: "private, no-cache, must-revalidate",
     closeHref: "/security",
     closeTitle: "back to Security Center",
     closeLabel: "back to Security Center",
@@ -246,7 +246,7 @@ h1{margin:0 0 4px}
     ${liveBar}
 ${main}
 `,
-    cache: "no-store, must-revalidate",
+    cache: "private, no-cache, must-revalidate",
     closeHref: "/updates",
     closeTitle: "back to Windows Update",
     closeLabel: "back to Windows Update",

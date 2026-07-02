@@ -146,6 +146,7 @@ Hard caps: 0 render-blocking script anywhere; ≤3KB br executed before first in
 | pageshow resync (scrollers, clock, checkbox normalize) | 0.6KB | bfcache repairs |
 | System Properties tray popout (fetches /whoareyou.json on open) | 0.4KB | owner-kept (2026-07-02); lazy fetch, nothing on page load |
 | Windows Update tray balloon (fetches /updates.json) | 0.4KB | owner-kept (2026-07-02); the changelog surfaces in the tray, as XP did |
+| tray sound pack (Web-Audio synthesis, default-muted, localStorage persistence) | 1.2KB | owner-kept (2026-07-02); 0 asset bytes, no recordings; in-page shell actions only (nav sounds die at unload anyway) |
 | shared utils | 0.6KB | |
 
 Per page on top: homepage ≤0.8KB inline (stand-down fetchers that detect "already populated" and quit, plus the prerender-gated count beacon); notepad.js 1.2KB raw on /writing only (Ln/Col via selectionchange, F5 stamp, print); essay demos ≤8KB br each, loaded on viewport entry or an explicit invoker, long loops chunked through `scheduler.yield` with a 3-line setTimeout(0) shim, heavy compute in a Worker. `will-change` applies only inside the drag/hover lifecycle. No framework, no hydration, no polyfills beyond the yield shim and the Temporal Date branch (scheduled for deletion when Safari stable ships).
@@ -241,7 +242,7 @@ Tiers stay as measured: 600px AVIF ~22KB and 400px AVIF ~12KB in one `<source sr
 - **WebTransport.** The fastest data on this site moves hourly; HTTP caching wins.
 - **Web fonts of any kind.** Owner law and period truth agree at 0 bytes.
 - **Skeletons, spinners, shimmer.** XP showed `cursor: progress` and then finished; placeholder theater is fabricated UI.
-- **The opt-in XP sound pack.** Commissioned sound-alikes are a standing rights liability plus 36KB of surface; cut clean rather than half-ship.
+- ~~The opt-in XP sound pack~~ **KEPT (owner ruling, 2026-07-02).** The refusal priced "commissioned sound-alikes, 36KB"; the deployed pack is neither: 0-byte Web-Audio synthesis (nav.js), no recordings, no rights exposure, default-muted with the choice persisted. The rationale mismatched the artifact, so the refusal dies; the pack joins the shell.js ledger (~1.2KB raw) and stays opt-in via the tray toggle.
 - **Screenshot-diff authenticity CI.** Flaky goldens become a muted gate within a year; the deploy greps keep the guarantee at zero flake.
 - **CSS-only 1Hz clock.** A perpetual style invalidation costs more than the 0.3KB timer it replaces.
 

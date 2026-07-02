@@ -159,14 +159,14 @@ worker-first (for the 404 cache-clamp), undoing the edge-direct cut shipped
 2026-07-01; the clamp wins until content-hashed /i/* URLs land, then avif goes
 edge-direct again permanently.
 
-**Owner rulings needed (found by the audit, absent from the blueprint):**
-1. The tray SOUND PACK: GREENFIELD refused "commissioned sound-alikes, 36KB",
-   but the deployed pack is 0-byte Web-Audio synthesis (nav.js:511-549). The
-   refusal's rationale does not match the artifact; re-adjudicate.
+**Owner rulings (found by the audit, absent from the blueprint): all closed.**
+1. RULED (owner, 2026-07-02): the tray SOUND PACK is KEPT. GREENFIELD's refusal
+   priced "commissioned sound-alikes, 36KB"; the deployed pack is 0-byte
+   Web-Audio synthesis (nav.js), no recordings, default-muted. It joins the
+   shell.js ledger (~1.2KB raw) and stays opt-in via the tray toggle.
 2. RULED (owner, 2026-07-02): the System Properties tray popout and the Windows
    Update balloon are KEPT; both added to the shell.js ledger (~0.4KB each) and
-   /whoareyou.json + /updates.json stay served. The sound-pack re-adjudication
-   (item 1) remains open.
+   /whoareyou.json + /updates.json stay served.
 
 **Seven migration duties the deletions impose:**
 1. /sw.js must NEVER 404: ship an unregister stub (skipWaiting; delete all
@@ -185,8 +185,10 @@ edge-direct again permanently.
    footer to <img src="/hit.svg">; retire the COUNTER binding + seed var after.
 6. Every NEW route (/hit.svg, /run, /photos) needs all three registrations:
    wrangler allowlist, index.js ROUTES/PREFIX, verify-routes.mjs.
-7. no-store -> private,no-cache on /updates + /restore keeps them origin-fresh
-   (the owner's freshness intent) while restoring bfcache eligibility.
+7. DONE (2026-07-02): no-store -> private,no-cache on /updates + /restore keeps
+   them origin-fresh (the owner's freshness intent) while restoring bfcache
+   eligibility. The balloon's /updates.json stays no-store (subresource, no
+   bfcache stake).
 
 **Before -> after (br wire bytes, measured live 2026-07-02; blueprint = projected):**
 
