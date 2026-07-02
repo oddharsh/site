@@ -291,11 +291,13 @@ const tracks = await swrKV(env, ctx,
 // return { title, css, body } — content only.</span></pre></figure>
       </div>
       <p class="what"><b>What it buys.</b> Not wire bytes (brotli already crushes the repeated
-        CSS per response) but correctness: <code>/updates</code> ships two copies of the chrome
-        CSS today because two template strings each call <code>xpChromeCss</code>, and nobody
-        can see that from inside either string. When the window chrome changed this week (the
-        back/forward buttons), one function would have updated nine pages. The XP shell is the
-        site's strongest abstraction; the server should treat it as one.</p>
+        CSS per response) but change-amplification: when the window chrome changed this week
+        (the back/forward buttons), one function would have updated nine pages. Correction,
+        post-audit: an earlier sweep claimed /updates shipped the chrome CSS twice; the
+        migration audit refuted it (the two <code>xpChromeCss</code> call sites are two routes,
+        /updates and /restore, one copy each). The honest case for the layout kit is
+        maintenance, and it is sufficient. The XP shell is the site's strongest abstraction;
+        the server should treat it as one.</p>
     </div>
 
     <div class="tg">
