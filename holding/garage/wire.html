@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>aadhar.sh/garage/bytes on the wire</title>
-<meta name="description" content="The site's first build step, and the brotli rabbit hole that led there: where Cloudflare actually compresses (edge quality vs q11), the four paths to q11 that all lost, deploy-time minification with readable-source twins, and the Cache API layer that finally made s-maxage true. Real numbers, live probes.">
+<meta name="description" content="The site's first build step, and the brotli rabbit hole that led there: where Cloudflare actually compresses (edge quality vs q11), the four paths to q11 that all lost, deploy-time minification with readable-source twins, why minifying the CSS measured out to a no (brotli voted), an esbuild vs Oxc head-to-head, and the Cache API layer that finally made s-maxage true. Real numbers, live probes.">
+
 <link rel="canonical" href="https://aadhar.sh/garage/wire">
 <meta property="og:type" content="website">
 <meta property="og:title" content="aadhar.sh/garage/bytes on the wire">
@@ -149,6 +150,18 @@ code.m, .m { font-family: var(--font-mono); font-size: 9.2pt; }
 .bar-row .val { text-align: right; font-family: var(--font-mono); font-size: 8.5pt; color: oklch(35% 0 0); }
 .bar-cap { font-size: 8.5pt; color: oklch(50% 0 0); margin: 4px 0 0; }
 
+/* before/after snippet cards (teardown vocabulary) */
+.diff { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0 0; }
+@media (max-width: 540px) { .diff { grid-template-columns: 1fr; } }
+.diff > figure { margin: 0; min-width: 0; }
+.diff figcaption { font: bold 8pt var(--font-mono); text-transform: uppercase; letter-spacing: .05em; padding: 3px 9px; border-radius: 3px 3px 0 0; }
+.diff .before figcaption { color: oklch(40% 0.15 25); background: oklch(93.5% 0.045 25); }
+.diff .after figcaption { color: oklch(36% 0.14 150); background: oklch(93.5% 0.05 150); }
+.diff pre { margin: 0; font-family: var(--font-mono); font-size: 8pt; line-height: 1.5; padding: 8px 10px; overflow-x: auto; white-space: pre; border: 1px solid; border-top: 0; }
+.diff .before pre { background: oklch(99% 0.01 25); border-color: oklch(88% 0.04 25); }
+.diff .after pre { background: oklch(99% 0.012 150); border-color: oklch(88% 0.04 150); }
+.diff pre .c { color: oklch(52% 0.03 145); }
+
 .cmp { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 9.5pt; }
 .cmp th, .cmp td { border: 1px solid oklch(85% 0.02 250); padding: 5px 8px; text-align: left; vertical-align: top; }
 .cmp th { background: oklch(96% 0.01 250); font-family: var(--font-caption); color: oklch(41.92% 0.0962 250.51); font-weight: normal; }
@@ -280,6 +293,107 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
         uploaded": their bytes were identical to the shells the previous deploy had
         shipped. The readable originals were already in storage, just under a
         different name.</p>
+    </div>
+
+    <h2>What about the CSS?</h2>
+    <p>Minifying CSS is the same idea as minifying JS, and worth seeing side by side,
+      because the two languages do not shrink the same way. Both snippets below are real
+      code from this site (the scroll-remember helper from <code class="m">nav.js</code>,
+      and this very page's Luna close-button gel), run through the same minifier. Byte
+      counts are for the full block; the excerpts are trimmed to fit.</p>
+
+    <div class="diff">
+      <figure class="before"><figcaption>JS before &middot; 1,105 bytes</figcaption><pre>function rememberScroll(sc) {
+  var key = "axp-scroll:" + location.pathname;
+  var save = function () {
+    try { sessionStorage.setItem(key,
+      String(sc.scrollTop)); } catch (e) {}
+  };
+  var nav = (performance.getEntriesByType &amp;&amp;
+    performance.getEntriesByType("navigation")[0]) || {};
+  if (nav.type === "reload") { <span class="c">/* ... */</span> }</pre></figure>
+      <figure class="after"><figcaption>JS after &middot; 622 bytes (44% smaller)</figcaption><pre>function rememberScroll(e){var t="axp-scroll:"
++location.pathname,r=function(){try{
+sessionStorage.setItem(t,String(e.scrollTop))}
+catch{}},s=performance.getEntriesByType&amp;&amp;
+performance.getEntriesByType("navigation")[0]
+||{};if(s.type==="reload"){<span class="c">/* ... */</span>}</pre></figure>
+    </div>
+
+    <div class="diff">
+      <figure class="before"><figcaption>CSS before &middot; 2,544 bytes</figcaption><pre>.title-bar .controls .close {
+  position: relative; box-sizing: border-box;
+  width: 21px; height: 21px; padding: 0;
+  border: 1px solid #6696eb; border-radius: 3px;
+  background-image: linear-gradient(180deg,
+    #e8795f 0%, #e45f40 30%, #e45d3d 52%,
+    #e2552a 80%, #ae3110 100%);
+  transition: filter 60ms ease-out;
+}</pre></figure>
+      <figure class="after"><figcaption>CSS after &middot; 2,167 bytes (15% smaller)</figcaption><pre>.title-bar .controls .close{position:relative;
+box-sizing:border-box;width:21px;height:21px;
+padding:0;border:1px solid #6696eb;
+border-radius:3px;background-image:
+linear-gradient(180deg,#e8795f,#e45f40 30%,
+#e45d3d 52%,#e2552a 80%,#ae3110);
+transition:filter 60ms ease-out}</pre></figure>
+    </div>
+
+    <p>The gap is the whole story. JS shrinks 44% because a minifier can <em>rename</em>
+      things: every local variable collapses to one letter, information genuinely leaves
+      the file. CSS shrinks 15% because nothing in it is renamable: selectors and
+      properties are the page's public API, so all a CSS minifier can remove is
+      whitespace, comments, and micro-slack (note it dropped the redundant
+      <code class="m">0%</code> and <code class="m">100%</code> gradient stops). And
+      whitespace is exactly the thing brotli already compresses to almost nothing.</p>
+
+    <p>So the real question is never "does the file get smaller" but "does the WIRE get
+      smaller after brotli." This site's CSS lives in three habitats, and I measured all
+      three:</p>
+
+    <table class="cmp">
+      <thead><tr><th>habitat</th><th>raw</th><th>on the wire (brotli)</th><th>verdict</th></tr></thead>
+      <tbody>
+        <tr><td>homepage inline <code>&lt;style&gt;</code></td><td>30.4KB &rarr; 12.7KB</td><td class="y">~9.2KB &rarr; ~3.3KB</td><td class="n">protected: View Source is the exhibit</td></tr>
+        <tr><td>worker-rendered chrome (xpChromeCss)</td><td>9.4KB &rarr; 6.4KB</td><td>84 bytes saved in page context</td><td class="n">brotli already did the job</td></tr>
+        <tr><td>the CSS strings inside nav.js</td><td>&minus;703 bytes</td><td class="n">GREW by 44 bytes</td><td class="n">rejected by the measurement itself</td></tr>
+      </tbody>
+      <caption>Habitat three is the fun one: minified CSS is higher-entropy per byte, and inside
+        an already-minified JS file it compresses WORSE than the verbose original. Brotli voted no.</caption>
+    </table>
+
+    <div class="callout">
+      <strong>The moral: minification and compression are fighting over the same bytes.</strong>
+      Minify-then-compress only wins where minification removes <em>information</em>, comments
+      and long identifiers, which is why the JS build pays for itself. Where it only removes
+      <em>redundancy</em>, whitespace and repeated patterns, brotli was going to erase that
+      anyway. The one habitat where CSS minification would genuinely pay (~6KB a visit on the
+      homepage) is exactly the one this site protects on purpose: the inline styles carry the
+      comments that make View Source worth reading. That is the measured price of the rule,
+      and it is paid knowingly.
+    </div>
+
+    <div class="cf-feat">
+      <h2>Sidebar: Rolldown + Oxc, the faster knife</h2>
+      <p>The new Rust toolchain (Rolldown the bundler, Oxc the parser/minifier under it)
+        is genuinely faster than esbuild. Tested on this site's four real shells,
+        same machine, same brotli after:</p>
+      <table class="cmp">
+        <thead><tr><th>&nbsp;</th><th>raw out</th><th>brotli out</th><th>time</th></tr></thead>
+        <tbody>
+          <tr><td>esbuild</td><td>89,512</td><td>24,421</td><td>21.9ms</td></tr>
+          <tr><td>oxc-minify</td><td>90,131</td><td class="y">24,381</td><td class="y">3.8ms</td></tr>
+        </tbody>
+        <caption>Totals across nav.js + notepad.js + lens.js + sw.js. Oxc is ~6x faster;
+          the byte difference is 40 bytes of brotli, 0.16%, inside the noise.</caption>
+      </table>
+      <p>Verdict: right tool, wrong scale. This build minifies four files once per deploy
+        in CI; the entire esbuild pass costs 22 milliseconds, so a 6x speedup saves 18ms
+        nobody is waiting on, and the output bytes are a wash. esbuild also happens to be
+        the engine wrangler already uses to bundle the worker, so it is one mental model
+        instead of two. Rolldown itself solves a problem this site refuses to have
+        (bundling). If the build ever grows into thousands of files, Oxc is the obvious
+        switch; today it would be a dependency swap in search of a benefit.</p>
     </div>
 
     <h2>Making s-maxage true</h2>
