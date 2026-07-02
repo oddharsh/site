@@ -211,7 +211,6 @@ export async function handleWhoareyou(request) {
     width: 720,
     description: "what one HTTP request to aadhar.sh reveals about you. read-only, never stored.",
     robots: "noindex",
-    titleClass: "title-text",
     css: `
 /* ─── /whoareyou, circa 2003 ──────────────────────────────────────────
    matches the holding page chrome: light-blue gradient body, white
@@ -219,9 +218,8 @@ export async function handleWhoareyou(request) {
    beveled data tables that feel like a Windows properties dialog.
    ────────────────────────────────────────────────────────────────── */
 
-/* whoareyou-specific title-bar extras: the title text flexes to fill,
-   and the boxed _ □ × controls get a touch more letter-spacing. */
-.title-bar .title-text { flex: 1; padding-left: 4px; }
+/* whoareyou-specific title-bar extra: the boxed _ □ × controls get a touch
+   more letter-spacing. (title flex comes from xpChromeCss site-wide.) */
 .title-bar .controls { letter-spacing: 2px; font-family: Tahoma, Verdana, Geneva, sans-serif; font-size: 9pt; }
 
 h1 {

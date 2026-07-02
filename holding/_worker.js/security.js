@@ -67,7 +67,6 @@ dl.sc-grid dd{margin:0;color:#15243f;font-family:var(--font-mono);font-size:8.5p
     css,
     body,
     cache: "no-store, must-revalidate",
-    titleClass: "title-text",
     closeHref: "/whoareyou",
     closeTitle: "back to System Properties",
     closeLabel: "back to System Properties",

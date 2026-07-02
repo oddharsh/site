@@ -99,7 +99,7 @@ body {
   color: oklch(100% 0 0);
   font-family: var(--font-caption);
   font-weight: bold;
-  font-size: 11pt;
+  font-size: 10pt;
   padding: 4px 5px 4px 8px;
   display: flex;
   align-items: center;

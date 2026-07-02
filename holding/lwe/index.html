@@ -31,7 +31,7 @@ body {
 }
 .title-bar {
   background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
-  color: #fff; font-family: var(--font-caption); font-weight: bold; font-size: 11pt;
+  color: #fff; font-family: var(--font-caption); font-weight: bold; font-size: 10pt;
   padding: 4px 5px 4px 8px; display: flex; align-items: center; gap: 6px; text-shadow: 1px 1px #0f1089; user-select: none;
 }
 .title-bar .title-text { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -105,6 +105,7 @@ a.buddy:hover { background: #e9f1fc; outline: 1px solid #bcd3f3; }
 .footnote .why { color: #15243f; font-weight: bold; }
 
 @media (max-width: 520px) { body { padding: 8px 4px 32px; } .buddy .nm .pm { white-space: normal; } }
+body { text-wrap: pretty; } /* progressive; older engines ignore it */
 </style>
 </head>
 <body>

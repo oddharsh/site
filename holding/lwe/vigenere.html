@@ -18,7 +18,7 @@ html, body { margin: 0; padding: 0; } html{background:linear-gradient(180deg,okl
 body { background: linear-gradient(180deg, oklch(56% 0.13 250) 0%, oklch(73% 0.10 236) 50%, oklch(88% 0.05 232) 60%, oklch(60% 0.16 140) 100%); font-family: var(--font-ui); font-size: 10.5pt; line-height: 1.5; color: oklch(21.78% 0 0); padding: 24px 12px 60px; min-height: 100vh; }
 
 .window { max-width: 640px; margin: 0 auto; background: oklch(100% 0 0); border: 2px solid #0831d9; border-right-color: #001ea0; border-bottom-color: #001ea0; border-top-left-radius: 8px; border-top-right-radius: 8px; overflow: hidden; box-shadow: inset 1px 1px 0 #166aee, inset 2px 2px 0 #0855dd, inset -1px -1px 0 #00138c, inset -2px -2px 0 #003bda, 4px 4px 0 rgba(0,30,160,.35); }
-.title-bar { background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%); color: #fff; font-family: var(--font-caption); font-weight: bold; font-size: 11pt; padding: 4px 5px 4px 8px; display: flex; align-items: center; gap: 6px; text-shadow: 1px 1px #0f1089; user-select: none; }
+.title-bar { background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%); color: #fff; font-family: var(--font-caption); font-weight: bold; font-size: 10pt; padding: 4px 5px 4px 8px; display: flex; align-items: center; gap: 6px; text-shadow: 1px 1px #0f1089; user-select: none; }
 .title-bar .title-text { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .title-bar .icon { width: 14px; height: 14px; flex: 0 0 14px; background: #fff; border: 1px solid #5e4716; position: relative; }
 .title-bar .icon::before { content: "⚷"; position: absolute; inset: 0; display: grid; place-items: center; font-size: 11px; color: var(--accent); font-weight: bold; text-shadow: none; }
@@ -118,6 +118,7 @@ body::after { content: ""; position: fixed; left: 0; right: 0; bottom: 0; height
 .compose .ta { flex: 1; min-height: 30px; border: 1px solid #7d8aa3; background: #fff; box-shadow: inset 1px 1px 0 #c3cbdb; padding: 4px 6px; font-family: var(--font-ui); font-size: 9.5pt; color: #9aa3b2; }
 
 @media (max-width: 520px){ body { padding: 8px 4px 32px; } .msgr-head .pets { display:none } .st-row{grid-template-columns:1fr} .field label{width:auto;text-align:left;flex:0 0 auto} }
+body { text-wrap: pretty; } /* progressive; older engines ignore it */
 </style>
 </head>
 <body>

@@ -17,7 +17,7 @@ background:linear-gradient(180deg,oklch(56% 0.13 250) 0%,oklch(73% 0.10 236) 50%
 border:2px solid #0831d9;border-right-color:#001ea0;border-bottom-color:#001ea0;border-top-left-radius:8px;border-top-right-radius:8px;overflow:hidden;
 box-shadow:inset 1px 1px 0 #166aee,inset 2px 2px 0 #0855dd,inset -1px -1px 0 #00138c,inset -2px -2px 0 #003bda,4px 4px 0 rgba(0,30,160,.35)}
 .np-titlebar{flex:0 0 auto;display:flex;align-items:center;gap:5px;padding:4px 6px 4px 7px;color:oklch(100% 0 0);
-font-family:var(--font-caption);font-weight:bold;font-size:11px;text-shadow:1px 1px #0f1089;border-bottom:1px solid oklch(41.9% 0.096 250);
+font-family:var(--font-caption);font-weight:bold;font-size:10pt;text-shadow:1px 1px #0f1089;border-bottom:1px solid oklch(41.9% 0.096 250);
 background:linear-gradient(180deg,oklch(70% 0.15 258) 0%,oklch(60% 0.20 261) 8%,oklch(51% 0.225 263) 18%,oklch(50% 0.225 263) 86%,oklch(58% 0.18 260) 100%)}
 .np-ico{flex:0 0 auto;width:14px;height:15px;background:oklch(100% 0 0);border:1px solid oklch(45% 0 0);border-radius:1px;position:relative}
 .np-ico::before{content:"";position:absolute;left:2px;right:3px;top:3px;height:1px;background:oklch(55% 0.16 258);box-shadow:0 3px 0 oklch(55% 0.16 258),0 6px 0 oklch(55% 0.16 258),0 9px 0 oklch(55% 0.16 258)}
@@ -71,7 +71,7 @@ background:oklch(93% 0.012 90);border-top:1px solid oklch(80% 0.02 90)}
 /* folder index ("My Writing") */
 .np-folder{height:auto;min-height:0;max-width:560px}
 .np-folder-body{padding:14px 16px 6px}
-.np-folder-intro{margin:0 0 12px;color:oklch(40% 0 0)}
+.np-folder-intro{margin:0 0 12px;color:oklch(40% 0 0);text-wrap:pretty}
 .np-files{list-style:none;margin:0;padding:0;border:1px solid oklch(80% 0.02 250)}
 .np-files li+li{border-top:1px solid oklch(92% 0.01 250)}
 .np-files a{display:flex;align-items:center;gap:10px;padding:7px 10px;text-decoration:none;color:oklch(20% 0 0)}

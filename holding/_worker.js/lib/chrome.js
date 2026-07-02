@@ -45,6 +45,9 @@ export function xpChromeCss(maxWidth) {
     align-items: center; justify-content: space-between;
     text-box-trim: trim-both; text-box-edge: cap alphabetic;
   }
+  /* flex:1 keeps the title left-aligned: nav.js injects its back/forward cluster as a
+     third title-bar child, and space-between would center an un-flexed title span. */
+  .title-bar .title-text { display: flex; align-items: center; flex: 1; min-width: 0; }
   .title-bar .icon { display: inline-block; width: 16px; height: 16px; margin-right: 6px; background: oklch(69.58% 0.2043 43.49); position: relative; flex-shrink: 0; }
   .title-bar .icon::before { content: ""; position: absolute; inset: 2px 4px; background: oklch(87.82% 0.0877 66.27); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
   .title-bar .controls { display: flex; align-items: center; gap: 2px; letter-spacing: 0; }
@@ -188,7 +191,7 @@ export function lunaPage({
 }) {
   const documentTitle = title || path || "aadhar.sh";
   const windowTitle = path || title || "aadhar.sh";
-  const classAttr = titleClass ? ` class="${escAttr(titleClass)}"` : "";
+  const classAttr = ` class="title-text${titleClass ? " " + escAttr(titleClass) : ""}"`;
   const metaDescription = description
     ? `\n<meta name="description" content="${escAttr(description)}">`
     : "";
