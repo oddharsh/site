@@ -262,8 +262,16 @@ export async function scrapePlaylistTracks(playlistId, env, ctx) {
 // (parse error OR missing both visualIdentity and artists), retry once
 // with cacheTtl: 0 + a cache-busting query param to force a fresh fetch.
 export async function scrapeSpotifyEmbed(kindAndId) {
+  // the PLAYLIST embed is the one upstream document that actually changes (tracks
+  // get added/removed); the 24h edge cache below meant every SWR rebuild re-read a
+  // day-old listing, so a new track could take a full day to appear no matter how
+  // often the rebuild ran. playlist fetches now always bypass the CF cache — they
+  // only happen on sentinel-lapse rebuilds (~1/hour), so upstream load is unchanged.
+  // track + artist embeds are near-immutable and keep the 24h cache.
+  const isPlaylist = kindAndId.startsWith("playlist/");
   const tryOnce = async (bustCache) => {
-    const qs = bustCache ? `?_t=${Date.now()}` : "";
+    const fresh = bustCache || isPlaylist;
+    const qs = fresh ? `?_t=${Date.now()}` : "";
     const res = await fetch(`https://open.spotify.com/embed/${kindAndId}${qs}`, {
       headers: {
         "user-agent":      BOT_UA,        // honest: identifies as AadharshBot
@@ -277,9 +285,9 @@ export async function scrapeSpotifyEmbed(kindAndId) {
       // already takes (callers catch: rn.js getTracksSWR .catch, per-track/artist
       // try/catch). the last unbounded outbound path on the site.
       signal: AbortSignal.timeout(5000),
-      cf: bustCache
-        ? { cacheTtl: 0, cacheEverything: false }     // bypass CF cache
-        : { cacheTtl: 86400, cacheEverything: true }, // 24h CF edge cache (normal path)
+      cf: fresh
+        ? { cacheTtl: 0, cacheEverything: false }     // bypass CF cache (retry + every playlist fetch)
+        : { cacheTtl: 86400, cacheEverything: true }, // 24h CF edge cache (track/artist embeds)
     });
     if (!res.ok) throw new Error(`embed ${kindAndId}: ${res.status}`);
     const html = await res.text();

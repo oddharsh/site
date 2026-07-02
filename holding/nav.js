@@ -1325,9 +1325,11 @@
         ".axp-histnav{display:inline-flex;gap:2px;margin-right:6px;flex:0 0 auto;align-items:center}" +
         ".axp-histnav button{position:relative;box-sizing:border-box;width:21px;height:21px;padding:0;margin:0;display:inline-block;overflow:hidden;font:0/0 a;color:transparent;cursor:pointer;border:1px solid #6696eb;border-radius:3px;background-color:#3e73f5;background-image:linear-gradient(180deg,#5f8cf7 0%,#3a71f5 22%,#3e73f5 55%,#2a70f2 82%,#1045be 100%);transition:filter 60ms ease-out}" +
         ".axp-histnav button::after{content:'';position:absolute;left:0;right:0;top:0;height:45%;background:linear-gradient(180deg,rgba(255,255,255,.55) 0%,rgba(255,255,255,.12) 70%,rgba(255,255,255,0) 100%);border-radius:2px 2px 5px 5px;pointer-events:none}" +
-        ".axp-histnav button::before{content:'';position:absolute;top:50%;left:50%;width:0;height:0;border:5px solid transparent;filter:drop-shadow(0 1px 0 rgba(0,0,0,.35))}" +
-        ".axp-histnav .axp-back::before{margin:-5px 0 0 -6px;border-right-color:#fff;border-left-width:0}" +
-        ".axp-histnav .axp-fwd::before{margin:-5px 0 0 -4px;border-left-color:#fff;border-right-width:0}" +
+        // translate(-50%,-50%) centers against the triangle's real border box (5x10),
+        // which margin guesses got wrong (back sat 3.5px left of center, fwd 1.5px)
+        ".axp-histnav button::before{content:'';position:absolute;top:50%;left:50%;width:0;height:0;border:5px solid transparent;transform:translate(-50%,-50%);filter:drop-shadow(0 1px 0 rgba(0,0,0,.35))}" +
+        ".axp-histnav .axp-back::before{border-right-color:#fff;border-left-width:0}" +
+        ".axp-histnav .axp-fwd::before{border-left-color:#fff;border-right-width:0}" +
         ".axp-histnav button:hover:not([disabled]){border-color:#8fb4ff;background-color:#4fa4ff;background-image:linear-gradient(180deg,#689bff 0%,#468aff 22%,#4fa4ff 55%,#3990fc 82%,#1858c8 100%);outline:none}" +
         ".axp-histnav button:active:not([disabled]){filter:brightness(.9)}" +
         ".axp-histnav button:focus-visible{outline:1px dotted #fff;outline-offset:-4px}" +
