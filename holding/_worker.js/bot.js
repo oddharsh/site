@@ -1,19 +1,12 @@
 // bot.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
 import { BOT_NAME, BOT_UA, SIG_AGENT } from "./lib/botauth.js";
-import { xpChromeCss } from "./lib/chrome.js";
+import { lunaPage } from "./lib/chrome.js";
 import { esc } from "./lib/http.js";
 
 // ── /bot info page ──────────────────────────────────────────────────
 export function handleBotPage(request) {
-  const html = `<!DOCTYPE html>
-<html lang="en"><head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>aadhar.sh/bot</title>
-<meta name="description" content="Identity and behavior of AadharshBot, the crawler operated by aadhar.sh.">
-<style>
-${xpChromeCss(660)}
+  const css = `
   h1 { font-family: "Trebuchet MS", Verdana, Geneva, sans-serif; font-size: 14pt; color: oklch(41.92% 0.0962 250.51); margin: 0 0 4px; font-weight: bold; }
   h2 { font-family: "Trebuchet MS", Verdana, Geneva, sans-serif; font-size: 12pt; color: oklch(41.92% 0.0962 250.51); margin: 16px 0 6px; font-weight: bold; line-height: 1.3; }
   h2::after { content: ""; display: block; height: 1px; background: oklch(86.67% 0.0294 259.59); margin-top: 8px; }
@@ -24,14 +17,8 @@ ${xpChromeCss(660)}
   dl.fields dt { background: oklch(94.66% 0.0114 252.09); color: oklch(41.92% 0.0962 250.51); font-weight: bold; padding: 4px 8px; }
   dl.fields dd { background: oklch(100.00% 0 0); margin: 0; padding: 4px 8px; font-family: "Courier New", Courier, monospace; font-size: 9.5pt; word-break: break-all; }
   footer { text-align: center; font-size: 9pt; color: oklch(44.95% 0 0); margin-top: 16px; padding-top: 10px; border-top: 1px solid oklch(86.67% 0.0294 259.59); }
-</style>
-</head><body>
-<div class="window">
-  <div class="title-bar">
-    <span><span class="icon"></span>${BOT_NAME}</span>
-    <span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/" title="back to aadhar.sh" aria-label="back to aadhar.sh"></a></span>
-  </div>
-  <div class="content">
+`;
+  const body = `
     <h1>${BOT_NAME}</h1>
     <p class="lede">
       A small, transparent crawler operated by <a href="/">aadhar.sh</a>. If you see it
@@ -84,15 +71,15 @@ Disallow: /</code></pre>
       see it in action: <a href="/around">/around</a> &middot;
       &copy; 2026 Aadharsh Pannirselvam
     </footer>
-  </div>
-</div>
-  <script src="/nav.js" defer></script>
-</body></html>`;
+`;
 
-  return new Response(html, {
-    headers: {
-      "content-type":  "text/html; charset=utf-8",
-      "cache-control": "public, max-age=300, s-maxage=300",
-    },
+  return lunaPage({
+    title: "aadhar.sh/bot",
+    path: BOT_NAME,
+    width: 660,
+    description: "Identity and behavior of AadharshBot, the crawler operated by aadhar.sh.",
+    css,
+    body,
+    cache: "public, max-age=300, s-maxage=300",
   });
 }

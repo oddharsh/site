@@ -1,6 +1,6 @@
 // security.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
-import { xpChromeCss } from "./lib/chrome.js";
+import { lunaPage } from "./lib/chrome.js";
 import { esc } from "./lib/http.js";
 
 // ── /security handler (Windows Security Center reskin) ───────────────
@@ -10,16 +10,7 @@ export function handleSecurityCenter(request) {
   const proto = esc(cf.httpProtocol || "—");
   const colo = esc(cf.colo || "—");
   const shield = `<svg class="shield" viewBox="0 0 16 16" fill="#fff" aria-hidden="true"><path d="M8 1.2 2 3.3v4.2c0 3.8 2.5 6.2 6 7.5 3.5-1.3 6-3.7 6-7.5V3.3z"/><path d="M5.4 8.2 7 9.8l3.4-3.6" fill="none" stroke="#3c8f24" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Security Center · aadhar.sh</title>
-<meta name="description" content="This site's security posture in a Windows Security Center reskin. Read-only.">
-<meta name="robots" content="noindex">
-<style>
-${xpChromeCss(620)}
+  const css = `
 h1{margin:0 0 4px}
 .sc-lede{font-size:9.5pt;color:#4a5568;margin:0 0 13px}
 .sc-panel{border:1px solid #b7c0d0;border-radius:4px;margin:0 0 9px;overflow:hidden;box-shadow:inset 0 1px 0 #fff}
@@ -33,15 +24,8 @@ dl.sc-grid{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;margin:6px 0
 dl.sc-grid dt{color:#6b7280}
 dl.sc-grid dd{margin:0;color:#15243f;font-family:var(--font-mono);font-size:8.5pt;word-break:break-word}
 .sc-foot{font-size:8.5pt;color:#6b7280;border-top:1px solid #e2e8f0;padding-top:8px;margin-top:10px}
-</style>
-</head>
-<body>
-<div class="window">
-  <div class="title-bar">
-    <span class="title-text"><span class="icon"></span>Security Center</span>
-    <span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/whoareyou" title="back to System Properties" aria-label="back to System Properties"></a></span>
-  </div>
-  <div class="content">
+`;
+  const body = `
     <h1>Security Center</h1>
     <p class="sc-lede">Windows used to greet you with three green shields. Here is the honest version for this site: what actually guards it, and what each layer really does.</p>
 
@@ -72,16 +56,22 @@ dl.sc-grid dd{margin:0;color:#15243f;font-family:var(--font-mono);font-size:8.5p
       <dt>This connection</dt><dd>${proto} · ${tls}</dd>
     </dl>
     <p class="sc-foot">Read-only, nothing logged or stored. <a href="/whoareyou">System Properties</a> shows what your specific request revealed.</p>
-  </div>
-</div>
-  <script src="/nav.js" defer></script>
-</body>
-</html>`;
+`;
 
-  return new Response(html, {
+  return lunaPage({
+    title: "Security Center · aadhar.sh",
+    path: "Security Center",
+    width: 620,
+    description: "This site's security posture in a Windows Security Center reskin. Read-only.",
+    robots: "noindex",
+    css,
+    body,
+    cache: "no-store, must-revalidate",
+    titleClass: "title-text",
+    closeHref: "/whoareyou",
+    closeTitle: "back to System Properties",
+    closeLabel: "back to System Properties",
     headers: {
-      "content-type":    "text/html; charset=utf-8",
-      "cache-control":   "no-store, must-revalidate",
       "x-robots-tag":    "noindex",
       "referrer-policy": "strict-origin-when-cross-origin",
     },

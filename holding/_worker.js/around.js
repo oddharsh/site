@@ -1,7 +1,8 @@
 // around.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
 import { BOT_NAME, BOT_UA, SIG_AGENT, signedFetch } from "./lib/botauth.js";
-import { xpChromeCss } from "./lib/chrome.js";
+import { deleteSWRKV, swrKV } from "./lib/cache.js";
+import { lunaPage } from "./lib/chrome.js";
 import { esc, extractMeta, extractTitle } from "./lib/http.js";
 
   // Signature-Agent value (RFC 8941 string)
@@ -37,13 +38,7 @@ export const NEIGHBORS = [
 // by AadharshBot (or served from a 1hr KV cache). curious, not competitive.
 export async function handleAround(request, env, ctx) {
   const report = await getOrBuildAroundReport(request, env, ctx);
-  return new Response(renderAroundHtml(report), {
-    headers: {
-      "content-type":  "text/html; charset=utf-8",
-      "cache-control": "public, max-age=60, s-maxage=300",
-      "x-robots-tag":  "noindex",
-    },
-  });
+  return renderAroundHtml(report);
 }
 
 export async function handleAroundJson(request, env, ctx) {
@@ -58,50 +53,22 @@ export async function handleAroundJson(request, env, ctx) {
 }
 
 const AROUND_KEY = "around:report";
-const AROUND_FRESH = "around:report:fresh";
 
 export async function getOrBuildAroundReport(request, env, ctx) {
   const url = new URL(request.url);
 
   // optional bust for force-refresh
   if (env.RN_BUST_SECRET && url.searchParams.get("bust") === env.RN_BUST_SECRET) {
-    if (env.RN_KV) await Promise.all([env.RN_KV.delete(AROUND_KEY), env.RN_KV.delete(AROUND_FRESH)]);
+    await deleteSWRKV(env, AROUND_KEY);
   }
 
-  // two-key stale-while-revalidate, matching the manifest / tracks / curius
-  // caches (photos.js:140). the report is stored WITHOUT a TTL (persistent);
-  // a tiny sentinel carries the 1h freshness. when the sentinel lapses the
-  // visitor gets the stale report instantly and the 20-neighbor crawl rebuilds
-  // in the background on ctx.waitUntil — so nobody waits on the crawl except
-  // the true first run. this is what lets /around stay lazy without ever
-  // blocking a visitor on a multi-second (formerly unbounded) crawl.
-  if (env.RN_KV) {
-    let report = null, fresh = null;
-    try {
-      [report, fresh] = await Promise.all([
-        env.RN_KV.get(AROUND_KEY, "json"),
-        env.RN_KV.get(AROUND_FRESH),
-      ]);
-    } catch {}
-    if (report) {
-      if (!fresh && ctx) {
-        ctx.waitUntil(runAround(env).then(r => storeAroundReport(env, r)).catch(() => {}));
-      }
-      return report;
-    }
-  }
-
-  // no cached report at all — build inline (true first run / manual bust)
-  const report = await runAround(env);
-  if (env.RN_KV && ctx) ctx.waitUntil(storeAroundReport(env, report));
-  return report;
-}
-
-async function storeAroundReport(env, report) {
-  await Promise.all([
-    env.RN_KV.put(AROUND_KEY, JSON.stringify(report)),
-    env.RN_KV.put(AROUND_FRESH, "1", { expirationTtl: 3600 }),
-  ]);
+  // two-key stale-while-revalidate via lib/cache.js. The report persists in KV,
+  // a tiny sentinel carries the 1h freshness window, and lapsed reports rebuild in
+  // the background so nobody waits on the 20-neighbor crawl except a true first run.
+  return swrKV(env, ctx, AROUND_KEY, 3600, () => runAround(env), {
+    isValid: (r) => r && Array.isArray(r.results),
+    shouldStore: (r) => r && Array.isArray(r.results) && r.results.length > 0,
+  });
 }
 
 export async function runAround(env) {
@@ -181,15 +148,13 @@ export function renderAroundHtml(report) {
       </tr>`;
   }).join("");
 
-  return `<!DOCTYPE html>
-<html lang="en"><head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>aadhar.sh/around</title>
-<meta name="description" content="Snapshot of crypto VC homepages I keep tabs on, crawled live by AadharshBot.">
-<meta name="robots" content="noindex">
-<style>
-${xpChromeCss(820)}
+  return lunaPage({
+    title: "aadhar.sh/around",
+    path: "aadhar.sh/around",
+    width: 820,
+    description: "Snapshot of crypto VC homepages I keep tabs on, crawled live by AadharshBot.",
+    robots: "noindex",
+    css: `
   h1 {
     font-family: "Trebuchet MS", Verdana, Geneva, sans-serif; color: oklch(41.92% 0.0962 250.51);
     font-size: 18pt; margin: 0 0 4px; font-weight: bold;
@@ -231,14 +196,8 @@ ${xpChromeCss(820)}
   a { color: oklch(42.61% 0.2353 263.74); }
   .dim { color: oklch(62.68% 0 0); }
   hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 12px 0; height: 0; }
-</style>
-</head><body>
-<div class="window">
-  <div class="title-bar">
-    <span><span class="icon"></span>aadhar.sh/around</span>
-    <span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/" title="back to aadhar.sh" aria-label="back to aadhar.sh"></a></span>
-  </div>
-  <div class="content">
+`,
+    body: `
     <h1>Around the Neighborhood</h1>
     <p class="lede">
       A peek at what folks in crypto VC are up to. <code>${esc(BOT_UA)}</code>, the
@@ -270,8 +229,8 @@ ${xpChromeCss(820)}
     <footer>
       &larr; <a href="/">aadhar.sh</a> &middot; crawled by <a href="/bot">${esc(BOT_NAME)}</a>
     </footer>
-  </div>
-</div>
-  <script src="/nav.js" defer></script>
-</body></html>`;
+`,
+    cache: "public, max-age=60, s-maxage=300",
+    headers: { "x-robots-tag": "noindex" },
+  });
 }

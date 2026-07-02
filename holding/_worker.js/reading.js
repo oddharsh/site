@@ -1,8 +1,8 @@
 // reading.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
 import { BOT_NAME, signedFetch } from "./lib/botauth.js";
-import { xpChromeCss } from "./lib/chrome.js";
-import { cachedRender } from "./lib/edgecache.js";
+import { cachedRender, deleteSWRKV, swrKV } from "./lib/cache.js";
+import { lunaPage } from "./lib/chrome.js";
 import { esc } from "./lib/http.js";
 
 // ── /reading — a native, Luna-styled mirror of my Curius reading list ──
@@ -74,50 +74,18 @@ async function buildCuriusPayload(env) {
   return { items, fetchedAt: new Date().toISOString() };
 }
 
-async function storeCurius(env, payload) {
-  if (!env.RN_KV) return;
-  await Promise.all([
-    env.RN_KV.put(CURIUS_CACHE_KEY, JSON.stringify(payload)),               // persistent value
-    env.RN_KV.put(`${CURIUS_CACHE_KEY}:fresh`, "1", { expirationTtl: CURIUS_TTL }),  // 6h sentinel
-  ]);
-}
-
-async function refreshCurius(env) {
-  try {
-    const payload = await buildCuriusPayload(env);
-    // only overwrite on a non-empty result, so a transient Curius failure leaves
-    // the good stale value intact instead of blanking the list.
-    if (payload.items.length) await storeCurius(env, payload);
-  } catch (_e) {}
-}
-
 export async function getCuriusCached(request, env, ctx) {
   const url = new URL(request.url);
   if (env.RN_BUST_SECRET && url.searchParams.get("bust") === env.RN_BUST_SECRET && env.RN_KV) {
     // clear BOTH keys, or a bust would leave the persistent value in place and never rebuild.
-    await Promise.all([
-      env.RN_KV.delete(CURIUS_CACHE_KEY),
-      env.RN_KV.delete(`${CURIUS_CACHE_KEY}:fresh`),
-    ]);
+    await deleteSWRKV(env, CURIUS_CACHE_KEY);
   }
-  if (env.RN_KV) {
-    let payload = null, fresh = null;
-    try {
-      [payload, fresh] = await Promise.all([
-        env.RN_KV.get(CURIUS_CACHE_KEY, "json"),
-        env.RN_KV.get(`${CURIUS_CACHE_KEY}:fresh`),
-      ]);
-    } catch (_e) {}
-    if (payload && Array.isArray(payload.items)) {
-      if (!fresh && ctx) ctx.waitUntil(refreshCurius(env));   // stale → serve now, refresh in background
-      return payload;
-    }
-  }
-  // no cached value at all — true first run or right after a bust — build inline
-  // (now bounded to ~3.5s by the crawl deadline instead of the old ~13s).
-  const payload = await buildCuriusPayload(env);
-  if (env.RN_KV && ctx && payload.items.length) ctx.waitUntil(storeCurius(env, payload));
-  return payload;
+  // no cached value at all — true first run or right after a bust — builds inline.
+  // non-empty guard: a transient Curius failure must not blank a good stale list.
+  return swrKV(env, ctx, CURIUS_CACHE_KEY, CURIUS_TTL, () => buildCuriusPayload(env), {
+    isValid: (p) => p && Array.isArray(p.items),
+    shouldStore: (p) => p && Array.isArray(p.items) && p.items.length > 0,
+  });
 }
 
 // shared-content render (no per-visitor bytes): was no-store out of conservatism,
@@ -136,13 +104,7 @@ async function renderReading(request, env, ctx) {
   let payload;
   try { payload = await getCuriusCached(request, env, ctx); }
   catch (_e) { payload = { items: [], fetchedAt: new Date().toISOString() }; }
-  return new Response(renderReadingPage(payload), {
-    headers: {
-      "content-type":    "text/html; charset=utf-8",
-      "cache-control":   "public, max-age=300",
-      "referrer-policy": "strict-origin-when-cross-origin",
-    },
-  });
+  return renderReadingPage(payload);
 }
 
 export function renderReadingPage(payload) {
@@ -180,16 +142,12 @@ export function renderReadingPage(payload) {
     listHtml = parts.join("");
   }
 
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>My Reading &middot; aadhar.sh</title>
-<meta name="description" content="What I've been reading, saved to Curius and mirrored natively here. ${count} link${count === 1 ? "" : "s"}, newest first.">
-<link rel="icon" href="/favicon.ico">
-<style>
-${xpChromeCss(720)}
+  return lunaPage({
+    title: "My Reading · aadhar.sh",
+    path: "My Reading",
+    width: 720,
+    description: `What I've been reading, saved to Curius and mirrored natively here. ${count} link${count === 1 ? "" : "s"}, newest first.`,
+    css: `
 h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:14pt; color:oklch(41.92% 0.0962 250.51); margin:0 0 4px; font-weight:bold; }
 .rd-lede { margin:0 0 12px; color:oklch(38.67% 0 0); font-size:10.5pt; }
 .rd-lede a { color:oklch(42.61% 0.2353 263.74); }
@@ -209,23 +167,15 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:14pt; color
 .rd-empty a { color:oklch(42.61% 0.2353 263.74); }
 footer { text-align:center; font-size:9pt; color:oklch(44.95% 0 0); margin-top:16px; padding-top:12px; border-top:1px solid oklch(86.67% 0.0294 259.59); }
 footer a { color:oklch(42.61% 0.2353 263.74); }
-</style>
-</head>
-<body>
-<div class="window">
-  <div class="title-bar">
-    <span><span class="icon"></span>My Reading</span>
-    <span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/" title="back to aadhar.sh" aria-label="back to aadhar.sh"></a></span>
-  </div>
-  <div class="content">
+`,
+    body: `
     <h1>My Reading</h1>
     <p class="rd-lede">Things I've saved to read, pulled from my <a href="${esc(profile)}" rel="external me" target="_blank">Curius</a>. Newest first.</p>
     <div class="rd-bar">${count} link${count === 1 ? "" : "s"}${fetched ? ` &middot; last synced ${fetched}` : ""} &middot; source: Curius, via AadharshBot</div>
     ${listHtml}
     <footer>&larr; <a href="/">aadhar.sh</a> &middot; saved on <a href="${esc(profile)}" rel="external" target="_blank">Curius</a> &middot; fetched by <a href="/bot">${esc(BOT_NAME)}</a></footer>
-  </div>
-</div>
-<script src="/nav.js" defer></script>
-</body>
-</html>`;
+`,
+    cache: "public, max-age=300",
+    headers: { "referrer-policy": "strict-origin-when-cross-origin" },
+  });
 }

@@ -2,10 +2,10 @@
   // Cloudflare Workers (static assets) config for aadhar.sh.
   // Migrated from the Pages project of the same name. The whole holding/ dir is
   // uploaded as static assets; holding/_worker.js/ is the bundled Worker entry
-  // (excluded from assets by holding/.assetsignore). run_worker_first mirrors
-  // Pages advanced mode (the worker sees every request and forwards static ones
-  // to env.ASSETS via index.js:302). Compression is left to the platform default
-  // for now (no precompression / q11 change in this migration).
+  // (excluded from assets by holding/.assetsignore). run_worker_first is an
+  // allowlist that mirrors holding/_worker.js/index.js: static is the default,
+  // and compute only runs where a route earns it. Compression is left to the
+  // platform default for now (no precompression / q11 change in this migration).
   "name": "aadhar-sh",
   "main": "holding/_worker.js/index.js",
   "compatibility_date": "2026-06-01",
@@ -14,36 +14,30 @@
   "assets": {
     "directory": "holding",
     "binding": "ASSETS",
-    // granular routing (safe cut): worker runs for everything EXCEPT the clearly-
-    // static shell JS + content/SEO files + avif thumbnails, which serve edge-
-    // direct (no worker invocation). negatives win over "/*".
+    // Worker-owned routes only. New static files do not cost invocations unless
+    // they are added here and to the ROUTES/PREFIX tables in index.js.
     //
-    // /images/*.avif: the primary + highest-volume image format (every modern
-    // browser takes the avif <source>; jpg is only the ancient-browser fallback).
-    // avif exists ONLY as thumbnails here — the R2 full-res originals under
-    // /images/full/ are SOOC jpg/HIF, never avif — so this negation can't collide
-    // with servePhotoFromR2. jpg is deliberately NOT excluded: "/images/*.jpg"
-    // would (deep-wildcard) also match "/images/full/*.jpg" and starve the R2
-    // route. The worker's thumbnail proxy was a Pages-era guard against the SPA
-    // 200-html-stamped-immutable poison; Workers' default not_found_handling
-    // returns a real 404, so that vector is gone. The only cost of going edge-
-    // direct is a genuinely-missing avif getting the raw asset 404 (s-maxage=86400,
-    // 24h edge cache) instead of the worker's 30s; acceptable because thumbs are
-    // content-addressed (?v=N) and deploys are atomic (no transient miss of a real
-    // file). manifest/meta/metadata/full stay worker-first (still guarded).
+    // /images/<thumb> stays worker-first for one narrow reason: a real 404 under
+    // /images/* must not inherit the immutable thumbnail cache rule. The old
+    // Pages SPA-fallback content-type sniff is gone; the Worker now only clamps
+    // asset 404 cache-control and passes every non-404 response through.
     "run_worker_first": [
-      "/*",
-      "!/nav.js", "!/lens.js", "!/notepad.js", "!/sw.js",
-      "!/garage/*", "!/lwe/*", "!/cars/*",
-      "!/images/*.avif",
-      // static agent-discovery cards: pure files the worker only passed through.
-      // edge-direct drops a worker invocation per crawler / Web-Bot-Auth verifier
-      // hit (all serve cf-cache-status=HIT already, so no latency change). NB: the
-      // api-catalog + oauth-* + auth.md cards are NOT here — those go through
-      // serveFreshAsset (a live per-request cache-bust guard) and MUST stay worker-first.
-      "!/.well-known/http-message-signatures-directory",
-      "!/.well-known/mcp.json", "!/.well-known/mcp/*", "!/.well-known/agent-skills/*",
-      "!/sitemap.xml", "!/robots.txt", "!/llms.txt", "!/index.md", "!/bimi.svg", "!/README.md"
+      "/", "/index.html", "/favicon.ico",
+      "/auth.md", "/.well-known/api-catalog",
+      "/.well-known/oauth-protected-resource",
+      "/.well-known/oauth-authorization-server",
+      "/agent/*", "/oauth2/*",
+      "/whoareyou", "/whoareyou.json", "/security",
+      "/reading", "/updates", "/updates.json", "/restore",
+      "/lens", "/lens/", "/lens/fetch", "/lens/shot",
+      "/writing", "/writing/*",
+      "/rn", "/rn/tracks", "/rn/admin", "/rn/set",
+      "/bot", "/around", "/around/json",
+      "/images", "/images/", "/images/full", "/images/full/*",
+      "/images/manifest.json", "/images/metadata.json", "/images/meta/*",
+      "/images/*.avif", "/images/*.jpg", "/images/*.jpeg",
+      "/images/*.png", "/images/*.gif",
+      "/images/*.heic", "/images/*.heif", "/images/*.hif"
     ]
   },
   "observability": { "enabled": true },

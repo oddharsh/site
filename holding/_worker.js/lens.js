@@ -1,8 +1,8 @@
 // lens.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
 import { BOT_UA, SIG_AGENT, signRequestForWebBotAuth } from "./lib/botauth.js";
-import { xpChromeCss } from "./lib/chrome.js";
-import { cachedRender } from "./lib/edgecache.js";
+import { cachedRender } from "./lib/cache.js";
+import { lunaPage } from "./lib/chrome.js";
 import { jsonResponse } from "./lib/http.js";
 
 // ── /lens — "the other web" -----------------------------------------------
@@ -28,17 +28,13 @@ export function handleLens(request, env, ctx) {
 }
 
 function renderLensShell() {
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>The Other Web &middot; aadhar.sh</title>
-<meta name="description" content="Paste any URL and see it the way a machine does: raw HTML, headers, JSON-LD and microformats, an LLM-style markdown render, and the site's robots.txt / sitemap / llms.txt — side by side with the human view.">
-<meta name="robots" content="index, nofollow">
-<link rel="icon" href="/favicon.ico">
-<style>
-${xpChromeCss(980)}
+  return lunaPage({
+    title: "The Other Web · aadhar.sh",
+    path: "The Other Web",
+    width: 980,
+    description: "Paste any URL and see it the way a machine does: raw HTML, headers, JSON-LD and microformats, an LLM-style markdown render, and the site's robots.txt / sitemap / llms.txt — side by side with the human view.",
+    robots: "index, nofollow",
+    css: `
 h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color:oklch(41.92% 0.0962 250.51); margin:0 0 2px; font-weight:bold; }
 .lx-lede { margin:0 0 10px; color:oklch(40% 0 0); font-size:10pt; }
 .lx-lede a { color:oklch(42.61% 0.2353 263.74); }
@@ -120,15 +116,8 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 footer { text-align:center; font-size:9pt; color:oklch(45% 0 0); margin-top:14px; padding-top:11px; border-top:1px solid oklch(86.67% 0.0294 259.59); }
 footer a { color:oklch(42.61% 0.2353 263.74); }
 @media (max-width:720px){ .lx-panes{ flex-direction:column; } .lx-panes.is-both .lx-pane{ min-height:280px; } }
-</style>
-</head>
-<body>
-<div class="window">
-  <div class="title-bar">
-    <span><span class="icon"></span>The Other Web</span>
-    <span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/" title="back to aadhar.sh" aria-label="back to aadhar.sh"></a></span>
-  </div>
-  <div class="content">
+`,
+    body: `
     <h1>The Other Web</h1>
     <p class="lx-lede">Every page has a second life as data. Paste a URL to see it the way a crawler, a model, or a link-preview bot does: the markup, the metadata, the machine directives, next to the human read. Fetched server-side, honestly, as <a href="/bot">AadharshBot</a>.</p>
 
@@ -174,16 +163,10 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
 
     <div class="lx-status" id="lx-status"><span>Idle. Nothing is fetched until you ask, and then just once, server-side, with no logging.</span></div>
     <footer>&larr; <a href="/">aadhar.sh</a> &middot; a research toy about how machines read the web &middot; fetched by <a href="/bot">AadharshBot</a></footer>
-  </div>
-</div>
-<script src="/lens.js" defer></script>
-<script src="/nav.js" defer></script>
-</body>
-</html>`;
-  return new Response(html, {
+`,
+    scripts: `<script src="/lens.js" defer></script>`,
+    cache: "public, max-age=60, s-maxage=300",
     headers: {
-      "content-type": "text/html; charset=utf-8",
-      "cache-control": "public, max-age=60, s-maxage=300",
       "x-robots-tag": "noindex",
       // /lens embeds arbitrary sites in the Human view, so it needs a looser
       // policy than the site default (which has no frame-src → falls back to

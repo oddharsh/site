@@ -1,6 +1,7 @@
 // photos.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
 import { THUMB_VERSION } from "./lib/const.js";
+import { swrKV } from "./lib/cache.js";
 import { errorResp, escHtml, jsonResp } from "./lib/http.js";
 
 // ── /images/full/<key> → R2 ─────────────────────────────────────────
@@ -162,44 +163,14 @@ export async function getAltMap(env) {
 }
 
 export async function getImagesManifest(env, ctx) {
-  // two-key stale-while-revalidate: the manifest itself is stored WITHOUT a
-  // TTL (persistent), and a tiny sentinel key carries the 1h freshness TTL.
-  // when the sentinel lapses, the visitor on the hot path gets the stale
-  // manifest immediately and the R2 list() rebuild rides ctx.waitUntil in
-  // the background — nobody pays the rebuild inline except the true first
-  // run (or after `wrangler kv key delete "manifest:images"`, which is
-  // still the documented manual cache-bust and still forces a rebuild).
-  if (env.RN_KV) {
-    let manifest = null, fresh = null;
-    try {
-      [manifest, fresh] = await Promise.all([
-        env.RN_KV.get("manifest:images", "json"),
-        env.RN_KV.get("manifest:images:fresh"),
-      ]);
-    } catch {}
-    if (manifest) {
-      if (!fresh && ctx) {
-        ctx.waitUntil(
-          buildImagesManifest(env)
-            .then(m => m && storeImagesManifest(env, m))
-            .catch(() => {})
-        );
-      }
-      return manifest;
-    }
-  }
-  // no cached manifest at all — build inline (first run / manual bust)
-  const manifest = await buildImagesManifest(env);
-  if (!manifest) return [];
-  if (env.RN_KV && ctx) ctx.waitUntil(storeImagesManifest(env, manifest));
-  return manifest;
-}
-
-export async function storeImagesManifest(env, manifest) {
-  await Promise.all([
-    env.RN_KV.put("manifest:images", JSON.stringify(manifest)),
-    env.RN_KV.put("manifest:images:fresh", "1", { expirationTtl: 3600 }),
-  ]);
+  // two-key stale-while-revalidate via lib/cache.js: the manifest is the
+  // persistent value, and `manifest:images:fresh` carries the 1h freshness TTL.
+  // stale serves instantly; only a true first run / manual bust rebuilds inline.
+  const manifest = await swrKV(env, ctx, "manifest:images", 3600, () => buildImagesManifest(env), {
+    isValid: Array.isArray,
+    shouldStore: (m) => Array.isArray(m) && m.length > 0,
+  });
+  return Array.isArray(manifest) ? manifest : [];
 }
 
 export async function buildImagesManifest(env) {

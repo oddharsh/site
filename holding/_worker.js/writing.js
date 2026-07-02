@@ -1,6 +1,6 @@
 // writing.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
-import { cachedRender } from "./lib/edgecache.js";
+import { cachedRender } from "./lib/cache.js";
 import { escAttr, escHtml } from "./lib/http.js";
 
 // ── /writing — the Notepad view ───────────────────────────────────────────────

@@ -1,7 +1,7 @@
 // whoareyou.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
 import { BOT_UA } from "./lib/botauth.js";
-import { xpChromeCss } from "./lib/chrome.js";
+import { lunaPage } from "./lib/chrome.js";
 import { esc } from "./lib/http.js";
 
 // ── /whoareyou handler ───────────────────────────────────────────────
@@ -205,22 +205,20 @@ export async function handleWhoareyouJson(request) {
 export async function handleWhoareyou(request) {
   const { data, ua, rdap } = await gatherWhoareyou(request);
 
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>System Properties · aadhar.sh/whoareyou</title>
-<meta name="description" content="what one HTTP request to aadhar.sh reveals about you. read-only, never stored.">
-<meta name="robots" content="noindex">
-<style>
+  return lunaPage({
+    title: "System Properties · aadhar.sh/whoareyou",
+    path: "System Properties",
+    width: 720,
+    description: "what one HTTP request to aadhar.sh reveals about you. read-only, never stored.",
+    robots: "noindex",
+    titleClass: "title-text",
+    css: `
 /* ─── /whoareyou, circa 2003 ──────────────────────────────────────────
    matches the holding page chrome: light-blue gradient body, white
    window panel, fake XP title bar, verdana body, trebuchet headings,
    beveled data tables that feel like a Windows properties dialog.
    ────────────────────────────────────────────────────────────────── */
 
-${xpChromeCss(720)}
 /* whoareyou-specific title-bar extras: the title text flexes to fill,
    and the boxed _ □ × controls get a touch more letter-spacing. */
 .title-bar .title-text { flex: 1; padding-left: 4px; }
@@ -352,18 +350,8 @@ footer {
 }
 footer .signature { font-style: italic; margin-top: 4px; }
 footer .signature small { color: oklch(56.93% 0 0); }
-</style>
-</head>
-<body>
-
-<div class="window">
-
-  <div class="title-bar">
-    <span class="title-text"><span class="icon"></span>System Properties</span>
-    <span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/" title="back to aadhar.sh" aria-label="back to aadhar.sh"></a></span>
-  </div>
-
-  <div class="content">
+`,
+    body: `
 
     <h1>System Properties</h1>
     <p class="lede">
@@ -469,17 +457,9 @@ footer .signature small { color: oklch(56.93% 0 0); }
       </p>
     </footer>
 
-  </div>
-</div>
-
-  <script src="/nav.js" defer></script>
-</body>
-</html>`;
-
-  return new Response(html, {
+`,
+    cache: "no-store, must-revalidate",
     headers: {
-      "content-type":    "text/html; charset=utf-8",
-      "cache-control":   "no-store, must-revalidate",
       "x-robots-tag":    "noindex",
       "referrer-policy": "strict-origin-when-cross-origin",
     },

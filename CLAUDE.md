@@ -121,16 +121,16 @@ Photo thumbnails are dual-encoded AVIF + JPG, served via `<picture>`:
 </a>
 ```
 
-**The `?v=N` query is critical.** Cloudflare's edge will cache a 404
-response for 4 hours if any URL gets hit during a deploy race window.
-The `THUMB_VERSION` constant (top of `_worker.js`, currently `18`) is
-appended as `?v=N` to every thumbnail URL in the pre-rendered HTML.
-**Bump it whenever you suspect cache poisoning** — bumping = fresh URLs =
-fresh edge cache lookup = bypass any poisoned 404.
+**The `?v=N` query is cache insurance.** The `THUMB_VERSION` constant
+(`holding/_worker.js/lib/const.js`, currently `19`) is appended as `?v=N`
+to every thumbnail URL in the pre-rendered HTML. Bump it when thumbnails
+are re-encoded or when you need a fresh edge cache key for a stale-looking
+thumbnail.
 
-The worker route at `/images/<stem>.<ext>` also rewrites cache-control
-on 404 responses to `max-age=0, must-revalidate` so future 404s can't
-poison the edge for 4 hours.
+Workers static assets return honest 404s now; the old Pages SPA-fallback
+masquerade is gone. The worker route at `/images/<stem>.<ext>` still clamps
+true 404 responses to `max-age=0, must-revalidate` so a missing thumbnail
+doesn't inherit the immutable `/images/*` cache rule.
 
 ### Worker enhancement (`serveHomepageWithPrerenderedTracks`)
 
@@ -302,10 +302,11 @@ npx wrangler deploy
 
 ## Conventions + gotchas this session learned the hard way
 
-1. **Cloudflare edge caches 404s for 4 hours.** If ANY thumb URL gets a
-   transient 404 during a deploy race, the edge serves that 404 for 4 hours
-   thereafter. Mitigations: `THUMB_VERSION` bump + worker route that rewrites
-   cache-control on non-200 responses.
+1. **Thumbnail 404s must be uncacheable.** Workers static assets no longer
+   return homepage HTML for missing files, but a real miss under `/images/*`
+   can still inherit the immutable cache rule unless the worker clamps it.
+   Mitigations: keep `/images/<thumb>` worker-first and bump `THUMB_VERSION`
+   when you need a fresh cache key.
 
 2. **zsh doesn't word-split unquoted parameters** — bash does. The
    `add-photos.sh` script uses `#!/usr/bin/env bash` so this isn't a problem
@@ -360,11 +361,11 @@ npx wrangler deploy
     variable-refresh-rate displays (ProMotion 24Hz). Toggle it on/off in JS
     around the hover lifecycle.
 
-12. **Cloudflare Pages dedup is content-addressed.** Re-deploying the same
-    bytes shows `Uploaded 0 files (252 already uploaded)` even if the live
-    URL serves a stale 404 — the bytes are in storage, the edge cache is
-    the problem. Diagnose by hitting the URL with a fresh `?cb=$RANDOM`:
-    if THAT returns 200 but `?v=N` returns 404, it's poisoned cache.
+12. **Cloudflare asset uploads are content-addressed.** Re-deploying the
+    same bytes may upload 0 files even when you are trying to change cache
+    behavior. If a thumb looks stale, hit it with a fresh `?cb=$RANDOM`: if
+    that differs from `?v=N`, you are looking at cache state, not missing
+    bytes.
 
 ---
 

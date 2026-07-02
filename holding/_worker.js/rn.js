@@ -1,7 +1,8 @@
 // rn.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
 import { BOT_UA } from "./lib/botauth.js";
-import { xpChromeCss } from "./lib/chrome.js";
+import { deleteSWRKV, swrKV } from "./lib/cache.js";
+import { lunaPage } from "./lib/chrome.js";
 import { esc, jsonResp, timingSafeEqual } from "./lib/http.js";
 
 // ── /rn redirect target ─────────────────────────────────────────────
@@ -89,25 +90,18 @@ export async function handleRnTracks(request, env, ctx) {
 
   // optional bust — drop both the value and its freshness sentinel
   if (env.RN_BUST_SECRET && url.searchParams.get("bust") === env.RN_BUST_SECRET) {
-    await Promise.all([env.RN_KV.delete(cacheKey), env.RN_KV.delete(`${cacheKey}:fresh`)]);
+    await deleteSWRKV(env, cacheKey);
   }
 
   // two-key SWR (same shape as the photo manifest): stale serves instantly,
   // a lapsed sentinel refreshes in the background. only a true cold start
   // (or a bust) pays the 3-tier Spotify scrape inline.
-  const cached = await getTracksSWR(env, ctx, playlistId);
-  if (cached) return jsonResp(cached);
-
-  // fetch + parse
   let payload;
   try {
-    payload = await scrapePlaylistTracks(playlistId, env, ctx);
+    payload = await getTracksSWR(env, ctx, playlistId, { buildOnMiss: true });
   } catch (e) {
     return jsonResp({ error: "scrape failed", message: String(e), tracks: [] }, 502);
   }
-
-  ctx.waitUntil(storeTracks(env, playlistId, payload));
-
   return jsonResp(payload);
 }
 
@@ -117,30 +111,12 @@ export async function handleRnTracks(request, env, ctx) {
 // carries the freshness window. lapsed sentinel → serve stale now, rescrape
 // on ctx.waitUntil. used by both /rn/tracks and the homepage prerender, so
 // whichever gets hit keeps the payload warm.
-export async function getTracksSWR(env, ctx, pid) {
-  const cacheKey = `tracks:${pid}`;
-  let payload = null, fresh = null;
-  try {
-    [payload, fresh] = await Promise.all([
-      env.RN_KV.get(cacheKey, "json"),
-      env.RN_KV.get(`${cacheKey}:fresh`),
-    ]);
-  } catch {}
-  if (payload && !fresh && ctx) {
-    ctx.waitUntil(
-      scrapePlaylistTracks(pid, env, ctx)
-        .then((p) => p && storeTracks(env, pid, p))
-        .catch(() => {})
-    );
-  }
-  return payload;
-}
-
-export async function storeTracks(env, pid, payload) {
-  await Promise.all([
-    env.RN_KV.put(`tracks:${pid}`, JSON.stringify(payload)),
-    env.RN_KV.put(`tracks:${pid}:fresh`, "1", { expirationTtl: RN_TRACKS_TTL }),
-  ]);
+export async function getTracksSWR(env, ctx, pid, opts = {}) {
+  return swrKV(env, ctx, `tracks:${pid}`, RN_TRACKS_TTL, () => scrapePlaylistTracks(pid, env, ctx), {
+    buildOnMiss: opts.buildOnMiss === true,
+    isValid: (p) => p && Array.isArray(p.tracks),
+    shouldStore: (p) => p && Array.isArray(p.tracks) && p.tracks.length > 0,
+  });
 }
 
 export async function scrapePlaylistTracks(playlistId, env, ctx) {
@@ -418,12 +394,14 @@ export async function readParams(request, url) {
 
 // ── tiny period-correct confirmation page ───────────────────────────
 export function setPage(status, title, bodyHtml) {
-  const html = `<!DOCTYPE html><html lang="en"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>aadhar.sh/rn/set/${esc(title)}</title>
-<meta name="robots" content="noindex">
-<style>
-${xpChromeCss(520)}
+  const pageTitle = `aadhar.sh/rn/set/${title}`;
+  return lunaPage({
+    status,
+    title: pageTitle,
+    path: pageTitle,
+    width: 520,
+    robots: "noindex",
+    css: `
   h1 {
     font-family: "Trebuchet MS", Verdana, Geneva, sans-serif; color: oklch(41.92% 0.0962 250.51);
     font-size: 16pt; margin: 0 0 8px;
@@ -432,20 +410,14 @@ ${xpChromeCss(520)}
   a:visited { color: oklch(42.09% 0.1935 328.36); }
   a:hover   { color: oklch(62.80% 0.2577 29.23); }
   code { font-family: "Courier New", Courier, monospace; background: oklch(96.72% 0 0); padding: 0 3px; border: 1px solid oklch(88.22% 0 0); }
-</style></head><body>
-<div class="window">
-  <div class="title-bar">aadhar.sh/rn/set/${esc(title)}</div>
-  <div class="content">
+`,
+    body: `
     <h1>${esc(title)}</h1>
     <p>${bodyHtml}</p>
     <p><small>&larr; <a href="/">aadhar.sh</a></small></p>
-  </div>
-</div><script src="/nav.js" defer></script></body></html>`;
-  return new Response(html, {
-    status,
+`,
+    cache: "no-store",
     headers: {
-      "content-type":  "text/html; charset=utf-8",
-      "cache-control": "no-store",
       "x-robots-tag":  "noindex",
     },
   });

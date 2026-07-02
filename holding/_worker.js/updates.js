@@ -1,6 +1,6 @@
 // updates.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
-import { xpChromeCss } from "./lib/chrome.js";
+import { lunaPage } from "./lib/chrome.js";
 import { esc } from "./lib/http.js";
 
 // ── /updates handler (Windows Update reskin) ────────────────────────
@@ -31,16 +31,13 @@ export async function handleWindowsUpdate(request, env) {
         : state === "error" ? "The update log did not answer just now; it is backed by Cloudflare D1 and this page stays read-only either way."
         : "No updates recorded yet."
       )}</span></li>`;
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Windows Update · aadhar.sh</title>
-<meta name="description" content="What has shipped to this site lately, in a Windows Update reskin. Read-only.">
-<meta name="robots" content="noindex">
-<style>
-${xpChromeCss(620)}
+  return lunaPage({
+    title: "Windows Update · aadhar.sh",
+    path: "Windows Update",
+    width: 620,
+    description: "What has shipped to this site lately, in a Windows Update reskin. Read-only.",
+    robots: "noindex",
+    css: `
 h1{margin:0 0 4px}
 .wu-ok{display:flex;align-items:center;gap:11px;border:1px solid #9cc97f;background:linear-gradient(180deg,#f0f8ea,#e2f1d6);border-radius:4px;padding:11px 13px;margin:0 0 13px}
 .wu-ok .ck{width:34px;height:34px;flex:0 0 34px;border-radius:50%;background:linear-gradient(180deg,#62b043,#3c8f24);display:grid;place-items:center}
@@ -53,15 +50,8 @@ h1{margin:0 0 4px}
 .wu-tag{flex:0 0 92px;font-family:var(--font-mono);font-size:8pt;color:#7a4eb0;background:#f3edfb;border:1px solid #e0d4f3;border-radius:3px;padding:1px 5px;text-align:center}
 .wu-desc{flex:1}
 .wu-foot{font-size:8.5pt;color:#6b7280;border-top:1px solid #e2e8f0;padding-top:8px;margin-top:11px}
-</style>
-</head>
-<body>
-<div class="window">
-  <div class="title-bar">
-    <span class="title-text"><span class="icon"></span>Windows Update</span>
-    <span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/security" title="back to Security Center" aria-label="back to Security Center"></a></span>
-  </div>
-  <div class="content">
+`,
+    body: `
     <h1>Windows Update</h1>
     <div class="wu-ok">
       <span class="ck"><svg viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5 6.5 11.5 12.5 4.5"/></svg></span>
@@ -72,16 +62,13 @@ h1{margin:0 0 4px}
       ${rows}
     </ul>
     <p class="wu-foot">No reboot, no nagging. Each item shipped when the service worker's version bumped; see how that auto-update works in <a href="/security">Security Center</a>, or roll the whole system back through every past build in <a href="/restore">System Restore</a>.</p>
-  </div>
-</div>
-  <script src="/nav.js" defer></script>
-</body>
-</html>`;
-
-  return new Response(html, {
+`,
+    cache: "no-store, must-revalidate",
+    titleClass: "title-text",
+    closeHref: "/security",
+    closeTitle: "back to Security Center",
+    closeLabel: "back to Security Center",
     headers: {
-      "content-type":    "text/html; charset=utf-8",
-      "cache-control":   "no-store, must-revalidate",
       "x-robots-tag":    "noindex",
       "referrer-policy": "strict-origin-when-cross-origin",
     },
@@ -204,16 +191,13 @@ var POINTS = ${JSON.stringify(data)};
     <p class="sr-foot">Backed by <b>Cloudflare D1</b>, with a 7-day Time Travel window underneath for real recovery. See what's shipped in <a href="/updates">Windows Update</a>.</p>`;
   }
 
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>System Restore · aadhar.sh</title>
-<meta name="description" content="Roll the site back through its real deploy history, in a Windows System Restore reskin backed by Cloudflare D1. Read-only.">
-<meta name="robots" content="noindex">
-<style>
-${xpChromeCss(680)}
+  return lunaPage({
+    title: "System Restore · aadhar.sh",
+    path: "System Restore",
+    width: 680,
+    description: "Roll the site back through its real deploy history, in a Windows System Restore reskin backed by Cloudflare D1. Read-only.",
+    robots: "noindex",
+    css: `
 h1{margin:0 0 4px}
 .sr-lede{font-size:9.5pt;color:#4a5568;margin:0 0 12px;line-height:1.5}
 .sr-now{display:flex;align-items:center;gap:11px;border:1px solid #9db8e0;background:linear-gradient(180deg,#eef5fe,#dceafe);border-radius:4px;padding:10px 13px;margin:0 0 13px}
@@ -257,28 +241,18 @@ h1{margin:0 0 4px}
 .sr-pending b{font-family:var(--font-caption);font-size:11pt;color:#7a5c12}
 .sr-pending .sub{font-size:8.5pt;color:#8a7430}
 @media (max-width:560px){.sr-stage{flex-direction:column}.sr-listwrap{flex:none}.sr-list{max-height:170px}}
-</style>
-</head>
-<body>
-<div class="window">
-  <div class="title-bar">
-    <span class="title-text"><span class="icon"></span>System Restore</span>
-    <span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/updates" title="back to Windows Update" aria-label="back to Windows Update"></a></span>
-  </div>
-  <div class="content">
+`,
+    body: `
     <h1>System Restore</h1>
     ${liveBar}
 ${main}
-  </div>
-</div>
-  <script src="/nav.js" defer></script>
-</body>
-</html>`;
-
-  return new Response(html, {
+`,
+    cache: "no-store, must-revalidate",
+    titleClass: "title-text",
+    closeHref: "/updates",
+    closeTitle: "back to Windows Update",
+    closeLabel: "back to Windows Update",
     headers: {
-      "content-type":    "text/html; charset=utf-8",
-      "cache-control":   "no-store, must-revalidate",
       "x-robots-tag":    "noindex",
       "referrer-policy": "strict-origin-when-cross-origin",
     },

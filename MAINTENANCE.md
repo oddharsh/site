@@ -5,7 +5,7 @@ with the exact command and the gotcha that bit me last time. Deep design notes
 and the full conventions list live in [CLAUDE.md](CLAUDE.md); this is the ops sheet.
 
 Three deploy targets:
-- **holding/** (aadhar.sh): a **Cloudflare Worker with static assets** (migrated off Pages 2026-06-30). Config is `wrangler.jsonc` at the repo root: `assets.directory=holding`, `main=holding/_worker.js/index.js`, `run_worker_first:true` (worker sees every request and forwards static to `env.ASSETS`, same as the old advanced mode), `workers_dev:false` (custom domain only). **Deploy: `wrangler deploy` from the repo root.** No git auto-deploy (Pages git sync retired); a `git push` is version control only. Verify after every deploy with `node verify-routes.mjs https://aadhar.sh`. Bindings live in `wrangler.jsonc` (KV/R2/D1/DO); secrets via `wrangler secret put` (`RN_SIGNING_KEY_JWK`, `BROWSER_RENDER_TOKEN`, `RN_BUST_SECRET`).
+- **holding/** (aadhar.sh): a **Cloudflare Worker with static assets** (migrated off Pages 2026-06-30). Config is `wrangler.jsonc` at the repo root: `assets.directory=holding`, `main=holding/_worker.js/index.js`, `assets.run_worker_first` is an allowlist that mirrors the `ROUTES`/`PREFIX` tables in `index.js` (static is the default), `workers_dev:false` (custom domain only). **Deploy: `npm run deploy` from the repo root.** No git auto-deploy (Pages git sync retired); a `git push` is version control only. Verify after every deploy with `node verify-routes.mjs https://aadhar.sh`. Bindings live in `wrangler.jsonc` (KV/R2/D1/DO); secrets via `wrangler secret put` (`RN_SIGNING_KEY_JWK`, `BROWSER_RENDER_TOKEN`, `RN_BUST_SECRET`).
 - **serendipity/** (separate Worker, aadhar.sh/serendipity): `cd serendipity && wrangler deploy`.
 - **cal/** (coffee booker): source-complete, NOT deployed. Needs secrets first (see [cal/README.md](cal/README.md)).
 
@@ -14,7 +14,7 @@ Three deploy targets:
 Key facts (don't hardcode these elsewhere, they drift):
 - RN_KV namespace id: `3cb8a107c58e47dc9244e75b33401f36`
 - R2 bucket: `aadhar-photos` (SOOC originals + full-res JPGs)
-- `THUMB_VERSION` lives at the top of `holding/_worker.js` (the `?v=N` on every thumbnail).
+- `THUMB_VERSION` lives in `holding/_worker.js/lib/const.js` (the `?v=N` on every thumbnail).
 - `CACHE_VERSION` lives at `holding/sw.js` line ~28 (the service-worker cache key).
 - Canonical photo source folder: `/Users/aadharsh/Downloads/to post (from ssd)/`. Privacy rule: nothing else from elsewhere on disk feeds the pipeline.
 
@@ -25,8 +25,9 @@ Key facts (don't hardcode these elsewhere, they drift):
 `holding/_worker.js/` is a **directory** bundled by Cloudflare at deploy. The
 dispatcher lives in `index.js`; each route's handler lives in a per-section
 module (search the module name to find it). `lib/` holds shared helpers.
-Static sections (`/garage/*`, `/lwe/*`, `/cars/*`, photos, `.well-known` docs)
-are served straight from disk and are already URL=folder.
+Static sections (`/garage/*`, `/lwe/*`, `/cars/*`, shell JS, most discovery
+files) are served straight from disk. Worker-owned routes are enumerated in
+`index.js`; keep that table and `assets.run_worker_first` in sync.
 
 | URL | Handler / mechanism | module (`holding/_worker.js/`) |
 |---|---|---|
@@ -47,12 +48,13 @@ are served straight from disk and are already URL=folder.
 | `/bot` | `handleBotPage` | `bot.js` |
 | `/around`, `/around/json` | `handleAround` / `handleAroundJson` (AadharshBot crawl) | `around.js` |
 | `/images`, `/images/full` | 301 -> trailing slash | `index.js` |
-| `/images/*` (listings, manifest, metadata, R2 originals, thumb guard) | `handleImages*` / `servePhotoFromR2` + inline metadata in `index.js` | `photos.js` (+ `index.js`) |
+| `/images/*` selected routes (listings, manifest, metadata, R2 originals, thumb 404 clamp) | `handleImages*` / `servePhotoFromR2` + asset 404 clamp in `index.js` | `photos.js` (+ `index.js`) |
 
 The shared toolbox: `lib/const.js` (THUMB_VERSION, CANONICAL_HOST), `lib/http.js`
 (esc, json/error responses, markdown negotiation), `lib/security.js` (security +
-discovery headers), `lib/chrome.js` (the XP window CSS), `lib/botauth.js`
-(AadharshBot signed fetch), `lib/assets.js` (`serveFreshAsset`).
+discovery headers), `lib/chrome.js` (the XP window CSS + `lunaPage` shell),
+`lib/cache.js` (`swrKV` + `cachedRender`), `lib/botauth.js` (AadharshBot signed
+fetch), `lib/assets.js` (`serveFreshAsset` + asset 404 clamp).
 
 ### Bindings the worker reads (`env.*`)
 
@@ -112,7 +114,7 @@ Writes `holding/images/metadata.json` (keyed by stem) + per-photo `holding/image
 ### Re-encode ALL thumbnails (e.g. a new resolution/quality)
 ```bash
 ./holding/scripts/reencode-thumbnails.sh           # re-encodes every grid thumb as pre-cropped center squares
-# bump THUMB_VERSION in holding/_worker.js, then deploy
+# bump THUMB_VERSION in holding/_worker.js/lib/const.js, then deploy
 ```
 `SQ_SM` (mobile tier) must match `THUMB_SMALL_PX` in `_worker.js` (the `-<N>.avif` suffix). add-photos.sh mirrors this script's two encode paths; keep them in sync.
 
@@ -173,7 +175,7 @@ wrangler kv key delete --namespace-id="$NS" "tracks:<id>:fresh" --remote
 ```
 
 ### Bump THUMB_VERSION
-Edit `const THUMB_VERSION` at the top of `holding/_worker.js`, deploy. Do this when you re-encode thumbnails, or when you suspect edge cache poisoning (Cloudflare caches a transient 404/HTML at a thumb URL for up to 4h; a fresh `?v=N` is a fresh edge lookup that routes around it).
+Edit `const THUMB_VERSION` in `holding/_worker.js/lib/const.js`, deploy. Do this when you re-encode thumbnails, or when you need a fresh edge cache key for a stale-looking thumbnail. Workers static assets return honest 404s now; the thumbnail worker route still clamps true 404s to `max-age=0` so misses do not inherit `/images/*` immutable caching.
 
 ### Bump CACHE_VERSION (service worker)
 Edit `const CACHE_VERSION` in `holding/sw.js` (line ~28), deploy. **Required on every change to `nav.js` or `notepad.js`** (they are SWR-cached by the SW), and on any SW behavior change. The bump sweeps old caches in the `activate` event.
@@ -208,7 +210,7 @@ curl -s "https://aadhar.sh/images/manifest.json" | jq length          # photo co
 
 ## Gotchas that have bitten me
 
-- **Cloudflare edge caches 404s for ~4 hours.** A transient miss at a thumb URL during a deploy gets pinned. Mitigations: `THUMB_VERSION` bump (fresh URLs) + the worker rewrites cache-control on non-image responses to uncacheable.
+- **Thumbnail 404s must be uncacheable.** Workers static assets no longer return homepage HTML for missing files, but a real miss under `/images/*` can still inherit the immutable cache rule unless the worker clamps it. Keep the thumbnail route worker-first and bump `THUMB_VERSION` when you need a fresh cache key.
 - **zsh eats `${var}:something`.** Brace-quote KV key names with colons (`"tracks:${OLD}:fresh"`), and use `${=flag}` if you need word-splitting in ad-hoc snippets (the scripts use `#!/usr/bin/env bash` so they are safe internally).
 - **`jpegtran` / mozjpeg strip EXIF.** Rotate losslessly with `jpegtran -copy none -rotate N` *before* recompressing, and send its binary stdout to a file (`2>/dev/null > out.jpg`), not through a pipe that could mix in stderr.
 - **Deploy = `npm run deploy` from the repo root** (or a `git push` to main once Workers Builds runs the same build + deploy commands). It stages `.build/` via `build.mjs`, then `wrangler deploy -c .build/wrangler.jsonc`. A bare `wrangler deploy` still works but ships UNMINIFIED shells — graceful fallback, not the front door. After deploying, run `node verify-routes.mjs https://aadhar.sh`.

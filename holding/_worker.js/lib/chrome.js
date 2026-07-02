@@ -1,5 +1,7 @@
 // lib/chrome.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
+import { escAttr, escHtml } from "./http.js";
+
 // shared XP window chrome for the server-rendered pages (/around, /bot,
 // /whoareyou, /rn/set). these four used to each carry their own copy of
 // the body gradient + window panel + title-bar + traffic-cone icon +
@@ -158,5 +160,70 @@ export function xpChromeCss(maxWidth) {
   .np-window .np-text{flex:1 1 auto;min-height:0}
   .wrap{display:flex;flex-direction:column;padding-bottom:0 !important}.wrap>.window{flex:0 1 auto;max-height:100%}
   body::after{content:"";position:fixed;left:0;right:0;bottom:0;height:30px;z-index:1;background:linear-gradient(180deg,oklch(67% 0.15 256) 0%,oklch(58% 0.19 257) 4%,oklch(51% 0.20 258) 9%,oklch(49% 0.20 258) 50%,oklch(46% 0.20 259) 92%,oklch(40% 0.18 260) 100%)}
-`;
+	`;
+}
+
+export function lunaPage({
+  title,
+  path,
+  width = 720,
+  description = "",
+  robots = "",
+  css = "",
+  head = "",
+  body = "",
+  status = 200,
+  cache = "public, max-age=300, s-maxage=300",
+  headers = {},
+  titleClass = "",
+  closeHref = "/",
+  closeTitle = "back to aadhar.sh",
+  closeLabel = closeTitle,
+  scripts = "",
+}) {
+  const documentTitle = title || path || "aadhar.sh";
+  const windowTitle = path || title || "aadhar.sh";
+  const classAttr = titleClass ? ` class="${escAttr(titleClass)}"` : "";
+  const metaDescription = description
+    ? `\n<meta name="description" content="${escAttr(description)}">`
+    : "";
+  const metaRobots = robots
+    ? `\n<meta name="robots" content="${escAttr(robots)}">`
+    : "";
+  const scriptHtml = `${scripts || ""}\n<script src="/nav.js" defer></script>`;
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escHtml(documentTitle)}</title>${metaDescription}${metaRobots}
+<link rel="icon" href="/favicon.ico">
+${head || ""}<style>
+${xpChromeCss(width)}
+${css || ""}
+</style>
+</head>
+<body>
+<div class="window">
+  <div class="title-bar">
+    <span${classAttr}><span class="icon"></span>${escHtml(windowTitle)}</span>
+    <span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="${escAttr(closeHref)}" title="${escAttr(closeTitle)}" aria-label="${escAttr(closeLabel)}"></a></span>
+  </div>
+  <div class="content">
+${body}
+  </div>
+</div>
+${scriptHtml}
+</body>
+</html>`;
+
+  return new Response(html, {
+    status,
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": cache,
+      ...headers,
+    },
+  });
 }
