@@ -1,11 +1,12 @@
-// build.mjs — the site's ONE build step: a deploy-time transform, not an authoring step.
+// build.mjs: the site's one build step, and it runs only at deploy.
 //
-// Authoring stays buildless: everything in holding/ is committed readable and is the
-// source of truth. This script stages a copy under .build/ and minifies ONLY the four
-// shell JS files (the assets every page loads), leaving index.html, all garage/ + lwe/
-// HTML, images, _headers, and the worker modules byte-identical. Each minified shell
-// keeps a pointer to its readable twin (/<name>.src.js, deployed alongside) so the
-// View Source culture survives minification.
+// Authoring stays buildless: everything in holding/ is committed readable and is
+// the source of truth. This script stages a copy under .build/ and minifies
+// exactly four shell scripts (the assets every page loads); index.html, the
+// garage/ and lwe/ HTML, images, _headers, and the worker modules ship
+// byte-identical to git. Each minified shell opens with a pointer to its
+// readable twin (/<name>.src.js, deployed alongside), because View Source is
+// part of the product and minification must not cost it.
 //
 //   node build.mjs                                   # stage .build/
 //   npm run deploy                                   # build + wrangler deploy -c .build/wrangler.jsonc

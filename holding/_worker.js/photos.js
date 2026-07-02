@@ -27,12 +27,12 @@ export async function servePhotoFromR2(request, env, ctx) {
   const ifNoneMatch = request.headers.get("if-none-match");
   const range       = request.headers.get("range");
 
-  // edge-cache full (non-range, non-conditional) GETs in caches.default, so a
-  // repeat view of a multi-MB original is served from the colo instead of a
-  // fresh R2 round-trip. originals are content-addressed + immutable, so there
-  // is zero staleness risk. range + conditional requests bypass this: they need
-  // R2's range / onlyIf handling and must not populate the full-body entry.
-  // x-photo-cache: hit|miss makes the layer observable (and was the gate check).
+  // caches.default holds full GETs of the originals, so a repeat view serves
+  // from the colo instead of re-pulling a 10MB object from R2. Content-addressed
+  // and immutable, so staleness cannot exist. Range and conditional requests
+  // bypass the cache because they need R2's range/onlyIf handling and must not
+  // populate a full-body entry. x-photo-cache: hit|miss proved this layer works
+  // and keeps proving it on every request.
   const cacheable = request.method === "GET" && !range && !ifNoneMatch;
   const cache = caches.default;
   if (cacheable) {

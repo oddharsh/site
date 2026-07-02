@@ -238,12 +238,12 @@ export async function scrapePlaylistTracks(playlistId, env, ctx) {
 // (parse error OR missing both visualIdentity and artists), retry once
 // with cacheTtl: 0 + a cache-busting query param to force a fresh fetch.
 export async function scrapeSpotifyEmbed(kindAndId) {
-  // the PLAYLIST embed is the one upstream document that actually changes (tracks
-  // get added/removed); the 24h edge cache below meant every SWR rebuild re-read a
-  // day-old listing, so a new track could take a full day to appear no matter how
-  // often the rebuild ran. playlist fetches now always bypass the CF cache — they
-  // only happen on sentinel-lapse rebuilds (~1/hour), so upstream load is unchanged.
-  // track + artist embeds are near-immutable and keep the 24h cache.
+  // The playlist embed is the one upstream document that changes, and the 24h
+  // edge cache below once fed every rebuild a day-old listing (a new track took
+  // a day to appear no matter how often the sentinel lapsed). Playlist fetches
+  // now always bypass the CF cache; they only fire on rebuilds (~1/hour), so
+  // Spotify sees no extra load. Track and artist embeds are near-immutable and
+  // keep the 24h cache.
   const isPlaylist = kindAndId.startsWith("playlist/");
   const tryOnce = async (bustCache) => {
     const fresh = bustCache || isPlaylist;
@@ -254,12 +254,9 @@ export async function scrapeSpotifyEmbed(kindAndId) {
         "accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "accept-language": "en-US,en;q=0.9",
       },
-      // bound the embed fetch to 5s. scrapePlaylistTracks fans out to dozens of
-      // these (playlist + N tracks + M artists, all Promise.all); without a
-      // deadline a single stuck embed hangs its branch indefinitely. on timeout
-      // this throws, degrading to the same empty-entity path any embed failure
-      // already takes (callers catch: rn.js getTracksSWR .catch, per-track/artist
-      // try/catch). the last unbounded outbound path on the site.
+      // 5s deadline. scrapePlaylistTracks fans out to dozens of these embeds in
+      // Promise.all, and one stuck fetch used to hang its whole branch. A timeout
+      // throws into the same empty-entity path any embed failure already takes.
       signal: AbortSignal.timeout(5000),
       cf: fresh
         ? { cacheTtl: 0, cacheEverything: false }     // bypass CF cache (retry + every playlist fetch)

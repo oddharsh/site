@@ -75,11 +75,9 @@ export async function runAround(env) {
   const results = await Promise.all(NEIGHBORS.map(async ({ name, url }) => {
     const t0 = Date.now();
     try {
-      // bound each neighbor to 4s (connect + TTFB + the 200KB body read).
-      // signedFetch forwards opts.signal (botauth.js:45); on timeout it aborts
-      // into the catch below as an {error} row instead of a hung neighbor
-      // stalling the whole Promise.all. body cap alone (200KB) didn't bound
-      // a slow/tar-pit connection.
+      // 4s deadline per neighbor: the 200KB body cap never bounded a tar-pit
+      // connection, so one hung homepage could stall the whole Promise.all.
+      // On timeout the catch below records an {error} row and the crawl moves on.
       const res = await signedFetch(url, env, { signal: AbortSignal.timeout(4000) });
       // some sites return 100MB+ — cap the body we read.
       const reader = res.body?.getReader();

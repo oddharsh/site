@@ -1,21 +1,17 @@
-// sw.js — aadhar.sh service worker.
+// sw.js: the service worker. Repeat visits should cost nothing for bytes that
+// cannot change, and nothing stale for bytes that can.
 //
-// goal: make repeat visits instant for the things that don't change often
-// (images, /llms.txt, /sitemap.xml, /robots.txt) while keeping HTML and
-// dynamic worker endpoints (/rn, /rn/tracks, /around, /whoareyou, /bot)
-// honest — always go to the network for those so a content update lands.
+// Three strategies, chosen per URL class:
+//   - cache-first, NO background revalidate: /images/* thumbnails. They are
+//     content-addressed behind ?v=N, so a refetch can never observe new bytes;
+//     revalidating them would be a pure redundant disk write per view.
+//   - stale-while-revalidate: the shell scripts (nav.js, notepad.js, lens.js)
+//     and the small discovery files. Stale paints now, fresh lands for next time.
+//   - network-only: HTML and every dynamic endpoint, so an update is never
+//     hidden behind a cached copy.
 //
-// caching strategies used:
-//   - cache-first (with background revalidate): /img/*
-//     thumbnails + full-res photos. immutable in practice, but we still
-//     refresh in the background so renamed files surface eventually.
-//   - stale-while-revalidate: /llms.txt, /sitemap.xml, /robots.txt,
-//     /.well-known/http-message-signatures-directory
-//     small static files. show stale instantly, refresh in background.
-//   - network-only: everything else (html, json apis, /rn/*, /around/*).
-//
-// updating the SW: bump CACHE_VERSION below. on next page load the new
-// SW installs, the old caches get cleaned up in `activate`.
+// Updating: bump CACHE_VERSION (bump-version.sh does this plus the D1 checkpoint);
+// the next activate sweeps every old cache.
 
 // bump on path renames or significant behavioral changes; old SW caches
 // get swept in the next `activate` event. v6 sweeps the v5 webp+jpg

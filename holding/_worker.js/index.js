@@ -1,6 +1,7 @@
-// _worker.js/index.js — request dispatcher + entry. The per-route handlers and
-// shared helpers live in sibling modules; wrangler/Cloudflare bundle this
-// directory at deploy (no build step). See MAINTENANCE.md for the route map.
+// _worker.js/index.js: the dispatcher. Handlers live in sibling modules;
+// wrangler bundles this directory at deploy (its build, not ours). The ROUTES
+// and PREFIX tables below mirror wrangler.jsonc's allowlist one-to-one; keep
+// them in sync or a route silently goes static. Map in MAINTENANCE.md.
 
 import { handleAgentAuthClaim, handleAgentAuthRegister, handleAgentAuthRevoke, handleAgentAuthToken } from "./agent.js";
 import { handleAround, handleAroundJson } from "./around.js";
@@ -38,11 +39,10 @@ export default {
       });
     }
 
-    // Workers Logs (observability): one compact structured line per request —
-    // path / method / status / ms / country / bot — queryable + filterable in the
-    // dashboard once observability is enabled on the Pages project. lean and fully
-    // strippable: delete this wrapper (keep `return withSecurityHeaders(await
-    // route(...))`) to revert. short keys keep each event tiny.
+    // Workers Logs: one structured line per worker-owned request (path, method,
+    // status, ms, country, bot), filterable in the dashboard. Edge-direct traffic
+    // never reaches this code, so it never logs. Strippable: delete the wrapper,
+    // keep `return withSecurityHeaders(await route(...))`.
     const t0 = Date.now();
     const response = await route(request, env, ctx);
     try {

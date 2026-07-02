@@ -1,12 +1,13 @@
-// lib/cache.js — the Worker-side caching kit.
+// lib/cache.js: the worker's caching kit, one primitive surface where four
+// hand-rolled dialects used to drift apart.
 //
-// Two cache shapes live here:
-//   - swrKV: persistent KV value + tiny ":fresh" TTL sentinel. Stale values serve
-//     immediately while the rebuild rides ctx.waitUntil; true cold misses build
-//     inline. Callers provide validity/storage guards so a transient empty rebuild
-//     cannot wipe a good stale value.
-//   - cachedRender: caches.default wrapper for worker-rendered shells whose bytes
-//     are static-shaped.
+//   swrKV: a persistent KV value plus a tiny ":fresh" TTL sentinel. Stale serves
+//   instantly, the rebuild rides ctx.waitUntil, and only a true cold miss builds
+//   inline. Callers pass validity guards because a transient empty rebuild must
+//   never wipe a good stale value; two of the four old copies allowed exactly that.
+//
+//   cachedRender: caches.default for rendered shells whose bytes are static-shaped,
+//   so the s-maxage a route declares finally means something on worker output.
 
 export async function swrKV(env, ctx, key, ttl, buildFn, opts = {}) {
   const kv = env && env.RN_KV;
@@ -68,16 +69,15 @@ export async function deleteSWRKV(env, key, opts = {}) {
   ]);
 }
 
-// edge-render cache: a small caches.default layer for static-shaped
-// worker-rendered routes (same pattern proven by servePhotoFromR2 in photos.js).
-//
-// Contract:
-//   - the EDGE TTL comes from the response's own cache-control (caches.default
-//     honors s-maxage, else max-age) — no header rewriting.
-//   - cache.put ONLY on status 200 — a transient 404/500 must never get pinned.
-//   - the key is a normalized URL (path only by default) so query-string variants
-//     of a query-independent shell share one entry.
-//   - x-edge-cache: hit|miss makes the layer observable from curl.
+// Contract, in the order it saves you:
+//   - the edge TTL is the response's own cache-control (caches.default honors
+//     s-maxage, else max-age); nothing rewrites headers, so browsers see exactly
+//     what the route declared.
+//   - cache.put fires only on status 200, because a pinned transient 404 is the
+//     poison class this site has already paid for once.
+//   - the key normalizes to a path, so query variants of a query-independent
+//     shell share one entry.
+//   - x-edge-cache: hit|miss makes every request auditable from curl.
 export async function cachedRender(request, ctx, renderFn, keyPath) {
   const url = new URL(request.url);
   const key = new Request(url.origin + (keyPath || url.pathname), { method: "GET" });

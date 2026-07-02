@@ -163,6 +163,11 @@ export function xpChromeCss(maxWidth) {
 	`;
 }
 
+// lunaPage: the one place a worker-rendered page becomes a Luna window. Nine
+// handlers hand it {title, body, css, cache} and it owns everything they used to
+// hand-assemble: doctype, chrome CSS (xpChromeCss, once), title bar with the
+// path as its caption, caption controls, security posture, nav.js include.
+// When the window chrome changes, this function changes and nine pages follow.
 export function lunaPage({
   title,
   path,

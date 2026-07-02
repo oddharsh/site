@@ -1299,13 +1299,11 @@
     });
   }
 
-  // ── back/forward + close-to-home + a working maximize, on the page window ──
-  // additive and site-wide from the shared shell; no per-page markup change.
-  // history nav uses history.back()/forward() so it rides the browser's bfcache
-  // (instant, no white flash); the homepage is no-cache-not-no-store precisely to
-  // stay bfcache-eligible, and this shell already leaned on that for back/forward.
-  // maximize is an in-page state toggle (no navigation, so no view transition), and
-  // the frame's ResizeObserver (mountScrollbar) re-fits the custom scrollbar for free.
+  // ── back/forward, close-to-home, and a real maximize, injected site-wide ──
+  // History buttons call history.back()/forward() so every hop rides bfcache:
+  // instant, no white flash (the homepage stays no-cache, never no-store, for
+  // exactly this). Maximize toggles in-page state, so no navigation and no view
+  // transition; the frame's ResizeObserver re-fits the scrollbar for free.
   function initWindowControls() {
     var win = D.querySelector("body > .window, body > .np-window");
     if (!win) return;

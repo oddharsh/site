@@ -1,9 +1,11 @@
-// lib/assets.js — extracted from the worker (no-build reorg). Bundled by
-// wrangler/Cloudflare at deploy; not served (inside _worker.js/).
-// read a bundled static asset bypassing the read-through asset cache (a unique
-// query string forces a cache miss), then re-emit it under the canonical URL
-// with the given content-type + a short, deploy-purgeable edge cache. used for
-// the agent-discovery docs whose canonical URL a long Cache-Control had pinned.
+// lib/assets.js: the two ways this worker hands out a static file when the
+// default asset path would lie.
+//
+// serveFreshAsset: fetch the asset under a unique query (which busts the
+// read-through asset cache), then re-emit it at the canonical URL with an honest
+// content-type and a short edge TTL. Exists because a long Cache-Control once
+// pinned a stale agent-discovery doc at its canonical URL while every ?query
+// variant served fresh.
 export async function serveFreshAsset(request, env, contentType) {
   const u = new URL(request.url);
   u.searchParams.set("__r", Date.now().toString(36));
@@ -14,6 +16,10 @@ export async function serveFreshAsset(request, env, contentType) {
   return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
 }
 
+// serveAssetWith404Clamp: pass real assets through untouched; clamp only a 404
+// to max-age=0, because a miss under /images/* would otherwise inherit the
+// 1-year immutable rule and pin itself at the edge. This one clamp is all that
+// survives of the Pages-era content sniffing; Workers 404s are honest now.
 export async function serveAssetWith404Clamp(request, env, opts = {}) {
   const res = await env.ASSETS.fetch(request);
   if (res.status === 404) {
