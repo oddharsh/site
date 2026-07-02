@@ -6,6 +6,7 @@
 import { handleAgentAuthClaim, handleAgentAuthRegister, handleAgentAuthRevoke, handleAgentAuthToken } from "./agent.js";
 import { handleAround, handleAroundJson } from "./around.js";
 import { handleBotPage } from "./bot.js";
+import { handleHitSvg } from "./counter.js";
 import { homepageHeadResponse, serveHomepageWithPrerenderedTracks, serveMarkdown } from "./home.js";
 import { handleLens, handleLensFetch, handleLensShot } from "./lens.js";
 import { serveAssetWith404Clamp, serveFreshAsset } from "./lib/assets.js";
@@ -74,6 +75,8 @@ const ROUTES = new Map([
   ["/agent/auth/claim", handleAgentAuthClaim],
   ["/oauth2/token", handleAgentAuthToken],
   ["/oauth2/revoke", handleAgentAuthRevoke],
+
+  ["/hit.svg", handleHitSvg],
 
   ["/whoareyou", handleWhoareyou],
   ["/whoareyou.json", handleWhoareyouJson],

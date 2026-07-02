@@ -191,7 +191,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
 <script type="speculationrules">
 {
   "prerender": [
-    { "where": { "and": [ { "href_matches": "/*" }, { "not": { "href_matches": "/" } }, { "not": { "href_matches": "/around*" } }, { "not": { "href_matches": "/whoareyou*" } } ] }, "eagerness": "moderate" }
+    { "where": { "and": [ { "href_matches": "/*" }, { "not": { "href_matches": "/around*" } }, { "not": { "href_matches": "/whoareyou*" } } ] }, "eagerness": "moderate" }
   ],
   "prefetch": [
     { "where": { "and": [ { "or": [ { "href_matches": "/garage/*" }, { "href_matches": "/lwe/*" } ] }, { "not": { "href_matches": "/lwe/ask*" } } ] }, "eagerness": "eager" }

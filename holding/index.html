@@ -787,20 +787,17 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
 
   .photos a:hover                   { border-color: oklch(41.92% 0.13 250.51); border-color: oklch(from var(--photo-frame) calc(l - 0.19) calc(c + 0.07) h); }
 
-  .counter                          { color: oklch(86.52% 0.22 90.38); }
 }
 
-/* visited-page counter joke — pure decoration */
+/* visited-page counter joke — pure decoration. the digits arrive as /hit.svg
+   (transparent SVG text); this rule paints the pill AROUND the image so the
+   skin stays page CSS and the image stays ~300B. */
 .counter {
   display: inline-block;
   background: oklch(21.78% 0 0);
-  color: oklch(86.52% 0.1768 90.38);
-  font-family: var(--font-mono);
-  font-size: 9pt;
-  font-weight: bold;
   padding: 1px 6px;
   border: 1px solid oklch(44.95% 0 0);
-  letter-spacing: 0.1em;
+  vertical-align: text-bottom;
 }
   /* standard scrollbar tint (Chrome + Safari 26 + Firefox): Luna-blue thumb,
      pale track. the garage/scroll demo styles its own element separately. */
@@ -1009,7 +1006,7 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
 
     <!--
       photo pool — worker pre-renders 12 random slots on every request
-      (cache-control: no-store on /, so each visit re-rolls). the script
+      (cache-control: private,no-cache on /, so each visit re-rolls). the script
       below is defense-in-depth, mirroring the now-playing fallback: if SSR
       did NOT fill the slots for ANY reason (worker down, an edge-cached
       static copy of this template, KV/R2 hiccup), the empty <picture> slots
@@ -1198,7 +1195,10 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
            has every link. -->
       <p>
         Last modified <time datetime="2026-06-07">June 7, 2026</time>
-        &middot; You are visitor <span class="counter">000042</span>
+        <!-- the counter is an IMAGE, as 2006 intended: the count never enters this
+             document, so a homepage GET is pure (prerender-safe, HEAD-immune) and
+             only the ~300B SVG carries no-store. see counter.js handleHitSvg. -->
+        &middot; You are visitor <img class="counter" src="/hit.svg" width="52" height="12" alt="visit counter">
       </p>
       <p class="signature">
         <small>&copy; 2026 Aadharsh Pannirselvam &middot; Best viewed in any browser made since 2001.</small>
@@ -1251,11 +1251,13 @@ if ("serviceWorker" in navigator) {
   Speculation Rules: McMaster-Carr-style — prerender EVERY internal page,
   eagerly, so navigations activate an already-built page with no network and
   no loading bar. a document rule matches all same-origin links on the page,
-  minus three that genuinely can't be prerendered:
-    /          — no-store; re-randomizes photos + ticks the counter per visit
+  minus two that genuinely can't be prerendered:
     /around    — a live crawl; prerendering would fire crawls on page load
     /whoareyou — per-request fingerprint must reflect the real click, not a
                  speculative prerender request
+  the homepage ITSELF is prerender-safe now: the counter left the document
+  (/hit.svg peeks on Sec-Purpose and ticks via the activation beacon below),
+  so a homepage GET has no side effects and a speculative grid draw is fine.
   cross-origin links (Twitter, Spotify, ENS, …) are skipped automatically.
   Chromium-only; other engines ignore the block. "moderate" prerenders on
   hover / pointerdown (not on load), so visitors who never click /garage or
@@ -1270,7 +1272,6 @@ if ("serviceWorker" in navigator) {
       "where": {
         "and": [
           { "href_matches": "/*" },
-          { "not": { "href_matches": "/" } },
           { "not": { "href_matches": "/around*" } },
           { "not": { "href_matches": "/whoareyou*" } },
           { "not": { "href_matches": "/rn*" } },
@@ -1295,6 +1296,11 @@ if ("serviceWorker" in navigator) {
   ]
 }
 </script>
+<!-- prerender honesty: a prerendered visit's /hit.svg fetch carried Sec-Purpose
+     and only PEEKED. this beacon ticks the counter exactly once, at activation,
+     which is the moment the visit becomes real. non-prerendered loads skip it
+     (document.prerendering is falsy) because their image fetch already ticked. -->
+<script>document.prerendering&&addEventListener("prerenderingchange",function(){fetch("/hit.svg?tick=1")},{once:true});</script>
 
     <!--
       NB: this script block lives at the END of the body (it used to sit
@@ -1308,7 +1314,7 @@ if ("serviceWorker" in navigator) {
       thumbnail dimensions, and EXIF (camera/exposure/date/film recipe)
       for photos; album art for track rows; profile photo for artist
       links. EXIF is lazy-fetched per photo from /images/meta/&lt;stem&gt;.json
-      on first hover rather than inlined per-slot — keeps the no-store
+      on first hover rather than inlined per-slot — keeps the uncacheable
       homepage lean for the majority who never hover; the histogram is computed
       client-side from the thumbnail, not stored. cursor-
       follow positioning is the single bit of JS we couldn't replace with
@@ -1449,7 +1455,7 @@ if ("serviceWorker" in navigator) {
         return { l: norm(l), r: norm(r), g: norm(g), b: norm(b) };
       };
       const histFor = (stem, img) => histCache[stem] || (histCache[stem] = computeHistogram(img)) || null;
-      // EXIF is NOT inlined on the no-store homepage, and not shipped as one big
+      // EXIF is NOT inlined on the uncacheable homepage, and not shipped as one big
       // index either — it's fetched PER PHOTO on hover from /images/meta/<stem>.json
       // (tiny, immutable, content-addressed → edge + browser cached forever, busted
       // by ?mv). so a visitor only pulls EXIF for the handful of photos they actually

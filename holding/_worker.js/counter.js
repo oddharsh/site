@@ -1,4 +1,5 @@
-// counter.js — the homepage visit counter, now an in-house Durable Object.
+// counter.js — the homepage visit counter: an in-house Durable Object, rendered
+// as /hit.svg so the homepage document itself never carries the count.
 //
 // Migrated off cf-garage's cross-script Counter (Pages couldn't host DOs; Workers
 // can). Same wire protocol home.js already speaks: GET https://do/ increments and
@@ -37,4 +38,49 @@ export class Counter {
     await this.state.storage.put("n", n);
     return Response.json({ n });
   }
+}
+
+// UAs that read the count without advancing it (mirrors the old home.js gate).
+const PEEK_UA = /bot|crawl|spider|slurp|crawler|bingpreview|facebookexternalhit|embedly|slackbot|whatsapp|telegrambot|discordbot|redditbot|petalbot|gptbot|claudebot|ccbot|perplexity|bytespider|google-extended/i;
+
+// ── GET /hit.svg — the counter as an image, 2006's own idiom ────────────────
+// The count leaves the homepage document so every homepage GET is pure: HEAD,
+// bots, and Sec-Purpose speculative loads peek; a real visitor's <img> fetch
+// ticks. Prerendered visits tick exactly once via the ?tick=1 activation beacon
+// (their image fetch carried Sec-Purpose and peeked). no-store rides the IMAGE
+// alone; the document stays bfcache-eligible.
+export async function handleHitSvg(request, env) {
+  const url = new URL(request.url);
+  const ua = request.headers.get("user-agent") || "";
+  const peek = request.method === "HEAD"
+    || url.searchParams.has("peek")
+    || /prefetch|prerender/i.test(request.headers.get("sec-purpose") || "")
+    || request.cf?.botManagement?.verifiedBot === true
+    || PEEK_UA.test(ua);
+
+  let n = null;
+  if (env.COUNTER) {
+    try {
+      const stub = env.COUNTER.get(env.COUNTER.idFromName("homepage-visits"));
+      n = (await (await stub.fetch(`https://do/${peek ? "?peek=1" : ""}`)).json()).n;
+    } catch {}
+  }
+
+  // the activation beacon wants the tick, never the pixels
+  if (url.searchParams.has("tick")) {
+    return new Response(null, { status: 204, headers: { "cache-control": "no-store" } });
+  }
+
+  // transparent SVG digits; the pill (dark ground, bevel, padding) stays page
+  // CSS on img.counter, so the image re-skins with the page. null DO reads
+  // render the classic dead-counter dashes rather than a fabricated number.
+  const digits = typeof n === "number" ? String(n).padStart(6, "0") : "------";
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="52" height="12" viewBox="0 0 52 12" role="img" aria-label="visitor ${digits}"><text x="0" y="10" font-family="'Courier New',Courier,monospace" font-size="12" font-weight="bold" letter-spacing="1.2" fill="oklch(86.52% 0.1768 90.38)">${digits}</text></svg>`;
+  return new Response(svg, {
+    headers: {
+      "content-type":  "image/svg+xml; charset=utf-8",
+      "cache-control": "no-store",
+      "x-robots-tag":  "noindex",
+    },
+  });
 }

@@ -1242,10 +1242,11 @@
   // shell-wide Speculation Rules: prerender the shell's safe destinations on
   // hover-intent (eagerness "moderate"), so opening a "window" (garage, writing,
   // serendipity, coffee…) is near-instant and the View Transition plays on
-  // already-loaded content. excludes the homepage (heaviest page + counter; closing
-  // back to it rides bfcache instead — see initCloseBack), /around (live crawl),
-  // /whoareyou (transient), /rn (redirect), images + raw text. /coffee IS
-  // prerendered: GET is read-only (booking is POST) so a speculative open is safe.
+  // already-loaded content. the homepage is prerenderable now (the counter left
+  // the document for /hit.svg, so its GETs are pure; close-to-home still prefers
+  // bfcache via initCloseBack). excluded: /around (live crawl), /whoareyou
+  // (transient), /rn (redirect), images + raw text. /coffee IS prerendered:
+  // GET is read-only (booking is POST) so a speculative open is safe.
   // unsupported browsers ignore the script → plain navigation. skips the homepage,
   // which ships its own inline ruleset earlier in the HTML.
   function injectSpeculation() {
@@ -1257,7 +1258,6 @@
       prerender: [{
         where: { and: [
           { href_matches: "/*" },
-          { not: { href_matches: "/" } },
           { not: { href_matches: "/around*" } },
           { not: { href_matches: "/whoareyou*" } },
           { not: { href_matches: "/rn*" } },

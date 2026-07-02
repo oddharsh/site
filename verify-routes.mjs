@@ -34,6 +34,8 @@ const ROUTES = [
   { path: "/", status: 200, ct: "text/html", marker: "Aadharsh" },
   { path: "/index.html", status: 301 },
   { path: "/favicon.ico", status: 200, ct: "image/svg+xml" },
+  // ?peek=1 so the oracle never advances the visitor count
+  { path: "/hit.svg?peek=1", status: 200, ct: "image/svg+xml", marker: "<svg" },
   { path: "/auth.md", status: 200, ct: "text/markdown" },
   { path: "/.well-known/api-catalog", status: 200, ct: "application/linkset+json" },
   { path: "/.well-known/oauth-protected-resource", status: 200, ct: "application/json" },
@@ -93,7 +95,7 @@ async function probe(r) {
     const ct = res.headers.get("content-type") || "";
     let body = "";
     // only read the body when we need a marker and it's a text response
-    if (r.marker && /text|json|javascript|markdown/.test(ct)) {
+    if (r.marker && /text|json|javascript|markdown|svg/.test(ct)) {
       body = (await res.text()).slice(0, 200000);
     }
     const okStatus = statusOk(r.status, res.status);

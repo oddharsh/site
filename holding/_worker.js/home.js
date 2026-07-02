@@ -38,9 +38,9 @@ export function homepageHeadResponse(request) {
 // over (the client-side scripts detect pre-rendered state via "already
 // has href?" / "already populated?" checks and bail early).
 export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
-  // the page is no-store, so the worker runs on every visit. these reads
+  // the page is private,no-cache, so the worker runs on every visit. these reads
   // are mutually independent (the static asset, the tracks payload, the
-  // photo manifest, the counter value), so fire them concurrently instead
+  // photo manifest, the alt map), so fire them concurrently instead
   // of awaiting each in turn — collapses ~3 serial KV round-trips + the
   // ASSETS fetch into roughly one wall-clock read. the tracks lookup needs
   // tracks:<pid> keyed off playlist-id, but the id changes ~never — so it's
@@ -61,29 +61,9 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
     arr => (Array.isArray(arr) && arr.length ? arr : null),
     () => null
   );
-  // visitor counter — atomic increment in the "homepage-visits" Durable Object
-  // (in-house Counter class, see counter.js, bound here as COUNTER). humans increment; bots
-  // and speculative loads (Speculation Rules prefetch/prerender, Speed Brain, any
-  // Sec-Purpose-honest prefetcher) peek (?peek=1) so crawlers + prefetches don't
-  // inflate the count. fired NOW so the read rides concurrently with the asset +
-  // tracks fetches — but it's AWAITED later, inside the footer .counter rewriter
-  // handler. the stream reaches .counter only at the very end of <body>, so the
-  // read overlaps the whole page and never gates first byte. no timeout race
-  // (that race is exactly what intermittently shipped the static "000042").
-  const counterUA = request.headers.get("user-agent") || "";
-  const counterIsSpeculative = /prefetch|prerender/i.test(request.headers.get("sec-purpose") || "");
-  const counterIsBot = counterIsSpeculative ||
-    request.cf?.botManagement?.verifiedBot === true ||
-    /bot|crawl|spider|slurp|crawler|bingpreview|facebookexternalhit|embedly|slackbot|whatsapp|telegrambot|discordbot|redditbot|petalbot|gptbot|claudebot|ccbot|perplexity|bytespider|google-extended/i.test(counterUA);
-  const counterRaw = env.COUNTER
-    ? env.COUNTER.get(env.COUNTER.idFromName("homepage-visits"))
-        .fetch(`https://do/${counterIsBot ? "?peek=1" : ""}`)
-        .then((r) => r.json())
-        .catch(() => null)
-    : Promise.resolve(null);
-  // ensure the increment lands even if the response bails early (below) before
-  // the rewriter runs.
-  ctx.waitUntil(counterRaw.catch(() => {}));
+  // the visit counter no longer touches this handler: the footer's
+  // <img src="/hit.svg"> carries it (see counter.js handleHitSvg), so every
+  // homepage GET is side-effect-free and the page is safe to prerender.
 
   const [res, tracksPayload, photos, altMap] = await Promise.all([
     env.ASSETS.fetch(request),
@@ -91,10 +71,6 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
     manifestP,
     getAltMap(env),   // AI alt text; module-cached, so this is free on warm isolates
   ]);
-
-  // honest classic-90s-counter behavior: counts every homepage GET, no session
-  // dedup, no cookie. the count itself is injected later, in the footer .counter
-  // rewriter handler (which awaits the DO read) — see below.
 
   // footer "Last modified" → the most recently added photo (a real, datable
   // content change; the pool grows often). Pages assets are content-addressed
@@ -191,22 +167,6 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
     }).join("");
     rewriter.on("section.photos", {
       element(el) { el.setInnerContent(slotsHtml, { html: true }); },
-    });
-  }
-
-  // ── visitor counter → footer .counter pill ──────────────────────
-  // async handler: the rewriter reaches .counter only at the end of <body>, so
-  // awaiting the DO read here overlaps it with the full page stream instead of
-  // gating first byte — no timeout race. on a null read (DO error/unbound) the
-  // static placeholder stays put, never a misleading number.
-  if (env.COUNTER) {
-    rewriter.on(".counter", {
-      async element(el) {
-        const data = await counterRaw;
-        if (data && typeof data.n === "number") {
-          el.setInnerContent(String(data.n).padStart(6, "0"));
-        }
-      },
     });
   }
 
