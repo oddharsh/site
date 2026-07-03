@@ -262,11 +262,16 @@
   })();
 
   function buildTaskbar() {
-    var bar = el('<div id="axp-taskbar" role="navigation" aria-label="taskbar"></div>');
-    var start = el('<button id="axp-start" type="button" aria-haspopup="dialog" aria-expanded="false" title="Run — navigate the site (' + KBD + ')"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">' + KBD + '</span></button>');
-    // the Start orb is a toggle: open Run, or close it if it's already open
-    // (matches the ⌘K / Ctrl-K shortcut, which toggles too).
-    start.addEventListener("click", function () { (run && run.classList.contains("open")) ? closeRun() : openRun(); });
+    // ADOPT-OR-BUILD (shell rewrite phase B): pages ship the taskbar as static
+    // markup now, so the desktop exists for curl, readers, and JS-off visitors
+    // and CLS is 0. This function only constructs on legacy cached HTML that
+    // predates the partial; either way, wireTaskbar() below binds behavior.
+    var bar = D.getElementById("axp-taskbar");
+    if (bar) { wireTaskbar(bar); return; }
+    bar = el('<div id="axp-taskbar" role="navigation" aria-label="taskbar"></div>');
+    // the Start orb is a real link to /run (the palette's no-script floor);
+    // wireTaskbar intercepts the click to open the live palette instead.
+    var start = el('<a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true"></span></a>');
     bar.appendChild(start);
     // app buttons — first-level subpages (internal nav → View-Transition windows).
     // profiles used to live here as Quick Launch; they're desktop shortcuts now —
@@ -284,8 +289,30 @@
       '<a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><svg viewBox="0 0 24 24"><defs><filter id="seSh" x="-30%" y="-15%" width="160%" height="150%"><feDropShadow dx="0" dy=".5" stdDeviation=".5" flood-color="#000" flood-opacity=".28"></feDropShadow></filter><linearGradient id="seF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7ed24f"></stop><stop offset=".5" stop-color="#3f9c24"></stop><stop offset="1" stop-color="#297818"></stop></linearGradient><linearGradient id="seGl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".55"></stop><stop offset="1" stop-color="#ffffff" stop-opacity="0"></stop></linearGradient></defs><g filter="url(#seSh)"><path d="M12 2.2 L4.4 4.9 V11.4 C4.4 16.2 8 19.7 12 21.6 C16 19.7 19.6 16.2 19.6 11.4 V4.9 Z" fill="url(#seF)" stroke="#1f5f12" stroke-width=".7"></path><path d="M12 3.4 L5.6 5.7 V11.3 C5.6 15.3 8.6 18.4 12 20.1 C15.4 18.4 18.4 15.3 18.4 11.3 V5.7 Z" fill="none" stroke="#c6f2a6" stroke-opacity=".5" stroke-width=".6"></path><path d="M12 3.4 L5.6 5.7 V8.8 Q12 10.8 18.4 8.8 V5.7 Z" fill="url(#seGl)"></path><path d="M8 11.5 L11 14.5 L16.2 8.4" fill="none" stroke="#103f08" stroke-opacity=".35" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round"></path><path d="M8 11.2 L11 14.2 L16.2 8.1" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path></g></svg></a>' +
       '<a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><svg viewBox="0 0 24 24"><defs><filter id="upSh" x="-25%" y="-20%" width="150%" height="155%"><feDropShadow dx="0" dy=".5" stdDeviation=".5" flood-color="#000" flood-opacity=".28"></feDropShadow></filter><radialGradient id="upG" cx=".36" cy=".3" r=".85"><stop offset="0" stop-color="#8eccf2"></stop><stop offset=".55" stop-color="#3f8fd0"></stop><stop offset="1" stop-color="#175a98"></stop></radialGradient><linearGradient id="upB" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#74cf52"></stop><stop offset="1" stop-color="#2c861d"></stop></linearGradient><radialGradient id="upGl" cx=".35" cy=".3" r=".5"><stop offset="0" stop-color="#ffffff" stop-opacity=".7"></stop><stop offset="1" stop-color="#ffffff" stop-opacity="0"></stop></radialGradient></defs><g filter="url(#upSh)"><circle cx="10.6" cy="10.6" r="8.2" fill="url(#upG)" stroke="#114e7d" stroke-width=".6"></circle><g fill="none" stroke="#dcefff" stroke-width=".55" opacity=".7"><path d="M2.5 10.6 H18.7"></path><path d="M3.6 7.1 H17.6"></path><path d="M3.6 14.1 H17.6"></path><path d="M10.6 2.4 V18.8"></path><ellipse cx="10.6" cy="10.6" rx="3.1" ry="8.2"></ellipse></g><ellipse cx="7.4" cy="7" rx="3.4" ry="2.2" fill="url(#upGl)"></ellipse><circle cx="17.8" cy="17.8" r="4.5" fill="url(#upB)" stroke="#ffffff" stroke-width=".9"></circle><path d="M17.8 15.6 A2.2 2.2 0 1 1 15.7 18.4" fill="none" stroke="#ffffff" stroke-width="1.1" stroke-linecap="round"></path><path d="M16.9 14.9 L18.8 15.3 L17.5 16.8 Z" fill="#ffffff"></path></g></svg></a>' +
       '<span id="axp-clock" aria-hidden="true"></span></div>');
-    // mute/unmute speaker, inserted left of System Properties
+    // mute/unmute speaker, inserted left of System Properties (painted by
+    // wireTaskbar; ships empty here, the static partial ships the "on" art)
     var sndBtn = el('<button id="axp-sound" type="button"></button>');
+    tray.insertBefore(sndBtn, tray.firstChild);
+    bar.appendChild(tray);
+    D.body.appendChild(bar);
+    wireTaskbar(bar);
+  }
+
+  // behavior for the taskbar, whether adopted (static partial) or constructed.
+  function wireTaskbar(bar) {
+    var start = D.getElementById("axp-start");
+    if (start) {
+      // platform-correct shortcut hint + title (the static partial ships ⌘K;
+      // non-Mac visitors get it rewritten here before they can notice)
+      start.title = "Run — navigate the site (" + KBD + ")";
+      [].forEach.call(start.querySelectorAll(".axp-kbd"), function (k) { k.textContent = KBD; });
+      start.addEventListener("click", function (e) {
+        e.preventDefault();   // the href is the JS-off floor; JS gets the palette
+        (run && run.classList.contains("open")) ? closeRun() : openRun();
+      });
+    }
+    var sndBtn = D.getElementById("axp-sound");
+    if (sndBtn) sndBtn.hidden = false;   // the partial ships it hidden: sounds need JS
     function paintSnd() {
       var on = AXP_SND.on();
       sndBtn.className = on ? "" : "muted";
@@ -295,13 +322,14 @@
         ? '<defs><filter id="sdSh" x="-20%" y="-20%" width="150%" height="150%"><feDropShadow dx="0" dy=".5" stdDeviation=".5" flood-color="#000" flood-opacity=".25"></feDropShadow></filter><linearGradient id="sdC" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fbfbfb"></stop><stop offset=".5" stop-color="#cfcfcf"></stop><stop offset="1" stop-color="#9c9c9c"></stop></linearGradient></defs><g filter="url(#sdSh)"><rect x="2" y="8.6" width="2.6" height="6.8" rx=".6" fill="#8c8c8c"></rect><path d="M3.4 9 H6.4 L11 4.6 V17.4 L6.4 13 H3.4 Z" fill="url(#sdC)" stroke="#5f5f5f" stroke-width=".6" stroke-linejoin="round"></path><path d="M3.9 9.4 H6.1 L9.6 6 V8.6 Z" fill="#ffffff" opacity=".4"></path><g fill="none" stroke="#2e8fd6" stroke-linecap="round"><path d="M13.4 8 Q15.4 11 13.4 14" stroke-width="1.6"></path><path d="M15.7 6 Q19.2 11 15.7 16" stroke-width="1.5" opacity=".82"></path><path d="M18 4.3 Q22.4 11 18 17.7" stroke-width="1.4" opacity=".62"></path></g></g>'
         : '<defs><filter id="muSh" x="-20%" y="-20%" width="150%" height="150%"><feDropShadow dx="0" dy=".5" stdDeviation=".5" flood-color="#000" flood-opacity=".25"></feDropShadow></filter><linearGradient id="muC" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ededed"></stop><stop offset=".5" stop-color="#c2c2c2"></stop><stop offset="1" stop-color="#969696"></stop></linearGradient><radialGradient id="muR" cx=".4" cy=".34" r=".75"><stop offset="0" stop-color="#f47f72"></stop><stop offset="1" stop-color="#c2271c"></stop></radialGradient></defs><g filter="url(#muSh)"><rect x="2" y="8.6" width="2.6" height="6.8" rx=".6" fill="#8c8c8c"></rect><path d="M3.4 9 H6.4 L11 4.6 V17.4 L6.4 13 H3.4 Z" fill="url(#muC)" stroke="#5f5f5f" stroke-width=".6" stroke-linejoin="round"></path><circle cx="16.6" cy="10.8" r="5.1" fill="url(#muR)" stroke="#8c1a10" stroke-width=".7"></circle><path d="M13.3 7.5 L19.9 14.1" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round"></path><ellipse cx="14.9" cy="8.4" rx="2.5" ry="1.2" fill="#ffffff" opacity=".28"></ellipse></g>') + '</svg>';
     }
-    sndBtn.addEventListener("click", function () { var next = !AXP_SND.on(); AXP_SND.set(next); paintSnd(); if (next) AXP_SND.play("tada"); });
-    paintSnd();
-    tray.insertBefore(sndBtn, tray.firstChild);
+    if (sndBtn) {
+      sndBtn.addEventListener("click", function () { var next = !AXP_SND.on(); AXP_SND.set(next); paintSnd(); if (next) AXP_SND.play("tada"); });
+      paintSnd();
+    }
     // each system-utility tray icon opens a brief XP balloon above itself. they stay
     // real <a href> so a modified click (⌘/Ctrl/Shift, or middle — which fires
     // auxclick, not click) still opens the full page in a new tab.
-    [].forEach.call(tray.querySelectorAll(".axp-trayico"), function (ic) {
+    [].forEach.call(bar.querySelectorAll(".axp-trayico"), function (ic) {
       ic.setAttribute("aria-haspopup", "dialog");
       ic.setAttribute("aria-expanded", "false");
       ic.addEventListener("click", function (e) {
@@ -310,8 +338,6 @@
         toggleBalloon(ic.getAttribute("data-kind"), ic);
       });
     });
-    bar.appendChild(tray);
-    D.body.appendChild(bar);
     tickClock();
     setInterval(tickClock, 15000);
   }
@@ -340,9 +366,20 @@
   function iconPos() { try { return JSON.parse(localStorage.getItem("axp-icons-pos") || "{}"); } catch (_) { return {}; } }
   function saveIconPos(p) { try { localStorage.setItem("axp-icons-pos", JSON.stringify(p)); } catch (_) {} }
 
-  // build the desktop-shortcut layer on the wallpaper
+  // build the desktop-shortcut layer on the wallpaper.
+  // ADOPT-OR-BUILD: the static partial ships the icons at their default
+  // positions (inline left/top); adopting means just replaying any positions
+  // the visitor dragged them to (localStorage) over those defaults.
   function buildIcons() {
-    if (D.getElementById("axp-icons")) return;
+    var existing = D.getElementById("axp-icons");
+    if (existing) {
+      var savedPos = iconPos();
+      [].forEach.call(existing.querySelectorAll(".axp-ico"), function (a) {
+        var p = savedPos[a.dataset.key];
+        if (p) { a.style.left = p.x + "px"; a.style.top = p.y + "px"; }
+      });
+      return;
+    }
     var wrap = el('<nav id="axp-icons" aria-label="desktop shortcuts"></nav>');
     var saved = iconPos();
     DESKTOP.forEach(function (it, i) {

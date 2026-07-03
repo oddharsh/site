@@ -377,7 +377,10 @@ font-family:var(--font-ui,Tahoma,Verdana,Geneva,sans-serif);font-size:11px;user-
 background:linear-gradient(180deg,oklch(67% 0.15 256) 0%,oklch(58% 0.19 257) 4%,oklch(51% 0.20 258) 9%,oklch(49% 0.20 258) 50%,oklch(46% 0.20 259) 92%,oklch(40% 0.18 260) 100%);
 box-shadow:inset 0 1px 0 oklch(82% 0.09 250),inset 0 2px 0 oklch(62% 0.16 255)}
 /* start orb */
-#axp-start{display:flex;align-items:center;gap:6px;padding:0 16px 2px 9px;border:0;cursor:pointer;color:oklch(100% 0 0);
+/* the Start orb is an <a href="/run"> now (phase B): the palette's no-script
+   floor is a real page, and wireTaskbar intercepts the click for the live
+   palette. text-decoration:none keeps the anchor dressed as the orb. */
+#axp-start{display:flex;align-items:center;gap:6px;padding:0 16px 2px 9px;border:0;cursor:pointer;color:oklch(100% 0 0);text-decoration:none;
 font-family:var(--font-caption,'Trebuchet MS',Verdana,Geneva,sans-serif);font-style:italic;font-weight:bold;font-size:14px;text-shadow:1px 1px 1px oklch(22% 0.07 145);
 border-radius:0 9px 9px 0/0 14px 14px 0;margin-right:6px;
 background:linear-gradient(180deg,oklch(72% 0.17 142) 0%,oklch(63% 0.18 143) 8%,oklch(54% 0.18 144) 46%,oklch(50% 0.18 145) 52%,oklch(58% 0.17 143) 92%,oklch(45% 0.16 146) 100%);

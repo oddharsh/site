@@ -1,5 +1,6 @@
 // lib/chrome.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
+import { DESKTOP_CHROME, DESKTOP_TOP } from "./desktop.js";
 import { escAttr, escHtml } from "./http.js";
 
 // shared XP window chrome for the server-rendered pages (/around, /bot,
@@ -215,6 +216,7 @@ ${css || ""}
 <link rel="stylesheet" href="/luna.css">
 </head>
 <body>
+${DESKTOP_TOP}
 <div class="window">
   <div class="title-bar">
     <span${classAttr}><span class="icon"></span>${escHtml(windowTitle)}</span>
@@ -224,6 +226,7 @@ ${css || ""}
 ${body}
   </div>
 </div>
+${DESKTOP_CHROME}
 ${scriptHtml}
 </body>
 </html>`;
