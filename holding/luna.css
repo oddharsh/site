@@ -408,7 +408,7 @@ box-shadow:inset 1px 1px 0 oklch(86% 0.13 140),inset -1px -1px 0 oklch(38% 0.13 
 #axp-icons{position:fixed;inset:0;z-index:1;pointer-events:none;view-transition-name:axp-icons}
 .axp-ico,.axp-ico:link,.axp-ico:visited,.axp-ico:hover,.axp-ico:active{color:oklch(100% 0 0);text-decoration:none}
 .axp-ico{position:absolute;pointer-events:auto;display:flex;flex-direction:column;align-items:center;gap:4px;width:76px;padding:5px 3px 4px;box-sizing:border-box;border:1px solid transparent;border-radius:2px;cursor:pointer}
-.axp-ico.axp-dragging{opacity:.8;z-index:7}
+.axp-ico.axp-dragging{opacity:.8;z-index:7;will-change:transform}   /* earn-it: released with the class on drop */
 .axp-ico:hover{background:oklch(60% 0.20 263 / .26);border-color:oklch(74% 0.10 263 / .5)}
 .axp-ico:focus-visible{outline:1px dotted oklch(100% 0 0);outline-offset:1px;background:oklch(60% 0.20 263 / .34)}
 .axp-ico:active .ic{transform:translateY(1px)}
@@ -429,7 +429,13 @@ box-shadow:inset 1px 1px 0 oklch(86% 0.13 140),inset -1px -1px 0 oklch(38% 0.13 
 /* app buttons (first-level subpages). NB: these are <a> tags, so the host page's */
 /* a:hover / a:visited rules would otherwise bleed in (red/purple text, */
 /* underlines) — pin every link state explicitly to white + no underline. */
-#axp-pins{display:flex;align-items:center;gap:3px;padding:0 3px;min-width:0}
+/* pins scroll horizontally when the bar runs out of room (narrow screens):
+   real XP squeezed buttons into slivers; icon-only buttons that keep their
+   shape and pan beat 9 unreadable slivers on a phone. the tray + clock are
+   flex:none so they can never be crushed into overlapping the buttons. */
+#axp-pins{display:flex;align-items:center;gap:3px;padding:0 3px;min-width:0;overflow-x:auto;scrollbar-width:none}
+#axp-pins::-webkit-scrollbar{display:none}
+.axp-pin{flex:0 0 auto}
 .axp-pin .lbl{overflow:hidden;text-overflow:ellipsis;max-width:92px}
 .axp-pin,.axp-pin:link,.axp-pin:visited,.axp-pin:hover,.axp-pin:active{color:oklch(100% 0 0);text-decoration:none}
 .axp-pin{display:flex;align-items:center;gap:6px;height:23px;padding:0 10px;cursor:pointer;font-family:inherit;font-size:11px;border-radius:2px;
@@ -438,11 +444,15 @@ background:linear-gradient(180deg,oklch(70% 0.15 255) 0%,oklch(60% 0.17 257) 48%
 box-shadow:inset 0 1px 0 oklch(82% 0.11 250)}
 .axp-pin:hover{background:linear-gradient(180deg,oklch(76% 0.14 254) 0%,oklch(66% 0.17 256) 48%,oklch(60% 0.18 258) 52%,oklch(64% 0.16 256) 100%);border-color:oklch(84% 0.10 250)}
 .axp-pin:active{background:linear-gradient(180deg,oklch(52% 0.18 260),oklch(60% 0.16 257));box-shadow:inset 1px 1px 2px oklch(36% 0.16 263);border-top-color:oklch(42% 0.17 261)}
+/* the CURRENT section's button stays depressed while its "app" is in front —
+   real XP taskbar behavior. same sunken recipe as :active, held; wireTaskbar
+   marks the pin whose section owns the current path (aria-current="page"). */
+.axp-pin.cur,.axp-pin.cur:hover{background:linear-gradient(180deg,oklch(50% 0.18 260),oklch(57% 0.16 258));box-shadow:inset 1px 1px 3px oklch(34% 0.16 263);border-color:oklch(46% 0.16 260);border-bottom-color:oklch(66% 0.13 255)}
 .axp-pin .fav{width:15px;height:15px;flex:0 0 auto;display:flex;line-height:0;filter:drop-shadow(0 1px 1px oklch(0% 0 0 / .3))}.axp-pin .fav svg{width:100%;height:100%;display:block}
 #axp-spacer{flex:1}
 /* tray + clock — flat, NOT a sunken box (the real XP clock is just text on the bar); */
 /* the only chrome is an engraved vertical separator on the tray's left edge. */
-#axp-tray{display:flex;align-items:center;padding:0 14px 0 13px;color:oklch(100% 0 0);
+#axp-tray{flex:0 0 auto;display:flex;align-items:center;padding:0 14px 0 13px;color:oklch(100% 0 0);white-space:nowrap;
 font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);box-shadow:inset 1px 0 0 oklch(64% 0.15 254)}
 /* notification-area icons: System Properties, Security Center, Windows Update. */
 /* where the little XP "system" tray bits actually lived, right of the engraved */
@@ -532,7 +542,7 @@ box-shadow:inset 1px 1px 0 oklch(100% 0 0),inset -1px -1px 0 oklch(84% 0.02 90)}
 #axp-run .btn:hover{background:linear-gradient(180deg,oklch(99% 0.02 263),oklch(90% 0.03 263))}
 #axp-run .btn:active{box-shadow:inset 1px 1px 0 oklch(84% 0.02 90),inset -1px -1px 0 oklch(100% 0 0)}
 #axp-run .btn.def{outline:1px dotted oklch(45% 0.10 263);outline-offset:-4px}
-@media (max-width:560px){.axp-pin .lbl{display:none}.axp-pin{padding:0 7px}#axp-run .body{padding-top:11px}}
+@media (max-width:560px){.axp-pin .lbl{display:none}.axp-pin{padding:0 7px}#axp-tray{padding:0 8px 0 7px}#axp-run .body{padding-top:11px}}
 @media (prefers-reduced-motion:no-preference){#axp-run[open]{animation:axp-pop .09s ease-out}}
 @keyframes axp-pop{from{transform:translate(-50%,-50%) scale(.97);opacity:.4}to{transform:translate(-50%,-50%) scale(1);opacity:1}}
 

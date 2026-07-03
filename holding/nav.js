@@ -314,6 +314,16 @@
         (run && run.open) ? closeRun() : openRun();
       });
     }
+    // XP taskbar truth: the app that's in front sits DEPRESSED. Match the
+    // current path's first segment against each pin's section (garage subpages
+    // keep the garage button pressed; the homepage is the desktop — none).
+    var seg = "/" + (location.pathname.split("/")[1] || "");
+    [].forEach.call(bar.querySelectorAll(".axp-pin"), function (p) {
+      var pinSeg = "/" + ((p.getAttribute("href") || "").split("/")[1] || "");
+      var cur = seg !== "/" && pinSeg === seg;
+      p.classList.toggle("cur", cur);
+      if (cur) p.setAttribute("aria-current", "page"); else p.removeAttribute("aria-current");
+    });
     var sndBtn = D.getElementById("axp-sound");
     if (sndBtn) sndBtn.hidden = false;   // the partial ships it hidden: sounds need JS
     function paintSnd() {
@@ -407,21 +417,27 @@
   // a movement threshold distinguishes a drag from a click so links still open.
   function initIconDrag() {
     var icons = D.getElementById("axp-icons"); if (!icons) return;
-    var cur = null, sx = 0, sy = 0, ox = 0, oy = 0, moved = false;
+    // ProMotion discipline: the gesture writes TRANSFORM only (pure compositor
+    // move, promoted by .axp-dragging's will-change), and the final left/top is
+    // committed once, on release. Writing left/top per pointermove forced a
+    // layout every frame — visible as judder on 120Hz variable-refresh panels.
+    var cur = null, sx = 0, sy = 0, ox = 0, oy = 0, nx = 0, ny = 0, moved = false;
     function mv(e) {
       if (!cur) return;
       var dx = e.clientX - sx, dy = e.clientY - sy;
       if (!moved && Math.abs(dx) + Math.abs(dy) < 4) return;
       moved = true; cur.classList.add("axp-dragging");
-      var nx = Math.max(0, Math.min(ox + dx, innerWidth - 76));
-      var ny = Math.max(0, Math.min(oy + dy, innerHeight - 30 - 72));
-      cur.style.left = nx + "px"; cur.style.top = ny + "px";
+      nx = Math.max(0, Math.min(ox + dx, innerWidth - 76));
+      ny = Math.max(0, Math.min(oy + dy, innerHeight - 30 - 72));
+      cur.style.transform = "translate(" + (nx - ox) + "px," + (ny - oy) + "px)";
     }
     function up() {
       D.removeEventListener("pointermove", mv);
       if (cur && moved) {
+        cur.style.left = nx + "px"; cur.style.top = ny + "px";
+        cur.style.transform = "";
         cur.classList.remove("axp-dragging");
-        var p = iconPos(); p[cur.dataset.key] = { x: parseFloat(cur.style.left), y: parseFloat(cur.style.top) }; saveIconPos(p);
+        var p = iconPos(); p[cur.dataset.key] = { x: nx, y: ny }; saveIconPos(p);
       }
       cur = null;
     }
