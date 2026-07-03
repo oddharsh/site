@@ -606,13 +606,14 @@ footer .signature small { color: oklch(56.93% 0 0); }
   max-width: 280px;
   line-height: 1.45;
 }
-/* anchored placement — the PRIMARY mode for track/artist/car tips (hover AND
-   keyboard focus): XP ToolTips popped at the control, so these tether to the
-   hovered/focused element via CSS anchor positioning (position-try flips at
-   viewport edges). The photo camera-back alone keeps cursor-follow, by owner
-   decree — gliding it across the contact sheet is part of the site's identity.
-   Chrome 125+ / Safari 26 / Firefox 147; on engines without anchor support the
-   JS falls back to cursor-follow for everything, exactly the old behavior. */
+/* keyboard-focus placement: cursor-follow needs a live pointer, so when a
+   target is focused via keyboard the tooltip tethers to it instead via CSS
+   anchor positioning (position-try flips at viewport edges). POINTER hover
+   always cursor-follows — the anchored-hover experiment (2026-07-03) shipped
+   and was rolled back the same day by owner ruling: gliding the album art
+   with the cursor is the site's identity, same as the photo camera-back.
+   Chrome 125+ / Safari 26 / Firefox 147; unsupported engines never get the
+   class, so keyboard users there are no worse off than before. */
 .xp-tooltip.anchored {
   position-anchor: --xp-tip;
   position-area: bottom span-right;
@@ -630,9 +631,8 @@ footer .signature small { color: oklch(56.93% 0 0); }
    transitions). */
 @supports selector(:popover-open) {
   .xp-tooltip:popover-open { display: block; }
-  /* anchored tips fade IN over 120ms (XP's subtle materialize); exit stays an
-     instant cut, and the photo camera-back keeps its hard snap (no transition
-     without .anchored). */
+  /* keyboard-anchored tips fade IN over 120ms; pointer tips (all of them,
+     cursor-following) keep their hard snap — no transition without .anchored. */
   .xp-tooltip.anchored:popover-open { transition: opacity 120ms ease-out; }
   @starting-style {
     .xp-tooltip.anchored:popover-open { opacity: 0; }
@@ -1702,7 +1702,6 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
         tip.classList.remove("anchored");
       };
       const hideTip = () => {
-        cancelShow();
         closeTip();
         dropAnchor();
         activeSlot = null;
@@ -1715,28 +1714,25 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
       // hover target here (photos, tracks, artists, car links) — one tooltip engine.
       const TIP_DISMISS_MS = 50;
       let hideTimer = 0;
-      // anchored mode needs CSS anchor positioning; without it every tip falls
-      // back to cursor-follow (the pre-anchor behavior, nothing lost).
+      // keyboard tips anchor via CSS anchor positioning where supported;
+      // pointer tips ALWAYS follow the cursor (owner re-ruling 2026-07-03:
+      // the anchored-hover experiment shipped and was rolled back the same
+      // day — gliding the album art with the cursor is part of the site's
+      // identity, same as the photo camera-back, and the 500ms cold-hover
+      // delay read as lag, not authenticity).
       const ANCHOR_OK = window.CSS && CSS.supports &&
         (CSS.supports("position-area: bottom") || CSS.supports("inset-area: bottom"));
-      const isPhotoTarget = (t) => t.matches(".photos a");
-      // XP's real hover delay: a COLD anchored tip waits 500ms; once one is up,
-      // sliding to an adjacent control swaps instantly (the "warm" behavior).
-      // The camera-back never waits — its instant glide is the kept identity.
-      const HOVER_DELAY_MS = 500;
-      let showTimer = 0;
-      const cancelShow = () => { clearTimeout(showTimer); showTimer = 0; };
       // while the content is actively scrolling (and a hair after it settles) we
       // suppress tooltips entirely — scrolling shouldn't trip a popover just
       // because the cursor happens to pass over a photo or track. tooltips return
       // on the next intentional hover-move.
       let scrolling = false, scrollIdle = 0;
       const cancelHide   = () => { clearTimeout(hideTimer); hideTimer = 0; };
-      const scheduleHide = () => { cancelShow(); clearTimeout(hideTimer); hideTimer = setTimeout(hideTip, TIP_DISMISS_MS); };
+      const scheduleHide = () => { clearTimeout(hideTimer); hideTimer = setTimeout(hideTip, TIP_DISMISS_MS); };
       const showTipFor = (target, e) => {
         if (scrolling) return;               // don't pop a tooltip mid-scroll
         cancelHide();                        // a fresh show cancels any pending gap-dismissal
-        dropAnchor();                        // follow mode: the tip rides --x/--y
+        dropAnchor();                        // pointer entry always uses cursor-follow
         activeSlot = target;
         const html = buildContent(target);
         if (!html) { hideTip(); return; }   // e.g. track with no cover yet
@@ -1744,6 +1740,7 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
         if (e) place(e);                     // position before showing (no glide-in)
         openTip();
       };
+      // keyboard-only anchored show (pointer never routes here anymore)
       const showAnchored = (target) => {
         if (scrolling) return;
         cancelHide();
@@ -1757,22 +1754,13 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
         tip.classList.add("anchored");
         openTip();
       };
-      // the mode router: photos follow the cursor (owner-kept identity, always
-      // instant); everything else anchors at the control with the XP delay
-      // semantics. engines without anchor positioning follow for everything.
-      const showFor = (target, e) => {
-        cancelShow();
-        if (isPhotoTarget(target) || !ANCHOR_OK) { showTipFor(target, e); return; }
-        if (isOpen()) { showAnchored(target); return; }     // warm swap: no wait
-        showTimer = setTimeout(() => showAnchored(target), HOVER_DELAY_MS);
-      };
 
       document.addEventListener("pointerover", (e) => {
         const target = findTarget(e.target);
         if (!target) return;
         cancelHide();                        // re-entered a target (same or next) → keep it up
         if (target === activeSlot) return;   // same target already shown
-        showFor(target, e);
+        showTipFor(target, e);
       }, { passive: true });
 
       // passive: lets the browser dispatch pointermove without waiting on
@@ -1814,22 +1802,20 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
       const reshowUnderCursor = () => {
         if (!lastX && !lastY) return;            // pointer never moved → nothing to re-target
         const target = findTarget(document.elementFromPoint(lastX, lastY));
-        if (target) showFor(target);             // photos reuse the existing --x/--y
+        if (target) showTipFor(target);          // no event: reuse the existing --x/--y
       };
       document.addEventListener("scroll", () => {
         scrolling = true;
-        cancelShow();
         if (isOpen()) hideTip();
         clearTimeout(scrollIdle);
         scrollIdle = setTimeout(() => { scrolling = false; reshowUnderCursor(); }, SCROLL_SETTLE_MS);
       }, { capture: true, passive: true });
 
-      // ── keyboard focus: same anchored mode, no delay ───────────────────
-      // anchoring is the primary mode for non-photo tips now (showFor above),
-      // so keyboard focus just drives the same path directly — a deliberate
-      // Tab deserves an instant tip, not the 500ms cold-hover wait. only fires
-      // for :focus-visible so a mouse click that happens to focus a link
-      // doesn't double-trigger.
+      // ── keyboard-focus fallback ────────────────────────────────────────
+      // mouse users get the cursor-following tooltip above; keyboard users
+      // get the same content tethered to the focused element via CSS anchor
+      // positioning (no pointer to track). only fires for :focus-visible so
+      // a mouse click that happens to focus a link doesn't double-trigger.
       if (ANCHOR_OK) {
         document.addEventListener("focusin", (e) => {
           const target = findTarget(e.target);

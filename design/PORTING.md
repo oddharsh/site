@@ -41,11 +41,11 @@ never the copy).
 
 | trick | today | in the rewrite |
 |---|---|---|
-| Cursor-follow via CSS custom props + `translate(clamp())`: pointermove writes two vars, no rAF, no getBoundingClientRect, edge-clamping in pure CSS | index.html:581-621 | OWNER-KEPT for the photo camera-back (~1KB in shell.js); all other tips anchor |
+| Cursor-follow via CSS custom props + `translate(clamp())`: pointermove writes two vars, no rAF, no getBoundingClientRect, edge-clamping in pure CSS | index.html:581-621 | OWNER-KEPT for ALL pointer tips (re-ruled 2026-07-03 after the anchored-hover experiment rolled back; the album art glides like the camera back) |
 | `will-change: transform` as an earn-it hint: promoted on tooltip open, released on close | index.html:1683-1699 | ported with the follow loop |
 | Scroll suppression + 60ms settle + `elementFromPoint` retarget (fixed tip + wheel scroll = cursor never moves, no pointerover fires) | index.html:1703-1764 | ported with the follow loop |
 | Touch gating as a media query: `@media (hover: hover)` retires the synthetic-touch-hover bug | index.html tooltip IIFE (JS check today) | promoted from JS check to pure CSS gate |
-| Keyboard fallback: anchor positioning + `position-try`, gated on `CSS.supports("position-area: bottom")`, fires only for :focus-visible | index.html:1795-1824 | ported; becomes the PRIMARY mode for non-photo tips |
+| Keyboard fallback: anchor positioning + `position-try`, gated on `CSS.supports("position-area: bottom")`, fires only for :focus-visible | index.html:1795-1824 | ported; stays KEYBOARD-ONLY (the promote-to-primary experiment was rolled back by owner ruling 2026-07-03) |
 | On-demand dns-prefetch: inject hints for Spotify CDNs on FIRST hover, once per session; visitors who never hover pay nothing | index.html:1336-1356 | ported as the pattern for any third-party media |
 | Lazy-fetch with in-flight sentinel + self-healing (`map[k]=null` marks in-flight; failure deletes the sentinel so the next hover retries) | index.html:1452-1482 | the EXIF use dies (data bakes at encode time) but the pattern ports for any lazy data |
 | Chunked list rendering: ~8 rows per `scheduler.yield()` (front-of-queue resume), setTimeout(0) shim | index.html:1140-1154 | ported for the stand-down fetchers + demos |
@@ -232,22 +232,41 @@ Firefox, ~0ms prerendered on Chromium, back/forward ~0ms bfcache everywhere.
   at parse time, cacheable independently of nav.js (107KB -> 77KB raw), same
   cascade order via link-after-inline-style, fallback link injection for
   stale HTML. Parity verified on every page class; oracle 54/54.
-- PHASE B (next): static desktop markup — wallpaper/taskbar/icons/Run dialog
-  as baked HTML per page (worker templates bake per-route, static pages get
-  copies), nav.js boot ADOPTS existing DOM instead of building it. Desktop
-  exists for curl/JS-off, CLS 0. The partial generator must reproduce
-  buildDesktop/buildIcons/buildTaskbar's exact ids/classes/SVGs.
-- PHASE C: behavior modernization per the zero-JS ledger — popover Start,
-  dialog Run (palette upgrades /run), checkbox minimize + AT upgrade,
-  CSS resize, ::-webkit-scrollbar replacing the JS scrollbar, forced-colors
-  + print coverage. Each verb lands one at a time, verified.
-- PHASE D: the inline dedup — pages drop chrome rules luna.css now carries
-  (index.html's copy of the window chrome, xpChromeCss's overlap), shrinking
-  every document; homepage keeps its soul inline per the blueprint's
-  critical-subset rule.
-- shell.js NAMING: nav.js keeps its URL through the phases (old HTML
-  references it); it becomes the blueprint's shell.js in role first, name
-  last.
+- PHASE B SHIPPED (v141): the desktop is static markup in every document
+  (wallpaper div after <body>, icons + full taskbar before </body>), CLS 0,
+  curl-able, JS-off visible. scripts/gen-desktop-partial.mjs GENERATES the
+  partial from nav.js's own data blocks (evaled from source, so no silent
+  drift), writes lib/desktop.js for lunaPage + writing, and patches the 27
+  static pages between idempotent markers. nav.js builders are
+  adopt-or-build (wireTaskbar binds behavior either way; buildIcons replays
+  localStorage positions over shipped defaults). Deliberate deltas: start
+  orb is <a href="/run"> (the no-script ladder, intercepted when JS runs),
+  sound toggle ships hidden until wired, clock ships empty, tray popup ARIA
+  arrives with wiring. Costs ~3KB br per document. The Run dialog stays
+  lazily built (invisible pre-open; /run covers JS-off).
+- PHASE C SHIPPED IN PART (v142): print coverage (strip the OS, flatten the
+  window into a document) + forced-colors coverage (the engine strips
+  backgrounds/bevels itself; luna.css adds only the boundaries flattening
+  can't infer). Reduced-motion was already covered. DEFERRED, each its own
+  future unit needing side-by-side review: dialog-element Run, native
+  ::-webkit-scrollbar replacing the JS scrollbar widget, CSS resize:both
+  replacing the JS grip. REJECTED for this site's shape: checkbox minimize
+  (one window per page; nothing to minimize INTO) and popover Start (no
+  Start menu exists; Start IS Run, and the /run ladder shipped in B).
+- TOOLTIP RE-RULING (owner, 2026-07-03, v142): the anchored-hover
+  experiment from the task-8 pass shipped and was rolled back the same
+  day. Pointer tips ALL cursor-follow again, instantly — gliding the album
+  art with the cursor is the site's identity, same as the camera back, and
+  the 500ms cold-hover delay read as lag. Anchor positioning survives as
+  the KEYBOARD path only (its original role). The baked-histogram half of
+  task 8 is untouched and stays.
+- PHASE D (open): the inline chrome dedup — pages drop window-chrome rules
+  luna.css could carry (index.html's copy, xpChromeCss's overlap). Needs a
+  unified chrome audit first: per-page hand-tuned diffs mean a shared rule
+  could clobber deliberate variation. The homepage keeps its soul inline
+  per the blueprint's critical-subset rule regardless.
+- shell.js NAMING: nav.js keeps its URL (old HTML references it); it now IS
+  the blueprint's shell.js in role — wiring, not construction — name last.
 
 **What a returning visitor notices.** Wave-1: nothing (forensic deltas only: a
 missing thumbnail serves the platform 404 body, and static hits stop emitting

@@ -534,3 +534,33 @@ box-shadow:inset 1px 1px 0 oklch(100% 0 0),inset -1px -1px 0 oklch(84% 0.02 90)}
 @media (max-width:560px){.axp-pin .lbl{display:none}.axp-pin{padding:0 7px}#axp-run .body{padding-top:11px}}
 @media (prefers-reduced-motion:no-preference){#axp-run.open{animation:axp-pop .09s ease-out}}
 @keyframes axp-pop{from{transform:translate(-50%,-50%) scale(.97);opacity:.4}to{transform:translate(-50%,-50%) scale(1);opacity:1}}
+
+/* ─────────────────── print + High Contrast (phase C) ─────────────────── */
+/* print: the document inside the window is the artifact; the OS around it
+   is not. strip the desktop, flatten the window into normal flow, and let
+   content run its full height (no internal scrollers on paper). the
+   Notepad view's own print block (NOTEPAD_CSS) composes with this. */
+@media print {
+  #axp-desktop, #axp-icons, #axp-taskbar, #axp-run, #axp-run-back,
+  .axp-sb, .axp-resize, .axp-acc, #axp-balloon, .axp-histnav,
+  .title-bar .controls, .np-controls { display: none !important; }
+  html, body { background: #fff !important; height: auto !important; overflow: visible !important; }
+  body { display: block !important; padding: 0 !important; }
+  .window, .np-window {
+    max-height: none !important; height: auto !important;
+    box-shadow: none !important; border: 1px solid #999 !important;
+    border-radius: 0 !important; margin: 0 !important; transform: none !important;
+  }
+  .content, .np-text { overflow: visible !important; max-height: none !important; }
+}
+
+/* High Contrast (forced-colors): the one dark mode XP genuinely had. The
+   engine already does the honest work here — backgrounds (gradients, the
+   Bliss SVG) are stripped, box-shadow bevels go to none, links and buttons
+   take system colors. We add only what flattening can't infer: window and
+   taskbar boundaries that were carried purely by the removed backgrounds. */
+@media (forced-colors: active) {
+  .window, .np-window, .axp-acc { border: 1px solid CanvasText !important; }
+  #axp-taskbar { border-top: 1px solid CanvasText; }
+  .title-bar, .np-titlebar, .titlebar { border-bottom: 1px solid CanvasText; text-shadow: none !important; }
+}

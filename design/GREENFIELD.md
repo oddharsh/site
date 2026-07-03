@@ -5,9 +5,11 @@ adversarial verification against live sources; the 5 corrections it caught are
 folded in below. This is the greenfield answer to "what would the resto-mod look
 like designed today"; the existing site converges on it incrementally.
 Owner amendment 2026-07-02: the photo camera-back tooltip KEEPS its
-cursor-following behavior on thumbnails (grid + archive); the synthesis's
-anchor-at-the-control verdict stands everywhere else. The tooltip DATA pipeline
-still moves to SSR bake, so the surviving JS is position-only (~1KB). -->
+cursor-following behavior on thumbnails (grid + archive). SUPERSEDED 2026-07-03:
+the anchor-at-the-control verdict was tried live for pointer hover and rolled
+back the same day — ALL pointer tips cursor-follow (the album art glides like
+the camera back); anchoring survives as the keyboard-focus path only. The
+tooltip DATA pipeline moved to the upload-time bake as planned. -->
 
 # aadhar.sh, rebuilt from zero: the 2026 resto-mod blueprint
 
@@ -230,7 +232,7 @@ Tiers stay as measured: 600px AVIF ~22KB and 400px AVIF ~12KB in one `<source sr
 - **JPEG XL tier.** 1 stable engine; a third encode pipeline for ~15% on Safari alone; encoder staged for the flip.
 - **Dark mode / `light-dark()`.** Luna is a light OS; forced-colors High Contrast is the honest dark path.
 - **corner-shape / superellipse.** The look caps radii at 3px; a superellipse reads 2025 in 1 frame.
-- **Cursor-following tooltips, everywhere except photo thumbnails.** XP tips popped at the control, so track/artist/generic tips anchor. The photo camera-back keeps its cursor-follow by owner decree (2026-07-02): a signature behavior, priced at ~1KB of position-only script.
+- **Cursor-following tooltips** — refusal RETIRED (2026-07-03). The everywhere-except-photos version shipped for a few hours and the owner missed the glide immediately; under OEM++ the taste test outranks period ToolTip behavior. All pointer tips follow the cursor; keyboard focus gets the anchored treatment.
 - **Scroll-driven animations, case-by-case (OEM++ re-adjudication).** No blanket period veto; the test is whether a given use reads as Luna (a file-copy progress bar tied to reading progress passes; parallax reveals read 2015 and fail). Admitted per use where 2 engines ship it, on taste review.
 - **`appearance: base-select`.** No genuine select exists in the design; adding one to use the feature is resume-driven development.
 - **`hidden=until-found`.** Redundant: the collapsed regions are `details`, which find-in-page already auto-expands where supported.
@@ -253,13 +255,13 @@ Tiers stay as measured: 600px AVIF ~22KB and 400px AVIF ~12KB in one `<source sr
 3. **The full token set goes in.** The no-color-tokens rule priced definitions against uncacheable inline bytes; a cached-forever sheet flips that ledger.
 4. **The counter leaves the document.** SHIPPED v133 (2026-07-02), DO-backed variant: hit.svg ticks the existing Counter DO, so no KV seeding and increments stay atomic. hit.svg + activation beacon makes every homepage GET pure, HEAD/bot/prerender-immune by construction, and puts the homepage in the prerender set its own counter used to bar it from. Per-visit HTML spend drops ~31KB to ~14KB.
 5. **View Transitions: the current site was right.** The synthesis first ruled ordinary hops back to instant cuts ("XP never animated document loads"); the OEM++ re-adjudication retracts that. Navigation is a window verb in the desktop metaphor, and the current site's window morphs on hops are the design. What survives of the verdict: morphs stay window-shaped (zoom, linear, no crossfades), stay under 2 named elements per page, and honor reduced-motion.
-6. **Tooltips anchor at the control** with the 500ms delay and 120ms fade, except the photo camera-back, which keeps cursor-follow (owner's call). Its data pipeline still moves to SSR bake, so the surviving script is a ~1KB position loop with the earn-it will-change lifecycle.
+6. **Tooltips anchor at the control** — TRIED AND ROLLED BACK (owner re-ruling 2026-07-03): the 500ms cold-hover delay read as lag and the gliding album art was missed within hours. All pointer tips cursor-follow; the anchor+delay+fade treatment survives as the keyboard-focus path. The data half of the verdict shipped: histograms + EXIF bake at photo-add time (v139).
 7. **Histograms move to encode time** as ~250B SVGs and EXIF inlines into the page; the hover-time decode + getImageData pipeline and the fetch-on-hover meta files are deleted.
 8. **Images go content-addressed.** SHIPPED 2026-07-03 (hash half; SVT re-encode split out, see PORTING duty 4): `?v=THUMB_VERSION` bumps re-downloaded ~2.3MB per returning visitor and existed to dodge 404 poisoning; hashed /i/ filenames kill both, and old URLs 301 for a year. The hand-referenced shell assets keep `?v=N` so hand-authoring never chases hashes.
 9. **The service worker and CACHE_VERSION ritual are deleted.** SHIPPED v136 (2026-07-03): unregister stub + all 24 registrations stripped in one deploy; bump-version.sh reads MAX(vnum) from D1. bump-version.sh keeps only its deploy-log insert; /updates and /restore still read the one table.
 10. **/around's crawl leaves the request path** for a cron (SHIPPED v134, 2026-07-03; */30 schedule); the page becomes a static snapshot and drops off the speculation deny-list.
 11. **`no-store` goes from lesson to law**, and /run gets the zero-JS ladder today's script-only Run box lacks. SHIPPED v135 (2026-07-03): /run + /photos live, listings 301, /updates + /restore on private,no-cache.
-12. **forced-colors, print, and reduced-motion coverage exist.** Today they don't, and all three are cheap.
+12. **forced-colors, print, and reduced-motion coverage exist.** SHIPPED v142 (2026-07-03) in luna.css; reduced-motion was already covered by the VT + animation gates.
 13. **Notepad autosize moves to `field-sizing: content`**, deleting measurement script.
 
 ## The 5 biggest risks
