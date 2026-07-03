@@ -178,10 +178,23 @@ edge-direct again permanently.
    now derives vnum from SELECT MAX(vnum) in D1 and touches no file.
 3. IN EFFECT: /nav.js + /notepad.js keep serving 200 through the stub window
    (old SWR caches return the cached copy on 404 forever); 410 only after.
-4. ?v= to content-hash is ONE atomic deploy: the manifest KV bakes literal ?v=N
-   strings, so bust manifest:images (+ :fresh) at cutover; keep /images/*.<img>
-   worker-first for the 301 layer; add /i/* to _headers immutable, keep it OUT
-   of the allowlist; bundle the parked SVT re-encode into this invalidation.
+4. DONE for the hash half (2026-07-03): /i/<stem>.<hash8>.<ext> serves the 438
+   tier files immutable + edge-direct (OUT of the allowlist), hashes.json +
+   scripts/hash-thumbnails.sh feed the manifest bake, /images/<thumb> is the
+   301 layer (worker-first, known stems redirect, unknown still 404-clamp),
+   every consumer (home SSR + inline fallback + /photos + masonry) reads
+   manifest URLs verbatim with an abs() shim so a stale pre-hash manifest
+   can't break the cutover window, and add-photos.sh hashes new tiers + busts
+   value AND :fresh sentinel. THE SVT RE-ENCODE WAS SPLIT OUT, deliberately
+   breaking the bundling condition: the A/B's parity crf didn't survive the
+   session, and re-deriving it inside the atomic cutover would have stacked an
+   unverified fleet re-encode on the riskiest migration. The bundle's economics
+   also softened: with hashed URLs a later re-encode invalidates per file and
+   costs returning visitors only the thumbs they actually browse, not a global
+   re-download. SVT stays PARKED with its own checklist: re-derive parity crf
+   (sweep 4 crfs on ~10 photos against current aom sizes), fleet-encode color
+   thumbs via ffmpeg/libsvtav1 tune=iq (mono keeps aom yuv400 bytes), visual
+   spot-check at 2x, then hash-thumbnails.sh + manifest bust does the rest.
 5. DONE (2026-07-02, v133), amended: the footer is <img src="/hit.svg"> + the
    prerenderingchange beacon, but the store stayed the Counter DO (hit.svg
    ticks it directly), which deleted the KV-seeding step and kept increments

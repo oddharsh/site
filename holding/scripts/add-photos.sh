@@ -264,8 +264,11 @@ if [ "$(ls -A "$EXPORTS" 2>/dev/null)" ]; then
 fi
 echo ""
 
-# ── phase 4: metadata.json + per-stem files + cache bust ─────────────
-echo "phase 4 — metadata regen + cache bust"
+# ── phase 4: content-hash the new tiers + metadata + cache bust ──────
+echo "phase 4 — hash tiers + metadata regen + cache bust"
+# content-address every tier into holding/i/ + refresh hashes.json (the
+# manifest bakes /i/ URLs from that map; idempotent, only new bytes copy)
+"$SCRIPT_DIR/hash-thumbnails.sh" 2>&1 | tail -1
 # regenerate from the FIRST input dir if it was a directory; else from the
 # parent dir of the first file (metadata script walks one canonical dir).
 META_SRC=""
@@ -281,11 +284,10 @@ else
   echo "  exiftool or jq missing — skipping metadata regen"
 fi
 
-wrangler kv key delete --namespace-id="$NS" "manifest:images"  --remote >/dev/null 2>&1 || true
-wrangler kv key delete --namespace-id="$NS" "idx:images"       --remote >/dev/null 2>&1 || true
-wrangler kv key delete --namespace-id="$NS" "idx:imagesfull"   --remote >/dev/null 2>&1 || true
-echo "  manifest + index caches busted"
+wrangler kv key delete --namespace-id="$NS" "manifest:images"        --remote >/dev/null 2>&1 || true
+wrangler kv key delete --namespace-id="$NS" "manifest:images:fresh"  --remote >/dev/null 2>&1 || true
+echo "  manifest cache busted (value + fresh sentinel)"
 echo ""
 
 echo "✓ done. deploy with:"
-echo "    wrangler pages deploy holding --project-name aadhar-sh --branch holding --commit-dirty=true"
+echo "    npm run deploy"

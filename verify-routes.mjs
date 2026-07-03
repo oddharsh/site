@@ -14,15 +14,23 @@
 //
 // Cache-busted per request so we measure the deployment, not the edge cache.
 
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 
 const base = (process.argv[2] || "https://aadhar.sh").replace(/\/$/, "");
 
 // Real identifiers that exist in the repo today (see writing/posts.json + images/).
 const SLUG = "in-flux";
-const THUMB = "L1000069_3-400.avif";   // /images/<stem>.avif thumbnail
+const THUMB = "L1000069_3-400.avif";   // legacy thumb shape (now a 301 into /i/)
 const META = "L1000069_3";             // /images/meta/<stem>.json
 const FULL = "L1000069_3.jpg";         // /images/full/<key>
+
+// the content-addressed twin of META's main avif, read from the same
+// hashes.json the worker bakes manifests from, so this row tracks re-encodes.
+let HASHED = null;
+try {
+  const hashes = JSON.parse(readFileSync(new URL("./holding/images/hashes.json", import.meta.url), "utf8"));
+  if (hashes[META] && hashes[META].a) HASHED = `/i/${META}.${hashes[META].a}.avif`;
+} catch {}
 
 // status: a number, or an array of acceptable numbers.
 // ct: a content-type prefix the response must start with (skipped for redirects).
@@ -78,7 +86,9 @@ const ROUTES = [
   { path: "/images/metadata.json", status: 200, ct: "application/json" },
   { path: `/images/meta/${META}.json`, status: 200, ct: "application/json" },
   { path: `/images/full/${FULL}`, status: 200, ct: "image/jpeg" },
-  { path: `/images/${THUMB}`, status: 200, ct: "image/avif" },
+  // legacy thumb URL 301s into /i/; the hashed twin serves immutable bytes
+  { path: `/images/${THUMB}`, status: 301 },
+  ...(HASHED ? [{ path: HASHED, status: 200, ct: "image/avif" }] : []),
   // static section pages that are already URL-skeuomorphic (must not regress)
   { path: "/garage/", status: 200, ct: "text/html" },
   { path: "/garage/scroll", status: 200, ct: "text/html" },

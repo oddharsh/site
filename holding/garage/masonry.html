@@ -196,8 +196,9 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
     var html = photos.map(function (p) {
       var m = meta[p.stem] || {};
       var ar = (m.width && m.height) ? (m.width + " / " + m.height) : "1";
-      var avif = "/images/" + (p.thumb_avif || (p.stem + ".avif"));
-      var jpg = "/images/" + (p.thumb_jpg || (p.stem + ".jpg"));
+      var abs = function (u) { return u && u.charAt(0) === "/" ? u : "/images/" + u; };
+      var avif = abs(p.thumb_avif || (p.stem + ".avif"));
+      var jpg = abs(p.thumb_jpg || (p.stem + ".jpg"));
       var full = "/images/full/" + encodeURI(p.full || (p.stem + ".jpg"));
       return '<a class="tile" href="' + esc(full) + '" style="--ar:' + esc(ar) + '" title="' + esc(p.stem) + '">' +
         '<picture><source type="image/avif" srcset="' + esc(avif) + '">' +

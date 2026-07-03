@@ -33,6 +33,13 @@
 /images/*
   Cache-Control: public, max-age=31536000, immutable
 
+# content-addressed thumbnails (hash cutover 2026-07-03): /i/<stem>.<hash8>.<ext>
+# names exact bytes forever, so immutable is structurally true here — a new
+# encode gets a new URL, and the old /images/<thumb> shape 301s into this one.
+# Deliberately NOT worker-first: these are edge-direct static assets.
+/i/*
+  Cache-Control: public, max-age=31536000, immutable
+
 # resto-mod car reference photos (homepage car-link tooltips). versioned via
 # ?v=N in the markup, so safe to cache a year + immutable like the thumbnails.
 # bump the ?v in index.html if a car image is replaced in place.

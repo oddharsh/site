@@ -31,9 +31,11 @@ wrangler pages deploy holding --project-name aadhar-sh --branch holding --commit
 # rebuild jpegli (Google's JPEG encoder, ~25% smaller than mozjpeg)
 ./holding/scripts/build-jpegli.sh
 
-# bust caches via wrangler (RN_KV namespace ID hardcoded in scripts)
+# bust caches via wrangler (RN_KV namespace ID hardcoded in scripts).
+# manifest busts need BOTH keys (value + freshness sentinel)
 NS="3cb8a107c58e47dc9244e75b33401f36"
 wrangler kv key delete --namespace-id="$NS" "manifest:images" --remote
+wrangler kv key delete --namespace-id="$NS" "manifest:images:fresh" --remote
 wrangler kv key delete --namespace-id="$NS" "tracks:4IRq9W1N2tOWHhH0O3vXiF" --remote
 ```
 
@@ -61,7 +63,7 @@ Single-page personal site at `aadhar.sh`. Hosted on Cloudflare Pages, with a
 | `holding/index.md` | Markdown source of homepage copy (used by `/llms.txt` and as a fallback). |
 | `holding/sitemap.xml`, `robots.txt` | Standard SEO files. robots.txt explicitly allows AadharshBot. |
 | `holding/.well-known/http-message-signatures-directory` | JWKS for AadharshBot's Ed25519 public key (Web Bot Auth IETF draft). |
-| `holding/images/` | 146 thumbnails (1200px AVIF + JPG pairs + 400px mobile AVIF tier) + `metadata.json` (EXIF index) + `meta/<stem>.json` per-photo EXIF for the hover tooltip. |
+| `holding/images/` + `holding/i/` | `images/` holds the photo DATA surfaces: `metadata.json` (EXIF index), `meta/<stem>.json` (per-photo EXIF the tooltip fetches), `alt.json` (AI captions), `hashes.json` (stem to hash8 map). The pixel tiers (600px AVIF+JPG squares + 400px mobile AVIF) live in `i/` under content-hashed names, 438 files for 146 photos. |
 | `holding/scripts/` | Photo-pipeline + asset scripts (see below). Beyond the core pipeline (`add-photos.sh`, `extract-photo-metadata.sh`, `build-jpegli.sh`): `add-car-photo.sh` (one resto-mod reference photo into the dual AVIF+JPG pair the car-link tooltips expect, output `holding/cars/<stem>.{avif,jpg}`, no EXIF/R2); `gen-alt-text.py` (AI alt text for every grid photo via the cf-garage Workers-AI caption endpoint, writes `holding/images/alt.json` `{stem: alt}`, resumable); `gen-encoding-samples.sh` (regenerates the color sample set for the `/garage/encoding` study through every encoder, prints byte counts + bytes-per-pixel); `reencode-thumbnails.sh` (re-encodes all published grid thumbnails as pre-cropped center squares from the canonical source folder, two square tiers); `photo-histograms.py` (kept on disk but unused: histograms are now computed client-side). |
 
 ### The photo pipeline
@@ -108,29 +110,34 @@ Two encoders + one transform tool, all built from source:
 - **Pillow** — no longer needed: histograms are computed client-side
   from the thumbnail; `photo-histograms.py` is kept on disk but unused.
 
-### `<picture>` + cache-busting strategy
+### `<picture>` + content-addressed thumbnails
 
-Photo thumbnails are dual-encoded AVIF + JPG, served via `<picture>`:
+Photo thumbnails are dual-encoded AVIF + JPG, served via `<picture>` from
+content-hashed URLs (cutover 2026-07-03):
 
 ```html
 <a href="/images/full/<filename>" data-full="..." data-size="..." data-uploaded="...">
   <picture>
-    <source type="image/avif" srcset="/images/<stem>.avif?v=10">
-    <img src="/images/<stem>.jpg?v=10" loading="lazy" decoding="async">
+    <source type="image/avif" media="(max-width: 560px)" srcset="/i/<stem>-400.<hash8>.avif">
+    <source type="image/avif" srcset="/i/<stem>.<hash8>.avif">
+    <img src="/i/<stem>.<hash8>.jpg" loading="lazy" decoding="async">
   </picture>
 </a>
 ```
 
-**The `?v=N` query is cache insurance.** The `THUMB_VERSION` constant
-(`holding/_worker.js/lib/const.js`, currently `19`) is appended as `?v=N`
-to every thumbnail URL in the pre-rendered HTML. Bump it when thumbnails
-are re-encoded or when you need a fresh edge cache key for a stale-looking
-thumbnail.
+**A URL names exact bytes.** `scripts/hash-thumbnails.sh` (run by
+add-photos.sh) sha256-hashes each tier into `holding/i/` and writes
+`holding/images/hashes.json`, which `buildImagesManifest` bakes into the
+manifest's absolute `thumb_avif`/`thumb_jpg`/`thumb_small` URLs. `/i/*` is
+edge-direct + immutable-1y; a re-encode mints a new URL, so there is no
+global version bump and no way for a cached 404 to shadow real bytes.
+`THUMB_VERSION` survives only in the legacy-fallback URL shape for stems
+missing from hashes.json; it should never need bumping again.
 
-Workers static assets return honest 404s now; the old Pages SPA-fallback
-masquerade is gone. The worker route at `/images/<stem>.<ext>` still clamps
-true 404 responses to `max-age=0, must-revalidate` so a missing thumbnail
-doesn't inherit the immutable `/images/*` cache rule.
+Legacy `/images/<stem>.<ext>[?v=N]` URLs 301 into `/i/` at the worker (kept
+for a year+ for old links); unknown names still get the 404 cache-clamp so
+a miss can't inherit an immutable rule. Workers static assets return honest
+404s; the old Pages SPA-fallback masquerade is gone.
 
 ### Worker enhancement (`serveHomepageWithPrerenderedTracks`)
 

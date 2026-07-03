@@ -1039,16 +1039,20 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
           [pool[i], pool[j]] = [pool[j], pool[i]];
         }
         grid.innerHTML = pool.slice(0, 12).map((p, i) => {
+          // manifest URLs are absolute (/i/<stem>.<hash8>.<ext>, content-
+          // addressed); abs() tolerates the older relative shape so a stale
+          // cached manifest can never break the fallback grid.
+          const abs = (u) => (u && u.startsWith("/") ? u : `/images/${u}`);
           const vq = p.thumb_avif && p.thumb_avif.includes("?") ? "?" + p.thumb_avif.split("?")[1] : "";
-          const small = `/images/${esc(p.stem)}-400.avif${vq}`;   // mobile tier (THUMB_SMALL_PX)
+          const small = p.thumb_small ? abs(p.thumb_small) : `/images/${esc(p.stem)}-400.avif${vq}`;
           const load = i === 0 ? 'loading="eager" fetchpriority="high"' : 'loading="lazy"';
           const sz = (typeof p.size === "number" && p.size > 0) ? ` data-size="${p.size}"` : "";
           const up = p.uploaded ? ` data-uploaded="${esc(p.uploaded)}"` : "";
           return `<a href="/images/full/${encodeURI(p.full)}" target="_blank" rel="noopener" data-full="${esc(p.full)}"${sz}${up}>` +
             `<picture>` +
-              `<source type="image/avif" media="(max-width: 560px)" srcset="${small}">` +
-              `<source type="image/avif" srcset="/images/${esc(p.thumb_avif)}">` +
-              `<img alt="${esc(alt[p.stem] || "")}" width="600" height="600" ${load} decoding="async" src="/images/${esc(p.thumb_jpg)}">` +
+              `<source type="image/avif" media="(max-width: 560px)" srcset="${esc(small)}">` +
+              `<source type="image/avif" srcset="${esc(abs(p.thumb_avif))}">` +
+              `<img alt="${esc(alt[p.stem] || "")}" width="600" height="600" ${load} decoding="async" src="${esc(abs(p.thumb_jpg))}">` +
             `</picture></a>`;
         }).join("");
       } catch (e) { /* leave the slots empty rather than guess — honest */ }

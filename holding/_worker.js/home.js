@@ -3,7 +3,7 @@
 import { THUMB_VERSION } from "./lib/const.js";
 import { escAttr, escHtml, wantsMarkdown } from "./lib/http.js";
 import { HOMEPAGE_DISCOVERY_LINK, withHomepageDiscoveryHeaders } from "./lib/security.js";
-import { THUMB_SMALL_PX, getAltMap, getImagesManifest } from "./photos.js";
+import { THUMB_SMALL_PX, absThumb, getAltMap, getImagesManifest } from "./photos.js";
 import { getTracksSWR } from "./rn.js";
 
 export function homepageHeadResponse(request) {
@@ -94,7 +94,7 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
   if (!tracksPayload?.tracks?.length && !photos && !env.COUNTER && !lastModStr) return withHomepageDiscoveryHeaders(res);
 
   const rewriter = new HTMLRewriter();
-  let lcpAvif = null, lcpStem = null;  // first photo tile → responsive preload Link
+  let lcpAvif = null, lcpSmall = null;  // first photo tile → responsive preload links
 
   // ── /rn/tracks → np-list ────────────────────────────────────────
   if (tracksPayload?.tracks?.length) {
@@ -127,10 +127,15 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
   // CF/browser/intermediaries don't pin this selection across refreshes.
   // <picture> uses AVIF primary + JPG fallback; data-* attrs feed the
   // hover tooltip; target=_blank + rel=noopener on the anchor.
+  // 400px-tier URL for a manifest entry, tolerant of the pre-hash shape
+  const smallOf = (p) => p.thumb_small
+    ? absThumb(p.thumb_small)
+    : (p.stem ? `/images/${p.stem}-${THUMB_SMALL_PX}.avif?v=${THUMB_VERSION}` : null);
+
   if (photos) {
     const pick = pickRandom(photos, 12);   // ~12 fills the justified rows into a fuller rectangle
-    lcpAvif = pick[0] && pick[0].thumb_avif ? pick[0].thumb_avif : null;
-    lcpStem = pick[0] && pick[0].stem ? pick[0].stem : null;
+    lcpAvif = pick[0] && pick[0].thumb_avif ? absThumb(pick[0].thumb_avif) : null;
+    lcpSmall = pick[0] ? smallOf(pick[0]) : null;
     const slotsHtml = pick.map((p, i) => {
       const full     = p.full;
       // first tile: eager + high fetch priority. it's the topmost photo
@@ -159,9 +164,11 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
           // mobile (<=560px) gets the 400px tile — at the ~100px mobile box that's
           // the same density 800px gives the ~197px desktop box, at ~1/3 the bytes.
           // ordered first: <picture> uses the first source whose media matches.
-          (p.stem ? `<source type="image/avif" media="(max-width: 560px)" srcset="/images/${escAttr(p.stem)}-${THUMB_SMALL_PX}.avif?v=${THUMB_VERSION}">` : "") +
-          (p.thumb_avif ? `<source type="image/avif" srcset="/images/${escAttr(p.thumb_avif)}">` : "") +
-          `<img alt="${escAttr(altMap[p.stem] || "")}" width="600" height="600" ${imgLoad} decoding="async" src="/images/${escAttr(p.thumb_jpg)}">` +
+          // URLs come from the manifest verbatim (absThumb tolerates a stale
+          // pre-hash manifest during the cutover window).
+          (smallOf(p) ? `<source type="image/avif" media="(max-width: 560px)" srcset="${escAttr(smallOf(p))}">` : "") +
+          (p.thumb_avif ? `<source type="image/avif" srcset="${escAttr(absThumb(p.thumb_avif))}">` : "") +
+          `<img alt="${escAttr(altMap[p.stem] || "")}" width="600" height="600" ${imgLoad} decoding="async" src="${escAttr(absThumb(p.thumb_jpg))}">` +
         `</picture>` +
       `</a>`;
     }).join("");
@@ -193,8 +200,8 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
   // type=image/avif hint makes non-AVIF browsers skip it (they use the JPG).
   if (lcpAvif) {
     const links =
-      `<link rel="preload" as="image" type="image/avif" fetchpriority="high" media="(min-width: 561px)" href="/images/${escAttr(lcpAvif)}">` +
-      (lcpStem ? `<link rel="preload" as="image" type="image/avif" fetchpriority="high" media="(max-width: 560px)" href="/images/${escAttr(lcpStem)}-${THUMB_SMALL_PX}.avif?v=${THUMB_VERSION}">` : "");
+      `<link rel="preload" as="image" type="image/avif" fetchpriority="high" media="(min-width: 561px)" href="${escAttr(lcpAvif)}">` +
+      (lcpSmall ? `<link rel="preload" as="image" type="image/avif" fetchpriority="high" media="(max-width: 560px)" href="${escAttr(lcpSmall)}">` : "");
     rewriter.on("head", { element(el) { el.prepend(links, { html: true }); } });
   }
   return withHomepageDiscoveryHeaders(rewriter.transform(res));

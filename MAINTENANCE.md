@@ -14,7 +14,7 @@ Three deploy targets:
 Key facts (don't hardcode these elsewhere, they drift):
 - RN_KV namespace id: `3cb8a107c58e47dc9244e75b33401f36`
 - R2 bucket: `aadhar-photos` (SOOC originals + full-res JPGs)
-- `THUMB_VERSION` lives in `holding/_worker.js/lib/const.js` (the `?v=N` on every thumbnail).
+- Thumbnails are content-addressed at `/i/<stem>.<hash8>.<ext>` (hashes.json via `hash-thumbnails.sh`); `THUMB_VERSION` in `lib/const.js` survives only for the legacy-fallback URL shape.
 - The service worker RETIRED in v136 (2026-07-03): `holding/sw.js` is an unregister stub that must keep serving 200 for a year+. There is no `CACHE_VERSION`; the deploy-log number lives in D1 (`bump-version.sh` derives the next from `MAX(vnum)`).
 - Canonical photo source folder: `/Users/aadharsh/Downloads/to post (from ssd)/`. Privacy rule: nothing else from elsewhere on disk feeds the pipeline.
 
@@ -103,7 +103,7 @@ wrangler deploy   # from the repo root; deploys the aadhar-sh Worker (holding/ a
 ```
 - Accepts JPG/PNG/HEIF/HIF. For HEIF it also uploads a visually-lossless JPG export as the `/images/full/<stem>.jpg` click target.
 - It busts `manifest:images`, `idx:images`, `idx:imagesfull` so the worker re-derives the grid from R2 on the next request.
-- If a thumbnail looks stale after deploy, bump `THUMB_VERSION` (see below). It does NOT auto-bump it (one new photo doesn't need it; a whole re-encode does).
+- A thumbnail can't go stale anymore: its URL is its bytes (`/i/<stem>.<hash8>`). If one looks wrong, re-run `hash-thumbnails.sh` and bust the manifest (value + `:fresh`); a changed file gets a new URL automatically.
 
 ### Regenerate just the EXIF metadata (photos already uploaded)
 ```bash
@@ -175,7 +175,7 @@ wrangler kv key delete --namespace-id="$NS" "tracks:<id>:fresh" --remote
 ```
 
 ### Bump THUMB_VERSION
-Edit `const THUMB_VERSION` in `holding/_worker.js/lib/const.js`, deploy. Do this when you re-encode thumbnails, or when you need a fresh edge cache key for a stale-looking thumbnail. Workers static assets return honest 404s now; the thumbnail worker route still clamps true 404s to `max-age=0` so misses do not inherit `/images/*` immutable caching.
+Mostly retired (hash cutover 2026-07-03): thumbnails are content-addressed at `/i/<stem>.<hash8>.<ext>`, so a re-encode mints new URLs by itself — run `./holding/scripts/hash-thumbnails.sh` after re-encoding, bust `manifest:images` + `manifest:images:fresh`, deploy. `THUMB_VERSION` survives only in the legacy-fallback URL shape (stems missing from hashes.json) and in the `/images/<thumb>` 301 layer's inputs; it should never need bumping. The worker route still clamps unknown-thumb 404s to `max-age=0` so misses do not inherit immutable caching.
 
 ### Log a deploy (bump-version.sh)
 `./holding/scripts/bump-version.sh <slug> "<title>"`, then deploy. Inserts the next checkpoint into D1 (vnum from `SELECT MAX(vnum)`), which is what `/updates` and `/restore` render. Nothing edits sw.js anymore: the service worker retired in v136, `nav.js`/`notepad.js` updates land via their short `_headers` max-age plus the per-deploy edge purge, and the stub at `/sw.js` cleans up old installs.

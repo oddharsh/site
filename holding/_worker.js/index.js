@@ -13,7 +13,7 @@ import { serveAssetWith404Clamp, serveFreshAsset } from "./lib/assets.js";
 import { CANONICAL_HOST } from "./lib/const.js";
 import { wantsMarkdown } from "./lib/http.js";
 import { withSecurityHeaders } from "./lib/security.js";
-import { handleImagesManifest, handlePhotos, servePhotoFromR2 } from "./photos.js";
+import { getThumbHashes, handleImagesManifest, handlePhotos, servePhotoFromR2 } from "./photos.js";
 import { handleReading } from "./reading.js";
 import { handleRun } from "./run.js";
 import { handleRn, handleRnAdmin, handleRnSet, handleRnTracks } from "./rn.js";
@@ -223,7 +223,28 @@ function routeImagesMeta(request, env) {
   });
 }
 
-function routeImageThumb(request, env) {
+// legacy thumbnail URLs (/images/<stem>.<ext>[?v=N]) 301 into their content-
+// addressed /i/ twins, so every old link, bookmark, and cached page keeps
+// resolving for at least a year after the hash cutover. Unknown names fall
+// through to the asset layer with the 404 cache-clamp, same as before.
+async function routeImageThumb(request, env, _ctx, url) {
+  const m = url.pathname.match(/^\/images\/([^/]+?)(-400)?\.(avif|jpe?g)$/i);
+  if (m) {
+    const [, stem, small, ext] = m;
+    const h = (await getThumbHashes(env))[stem];
+    const isJpg = /^jpe?g$/i.test(ext);
+    const key = small ? "s" : (isJpg ? "j" : "a");
+    if (h && h[key]) {
+      const name = small ? `${stem}-400.${h[key]}.avif` : `${stem}.${h[key]}.${isJpg ? "jpg" : "avif"}`;
+      return new Response(null, {
+        status: 301,
+        headers: {
+          "location":      `${url.origin}/i/${name}`,
+          "cache-control": "public, max-age=86400",
+        },
+      });
+    }
+  }
   return serveAssetWith404Clamp(request, env);
 }
 
