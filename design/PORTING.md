@@ -247,12 +247,33 @@ Firefox, ~0ms prerendered on Chromium, back/forward ~0ms bfcache everywhere.
 - PHASE C SHIPPED IN PART (v142): print coverage (strip the OS, flatten the
   window into a document) + forced-colors coverage (the engine strips
   backgrounds/bevels itself; luna.css adds only the boundaries flattening
-  can't infer). Reduced-motion was already covered. DEFERRED, each its own
-  future unit needing side-by-side review: dialog-element Run, native
-  ::-webkit-scrollbar replacing the JS scrollbar widget, CSS resize:both
-  replacing the JS grip. REJECTED for this site's shape: checkbox minimize
-  (one window per page; nothing to minimize INTO) and popover Start (no
-  Start menu exists; Start IS Run, and the /run ladder shipped in B).
+  can't infer). Reduced-motion was already covered. REJECTED for this
+  site's shape: checkbox minimize (one window per page; nothing to
+  minimize INTO) and popover Start (no Start menu exists; Start IS Run,
+  and the /run ladder shipped in B).
+- PHASE C FOLLOW-UPS SHIPPED (v143): (1) Run is a real <dialog> —
+  showModal's native focus trap, Esc, inert page, and focus restore retire
+  the hand-rolled backdrop div and lastFocus juggling; light dismiss is a
+  click landing on the dialog's own backdrop-covered margin. (2) The JS
+  scrollbar widget retired: luna.css dresses the REAL bar
+  (::-webkit-scrollbar 16px Luna bevels with working arrow buttons; styling
+  any part opts macOS out of overlay bars, so the bar is persistent exactly
+  like the widget was; Firefox takes scrollbar-color, its honest thin
+  rendering). The 28px pre-reserved gutters retuned to 12px site-wide so
+  bar + pad keeps the old 28px rhythm. (3) CSS resize:both owns window
+  resizing (>=720px, min 260x140, never maximized); nav.js keeps only the
+  decorative dotted grip (pointer-events:none) and a corner-gesture clamp
+  lift, because native resize cannot exceed a page's design max-width.
+- PHASE D SHIPPED for the worker pages (v143): the canonical window kit
+  (title bar, gel caption buttons, frame, xp-button/input, .content pad)
+  hoisted from xpChromeCss into luna.css with EVERY selector wrapped in
+  :where() — zero specificity, so static pages' inline copies win all ties
+  and render byte-identically, while lunaPage + Notepad documents dropped
+  ~5KB + ~1.6KB of inline chrome each (.np-controls twins carry the
+  Notepad gels). The transformer twins pseudo-classes AND pseudo-elements
+  correctly (the first cut leaked stroke styles onto the close element;
+  caught in verification, rebuilt from source). Static pages keep their
+  inline chrome by View Source doctrine; dropping it stays optional.
 - TOOLTIP RE-RULING (owner, 2026-07-03, v142): the anchored-hover
   experiment from the task-8 pass shipped and was rolled back the same
   day. Pointer tips ALL cursor-follow again, instantly — gliding the album
@@ -260,11 +281,6 @@ Firefox, ~0ms prerendered on Chromium, back/forward ~0ms bfcache everywhere.
   the 500ms cold-hover delay read as lag. Anchor positioning survives as
   the KEYBOARD path only (its original role). The baked-histogram half of
   task 8 is untouched and stays.
-- PHASE D (open): the inline chrome dedup — pages drop window-chrome rules
-  luna.css could carry (index.html's copy, xpChromeCss's overlap). Needs a
-  unified chrome audit first: per-page hand-tuned diffs mean a shared rule
-  could clobber deliberate variation. The homepage keeps its soul inline
-  per the blueprint's critical-subset rule regardless.
 - shell.js NAMING: nav.js keeps its URL (old HTML references it); it now IS
   the blueprint's shell.js in role — wiring, not construction — name last.
 

@@ -215,7 +215,7 @@
   }
 
   // ── build DOM ────────────────────────────────────────────────────────────────
-  var run, input, list, backdrop, results = [], sel = -1, lastQuery = null, semantic = { q: "", items: [] }, searchTimer = null;
+  var run, input, list, results = [], sel = -1, lastQuery = null, semantic = { q: "", items: [] }, searchTimer = null;
   // System Properties tray popout state
   var balloon = null, balloonKind = null, sysData = null, updData = null;
 
@@ -308,7 +308,7 @@
       [].forEach.call(start.querySelectorAll(".axp-kbd"), function (k) { k.textContent = KBD; });
       start.addEventListener("click", function (e) {
         e.preventDefault();   // the href is the JS-off floor; JS gets the palette
-        (run && run.classList.contains("open")) ? closeRun() : openRun();
+        (run && run.open) ? closeRun() : openRun();
       });
     }
     var sndBtn = D.getElementById("axp-sound");
@@ -456,19 +456,28 @@
   }
 
   function buildRun() {
-    backdrop = el('<div id="axp-run-back"></div>');
-    backdrop.addEventListener("click", closeRun);
+    // a REAL <dialog> (phase C follow-up): showModal gives the native focus
+    // trap, Esc handling, inert page, and focus restore — the hand-rolled
+    // backdrop div, lastFocus juggling, and aria-modal claims all retire.
     run = el(
-      '<div id="axp-run" role="dialog" aria-modal="true" aria-label="Run">' +
+      '<dialog id="axp-run" aria-label="Run">' +
         '<div class="tb"><span>Run</span><span class="axp-kbd" aria-hidden="true">' + KBD + '</span><button class="x" type="button" title="Close" aria-label="Close">✕</button></div>' +
         '<div class="body"><div class="ico" aria-hidden="true"><div class="doc"></div><div class="sw"></div></div>' +
           '<div class="prompt">Type the name of a page, photo, or profile, and <b>aadhar.sh</b> will open it for you.</div></div>' +
         '<div class="open-row"><label for="axp-run-in">Open:</label><input id="axp-run-in" type="text" autocomplete="off" spellcheck="false" placeholder="start typing… (e.g. garage, encoding, spotify, a photo)"></div>' +
         '<div class="list" id="axp-run-list" role="listbox" aria-label="destinations"></div>' +
         '<div class="btns"><button class="btn def" type="button" data-act="ok">OK</button><button class="btn" type="button" data-act="cancel">Cancel</button></div>' +
-      '</div>'
+      '</dialog>'
     );
-    D.body.appendChild(backdrop); D.body.appendChild(run);
+    D.body.appendChild(run);
+    // ::backdrop click = light dismiss: a click landing on the dialog element
+    // itself (not its children) can only be the backdrop-covered margin area
+    run.addEventListener("click", function (e) { if (e.target === run) closeRun(); });
+    // native close (Esc/cancel, or run.close()): one place for the side effects
+    run.addEventListener("close", function () {
+      AXP_SND.play("close");
+      var s = D.getElementById("axp-start"); if (s) s.setAttribute("aria-expanded", "false");
+    });
     input = run.querySelector("#axp-run-in");
     list = run.querySelector("#axp-run-list");
     run.querySelector(".x").addEventListener("click", closeRun);
@@ -581,7 +590,7 @@
       .then(function (r) { return r.ok ? r.json() : { results: [] }; })
       .then(function (d) {
         semantic = { q: qKey, items: (d.results || []).map(function (x) { return { kind: "search", label: x.title, hint: x.snippet, path: x.url }; }) };
-        if (input && input.value.trim().toLowerCase() === qKey && run && run.classList.contains("open")) render();
+        if (input && input.value.trim().toLowerCase() === qKey && run && run.open) render();
       })
       .catch(function () {});
   }
@@ -688,23 +697,18 @@
   }
 
   // ── open / close ──────────────────────────────────────────────────────────────
-  var lastFocus = null;
   function openRun() {
     if (!run) buildRun();
-    if (run.classList.contains("open")) return;
-    if (!PHOTOS) loadPhotos().then(function () { if (run.classList.contains("open")) render(); });
-    if (!WRITING) loadWriting().then(function () { if (run.classList.contains("open")) render(); });
-    lastFocus = D.activeElement;
-    backdrop.classList.add("open"); run.classList.add("open"); AXP_SND.play("open");
+    if (run.open) return;
+    if (!PHOTOS) loadPhotos().then(function () { if (run.open) render(); });
+    if (!WRITING) loadWriting().then(function () { if (run.open) render(); });
+    run.showModal(); AXP_SND.play("open");
     var s = D.getElementById("axp-start"); if (s) s.setAttribute("aria-expanded", "true");
     input.value = ""; render();
     input.focus();
   }
   function closeRun() {
-    if (!run || !run.classList.contains("open")) return;
-    run.classList.remove("open"); backdrop.classList.remove("open"); AXP_SND.play("close");
-    var s = D.getElementById("axp-start"); if (s) s.setAttribute("aria-expanded", "false");
-    if (lastFocus && lastFocus.focus) try { lastFocus.focus(); } catch (e) {}
+    if (run && run.open) run.close();   // side effects ride the "close" event
   }
 
   // ── tray balloons: brief XP notification-bubble popouts for the system-utility
@@ -819,7 +823,7 @@
   D.addEventListener("keydown", function (e) {
     if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) {
       e.preventDefault();
-      run && run.classList.contains("open") ? closeRun() : openRun();
+      run && run.open ? closeRun() : openRun();
     }
   });
 
@@ -882,62 +886,13 @@
     });
   }
 
-  // ── custom XP scrollbar on the window frame ───────────────────────────────────
-  function mountScrollbar(frame, scroller) {
-    if (frame.querySelector(":scope > .axp-sb")) return;
-    if (getComputedStyle(frame).position === "static") frame.style.position = "relative";
-    var sb = el('<div class="axp-sb" aria-hidden="true"><span class="axp-sb-up"></span><div class="axp-sb-track"><div class="axp-sb-thumb"></div></div><span class="axp-sb-down"></span></div>');
-    frame.appendChild(sb);
-    var track = sb.querySelector(".axp-sb-track"), thumb = sb.querySelector(".axp-sb-thumb");
-    // inset the bar off the window's inner bevel (right + 1px top) and stop it
-    // 15px above the bottom so it doesn't pile onto the bevel or the resize grip
-    // in the bottom-right corner — like XP, where the corner is the sizing grip.
-    function place() { sb.style.top = (scroller.offsetTop + 1) + "px"; sb.style.height = Math.max(0, scroller.offsetHeight - 16) + "px"; sb.style.right = "3px"; }
-    function update() {
-      var sh = scroller.scrollHeight, ch = scroller.clientHeight;
-      if (sh - ch <= 1) { sb.style.display = "none"; scroller.classList.remove("axp-sb-pad"); return; }
-      sb.style.display = "flex"; scroller.classList.add("axp-sb-pad");
-      var th = track.clientHeight;
-      var thumbH = Math.max(18, Math.round(th * ch / sh));
-      var maxTop = th - thumbH;
-      thumb.style.height = thumbH + "px";
-      thumb.style.top = Math.round(maxTop * (scroller.scrollTop / (sh - ch))) + "px";
-    }
-    function refresh() { place(); update(); }
-    scroller.addEventListener("scroll", update, { passive: true });
-    thumb.addEventListener("pointerdown", function (e) {
-      e.preventDefault(); e.stopPropagation();
-      var startY = e.clientY, startScroll = scroller.scrollTop;
-      var sh = scroller.scrollHeight, ch = scroller.clientHeight;
-      var maxTop = track.clientHeight - thumb.offsetHeight;
-      function mv(ev) { var frac = maxTop > 0 ? (ev.clientY - startY) / maxTop : 0; scroller.scrollTop = startScroll + frac * (sh - ch); }
-      function done() { D.removeEventListener("pointermove", mv); }
-      try { thumb.setPointerCapture(e.pointerId); } catch (_) {}
-      D.addEventListener("pointermove", mv); D.addEventListener("pointerup", done, { once: true });
-    });
-    sb.querySelector(".axp-sb-up").addEventListener("click", function (e) { e.stopPropagation(); scroller.scrollBy({ top: -48 }); });
-    sb.querySelector(".axp-sb-down").addEventListener("click", function (e) { e.stopPropagation(); scroller.scrollBy({ top: 48 }); });
-    track.addEventListener("pointerdown", function (e) {
-      if (e.target !== track) return;
-      var rel = e.clientY - track.getBoundingClientRect().top;
-      var dir = rel < (thumb.offsetTop + thumb.offsetHeight / 2) ? -1 : 1;
-      scroller.scrollBy({ top: dir * scroller.clientHeight * 0.9 });
-    });
-    if (window.ResizeObserver) { var ro = new ResizeObserver(refresh); ro.observe(scroller); ro.observe(frame); }
-    window.addEventListener("resize", refresh);
-    window.addEventListener("load", refresh);
-    refresh();
-  }
+  // The custom scrollbar widget retired in the phase-C follow-ups: luna.css
+  // now styles the REAL scrollbar (::-webkit-scrollbar bevels + arrow buttons
+  // in Chromium/WebKit; scrollbar-color in Firefox — the truthful thin
+  // rendering). Styling any ::-webkit-scrollbar part also opts macOS out of
+  // overlay bars, so the 16px XP bar is persistent exactly like the widget was.
   function initScrollbars() {
-    [].forEach.call(D.querySelectorAll(".window"), function (w) {
-      var sc = w.querySelector(":scope > .content, :scope > .body");
-      if (sc) mountScrollbar(w, sc);
-    });
-    [].forEach.call(D.querySelectorAll(".np-window"), function (w) {
-      var sc = w.querySelector(".np-text");
-      if (sc) mountScrollbar(w, sc);
-    });
-    // remember the primary window's scroll across quick reloads
+    // native bars are pure CSS now; the one JS job left is the scroll memory
     var main = D.querySelector("body > .window > .content, body > .window > .body");
     if (!main) { var npw = D.querySelector("body > .np-window"); if (npw) main = npw.querySelector(".np-text"); }
     if (main) rememberScroll(main);
@@ -969,25 +924,23 @@
 
   // ── resizable windows (bottom-right grip) ─────────────────────────────────────
   function initResize() {
+    // CSS `resize: both` does the actual resizing now (phase C follow-up; the
+    // pointer math lived here). What remains: the decorative XP dotted grip
+    // (pointer-events:none, so the native resizer under it gets the drag) and
+    // one real job the platform can't do — pages clamp windows with their
+    // design max-width/height, which native resize cannot exceed, so a
+    // gesture starting in the corner lifts the clamps first.
     [].forEach.call(D.querySelectorAll(".window,.np-window"), function (f) {
       if (f.classList.contains("np-folder")) return;   // folder hugs its content — not resizable
       if (f.querySelector(":scope > .axp-resize")) return;
       if (getComputedStyle(f).position === "static") f.style.position = "relative";
-      var g = el('<div class="axp-resize" aria-hidden="true"></div>');
-      f.appendChild(g);
-      g.addEventListener("pointerdown", function (e) {
-        if (f.classList.contains("axp-max")) return;   // no resizing a maximized window
-        e.preventDefault(); e.stopPropagation();
-        var sx = e.clientX, sy = e.clientY, rc = f.getBoundingClientRect(), w0 = rc.width, h0 = rc.height;
-        f.classList.add("axp-dragging");
-        function mv(ev) {
-          var nw = Math.max(260, Math.min(w0 + (ev.clientX - sx), innerWidth - 16));
-          var nh = Math.max(140, Math.min(h0 + (ev.clientY - sy), innerHeight - 30 - 16));
-          f.style.width = nw + "px"; f.style.maxWidth = "none"; f.style.height = nh + "px";
+      f.appendChild(el('<div class="axp-resize" aria-hidden="true"></div>'));
+      f.addEventListener("pointerdown", function (e) {
+        if (f.classList.contains("axp-max")) return;
+        var r = f.getBoundingClientRect();
+        if (r.right - e.clientX < 20 && r.bottom - e.clientY < 20) {
+          f.style.maxWidth = "none"; f.style.maxHeight = "none";
         }
-        function done() { D.removeEventListener("pointermove", mv); f.classList.remove("axp-dragging"); }
-        try { g.setPointerCapture(e.pointerId); } catch (_) {}
-        D.addEventListener("pointermove", mv); D.addEventListener("pointerup", done, { once: true });
       });
     });
   }

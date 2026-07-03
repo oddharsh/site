@@ -845,7 +845,7 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
      regardless of which nav.js a visitor has cached. 28px → a ~9px gap to the
      scrollbar. Also kills the paint→mount reflow (the grid lays out at its final
      width immediately). top/left/bottom keep .content's 12/16/16. */
-  .window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 28px !important; }
+  .window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 12px !important; }
   /* pre-JS taskbar strip — the real #axp-taskbar (z 99999) covers it once nav.js
      mounts; gradient matches it so there's no colour pop either. */
   body::after {
