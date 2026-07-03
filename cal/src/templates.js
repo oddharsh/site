@@ -492,7 +492,6 @@ function shell(title, body, env) {
   <meta name="theme-color" content="#2D78BD">
 <title>${esc(fullTitle)}</title>
 <meta name="description" content="let's grab coffee or a bagel with ${esc(env.HOST_NAME)} in NYC. requests are reviewed by hand.">
-<meta name="theme-color" content="#0858a3">
 <link rel="icon" type="image/svg+xml" href="${COFFEE_FAVICON}">
 <style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}${STYLES}${onShell ? SHELL_GEOMETRY : ""}</style>
 </head>
