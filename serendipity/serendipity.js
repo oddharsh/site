@@ -327,7 +327,8 @@ function shell(title, currentPath, bodyHtml) {
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#2D78BD">
 <title>${esc(title) === "Serendipity" ? "aadhar.sh/serendipity" : "aadhar.sh/serendipity/" + esc(title)}</title>
 <meta name="description" content="A public, shared database of events worth going to and who's going — fed by the collective, queryable by humans and agents.">
-<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}${shellCss()}</style></head><body>
+<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}${shellCss()}</style>
+<link rel="stylesheet" href="/luna.css"></head><body>
 <div class="wrap"><div class="window">
   <div class="titlebar"><span class="ico" aria-hidden="true"></span>
     <span class="t">aadhar.sh/serendipity</span>
@@ -1867,7 +1868,7 @@ const SECURITY_HEADERS = {
     // mole and silently broke the odd external cover. Covers now route through the
     // same-origin /cover proxy anyway, so 'self' carries them — `https:` is the
     // belt-and-suspenders net for the proxy's full-size fallback redirect path.
-    "default-src 'self'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; object-src 'none'",
+    "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; object-src 'none'",
   "x-content-type-options": "nosniff",
   "referrer-policy": "strict-origin-when-cross-origin",
   "x-frame-options": "DENY",

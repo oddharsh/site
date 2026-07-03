@@ -490,6 +490,7 @@ function shell(title, body, env) {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#2D78BD">
+  <link rel="stylesheet" href="https://aadhar.sh/luna.css">
 <title>${esc(fullTitle)}</title>
 <meta name="description" content="let's grab coffee or a bagel with ${esc(env.HOST_NAME)} in NYC. requests are reviewed by hand.">
 <link rel="icon" type="image/svg+xml" href="${COFFEE_FAVICON}">
