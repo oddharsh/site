@@ -41,6 +41,9 @@
     ]
   },
   "observability": { "enabled": true },
+  // the /around neighborhood crawl: per-generation, never per-visitor. The
+  // request path only reads the KV snapshot this cron writes (around.js).
+  "triggers": { "crons": ["*/30 * * * *"] },
   "kv_namespaces": [
     { "binding": "RN_KV", "id": "3cb8a107c58e47dc9244e75b33401f36" }
   ],

@@ -4,7 +4,7 @@
 // them in sync or a route silently goes static. Map in MAINTENANCE.md.
 
 import { handleAgentAuthClaim, handleAgentAuthRegister, handleAgentAuthRevoke, handleAgentAuthToken } from "./agent.js";
-import { handleAround, handleAroundJson } from "./around.js";
+import { cronAround, handleAround, handleAroundJson } from "./around.js";
 import { handleBotPage } from "./bot.js";
 import { handleHitSvg } from "./counter.js";
 import { homepageHeadResponse, serveHomepageWithPrerenderedTracks, serveMarkdown } from "./home.js";
@@ -57,7 +57,14 @@ export default {
       }));
     } catch {}
     return withSecurityHeaders(response);
-  }
+  },
+
+  // cron (wrangler.jsonc "triggers"): the /around crawl runs here, per
+  // generation, so the request path stays a pure KV read and the page is
+  // safe to prerender. One schedule today; switch on event.cron if more land.
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(cronAround(env));
+  },
 };
 
 // Exact worker-owned routes. This table mirrors wrangler.jsonc's

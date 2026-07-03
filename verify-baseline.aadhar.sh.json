@@ -17,6 +17,11 @@
       "ct": "image/svg+xml; charset=utf-8"
     },
     {
+      "path": "/hit.svg?peek=1",
+      "status": 200,
+      "ct": "image/svg+xml; charset=utf-8"
+    },
+    {
       "path": "/auth.md",
       "status": 200,
       "ct": "text/markdown; charset=utf-8"

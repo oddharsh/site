@@ -1251,13 +1251,15 @@ if ("serviceWorker" in navigator) {
   Speculation Rules: McMaster-Carr-style — prerender EVERY internal page,
   eagerly, so navigations activate an already-built page with no network and
   no loading bar. a document rule matches all same-origin links on the page,
-  minus two that genuinely can't be prerendered:
-    /around    — a live crawl; prerendering would fire crawls on page load
+  minus one that genuinely can't be prerendered:
     /whoareyou — per-request fingerprint must reflect the real click, not a
                  speculative prerender request
   the homepage ITSELF is prerender-safe now: the counter left the document
   (/hit.svg peeks on Sec-Purpose and ticks via the activation beacon below),
   so a homepage GET has no side effects and a speculative grid draw is fine.
+  /around is prerender-safe too: its crawl moved to a cron, so any visit,
+  real or speculative, is a pure KV read. GET purity is what keeps this list
+  short; /lens's ?url= autorun holds fire until prerenderingchange.
   cross-origin links (Twitter, Spotify, ENS, …) are skipped automatically.
   Chromium-only; other engines ignore the block. "moderate" prerenders on
   hover / pointerdown (not on load), so visitors who never click /garage or
@@ -1272,7 +1274,6 @@ if ("serviceWorker" in navigator) {
       "where": {
         "and": [
           { "href_matches": "/*" },
-          { "not": { "href_matches": "/around*" } },
           { "not": { "href_matches": "/whoareyou*" } },
           { "not": { "href_matches": "/rn*" } },
           { "not": { "href_matches": "/images*" } },

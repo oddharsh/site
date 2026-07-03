@@ -354,9 +354,17 @@
     b.addEventListener("click", function () { setLens(b.getAttribute("data-lens")); });
   });
 
-  // deep link: /lens?url=… autoruns
+  // deep link: /lens?url=… autoruns. Speculation safety: an autorun fires a
+  // third-party crawl, so a PRERENDERED copy of this page (omnibox prediction,
+  // link hover) must hold fire until the visit is real (prerenderingchange).
   try {
     var qp = new URLSearchParams(location.search).get("url");
-    if (qp) run(qp);
+    if (qp) {
+      if (document.prerendering) {
+        document.addEventListener("prerenderingchange", function () { run(qp); }, { once: true });
+      } else {
+        run(qp);
+      }
+    }
   } catch (e) {}
 })();

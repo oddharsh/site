@@ -1,7 +1,7 @@
 // around.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
 import { BOT_NAME, BOT_UA, SIG_AGENT, signedFetch } from "./lib/botauth.js";
-import { deleteSWRKV, swrKV } from "./lib/cache.js";
+import { deleteSWRKV } from "./lib/cache.js";
 import { lunaPage } from "./lib/chrome.js";
 import { esc, extractMeta, extractTitle } from "./lib/http.js";
 
@@ -34,15 +34,24 @@ export const NEIGHBORS = [
 ];
 
 // ── /around ─────────────────────────────────────────────────────────
-// what's going on in the crypto-VC neighborhood. each homepage fetched live
-// by AadharshBot (or served from a 1hr KV cache). curious, not competitive.
+// what's going on in the crypto-VC neighborhood, as of the last CRON crawl.
+// The request path only READS the snapshot: no visitor, crawler, or speculative
+// prerender can make this site fetch 20 third-party homepages, which is what
+// lets /around join the prerender set with every other page. The crawl runs on
+// the schedule in wrangler.jsonc (cronAround, via index.js's scheduled handler).
 export async function handleAround(request, env, ctx) {
-  const report = await getOrBuildAroundReport(request, env, ctx);
+  const report = await readAroundReport(request, env);
   return renderAroundHtml(report);
 }
 
 export async function handleAroundJson(request, env, ctx) {
-  const report = await getOrBuildAroundReport(request, env, ctx);
+  const report = await readAroundReport(request, env);
+  if (!report) {
+    return new Response(JSON.stringify({ pending: true, note: "no snapshot yet; the cron crawl hasn't run" }), {
+      status: 503,
+      headers: { "content-type": "application/json; charset=utf-8", "retry-after": "1800", "x-robots-tag": "noindex" },
+    });
+  }
   return new Response(JSON.stringify(report, null, 2), {
     headers: {
       "content-type":  "application/json; charset=utf-8",
@@ -54,21 +63,31 @@ export async function handleAroundJson(request, env, ctx) {
 
 const AROUND_KEY = "around:report";
 
-export async function getOrBuildAroundReport(request, env, ctx) {
-  const url = new URL(request.url);
-
-  // optional bust for force-refresh
-  if (env.RN_BUST_SECRET && url.searchParams.get("bust") === env.RN_BUST_SECRET) {
-    await deleteSWRKV(env, AROUND_KEY);
+// cron entry: crawl the neighborhood and persist the snapshot. An empty or
+// failed crawl stores nothing, so the last good snapshot keeps serving.
+export async function cronAround(env) {
+  const report = await runAround(env);
+  if (report && Array.isArray(report.results) && report.results.length > 0 && env.RN_KV) {
+    await env.RN_KV.put(AROUND_KEY, JSON.stringify(report));
   }
+}
 
-  // two-key stale-while-revalidate via lib/cache.js. The report persists in KV,
-  // a tiny sentinel carries the 1h freshness window, and lapsed reports rebuild in
-  // the background so nobody waits on the 20-neighbor crawl except a true first run.
-  return swrKV(env, ctx, AROUND_KEY, 3600, () => runAround(env), {
-    isValid: (r) => r && Array.isArray(r.results),
-    shouldStore: (r) => r && Array.isArray(r.results) && r.results.length > 0,
-  });
+async function readAroundReport(request, env) {
+  // ?bust=SECRET stays as the owner's force-refresh: the one request-path caller
+  // still allowed to crawl, because it authenticates as the owner.
+  const url = new URL(request.url);
+  if (env.RN_BUST_SECRET && url.searchParams.get("bust") === env.RN_BUST_SECRET) {
+    await deleteSWRKV(env, AROUND_KEY);   // clears the legacy :fresh sentinel too
+    const report = await runAround(env);
+    if (report && report.results && report.results.length && env.RN_KV) {
+      await env.RN_KV.put(AROUND_KEY, JSON.stringify(report));
+    }
+    return report;
+  }
+  try {
+    const report = env.RN_KV ? await env.RN_KV.get(AROUND_KEY, "json") : null;
+    return report && Array.isArray(report.results) ? report : null;
+  } catch { return null; }
 }
 
 export async function runAround(env) {
@@ -127,6 +146,28 @@ export async function runAround(env) {
 }
 
 export function renderAroundHtml(report) {
+  // failure honesty: no snapshot means a greyed, period-correct empty panel,
+  // never a fabricated table. only ever visible before the first cron run
+  // (or after an owner bust that failed to rebuild).
+  if (!report) {
+    return lunaPage({
+      title: "aadhar.sh/around",
+      path: "aadhar.sh/around",
+      width: 820,
+      description: "Snapshot of crypto VC homepages I keep tabs on, crawled by AadharshBot on a schedule.",
+      robots: "noindex",
+      css: `.pending { border: 1px solid oklch(61.14% 0.0611 253.60); background: oklch(96.72% 0 0);
+        color: oklch(51.03% 0 0); padding: 18px 16px; margin: 16px 0; cursor: progress; }`,
+      body: `
+    <h1 style="font-family:'Trebuchet MS',Verdana,Geneva,sans-serif;color:oklch(41.92% 0.0962 250.51);font-size:18pt;margin:0 0 4px">Around the Neighborhood</h1>
+    <div class="pending"><b>The neighborhood snapshot isn't built yet.</b><br>
+    The crawl runs on a schedule, not on your visit; check back in a few minutes.</div>
+    <footer style="text-align:center;font-size:9pt;margin-top:14px">&larr; <a href="/">aadhar.sh</a></footer>`,
+      cache: "public, max-age=60",
+      headers: { "x-robots-tag": "noindex" },
+    });
+  }
+
   const rows = report.results.map((r, i) => {
     const ok = !r.error && r.status >= 200 && r.status < 400;
     const status = r.error
@@ -199,9 +240,9 @@ export function renderAroundHtml(report) {
     <h1>Around the Neighborhood</h1>
     <p class="lede">
       A peek at what folks in crypto VC are up to. <code>${esc(BOT_UA)}</code>, the
-      small branded crawler I run from this site, fetches each homepage live and
-      lays it out as a tiny neighborhood window. I built this mostly to play with
-      signed outbound requests per
+      small branded crawler I run from this site, crawls each homepage on a
+      schedule and lays the snapshot out as a tiny neighborhood window. I built
+      this mostly to play with signed outbound requests per
       <a href="https://datatracker.ietf.org/wg/webbotauth/about/" target="_blank" rel="noopener">Web Bot Auth</a>;
       the shortlist is funds whose work I follow. Receiving sites can
       verify the signatures against
@@ -211,7 +252,7 @@ export function renderAroundHtml(report) {
       <strong>Last crawl:</strong> ${esc(report.crawledAt)} &middot;
       <strong>UA:</strong> <code>${esc(BOT_UA)}</code> &middot;
       <strong>Signature-Agent:</strong> <code>${esc(SIG_AGENT)}</code> &middot;
-      <strong>Cache:</strong> 1 hour
+      <strong>Refreshed:</strong> every 30 min by cron (your visit triggers nothing)
     </div>
     <table class="scout">
       <thead>
