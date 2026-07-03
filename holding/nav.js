@@ -39,6 +39,9 @@
   }
   if (window.navigation && "onpagereveal" in window) {
     addEventListener("pageswap", function (e) {
+      // diagnostic breadcrumb: /garage/vt-check reads this to report whether
+      // real shell navigations are actually getting cross-document VTs
+      try { sessionStorage.setItem("axp-vt-swap", e.viewTransition ? "1" : "0"); } catch (x) {}
       if (e.viewTransition && e.activation) { try { e.viewTransition.types.add(axpVTDir(e.activation)); } catch (x) {} }
     });
     addEventListener("pagereveal", function (e) {

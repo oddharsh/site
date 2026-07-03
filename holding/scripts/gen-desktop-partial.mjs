@@ -107,8 +107,11 @@ const topBlock = `${TOP_OPEN}${desktopHtml}${TOP_CLOSE}`;
 const chromeBlock = `${CHROME_OPEN}${iconsHtml}${taskbarHtml}${CHROME_CLOSE}`;
 
 import { readdirSync } from "node:fs";
+// vt-check/vt-b are deliberately shell-free diagnostic mules — they test the
+// bare platform, so the desktop partial must never touch them
+const BARE = new Set(["vt-check.html", "vt-b.html"]);
 const pages = ["holding/index.html"]
-  .concat(readdirSync("holding/garage").filter(f => f.endsWith(".html")).map(f => "holding/garage/" + f))
+  .concat(readdirSync("holding/garage").filter(f => f.endsWith(".html") && !BARE.has(f)).map(f => "holding/garage/" + f))
   .concat(readdirSync("holding/lwe").filter(f => f.endsWith(".html")).map(f => "holding/lwe/" + f));
 
 let patched = 0;
