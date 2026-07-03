@@ -226,6 +226,29 @@ static garage 80ms; /writing edge-hit 90ms / miss 114ms; /reading hit 79ms;
 TTFB ~260ms / FCP <=600ms / LCP <=1000ms p75; warm hops 100-250ms on Safari and
 Firefox, ~0ms prerendered on Chromium, back/forward ~0ms bfcache everywhere.
 
+**Shell rewrite phase ledger (task 9, started 2026-07-03):**
+- PHASE A SHIPPED (v140): /luna.css extracted from nav.js's injected <style>
+  with design/tokens/ folded in verbatim (fonts.css reference-only). Present
+  at parse time, cacheable independently of nav.js (107KB -> 77KB raw), same
+  cascade order via link-after-inline-style, fallback link injection for
+  stale HTML. Parity verified on every page class; oracle 54/54.
+- PHASE B (next): static desktop markup — wallpaper/taskbar/icons/Run dialog
+  as baked HTML per page (worker templates bake per-route, static pages get
+  copies), nav.js boot ADOPTS existing DOM instead of building it. Desktop
+  exists for curl/JS-off, CLS 0. The partial generator must reproduce
+  buildDesktop/buildIcons/buildTaskbar's exact ids/classes/SVGs.
+- PHASE C: behavior modernization per the zero-JS ledger — popover Start,
+  dialog Run (palette upgrades /run), checkbox minimize + AT upgrade,
+  CSS resize, ::-webkit-scrollbar replacing the JS scrollbar, forced-colors
+  + print coverage. Each verb lands one at a time, verified.
+- PHASE D: the inline dedup — pages drop chrome rules luna.css now carries
+  (index.html's copy of the window chrome, xpChromeCss's overlap), shrinking
+  every document; homepage keeps its soul inline per the blueprint's
+  critical-subset rule.
+- shell.js NAMING: nav.js keeps its URL through the phases (old HTML
+  references it); it becomes the blueprint's shell.js in role first, name
+  last.
+
 **What a returning visitor notices.** Wave-1: nothing (forensic deltas only: a
 missing thumbnail serves the platform 404 body, and static hits stop emitting
 Workers Logs lines). Blueprint cutover: one re-download (~38KB shell + whatever

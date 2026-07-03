@@ -92,6 +92,11 @@
       "ct": "text/javascript"
     },
     {
+      "path": "/luna.css",
+      "status": 200,
+      "ct": "text/css"
+    },
+    {
       "path": "/sw.js",
       "status": 200,
       "ct": "application/javascript; charset=utf-8"
