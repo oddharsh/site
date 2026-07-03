@@ -606,12 +606,13 @@ footer .signature small { color: oklch(56.93% 0 0); }
   max-width: 280px;
   line-height: 1.45;
 }
-/* keyboard-focus fallback placement: cursor-follow needs a live pointer, so
-   when a target is focused via keyboard there's nothing to track. JS adds
-   .anchored (only on engines with anchor positioning) and tethers the tooltip
-   to the focused element instead of the cursor — overriding the translate.
-   Chrome 125+ / Safari 26 / Firefox 147; unsupported engines never get the
-   class, so keyboard users there are no worse off than before (no tooltip). */
+/* anchored placement — the PRIMARY mode for track/artist/car tips (hover AND
+   keyboard focus): XP ToolTips popped at the control, so these tether to the
+   hovered/focused element via CSS anchor positioning (position-try flips at
+   viewport edges). The photo camera-back alone keeps cursor-follow, by owner
+   decree — gliding it across the contact sheet is part of the site's identity.
+   Chrome 125+ / Safari 26 / Firefox 147; on engines without anchor support the
+   JS falls back to cursor-follow for everything, exactly the old behavior. */
 .xp-tooltip.anchored {
   position-anchor: --xp-tip;
   position-area: bottom span-right;
@@ -629,6 +630,13 @@ footer .signature small { color: oklch(56.93% 0 0); }
    transitions). */
 @supports selector(:popover-open) {
   .xp-tooltip:popover-open { display: block; }
+  /* anchored tips fade IN over 120ms (XP's subtle materialize); exit stays an
+     instant cut, and the photo camera-back keeps its hard snap (no transition
+     without .anchored). */
+  .xp-tooltip.anchored:popover-open { transition: opacity 120ms ease-out; }
+  @starting-style {
+    .xp-tooltip.anchored:popover-open { opacity: 0; }
+  }
 }
 .xp-tooltip .filename {
   font-weight: bold;
@@ -1434,45 +1442,21 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
         const b = Array.isArray(h.b) ? `<polyline class="b" points="${pts(h.b)}"/>` : "";
         return `<svg class="hist-svg" viewBox="0 0 ${n - 1} 32" preserveAspectRatio="none">${luma}${r}${g}${b}</svg>`;
       };
-      // histogram bins are computed CLIENT-SIDE from the already-decoded
-      // thumbnail (it's on screen anyway), not shipped in metadata.json. downsample
-      // to 128px, tally {l,r,g,b} into 64 bins, normalize 0..100 for
-      // renderHistogramSvg; memoized per stem. same-origin image → canvas isn't
-      // tainted, so getImageData works. NB: today's thumbnail is a square center-
-      // crop, so the bars reflect the cropped view; when full-frame thumbnails ship
-      // this becomes the whole-image histogram for free.
-      const histCache = Object.create(null);
-      let histCanvas = null;
-      const computeHistogram = (img) => {
-        if (!img || !img.complete || !img.naturalWidth) return null;
-        const S = 128;
-        histCanvas = histCanvas || document.createElement("canvas");
-        histCanvas.width = histCanvas.height = S;
-        const ctx = histCanvas.getContext("2d", { willReadFrequently: true });
-        if (!ctx) return null;
-        let data;
-        try { ctx.drawImage(img, 0, 0, S, S); data = ctx.getImageData(0, 0, S, S).data; }
-        catch { return null; }
-        const N = 64, l = new Array(N).fill(0), r = new Array(N).fill(0), g = new Array(N).fill(0), b = new Array(N).fill(0);
-        for (let i = 0; i < data.length; i += 4) {
-          const R = data[i], G = data[i + 1], B = data[i + 2];
-          r[R >> 2]++; g[G >> 2]++; b[B >> 2]++;
-          l[((R * 54 + G * 183 + B * 19) >> 8) >> 2]++;   // Rec.709 luma → 64 bins
-        }
-        const norm = a => { const m = Math.max(1, ...a); return a.map(v => Math.round(v / m * 100)); };
-        return { l: norm(l), r: norm(r), g: norm(g), b: norm(b) };
-      };
-      const histFor = (stem, img) => histCache[stem] || (histCache[stem] = computeHistogram(img)) || null;
+      // histogram bins are BAKED at photo-add time (photo-histograms.py measures
+      // the shipped JPG twin, so the bars still show exactly what the visitor
+      // sees) and ride the same meta/<stem>.json the EXIF already arrives in.
+      // the old decode → canvas → getImageData → main-thread binning pipeline is
+      // gone; renderHistogramSvg draws the identical SVG from meta.hist.
+      const histFor = (stem) => (metaMap[stem] && metaMap[stem].hist) || null;
       // EXIF is NOT inlined on the uncacheable homepage, and not shipped as one big
       // index either — it's fetched PER PHOTO on hover from /images/meta/<stem>.json
       // (tiny, immutable, content-addressed → edge + browser cached forever, busted
       // by ?mv). so a visitor only pulls EXIF for the handful of photos they actually
-      // hover, not all 119; repeat hovers and repeat visits are served from the
-      // browser's HTTP cache with no network at all. histograms are client-side
-      // (above), so a hovered photo shows its bars + dimensions instantly and the
-      // EXIF text fills in a beat later when its little file lands.
+      // hover, not the whole pool; repeat hovers and repeat visits are served
+      // from the browser's HTTP cache with no network at all. the baked histogram
+      // rides the same file, so bars + EXIF land together in one tiny fetch.
       const metaMap = Object.create(null);   // stem → exif object | null (fetched, none) | absent (not fetched)
-      const META_V = "mv=3";                 // bump when metadata is regenerated
+      const META_V = "mv=4";                 // bump when metadata is regenerated (4: histograms baked in)
       const fetchMeta = (stem) => {
         if (stem in metaMap) return;         // already in hand, or a fetch is in flight
         metaMap[stem] = null;                // in-flight sentinel (renders as "no exif yet")
@@ -1608,11 +1592,8 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
         ].filter(([, v]) => v && v !== "undefined")
          .map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("");
 
-        const hist = histFor(stem, img);
+        const hist = histFor(stem);
         const histSvg = hist ? renderHistogramSvg(hist) : "";
-        // thumbnail not decoded yet? re-render this tip once it loads.
-        if (!hist && img && !img.complete) img.addEventListener("load",
-          () => { if (activeSlot === slot && activeSlot.matches?.(".photos a")) showTipFor(activeSlot); }, { once: true });
         const dateStr = fmtDate(exif.date) || (slot.dataset.uploaded ? "up " + fmtDate(slot.dataset.uploaded) : "");
 
         return `<div class="cam">` +
@@ -1719,6 +1700,7 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
         tip.classList.remove("anchored");
       };
       const hideTip = () => {
+        cancelShow();
         closeTip();
         dropAnchor();
         activeSlot = null;
@@ -1731,17 +1713,28 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
       // hover target here (photos, tracks, artists, car links) — one tooltip engine.
       const TIP_DISMISS_MS = 50;
       let hideTimer = 0;
+      // anchored mode needs CSS anchor positioning; without it every tip falls
+      // back to cursor-follow (the pre-anchor behavior, nothing lost).
+      const ANCHOR_OK = window.CSS && CSS.supports &&
+        (CSS.supports("position-area: bottom") || CSS.supports("inset-area: bottom"));
+      const isPhotoTarget = (t) => t.matches(".photos a");
+      // XP's real hover delay: a COLD anchored tip waits 500ms; once one is up,
+      // sliding to an adjacent control swaps instantly (the "warm" behavior).
+      // The camera-back never waits — its instant glide is the kept identity.
+      const HOVER_DELAY_MS = 500;
+      let showTimer = 0;
+      const cancelShow = () => { clearTimeout(showTimer); showTimer = 0; };
       // while the content is actively scrolling (and a hair after it settles) we
       // suppress tooltips entirely — scrolling shouldn't trip a popover just
       // because the cursor happens to pass over a photo or track. tooltips return
       // on the next intentional hover-move.
       let scrolling = false, scrollIdle = 0;
       const cancelHide   = () => { clearTimeout(hideTimer); hideTimer = 0; };
-      const scheduleHide = () => { clearTimeout(hideTimer); hideTimer = setTimeout(hideTip, TIP_DISMISS_MS); };
+      const scheduleHide = () => { cancelShow(); clearTimeout(hideTimer); hideTimer = setTimeout(hideTip, TIP_DISMISS_MS); };
       const showTipFor = (target, e) => {
         if (scrolling) return;               // don't pop a tooltip mid-scroll
         cancelHide();                        // a fresh show cancels any pending gap-dismissal
-        dropAnchor();                        // pointer entry always uses cursor-follow
+        dropAnchor();                        // follow mode: the tip rides --x/--y
         activeSlot = target;
         const html = buildContent(target);
         if (!html) { hideTip(); return; }   // e.g. track with no cover yet
@@ -1749,13 +1742,35 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
         if (e) place(e);                     // position before showing (no glide-in)
         openTip();
       };
+      const showAnchored = (target) => {
+        if (scrolling) return;
+        cancelHide();
+        const html = buildContent(target);
+        if (!html) { hideTip(); return; }
+        dropAnchor();
+        activeSlot = target;
+        tip.innerHTML = html;
+        target.style.setProperty("anchor-name", "--xp-tip");
+        anchoredEl = target;
+        tip.classList.add("anchored");
+        openTip();
+      };
+      // the mode router: photos follow the cursor (owner-kept identity, always
+      // instant); everything else anchors at the control with the XP delay
+      // semantics. engines without anchor positioning follow for everything.
+      const showFor = (target, e) => {
+        cancelShow();
+        if (isPhotoTarget(target) || !ANCHOR_OK) { showTipFor(target, e); return; }
+        if (isOpen()) { showAnchored(target); return; }     // warm swap: no wait
+        showTimer = setTimeout(() => showAnchored(target), HOVER_DELAY_MS);
+      };
 
       document.addEventListener("pointerover", (e) => {
         const target = findTarget(e.target);
         if (!target) return;
         cancelHide();                        // re-entered a target (same or next) → keep it up
         if (target === activeSlot) return;   // same target already shown
-        showTipFor(target, e);
+        showFor(target, e);
       }, { passive: true });
 
       // passive: lets the browser dispatch pointermove without waiting on
@@ -1797,40 +1812,28 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
       const reshowUnderCursor = () => {
         if (!lastX && !lastY) return;            // pointer never moved → nothing to re-target
         const target = findTarget(document.elementFromPoint(lastX, lastY));
-        if (target) showTipFor(target);          // no event: reuse the existing --x/--y
+        if (target) showFor(target);             // photos reuse the existing --x/--y
       };
       document.addEventListener("scroll", () => {
         scrolling = true;
+        cancelShow();
         if (isOpen()) hideTip();
         clearTimeout(scrollIdle);
         scrollIdle = setTimeout(() => { scrolling = false; reshowUnderCursor(); }, SCROLL_SETTLE_MS);
       }, { capture: true, passive: true });
 
-      // ── keyboard-focus fallback ────────────────────────────────────────
-      // mouse users get the cursor-following tooltip above; keyboard users had
-      // nothing (no pointer to track). when the engine supports CSS anchor
-      // positioning, tether the tooltip to the focused element instead. gated
-      // on support, so it's a clean no-op (and no tooltip, exactly as before)
-      // where unsupported. only fires for :focus-visible — a mouse click that
-      // focuses a link doesn't trigger it, leaving cursor-follow in charge.
-      if (window.CSS && CSS.supports &&
-          (CSS.supports("position-area: bottom") || CSS.supports("inset-area: bottom"))) {
-        const showAnchored = (target) => {
-          const html = buildContent(target);
-          if (!html) return;
-          dropAnchor();
-          activeSlot = target;
-          tip.innerHTML = html;
-          target.style.setProperty("anchor-name", "--xp-tip");
-          anchoredEl = target;
-          tip.classList.add("anchored");
-          openTip();
-        };
+      // ── keyboard focus: same anchored mode, no delay ───────────────────
+      // anchoring is the primary mode for non-photo tips now (showFor above),
+      // so keyboard focus just drives the same path directly — a deliberate
+      // Tab deserves an instant tip, not the 500ms cold-hover wait. only fires
+      // for :focus-visible so a mouse click that happens to focus a link
+      // doesn't double-trigger.
+      if (ANCHOR_OK) {
         document.addEventListener("focusin", (e) => {
           const target = findTarget(e.target);
           if (!target) return;
           try { if (!target.matches(":focus-visible")) return; } catch (_) {}
-          showAnchored(target);
+          showAnchored(target);   // keyboard focus is deliberate: no cold delay
         });
         document.addEventListener("focusout", (e) => {
           if (anchoredEl && findTarget(e.target) === anchoredEl) hideTip();

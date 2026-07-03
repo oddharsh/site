@@ -185,6 +185,10 @@ jq -c 'to_entries[]' "$OUT" | while IFS= read -r entry; do
   printf '%s' "$entry" | jq -c '.value' > "$META_DIR/$stem.json"
 done
 
+# bake the 64-bin histograms back into the fresh meta files (the rm above
+# wiped them; the tooltip reads meta.hist instead of computing client-side)
+"$SCRIPT_DIR/photo-histograms.py" 2>&1 | tail -1
+
 COUNT=$(jq 'keys | length' "$OUT")
-echo "✓ extracted metadata for $COUNT photos → $OUT (+ $COUNT per-stem files in images/meta/)"
-echo "  next: commit + deploy. the hover tooltip on aadhar.sh will pick it up."
+echo "✓ extracted metadata for $COUNT photos → $OUT (+ $COUNT per-stem files in images/meta/, histograms baked)"
+echo "  next: bump META_V in index.html if fields changed, commit + deploy."

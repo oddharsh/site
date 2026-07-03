@@ -1,70 +1,60 @@
 #!/usr/bin/env python3
 """
-photo-histograms.py — compute 64-bin RGB + luminance histograms for a
-folder of photos and emit JSON keyed by stem. used by
-extract-photo-metadata.sh to inline real histograms into metadata.json,
-which the Fuji LCD tooltip renders on hover.
+photo-histograms.py — bake 64-bin RGB + luminance histograms into the
+per-photo meta files (holding/images/meta/<stem>.json), at photo-add time.
 
-output shape per photo:
-  {"l": [0..100, ...], "r": [...], "g": [...], "b": [...]}
-each channel is 64 bins, normalized so the tallest bin in that channel
-reads 100. matches what a camera-back RGB histogram shows: relative
-distribution per channel, each scaled independently so a heavily
-blue-shifted shot still reads its red and green channels clearly.
+Resurrected 2026-07-03 (blueprint: histograms move to encode time). The
+browser used to decode the on-screen thumbnail into a canvas and bin it on
+the main thread per hover; now the bins ride the same meta JSON the tooltip
+already fetches, the client renderer draws the identical SVG from them, and
+the decode/getImageData path is deleted.
 
-requires: Pillow + pillow-heif (for Fuji .HIF files). install with:
-  pip3 install --user pillow pillow-heif
+Honesty rule: bins are computed from the SHIPPED thumbnail bytes — the
+encoded JPG twin in holding/i/ (content-hashed, found via hashes.json) —
+so the histogram measures exactly what the visitor sees, the same property
+the client-side compute had. Merges into existing meta files (EXIF fields
+untouched); creates the file if extract-photo-metadata.sh hasn't yet.
+
+output per photo, merged under "hist":
+  {"hist": {"l": [64 x 0..100], "r": [...], "g": [...], "b": [...]}}
+each channel normalized so its tallest bin reads 100, matching a camera
+back's per-channel display.
+
+requires: Pillow (shipped thumbs are JPG, so no pillow-heif needed).
 
 usage:
-  ./photo-histograms.py /path/to/sooc-folder/  > histograms.json
+  ./photo-histograms.py            # bake/refresh every stem in hashes.json
+  ./photo-histograms.py STEM ...   # just these stems (add-photos fast path)
 """
 import json
 import sys
 from pathlib import Path
 
 try:
-    from PIL import Image, ImageOps
+    from PIL import Image
 except ImportError:
-    sys.stderr.write(
-        "error: Pillow not installed. run:\n"
-        "  pip3 install --user pillow pillow-heif\n"
-    )
+    sys.stderr.write("error: Pillow not installed. run: pip3 install --user pillow\n")
     sys.exit(2)
 
-# Fuji X-T cameras (and Leica Q) write HEIF with a .HIF extension. base
-# Pillow doesn't know HEIF; pillow-heif registers it as a format. without
-# this, 60%+ of the photos in the SOOC folder would silently fail.
-try:
-    import pillow_heif  # noqa: F401
-    pillow_heif.register_heif_opener()
-except ImportError:
-    sys.stderr.write(
-        "warn: pillow-heif not installed. HIF/HEIF photos will be skipped.\n"
-        "       install with:  pip3 install --user pillow-heif\n"
-    )
-
-EXTS = {".jpg", ".jpeg", ".heic", ".heif", ".hif"}
 BINS = 64
-THUMB_MAX = 512  # downsample for speed; histogram shape is preserved
+HOLDING = Path(__file__).resolve().parent.parent
+IMAGES = HOLDING / "images"
+HASHED = HOLDING / "i"
+META = IMAGES / "meta"
 
 
-def _bin_normalize(raw: list[int]) -> list[int]:
-    """take a 256-int channel histogram, return 64 bins normalized 0..100."""
-    bin_size = 256 // BINS
-    binned = [sum(raw[i * bin_size:(i + 1) * bin_size]) for i in range(BINS)]
+def _bin_normalize(raw):
+    """256-int channel histogram -> 64 bins normalized 0..100."""
+    size = 256 // BINS
+    binned = [sum(raw[i * size:(i + 1) * size]) for i in range(BINS)]
     peak = max(binned) or 1
     return [int(round(100 * b / peak)) for b in binned]
 
 
-def histogram_bars(path: Path) -> dict[str, list[int]]:
-    """RGB + luminance histograms, each 64 bins, each normalized 0..100."""
+def histogram_bars(path):
     with Image.open(path) as img:
-        # respect EXIF orientation so the histogram matches what the viewer sees
-        oriented = ImageOps.exif_transpose(img)
-        # downsample to keep this fast on a folder of 100+ photos
-        oriented.thumbnail((THUMB_MAX, THUMB_MAX))
-        rgb = oriented.convert("RGB")
-        luma = oriented.convert("L")
+        rgb = img.convert("RGB")
+        luma = img.convert("L")
         rgb_raw = rgb.histogram()   # 768 ints: R then G then B
         l_raw = luma.histogram()    # 256 ints
     return {
@@ -76,29 +66,41 @@ def histogram_bars(path: Path) -> dict[str, list[int]]:
 
 
 def main():
-    if len(sys.argv) != 2:
-        sys.stderr.write("usage: photo-histograms.py <directory>\n")
-        sys.exit(1)
-    src = Path(sys.argv[1])
-    if not src.is_dir():
-        sys.stderr.write(f"error: {src} is not a directory\n")
-        sys.exit(1)
+    hashes = json.loads((IMAGES / "hashes.json").read_text())
+    stems = sys.argv[1:] or sorted(hashes.keys())
+    META.mkdir(exist_ok=True)
 
-    result = {}
-    failed = 0
-    for f in sorted(src.iterdir()):
-        if f.suffix.lower() not in EXTS:
+    done = failed = 0
+    for stem in stems:
+        h = hashes.get(stem, {})
+        if "j" not in h:
+            sys.stderr.write(f"warn: {stem}: no hashed JPG in hashes.json, skipped\n")
+            failed += 1
+            continue
+        jpg = HASHED / f"{stem}.{h['j']}.jpg"
+        if not jpg.exists():
+            sys.stderr.write(f"warn: {stem}: {jpg.name} missing, skipped\n")
+            failed += 1
             continue
         try:
-            result[f.stem] = histogram_bars(f)
+            hist = histogram_bars(jpg)
         except Exception as e:
-            sys.stderr.write(f"warn: skipped {f.name}: {e}\n")
+            sys.stderr.write(f"warn: {stem}: {e}\n")
             failed += 1
+            continue
 
-    # compact JSON; the file ends up in metadata.json which we want small
-    sys.stdout.write(json.dumps(result, separators=(",", ":")))
-    sys.stdout.write("\n")
-    sys.stderr.write(f"computed histograms for {len(result)} photos")
+        meta_path = META / f"{stem}.json"
+        meta = {}
+        if meta_path.exists():
+            try:
+                meta = json.loads(meta_path.read_text())
+            except Exception:
+                meta = {}
+        meta["hist"] = hist
+        meta_path.write_text(json.dumps(meta, separators=(",", ":")) + "\n")
+        done += 1
+
+    sys.stderr.write(f"baked histograms into {done} meta files")
     if failed:
         sys.stderr.write(f", {failed} skipped")
     sys.stderr.write("\n")
