@@ -158,6 +158,41 @@
     },
     {
       "path": "/images/",
+      "status": 301,
+      "ct": ""
+    },
+    {
+      "path": "/images/full",
+      "status": 301,
+      "ct": ""
+    },
+    {
+      "path": "/images/full/",
+      "status": 301,
+      "ct": ""
+    },
+    {
+      "path": "/photos",
+      "status": 200,
+      "ct": "text/html; charset=utf-8"
+    },
+    {
+      "path": "/photos/",
+      "status": 301,
+      "ct": ""
+    },
+    {
+      "path": "/run",
+      "status": 200,
+      "ct": "text/html; charset=utf-8"
+    },
+    {
+      "path": "/run?cmd=garage",
+      "status": 302,
+      "ct": ""
+    },
+    {
+      "path": "/run?cmd=xyzzy-not-a-page",
       "status": 200,
       "ct": "text/html; charset=utf-8"
     },

@@ -36,7 +36,7 @@ dl.sc-grid dd{margin:0;color:#15243f;font-family:var(--font-mono);font-size:8.5p
 
     <div class="sc-panel">
       <div class="sc-bar">${shield} Automatic Updates <span class="state">ON</span></div>
-      <div class="sc-body"><b>Service worker.</b> A versioned service worker caches the shared assets and sweeps the old versions whenever its version string bumps, so a return visit picks up changes without a hard reload. The worker-rendered pages stay network-only, so they always render fresh. See the recent installs in <a href="/updates">Windows Update</a>.</div>
+      <div class="sc-body"><b>Deploy-time delivery.</b> Every deploy purges the edge, shared assets carry short revalidating caches, and pages ship origin-fresh, so a return visit picks up changes without a hard reload and there is no second cache to go stale. (A service worker used to do this job; it retired in v136 because the platform now covers it.) See the recent installs in <a href="/updates">Windows Update</a>.</div>
     </div>
 
     <div class="sc-panel">

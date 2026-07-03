@@ -50,6 +50,8 @@ const ROUTES = [
   { path: "/lens", status: 200, ct: "text/html", marker: "The Other Web" },
   { path: "/lens/", status: 200, ct: "text/html" },
   { path: "/lens.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "replaceState" },
+  // the retired SW's unregister stub: must keep serving 200 for a year+
+  { path: "/sw.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "unregister" },
   { path: "/lens/fetch?url=https://example.com", status: 200, ct: "application/json" },
   { path: "/lens/shot?url=https://example.com", status: [200, 503], flaky: true },
   { path: "/writing", status: 200, ct: "text/html" },

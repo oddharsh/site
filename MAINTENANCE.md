@@ -15,7 +15,7 @@ Key facts (don't hardcode these elsewhere, they drift):
 - RN_KV namespace id: `3cb8a107c58e47dc9244e75b33401f36`
 - R2 bucket: `aadhar-photos` (SOOC originals + full-res JPGs)
 - `THUMB_VERSION` lives in `holding/_worker.js/lib/const.js` (the `?v=N` on every thumbnail).
-- `CACHE_VERSION` lives at `holding/sw.js` line ~28 (the service-worker cache key).
+- The service worker RETIRED in v136 (2026-07-03): `holding/sw.js` is an unregister stub that must keep serving 200 for a year+. There is no `CACHE_VERSION`; the deploy-log number lives in D1 (`bump-version.sh` derives the next from `MAX(vnum)`).
 - Canonical photo source folder: `/Users/aadharsh/Downloads/to post (from ssd)/`. Privacy rule: nothing else from elsewhere on disk feeds the pipeline.
 
 ---
@@ -177,8 +177,8 @@ wrangler kv key delete --namespace-id="$NS" "tracks:<id>:fresh" --remote
 ### Bump THUMB_VERSION
 Edit `const THUMB_VERSION` in `holding/_worker.js/lib/const.js`, deploy. Do this when you re-encode thumbnails, or when you need a fresh edge cache key for a stale-looking thumbnail. Workers static assets return honest 404s now; the thumbnail worker route still clamps true 404s to `max-age=0` so misses do not inherit `/images/*` immutable caching.
 
-### Bump CACHE_VERSION (service worker)
-Edit `const CACHE_VERSION` in `holding/sw.js` (line ~28), deploy. **Required on every change to `nav.js` or `notepad.js`** (they are SWR-cached by the SW), and on any SW behavior change. The bump sweeps old caches in the `activate` event.
+### Log a deploy (bump-version.sh)
+`./holding/scripts/bump-version.sh <slug> "<title>"`, then deploy. Inserts the next checkpoint into D1 (vnum from `SELECT MAX(vnum)`), which is what `/updates` and `/restore` render. Nothing edits sw.js anymore: the service worker retired in v136, `nav.js`/`notepad.js` updates land via their short `_headers` max-age plus the per-deploy edge purge, and the stub at `/sw.js` cleans up old installs.
 
 ---
 

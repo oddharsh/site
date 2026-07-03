@@ -438,12 +438,6 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
 </script>
 
 <!-- register the SW on idle so deep-link visitors install it too -->
-<script>
-if ("serviceWorker" in navigator) {
-  var reg = function () { navigator.serviceWorker.register("/sw.js").catch(function () {}); };
-  "requestIdleCallback" in window ? requestIdleCallback(reg, { timeout: 2000 }) : setTimeout(reg, 1000);
-}
-</script>
 <!-- prerender internal pages eagerly (McMaster-style); same exclusions as homepage -->
 <script type="speculationrules">
 { "prerender": [ { "where": { "and": [ { "href_matches": "/*" }, { "not": { "href_matches": "/whoareyou*" } } ] }, "eagerness": "moderate" } ] }

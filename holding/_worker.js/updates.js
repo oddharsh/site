@@ -4,15 +4,13 @@ import { lunaPage } from "./lib/chrome.js";
 import { esc } from "./lib/http.js";
 
 // ── /updates handler (Windows Update reskin) ────────────────────────
-// The service worker's named CACHE_VERSION suffixes ARE the changelog;
-// this list is curated by hand, newest first. Update it when you bump SW.
 export async function handleWindowsUpdate(request, env) {
   // Single source of truth: the same D1 `checkpoints` table that backs /restore.
-  // One row per real deploy (a SW CACHE_VERSION bump); the newest row is the
-  // running build, and the recent rows ARE the changelog. /updates and /restore
-  // now read this one log, so a single insert (scripts/bump-version.sh) keeps both
-  // current and they cannot drift apart. Degrades gracefully when RESTORE_DB is
-  // unbound, mirroring /restore.
+  // One row per logged deploy (scripts/bump-version.sh, which now derives the
+  // next vnum from this table; the retired service worker used to carry it as
+  // CACHE_VERSION). The newest row is the running build and the recent rows ARE
+  // the changelog, so /updates and /restore cannot drift apart. Degrades
+  // gracefully when RESTORE_DB is unbound, mirroring /restore.
   let build = "aadhar.sh", log = [], state = "ok";
   try {
     if (env && env.RESTORE_DB) {
@@ -55,13 +53,13 @@ h1{margin:0 0 4px}
     <h1>Windows Update</h1>
     <div class="wu-ok">
       <span class="ck"><svg viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5 6.5 11.5 12.5 4.5"/></svg></span>
-      <div><b>aadhar.sh is up to date.</b><div class="sub">running build <span class="mono">${esc(build)}</span>. updates install themselves through the service worker, so you never click "restart now."</div></div>
+      <div><b>aadhar.sh is up to date.</b><div class="sub">running build <span class="mono">${esc(build)}</span>. updates install themselves at deploy time, so you never click "restart now."</div></div>
     </div>
     <h2>Recently installed</h2>
     <ul class="wu-list">
       ${rows}
     </ul>
-    <p class="wu-foot">No reboot, no nagging. Each item shipped when the service worker's version bumped; see how that auto-update works in <a href="/security">Security Center</a>, or roll the whole system back through every past build in <a href="/restore">System Restore</a>.</p>
+    <p class="wu-foot">No reboot, no nagging. Each item is a real deploy from the site's checkpoint log; see how delivery works in <a href="/security">Security Center</a>, or roll the whole system back through every past build in <a href="/restore">System Restore</a>.</p>
 `,
     cache: "private, no-cache, must-revalidate",
     closeHref: "/security",
@@ -97,8 +95,8 @@ export async function handleUpdatesJson(request, env) {
 }
 
 // ── /restore handler (Windows System Restore reskin, backed by D1) ───
-// Restore points live in the aadhar-restore D1 database, one row per real
-// deploy (a SW CACHE_VERSION bump), seeded from this repo's git history. The
+// Restore points live in the aadhar-restore D1 database, one row per logged
+// deploy (bump-version.sh insert), seeded from this repo's git history. The
 // scrubber previews the recorded state at any past point; it changes nothing.
 // A real rollback is a destructive D1 Time Travel restore run from the CLI
 // (7-day window on the free plan), never exposed to a visitor. env.RESTORE_DB

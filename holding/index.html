@@ -1234,18 +1234,11 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
   every page load.) -->
 
 <!--
-  service worker — cache-first for /images/* (12 random tiles per visit + the
-  full-res counterparts), stale-while-revalidate for the small discovery
-  files. won't touch HTML or worker endpoints; those always go through
-  to the worker so they stay fresh.
+  the service worker retired in v136: immutable assets + bfcache + prerender
+  already made repeats instant, and deleting it deletes the CACHE_VERSION
+  ritual plus a second poisonable cache. /sw.js serves an unregister stub so
+  installed copies clean themselves up on their next visit.
 -->
-<script>
-if ("serviceWorker" in navigator) {
-  // register on idle so it doesn't compete with first paint
-  const reg = () => navigator.serviceWorker.register("/sw.js").catch(() => {});
-  "requestIdleCallback" in window ? requestIdleCallback(reg, { timeout: 2000 }) : setTimeout(reg, 1000);
-}
-</script>
 
 <!--
   Speculation Rules: McMaster-Carr-style — prerender EVERY internal page,

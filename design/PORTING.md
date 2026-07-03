@@ -169,22 +169,26 @@ edge-direct again permanently.
    /whoareyou.json + /updates.json stay served.
 
 **Seven migration duties the deletions impose:**
-1. /sw.js must NEVER 404: ship an unregister stub (skipWaiting; delete all
-   caches; unregister; clients.claim) for >= 1 year, and strip the 24 SW
-   registration snippets in the SAME deploy, or every visit reinstalls the stub.
-2. That stub breaks the build: drop build.mjs's sw.js tripwire row and re-point
-   bump-version.sh's vnum source from grepping sw.js to SELECT MAX(vnum) from
-   the D1 checkpoints table, in the stub's own commit.
-3. /nav.js keeps serving 200 through the stub window (old SWR caches return the
-   cached copy on 404 forever); retire to 410 only after; same for notepad.js.
+1. DONE (2026-07-03, v136): /sw.js is the unregister stub (skipWaiting; delete
+   all caches; claim; unregister) and all 24 registration snippets left in the
+   same deploy. The stub must keep serving 200 for >= 1 year (_headers pins it
+   max-age=0 must-revalidate; the oracle asserts the 200 + "unregister" marker).
+2. DONE (2026-07-03, same commit): build.mjs dropped sw.js from SHELLS (the
+   stub ships readable, no twin, no CACHE_VERSION tripwire) and bump-version.sh
+   now derives vnum from SELECT MAX(vnum) in D1 and touches no file.
+3. IN EFFECT: /nav.js + /notepad.js keep serving 200 through the stub window
+   (old SWR caches return the cached copy on 404 forever); 410 only after.
 4. ?v= to content-hash is ONE atomic deploy: the manifest KV bakes literal ?v=N
    strings, so bust manifest:images (+ :fresh) at cutover; keep /images/*.<img>
    worker-first for the 301 layer; add /i/* to _headers immutable, keep it OUT
    of the allowlist; bundle the parked SVT re-encode into this invalidation.
-5. Counter cutover: seed KV from the DO's live n (?peek=1) before flipping the
-   footer to <img src="/hit.svg">; retire the COUNTER binding + seed var after.
-6. Every NEW route (/hit.svg, /run, /photos) needs all three registrations:
-   wrangler allowlist, index.js ROUTES/PREFIX, verify-routes.mjs.
+5. DONE (2026-07-02, v133), amended: the footer is <img src="/hit.svg"> + the
+   prerenderingchange beacon, but the store stayed the Counter DO (hit.svg
+   ticks it directly), which deleted the KV-seeding step and kept increments
+   atomic. The COUNTER binding therefore stays; COUNTER_SEED can retire once
+   the DO's self-seed is confirmed moot.
+6. IN EFFECT (hit.svg, /photos, /run all registered 3x): every NEW route needs
+   wrangler allowlist + index.js ROUTES/PREFIX + verify-routes.mjs.
 7. DONE (2026-07-02): no-store -> private,no-cache on /updates + /restore keeps
    them origin-fresh (the owner's freshness intent) while restoring bfcache
    eligibility. The balloon's /updates.json stays no-store (subresource, no

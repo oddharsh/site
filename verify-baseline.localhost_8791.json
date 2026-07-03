@@ -92,6 +92,11 @@
       "ct": "text/javascript; charset=utf-8"
     },
     {
+      "path": "/sw.js",
+      "status": 200,
+      "ct": "application/javascript; charset=utf-8"
+    },
+    {
       "path": "/lens/fetch?url=https://example.com",
       "status": 200,
       "ct": "application/json; charset=utf-8"

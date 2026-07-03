@@ -161,9 +161,6 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
 { "prerender": [ { "where": { "and": [ { "href_matches": "/*" }, { "not": { "href_matches": "/whoareyou*" } } ] }, "eagerness": "moderate" } ], "prefetch": [ { "where": { "and": [ { "or": [ { "href_matches": "/garage/*" }, { "href_matches": "/lwe/*" } ] }, { "not": { "href_matches": "/lwe/ask*" } } ] }, "eagerness": "eager" } ] }
 </script>
 <script>
-if ("serviceWorker" in navigator) { var reg = function () { navigator.serviceWorker.register("/sw.js").catch(function () {}); }; "requestIdleCallback" in window ? requestIdleCallback(reg, { timeout: 2000 }) : setTimeout(reg, 1000); }
-</script>
-<script>
 (function(){var inp=document.getElementById('snk-in'),out=document.getElementById('snk-out');if(!inp||!out)return;function hex(b){return Array.prototype.map.call(new Uint8Array(b),function(x){return x.toString(16).padStart(2,'0')}).join('')}function go(){Promise.resolve(crypto.subtle.digest('SHA-256',new TextEncoder().encode(inp.value))).then(function(d){out.textContent='0x'+hex(d)})}inp.addEventListener('input',go);go();})();
 </script>
 <script src="/lwe/ask.js" defer></script>

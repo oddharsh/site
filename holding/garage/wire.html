@@ -495,12 +495,6 @@ transition:filter 60ms ease-out}</pre></figure>
 }
 </script>
 
-<script>
-if ("serviceWorker" in navigator) {
-  const reg = () => navigator.serviceWorker.register("/sw.js").catch(() => {});
-  "requestIdleCallback" in window ? requestIdleCallback(reg, { timeout: 2000 }) : setTimeout(reg, 1000);
-}
-</script>
   <script src="/nav.js" defer></script>
 </body>
 </html>

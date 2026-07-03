@@ -56,7 +56,7 @@ Single-page personal site at `aadhar.sh`. Hosted on Cloudflare Pages, with a
 | `holding/nav.js` | Site-wide XP **desktop shell**. The ONE shared external asset (deferred, SW-cached) — every page includes `<script src="/nav.js" defer>`; it injects its own `<style>` + builds, into `<body>`: the **Bliss desktop** wallpaper, **draggable desktop icons** (Notepad + the 5 profiles, positions persisted in localStorage), the **taskbar** (Start orb → Run, first-level-subpage app buttons each with a per-section SVG icon, clock via Temporal), and the **Run** command palette (⌘K / Start). Also owns the **OS-window model**: body is a clipping flex desktop, each `.window`/`.np-window` is pinned + its content scrolls internally behind a **custom XP scrollbar**, windows are **draggable** (top is a hard boundary) + **resizable**, and View Transitions animate only the window. Sets each first-level route's **tab favicon** to its section icon. Run destinations: pages + profiles inline; 146 photos lazy-loaded from `/images/manifest.json` with `/images/alt.json` captions. Wired into homepage + all garage pages + worker-gen `/around`,`/whoareyou`,`/bot` + serendipity shell. |
 | `holding/_worker.js` | Pages-Worker hybrid. Owns routing, photo serving from R2, manifest building, Spotify playlist scraping, AadharshBot crawler, the `/writing` Notepad pages, cache-control overrides. |
 | `holding/_headers` | Static-asset cache + security headers (CSP, Permissions-Policy, etc.). Applied to direct static-asset requests; the worker overrides cache-control for select paths. |
-| `holding/sw.js` | Service worker. `CACHE_VERSION` (see holding/sw.js line ~28 for the current version) bumps on every nav.js/notepad.js change. Cache-first for `/images/*` thumbnails only (content-addressed via `?v=N`; full-res `/images/full/*` deliberately excluded — browser HTTP cache holds those immutable), SWR for static text files + nav.js/notepad.js, network-only for everything else. Bumping `CACHE_VERSION` sweeps old caches. |
+| `holding/sw.js` | RETIRED (v136, 2026-07-03): now a ~15-line unregister stub (skipWaiting, delete caches, claim, unregister) that must keep serving 200 for a year+ so installed copies clean themselves up. No CACHE_VERSION anymore; the deploy-log vnum lives in D1 alone (bump-version.sh derives the next from MAX(vnum)). Repeat-visit speed comes from immutable assets + bfcache + speculation prerender. |
 | `holding/llms.txt` | The llms.txt format — concise site summary for LLMs. Linked from `<link rel="alternate">`. |
 | `holding/index.md` | Markdown source of homepage copy (used by `/llms.txt` and as a fallback). |
 | `holding/sitemap.xml`, `robots.txt` | Standard SEO files. robots.txt explicitly allows AadharshBot. |
@@ -185,17 +185,19 @@ the site doesn't actually serve. To verify:
   (~3 GB / 146 photos at FUJIFILM X-T5 + Leica resolution).
 - **ASSETS** — auto-bound by Pages, serves static files from the project.
 - **RESTORE_DB** — D1 database `aadhar-restore` (id `88c8daf1-3a36-4f8e-a2ad-dba8a74e1b9f`),
-  the **single source of truth for the deploy log**. One row per real deploy (a SW
-  `CACHE_VERSION` bump), seeded from git history. BOTH `/restore` (the restore-point
+  the **single source of truth for the deploy log**. One row per logged deploy
+  (bump-version.sh insert; the retired SW's `CACHE_VERSION` used to carry the
+  number), seeded from git history. BOTH `/restore` (the restore-point
   scrubber + "You are here" banner) AND `/updates` (Windows Update changelog + running
   build) read this one `checkpoints` table, so they cannot drift apart. Schema:
   `checkpoints(vnum INTEGER PK, ts INTEGER, ymd TEXT, version TEXT, slug TEXT, title TEXT)`
   — `slug` is the version suffix / changelog tag, `title` is the human description.
   **Configured as a dashboard binding** (Pages → Settings → Bindings), NOT in a
   `wrangler.toml` — holding/ has no toml, so all its bindings live in the dashboard.
-  **Bump + log a deploy in one step** (do this instead of hand-editing `CACHE_VERSION`,
-  so both pages stay current): `./holding/scripts/bump-version.sh <slug> "<title>"`,
-  then deploy. It increments the SW version string AND inserts the matching checkpoint.
+  **Log a deploy** (so both pages stay current):
+  `./holding/scripts/bump-version.sh <slug> "<title>"`, then deploy. It derives
+  the next vnum from `SELECT MAX(vnum)` and inserts the checkpoint (no file edit;
+  the SW that used to carry the version string retired in v136).
 - **CF_ACCOUNT_ID + BROWSER_RENDER_TOKEN** — env vars (Pages → Settings → Variables
   and Secrets, NOT in code, NOT in a `wrangler.toml`) that power `/lens/shot`, the
   Browser Rendering screenshot fallback inside **`/lens`** ("The Other Web", which shows

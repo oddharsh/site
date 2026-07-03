@@ -223,7 +223,7 @@ Tiers stay as measured: 600px AVIF ~22KB and 400px AVIF ~12KB in one `<source sr
 
 ## Refusals
 
-- **Service worker.** Immutable assets + bfcache + prerender already deliver instant repeats; deleting the CACHE_VERSION ritual and a second poisonable cache is the one optimization that compounds yearly. (Named conflict: 3 designs kept it, the simplicity judge's best idea kills it, and with content-hashed images its remaining job was insurance.)
+- **Service worker.** EXECUTED v136 (2026-07-03). Immutable assets + bfcache + prerender already deliver instant repeats; deleting the CACHE_VERSION ritual and a second poisonable cache is the one optimization that compounds yearly. (Named conflict: 3 designs kept it, the simplicity judge's best idea kills it, and with content-hashed images its remaining job was insurance.)
 - **SPA router / framework / hydration.** MPA + bfcache + prerender beats a userland router at 0KB.
 - **Declarative shadow DOM for chrome.** Template soup in View Source; find-in-page safety by vigilance alone; brotli already dedupes repeated markup.
 - **Grid Lanes masonry, parked NOT refused (OEM++ re-adjudication).** The period argument ("Explorer thumbnails were uniform") is void: uniform grids were a GDI+ layout limitation, and an aspect-ratio-preserving contact sheet is exactly what Explorer would have shipped with a better engine. Grid Lanes passes the taste test; only the 2-engine rule holds it (Safari 26.4 stable, Chrome + Firefox at flag). Adopt the day a second engine unflags; the fallback stays the uniform sheet.
@@ -251,14 +251,14 @@ Tiers stay as measured: 600px AVIF ~22KB and 400px AVIF ~12KB in one `<source sr
 1. **The shell leaves nav.js.** Today a 108.9KB raw script builds the desktop after load; here every document carries ~2KB of static desktop markup and behavior shrinks to a 9KB raw shell. The desktop exists for curl, readers, and JS-off visitors, and CLS is 0.
 2. **Inline-everything ends at 30 pages.** The rule was right for 1 page; across ~30 documents, repeated chrome CSS costs ~3KB br on every hop. One immutable 9KB br luna.css plus a 2KB inline critical subset drops warm hops to HTML only. View Source survives: the sheet ships commented, an artifact in its own right.
 3. **The full token set goes in.** The no-color-tokens rule priced definitions against uncacheable inline bytes; a cached-forever sheet flips that ledger.
-4. **The counter leaves the document.** hit.svg + activation beacon makes every homepage GET pure, HEAD/bot/prerender-immune by construction, and puts the homepage in the prerender set its own counter used to bar it from. Per-visit HTML spend drops ~31KB to ~14KB.
+4. **The counter leaves the document.** SHIPPED v133 (2026-07-02), DO-backed variant: hit.svg ticks the existing Counter DO, so no KV seeding and increments stay atomic. hit.svg + activation beacon makes every homepage GET pure, HEAD/bot/prerender-immune by construction, and puts the homepage in the prerender set its own counter used to bar it from. Per-visit HTML spend drops ~31KB to ~14KB.
 5. **View Transitions: the current site was right.** The synthesis first ruled ordinary hops back to instant cuts ("XP never animated document loads"); the OEM++ re-adjudication retracts that. Navigation is a window verb in the desktop metaphor, and the current site's window morphs on hops are the design. What survives of the verdict: morphs stay window-shaped (zoom, linear, no crossfades), stay under 2 named elements per page, and honor reduced-motion.
 6. **Tooltips anchor at the control** with the 500ms delay and 120ms fade, except the photo camera-back, which keeps cursor-follow (owner's call). Its data pipeline still moves to SSR bake, so the surviving script is a ~1KB position loop with the earn-it will-change lifecycle.
 7. **Histograms move to encode time** as ~250B SVGs and EXIF inlines into the page; the hover-time decode + getImageData pipeline and the fetch-on-hover meta files are deleted.
 8. **Images go content-addressed.** `?v=THUMB_VERSION` bumps re-download ~2.3MB per returning visitor and exist to dodge 404 poisoning; hashed filenames kill both. The 4 hand-referenced shell assets keep `?v=N` so hand-authoring never chases hashes.
-9. **The service worker and CACHE_VERSION ritual are deleted.** bump-version.sh keeps only its deploy-log insert; /updates and /restore still read the one table.
-10. **/around's crawl leaves the request path** for a cron; the page becomes a static snapshot and drops off the speculation deny-list.
-11. **`no-store` goes from lesson to law**, and /run gets the zero-JS ladder today's script-only Run box lacks.
+9. **The service worker and CACHE_VERSION ritual are deleted.** SHIPPED v136 (2026-07-03): unregister stub + all 24 registrations stripped in one deploy; bump-version.sh reads MAX(vnum) from D1. bump-version.sh keeps only its deploy-log insert; /updates and /restore still read the one table.
+10. **/around's crawl leaves the request path** for a cron (SHIPPED v134, 2026-07-03; */30 schedule); the page becomes a static snapshot and drops off the speculation deny-list.
+11. **`no-store` goes from lesson to law**, and /run gets the zero-JS ladder today's script-only Run box lacks. SHIPPED v135 (2026-07-03): /run + /photos live, listings 301, /updates + /restore on private,no-cache.
 12. **forced-colors, print, and reduced-motion coverage exist.** Today they don't, and all three are cheap.
 13. **Notepad autosize moves to `field-sizing: content`**, deleting measurement script.
 

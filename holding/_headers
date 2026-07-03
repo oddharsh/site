@@ -42,8 +42,8 @@
 # garage experiment pages — active development mules, edited constantly. the
 # browser must REVALIDATE every time (max-age=0) so fresh edits always show; the
 # revalidation is a cheap 304 against the edge (s-maxage=86400), not the origin,
-# and Pages purges the edge on each deploy so new bytes land immediately. paired
-# with network-only in sw.js — no layer holds a stale garage page anymore.
+# and each deploy purges the edge so new bytes land immediately — no layer
+# holds a stale garage page.
 /garage/*
   Cache-Control: public, max-age=0, must-revalidate, s-maxage=86400
 
@@ -137,10 +137,9 @@
 
 # shared shell scripts — the ONE external asset every page pulls. without a
 # rule these shipped Pages' default (max-age=0, must-revalidate), so a first-
-# visit / SW-less session paid a conditional request for the shell on every
-# navigation. a short browser cache + SWR matches the SW's own staleness model;
-# a deploy purges the edge and the SW (sw.js) revalidates nav.js for warm
-# visitors, so updates still land fast.
+# visit session paid a conditional request for the shell on every navigation.
+# a short browser cache + SWR keeps repeats free; a deploy purges the edge,
+# so updates still land within max-age.
 /nav.js
   Cache-Control: public, max-age=300, stale-while-revalidate=86400, s-maxage=86400
 
@@ -155,9 +154,10 @@
 /lens.js
   Cache-Control: public, max-age=300, stale-while-revalidate=86400, s-maxage=86400
 
-# service worker — short cache so a bumped CACHE_VERSION propagates fast.
-# Service-Worker-Allowed lets the worker control the full site (default
-# scope is its own path, but root scope is what we want).
+# the retired service worker's unregister stub (v136): revalidates on every
+# check so installed copies pick it up fast, and must keep serving 200 for a
+# year+ (an old SW whose script 404s lingers forever). Service-Worker-Allowed
+# stays so the stub can replace root-scope registrations.
 /sw.js
   Content-Type: application/javascript; charset=utf-8
   Cache-Control: public, max-age=0, must-revalidate, s-maxage=60
