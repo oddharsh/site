@@ -1,0 +1,533 @@
+/* ============================================================================
+   luna.css — the OS, as one stylesheet. aadhar.sh's Windows XP "Luna" (Blue)
+   shell: design tokens + the desktop (Bliss wallpaper, taskbar, Start, Run),
+   the OS-window model, custom XP scrollbars, gel caption buttons, accessory
+   windows, the tray balloon, and the back/forward title-bar cluster.
+   ----------------------------------------------------------------------------
+   Extracted from nav.js's injected <style> on 2026-07-03 (shell rewrite,
+   phase A): the same rules, now readable, cacheable, and present at parse
+   time instead of arriving with a deferred script. nav.js only injects a
+   <link> to this file as a fallback for stale cached HTML.
+
+   Order matters: pages place their own inline <style> FIRST and link this
+   sheet after it, preserving the cascade the injected <style> had (shell
+   rules win specificity ties, exactly as before). No @layer on purpose —
+   layering would flip those ties.
+
+   The token sets below are design/tokens/* verbatim (colors, bevels,
+   typography). fonts.css is deliberately NOT here: its @font-face rules are
+   local()-only references for tooling, and the house rule is that no served
+   page carries @font-face — the --font-* stacks in typography.css are the
+   shipping surface. View Source is part of the product; this sheet ships
+   uncompressed and commented.
+   ============================================================================ */
+
+/* ──────────────────── design/tokens/colors.css (verbatim) ──────────────────── */
+
+/* ============================================================================
+   aadhar.sh — Color tokens · Windows XP "Luna" (Blue), resto-mod
+   ----------------------------------------------------------------------------
+   Everything is OKLCH and mapped RELATIVELY so the whole theme tone-shifts from
+   a handful of knobs. This goes one step past the site's canonical tokens.css
+   (which deliberately keeps the beige/grey chrome in hex): here the low-chroma
+   chrome is OKLCH too, anchored on a shared warm hue, so a single hue/chroma
+   nudge retunes the entire control face. Canonical Luna hex is noted in comments
+   as the period-correct ground truth.
+
+   Render like 2003, author like 2026: these resolve to period-correct Luna
+   blues and beiges, but the source reads modern and gets wide-gamut depth on P3.
+   ============================================================================ */
+
+:root {
+  /* ── TONE KNOBS — turn these to shift the whole theme ────────────────────
+     Change --hue-luna to recolor every blue (title bar, links, selection,
+     frames) at once; --hue-chrome to warm/cool the beige control face; the
+     -boost knobs push saturation on P3. This is the "toneshift later" surface. */
+  --hue-luna:    263;     /* @kind other */ /* the Luna blue family (title, frames, links) */
+  --hue-chrome:   95;     /* @kind other */ /* warm hue of the beige ButtonFace + greys     */
+  --hue-danger:   25;     /* @kind other */ /* close-button / error red                     */
+  --hue-go:      145;     /* @kind other */ /* success / shipped green                       */
+  --hue-warn:  47.10;     /* @kind other */ /* warning / "under construction" amber (matches shipped) */
+  --hue-rowhover: 95.44;  /* @kind other */ /* warm-yellow row hover tint (distinct from amber)        */
+  --chroma-luna: 0.225;   /* @kind other */ /* peak chroma of the saturated blue             */
+  --chroma-chrome: 0.018; /* @kind other */ /* how warm the beige chrome reads               */
+
+  /* ── BLUE RAMP — the saturated Luna accent, derived off --hue-luna ───────
+     Canonical: ActiveTitle #0054E3 · GradientActiveTitle #3D95FF ·
+     InactiveTitle #7A96DF · Highlight #316AC5. */
+  --blue-95: oklch(70% 0.150 calc(var(--hue-luna) - 5));   /* title-grad top, bright   */
+  --blue-80: oklch(60% 0.200 calc(var(--hue-luna) - 2));   /* title-grad upper         */
+  --blue-65: oklch(51% var(--chroma-luna) var(--hue-luna));/* title-grad core ≈ #0054E3*/
+  --blue-60: oklch(50% var(--chroma-luna) var(--hue-luna));/* title-grad lower         */
+  --blue-55: oklch(58% 0.180 calc(var(--hue-luna) - 3));   /* title-grad bottom lip    */
+  --blue-50: oklch(52% 0.160 var(--hue-luna));             /* Highlight/selection ≈ #316AC5 */
+  --blue-45: oklch(47.12% 0.0555 253.58);                  /* strong frame / sunken TL */
+  --blue-40: oklch(41.92% 0.0962 250.51);                  /* navy heading / inner edge*/
+  --blue-inactive: oklch(66% 0.090 var(--hue-luna));       /* InactiveTitle ≈ #7A96DF  */
+  --frame:   oklch(61.14% 0.0611 253.60);                  /* 1px window/photo frame   */
+
+  /* ── CHROME RAMP — the beige Luna "face", derived off --hue-chrome ───────
+     Canonical: ButtonFace #ECE9D8 · ButtonLight #F1EFE2 · ButtonShadow #ACA899
+     · 3D dark shadow #716F64. */
+  --face:        oklch(92.5% var(--chroma-chrome) var(--hue-chrome));  /* #ECE9D8 */
+  --face-light:  oklch(94.0% calc(var(--chroma-chrome) - 0.002) var(--hue-chrome)); /* #F1EFE2 */
+  --highlight:   oklch(100% 0 0);                                       /* #FFFFFF */
+  --shadow:      oklch(71.5% 0.014 var(--hue-chrome));                  /* #ACA899 */
+  --darkshadow:  oklch(50.0% 0.012 var(--hue-chrome));                  /* #716F64 */
+
+  /* ── NEUTRALS — window/field background + text greys ─────────────────────*/
+  --window:    oklch(100% 0 0);          /* #FFFFFF content + input field bg   */
+  --paper:     oklch(99% 0.005 var(--hue-chrome)); /* faint-warm workspace bg  */
+  --ink:       oklch(21.78% 0 0);        /* primary window text (near-black)   */
+  --ink-soft:  oklch(38.67% 0 0);        /* body prose / secondary             */
+  --ink-dim:   oklch(51.03% 0 0);        /* meta, captions, disabled label     */
+  --ink-faint: oklch(62.68% 0 0);        /* placeholder / loading text         */
+  --rule:      oklch(86.67% 0.0294 calc(var(--hue-luna) - 4)); /* hairline divider */
+  --row-alt:   oklch(97.50% 0.0062 calc(var(--hue-luna) - 8)); /* zebra row tint */
+  --row-hover: oklch(97.73% 0.0373 var(--hue-rowhover));      /* warm hover tint */
+
+  /* ── SEMANTIC ACCENTS — status + interactive color ───────────────────────*/
+  --danger:      oklch(58% 0.200 var(--hue-danger));   /* close red / error      */
+  --danger-deep: oklch(46.34% 0.190 var(--hue-danger));/* error text             */
+  --go:          oklch(49.32% 0.168 var(--hue-go));    /* success / shipped      */
+  --warn:        oklch(54.44% 0.150 var(--hue-warn));  /* under-construction amber*/
+  --gold:        oklch(86.52% 0.177 90.38);            /* counter / odometer LCD  */
+
+  /* link states — canonical web-safe blue/purple/red, OKLCH'd */
+  --link:         oklch(42.61% 0.235 263.74);
+  --link-visited: oklch(42.09% 0.194 328.36);
+  --link-hover:   oklch(62.80% 0.258 29.23);
+
+  /* selection */
+  --selection:      var(--blue-50);
+  --selection-text: oklch(100% 0 0);
+
+  /* ── SEMANTIC SURFACE / ROLE ALIASES — author against these ──────────────*/
+  --surface-desktop:  oklch(94.66% 0.0114 252.09); /* the page "desktop" wash  */
+  --surface-window:   var(--window);               /* white content area       */
+  --surface-chrome:   var(--face);                 /* beige control face        */
+  --surface-field:    var(--window);               /* inputs / wells           */
+  --text-title:       oklch(100% 0 0);             /* caption text (white)      */
+  --text-heading:     var(--blue-40);              /* navy h1–h3                */
+  --text-body:        var(--ink);
+  --text-muted:       var(--ink-dim);
+  --border-window-color: var(--frame);
+  --border-field:     var(--frame);
+}
+
+/* ── WIDE-GAMUT UPGRADE — push the user-action accents past the sRGB chroma
+   envelope on P3 displays; XP chrome stays period-accurate. ──────────────── */
+@media (color-gamut: p3) {
+  :root {
+    --chroma-luna: 0.30;     /* @kind other */
+    --link:        oklch(42.61% 0.30 263.74);
+    --link-visited:oklch(42.09% 0.27 328.36);
+    --link-hover:  oklch(62.80% 0.33 29.23);
+    --danger:      oklch(58% 0.26 var(--hue-danger));
+    --gold:        oklch(86.52% 0.22 90.38);
+  }
+}
+
+
+/* ──────────────────── design/tokens/bevels.css (verbatim) ──────────────────── */
+
+/* ============================================================================
+   aadhar.sh — Bevels, borders, radii, shadow, motion
+   ----------------------------------------------------------------------------
+   XP's whole look is the 1px 3D bevel. Two directions, never mixed:
+     RAISED = highlight top-left, shadow bottom-right (buttons, raised chrome)
+     SUNKEN = the inverse           (text inputs, wells, group insets)
+   A held/active button swaps raised → sunken.
+
+   Radii: XP is squared. ONLY the title-bar top corners round. No pills, no
+   circles, no soft modern shadows. Depth comes from bevels, not blur.
+   ============================================================================ */
+
+:root {
+  /* ── BEVELS — ready-to-use box-shadows ───────────────────────────────────*/
+  --bevel-raised: inset  1px  1px 0 var(--highlight),
+                  inset -1px -1px 0 var(--shadow);
+  --bevel-sunken: inset  1px  1px 0 var(--shadow),
+                  inset -1px -1px 0 var(--highlight);
+  --bevel-sunken-deep: inset  1px  1px 0 var(--darkshadow),
+                       inset -1px -1px 0 var(--highlight);
+
+  /* The full Luna window frame — a double-bevel blue border (homepage spec).
+     Inner light-blue highlight + outer navy, plus the flat drop. */
+  --frame-window:
+    inset 1px 1px 0 oklch(58% 0.16 calc(var(--hue-luna) - 5)),
+    inset 2px 2px 0 oklch(46% 0.20 calc(var(--hue-luna) - 2)),
+    inset -1px -1px 0 oklch(33% 0.16 var(--hue-luna)),
+    inset -2px -2px 0 oklch(42% 0.20 var(--hue-luna)),
+    4px 4px 0 oklch(46% 0.16 var(--hue-luna) / 0.35);
+
+  /* ── BORDERS ─────────────────────────────────────────────────────────────*/
+  --border-1: 1px solid var(--frame);          /* default hairline frame       */
+  --border-strong: 1px solid var(--blue-45);   /* inner TL of a sunken bevel   */
+  --border-window: 2px solid oklch(45% 0.22 var(--hue-luna)); /* blue window edge */
+  --border-rule: 1px solid var(--rule);        /* divider line                 */
+
+  /* ── WORKSPACE GRADIENTS — raised chrome vs its inverse ──────────────────*/
+  --grad-raised: linear-gradient(180deg, #ffffff, #fdfdfd 45%, #f3f2ec 55%, #e9e7dc); /* @kind color */
+  --grad-face:   linear-gradient(180deg, #ffffff, #f3f2ec); /* @kind color */
+  /* the canonical homepage title-bar: vivid vertical 5-stop blue */
+  --grad-title:  linear-gradient(180deg,
+      var(--blue-95)  0%, var(--blue-80)  8%, var(--blue-65) 18%,
+      var(--blue-60) 86%, var(--blue-55) 100%);
+  /* a raised button face */
+  --grad-button: linear-gradient(180deg, oklch(99% 0 0) 0%, oklch(92% 0.005 var(--hue-luna)) 100%);
+
+  /* ── RADII — squared everywhere except title-bar tops ────────────────────*/
+  --radius-control: 0;     /* buttons, inputs, cards, badges — squared         */
+  --radius-title:   3px;   /* title-bar TOP corners only (Luna)                */
+  --radius-window:  8px;   /* outer window top corners (homepage build)        */
+  --radius-gel:     3px;   /* caption gel-button corners                        */
+
+  /* ── THE ONE ALLOWED SOFT SHADOW — a small flat drop under floats ────────
+     For tooltips/popovers only. Never on inline chrome. */
+  --shadow-float: 2px 3px 12px -2px oklch(30% 0.12 var(--hue-luna) / 0.55);
+  --shadow-drop:  4px 4px 0 oklch(46% 0.16 var(--hue-luna) / 0.35); /* window cast */
+  --shadow-tip:   2px 2px 0 oklch(15% 0 0 / 0.15);   /* hard XP tooltip drop     */
+
+  /* ── MOTION — XP is instant. Keep transitions short/snappy. ──────────────*/
+  --xp-transition: 60ms ease-out;       /* @kind other */
+  --xp-transition-fade: 90ms ease-out;  /* @kind other */ /* tooltip opacity fade        */
+
+  /* ── SPACING — the dialog rhythm (4px base, tight XP density) ────────────*/
+  --space-1: 2px;
+  --space-2: 4px;
+  --space-3: 6px;
+  --space-4: 8px;
+  --space-5: 12px;
+  --space-6: 16px;
+  --space-7: 24px;
+  --space-8: 32px;
+
+  /* common composite paddings */
+  --pad-titlebar: 4px 8px;     /* title-bar strip                              */
+  --pad-content:  12px 16px 16px; /* window workspace                          */
+  --pad-control:  3px 12px;    /* button face                                  */
+  --pad-field:    3px 6px;     /* text input                                   */
+  --pad-row:      5px 8px;     /* list row                                     */
+}
+
+
+/* ──────────────────── design/tokens/typography.css (verbatim) ──────────────────── */
+
+/* ============================================================================
+   aadhar.sh — Typography tokens · canonical Luna stacks
+   ----------------------------------------------------------------------------
+   Three stacks, and ONLY these three (see DESIGN.md). Native-available fonts
+   only — no @font-face, no web fonts. That is a hard brand rule: the lightest
+   possible footprint is part of the resto-mod thesis.
+
+   Native-availability order: Tahoma isn't reliably on macOS, so --font-ui falls
+   through to Verdana (mac-native, metrically close); Trebuchet MS IS on macOS so
+   captions render true on both. Every stack ends generic so it never lands on
+   Arial/Helvetica.
+   ============================================================================ */
+
+:root {
+  /* ── FAMILIES ────────────────────────────────────────────────────────────*/
+  --font-caption: "Trebuchet MS", Verdana, Geneva, sans-serif; /* title bars, h1–h3      */
+  --font-ui:      Tahoma, Verdana, Geneva, sans-serif;         /* body, controls, labels */
+  --font-mono:    "Courier New", Courier, monospace;           /* numerics, EXIF, /source*/
+
+  /* ── SIZE SCALE — authored in pt, the period-correct unit for XP UI ──────
+     The site sets body at 10.5pt and scales headings up; control text is 10pt.
+     Kept in pt so it reads like a 2003 dialog, not a 2026 rem grid. */
+  --text-h1:    14pt;   /* page heading (homepage h1)                          */
+  --text-h1-lg: 18pt;   /* large heading (coffee page h1)                      */
+  --text-h2:    12pt;   /* section heading                                     */
+  --text-body:  10.5pt; /* prose / lede                                        */
+  --text-ui:    10pt;   /* buttons, labels, list rows                          */
+  --text-sm:    9.5pt;  /* meta, captions                                      */
+  --text-xs:    9pt;    /* footer, status bar                                  */
+  --text-mono:  9pt;    /* mono readouts, badges                               */
+  --text-micro: 8.5pt;  /* status pills, fine print                            */
+
+  /* ── WEIGHTS — XP UI is normal or bold, nothing in between ───────────────*/
+  --weight-normal: 400;
+  --weight-bold:   700;
+
+  /* ── LINE HEIGHTS ────────────────────────────────────────────────────────*/
+  --leading-tight: 1.3;   /* headings                                          */
+  --leading-ui:    1.35;  /* list rows, controls                               */
+  --leading-body:  1.5;   /* prose                                             */
+
+  /* ── TRACKING — the two intentional letter-spacings in the system ────────*/
+  --tracking-heading: -0.01em;  /* tight on the navy headings                  */
+  --tracking-caps:     0.05em;   /* uppercase labels / "UNDER CONSTRUCTION"     */
+}
+
+
+/* ──────────────────────────── the shell (from nav.js) ─────────────────────────── */
+
+/* site-wide typography: modern line-breaking. text-wrap is inherited, so this one */
+/* rule on <html> turns on "pretty" (fewer orphans + less ragged last lines) for */
+/* every page nav.js loads on. progressive — browsers without it just wrap normally, */
+/* at no layout cost. the homepage + shared worker chrome also set it inline so the */
+/* flagship surfaces don't wait for this deferred script. */
+html{text-wrap:pretty}
+/* View Transitions: animate window open/close across real navigations while the */
+/* desktop + taskbar stay put (named = persistent). progressive — a no-op where the */
+/* browser doesn't support it (Firefox just navigates instantly). */
+@view-transition{navigation:auto}
+/* the shared Bliss desktop on a fixed layer behind everything; page BODIES forced */
+/* transparent so it shows through. html keeps a sky→hills gradient (the same one */
+/* pages paint at first load) as the backstop — NOT transparent: during a cross-doc */
+/* view transition the #axp-desktop snapshot momentarily repaints, and a transparent */
+/* html exposes the browser's white canvas behind it (a white flash). The gradient */
+/* makes that gap read as sky, not white; the opaque Bliss layer covers it otherwise. */
+html{background:linear-gradient(180deg,oklch(56% 0.13 250) 0%,oklch(73% 0.10 236) 50%,oklch(88% 0.05 232) 60%,oklch(60% 0.16 140) 100%) !important}body{background:transparent !important}
+/* app-shell: the taskbar is a HARD FLOOR. the body is the scroll container and ends at */
+/* the taskbar's top (height = viewport − 30px taskbar), so page content scrolls within */
+/* it and never flows under the bar. html doesn't scroll. dvh tracks the mobile URL bar; */
+/* vh is the fallback. !important to beat each page's own min-height:100vh / overflow. */
+html{height:100dvh;overflow:hidden}
+/* base: the desktop area is the viewport minus the taskbar (the hard floor). */
+/* windowless pages (e.g. the raw directory index) keep normal scrolling here. */
+body{min-height:0 !important;height:calc(100vh - 30px) !important;height:calc(100dvh - 30px) !important;overflow-x:hidden !important;overflow-y:auto !important;box-sizing:border-box}
+/* frontier typography, site-wide (headings with their own text-wrap:balance win): */
+/* prettier paragraph ragging where supported, normal wrapping where not. */
+body{text-wrap:pretty}
+/* OS-window model — only on pages that actually have a window. body becomes a */
+/* flex column that centres the single window and CLIPS overflow, so the window */
+/* is pinned: it never scrolls the page and can't slide under the taskbar. its */
+/* inner region scrolls instead. (:has gates this; old browsers fall back to the */
+/* scrolling body above. the fixed taskbar/desktop/icons/run sit outside this flow.) */
+body:has(.window),body:has(.np-window),body:has(.wrap){overflow:hidden !important;display:flex !important;flex-direction:column !important;align-items:center !important;padding:8px !important}
+/* window frame: bounded to the desktop, sized to content but never taller than it. */
+.window,.np-window,.wrap{position:relative;z-index:2;flex:0 1 auto !important;min-height:0;max-height:100% !important;width:100%;margin:0 auto !important;box-sizing:border-box}
+.window,.np-window{display:flex;flex-direction:column}
+.window>.title-bar,.window>.titlebar,.np-window>.np-titlebar{flex:0 0 auto}
+/* the scrolling region inside the frame (Notepad's .np-text already scrolls) */
+.window>.content,.window>.body{flex:1 1 auto;min-height:0;overflow:auto}
+.np-window .np-text{flex:1 1 auto;min-height:0}   /* textarea fills the window (so resizing a note grows the editor, not empty space) */
+/* serendipity nests its window in .wrap — make it a transparent flex pass-through */
+.wrap{display:flex;flex-direction:column;padding-bottom:0 !important}.wrap>.window{flex:0 1 auto;max-height:100%}
+/* strict windowing: HIDE the native scrollbar on the scroll regions — a custom */
+/* XP scrollbar (mounted by JS) rides the window's right edge instead. (the Run */
+/* list keeps a normal styled bar; it isn't a window.) */
+.window>.content,.window>.body,.np-text{scrollbar-width:none;-ms-overflow-style:none}
+.window>.content::-webkit-scrollbar,.window>.body::-webkit-scrollbar,.np-text::-webkit-scrollbar{width:0;height:0;display:none}
+#axp-run .list{scrollbar-color:oklch(62% 0.14 255) oklch(90% 0.02 250)}
+/* reserve room on the right so content clears the custom bar (toggled when it shows) */
+/* 24px (not 20) so content children clear the scrollbar with a ~5px gutter:
+the bar is 16px + right:3px, so padding must exceed 19 or a full-width panel
+border (the now-playing list, the photo grid) kisses the scrollbar's edge. */
+.axp-sb-pad{padding-right:28px !important}
+/* the custom scrollbar widget: sunken track, raised thumb, raised arrow buttons */
+.axp-sb{position:absolute;width:16px;display:flex;flex-direction:column;z-index:3;user-select:none;touch-action:none}
+.axp-sb-track{flex:1 1 auto;position:relative;background:oklch(92% 0.015 250);box-shadow:inset 1px 0 0 oklch(72% 0.03 250),inset -1px 0 0 oklch(100% 0 0)}
+.axp-sb-thumb{position:absolute;left:1px;right:1px;top:0;min-height:18px;border:1px solid;border-color:oklch(88% 0.05 256) oklch(46% 0.15 260) oklch(46% 0.15 260) oklch(88% 0.05 256);background:linear-gradient(90deg,oklch(80% 0.08 256),oklch(63% 0.16 257));box-shadow:inset 1px 1px 0 oklch(92% 0.06 250)}
+.axp-sb-thumb:hover{background:linear-gradient(90deg,oklch(84% 0.09 256),oklch(67% 0.17 257))}
+.axp-sb-up,.axp-sb-down{flex:0 0 auto;height:16px;border:1px solid;border-color:oklch(100% 0 0) oklch(50% 0.04 260) oklch(50% 0.04 260) oklch(100% 0 0);background:linear-gradient(180deg,oklch(98% 0.01 255),oklch(86% 0.03 256));padding:0;cursor:pointer;position:relative}
+.axp-sb-up:active,.axp-sb-down:active{border-color:oklch(50% 0.04 260) oklch(100% 0 0) oklch(100% 0 0) oklch(50% 0.04 260);background:linear-gradient(180deg,oklch(86% 0.03 256),oklch(94% 0.02 255))}
+.axp-sb-up::before,.axp-sb-down::before{content:'';position:absolute;left:50%;top:50%;width:0;height:0;border:3px solid transparent}
+.axp-sb-up::before{margin:-4px 0 0 -3px;border-bottom-color:oklch(28% 0.04 260)}
+.axp-sb-down::before{margin:-1px 0 0 -3px;border-top-color:oklch(28% 0.04 260)}
+/* resize grip (bottom-right corner of every window) */
+.axp-resize{position:absolute;right:1px;bottom:1px;width:14px;height:14px;cursor:nwse-resize;z-index:4;background:linear-gradient(135deg,transparent 0 38%,oklch(72% 0.04 256) 38% 50%,transparent 50% 60%,oklch(72% 0.04 256) 60% 72%,transparent 72% 84%,oklch(72% 0.04 256) 84% 96%,transparent 96%)}
+#axp-desktop{position:fixed;inset:0;z-index:-1;transform:translateZ(0);view-transition-name:axp-desktop;background:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20200%20120%22%20preserveAspectRatio%3D%22xMidYMid%20slice%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22s%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%220%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%233f7fcc%22%2F%3E%3Cstop%20offset%3D%22.42%22%20stop-color%3D%22%236ba3e0%22%2F%3E%3Cstop%20offset%3D%22.62%22%20stop-color%3D%22%23bcdcf4%22%2F%3E%3Cstop%20offset%3D%22.67%22%20stop-color%3D%22%23dfeefb%22%2F%3E%3C%2FlinearGradient%3E%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%220%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%2395c43d%22%2F%3E%3Cstop%20offset%3D%22.35%22%20stop-color%3D%22%2374af2d%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%233c7d1a%22%2F%3E%3C%2FlinearGradient%3E%3CradialGradient%20id%3D%22sn%22%20cx%3D%22.5%22%20cy%3D%22.64%22%20r%3D%22.55%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%23fffbe6%22%20stop-opacity%3D%22.5%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23fffbe6%22%20stop-opacity%3D%220%22%2F%3E%3C%2FradialGradient%3E%3Cfilter%20id%3D%22bl%22%20x%3D%22-30%25%22%20y%3D%22-30%25%22%20width%3D%22160%25%22%20height%3D%22160%25%22%3E%3CfeGaussianBlur%20stdDeviation%3D%221.1%22%2F%3E%3C%2Ffilter%3E%3C%2Fdefs%3E%3Crect%20width%3D%22200%22%20height%3D%22120%22%20fill%3D%22url(%23s)%22%2F%3E%3Crect%20width%3D%22200%22%20height%3D%22120%22%20fill%3D%22url(%23sn)%22%2F%3E%3Cg%20fill%3D%22%23fff%22%20filter%3D%22url(%23bl)%22%3E%3Cg%20opacity%3D%22.92%22%3E%3Cellipse%20cx%3D%2234%22%20cy%3D%2225%22%20rx%3D%2218%22%20ry%3D%224.6%22%2F%3E%3Cellipse%20cx%3D%2241%22%20cy%3D%2220%22%20rx%3D%2211%22%20ry%3D%224.2%22%2F%3E%3Cellipse%20cx%3D%2225%22%20cy%3D%2222%22%20rx%3D%228%22%20ry%3D%223.6%22%2F%3E%3C%2Fg%3E%3Cg%20opacity%3D%22.8%22%3E%3Cellipse%20cx%3D%22151%22%20cy%3D%2218%22%20rx%3D%2214%22%20ry%3D%223.8%22%2F%3E%3Cellipse%20cx%3D%22158%22%20cy%3D%2214%22%20rx%3D%227%22%20ry%3D%223.2%22%2F%3E%3C%2Fg%3E%3Cg%20opacity%3D%22.6%22%3E%3Cellipse%20cx%3D%2298%22%20cy%3D%2231%22%20rx%3D%2222%22%20ry%3D%223%22%2F%3E%3C%2Fg%3E%3Cg%20opacity%3D%22.75%22%3E%3Cellipse%20cx%3D%22123%22%20cy%3D%2242%22%20rx%3D%2211%22%20ry%3D%222.6%22%2F%3E%3C%2Fg%3E%3C%2Fg%3E%3Cpath%20d%3D%22M0%2C79%20C36%2C69%2070%2C85%20104%2C76%20C140%2C67%20172%2C78%20200%2C72%20L200%2C120%20L0%2C120%20Z%22%20fill%3D%22url(%23g)%22%2F%3E%3Cpath%20d%3D%22M0%2C79%20C36%2C69%2070%2C85%20104%2C76%20C140%2C67%20172%2C78%20200%2C72%22%20fill%3D%22none%22%20stroke%3D%22%23bcde66%22%20stroke-width%3D%221.1%22%20opacity%3D%22.5%22%2F%3E%3C%2Fsvg%3E") center center/cover no-repeat}
+/* accessory windows — small built-in apps (a Clock for now) that float over the */
+/* desktop, composite, drag, and click-to-front. plain DOM windows, no iframes. */
+.axp-acc{position:fixed;z-index:40;min-width:170px;background:oklch(99% 0.005 95);border:2px solid #0831d9;border-right-color:#001ea0;border-bottom-color:#001ea0;border-top-left-radius:7px;border-top-right-radius:7px;box-shadow:inset 1px 1px 0 #166aee,inset -1px -1px 0 #00138c,3px 4px 9px rgba(0,20,90,.4);display:flex;flex-direction:column;overflow:hidden;touch-action:none}
+.axp-acc>.tb{display:flex;align-items:center;gap:5px;padding:3px 4px 3px 7px;cursor:move;color:#fff;font-family:var(--font-caption);font-weight:bold;font-size:10pt;text-shadow:1px 1px #0f1089;background:linear-gradient(180deg,oklch(70% 0.15 258),oklch(51% 0.225 263) 60%,oklch(58% 0.18 260))}
+.axp-acc>.tb .t{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.axp-acc>.tb .x{width:18px;height:16px;flex:0 0 18px;display:grid;place-items:center;border:1px solid #d8401c;border-radius:3px;background:linear-gradient(180deg,#e8795f,#ae3110);font-size:9px;cursor:pointer}.axp-acc>.tb .x:hover{filter:brightness(1.12)}
+.axp-acc>.bd{padding:8px;background:#ece9d8}
+.clk{text-align:center;padding:5px 12px}.clk-t{font-family:var(--font-mono);font-size:22pt;font-weight:bold;color:#15243f;letter-spacing:1px}.clk-d{font-size:8.5pt;color:#4a5568;margin-top:3px;white-space:nowrap}
+/* windows drag by their title bar */
+.title-bar,.np-titlebar,.titlebar,#axp-run .tb{cursor:move}
+.axp-dragging{user-select:none;will-change:transform}.axp-dragging .title-bar,.axp-dragging .np-titlebar,.axp-dragging .titlebar,#axp-run.axp-dragging .tb{cursor:grabbing}
+/* transition ONLY the window — freeze the desktop, taskbar AND root groups so the */
+/* wallpaper + taskbar never cross-fade (that root cross-fade was the white flash). */
+.window,.np-window{view-transition-name:axp-window}
+::view-transition-group(root),::view-transition-group(axp-desktop),::view-transition-group(axp-taskbar),::view-transition-group(axp-icons){animation:none !important}
+/* HOLD the persistent shell layers through the transition. Freezing only the GROUP */
+/* (above) stops them moving but the UA still cross-fades their old↔new images — and */
+/* the INCOMING page hasn't run nav.js yet, so it has no desktop/taskbar/icons snapshot */
+/* to fade INTO → the Bliss layer fades to nothing for a beat (the white flash). Pinning */
+/* the old/new images to animation:none keeps the old Bliss fully opaque the whole time; */
+/* since the shell is identical across pages, the live new shell takes over seamlessly. */
+::view-transition-old(axp-desktop),::view-transition-new(axp-desktop),::view-transition-old(axp-taskbar),::view-transition-new(axp-taskbar),::view-transition-old(axp-icons),::view-transition-new(axp-icons){animation:none !important;mix-blend-mode:normal}
+/* map to XP's "animate windows when minimizing/maximizing": the outgoing window */
+/* zooms DOWN toward the taskbar and the incoming one zooms UP out of it — scale */
+/* origin biased below-centre (toward the bar at the bottom), fast + near-linear, */
+/* minimize easing in, restore easing out. no modern in-place cross-zoom. */
+::view-transition-group(axp-window){animation-duration:.2s;animation-timing-function:ease-out}
+::view-transition-old(axp-window){transform-origin:50% 130%;animation:axp-min .18s cubic-bezier(.4,0,1,1) both}
+::view-transition-new(axp-window){transform-origin:50% 130%;animation:axp-res .2s cubic-bezier(0,0,.2,1) both}
+@keyframes axp-min{to{opacity:0;transform:scale(.66)}}@keyframes axp-res{from{opacity:0;transform:scale(.66)}}
+/* DIRECTIONAL refinement (Chromium view-transition-types). initVTTypes() tags each */
+/* cross-doc nav "axp-open" (forward/push) or "axp-close" (back). OPEN emphasises the */
+/* NEW window zooming up out of the taskbar while the old just fades; CLOSE emphasises */
+/* the OLD window minimising toward the taskbar while the new fades in. These are more */
+/* specific than the bare rules above, so a typed nav wins; with no type (unsupported, */
+/* or a reload) the symmetric default plays. reduce-motion below still neutralises all. */
+:root:active-view-transition-type(axp-open)::view-transition-old(axp-window){transform-origin:50% 50%;animation:axp-vt-out .12s ease-out both}
+:root:active-view-transition-type(axp-open)::view-transition-new(axp-window){transform-origin:50% 120%;animation:axp-open-in .2s cubic-bezier(0,0,.2,1) both}
+:root:active-view-transition-type(axp-close)::view-transition-old(axp-window){transform-origin:50% 120%;animation:axp-min .18s cubic-bezier(.4,0,1,1) both}
+:root:active-view-transition-type(axp-close)::view-transition-new(axp-window){transform-origin:50% 50%;animation:axp-vt-in .16s ease-out both}
+@keyframes axp-open-in{from{opacity:0;transform:scale(.7)}to{opacity:1;transform:scale(1)}}@keyframes axp-vt-out{to{opacity:0}}@keyframes axp-vt-in{from{opacity:0}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){::view-transition-old(axp-window),::view-transition-new(axp-window),::view-transition-group(axp-window){animation:none !important}}
+#axp-taskbar{position:fixed;left:0;right:0;bottom:0;height:30px;z-index:99999;view-transition-name:axp-taskbar;display:flex;align-items:stretch;
+font-family:var(--font-ui,Tahoma,Verdana,Geneva,sans-serif);font-size:11px;user-select:none;
+background:linear-gradient(180deg,oklch(67% 0.15 256) 0%,oklch(58% 0.19 257) 4%,oklch(51% 0.20 258) 9%,oklch(49% 0.20 258) 50%,oklch(46% 0.20 259) 92%,oklch(40% 0.18 260) 100%);
+box-shadow:inset 0 1px 0 oklch(82% 0.09 250),inset 0 2px 0 oklch(62% 0.16 255)}
+/* start orb */
+#axp-start{display:flex;align-items:center;gap:6px;padding:0 16px 2px 9px;border:0;cursor:pointer;color:oklch(100% 0 0);
+font-family:var(--font-caption,'Trebuchet MS',Verdana,Geneva,sans-serif);font-style:italic;font-weight:bold;font-size:14px;text-shadow:1px 1px 1px oklch(22% 0.07 145);
+border-radius:0 9px 9px 0/0 14px 14px 0;margin-right:6px;
+background:linear-gradient(180deg,oklch(72% 0.17 142) 0%,oklch(63% 0.18 143) 8%,oklch(54% 0.18 144) 46%,oklch(50% 0.18 145) 52%,oklch(58% 0.17 143) 92%,oklch(45% 0.16 146) 100%);
+box-shadow:inset 1px 1px 0 oklch(86% 0.13 140),inset -1px -1px 0 oklch(38% 0.13 147)}
+#axp-start:hover{filter:brightness(1.08)}#axp-start:active,#axp-start[aria-expanded=true]{filter:brightness(.92);box-shadow:inset 1px 1px 0 oklch(38% 0.13 147),inset -1px -1px 0 oklch(86% 0.13 140)}
+/* the ⌘K / Ctrl-K keycap badge — a small inset "key" reading on both the green */
+/* Start orb and the blue Run title bar (translucent white on either ground). */
+.axp-kbd{display:inline-flex;align-items:center;font-family:var(--font-ui,Tahoma,Verdana,Geneva,sans-serif);font-style:normal;font-weight:bold;font-size:9px;line-height:1;letter-spacing:.02em;padding:2px 4px;border-radius:3px;color:oklch(100% 0 0);background:oklch(100% 0 0 / .18);border:1px solid oklch(100% 0 0 / .5);box-shadow:inset 0 1px 0 oklch(100% 0 0 / .35);text-shadow:none;white-space:nowrap}
+#axp-run .tb .axp-kbd{margin-left:6px}
+/* on the Start orb the boxed chip clashes with the italic 'start' logotype — strip the */
+/* tile (no border/fill/shadow) down to a quiet translucent hint set off by a thin rule. */
+#axp-start .axp-kbd{background:none;border:0;box-shadow:none;border-radius:0;padding:0 0 0 6px;margin-left:5px;border-left:1px solid oklch(100% 0 0 / .4);opacity:.8;font-weight:normal;font-size:9.5px;letter-spacing:.04em}
+/* the site's traffic cone, drawn as CSS (the only mark the site uses) — orange */
+/* triangle with two white bands + a base, matching the /favicon.ico cone. */
+#axp-cone{flex:0 0 auto;width:15px;height:15px;position:relative;margin-right:1px;filter:drop-shadow(1px 1px 1px oklch(25% 0.05 30 / .5))}
+#axp-cone::before{content:'';position:absolute;left:0;right:0;top:0;bottom:2px;clip-path:polygon(50% 0,100% 100%,0 100%);background:linear-gradient(180deg,oklch(64% 0.22 38) 0 34%,oklch(97% 0.02 80) 34% 48%,oklch(64% 0.22 38) 48% 70%,oklch(97% 0.02 80) 70% 82%,oklch(64% 0.22 38) 82% 100%)}
+#axp-cone::after{content:'';position:absolute;left:1px;right:1px;bottom:0;height:3px;border-radius:1px;background:oklch(70% 0.19 55)}
+/* ── Desktop shortcuts ── icons on the wallpaper (top-left, XP-style). The */
+/* philosophy: desktop = launchers (profiles + Pictures + Notepad), taskbar = */
+/* runnable apps. They sit ABOVE content (z-index) but only show on wide screens */
+/* where the centred window leaves a wallpaper gutter — so they don't overlap. */
+/* Stylized CSS glyphs + brand colours, no image bytes, no trademark repros. */
+/* full-desktop layer (pointer-events pass through to the window EXCEPT on icons), */
+/* so icons can be dragged anywhere on the wallpaper. positions persist in */
+/* localStorage; default layout is a left column. */
+#axp-icons{position:fixed;inset:0;z-index:1;pointer-events:none;view-transition-name:axp-icons}
+.axp-ico,.axp-ico:link,.axp-ico:visited,.axp-ico:hover,.axp-ico:active{color:oklch(100% 0 0);text-decoration:none}
+.axp-ico{position:absolute;pointer-events:auto;display:flex;flex-direction:column;align-items:center;gap:4px;width:76px;padding:5px 3px 4px;box-sizing:border-box;border:1px solid transparent;border-radius:2px;cursor:pointer}
+.axp-ico.axp-dragging{opacity:.8;z-index:7}
+.axp-ico:hover{background:oklch(60% 0.20 263 / .26);border-color:oklch(74% 0.10 263 / .5)}
+.axp-ico:focus-visible{outline:1px dotted oklch(100% 0 0);outline-offset:1px;background:oklch(60% 0.20 263 / .34)}
+.axp-ico:active .ic{transform:translateY(1px)}
+.axp-ico .ic{width:31px;height:31px;border-radius:3px;display:flex;align-items:center;justify-content:center;color:oklch(100% 0 0);font-weight:bold;font-size:18px;line-height:1;font-family:var(--font-caption,'Trebuchet MS',Verdana,Geneva,sans-serif);text-shadow:0 1px 1px oklch(0% 0 0 / .4);box-shadow:inset 0 1px 0 oklch(100% 0 0 / .5),inset 0 -2px 2px oklch(0% 0 0 / .22),0 1px 2px oklch(0% 0 0 / .5)}
+/* label: white text with the classic XP desktop drop shadow, up to two lines */
+.axp-ico .t{font-size:11px;line-height:1.18;text-align:center;color:oklch(100% 0 0);text-shadow:0 1px 2px oklch(18% 0.04 263),0 0 3px oklch(18% 0.04 263);max-width:82px;overflow-wrap:anywhere}
+/* My Pictures glyph: a tiny framed Bliss — sky, sun, rolling hill */
+/* Notepad glyph: white ruled page with a folded corner */
+.axp-ico .note{background:linear-gradient(135deg,oklch(99% 0 0) 0 80%,oklch(82% 0.02 250) 80% 100%);position:relative}
+.axp-ico .note::before{content:'';position:absolute;left:7px;right:7px;top:9px;height:1px;background:oklch(58% 0.13 250);box-shadow:0 4px 0 oklch(58% 0.13 250),0 8px 0 oklch(58% 0.13 250),0 12px 0 oklch(58% 0.13 250)}
+.axp-ico .note::after{content:'';position:absolute;right:0;top:0;border-width:6px;border-style:solid;border-color:oklch(82% 0.02 250) oklch(99% 0 0) oklch(99% 0 0) oklch(82% 0.02 250)}
+/* generic camera glyph for the photo app (rounded body + lens + flash nub) */
+.axp-ico .cam{width:15px;height:11px;border:1.8px solid oklch(100% 0 0);border-radius:2px;position:relative;box-sizing:border-box}
+.axp-ico .cam::before{content:'';position:absolute;left:50%;top:50%;width:5px;height:5px;margin:-2.5px 0 0 -2.5px;border:1.8px solid oklch(100% 0 0);border-radius:50%;box-sizing:border-box}
+.axp-ico .cam::after{content:'';position:absolute;right:0;top:-4px;width:4px;height:2px;background:oklch(100% 0 0);border-radius:1px}
+/* only show desktop icons when the centred window leaves a wallpaper gutter */
+@media (max-width:1023px){#axp-icons{display:none}}
+/* app buttons (first-level subpages). NB: these are <a> tags, so the host page's */
+/* a:hover / a:visited rules would otherwise bleed in (red/purple text, */
+/* underlines) — pin every link state explicitly to white + no underline. */
+#axp-pins{display:flex;align-items:center;gap:3px;padding:0 3px;min-width:0}
+.axp-pin .lbl{overflow:hidden;text-overflow:ellipsis;max-width:92px}
+.axp-pin,.axp-pin:link,.axp-pin:visited,.axp-pin:hover,.axp-pin:active{color:oklch(100% 0 0);text-decoration:none}
+.axp-pin{display:flex;align-items:center;gap:6px;height:23px;padding:0 10px;cursor:pointer;font-family:inherit;font-size:11px;border-radius:2px;
+border:1px solid oklch(72% 0.12 254);border-bottom-color:oklch(42% 0.17 261);
+background:linear-gradient(180deg,oklch(70% 0.15 255) 0%,oklch(60% 0.17 257) 48%,oklch(54% 0.18 259) 52%,oklch(58% 0.17 257) 100%);
+box-shadow:inset 0 1px 0 oklch(82% 0.11 250)}
+.axp-pin:hover{background:linear-gradient(180deg,oklch(76% 0.14 254) 0%,oklch(66% 0.17 256) 48%,oklch(60% 0.18 258) 52%,oklch(64% 0.16 256) 100%);border-color:oklch(84% 0.10 250)}
+.axp-pin:active{background:linear-gradient(180deg,oklch(52% 0.18 260),oklch(60% 0.16 257));box-shadow:inset 1px 1px 2px oklch(36% 0.16 263);border-top-color:oklch(42% 0.17 261)}
+.axp-pin .fav{width:15px;height:15px;flex:0 0 auto;display:flex;line-height:0;filter:drop-shadow(0 1px 1px oklch(0% 0 0 / .3))}.axp-pin .fav svg{width:100%;height:100%;display:block}
+#axp-spacer{flex:1}
+/* tray + clock — flat, NOT a sunken box (the real XP clock is just text on the bar); */
+/* the only chrome is an engraved vertical separator on the tray's left edge. */
+#axp-tray{display:flex;align-items:center;padding:0 14px 0 13px;color:oklch(100% 0 0);
+font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);box-shadow:inset 1px 0 0 oklch(64% 0.15 254)}
+/* notification-area icons: System Properties, Security Center, Windows Update. */
+/* where the little XP "system" tray bits actually lived, right of the engraved */
+/* separator. shared class so the three line up identically. */
+.axp-trayico{display:flex;align-items:center;justify-content:center;width:22px;height:22px;margin-right:8px;border-radius:3px;text-decoration:none;opacity:.85;cursor:pointer}
+.axp-trayico:hover{background:oklch(64% 0.15 254);opacity:1}
+.axp-trayico svg{width:15px;height:15px;display:block;filter:drop-shadow(0 1px 1px oklch(0% 0 0 / .3))}
+/* mute/unmute speaker, sits just left of System Properties; matches its tray styling */
+#axp-sound{display:flex;align-items:center;justify-content:center;width:22px;height:22px;margin-right:7px;padding:0;border:0;background:transparent;border-radius:3px;cursor:pointer;opacity:.88}
+#axp-sound:hover{background:oklch(64% 0.15 254);opacity:1}
+#axp-sound.muted{opacity:.5}
+#axp-sound svg{width:15px;height:15px;display:block;filter:drop-shadow(0 1px 1px oklch(0% 0 0 / .3))}
+/* ── XP balloon-tip popout for tray icons: brief status + a tail to the icon ── */
+/* pale-yellow notification bubble (the classic XP balloon), one at a time, opens */
+/* above whichever tray icon was clicked. --tail is the px offset of the down-tail */
+/* from the balloon's left edge, set in JS so it points at that icon. */
+#axp-balloon{position:fixed;right:6px;bottom:38px;z-index:100000;width:min(300px,calc(100vw - 16px));display:none;
+font-family:var(--font-ui,Tahoma,Verdana,Geneva,sans-serif);font-size:11px;color:oklch(28% 0.02 90);
+background:oklch(98.5% 0.035 95);border:1px solid oklch(72% 0.06 86);border-radius:4px;
+box-shadow:2px 3px 11px -3px oklch(40% 0.05 90 / .55)}
+#axp-balloon.open{display:block}
+@media (prefers-reduced-motion:no-preference){#axp-balloon.open{animation:axp-bln .12s ease-out}}
+@keyframes axp-bln{from{transform:translateY(7px);opacity:.3}to{transform:translateY(0);opacity:1}}
+#axp-balloon::before,#axp-balloon::after{content:'';position:absolute;top:100%;left:var(--tail,84%);width:0;height:0;border:9px solid transparent;border-bottom:0;margin-left:-9px}
+#axp-balloon::before{border-top-color:oklch(72% 0.06 86)}
+#axp-balloon::after{border-top-color:oklch(98.5% 0.035 95);margin-top:-1.5px}
+#axp-balloon .tb{display:flex;align-items:flex-start;gap:7px;padding:8px 8px 3px 9px}
+#axp-balloon .ic{flex:0 0 16px;width:16px;height:16px;margin-top:1px}#axp-balloon .ic svg{width:16px;height:16px;display:block}
+#axp-balloon .t{flex:1;font-weight:bold;font-size:11px;line-height:1.3;padding-top:1px;color:oklch(24% 0.02 90)}
+#axp-balloon .x{flex:0 0 auto;position:relative;width:14px;height:14px;padding:0;margin:0;border:1px solid oklch(72% 0.04 88);border-radius:2px;background:oklch(95% 0.02 90);cursor:pointer;font-size:0;color:transparent}
+#axp-balloon .x:hover{background:oklch(86% 0.07 55)}
+#axp-balloon .x::before,#axp-balloon .x::after{content:'';position:absolute;left:50%;top:50%;width:8px;height:1.5px;margin:-.75px 0 0 -4px;background:oklch(35% 0.02 90)}
+#axp-balloon .x::before{transform:rotate(45deg)}#axp-balloon .x::after{transform:rotate(-45deg)}
+#axp-balloon .bd{padding:0 12px 4px 32px}
+#axp-balloon .ln{margin:3px 0;line-height:1.45;color:oklch(32% 0.015 90)}
+#axp-balloon .ln .k{color:oklch(50% 0.02 90)}#axp-balloon .ln b{color:oklch(20% 0.02 90)}
+#axp-balloon .ok{color:oklch(50% 0.16 145);font-weight:bold}
+#axp-balloon .mono{font-family:var(--font-mono,'Courier New',monospace);font-size:10px}
+#axp-balloon .load{padding:0 12px 6px 32px;color:oklch(55% 0.02 90);font-style:italic}
+#axp-balloon .ft{padding:2px 12px 9px 32px}#axp-balloon .ft a{color:oklch(42.61% 0.2353 263.74);font-size:10.5px;text-decoration:underline}
+/* ── Run dialog ── */
+#axp-run-back{position:fixed;inset:0;z-index:99998;display:none}
+#axp-run-back.open{display:block}
+#axp-run{position:fixed;left:50%;top:38%;transform:translate(-50%,-50%);z-index:100000;width:min(440px,calc(100vw - 24px));display:none;
+font-family:var(--font-ui,Tahoma,Verdana,Geneva,sans-serif);font-size:12px;color:oklch(21% 0 0);background:oklch(100% 0 0);
+border:2px solid #0831d9;border-right-color:#001ea0;border-bottom-color:#001ea0;
+box-shadow:inset 1px 1px 0 #166aee,inset 2px 2px 0 #0855dd,inset -1px -1px 0 #00138c,inset -2px -2px 0 #003bda,4px 4px 0 rgba(0,30,160,.35),2px 3px 12px -2px oklch(30% 0.12 263 / .55)}
+#axp-run.open{display:block}
+#axp-run .tb{display:flex;align-items:center;gap:6px;padding:3px 4px 4px 7px;color:oklch(100% 0 0);
+font-family:var(--font-caption,'Trebuchet MS',Verdana,Geneva,sans-serif);font-weight:bold;font-size:10pt;text-shadow:1px 1px oklch(28% 0.12 263);
+border-radius:3px 3px 0 0;border-bottom:1px solid oklch(41% 0.10 251);
+background:linear-gradient(180deg,oklch(70% 0.15 258) 0%,oklch(60% 0.20 261) 8%,oklch(51% 0.225 263) 18%,oklch(50% 0.225 263) 86%,oklch(58% 0.18 260) 100%)}
+/* the canonical Luna caption CLOSE button (design system): 21x21 red "gel" lozenge, */
+/* glossy gradient, CSS-drawn white X. matches .title-bar .controls .close site-wide. */
+#axp-run .tb .x{position:relative;box-sizing:border-box;margin-left:auto;width:21px;height:21px;padding:0;overflow:hidden;font-size:0;color:transparent;cursor:pointer;border:1px solid #d8401c;border-radius:3px;background-color:#e45f3e;background-image:linear-gradient(180deg,#e8795f 0%,#e45f40 30%,#e45d3d 52%,#e2552a 80%,#ae3110 100%);transition:filter 60ms ease-out}
+#axp-run .tb .x:hover,#axp-run .tb .x:focus-visible{border-color:#ff7a66;background-color:#ff957c;background-image:linear-gradient(180deg,#ff8b7d 0%,#ff7463 26%,#ff957c 55%,#fd7e64 82%,#d34936 100%);box-shadow:0 0 4px rgba(255,120,96,.7);outline:none}
+#axp-run .tb .x:active{filter:brightness(.9)}
+#axp-run .tb .x::before,#axp-run .tb .x::after{content:'';position:absolute;left:50%;top:50%;width:13px;height:2px;margin:-1px 0 0 -6.5px;background:#fff;box-shadow:0 1px 0 rgba(0,0,0,.35)}
+#axp-run .tb .x::before{transform:rotate(45deg)}#axp-run .tb .x::after{transform:rotate(-45deg)}
+#axp-run .body{display:flex;gap:11px;padding:14px 13px 6px}
+#axp-run .ico{flex:0 0 auto;width:34px;height:34px;position:relative;margin-top:2px}
+/* run "document with green swoosh" icon, pure CSS */
+#axp-run .ico .doc{position:absolute;inset:0 6px 0 2px;background:oklch(99% 0 0);border:1px solid oklch(55% 0 0);border-radius:1px}
+#axp-run .ico .doc::before{content:'';position:absolute;left:3px;right:5px;top:5px;height:1px;box-shadow:0 0 0 0 oklch(60% 0 0),0 3px 0 oklch(60% 0 0),0 6px 0 oklch(60% 0 0),0 9px 0 oklch(60% 0 0);background:oklch(60% 0 0)}
+#axp-run .ico .sw{position:absolute;left:-2px;bottom:-1px;width:26px;height:18px;border-radius:50%;border:5px solid oklch(58% 0.18 150);border-right-color:transparent;border-bottom-color:transparent;transform:rotate(34deg)}
+#axp-run .prompt{flex:1;line-height:1.45;color:oklch(28% 0 0)}
+#axp-run .open-row{display:flex;align-items:center;gap:8px;padding:4px 13px 2px}
+#axp-run .open-row label{flex:0 0 auto}
+#axp-run input{flex:1;font-family:var(--font-ui,Tahoma,Verdana,Geneva,sans-serif);font-size:12px;padding:3px 5px;color:oklch(18% 0 0);background:oklch(100% 0 0);
+border:2px solid;border-color:oklch(55% 0 0) oklch(86% 0 0) oklch(86% 0 0) oklch(55% 0 0)}
+#axp-run input:focus{outline:1px dotted oklch(45% 0.10 263);outline-offset:1px}
+#axp-run .list{margin:6px 13px 0;border:1px solid oklch(72% 0.02 250);max-height:40vh;overflow:auto;background:oklch(100% 0 0)}
+#axp-run .grp{padding:3px 8px;font-size:10px;font-weight:bold;letter-spacing:.06em;text-transform:uppercase;color:oklch(45% 0.04 255);background:oklch(95% 0.01 250);position:sticky;top:0}
+#axp-run .opt{display:flex;align-items:baseline;gap:8px;padding:3px 9px;cursor:pointer;white-space:nowrap}
+#axp-run .opt .nm{font-weight:bold;color:oklch(30% 0.03 255)}
+#axp-run .opt .ht{color:oklch(52% 0 0);font-size:11px;overflow:hidden;text-overflow:ellipsis}
+#axp-run .opt .pa{margin-left:auto;color:oklch(60% 0 0);font-family:var(--font-mono,'Courier New',monospace);font-size:10px}
+#axp-run .opt[aria-selected=true]{background:oklch(50% 0.22 263);color:oklch(100% 0 0)}
+#axp-run .opt[aria-selected=true] .nm,#axp-run .opt[aria-selected=true] .ht,#axp-run .opt[aria-selected=true] .pa{color:oklch(100% 0 0)}
+#axp-run .empty{padding:8px 10px;color:oklch(52% 0 0);font-style:italic}
+#axp-run .btns{display:flex;justify-content:flex-end;gap:7px;padding:11px 13px 13px}
+#axp-run .btn{min-width:74px;padding:3px 12px;font-family:inherit;font-size:12px;cursor:pointer;color:oklch(18% 0 0);
+background:linear-gradient(180deg,oklch(99% 0 0),oklch(92% 0.005 263));border:1px solid oklch(50% 0.04 263);border-radius:3px;
+box-shadow:inset 1px 1px 0 oklch(100% 0 0),inset -1px -1px 0 oklch(84% 0.02 90)}
+#axp-run .btn:hover{background:linear-gradient(180deg,oklch(99% 0.02 263),oklch(90% 0.03 263))}
+#axp-run .btn:active{box-shadow:inset 1px 1px 0 oklch(84% 0.02 90),inset -1px -1px 0 oklch(100% 0 0)}
+#axp-run .btn.def{outline:1px dotted oklch(45% 0.10 263);outline-offset:-4px}
+@media (max-width:560px){.axp-pin .lbl{display:none}.axp-pin{padding:0 7px}#axp-run .body{padding-top:11px}}
+@media (prefers-reduced-motion:no-preference){#axp-run.open{animation:axp-pop .09s ease-out}}
+@keyframes axp-pop{from{transform:translate(-50%,-50%) scale(.97);opacity:.4}to{transform:translate(-50%,-50%) scale(1);opacity:1}}

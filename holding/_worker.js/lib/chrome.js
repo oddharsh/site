@@ -212,6 +212,7 @@ ${head || ""}<style>
 ${xpChromeCss(width)}
 ${css || ""}
 </style>
+<link rel="stylesheet" href="/luna.css">
 </head>
 <body>
 <div class="window">

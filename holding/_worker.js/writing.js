@@ -120,7 +120,7 @@ export function writingShell(o) {
     "<link rel=\"canonical\" href=\"https://aadhar.sh" + escAttr(o.path) + "\">" +
     "<link rel=\"icon\" type=\"image/svg+xml\" href=\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='7' y='3' width='18' height='26' rx='1' fill='%23ffffff' stroke='%230855dd' stroke-width='2'/><rect x='10' y='9' width='12' height='1.6' fill='%23166aee'/><rect x='10' y='14' width='12' height='1.6' fill='%23166aee'/><rect x='10' y='19' width='8' height='1.6' fill='%23166aee'/></svg>\">" +
     "<style>:root{--font-caption:\"Trebuchet MS\",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:\"Courier New\",Courier,monospace}</style>" +
-    "<style>" + NOTEPAD_CSS + "</style></head><body class=\"np-page\">" +
+    "<style>" + NOTEPAD_CSS + "</style><link rel=\"stylesheet\" href=\"/luna.css\"></head><body class=\"np-page\">" +
     o.body +
     "<script src=\"/notepad.js\" defer></script><script src=\"/nav.js\" defer></script></body></html>";
 }
