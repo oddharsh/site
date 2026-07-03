@@ -10,6 +10,9 @@ import { escAttr, escHtml } from "./lib/http.js";
 // the canonical copy). The prose ships in the HTML, so it's readable/crawlable with
 // JS off; notepad.js only adds the menus + Ln/Col status + the F5 date stamp.
 export const NOTEPAD_CSS = `
+/* cross-doc View Transition opt-in: without this, navs to/from /writing were
+   the one place Chrome still white-flashed (every other page opts in). */
+@media (prefers-reduced-motion:no-preference){@view-transition{navigation:auto}::view-transition-old(root),::view-transition-new(root){animation-duration:140ms}}
 html{background:linear-gradient(180deg,oklch(56% 0.13 250) 0%,oklch(73% 0.10 236) 50%,oklch(88% 0.05 232) 60%,oklch(60% 0.16 140) 100%)}
 body.np-page{margin:0;min-height:100vh;padding:16px 12px 54px;color:oklch(21% 0 0);font-family:var(--font-ui);font-size:12px;
 background:linear-gradient(180deg,oklch(56% 0.13 250) 0%,oklch(73% 0.10 236) 50%,oklch(88% 0.05 232) 60%,oklch(60% 0.16 140) 100%)}
@@ -111,6 +114,7 @@ body.np-page::after{content:"";position:fixed;left:0;right:0;bottom:0;height:30p
 export function writingShell(o) {
   return "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\">" +
     "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">" +
+    "<meta name=\"theme-color\" content=\"#2D78BD\">" +
     "<title>" + escHtml(o.title) + "</title>" +
     "<meta name=\"description\" content=\"" + escAttr(o.desc) + "\">" +
     "<link rel=\"canonical\" href=\"https://aadhar.sh" + escAttr(o.path) + "\">" +

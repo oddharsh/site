@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#2D78BD">
 <title>Aadharsh Pannirselvam</title>
 <meta name="description" content="Aadharsh Pannirselvam. I research and invest in interesting tech-oriented stuff and the people that make them.">
 <meta name="author" content="Aadharsh Pannirselvam">
@@ -787,17 +788,22 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
 
   .photos a:hover                   { border-color: oklch(41.92% 0.13 250.51); border-color: oklch(from var(--photo-frame) calc(l - 0.19) calc(c + 0.07) h); }
 
+  .counter                          { color: oklch(86.52% 0.22 90.38); }
 }
 
-/* visited-page counter joke — pure decoration. the digits arrive as /hit.svg
-   (transparent SVG text); this rule paints the pill AROUND the image so the
-   skin stays page CSS and the image stays ~300B. */
+/* visited-page counter joke — pure decoration. the digits are TEXT again
+   (SSR'd from a read-only DO peek, so displaying the count mutates nothing);
+   the tick rides the /hit.svg?tick=1 beacon below instead of the render. */
 .counter {
   display: inline-block;
   background: oklch(21.78% 0 0);
+  color: oklch(86.52% 0.1768 90.38);
+  font-family: var(--font-mono);
+  font-size: 9pt;
+  font-weight: bold;
   padding: 1px 6px;
   border: 1px solid oklch(44.95% 0 0);
-  vertical-align: text-bottom;
+  letter-spacing: 0.1em;
 }
   /* standard scrollbar tint (Chrome + Safari 26 + Firefox): Luna-blue thumb,
      pale track. the garage/scroll demo styles its own element separately. */
@@ -1199,10 +1205,12 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
            has every link. -->
       <p>
         Last modified <time datetime="2026-06-07">June 7, 2026</time>
-        <!-- the counter is an IMAGE, as 2006 intended: the count never enters this
-             document, so a homepage GET is pure (prerender-safe, HEAD-immune) and
-             only the ~300B SVG carries no-store. see counter.js handleHitSvg. -->
-        &middot; You are visitor <img class="counter" src="/hit.svg" width="52" height="12" alt="visit counter">
+        <!-- the count is SSR'd text from a read-only DO peek (display mutates
+             nothing, so homepage GETs stay pure + prerender-safe); the actual
+             tick is the /hit.svg?tick=1 beacon at the end of <body>, plus a
+             <noscript> pixel for script-off visitors. curl /hit.svg for the
+             odometer itself. -->
+        &middot; You are visitor <span class="counter">000042</span><noscript><img src="/hit.svg?tick=1" alt="" width="1" height="1"></noscript>
       </p>
       <p class="signature">
         <small>&copy; 2026 Aadharsh Pannirselvam &middot; Best viewed in any browser made since 2001.</small>
@@ -1251,9 +1259,9 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
   minus one that genuinely can't be prerendered:
     /whoareyou — per-request fingerprint must reflect the real click, not a
                  speculative prerender request
-  the homepage ITSELF is prerender-safe now: the counter left the document
-  (/hit.svg peeks on Sec-Purpose and ticks via the activation beacon below),
-  so a homepage GET has no side effects and a speculative grid draw is fine.
+  the homepage ITSELF is prerender-safe: rendering only PEEKS the counter
+  (read-only), and the tick is the /hit.svg?tick=1 beacon below, which defers
+  to prerenderingchange on speculative loads. a speculative grid draw is fine.
   /around is prerender-safe too: its crawl moved to a cron, so any visit,
   real or speculative, is a pure KV read. GET purity is what keeps this list
   short; /lens's ?url= autorun holds fire until prerenderingchange.
@@ -1294,11 +1302,13 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
   ]
 }
 </script>
-<!-- prerender honesty: a prerendered visit's /hit.svg fetch carried Sec-Purpose
-     and only PEEKED. this beacon ticks the counter exactly once, at activation,
-     which is the moment the visit becomes real. non-prerendered loads skip it
-     (document.prerendering is falsy) because their image fetch already ticked. -->
-<script>document.prerendering&&addEventListener("prerenderingchange",function(){fetch("/hit.svg?tick=1")},{once:true});</script>
+<!-- the counter's ONLY scripted tick: fires once per real visit, deferred to
+     prerenderingchange when the load was speculative so a hover-prerender that
+     never activates counts zero and an activated one counts exactly once.
+     bfcache restores re-run nothing, so back/forward stays tick-free. the
+     display above is a read-only peek; script-off visitors tick via the
+     <noscript> pixel instead. -->
+<script>(function(){var t=function(){fetch("/hit.svg?tick=1")};document.prerendering?addEventListener("prerenderingchange",t,{once:true}):t()})();</script>
 
     <!--
       NB: this script block lives at the END of the body (it used to sit

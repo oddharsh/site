@@ -1,10 +1,10 @@
 # aadhar.sh — personal site
 
 A resto-mod 2003-aesthetic personal site for Aadharsh Pannirselvam, deployed
-to Cloudflare Pages + Workers. Two cohabiting projects in this directory:
+as a Cloudflare Worker with static assets. Cohabiting projects in this directory:
 
-- **`holding/`** — the live `aadhar.sh` homepage (Cloudflare Pages + `_worker.js`)
-- **`cal/`** — a custom coffee/bagel booking system at `aadhar.sh/coffee` (Cloudflare Worker, not yet deployed)
+- **`holding/`** — the live `aadhar.sh` site (Workers static assets + the `_worker.js/` module worker)
+- **`cal/`** — a custom coffee/bagel booking system at `aadhar.sh/coffee` (its own Cloudflare Worker, LIVE via the aadhar.sh/coffee* zone route; deploy separately with `cd cal && npx wrangler deploy`)
 
 The look is deliberately Windows XP / Outlook Express era: blue title bars,
 Verdana/Tahoma fonts, raised 3D bevel buttons, sunken inputs, OKLCH-encoded
@@ -43,7 +43,7 @@ wrangler kv key delete --namespace-id="$NS" "tracks:4IRq9W1N2tOWHhH0O3vXiF" --re
 
 ## holding/ — homepage architecture
 
-Single-page personal site at `aadhar.sh`. Hosted on Cloudflare Pages, with a
+Single-page personal site at `aadhar.sh`. A Cloudflare Worker with static assets, with a
 `_worker.js` that does server-side enhancement of an otherwise-static
 `index.html`. The worker route table sits in `route()` at the top of
 `_worker.js`.
@@ -56,7 +56,7 @@ Single-page personal site at `aadhar.sh`. Hosted on Cloudflare Pages, with a
 | `holding/writing/` | Written content as plain `.txt` files + `posts.json` registry `[{slug,title,date}]`. The worker renders each as an XP **Notepad** window at `/writing/<slug>` (a server-rendered `<textarea>` seeded with the canonical text — editable by nature, ephemeral by nature: no save → reload restores canonical, "writing in flux"), plus a "My Writing" folder index at `/writing`. Raw `.txt` stays fetchable at `/writing/<slug>.txt`. Author a post = drop a `.txt` + a `posts.json` entry. Render code (`handleWritingIndex`/`handleWritingPost`/`NOTEPAD_CSS`) lives in `_worker.js`. |
 | `holding/notepad.js` | Behavior for the `/writing` Notepad view (deferred, SW-cached): per-window `enhance()` wiring File/Edit/Format/View/Help menus, live Ln/Col + word-count status bar, Word-Wrap toggle, the classic **F5 time/date** stamp (Temporal w/ Date fallback), Select All, Print, About. Also opens folder notes as **popovers** that composite over the folder index (+ `pushState` to `/writing/<slug>`, Back closes). Chrome itself is SSR'd by `_worker.js`. No-op without a `.np-window`. |
 | `holding/nav.js` | Site-wide XP **desktop shell**. The ONE shared external asset (deferred, SW-cached) — every page includes `<script src="/nav.js" defer>`; it injects its own `<style>` + builds, into `<body>`: the **Bliss desktop** wallpaper, **draggable desktop icons** (Notepad + the 5 profiles, positions persisted in localStorage), the **taskbar** (Start orb → Run, first-level-subpage app buttons each with a per-section SVG icon, clock via Temporal), and the **Run** command palette (⌘K / Start). Also owns the **OS-window model**: body is a clipping flex desktop, each `.window`/`.np-window` is pinned + its content scrolls internally behind a **custom XP scrollbar**, windows are **draggable** (top is a hard boundary) + **resizable**, and View Transitions animate only the window. Sets each first-level route's **tab favicon** to its section icon. Run destinations: pages + profiles inline; 146 photos lazy-loaded from `/images/manifest.json` with `/images/alt.json` captions. Wired into homepage + all garage pages + worker-gen `/around`,`/whoareyou`,`/bot` + serendipity shell. |
-| `holding/_worker.js` | Pages-Worker hybrid. Owns routing, photo serving from R2, manifest building, Spotify playlist scraping, AadharshBot crawler, the `/writing` Notepad pages, cache-control overrides. |
+| `holding/_worker.js` | The module worker (bundled by wrangler at deploy). Owns routing, photo serving from R2, manifest building, Spotify playlist scraping, AadharshBot crawler, the `/writing` Notepad pages, cache-control overrides. |
 | `holding/_headers` | Static-asset cache + security headers (CSP, Permissions-Policy, etc.). Applied to direct static-asset requests; the worker overrides cache-control for select paths. |
 | `holding/sw.js` | RETIRED (v136, 2026-07-03): now a ~15-line unregister stub (skipWaiting, delete caches, claim, unregister) that must keep serving 200 for a year+ so installed copies clean themselves up. No CACHE_VERSION anymore; the deploy-log vnum lives in D1 alone (bump-version.sh derives the next from MAX(vnum)). Repeat-visit speed comes from immutable assets + bfcache + speculation prerender. |
 | `holding/llms.txt` | The llms.txt format — concise site summary for LLMs. Linked from `<link rel="alternate">`. |
@@ -190,7 +190,7 @@ the site doesn't actually serve. To verify:
   results. ~10K writes/day budget; we use a handful.
 - **PHOTOS_R2** — R2 bucket `aadhar-photos`, holds the SOOC originals
   (~3 GB / 146 photos at FUJIFILM X-T5 + Leica resolution).
-- **ASSETS** — auto-bound by Pages, serves static files from the project.
+- **ASSETS** — the Workers static-assets binding (wrangler.jsonc `assets`), serves files from holding/.
 - **RESTORE_DB** — D1 database `aadhar-restore` (id `88c8daf1-3a36-4f8e-a2ad-dba8a74e1b9f`),
   the **single source of truth for the deploy log**. One row per logged deploy
   (bump-version.sh insert; the retired SW's `CACHE_VERSION` used to carry the
@@ -199,14 +199,14 @@ the site doesn't actually serve. To verify:
   build) read this one `checkpoints` table, so they cannot drift apart. Schema:
   `checkpoints(vnum INTEGER PK, ts INTEGER, ymd TEXT, version TEXT, slug TEXT, title TEXT)`
   — `slug` is the version suffix / changelog tag, `title` is the human description.
-  **Configured as a dashboard binding** (Pages → Settings → Bindings), NOT in a
-  `wrangler.toml` — holding/ has no toml, so all its bindings live in the dashboard.
+  **Configured in `wrangler.jsonc`** (d1_databases), like every other binding
+  since the Workers migration.
   **Log a deploy** (so both pages stay current):
   `./holding/scripts/bump-version.sh <slug> "<title>"`, then deploy. It derives
   the next vnum from `SELECT MAX(vnum)` and inserts the checkpoint (no file edit;
   the SW that used to carry the version string retired in v136).
-- **CF_ACCOUNT_ID + BROWSER_RENDER_TOKEN** — env vars (Pages → Settings → Variables
-  and Secrets, NOT in code, NOT in a `wrangler.toml`) that power `/lens/shot`, the
+- **CF_ACCOUNT_ID + BROWSER_RENDER_TOKEN** — CF_ACCOUNT_ID is a var in
+  `wrangler.jsonc`; BROWSER_RENDER_TOKEN is a Worker secret (`wrangler secret put`) that power `/lens/shot`, the
   Browser Rendering screenshot fallback inside **`/lens`** ("The Other Web", which shows
   any URL the way a machine does). `/lens`'s Human view embeds framable sites in a live
   cross-origin `<iframe>` (loaded by the visitor's own browser) and screenshots the rest
@@ -258,8 +258,8 @@ are installed on macOS, so the fallback path doesn't hit Helvetica/Arial.
 Custom-built scheduler at `aadhar.sh/coffee`. Replaces Cal.com. Inspired by
 [jry.io/bagel](https://jry.io/bagel). Crediting Jacob Young in the footer.
 
-**Status: source-complete, not deployed.** Needs secrets set before
-`wrangler deploy` will work end-to-end (see `cal/README.md`).
+**Status: LIVE at aadhar.sh/coffee** (zone route -> cal-aadhar-sh worker).
+Deploys separately: `cd cal && npx wrangler deploy` (secrets already set).
 
 ### Architecture
 
@@ -355,7 +355,7 @@ npx wrangler deploy
    `<span class="np-artist-link" role="link" tabindex="0" data-href="...">`
    + a delegated click handler.
 
-9. **Pages's `wrangler pages deploy holding`** must run from the project
+9. **HISTORICAL (Pages era): `wrangler pages deploy holding`** had to run from the project
    root (`~/noodling/site/`), not from inside `holding/images/` etc.,
    otherwise wrangler tries to scan `images/holding/` and ENOENTs.
 

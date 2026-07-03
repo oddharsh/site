@@ -58,12 +58,13 @@ fetch), `lib/assets.js` (`serveFreshAsset` + asset 404 clamp).
 
 ### Bindings the worker reads (`env.*`)
 
-KV/R2/D1/DO are resource bindings; the rest are secrets. All live in the Pages
-dashboard. Every use is guarded, so a missing binding degrades, it doesn't crash.
+KV/R2/D1/DO are resource bindings; the rest are secrets. Bindings live in
+wrangler.jsonc; secrets on the Worker via `wrangler secret put`. Every use is
+guarded, so a missing binding degrades, it doesn't crash.
 
 | `env.*` | Kind | What |
 |---|---|---|
-| `ASSETS` | (auto) | static assets, auto-bound by Pages |
+| `ASSETS` | (auto) | Workers static assets binding (wrangler.jsonc `assets`) |
 | `RN_KV` | KV | tracks, manifest, artist pics, crawler caches (`3cb8a107c58e47dc9244e75b33401f36`) |
 | `PHOTOS_R2` | R2 | bucket `aadhar-photos`, SOOC originals |
 | `RESTORE_DB` | D1 | `/restore` + `/updates` changelog store |

@@ -448,7 +448,7 @@ footer .signature small { color: oklch(56.93% 0 0); }
     <footer>
       <p>
         &larr; Back to <a href="/">aadhar.sh</a>
-        &middot; Built as a Cloudflare Pages worker
+        &middot; Built as a Cloudflare Worker
       </p>
       <p class="signature">
         <small>&copy; 2026 Aadharsh Pannirselvam &middot; Best viewed in any browser made since 2001.</small>

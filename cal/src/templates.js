@@ -489,6 +489,7 @@ function shell(title, body, env) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#2D78BD">
 <title>${esc(fullTitle)}</title>
 <meta name="description" content="let's grab coffee or a bagel with ${esc(env.HOST_NAME)} in NYC. requests are reviewed by hand.">
 <meta name="theme-color" content="#0858a3">

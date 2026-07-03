@@ -61,9 +61,18 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
     arr => (Array.isArray(arr) && arr.length ? arr : null),
     () => null
   );
-  // the visit counter no longer touches this handler: the footer's
-  // <img src="/hit.svg"> carries it (see counter.js handleHitSvg), so every
-  // homepage GET is side-effect-free and the page is safe to prerender.
+  // the visit count is displayed as SSR'd text via a READ-ONLY DO peek:
+  // rendering never mutates, so homepage GETs stay pure and prerender-safe.
+  // The actual tick is the /hit.svg?tick=1 beacon (plus a <noscript> pixel)
+  // in index.html. Fired now, awaited inside the footer .counter rewriter,
+  // so the read overlaps the whole page stream and never gates first byte.
+  const counterPeek = env.COUNTER
+    ? env.COUNTER.get(env.COUNTER.idFromName("homepage-visits"))
+        .fetch("https://do/?peek=1")
+        .then((r) => r.json())
+        .catch(() => null)
+    : Promise.resolve(null);
+  ctx.waitUntil(counterPeek.catch(() => {}));
 
   const [res, tracksPayload, photos, altMap] = await Promise.all([
     env.ASSETS.fetch(request),
@@ -73,7 +82,7 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
   ]);
 
   // footer "Last modified" → the most recently added photo (a real, datable
-  // content change; the pool grows often). Pages assets are content-addressed
+  // content change; the pool grows often). Static assets are content-addressed
   // (ETag, no Last-Modified) and there's no build step, so this is the cleanest
   // auto-advancing source. floored by the hardcoded date in index.html (so a
   // copy-only edit can still bump it by hand). null → hardcoded date stays.
@@ -174,6 +183,21 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
     }).join("");
     rewriter.on("section.photos", {
       element(el) { el.setInnerContent(slotsHtml, { html: true }); },
+    });
+  }
+
+  // ── visitor count → footer .counter (read-only peek; the beacon ticks) ──
+  // the rewriter reaches .counter at the very end of <body>, so awaiting the
+  // peek here rides the full page stream. on a null read the static
+  // placeholder stays put, never a misleading number.
+  if (env.COUNTER) {
+    rewriter.on(".counter", {
+      async element(el) {
+        const data = await counterPeek;
+        if (data && typeof data.n === "number") {
+          el.setInnerContent(String(data.n).padStart(6, "0"));
+        }
+      },
     });
   }
 

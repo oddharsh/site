@@ -13,5 +13,5 @@ export const THUMB_VERSION = 19;
 // auto-generated pages.dev subdomain (aadhar-sh.pages.dev or any deploy-
 // hash variant like 60bcf749.aadhar-sh.pages.dev) gets 301'd to the
 // equivalent path on aadhar.sh. eliminates the duplicate public footprint
-// while preserving the ability to deploy + serve from Cloudflare Pages.
+// while preserving the ability to deploy + serve as a Cloudflare Worker.
 export const CANONICAL_HOST = "aadhar.sh";

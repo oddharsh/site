@@ -104,14 +104,8 @@ export async function servePhotoFromR2(request, env, ctx) {
   return resp;
 }
 
-// ── 1990s-style directory listings ──────────────────────────────────
-// the 1999 web had these everywhere — Apache's mod_autoindex was the
-// canonical implementation. Cloudflare Pages doesn't auto-generate them
-// (the request 404s without an index file), so we hand-render in that
-// visual style: bracketed icons, DD-MMM-YYYY HH:MM dates, K/M sizes,
-// parent directory link. honest about the source though — the signature
-// at the bottom reads "handwritten worker at aadhar.sh" rather than
-// pretending to be Apache.
+// (the Apache-styled /images listings lived here until 2026-07-03; /photos
+// superseded them and their signature line moved with it.)
 
 // the photo manifest is the single source of truth for which photos
 // exist. derived from R2 keys (each upload preserves its SOOC filename;
@@ -129,16 +123,9 @@ export const R2_EXT_PRIORITY = {
   heif: 1, heic: 1, hif: 1,
 };
 
-// bump to bust all `/images/<stem>.{avif,jpg}` edge-cache entries at
-// once. used as a `?v=<N>` suffix in the manifest's thumb URLs. Cloudflare
-// includes the query string in the cache key by default, so changing this
-// produces a fresh cache lookup that doesn't see prior stale 404s.
-// (10 dropped WebP; 11 grid thumbs 1200px → 500px; 12 AVIF re-encoded at
-// higher quality (CQ30 → -q63); 13 the 3 grayscale Leica thumbs re-encoded
-// as true monochrome (yuv420 → yuv400). same filenames each time, so the
-// ?v= bump is what busts the edge cache for the new bytes.)
-// THUMB_VERSION now lives in ./lib/const.js (imported at the top) — the first
-// extracted module proving the no-build directory bundle.
+// THUMB_VERSION (lib/const.js) survives only in the legacy-fallback URL shape
+// for stems missing from hashes.json — content-hashed /i/ URLs made the ?v=
+// bump ritual obsolete (a new encode IS a new URL).
 // stems removed from the pool — excluded from the rebuilt manifest even if their
 // original still lingers in R2's eventually-consistent list(). prune once R2
 // list() drops them (and the entry here is harmless to keep as a record).

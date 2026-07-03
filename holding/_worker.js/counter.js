@@ -1,7 +1,7 @@
 // counter.js — the homepage visit counter: an in-house Durable Object, rendered
 // as /hit.svg so the homepage document itself never carries the count.
 //
-// Migrated off cf-garage's cross-script Counter (Pages couldn't host DOs; Workers
+// Migrated off cf-garage's cross-script Counter (the old Pages setup couldn't host DOs;
 // can). Same wire protocol home.js already speaks: GET https://do/ increments and
 // returns {n}; ?peek=1 reads without bumping (bots/prerender). Storage is the
 // per-DO SQLite-backed KV (state.storage), one instance named "homepage-visits".
@@ -43,12 +43,13 @@ export class Counter {
 // UAs that read the count without advancing it (mirrors the old home.js gate).
 const PEEK_UA = /bot|crawl|spider|slurp|crawler|bingpreview|facebookexternalhit|embedly|slackbot|whatsapp|telegrambot|discordbot|redditbot|petalbot|gptbot|claudebot|ccbot|perplexity|bytespider|google-extended/i;
 
-// ── GET /hit.svg — the counter as an image, 2006's own idiom ────────────────
-// The count leaves the homepage document so every homepage GET is pure: HEAD,
-// bots, and Sec-Purpose speculative loads peek; a real visitor's <img> fetch
-// ticks. Prerendered visits tick exactly once via the ?tick=1 activation beacon
-// (their image fetch carried Sec-Purpose and peeked). no-store rides the IMAGE
-// alone; the document stays bfcache-eligible.
+// ── GET /hit.svg — the counter's tick endpoint + a curl-able odometer ───────
+// The homepage DISPLAYS the count as SSR'd text from a read-only peek (home.js),
+// so rendering never mutates; the tick arrives here as ?tick=1 (the beacon at
+// the end of index.html's body, deferred to prerenderingchange on speculative
+// loads, plus a <noscript> pixel). HEAD, ?peek, verified bots, and Sec-Purpose
+// speculative loads never tick. Fetch /hit.svg directly and you get the
+// odometer as a tiny SVG, no-store, which is its own little easter egg.
 export async function handleHitSvg(request, env) {
   const url = new URL(request.url);
   const ua = request.headers.get("user-agent") || "";

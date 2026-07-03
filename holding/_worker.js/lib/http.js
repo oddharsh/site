@@ -23,7 +23,7 @@ export function jsonResponse(body, status = 200, extraHeaders = {}) {
 // TTL to 30s on 4xx/5xx — sending max-age=30 makes the browser cache
 // honor the same window, so a transient 404 during a deploy race
 // doesn't get pinned in either CF's edge OR the visitor's browser for
-// CF Pages's default 4h. use everywhere we emit a 4xx/5xx ourselves.
+// the platform's default 4h negative-cache. use everywhere we emit a 4xx/5xx ourselves.
 export function errorResp(body, status) {
   return new Response(body, {
     status,

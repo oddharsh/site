@@ -870,6 +870,23 @@
   // No iframes, no SPA — the content pages stay one-document-per-window; only these
   // accessories get the multi-window treatment (the same split XP itself made).
   var ACC_Z = 40, ACC_OPEN = {};
+
+  // ── click-to-raise: any pointerdown inside a window brings it to the front ──
+  // "front" is just paint order among overlapping siblings, and windows only
+  // overlap once dragging (or an accessory popout) is involved — the flex
+  // desktop never overlaps them at rest. One monotonic counter shared by page
+  // windows and accessories keeps the two families interleaving correctly
+  // (click a page window and it rises above the Clock, and vice versa).
+  // Capture phase so clicks on scrollbars, inputs, and the textarea all raise.
+  // Ceiling stays far below the taskbar (99999) / Run (99998) / balloon layers.
+  function initRaise() {
+    D.addEventListener("pointerdown", function (e) {
+      var w = e.target && e.target.closest && e.target.closest(".window,.np-window,.axp-acc");
+      if (!w) return;
+      if (String(w.style.zIndex) === String(ACC_Z)) return;   // already on top
+      w.style.zIndex = ++ACC_Z;
+    }, true);
+  }
   var ACCESSORIES = [
     { label: "Clock", hint: "the current time, ticking", kind: "accessory", accId: "clock", path: "", icon: "🕐", build: buildClock }
   ];
@@ -1380,7 +1397,7 @@
     }
   }
 
-  function boot() { injectCSS(); buildDesktop(); buildIcons(); buildTaskbar(); initDrag(); initIconDrag(); initScrollbars(); initResize(); setFavicon(); injectSpeculation(); initCloseBack(); initWindowControls(); }
+  function boot() { injectCSS(); buildDesktop(); buildIcons(); buildTaskbar(); initDrag(); initRaise(); initIconDrag(); initScrollbars(); initResize(); setFavicon(); injectSpeculation(); initCloseBack(); initWindowControls(); }
   if (D.readyState === "loading") D.addEventListener("DOMContentLoaded", boot);
   else boot();
 })();

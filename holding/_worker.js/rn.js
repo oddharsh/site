@@ -15,8 +15,8 @@ import { esc, jsonResp, timingSafeEqual } from "./lib/http.js";
 // updating from a shortcut / curl:
 //   https://aadhar.sh/rn/set?secret=<RN_BUST_SECRET>&url=<new playlist url>
 //
-// required binding:  RN_KV (Pages → Functions → KV namespace bindings)
-// required env:      RN_BUST_SECRET (Pages secret)
+// required binding:  RN_KV (wrangler.jsonc kv_namespaces)
+// required env:      RN_BUST_SECRET (Worker secret)
 //
 // if KV is empty (first deploy, or you deliberately cleared it), the
 // redirect falls back to the playlist URL hardcoded below.
@@ -358,7 +358,7 @@ export async function handleRnSet(request, env) {
   const id = m[1];
 
   if (!env.RN_KV) {
-    return setPage(500, "no kv binding", "the worker can't see RN_KV — bind it in Pages settings.");
+    return setPage(500, "no kv binding", "the worker can't see RN_KV — bind it in wrangler.jsonc.");
   }
   await env.RN_KV.put("playlist-id", id);
 
