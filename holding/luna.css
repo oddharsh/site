@@ -356,6 +356,17 @@ body:has(.window),body:has(.np-window),body:has(.wrap){overflow:hidden !importan
 /* origin biased below-centre (toward the bar at the bottom), fast + near-linear, */
 /* minimize easing in, restore easing out. no modern in-place cross-zoom. */
 ::view-transition-group(axp-window){animation-duration:.2s;animation-timing-function:ease-out}
+/* the WHITE BLINK fix (2026-07-03, confirmed via /garage/vt-check): the UA
+   composites each old/new pair with plus-lighter, whose seamlessness assumes
+   the two opacities sum to exactly 1 at every instant — true for its own
+   default fades, false for our custom minimize/restore curves. Two half-faded
+   WHITE window snapshots then ADD to brighter-than-either and the whole
+   window blinks white mid-morph. Same class the desktop groups were already
+   treated for above; the pair goes back to normal alpha compositing, so the
+   mid-morph dip shows the Bliss wallpaper behind instead of clipping white —
+   which is also simply what a minimizing XP window looked like. */
+::view-transition-image-pair(axp-window){isolation:auto}
+::view-transition-old(axp-window),::view-transition-new(axp-window){mix-blend-mode:normal}
 ::view-transition-old(axp-window){transform-origin:50% 130%;animation:axp-min .18s cubic-bezier(.4,0,1,1) both}
 ::view-transition-new(axp-window){transform-origin:50% 130%;animation:axp-res .2s cubic-bezier(0,0,.2,1) both}
 @keyframes axp-min{to{opacity:0;transform:scale(.66)}}@keyframes axp-res{from{opacity:0;transform:scale(.66)}}
