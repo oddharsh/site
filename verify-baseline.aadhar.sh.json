@@ -223,6 +223,11 @@
     },
     {
       "path": "/images/L1000069_3-400.avif",
+      "status": 301,
+      "ct": ""
+    },
+    {
+      "path": "/i/L1000069_3.c82791da.avif",
       "status": 200,
       "ct": "image/avif"
     },
