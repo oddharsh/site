@@ -49,6 +49,7 @@
   // ── destinations ──────────────────────────────────────────────────────────
   var PAGES = [
     { label: "Home", path: "/", hint: "aadhar.sh" },
+    { label: "photos", path: "/photos", hint: "every photo, Explorer Thumbnails view — the archive the old /images/ listing became" },
     { label: "whoareyou", path: "/whoareyou", hint: "system properties · what one request reveals · for agents + the curious" },
     { label: "security center", path: "/security", hint: "the site's security posture, XP-style: firewall, updates, threat protection" },
     { label: "windows update", path: "/updates", hint: "what shipped lately: the service-worker changelog as installed updates" },
@@ -815,7 +816,7 @@
           '<span class="pa">' + esc(g.it.kind === "profile" ? "↗" : g.it.kind === "raycast" ? "↗ raycast" : g.it.kind === "accessory" ? "↗ window" : g.it.path) + "</span></div>";
       });
     });
-    list.innerHTML = html || '<div class="empty">No match. Try a page name, a photo stem, or a profile.</div>';
+    list.innerHTML = html || '<div class="empty">No match. Try a page name, a photo stem, or a profile — or <a href="/photos">browse all photos</a>.</div>';
     ensureVisible();
   }
 

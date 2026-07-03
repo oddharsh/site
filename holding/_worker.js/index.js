@@ -13,8 +13,9 @@ import { serveAssetWith404Clamp, serveFreshAsset } from "./lib/assets.js";
 import { CANONICAL_HOST } from "./lib/const.js";
 import { wantsMarkdown } from "./lib/http.js";
 import { withSecurityHeaders } from "./lib/security.js";
-import { handleImagesFullIndex, handleImagesIndex, handleImagesManifest, servePhotoFromR2 } from "./photos.js";
+import { handleImagesManifest, handlePhotos, servePhotoFromR2 } from "./photos.js";
 import { handleReading } from "./reading.js";
+import { handleRun } from "./run.js";
 import { handleRn, handleRnAdmin, handleRnSet, handleRnTracks } from "./rn.js";
 import { handleSecurityCenter } from "./security.js";
 import { handleSystemRestore, handleUpdatesJson, handleWindowsUpdate } from "./updates.js";
@@ -110,10 +111,16 @@ const ROUTES = new Map([
   ["/around", handleAround],
   ["/around/json", handleAroundJson],
 
-  ["/images", routeImagesRedirect],
-  ["/images/full", routeImagesFullRedirect],
-  ["/images/", handleImagesIndex],
-  ["/images/full/", handleImagesFullIndex],
+  ["/photos", handlePhotos],
+  ["/photos/", routePhotosRedirect],
+  ["/run", handleRun],
+
+  // the Apache-styled listings are retired (owner decree 2026-07-02): /photos
+  // is the browse surface, so every listing URL 301s there instead of 404ing.
+  ["/images", routePhotosRedirect],
+  ["/images/", routePhotosRedirect],
+  ["/images/full", routePhotosRedirect],
+  ["/images/full/", routePhotosRedirect],
   ["/images/manifest.json", handleImagesManifest],
   ["/images/metadata.json", routeImagesMetadata],
 
@@ -192,12 +199,8 @@ function routeOAuthAuthorizationServer(request, env) {
   return serveFreshAsset(request, env, "application/json; charset=utf-8");
 }
 
-function routeImagesRedirect(_request, _env, _ctx, url) {
-  return Response.redirect(url.origin + "/images/" + url.search, 301);
-}
-
-function routeImagesFullRedirect(_request, _env, _ctx, url) {
-  return Response.redirect(url.origin + "/images/full/" + url.search, 301);
+function routePhotosRedirect(_request, _env, _ctx, url) {
+  return Response.redirect(url.origin + "/photos", 301);
 }
 
 function routeWritingPost(request, env, ctx, url) {

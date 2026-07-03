@@ -42,7 +42,9 @@ full playlist on Spotify.
 A random nine photos from a curated pool of ~146 are rendered on each page
 load. Thumbnails dual-encoded as AVIF (primary, via `<picture>`) and JPG
 (universal fallback) at `/images/<stem>.{avif,jpg}`; full-resolution SOOC
-originals at `/images/full/<name>.<ext>` via worker-proxied R2.
+originals at `/images/full/<name>.<ext>` via worker-proxied R2. The whole
+archive is browsable at `/photos`, and machine-readable at
+`/images/manifest.json` (+ `alt.json` captions, `metadata.json` EXIF).
 
 ## Links
 

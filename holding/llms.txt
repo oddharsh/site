@@ -24,6 +24,14 @@ aggregations.
   desktop shell, with a photo grid and a "now playing" tracklist. HTML by
   default; markdown is available via `Accept: text/markdown` content
   negotiation.
+- [/photos](https://aadhar.sh/photos): The photo archive — every published
+  photo as a square contact sheet (Explorer's Thumbnails view), each tile
+  linking to its straight-out-of-camera original. Machine-readable indexes:
+  [manifest.json](https://aadhar.sh/images/manifest.json) (stems, thumbnail
+  URLs, full-res keys, sizes, upload dates),
+  [alt.json](https://aadhar.sh/images/alt.json) (AI captions), and
+  [metadata.json](https://aadhar.sh/images/metadata.json) (EXIF incl. Fuji
+  film-recipe fields). The old `/images/` directory listings 301 here.
 - [/whoareyou](https://aadhar.sh/whoareyou): Transparency page — shows what
   a single HTTP request from your client reveals to the site (network,
   transport, browser, cookies). Nothing is logged or stored. `noindex`.
@@ -31,9 +39,10 @@ aggregations.
   branded crawler that this site operates. Documents the User-Agent,
   Signature-Agent URL, signing algorithm, and opt-out instructions.
 - [/around](https://aadhar.sh/around): A small dashboard of crypto-VC
-  homepages I keep tabs on, each fetched live by AadharshBot. Curious
-  rather than competitive. Signed per Web Bot Auth so receiving sites can
-  verify the requests came from this domain. `noindex`.
+  homepages I keep tabs on, crawled by AadharshBot on a 30-minute cron
+  (your visit only reads the snapshot). Curious rather than competitive.
+  Signed per Web Bot Auth so receiving sites can verify the requests came
+  from this domain. `noindex`.
 - [/garage](https://aadhar.sh/garage): Prototypes and experiments —
   alternate visual styles, work-in-progress interactions, things that
   haven't shipped to the homepage yet. Public so people can see what's

@@ -1,8 +1,9 @@
 // photos.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
 import { THUMB_VERSION } from "./lib/const.js";
-import { swrKV } from "./lib/cache.js";
-import { errorResp, escHtml, jsonResp } from "./lib/http.js";
+import { cachedRender, swrKV } from "./lib/cache.js";
+import { lunaPage } from "./lib/chrome.js";
+import { errorResp, escAttr, escHtml, jsonResp } from "./lib/http.js";
 
 // ── /images/full/<key> → R2 ─────────────────────────────────────────
 // proxies an R2 GET through the worker. supports If-None-Match (304s on
@@ -225,176 +226,94 @@ export async function buildImagesManifest(env) {
 
 export async function handleImagesManifest(request, env, ctx) {
   const photos = await getImagesManifest(env, ctx);
-  return jsonResp({ photos, count: photos.length });
+  // _address: the doctrinal signature that lived in the retired Apache listings;
+  // the machine surface keeps it now that the human one is /photos.
+  return jsonResp({ _address: "handwritten worker at aadhar.sh", photos, count: photos.length });
 }
 
-export async function handleImagesIndex(request, env, ctx) {
-  // probe the static asset layer for each known thumbnail. cache the
-  // result in KV for an hour. uses GET (not HEAD) because env.ASSETS
-  // doesn't reliably populate Content-Length, then reads the body via
-  // arrayBuffer to count bytes.
-  let entries = null;
-  if (env.RN_KV) {
-    try { entries = await env.RN_KV.get("idx:images", "json"); } catch {}
-  }
-  if (!entries) {
-    // derive thumbnail filenames from the photo manifest. picks up new
-    // uploads automatically (no POOL_COUNT bump needed). manifest stores
-    // thumb URLs with a `?v=N` cache-bust suffix; strip it for the
-    // human-readable directory listing (the probe still resolves the
-    // underlying static asset regardless of the query string).
-    const manifest = await getImagesManifest(env, ctx);
-    const stripVer = (s) => String(s || "").replace(/\?.*$/, "");
-    const names = manifest.flatMap(p => [
-      stripVer(p.thumb_avif),
-      stripVer(p.thumb_jpg),
-    ]).filter(Boolean);
-    entries = await Promise.all(names.map(async (name) => {
-      try {
-        const probeUrl = new URL(`/images/${name}`, request.url).toString();
-        const res = await env.ASSETS.fetch(probeUrl);
-        if (!res.ok) return null;
-        // env.ASSETS doesn't populate Content-Length on its responses
-        // (likely chunked internally), so read the body to count bytes.
-        // expensive once per cache miss (~7MB across 68 files); harmless
-        // since we cache the listing in KV for an hour afterward.
-        let size = parseInt(res.headers.get("content-length") || "0", 10);
-        if (!size && res.body) {
-          const buf = await res.arrayBuffer();
-          size = buf.byteLength;
-        }
-        return {
-          name,
-          size,
-          lastModified: res.headers.get("last-modified") || null,
-        };
-      } catch {
-        return null;
-      }
-    }));
-    entries = entries.filter(Boolean);
-    entries.sort((a, b) => a.name.localeCompare(b.name));
-    // prepend the full/ subdirectory entry
-    entries = [{ name: "full/", size: null, lastModified: null, isDir: true }, ...entries];
-    if (env.RN_KV) {
-      ctx.waitUntil(env.RN_KV.put("idx:images", JSON.stringify(entries), { expirationTtl: 3600 }));
+// ── /photos — the archive, Explorer's Thumbnails view ───────────────────────
+// Supersedes the two mod_autoindex listings (/images/, /images/full/ → 301
+// here): one uniform square contact sheet of every published photo, anchor-
+// walkable for no-JS visitors and dumb crawlers, each tile opening its SOOC
+// original. Tiles use the 400px AVIF tier (plenty at ~160-250px rendered,
+// even 2x) with the 600px JPG as the universal fallback. First 12 eager
+// (above the fold), the rest lazy; content-visibility skips below-fold work.
+export async function handlePhotos(request, env, ctx) {
+  const render = async () => {
+    const [photos, altMap] = await Promise.all([
+      getImagesManifest(env, ctx),
+      getAltMap(env),
+    ]);
+    if (!photos.length) {
+      return new Response("photo manifest unavailable", {
+        status: 503,
+        headers: { "content-type": "text/plain; charset=utf-8", "retry-after": "60" },
+      });
     }
+
+    const tiles = photos.map((p, i) => {
+      const eager = i < 12;
+      const alt = escAttr((altMap && altMap[p.stem]) || p.stem);
+      return `<a class="ph" href="/images/full/${escAttr(encodeURIComponent(p.full).replace(/%2F/g, "/"))}">
+<picture>
+<source type="image/avif" srcset="/images/${escAttr(p.stem)}-${THUMB_SMALL_PX}.avif?v=${THUMB_VERSION}">
+<img src="/images/${escAttr(p.thumb_jpg)}" alt="${alt}" width="400" height="400"${eager ? "" : ` loading="lazy"`} decoding="async">
+</picture>
+<span class="ph-name">${escHtml(p.stem)}</span>
+</a>`;
+    }).join("\n");
+
+    return lunaPage({
+      title: "aadhar.sh/photos",
+      path: "aadhar.sh/photos",
+      width: 980,
+      description: `All ${photos.length} photos, straight out of camera. FUJIFILM X-T5 + Leica M.`,
+      css: `
+  h1 { font-family: var(--font-caption); color: oklch(41.92% 0.0962 250.51); font-size: 18pt; margin: 0 0 4px; font-weight: bold; }
+  .lede { margin: 0 0 14px; color: oklch(38.67% 0 0); font-size: 10.5pt; }
+  .sheet {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 12px; margin: 8px 0 16px;
   }
-
-  return apacheIndexResponse("/images", entries);
-}
-
-export async function handleImagesFullIndex(request, env, ctx) {
-  if (!env.PHOTOS_R2) {
-    return errorResp("R2 not bound", 503);
+  .ph {
+    display: block; text-decoration: none; text-align: center;
+    content-visibility: auto; contain-intrinsic-size: auto 190px;
   }
-  // R2 lists are cheap; cache 5 min so it's snappy without going too stale.
-  let entries = null;
-  if (env.RN_KV) {
-    try { entries = await env.RN_KV.get("idx:imagesfull", "json"); } catch {}
+  .ph picture, .ph img {
+    display: block; width: 100%; height: auto; aspect-ratio: 1;
+    border: 1px solid oklch(80% 0.02 250); background: oklch(96.72% 0 0);
+    box-sizing: border-box;
   }
-  if (!entries) {
-    const list = await env.PHOTOS_R2.list({ limit: 1000 });
-    entries = (list.objects || [])
-      .map(o => ({
-        name:         o.key,
-        size:         o.size,
-        lastModified: o.uploaded ? new Date(o.uploaded).toUTCString() : null,
-      }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-    if (env.RN_KV) {
-      ctx.waitUntil(env.RN_KV.put("idx:imagesfull", JSON.stringify(entries), { expirationTtl: 300 }));
-    }
+  .ph:hover img { border-color: oklch(41.92% 0.13 250.51); }
+  .ph-name {
+    display: block; margin-top: 3px; font-size: 7.5pt; color: oklch(44.95% 0 0);
+    font-family: var(--font-ui); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-
-  return apacheIndexResponse("/images/full", entries);
-}
-
-export function apacheIndexResponse(path, entries) {
-  const fmtSize = (b) => {
-    if (b === null || b === undefined) return "-";
-    if (b < 1024)            return String(b);
-    if (b < 1024 * 1024)     return `${Math.round(b / 1024)}K`;
-    if (b < 1024 * 1024 * 1024) return `${(b / 1024 / 1024).toFixed(1)}M`;
-    return `${(b / 1024 / 1024 / 1024).toFixed(1)}G`;
-  };
-  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  const pad = (n) => String(n).padStart(2, "0");
-  const fmtDate = (s) => {
-    if (!s) return "                 -";
-    const d = new Date(s);
-    if (isNaN(d)) return "                 -";
-    return `${pad(d.getUTCDate())}-${months[d.getUTCMonth()]}-${d.getUTCFullYear()} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
-  };
-  const iconFor = (e) => {
-    if (e.isDir) return "[DIR]";
-    const ext = e.name.split(".").pop().toLowerCase();
-    if (["jpg","jpeg","png","gif","avif","webp","heic","heif","bmp","tiff"].includes(ext)) return "[IMG]";
-    if (["txt","md","xml","json","csv"].includes(ext)) return "[TXT]";
-    if (["mp3","wav","flac","ogg"].includes(ext)) return "[SND]";
-    if (["mp4","mov","webm","avi"].includes(ext)) return "[VID]";
-    return "[   ]";
-  };
-
-  // parent directory link — one level up. an empty join produces an
-  // empty string, which would yield "//" if we naively appended "/". so:
-  // build the path explicitly and reuse "/" as the root case.
-  const parts = path.split("/").filter(Boolean);
-  const parentParts = parts.slice(0, -1);
-  const parentHref = parts.length === 0
-    ? null
-    : parentParts.length === 0 ? "/" : "/" + parentParts.join("/") + "/";
-
-  const formatRow = (icon, nameHtml, dateStr, sizeStr) => {
-    // padded to look like the classic Apache <pre>-formatted listing
-    const namePart  = nameHtml.padEnd(31, " ");
-    const datePart  = dateStr.padEnd(17, " ");
-    const sizePart  = sizeStr.padStart(5, " ");
-    return `${icon} <a href="${nameHtml.replace(/<[^>]+>/g, "")}">${nameHtml}</a>${" ".repeat(Math.max(0, 30 - nameHtml.replace(/<[^>]+>/g, "").length))}  ${datePart}  ${sizePart}`;
+  .ph:hover .ph-name { color: oklch(42.61% 0.2353 263.74); }
+  footer { text-align: center; font-size: 9pt; color: oklch(44.95% 0 0); margin-top: 14px; padding-top: 10px; border-top: 1px solid oklch(86.67% 0.0294 259.59); }
+  footer address { font-style: italic; margin-top: 4px; }
+  a { color: oklch(42.61% 0.2353 263.74); }
+`,
+      body: `
+    <h1>Photos</h1>
+    <p class="lede">
+      All ${photos.length}, straight out of camera (FUJIFILM X-T5, Leica M).
+      Click any tile for the full-resolution original. Machine-readable index:
+      <a href="/images/manifest.json">manifest.json</a> &middot;
+      <a href="/images/alt.json">alt.json</a> &middot;
+      <a href="/images/metadata.json">metadata.json</a>.
+    </p>
+    <div class="sheet">
+${tiles}
+    </div>
+    <footer>
+      &larr; <a href="/">aadhar.sh</a> &middot; press <b>&#8984;K</b> anywhere to search these by name
+      <address>handwritten worker at aadhar.sh</address>
+    </footer>
+`,
+      cache: "public, max-age=300",
+    });
   };
 
-  let rows = "";
-  if (parentHref) {
-    rows += `[DIR] <a href="${parentHref}">Parent Directory</a>                                   -\n`;
-  }
-  for (const e of entries) {
-    const icon = iconFor(e);
-    const displayName = e.isDir ? e.name : e.name;
-    const linkHref = e.isDir ? displayName : encodeURIComponent(displayName).replace(/%2F/g, "/");
-    const padded = displayName.length > 28 ? displayName.slice(0, 25) + ".." : displayName;
-    const namePad = " ".repeat(Math.max(0, 30 - padded.length));
-    rows += `${icon} <a href="${linkHref}">${escHtml(padded)}</a>${namePad}  ${fmtDate(e.lastModified)}  ${fmtSize(e.size).padStart(6, " ")}\n`;
-  }
-
-  const html = `<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">
-<html>
- <head>
-  <title>Index of ${escHtml(path)}</title>
-  <style>
-    body { background: #ffffff; color: #000000; font-family: monospace; padding: 12px; }
-    h1 { font-family: Helvetica, Arial, sans-serif; font-weight: bold; font-size: 14pt; margin: 0 0 12px; }
-    pre { font-family: "Courier New", Courier, monospace; font-size: 10pt; line-height: 1.5; margin: 0; }
-    a { color: #0000ee; text-decoration: underline; }
-    a:visited { color: #551a8b; }
-    hr { border: 0; border-top: 1px solid #000000; margin: 8px 0; }
-    address { font-family: Helvetica, Arial, sans-serif; font-size: 9pt; font-style: italic; color: #000000; }
-  </style>
- </head>
- <body>
-<h1>Index of ${escHtml(path)}</h1>
-<hr>
-<pre>      Name                            Last modified      Size
-<hr>${rows}<hr></pre>
-<address>handwritten worker at aadhar.sh</address>
-<script src="/nav.js" defer></script>
- </body>
-</html>`;
-
-  return new Response(html, {
-    status: 200,
-    headers: {
-      "content-type":  "text/html; charset=utf-8",
-      "cache-control": "public, max-age=60, s-maxage=300",
-    },
-  });
+  return cachedRender(request, ctx, render, "/photos");
 }
