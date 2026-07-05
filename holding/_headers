@@ -46,12 +46,15 @@
 /cars/*
   Cache-Control: public, max-age=31536000, immutable
 
-# the resume: one mutable document, replaced in place on update (the URL is
-# the product — /resume.pdf never changes, the bytes do). browser revalidates
-# every time (cheap edge 304), the edge holds a day, a deploy purges it —
-# same staleness model as the garage pages.
+# a mutable one-off document, replaced in place (the URL is the product; the
+# bytes change under it). browser revalidates every time (cheap edge 304), the
+# edge holds a day, a deploy purges it — same staleness model as the garage
+# pages. noindex/nofollow so it never lands in a search index if the URL leaks:
+# it's reachable by direct link only, deliberately absent from sitemap, robots,
+# and every on-site link, so nothing here advertises it.
 /resume.pdf
   Cache-Control: public, max-age=0, must-revalidate, s-maxage=86400
+  X-Robots-Tag: noindex, nofollow
 
 # garage experiment pages — active development mules, edited constantly. the
 # browser must REVALIDATE every time (max-age=0) so fresh edits always show; the
