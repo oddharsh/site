@@ -1086,11 +1086,28 @@
       var hn = el('<span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>');
       bar.insertBefore(hn, bar.firstChild);
       var bBtn = hn.querySelector(".axp-back"), fBtn = hn.querySelector(".axp-fwd");
-      bBtn.addEventListener("click", function () { history.back(); });
+      // Back's PARENT fallback: with no history behind this page (a cold
+      // arrival, a shared link), Back walks UP the path instead of sitting
+      // blank — /lwe/vigenere goes to /lwe/, /garage/wire to /garage/,
+      // /around to /. Real history always wins (it rides bfcache, ~0ms);
+      // the fallback only fires when there is nothing to go back TO. On
+      // the homepage there is no parent, so Back stays disabled there.
+      var parentPath = location.pathname.replace(/\/+$/, "").replace(/[^/]+$/, "") || "/";
+      var atRoot = (location.pathname.replace(/\/+$/, "") || "/") === "/";
+      var realBack = function () {
+        return window.navigation ? navigation.canGoBack : history.length > 1;
+      };
+      bBtn.addEventListener("click", function () {
+        if (realBack()) history.back();
+        else if (!atRoot) location.href = parentPath;
+      });
       fBtn.addEventListener("click", function () { history.forward(); });
       var sync = function () {
         if (!window.navigation) return;                 // no Navigation API -> leave both enabled
-        bBtn.disabled = !navigation.canGoBack;
+        var rb = navigation.canGoBack;
+        bBtn.disabled = !rb && atRoot;                  // parent fallback keeps it live elsewhere
+        bBtn.title = rb || atRoot ? "Back" : "Back to " + parentPath;
+        bBtn.setAttribute("aria-label", bBtn.title);
         fBtn.disabled = !navigation.canGoForward;
       };
       sync();
