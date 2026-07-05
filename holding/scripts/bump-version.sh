@@ -28,17 +28,28 @@ fi
 # keep the SQL single-quoted and simple: no apostrophes in the title
 case "$title" in *\'*) echo "title cannot contain a single quote (')" >&2; exit 1;; esac
 
-# current version = the D1 log's high-water mark (the SW string used to carry it)
+# current version = the D1 log's high-water mark (the SW string used to carry it).
+# REPLICA-LAG HARDENING (this bit three deploys on 2026-07-03): the MAX read can
+# hit a stale D1 replica, and INSERT OR IGNORE then swallowed the collision
+# silently — a checkpoint just vanished. Now the insert is plain (a collision
+# ERRORS), and on conflict we advance vnum and retry a few times.
 curnum="$(wrangler d1 execute "$DB" --remote --json --command \
   "SELECT MAX(vnum) AS m FROM checkpoints;" \
   | python3 -c 'import json,sys; print(json.load(sys.stdin)[0]["results"][0]["m"])')"
-next=$((curnum + 1))
-ver="aadhar-v${next}-${slug}"
 ymd="$(date -u +%Y-%m-%d)"
 ts="$(date -u +%s)"
 
-wrangler d1 execute "$DB" --remote --command \
-  "INSERT OR IGNORE INTO checkpoints (vnum, ts, ymd, version, slug, title) VALUES (${next}, ${ts}, '${ymd}', '${ver}', '${slug}', '${title}');"
-
-echo "d1:     logged checkpoint v${next} (${ymd}) as ${ver}  ->  /updates + /restore"
-echo "next:   npm run deploy"
+next=$((curnum + 1))
+for attempt in 1 2 3 4; do
+  ver="aadhar-v${next}-${slug}"
+  if wrangler d1 execute "$DB" --remote --command \
+    "INSERT INTO checkpoints (vnum, ts, ymd, version, slug, title) VALUES (${next}, ${ts}, '${ymd}', '${ver}', '${slug}', '${title}');" >/dev/null 2>&1; then
+    echo "d1:     logged checkpoint v${next} (${ymd}) as ${ver}  ->  /updates + /restore"
+    echo "next:   npm run deploy"
+    exit 0
+  fi
+  echo "d1:     vnum ${next} taken (stale replica read?) — retrying with $((next + 1))" >&2
+  next=$((next + 1))
+done
+echo "error: could not insert a checkpoint after 4 attempts" >&2
+exit 1
