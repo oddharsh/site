@@ -86,6 +86,8 @@ aggregations.
 - [/rn](https://aadhar.sh/rn): 302 to whichever Spotify playlist of mine is
   currently named `rn`. The target lives in Cloudflare KV and is updated
   via a secret-gated admin form whenever a new musical era begins.
+- [/resume.pdf](https://aadhar.sh/resume.pdf): Aadharsh Pannirselvam's resume
+  / CV (PDF). Background, experience, and how to reach me.
 
 ## Discovery
 
