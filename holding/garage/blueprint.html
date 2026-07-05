@@ -232,8 +232,8 @@ return res;</pre></figure>
         honest 404, so the masquerade check now tests for a platform behavior that cannot occur.
         What remains load-bearing is narrower: an edge-cached 404 under <code>/images/*</code>
         would still inherit the 1-year immutable rule, so the cache-control clamp stays. One
-        small guard instead of three sniffing ones. Same logic demotes <code>THUMB_VERSION</code>
-        from critical to insurance: atomic deploys removed the race it was built for.</p>
+        small guard instead of three sniffing ones. Same logic eventually retired <code>THUMB_VERSION</code>
+        outright: atomic deploys plus content-hashed <code>/i/</code> URLs removed the race it was built for.</p>
     </div>
 
     <div class="tg">

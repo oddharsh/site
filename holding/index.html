@@ -1065,8 +1065,7 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
           // addressed); abs() tolerates the older relative shape so a stale
           // cached manifest can never break the fallback grid.
           const abs = (u) => (u && u.startsWith("/") ? u : `/images/${u}`);
-          const vq = p.thumb_avif && p.thumb_avif.includes("?") ? "?" + p.thumb_avif.split("?")[1] : "";
-          const small = p.thumb_small ? abs(p.thumb_small) : `/images/${esc(p.stem)}-400.avif${vq}`;
+          const small = abs(p.thumb_small);
           const load = i === 0 ? 'loading="eager" fetchpriority="high"' : 'loading="lazy"';
           const sz = (typeof p.size === "number" && p.size > 0) ? ` data-size="${p.size}"` : "";
           const up = p.uploaded ? ` data-uploaded="${esc(p.uploaded)}"` : "";

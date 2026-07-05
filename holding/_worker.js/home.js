@@ -1,9 +1,8 @@
 // home.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
-import { THUMB_VERSION } from "./lib/const.js";
 import { escAttr, escHtml, wantsMarkdown } from "./lib/http.js";
 import { HOMEPAGE_DISCOVERY_LINK, withHomepageDiscoveryHeaders } from "./lib/security.js";
-import { THUMB_SMALL_PX, absThumb, getAltMap, getImagesManifest } from "./photos.js";
+import { absThumb, getAltMap, getImagesManifest } from "./photos.js";
 import { getTracksSWR } from "./rn.js";
 
 export function homepageHeadResponse(request) {
@@ -136,10 +135,10 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
   // CF/browser/intermediaries don't pin this selection across refreshes.
   // <picture> uses AVIF primary + JPG fallback; data-* attrs feed the
   // hover tooltip; target=_blank + rel=noopener on the anchor.
-  // 400px-tier URL for a manifest entry, tolerant of the pre-hash shape
-  const smallOf = (p) => p.thumb_small
-    ? absThumb(p.thumb_small)
-    : (p.stem ? `/images/${p.stem}-${THUMB_SMALL_PX}.avif?v=${THUMB_VERSION}` : null);
+  // 400px-tier URL, straight from the manifest (absThumb tolerates a stale
+  // pre-hash KV manifest; unhashed stems never reach here, they're skipped
+  // at manifest-build time)
+  const smallOf = (p) => (p.thumb_small ? absThumb(p.thumb_small) : null);
 
   if (photos) {
     const pick = pickRandom(photos, 12);   // ~12 fills the justified rows into a fuller rectangle

@@ -1,6 +1,5 @@
 // photos.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
-import { THUMB_VERSION } from "./lib/const.js";
 import { cachedRender, swrKV } from "./lib/cache.js";
 import { lunaPage } from "./lib/chrome.js";
 import { errorResp, escAttr, escHtml, jsonResp } from "./lib/http.js";
@@ -123,16 +122,10 @@ export const R2_EXT_PRIORITY = {
   heif: 1, heic: 1, hif: 1,
 };
 
-// THUMB_VERSION (lib/const.js) survives only in the legacy-fallback URL shape
-// for stems missing from hashes.json — content-hashed /i/ URLs made the ?v=
-// bump ritual obsolete (a new encode IS a new URL).
 // stems removed from the pool — excluded from the rebuilt manifest even if their
 // original still lingers in R2's eventually-consistent list(). prune once R2
 // list() drops them (and the entry here is harmless to keep as a record).
 export const REMOVED_STEMS = new Set(["XT509360"]);
-
-// small mobile AVIF tier (stem-400.avif), served via <source media> at <=560px.
-export const THUMB_SMALL_PX = 400;
 
 // normalize a manifest thumb URL: new manifests bake absolute /i/ URLs, but a
 // stale KV manifest (pre-cutover) still carries the relative legacy shape.
@@ -205,9 +198,12 @@ export async function buildImagesManifest(env) {
     // thumb URLs are ABSOLUTE and content-addressed (/i/<stem>.<hash8>.<ext>,
     // from hashes.json via getThumbHashes): a URL names exact bytes, served
     // immutable for a year, so there is no global version to bump and no way
-    // for a cached 404 to shadow a real file. A stem missing from the hash map
-    // falls back to the legacy /images/...?v=N shape, which the worker's
-    // /images/<thumb> route now answers with a 301 into /i/ anyway.
+    // for a cached 404 to shadow a real file. hashes.json is complete for every
+    // live photo (add-photos.sh runs hash-thumbnails.sh), so a stem with no hash
+    // is a half-run pipeline: SKIP it rather than bake a broken /i/undefined
+    // tile, and log so the gap surfaces. (The old ?v= legacy fallback retired
+    // once hashes.json went 100% complete; the /images/<thumb> 301 layer still
+    // catches old external links independently of this builder.)
     //
     // dual-source: thumb_avif is the <picture> primary; thumb_jpg is
     // the universal <img src> fallback (thumb_small is the 400px mobile AVIF).
@@ -217,18 +213,21 @@ export async function buildImagesManifest(env) {
     // slim hot-path manifest: ONLY the fields the SSR slot-builder reads
     // (EXIF rides /images/meta/<stem>.json, fetched per photo on hover).
     const hashes = await getThumbHashes(env);
-    const v = THUMB_VERSION;
-    return [...byStem.entries()].map(([stem, o]) => {
+    return [...byStem.entries()].flatMap(([stem, o]) => {
       const h = hashes[stem];
-      return {
+      if (!h || !h.a || !h.j || !h.s) {
+        console.log(`manifest: skipping ${stem} (no content-hash in hashes.json)`);
+        return [];
+      }
+      return [{
         full:        o.key,                   // R2 key, e.g. "XT507333.JPG"
-        thumb_avif:  h && h.a ? `/i/${stem}.${h.a}.avif`     : `/images/${stem}.avif?v=${v}`,
-        thumb_jpg:   h && h.j ? `/i/${stem}.${h.j}.jpg`      : `/images/${stem}.jpg?v=${v}`,
-        thumb_small: h && h.s ? `/i/${stem}-400.${h.s}.avif` : `/images/${stem}-${THUMB_SMALL_PX}.avif?v=${v}`,
+        thumb_avif:  `/i/${stem}.${h.a}.avif`,
+        thumb_jpg:   `/i/${stem}.${h.j}.jpg`,
+        thumb_small: `/i/${stem}-400.${h.s}.avif`,
         stem,
         size:       o.size,                   // R2 object size in bytes
         uploaded:   o.uploaded ? new Date(o.uploaded).toISOString() : null,
-      };
+      }];
     }).sort((a, b) => a.full.localeCompare(b.full));
   }
 }
@@ -263,7 +262,7 @@ export async function handlePhotos(request, env, ctx) {
     const tiles = photos.map((p, i) => {
       const eager = i < 12;
       const alt = escAttr((altMap && altMap[p.stem]) || p.stem);
-      const small = p.thumb_small ? absThumb(p.thumb_small) : `/images/${p.stem}-${THUMB_SMALL_PX}.avif?v=${THUMB_VERSION}`;
+      const small = absThumb(p.thumb_small);   // manifest guarantees thumb_small (unhashed stems are skipped)
       return `<a class="ph" href="/images/full/${escAttr(encodeURIComponent(p.full).replace(/%2F/g, "/"))}">
 <picture>
 <source type="image/avif" srcset="${escAttr(small)}">
