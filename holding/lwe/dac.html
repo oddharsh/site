@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#2D78BD">
 <title>aadhar.sh/lwe/dac</title>
-<meta name="description" content="Why DAC nerds fight about multibit versus delta-sigma, explained at MSN-chat pace. An R-2R ladder you can mismatch, a multibit staircase, a live noise-shaping DFT, an audible bit-depth demo, and a reconstruction filter showing the time-frequency tradeoff. Leans on Schiit Happened and head-fi, cited.">
+<meta name="description" content="Why DAC nerds fight about multibit versus delta-sigma, explained at MSN-chat pace. An R-2R ladder you can mismatch, a multibit staircase, a live noise-shaping DFT, an audible bit-depth demo, a reconstruction filter showing the time-frequency tradeoff, and a tube stage you can overdrive into even or odd harmonics. Leans on Schiit Happened and head-fi, cited.">
 <link rel="canonical" href="https://aadhar.sh/lwe/dac">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23a8541f'/><text x='16' y='23' font-size='20' font-family='Trebuchet MS,sans-serif' fill='%23fff' text-anchor='middle'>∿</text></svg>">
 <meta property="og:type" content="article">
@@ -74,7 +74,7 @@ body::after { content: ""; position: fixed; left: 0; right: 0; bottom: 0; height
 .compose .box { display: flex; gap: 7px; }
 .compose .ta { flex: 1; min-height: 30px; border: 1px solid #7d8aa3; background: #fff; box-shadow: inset 1px 1px 0 #c3cbdb; padding: 4px 6px; font-family: var(--font-ui); font-size: 9.5pt; color: #9aa3b2; }
 @media (max-width: 520px){ body { padding: 8px 4px 32px; } .msgr-head .pets { display:none } }
-.lead{font-size:9.5pt;color:#5a4a38;margin:0 0 9px;line-height:1.5}.dac-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:4px 0 10px}.dac-row label{display:flex;align-items:center;gap:8px;font-size:9pt;color:#6b5640}.dac-row input[type=range]{accent-color:#a8541f}.dac-btn{font:inherit;font-size:9pt;padding:4px 12px;cursor:pointer;border:1px solid #c79a6a;border-radius:3px;background:linear-gradient(180deg,#fdf6ee,#f0dcc6);box-shadow:inset 0 1px 0 #fff;color:#6b3f17}.dac-btn:hover{background:linear-gradient(180deg,#fff,#f6e6d2)}.dac-btn:active{background:#e9d2b6}canvas#stairCanvas,canvas#nsCanvas{width:100%;max-width:560px;height:auto;border:1px solid #e0d3c2;border-radius:4px;background:#fffdf9;display:block}.dac-cap{font-size:8.5pt;color:#8a7a64;margin:6px 0 0;line-height:1.5}.demo .mono{font-family:var(--font-mono)}.demo .dim{color:#9aa3b2}.dac-bit{font:inherit;font-size:8.5pt;padding:4px 8px;cursor:pointer;border:1px solid #c79a6a;border-radius:3px;background:#f6ece1;color:#6b3f17;display:flex;flex-direction:column;align-items:center;line-height:1.2;min-width:46px}.dac-bit span{font-family:var(--font-mono);font-size:7pt;color:#9a7a55}.dac-bit[aria-pressed=true]{background:linear-gradient(180deg,#cf7a3a,#a8541f);color:#fff;border-color:#83400f}.dac-bit[aria-pressed=true] span{color:#f6ddc6}canvas#ladderXfer{width:100%;max-width:560px;height:auto;border:1px solid #e0d3c2;border-radius:4px;background:#fffdf9;display:block}.filt-wrap{display:flex;gap:8px;flex-wrap:wrap}.filt-wrap canvas{flex:1;min-width:160px;max-width:276px;height:auto;border:1px solid #e0d3c2;border-radius:4px;background:#fffdf9}.mu-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:4px 0 2px}.mu-col{min-width:0}.mu-h{font-size:8.5pt;font-weight:bold;color:#6b3f17;margin:0 0 3px}canvas#muMbCanvas,canvas#muDsCanvas{width:100%;height:auto;border:1px solid #e0d3c2;border-radius:3px;background:#fffdf9;display:block}
+.lead{font-size:9.5pt;color:#5a4a38;margin:0 0 9px;line-height:1.5}.dac-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:4px 0 10px}.dac-row label{display:flex;align-items:center;gap:8px;font-size:9pt;color:#6b5640}.dac-row input[type=range]{accent-color:#a8541f}.dac-btn{font:inherit;font-size:9pt;padding:4px 12px;cursor:pointer;border:1px solid #c79a6a;border-radius:3px;background:linear-gradient(180deg,#fdf6ee,#f0dcc6);box-shadow:inset 0 1px 0 #fff;color:#6b3f17}.dac-btn:hover{background:linear-gradient(180deg,#fff,#f6e6d2)}.dac-btn:active{background:#e9d2b6}canvas#stairCanvas,canvas#nsCanvas{width:100%;max-width:560px;height:auto;border:1px solid #e0d3c2;border-radius:4px;background:#fffdf9;display:block}.dac-cap{font-size:8.5pt;color:#8a7a64;margin:6px 0 0;line-height:1.5}.demo .mono{font-family:var(--font-mono)}.demo .dim{color:#9aa3b2}.dac-bit{font:inherit;font-size:8.5pt;padding:4px 8px;cursor:pointer;border:1px solid #c79a6a;border-radius:3px;background:#f6ece1;color:#6b3f17;display:flex;flex-direction:column;align-items:center;line-height:1.2;min-width:46px}.dac-bit span{font-family:var(--font-mono);font-size:7pt;color:#9a7a55}.dac-bit[aria-pressed=true]{background:linear-gradient(180deg,#cf7a3a,#a8541f);color:#fff;border-color:#83400f}.dac-bit[aria-pressed=true] span{color:#f6ddc6}canvas#ladderXfer{width:100%;max-width:560px;height:auto;border:1px solid #e0d3c2;border-radius:4px;background:#fffdf9;display:block}.filt-wrap{display:flex;gap:8px;flex-wrap:wrap}.filt-wrap canvas{flex:1;min-width:160px;max-width:276px;height:auto;border:1px solid #e0d3c2;border-radius:4px;background:#fffdf9}.mu-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:4px 0 2px}.mu-col{min-width:0}.mu-h{font-size:8.5pt;font-weight:bold;color:#6b3f17;margin:0 0 3px}canvas#muMbCanvas,canvas#muDsCanvas{width:100%;height:auto;border:1px solid #e0d3c2;border-radius:3px;background:#fffdf9;display:block}canvas#tubeSpec{width:100%;max-width:560px;height:auto;border:1px solid #e0d3c2;border-radius:4px;background:#fffdf9;display:block;margin-top:8px}.tmode[aria-pressed=true]{background:linear-gradient(180deg,#cf7a3a,#a8541f);color:#fff;border-color:#83400f}.dac-play[aria-pressed=true]{background:linear-gradient(180deg,#6fae67,#3f8f45);color:#fff;border-color:#2f6b34}
 body { text-wrap: pretty; } /* progressive; older engines ignore it */
 </style>
 <link rel="stylesheet" href="/luna.css">
@@ -95,7 +95,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
         <div class="pets">Learning&nbsp;With&nbsp;Errors<br>bits &amp; voltages</div>
       </div>
 
-      <p class="disclosure"><b>Starter draft.</b> The explanations lean on <a href="http://lucasbosch.de/schiit/jason-stoddard-shiit-happened-tablet-lblb.pdf" rel="external">Schiit Happened</a> (Jason Stoddard's book, shared free by the author) and the <a href="https://www.head-fi.org/threads/schiit-happened-the-story-of-the-gods-of-noise.701900/" rel="external">head-fi threads</a>, paraphrased and cited. The five demos run real math: a quantized staircase, an R-2R ladder you can mismatch, an actual DFT of a noise-shaped signal, a Web Audio tone you can hear at each bit depth, and a reconstruction filter showing the time-frequency tradeoff.</p>
+      <p class="disclosure"><b>Starter draft.</b> The explanations lean on <a href="http://lucasbosch.de/schiit/jason-stoddard-shiit-happened-tablet-lblb.pdf" rel="external">Schiit Happened</a> (Jason Stoddard's book, shared free by the author) and the <a href="https://www.head-fi.org/threads/schiit-happened-the-story-of-the-gods-of-noise.701900/" rel="external">head-fi threads</a>, paraphrased and cited. The six demos run real math: a quantized staircase, an R-2R ladder you can mismatch, an actual DFT of a noise-shaped signal, a Web Audio tone you can hear at each bit depth, a reconstruction filter showing the time-frequency tradeoff, and a tube stage that turns a sine into even or odd harmonics.</p>
 
       <div class="log">
 
@@ -113,7 +113,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
 
       <div class="demo" id="demo-stair">
         <div class="bar">the staircase &middot; drag the bit depth</div>
-        <div class="pad"><p class="lead">A multibit DAC builds each sample as one exact voltage, chosen from 2<sup>N</sup> levels a resistor ladder defines. Drag the bit depth: more bits means a finer staircase, closer to the smooth wave underneath.</p><div class="dac-row"><label>bit depth <input type="range" id="stairBits" min="3" max="10" value="4"> <span id="stairN" class="mono">4-bit &middot; 16 levels</span></label></div><canvas id="stairCanvas" width="560" height="180"></canvas></div>
+        <div class="pad"><p class="lead">A multibit DAC builds each sample as one exact voltage, chosen from 2<sup>N</sup> levels a resistor ladder defines. Drag the bit depth: more bits means a finer staircase, closer to the smooth wave underneath.</p><div class="dac-row"><label>bit depth <input type="range" id="stairBits" min="3" max="10" value="4"> <span id="stairN" class="mono">4-bit &middot; 16 levels</span></label> <button class="dac-btn dac-play" type="button" id="stairPlay">play</button></div><canvas id="stairCanvas" width="560" height="180"></canvas><p class="dac-cap">Hit <b>play</b> and drag the bit depth: at 3-bit the quantization hash is loud, and it melts off as the staircase gets finer. Same tone, same sine, just more levels.</p></div>
       </div>
 
       <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>14:22</time></div>
@@ -124,7 +124,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
 
       <div class="demo" id="demo-ladder">
         <div class="bar">the R-2R ladder &middot; toggle bits, then add resistor error</div>
-        <div class="pad"><p class="lead">An R-2R ladder turns N bits into one voltage from just two resistor values. Each raised bit adds half the previous bit's share: the MSB adds Vref/2, the next Vref/4, and so on. Toggle the bits, then crank the resistor tolerance and watch the transfer curve bend.</p><div class="dac-row" id="ladderBits"></div><div class="dac-row"><span class="mono" id="ladderOut">Vout = 0.500 Vref</span></div><div class="dac-row"><label>resistor tolerance <input type="range" id="ladderTol" min="0" max="10" value="0" step="0.5"> <span class="mono" id="ladderTolL">0.0%</span></label></div><canvas id="ladderXfer" width="560" height="150"></canvas><p class="dac-cap">The transfer curve over all 64 codes, ideal (straight) against actual. Errors in the big bits bend the line; push the tolerance and a step can run backward (red), a non-monotonic glitch. That is why a 20-bit ladder wants parts matched to about 1 part per million: the MSB resistor alone has to beat the size of the smallest step.</p></div>
+        <div class="pad"><p class="lead">An R-2R ladder turns N bits into one voltage from just two resistor values. Each raised bit adds half the previous bit's share: the MSB adds Vref/2, the next Vref/4, and so on. Toggle the bits, then crank the resistor tolerance and watch the transfer curve bend.</p><div class="dac-row" id="ladderBits"></div><div class="dac-row"><span class="mono" id="ladderOut">Vout = 0.500 Vref</span></div><div class="dac-row"><label>resistor tolerance <input type="range" id="ladderTol" min="0" max="10" value="0" step="0.5"> <span class="mono" id="ladderTolL">0.0%</span></label> <button class="dac-btn dac-play" type="button" id="ladderPlay">play</button></div><canvas id="ladderXfer" width="560" height="150"></canvas><p class="dac-cap">The transfer curve over all 64 codes, ideal (straight) against actual. Errors in the big bits bend the line; push the tolerance and a step can run backward (red), a non-monotonic glitch. That is why a 20-bit ladder wants parts matched to about 1 part per million: the MSB resistor alone has to beat the size of the smallest step. Play a tone through the ladder and raise the tolerance: the bending curve turns into audible harmonic distortion, worst where a step runs backward.</p></div>
       </div>
 
       <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>14:23</time></div>
@@ -141,7 +141,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
 
       <div class="demo" id="demo-noise">
         <div class="bar">noise shaping &middot; a live DFT</div>
-        <div class="pad"><p class="lead">A delta-sigma DAC runs a coarse quantizer fast, with a feedback loop that shapes the quantization noise. Toggle it: the same 3-bit quantizer either way, but shaping pushes the error up out of the band you can hear (shaded).</p><div class="dac-row"><button id="nsToggle" class="dac-btn">noise shaping: ON</button> <span class="mono dim" id="nsInfo">3-bit quantizer, 1st-order shaping</span></div><canvas id="nsCanvas" width="560" height="200"></canvas><p class="dac-cap">Spectrum of the quantizer output. The spike is the tone; the floor is quantization noise. Shaping tilts that floor up and away from the shaded audible band.</p></div>
+        <div class="pad"><p class="lead">A delta-sigma DAC runs a coarse quantizer fast, with a feedback loop that shapes the quantization noise. Toggle it: the same 3-bit quantizer either way, but shaping pushes the error up out of the band you can hear (shaded).</p><div class="dac-row"><button id="nsToggle" class="dac-btn">noise shaping: ON</button> <button class="dac-btn dac-play" type="button" id="nsPlay">play</button> <span class="mono dim" id="nsInfo">3-bit quantizer, 1st-order shaping</span></div><canvas id="nsCanvas" width="560" height="200"></canvas><p class="dac-cap">Spectrum of the quantizer output. The spike is the tone; the floor is quantization noise. Shaping tilts that floor up and away from the shaded audible band. Play it and toggle shaping: OFF is a grainy in-band hash, ON pushes that hash up into a faint high hiss and clears the tone.</p></div>
       </div>
 
       <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>14:25</time></div>
@@ -158,7 +158,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
 
       <div class="demo" id="demo-filter">
         <div class="bar">reconstruction filter &middot; time against frequency</div>
-        <div class="pad"><p class="lead">A windowed-sinc reconstruction filter. Drag the sharpness: more taps steepen the frequency wall on the right, and the impulse response on the left rings longer to pay for it. You cannot tighten both at once.</p><div class="dac-row"><label>sharpness <input type="range" id="filtSharp" min="1" max="9" value="3" step="0.1"> <span class="mono" id="filtSharpL"></span></label></div><div class="filt-wrap"><canvas id="filtTime" width="276" height="150"></canvas><canvas id="filtFreq" width="276" height="150"></canvas></div><p class="dac-cap">Left: the impulse response in time, the sinc and its ringing. Right: the frequency response, flat through the shaded audio band and rolling off near Nyquist. A sharper wall on the right means longer ringing on the left.</p></div>
+        <div class="pad"><p class="lead">A windowed-sinc reconstruction filter. Drag the sharpness: more taps steepen the frequency wall on the right, and the impulse response on the left rings longer to pay for it. You cannot tighten both at once.</p><div class="dac-row"><label>sharpness <input type="range" id="filtSharp" min="1" max="9" value="3" step="0.1"> <span class="mono" id="filtSharpL"></span></label> <button class="dac-btn dac-play" type="button" id="filtPlay">play</button></div><div class="filt-wrap"><canvas id="filtTime" width="276" height="150"></canvas><canvas id="filtFreq" width="276" height="150"></canvas></div><p class="dac-cap">Left: the impulse response in time, the sinc and its ringing. Right: the frequency response, flat through the shaded audio band and rolling off near Nyquist. A sharper wall on the right means longer ringing on the left. Play the click train and drag sharpness: the left graph IS what one click sounds like, so a sharper filter makes each click ring longer.</p></div>
       </div>
 
       <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>14:27</time></div>
@@ -201,7 +201,29 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
       <div class="msg bot"><div class="pic"></div><div><div class="who"><b>DACs</b><time>14:29</time></div>
         <div class="bubble"><p>Right. Multibit pays in hardware to make every level physically exact. Delta-sigma pays in cleverness to make the errors inaudible. Both arrive at clean sound; they just disagree about where to put the hard part, and the filter is where a lot of the audible character is decided.</p></div></div></div>
 
-      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>14:30</time></div>
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>14:32</time></div>
+        <div class="bubble"><p>one more, since you keep landing on that word. "warmth" is the exact thing people say about tube amps. is the multibit version literally the same effect a tube has?</p></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>DACs</b><time>14:32</time></div>
+        <div class="bubble"><p>Same family, and it is worth seeing why. Both bend the wave into harmonics; the character is set by <em>which</em> ones. A gentle, lopsided curve, the kind a single tube makes, adds mostly the 2nd harmonic, which sits exactly one octave above the note, so your ear reads it as fuller rather than dirty. Drive the same tone into a hard, symmetric clip and the even harmonics cancel, leaving the odd ones (3rd, 5th, 7th) that climb toward a square wave, the buzz of a signal slammed flat into its rails. Push the curve below and watch which harmonics grow.</p> <a href="https://en.wikipedia.org/wiki/Valve_sound" rel="external" title="Valve sound (tube harmonics)">[src]</a></div></div></div>
+
+      <div class="demo" id="demo-tube">
+        <div class="bar">tube warmth &middot; drive a sine into the curve</div>
+        <div class="pad"><p class="lead">Past the DAC, the signal meets an amplifier, and this is where "warmth" gets built on purpose. A single tube's transfer curve is gently lopsided, so it grows mostly the <b>2nd harmonic</b>, one octave up. A hard, symmetric clip cancels the even harmonics and grows odd ones instead, heading for a square wave. Drive it, switch the curve, and watch the spectrum; hit play to hear it.</p>
+          <div class="dac-row"><button class="dac-btn tmode" type="button" data-mode="tube" aria-pressed="true">tube (even)</button><button class="dac-btn tmode" type="button" data-mode="clip" aria-pressed="false">hard clip (odd)</button> <span class="mono dim" id="tubeInfo"></span></div>
+          <div class="dac-row"><label>drive <input type="range" id="tubeDrive" min="0" max="10" value="4" step="0.1"> <span class="mono" id="tubeDriveL"></span></label> <button class="dac-btn dac-play" type="button" id="tubePlay">play</button></div>
+          <div class="filt-wrap"><canvas id="tubeXfer" width="276" height="150"></canvas><canvas id="tubeWave" width="276" height="150"></canvas></div>
+          <canvas id="tubeSpec" width="560" height="150"></canvas>
+          <p class="dac-cap">Left: the transfer curve, output against input, the straight dashed line being no distortion at all. The tube curve bows more on one side (asymmetric, even harmonics); the clip flattens both rails alike (symmetric, odd harmonics). Middle: what that does to a sine. Bottom: the harmonics, each labeled by its multiple of the note. <b>2&times;</b> is the octave that reads as warmth; the odd stack (3&times;, 5&times;, 7&times;...) is the square-wave buzz. Real tubes add some higher-order even harmonics too; this isolates the dominant 2nd. Hit play, then keep driving and toggling: the tone shifts in real time, no need to re-press.</p></div>
+      </div>
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>14:33</time></div>
+        <div class="bubble"><p>so the 2nd harmonic IS the octave, that's why it reads as musical, and hard clipping just collapses into a square, all odd harmonics. the asymmetry is the whole tell.</p></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>DACs</b><time>14:33</time></div>
+        <div class="bubble"><p>That is the tell, and it is the same axis the DAC argument rides. A little 2nd harmonic is what some people are chasing when a multibit ladder or a tube stage "sounds warm," even as the meter reports higher THD. A square wave is just the far end of that dial: every bit of headroom spent, nothing left but the odd harmonics.</p></div></div></div>
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>14:34</time></div>
         <div class="bubble"><p>clearest version of this I've read. thanks.</p><p>&rarr; <a href="http://lucasbosch.de/schiit/jason-stoddard-shiit-happened-tablet-lblb.pdf" rel="external">Schiit Happened (Jason Stoddard)</a> &middot; <a href="https://www.head-fi.org/threads/schiit-happened-the-story-of-the-gods-of-noise.701900/" rel="external">the head-fi thread</a> &middot; <a href="https://en.wikipedia.org/wiki/Delta-sigma_modulation" rel="external">delta-sigma on Wikipedia</a> &middot; <a href="/lwe/">back to Learning With Errors</a></p></div></div></div>
 
       <div class="scrollnote">end of first pass</div>
@@ -216,6 +238,55 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
 { "prerender": [ { "where": { "and": [ { "href_matches": "/*" }, { "not": { "href_matches": "/whoareyou*" } } ] }, "eagerness": "moderate" } ], "prefetch": [ { "where": { "and": [ { "or": [ { "href_matches": "/garage/*" }, { "href_matches": "/lwe/*" } ] }, { "not": { "href_matches": "/lwe/ask*" } } ] }, "eagerness": "eager" } ] }
 </script>
 <script>
+// ── shared live audio for the demos ──────────────────────────────────
+// One AudioContext, one voice at a time (starting a demo stops the others), so
+// you hit play once and then HEAR the knobs move: turning a slider or flipping a
+// toggle retunes the running graph in real time instead of firing a new one-shot
+// (the old autopause meant re-clicking to hear a change). Memoryless transfer
+// curves — the quantizer staircase, the tube curve, the R-2R ladder — ride a
+// WaveShaperNode whose .curve we swap live (oversampled 4x to tame aliasing);
+// the delta-sigma feedback loop and the reconstruction filter need their own
+// small graphs. Audio only ever starts on a click, so autoplay policy and
+// prefers-reduced-motion need nothing special here.
+var DACAudio = (function(){
+  var ac = null, current = null;                                     // current = the running demo's stop fn
+  function ctx(){ try { ac = ac || new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; } if (ac.resume) ac.resume(); return ac; }
+  // sample a transfer function fn(x), x in [-1,1], into a WaveShaper curve,
+  // DC-removed + peak-normalized so loudness stays put as you turn the knob
+  function curve(fn, n){
+    n = n || 2048; var a = new Float32Array(n), i, mean = 0, peak = 1e-6;
+    for (i = 0; i < n; i++){ a[i] = fn(i / (n - 1) * 2 - 1); mean += a[i]; }
+    mean /= n;
+    for (i = 0; i < n; i++){ a[i] -= mean; var m = Math.abs(a[i]); if (m > peak) peak = m; }
+    for (i = 0; i < n; i++) a[i] /= peak;
+    return a;
+  }
+  function attack(g, c, level){ var t = c.currentTime; g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(level, t + 0.03); }
+  function release(g, c){ var t = c.currentTime; g.gain.cancelScheduledValues(t); g.gain.setValueAtTime(Math.max(g.gain.value, 0.0001), t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.05); return t + 0.07; }
+  // a sine → WaveShaper(curveFn) → gain voice; retune() re-bakes the curve live
+  function shaperVoice(c, freq, curveFn, level){
+    var osc = c.createOscillator(); osc.type = 'sine'; osc.frequency.value = freq;
+    var ws = c.createWaveShaper(); ws.oversample = '4x'; ws.curve = curveFn();
+    var g = c.createGain(); attack(g, c, level || 0.2);
+    osc.connect(ws); ws.connect(g); g.connect(c.destination); osc.start();
+    return { stop: function(){ osc.stop(release(g, c)); }, retune: function(){ ws.curve = curveFn(); } };
+  }
+  // wire a play/stop button to a builder(ctx) -> {stop, retune}. returns a handle
+  // whose .retune() the demo calls on any knob change (a no-op when not playing)
+  function wire(btn, build){
+    var voice = null;
+    function stopMe(){ if (voice){ try { voice.stop(); } catch (e) {} voice = null; } btn.textContent = 'play'; btn.setAttribute('aria-pressed', 'false'); }
+    btn.addEventListener('click', function(){
+      if (voice){ stopMe(); current = null; return; }                // stop me
+      var c = ctx(); if (!c) return;
+      if (current) current();                                        // stop whoever else is playing
+      voice = build(c); btn.textContent = 'stop'; btn.setAttribute('aria-pressed', 'true'); current = stopMe;
+    });
+    return { retune: function(){ if (voice && voice.retune) voice.retune(); }, attack: attack, release: release };
+  }
+  return { ctx: ctx, curve: curve, shaperVoice: shaperVoice, wire: wire, attack: attack, release: release };
+})();
+
 // ── Demo A: multibit staircase ───────────────────────────────────────
 (function(){
   var c=document.getElementById('stairCanvas'); if(!c) return;
@@ -233,7 +304,10 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
     for(var i=0;i<samples;i++){ var s=Math.sin(i/samples*cycles*2*Math.PI), q=Math.round(s*maxv)/maxv, x0=i/samples*W, x1=(i+1)/samples*W, yq=mid-q*amp; i?ctx.lineTo(x0,yq):ctx.moveTo(x0,yq); ctx.lineTo(x1,yq); }
     ctx.stroke();
   }
-  bits.addEventListener('input',draw); draw();
+  var voice=DACAudio.wire(document.getElementById('stairPlay'), function(ac){
+    return DACAudio.shaperVoice(ac, 220, function(){ var Nb=+bits.value, m=Math.pow(2,Nb)/2-1; return DACAudio.curve(function(x){ return Math.round(x*m)/m; }); }, 0.2);
+  });
+  bits.addEventListener('input',function(){ draw(); voice.retune(); }); draw();
 })();
 
 // ── Demo B: delta-sigma noise shaping (real DFT) ──────────────────────
@@ -266,7 +340,19 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
     for(var k=0;k<half;k++){ var x=k/half*W, db=20*Math.log10(mag[k]+1e-9), yy=py(db); k?ctx.lineTo(x,yy):ctx.moveTo(x,yy); }
     ctx.stroke();
   }
-  btn.addEventListener('click',function(){ shape=!shape; draw(); }); draw();
+  function nsBuf(ac){                                                  // ~1.2s loop of the 3-bit tone, integer cycles so the tone seam is clean
+    var sr=ac.sampleRate, len=Math.floor(sr*1.2), k=Math.round(300*len/sr), f=k*sr/len;
+    var buf=ac.createBuffer(1,len,sr), ch=buf.getChannelData(0), maxv=Math.pow(2,BITS)/2-1, e=0;
+    for(var i=0;i<len;i++){ var s=0.6*Math.sin(2*Math.PI*f*i/sr), q; if(shape){ var w=s-e; q=clamp(Math.round(w*maxv)/maxv); e=q-w; } else { q=clamp(Math.round(s*maxv)/maxv); } ch[i]=q; }
+    return buf;
+  }
+  var nsVoice=DACAudio.wire(document.getElementById('nsPlay'), function(ac){
+    var g=ac.createGain(); DACAudio.attack(g,ac,0.26); g.connect(ac.destination); var src=null;
+    function run(){ src=ac.createBufferSource(); src.loop=true; src.buffer=nsBuf(ac); src.connect(g); src.start(); }
+    run();
+    return { stop:function(){ var end=DACAudio.release(g,ac); if(src){ try{src.stop(end);}catch(e){} } }, retune:function(){ if(src){ try{src.stop();}catch(e){} src.disconnect(); } run(); } };
+  });
+  btn.addEventListener('click',function(){ shape=!shape; draw(); nsVoice.retune(); }); draw();
 })();
 
 // ── Demo C: hear the bit depth (Web Audio, user gesture) ──────────────
@@ -323,8 +409,14 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
       px = { x: X, y: Y }; pv = v;
     }
   }
+  var lVoice = DACAudio.wire(document.getElementById('ladderPlay'), function(ac){
+    return DACAudio.shaperVoice(ac, 180, function(){                          // map a full-scale sine through the code→voltage transfer curve
+      var w = weights((+tol.value) / 100), vfull = vout(MAX, w) || 1;
+      return DACAudio.curve(function(x){ var cd = Math.round((x + 1) / 2 * MAX); if (cd < 0) cd = 0; if (cd > MAX) cd = MAX; return vout(cd, w) / vfull * 2 - 1; });
+    }, 0.2);
+  });
   wrap.addEventListener('click', function(e) { var b = e.target.closest && e.target.closest('.dac-bit'); if (!b) return; code ^= (1 << +b.getAttribute('data-b')); render(); });
-  if (tol) tol.addEventListener('input', render);
+  if (tol) tol.addEventListener('input', function(){ render(); lVoice.retune(); });
   render();
 })();
 
@@ -376,7 +468,16 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
       fctx.stroke();
     }
   }
-  sh.addEventListener('input', draw); draw();
+  function irBuf(ac){ var h=build(+sh.value), len=h.length, b=ac.createBuffer(1,len,ac.sampleRate), d=b.getChannelData(0), pk=1e-6; for(var i=0;i<len;i++){ var m=Math.abs(h[i]); if(m>pk)pk=m; } for(i=0;i<len;i++) d[i]=h[i]/pk; return b; }
+  var fVoice=DACAudio.wire(document.getElementById('filtPlay'), function(ac){
+    var conv=ac.createConvolver(); conv.normalize=false; conv.buffer=irBuf(ac);
+    var g=ac.createGain(); DACAudio.attack(g,ac,0.4);
+    var sr=ac.sampleRate, per=Math.floor(sr*0.5), len=per*3, cb=ac.createBuffer(1,len,sr), cd=cb.getChannelData(0);  // a click every 0.5s, looped; convolved with the kernel = the impulse response you can hear
+    for(var kk=0;kk<3;kk++) cd[kk*per]=1;
+    var src=ac.createBufferSource(); src.buffer=cb; src.loop=true; src.connect(conv); conv.connect(g); g.connect(ac.destination); src.start();
+    return { stop:function(){ var end=DACAudio.release(g,ac); try{src.stop(end);}catch(e){} }, retune:function(){ conv.buffer=irBuf(ac); } };
+  });
+  sh.addEventListener('input', function(){ draw(); fVoice.retune(); }); draw();
 })();
 
 // ── Demo: the contested ground — low-level linearity, multibit vs delta-sigma ──
@@ -445,6 +546,92 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
   var grid = document.querySelector('.mu-grid');
   if (grid) grid.addEventListener('click', function(ev){ var b = ev.target.closest && ev.target.closest('[data-topo]'); if (b) play(b.getAttribute('data-topo') === 'ds'); });
   render();
+})();
+
+// ── Demo: tube distortion — the "warmth" axis, even vs odd harmonics ──
+// After the DAC the analog signal meets an amplifier, and this is where the word
+// "warmth" is actually earned. A single tube's transfer curve is gently
+// asymmetric, so a driven sine grows mostly the 2nd harmonic — one octave up,
+// which the ear reads as consonant/full. A hard SYMMETRIC clip cancels the even
+// harmonics and grows odd ones (3rd, 5th, 7th...), marching toward a square wave:
+// the buzz of a signal slammed into its rails. Two deliberately clean, contrasting
+// curves: tube = x + c*x^2 (dominant 2nd, even), clip = clamp(g*x) (odd, → square).
+// The spectrum bars read a DFT sampled over an integer number of cycles (K0 cycles
+// / N samples), so every harmonic lands exactly on a bin. Renders on interaction
+// only — no animation loop, so prefers-reduced-motion needs nothing special.
+(function(){
+  var driveEl = document.getElementById('tubeDrive'); if (!driveEl) return;
+  var driveL = document.getElementById('tubeDriveL'), info = document.getElementById('tubeInfo');
+  var xferC = document.getElementById('tubeXfer'), waveC = document.getElementById('tubeWave'), specC = document.getElementById('tubeSpec');
+  var xc = xferC && xferC.getContext('2d'), wc = waveC && waveC.getContext('2d'), sc = specC && specC.getContext('2d');
+  var modeBtns = document.querySelectorAll('.tmode'), playBtn = document.getElementById('tubePlay');
+  var mode = 'tube', A = 0.9, N = 600, K0 = 6;
+  function clampv(v){ return v > 1 ? 1 : v < -1 ? -1 : v; }
+  function shape(x, drive){
+    if (mode === 'clip') { var g = 1 + drive * 0.9; return clampv(g * x); }   // symmetric hard clip → odd / square
+    var c = drive * 0.11; return x + c * x * x;                               // asymmetric soft curve → 2nd harmonic
+  }
+  function series(drive){                                                     // one window, DC-removed + peak-normalized
+    var y = new Array(N), mean = 0, peak = 1e-9, n;
+    for (n = 0; n < N; n++){ y[n] = shape(A * Math.sin(2 * Math.PI * K0 * n / N), drive); mean += y[n]; }
+    mean /= N;
+    for (n = 0; n < N; n++){ y[n] -= mean; var a = Math.abs(y[n]); if (a > peak) peak = a; }
+    for (n = 0; n < N; n++) y[n] /= peak;
+    return y;
+  }
+  function harmonics(y, H){                                                   // amplitude at each harmonic bin K0*h
+    var out = [], h, n;
+    for (h = 1; h <= H; h++){ var k = K0 * h, re = 0, im = 0; for (n = 0; n < N; n++){ var a = 2 * Math.PI * k * n / N; re += y[n] * Math.cos(a); im -= y[n] * Math.sin(a); } out.push(2 * Math.sqrt(re * re + im * im) / N); }
+    return out;
+  }
+  function draw(){
+    var drive = +driveEl.value;
+    if (driveL) driveL.textContent = drive <= 0.05 ? 'clean' : drive < 3.5 ? 'gentle' : drive < 7 ? 'pushed' : 'slammed';
+    if (info) info.textContent = mode === 'tube' ? 'asymmetric curve · even (2nd)' : 'symmetric clip · odd → square';
+    var y = series(drive);
+    if (xc){                                                                 // transfer curve: output vs input, identity ghosted
+      var W = xferC.width, H = xferC.height; xc.clearRect(0, 0, W, H);
+      xc.strokeStyle = '#efe6d8'; xc.lineWidth = 1; xc.beginPath(); xc.moveTo(0, H / 2); xc.lineTo(W, H / 2); xc.moveTo(W / 2, 0); xc.lineTo(W / 2, H); xc.stroke();
+      xc.strokeStyle = '#d9cbb6'; xc.setLineDash([3, 3]); xc.beginPath(); xc.moveTo(6, H - 6); xc.lineTo(W - 6, 6); xc.stroke(); xc.setLineDash([]);
+      var pk = 1e-9; for (var t = 0; t <= 140; t++){ var av = Math.abs(shape(t / 140 * 2 - 1, drive)); if (av > pk) pk = av; }   // scale the curve to fill the box (honest asymmetry, no false clamp)
+      xc.strokeStyle = '#a8541f'; xc.lineWidth = 1.9; xc.beginPath();
+      for (var i = 0; i <= 140; i++){ var xin = i / 140 * 2 - 1, yo = shape(xin, drive) / pk, px = 6 + (xin + 1) / 2 * (W - 12), py = (H - 6) - (yo + 1) / 2 * (H - 12); i ? xc.lineTo(px, py) : xc.moveTo(px, py); }
+      xc.stroke();
+    }
+    if (wc){                                                                 // waveform: input sine (ghost) + driven output
+      var W2 = waveC.width, H2 = waveC.height, mid = H2 / 2, amp = H2 * 0.40; wc.clearRect(0, 0, W2, H2);
+      wc.strokeStyle = '#efe6d8'; wc.beginPath(); wc.moveTo(0, mid); wc.lineTo(W2, mid); wc.stroke();
+      wc.strokeStyle = '#cbb89e'; wc.lineWidth = 1.2; wc.beginPath();
+      for (var s = 0; s <= W2; s++){ var th = s / W2 * 4 * Math.PI, yy = mid - Math.sin(th) * amp * A; s ? wc.lineTo(s, yy) : wc.moveTo(s, yy); }
+      wc.stroke();
+      wc.strokeStyle = '#a8541f'; wc.lineWidth = 1.9; wc.beginPath();
+      var span = (N / K0) * 2;                                               // 2 cycles of the driven wave
+      for (var j = 0; j <= span; j++){ var xx = j / span * W2, yv = mid - y[j % N] * amp; j ? wc.lineTo(xx, yv) : wc.moveTo(xx, yv); }
+      wc.stroke();
+    }
+    if (sc){                                                                 // harmonic bars, labeled by multiple of the note
+      var W3 = specC.width, H3 = specC.height, HN = 12, mags = harmonics(y, HN), f0 = mags[0] || 1e-9;
+      var base = H3 - 16, top = 10, slot = W3 / (HN + 1); sc.clearRect(0, 0, W3, H3);
+      sc.strokeStyle = '#e0d3c2'; sc.lineWidth = 1; sc.beginPath(); sc.moveTo(0, base); sc.lineTo(W3, base); sc.stroke();
+      sc.font = '7.5pt "Courier New",monospace'; sc.textAlign = 'center';
+      for (var h = 1; h <= HN; h++){
+        var rel = mags[h - 1] / f0; if (rel > 1) rel = 1;
+        var bx = slot * h, bw = Math.min(16, slot * 0.5), bh = rel * (base - top), even = (h % 2) === 0;
+        sc.fillStyle = h === 1 ? '#7a6141' : even ? '#a8541f' : '#d29a6a';   // fundamental neutral, even = accent, odd = light
+        sc.fillRect(bx - bw / 2, base - bh, bw, Math.max(bh, 0.6));
+        sc.fillStyle = h === 2 ? '#83400f' : '#a8977c';
+        sc.fillText(h + '×', bx, H3 - 4);
+      }
+    }
+  }
+  var tVoice = DACAudio.wire(playBtn, function(ac){                           // live: a sine through the transfer curve, retuned as you move
+    return DACAudio.shaperVoice(ac, 165, function(){ var d = +driveEl.value; return DACAudio.curve(function(x){ return shape(x, d); }); }, 0.2);
+  });
+  for (var b = 0; b < modeBtns.length; b++){
+    modeBtns[b].addEventListener('click', function(){ var btn = this; mode = btn.getAttribute('data-mode'); for (var k = 0; k < modeBtns.length; k++) modeBtns[k].setAttribute('aria-pressed', modeBtns[k] === btn ? 'true' : 'false'); draw(); tVoice.retune(); });
+  }
+  driveEl.addEventListener('input', function(){ draw(); tVoice.retune(); });
+  draw();
 })();
 </script>
 <script src="/lwe/ask.js" defer></script>
