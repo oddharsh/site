@@ -146,5 +146,5 @@ export async function handleRun(request, env, ctx) {
 
   // bare /run is static-shaped: edge-cache it. Query variants never enter this
   // branch, so the 302/error paths can't be masked by a cached bare page.
-  return cachedRender(request, ctx, () => Promise.resolve(renderRun(request)), "/run");
+  return cachedRender(request, ctx, () => Promise.resolve(renderRun(request)), "/run", env);
 }

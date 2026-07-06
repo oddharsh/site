@@ -62,7 +62,7 @@ never the copy).
 | Bad-cached-response retry: entity-looks-empty detect, then one retry with cacheTtl:0 + cache-busting query | rn.js:264-313 | ported into the cron scraper |
 | The playlist-listing fetch always bypasses the CDN cache; near-immutable track/artist embeds keep 24h | rn.js (this week's staleness fix) | ported; the cron thinks per generation |
 | Outbound deadline discipline: AbortSignal.timeout on every crawl/scrape (2-5s), failures degrade to error rows | around.js, rn.js, whoareyou.js | law for every cron lane |
-| cachedRender: caches.default with 200-ONLY puts (the 404-poison scar), honest TTLs (deploys do not flush), x-edge-cache/x-photo-cache observability headers | lib/cache.js | ported for the few per-request renders that remain |
+| cachedRender: caches.default with 200-ONLY puts (the 404-poison scar), version-keyed on CF_VERSION_METADATA so a deploy busts every shell cleanly (TTL bounds the entry within a version), x-edge-cache/x-photo-cache observability headers | lib/cache.js | wraps /reading, /run, /writing, /lens, /photos, /bot |
 | ?bust=SECRET evicts KV AND the edge entry | reading.js | ported per cron lane |
 | 404 cache-control clamp under /images/* (a miss must never inherit the immutable rule) | index.js (the one guard GPT's cleanup kept) | ported; content-hashed image URLs make it belt-and-suspenders |
 | Counter purity: HEAD never ticks, verified bots peek, prerender ticks exactly once on activation | home.js + counter.js | already the hit.svg design |

@@ -1,11 +1,18 @@
 // bot.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
 import { BOT_NAME, BOT_UA, SIG_AGENT } from "./lib/botauth.js";
+import { cachedRender } from "./lib/cache.js";
 import { lunaPage } from "./lib/chrome.js";
 import { esc } from "./lib/http.js";
 
 // ── /bot info page ──────────────────────────────────────────────────
-export function handleBotPage(request) {
+// static shell: ride the caches.default layer like the other rendered pages;
+// edge TTL = the s-maxage in the render, version-keyed so a deploy busts it.
+export function handleBotPage(request, env, ctx) {
+  return cachedRender(request, ctx, () => Promise.resolve(renderBotPage()), "/bot", env);
+}
+
+function renderBotPage() {
   const css = `
   h1 { font-family: "Trebuchet MS", Verdana, Geneva, sans-serif; font-size: 14pt; color: oklch(41.92% 0.0962 250.51); margin: 0 0 4px; font-weight: bold; }
   h2 { font-family: "Trebuchet MS", Verdana, Geneva, sans-serif; font-size: 12pt; color: oklch(41.92% 0.0962 250.51); margin: 16px 0 6px; font-weight: bold; line-height: 1.3; }

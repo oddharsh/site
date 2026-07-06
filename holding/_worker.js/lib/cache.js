@@ -69,18 +69,31 @@ export async function deleteSWRKV(env, key, opts = {}) {
   ]);
 }
 
+// The cache key folds in the deployed worker VERSION (CF_VERSION_METADATA.id),
+// so a deploy mints a fresh keyspace and every old rendered shell is orphaned at
+// once — the same "a name points at exact bytes" trick the /i/ content-hashed
+// images use, lifted to worker output. No purge step, no TTL wait, no manual
+// bump: the old entries just age out under their own max-age. Falls back to
+// "dev" when the binding is absent (local dev, preview), so nothing breaks there.
+export function edgeKey(origin, keyPath, env) {
+  const ver = (env && env.CF_VERSION_METADATA && env.CF_VERSION_METADATA.id) || "dev";
+  return new Request(`${origin}/__ec/${encodeURIComponent(ver)}${keyPath}`, { method: "GET" });
+}
+
 // Contract, in the order it saves you:
 //   - the edge TTL is the response's own cache-control (caches.default honors
 //     s-maxage, else max-age); nothing rewrites headers, so browsers see exactly
 //     what the route declared.
+//   - the key folds in the deploy version (edgeKey), so shipping busts every
+//     shell atomically; within a version the response's max-age still bounds it.
 //   - cache.put fires only on status 200, because a pinned transient 404 is the
 //     poison class this site has already paid for once.
 //   - the key normalizes to a path, so query variants of a query-independent
 //     shell share one entry.
 //   - x-edge-cache: hit|miss makes every request auditable from curl.
-export async function cachedRender(request, ctx, renderFn, keyPath) {
+export async function cachedRender(request, ctx, renderFn, keyPath, env) {
   const url = new URL(request.url);
-  const key = new Request(url.origin + (keyPath || url.pathname), { method: "GET" });
+  const key = edgeKey(url.origin, keyPath || url.pathname, env);
   const cache = caches.default;
 
   if (request.method === "GET") {

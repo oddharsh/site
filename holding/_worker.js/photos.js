@@ -324,5 +324,5 @@ ${tiles}
     });
   };
 
-  return cachedRender(request, ctx, render, "/photos");
+  return cachedRender(request, ctx, render, "/photos", env);
 }

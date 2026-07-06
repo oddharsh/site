@@ -24,7 +24,7 @@ import { jsonResponse } from "./lib/http.js";
 // read client-side by lens.js, the shell bytes are identical for every query.
 // edge TTL = the s-maxage below (300s); 200-only put inside cachedRender.
 export function handleLens(request, env, ctx) {
-  return cachedRender(request, ctx, () => renderLensShell(), "/lens");
+  return cachedRender(request, ctx, () => renderLensShell(), "/lens", env);
 }
 
 function renderLensShell() {

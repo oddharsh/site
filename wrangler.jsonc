@@ -42,6 +42,11 @@
     ]
   },
   "observability": { "enabled": true },
+  // the deployed version id (changes every deploy). lib/cache.js folds it into
+  // the caches.default key for rendered shells, so a deploy orphans the old
+  // edge entries atomically instead of waiting out their TTL. Not populated in
+  // local dev (the key falls back to "dev" there).
+  "version_metadata": { "binding": "CF_VERSION_METADATA" },
   // the /around neighborhood crawl: per-generation, never per-visitor. The
   // request path only reads the KV snapshot this cron writes (around.js).
   "triggers": { "crons": ["*/30 * * * *"] },

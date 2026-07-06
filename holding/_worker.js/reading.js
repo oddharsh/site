@@ -1,7 +1,7 @@
 // reading.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
 import { BOT_NAME, signedFetch } from "./lib/botauth.js";
-import { cachedRender, deleteSWRKV, swrKV } from "./lib/cache.js";
+import { cachedRender, deleteSWRKV, edgeKey, swrKV } from "./lib/cache.js";
 import { lunaPage } from "./lib/chrome.js";
 import { esc } from "./lib/http.js";
 
@@ -95,9 +95,9 @@ export async function getCuriusCached(request, env, ctx) {
 export async function handleReading(request, env, ctx) {
   const url = new URL(request.url);
   if (env.RN_BUST_SECRET && url.searchParams.get("bust") === env.RN_BUST_SECRET) {
-    try { await caches.default.delete(new Request(url.origin + "/reading", { method: "GET" })); } catch {}
+    try { await caches.default.delete(edgeKey(url.origin, "/reading", env)); } catch {}
   }
-  return cachedRender(request, ctx, () => renderReading(request, env, ctx), "/reading");
+  return cachedRender(request, ctx, () => renderReading(request, env, ctx), "/reading", env);
 }
 
 async function renderReading(request, env, ctx) {
