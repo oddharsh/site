@@ -115,3 +115,26 @@ the user; nothing closed off-screen.
 **Verify:** `node build.mjs` clean, break each hard-block once to confirm it
 fires, `node verify-routes.mjs` green, a served `manifest.json` is all `/i/`,
 the homepage grid + `/photos` render.
+
+## Shipped (2026-07-05 / 06)
+
+- **B, v150 (`finish-hash-migration`).** THUMB_VERSION + THUMB_SMALL_PX gone,
+  the 3 `?v=` fallback branches retired, the manifest builder skips + logs an
+  unhashed stem (L1=a), stale comments corrected (const.js, the blueprint
+  essay, a dead `THUMBV` in masonry). Verified on live bindings: 146 photos,
+  438 all-`/i/` URLs, zero legacy. KV manifest busted so it re-baked.
+- **A, v151 (`deploy-tripwires`).** `build.mjs checkInvariants()`: hard-block
+  (ROUTES-in-allowlist, CSP style-src `'self'`, luna.css blink rules),
+  warn-only (generator freshness, taskbar-floor agreement). Each hard-block
+  proven to fire and name its culprit; clean tree warning-free.
+- **A mid-build finding (reshaped check 5).** The geometry byte-guard from the
+  map was infeasible: the inline critical-CSS copies are divergent per-context
+  subsets (cal carries almost none; luna.css uses shorthand where chrome.js /
+  writing.js use `padding-right`). A full byte-compare would false-fire, so
+  check 5 was scoped to the one value that drifts and hurts (the taskbar-floor
+  height, `calc(100dvh - Npx)`, body-only via a `(?<!max-)` anchor after the
+  first regex grabbed writing.js's window `max-height`). The stale
+  "byte-identical to nav.js" comments now name luna.css as canonical.
+- **C, no separate deploy.** The blink-fix tripwire is A's check 3; C's other
+  residuals stay sharp edges (above), and this map is C's verified-understanding
+  deliverable. Nothing else to build.
