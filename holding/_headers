@@ -56,6 +56,15 @@
 /resume.pdf
   Cache-Control: public, max-age=0, must-revalidate, s-maxage=86400
 
+# machine-readable resume mirrors (same indexable, human-unlinked posture as
+# the PDF above): a plain-text copy and a JSON Resume document for agents.
+/resume.md
+  Content-Type: text/markdown; charset=utf-8
+  Cache-Control: public, max-age=0, must-revalidate, s-maxage=86400
+/resume.json
+  Content-Type: application/json; charset=utf-8
+  Cache-Control: public, max-age=0, must-revalidate, s-maxage=86400
+
 # garage experiment pages — active development mules, edited constantly. the
 # browser must REVALIDATE every time (max-age=0) so fresh edits always show; the
 # revalidation is a cheap 304 against the edge (s-maxage=86400), not the origin,

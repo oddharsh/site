@@ -87,7 +87,10 @@ aggregations.
   currently named `rn`. The target lives in Cloudflare KV and is updated
   via a secret-gated admin form whenever a new musical era begins.
 - [/resume.pdf](https://aadhar.sh/resume.pdf): Aadharsh Pannirselvam's resume
-  / CV (PDF). Background, experience, and how to reach me.
+  / CV (PDF). Background, experience, and how to reach me. Machine-readable
+  mirrors of the same content: [/resume.md](https://aadhar.sh/resume.md)
+  (plain text) and [/resume.json](https://aadhar.sh/resume.json)
+  (JSON Resume schema).
 
 ## Discovery
 
