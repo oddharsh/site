@@ -39,10 +39,12 @@ export function xpChromeCss(maxWidth) {
      input) lives in luna.css now, zero-specificity via :where() — phase D.
      Only the page-parametric width survives inline. */
   html { scrollbar-color: oklch(62% 0.14 255) oklch(91% 0.02 248); }
-  /* OS-window geometry inlined so FIRST PAINT matches nav.js (no shell "pop"
-     when the deferred desktop arrives). byte-identical to nav.js's app-shell
-     rules; !important beats each page's own body rule; degrades with JS off
-     (.content scrolls natively, the ::after strip stands in for the taskbar). */
+  /* OS-window geometry inlined as the FIRST-PAINT critical subset (no shell
+     "pop" before the linked luna.css lands). luna.css carries the canonical
+     full set; this is the overlap that has to paint pre-stylesheet. !important
+     beats each page's own body rule; degrades with JS off (.content scrolls
+     natively, the ::after strip stands in for the taskbar). The build's
+     geometry tripwire checks the taskbar-floor value here matches luna.css. */
   html{height:100dvh;overflow:hidden}
   body{min-height:0 !important;height:calc(100vh - 30px) !important;height:calc(100dvh - 30px) !important;overflow-x:hidden !important;overflow-y:auto !important;box-sizing:border-box}
   body:has(.window),body:has(.np-window),body:has(.wrap){overflow:hidden !important;display:flex !important;flex-direction:column !important;align-items:center !important;padding:8px !important}

@@ -302,9 +302,9 @@ function shellCss() {
      letterboxing inside it (bg fills) rather than distorting. */
   #ev-tip img{display:block;width:300px;height:auto;max-height:340px;object-fit:contain;background:oklch(94% 0.005 240);border:3px solid #fff;outline:1px solid oklch(61% 0.061 253);outline-offset:-1px;box-shadow:2px 3px 12px -2px rgba(0,20,90,.55)}
   @media(max-width:640px){.body{flex-direction:column}.pane{width:auto;border-right:0;border-bottom:2px solid #7a96c8}}
-  /* OS-window geometry inlined so first paint matches nav.js (no shell "pop"
-     when the deferred desktop arrives). byte-identical to nav.js's app-shell
-     rules; !important beats this page's own body rule. serendipity's own
+  /* OS-window geometry inlined as the first-paint critical subset (no shell
+     "pop" before the linked luna.css lands; luna.css holds the canonical set).
+     !important beats this page's own body rule. serendipity's own
      .window>.body{overflow:hidden !important} + .pane-body scroll still win. */
   html{height:100dvh;overflow:hidden}
   body{min-height:0 !important;height:calc(100vh - 30px) !important;height:calc(100dvh - 30px) !important;overflow-x:hidden !important;overflow-y:auto !important;box-sizing:border-box}

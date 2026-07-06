@@ -86,9 +86,10 @@ background:linear-gradient(180deg,oklch(99% 0 0),oklch(92% 0.005 263));box-shado
 .np-btn:active{box-shadow:inset 1px 1px 0 oklch(84% 0.02 90),inset -1px -1px 0 oklch(100% 0 0)}
 @media print{body.np-page{padding:0;background:none}#axp-taskbar,.np-titlebar,.np-menubar,.np-status{display:none}
 .np-window{border:0;box-shadow:none;height:auto;max-width:none}.np-text{font-size:11pt;color:#000}}
-/* OS-window geometry inlined so first paint matches nav.js (no shell "pop").
-   byte-identical to nav.js's app-shell rules; !important beats body.np-page's
-   own padding/min-height; degrades with JS off. */
+/* OS-window geometry inlined as the first-paint critical subset (no shell
+   "pop" before the linked luna.css lands; luna.css holds the canonical set).
+   !important beats body.np-page's own padding/min-height; degrades with JS
+   off. The build's geometry tripwire checks the taskbar floor matches luna.css. */
 html{height:100dvh;overflow:hidden}
 body{min-height:0 !important;height:calc(100vh - 30px) !important;height:calc(100dvh - 30px) !important;overflow-x:hidden !important;overflow-y:auto !important;box-sizing:border-box}
 body:has(.window),body:has(.np-window),body:has(.wrap){overflow:hidden !important;display:flex !important;flex-direction:column !important;align-items:center !important;padding:8px !important}
