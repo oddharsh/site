@@ -155,6 +155,7 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
       <button class="lx-chip" data-url="https://stripe.com/">a modern marketing site</button>
       <button class="lx-chip" data-url="https://en.wikipedia.org/wiki/Semantic_Web">a Wikipedia article</button>
       <button class="lx-chip" data-url="https://www.nytimes.com/">a publisher with AI terms</button>
+      <button class="lx-chip" data-url="https://aadhar.sh/llms-full.txt">a bot paywall (x402)</button>
       <button class="lx-chip" data-url="https://example.com/">the bare minimum</button>
     </div>
 

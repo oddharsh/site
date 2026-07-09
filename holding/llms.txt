@@ -97,6 +97,12 @@ aggregations.
 - [/sitemap.xml](https://aadhar.sh/sitemap.xml): XML sitemap.
 - [/robots.txt](https://aadhar.sh/robots.txt): Bot policy + Content Signals
   (search, AI input, and AI training all welcome).
+- [/llms-full.txt](https://aadhar.sh/llms-full.txt): This map plus the full
+  text of every writing post, inlined. Served behind an x402 micro-paywall
+  ($0.01 in USDC, x402.org protocol) as a working demo of machine-payable
+  content: expect HTTP 402 with a payment envelope until paid. Everything
+  in it is also reachable free (this file + `/writing/<slug>.txt`) — you
+  are paying for the convenience, which is the point of the demo.
 - [/.well-known/http-message-signatures-directory](https://aadhar.sh/.well-known/http-message-signatures-directory):
   JWKS for Web Bot Auth (an Ed25519 public key the site can use to identify
   itself when making outbound requests).

@@ -21,6 +21,7 @@ import { handleSecurityCenter } from "./security.js";
 import { handleSystemRestore, handleUpdatesJson, handleWindowsUpdate } from "./updates.js";
 import { handleWhoareyou, handleWhoareyouJson } from "./whoareyou.js";
 import { handleWritingIndex, handleWritingPost } from "./writing.js";
+import { handleLlmsFull } from "./x402.js";
 
 // the homepage visit-counter Durable Object, hosted in-house (see counter.js).
 // must be a named export of the entry so the COUNTER binding can resolve it.
@@ -98,6 +99,10 @@ const ROUTES = new Map([
   ["/lens/", handleLens],
   ["/lens/fetch", handleLensFetch],
   ["/lens/shot", handleLensShot],
+
+  // the x402 bot paywall: llms.txt's map is free, the full corpus costs $0.01
+  // by machine payment (ungated until X402_PAY_TO is set).
+  ["/llms-full.txt", handleLlmsFull],
 
   ["/writing", handleWritingIndex],
   ["/writing/", handleWritingIndex],
