@@ -6,16 +6,18 @@ import { lunaPage } from "./lib/chrome.js";
 import { jsonResponse } from "./lib/http.js";
 
 // ── /lens — "the other web" -----------------------------------------------
-// A URL goes in; what a MACHINE sees comes out, across four lenses: page
+// A URL goes in; what a MACHINE sees comes out, across five lenses: page
 // anatomy (raw HTML, headers, headings, stripped text), structured/semantic
 // data (JSON-LD, microdata, RDFa, microformats, OG/Twitter), the LLM/AI view
-// (a markdown rendering + crawler directives), and site-level discovery files
-// (robots.txt, sitemap.xml, llms.txt, feeds). The fetch is server-side (CORS
-// blocks the browser), guarded against SSRF, capped in time + size, and made
-// honestly as AadharshBot. Engine here; the /lens page (handleLens) is the UI.
+// (a markdown rendering + crawler directives), the TERMS the site sets for
+// machines (per-bot robots verdicts, Content-Signal, price + enforcement,
+// the open → signaled → enforced → paid spectrum), and site-level discovery
+// files (robots.txt, sitemap.xml, llms.txt, feeds). The fetch is server-side
+// (CORS blocks the browser), guarded against SSRF, capped in time + size, and
+// made honestly as AadharshBot. Engine here; the /lens page (handleLens) is the UI.
 
 // /lens — the SSR shell: IE6 address bar, a Human/Machine view toggle, the
-// four lens tabs, two panes, seeded examples. The renderer lives in /lens.js
+// five lens tabs, two panes, seeded examples. The renderer lives in /lens.js
 // (a real static file, SW-cached like nav.js) so it can use normal JS without
 // fighting this template literal's ${} and backticks.
 // the /lens shell is a fully static template (all per-request work lives in
@@ -32,7 +34,7 @@ function renderLensShell() {
     title: "The Other Web · aadhar.sh",
     path: "The Other Web",
     width: 980,
-    description: "Paste any URL and see it the way a machine does: raw HTML, headers, JSON-LD and microformats, an LLM-style markdown render, and the site's robots.txt / sitemap / llms.txt — side by side with the human view.",
+    description: "Paste any URL and see it the way a machine does: raw HTML, headers, JSON-LD and microformats, an LLM-style markdown render, the terms it sets for AI crawlers, and the site's robots.txt / sitemap / llms.txt — side by side with the human view.",
     robots: "index, nofollow",
     css: `
 h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color:oklch(41.92% 0.0962 250.51); margin:0 0 2px; font-weight:bold; }
@@ -109,6 +111,25 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 .lx-ogcard .d { font-size:8.8pt; color:oklch(45% 0 0); margin-top:3px; }
 .lx-ogcard .u { font-family:"Courier New",monospace; font-size:8pt; color:oklch(50% 0.05 150); margin-top:4px; }
 
+/* Terms lens: the open → signaled → enforced → paid spectrum + bot scoreboard */
+.lx-spectrum { display:flex; border:1px solid oklch(70% 0.03 250); border-radius:3px; overflow:hidden; margin:2px 0 8px; }
+.lx-spec { flex:1 1 0; text-align:center; padding:5px 4px 6px; background:oklch(97% 0.005 250); border-right:1px solid oklch(88% 0.01 250); }
+.lx-spec:last-child { border-right:none; }
+.lx-spec b { display:block; font-size:9.2pt; color:oklch(40% 0.02 255); }
+.lx-spec span { font-size:7.8pt; color:oklch(55% 0 0); }
+.lx-spec.is-here { background:linear-gradient(180deg, oklch(58% 0.15 255), oklch(44% 0.18 257)); }
+.lx-spec.is-here b, .lx-spec.is-here span { color:#fff; }
+.lx-why { margin:0 0 4px; padding-left:18px; font-size:8.8pt; color:oklch(35% 0 0); }
+.lx-why li { margin:1px 0; }
+.lx-bots { width:100%; border-collapse:collapse; font-size:8.8pt; }
+.lx-bots td, .lx-bots th { border-bottom:1px solid oklch(93% 0.01 250); padding:3px 8px 3px 0; text-align:left; vertical-align:top; }
+.lx-bots th { font-size:7.8pt; font-weight:normal; color:oklch(50% 0 0); text-transform:uppercase; letter-spacing:.05em; }
+.lx-bots .ua { font-family:"Courier New",monospace; color:oklch(30% 0.05 255); white-space:nowrap; }
+.lx-bots .rule { font-family:"Courier New",monospace; font-size:8.2pt; color:oklch(48% 0 0); word-break:break-all; }
+.lx-bots .who { color:oklch(55% 0 0); font-size:8pt; }
+.lx-badge.no { background:oklch(52% 0.17 27); }
+.lx-kindrow td { font-family:"Trebuchet MS",Verdana,sans-serif; font-size:8.6pt; font-weight:bold; color:oklch(38% 0.07 255); padding-top:9px; }
+
 /* status bar */
 .lx-status { margin-top:9px; border-top:1px solid oklch(86% 0.03 260); padding-top:6px; display:flex; flex-wrap:wrap; gap:5px 14px; font-size:8.6pt; color:oklch(45% 0 0); }
 .lx-status b { color:oklch(30% 0.04 255); font-weight:bold; }
@@ -133,6 +154,7 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
       <button class="lx-chip" data-url="https://daringfireball.net/">a hand-built blog</button>
       <button class="lx-chip" data-url="https://stripe.com/">a modern marketing site</button>
       <button class="lx-chip" data-url="https://en.wikipedia.org/wiki/Semantic_Web">a Wikipedia article</button>
+      <button class="lx-chip" data-url="https://www.nytimes.com/">a publisher with AI terms</button>
       <button class="lx-chip" data-url="https://example.com/">the bare minimum</button>
     </div>
 
@@ -146,6 +168,7 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
         <button class="lx-tab is-on" data-lens="anatomy" type="button">Anatomy</button>
         <button class="lx-tab" data-lens="structured" type="button">Structured</button>
         <button class="lx-tab" data-lens="ai" type="button">AI view</button>
+        <button class="lx-tab" data-lens="terms" type="button">Terms</button>
         <button class="lx-tab" data-lens="discovery" type="button">Discovery</button>
       </div>
     </div>
@@ -376,10 +399,11 @@ export async function lensInspect(targetUrl, env) {
   // site-level discovery — probe the origin's well-known files in parallel.
   const origin = (() => { try { return new URL(finalUrl).origin; } catch { return null; } })();
   if (origin) {
-    const [robots, sitemap, llms, llmsFull, aiTxt, secTxt] = await Promise.all([
+    const [robots, sitemap, llms, llmsFull, aiTxt, secTxt, tdmrep] = await Promise.all([
       lensProbe(origin + "/robots.txt", env), lensProbe(origin + "/sitemap.xml", env),
       lensProbe(origin + "/llms.txt", env), lensProbe(origin + "/llms-full.txt", env),
       lensProbe(origin + "/ai.txt", env), lensProbe(origin + "/.well-known/security.txt", env),
+      lensProbe(origin + "/.well-known/tdmrep.json", env),
     ]);
     const feeds = (out.structured?.relLinks || []).filter((l) =>
       /alternate/.test(l.rel) && /(rss|atom|feed|\+xml|\+json)/i.test((l.type || "") + " " + (l.href || "")));
@@ -391,6 +415,10 @@ export async function lensInspect(targetUrl, env) {
       xRobotsTag: headers["x-robots-tag"] || null,
       namesAiCrawlers: robots.ok ? /GPTBot|ClaudeBot|Claude-Web|Google-Extended|CCBot|PerplexityBot|anthropic-ai|OAI-SearchBot|Bytespider|Amazonbot/i.test(robots.body || "") : false,
     };
+    out.terms = lensTerms({
+      finalUrl, status: res.status, headers, body, robots, tdmrep,
+      metaRobots: out.structured?.meta?.robots || null,
+    });
   }
   return out;
 }
@@ -553,4 +581,169 @@ export function lensDecode(s) {
     .replace(/&#(\d+);/g, (m, n) => { try { return String.fromCodePoint(+n); } catch { return m; } })
     .replace(/&#x([0-9a-f]+);/gi, (m, n) => { try { return String.fromCodePoint(parseInt(n, 16)); } catch { return m; } })
     .replace(/&amp;/g, "&");
+}
+
+// ── the Terms lens ----------------------------------------------------------
+// What this site permits, resists, or charges — per bot, per path. Everything
+// below is read from PUBLISHED policy (robots.txt, Content-Signal, TDMRep,
+// noai directives) plus what happened to our own identified fetch. Lens never
+// wears another bot's user-agent to test enforcement; same honesty rule as
+// AadharshBot itself.
+
+// The crawlers worth a scoreboard row: the household names of the agentic web,
+// grouped by what they take (a search index / a training corpus / live
+// answers). Verdicts are evaluated per-bot against the exact fetched path.
+const LENS_BOTS = [
+  { ua: "Googlebot",          owner: "Google",       kind: "search",  note: "the classic search index" },
+  { ua: "Bingbot",            owner: "Microsoft",    kind: "search",  note: "Bing (and Copilot grounding)" },
+  { ua: "GPTBot",             owner: "OpenAI",       kind: "train",   note: "training corpus" },
+  { ua: "ClaudeBot",          owner: "Anthropic",    kind: "train",   note: "training corpus" },
+  { ua: "Google-Extended",    owner: "Google",       kind: "train",   note: "the Gemini-training consent token" },
+  { ua: "Applebot-Extended",  owner: "Apple",        kind: "train",   note: "Apple Intelligence consent token" },
+  { ua: "Meta-ExternalAgent", owner: "Meta",         kind: "train",   note: "Llama training + Meta AI" },
+  { ua: "CCBot",              owner: "Common Crawl", kind: "train",   note: "the open crawl most models started on" },
+  { ua: "Bytespider",         owner: "ByteDance",    kind: "train",   note: "famously robots-indifferent" },
+  { ua: "Amazonbot",          owner: "Amazon",       kind: "train",   note: "Alexa answers + training" },
+  { ua: "OAI-SearchBot",      owner: "OpenAI",       kind: "answers", note: "the ChatGPT Search index" },
+  { ua: "ChatGPT-User",       owner: "OpenAI",       kind: "answers", note: "live fetch for a user's chat" },
+  { ua: "Claude-User",        owner: "Anthropic",    kind: "answers", note: "live fetch for a user's chat" },
+  { ua: "PerplexityBot",      owner: "Perplexity",   kind: "answers", note: "answer-engine index" },
+  { ua: "AadharshBot",        owner: "aadhar.sh",    kind: "answers", note: "the bot that fetched this page" },
+];
+
+// robots.txt → { groups: [{agents, rules, signal}], sitemaps }. Groups follow
+// RFC 9309: consecutive User-agent lines share one group; Content-Signal
+// (contentsignals.org) rides along as a group-level directive.
+export function lensParseRobots(txt) {
+  const groups = [], sitemaps = [];
+  let cur = null, inAgents = false;
+  for (const raw of String(txt || "").split(/\r?\n/)) {
+    const line = raw.replace(/#.*$/, "").trim();
+    if (!line) continue;
+    const i = line.indexOf(":");
+    if (i < 0) continue;
+    const key = line.slice(0, i).trim().toLowerCase();
+    const val = line.slice(i + 1).trim();
+    if (key === "user-agent") {
+      if (!inAgents) { cur = { agents: [], rules: [], signal: null }; groups.push(cur); }
+      cur.agents.push(val.toLowerCase());
+      inAgents = true;
+      continue;
+    }
+    inAgents = false;
+    if (key === "sitemap") { sitemaps.push(val); continue; }
+    if (!cur) continue;
+    if (key === "allow" || key === "disallow") cur.rules.push({ allow: key === "allow", pattern: val });
+    else if (key === "content-signal") cur.signal = val;
+  }
+  return { groups, sitemaps };
+}
+
+// RFC 9309 evaluation for one bot: the group with the longest user-agent token
+// that prefixes the bot's product token wins ('*' only as fallback), then the
+// longest matching path rule; Allow beats Disallow on a length tie.
+export function lensRobotsVerdict(parsed, botUa, path) {
+  const token = botUa.toLowerCase();
+  let bestUa = null;
+  for (const g of parsed.groups) for (const ua of g.agents) {
+    if (ua !== "*" && token.startsWith(ua) && (bestUa === null || ua.length > bestUa.length)) bestUa = ua;
+  }
+  const matchedUa = bestUa ?? (parsed.groups.some((g) => g.agents.includes("*")) ? "*" : null);
+  if (matchedUa === null) return { verdict: "allow", matchedUa: null, rule: null, signal: null };
+  const chosen = parsed.groups.filter((g) => g.agents.includes(matchedUa));
+  let best = null;
+  for (const g of chosen) for (const r of g.rules) {
+    if (!r.pattern || !lensPathMatch(r.pattern, path)) continue; // empty Disallow: = no rule at all
+    if (!best || r.pattern.length > best.pattern.length || (r.pattern.length === best.pattern.length && r.allow && !best.allow)) best = r;
+  }
+  const signal = chosen.map((g) => g.signal).find(Boolean) || null;
+  return {
+    verdict: best && !best.allow ? "block" : "allow",
+    matchedUa,
+    rule: best ? (best.allow ? "Allow: " : "Disallow: ") + best.pattern : null,
+    signal,
+  };
+}
+
+// robots path patterns: '*' is a wildcard, a trailing '$' anchors the end.
+export function lensPathMatch(pattern, path) {
+  const anchored = pattern.endsWith("$");
+  const body = anchored ? pattern.slice(0, -1) : pattern;
+  const rx = "^" + body.split("*").map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join(".*") + (anchored ? "$" : "");
+  try { return new RegExp(rx).test(path); } catch { return path.startsWith(body.split("*")[0]); }
+}
+
+// "search=yes,ai-input=yes,ai-train=no" → { search: "yes", ... }
+export function lensParseContentSignal(raw) {
+  const out = {};
+  for (const part of String(raw || "").split(",")) {
+    const kv = part.split("=");
+    if (kv.length === 2 && kv[0].trim()) out[kv[0].trim().toLowerCase()] = kv[1].trim().toLowerCase();
+  }
+  return out;
+}
+
+// assemble the whole terms envelope: scoreboard + signals + price + enforcement
+// + the open → signaled → enforced → paid spectrum.
+export function lensTerms({ finalUrl, status, headers, body, robots, tdmrep, metaRobots }) {
+  let path = "/";
+  try { const u = new URL(finalUrl); path = u.pathname + u.search; } catch (_e) {}
+  const t = { path, robotsPresent: !!(robots && robots.ok) };
+
+  // "absent" (a clean 404) and "unreachable" (timeout / 403 / 5xx) are very
+  // different claims — never report unknown terms as no terms.
+  const robotsAbsent = !!(robots && !robots.ok && (robots.status === 404 || robots.status === 410));
+  t.robotsUnknown = !t.robotsPresent && !robotsAbsent;
+  t.robotsError = t.robotsUnknown ? ((robots && (robots.error || (robots.status ? "HTTP " + robots.status : null))) || "unreachable") : null;
+
+  const parsed = t.robotsPresent ? lensParseRobots(robots.body || "") : { groups: [], sitemaps: [] };
+  t.scoreboard = LENS_BOTS.map((b) => {
+    if (t.robotsUnknown) return { ua: b.ua, owner: b.owner, kind: b.kind, note: b.note, verdict: "unknown", matchedUa: null, rule: null };
+    const v = lensRobotsVerdict(parsed, b.ua, path);
+    return { ua: b.ua, owner: b.owner, kind: b.kind, note: b.note, verdict: v.verdict, matchedUa: v.matchedUa, rule: v.rule };
+  });
+  t.signals = parsed.groups.filter((g) => g.signal).map((g) => ({ agents: g.agents, raw: g.signal, parsed: lensParseContentSignal(g.signal) }));
+
+  // price signals on the fetched response: HTTP 402, Cloudflare pay-per-crawl
+  // headers, an x402 payment envelope in the body.
+  const crawlerHeaders = {};
+  for (const k in headers) if (/^crawler-/i.test(k)) crawlerHeaders[k] = headers[k];
+  t.paid = { http402: status === 402, crawlerHeaders, x402: null };
+  if (status === 402 && body) {
+    try { const j = JSON.parse(body); if (j && (j.x402Version != null || j.accepts)) t.paid.x402 = JSON.stringify(j, null, 2).slice(0, 6000); } catch (_e) {}
+  }
+
+  // enforcement: what actually happened to our identified, signed fetch.
+  const challenged = headers["cf-mitigated"] === "challenge" || /_cf_chl_opt|challenge-platform|<title>Just a moment/i.test(String(body || "").slice(0, 6000));
+  t.enforcement = { status, challenged, blocked: challenged || status === 401 || status === 403 || status === 451 };
+
+  const xRobotsTag = headers["x-robots-tag"] || null;
+  t.directives = { metaRobots: metaRobots || null, xRobotsTag, noai: /noai|noimageai/i.test((metaRobots || "") + " " + (xRobotsTag || "")) };
+  t.tdmrep = tdmrep && tdmrep.ok ? { present: true, body: String(tdmrep.body || "").slice(0, 4000) } : { present: false };
+
+  // the spectrum: strongest tier present wins; reasons list everything found.
+  // Nuance: an all-yes Content-Signal (or naming bots only to allow them) is an
+  // explicit GRANT — that keeps the site at "open", just deliberately so.
+  const reasons = [];
+  const named = t.scoreboard.filter((b) => b.matchedUa && b.matchedUa !== "*");
+  const blocked = t.scoreboard.filter((b) => b.verdict === "block");
+  const restrictiveSignals = t.signals.some((s) => Object.values(s.parsed).some((v) => v !== "yes"));
+  if (t.paid.http402) reasons.push({ tier: "paid", why: "answered 402 Payment Required" + (t.paid.x402 ? " with an x402 payment envelope" : "") });
+  if (Object.keys(crawlerHeaders).length) reasons.push({ tier: "paid", why: "advertises pay-per-crawl price headers (" + Object.keys(crawlerHeaders).join(", ") + ")" });
+  if (t.enforcement.challenged) reasons.push({ tier: "enforced", why: "served a bot challenge to our identified fetch" });
+  else if (t.enforcement.blocked) reasons.push({ tier: "enforced", why: "refused our identified fetch with HTTP " + status });
+  if (blocked.length) reasons.push({ tier: "signaled", why: "robots.txt blocks " + blocked.length + " of " + t.scoreboard.length + " scoreboard crawlers for this path" });
+  if (named.length && !blocked.length) reasons.push({ tier: "open", why: "robots.txt names " + named.length + " scoreboard crawler" + (named.length > 1 ? "s" : "") + " explicitly, all allowed" });
+  if (t.signals.length) reasons.push(restrictiveSignals
+    ? { tier: "signaled", why: "declares restrictive Content-Signal preferences in robots.txt" }
+    : { tier: "open", why: "declares Content-Signal preferences, all yes — explicitly open, in writing" });
+  if (t.directives.noai) reasons.push({ tier: "signaled", why: "sets a noai directive (meta robots / X-Robots-Tag)" });
+  if (t.tdmrep.present) reasons.push({ tier: "signaled", why: "publishes a TDM Reservation Protocol manifest" });
+  if (t.robotsUnknown) reasons.push({ tier: "open", why: "robots.txt could not be read (" + t.robotsError + ") — robots terms unknown, not absent" });
+  const order = ["open", "signaled", "enforced", "paid"];
+  t.spectrum = {
+    tier: reasons.reduce((top, r) => (order.indexOf(r.tier) > order.indexOf(top) ? r.tier : top), "open"),
+    reasons: reasons.length ? reasons.map((r) => r.why) : ["no machine terms found — any bot may read anything here, free"],
+  };
+  return t;
 }

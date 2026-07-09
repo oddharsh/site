@@ -1,9 +1,9 @@
 // lens.js — client behavior for /lens ("The Other Web").
 //
 // Calls the server-side /lens/fetch engine (CORS blocks the browser from
-// fetching arbitrary origins itself), then renders the result through four
-// machine "lenses" — Anatomy, Structured data, AI view, Discovery files —
-// next to a plain human read. No deps, no build. Deferred + SW-cached.
+// fetching arbitrary origins itself), then renders the result through five
+// machine "lenses" — Anatomy, Structured data, AI view, Terms, Discovery
+// files — next to a plain human read. No deps, no build. Deferred + SW-cached.
 (function () {
   "use strict";
   var form = document.getElementById("lx-form");
@@ -21,7 +21,7 @@
   var lens = "anatomy";  // anatomy | structured | ai | discovery
   var busy = false;
 
-  var LENS_LABEL = { anatomy: "Anatomy", structured: "Structured", ai: "AI view", discovery: "Discovery" };
+  var LENS_LABEL = { anatomy: "Anatomy", structured: "Structured", ai: "AI view", terms: "Terms", discovery: "Discovery" };
 
   function esc(s) {
     return String(s == null ? "" : s)
@@ -164,7 +164,7 @@
   function renderMachine() {
     machineH.innerHTML = "Machine view &middot; " + LENS_LABEL[lens];
     if (!data) { return; }
-    var fn = { anatomy: lensAnatomy, structured: lensStructured, ai: lensAI, discovery: lensDiscovery }[lens];
+    var fn = { anatomy: lensAnatomy, structured: lensStructured, ai: lensAI, terms: lensTerms, discovery: lensDiscovery }[lens];
     machineBody.innerHTML = fn();
     machineBody.scrollTop = 0;
   }
@@ -267,6 +267,100 @@
     return out;
   }
 
+  // the Terms lens: whose bots may read this path, on what signals, at what
+  // price, behind what wall. Everything shown is published policy plus what
+  // happened to lens's own identified fetch — no user-agent dress-up.
+  function lensTerms() {
+    var t = data.terms;
+    if (!t) return '<div class="lx-empty">No terms to read (the origin never answered the probes).</div>';
+    var out = "";
+
+    // the spectrum strip
+    var TIERS = [
+      { k: "open",     label: "Open",     sub: "no terms set" },
+      { k: "signaled", label: "Signaled", sub: "asks, via robots" },
+      { k: "enforced", label: "Enforced", sub: "blocks at the edge" },
+      { k: "paid",     label: "Paid",     sub: "charges for access" },
+    ];
+    var strip = '<div class="lx-spectrum">' + TIERS.map(function (x) {
+      return '<div class="lx-spec' + (t.spectrum.tier === x.k ? " is-here" : "") + '"><b>' + x.label + "</b><span>" + x.sub + "</span></div>";
+    }).join("") + "</div>";
+    var why = '<ul class="lx-why">' + (t.spectrum.reasons || []).map(function (r) { return "<li>" + esc(r) + "</li>"; }).join("") + "</ul>";
+    out += section("Where this site sits", { text: t.spectrum.tier, kind: t.spectrum.tier === "open" ? "ok" : t.spectrum.tier === "signaled" ? "" : "warn" },
+      "Open to any bot, gated behind payment, or anywhere in between. The agentic web's actual terms of service.",
+      strip + why);
+
+    // the bot scoreboard
+    var KIND = { search: "Search engines", train: "AI training crawlers", answers: "AI answer engines (live retrieval)" };
+    var blocked = (t.scoreboard || []).filter(function (b) { return b.verdict === "block"; }).length;
+    var rows = "<tr><th>crawler</th><th>runs it</th><th>verdict</th><th>why</th></tr>";
+    var lastKind = null;
+    (t.scoreboard || []).forEach(function (b) {
+      if (b.kind !== lastKind) { rows += '<tr class="lx-kindrow"><td colspan="4">' + KIND[b.kind] + "</td></tr>"; lastKind = b.kind; }
+      var badge, why2;
+      if (t.robotsUnknown) { badge = '<span class="lx-badge warn">unknown</span>'; why2 = "robots.txt unreachable: " + (t.robotsError || "no answer"); }
+      else if (!t.robotsPresent) { badge = '<span class="lx-badge off">no robots.txt</span>'; why2 = "nothing to obey"; }
+      else if (b.verdict === "block") { badge = '<span class="lx-badge no">blocked</span>'; why2 = (b.rule || "") + " (as " + b.matchedUa + ")"; }
+      else if (b.matchedUa && b.matchedUa !== "*") { badge = '<span class="lx-badge ok">allowed</span>'; why2 = (b.rule || "no matching rule") + " (named as " + b.matchedUa + ")"; }
+      else if (b.matchedUa === "*") { badge = '<span class="lx-badge ok">allowed</span>'; why2 = (b.rule || "no matching rule") + " (under *)"; }
+      else { badge = '<span class="lx-badge off">unmentioned</span>'; why2 = "no group matches, so allowed by default"; }
+      rows += '<tr><td class="ua">' + esc(b.ua) + '</td><td>' + esc(b.owner) + '<br><span class="who">' + esc(b.note) + "</span></td><td>" + badge + '</td><td class="rule">' + esc(why2) + "</td></tr>";
+    });
+    var sbBadge = t.robotsUnknown ? { text: "unknown", kind: "warn" }
+      : !t.robotsPresent ? { text: "no robots.txt", kind: "off" }
+      : blocked ? { text: blocked + " blocked", kind: "warn" } : { text: "all allowed", kind: "ok" };
+    out += section("The bot scoreboard", sbBadge,
+      "robots.txt evaluated per crawler (RFC 9309 longest-match) for " + t.path + ". This is policy, not enforcement — obeying it is voluntary.",
+      '<table class="lx-bots">' + rows + "</table>");
+
+    // Content Signals
+    var sig;
+    if (t.signals && t.signals.length) {
+      sig = t.signals.map(function (s) {
+        var chips = ["search", "ai-input", "ai-train"].map(function (k) {
+          var v = s.parsed[k];
+          var kind = v === "yes" ? "ok" : v === "no" ? "no" : "off";
+          return '<span class="lx-badge ' + kind + '">' + k + "=" + esc(v || "unset") + "</span>";
+        }).join(" ");
+        return '<div style="margin:0 0 7px"><span class="lx-tag">User-agent: ' + esc(s.agents.join(", ")) + '</span><div style="height:4px"></div>' + chips + "</div>";
+      }).join("");
+    } else {
+      sig = '<div class="lx-none">no Content-Signal lines in robots.txt</div>';
+    }
+    out += section("Content Signals", { text: t.signals && t.signals.length ? "declared" : "absent", kind: t.signals && t.signals.length ? "ok" : "off" },
+      "contentsignals.org, 2025 (Cloudflare). Three consent bits a site can attach to a robots group: search, ai-input (grounding answers), ai-train.",
+      sig);
+
+    // price
+    var paid = t.paid || {};
+    var paidInner = "";
+    if (paid.http402) paidInner += '<div class="lx-fallback-note">This URL answered <b>402 Payment Required</b>' + (paid.x402 ? " with an x402 envelope — a machine-readable invoice." : ".") + "</div>";
+    if (paid.x402) paidInner += pre(paid.x402, true);
+    if (has(paid.crawlerHeaders)) paidInner += kvTable(paid.crawlerHeaders);
+    if (!paidInner) paidInner = '<div class="lx-none">no price signals: no 402, no pay-per-crawl headers. (Almost nobody sets these yet — that is the frontier.)</div>';
+    out += section("Price", { text: paid.http402 ? "402" : "free", kind: paid.http402 ? "warn" : "off" },
+      "HTTP 402, Cloudflare pay-per-crawl headers, x402 envelopes: content gated behind machine payment.",
+      paidInner);
+
+    // enforcement
+    var enf = t.enforcement || {};
+    var enfInner;
+    if (enf.challenged) enfInner = '<div class="lx-fallback-note">Our fetch hit a bot challenge (the &quot;verify you are human&quot; wall). The policy above is backed by active enforcement.</div>';
+    else if (enf.blocked) enfInner = '<div class="lx-fallback-note">Our identified fetch was refused with HTTP ' + enf.status + ". Policy here is enforced, at least against bots that announce themselves.</div>";
+    else enfInner = '<div class="lx-none">our identified fetch went through (HTTP ' + enf.status + ") — no wall between the policy and the content</div>";
+    enfInner += '<div class="lx-cap" style="margin-top:6px">Honesty note: lens never wears another bot\'s user-agent to probe enforcement. This reports what happened to AadharshBot\'s own signed fetch; the scoreboard reports published policy.</div>';
+    out += section("Enforcement", { text: enf.challenged ? "challenge" : enf.blocked ? "blocked" : "none seen", kind: enf.challenged || enf.blocked ? "warn" : "off" },
+      "robots.txt is a request. Edges like Cloudflare can make it a wall.",
+      enfInner);
+
+    // TDMRep
+    out += section("TDM Reservation Protocol", { text: t.tdmrep && t.tdmrep.present ? "found" : "absent", kind: t.tdmrep && t.tdmrep.present ? "ok" : "off" },
+      "W3C community spec: the EU text-and-data-mining opt-out, at /.well-known/tdmrep.json.",
+      t.tdmrep && t.tdmrep.present ? pre(t.tdmrep.body, true) : '<div class="lx-none">not present</div>');
+
+    return out;
+  }
+
   function lensDiscovery() {
     var dsc = data.discovery;
     if (!dsc) return '<div class="lx-empty">No origin to probe.</div>';
@@ -321,6 +415,7 @@
   function httpText(s) {
     if (s >= 200 && s < 300) return "OK";
     if (s >= 300 && s < 400) return "redirect";
+    if (s === 402) return "Payment Required";
     if (s === 404) return "Not Found";
     if (s >= 400 && s < 500) return "client error";
     if (s >= 500) return "server error";
