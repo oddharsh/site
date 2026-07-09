@@ -56,6 +56,11 @@ aggregations.
 - [/reading](https://aadhar.sh/reading): A native, Luna-styled mirror of my
   Curius reading list (curius.app/aadharsh-pannirselvam), pulled live through
   AadharshBot and KV-cached. Saved articles newest-first, with my highlights.
+- [/ledger](https://aadhar.sh/ledger): The crawl ledger — the last 30 days
+  of identified AI-crawler visits rendered as an invoice (one cent a page,
+  issued monthly, collected never). A commentary page, not a demand letter;
+  reading this site by machine is welcome. JSON twin at
+  [/ledger.json](https://aadhar.sh/ledger.json).
 - [/serendipity](https://aadhar.sh/serendipity): A public pool of events
   worth going to (and who's going), contributed and browsable.
 - [/lwe](https://aadhar.sh/lwe): "Learning With Errors" — interactive,

@@ -30,7 +30,7 @@
       "/whoareyou", "/whoareyou.json", "/security",
       "/reading", "/updates", "/updates.json", "/restore",
       "/lens", "/lens/", "/lens/fetch", "/lens/shot",
-      "/llms-full.txt",
+      "/llms-full.txt", "/ledger", "/ledger.json",
       "/writing", "/writing/*",
       "/rn", "/rn/tracks", "/rn/admin", "/rn/set",
       "/bot", "/around", "/around/json",
@@ -53,6 +53,11 @@
   "triggers": { "crons": ["*/30 * * * *"] },
   "kv_namespaces": [
     { "binding": "RN_KV", "id": "3cb8a107c58e47dc9244e75b33401f36" }
+  ],
+  // the bot ledger: identified AI-crawler hits tick in here (ledger.js);
+  // /ledger reads them back via the SQL API (needs ANALYTICS_READ_TOKEN).
+  "analytics_engine_datasets": [
+    { "binding": "BOT_LEDGER", "dataset": "aadhar_bot_ledger" }
   ],
   "r2_buckets": [
     { "binding": "PHOTOS_R2", "bucket_name": "aadhar-photos" }

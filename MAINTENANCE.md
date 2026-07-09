@@ -43,6 +43,7 @@ files) are served straight from disk. Worker-owned routes are enumerated in
 | `/lens`, `/lens/`, `/lens/fetch`, `/lens/shot` | `handleLens` / `handleLensFetch` / `handleLensShot` | `lens.js` |
 | `/lens.js` | static client renderer | `holding/lens.js` (served asset) |
 | `/llms-full.txt` | `handleLlmsFull` (x402 bot paywall; free until `X402_PAY_TO` is set) | `x402.js` |
+| `/ledger`, `/ledger.json` | `handleLedger` / `handleLedgerJson` (AI-crawler invoice from Analytics Engine; counting via `countCrawlerHit` in `index.js`) | `ledger.js` |
 | `/writing`, `/writing/`, `/writing/<slug>` | `handleWritingIndex` / `handleWritingPost` (Notepad) | `writing.js` |
 | `/writing/<slug>.txt`, `/writing/posts.json` | ASSETS passthrough (dotted paths fall through) | n/a |
 | `/rn`, `/rn/tracks`, `/rn/admin`, `/rn/set` | `handleRn` / `handleRnTracks` / `handleRnAdmin` / `handleRnSet` | `rn.js` |
@@ -72,6 +73,8 @@ guarded, so a missing binding degrades, it doesn't crash.
 | `COUNTER` | Durable Object | cross-script binding to cf-garage's Counter (homepage visits) |
 | `RN_SIGNING_KEY_JWK` | secret | AadharshBot Ed25519 signing key (RFC 9421) |
 | `BROWSER_RENDER_TOKEN`, `CF_ACCOUNT_ID` | secret | Browser Rendering for `/lens/shot` |
+| `BOT_LEDGER` | Analytics Engine | dataset `aadhar_bot_ledger` — AI-crawler hit counts for `/ledger` (absent → counting silently off) |
+| `ANALYTICS_READ_TOKEN` | secret | API token (Account Analytics : Read) so `/ledger` can query the dataset back; absent → invoice renders with a "meter not readable" note |
 | `X402_PAY_TO` | var or secret | receiving EVM address for the `/llms-full.txt` x402 paywall; absent → file serves free with `x-payment-note` |
 | `X402_NETWORK`, `X402_FACILITATOR` | var | optional x402 overrides: network (`base` default, `base-sepolia` for tests) + verify/settle facilitator URL (default `https://x402.org/facilitator`, which is testnet-only — mainnet needs e.g. Coinbase CDP's) |
 | `RN_BUST_SECRET` | secret | guards `/rn/admin` + `/rn/set` |

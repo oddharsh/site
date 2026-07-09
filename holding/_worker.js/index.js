@@ -8,6 +8,7 @@ import { cronAround, handleAround, handleAroundJson } from "./around.js";
 import { handleBotPage } from "./bot.js";
 import { handleHitSvg } from "./counter.js";
 import { homepageHeadResponse, serveHomepageWithPrerenderedTracks, serveMarkdown } from "./home.js";
+import { countCrawlerHit, handleLedger, handleLedgerJson } from "./ledger.js";
 import { handleLens, handleLensFetch, handleLensShot } from "./lens.js";
 import { serveAssetWith404Clamp, serveFreshAsset } from "./lib/assets.js";
 import { CANONICAL_HOST } from "./lib/const.js";
@@ -48,6 +49,9 @@ export default {
     // keep `return withSecurityHeaders(await route(...))`.
     const t0 = Date.now();
     const response = await route(request, env, ctx);
+    // the bot ledger: identified AI-crawler hits tick into Analytics Engine
+    // (worker-owned routes only); /ledger prices them. Best-effort, non-blocking.
+    countCrawlerHit(env, request, response, url.pathname);
     try {
       console.log(JSON.stringify({
         p: url.pathname,
@@ -103,6 +107,11 @@ const ROUTES = new Map([
   // the x402 bot paywall: llms.txt's map is free, the full corpus costs $0.01
   // by machine payment (ungated until X402_PAY_TO is set).
   ["/llms-full.txt", handleLlmsFull],
+
+  // the crawl ledger: the month's AI-bot traffic as an invoice, issued
+  // monthly, collected never.
+  ["/ledger", handleLedger],
+  ["/ledger.json", handleLedgerJson],
 
   ["/writing", handleWritingIndex],
   ["/writing/", handleWritingIndex],

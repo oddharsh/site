@@ -65,6 +65,8 @@ const ROUTES = [
   { path: "/lens/shot?url=https://example.com", status: [200, 503], flaky: true },
   // 200 text/plain when the x402 gate is unconfigured; 402 json once X402_PAY_TO is set
   { path: "/llms-full.txt", status: [200, 402], ct: ["text/plain", "application/json"] },
+  { path: "/ledger", status: 200, ct: "text/html", marker: "Crawl Ledger" },
+  { path: "/ledger.json", status: 200, ct: "application/json" },
   { path: "/writing", status: 200, ct: "text/html" },
   { path: `/writing/${SLUG}`, status: 200, ct: "text/html" },
   { path: `/writing/${SLUG}.txt`, status: 200, ct: "text/plain" },
