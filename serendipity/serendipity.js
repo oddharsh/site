@@ -735,7 +735,14 @@ async function fetchMyEvents(cookieHeader, selfId) {
 async function fetchEventGuests(eventId, ticketKey, cookieHeader) {
   const all = []; let cursor = null;
   while (true) {
-    const p = new URLSearchParams({ event_api_id: eventId, ticket_key: ticketKey, pagination_limit: "100" });
+    // ticket_key ONLY when we have a real one. Sending ticket_key=null (the
+    // literal, which URLSearchParams produces from a null value) makes Luma
+    // 403 "you don't have access to see the guest list". Omitting it lets
+    // access ride the auth session: a host sees their own event's list, and a
+    // guest sees any event whose list is public to guests. (Verified against
+    // api2.luma.com: same 7 guests with the key or with it omitted.)
+    const p = new URLSearchParams({ event_api_id: eventId, pagination_limit: "100" });
+    if (ticketKey) p.set("ticket_key", ticketKey);
     if (cursor) p.set("pagination_cursor", cursor);
     const data = await (await lumaFetch(`${LUMA_API}/event/get-guest-list?${p}`, cookieHeader)).json();
     for (const e of (data.entries || [])) all.push(parseGuest(e.api_id, e.user || {}));
@@ -919,7 +926,9 @@ async function syncGuests(d, eventId, cookiesJson) {
   const ev = await d.prepare("SELECT ticket_key, user_status FROM events WHERE id = ?").get(eventId);
   if (!ev) return { error: "event not found" };
   if (ev.user_status !== "going") return { error: `status is ${ev.user_status}, not going` };
-  if (!ev.ticket_key) return { error: "no ticket_key" };
+  // no ticket_key gate: events you HOST/manage (and link-added ones) have no
+  // ticket_key of your own, but the list still loads over the auth session.
+  // fetchEventGuests omits a missing key rather than sending null (which 403s).
   const selfId = selfIdFrom(cookiesJson);
   try {
     const guests = await fetchEventGuests(eventId, ev.ticket_key, cookieHeader);
