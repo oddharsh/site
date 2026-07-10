@@ -64,6 +64,19 @@ async function checkInvariants() {
     "animation:none !important;mix-blend-mode:normal}",
   ]) if (!luna.includes(rule)) hard.push(`luna.css lost a white-blink rule: ${rule}`);
 
+  // 3b (hard) — luna.css parses as valid CSS. A botched find-replace in v143
+  // wrapped several .window/.xp-button declarations in :where(...) and left
+  // unbalanced parens; esbuild only WARNS (never throws) and the served bytes
+  // are byte-identical to git, so the corruption shipped silently for three
+  // releases (the .window box-shadow + the whole .xp-button base rule dropped
+  // from the CSSOM). Transform as CSS and block on any warning.
+  try {
+    const res = await transform(luna, { loader: "css", minify: false });
+    for (const w of res.warnings) hard.push(`luna.css CSS parse warning: ${w.text}${w.location ? ` (line ${w.location.line})` : ""}`);
+  } catch (e) {
+    hard.push(`luna.css failed to parse as CSS: ${e.message.split("\n")[0]}`);
+  }
+
   // 4 (warn) — the static desktop partial is current with nav.js's data. A
   // byte-compare would false-fire on whitespace, so this is a count proxy: one
   // taskbar pin per SUBPAGE, one desktop icon per DESKTOP entry (Notepad +
@@ -96,6 +109,18 @@ async function checkInvariants() {
   const floorVals = new Set(floors.values());
   if (floorVals.size > 1) warn.push(`taskbar-floor height disagrees across the critical-geometry copies (${[...floors].map(([f, v]) => `${f.split("/").pop()}:${v}px`).join(", ")}) — luna.css and the inline copies must match`);
 
+  // 6 (warn) — the local-dev twin (wrangler.dev.jsonc) must declare the same
+  // bindings as the deploy config (wrangler.jsonc), or local `wrangler dev`
+  // diverges from prod. Compare the set of binding identifiers by name; a
+  // mismatch means a binding was added to one config but not the other.
+  try {
+    const dev = await read("wrangler.dev.jsonc");
+    const names = (s) => new Set([...s.matchAll(/"(?:binding|name|database_name|bucket_name|dataset)"\s*:\s*"([^"]+)"/g)].map((m) => m[1]));
+    const a = names(wrangler), b = names(dev);
+    const diff = [...new Set([...a].filter((x) => !b.has(x)).concat([...b].filter((x) => !a.has(x))))];
+    if (diff.length) warn.push(`wrangler.jsonc and wrangler.dev.jsonc binding sets differ (${diff.join(", ")}) — keep the dev twin in sync`);
+  } catch (e) { warn.push(`dev-config drift check could not run: ${e.message}`); }
+
   if (warn.length) console.warn("build: invariant WARNINGS (deploy continues):\n  - " + warn.join("\n  - "));
   if (hard.length) throw new Error("build: invariant tripwires FAILED, deploy blocked:\n  - " + hard.join("\n  - "));
   console.log(`invariants ok: ${routeKeys.length} routes mirrored, CSP style-src, blink-fix, generator, geometry${warn.length ? " (with warnings above)" : ""}`);
@@ -116,9 +141,11 @@ await checkInvariants();
 await rm(OUT, { recursive: true, force: true });
 await mkdir(OUT, { recursive: true });
 
-// 1) stage: holding/ + wrangler config, verbatim (.assetsignore rides along)
+// 1) stage: holding/ verbatim (.assetsignore rides along). No wrangler config is
+// copied into .build anymore — the deploy config (wrangler.jsonc) points main +
+// assets at .build/holding and runs THIS script via its build.command, so the
+// build output never needs its own config. (Local dev uses wrangler.dev.jsonc.)
 await cp("holding", `${OUT}/holding`, { recursive: true });
-await cp("wrangler.jsonc", `${OUT}/wrangler.jsonc`);
 
 // 2) shells: deploy the readable original as <name>.src.js, minify the served file
 for (const [file, srcPath, marker] of SHELLS) {
@@ -138,4 +165,21 @@ for (const [file, srcPath, marker] of SHELLS) {
   console.log(`${file}: ${src.length} -> ${min.length} bytes (+ ${srcPath})`);
 }
 
-console.log(`staged ${OUT}/ - deploy with: wrangler deploy -c ${OUT}/wrangler.jsonc`);
+// 3) luna.css: the one shared external stylesheet, minified with a readable
+// /luna.src.css twin (same readable-twin philosophy as the shells). Repaired, it
+// goes 63KB->35KB raw / 16.0KB->7.35KB brotli — an ~8.7KB saving on a
+// render-blocking sheet every worker-rendered + garage/lwe page loads, almost
+// all of it the heavy View-Source comments (which live on in luna.src.css).
+// Owner-approved 2026-07 as the ONE non-shell file the build is allowed to
+// minify; do not extend CSS minification past luna.css without the owner's say-so.
+{
+  const src = await readFile("holding/luna.css", "utf8");
+  await writeFile(`${OUT}/holding/luna.src.css`, src);
+  const { code, warnings } = await transform(src, { loader: "css", minify: true });
+  if (warnings.length) throw new Error(`luna.css minify emitted warnings: ${warnings.map(w => w.text).join("; ")}`);
+  const out = `/*! minified at deploy - readable source: /luna.src.css */\n` + code;
+  await writeFile(`${OUT}/holding/luna.css`, out);
+  console.log(`luna.css: ${src.length} -> ${out.length} bytes (+ /luna.src.css)`);
+}
+
+console.log(`staged ${OUT}/ - deploy with: wrangler deploy (self-builds via build.command) or npm run deploy`);

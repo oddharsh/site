@@ -1,18 +1,27 @@
 {
-  // Cloudflare Workers (static assets) config for aadhar.sh.
-  // Migrated from the Pages project of the same name. The whole holding/ dir is
-  // uploaded as static assets; holding/_worker.js/ is the bundled Worker entry
-  // (excluded from assets by holding/.assetsignore). run_worker_first is an
+  // Cloudflare Workers (static assets) config for aadhar.sh — the DEPLOY config.
+  // Migrated from the Pages project of the same name. run_worker_first is an
   // allowlist that mirrors holding/_worker.js/index.js: static is the default,
   // and compute only runs where a route earns it. Compression is left to the
   // platform default for now (no precompression / q11 change in this migration).
+  //
+  // UNBYPASSABLE BUILD: main + assets point at .build/holding (the minified
+  // tree), and the "build" block below runs build.mjs FIRST on every deploy.
+  // So `wrangler deploy` (bare), `npm run deploy`, and Workers Builds all ship
+  // the minified shells + luna.css — there is no longer a path that serves the
+  // readable originals by accident (which is exactly how prod ended up on an
+  // unminified 78KB nav.js). Local dev must NOT use this config (it would pay
+  // the full holding/ -> .build copy on every reload); it uses wrangler.dev.jsonc,
+  // which points at holding/ directly. The two configs' bindings must match;
+  // build.mjs warns on drift.
   "name": "aadhar-sh",
-  "main": "holding/_worker.js/index.js",
+  "main": ".build/holding/_worker.js/index.js",
+  "build": { "command": "node build.mjs" },
   "compatibility_date": "2026-06-01",
   // serve only on the custom domain (aadhar.sh); no public *.workers.dev URL.
   "workers_dev": false,
   "assets": {
-    "directory": "holding",
+    "directory": ".build/holding",
     "binding": "ASSETS",
     // Worker-owned routes only. New static files do not cost invocations unless
     // they are added here and to the ROUTES/PREFIX tables in index.js.

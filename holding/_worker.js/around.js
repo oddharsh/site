@@ -1,7 +1,7 @@
 // around.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
 import { BOT_NAME, BOT_UA, SIG_AGENT, signedFetch } from "./lib/botauth.js";
-import { deleteSWRKV } from "./lib/cache.js";
+import { cachedRender, deleteSWRKV } from "./lib/cache.js";
 import { lunaPage } from "./lib/chrome.js";
 import { esc, extractMeta, extractTitle } from "./lib/http.js";
 
@@ -40,25 +40,38 @@ export const NEIGHBORS = [
 // lets /around join the prerender set with every other page. The crawl runs on
 // the schedule in wrangler.jsonc (cronAround, via index.js's scheduled handler).
 export async function handleAround(request, env, ctx) {
-  const report = await readAroundReport(request, env);
-  return renderAroundHtml(report);
+  const url = new URL(request.url);
+  // ?bust=SECRET is the owner's force-refresh (it re-crawls inside
+  // readAroundReport), so it must skip the edge cache. Every other visit serves
+  // the version-keyed caches.default copy and never touches KV; the TTL is the
+  // response's own s-maxage=300 (renderAroundHtml). The crawl runs on cron.
+  const isBust = env.RN_BUST_SECRET && url.searchParams.get("bust") === env.RN_BUST_SECRET;
+  const render = async () => renderAroundHtml(await readAroundReport(request, env));
+  return isBust ? render() : cachedRender(request, ctx, render, "/around", env);
 }
 
 export async function handleAroundJson(request, env, ctx) {
-  const report = await readAroundReport(request, env);
-  if (!report) {
-    return new Response(JSON.stringify({ pending: true, note: "no snapshot yet; the cron crawl hasn't run" }), {
-      status: 503,
-      headers: { "content-type": "application/json; charset=utf-8", "retry-after": "1800", "x-robots-tag": "noindex" },
+  const url = new URL(request.url);
+  const isBust = env.RN_BUST_SECRET && url.searchParams.get("bust") === env.RN_BUST_SECRET;
+  const render = async () => {
+    const report = await readAroundReport(request, env);
+    if (!report) {
+      // 503 pending is never cached (cachedRender only stores 200) — a snapshot
+      // that appears next cron won't be shadowed by a pinned "pending".
+      return new Response(JSON.stringify({ pending: true, note: "no snapshot yet; the cron crawl hasn't run" }), {
+        status: 503,
+        headers: { "content-type": "application/json; charset=utf-8", "retry-after": "1800", "x-robots-tag": "noindex" },
+      });
+    }
+    return new Response(JSON.stringify(report, null, 2), {
+      headers: {
+        "content-type":  "application/json; charset=utf-8",
+        "cache-control": "public, max-age=60, s-maxage=300",
+        "x-robots-tag":  "noindex",
+      },
     });
-  }
-  return new Response(JSON.stringify(report, null, 2), {
-    headers: {
-      "content-type":  "application/json; charset=utf-8",
-      "cache-control": "public, max-age=60, s-maxage=300",
-      "x-robots-tag":  "noindex",
-    },
-  });
+  };
+  return isBust ? render() : cachedRender(request, ctx, render, "/around/json", env);
 }
 
 const AROUND_KEY = "around:report";

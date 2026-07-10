@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#2D78BD">
+<!-- discover the one shared stylesheet at the top of head so its bytes are in
+     flight before the inline <style> block; the real stylesheet link stays
+     put (line ~869) so the cascade order is unchanged. same href -> one req. -->
+<link rel="preload" as="style" href="/luna.css">
 <title>Aadharsh Pannirselvam</title>
 <meta name="description" content="Aadharsh Pannirselvam. I research and invest in interesting tech-oriented stuff and the people that make them.">
 <meta name="author" content="Aadharsh Pannirselvam">
@@ -1070,14 +1074,20 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
           // addressed); abs() tolerates the older relative shape so a stale
           // cached manifest can never break the fallback grid.
           const abs = (u) => (u && u.startsWith("/") ? u : `/images/${u}`);
-          const small = abs(p.thumb_small);
+          // same responsive tiers as the worker path: mobile pinned to 400px,
+          // desktop 400w/600w @ sizes:174px so DPR<=2 gets 400px, DPR3 gets 600px.
+          const hasSmall = !!p.thumb_small;
+          const small = hasSmall ? abs(p.thumb_small) : null;
+          const large = abs(p.thumb_avif);
           const load = i === 0 ? 'loading="eager" fetchpriority="high"' : 'loading="lazy"';
           const sz = (typeof p.size === "number" && p.size > 0) ? ` data-size="${p.size}"` : "";
           const up = p.uploaded ? ` data-uploaded="${esc(p.uploaded)}"` : "";
           return `<a href="/images/full/${encodeURI(p.full)}" target="_blank" rel="noopener" data-full="${esc(p.full)}"${sz}${up}>` +
             `<picture>` +
-              `<source type="image/avif" media="(max-width: 560px)" srcset="${esc(small)}">` +
-              `<source type="image/avif" srcset="${esc(abs(p.thumb_avif))}">` +
+              (hasSmall ? `<source type="image/avif" media="(max-width: 560px)" srcset="${esc(small)}">` : "") +
+              (hasSmall
+                ? `<source type="image/avif" srcset="${esc(small)} 400w, ${esc(large)} 600w" sizes="174px">`
+                : `<source type="image/avif" srcset="${esc(large)}">`) +
               `<img alt="${esc(alt[p.stem] || "")}" width="600" height="600" ${load} decoding="async" src="${esc(abs(p.thumb_jpg))}">` +
             `</picture></a>`;
         }).join("");
@@ -1490,16 +1500,12 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
           // than the photo being stuck empty for the whole session. self-healing.
           .catch(() => { delete metaMap[stem]; });
       };
-      // warm EXIF for the photos actually on the page (≤12) once idle, so the first
-      // hover is instant rather than showing empty fields for a beat. staggered (not a
-      // 12-wide burst) to stay gentle on the edge / any rate limit. still per-stem
-      // (only what's shown — scales as the library grows), immutable-cached after; a
-      // failed warm just retries on hover, since fetchMeta self-heals.
-      const warmShownMeta = () => [...document.querySelectorAll(".photos a[data-full]")].forEach((a, i) => {
-        const s = (a.dataset.full || "").replace(/\.[^.]+$/, "");
-        if (s) setTimeout(() => fetchMeta(s), i * 60);
-      });
-      ("requestIdleCallback" in window) ? requestIdleCallback(warmShownMeta, { timeout: 2500 }) : setTimeout(warmShownMeta, 1200);
+      // EXIF/histogram is fetched lazily on first hover or keyboard focus (see
+      // buildPhotoContent → fetchMeta), NOT idle-warmed. the old warm loop fired
+      // ~12 requests / ~15KB on every no-store visit to make a first hover instant
+      // — but most visitors never hover a tile, so it was pure waste on the hot
+      // path. the first hover now pays one tiny immutable fetch (cached forever
+      // after, self-healing on failure); the grid itself never waits on it.
 
       // unified hover target → "what was hovered?" lookup. one tooltip
       // element, three content shapes: a photo slot (.photos a), a track

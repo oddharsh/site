@@ -1,10 +1,18 @@
 // updates.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
+import { cachedRender } from "./lib/cache.js";
 import { lunaPage } from "./lib/chrome.js";
 import { esc } from "./lib/http.js";
 
 // ── /updates handler (Windows Update reskin) ────────────────────────
-export async function handleWindowsUpdate(request, env) {
+export async function handleWindowsUpdate(request, env, ctx) {
+  // Version-keyed edge cache (caches.default): the changelog changes only on
+  // deploy, and a deploy mints a fresh cache key, so the rendered shell serves
+  // for up to s-maxage=300 without re-querying D1 on every visit.
+  return cachedRender(request, ctx, () => renderWindowsUpdate(env), "/updates", env);
+}
+
+async function renderWindowsUpdate(env) {
   // Single source of truth: the same D1 `checkpoints` table that backs /restore.
   // One row per logged deploy (scripts/bump-version.sh, which now derives the
   // next vnum from this table; the retired service worker used to carry it as
@@ -61,7 +69,7 @@ h1{margin:0 0 4px}
     </ul>
     <p class="wu-foot">No reboot, no nagging. Each item is a real deploy from the site's checkpoint log; see how delivery works in <a href="/security">Security Center</a>, or roll the whole system back through every past build in <a href="/restore">System Restore</a>.</p>
 `,
-    cache: "private, no-cache, must-revalidate",
+    cache: "public, max-age=0, s-maxage=300",
     closeHref: "/security",
     closeTitle: "back to Security Center",
     closeLabel: "back to Security Center",
@@ -74,7 +82,11 @@ h1{margin:0 0 4px}
 
 // brief JSON for the Windows Update tray balloon: running build + recent changelog,
 // read from the same D1 checkpoints log as /updates and /restore.
-export async function handleUpdatesJson(request, env) {
+export async function handleUpdatesJson(request, env, ctx) {
+  return cachedRender(request, ctx, () => renderUpdatesJson(env), "/updates.json", env);
+}
+
+async function renderUpdatesJson(env) {
   let build = "aadhar.sh", items = [];
   try {
     if (env && env.RESTORE_DB) {
@@ -87,7 +99,7 @@ export async function handleUpdatesJson(request, env) {
   return new Response(JSON.stringify({ build, items }), {
     headers: {
       "content-type":    "application/json; charset=utf-8",
-      "cache-control":   "no-store, must-revalidate",
+      "cache-control":   "public, max-age=0, s-maxage=300",
       "x-robots-tag":    "noindex",
       "referrer-policy": "strict-origin-when-cross-origin",
     },
@@ -101,7 +113,11 @@ export async function handleUpdatesJson(request, env) {
 // A real rollback is a destructive D1 Time Travel restore run from the CLI
 // (7-day window on the free plan), never exposed to a visitor. env.RESTORE_DB
 // is a dashboard binding; this page degrades gracefully when it is absent.
-export async function handleSystemRestore(request, env) {
+export async function handleSystemRestore(request, env, ctx) {
+  return cachedRender(request, ctx, () => renderSystemRestore(env), "/restore", env);
+}
+
+async function renderSystemRestore(env) {
   let points = [], state = "ok";
   try {
     if (env && env.RESTORE_DB) {
@@ -244,7 +260,7 @@ h1{margin:0 0 4px}
     ${liveBar}
 ${main}
 `,
-    cache: "private, no-cache, must-revalidate",
+    cache: "public, max-age=0, s-maxage=300",
     closeHref: "/updates",
     closeTitle: "back to Windows Update",
     closeLabel: "back to Windows Update",

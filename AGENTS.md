@@ -3,8 +3,8 @@
 A resto-mod 2003-aesthetic personal site for Aadharsh Pannirselvam, deployed
 to Cloudflare Pages + Workers. Two cohabiting projects in this directory:
 
-- **`holding/`** — the live `aadhar.sh` homepage (Cloudflare Pages + `_worker.js`)
-- **`cal/`** — a custom coffee/bagel booking system at `aadhar.sh/coffee` (Cloudflare Worker, not yet deployed)
+- **`holding/`** — the live `aadhar.sh` homepage (Cloudflare Worker with static assets + `_worker.js`; migrated off Pages 2026-06-30)
+- **`cal/`** — a custom coffee/bagel booking system LIVE at `aadhar.sh/coffee` (its own Cloudflare Worker; deploy separately with `cd cal && npm run deploy`)
 
 The look is deliberately Windows XP / Outlook Express era: blue title bars,
 Verdana/Tahoma fonts, raised 3D bevel buttons, sunken inputs, OKLCH-encoded
@@ -218,8 +218,13 @@ are installed on macOS, so the fallback path doesn't hit Helvetica/Arial.
 Custom-built scheduler at `aadhar.sh/coffee`. Replaces Cal.com. Inspired by
 [jry.io/bagel](https://jry.io/bagel). Crediting Jacob Young in the footer.
 
-**Status: source-complete, not deployed.** Needs secrets set before
-`wrangler deploy` will work end-to-end (see `cal/README.md`).
+**Status: LIVE at aadhar.sh/coffee** (zone route → `cal-aadhar-sh` worker).
+Deploys separately: `cd cal && npm run deploy` (secrets already set). The cal npm
+scripts pass `-c wrangler.toml`: a bare `wrangler deploy` from cal/ wrongly
+inherits the repo-root `build.command` (`node build.mjs`) and fails.
+Availability is served from an SWR calendar snapshot (KV `cal:busy`, 2s upstream
+deadline, stale fallback), the GET page edge-caches 30s, and a booking fails
+closed if the calendar can't be vouched for (never books over an unseen event).
 
 ### Architecture
 

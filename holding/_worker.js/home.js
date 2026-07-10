@@ -37,6 +37,24 @@ export function homepageHeadResponse(request) {
 // over (the client-side scripts detect pre-rendered state via "already
 // has href?" / "already populated?" checks and bail early).
 export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
+  // Server-Timing: measure the TTFB-gating reads so the KV-shape experiments the
+  // perf plan calls for run on real numbers, not guesses. Date.now() in Workers
+  // advances only across I/O, so these spans are meaningful for the KV/R2/asset
+  // reads (all I/O) even though pure-compute reads as 0. The visit counter is
+  // deliberately absent: it overlaps the body stream and never gates first byte.
+  const t0 = Date.now();
+  const timings = {};
+  const timed = (name, p) => {
+    const s = Date.now();
+    return Promise.resolve(p).then(
+      (v) => { timings[name] = Date.now() - s; return v; },
+      (e) => { timings[name] = Date.now() - s; throw e; },
+    );
+  };
+  const serverTiming = () => {
+    timings.total = Date.now() - t0;
+    return Object.entries(timings).map(([k, v]) => `${k};dur=${v}`).join(", ");
+  };
   // the page is private,no-cache, so the worker runs on every visit. these reads
   // are mutually independent (the static asset, the tracks payload, the
   // photo manifest, the alt map), so fire them concurrently instead
@@ -74,10 +92,10 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
   ctx.waitUntil(counterPeek.catch(() => {}));
 
   const [res, tracksPayload, photos, altMap] = await Promise.all([
-    env.ASSETS.fetch(request),
-    tracksChain,
-    manifestP,
-    getAltMap(env),   // AI alt text; module-cached, so this is free on warm isolates
+    timed("assets", env.ASSETS.fetch(request)),
+    timed("tracks", tracksChain),
+    timed("manifest", manifestP),
+    timed("alt", getAltMap(env)),   // AI alt text; module-cached, so this is free on warm isolates
   ]);
 
   // footer "Last modified" → the most recently added photo (a real, datable
@@ -99,7 +117,11 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
   // bail if no dynamic data is available — the static HTML's inline
   // JS will pick up the slack on the client (and the hardcoded "000042"
   // stays in the footer as a graceful fallback).
-  if (!tracksPayload?.tracks?.length && !photos && !env.COUNTER && !lastModStr) return withHomepageDiscoveryHeaders(res);
+  if (!tracksPayload?.tracks?.length && !photos && !env.COUNTER && !lastModStr) {
+    const out = withHomepageDiscoveryHeaders(res);
+    out.headers.set("server-timing", serverTiming());
+    return out;
+  }
 
   const rewriter = new HTMLRewriter();
   let lcpAvif = null, lcpSmall = null;  // first photo tile → responsive preload links
@@ -165,17 +187,29 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
       // shipped ~14KB raw of EXIF on every no-store visit for a hover most
       // visitors never make — lazy keeps the hot path lean. (the grid is a
       // square 3-col CSS grid via aspect-ratio:1, so no per-tile --ar needed.)
+      // dual-tier AVIF from the manifest: a 400px small tile + a 600px large.
+      // mobile (<=560px) is pinned to 400px (its box is ~100px, so 400px is
+      // already 2x-dense even on DPR3). desktop is responsive: the tile renders
+      // 174px (184px column − 4px padding − 1px frame, both sides), so a
+      // 400w/600w srcset + sizes:174px lands 400px on DPR1/DPR2 and 600px only
+      // on DPR3 — the old 600px-everywhere source shipped ~10-15KB of unseen
+      // detail to every DPR2 desktop tile. small missing → single 600px source.
+      // ordered first: <picture> uses the first source whose media matches.
+      // URLs come from the manifest verbatim (absThumb tolerates a stale
+      // pre-hash manifest during the cutover window).
+      const small = smallOf(p);
+      const large = p.thumb_avif ? absThumb(p.thumb_avif) : null;
+      const desktopSrc = large
+        ? (small
+            ? `<source type="image/avif" srcset="${escAttr(small)} 400w, ${escAttr(large)} 600w" sizes="174px">`
+            : `<source type="image/avif" srcset="${escAttr(large)}">`)
+        : "";
       return `<a href="/images/full/${encodeURI(full)}"` +
              ` target="_blank" rel="noopener"` +
              ` data-full="${escAttr(full)}"${sizeAttr}${upAttr}>` +
         `<picture>` +
-          // mobile (<=560px) gets the 400px tile — at the ~100px mobile box that's
-          // the same density 800px gives the ~197px desktop box, at ~1/3 the bytes.
-          // ordered first: <picture> uses the first source whose media matches.
-          // URLs come from the manifest verbatim (absThumb tolerates a stale
-          // pre-hash manifest during the cutover window).
-          (smallOf(p) ? `<source type="image/avif" media="(max-width: 560px)" srcset="${escAttr(smallOf(p))}">` : "") +
-          (p.thumb_avif ? `<source type="image/avif" srcset="${escAttr(absThumb(p.thumb_avif))}">` : "") +
+          (small ? `<source type="image/avif" media="(max-width: 560px)" srcset="${escAttr(small)}">` : "") +
+          desktopSrc +
           `<img alt="${escAttr(altMap[p.stem] || "")}" width="600" height="600" ${imgLoad} decoding="async" src="${escAttr(absThumb(p.thumb_jpg))}">` +
         `</picture>` +
       `</a>`;
@@ -222,12 +256,21 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
   // arrive. Responsive: desktop the 800 tile, mobile the 400 (media-gated); the
   // type=image/avif hint makes non-AVIF browsers skip it (they use the JPG).
   if (lcpAvif) {
+    // desktop preload must match the tile's responsive selection or it fetches
+    // the wrong tier and the hero double-downloads: imagesrcset+imagesizes
+    // mirror the <source> srcset/sizes (400px on DPR1/2, 600px on DPR3), with
+    // href=600px as the legacy fallback (ignored where imagesrcset is honored).
+    const desktopPreload = lcpSmall
+      ? `<link rel="preload" as="image" type="image/avif" fetchpriority="high" media="(min-width: 561px)" imagesrcset="${escAttr(lcpSmall)} 400w, ${escAttr(lcpAvif)} 600w" imagesizes="174px" href="${escAttr(lcpAvif)}">`
+      : `<link rel="preload" as="image" type="image/avif" fetchpriority="high" media="(min-width: 561px)" href="${escAttr(lcpAvif)}">`;
     const links =
-      `<link rel="preload" as="image" type="image/avif" fetchpriority="high" media="(min-width: 561px)" href="${escAttr(lcpAvif)}">` +
+      desktopPreload +
       (lcpSmall ? `<link rel="preload" as="image" type="image/avif" fetchpriority="high" media="(max-width: 560px)" href="${escAttr(lcpSmall)}">` : "");
     rewriter.on("head", { element(el) { el.prepend(links, { html: true }); } });
   }
-  return withHomepageDiscoveryHeaders(rewriter.transform(res));
+  const out = withHomepageDiscoveryHeaders(rewriter.transform(res));
+  out.headers.set("server-timing", serverTiming());
+  return out;
 }
 
 // fisher-yates shuffle, return first N elements. doesn't mutate input.

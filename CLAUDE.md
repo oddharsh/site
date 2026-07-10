@@ -4,7 +4,7 @@ A resto-mod 2003-aesthetic personal site for Aadharsh Pannirselvam, deployed
 as a Cloudflare Worker with static assets. Cohabiting projects in this directory:
 
 - **`holding/`** — the live `aadhar.sh` site (Workers static assets + the `_worker.js/` module worker)
-- **`cal/`** — a custom coffee/bagel booking system at `aadhar.sh/coffee` (its own Cloudflare Worker, LIVE via the aadhar.sh/coffee* zone route; deploy separately with `cd cal && npx wrangler deploy`)
+- **`cal/`** — a custom coffee/bagel booking system at `aadhar.sh/coffee` (its own Cloudflare Worker, LIVE via the aadhar.sh/coffee* zone route; deploy separately with `cd cal && npm run deploy`)
 
 The look is deliberately Windows XP / Outlook Express era: blue title bars,
 Verdana/Tahoma fonts, raised 3D bevel buttons, sunken inputs, OKLCH-encoded
@@ -230,7 +230,7 @@ canonical token set (fonts, Luna palette, bevels, radii). Pull from those before
 hardcoding any color/font/bevel. Captions = Trebuchet MS, UI/body = Tahoma→Verdana,
 mono = Courier New — those three stacks only.
 
-**HARD RULES (strong owner preference):** (1) **internal/native fonts ONLY** — never ship `@font-face` with `url()`, web fonts, `@import`, or font preloads; the served pages carry ZERO font bytes (the design system's `@font-face local()` rules are reference-only, never inlined into a served page). (2) **keep perf lean** — fold design tokens in WITHOUT regressing the byte budget: on a brotli'd inline page, tokenizing repeated literals is a wash (brotli already dedupes) while token *definitions* are net-new bytes, so only the FONT tokens (`--font-*`) are inlined site-wide; color/gradient tokens are NOT inlined (they cost bytes for no brotli gain). no external stylesheet, no JS for styling. (3) **authoring stays buildless; serving is minified** — the ONLY build is `build.mjs` (deploy-time transform: minifies the four shell scripts into a staged `.build/` copy, ships readable `/<name>.src.js` twins alongside). Never minify `index.html` or the garage/lwe HTML (View Source is part of the design), never bundle, never extend the build beyond those four files without the owner's say-so.
+**HARD RULES (strong owner preference):** (1) **internal/native fonts ONLY** — never ship `@font-face` with `url()`, web fonts, `@import`, or font preloads; the served pages carry ZERO font bytes (the design system's `@font-face local()` rules are reference-only, never inlined into a served page). (2) **keep perf lean** — fold design tokens in WITHOUT regressing the byte budget: on a brotli'd inline page, tokenizing repeated literals is a wash (brotli already dedupes) while token *definitions* are net-new bytes, so only the FONT tokens (`--font-*`) are inlined site-wide; color/gradient tokens are NOT inlined (they cost bytes for no brotli gain). no external stylesheet, no JS for styling. (3) **authoring stays buildless; serving is minified** — the ONLY build is `build.mjs` (deploy-time transform: minifies the three shell scripts + `luna.css` into a staged `.build/` copy, ships readable `/<name>.src.js` / `/luna.src.css` twins alongside; also hard-fails the deploy if `luna.css` doesn't parse). `wrangler.jsonc` self-builds via its `build.command` and points `main`+`assets` at `.build/holding`, so NO deploy path (bare `wrangler deploy`, `npm run deploy`, Workers Builds) can ship the readable originals; local dev uses `wrangler.dev.jsonc` (readable `holding/`, fast reload). Never minify `index.html` or the garage/lwe HTML (View Source is part of the design), never bundle, never extend the build to more CSS or HTML without the owner's say-so (`luna.css` was owner-approved 2026-07 for an ~8.7KB brotli win on a render-blocking sheet).
 
 Reusable classes that show up across the site (homepage + future `/coffee`):
 
@@ -259,14 +259,25 @@ Custom-built scheduler at `aadhar.sh/coffee`. Replaces Cal.com. Inspired by
 [jry.io/bagel](https://jry.io/bagel). Crediting Jacob Young in the footer.
 
 **Status: LIVE at aadhar.sh/coffee** (zone route -> cal-aadhar-sh worker).
-Deploys separately: `cd cal && npx wrangler deploy` (secrets already set).
+Deploys separately: `cd cal && npm run deploy` (secrets already set). The cal
+scripts pass `-c wrangler.toml` on purpose: a bare `wrangler deploy` from cal/
+wrongly inherits the repo-root `wrangler.jsonc` `build.command` (`node build.mjs`,
+which only stages the holding/ worker) and fails, so always go through the npm
+script or pass `-c wrangler.toml` yourself.
 
 ### Architecture
 
-- Public ICS feed (Google/iCloud) is the read-only source of busy intervals
+- Public ICS feed (Google/iCloud) is the read-only source of busy intervals,
+  read via `fetchBusySWR`: a last-good snapshot in KV (`cal:busy`, 5-min
+  freshness, 2s upstream deadline, stale fallback) so a slow/down feed never
+  gates the page. The GET page edge-caches 30s (invalidated on booking action);
+  `/slots` stays live.
 - `generateSlots()` computes bookable slots from working hours config
 - `POST /book` creates a pending booking in KV, emails the host with
-  HMAC-signed approve/decline links (Resend free tier)
+  HMAC-signed approve/decline links (Resend free tier). It **fails closed**: if
+  the calendar snapshot is unavailable or older than 15 min, it 503s rather than
+  book over a real event it can't see (the old code returned `[]` on ICS failure,
+  making every slot look free — a double-booking risk).
 - Host clicks approve → confirmed → `.ics` invite to requester
 - Host clicks decline → polite auto-reply
 - Cron triggers a weekly sweep of un-acted pending bookings

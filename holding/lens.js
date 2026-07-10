@@ -34,6 +34,17 @@
     if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
     return (n / 1048576).toFixed(2) + " MB";
   }
+  function fmtTok(n) {
+    if (n >= 1e6) return (n / 1e6).toFixed(1) + "M";
+    if (n >= 1000) return (n / 1000).toFixed(1) + "k";
+    return String(n);
+  }
+  function fmtUsd(x) {
+    if (x >= 0.1) return "$" + x.toFixed(2);
+    if (x >= 0.0005) return "$" + x.toFixed(4);
+    if (x > 0) return "<$0.0005";
+    return "$0";
+  }
   function has(o) { return o && typeof o === "object" && Object.keys(o).length > 0; }
 
   // ---- networking -------------------------------------------------------
@@ -248,8 +259,39 @@
     return out;
   }
 
+  // context economics: the same page priced per representation an agent could
+  // ingest. The semantic web asked publishers to structure up front; LLMs pay
+  // the difference per read instead — this table is that difference.
+  function econSection() {
+    var c = data.cost;
+    if (!c || !c.tiers || !c.tiers.length) return "";
+    var rate = (c.rates && c.rates[0]) || { model: "reference", usdPerMtok: 3 };
+    var base = c.tiers[0];
+    var rows = '<tr><th>representation</th><th class="num">size</th><th class="num">~tokens</th><th class="num">1 read</th><th class="num">1,000 reads</th><th></th></tr>';
+    c.tiers.forEach(function (t) {
+      var usd = t.tokens / 1e6 * rate.usdPerMtok;
+      var mult = (t !== base && t.tokens > 0) ? Math.round(base.tokens / t.tokens) : 0;
+      rows += "<tr><td>" + esc(t.label) + '<br><span class="who">' + esc(t.note) + '</span></td><td class="num">' + bytes(t.chars) +
+        '</td><td class="num">' + fmtTok(t.tokens) + '</td><td class="num">' + fmtUsd(usd) + '</td><td class="num">' + fmtUsd(usd * 1000) +
+        "</td><td>" + (mult > 1 ? '<span class="lx-mult">&times;' + mult + " cheaper</span>" : "") + "</td></tr>";
+    });
+    var summary = "";
+    if (c.tiers.length > 1) {
+      var cheapest = c.tiers[c.tiers.length - 1];
+      var multAll = cheapest.tokens ? Math.round(base.tokens / cheapest.tokens) : 0;
+      var per1k = fmtUsd(base.tokens / 1e6 * rate.usdPerMtok * 1000);
+      summary = '<div class="lx-cap" style="margin-top:6px">' +
+        (multAll > 1 ? "A naive read pays &times;" + multAll + " what the " + esc(cheapest.label) + " costs. The semantic web asked publishers to do this work up front; models just pay the difference on every read. " : "") +
+        '1,000 naive reads of this page &asymp; <b>' + per1k + "</b> of inference; the publisher collects $0.00 (<a href=\"/ledger\">the ledger</a>).</div>";
+    }
+    var others = (c.rates || []).slice(1).map(function (r) { return r.model + " $" + r.usdPerMtok; }).join(", ");
+    return section("Context economics", { text: "~" + fmtTok(base.tokens) + " tok" },
+      "What reading this page costs a machine. Priced at " + rate.model + " input, $" + rate.usdPerMtok + "/Mtok (" + others + " — checked " + (c.checked || "") + "); tokens are " + c.tokenizer + ".",
+      '<table class="lx-bots">' + rows + "</table>" + summary);
+  }
+
   function lensAI() {
-    var out = "";
+    var out = econSection();
     var d = (data.ai && data.ai.directives) || {};
     var dir = {
       "llms.txt": data.ai && data.ai.llmsTxtPresent ? "present at /llms.txt" : "not found",
@@ -361,10 +403,56 @@
     return out;
   }
 
+  // agent doors: the action/read surfaces this origin exposes to machines,
+  // and the verdict on which strategy the site picked (publish-for-agents vs
+  // make-them-drive-the-human-page).
+  function doorsSection() {
+    var ag = data.agent;
+    if (!ag) return "";
+    var rows = "";
+    function row(name, note, badge, kind, detail) {
+      rows += '<tr><td class="ua">' + esc(name) + '</td><td>' + esc(note) + "</td><td><span class=\"lx-badge " + kind + '">' + esc(badge) + '</span></td><td class="rule">' + esc(detail || "") + "</td></tr>";
+    }
+    var mcp = ag.mcp || {};
+    row("/mcp", "MCP endpoint (2024) — tools for models, at run time",
+      mcp.verdict === "yes" ? "found" : mcp.verdict === "likely" ? "likely" : mcp.verdict === "maybe" ? "maybe" : "absent",
+      mcp.verdict === "yes" || mcp.verdict === "likely" ? "ok" : mcp.verdict === "maybe" ? "warn" : "off", mcp.detail);
+    var nl = ag.nlweb || {};
+    row("/ask", "NLWeb (Microsoft, 2025) — the site as a natural-language endpoint",
+      nl.verdict === "maybe" ? "NLWeb-shaped" : "absent", nl.verdict === "maybe" ? "warn" : "off", nl.detail);
+    var wm = ag.webmcp || {};
+    row("WebMCP", "in-page tools for browser agents (Chrome/W3C draft)",
+      wm.found ? "markers found" : "absent", wm.found ? "ok" : "off", wm.marker);
+    var card = ag.agentCard || {};
+    row(".well-known/agent-card.json", "A2A agent card — who this agent is, what it offers",
+      card.present ? "found" : "absent", card.present ? "ok" : "off", card.detail || card.note);
+    var mn = ag.mdNegotiation || {};
+    row("Accept: text/markdown", "content negotiation — the same URL, re-served for machines",
+      mn.supported ? "supported" : "no", mn.supported ? "ok" : "off",
+      mn.supported ? "content-type flips to " + mn.contentType : (mn.note || (mn.contentType ? "stays " + mn.contentType : "")));
+    var oa = ag.openapi || {};
+    row("/openapi.json", "OpenAPI — the build-time API contract",
+      oa.present ? "found" : "absent", oa.present ? "ok" : "off", oa.detail || oa.note);
+    var cat = ag.apiCatalog || {};
+    row(".well-known/api-catalog", "RFC 9264 linkset — a catalog of the site's APIs",
+      cat.present ? "found" : "absent", cat.present ? "ok" : "off", cat.detail || cat.note);
+    if (ag.aiPlugin && ag.aiPlugin.present) {
+      row(".well-known/ai-plugin.json", "OpenAI plugin manifest (2023, retired) — the fossil record", "found", "ok", ag.aiPlugin.detail);
+    }
+    var st = ag.strategy || {};
+    var stBadge = st.verdict === "agent-native" ? { text: "agent-native", kind: "ok" }
+      : st.verdict === "agent-readable" ? { text: "agent-readable", kind: "" }
+      : { text: "human-only", kind: "warn" };
+    return section("Agent doors", stBadge,
+      "Does this site publish surfaces for agents, or must they drive the human page? The semantic web's open question, asked live.",
+      '<div class="lx-cap" style="margin:0 0 6px">' + esc(st.note || "") + '</div><table class="lx-bots"><tr><th>door</th><th>what it is</th><th>status</th><th>evidence</th></tr>' + rows + "</table>");
+  }
+
   function lensDiscovery() {
     var dsc = data.discovery;
     if (!dsc) return '<div class="lx-empty">No origin to probe.</div>';
     var out = '<div class="lx-cap" style="margin-bottom:10px">Probed at the site root: <b>' + esc(dsc.origin) + "</b></div>";
+    out += doorsSection();
 
     function file(label, obj, caption, extra) {
       var badge = obj && obj.ok ? { text: "found", kind: "ok" } : { text: (obj && obj.status ? obj.status : "absent"), kind: "off" };
@@ -407,6 +495,7 @@
     parts.push("<span><b>" + data.status + "</b> " + esc(httpText(data.status)) + "</span>");
     parts.push("<span>" + esc(data.contentType || "?") + "</span>");
     if (data.anatomy) parts.push("<span>" + bytes(data.anatomy.rawBytes) + "</span>");
+    if (data.cost && data.cost.tiers && data.cost.tiers.length) parts.push("<span>~" + fmtTok(data.cost.tiers[0].tokens) + " tok</span>");
     parts.push("<span>" + data.elapsedMs + " ms</span>");
     if (data.redirected) parts.push("<span>&rarr; " + esc(data.finalUrl) + "</span>");
     parts.push('<span style="margin-left:auto">fetched as ' + esc(data.fetchedBy) + "</span>");

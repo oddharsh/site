@@ -644,7 +644,10 @@ box-shadow:inset 1px 1px 0 oklch(100% 0 0),inset -1px -1px 0 oklch(84% 0.02 90)}
 :where(.window) {
   border: 2px solid #0831d9; border-right-color: #001ea0; border-bottom-color: #001ea0;
   border-top-left-radius: 8px; border-top-right-radius: 8px; overflow: hidden;
-  :where(box-shadow: inset 1px 1px 0 #166aee), :where(inset 2px 2px 0 #0855dd), :where(inset -1px -1px 0 #00138c), :where(inset -2px -2px 0 #003bda), :where(4px 4px 0 rgba(0), :where(30), :where(160), :where(.35); } /* reusable Luna command button + sunken field (used by the /rn form) */ .xp-button) {
+  box-shadow: inset 1px 1px 0 #166aee, inset 2px 2px 0 #0855dd, inset -1px -1px 0 #00138c, inset -2px -2px 0 #003bda, 4px 4px 0 rgba(0,30,160,.35);
+}
+/* reusable Luna command button + sunken field (used by the /rn form) */
+:where(.xp-button) {
   display: inline-block; min-width: 75px; padding: 3px 12px;
   font: 8pt/1.4 var(--font-ui); color: #000;
   text-align: center; text-decoration: none; cursor: pointer; user-select: none;

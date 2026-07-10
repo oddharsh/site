@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#2D78BD">
+<link rel="preload" as="style" href="/luna.css">
 <title>aadhar.sh/garage</title>
 <meta name="description" content="Prototypes, experiments, and work-in-progress for aadhar.sh. Stuff that hasn't made it to the homepage yet, or won't.">
 <link rel="canonical" href="https://aadhar.sh/garage">
@@ -309,7 +310,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
       <figure class="mule-fig">
         <picture>
           <source type="image/avif" srcset="/cars/t50-mule.avif?v=1">
-          <img src="/cars/t50-mule.jpg?v=1" width="600" height="338" alt="Gordon Murray Automotive T.50 development mule, an Ultima GTR nicknamed George" loading="lazy" decoding="async">
+          <img src="/cars/t50-mule.jpg?v=1" width="600" height="338" alt="Gordon Murray Automotive T.50 development mule, an Ultima GTR nicknamed George" loading="eager" fetchpriority="high" decoding="async">
         </picture>
         <figcaption>
           GMA developed the T.50, the F1&apos;s spiritual heir, in Ultima GTR mules,
@@ -353,6 +354,23 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
     <hr>
 
     <ul class="shelf">
+
+      <li>
+        <div class="title-row">
+          <span class="name"><a href="/garage/gpt56">5.6 Sol&apos;s performance pass</a></span>
+          <span class="status review">field note</span>
+        </div>
+        <div class="desc">
+          The performance pass outlined with 5.6 Sol this morning, translated into the
+          work that actually made it onto the lift: first-paint geometry, immutable photo
+          bytes, a shared Luna sheet, explicit Worker boundaries, and deploy-time proof.
+          The local workbench toggles between the three checks; the trace readout is honest
+          about what is local and what still needs field data.
+        </div>
+        <div class="meta">
+          shape: performance field note + local workbench &middot; added 2026-07-10
+        </div>
+      </li>
 
       <li>
         <div class="title-row">

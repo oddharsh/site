@@ -4,7 +4,7 @@
     {
       "path": "/",
       "status": 200,
-      "ct": "text/html"
+      "ct": "text/html; charset=utf-8"
     },
     {
       "path": "/index.html",
@@ -89,12 +89,12 @@
     {
       "path": "/lens.js",
       "status": 200,
-      "ct": "text/javascript"
+      "ct": "text/javascript; charset=utf-8"
     },
     {
       "path": "/luna.css",
       "status": 200,
-      "ct": "text/css"
+      "ct": "text/css; charset=utf-8"
     },
     {
       "path": "/sw.js",
@@ -108,8 +108,23 @@
     },
     {
       "path": "/lens/shot?url=https://example.com",
+      "status": 503,
+      "ct": "application/json; charset=utf-8"
+    },
+    {
+      "path": "/llms-full.txt",
       "status": 200,
-      "ct": "image/png"
+      "ct": "text/plain; charset=utf-8"
+    },
+    {
+      "path": "/ledger",
+      "status": 200,
+      "ct": "text/html; charset=utf-8"
+    },
+    {
+      "path": "/ledger.json",
+      "status": 200,
+      "ct": "application/json; charset=utf-8"
     },
     {
       "path": "/writing",
@@ -124,7 +139,7 @@
     {
       "path": "/writing/in-flux.txt",
       "status": 200,
-      "ct": "text/plain"
+      "ct": "text/plain; charset=utf-8"
     },
     {
       "path": "/writing/posts.json",
@@ -158,7 +173,7 @@
     },
     {
       "path": "/around/json",
-      "status": 200,
+      "status": 503,
       "ct": "application/json; charset=utf-8"
     },
     {
@@ -183,8 +198,8 @@
     },
     {
       "path": "/photos",
-      "status": 200,
-      "ct": "text/html; charset=utf-8"
+      "status": 503,
+      "ct": "text/plain; charset=utf-8"
     },
     {
       "path": "/photos/",
@@ -223,8 +238,8 @@
     },
     {
       "path": "/images/full/L1000069_3.jpg",
-      "status": 200,
-      "ct": "image/jpeg"
+      "status": 404,
+      "ct": "text/plain; charset=utf-8"
     },
     {
       "path": "/images/L1000069_3-400.avif",
@@ -239,27 +254,32 @@
     {
       "path": "/garage/",
       "status": 200,
-      "ct": "text/html"
+      "ct": "text/html; charset=utf-8"
     },
     {
       "path": "/garage/scroll",
       "status": 200,
-      "ct": "text/html"
+      "ct": "text/html; charset=utf-8"
     },
     {
       "path": "/garage/workers",
       "status": 200,
-      "ct": "text/html"
+      "ct": "text/html; charset=utf-8"
     },
     {
       "path": "/garage/wire",
       "status": 200,
-      "ct": "text/html"
+      "ct": "text/html; charset=utf-8"
     },
     {
       "path": "/garage/blueprint",
       "status": 200,
-      "ct": "text/html"
+      "ct": "text/html; charset=utf-8"
+    },
+    {
+      "path": "/garage/gpt56",
+      "status": 200,
+      "ct": "text/html; charset=utf-8"
     },
     {
       "path": "/garage/enc/z-jl90.jpg",
@@ -269,7 +289,7 @@
     {
       "path": "/lwe/utf8",
       "status": 200,
-      "ct": "text/html"
+      "ct": "text/html; charset=utf-8"
     }
   ]
 }

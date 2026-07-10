@@ -16,7 +16,8 @@ cloudflare worker that replaces cal.com for `/coffee/` on aadhar.sh.
 |---|---|
 | public page + routing | Cloudflare Workers |
 | pending booking store | Cloudflare KV |
-| availability source | public/secret iCal URL (Google or iCloud), fetched + parsed each request, edge-cached 5 min |
+| availability source | public/secret iCal URL (Google/iCloud), parsed into an SWR snapshot in KV (`cal:busy`): 5-min freshness, 2s upstream deadline, stale fallback so a slow/down feed never gates the page. Booking fails closed if the calendar can't be vouched for |
+| GET page cache | edge-cached 30s (caches.default), invalidated on book/approve/decline; live `/slots` JSON stays uncached |
 | outbound email | Resend (free 3k/mo) |
 | approve/decline auth | HMAC-SHA256 signed URLs |
 | weekly cleanup | Workers Cron Triggers |
@@ -71,8 +72,12 @@ all times use IANA timezone names so DST is handled automatically.
 ### 6. deploy
 
 ```sh
-npx wrangler deploy
+npm run deploy   # = wrangler deploy -c wrangler.toml
 ```
+
+Use the npm script (or pass `-c wrangler.toml` yourself). A bare `wrangler deploy`
+from this dir inherits the repo-root `wrangler.jsonc` `build.command` (`node
+build.mjs`, which is only for the holding/ worker) and fails.
 
 then in the Cloudflare dashboard:
 - Workers → `cal-aadhar-sh` → Triggers → add custom domain `cal.aadhar.sh`

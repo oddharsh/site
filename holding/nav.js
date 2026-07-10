@@ -85,6 +85,7 @@
     { label: "garage · masonry", path: "/garage/masonry", hint: "Grid Lanes masonry photo grid (with fixed-square fallback)" },
     { label: "garage · pretext", path: "/garage/pretext", hint: "DOM-free text measurement" },
     { label: "garage · safari 27", path: "/garage/safari27", hint: "WWDC26 Safari 27 features, through this site's lens" },
+    { label: "garage · 5.6 sol", path: "/garage/gpt56", hint: "the performance pass outlined with 5.6 Sol" },
     { label: "garage · scroll", path: "/garage/scroll", hint: "XP scroll chrome" },
     { label: "garage · tooltips", path: "/garage/tooltips", hint: "tooltip experiments" },
     // Raycast deep-link easter eggs — fire built-in Raycast commands (every Raycast

@@ -129,6 +129,8 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 .lx-bots .who { color:oklch(55% 0 0); font-size:8pt; }
 .lx-badge.no { background:oklch(52% 0.17 27); }
 .lx-kindrow td { font-family:"Trebuchet MS",Verdana,sans-serif; font-size:8.6pt; font-weight:bold; color:oklch(38% 0.07 255); padding-top:9px; }
+.lx-mult { font-family:"Courier New",monospace; font-size:7.8pt; color:oklch(38% 0.09 150); background:oklch(94% 0.04 150); border:1px solid oklch(80% 0.06 150); border-radius:8px; padding:1px 7px; white-space:nowrap; }
+.lx-bots th.num, .lx-bots td.num { text-align:right; font-family:"Courier New",monospace; white-space:nowrap; padding-right:10px; }
 
 /* status bar */
 .lx-status { margin-top:9px; border-top:1px solid oklch(86% 0.03 260); padding-top:6px; display:flex; flex-wrap:wrap; gap:5px 14px; font-size:8.6pt; color:oklch(45% 0 0); }
@@ -374,11 +376,12 @@ export async function lensInspect(targetUrl, env) {
   if (isHtml && body) {
     const attrs = await lensExtractAttrs(body);
     const jsonld = attrs.jsonld.map(lensParseJsonld);
+    const fullText = lensText(body);
     out.anatomy = {
       rawHtml: body.length > 80000 ? body.slice(0, 80000) : body,
       rawBytes: body.length,
       headings: lensHeadings(body),
-      text: lensText(body).slice(0, 24000),
+      text: fullText.slice(0, 24000),
       imgTotal: attrs.imgTotal, imgNoAlt: attrs.imgNoAlt,
     };
     out.anatomy.wordCount = out.anatomy.text ? out.anatomy.text.split(/\s+/).filter(Boolean).length : 0;
@@ -391,20 +394,32 @@ export async function lensInspect(targetUrl, env) {
       relLinks: attrs.relLinks.map((l) => ({ ...l, href: lensAbs(l.href, finalUrl) })),
     };
     out.ai = { markdown: lensMarkdown(body, finalUrl) };
+    // context economics: the same page, priced per representation an agent
+    // could ingest. Full (unsliced) lengths — the slices above are UI caps.
+    out.cost = lensCost({ html: body.length, text: fullText.length, markdown: out.ai.markdown.length, headings: out.anatomy.headings });
   } else if (isTextual && body) {
     // non-HTML text (xml/json/txt/markdown): show it raw, no parsing.
     out.anatomy = { rawHtml: body.slice(0, 80000), rawBytes: body.length, text: lensText(body).slice(0, 24000), headings: [], imgTotal: 0, imgNoAlt: 0 };
     out.anatomy.wordCount = out.anatomy.text ? out.anatomy.text.split(/\s+/).filter(Boolean).length : 0;
+    out.cost = lensCost({ raw: body.length });
   }
 
-  // site-level discovery — probe the origin's well-known files in parallel.
+  // site-level discovery — probe the origin's well-known files + agent doors
+  // in parallel.
   const origin = (() => { try { return new URL(finalUrl).origin; } catch { return null; } })();
   if (origin) {
-    const [robots, sitemap, llms, llmsFull, aiTxt, secTxt, tdmrep] = await Promise.all([
+    const [robots, sitemap, llms, llmsFull, aiTxt, secTxt, tdmrep, agentCard, openapi, aiPlugin, apiCatalog, mcp, nlweb, mdNego] = await Promise.all([
       lensProbe(origin + "/robots.txt", env), lensProbe(origin + "/sitemap.xml", env),
       lensProbe(origin + "/llms.txt", env), lensProbe(origin + "/llms-full.txt", env),
       lensProbe(origin + "/ai.txt", env), lensProbe(origin + "/.well-known/security.txt", env),
       lensProbe(origin + "/.well-known/tdmrep.json", env),
+      lensProbe(origin + "/.well-known/agent-card.json", env),
+      lensProbe(origin + "/openapi.json", env),
+      lensProbe(origin + "/.well-known/ai-plugin.json", env),
+      lensProbe(origin + "/.well-known/api-catalog", env),
+      lensProbeMcp(origin, env),
+      lensProbeNlweb(origin, env),
+      isHtml ? lensProbeMdNego(finalUrl, env) : Promise.resolve(null),
     ]);
     const feeds = (out.structured?.relLinks || []).filter((l) =>
       /alternate/.test(l.rel) && /(rss|atom|feed|\+xml|\+json)/i.test((l.type || "") + " " + (l.href || "")));
@@ -420,16 +435,21 @@ export async function lensInspect(targetUrl, env) {
       finalUrl, status: res.status, headers, body, robots, tdmrep,
       metaRobots: out.structured?.meta?.robots || null,
     });
+    out.agent = lensAgentDoors({
+      llmsTxt: llms, mdNego, mcp, nlweb, agentCard, openapi, aiPlugin, apiCatalog,
+      webmcp: isHtml ? lensDetectWebmcp(body) : { found: false },
+    });
   }
   return out;
 }
 
 // honest, identified fetch — AadharshBot UA + (when the key is set) a Web Bot
 // Auth signature, same identity the rest of the site crawls under.
-export async function lensFetch(targetUrl, env, signal) {
+// `accept` override: the md-negotiation and MCP probes speak different Accepts.
+export async function lensFetch(targetUrl, env, signal, accept) {
   const headers = new Headers({
     "user-agent": BOT_UA,
-    "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.7",
+    "accept": accept || "text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.7",
     "accept-language": "en-US,en;q=0.9",
   });
   if (env.RN_SIGNING_KEY_JWK) {
@@ -747,4 +767,159 @@ export function lensTerms({ finalUrl, status, headers, body, robots, tdmrep, met
     reasons: reasons.length ? reasons.map((r) => r.why) : ["no machine terms found — any bot may read anything here, free"],
   };
   return t;
+}
+
+// ── context economics --------------------------------------------------------
+// What reading this page costs a machine, per representation it could ingest.
+// The semantic web asked publishers to structure content up front; LLMs won by
+// brute-force reading the human HTML instead — this is that choice, priced.
+//
+// chars-per-token calibrated 2026-07 against o200k_base on real pages
+// (stripe.com 584KB, wikipedia Semantic_Web, daringfireball, aadhar.sh;
+// size-weighted): raw HTML ≈ 2.9 (minified script-heavy markup tokenizes
+// brutally — stripe hit 2.5), stripped text ≈ 4.5, markdown ≈ 3.9.
+// Estimates, and the UI labels them ≈.
+const LENS_CPT = { html: 3.0, text: 4.5, markdown: 3.9 };
+// reference input prices, USD per million tokens, last checked 2026-07.
+const LENS_RATES = [
+  { model: "Claude Sonnet 4.5", usdPerMtok: 3.0 },
+  { model: "GPT-5", usdPerMtok: 1.25 },
+  { model: "Claude Haiku 4.5", usdPerMtok: 1.0 },
+];
+
+export function lensCost({ html, text, markdown, headings, raw }) {
+  const tiers = [];
+  const add = (key, label, note, chars, cpt) => {
+    if (chars > 0) tiers.push({ key, label, note, chars, tokens: Math.round(chars / cpt) });
+  };
+  add("html", "raw HTML", "what a naive scraper puts in context", html, LENS_CPT.html);
+  add("text", "stripped text", "tags dropped, structure lost", text, LENS_CPT.text);
+  add("markdown", "markdown", "the AI-view rendering below", markdown, LENS_CPT.markdown);
+  if (headings && headings.length) {
+    const outline = headings.map((h) => "#".repeat(h.level) + " " + h.text).join("\n");
+    add("outline", "outline", "headings only — what an efficient agent asks for first", outline.length, LENS_CPT.markdown);
+  }
+  add("raw", "raw body", "served as-is — already machine-shaped", raw, LENS_CPT.text);
+  return tiers.length ? { tokenizer: "o200k_base, calibrated estimate", checked: "2026-07", rates: LENS_RATES, tiers } : null;
+}
+
+// ── agent doors ---------------------------------------------------------------
+// Does this site publish surfaces for agents, or must they brute-force the
+// human page? The research question behind the whole machine-internet thread
+// (publish-for-agents vs drive-the-human-web), probed live per site.
+
+// /mcp — Streamable HTTP MCP servers answer a GET with SSE, a JSON-RPC error,
+// 401 + WWW-Authenticate (OAuth-protected), or a POST-only 4xx in JSON. A SPA
+// answering 200 text/html is a router fallback, not a server.
+export async function lensProbeMcp(origin, env) {
+  try {
+    const ctrl = new AbortController();
+    const to = setTimeout(() => ctrl.abort(), 5000);
+    let res;
+    try { res = await lensFetch(origin + "/mcp", env, ctrl.signal, "application/json, text/event-stream"); }
+    finally { clearTimeout(to); }
+    const ct = (res.headers.get("content-type") || "").split(";")[0].trim();
+    const www = res.headers.get("www-authenticate") || "";
+    const head = (await lensReadCapped(res, 2048)).text;
+    if (/^text\/event-stream$/i.test(ct)) return { verdict: "yes", detail: "SSE stream at /mcp" };
+    if (/jsonrpc/i.test(head)) return { verdict: "yes", detail: "JSON-RPC answer at /mcp (HTTP " + res.status + ")" };
+    if (res.status === 401 && www) return { verdict: "likely", detail: "401 + WWW-Authenticate at /mcp (OAuth-protected server)" };
+    if ([400, 405, 406].includes(res.status) && /json/i.test(ct)) return { verdict: "maybe", detail: "HTTP " + res.status + " " + ct + " at /mcp (POST-only server?)" };
+    return { verdict: "no", detail: res.status === 404 ? "no /mcp" : "HTTP " + res.status + (ct ? " " + ct : "") };
+  } catch (_e) { return { verdict: "unknown", detail: "probe failed" }; }
+}
+
+// /ask — NLWeb's REST convention. A real instance answers JSON (usually an
+// error asking for a query); we never send one, so nothing runs on their side.
+export async function lensProbeNlweb(origin, env) {
+  try {
+    const ctrl = new AbortController();
+    const to = setTimeout(() => ctrl.abort(), 5000);
+    let res;
+    try { res = await lensFetch(origin + "/ask", env, ctrl.signal, "application/json"); }
+    finally { clearTimeout(to); }
+    const ct = (res.headers.get("content-type") || "").split(";")[0].trim();
+    const head = (await lensReadCapped(res, 1024)).text.trim();
+    if (res.status === 404 || /html/i.test(ct)) return { verdict: "no", detail: res.status === 404 ? "no /ask" : "HTML at /ask (a page, not an endpoint)" };
+    if (/json/i.test(ct) || head.startsWith("{")) return { verdict: "maybe", detail: "JSON at /ask (HTTP " + res.status + ") — NLWeb-shaped" };
+    return { verdict: "no", detail: "HTTP " + res.status + (ct ? " " + ct : "") };
+  } catch (_e) { return { verdict: "unknown", detail: "probe failed" }; }
+}
+
+// Accept: text/markdown — Cloudflare-style content negotiation: the same URL,
+// re-served for machines. Supported iff the content-type actually flips.
+export async function lensProbeMdNego(pageUrl, env) {
+  try {
+    const ctrl = new AbortController();
+    const to = setTimeout(() => ctrl.abort(), 5000);
+    let res;
+    try { res = await lensFetch(pageUrl, env, ctrl.signal, "text/markdown"); }
+    finally { clearTimeout(to); }
+    const ct = (res.headers.get("content-type") || "").split(";")[0].trim();
+    try { await res.body?.cancel(); } catch (_e) {}
+    return { supported: /^text\/markdown$/i.test(ct), contentType: ct, status: res.status };
+  } catch (_e) { return { supported: false, note: "probe failed" }; }
+}
+
+// WebMCP is a page-level JS API (navigator.modelContext), so the marker lives
+// in the HTML we already fetched — no extra request.
+export function lensDetectWebmcp(html) {
+  const m = String(html || "").match(/navigator\.modelContext|modelContext\.(?:registerTool|provideContext)|window\.webmcp/i);
+  return m ? { found: true, marker: m[0] } : { found: false };
+}
+
+// a well-known JSON probe only counts if the body parses AND has the right
+// shape — SPAs answer 200 text/html for every path, and that must read as
+// absent, not present.
+function lensJsonDoor(probe, validate, label) {
+  if (!probe || !probe.ok) return { present: false, status: probe ? probe.status : null };
+  let j = null;
+  try { j = JSON.parse(probe.body); } catch (_e) { return { present: false, note: "answered, but not JSON (SPA fallback?)" }; }
+  if (!j || typeof j !== "object" || !validate(j)) return { present: false, note: "JSON, but not " + label + "-shaped" };
+  return { present: true, json: j };
+}
+
+export function lensAgentDoors({ llmsTxt, mdNego, mcp, nlweb, webmcp, agentCard, openapi, aiPlugin, apiCatalog }) {
+  const doors = {
+    mcp: mcp || { verdict: "unknown" },
+    nlweb: nlweb || { verdict: "unknown" },
+    webmcp: webmcp || { found: false },
+    agentCard: lensJsonDoor(agentCard, (j) => j.name && (j.url || j.skills || j.capabilities || j.protocolVersion), "agent-card"),
+    openapi: lensJsonDoor(openapi, (j) => j.openapi || j.swagger, "OpenAPI"),
+    aiPlugin: lensJsonDoor(aiPlugin, (j) => j.schema_version || j.name_for_model, "ai-plugin"),
+    apiCatalog: lensJsonDoor(apiCatalog, (j) => j.linkset, "linkset"),
+    mdNegotiation: mdNego || { supported: false, note: "not probed (non-HTML target)" },
+    llmsTxt: { present: !!(llmsTxt && llmsTxt.ok) },
+  };
+  if (doors.agentCard.present) doors.agentCard.detail = String(doors.agentCard.json.name || "").slice(0, 80);
+  if (doors.openapi.present) doors.openapi.detail = "OpenAPI " + String(doors.openapi.json.openapi || doors.openapi.json.swagger).slice(0, 20);
+  if (doors.aiPlugin.present) doors.aiPlugin.detail = String(doors.aiPlugin.json.name_for_model || "manifest").slice(0, 80);
+  if (doors.apiCatalog.present) doors.apiCatalog.detail = (doors.apiCatalog.json.linkset || []).length + " linkset entr" + ((doors.apiCatalog.json.linkset || []).length === 1 ? "y" : "ies");
+  for (const k of ["agentCard", "openapi", "aiPlugin", "apiCatalog"]) delete doors[k].json;
+
+  // the verdict: action surfaces beat readable ones beat nothing.
+  const action = [];
+  if (doors.mcp.verdict === "yes" || doors.mcp.verdict === "likely") action.push("an MCP endpoint");
+  if (doors.nlweb.verdict === "maybe") action.push("an NLWeb-shaped /ask");
+  if (doors.webmcp.found) action.push("in-page WebMCP tools");
+  if (doors.agentCard.present) action.push("an A2A agent card");
+  const readable = [];
+  if (doors.llmsTxt.present) readable.push("llms.txt");
+  if (doors.mdNegotiation.supported) readable.push("markdown negotiation");
+  if (doors.apiCatalog.present) readable.push("an RFC 9264 API catalog");
+  if (doors.openapi.present) readable.push("OpenAPI");
+  if (doors.aiPlugin.present) readable.push("a legacy ai-plugin manifest");
+  let verdict, note;
+  if (action.length) {
+    verdict = "agent-native";
+    note = "This site publishes action surfaces: " + action.join(", ") + (readable.length ? " — plus " + readable.join(", ") + "." : ".");
+  } else if (readable.length) {
+    verdict = "agent-readable";
+    note = "This site publishes for machine readers (" + readable.join(", ") + ") but exposes no action surface.";
+  } else {
+    verdict = "human-only";
+    note = "No agent door found. An agent here must brute-force the human page — the AI view prices exactly that.";
+  }
+  doors.strategy = { verdict, note, action, readable };
+  return doors;
 }

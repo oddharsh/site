@@ -98,6 +98,7 @@ export function lunaPage({
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#2D78BD">
+<link rel="preload" as="style" href="/luna.css">
 <title>${escHtml(documentTitle)}</title>${metaDescription}${metaRobots}
 <link rel="icon" href="/favicon.ico">
 ${head || ""}<style>

@@ -102,6 +102,31 @@
       "ct": "application/javascript; charset=utf-8"
     },
     {
+      "path": "/nav.js",
+      "status": 200,
+      "ct": "text/javascript"
+    },
+    {
+      "path": "/nav.src.js",
+      "status": 200,
+      "ct": "text/javascript"
+    },
+    {
+      "path": "/notepad.src.js",
+      "status": 200,
+      "ct": "text/javascript"
+    },
+    {
+      "path": "/lens.src.js",
+      "status": 200,
+      "ct": "text/javascript"
+    },
+    {
+      "path": "/luna.src.css",
+      "status": 200,
+      "ct": "text/css"
+    },
+    {
       "path": "/lens/fetch?url=https://example.com",
       "status": 200,
       "ct": "application/json; charset=utf-8"
@@ -110,6 +135,21 @@
       "path": "/lens/shot?url=https://example.com",
       "status": 200,
       "ct": "image/png"
+    },
+    {
+      "path": "/llms-full.txt",
+      "status": 200,
+      "ct": "text/plain; charset=utf-8"
+    },
+    {
+      "path": "/ledger",
+      "status": 200,
+      "ct": "text/html; charset=utf-8"
+    },
+    {
+      "path": "/ledger.json",
+      "status": 200,
+      "ct": "application/json; charset=utf-8"
     },
     {
       "path": "/writing",

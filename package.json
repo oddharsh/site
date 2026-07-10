@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "build": "node build.mjs",
-    "deploy": "node build.mjs && wrangler deploy -c .build/wrangler.jsonc"
+    "dev": "wrangler dev -c wrangler.dev.jsonc",
+    "deploy": "wrangler deploy",
+    "perf-budget": "node perf-budget.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.25.0"

@@ -4,12 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "wrangler dev -c wrangler.toml",
     "test": "vitest run",
     "test:watch": "vitest",
-    "deploy": "wrangler deploy",
-    "tail": "wrangler tail",
-    "secret:set": "wrangler secret put"
+    "deploy": "wrangler deploy -c wrangler.toml",
+    "tail": "wrangler tail -c wrangler.toml",
+    "secret:set": "wrangler secret put -c wrangler.toml"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.16.15",

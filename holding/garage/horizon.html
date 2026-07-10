@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#2D78BD">
+<link rel="preload" as="style" href="/luna.css">
 <title>aadhar.sh/garage/horizon</title>
 <meta name="description" content="Test-driving upcoming web-platform features (text-box-trim, contrast-color, interestfor, anchor positioning) before any of them touch the live aadhar.sh homepage.">
 <link rel="canonical" href="https://aadhar.sh/garage/horizon">
@@ -2976,7 +2977,11 @@ myButton.onclick = async () =&gt; {
       <p class="replaces">
         On the site: live already. The homepage and garage pages prerender internal links
         (eagerness &quot;moderate&quot;, minus the live <code>/around</code> + <code>/whoareyou</code>
-        crawlers), which is most of why navigation here feels instant.
+        crawlers), which is most of why navigation here feels instant. Cloudflare sells the managed
+        version as <a href="https://developers.cloudflare.com/speed/optimization/content/speed-brain/" rel="external">Speed&nbsp;Brain</a>,
+        which injects a hosted rule set from the edge via a <code>Speculation-Rules</code> response
+        header; I hand-write the inline block instead, to keep eagerness where I want it and to skip
+        the two live crawlers that an opinionated edge config wouldn&apos;t know to leave alone.
       </p>
       <p class="unsupported">No Speculation Rules here; links just load on click.</p>
     </section>
@@ -2990,15 +2995,52 @@ myButton.onclick = async () =&gt; {
       <p class="note">
         Use a file you&apos;ve already downloaded (or a shipped static dictionary) as the
         Brotli/Zstandard <em>dictionary</em> for later fetches, so an updated asset arrives as a
-        tiny <strong>delta</strong> against the old copy instead of the whole thing. Shipped in
-        Chrome&nbsp;130; it negotiates entirely through <code>Accept-Encoding: dcb/dcz</code> +
-        <code>Use-As-Dictionary</code> headers, so there&apos;s no chip above.
+        tiny <strong>delta</strong> against the old copy instead of the whole thing. The transport
+        left draft and is now <a href="https://www.rfc-editor.org/rfc/rfc9842.html" rel="external">RFC&nbsp;9842</a>:
+        it negotiates entirely through <code>Accept-Encoding: dcb/dcz</code> +
+        <code>Use-As-Dictionary</code> / <code>Available-Dictionary</code> headers
+        (Chrome/Edge&nbsp;130+), so there&apos;s no chip above.
       </p>
       <p class="replaces">
         On the site: marginal, honestly. The homepage is ~22&nbsp;KB brotli and
         <code>nav.js</code> is small, so the delta savings stay tiny in absolute terms. It&apos;d earn
-        its keep if those grew. Cloudflare&apos;s support is in open beta (Apr&nbsp;2026); the natural
-        use is shipping a <code>nav.js</code> update as a diff against the cached copy.
+        its keep if those grew. Cloudflare shipped its edge half as
+        <a href="https://blog.cloudflare.com/shared-dictionaries/" rel="external">Shared&nbsp;Dictionaries</a>,
+        still <strong>passthrough open beta</strong> on all plans (Apr&nbsp;30&nbsp;2026): my origin
+        owns the dictionary lifecycle and the edge just forwards the headers and <code>dcb/dcz</code>
+        bytes untouched, varying the cache per delta. Cloudflare pitched it as compression &quot;for the
+        agentic web,&quot; which is the angle that actually fits here: the machine surfaces
+        (<a href="/llms-full.txt" rel="external">/llms-full.txt</a>, the JSON endpoints a returning
+        crawler refetches) are where a delta would earn more than a human loading the homepage once.
+      </p>
+    </section>
+
+    <!-- ───────────────────── stale-while-revalidate ───────────────────── -->
+    <section class="demo" data-cap="stale-revalidate">
+      <h2>
+        <span>stale-while-revalidate <span class="mono">async at the edge</span></span>
+        <span class="stat cross">RFC&nbsp;5861 &middot; Cloudflare async 2026</span>
+      </h2>
+      <p class="note">
+        A <code>Cache-Control</code> directive (<a href="https://www.rfc-editor.org/rfc/rfc5861" rel="external">RFC&nbsp;5861</a>):
+        keep serving the <em>expired</em> copy for a grace window while a fresh one is fetched in the
+        background, so nobody waits on the revalidation. Cloudflare made its handling
+        <strong>fully asynchronous</strong> in Feb&nbsp;2026: the first hit after expiry used to block
+        on the origin (a <code>REVALIDATED</code>/<code>EXPIRED</code> status); now it returns the
+        stale copy instantly with an <code>UPDATING</code> status and revalidates behind the scenes.
+        It rides on the <a href="https://developers.cloudflare.com/changelog/post/2026-05-04-pingora-powers-cache/" rel="external">new Pingora-based cache proxy</a>
+        (Rust, shipped May&nbsp;2026), which also cut per-request overhead and tightened RFC
+        compliance. Header-level, so there&apos;s no chip above.
+      </p>
+      <p class="replaces">
+        On the site: I already hand-roll exactly this pattern in KV. The photo manifest carries a
+        <code>manifest:images:fresh</code> freshness sentinel next to its value, and
+        <code>cal/</code>&apos;s <code>fetchBusySWR</code> keeps a last-good calendar snapshot so a slow
+        ICS feed never gates the booking page. The now-playing tracks are the cleanest candidate to
+        hand back to the platform: set <code>stale-while-revalidate</code> on that cached JSON and the
+        edge serves the last-good playlist instantly while it re-scrapes Spotify in the background,
+        retiring the sentinel bookkeeping. The homepage stays <code>no-store</code> (it opts out by
+        design), so this lives entirely in the manifest/JSON layer underneath it.
       </p>
     </section>
 

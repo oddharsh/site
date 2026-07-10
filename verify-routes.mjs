@@ -18,6 +18,11 @@ import { readFileSync, writeFileSync } from "node:fs";
 
 const base = (process.argv[2] || "https://aadhar.sh").replace(/\/$/, "");
 
+// Build-output assertions (minified shells + luna.css + the .src twins) only hold
+// against a real deploy. Local `wrangler dev` serves the readable holding/ tree
+// (unminified, no .src twins), so those checks are gated to non-localhost bases.
+const isProd = !/^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])/.test(base);
+
 // Real identifiers that exist in the repo today (see writing/posts.json + images/).
 const SLUG = "in-flux";
 const THUMB = "L1000069_3-400.avif";   // legacy thumb shape (now a 301 into /i/)
@@ -58,9 +63,19 @@ const ROUTES = [
   { path: "/lens", status: 200, ct: "text/html", marker: "The Other Web" },
   { path: "/lens/", status: 200, ct: "text/html" },
   { path: "/lens.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "replaceState" },
-  { path: "/luna.css", status: 200, ct: "text/css", marker: "axp-desktop" },
+  { path: "/luna.css", status: 200, ct: "text/css", marker: "axp-desktop", maxBytes: isProd ? 45000 : undefined },
   // the retired SW's unregister stub: must keep serving 200 for a year+
   { path: "/sw.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "unregister" },
+  // build-output oracle (prod only — dev serves the readable holding/ tree): a
+  // deploy that skipped build.mjs ships the 78KB readable nav.js with no banner
+  // and 404s every .src twin. These are the tripwire for that exact bypass.
+  ...(isProd ? [
+    { path: "/nav.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", maxBytes: 50000 },
+    { path: "/nav.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "axp-histnav" },
+    { path: "/notepad.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "np-window" },
+    { path: "/lens.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "replaceState" },
+    { path: "/luna.src.css", status: 200, ct: "text/css", marker: "axp-desktop" },
+  ] : []),
   { path: "/lens/fetch?url=https://example.com", status: 200, ct: "application/json" },
   { path: "/lens/shot?url=https://example.com", status: [200, 503], flaky: true },
   // 200 text/plain when the x402 gate is unconfigured; 402 json once X402_PAY_TO is set
@@ -100,6 +115,7 @@ const ROUTES = [
   { path: "/garage/workers", status: 200, ct: "text/html", marker: "run_worker_first" },
   { path: "/garage/wire", status: 200, ct: "text/html", marker: "x-edge-cache" },
   { path: "/garage/blueprint", status: 200, ct: "text/html", marker: "run_worker_first" },
+  { path: "/garage/gpt56", status: 200, ct: "text/html", marker: "5.6 Sol" },
   { path: "/garage/enc/z-jl90.jpg", status: 200, ct: "image/jpeg" },
   { path: "/lwe/utf8", status: 200, ct: "text/html" },
 ];
@@ -118,16 +134,19 @@ async function probe(r) {
   try {
     const res = await fetch(url, { redirect: "manual", headers: { accept: "*/*" } });
     const ct = res.headers.get("content-type") || "";
-    let body = "";
-    // only read the body when we need a marker and it's a text response
-    if (r.marker && /text|json|javascript|markdown|svg/.test(ct)) {
-      body = (await res.text()).slice(0, 200000);
+    let body = "", bytes = null;
+    // read the body when we need a marker or a size assertion on a text response
+    if ((r.marker || r.maxBytes) && /text|json|javascript|markdown|svg|css/.test(ct)) {
+      const full = await res.text();
+      bytes = Buffer.byteLength(full);
+      body = full.slice(0, 200000);
     }
     const okStatus = statusOk(r.status, res.status);
     const okCt = !r.ct || (Array.isArray(r.ct) ? r.ct.some(c => ct.startsWith(c)) : ct.startsWith(r.ct));
     const okMarker = !r.marker || body.includes(r.marker);
-    const pass = okStatus && okCt && okMarker;
-    return { path: r.path, status: res.status, ct, pass, flaky: !!r.flaky, okStatus, okCt, okMarker, want: r.status, wantCt: r.ct, marker: r.marker };
+    const okBytes = !r.maxBytes || (bytes !== null && bytes <= r.maxBytes);
+    const pass = okStatus && okCt && okMarker && okBytes;
+    return { path: r.path, status: res.status, ct, pass, flaky: !!r.flaky, okStatus, okCt, okMarker, okBytes, bytes, want: r.status, wantCt: r.ct, marker: r.marker, maxBytes: r.maxBytes };
   } catch (e) {
     return { path: r.path, status: 0, ct: "", pass: false, flaky: !!r.flaky, error: String(e && e.message || e), want: r.status };
   }
@@ -155,6 +174,7 @@ async function main() {
       r.okStatus === false ? `status ${r.status}!=${JSON.stringify(r.want)}` : "",
       r.okCt === false ? `ct "${r.ct}"!^"${r.wantCt}"` : "",
       r.okMarker === false ? `missing marker "${r.marker}"` : "",
+      r.okBytes === false ? `size ${r.bytes}B > ${r.maxBytes}B (unminified? build bypassed?)` : "",
       r.error ? `err ${r.error}` : "",
     ].filter(Boolean).join(", ");
     console.log(`${tag.padEnd(5)} ${String(r.status).padEnd(4)} ${r.path}${why ? "   <- " + why : ""}`);

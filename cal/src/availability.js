@@ -9,19 +9,58 @@
 // for one or two events near the shift. Worth knowing about; not worth
 // solving until it bites.
 
-// fetch the ICS feed and return an array of {start, end} busy intervals
-// in unix-ms. caches per Worker isolate for the request lifetime.
-export async function fetchBusy(icalUrl, opts = {}) {
-  if (!icalUrl) return [];
-  const r = await fetch(icalUrl, {
-    cf: { cacheTtl: 300, cacheEverything: true },  // 5min edge cache
-  });
-  if (!r.ok) {
-    console.warn(`ICS fetch failed: ${r.status}`);
-    return [];
+// ── calendar snapshot (stale-while-revalidate) ──────────────────────────────
+// The ICS upstream can be slow or briefly down, and the old fetchBusy() gated
+// the whole page on it AND returned [] on failure — which silently made EVERY
+// slot look free during an outage, a double-booking risk. fetchBusySWR keeps the
+// last-good PARSED busy[] in KV with a timestamp, caps the upstream fetch with a
+// hard deadline so a slow origin can't gate the page, and falls back to the
+// snapshot when the fetch fails. It returns freshness metadata so the booking
+// path can fail CLOSED — never confirm a slot against a calendar we can't vouch
+// for. The GET page, by contrast, renders happily from a stale snapshot.
+export const BUSY_KEY = "cal:busy";            // KV: { busy:[{start,end}], ts }
+export const CAL_FRESH_MS = 5 * 60_000;        // snapshot is "fresh" under 5 min
+export const CAL_DEADLINE_MS = 2_000;          // hard cap on a blocking ICS fetch
+export const BOOK_MAX_STALE_MS = 15 * 60_000;  // booking refuses a calendar older than this
+
+// returns { busy, ageMs, ok, source }. ok:false only when there is neither a live
+// fetch nor any stored snapshot — that is the signal for the booking path to
+// refuse. source is one of fresh | live | stale | none (surfaced in Server-Timing).
+export async function fetchBusySWR(env, ctx) {
+  const kv = env.BOOKINGS;
+  const now = Date.now();
+  let snap = null;
+  try { snap = kv ? await kv.get(BUSY_KEY, "json") : null; } catch {}
+  const age = snap && Number.isFinite(snap.ts) ? now - snap.ts : Infinity;
+
+  // fresh snapshot → serve it, skip the upstream entirely (no per-request writes)
+  if (snap && age < CAL_FRESH_MS) return { busy: snap.busy || [], ageMs: age, ok: true, source: "fresh" };
+
+  // stale or missing → refresh under a deadline
+  try {
+    const fresh = await refreshBusy(env);
+    return { busy: fresh.busy, ageMs: 0, ok: true, source: "live" };
+  } catch {
+    // upstream slow/down → serve the last-good snapshot if we have one
+    if (snap) return { busy: snap.busy || [], ageMs: age, ok: true, source: "stale" };
+    return { busy: [], ageMs: Infinity, ok: false, source: "none" };
   }
-  const text = await r.text();
-  return parseICS(text);
+}
+
+// fetch + parse the ICS under a deadline and persist the snapshot. throws on any
+// failure (no ICAL_URL, non-2xx, timeout) so fetchBusySWR can fall back.
+async function refreshBusy(env) {
+  const url = env.ICAL_URL;
+  if (!url) throw new Error("no ICAL_URL");
+  const r = await fetch(url, {
+    cf: { cacheTtl: 300, cacheEverything: true },  // 5min edge cache in front of KV
+    signal: AbortSignal.timeout(CAL_DEADLINE_MS),
+  });
+  if (!r.ok) throw new Error(`ICS ${r.status}`);
+  const busy = parseICS(await r.text());
+  const snap = { busy, ts: Date.now() };
+  if (env.BOOKINGS) { try { await env.BOOKINGS.put(BUSY_KEY, JSON.stringify(snap)); } catch {} }
+  return snap;
 }
 
 function parseICS(text) {

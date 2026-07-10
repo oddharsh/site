@@ -17,7 +17,8 @@
 //     events are pushed to the host's real calendar via the .ics invite
 //     they accept in their own inbox.
 
-import { generateSlots, fetchBusy }       from "./availability.js";
+import { generateSlots, fetchBusySWR,
+         BOOK_MAX_STALE_MS }               from "./availability.js";
 import { createBooking, getBooking,
          setStatus, expireOld, getRecent } from "./booking.js";
 import { sendApprovalRequest, sendInvite,
@@ -60,18 +61,44 @@ export default {
   }
 };
 
-async function route_index(req, env) {
+async function route_index(req, env, ctx) {
   // initial page is server-rendered with the next ~14 days of slots embedded
   // so the page works without JS for screen readers / scrapers / no-JS humans.
   // the form posts to /book; if JS is on, the page replaces the listing with
   // a live-updating slot view that re-fetches /slots after a booking.
-  const slots = await listOpenSlots(env);
-  return new Response(bookingPage(slots, env), { headers: htmlHeaders() });
+  //
+  // Cached 30s at the edge (caches.default). Safe because the live /slots JSON
+  // is uncached AND /book re-validates the slot, so a briefly stale SSR listing
+  // can never confirm a taken slot. Invalidated on book/approve/decline.
+  const cache = caches.default;
+  const key = calIndexKey(req, env);
+  const hit = await cache.match(key);
+  if (hit) { const r = new Response(hit.body, hit); r.headers.set("x-cal-cache", "hit"); return r; }
+
+  const timings = {};
+  const t0 = Date.now();
+  const { slots, cal } = await listOpenSlots(env, ctx, timings);
+  const rs = Date.now();
+  const html = bookingPage(slots, env);
+  timings.render = Date.now() - rs;
+  timings.total = Date.now() - t0;
+
+  const headers = {
+    ...htmlHeaders(),
+    // edge-cache 30s (caches.default keys on s-maxage), browser always
+    // revalidates (max-age=0) so a returning visitor never sees a stale slot list.
+    "cache-control": "public, max-age=0, s-maxage=30",
+    "server-timing": fmtServerTiming(timings),
+    "x-cal-source": cal.source,   // fresh | live | stale | none
+  };
+  const cached = new Response(html, { headers });
+  if (ctx) ctx.waitUntil(cache.put(key, cached.clone()));
+  return new Response(html, { headers: { ...headers, "x-cal-cache": "miss" } });
 }
 
-async function route_slots(req, env) {
-  // used by client-side JS to refresh after a booking, or to filter by week.
-  const slots = await listOpenSlots(env);
+async function route_slots(req, env, ctx) {
+  // live path — never cached, so the JS view always reflects the latest slots.
+  const { slots } = await listOpenSlots(env, ctx);
   return Response.json({ slots });
 }
 
@@ -101,8 +128,14 @@ async function route_book(req, env, ctx) {
                         { status: 400, headers: htmlHeaders() });
   }
 
-  // verify the slot is still open RIGHT NOW (race condition window)
-  const slots = await listOpenSlots(env);
+  // verify the slot is still open RIGHT NOW (race window) against a calendar we
+  // can vouch for. fail CLOSED: if the ICS upstream is down and the last-good
+  // snapshot is too old, refuse rather than book over a real event we can't see.
+  const { slots, cal } = await listOpenSlots(env, ctx);
+  if (!cal.ok || cal.ageMs > BOOK_MAX_STALE_MS) {
+    return new Response(errorPage("can't confirm the calendar right now — grab a slot again in a minute.", env),
+                        { status: 503, headers: { ...htmlHeaders(), "retry-after": "60" } });
+  }
   const slot = slots.find(s => s.start === start);
   if (!slot) {
     return new Response(errorPage("that slot was taken or expired. pick another.", env),
@@ -130,6 +163,7 @@ async function route_book(req, env, ctx) {
   const declineUrl = `${base}/decline?t=${booking.id}&sig=${declineSig}`;
 
   ctx.waitUntil(sendApprovalRequest(env, booking, approveUrl, declineUrl));
+  ctx.waitUntil(caches.default.delete(calIndexKey(req, env)));  // slot now held: drop the stale SSR page
 
   return new Response(successPage(env), { headers: htmlHeaders() });
 }
@@ -152,6 +186,7 @@ async function route_approve(req, env, ctx, url) {
   }
   await setStatus(env, id, "confirmed");
   ctx.waitUntil(sendInvite(env, booking));
+  ctx.waitUntil(caches.default.delete(calIndexKey(req, env)));  // pending slot resolved
   return new Response(confirmedPage(booking, env, /*already=*/false),
                       { headers: htmlHeaders() });
 }
@@ -174,22 +209,48 @@ async function route_decline(req, env, ctx, url) {
   }
   await setStatus(env, id, "declined");
   ctx.waitUntil(sendDecline(env, booking));
+  ctx.waitUntil(caches.default.delete(calIndexKey(req, env)));  // slot freed again
   return new Response(declinedPage(booking, env, /*already=*/false),
                       { headers: htmlHeaders() });
 }
 
-async function listOpenSlots(env) {
-  // pending bookings hold slots optimistically — they're reserved until the
-  // host approves or declines. cron job sweeps stale pending after TTL.
-  const [busy, pending] = await Promise.all([
-    fetchBusy(env.ICAL_URL),
-    getRecent(env, "pending"),
+// returns { slots, cal } where cal is the SWR calendar metadata (busy, ageMs,
+// ok, source). Callers that only need the listing destructure { slots };
+// route_book also reads { cal } to fail closed on an unvouchable calendar.
+// timings (optional) collects per-step durations for a Server-Timing header.
+async function listOpenSlots(env, ctx, timings = null) {
+  const mark = (name, p) => {
+    if (!timings) return p;
+    const s = Date.now();
+    return p.then(v => { timings[name] = Date.now() - s; return v; },
+                  e => { timings[name] = Date.now() - s; throw e; });
+  };
+  // pending bookings hold slots optimistically — reserved until the host
+  // approves or declines; the cron sweep reclaims stale pending after TTL.
+  const [cal, pending] = await Promise.all([
+    mark("ics", fetchBusySWR(env, ctx)),
+    mark("pending", getRecent(env, "pending")),
   ]);
   const pendingIntervals = pending.map(b => ({ start: b.start, end: b.end }));
   // busy → conflict-only (your real calendar); pending coffee bookings →
   // conflict + count toward DAILY/WEEKLY_LIMIT. keeping them separate is what
   // stops a packed calendar from zeroing out availability.
-  return generateSlots(env, busy, pendingIntervals);
+  const t = Date.now();
+  const slots = generateSlots(env, cal.busy, pendingIntervals);
+  if (timings) timings.slots = Date.now() - t;
+  return { slots, cal };
+}
+
+// one edge-cache entry per (origin, basePath): aadhar.sh/coffee and
+// cal.aadhar.sh render different form actions, so they must not share a cached
+// body; query strings and trailing slashes normalize away.
+function calIndexKey(req, env) {
+  const url = new URL(req.url);
+  return new Request(`${url.origin}${env.BASE_PATH || ""}/__cal_index`, { method: "GET" });
+}
+
+function fmtServerTiming(t) {
+  return Object.entries(t).map(([k, v]) => `${k};dur=${v}`).join(", ");
 }
 
 function htmlHeaders() {
