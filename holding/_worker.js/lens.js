@@ -870,9 +870,13 @@ export function lensDetectWebmcp(html) {
 
 // a well-known JSON probe only counts if the body parses AND has the right
 // shape — SPAs answer 200 text/html for every path, and that must read as
-// absent, not present.
+// absent, not present. And a probe that never answered reads as UNKNOWN,
+// not absent — same honesty rule as the robots.txt tier.
 function lensJsonDoor(probe, validate, label) {
-  if (!probe || !probe.ok) return { present: false, status: probe ? probe.status : null };
+  if (!probe || !probe.ok) {
+    const unknown = !probe || !!probe.error || (probe.status && probe.status >= 500);
+    return { present: false, status: probe ? probe.status : null, unknown };
+  }
   let j = null;
   try { j = JSON.parse(probe.body); } catch (_e) { return { present: false, note: "answered, but not JSON (SPA fallback?)" }; }
   if (!j || typeof j !== "object" || !validate(j)) return { present: false, note: "JSON, but not " + label + "-shaped" };
@@ -889,7 +893,10 @@ export function lensAgentDoors({ llmsTxt, mdNego, mcp, nlweb, webmcp, agentCard,
     aiPlugin: lensJsonDoor(aiPlugin, (j) => j.schema_version || j.name_for_model, "ai-plugin"),
     apiCatalog: lensJsonDoor(apiCatalog, (j) => j.linkset, "linkset"),
     mdNegotiation: mdNego || { supported: false, note: "not probed (non-HTML target)" },
-    llmsTxt: { present: !!(llmsTxt && llmsTxt.ok) },
+    llmsTxt: {
+      present: !!(llmsTxt && llmsTxt.ok),
+      unknown: !!(llmsTxt && !llmsTxt.ok && llmsTxt.error),
+    },
   };
   if (doors.agentCard.present) doors.agentCard.detail = String(doors.agentCard.json.name || "").slice(0, 80);
   if (doors.openapi.present) doors.openapi.detail = "OpenAPI " + String(doors.openapi.json.openapi || doors.openapi.json.swagger).slice(0, 20);
@@ -909,6 +916,16 @@ export function lensAgentDoors({ llmsTxt, mdNego, mcp, nlweb, webmcp, agentCard,
   if (doors.apiCatalog.present) readable.push("an RFC 9264 API catalog");
   if (doors.openapi.present) readable.push("OpenAPI");
   if (doors.aiPlugin.present) readable.push("a legacy ai-plugin manifest");
+  // probes that never answered can't vote — say so rather than undercount.
+  const unknowns = [];
+  if (doors.llmsTxt.unknown) unknowns.push("llms.txt");
+  if (doors.mcp.verdict === "unknown") unknowns.push("/mcp");
+  if (doors.nlweb.verdict === "unknown") unknowns.push("/ask");
+  if (doors.mdNegotiation.note === "probe failed") unknowns.push("markdown negotiation");
+  for (const [k, label] of [["agentCard", "agent card"], ["openapi", "OpenAPI"], ["aiPlugin", "ai-plugin"], ["apiCatalog", "api-catalog"]]) {
+    if (doors[k].unknown) unknowns.push(label);
+  }
+
   let verdict, note;
   if (action.length) {
     verdict = "agent-native";
@@ -916,10 +933,13 @@ export function lensAgentDoors({ llmsTxt, mdNego, mcp, nlweb, webmcp, agentCard,
   } else if (readable.length) {
     verdict = "agent-readable";
     note = "This site publishes for machine readers (" + readable.join(", ") + ") but exposes no action surface.";
+  } else if (unknowns.length) {
+    verdict = "human-only";
+    note = "No agent door answered, but " + unknowns.length + " probe" + (unknowns.length > 1 ? "s" : "") + " (" + unknowns.join(", ") + ") never got a response — this verdict may undercount.";
   } else {
     verdict = "human-only";
     note = "No agent door found. An agent here must brute-force the human page — the AI view prices exactly that.";
   }
-  doors.strategy = { verdict, note, action, readable };
+  doors.strategy = { verdict, note, action, readable, unknowns };
   return doors;
 }
