@@ -1048,7 +1048,7 @@ placeholder
     <section class="demo ifor-demo" data-cap="interestfor">
       <h2>
         <span>interestfor <span class="mono">+ anchor positioning</span></span>
-        <span class="stat contested">Origin trial &middot; Safari opposes</span>
+        <span class="stat contested">Chrome 142 &middot; Safari opposes &middot; FF no</span>
       </h2>
       <p class="note">
         The declarative dream: <code>interestfor="id"</code> shows a popover on
@@ -1084,8 +1084,8 @@ placeholder
         On the site: this comes closest to natively replacing the ~70-line
         cursor-tooltip layer: it handles hover/focus detection,
         the show/hide delay, and accessibility on its own. <strong>But</strong> Safari
-        <em>opposes</em> the current design and it&apos;s Chrome origin-trial
-        only, so it is <em>not</em> a migration path while the site cares about
+        <em>opposes</em> the current design and it&apos;s Chrome-only (shipped
+        default-on in Chrome&nbsp;142, Firefox hasn&apos;t), so it is <em>not</em> a migration path while the site cares about
         Safari (WebKit standards-position:
         <a href="https://github.com/WebKit/standards-positions/issues/464" rel="external">oppose, #464</a>).
         And it anchors to the <em>element</em>, not the cursor,
@@ -1106,9 +1106,9 @@ pointerout   -&gt; hidePopover()
       </details>
       <p class="unsupported">
         Your browser doesn&apos;t support <code>interestfor</code>, the
-        links above just navigate on click and show no popover. To try it in
-        Chrome: enable <code>chrome://flags#interest-target-attribute</code>
-        (or join the origin trial).
+        links above just navigate on click and show no popover. It ships
+        default-on in Chrome/Edge&nbsp;142+, so open this page there to see it
+        (Safari opposes, Firefox hasn&apos;t shipped).
       </p>
     </section>
 
@@ -1220,7 +1220,7 @@ pointerout   -&gt; hidePopover()
     <section class="demo" data-cap="popover-hint">
       <h2>
         <span>popover=<span class="mono">hint</span></span>
-        <span class="stat chrome">Chrome 133 · Safari/FF positive</span>
+        <span class="stat chrome">Chrome 133 &middot; FF 149 &middot; Safari no</span>
       </h2>
       <p class="note">
         A third popover <em>type</em>, sitting between <code>auto</code> and
@@ -1273,7 +1273,7 @@ pointerout   -&gt; hidePopover()
     <section class="demo" data-cap="field-sizing">
       <h2>
         <span>field-sizing <span class="mono">: content</span></span>
-        <span class="stat cross">Chrome &middot; Safari &middot; Firefox 152</span>
+        <span class="stat cross">Chrome 123 &middot; Safari 26.2 &middot; FF 152</span>
       </h2>
       <p class="note">
         Lets a form control size itself to its <em>content</em> instead of a
@@ -1306,7 +1306,7 @@ pointerout   -&gt; hidePopover()
         message box on the booking form can drop its resize script
         entirely and just say <code>field-sizing: content; max-height: 9em</code>
         on the sunken XP textarea, with the layout reflowing for free. Now
-        shipped in Chrome&nbsp;123 and Safari&nbsp;26.2 (Firefox not yet), so it can graduate to the live booking form,
+        shipped in Chrome&nbsp;123, Safari&nbsp;26.2, and Firefox&nbsp;152 (June&nbsp;2026), so it is now Baseline and can graduate to the live booking form,
         not just the garage. Pair it with a static <code>rows</code> attribute
         as the fallback height and there's nothing to feature-detect.
       </p>
@@ -1321,7 +1321,7 @@ pointerout   -&gt; hidePopover()
     <section class="demo" data-cap="view-transitions">
       <h2>
         <span>View Transitions <span class="mono">/ document.startViewTransition()</span></span>
-        <span class="stat chrome">Chrome &middot; Safari &middot; no Firefox</span>
+        <span class="stat cross">Chrome &middot; Safari &middot; FF 144</span>
       </h2>
       <p class="note">
         Wrap a DOM mutation in <code>document.startViewTransition(cb)</code> and
@@ -1331,7 +1331,8 @@ pointerout   -&gt; hidePopover()
         Same-document is shipped in Chrome&nbsp;111 and Safari&nbsp;18; the
         cross-document <code>@view-transition&nbsp;{ navigation: auto }</code>
         variant (Chrome&nbsp;126, Safari&nbsp;18.2) animates whole navigations.
-        Firefox ships neither. Tap the toggle: the panel below has its
+        Firefox shipped same-document in&nbsp;144 (Oct&nbsp;2025) but not the cross-document
+        variant yet. Tap the toggle: the panel below has its
         own <code>view-transition-name</code>, so only it animates:
       </p>
       <div class="vt-stage">
@@ -1404,7 +1405,7 @@ pointerout   -&gt; hidePopover()
     <section class="demo" data-cap="base-select">
       <h2>
         <span>appearance: base-select <span class="mono">/ customizable &lt;select&gt;</span></span>
-        <span class="stat cross">Chrome &middot; Safari 27</span>
+        <span class="stat chrome">Chrome 135 &middot; Safari 27 beta &middot; FF flag</span>
       </h2>
       <p class="note">
         For two decades the <code>&lt;select&gt;</code> popup has been a sealed
@@ -1458,7 +1459,7 @@ pointerout   -&gt; hidePopover()
     <section class="demo" data-cap="corner-shape">
       <h2>
         <span>corner-shape <span class="mono">+ superellipse()</span></span>
-        <span class="stat chrome">Chrome · Safari TP/flag</span>
+        <span class="stat chrome">Chrome 139 &middot; Safari positive &middot; FF no</span>
       </h2>
       <p class="note">
         A second axis for <code>border-radius</code>. The radius sets <em>where</em>
@@ -1568,7 +1569,7 @@ pointerout   -&gt; hidePopover()
     <section class="demo" data-cap="scheduler-yield">
       <h2>
         <span>scheduler.yield() <span class="mono">/ main-thread responsiveness</span></span>
-        <span class="stat chrome">Chrome-only · FF positive</span>
+        <span class="stat chrome">Chrome 129 &middot; FF 142 &middot; no Safari</span>
       </h2>
       <p class="note">
         <span class="wk non">WebKit: unstated</span>
@@ -1577,7 +1578,7 @@ pointerout   -&gt; hidePopover()
         resumes your loop, and crucially resumes at the <em>front</em> of
         the queue, not the back like <code>setTimeout(0)</code>. So you stay
         responsive without losing your turn to unrelated work. It&apos;s shipped
-        in Chrome (no flag), so the demo below is live: the concept, then a
+        in Chrome and Firefox&nbsp;142 (no flag), so the demo below is live: the concept, then a
         real measured run, then the code.
       </p>
 
@@ -2274,7 +2275,7 @@ myButton.onclick = async () =&gt; {
     <section class="demo" data-cap="css-scope">
       <h2>
         <span><code>@scope</code> <span class="mono">scoped styles + donut</span></span>
-        <span class="stat cross">Chrome 118 &middot; Safari 17.4</span>
+        <span class="stat cross">Chrome 118 &middot; Safari 17.4 &middot; FF 146</span>
       </h2>
       <p class="note">
         Style a subtree without a naming convention, and stop the styles at an inner
@@ -2330,7 +2331,7 @@ myButton.onclick = async () =&gt; {
     <section class="demo" data-cap="hidden-until-found">
       <h2>
         <span><code>hidden=until-found</code> <span class="mono">+ scroll-to-text</span></span>
-        <span class="stat cross">Chrome 102 &middot; Safari 26</span>
+        <span class="stat cross">Chrome 102 &middot; Safari 26 &middot; FF 148</span>
       </h2>
       <p class="note">
         Content that is collapsed <em>but still findable</em>: <code>hidden="until-found"</code>
@@ -2793,11 +2794,110 @@ myButton.onclick = async () =&gt; {
       </p>
     </section>
 
+    <!-- ───────────────────── focusgroup ───────────────────── -->
+    <section class="demo" data-cap="focusgroup">
+      <h2>
+        <span>focusgroup <span class="mono">attribute</span></span>
+        <span class="stat chrome">Chrome 150 &middot; Safari/FF no</span>
+      </h2>
+      <p class="note">
+        Declarative arrow-key navigation for a set of controls: put
+        <code>focusgroup</code> on a container and the browser gives its children a
+        single tab stop, arrow-key movement between them, and last-focused memory,
+        the roving-<code>tabindex</code> pattern every toolbar and menu hand-rolls in
+        JS. Shipped default-on in Chrome&nbsp;150; no Safari or Firefox yet, where it
+        degrades to each control being its own tab stop. Tab into the toolbar below,
+        then use the arrow keys (in Chrome&nbsp;150):
+      </p>
+      <div focusgroup role="toolbar" aria-label="focusgroup demo" style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+        <button class="xp-button" type="button">Cut</button>
+        <button class="xp-button" type="button">Copy</button>
+        <button class="xp-button" type="button">Paste</button>
+        <button class="xp-button" type="button">Delete</button>
+      </div>
+      <p class="replaces">
+        On the site: aimed straight at the XP shell in <code>nav.js</code>. The taskbar
+        app-buttons, the Start menu, and the row of draggable desktop icons are exactly
+        the composite widgets <code>focusgroup</code> is for, and their keyboard handling
+        is hand-written today. It would hand the arrow-key + single-tab-stop wiring to
+        the browser. Single-engine, so it stays a garage experiment until a second one
+        ships it.
+      </p>
+    </section>
+
+    <!-- ───────────────────── background-clip: border-area ───────────────────── -->
+    <section class="demo" data-cap="background-clip-border-area">
+      <h2>
+        <span>background-clip <span class="mono">: border-area</span></span>
+        <span class="stat chrome">Chrome 150 &middot; Safari/FF no</span>
+      </h2>
+      <p class="note">
+        Paint a background into the border box <em>itself</em>, so a gradient border is
+        one declaration instead of the old <code>border-image</code> slice dance or a
+        stacked-background hack: give the element a gradient background, a transparent
+        border, and <code>background-clip: border-area</code>, and the gradient fills
+        only the border stroke. Chrome&nbsp;150, default-on; not in Safari or Firefox
+        yet. The frame below is a transparent border filled by a clipped gradient:
+      </p>
+      <div style="margin-top:8px;padding:12px 14px;border:6px solid transparent;border-radius:8px;background:linear-gradient(120deg, oklch(55% 0.20 264), oklch(72% 0.15 190));background-clip:border-area;font:bold 10pt Tahoma, sans-serif;color:oklch(30% 0.03 264)">background-clip: border-area</div>
+      <p class="replaces">
+        On the site: the whole Luna look is 3D bevels and blue-gradient title bars,
+        currently built from stacked <code>box-shadow</code>s and hand-mixed OKLCH border
+        colours. A gradient-framed window or a two-tone bevel collapses to one background
+        plus one clip, no <code>border-image</code>. The existing bevels already render
+        fine, so this is a simplification rather than a new capability.
+      </p>
+      <p class="unsupported">Your browser doesn&apos;t support <code>background-clip: border-area</code>; the gradient above fills the whole box instead of just the border.</p>
+    </section>
+
+    <!-- ───────────────────── text-fit ───────────────────── -->
+    <section class="demo" data-cap="text-fit">
+      <h2>
+        <span>text-fit <span class="mono">CSS property</span></span>
+        <span class="stat chrome">Chrome 150 &middot; Safari/FF no</span>
+      </h2>
+      <p class="note">
+        Scale a text node&apos;s font size to exactly fill the width of its box, in pure
+        CSS, with no JS measuring the string and setting a size per element.
+        Chrome&nbsp;150, default-on; not in Safari or Firefox yet, where the text just
+        keeps its declared size.
+      </p>
+      <p class="replaces">
+        On the site: the XP title bars and folder labels truncate long names with an
+        ellipsis today. <code>text-fit</code> could instead shrink an over-long window
+        title to fit its bar, the way a real Luna caption never clipped. Minor and
+        single-engine, so it parks here for now.
+      </p>
+      <p class="unsupported">Your browser doesn&apos;t support <code>text-fit</code> yet; nothing here changes size.</p>
+    </section>
+
+    <!-- ───────────────────── CSS random() ───────────────────── -->
+    <section class="demo" data-cap="css-random">
+      <h2>
+        <span>CSS <span class="mono">random()</span></span>
+        <span class="stat trial">Safari 26.2 &middot; Chrome flag &middot; FF no</span>
+      </h2>
+      <p class="note">
+        A random value straight in CSS: <code>random(25%, 100%)</code> resolves to a
+        number in that range at computed-value time, with an element-scoped keyword so
+        each element can draw its own. Shipped in <strong>Safari&nbsp;26.2</strong>;
+        behind the experimental flag in Chrome (~148+) and nothing in Firefox, so it
+        reads as a Safari-first CSS Values&nbsp;5 feature for now.
+      </p>
+      <p class="replaces">
+        On the site: pure decoration, filed next to WebGPU under &quot;because we can.&quot;
+        A hand-strewn desktop-icon jitter, per-photo grain seeds, or a scatter of Bliss
+        clouds could pick their own offsets with no JS random loop. Nothing here needs
+        it, which is exactly why it belongs on the horizon.
+      </p>
+      <p class="unsupported">Your browser doesn&apos;t support <code>random()</code> yet, so a fixed fallback value is used.</p>
+    </section>
+
     <!-- ───────────────────── Element.moveBefore() ───────────────────── -->
     <section class="demo" data-cap="move-before">
       <h2>
         <span>Element.moveBefore() <span class="mono">state-preserving move</span></span>
-        <span class="stat chrome">Chrome 133 &middot; FF/Safari positive</span>
+        <span class="stat chrome">Chrome 133 &middot; FF 144 &middot; Safari positive</span>
       </h2>
       <p class="note">
         Reparenting a node with <code>appendChild</code> tears its state down: iframes reload,
@@ -3331,6 +3431,9 @@ myButton.onclick = async () =&gt; {
     "sw-static-routing": function () { return (typeof InstallEvent !== "undefined" && "addRoutes" in InstallEvent.prototype); },
     "local-fonts": function () { return ("queryLocalFonts" in window); },
     "webgpu": function () { return ("gpu" in navigator); },
+    "background-clip-border-area": function () { return CSS.supports("background-clip: border-area"); },
+    "text-fit": function () { return (CSS.supports("text-fit: scale-inline") || ("textFit" in document.documentElement.style)); },
+    "css-random": function () { return CSS.supports("width: random(1px, 2px)"); },
     "speculation-rules": function () { return (typeof HTMLScriptElement !== "undefined" && HTMLScriptElement.supports && HTMLScriptElement.supports("speculationrules")); },
   };
   var label = {
@@ -3379,6 +3482,9 @@ myButton.onclick = async () =&gt; {
     "sw-static-routing": "SW routing",
     "local-fonts": "local fonts",
     "webgpu": "WebGPU",
+    "background-clip-border-area": "border-area",
+    "text-fit": "text-fit",
+    "css-random": "random()",
     "speculation-rules": "speculation",
   };
   var state = {};
