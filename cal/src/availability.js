@@ -103,9 +103,12 @@ function parseICS(text) {
 }
 
 // parse "20260512T143000Z" or "20260512T143000" or "20260512" → unix-ms.
-// for floating times without TZ, we treat them as UTC (best we can without
-// expanding VTIMEZONE). this is fine for personal calendars where events
-// are usually anchored to a real tz or explicitly UTC.
+// a DTSTART;TZID=America/New_York:...  local time is resolved through Intl to
+// the zone's offset at that instant (Google/iCloud "secret ICS" feeds emit
+// exactly this shape for timed events). a bare floating time with no TZID and
+// no Z is still treated as UTC — we can't know its zone, and that's the rare
+// case for personal calendars. Slot generation (atLocalHour/tzOffsetMinutes)
+// uses the same offset math, so a real 2:30pm event blocks the 2:30pm slot.
 function parseICSDate(value, params = "") {
   // YYYYMMDD all-day events — treat as full UTC day
   if (/^\d{8}$/.test(value)) {
@@ -117,9 +120,27 @@ function parseICSDate(value, params = "") {
   if (!m) return NaN;
   const [, Y, M, D, h, min, s, Z] = m;
   const ms = Date.UTC(+Y, +M - 1, +D, +h, +min, +s);
-  // if Z (UTC) or no TZ, return as-is. if TZID was in params, we'd need
-  // VTIMEZONE expansion — skip for now, accept ~1h drift on DST edges.
-  return ms;
+  if (Z) return ms;                          // explicit UTC — already correct
+  // local time: shift by the TZID zone's offset at this instant. the wall clock
+  // was read as if UTC, so adding the offset (positive = west of UTC) lands the
+  // real instant: 14:30 in a UTC-4 zone becomes 18:30Z. NaN (floating or an
+  // unknown TZID we can't resolve) falls back to the old treat-as-UTC behavior.
+  const tzid = (/;TZID=([^:;,]+)/.exec(params) || [])[1];
+  const offMin = icsZoneOffsetMinutes(ms, tzid);
+  return Number.isFinite(offMin) ? ms + offMin * 60000 : ms;
+}
+
+// offset (minutes, positive = west of UTC) of an IANA zone at a given instant.
+// mirrors tzOffsetMinutes but tolerates a missing/invalid TZID (Windows-style
+// zone names, junk) by returning NaN so the caller keeps the raw UTC value.
+function icsZoneOffsetMinutes(ms, tzid) {
+  if (!tzid) return NaN;
+  try {
+    const d = new Date(ms);
+    const utc   = d.toLocaleString("en-US", { timeZone: "UTC",  hour12: false });
+    const local = d.toLocaleString("en-US", { timeZone: tzid,   hour12: false });
+    return (Date.parse(utc) - Date.parse(local)) / 60000;
+  } catch { return NaN; }
 }
 
 // generate bookable slots from now+min_notice through max_lookahead.

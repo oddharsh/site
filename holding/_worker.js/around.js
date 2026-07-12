@@ -76,11 +76,13 @@ export async function handleAroundJson(request, env, ctx) {
 
 const AROUND_KEY = "around:report";
 
-// cron entry: crawl the neighborhood and persist the snapshot. An empty or
-// failed crawl stores nothing, so the last good snapshot keeps serving.
+// cron entry: crawl the neighborhood and persist the snapshot. A crawl where
+// EVERY neighbor errored stores nothing, so the last good snapshot keeps serving.
+// (results.length is always NEIGHBORS.length — one row per neighbor, success or
+// error — so the old length>0 guard never fired; check for a non-error row.)
 export async function cronAround(env) {
   const report = await runAround(env);
-  if (report && Array.isArray(report.results) && report.results.length > 0 && env.RN_KV) {
+  if (report && Array.isArray(report.results) && report.results.some(r => !r.error) && env.RN_KV) {
     await env.RN_KV.put(AROUND_KEY, JSON.stringify(report));
   }
 }
@@ -92,7 +94,7 @@ async function readAroundReport(request, env) {
   if (env.RN_BUST_SECRET && url.searchParams.get("bust") === env.RN_BUST_SECRET) {
     await deleteSWRKV(env, AROUND_KEY);   // clears the legacy :fresh sentinel too
     const report = await runAround(env);
-    if (report && report.results && report.results.length && env.RN_KV) {
+    if (report && report.results && report.results.some(r => !r.error) && env.RN_KV) {
       await env.RN_KV.put(AROUND_KEY, JSON.stringify(report));
     }
     return report;

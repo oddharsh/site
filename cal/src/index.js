@@ -158,7 +158,10 @@ async function route_book(req, env, ctx) {
   // sign approve/decline links so only someone with the secret can act on them
   const approveSig = await sign(`${booking.id}|approve`, env.SIGNING_SECRET);
   const declineSig = await sign(`${booking.id}|decline`, env.SIGNING_SECRET);
-  const base = `https://${new URL(req.url).host}`;
+  // include BASE_PATH: a booking made at aadhar.sh/coffee must email links under
+  // /coffee/* (the worker's only zone route there) — bare /approve|/decline fall
+  // through to the main site and 404, so the host can't act on the request.
+  const base = `https://${new URL(req.url).host}${env.BASE_PATH || ""}`;
   const approveUrl = `${base}/approve?t=${booking.id}&sig=${approveSig}`;
   const declineUrl = `${base}/decline?t=${booking.id}&sig=${declineSig}`;
 
@@ -225,18 +228,21 @@ async function listOpenSlots(env, ctx, timings = null) {
     return p.then(v => { timings[name] = Date.now() - s; return v; },
                   e => { timings[name] = Date.now() - s; throw e; });
   };
-  // pending bookings hold slots optimistically — reserved until the host
-  // approves or declines; the cron sweep reclaims stale pending after TTL.
-  const [cal, pending] = await Promise.all([
+  // pending bookings hold slots optimistically (reserved until the host approves
+  // or declines; the cron sweep reclaims stale pending after TTL). confirmed
+  // bookings hold their slot for real — both must be seen or an approved coffee's
+  // slot reopens and the caps undercount.
+  const [cal, pending, confirmed] = await Promise.all([
     mark("ics", fetchBusySWR(env, ctx)),
     mark("pending", getRecent(env, "pending")),
+    mark("confirmed", getRecent(env, "confirmed")),
   ]);
-  const pendingIntervals = pending.map(b => ({ start: b.start, end: b.end }));
-  // busy → conflict-only (your real calendar); pending coffee bookings →
-  // conflict + count toward DAILY/WEEKLY_LIMIT. keeping them separate is what
-  // stops a packed calendar from zeroing out availability.
+  const held = [...pending, ...confirmed].map(b => ({ start: b.start, end: b.end }));
+  // busy → conflict-only (your real calendar); coffee bookings (pending +
+  // confirmed) → conflict + count toward DAILY/WEEKLY_LIMIT. keeping them
+  // separate is what stops a packed calendar from zeroing out availability.
   const t = Date.now();
-  const slots = generateSlots(env, cal.busy, pendingIntervals);
+  const slots = generateSlots(env, cal.busy, held);
   if (timings) timings.slots = Date.now() - t;
   return { slots, cal };
 }

@@ -30,8 +30,8 @@ const DESTS = [
   ["twitter",     "https://twitter.com/oddhash",                        "profile"],
   ["instagram",   "https://instagram.com/aadharsh.hif",                 "profile"],
   ["curius",      "https://curius.app/aadharsh-pannirselvam",           "profile"],
-  ["beli",        "https://beliapp.co/app/aadharsh",                    "profile"],
-  ["spotify",     "https://open.spotify.com/user/31rvzo7ybgmz6f26cbrrmxfvu3le", "profile"],
+  ["beli",        "https://beliapp.com/users/aadharsh",                 "profile"],
+  ["spotify",     "https://open.spotify.com/user/aadharsh2010",         "profile"],
 ];
 
 async function resolve(cmd, env, ctx, request) {
