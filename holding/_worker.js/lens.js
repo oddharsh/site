@@ -2,6 +2,7 @@
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
 import { BOT_UA, SIG_AGENT, signRequestForWebBotAuth } from "./lib/botauth.js";
 import { cachedRender } from "./lib/cache.js";
+import { CANONICAL_HOST } from "./lib/const.js";
 import { lunaPage } from "./lib/chrome.js";
 import { jsonResponse } from "./lib/http.js";
 
@@ -347,19 +348,20 @@ export async function lensInspect(targetUrl, env) {
   const started = Date.now();
   const ctrl = new AbortController();
   const to = setTimeout(() => ctrl.abort(), 8000);
-  let res;
-  try { res = await lensFetch(targetUrl, env, ctrl.signal); }
-  finally { clearTimeout(to); }
+  let res, body = "", truncated = false, ct = "", isTextual = false, isHtml = false;
+  try {
+    res = await lensFetch(targetUrl, env, ctrl.signal);
+    ct = res.headers.get("content-type") || "";
+    isTextual = ct === "" || /text|html|xml|json|javascript|\+xml|\+json/i.test(ct);
+    isHtml = /html/i.test(ct);
+    // read the body while the abort timer is still armed. clearing it before the
+    // read (as this used to) left a slow-drip response unbounded in wall time.
+    if (isTextual) { const r = await lensReadCapped(res, 2 * 1024 * 1024); body = r.text; truncated = r.truncated; }
+  } finally { clearTimeout(to); }
 
   const finalUrl = res.url || targetUrl;
-  const ct = res.headers.get("content-type") || "";
   const headers = {};
   for (const [k, val] of res.headers) headers[k] = val;
-  const isTextual = ct === "" || /text|html|xml|json|javascript|\+xml|\+json/i.test(ct);
-  const isHtml = /html/i.test(ct) || (ct === "" && false);
-
-  let body = "", truncated = false;
-  if (isTextual) { const r = await lensReadCapped(res, 2 * 1024 * 1024); body = r.text; truncated = r.truncated; }
 
   const out = {
     ok: true, url: targetUrl, finalUrl, redirected: finalUrl !== targetUrl,
@@ -406,7 +408,13 @@ export async function lensInspect(targetUrl, env) {
 
   // site-level discovery — probe the origin's well-known files + agent doors
   // in parallel.
-  const origin = (() => { try { return new URL(finalUrl).origin; } catch { return null; } })();
+  // re-validate the FINAL url before probing its origin: the input allowlist only
+  // vetted the url the user typed, but redirect:"follow" could have landed us on a
+  // private/link-local host. a blocked final host skips discovery entirely.
+  const origin = (() => {
+    try { const u = new URL(finalUrl); return lensHostBlocked(u.hostname.toLowerCase()) ? null : u.origin; }
+    catch { return null; }
+  })();
   if (origin) {
     const [robots, sitemap, llms, llmsFull, aiTxt, secTxt, tdmrep, agentCard, openapi, aiPlugin, apiCatalog, mcp, nlweb, mdNego] = await Promise.all([
       lensProbe(origin + "/robots.txt", env), lensProbe(origin + "/sitemap.xml", env),
@@ -460,6 +468,17 @@ export async function lensFetch(targetUrl, env, signal, accept) {
       headers.set("Signature", `sig1=:${sig.b64}:`);
     } catch (_e) { /* recipient just can't verify */ }
   }
+  // Fetching our own hostname over the network loops back through this same
+  // worker, and Cloudflare kills the loop with a 522 — which is why the featured
+  // "Try: aadhar.sh" example (and every self-probe: robots.txt, llms.txt, …) used
+  // to render the site as down. Serve our own paths straight from the ASSETS
+  // binding instead: same bytes a crawler would get, no network hop, no loop.
+  try {
+    const u = new URL(targetUrl);
+    if (env.ASSETS && u.hostname.toLowerCase() === CANONICAL_HOST) {
+      return env.ASSETS.fetch(new Request(u.toString(), { method: "GET", headers }));
+    }
+  } catch (_e) { /* fall through to a normal fetch */ }
   return fetch(targetUrl, { method: "GET", headers, redirect: "follow", signal, cf: { cacheTtl: 0 } });
 }
 
@@ -926,13 +945,18 @@ export function lensAgentDoors({ llmsTxt, mdNego, mcp, nlweb, webmcp, agentCard,
     if (doors[k].unknown) unknowns.push(label);
   }
 
+  // a timed-out probe can hide an action/readable door too, not just flip a
+  // human-only verdict — so hedge on every verdict where unknowns remain.
+  const hedge = unknowns.length
+    ? " (" + unknowns.length + " probe" + (unknowns.length > 1 ? "s" : "") + " never answered, so this may undercount: " + unknowns.join(", ") + ")"
+    : "";
   let verdict, note;
   if (action.length) {
     verdict = "agent-native";
-    note = "This site publishes action surfaces: " + action.join(", ") + (readable.length ? " — plus " + readable.join(", ") + "." : ".");
+    note = "This site publishes action surfaces: " + action.join(", ") + (readable.length ? " — plus " + readable.join(", ") + "." : ".") + hedge;
   } else if (readable.length) {
     verdict = "agent-readable";
-    note = "This site publishes for machine readers (" + readable.join(", ") + ") but exposes no action surface.";
+    note = "This site publishes for machine readers (" + readable.join(", ") + ") but exposes no action surface." + hedge;
   } else if (unknowns.length) {
     verdict = "human-only";
     note = "No agent door answered, but " + unknowns.length + " probe" + (unknowns.length > 1 ? "s" : "") + " (" + unknowns.join(", ") + ") never got a response — this verdict may undercount.";

@@ -140,7 +140,7 @@ async function queryEvents(d) {
     `SELECT e.id, e.name, e.start_at, e.location, e.url, e.user_status, e.cover_url,
             SUM(CASE WHEN ea.is_host = 0 THEN 1 ELSE 0 END) AS attendee_count,
             SUM(CASE WHEN ea.is_host = 1 THEN 1 ELSE 0 END) AS host_count,
-            (SELECT GROUP_CONCAT(COALESCE(uc.label, 'unnamed-' || substr(ec.user_key,1,4)), ', ')
+            (SELECT GROUP_CONCAT(COALESCE(uc.label, 'unnamed-' || substr(ec.user_key,1,4)), char(31))
                FROM event_contributions ec
                LEFT JOIN user_cookies uc ON uc.user_key = ec.user_key
               WHERE ec.event_id = e.id) AS contributors
@@ -356,7 +356,9 @@ function shell(title, currentPath, bodyHtml) {
 
 // ── pages ────────────────────────────────────────────────────────────────────
 function eventCard(e, isPast) {
-  const contributors = (e.contributors || "").split(", ").filter(Boolean);
+  // split on the GROUP_CONCAT delimiter (char 31 / unit separator), which can't
+  // occur in a label — a plain ", " split shredded any label containing a comma.
+  const contributors = (e.contributors || "").split("\x1f").filter(Boolean);
   // first-class = a contributor actually RSVP'd / hosts (user_status 'going');
   // everything else was synced from browsing a feed — demote it (dimmed + a
   // "browsed" badge) so the real events stand out.
@@ -1230,6 +1232,27 @@ async function coverProxyUrl(rawUrl, env) {
   return secret ? `${base}&s=${await signCoverUrl(rawUrl, secret)}` : base;
 }
 
+// reject non-public hosts so /cover can't be turned into an SSRF probe of the
+// internal network / cloud-metadata endpoint. mirrors the /lens host filter, and
+// runs regardless of signature — the cover fetch degrades to an unsigned plain
+// fetch when Transformations are off, so a signature check alone isn't the gate.
+function coverHostBlocked(host) {
+  const h = host.replace(/^\[|\]$/g, "");
+  if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".local") || h.endsWith(".internal") || h.endsWith(".onion")) return true;
+  if (h === "::1" || h.startsWith("fc") || h.startsWith("fd") || h.startsWith("fe80:")) return true;
+  const m = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (m) {
+    const a = +m[1], b = +m[2];
+    if (a === 0 || a === 10 || a === 127) return true;
+    if (a === 169 && b === 254) return true;        // link-local incl. 169.254.169.254 metadata
+    if (a === 192 && b === 168) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT
+    if (a >= 224) return true;                        // multicast / reserved
+  }
+  return false;
+}
+
 // ── router ────────────────────────────────────────────────────────────────────
 // GET /serendipity/cover?u=<encoded image url>[&s=<hmac>] — same-origin cover proxy.
 // Resizes via Cloudflare Image Transformations (cf.image) so the hover tooltip
@@ -1248,6 +1271,9 @@ async function handleCover(request, env, ctx) {
   let target;
   try { target = new URL(raw); } catch { return new Response("bad u", { status: 400 }); }
   if (target.protocol !== "https:") return new Response("https only", { status: 400 });
+  if (target.port && target.port !== "443") return new Response("https only", { status: 400 });
+  // SSRF guard, before any fetch and independent of the signature below.
+  if (coverHostBlocked(target.hostname.toLowerCase())) return new Response("blocked host", { status: 400 });
   const secret = coverSecret(env);
   if (secret && !(await verifyCoverUrl(raw, url.searchParams.get("s"), secret))) {
     return new Response("bad or missing signature", { status: 403 });
@@ -1834,6 +1860,7 @@ export async function handleSerendipity(request, env, ctx) {
   if ((request.method === "GET" || request.method === "HEAD") && path === `${PREFIX}/cover`) return handleCover(request, env, ctx);
 
   let res;
+  try {
   if (request.method === "POST" && path === `${PREFIX}/cookies`) res = await handleCookies(request, env, d, uid);
   else if (request.method === "POST" && path === `${PREFIX}/add-event`) res = await handleAddEvent(request, env, d, uid);
   else if (path === PREFIX) {
@@ -1859,6 +1886,11 @@ export async function handleSerendipity(request, env, ctx) {
   else if (path === `${PREFIX}/mcp-info`) res = renderMcpInfo(path);
   else if (path.startsWith(`${PREFIX}/event/`)) res = await renderEvent(d, decodeURIComponent(path.slice(`${PREFIX}/event/`.length)), path);
   else res = html(404, shell("Not found", path, `<h1 class="page">404</h1><p class="lede">No such page. <a href="${PREFIX}">Back to events</a>.</p>`));
+  } catch (e) {
+    // a bound-but-unmigrated / erroring D1 would otherwise throw a bare, unstyled
+    // 500 — degrade to the same shell()-styled error the missing-binding case uses.
+    res = html(500, shell("Error", path, `<h1 class="page">Something broke</h1><p class="lede">The event pool hit a database error. Try again in a moment.</p>`));
+  }
 
   if (setCookie) {
     const h = new Headers(res.headers);

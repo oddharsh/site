@@ -166,18 +166,25 @@
     if (!files || !("showPopover" in HTMLElement.prototype)) return;   // no-JS / old → follow links
 
     files.addEventListener("click", function (e) {
+      // let a modified / non-primary click through so the real /writing/<slug>
+      // permalink still opens (Cmd/Ctrl-click new tab, middle-click, etc.).
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
       var a = e.target.closest("a[data-note]"); if (!a) return;
       var pop = D.getElementById("note-" + a.dataset.note); if (!pop) return;
       e.preventDefault();
       openNote(pop);
     });
 
-    // manual popovers don't close on Esc — wire it to close the topmost note
+    // manual popovers don't close on Esc, so wire it to close the topmost note.
+    // capture phase, so we see an open menu BEFORE its own bubble-phase Esc
+    // handler removes it: if a .np-drop menu is open, that Escape belongs to the
+    // menu, so leave the note alone (a second Escape then closes the note).
     D.addEventListener("keydown", function (e) {
       if (e.key !== "Escape") return;
+      if (D.querySelector(".np-drop")) return;
       var open = D.querySelectorAll(".np-note:popover-open");
       if (open.length) { e.preventDefault(); open[open.length - 1].hidePopover(); }
-    });
+    }, true);
   }
   function openNote(pop) {
     var ta = pop.querySelector(".np-text");

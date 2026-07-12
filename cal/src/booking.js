@@ -3,10 +3,14 @@
 // keys:
 //   booking:<id>        full booking payload (JSON)
 //   index:pending       comma-separated ids of pending bookings (for sweep + listing)
+//   index:confirmed     comma-separated ids of confirmed bookings (still hold their
+//                       slot + count toward the caps, so availability must see them)
 //
-// the index key lets us list all pending bookings without scanning all keys
-// (KV doesn't support cheap key scans). when we mark something confirmed
-// or declined, we remove it from the pending index.
+// the index keys let us list bookings without scanning all keys (KV doesn't
+// support cheap key scans). a booking moves pending → confirmed (kept in the
+// confirmed index) or pending → declined/expired (indexed nowhere: it holds no
+// slot). dropping a confirmed booking from every index was a double-book bug —
+// its slot reopened and the daily/weekly caps stopped counting it.
 
 import { v4 as uuid } from "./uuid.js";
 
@@ -18,7 +22,7 @@ export async function createBooking(env, fields) {
   await env.BOOKINGS.put(`booking:${id}`, JSON.stringify(booking), {
     expirationTtl: TTL_BOOKING_DAYS * 86400,
   });
-  await addToPendingIndex(env, id);
+  await addToIndex(env, "pending", id);
   return booking;
 }
 
@@ -35,21 +39,23 @@ export async function setStatus(env, id, status) {
   await env.BOOKINGS.put(`booking:${id}`, JSON.stringify(b), {
     expirationTtl: TTL_BOOKING_DAYS * 86400,
   });
-  if (status !== "pending") await removeFromPendingIndex(env, id);
+  // a confirmed coffee moves from the pending index to the confirmed index so
+  // availability still sees it (holds its slot, counts toward the caps). anything
+  // else (declined/expired) holds nothing and leaves both indexes.
+  if (status !== "pending") await removeFromIndex(env, "pending", id);
+  if (status === "confirmed") await addToIndex(env, "confirmed", id);
+  else await removeFromIndex(env, "confirmed", id);
   return b;
 }
 
-// list pending or confirmed bookings within the last N days. used for
-// availability (we don't want to offer a slot another pending booking has
-// claimed) and for the weekly sweep.
+// list pending or confirmed bookings. used for availability (a slot another
+// booking already holds must not be offered, and confirmed coffees count toward
+// the caps) and for the weekly sweep.
 export async function getRecent(env, status = "pending") {
-  const ids = await readIndex(env, "pending");
-  if (status === "pending") {
-    return (await Promise.all(ids.map(id => getBooking(env, id))))
-      .filter(b => b && b.status === "pending");
-  }
-  // fallback: read all + filter (slow but rare)
-  return [];
+  const name = status === "confirmed" ? "confirmed" : "pending";
+  const ids = await readIndex(env, name);
+  return (await Promise.all(ids.map(id => getBooking(env, id))))
+    .filter(b => b && b.status === status);
 }
 
 export async function expireOld(env) {
@@ -61,7 +67,7 @@ export async function expireOld(env) {
     const b = await getBooking(env, id);
     if (!b) {
       // already gone from KV (maybe TTL'd) — clean up the index
-      await removeFromPendingIndex(env, id);
+      await removeFromIndex(env, "pending", id);
       continue;
     }
     if (b.status === "pending" && b.created < cutoff) {
@@ -70,9 +76,14 @@ export async function expireOld(env) {
       await env.BOOKINGS.put(`booking:${id}`, JSON.stringify(b), {
         expirationTtl: TTL_BOOKING_DAYS * 86400,
       });
-      await removeFromPendingIndex(env, id);
+      await removeFromIndex(env, "pending", id);
       expired++;
     }
+  }
+  // keep the confirmed index bounded: drop ids whose booking has TTL'd away.
+  const confirmedIds = await readIndex(env, "confirmed");
+  for (const id of confirmedIds) {
+    if (!(await getBooking(env, id))) await removeFromIndex(env, "confirmed", id);
   }
   console.log(`sweep: expired ${expired} pending bookings`);
 }
@@ -91,14 +102,14 @@ async function readIndex(env, name) {
 async function writeIndex(env, name, ids) {
   await env.BOOKINGS.put(`index:${name}`, ids.join(","));
 }
-async function addToPendingIndex(env, id) {
-  const ids = await readIndex(env, "pending");
+async function addToIndex(env, name, id) {
+  const ids = await readIndex(env, name);
   if (!ids.includes(id)) {
     ids.push(id);
-    await writeIndex(env, "pending", ids);
+    await writeIndex(env, name, ids);
   }
 }
-async function removeFromPendingIndex(env, id) {
-  const ids = await readIndex(env, "pending");
-  await writeIndex(env, "pending", ids.filter(x => x !== id));
+async function removeFromIndex(env, name, id) {
+  const ids = await readIndex(env, name);
+  await writeIndex(env, name, ids.filter(x => x !== id));
 }

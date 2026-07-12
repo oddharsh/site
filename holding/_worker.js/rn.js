@@ -88,8 +88,10 @@ export async function handleRnTracks(request, env, ctx) {
 
   const cacheKey = `tracks:${playlistId}`;
 
-  // optional bust — drop both the value and its freshness sentinel
-  if (env.RN_BUST_SECRET && url.searchParams.get("bust") === env.RN_BUST_SECRET) {
+  // optional bust — drop both the value and its freshness sentinel.
+  // constant-time compare, same as the admin/set gate (a plain === leaks the
+  // secret's length + prefix through timing).
+  if (env.RN_BUST_SECRET && timingSafeEqual(url.searchParams.get("bust") || "", env.RN_BUST_SECRET)) {
     await deleteSWRKV(env, cacheKey);
   }
 
