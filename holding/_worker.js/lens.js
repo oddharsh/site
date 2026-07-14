@@ -26,8 +26,11 @@ import { jsonResponse } from "./lib/http.js";
 // instead of re-assembling it. keyed on the bare path: the ?url= share param is
 // read client-side by lens.js, the shell bytes are identical for every query.
 // edge TTL = the s-maxage below (300s); 200-only put inside cachedRender.
+// Keep a route-local shell key: the production runtime may not expose
+// CF_VERSION_METADATA, so a deploy can otherwise leave an older shell in the
+// edge cache while the separately served lens.js has already changed.
 export function handleLens(request, env, ctx) {
-  return cachedRender(request, ctx, () => renderLensShell(), "/lens", env);
+  return cachedRender(request, ctx, () => renderLensShell(), "/lens-shell-v3", env);
 }
 
 function renderLensShell() {
@@ -78,6 +81,12 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 .lx-body { flex:1 1 auto; overflow:auto; padding:10px 11px; }
 .lx-empty { color:oklch(55% 0 0); font-size:9.5pt; padding:18px 6px; text-align:center; }
 .lx-spin { color:oklch(42.61% 0.2353 263.74); font-size:9.5pt; padding:18px 6px; text-align:center; }
+.lx-idle-lens { max-width:620px; margin:22px auto; padding:16px 18px; border:1px solid oklch(78% 0.04 250); border-radius:4px; background:linear-gradient(180deg,#fff,oklch(97% 0.008 250)); color:oklch(31% 0.02 255); }
+.lx-idle-kicker { color:oklch(46% 0.13 252); font:9pt Tahoma,Verdana,sans-serif; text-transform:uppercase; letter-spacing:.06em; }
+.lx-idle-lens h3 { margin:4px 0 5px; color:oklch(33% 0.10 263); font: bold 13pt "Trebuchet MS",Verdana,sans-serif; }
+.lx-idle-lens p { margin:0 0 11px; line-height:1.45; }
+.lx-idle-lens ul { margin:0 0 13px 18px; padding:0; line-height:1.5; }
+.lx-idle-cta { padding:7px 9px; border-left:3px solid oklch(58% 0.15 255); background:oklch(95% 0.025 250); color:oklch(43% 0 0); font-size:9pt; }
 .lx-body.is-bleed { padding:0; }
 .lx-frame { width:100%; height:100%; min-height:520px; border:0; display:block; background:#fff; }
 .lx-shot { width:100%; height:auto; display:block; }

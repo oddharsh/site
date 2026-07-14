@@ -696,6 +696,45 @@
     parts.push('<span style="margin-left:auto">fetched as ' + esc(data.fetchedBy) + "</span>");
     statusBar.innerHTML = parts.join("");
   }
+
+  // Keep the lens tabs useful before the first fetch. A selected tab should
+  // change the evidence pane immediately, even when there is no origin data
+  // to inspect yet; the scan then replaces this primer with observed output.
+  function renderIdleLens() {
+    var primers = {
+      anatomy: {
+        title: "Anatomy",
+        note: "The response surface a machine can read without interpreting the page.",
+        rows: ["status, content type, and payload size", "headings, links, images, and readable text", "headers and accessibility clues"]
+      },
+      structured: {
+        title: "Structured",
+        note: "The entities and relationships a parser can lift from the markup.",
+        rows: ["JSON-LD and Schema.org entities", "Microdata, RDFa, and microformats", "Open Graph and Twitter preview fields"]
+      },
+      ai: {
+        title: "AI view",
+        note: "The compact representation and crawler signals available to a model.",
+        rows: ["best-effort Markdown rendering", "robots and AI-specific directives", "token cost and a cleaner alternate surface"]
+      },
+      terms: {
+        title: "Terms",
+        note: "What a site asks of crawlers, what it enforces, and whether access is priced.",
+        rows: ["per-bot robots.txt verdicts", "Content-Signal and TDM reservations", "the observed AadharshBot fetch and any wall"]
+      },
+      discovery: {
+        title: "Discovery",
+        note: "The doors an agent can find before it has to drive the human page.",
+        rows: ["robots.txt, sitemap.xml, and llms.txt", "feeds and API/action descriptions", "MCP, NLWeb, WebMCP, and agent-card hints"]
+      }
+    };
+    var p = primers[lens] || primers.anatomy;
+    machineBody.innerHTML = '<div class="lx-idle-lens"><div class="lx-idle-kicker">Selected machine lens</div>' +
+      '<h3>' + esc(p.title) + '</h3><p>' + esc(p.note) + '</p><ul>' +
+      p.rows.map(function (row) { return '<li>' + esc(row) + '</li>'; }).join("") +
+      '</ul><div class="lx-idle-cta">Choose an example above or paste a URL, then press <b>Go</b> to replace this primer with observed evidence.</div></div>';
+  }
+
   function httpText(s) {
     if (s >= 200 && s < 300) return "OK";
     if (s >= 300 && s < 400) return "redirect";
@@ -731,7 +770,7 @@
     if (data) {
       renderMachine();
       renderStatus();
-    }
+    } else renderIdleLens();
   }
   function setLens(l) {
     lens = l;
@@ -740,7 +779,7 @@
       b.classList.toggle("is-on", active);
       b.setAttribute("aria-selected", active ? "true" : "false");
     });
-    if (data) renderMachine(); else updateModeUi();
+    if (data) renderMachine(); else { updateModeUi(); renderIdleLens(); }
   }
 
   form.addEventListener("submit", function (e) { e.preventDefault(); run(urlInput.value); });
