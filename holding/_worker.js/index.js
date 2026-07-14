@@ -82,6 +82,7 @@ const ROUTES = new Map([
 
   ["/auth.md", routeAuthMd],
   ["/.well-known/api-catalog", routeApiCatalog],
+  ["/.well-known/agent-card.json", routeAgentCard],
   ["/.well-known/oauth-protected-resource", routeOAuthProtectedResource],
   ["/.well-known/oauth-authorization-server", routeOAuthAuthorizationServer],
   ["/agent/auth", handleAgentAuthRegister],
@@ -203,6 +204,10 @@ function routeAuthMd(request, env) {
 
 function routeApiCatalog(request, env) {
   return serveFreshAsset(request, env, "application/linkset+json");
+}
+
+function routeAgentCard(request, env) {
+  return serveFreshAsset(request, env, "application/json; charset=utf-8");
 }
 
 function routeOAuthProtectedResource(request, env) {

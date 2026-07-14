@@ -113,6 +113,10 @@ aggregations.
   itself when making outbound requests).
 - [/.well-known/security.txt](https://aadhar.sh/.well-known/security.txt):
   Disclosure contacts + scope statement per RFC 9116.
+- [/.well-known/agent-card.json](https://aadhar.sh/.well-known/agent-card.json):
+  Discovery-only Agent Card describing the site's read-only MCP, HTTP JSON,
+  WebMCP, and optional anonymous agent-registration interfaces. This host does
+  not expose an A2A task endpoint.
 - `_index._agents.aadhar.sh` (SVCB): DNS for AI Discovery (DNS-AID)
   entrypoint per draft-mozleywilliams-dnsop-dnsaid. A ServiceMode SVCB
   record (`1 aadhar.sh. alpn="h2,h3" port=443 mandatory=alpn,port`)

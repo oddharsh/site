@@ -24,6 +24,7 @@ export const HOMEPAGE_DISCOVERY_LINKS = [
   '</.well-known/http-message-signatures-directory>; rel="http-message-signatures-directory"; type="application/jwk-set+json"',
   '</.well-known/security.txt>; rel="security-policy"; type="text/plain"',
   '</.well-known/api-catalog>; rel="api-catalog"; type="application/linkset+json"',
+  '</.well-known/agent-card.json>; rel="service-desc"; type="application/json"; title="Aadharsh site agent card"',
 ];
 
 export const HOMEPAGE_DISCOVERY_LINK = HOMEPAGE_DISCOVERY_LINKS.join(", ");
