@@ -133,6 +133,33 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 .lx-mult { font-family:"Courier New",monospace; font-size:7.8pt; color:oklch(38% 0.09 150); background:oklch(94% 0.04 150); border:1px solid oklch(80% 0.06 150); border-radius:8px; padding:1px 7px; white-space:nowrap; }
 .lx-bots th.num, .lx-bots td.num { text-align:right; font-family:"Courier New",monospace; white-space:nowrap; padding-right:10px; }
 
+/* Machine briefing + Delta lab */
+.lx-mode-note { margin:7px 0 0; padding:5px 8px; border-left:3px solid oklch(55% 0.14 250); background:oklch(97% 0.012 250); color:oklch(42% 0.03 255); font-size:8.7pt; }
+.lx-brief-lede { margin:0 0 10px; padding:7px 9px; border:1px solid oklch(82% 0.04 250); background:linear-gradient(180deg,oklch(98% 0.01 250),oklch(94% 0.018 250)); color:oklch(31% 0.04 255); font-size:9pt; line-height:1.45; }
+.lx-brief-lede b { color:oklch(35% 0.13 250); }
+.lx-machine-block { border-top:1px solid oklch(86% 0.03 250); padding-top:9px; margin-top:11px; }
+.lx-machine-block .lx-sec-h { color:oklch(30% 0.10 250); }
+.lx-delta-intro { margin:0 0 10px; padding:7px 9px; border:1px solid oklch(82% 0.08 75); background:oklch(97% 0.035 85); color:oklch(39% 0.05 60); font-size:9pt; line-height:1.45; }
+.lx-cf-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; margin:5px 0 12px; }
+.lx-cf-card { border:1px solid oklch(82% 0.03 250); border-radius:3px; padding:7px 8px; background:oklch(99% 0.003 250); }
+.lx-cf-card.is-on { border-color:oklch(61% 0.13 150); background:oklch(97% 0.025 150); }
+.lx-cf-card h4 { margin:0 0 3px; font-family:"Trebuchet MS",Verdana,sans-serif; font-size:9.1pt; color:oklch(32% 0.07 255); }
+.lx-cf-card p { margin:0 0 6px; color:oklch(48% 0 0); font-size:8.3pt; line-height:1.35; }
+.lx-cf-toggle { display:inline-flex; align-items:center; gap:5px; border:1px solid oklch(65% 0.03 250); border-radius:3px; padding:2px 6px; background:linear-gradient(180deg,#fff,oklch(91% 0.012 250)); color:oklch(34% 0.06 255); font-family:"Courier New",monospace; font-size:8pt; cursor:pointer; }
+.lx-cf-toggle:hover { border-color:oklch(48% 0.12 250); }
+.lx-cf-toggle[aria-pressed="true"] { color:#fff; border-color:oklch(43% 0.12 150); background:linear-gradient(180deg,oklch(59% 0.13 150),oklch(45% 0.15 150)); }
+.lx-cf-dot { width:7px; height:7px; display:inline-block; border-radius:50%; background:oklch(60% 0 0); }
+.lx-cf-toggle[aria-pressed="true"] .lx-cf-dot { background:oklch(88% 0.15 105); }
+.lx-path { display:grid; gap:5px; margin-top:4px; }
+.lx-stage { display:grid; grid-template-columns:88px 1fr; gap:7px; align-items:start; padding:5px 0; border-bottom:1px solid oklch(93% 0.01 250); font-size:8.6pt; }
+.lx-stage:last-child { border-bottom:0; }
+.lx-stage-name { font-family:"Courier New",monospace; color:oklch(39% 0.08 255); }
+.lx-stage-copy { color:oklch(32% 0 0); }
+.lx-stage-copy .lx-badge { margin-right:4px; }
+.lx-proof { margin-top:8px; font-size:8.2pt; color:oklch(52% 0 0); }
+.lx-proof b { color:oklch(38% 0.06 255); }
+@media (max-width:560px){ .lx-cf-grid{ grid-template-columns:1fr; } .lx-stage{ grid-template-columns:74px 1fr; } }
+
 /* status bar */
 .lx-status { margin-top:9px; border-top:1px solid oklch(86% 0.03 260); padding-top:6px; display:flex; flex-wrap:wrap; gap:5px 14px; font-size:8.6pt; color:oklch(45% 0 0); }
 .lx-status b { color:oklch(30% 0.04 255); font-weight:bold; }
@@ -143,7 +170,7 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
 `,
     body: `
     <h1>The Other Web</h1>
-    <p class="lx-lede">Every page has a second life as data. Paste a URL to see it the way a crawler, a model, or a link-preview bot does: the markup, the metadata, the machine directives, next to the human read. Fetched server-side, honestly, as <a href="/bot">AadharshBot</a>.</p>
+    <p class="lx-lede">Every page has a second life as data. Paste a URL, then switch between the human page, a machine briefing, and the infrastructure that would change the route between them. Fetched server-side, honestly, as <a href="/bot">AadharshBot</a>.</p>
 
     <form class="lx-addr" id="lx-form">
       <span class="lx-globe" aria-hidden="true"></span>
@@ -163,10 +190,11 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
     </div>
 
     <div class="lx-toolbar">
-      <div class="lx-view" role="group" aria-label="view layout">
-        <button class="lx-seg is-on" data-view="both" type="button">Both</button>
-        <button class="lx-seg" data-view="human" type="button">Human</button>
-        <button class="lx-seg" data-view="machine" type="button">Machine</button>
+      <div class="lx-view" role="radiogroup" aria-label="page mode">
+        <button class="lx-seg is-on" data-view="both" role="radio" aria-checked="true" type="button">Compare</button>
+        <button class="lx-seg" data-view="human" role="radio" aria-checked="false" type="button">Human</button>
+        <button class="lx-seg" data-view="machine" role="radio" aria-checked="false" type="button">Machine</button>
+        <button class="lx-seg" data-view="delta" role="radio" aria-checked="false" type="button">Delta</button>
       </div>
       <div class="lx-lenses" role="tablist" aria-label="machine lens">
         <button class="lx-tab is-on" data-lens="anatomy" type="button">Anatomy</button>
@@ -176,6 +204,7 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
         <button class="lx-tab" data-lens="discovery" type="button">Discovery</button>
       </div>
     </div>
+    <div class="lx-mode-note" id="lx-mode-note">Compare keeps the live page beside the selected evidence lens.</div>
 
     <div class="lx-panes is-both" id="lx-panes">
       <section class="lx-pane lx-pane-human" id="lx-human">

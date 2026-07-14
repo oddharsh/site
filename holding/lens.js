@@ -14,11 +14,14 @@
   var humanBody = document.getElementById("lx-human-body");
   var machineBody = document.getElementById("lx-machine-body");
   var machineH = document.getElementById("lx-machine-h");
+  var humanH = document.getElementById("lx-human-h");
+  var modeNote = document.getElementById("lx-mode-note");
   var statusBar = document.getElementById("lx-status");
 
   var data = null;       // last successful envelope
-  var view = "both";     // both | human | machine
+  var view = "both";     // both | human | machine | delta
   var lens = "anatomy";  // anatomy | structured | ai | discovery
+  var counterfactuals = { markdown: false, semantic: false, contract: false, authority: false, receipt: false };
   var busy = false;
 
   var LENS_LABEL = { anatomy: "Anatomy", structured: "Structured", ai: "AI view", terms: "Terms", discovery: "Discovery" };
@@ -46,6 +49,17 @@
     return "$0";
   }
   function has(o) { return o && typeof o === "object" && Object.keys(o).length > 0; }
+
+  var MODE_NOTE = {
+    both: "Compare keeps the live page beside the selected evidence lens.",
+    human: "Human shows the page as a person receives it in a browser.",
+    machine: "Machine turns the scan into an evidence-first briefing, then keeps the selected lens below it.",
+    delta: "Delta keeps the page visible while you add hypothetical machine infrastructure to the route.",
+  };
+
+  function modeLabel() {
+    return view === "both" ? "Compare" : view.charAt(0).toUpperCase() + view.slice(1);
+  }
 
   // ---- networking -------------------------------------------------------
   function run(url) {
@@ -172,12 +186,136 @@
     return '<pre class="lx-pre' + (light ? " lx-pre-light" : "") + '">' + esc(text) + "</pre>";
   }
 
+  function badge(text, kind) {
+    return '<span class="lx-badge ' + (kind || "") + '">' + esc(text) + "</span>";
+  }
+
+  function briefTable(rows) {
+    return '<table class="lx-bots"><tr><th>surface</th><th>what a machine can establish</th><th>state</th></tr>' +
+      rows.map(function (r) {
+        return '<tr><td class="ua">' + esc(r[0]) + '</td><td>' + esc(r[1]) + '</td><td>' + badge(r[2], r[3]) + '</td></tr>';
+      }).join("") + '</table>';
+  }
+
+  function machineBrief() {
+    var a = data.anatomy || {};
+    var s = data.structured || {};
+    var d = data.discovery || {};
+    var ag = data.agent || {};
+    var st = ag.strategy || {};
+    var t = data.terms || {};
+    var jsonldCount = s.jsonld ? s.jsonld.length : 0;
+    var microCount = s.microdata && s.microdata.itemtypes ? s.microdata.itemtypes.length : 0;
+    var rdfaCount = s.rdfa && s.rdfa.typeof ? s.rdfa.typeof.length : 0;
+    var relCount = s.relLinks ? s.relLinks.length : 0;
+    var title = s.title || "(untitled)";
+    var robots = d.robotsTxt && d.robotsTxt.ok ? "robots.txt answered" : d.robotsTxt && d.robotsTxt.error ? "robots.txt unknown" : "no robots.txt";
+    var spectrum = t.spectrum && t.spectrum.tier ? t.spectrum.tier : "unknown";
+    var facts = {
+      "url": data.finalUrl,
+      "title": title,
+      "response": data.status + " " + httpText(data.status),
+      "content-type": data.contentType || "(none)",
+      "payload": bytes(a.rawBytes) + (data.truncated ? " (capped)" : ""),
+      "headings": a.headings ? a.headings.length : 0,
+      "links in head": relCount,
+      "fetched as": data.fetchedBy || "identified bot",
+    };
+    var out = '<div class="lx-brief-lede"><b>Machine briefing.</b> This is a reconstruction from the response and the probes Lens actually ran. It describes available evidence; it does not claim that a site has agreed to a new interface.</div>';
+    out += section("Observed document", { text: "observed", kind: "ok" },
+      "The minimum contract a machine can recover from this response.", kvTable(facts));
+    out += section("Machine affordances", { text: st.verdict || "unknown", kind: st.verdict === "agent-native" ? "ok" : st.verdict === "agent-readable" ? "" : "warn" },
+      "A readable page, a declared action surface, and permission are separate signals.",
+      briefTable([
+        ["read", (data.contentType || "response") + ", " + bytes(a.rawBytes), "observed", "ok"],
+        ["structure", jsonldCount + " JSON-LD, " + microCount + " microdata, " + rdfaCount + " RDFa type(s)", jsonldCount || microCount || rdfaCount ? "found" : "absent", jsonldCount || microCount || rdfaCount ? "ok" : "off"],
+        ["discover", ((d.llmsTxt && d.llmsTxt.ok ? "llms.txt" : "") + (d.sitemapXml && d.sitemapXml.ok ? " + sitemap" : "")) || "site files not found", d.llmsTxt && d.llmsTxt.ok || d.sitemapXml && d.sitemapXml.ok ? "found" : "absent", d.llmsTxt && d.llmsTxt.ok || d.sitemapXml && d.sitemapXml.ok ? "ok" : "off"],
+        ["action", st.action && st.action.length ? st.action.join(", ") : "no declared action surface", st.action && st.action.length ? "found" : "absent", st.action && st.action.length ? "ok" : "off"],
+        ["policy", robots + "; spectrum: " + spectrum, robots === "robots.txt answered" ? "observed" : "unknown", robots === "robots.txt answered" ? "" : "warn"],
+        ["markdown", ag.mdNegotiation && ag.mdNegotiation.supported ? "same URL serves text/markdown" : "HTML response stays HTML", ag.mdNegotiation && ag.mdNegotiation.supported ? "supported" : "absent", ag.mdNegotiation && ag.mdNegotiation.supported ? "ok" : "off"],
+      ]));
+    var briefText = "# observed\n" +
+      "url       " + data.finalUrl + "\n" +
+      "title     " + title + "\n" +
+      "response  " + data.status + " " + httpText(data.status) + "\n" +
+      "read      " + (data.contentType || "unknown") + " · " + bytes(a.rawBytes) + "\n" +
+      "structure " + jsonldCount + " JSON-LD · " + microCount + " microdata · " + rdfaCount + " RDFa\n" +
+      "action    " + (st.action && st.action.length ? st.action.join(", ") : "none observed") + "\n\n" +
+      "# boundaries\n" +
+      "identity  " + (data.fetchedBy || "identified fetch") + "\n" +
+      "policy    " + robots + " · " + spectrum + "\n" +
+      "sidefx    Lens inspected; it submitted no forms or tools";
+    out += section("Copyable machine brief", { text: "plain text" },
+      "The compact representation an agent could carry forward without the browser chrome.", pre(briefText, true));
+    out += section("Boundaries", { text: "explicit", kind: "warn" },
+      "These limits keep the reconstruction honest.",
+      '<ul class="lx-why"><li>Lens fetched as ' + esc(data.fetchedBy || "an identified bot") + '; no other bot identity was tested.</li>' +
+      '<li>Robots policy describes a request; the enforcement result appears separately in the Terms lens.</li>' +
+      '<li>Reading a page does not grant permission to act on a user\'s behalf.</li></ul>');
+    return out;
+  }
+
+  function cfState(observed, key) {
+    if (observed) return { text: "observed", kind: "ok" };
+    if (counterfactuals[key]) return { text: "counterfactual", kind: "warn" };
+    return { text: "missing", kind: "off" };
+  }
+
+  function deltaView() {
+    var s = data.structured || {};
+    var d = data.discovery || {};
+    var ag = data.agent || {};
+    var st = ag.strategy || {};
+    var jsonld = s.jsonld && s.jsonld.length > 0;
+    var semantic = jsonld || (s.microdata && s.microdata.itemtypes && s.microdata.itemtypes.length) || (s.rdfa && s.rdfa.typeof && s.rdfa.typeof.length);
+    var action = st.action && st.action.length > 0;
+    var markdown = ag.mdNegotiation && ag.mdNegotiation.supported;
+    var cf = [
+      { key: "markdown", label: "Clean machine text", stage: "Read", observed: markdown, detail: "Serve a deliberate text/markdown representation from the same URL." },
+      { key: "semantic", label: "Entity schema", stage: "Understand", observed: semantic, detail: "Publish stable entities and properties a parser can validate." },
+      { key: "contract", label: "Action contract", stage: "Act", observed: action, detail: "Describe callable operations, parameters, and side effects." },
+      { key: "authority", label: "Delegated authority", stage: "Authorize", observed: false, detail: "Add a consent boundary with scopes and an explicit user approval." },
+      { key: "receipt", label: "A result receipt", stage: "Confirm", observed: false, detail: "Return a durable result with origin, time, and provenance." },
+    ];
+    var controls = '<div class="lx-cf-grid">' + cf.map(function (x) {
+      var on = !!counterfactuals[x.key];
+      return '<div class="lx-cf-card' + (on ? " is-on" : "") + '"><h4>' + esc(x.label) + '</h4><p>' + esc(x.detail) + '</p>' +
+        '<button class="lx-cf-toggle" type="button" data-cf="' + esc(x.key) + '" aria-pressed="' + (on ? "true" : "false") + '"><span class="lx-cf-dot" aria-hidden="true"></span>' + (on ? "on" : "off") + "</button></div>";
+    }).join("") + "</div>";
+    var path = cf.map(function (x) {
+      var state = cfState(x.observed, x.key);
+      var copy = x.observed ? "published signal found" : counterfactuals[x.key] ? x.detail : "no matching surface observed";
+      return '<div class="lx-stage"><div class="lx-stage-name">' + esc(x.stage) + '</div><div class="lx-stage-copy">' + badge(state.text, state.kind) + esc(copy) + '</div></div>';
+    }).join("");
+    var intro = '<div class="lx-delta-intro"><b>Counterfactual lab.</b> Turn on one piece of web infrastructure and watch the route change. Green means Lens observed a signal. Amber means this page is simulating the addition locally.</div>';
+    var proof = '<div class="lx-proof"><b>Current evidence:</b> ' + esc((d.llmsTxt && d.llmsTxt.ok ? "llms.txt is present. " : "No llms.txt observed. ") + (action ? "An action surface answered. " : "No action surface answered. ") + (semantic ? "Structured data exists." : "Structured entity data is absent.")) + '</div>';
+    var deltaText = cf.filter(function (x) { return counterfactuals[x.key]; }).map(function (x) { return "+ " + x.stage.toLowerCase() + " · " + x.label; }).join("\n");
+    return intro + section("Infrastructure switches", null, "Each switch changes one stage of the path and nothing else.", controls) +
+      section("The route", { text: "no score" }, "A task path is more useful here than a readiness number.", '<div class="lx-path">' + path + '</div>' + proof) +
+      section("What this proves", { text: "local simulation", kind: "warn" }, "Counterfactuals clarify a missing contract; they do not create a real endpoint on the scanned site.", pre("# delta\n" + (deltaText || "(no switches on)"), true));
+  }
+
+  function bindCounterfactuals() {
+    [].forEach.call(machineBody.querySelectorAll(".lx-cf-toggle"), function (b) {
+      b.addEventListener("click", function () {
+        var key = b.getAttribute("data-cf");
+        if (!Object.prototype.hasOwnProperty.call(counterfactuals, key)) return;
+        counterfactuals[key] = !counterfactuals[key];
+        renderMachine();
+      });
+    });
+  }
+
   function renderMachine() {
-    machineH.innerHTML = "Machine view &middot; " + LENS_LABEL[lens];
+    var title = view === "machine" ? "Machine view &middot; Briefing" : view === "delta" ? "Delta view &middot; What changes" : "Machine view &middot; " + LENS_LABEL[lens];
+    machineH.innerHTML = title;
     if (!data) { return; }
     var fn = { anatomy: lensAnatomy, structured: lensStructured, ai: lensAI, terms: lensTerms, discovery: lensDiscovery }[lens];
-    machineBody.innerHTML = fn();
+    var body = view === "machine" ? machineBrief() + '<div class="lx-machine-block">' + section("Selected evidence lens", { text: LENS_LABEL[lens] }, "The original inspector remains available below the briefing.", fn()) + "</div>"
+      : view === "delta" ? deltaView() : fn();
+    machineBody.innerHTML = body;
     machineBody.scrollTop = 0;
+    if (view === "delta") bindCounterfactuals();
   }
 
   function lensAnatomy() {
@@ -493,6 +631,7 @@
   function renderStatus() {
     var parts = [];
     parts.push("<span><b>" + data.status + "</b> " + esc(httpText(data.status)) + "</span>");
+    parts.push("<span>" + esc(modeLabel()) + "</span>");
     parts.push("<span>" + esc(data.contentType || "?") + "</span>");
     if (data.anatomy) parts.push("<span>" + bytes(data.anatomy.rawBytes) + "</span>");
     if (data.cost && data.cost.tiers && data.cost.tiers.length) parts.push("<span>~" + fmtTok(data.cost.tiers[0].tokens) + " tok</span>");
@@ -512,19 +651,38 @@
   }
 
   // ---- controls ---------------------------------------------------------
+  function updateModeUi() {
+    if (modeNote) modeNote.textContent = MODE_NOTE[view] || MODE_NOTE.both;
+    [].forEach.call(document.querySelectorAll(".lx-seg"), function (b) {
+      var active = b.getAttribute("data-view") === view;
+      b.classList.toggle("is-on", active);
+      b.setAttribute("aria-checked", active ? "true" : "false");
+    });
+    if (humanH && !data) {
+      humanH.innerHTML = view === "delta" ? "Human view &middot; baseline" : "Human view &middot; the live page";
+    }
+    if (machineH && !data) {
+      machineH.innerHTML = view === "machine" ? "Machine view &middot; Briefing" : view === "delta" ? "Delta view &middot; What changes" : "Machine view &middot; " + LENS_LABEL[lens];
+    }
+  }
+
   function setView(v) {
+    if (["both", "human", "machine", "delta"].indexOf(v) < 0) v = "both";
     view = v;
     panes.className = "lx-panes is-" + v;
-    [].forEach.call(document.querySelectorAll(".lx-seg"), function (b) {
-      b.classList.toggle("is-on", b.getAttribute("data-view") === v);
-    });
+    try { localStorage.setItem("lx-mode", v); } catch (e) {}
+    updateModeUi();
+    if (data) {
+      renderMachine();
+      renderStatus();
+    }
   }
   function setLens(l) {
     lens = l;
     [].forEach.call(document.querySelectorAll(".lx-tab"), function (b) {
       b.classList.toggle("is-on", b.getAttribute("data-lens") === l);
     });
-    if (data) renderMachine(); else machineH.innerHTML = "Machine view &middot; " + LENS_LABEL[l];
+    if (data) renderMachine(); else updateModeUi();
   }
 
   form.addEventListener("submit", function (e) { e.preventDefault(); run(urlInput.value); });
@@ -537,6 +695,11 @@
   [].forEach.call(document.querySelectorAll(".lx-tab"), function (b) {
     b.addEventListener("click", function () { setLens(b.getAttribute("data-lens")); });
   });
+  try {
+    var savedView = localStorage.getItem("lx-mode");
+    if (["both", "human", "machine", "delta"].indexOf(savedView) >= 0) view = savedView;
+  } catch (e) {}
+  setView(view);
 
   // deep link: /lens?url=… autoruns. Speculation safety: an autorun fires a
   // third-party crawl, so a PRERENDERED copy of this page (omnibox prediction,
