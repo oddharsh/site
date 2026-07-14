@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            cal/package-lock.json
+
+      - name: Install homepage dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Build homepage
+        run: npm run build
+
+      - name: Enforce homepage performance budget
+        run: npm run perf-budget
+
+      - name: Validate coffee Worker config
+        run: npx wrangler deploy --dry-run -c cal/wrangler.toml
+
+      - name: Validate Serendipity Worker config
+        run: npx wrangler deploy --dry-run -c serendipity/wrangler.toml
+
+      - name: Install coffee dependencies
+        working-directory: cal
+        run: npm ci --no-audit --no-fund
+
+      - name: Test coffee Worker
+        working-directory: cal
+        run: npm test

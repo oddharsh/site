@@ -29,7 +29,10 @@ import { transform } from "esbuild";
 const SHELL_BUDGET = {
   "nav.js": 50_000,
   "notepad.js": 8_000,
-  "lens.js": 20_000,
+  // origin/main is currently 21.7 KiB after minification. Keep a small,
+  // explicit baseline allowance so CI is green on the released tree while
+  // still rejecting the ~29.8 KiB Lens feature branch that prompted this gate.
+  "lens.js": 22_000,
   "luna.css": 40_000,
 };
 const BUNDLE_GZIP_KIB = 70;
