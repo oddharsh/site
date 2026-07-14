@@ -233,7 +233,9 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
     <div class="lx-status" id="lx-status"><span>Idle. Nothing is fetched until you ask, and then just once, server-side, with no logging.</span></div>
     <footer>&larr; <a href="/">aadhar.sh</a> &middot; a research toy about how machines read the web &middot; fetched by <a href="/bot">AadharshBot</a></footer>
 `,
-    scripts: `<script src="/lens.js" defer></script>`,
+    // The shell is cached at the edge and browsers cache static scripts too;
+    // version the client URL so a fresh shell cannot pair with an older lens.js.
+    scripts: `<script src="/lens.js?v=3" defer></script>`,
     cache: "public, max-age=60, s-maxage=300",
     headers: {
       "x-robots-tag": "noindex",
