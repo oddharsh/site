@@ -45,7 +45,9 @@ worktrees may edit freely, but a worktree is not a release surface.
   not deploy from a dirty worktree or push agent work directly to `main`.
 - PR CI builds the homepage, enforces the performance budget, dry-runs all
   three Worker configs, and runs the coffee tests.
-- Only a merge to protected `main` triggers the production deploy workflow.
+- Only a successful CI run for `main` associated with a merged PR triggers the
+  production deploy workflow. GitHub's current free private-repo plan cannot
+  enforce branch protection, so the workflow guard is the release backstop.
   It deploys `holding/`, `cal/`, and `serendipity/`, then runs the homepage
   route oracle plus satellite-worker smoke checks.
 - Production credentials live in the GitHub `production` environment. Keep

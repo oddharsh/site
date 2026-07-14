@@ -18,13 +18,17 @@ dependencies, builds the homepage, enforces the performance budget, dry-runs
 the `holding/`, `cal/`, and `serendipity/` Wrangler configs, and runs
 `cal/npm test`.
 
-`.github/workflows/deploy.yml` is the only production publisher. It runs on a
-merge to `main` (or an explicit manual dispatch), deploys all three Workers,
-then verifies the homepage route surface plus `/coffee`, `/coffee/slots`, and
-`/serendipity`. The GitHub `production` environment must contain
-`CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`. Disable any Cloudflare
-Workers Builds production auto-deploy before enabling this workflow; otherwise
-one merge can produce two independent releases.
+`.github/workflows/deploy.yml` is the only production publisher. It runs after
+a successful `CI` run for `main` associated with a merged PR (or an explicit
+manual dispatch), deploys all three Workers, then verifies the homepage route
+surface plus `/coffee`, `/coffee/slots`, and `/serendipity`. The GitHub
+`production` environment must contain `CLOUDFLARE_API_TOKEN` and
+`CLOUDFLARE_ACCOUNT_ID`. This repository's current free private-repo plan does
+not support branch/environment protection rules, so the workflow refuses
+non-PR commits; upgrade or make the repo public later if hard GitHub-side
+branch protection is desired. Disable any Cloudflare Workers Builds production
+auto-deploy before enabling this workflow; otherwise one merge can produce two
+independent releases.
 
 Key facts (don't hardcode these elsewhere, they drift):
 - RN_KV namespace id: `3cb8a107c58e47dc9244e75b33401f36`

@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
   group: production-deploy
@@ -37,6 +38,19 @@ jobs:
         uses: actions/checkout@v6
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Require a merged pull request
+        if: github.event_name == 'workflow_run'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ env.RELEASE_SHA }}
+        run: |
+          set -euo pipefail
+          prs="$(gh api "/repos/${GITHUB_REPOSITORY}/commits/${RELEASE_SHA}/pulls")"
+          if ! jq -e 'any(.[]; .merged_at != null and .base.ref == "main")' >/dev/null <<<"$prs"; then
+            echo "Refusing production deploy: ${RELEASE_SHA} is not associated with a merged pull request into main."
+            exit 1
+          fi
 
       - name: Set up Node.js
         uses: actions/setup-node@v6
