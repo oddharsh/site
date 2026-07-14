@@ -137,6 +137,10 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 .lx-mode-note { margin:7px 0 0; padding:5px 8px; border-left:3px solid oklch(55% 0.14 250); background:oklch(97% 0.012 250); color:oklch(42% 0.03 255); font-size:8.7pt; }
 .lx-brief-lede { margin:0 0 10px; padding:7px 9px; border:1px solid oklch(82% 0.04 250); background:linear-gradient(180deg,oklch(98% 0.01 250),oklch(94% 0.018 250)); color:oklch(31% 0.04 255); font-size:9pt; line-height:1.45; }
 .lx-brief-lede b { color:oklch(35% 0.13 250); }
+.lx-focus { margin:0 0 12px; padding:7px 8px 1px; border:1px solid oklch(77% 0.07 250); background:linear-gradient(180deg,oklch(98% 0.018 250),oklch(94% 0.025 250)); box-shadow:inset 0 1px #fff; }
+.lx-focus .lx-sec { margin-bottom:7px; }
+.lx-focus .lx-sec-h { color:oklch(29% 0.12 250); }
+.lx-focus .lx-kv td { border-bottom-color:oklch(88% 0.025 250); }
 .lx-machine-block { border-top:1px solid oklch(86% 0.03 250); padding-top:9px; margin-top:11px; }
 .lx-machine-block .lx-sec-h { color:oklch(30% 0.10 250); }
 .lx-delta-intro { margin:0 0 10px; padding:7px 9px; border:1px solid oklch(82% 0.08 75); background:oklch(97% 0.035 85); color:oklch(39% 0.05 60); font-size:9pt; line-height:1.45; }
@@ -197,11 +201,11 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
         <button class="lx-seg" data-view="delta" role="radio" aria-checked="false" type="button">Delta</button>
       </div>
       <div class="lx-lenses" role="tablist" aria-label="machine lens">
-        <button class="lx-tab is-on" data-lens="anatomy" type="button">Anatomy</button>
-        <button class="lx-tab" data-lens="structured" type="button">Structured</button>
-        <button class="lx-tab" data-lens="ai" type="button">AI view</button>
-        <button class="lx-tab" data-lens="terms" type="button">Terms</button>
-        <button class="lx-tab" data-lens="discovery" type="button">Discovery</button>
+        <button class="lx-tab is-on" data-lens="anatomy" role="tab" aria-selected="true" aria-controls="lx-machine-body" type="button">Anatomy</button>
+        <button class="lx-tab" data-lens="structured" role="tab" aria-selected="false" aria-controls="lx-machine-body" type="button">Structured</button>
+        <button class="lx-tab" data-lens="ai" role="tab" aria-selected="false" aria-controls="lx-machine-body" type="button">AI view</button>
+        <button class="lx-tab" data-lens="terms" role="tab" aria-selected="false" aria-controls="lx-machine-body" type="button">Terms</button>
+        <button class="lx-tab" data-lens="discovery" role="tab" aria-selected="false" aria-controls="lx-machine-body" type="button">Discovery</button>
       </div>
     </div>
     <div class="lx-mode-note" id="lx-mode-note">Compare keeps the live page beside the selected evidence lens.</div>

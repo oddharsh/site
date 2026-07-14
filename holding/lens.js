@@ -197,6 +197,62 @@
       }).join("") + '</table>';
   }
 
+  function lensFocus() {
+    var a = data.anatomy || {};
+    var s = data.structured || {};
+    var ag = data.agent || {};
+    var st = ag.strategy || {};
+    var d = data.discovery || {};
+    var t = data.terms || {};
+    var jsonld = s.jsonld ? s.jsonld.length : 0;
+    var micro = s.microdata && s.microdata.itemtypes ? s.microdata.itemtypes.length : 0;
+    var rdfa = s.rdfa && s.rdfa.typeof ? s.rdfa.typeof.length : 0;
+    var mf = s.microformats ? s.microformats.length : 0;
+    var entityTypes = [];
+    (s.jsonld || []).forEach(function (b) {
+      (b.types || []).forEach(function (x) { if (entityTypes.indexOf(x) < 0) entityTypes.push(x); });
+    });
+    var title, badgeData, caption, rows, extra = "";
+
+    if (lens === "anatomy") {
+      var alt = a.imgTotal ? ((a.imgTotal - a.imgNoAlt) + " / " + a.imgTotal + " images have alt") : "no images found";
+      title = "Anatomy focus";
+      badgeData = { text: data.status + " " + httpText(data.status), kind: data.status >= 200 && data.status < 400 ? "ok" : "warn" };
+      caption = "Can a machine get a usable reading surface before it knows what the page means?";
+      rows = { "response": (data.contentType || "(none)") + " · " + bytes(a.rawBytes), "shape": (a.headings ? a.headings.length : 0) + " headings · " + (a.wordCount || 0) + " words", "accessibility": alt, "headers": Object.keys(data.headers || {}).length + " received" };
+    } else if (lens === "structured") {
+      title = "Structured focus";
+      badgeData = { text: (jsonld || micro || rdfa || mf) ? "signals found" : "mostly untyped", kind: (jsonld || micro || rdfa || mf) ? "ok" : "off" };
+      caption = "What entities and relationships can be lifted from the markup without guessing?";
+      rows = { "title": s.title || "(untitled)", "schema": jsonld + " JSON-LD · " + micro + " microdata · " + rdfa + " RDFa", "microformats": mf + " class signal" + (mf === 1 ? "" : "s"), "preview": has(s.og) ? "Open Graph card present" : "no Open Graph card" };
+      if (entityTypes.length) extra = tags(entityTypes.slice(0, 18));
+    } else if (lens === "ai") {
+      var md = ag.mdNegotiation && ag.mdNegotiation.supported ? "negotiated text/markdown" : "HTML only";
+      var markdownTier = (data.cost && data.cost.tiers || []).filter(function (x) { return x.key === "markdown"; })[0];
+      var directives = data.ai && data.ai.directives || {};
+      title = "AI view focus";
+      badgeData = { text: markdownTier ? "~" + fmtTok(markdownTier.tokens) + " tok" : md, kind: markdownTier ? "ok" : "warn" };
+      caption = "What a model can ingest, how much context it costs, and whether the site offers a cleaner representation.";
+      rows = { "representation": md + " · " + bytes((data.ai && data.ai.markdown || "").length), "directives": (directives.metaRobots || directives.xRobotsTag || directives.namesAiCrawlers) ? "crawler signals published" : "no AI-specific signal", "curation": data.ai && data.ai.llmsTxtPresent ? "llms.txt present" : "no llms.txt", "cheapest shortcut": markdownTier ? "markdown is the selected compact read" : "none observed" };
+    } else if (lens === "terms") {
+      var tier = t.spectrum && t.spectrum.tier || "unknown";
+      var blocked = (t.scoreboard || []).filter(function (b) { return b.verdict === "block"; }).length;
+      var enforcement = t.enforcement && (t.enforcement.challenged ? "bot challenge" : t.enforcement.blocked ? "fetch refused" : "fetch passed");
+      title = "Terms focus";
+      badgeData = { text: tier, kind: tier === "open" ? "ok" : "warn" };
+      caption = "Is reading open, merely requested, actively enforced, or priced? Published policy and observed behavior stay separate.";
+      rows = { "spectrum": tier, "robots": t.robotsUnknown ? "unknown / unreachable" : t.robotsPresent ? blocked + " of " + (t.scoreboard || []).length + " bots blocked" : "no robots.txt", "enforcement": enforcement || "not observed", "price": t.paid && t.paid.http402 ? "402 Payment Required" : "no payment signal" };
+    } else {
+      var doors = [ag.mcp, ag.nlweb, ag.webmcp, ag.agentCard, ag.openapi, ag.apiCatalog].filter(function (x) { return x && (x.verdict === "yes" || x.verdict === "likely" || x.verdict === "maybe" || x.present || x.found); }).length;
+      var maps = (d.llmsTxt && d.llmsTxt.ok ? 1 : 0) + (d.sitemapXml && d.sitemapXml.ok ? 1 : 0);
+      title = "Discovery focus";
+      badgeData = { text: st.verdict || "unknown", kind: st.verdict === "agent-native" ? "ok" : st.verdict === "agent-readable" ? "" : "warn" };
+      caption = "What can an agent discover before it has to drive the human page?";
+      rows = { "strategy": st.note || st.verdict || "unknown", "site maps": maps + " of 2 found · llms.txt / sitemap.xml", "agent doors": doors + " declared or probable", "feeds": (d.feeds || []).length + " advertised" };
+    }
+    return '<div class="lx-focus">' + section(title, badgeData, caption, kvTable(rows) + extra) + "</div>";
+  }
+
   function machineBrief() {
     var a = data.anatomy || {};
     var s = data.structured || {};
@@ -221,7 +277,7 @@
       "links in head": relCount,
       "fetched as": data.fetchedBy || "identified bot",
     };
-    var out = '<div class="lx-brief-lede"><b>Machine briefing.</b> This is a reconstruction from the response and the probes Lens actually ran. It describes available evidence; it does not claim that a site has agreed to a new interface.</div>';
+    var out = '<div class="lx-brief-lede"><b>Machine briefing.</b> This is a reconstruction from the response and the probes Lens actually ran. It describes available evidence; it does not claim that a site has agreed to a new interface.</div>' + lensFocus();
     out += section("Observed document", { text: "observed", kind: "ok" },
       "The minimum contract a machine can recover from this response.", kvTable(facts));
     out += section("Machine affordances", { text: st.verdict || "unknown", kind: st.verdict === "agent-native" ? "ok" : st.verdict === "agent-readable" ? "" : "warn" },
@@ -307,7 +363,7 @@
   }
 
   function renderMachine() {
-    var title = view === "machine" ? "Machine view &middot; Briefing" : view === "delta" ? "Delta view &middot; What changes" : "Machine view &middot; " + LENS_LABEL[lens];
+    var title = view === "machine" ? "Machine view &middot; " + LENS_LABEL[lens] : view === "delta" ? "Delta view &middot; What changes" : "Machine view &middot; " + LENS_LABEL[lens];
     machineH.innerHTML = title;
     if (!data) { return; }
     var fn = { anatomy: lensAnatomy, structured: lensStructured, ai: lensAI, terms: lensTerms, discovery: lensDiscovery }[lens];
@@ -662,7 +718,7 @@
       humanH.innerHTML = view === "delta" ? "Human view &middot; baseline" : "Human view &middot; the live page";
     }
     if (machineH && !data) {
-      machineH.innerHTML = view === "machine" ? "Machine view &middot; Briefing" : view === "delta" ? "Delta view &middot; What changes" : "Machine view &middot; " + LENS_LABEL[lens];
+      machineH.innerHTML = view === "machine" ? "Machine view &middot; " + LENS_LABEL[lens] : view === "delta" ? "Delta view &middot; What changes" : "Machine view &middot; " + LENS_LABEL[lens];
     }
   }
 
@@ -680,7 +736,9 @@
   function setLens(l) {
     lens = l;
     [].forEach.call(document.querySelectorAll(".lx-tab"), function (b) {
-      b.classList.toggle("is-on", b.getAttribute("data-lens") === l);
+      var active = b.getAttribute("data-lens") === l;
+      b.classList.toggle("is-on", active);
+      b.setAttribute("aria-selected", active ? "true" : "false");
     });
     if (data) renderMachine(); else updateModeUi();
   }
