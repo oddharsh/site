@@ -15,7 +15,7 @@ colors that read modern in source but render period-correct.
 ## Quick reference
 
 ```bash
-# production deploys happen from GitHub Actions after a merge to main
+# CI promotes a tested merge to production; Workers Builds deploys it
 # local fallback only: npm run deploy
 
 # add new photos (resize, EXIF-rotate, encode to AVIF+JPG, upload to R2,
@@ -45,14 +45,16 @@ worktrees may edit freely, but a worktree is not a release surface.
   not deploy from a dirty worktree or push agent work directly to `main`.
 - PR CI builds the homepage, enforces the performance budget, dry-runs all
   three Worker configs, and runs the coffee tests.
-- Only a successful CI run for `main` associated with a merged PR triggers the
-  production deploy workflow. GitHub's current free private-repo plan cannot
-  enforce branch protection, so the workflow guard is the release backstop.
-  It deploys `holding/`, `cal/`, and `serendipity/`, then runs the homepage
-  route oracle plus satellite-worker smoke checks.
-- Production credentials live in the GitHub `production` environment. Keep
-  Cloudflare Workers Builds disabled for production once this workflow is
-  enabled, so there is exactly one production deployer.
+- Only a successful CI run for `main` associated with a merged PR can promote
+  the exact tested commit to the machine-owned `production` branch. GitHub's
+  current free private-repo plan cannot enforce branch protection, so the
+  workflow guard is the release backstop. Cloudflare Workers Builds watches
+  `production` and is the only production publisher for `holding/`, `cal/`,
+  and `serendipity/`.
+- Configure one Workers Build project per Worker with `production` as its
+  production branch. Keep the dashboard Build command blank; use the repo's
+  Wrangler-owned build during each Deploy command. GitHub should not hold a
+  Cloudflare production API token for this path.
 
 ---
 
@@ -341,8 +343,9 @@ npx wrangler deploy
    + a delegated click handler.
 
 9. **Production deploys do not use `wrangler pages deploy`.** Merge through
-   GitHub Actions; use the root `wrangler.jsonc` only for local fallback
-   deploys, from the repository root.
+   GitHub Actions; it promotes the tested commit to `production`, where
+   Workers Builds deploys it. Use the root `wrangler.jsonc` only for local
+   fallback deploys, from the repository root.
 
 10. **Hover-only features need `(hover: none)` gating.** Touch devices fire
     synthetic `mouseover`/`mouseout` on long-press, which was causing
