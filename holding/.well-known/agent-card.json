@@ -1,0 +1,191 @@
+{
+  "name": "Aadharsh Site Agent",
+  "description": "Discovery card for the read-only machine interfaces published by aadhar.sh. This host does not expose an A2A task endpoint; use the declared MCP or HTTP JSON interfaces for public data.",
+  "provider": {
+    "organization": "Aadharsh Pannirselvam",
+    "url": "https://aadhar.sh/"
+  },
+  "version": "1.0.0",
+  "documentationUrl": "https://aadhar.sh/llms.txt",
+  "supportedInterfaces": [
+    {
+      "url": "https://aadhar.sh/serendipity/mcp",
+      "protocolBinding": "https://modelcontextprotocol.io/specification/2025-06-18",
+      "protocolVersion": "1.0"
+    }
+  ],
+  "capabilities": {
+    "streaming": false,
+    "pushNotifications": false,
+    "extendedAgentCard": false
+  },
+  "defaultInputModes": [
+    "application/json",
+    "text/plain"
+  ],
+  "defaultOutputModes": [
+    "application/json",
+    "text/plain"
+  ],
+  "skills": [
+    {
+      "id": "serendipity-events",
+      "name": "Serendipity event research",
+      "description": "Search and inspect the public Serendipity event pool: events, attendees, contributors, and co-attendance patterns.",
+      "tags": [
+        "events",
+        "people",
+        "co-attendance",
+        "read-only"
+      ],
+      "examples": [
+        "What events are happening soon?",
+        "Who is going to this event?",
+        "Who am I seeing most often?"
+      ],
+      "inputModes": [
+        "application/json",
+        "text/plain"
+      ],
+      "outputModes": [
+        "application/json"
+      ]
+    },
+    {
+      "id": "site-json-surfaces",
+      "name": "Read public site data",
+      "description": "Read the site's public JSON surfaces, including the current playlist, photo archive indexes, neighborhood crawl, and crawl ledger.",
+      "tags": [
+        "http-json",
+        "music",
+        "photos",
+        "discovery",
+        "read-only"
+      ],
+      "examples": [
+        "What is Aadharsh listening to?",
+        "List the published photo archive metadata.",
+        "Show the current neighborhood crawl snapshot."
+      ],
+      "inputModes": [
+        "text/plain"
+      ],
+      "outputModes": [
+        "application/json"
+      ]
+    },
+    {
+      "id": "webmcp-read-only",
+      "name": "Browser-local read-only tools",
+      "description": "On the homepage, browsers that implement navigator.modelContext can discover two same-origin tools: whats_playing and find_events.",
+      "tags": [
+        "webmcp",
+        "browser",
+        "read-only"
+      ],
+      "examples": [
+        "Use the page's whats_playing tool.",
+        "Find events matching a keyword with the page's find_events tool."
+      ],
+      "inputModes": [
+        "application/json",
+        "text/plain"
+      ],
+      "outputModes": [
+        "application/json",
+        "text/plain"
+      ]
+    }
+  ],
+  "x-aadhar-sh": {
+    "cardType": "discovery-only",
+    "a2a": {
+      "taskEndpoint": null,
+      "note": "No A2A JSON-RPC, HTTP+JSON, or gRPC task endpoint is exposed. The supportedInterfaces entry identifies the site's actual MCP interface using a custom protocol binding."
+    },
+    "interfaces": {
+      "mcp": [
+        {
+          "name": "Serendipity MCP",
+          "url": "https://aadhar.sh/serendipity/mcp",
+          "transport": "streamable-http",
+          "protocolVersion": "2025-06-18",
+          "authentication": "optional bearer credential; public read-only access works anonymously",
+          "documentationUrl": "https://aadhar.sh/serendipity/mcp-info",
+          "serverCard": "https://aadhar.sh/.well-known/mcp.json"
+        }
+      ],
+      "httpJson": [
+        {
+          "name": "Current playlist",
+          "url": "https://aadhar.sh/rn/tracks",
+          "authentication": "anonymous"
+        },
+        {
+          "name": "Photo manifest",
+          "url": "https://aadhar.sh/images/manifest.json",
+          "authentication": "anonymous"
+        },
+        {
+          "name": "Photo captions",
+          "url": "https://aadhar.sh/images/alt.json",
+          "authentication": "anonymous"
+        },
+        {
+          "name": "Photo metadata",
+          "url": "https://aadhar.sh/images/metadata.json",
+          "authentication": "anonymous"
+        },
+        {
+          "name": "Neighborhood crawl",
+          "url": "https://aadhar.sh/around/json",
+          "authentication": "anonymous"
+        },
+        {
+          "name": "Crawler ledger",
+          "url": "https://aadhar.sh/ledger.json",
+          "authentication": "anonymous"
+        }
+      ],
+      "webmcp": {
+        "page": "https://aadhar.sh/",
+        "featureDetection": "navigator.modelContext",
+        "tools": [
+          "whats_playing",
+          "find_events"
+        ],
+        "authentication": "same-origin browser context"
+      },
+      "agentAuth": {
+        "registrationUrl": "https://aadhar.sh/agent/auth",
+        "tokenUrl": "https://aadhar.sh/oauth2/token",
+        "claimUrl": "https://aadhar.sh/agent/auth/claim",
+        "revocationUrl": "https://aadhar.sh/oauth2/revoke",
+        "supportedIdentityTypes": [
+          "anonymous"
+        ],
+        "scopes": [
+          "public.read",
+          "mcp.read",
+          "rn.read",
+          "photos.read",
+          "around.read"
+        ],
+        "documentationUrl": "https://aadhar.sh/auth.md"
+      }
+    },
+    "discovery": {
+      "llms": "https://aadhar.sh/llms.txt",
+      "apiCatalog": "https://aadhar.sh/.well-known/api-catalog",
+      "skillsIndex": "https://aadhar.sh/.well-known/agent-skills/index.json",
+      "oauthProtectedResource": "https://aadhar.sh/.well-known/oauth-protected-resource",
+      "oauthAuthorizationServer": "https://aadhar.sh/.well-known/oauth-authorization-server"
+    },
+    "outboundIdentity": {
+      "name": "AadharshBot",
+      "documentationUrl": "https://aadhar.sh/bot",
+      "jwksUrl": "https://aadhar.sh/.well-known/http-message-signatures-directory",
+      "protocol": "Web Bot Auth over RFC 9421 HTTP Message Signatures"
+    }
+  }
+}

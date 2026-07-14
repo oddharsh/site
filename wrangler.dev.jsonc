@@ -19,7 +19,7 @@
     "binding": "ASSETS",
     "run_worker_first": [
       "/", "/index.html", "/favicon.ico", "/hit.svg",
-      "/auth.md", "/.well-known/api-catalog",
+      "/auth.md", "/.well-known/api-catalog", "/.well-known/agent-card.json",
       "/.well-known/oauth-protected-resource",
       "/.well-known/oauth-authorization-server",
       "/agent/*", "/oauth2/*",

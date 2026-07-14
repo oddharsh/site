@@ -61,7 +61,7 @@ files) are served straight from disk. Worker-owned routes are enumerated in
 | `/` | homepage prerender (HTMLRewriter over `index.html`) + markdown negotiation | `home.js` |
 | `/index.html` | 301 -> `/` | `index.js` |
 | `/favicon.ico` | inline traffic-cone SVG | `index.js` |
-| `/auth.md`, `/.well-known/api-catalog`, `/.well-known/oauth-*` | `serveFreshAsset` (static cards) | `lib/assets.js` |
+| `/auth.md`, `/.well-known/api-catalog`, `/.well-known/agent-card.json`, `/.well-known/oauth-*` | `serveFreshAsset` (static cards) | `lib/assets.js` |
 | `/agent/auth`, `/agent/auth/claim`, `/oauth2/token`, `/oauth2/revoke` | `handleAgentAuth*` | `agent.js` |
 | `/whoareyou`, `/whoareyou.json` | `handleWhoareyou` / `handleWhoareyouJson` | `whoareyou.js` |
 | `/security` | `handleSecurityCenter` | `security.js` |
