@@ -1,9 +1,9 @@
 // Integration tests for the worker's request flow (src/index.js). Rather than
 // SELF (a separate isolate this pool version can't easily inject fetch mocks
 // into), we import the worker and call worker.fetch() directly — same isolate,
-// so the globalThis.fetch stub intercepts its outbound calls. ICAL_URL is ""
-// (fetchBusy short-circuits to no network); RESEND is the stub. The KV binding
-// + working-hours vars come from wrangler.toml via cloudflare:test's `env`.
+// so the globalThis.fetch stub intercepts its outbound calls. The calendar feed
+// and Resend are both stubbed below. The KV binding + working-hours vars come
+// from wrangler.toml via cloudflare:test's `env`.
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { env as baseEnv, createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 import worker from "../src/index.js";
@@ -11,7 +11,19 @@ import { sign } from "../src/sign.js";
 import { getBooking, getRecent } from "../src/booking.js";
 
 const SECRET = "integration-signing-secret";
-const env = { ...baseEnv, SIGNING_SECRET: SECRET, RESEND_API_KEY: "test-key", ICAL_URL: "" };
+const env = {
+  ...baseEnv,
+  SIGNING_SECRET: SECRET,
+  RESEND_API_KEY: "test-key",
+  ICAL_URL: "https://calendar.test/availability.ics",
+};
+
+const EMPTY_ICS = [
+  "BEGIN:VCALENDAR",
+  "VERSION:2.0",
+  "END:VCALENDAR",
+  "",
+].join("\r\n");
 
 let mailCalls;
 beforeEach(async () => {
@@ -25,6 +37,12 @@ beforeEach(async () => {
 
   mailCalls = [];
   vi.stubGlobal("fetch", vi.fn(async (url, init) => {
+    if (String(url) === env.ICAL_URL) {
+      return new Response(EMPTY_ICS, {
+        status: 200,
+        headers: { "content-type": "text/calendar" },
+      });
+    }
     mailCalls.push({ url: String(url), body: JSON.parse(init.body) });
     return new Response(JSON.stringify({ id: "m" }), {
       status: 200, headers: { "content-type": "application/json" },
@@ -60,11 +78,11 @@ const firstSlot = async () => {
 const statusOf = async (id) => (await getBooking(env, id))?.status;
 
 describe("routing", () => {
-  it("GET / renders the booking page (no-store HTML)", async () => {
+  it("GET / renders the booking page with browser revalidation", async () => {
     const res = await dispatch("/");
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toContain("text/html");
-    expect(res.headers.get("cache-control")).toContain("no-store");
+    expect(res.headers.get("cache-control")).toBe("public, max-age=0, s-maxage=30");
     expect((await res.text()).length).toBeGreaterThan(100);
   });
 

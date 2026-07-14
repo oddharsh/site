@@ -10,6 +10,7 @@
     "perf-budget": "node perf-budget.mjs"
   },
   "devDependencies": {
-    "esbuild": "^0.25.0"
+    "esbuild": "^0.25.0",
+    "wrangler": "4.102.0"
   }
 }

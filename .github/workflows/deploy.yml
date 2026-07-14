@@ -1,0 +1,111 @@
+name: Deploy production
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: deploy
+    if: >-
+      ${{
+        github.event_name == 'workflow_dispatch' ||
+        (github.event.workflow_run.conclusion == 'success' &&
+         github.event.workflow_run.head_branch == 'main')
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: production
+      url: https://aadhar.sh
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      RELEASE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            cal/package-lock.json
+
+      - name: Install homepage dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Deploy homepage Worker
+        run: |
+          set -o pipefail
+          mkdir -p .release-artifacts
+          npm run deploy 2>&1 | tee .release-artifacts/homepage-deploy.log
+
+      - name: Install coffee dependencies
+        working-directory: cal
+        run: npm ci --no-audit --no-fund
+
+      - name: Deploy coffee Worker
+        working-directory: cal
+        run: |
+          set -o pipefail
+          npm run deploy 2>&1 | tee ../.release-artifacts/coffee-deploy.log
+
+      - name: Deploy Serendipity Worker
+        run: |
+          set -o pipefail
+          npx wrangler deploy -c serendipity/wrangler.toml 2>&1 | tee .release-artifacts/serendipity-deploy.log
+
+      - name: Verify homepage routes
+        run: node verify-routes.mjs https://aadhar.sh
+
+      - name: Verify satellite Worker routes
+        run: |
+          set -euo pipefail
+          for url in \
+            https://aadhar.sh/coffee \
+            https://aadhar.sh/coffee/slots \
+            https://aadhar.sh/serendipity; do
+            curl --fail --silent --show-error --location \
+              --retry 5 --retry-delay 3 --max-time 30 "$url" -o /dev/null
+            echo "PASS $url"
+          done
+
+      - name: Publish release record
+        if: always()
+        run: |
+          {
+            echo "## Production release"
+            echo "- commit: `${RELEASE_SHA}`"
+            echo "- workflow: [${GITHUB_RUN_ID}](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})"
+            echo "- targets: homepage, coffee, Serendipity"
+            echo "- live verification: route oracle plus coffee/Serendipity smoke checks"
+            echo
+            echo "### Wrangler deployment output"
+            grep -hE 'Current Version ID|Uploaded|Published' .release-artifacts/*-deploy.log || true
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload release evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: production-release-${{ env.RELEASE_SHA }}
+          if-no-files-found: ignore
+          path: |
+            .release-artifacts/
+            verify-baseline.aadhar.sh.json
