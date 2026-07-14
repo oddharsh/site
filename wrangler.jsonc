@@ -10,10 +10,12 @@
   // So `wrangler deploy` (bare), `npm run deploy`, and Workers Builds all ship
   // the minified shells + luna.css — there is no longer a path that serves the
   // readable originals by accident (which is exactly how prod ended up on an
-  // unminified 78KB nav.js). Local dev must NOT use this config (it would pay
-  // the full holding/ -> .build copy on every reload); it uses wrangler.dev.jsonc,
-  // which points at holding/ directly. The two configs' bindings must match;
-  // build.mjs warns on drift.
+  // unminified 78KB nav.js). In Workers Builds, leave the dashboard's separate
+  // Build command blank and set its Deploy command to `npx wrangler deploy`;
+  // Wrangler then owns this one build instead of running it twice. Local dev
+  // must NOT use this config (it would pay the full holding/ -> .build copy on
+  // every reload); it uses wrangler.dev.jsonc, which points at holding/ directly.
+  // The two configs' bindings must match; build.mjs warns on drift.
   "name": "aadhar-sh",
   "main": ".build/holding/_worker.js/index.js",
   "build": { "command": "node build.mjs" },
