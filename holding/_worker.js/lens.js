@@ -18,7 +18,7 @@ import { jsonResponse } from "./lib/http.js";
 // made honestly as AadharshBot. Engine here; the /lens page (handleLens) is the UI.
 
 // /lens — the SSR shell: IE6 address bar, a Human/Machine view toggle, the
-// five lens tabs, two panes, seeded examples. The renderer lives in /lens.js
+// six lens tabs, two panes, seeded examples. The renderer lives in /lens.js
 // (a real static file, SW-cached like nav.js) so it can use normal JS without
 // fighting this template literal's ${} and backticks.
 // the /lens shell is a fully static template (all per-request work lives in
@@ -38,7 +38,7 @@ function renderLensShell() {
     title: "The Other Web · aadhar.sh",
     path: "The Other Web",
     width: 980,
-    description: "Paste any URL and see it the way a machine does: raw HTML, headers, JSON-LD and microformats, an LLM-style markdown render, the terms it sets for AI crawlers, and the site's robots.txt / sitemap / llms.txt — side by side with the human view.",
+    description: "Paste any URL and see the human page, a transparent agent-readiness score, bot-specific access samples, raw HTML, structured data, machine terms, and the site's discovery surfaces side by side.",
     robots: "index, nofollow",
     css: `
 h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color:oklch(41.92% 0.0962 250.51); margin:0 0 2px; font-weight:bold; }
@@ -137,6 +137,37 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 .lx-bots .ua { font-family:"Courier New",monospace; color:oklch(30% 0.05 255); white-space:nowrap; }
 .lx-bots .rule { font-family:"Courier New",monospace; font-size:8.2pt; color:oklch(48% 0 0); word-break:break-all; }
 .lx-bots .who { color:oklch(55% 0 0); font-size:8pt; }
+.lx-readiness-hero { display:flex; align-items:center; gap:15px; padding:10px 12px; margin:0 0 9px; border:1px solid oklch(73% 0.06 250); border-radius:4px; background:linear-gradient(105deg,oklch(97% 0.025 250),#fff); }
+.lx-readiness-number { font:bold 29pt "Trebuchet MS",Verdana,sans-serif; line-height:1; color:oklch(38% 0.14 255); white-space:nowrap; }
+.lx-readiness-number span { font:normal 10pt Tahoma,Verdana,sans-serif; color:oklch(53% 0 0); margin-left:2px; }
+.lx-readiness-kicker { font:8pt Tahoma,Verdana,sans-serif; color:oklch(50% 0 0); text-transform:uppercase; letter-spacing:.06em; }
+.lx-readiness-level { display:flex; align-items:center; gap:6px; margin:2px 0 3px; font-size:10pt; color:oklch(30% 0.04 255); }
+.lx-readiness-cats { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:5px; margin:5px 0 12px; }
+.lx-readiness-cat { border:1px solid oklch(82% 0.03 250); border-radius:3px; padding:6px 8px; background:#fff; }
+.lx-readiness-cat > div { display:flex; justify-content:space-between; gap:7px; font-size:8.4pt; color:oklch(37% 0.04 255); }
+.lx-readiness-cat > div span { font:8pt "Courier New",monospace; color:oklch(55% 0 0); white-space:nowrap; }
+.lx-readiness-cat strong { display:block; margin-top:2px; font:bold 14pt "Courier New",monospace; color:oklch(43% 0.13 150); }
+.lx-readiness-cat.is-skipped strong { color:oklch(58% 0 0); }
+.lx-projection { margin:0 0 12px; padding:6px 8px; border-left:3px solid oklch(60% 0.15 50); background:oklch(97% 0.035 75); color:oklch(42% 0.06 50); font-size:8.7pt; }
+.lx-projection span { color:oklch(52% 0 0); }
+.lx-readiness-checks { display:grid; gap:5px; margin-top:7px; }
+.lx-readiness-check { padding:6px 8px; border:1px solid oklch(88% 0.015 250); border-radius:3px; background:#fff; }
+.lx-readiness-check-top { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.lx-readiness-check-top b { font-size:9pt; color:oklch(32% 0.05 255); }
+.lx-readiness-detail { margin-top:2px; font-size:8.4pt; color:oklch(52% 0 0); }
+.lx-readiness-fix { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:5px; padding-top:5px; border-top:1px dotted oklch(85% 0.02 250); font-size:8.4pt; color:oklch(42% 0.07 50); }
+.lx-copy-fix, .lx-copy-all { border:1px solid oklch(62% 0.05 250); border-radius:3px; padding:2px 7px; background:linear-gradient(180deg,#fff,oklch(91% 0.012 250)); color:oklch(34% 0.07 255); font:8pt Tahoma,Verdana,sans-serif; cursor:pointer; white-space:nowrap; }
+.lx-copy-fix:hover, .lx-copy-all:hover { background:oklch(93% 0.04 250); }
+.lx-copy-all { margin:0 0 7px; font-weight:bold; }
+.lx-next-actions { display:grid; gap:4px; margin:0 0 9px; }
+.lx-next-actions div { display:grid; grid-template-columns:145px 1fr; gap:8px; padding:4px 6px; background:oklch(98% 0.01 250); border-left:3px solid oklch(60% 0.15 50); font-size:8.4pt; }
+.lx-next-actions b { color:oklch(34% 0.07 255); }
+.lx-next-actions span { color:oklch(46% 0 0); }
+.lx-bot-matrix { width:100%; border-collapse:collapse; font-size:8.4pt; }
+.lx-bot-matrix td, .lx-bot-matrix th { border-bottom:1px solid oklch(93% 0.01 250); padding:4px 7px 4px 0; text-align:left; vertical-align:top; }
+.lx-bot-matrix th { font-size:7.5pt; font-weight:normal; color:oklch(50% 0 0); text-transform:uppercase; letter-spacing:.04em; }
+.lx-bot-matrix .ua { font-family:"Courier New",monospace; color:oklch(30% 0.05 255); white-space:nowrap; }
+.lx-bot-matrix .rule { color:oklch(47% 0 0); }
 .lx-badge.no { background:oklch(52% 0.17 27); }
 .lx-kindrow td { font-family:"Trebuchet MS",Verdana,sans-serif; font-size:8.6pt; font-weight:bold; color:oklch(38% 0.07 255); padding-top:9px; }
 .lx-mult { font-family:"Courier New",monospace; font-size:7.8pt; color:oklch(38% 0.09 150); background:oklch(94% 0.04 150); border:1px solid oklch(80% 0.06 150); border-radius:8px; padding:1px 7px; white-space:nowrap; }
@@ -171,7 +202,7 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 .lx-stage-copy .lx-badge { margin-right:4px; }
 .lx-proof { margin-top:8px; font-size:8.2pt; color:oklch(52% 0 0); }
 .lx-proof b { color:oklch(38% 0.06 255); }
-@media (max-width:560px){ .lx-cf-grid{ grid-template-columns:1fr; } .lx-stage{ grid-template-columns:74px 1fr; } }
+@media (max-width:560px){ .lx-cf-grid{ grid-template-columns:1fr; } .lx-stage{ grid-template-columns:74px 1fr; } .lx-readiness-cats{ grid-template-columns:1fr; } .lx-readiness-hero{ align-items:flex-start; } .lx-next-actions div{ grid-template-columns:1fr; gap:2px; } .lx-bot-matrix{ min-width:620px; } }
 
 /* status bar */
 .lx-status { margin-top:9px; border-top:1px solid oklch(86% 0.03 260); padding-top:6px; display:flex; flex-wrap:wrap; gap:5px 14px; font-size:8.6pt; color:oklch(45% 0 0); }
@@ -183,7 +214,7 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
 `,
     body: `
     <h1>The Other Web</h1>
-    <p class="lx-lede">Every page has a second life as data. Paste a URL, then switch between the human page, a machine briefing, and the infrastructure that would change the route between them. Fetched server-side, honestly, as <a href="/bot">AadharshBot</a>.</p>
+    <p class="lx-lede">Every page has a second life as data. Paste a URL to see what a person receives, what representative bots can retrieve, and which missing web surfaces limit them. The score is a map, not a verdict: every point stays tied to evidence. Fetched server-side, honestly, as <a href="/bot">AadharshBot</a>.</p>
 
     <form class="lx-addr" id="lx-form">
       <span class="lx-globe" aria-hidden="true"></span>
@@ -210,7 +241,8 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
         <button class="lx-seg" data-view="delta" role="radio" aria-checked="false" type="button">Delta</button>
       </div>
       <div class="lx-lenses" role="tablist" aria-label="machine lens">
-        <button class="lx-tab is-on" data-lens="anatomy" role="tab" aria-selected="true" aria-controls="lx-machine-body" type="button">Anatomy</button>
+        <button class="lx-tab is-on" data-lens="readiness" role="tab" aria-selected="true" aria-controls="lx-machine-body" type="button">Readiness</button>
+        <button class="lx-tab" data-lens="anatomy" role="tab" aria-selected="false" aria-controls="lx-machine-body" type="button">Anatomy</button>
         <button class="lx-tab" data-lens="structured" role="tab" aria-selected="false" aria-controls="lx-machine-body" type="button">Structured</button>
         <button class="lx-tab" data-lens="ai" role="tab" aria-selected="false" aria-controls="lx-machine-body" type="button">AI view</button>
         <button class="lx-tab" data-lens="terms" role="tab" aria-selected="false" aria-controls="lx-machine-body" type="button">Terms</button>
@@ -225,7 +257,7 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
         <div class="lx-body" id="lx-human-body"><div class="lx-empty">Paste a URL above to see it through both eyes.</div></div>
       </section>
       <section class="lx-pane lx-pane-machine" id="lx-machine">
-        <div class="lx-pane-h" id="lx-machine-h">Machine view &middot; Anatomy</div>
+        <div class="lx-pane-h" id="lx-machine-h">Machine view &middot; Readiness</div>
         <div class="lx-body" id="lx-machine-body"><div class="lx-empty">The markup, metadata, and machine directives land here.</div></div>
       </section>
     </div>
@@ -235,7 +267,7 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
 `,
     // The shell is cached at the edge and browsers cache static scripts too;
     // version the client URL so a fresh shell cannot pair with an older lens.js.
-    scripts: `<script src="/lens.js?v=3" defer></script>`,
+    scripts: `<script src="/lens.js?v=4" defer></script>`,
     cache: "public, max-age=60, s-maxage=300",
     headers: {
       "x-robots-tag": "noindex",
@@ -460,7 +492,7 @@ export async function lensInspect(targetUrl, env) {
     catch { return null; }
   })();
   if (origin) {
-    const [robots, sitemap, llms, llmsFull, aiTxt, secTxt, tdmrep, agentCard, openapi, aiPlugin, apiCatalog, mcp, nlweb, mdNego] = await Promise.all([
+    const [robots, sitemap, llms, llmsFull, aiTxt, secTxt, tdmrep, agentCard, openapi, aiPlugin, apiCatalog, mcp, nlweb, mdNego, webBotAuth, openidConfig, oauthServer, oauthResource, authMd, mcpServerCard, agentSkills, ucp, acp, ap2, dnsAid, botViews] = await Promise.all([
       lensProbe(origin + "/robots.txt", env), lensProbe(origin + "/sitemap.xml", env),
       lensProbe(origin + "/llms.txt", env), lensProbe(origin + "/llms-full.txt", env),
       lensProbe(origin + "/ai.txt", env), lensProbe(origin + "/.well-known/security.txt", env),
@@ -472,10 +504,28 @@ export async function lensInspect(targetUrl, env) {
       lensProbeMcp(origin, env),
       lensProbeNlweb(origin, env),
       isHtml ? lensProbeMdNego(finalUrl, env) : Promise.resolve(null),
+      lensProbe(origin + "/.well-known/http-message-signatures-directory", env),
+      lensProbe(origin + "/.well-known/openid-configuration", env),
+      lensProbe(origin + "/.well-known/oauth-authorization-server", env),
+      lensProbe(origin + "/.well-known/oauth-protected-resource", env),
+      lensProbe(origin + "/auth.md", env),
+      lensProbe(origin + "/.well-known/mcp/server-card.json", env),
+      lensProbe(origin + "/.well-known/agent-skills/index.json", env),
+      lensProbe(origin + "/.well-known/ucp", env),
+      lensProbe(origin + "/.well-known/acp.json", env),
+      lensProbe(origin + "/.well-known/ap2", env),
+      lensProbeDnsAid(new URL(finalUrl).hostname),
+      lensProbeBotViews(finalUrl, env),
     ]);
     const feeds = (out.structured?.relLinks || []).filter((l) =>
       /alternate/.test(l.rel) && /(rss|atom|feed|\+xml|\+json)/i.test((l.type || "") + " " + (l.href || "")));
-    out.discovery = { origin, robotsTxt: robots, sitemapXml: sitemap, llmsTxt: llms, llmsFullTxt: llmsFull, aiTxt, securityTxt: secTxt, feeds };
+    out.discovery = {
+      origin, robotsTxt: robots, sitemapXml: sitemap, llmsTxt: llms, llmsFullTxt: llmsFull,
+      aiTxt, securityTxt: secTxt, feeds, dnsAid,
+      webBotAuth, oauthDiscovery: { openidConfiguration: openidConfig, oauthAuthorizationServer: oauthServer },
+      oauthProtectedResource: oauthResource, authMd, mcpServerCard, agentSkills,
+      commerce: { ucp, acp, ap2 },
+    };
     out.ai = out.ai || {};
     out.ai.llmsTxtPresent = llms.ok;
     out.ai.directives = {
@@ -490,6 +540,11 @@ export async function lensInspect(targetUrl, env) {
     out.agent = lensAgentDoors({
       llmsTxt: llms, mdNego, mcp, nlweb, agentCard, openapi, aiPlugin, apiCatalog,
       webmcp: isHtml ? lensDetectWebmcp(body) : { found: false },
+    });
+    out.botViews = botViews;
+    out.readiness = lensReadiness({
+      finalUrl, status: res.status, headers, body, robots, sitemap, terms: out.terms,
+      discovery: out.discovery, agent: out.agent, openapi, botViews,
     });
   }
   return out;
@@ -520,6 +575,16 @@ export async function lensFetch(targetUrl, env, signal, accept) {
   try {
     const u = new URL(targetUrl);
     if (env.ASSETS && u.hostname.toLowerCase() === CANONICAL_HOST) {
+      // The public homepage negotiates text/markdown in the Worker before the
+      // static asset layer. Reproduce that branch here so a self-scan measures
+      // the same surface an external agent receives, not just /index.html.
+      if (u.pathname === "/" && /text\/markdown/i.test(headers.get("accept") || "")) {
+        const md = await env.ASSETS.fetch(new Request(new URL("/index.md", u).toString(), { method: "GET", headers }));
+        if (md.ok) {
+          const body = await md.text();
+          return new Response(body, { status: 200, headers: { "content-type": "text/markdown; charset=utf-8", "x-markdown-tokens": String(Math.ceil(body.length / 4)), "vary": "accept" } });
+        }
+      }
       return env.ASSETS.fetch(new Request(u.toString(), { method: "GET", headers }));
     }
   } catch (_e) { /* fall through to a normal fetch */ }
@@ -541,6 +606,81 @@ export async function lensReadCapped(res, max) {
   const merged = new Uint8Array(len); let off = 0;
   for (const c of chunks) { merged.set(c, off); off += c.length; }
   return { text: new TextDecoder("utf-8").decode(merged), truncated };
+}
+
+// DNS-AID is a DNS surface, not an HTTP file. Query the three discovery names
+// the scanner recognizes through Cloudflare's DNS-over-HTTPS endpoint and keep
+// the result deliberately small: Lens is showing whether a door exists, not
+// pretending to be a full DNS debugger.
+export async function lensProbeDnsAid(hostname) {
+  const names = ["_index._agents.", "_a2a._agents.", "_mcp._agents."].map((prefix) => prefix + hostname);
+  try {
+    const rows = await Promise.all(names.map(async (name) => {
+      const ctrl = new AbortController();
+      const to = setTimeout(() => ctrl.abort(), 4500);
+      try {
+        const url = "https://cloudflare-dns.com/dns-query?name=" + encodeURIComponent(name) + "&type=SVCB&do=1";
+        const res = await fetch(url, { headers: { accept: "application/dns-json" }, signal: ctrl.signal, cf: { cacheTtl: 0 } });
+        const body = await res.json();
+        const answers = Array.isArray(body.Answer) ? body.Answer : [];
+        return { name, status: res.status, dnssecValidated: body.AD === true, answers: answers.filter((a) => a.type === 64 || a.type === 65).length };
+      } finally { clearTimeout(to); }
+    }));
+    const records = rows.filter((r) => r.answers > 0);
+    return { ok: true, found: records.length > 0, dnssecValidated: records.some((r) => r.dnssecValidated), names, records: rows };
+  } catch (e) {
+    return { ok: false, found: false, names, error: (e && e.message) || String(e) };
+  }
+}
+
+// These are representative request identities, not claims about the exact
+// implementation each vendor uses. A bot view is a bounded GET observation;
+// the policy verdict in Terms remains the source of truth for robots.txt.
+const LENS_BOT_VIEWS = [
+  { key: "GPTBot", label: "GPTBot", owner: "OpenAI", ua: "GPTBot/1.0" },
+  { key: "ClaudeBot", label: "ClaudeBot", owner: "Anthropic", ua: "ClaudeBot/1.0" },
+  { key: "CCBot", label: "CCBot", owner: "Common Crawl", ua: "CCBot/2.0" },
+  { key: "Google-Extended", label: "Google-Extended", owner: "Google", ua: "Google-Extended" },
+  { key: "PerplexityBot", label: "PerplexityBot", owner: "Perplexity", ua: "PerplexityBot/1.0" },
+  { key: "ChatGPT-User", label: "ChatGPT-User", owner: "OpenAI", ua: "ChatGPT-User/1.0" },
+];
+
+export async function lensFetchAsBot(targetUrl, env, signal, userAgent) {
+  const headers = new Headers({
+    "user-agent": userAgent,
+    accept: "text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.7",
+    "accept-language": "en-US,en;q=0.9",
+  });
+  try {
+    const u = new URL(targetUrl);
+    if (env.ASSETS && u.hostname.toLowerCase() === CANONICAL_HOST) {
+      return env.ASSETS.fetch(new Request(u.toString(), { method: "GET", headers }));
+    }
+  } catch (_e) { /* fall through to a normal fetch */ }
+  return fetch(targetUrl, { method: "GET", headers, redirect: "follow", signal, cf: { cacheTtl: 0 } });
+}
+
+export async function lensProbeBotView(targetUrl, env, profile) {
+  const ctrl = new AbortController();
+  const to = setTimeout(() => ctrl.abort(), 4500);
+  try {
+    const res = await lensFetchAsBot(targetUrl, env, ctrl.signal, profile.ua);
+    const contentType = (res.headers.get("content-type") || "").split(";")[0].trim();
+    const cap = await lensReadCapped(res, 2048);
+    const challenge = res.headers.get("cf-mitigated") === "challenge" || /challenge-platform|<title>Just a moment/i.test(cap.text);
+    return {
+      key: profile.key, label: profile.label, owner: profile.owner, userAgent: profile.ua,
+      status: res.status, contentType, sampleBytes: cap.text.length,
+      blocked: challenge || [401, 403, 406, 429, 451].includes(res.status), challenge,
+      redirected: res.url !== targetUrl,
+    };
+  } catch (e) {
+    return { key: profile.key, label: profile.label, owner: profile.owner, userAgent: profile.ua, status: null, contentType: "", sampleBytes: 0, blocked: false, challenge: false, error: (e && e.message) || String(e) };
+  } finally { clearTimeout(to); }
+}
+
+export function lensProbeBotViews(targetUrl, env) {
+  return Promise.all(LENS_BOT_VIEWS.map((profile) => lensProbeBotView(targetUrl, env, profile)));
 }
 
 // small, forgiving probe for a single site-level file.
@@ -1010,4 +1150,110 @@ export function lensAgentDoors({ llmsTxt, mdNego, mcp, nlweb, webmcp, agentCard,
   }
   doors.strategy = { verdict, note, action, readable, unknowns };
   return doors;
+}
+
+// ── agent readiness rubric -------------------------------------------------
+// A local, evidence-backed implementation of the public IsItAgentReady rubric.
+// The score is intentionally transparent: pass / (pass + fail + unknown),
+// with neutral emerging-commerce checks excluded. A site can inspect exactly
+// why a point moved instead of receiving an opaque vendor verdict.
+const LENS_READINESS_META = {
+  robotsTxt: { category: "discoverability", label: "robots.txt" }, sitemap: { category: "discoverability", label: "Sitemap" },
+  linkHeaders: { category: "discoverability", label: "Link headers" }, dnsAid: { category: "discoverability", label: "DNS-AID" },
+  markdownNegotiation: { category: "contentAccessibility", label: "Markdown negotiation" },
+  robotsTxtAiRules: { category: "botAccessControl", label: "AI bot rules" }, contentSignals: { category: "botAccessControl", label: "Content Signals" },
+  webBotAuth: { category: "botAccessControl", label: "Web Bot Auth" }, apiCatalog: { category: "discovery", label: "API Catalog" },
+  oauthDiscovery: { category: "discovery", label: "OAuth discovery" }, oauthProtectedResource: { category: "discovery", label: "OAuth Protected Resource" },
+  authMd: { category: "discovery", label: "Auth.md" }, mcpServerCard: { category: "discovery", label: "MCP Server Card" },
+  a2aAgentCard: { category: "discovery", label: "A2A Agent Card", optional: true, countInScore: false },
+  agentSkills: { category: "discovery", label: "Agent Skills" }, webMcp: { category: "discovery", label: "WebMCP" },
+  x402: { category: "commerce", label: "x402", optional: true, countInScore: false }, mpp: { category: "commerce", label: "MPP", optional: true, countInScore: false },
+  ucp: { category: "commerce", label: "UCP", optional: true, countInScore: false }, acp: { category: "commerce", label: "ACP", optional: true, countInScore: false },
+  ap2: { category: "commerce", label: "AP2", optional: true, countInScore: false },
+};
+
+const LENS_READINESS_CATEGORIES = [
+  { key: "discoverability", label: "Discoverability", countInScore: true },
+  { key: "contentAccessibility", label: "Content Accessibility", countInScore: true },
+  { key: "botAccessControl", label: "Bot Access Control", countInScore: true },
+  { key: "discovery", label: "API, Auth, MCP & Skill Discovery", countInScore: true },
+  { key: "commerce", label: "Commerce", countInScore: false },
+];
+
+function lensJsonShape(probe, validate) {
+  if (!probe || probe.error) return { status: "unknown", detail: "probe did not answer" };
+  if (!probe.ok) return { status: "fail", detail: "HTTP " + (probe.status || "error") };
+  try {
+    const json = JSON.parse(probe.body || "");
+    return validate(json) ? { status: "pass", detail: "valid JSON shape" } : { status: "fail", detail: "JSON answered, but the expected fields were absent" };
+  } catch (_e) { return { status: "fail", detail: "answered, but was not valid JSON" }; }
+}
+
+function lensReadinessItem(key, status, detail) {
+  const meta = LENS_READINESS_META[key];
+  return {
+    key, category: meta.category, label: meta.label, status, detail,
+    optional: !!meta.optional,
+    countInScore: meta.countInScore !== false && !meta.optional,
+  };
+}
+
+export function lensReadiness({ headers, robots, sitemap, terms, discovery, agent, openapi, botViews }) {
+  const items = {};
+  const robotsParsed = robots && robots.ok ? lensParseRobots(robots.body || "") : null;
+  const robotsRules = robotsParsed && robotsParsed.groups.length > 0;
+  const link = String((headers && headers.link) || "");
+  const usefulLinks = (link.match(/rel\s*=\s*["']?(?:sitemap|alternate|service-doc|service-desc|api-catalog)/gi) || []).length;
+  const botAuth = lensJsonShape(discovery && discovery.webBotAuth, (j) => Array.isArray(j.keys) && j.keys.length > 0);
+  const oauthOpen = lensJsonShape(discovery && discovery.oauthDiscovery && discovery.oauthDiscovery.openidConfiguration, (j) => !!(j.issuer || j.authorization_endpoint || j.token_endpoint));
+  const oauthServer = lensJsonShape(discovery && discovery.oauthDiscovery && discovery.oauthDiscovery.oauthAuthorizationServer, (j) => !!(j.issuer || j.token_endpoint || j.authorization_endpoint));
+  const oauthResource = lensJsonShape(discovery && discovery.oauthProtectedResource, (j) => !!(j.resource || j.authorization_servers || j.scopes_supported));
+  const mcpCard = lensJsonShape(discovery && discovery.mcpServerCard, (j) => !!(j.serverInfo || j.server || j.name || j.capabilities));
+  const skills = lensJsonShape(discovery && discovery.agentSkills, (j) => Array.isArray(j.skills));
+  const ucp = lensJsonShape(discovery && discovery.commerce && discovery.commerce.ucp, (j) => !!(j.protocol || j.version || j.services || j.capabilities));
+  const acp = lensJsonShape(discovery && discovery.commerce && discovery.commerce.acp, (j) => !!(j.protocol || j.api_base_url || j.capabilities || j.services));
+  const ap2 = lensJsonShape(discovery && discovery.commerce && discovery.commerce.ap2, (j) => !!(j.protocol || j.version || j.capabilities));
+
+  items.robotsTxt = lensReadinessItem("robotsTxt", robots && robots.ok ? "pass" : robots && (robots.status === 404 || robots.status === 410) ? "fail" : "unknown", robots && robots.ok ? "valid response with " + robotsParsed.groups.length + " User-agent group(s)" : "robots.txt did not return a readable 200");
+  items.sitemap = lensReadinessItem("sitemap", sitemap && sitemap.ok ? "pass" : sitemap && (sitemap.status === 404 || sitemap.status === 410) ? "fail" : "unknown", sitemap && sitemap.ok ? "sitemap answered with " + ((sitemap.body || "").match(/<url>|<sitemap>/gi) || []).length + " URL entries" : "sitemap.xml was not found or did not answer");
+  items.linkHeaders = lensReadinessItem("linkHeaders", usefulLinks ? "pass" : "fail", usefulLinks ? usefulLinks + " agent-useful Link relation(s)" : "no agent-useful Link relations on the fetched response");
+  items.dnsAid = lensReadinessItem("dnsAid", discovery && discovery.dnsAid && discovery.dnsAid.ok ? (discovery.dnsAid.found ? "pass" : "fail") : "unknown", discovery && discovery.dnsAid && discovery.dnsAid.found ? "DNS-AID record found" : "no DNS-AID record found at the checked discovery names");
+  items.markdownNegotiation = lensReadinessItem("markdownNegotiation", agent && agent.mdNegotiation && agent.mdNegotiation.supported ? "pass" : agent && agent.mdNegotiation && agent.mdNegotiation.note === "probe failed" ? "unknown" : "fail", agent && agent.mdNegotiation && agent.mdNegotiation.supported ? "same URL returned text/markdown" : "Accept: text/markdown stayed non-markdown");
+  items.robotsTxtAiRules = lensReadinessItem("robotsTxtAiRules", robots && robots.ok ? (robotsRules ? "pass" : "fail") : "unknown", robotsRules ? (robotsParsed.groups.some((g) => g.agents.some((a) => a !== "*" && /bot|crawler|extended|spider|anthropic|openai|claude/i.test(a))) ? "named AI bot rules found" : "wildcard rules apply to crawlers") : "robots policy could not be evaluated");
+  items.contentSignals = lensReadinessItem("contentSignals", terms && terms.robotsUnknown ? "unknown" : terms && terms.signals && terms.signals.length ? "pass" : "fail", terms && terms.signals && terms.signals.length ? terms.signals.length + " Content-Signal directive(s)" : "no Content-Signal directive found");
+  items.webBotAuth = lensReadinessItem("webBotAuth", botAuth.status, botAuth.detail);
+  items.apiCatalog = lensReadinessItem("apiCatalog", agent && agent.apiCatalog && agent.apiCatalog.present ? "pass" : agent && agent.apiCatalog && agent.apiCatalog.unknown ? "unknown" : "fail", agent && agent.apiCatalog && agent.apiCatalog.present ? agent.apiCatalog.detail : "no valid API Catalog linkset");
+  items.oauthDiscovery = lensReadinessItem("oauthDiscovery", oauthOpen.status === "pass" || oauthServer.status === "pass" ? "pass" : oauthOpen.status === "unknown" || oauthServer.status === "unknown" ? "unknown" : "fail", oauthOpen.status === "pass" || oauthServer.status === "pass" ? "OAuth or OIDC discovery metadata found" : "no valid OAuth/OIDC discovery document");
+  items.oauthProtectedResource = lensReadinessItem("oauthProtectedResource", oauthResource.status, oauthResource.detail);
+  items.authMd = lensReadinessItem("authMd", discovery && discovery.authMd && discovery.authMd.ok && String(discovery.authMd.body || "").trim() ? "pass" : discovery && discovery.authMd && discovery.authMd.error ? "unknown" : "fail", discovery && discovery.authMd && discovery.authMd.ok ? "auth.md answered" : "no auth.md registration guide");
+  items.mcpServerCard = lensReadinessItem("mcpServerCard", mcpCard.status, mcpCard.detail);
+  items.a2aAgentCard = lensReadinessItem("a2aAgentCard", agent && agent.agentCard && agent.agentCard.present ? "pass" : "fail", agent && agent.agentCard && agent.agentCard.present ? agent.agentCard.detail : "no valid A2A Agent Card");
+  items.agentSkills = lensReadinessItem("agentSkills", skills.status, skills.detail);
+  items.webMcp = lensReadinessItem("webMcp", agent && agent.webmcp && agent.webmcp.found ? "pass" : "fail", agent && agent.webmcp && agent.webmcp.found ? "modelContext marker found in page" : "no WebMCP marker found in the fetched HTML");
+  items.x402 = lensReadinessItem("x402", terms && terms.paid && terms.paid.http402 ? "pass" : "neutral", terms && terms.paid && terms.paid.http402 ? "HTTP 402 payment requirement observed" : "not observed (optional; not scored)");
+  const openapiText = openapi && openapi.ok ? String(openapi.body || "") : "";
+  items.mpp = lensReadinessItem("mpp", /x-payment-info|mpp/i.test(openapiText) ? "pass" : "neutral", /x-payment-info|mpp/i.test(openapiText) ? "payment metadata found in OpenAPI" : "not observed (optional; not scored)");
+  items.ucp = lensReadinessItem("ucp", ucp.status === "pass" ? "pass" : "neutral", ucp.status === "pass" ? "UCP-shaped discovery metadata found" : "not observed (optional; not scored)");
+  items.acp = lensReadinessItem("acp", acp.status === "pass" ? "pass" : "neutral", acp.status === "pass" ? "ACP-shaped discovery metadata found" : "not observed (optional; not scored)");
+  items.ap2 = lensReadinessItem("ap2", ap2.status === "pass" ? "pass" : "neutral", ap2.status === "pass" ? "AP2-shaped discovery metadata found" : "not observed (optional; not scored)");
+
+  const categories = LENS_READINESS_CATEGORIES.map((category) => {
+    const values = Object.values(items).filter((item) => item.category === category.key && item.countInScore && item.status !== "neutral");
+    const passed = values.filter((item) => item.status === "pass").length;
+    return { key: category.key, label: category.label, score: values.length ? Math.round((passed / values.length) * 100) : 0, passed, total: values.length, checkCount: Object.values(items).filter((item) => item.category === category.key).length, countInScore: category.countInScore };
+  });
+  const counted = Object.values(items).filter((item) => item.countInScore && item.status !== "neutral");
+  const passed = counted.filter((item) => item.status === "pass").length;
+  const overall = counted.length ? Math.round((passed / counted.length) * 100) : 0;
+  const actionSurface = !!(agent && agent.strategy && agent.strategy.action && agent.strategy.action.length);
+  const strongPublishing = items.markdownNegotiation.status === "pass" && items.contentSignals.status === "pass" && items.linkHeaders.status === "pass";
+  const baseline = items.robotsTxt.status === "pass" || items.sitemap.status === "pass";
+  const level = actionSurface ? { number: 5, name: "Agent-Native" } : strongPublishing ? { number: 3, name: "Agent-Readable" } : baseline ? { number: 1, name: "Basic Web Presence" } : { number: 0, name: "Not Ready" };
+  const nextActions = Object.values(items).filter((item) => item.status === "fail" && item.countInScore).slice(0, 5).map((item) => ({ key: item.key }));
+  return {
+    overall, level: level.number, levelName: level.name,
+    categories, checks: items, counted: counted.length, passed,
+    scoringNote: "Passes divided by pass + fail + unknown; neutral emerging-commerce checks are shown but excluded.",
+    nextActions, botViews: botViews || [],
+  };
 }
