@@ -50,6 +50,13 @@
   }
   function has(o) { return o && typeof o === "object" && Object.keys(o).length > 0; }
 
+  function readInitialData() {
+    var node = document.getElementById("lx-initial-data");
+    if (!node) return null;
+    try { return JSON.parse(node.textContent || "null"); } catch (e) { return null; }
+  }
+  var initialData = readInitialData();
+
   var MODE_NOTE = {
     both: "Compare keeps the live page beside the selected evidence lens.",
     human: "Human shows the page as a person receives it in a browser.",
@@ -59,6 +66,73 @@
 
   function modeLabel() {
     return view === "both" ? "Compare" : view.charAt(0).toUpperCase() + view.slice(1);
+  }
+
+  function readUrlState() {
+    var p = new URLSearchParams(location.search);
+    var views = ["both", "human", "machine", "delta"];
+    var lenses = ["readiness", "anatomy", "structured", "ai", "terms", "discovery"];
+    var cf = {};
+    (p.get("cf") || "").split(",").forEach(function (key) {
+      if (["markdown", "semantic", "contract", "authority", "receipt"].indexOf(key) >= 0) cf[key] = true;
+    });
+    return {
+      url: p.get("url") || "",
+      view: views.indexOf(p.get("view")) >= 0 ? p.get("view") : "both",
+      lens: lenses.indexOf(p.get("lens")) >= 0 ? p.get("lens") : "readiness",
+      counterfactuals: cf,
+    };
+  }
+
+  function syncUrl(push) {
+    var u;
+    try { u = new URL(location.href); } catch (e) { return; }
+    u.pathname = "/lens";
+    ["url", "view", "lens", "cf"].forEach(function (key) { u.searchParams.delete(key); });
+    var raw = urlInput.value.trim();
+    if (raw) u.searchParams.set("url", raw);
+    if (view !== "both") u.searchParams.set("view", view);
+    if (lens !== "readiness") u.searchParams.set("lens", lens);
+    var cf = Object.keys(counterfactuals).filter(function (key) { return counterfactuals[key]; });
+    if (cf.length) u.searchParams.set("cf", cf.join(","));
+    var next = u.pathname + (u.search || "") + (u.hash || "");
+    var current = location.pathname + location.search + location.hash;
+    if (next === current) return;
+    try {
+      (push ? history.pushState : history.replaceState).call(history, null, "", next);
+    } catch (e) {}
+  }
+
+  function showError(j) {
+    var msg = (j && j.error) || "Something went wrong.";
+    data = null;
+    machineBody.innerHTML = '<div class="lx-empty">' + esc(msg) + "</div>";
+    humanBody.innerHTML = '<div class="lx-empty">No page to show.</div>';
+    statusBar.innerHTML = '<span class="err">Failed:</span> <span>' + esc(msg) + "</span>";
+  }
+
+  function parseFragmentResponse(response, text) {
+    var ct = response.headers.get("content-type") || "";
+    if (ct.indexOf("json") >= 0) return { data: JSON.parse(text), fragment: null };
+    var doc = new DOMParser().parseFromString(text, "text/html");
+    var root = doc.getElementById("lx-fragments");
+    var script = doc.getElementById("lx-initial-data");
+    if (!root || !script) throw new Error("The fragment response was incomplete.");
+    return {
+      data: JSON.parse(script.textContent || "null"),
+      fragment: {
+        human: (root.querySelector("[data-lens-part=human]") || {}).innerHTML || "",
+        machine: (root.querySelector("[data-lens-part=machine]") || {}).innerHTML || "",
+        status: (root.querySelector("[data-lens-part=status]") || {}).innerHTML || "",
+      },
+    };
+  }
+
+  function applyFragment(fragment) {
+    if (!fragment) return;
+    humanBody.innerHTML = fragment.human;
+    machineBody.innerHTML = fragment.machine;
+    statusBar.innerHTML = fragment.status;
   }
 
   // ---- networking -------------------------------------------------------
@@ -72,24 +146,21 @@
     // replaceState (not pushState): no reload, and repeated scans don't spam the
     // history stack, so Back still leaves /lens cleanly. Pairs with the ?url= autorun
     // at the bottom: open or share /lens?url=<site> and it re-runs the same scan.
-    try {
-      history.replaceState(null, "", "/lens?url=" + encodeURIComponent(url));
-    } catch (e) {}
+    syncUrl(false);
     humanBody.innerHTML = '<div class="lx-spin">Fetching as AadharshBot&hellip;</div>';
     machineBody.innerHTML = '<div class="lx-spin">Reading the markup&hellip;</div>';
     statusBar.innerHTML = "<span>Fetching <b>" + esc(url) + "</b> server-side&hellip;</span>";
 
-    fetch("/lens/fetch?url=" + encodeURIComponent(url), { headers: { accept: "application/json" } })
-      .then(function (r) { return r.json(); })
-      .then(function (j) {
+    fetch("/lens/fetch?url=" + encodeURIComponent(url), { headers: { accept: "text/html" } })
+      .then(function (r) { return r.text().then(function (text) { return parseFragmentResponse(r, text); }); })
+      .then(function (result) {
+        var j = result.data;
         busy = false;
         if (!j || !j.ok) {
-          var msg = (j && j.error) || "Something went wrong.";
-          machineBody.innerHTML = '<div class="lx-empty">' + esc(msg) + "</div>";
-          humanBody.innerHTML = '<div class="lx-empty">No page to show.</div>';
-          statusBar.innerHTML = '<span class="err">Failed:</span> <span>' + esc(msg) + "</span>";
+          showError(j);
           return;
         }
+        applyFragment(result.fragment);
         data = j;
         renderHuman();
         renderMachine();
@@ -364,7 +435,8 @@
         var key = b.getAttribute("data-cf");
         if (!Object.prototype.hasOwnProperty.call(counterfactuals, key)) return;
         counterfactuals[key] = !counterfactuals[key];
-        renderMachine();
+        syncUrl(true);
+        withViewTransition(function () { renderMachine(); });
       });
     });
   }
@@ -912,10 +984,11 @@
     return fn();
   }
 
-  function setView(v, animate) {
+  function setView(v, animate, writeHistory) {
     if (["both", "human", "machine", "delta"].indexOf(v) < 0) v = "both";
     view = v;
     try { localStorage.setItem("lx-mode", v); } catch (e) {}
+    if (writeHistory !== false) syncUrl(true);
     withViewTransition(function () {
       panes.className = "lx-panes is-" + v;
       updateModeUi();
@@ -925,8 +998,9 @@
       } else renderIdleLens();
     }, animate);
   }
-  function setLens(l, animate) {
+  function setLens(l, animate, writeHistory) {
     lens = l;
+    if (writeHistory !== false) syncUrl(true);
     withViewTransition(function () {
       [].forEach.call(document.querySelectorAll(".lx-tab"), function (b) {
         var active = b.getAttribute("data-lens") === l;
@@ -947,18 +1021,52 @@
   [].forEach.call(document.querySelectorAll(".lx-tab"), function (b) {
     b.addEventListener("click", function () { setLens(b.getAttribute("data-lens")); });
   });
+  var urlState = readUrlState();
   try {
     var savedView = localStorage.getItem("lx-mode");
     if (["both", "human", "machine", "delta"].indexOf(savedView) >= 0) view = savedView;
   } catch (e) {}
-  setView(view, false);
+  if (urlState.view !== "both") view = urlState.view;
+    if (urlState.lens !== "readiness") lens = urlState.lens;
+  counterfactuals = urlState.counterfactuals;
+  setView(view, false, false);
+  setLens(lens, false, false);
+
+  window.addEventListener("popstate", function () {
+    var state = readUrlState();
+    view = state.view;
+    lens = state.lens;
+    counterfactuals = state.counterfactuals;
+    if (state.url && state.url !== urlInput.value.trim()) {
+      run(state.url);
+      return;
+    }
+    if (!state.url && data) {
+      data = null;
+      humanBody.innerHTML = '<div class="lx-empty">Paste a URL above to see it through both eyes.</div>';
+      machineBody.innerHTML = '<div class="lx-empty">The markup, metadata, and machine directives land here.</div>';
+      statusBar.innerHTML = '<span>Idle. Nothing is fetched until you ask, and then just once, server-side, with no logging.</span>';
+    }
+    setView(view, true, false);
+    setLens(lens, false, false);
+  });
 
   // deep link: /lens?url=… autoruns. Speculation safety: an autorun fires a
   // third-party crawl, so a PRERENDERED copy of this page (omnibox prediction,
   // link hover) must hold fire until the visit is real (prerenderingchange).
   try {
     var qp = new URLSearchParams(location.search).get("url");
-    if (qp) {
+    if (initialData) {
+      urlInput.value = qp || initialData.finalUrl || initialData.url || "";
+      if (initialData.ok) {
+        data = initialData;
+        renderHuman();
+        renderMachine();
+        renderStatus();
+      } else {
+        showError(initialData);
+      }
+    } else if (qp) {
       if (document.prerendering) {
         document.addEventListener("prerenderingchange", function () { run(qp); }, { once: true });
       } else {

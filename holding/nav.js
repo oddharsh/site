@@ -19,6 +19,12 @@
   "use strict";
   if (window.__axpNav) return; window.__axpNav = true;
   var D = document;
+  function withViewTransition(fn) {
+    if (D.startViewTransition && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      return D.startViewTransition(fn);
+    }
+    return fn();
+  }
   // platform-aware shortcut label shown on the Start orb + Run dialog. The
   // keydown handler binds BOTH ⌘K and Ctrl-K; this is only what we DISPLAY, so
   // Mac users see ⌘K and everyone else sees Ctrl K.
@@ -490,6 +496,7 @@
       '</dialog>'
     );
     D.body.appendChild(run);
+    run.style.viewTransitionName = "axp-run";
     // ::backdrop click = light dismiss: a click landing on the dialog element
     // itself (not its children) can only be the backdrop-covered margin area
     run.addEventListener("click", function (e) { if (e.target === run) closeRun(); });
@@ -722,13 +729,15 @@
     if (run.open) return;
     if (!PHOTOS) loadPhotos().then(function () { if (run.open) render(); });
     if (!WRITING) loadWriting().then(function () { if (run.open) render(); });
-    run.showModal(); AXP_SND.play("open");
-    var s = D.getElementById("axp-start"); if (s) s.setAttribute("aria-expanded", "true");
-    input.value = ""; render();
-    input.focus();
+    withViewTransition(function () {
+      run.showModal(); AXP_SND.play("open");
+      var s = D.getElementById("axp-start"); if (s) s.setAttribute("aria-expanded", "true");
+      input.value = ""; render();
+      input.focus();
+    });
   }
   function closeRun() {
-    if (run && run.open) run.close();   // side effects ride the "close" event
+    if (run && run.open) withViewTransition(function () { run.close(); });   // side effects ride the "close" event
   }
 
   // ── tray balloons: brief XP notification-bubble popouts for the system-utility

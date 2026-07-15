@@ -3,7 +3,7 @@
 import { BOT_UA } from "./lib/botauth.js";
 import { deleteSWRKV, swrKV } from "./lib/cache.js";
 import { lunaPage } from "./lib/chrome.js";
-import { esc, jsonResp, timingSafeEqual } from "./lib/http.js";
+import { acceptQ, esc, escAttr, escHtml, jsonResp, timingSafeEqual } from "./lib/http.js";
 
 // ── /rn redirect target ─────────────────────────────────────────────
 // the link on the site is static (/rn). the redirect target lives in KV
@@ -75,15 +75,37 @@ export const RN_TRACKS_TTL  = 3600;
 export const ARTIST_KV_TTL  = 30 * 86400;
 
       // 30d: artist profile (rarely changes)
+function wantsTrackHtml(request) {
+  const accept = (request.headers.get("accept") || "").toLowerCase();
+  return acceptQ(accept, "text/html") > acceptQ(accept, "application/json");
+}
+
+function trackResponse(request, payload, status = 200) {
+  if (wantsTrackHtml(request)) {
+    return new Response(renderTrackListHtml(payload), {
+      status,
+      headers: {
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": status >= 400 ? "public, max-age=30, must-revalidate" : "public, max-age=300, s-maxage=600",
+        "vary": "accept",
+        "x-content-type-options": "nosniff",
+      },
+    });
+  }
+  const response = jsonResp(payload, status);
+  response.headers.set("vary", "accept");
+  return response;
+}
+
 export async function handleRnTracks(request, env, ctx) {
   const url = new URL(request.url);
 
   if (!env.RN_KV) {
-    return jsonResp({ error: "no kv binding" }, 500);
+    return trackResponse(request, { error: "no kv binding", tracks: [] }, 500);
   }
   const playlistId = await env.RN_KV.get("playlist-id");
   if (!playlistId || !/^[0-9A-Za-z]{22}$/.test(playlistId)) {
-    return jsonResp({ error: "no playlist set", tracks: [] });
+    return trackResponse(request, { error: "no playlist set", tracks: [] });
   }
 
   const cacheKey = `tracks:${playlistId}`;
@@ -102,9 +124,57 @@ export async function handleRnTracks(request, env, ctx) {
   try {
     payload = await getTracksSWR(env, ctx, playlistId, { buildOnMiss: true });
   } catch (e) {
-    return jsonResp({ error: "scrape failed", message: String(e), tracks: [] }, 502);
+    return trackResponse(request, { error: "scrape failed", tracks: [] }, 502);
   }
-  return jsonResp(payload);
+  return trackResponse(request, payload);
+}
+
+// The HTML representation is intentionally the same row shape used by the
+// homepage rewriter. JSON remains the machine-facing contract; HTML is the
+// browser-facing hypermedia representation.
+export function renderTrackListHtml(payload) {
+  const tracks = Array.isArray(payload?.tracks) ? payload.tracks : [];
+  if (!tracks.length) return '<li class="np-empty">No tracks yet. <a href="/rn">Open on Spotify</a>.</li>';
+  return tracks.map(t => {
+    const dur = t.duration_ms ? fmtDuration(t.duration_ms) : "";
+    const artistsText = t.artists_text || (t.artists || []).map(a => a.name).join(", ");
+    const dataAttrs =
+      ` data-track-title="${escAttr(t.title)}"` +
+      ` data-track-artists="${escAttr(artistsText)}"` +
+      (t.image_url   ? ` data-track-image="${escAttr(t.image_url)}"` : "") +
+      (t.duration_ms ? ` data-track-duration="${dur}"`               : "") +
+      (t.is_explicit ? ` data-track-explicit="1"`                    : "");
+    return `<li${dataAttrs}>
+      <a href="${escAttr(t.song_link_url)}" target="_blank" rel="noopener">${
+        dur ? `<span class="np-duration">${dur}</span>` : ""
+      }<span class="np-title">${escHtml(t.title)}</span><span class="np-sep">&mdash;</span><span class="np-artist">${linkifyArtists(t.artists, artistsText)}</span>${
+        t.is_explicit ? '<span class="np-explicit">E</span>' : ""
+      }</a>
+    </li>`;
+  }).join("");
+}
+
+function linkifyArtists(artists, fallbackText) {
+  if (Array.isArray(artists) && artists.length) {
+    return artists.map(a => {
+      const href = a.spotify_url || `https://open.spotify.com/search/${encodeURIComponent(a.name)}/artists`;
+      const img = a.image_url ? ` data-artist-image="${escAttr(a.image_url)}"` : "";
+      return `<span class="np-artist-link" data-href="${escAttr(href)}" data-artist-name="${escAttr(a.name)}"${img} role="link" tabindex="0">${escHtml(a.name)}</span>`;
+    }).join(", ");
+  }
+  const raw = fallbackText || (typeof artists === "string" ? artists : "");
+  if (!raw) return "";
+  return String(raw).split(/,\s*/).filter(Boolean).map(name => {
+    const href = `https://open.spotify.com/search/${encodeURIComponent(name)}/artists`;
+    return `<span class="np-artist-link" data-href="${escAttr(href)}" data-artist-name="${escAttr(name)}" role="link" tabindex="0">${escHtml(name)}</span>`;
+  }).join(", ");
+}
+
+function fmtDuration(ms) {
+  const total = Math.round(ms / 1000);
+  const m = Math.floor(total / 60);
+  const s = String(total % 60).padStart(2, "0");
+  return `${m}:${s}`;
 }
 
 // two-key stale-while-revalidate for the playlist payload, mirroring

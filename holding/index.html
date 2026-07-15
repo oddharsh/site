@@ -1102,21 +1102,16 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
     <section class="now-playing" aria-label="music">
       <h2><a href="/rn" title="open this playlist on Spotify">Music I'm listening to right now <span class="np-open">&#x2197;&#xFE0E; the playlist</span></a></h2>
       <ol class="np-list" id="np-list" data-ssr="0">
-        <li class="np-loading">Loading playlist&hellip;</li>
+        <li class="np-loading">Loading playlist&hellip; <a href="/rn">Open on Spotify &#x2197;&#xFE0E;</a></li>
       </ol>
-      <noscript><p class="np-nojs">Playlist loads with JavaScript. <a href="/rn">Open it on Spotify &#x2197;&#xFE0E;</a></p></noscript>
+      <noscript><p class="np-nojs">The playlist is server-rendered when available. <a href="/rn">Open it on Spotify &#x2197;&#xFE0E;</a></p></noscript>
     </section>
 
     <!--
       now-playing list — worker pre-renders from KV-cached /rn/tracks on
-      every request (the only path under healthy conditions). minimal
-      fallback below catches the case where SSR didn't run for ANY
-      reason: stale cached HTML served before SSR was wired, a CF edge
-      hiccup, a worker exception, KV unavailability, etc. it checks if
-      the "Loading playlist…" placeholder is still present after page
-      load, and if so re-fetches /rn/tracks client-side and fills.
-      ~30 lines as defense-in-depth for what would otherwise be an
-      eternal "Loading…" state.
+      every request (the only path under healthy conditions). the fallback
+      asks the same endpoint for an HTML row fragment if the worker did not
+      populate the list. JSON remains available for machine callers.
     -->
     <script>
     (async () => {
@@ -1126,75 +1121,10 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
       if (list.dataset.ssr === "1") return;
       // Compatibility guard for an older/unmarked edge response.
       if (!list.querySelector(".np-loading")) return;
-      const esc = (s) => String(s ?? "")
-        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-      const fmt = (ms) => {
-        if (!ms) return "";
-        const t = Math.round(ms / 1000);
-        return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`;
-      };
-      // build the per-artist .np-artist-link spans, EXACTLY as the worker's
-      // SSR does (linkifyArtists in _worker.js). this is what makes the
-      // artist hover-tooltip + click-through work; bare text would break
-      // both. structured artists link to their Spotify page + carry the
-      // profile image for the tooltip; otherwise fall back to a search.
-      const linkifyArtists = (artists, fallbackText) => {
-        if (Array.isArray(artists) && artists.length) {
-          return artists.map(a => {
-            const href = a.spotify_url || `https://open.spotify.com/search/${encodeURIComponent(a.name)}/artists`;
-            const img = a.image_url ? ` data-artist-image="${esc(a.image_url)}"` : "";
-            return `<span class="np-artist-link" data-href="${esc(href)}" data-artist-name="${esc(a.name)}"${img} role="link" tabindex="0">${esc(a.name)}</span>`;
-          }).join(", ");
-        }
-        const raw = fallbackText || (typeof artists === "string" ? artists : "");
-        if (!raw) return "";
-        return String(raw).split(/,\s*/).filter(Boolean).map(name =>
-          `<span class="np-artist-link" data-href="https://open.spotify.com/search/${encodeURIComponent(name)}/artists" data-artist-name="${esc(name)}" role="link" tabindex="0">${esc(name)}</span>`
-        ).join(", ");
-      };
       try {
-        const res = await fetch("/rn/tracks");
-        const data = await res.json();
-        if (!data.tracks?.length) {
-          list.innerHTML = '<li class="np-empty">No tracks yet. <a href="/rn">Open on Spotify</a>.</li>';
-          return;
-        }
-        // render rows at FULL fidelity, identical to the worker SSR path:
-        // the data-track-* attributes are what the hover-tooltip keys off
-        // (findTarget matches `.np-list li[data-track-title]`). the old
-        // minimal fallback omitted them, so music tooltips silently failed
-        // on any visit where SSR didn't populate (cold tracks:<pid> KV).
-        const renderRow = (t) => {
-          const artistsText = t.artists_text || (Array.isArray(t.artists) ? t.artists.map(a => a.name).join(", ") : "");
-          const dur = fmt(t.duration_ms);
-          const attrs =
-            ` data-track-title="${esc(t.title)}"` +
-            ` data-track-artists="${esc(artistsText)}"` +
-            (t.image_url   ? ` data-track-image="${esc(t.image_url)}"`   : "") +
-            (t.duration_ms ? ` data-track-duration="${dur}"`            : "") +
-            (t.is_explicit ? ` data-track-explicit="1"`                 : "");
-          return `<li${attrs}><a href="${esc(t.song_link_url)}" target="_blank" rel="noopener">${
-            dur ? `<span class="np-duration">${dur}</span>` : ""
-          }<span class="np-title">${esc(t.title)}</span><span class="np-sep">&mdash;</span><span class="np-artist">${linkifyArtists(t.artists, artistsText)}</span>${
-            t.is_explicit ? '<span class="np-explicit">E</span>' : ""
-          }</a></li>`;
-        };
-        // chunked insert: build + flush ~8 rows at a time, yielding to the main
-        // thread between batches so taps/scroll stay live while a long playlist
-        // renders on a slow phone. scheduler.yield() resumes at the FRONT of the
-        // task queue (no setTimeout back-of-queue penalty); guarded so engines
-        // without it take a setTimeout(0) shim — same shape, ships everywhere.
-        const yieldNow = (window.scheduler && typeof scheduler.yield === "function")
-          ? () => scheduler.yield()
-          : () => new Promise(r => setTimeout(r, 0));
-        list.innerHTML = "";
-        let batch = "";
-        for (let i = 0; i < data.tracks.length; i++) {
-          batch += renderRow(data.tracks[i]);
-          if ((i + 1) % 8 === 0) { list.insertAdjacentHTML("beforeend", batch); batch = ""; await yieldNow(); }
-        }
-        if (batch) list.insertAdjacentHTML("beforeend", batch);
+        const res = await fetch("/rn/tracks", { headers: { accept: "text/html" } });
+        const html = await res.text();
+        list.innerHTML = html || '<li class="np-empty">No tracks yet. <a href="/rn">Open on Spotify</a>.</li>';
       } catch {
         list.innerHTML = '<li class="np-empty">Couldn&#39;t load tracks. <a href="/rn">Open on Spotify</a>.</li>';
       }

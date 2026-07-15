@@ -17,6 +17,16 @@
 
   function el(h) { var t = D.createElement("template"); t.innerHTML = h.trim(); return t.content.firstChild; }
   function esc(s) { return String(s).replace(/[&<>]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]; }); }
+  function withViewTransition(fn) {
+    if (D.startViewTransition && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      return D.startViewTransition(fn);
+    }
+    return fn();
+  }
+  function nameNoteTransition(pop) {
+    if (!pop.id) return;
+    pop.style.viewTransitionName = "axp-note-" + pop.id.replace(/[^a-z0-9_-]/gi, "-");
+  }
 
   // ── per-window enhancement ────────────────────────────────────────────────────
   function enhance(win) {
@@ -29,7 +39,11 @@
     // a popover note's close button hides the popover instead of navigating
     var closeBtn = win.querySelector(".np-controls .close[data-pop]");
     if (closeBtn && win.matches("[popover]")) {
-      closeBtn.addEventListener("click", function (e) { e.preventDefault(); if (win.hidePopover) win.hidePopover(); });
+      nameNoteTransition(win);
+      closeBtn.addEventListener("click", function (e) {
+        e.preventDefault();
+        if (win.hidePopover) withViewTransition(function () { win.hidePopover(); });
+      });
     }
     if (!ta) return;   // folder index has no textarea — nothing more to wire
 
@@ -75,7 +89,10 @@
       ta.focus(); status();
     }
     function newDoc() { ta.value = ""; ta.focus(); status(); }   // a fresh scratch (unsaved, like everything here)
-    function exit() { if (win.matches("[popover]") && win.hidePopover) win.hidePopover(); else location.assign("/writing"); }
+    function exit() {
+      if (win.matches("[popover]") && win.hidePopover) withViewTransition(function () { win.hidePopover(); });
+      else location.assign("/writing");
+    }
     function about() {
       if (D.querySelector(".np-about")) return;
       var box = el(
@@ -183,25 +200,33 @@
       if (e.key !== "Escape") return;
       if (D.querySelector(".np-drop")) return;
       var open = D.querySelectorAll(".np-note:popover-open");
-      if (open.length) { e.preventDefault(); open[open.length - 1].hidePopover(); }
+      if (open.length) {
+        e.preventDefault();
+        withViewTransition(function () { open[open.length - 1].hidePopover(); });
+      }
     }, true);
   }
   function openNote(pop) {
+    nameNoteTransition(pop);
     var ta = pop.querySelector(".np-text");
     if (pop.matches(":popover-open")) {                 // already open → raise + focus
-      try { pop.hidePopover(); pop.showPopover(); } catch (_) {}
+      withViewTransition(function () {
+        try { pop.hidePopover(); pop.showPopover(); } catch (_) {}
+      });
       if (ta) ta.focus();
       return;
     }
     var n = D.querySelectorAll(".np-note:popover-open").length;   // # already open → cascade step
-    try { pop.showPopover(); } catch (_) { return; }
-    var folder = D.querySelector(".np-folder");
-    var bx = (folder ? folder.getBoundingClientRect().left : 16) + 32;
-    var by = (folder ? folder.getBoundingClientRect().top : 8) + 30;
-    var step = 26;
-    var x = Math.max(8, Math.min(bx + n * step, innerWidth - pop.offsetWidth - 8));
-    var y = Math.max(8, Math.min(by + n * step, innerHeight - 30 - 90));
-    pop.style.margin = "0"; pop.style.right = "auto"; pop.style.left = x + "px"; pop.style.top = y + "px";
+    withViewTransition(function () {
+      try { pop.showPopover(); } catch (_) { return; }
+      var folder = D.querySelector(".np-folder");
+      var bx = (folder ? folder.getBoundingClientRect().left : 16) + 32;
+      var by = (folder ? folder.getBoundingClientRect().top : 8) + 30;
+      var step = 26;
+      var x = Math.max(8, Math.min(bx + n * step, innerWidth - pop.offsetWidth - 8));
+      var y = Math.max(8, Math.min(by + n * step, innerHeight - 30 - 90));
+      pop.style.margin = "0"; pop.style.right = "auto"; pop.style.left = x + "px"; pop.style.top = y + "px";
+    });
     if (ta) ta.focus();
     window.dispatchEvent(new Event("resize"));   // nudge the custom scrollbar to (re)measure now it's visible
   }

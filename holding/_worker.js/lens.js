@@ -4,7 +4,7 @@ import { BOT_UA, SIG_AGENT, signRequestForWebBotAuth } from "./lib/botauth.js";
 import { cachedRender } from "./lib/cache.js";
 import { CANONICAL_HOST } from "./lib/const.js";
 import { lunaPage } from "./lib/chrome.js";
-import { jsonResponse } from "./lib/http.js";
+import { acceptQ, escAttr, escHtml, jsonResponse } from "./lib/http.js";
 
 // ── /lens — "the other web" -----------------------------------------------
 // A URL goes in; what a MACHINE sees comes out, across five lenses: page
@@ -21,19 +21,178 @@ import { jsonResponse } from "./lib/http.js";
 // six lens tabs, two panes, seeded examples. The renderer lives in /lens.js
 // (a real static file, SW-cached like nav.js) so it can use normal JS without
 // fighting this template literal's ${} and backticks.
-// the /lens shell is a fully static template (all per-request work lives in
-// /lens/fetch + /lens/shot), so repeat hits per colo serve from caches.default
-// instead of re-assembling it. keyed on the bare path: the ?url= share param is
-// read client-side by lens.js, the shell bytes are identical for every query.
-// edge TTL = the s-maxage below (300s); 200-only put inside cachedRender.
-// Keep a route-local shell key: the production runtime may not expose
-// CF_VERSION_METADATA, so a deploy can otherwise leave an older shell in the
-// edge cache while the separately served lens.js has already changed.
-export function handleLens(request, env, ctx) {
+// the /lens shell is static when it has no target. A shareable ?url= request is
+// intentionally inspected server-side and seeded with the same HTML floor as
+// /lens/fetch, so no-JS visitors still get a useful result. The empty shell is
+// keyed on the bare path and remains cacheable; targeted inspections are
+// private because they spend the crawler budget and contain third-party data.
+export async function handleLens(request, env, ctx) {
+  const url = new URL(request.url);
+  const target = url.searchParams.get("url");
+  if (target) {
+    const result = await inspectLensRequest(request, env, ctx);
+    const response = renderLensShell(result.payload, lensState(url), target);
+    response.headers.set("cache-control", "no-store, must-revalidate");
+    response.headers.set("vary", "accept");
+    response.headers.set("x-content-type-options", "nosniff");
+    response.headers.set("x-robots-tag", "noindex");
+    return response;
+  }
+  // Keep a route-local shell key: the production runtime may not expose
+  // CF_VERSION_METADATA, so a deploy can otherwise leave an older shell in
+  // the edge cache while the separately served lens.js has already changed.
   return cachedRender(request, ctx, () => renderLensShell(), "/lens-shell-v3", env);
 }
 
-function renderLensShell() {
+function wantsLensHtml(request) {
+  const accept = (request.headers.get("accept") || "").toLowerCase();
+  return acceptQ(accept, "text/html") > acceptQ(accept, "application/json");
+}
+
+function lensState(url) {
+  const validViews = ["both", "human", "machine", "delta"];
+  const validLenses = ["readiness", "anatomy", "structured", "ai", "terms", "discovery"];
+  const view = validViews.includes(url.searchParams.get("view")) ? url.searchParams.get("view") : "both";
+  const lens = validLenses.includes(url.searchParams.get("lens")) ? url.searchParams.get("lens") : "readiness";
+  const counterfactuals = {};
+  for (const key of (url.searchParams.get("cf") || "").split(",")) {
+    if (["markdown", "semantic", "contract", "authority", "receipt"].includes(key)) counterfactuals[key] = true;
+  }
+  return { view, lens, counterfactuals };
+}
+
+function lensScriptJson(value) {
+  return JSON.stringify(value)
+    .replace(/</g, "\\u003c")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
+}
+
+function lensHttpText(status) {
+  if (status >= 200 && status < 300) return "OK";
+  if (status >= 300 && status < 400) return "redirect";
+  if (status === 404) return "Not Found";
+  if (status >= 400 && status < 500) return "client error";
+  if (status >= 500) return "server error";
+  return "";
+}
+
+function lensReaderFragment(data, note) {
+  if (!data || !data.ok) return '<div class="lx-empty">' + escHtml((data && data.error) || "No page to show.") + "</div>";
+  const a = data.anatomy;
+  let out = note ? '<div class="lx-fallback-note">' + escHtml(note) + "</div>" : "";
+  if (!a) return out + '<div class="lx-empty">No readable text either.</div>';
+  const title = data.structured && data.structured.title || "";
+  if (title) out += '<div class="lx-h-title">' + escHtml(title) + "</div>";
+  if (a.headings && a.headings.length) {
+    out += '<div class="lx-h-outline"><b>Document outline</b><br>';
+    for (const h of a.headings.slice(0, 60)) {
+      out += '<div style="padding-left:' + ((h.level - 1) * 12) + 'px"><span style="color:#9aa">h' + h.level + "</span> " + escHtml(h.text) + "</div>";
+    }
+    out += "</div>";
+  }
+  return out + '<div class="lx-h-text">' + escHtml(a.text || "(no extractable text)") + "</div>";
+}
+
+function lensHumanFragment(data) {
+  if (!data || !data.ok) return lensReaderFragment(data);
+  if (data.framable) {
+    return '<iframe class="lx-frame" src="' + escAttr(data.finalUrl) +
+      '" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals"' +
+      ' referrerpolicy="no-referrer-when-downgrade" loading="lazy"></iframe>';
+  }
+  return lensReaderFragment(data, "Embedding is blocked; JavaScript can request a server-side snapshot, so this is the readable fallback.");
+}
+
+function lensMachineFragment(data, state) {
+  if (!data || !data.ok) return '<div class="lx-empty">' + escHtml((data && data.error) || "No evidence yet.") + "</div>";
+  const a = data.anatomy || {};
+  const s = data.structured || {};
+  const d = data.discovery || {};
+  const ag = data.agent || {};
+  const rows = [
+    ["url", data.finalUrl || data.url],
+    ["title", s.title || "(untitled)"],
+    ["response", data.status + " " + lensHttpText(data.status)],
+    ["readiness", data.readiness && data.readiness.overall != null ? data.readiness.overall + "/100" : "unknown"],
+    ["content-type", data.contentType || "(none)"],
+    ["payload", (a.rawBytes || 0) + " B" + (data.truncated ? " (capped)" : "")],
+    ["headings", a.headings ? a.headings.length : 0],
+    ["fetched as", data.fetchedBy || "identified bot"],
+  ].map(row => '<tr><td>' + escHtml(row[0]) + '</td><td>' + escHtml(row[1]) + "</td></tr>").join("");
+  const doors = ag.strategy && ag.strategy.verdict || "unknown";
+  const files = [
+    d.robotsTxt && d.robotsTxt.ok ? "robots.txt" : "",
+    d.sitemapXml && d.sitemapXml.ok ? "sitemap.xml" : "",
+    d.llmsTxt && d.llmsTxt.ok ? "llms.txt" : "",
+  ].filter(Boolean);
+  return '<div class="lx-brief-lede"><b>Server-rendered machine summary.</b> JavaScript can enhance this into the full selected lens; this fragment is the no-script evidence floor.</div>' +
+    '<div class="lx-sec"><div class="lx-sec-h">Observed document <span class="lx-badge ok">observed</span></div>' +
+    '<div class="lx-cap">The minimum contract a machine can recover from this response.</div><table class="lx-kv">' + rows + "</table></div>" +
+    '<div class="lx-sec"><div class="lx-sec-h">Available surfaces <span class="lx-badge">' + escHtml(doors) + "</span></div>" +
+    '<div class="lx-cap">Evidence found during the server-side inspection.</div><div class="lx-tags">' +
+    (files.length ? files.map(file => '<span class="lx-tag">' + escHtml(file) + "</span>").join("") : '<span class="lx-none">no discovery files found</span>') +
+    "</div></div>" +
+    '<div class="lx-sec"><div class="lx-sec-h">Selected state <span class="lx-badge">' + escHtml(state.lens) + "</span></div>" +
+    '<div class="lx-cap">View: ' + escHtml(state.view) + ". The browser enhancement can open the complete lens without changing the URL.</div></div>";
+}
+
+function lensStatusFragment(data, state) {
+  if (!data || !data.ok) return '<span class="err">Failed:</span> <span>' + escHtml((data && data.error) || "unknown error") + "</span>";
+  return '<span><b>' + data.status + "</b> " + lensHttpText(data.status) + "</span>" +
+    '<span>' + escHtml(state.view === "both" ? "Compare" : state.view.charAt(0).toUpperCase() + state.view.slice(1)) + "</span>" +
+    '<span>' + escHtml(data.contentType || "?") + "</span>" +
+    (data.anatomy ? '<span>' + data.anatomy.rawBytes + " B</span>" : "") +
+    '<span>' + escHtml(String(data.elapsedMs || 0)) + " ms</span>" +
+    (data.redirected ? '<span>&rarr; ' + escHtml(data.finalUrl) + "</span>" : "") +
+    '<span style="margin-left:auto">fetched as ' + escHtml(data.fetchedBy || "identified bot") + "</span>";
+}
+
+function renderLensFragments(data, state) {
+  return '<div id="lx-fragments" data-lens-fragments="1">' +
+    '<div data-lens-part="human">' + lensHumanFragment(data) + "</div>" +
+    '<div data-lens-part="machine">' + lensMachineFragment(data, state) + "</div>" +
+    '<div data-lens-part="status">' + lensStatusFragment(data, state) + "</div>" +
+    '<script type="application/json" id="lx-initial-data">' + lensScriptJson(data) + "</script></div>";
+}
+
+async function inspectLensRequest(request, env, ctx) {
+  const v = validateLensTarget(new URL(request.url).searchParams.get("url") || "");
+  if (!v.ok) return { status: 400, payload: { ok: false, error: v.error } };
+
+  // best-effort per-IP rate limit so the proxy can't be turned into a firehose.
+  const ip = request.headers.get("cf-connecting-ip") || "0.0.0.0";
+  if (env.RN_KV) {
+    const bucket = `lens:rl:${ip}:${Math.floor(Date.now() / 60000)}`;
+    const n = parseInt((await env.RN_KV.get(bucket)) || "0", 10);
+    if (n >= 30) return { status: 429, payload: { ok: false, error: "Slow down — 30 lookups a minute. Try again shortly." } };
+    ctx.waitUntil(env.RN_KV.put(bucket, String(n + 1), { expirationTtl: 120 }));
+  }
+
+  try {
+    return { status: 200, payload: await lensInspect(v.url, env) };
+  } catch (e) {
+    const msg = e && e.name === "AbortError" ? "The site took too long to answer (8s timeout)." : (e && e.message) || String(e);
+    return { status: 502, payload: { ok: false, error: msg } };
+  }
+}
+
+function renderLensShell(initial, state, inputValue) {
+  state = state || { view: "both", lens: "anatomy", counterfactuals: {} };
+  const seeded = initial && initial.ok;
+  const value = inputValue || (seeded ? initial.finalUrl || initial.url : "");
+  const humanHeader = seeded && !initial.framable
+    ? 'Human view <span class="lx-mode">Reader</span> <span class="lx-mode-sub">server-rendered readable fallback</span>'
+    : "Human view &middot; the live page";
+  const machineHeader = state.view === "machine" ? "Machine view &middot; Briefing" : state.view === "delta" ? "Delta view &middot; What changes" : "Machine view &middot; " + state.lens.charAt(0).toUpperCase() + state.lens.slice(1);
+  const modeNote = state.view === "human"
+    ? "Human shows the page as a person receives it in a browser."
+    : state.view === "machine"
+      ? "Machine turns the scan into an evidence-first briefing, then keeps the selected lens below it."
+      : state.view === "delta"
+        ? "Delta keeps the page visible while you add hypothetical machine infrastructure to the route."
+        : "Compare keeps the live page beside the selected evidence lens.";
+  const initialScript = initial ? '<script type="application/json" id="lx-initial-data">' + lensScriptJson(initial) + "</script>" : "";
   return lunaPage({
     title: "The Other Web · aadhar.sh",
     path: "The Other Web",
@@ -216,10 +375,10 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
     <h1>The Other Web</h1>
     <p class="lx-lede">Every page has a second life as data. Paste a URL to see what a person receives, what representative bots can retrieve, and which missing web surfaces limit them. The score is a map, not a verdict: every point stays tied to evidence. Fetched server-side, honestly, as <a href="/bot">AadharshBot</a>.</p>
 
-    <form class="lx-addr" id="lx-form">
+    <form class="lx-addr" id="lx-form" action="/lens" method="get">
       <span class="lx-globe" aria-hidden="true"></span>
       <label class="lx-addr-label" for="lx-url">Address</label>
-      <input id="lx-url" class="lx-url" type="text" inputmode="url" placeholder="https://example.com  —  paste any URL" autocomplete="off" spellcheck="false">
+      <input id="lx-url" class="lx-url" type="text" name="url" value="${escAttr(value)}" inputmode="url" placeholder="https://example.com  —  paste any URL" autocomplete="off" spellcheck="false">
       <button class="lx-go" type="submit">Go</button>
     </form>
     <div class="lx-chips">
@@ -235,35 +394,36 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
 
     <div class="lx-toolbar">
       <div class="lx-view" role="radiogroup" aria-label="page mode">
-        <button class="lx-seg is-on" data-view="both" role="radio" aria-checked="true" type="button">Compare</button>
-        <button class="lx-seg" data-view="human" role="radio" aria-checked="false" type="button">Human</button>
-        <button class="lx-seg" data-view="machine" role="radio" aria-checked="false" type="button">Machine</button>
-        <button class="lx-seg" data-view="delta" role="radio" aria-checked="false" type="button">Delta</button>
+        <button class="lx-seg${state.view === "both" ? " is-on" : ""}" data-view="both" role="radio" aria-checked="${state.view === "both" ? "true" : "false"}" type="button">Compare</button>
+        <button class="lx-seg${state.view === "human" ? " is-on" : ""}" data-view="human" role="radio" aria-checked="${state.view === "human" ? "true" : "false"}" type="button">Human</button>
+        <button class="lx-seg${state.view === "machine" ? " is-on" : ""}" data-view="machine" role="radio" aria-checked="${state.view === "machine" ? "true" : "false"}" type="button">Machine</button>
+        <button class="lx-seg${state.view === "delta" ? " is-on" : ""}" data-view="delta" role="radio" aria-checked="${state.view === "delta" ? "true" : "false"}" type="button">Delta</button>
       </div>
       <div class="lx-lenses" role="tablist" aria-label="machine lens">
-        <button class="lx-tab is-on" data-lens="readiness" role="tab" aria-selected="true" aria-controls="lx-machine-body" type="button">Readiness</button>
-        <button class="lx-tab" data-lens="anatomy" role="tab" aria-selected="false" aria-controls="lx-machine-body" type="button">Anatomy</button>
-        <button class="lx-tab" data-lens="structured" role="tab" aria-selected="false" aria-controls="lx-machine-body" type="button">Structured</button>
-        <button class="lx-tab" data-lens="ai" role="tab" aria-selected="false" aria-controls="lx-machine-body" type="button">AI view</button>
-        <button class="lx-tab" data-lens="terms" role="tab" aria-selected="false" aria-controls="lx-machine-body" type="button">Terms</button>
-        <button class="lx-tab" data-lens="discovery" role="tab" aria-selected="false" aria-controls="lx-machine-body" type="button">Discovery</button>
+        <button class="lx-tab${state.lens === "readiness" ? " is-on" : ""}" data-lens="readiness" role="tab" aria-selected="${state.lens === "readiness" ? "true" : "false"}" aria-controls="lx-machine-body" type="button">Readiness</button>
+        <button class="lx-tab${state.lens === "anatomy" ? " is-on" : ""}" data-lens="anatomy" role="tab" aria-selected="${state.lens === "anatomy" ? "true" : "false"}" aria-controls="lx-machine-body" type="button">Anatomy</button>
+        <button class="lx-tab${state.lens === "structured" ? " is-on" : ""}" data-lens="structured" role="tab" aria-selected="${state.lens === "structured" ? "true" : "false"}" aria-controls="lx-machine-body" type="button">Structured</button>
+        <button class="lx-tab${state.lens === "ai" ? " is-on" : ""}" data-lens="ai" role="tab" aria-selected="${state.lens === "ai" ? "true" : "false"}" aria-controls="lx-machine-body" type="button">AI view</button>
+        <button class="lx-tab${state.lens === "terms" ? " is-on" : ""}" data-lens="terms" role="tab" aria-selected="${state.lens === "terms" ? "true" : "false"}" aria-controls="lx-machine-body" type="button">Terms</button>
+        <button class="lx-tab${state.lens === "discovery" ? " is-on" : ""}" data-lens="discovery" role="tab" aria-selected="${state.lens === "discovery" ? "true" : "false"}" aria-controls="lx-machine-body" type="button">Discovery</button>
       </div>
     </div>
-    <div class="lx-mode-note" id="lx-mode-note">Compare keeps the live page beside the selected evidence lens.</div>
+    <div class="lx-mode-note" id="lx-mode-note">${modeNote}</div>
 
-    <div class="lx-panes is-both" id="lx-panes">
+    <div class="lx-panes is-${state.view}" id="lx-panes">
       <section class="lx-pane lx-pane-human" id="lx-human">
-        <div class="lx-pane-h" id="lx-human-h">Human view &middot; the live page</div>
-        <div class="lx-body" id="lx-human-body"><div class="lx-empty">Paste a URL above to see it through both eyes.</div></div>
+        <div class="lx-pane-h" id="lx-human-h">${humanHeader}</div>
+        <div class="lx-body" id="lx-human-body">${seeded ? lensHumanFragment(initial) : '<div class="lx-empty">Paste a URL above to see it through both eyes.</div>'}</div>
       </section>
       <section class="lx-pane lx-pane-machine" id="lx-machine">
-        <div class="lx-pane-h" id="lx-machine-h">Machine view &middot; Readiness</div>
-        <div class="lx-body" id="lx-machine-body"><div class="lx-empty">The markup, metadata, and machine directives land here.</div></div>
+        <div class="lx-pane-h" id="lx-machine-h">${machineHeader}</div>
+        <div class="lx-body" id="lx-machine-body">${seeded ? lensMachineFragment(initial, state) : '<div class="lx-empty">The markup, metadata, and machine directives land here.</div>'}</div>
       </section>
     </div>
 
-    <div class="lx-status" id="lx-status"><span>Idle. Nothing is fetched until you ask, and then just once, server-side, with no logging.</span></div>
+    <div class="lx-status" id="lx-status">${seeded || (initial && !initial.ok) ? lensStatusFragment(initial, state) : '<span>Idle. Nothing is fetched until you ask, and then just once, server-side, with no logging.</span>'}</div>
     <footer>&larr; <a href="/">aadhar.sh</a> &middot; a research toy about how machines read the web &middot; fetched by <a href="/bot">AadharshBot</a></footer>
+    ${initialScript}
 `,
     // The shell is cached at the edge and browsers cache static scripts too;
     // version the client URL so a fresh shell cannot pair with an older lens.js.
@@ -285,26 +445,26 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
   });
 }
 
-// /lens/fetch?url=… → one JSON envelope with every lens. no-store.
+// /lens/fetch?url=… → JSON by default, or an HTML fragment when explicitly
+// requested by the browser enhancement. no-store either way.
 export async function handleLensFetch(request, env, ctx) {
-  const v = validateLensTarget(new URL(request.url).searchParams.get("url") || "");
-  if (!v.ok) return jsonResponse({ ok: false, error: v.error }, 400);
-
-  // best-effort per-IP rate limit so the proxy can't be turned into a firehose.
-  const ip = request.headers.get("cf-connecting-ip") || "0.0.0.0";
-  if (env.RN_KV) {
-    const bucket = `lens:rl:${ip}:${Math.floor(Date.now() / 60000)}`;
-    const n = parseInt((await env.RN_KV.get(bucket)) || "0", 10);
-    if (n >= 30) return jsonResponse({ ok: false, error: "Slow down — 30 lookups a minute. Try again shortly." }, 429);
-    ctx.waitUntil(env.RN_KV.put(bucket, String(n + 1), { expirationTtl: 120 }));
+  const url = new URL(request.url);
+  const result = await inspectLensRequest(request, env, ctx);
+  if (wantsLensHtml(request)) {
+    return new Response(renderLensFragments(result.payload, lensState(url)), {
+      status: result.status,
+      headers: {
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": "no-store, must-revalidate",
+        "vary": "accept",
+        "x-content-type-options": "nosniff",
+        "x-robots-tag": "noindex",
+      },
+    });
   }
-
-  try {
-    return jsonResponse(await lensInspect(v.url, env), 200);
-  } catch (e) {
-    const msg = e && e.name === "AbortError" ? "The site took too long to answer (8s timeout)." : (e && e.message) || String(e);
-    return jsonResponse({ ok: false, error: msg }, 502);
-  }
+  const response = jsonResponse(result.payload, result.status);
+  response.headers.set("vary", "accept");
+  return response;
 }
 
 // /lens/shot?url=… → a faithful PNG of the page, rendered by Cloudflare
@@ -392,6 +552,9 @@ export function lensFramable(headers) {
 export function validateLensTarget(raw) {
   const s0 = String(raw || "").trim();
   if (!s0) return { ok: false, error: "Type a URL to inspect." };
+  if (/^[a-z][a-z0-9+.-]*:/i.test(s0) && !/^https?:\/\//i.test(s0)) {
+    return { ok: false, error: "Only http and https URLs." };
+  }
   const s = /^https?:\/\//i.test(s0) ? s0 : "https://" + s0;
   let url;
   try { url = new URL(s); } catch { return { ok: false, error: "That doesn't parse as a URL." }; }

@@ -35,9 +35,11 @@ const SHELL_BUDGET = {
   "lens.js": 48_000,
   "luna.css": 40_000,
 };
-// The readiness probes add a bounded server-side envelope and bot matrix. A
-// 75 KiB ceiling leaves measured headroom while keeping the Worker finite.
-const BUNDLE_GZIP_KIB = 75;
+// The readiness probes add a bounded server-side envelope and bot matrix, and
+// HTML negotiation adds a no-script fragment contract. The merged Worker is
+// 75.76 KiB gzip; 77 KiB leaves a small measured allowance without making the
+// dependency and feature budget meaningless.
+const BUNDLE_GZIP_KIB = 77;
 const TWINS = ["nav.src.js", "notepad.src.js", "lens.src.js", "luna.src.css"];
 
 const fails = [];

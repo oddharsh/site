@@ -3,7 +3,7 @@
 import { escAttr, escHtml, wantsMarkdown } from "./lib/http.js";
 import { HOMEPAGE_DISCOVERY_LINK, withHomepageDiscoveryHeaders } from "./lib/security.js";
 import { absThumb, getAltMap, getImagesManifest } from "./photos.js";
-import { getTracksSWR } from "./rn.js";
+import { getTracksSWR, renderTrackListHtml } from "./rn.js";
 
 export function homepageHeadResponse(request) {
   const markdown = wantsMarkdown(request);
@@ -128,23 +128,7 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
 
   // ── /rn/tracks → np-list ────────────────────────────────────────
   if (tracksPayload?.tracks?.length) {
-    const itemsHtml = tracksPayload.tracks.map(t => {
-      const dur = t.duration_ms ? fmtDuration(t.duration_ms) : "";
-      const artistsText = t.artists_text || (t.artists || []).map(a => a.name).join(", ");
-      const dataAttrs =
-        ` data-track-title="${escAttr(t.title)}"` +
-        ` data-track-artists="${escAttr(artistsText)}"` +
-        (t.image_url   ? ` data-track-image="${escAttr(t.image_url)}"` : "") +
-        (t.duration_ms ? ` data-track-duration="${dur}"`               : "") +
-        (t.is_explicit ? ` data-track-explicit="1"`                    : "");
-      return `<li${dataAttrs}>
-        <a href="${escAttr(t.song_link_url)}" target="_blank" rel="noopener">${
-          dur ? `<span class="np-duration">${dur}</span>` : ""
-        }<span class="np-title">${escHtml(t.title)}</span><span class="np-sep">&mdash;</span><span class="np-artist">${linkifyArtists(t.artists, artistsText)}</span>${
-          t.is_explicit ? '<span class="np-explicit">E</span>' : ""
-        }</a>
-      </li>`;
-    }).join("");
+    const itemsHtml = renderTrackListHtml(tracksPayload);
     rewriter.on("#np-list", {
       element(el) {
         el.setAttribute("data-ssr", "1");
@@ -297,42 +281,6 @@ export function pickRandom(arr, n) {
 //
 // each span also carries data-artist-name and (when known) data-artist-image
 // so the XP hover-tooltip can show a profile pic + name on hover. when we
-// have structured `artists` from the scraper we link straight to the
-// artist's spotify URL (precise); otherwise we fall back to a name-based
-// search URL and skip the image.
-export function linkifyArtists(artists, fallbackText) {
-  // structured case: [{id, name, spotify_url, image_url}, ...]
-  if (Array.isArray(artists) && artists.length) {
-    return artists.map(a => {
-      const href = a.spotify_url ||
-        `https://open.spotify.com/search/${encodeURIComponent(a.name)}/artists`;
-      const img  = a.image_url ? ` data-artist-image="${escAttr(a.image_url)}"` : "";
-      return `<span class="np-artist-link"` +
-             ` data-href="${escAttr(href)}"` +
-             ` data-artist-name="${escAttr(a.name)}"` +
-             img +
-             ` role="link" tabindex="0">${escHtml(a.name)}</span>`;
-    }).join(", ");
-  }
-  // fallback (no structured data, just the joined "A, B" string)
-  const raw = fallbackText || (typeof artists === "string" ? artists : "");
-  if (!raw) return "";
-  return String(raw).split(/,\s*/).filter(Boolean).map(name => {
-    const href = `https://open.spotify.com/search/${encodeURIComponent(name)}/artists`;
-    return `<span class="np-artist-link"` +
-           ` data-href="${escAttr(href)}"` +
-           ` data-artist-name="${escAttr(name)}"` +
-           ` role="link" tabindex="0">${escHtml(name)}</span>`;
-  }).join(", ");
-}
-
-export function fmtDuration(ms) {
-  const total = Math.round(ms / 1000);
-  const m = Math.floor(total / 60);
-  const s = String(total % 60).padStart(2, "0");
-  return `${m}:${s}`;
-}
-
 // the Spotify playlist id (KV "playlist-id") changes ~never; module-cached so
 // the homepage tracks lookup is one KV read on warm isolates instead of two.
 export let _playlistId;
