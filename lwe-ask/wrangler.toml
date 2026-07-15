@@ -35,3 +35,6 @@ THUMB_VERSION = "18"   # cache-bust for /images/<stem> thumbs in the CAPTCHA gri
 # secrets (wrangler secret put):
 #   SIGNING_SECRET — HMAC for the CAPTCHA challenge + askToken (openssl rand -hex 32)
 #   REINDEX_SECRET — gates the /lwe/ask/reindex route
+
+[dependencies_instrumentation]
+enabled = true

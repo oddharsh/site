@@ -47,6 +47,9 @@ HOST_PUBLIC_URL     = "https://aadhar.sh"
 EVENT_TITLE         = "coffee with aadharsh"
 PENDING_TTL_DAYS    = "7"
 
+[dependencies_instrumentation]
+enabled = true
+
 # secrets — set with `wrangler secret put NAME`. never check these in:
 #   ICAL_URL          public/secret iCal URL of your *real* calendar (read-only)
 #                     google: settings → integrate calendar → "secret address in iCal format"

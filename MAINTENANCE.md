@@ -15,8 +15,18 @@ Three deploy targets:
 
 `.github/workflows/ci.yml` is the pull-request gate. It installs locked
 dependencies, builds the homepage, enforces the performance budget, dry-runs
-the `holding/`, `cal/`, and `serendipity/` Wrangler configs, and runs
-`cal/npm test`.
+the `holding/`, `cal/`, `cf-garage/`, `lwe-ask/`, and `serendipity/` Wrangler
+configs, and runs `cal/npm test`. The latter two auxiliary route Workers and
+the Cloudflare garage demo are not separate Workers Build production targets,
+but they remain public contract surfaces and their bundles/configs stay inside
+the pull-request gate.
+
+`.github/workflows/update-wrangler.yml` runs weekly (and on manual dispatch),
+resolves the newest published Wrangler, applies the same exact version to all
+five Worker projects and their lockfiles, then opens or refreshes a draft PR.
+The exact lockfile pin keeps a release reproducible; the scheduled PR keeps it
+current. Wrangler's npm dependency metadata instrumentation is explicitly
+enabled in every Worker config.
 
 `.github/workflows/promote-production.yml` runs after a successful `CI` run for
 `main` associated with a merged PR (or an explicit manual dispatch). It refuses
