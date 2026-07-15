@@ -9,7 +9,7 @@ import { handleBotPage } from "./bot.js";
 import { handleHitSvg } from "./counter.js";
 import { homepageHeadResponse, serveHomepageWithPrerenderedTracks, serveMarkdown } from "./home.js";
 import { countCrawlerHit, handleLedger, handleLedgerJson } from "./ledger.js";
-import { handleLens, handleLensFetch, handleLensFragment, handleLensShot } from "./lens.js";
+import { handleLens, handleLensFetch, handleLensShot } from "./lens.js";
 import { serveAssetWith404Clamp, serveFreshAsset } from "./lib/assets.js";
 import { CANONICAL_HOST } from "./lib/const.js";
 import { wantsMarkdown } from "./lib/http.js";
@@ -117,7 +117,6 @@ const ROUTES = new Map([
   ["/lens", handleLens],
   ["/lens/", handleLens],
   ["/lens/fetch", handleLensFetch],
-  ["/lens/fragment", handleLensFragment],
   ["/lens/shot", handleLensShot],
 
   // the x402 bot paywall: llms.txt's map is free, the full corpus costs $0.01

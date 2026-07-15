@@ -132,14 +132,14 @@
     machineBody.innerHTML = '<div class="lx-spin">Reading the markup&hellip;</div>';
     statusBar.innerHTML = "<span>Fetching <b>" + esc(url) + "</b> server-side&hellip;</span>";
 
-    // /lens/fetch is the JSON contract; /lens/fragment serves the same payload wrapped
-    // in server-rendered HTML. This client renders every pane itself anyway (it must:
-    // switching lenses and toggling Delta counterfactuals can't round-trip, and
+    // /lens/fetch is the engine's one browser-facing contract: JSON in, rendered here.
+    // There was briefly a /lens/fragment twin that wrapped the same payload in
+    // server-rendered HTML, but this client has to render every pane itself anyway
+    // (switching lenses and toggling Delta counterfactuals can't round-trip, and
     // renderMachine() is what binds the toggle handlers), so the fragment's markup was
-    // being injected and then overwritten in this same synchronous block, never once
-    // painted. Taking the JSON directly drops ~8-10KB per scan and a DOMParser pass
-    // over the whole response. /lens/fragment stays a real hypermedia surface for
-    // consumers that want the HTML; it just isn't this client's transport.
+    // injected and then overwritten in this same synchronous block, never once painted.
+    // The server-side pane renderers it used live on: renderLensShell still SSRs them
+    // for the no-JS path at /lens?url=, and this client hydrates from #lx-initial-data.
     fetch("/lens/fetch?url=" + encodeURIComponent(url))
       .then(function (r) {
         var ct = r.headers.get("content-type") || "";

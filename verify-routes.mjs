@@ -80,7 +80,6 @@ const ROUTES = [
   // Representation contracts: the machine paths stay fixed even if a caller
   // sends a browser Accept header; the HTML paths are explicit fragments.
   { path: "/lens/fetch?url=https://example.com", status: 200, ct: "application/json", headers: { accept: "text/html" } },
-  { path: "/lens/fragment?url=https://example.com", status: 200, ct: "text/html", marker: "id=\"lx-fragments\"", fragment: true, fragmentRoot: "id=\"lx-fragments\"" },
   { path: "/lens/shot?url=https://example.com", status: [200, 503], flaky: true },
   // 200 text/plain when the x402 gate is unconfigured; 402 json once X402_PAY_TO is set
   { path: "/llms-full.txt", status: [200, 402], ct: ["text/plain", "application/json"] },

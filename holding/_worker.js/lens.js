@@ -142,13 +142,6 @@ function lensStatusFragment(data, state) {
     '<span style="margin-left:auto">fetched as ' + escHtml(data.fetchedBy || "identified bot") + "</span>";
 }
 
-export function renderLensFragments(data, state) {
-  return '<div id="lx-fragments" data-lens-fragments="1">' +
-    '<div data-lens-part="human">' + lensHumanFragment(data) + "</div>" +
-    '<div data-lens-part="machine">' + lensMachineFragment(data, state) + "</div>" +
-    '<div data-lens-part="status">' + lensStatusFragment(data, state) + "</div>" +
-    '<script type="application/json" id="lx-initial-data">' + lensScriptJson(data) + "</script></div>";
-}
 
 async function inspectLensRequest(request, env, ctx) {
   const v = validateLensTarget(new URL(request.url).searchParams.get("url") || "");
@@ -447,21 +440,6 @@ export async function handleLensFetch(request, env, ctx) {
   return jsonResponse(result.payload, result.status);
 }
 
-// /lens/fragment?url=… → browser-facing hypermedia fragment. It is a partial
-// response by path, never a second representation selected by Accept.
-export async function handleLensFragment(request, env, ctx) {
-  const url = new URL(request.url);
-  const result = await inspectLensRequest(request, env, ctx);
-  return new Response(renderLensFragments(result.payload, lensState(url)), {
-    status: result.status,
-    headers: {
-      "content-type": "text/html; charset=utf-8",
-      "cache-control": "no-store, must-revalidate",
-      "x-content-type-options": "nosniff",
-      "x-robots-tag": "noindex",
-    },
-  });
-}
 
 // /lens/shot?url=… → a faithful PNG of the page, rendered by Cloudflare
 // Browser Rendering (real headless Chrome, server-side). The Human view uses
