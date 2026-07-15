@@ -1,6 +1,6 @@
 // lens.js — client behavior for /lens ("The Other Web").
 //
-// Calls the server-side /lens/fragment engine (CORS blocks the browser from
+// Calls the server-side /lens/fetch engine (CORS blocks the browser from
 // fetching arbitrary origins itself), then renders the result through six
 // machine "lenses" — Readiness, Anatomy, Structured data, AI view, Terms, Discovery
 // files — next to a plain human read. No deps, no build. Deferred + SW-cached.
@@ -116,30 +116,6 @@
     statusBar.innerHTML = '<span class="err">Failed:</span> <span>' + esc(msg) + "</span>";
   }
 
-  function parseFragmentResponse(response, text) {
-    var ct = response.headers.get("content-type") || "";
-    if (ct.indexOf("json") >= 0) return { data: JSON.parse(text), fragment: null };
-    var doc = new DOMParser().parseFromString(text, "text/html");
-    var root = doc.getElementById("lx-fragments");
-    var script = doc.getElementById("lx-initial-data");
-    if (!root || !script) throw new Error("The fragment response was incomplete.");
-    return {
-      data: JSON.parse(script.textContent || "null"),
-      fragment: {
-        human: (root.querySelector("[data-lens-part=human]") || {}).innerHTML || "",
-        machine: (root.querySelector("[data-lens-part=machine]") || {}).innerHTML || "",
-        status: (root.querySelector("[data-lens-part=status]") || {}).innerHTML || "",
-      },
-    };
-  }
-
-  function applyFragment(fragment) {
-    if (!fragment) return;
-    humanBody.innerHTML = fragment.human;
-    machineBody.innerHTML = fragment.machine;
-    statusBar.innerHTML = fragment.status;
-  }
-
   // ---- networking -------------------------------------------------------
   function run(url) {
     if (busy) return;
@@ -156,16 +132,26 @@
     machineBody.innerHTML = '<div class="lx-spin">Reading the markup&hellip;</div>';
     statusBar.innerHTML = "<span>Fetching <b>" + esc(url) + "</b> server-side&hellip;</span>";
 
-    fetch("/lens/fragment?url=" + encodeURIComponent(url))
-      .then(function (r) { return r.text().then(function (text) { return parseFragmentResponse(r, text); }); })
-      .then(function (result) {
-        var j = result.data;
+    // /lens/fetch is the JSON contract; /lens/fragment serves the same payload wrapped
+    // in server-rendered HTML. This client renders every pane itself anyway (it must:
+    // switching lenses and toggling Delta counterfactuals can't round-trip, and
+    // renderMachine() is what binds the toggle handlers), so the fragment's markup was
+    // being injected and then overwritten in this same synchronous block, never once
+    // painted. Taking the JSON directly drops ~8-10KB per scan and a DOMParser pass
+    // over the whole response. /lens/fragment stays a real hypermedia surface for
+    // consumers that want the HTML; it just isn't this client's transport.
+    fetch("/lens/fetch?url=" + encodeURIComponent(url))
+      .then(function (r) {
+        var ct = r.headers.get("content-type") || "";
+        if (ct.indexOf("json") < 0) throw new Error("The lens engine returned an unexpected response.");
+        return r.json();
+      })
+      .then(function (j) {
         busy = false;
         if (!j || !j.ok) {
           showError(j);
           return;
         }
-        applyFragment(result.fragment);
         data = j;
         renderHuman();
         renderMachine();
