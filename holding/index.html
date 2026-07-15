@@ -346,7 +346,8 @@ hr {
   height: 0;
 }
 
-/* now-playing list: a section that fetches /rn/tracks and renders each
+/* now-playing list: a section backed by /rn/tracks (or its /rn/tracks.html
+   fallback) that renders each
    track as a link to song.link (cross-platform redirect). styled like a
    period-correct Windows-list view — alternating row tint, monospace title
    column, navy heading, hairline divider. */
@@ -540,7 +541,7 @@ hr {
 
 /* tracks list loading fallback: most visits get a worker pre-render so the
    list arrives populated. when KV cache is empty (race after a playlist
-   swap, etc), reserve list height while the JS fetches /rn/tracks so the
+   swap, etc), reserve list height while the JS fetches /rn/tracks.html so the
    page below doesn't jump when the items land. */
 .np-list:has(.np-loading) {
   min-height: 480px;
@@ -1110,8 +1111,9 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
     <!--
       now-playing list — worker pre-renders from KV-cached /rn/tracks on
       every request (the only path under healthy conditions). the fallback
-      asks the same endpoint for an HTML row fragment if the worker did not
-      populate the list. JSON remains available for machine callers.
+      asks the explicit /rn/tracks.html endpoint for an HTML row fragment if
+      the worker did not populate the list. /rn/tracks remains JSON-only for
+      machine callers.
     -->
     <script>
     (async () => {
@@ -1122,7 +1124,7 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
       // Compatibility guard for an older/unmarked edge response.
       if (!list.querySelector(".np-loading")) return;
       try {
-        const res = await fetch("/rn/tracks", { headers: { accept: "text/html" } });
+        const res = await fetch("/rn/tracks.html");
         const html = await res.text();
         list.innerHTML = html || '<li class="np-empty">No tracks yet. <a href="/rn">Open on Spotify</a>.</li>';
       } catch {
@@ -1799,7 +1801,7 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
         description: "What Aadharsh is listening to right now: the live playlist on aadhar.sh.",
         inputSchema: { type: "object", properties: {} },
         execute: async function () {
-          var r = await fetch("/rn/tracks", { headers: { accept: "application/json" } });
+          var r = await fetch("/rn/tracks");
           return ok(await r.text());
         }
       });

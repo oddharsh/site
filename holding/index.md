@@ -32,7 +32,8 @@ The rest of the site goes live shortly. Check back, or just send a note.
 ## Music I'm listening to right now
 
 The current "rn" Spotify playlist's tracks are served as JSON at
-[/rn/tracks](https://aadhar.sh/rn/tracks). Each track includes a
+[/rn/tracks](https://aadhar.sh/rn/tracks); the homepage's HTML row fallback is
+at [/rn/tracks.html](https://aadhar.sh/rn/tracks.html). Each track includes a
 [song.link](https://song.link) URL that forwards to your preferred music
 service. The /rn redirect ([aadhar.sh/rn](https://aadhar.sh/rn)) opens the
 full playlist on Spotify.

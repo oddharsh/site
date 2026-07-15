@@ -4,7 +4,7 @@ import { BOT_UA, SIG_AGENT, signRequestForWebBotAuth } from "./lib/botauth.js";
 import { cachedRender } from "./lib/cache.js";
 import { CANONICAL_HOST } from "./lib/const.js";
 import { lunaPage } from "./lib/chrome.js";
-import { acceptQ, escAttr, escHtml, jsonResponse } from "./lib/http.js";
+import { escAttr, escHtml, jsonResponse } from "./lib/http.js";
 
 // ── /lens — "the other web" -----------------------------------------------
 // A URL goes in; what a MACHINE sees comes out, across five lenses: page
@@ -33,7 +33,6 @@ export async function handleLens(request, env, ctx) {
     const result = await inspectLensRequest(request, env, ctx);
     const response = renderLensShell(result.payload, lensState(url), target);
     response.headers.set("cache-control", "no-store, must-revalidate");
-    response.headers.set("vary", "accept");
     response.headers.set("x-content-type-options", "nosniff");
     response.headers.set("x-robots-tag", "noindex");
     return response;
@@ -42,11 +41,6 @@ export async function handleLens(request, env, ctx) {
   // CF_VERSION_METADATA, so a deploy can otherwise leave an older shell in
   // the edge cache while the separately served lens.js has already changed.
   return cachedRender(request, ctx, () => renderLensShell(), "/lens-shell-v3", env);
-}
-
-function wantsLensHtml(request) {
-  const accept = (request.headers.get("accept") || "").toLowerCase();
-  return acceptQ(accept, "text/html") > acceptQ(accept, "application/json");
 }
 
 function lensState(url) {
@@ -148,7 +142,7 @@ function lensStatusFragment(data, state) {
     '<span style="margin-left:auto">fetched as ' + escHtml(data.fetchedBy || "identified bot") + "</span>";
 }
 
-function renderLensFragments(data, state) {
+export function renderLensFragments(data, state) {
   return '<div id="lx-fragments" data-lens-fragments="1">' +
     '<div data-lens-part="human">' + lensHumanFragment(data) + "</div>" +
     '<div data-lens-part="machine">' + lensMachineFragment(data, state) + "</div>" +
@@ -177,7 +171,7 @@ async function inspectLensRequest(request, env, ctx) {
   }
 }
 
-function renderLensShell(initial, state, inputValue) {
+export function renderLensShell(initial, state, inputValue) {
   state = state || { view: "both", lens: "anatomy", counterfactuals: {} };
   const seeded = initial && initial.ok;
   const value = inputValue || (seeded ? initial.finalUrl || initial.url : "");
@@ -445,26 +439,26 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
   });
 }
 
-// /lens/fetch?url=… → JSON by default, or an HTML fragment when explicitly
-// requested by the browser enhancement. no-store either way.
+// /lens/fetch?url=… → the stable machine-facing JSON contract.
 export async function handleLensFetch(request, env, ctx) {
+  const result = await inspectLensRequest(request, env, ctx);
+  return jsonResponse(result.payload, result.status);
+}
+
+// /lens/fragment?url=… → browser-facing hypermedia fragment. It is a partial
+// response by path, never a second representation selected by Accept.
+export async function handleLensFragment(request, env, ctx) {
   const url = new URL(request.url);
   const result = await inspectLensRequest(request, env, ctx);
-  if (wantsLensHtml(request)) {
-    return new Response(renderLensFragments(result.payload, lensState(url)), {
-      status: result.status,
-      headers: {
-        "content-type": "text/html; charset=utf-8",
-        "cache-control": "no-store, must-revalidate",
-        "vary": "accept",
-        "x-content-type-options": "nosniff",
-        "x-robots-tag": "noindex",
-      },
-    });
-  }
-  const response = jsonResponse(result.payload, result.status);
-  response.headers.set("vary", "accept");
-  return response;
+  return new Response(renderLensFragments(result.payload, lensState(url)), {
+    status: result.status,
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "no-store, must-revalidate",
+      "x-content-type-options": "nosniff",
+      "x-robots-tag": "noindex",
+    },
+  });
 }
 
 // /lens/shot?url=… → a faithful PNG of the page, rendered by Cloudflare
@@ -732,23 +726,23 @@ export async function lensFetch(targetUrl, env, signal, accept) {
   }
   // Fetching our own hostname over the network loops back through this same
   // worker, and Cloudflare kills the loop with a 522 — which is why the featured
-  // "Try: aadhar.sh" example (and every self-probe: robots.txt, llms.txt, …) used
-  // to render the site as down. Serve our own paths straight from the ASSETS
-  // binding instead: same bytes a crawler would get, no network hop, no loop.
+  // "Try: aadhar.sh" example (and every self-probe: robots.txt, llms.txt, …) once
+  // rendered the site as down. Dispatch through our own router instead
+  // (SELF_FETCH, injected in index.js): it returns the REAL response an external
+  // agent receives — worker enhancement, markdown negotiation, cache + security
+  // headers, all of it — so a self-scan measures the live surface rather than a
+  // reimplementation of it.
+  //
+  // ASSETS is the fallback only. It serves the PRE-enhancement static file, which
+  // is right for /robots.txt but wrong for "/": the skeleton carries an empty photo
+  // grid and zero alt text, so a self-scan through it under-reported this site's own
+  // image accessibility as 0/12 while the live page ships 13 alt texts.
   try {
     const u = new URL(targetUrl);
-    if (env.ASSETS && u.hostname.toLowerCase() === CANONICAL_HOST) {
-      // The public homepage negotiates text/markdown in the Worker before the
-      // static asset layer. Reproduce that branch here so a self-scan measures
-      // the same surface an external agent receives, not just /index.html.
-      if (u.pathname === "/" && /text\/markdown/i.test(headers.get("accept") || "")) {
-        const md = await env.ASSETS.fetch(new Request(new URL("/index.md", u).toString(), { method: "GET", headers }));
-        if (md.ok) {
-          const body = await md.text();
-          return new Response(body, { status: 200, headers: { "content-type": "text/markdown; charset=utf-8", "x-markdown-tokens": String(Math.ceil(body.length / 4)), "vary": "accept" } });
-        }
-      }
-      return env.ASSETS.fetch(new Request(u.toString(), { method: "GET", headers }));
+    if (u.hostname.toLowerCase() === CANONICAL_HOST) {
+      const selfReq = new Request(u.toString(), { method: "GET", headers });
+      if (env.SELF_FETCH) return await env.SELF_FETCH(selfReq);
+      if (env.ASSETS)     return await env.ASSETS.fetch(selfReq);
     }
   } catch (_e) { /* fall through to a normal fetch */ }
   return fetch(targetUrl, { method: "GET", headers, redirect: "follow", signal, cf: { cacheTtl: 0 } });
@@ -814,10 +808,16 @@ export async function lensFetchAsBot(targetUrl, env, signal, userAgent) {
     accept: "text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.7",
     "accept-language": "en-US,en;q=0.9",
   });
+  // same self-dispatch rule as lensFetch: route() gives the real response this
+  // bot identity would actually receive (the worker's UA-conditional branches
+  // included), where ASSETS would hand back the pre-enhancement skeleton and make
+  // every bot look identical for the wrong reason.
   try {
     const u = new URL(targetUrl);
-    if (env.ASSETS && u.hostname.toLowerCase() === CANONICAL_HOST) {
-      return env.ASSETS.fetch(new Request(u.toString(), { method: "GET", headers }));
+    if (u.hostname.toLowerCase() === CANONICAL_HOST) {
+      const selfReq = new Request(u.toString(), { method: "GET", headers });
+      if (env.SELF_FETCH) return await env.SELF_FETCH(selfReq);
+      if (env.ASSETS)     return await env.ASSETS.fetch(selfReq);
     }
   } catch (_e) { /* fall through to a normal fetch */ }
   return fetch(targetUrl, { method: "GET", headers, redirect: "follow", signal, cf: { cacheTtl: 0 } });

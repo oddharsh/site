@@ -49,6 +49,9 @@ jobs:
       - name: Validate homepage Worker config
         run: npx wrangler deploy --dry-run
 
+      - name: Test homepage representation contracts
+        run: npm test
+
       - name: Validate coffee Worker config
         run: npx wrangler deploy --dry-run -c cal/wrangler.toml
 

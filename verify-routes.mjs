@@ -61,7 +61,7 @@ const ROUTES = [
   { path: "/updates", status: 200, ct: "text/html" },
   { path: "/updates.json", status: 200, ct: "application/json" },
   { path: "/restore", status: 200, ct: "text/html" },
-  { path: "/lens", status: 200, ct: "text/html", marker: "The Other Web" },
+  { path: "/lens", status: 200, ct: "text/html", marker: "The Other Web", fullPage: true },
   { path: "/lens/", status: 200, ct: "text/html" },
   { path: "/lens.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "replaceState" },
   { path: "/luna.css", status: 200, ct: "text/css", marker: "axp-desktop", maxBytes: isProd ? 45000 : undefined },
@@ -77,7 +77,10 @@ const ROUTES = [
     { path: "/lens.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "replaceState" },
     { path: "/luna.src.css", status: 200, ct: "text/css", marker: "axp-desktop" },
   ] : []),
-  { path: "/lens/fetch?url=https://example.com", status: 200, ct: "application/json" },
+  // Representation contracts: the machine paths stay fixed even if a caller
+  // sends a browser Accept header; the HTML paths are explicit fragments.
+  { path: "/lens/fetch?url=https://example.com", status: 200, ct: "application/json", headers: { accept: "text/html" } },
+  { path: "/lens/fragment?url=https://example.com", status: 200, ct: "text/html", marker: "id=\"lx-fragments\"", fragment: true, fragmentRoot: "id=\"lx-fragments\"" },
   { path: "/lens/shot?url=https://example.com", status: [200, 503], flaky: true },
   // 200 text/plain when the x402 gate is unconfigured; 402 json once X402_PAY_TO is set
   { path: "/llms-full.txt", status: [200, 402], ct: ["text/plain", "application/json"] },
@@ -88,7 +91,8 @@ const ROUTES = [
   { path: `/writing/${SLUG}.txt`, status: 200, ct: "text/plain" },
   { path: "/writing/posts.json", status: 200, ct: "application/json" },
   { path: "/rn", status: 302 },
-  { path: "/rn/tracks", status: 200, ct: "application/json" },
+  { path: "/rn/tracks", status: 200, ct: "application/json", headers: { accept: "text/html" } },
+  { path: "/rn/tracks.html", status: 200, ct: "text/html", fragment: true },
   { path: "/rn/admin", status: 403 },
   { path: "/bot", status: 200, ct: "text/html" },
   { path: "/around", status: 200, ct: "text/html" },
@@ -133,11 +137,11 @@ function statusOk(want, got) {
 async function probe(r) {
   const url = cacheBust(r.path);
   try {
-    const res = await fetch(url, { redirect: "manual", headers: { accept: "*/*" } });
+    const res = await fetch(url, { redirect: "manual", headers: { accept: "*/*", ...(r.headers || {}) } });
     const ct = res.headers.get("content-type") || "";
     let body = "", bytes = null;
     // read the body when we need a marker or a size assertion on a text response
-    if ((r.marker || r.maxBytes) && /text|json|javascript|markdown|svg|css/.test(ct)) {
+    if ((r.marker || r.maxBytes || r.fullPage || r.fragment) && /text|json|javascript|markdown|svg|css/.test(ct)) {
       const full = await res.text();
       bytes = Buffer.byteLength(full);
       body = full.slice(0, 200000);
@@ -146,8 +150,19 @@ async function probe(r) {
     const okCt = !r.ct || (Array.isArray(r.ct) ? r.ct.some(c => ct.startsWith(c)) : ct.startsWith(r.ct));
     const okMarker = !r.marker || body.includes(r.marker);
     const okBytes = !r.maxBytes || (bytes !== null && bytes <= r.maxBytes);
-    const pass = okStatus && okCt && okMarker && okBytes;
-    return { path: r.path, status: res.status, ct, pass, flaky: !!r.flaky, okStatus, okCt, okMarker, okBytes, bytes, want: r.status, wantCt: r.ct, marker: r.marker, maxBytes: r.maxBytes };
+    const okFullPage = !r.fullPage || (
+      /^<!doctype html[\s>]/i.test(body) &&
+      /<html\b/i.test(body) &&
+      /<head\b/i.test(body) &&
+      /<body\b/i.test(body) &&
+      /<\/html>/i.test(body)
+    );
+    const okFragment = !r.fragment || (
+      !/<(?:!doctype|html|head|body)\b/i.test(body) &&
+      (!r.fragmentRoot || body.includes(r.fragmentRoot))
+    );
+    const pass = okStatus && okCt && okMarker && okBytes && okFullPage && okFragment;
+    return { path: r.path, status: res.status, ct, pass, flaky: !!r.flaky, okStatus, okCt, okMarker, okBytes, okFullPage, okFragment, bytes, want: r.status, wantCt: r.ct, marker: r.marker, maxBytes: r.maxBytes };
   } catch (e) {
     return { path: r.path, status: 0, ct: "", pass: false, flaky: !!r.flaky, error: String(e && e.message || e), want: r.status };
   }
@@ -176,6 +191,8 @@ async function main() {
       r.okCt === false ? `ct "${r.ct}"!^"${r.wantCt}"` : "",
       r.okMarker === false ? `missing marker "${r.marker}"` : "",
       r.okBytes === false ? `size ${r.bytes}B > ${r.maxBytes}B (unminified? build bypassed?)` : "",
+      r.okFullPage === false ? "full-page contract missing document wrapper" : "",
+      r.okFragment === false ? "fragment contract returned a document wrapper" : "",
       r.error ? `err ${r.error}` : "",
     ].filter(Boolean).join(", ");
     console.log(`${tag.padEnd(5)} ${String(r.status).padEnd(4)} ${r.path}${why ? "   <- " + why : ""}`);

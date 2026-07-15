@@ -3,7 +3,7 @@
 import { BOT_UA } from "./lib/botauth.js";
 import { deleteSWRKV, swrKV } from "./lib/cache.js";
 import { lunaPage } from "./lib/chrome.js";
-import { acceptQ, esc, escAttr, escHtml, jsonResp, timingSafeEqual } from "./lib/http.js";
+import { esc, escAttr, escHtml, jsonResp, timingSafeEqual } from "./lib/http.js";
 
 // ── /rn redirect target ─────────────────────────────────────────────
 // the link on the site is static (/rn). the redirect target lives in KV
@@ -41,7 +41,7 @@ export async function handleRn(request, env) {
   });
 }
 
-// ── /rn/tracks handler ──────────────────────────────────────────────
+// ── /rn/tracks handlers ─────────────────────────────────────────────
 // returns the current "rn" playlist's track list as JSON. data is pulled
 // from spotify's public embed pages — three tiers of scrape:
 //
@@ -75,37 +75,29 @@ export const RN_TRACKS_TTL  = 3600;
 export const ARTIST_KV_TTL  = 30 * 86400;
 
       // 30d: artist profile (rarely changes)
-function wantsTrackHtml(request) {
-  const accept = (request.headers.get("accept") || "").toLowerCase();
-  return acceptQ(accept, "text/html") > acceptQ(accept, "application/json");
-}
-
-function trackResponse(request, payload, status = 200) {
-  if (wantsTrackHtml(request)) {
+function trackResponse(payload, status = 200, format = "json") {
+  if (format === "html") {
     return new Response(renderTrackListHtml(payload), {
       status,
       headers: {
         "content-type": "text/html; charset=utf-8",
         "cache-control": status >= 400 ? "public, max-age=30, must-revalidate" : "public, max-age=300, s-maxage=600",
-        "vary": "accept",
         "x-content-type-options": "nosniff",
       },
     });
   }
-  const response = jsonResp(payload, status);
-  response.headers.set("vary", "accept");
-  return response;
+  return jsonResp(payload, status);
 }
 
-export async function handleRnTracks(request, env, ctx) {
+async function loadRnTracks(request, env, ctx) {
   const url = new URL(request.url);
 
   if (!env.RN_KV) {
-    return trackResponse(request, { error: "no kv binding", tracks: [] }, 500);
+    return { payload: { error: "no kv binding", tracks: [] }, status: 500 };
   }
   const playlistId = await env.RN_KV.get("playlist-id");
   if (!playlistId || !/^[0-9A-Za-z]{22}$/.test(playlistId)) {
-    return trackResponse(request, { error: "no playlist set", tracks: [] });
+    return { payload: { error: "no playlist set", tracks: [] }, status: 200 };
   }
 
   const cacheKey = `tracks:${playlistId}`;
@@ -124,9 +116,23 @@ export async function handleRnTracks(request, env, ctx) {
   try {
     payload = await getTracksSWR(env, ctx, playlistId, { buildOnMiss: true });
   } catch (e) {
-    return trackResponse(request, { error: "scrape failed", tracks: [] }, 502);
+    return { payload: { error: "scrape failed", tracks: [] }, status: 502 };
   }
-  return trackResponse(request, payload);
+  return { payload, status: 200 };
+}
+
+// `/rn/tracks` is the stable machine contract. Keep its representation fixed
+// so callers do not need to negotiate against a browser-oriented HTML shape.
+export async function handleRnTracks(request, env, ctx) {
+  const result = await loadRnTracks(request, env, ctx);
+  return trackResponse(result.payload, result.status, "json");
+}
+
+// `/rn/tracks.html` is the browser fragment contract used by the homepage's
+// no-SSR fallback. It intentionally returns `<li>` rows, not a full document.
+export async function handleRnTracksHtml(request, env, ctx) {
+  const result = await loadRnTracks(request, env, ctx);
+  return trackResponse(result.payload, result.status, "html");
 }
 
 // The HTML representation is intentionally the same row shape used by the

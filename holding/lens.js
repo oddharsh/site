@@ -1,6 +1,6 @@
 // lens.js — client behavior for /lens ("The Other Web").
 //
-// Calls the server-side /lens/fetch engine (CORS blocks the browser from
+// Calls the server-side /lens/fragment engine (CORS blocks the browser from
 // fetching arbitrary origins itself), then renders the result through six
 // machine "lenses" — Readiness, Anatomy, Structured data, AI view, Terms, Discovery
 // files — next to a plain human read. No deps, no build. Deferred + SW-cached.
@@ -151,7 +151,7 @@
     machineBody.innerHTML = '<div class="lx-spin">Reading the markup&hellip;</div>';
     statusBar.innerHTML = "<span>Fetching <b>" + esc(url) + "</b> server-side&hellip;</span>";
 
-    fetch("/lens/fetch?url=" + encodeURIComponent(url), { headers: { accept: "text/html" } })
+    fetch("/lens/fragment?url=" + encodeURIComponent(url))
       .then(function (r) { return r.text().then(function (text) { return parseFragmentResponse(r, text); }); })
       .then(function (result) {
         var j = result.data;
