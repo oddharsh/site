@@ -43,7 +43,10 @@
 # With just two bodies it's near-binary today — the visual variety will come
 # from aspect ratios, not this — but it future-proofs the moment a 3rd body lands.
 #
-# After running, bump THUMB_VERSION in _worker.js to bust caches.
+# After running, re-run hash-thumbnails.sh: it re-hashes each tier into holding/i/
+# and rewrites images/hashes.json. A re-encode mints a NEW content-addressed URL,
+# so there is nothing to bust (THUMB_VERSION is gone; it only ever survived in the
+# legacy-fallback URL shape).
 #   SQ=600 ./holding/scripts/reencode-thumbnails.sh
 #   SQ=600 SQ_SM=400 ./holding/scripts/reencode-thumbnails.sh "/path/to/source/folder"
 #

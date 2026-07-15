@@ -421,7 +421,7 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
 `,
     // The shell is cached at the edge and browsers cache static scripts too;
     // version the client URL so a fresh shell cannot pair with an older lens.js.
-    scripts: `<script src="/lens.js?v=4" defer></script>`,
+    scripts: `<script src="/lens.js?v=5" defer></script>`,   // BUMP on every holding/lens.js change: the shell is no-store but the script is cached, so a stale token pairs a fresh shell with an old script
     cache: "public, max-age=60, s-maxage=300",
     headers: {
       "x-robots-tag": "noindex",

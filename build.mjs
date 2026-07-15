@@ -14,6 +14,7 @@
 // wrangler resolves `main` and `assets.directory` relative to the config file, so the
 // root wrangler.jsonc is copied verbatim into .build/ and just works against the copy.
 
+import { createHash } from "node:crypto";
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { transform } from "esbuild";
 
@@ -121,9 +122,25 @@ async function checkInvariants() {
     if (diff.length) warn.push(`wrangler.jsonc and wrangler.dev.jsonc binding sets differ (${diff.join(", ")}) — keep the dev twin in sync`);
   } catch (e) { warn.push(`dev-config drift check could not run: ${e.message}`); }
 
+  // 7 (hard) — every agent-skills digest matches the file it points at. The
+  // discovery schema invites clients to verify these, so a stale digest doesn't
+  // read as "the author forgot": it reads as tampering, and the skill gets
+  // rejected. Editing SKILL.md without regenerating index.json already shipped
+  // that state once, so the check belongs on the one unbypassable deploy path.
+  let skillsChecked = 0;
+  try {
+    const idx = JSON.parse(await read("holding/.well-known/agent-skills/index.json"));
+    for (const s of idx.skills || []) {
+      const path = "holding" + new URL(s.url).pathname;
+      const actual = "sha256:" + createHash("sha256").update(await readFile(path)).digest("hex");
+      if (s.digest !== actual) hard.push(`agent-skills: ${s.name} digest is stale — index.json says ${s.digest.slice(0, 20)}…, ${path} hashes to ${actual.slice(0, 20)}… (regenerate index.json)`);
+      skillsChecked++;
+    }
+  } catch (e) { warn.push(`agent-skills digest check could not run: ${e.message}`); }
+
   if (warn.length) console.warn("build: invariant WARNINGS (deploy continues):\n  - " + warn.join("\n  - "));
   if (hard.length) throw new Error("build: invariant tripwires FAILED, deploy blocked:\n  - " + hard.join("\n  - "));
-  console.log(`invariants ok: ${routeKeys.length} routes mirrored, CSP style-src, blink-fix, generator, geometry${warn.length ? " (with warnings above)" : ""}`);
+  console.log(`invariants ok: ${routeKeys.length} routes mirrored, CSP style-src, blink-fix, generator, geometry, ${skillsChecked} skill digest${skillsChecked === 1 ? "" : "s"}${warn.length ? " (with warnings above)" : ""}`);
 }
 
 // the shells to minify: [file, banner pointer, tripwire the minified output MUST contain]

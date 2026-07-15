@@ -5,6 +5,7 @@
 //   GET  /lwe/ask/challenge -> { stems[9], exp, token, thumb }   (no answer leaked)
 //   POST /lwe/ask/verify    { stems, exp, token, selected[] } -> { ok, askToken, askExp }
 //   POST /lwe/ask           { question, concept?, askToken, askExp } -> { answer, sources[] }
+//   POST /lwe/ask/search    { question } -> best-matching concept page (Search Companion)
 //   POST /lwe/ask/reindex   (gated by REINDEX_SECRET) -> embeds + upserts passages
 //
 // Verification is stateless: the challenge token is HMAC(secret, stems|exp|CORRECT

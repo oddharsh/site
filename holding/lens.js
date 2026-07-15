@@ -72,9 +72,14 @@
     var p = new URLSearchParams(location.search);
     var views = ["both", "human", "machine", "delta"];
     var lenses = ["readiness", "anatomy", "structured", "ai", "terms", "discovery"];
-    var cf = {};
+    // Seed every key false, then flip the ones named in ?cf=. Both callers REPLACE
+    // `counterfactuals` with this object, and the toggle handler guards on
+    // hasOwnProperty — so returning only the keys ?cf= mentioned (i.e. none, on a
+    // normal visit) left every Delta switch dead and the Readiness projection
+    // banner permanently empty. The seed doubles as the allowlist.
+    var cf = { markdown: false, semantic: false, contract: false, authority: false, receipt: false };
     (p.get("cf") || "").split(",").forEach(function (key) {
-      if (["markdown", "semantic", "contract", "authority", "receipt"].indexOf(key) >= 0) cf[key] = true;
+      if (Object.prototype.hasOwnProperty.call(cf, key)) cf[key] = true;
     });
     return {
       url: p.get("url") || "",

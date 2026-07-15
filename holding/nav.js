@@ -19,9 +19,15 @@
   "use strict";
   if (window.__axpNav) return; window.__axpNav = true;
   var D = document;
-  function withViewTransition(fn) {
+  // `types` tags a SAME-document transition so it doesn't inherit the
+  // cross-document window choreography. luna.css names every .window/.np-window
+  // `axp-window` and animates that name from UNTYPED ::view-transition-* rules, so
+  // an untyped ⌘K captured the page's unchanged window and minimized/restored it:
+  // the whole window visibly pulsed on every Run open/close. Passing
+  // ["axp-dialog"] lets luna.css cancel that animation for dialog transitions.
+  function withViewTransition(fn, types) {
     if (D.startViewTransition && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      return D.startViewTransition(fn);
+      return types ? D.startViewTransition({ update: fn, types: types }) : D.startViewTransition(fn);
     }
     return fn();
   }
@@ -734,10 +740,10 @@
       var s = D.getElementById("axp-start"); if (s) s.setAttribute("aria-expanded", "true");
       input.value = ""; render();
       input.focus();
-    });
+    }, ["axp-dialog"]);
   }
   function closeRun() {
-    if (run && run.open) withViewTransition(function () { run.close(); });   // side effects ride the "close" event
+    if (run && run.open) withViewTransition(function () { run.close(); }, ["axp-dialog"]);   // side effects ride the "close" event
   }
 
   // ── tray balloons: brief XP notification-bubble popouts for the system-utility
@@ -799,7 +805,7 @@
     var tr = j ? ('<div class="ln"><span class="k">Transport</span> ' + esc((m["HTTP version"] || "") + " · " + (m["TLS version"] || "")) + '</div>') : "";
     b.innerHTML =
       '<div class="ln"><b>Firewall</b> <span class="ok">ON</span> <span class="k">Cloudflare edge</span></div>' +
-      '<div class="ln"><b>Automatic Updates</b> <span class="ok">ON</span> <span class="k">service worker</span></div>' +
+      '<div class="ln"><b>Automatic Updates</b> <span class="ok">ON</span> <span class="k">immutable assets</span></div>' +
       '<div class="ln"><b>Threat protection</b> <span class="ok">ON</span> <span class="k">bot auth</span></div>' + tr;
   }
   function renderUpd(j) {

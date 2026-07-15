@@ -1,6 +1,6 @@
 // home.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
-import { escAttr, escHtml, wantsMarkdown } from "./lib/http.js";
+import { escAttr, wantsMarkdown } from "./lib/http.js";
 import { HOMEPAGE_DISCOVERY_LINK, withHomepageDiscoveryHeaders } from "./lib/security.js";
 import { absThumb, getAltMap, getImagesManifest } from "./photos.js";
 import { getTracksSWR, renderTrackListHtml } from "./rn.js";

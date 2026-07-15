@@ -43,12 +43,26 @@ export default {
       });
     }
 
+    // SELF_FETCH — how /lens reads our own hostname without lying about it.
+    // A plain fetch("https://aadhar.sh/") from inside this worker loops back
+    // through the edge and dies as a 522; serving env.ASSETS instead returns the
+    // PRE-enhancement static skeleton (wrong bytes, empty photo grid, zero alt
+    // text), which a page whose whole claim is "what the server actually sent
+    // back" must not show. Dispatching through route() yields the real response.
+    // SELF_FETCH is nulled one level down, so a lens pointed at /lens/fetch
+    // resolves once and cannot recurse.
+    const selfEnv = {
+      ...env,
+      SELF_FETCH: async (req) =>
+        withSecurityHeaders(await route(req, { ...env, SELF_FETCH: null }, ctx)),
+    };
+
     // Workers Logs: one structured line per worker-owned request (path, method,
     // status, ms, country, bot), filterable in the dashboard. Edge-direct traffic
     // never reaches this code, so it never logs. Strippable: delete the wrapper,
     // keep `return withSecurityHeaders(await route(...))`.
     const t0 = Date.now();
-    const response = await route(request, env, ctx);
+    const response = await route(request, selfEnv, ctx);
     // the bot ledger: identified AI-crawler hits tick into Analytics Engine
     // (worker-owned routes only); /ledger prices them. Best-effort, non-blocking.
     countCrawlerHit(env, request, response, url.pathname);
