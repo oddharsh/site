@@ -1,0 +1,10 @@
+Big screens and small screens
+─────────────────────────────
+
+The boundaries of consumer modalities are shaped by the Overton window and by culture as much as by incentives. Buying stocks or booking flights as strictly big-screen activities feels natural because we've learned to treat them that way. That's especially true for general-purpose modalities, like humanoids or RGB cameras for FSD. For early adopters, narrative can matter more than the immediate incentive.
+
+Is a change in modality really a change in consumer behavior? Or is it a precondition for consumer behavior to change?
+
+Hailing a cab, calling one by phone, and using an app like Uber all solve the same basic problem, but each modality changes what feels easy, available, and normal. The behavior shifts because the interface makes a different version of it legible.
+
+Next up: foldables breaking down the distinction between big-screen tasks and small-screen tasks. My guess is that they'll work well for reading and less well for media consumption. More interestingly, they may push people to do more traditionally big-screen tasks on the go, perhaps making filesystem literacy even rarer.
