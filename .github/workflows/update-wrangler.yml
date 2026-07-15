@@ -1,0 +1,117 @@
+name: Update Wrangler
+
+on:
+  schedule:
+    - cron: "17 9 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: update-wrangler
+  cancel-in-progress: false
+
+jobs:
+  update:
+    name: update Wrangler and open PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            cal/package-lock.json
+            cf-garage/package-lock.json
+            lwe-ask/package-lock.json
+            serendipity/package-lock.json
+
+      - name: Resolve latest Wrangler
+        id: latest
+        shell: bash
+        run: |
+          set -euo pipefail
+          latest="$(npm view wrangler version)"
+          [[ "$latest" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          echo "version=$latest" >> "$GITHUB_OUTPUT"
+          echo "Latest Wrangler: $latest"
+
+      - name: Apply latest Wrangler to every Worker project
+        env:
+          WRANGLER_VERSION: ${{ steps.latest.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for project in . cal cf-garage lwe-ask serendipity; do
+            (
+              cd "$project"
+              npm install --ignore-scripts --no-audit --no-fund --save-dev --save-exact "wrangler@${WRANGLER_VERSION}"
+            )
+          done
+
+      - name: Check all manifests and lockfiles agree
+        env:
+          WRANGLER_VERSION: ${{ steps.latest.outputs.version }}
+        run: npm run check-wrangler
+
+      - name: Prepare update branch
+        id: diff
+        env:
+          WRANGLER_VERSION: ${{ steps.latest.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Wrangler is already current."
+            exit 0
+          fi
+          git switch -C automation/wrangler-latest
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json \
+            cal/package.json cal/package-lock.json \
+            cf-garage/package.json cf-garage/package-lock.json \
+            lwe-ask/package.json lwe-ask/package-lock.json \
+            serendipity/package.json serendipity/package-lock.json
+          git commit -m "chore: update Wrangler to v${WRANGLER_VERSION}"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Push update branch
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          git fetch origin automation/wrangler-latest || true
+          git push --force-with-lease --set-upstream origin automation/wrangler-latest
+
+      - name: Open or refresh update PR
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WRANGLER_VERSION: ${{ steps.latest.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo="${GITHUB_REPOSITORY}"
+          if gh pr list --repo "$repo" --head automation/wrangler-latest --state open --json number --jq '.[0].number' | grep -q .; then
+            echo "Updated existing Wrangler PR."
+          else
+            gh pr create \
+              --repo "$repo" \
+              --base main \
+              --head automation/wrangler-latest \
+              --draft \
+              --title "chore: update Wrangler to v${WRANGLER_VERSION}" \
+              --body "Automated Wrangler refresh to v${WRANGLER_VERSION}. The normal CI workflow validates every Worker manifest, lockfile, build, dry-run, and test before merge."
+          fi

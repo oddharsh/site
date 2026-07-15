@@ -13,6 +13,7 @@
   "name": "aadhar-sh",
   "main": "holding/_worker.js/index.js",
   "compatibility_date": "2026-06-01",
+  "dependencies_instrumentation": { "enabled": true },
   "workers_dev": false,
   "assets": {
     "directory": "holding",

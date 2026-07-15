@@ -20,6 +20,7 @@
   "main": ".build/holding/_worker.js/index.js",
   "build": { "command": "node build.mjs" },
   "compatibility_date": "2026-06-01",
+  "dependencies_instrumentation": { "enabled": true },
   // serve only on the custom domain (aadhar.sh); no public *.workers.dev URL.
   "workers_dev": false,
   "assets": {

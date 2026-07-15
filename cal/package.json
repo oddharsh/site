@@ -12,8 +12,8 @@
     "secret:set": "wrangler secret put -c wrangler.toml"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.16.15",
+    "@cloudflare/vitest-pool-workers": "^0.18.5",
     "vitest": "^4.1.9",
-    "wrangler": "^4.102.0"
+    "wrangler": "4.111.0"
   }
 }

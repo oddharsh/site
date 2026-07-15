@@ -21,3 +21,6 @@ routes = [
 binding = "SERENDIPITY_DB"
 database_name = "serendipity"
 database_id = "d3aa3215-17c3-4389-b224-cf465ddbb786"
+
+[dependencies_instrumentation]
+enabled = true

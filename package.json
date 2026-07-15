@@ -7,10 +7,11 @@
     "build": "node build.mjs",
     "dev": "wrangler dev -c wrangler.dev.jsonc",
     "deploy": "wrangler deploy",
-    "perf-budget": "node perf-budget.mjs"
+    "perf-budget": "node perf-budget.mjs",
+    "check-wrangler": "node scripts/check-wrangler.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.25.0",
-    "wrangler": "4.102.0"
+    "wrangler": "4.111.0"
   }
 }
