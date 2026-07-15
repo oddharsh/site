@@ -29,10 +29,15 @@ import { transform } from "esbuild";
 const SHELL_BUDGET = {
   "nav.js": 50_000,
   "notepad.js": 8_000,
-  "lens.js": 20_000,
+  // Lens now carries the readiness rubric, six bot observations, copyable
+  // fixes, and the counterfactual score view. Keep an explicit ceiling above
+  // that intentional feature surface rather than silently letting it grow.
+  "lens.js": 48_000,
   "luna.css": 40_000,
 };
-const BUNDLE_GZIP_KIB = 70;
+// The readiness probes add a bounded server-side envelope and bot matrix. A
+// 75 KiB ceiling leaves measured headroom while keeping the Worker finite.
+const BUNDLE_GZIP_KIB = 75;
 const TWINS = ["nav.src.js", "notepad.src.js", "lens.src.js", "luna.src.css"];
 
 const fails = [];

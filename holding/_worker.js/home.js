@@ -146,7 +146,10 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
       </li>`;
     }).join("");
     rewriter.on("#np-list", {
-      element(el) { el.setInnerContent(itemsHtml, { html: true }); },
+      element(el) {
+        el.setAttribute("data-ssr", "1");
+        el.setInnerContent(itemsHtml, { html: true });
+      },
     });
   }
 
@@ -215,7 +218,10 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
       `</a>`;
     }).join("");
     rewriter.on("section.photos", {
-      element(el) { el.setInnerContent(slotsHtml, { html: true }); },
+      element(el) {
+        el.setAttribute("data-ssr", "1");
+        el.setInnerContent(slotsHtml, { html: true });
+      },
     });
   }
 

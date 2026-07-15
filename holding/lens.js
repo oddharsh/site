@@ -901,25 +901,40 @@
     }
   }
 
-  function setView(v) {
+  function withViewTransition(fn, animate) {
+    if (
+      animate !== false &&
+      document.startViewTransition &&
+      !window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      return document.startViewTransition(fn);
+    }
+    return fn();
+  }
+
+  function setView(v, animate) {
     if (["both", "human", "machine", "delta"].indexOf(v) < 0) v = "both";
     view = v;
-    panes.className = "lx-panes is-" + v;
     try { localStorage.setItem("lx-mode", v); } catch (e) {}
-    updateModeUi();
-    if (data) {
-      renderMachine();
-      renderStatus();
-    } else renderIdleLens();
+    withViewTransition(function () {
+      panes.className = "lx-panes is-" + v;
+      updateModeUi();
+      if (data) {
+        renderMachine();
+        renderStatus();
+      } else renderIdleLens();
+    }, animate);
   }
-  function setLens(l) {
+  function setLens(l, animate) {
     lens = l;
-    [].forEach.call(document.querySelectorAll(".lx-tab"), function (b) {
-      var active = b.getAttribute("data-lens") === l;
-      b.classList.toggle("is-on", active);
-      b.setAttribute("aria-selected", active ? "true" : "false");
-    });
-    if (data) renderMachine(); else { updateModeUi(); renderIdleLens(); }
+    withViewTransition(function () {
+      [].forEach.call(document.querySelectorAll(".lx-tab"), function (b) {
+        var active = b.getAttribute("data-lens") === l;
+        b.classList.toggle("is-on", active);
+        b.setAttribute("aria-selected", active ? "true" : "false");
+      });
+      if (data) renderMachine(); else { updateModeUi(); renderIdleLens(); }
+    }, animate);
   }
 
   form.addEventListener("submit", function (e) { e.preventDefault(); run(urlInput.value); });
@@ -936,7 +951,7 @@
     var savedView = localStorage.getItem("lx-mode");
     if (["both", "human", "machine", "delta"].indexOf(savedView) >= 0) view = savedView;
   } catch (e) {}
-  setView(view);
+  setView(view, false);
 
   // deep link: /lens?url=… autoruns. Speculation safety: an autorun fires a
   // third-party crawl, so a PRERENDERED copy of this page (omnibox prediction,

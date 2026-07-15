@@ -105,6 +105,7 @@
   Link: </.well-known/http-message-signatures-directory>; rel="http-message-signatures-directory"; type="application/jwk-set+json"
   Link: </.well-known/security.txt>; rel="security-policy"; type="text/plain"
   Link: </.well-known/api-catalog>; rel="api-catalog"; type="application/linkset+json"
+  Link: </.well-known/agent-card.json>; rel="service-desc"; type="application/json"; title="Aadharsh site agent card"
   Vary: Accept
 
 # discovery files: long cache. these all change rarely (sitemap when
@@ -152,6 +153,11 @@
 /.well-known/oauth-authorization-server
   Content-Type: application/json; charset=utf-8
   Cache-Control: public, max-age=0, must-revalidate, s-maxage=86400
+
+/.well-known/agent-card.json
+  Content-Type: application/json; charset=utf-8
+  Cache-Control: public, max-age=0, must-revalidate, s-maxage=86400
+  Link: </.well-known/agent-card.json>; rel="service-desc"; type="application/json"; title="Aadharsh site agent card"
 
 /.well-known/agent-skills/serendipity-events/SKILL.md
   Content-Type: text/markdown; charset=utf-8
