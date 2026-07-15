@@ -960,7 +960,7 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
          the photos section so it can fixed-position over anything. -->
     <div id="xp-tooltip" class="xp-tooltip" popover="manual" aria-hidden="true"></div>
 
-    <section class="photos" aria-label="photographs">
+    <section class="photos" aria-label="photographs" data-ssr="0">
       <a>
         <picture>
           <source type="image/avif">
@@ -1049,7 +1049,10 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
     (async () => {
       const grid = document.querySelector("section.photos");
       if (!grid) return;
-      // SSR already filled the slots? first <img> has a real src → done.
+      // The edge worker filled this dynamic island? Nothing to do.
+      if (grid.dataset.ssr === "1") return;
+      // Compatibility guard for an older/unmarked edge response: a real
+      // thumbnail still means the worker already filled the slots.
       const firstImg = grid.querySelector("a picture img");
       if (firstImg && firstImg.getAttribute("src")) return;
       const esc = (s) => String(s ?? "")
@@ -1098,7 +1101,7 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
 
     <section class="now-playing" aria-label="music">
       <h2><a href="/rn" title="open this playlist on Spotify">Music I'm listening to right now <span class="np-open">&#x2197;&#xFE0E; the playlist</span></a></h2>
-      <ol class="np-list" id="np-list">
+      <ol class="np-list" id="np-list" data-ssr="0">
         <li class="np-loading">Loading playlist&hellip;</li>
       </ol>
       <noscript><p class="np-nojs">Playlist loads with JavaScript. <a href="/rn">Open it on Spotify &#x2197;&#xFE0E;</a></p></noscript>
@@ -1118,8 +1121,11 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
     <script>
     (async () => {
       const list = document.getElementById("np-list");
-      // SSR rendered tracks? loader gone → nothing to do.
-      if (!list || !list.querySelector(".np-loading")) return;
+      if (!list) return;
+      // The edge worker rendered this dynamic island? Nothing to do.
+      if (list.dataset.ssr === "1") return;
+      // Compatibility guard for an older/unmarked edge response.
+      if (!list.querySelector(".np-loading")) return;
       const esc = (s) => String(s ?? "")
         .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
