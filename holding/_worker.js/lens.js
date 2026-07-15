@@ -172,7 +172,9 @@ async function inspectLensRequest(request, env, ctx) {
 }
 
 export function renderLensShell(initial, state, inputValue) {
-  state = state || { view: "both", lens: "anatomy", counterfactuals: {} };
+  // defaults must match the client (lens.js) and lensState(), or a plain /lens
+  // SSRs one tab and the deferred script silently flips to another on hydrate.
+  state = state || { view: "both", lens: "readiness", counterfactuals: { markdown: false, semantic: false, contract: false, authority: false, receipt: false } };
   const seeded = initial && initial.ok;
   const value = inputValue || (seeded ? initial.finalUrl || initial.url : "");
   const humanHeader = seeded && !initial.framable
@@ -649,6 +651,18 @@ export async function lensInspect(targetUrl, env) {
     catch { return null; }
   })();
   if (origin) {
+    // Scanning our OWN /lens route is a fan-out trap. SELF_FETCH dispatches each probe
+    // back through route() into handleLens, and every one of those re-runs a COMPLETE
+    // inspection of the inner ?url= target: the main fetch, plus markdown negotiation,
+    // plus six bot identities = 8 full nested scans inside one invocation. SELF_FETCH
+    // nulls itself one level down, so DEPTH was already bounded; this bounds the WIDTH.
+    // Neither probe says anything meaningful about the lens itself anyway.
+    const selfLens = (() => {
+      try {
+        const u = new URL(finalUrl);
+        return u.hostname.toLowerCase() === CANONICAL_HOST && /^\/lens(\/|$)/.test(u.pathname);
+      } catch { return false; }
+    })();
     const [robots, sitemap, llms, llmsFull, aiTxt, secTxt, tdmrep, agentCard, openapi, aiPlugin, apiCatalog, mcp, nlweb, mdNego, webBotAuth, openidConfig, oauthServer, oauthResource, authMd, mcpServerCard, agentSkills, ucp, acp, ap2, dnsAid, botViews] = await Promise.all([
       lensProbe(origin + "/robots.txt", env), lensProbe(origin + "/sitemap.xml", env),
       lensProbe(origin + "/llms.txt", env), lensProbe(origin + "/llms-full.txt", env),
@@ -660,7 +674,7 @@ export async function lensInspect(targetUrl, env) {
       lensProbe(origin + "/.well-known/api-catalog", env),
       lensProbeMcp(origin, env),
       lensProbeNlweb(origin, env),
-      isHtml ? lensProbeMdNego(finalUrl, env) : Promise.resolve(null),
+      isHtml && !selfLens ? lensProbeMdNego(finalUrl, env) : Promise.resolve(null),
       lensProbe(origin + "/.well-known/http-message-signatures-directory", env),
       lensProbe(origin + "/.well-known/openid-configuration", env),
       lensProbe(origin + "/.well-known/oauth-authorization-server", env),
@@ -672,7 +686,7 @@ export async function lensInspect(targetUrl, env) {
       lensProbe(origin + "/.well-known/acp.json", env),
       lensProbe(origin + "/.well-known/ap2", env),
       lensProbeDnsAid(new URL(finalUrl).hostname),
-      lensProbeBotViews(finalUrl, env),
+      selfLens ? Promise.resolve([]) : lensProbeBotViews(finalUrl, env),
     ]);
     const feeds = (out.structured?.relLinks || []).filter((l) =>
       /alternate/.test(l.rel) && /(rss|atom|feed|\+xml|\+json)/i.test((l.type || "") + " " + (l.href || "")));
@@ -1365,6 +1379,13 @@ export function lensReadiness({ headers, robots, sitemap, terms, discovery, agen
   const items = {};
   const robotsParsed = robots && robots.ok ? lensParseRobots(robots.body || "") : null;
   const robotsRules = robotsParsed && robotsParsed.groups.length > 0;
+  // Gate the "AI bot rules" STATUS on actually-named agents. Keying it on
+  // robotsRules (= "any User-agent group exists") passed a robots.txt carrying
+  // nothing but `User-agent: *` on a check whose own fix copy says to declare
+  // explicit GPTBot/ClaudeBot/CCBot rules — this site scored that unearned pass on
+  // its own scan. The predicate already existed; it just lived in the detail string.
+  const namedAiRules = !!(robotsRules && robotsParsed.groups.some((g) =>
+    g.agents.some((a) => a !== "*" && /bot|crawler|extended|spider|anthropic|openai|claude/i.test(a))));
   const link = String((headers && headers.link) || "");
   const usefulLinks = (link.match(/rel\s*=\s*["']?(?:sitemap|alternate|service-doc|service-desc|api-catalog)/gi) || []).length;
   const botAuth = lensJsonShape(discovery && discovery.webBotAuth, (j) => Array.isArray(j.keys) && j.keys.length > 0);
@@ -1381,8 +1402,15 @@ export function lensReadiness({ headers, robots, sitemap, terms, discovery, agen
   items.sitemap = lensReadinessItem("sitemap", sitemap && sitemap.ok ? "pass" : sitemap && (sitemap.status === 404 || sitemap.status === 410) ? "fail" : "unknown", sitemap && sitemap.ok ? "sitemap answered with " + ((sitemap.body || "").match(/<url>|<sitemap>/gi) || []).length + " URL entries" : "sitemap.xml was not found or did not answer");
   items.linkHeaders = lensReadinessItem("linkHeaders", usefulLinks ? "pass" : "fail", usefulLinks ? usefulLinks + " agent-useful Link relation(s)" : "no agent-useful Link relations on the fetched response");
   items.dnsAid = lensReadinessItem("dnsAid", discovery && discovery.dnsAid && discovery.dnsAid.ok ? (discovery.dnsAid.found ? "pass" : "fail") : "unknown", discovery && discovery.dnsAid && discovery.dnsAid.found ? "DNS-AID record found" : "no DNS-AID record found at the checked discovery names");
-  items.markdownNegotiation = lensReadinessItem("markdownNegotiation", agent && agent.mdNegotiation && agent.mdNegotiation.supported ? "pass" : agent && agent.mdNegotiation && agent.mdNegotiation.note === "probe failed" ? "unknown" : "fail", agent && agent.mdNegotiation && agent.mdNegotiation.supported ? "same URL returned text/markdown" : "Accept: text/markdown stayed non-markdown");
-  items.robotsTxtAiRules = lensReadinessItem("robotsTxtAiRules", robots && robots.ok ? (robotsRules ? "pass" : "fail") : "unknown", robotsRules ? (robotsParsed.groups.some((g) => g.agents.some((a) => a !== "*" && /bot|crawler|extended|spider|anthropic|openai|claude/i.test(a))) ? "named AI bot rules found" : "wildcard rules apply to crawlers") : "robots policy could not be evaluated");
+  // A probe that never ran cannot be a "fail". lensProbeMdNego sets `note` ONLY when
+  // it produced no real answer ("probe failed", or "not probed (non-HTML target)");
+  // a genuine negative carries contentType/status and no note. Keying on the exact
+  // string "probe failed" let the not-probed case fall through to fail and then
+  // assert "Accept: text/markdown stayed non-markdown" about a request never sent —
+  // the same fabrication the agent-doors tier already refuses to make.
+  const mdNego = (agent && agent.mdNegotiation) || null;
+  items.markdownNegotiation = lensReadinessItem("markdownNegotiation", mdNego && mdNego.supported ? "pass" : mdNego && mdNego.note ? "unknown" : "fail", mdNego && mdNego.supported ? "same URL returned text/markdown" : mdNego && mdNego.note ? mdNego.note : "Accept: text/markdown stayed non-markdown");
+  items.robotsTxtAiRules = lensReadinessItem("robotsTxtAiRules", robots && robots.ok ? (namedAiRules ? "pass" : "fail") : "unknown", namedAiRules ? "named AI bot rules found" : robotsRules ? "wildcard rules apply to crawlers, no AI crawler is named" : "robots policy could not be evaluated");
   items.contentSignals = lensReadinessItem("contentSignals", terms && terms.robotsUnknown ? "unknown" : terms && terms.signals && terms.signals.length ? "pass" : "fail", terms && terms.signals && terms.signals.length ? terms.signals.length + " Content-Signal directive(s)" : "no Content-Signal directive found");
   items.webBotAuth = lensReadinessItem("webBotAuth", botAuth.status, botAuth.detail);
   items.apiCatalog = lensReadinessItem("apiCatalog", agent && agent.apiCatalog && agent.apiCatalog.present ? "pass" : agent && agent.apiCatalog && agent.apiCatalog.unknown ? "unknown" : "fail", agent && agent.apiCatalog && agent.apiCatalog.present ? agent.apiCatalog.detail : "no valid API Catalog linkset");

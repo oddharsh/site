@@ -83,6 +83,10 @@ function trackResponse(payload, status = 200, format = "json") {
         "content-type": "text/html; charset=utf-8",
         "cache-control": status >= 400 ? "public, max-age=30, must-revalidate" : "public, max-age=300, s-maxage=600",
         "x-content-type-options": "nosniff",
+        // positive proof this body is OUR fragment. A 500/522/1101 from the edge is
+        // also text/html and also resolves fine, so the homepage requires this marker
+        // before injecting the response into the track list.
+        "x-rn-fragment": "1",
       },
     });
   }
@@ -140,6 +144,12 @@ export async function handleRnTracksHtml(request, env, ctx) {
 // browser-facing hypermedia representation.
 export function renderTrackListHtml(payload) {
   const tracks = Array.isArray(payload?.tracks) ? payload.tracks : [];
+  // A failure and an empty playlist are different stories. The JSON twin keeps them
+  // apart via payload.error; without this branch all three states (scrape failed,
+  // no KV binding, no playlist set) serialized to a byte-identical "No tracks yet",
+  // so the two representations disagreed and a client reading the fragment alone
+  // was told the playlist is empty when the scrape actually broke.
+  if (payload?.error) return '<li class="np-empty">Couldn&#39;t load tracks right now. <a href="/rn">Open on Spotify</a>.</li>';
   if (!tracks.length) return '<li class="np-empty">No tracks yet. <a href="/rn">Open on Spotify</a>.</li>';
   return tracks.map(t => {
     const dur = t.duration_ms ? fmtDuration(t.duration_ms) : "";

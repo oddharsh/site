@@ -1125,6 +1125,12 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
       if (!list.querySelector(".np-loading")) return;
       try {
         const res = await fetch("/rn/tracks.html");
+        // fetch() only rejects on a network fault, so a 500 / 522 / 1101 resolves
+        // normally and res.text() hands back an edge error PAGE, which would land in
+        // the tracklist verbatim (and left the catch below unreachable for exactly
+        // the failures it was written for). Require the worker's own marker: our
+        // fragment carries it even when it reports an error, an interstitial never does.
+        if (res.headers.get("x-rn-fragment") !== "1") throw new Error("not a track fragment");
         const html = await res.text();
         list.innerHTML = html || '<li class="np-empty">No tracks yet. <a href="/rn">Open on Spotify</a>.</li>';
       } catch {
