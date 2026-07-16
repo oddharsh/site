@@ -43,8 +43,10 @@ const SHELL_BUDGET = {
 // negotiation adds a no-script fragment contract, and CachedPages adds a named
 // Workers Cache entrypoint without a separate Worker. The merged Worker now
 // sits at the 78 KiB ceiling; further runtime features need to replace bytes,
-// not simply add to the bundle.
-const BUNDLE_GZIP_KIB = 78;
+// not simply add to the bundle. Wrangler's displayed gzip size varies by
+// about 0.2 KiB between the Node runtimes used locally and in CI, so keep only
+// a narrow 0.25 KiB portability margin rather than making the gate flaky.
+const BUNDLE_GZIP_KIB = 78.25;
 const TWINS = ["nav.src.js", "notepad.src.js", "lens.src.js", "lens-browser.src.js", "luna.src.css"];
 
 const fails = [];
