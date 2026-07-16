@@ -87,15 +87,15 @@
   // readiness surface, so the rubric reads as a market map, not a compliance
   // checklist. Publication is not consumption; that gap is the argument.
   var CONSUMPTION = {
-    markdownNegotiation: "Consumed today mainly by coding agents; most answer engines still scrape the HTML.",
-    robotsTxtAiRules: "Widely published; honored by the major AI crawlers that choose to identify themselves.",
-    contentSignals: "~3.8M domains publish it; Google says it has no effect on its crawling.",
-    webBotAuth: "Required to join Cloudflare's pay-per-crawl; almost no independent verifiers exist yet.",
-    dnsAid: "A 2026 Linux Foundation discovery proposal; near-zero deployment so far.",
-    mcpServerCard: "MCP is the one surface here with a real, cross-vendor consumer ecosystem.",
-    a2aAgentCard: "A2A discovery is enterprise-flavored and early — 50+ orgs, nowhere near MCP's scale.",
-    apiCatalog: "An IETF linkset standard; discovery clients for it are still thin on the ground.",
-    llmsTxt: "Published by ~6% of top sites; consumed by coding agents. Google explicitly won't read it.",
+    markdownNegotiation: "Read mostly by coding agents; answer engines still scrape HTML.",
+    robotsTxtAiRules: "Honored by the major AI crawlers that identify themselves.",
+    contentSignals: "~3.8M domains publish it; Google says it changes nothing.",
+    webBotAuth: "Required for pay-per-crawl; almost no verifiers exist yet.",
+    dnsAid: "A 2026 Linux Foundation proposal; near-zero deployment.",
+    mcpServerCard: "MCP is the one surface here with a real consumer ecosystem.",
+    a2aAgentCard: "A2A discovery is early: 50+ orgs, nowhere near MCP's scale.",
+    apiCatalog: "An IETF linkset standard; discovery clients stay thin.",
+    llmsTxt: "~6% of top sites publish it; Google won't read it.",
   };
 
   function readInitialData() {

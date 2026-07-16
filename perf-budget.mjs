@@ -30,24 +30,24 @@ const SHELL_BUDGET = {
   "nav.js": 50_000,
   "notepad.js": 8_000,
   // Lens now carries the readiness rubric, six bot observations, copyable
-  // fixes, and the counterfactual score view. Keep an explicit ceiling above
-  // that intentional feature surface rather than silently letting it grow.
-  // The loader for the opt-in Browser Run module adds a small fixed cost to
-  // the initial Lens shell; the rendered-browser code itself is split out.
-  "lens.js": 48_100,
-  // Loaded only after the owner asks for the rendered Browser Run view.
+  // fixes, the counterfactual score view, the opt-in Browser Run loader, AND
+  // the teaching surface added 2026-07:
+  // the agent-trace console, the always-on dollar verdict strip, per-check
+  // consumption annotations, and the idle state-of-web hide logic. Deferred +
+  // cached, not render-blocking. Ceiling raised from 48K for that surface.
+  // Browser Run's rendered code remains split into its own deferred twin.
+  "lens.js": 54_000,
   "lens-browser.js": 8_000,
   "luna.css": 40_000,
 };
-// The readiness probes add a bounded server-side envelope and bot matrix, HTML
-// negotiation adds a no-script fragment contract, and CachedPages adds a named
-// Workers Cache entrypoint without a separate Worker. The merged Worker now
-// sits at the 78 KiB ceiling; further runtime features need to replace bytes,
-// not simply add to the bundle. Wrangler's displayed gzip size varies by
-// about 0.2 KiB between the Node runtimes used locally and in CI, so keep only
-// a narrow 0.25 KiB portability margin rather than making the gate flaky.
-const BUNDLE_GZIP_KIB = 78.25;
-const TWINS = ["nav.src.js", "notepad.src.js", "lens.src.js", "lens-browser.src.js", "luna.src.css"];
+// The readiness probes add a bounded server-side envelope and bot matrix, and
+// HTML negotiation adds a no-script fragment contract. The 2026-07 /lens work
+// grew the Worker again: the state-of-web panel + verdict/trace/consumption
+// renderers and CSS, plus census.js (the weekly longitudinal sweep, the
+// /lens/census page, and its JSON twin). Measured 83.64 KiB gzip; 85 leaves a
+// small allowance without making the feature budget meaningless.
+const BUNDLE_GZIP_KIB = 85;
+const TWINS = ["nav.src.js", "notepad.src.js", "lens.src.js", "lens-browser.js", "luna.src.css"];
 
 const fails = [];
 const ok = (m) => console.log(`  ok    ${m}`);
