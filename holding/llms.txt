@@ -68,6 +68,11 @@ aggregations.
   JSON contract for the same inspection is at
   [/lens/fetch?url=…](https://aadhar.sh/lens/fetch). This is the site's
   argument about the human/machine gap, made runnable.
+- [/lens/census](https://aadhar.sh/lens/census): A weekly, longitudinal record
+  of how agent-ready 16 representative sites are (spectrum tier, readiness
+  score, agent doors), tracked over time so you can watch the agentic web move
+  rather than sampling one URL. JSON twin at
+  [/lens/census.json](https://aadhar.sh/lens/census.json).
 - [/ledger](https://aadhar.sh/ledger): The crawl ledger — the last 30 days
   of identified AI-crawler visits rendered as an invoice (one cent a page,
   issued monthly, collected never). A commentary page, not a demand letter;

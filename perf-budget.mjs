@@ -40,14 +40,15 @@ const SHELL_BUDGET = {
   "lens-browser.js": 8_000,
   "luna.css": 40_000,
 };
-// The readiness probes add a bounded server-side envelope and bot matrix, and
-// HTML negotiation adds a no-script fragment contract. The 2026-07 /lens work
-// grew the Worker again: the state-of-web panel + verdict/trace/consumption
-// renderers and CSS, plus census.js (the weekly longitudinal sweep, the
-// /lens/census page, and its JSON twin). Measured 83.64 KiB gzip; 85 leaves a
-// small allowance without making the feature budget meaningless.
-const BUNDLE_GZIP_KIB = 85;
-const TWINS = ["nav.src.js", "notepad.src.js", "lens.src.js", "lens-browser.js", "luna.src.css"];
+// The readiness probes add a bounded server-side envelope and bot matrix, HTML
+// negotiation adds a no-script fragment contract, CachedPages adds a named
+// Workers Cache entrypoint, and the 2026-07 /lens work grew the Worker again:
+// the state-of-web panel + verdict/trace/consumption renderers and CSS, plus
+// census.js (the weekly longitudinal sweep, the /lens/census page + JSON twin).
+// Measured ~84.8 KiB gzip; 86 leaves ~1.2 KiB, enough to cover the ~0.2 KiB
+// gzip variance between the local and CI Node runtimes without going flaky.
+const BUNDLE_GZIP_KIB = 86;
+const TWINS = ["nav.src.js", "notepad.src.js", "lens.src.js", "lens-browser.src.js", "luna.src.css"];
 
 const fails = [];
 const ok = (m) => console.log(`  ok    ${m}`);
