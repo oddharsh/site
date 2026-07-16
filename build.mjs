@@ -2,7 +2,7 @@
 //
 // Authoring stays buildless: everything in holding/ is committed readable and is
 // the source of truth. This script stages a copy under .build/ and minifies
-// exactly three shell scripts (the assets pages load); index.html, the
+// exactly four shell scripts (the assets pages load); index.html, the
 // garage/ and lwe/ HTML, images, _headers, and the worker modules ship
 // byte-identical to git. Each minified shell opens with a pointer to its
 // readable twin (/<name>.src.js, deployed alongside), because View Source is
@@ -160,6 +160,7 @@ const SHELLS = [
   ["nav.js",     "/nav.src.js",     "axp-histnav"],
   ["notepad.js", "/notepad.src.js", "np-window"],
   ["lens.js",    "/lens.src.js",    "replaceState"],   // verify-routes.mjs marker
+  ["lens-browser.js", "/lens-browser.src.js", "LensBrowser"],
 ];
 
 // fail fast on a broken invariant before doing any staging work

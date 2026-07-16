@@ -4,7 +4,7 @@
 // Deterministic, buildtime checks that catch a perf regression BEFORE it ships:
 //   1. luna.css parses clean (no esbuild CSS warnings) — the v143-corruption
 //      tripwire, so a broken stylesheet can never reach a deploy.
-//   2. the build output is actually minified: the three shells + luna.css each
+//   2. the build output is actually minified: the four shells + luna.css each
 //      carry the "minified at deploy" banner, sit under their byte budget, and
 //      ship a readable twin (/<name>.src.js / /luna.src.css).
 //   3. the bundled Worker stays under the gzip budget (via wrangler --dry-run,
@@ -32,15 +32,19 @@ const SHELL_BUDGET = {
   // Lens now carries the readiness rubric, six bot observations, copyable
   // fixes, and the counterfactual score view. Keep an explicit ceiling above
   // that intentional feature surface rather than silently letting it grow.
-  "lens.js": 48_000,
+  // The loader for the opt-in Browser Run module adds a small fixed cost to
+  // the initial Lens shell; the rendered-browser code itself is split out.
+  "lens.js": 48_100,
+  // Loaded only after the owner asks for the rendered Browser Run view.
+  "lens-browser.js": 8_000,
   "luna.css": 40_000,
 };
 // The readiness probes add a bounded server-side envelope and bot matrix, and
-// HTML negotiation adds a no-script fragment contract. The merged Worker is
-// 75.76 KiB gzip; 77 KiB leaves a small measured allowance without making the
-// dependency and feature budget meaningless.
-const BUNDLE_GZIP_KIB = 77;
-const TWINS = ["nav.src.js", "notepad.src.js", "lens.src.js", "luna.src.css"];
+// HTML negotiation adds a no-script fragment contract. Browser Run adds one
+// binding-backed snapshot route; the merged Worker measures 77.61 KiB gzip,
+// so 78 KiB leaves a small allowance without making the feature budget vague.
+const BUNDLE_GZIP_KIB = 78;
+const TWINS = ["nav.src.js", "notepad.src.js", "lens.src.js", "lens-browser.src.js", "luna.src.css"];
 
 const fails = [];
 const ok = (m) => console.log(`  ok    ${m}`);

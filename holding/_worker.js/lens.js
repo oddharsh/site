@@ -45,7 +45,7 @@ export async function handleLens(request, env, ctx) {
 }
 
 function lensState(url) {
-  const validViews = ["both", "human", "machine", "delta"];
+  const validViews = ["both", "human", "machine", "browser", "delta"];
   const validLenses = ["readiness", "anatomy", "structured", "ai", "terms", "discovery"];
   const view = validViews.includes(url.searchParams.get("view")) ? url.searchParams.get("view") : "both";
   const lens = validLenses.includes(url.searchParams.get("lens")) ? url.searchParams.get("lens") : "readiness";
@@ -133,6 +133,16 @@ function lensMachineFragment(data, state) {
     '<div class="lx-cap">View: ' + escHtml(state.view) + ". The browser enhancement can open the complete lens without changing the URL.</div></div>";
 }
 
+function lensBrowserFragment(data) {
+  if (!data || !data.ok) {
+    return '<div class="lx-browser-intro"><b>Browser Run view.</b> Ask Cloudflare to open this URL in a real headless browser and return the rendered page, screenshot, Markdown, accessibility tree, and a clear WebMCP lab boundary.' +
+      '<div class="lx-cap">This is opt-in: browser execution is slower and can run page JavaScript. Runtime WebMCP discovery is reported separately and requires the Chrome-beta lab.</div>' +
+      '<button class="lx-browser-run" type="button" id="lx-browser-run">Run Browser Run snapshot</button></div>';
+  }
+  return '<div class="lx-browser-intro"><b>Browser Run snapshot ready.</b> The Browser pane is a rendered observation, separate from AadharshBot\'s HTTP fetch and the visitor\'s Human view.' +
+    '<div class="lx-cap">Switch back to Browser and run again to refresh this snapshot.</div></div>';
+}
+
 function lensStatusFragment(data, state) {
   if (!data || !data.ok) return '<span class="err">Failed:</span> <span>' + escHtml((data && data.error) || "unknown error") + "</span>";
   return '<span><b>' + data.status + "</b> " + lensHttpText(data.status) + "</span>" +
@@ -176,13 +186,16 @@ export function renderLensShell(initial, state, inputValue) {
     ? 'Human view <span class="lx-mode">Reader</span> <span class="lx-mode-sub">server-rendered readable fallback</span>'
     : "Human view &middot; the live page";
   const machineHeader = state.view === "machine" ? "Machine view &middot; Briefing" : state.view === "delta" ? "Delta view &middot; What changes" : "Machine view &middot; " + state.lens.charAt(0).toUpperCase() + state.lens.slice(1);
+  const browserHeader = "Browser Run &middot; Rendered";
   const modeNote = state.view === "human"
     ? "Human shows the page as a person receives it in a browser."
     : state.view === "machine"
       ? "Machine turns the scan into an evidence-first briefing, then keeps the selected lens below it."
+      : state.view === "browser"
+        ? "Browser Run renders the URL after page JavaScript, then exposes the browser's structural evidence beside the HTTP scan."
       : state.view === "delta"
         ? "Delta keeps the page visible while you add hypothetical machine infrastructure to the route."
-        : "Compare keeps the live page beside the selected evidence lens.";
+        : "Compare puts Human, HTTP Machine, and the opt-in Browser Run render side by side.";
   const initialScript = initial ? '<script type="application/json" id="lx-initial-data">' + lensScriptJson(initial) + "</script>" : "";
   return lunaPage({
     title: "The Other Web · aadhar.sh",
@@ -224,10 +237,14 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 
 /* panes */
 .lx-panes { display:flex; gap:8px; margin-top:8px; min-height:560px; }
-.lx-panes.is-human .lx-pane-machine, .lx-panes.is-machine .lx-pane-human { display:none; }
+.lx-panes.is-human .lx-pane-machine, .lx-panes.is-human .lx-pane-browser,
+.lx-panes.is-machine .lx-pane-human, .lx-panes.is-machine .lx-pane-browser,
+.lx-panes.is-browser .lx-pane-human, .lx-panes.is-browser .lx-pane-machine,
+.lx-panes.is-delta .lx-pane-browser { display:none; }
 .lx-pane { flex:1 1 0; min-width:0; display:flex; flex-direction:column; border:1px solid oklch(70% 0.03 250); border-radius:0 3px 3px 3px; background:#fff; }
 .lx-pane-h { font-family:"Trebuchet MS",Verdana,sans-serif; font-size:8.5pt; font-weight:bold; text-transform:uppercase; letter-spacing:.05em; color:#fff; background:linear-gradient(180deg, oklch(56% 0.12 252), oklch(45% 0.15 255)); padding:4px 8px; border-radius:0 2px 0 0; }
 .lx-pane-human .lx-pane-h { background:linear-gradient(180deg, oklch(58% 0.06 150), oklch(46% 0.09 155)); }
+.lx-pane-browser .lx-pane-h { background:linear-gradient(180deg, oklch(58% 0.10 205), oklch(45% 0.14 220)); }
 .lx-body { flex:1 1 auto; overflow:auto; padding:10px 11px; }
 .lx-empty { color:oklch(55% 0 0); font-size:9.5pt; padding:18px 6px; text-align:center; }
 .lx-spin { color:oklch(42.61% 0.2353 263.74); font-size:9.5pt; padding:18px 6px; text-align:center; }
@@ -240,9 +257,14 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 .lx-body.is-bleed { padding:0; }
 .lx-frame { width:100%; height:100%; min-height:520px; border:0; display:block; background:#fff; }
 .lx-shot { width:100%; height:auto; display:block; }
+.lx-browser-shot { width:100%; height:auto; display:block; border:1px solid oklch(82% 0.04 210); background:#fff; }
 .lx-fallback-note { font-size:8.8pt; color:oklch(42% 0.11 60); background:oklch(96% 0.045 92); border:1px solid oklch(82% 0.09 80); border-radius:3px; padding:5px 9px; margin:0 0 10px; }
 .lx-mode { font-family:"Courier New",monospace; font-size:7.6pt; font-weight:normal; text-transform:none; letter-spacing:0; color:oklch(38% 0.09 150); background:#fff; border-radius:7px; padding:1px 7px; vertical-align:middle; }
 .lx-mode-sub { font-weight:normal; text-transform:none; letter-spacing:0; opacity:.85; font-size:8pt; }
+.lx-browser-intro { padding:10px 9px; border:1px solid oklch(78% 0.06 210); background:linear-gradient(180deg,oklch(98% 0.015 210),oklch(94% 0.025 210)); color:oklch(31% 0.04 220); font-size:9pt; line-height:1.45; }
+.lx-browser-intro b { color:oklch(34% 0.11 220); }
+.lx-browser-run { margin-top:7px; border:1px solid oklch(52% 0.08 220); border-radius:3px; padding:3px 8px; background:linear-gradient(180deg,#fff,oklch(89% 0.025 210)); color:oklch(30% 0.08 220); font:8.4pt Tahoma,Verdana,sans-serif; cursor:pointer; }
+.lx-browser-run:hover { background:oklch(91% 0.05 210); }
 
 /* rendered machine content */
 .lx-h-title { font-family:"Trebuchet MS",Verdana,sans-serif; font-size:13pt; font-weight:bold; color:oklch(30% 0.06 255); margin:0 0 8px; }
@@ -388,6 +410,7 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
         <button class="lx-seg${state.view === "both" ? " is-on" : ""}" data-view="both" role="radio" aria-checked="${state.view === "both" ? "true" : "false"}" type="button">Compare</button>
         <button class="lx-seg${state.view === "human" ? " is-on" : ""}" data-view="human" role="radio" aria-checked="${state.view === "human" ? "true" : "false"}" type="button">Human</button>
         <button class="lx-seg${state.view === "machine" ? " is-on" : ""}" data-view="machine" role="radio" aria-checked="${state.view === "machine" ? "true" : "false"}" type="button">Machine</button>
+        <button class="lx-seg${state.view === "browser" ? " is-on" : ""}" data-view="browser" role="radio" aria-checked="${state.view === "browser" ? "true" : "false"}" type="button">Browser</button>
         <button class="lx-seg${state.view === "delta" ? " is-on" : ""}" data-view="delta" role="radio" aria-checked="${state.view === "delta" ? "true" : "false"}" type="button">Delta</button>
       </div>
       <div class="lx-lenses" role="tablist" aria-label="machine lens">
@@ -404,11 +427,15 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
     <div class="lx-panes is-${state.view}" id="lx-panes">
       <section class="lx-pane lx-pane-human" id="lx-human">
         <div class="lx-pane-h" id="lx-human-h">${humanHeader}</div>
-        <div class="lx-body" id="lx-human-body">${seeded ? lensHumanFragment(initial) : '<div class="lx-empty">Paste a URL above to see it through both eyes.</div>'}</div>
+        <div class="lx-body" id="lx-human-body">${seeded ? lensHumanFragment(initial) : '<div class="lx-empty">Paste a URL above to compare the three surfaces.</div>'}</div>
       </section>
       <section class="lx-pane lx-pane-machine" id="lx-machine">
         <div class="lx-pane-h" id="lx-machine-h">${machineHeader}</div>
         <div class="lx-body" id="lx-machine-body">${seeded ? lensMachineFragment(initial, state) : '<div class="lx-empty">The markup, metadata, and machine directives land here.</div>'}</div>
+      </section>
+      <section class="lx-pane lx-pane-browser" id="lx-browser">
+        <div class="lx-pane-h" id="lx-browser-h">${browserHeader}</div>
+        <div class="lx-body" id="lx-browser-body">${lensBrowserFragment(null)}</div>
       </section>
     </div>
 
@@ -418,7 +445,7 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
 `,
     // The shell is cached at the edge and browsers cache static scripts too;
     // version the client URL so a fresh shell cannot pair with an older lens.js.
-    scripts: `<script src="/lens.js?v=5" defer></script>`,   // BUMP on every holding/lens.js change: the shell is no-store but the script is cached, so a stale token pairs a fresh shell with an old script
+    scripts: `<script src="/lens.js?v=6" defer></script>`,   // BUMP on every holding/lens.js change: the shell is no-store but the script is cached, so a stale token pairs a fresh shell with an old script
     cache: "public, max-age=60, s-maxage=300",
     headers: {
       "x-robots-tag": "noindex",
@@ -444,18 +471,12 @@ export async function handleLensFetch(request, env, ctx) {
 
 
 // /lens/shot?url=… → a faithful PNG of the page, rendered by Cloudflare
-// Browser Rendering (real headless Chrome, server-side). The Human view uses
-// this only when a site forbids live framing. Needs CF_ACCOUNT_ID +
-// BROWSER_RENDER_TOKEN in env; degrades to a clear 503 when unconfigured.
+// Browser Run (real headless Chrome, server-side). The Human view uses this
+// only when a site forbids live framing.
 export async function handleLensShot(request, env, ctx) {
   const v = validateLensTarget(new URL(request.url).searchParams.get("url") || "");
   if (!v.ok) return jsonResponse({ ok: false, error: v.error }, 400);
-  if (!env.BROWSER_RENDER_TOKEN || !env.CF_ACCOUNT_ID) {
-    const missing = [];
-    if (!env.CF_ACCOUNT_ID) missing.push("CF_ACCOUNT_ID");
-    if (!env.BROWSER_RENDER_TOKEN) missing.push("BROWSER_RENDER_TOKEN");
-    return jsonResponse({ ok: false, missing, error: "Snapshot rendering isn't configured: this deployment can't see " + missing.join(" + ") + ". Check the exact variable name(s) (case-sensitive) and that they're set on the same environment this branch deploys to, then redeploy." }, 503);
-  }
+  if (!env.BROWSER || typeof env.BROWSER.quickAction !== "function") return jsonResponse({ ok: false, error: "Browser Run is not configured on this deployment." }, 503);
 
   // screenshots are the expensive path — tighter per-IP limit + a KV cache.
   const ip = request.headers.get("cf-connecting-ip") || "0.0.0.0";
@@ -472,7 +493,6 @@ export async function handleLensShot(request, env, ctx) {
     if (hit) return new Response(hit, { headers: lensPngHeaders(true) });
   }
 
-  const api = `https://api.cloudflare.com/client/v4/accounts/${env.CF_ACCOUNT_ID}/browser-rendering/screenshot`;
   const payload = {
     url: v.url,
     viewport: { width: 1280, height: 800, deviceScaleFactor: 1 },
@@ -482,19 +502,94 @@ export async function handleLensShot(request, env, ctx) {
   };
   let r;
   try {
-    r = await fetch(api, { method: "POST", headers: { authorization: "Bearer " + env.BROWSER_RENDER_TOKEN, "content-type": "application/json" }, body: JSON.stringify(payload) });
+    r = await env.BROWSER.quickAction("screenshot", payload);
   } catch (e) {
-    return jsonResponse({ ok: false, error: "Render request failed: " + ((e && e.message) || e) }, 502);
+    return jsonResponse({ ok: false, error: "Browser Run request failed: " + ((e && e.message) || e) }, 502);
   }
   const ctype = r.headers.get("content-type") || "";
   if (!r.ok || !ctype.startsWith("image/")) {
     let detail = "";
     try { detail = (await r.text()).slice(0, 300); } catch (_e) {}
-    return jsonResponse({ ok: false, error: "Browser Rendering returned " + r.status + ".", detail }, 502);
+    return jsonResponse({ ok: false, error: "Browser Run returned " + r.status + ".", detail }, 502);
   }
   const buf = await r.arrayBuffer();
   if (env.RN_KV) ctx.waitUntil(env.RN_KV.put(cacheKey, buf, { expirationTtl: 3600 }));
   return new Response(buf, { headers: lensPngHeaders(false) });
+}
+
+// /lens/browser?url=… → opt-in rendered evidence for the third Lens pane.
+// This deliberately stays separate from /lens/fetch: the normal scan is an
+// identified HTTP observation, while this path executes page JavaScript in a
+// Browser Run instance and returns a rendered snapshot plus browser structure.
+export async function handleLensBrowser(request, env, ctx) {
+  const v = validateLensTarget(new URL(request.url).searchParams.get("url") || "");
+  if (!v.ok) return jsonResponse({ ok: false, error: v.error }, 400);
+  if (!env.BROWSER || typeof env.BROWSER.quickAction !== "function") return jsonResponse({ ok: false, error: "Browser Run is not configured on this deployment." }, 503);
+
+  const ip = request.headers.get("cf-connecting-ip") || "0.0.0.0";
+  if (env.RN_KV) {
+    const bucket = `lens:browserrl:${ip}:${Math.floor(Date.now() / 60000)}`;
+    const n = parseInt((await env.RN_KV.get(bucket)) || "0", 10);
+    if (n >= 4) return jsonResponse({ ok: false, error: "Browser Run snapshots are rate-limited to 4/min. Hang on a moment." }, 429);
+    ctx.waitUntil(env.RN_KV.put(bucket, String(n + 1), { expirationTtl: 120 }));
+  }
+
+  const cacheKey = "lens:browser:" + (await lensSha256Hex(v.url));
+  if (env.RN_KV) {
+    try {
+      const hit = await env.RN_KV.get(cacheKey, "json");
+      if (hit && hit.ok) return jsonResponse({ ...hit, cached: true });
+    } catch (_e) { /* a corrupt cache entry is a miss, never a user-visible failure */ }
+  }
+
+  const started = Date.now();
+  const payload = {
+    url: v.url,
+    formats: ["content", "screenshot", "markdown", "accessibilityTree"],
+    viewport: { width: 1280, height: 800, deviceScaleFactor: 1 },
+    screenshotOptions: { fullPage: true, type: "png" },
+    gotoOptions: { waitUntil: "networkidle0", timeout: 18000 },
+    userAgent: BOT_UA,
+  };
+
+  let response;
+  try {
+    response = await env.BROWSER.quickAction("snapshot", payload);
+  } catch (e) {
+    return jsonResponse({ ok: false, error: "Browser Run request failed: " + ((e && e.message) || e) }, 502);
+  }
+  if (!response.ok) {
+    let detail = "";
+    try { detail = (await response.text()).slice(0, 500); } catch (_e) {}
+    return jsonResponse({ ok: false, error: "Browser Run returned " + response.status + ".", detail }, 502);
+  }
+
+  let envelope;
+  try { envelope = await response.json(); }
+  catch (e) { return jsonResponse({ ok: false, error: "Browser Run returned invalid JSON: " + ((e && e.message) || e) }, 502); }
+  const result = envelope && envelope.result ? envelope.result : envelope || {};
+  const meta = envelope && envelope.meta ? envelope.meta : {};
+  const rawContent = String(result.content || "");
+  const output = {
+    ok: true,
+    url: v.url,
+    finalUrl: meta.url || v.url,
+    status: meta.status == null ? null : meta.status,
+    title: meta.title || "",
+    content: rawContent.slice(0, 120000),
+    contentTruncated: rawContent.length > 120000,
+    markdown: String(result.markdown || "").slice(0, 60000),
+    accessibilityTree: result.accessibilityTree || null,
+    screenshot: result.screenshot ? "data:image/png;base64," + result.screenshot : null,
+    // WebMCP discovery is currently a Chrome-beta lab capability, not a
+    // production Browser Run binding capability. The local helper performs
+    // the real runtime listing; this field keeps that boundary explicit.
+    webmcp: { status: "lab-required", detail: "Runtime WebMCP listing requires the local Browser Run Chrome-beta lab. Use scripts/lens-webmcp.mjs." },
+    fetchedBy: "Cloudflare Browser Run",
+    elapsedMs: Date.now() - started,
+  };
+  if (env.RN_KV) ctx.waitUntil(env.RN_KV.put(cacheKey, JSON.stringify(output), { expirationTtl: 900 }));
+  return jsonResponse({ ...output, cached: false });
 }
 
 export function lensPngHeaders(cached) {

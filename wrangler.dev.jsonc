@@ -28,7 +28,7 @@
       "/agent/*", "/oauth2/*",
       "/whoareyou", "/whoareyou.json", "/security",
       "/reading", "/updates", "/updates.json", "/restore",
-      "/lens", "/lens/", "/lens/fetch", "/lens/shot",
+      "/lens", "/lens/", "/lens/fetch", "/lens/shot", "/lens/browser",
       "/llms-full.txt", "/ledger", "/ledger.json",
       "/writing", "/writing/*",
       "/rn", "/rn/tracks", "/rn/tracks.html", "/rn/admin", "/rn/set",
@@ -64,8 +64,9 @@
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["Counter"] }
   ],
+  // Quick Actions need remote mode during local Wrangler development.
+  "browser": { "binding": "BROWSER", "remote": true },
   "vars": {
-    "CF_ACCOUNT_ID": "1c99acdb6141579023fb97d24261ea58",
     "COUNTER_SEED": "2375"
   }
 }
