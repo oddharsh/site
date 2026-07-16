@@ -41,7 +41,7 @@ export async function handleLens(request, env, ctx) {
   // Keep a route-local shell key: the production runtime may not expose
   // CF_VERSION_METADATA, so a deploy can otherwise leave an older shell in
   // the edge cache while the separately served lens.js has already changed.
-  return cachedRender(request, ctx, () => renderLensShell(), "/lens-shell-v3", env);
+  return cachedRender(request, ctx, () => renderLensShell(), "/lens-shell-v4", env);
 }
 
 // One label per lens, shared by the SSR tabs, the SSR machine header, and the
@@ -237,7 +237,7 @@ function lensStateOfWebPanel() {
     '<div class="lx-sow-h"><span class="lx-sow-kicker">The state of the machine web</span>' +
     '<span class="lx-sow-sub">mid-2026 &middot; the population every scan below is a sample of</span></div>' +
     '<div class="lx-sow-grid">' + cards + "</div>" +
-    '<div class="lx-sow-foot">A page\'s second life as data is now the busier one. Whether a machine can actually <b>read</b>, <b>understand</b>, and <b>act</b> on a page — not just fetch it — is what the lenses below measure. Paste a URL to see one site\'s answer.</div>' +
+    '<div class="lx-sow-foot">A page\'s second life as data is now the busier one. Whether a machine can actually <b>read</b>, <b>understand</b>, and <b>act</b> on a page — not just fetch it — is what the lenses below measure. Paste a URL to see one site\'s answer, or watch the movement over time in <a href="/lens/census">the weekly census</a> of 16 representative sites.</div>' +
     "</section>";
 }
 
@@ -755,7 +755,8 @@ export function lensHostBlocked(host) {
 
 // the orchestrator: fetch the target, parse it, then probe the origin's
 // site-level files in parallel. returns the full lens envelope.
-export async function lensInspect(targetUrl, env) {
+export async function lensInspect(targetUrl, env, opts) {
+  opts = opts || {};
   const started = Date.now();
   const ctrl = new AbortController();
   const to = setTimeout(() => ctrl.abort(), 8000);
@@ -863,7 +864,10 @@ export async function lensInspect(targetUrl, env) {
       lensProbe(origin + "/.well-known/ap2", env),
       lensProbeAgentsMd(origin, env),
       lensProbeDnsAid(new URL(finalUrl).hostname),
-      selfLens ? Promise.resolve([]) : lensProbeBotViews(finalUrl, env),
+      // bot-view sampling is 6 extra fetches per scan. The census (opts.skipBotViews)
+      // only needs tier/score/doors, so it skips them to stay well under the
+      // per-invocation subrequest budget when sweeping the whole roster.
+      (selfLens || opts.skipBotViews) ? Promise.resolve([]) : lensProbeBotViews(finalUrl, env),
     ]);
     const feeds = (out.structured?.relLinks || []).filter((l) =>
       /alternate/.test(l.rel) && /(rss|atom|feed|\+xml|\+json)/i.test((l.type || "") + " " + (l.href || "")));

@@ -7,6 +7,7 @@ import { WorkerEntrypoint } from "cloudflare:workers";
 import { handleAgentAuthClaim, handleAgentAuthRegister, handleAgentAuthRevoke, handleAgentAuthToken } from "./agent.js";
 import { cronAround, handleAround, handleAroundJson } from "./around.js";
 import { handleBotPage } from "./bot.js";
+import { cronCensus, handleCensus, handleCensusJson } from "./census.js";
 import { handleHitSvg } from "./counter.js";
 import { homepageHeadResponse, serveHomepageWithPrerenderedTracks, serveMarkdown } from "./home.js";
 import { countCrawlerHit, handleLedger, handleLedgerJson } from "./ledger.js";
@@ -114,11 +115,15 @@ export default {
     return serveWorkerRequest(request, env, ctx);
   },
 
-  // cron (wrangler.jsonc "triggers"): the /around crawl runs here, per
-  // generation, so the request path stays a pure KV read and the page is
-  // safe to prerender. One schedule today; switch on event.cron if more land.
+  // cron (wrangler.jsonc "triggers"): the /around crawl runs on the frequent
+  // schedule so the request path stays a pure KV read and the page is safe to
+  // prerender. The weekly schedule sweeps the /lens/census roster into D1.
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(cronAround(env));
+    if (event.cron === "17 8 * * 1") {
+      ctx.waitUntil(cronCensus(env));   // Mondays 08:17 UTC — the longitudinal census
+    } else {
+      ctx.waitUntil(cronAround(env));   // */30 — the neighborhood crawl
+    }
   },
 };
 
@@ -154,6 +159,8 @@ const ROUTES = new Map([
   ["/lens/fetch", handleLensFetch],
   ["/lens/shot", handleLensShot],
   ["/lens/browser", handleLensBrowser],
+  ["/lens/census", handleCensus],
+  ["/lens/census.json", handleCensusJson],
 
   // the x402 bot paywall: llms.txt's map is free, the full corpus costs $0.01
   // by machine payment (ungated until X402_PAY_TO is set).
