@@ -116,7 +116,7 @@ const ROUTES = [
   ...(HASHED ? [{ path: HASHED, status: 200, ct: "image/avif" }] : []),
   // static section pages that are already URL-skeuomorphic (must not regress)
   { path: "/garage", status: 200, ct: "text/html" },
-  { path: "/garage/", status: [301, 308] },   // drop-trailing-slash: /garage serves, /garage/ redirects
+  { path: "/garage/", status: [301, 307, 308] },   // drop-trailing-slash: /garage serves, /garage/ redirects
   { path: "/garage/scroll", status: 200, ct: "text/html" },
   { path: "/garage/workers", status: 200, ct: "text/html", marker: "run_worker_first" },
   { path: "/garage/wire", status: 200, ct: "text/html", marker: "x-edge-cache" },
@@ -124,7 +124,7 @@ const ROUTES = [
   { path: "/garage/gpt56", status: 200, ct: "text/html", marker: "5.6 Sol" },
   { path: "/garage/enc/z-jl90.jpg", status: 200, ct: "image/jpeg" },
   { path: "/lwe", status: 200, ct: "text/html" },
-  { path: "/lwe/", status: [301, 308] },   // drop-trailing-slash
+  { path: "/lwe/", status: [301, 307, 308] },   // drop-trailing-slash
   { path: "/lwe/utf8", status: 200, ct: "text/html" },
 ];
 
