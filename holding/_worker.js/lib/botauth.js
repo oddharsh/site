@@ -8,7 +8,7 @@
 // and verify against the published Ed25519 public key.
 export const BOT_NAME    = "AadharshBot";
 
-export const BOT_VERSION = "1.0";
+const BOT_VERSION = "1.0";   // module-private: only BOT_UA below consumes it
 
 export const BOT_UA      = `${BOT_NAME}/${BOT_VERSION} (+https://aadhar.sh/bot)`;
 
@@ -43,7 +43,7 @@ export async function signedFetch(targetUrl, env, opts = {}) {
     headers,
     redirect: opts.redirect || "follow",
     signal: opts.signal,  // optional caller-supplied deadline (AbortSignal)
-    cf: { cacheTtl: 0 },  // we cache at the application layer
+    cf: opts.cf || { cacheTtl: 0 },  // caller may set its own edge-cache policy; default is app-layer only
   });
 }
 
