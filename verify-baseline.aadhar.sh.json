@@ -32,6 +32,11 @@
       "ct": "application/linkset+json"
     },
     {
+      "path": "/.well-known/agent-card.json",
+      "status": 200,
+      "ct": "application/json; charset=utf-8"
+    },
+    {
       "path": "/.well-known/oauth-protected-resource",
       "status": 200,
       "ct": "application/json; charset=utf-8"
@@ -83,11 +88,16 @@
     },
     {
       "path": "/lens/",
-      "status": 200,
-      "ct": "text/html; charset=utf-8"
+      "status": 301,
+      "ct": ""
     },
     {
       "path": "/lens.js",
+      "status": 200,
+      "ct": "text/javascript"
+    },
+    {
+      "path": "/lens-browser.js",
       "status": 200,
       "ct": "text/javascript"
     },
@@ -122,6 +132,11 @@
       "ct": "text/javascript"
     },
     {
+      "path": "/lens-browser.src.js",
+      "status": 200,
+      "ct": "text/javascript"
+    },
+    {
       "path": "/luna.src.css",
       "status": 200,
       "ct": "text/css"
@@ -135,6 +150,11 @@
       "path": "/lens/shot?url=https://example.com",
       "status": 200,
       "ct": "image/png"
+    },
+    {
+      "path": "/lens/browser?url=javascript%3Aalert(1)",
+      "status": 400,
+      "ct": "application/json; charset=utf-8"
     },
     {
       "path": "/llms-full.txt",
@@ -155,6 +175,11 @@
       "path": "/writing",
       "status": 200,
       "ct": "text/html; charset=utf-8"
+    },
+    {
+      "path": "/writing/",
+      "status": 301,
+      "ct": ""
     },
     {
       "path": "/writing/in-flux",
@@ -180,6 +205,11 @@
       "path": "/rn/tracks",
       "status": 200,
       "ct": "application/json; charset=utf-8"
+    },
+    {
+      "path": "/rn/tracks.html",
+      "status": 200,
+      "ct": "text/html; charset=utf-8"
     },
     {
       "path": "/rn/admin",
@@ -277,9 +307,14 @@
       "ct": "image/avif"
     },
     {
-      "path": "/garage/",
+      "path": "/garage",
       "status": 200,
       "ct": "text/html"
+    },
+    {
+      "path": "/garage/",
+      "status": 307,
+      "ct": ""
     },
     {
       "path": "/garage/scroll",
@@ -302,9 +337,24 @@
       "ct": "text/html"
     },
     {
+      "path": "/garage/gpt56",
+      "status": 200,
+      "ct": "text/html"
+    },
+    {
       "path": "/garage/enc/z-jl90.jpg",
       "status": 200,
       "ct": "image/jpeg"
+    },
+    {
+      "path": "/lwe",
+      "status": 200,
+      "ct": "text/html"
+    },
+    {
+      "path": "/lwe/",
+      "status": 307,
+      "ct": ""
     },
     {
       "path": "/lwe/utf8",
