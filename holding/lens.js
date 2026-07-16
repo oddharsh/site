@@ -29,7 +29,9 @@
   var browserBusy = false;
   var lastShotUrl = null;   // the live snapshot object URL, revoked before the next mint / on decode
 
-  var LENS_LABEL = { readiness: "Readiness", anatomy: "Anatomy", structured: "Structured", ai: "AI view", terms: "Terms", discovery: "Discovery" };
+  // Must match LENS_TAB_LABELS in holding/_worker.js/lens.js: the tab labels are
+  // phrased as the question each lens answers, so the tab row reads as a menu.
+  var LENS_LABEL = { readiness: "Agent-ready?", anatomy: "Raw response", structured: "What it claims", ai: "Model cost", terms: "Who's allowed", discovery: "Agent doors" };
 
   function esc(s) {
     return String(s == null ? "" : s)
@@ -54,6 +56,47 @@
     return "$0";
   }
   function has(o) { return o && typeof o === "object" && Object.keys(o).length > 0; }
+
+  // The one-sentence thesis, stated in dollars, shown above every scanned lens so
+  // the cost gap is visceral without hunting for the AI-view tab. Built entirely
+  // from data.cost (already computed server-side). Null when there's no cost model
+  // (non-HTML) so we don't fake a number.
+  function verdictStrip() {
+    var c = data && data.cost;
+    if (!c || !c.tiers || c.tiers.length < 2) return "";
+    var rate = (c.rates && c.rates[0]) || { usdPerMtok: 3 };
+    var base = c.tiers[0];
+    // Compare against a realistic clean representation (the markdown rendering),
+    // not the headings-only outline — an outline of a heading-light page yields an
+    // absurd ×1000+ that reads as hyperbole. Phrase it as "a clean markdown copy"
+    // without claiming the site does or doesn't publish one (some, like this one, do).
+    var clean = (c.tiers.filter(function (t) { return t.key === "markdown"; })[0]) ||
+                (c.tiers.filter(function (t) { return t.key === "text"; })[0]) ||
+                c.tiers[c.tiers.length - 1];
+    var per1 = base.tokens / 1e6 * rate.usdPerMtok;
+    var per1k = per1 * 1000;
+    var mult = (clean && clean.tokens && clean !== base) ? Math.round(base.tokens / clean.tokens) : 0;
+    var line = "A person reads this page for free. A model pays <b>" + fmtUsd(per1) + "</b> per read to brute-force " +
+      fmtTok(base.tokens) + " tokens of raw HTML" +
+      (mult > 1 ? " — about &times;" + mult + " what the same page as clean markdown would cost" : "") +
+      ". 1,000 reads &asymp; <b>" + fmtUsd(per1k) + "</b> of inference; the publisher collects <b>$0.00</b>.";
+    return '<div class="lx-verdict">' + line + "</div>";
+  }
+
+  // "Who actually reads this" — the mid-2026 consumption reality behind each
+  // readiness surface, so the rubric reads as a market map, not a compliance
+  // checklist. Publication is not consumption; that gap is the argument.
+  var CONSUMPTION = {
+    markdownNegotiation: "Read mostly by coding agents; answer engines still scrape HTML.",
+    robotsTxtAiRules: "Honored by the major AI crawlers that identify themselves.",
+    contentSignals: "~3.8M domains publish it; Google says it changes nothing.",
+    webBotAuth: "Required for pay-per-crawl; almost no verifiers exist yet.",
+    dnsAid: "A 2026 Linux Foundation proposal; near-zero deployment.",
+    mcpServerCard: "MCP is the one surface here with a real consumer ecosystem.",
+    a2aAgentCard: "A2A discovery is early: 50+ orgs, nowhere near MCP's scale.",
+    apiCatalog: "An IETF linkset standard; discovery clients stay thin.",
+    llmsTxt: "~6% of top sites publish it; Google won't read it.",
+  };
 
   function readInitialData() {
     var node = document.getElementById("lx-initial-data");
@@ -114,6 +157,14 @@
     } catch (e) {}
   }
 
+  // The SSR "state of the machine web" exhibit is the cold-start argument; once a
+  // real scan lands it steps aside so the panes own the screen. Re-shown when the
+  // user navigates back to the empty shell.
+  function stateWeb(show) {
+    var el = document.getElementById("lx-stateweb");
+    if (el) el.style.display = show ? "" : "none";
+  }
+
   function showError(j) {
     var msg = (j && j.error) || "Something went wrong.";
     data = null;
@@ -132,6 +183,13 @@
     busy = true;
     browserData = null;
     urlInput.value = url;
+    // A new site is a fresh page: don't carry the last scan's Delta switches onto
+    // it (a markdown/contract simulation from site A silently misrepresenting site
+    // B). Only reset when we already hold data for a *different* URL, so a shared
+    // /lens?url=X&cf=… deep link still lands with its switches intact on first load.
+    if (data && (data.finalUrl || data.url) !== url) {
+      counterfactuals = { markdown: false, semantic: false, contract: false, authority: false, receipt: false };
+    }
     // reflect the scanned URL in the address bar so every scan is a shareable link.
     // replaceState (not pushState): no reload, and repeated scans don't spam the
     // history stack, so Back still leaves /lens cleanly. Pairs with the ?url= autorun
@@ -163,6 +221,7 @@
           return;
         }
         data = j;
+        stateWeb(false);
         renderHuman();
         renderMachine();
         renderBrowser();
@@ -391,6 +450,66 @@
     return '<div class="lx-focus">' + section(title, badgeData, caption, kvTable(rows) + extra) + "</div>";
   }
 
+  // Agent trace: what one agent would actually DO here, narrated only from
+  // evidence already in the envelope — no LLM call, no new fetch. It turns the
+  // six lenses of evidence into a single line of consequence ("task: BLOCKED"),
+  // which is the "so what does this mean for an agent" the rest of the page implies
+  // but never says. Styled as an XP console.
+  function agentTrace() {
+    var a = data.anatomy || {};
+    var s = data.structured || {};
+    var d = data.discovery || {};
+    var ag = data.agent || {};
+    var st = ag.strategy || {};
+    var c = data.cost && data.cost.tiers && data.cost.tiers[0];
+    var rate = (data.cost && data.cost.rates && data.cost.rates[0]) || { usdPerMtok: 3 };
+    var lines = [];
+    function line(kind, text) { lines.push({ kind: kind, text: text }); }
+
+    // READ
+    var costNote = c ? " (~" + fmtTok(c.tokens) + " tok, " + fmtUsd(c.tokens / 1e6 * rate.usdPerMtok) + " at " + (rate.model || "Sonnet") + " rates)" : "";
+    line("ok", "GET " + (data.finalUrl || data.url) + " as an agent → " + data.status + " " + esc(httpText(data.status)) + ", " + (data.contentType || "?") + ", " + bytes(a.rawBytes) + costNote + ".");
+    // md negotiation
+    var md = ag.mdNegotiation;
+    if (md && md.supported) line("ok", "Asked for text/markdown → the site served a clean machine copy. No HTML tax.");
+    else line("warn", "Asked for text/markdown → still HTML. Paying the token tax to read markup meant for a browser.");
+    // UNDERSTAND
+    var jsonld = (s.jsonld || []).length;
+    if (jsonld) {
+      var types = [];
+      (s.jsonld || []).forEach(function (b) { (b.types || []).forEach(function (x) { if (types.indexOf(x) < 0) types.push(x); }); });
+      line("ok", "Parsed structured data → " + jsonld + " JSON-LD block" + (jsonld === 1 ? "" : "s") + (types.length ? " (" + types.slice(0, 4).join(", ") + ")" : "") + ". Entities without guessing.");
+    } else {
+      line("warn", "Looked for a typed entity graph → none. Any structure must be inferred from the prose.");
+    }
+    // ACT
+    var action = st.action && st.action.length;
+    if (action) line("ok", "Probed for an action surface → " + st.action.join(", ") + ". It can call, not just read.");
+    else {
+      var doorNote = (d.agentsMd && d.agentsMd.present) ? " (an AGENTS.md exists, but that's instructions, not a callable endpoint)" : "";
+      line("warn", "Probed for a callable contract (MCP, OpenAPI, agent-card)" + doorNote + " → none. To do anything it must drive the human page and guess at side effects.");
+    }
+    // AUTHORIZE
+    var authority = (d.oauthProtectedResource && d.oauthProtectedResource.ok) || (d.oauthDiscovery && ((d.oauthDiscovery.openidConfiguration && d.oauthDiscovery.openidConfiguration.ok) || (d.oauthDiscovery.oauthAuthorizationServer && d.oauthDiscovery.oauthAuthorizationServer.ok)));
+    if (authority) line("ok", "Checked for a delegated-authority boundary → OAuth discovery present. A user could grant scoped access.");
+    else line("warn", "Checked for a consent boundary → none. No scoped, revocable way to act on a user's behalf.");
+
+    // verdict
+    var verdict, vkind;
+    if (action && authority) { verdict = "ACT: this site was built for agents. A task with side effects can run against a real contract."; vkind = "ok"; }
+    else if (action) { verdict = "ACT (unsafe): an action surface exists, but with no consent boundary an agent acts without scoped permission."; vkind = "warn"; }
+    else { verdict = "BLOCKED: a task needing action can't complete. An agent can read this page, but not do anything here without a human driving a browser."; vkind = "no"; }
+    line(vkind, "task verdict → " + verdict);
+
+    var body = lines.map(function (l) {
+      var glyph = l.kind === "ok" ? "✓" : l.kind === "no" ? "✗" : "•";
+      return '<div class="lx-trace-line ' + l.kind + '"><span class="lx-trace-g">' + glyph + '</span><span>' + esc(l.text).replace(/&amp;times;/g, "&times;") + "</span></div>";
+    }).join("");
+    return section("Agent trace", { text: "what an agent would do", kind: vkind === "no" ? "warn" : vkind },
+      "One agent's attempt at a task on this URL, narrated only from evidence Lens already gathered. No model was called.",
+      '<div class="lx-trace">' + body + "</div>");
+  }
+
   function machineBrief() {
     var a = data.anatomy || {};
     var s = data.structured || {};
@@ -415,7 +534,7 @@
       "links in head": relCount,
       "fetched as": data.fetchedBy || "identified bot",
     };
-    var out = '<div class="lx-brief-lede"><b>Machine briefing.</b> This is a reconstruction from the response and the probes Lens actually ran. It describes available evidence; it does not claim that a site has agreed to a new interface.</div>' + lensFocus();
+    var out = agentTrace() + '<div class="lx-brief-lede"><b>Machine briefing.</b> This is a reconstruction from the response and the probes Lens actually ran. It describes available evidence; it does not claim that a site has agreed to a new interface.</div>' + lensFocus();
     out += section("Observed document", { text: "observed", kind: "ok" },
       "The minimum contract a machine can recover from this response.", kvTable(facts));
     out += section("Machine affordances", { text: st.verdict || "unknown", kind: st.verdict === "agent-native" ? "ok" : st.verdict === "agent-readable" ? "" : "warn" },
@@ -486,7 +605,7 @@
     var cf = [
       { key: "markdown", label: "Clean machine text", stage: "Read", observed: cfObserved("markdown", checks), detail: "Serve a deliberate text/markdown representation from the same URL." },
       { key: "semantic", label: "Entity schema", stage: "Understand", observed: !!semantic, detail: "Publish stable entities and properties a parser can validate." },
-      { key: "contract", label: "Action contract", stage: "Act", observed: cfObserved("contract", checks), detail: "Describe callable operations, parameters, and side effects." },
+      { key: "contract", label: "Action contract", stage: "Act", observed: cfObserved("contract", checks), detail: "Describe callable operations, their parameters, and side effects. In 2026 this contract is landing as MCP servers and agent CLIs, not the OpenAPI files that mostly never shipped." },
       { key: "authority", label: "Delegated authority", stage: "Authorize", observed: cfObserved("authority", checks), detail: "Add a consent boundary with scopes and an explicit user approval." },
       { key: "receipt", label: "A result receipt", stage: "Confirm", observed: false, detail: "Return a durable result with origin, time, and provenance. No probe measures this surface yet, so it is always shown as a projection, never as observed." },
     ];
@@ -630,7 +749,8 @@
       var state = readinessStatus(item);
       var copy = readinessCopy(item);
       var fix = copy.fix;
-      return '<div class="lx-readiness-check" data-status="' + esc(item.status) + '" data-label="' + esc(copy.label) + '" data-fix="' + esc(fix) + '"><div class="lx-readiness-check-top"><b>' + esc(copy.label) + '</b>' + badge(state.text, state.kind) + '</div><div class="lx-readiness-detail">' + esc(item.detail || "") + '</div>' + (item.status === "fail" ? '<div class="lx-readiness-fix"><span>' + esc(fix) + '</span><button class="lx-copy-fix" type="button" data-fix="' + esc(fix) + '">Copy fix</button></div>' : "") + '</div>';
+      var consume = CONSUMPTION[item.key] ? '<div class="lx-readiness-consume">Who reads it: ' + esc(CONSUMPTION[item.key]) + '</div>' : "";
+      return '<div class="lx-readiness-check" data-status="' + esc(item.status) + '" data-label="' + esc(copy.label) + '" data-fix="' + esc(fix) + '"><div class="lx-readiness-check-top"><b>' + esc(copy.label) + '</b>' + badge(state.text, state.kind) + '</div><div class="lx-readiness-detail">' + esc(item.detail || "") + '</div>' + consume + (item.status === "fail" ? '<div class="lx-readiness-fix"><span>' + esc(fix) + '</span><button class="lx-copy-fix" type="button" data-fix="' + esc(fix) + '">Copy fix</button></div>' : "") + '</div>';
     }).join("") + '</div>';
 
     var bots = r.botViews || [];
@@ -662,6 +782,9 @@
     var fn = { readiness: lensReadiness, anatomy: lensAnatomy, structured: lensStructured, ai: lensAI, terms: lensTerms, discovery: lensDiscovery }[lens] || lensReadiness;
     var body = view === "machine" ? machineBrief() + '<div class="lx-machine-block">' + section("Selected evidence lens", { text: LENS_LABEL[lens] }, "The original inspector remains available below the briefing.", fn()) + "</div>"
       : view === "delta" ? deltaView() : fn();
+    // the dollar thesis rides above every scanned lens except Delta (which runs its
+    // own no-score narrative). Machine view already leads with the briefing/trace.
+    if (view !== "delta" && view !== "machine") body = verdictStrip() + body;
     machineBody.innerHTML = body;
     machineBody.scrollTop = 0;
     if (view === "delta") bindCounterfactuals();
@@ -878,7 +1001,7 @@
     if (enf.challenged) enfInner = '<div class="lx-fallback-note">Our fetch hit a bot challenge (the &quot;verify you are human&quot; wall). The policy above is backed by active enforcement.</div>';
     else if (enf.blocked) enfInner = '<div class="lx-fallback-note">Our identified fetch was refused with HTTP ' + enf.status + ". Policy here is enforced, at least against bots that announce themselves.</div>";
     else enfInner = '<div class="lx-none">our identified fetch went through (HTTP ' + enf.status + ") — no wall between the policy and the content</div>";
-    enfInner += '<div class="lx-cap" style="margin-top:6px">Honesty note: lens never wears another bot\'s user-agent to probe enforcement. This reports what happened to AadharshBot\'s own signed fetch; the scoreboard reports published policy.</div>';
+    enfInner += '<div class="lx-cap" style="margin-top:6px">Honesty note: this enforcement verdict reports only what happened to AadharshBot\'s own signed fetch. The Readiness lens does send six representative crawler user-agents for read-only GET sampling (to observe response differences), but Lens never impersonates a bot to defeat a wall, and the scoreboard above reports published policy, not spoofed probes.</div>';
     out += section("Enforcement", { text: enf.challenged ? "challenge" : enf.blocked ? "blocked" : "none seen", kind: enf.challenged || enf.blocked ? "warn" : "off" },
       "robots.txt is a request. Edges like Cloudflare can make it a wall.",
       enfInner);
@@ -964,6 +1087,16 @@
     out += file("sitemap.xml", dsc.sitemapXml, "2005, Google/Yahoo/Microsoft. The XML list of every URL worth crawling.", sitemapExtra);
     out += file("llms.txt", dsc.llmsTxt, "2024. A curated map of a site written for language models.");
     if (dsc.llmsFullTxt && dsc.llmsFullTxt.ok) out += file("llms-full.txt", dsc.llmsFullTxt, "2024. The expanded llms.txt: full text inlined for models.");
+
+    // AGENTS.md — the CLI wave's instruction file. Present only when a real
+    // Markdown body answered (an SPA catch-all doesn't count).
+    var am = dsc.agentsMd || {};
+    var amCaption = "2025. Plain-Markdown instructions for an agent working with this service — the CLI era's answer to “where's the contract.”";
+    if (am.present) {
+      out += section("AGENTS.md", { text: "found" + (am.variant ? " (" + am.variant + ")" : ""), kind: "ok" }, amCaption, pre((am.body || "").slice(0, 12000) + (am.truncated ? "\n\n[... truncated]" : ""), true));
+    } else {
+      out += section("AGENTS.md", { text: "absent", kind: "off" }, amCaption, '<div class="lx-none">' + esc(am.note || "no /agents.md or /AGENTS.md found") + "</div>");
+    }
     if (dsc.aiTxt && dsc.aiTxt.ok) out += file("ai.txt", dsc.aiTxt, "AI-training opt-out manifest, a Spawning.ai convention.");
     if (dsc.securityTxt && dsc.securityTxt.ok) out += file(".well-known/security.txt", dsc.securityTxt, "RFC 9116. Where to report vulnerabilities.");
 
@@ -1030,7 +1163,7 @@
     };
     var p = primers[lens] || primers.anatomy;
     machineBody.innerHTML = '<div class="lx-idle-lens"><div class="lx-idle-kicker">Selected machine lens</div>' +
-      '<h3>' + esc(p.title) + '</h3><p>' + esc(p.note) + '</p><ul>' +
+      '<h3>' + esc(LENS_LABEL[lens] || p.title) + '</h3><p>' + esc(p.note) + '</p><ul>' +
       p.rows.map(function (row) { return '<li>' + esc(row) + '</li>'; }).join("") +
       '</ul><div class="lx-idle-cta">Choose an example above or paste a URL, then press <b>Go</b> to replace this primer with observed evidence.</div></div>';
   }
@@ -1108,7 +1241,13 @@
     b.addEventListener("click", function () { setView(b.getAttribute("data-view")); });
   });
   [].forEach.call(document.querySelectorAll(".lx-tab"), function (b) {
-    b.addEventListener("click", function () { setLens(b.getAttribute("data-lens")); });
+    b.addEventListener("click", function () {
+      // Delta ignores the lens (it runs its own no-score narrative), so picking a
+      // lens while in Delta looked like a dead click. Treat it as "show me that
+      // evidence": drop back to Compare with the chosen lens selected.
+      if (view === "delta") setView("both");
+      setLens(b.getAttribute("data-lens"));
+    });
   });
   var urlState = readUrlState();
   try {
@@ -1133,7 +1272,8 @@
     if (!state.url && data) {
       data = null;
       browserData = null;
-      humanBody.innerHTML = '<div class="lx-empty">Paste a URL above to compare the three surfaces.</div>';
+      stateWeb(true);
+      humanBody.innerHTML = '<div class="lx-empty">Paste a URL above to see it through both eyes.</div>';
       machineBody.innerHTML = '<div class="lx-empty">The markup, metadata, and machine directives land here.</div>';
       renderBrowser();
       statusBar.innerHTML = '<span>Idle. Nothing is fetched until you ask, and then just once, server-side, with no logging.</span>';

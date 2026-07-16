@@ -44,6 +44,19 @@ export async function handleLens(request, env, ctx) {
   return cachedRender(request, ctx, () => renderLensShell(), "/lens-shell-v3", env);
 }
 
+// One label per lens, shared by the SSR tabs, the SSR machine header, and the
+// client (LENS_LABEL in lens.js must match). These are phrased as the question
+// each lens answers, not practitioner nouns, so a first-time visitor can read
+// the tab row as a menu of questions. Change here + in holding/lens.js together.
+const LENS_TAB_LABELS = {
+  readiness: "Agent-ready?",
+  anatomy: "Raw response",
+  structured: "What it claims",
+  ai: "Model cost",
+  terms: "Who's allowed",
+  discovery: "Agent doors",
+};
+
 function lensState(url) {
   const validViews = ["both", "human", "machine", "browser", "delta"];
   const validLenses = ["readiness", "anatomy", "structured", "ai", "terms", "discovery"];
@@ -176,6 +189,58 @@ async function inspectLensRequest(request, env, ctx) {
   }
 }
 
+// A dated, source-linked exhibit of where the machine web actually stands, so a
+// cold visitor reads every per-URL verdict below as a claim about the web, not
+// one site's laziness. Hand-maintained; each fact carries a "checked" date and a
+// source. Shown only on the idle shell (no ?url= scan) and hidden by the client
+// once a scan runs. Update the dates when you refresh the numbers.
+function lensStateOfWebPanel() {
+  const facts = [
+    {
+      stat: "57.5%",
+      claim: "Bots now make more of the web's requests than people do. Automated clients sent 57.5% of HTML requests on Cloudflare's network — the first time bots crossed half.",
+      src: "Cloudflare Radar", href: "https://radar.cloudflare.com/",
+    },
+    {
+      stat: "5.6% / ~0",
+      claim: "Publishers signal, models mostly don't read. llms.txt is now published by 5.6% of the top 10k sites (up ~5× in a year), but one server-log study found 408 llms.txt hits across ~500M AI-bot visits, and Google says it ignores the file.",
+      src: "HTTP Archive", href: "https://httparchive.org/",
+    },
+    {
+      stat: "~10k servers",
+      claim: "One protocol won the tool layer. MCP sits under the Linux Foundation with OpenAI, Google, Microsoft, and Amazon all shipping support, and roughly 10k public servers.",
+      src: "Linux Foundation", href: "https://www.linuxfoundation.org/",
+    },
+    {
+      stat: "the CLI is the new API",
+      claim: "The action layer moved to the terminal. A Q1 2026 wave of agent-native CLIs (Stripe, Ramp, Google Workspace, Vercel) each crossed 20k GitHub stars in weeks — structured commands an agent runs, not HTTP well-knowns it discovers.",
+      src: "OSS Insight", href: "https://ossinsight.io/",
+    },
+    {
+      stat: "2 partners",
+      claim: "Paying to crawl is still an experiment. A year after Cloudflare's pay-per-crawl launched, it has two named AI-side partners; unsigned crawlers get blocked, and default-blocking arrives for new domains on Sept 15, 2026.",
+      src: "Cloudflare", href: "https://blog.cloudflare.com/introducing-pay-per-crawl/",
+    },
+    {
+      stat: "$24M / 75M txns",
+      claim: "Agent payments are many and tiny. x402 moved about $24M across ~75M transactions in the last 30 days — roughly $0.32 each, mostly sub-dollar micropayments.",
+      src: "CoinDesk", href: "https://www.coindesk.com/",
+    },
+  ];
+  const checked = "checked 2026-07";
+  const cards = facts.map((f) =>
+    '<div class="lx-sow-card"><div class="lx-sow-stat">' + escHtml(f.stat) + "</div>" +
+    '<div class="lx-sow-claim">' + escHtml(f.claim) + "</div>" +
+    '<div class="lx-sow-src"><a href="' + escAttr(f.href) + '" target="_blank" rel="noopener">' + escHtml(f.src) + "</a> &middot; " + checked + "</div></div>"
+  ).join("");
+  return '<section class="lx-stateweb" id="lx-stateweb">' +
+    '<div class="lx-sow-h"><span class="lx-sow-kicker">The state of the machine web</span>' +
+    '<span class="lx-sow-sub">mid-2026 &middot; the population every scan below is a sample of</span></div>' +
+    '<div class="lx-sow-grid">' + cards + "</div>" +
+    '<div class="lx-sow-foot">A page\'s second life as data is now the busier one. Whether a machine can actually <b>read</b>, <b>understand</b>, and <b>act</b> on a page — not just fetch it — is what the lenses below measure. Paste a URL to see one site\'s answer.</div>' +
+    "</section>";
+}
+
 export function renderLensShell(initial, state, inputValue) {
   // defaults must match the client (lens.js) and lensState(), or a plain /lens
   // SSRs one tab and the deferred script silently flips to another on hydrate.
@@ -185,7 +250,7 @@ export function renderLensShell(initial, state, inputValue) {
   const humanHeader = seeded && !initial.framable
     ? 'Human view <span class="lx-mode">Reader</span> <span class="lx-mode-sub">server-rendered readable fallback</span>'
     : "Human view &middot; the live page";
-  const machineHeader = state.view === "machine" ? "Machine view &middot; Briefing" : state.view === "delta" ? "Delta view &middot; What changes" : "Machine view &middot; " + state.lens.charAt(0).toUpperCase() + state.lens.slice(1);
+  const machineHeader = state.view === "machine" ? "Machine view &middot; Briefing" : state.view === "delta" ? "Delta view &middot; What changes" : "Machine view &middot; " + (LENS_TAB_LABELS[state.lens] || state.lens);
   const browserHeader = "Browser Run &middot; Rendered";
   const modeNote = state.view === "human"
     ? "Human shows the page as a person receives it in a browser."
@@ -202,7 +267,11 @@ export function renderLensShell(initial, state, inputValue) {
     path: "The Other Web",
     width: 980,
     description: "Paste any URL and see the human page, a transparent agent-readiness score, bot-specific access samples, raw HTML, structured data, machine terms, and the site's discovery surfaces side by side.",
-    robots: "index, nofollow",
+    // The bare shell is the site's flagship machine-web page and should be
+    // indexable — an agent reading llms.txt now finds /lens listed there. Only a
+    // targeted ?url= scan gets x-robots-tag: noindex (handleLens sets it), since
+    // that response spends the crawl budget and carries third-party data.
+    robots: "index, follow",
     css: `
 h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color:oklch(41.92% 0.0962 250.51); margin:0 0 2px; font-weight:bold; }
 .lx-lede { margin:0 0 10px; color:oklch(40% 0 0); font-size:10pt; }
@@ -327,6 +396,7 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 .lx-readiness-check-top { display:flex; align-items:center; justify-content:space-between; gap:8px; }
 .lx-readiness-check-top b { font-size:9pt; color:oklch(32% 0.05 255); }
 .lx-readiness-detail { margin-top:2px; font-size:8.4pt; color:oklch(52% 0 0); }
+.lx-readiness-consume { margin-top:3px; font-size:8pt; color:oklch(46% 0.06 255); border-left:2px solid oklch(78% 0.06 255); padding-left:6px; }
 .lx-readiness-fix { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:5px; padding-top:5px; border-top:1px dotted oklch(85% 0.02 250); font-size:8.4pt; color:oklch(42% 0.07 50); }
 .lx-copy-fix, .lx-copy-all { border:1px solid oklch(62% 0.05 250); border-radius:3px; padding:2px 7px; background:linear-gradient(180deg,#fff,oklch(91% 0.012 250)); color:oklch(34% 0.07 255); font:8pt Tahoma,Verdana,sans-serif; cursor:pointer; white-space:nowrap; }
 .lx-copy-fix:hover, .lx-copy-all:hover { background:oklch(93% 0.04 250); }
@@ -344,6 +414,20 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 .lx-kindrow td { font-family:"Trebuchet MS",Verdana,sans-serif; font-size:8.6pt; font-weight:bold; color:oklch(38% 0.07 255); padding-top:9px; }
 .lx-mult { font-family:"Courier New",monospace; font-size:7.8pt; color:oklch(38% 0.09 150); background:oklch(94% 0.04 150); border:1px solid oklch(80% 0.06 150); border-radius:8px; padding:1px 7px; white-space:nowrap; }
 .lx-bots th.num, .lx-bots td.num { text-align:right; font-family:"Courier New",monospace; white-space:nowrap; padding-right:10px; }
+
+/* the dollar-thesis verdict strip, above every scanned lens */
+.lx-verdict { margin:0 0 11px; padding:8px 11px; border:1px solid oklch(74% 0.09 150); border-left:4px solid oklch(52% 0.14 150); border-radius:3px; background:linear-gradient(180deg,oklch(98% 0.02 150),oklch(96% 0.03 150)); color:oklch(30% 0.03 255); font-size:9.4pt; line-height:1.5; }
+.lx-verdict b { color:oklch(34% 0.13 150); font-family:"Courier New",monospace; }
+
+/* agent trace: an XP console of what an agent would do */
+.lx-trace { font-family:"Courier New",Courier,monospace; font-size:8.7pt; line-height:1.5; background:oklch(22% 0.02 255); border-radius:3px; padding:9px 10px; color:oklch(90% 0.02 150); }
+.lx-trace-line { display:grid; grid-template-columns:14px 1fr; gap:6px; padding:2px 0; align-items:start; }
+.lx-trace-line + .lx-trace-line { border-top:1px solid oklch(30% 0.02 255); }
+.lx-trace-g { text-align:center; font-weight:bold; }
+.lx-trace-line.ok .lx-trace-g { color:oklch(78% 0.16 150); }
+.lx-trace-line.warn .lx-trace-g { color:oklch(80% 0.15 85); }
+.lx-trace-line.no .lx-trace-g { color:oklch(72% 0.17 27); }
+.lx-trace-line.no span:last-child, .lx-trace-line.warn span:last-child { color:oklch(96% 0.01 150); }
 
 /* Machine briefing + Delta lab */
 .lx-mode-note { margin:7px 0 0; padding:5px 8px; border-left:3px solid oklch(55% 0.14 250); background:oklch(97% 0.012 250); color:oklch(42% 0.03 255); font-size:8.7pt; }
@@ -375,6 +459,21 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 .lx-proof { margin-top:8px; font-size:8.2pt; color:oklch(52% 0 0); }
 .lx-proof b { color:oklch(38% 0.06 255); }
 @media (max-width:560px){ .lx-cf-grid{ grid-template-columns:1fr; } .lx-stage{ grid-template-columns:74px 1fr; } .lx-readiness-cats{ grid-template-columns:1fr; } .lx-readiness-hero{ align-items:flex-start; } .lx-next-actions div{ grid-template-columns:1fr; gap:2px; } .lx-bot-matrix{ min-width:620px; } }
+
+/* state of the machine web — the idle exhibit */
+.lx-stateweb { margin:10px 0 4px; border:1px solid oklch(80% 0.05 250); border-radius:4px; background:linear-gradient(180deg,oklch(98% 0.012 250),oklch(95% 0.02 250)); padding:10px 12px 11px; }
+.lx-sow-h { display:flex; align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:4px 10px; margin:0 0 8px; }
+.lx-sow-kicker { font:bold 11pt "Trebuchet MS",Verdana,sans-serif; color:oklch(33% 0.10 263); }
+.lx-sow-sub { font-size:8.2pt; color:oklch(52% 0 0); font-style:italic; }
+.lx-sow-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px; }
+.lx-sow-card { border:1px solid oklch(86% 0.02 250); border-radius:3px; background:#fff; padding:7px 9px; }
+.lx-sow-stat { font:bold 12pt "Courier New",monospace; color:oklch(40% 0.14 255); margin:0 0 3px; line-height:1.1; }
+.lx-sow-claim { font-size:8.5pt; line-height:1.4; color:oklch(30% 0.02 255); }
+.lx-sow-src { margin-top:4px; font-size:7.8pt; color:oklch(55% 0 0); }
+.lx-sow-src a { color:oklch(42.61% 0.2353 263.74); text-decoration:none; }
+.lx-sow-foot { margin-top:9px; padding-top:7px; border-top:1px solid oklch(88% 0.02 250); font-size:8.8pt; line-height:1.45; color:oklch(38% 0.02 255); }
+.lx-sow-foot b { color:oklch(33% 0.10 263); }
+@media (max-width:720px){ .lx-sow-grid{ grid-template-columns:1fr; } }
 
 /* status bar */
 .lx-status { margin-top:9px; border-top:1px solid oklch(86% 0.03 260); padding-top:6px; display:flex; flex-wrap:wrap; gap:5px 14px; font-size:8.6pt; color:oklch(45% 0 0); }
@@ -414,15 +513,16 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
         <button class="lx-seg${state.view === "delta" ? " is-on" : ""}" data-view="delta" role="radio" aria-checked="${state.view === "delta" ? "true" : "false"}" type="button">Delta</button>
       </div>
       <div class="lx-lenses" role="tablist" aria-label="machine lens">
-        <button class="lx-tab${state.lens === "readiness" ? " is-on" : ""}" data-lens="readiness" role="tab" aria-selected="${state.lens === "readiness" ? "true" : "false"}" aria-controls="lx-machine-body" type="button">Readiness</button>
-        <button class="lx-tab${state.lens === "anatomy" ? " is-on" : ""}" data-lens="anatomy" role="tab" aria-selected="${state.lens === "anatomy" ? "true" : "false"}" aria-controls="lx-machine-body" type="button">Anatomy</button>
-        <button class="lx-tab${state.lens === "structured" ? " is-on" : ""}" data-lens="structured" role="tab" aria-selected="${state.lens === "structured" ? "true" : "false"}" aria-controls="lx-machine-body" type="button">Structured</button>
-        <button class="lx-tab${state.lens === "ai" ? " is-on" : ""}" data-lens="ai" role="tab" aria-selected="${state.lens === "ai" ? "true" : "false"}" aria-controls="lx-machine-body" type="button">AI view</button>
-        <button class="lx-tab${state.lens === "terms" ? " is-on" : ""}" data-lens="terms" role="tab" aria-selected="${state.lens === "terms" ? "true" : "false"}" aria-controls="lx-machine-body" type="button">Terms</button>
-        <button class="lx-tab${state.lens === "discovery" ? " is-on" : ""}" data-lens="discovery" role="tab" aria-selected="${state.lens === "discovery" ? "true" : "false"}" aria-controls="lx-machine-body" type="button">Discovery</button>
+        <button class="lx-tab${state.lens === "readiness" ? " is-on" : ""}" data-lens="readiness" role="tab" aria-selected="${state.lens === "readiness" ? "true" : "false"}" aria-controls="lx-machine-body" type="button">${LENS_TAB_LABELS.readiness}</button>
+        <button class="lx-tab${state.lens === "anatomy" ? " is-on" : ""}" data-lens="anatomy" role="tab" aria-selected="${state.lens === "anatomy" ? "true" : "false"}" aria-controls="lx-machine-body" type="button">${LENS_TAB_LABELS.anatomy}</button>
+        <button class="lx-tab${state.lens === "structured" ? " is-on" : ""}" data-lens="structured" role="tab" aria-selected="${state.lens === "structured" ? "true" : "false"}" aria-controls="lx-machine-body" type="button">${LENS_TAB_LABELS.structured}</button>
+        <button class="lx-tab${state.lens === "ai" ? " is-on" : ""}" data-lens="ai" role="tab" aria-selected="${state.lens === "ai" ? "true" : "false"}" aria-controls="lx-machine-body" type="button">${LENS_TAB_LABELS.ai}</button>
+        <button class="lx-tab${state.lens === "terms" ? " is-on" : ""}" data-lens="terms" role="tab" aria-selected="${state.lens === "terms" ? "true" : "false"}" aria-controls="lx-machine-body" type="button">${LENS_TAB_LABELS.terms}</button>
+        <button class="lx-tab${state.lens === "discovery" ? " is-on" : ""}" data-lens="discovery" role="tab" aria-selected="${state.lens === "discovery" ? "true" : "false"}" aria-controls="lx-machine-body" type="button">${LENS_TAB_LABELS.discovery}</button>
       </div>
     </div>
     <div class="lx-mode-note" id="lx-mode-note">${modeNote}</div>
+    ${seeded ? "" : lensStateOfWebPanel()}
 
     <div class="lx-panes is-${state.view}" id="lx-panes">
       <section class="lx-pane lx-pane-human" id="lx-human">
@@ -445,10 +545,11 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
 `,
     // The shell is cached at the edge and browsers cache static scripts too;
     // version the client URL so a fresh shell cannot pair with an older lens.js.
-    scripts: `<script src="/lens.js?v=6" defer></script>`,   // BUMP on every holding/lens.js change: the shell is no-store but the script is cached, so a stale token pairs a fresh shell with an old script
+    scripts: `<script src="/lens.js?v=7" defer></script>`,   // BUMP on every holding/lens.js change: the shell is no-store but the script is cached, so a stale token pairs a fresh shell with an old script
     cache: "public, max-age=60, s-maxage=300",
     headers: {
-      "x-robots-tag": "noindex",
+      // No x-robots-tag here: the bare shell is meant to be indexed. handleLens
+      // adds x-robots-tag: noindex for ?url= scans only.
       // /lens embeds arbitrary sites in the Human view, so it needs a looser
       // policy than the site default (which has no frame-src → falls back to
       // default-src 'self' and blocks every cross-origin iframe). This relaxes
@@ -738,7 +839,7 @@ export async function lensInspect(targetUrl, env) {
         return u.hostname.toLowerCase() === CANONICAL_HOST && /^\/lens(\/|$)/.test(u.pathname);
       } catch { return false; }
     })();
-    const [robots, sitemap, llms, llmsFull, aiTxt, secTxt, tdmrep, agentCard, openapi, aiPlugin, apiCatalog, mcp, nlweb, mdNego, webBotAuth, openidConfig, oauthServer, oauthResource, authMd, mcpServerCard, agentSkills, ucp, acp, ap2, dnsAid, botViews] = await Promise.all([
+    const [robots, sitemap, llms, llmsFull, aiTxt, secTxt, tdmrep, agentCard, openapi, aiPlugin, apiCatalog, mcp, nlweb, mdNego, webBotAuth, openidConfig, oauthServer, oauthResource, authMd, mcpServerCard, agentSkills, ucp, acp, ap2, agentsMd, dnsAid, botViews] = await Promise.all([
       lensProbe(origin + "/robots.txt", env), lensProbe(origin + "/sitemap.xml", env),
       lensProbe(origin + "/llms.txt", env), lensProbe(origin + "/llms-full.txt", env),
       lensProbe(origin + "/ai.txt", env), lensProbe(origin + "/.well-known/security.txt", env),
@@ -760,6 +861,7 @@ export async function lensInspect(targetUrl, env) {
       lensProbe(origin + "/.well-known/ucp", env),
       lensProbe(origin + "/.well-known/acp.json", env),
       lensProbe(origin + "/.well-known/ap2", env),
+      lensProbeAgentsMd(origin, env),
       lensProbeDnsAid(new URL(finalUrl).hostname),
       selfLens ? Promise.resolve([]) : lensProbeBotViews(finalUrl, env),
     ]);
@@ -767,7 +869,7 @@ export async function lensInspect(targetUrl, env) {
       /alternate/.test(l.rel) && /(rss|atom|feed|\+xml|\+json)/i.test((l.type || "") + " " + (l.href || "")));
     out.discovery = {
       origin, robotsTxt: robots, sitemapXml: sitemap, llmsTxt: llms, llmsFullTxt: llmsFull,
-      aiTxt, securityTxt: secTxt, feeds, dnsAid,
+      aiTxt, securityTxt: secTxt, feeds, dnsAid, agentsMd,
       webBotAuth, oauthDiscovery: { openidConfiguration: openidConfig, oauthAuthorizationServer: oauthServer },
       oauthProtectedResource: oauthResource, authMd, mcpServerCard, agentSkills,
       commerce: { ucp, acp, ap2 },
@@ -949,6 +1051,22 @@ export async function lensProbe(url, env) {
     const cap = await lensReadCapped(res, 256 * 1024);
     return { ok: true, status: res.status, url, contentType: res.headers.get("content-type") || "", body: cap.text, truncated: cap.truncated };
   } catch (e) { return { ok: false, error: (e && e.message) || String(e), url }; }
+}
+
+// AGENTS.md / agents.md — the 2025 convention for telling an agent how to work
+// with a codebase or service (the CLI wave's answer to "where's the contract").
+// Case varies by host, so try the lowercase web form first, then the uppercase
+// repo form. `present` requires a non-trivial body, not just a 200, so an SPA
+// catch-all serving HTML for everything doesn't read as a real AGENTS.md.
+export async function lensProbeAgentsMd(origin, env) {
+  for (const name of ["/agents.md", "/AGENTS.md"]) {
+    const p = await lensProbe(origin + name, env);
+    const body = (p && p.body || "").trim();
+    const looksMd = body.length > 40 && !/^\s*<(?:!doctype|html)/i.test(body);
+    if (p && p.ok && looksMd) return { ok: true, present: true, variant: name, status: p.status, body, truncated: p.truncated };
+    if (p && p.ok && !looksMd) return { ok: true, present: false, variant: name, status: p.status, note: "answered, but the body looks like a catch-all HTML page, not Markdown instructions" };
+  }
+  return { ok: false, present: false, note: "no /agents.md or /AGENTS.md found" };
 }
 
 // HTMLRewriter pass for the attribute-driven extraction it's robust at:
