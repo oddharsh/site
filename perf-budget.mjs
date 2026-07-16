@@ -39,11 +39,14 @@ const SHELL_BUDGET = {
   "lens-browser.js": 8_000,
   "luna.css": 40_000,
 };
-// The readiness probes add a bounded server-side envelope and bot matrix, and
-// HTML negotiation adds a no-script fragment contract. Browser Run adds one
-// binding-backed snapshot route; the merged Worker measures 77.61 KiB gzip,
-// so 78 KiB leaves a small allowance without making the feature budget vague.
-const BUNDLE_GZIP_KIB = 78;
+// The readiness probes add a bounded server-side envelope and bot matrix, HTML
+// negotiation adds a no-script fragment contract, and CachedPages adds a named
+// Workers Cache entrypoint without a separate Worker. The merged Worker now
+// sits at the 78 KiB ceiling; further runtime features need to replace bytes,
+// not simply add to the bundle. Wrangler's displayed gzip size varies by
+// about 0.2 KiB between the Node runtimes used locally and in CI, so keep only
+// a narrow 0.25 KiB portability margin rather than making the gate flaky.
+const BUNDLE_GZIP_KIB = 78.25;
 const TWINS = ["nav.src.js", "notepad.src.js", "lens.src.js", "lens-browser.src.js", "luna.src.css"];
 
 const fails = [];

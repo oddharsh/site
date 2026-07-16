@@ -6,8 +6,11 @@
 //   inline. Callers pass validity guards because a transient empty rebuild must
 //   never wipe a good stale value; two of the four old copies allowed exactly that.
 //
-//   cachedRender: caches.default for rendered shells whose bytes are static-shaped,
-//   so the s-maxage a route declares finally means something on worker output.
+//   cachedRender: a local caches.default fallback for rendered shells whose bytes
+//   are static-shaped. Production's named CachedPages entrypoint now sits in
+//   front of these routes, so a Workers Cache hit skips the worker entirely;
+//   this fallback still covers local dev, internal self-dispatch, and a miss
+//   where the per-colo response is already warm.
 
 export async function swrKV(env, ctx, key, ttl, buildFn, opts = {}) {
   const kv = env && env.RN_KV;

@@ -1,11 +1,13 @@
 {
   // LOCAL DEV ONLY — `wrangler dev -c wrangler.dev.jsonc` (see .claude/launch.json).
   //
-  // This is the twin of wrangler.jsonc. The two differ in exactly three places:
+  // This is the twin of wrangler.jsonc. The two differ in exactly four places:
   //   - main:             holding/... here vs .build/holding/... in wrangler.jsonc
   //   - assets.directory: holding    here vs .build/holding    in wrangler.jsonc
   //   - no "build" block here (dev serves the readable holding/ tree directly, so
   //     the fast edit->reload loop never pays the full holding/ -> .build copy)
+  //   - Workers Cache is disabled for both local entrypoints, so edit->reload
+  //     never observes a stale cached response; deploy enables it for CachedPages
   // Everything else (bindings, crons, vars, migrations) MUST match wrangler.jsonc.
   // build.mjs warns if a binding name drifts between the two. Deploys never use
   // this file — wrangler.jsonc self-builds via its build.command and ships the
@@ -13,6 +15,11 @@
   "name": "aadhar-sh",
   "main": "holding/_worker.js/index.js",
   "compatibility_date": "2026-06-01",
+  "cache": { "enabled": false, "cross_version_cache": false },
+  "exports": {
+    "default": { "type": "worker", "cache": { "enabled": false } },
+    "CachedPages": { "type": "worker", "cache": { "enabled": false } }
+  },
   "dependencies_instrumentation": { "enabled": true },
   "workers_dev": false,
   "assets": {

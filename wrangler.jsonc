@@ -20,6 +20,15 @@
   "main": ".build/holding/_worker.js/index.js",
   "build": { "command": "node build.mjs" },
   "compatibility_date": "2026-06-01",
+  // Workers Cache sits in front of the public-response entrypoint below. The
+  // default dispatcher stays uncached because it owns mutations, per-visitor
+  // views, the homepage, and request logging; response Cache-Control remains
+  // the route-level freshness contract inside CachedPages.
+  "cache": { "enabled": true, "cross_version_cache": false },
+  "exports": {
+    "default": { "type": "worker", "cache": { "enabled": false } },
+    "CachedPages": { "type": "worker", "cache": { "enabled": true } }
+  },
   "dependencies_instrumentation": { "enabled": true },
   // serve only on the custom domain (aadhar.sh); no public *.workers.dev URL.
   "workers_dev": false,
