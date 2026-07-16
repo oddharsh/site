@@ -137,7 +137,7 @@ function db(env) {
 // ── query layer — the SINGLE source of truth (HTML now; MCP + JSON reuse it) ─
 async function queryEvents(d) {
   return d.prepare(
-    `SELECT e.id, e.name, e.start_at, e.location, e.url, e.user_status, e.cover_url,
+    `SELECT e.id, e.name, e.start_at, e.location, e.url, e.user_status, e.cover_url, e.vibe, e.vibe_tags,
             SUM(CASE WHEN ea.is_host = 0 THEN 1 ELSE 0 END) AS attendee_count,
             SUM(CASE WHEN ea.is_host = 1 THEN 1 ELSE 0 END) AS host_count,
             (SELECT GROUP_CONCAT(COALESCE(uc.label, 'unnamed-' || substr(ec.user_key,1,4)), ', ')
@@ -151,11 +151,11 @@ async function queryEvents(d) {
   ).all();
 }
 async function queryEvent(d, id) {
-  return d.prepare(`SELECT id, name, description, start_at, end_at, location, url, ticket_key, user_status FROM events WHERE id = ?`).get(id);
+  return d.prepare(`SELECT id, name, description, start_at, end_at, location, url, ticket_key, user_status, vibe, vibe_tags FROM events WHERE id = ?`).get(id);
 }
 async function queryEventAttendees(d, id) {
   return d.prepare(
-    `SELECT a.id AS attendee_id, a.name, a.bio_short, a.times_seen, ea.is_host,
+    `SELECT a.id AS attendee_id, a.name, a.bio_short, a.times_seen, ea.is_host, ea.approval_status,
             a.website, a.twitter_handle, a.linkedin_handle, a.instagram_handle,
             en.company, en.role, en.bio AS enriched_bio, en.location,
             en.linkedin_url, en.enriched_at
@@ -244,8 +244,13 @@ function shellCss() {
   .badge.via{background:oklch(96% 0.02 250);color:oklch(42% 0.03 255);border-color:oklch(80% 0.04 250);font-weight:normal;text-transform:none}
   .badge.past{background:oklch(95% 0 0);color:oklch(45% 0 0);border-color:oklch(78% 0 0)}
   .badge.browsed{background:oklch(95% 0.03 75);color:oklch(46% 0.08 60);border-color:oklch(83% 0.06 75);font-weight:normal;text-transform:none}
+  .badge.status{font-weight:normal;text-transform:none;background:oklch(96% 0.04 85);color:oklch(45% 0.09 70);border-color:oklch(82% 0.07 80)}
+  .badge.status.declined{background:oklch(95% 0 0);color:oklch(50% 0 0);border-color:oklch(80% 0 0)}
   .ev.disc{opacity:.5;background:oklch(98.5% 0 0)}
   .ev.disc:hover{opacity:1}
+  .vtags{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}
+  .vtag{display:inline-block;font:9px var(--font-ui);letter-spacing:.03em;padding:1px 7px;border-radius:0;background:oklch(95% 0.03 200);color:oklch(40% 0.08 220);border:1px solid oklch(83% 0.05 210)}
+  .pg-vibe{color:oklch(34% 0.03 255);font-size:12px;font-style:italic;margin:-6px 0 14px;max-width:60ch}
   /* attendee row */
   .alist{border:1px solid oklch(80% 0.035 250);border-radius:0;background:#fff}
   .att{display:flex;align-items:center;gap:10px;padding:8px 12px;border-top:1px solid oklch(92% 0.02 250)}
@@ -355,6 +360,16 @@ function shell(title, currentPath, bodyHtml) {
 }
 
 // ── pages ────────────────────────────────────────────────────────────────────
+// vibe_tags is stored as a JSON array string; parse defensively (never throw on a
+// malformed value written by a future model change).
+function parseTags(raw) {
+  if (!raw) return [];
+  try { const a = JSON.parse(raw); return Array.isArray(a) ? a.filter((t) => typeof t === "string" && t) : []; } catch { return []; }
+}
+function vtagsHtml(raw, max) {
+  const tags = parseTags(raw).slice(0, max);
+  return tags.length ? `<div class="vtags">${tags.map((t) => `<span class="vtag">${esc(t)}</span>`).join("")}</div>` : "";
+}
 function eventCard(e, isPast) {
   const contributors = (e.contributors || "").split(", ").filter(Boolean);
   // first-class = a contributor actually RSVP'd / hosts (user_status 'going');
@@ -374,6 +389,7 @@ function eventCard(e, isPast) {
       ${contributors.slice(0, 3).map((c) => `<span class="badge via">via ${esc(c)}</span>`).join("")}
       ${contributors.length > 3 ? `<span class="count">+${contributors.length - 3}</span>` : ""}
     </div>
+    ${vtagsHtml(e.vibe_tags, 3)}
   </a>`;
 }
 
@@ -487,15 +503,29 @@ async function renderDashboard(d, path, msg, env) {
   return html(200, shell("Events", path, banner(msg) + body));
 }
 
+// normalize a guest's approval_status to a short display label. "approved"/"going"
+// is the default expectation — no badge. only the exceptions (pending/waitlisted/
+// invited/declined) get one, so managed-event rosters read at a glance.
+function statusLabel(raw) {
+  if (!raw) return null;
+  const s = String(raw).toLowerCase();
+  if (s === "approved" || s === "going" || s === "attending" || s === "accepted") return null;
+  if (s.includes("waitlist")) return "waitlisted";
+  if (s.includes("pending")) return "pending";
+  if (s === "invited") return "invited";
+  if (s === "declined" || s === "rejected") return "declined";
+  return null;
+}
 function attendeeRow(a) {
   const sub = [a.role, a.company].filter(Boolean).join(" · ") || a.bio_short || (a.location ? `📍 ${a.location}` : "");
+  const st = statusLabel(a.approval_status);
   const soc = [];
   if (a.twitter_handle) soc.push(`<a href="https://x.com/${esc(a.twitter_handle.replace(/^@/, ""))}" rel="noopener external">𝕏</a>`);
   if (a.linkedin_url) soc.push(`<a href="${esc(a.linkedin_url)}" rel="noopener external">in</a>`);
   else if (a.linkedin_handle) soc.push(`<a href="https://linkedin.com/in/${esc(a.linkedin_handle)}" rel="noopener external">in</a>`);
   if (a.website) soc.push(`<a href="${esc(a.website)}" rel="noopener external">web</a>`);
   return `<div class="att">${avatar(a.name)}
-    <div class="who"><div class="n">${esc(a.name)}${a.times_seen > 1 ? ` <span class="count" title="seen at ${a.times_seen} events">×${a.times_seen}</span>` : ""}</div>
+    <div class="who"><div class="n">${esc(a.name)}${a.times_seen > 1 ? ` <span class="count" title="seen at ${a.times_seen} events">×${a.times_seen}</span>` : ""}${st ? ` <span class="badge status ${st}">${st}</span>` : ""}</div>
       ${sub ? `<div class="sub">${esc(sub)}</div>` : ""}</div>
     ${soc.length ? `<div class="soc">${soc.join("")}</div>` : ""}</div>`;
 }
@@ -516,6 +546,8 @@ async function renderEvent(d, id, path) {
     <p style="margin:0 0 10px"><a href="${PREFIX}">&larr; All events</a></p>
     <h1 class="page">${esc(ev.name)}</h1>
     <p class="lede">${d0 ? esc(fmtDateTime(ev.start_at)) : "date TBD"}${ev.location ? " · " + esc(ev.location) : ""}${lumaUrl ? ` · <a href="${esc(lumaUrl)}" rel="noopener external">View on Luma ↗</a>` : ""}</p>
+    ${ev.vibe ? `<p class="pg-vibe">${esc(ev.vibe)}</p>` : ""}
+    ${vtagsHtml(ev.vibe_tags, 6)}
     ${contributors.length ? `<div class="row" style="display:flex;gap:6px;flex-wrap:wrap;margin:-8px 0 14px"><span class="grp" style="margin:0">Contributed by</span>${contributors.map((c) => `<span class="badge via"${Number(c.enabled) === 0 ? ' style="text-decoration:line-through;opacity:.6"' : ""}>${esc(c.label)}</span>`).join("")}</div>` : ""}
     ${ev.description && ev.description.trim() ? `<button class="xp-button" type="button" style="margin:0 0 12px" onclick="var d=this.nextElementSibling;d.hidden=false;this.remove()">Show description &#9662;</button><div class="evdesc" hidden="until-found">${esc(ev.description.trim())}</div>` : ""}
     ${hosts.length ? `<div class="grp">${hosts.length === 1 ? "Host" : "Hosts"}</div><div class="alist">${hosts.map(attendeeRow).join("")}</div>` : ""}
@@ -527,13 +559,27 @@ async function renderEvent(d, id, path) {
 
 async function renderContribute(d, path, uid, msg) {
   const n = await countContributors(d);
-  const own = await d.prepare("SELECT label, enabled FROM user_cookies WHERE user_key = ?").get(uid);
+  const own = await d.prepare("SELECT label, enabled, last_sync_ok, last_sync_at, last_error FROM user_cookies WHERE user_key = ?").get(uid);
   let cnt = 0;
   if (own) { const c = await d.prepare("SELECT count(*) AS n FROM event_contributions WHERE user_key = ?").get(uid); cnt = c ? Number(c.n) : 0; }
+  // freshness: turn the last sync outcome into a human note. an expired/rotated
+  // session gets a loud re-paste prompt; a healthy one shows when it last synced
+  // and reassures that it self-refreshes (no routine re-paste needed anymore).
+  let freshHtml = "";
+  if (own) {
+    const stale = Number(own.last_sync_ok) === 0;
+    let whenTxt = null;
+    if (own.last_sync_at) { const t = new Date(own.last_sync_at.replace(" ", "T") + "Z"); if (!isNaN(t)) whenTxt = relativeTime(t); }
+    if (stale) {
+      freshHtml = `<div class="banner err">&#9888; Your Luma session ${own.last_error === "LUMA_AUTH_EXPIRED" ? "expired" : "couldn&apos;t sync"}${whenTxt ? ` (last tried ${whenTxt})` : ""}. Re-paste fresh cookies below to reconnect &mdash; after that it refreshes itself.</div>`;
+    } else if (whenTxt) {
+      freshHtml = `<div class="banner ok">&#10003; Last synced ${whenTxt}. The session self-refreshes on each sync &mdash; no need to re-paste unless it expires.</div>`;
+    }
+  }
   const body = `<h1 class="page">Contribute</h1>
     <p class="lede">Serendipity pools events worth going to &mdash; and who&apos;s going &mdash; into one public view. Add an event by link, or connect your Luma feed to sync everything. ${n} active contributor${n == 1 ? "" : "s"} so far.</p>
     ${banner(msg)}
-    ${own ? `<div class="connected">&#10003; You&apos;re contributing as <b>${esc(own.label || "unnamed")}</b> &mdash; ${cnt} event${cnt == 1 ? "" : "s"} from your feed are in the pool. Re-paste below to refresh your Luma session.</div>` : ""}
+    ${own ? `<div class="connected">&#10003; You&apos;re contributing as <b>${esc(own.label || "unnamed")}</b> &mdash; ${cnt} event${cnt == 1 ? "" : "s"} from your feed are in the pool.</div>${freshHtml}` : ""}
 
     <div class="grp">Add an event by link</div>
     <p class="note" style="margin:0 0 8px">Paste public Luma event links (<code>lu.ma/&hellip;</code> or <code>luma.com/&hellip;</code>) &mdash; one per line. No login needed; we pull each event&apos;s details into the pool. The full guest list fills in once someone going syncs their feed.</p>
@@ -618,6 +664,7 @@ function renderMcpInfo(path) {
       ${tool("co_attendees", "q, limit", "Who one person crosses paths with most, with the shared event names. Pass your own name for &quot;who am I seeing a lot&quot;.")}
       ${tool("connections", "min_shared, limit", "The tightest co-attendance pairs pool-wide (who&apos;s seeing who), with shared counts + event names.")}
       ${tool("shared_events", "a, b", "The events two named people both attended (did they cross paths, and where).")}
+      ${tool("mutual_events", "person, contributor", "Mutual events between a person and a contributor &mdash; where you cross paths with them &mdash; plus Luma&apos;s own events-together count. Omit contributor for overlap with the whole pool.")}
       ${tool("stats", "", "Pool overview: event counts, distinct people, active contributors.")}
     </div>
     <div class="grp">Connect</div>
@@ -637,11 +684,48 @@ function renderMcpInfo(path) {
 // ════════════════════════════════════════════════════════════════════════════
 const LUMA_API = "https://api2.luma.com";
 
-function cookieHeaderFrom(cookiesJson) {
-  try {
-    const data = JSON.parse(cookiesJson);
-    return (data.cookies || []).map((c) => `${c.name}=${c.value}`).join("; ");
-  } catch { return null; }
+// parse the leading "name=value" pair out of a Set-Cookie response line.
+function parseSetCookie(line) {
+  const seg = String(line || "").split(";", 1)[0];
+  const eq = seg.indexOf("=");
+  if (eq === -1) return null;
+  const name = seg.slice(0, eq).trim();
+  return name ? { name, value: seg.slice(eq + 1).trim() } : null;
+}
+// merge a Set-Cookie line into the jar: replace a stored luma.* cookie in place,
+// or append a new luma.* one. marks dirty only when a value actually changed, so
+// we re-persist to D1 exactly when Luma rotated the session — the common case
+// that used to silently break the scan (the rotated token was fetched, then the
+// response's Set-Cookie discarded, so the stale one kept getting sent until it died).
+function applyToJar(cookies, line, markDirty) {
+  const p = parseSetCookie(line);
+  if (!p || !/^luma/i.test(p.name)) return;
+  const ex = cookies.find((c) => c.name === p.name);
+  if (ex) { if (ex.value !== p.value) { ex.value = p.value; markDirty(); } }
+  else { cookies.push({ name: p.name, value: p.value, domain: ".lu.ma", path: "/", expires: -1, httpOnly: false, secure: true, sameSite: "Lax" }); markDirty(); }
+}
+// a stateful Luma session: holds the cookie jar, sends it on every request, and
+// captures rotated cookies from Set-Cookie so the session self-refreshes instead
+// of dying the first time Luma rolls the token. dirty() => the jar changed and
+// should be persisted back to user_cookies. thrown errors carry .status (401/403).
+function lumaClient(cookiesJson) {
+  let cookies;
+  try { cookies = JSON.parse(cookiesJson).cookies || []; } catch { cookies = []; }
+  let dirty = false;
+  const mark = () => { dirty = true; };
+  const header = () => cookies.map((c) => `${c.name}=${c.value}`).join("; ");
+  async function fetchJson(url) {
+    const res = await fetch(url, { headers: { "Content-Type": "application/json", Cookie: header(), "x-luma-web-url": "https://lu.ma" } });
+    if (res.headers.getSetCookie) for (const line of res.headers.getSetCookie()) applyToJar(cookies, line, mark);
+    if (!res.ok) { const b = await res.text().catch(() => ""); const e = new Error(`Luma ${res.status}: ${b.slice(0, 200)}`); e.status = res.status; throw e; }
+    return res.json();
+  }
+  return {
+    fetchJson, header,
+    dirty: () => dirty,
+    hasAuth: () => cookies.some((c) => c.name === "luma.auth-session-key"),
+    serialize: () => JSON.stringify({ cookies, capturedAt: new Date().toISOString() }),
+  };
 }
 function selfIdFrom(cookiesJson) {
   try {
@@ -657,9 +741,9 @@ async function lumaFetch(url, cookieHeader) {
   if (!res.ok) { const b = await res.text().catch(() => ""); throw new Error(`Luma ${res.status}: ${b.slice(0, 200)}`); }
   return res;
 }
-async function fetchMe(cookieHeader) {
+async function fetchMe(client) {
   try {
-    const data = await (await lumaFetch(`${LUMA_API}/user/get-self`, cookieHeader)).json();
+    const data = await client.fetchJson(`${LUMA_API}/user/get-self`);
     const u = data.user ?? data;
     return u.api_id ? { api_id: u.api_id, name: u.name ?? "" } : null;
   } catch { return null; }
@@ -669,6 +753,9 @@ function parseGuest(entryApiId, user) {
   return {
     id: entryApiId || user.api_id, name: user.name || null, email: user.email || null,
     avatar_url: user.avatar_url || null, bio_short: user.bio_short || null, website: user.website || null,
+    // username: the vanity handle Luma's /user/profile endpoint is keyed by (null
+    // when the person never claimed one) — captured so we know who's profile-fetchable.
+    username: user.username || null,
     twitter_handle: user.twitter_handle || null, linkedin_handle: user.linkedin_handle || null,
     instagram_handle: user.instagram_handle || null, tiktok_handle: user.tiktok_handle || null, youtube_handle: user.youtube_handle || null,
   };
@@ -713,7 +800,7 @@ function parseEvents(data, selfId) {
     };
   });
 }
-async function fetchMyEvents(cookieHeader, selfId) {
+async function fetchMyEvents(client, selfId) {
   const all = [];
   for (const period of ["future", "past"]) {
     // page caps kept low: Cloudflare limits subrequests (fetch calls) per Worker
@@ -724,7 +811,7 @@ async function fetchMyEvents(cookieHeader, selfId) {
       page++;
       const p = new URLSearchParams({ pagination_limit: "50", period });
       if (cursor) p.set("pagination_cursor", cursor);
-      const data = await (await lumaFetch(`${LUMA_API}/home/get-events?${p}`, cookieHeader)).json();
+      const data = await client.fetchJson(`${LUMA_API}/home/get-events?${p}`);
       all.push(...parseEvents(data, selfId));
       if (!data.has_more || !data.next_cursor) break;
       cursor = data.next_cursor;
@@ -732,7 +819,7 @@ async function fetchMyEvents(cookieHeader, selfId) {
   }
   return all;
 }
-async function fetchEventGuests(eventId, ticketKey, cookieHeader) {
+async function fetchEventGuests(eventId, ticketKey, client) {
   const all = []; let cursor = null;
   while (true) {
     // ticket_key ONLY when we have a real one. Sending ticket_key=null (the
@@ -744,8 +831,15 @@ async function fetchEventGuests(eventId, ticketKey, cookieHeader) {
     const p = new URLSearchParams({ event_api_id: eventId, pagination_limit: "100" });
     if (ticketKey) p.set("ticket_key", ticketKey);
     if (cursor) p.set("pagination_cursor", cursor);
-    const data = await (await lumaFetch(`${LUMA_API}/event/get-guest-list?${p}`, cookieHeader)).json();
-    for (const e of (data.entries || [])) all.push(parseGuest(e.api_id, e.user || {}));
+    const data = await client.fetchJson(`${LUMA_API}/event/get-guest-list?${p}`);
+    for (const e of (data.entries || [])) {
+      const g = parseGuest(e.api_id, e.user || {});
+      // hosts see every status (approved/pending/waitlisted/invited/declined);
+      // a plain guest sees only approved. store it so the roster reflects the
+      // full picture for events we manage, not just the "going" slice.
+      g.approval_status = e.approval_status || e.status || null;
+      all.push(g);
+    }
     if (!data.has_more || !data.next_cursor) break;
     cursor = data.next_cursor;
   }
@@ -766,13 +860,12 @@ function pmToText(node) {
 
 // fetch ONE event's full detail for its description (the list endpoint omits it).
 // returns plain-text description, or null. one subrequest per call.
-async function fetchEventDescription(eventId, cookieHeader) {
+async function fetchEventDescription(eventId, client) {
   const p = new URLSearchParams({ event_api_id: eventId });
-  let res;
-  // deleted/private events 400/404 — lumaFetch throws; treat as "no description".
-  try { res = await lumaFetch(`${LUMA_API}/event/get?${p}`, cookieHeader); }
+  let data;
+  // deleted/private events 400/404 — fetchJson throws; treat as "no description".
+  try { data = await client.fetchJson(`${LUMA_API}/event/get?${p}`); }
   catch { return null; }
-  const data = await res.json();
   const e = data.event || {};
   let txt = data.description_md || data.description || e.description_md || e.description || "";
   if (!txt && data.description_mirror) txt = pmToText(data.description_mirror);
@@ -835,12 +928,13 @@ async function fetchEventByLink(input) {
 
 // single-statement attendee upsert (batch-friendly — no read-then-write).
 // preserves email/first_seen_at/times_seen on conflict; refreshes profile fields.
-const UPSERT_ATTENDEE = `INSERT INTO attendees (id,name,email,avatar_url,bio_short,website,twitter_handle,linkedin_handle,instagram_handle,tiktok_handle,youtube_handle,first_seen_at,times_seen)
- VALUES (?,?,?,?,?,?,?,?,?,?,?,datetime('now'),1)
+const UPSERT_ATTENDEE = `INSERT INTO attendees (id,name,email,avatar_url,bio_short,website,username,twitter_handle,linkedin_handle,instagram_handle,tiktok_handle,youtube_handle,first_seen_at,times_seen)
+ VALUES (?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'),1)
  ON CONFLICT(id) DO UPDATE SET name=excluded.name,avatar_url=excluded.avatar_url,bio_short=excluded.bio_short,website=excluded.website,
+   username=COALESCE(excluded.username,attendees.username),
    twitter_handle=excluded.twitter_handle,linkedin_handle=excluded.linkedin_handle,instagram_handle=excluded.instagram_handle,
    tiktok_handle=excluded.tiktok_handle,youtube_handle=excluded.youtube_handle`;
-const attendeeStmt = (d, g) => d.stmt(UPSERT_ATTENDEE, g.id, g.name || "Unknown", g.email, g.avatar_url, g.bio_short, g.website, g.twitter_handle, g.linkedin_handle, g.instagram_handle, g.tiktok_handle, g.youtube_handle);
+const attendeeStmt = (d, g) => d.stmt(UPSERT_ATTENDEE, g.id, g.name || "Unknown", g.email, g.avatar_url, g.bio_short, g.website, g.username || null, g.twitter_handle, g.linkedin_handle, g.instagram_handle, g.tiktok_handle, g.youtube_handle);
 const UPSERT_EVENT = `INSERT INTO events (id,name,description,start_at,end_at,location,cover_url,url,geo_latitude,geo_longitude,ticket_key,user_status,synced_at)
  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'))
  ON CONFLICT(id) DO UPDATE SET name=excluded.name,description=COALESCE(excluded.description,events.description),start_at=excluded.start_at,end_at=excluded.end_at,
@@ -852,16 +946,45 @@ const UPSERT_EVENT = `INSERT INTO events (id,name,description,start_at,end_at,lo
      WHEN events.user_status='waitlisted' OR excluded.user_status='waitlisted' THEN 'waitlisted' ELSE excluded.user_status END,
    synced_at=datetime('now')`;
 
+// persist a contributor's sync outcome (freshness) + any rotated cookies the
+// session picked up. one D1 write; the cookies_json is only rewritten when the
+// jar actually changed. best-effort — freshness is advisory, never fail a sync on it.
+async function persistCookieState(d, userKey, client, ok, error) {
+  if (!userKey) return;
+  try {
+    if (client && client.dirty()) {
+      await d.prepare(`UPDATE user_cookies SET cookies_json=?, last_sync_at=datetime('now'), last_sync_ok=?, last_error=? WHERE user_key=?`)
+        .run(client.serialize(), ok ? 1 : 0, error || null, userKey);
+    } else {
+      await d.prepare(`UPDATE user_cookies SET last_sync_at=datetime('now'), last_sync_ok=?, last_error=? WHERE user_key=?`)
+        .run(ok ? 1 : 0, error || null, userKey);
+    }
+  } catch { /* advisory only */ }
+}
+// persist ONLY a rotated token (no freshness change) — for read paths whose
+// errors are swallowed (description sync), where flipping last_sync_ok would lie.
+async function persistRotation(d, userKey, client) {
+  if (!userKey || !client || !client.dirty()) return;
+  try { await d.prepare(`UPDATE user_cookies SET cookies_json=? WHERE user_key=?`).run(client.serialize(), userKey); } catch { /* advisory */ }
+}
+// a 401 (or a 403 on the identity/feed endpoints) means the stored Luma session
+// is dead and the contributor must re-paste. get-guest-list 403 is handled
+// separately (that's "list restricted", not "session expired").
+const isAuthExpired = (err) => !!(err && (err.status === 401 || err.status === 403));
+
 // sync one contributor's events into the pool. All writes are collected then
 // run via d.batch() (one subrequest per 50 statements) to stay under the
 // Cloudflare per-invocation subrequest cap. Returns {synced} or {error}.
 async function syncEvents(d, userKey, cookiesJson) {
-  const cookieHeader = cookieHeaderFrom(cookiesJson);
-  if (!cookieHeader) return { error: "bad cookie json" };
+  const client = lumaClient(cookiesJson);
+  if (!client.hasAuth()) return { error: "bad cookie json" };
   try {
-    const selfId0 = selfIdFrom(cookiesJson);
-    const [events, me] = await Promise.all([fetchMyEvents(cookieHeader, selfId0), fetchMe(cookieHeader)]);
-    const selfId = me?.api_id ?? selfId0;
+    // fetch identity FIRST, not in parallel: the first authed call is where Luma
+    // hands back a rotated token via Set-Cookie, so serializing it means the paged
+    // feed fetches below already carry the fresh cookie (dodges a rotation race).
+    const me = await fetchMe(client);
+    const selfId = me?.api_id ?? selfIdFrom(cookiesJson);
+    const events = await fetchMyEvents(client, selfId);
     const S = [];
     if (selfId) {
       S.push(d.stmt(`INSERT INTO settings (key,value,updated_at) VALUES (?,?,datetime('now')) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=datetime('now')`, `luma_user_id_${userKey}`, selfId));
@@ -874,8 +997,13 @@ async function syncEvents(d, userKey, cookiesJson) {
       for (const g of e.preview_guests) { if (!g.id || g.id === selfId) continue; S.push(attendeeStmt(d, g)); S.push(d.stmt(`INSERT INTO event_attendees (event_id,attendee_id) VALUES (?,?) ON CONFLICT(event_id,attendee_id) DO NOTHING`, e.id, g.id)); }
     }
     await d.batch(S);
+    await persistCookieState(d, userKey, client, true, null);
     return { synced: events.length, statements: S.length };
-  } catch (err) { return { error: err instanceof Error ? err.message : String(err) }; }
+  } catch (err) {
+    const msg = isAuthExpired(err) ? "LUMA_AUTH_EXPIRED" : (err instanceof Error ? err.message : String(err));
+    await persistCookieState(d, userKey, client, false, msg);
+    return { error: msg };
+  }
 }
 
 // add events to the pool from pasted Luma links (no cookies needed). caps at 8
@@ -920,9 +1048,9 @@ async function handleAddEvent(request, env, d, uid) {
 }
 
 // sync one event's full guest list (batched writes). Returns {synced} or {error}.
-async function syncGuests(d, eventId, cookiesJson) {
-  const cookieHeader = cookieHeaderFrom(cookiesJson);
-  if (!cookieHeader) return { error: "bad cookie json" };
+async function syncGuests(d, eventId, userKey, cookiesJson) {
+  const client = lumaClient(cookiesJson);
+  if (!client.hasAuth()) return { error: "bad cookie json" };
   const ev = await d.prepare("SELECT ticket_key, user_status FROM events WHERE id = ?").get(eventId);
   if (!ev) return { error: "event not found" };
   if (ev.user_status !== "going") return { error: `status is ${ev.user_status}, not going` };
@@ -931,25 +1059,35 @@ async function syncGuests(d, eventId, cookiesJson) {
   // fetchEventGuests omits a missing key rather than sending null (which 403s).
   const selfId = selfIdFrom(cookiesJson);
   try {
-    const guests = await fetchEventGuests(eventId, ev.ticket_key, cookieHeader);
+    const guests = await fetchEventGuests(eventId, ev.ticket_key, client);
     const S = [];
     for (const g of guests) {
       if (!g.id || g.id === selfId) continue;
       S.push(attendeeStmt(d, g));
-      S.push(d.stmt(`INSERT INTO event_attendees (event_id,attendee_id) VALUES (?,?) ON CONFLICT(event_id,attendee_id) DO NOTHING`, eventId, g.id));
+      // carry approval_status (approved/pending/waitlisted/invited) so managed-event
+      // rosters show the full picture; COALESCE keeps a known status if a later
+      // partial sync (guest-view) can't see it.
+      S.push(d.stmt(`INSERT INTO event_attendees (event_id,attendee_id,approval_status) VALUES (?,?,?)
+        ON CONFLICT(event_id,attendee_id) DO UPDATE SET approval_status=COALESCE(excluded.approval_status,event_attendees.approval_status)`, eventId, g.id, g.approval_status || null));
     }
+    // stamp the full-roster pull so the batched sweep stops re-scanning it.
+    S.push(d.stmt(`UPDATE events SET guests_synced_at=datetime('now') WHERE id=?`, eventId));
     await d.batch(S);
+    await persistCookieState(d, userKey, client, true, null);
     return { synced: guests.length };
-  } catch (err) { const m = err instanceof Error ? err.message : String(err); return { error: m.includes("403") ? "GUEST_LIST_RESTRICTED" : m }; }
+  } catch (err) {
+    if (err && err.status === 403) return { error: "GUEST_LIST_RESTRICTED" };  // list not visible to us — a healthy session, just no access
+    const msg = isAuthExpired(err) ? "LUMA_AUTH_EXPIRED" : (err instanceof Error ? err.message : String(err));
+    await persistCookieState(d, userKey, client, false, msg);
+    return { error: msg };
+  }
 }
 
 // throttled description backfill. the list-sync omits descriptions, and fetching
 // detail for every event in one go would blow the per-invocation subrequest cap,
 // so each call fills up to `limit` events (one Luma fetch each) and reports how
 // many remain — re-run until remaining hits 0. Returns {scanned,filled,remaining}.
-async function syncDescriptions(d, cookiesJson, limit) {
-  const cookieHeader = cookieHeaderFrom(cookiesJson);
-  if (!cookieHeader) return { error: "bad cookie json" };
+async function syncDescriptions(d, client, limit) {
   try {
     // only events we haven't attempted yet (desc_synced_at marks the attempt, so
     // events with no description / deleted events don't get re-scanned forever).
@@ -961,7 +1099,7 @@ async function syncDescriptions(d, cookiesJson, limit) {
     const S = [];
     for (const row of todo) {
       let desc = null;
-      try { desc = await fetchEventDescription(row.id, cookieHeader); } catch { desc = null; }  // never let one event abort the batch
+      try { desc = await fetchEventDescription(row.id, client); } catch { desc = null; }  // never let one event abort the batch
       // always stamp the attempt; set description only when we got text.
       S.push(d.stmt(`UPDATE events SET description = COALESCE(?, description), desc_synced_at = datetime('now') WHERE id = ?`, desc, row.id));
       if (desc) filled++;
@@ -981,9 +1119,13 @@ async function handleSyncDescriptions(request, env, d) {
   }
   const limit = Math.min(45, Math.max(1, parseInt(url.searchParams.get("n") || "30", 10) || 30));
   // any enabled cookie can read public event detail; use the first available.
-  const set = await d.prepare("SELECT cookies_json, label FROM user_cookies WHERE enabled = 1 LIMIT 1").get();
+  const set = await d.prepare("SELECT user_key, cookies_json, label FROM user_cookies WHERE enabled = 1 LIMIT 1").get();
   if (!set) return new Response(JSON.stringify({ ok: false, error: "no enabled cookies" }), { status: 400, headers: { "content-type": "application/json" } });
-  const r = await syncDescriptions(d, set.cookies_json, limit);
+  const client = lumaClient(set.cookies_json);
+  const r = await syncDescriptions(d, client, limit);
+  // desc fetches swallow auth errors (public /event/get), so don't touch the
+  // set's freshness here — just capture any rotated token so it stays alive.
+  await persistRotation(d, set.user_key, client);
   return new Response(JSON.stringify({ ok: !r.error, via: set.label, ...r }, null, 2), { headers: { "content-type": "application/json" } });
 }
 
@@ -997,10 +1139,186 @@ async function handleSync(request, env, d) {
   const eventId = url.searchParams.get("event");
   const out = [];
   for (const s of sets) {
-    if (eventId) out.push({ label: s.label, event: eventId, ...(await syncGuests(d, eventId, s.cookies_json)) });
+    if (eventId) out.push({ label: s.label, event: eventId, ...(await syncGuests(d, eventId, s.user_key, s.cookies_json)) });
     else out.push({ label: s.label, ...(await syncEvents(d, s.user_key, s.cookies_json)) });
   }
   return new Response(JSON.stringify({ ok: true, results: out }, null, 2), { headers: { "content-type": "application/json" } });
+}
+
+// throttled full-roster sweep. syncEvents only stores the feed's preview_guests +
+// hosts; the complete guest list (all statuses, for events we host/manage) needs a
+// per-event get-guest-list call. Doing every event in one go would blow the
+// subrequest cap, so each call pulls up to `limit` events (going, not yet swept),
+// upcoming soonest-first — the events people are deciding on now. guests_synced_at
+// marks the attempt so a drained event doesn't re-queue. Returns {scanned,synced,remaining}.
+async function syncGuestsSweep(d, sets, limit) {
+  const todo = await d.prepare(
+    `SELECT id FROM events
+       WHERE user_status='going' AND guests_synced_at IS NULL
+       ORDER BY CASE WHEN start_at >= datetime('now') THEN 0 ELSE 1 END,
+                CASE WHEN start_at >= datetime('now') THEN start_at END ASC,
+                start_at DESC
+       LIMIT ?`
+  ).all(limit);
+  let synced = 0, restricted = 0;
+  const results = [];
+  for (const row of todo) {
+    let done = false, lastErr = null;
+    // try each contributor's session until one can see the list. a host sees
+    // their own managed event's full roster; a plain guest sees the public slice.
+    for (const s of sets) {
+      const r = await syncGuests(d, row.id, s.user_key, s.cookies_json);
+      if (!r.error) { synced++; done = true; results.push({ event: row.id, via: s.label, synced: r.synced }); break; }
+      lastErr = r.error;
+      if (r.error !== "GUEST_LIST_RESTRICTED") break;  // real error (auth/network) — don't burn the other sets this pass
+    }
+    // nobody could see it: stamp attempted so it stops re-queuing. a transient
+    // auth/network error leaves it unstamped so a later pass retries.
+    if (!done) {
+      if (lastErr === "GUEST_LIST_RESTRICTED") { await d.prepare(`UPDATE events SET guests_synced_at=datetime('now') WHERE id=?`).run(row.id); restricted++; }
+      results.push({ event: row.id, error: lastErr });
+    }
+  }
+  const rem = await d.prepare(`SELECT COUNT(*) AS n FROM events WHERE user_status='going' AND guests_synced_at IS NULL`).get();
+  return { scanned: todo.length, synced, restricted, remaining: rem?.n || 0, results };
+}
+
+// secret-gated: POST /serendipity/sync-guests?key=SECRET[&n=6]
+// pulls full guest lists for up to n (default 6, max 12) going/managed events per call.
+async function handleSyncGuests(request, env, d) {
+  const url = new URL(request.url);
+  if (!env.SYNC_SECRET || url.searchParams.get("key") !== env.SYNC_SECRET) return new Response("forbidden", { status: 403 });
+  const limit = Math.min(12, Math.max(1, parseInt(url.searchParams.get("n") || "6", 10) || 6));
+  const sets = await d.prepare("SELECT user_key, cookies_json, label FROM user_cookies WHERE enabled = 1").all();
+  if (!sets.length) return new Response(JSON.stringify({ ok: false, error: "no enabled cookies" }), { status: 400, headers: { "content-type": "application/json" } });
+  const r = await syncGuestsSweep(d, sets, limit);
+  return new Response(JSON.stringify({ ok: !r.error, ...r }, null, 2), { headers: { "content-type": "application/json" } });
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Luma profile ingest — mutual events. api2.luma.com/user/profile/events?username=
+// returns {events_hosting, events_past, events_together}; the entries share the
+// home-feed shape, so parseEvents handles them. events_together is Luma's own
+// "events you both attended", computed relative to the AUTHENTICATED caller — so
+// syncing a profile with a contributor's session surfaces mutual events between
+// that contributor and the person. Keyed by username (api_id doesn't work), which
+// we capture from guest/host user objects.
+// ════════════════════════════════════════════════════════════════════════════
+async function fetchProfileEvents(client, username) {
+  return client.fetchJson(`${LUMA_API}/user/profile/events?${new URLSearchParams({ username })}`);
+}
+async function fetchProfileCounts(client, username) {
+  return client.fetchJson(`${LUMA_API}/user/profile?${new URLSearchParams({ username })}`);
+}
+
+// ingest one person's public Luma profile into the pool + record mutual events.
+// viewerKey/selfId identify the syncing contributor (events_together is relative
+// to them). Returns {synced, together, together_count} or {error}.
+async function syncProfile(d, client, viewerKey, selfId, attendee) {
+  const username = attendee.username;
+  if (!username) return { error: "no username" };
+  let ev;
+  try { ev = await fetchProfileEvents(client, username); }
+  catch (e) {
+    if (e && e.status === 404) return { error: "PROFILE_NOT_FOUND" };
+    return { error: isAuthExpired(e) ? "LUMA_AUTH_EXPIRED" : (e instanceof Error ? e.message : String(e)) };
+  }
+  let counts = null;
+  try { counts = await fetchProfileCounts(client, username); } catch { /* counts are a nicety */ }
+  const S = [];
+  let added = 0, together = 0;
+  // hosting → is_host=1; past/together → is_host=0. these are ANOTHER person's
+  // events, so force user_status 'unknown' (never 'going' — that tier means the
+  // syncing contributor RSVP'd). UPSERT_EVENT keeps a prior 'going' if one exists.
+  for (const [kind, entries, isHost] of [["hosting", ev.events_hosting, 1], ["past", ev.events_past, 0], ["together", ev.events_together, 0]]) {
+    for (const e of parseEvents({ entries: entries || [] }, selfId)) {
+      if (!e.id) continue;
+      // ticket_key null: the profile's guest_info ticket is THEIRS, not ours, and
+      // discovered events stay user_status 'unknown' so syncGuests never uses it.
+      S.push(d.stmt(UPSERT_EVENT, e.id, e.name, e.description, e.start_at, e.end_at, e.location, e.cover_url, e.url, e.geo_latitude, e.geo_longitude, null, "unknown"));
+      S.push(d.stmt(`INSERT INTO event_attendees (event_id,attendee_id,is_host) VALUES (?,?,?) ON CONFLICT(event_id,attendee_id) DO UPDATE SET is_host=MAX(is_host,excluded.is_host)`, e.id, attendee.id, isHost));
+      for (const h of e.hosts) {
+        if (!h.id || h.id === selfId || h.id === attendee.id) continue;
+        S.push(attendeeStmt(d, h));
+        S.push(d.stmt(`INSERT INTO event_attendees (event_id,attendee_id,is_host) VALUES (?,?,1) ON CONFLICT(event_id,attendee_id) DO UPDATE SET is_host=1`, e.id, h.id));
+      }
+      // events_together are mutual with the viewer → record the viewer's contribution
+      // so mutual_events(person, viewer) finds them even if the viewer's own feed
+      // sync hasn't reached this event yet.
+      if (kind === "together") { S.push(d.stmt(`INSERT INTO event_contributions (event_id,user_key,contributed_at) VALUES (?,?,datetime('now')) ON CONFLICT(event_id,user_key) DO NOTHING`, e.id, viewerKey)); together++; }
+      added++;
+    }
+  }
+  const togetherCount = counts && counts.event_together_count != null ? Number(counts.event_together_count) : together;
+  S.push(d.stmt(`UPDATE attendees SET profile_synced_at=datetime('now'), event_together_count=? WHERE id=?`, togetherCount, attendee.id));
+  await d.batch(S);
+  return { synced: added, together, together_count: togetherCount };
+}
+
+// throttled profile sweep. only username-having attendees are fetchable; prioritize
+// the most-seen (the people worth knowing overlap with). one viewer (first enabled
+// set) so events_together is consistently relative to them. Returns {scanned,synced,remaining}.
+async function syncProfilesSweep(d, sets, limit) {
+  const viewer = sets[0];
+  const client = lumaClient(viewer.cookies_json);
+  const selfId = selfIdFrom(viewer.cookies_json);
+  const targets = await d.prepare(
+    `SELECT id, username FROM attendees WHERE username IS NOT NULL AND profile_synced_at IS NULL ORDER BY times_seen DESC LIMIT ?`
+  ).all(limit);
+  let synced = 0;
+  const results = [];
+  for (const a of targets) {
+    const r = await syncProfile(d, client, viewer.user_key, selfId, a);
+    if (r.error) {
+      results.push({ person: a.id, username: a.username, error: r.error });
+      if (r.error === "PROFILE_NOT_FOUND") await d.prepare(`UPDATE attendees SET profile_synced_at=datetime('now') WHERE id=?`).run(a.id);  // stop re-queuing a dead handle
+      if (r.error === "LUMA_AUTH_EXPIRED") break;  // viewer session dead — stop the sweep
+    } else { synced++; results.push({ person: a.id, username: a.username, ...r }); }
+  }
+  await persistRotation(d, viewer.user_key, client);
+  const rem = (await d.prepare(`SELECT COUNT(*) AS n FROM attendees WHERE username IS NOT NULL AND profile_synced_at IS NULL`).get())?.n || 0;
+  return { scanned: targets.length, synced, remaining: rem, results };
+}
+
+// secret-gated: POST /serendipity/sync-profiles?key=SECRET[&n=4]
+//   &person=<attendee id>  — one known attendee
+//   &username=<handle>     — one profile by handle (seeds the attendee if new)
+//   (neither)              — batch sweep of username-having, un-synced attendees
+async function handleSyncProfiles(request, env, d) {
+  const url = new URL(request.url);
+  if (!env.SYNC_SECRET || url.searchParams.get("key") !== env.SYNC_SECRET) return new Response("forbidden", { status: 403 });
+  const jerr = (msg, code = 400) => new Response(JSON.stringify({ ok: false, error: msg }), { status: code, headers: { "content-type": "application/json" } });
+  const sets = await d.prepare("SELECT user_key, cookies_json, label FROM user_cookies WHERE enabled = 1").all();
+  if (!sets.length) return jerr("no enabled cookies");
+  const username = url.searchParams.get("username");
+  const personId = url.searchParams.get("person");
+  let r;
+  if (username || personId) {
+    const viewer = sets[0];
+    const client = lumaClient(viewer.cookies_json);
+    const selfId = selfIdFrom(viewer.cookies_json);
+    let attendee;
+    if (personId) {
+      attendee = await d.prepare("SELECT id, username FROM attendees WHERE id = ?").get(personId);
+      if (!attendee) return jerr(`no attendee with id ${personId}`, 404);
+      if (!attendee.username) return jerr(`attendee ${personId} has no username — not profile-fetchable`);
+    } else {
+      // seed the attendee from the profile so an ad-hoc handle works
+      let counts;
+      try { counts = await fetchProfileCounts(client, username); }
+      catch (e) { return jerr("profile fetch failed: " + (e instanceof Error ? e.message : String(e))); }
+      const u = counts && counts.user;
+      if (!u || !u.api_id) return jerr(`no Luma profile for username "${username}"`, 404);
+      await d.batch([attendeeStmt(d, parseGuest(u.api_id, u))]);
+      attendee = { id: u.api_id, username: u.username || username };
+    }
+    r = { one: true, person: attendee.id, username: attendee.username, ...(await syncProfile(d, client, viewer.user_key, selfId, attendee)) };
+    await persistRotation(d, viewer.user_key, client);
+  } else {
+    const limit = Math.min(8, Math.max(1, parseInt(url.searchParams.get("n") || "4", 10) || 4));
+    r = await syncProfilesSweep(d, sets, limit);
+  }
+  return new Response(JSON.stringify({ ok: !r.error, ...r }, null, 2), { headers: { "content-type": "application/json" } });
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1192,6 +1510,127 @@ async function handleEnrich(request, env, d) {
   return new Response(JSON.stringify({ ok: true, provider, enriched: out }, null, 2), { headers: { "content-type": "application/json" } });
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// Vibe characterization — Cloudflare Workers AI (env.AI). A secret-gated batch
+// job like /enrich: reads an event's description + who RSVP'd and writes a one-line
+// vibe + a few tags onto the event. Grounded only in the given facts (never invents
+// attendees/themes); skips events too thin to say anything real. Zero page-weight
+// cost — the vibe is precomputed and served as static text.
+// ════════════════════════════════════════════════════════════════════════════
+// swap freely; 3.3-70b-fp8-fast gives the best short characterizations, 3.1-8b is
+// the cheap universally-available fallback.
+const VIBE_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+const VIBE_SYSTEM = `You characterize the "vibe" of a real-world event from its description and who is attending. Ground every word ONLY in the facts given — never invent attendees, sponsors, or themes. Output STRICT JSON and nothing else:
+{"vibe":"<one vivid sentence, <=150 chars, plain and specific, no marketing hype>","tags":["<2-5 short lowercase tags describing the crowd, domain, format, or energy, e.g. founder-heavy, crypto, happy hour, technical, intimate, high-energy>"]}
+If the inputs are too thin to say anything real, return {"vibe":"","tags":[]}.`;
+
+// compact, factual digest of an event for the model. hosts + a sample of guests
+// (with role/company/bio when enriched) give the "who's coming" signal; the
+// description gives the "what". capped so the prompt stays small.
+function vibeDigest(event, attendees) {
+  const lines = [`Event: ${event.name || "(untitled)"}`];
+  if (event.start_at) lines.push(`When: ${event.start_at}`);
+  if (event.location) lines.push(`Where: ${event.location}`);
+  if (event.description) lines.push(`Description: ${String(event.description).replace(/\s+/g, " ").slice(0, 1200)}`);
+  const fmt = (a) => {
+    const who = [a.role, a.company].filter(Boolean).join(" at ") || (a.bio_short ? String(a.bio_short).slice(0, 60) : "");
+    return who ? `${a.name} (${who})` : a.name;
+  };
+  const hosts = attendees.filter((a) => Number(a.is_host));
+  const guests = attendees.filter((a) => !Number(a.is_host));
+  if (hosts.length) lines.push(`Hosts: ${hosts.slice(0, 6).map(fmt).join("; ")}`);
+  if (guests.length) lines.push(`${guests.length} guests in the sample. Some: ${guests.slice(0, 18).map(fmt).join("; ")}`);
+  return lines.join("\n");
+}
+
+// pull a strict-JSON {vibe, tags} out of the model's text (models sometimes wrap
+// it in prose); clamp lengths + normalize tags. never throws.
+function parseVibe(text) {
+  if (!text) return { vibe: null, tags: [] };
+  let obj = null;
+  const m = String(text).match(/\{[\s\S]*\}/);
+  if (m) { try { obj = JSON.parse(m[0]); } catch { /* fall through */ } }
+  if (!obj || typeof obj !== "object") return { vibe: null, tags: [] };
+  let vibe = typeof obj.vibe === "string" ? obj.vibe.trim() : "";
+  if (vibe.length > 200) vibe = vibe.slice(0, 200).trim();
+  let tags = Array.isArray(obj.tags) ? obj.tags : [];
+  tags = [...new Set(tags.map((t) => String(t).toLowerCase().trim().replace(/^#/, "")).filter((t) => t && t.length <= 24))].slice(0, 5);
+  return { vibe: vibe || null, tags };
+}
+
+// one event → {vibe, tags} via Workers AI, or {error} on a hard failure (AI down),
+// or {vibe:null,tags:[]} when there's nothing to characterize.
+async function characterizeVibe(env, event, attendees) {
+  if (!env.AI) return { error: "AI_NOT_BOUND" };
+  if (!event.description && !(attendees && attendees.length)) return { vibe: null, tags: [] };
+  let text;
+  try {
+    const r = await env.AI.run(VIBE_MODEL, {
+      messages: [{ role: "system", content: VIBE_SYSTEM }, { role: "user", content: vibeDigest(event, attendees) }],
+      max_tokens: 220, temperature: 0.3,
+    });
+    text = (r && (r.response ?? r.result ?? r.output_text)) || "";
+  } catch (e) { return { error: e instanceof Error ? e.message : String(e) }; }
+  return parseVibe(text);
+}
+
+// throttled vibe backfill. one AI call per event would blow the wall-clock/subrequest
+// budget across the whole pool, so each call does up to `limit` events (going/upcoming
+// first — the ones people decide on now), stamping vibe_synced_at so a done event
+// doesn't re-run. Pass eventId to (re)generate a single event. Returns {scanned,filled,remaining}.
+async function syncVibes(d, env, { limit, eventId }) {
+  if (!env.AI) return { error: "AI binding not configured" };
+  let events;
+  if (eventId) {
+    const e = await d.prepare(`SELECT id, name, description, start_at, location FROM events WHERE id = ?`).get(eventId);
+    events = e ? [e] : [];
+  } else {
+    events = await d.prepare(
+      `SELECT id, name, description, start_at, location FROM events e
+        WHERE vibe_synced_at IS NULL
+          AND (description IS NOT NULL OR EXISTS (SELECT 1 FROM event_attendees ea WHERE ea.event_id = e.id))
+        ORDER BY CASE WHEN start_at >= datetime('now') THEN 0 ELSE 1 END,
+                 CASE WHEN start_at >= datetime('now') THEN start_at END ASC,
+                 start_at DESC
+        LIMIT ?`
+    ).all(limit);
+  }
+  let filled = 0;
+  const results = [];
+  for (const ev of events) {
+    const attendees = await d.prepare(
+      `SELECT a.name, ea.is_host, a.bio_short, en.role, en.company
+         FROM event_attendees ea JOIN attendees a ON a.id = ea.attendee_id
+         LEFT JOIN enrichments en ON en.attendee_id = a.id
+        WHERE ea.event_id = ? ORDER BY ea.is_host DESC, a.times_seen DESC LIMIT 25`
+    ).all(ev.id);
+    const r = await characterizeVibe(env, ev, attendees);
+    // hard AI error (model down): don't stamp, so a later pass retries.
+    if (r.error) { results.push({ event: ev.id, error: r.error }); continue; }
+    await d.prepare(`UPDATE events SET vibe = ?, vibe_tags = ?, vibe_synced_at = datetime('now') WHERE id = ?`)
+      .run(r.vibe, r.tags && r.tags.length ? JSON.stringify(r.tags) : null, ev.id);
+    if (r.vibe) filled++;
+    results.push({ event: ev.id, vibe: r.vibe, tags: r.tags });
+  }
+  const rem = eventId ? 0 : ((await d.prepare(
+    `SELECT COUNT(*) AS n FROM events e WHERE vibe_synced_at IS NULL
+       AND (description IS NOT NULL OR EXISTS (SELECT 1 FROM event_attendees ea WHERE ea.event_id = e.id))`
+  ).get())?.n || 0);
+  return { scanned: events.length, filled, remaining: rem, results };
+}
+
+// secret-gated: POST /serendipity/vibe?key=SECRET[&n=5][&event=<id>]
+// characterizes up to n (default 5, max 10) events per call; &event=<id> regenerates one.
+async function handleVibe(request, env, d) {
+  const url = new URL(request.url);
+  if (!env.SYNC_SECRET || url.searchParams.get("key") !== env.SYNC_SECRET) return new Response("forbidden", { status: 403 });
+  if (!env.AI) return new Response(JSON.stringify({ ok: false, error: "AI binding not configured — add [ai] binding=\"AI\" to wrangler.toml" }), { status: 400, headers: { "content-type": "application/json" } });
+  const limit = Math.min(10, Math.max(1, parseInt(url.searchParams.get("n") || "5", 10) || 5));
+  const eventId = url.searchParams.get("event") || null;
+  const r = await syncVibes(d, env, { limit, eventId });
+  return new Response(JSON.stringify({ ok: !r.error, ...r }, null, 2), { headers: { "content-type": "application/json" } });
+}
+
 // ── cover-proxy request signing ─────────────────────────────────────────────
 // The /cover proxy fetches a caller-supplied URL and edge-caches it (s-maxage 7d).
 // Left open that's an SSRF-shaped vector: any third party could point ?u= at an
@@ -1315,6 +1754,13 @@ function mcpAttendee(a) {
     times_seen: a.times_seen != null ? Number(a.times_seen) : null,
   };
   if (a.is_host != null) o.is_host = !!Number(a.is_host);
+  // Luma's own "events together" count relative to the syncing contributor, when
+  // this person's profile has been fetched (see mutual_events / sync-profiles).
+  if (a.event_together_count != null) o.event_together_count = Number(a.event_together_count);
+  // only surface a non-default RSVP status (pending/waitlisted/invited/declined);
+  // "approved"/"going" is the norm and left implicit.
+  const st = statusLabel(a.approval_status);
+  if (st) o.rsvp_status = st;
   if (Object.keys(socials).length) o.socials = socials;
   return o;
 }
@@ -1333,6 +1779,10 @@ function mcpEventSummary(e) {
     // browsing a Luma feed without RSVPing — no roster, second-class.
     attending: e.user_status === "going",
     rsvp: e.user_status || "unknown",
+    // vibe: a one-line characterization + tags (present when the event has been
+    // run through /vibe). null when not yet characterized or too thin to say.
+    vibe: e.vibe || null,
+    tags: e.vibe_tags ? parseTags(e.vibe_tags) : null,
     contributors: e.contributors || null,
   };
 }
@@ -1342,7 +1792,7 @@ function mcpEventSummary(e) {
 async function mcpSearchPeople(d, q, limit) {
   const term = "%" + String(q).replace(/[\\%_]/g, "\\$&") + "%";
   const people = await d.prepare(
-    `SELECT a.id, a.name, a.bio_short, a.times_seen, a.website,
+    `SELECT a.id, a.name, a.bio_short, a.times_seen, a.website, a.event_together_count,
             a.twitter_handle, a.linkedin_handle, a.instagram_handle,
             en.company, en.role, en.location, en.linkedin_url
        FROM attendees a LEFT JOIN enrichments en ON en.attendee_id = a.id
@@ -1424,7 +1874,7 @@ async function mcpListContributors(d) {
 // who-overlaps-with-whom is already implicit in the public guest lists, this
 // just computes it). co-attendance counts hosts and guests alike: being at the
 // same event is the edge.
-const PUB_COLS = `a.id, a.name, a.bio_short, a.times_seen, a.website,
+const PUB_COLS = `a.id, a.name, a.bio_short, a.times_seen, a.website, a.event_together_count,
             a.twitter_handle, a.linkedin_handle, a.instagram_handle,
             en.company, en.role, en.location, en.linkedin_url`;
 
@@ -1527,10 +1977,51 @@ async function mcpSharedEvents(d, qa, qb) {
   return { a: mcpAttendee(a), b: mcpAttendee(b), shared_count: rows.length, shared_events: rows.map(mcpEventSummary) };
 }
 
+// mutual events between a person and a contributor: the events the person is at
+// that the contributor also fed into the pool (from their own feed OR from the
+// events_together their Luma profile-fetch recorded). With no contributor, the
+// person's events that overlap the pool at large. luma_event_together_count is
+// Luma's own headline number (mutual with the contributor who synced the profile).
+async function mcpMutualEvents(d, personQ, contributorQ) {
+  const person = await mcpResolvePerson(d, personQ);
+  if (!person) return { _missing: personQ };
+  let contributor = null;
+  if (contributorQ && String(contributorQ).trim()) {
+    const key = String(contributorQ).trim();
+    contributor = await d.prepare(
+      `SELECT user_key, label FROM user_cookies WHERE user_key = ?1 OR label = ?1 OR user_key LIKE ?2 ESCAPE '\\' LIMIT 1`
+    ).get(key, key.replace(/[\\%_]/g, "\\$&") + "%");
+    if (!contributor) return { _missing: contributorQ };
+  }
+  const cols = `e.id, e.name, e.start_at, e.location, e.url, e.user_status, e.vibe, e.vibe_tags,
+       (SELECT COUNT(*) FROM event_attendees x WHERE x.event_id = e.id AND x.is_host = 0) AS attendee_count,
+       (SELECT COUNT(*) FROM event_attendees x WHERE x.event_id = e.id AND x.is_host = 1) AS host_count`;
+  const rows = contributor
+    ? await d.prepare(
+        `SELECT ${cols} FROM events e
+           JOIN event_attendees ea ON ea.event_id = e.id AND ea.attendee_id = ?1
+           JOIN event_contributions ec ON ec.event_id = e.id AND ec.user_key = ?2
+          ORDER BY e.start_at DESC`
+      ).all(person.id, contributor.user_key)
+    : await d.prepare(
+        `SELECT ${cols} FROM events e
+          WHERE e.id IN (SELECT event_id FROM event_attendees WHERE attendee_id = ?1)
+            AND e.id IN (SELECT event_id FROM event_contributions)
+          ORDER BY e.start_at DESC`
+      ).all(person.id);
+  return {
+    person: mcpAttendee(person),
+    contributor: contributor ? { label: contributor.label || null, id_prefix: String(contributor.user_key).slice(0, 8) } : null,
+    luma_event_together_count: person.event_together_count != null ? Number(person.event_together_count) : null,
+    mutual_count: rows.length,
+    mutual_events: rows.map(mcpEventSummary),
+  };
+}
+
 const MCP_TOOLS = [
   {
     name: "list_events",
-    description: "List events in the Serendipity pool, each with a head count of who's going and an RSVP tier. The pool mixes events a contributor actually RSVP'd to or hosts (rsvp:\"going\" — first-class, the ones with real rosters) with events synced from just browsing a Luma feed (rsvp:\"invited\"/\"pending\"/etc — no roster, second-class). By default only the going (RSVP'd) events are returned, with a discovered_hidden count noting how many browsed events were omitted; pass rsvp:\"all\" to include them (first-class first) or rsvp:\"discovered\" for only the browsed ones. Each event carries attending (bool) + rsvp (raw status). Defaults to upcoming, soonest first.",
+    description: "List events in the Serendipity pool, each with a head count of who's going and an RSVP tier. The pool mixes events a contributor actually RSVP'd to or hosts (rsvp:\"going\" — first-class, the ones with real rosters) with events synced from just browsing a Luma feed (rsvp:\"invited\"/\"pending\"/etc — no roster, second-class). By default only the going (RSVP'd) events are returned, with a discovered_hidden count noting how many browsed events were omitted; pass rsvp:\"all\" to include them (first-class first) or rsvp:\"discovered\" for only the browsed ones. Each event carries attending (bool) + rsvp (raw status), plus a vibe (a one-line characterization) + tags (crowd/domain/format) once it's been characterized from its description and who's coming. Defaults to upcoming, soonest first.",
     inputSchema: {
       type: "object",
       properties: {
@@ -1543,7 +2034,7 @@ const MCP_TOOLS = [
   },
   {
     name: "get_event",
-    description: "Full detail for one event by id: description, time, location, Luma link, hosts, the guest list (who's going, with role/company/socials when known), and which contributors added it.",
+    description: "Full detail for one event by id: description, time, location, Luma link, hosts, the guest list (who's going, with role/company/socials when known), and which contributors added it. For events a contributor hosts/manages the roster is complete across statuses — a guest carries rsvp_status only when it isn't the default going/approved (i.e. pending, waitlisted, invited, or declined).",
     inputSchema: {
       type: "object",
       properties: { id: { type: "string", description: "the event id, as returned by list_events" } },
@@ -1623,6 +2114,18 @@ const MCP_TOOLS = [
     },
   },
   {
+    name: "mutual_events",
+    description: "Mutual events between a person and a contributor — the events that person is at which the contributor also fed into the pool (from their own feed or from the person's Luma profile fetch). Answers \"where do this contributor and this person cross paths\". Omit contributor for the person's events that overlap the pool at large. Also returns luma_event_together_count, Luma's own count of events they attended together (relative to the contributor whose session fetched the profile).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        person: { type: "string", description: "the person's name" },
+        contributor: { type: "string", description: "a contributor's label / cookie id / id prefix (optional; from list_contributors)" },
+      },
+      required: ["person"],
+    },
+  },
+  {
     name: "stats",
     description: "Overview of the pool: upcoming/past event counts, distinct people seen, and active contributors.",
     inputSchema: { type: "object", properties: {} },
@@ -1674,6 +2177,7 @@ async function mcpCallTool(d, name, args) {
         start_at: ev.start_at || null, end_at: ev.end_at || null,
         location: ev.location || null, url: ev.url || (ev.id ? "https://lu.ma/" + ev.id : null),
         status: ev.user_status || null,
+        vibe: ev.vibe || null, tags: ev.vibe_tags ? parseTags(ev.vibe_tags) : null,
       },
       hosts, going: guests.length, attendees: guests,
       contributors: contributors.map((c) => c.label),
@@ -1720,6 +2224,13 @@ async function mcpCallTool(d, name, args) {
     if (!a || !b) return { _error: "both a and b (person names) are required" };
     const out = await mcpSharedEvents(d, a, b);
     if (out._missing) return { _error: "no person matching \"" + out._missing + "\"" };
+    return out;
+  }
+  if (name === "mutual_events") {
+    const person = String(args.person || "").trim();
+    if (!person) return { _error: "person (a name) is required" };
+    const out = await mcpMutualEvents(d, person, args.contributor);
+    if (out._missing) return { _error: "no person or contributor matching \"" + out._missing + "\"" };
     return out;
   }
   if (name === "stats") {
@@ -1819,14 +2330,18 @@ export async function handleSerendipity(request, env, ctx) {
 
   // any mutation (sync / enrich / contribute) invalidates the cached dashboard
   if (request.method === "POST" &&
-      (path === `${PREFIX}/sync` || path === `${PREFIX}/sync-descriptions` ||
-       path === `${PREFIX}/enrich` || path === `${PREFIX}/cookies` || path === `${PREFIX}/add-event`)) {
+      (path === `${PREFIX}/sync` || path === `${PREFIX}/sync-descriptions` || path === `${PREFIX}/sync-guests` ||
+       path === `${PREFIX}/sync-profiles` || path === `${PREFIX}/vibe` || path === `${PREFIX}/enrich` ||
+       path === `${PREFIX}/cookies` || path === `${PREFIX}/add-event`)) {
     ctx.waitUntil(caches.default.delete(dashKey));
   }
 
   // secret-gated triggers (admin/cron): pull from cookies + Exa-enrich attendees
   if (request.method === "POST" && path === `${PREFIX}/sync`) return handleSync(request, env, d);
   if (request.method === "POST" && path === `${PREFIX}/sync-descriptions`) return handleSyncDescriptions(request, env, d);
+  if (request.method === "POST" && path === `${PREFIX}/sync-guests`) return handleSyncGuests(request, env, d);
+  if (request.method === "POST" && path === `${PREFIX}/sync-profiles`) return handleSyncProfiles(request, env, d);
+  if (request.method === "POST" && path === `${PREFIX}/vibe`) return handleVibe(request, env, d);
   if (request.method === "POST" && path === `${PREFIX}/enrich`) return handleEnrich(request, env, d);
 
   // same-origin cover proxy (resizes via cf.image) — early return, no uid cookie

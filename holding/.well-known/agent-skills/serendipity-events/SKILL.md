@@ -29,12 +29,16 @@ database).
   browsing a Luma feed (second-class, no roster). By default it returns only
   the RSVP'd events plus a `discovered_hidden` count; pass `rsvp: "all"` to
   include the browsed ones (first-class first) or `rsvp: "discovered"` for only
-  them. Each event carries `attending` (bool) + `rsvp` (raw status). Args:
+  them. Each event carries `attending` (bool) + `rsvp` (raw status), plus a
+  `vibe` (a one-line characterization) and `tags` (crowd / domain / format) once
+  it has been characterized from its description and who is coming. Args:
   `when` (`upcoming` | `past` | `all`, default `upcoming`), `rsvp`
   (`going` | `all` | `discovered`, default `going`), `q` (filter on name,
   location, or contributor), `limit`.
-- `get_event` returns one event in full: description, hosts, the guest list (who
-  is going), and which contributors added it. Args: `id` (from `list_events`).
+- `get_event` returns one event in full: description, `vibe` + `tags`, hosts, the
+  guest list (who is going, each with an `rsvp_status` when it is not the default
+  going/approved — for events a contributor hosts the roster spans all statuses),
+  and which contributors added it. Args: `id` (from `list_events`).
 - `search_people` finds people by name. It returns role, company, and socials
   when known, plus their events split into `going_to` (upcoming) and `been_to`
   (past). Args: `q`, `limit`.
@@ -52,6 +56,11 @@ database).
   is seeing who), with shared counts and event names. Args: `min_shared`, `limit`.
 - `shared_events` takes two people by name and returns the events they both
   attended. Args: `a`, `b`.
+- `mutual_events` takes a person and (optionally) a contributor and returns the
+  events that person is at which the contributor also fed into the pool — "where
+  do we cross paths with them". It also returns `luma_event_together_count`,
+  Luma's own count of events they attended together. Args: `person`,
+  `contributor` (optional). Omit `contributor` for overlap with the whole pool.
 - `stats` returns a pool overview: event counts, distinct people, contributors.
 
 ## Typical flow
