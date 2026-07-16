@@ -3,6 +3,7 @@
 // and PREFIX tables below mirror wrangler.jsonc's allowlist one-to-one; keep
 // them in sync or a route silently goes static. Map in MAINTENANCE.md.
 
+import { WorkerEntrypoint } from "cloudflare:workers";
 import { handleAgentAuthClaim, handleAgentAuthRegister, handleAgentAuthRevoke, handleAgentAuthToken } from "./agent.js";
 import { cronAround, handleAround, handleAroundJson } from "./around.js";
 import { handleBotPage } from "./bot.js";
@@ -28,55 +29,111 @@ import { handleLlmsFull } from "./x402.js";
 // must be a named export of the entry so the COUNTER binding can resolve it.
 export { Counter } from "./counter.js";
 
+// Workers Cache only fronts responses whose route contract is already public
+// and reusable. Keep the default export as an uncached gateway: it handles the
+// homepage, mutations, per-visitor views, and arbitrary inspection targets.
+// Query strings are excluded deliberately so owner bust tokens and future
+// query-bearing features cannot accidentally become shared cache keys.
+const WORKERS_CACHEABLE_PATHS = new Set([
+  "/favicon.ico",
+  "/auth.md",
+  "/.well-known/api-catalog",
+  "/.well-known/agent-card.json",
+  "/.well-known/oauth-protected-resource",
+  "/.well-known/oauth-authorization-server",
+  "/reading",
+  "/updates",
+  "/updates.json",
+  "/restore",
+  "/lens",
+  "/ledger",
+  "/writing",
+  "/bot",
+  "/around",
+  "/around/json",
+  "/photos",
+  "/rn/tracks",
+  "/rn/tracks.html",
+  "/images/manifest.json",
+  "/images/metadata.json",
+]);
+
+function shouldUseWorkersCache(request) {
+  if (request.method !== "GET" && request.method !== "HEAD") return false;
+  if (request.headers.has("range") || request.headers.has("if-none-match")) return false;
+  const url = new URL(request.url);
+  if (url.search) return false;
+  if (WORKERS_CACHEABLE_PATHS.has(url.pathname)) return true;
+  return url.pathname.startsWith("/writing/")
+    || url.pathname.startsWith("/images/full/")
+    || url.pathname.startsWith("/images/meta/");
+}
+
+async function serveWorkerRequest(request, env, ctx) {
+  const url = new URL(request.url);
+
+  if (url.hostname.endsWith(".pages.dev")) {
+    const target = `https://${CANONICAL_HOST}${url.pathname}${url.search}`;
+    return new Response(null, {
+      status: 301,
+      headers: {
+        "location":      target,
+        "cache-control": "public, max-age=3600",
+      },
+    });
+  }
+
+  // SELF_FETCH — how /lens reads our own hostname without lying about it.
+  // A plain fetch("https://aadhar.sh/") from inside this worker loops back
+  // through the edge and dies as a 522; serving env.ASSETS instead returns the
+  // PRE-enhancement static skeleton (wrong bytes, empty photo grid, zero alt
+  // text), which a page whose whole claim is "what the server actually sent
+  // back" must not show. Dispatching through route() yields the real response.
+  // SELF_FETCH is nulled one level down, so a lens pointed at /lens/fetch
+  // resolves once and cannot recurse.
+  const selfEnv = {
+    ...env,
+    SELF_FETCH: async (req) =>
+      withSecurityHeaders(await route(req, { ...env, SELF_FETCH: null }, ctx)),
+  };
+
+  // Workers Logs: one structured line per worker-owned request (path, method,
+  // status, ms, country, bot), filterable in the dashboard. Edge-direct traffic
+  // never reaches this code, so it never logs. Strippable: delete the wrapper,
+  // keep `return withSecurityHeaders(await route(...))`.
+  const t0 = Date.now();
+  const response = await route(request, selfEnv, ctx);
+  // the bot ledger: identified AI-crawler hits tick into Analytics Engine
+  // (worker-owned routes only); /ledger prices them. Best-effort, non-blocking.
+  countCrawlerHit(env, request, response, url.pathname);
+  try {
+    console.log(JSON.stringify({
+      p: url.pathname,
+      m: request.method,
+      s: response.status,
+      ms: Date.now() - t0,
+      co: request.cf?.country,
+      bot: request.cf?.botManagement?.verifiedBot || undefined,
+    }));
+  } catch {}
+  return withSecurityHeaders(response);
+}
+
+// The named entrypoint is the only one configured to consult Workers Cache in
+// production. A cache hit returns before this method runs; a miss gets the
+// exact same dispatcher, security headers, and observability as the gateway.
+export class CachedPages extends WorkerEntrypoint {
+  async fetch(request) {
+    return serveWorkerRequest(request, this.env, this.ctx);
+  }
+}
+
 export default {
   async fetch(request, env, ctx) {
-    const url = new URL(request.url);
-
-    if (url.hostname.endsWith(".pages.dev")) {
-      const target = `https://${CANONICAL_HOST}${url.pathname}${url.search}`;
-      return new Response(null, {
-        status: 301,
-        headers: {
-          "location":      target,
-          "cache-control": "public, max-age=3600",
-        },
-      });
+    if (shouldUseWorkersCache(request) && ctx.exports?.CachedPages) {
+      return ctx.exports.CachedPages.fetch(request);
     }
-
-    // SELF_FETCH — how /lens reads our own hostname without lying about it.
-    // A plain fetch("https://aadhar.sh/") from inside this worker loops back
-    // through the edge and dies as a 522; serving env.ASSETS instead returns the
-    // PRE-enhancement static skeleton (wrong bytes, empty photo grid, zero alt
-    // text), which a page whose whole claim is "what the server actually sent
-    // back" must not show. Dispatching through route() yields the real response.
-    // SELF_FETCH is nulled one level down, so a lens pointed at /lens/fetch
-    // resolves once and cannot recurse.
-    const selfEnv = {
-      ...env,
-      SELF_FETCH: async (req) =>
-        withSecurityHeaders(await route(req, { ...env, SELF_FETCH: null }, ctx)),
-    };
-
-    // Workers Logs: one structured line per worker-owned request (path, method,
-    // status, ms, country, bot), filterable in the dashboard. Edge-direct traffic
-    // never reaches this code, so it never logs. Strippable: delete the wrapper,
-    // keep `return withSecurityHeaders(await route(...))`.
-    const t0 = Date.now();
-    const response = await route(request, selfEnv, ctx);
-    // the bot ledger: identified AI-crawler hits tick into Analytics Engine
-    // (worker-owned routes only); /ledger prices them. Best-effort, non-blocking.
-    countCrawlerHit(env, request, response, url.pathname);
-    try {
-      console.log(JSON.stringify({
-        p: url.pathname,
-        m: request.method,
-        s: response.status,
-        ms: Date.now() - t0,
-        co: request.cf?.country,
-        bot: request.cf?.botManagement?.verifiedBot || undefined,
-      }));
-    } catch {}
-    return withSecurityHeaders(response);
+    return serveWorkerRequest(request, env, ctx);
   },
 
   // cron (wrangler.jsonc "triggers"): the /around crawl runs here, per

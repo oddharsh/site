@@ -39,10 +39,11 @@ const SHELL_BUDGET = {
   "lens-browser.js": 8_000,
   "luna.css": 40_000,
 };
-// The readiness probes add a bounded server-side envelope and bot matrix, and
-// HTML negotiation adds a no-script fragment contract. Browser Run adds one
-// binding-backed snapshot route; the merged Worker measures 77.61 KiB gzip,
-// so 78 KiB leaves a small allowance without making the feature budget vague.
+// The readiness probes add a bounded server-side envelope and bot matrix, HTML
+// negotiation adds a no-script fragment contract, and CachedPages adds a named
+// Workers Cache entrypoint without a separate Worker. The merged Worker now
+// sits at the 78 KiB ceiling; further runtime features need to replace bytes,
+// not simply add to the bundle.
 const BUNDLE_GZIP_KIB = 78;
 const TWINS = ["nav.src.js", "notepad.src.js", "lens.src.js", "lens-browser.src.js", "luna.src.css"];
 
