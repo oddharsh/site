@@ -401,21 +401,40 @@
     return { text: "missing", kind: "off" };
   }
 
+  // ONE source of truth for whether a counterfactual's surface is already published,
+  // read off the SAME data.readiness.checks the projection scores against. deltaView
+  // used to HARDCODE authority (and receipt) as never-observed while readinessProjection
+  // read authority from the oauth checks, so a scan of aadhar.sh (which ships
+  // /.well-known/oauth-protected-resource) showed "Delegated authority" as missing in the
+  // Delta view and present in the Readiness tab at once. markdown/contract/authority now
+  // derive from these checks in both places; semantic has no single readiness check (it is
+  // computed from structured data) and receipt has no probe backing it yet.
+  var CF_MAP = {
+    markdown:  { checks: ["markdownNegotiation"] },
+    contract:  { checks: ["apiCatalog"] },
+    authority: { checks: ["oauthProtectedResource", "oauthDiscovery", "authMd"] },
+  };
+  function cfObserved(key, checks) {
+    var m = CF_MAP[key];
+    checks = checks || {};
+    return !!(m && m.checks.some(function (n) { return checks[n] && checks[n].status === "pass"; }));
+  }
+
   function deltaView() {
     var s = data.structured || {};
     var d = data.discovery || {};
     var ag = data.agent || {};
     var st = ag.strategy || {};
+    var checks = (data.readiness && data.readiness.checks) || {};
     var jsonld = s.jsonld && s.jsonld.length > 0;
     var semantic = jsonld || (s.microdata && s.microdata.itemtypes && s.microdata.itemtypes.length) || (s.rdfa && s.rdfa.typeof && s.rdfa.typeof.length);
-    var action = st.action && st.action.length > 0;
-    var markdown = ag.mdNegotiation && ag.mdNegotiation.supported;
+    var action = st.action && st.action.length > 0;   // the agent strategy's action surface, for the evidence line below
     var cf = [
-      { key: "markdown", label: "Clean machine text", stage: "Read", observed: markdown, detail: "Serve a deliberate text/markdown representation from the same URL." },
-      { key: "semantic", label: "Entity schema", stage: "Understand", observed: semantic, detail: "Publish stable entities and properties a parser can validate." },
-      { key: "contract", label: "Action contract", stage: "Act", observed: action, detail: "Describe callable operations, parameters, and side effects." },
-      { key: "authority", label: "Delegated authority", stage: "Authorize", observed: false, detail: "Add a consent boundary with scopes and an explicit user approval." },
-      { key: "receipt", label: "A result receipt", stage: "Confirm", observed: false, detail: "Return a durable result with origin, time, and provenance." },
+      { key: "markdown", label: "Clean machine text", stage: "Read", observed: cfObserved("markdown", checks), detail: "Serve a deliberate text/markdown representation from the same URL." },
+      { key: "semantic", label: "Entity schema", stage: "Understand", observed: !!semantic, detail: "Publish stable entities and properties a parser can validate." },
+      { key: "contract", label: "Action contract", stage: "Act", observed: cfObserved("contract", checks), detail: "Describe callable operations, parameters, and side effects." },
+      { key: "authority", label: "Delegated authority", stage: "Authorize", observed: cfObserved("authority", checks), detail: "Add a consent boundary with scopes and an explicit user approval." },
+      { key: "receipt", label: "A result receipt", stage: "Confirm", observed: false, detail: "Return a durable result with origin, time, and provenance. No probe measures this surface yet, so it is always shown as a projection, never as observed." },
     ];
     var controls = '<div class="lx-cf-grid">' + cf.map(function (x) {
       var on = !!counterfactuals[x.key];
@@ -491,16 +510,20 @@
   }
 
   function readinessProjection(readiness) {
+    // same CF_MAP + cfObserved the Delta view uses, so "improvable here" means exactly
+    // "not observed by any of this key's checks" in both places. The primary check
+    // (checks[0]) is the one whose score we project adding.
+    var checks = readiness.checks || {};
     var direct = [
-      { key: "markdown", check: "markdownNegotiation", label: "Clean machine text" },
-      { key: "contract", check: "apiCatalog", label: "Action contract" },
-      { key: "authority", check: "oauthProtectedResource", label: "Delegated authority" },
+      { key: "markdown", label: "Clean machine text" },
+      { key: "contract", label: "Action contract" },
+      { key: "authority", label: "Delegated authority" },
     ];
-    var active = direct.filter(function (x) { return counterfactuals[x.key] && readiness.checks[x.check] && readiness.checks[x.check].status !== "pass"; });
+    var active = direct.filter(function (x) { return counterfactuals[x.key] && !cfObserved(x.key, checks); });
     if (!active.length) return null;
     var pass = readiness.passed;
     var counted = readiness.counted;
-    active.forEach(function (x) { if (readiness.checks[x.check].countInScore) pass++; });
+    active.forEach(function (x) { var c = checks[CF_MAP[x.key].checks[0]]; if (c && c.countInScore) pass++; });
     return { score: counted ? Math.round(pass / counted * 100) : readiness.overall, labels: active.map(function (x) { return x.label; }) };
   }
 

@@ -704,17 +704,40 @@
       ev.stopPropagation(); if (bd._iv) clearInterval(bd._iv); win.remove(); btn.remove(); delete ACC_OPEN[id];
     });
     var tb = win.querySelector(".tb");
+    // Same ProMotion discipline as initIconDrag / initDrag: the gesture writes
+    // TRANSFORM only (a pure compositor move, promoted by .axp-dragging's
+    // will-change) and commits the final left/top once, on release. Writing
+    // left/top per pointermove re-laid out this fixed window every frame — the
+    // judder those two drags were already rewritten to avoid. rAF batching would
+    // NOT help: pointermove is already frame-coalesced and getBoundingClientRect
+    // is read once at pointerdown, so there is no read/write thrash to defer; it
+    // would still force a layout per frame and diverge from the other two drags.
+    // .axp-acc is position:fixed, so viewport left/top and transform are the same
+    // coordinates, and it has no fixed-position descendants, so the transform's
+    // new containing block changes nothing.
     tb.addEventListener("pointerdown", function (e) {
       if (e.target.closest(".x")) return;
       accFront(win);
       var r = win.getBoundingClientRect(), sx = e.clientX, sy = e.clientY, ox = r.left, oy = r.top;
+      var nx = ox, ny = oy;
       try { tb.setPointerCapture(e.pointerId); } catch (er) {}
+      win.classList.add("axp-dragging");   // earn-it: will-change on for the gesture, off on drop
       function mv(ev) {
-        win.style.left = Math.max(0, Math.min(innerWidth - 40, ox + ev.clientX - sx)) + "px";
-        win.style.top = Math.max(0, Math.min(innerHeight - 36, oy + ev.clientY - sy)) + "px";
+        nx = Math.max(0, Math.min(innerWidth - 40, ox + ev.clientX - sx));
+        ny = Math.max(0, Math.min(innerHeight - 36, oy + ev.clientY - sy));
+        win.style.transform = "translate(" + (nx - ox) + "px," + (ny - oy) + "px)";
       }
-      function up() { tb.removeEventListener("pointermove", mv); tb.removeEventListener("pointerup", up); }
-      tb.addEventListener("pointermove", mv); tb.addEventListener("pointerup", up);
+      function up() {
+        win.style.left = nx + "px"; win.style.top = ny + "px";
+        win.style.transform = "";
+        win.classList.remove("axp-dragging");
+        tb.removeEventListener("pointermove", mv);
+        tb.removeEventListener("pointerup", up);
+        tb.removeEventListener("pointercancel", up);   // a cancelled gesture otherwise leaks mv + strands the drag
+      }
+      tb.addEventListener("pointermove", mv);
+      tb.addEventListener("pointerup", up);
+      tb.addEventListener("pointercancel", up);
     });
   }
   function buildClock(bd) {

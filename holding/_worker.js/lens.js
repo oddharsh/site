@@ -1234,10 +1234,18 @@ export function lensDetectWebmcp(html) {
 // shape — SPAs answer 200 text/html for every path, and that must read as
 // absent, not present. And a probe that never answered reads as UNKNOWN,
 // not absent — same honesty rule as the robots.txt tier.
+// One predicate for "this probe never actually answered the question", shared by
+// both JSON interpreters below so they cannot disagree. lensProbe only sets .error
+// when the fetch THROWS; a reachable-but-broken origin returns { ok:false, status:503 }
+// with no error, which is still not an answer. (429 stays a definitive negative here,
+// matching the door tier; revisit if rate-limited probes need their own "unknown".)
+function lensProbeUnanswered(probe) {
+  return !probe || !!probe.error || !!(probe.status && probe.status >= 500);
+}
+
 function lensJsonDoor(probe, validate, label) {
   if (!probe || !probe.ok) {
-    const unknown = !probe || !!probe.error || (probe.status && probe.status >= 500);
-    return { present: false, status: probe ? probe.status : null, unknown };
+    return { present: false, status: probe ? probe.status : null, unknown: lensProbeUnanswered(probe) };
   }
   let j = null;
   try { j = JSON.parse(probe.body); } catch (_e) { return { present: false, note: "answered, but not JSON (SPA fallback?)" }; }
@@ -1340,7 +1348,10 @@ const LENS_READINESS_CATEGORIES = [
 ];
 
 function lensJsonShape(probe, validate) {
-  if (!probe || probe.error) return { status: "unknown", detail: "probe did not answer" };
+  // same "did it answer?" rule as lensJsonDoor: a 5xx origin did NOT answer, so it is
+  // unknown, not a definitive fail (this used to call a reachable-but-broken 503 a fail,
+  // undercounting webBotAuth / the oauth checks that route through here).
+  if (lensProbeUnanswered(probe)) return { status: "unknown", detail: probe && probe.status ? "HTTP " + probe.status + " — probe did not answer" : "probe did not answer" };
   if (!probe.ok) return { status: "fail", detail: "HTTP " + (probe.status || "error") };
   try {
     const json = JSON.parse(probe.body || "");
