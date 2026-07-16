@@ -62,7 +62,7 @@ const ROUTES = [
   { path: "/updates.json", status: 200, ct: "application/json" },
   { path: "/restore", status: 200, ct: "text/html" },
   { path: "/lens", status: 200, ct: "text/html", marker: "The Other Web", fullPage: true },
-  { path: "/lens/", status: 200, ct: "text/html" },
+  { path: "/lens/", status: 301 },   // slashless canonical: routeDropSlash 301s to /lens
   { path: "/lens.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "replaceState" },
   { path: "/luna.css", status: 200, ct: "text/css", marker: "axp-desktop", maxBytes: isProd ? 45000 : undefined },
   // the retired SW's unregister stub: must keep serving 200 for a year+
@@ -80,13 +80,13 @@ const ROUTES = [
   // Representation contracts: the machine paths stay fixed even if a caller
   // sends a browser Accept header; the HTML paths are explicit fragments.
   { path: "/lens/fetch?url=https://example.com", status: 200, ct: "application/json", headers: { accept: "text/html" } },
-  { path: "/lens/fragment?url=https://example.com", status: 200, ct: "text/html", marker: "id=\"lx-fragments\"", fragment: true, fragmentRoot: "id=\"lx-fragments\"" },
   { path: "/lens/shot?url=https://example.com", status: [200, 503], flaky: true },
   // 200 text/plain when the x402 gate is unconfigured; 402 json once X402_PAY_TO is set
   { path: "/llms-full.txt", status: [200, 402], ct: ["text/plain", "application/json"] },
   { path: "/ledger", status: 200, ct: "text/html", marker: "Crawl Ledger" },
   { path: "/ledger.json", status: 200, ct: "application/json" },
   { path: "/writing", status: 200, ct: "text/html" },
+  { path: "/writing/", status: 301 },   // routeDropSlash 301s to /writing
   { path: `/writing/${SLUG}`, status: 200, ct: "text/html" },
   { path: `/writing/${SLUG}.txt`, status: 200, ct: "text/plain" },
   { path: "/writing/posts.json", status: 200, ct: "application/json" },
@@ -115,13 +115,16 @@ const ROUTES = [
   { path: `/images/${THUMB}`, status: 301 },
   ...(HASHED ? [{ path: HASHED, status: 200, ct: "image/avif" }] : []),
   // static section pages that are already URL-skeuomorphic (must not regress)
-  { path: "/garage/", status: 200, ct: "text/html" },
+  { path: "/garage", status: 200, ct: "text/html" },
+  { path: "/garage/", status: [301, 307, 308] },   // drop-trailing-slash: /garage serves, /garage/ redirects
   { path: "/garage/scroll", status: 200, ct: "text/html" },
   { path: "/garage/workers", status: 200, ct: "text/html", marker: "run_worker_first" },
   { path: "/garage/wire", status: 200, ct: "text/html", marker: "x-edge-cache" },
   { path: "/garage/blueprint", status: 200, ct: "text/html", marker: "run_worker_first" },
   { path: "/garage/gpt56", status: 200, ct: "text/html", marker: "5.6 Sol" },
   { path: "/garage/enc/z-jl90.jpg", status: 200, ct: "image/jpeg" },
+  { path: "/lwe", status: 200, ct: "text/html" },
+  { path: "/lwe/", status: [301, 307, 308] },   // drop-trailing-slash
   { path: "/lwe/utf8", status: 200, ct: "text/html" },
 ];
 

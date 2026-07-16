@@ -10,6 +10,21 @@ export async function serveFreshAsset(request, env, contentType) {
   const u = new URL(request.url);
   u.searchParams.set("__r", Date.now().toString(36));
   const res = await env.ASSETS.fetch(new Request(u.toString(), { headers: request.headers }));
+  // A miss must not wear the success content-type or the 300s shared TTL: an agent
+  // parsing /.well-known/agent-card.json deserves an honest 404 rather than a body
+  // that says "not found" under `application/json`, and pinning that miss at the
+  // edge for 5 minutes would outlive the deploy that restores the file. Same clamp
+  // the serveAssetWith404Clamp sibling below applies.
+  if (res.status === 404) {
+    try { await res.body?.cancel(); } catch {}
+    return new Response("not found", {
+      status: 404,
+      headers: {
+        "content-type":  "text/plain; charset=utf-8",
+        "cache-control": "public, max-age=0, must-revalidate",
+      },
+    });
+  }
   const headers = new Headers(res.headers);
   if (contentType) headers.set("content-type", contentType);
   headers.set("cache-control", "public, max-age=0, must-revalidate, s-maxage=300");

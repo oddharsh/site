@@ -3,6 +3,7 @@
 import { BOT_UA, SIG_AGENT, signRequestForWebBotAuth } from "./lib/botauth.js";
 import { cachedRender } from "./lib/cache.js";
 import { CANONICAL_HOST } from "./lib/const.js";
+import { lensParseRobots, lensPathMatch, lensRobotsVerdict } from "./lib/robots.js";
 import { lunaPage } from "./lib/chrome.js";
 import { escAttr, escHtml, jsonResponse } from "./lib/http.js";
 
@@ -65,6 +66,7 @@ function lensScriptJson(value) {
 function lensHttpText(status) {
   if (status >= 200 && status < 300) return "OK";
   if (status >= 300 && status < 400) return "redirect";
+  if (status === 402) return "Payment Required";   // the x402 chip's whole point; a bare "client error" is the least useful label for the demo the page ships to showcase 402
   if (status === 404) return "Not Found";
   if (status >= 400 && status < 500) return "client error";
   if (status >= 500) return "server error";
@@ -142,13 +144,6 @@ function lensStatusFragment(data, state) {
     '<span style="margin-left:auto">fetched as ' + escHtml(data.fetchedBy || "identified bot") + "</span>";
 }
 
-export function renderLensFragments(data, state) {
-  return '<div id="lx-fragments" data-lens-fragments="1">' +
-    '<div data-lens-part="human">' + lensHumanFragment(data) + "</div>" +
-    '<div data-lens-part="machine">' + lensMachineFragment(data, state) + "</div>" +
-    '<div data-lens-part="status">' + lensStatusFragment(data, state) + "</div>" +
-    '<script type="application/json" id="lx-initial-data">' + lensScriptJson(data) + "</script></div>";
-}
 
 async function inspectLensRequest(request, env, ctx) {
   const v = validateLensTarget(new URL(request.url).searchParams.get("url") || "");
@@ -172,7 +167,9 @@ async function inspectLensRequest(request, env, ctx) {
 }
 
 export function renderLensShell(initial, state, inputValue) {
-  state = state || { view: "both", lens: "anatomy", counterfactuals: {} };
+  // defaults must match the client (lens.js) and lensState(), or a plain /lens
+  // SSRs one tab and the deferred script silently flips to another on hydrate.
+  state = state || { view: "both", lens: "readiness", counterfactuals: { markdown: false, semantic: false, contract: false, authority: false, receipt: false } };
   const seeded = initial && initial.ok;
   const value = inputValue || (seeded ? initial.finalUrl || initial.url : "");
   const humanHeader = seeded && !initial.framable
@@ -421,7 +418,7 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
 `,
     // The shell is cached at the edge and browsers cache static scripts too;
     // version the client URL so a fresh shell cannot pair with an older lens.js.
-    scripts: `<script src="/lens.js?v=4" defer></script>`,
+    scripts: `<script src="/lens.js?v=5" defer></script>`,   // BUMP on every holding/lens.js change: the shell is no-store but the script is cached, so a stale token pairs a fresh shell with an old script
     cache: "public, max-age=60, s-maxage=300",
     headers: {
       "x-robots-tag": "noindex",
@@ -445,21 +442,6 @@ export async function handleLensFetch(request, env, ctx) {
   return jsonResponse(result.payload, result.status);
 }
 
-// /lens/fragment?url=… → browser-facing hypermedia fragment. It is a partial
-// response by path, never a second representation selected by Accept.
-export async function handleLensFragment(request, env, ctx) {
-  const url = new URL(request.url);
-  const result = await inspectLensRequest(request, env, ctx);
-  return new Response(renderLensFragments(result.payload, lensState(url)), {
-    status: result.status,
-    headers: {
-      "content-type": "text/html; charset=utf-8",
-      "cache-control": "no-store, must-revalidate",
-      "x-content-type-options": "nosniff",
-      "x-robots-tag": "noindex",
-    },
-  });
-}
 
 // /lens/shot?url=… → a faithful PNG of the page, rendered by Cloudflare
 // Browser Rendering (real headless Chrome, server-side). The Human view uses
@@ -649,6 +631,18 @@ export async function lensInspect(targetUrl, env) {
     catch { return null; }
   })();
   if (origin) {
+    // Scanning our OWN /lens route is a fan-out trap. SELF_FETCH dispatches each probe
+    // back through route() into handleLens, and every one of those re-runs a COMPLETE
+    // inspection of the inner ?url= target: the main fetch, plus markdown negotiation,
+    // plus six bot identities = 8 full nested scans inside one invocation. SELF_FETCH
+    // nulls itself one level down, so DEPTH was already bounded; this bounds the WIDTH.
+    // Neither probe says anything meaningful about the lens itself anyway.
+    const selfLens = (() => {
+      try {
+        const u = new URL(finalUrl);
+        return u.hostname.toLowerCase() === CANONICAL_HOST && /^\/lens(\/|$)/.test(u.pathname);
+      } catch { return false; }
+    })();
     const [robots, sitemap, llms, llmsFull, aiTxt, secTxt, tdmrep, agentCard, openapi, aiPlugin, apiCatalog, mcp, nlweb, mdNego, webBotAuth, openidConfig, oauthServer, oauthResource, authMd, mcpServerCard, agentSkills, ucp, acp, ap2, dnsAid, botViews] = await Promise.all([
       lensProbe(origin + "/robots.txt", env), lensProbe(origin + "/sitemap.xml", env),
       lensProbe(origin + "/llms.txt", env), lensProbe(origin + "/llms-full.txt", env),
@@ -660,7 +654,7 @@ export async function lensInspect(targetUrl, env) {
       lensProbe(origin + "/.well-known/api-catalog", env),
       lensProbeMcp(origin, env),
       lensProbeNlweb(origin, env),
-      isHtml ? lensProbeMdNego(finalUrl, env) : Promise.resolve(null),
+      isHtml && !selfLens ? lensProbeMdNego(finalUrl, env) : Promise.resolve(null),
       lensProbe(origin + "/.well-known/http-message-signatures-directory", env),
       lensProbe(origin + "/.well-known/openid-configuration", env),
       lensProbe(origin + "/.well-known/oauth-authorization-server", env),
@@ -672,7 +666,7 @@ export async function lensInspect(targetUrl, env) {
       lensProbe(origin + "/.well-known/acp.json", env),
       lensProbe(origin + "/.well-known/ap2", env),
       lensProbeDnsAid(new URL(finalUrl).hostname),
-      lensProbeBotViews(finalUrl, env),
+      selfLens ? Promise.resolve([]) : lensProbeBotViews(finalUrl, env),
     ]);
     const feeds = (out.structured?.relLinks || []).filter((l) =>
       /alternate/.test(l.rel) && /(rss|atom|feed|\+xml|\+json)/i.test((l.type || "") + " " + (l.href || "")));
@@ -835,7 +829,10 @@ export async function lensProbeBotView(targetUrl, env, profile) {
       key: profile.key, label: profile.label, owner: profile.owner, userAgent: profile.ua,
       status: res.status, contentType, sampleBytes: cap.text.length,
       blocked: challenge || [401, 403, 406, 429, 451].includes(res.status), challenge,
-      redirected: res.url !== targetUrl,
+      // res.url is "" for a same-origin response built inside the worker (SELF_FETCH /
+      // ASSETS), so `res.url !== targetUrl` reported redirected:true for every bot on any
+      // aadhar.sh scan. Fall back to targetUrl, matching lensInspect's `res.url || targetUrl`.
+      redirected: (res.url || targetUrl) !== targetUrl,
     };
   } catch (e) {
     return { key: profile.key, label: profile.label, owner: profile.owner, userAgent: profile.ua, status: null, contentType: "", sampleBytes: 0, blocked: false, challenge: false, error: (e && e.message) || String(e) };
@@ -1001,64 +998,10 @@ const LENS_BOTS = [
 // robots.txt → { groups: [{agents, rules, signal}], sitemaps }. Groups follow
 // RFC 9309: consecutive User-agent lines share one group; Content-Signal
 // (contentsignals.org) rides along as a group-level directive.
-export function lensParseRobots(txt) {
-  const groups = [], sitemaps = [];
-  let cur = null, inAgents = false;
-  for (const raw of String(txt || "").split(/\r?\n/)) {
-    const line = raw.replace(/#.*$/, "").trim();
-    if (!line) continue;
-    const i = line.indexOf(":");
-    if (i < 0) continue;
-    const key = line.slice(0, i).trim().toLowerCase();
-    const val = line.slice(i + 1).trim();
-    if (key === "user-agent") {
-      if (!inAgents) { cur = { agents: [], rules: [], signal: null }; groups.push(cur); }
-      cur.agents.push(val.toLowerCase());
-      inAgents = true;
-      continue;
-    }
-    inAgents = false;
-    if (key === "sitemap") { sitemaps.push(val); continue; }
-    if (!cur) continue;
-    if (key === "allow" || key === "disallow") cur.rules.push({ allow: key === "allow", pattern: val });
-    else if (key === "content-signal") cur.signal = val;
-  }
-  return { groups, sitemaps };
-}
-
-// RFC 9309 evaluation for one bot: the group with the longest user-agent token
-// that prefixes the bot's product token wins ('*' only as fallback), then the
-// longest matching path rule; Allow beats Disallow on a length tie.
-export function lensRobotsVerdict(parsed, botUa, path) {
-  const token = botUa.toLowerCase();
-  let bestUa = null;
-  for (const g of parsed.groups) for (const ua of g.agents) {
-    if (ua !== "*" && token.startsWith(ua) && (bestUa === null || ua.length > bestUa.length)) bestUa = ua;
-  }
-  const matchedUa = bestUa ?? (parsed.groups.some((g) => g.agents.includes("*")) ? "*" : null);
-  if (matchedUa === null) return { verdict: "allow", matchedUa: null, rule: null, signal: null };
-  const chosen = parsed.groups.filter((g) => g.agents.includes(matchedUa));
-  let best = null;
-  for (const g of chosen) for (const r of g.rules) {
-    if (!r.pattern || !lensPathMatch(r.pattern, path)) continue; // empty Disallow: = no rule at all
-    if (!best || r.pattern.length > best.pattern.length || (r.pattern.length === best.pattern.length && r.allow && !best.allow)) best = r;
-  }
-  const signal = chosen.map((g) => g.signal).find(Boolean) || null;
-  return {
-    verdict: best && !best.allow ? "block" : "allow",
-    matchedUa,
-    rule: best ? (best.allow ? "Allow: " : "Disallow: ") + best.pattern : null,
-    signal,
-  };
-}
-
-// robots path patterns: '*' is a wildcard, a trailing '$' anchors the end.
-export function lensPathMatch(pattern, path) {
-  const anchored = pattern.endsWith("$");
-  const body = anchored ? pattern.slice(0, -1) : pattern;
-  const rx = "^" + body.split("*").map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join(".*") + (anchored ? "$" : "");
-  try { return new RegExp(rx).test(path); } catch { return path.startsWith(body.split("*")[0]); }
-}
+// robots.txt parsing + RFC 9309 evaluation moved to lib/robots.js (a second caller,
+// /around, now OBEYS these on the crawl). Imported above for local use here and
+// re-exported so every lens caller and the public export surface stay identical.
+export { lensParseRobots, lensPathMatch, lensRobotsVerdict };
 
 // "search=yes,ai-input=yes,ai-train=no" → { search: "yes", ... }
 export function lensParseContentSignal(raw) {
@@ -1238,10 +1181,18 @@ export function lensDetectWebmcp(html) {
 // shape — SPAs answer 200 text/html for every path, and that must read as
 // absent, not present. And a probe that never answered reads as UNKNOWN,
 // not absent — same honesty rule as the robots.txt tier.
+// One predicate for "this probe never actually answered the question", shared by
+// both JSON interpreters below so they cannot disagree. lensProbe only sets .error
+// when the fetch THROWS; a reachable-but-broken origin returns { ok:false, status:503 }
+// with no error, which is still not an answer. (429 stays a definitive negative here,
+// matching the door tier; revisit if rate-limited probes need their own "unknown".)
+function lensProbeUnanswered(probe) {
+  return !probe || !!probe.error || !!(probe.status && probe.status >= 500);
+}
+
 function lensJsonDoor(probe, validate, label) {
   if (!probe || !probe.ok) {
-    const unknown = !probe || !!probe.error || (probe.status && probe.status >= 500);
-    return { present: false, status: probe ? probe.status : null, unknown };
+    return { present: false, status: probe ? probe.status : null, unknown: lensProbeUnanswered(probe) };
   }
   let j = null;
   try { j = JSON.parse(probe.body); } catch (_e) { return { present: false, note: "answered, but not JSON (SPA fallback?)" }; }
@@ -1344,7 +1295,10 @@ const LENS_READINESS_CATEGORIES = [
 ];
 
 function lensJsonShape(probe, validate) {
-  if (!probe || probe.error) return { status: "unknown", detail: "probe did not answer" };
+  // same "did it answer?" rule as lensJsonDoor: a 5xx origin did NOT answer, so it is
+  // unknown, not a definitive fail (this used to call a reachable-but-broken 503 a fail,
+  // undercounting webBotAuth / the oauth checks that route through here).
+  if (lensProbeUnanswered(probe)) return { status: "unknown", detail: probe && probe.status ? "HTTP " + probe.status + " — probe did not answer" : "probe did not answer" };
   if (!probe.ok) return { status: "fail", detail: "HTTP " + (probe.status || "error") };
   try {
     const json = JSON.parse(probe.body || "");
@@ -1365,6 +1319,13 @@ export function lensReadiness({ headers, robots, sitemap, terms, discovery, agen
   const items = {};
   const robotsParsed = robots && robots.ok ? lensParseRobots(robots.body || "") : null;
   const robotsRules = robotsParsed && robotsParsed.groups.length > 0;
+  // Gate the "AI bot rules" STATUS on actually-named agents. Keying it on
+  // robotsRules (= "any User-agent group exists") passed a robots.txt carrying
+  // nothing but `User-agent: *` on a check whose own fix copy says to declare
+  // explicit GPTBot/ClaudeBot/CCBot rules — this site scored that unearned pass on
+  // its own scan. The predicate already existed; it just lived in the detail string.
+  const namedAiRules = !!(robotsRules && robotsParsed.groups.some((g) =>
+    g.agents.some((a) => a !== "*" && /bot|crawler|extended|spider|anthropic|openai|claude/i.test(a))));
   const link = String((headers && headers.link) || "");
   const usefulLinks = (link.match(/rel\s*=\s*["']?(?:sitemap|alternate|service-doc|service-desc|api-catalog)/gi) || []).length;
   const botAuth = lensJsonShape(discovery && discovery.webBotAuth, (j) => Array.isArray(j.keys) && j.keys.length > 0);
@@ -1381,8 +1342,15 @@ export function lensReadiness({ headers, robots, sitemap, terms, discovery, agen
   items.sitemap = lensReadinessItem("sitemap", sitemap && sitemap.ok ? "pass" : sitemap && (sitemap.status === 404 || sitemap.status === 410) ? "fail" : "unknown", sitemap && sitemap.ok ? "sitemap answered with " + ((sitemap.body || "").match(/<url>|<sitemap>/gi) || []).length + " URL entries" : "sitemap.xml was not found or did not answer");
   items.linkHeaders = lensReadinessItem("linkHeaders", usefulLinks ? "pass" : "fail", usefulLinks ? usefulLinks + " agent-useful Link relation(s)" : "no agent-useful Link relations on the fetched response");
   items.dnsAid = lensReadinessItem("dnsAid", discovery && discovery.dnsAid && discovery.dnsAid.ok ? (discovery.dnsAid.found ? "pass" : "fail") : "unknown", discovery && discovery.dnsAid && discovery.dnsAid.found ? "DNS-AID record found" : "no DNS-AID record found at the checked discovery names");
-  items.markdownNegotiation = lensReadinessItem("markdownNegotiation", agent && agent.mdNegotiation && agent.mdNegotiation.supported ? "pass" : agent && agent.mdNegotiation && agent.mdNegotiation.note === "probe failed" ? "unknown" : "fail", agent && agent.mdNegotiation && agent.mdNegotiation.supported ? "same URL returned text/markdown" : "Accept: text/markdown stayed non-markdown");
-  items.robotsTxtAiRules = lensReadinessItem("robotsTxtAiRules", robots && robots.ok ? (robotsRules ? "pass" : "fail") : "unknown", robotsRules ? (robotsParsed.groups.some((g) => g.agents.some((a) => a !== "*" && /bot|crawler|extended|spider|anthropic|openai|claude/i.test(a))) ? "named AI bot rules found" : "wildcard rules apply to crawlers") : "robots policy could not be evaluated");
+  // A probe that never ran cannot be a "fail". lensProbeMdNego sets `note` ONLY when
+  // it produced no real answer ("probe failed", or "not probed (non-HTML target)");
+  // a genuine negative carries contentType/status and no note. Keying on the exact
+  // string "probe failed" let the not-probed case fall through to fail and then
+  // assert "Accept: text/markdown stayed non-markdown" about a request never sent —
+  // the same fabrication the agent-doors tier already refuses to make.
+  const mdNego = (agent && agent.mdNegotiation) || null;
+  items.markdownNegotiation = lensReadinessItem("markdownNegotiation", mdNego && mdNego.supported ? "pass" : mdNego && mdNego.note ? "unknown" : "fail", mdNego && mdNego.supported ? "same URL returned text/markdown" : mdNego && mdNego.note ? mdNego.note : "Accept: text/markdown stayed non-markdown");
+  items.robotsTxtAiRules = lensReadinessItem("robotsTxtAiRules", robots && robots.ok ? (namedAiRules ? "pass" : "fail") : "unknown", namedAiRules ? "named AI bot rules found" : robotsRules ? "wildcard rules apply to crawlers, no AI crawler is named" : "robots policy could not be evaluated");
   items.contentSignals = lensReadinessItem("contentSignals", terms && terms.robotsUnknown ? "unknown" : terms && terms.signals && terms.signals.length ? "pass" : "fail", terms && terms.signals && terms.signals.length ? terms.signals.length + " Content-Signal directive(s)" : "no Content-Signal directive found");
   items.webBotAuth = lensReadinessItem("webBotAuth", botAuth.status, botAuth.detail);
   items.apiCatalog = lensReadinessItem("apiCatalog", agent && agent.apiCatalog && agent.apiCatalog.present ? "pass" : agent && agent.apiCatalog && agent.apiCatalog.unknown ? "unknown" : "fail", agent && agent.apiCatalog && agent.apiCatalog.present ? agent.apiCatalog.detail : "no valid API Catalog linkset");
@@ -1412,7 +1380,10 @@ export function lensReadiness({ headers, robots, sitemap, terms, discovery, agen
   const strongPublishing = items.markdownNegotiation.status === "pass" && items.contentSignals.status === "pass" && items.linkHeaders.status === "pass";
   const baseline = items.robotsTxt.status === "pass" || items.sitemap.status === "pass";
   const level = actionSurface ? { number: 5, name: "Agent-Native" } : strongPublishing ? { number: 3, name: "Agent-Readable" } : baseline ? { number: 1, name: "Basic Web Presence" } : { number: 0, name: "Not Ready" };
-  const nextActions = Object.values(items).filter((item) => item.status === "fail" && item.countInScore).slice(0, 5).map((item) => ({ key: item.key }));
+  // ship the label with each action: LENS_READINESS_META already owns it, so the
+  // client should render it off the envelope rather than keep a second copy that
+  // silently wins and drifts when a label is renamed here.
+  const nextActions = Object.values(items).filter((item) => item.status === "fail" && item.countInScore).slice(0, 5).map((item) => ({ key: item.key, label: item.label }));
   return {
     overall, level: level.number, levelName: level.name,
     categories, checks: items, counted: counted.length, passed,

@@ -14,6 +14,7 @@
 // wrangler resolves `main` and `assets.directory` relative to the config file, so the
 // root wrangler.jsonc is copied verbatim into .build/ and just works against the copy.
 
+import { createHash } from "node:crypto";
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { transform } from "esbuild";
 
@@ -30,10 +31,12 @@ async function checkInvariants() {
   const read = (p) => readFile(p, "utf8");
   const hard = [], warn = [];
 
-  // 1 (hard) — every EXACT index.js ROUTES key is covered by the wrangler
-  // run_worker_first allowlist, or that route silently serves static. Globs
-  // and regex PREFIX are matched, never required literally (a symmetric diff
-  // would false-fire on the 13 glob entries — the exact disable-magnet).
+  // 1 (hard) — every index.js dispatch key is covered by the wrangler
+  // run_worker_first allowlist, or that route silently serves static. BOTH tables
+  // are checked: the exact ROUTES map, and the ordered PREFIX table (whose labels
+  // become a concrete probe path). Allowlist globs are matched as patterns, never
+  // required literally (a symmetric diff would false-fire on the glob entries —
+  // the exact disable-magnet).
   const idx = await read("holding/_worker.js/index.js");
   const wrangler = await read("wrangler.jsonc");
   const routesBlock = (idx.match(/const ROUTES = new Map\(\[([\s\S]*?)\]\);/) || [,""])[1];
@@ -43,6 +46,14 @@ async function checkInvariants() {
   const globRe = (g) => new RegExp("^" + g.replace(/[.]/g, "\\$&").replace(/\*/g, ".*") + "$");
   const covered = (p) => allow.includes(p) || allow.some((a) => a.includes("*") && globRe(a).test(p));
   for (const k of routeKeys) if (!covered(k)) hard.push(`ROUTES key ${k} is not in wrangler run_worker_first (route would silently serve static)`);
+
+  // the PREFIX table is the second dispatch surface and was never asserted, so a
+  // route like /writing/<slug> could lose its allowlist entry and quietly go static.
+  // Turn each label's placeholder into a path the glob matcher can actually test.
+  const prefixBlock = (idx.match(/const PREFIX = \[([\s\S]*?)\n\];/) || [, ""])[1];
+  const prefixProbes = [...prefixBlock.matchAll(/label:\s*"([^"]+)"/g)].map((m) =>
+    m[1].replace("<slug>", "x").replace("<stem>", "x").replace("<key>", "x").replace("<thumb>", "x.avif"));
+  for (const p of prefixProbes) if (!covered(p)) hard.push(`PREFIX route ${p} is not in wrangler run_worker_first (route would silently serve static)`);
 
   // 2 (hard) — wherever a worker emits a CSP with a style-src, it includes
   // 'self'. cal emits no CSP and passes vacuously (this is the exact thing that
@@ -121,9 +132,25 @@ async function checkInvariants() {
     if (diff.length) warn.push(`wrangler.jsonc and wrangler.dev.jsonc binding sets differ (${diff.join(", ")}) — keep the dev twin in sync`);
   } catch (e) { warn.push(`dev-config drift check could not run: ${e.message}`); }
 
+  // 7 (hard) — every agent-skills digest matches the file it points at. The
+  // discovery schema invites clients to verify these, so a stale digest doesn't
+  // read as "the author forgot": it reads as tampering, and the skill gets
+  // rejected. Editing SKILL.md without regenerating index.json already shipped
+  // that state once, so the check belongs on the one unbypassable deploy path.
+  let skillsChecked = 0;
+  try {
+    const idx = JSON.parse(await read("holding/.well-known/agent-skills/index.json"));
+    for (const s of idx.skills || []) {
+      const path = "holding" + new URL(s.url).pathname;
+      const actual = "sha256:" + createHash("sha256").update(await readFile(path)).digest("hex");
+      if (s.digest !== actual) hard.push(`agent-skills: ${s.name} digest is stale — index.json says ${s.digest.slice(0, 20)}…, ${path} hashes to ${actual.slice(0, 20)}… (regenerate index.json)`);
+      skillsChecked++;
+    }
+  } catch (e) { warn.push(`agent-skills digest check could not run: ${e.message}`); }
+
   if (warn.length) console.warn("build: invariant WARNINGS (deploy continues):\n  - " + warn.join("\n  - "));
   if (hard.length) throw new Error("build: invariant tripwires FAILED, deploy blocked:\n  - " + hard.join("\n  - "));
-  console.log(`invariants ok: ${routeKeys.length} routes mirrored, CSP style-src, blink-fix, generator, geometry${warn.length ? " (with warnings above)" : ""}`);
+  console.log(`invariants ok: ${routeKeys.length + prefixProbes.length} routes mirrored (${prefixProbes.length} prefix), CSP style-src, blink-fix, generator, geometry, ${skillsChecked} skill digest${skillsChecked === 1 ? "" : "s"}${warn.length ? " (with warnings above)" : ""}`);
 }
 
 // the shells to minify: [file, banner pointer, tripwire the minified output MUST contain]

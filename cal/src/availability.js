@@ -1,13 +1,19 @@
 // availability.js — read the host's calendar as an ICS feed, compute free
 // intervals within configured working hours, slice into bookable slots.
 //
-// ICS parsing here is intentionally minimal: we only care about DTSTART /
-// DTEND on VEVENT blocks to determine "busy". We don't handle every RFC 5545
-// edge case (RRULE expansion is partial, no VTIMEZONE expansion). For a
-// typical personal calendar this gets you 95% accuracy; if you keep recurring
-// events that span time zones with DST shifts, those edges may drift by ~1h
-// for one or two events near the shift. Worth knowing about; not worth
-// solving until it bites.
+// ICS parsing here reads DTSTART / DTEND on VEVENT blocks to determine "busy",
+// and EXPANDS recurring events (RRULE). The RRULE gap had teeth: Google/iCloud
+// secret-ICS feeds emit a standing weekly meeting as ONE VEVENT carrying its
+// RRULE, so seeing only the first occurrence meant every later week's slot looked
+// free and was bookable over a real meeting. We now expand FREQ=DAILY|WEEKLY|
+// MONTHLY|YEARLY with INTERVAL, COUNT, UNTIL, BYDAY (weekly), and honor EXDATE, out
+// to RRULE_HORIZON_DAYS and capped at RRULE_MAX_INSTANCES per rule.
+//
+// Known deviations, all on the SAFE side (fail-closed: over-block a slot, never
+// under-block one): occurrences step in whole UTC days, so a recurrence that
+// crosses a DST boundary can land ~1h off for occurrences past the shift; an RRULE
+// shape we cannot parse keeps just the base occurrence rather than dropping the
+// event; VTIMEZONE blocks are not expanded (TZID resolves through Intl instead).
 
 // ── calendar snapshot (stale-while-revalidate) ──────────────────────────────
 // The ICS upstream can be slow or briefly down, and the old fetchBusy() gated
@@ -69,20 +75,25 @@ function parseICS(text) {
   const unfolded = text.replace(/\r?\n[ \t]/g, "");
   const lines = unfolded.split(/\r?\n/);
 
+  const now = Date.now();
+  const windowStart = now - 2 * 86_400_000;                    // catch an in-progress recurrence
+  const windowEnd = now + RRULE_HORIZON_DAYS * 86_400_000;
+
   const busy = [];
   let inEvent = false;
-  let dtstart, dtend, status, transp;
+  let dtstart, dtend, status, transp, rrule, exdates;
 
   for (const line of lines) {
     if (line === "BEGIN:VEVENT") {
       inEvent = true;
-      dtstart = dtend = status = transp = undefined;
+      dtstart = dtend = status = transp = rrule = undefined;
+      exdates = new Set();
       continue;
     }
     if (line === "END:VEVENT") {
       // ignore cancelled events and events marked TRANSP:TRANSPARENT (free time)
       if (inEvent && dtstart && dtend && status !== "CANCELLED" && transp !== "TRANSPARENT") {
-        busy.push({ start: dtstart, end: dtend });
+        for (const iv of expandEvent(dtstart, dtend, rrule, exdates, windowStart, windowEnd)) busy.push(iv);
       }
       inEvent = false;
       continue;
@@ -98,8 +109,89 @@ function parseICS(text) {
     if (key === "DTEND")   dtend   = parseICSDate(value, params);
     if (key === "STATUS")  status  = value;
     if (key === "TRANSP")  transp  = value;
+    if (key === "RRULE")   rrule   = value;
+    // EXDATE can carry several comma-separated values, and repeat across lines
+    if (key === "EXDATE") for (const v of value.split(",")) { const t = parseICSDate(v, params); if (Number.isFinite(t)) exdates.add(t); }
   }
   return busy;
+}
+
+// how far out to expand recurrences, and a hard per-rule cap so a malformed RRULE
+// cannot hang or blow memory. The horizon comfortably exceeds MAX_LOOKAHEAD_DAYS
+// and is re-anchored to "now" on every snapshot refresh (fetchBusySWR).
+export const RRULE_HORIZON_DAYS = 120;
+export const RRULE_MAX_INSTANCES = 400;
+
+const DOW = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6 };
+const DAY_MS = 86_400_000;
+
+function addMonthsUTC(ms, n) { const d = new Date(ms); d.setUTCMonth(d.getUTCMonth() + n); return d.getTime(); }
+function addYearsUTC(ms, n)  { const d = new Date(ms); d.setUTCFullYear(d.getUTCFullYear() + n); return d.getTime(); }
+
+// Expand one VEVENT into busy intervals. A non-recurring event yields its single
+// interval; a recurring one yields every occurrence whose START falls within
+// [windowStart, windowEnd], each keeping the base DURATION, minus EXDATEs. An RRULE
+// we cannot parse yields just the base occurrence — over-block, never under-block.
+function expandEvent(dtstart, dtend, rrule, exdates, windowStart, windowEnd) {
+  const dur = dtend > dtstart ? dtend - dtstart : 0;
+  const iv = (start) => ({ start, end: start + dur });
+  const ex = exdates || new Set();
+  if (!rrule) return [iv(dtstart)];
+
+  const R = {};
+  for (const part of rrule.split(";")) { const i = part.indexOf("="); if (i > 0) R[part.slice(0, i).toUpperCase()] = part.slice(i + 1); }
+  const freq = (R.FREQ || "").toUpperCase();
+  const interval = Math.max(1, parseInt(R.INTERVAL, 10) || 1);
+  const count = R.COUNT ? parseInt(R.COUNT, 10) : null;
+  const until = R.UNTIL ? parseICSDate(R.UNTIL, "") : null;
+  if (["DAILY", "WEEKLY", "MONTHLY", "YEARLY"].indexOf(freq) === -1) return [iv(dtstart)];  // unknown FREQ → base only
+
+  const out = [];
+  let n = 0;   // occurrence index (counts toward COUNT even before the window)
+  // returns false when the series is exhausted (UTIL / COUNT / cap / past window)
+  const stop = (start) => (until && start > until) || (count != null && n >= count) || n >= RRULE_MAX_INSTANCES || start > windowEnd;
+  const emit = (start) => { if (!ex.has(start) && start >= windowStart && start <= windowEnd) out.push(iv(start)); n++; };
+
+  const byday = R.BYDAY ? R.BYDAY.split(",").map((s) => DOW[s.trim().slice(-2).toUpperCase()]).filter((x) => x != null).sort((a, b) => a - b) : null;
+
+  if (freq === "WEEKLY" && byday && byday.length) {
+    const weekSunday = dtstart - new Date(dtstart).getUTCDay() * DAY_MS;   // whole-day shift keeps time-of-day
+    // fast-forward whole blocks that end before the window, so a weekly meeting from
+    // long ago doesn't burn the instance budget before reaching today. n advances by
+    // one block's worth of occurrences so COUNT/cap stay roughly honest.
+    let block = 0;
+    if (windowStart > weekSunday + 6 * DAY_MS) {
+      block = Math.floor((windowStart - weekSunday) / (interval * 7 * DAY_MS));
+      n = block * byday.length;
+    }
+    for (; block < 100000; block++) {
+      const weekBase = weekSunday + block * interval * 7 * DAY_MS;
+      if (weekBase - 7 * DAY_MS > windowEnd) break;
+      for (const dow of byday) {
+        const occ = weekBase + dow * DAY_MS;
+        if (occ < dtstart) continue;      // before the series actually starts
+        if (stop(occ)) return out;
+        emit(occ);
+      }
+    }
+    return out;
+  }
+
+  const stepMs = freq === "DAILY" ? interval * DAY_MS : freq === "WEEKLY" ? interval * 7 * DAY_MS : 0;
+  const advance = (k) =>
+    freq === "MONTHLY" ? addMonthsUTC(dtstart, k * interval) :
+    freq === "YEARLY"  ? addYearsUTC(dtstart, k * interval) :
+                         dtstart + k * stepMs;
+  // fast-forward arithmetic freqs into the window (monthly/yearly steps are large,
+  // so from k=0 they reach the window in well under the cap even from years back).
+  let k = 0;
+  if (stepMs && windowStart > dtstart) { k = Math.floor((windowStart - dtstart) / stepMs); n = k; }
+  for (; ; k++) {
+    const occ = advance(k);
+    if (stop(occ)) break;
+    emit(occ);
+  }
+  return out;
 }
 
 // parse "20260512T143000Z" or "20260512T143000" or "20260512" → unix-ms.

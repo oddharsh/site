@@ -9,7 +9,7 @@ import { handleBotPage } from "./bot.js";
 import { handleHitSvg } from "./counter.js";
 import { homepageHeadResponse, serveHomepageWithPrerenderedTracks, serveMarkdown } from "./home.js";
 import { countCrawlerHit, handleLedger, handleLedgerJson } from "./ledger.js";
-import { handleLens, handleLensFetch, handleLensFragment, handleLensShot } from "./lens.js";
+import { handleLens, handleLensFetch, handleLensShot } from "./lens.js";
 import { serveAssetWith404Clamp, serveFreshAsset } from "./lib/assets.js";
 import { CANONICAL_HOST } from "./lib/const.js";
 import { wantsMarkdown } from "./lib/http.js";
@@ -43,12 +43,26 @@ export default {
       });
     }
 
+    // SELF_FETCH — how /lens reads our own hostname without lying about it.
+    // A plain fetch("https://aadhar.sh/") from inside this worker loops back
+    // through the edge and dies as a 522; serving env.ASSETS instead returns the
+    // PRE-enhancement static skeleton (wrong bytes, empty photo grid, zero alt
+    // text), which a page whose whole claim is "what the server actually sent
+    // back" must not show. Dispatching through route() yields the real response.
+    // SELF_FETCH is nulled one level down, so a lens pointed at /lens/fetch
+    // resolves once and cannot recurse.
+    const selfEnv = {
+      ...env,
+      SELF_FETCH: async (req) =>
+        withSecurityHeaders(await route(req, { ...env, SELF_FETCH: null }, ctx)),
+    };
+
     // Workers Logs: one structured line per worker-owned request (path, method,
     // status, ms, country, bot), filterable in the dashboard. Edge-direct traffic
     // never reaches this code, so it never logs. Strippable: delete the wrapper,
     // keep `return withSecurityHeaders(await route(...))`.
     const t0 = Date.now();
-    const response = await route(request, env, ctx);
+    const response = await route(request, selfEnv, ctx);
     // the bot ledger: identified AI-crawler hits tick into Analytics Engine
     // (worker-owned routes only); /ledger prices them. Best-effort, non-blocking.
     countCrawlerHit(env, request, response, url.pathname);
@@ -101,9 +115,8 @@ const ROUTES = new Map([
   ["/restore", handleSystemRestore],
 
   ["/lens", handleLens],
-  ["/lens/", handleLens],
+  ["/lens/", routeDropSlash],
   ["/lens/fetch", handleLensFetch],
-  ["/lens/fragment", handleLensFragment],
   ["/lens/shot", handleLensShot],
 
   // the x402 bot paywall: llms.txt's map is free, the full corpus costs $0.01
@@ -116,7 +129,7 @@ const ROUTES = new Map([
   ["/ledger.json", handleLedgerJson],
 
   ["/writing", handleWritingIndex],
-  ["/writing/", handleWritingIndex],
+  ["/writing/", routeDropSlash],
 
   ["/rn", handleRn],
   ["/rn/tracks", handleRnTracks],
@@ -222,6 +235,13 @@ function routeOAuthAuthorizationServer(request, env) {
 
 function routePhotosRedirect(_request, _env, _ctx, url) {
   return Response.redirect(url.origin + "/photos", 301);
+}
+
+// canonical URLs carry no trailing slash (sitemap + rel=canonical + llms.txt all
+// say so, and the asset layer's drop-trailing-slash agrees). A worker route's own
+// slashed twin 301s to the slashless form rather than serving a duplicate 200.
+function routeDropSlash(_request, _env, _ctx, url) {
+  return Response.redirect(url.origin + url.pathname.replace(/\/+$/, "") + url.search, 301);
 }
 
 function routeWritingPost(request, env, ctx, url) {

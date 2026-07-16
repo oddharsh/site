@@ -19,9 +19,15 @@
   "use strict";
   if (window.__axpNav) return; window.__axpNav = true;
   var D = document;
-  function withViewTransition(fn) {
+  // `types` tags a SAME-document transition so it doesn't inherit the
+  // cross-document window choreography. luna.css names every .window/.np-window
+  // `axp-window` and animates that name from UNTYPED ::view-transition-* rules, so
+  // an untyped ⌘K captured the page's unchanged window and minimized/restored it:
+  // the whole window visibly pulsed on every Run open/close. Passing
+  // ["axp-dialog"] lets luna.css cancel that animation for dialog transitions.
+  function withViewTransition(fn, types) {
     if (D.startViewTransition && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      return D.startViewTransition(fn);
+      return types ? D.startViewTransition({ update: fn, types: types }) : D.startViewTransition(fn);
     }
     return fn();
   }
@@ -64,14 +70,14 @@
     { label: "windows update", path: "/updates", hint: "what shipped lately: the deploy changelog as installed updates" },
     { label: "system restore", path: "/restore", hint: "scrub the site back through its real deploy history, backed by Cloudflare D1" },
     { label: "around", path: "/around", hint: "the crypto-VC neighborhood" },
-    { label: "garage", path: "/garage/", hint: "prototypes + experiments" },
+    { label: "garage", path: "/garage", hint: "prototypes + experiments" },
     { label: "serendipity", path: "/serendipity", hint: "events worth going to" },
     { label: "music", path: "/rn", hint: "what I'm listening to right now" },
     { label: "coffee", path: "/coffee", hint: "book a coffee / bagel" },
     { label: "writing", path: "/writing", hint: "notes, in flux — an editable notepad" },
     { label: "reading", path: "/reading", hint: "what I've been reading — saved to Curius, mirrored here" },
     { label: "lens", path: "/lens", hint: "the other web: see any URL the way a machine does — raw HTML, JSON-LD, llms.txt" },
-    { label: "learning with errors", path: "/lwe/", hint: "chat-style explainers + live demos" },
+    { label: "learning with errors", path: "/lwe", hint: "chat-style explainers + live demos" },
     // generated:lwe-pages:start
     { label: "lwe · fhe", path: "/lwe/fhe", hint: "fully homomorphic encryption, explained" },
     { label: "lwe · mpc", path: "/lwe/mpc", hint: "multi-party computation, honest majority and traitors" },
@@ -122,8 +128,8 @@
 
   // first-level subpages — the full-fledged "apps" pinned to the taskbar.
   var SUBPAGES = [
-    { label: "garage", path: "/garage/", hint: "prototypes + experiments" },
-    { label: "lwe", path: "/lwe/", hint: "chat-style explainers + live demos" },
+    { label: "garage", path: "/garage", hint: "prototypes + experiments" },
+    { label: "lwe", path: "/lwe", hint: "chat-style explainers + live demos" },
     { label: "writing", path: "/writing", hint: "notes, in flux: an editable notepad" },
     { label: "reading", path: "/reading", hint: "what I've been reading, from Curius" },
     { label: "serendipity", path: "/serendipity", hint: "events worth going to" },
@@ -698,17 +704,40 @@
       ev.stopPropagation(); if (bd._iv) clearInterval(bd._iv); win.remove(); btn.remove(); delete ACC_OPEN[id];
     });
     var tb = win.querySelector(".tb");
+    // Same ProMotion discipline as initIconDrag / initDrag: the gesture writes
+    // TRANSFORM only (a pure compositor move, promoted by .axp-dragging's
+    // will-change) and commits the final left/top once, on release. Writing
+    // left/top per pointermove re-laid out this fixed window every frame — the
+    // judder those two drags were already rewritten to avoid. rAF batching would
+    // NOT help: pointermove is already frame-coalesced and getBoundingClientRect
+    // is read once at pointerdown, so there is no read/write thrash to defer; it
+    // would still force a layout per frame and diverge from the other two drags.
+    // .axp-acc is position:fixed, so viewport left/top and transform are the same
+    // coordinates, and it has no fixed-position descendants, so the transform's
+    // new containing block changes nothing.
     tb.addEventListener("pointerdown", function (e) {
       if (e.target.closest(".x")) return;
       accFront(win);
       var r = win.getBoundingClientRect(), sx = e.clientX, sy = e.clientY, ox = r.left, oy = r.top;
+      var nx = ox, ny = oy;
       try { tb.setPointerCapture(e.pointerId); } catch (er) {}
+      win.classList.add("axp-dragging");   // earn-it: will-change on for the gesture, off on drop
       function mv(ev) {
-        win.style.left = Math.max(0, Math.min(innerWidth - 40, ox + ev.clientX - sx)) + "px";
-        win.style.top = Math.max(0, Math.min(innerHeight - 36, oy + ev.clientY - sy)) + "px";
+        nx = Math.max(0, Math.min(innerWidth - 40, ox + ev.clientX - sx));
+        ny = Math.max(0, Math.min(innerHeight - 36, oy + ev.clientY - sy));
+        win.style.transform = "translate(" + (nx - ox) + "px," + (ny - oy) + "px)";
       }
-      function up() { tb.removeEventListener("pointermove", mv); tb.removeEventListener("pointerup", up); }
-      tb.addEventListener("pointermove", mv); tb.addEventListener("pointerup", up);
+      function up() {
+        win.style.left = nx + "px"; win.style.top = ny + "px";
+        win.style.transform = "";
+        win.classList.remove("axp-dragging");
+        tb.removeEventListener("pointermove", mv);
+        tb.removeEventListener("pointerup", up);
+        tb.removeEventListener("pointercancel", up);   // a cancelled gesture otherwise leaks mv + strands the drag
+      }
+      tb.addEventListener("pointermove", mv);
+      tb.addEventListener("pointerup", up);
+      tb.addEventListener("pointercancel", up);
     });
   }
   function buildClock(bd) {
@@ -734,10 +763,10 @@
       var s = D.getElementById("axp-start"); if (s) s.setAttribute("aria-expanded", "true");
       input.value = ""; render();
       input.focus();
-    });
+    }, ["axp-dialog"]);
   }
   function closeRun() {
-    if (run && run.open) withViewTransition(function () { run.close(); });   // side effects ride the "close" event
+    if (run && run.open) withViewTransition(function () { run.close(); }, ["axp-dialog"]);   // side effects ride the "close" event
   }
 
   // ── tray balloons: brief XP notification-bubble popouts for the system-utility
@@ -799,7 +828,7 @@
     var tr = j ? ('<div class="ln"><span class="k">Transport</span> ' + esc((m["HTTP version"] || "") + " · " + (m["TLS version"] || "")) + '</div>') : "";
     b.innerHTML =
       '<div class="ln"><b>Firewall</b> <span class="ok">ON</span> <span class="k">Cloudflare edge</span></div>' +
-      '<div class="ln"><b>Automatic Updates</b> <span class="ok">ON</span> <span class="k">service worker</span></div>' +
+      '<div class="ln"><b>Automatic Updates</b> <span class="ok">ON</span> <span class="k">immutable assets</span></div>' +
       '<div class="ln"><b>Threat protection</b> <span class="ok">ON</span> <span class="k">bot auth</span></div>' + tr;
   }
   function renderUpd(j) {

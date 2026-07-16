@@ -325,7 +325,7 @@ function shell(title, currentPath, bodyHtml) {
   };
   return `<!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#2D78BD">
-<title>${esc(title) === "Serendipity" ? "aadhar.sh/serendipity" : "aadhar.sh/serendipity/" + esc(title)}</title>
+<title>${currentPath === PREFIX ? "aadhar.sh/serendipity" : "aadhar.sh/serendipity/" + esc(title)}</title>
 <meta name="description" content="A public, shared database of events worth going to and who's going — fed by the collective, queryable by humans and agents.">
 <style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}${shellCss()}</style>
 <link rel="stylesheet" href="/luna.css"></head><body>

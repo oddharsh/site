@@ -6,11 +6,12 @@ import { errorResp, escAttr, escHtml, jsonResp } from "./lib/http.js";
 
 // ── /images/full/<key> → R2 ─────────────────────────────────────────
 // proxies an R2 GET through the worker. supports If-None-Match (304s on
-// cache hit), Range requests, and emits long cache headers since each
-// upload is content-addressed by its filename. originals retain their
-// SOOC filenames (IMG_1234.jpg, DSCF5678.heic, etc.), so the validation
-// is permissive on stem but strict on extension and forbids any path
-// traversal characters.
+// cache hit) and Range requests. UNLIKE the /i/ thumbnails, these originals are
+// NOT content-addressed: they keep their SOOC filenames (IMG_1234.jpg,
+// DSCF5678.heic, etc.), so the URL names a SLOT, not exact bytes. The long cache
+// header rides on the convention that an original is never overwritten in place
+// (a new photo is a new filename), not on the URL naming its bytes. validation is
+// permissive on stem but strict on extension and forbids any path traversal characters.
 export async function servePhotoFromR2(request, env, ctx) {
   if (!env.PHOTOS_R2) {
     return errorResp("R2 bucket not bound", 503);
@@ -28,8 +29,9 @@ export async function servePhotoFromR2(request, env, ctx) {
   const range       = request.headers.get("range");
 
   // caches.default holds full GETs of the originals, so a repeat view serves
-  // from the colo instead of re-pulling a 10MB object from R2. Content-addressed
-  // and immutable, so staleness cannot exist. Range and conditional requests
+  // from the colo instead of re-pulling a 10MB object from R2. Safe to cache hard
+  // because an original is never overwritten in place (a new upload is a new
+  // filename), NOT because the URL is content-addressed. Range and conditional requests
   // bypass the cache because they need R2's range/onlyIf handling and must not
   // populate a full-body entry. x-photo-cache: hit|miss proved this layer works
   // and keeps proving it on every request.

@@ -11,8 +11,6 @@ import test from "node:test";
 
 import {
   handleLensFetch,
-  handleLensFragment,
-  renderLensFragments,
   renderLensShell,
 } from "./holding/_worker.js/lens.js";
 import {
@@ -63,13 +61,8 @@ function assertFullDocument(html) {
   assert.match(html, /<head\b/i);
   assert.match(html, /<body\b/i);
   assert.match(html, /<\/html>/i);
-  assert.doesNotMatch(html, /id="lx-fragments"/);
 }
 
-function assertFragment(html) {
-  assert.match(html, /id="lx-fragments"/);
-  assert.doesNotMatch(html, /<(?:!doctype|html|head|body)\b/i);
-}
 
 test("Lens shell is a complete document, not a fragment", () => {
   const response = renderLensShell();
@@ -78,14 +71,6 @@ test("Lens shell is a complete document, not a fragment", () => {
   return response.text().then(assertFullDocument);
 });
 
-test("Lens fragment renderer stays partial and carries its hydration marker", () => {
-  const html = renderLensFragments(
-    { ok: false, error: "invalid target" },
-    { view: "both", lens: "readiness", counterfactuals: {} },
-  );
-  assertFragment(html);
-  assert.match(html, /id="lx-initial-data"/);
-});
 
 test("track HTML renderer emits rows only", () => {
   const html = renderTrackListHtml(TRACKS);
@@ -119,7 +104,7 @@ test("track endpoints keep JSON and HTML contracts independent of Accept", async
   assert.doesNotMatch(body, /<(?:!doctype|html|head|body)\b/i);
 });
 
-test("Lens endpoints keep JSON and HTML contracts independent of Accept", async () => {
+test("Lens fetch keeps its JSON contract regardless of Accept", async () => {
   const json = await handleLensFetch(
     new Request("https://aadhar.sh/lens/fetch?url=javascript%3Aalert(1)", {
       headers: { accept: "text/html" },
@@ -131,16 +116,4 @@ test("Lens endpoints keep JSON and HTML contracts independent of Accept", async 
   assert.match(json.headers.get("content-type") || "", /^application\/json/);
   assert.equal(json.headers.get("vary"), null);
   assert.equal((await json.json()).ok, false);
-
-  const fragment = await handleLensFragment(
-    new Request("https://aadhar.sh/lens/fragment?url=javascript%3Aalert(1)", {
-      headers: { accept: "application/json" },
-    }),
-    {},
-    context(),
-  );
-  assert.equal(fragment.status, 400);
-  assert.match(fragment.headers.get("content-type") || "", /^text\/html/);
-  assert.equal(fragment.headers.get("vary"), null);
-  assertFragment(await fragment.text());
 });

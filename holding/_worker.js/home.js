@@ -1,6 +1,6 @@
 // home.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
-import { escAttr, escHtml, wantsMarkdown } from "./lib/http.js";
+import { escAttr, wantsMarkdown } from "./lib/http.js";
 import { HOMEPAGE_DISCOVERY_LINK, withHomepageDiscoveryHeaders } from "./lib/security.js";
 import { absThumb, getAltMap, getImagesManifest } from "./photos.js";
 import { getTracksSWR, renderTrackListHtml } from "./rn.js";
@@ -59,15 +59,16 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
   // are mutually independent (the static asset, the tracks payload, the
   // photo manifest, the alt map), so fire them concurrently instead
   // of awaiting each in turn — collapses ~3 serial KV round-trips + the
-  // ASSETS fetch into roughly one wall-clock read. the tracks lookup needs
-  // tracks:<pid> keyed off playlist-id, but the id changes ~never — so it's
-  // cached in a module var (like _altMap) and the chain costs two serial KV
-  // reads only on a cold isolate; warm isolates do a single read.
+  // ASSETS fetch into roughly one wall-clock read. The tracks lookup needs
+  // tracks:<pid> keyed off playlist-id, read FRESH each render: it used to be
+  // cached in a module var, which meant /rn/set could swap the playlist while
+  // warm isolates kept SSRing the old id's tracks indefinitely (a module var
+  // can't be busted cross-isolate). The id read is a tiny KV get and it rides in
+  // this same Promise.all, so freshness costs nothing measurable.
   const tracksChain = (async () => {
     if (!env.RN_KV) return null;
     try {
-      const pid = _playlistId ??
-        (_playlistId = await env.RN_KV.get("playlist-id"));
+      const pid = await env.RN_KV.get("playlist-id");
       if (pid && /^[0-9A-Za-z]{22}$/.test(pid)) {
         return await getTracksSWR(env, ctx, pid);
       }
@@ -281,10 +282,6 @@ export function pickRandom(arr, n) {
 //
 // each span also carries data-artist-name and (when known) data-artist-image
 // so the XP hover-tooltip can show a profile pic + name on hover. when we
-// the Spotify playlist id (KV "playlist-id") changes ~never; module-cached so
-// the homepage tracks lookup is one KV read on warm isolates instead of two.
-export let _playlistId;
-
 export async function serveMarkdown(request, env) {
   // ask the static assets layer for /index.md
   const mdUrl = new URL("/index.md", request.url);

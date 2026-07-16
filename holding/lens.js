@@ -1,6 +1,6 @@
 // lens.js — client behavior for /lens ("The Other Web").
 //
-// Calls the server-side /lens/fragment engine (CORS blocks the browser from
+// Calls the server-side /lens/fetch engine (CORS blocks the browser from
 // fetching arbitrary origins itself), then renders the result through six
 // machine "lenses" — Readiness, Anatomy, Structured data, AI view, Terms, Discovery
 // files — next to a plain human read. No deps, no build. Deferred + SW-cached.
@@ -23,6 +23,7 @@
   var lens = "readiness"; // readiness | anatomy | structured | ai | terms | discovery
   var counterfactuals = { markdown: false, semantic: false, contract: false, authority: false, receipt: false };
   var busy = false;
+  var lastShotUrl = null;   // the live snapshot object URL, revoked before the next mint / on decode
 
   var LENS_LABEL = { readiness: "Readiness", anatomy: "Anatomy", structured: "Structured", ai: "AI view", terms: "Terms", discovery: "Discovery" };
 
@@ -72,9 +73,14 @@
     var p = new URLSearchParams(location.search);
     var views = ["both", "human", "machine", "delta"];
     var lenses = ["readiness", "anatomy", "structured", "ai", "terms", "discovery"];
-    var cf = {};
+    // Seed every key false, then flip the ones named in ?cf=. Both callers REPLACE
+    // `counterfactuals` with this object, and the toggle handler guards on
+    // hasOwnProperty — so returning only the keys ?cf= mentioned (i.e. none, on a
+    // normal visit) left every Delta switch dead and the Readiness projection
+    // banner permanently empty. The seed doubles as the allowlist.
+    var cf = { markdown: false, semantic: false, contract: false, authority: false, receipt: false };
     (p.get("cf") || "").split(",").forEach(function (key) {
-      if (["markdown", "semantic", "contract", "authority", "receipt"].indexOf(key) >= 0) cf[key] = true;
+      if (Object.prototype.hasOwnProperty.call(cf, key)) cf[key] = true;
     });
     return {
       url: p.get("url") || "",
@@ -111,30 +117,6 @@
     statusBar.innerHTML = '<span class="err">Failed:</span> <span>' + esc(msg) + "</span>";
   }
 
-  function parseFragmentResponse(response, text) {
-    var ct = response.headers.get("content-type") || "";
-    if (ct.indexOf("json") >= 0) return { data: JSON.parse(text), fragment: null };
-    var doc = new DOMParser().parseFromString(text, "text/html");
-    var root = doc.getElementById("lx-fragments");
-    var script = doc.getElementById("lx-initial-data");
-    if (!root || !script) throw new Error("The fragment response was incomplete.");
-    return {
-      data: JSON.parse(script.textContent || "null"),
-      fragment: {
-        human: (root.querySelector("[data-lens-part=human]") || {}).innerHTML || "",
-        machine: (root.querySelector("[data-lens-part=machine]") || {}).innerHTML || "",
-        status: (root.querySelector("[data-lens-part=status]") || {}).innerHTML || "",
-      },
-    };
-  }
-
-  function applyFragment(fragment) {
-    if (!fragment) return;
-    humanBody.innerHTML = fragment.human;
-    machineBody.innerHTML = fragment.machine;
-    statusBar.innerHTML = fragment.status;
-  }
-
   // ---- networking -------------------------------------------------------
   function run(url) {
     if (busy) return;
@@ -151,16 +133,26 @@
     machineBody.innerHTML = '<div class="lx-spin">Reading the markup&hellip;</div>';
     statusBar.innerHTML = "<span>Fetching <b>" + esc(url) + "</b> server-side&hellip;</span>";
 
-    fetch("/lens/fragment?url=" + encodeURIComponent(url))
-      .then(function (r) { return r.text().then(function (text) { return parseFragmentResponse(r, text); }); })
-      .then(function (result) {
-        var j = result.data;
+    // /lens/fetch is the engine's one browser-facing contract: JSON in, rendered here.
+    // There was briefly a /lens/fragment twin that wrapped the same payload in
+    // server-rendered HTML, but this client has to render every pane itself anyway
+    // (switching lenses and toggling Delta counterfactuals can't round-trip, and
+    // renderMachine() is what binds the toggle handlers), so the fragment's markup was
+    // injected and then overwritten in this same synchronous block, never once painted.
+    // The server-side pane renderers it used live on: renderLensShell still SSRs them
+    // for the no-JS path at /lens?url=, and this client hydrates from #lx-initial-data.
+    fetch("/lens/fetch?url=" + encodeURIComponent(url))
+      .then(function (r) {
+        var ct = r.headers.get("content-type") || "";
+        if (ct.indexOf("json") < 0) throw new Error("The lens engine returned an unexpected response.");
+        return r.json();
+      })
+      .then(function (j) {
         busy = false;
         if (!j || !j.ok) {
           showError(j);
           return;
         }
-        applyFragment(result.fragment);
         data = j;
         renderHuman();
         renderMachine();
@@ -205,7 +197,21 @@
         var ct = r.headers.get("content-type") || "";
         if (r.ok && ct.indexOf("image/") === 0) {
           return r.blob().then(function (b) {
-            humanBody.innerHTML = '<img class="lx-shot" alt="Rendered snapshot of ' + esc(shotUrl) + '" src="' + URL.createObjectURL(b) + '">';
+            // revoke the previous snapshot's object URL before minting the next, and
+            // again once this one has decoded. Overwriting innerHTML drops the <img> but
+            // NOT the blob-URL registry entry, so scanning several framing-blocked sites
+            // in a session (nytimes + stripe are both seeded chips) otherwise pins a full
+            // Browser-Rendering PNG each.
+            if (lastShotUrl) { URL.revokeObjectURL(lastShotUrl); lastShotUrl = null; }
+            var objUrl = URL.createObjectURL(b);
+            lastShotUrl = objUrl;
+            var img = new Image();
+            img.className = "lx-shot";
+            img.alt = "Rendered snapshot of " + shotUrl;
+            img.onload = function () { if (lastShotUrl === objUrl) { URL.revokeObjectURL(objUrl); lastShotUrl = null; } };
+            img.src = objUrl;
+            humanBody.innerHTML = "";
+            humanBody.appendChild(img);
           });
         }
         return r.json().then(function (j) { renderReader((j && j.error) || ("snapshot failed (" + r.status + ")")); })
@@ -395,21 +401,40 @@
     return { text: "missing", kind: "off" };
   }
 
+  // ONE source of truth for whether a counterfactual's surface is already published,
+  // read off the SAME data.readiness.checks the projection scores against. deltaView
+  // used to HARDCODE authority (and receipt) as never-observed while readinessProjection
+  // read authority from the oauth checks, so a scan of aadhar.sh (which ships
+  // /.well-known/oauth-protected-resource) showed "Delegated authority" as missing in the
+  // Delta view and present in the Readiness tab at once. markdown/contract/authority now
+  // derive from these checks in both places; semantic has no single readiness check (it is
+  // computed from structured data) and receipt has no probe backing it yet.
+  var CF_MAP = {
+    markdown:  { checks: ["markdownNegotiation"] },
+    contract:  { checks: ["apiCatalog"] },
+    authority: { checks: ["oauthProtectedResource", "oauthDiscovery", "authMd"] },
+  };
+  function cfObserved(key, checks) {
+    var m = CF_MAP[key];
+    checks = checks || {};
+    return !!(m && m.checks.some(function (n) { return checks[n] && checks[n].status === "pass"; }));
+  }
+
   function deltaView() {
     var s = data.structured || {};
     var d = data.discovery || {};
     var ag = data.agent || {};
     var st = ag.strategy || {};
+    var checks = (data.readiness && data.readiness.checks) || {};
     var jsonld = s.jsonld && s.jsonld.length > 0;
     var semantic = jsonld || (s.microdata && s.microdata.itemtypes && s.microdata.itemtypes.length) || (s.rdfa && s.rdfa.typeof && s.rdfa.typeof.length);
-    var action = st.action && st.action.length > 0;
-    var markdown = ag.mdNegotiation && ag.mdNegotiation.supported;
+    var action = st.action && st.action.length > 0;   // the agent strategy's action surface, for the evidence line below
     var cf = [
-      { key: "markdown", label: "Clean machine text", stage: "Read", observed: markdown, detail: "Serve a deliberate text/markdown representation from the same URL." },
-      { key: "semantic", label: "Entity schema", stage: "Understand", observed: semantic, detail: "Publish stable entities and properties a parser can validate." },
-      { key: "contract", label: "Action contract", stage: "Act", observed: action, detail: "Describe callable operations, parameters, and side effects." },
-      { key: "authority", label: "Delegated authority", stage: "Authorize", observed: false, detail: "Add a consent boundary with scopes and an explicit user approval." },
-      { key: "receipt", label: "A result receipt", stage: "Confirm", observed: false, detail: "Return a durable result with origin, time, and provenance." },
+      { key: "markdown", label: "Clean machine text", stage: "Read", observed: cfObserved("markdown", checks), detail: "Serve a deliberate text/markdown representation from the same URL." },
+      { key: "semantic", label: "Entity schema", stage: "Understand", observed: !!semantic, detail: "Publish stable entities and properties a parser can validate." },
+      { key: "contract", label: "Action contract", stage: "Act", observed: cfObserved("contract", checks), detail: "Describe callable operations, parameters, and side effects." },
+      { key: "authority", label: "Delegated authority", stage: "Authorize", observed: cfObserved("authority", checks), detail: "Add a consent boundary with scopes and an explicit user approval." },
+      { key: "receipt", label: "A result receipt", stage: "Confirm", observed: false, detail: "Return a durable result with origin, time, and provenance. No probe measures this surface yet, so it is always shown as a projection, never as observed." },
     ];
     var controls = '<div class="lx-cf-grid">' + cf.map(function (x) {
       var on = !!counterfactuals[x.key];
@@ -441,23 +466,27 @@
     });
   }
 
-  var READINESS_COPY = {
-    robotsTxt: ["robots.txt", "Publish a valid /robots.txt with explicit User-agent rules and a Sitemap directive."], sitemap: ["Sitemap", "Publish /sitemap.xml and reference it from robots.txt."],
-    linkHeaders: ["Link headers", "Add RFC 8288 Link relations for your sitemap, docs, API catalog, or alternate machine representation."], dnsAid: ["DNS-AID", "Publish a DNSSEC-signed _index._agents.<domain> SVCB/HTTPS record for machine discovery."],
-    markdownNegotiation: ["Markdown negotiation", "Return text/markdown when a client sends Accept: text/markdown, while keeping HTML for browsers."],
-    robotsTxtAiRules: ["AI bot rules", "Declare explicit GPTBot, ClaudeBot, CCBot, and other AI crawler rules in robots.txt."], contentSignals: ["Content Signals", "Add Content-Signal directives for ai-train, ai-input, and search to robots.txt."],
-    webBotAuth: ["Web Bot Auth", "Publish a valid JWKS at /.well-known/http-message-signatures-directory."], apiCatalog: ["API Catalog", "Publish /.well-known/api-catalog as application/linkset+json with service-desc and service-doc links."],
-    oauthDiscovery: ["OAuth discovery", "Publish OAuth/OIDC discovery metadata with issuer and token endpoints."], oauthProtectedResource: ["OAuth Protected Resource", "Publish /.well-known/oauth-protected-resource with authorization_servers and scopes_supported."],
-    authMd: ["Auth.md", "Publish /auth.md with agent registration instructions and link it to your OAuth metadata."], mcpServerCard: ["MCP Server Card", "Publish /.well-known/mcp/server-card.json with serverInfo, transport, and capabilities."],
-    a2aAgentCard: ["A2A Agent Card", "Publish /.well-known/agent-card.json describing the agent's interfaces, capabilities, and skills."], agentSkills: ["Agent Skills", "Publish /.well-known/agent-skills/index.json with skills, URLs, and digests."],
-    webMcp: ["WebMCP", "Expose safe browser actions with navigator.modelContext and JSON Schemas."], x402: ["x402", "Return a machine-readable HTTP 402 payment requirement for payable routes."],
-    mpp: ["MPP", "Describe payable OpenAPI operations with x-payment-info and MPP settlement metadata."], ucp: ["UCP", "Publish /.well-known/ucp with protocol version, services, capabilities, and endpoints."],
-    acp: ["ACP", "Publish /.well-known/acp.json so agents can discover commerce services and transports."], ap2: ["AP2", "Publish the AP2 discovery metadata when your commerce flow supports it."],
+  // Fix copy only. Labels used to live here too and silently won over the ones the
+  // worker ships on every readiness item (LENS_READINESS_META), so a label renamed
+  // server-side changed the SSR text but not the hydrated text. Labels now come off
+  // the envelope item; this map is just key -> how-to-fix, which the worker never carries.
+  var READINESS_FIX = {
+    robotsTxt: "Publish a valid /robots.txt with explicit User-agent rules and a Sitemap directive.", sitemap: "Publish /sitemap.xml and reference it from robots.txt.",
+    linkHeaders: "Add RFC 8288 Link relations for your sitemap, docs, API catalog, or alternate machine representation.", dnsAid: "Publish a DNSSEC-signed _index._agents.<domain> SVCB/HTTPS record for machine discovery.",
+    markdownNegotiation: "Return text/markdown when a client sends Accept: text/markdown, while keeping HTML for browsers.",
+    robotsTxtAiRules: "Declare explicit GPTBot, ClaudeBot, CCBot, and other AI crawler rules in robots.txt.", contentSignals: "Add Content-Signal directives for ai-train, ai-input, and search to robots.txt.",
+    webBotAuth: "Publish a valid JWKS at /.well-known/http-message-signatures-directory.", apiCatalog: "Publish /.well-known/api-catalog as application/linkset+json with service-desc and service-doc links.",
+    oauthDiscovery: "Publish OAuth/OIDC discovery metadata with issuer and token endpoints.", oauthProtectedResource: "Publish /.well-known/oauth-protected-resource with authorization_servers and scopes_supported.",
+    authMd: "Publish /auth.md with agent registration instructions and link it to your OAuth metadata.", mcpServerCard: "Publish /.well-known/mcp/server-card.json with serverInfo, transport, and capabilities.",
+    a2aAgentCard: "Publish /.well-known/agent-card.json describing the agent's interfaces, capabilities, and skills.", agentSkills: "Publish /.well-known/agent-skills/index.json with skills, URLs, and digests.",
+    webMcp: "Expose safe browser actions with navigator.modelContext and JSON Schemas.", x402: "Return a machine-readable HTTP 402 payment requirement for payable routes.",
+    mpp: "Describe payable OpenAPI operations with x-payment-info and MPP settlement metadata.", ucp: "Publish /.well-known/ucp with protocol version, services, capabilities, and endpoints.",
+    acp: "Publish /.well-known/acp.json so agents can discover commerce services and transports.", ap2: "Publish the AP2 discovery metadata when your commerce flow supports it.",
   };
   function readinessCopy(itemOrKey) {
     var key = typeof itemOrKey === "string" ? itemOrKey : itemOrKey && itemOrKey.key;
-    var copy = READINESS_COPY[key];
-    return { label: copy ? copy[0] : (itemOrKey && itemOrKey.label) || key || "check", fix: copy ? copy[1] : "Inspect this surface and publish the expected machine-readable contract." };
+    var label = (itemOrKey && itemOrKey.label) || key || "check";   // the worker ships label on both items and nextActions entries
+    return { label: label, fix: READINESS_FIX[key] || "Inspect this surface and publish the expected machine-readable contract." };
   }
 
   function readinessStatus(item) {
@@ -481,16 +510,20 @@
   }
 
   function readinessProjection(readiness) {
+    // same CF_MAP + cfObserved the Delta view uses, so "improvable here" means exactly
+    // "not observed by any of this key's checks" in both places. The primary check
+    // (checks[0]) is the one whose score we project adding.
+    var checks = readiness.checks || {};
     var direct = [
-      { key: "markdown", check: "markdownNegotiation", label: "Clean machine text" },
-      { key: "contract", check: "apiCatalog", label: "Action contract" },
-      { key: "authority", check: "oauthProtectedResource", label: "Delegated authority" },
+      { key: "markdown", label: "Clean machine text" },
+      { key: "contract", label: "Action contract" },
+      { key: "authority", label: "Delegated authority" },
     ];
-    var active = direct.filter(function (x) { return counterfactuals[x.key] && readiness.checks[x.check] && readiness.checks[x.check].status !== "pass"; });
+    var active = direct.filter(function (x) { return counterfactuals[x.key] && !cfObserved(x.key, checks); });
     if (!active.length) return null;
     var pass = readiness.passed;
     var counted = readiness.counted;
-    active.forEach(function (x) { if (readiness.checks[x.check].countInScore) pass++; });
+    active.forEach(function (x) { var c = checks[CF_MAP[x.key].checks[0]]; if (c && c.countInScore) pass++; });
     return { score: counted ? Math.round(pass / counted * 100) : readiness.overall, labels: active.map(function (x) { return x.label; }) };
   }
 

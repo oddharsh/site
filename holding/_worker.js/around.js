@@ -4,6 +4,32 @@ import { BOT_NAME, BOT_UA, SIG_AGENT, signedFetch } from "./lib/botauth.js";
 import { cachedRender, deleteSWRKV } from "./lib/cache.js";
 import { lunaPage } from "./lib/chrome.js";
 import { esc, extractMeta, extractTitle } from "./lib/http.js";
+import { lensParseRobots, lensRobotsVerdict } from "./lib/robots.js";
+
+// Obey robots.txt before crawling a neighbor. /bot promises AadharshBot reads and
+// obeys robots.txt, and this cron is the one path that fetches third-party sites
+// unprompted, so it is where the promise has to be kept. RFC 9309: an absent or
+// 4xx robots.txt means allow-all; a 5xx or unreachable one means treat as
+// disallowed (we skip THIS cycle and retry next cron, rather than crawl over a
+// policy we could not read). Parsed robots is cached 12h per origin — ~20 origins,
+// one write each, trivially within the KV budget.
+async function robotsGate(env, url) {
+  let origin, path;
+  try { const u = new URL(url); origin = u.origin; path = u.pathname || "/"; } catch { return { ok: true }; }
+  const key = `around:robots:${origin}`;
+  let parsed = null;
+  try { parsed = env.RN_KV ? await env.RN_KV.get(key, "json") : null; } catch {}
+  if (!parsed) {
+    try {
+      const r = await signedFetch(origin + "/robots.txt", env, { signal: AbortSignal.timeout(3000) });
+      if (r.status >= 500) return { ok: false, kind: "undetermined", reason: "robots.txt " + r.status };   // 5xx: don't cache, retry next cron
+      parsed = r.ok ? lensParseRobots(await r.text()) : { groups: [], sitemaps: [] };   // 4xx / absent → allow-all, cacheable
+      if (env.RN_KV) { try { await env.RN_KV.put(key, JSON.stringify(parsed), { expirationTtl: 43200 }); } catch {} }
+    } catch { return { ok: false, kind: "undetermined", reason: "robots.txt unreachable" }; }
+  }
+  const v = lensRobotsVerdict(parsed, BOT_NAME, path);
+  return v.verdict === "block" ? { ok: false, kind: "disallow", rule: v.rule || "Disallow" } : { ok: true };
+}
 
   // Signature-Agent value (RFC 8941 string)
 
@@ -108,6 +134,12 @@ async function readAroundReport(request, env) {
 export async function runAround(env) {
   const results = await Promise.all(NEIGHBORS.map(async ({ name, url }) => {
     const t0 = Date.now();
+    // honor robots.txt first. A disallow is a legitimate result (skipped row, no
+    // error); an undetermined robots.txt is recorded as an error so a network-wide
+    // outage can't overwrite the last-good snapshot with an all-skipped one.
+    const gate = await robotsGate(env, url);
+    if (gate.kind === "disallow") return { name, url, skipped: "robots", robotsRule: gate.rule, elapsedMs: Date.now() - t0 };
+    if (gate.kind === "undetermined") return { name, url, error: gate.reason + ", not crawled", elapsedMs: Date.now() - t0 };
     try {
       // 4s deadline per neighbor: the 200KB body cap never bounded a tar-pit
       // connection, so one hung homepage could stall the whole Promise.all.
@@ -147,8 +179,8 @@ export async function runAround(env) {
   // sort fastest → slowest; errors (no latency or huge values) fall to the
   // bottom so the table reads as a leaderboard.
   results.sort((a, b) => {
-    const an = a.error ? Infinity : (a.elapsedMs ?? Infinity);
-    const bn = b.error ? Infinity : (b.elapsedMs ?? Infinity);
+    const an = (a.error || a.skipped) ? Infinity : (a.elapsedMs ?? Infinity);
+    const bn = (b.error || b.skipped) ? Infinity : (b.elapsedMs ?? Infinity);
     return an - bn;
   });
   return {
@@ -184,13 +216,20 @@ export function renderAroundHtml(report) {
   }
 
   const rows = report.results.map((r, i) => {
-    const ok = !r.error && r.status >= 200 && r.status < 400;
+    const skipped = r.skipped === "robots";
+    const ok = !r.error && !skipped && r.status >= 200 && r.status < 400;
     const status = r.error
       ? `<span class="bad">error</span>`
-      : ok
-        ? `<span class="ok">${r.status}</span>`
-        : `<span class="warn">${r.status}</span>`;
-    const titleCol = r.error ? esc(r.error) : (esc(r.title) || "<span class=dim>—</span>");
+      : skipped
+        ? `<span class="dim" title="robots.txt disallows AadharshBot on this path">robots</span>`
+        : ok
+          ? `<span class="ok">${r.status}</span>`
+          : `<span class="warn">${r.status}</span>`;
+    const titleCol = r.error
+      ? esc(r.error)
+      : skipped
+        ? `<span class=dim>not crawled (${esc(r.robotsRule || "robots.txt")})</span>`
+        : (esc(r.title) || "<span class=dim>—</span>");
     const desc = r.description ? `<div class="desc">${esc(r.description)}</div>` : "";
     return `
       <tr>

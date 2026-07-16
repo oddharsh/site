@@ -109,9 +109,13 @@ after deploy:
 
 ## known limitations / fix-later
 
-- **ICS parser doesn't expand VTIMEZONE / RRULE fully** — recurring events
-  across DST boundaries may drift by ~1h for the boundary instance. fine for
-  most personal calendars. fix: use a real ICS lib (ical.js) if it matters.
+- **ICS parser expands RRULE but not VTIMEZONE** — recurring events
+  (FREQ=DAILY/WEEKLY/MONTHLY/YEARLY with INTERVAL/COUNT/UNTIL/BYDAY, plus EXDATE)
+  are expanded out to 120 days so a standing weekly meeting blocks every week, not
+  just its first. Occurrences step in whole UTC days, so one that crosses a DST
+  boundary can land ~1h off past the shift; that errs toward over-blocking (safe).
+  An RRULE shape the parser can't read keeps the base occurrence rather than
+  dropping the event. fix for the DST edge: a real ICS lib (ical.js) if it matters.
 - **No reschedule flow** — booker has to email manually if they need to
   change. could add a `/reschedule` endpoint later.
 - **No double-booking protection across rapid concurrent requests** — KV
