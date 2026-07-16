@@ -64,6 +64,7 @@ const ROUTES = [
   { path: "/lens", status: 200, ct: "text/html", marker: "The Other Web", fullPage: true },
   { path: "/lens/", status: 301 },   // slashless canonical: routeDropSlash 301s to /lens
   { path: "/lens.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "replaceState" },
+  { path: "/lens-browser.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "LensBrowser" },
   { path: "/luna.css", status: 200, ct: "text/css", marker: "axp-desktop", maxBytes: isProd ? 45000 : undefined },
   // the retired SW's unregister stub: must keep serving 200 for a year+
   { path: "/sw.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "unregister" },
@@ -75,12 +76,14 @@ const ROUTES = [
     { path: "/nav.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "axp-histnav" },
     { path: "/notepad.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "np-window" },
     { path: "/lens.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "replaceState" },
+    { path: "/lens-browser.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "LensBrowser" },
     { path: "/luna.src.css", status: 200, ct: "text/css", marker: "axp-desktop" },
   ] : []),
   // Representation contracts: the machine paths stay fixed even if a caller
   // sends a browser Accept header; the HTML paths are explicit fragments.
   { path: "/lens/fetch?url=https://example.com", status: 200, ct: "application/json", headers: { accept: "text/html" } },
   { path: "/lens/shot?url=https://example.com", status: [200, 503], flaky: true },
+  { path: "/lens/browser?url=javascript%3Aalert(1)", status: 400, ct: "application/json", headers: { accept: "text/html" } },
   // 200 text/plain when the x402 gate is unconfigured; 402 json once X402_PAY_TO is set
   { path: "/llms-full.txt", status: [200, 402], ct: ["text/plain", "application/json"] },
   { path: "/ledger", status: 200, ct: "text/html", marker: "Crawl Ledger" },

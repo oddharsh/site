@@ -46,7 +46,7 @@
       "/agent/*", "/oauth2/*",
       "/whoareyou", "/whoareyou.json", "/security",
       "/reading", "/updates", "/updates.json", "/restore",
-      "/lens", "/lens/", "/lens/fetch", "/lens/shot",
+      "/lens", "/lens/", "/lens/fetch", "/lens/shot", "/lens/browser",
       "/llms-full.txt", "/ledger", "/ledger.json",
       "/writing", "/writing/*",
       "/rn", "/rn/tracks", "/rn/tracks.html", "/rn/admin", "/rn/set",
@@ -92,14 +92,15 @@
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["Counter"] }
   ],
+  // Browser Run Quick Actions. The binding is authenticated by Workers, so
+  // Lens no longer needs a Browser Rendering API token for snapshots.
+  "browser": { "binding": "BROWSER" },
   "vars": {
-    // account id for the /lens/shot Browser Rendering REST call. not secret.
-    "CF_ACCOUNT_ID": "1c99acdb6141579023fb97d24261ea58",
     // one-time continuity: the new in-house Counter DO self-seeds to this on first
     // wake (carried over from cf-garage's counter, ~2375 at migration). idempotent;
     // safe to remove once the DO is seeded.
     "COUNTER_SEED": "2375"
   }
   // Secrets are NOT here (set on the Worker with `wrangler secret put`):
-  //   RN_SIGNING_KEY_JWK, BROWSER_RENDER_TOKEN, RN_BUST_SECRET
+  //   RN_SIGNING_KEY_JWK, BROWSER_RENDER_TOKEN (legacy, no longer read), RN_BUST_SECRET
 }

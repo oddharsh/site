@@ -3,7 +3,8 @@
 // Calls the server-side /lens/fetch engine (CORS blocks the browser from
 // fetching arbitrary origins itself), then renders the result through six
 // machine "lenses" — Readiness, Anatomy, Structured data, AI view, Terms, Discovery
-// files — next to a plain human read. No deps, no build. Deferred + SW-cached.
+// files — next to a plain human read and an opt-in Browser Run render. No deps, no
+// build. Deferred + SW-cached.
 (function () {
   "use strict";
   var form = document.getElementById("lx-form");
@@ -13,16 +14,19 @@
   var panes = document.getElementById("lx-panes");
   var humanBody = document.getElementById("lx-human-body");
   var machineBody = document.getElementById("lx-machine-body");
+  var browserBody = document.getElementById("lx-browser-body");
   var machineH = document.getElementById("lx-machine-h");
   var humanH = document.getElementById("lx-human-h");
   var modeNote = document.getElementById("lx-mode-note");
   var statusBar = document.getElementById("lx-status");
 
-  var data = null;       // last successful envelope
-  var view = "both";     // both | human | machine | delta
+  var data = null;       // last successful HTTP envelope
+  var browserData = null; // last opt-in Browser Run snapshot
+  var view = "both";     // both | human | machine | browser | delta
   var lens = "readiness"; // readiness | anatomy | structured | ai | terms | discovery
   var counterfactuals = { markdown: false, semantic: false, contract: false, authority: false, receipt: false };
   var busy = false;
+  var browserBusy = false;
   var lastShotUrl = null;   // the live snapshot object URL, revoked before the next mint / on decode
 
   var LENS_LABEL = { readiness: "Readiness", anatomy: "Anatomy", structured: "Structured", ai: "AI view", terms: "Terms", discovery: "Discovery" };
@@ -59,9 +63,10 @@
   var initialData = readInitialData();
 
   var MODE_NOTE = {
-    both: "Compare keeps the live page beside the selected evidence lens.",
+    both: "Compare puts Human, HTTP Machine, and the opt-in Browser Run render side by side.",
     human: "Human shows the page as a person receives it in a browser.",
     machine: "Machine turns the scan into an evidence-first briefing, then keeps the selected lens below it.",
+    browser: "Browser Run renders the URL after JavaScript and exposes browser structure beside the HTTP scan.",
     delta: "Delta keeps the page visible while you add hypothetical machine infrastructure to the route.",
   };
 
@@ -71,7 +76,7 @@
 
   function readUrlState() {
     var p = new URLSearchParams(location.search);
-    var views = ["both", "human", "machine", "delta"];
+    var views = ["both", "human", "machine", "browser", "delta"];
     var lenses = ["readiness", "anatomy", "structured", "ai", "terms", "discovery"];
     // Seed every key false, then flip the ones named in ?cf=. Both callers REPLACE
     // `counterfactuals` with this object, and the toggle handler guards on
@@ -112,8 +117,10 @@
   function showError(j) {
     var msg = (j && j.error) || "Something went wrong.";
     data = null;
+    browserData = null;
     machineBody.innerHTML = '<div class="lx-empty">' + esc(msg) + "</div>";
     humanBody.innerHTML = '<div class="lx-empty">No page to show.</div>';
+    renderBrowser();
     statusBar.innerHTML = '<span class="err">Failed:</span> <span>' + esc(msg) + "</span>";
   }
 
@@ -123,6 +130,7 @@
     url = (url || "").trim();
     if (!url) { urlInput.focus(); return; }
     busy = true;
+    browserData = null;
     urlInput.value = url;
     // reflect the scanned URL in the address bar so every scan is a shareable link.
     // replaceState (not pushState): no reload, and repeated scans don't spam the
@@ -131,6 +139,7 @@
     syncUrl(false);
     humanBody.innerHTML = '<div class="lx-spin">Fetching as AadharshBot&hellip;</div>';
     machineBody.innerHTML = '<div class="lx-spin">Reading the markup&hellip;</div>';
+    renderBrowser();
     statusBar.innerHTML = "<span>Fetching <b>" + esc(url) + "</b> server-side&hellip;</span>";
 
     // /lens/fetch is the engine's one browser-facing contract: JSON in, rendered here.
@@ -156,6 +165,7 @@
         data = j;
         renderHuman();
         renderMachine();
+        renderBrowser();
         renderStatus();
       })
       .catch(function (e) {
@@ -218,6 +228,50 @@
           .catch(function () { renderReader("snapshot failed (" + r.status + ")"); });
       })
       .catch(function () { renderReader("the snapshot request didn't go through"); });
+  }
+
+  // ---- Browser Run pane --------------------------------------------------
+  // Browser Run is deliberately lazy. The normal HTTP scan stays cheap and
+  // identified as AadharshBot; this action opts into rendered JavaScript and
+  // a separate Cloudflare Browser Run observation.
+  function renderBrowser() {
+    if (!data) {
+      browserBody.innerHTML = '<div class="lx-empty">Run Browser Run after a URL scan.</div>';
+      return;
+    }
+    if (!window.LensBrowser) {
+      browserBody.innerHTML = '<div class="lx-browser-intro"><b>Browser Run:</b> rendered HTML, screenshot, Markdown, and accessibility tree.' +
+        '<button class="lx-browser-run" type="button" id="lx-browser-run">Run snapshot</button></div>';
+      var button = document.getElementById("lx-browser-run");
+      if (button) button.addEventListener("click", runBrowser);
+      return;
+    }
+    window.LensBrowser.mount(browserBody, data, browserData, runBrowser);
+  }
+
+  function runBrowser() {
+    if (browserBusy || !data) return;
+    browserBusy = true;
+    function runLoaded() {
+      if (!window.LensBrowser) { browserBusy = false; renderBrowser(); return; }
+      window.LensBrowser.run(browserBody, data, function (j) {
+        browserBusy = false;
+        browserData = j;
+        renderBrowser();
+        renderStatus();
+      }, function (e) {
+        browserBusy = false;
+      }, runBrowser);
+    }
+    if (window.LensBrowser) {
+      runLoaded();
+      return;
+    }
+    var script = document.createElement("script");
+    script.src = "/lens-browser.js?v=1";
+    script.onload = runLoaded;
+    script.onerror = function () { browserBusy = false; renderBrowser(); };
+    document.head.appendChild(script);
   }
 
   // last-resort readable view: title + outline + stripped text.
@@ -933,6 +987,7 @@
     if (data.cost && data.cost.tiers && data.cost.tiers.length) parts.push("<span>~" + fmtTok(data.cost.tiers[0].tokens) + " tok</span>");
     parts.push("<span>" + data.elapsedMs + " ms</span>");
     if (data.redirected) parts.push("<span>&rarr; " + esc(data.finalUrl) + "</span>");
+    if (browserData) parts.push("<span>Browser Run: " + (browserData.cached ? "cached" : "fresh") + "</span>");
     parts.push('<span style="margin-left:auto">fetched as ' + esc(data.fetchedBy) + "</span>");
     statusBar.innerHTML = parts.join("");
   }
@@ -1018,7 +1073,7 @@
   }
 
   function setView(v, animate, writeHistory) {
-    if (["both", "human", "machine", "delta"].indexOf(v) < 0) v = "both";
+    if (["both", "human", "machine", "browser", "delta"].indexOf(v) < 0) v = "both";
     view = v;
     try { localStorage.setItem("lx-mode", v); } catch (e) {}
     if (writeHistory !== false) syncUrl(true);
@@ -1027,8 +1082,9 @@
       updateModeUi();
       if (data) {
         renderMachine();
+        renderBrowser();
         renderStatus();
-      } else renderIdleLens();
+      } else { renderIdleLens(); renderBrowser(); }
     }, animate);
   }
   function setLens(l, animate, writeHistory) {
@@ -1057,7 +1113,7 @@
   var urlState = readUrlState();
   try {
     var savedView = localStorage.getItem("lx-mode");
-    if (["both", "human", "machine", "delta"].indexOf(savedView) >= 0) view = savedView;
+    if (["both", "human", "machine", "browser", "delta"].indexOf(savedView) >= 0) view = savedView;
   } catch (e) {}
   if (urlState.view !== "both") view = urlState.view;
     if (urlState.lens !== "readiness") lens = urlState.lens;
@@ -1076,8 +1132,10 @@
     }
     if (!state.url && data) {
       data = null;
-      humanBody.innerHTML = '<div class="lx-empty">Paste a URL above to see it through both eyes.</div>';
+      browserData = null;
+      humanBody.innerHTML = '<div class="lx-empty">Paste a URL above to compare the three surfaces.</div>';
       machineBody.innerHTML = '<div class="lx-empty">The markup, metadata, and machine directives land here.</div>';
+      renderBrowser();
       statusBar.innerHTML = '<span>Idle. Nothing is fetched until you ask, and then just once, server-side, with no logging.</span>';
     }
     setView(view, true, false);
@@ -1095,6 +1153,7 @@
         data = initialData;
         renderHuman();
         renderMachine();
+        renderBrowser();
         renderStatus();
       } else {
         showError(initialData);

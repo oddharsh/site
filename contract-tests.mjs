@@ -10,7 +10,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  handleLensBrowser,
   handleLensFetch,
+  handleLensShot,
   renderLensShell,
 } from "./holding/_worker.js/lens.js";
 import {
@@ -116,4 +118,76 @@ test("Lens fetch keeps its JSON contract regardless of Accept", async () => {
   assert.match(json.headers.get("content-type") || "", /^application\/json/);
   assert.equal(json.headers.get("vary"), null);
   assert.equal((await json.json()).ok, false);
+});
+
+test("Lens Browser Run endpoint validates targets before invoking the binding", async () => {
+  let called = false;
+  const response = await handleLensBrowser(
+    new Request("https://aadhar.sh/lens/browser?url=javascript%3Aalert(1)", {
+      headers: { accept: "text/html" },
+    }),
+    { BROWSER: { quickAction: async () => { called = true; } } },
+    context(),
+  );
+  assert.equal(response.status, 400);
+  assert.equal(called, false);
+  assert.match(response.headers.get("content-type") || "", /^application\/json/);
+  assert.equal((await response.json()).ok, false);
+});
+
+test("Lens Browser Run endpoint normalizes a snapshot into the comparison contract", async () => {
+  let action;
+  let payload;
+  const response = await handleLensBrowser(
+    new Request("https://aadhar.sh/lens/browser?url=https%3A%2F%2Fexample.com%2F"),
+    {
+      BROWSER: {
+        async quickAction(name, input) {
+          action = name;
+          payload = input;
+          return Response.json({
+            result: {
+              content: "<html><title>Rendered</title><body><p>hello</p></body></html>",
+              markdown: "# hello",
+              accessibilityTree: { role: "RootWebArea", children: [] },
+              screenshot: "AAAA",
+            },
+            meta: { status: 200, title: "Rendered", url: "https://example.com/" },
+          });
+        },
+      },
+    },
+    context(),
+  );
+  assert.equal(response.status, 200);
+  assert.equal(action, "snapshot");
+  assert.deepEqual(payload.formats, ["content", "screenshot", "markdown", "accessibilityTree"]);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.title, "Rendered");
+  assert.equal(body.finalUrl, "https://example.com/");
+  assert.equal(body.screenshot, "data:image/png;base64,AAAA");
+  assert.equal(body.webmcp.status, "lab-required");
+  assert.doesNotMatch(body.content, /__lens_webmcp_runtime__/);
+});
+
+test("Lens screenshot endpoint delegates PNG rendering to the Browser Run binding", async () => {
+  let action;
+  const png = new Uint8Array([137, 80, 78, 71]);
+  const response = await handleLensShot(
+    new Request("https://aadhar.sh/lens/shot?url=https%3A%2F%2Fexample.com%2F"),
+    {
+      BROWSER: {
+        async quickAction(name) {
+          action = name;
+          return new Response(png, { headers: { "content-type": "image/png" } });
+        },
+      },
+    },
+    context(),
+  );
+  assert.equal(response.status, 200);
+  assert.equal(action, "screenshot");
+  assert.equal(response.headers.get("content-type"), "image/png");
+  assert.deepEqual(new Uint8Array(await response.arrayBuffer()), png);
 });
