@@ -146,7 +146,7 @@ ${spec.demoCss || ""}</style>
 <div class="window">
   <div class="title-bar" aria-hidden="true">
     <span class="title-text"><span class="icon"></span>aadhar.sh/lwe — ${titleSuffix}</span>
-    <span class="controls"><span class="min" title="minimize"></span><span class="max" title="maximize"></span><a class="close" href="/lwe/" title="back to Learning With Errors" aria-label="back to Learning With Errors"></a></span>
+    <span class="controls"><span class="min" title="minimize"></span><span class="max" title="maximize"></span><a class="close" href="/lwe" title="back to Learning With Errors" aria-label="back to Learning With Errors"></a></span>
   </div>
   <div class="content">
     <div class="msgr">

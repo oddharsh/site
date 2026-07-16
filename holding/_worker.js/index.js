@@ -115,7 +115,7 @@ const ROUTES = new Map([
   ["/restore", handleSystemRestore],
 
   ["/lens", handleLens],
-  ["/lens/", handleLens],
+  ["/lens/", routeDropSlash],
   ["/lens/fetch", handleLensFetch],
   ["/lens/shot", handleLensShot],
 
@@ -129,7 +129,7 @@ const ROUTES = new Map([
   ["/ledger.json", handleLedgerJson],
 
   ["/writing", handleWritingIndex],
-  ["/writing/", handleWritingIndex],
+  ["/writing/", routeDropSlash],
 
   ["/rn", handleRn],
   ["/rn/tracks", handleRnTracks],
@@ -235,6 +235,13 @@ function routeOAuthAuthorizationServer(request, env) {
 
 function routePhotosRedirect(_request, _env, _ctx, url) {
   return Response.redirect(url.origin + "/photos", 301);
+}
+
+// canonical URLs carry no trailing slash (sitemap + rel=canonical + llms.txt all
+// say so, and the asset layer's drop-trailing-slash agrees). A worker route's own
+// slashed twin 301s to the slashless form rather than serving a duplicate 200.
+function routeDropSlash(_request, _env, _ctx, url) {
+  return Response.redirect(url.origin + url.pathname.replace(/\/+$/, "") + url.search, 301);
 }
 
 function routeWritingPost(request, env, ctx, url) {

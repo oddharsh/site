@@ -26,6 +26,11 @@
   "assets": {
     "directory": ".build/holding",
     "binding": "ASSETS",
+    // canonical URLs carry NO trailing slash (sitemap.xml, both rel=canonical tags,
+    // llms.txt and nav.js's own normalization all say so). drop-trailing-slash makes
+    // the asset layer agree: /garage + /lwe serve directly, /garage/ + /lwe/ 301 to
+    // the slashless form. MUST match wrangler.dev.jsonc, or dev diverges from prod.
+    "html_handling": "drop-trailing-slash",
     // Worker-owned routes only. New static files do not cost invocations unless
     // they are added here and to the ROUTES/PREFIX tables in index.js.
     //

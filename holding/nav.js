@@ -70,14 +70,14 @@
     { label: "windows update", path: "/updates", hint: "what shipped lately: the deploy changelog as installed updates" },
     { label: "system restore", path: "/restore", hint: "scrub the site back through its real deploy history, backed by Cloudflare D1" },
     { label: "around", path: "/around", hint: "the crypto-VC neighborhood" },
-    { label: "garage", path: "/garage/", hint: "prototypes + experiments" },
+    { label: "garage", path: "/garage", hint: "prototypes + experiments" },
     { label: "serendipity", path: "/serendipity", hint: "events worth going to" },
     { label: "music", path: "/rn", hint: "what I'm listening to right now" },
     { label: "coffee", path: "/coffee", hint: "book a coffee / bagel" },
     { label: "writing", path: "/writing", hint: "notes, in flux — an editable notepad" },
     { label: "reading", path: "/reading", hint: "what I've been reading — saved to Curius, mirrored here" },
     { label: "lens", path: "/lens", hint: "the other web: see any URL the way a machine does — raw HTML, JSON-LD, llms.txt" },
-    { label: "learning with errors", path: "/lwe/", hint: "chat-style explainers + live demos" },
+    { label: "learning with errors", path: "/lwe", hint: "chat-style explainers + live demos" },
     // generated:lwe-pages:start
     { label: "lwe · fhe", path: "/lwe/fhe", hint: "fully homomorphic encryption, explained" },
     { label: "lwe · mpc", path: "/lwe/mpc", hint: "multi-party computation, honest majority and traitors" },
@@ -128,8 +128,8 @@
 
   // first-level subpages — the full-fledged "apps" pinned to the taskbar.
   var SUBPAGES = [
-    { label: "garage", path: "/garage/", hint: "prototypes + experiments" },
-    { label: "lwe", path: "/lwe/", hint: "chat-style explainers + live demos" },
+    { label: "garage", path: "/garage", hint: "prototypes + experiments" },
+    { label: "lwe", path: "/lwe", hint: "chat-style explainers + live demos" },
     { label: "writing", path: "/writing", hint: "notes, in flux: an editable notepad" },
     { label: "reading", path: "/reading", hint: "what I've been reading, from Curius" },
     { label: "serendipity", path: "/serendipity", hint: "events worth going to" },
