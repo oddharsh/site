@@ -14,7 +14,7 @@ export const SECURITY_HEADERS = {
   "referrer-policy":         "strict-origin-when-cross-origin",
 };
 
-export const HOMEPAGE_DISCOVERY_LINKS = [
+const HOMEPAGE_DISCOVERY_LINKS = [
   '</sitemap.xml>; rel="sitemap"; type="application/xml"',
   '</llms.txt>; rel="alternate"; type="text/plain"; title="llms.txt summary"',
   '</auth.md>; rel="service-doc"; type="text/markdown"; title="Auth.md agent registration"',
@@ -58,7 +58,7 @@ export function withHomepageDiscoveryHeaders(response) {
   });
 }
 
-export function appendVary(headers, token) {
+function appendVary(headers, token) {
   const current = headers.get("vary");
   if (!current) {
     headers.set("vary", token);

@@ -142,7 +142,7 @@
       "nameColor": "#46617f",
       "lastmod": "2026-06-21",
       "buddyClass": "enc",
-      "badge": "read",
+      "badge": "chat",
       "navLabel": "encoding",
       "hasAsk": true
     },
@@ -166,7 +166,7 @@
       "nameColor": "#7a4eb0",
       "lastmod": "2026-06-21",
       "buddyClass": "pk",
-      "badge": "read",
+      "badge": "chat",
       "navLabel": "programmable crypto",
       "hasAsk": true
     },
@@ -190,7 +190,7 @@
       "nameColor": "#83400f",
       "lastmod": "2026-06-22",
       "buddyClass": "dac",
-      "badge": "read",
+      "badge": "chat",
       "navLabel": "dac",
       "hasAsk": true
     },

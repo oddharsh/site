@@ -131,8 +131,10 @@ add-photos.sh) sha256-hashes each tier into `holding/i/` and writes
 manifest's absolute `thumb_avif`/`thumb_jpg`/`thumb_small` URLs. `/i/*` is
 edge-direct + immutable-1y; a re-encode mints a new URL, so there is no
 global version bump and no way for a cached 404 to shadow real bytes.
-`THUMB_VERSION` survives only in the legacy-fallback URL shape for stems
-missing from hashes.json; it should never need bumping again.
+`THUMB_VERSION` is gone (retired once hashes.json went 100% complete). There
+is no legacy-fallback URL shape: a stem missing from hashes.json means a
+half-run pipeline, so `buildImagesManifest` skips it and logs the gap rather
+than baking a broken `/i/undefined` tile.
 
 Legacy `/images/<stem>.<ext>[?v=N]` URLs 301 into `/i/` at the worker (kept
 for a year+ for old links); unknown names still get the 404 cache-clamp so

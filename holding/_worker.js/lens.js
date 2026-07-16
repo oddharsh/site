@@ -65,6 +65,7 @@ function lensScriptJson(value) {
 function lensHttpText(status) {
   if (status >= 200 && status < 300) return "OK";
   if (status >= 300 && status < 400) return "redirect";
+  if (status === 402) return "Payment Required";   // the x402 chip's whole point; a bare "client error" is the least useful label for the demo the page ships to showcase 402
   if (status === 404) return "Not Found";
   if (status >= 400 && status < 500) return "client error";
   if (status >= 500) return "server error";
@@ -827,7 +828,10 @@ export async function lensProbeBotView(targetUrl, env, profile) {
       key: profile.key, label: profile.label, owner: profile.owner, userAgent: profile.ua,
       status: res.status, contentType, sampleBytes: cap.text.length,
       blocked: challenge || [401, 403, 406, 429, 451].includes(res.status), challenge,
-      redirected: res.url !== targetUrl,
+      // res.url is "" for a same-origin response built inside the worker (SELF_FETCH /
+      // ASSETS), so `res.url !== targetUrl` reported redirected:true for every bot on any
+      // aadhar.sh scan. Fall back to targetUrl, matching lensInspect's `res.url || targetUrl`.
+      redirected: (res.url || targetUrl) !== targetUrl,
     };
   } catch (e) {
     return { key: profile.key, label: profile.label, owner: profile.owner, userAgent: profile.ua, status: null, contentType: "", sampleBytes: 0, blocked: false, challenge: false, error: (e && e.message) || String(e) };
@@ -1418,7 +1422,10 @@ export function lensReadiness({ headers, robots, sitemap, terms, discovery, agen
   const strongPublishing = items.markdownNegotiation.status === "pass" && items.contentSignals.status === "pass" && items.linkHeaders.status === "pass";
   const baseline = items.robotsTxt.status === "pass" || items.sitemap.status === "pass";
   const level = actionSurface ? { number: 5, name: "Agent-Native" } : strongPublishing ? { number: 3, name: "Agent-Readable" } : baseline ? { number: 1, name: "Basic Web Presence" } : { number: 0, name: "Not Ready" };
-  const nextActions = Object.values(items).filter((item) => item.status === "fail" && item.countInScore).slice(0, 5).map((item) => ({ key: item.key }));
+  // ship the label with each action: LENS_READINESS_META already owns it, so the
+  // client should render it off the envelope rather than keep a second copy that
+  // silently wins and drifts when a label is renamed here.
+  const nextActions = Object.values(items).filter((item) => item.status === "fail" && item.countInScore).slice(0, 5).map((item) => ({ key: item.key, label: item.label }));
   return {
     overall, level: level.number, levelName: level.name,
     categories, checks: items, counted: counted.length, passed,

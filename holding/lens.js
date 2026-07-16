@@ -23,6 +23,7 @@
   var lens = "readiness"; // readiness | anatomy | structured | ai | terms | discovery
   var counterfactuals = { markdown: false, semantic: false, contract: false, authority: false, receipt: false };
   var busy = false;
+  var lastShotUrl = null;   // the live snapshot object URL, revoked before the next mint / on decode
 
   var LENS_LABEL = { readiness: "Readiness", anatomy: "Anatomy", structured: "Structured", ai: "AI view", terms: "Terms", discovery: "Discovery" };
 
@@ -196,7 +197,21 @@
         var ct = r.headers.get("content-type") || "";
         if (r.ok && ct.indexOf("image/") === 0) {
           return r.blob().then(function (b) {
-            humanBody.innerHTML = '<img class="lx-shot" alt="Rendered snapshot of ' + esc(shotUrl) + '" src="' + URL.createObjectURL(b) + '">';
+            // revoke the previous snapshot's object URL before minting the next, and
+            // again once this one has decoded. Overwriting innerHTML drops the <img> but
+            // NOT the blob-URL registry entry, so scanning several framing-blocked sites
+            // in a session (nytimes + stripe are both seeded chips) otherwise pins a full
+            // Browser-Rendering PNG each.
+            if (lastShotUrl) { URL.revokeObjectURL(lastShotUrl); lastShotUrl = null; }
+            var objUrl = URL.createObjectURL(b);
+            lastShotUrl = objUrl;
+            var img = new Image();
+            img.className = "lx-shot";
+            img.alt = "Rendered snapshot of " + shotUrl;
+            img.onload = function () { if (lastShotUrl === objUrl) { URL.revokeObjectURL(objUrl); lastShotUrl = null; } };
+            img.src = objUrl;
+            humanBody.innerHTML = "";
+            humanBody.appendChild(img);
           });
         }
         return r.json().then(function (j) { renderReader((j && j.error) || ("snapshot failed (" + r.status + ")")); })
@@ -432,23 +447,27 @@
     });
   }
 
-  var READINESS_COPY = {
-    robotsTxt: ["robots.txt", "Publish a valid /robots.txt with explicit User-agent rules and a Sitemap directive."], sitemap: ["Sitemap", "Publish /sitemap.xml and reference it from robots.txt."],
-    linkHeaders: ["Link headers", "Add RFC 8288 Link relations for your sitemap, docs, API catalog, or alternate machine representation."], dnsAid: ["DNS-AID", "Publish a DNSSEC-signed _index._agents.<domain> SVCB/HTTPS record for machine discovery."],
-    markdownNegotiation: ["Markdown negotiation", "Return text/markdown when a client sends Accept: text/markdown, while keeping HTML for browsers."],
-    robotsTxtAiRules: ["AI bot rules", "Declare explicit GPTBot, ClaudeBot, CCBot, and other AI crawler rules in robots.txt."], contentSignals: ["Content Signals", "Add Content-Signal directives for ai-train, ai-input, and search to robots.txt."],
-    webBotAuth: ["Web Bot Auth", "Publish a valid JWKS at /.well-known/http-message-signatures-directory."], apiCatalog: ["API Catalog", "Publish /.well-known/api-catalog as application/linkset+json with service-desc and service-doc links."],
-    oauthDiscovery: ["OAuth discovery", "Publish OAuth/OIDC discovery metadata with issuer and token endpoints."], oauthProtectedResource: ["OAuth Protected Resource", "Publish /.well-known/oauth-protected-resource with authorization_servers and scopes_supported."],
-    authMd: ["Auth.md", "Publish /auth.md with agent registration instructions and link it to your OAuth metadata."], mcpServerCard: ["MCP Server Card", "Publish /.well-known/mcp/server-card.json with serverInfo, transport, and capabilities."],
-    a2aAgentCard: ["A2A Agent Card", "Publish /.well-known/agent-card.json describing the agent's interfaces, capabilities, and skills."], agentSkills: ["Agent Skills", "Publish /.well-known/agent-skills/index.json with skills, URLs, and digests."],
-    webMcp: ["WebMCP", "Expose safe browser actions with navigator.modelContext and JSON Schemas."], x402: ["x402", "Return a machine-readable HTTP 402 payment requirement for payable routes."],
-    mpp: ["MPP", "Describe payable OpenAPI operations with x-payment-info and MPP settlement metadata."], ucp: ["UCP", "Publish /.well-known/ucp with protocol version, services, capabilities, and endpoints."],
-    acp: ["ACP", "Publish /.well-known/acp.json so agents can discover commerce services and transports."], ap2: ["AP2", "Publish the AP2 discovery metadata when your commerce flow supports it."],
+  // Fix copy only. Labels used to live here too and silently won over the ones the
+  // worker ships on every readiness item (LENS_READINESS_META), so a label renamed
+  // server-side changed the SSR text but not the hydrated text. Labels now come off
+  // the envelope item; this map is just key -> how-to-fix, which the worker never carries.
+  var READINESS_FIX = {
+    robotsTxt: "Publish a valid /robots.txt with explicit User-agent rules and a Sitemap directive.", sitemap: "Publish /sitemap.xml and reference it from robots.txt.",
+    linkHeaders: "Add RFC 8288 Link relations for your sitemap, docs, API catalog, or alternate machine representation.", dnsAid: "Publish a DNSSEC-signed _index._agents.<domain> SVCB/HTTPS record for machine discovery.",
+    markdownNegotiation: "Return text/markdown when a client sends Accept: text/markdown, while keeping HTML for browsers.",
+    robotsTxtAiRules: "Declare explicit GPTBot, ClaudeBot, CCBot, and other AI crawler rules in robots.txt.", contentSignals: "Add Content-Signal directives for ai-train, ai-input, and search to robots.txt.",
+    webBotAuth: "Publish a valid JWKS at /.well-known/http-message-signatures-directory.", apiCatalog: "Publish /.well-known/api-catalog as application/linkset+json with service-desc and service-doc links.",
+    oauthDiscovery: "Publish OAuth/OIDC discovery metadata with issuer and token endpoints.", oauthProtectedResource: "Publish /.well-known/oauth-protected-resource with authorization_servers and scopes_supported.",
+    authMd: "Publish /auth.md with agent registration instructions and link it to your OAuth metadata.", mcpServerCard: "Publish /.well-known/mcp/server-card.json with serverInfo, transport, and capabilities.",
+    a2aAgentCard: "Publish /.well-known/agent-card.json describing the agent's interfaces, capabilities, and skills.", agentSkills: "Publish /.well-known/agent-skills/index.json with skills, URLs, and digests.",
+    webMcp: "Expose safe browser actions with navigator.modelContext and JSON Schemas.", x402: "Return a machine-readable HTTP 402 payment requirement for payable routes.",
+    mpp: "Describe payable OpenAPI operations with x-payment-info and MPP settlement metadata.", ucp: "Publish /.well-known/ucp with protocol version, services, capabilities, and endpoints.",
+    acp: "Publish /.well-known/acp.json so agents can discover commerce services and transports.", ap2: "Publish the AP2 discovery metadata when your commerce flow supports it.",
   };
   function readinessCopy(itemOrKey) {
     var key = typeof itemOrKey === "string" ? itemOrKey : itemOrKey && itemOrKey.key;
-    var copy = READINESS_COPY[key];
-    return { label: copy ? copy[0] : (itemOrKey && itemOrKey.label) || key || "check", fix: copy ? copy[1] : "Inspect this surface and publish the expected machine-readable contract." };
+    var label = (itemOrKey && itemOrKey.label) || key || "check";   // the worker ships label on both items and nextActions entries
+    return { label: label, fix: READINESS_FIX[key] || "Inspect this surface and publish the expected machine-readable contract." };
   }
 
   function readinessStatus(item) {
