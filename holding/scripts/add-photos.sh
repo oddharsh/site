@@ -18,7 +18,9 @@
 #
 # post-processing:
 #   4. regenerates holding/images/metadata.json + per-stem images/meta/<stem>.json
-#      (EXIF for the tooltip; histograms are computed client-side, not stored)
+#      (EXIF for the tooltip) and bakes the 64-bin RGB+luma histograms into
+#      meta.hist via photo-histograms.py — the tooltip renders the bars from
+#      that field, and the metadata regen drops it, so the bake runs right after
 #   5. busts the manifest:images KV key so the worker re-derives from R2
 #
 # safe to re-run. skips thumbnail generation when all three thumb files are
@@ -282,6 +284,18 @@ if command -v exiftool >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
   "$SCRIPT_DIR/extract-photo-metadata.sh" "$META_SRC" 2>&1 | tail -1
 else
   echo "  exiftool or jq missing — skipping metadata regen"
+fi
+
+# bake 64-bin RGB+luma histograms into per-stem meta. the photo tooltip renders
+# the histogram from meta.hist (index.html renderHistogramSvg), and
+# extract-photo-metadata.sh above does NOT emit hist — so this MUST run after it,
+# or every incremental add strips the bars off all existing photos. computed from
+# the shipped /i/ thumbnails via hashes.json; idempotent (unchanged thumbs re-bake
+# byte-identically), so running over the whole library each add is a no-op diff.
+if command -v python3 >/dev/null 2>&1 && python3 -c "import PIL" >/dev/null 2>&1; then
+  python3 "$SCRIPT_DIR/photo-histograms.py" 2>&1 | tail -1
+else
+  echo "  Pillow (python3 PIL) missing — skipping histogram bake (run photo-histograms.py after 'pip3 install --user pillow')"
 fi
 
 wrangler kv key delete --namespace-id="$NS" "manifest:images"        --remote >/dev/null 2>&1 || true

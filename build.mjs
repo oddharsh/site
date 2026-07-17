@@ -15,7 +15,7 @@
 // root wrangler.jsonc is copied verbatim into .build/ and just works against the copy.
 
 import { createHash } from "node:crypto";
-import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { transform } from "esbuild";
 
 const OUT = ".build";
@@ -208,6 +208,40 @@ for (const [file, srcPath, marker] of SHELLS) {
   const out = `/*! minified at deploy - readable source: /luna.src.css */\n` + code;
   await writeFile(`${OUT}/holding/luna.css`, out);
   console.log(`luna.css: ${src.length} -> ${out.length} bytes (+ /luna.src.css)`);
+}
+
+// 4) worker-module CSS: minify static CSS template literals marked with a
+// leading /*min*/ sentinel. Dynamic page CSS stays unmarked; readable source
+// remains in holding/ while only the staged worker bytes shrink on the wire.
+{
+  const dir = `${OUT}/holding/_worker.js`;
+  const jsFiles = (await readdir(dir, { recursive: true })).filter((f) => f.endsWith(".js"));
+  const marker = /`(\/\*min\*\/[^`]*)`/g;
+  let litCount = 0, saved = 0, fileCount = 0;
+  for (const rel of jsFiles) {
+    const path = `${dir}/${rel}`;
+    const src = await readFile(path, "utf8");
+    const matches = [...src.matchAll(marker)];
+    if (!matches.length) continue;
+    let out = "", last = 0;
+    for (const m of matches) {
+      const cssLiteral = m[1];
+      if (cssLiteral.includes("${")) throw new Error(`${rel}: a /*min*/ CSS literal carries interpolation`);
+      const { code, warnings } = await transform(cssLiteral, { loader: "css", minify: true });
+      if (warnings.length) throw new Error(`${rel}: /*min*/ CSS minify warning: ${warnings.map((w) => w.text).join("; ")}`);
+      const min = code.replace(/\n+$/, "");
+      out += src.slice(last, m.index) + "`" + min + "`";
+      last = m.index + m[0].length;
+      saved += m[0].length - (min.length + 2);
+      litCount++;
+    }
+    out += src.slice(last);
+    try { await transform(out, { loader: "js", minify: false }); }
+    catch (e) { throw new Error(`${rel}: minifying CSS broke JS parse: ${e.message.split("\n")[0]}`); }
+    await writeFile(path, out);
+    fileCount++;
+  }
+  console.log(`worker CSS: minified ${litCount} /*min*/ literals across ${fileCount} modules, ~${(saved / 1024).toFixed(1)}KB raw saved`);
 }
 
 console.log(`staged ${OUT}/ - deploy with: wrangler deploy (self-builds via build.command) or npm run deploy`);

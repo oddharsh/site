@@ -1,7 +1,7 @@
 // HTML templates rendered by the Worker. Windows XP / Outlook Express
 // visual theme — matches the resto-mod aesthetic of aadhar.sh. The CSS
-// lives inline so the page renders without a cross-origin fetch, and so
-// the worker is a single bundle.
+// page-specific rules live inline; shared Luna window chrome comes from the
+// cacheable /luna.css stylesheet.
 //
 // design vocab:
 //   - .xp-window           outer panel, blue title bar + chrome buttons
@@ -19,27 +19,6 @@
 // in on; the router sets env.BASE_PATH per-request.
 
 const STYLES = `
-:root {
-  /* core XP palette — hand-mirrors design/tokens/colors.css (keep in sync) */
-  --xp-blue-1:   oklch(41.92% 0.0962 250.51); /* dark navy edge ≈ --blue-40   */
-  --xp-blue-2:   oklch(51% 0.225 263);        /* mid ≈ --blue-65 (title core) */
-  --xp-blue-3:   oklch(70% 0.15 258);         /* bright ≈ --blue-95 (grad top)*/
-  --xp-blue-4:   oklch(66% 0.09 263);         /* pale ≈ --blue-inactive       */
-  --xp-tan:      oklch(92.5% 0.018 95);       /* ButtonFace #ECE9D8 ≈ --face  */
-  --xp-paper:    oklch(99% 0.005 95);   /* workspace bg */
-  --xp-edge-dk:  oklch(46% 0.02 260);   /* sunken dark edge */
-  --xp-edge-md:  oklch(70% 0.02 260);   /* mid bevel */
-  --xp-edge-lt:  oklch(99% 0 0);        /* raised light edge */
-  --xp-edge-sh:  oklch(56% 0.02 260);   /* button shadow */
-  --xp-text:     oklch(18% 0 0);
-  --xp-dim:      oklch(50% 0 0);
-  --xp-link:     oklch(42.61% 0.235 263.74);
-  --xp-link-hov: oklch(62.80% 0.258 29.23);
-  --xp-link-vis: oklch(42.09% 0.194 328.36);
-  --xp-row-alt:  oklch(96% 0.01 240);   /* alternating row tint */
-  --xp-disabled: oklch(80% 0 0);
-}
-
 * { box-sizing: border-box; }
 
 /* cross-document view transitions — animate the window on nav, matching the
@@ -50,8 +29,8 @@ const STYLES = `
 }
 
 html {
-  background: var(--xp-tan);
-  color: var(--xp-text);
+  background: var(--face);
+  color: var(--ink);
   -webkit-font-smoothing: subpixel-antialiased;
 }
 body {
@@ -67,50 +46,14 @@ body {
   min-height: 100vh;
 }
 
-/* ── window chrome ──────────────────────────────────────────────────── */
 .window {
   max-width: 720px;
-  margin: 0 auto;
-  background: var(--xp-tan);
-  /* canonical Luna window frame — byte-identical to holding/index.html .window */
-  border: 2px solid #0831d9; border-right-color: #001ea0; border-bottom-color: #001ea0;
-  border-top-left-radius: 8px; border-top-right-radius: 8px; overflow: hidden;
-  box-shadow:
-    inset 1px 1px 0 #166aee, inset 2px 2px 0 #0855dd,
-    inset -1px -1px 0 #00138c, inset -2px -2px 0 #003bda,
-    4px 4px 0 rgba(0,30,160,.35);
 }
-/* title bar — mirrors the aadhar.sh main-site convention: a single
-   gradient strip with a tiny icon block + the page title on the left,
-   and three glossy gel control buttons (min/max/close) on the right.
-   the glyphs are CSS-drawn (no text, no Marlett dependency), matching
-   the canonical .title-bar .controls .min/.max/.close site-wide. */
-.title-bar {
-  /* the canonical site-wide 5-stop title gradient (≈ --grad-title) */
-  background:
-    linear-gradient(
-      180deg,
-      oklch(70% 0.15 258)  0%,
-      oklch(60% 0.20 261)  8%,
-      oklch(51% 0.225 263) 18%,
-      oklch(50% 0.225 263) 86%,
-      oklch(58% 0.18 260)  100%
-    );
-  color: oklch(100% 0 0);
-  font-family: var(--font-caption);
-  font-weight: bold;
-  font-size: 10pt;
-  padding: 4px 5px 4px 8px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  text-shadow: 1px 1px #0f1089;
-  user-select: none;
-}
-.title-bar .icon { /* tiny app icon */
-  width: 14px; height: 14px;
-  background: var(--xp-paper);
-  border: 1px solid var(--xp-blue-1);
+/* The coffee icon is page-specific; Luna owns the title strip and controls. */
+.title-bar .icon {
+  width: 14px; height: 14px; margin-right: 6px;
+  background: var(--paper);
+  border: 1px solid var(--blue-40);
   display: inline-block;
   position: relative;
   flex: 0 0 14px;
@@ -125,90 +68,14 @@ body {
   filter: grayscale(0.2);
   text-shadow: none;
 }
-.title-bar .title-text {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.controls {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-}
-/* authentic Luna caption buttons — 21px glossy "gel" lozenges with a top
-   specular highlight + CSS-drawn white glyphs, ported from the main site.
-   sRGB hex traced from the Luna .msstyles bitmap, kept as hex on purpose.
-   min/max are blue; CLOSE is RED at rest. */
-.controls .min,
-.controls .max,
-.controls .close {
-  position: relative; box-sizing: border-box;
-  width: 21px; height: 21px; padding: 0; margin: 0;
-  display: inline-block; overflow: hidden; font-size: 0; color: transparent;
-  border: 1px solid #6696eb; border-radius: 3px;
-  text-decoration: none; cursor: pointer; text-shadow: none;
-  background-color: #3e73f5;
-  background-image: linear-gradient(180deg, #5f8cf7 0%, #3a71f5 22%, #3e73f5 55%, #2a70f2 82%, #1045be 100%);
-  transition: filter 60ms ease-out;
-}
-/* "wet plastic" gloss band over the top ~45% (close uses ::after for its X stroke) */
-.controls .min::after,
-.controls .max::after {
-  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 45%;
-  background: linear-gradient(180deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.12) 70%, rgba(255,255,255,0) 100%);
-  pointer-events: none; border-radius: 2px 2px 5px 5px;
-}
-.controls .min:hover, .controls .min:focus-visible,
-.controls .max:hover, .controls .max:focus-visible {
-  border-color: #8fb4ff; background-color: #4fa4ff;
-  background-image: linear-gradient(180deg, #689bff 0%, #468aff 22%, #4fa4ff 55%, #3990fc 82%, #1858c8 100%);
-  outline: none;
-}
-/* CLOSE = red at rest */
-.controls .close {
-  border-color: #d8401c; background-color: #e45f3e;
-  background-image: linear-gradient(180deg, #e8795f 0%, #e45f40 30%, #e45d3d 52%, #e2552a 80%, #ae3110 100%);
-}
-.controls .close:hover, .controls .close:focus-visible {
-  border-color: #ff7a66; background-color: #ff957c;
-  background-image: linear-gradient(180deg, #ff8b7d 0%, #ff7463 26%, #ff957c 55%, #fd7e64 82%, #d34936 100%);
-  box-shadow: 0 0 4px rgba(255,120,96,.7); outline: none;
-}
-.controls .min:active,
-.controls .max:active,
-.controls .close:active { filter: brightness(.9); }
-/* white glyphs drawn with pseudo-elements */
-.controls .min::before {
-  content: ""; position: absolute; left: 5px; right: 5px; bottom: 5px; height: 2px;
-  background: #fff; box-shadow: 0 1px 0 rgba(0,0,0,.35);
-}
-.controls .max::before {
-  content: ""; position: absolute; left: 5px; top: 5px; width: 11px; height: 9px;
-  box-sizing: border-box; border: 1px solid #fff; border-top-width: 2px;
-  filter: drop-shadow(0 1px 0 rgba(0,0,0,.35));
-}
-.controls .close::before,
-.controls .close::after {
-  content: ""; position: absolute; left: 50%; top: 50%;
-  width: 13px; height: 2px; margin: -1px 0 0 -6.5px; background: #fff;
-  box-shadow: 0 1px 0 rgba(0,0,0,.35);
-}
-.controls .close::before { transform: rotate(45deg); }
-.controls .close::after  { transform: rotate(-45deg); }
 
-/* ── workspace body ─────────────────────────────────────────────────── */
 .content {
-  background: var(--xp-paper);
+  background: var(--paper);
   /* sunken inner bevel */
-  border-top:    1px solid var(--xp-edge-dk);
-  border-left:   1px solid var(--xp-edge-dk);
-  border-right:  1px solid var(--xp-edge-lt);
-  border-bottom: 1px solid var(--xp-edge-lt);
+  border-top:    1px solid var(--darkshadow);
+  border-left:   1px solid var(--darkshadow);
+  border-right:  1px solid var(--highlight);
+  border-bottom: 1px solid var(--highlight);
   padding: 14px 18px 18px;
 }
 
@@ -218,7 +85,7 @@ h1 {
   font-family: var(--font-caption);
   font-size: 18pt;
   font-weight: bold;
-  color: var(--xp-blue-1);
+  color: var(--blue-40);
   margin: 4px 0 8px;
   letter-spacing: -0.01em;
   text-wrap: balance;   /* horizon: even heading line breaks, no JS */
@@ -230,18 +97,18 @@ h1 {
   text-wrap: pretty;    /* horizon: avoids orphans/ragged last line */
 }
 
-a { color: var(--xp-link); text-decoration: underline; }
-a:visited { color: var(--xp-link-vis); }
-a:hover { color: var(--xp-link-hov); }
+a { color: var(--link); text-decoration: underline; }
+a:visited { color: var(--link-visited); }
+a:hover { color: var(--link-hover); }
 
 /* ── group boxes (Windows GroupBox controls) ────────────────────────── */
 .xp-group {
   position: relative;
-  border: 1px solid var(--xp-edge-md);
+  border: 1px solid var(--shadow);
   border-radius: 0;
   padding: 14px 12px 12px;
   margin: 16px 0;
-  background: var(--xp-paper);
+  background: var(--paper);
   /* inner inset */
   box-shadow:
     inset 1px 1px 0 oklch(94% 0.01 260),
@@ -250,16 +117,16 @@ a:hover { color: var(--xp-link-hov); }
 .xp-group > .legend {
   position: absolute;
   top: -8px; left: 10px;
-  background: var(--xp-paper);
+  background: var(--paper);
   padding: 0 6px;
   font-size: 10pt;
   font-weight: bold;
-  color: var(--xp-blue-1);
+  color: var(--blue-40);
 }
 
 /* ── slot listing ───────────────────────────────────────────────────── */
 .xp-meta {
-  color: var(--xp-dim);
+  color: var(--ink-dim);
   font-size: 9.5pt;
   margin: 0 0 8px;
 }
@@ -274,7 +141,7 @@ a:hover { color: var(--xp-link-hov); }
   font-size: 10pt;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--xp-blue-1);
+  color: var(--blue-40);
   margin: 14px 0 4px;
   padding-bottom: 2px;
   border-bottom: 1px dotted oklch(80% 0.03 240);
@@ -297,36 +164,36 @@ button.xp-button {
   min-width: 70px;
   font-family: var(--font-ui);
   font-size: 10pt;
-  color: var(--xp-text);
+  color: var(--ink);
   background: linear-gradient(to bottom, oklch(99% 0 0) 0%, oklch(92% 0.005 240) 100%);
-  border: 1px solid var(--xp-edge-sh);
+  border: 1px solid var(--shadow);
   border-radius: 0;
   cursor: pointer;
   /* raised bevel */
   box-shadow:
-    inset 1px 1px 0 var(--xp-edge-lt),
-    inset -1px -1px 0 var(--xp-edge-md);
+    inset 1px 1px 0 var(--highlight),
+    inset -1px -1px 0 var(--shadow);
   font-variant-numeric: tabular-nums;
 }
 .slot-btn:hover,
 button.xp-button:hover {
   background: linear-gradient(to bottom, oklch(99% 0.015 240) 0%, oklch(90% 0.03 240) 100%);
-  border-color: var(--xp-blue-2);
+  border-color: var(--blue-65);
 }
 .slot-btn:active,
 button.xp-button:active {
   background: linear-gradient(to bottom, oklch(88% 0.01 240), oklch(95% 0.005 240));
   box-shadow:
-    inset 1px 1px 0 var(--xp-edge-md),
-    inset -1px -1px 0 var(--xp-edge-lt);
+    inset 1px 1px 0 var(--shadow),
+    inset -1px -1px 0 var(--highlight);
 }
 .slot-btn[aria-pressed="true"] {
-  background: linear-gradient(to bottom, var(--xp-blue-3), var(--xp-blue-2));
+  background: linear-gradient(to bottom, var(--blue-95), var(--blue-65));
   color: oklch(100% 0 0);
-  border-color: var(--xp-blue-1);
+  border-color: var(--blue-40);
   box-shadow:
-    inset 1px 1px 0 var(--xp-blue-3),
-    inset -1px -1px 0 var(--xp-blue-1);
+    inset 1px 1px 0 var(--blue-95),
+    inset -1px -1px 0 var(--blue-40);
   font-weight: bold;
   text-shadow: 1px 1px 0 oklch(20% 0.05 260 / 0.6);
 }
@@ -339,7 +206,7 @@ button.xp-button.primary {
 }
 button.xp-button.primary:disabled,
 button.xp-button:disabled {
-  color: var(--xp-disabled);
+  color: var(--ink-faint);
   background: linear-gradient(to bottom, oklch(95% 0 0), oklch(88% 0 0));
   border-color: oklch(75% 0 0);
   cursor: not-allowed;
@@ -363,7 +230,7 @@ form.book .row.stacked {
 }
 form.book label {
   font-size: 10pt;
-  color: var(--xp-text);
+  color: var(--ink);
 }
 form.book input[type="text"],
 form.book input[type="email"],
@@ -372,8 +239,8 @@ form.book textarea {
   font-size: 10.5pt;
   padding: 3px 6px;
   background: oklch(100% 0 0);
-  color: var(--xp-text);
-  border: 1px solid var(--xp-edge-md);
+  color: var(--ink);
+  border: 1px solid var(--shadow);
   /* sunken (inset) — opposite of buttons */
   box-shadow:
     inset 1px 1px 0 oklch(70% 0.01 260),
@@ -385,11 +252,11 @@ form.book textarea { min-height: 5.5em; max-height: 40vh; resize: vertical; fiel
 form.book input:focus,
 form.book textarea:focus {
   outline: none;
-  border-color: var(--xp-blue-2);
+  border-color: var(--blue-65);
   box-shadow:
     inset 1px 1px 0 oklch(70% 0.01 260),
     inset -1px -1px 0 oklch(100% 0 0),
-    0 0 0 1px var(--xp-blue-3);
+    0 0 0 1px var(--blue-95);
 }
 form.book .honeypot {
   position: absolute; left: -9999px; visibility: hidden;
@@ -412,7 +279,7 @@ form.book .actions {
   gap: 8px;
   align-items: flex-start;
 }
-.banner::before { content: "ⓘ"; color: var(--xp-blue-2); font-weight: bold; flex: 0 0 auto; }
+.banner::before { content: "ⓘ"; color: var(--blue-65); font-weight: bold; flex: 0 0 auto; }
 .banner.success { border-color: oklch(70% 0.13 145); background: oklch(95% 0.06 145); }
 .banner.success::before { content: "✓"; color: oklch(50% 0.18 145); }
 .banner.warn   { border-color: oklch(70% 0.13 50);  background: oklch(95% 0.06 80); }
@@ -421,7 +288,7 @@ form.book .actions {
 .banner.error::before  { content: "✕"; color: oklch(50% 0.22 25);  }
 
 .empty {
-  color: var(--xp-dim);
+  color: var(--ink-dim);
   font-style: italic;
   margin: 14px 0;
 }
@@ -430,8 +297,8 @@ form.book .actions {
 .xp-statusbar {
   margin-top: 14px;
   font-size: 9pt;
-  color: var(--xp-dim);
-  border-top: 1px solid var(--xp-edge-md);
+  color: var(--ink-dim);
+  border-top: 1px solid var(--shadow);
   padding-top: 6px;
   display: flex;
   flex-wrap: wrap;
@@ -450,7 +317,7 @@ form.book .actions {
   body { padding: 8px 4px 32px; }
   .content { padding: 10px 10px 12px; }
   form.book .row { grid-template-columns: 1fr; gap: 2px; }
-  form.book label { font-size: 9.5pt; color: var(--xp-dim); text-transform: uppercase; letter-spacing: 0.04em; }
+  form.book label { font-size: 9.5pt; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.04em; }
 }
 `;
 
@@ -489,8 +356,9 @@ function shell(title, body, env) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#2D78BD">
-  <link rel="stylesheet" href="https://aadhar.sh/luna.css">
+<meta name="theme-color" content="#2D78BD">
+<link rel="preload" as="style" href="https://aadhar.sh/luna.css">
+<link rel="stylesheet" href="https://aadhar.sh/luna.css">
 <title>${esc(fullTitle)}</title>
 <meta name="description" content="let's grab coffee or a bagel with ${esc(env.HOST_NAME)} in NYC. requests are reviewed by hand.">
 <link rel="icon" type="image/svg+xml" href="${COFFEE_FAVICON}">

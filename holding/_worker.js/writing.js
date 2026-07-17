@@ -10,7 +10,7 @@ import { escAttr, escHtml } from "./lib/http.js";
 // canonical text: editable by nature, ephemeral by nature (no save → reload restores
 // the canonical copy). The prose ships in the HTML, so it's readable/crawlable with
 // JS off; notepad.js only adds the menus + Ln/Col status + the F5 date stamp.
-export const NOTEPAD_CSS = `
+export const NOTEPAD_CSS = `/*min*/
 /* cross-doc View Transition opt-in: without this, navs to/from /writing were
    the one place Chrome still white-flashed (every other page opts in). */
 @media (prefers-reduced-motion:no-preference){@view-transition{navigation:auto}::view-transition-old(root),::view-transition-new(root){animation-duration:140ms}}

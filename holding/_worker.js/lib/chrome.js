@@ -11,9 +11,10 @@ import { escAttr, escHtml } from "./http.js";
 // how the /whoareyou and /bot h2 rules drifted apart earlier). this is
 // the one shared source; page-specific rules (h1 sizes, tables, field
 // grids, the whoareyou title-text + control spacing) stay inline per
-// page after the call. only max-width is parameterized.
-export function xpChromeCss(maxWidth) {
-  return `
+// page after the call. The /*min*/ sentinel lets build.mjs minify this static
+// literal on the wire; the readable source remains in git.
+export function xpChromeCss() {
+  return `/*min*/
   :root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}
   * { box-sizing: border-box; }
 /* cross-document View Transitions: a fast, reduced-motion-safe crossfade on real
@@ -34,7 +35,7 @@ export function xpChromeCss(maxWidth) {
     text-wrap: pretty;  /* modern line-breaking; progressive, ignored where unsupported */
     margin: 0; padding: 24px 12px 60px; min-height: 100vh;
   }
-  .window { max-width: ${maxWidth}px; }
+  .window { max-width: var(--axp-maxw, 720px); }
   /* the canonical window chrome (title bar, gel buttons, frame, xp-button/
      input) lives in luna.css now, zero-specificity via :where() — phase D.
      Only the page-parametric width survives inline. */
@@ -102,7 +103,8 @@ export function lunaPage({
 <title>${escHtml(documentTitle)}</title>${metaDescription}${metaRobots}
 <link rel="icon" href="/favicon.ico">
 ${head || ""}<style>
-${xpChromeCss(width)}
+:root{--axp-maxw:${width}px}
+${xpChromeCss()}
 ${css || ""}
 </style>
 <link rel="stylesheet" href="/luna.css">
