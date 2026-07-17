@@ -958,7 +958,7 @@ placeholder
 
   <div class="title-bar" aria-hidden="true">
     <span class="title-text"><span class="icon"></span>aadhar.sh/garage/horizon</span>
-    <span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/garage/" title="back to the garage" aria-label="back to the garage"></a></span>
+    <span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
   </div>
 
   <div class="content">
@@ -1048,7 +1048,7 @@ placeholder
     <section class="demo ifor-demo" data-cap="interestfor">
       <h2>
         <span>interestfor <span class="mono">+ anchor positioning</span></span>
-        <span class="stat contested">Origin trial &middot; Safari opposes</span>
+        <span class="stat contested">Chrome 142 &middot; Safari opposes &middot; FF no</span>
       </h2>
       <p class="note">
         The declarative dream: <code>interestfor="id"</code> shows a popover on
@@ -1084,8 +1084,8 @@ placeholder
         On the site: this comes closest to natively replacing the ~70-line
         cursor-tooltip layer: it handles hover/focus detection,
         the show/hide delay, and accessibility on its own. <strong>But</strong> Safari
-        <em>opposes</em> the current design and it&apos;s Chrome origin-trial
-        only, so it is <em>not</em> a migration path while the site cares about
+        <em>opposes</em> the current design and it&apos;s Chrome-only (shipped
+        default-on in Chrome&nbsp;142, Firefox hasn&apos;t), so it is <em>not</em> a migration path while the site cares about
         Safari (WebKit standards-position:
         <a href="https://github.com/WebKit/standards-positions/issues/464" rel="external">oppose, #464</a>).
         And it anchors to the <em>element</em>, not the cursor,
@@ -1106,9 +1106,9 @@ pointerout   -&gt; hidePopover()
       </details>
       <p class="unsupported">
         Your browser doesn&apos;t support <code>interestfor</code>, the
-        links above just navigate on click and show no popover. To try it in
-        Chrome: enable <code>chrome://flags#interest-target-attribute</code>
-        (or join the origin trial).
+        links above just navigate on click and show no popover. It ships
+        default-on in Chrome/Edge&nbsp;142+, so open this page there to see it
+        (Safari opposes, Firefox hasn&apos;t shipped).
       </p>
     </section>
 
@@ -1220,7 +1220,7 @@ pointerout   -&gt; hidePopover()
     <section class="demo" data-cap="popover-hint">
       <h2>
         <span>popover=<span class="mono">hint</span></span>
-        <span class="stat chrome">Chrome 133 · Safari/FF positive</span>
+        <span class="stat chrome">Chrome 133 &middot; FF 149 &middot; Safari no</span>
       </h2>
       <p class="note">
         A third popover <em>type</em>, sitting between <code>auto</code> and
@@ -1273,7 +1273,7 @@ pointerout   -&gt; hidePopover()
     <section class="demo" data-cap="field-sizing">
       <h2>
         <span>field-sizing <span class="mono">: content</span></span>
-        <span class="stat cross">Chrome &middot; Safari &middot; Firefox 152</span>
+        <span class="stat cross">Chrome 123 &middot; Safari 26.2 &middot; FF 152</span>
       </h2>
       <p class="note">
         Lets a form control size itself to its <em>content</em> instead of a
@@ -1306,7 +1306,7 @@ pointerout   -&gt; hidePopover()
         message box on the booking form can drop its resize script
         entirely and just say <code>field-sizing: content; max-height: 9em</code>
         on the sunken XP textarea, with the layout reflowing for free. Now
-        shipped in Chrome&nbsp;123 and Safari&nbsp;26.2 (Firefox not yet), so it can graduate to the live booking form,
+        shipped in Chrome&nbsp;123, Safari&nbsp;26.2, and Firefox&nbsp;152 (June&nbsp;2026), so it is now Baseline and can graduate to the live booking form,
         not just the garage. Pair it with a static <code>rows</code> attribute
         as the fallback height and there's nothing to feature-detect.
       </p>
@@ -1321,7 +1321,7 @@ pointerout   -&gt; hidePopover()
     <section class="demo" data-cap="view-transitions">
       <h2>
         <span>View Transitions <span class="mono">/ document.startViewTransition()</span></span>
-        <span class="stat chrome">Chrome &middot; Safari &middot; no Firefox</span>
+        <span class="stat cross">Chrome &middot; Safari &middot; FF 144</span>
       </h2>
       <p class="note">
         Wrap a DOM mutation in <code>document.startViewTransition(cb)</code> and
@@ -1331,7 +1331,8 @@ pointerout   -&gt; hidePopover()
         Same-document is shipped in Chrome&nbsp;111 and Safari&nbsp;18; the
         cross-document <code>@view-transition&nbsp;{ navigation: auto }</code>
         variant (Chrome&nbsp;126, Safari&nbsp;18.2) animates whole navigations.
-        Firefox ships neither. Tap the toggle: the panel below has its
+        Firefox shipped same-document in&nbsp;144 (Oct&nbsp;2025) but not the cross-document
+        variant yet. Tap the toggle: the panel below has its
         own <code>view-transition-name</code>, so only it animates:
       </p>
       <div class="vt-stage">
@@ -1404,7 +1405,7 @@ pointerout   -&gt; hidePopover()
     <section class="demo" data-cap="base-select">
       <h2>
         <span>appearance: base-select <span class="mono">/ customizable &lt;select&gt;</span></span>
-        <span class="stat cross">Chrome &middot; Safari 27</span>
+        <span class="stat chrome">Chrome 135 &middot; Safari 27 beta &middot; FF flag</span>
       </h2>
       <p class="note">
         For two decades the <code>&lt;select&gt;</code> popup has been a sealed
@@ -1458,7 +1459,7 @@ pointerout   -&gt; hidePopover()
     <section class="demo" data-cap="corner-shape">
       <h2>
         <span>corner-shape <span class="mono">+ superellipse()</span></span>
-        <span class="stat chrome">Chrome · Safari TP/flag</span>
+        <span class="stat chrome">Chrome 139 &middot; Safari positive &middot; FF no</span>
       </h2>
       <p class="note">
         A second axis for <code>border-radius</code>. The radius sets <em>where</em>
@@ -1568,7 +1569,7 @@ pointerout   -&gt; hidePopover()
     <section class="demo" data-cap="scheduler-yield">
       <h2>
         <span>scheduler.yield() <span class="mono">/ main-thread responsiveness</span></span>
-        <span class="stat chrome">Chrome-only · FF positive</span>
+        <span class="stat chrome">Chrome 129 &middot; FF 142 &middot; no Safari</span>
       </h2>
       <p class="note">
         <span class="wk non">WebKit: unstated</span>
@@ -1577,7 +1578,7 @@ pointerout   -&gt; hidePopover()
         resumes your loop, and crucially resumes at the <em>front</em> of
         the queue, not the back like <code>setTimeout(0)</code>. So you stay
         responsive without losing your turn to unrelated work. It&apos;s shipped
-        in Chrome (no flag), so the demo below is live: the concept, then a
+        in Chrome and Firefox&nbsp;142 (no flag), so the demo below is live: the concept, then a
         real measured run, then the code.
       </p>
 
@@ -2081,7 +2082,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
 &lt;!-- TOMORROW (Chrome flag #route-matching, not cross-browser): --&gt;
 &lt;!-- routes declared in markup; CSS styles the active one directly,  --&gt;
 &lt;!-- no navigate listener, no data-attribute plumbing.              --&gt;
-&lt;a href="/garage/" class="nav-tab"&gt;garage&lt;/a&gt;
+&lt;a href="/garage" class="nav-tab"&gt;garage&lt;/a&gt;
 /* :route-active { font-weight: bold; }  (sketch syntax) */</pre>
       </details>
 
@@ -2274,7 +2275,7 @@ myButton.onclick = async () =&gt; {
     <section class="demo" data-cap="css-scope">
       <h2>
         <span><code>@scope</code> <span class="mono">scoped styles + donut</span></span>
-        <span class="stat cross">Chrome 118 &middot; Safari 17.4</span>
+        <span class="stat cross">Chrome 118 &middot; Safari 17.4 &middot; FF 146</span>
       </h2>
       <p class="note">
         Style a subtree without a naming convention, and stop the styles at an inner
@@ -2330,7 +2331,7 @@ myButton.onclick = async () =&gt; {
     <section class="demo" data-cap="hidden-until-found">
       <h2>
         <span><code>hidden=until-found</code> <span class="mono">+ scroll-to-text</span></span>
-        <span class="stat cross">Chrome 102 &middot; Safari 26</span>
+        <span class="stat cross">Chrome 102 &middot; Safari 26 &middot; FF 148</span>
       </h2>
       <p class="note">
         Content that is collapsed <em>but still findable</em>: <code>hidden="until-found"</code>
@@ -2793,11 +2794,110 @@ myButton.onclick = async () =&gt; {
       </p>
     </section>
 
+    <!-- ───────────────────── focusgroup ───────────────────── -->
+    <section class="demo" data-cap="focusgroup">
+      <h2>
+        <span>focusgroup <span class="mono">attribute</span></span>
+        <span class="stat chrome">Chrome 150 &middot; Safari/FF no</span>
+      </h2>
+      <p class="note">
+        Declarative arrow-key navigation for a set of controls: put
+        <code>focusgroup</code> on a container and the browser gives its children a
+        single tab stop, arrow-key movement between them, and last-focused memory,
+        the roving-<code>tabindex</code> pattern every toolbar and menu hand-rolls in
+        JS. Shipped default-on in Chrome&nbsp;150; no Safari or Firefox yet, where it
+        degrades to each control being its own tab stop. Tab into the toolbar below,
+        then use the arrow keys (in Chrome&nbsp;150):
+      </p>
+      <div focusgroup role="toolbar" aria-label="focusgroup demo" style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+        <button class="xp-button" type="button">Cut</button>
+        <button class="xp-button" type="button">Copy</button>
+        <button class="xp-button" type="button">Paste</button>
+        <button class="xp-button" type="button">Delete</button>
+      </div>
+      <p class="replaces">
+        On the site: aimed straight at the XP shell in <code>nav.js</code>. The taskbar
+        app-buttons, the Start menu, and the row of draggable desktop icons are exactly
+        the composite widgets <code>focusgroup</code> is for, and their keyboard handling
+        is hand-written today. It would hand the arrow-key + single-tab-stop wiring to
+        the browser. Single-engine, so it stays a garage experiment until a second one
+        ships it.
+      </p>
+    </section>
+
+    <!-- ───────────────────── background-clip: border-area ───────────────────── -->
+    <section class="demo" data-cap="background-clip-border-area">
+      <h2>
+        <span>background-clip <span class="mono">: border-area</span></span>
+        <span class="stat chrome">Chrome 150 &middot; Safari/FF no</span>
+      </h2>
+      <p class="note">
+        Paint a background into the border box <em>itself</em>, so a gradient border is
+        one declaration instead of the old <code>border-image</code> slice dance or a
+        stacked-background hack: give the element a gradient background, a transparent
+        border, and <code>background-clip: border-area</code>, and the gradient fills
+        only the border stroke. Chrome&nbsp;150, default-on; not in Safari or Firefox
+        yet. The frame below is a transparent border filled by a clipped gradient:
+      </p>
+      <div style="margin-top:8px;padding:12px 14px;border:6px solid transparent;border-radius:8px;background:linear-gradient(120deg, oklch(55% 0.20 264), oklch(72% 0.15 190));background-clip:border-area;font:bold 10pt Tahoma, sans-serif;color:oklch(30% 0.03 264)">background-clip: border-area</div>
+      <p class="replaces">
+        On the site: the whole Luna look is 3D bevels and blue-gradient title bars,
+        currently built from stacked <code>box-shadow</code>s and hand-mixed OKLCH border
+        colours. A gradient-framed window or a two-tone bevel collapses to one background
+        plus one clip, no <code>border-image</code>. The existing bevels already render
+        fine, so this is a simplification rather than a new capability.
+      </p>
+      <p class="unsupported">Your browser doesn&apos;t support <code>background-clip: border-area</code>; the gradient above fills the whole box instead of just the border.</p>
+    </section>
+
+    <!-- ───────────────────── text-fit ───────────────────── -->
+    <section class="demo" data-cap="text-fit">
+      <h2>
+        <span>text-fit <span class="mono">CSS property</span></span>
+        <span class="stat chrome">Chrome 150 &middot; Safari/FF no</span>
+      </h2>
+      <p class="note">
+        Scale a text node&apos;s font size to exactly fill the width of its box, in pure
+        CSS, with no JS measuring the string and setting a size per element.
+        Chrome&nbsp;150, default-on; not in Safari or Firefox yet, where the text just
+        keeps its declared size.
+      </p>
+      <p class="replaces">
+        On the site: the XP title bars and folder labels truncate long names with an
+        ellipsis today. <code>text-fit</code> could instead shrink an over-long window
+        title to fit its bar, the way a real Luna caption never clipped. Minor and
+        single-engine, so it parks here for now.
+      </p>
+      <p class="unsupported">Your browser doesn&apos;t support <code>text-fit</code> yet; nothing here changes size.</p>
+    </section>
+
+    <!-- ───────────────────── CSS random() ───────────────────── -->
+    <section class="demo" data-cap="css-random">
+      <h2>
+        <span>CSS <span class="mono">random()</span></span>
+        <span class="stat trial">Safari 26.2 &middot; Chrome flag &middot; FF no</span>
+      </h2>
+      <p class="note">
+        A random value straight in CSS: <code>random(25%, 100%)</code> resolves to a
+        number in that range at computed-value time, with an element-scoped keyword so
+        each element can draw its own. Shipped in <strong>Safari&nbsp;26.2</strong>;
+        behind the experimental flag in Chrome (~148+) and nothing in Firefox, so it
+        reads as a Safari-first CSS Values&nbsp;5 feature for now.
+      </p>
+      <p class="replaces">
+        On the site: pure decoration, filed next to WebGPU under &quot;because we can.&quot;
+        A hand-strewn desktop-icon jitter, per-photo grain seeds, or a scatter of Bliss
+        clouds could pick their own offsets with no JS random loop. Nothing here needs
+        it, which is exactly why it belongs on the horizon.
+      </p>
+      <p class="unsupported">Your browser doesn&apos;t support <code>random()</code> yet, so a fixed fallback value is used.</p>
+    </section>
+
     <!-- ───────────────────── Element.moveBefore() ───────────────────── -->
     <section class="demo" data-cap="move-before">
       <h2>
         <span>Element.moveBefore() <span class="mono">state-preserving move</span></span>
-        <span class="stat chrome">Chrome 133 &middot; FF/Safari positive</span>
+        <span class="stat chrome">Chrome 133 &middot; FF 144 &middot; Safari positive</span>
       </h2>
       <p class="note">
         Reparenting a node with <code>appendChild</code> tears its state down: iframes reload,
@@ -3248,7 +3348,7 @@ myButton.onclick = async () =&gt; {
     </section>
 
     <footer>
-      <p>&larr; back to the <a href="/garage/">garage</a> &middot; <a href="/">aadhar.sh</a></p>
+      <p>&larr; back to the <a href="/garage">garage</a> &middot; <a href="/">aadhar.sh</a></p>
       <p><small>&copy; 2026 Aadharsh Pannirselvam &middot; built in the open &middot; triangulated from chromestatus.com + chrome://flags (Canary) + webkit.org/standards-positions</small></p>
     </footer>
 
@@ -3331,6 +3431,9 @@ myButton.onclick = async () =&gt; {
     "sw-static-routing": function () { return (typeof InstallEvent !== "undefined" && "addRoutes" in InstallEvent.prototype); },
     "local-fonts": function () { return ("queryLocalFonts" in window); },
     "webgpu": function () { return ("gpu" in navigator); },
+    "background-clip-border-area": function () { return CSS.supports("background-clip: border-area"); },
+    "text-fit": function () { return (CSS.supports("text-fit: scale-inline") || ("textFit" in document.documentElement.style)); },
+    "css-random": function () { return CSS.supports("width: random(1px, 2px)"); },
     "speculation-rules": function () { return (typeof HTMLScriptElement !== "undefined" && HTMLScriptElement.supports && HTMLScriptElement.supports("speculationrules")); },
   };
   var label = {
@@ -3379,6 +3482,9 @@ myButton.onclick = async () =&gt; {
     "sw-static-routing": "SW routing",
     "local-fonts": "local fonts",
     "webgpu": "WebGPU",
+    "background-clip-border-area": "border-area",
+    "text-fit": "text-fit",
+    "css-random": "random()",
     "speculation-rules": "speculation",
   };
   var state = {};
@@ -3457,6 +3563,6 @@ myButton.onclick = async () =&gt; {
 }
 </script>
   <script src="/nav.js" defer></script>
-<!-- axp:shell --><nav id="axp-icons" aria-label="desktop shortcuts"><a class="axp-ico" title="writing, in flux" href="/writing" data-key="Notepad" style="left:9px;top:9px"><span class="ic note" aria-hidden="true"></span><span class="t">Notepad</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Twitter (opens in a new tab)" href="https://twitter.com/oddhash" data-key="Twitter" style="left:9px;top:95px"><span class="ic " style="background:linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))" aria-hidden="true">@</span><span class="t">Twitter</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Instagram (opens in a new tab)" href="https://instagram.com/aadharsh.hif" data-key="Photos" style="left:9px;top:181px"><span class="ic " style="background:linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))" aria-hidden="true"><i class="cam" aria-hidden="true"></i></span><span class="t">Photos</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Curius (opens in a new tab)" href="https://curius.app/aadharsh-pannirselvam" data-key="Curius" style="left:9px;top:267px"><span class="ic " style="background:linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))" aria-hidden="true">C</span><span class="t">Curius</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Beli (opens in a new tab)" href="https://beliapp.com/users/aadharsh" data-key="Beli" style="left:9px;top:353px"><span class="ic " style="background:linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))" aria-hidden="true">B</span><span class="t">Beli</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Spotify (opens in a new tab)" href="https://open.spotify.com/user/aadharsh2010" data-key="Music" style="left:9px;top:439px"><span class="ic " style="background:linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))" aria-hidden="true">♪</span><span class="t">Music</span></a></nav><div id="axp-taskbar" role="navigation" aria-label="taskbar"><a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a><div id="axp-pins"><a class="axp-pin" title="prototypes + experiments" href="/garage/"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="garageF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffb45a"/><stop offset=".5" stop-color="#ef8f24"/><stop offset="1" stop-color="#c2660a"/></linearGradient><linearGradient id="garageG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="garageS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#garageS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#garageF)" stroke="#8f4d06" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#garageG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><g fill="#fff"><rect x="14" y="5" width="4" height="22" rx="1.5"/><rect x="5" y="14" width="22" height="4" rx="1.5"/><rect x="14" y="5" width="4" height="22" rx="1.5" transform="rotate(45 16 16)"/><rect x="14" y="5" width="4" height="22" rx="1.5" transform="rotate(-45 16 16)"/><circle cx="16" cy="16" r="6.5"/></g><circle cx="16" cy="16" r="2.8" fill="#ef8f24"/></g></g></svg></span><span class="lbl">garage</span></a><a class="axp-pin" title="chat-style explainers + live demos" href="/lwe/"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="lweF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#838ae6"/><stop offset=".5" stop-color="#4b53c9"/><stop offset="1" stop-color="#333aa0"/></linearGradient><linearGradient id="lweG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="lweS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#lweS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#lweF)" stroke="#272d82" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#lweG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><path d="M6 9 h20 a2 2 0 0 1 2 2 v9 a2 2 0 0 1-2 2 H14 l-5 4 v-4 H6 a2 2 0 0 1-2-2 v-9 a2 2 0 0 1 2-2 Z" fill="#fff"/><g stroke="#4b53c9" stroke-width="1.7" stroke-linecap="round" fill="none"><path d="M8.5 13.5 q2 -2.4 4 0 t4 0 t4 0"/><path d="M8.5 18 q2 -2.4 4 0 t4 0"/></g></g></g></svg></span><span class="lbl">lwe</span></a><a class="axp-pin" title="notes, in flux: an editable notepad" href="/writing"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="writingF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6fa0ee"/><stop offset=".5" stop-color="#2f6bd6"/><stop offset="1" stop-color="#1a4ba8"/></linearGradient><linearGradient id="writingG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="writingS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#writingS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#writingF)" stroke="#143c86" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#writingG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><g fill="#fff"><rect x="8" y="8" width="16" height="2.6" rx="1.3"/><rect x="8" y="14.7" width="16" height="2.6" rx="1.3"/><rect x="8" y="21.4" width="10" height="2.6" rx="1.3"/></g></g></g></svg></span><span class="lbl">writing</span></a><a class="axp-pin" title="what I've been reading, from Curius" href="/reading"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="readingF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#de8186"/><stop offset=".5" stop-color="#c1545a"/><stop offset="1" stop-color="#93333a"/></linearGradient><linearGradient id="readingG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="readingS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#readingS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#readingF)" stroke="#732830" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#readingG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><g fill="#fff"><path d="M16 9 C13 7.2 9 7 6 7.6 V24 C9 23.4 13 23.6 16 25 Z"/><path d="M16 9 C19 7.2 23 7 26 7.6 V24 C23 23.4 19 23.6 16 25 Z" opacity=".82"/></g><path d="M16 9 V25" stroke="#c1545a" stroke-width="1.4"/></g></g></svg></span><span class="lbl">reading</span></a><a class="axp-pin" title="events worth going to" href="/serendipity"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="serendipityF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a886e8"/><stop offset=".5" stop-color="#7c4dd6"/><stop offset="1" stop-color="#5a32a8"/></linearGradient><linearGradient id="serendipityG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="serendipityS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#serendipityS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#serendipityF)" stroke="#482788" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#serendipityG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><rect x="6" y="8" width="20" height="18" rx="2" fill="#fff"/><rect x="6" y="8" width="20" height="5" rx="2" fill="#e7e7ef"/><g fill="#7c4dd6"><rect x="9" y="16" width="3.4" height="3.4"/><rect x="14.3" y="16" width="3.4" height="3.4"/><rect x="19.6" y="16" width="3.4" height="3.4"/><rect x="9" y="21" width="3.4" height="3.4"/><rect x="14.3" y="21" width="3.4" height="3.4"/></g></g></g></svg></span><span class="lbl">serendipity</span></a><a class="axp-pin" title="the crypto-VC neighborhood" href="/around"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="aroundF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5cc6ba"/><stop offset=".5" stop-color="#1f9b8e"/><stop offset="1" stop-color="#137468"/></linearGradient><linearGradient id="aroundG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="aroundS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#aroundS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#aroundF)" stroke="#0d5a50" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#aroundG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><path d="M16 6 C11.6 6 8 9.3 8 13.6 C8 19 16 26 16 26 C16 26 24 19 24 13.6 C24 9.3 20.4 6 16 6 Z" fill="#fff"/><circle cx="16" cy="13.6" r="3.2" fill="#1f9b8e"/></g></g></svg></span><span class="lbl">around</span></a><a class="axp-pin" title="the other web: how machines read a URL" href="/lens"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="lensF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#79c7e6"/><stop offset=".5" stop-color="#2f9fc4"/><stop offset="1" stop-color="#1d7895"/></linearGradient><linearGradient id="lensG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="lensS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#lensS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#lensF)" stroke="#145d73" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#lensG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><rect x="5.5" y="5" width="15" height="19" rx="2" fill="#fff"/><g fill="#2f9fc4"><rect x="8.5" y="9.5" width="9" height="1.7" rx="0.6"/><rect x="8.5" y="13" width="9" height="1.7" rx="0.6"/><rect x="8.5" y="16.5" width="6" height="1.7" rx="0.6"/></g><circle cx="20.5" cy="20.5" r="6" fill="#2f9fc4" stroke="#fff" stroke-width="2.2"/><circle cx="18.6" cy="18.6" r="1.5" fill="#fff" opacity=".85"/><path d="M24.8 24.8 L28.5 28.5" stroke="#fff" stroke-width="3.2" stroke-linecap="round"/></g></g></svg></span><span class="lbl">lens</span></a><a class="axp-pin" title="what I'm listening to right now" href="/rn"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="musicF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6fcd8a"/><stop offset=".5" stop-color="#2faa55"/><stop offset="1" stop-color="#1d8040"/></linearGradient><linearGradient id="musicG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="musicS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#musicS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#musicF)" stroke="#156030" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#musicG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><g fill="#fff"><rect x="17" y="7" width="2.6" height="14"/><path d="M19.6 7 C23 8 25 10 24.4 13.6 C23 11 21 11 19.6 11.8 Z"/><ellipse cx="14" cy="21" rx="4.4" ry="3.5"/></g></g></g></svg></span><span class="lbl">music</span></a><a class="axp-pin" title="book a coffee / bagel" href="/coffee"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="coffeeF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b08858"/><stop offset=".5" stop-color="#875c34"/><stop offset="1" stop-color="#5e3c1e"/></linearGradient><linearGradient id="coffeeG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="coffeeS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#coffeeS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#coffeeF)" stroke="#472d16" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#coffeeG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><path d="M8 12 h13 v6 a6.5 6.5 0 0 1-13 0 Z" fill="#fff"/><path d="M21 13 h3 a2.6 2.6 0 0 1 0 5.2 h-3" fill="none" stroke="#fff" stroke-width="2.2"/><g stroke="#fff" stroke-width="1.8" stroke-linecap="round"><path d="M11 5.5 v3"/><path d="M14.5 5 v3.5"/></g></g></g></svg></span><span class="lbl">coffee</span></a></div><div id="axp-spacer"></div><div id="axp-tray"><button id="axp-sound" type="button" hidden></button><a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><svg viewBox="0 0 24 24"><defs><filter id="spSh" x="-30%" y="-20%" width="160%" height="150%"><feDropShadow dx="0" dy=".5" stdDeviation=".5" flood-color="#000" flood-opacity=".28"></feDropShadow></filter><linearGradient id="spBez" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f3efe4"></stop><stop offset=".5" stop-color="#d6d0be"></stop><stop offset="1" stop-color="#b1aa94"></stop></linearGradient><linearGradient id="spScr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6fb0e8"></stop><stop offset=".5" stop-color="#2f72b6"></stop><stop offset="1" stop-color="#16548f"></stop></linearGradient><linearGradient id="spGl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".5"></stop><stop offset="1" stop-color="#ffffff" stop-opacity="0"></stop></linearGradient></defs><g filter="url(#spSh)"><ellipse cx="12" cy="21.3" rx="5.2" ry="1" fill="#8f876f" opacity=".5"></ellipse><rect x="10.4" y="17.2" width="3.2" height="2.8" fill="#c3bca6"></rect><path d="M7 21 Q7 19.7 8.6 19.7 H15.4 Q17 19.7 17 21 Z" fill="url(#spBez)" stroke="#897f66" stroke-width=".4"></path><rect x="2.3" y="2.7" width="19.4" height="14.9" rx="2" fill="url(#spBez)" stroke="#857c63" stroke-width=".5"></rect><rect x="2.95" y="3.3" width="18.1" height="13.7" rx="1.5" fill="none" stroke="#ffffff" stroke-opacity=".5" stroke-width=".5"></rect><rect x="4.2" y="4.7" width="15.6" height="11" rx=".8" fill="#0f3d63"></rect><rect x="4.6" y="5.1" width="14.8" height="10.2" rx=".6" fill="url(#spScr)"></rect><path d="M4.6 5.1 H19.4 V7.9 Q12 11.8 4.6 9.1 Z" fill="url(#spGl)"></path><circle cx="20" cy="15.9" r=".8" fill="#84e85a" stroke="#3f7a2a" stroke-width=".3"></circle></g></svg></a><a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><svg viewBox="0 0 24 24"><defs><filter id="seSh" x="-30%" y="-15%" width="160%" height="150%"><feDropShadow dx="0" dy=".5" stdDeviation=".5" flood-color="#000" flood-opacity=".28"></feDropShadow></filter><linearGradient id="seF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7ed24f"></stop><stop offset=".5" stop-color="#3f9c24"></stop><stop offset="1" stop-color="#297818"></stop></linearGradient><linearGradient id="seGl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".55"></stop><stop offset="1" stop-color="#ffffff" stop-opacity="0"></stop></linearGradient></defs><g filter="url(#seSh)"><path d="M12 2.2 L4.4 4.9 V11.4 C4.4 16.2 8 19.7 12 21.6 C16 19.7 19.6 16.2 19.6 11.4 V4.9 Z" fill="url(#seF)" stroke="#1f5f12" stroke-width=".7"></path><path d="M12 3.4 L5.6 5.7 V11.3 C5.6 15.3 8.6 18.4 12 20.1 C15.4 18.4 18.4 15.3 18.4 11.3 V5.7 Z" fill="none" stroke="#c6f2a6" stroke-opacity=".5" stroke-width=".6"></path><path d="M12 3.4 L5.6 5.7 V8.8 Q12 10.8 18.4 8.8 V5.7 Z" fill="url(#seGl)"></path><path d="M8 11.5 L11 14.5 L16.2 8.4" fill="none" stroke="#103f08" stroke-opacity=".35" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round"></path><path d="M8 11.2 L11 14.2 L16.2 8.1" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path></g></svg></a><a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><svg viewBox="0 0 24 24"><defs><filter id="upSh" x="-25%" y="-20%" width="150%" height="155%"><feDropShadow dx="0" dy=".5" stdDeviation=".5" flood-color="#000" flood-opacity=".28"></feDropShadow></filter><radialGradient id="upG" cx=".36" cy=".3" r=".85"><stop offset="0" stop-color="#8eccf2"></stop><stop offset=".55" stop-color="#3f8fd0"></stop><stop offset="1" stop-color="#175a98"></stop></radialGradient><linearGradient id="upB" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#74cf52"></stop><stop offset="1" stop-color="#2c861d"></stop></linearGradient><radialGradient id="upGl" cx=".35" cy=".3" r=".5"><stop offset="0" stop-color="#ffffff" stop-opacity=".7"></stop><stop offset="1" stop-color="#ffffff" stop-opacity="0"></stop></radialGradient></defs><g filter="url(#upSh)"><circle cx="10.6" cy="10.6" r="8.2" fill="url(#upG)" stroke="#114e7d" stroke-width=".6"></circle><g fill="none" stroke="#dcefff" stroke-width=".55" opacity=".7"><path d="M2.5 10.6 H18.7"></path><path d="M3.6 7.1 H17.6"></path><path d="M3.6 14.1 H17.6"></path><path d="M10.6 2.4 V18.8"></path><ellipse cx="10.6" cy="10.6" rx="3.1" ry="8.2"></ellipse></g><ellipse cx="7.4" cy="7" rx="3.4" ry="2.2" fill="url(#upGl)"></ellipse><circle cx="17.8" cy="17.8" r="4.5" fill="url(#upB)" stroke="#ffffff" stroke-width=".9"></circle><path d="M17.8 15.6 A2.2 2.2 0 1 1 15.7 18.4" fill="none" stroke="#ffffff" stroke-width="1.1" stroke-linecap="round"></path><path d="M16.9 14.9 L18.8 15.3 L17.5 16.8 Z" fill="#ffffff"></path></g></svg></a><span id="axp-clock" aria-hidden="true"></span></div></div><!-- /axp:shell -->
+<!-- axp:shell --><nav id="axp-icons" aria-label="desktop shortcuts"><a class="axp-ico" title="writing, in flux" href="/writing" data-key="Notepad" style="left:9px;top:9px"><span class="ic note" aria-hidden="true"></span><span class="t">Notepad</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Twitter (opens in a new tab)" href="https://twitter.com/oddhash" data-key="Twitter" style="left:9px;top:95px"><span class="ic " style="background:linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))" aria-hidden="true">@</span><span class="t">Twitter</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Instagram (opens in a new tab)" href="https://instagram.com/aadharsh.hif" data-key="Photos" style="left:9px;top:181px"><span class="ic " style="background:linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))" aria-hidden="true"><i class="cam" aria-hidden="true"></i></span><span class="t">Photos</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Curius (opens in a new tab)" href="https://curius.app/aadharsh-pannirselvam" data-key="Curius" style="left:9px;top:267px"><span class="ic " style="background:linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))" aria-hidden="true">C</span><span class="t">Curius</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Beli (opens in a new tab)" href="https://beliapp.com/users/aadharsh" data-key="Beli" style="left:9px;top:353px"><span class="ic " style="background:linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))" aria-hidden="true">B</span><span class="t">Beli</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Spotify (opens in a new tab)" href="https://open.spotify.com/user/aadharsh2010" data-key="Music" style="left:9px;top:439px"><span class="ic " style="background:linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))" aria-hidden="true">♪</span><span class="t">Music</span></a></nav><div id="axp-taskbar" role="navigation" aria-label="taskbar"><a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a><div id="axp-pins"><a class="axp-pin" title="prototypes + experiments" href="/garage"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="garageF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffb45a"/><stop offset=".5" stop-color="#ef8f24"/><stop offset="1" stop-color="#c2660a"/></linearGradient><linearGradient id="garageG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="garageS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#garageS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#garageF)" stroke="#8f4d06" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#garageG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><g fill="#fff"><rect x="14" y="5" width="4" height="22" rx="1.5"/><rect x="5" y="14" width="22" height="4" rx="1.5"/><rect x="14" y="5" width="4" height="22" rx="1.5" transform="rotate(45 16 16)"/><rect x="14" y="5" width="4" height="22" rx="1.5" transform="rotate(-45 16 16)"/><circle cx="16" cy="16" r="6.5"/></g><circle cx="16" cy="16" r="2.8" fill="#ef8f24"/></g></g></svg></span><span class="lbl">garage</span></a><a class="axp-pin" title="chat-style explainers + live demos" href="/lwe"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="lweF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#838ae6"/><stop offset=".5" stop-color="#4b53c9"/><stop offset="1" stop-color="#333aa0"/></linearGradient><linearGradient id="lweG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="lweS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#lweS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#lweF)" stroke="#272d82" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#lweG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><path d="M6 9 h20 a2 2 0 0 1 2 2 v9 a2 2 0 0 1-2 2 H14 l-5 4 v-4 H6 a2 2 0 0 1-2-2 v-9 a2 2 0 0 1 2-2 Z" fill="#fff"/><g stroke="#4b53c9" stroke-width="1.7" stroke-linecap="round" fill="none"><path d="M8.5 13.5 q2 -2.4 4 0 t4 0 t4 0"/><path d="M8.5 18 q2 -2.4 4 0 t4 0"/></g></g></g></svg></span><span class="lbl">lwe</span></a><a class="axp-pin" title="notes, in flux: an editable notepad" href="/writing"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="writingF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6fa0ee"/><stop offset=".5" stop-color="#2f6bd6"/><stop offset="1" stop-color="#1a4ba8"/></linearGradient><linearGradient id="writingG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="writingS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#writingS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#writingF)" stroke="#143c86" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#writingG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><g fill="#fff"><rect x="8" y="8" width="16" height="2.6" rx="1.3"/><rect x="8" y="14.7" width="16" height="2.6" rx="1.3"/><rect x="8" y="21.4" width="10" height="2.6" rx="1.3"/></g></g></g></svg></span><span class="lbl">writing</span></a><a class="axp-pin" title="what I've been reading, from Curius" href="/reading"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="readingF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#de8186"/><stop offset=".5" stop-color="#c1545a"/><stop offset="1" stop-color="#93333a"/></linearGradient><linearGradient id="readingG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="readingS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#readingS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#readingF)" stroke="#732830" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#readingG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><g fill="#fff"><path d="M16 9 C13 7.2 9 7 6 7.6 V24 C9 23.4 13 23.6 16 25 Z"/><path d="M16 9 C19 7.2 23 7 26 7.6 V24 C23 23.4 19 23.6 16 25 Z" opacity=".82"/></g><path d="M16 9 V25" stroke="#c1545a" stroke-width="1.4"/></g></g></svg></span><span class="lbl">reading</span></a><a class="axp-pin" title="events worth going to" href="/serendipity"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="serendipityF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a886e8"/><stop offset=".5" stop-color="#7c4dd6"/><stop offset="1" stop-color="#5a32a8"/></linearGradient><linearGradient id="serendipityG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="serendipityS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#serendipityS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#serendipityF)" stroke="#482788" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#serendipityG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><rect x="6" y="8" width="20" height="18" rx="2" fill="#fff"/><rect x="6" y="8" width="20" height="5" rx="2" fill="#e7e7ef"/><g fill="#7c4dd6"><rect x="9" y="16" width="3.4" height="3.4"/><rect x="14.3" y="16" width="3.4" height="3.4"/><rect x="19.6" y="16" width="3.4" height="3.4"/><rect x="9" y="21" width="3.4" height="3.4"/><rect x="14.3" y="21" width="3.4" height="3.4"/></g></g></g></svg></span><span class="lbl">serendipity</span></a><a class="axp-pin" title="the crypto-VC neighborhood" href="/around"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="aroundF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5cc6ba"/><stop offset=".5" stop-color="#1f9b8e"/><stop offset="1" stop-color="#137468"/></linearGradient><linearGradient id="aroundG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="aroundS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#aroundS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#aroundF)" stroke="#0d5a50" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#aroundG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><path d="M16 6 C11.6 6 8 9.3 8 13.6 C8 19 16 26 16 26 C16 26 24 19 24 13.6 C24 9.3 20.4 6 16 6 Z" fill="#fff"/><circle cx="16" cy="13.6" r="3.2" fill="#1f9b8e"/></g></g></svg></span><span class="lbl">around</span></a><a class="axp-pin" title="the other web: how machines read a URL" href="/lens"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="lensF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#79c7e6"/><stop offset=".5" stop-color="#2f9fc4"/><stop offset="1" stop-color="#1d7895"/></linearGradient><linearGradient id="lensG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="lensS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#lensS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#lensF)" stroke="#145d73" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#lensG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><rect x="5.5" y="5" width="15" height="19" rx="2" fill="#fff"/><g fill="#2f9fc4"><rect x="8.5" y="9.5" width="9" height="1.7" rx="0.6"/><rect x="8.5" y="13" width="9" height="1.7" rx="0.6"/><rect x="8.5" y="16.5" width="6" height="1.7" rx="0.6"/></g><circle cx="20.5" cy="20.5" r="6" fill="#2f9fc4" stroke="#fff" stroke-width="2.2"/><circle cx="18.6" cy="18.6" r="1.5" fill="#fff" opacity=".85"/><path d="M24.8 24.8 L28.5 28.5" stroke="#fff" stroke-width="3.2" stroke-linecap="round"/></g></g></svg></span><span class="lbl">lens</span></a><a class="axp-pin" title="what I'm listening to right now" href="/rn"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="musicF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6fcd8a"/><stop offset=".5" stop-color="#2faa55"/><stop offset="1" stop-color="#1d8040"/></linearGradient><linearGradient id="musicG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="musicS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#musicS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#musicF)" stroke="#156030" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#musicG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><g fill="#fff"><rect x="17" y="7" width="2.6" height="14"/><path d="M19.6 7 C23 8 25 10 24.4 13.6 C23 11 21 11 19.6 11.8 Z"/><ellipse cx="14" cy="21" rx="4.4" ry="3.5"/></g></g></g></svg></span><span class="lbl">music</span></a><a class="axp-pin" title="book a coffee / bagel" href="/coffee"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="coffeeF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b08858"/><stop offset=".5" stop-color="#875c34"/><stop offset="1" stop-color="#5e3c1e"/></linearGradient><linearGradient id="coffeeG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="coffeeS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#coffeeS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#coffeeF)" stroke="#472d16" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#coffeeG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><path d="M8 12 h13 v6 a6.5 6.5 0 0 1-13 0 Z" fill="#fff"/><path d="M21 13 h3 a2.6 2.6 0 0 1 0 5.2 h-3" fill="none" stroke="#fff" stroke-width="2.2"/><g stroke="#fff" stroke-width="1.8" stroke-linecap="round"><path d="M11 5.5 v3"/><path d="M14.5 5 v3.5"/></g></g></g></svg></span><span class="lbl">coffee</span></a></div><div id="axp-spacer"></div><div id="axp-tray"><button id="axp-sound" type="button" hidden></button><a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><svg viewBox="0 0 24 24"><defs><filter id="spSh" x="-30%" y="-20%" width="160%" height="150%"><feDropShadow dx="0" dy=".5" stdDeviation=".5" flood-color="#000" flood-opacity=".28"></feDropShadow></filter><linearGradient id="spBez" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f3efe4"></stop><stop offset=".5" stop-color="#d6d0be"></stop><stop offset="1" stop-color="#b1aa94"></stop></linearGradient><linearGradient id="spScr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6fb0e8"></stop><stop offset=".5" stop-color="#2f72b6"></stop><stop offset="1" stop-color="#16548f"></stop></linearGradient><linearGradient id="spGl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".5"></stop><stop offset="1" stop-color="#ffffff" stop-opacity="0"></stop></linearGradient></defs><g filter="url(#spSh)"><ellipse cx="12" cy="21.3" rx="5.2" ry="1" fill="#8f876f" opacity=".5"></ellipse><rect x="10.4" y="17.2" width="3.2" height="2.8" fill="#c3bca6"></rect><path d="M7 21 Q7 19.7 8.6 19.7 H15.4 Q17 19.7 17 21 Z" fill="url(#spBez)" stroke="#897f66" stroke-width=".4"></path><rect x="2.3" y="2.7" width="19.4" height="14.9" rx="2" fill="url(#spBez)" stroke="#857c63" stroke-width=".5"></rect><rect x="2.95" y="3.3" width="18.1" height="13.7" rx="1.5" fill="none" stroke="#ffffff" stroke-opacity=".5" stroke-width=".5"></rect><rect x="4.2" y="4.7" width="15.6" height="11" rx=".8" fill="#0f3d63"></rect><rect x="4.6" y="5.1" width="14.8" height="10.2" rx=".6" fill="url(#spScr)"></rect><path d="M4.6 5.1 H19.4 V7.9 Q12 11.8 4.6 9.1 Z" fill="url(#spGl)"></path><circle cx="20" cy="15.9" r=".8" fill="#84e85a" stroke="#3f7a2a" stroke-width=".3"></circle></g></svg></a><a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><svg viewBox="0 0 24 24"><defs><filter id="seSh" x="-30%" y="-15%" width="160%" height="150%"><feDropShadow dx="0" dy=".5" stdDeviation=".5" flood-color="#000" flood-opacity=".28"></feDropShadow></filter><linearGradient id="seF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7ed24f"></stop><stop offset=".5" stop-color="#3f9c24"></stop><stop offset="1" stop-color="#297818"></stop></linearGradient><linearGradient id="seGl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".55"></stop><stop offset="1" stop-color="#ffffff" stop-opacity="0"></stop></linearGradient></defs><g filter="url(#seSh)"><path d="M12 2.2 L4.4 4.9 V11.4 C4.4 16.2 8 19.7 12 21.6 C16 19.7 19.6 16.2 19.6 11.4 V4.9 Z" fill="url(#seF)" stroke="#1f5f12" stroke-width=".7"></path><path d="M12 3.4 L5.6 5.7 V11.3 C5.6 15.3 8.6 18.4 12 20.1 C15.4 18.4 18.4 15.3 18.4 11.3 V5.7 Z" fill="none" stroke="#c6f2a6" stroke-opacity=".5" stroke-width=".6"></path><path d="M12 3.4 L5.6 5.7 V8.8 Q12 10.8 18.4 8.8 V5.7 Z" fill="url(#seGl)"></path><path d="M8 11.5 L11 14.5 L16.2 8.4" fill="none" stroke="#103f08" stroke-opacity=".35" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round"></path><path d="M8 11.2 L11 14.2 L16.2 8.1" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path></g></svg></a><a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><svg viewBox="0 0 24 24"><defs><filter id="upSh" x="-25%" y="-20%" width="150%" height="155%"><feDropShadow dx="0" dy=".5" stdDeviation=".5" flood-color="#000" flood-opacity=".28"></feDropShadow></filter><radialGradient id="upG" cx=".36" cy=".3" r=".85"><stop offset="0" stop-color="#8eccf2"></stop><stop offset=".55" stop-color="#3f8fd0"></stop><stop offset="1" stop-color="#175a98"></stop></radialGradient><linearGradient id="upB" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#74cf52"></stop><stop offset="1" stop-color="#2c861d"></stop></linearGradient><radialGradient id="upGl" cx=".35" cy=".3" r=".5"><stop offset="0" stop-color="#ffffff" stop-opacity=".7"></stop><stop offset="1" stop-color="#ffffff" stop-opacity="0"></stop></radialGradient></defs><g filter="url(#upSh)"><circle cx="10.6" cy="10.6" r="8.2" fill="url(#upG)" stroke="#114e7d" stroke-width=".6"></circle><g fill="none" stroke="#dcefff" stroke-width=".55" opacity=".7"><path d="M2.5 10.6 H18.7"></path><path d="M3.6 7.1 H17.6"></path><path d="M3.6 14.1 H17.6"></path><path d="M10.6 2.4 V18.8"></path><ellipse cx="10.6" cy="10.6" rx="3.1" ry="8.2"></ellipse></g><ellipse cx="7.4" cy="7" rx="3.4" ry="2.2" fill="url(#upGl)"></ellipse><circle cx="17.8" cy="17.8" r="4.5" fill="url(#upB)" stroke="#ffffff" stroke-width=".9"></circle><path d="M17.8 15.6 A2.2 2.2 0 1 1 15.7 18.4" fill="none" stroke="#ffffff" stroke-width="1.1" stroke-linecap="round"></path><path d="M16.9 14.9 L18.8 15.3 L17.5 16.8 Z" fill="#ffffff"></path></g></svg></a><span id="axp-clock" aria-hidden="true"></span></div></div><!-- /axp:shell -->
 </body>
 </html>

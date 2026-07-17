@@ -10,19 +10,36 @@
   // So `wrangler deploy` (bare), `npm run deploy`, and Workers Builds all ship
   // the minified shells + luna.css — there is no longer a path that serves the
   // readable originals by accident (which is exactly how prod ended up on an
-  // unminified 78KB nav.js). Local dev must NOT use this config (it would pay
-  // the full holding/ -> .build copy on every reload); it uses wrangler.dev.jsonc,
-  // which points at holding/ directly. The two configs' bindings must match;
-  // build.mjs warns on drift.
+  // unminified 78KB nav.js). In Workers Builds, leave the dashboard's separate
+  // Build command blank and set its Deploy command to `npx wrangler deploy`;
+  // Wrangler then owns this one build instead of running it twice. Local dev
+  // must NOT use this config (it would pay the full holding/ -> .build copy on
+  // every reload); it uses wrangler.dev.jsonc, which points at holding/ directly.
+  // The two configs' bindings must match; build.mjs warns on drift.
   "name": "aadhar-sh",
   "main": ".build/holding/_worker.js/index.js",
   "build": { "command": "node build.mjs" },
   "compatibility_date": "2026-06-01",
+  // Workers Cache sits in front of the public-response entrypoint below. The
+  // default dispatcher stays uncached because it owns mutations, per-visitor
+  // views, the homepage, and request logging; response Cache-Control remains
+  // the route-level freshness contract inside CachedPages.
+  "cache": { "enabled": true, "cross_version_cache": false },
+  "exports": {
+    "default": { "type": "worker", "cache": { "enabled": false } },
+    "CachedPages": { "type": "worker", "cache": { "enabled": true } }
+  },
+  "dependencies_instrumentation": { "enabled": true },
   // serve only on the custom domain (aadhar.sh); no public *.workers.dev URL.
   "workers_dev": false,
   "assets": {
     "directory": ".build/holding",
     "binding": "ASSETS",
+    // canonical URLs carry NO trailing slash (sitemap.xml, both rel=canonical tags,
+    // llms.txt and nav.js's own normalization all say so). drop-trailing-slash makes
+    // the asset layer agree: /garage + /lwe serve directly, /garage/ + /lwe/ 301 to
+    // the slashless form. MUST match wrangler.dev.jsonc, or dev diverges from prod.
+    "html_handling": "drop-trailing-slash",
     // Worker-owned routes only. New static files do not cost invocations unless
     // they are added here and to the ROUTES/PREFIX tables in index.js.
     //
@@ -32,16 +49,16 @@
     // asset 404 cache-control and passes every non-404 response through.
     "run_worker_first": [
       "/", "/index.html", "/favicon.ico", "/hit.svg",
-      "/auth.md", "/.well-known/api-catalog",
+      "/auth.md", "/.well-known/api-catalog", "/.well-known/agent-card.json",
       "/.well-known/oauth-protected-resource",
       "/.well-known/oauth-authorization-server",
       "/agent/*", "/oauth2/*",
       "/whoareyou", "/whoareyou.json", "/security",
       "/reading", "/updates", "/updates.json", "/restore",
-      "/lens", "/lens/", "/lens/fetch", "/lens/shot",
+      "/lens", "/lens/", "/lens/fetch", "/lens/shot", "/lens/browser", "/lens/census", "/lens/census.json",
       "/llms-full.txt", "/ledger", "/ledger.json",
       "/writing", "/writing/*",
-      "/rn", "/rn/tracks", "/rn/admin", "/rn/set",
+      "/rn", "/rn/tracks", "/rn/tracks.html", "/rn/admin", "/rn/set",
       "/bot", "/around", "/around/json",
       "/photos", "/photos/", "/run",
       "/images", "/images/", "/images/full", "/images/full/*",
@@ -57,9 +74,11 @@
   // edge entries atomically instead of waiting out their TTL. Not populated in
   // local dev (the key falls back to "dev" there).
   "version_metadata": { "binding": "CF_VERSION_METADATA" },
-  // the /around neighborhood crawl: per-generation, never per-visitor. The
-  // request path only reads the KV snapshot this cron writes (around.js).
-  "triggers": { "crons": ["*/30 * * * *"] },
+  // */30 — the /around neighborhood crawl (per-generation, never per-visitor;
+  // the request path only reads the KV snapshot this cron writes, around.js).
+  // 17 8 * * 1 — the weekly /lens/census sweep into D1 (index.js switches on
+  // event.cron). Odd minute so it doesn't collide with the :00/:30 crawl tick.
+  "triggers": { "crons": ["*/30 * * * *", "17 8 * * 1"] },
   "kv_namespaces": [
     { "binding": "RN_KV", "id": "3cb8a107c58e47dc9244e75b33401f36" }
   ],
@@ -84,14 +103,15 @@
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["Counter"] }
   ],
+  // Browser Run Quick Actions. The binding is authenticated by Workers, so
+  // Lens no longer needs a Browser Rendering API token for snapshots.
+  "browser": { "binding": "BROWSER" },
   "vars": {
-    // account id for the /lens/shot Browser Rendering REST call. not secret.
-    "CF_ACCOUNT_ID": "1c99acdb6141579023fb97d24261ea58",
     // one-time continuity: the new in-house Counter DO self-seeds to this on first
     // wake (carried over from cf-garage's counter, ~2375 at migration). idempotent;
     // safe to remove once the DO is seeded.
     "COUNTER_SEED": "2375"
   }
   // Secrets are NOT here (set on the Worker with `wrangler secret put`):
-  //   RN_SIGNING_KEY_JWK, BROWSER_RENDER_TOKEN, RN_BUST_SECRET
+  //   RN_SIGNING_KEY_JWK, BROWSER_RENDER_TOKEN (legacy, no longer read), RN_BUST_SECRET
 }

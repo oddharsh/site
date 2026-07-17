@@ -2,8 +2,10 @@
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
 import { BOT_UA, SIG_AGENT, signRequestForWebBotAuth } from "./lib/botauth.js";
 import { cachedRender } from "./lib/cache.js";
+import { CANONICAL_HOST } from "./lib/const.js";
+import { lensParseRobots, lensPathMatch, lensRobotsVerdict } from "./lib/robots.js";
 import { lunaPage } from "./lib/chrome.js";
-import { jsonResponse } from "./lib/http.js";
+import { escAttr, escHtml, jsonResponse } from "./lib/http.js";
 
 // ── /lens — "the other web" -----------------------------------------------
 // A URL goes in; what a MACHINE sees comes out, across five lenses: page
@@ -17,25 +19,259 @@ import { jsonResponse } from "./lib/http.js";
 // made honestly as AadharshBot. Engine here; the /lens page (handleLens) is the UI.
 
 // /lens — the SSR shell: IE6 address bar, a Human/Machine view toggle, the
-// five lens tabs, two panes, seeded examples. The renderer lives in /lens.js
+// six lens tabs, two panes, seeded examples. The renderer lives in /lens.js
 // (a real static file, SW-cached like nav.js) so it can use normal JS without
 // fighting this template literal's ${} and backticks.
-// the /lens shell is a fully static template (all per-request work lives in
-// /lens/fetch + /lens/shot), so repeat hits per colo serve from caches.default
-// instead of re-assembling it. keyed on the bare path: the ?url= share param is
-// read client-side by lens.js, the shell bytes are identical for every query.
-// edge TTL = the s-maxage below (300s); 200-only put inside cachedRender.
-export function handleLens(request, env, ctx) {
-  return cachedRender(request, ctx, () => renderLensShell(), "/lens", env);
+// the /lens shell is static when it has no target. A shareable ?url= request is
+// intentionally inspected server-side and seeded with the same HTML floor as
+// /lens/fetch, so no-JS visitors still get a useful result. The empty shell is
+// keyed on the bare path and remains cacheable; targeted inspections are
+// private because they spend the crawler budget and contain third-party data.
+export async function handleLens(request, env, ctx) {
+  const url = new URL(request.url);
+  const target = url.searchParams.get("url");
+  if (target) {
+    const result = await inspectLensRequest(request, env, ctx);
+    const response = renderLensShell(result.payload, lensState(url), target);
+    response.headers.set("cache-control", "no-store, must-revalidate");
+    response.headers.set("x-content-type-options", "nosniff");
+    response.headers.set("x-robots-tag", "noindex");
+    return response;
+  }
+  // Keep a route-local shell key: the production runtime may not expose
+  // CF_VERSION_METADATA, so a deploy can otherwise leave an older shell in
+  // the edge cache while the separately served lens.js has already changed.
+  return cachedRender(request, ctx, () => renderLensShell(), "/lens-shell-v4", env);
 }
 
-function renderLensShell() {
+// One label per lens, shared by the SSR tabs, the SSR machine header, and the
+// client (LENS_LABEL in lens.js must match). These are phrased as the question
+// each lens answers, not practitioner nouns, so a first-time visitor can read
+// the tab row as a menu of questions. Change here + in holding/lens.js together.
+const LENS_TAB_LABELS = {
+  readiness: "Agent-ready?",
+  anatomy: "Raw response",
+  structured: "What it claims",
+  ai: "Model cost",
+  terms: "Who's allowed",
+  discovery: "Agent doors",
+};
+
+function lensState(url) {
+  const validViews = ["both", "human", "machine", "browser", "delta"];
+  const validLenses = ["readiness", "anatomy", "structured", "ai", "terms", "discovery"];
+  const view = validViews.includes(url.searchParams.get("view")) ? url.searchParams.get("view") : "both";
+  const lens = validLenses.includes(url.searchParams.get("lens")) ? url.searchParams.get("lens") : "readiness";
+  const counterfactuals = {};
+  for (const key of (url.searchParams.get("cf") || "").split(",")) {
+    if (["markdown", "semantic", "contract", "authority", "receipt"].includes(key)) counterfactuals[key] = true;
+  }
+  return { view, lens, counterfactuals };
+}
+
+function lensScriptJson(value) {
+  return JSON.stringify(value)
+    .replace(/</g, "\\u003c")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
+}
+
+function lensHttpText(status) {
+  if (status >= 200 && status < 300) return "OK";
+  if (status >= 300 && status < 400) return "redirect";
+  if (status === 402) return "Payment Required";   // the x402 chip's whole point; a bare "client error" is the least useful label for the demo the page ships to showcase 402
+  if (status === 404) return "Not Found";
+  if (status >= 400 && status < 500) return "client error";
+  if (status >= 500) return "server error";
+  return "";
+}
+
+function lensReaderFragment(data, note) {
+  if (!data || !data.ok) return '<div class="lx-empty">' + escHtml((data && data.error) || "No page to show.") + "</div>";
+  const a = data.anatomy;
+  let out = note ? '<div class="lx-fallback-note">' + escHtml(note) + "</div>" : "";
+  if (!a) return out + '<div class="lx-empty">No readable text either.</div>';
+  const title = data.structured && data.structured.title || "";
+  if (title) out += '<div class="lx-h-title">' + escHtml(title) + "</div>";
+  if (a.headings && a.headings.length) {
+    out += '<div class="lx-h-outline"><b>Document outline</b><br>';
+    for (const h of a.headings.slice(0, 60)) {
+      out += '<div style="padding-left:' + ((h.level - 1) * 12) + 'px"><span style="color:#9aa">h' + h.level + "</span> " + escHtml(h.text) + "</div>";
+    }
+    out += "</div>";
+  }
+  return out + '<div class="lx-h-text">' + escHtml(a.text || "(no extractable text)") + "</div>";
+}
+
+function lensHumanFragment(data) {
+  if (!data || !data.ok) return lensReaderFragment(data);
+  if (data.framable) {
+    return '<iframe class="lx-frame" src="' + escAttr(data.finalUrl) +
+      '" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals"' +
+      ' referrerpolicy="no-referrer-when-downgrade" loading="lazy"></iframe>';
+  }
+  return lensReaderFragment(data, "Embedding is blocked; JavaScript can request a server-side snapshot, so this is the readable fallback.");
+}
+
+function lensMachineFragment(data, state) {
+  if (!data || !data.ok) return '<div class="lx-empty">' + escHtml((data && data.error) || "No evidence yet.") + "</div>";
+  const a = data.anatomy || {};
+  const s = data.structured || {};
+  const d = data.discovery || {};
+  const ag = data.agent || {};
+  const rows = [
+    ["url", data.finalUrl || data.url],
+    ["title", s.title || "(untitled)"],
+    ["response", data.status + " " + lensHttpText(data.status)],
+    ["readiness", data.readiness && data.readiness.overall != null ? data.readiness.overall + "/100" : "unknown"],
+    ["content-type", data.contentType || "(none)"],
+    ["payload", (a.rawBytes || 0) + " B" + (data.truncated ? " (capped)" : "")],
+    ["headings", a.headings ? a.headings.length : 0],
+    ["fetched as", data.fetchedBy || "identified bot"],
+  ].map(row => '<tr><td>' + escHtml(row[0]) + '</td><td>' + escHtml(row[1]) + "</td></tr>").join("");
+  const doors = ag.strategy && ag.strategy.verdict || "unknown";
+  const files = [
+    d.robotsTxt && d.robotsTxt.ok ? "robots.txt" : "",
+    d.sitemapXml && d.sitemapXml.ok ? "sitemap.xml" : "",
+    d.llmsTxt && d.llmsTxt.ok ? "llms.txt" : "",
+  ].filter(Boolean);
+  return '<div class="lx-brief-lede"><b>Server-rendered machine summary.</b> JavaScript can enhance this into the full selected lens; this fragment is the no-script evidence floor.</div>' +
+    '<div class="lx-sec"><div class="lx-sec-h">Observed document <span class="lx-badge ok">observed</span></div>' +
+    '<div class="lx-cap">The minimum contract a machine can recover from this response.</div><table class="lx-kv">' + rows + "</table></div>" +
+    '<div class="lx-sec"><div class="lx-sec-h">Available surfaces <span class="lx-badge">' + escHtml(doors) + "</span></div>" +
+    '<div class="lx-cap">Evidence found during the server-side inspection.</div><div class="lx-tags">' +
+    (files.length ? files.map(file => '<span class="lx-tag">' + escHtml(file) + "</span>").join("") : '<span class="lx-none">no discovery files found</span>') +
+    "</div></div>" +
+    '<div class="lx-sec"><div class="lx-sec-h">Selected state <span class="lx-badge">' + escHtml(state.lens) + "</span></div>" +
+    '<div class="lx-cap">View: ' + escHtml(state.view) + ". The browser enhancement can open the complete lens without changing the URL.</div></div>";
+}
+
+function lensBrowserFragment(data) {
+  if (!data || !data.ok) {
+    return '<div class="lx-browser-intro"><b>Browser Run view.</b> Ask Cloudflare to open this URL in a real headless browser and return the rendered page, screenshot, Markdown, accessibility tree, and a clear WebMCP lab boundary.' +
+      '<div class="lx-cap">This is opt-in: browser execution is slower and can run page JavaScript. Runtime WebMCP discovery is reported separately and requires the Chrome-beta lab.</div>' +
+      '<button class="lx-browser-run" type="button" id="lx-browser-run">Run Browser Run snapshot</button></div>';
+  }
+  return '<div class="lx-browser-intro"><b>Browser Run snapshot ready.</b> The Browser pane is a rendered observation, separate from AadharshBot\'s HTTP fetch and the visitor\'s Human view.' +
+    '<div class="lx-cap">Switch back to Browser and run again to refresh this snapshot.</div></div>';
+}
+
+function lensStatusFragment(data, state) {
+  if (!data || !data.ok) return '<span class="err">Failed:</span> <span>' + escHtml((data && data.error) || "unknown error") + "</span>";
+  return '<span><b>' + data.status + "</b> " + lensHttpText(data.status) + "</span>" +
+    '<span>' + escHtml(state.view === "both" ? "Compare" : state.view.charAt(0).toUpperCase() + state.view.slice(1)) + "</span>" +
+    '<span>' + escHtml(data.contentType || "?") + "</span>" +
+    (data.anatomy ? '<span>' + data.anatomy.rawBytes + " B</span>" : "") +
+    '<span>' + escHtml(String(data.elapsedMs || 0)) + " ms</span>" +
+    (data.redirected ? '<span>&rarr; ' + escHtml(data.finalUrl) + "</span>" : "") +
+    '<span style="margin-left:auto">fetched as ' + escHtml(data.fetchedBy || "identified bot") + "</span>";
+}
+
+
+async function inspectLensRequest(request, env, ctx) {
+  const v = validateLensTarget(new URL(request.url).searchParams.get("url") || "");
+  if (!v.ok) return { status: 400, payload: { ok: false, error: v.error } };
+
+  // best-effort per-IP rate limit so the proxy can't be turned into a firehose.
+  const ip = request.headers.get("cf-connecting-ip") || "0.0.0.0";
+  if (env.RN_KV) {
+    const bucket = `lens:rl:${ip}:${Math.floor(Date.now() / 60000)}`;
+    const n = parseInt((await env.RN_KV.get(bucket)) || "0", 10);
+    if (n >= 30) return { status: 429, payload: { ok: false, error: "Slow down — 30 lookups a minute. Try again shortly." } };
+    ctx.waitUntil(env.RN_KV.put(bucket, String(n + 1), { expirationTtl: 120 }));
+  }
+
+  try {
+    return { status: 200, payload: await lensInspect(v.url, env) };
+  } catch (e) {
+    const msg = e && e.name === "AbortError" ? "The site took too long to answer (8s timeout)." : (e && e.message) || String(e);
+    return { status: 502, payload: { ok: false, error: msg } };
+  }
+}
+
+// A dated, source-linked exhibit of where the machine web actually stands, so a
+// cold visitor reads every per-URL verdict below as a claim about the web, not
+// one site's laziness. Hand-maintained; each fact carries a "checked" date and a
+// source. Shown only on the idle shell (no ?url= scan) and hidden by the client
+// once a scan runs. Update the dates when you refresh the numbers.
+function lensStateOfWebPanel() {
+  const facts = [
+    {
+      stat: "57.5%",
+      claim: "Bots now make more of the web's requests than people do. Automated clients sent 57.5% of HTML requests on Cloudflare's network — the first time bots crossed half.",
+      src: "Cloudflare Radar", href: "https://radar.cloudflare.com/",
+    },
+    {
+      stat: "5.6% / ~0",
+      claim: "Publishers signal, models mostly don't read. llms.txt is now published by 5.6% of the top 10k sites (up ~5× in a year), but one server-log study found 408 llms.txt hits across ~500M AI-bot visits, and Google says it ignores the file.",
+      src: "HTTP Archive", href: "https://httparchive.org/",
+    },
+    {
+      stat: "~10k servers",
+      claim: "One protocol won the tool layer. MCP sits under the Linux Foundation with OpenAI, Google, Microsoft, and Amazon all shipping support, and roughly 10k public servers.",
+      src: "Linux Foundation", href: "https://www.linuxfoundation.org/",
+    },
+    {
+      stat: "the CLI is the new API",
+      claim: "The action layer moved to the terminal. A Q1 2026 wave of agent-native CLIs (Stripe, Ramp, Google Workspace, Vercel) each crossed 20k GitHub stars in weeks — structured commands an agent runs, not HTTP well-knowns it discovers.",
+      src: "OSS Insight", href: "https://ossinsight.io/",
+    },
+    {
+      stat: "2 partners",
+      claim: "Paying to crawl is still an experiment. A year after Cloudflare's pay-per-crawl launched, it has two named AI-side partners; unsigned crawlers get blocked, and default-blocking arrives for new domains on Sept 15, 2026.",
+      src: "Cloudflare", href: "https://blog.cloudflare.com/introducing-pay-per-crawl/",
+    },
+    {
+      stat: "$24M / 75M txns",
+      claim: "Agent payments are many and tiny. x402 moved about $24M across ~75M transactions in the last 30 days — roughly $0.32 each, mostly sub-dollar micropayments.",
+      src: "CoinDesk", href: "https://www.coindesk.com/",
+    },
+  ];
+  const checked = "checked 2026-07";
+  const cards = facts.map((f) =>
+    '<div class="lx-sow-card"><div class="lx-sow-stat">' + escHtml(f.stat) + "</div>" +
+    '<div class="lx-sow-claim">' + escHtml(f.claim) + "</div>" +
+    '<div class="lx-sow-src"><a href="' + escAttr(f.href) + '" target="_blank" rel="noopener">' + escHtml(f.src) + "</a> &middot; " + checked + "</div></div>"
+  ).join("");
+  return '<section class="lx-stateweb" id="lx-stateweb">' +
+    '<div class="lx-sow-h"><span class="lx-sow-kicker">The state of the machine web</span>' +
+    '<span class="lx-sow-sub">mid-2026 &middot; the population every scan below is a sample of</span></div>' +
+    '<div class="lx-sow-grid">' + cards + "</div>" +
+    '<div class="lx-sow-foot">A page\'s second life as data is now the busier one. Whether a machine can actually <b>read</b>, <b>understand</b>, and <b>act</b> on a page — not just fetch it — is what the lenses below measure. Paste a URL to see one site\'s answer, or watch the movement over time in <a href="/lens/census">the weekly census</a> of 16 representative sites.</div>' +
+    "</section>";
+}
+
+export function renderLensShell(initial, state, inputValue) {
+  // defaults must match the client (lens.js) and lensState(), or a plain /lens
+  // SSRs one tab and the deferred script silently flips to another on hydrate.
+  state = state || { view: "both", lens: "readiness", counterfactuals: { markdown: false, semantic: false, contract: false, authority: false, receipt: false } };
+  const seeded = initial && initial.ok;
+  const value = inputValue || (seeded ? initial.finalUrl || initial.url : "");
+  const humanHeader = seeded && !initial.framable
+    ? 'Human view <span class="lx-mode">Reader</span> <span class="lx-mode-sub">server-rendered readable fallback</span>'
+    : "Human view &middot; the live page";
+  const machineHeader = state.view === "machine" ? "Machine view &middot; Briefing" : state.view === "delta" ? "Delta view &middot; What changes" : "Machine view &middot; " + (LENS_TAB_LABELS[state.lens] || state.lens);
+  const browserHeader = "Browser Run &middot; Rendered";
+  const modeNote = state.view === "human"
+    ? "Human shows the page as a person receives it in a browser."
+    : state.view === "machine"
+      ? "Machine turns the scan into an evidence-first briefing, then keeps the selected lens below it."
+      : state.view === "browser"
+        ? "Browser Run renders the URL after page JavaScript, then exposes the browser's structural evidence beside the HTTP scan."
+      : state.view === "delta"
+        ? "Delta keeps the page visible while you add hypothetical machine infrastructure to the route."
+        : "Compare puts Human, HTTP Machine, and the opt-in Browser Run render side by side.";
+  const initialScript = initial ? '<script type="application/json" id="lx-initial-data">' + lensScriptJson(initial) + "</script>" : "";
   return lunaPage({
     title: "The Other Web · aadhar.sh",
     path: "The Other Web",
     width: 980,
-    description: "Paste any URL and see it the way a machine does: raw HTML, headers, JSON-LD and microformats, an LLM-style markdown render, the terms it sets for AI crawlers, and the site's robots.txt / sitemap / llms.txt — side by side with the human view.",
-    robots: "index, nofollow",
+    description: "Paste any URL and see the human page, a transparent agent-readiness score, bot-specific access samples, raw HTML, structured data, machine terms, and the site's discovery surfaces side by side.",
+    // The bare shell is the site's flagship machine-web page and should be
+    // indexable — an agent reading llms.txt now finds /lens listed there. Only a
+    // targeted ?url= scan gets x-robots-tag: noindex (handleLens sets it), since
+    // that response spends the crawl budget and carries third-party data.
+    robots: "index, follow",
     css: `
 h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color:oklch(41.92% 0.0962 250.51); margin:0 0 2px; font-weight:bold; }
 .lx-lede { margin:0 0 10px; color:oklch(40% 0 0); font-size:10pt; }
@@ -70,19 +306,34 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 
 /* panes */
 .lx-panes { display:flex; gap:8px; margin-top:8px; min-height:560px; }
-.lx-panes.is-human .lx-pane-machine, .lx-panes.is-machine .lx-pane-human { display:none; }
+.lx-panes.is-human .lx-pane-machine, .lx-panes.is-human .lx-pane-browser,
+.lx-panes.is-machine .lx-pane-human, .lx-panes.is-machine .lx-pane-browser,
+.lx-panes.is-browser .lx-pane-human, .lx-panes.is-browser .lx-pane-machine,
+.lx-panes.is-delta .lx-pane-browser { display:none; }
 .lx-pane { flex:1 1 0; min-width:0; display:flex; flex-direction:column; border:1px solid oklch(70% 0.03 250); border-radius:0 3px 3px 3px; background:#fff; }
 .lx-pane-h { font-family:"Trebuchet MS",Verdana,sans-serif; font-size:8.5pt; font-weight:bold; text-transform:uppercase; letter-spacing:.05em; color:#fff; background:linear-gradient(180deg, oklch(56% 0.12 252), oklch(45% 0.15 255)); padding:4px 8px; border-radius:0 2px 0 0; }
 .lx-pane-human .lx-pane-h { background:linear-gradient(180deg, oklch(58% 0.06 150), oklch(46% 0.09 155)); }
+.lx-pane-browser .lx-pane-h { background:linear-gradient(180deg, oklch(58% 0.10 205), oklch(45% 0.14 220)); }
 .lx-body { flex:1 1 auto; overflow:auto; padding:10px 11px; }
 .lx-empty { color:oklch(55% 0 0); font-size:9.5pt; padding:18px 6px; text-align:center; }
 .lx-spin { color:oklch(42.61% 0.2353 263.74); font-size:9.5pt; padding:18px 6px; text-align:center; }
+.lx-idle-lens { max-width:620px; margin:22px auto; padding:16px 18px; border:1px solid oklch(78% 0.04 250); border-radius:4px; background:linear-gradient(180deg,#fff,oklch(97% 0.008 250)); color:oklch(31% 0.02 255); }
+.lx-idle-kicker { color:oklch(46% 0.13 252); font:9pt Tahoma,Verdana,sans-serif; text-transform:uppercase; letter-spacing:.06em; }
+.lx-idle-lens h3 { margin:4px 0 5px; color:oklch(33% 0.10 263); font: bold 13pt "Trebuchet MS",Verdana,sans-serif; }
+.lx-idle-lens p { margin:0 0 11px; line-height:1.45; }
+.lx-idle-lens ul { margin:0 0 13px 18px; padding:0; line-height:1.5; }
+.lx-idle-cta { padding:7px 9px; border-left:3px solid oklch(58% 0.15 255); background:oklch(95% 0.025 250); color:oklch(43% 0 0); font-size:9pt; }
 .lx-body.is-bleed { padding:0; }
 .lx-frame { width:100%; height:100%; min-height:520px; border:0; display:block; background:#fff; }
 .lx-shot { width:100%; height:auto; display:block; }
+.lx-browser-shot { width:100%; height:auto; display:block; border:1px solid oklch(82% 0.04 210); background:#fff; }
 .lx-fallback-note { font-size:8.8pt; color:oklch(42% 0.11 60); background:oklch(96% 0.045 92); border:1px solid oklch(82% 0.09 80); border-radius:3px; padding:5px 9px; margin:0 0 10px; }
 .lx-mode { font-family:"Courier New",monospace; font-size:7.6pt; font-weight:normal; text-transform:none; letter-spacing:0; color:oklch(38% 0.09 150); background:#fff; border-radius:7px; padding:1px 7px; vertical-align:middle; }
 .lx-mode-sub { font-weight:normal; text-transform:none; letter-spacing:0; opacity:.85; font-size:8pt; }
+.lx-browser-intro { padding:10px 9px; border:1px solid oklch(78% 0.06 210); background:linear-gradient(180deg,oklch(98% 0.015 210),oklch(94% 0.025 210)); color:oklch(31% 0.04 220); font-size:9pt; line-height:1.45; }
+.lx-browser-intro b { color:oklch(34% 0.11 220); }
+.lx-browser-run { margin-top:7px; border:1px solid oklch(52% 0.08 220); border-radius:3px; padding:3px 8px; background:linear-gradient(180deg,#fff,oklch(89% 0.025 210)); color:oklch(30% 0.08 220); font:8.4pt Tahoma,Verdana,sans-serif; cursor:pointer; }
+.lx-browser-run:hover { background:oklch(91% 0.05 210); }
 
 /* rendered machine content */
 .lx-h-title { font-family:"Trebuchet MS",Verdana,sans-serif; font-size:13pt; font-weight:bold; color:oklch(30% 0.06 255); margin:0 0 8px; }
@@ -127,10 +378,102 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 .lx-bots .ua { font-family:"Courier New",monospace; color:oklch(30% 0.05 255); white-space:nowrap; }
 .lx-bots .rule { font-family:"Courier New",monospace; font-size:8.2pt; color:oklch(48% 0 0); word-break:break-all; }
 .lx-bots .who { color:oklch(55% 0 0); font-size:8pt; }
+.lx-readiness-hero { display:flex; align-items:center; gap:15px; padding:10px 12px; margin:0 0 9px; border:1px solid oklch(73% 0.06 250); border-radius:4px; background:linear-gradient(105deg,oklch(97% 0.025 250),#fff); }
+.lx-readiness-number { font:bold 29pt "Trebuchet MS",Verdana,sans-serif; line-height:1; color:oklch(38% 0.14 255); white-space:nowrap; }
+.lx-readiness-number span { font:normal 10pt Tahoma,Verdana,sans-serif; color:oklch(53% 0 0); margin-left:2px; }
+.lx-readiness-kicker { font:8pt Tahoma,Verdana,sans-serif; color:oklch(50% 0 0); text-transform:uppercase; letter-spacing:.06em; }
+.lx-readiness-level { display:flex; align-items:center; gap:6px; margin:2px 0 3px; font-size:10pt; color:oklch(30% 0.04 255); }
+.lx-readiness-cats { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:5px; margin:5px 0 12px; }
+.lx-readiness-cat { border:1px solid oklch(82% 0.03 250); border-radius:3px; padding:6px 8px; background:#fff; }
+.lx-readiness-cat > div { display:flex; justify-content:space-between; gap:7px; font-size:8.4pt; color:oklch(37% 0.04 255); }
+.lx-readiness-cat > div span { font:8pt "Courier New",monospace; color:oklch(55% 0 0); white-space:nowrap; }
+.lx-readiness-cat strong { display:block; margin-top:2px; font:bold 14pt "Courier New",monospace; color:oklch(43% 0.13 150); }
+.lx-readiness-cat.is-skipped strong { color:oklch(58% 0 0); }
+.lx-projection { margin:0 0 12px; padding:6px 8px; border-left:3px solid oklch(60% 0.15 50); background:oklch(97% 0.035 75); color:oklch(42% 0.06 50); font-size:8.7pt; }
+.lx-projection span { color:oklch(52% 0 0); }
+.lx-readiness-checks { display:grid; gap:5px; margin-top:7px; }
+.lx-readiness-check { padding:6px 8px; border:1px solid oklch(88% 0.015 250); border-radius:3px; background:#fff; }
+.lx-readiness-check-top { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.lx-readiness-check-top b { font-size:9pt; color:oklch(32% 0.05 255); }
+.lx-readiness-detail { margin-top:2px; font-size:8.4pt; color:oklch(52% 0 0); }
+.lx-readiness-consume { margin-top:3px; font-size:8pt; color:oklch(46% 0.06 255); border-left:2px solid oklch(78% 0.06 255); padding-left:6px; }
+.lx-readiness-fix { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:5px; padding-top:5px; border-top:1px dotted oklch(85% 0.02 250); font-size:8.4pt; color:oklch(42% 0.07 50); }
+.lx-copy-fix, .lx-copy-all { border:1px solid oklch(62% 0.05 250); border-radius:3px; padding:2px 7px; background:linear-gradient(180deg,#fff,oklch(91% 0.012 250)); color:oklch(34% 0.07 255); font:8pt Tahoma,Verdana,sans-serif; cursor:pointer; white-space:nowrap; }
+.lx-copy-fix:hover, .lx-copy-all:hover { background:oklch(93% 0.04 250); }
+.lx-copy-all { margin:0 0 7px; font-weight:bold; }
+.lx-next-actions { display:grid; gap:4px; margin:0 0 9px; }
+.lx-next-actions div { display:grid; grid-template-columns:145px 1fr; gap:8px; padding:4px 6px; background:oklch(98% 0.01 250); border-left:3px solid oklch(60% 0.15 50); font-size:8.4pt; }
+.lx-next-actions b { color:oklch(34% 0.07 255); }
+.lx-next-actions span { color:oklch(46% 0 0); }
+.lx-bot-matrix { width:100%; border-collapse:collapse; font-size:8.4pt; }
+.lx-bot-matrix td, .lx-bot-matrix th { border-bottom:1px solid oklch(93% 0.01 250); padding:4px 7px 4px 0; text-align:left; vertical-align:top; }
+.lx-bot-matrix th { font-size:7.5pt; font-weight:normal; color:oklch(50% 0 0); text-transform:uppercase; letter-spacing:.04em; }
+.lx-bot-matrix .ua { font-family:"Courier New",monospace; color:oklch(30% 0.05 255); white-space:nowrap; }
+.lx-bot-matrix .rule { color:oklch(47% 0 0); }
 .lx-badge.no { background:oklch(52% 0.17 27); }
 .lx-kindrow td { font-family:"Trebuchet MS",Verdana,sans-serif; font-size:8.6pt; font-weight:bold; color:oklch(38% 0.07 255); padding-top:9px; }
 .lx-mult { font-family:"Courier New",monospace; font-size:7.8pt; color:oklch(38% 0.09 150); background:oklch(94% 0.04 150); border:1px solid oklch(80% 0.06 150); border-radius:8px; padding:1px 7px; white-space:nowrap; }
 .lx-bots th.num, .lx-bots td.num { text-align:right; font-family:"Courier New",monospace; white-space:nowrap; padding-right:10px; }
+
+/* the dollar-thesis verdict strip, above every scanned lens */
+.lx-verdict { margin:0 0 11px; padding:8px 11px; border:1px solid oklch(74% 0.09 150); border-left:4px solid oklch(52% 0.14 150); border-radius:3px; background:linear-gradient(180deg,oklch(98% 0.02 150),oklch(96% 0.03 150)); color:oklch(30% 0.03 255); font-size:9.4pt; line-height:1.5; }
+.lx-verdict b { color:oklch(34% 0.13 150); font-family:"Courier New",monospace; }
+
+/* agent trace: an XP console of what an agent would do */
+.lx-trace { font-family:"Courier New",Courier,monospace; font-size:8.7pt; line-height:1.5; background:oklch(22% 0.02 255); border-radius:3px; padding:9px 10px; color:oklch(90% 0.02 150); }
+.lx-trace-line { display:grid; grid-template-columns:14px 1fr; gap:6px; padding:2px 0; align-items:start; }
+.lx-trace-line + .lx-trace-line { border-top:1px solid oklch(30% 0.02 255); }
+.lx-trace-g { text-align:center; font-weight:bold; }
+.lx-trace-line.ok .lx-trace-g { color:oklch(78% 0.16 150); }
+.lx-trace-line.warn .lx-trace-g { color:oklch(80% 0.15 85); }
+.lx-trace-line.no .lx-trace-g { color:oklch(72% 0.17 27); }
+.lx-trace-line.no span:last-child, .lx-trace-line.warn span:last-child { color:oklch(96% 0.01 150); }
+
+/* Machine briefing + Delta lab */
+.lx-mode-note { margin:7px 0 0; padding:5px 8px; border-left:3px solid oklch(55% 0.14 250); background:oklch(97% 0.012 250); color:oklch(42% 0.03 255); font-size:8.7pt; }
+.lx-brief-lede { margin:0 0 10px; padding:7px 9px; border:1px solid oklch(82% 0.04 250); background:linear-gradient(180deg,oklch(98% 0.01 250),oklch(94% 0.018 250)); color:oklch(31% 0.04 255); font-size:9pt; line-height:1.45; }
+.lx-brief-lede b { color:oklch(35% 0.13 250); }
+.lx-focus { margin:0 0 12px; padding:7px 8px 1px; border:1px solid oklch(77% 0.07 250); background:linear-gradient(180deg,oklch(98% 0.018 250),oklch(94% 0.025 250)); box-shadow:inset 0 1px #fff; }
+.lx-focus .lx-sec { margin-bottom:7px; }
+.lx-focus .lx-sec-h { color:oklch(29% 0.12 250); }
+.lx-focus .lx-kv td { border-bottom-color:oklch(88% 0.025 250); }
+.lx-machine-block { border-top:1px solid oklch(86% 0.03 250); padding-top:9px; margin-top:11px; }
+.lx-machine-block .lx-sec-h { color:oklch(30% 0.10 250); }
+.lx-delta-intro { margin:0 0 10px; padding:7px 9px; border:1px solid oklch(82% 0.08 75); background:oklch(97% 0.035 85); color:oklch(39% 0.05 60); font-size:9pt; line-height:1.45; }
+.lx-cf-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; margin:5px 0 12px; }
+.lx-cf-card { border:1px solid oklch(82% 0.03 250); border-radius:3px; padding:7px 8px; background:oklch(99% 0.003 250); }
+.lx-cf-card.is-on { border-color:oklch(61% 0.13 150); background:oklch(97% 0.025 150); }
+.lx-cf-card h4 { margin:0 0 3px; font-family:"Trebuchet MS",Verdana,sans-serif; font-size:9.1pt; color:oklch(32% 0.07 255); }
+.lx-cf-card p { margin:0 0 6px; color:oklch(48% 0 0); font-size:8.3pt; line-height:1.35; }
+.lx-cf-toggle { display:inline-flex; align-items:center; gap:5px; border:1px solid oklch(65% 0.03 250); border-radius:3px; padding:2px 6px; background:linear-gradient(180deg,#fff,oklch(91% 0.012 250)); color:oklch(34% 0.06 255); font-family:"Courier New",monospace; font-size:8pt; cursor:pointer; }
+.lx-cf-toggle:hover { border-color:oklch(48% 0.12 250); }
+.lx-cf-toggle[aria-pressed="true"] { color:#fff; border-color:oklch(43% 0.12 150); background:linear-gradient(180deg,oklch(59% 0.13 150),oklch(45% 0.15 150)); }
+.lx-cf-dot { width:7px; height:7px; display:inline-block; border-radius:50%; background:oklch(60% 0 0); }
+.lx-cf-toggle[aria-pressed="true"] .lx-cf-dot { background:oklch(88% 0.15 105); }
+.lx-path { display:grid; gap:5px; margin-top:4px; }
+.lx-stage { display:grid; grid-template-columns:88px 1fr; gap:7px; align-items:start; padding:5px 0; border-bottom:1px solid oklch(93% 0.01 250); font-size:8.6pt; }
+.lx-stage:last-child { border-bottom:0; }
+.lx-stage-name { font-family:"Courier New",monospace; color:oklch(39% 0.08 255); }
+.lx-stage-copy { color:oklch(32% 0 0); }
+.lx-stage-copy .lx-badge { margin-right:4px; }
+.lx-proof { margin-top:8px; font-size:8.2pt; color:oklch(52% 0 0); }
+.lx-proof b { color:oklch(38% 0.06 255); }
+@media (max-width:560px){ .lx-cf-grid{ grid-template-columns:1fr; } .lx-stage{ grid-template-columns:74px 1fr; } .lx-readiness-cats{ grid-template-columns:1fr; } .lx-readiness-hero{ align-items:flex-start; } .lx-next-actions div{ grid-template-columns:1fr; gap:2px; } .lx-bot-matrix{ min-width:620px; } }
+
+/* state of the machine web — the idle exhibit */
+.lx-stateweb { margin:10px 0 4px; border:1px solid oklch(80% 0.05 250); border-radius:4px; background:linear-gradient(180deg,oklch(98% 0.012 250),oklch(95% 0.02 250)); padding:10px 12px 11px; }
+.lx-sow-h { display:flex; align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:4px 10px; margin:0 0 8px; }
+.lx-sow-kicker { font:bold 11pt "Trebuchet MS",Verdana,sans-serif; color:oklch(33% 0.10 263); }
+.lx-sow-sub { font-size:8.2pt; color:oklch(52% 0 0); font-style:italic; }
+.lx-sow-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px; }
+.lx-sow-card { border:1px solid oklch(86% 0.02 250); border-radius:3px; background:#fff; padding:7px 9px; }
+.lx-sow-stat { font:bold 12pt "Courier New",monospace; color:oklch(40% 0.14 255); margin:0 0 3px; line-height:1.1; }
+.lx-sow-claim { font-size:8.5pt; line-height:1.4; color:oklch(30% 0.02 255); }
+.lx-sow-src { margin-top:4px; font-size:7.8pt; color:oklch(55% 0 0); }
+.lx-sow-src a { color:oklch(42.61% 0.2353 263.74); text-decoration:none; }
+.lx-sow-foot { margin-top:9px; padding-top:7px; border-top:1px solid oklch(88% 0.02 250); font-size:8.8pt; line-height:1.45; color:oklch(38% 0.02 255); }
+.lx-sow-foot b { color:oklch(33% 0.10 263); }
+@media (max-width:720px){ .lx-sow-grid{ grid-template-columns:1fr; } }
 
 /* status bar */
 .lx-status { margin-top:9px; border-top:1px solid oklch(86% 0.03 260); padding-top:6px; display:flex; flex-wrap:wrap; gap:5px 14px; font-size:8.6pt; color:oklch(45% 0 0); }
@@ -142,12 +485,12 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
 `,
     body: `
     <h1>The Other Web</h1>
-    <p class="lx-lede">Every page has a second life as data. Paste a URL to see it the way a crawler, a model, or a link-preview bot does: the markup, the metadata, the machine directives, next to the human read. Fetched server-side, honestly, as <a href="/bot">AadharshBot</a>.</p>
+    <p class="lx-lede">Every page has a second life as data. Paste a URL to see what a person receives, what representative bots can retrieve, and which missing web surfaces limit them. The score is a map, not a verdict: every point stays tied to evidence. Fetched server-side, honestly, as <a href="/bot">AadharshBot</a>.</p>
 
-    <form class="lx-addr" id="lx-form">
+    <form class="lx-addr" id="lx-form" action="/lens" method="get">
       <span class="lx-globe" aria-hidden="true"></span>
       <label class="lx-addr-label" for="lx-url">Address</label>
-      <input id="lx-url" class="lx-url" type="text" inputmode="url" placeholder="https://example.com  —  paste any URL" autocomplete="off" spellcheck="false">
+      <input id="lx-url" class="lx-url" type="text" name="url" value="${escAttr(value)}" inputmode="url" placeholder="https://example.com  —  paste any URL" autocomplete="off" spellcheck="false">
       <button class="lx-go" type="submit">Go</button>
     </form>
     <div class="lx-chips">
@@ -162,38 +505,51 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
     </div>
 
     <div class="lx-toolbar">
-      <div class="lx-view" role="group" aria-label="view layout">
-        <button class="lx-seg is-on" data-view="both" type="button">Both</button>
-        <button class="lx-seg" data-view="human" type="button">Human</button>
-        <button class="lx-seg" data-view="machine" type="button">Machine</button>
+      <div class="lx-view" role="radiogroup" aria-label="page mode">
+        <button class="lx-seg${state.view === "both" ? " is-on" : ""}" data-view="both" role="radio" aria-checked="${state.view === "both" ? "true" : "false"}" type="button">Compare</button>
+        <button class="lx-seg${state.view === "human" ? " is-on" : ""}" data-view="human" role="radio" aria-checked="${state.view === "human" ? "true" : "false"}" type="button">Human</button>
+        <button class="lx-seg${state.view === "machine" ? " is-on" : ""}" data-view="machine" role="radio" aria-checked="${state.view === "machine" ? "true" : "false"}" type="button">Machine</button>
+        <button class="lx-seg${state.view === "browser" ? " is-on" : ""}" data-view="browser" role="radio" aria-checked="${state.view === "browser" ? "true" : "false"}" type="button">Browser</button>
+        <button class="lx-seg${state.view === "delta" ? " is-on" : ""}" data-view="delta" role="radio" aria-checked="${state.view === "delta" ? "true" : "false"}" type="button">Delta</button>
       </div>
       <div class="lx-lenses" role="tablist" aria-label="machine lens">
-        <button class="lx-tab is-on" data-lens="anatomy" type="button">Anatomy</button>
-        <button class="lx-tab" data-lens="structured" type="button">Structured</button>
-        <button class="lx-tab" data-lens="ai" type="button">AI view</button>
-        <button class="lx-tab" data-lens="terms" type="button">Terms</button>
-        <button class="lx-tab" data-lens="discovery" type="button">Discovery</button>
+        <button class="lx-tab${state.lens === "readiness" ? " is-on" : ""}" data-lens="readiness" role="tab" aria-selected="${state.lens === "readiness" ? "true" : "false"}" aria-controls="lx-machine-body" type="button">${LENS_TAB_LABELS.readiness}</button>
+        <button class="lx-tab${state.lens === "anatomy" ? " is-on" : ""}" data-lens="anatomy" role="tab" aria-selected="${state.lens === "anatomy" ? "true" : "false"}" aria-controls="lx-machine-body" type="button">${LENS_TAB_LABELS.anatomy}</button>
+        <button class="lx-tab${state.lens === "structured" ? " is-on" : ""}" data-lens="structured" role="tab" aria-selected="${state.lens === "structured" ? "true" : "false"}" aria-controls="lx-machine-body" type="button">${LENS_TAB_LABELS.structured}</button>
+        <button class="lx-tab${state.lens === "ai" ? " is-on" : ""}" data-lens="ai" role="tab" aria-selected="${state.lens === "ai" ? "true" : "false"}" aria-controls="lx-machine-body" type="button">${LENS_TAB_LABELS.ai}</button>
+        <button class="lx-tab${state.lens === "terms" ? " is-on" : ""}" data-lens="terms" role="tab" aria-selected="${state.lens === "terms" ? "true" : "false"}" aria-controls="lx-machine-body" type="button">${LENS_TAB_LABELS.terms}</button>
+        <button class="lx-tab${state.lens === "discovery" ? " is-on" : ""}" data-lens="discovery" role="tab" aria-selected="${state.lens === "discovery" ? "true" : "false"}" aria-controls="lx-machine-body" type="button">${LENS_TAB_LABELS.discovery}</button>
       </div>
     </div>
+    <div class="lx-mode-note" id="lx-mode-note">${modeNote}</div>
+    ${seeded ? "" : lensStateOfWebPanel()}
 
-    <div class="lx-panes is-both" id="lx-panes">
+    <div class="lx-panes is-${state.view}" id="lx-panes">
       <section class="lx-pane lx-pane-human" id="lx-human">
-        <div class="lx-pane-h" id="lx-human-h">Human view &middot; the live page</div>
-        <div class="lx-body" id="lx-human-body"><div class="lx-empty">Paste a URL above to see it through both eyes.</div></div>
+        <div class="lx-pane-h" id="lx-human-h">${humanHeader}</div>
+        <div class="lx-body" id="lx-human-body">${seeded ? lensHumanFragment(initial) : '<div class="lx-empty">Paste a URL above to compare the three surfaces.</div>'}</div>
       </section>
       <section class="lx-pane lx-pane-machine" id="lx-machine">
-        <div class="lx-pane-h" id="lx-machine-h">Machine view &middot; Anatomy</div>
-        <div class="lx-body" id="lx-machine-body"><div class="lx-empty">The markup, metadata, and machine directives land here.</div></div>
+        <div class="lx-pane-h" id="lx-machine-h">${machineHeader}</div>
+        <div class="lx-body" id="lx-machine-body">${seeded ? lensMachineFragment(initial, state) : '<div class="lx-empty">The markup, metadata, and machine directives land here.</div>'}</div>
+      </section>
+      <section class="lx-pane lx-pane-browser" id="lx-browser">
+        <div class="lx-pane-h" id="lx-browser-h">${browserHeader}</div>
+        <div class="lx-body" id="lx-browser-body">${lensBrowserFragment(null)}</div>
       </section>
     </div>
 
-    <div class="lx-status" id="lx-status"><span>Idle. Nothing is fetched until you ask, and then just once, server-side, with no logging.</span></div>
+    <div class="lx-status" id="lx-status">${seeded || (initial && !initial.ok) ? lensStatusFragment(initial, state) : '<span>Idle. Nothing is fetched until you ask, and then just once, server-side, with no logging.</span>'}</div>
     <footer>&larr; <a href="/">aadhar.sh</a> &middot; a research toy about how machines read the web &middot; fetched by <a href="/bot">AadharshBot</a></footer>
+    ${initialScript}
 `,
-    scripts: `<script src="/lens.js" defer></script>`,
+    // The shell is cached at the edge and browsers cache static scripts too;
+    // version the client URL so a fresh shell cannot pair with an older lens.js.
+    scripts: `<script src="/lens.js?v=7" defer></script>`,   // BUMP on every holding/lens.js change: the shell is no-store but the script is cached, so a stale token pairs a fresh shell with an old script
     cache: "public, max-age=60, s-maxage=300",
     headers: {
-      "x-robots-tag": "noindex",
+      // No x-robots-tag here: the bare shell is meant to be indexed. handleLens
+      // adds x-robots-tag: noindex for ?url= scans only.
       // /lens embeds arbitrary sites in the Human view, so it needs a looser
       // policy than the site default (which has no frame-src → falls back to
       // default-src 'self' and blocks every cross-origin iframe). This relaxes
@@ -208,41 +564,20 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
   });
 }
 
-// /lens/fetch?url=… → one JSON envelope with every lens. no-store.
+// /lens/fetch?url=… → the stable machine-facing JSON contract.
 export async function handleLensFetch(request, env, ctx) {
-  const v = validateLensTarget(new URL(request.url).searchParams.get("url") || "");
-  if (!v.ok) return jsonResponse({ ok: false, error: v.error }, 400);
-
-  // best-effort per-IP rate limit so the proxy can't be turned into a firehose.
-  const ip = request.headers.get("cf-connecting-ip") || "0.0.0.0";
-  if (env.RN_KV) {
-    const bucket = `lens:rl:${ip}:${Math.floor(Date.now() / 60000)}`;
-    const n = parseInt((await env.RN_KV.get(bucket)) || "0", 10);
-    if (n >= 30) return jsonResponse({ ok: false, error: "Slow down — 30 lookups a minute. Try again shortly." }, 429);
-    ctx.waitUntil(env.RN_KV.put(bucket, String(n + 1), { expirationTtl: 120 }));
-  }
-
-  try {
-    return jsonResponse(await lensInspect(v.url, env), 200);
-  } catch (e) {
-    const msg = e && e.name === "AbortError" ? "The site took too long to answer (8s timeout)." : (e && e.message) || String(e);
-    return jsonResponse({ ok: false, error: msg }, 502);
-  }
+  const result = await inspectLensRequest(request, env, ctx);
+  return jsonResponse(result.payload, result.status);
 }
 
+
 // /lens/shot?url=… → a faithful PNG of the page, rendered by Cloudflare
-// Browser Rendering (real headless Chrome, server-side). The Human view uses
-// this only when a site forbids live framing. Needs CF_ACCOUNT_ID +
-// BROWSER_RENDER_TOKEN in env; degrades to a clear 503 when unconfigured.
+// Browser Run (real headless Chrome, server-side). The Human view uses this
+// only when a site forbids live framing.
 export async function handleLensShot(request, env, ctx) {
   const v = validateLensTarget(new URL(request.url).searchParams.get("url") || "");
   if (!v.ok) return jsonResponse({ ok: false, error: v.error }, 400);
-  if (!env.BROWSER_RENDER_TOKEN || !env.CF_ACCOUNT_ID) {
-    const missing = [];
-    if (!env.CF_ACCOUNT_ID) missing.push("CF_ACCOUNT_ID");
-    if (!env.BROWSER_RENDER_TOKEN) missing.push("BROWSER_RENDER_TOKEN");
-    return jsonResponse({ ok: false, missing, error: "Snapshot rendering isn't configured: this deployment can't see " + missing.join(" + ") + ". Check the exact variable name(s) (case-sensitive) and that they're set on the same environment this branch deploys to, then redeploy." }, 503);
-  }
+  if (!env.BROWSER || typeof env.BROWSER.quickAction !== "function") return jsonResponse({ ok: false, error: "Browser Run is not configured on this deployment." }, 503);
 
   // screenshots are the expensive path — tighter per-IP limit + a KV cache.
   const ip = request.headers.get("cf-connecting-ip") || "0.0.0.0";
@@ -259,7 +594,6 @@ export async function handleLensShot(request, env, ctx) {
     if (hit) return new Response(hit, { headers: lensPngHeaders(true) });
   }
 
-  const api = `https://api.cloudflare.com/client/v4/accounts/${env.CF_ACCOUNT_ID}/browser-rendering/screenshot`;
   const payload = {
     url: v.url,
     viewport: { width: 1280, height: 800, deviceScaleFactor: 1 },
@@ -269,19 +603,94 @@ export async function handleLensShot(request, env, ctx) {
   };
   let r;
   try {
-    r = await fetch(api, { method: "POST", headers: { authorization: "Bearer " + env.BROWSER_RENDER_TOKEN, "content-type": "application/json" }, body: JSON.stringify(payload) });
+    r = await env.BROWSER.quickAction("screenshot", payload);
   } catch (e) {
-    return jsonResponse({ ok: false, error: "Render request failed: " + ((e && e.message) || e) }, 502);
+    return jsonResponse({ ok: false, error: "Browser Run request failed: " + ((e && e.message) || e) }, 502);
   }
   const ctype = r.headers.get("content-type") || "";
   if (!r.ok || !ctype.startsWith("image/")) {
     let detail = "";
     try { detail = (await r.text()).slice(0, 300); } catch (_e) {}
-    return jsonResponse({ ok: false, error: "Browser Rendering returned " + r.status + ".", detail }, 502);
+    return jsonResponse({ ok: false, error: "Browser Run returned " + r.status + ".", detail }, 502);
   }
   const buf = await r.arrayBuffer();
   if (env.RN_KV) ctx.waitUntil(env.RN_KV.put(cacheKey, buf, { expirationTtl: 3600 }));
   return new Response(buf, { headers: lensPngHeaders(false) });
+}
+
+// /lens/browser?url=… → opt-in rendered evidence for the third Lens pane.
+// This deliberately stays separate from /lens/fetch: the normal scan is an
+// identified HTTP observation, while this path executes page JavaScript in a
+// Browser Run instance and returns a rendered snapshot plus browser structure.
+export async function handleLensBrowser(request, env, ctx) {
+  const v = validateLensTarget(new URL(request.url).searchParams.get("url") || "");
+  if (!v.ok) return jsonResponse({ ok: false, error: v.error }, 400);
+  if (!env.BROWSER || typeof env.BROWSER.quickAction !== "function") return jsonResponse({ ok: false, error: "Browser Run is not configured on this deployment." }, 503);
+
+  const ip = request.headers.get("cf-connecting-ip") || "0.0.0.0";
+  if (env.RN_KV) {
+    const bucket = `lens:browserrl:${ip}:${Math.floor(Date.now() / 60000)}`;
+    const n = parseInt((await env.RN_KV.get(bucket)) || "0", 10);
+    if (n >= 4) return jsonResponse({ ok: false, error: "Browser Run snapshots are rate-limited to 4/min. Hang on a moment." }, 429);
+    ctx.waitUntil(env.RN_KV.put(bucket, String(n + 1), { expirationTtl: 120 }));
+  }
+
+  const cacheKey = "lens:browser:" + (await lensSha256Hex(v.url));
+  if (env.RN_KV) {
+    try {
+      const hit = await env.RN_KV.get(cacheKey, "json");
+      if (hit && hit.ok) return jsonResponse({ ...hit, cached: true });
+    } catch (_e) { /* a corrupt cache entry is a miss, never a user-visible failure */ }
+  }
+
+  const started = Date.now();
+  const payload = {
+    url: v.url,
+    formats: ["content", "screenshot", "markdown", "accessibilityTree"],
+    viewport: { width: 1280, height: 800, deviceScaleFactor: 1 },
+    screenshotOptions: { fullPage: true, type: "png" },
+    gotoOptions: { waitUntil: "networkidle0", timeout: 18000 },
+    userAgent: BOT_UA,
+  };
+
+  let response;
+  try {
+    response = await env.BROWSER.quickAction("snapshot", payload);
+  } catch (e) {
+    return jsonResponse({ ok: false, error: "Browser Run request failed: " + ((e && e.message) || e) }, 502);
+  }
+  if (!response.ok) {
+    let detail = "";
+    try { detail = (await response.text()).slice(0, 500); } catch (_e) {}
+    return jsonResponse({ ok: false, error: "Browser Run returned " + response.status + ".", detail }, 502);
+  }
+
+  let envelope;
+  try { envelope = await response.json(); }
+  catch (e) { return jsonResponse({ ok: false, error: "Browser Run returned invalid JSON: " + ((e && e.message) || e) }, 502); }
+  const result = envelope && envelope.result ? envelope.result : envelope || {};
+  const meta = envelope && envelope.meta ? envelope.meta : {};
+  const rawContent = String(result.content || "");
+  const output = {
+    ok: true,
+    url: v.url,
+    finalUrl: meta.url || v.url,
+    status: meta.status == null ? null : meta.status,
+    title: meta.title || "",
+    content: rawContent.slice(0, 120000),
+    contentTruncated: rawContent.length > 120000,
+    markdown: String(result.markdown || "").slice(0, 60000),
+    accessibilityTree: result.accessibilityTree || null,
+    screenshot: result.screenshot ? "data:image/png;base64," + result.screenshot : null,
+    // WebMCP discovery is currently a Chrome-beta lab capability, not a
+    // production Browser Run binding capability. The local helper performs
+    // the real runtime listing; this field keeps that boundary explicit.
+    webmcp: { status: "lab-required", detail: "Runtime WebMCP listing requires the local Browser Run Chrome-beta lab. Use scripts/lens-webmcp.mjs." },
+    fetchedBy: "Cloudflare Browser Run",
+    elapsedMs: Date.now() - started,
+  };
+  if (env.RN_KV) ctx.waitUntil(env.RN_KV.put(cacheKey, JSON.stringify(output), { expirationTtl: 900 }));
+  return jsonResponse({ ...output, cached: false });
 }
 
 export function lensPngHeaders(cached) {
@@ -315,6 +724,9 @@ export function lensFramable(headers) {
 export function validateLensTarget(raw) {
   const s0 = String(raw || "").trim();
   if (!s0) return { ok: false, error: "Type a URL to inspect." };
+  if (/^[a-z][a-z0-9+.-]*:/i.test(s0) && !/^https?:\/\//i.test(s0)) {
+    return { ok: false, error: "Only http and https URLs." };
+  }
   const s = /^https?:\/\//i.test(s0) ? s0 : "https://" + s0;
   let url;
   try { url = new URL(s); } catch { return { ok: false, error: "That doesn't parse as a URL." }; }
@@ -343,23 +755,25 @@ export function lensHostBlocked(host) {
 
 // the orchestrator: fetch the target, parse it, then probe the origin's
 // site-level files in parallel. returns the full lens envelope.
-export async function lensInspect(targetUrl, env) {
+export async function lensInspect(targetUrl, env, opts) {
+  opts = opts || {};
   const started = Date.now();
   const ctrl = new AbortController();
   const to = setTimeout(() => ctrl.abort(), 8000);
-  let res;
-  try { res = await lensFetch(targetUrl, env, ctrl.signal); }
-  finally { clearTimeout(to); }
+  let res, body = "", truncated = false, ct = "", isTextual = false, isHtml = false;
+  try {
+    res = await lensFetch(targetUrl, env, ctrl.signal);
+    ct = res.headers.get("content-type") || "";
+    isTextual = ct === "" || /text|html|xml|json|javascript|\+xml|\+json/i.test(ct);
+    isHtml = /html/i.test(ct);
+    // read the body while the abort timer is still armed. clearing it before the
+    // read (as this used to) left a slow-drip response unbounded in wall time.
+    if (isTextual) { const r = await lensReadCapped(res, 2 * 1024 * 1024); body = r.text; truncated = r.truncated; }
+  } finally { clearTimeout(to); }
 
   const finalUrl = res.url || targetUrl;
-  const ct = res.headers.get("content-type") || "";
   const headers = {};
   for (const [k, val] of res.headers) headers[k] = val;
-  const isTextual = ct === "" || /text|html|xml|json|javascript|\+xml|\+json/i.test(ct);
-  const isHtml = /html/i.test(ct) || (ct === "" && false);
-
-  let body = "", truncated = false;
-  if (isTextual) { const r = await lensReadCapped(res, 2 * 1024 * 1024); body = r.text; truncated = r.truncated; }
 
   const out = {
     ok: true, url: targetUrl, finalUrl, redirected: finalUrl !== targetUrl,
@@ -406,9 +820,27 @@ export async function lensInspect(targetUrl, env) {
 
   // site-level discovery — probe the origin's well-known files + agent doors
   // in parallel.
-  const origin = (() => { try { return new URL(finalUrl).origin; } catch { return null; } })();
+  // re-validate the FINAL url before probing its origin: the input allowlist only
+  // vetted the url the user typed, but redirect:"follow" could have landed us on a
+  // private/link-local host. a blocked final host skips discovery entirely.
+  const origin = (() => {
+    try { const u = new URL(finalUrl); return lensHostBlocked(u.hostname.toLowerCase()) ? null : u.origin; }
+    catch { return null; }
+  })();
   if (origin) {
-    const [robots, sitemap, llms, llmsFull, aiTxt, secTxt, tdmrep, agentCard, openapi, aiPlugin, apiCatalog, mcp, nlweb, mdNego] = await Promise.all([
+    // Scanning our OWN /lens route is a fan-out trap. SELF_FETCH dispatches each probe
+    // back through route() into handleLens, and every one of those re-runs a COMPLETE
+    // inspection of the inner ?url= target: the main fetch, plus markdown negotiation,
+    // plus six bot identities = 8 full nested scans inside one invocation. SELF_FETCH
+    // nulls itself one level down, so DEPTH was already bounded; this bounds the WIDTH.
+    // Neither probe says anything meaningful about the lens itself anyway.
+    const selfLens = (() => {
+      try {
+        const u = new URL(finalUrl);
+        return u.hostname.toLowerCase() === CANONICAL_HOST && /^\/lens(\/|$)/.test(u.pathname);
+      } catch { return false; }
+    })();
+    const [robots, sitemap, llms, llmsFull, aiTxt, secTxt, tdmrep, agentCard, openapi, aiPlugin, apiCatalog, mcp, nlweb, mdNego, webBotAuth, openidConfig, oauthServer, oauthResource, authMd, mcpServerCard, agentSkills, ucp, acp, ap2, agentsMd, dnsAid, botViews] = await Promise.all([
       lensProbe(origin + "/robots.txt", env), lensProbe(origin + "/sitemap.xml", env),
       lensProbe(origin + "/llms.txt", env), lensProbe(origin + "/llms-full.txt", env),
       lensProbe(origin + "/ai.txt", env), lensProbe(origin + "/.well-known/security.txt", env),
@@ -419,11 +851,33 @@ export async function lensInspect(targetUrl, env) {
       lensProbe(origin + "/.well-known/api-catalog", env),
       lensProbeMcp(origin, env),
       lensProbeNlweb(origin, env),
-      isHtml ? lensProbeMdNego(finalUrl, env) : Promise.resolve(null),
+      isHtml && !selfLens ? lensProbeMdNego(finalUrl, env) : Promise.resolve(null),
+      lensProbe(origin + "/.well-known/http-message-signatures-directory", env),
+      lensProbe(origin + "/.well-known/openid-configuration", env),
+      lensProbe(origin + "/.well-known/oauth-authorization-server", env),
+      lensProbe(origin + "/.well-known/oauth-protected-resource", env),
+      lensProbe(origin + "/auth.md", env),
+      lensProbe(origin + "/.well-known/mcp/server-card.json", env),
+      lensProbe(origin + "/.well-known/agent-skills/index.json", env),
+      lensProbe(origin + "/.well-known/ucp", env),
+      lensProbe(origin + "/.well-known/acp.json", env),
+      lensProbe(origin + "/.well-known/ap2", env),
+      lensProbeAgentsMd(origin, env),
+      lensProbeDnsAid(new URL(finalUrl).hostname),
+      // bot-view sampling is 6 extra fetches per scan. The census (opts.skipBotViews)
+      // only needs tier/score/doors, so it skips them to stay well under the
+      // per-invocation subrequest budget when sweeping the whole roster.
+      (selfLens || opts.skipBotViews) ? Promise.resolve([]) : lensProbeBotViews(finalUrl, env),
     ]);
     const feeds = (out.structured?.relLinks || []).filter((l) =>
       /alternate/.test(l.rel) && /(rss|atom|feed|\+xml|\+json)/i.test((l.type || "") + " " + (l.href || "")));
-    out.discovery = { origin, robotsTxt: robots, sitemapXml: sitemap, llmsTxt: llms, llmsFullTxt: llmsFull, aiTxt, securityTxt: secTxt, feeds };
+    out.discovery = {
+      origin, robotsTxt: robots, sitemapXml: sitemap, llmsTxt: llms, llmsFullTxt: llmsFull,
+      aiTxt, securityTxt: secTxt, feeds, dnsAid, agentsMd,
+      webBotAuth, oauthDiscovery: { openidConfiguration: openidConfig, oauthAuthorizationServer: oauthServer },
+      oauthProtectedResource: oauthResource, authMd, mcpServerCard, agentSkills,
+      commerce: { ucp, acp, ap2 },
+    };
     out.ai = out.ai || {};
     out.ai.llmsTxtPresent = llms.ok;
     out.ai.directives = {
@@ -438,6 +892,11 @@ export async function lensInspect(targetUrl, env) {
     out.agent = lensAgentDoors({
       llmsTxt: llms, mdNego, mcp, nlweb, agentCard, openapi, aiPlugin, apiCatalog,
       webmcp: isHtml ? lensDetectWebmcp(body) : { found: false },
+    });
+    out.botViews = botViews;
+    out.readiness = lensReadiness({
+      finalUrl, status: res.status, headers, body, robots, sitemap, terms: out.terms,
+      discovery: out.discovery, agent: out.agent, openapi, botViews,
     });
   }
   return out;
@@ -460,6 +919,27 @@ export async function lensFetch(targetUrl, env, signal, accept) {
       headers.set("Signature", `sig1=:${sig.b64}:`);
     } catch (_e) { /* recipient just can't verify */ }
   }
+  // Fetching our own hostname over the network loops back through this same
+  // worker, and Cloudflare kills the loop with a 522 — which is why the featured
+  // "Try: aadhar.sh" example (and every self-probe: robots.txt, llms.txt, …) once
+  // rendered the site as down. Dispatch through our own router instead
+  // (SELF_FETCH, injected in index.js): it returns the REAL response an external
+  // agent receives — worker enhancement, markdown negotiation, cache + security
+  // headers, all of it — so a self-scan measures the live surface rather than a
+  // reimplementation of it.
+  //
+  // ASSETS is the fallback only. It serves the PRE-enhancement static file, which
+  // is right for /robots.txt but wrong for "/": the skeleton carries an empty photo
+  // grid and zero alt text, so a self-scan through it under-reported this site's own
+  // image accessibility as 0/12 while the live page ships 13 alt texts.
+  try {
+    const u = new URL(targetUrl);
+    if (u.hostname.toLowerCase() === CANONICAL_HOST) {
+      const selfReq = new Request(u.toString(), { method: "GET", headers });
+      if (env.SELF_FETCH) return await env.SELF_FETCH(selfReq);
+      if (env.ASSETS)     return await env.ASSETS.fetch(selfReq);
+    }
+  } catch (_e) { /* fall through to a normal fetch */ }
   return fetch(targetUrl, { method: "GET", headers, redirect: "follow", signal, cf: { cacheTtl: 0 } });
 }
 
@@ -480,6 +960,90 @@ export async function lensReadCapped(res, max) {
   return { text: new TextDecoder("utf-8").decode(merged), truncated };
 }
 
+// DNS-AID is a DNS surface, not an HTTP file. Query the three discovery names
+// the scanner recognizes through Cloudflare's DNS-over-HTTPS endpoint and keep
+// the result deliberately small: Lens is showing whether a door exists, not
+// pretending to be a full DNS debugger.
+export async function lensProbeDnsAid(hostname) {
+  const names = ["_index._agents.", "_a2a._agents.", "_mcp._agents."].map((prefix) => prefix + hostname);
+  try {
+    const rows = await Promise.all(names.map(async (name) => {
+      const ctrl = new AbortController();
+      const to = setTimeout(() => ctrl.abort(), 4500);
+      try {
+        const url = "https://cloudflare-dns.com/dns-query?name=" + encodeURIComponent(name) + "&type=SVCB&do=1";
+        const res = await fetch(url, { headers: { accept: "application/dns-json" }, signal: ctrl.signal, cf: { cacheTtl: 0 } });
+        const body = await res.json();
+        const answers = Array.isArray(body.Answer) ? body.Answer : [];
+        return { name, status: res.status, dnssecValidated: body.AD === true, answers: answers.filter((a) => a.type === 64 || a.type === 65).length };
+      } finally { clearTimeout(to); }
+    }));
+    const records = rows.filter((r) => r.answers > 0);
+    return { ok: true, found: records.length > 0, dnssecValidated: records.some((r) => r.dnssecValidated), names, records: rows };
+  } catch (e) {
+    return { ok: false, found: false, names, error: (e && e.message) || String(e) };
+  }
+}
+
+// These are representative request identities, not claims about the exact
+// implementation each vendor uses. A bot view is a bounded GET observation;
+// the policy verdict in Terms remains the source of truth for robots.txt.
+const LENS_BOT_VIEWS = [
+  { key: "GPTBot", label: "GPTBot", owner: "OpenAI", ua: "GPTBot/1.0" },
+  { key: "ClaudeBot", label: "ClaudeBot", owner: "Anthropic", ua: "ClaudeBot/1.0" },
+  { key: "CCBot", label: "CCBot", owner: "Common Crawl", ua: "CCBot/2.0" },
+  { key: "Google-Extended", label: "Google-Extended", owner: "Google", ua: "Google-Extended" },
+  { key: "PerplexityBot", label: "PerplexityBot", owner: "Perplexity", ua: "PerplexityBot/1.0" },
+  { key: "ChatGPT-User", label: "ChatGPT-User", owner: "OpenAI", ua: "ChatGPT-User/1.0" },
+];
+
+export async function lensFetchAsBot(targetUrl, env, signal, userAgent) {
+  const headers = new Headers({
+    "user-agent": userAgent,
+    accept: "text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.7",
+    "accept-language": "en-US,en;q=0.9",
+  });
+  // same self-dispatch rule as lensFetch: route() gives the real response this
+  // bot identity would actually receive (the worker's UA-conditional branches
+  // included), where ASSETS would hand back the pre-enhancement skeleton and make
+  // every bot look identical for the wrong reason.
+  try {
+    const u = new URL(targetUrl);
+    if (u.hostname.toLowerCase() === CANONICAL_HOST) {
+      const selfReq = new Request(u.toString(), { method: "GET", headers });
+      if (env.SELF_FETCH) return await env.SELF_FETCH(selfReq);
+      if (env.ASSETS)     return await env.ASSETS.fetch(selfReq);
+    }
+  } catch (_e) { /* fall through to a normal fetch */ }
+  return fetch(targetUrl, { method: "GET", headers, redirect: "follow", signal, cf: { cacheTtl: 0 } });
+}
+
+export async function lensProbeBotView(targetUrl, env, profile) {
+  const ctrl = new AbortController();
+  const to = setTimeout(() => ctrl.abort(), 4500);
+  try {
+    const res = await lensFetchAsBot(targetUrl, env, ctrl.signal, profile.ua);
+    const contentType = (res.headers.get("content-type") || "").split(";")[0].trim();
+    const cap = await lensReadCapped(res, 2048);
+    const challenge = res.headers.get("cf-mitigated") === "challenge" || /challenge-platform|<title>Just a moment/i.test(cap.text);
+    return {
+      key: profile.key, label: profile.label, owner: profile.owner, userAgent: profile.ua,
+      status: res.status, contentType, sampleBytes: cap.text.length,
+      blocked: challenge || [401, 403, 406, 429, 451].includes(res.status), challenge,
+      // res.url is "" for a same-origin response built inside the worker (SELF_FETCH /
+      // ASSETS), so `res.url !== targetUrl` reported redirected:true for every bot on any
+      // aadhar.sh scan. Fall back to targetUrl, matching lensInspect's `res.url || targetUrl`.
+      redirected: (res.url || targetUrl) !== targetUrl,
+    };
+  } catch (e) {
+    return { key: profile.key, label: profile.label, owner: profile.owner, userAgent: profile.ua, status: null, contentType: "", sampleBytes: 0, blocked: false, challenge: false, error: (e && e.message) || String(e) };
+  } finally { clearTimeout(to); }
+}
+
+export function lensProbeBotViews(targetUrl, env) {
+  return Promise.all(LENS_BOT_VIEWS.map((profile) => lensProbeBotView(targetUrl, env, profile)));
+}
+
 // small, forgiving probe for a single site-level file.
 export async function lensProbe(url, env) {
   try {
@@ -491,6 +1055,22 @@ export async function lensProbe(url, env) {
     const cap = await lensReadCapped(res, 256 * 1024);
     return { ok: true, status: res.status, url, contentType: res.headers.get("content-type") || "", body: cap.text, truncated: cap.truncated };
   } catch (e) { return { ok: false, error: (e && e.message) || String(e), url }; }
+}
+
+// AGENTS.md / agents.md — the 2025 convention for telling an agent how to work
+// with a codebase or service (the CLI wave's answer to "where's the contract").
+// Case varies by host, so try the lowercase web form first, then the uppercase
+// repo form. `present` requires a non-trivial body, not just a 200, so an SPA
+// catch-all serving HTML for everything doesn't read as a real AGENTS.md.
+export async function lensProbeAgentsMd(origin, env) {
+  for (const name of ["/agents.md", "/AGENTS.md"]) {
+    const p = await lensProbe(origin + name, env);
+    const body = (p && p.body || "").trim();
+    const looksMd = body.length > 40 && !/^\s*<(?:!doctype|html)/i.test(body);
+    if (p && p.ok && looksMd) return { ok: true, present: true, variant: name, status: p.status, body, truncated: p.truncated };
+    if (p && p.ok && !looksMd) return { ok: true, present: false, variant: name, status: p.status, note: "answered, but the body looks like a catch-all HTML page, not Markdown instructions" };
+  }
+  return { ok: false, present: false, note: "no /agents.md or /AGENTS.md found" };
 }
 
 // HTMLRewriter pass for the attribute-driven extraction it's robust at:
@@ -635,64 +1215,10 @@ const LENS_BOTS = [
 // robots.txt → { groups: [{agents, rules, signal}], sitemaps }. Groups follow
 // RFC 9309: consecutive User-agent lines share one group; Content-Signal
 // (contentsignals.org) rides along as a group-level directive.
-export function lensParseRobots(txt) {
-  const groups = [], sitemaps = [];
-  let cur = null, inAgents = false;
-  for (const raw of String(txt || "").split(/\r?\n/)) {
-    const line = raw.replace(/#.*$/, "").trim();
-    if (!line) continue;
-    const i = line.indexOf(":");
-    if (i < 0) continue;
-    const key = line.slice(0, i).trim().toLowerCase();
-    const val = line.slice(i + 1).trim();
-    if (key === "user-agent") {
-      if (!inAgents) { cur = { agents: [], rules: [], signal: null }; groups.push(cur); }
-      cur.agents.push(val.toLowerCase());
-      inAgents = true;
-      continue;
-    }
-    inAgents = false;
-    if (key === "sitemap") { sitemaps.push(val); continue; }
-    if (!cur) continue;
-    if (key === "allow" || key === "disallow") cur.rules.push({ allow: key === "allow", pattern: val });
-    else if (key === "content-signal") cur.signal = val;
-  }
-  return { groups, sitemaps };
-}
-
-// RFC 9309 evaluation for one bot: the group with the longest user-agent token
-// that prefixes the bot's product token wins ('*' only as fallback), then the
-// longest matching path rule; Allow beats Disallow on a length tie.
-export function lensRobotsVerdict(parsed, botUa, path) {
-  const token = botUa.toLowerCase();
-  let bestUa = null;
-  for (const g of parsed.groups) for (const ua of g.agents) {
-    if (ua !== "*" && token.startsWith(ua) && (bestUa === null || ua.length > bestUa.length)) bestUa = ua;
-  }
-  const matchedUa = bestUa ?? (parsed.groups.some((g) => g.agents.includes("*")) ? "*" : null);
-  if (matchedUa === null) return { verdict: "allow", matchedUa: null, rule: null, signal: null };
-  const chosen = parsed.groups.filter((g) => g.agents.includes(matchedUa));
-  let best = null;
-  for (const g of chosen) for (const r of g.rules) {
-    if (!r.pattern || !lensPathMatch(r.pattern, path)) continue; // empty Disallow: = no rule at all
-    if (!best || r.pattern.length > best.pattern.length || (r.pattern.length === best.pattern.length && r.allow && !best.allow)) best = r;
-  }
-  const signal = chosen.map((g) => g.signal).find(Boolean) || null;
-  return {
-    verdict: best && !best.allow ? "block" : "allow",
-    matchedUa,
-    rule: best ? (best.allow ? "Allow: " : "Disallow: ") + best.pattern : null,
-    signal,
-  };
-}
-
-// robots path patterns: '*' is a wildcard, a trailing '$' anchors the end.
-export function lensPathMatch(pattern, path) {
-  const anchored = pattern.endsWith("$");
-  const body = anchored ? pattern.slice(0, -1) : pattern;
-  const rx = "^" + body.split("*").map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join(".*") + (anchored ? "$" : "");
-  try { return new RegExp(rx).test(path); } catch { return path.startsWith(body.split("*")[0]); }
-}
+// robots.txt parsing + RFC 9309 evaluation moved to lib/robots.js (a second caller,
+// /around, now OBEYS these on the crawl). Imported above for local use here and
+// re-exported so every lens caller and the public export surface stay identical.
+export { lensParseRobots, lensPathMatch, lensRobotsVerdict };
 
 // "search=yes,ai-input=yes,ai-train=no" → { search: "yes", ... }
 export function lensParseContentSignal(raw) {
@@ -870,9 +1396,21 @@ export function lensDetectWebmcp(html) {
 
 // a well-known JSON probe only counts if the body parses AND has the right
 // shape — SPAs answer 200 text/html for every path, and that must read as
-// absent, not present.
+// absent, not present. And a probe that never answered reads as UNKNOWN,
+// not absent — same honesty rule as the robots.txt tier.
+// One predicate for "this probe never actually answered the question", shared by
+// both JSON interpreters below so they cannot disagree. lensProbe only sets .error
+// when the fetch THROWS; a reachable-but-broken origin returns { ok:false, status:503 }
+// with no error, which is still not an answer. (429 stays a definitive negative here,
+// matching the door tier; revisit if rate-limited probes need their own "unknown".)
+function lensProbeUnanswered(probe) {
+  return !probe || !!probe.error || !!(probe.status && probe.status >= 500);
+}
+
 function lensJsonDoor(probe, validate, label) {
-  if (!probe || !probe.ok) return { present: false, status: probe ? probe.status : null };
+  if (!probe || !probe.ok) {
+    return { present: false, status: probe ? probe.status : null, unknown: lensProbeUnanswered(probe) };
+  }
   let j = null;
   try { j = JSON.parse(probe.body); } catch (_e) { return { present: false, note: "answered, but not JSON (SPA fallback?)" }; }
   if (!j || typeof j !== "object" || !validate(j)) return { present: false, note: "JSON, but not " + label + "-shaped" };
@@ -889,7 +1427,10 @@ export function lensAgentDoors({ llmsTxt, mdNego, mcp, nlweb, webmcp, agentCard,
     aiPlugin: lensJsonDoor(aiPlugin, (j) => j.schema_version || j.name_for_model, "ai-plugin"),
     apiCatalog: lensJsonDoor(apiCatalog, (j) => j.linkset, "linkset"),
     mdNegotiation: mdNego || { supported: false, note: "not probed (non-HTML target)" },
-    llmsTxt: { present: !!(llmsTxt && llmsTxt.ok) },
+    llmsTxt: {
+      present: !!(llmsTxt && llmsTxt.ok),
+      unknown: !!(llmsTxt && !llmsTxt.ok && llmsTxt.error),
+    },
   };
   if (doors.agentCard.present) doors.agentCard.detail = String(doors.agentCard.json.name || "").slice(0, 80);
   if (doors.openapi.present) doors.openapi.detail = "OpenAPI " + String(doors.openapi.json.openapi || doors.openapi.json.swagger).slice(0, 20);
@@ -909,17 +1450,161 @@ export function lensAgentDoors({ llmsTxt, mdNego, mcp, nlweb, webmcp, agentCard,
   if (doors.apiCatalog.present) readable.push("an RFC 9264 API catalog");
   if (doors.openapi.present) readable.push("OpenAPI");
   if (doors.aiPlugin.present) readable.push("a legacy ai-plugin manifest");
+  // probes that never answered can't vote — say so rather than undercount.
+  const unknowns = [];
+  if (doors.llmsTxt.unknown) unknowns.push("llms.txt");
+  if (doors.mcp.verdict === "unknown") unknowns.push("/mcp");
+  if (doors.nlweb.verdict === "unknown") unknowns.push("/ask");
+  if (doors.mdNegotiation.note === "probe failed") unknowns.push("markdown negotiation");
+  for (const [k, label] of [["agentCard", "agent card"], ["openapi", "OpenAPI"], ["aiPlugin", "ai-plugin"], ["apiCatalog", "api-catalog"]]) {
+    if (doors[k].unknown) unknowns.push(label);
+  }
+
+  // a timed-out probe can hide an action/readable door too, not just flip a
+  // human-only verdict — so hedge on every verdict where unknowns remain.
+  const hedge = unknowns.length
+    ? " (" + unknowns.length + " probe" + (unknowns.length > 1 ? "s" : "") + " never answered, so this may undercount: " + unknowns.join(", ") + ")"
+    : "";
   let verdict, note;
   if (action.length) {
     verdict = "agent-native";
-    note = "This site publishes action surfaces: " + action.join(", ") + (readable.length ? " — plus " + readable.join(", ") + "." : ".");
+    note = "This site publishes action surfaces: " + action.join(", ") + (readable.length ? " — plus " + readable.join(", ") + "." : ".") + hedge;
   } else if (readable.length) {
     verdict = "agent-readable";
-    note = "This site publishes for machine readers (" + readable.join(", ") + ") but exposes no action surface.";
+    note = "This site publishes for machine readers (" + readable.join(", ") + ") but exposes no action surface." + hedge;
+  } else if (unknowns.length) {
+    verdict = "human-only";
+    note = "No agent door answered, but " + unknowns.length + " probe" + (unknowns.length > 1 ? "s" : "") + " (" + unknowns.join(", ") + ") never got a response — this verdict may undercount.";
   } else {
     verdict = "human-only";
     note = "No agent door found. An agent here must brute-force the human page — the AI view prices exactly that.";
   }
-  doors.strategy = { verdict, note, action, readable };
+  doors.strategy = { verdict, note, action, readable, unknowns };
   return doors;
+}
+
+// ── agent readiness rubric -------------------------------------------------
+// A local, evidence-backed implementation of the public IsItAgentReady rubric.
+// The score is intentionally transparent: pass / (pass + fail + unknown),
+// with neutral emerging-commerce checks excluded. A site can inspect exactly
+// why a point moved instead of receiving an opaque vendor verdict.
+const LENS_READINESS_META = {
+  robotsTxt: { category: "discoverability", label: "robots.txt" }, sitemap: { category: "discoverability", label: "Sitemap" },
+  linkHeaders: { category: "discoverability", label: "Link headers" }, dnsAid: { category: "discoverability", label: "DNS-AID" },
+  markdownNegotiation: { category: "contentAccessibility", label: "Markdown negotiation" },
+  robotsTxtAiRules: { category: "botAccessControl", label: "AI bot rules" }, contentSignals: { category: "botAccessControl", label: "Content Signals" },
+  webBotAuth: { category: "botAccessControl", label: "Web Bot Auth" }, apiCatalog: { category: "discovery", label: "API Catalog" },
+  oauthDiscovery: { category: "discovery", label: "OAuth discovery" }, oauthProtectedResource: { category: "discovery", label: "OAuth Protected Resource" },
+  authMd: { category: "discovery", label: "Auth.md" }, mcpServerCard: { category: "discovery", label: "MCP Server Card" },
+  a2aAgentCard: { category: "discovery", label: "A2A Agent Card", optional: true, countInScore: false },
+  agentSkills: { category: "discovery", label: "Agent Skills" }, webMcp: { category: "discovery", label: "WebMCP" },
+  x402: { category: "commerce", label: "x402", optional: true, countInScore: false }, mpp: { category: "commerce", label: "MPP", optional: true, countInScore: false },
+  ucp: { category: "commerce", label: "UCP", optional: true, countInScore: false }, acp: { category: "commerce", label: "ACP", optional: true, countInScore: false },
+  ap2: { category: "commerce", label: "AP2", optional: true, countInScore: false },
+};
+
+const LENS_READINESS_CATEGORIES = [
+  { key: "discoverability", label: "Discoverability", countInScore: true },
+  { key: "contentAccessibility", label: "Content Accessibility", countInScore: true },
+  { key: "botAccessControl", label: "Bot Access Control", countInScore: true },
+  { key: "discovery", label: "API, Auth, MCP & Skill Discovery", countInScore: true },
+  { key: "commerce", label: "Commerce", countInScore: false },
+];
+
+function lensJsonShape(probe, validate) {
+  // same "did it answer?" rule as lensJsonDoor: a 5xx origin did NOT answer, so it is
+  // unknown, not a definitive fail (this used to call a reachable-but-broken 503 a fail,
+  // undercounting webBotAuth / the oauth checks that route through here).
+  if (lensProbeUnanswered(probe)) return { status: "unknown", detail: probe && probe.status ? "HTTP " + probe.status + " — probe did not answer" : "probe did not answer" };
+  if (!probe.ok) return { status: "fail", detail: "HTTP " + (probe.status || "error") };
+  try {
+    const json = JSON.parse(probe.body || "");
+    return validate(json) ? { status: "pass", detail: "valid JSON shape" } : { status: "fail", detail: "JSON answered, but the expected fields were absent" };
+  } catch (_e) { return { status: "fail", detail: "answered, but was not valid JSON" }; }
+}
+
+function lensReadinessItem(key, status, detail) {
+  const meta = LENS_READINESS_META[key];
+  return {
+    key, category: meta.category, label: meta.label, status, detail,
+    optional: !!meta.optional,
+    countInScore: meta.countInScore !== false && !meta.optional,
+  };
+}
+
+export function lensReadiness({ headers, robots, sitemap, terms, discovery, agent, openapi, botViews }) {
+  const items = {};
+  const robotsParsed = robots && robots.ok ? lensParseRobots(robots.body || "") : null;
+  const robotsRules = robotsParsed && robotsParsed.groups.length > 0;
+  // Gate the "AI bot rules" STATUS on actually-named agents. Keying it on
+  // robotsRules (= "any User-agent group exists") passed a robots.txt carrying
+  // nothing but `User-agent: *` on a check whose own fix copy says to declare
+  // explicit GPTBot/ClaudeBot/CCBot rules — this site scored that unearned pass on
+  // its own scan. The predicate already existed; it just lived in the detail string.
+  const namedAiRules = !!(robotsRules && robotsParsed.groups.some((g) =>
+    g.agents.some((a) => a !== "*" && /bot|crawler|extended|spider|anthropic|openai|claude/i.test(a))));
+  const link = String((headers && headers.link) || "");
+  const usefulLinks = (link.match(/rel\s*=\s*["']?(?:sitemap|alternate|service-doc|service-desc|api-catalog)/gi) || []).length;
+  const botAuth = lensJsonShape(discovery && discovery.webBotAuth, (j) => Array.isArray(j.keys) && j.keys.length > 0);
+  const oauthOpen = lensJsonShape(discovery && discovery.oauthDiscovery && discovery.oauthDiscovery.openidConfiguration, (j) => !!(j.issuer || j.authorization_endpoint || j.token_endpoint));
+  const oauthServer = lensJsonShape(discovery && discovery.oauthDiscovery && discovery.oauthDiscovery.oauthAuthorizationServer, (j) => !!(j.issuer || j.token_endpoint || j.authorization_endpoint));
+  const oauthResource = lensJsonShape(discovery && discovery.oauthProtectedResource, (j) => !!(j.resource || j.authorization_servers || j.scopes_supported));
+  const mcpCard = lensJsonShape(discovery && discovery.mcpServerCard, (j) => !!(j.serverInfo || j.server || j.name || j.capabilities));
+  const skills = lensJsonShape(discovery && discovery.agentSkills, (j) => Array.isArray(j.skills));
+  const ucp = lensJsonShape(discovery && discovery.commerce && discovery.commerce.ucp, (j) => !!(j.protocol || j.version || j.services || j.capabilities));
+  const acp = lensJsonShape(discovery && discovery.commerce && discovery.commerce.acp, (j) => !!(j.protocol || j.api_base_url || j.capabilities || j.services));
+  const ap2 = lensJsonShape(discovery && discovery.commerce && discovery.commerce.ap2, (j) => !!(j.protocol || j.version || j.capabilities));
+
+  items.robotsTxt = lensReadinessItem("robotsTxt", robots && robots.ok ? "pass" : robots && (robots.status === 404 || robots.status === 410) ? "fail" : "unknown", robots && robots.ok ? "valid response with " + robotsParsed.groups.length + " User-agent group(s)" : "robots.txt did not return a readable 200");
+  items.sitemap = lensReadinessItem("sitemap", sitemap && sitemap.ok ? "pass" : sitemap && (sitemap.status === 404 || sitemap.status === 410) ? "fail" : "unknown", sitemap && sitemap.ok ? "sitemap answered with " + ((sitemap.body || "").match(/<url>|<sitemap>/gi) || []).length + " URL entries" : "sitemap.xml was not found or did not answer");
+  items.linkHeaders = lensReadinessItem("linkHeaders", usefulLinks ? "pass" : "fail", usefulLinks ? usefulLinks + " agent-useful Link relation(s)" : "no agent-useful Link relations on the fetched response");
+  items.dnsAid = lensReadinessItem("dnsAid", discovery && discovery.dnsAid && discovery.dnsAid.ok ? (discovery.dnsAid.found ? "pass" : "fail") : "unknown", discovery && discovery.dnsAid && discovery.dnsAid.found ? "DNS-AID record found" : "no DNS-AID record found at the checked discovery names");
+  // A probe that never ran cannot be a "fail". lensProbeMdNego sets `note` ONLY when
+  // it produced no real answer ("probe failed", or "not probed (non-HTML target)");
+  // a genuine negative carries contentType/status and no note. Keying on the exact
+  // string "probe failed" let the not-probed case fall through to fail and then
+  // assert "Accept: text/markdown stayed non-markdown" about a request never sent —
+  // the same fabrication the agent-doors tier already refuses to make.
+  const mdNego = (agent && agent.mdNegotiation) || null;
+  items.markdownNegotiation = lensReadinessItem("markdownNegotiation", mdNego && mdNego.supported ? "pass" : mdNego && mdNego.note ? "unknown" : "fail", mdNego && mdNego.supported ? "same URL returned text/markdown" : mdNego && mdNego.note ? mdNego.note : "Accept: text/markdown stayed non-markdown");
+  items.robotsTxtAiRules = lensReadinessItem("robotsTxtAiRules", robots && robots.ok ? (namedAiRules ? "pass" : "fail") : "unknown", namedAiRules ? "named AI bot rules found" : robotsRules ? "wildcard rules apply to crawlers, no AI crawler is named" : "robots policy could not be evaluated");
+  items.contentSignals = lensReadinessItem("contentSignals", terms && terms.robotsUnknown ? "unknown" : terms && terms.signals && terms.signals.length ? "pass" : "fail", terms && terms.signals && terms.signals.length ? terms.signals.length + " Content-Signal directive(s)" : "no Content-Signal directive found");
+  items.webBotAuth = lensReadinessItem("webBotAuth", botAuth.status, botAuth.detail);
+  items.apiCatalog = lensReadinessItem("apiCatalog", agent && agent.apiCatalog && agent.apiCatalog.present ? "pass" : agent && agent.apiCatalog && agent.apiCatalog.unknown ? "unknown" : "fail", agent && agent.apiCatalog && agent.apiCatalog.present ? agent.apiCatalog.detail : "no valid API Catalog linkset");
+  items.oauthDiscovery = lensReadinessItem("oauthDiscovery", oauthOpen.status === "pass" || oauthServer.status === "pass" ? "pass" : oauthOpen.status === "unknown" || oauthServer.status === "unknown" ? "unknown" : "fail", oauthOpen.status === "pass" || oauthServer.status === "pass" ? "OAuth or OIDC discovery metadata found" : "no valid OAuth/OIDC discovery document");
+  items.oauthProtectedResource = lensReadinessItem("oauthProtectedResource", oauthResource.status, oauthResource.detail);
+  items.authMd = lensReadinessItem("authMd", discovery && discovery.authMd && discovery.authMd.ok && String(discovery.authMd.body || "").trim() ? "pass" : discovery && discovery.authMd && discovery.authMd.error ? "unknown" : "fail", discovery && discovery.authMd && discovery.authMd.ok ? "auth.md answered" : "no auth.md registration guide");
+  items.mcpServerCard = lensReadinessItem("mcpServerCard", mcpCard.status, mcpCard.detail);
+  items.a2aAgentCard = lensReadinessItem("a2aAgentCard", agent && agent.agentCard && agent.agentCard.present ? "pass" : "fail", agent && agent.agentCard && agent.agentCard.present ? agent.agentCard.detail : "no valid A2A Agent Card");
+  items.agentSkills = lensReadinessItem("agentSkills", skills.status, skills.detail);
+  items.webMcp = lensReadinessItem("webMcp", agent && agent.webmcp && agent.webmcp.found ? "pass" : "fail", agent && agent.webmcp && agent.webmcp.found ? "modelContext marker found in page" : "no WebMCP marker found in the fetched HTML");
+  items.x402 = lensReadinessItem("x402", terms && terms.paid && terms.paid.http402 ? "pass" : "neutral", terms && terms.paid && terms.paid.http402 ? "HTTP 402 payment requirement observed" : "not observed (optional; not scored)");
+  const openapiText = openapi && openapi.ok ? String(openapi.body || "") : "";
+  items.mpp = lensReadinessItem("mpp", /x-payment-info|mpp/i.test(openapiText) ? "pass" : "neutral", /x-payment-info|mpp/i.test(openapiText) ? "payment metadata found in OpenAPI" : "not observed (optional; not scored)");
+  items.ucp = lensReadinessItem("ucp", ucp.status === "pass" ? "pass" : "neutral", ucp.status === "pass" ? "UCP-shaped discovery metadata found" : "not observed (optional; not scored)");
+  items.acp = lensReadinessItem("acp", acp.status === "pass" ? "pass" : "neutral", acp.status === "pass" ? "ACP-shaped discovery metadata found" : "not observed (optional; not scored)");
+  items.ap2 = lensReadinessItem("ap2", ap2.status === "pass" ? "pass" : "neutral", ap2.status === "pass" ? "AP2-shaped discovery metadata found" : "not observed (optional; not scored)");
+
+  const categories = LENS_READINESS_CATEGORIES.map((category) => {
+    const values = Object.values(items).filter((item) => item.category === category.key && item.countInScore && item.status !== "neutral");
+    const passed = values.filter((item) => item.status === "pass").length;
+    return { key: category.key, label: category.label, score: values.length ? Math.round((passed / values.length) * 100) : 0, passed, total: values.length, checkCount: Object.values(items).filter((item) => item.category === category.key).length, countInScore: category.countInScore };
+  });
+  const counted = Object.values(items).filter((item) => item.countInScore && item.status !== "neutral");
+  const passed = counted.filter((item) => item.status === "pass").length;
+  const overall = counted.length ? Math.round((passed / counted.length) * 100) : 0;
+  const actionSurface = !!(agent && agent.strategy && agent.strategy.action && agent.strategy.action.length);
+  const strongPublishing = items.markdownNegotiation.status === "pass" && items.contentSignals.status === "pass" && items.linkHeaders.status === "pass";
+  const baseline = items.robotsTxt.status === "pass" || items.sitemap.status === "pass";
+  const level = actionSurface ? { number: 5, name: "Agent-Native" } : strongPublishing ? { number: 3, name: "Agent-Readable" } : baseline ? { number: 1, name: "Basic Web Presence" } : { number: 0, name: "Not Ready" };
+  // ship the label with each action: LENS_READINESS_META already owns it, so the
+  // client should render it off the envelope rather than keep a second copy that
+  // silently wins and drifts when a label is renamed here.
+  const nextActions = Object.values(items).filter((item) => item.status === "fail" && item.countInScore).slice(0, 5).map((item) => ({ key: item.key, label: item.label }));
+  return {
+    overall, level: level.number, levelName: level.name,
+    categories, checks: items, counted: counted.length, passed,
+    scoringNote: "Passes divided by pass + fail + unknown; neutral emerging-commerce checks are shown but excluded.",
+    nextActions, botViews: botViews || [],
+  };
 }

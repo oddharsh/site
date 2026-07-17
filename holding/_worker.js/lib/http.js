@@ -50,7 +50,7 @@ export function wantsMarkdown(request) {
   return markdownQ > 0 && markdownQ > htmlQ;
 }
 
-export function acceptQ(accept, type) {
+function acceptQ(accept, type) {
   const [wantType, wantSub] = type.split("/");
   let best = 0;
   for (const raw of accept.split(",")) {
@@ -98,7 +98,7 @@ export function extractMeta(html, name) {
   return m ? decodeEntities(m[1].trim()).slice(0, 240) : "";
 }
 
-export function decodeEntities(s) {
+function decodeEntities(s) {
   return s
     .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, " ");

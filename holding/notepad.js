@@ -8,15 +8,43 @@
 // feature (writing in flux); nothing here persists edits.
 //
 // The /writing folder inlines every note as a popover .np-window; clicking a file
-// composites the note OVER the folder ("selecting menu") with no navigation, while
-// keeping a real /writing/<slug> URL (pushState) so links + Back still work. Each
-// window is enhanced independently — hence the per-window enhance() below.
+// composites the note OVER the folder ("selecting menu") with no navigation and
+// without touching the address bar. That is deliberate: notes are popover="manual"
+// so several stay open at once (cascaded, Esc closes the topmost), and one URL
+// cannot honestly name three open windows — pushState would also trap Back, since
+// five open notes would mean six Backs to leave the site. An XP folder opening a
+// Notepad window never drove the address bar either.
+//
+// The permalink is real without it: every row IS an <a href="/writing/<slug>">
+// that the worker serves as a standalone page, and a modified click (Cmd/Ctrl,
+// middle, shift) passes straight through to it. Each window is enhanced
+// independently — hence the per-window enhance() below.
 (function () {
   "use strict";
   var D = document;
 
   function el(h) { var t = D.createElement("template"); t.innerHTML = h.trim(); return t.content.firstChild; }
-  function esc(s) { return String(s).replace(/[&<>]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]; }); }
+  // Intentional twins of nav.js's el()/esc(). nav.js and notepad.js are separate
+  // top-level scripts, each minified on its own (build.mjs runs esbuild `transform`,
+  // never `bundle`), so sharing these ~250 bytes would cost either an import (a
+  // second request on every /writing page) or a window global — and notepad.js is
+  // deferred BEFORE nav.js, so nav's global isn't there yet when this runs. Keep the
+  // two byte-identical instead: esc() escapes the double quote too, so it stays safe
+  // in an attribute even though today's callers only use it in text.
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  // Same-document popover transitions are tagged "axp-dialog" so luna.css cancels
+  // the axp-window minimize/restore for them: .np-folder is itself a .np-window, so
+  // an untyped transition pulsed the whole folder every time a note opened.
+  function withViewTransition(fn, types) {
+    if (D.startViewTransition && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      return types ? D.startViewTransition({ update: fn, types: types }) : D.startViewTransition(fn);
+    }
+    return fn();
+  }
+  function nameNoteTransition(pop) {
+    if (!pop.id) return;
+    pop.style.viewTransitionName = "axp-note-" + pop.id.replace(/[^a-z0-9_-]/gi, "-");
+  }
 
   // ── per-window enhancement ────────────────────────────────────────────────────
   function enhance(win) {
@@ -29,7 +57,11 @@
     // a popover note's close button hides the popover instead of navigating
     var closeBtn = win.querySelector(".np-controls .close[data-pop]");
     if (closeBtn && win.matches("[popover]")) {
-      closeBtn.addEventListener("click", function (e) { e.preventDefault(); if (win.hidePopover) win.hidePopover(); });
+      nameNoteTransition(win);
+      closeBtn.addEventListener("click", function (e) {
+        e.preventDefault();
+        if (win.hidePopover) withViewTransition(function () { win.hidePopover(); }, ["axp-dialog"]);
+      });
     }
     if (!ta) return;   // folder index has no textarea — nothing more to wire
 
@@ -75,7 +107,10 @@
       ta.focus(); status();
     }
     function newDoc() { ta.value = ""; ta.focus(); status(); }   // a fresh scratch (unsaved, like everything here)
-    function exit() { if (win.matches("[popover]") && win.hidePopover) win.hidePopover(); else location.assign("/writing"); }
+    function exit() {
+      if (win.matches("[popover]") && win.hidePopover) withViewTransition(function () { win.hidePopover(); }, ["axp-dialog"]);
+      else location.assign("/writing");
+    }
     function about() {
       if (D.querySelector(".np-about")) return;
       var box = el(
@@ -166,37 +201,57 @@
     if (!files || !("showPopover" in HTMLElement.prototype)) return;   // no-JS / old → follow links
 
     files.addEventListener("click", function (e) {
+      // let a modified / non-primary click through so the real /writing/<slug>
+      // permalink still opens (Cmd/Ctrl-click new tab, middle-click, etc.).
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
       var a = e.target.closest("a[data-note]"); if (!a) return;
       var pop = D.getElementById("note-" + a.dataset.note); if (!pop) return;
       e.preventDefault();
       openNote(pop);
     });
 
-    // manual popovers don't close on Esc — wire it to close the topmost note
+    // manual popovers don't close on Esc, so wire it to close the topmost note.
+    // capture phase, so we see an open menu BEFORE its own bubble-phase Esc
+    // handler removes it: if a .np-drop menu is open, that Escape belongs to the
+    // menu, so leave the note alone (a second Escape then closes the note).
     D.addEventListener("keydown", function (e) {
       if (e.key !== "Escape") return;
+      if (D.querySelector(".np-drop")) return;
       var open = D.querySelectorAll(".np-note:popover-open");
-      if (open.length) { e.preventDefault(); open[open.length - 1].hidePopover(); }
-    });
+      if (open.length) {
+        e.preventDefault();
+        withViewTransition(function () { open[open.length - 1].hidePopover(); }, ["axp-dialog"]);
+      }
+    }, true);
   }
   function openNote(pop) {
+    nameNoteTransition(pop);
     var ta = pop.querySelector(".np-text");
+    // Anything that needs the note to be VISIBLE must live inside the transition
+    // callback: startViewTransition defers it, so a focus() or a measure out here
+    // runs while the popover is still `display:none` (writing.js's .np-note rule)
+    // and silently does nothing. Only the reduced-motion path, where
+    // withViewTransition calls fn synchronously, ever worked.
     if (pop.matches(":popover-open")) {                 // already open → raise + focus
-      try { pop.hidePopover(); pop.showPopover(); } catch (_) {}
-      if (ta) ta.focus();
+      withViewTransition(function () {
+        try { pop.hidePopover(); pop.showPopover(); } catch (_) {}
+        if (ta) ta.focus();
+      }, ["axp-dialog"]);
       return;
     }
     var n = D.querySelectorAll(".np-note:popover-open").length;   // # already open → cascade step
-    try { pop.showPopover(); } catch (_) { return; }
-    var folder = D.querySelector(".np-folder");
-    var bx = (folder ? folder.getBoundingClientRect().left : 16) + 32;
-    var by = (folder ? folder.getBoundingClientRect().top : 8) + 30;
-    var step = 26;
-    var x = Math.max(8, Math.min(bx + n * step, innerWidth - pop.offsetWidth - 8));
-    var y = Math.max(8, Math.min(by + n * step, innerHeight - 30 - 90));
-    pop.style.margin = "0"; pop.style.right = "auto"; pop.style.left = x + "px"; pop.style.top = y + "px";
-    if (ta) ta.focus();
-    window.dispatchEvent(new Event("resize"));   // nudge the custom scrollbar to (re)measure now it's visible
+    withViewTransition(function () {
+      try { pop.showPopover(); } catch (_) { return; }
+      var folder = D.querySelector(".np-folder");
+      var bx = (folder ? folder.getBoundingClientRect().left : 16) + 32;
+      var by = (folder ? folder.getBoundingClientRect().top : 8) + 30;
+      var step = 26;
+      var x = Math.max(8, Math.min(bx + n * step, innerWidth - pop.offsetWidth - 8));
+      var y = Math.max(8, Math.min(by + n * step, innerHeight - 30 - 90));
+      pop.style.margin = "0"; pop.style.right = "auto"; pop.style.left = x + "px"; pop.style.top = y + "px";
+      if (ta) ta.focus();
+      window.dispatchEvent(new Event("resize"));   // nudge the custom scrollbar to (re)measure now it's visible
+    }, ["axp-dialog"]);
   }
 
   [].forEach.call(D.querySelectorAll(".np-window"), enhance);

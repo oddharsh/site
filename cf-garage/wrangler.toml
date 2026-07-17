@@ -12,7 +12,7 @@ enabled = true
 
 # Workers tracing — records request traces (incl. our custom spans) in the
 # Observability dashboard. powers the /garage/cf/trace custom-spans demo.
-[observability.tracing]
+[observability.traces]
 enabled = true
 head_sampling_rate = 1
 
@@ -32,3 +32,6 @@ class_name = "Counter"
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["Counter"]
+
+[dependencies_instrumentation]
+enabled = true

@@ -1,9 +1,9 @@
 // home.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
-import { escAttr, escHtml, wantsMarkdown } from "./lib/http.js";
+import { escAttr, wantsMarkdown } from "./lib/http.js";
 import { HOMEPAGE_DISCOVERY_LINK, withHomepageDiscoveryHeaders } from "./lib/security.js";
 import { absThumb, getAltMap, getImagesManifest } from "./photos.js";
-import { getTracksSWR } from "./rn.js";
+import { getTracksSWR, renderTrackListHtml } from "./rn.js";
 
 export function homepageHeadResponse(request) {
   const markdown = wantsMarkdown(request);
@@ -59,15 +59,16 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
   // are mutually independent (the static asset, the tracks payload, the
   // photo manifest, the alt map), so fire them concurrently instead
   // of awaiting each in turn — collapses ~3 serial KV round-trips + the
-  // ASSETS fetch into roughly one wall-clock read. the tracks lookup needs
-  // tracks:<pid> keyed off playlist-id, but the id changes ~never — so it's
-  // cached in a module var (like _altMap) and the chain costs two serial KV
-  // reads only on a cold isolate; warm isolates do a single read.
+  // ASSETS fetch into roughly one wall-clock read. The tracks lookup needs
+  // tracks:<pid> keyed off playlist-id, read FRESH each render: it used to be
+  // cached in a module var, which meant /rn/set could swap the playlist while
+  // warm isolates kept SSRing the old id's tracks indefinitely (a module var
+  // can't be busted cross-isolate). The id read is a tiny KV get and it rides in
+  // this same Promise.all, so freshness costs nothing measurable.
   const tracksChain = (async () => {
     if (!env.RN_KV) return null;
     try {
-      const pid = _playlistId ??
-        (_playlistId = await env.RN_KV.get("playlist-id"));
+      const pid = await env.RN_KV.get("playlist-id");
       if (pid && /^[0-9A-Za-z]{22}$/.test(pid)) {
         return await getTracksSWR(env, ctx, pid);
       }
@@ -128,25 +129,12 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
 
   // ── /rn/tracks → np-list ────────────────────────────────────────
   if (tracksPayload?.tracks?.length) {
-    const itemsHtml = tracksPayload.tracks.map(t => {
-      const dur = t.duration_ms ? fmtDuration(t.duration_ms) : "";
-      const artistsText = t.artists_text || (t.artists || []).map(a => a.name).join(", ");
-      const dataAttrs =
-        ` data-track-title="${escAttr(t.title)}"` +
-        ` data-track-artists="${escAttr(artistsText)}"` +
-        (t.image_url   ? ` data-track-image="${escAttr(t.image_url)}"` : "") +
-        (t.duration_ms ? ` data-track-duration="${dur}"`               : "") +
-        (t.is_explicit ? ` data-track-explicit="1"`                    : "");
-      return `<li${dataAttrs}>
-        <a href="${escAttr(t.song_link_url)}" target="_blank" rel="noopener">${
-          dur ? `<span class="np-duration">${dur}</span>` : ""
-        }<span class="np-title">${escHtml(t.title)}</span><span class="np-sep">&mdash;</span><span class="np-artist">${linkifyArtists(t.artists, artistsText)}</span>${
-          t.is_explicit ? '<span class="np-explicit">E</span>' : ""
-        }</a>
-      </li>`;
-    }).join("");
+    const itemsHtml = renderTrackListHtml(tracksPayload);
     rewriter.on("#np-list", {
-      element(el) { el.setInnerContent(itemsHtml, { html: true }); },
+      element(el) {
+        el.setAttribute("data-ssr", "1");
+        el.setInnerContent(itemsHtml, { html: true });
+      },
     });
   }
 
@@ -215,7 +203,10 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
       `</a>`;
     }).join("");
     rewriter.on("section.photos", {
-      element(el) { el.setInnerContent(slotsHtml, { html: true }); },
+      element(el) {
+        el.setAttribute("data-ssr", "1");
+        el.setInnerContent(slotsHtml, { html: true });
+      },
     });
   }
 
@@ -291,46 +282,6 @@ export function pickRandom(arr, n) {
 //
 // each span also carries data-artist-name and (when known) data-artist-image
 // so the XP hover-tooltip can show a profile pic + name on hover. when we
-// have structured `artists` from the scraper we link straight to the
-// artist's spotify URL (precise); otherwise we fall back to a name-based
-// search URL and skip the image.
-export function linkifyArtists(artists, fallbackText) {
-  // structured case: [{id, name, spotify_url, image_url}, ...]
-  if (Array.isArray(artists) && artists.length) {
-    return artists.map(a => {
-      const href = a.spotify_url ||
-        `https://open.spotify.com/search/${encodeURIComponent(a.name)}/artists`;
-      const img  = a.image_url ? ` data-artist-image="${escAttr(a.image_url)}"` : "";
-      return `<span class="np-artist-link"` +
-             ` data-href="${escAttr(href)}"` +
-             ` data-artist-name="${escAttr(a.name)}"` +
-             img +
-             ` role="link" tabindex="0">${escHtml(a.name)}</span>`;
-    }).join(", ");
-  }
-  // fallback (no structured data, just the joined "A, B" string)
-  const raw = fallbackText || (typeof artists === "string" ? artists : "");
-  if (!raw) return "";
-  return String(raw).split(/,\s*/).filter(Boolean).map(name => {
-    const href = `https://open.spotify.com/search/${encodeURIComponent(name)}/artists`;
-    return `<span class="np-artist-link"` +
-           ` data-href="${escAttr(href)}"` +
-           ` data-artist-name="${escAttr(name)}"` +
-           ` role="link" tabindex="0">${escHtml(name)}</span>`;
-  }).join(", ");
-}
-
-export function fmtDuration(ms) {
-  const total = Math.round(ms / 1000);
-  const m = Math.floor(total / 60);
-  const s = String(total % 60).padStart(2, "0");
-  return `${m}:${s}`;
-}
-
-// the Spotify playlist id (KV "playlist-id") changes ~never; module-cached so
-// the homepage tracks lookup is one KV read on warm isolates instead of two.
-export let _playlistId;
-
 export async function serveMarkdown(request, env) {
   // ask the static assets layer for /index.md
   const mdUrl = new URL("/index.md", request.url);

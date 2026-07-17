@@ -1,11 +1,13 @@
 {
   // LOCAL DEV ONLY — `wrangler dev -c wrangler.dev.jsonc` (see .claude/launch.json).
   //
-  // This is the twin of wrangler.jsonc. The two differ in exactly three places:
+  // This is the twin of wrangler.jsonc. The two differ in exactly four places:
   //   - main:             holding/... here vs .build/holding/... in wrangler.jsonc
   //   - assets.directory: holding    here vs .build/holding    in wrangler.jsonc
   //   - no "build" block here (dev serves the readable holding/ tree directly, so
   //     the fast edit->reload loop never pays the full holding/ -> .build copy)
+  //   - Workers Cache is disabled for both local entrypoints, so edit->reload
+  //     never observes a stale cached response; deploy enables it for CachedPages
   // Everything else (bindings, crons, vars, migrations) MUST match wrangler.jsonc.
   // build.mjs warns if a binding name drifts between the two. Deploys never use
   // this file — wrangler.jsonc self-builds via its build.command and ships the
@@ -13,22 +15,30 @@
   "name": "aadhar-sh",
   "main": "holding/_worker.js/index.js",
   "compatibility_date": "2026-06-01",
+  "cache": { "enabled": false, "cross_version_cache": false },
+  "exports": {
+    "default": { "type": "worker", "cache": { "enabled": false } },
+    "CachedPages": { "type": "worker", "cache": { "enabled": false } }
+  },
+  "dependencies_instrumentation": { "enabled": true },
   "workers_dev": false,
   "assets": {
     "directory": "holding",
     "binding": "ASSETS",
+    // MUST match wrangler.jsonc: canonical URLs carry no trailing slash.
+    "html_handling": "drop-trailing-slash",
     "run_worker_first": [
       "/", "/index.html", "/favicon.ico", "/hit.svg",
-      "/auth.md", "/.well-known/api-catalog",
+      "/auth.md", "/.well-known/api-catalog", "/.well-known/agent-card.json",
       "/.well-known/oauth-protected-resource",
       "/.well-known/oauth-authorization-server",
       "/agent/*", "/oauth2/*",
       "/whoareyou", "/whoareyou.json", "/security",
       "/reading", "/updates", "/updates.json", "/restore",
-      "/lens", "/lens/", "/lens/fetch", "/lens/shot",
+      "/lens", "/lens/", "/lens/fetch", "/lens/shot", "/lens/browser",
       "/llms-full.txt", "/ledger", "/ledger.json",
       "/writing", "/writing/*",
-      "/rn", "/rn/tracks", "/rn/admin", "/rn/set",
+      "/rn", "/rn/tracks", "/rn/tracks.html", "/rn/admin", "/rn/set",
       "/bot", "/around", "/around/json",
       "/photos", "/photos/", "/run",
       "/images", "/images/", "/images/full", "/images/full/*",
@@ -40,7 +50,7 @@
   },
   "observability": { "enabled": true },
   "version_metadata": { "binding": "CF_VERSION_METADATA" },
-  "triggers": { "crons": ["*/30 * * * *"] },
+  "triggers": { "crons": ["*/30 * * * *", "17 8 * * 1"] },
   "kv_namespaces": [
     { "binding": "RN_KV", "id": "3cb8a107c58e47dc9244e75b33401f36" }
   ],
@@ -61,8 +71,9 @@
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["Counter"] }
   ],
+  // Quick Actions need remote mode during local Wrangler development.
+  "browser": { "binding": "BROWSER", "remote": true },
   "vars": {
-    "CF_ACCOUNT_ID": "1c99acdb6141579023fb97d24261ea58",
     "COUNTER_SEED": "2375"
   }
 }

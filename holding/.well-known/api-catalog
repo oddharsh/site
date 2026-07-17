@@ -35,7 +35,8 @@
       ],
       "service-desc": [
         { "href": "https://aadhar.sh/.well-known/oauth-protected-resource", "type": "application/json", "title": "OAuth protected resource metadata" },
-        { "href": "https://aadhar.sh/.well-known/oauth-authorization-server", "type": "application/json", "title": "OAuth authorization server metadata" }
+        { "href": "https://aadhar.sh/.well-known/oauth-authorization-server", "type": "application/json", "title": "OAuth authorization server metadata" },
+        { "href": "https://aadhar.sh/.well-known/agent-card.json", "type": "application/json", "title": "Aadharsh site agent card" }
       ]
     }
   ]

@@ -105,6 +105,7 @@
   Link: </.well-known/http-message-signatures-directory>; rel="http-message-signatures-directory"; type="application/jwk-set+json"
   Link: </.well-known/security.txt>; rel="security-policy"; type="text/plain"
   Link: </.well-known/api-catalog>; rel="api-catalog"; type="application/linkset+json"
+  Link: </.well-known/agent-card.json>; rel="service-desc"; type="application/json"; title="Aadharsh site agent card"
   Vary: Accept
 
 # discovery files: long cache. these all change rarely (sitemap when
@@ -130,6 +131,9 @@
   Content-Type: application/jwk-set+json
   Cache-Control: public, max-age=2592000, s-maxage=2592000
 
+# NOTE: the five worker-first docs below (api-catalog, auth.md, both oauth
+# metadata files, agent-card.json) are served through serveFreshAsset, which sets
+# their Cache-Control itself, so no Cache-Control line here would reach the client.
 # agent discovery surfaces. content-types are explicit because the api-catalog
 # path has no extension and the .md files must serve as markdown (not text/html
 # or octet-stream). the .json cards under .well-known/mcp/ + agent-skills/ get
@@ -138,20 +142,20 @@
 # clobber the explicit per-file rules.
 /.well-known/api-catalog
   Content-Type: application/linkset+json
-  Cache-Control: public, max-age=0, must-revalidate, s-maxage=86400
   Link: </.well-known/api-catalog>; rel="api-catalog"; type="application/linkset+json"
 
 /auth.md
   Content-Type: text/markdown; charset=utf-8
-  Cache-Control: public, max-age=0, must-revalidate, s-maxage=86400
 
 /.well-known/oauth-protected-resource
   Content-Type: application/json; charset=utf-8
-  Cache-Control: public, max-age=0, must-revalidate, s-maxage=86400
 
 /.well-known/oauth-authorization-server
   Content-Type: application/json; charset=utf-8
-  Cache-Control: public, max-age=0, must-revalidate, s-maxage=86400
+
+/.well-known/agent-card.json
+  Content-Type: application/json; charset=utf-8
+  Link: </.well-known/agent-card.json>; rel="service-desc"; type="application/json"; title="Aadharsh site agent card"
 
 /.well-known/agent-skills/serendipity-events/SKILL.md
   Content-Type: text/markdown; charset=utf-8

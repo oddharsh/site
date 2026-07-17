@@ -6,8 +6,10 @@
 > live photo grid) and longform writing (an editable Notepad at /writing)
 > are live. Sounds, dishes, and tinkering are still planned.
 
-A handwritten HTML/CSS personal site on Cloudflare Pages. No build step, one
-`_worker.js`, one stylesheet inline per page. This file follows the
+A handwritten HTML/CSS personal site on Cloudflare Workers (static assets + a
+module `_worker.js`). Minimal build: `build.mjs` only minifies the shell
+scripts and one stylesheet; the HTML is authored and served as-is. One
+stylesheet inline per page. This file follows the
 [llmstxt.org](https://llmstxt.org) convention so agents can read a clean
 summary without scraping the page.
 
@@ -56,6 +58,21 @@ aggregations.
 - [/reading](https://aadhar.sh/reading): A native, Luna-styled mirror of my
   Curius reading list (curius.app/aadharsh-pannirselvam), pulled live through
   AadharshBot and KV-cached. Saved articles newest-first, with my highlights.
+- [/lens](https://aadhar.sh/lens): "The Other Web" — paste any URL and see it
+  the way a machine does, beside the way a person does. Fetches the target
+  server-side (honestly, as AadharshBot) and lays out six lenses: an
+  agent-readiness score, the raw response, structured data, the token cost of
+  reading the HTML, the machine terms (per-bot robots verdicts, Content
+  Signals, pay-per-crawl / x402 pricing), and the site's discovery surfaces
+  (robots, sitemap, llms.txt, MCP, agent cards, AGENTS.md, DNS-AID). A stable
+  JSON contract for the same inspection is at
+  [/lens/fetch?url=…](https://aadhar.sh/lens/fetch). This is the site's
+  argument about the human/machine gap, made runnable.
+- [/lens/census](https://aadhar.sh/lens/census): A weekly, longitudinal record
+  of how agent-ready 16 representative sites are (spectrum tier, readiness
+  score, agent doors), tracked over time so you can watch the agentic web move
+  rather than sampling one URL. JSON twin at
+  [/lens/census.json](https://aadhar.sh/lens/census.json).
 - [/ledger](https://aadhar.sh/ledger): The crawl ledger — the last 30 days
   of identified AI-crawler visits rendered as an invoice (one cent a page,
   issued monthly, collected never). A commentary page, not a demand letter;
@@ -113,6 +130,10 @@ aggregations.
   itself when making outbound requests).
 - [/.well-known/security.txt](https://aadhar.sh/.well-known/security.txt):
   Disclosure contacts + scope statement per RFC 9116.
+- [/.well-known/agent-card.json](https://aadhar.sh/.well-known/agent-card.json):
+  Discovery-only Agent Card describing the site's read-only MCP, HTTP JSON,
+  WebMCP, and optional anonymous agent-registration interfaces. This host does
+  not expose an A2A task endpoint.
 - `_index._agents.aadhar.sh` (SVCB): DNS for AI Discovery (DNS-AID)
   entrypoint per draft-mozleywilliams-dnsop-dnsaid. A ServiceMode SVCB
   record (`1 aadhar.sh. alpn="h2,h3" port=443 mandatory=alpn,port`)

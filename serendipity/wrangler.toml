@@ -27,3 +27,5 @@ database_id = "d3aa3215-17c3-4389-b224-cf465ddbb786"
 # so it never touches served-page latency.
 [ai]
 binding = "AI"
+[dependencies_instrumentation]
+enabled = true

@@ -1,7 +1,7 @@
 # aadhar.sh — personal site
 
 A resto-mod 2003-aesthetic personal site for Aadharsh Pannirselvam, deployed
-to Cloudflare Pages + Workers. Two cohabiting projects in this directory:
+to Cloudflare Workers. Two cohabiting projects in this directory:
 
 - **`holding/`** — the live `aadhar.sh` homepage (Cloudflare Worker with static assets + `_worker.js`; migrated off Pages 2026-06-30)
 - **`cal/`** — a custom coffee/bagel booking system LIVE at `aadhar.sh/coffee` (its own Cloudflare Worker; deploy separately with `cd cal && npm run deploy`)
@@ -15,8 +15,8 @@ colors that read modern in source but render period-correct.
 ## Quick reference
 
 ```bash
-# deploy the homepage
-wrangler pages deploy holding --project-name aadhar-sh --branch holding --commit-dirty=true
+# CI promotes a tested merge to production; Workers Builds deploys it
+# local fallback only: npm run deploy
 
 # add new photos (resize, EXIF-rotate, encode to AVIF+JPG, upload to R2,
 # regenerate metadata.json, bust manifest cache)
@@ -34,11 +34,33 @@ wrangler kv key delete --namespace-id="$NS" "manifest:images" --remote
 wrangler kv key delete --namespace-id="$NS" "tracks:4IRq9W1N2tOWHhH0O3vXiF" --remote
 ```
 
+## Collaboration and release discipline
+
+`origin/main` is the production source of truth. Claude, Codex, and local
+worktrees may edit freely, but a worktree is not a release surface.
+
+- Start work from a fresh `origin/main`: `git fetch --prune origin`, then make
+  a named branch/worktree. Never use a stale local `main` as an agent base.
+- Keep each change on its own branch, commit it, push it, and open a PR. Do
+  not deploy from a dirty worktree or push agent work directly to `main`.
+- PR CI builds the homepage, enforces the performance budget, dry-runs all
+  three Worker configs, and runs the coffee tests.
+- Only a successful CI run for `main` associated with a merged PR can promote
+  the exact tested commit to the machine-owned `production` branch. GitHub's
+  current free private-repo plan cannot enforce branch protection, so the
+  workflow guard is the release backstop. Cloudflare Workers Builds watches
+  `production` and is the only production publisher for `holding/`, `cal/`,
+  and `serendipity/`.
+- Configure one Workers Build project per Worker with `production` as its
+  production branch. Keep the dashboard Build command blank; use the repo's
+  Wrangler-owned build during each Deploy command. GitHub should not hold a
+  Cloudflare production API token for this path.
+
 ---
 
 ## holding/ — homepage architecture
 
-Single-page personal site at `aadhar.sh`. Hosted on Cloudflare Pages, with a
+Single-page personal site at `aadhar.sh`. Hosted on a Cloudflare Worker with
 `_worker.js` that does server-side enhancement of an otherwise-static
 `index.html`. The worker route table sits in `route()` at the top of
 `_worker.js`.
@@ -320,9 +342,10 @@ npx wrangler deploy
    `<span class="np-artist-link" role="link" tabindex="0" data-href="...">`
    + a delegated click handler.
 
-9. **Pages's `wrangler pages deploy holding`** must run from the project
-   root (`~/noodling/site/`), not from inside `holding/images/` etc.,
-   otherwise wrangler tries to scan `images/holding/` and ENOENTs.
+9. **Production deploys do not use `wrangler pages deploy`.** Merge through
+   GitHub Actions; it promotes the tested commit to `production`, where
+   Workers Builds deploys it. Use the root `wrangler.jsonc` only for local
+   fallback deploys, from the repository root.
 
 10. **Hover-only features need `(hover: none)` gating.** Touch devices fire
     synthetic `mouseover`/`mouseout` on long-press, which was causing

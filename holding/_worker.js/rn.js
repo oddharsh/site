@@ -1,9 +1,9 @@
 // rn.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
-import { BOT_UA } from "./lib/botauth.js";
+import { signedFetch } from "./lib/botauth.js";
 import { deleteSWRKV, swrKV } from "./lib/cache.js";
 import { lunaPage } from "./lib/chrome.js";
-import { esc, jsonResp, timingSafeEqual } from "./lib/http.js";
+import { esc, escAttr, escHtml, jsonResp, timingSafeEqual } from "./lib/http.js";
 
 // ── /rn redirect target ─────────────────────────────────────────────
 // the link on the site is static (/rn). the redirect target lives in KV
@@ -41,7 +41,7 @@ export async function handleRn(request, env) {
   });
 }
 
-// ── /rn/tracks handler ──────────────────────────────────────────────
+// ── /rn/tracks handlers ─────────────────────────────────────────────
 // returns the current "rn" playlist's track list as JSON. data is pulled
 // from spotify's public embed pages — three tiers of scrape:
 //
@@ -64,32 +64,53 @@ export async function handleRn(request, env) {
 //                duration_ms, preview_url, is_explicit }] }
 //
 // force-refresh with /rn/tracks?bust=<RN_BUST_SECRET>.
-// Spotify scrape identifies itself as AadharshBot (see ── AadharshBot ──
-// section below). prior versions sent a fake Chrome UA; switching to the
-// branded UA keeps Spotify's logs honest about who's hitting their public
-// embed pages, and matches the policy used by the /around crawler. the
-// embed pages are public + cacheable, so UA shouldn't affect what's served.
+// Spotify scrape goes through signedFetch (lib/botauth.js): the AadharshBot UA
+// plus a Web Bot Auth signature (RFC 9421) when the key is set, falling back to
+// UA-only if signing throws. That keeps the scrape honest with the promise /bot,
+// CLAUDE.md and AGENTS.md all make that EVERY outbound request is signed, and
+// matches the /around crawler. The embed pages are public + cacheable, so neither
+// the UA nor the signature affects what Spotify serves.
 export const RN_TRACKS_TTL  = 3600;
 
             // 1h: playlist tracks payload
 export const ARTIST_KV_TTL  = 30 * 86400;
 
       // 30d: artist profile (rarely changes)
-export async function handleRnTracks(request, env, ctx) {
+function trackResponse(payload, status = 200, format = "json") {
+  if (format === "html") {
+    return new Response(renderTrackListHtml(payload), {
+      status,
+      headers: {
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": status >= 400 ? "public, max-age=30, must-revalidate" : "public, max-age=300, s-maxage=600",
+        "x-content-type-options": "nosniff",
+        // positive proof this body is OUR fragment. A 500/522/1101 from the edge is
+        // also text/html and also resolves fine, so the homepage requires this marker
+        // before injecting the response into the track list.
+        "x-rn-fragment": "1",
+      },
+    });
+  }
+  return jsonResp(payload, status);
+}
+
+async function loadRnTracks(request, env, ctx) {
   const url = new URL(request.url);
 
   if (!env.RN_KV) {
-    return jsonResp({ error: "no kv binding" }, 500);
+    return { payload: { error: "no kv binding", tracks: [] }, status: 500 };
   }
   const playlistId = await env.RN_KV.get("playlist-id");
   if (!playlistId || !/^[0-9A-Za-z]{22}$/.test(playlistId)) {
-    return jsonResp({ error: "no playlist set", tracks: [] });
+    return { payload: { error: "no playlist set", tracks: [] }, status: 200 };
   }
 
   const cacheKey = `tracks:${playlistId}`;
 
-  // optional bust — drop both the value and its freshness sentinel
-  if (env.RN_BUST_SECRET && url.searchParams.get("bust") === env.RN_BUST_SECRET) {
+  // optional bust — drop both the value and its freshness sentinel.
+  // constant-time compare, same as the admin/set gate (a plain === leaks the
+  // secret's length + prefix through timing).
+  if (env.RN_BUST_SECRET && timingSafeEqual(url.searchParams.get("bust") || "", env.RN_BUST_SECRET)) {
     await deleteSWRKV(env, cacheKey);
   }
 
@@ -100,9 +121,77 @@ export async function handleRnTracks(request, env, ctx) {
   try {
     payload = await getTracksSWR(env, ctx, playlistId, { buildOnMiss: true });
   } catch (e) {
-    return jsonResp({ error: "scrape failed", message: String(e), tracks: [] }, 502);
+    return { payload: { error: "scrape failed", tracks: [] }, status: 502 };
   }
-  return jsonResp(payload);
+  return { payload, status: 200 };
+}
+
+// `/rn/tracks` is the stable machine contract. Keep its representation fixed
+// so callers do not need to negotiate against a browser-oriented HTML shape.
+export async function handleRnTracks(request, env, ctx) {
+  const result = await loadRnTracks(request, env, ctx);
+  return trackResponse(result.payload, result.status, "json");
+}
+
+// `/rn/tracks.html` is the browser fragment contract used by the homepage's
+// no-SSR fallback. It intentionally returns `<li>` rows, not a full document.
+export async function handleRnTracksHtml(request, env, ctx) {
+  const result = await loadRnTracks(request, env, ctx);
+  return trackResponse(result.payload, result.status, "html");
+}
+
+// The HTML representation is intentionally the same row shape used by the
+// homepage rewriter. JSON remains the machine-facing contract; HTML is the
+// browser-facing hypermedia representation.
+export function renderTrackListHtml(payload) {
+  const tracks = Array.isArray(payload?.tracks) ? payload.tracks : [];
+  // A failure and an empty playlist are different stories. The JSON twin keeps them
+  // apart via payload.error; without this branch all three states (scrape failed,
+  // no KV binding, no playlist set) serialized to a byte-identical "No tracks yet",
+  // so the two representations disagreed and a client reading the fragment alone
+  // was told the playlist is empty when the scrape actually broke.
+  if (payload?.error) return '<li class="np-empty">Couldn&#39;t load tracks right now. <a href="/rn">Open on Spotify</a>.</li>';
+  if (!tracks.length) return '<li class="np-empty">No tracks yet. <a href="/rn">Open on Spotify</a>.</li>';
+  return tracks.map(t => {
+    const dur = t.duration_ms ? fmtDuration(t.duration_ms) : "";
+    const artistsText = t.artists_text || (t.artists || []).map(a => a.name).join(", ");
+    const dataAttrs =
+      ` data-track-title="${escAttr(t.title)}"` +
+      ` data-track-artists="${escAttr(artistsText)}"` +
+      (t.image_url   ? ` data-track-image="${escAttr(t.image_url)}"` : "") +
+      (t.duration_ms ? ` data-track-duration="${dur}"`               : "") +
+      (t.is_explicit ? ` data-track-explicit="1"`                    : "");
+    return `<li${dataAttrs}>
+      <a href="${escAttr(t.song_link_url)}" target="_blank" rel="noopener">${
+        dur ? `<span class="np-duration">${dur}</span>` : ""
+      }<span class="np-title">${escHtml(t.title)}</span><span class="np-sep">&mdash;</span><span class="np-artist">${linkifyArtists(t.artists, artistsText)}</span>${
+        t.is_explicit ? '<span class="np-explicit">E</span>' : ""
+      }</a>
+    </li>`;
+  }).join("");
+}
+
+function linkifyArtists(artists, fallbackText) {
+  if (Array.isArray(artists) && artists.length) {
+    return artists.map(a => {
+      const href = a.spotify_url || `https://open.spotify.com/search/${encodeURIComponent(a.name)}/artists`;
+      const img = a.image_url ? ` data-artist-image="${escAttr(a.image_url)}"` : "";
+      return `<span class="np-artist-link" data-href="${escAttr(href)}" data-artist-name="${escAttr(a.name)}"${img} role="link" tabindex="0">${escHtml(a.name)}</span>`;
+    }).join(", ");
+  }
+  const raw = fallbackText || (typeof artists === "string" ? artists : "");
+  if (!raw) return "";
+  return String(raw).split(/,\s*/).filter(Boolean).map(name => {
+    const href = `https://open.spotify.com/search/${encodeURIComponent(name)}/artists`;
+    return `<span class="np-artist-link" data-href="${escAttr(href)}" data-artist-name="${escAttr(name)}" role="link" tabindex="0">${escHtml(name)}</span>`;
+  }).join(", ");
+}
+
+function fmtDuration(ms) {
+  const total = Math.round(ms / 1000);
+  const m = Math.floor(total / 60);
+  const s = String(total % 60).padStart(2, "0");
+  return `${m}:${s}`;
 }
 
 // two-key stale-while-revalidate for the playlist payload, mirroring
@@ -121,7 +210,7 @@ export async function getTracksSWR(env, ctx, pid, opts = {}) {
 
 export async function scrapePlaylistTracks(playlistId, env, ctx) {
   // tier 1: playlist embed → ordered track list
-  const playlistEntity = await scrapeSpotifyEmbed(`playlist/${playlistId}`);
+  const playlistEntity = await scrapeSpotifyEmbed(`playlist/${playlistId}`, env);
   const trackList = Array.isArray(playlistEntity.trackList) ? playlistEntity.trackList : [];
 
   const baseTracks = trackList
@@ -146,7 +235,7 @@ export async function scrapePlaylistTracks(playlistId, env, ctx) {
   // artist URIs we need for the artist-hover feature).
   const enriched = await Promise.all(baseTracks.map(async t => {
     try {
-      const e = await scrapeSpotifyEmbed(`track/${t.id}`);
+      const e = await scrapeSpotifyEmbed(`track/${t.id}`, env);
       const image_url = e?.visualIdentity?.image?.[0]?.url || null;
       const artists = Array.isArray(e?.artists)
         ? e.artists
@@ -187,7 +276,7 @@ export async function scrapePlaylistTracks(playlistId, env, ctx) {
       }
     }
     try {
-      const e = await scrapeSpotifyEmbed(`artist/${a.id}`);
+      const e = await scrapeSpotifyEmbed(`artist/${a.id}`, env);
       // pick the 320px variant: tooltip renders at 180×180, so 320 source
       // gives a crisp retina-ready image without paying the 640px hero
       // weight. fall through to whatever's first if no 320 variant exists.
@@ -237,7 +326,7 @@ export async function scrapePlaylistTracks(playlistId, env, ctx) {
 // so the bad state sticks across worker invocations. on a failed extraction
 // (parse error OR missing both visualIdentity and artists), retry once
 // with cacheTtl: 0 + a cache-busting query param to force a fresh fetch.
-export async function scrapeSpotifyEmbed(kindAndId) {
+export async function scrapeSpotifyEmbed(kindAndId, env) {
   // The playlist embed is the one upstream document that changes, and the 24h
   // edge cache below once fed every rebuild a day-old listing (a new track took
   // a day to appear no matter how often the sentinel lapsed). Playlist fetches
@@ -248,12 +337,11 @@ export async function scrapeSpotifyEmbed(kindAndId) {
   const tryOnce = async (bustCache) => {
     const fresh = bustCache || isPlaylist;
     const qs = fresh ? `?_t=${Date.now()}` : "";
-    const res = await fetch(`https://open.spotify.com/embed/${kindAndId}${qs}`, {
-      headers: {
-        "user-agent":      BOT_UA,        // honest: identifies as AadharshBot
-        "accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "accept-language": "en-US,en;q=0.9",
-      },
+    // signedFetch adds the Web Bot Auth signature (RFC 9421) when the key is set,
+    // and falls back to UA-only if signing throws — so the scrape now keeps the
+    // promise /bot, CLAUDE.md and AGENTS.md all make ("every request is signed"),
+    // where a plain fetch left this one path unsigned under the AadharshBot UA.
+    const res = await signedFetch(`https://open.spotify.com/embed/${kindAndId}${qs}`, env || {}, {
       // 5s deadline. scrapePlaylistTracks fans out to dozens of these embeds in
       // Promise.all, and one stuck fetch used to hang its whole branch. A timeout
       // throws into the same empty-entity path any embed failure already takes.

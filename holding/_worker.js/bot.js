@@ -68,8 +68,11 @@ function renderBotPage() {
     <pre><code>User-agent: ${BOT_NAME}
 Disallow: /</code></pre>
     <p>
-      ${BOT_NAME} reads <code>robots.txt</code> on every cold cache hit and obeys
-      <code>Disallow</code> rules. If you have a question or a complaint, email
+      Before the <a href="/around">/around</a> crawl fetches a site, ${BOT_NAME}
+      reads that site's <code>robots.txt</code> (cached briefly per origin) and skips
+      any path <code>Disallow</code>ed for <code>${BOT_NAME}</code> or <code>*</code>;
+      a site whose <code>robots.txt</code> it can't read is skipped that cycle, not
+      crawled. If you have a question or a complaint, email
       <!--email_off--><a href="mailto:coffee@aadhar.sh">coffee@aadhar.sh</a><!--/email_off--> and I'll reply by hand.
     </p>
 

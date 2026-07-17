@@ -4,7 +4,7 @@
 // Deterministic, buildtime checks that catch a perf regression BEFORE it ships:
 //   1. luna.css parses clean (no esbuild CSS warnings) — the v143-corruption
 //      tripwire, so a broken stylesheet can never reach a deploy.
-//   2. the build output is actually minified: the three shells + luna.css each
+//   2. the build output is actually minified: the four shells + luna.css each
 //      carry the "minified at deploy" banner, sit under their byte budget, and
 //      ship a readable twin (/<name>.src.js / /luna.src.css).
 //   3. the bundled Worker stays under the gzip budget (via wrangler --dry-run,
@@ -29,11 +29,26 @@ import { transform } from "esbuild";
 const SHELL_BUDGET = {
   "nav.js": 50_000,
   "notepad.js": 8_000,
-  "lens.js": 20_000,
+  // Lens now carries the readiness rubric, six bot observations, copyable
+  // fixes, the counterfactual score view, the opt-in Browser Run loader, AND
+  // the teaching surface added 2026-07:
+  // the agent-trace console, the always-on dollar verdict strip, per-check
+  // consumption annotations, and the idle state-of-web hide logic. Deferred +
+  // cached, not render-blocking. Ceiling raised from 48K for that surface.
+  // Browser Run's rendered code remains split into its own deferred twin.
+  "lens.js": 54_000,
+  "lens-browser.js": 8_000,
   "luna.css": 40_000,
 };
-const BUNDLE_GZIP_KIB = 70;
-const TWINS = ["nav.src.js", "notepad.src.js", "lens.src.js", "luna.src.css"];
+// The readiness probes add a bounded server-side envelope and bot matrix, HTML
+// negotiation adds a no-script fragment contract, CachedPages adds a named
+// Workers Cache entrypoint, and the 2026-07 /lens work grew the Worker again:
+// the state-of-web panel + verdict/trace/consumption renderers and CSS, plus
+// census.js (the weekly longitudinal sweep, the /lens/census page + JSON twin).
+// Measured ~84.8 KiB gzip; 86 leaves ~1.2 KiB, enough to cover the ~0.2 KiB
+// gzip variance between the local and CI Node runtimes without going flaky.
+const BUNDLE_GZIP_KIB = 86;
+const TWINS = ["nav.src.js", "notepad.src.js", "lens.src.js", "lens-browser.src.js", "luna.src.css"];
 
 const fails = [];
 const ok = (m) => console.log(`  ok    ${m}`);

@@ -51,6 +51,7 @@ const ROUTES = [
   { path: "/hit.svg?peek=1", status: 200, ct: "image/svg+xml", marker: "<svg" },
   { path: "/auth.md", status: 200, ct: "text/markdown" },
   { path: "/.well-known/api-catalog", status: 200, ct: "application/linkset+json" },
+  { path: "/.well-known/agent-card.json", status: 200, ct: "application/json", marker: "discovery-only" },
   { path: "/.well-known/oauth-protected-resource", status: 200, ct: "application/json" },
   { path: "/.well-known/oauth-authorization-server", status: 200, ct: "application/json" },
   { path: "/whoareyou", status: 200, ct: "text/html" },
@@ -60,9 +61,10 @@ const ROUTES = [
   { path: "/updates", status: 200, ct: "text/html" },
   { path: "/updates.json", status: 200, ct: "application/json" },
   { path: "/restore", status: 200, ct: "text/html" },
-  { path: "/lens", status: 200, ct: "text/html", marker: "The Other Web" },
-  { path: "/lens/", status: 200, ct: "text/html" },
+  { path: "/lens", status: 200, ct: "text/html", marker: "The Other Web", fullPage: true },
+  { path: "/lens/", status: 301 },   // slashless canonical: routeDropSlash 301s to /lens
   { path: "/lens.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "replaceState" },
+  { path: "/lens-browser.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "LensBrowser" },
   { path: "/luna.css", status: 200, ct: "text/css", marker: "axp-desktop", maxBytes: isProd ? 45000 : undefined },
   // the retired SW's unregister stub: must keep serving 200 for a year+
   { path: "/sw.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "unregister" },
@@ -74,20 +76,26 @@ const ROUTES = [
     { path: "/nav.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "axp-histnav" },
     { path: "/notepad.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "np-window" },
     { path: "/lens.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "replaceState" },
+    { path: "/lens-browser.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "LensBrowser" },
     { path: "/luna.src.css", status: 200, ct: "text/css", marker: "axp-desktop" },
   ] : []),
-  { path: "/lens/fetch?url=https://example.com", status: 200, ct: "application/json" },
+  // Representation contracts: the machine paths stay fixed even if a caller
+  // sends a browser Accept header; the HTML paths are explicit fragments.
+  { path: "/lens/fetch?url=https://example.com", status: 200, ct: "application/json", headers: { accept: "text/html" } },
   { path: "/lens/shot?url=https://example.com", status: [200, 503], flaky: true },
+  { path: "/lens/browser?url=javascript%3Aalert(1)", status: 400, ct: "application/json", headers: { accept: "text/html" } },
   // 200 text/plain when the x402 gate is unconfigured; 402 json once X402_PAY_TO is set
   { path: "/llms-full.txt", status: [200, 402], ct: ["text/plain", "application/json"] },
   { path: "/ledger", status: 200, ct: "text/html", marker: "Crawl Ledger" },
   { path: "/ledger.json", status: 200, ct: "application/json" },
   { path: "/writing", status: 200, ct: "text/html" },
+  { path: "/writing/", status: 301 },   // routeDropSlash 301s to /writing
   { path: `/writing/${SLUG}`, status: 200, ct: "text/html" },
   { path: `/writing/${SLUG}.txt`, status: 200, ct: "text/plain" },
   { path: "/writing/posts.json", status: 200, ct: "application/json" },
   { path: "/rn", status: 302 },
-  { path: "/rn/tracks", status: 200, ct: "application/json" },
+  { path: "/rn/tracks", status: 200, ct: "application/json", headers: { accept: "text/html" } },
+  { path: "/rn/tracks.html", status: 200, ct: "text/html", fragment: true },
   { path: "/rn/admin", status: 403 },
   { path: "/bot", status: 200, ct: "text/html" },
   { path: "/around", status: 200, ct: "text/html" },
@@ -110,13 +118,16 @@ const ROUTES = [
   { path: `/images/${THUMB}`, status: 301 },
   ...(HASHED ? [{ path: HASHED, status: 200, ct: "image/avif" }] : []),
   // static section pages that are already URL-skeuomorphic (must not regress)
-  { path: "/garage/", status: 200, ct: "text/html" },
+  { path: "/garage", status: 200, ct: "text/html" },
+  { path: "/garage/", status: [301, 307, 308] },   // drop-trailing-slash: /garage serves, /garage/ redirects
   { path: "/garage/scroll", status: 200, ct: "text/html" },
   { path: "/garage/workers", status: 200, ct: "text/html", marker: "run_worker_first" },
   { path: "/garage/wire", status: 200, ct: "text/html", marker: "x-edge-cache" },
   { path: "/garage/blueprint", status: 200, ct: "text/html", marker: "run_worker_first" },
   { path: "/garage/gpt56", status: 200, ct: "text/html", marker: "5.6 Sol" },
   { path: "/garage/enc/z-jl90.jpg", status: 200, ct: "image/jpeg" },
+  { path: "/lwe", status: 200, ct: "text/html" },
+  { path: "/lwe/", status: [301, 307, 308] },   // drop-trailing-slash
   { path: "/lwe/utf8", status: 200, ct: "text/html" },
 ];
 
@@ -132,11 +143,11 @@ function statusOk(want, got) {
 async function probe(r) {
   const url = cacheBust(r.path);
   try {
-    const res = await fetch(url, { redirect: "manual", headers: { accept: "*/*" } });
+    const res = await fetch(url, { redirect: "manual", headers: { accept: "*/*", ...(r.headers || {}) } });
     const ct = res.headers.get("content-type") || "";
     let body = "", bytes = null;
     // read the body when we need a marker or a size assertion on a text response
-    if ((r.marker || r.maxBytes) && /text|json|javascript|markdown|svg|css/.test(ct)) {
+    if ((r.marker || r.maxBytes || r.fullPage || r.fragment) && /text|json|javascript|markdown|svg|css/.test(ct)) {
       const full = await res.text();
       bytes = Buffer.byteLength(full);
       body = full.slice(0, 200000);
@@ -145,8 +156,19 @@ async function probe(r) {
     const okCt = !r.ct || (Array.isArray(r.ct) ? r.ct.some(c => ct.startsWith(c)) : ct.startsWith(r.ct));
     const okMarker = !r.marker || body.includes(r.marker);
     const okBytes = !r.maxBytes || (bytes !== null && bytes <= r.maxBytes);
-    const pass = okStatus && okCt && okMarker && okBytes;
-    return { path: r.path, status: res.status, ct, pass, flaky: !!r.flaky, okStatus, okCt, okMarker, okBytes, bytes, want: r.status, wantCt: r.ct, marker: r.marker, maxBytes: r.maxBytes };
+    const okFullPage = !r.fullPage || (
+      /^<!doctype html[\s>]/i.test(body) &&
+      /<html\b/i.test(body) &&
+      /<head\b/i.test(body) &&
+      /<body\b/i.test(body) &&
+      /<\/html>/i.test(body)
+    );
+    const okFragment = !r.fragment || (
+      !/<(?:!doctype|html|head|body)\b/i.test(body) &&
+      (!r.fragmentRoot || body.includes(r.fragmentRoot))
+    );
+    const pass = okStatus && okCt && okMarker && okBytes && okFullPage && okFragment;
+    return { path: r.path, status: res.status, ct, pass, flaky: !!r.flaky, okStatus, okCt, okMarker, okBytes, okFullPage, okFragment, bytes, want: r.status, wantCt: r.ct, marker: r.marker, maxBytes: r.maxBytes };
   } catch (e) {
     return { path: r.path, status: 0, ct: "", pass: false, flaky: !!r.flaky, error: String(e && e.message || e), want: r.status };
   }
@@ -175,6 +197,8 @@ async function main() {
       r.okCt === false ? `ct "${r.ct}"!^"${r.wantCt}"` : "",
       r.okMarker === false ? `missing marker "${r.marker}"` : "",
       r.okBytes === false ? `size ${r.bytes}B > ${r.maxBytes}B (unminified? build bypassed?)` : "",
+      r.okFullPage === false ? "full-page contract missing document wrapper" : "",
+      r.okFragment === false ? "fragment contract returned a document wrapper" : "",
       r.error ? `err ${r.error}` : "",
     ].filter(Boolean).join(", ");
     console.log(`${tag.padEnd(5)} ${String(r.status).padEnd(4)} ${r.path}${why ? "   <- " + why : ""}`);

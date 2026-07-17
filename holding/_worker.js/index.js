@@ -3,13 +3,15 @@
 // and PREFIX tables below mirror wrangler.jsonc's allowlist one-to-one; keep
 // them in sync or a route silently goes static. Map in MAINTENANCE.md.
 
+import { WorkerEntrypoint } from "cloudflare:workers";
 import { handleAgentAuthClaim, handleAgentAuthRegister, handleAgentAuthRevoke, handleAgentAuthToken } from "./agent.js";
 import { cronAround, handleAround, handleAroundJson } from "./around.js";
 import { handleBotPage } from "./bot.js";
+import { cronCensus, handleCensus, handleCensusJson } from "./census.js";
 import { handleHitSvg } from "./counter.js";
 import { homepageHeadResponse, serveHomepageWithPrerenderedTracks, serveMarkdown } from "./home.js";
 import { countCrawlerHit, handleLedger, handleLedgerJson } from "./ledger.js";
-import { handleLens, handleLensFetch, handleLensShot } from "./lens.js";
+import { handleLens, handleLensBrowser, handleLensFetch, handleLensShot } from "./lens.js";
 import { serveAssetWith404Clamp, serveFreshAsset } from "./lib/assets.js";
 import { CANONICAL_HOST } from "./lib/const.js";
 import { wantsMarkdown } from "./lib/http.js";
@@ -17,7 +19,7 @@ import { withSecurityHeaders } from "./lib/security.js";
 import { getThumbHashes, handleImagesManifest, handlePhotos, servePhotoFromR2 } from "./photos.js";
 import { handleReading } from "./reading.js";
 import { handleRun } from "./run.js";
-import { handleRn, handleRnAdmin, handleRnSet, handleRnTracks } from "./rn.js";
+import { handleRn, handleRnAdmin, handleRnSet, handleRnTracks, handleRnTracksHtml } from "./rn.js";
 import { handleSecurityCenter } from "./security.js";
 import { handleSystemRestore, handleUpdatesJson, handleWindowsUpdate } from "./updates.js";
 import { handleWhoareyou, handleWhoareyouJson } from "./whoareyou.js";
@@ -28,48 +30,100 @@ import { handleLlmsFull } from "./x402.js";
 // must be a named export of the entry so the COUNTER binding can resolve it.
 export { Counter } from "./counter.js";
 
+// Workers Cache only fronts responses whose route contract is already public
+// and reusable. Keep the default export as an uncached gateway: it handles the
+// homepage, mutations, per-visitor views, and arbitrary inspection targets.
+// Query strings are excluded deliberately so owner bust tokens and future
+// query-bearing features cannot accidentally become shared cache keys.
+const WORKERS_CACHEABLE_PATHS = new Set("/favicon.ico /auth.md /.well-known/api-catalog /.well-known/agent-card.json /.well-known/oauth-protected-resource /.well-known/oauth-authorization-server /reading /updates /updates.json /restore /lens /ledger /writing /bot /around /around/json /photos /rn/tracks /rn/tracks.html /images/manifest.json /images/metadata.json".split(" "));
+
+function shouldUseWorkersCache(request) {
+  if (request.method !== "GET" && request.method !== "HEAD") return false;
+  if (request.headers.has("range") || request.headers.has("if-none-match")) return false;
+  const url = new URL(request.url);
+  if (url.search) return false;
+  if (WORKERS_CACHEABLE_PATHS.has(url.pathname)) return true;
+  return url.pathname.startsWith("/writing/")
+    || url.pathname.startsWith("/images/full/")
+    || url.pathname.startsWith("/images/meta/");
+}
+
+async function serveWorkerRequest(request, env, ctx) {
+  const url = new URL(request.url);
+
+  if (url.hostname.endsWith(".pages.dev")) {
+    const target = `https://${CANONICAL_HOST}${url.pathname}${url.search}`;
+    return new Response(null, {
+      status: 301,
+      headers: {
+        "location":      target,
+        "cache-control": "public, max-age=3600",
+      },
+    });
+  }
+
+  // SELF_FETCH — how /lens reads our own hostname without lying about it.
+  // A plain fetch("https://aadhar.sh/") from inside this worker loops back
+  // through the edge and dies as a 522; serving env.ASSETS instead returns the
+  // PRE-enhancement static skeleton (wrong bytes, empty photo grid, zero alt
+  // text), which a page whose whole claim is "what the server actually sent
+  // back" must not show. Dispatching through route() yields the real response.
+  // SELF_FETCH is nulled one level down, so a lens pointed at /lens/fetch
+  // resolves once and cannot recurse.
+  const selfEnv = {
+    ...env,
+    SELF_FETCH: async (req) =>
+      withSecurityHeaders(await route(req, { ...env, SELF_FETCH: null }, ctx)),
+  };
+
+  // Workers Logs: one structured line per worker-owned request (path, method,
+  // status, ms, country, bot), filterable in the dashboard. Edge-direct traffic
+  // never reaches this code, so it never logs. Strippable: delete the wrapper,
+  // keep `return withSecurityHeaders(await route(...))`.
+  const t0 = Date.now();
+  const response = await route(request, selfEnv, ctx);
+  // the bot ledger: identified AI-crawler hits tick into Analytics Engine
+  // (worker-owned routes only); /ledger prices them. Best-effort, non-blocking.
+  countCrawlerHit(env, request, response, url.pathname);
+  try {
+    console.log(JSON.stringify({
+      p: url.pathname,
+      m: request.method,
+      s: response.status,
+      ms: Date.now() - t0,
+      co: request.cf?.country,
+      bot: request.cf?.botManagement?.verifiedBot || undefined,
+    }));
+  } catch {}
+  return withSecurityHeaders(response);
+}
+
+// The named entrypoint is the only one configured to consult Workers Cache in
+// production. A cache hit returns before this method runs; a miss gets the
+// exact same dispatcher, security headers, and observability as the gateway.
+export class CachedPages extends WorkerEntrypoint {
+  async fetch(request) {
+    return serveWorkerRequest(request, this.env, this.ctx);
+  }
+}
+
 export default {
   async fetch(request, env, ctx) {
-    const url = new URL(request.url);
-
-    if (url.hostname.endsWith(".pages.dev")) {
-      const target = `https://${CANONICAL_HOST}${url.pathname}${url.search}`;
-      return new Response(null, {
-        status: 301,
-        headers: {
-          "location":      target,
-          "cache-control": "public, max-age=3600",
-        },
-      });
+    if (shouldUseWorkersCache(request) && ctx.exports?.CachedPages) {
+      return ctx.exports.CachedPages.fetch(request);
     }
-
-    // Workers Logs: one structured line per worker-owned request (path, method,
-    // status, ms, country, bot), filterable in the dashboard. Edge-direct traffic
-    // never reaches this code, so it never logs. Strippable: delete the wrapper,
-    // keep `return withSecurityHeaders(await route(...))`.
-    const t0 = Date.now();
-    const response = await route(request, env, ctx);
-    // the bot ledger: identified AI-crawler hits tick into Analytics Engine
-    // (worker-owned routes only); /ledger prices them. Best-effort, non-blocking.
-    countCrawlerHit(env, request, response, url.pathname);
-    try {
-      console.log(JSON.stringify({
-        p: url.pathname,
-        m: request.method,
-        s: response.status,
-        ms: Date.now() - t0,
-        co: request.cf?.country,
-        bot: request.cf?.botManagement?.verifiedBot || undefined,
-      }));
-    } catch {}
-    return withSecurityHeaders(response);
+    return serveWorkerRequest(request, env, ctx);
   },
 
-  // cron (wrangler.jsonc "triggers"): the /around crawl runs here, per
-  // generation, so the request path stays a pure KV read and the page is
-  // safe to prerender. One schedule today; switch on event.cron if more land.
+  // cron (wrangler.jsonc "triggers"): the /around crawl runs on the frequent
+  // schedule so the request path stays a pure KV read and the page is safe to
+  // prerender. The weekly schedule sweeps the /lens/census roster into D1.
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(cronAround(env));
+    if (event.cron === "17 8 * * 1") {
+      ctx.waitUntil(cronCensus(env));   // Mondays 08:17 UTC — the longitudinal census
+    } else {
+      ctx.waitUntil(cronAround(env));   // */30 — the neighborhood crawl
+    }
   },
 };
 
@@ -82,6 +136,7 @@ const ROUTES = new Map([
 
   ["/auth.md", routeAuthMd],
   ["/.well-known/api-catalog", routeApiCatalog],
+  ["/.well-known/agent-card.json", routeAgentCard],
   ["/.well-known/oauth-protected-resource", routeOAuthProtectedResource],
   ["/.well-known/oauth-authorization-server", routeOAuthAuthorizationServer],
   ["/agent/auth", handleAgentAuthRegister],
@@ -100,9 +155,12 @@ const ROUTES = new Map([
   ["/restore", handleSystemRestore],
 
   ["/lens", handleLens],
-  ["/lens/", handleLens],
+  ["/lens/", routeDropSlash],
   ["/lens/fetch", handleLensFetch],
   ["/lens/shot", handleLensShot],
+  ["/lens/browser", handleLensBrowser],
+  ["/lens/census", handleCensus],
+  ["/lens/census.json", handleCensusJson],
 
   // the x402 bot paywall: llms.txt's map is free, the full corpus costs $0.01
   // by machine payment (ungated until X402_PAY_TO is set).
@@ -114,10 +172,11 @@ const ROUTES = new Map([
   ["/ledger.json", handleLedgerJson],
 
   ["/writing", handleWritingIndex],
-  ["/writing/", handleWritingIndex],
+  ["/writing/", routeDropSlash],
 
   ["/rn", handleRn],
   ["/rn/tracks", handleRnTracks],
+  ["/rn/tracks.html", handleRnTracksHtml],
   ["/rn/admin", handleRnAdmin],
   ["/rn/set", handleRnSet],
 
@@ -205,6 +264,10 @@ function routeApiCatalog(request, env) {
   return serveFreshAsset(request, env, "application/linkset+json");
 }
 
+function routeAgentCard(request, env) {
+  return serveFreshAsset(request, env, "application/json; charset=utf-8");
+}
+
 function routeOAuthProtectedResource(request, env) {
   return serveFreshAsset(request, env, "application/json; charset=utf-8");
 }
@@ -215,6 +278,13 @@ function routeOAuthAuthorizationServer(request, env) {
 
 function routePhotosRedirect(_request, _env, _ctx, url) {
   return Response.redirect(url.origin + "/photos", 301);
+}
+
+// canonical URLs carry no trailing slash (sitemap + rel=canonical + llms.txt all
+// say so, and the asset layer's drop-trailing-slash agrees). A worker route's own
+// slashed twin 301s to the slashless form rather than serving a duplicate 200.
+function routeDropSlash(_request, _env, _ctx, url) {
+  return Response.redirect(url.origin + url.pathname.replace(/\/+$/, "") + url.search, 301);
 }
 
 function routeWritingPost(request, env, ctx, url) {
