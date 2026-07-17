@@ -1223,6 +1223,12 @@
   function setLens(l, animate, writeHistory) {
     lens = l;
     if (writeHistory !== false) syncUrl(true);
+    // Lens tabs replace evidence inside the existing window. Keep that local
+    // subtab change synchronous; otherwise the site's named axp-window view
+    // transition makes the whole Lens window play its close/open choreography.
+    // An explicit true remains available for a future tab transition that
+    // deliberately opts into motion.
+    var shouldAnimate = animate === true;
     withViewTransition(function () {
       [].forEach.call(document.querySelectorAll(".lx-tab"), function (b) {
         var active = b.getAttribute("data-lens") === l;
@@ -1230,7 +1236,7 @@
         b.setAttribute("aria-selected", active ? "true" : "false");
       });
       if (data) renderMachine(); else { updateModeUi(); renderIdleLens(); }
-    }, animate);
+    }, shouldAnimate);
   }
 
   form.addEventListener("submit", function (e) { e.preventDefault(); run(urlInput.value); });
