@@ -1,12 +1,13 @@
 # holding/
 
 The live **aadhar.sh** homepage — a resto-mod Windows-XP / Luna personal
-site on Cloudflare Pages, server-enhanced by `_worker.js`. This directory is
-the deploy root (not a placeholder; there is no separate `site/` build).
+site on a Cloudflare Worker with static assets, server-enhanced by
+`_worker.js`. This directory is the asset source for the repository-root
+Workers build.
 
 ```bash
-# deploy
-wrangler pages deploy holding --project-name aadhar-sh --branch holding --commit-dirty=true
+# local fallback deploy; production uses merge -> CI promotion -> Workers Builds
+npm run deploy
 ```
 
 Recurring chores (add photos, swap the playlist, bust caches, version bumps,
@@ -18,7 +19,7 @@ what every script in `scripts/` does) live in the ops runbook:
 - `index.html` — the whole homepage in one file (inline CSS + JS): an XP
   window over a Bliss-style desktop, a photo grid, and a "now playing"
   tracklist.
-- `_worker.js` — Pages-Worker hybrid: routing, R2 photo serving + manifest,
+- `_worker.js` — module Worker: routing, R2 photo serving + manifest,
   Spotify scrape, AadharshBot crawler, `/around` + `/whoareyou` + `/bot`,
   and the `/writing` Notepad pages.
 - `nav.js` — the shared desktop shell injected on every page: taskbar (with
@@ -29,7 +30,8 @@ what every script in `scripts/` does) live in the ops runbook:
   bar, F5 stamp), incl. opening notes as popovers over the folder.
 - `sw.js` — service worker (cache-first images, SWR for static text).
 - `writing/` — `.txt` notes + `posts.json`; rendered as Notepad windows.
-- `images/` — dual-encoded AVIF+JPG thumbnails + `metadata.json` EXIF index.
+- `images/` + `i/` — full photo metadata plus content-addressed AVIF/JPG
+  thumbnail tiers; per-photo metadata includes the baked histogram channels.
 - `scripts/` — the photo pipeline (resize → rotate → jpegli/avif → R2).
 - `llms.txt`, `sitemap.xml`, `robots.txt`, `.well-known/` — discovery + SEO.
 
