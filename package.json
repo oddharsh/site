@@ -3,6 +3,12 @@
   "private": true,
   "description": "aadhar.sh - deploy-time transform only (authoring stays buildless; see build.mjs)",
   "type": "module",
+  "workspaces": [
+    "cal",
+    "cf-garage",
+    "lwe-ask",
+    "serendipity"
+  ],
   "scripts": {
     "build": "node build.mjs",
     "dev": "wrangler dev -c wrangler.dev.jsonc",
