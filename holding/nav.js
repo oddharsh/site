@@ -111,6 +111,7 @@
   // `icon` (when present) keys the tile colour + glyph; `hint` doubles as a Run
   // search alias + tooltip, so "Photos"/"Music" still resolve to insta/spotify.
   var PROFILES = [
+    { label: "GitHub", url: "https://github.com/oddharsh" },
     { label: "Twitter", url: "https://twitter.com/oddhash" },
     { label: "Photos", icon: "Instagram", hint: "Instagram", url: "https://instagram.com/aadharsh.hif" },
     { label: "Curius", url: "https://curius.app/aadharsh-pannirselvam" },
