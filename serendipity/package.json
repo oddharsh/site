@@ -1,8 +1,5 @@
 {
   "name": "serendipity-worker",
   "private": true,
-  "type": "module",
-  "devDependencies": {
-    "wrangler": "4.111.0"
-  }
+  "type": "module"
 }

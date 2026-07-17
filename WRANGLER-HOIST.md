@@ -3,8 +3,10 @@
 This branch (`chore/wrangler-workspace-hoist`) collapses the five separate
 Wrangler installs (root + `cal` + `cf-garage` + `lwe-ask` + `serendipity`, each
 carrying its own ~180MB toolchain) into **one hoisted install** via npm
-workspaces. The re-pin to Wrangler 4.111.0 already landed separately; this is
-purely the "stop installing the same toolchain five times" change.
+workspaces. Wrangler is declared and pinned exactly once in the root
+`package.json`; workspace scripts resolve that root binary through npm's
+workspace PATH. The re-pin to Wrangler 4.111.0 already landed separately; this
+is the "stop installing the same toolchain five times" change.
 
 **It cannot ship until the Cloudflare Workers Builds projects are reconfigured
 (step 2), because that is where the current per-subdir `npm ci` lives.** Merging
@@ -15,17 +17,21 @@ reason.
 ## What the repo change does
 
 - `package.json` gains `"workspaces": ["cal", "cf-garage", "lwe-ask", "serendipity"]`.
+- The root `package.json` is the only manifest that declares Wrangler. The four
+  workspace manifests use the shared root binary rather than repeating the pin.
 - The four sub-`package-lock.json` files are deleted; there is now one root
   lockfile that resolves every project's deps together and hoists the shared
   Wrangler toolchain to the root `node_modules`.
 - `scripts/check-wrangler.mjs` is rewritten to validate the single workspace
-  lockfile instead of five separate ones.
+  lockfile instead of five separate ones, and fails if a workspace adds a
+  duplicate direct Wrangler declaration or install.
 - `.github/workflows/ci.yml` drops the four per-subdir `npm ci` steps; one root
   `npm ci` now installs the whole workspace. The per-worker validation still runs
   as `wrangler deploy --dry-run -c <dir>/wrangler.toml` from the root install
   (the pattern CI already used for cal + serendipity).
-- `.github/workflows/update-wrangler.yml` bumps Wrangler once at the root plus
-  each workspace `package.json`, then regenerates the single lockfile.
+- `.github/dependabot.yml` watches the root npm manifest weekly and opens one
+  Wrangler-only PR. CI checks the exact root pin, lockfile, workspace tests,
+  builds, and every Worker dry-run before merge.
 
 ## Step 1 — materialize the hoist locally (safe, reversible)
 
@@ -70,11 +76,27 @@ Only after step 2 is live and the dry-runs in step 1 pass. Then a normal merge
 to `main` promotes to `production`, and the reconfigured Workers Builds projects
 deploy from the single hoisted install.
 
+## Ongoing pin maintenance
+
+Dependabot monitors only the root npm manifest and opens a single weekly PR for
+the exact Wrangler pin. There is no second updater workflow and no per-project
+lockfile for it to keep synchronized. The normal CI job is the gate for those
+PRs; it runs `check-wrangler`, which rejects both a stale root lock and a new
+workspace-local Wrangler declaration.
+
+For a manual refresh, run this from the repository root and commit the root
+manifest plus lockfile together:
+
+```bash
+npm install --ignore-scripts --no-audit --no-fund --save-dev --save-exact wrangler@4.112.0
+npm run check-wrangler
+```
+
 ## Known caveat
 
 `cal`'s test dependency `@cloudflare/vitest-pool-workers` pulls its own nested
 Wrangler (a transitive of the test tool, not the deploy path). `check-wrangler`
-warns on it rather than failing, because forcing it to match via an `overrides`
+reports it rather than failing, because forcing it to match via an `overrides`
 entry de-hoists the primary install (npm plants a per-workspace copy in every
 project — the opposite of the goal). The deploy path uses the single root
 Wrangler; the test tool's copy only matters for `npm test -w cal`.
