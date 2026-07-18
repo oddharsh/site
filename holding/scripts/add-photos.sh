@@ -296,7 +296,7 @@ fi
 if command -v python3 >/dev/null 2>&1 && python3 -c "import PIL" >/dev/null 2>&1; then
   python3 "$SCRIPT_DIR/photo-histograms.py" 2>&1 | tail -1
 else
-  echo "  Pillow (python3 PIL) missing — install with 'python3 -m pip install -r holding/scripts/requirements.txt'"
+  echo "  Pillow (python3 PIL) missing — skipping histogram bake (run photo-histograms.py after 'pip3 install --user pillow')"
 fi
 
 node "$PROJECT_DIR/holding/scripts/check-photo-pipeline.mjs"
