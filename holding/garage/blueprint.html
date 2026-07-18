@@ -187,6 +187,12 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
 
     <div class="tg">
       <h3>Routing is a denylist because Pages saw everything</h3>
+      <p class="what"><b>Why it is a ghost.</b> On Pages advanced mode the worker intercepted
+        every request by definition, so the migration naturally inverted that into "everything,
+        minus exceptions." But the exceptions are now the majority: most of this site is static
+        files. An allowlist makes the config read as intent (here is exactly where compute
+        happens), and a new static file can never accidentally cost a worker invocation because
+        someone forgot a negation. Same engine, opposite default.</p>
       <div class="diff">
         <figure class="before"><figcaption>as built</figcaption><pre>"run_worker_first": [
   "/*",                 <span class="c">// worker sees EVERYTHING...</span>
@@ -201,16 +207,18 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
   "/oauth2/*", "/images/full/*", ...
 ]  <span class="c">// the worker EARNS each route; static is the default</span></pre></figure>
       </div>
-      <p class="what"><b>Why it is a ghost.</b> On Pages advanced mode the worker intercepted
-        every request by definition, so the migration naturally inverted that into "everything,
-        minus exceptions." But the exceptions are now the majority: most of this site is static
-        files. An allowlist makes the config read as intent (here is exactly where compute
-        happens), and a new static file can never accidentally cost a worker invocation because
-        someone forgot a negation. Same engine, opposite default.</p>
     </div>
 
     <div class="tg">
       <h3>Three guards still sniff for an attacker that left</h3>
+      <p class="what"><b>Why it is a ghost, mostly.</b> The teardown's biggest find was Pages
+        serving homepage HTML at missing thumbnail URLs with a year-long cache header, and these
+        content-type gates were the fix. Workers static assets answers a missing file with an
+        honest 404, so the masquerade check now tests for a platform behavior that cannot occur.
+        What remains load-bearing is narrower: an edge-cached 404 under <code>/images/*</code>
+        would still inherit the 1-year immutable rule, so the cache-control clamp stays. One
+        small guard instead of three sniffing ones. Same logic eventually retired <code>THUMB_VERSION</code>
+        outright: atomic deploys plus content-hashed <code>/i/</code> URLs removed the race it was built for.</p>
       <div class="diff">
         <figure class="before"><figcaption>as built</figcaption><pre><span class="c">// x3: metadata.json, meta/*.json, thumbnails</span>
 const res = await env.ASSETS.fetch(request);
@@ -227,14 +235,6 @@ const res = await env.ASSETS.fetch(request);
 if (res.status === 404) return uncacheable404();
 return res;</pre></figure>
       </div>
-      <p class="what"><b>Why it is a ghost, mostly.</b> The teardown's biggest find was Pages
-        serving homepage HTML at missing thumbnail URLs with a year-long cache header, and these
-        content-type gates were the fix. Workers static assets answers a missing file with an
-        honest 404, so the masquerade check now tests for a platform behavior that cannot occur.
-        What remains load-bearing is narrower: an edge-cached 404 under <code>/images/*</code>
-        would still inherit the 1-year immutable rule, so the cache-control clamp stays. One
-        small guard instead of three sniffing ones. Same logic eventually retired <code>THUMB_VERSION</code>
-        outright: atomic deploys plus content-hashed <code>/i/</code> URLs removed the race it was built for.</p>
     </div>
 
     <div class="tg">
@@ -258,6 +258,13 @@ return res;</pre></figure>
 
     <div class="tg">
       <h3>Four hand-rolled SWR caches become one primitive</h3>
+      <p class="what"><b>What it buys.</b> The pattern is identical everywhere: persistent
+        value, <code>:fresh</code> sentinel, stale-instant serve, background rebuild, first-run
+        inline. Four implementations means four places a subtle rule can drift (one of them
+        protects empty rebuilds from clobbering good stale data; the others learned that
+        separately). One primitive with the empty-guard built in makes the next cache a
+        one-liner. Two thirds of this kit already exists: <code>cachedRender</code> and the R2
+        edge layer landed this week. This finishes the set.</p>
       <div class="diff">
         <figure class="before"><figcaption>as built</figcaption><pre><span class="c">// photos.js ~30 lines: manifest + sentinel</span>
 <span class="c">// rn.js     ~25 lines: tracks + sentinel</span>
@@ -273,17 +280,18 @@ cachedR2(request, env, ctx, key)    <span class="c">// exists</span>
 const tracks = await swrKV(env, ctx,
   `tracks:${pid}`, 3600, () =&gt; scrape(pid));</pre></figure>
       </div>
-      <p class="what"><b>What it buys.</b> The pattern is identical everywhere: persistent
-        value, <code>:fresh</code> sentinel, stale-instant serve, background rebuild, first-run
-        inline. Four implementations means four places a subtle rule can drift (one of them
-        protects empty rebuilds from clobbering good stale data; the others learned that
-        separately). One primitive with the empty-guard built in makes the next cache a
-        one-liner. Two thirds of this kit already exists: <code>cachedRender</code> and the R2
-        edge layer landed this week. This finishes the set.</p>
     </div>
 
     <div class="tg">
       <h3>Nine handlers stop hand-assembling the same window</h3>
+      <p class="what"><b>What it buys.</b> Not wire bytes (brotli already crushes the repeated
+        CSS per response) but change-amplification: when the window chrome changed this week
+        (the back/forward buttons), one function would have updated nine pages. Correction,
+        post-audit: an earlier sweep claimed /updates shipped the chrome CSS twice; the
+        migration audit refuted it (the two <code>xpChromeCss</code> call sites are two routes,
+        /updates and /restore, one copy each). The honest case for the layout kit is
+        maintenance, and it is sufficient. The XP shell is the site's strongest abstraction;
+        the server should treat it as one.</p>
       <div class="diff">
         <figure class="before"><figcaption>as built</figcaption><pre><span class="c">// whoareyou.js, around.js, reading.js, bot.js,
 // security.js, updates.js (x2!), rn.js, lens.js
@@ -295,18 +303,17 @@ const tracks = await swrKV(env, ctx,
 // nav.js include, security posture. handlers
 // return { title, css, body } — content only.</span></pre></figure>
       </div>
-      <p class="what"><b>What it buys.</b> Not wire bytes (brotli already crushes the repeated
-        CSS per response) but change-amplification: when the window chrome changed this week
-        (the back/forward buttons), one function would have updated nine pages. Correction,
-        post-audit: an earlier sweep claimed /updates shipped the chrome CSS twice; the
-        migration audit refuted it (the two <code>xpChromeCss</code> call sites are two routes,
-        /updates and /restore, one copy each). The honest case for the layout kit is
-        maintenance, and it is sufficient. The XP shell is the site's strongest abstraction;
-        the server should treat it as one.</p>
     </div>
 
     <div class="tg">
       <h3>The if-chain becomes a table, and comments become the contract</h3>
+      <p class="what"><b>And the comments.</b> The essay-grade comments are the best
+        documentation this repo has; a rewrite keeps authoring them exactly as-is and lets the
+        build own the split: readable in git and in every <code>.src.js</code> twin, minified on
+        the wire. That bargain already shipped for the four shells. The worker modules get it
+        for free (wrangler strips nothing, but they are never served). <code>index.html</code>
+        keeps its comments on the wire forever, because the homepage's View Source is the
+        exhibit itself.</p>
       <div class="diff">
         <figure class="before"><figcaption>as built</figcaption><pre><span class="c">// index.js: 240 lines of
 // if (url.pathname === "/x") return handleX(...)
@@ -317,13 +324,6 @@ const PREFIX = [...];            <span class="c">// ordered</span>
 // sitemap, and mirrors run_worker_first
 // one-to-one — config and code agree.</span></pre></figure>
       </div>
-      <p class="what"><b>And the comments.</b> The essay-grade comments are the best
-        documentation this repo has; a rewrite keeps authoring them exactly as-is and lets the
-        build own the split: readable in git and in every <code>.src.js</code> twin, minified on
-        the wire. That bargain already shipped for the four shells. The worker modules get it
-        for free (wrangler strips nothing, but they are never served). <code>index.html</code>
-        keeps its comments on the wire forever, because the homepage's View Source is the
-        exhibit itself.</p>
     </div>
 
     <h2>What I would not touch<span class="sev keep">the soul</span></h2>

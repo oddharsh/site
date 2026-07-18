@@ -245,6 +245,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
 
     <div class="tg">
       <h3>Missing thumbnails were serving the homepage as a 200, cached for a year</h3>
+      <p class="what"><b>What it does.</b> Cloudflare Pages answers a missing <code>/images/x.jpg</code> with its SPA fallback: a 200 carrying the whole homepage HTML. Gating on <code>res.ok</code> let that HTML through, and the headers rule then stamped it <code>max-age=31536000, immutable</code>, so a real thumbnail URL could end up pinned to homepage HTML at the edge for a year. Gating on the content-type instead lets only <code>image/*</code> pass and turns everything else into an uncacheable 404. I confirmed this one live before the fix: a made-up thumbnail URL really was returning 79KB of HTML with a 1-year cache.</p>
       <div class="diff">
         <figure class="before"><figcaption>before</figcaption><pre>const res = await env.ASSETS.fetch(request);
 <span class="c">// only rewrote the cache header on a 4xx/5xx</span>
@@ -255,11 +256,11 @@ const ct = res.headers.get("content-type") || "";
 if (res.ok &amp;&amp; ct.startsWith("image/")) return res;
 return errorResp("not found", 404);  <span class="c">// no masquerade</span></pre></figure>
       </div>
-      <p class="what"><b>What it does.</b> Cloudflare Pages answers a missing <code>/images/x.jpg</code> with its SPA fallback: a 200 carrying the whole homepage HTML. Gating on <code>res.ok</code> let that HTML through, and the headers rule then stamped it <code>max-age=31536000, immutable</code>, so a real thumbnail URL could end up pinned to homepage HTML at the edge for a year. Gating on the content-type instead lets only <code>image/*</code> pass and turns everything else into an uncacheable 404. I confirmed this one live before the fix: a made-up thumbnail URL really was returning 79KB of HTML with a 1-year cache.</p>
     </div>
 
     <div class="tg">
       <h3>The /writing notes broke in any browser without the Popover API</h3>
+      <p class="what"><b>What it does.</b> In an engine that has not shipped the Popover API, <code>:popover-open</code> is an unknown pseudo-class. <code>:not()</code> is non-forgiving, so the engine throws the entire rule away, and with no UA rule to hide them, all three Notepad windows render stacked on top of the folder. Inverting it to hide-by-default means any parser hides the notes. Only an engine that understands <code>:popover-open</code> (and therefore actually supports popovers) reveals one. The fallback now degrades the right direction.</p>
       <div class="diff">
         <figure class="before"><figcaption>before</figcaption><pre>.np-note:not(:popover-open) {
   display: none !important;
@@ -267,13 +268,13 @@ return errorResp("not found", 404);  <span class="c">// no masquerade</span></pr
         <figure class="after"><figcaption>after</figcaption><pre>.np-note { display: none !important; }
 .np-note:popover-open { display: flex !important; }</pre></figure>
       </div>
-      <p class="what"><b>What it does.</b> In an engine that has not shipped the Popover API, <code>:popover-open</code> is an unknown pseudo-class. <code>:not()</code> is non-forgiving, so the engine throws the entire rule away, and with no UA rule to hide them, all three Notepad windows render stacked on top of the folder. Inverting it to hide-by-default means any parser hides the notes. Only an engine that understands <code>:popover-open</code> (and therefore actually supports popovers) reveals one. The fallback now degrades the right direction.</p>
     </div>
 
     <h2>Made it feel faster<span class="sev perf">perceived speed</span></h2>
 
     <div class="tg">
       <h3>The window shell popped into place after first paint</h3>
+      <p class="what"><b>What it does.</b> The shared shell script is deferred, so it used to apply the OS-window geometry (clip the body, pin the window, reserve the taskbar strip) a beat after the page first painted. The very first load visibly popped in two stages. Inlining the exact same geometry into each page makes first paint already the windowed layout. nav.js's later rules are byte-identical, so when it runs, nothing moves. It still degrades with JS off: the content scrolls natively and a CSS strip stands in for the taskbar.</p>
       <div class="diff">
         <figure class="before"><figcaption>before</figcaption><pre><span class="c">// page paints in document-scroll mode;
 // the deferred nav.js flips it to the
@@ -286,11 +287,11 @@ body { height: calc(100dvh - 30px); overflow: hidden;
   display: flex; flex-direction: column; padding: 8px; }
 .window &gt; .content { flex: 1; min-height: 0; overflow: auto; }</pre></figure>
       </div>
-      <p class="what"><b>What it does.</b> The shared shell script is deferred, so it used to apply the OS-window geometry (clip the body, pin the window, reserve the taskbar strip) a beat after the page first painted. The very first load visibly popped in two stages. Inlining the exact same geometry into each page makes first paint already the windowed layout. nav.js's later rules are byte-identical, so when it runs, nothing moves. It still degrades with JS off: the content scrolls natively and a CSS strip stands in for the taskbar.</p>
     </div>
 
     <div class="tg">
       <h3>The homepage first byte waited on a single-homed counter</h3>
+      <p class="what"><b>What it does.</b> The homepage is <code>no-store</code>, so the worker runs on every visit and the visitor counter is a single-homed Durable Object. A visitor far from its home region paid a cross-region round trip before the first byte, just to fill in a hit-counter pill that already has a static placeholder. Racing it against 75ms means on a miss the pill keeps the placeholder and the real increment still completes in the background. Measured TTFB dropped from ~0.12-0.25s back toward the ~0.07s the static pages serve.</p>
       <div class="diff">
         <figure class="before"><figcaption>before</figcaption><pre>const counterP = DO.fetch(...).then(r =&gt; r.json());
 await Promise.all([assets, tracks, photos,
@@ -302,11 +303,11 @@ const counterP = Promise.race([raw,
   new Promise(r =&gt; setTimeout(() =&gt; r(null), 75))]);
 ctx.waitUntil(raw);  <span class="c">// increment still lands</span></pre></figure>
       </div>
-      <p class="what"><b>What it does.</b> The homepage is <code>no-store</code>, so the worker runs on every visit and the visitor counter is a single-homed Durable Object. A visitor far from its home region paid a cross-region round trip before the first byte, just to fill in a hit-counter pill that already has a static placeholder. Racing it against 75ms means on a miss the pill keeps the placeholder and the real increment still completes in the background. Measured TTFB dropped from ~0.12-0.25s back toward the ~0.07s the static pages serve.</p>
     </div>
 
     <div class="tg">
       <h3>One visitor an hour ate the full Spotify scrape</h3>
+      <p class="what"><b>What it does.</b> The tracklist lived in a single KV key with a one-hour TTL. The moment it expired, the next visitor triggered the inline three-tier scrape of Spotify (one to three seconds, and a transient failure showed no music at all). The photo manifest already solved this shape, so the tracks got the same two-key stale-while-revalidate: the value persists with no TTL, a tiny <code>:fresh</code> sentinel carries the hour, and a lapsed sentinel serves the stale list instantly while a rescrape rides <code>ctx.waitUntil</code>. Nobody waits on Spotify anymore.</p>
       <div class="diff">
         <figure class="before"><figcaption>before</figcaption><pre>const hit = await KV.get(key, "json");
 if (hit) return hit;
@@ -318,11 +319,11 @@ const hit = await getTracksSWR(env, ctx, pid);
 if (hit) return hit;  <span class="c">// stale serves now,
                        // rescrape rides waitUntil</span></pre></figure>
       </div>
-      <p class="what"><b>What it does.</b> The tracklist lived in a single KV key with a one-hour TTL. The moment it expired, the next visitor triggered the inline three-tier scrape of Spotify (one to three seconds, and a transient failure showed no music at all). The photo manifest already solved this shape, so the tracks got the same two-key stale-while-revalidate: the value persists with no TTL, a tiny <code>:fresh</code> sentinel carries the hour, and a lapsed sentinel serves the stale list instantly while a rescrape rides <code>ctx.waitUntil</code>. Nobody waits on Spotify anymore.</p>
     </div>
 
     <div class="tg">
       <h3>The service worker rewrote immutable photos on every view</h3>
+      <p class="what"><b>What it does.</b> Thumbnails are content-addressed: their URL carries a <code>?v=N</code> version and they are served immutable. The cache-first handler still fired a background refetch and <code>cache.put</code> on every single photo view, which could never observe new bytes because the HTTP cache absorbs it. It was a redundant disk write per thumbnail, felt most on low-power devices. Invalidation already comes from the <code>?v</code> bump and the activate-event cache sweep, so the background write just had to go.</p>
       <div class="diff">
         <figure class="before"><figcaption>before</figcaption><pre>if (hit) {
   fetch(req).then(res =&gt; cache.put(req, res.clone()));
@@ -332,13 +333,13 @@ if (hit) return hit;  <span class="c">// stale serves now,
 <span class="c">// thumbnails are ?v=N + immutable: a refetch can
 // never see new bytes, so the write was pure waste</span></pre></figure>
       </div>
-      <p class="what"><b>What it does.</b> Thumbnails are content-addressed: their URL carries a <code>?v=N</code> version and they are served immutable. The cache-first handler still fired a background refetch and <code>cache.put</code> on every single photo view, which could never observe new bytes because the HTTP cache absorbs it. It was a redundant disk write per thumbnail, felt most on low-power devices. Invalidation already comes from the <code>?v</code> bump and the activate-event cache sweep, so the background write just had to go.</p>
     </div>
 
     <h2>Polish<span class="sev low">low severity</span></h2>
 
     <div class="tg">
       <h3>The Run palette yanked your keyboard selection to the top</h3>
+      <p class="what"><b>What it does.</b> Open the palette with the keyboard, arrow down to a row, and the lazy photo and writing lists would finish loading, re-render, and snap your selection back to row 0 right as you pressed Enter. Now the selection is preserved by item identity across an async re-render with the same query, and only resets to the top when the query actually changes, which is the one case where selecting the new best match is correct.</p>
       <div class="diff">
         <figure class="before"><figcaption>before</figcaption><pre>results = items;
 sel = items.length ? 0 : -1;
@@ -350,7 +351,6 @@ sel = keep ? indexOfIdentity(items, keep)
            : (items.length ? 0 : -1);
 <span class="c">// only reset to top on an actual keystroke</span></pre></figure>
       </div>
-      <p class="what"><b>What it does.</b> Open the palette with the keyboard, arrow down to a row, and the lazy photo and writing lists would finish loading, re-render, and snap your selection back to row 0 right as you pressed Enter. Now the selection is preserved by item identity across an async re-render with the same query, and only resets to the top when the query actually changes, which is the one case where selecting the new best match is correct.</p>
     </div>
 
     <h2>The rest<span class="sev low">verified, shipped</span></h2>
