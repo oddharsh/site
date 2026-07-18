@@ -108,18 +108,18 @@ export function start(initial) {
         return `<svg class="hist-svg" viewBox="0 0 ${n - 1} 32" preserveAspectRatio="none">${luma}${r}${g}${b}</svg>`;
       };
       // histogram bins are BAKED at photo-add time (photo-histograms.py measures
-      // the shipped JPG twin, so the bars still show exactly what the visitor
-      // sees) and ride the same meta/<stem>.json the EXIF already arrives in.
-      // the old decode → canvas → getImageData → main-thread binning pipeline is
-      // gone; renderHistogramSvg draws the identical SVG from meta.hist.
+      // the shipped JPG twin, so the bars stay tied to the published thumbnail)
+      // and ride the same meta/<stem>.json as the EXIF. The old decode → canvas
+      // → getImageData → main-thread binning pipeline is gone; renderHistogramSvg
+      // draws the prebuilt SVG data from meta.hist.
       const histFor = (stem) => (metaMap[stem] && metaMap[stem].hist) || null;
       // EXIF is NOT inlined on the uncacheable homepage, and not shipped as one big
-      // index either — it's fetched PER PHOTO on hover from /images/meta/<stem>.json
-      // (tiny, immutable, content-addressed → edge + browser cached forever, busted
-      // by ?mv). so a visitor only pulls EXIF for the handful of photos they actually
-      // hover, not the whole pool; repeat hovers and repeat visits are served
-      // from the browser's HTTP cache with no network at all. the baked histogram
-      // rides the same file, so bars + EXIF land together in one tiny fetch.
+      // index either — it's fetched PER PHOTO from /images/meta/<stem>.json after
+      // page settle (with first-hover fetch as fallback). The tiny files are edge
+      // and browser cached, busted by ?mv, so the warm-up covers only the current
+      // selection rather than the whole pool; repeat hovers and repeat visits are
+      // served from the browser's HTTP cache with no network at all. The baked
+      // histogram rides the same file, so bars + EXIF land together in one fetch.
       const metaMap = Object.create(null);   // stem → exif object | null (fetched, none) | absent (not fetched)
       const META_V = "mv=4";                 // bump when metadata is regenerated (4: histograms baked in)
       const fetchMeta = (stem) => {
@@ -143,12 +143,50 @@ export function start(initial) {
           // than the photo being stuck empty for the whole session. self-healing.
           .catch(() => { delete metaMap[stem]; });
       };
-      // EXIF/histogram is fetched lazily on first hover or keyboard focus (see
-      // buildPhotoContent → fetchMeta), NOT idle-warmed. the old warm loop fired
-      // ~12 requests / ~15KB on every no-store visit to make a first hover instant
-      // — but most visitors never hover a tile, so it was pure waste on the hot
-      // path. the first hover now pays one tiny immutable fetch (cached forever
-      // after, self-healing on failure); the grid itself never waits on it.
+      // EXIF/histogram is idle-prefetched for the current photo selection after
+      // page settle (see warmPhotoMeta below). A first-hover fetch remains the
+      // fallback for a busy page or a client-rendered grid. The warm-up costs a
+      // small burst for the visible slots, never the full photo library, and
+      // repeat visits are served from the browser/edge cache.
+
+      const photoStem = (slot) => {
+        const filename = slot.dataset.full || decodeURIComponent((slot.href || "").split("/").pop());
+        return filename.replace(/\.[^.]+$/, "");
+      };
+      const warmPhotoMeta = () => {
+        const stems = new Set();
+        document.querySelectorAll(".photos a[data-full]").forEach((slot) => {
+          const stem = photoStem(slot);
+          if (stem) stems.add(stem);
+        });
+        stems.forEach(fetchMeta);
+      };
+      let metaWarmupQueued = false;
+      const queuePhotoMetaWarmup = () => {
+        if (metaWarmupQueued) return;
+        metaWarmupQueued = true;
+        const run = () => {
+          metaWarmupQueued = false;
+          warmPhotoMeta();
+        };
+        const idle = () => {
+          if (typeof window.requestIdleCallback === "function") {
+            window.requestIdleCallback(run, { timeout: 2000 });
+          } else {
+            setTimeout(run, 0);
+          }
+        };
+        // Let the initial page, eager image, and dynamic islands settle before
+        // opening the metadata requests. The observer covers the fallback grid
+        // if it finishes after this page-load boundary.
+        if (document.readyState === "complete") setTimeout(idle, 750);
+        else window.addEventListener("load", () => setTimeout(idle, 750), { once: true });
+      };
+      const photoGrid = document.querySelector("section.photos");
+      if (photoGrid) {
+        new MutationObserver(() => queuePhotoMetaWarmup()).observe(photoGrid, { childList: true });
+      }
+      queuePhotoMetaWarmup();
 
       // unified hover target → "what was hovered?" lookup. one tooltip
       // element, three content shapes: a photo slot (.photos a), a track
@@ -201,13 +239,13 @@ export function start(initial) {
 
       // XP camera-back review readout: a Luna header strip (filename + flash),
       // a sunken histogram band, the exposure trio, the full Fuji recipe as
-      // label/value rows, and a date footer. EXIF is lazy-fetched per-photo from
-      // /images/meta/<stem>.json on first hover (see fetchMeta); the histogram is
-      // computed client-side from the thumbnail. first hover may render text-only
-      // for a beat, then re-renders when the EXIF fetch (or image decode) lands.
+      // label/value rows, and a date footer. EXIF and the prebuilt histogram are
+      // fetched per-photo from /images/meta/<stem>.json after page settle (see
+      // fetchMeta and warmPhotoMeta); first hover may still render the shell for
+      // a beat if warm-up has not run or a fetch is slow, then re-renders when
+      // data lands.
       function buildPhotoContent(slot) {
-        const filename = slot.dataset.full || decodeURIComponent((slot.href || "").split("/").pop());
-        const stem = filename.replace(/\.[^.]+$/, "");
+        const stem = photoStem(slot);
         const img  = slot.querySelector("img");
         fetchMeta(stem);                           // per-photo lazy fetch (no-op if already in hand)
         const exif = metaMap[stem] || {};
