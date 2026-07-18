@@ -252,15 +252,18 @@ export function renderLensShell(initial, state, inputValue) {
     : "Human view &middot; the live page";
   const machineHeader = state.view === "machine" ? "Machine view &middot; Briefing" : state.view === "delta" ? "Delta view &middot; What changes" : "Machine view &middot; " + (LENS_TAB_LABELS[state.lens] || state.lens);
   const browserHeader = "Browser Run &middot; Rendered";
+  // Mode notes coach, they don't caption: each one asks for a prediction the
+  // pane will then confirm or correct. Keep the strings byte-identical to
+  // MODE_NOTE in holding/lens.js or the note visibly rewrites on hydrate.
   const modeNote = state.view === "human"
-    ? "Human shows the page as a person receives it in a browser."
+    ? "Human is the page as a person receives it. Every other view subtracts the person."
     : state.view === "machine"
-      ? "Machine turns the scan into an evidence-first briefing, then keeps the selected lens below it."
+      ? "Machine is an evidence-first briefing. Read claims first, then check each against its evidence."
       : state.view === "browser"
-        ? "Browser Run renders the URL after page JavaScript, then exposes the browser's structural evidence beside the HTTP scan."
+        ? "Browser Run renders after JavaScript beside HTTP. Disagreement reveals a JS dependency."
       : state.view === "delta"
-        ? "Delta keeps the page visible while you add hypothetical machine infrastructure to the route."
-        : "Compare puts Human, HTTP Machine, and the opt-in Browser Run render side by side.";
+        ? "Delta toggles hypothetical infrastructure. Predict, flip, check."
+        : "Compare puts Human, HTTP Machine, and Browser Run side by side. Predict the machine pane; the miss is the lesson.";
   const initialScript = initial ? '<script type="application/json" id="lx-initial-data">' + lensScriptJson(initial) + "</script>" : "";
   return lunaPage({
     title: "The Other Web · aadhar.sh",
@@ -440,6 +443,8 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 .lx-machine-block { border-top:1px solid oklch(86% 0.03 250); padding-top:9px; margin-top:11px; }
 .lx-machine-block .lx-sec-h { color:oklch(30% 0.10 250); }
 .lx-delta-intro { margin:0 0 10px; padding:7px 9px; border:1px solid oklch(82% 0.08 75); background:oklch(97% 0.035 85); color:oklch(39% 0.05 60); font-size:9pt; line-height:1.45; }
+.lx-cf-credit { margin-top:10px; font-size:8pt; color:oklch(55% 0 0); line-height:1.5; }
+.lx-cf-credit a { color:oklch(42.61% 0.2353 263.74); }
 .lx-cf-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; margin:5px 0 12px; }
 .lx-cf-card { border:1px solid oklch(82% 0.03 250); border-radius:3px; padding:7px 8px; background:oklch(99% 0.003 250); }
 .lx-cf-card.is-on { border-color:oklch(61% 0.13 150); background:oklch(97% 0.025 150); }
@@ -485,7 +490,7 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
 `,
     body: `
     <h1>The Other Web</h1>
-    <p class="lx-lede">Every page has a second life as data. Paste a URL to see what a person receives, what representative bots can retrieve, and which missing web surfaces limit them. The score is a map, not a verdict: every point stays tied to evidence. Fetched server-side, honestly, as <a href="/bot">AadharshBot</a>.</p>
+    <p class="lx-lede">Every page has a second life as data. Paste a URL to see what a person receives, what representative bots can retrieve, and which missing web surfaces limit them. The score is a map, not a verdict: every point stays tied to evidence. Scan a few sites and you start predicting the briefing before it loads; that mental model is the point, since you build differently once you carry it. Fetched server-side, honestly, as <a href="/bot">AadharshBot</a>.</p>
 
     <form class="lx-addr" id="lx-form" action="/lens" method="get">
       <span class="lx-globe" aria-hidden="true"></span>
@@ -545,7 +550,7 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
 `,
     // The shell is cached at the edge and browsers cache static scripts too;
     // version the client URL so a fresh shell cannot pair with an older lens.js.
-    scripts: `<script src="/lens.js?v=7" defer></script>`,   // BUMP on every holding/lens.js change: the shell is no-store but the script is cached, so a stale token pairs a fresh shell with an old script
+    scripts: `<script src="/lens.js?v=8" defer></script>`,   // BUMP on every holding/lens.js change: the shell is no-store but the script is cached, so a stale token pairs a fresh shell with an old script
     cache: "public, max-age=60, s-maxage=300",
     headers: {
       // No x-robots-tag here: the bare shell is meant to be indexed. handleLens

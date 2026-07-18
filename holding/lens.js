@@ -105,12 +105,15 @@
   }
   var initialData = readInitialData();
 
+  // Mode notes coach, they don't caption: each asks for a prediction the pane
+  // then confirms or corrects. Keep byte-identical to the modeNote strings in
+  // _worker.js/lens.js or the note visibly rewrites on hydrate.
   var MODE_NOTE = {
-    both: "Compare puts Human, HTTP Machine, and the opt-in Browser Run render side by side.",
-    human: "Human shows the page as a person receives it in a browser.",
-    machine: "Machine turns the scan into an evidence-first briefing, then keeps the selected lens below it.",
-    browser: "Browser Run renders the URL after JavaScript and exposes browser structure beside the HTTP scan.",
-    delta: "Delta keeps the page visible while you add hypothetical machine infrastructure to the route.",
+    both: "Compare puts Human, HTTP Machine, and Browser Run side by side. Predict the machine pane; the miss is the lesson.",
+    human: "Human is the page as a person receives it. Every other view subtracts the person.",
+    machine: "Machine is an evidence-first briefing. Read claims first, then check each against its evidence.",
+    browser: "Browser Run renders after JavaScript beside HTTP. Disagreement reveals a JS dependency.",
+    delta: "Delta toggles hypothetical infrastructure. Predict, flip, check.",
   };
 
   function modeLabel() {
@@ -624,7 +627,8 @@
     var deltaText = cf.filter(function (x) { return counterfactuals[x.key]; }).map(function (x) { return "+ " + x.stage.toLowerCase() + " · " + x.label; }).join("\n");
     return intro + section("Infrastructure switches", null, "Each switch changes one stage of the path and nothing else.", controls) +
       section("The route", { text: "no score" }, "A task path is more useful here than a readiness number.", '<div class="lx-path">' + path + '</div>' + proof) +
-      section("What this proves", { text: "local simulation", kind: "warn" }, "Counterfactuals clarify a missing contract; they do not create a real endpoint on the scanned site.", pre("# delta\n" + (deltaText || "(no switches on)"), true));
+      section("What this proves", { text: "local simulation", kind: "warn" }, "Counterfactuals clarify a missing contract; they do not create a real endpoint on the scanned site.", pre("# delta\n" + (deltaText || "(no switches on)"), true)) +
+      '<div class="lx-cf-credit">Papert&rsquo;s micro-world: flip, predict, check. After <a href="https://www.geoffreylitt.com/2026/07/02/understanding-is-the-new-bottleneck">Geoffrey Litt&rsquo;s &ldquo;Understanding is the new bottleneck&rdquo;</a>.</div>';
   }
 
   function bindCounterfactuals() {
