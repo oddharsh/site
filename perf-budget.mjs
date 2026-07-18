@@ -4,7 +4,7 @@
 // Deterministic, buildtime checks that catch a perf regression BEFORE it ships:
 //   1. luna.css parses clean (no esbuild CSS warnings) — the v143-corruption
 //      tripwire, so a broken stylesheet can never reach a deploy.
-//   2. the build output is actually minified: the four shells + luna.css each
+//   2. the build output is actually minified: the client scripts + luna.css each
 //      carry the "minified at deploy" banner, sit under their byte budget, and
 //      ship a readable twin (/<name>.src.js / /luna.src.css).
 //   3. the bundled Worker stays under the gzip budget (via wrangler --dry-run,
@@ -38,6 +38,10 @@ const SHELL_BUDGET = {
   // Browser Run's rendered code remains split into its own deferred twin.
   "lens.js": 54_000,
   "lens-browser.js": 8_000,
+  // Rich hover content is an idle-prefetched island, not homepage-critical JS.
+  // Keep it bounded so the first-hover optimization does not become another
+  // shared shell by accident.
+  "tooltip.js": 18_000,
   "luna.css": 40_000,
 };
 // The readiness probes add a bounded server-side envelope and bot matrix, HTML
@@ -48,7 +52,7 @@ const SHELL_BUDGET = {
 // Measured ~84.8 KiB gzip; 86 leaves ~1.2 KiB, enough to cover the ~0.2 KiB
 // gzip variance between the local and CI Node runtimes without going flaky.
 const BUNDLE_GZIP_KIB = 86;
-const TWINS = ["nav.src.js", "notepad.src.js", "lens.src.js", "lens-browser.src.js", "luna.src.css"];
+const TWINS = ["nav.src.js", "notepad.src.js", "lens.src.js", "lens-browser.src.js", "tooltip.src.js", "luna.src.css"];
 
 const fails = [];
 const ok = (m) => console.log(`  ok    ${m}`);

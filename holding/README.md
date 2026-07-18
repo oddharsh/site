@@ -28,6 +28,9 @@ what every script in `scripts/` does) live in the ops runbook:
   favicons. One external asset, deferred + SW-cached.
 - `notepad.js` — behavior for the `/writing` Notepad view (menus, status
   bar, F5 stamp), incl. opening notes as popovers over the folder.
+- `tooltip.js` — the rich hover island for photos, tracks, artists, and car
+  references. A tiny inline loader warms it during idle and replays a cold
+  first hover; touch visitors never load it.
 - `sw.js` — service worker (cache-first images, SWR for static text).
 - `writing/` — `.txt` notes + `posts.json`; rendered as Notepad windows.
 - `images/` + `i/` — full photo metadata plus content-addressed AVIF/JPG
