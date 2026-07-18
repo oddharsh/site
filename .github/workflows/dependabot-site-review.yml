@@ -19,7 +19,7 @@ jobs:
           github-token: ${{ github.token }}
 
       - name: Add or refresh the site review note
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           DEPENDENCY_NAMES: ${{ steps.metadata.outputs.dependency-names }}
           DEPENDENCY_TYPE: ${{ steps.metadata.outputs.dependency-type }}
