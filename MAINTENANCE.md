@@ -48,6 +48,15 @@ Before merging the first revision that uses this path, change each Workers
 Build project's production branch from `main` to `production`. Otherwise the
 merge push can still trigger the old direct production build.
 
+## Understanding-first review
+
+Every pull request uses the author claim card in
+`.github/pull_request_template.md` and receives an idempotent reviewer prompt
+from `.github/workflows/understanding-review.yml`. The canonical practice is
+documented in [UNDERSTANDING-REVIEW.md](UNDERSTANDING-REVIEW.md): reconstruct
+the model, name a falsifier, inspect evidence, and leave residual uncertainty
+visible. The prompt is advisory; it is not a prose-quality or AI-scoring gate.
+
 Key facts (don't hardcode these elsewhere, they drift):
 - RN_KV namespace id: `3cb8a107c58e47dc9244e75b33401f36`
 - R2 bucket: `aadhar-photos` (SOOC originals + full-res JPGs)
