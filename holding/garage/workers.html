@@ -213,7 +213,10 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
       bucket, the D1 database, the Durable Object, the environment variables: all clicked in
       through a web UI, invisible to git, undocumented outside my own memory, impossible to diff
       or review. Rebuilding the project meant remembering every toggle I had ever flipped.</p>
-    <p>On Workers, all of it is one checked-in file, <code class="m">wrangler.jsonc</code>:</p>
+    <p>On Workers, all of it is one checked-in file, <code class="m">wrangler.jsonc</code>. One
+      line needs a primer before you hit it: <code class="m">run_worker_first</code> opens with
+      <code class="m">"/*"</code>, meaning every request wakes the worker, and each entry starting
+      with <code class="m">!</code> carves that path back out to serve straight from the edge:</p>
     <pre class="cf-code">{
   "name": "aadhar-sh",
   "main": "holding/_worker.js/index.js",
