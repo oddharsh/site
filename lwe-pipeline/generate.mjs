@@ -6,7 +6,8 @@
 //                                               #   (sitemap urls now; prints buddy + nav blocks)
 //
 // concepts.json is the single source of truth. A page-spec (specs/<id>.json) carries
-// only what is unique to one concept: the conversation, the demos, the disclosure.
+// only what is unique to one concept: the conversation, the demos, the disclosure,
+// the reader model, and the understanding check.
 // Everything structural — the window chrome, the messenger shell, the taskbar desktop —
 // is generated here so every page stays byte-identical in its bones.
 //
@@ -19,13 +20,18 @@
 //     phrases, never the "not X, Y" negation pattern. Emojis only when they earn their
 //     place (a functional glyph or a genuinely apt beat), never as filler reactions.
 //   - Teacher bubbles that quote a source stay verbatim; mark them with `cite`.
+//   - Every spec carries an `editorial` card (reader, problem, thesis, evidence,
+//     uncertainty) and an `understanding` card (3–7 questions, one correct option,
+//     feedback on every option). The shared contract validates both.
 //   - DEMO DETECTION: in the source chat, a request to clarify, to re-explain, or an
 //     explicit "show me" is a demo cue. Those moments become {demo:{...}} slots, authored
 //     by hand. The pipeline flags them; a human builds the actual widget.
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { renderUnderstanding, validatePageSpec } from "../content-pipeline/page-contract.mjs";
+import { DESKTOP_CHROME, DESKTOP_TOP } from "../holding/_worker.js/lib/desktop.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..");
@@ -119,6 +125,7 @@ function renderMsg(m, c) {
 function pageHtml(spec) {
   const c = byId(spec.id);
   if (!c) throw new Error(`no registry entry for "${spec.id}"`);
+  validatePageSpec(spec, `LWE spec "${spec.id}"`);
   const titleSuffix = c.title;
   const stat = spec.buddyStat || c.navHint;
   const pets = spec.petsLine || "Learning&nbsp;With&nbsp;Errors";
@@ -126,6 +133,7 @@ function pageHtml(spec) {
   const favFont = c.glyphFont ? c.glyphFont.replace(/"/g, "'") : "Trebuchet MS,sans-serif";
   const askScript = (spec.hasAsk ?? c.hasAsk) ? `<script src="/lwe/ask.js" defer></script>\n` : "";
   const demoJs = spec.demoJs ? `<script>\n${spec.demoJs}\n</script>\n` : "";
+  const understanding = renderUnderstanding(spec.understanding, "lwe");
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -143,6 +151,7 @@ function pageHtml(spec) {
 ${spec.demoCss || ""}</style>
 </head>
 <body>
+${DESKTOP_TOP}
 <div class="window">
   <div class="title-bar" aria-hidden="true">
     <span class="title-text"><span class="icon"></span>aadhar.sh/lwe — ${titleSuffix}</span>
@@ -175,7 +184,9 @@ ${spec.messages.map((m) => renderMsg(m, c)).join("\n\n")}
 <script>
 if ("serviceWorker" in navigator) { var reg = function () { navigator.serviceWorker.register("/sw.js").catch(function () {}); }; "requestIdleCallback" in window ? requestIdleCallback(reg, { timeout: 2000 }) : setTimeout(reg, 1000); }
 </script>
-${demoJs}${askScript}<script src="/nav.js" defer></script>
+${demoJs}${askScript}${understanding}
+<script src="/nav.js" defer></script>
+<!-- axp:shell -->${DESKTOP_CHROME}<!-- /axp:shell -->
 </body>
 </html>
 `;
@@ -224,19 +235,23 @@ function injectBetween(file, start, end, content) {
   return true;
 }
 
+export { pageHtml, chromeCss, renderMsg };
+
 // ---- CLI ----
-const [cmd, arg] = process.argv.slice(2);
-if (cmd === "page") {
-  const spec = JSON.parse(readFileSync(join(HERE, "specs", `${arg}.json`), "utf8"));
-  const out = join(HOLDING, "lwe", `${arg}.html`);
-  writeFileSync(out, pageHtml(spec));
-  console.log(`wrote ${out}`);
-} else if (cmd === "wire") {
-  console.log("wiring from concepts.json:");
-  injectBetween("sitemap.xml", "<!-- generated:lwe:start -->", "<!-- generated:lwe:end -->", sitemapBlock(REGISTRY));
-  injectBetween("lwe/index.html", "<!-- generated:buddies:start -->", "<!-- generated:buddies:end -->", buddyGroup(REGISTRY));
-  injectBetween("nav.js", "// generated:lwe-pages:start", "// generated:lwe-pages:end", navBlock(REGISTRY));
-  injectBetween("lwe/ask.js", "// generated:concepts:start", "// generated:concepts:end", conceptsBlock(REGISTRY));
-} else {
-  console.log("usage: generate.mjs page <id> | generate.mjs wire");
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const [cmd, arg] = process.argv.slice(2);
+  if (cmd === "page") {
+    const spec = JSON.parse(readFileSync(join(HERE, "specs", `${arg}.json`), "utf8"));
+    const out = join(HOLDING, "lwe", `${arg}.html`);
+    writeFileSync(out, pageHtml(spec));
+    console.log(`wrote ${out}`);
+  } else if (cmd === "wire") {
+    console.log("wiring from concepts.json:");
+    injectBetween("sitemap.xml", "<!-- generated:lwe:start -->", "<!-- generated:lwe:end -->", sitemapBlock(REGISTRY));
+    injectBetween("lwe/index.html", "<!-- generated:buddies:start -->", "<!-- generated:buddies:end -->", buddyGroup(REGISTRY));
+    injectBetween("nav.js", "// generated:lwe-pages:start", "// generated:lwe-pages:end", navBlock(REGISTRY));
+    injectBetween("lwe/ask.js", "// generated:concepts:start", "// generated:concepts:end", conceptsBlock(REGISTRY));
+  } else {
+    console.log("usage: generate.mjs page <id> | generate.mjs wire");
+  }
 }

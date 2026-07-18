@@ -6,6 +6,131 @@
   "composeNote": "This is a recorded conversation. The demos above run live: drag, toggle, and click to hear.",
   "hasAsk": true,
   "disclosure": "<b>Starter draft.</b> The explanations lean on <a href=\"http://lucasbosch.de/schiit/jason-stoddard-shiit-happened-tablet-lblb.pdf\" rel=\"external\">Schiit Happened</a> (Jason Stoddard's book, shared free by the author) and the <a href=\"https://www.head-fi.org/threads/schiit-happened-the-story-of-the-gods-of-noise.701900/\" rel=\"external\">head-fi threads</a>, paraphrased and cited. The five demos run real math: a quantized staircase, an R-2R ladder you can mismatch, an actual DFT of a noise-shaped signal, a Web Audio tone you can hear at each bit depth, and a reconstruction filter showing the time-frequency tradeoff.",
+  "editorial": {
+    "reader": "A curious reader who knows the surface term but wants the mechanism.",
+    "problem": "The reader can recognize dac vocabulary without being able to predict what its mechanism will do.",
+    "thesis": "The page should leave the reader able to explain dac in plain language and predict its behavior.",
+    "evidence": [
+      "The conversation cites its sources and the demos make the mechanism visible.",
+      "The understanding check names common misconceptions and explains every answer."
+    ],
+    "uncertainty": "The demos teach the model; they do not replace a measurement or a full treatment."
+  },
+  "understanding": {
+    "intro": "Before you go pick a side in a DAC forum thread: pop quiz. Five questions, all from the chat above, no stakes.",
+    "questions": [
+      {
+        "q": "Start with the ladder. A 20-bit R-2R DAC wants resistors matched to about 1 part per million. Why does the bar sit that high?",
+        "options": [
+          {
+            "t": "the MSB carries half the output, so its error alone has to stay smaller than the smallest step",
+            "ok": true,
+            "why": "Right. Each rung halves the next bit's share, so the big bits carry nearly everything. Let the MSB drift past one step's worth and a code can run backward, the red non-monotonic glitch the tolerance slider produces in the ladder demo."
+          },
+          {
+            "t": "each of the 20 bits needs its own distinct resistor value, and that many values are hard to make",
+            "why": "The ladder's whole economy runs the other way: two values only, R and 2R, repeated down the chain. The hard part is matching those repeats, and the MSB rung is where an error costs the most. Scroll back to the ladder demo's lead line."
+          },
+          {
+            "t": "the resistors have to switch fast enough to keep up with a sample rate that high",
+            "why": "Speed is delta-sigma's currency, and the page's point is that timing precision comes cheap in digital. A ladder's burden is amplitude precision, exact voltage levels. The tolerance slider bends levels; nothing in that demo touches timing."
+          },
+          {
+            "t": "more bits draw more current, and the extra heat drifts the resistor values apart",
+            "why": "Heat and drift are real circuit concerns, but the page pins the cost to matching: the MSB's share against the smallest step. That ratio is why Yggdrasil ships instrumentation parts, the AD5791s that also sit in MRI machines."
+          }
+        ]
+      },
+      {
+        "q": "The noise shaping demo runs the same 3-bit quantizer whether shaping is ON or OFF. What does the feedback loop actually change?",
+        "options": [
+          {
+            "t": "where the error sits: the same total hash, tilted up and out of the band you can hear",
+            "ok": true,
+            "why": "That's the whole move. The loop high-passes the quantization error, so the floor tilts away from the shaded audible band and piles up in the ultrasonics, where a cheap analog filter wipes it."
+          },
+          {
+            "t": "how much error exists: the loop cancels most of the quantization noise outright",
+            "why": "Toggle the demo and look at the right side of the DFT: the floor rises there when shaping is ON. The total error stays roughly the same size and simply relocates above the band. Deletion happens later, at the analog filter."
+          },
+          {
+            "t": "the effective bit depth: feedback makes the 3 coarse bits behave like 16 real ones",
+            "why": "Inside the audible band the floor does drop that far, but the mechanism is relocation, and the faint high hiss in the demo's play mode is the receipt. The quantizer stays coarse the whole time; nothing gained bits."
+          },
+          {
+            "t": "the tone itself: shaping boosts the signal so it stands clear of the noise floor",
+            "why": "The tone's spike sits at the same height in both modes; only the noise floor moves. The signal path is untouched. The feedback loop filters the error alone, which is what makes the trick so cheap."
+          }
+        ]
+      },
+      {
+        "q": "In the filter demo, dragging sharpness up steepens the frequency wall on the right. What happens on the left, and why is it unavoidable?",
+        "options": [
+          {
+            "t": "the impulse rings longer, since sharpness in frequency is paid for with length in time",
+            "ok": true,
+            "why": "That's the Fourier tradeoff the whole section rides on. A perfect brick wall at 20 kHz is a sinc that ripples forever in time, and NOS, oversampling, and Moffat's closed-form filter are each a different answer to it."
+          },
+          {
+            "t": "nothing changes, a well-designed filter can be sharp in frequency and clean in time",
+            "why": "The two graphs are two views of one object, so tightening the right one lengthens the left one, every time. It's a mathematical constraint, the reason the demo's lead says you cannot tighten both at once."
+          },
+          {
+            "t": "the ringing would vanish with better hardware, it comes from cheap filter parts",
+            "why": "The demo is pure math, no hardware anywhere, and it rings anyway. Ringing is the price of the steep wall itself; better parts buy fidelity to a chosen curve and leave the tradeoff standing."
+          },
+          {
+            "t": "the click gets quieter, because a longer filter absorbs more of the click's energy",
+            "why": "The click keeps its energy and gets smeared across time instead. Hit play while dragging: each click holds its level but rings longer as the wall sharpens, because the left graph is literally what one click sounds like."
+          }
+        ]
+      },
+      {
+        "q": "The contested ground demo feeds one quiet tone to both architectures. What two different imperfections do the spectra show?",
+        "options": [
+          {
+            "t": "multibit sprouts spikes at the tone's multiples, delta-sigma keeps one clean spike over a raised floor",
+            "ok": true,
+            "why": "That's the honest core of the debate. Rounding to exact levels bends a quiet wave into harmonic distortion; shaping trades that for a noise floor. Slide to 16-bit and both sink below hearing, which is why the argument never settles."
+          },
+          {
+            "t": "multibit shows the raised noise floor, and delta-sigma is the one sprouting harmonic spikes",
+            "why": "Swapped. Rounding to the nearest exact level is what manufactures harmonics, and that's the multibit panel; the shaped floor is delta-sigma's trade. The captions under the two canvases in the demo name each one."
+          },
+          {
+            "t": "multibit stays clean down there because its levels are physically exact by construction",
+            "why": "Exact levels are the problem in the soft tail: a quiet wave spans only a few of them, so rounding bends its shape into harmonics. Exactness pays off at full scale and costs you in the quiet passages, which is where the demo lives."
+          },
+          {
+            "t": "both show the same imperfection, and the audible gap comes entirely from the filters",
+            "why": "The filter carries real audible character, the chat grants that, but this demo isolates a mechanical difference underneath: harmonics on one side, noise on the other. Same tone, two flavors of imperfection, pick yours."
+          }
+        ]
+      },
+      {
+        "q": "Last one, on warmth. Why does the tube curve read as full while the hard clip reads as buzz, when both are just distortion?",
+        "options": [
+          {
+            "t": "the tube's lopsided curve grows mostly the 2nd harmonic, the symmetric clip cancels evens and stacks the odds",
+            "ok": true,
+            "why": "That's the tell. The 2nd harmonic IS the octave, the most consonant interval there is, so the ear reads fuller. Symmetry cancels the evens, and the odd stack (3rd, 5th, 7th) climbs toward the square-wave buzz of a signal slammed into its rails."
+          },
+          {
+            "t": "tubes roll off the harsh treble frequencies, while transistor-style clipping leaves all of them in",
+            "why": "The tube mode adds content, a new harmonic above the note, and the tone's own treble never moves. Watch the spectrum bars: 2x grows as you push the drive. Warmth here is additive, a stacked octave, per the demo's lead."
+          },
+          {
+            "t": "tubes add no distortion at all, and that untouched clean transfer is what people call smooth",
+            "why": "The meter says otherwise: the tube curve raises THD, and some listeners chase exactly that reading as warmth. The page's point is that WHICH harmonics grow decides the character, so more distortion can still sound fuller."
+          },
+          {
+            "t": "odd harmonics are the consonant ones, since the 3rd harmonic sits closest to the original note",
+            "why": "Consonance tracks intervals, and the 2nd harmonic lands exactly one octave up, the friendliest interval available. The odd stack is what builds a square wave. Flip the demo to hard clip and listen to where that dial ends."
+          }
+        ]
+      }
+    ]
+  },
   "messages": [
     {
       "who": "you",
