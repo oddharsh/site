@@ -50,6 +50,9 @@ jobs:
       - name: Test homepage representation contracts
         run: npm test
 
+      - name: Validate LWE and Garage page contracts
+        run: npm run pages:check
+
       - name: Validate coffee Worker config
         run: npx wrangler deploy --dry-run -c cal/wrangler.toml
 

@@ -6,6 +6,109 @@
   "composeNote": "This is a recorded conversation. Toggle and pull in the demo above.",
   "hasAsk": true,
   "disclosure": "<b>Starter draft.</b> The granny-versus-square structure is standard knot lore; the demo is a schematic of the two crossings, not a rope simulation. Background paraphrased from <a href=\"https://www.fieggen.com/shoelace/ianknot.htm\" rel=\"external\">Ian's Shoelace Site</a> and Wikipedia.",
+  "editorial": {
+    "reader": "A curious reader who knows the surface term but wants the mechanism.",
+    "problem": "The reader can recognize knots vocabulary without being able to predict what its mechanism will do.",
+    "thesis": "The page should leave the reader able to explain knots in plain language and predict its behavior.",
+    "evidence": [
+      "The conversation cites its sources and the demos make the mechanism visible.",
+      "The understanding check names common misconceptions and explains every answer."
+    ],
+    "uncertainty": "The demos teach the model; they do not replace a measurement or a full treatment."
+  },
+  "understanding": {
+    "intro": "Before you run off to re-tie those shoes, a quick check. Four questions, no stakes. If the demo did its job, you already know every answer.",
+    "questions": [
+      {
+        "q": "Start with the core of it. Two bows, same four moves, one holds and one slips. What separates the square (reef) bow from the granny?",
+        "options": [
+          {
+            "t": "whether the second crossing mirrors the first or repeats it",
+            "ok": true,
+            "why": "Right. Opposite handedness on the second crossing seats the knot flat so each rope nips the other. Same handedness and it capsizes. That is the whole difference."
+          },
+          {
+            "t": "how hard you cinch the finishing loops down",
+            "why": "Tension is a red herring: the demo pulls both knots equally hard and only the granny slides apart. The handedness of the second crossing decides, long before you tighten anything."
+          },
+          {
+            "t": "how many times the laces cross each other",
+            "why": "Both bows are exactly two crossings. Watch the toggle in the demo: it never adds or removes a crossing, it only flips which rope goes over at the second one."
+          },
+          {
+            "t": "which lace goes on top in the very first cross",
+            "why": "The first crossing can go either way. What matters is the relation between the two: the second must oppose whatever the first did. The demo holds crossing one fixed and only flips crossing two."
+          }
+        ]
+      },
+      {
+        "q": "In the demo above, set the toggle to granny and hit pull the ends. What do the two crossings do?",
+        "options": [
+          {
+            "t": "they slide apart toward the ends instead of cinching",
+            "ok": true,
+            "why": "Yes. The granny is unbalanced, so load capsizes it and the crossings drift toward the ends. That drift is your bow working itself open on a walk."
+          },
+          {
+            "t": "they cinch tight, the slipping only shows up later",
+            "why": "The failure is immediate. On the very first pull the granny's crossings move apart, never together. A granny bow starts losing grip the moment load hits it."
+          },
+          {
+            "t": "they vanish as the ropes untie and snap straight",
+            "why": "The schematic keeps both crossings on screen so you can watch them travel. The point is the direction of motion under load: a square cinches inward, a granny slides outward."
+          },
+          {
+            "t": "they lock the same as the square, just at a crooked angle",
+            "why": "The crooked sit is the symptom, the sliding is the problem. Pull a square and the crossings move toward each other and seat flat. Pull a granny and they move apart. Toggle back and compare."
+          }
+        ]
+      },
+      {
+        "q": "People credit the Ian knot with keeping their laces tied. What does it actually change?",
+        "options": [
+          {
+            "t": "nothing about the knot itself, it just gets you to the same square bow faster",
+            "ok": true,
+            "why": "That is the trick. Both loops form at once and pass through each other in one motion, so you land on the same square bow in a fraction of the time. Speed method, same destination."
+          },
+          {
+            "t": "it's a third kind of knot that holds better than square or granny",
+            "why": "Ian Fieggen's method produces the ordinary square bow. The speed comes from forming both loops simultaneously, and the holding comes from the same opposed crossings as any square knot."
+          },
+          {
+            "t": "it adds a tuck that pins the bow so it can't work loose",
+            "why": "The tuck belongs to his Secure variant, an add-on for laces that still wander. The base Ian knot is pure speed: two simultaneous loops, one motion, same square bow at the end."
+          },
+          {
+            "t": "it makes handedness irrelevant, you get a square bow either way",
+            "why": "Handedness still rules. Tied with the right handedness it gives the square bow, which means the wrong handedness gives you a very fast granny. The crossings still decide whether it holds."
+          }
+        ]
+      },
+      {
+        "q": "Last one. Bunny ears, the both-loops-first method from childhood. Does it keep you clear of the granny trap?",
+        "options": [
+          {
+            "t": "no, tying the ears with the same handedness still makes a granny",
+            "ok": true,
+            "why": "Correct. Bunny ears reaches the same two crossings by another route, and the knot only cares about their handedness. Match the starting cross and it slips like any granny bow."
+          },
+          {
+            "t": "yes, making both loops first sidesteps the handedness problem",
+            "why": "Bunny ears ties the two ears together like ropes, so the trap is waiting there too: same handedness as the starting cross and you have a granny. The chat calls it just as prone."
+          },
+          {
+            "t": "yes, bunny ears holds by the friction of the loops instead",
+            "why": "Bunny ears ends at the exact same knot as the standard bow, two crossings and all. What holds any of them is opposed crossings nipping each other flat, and the demo shows exactly that."
+          },
+          {
+            "t": "no, but only because bunny ears is the weakest method",
+            "why": "Method quality is a distraction. Bunny ears, the standard bow, and the Ian knot can each produce a square or a granny. Whether the two crossings oppose decides the outcome, whichever hands got you there."
+          }
+        ]
+      }
+    ]
+  },
   "messages": [
     {
       "who": "you",

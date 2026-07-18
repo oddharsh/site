@@ -17,6 +17,7 @@
     "photos:check": "node holding/scripts/check-photo-pipeline.mjs",
     "perf-budget": "node perf-budget.mjs",
     "check-wrangler": "node scripts/check-wrangler.mjs",
+    "pages:check": "node scripts/check-page-contracts.mjs",
     "test": "node --test contract-tests.mjs"
   },
   "devDependencies": {

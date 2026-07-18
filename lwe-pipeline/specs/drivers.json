@@ -6,6 +6,109 @@
   "composeNote": "This is a recorded conversation. Drag the frequency in the demo above.",
   "hasAsk": true,
   "disclosure": "<b>Starter draft.</b> The mechanism is standard driver physics; the demo is a real phase-lag model (a cone driven at one point against a film driven everywhere), not a measurement. Background paraphrased from <a href=\"https://en.wikipedia.org/wiki/Planar_magnetic_loudspeaker\" rel=\"external\">Wikipedia</a> and the usual headphone references.",
+  "editorial": {
+    "reader": "A curious reader who knows the surface term but wants the mechanism.",
+    "problem": "The reader can recognize drivers vocabulary without being able to predict what its mechanism will do.",
+    "thesis": "The page should leave the reader able to explain drivers in plain language and predict its behavior.",
+    "evidence": [
+      "The conversation cites its sources and the demos make the mechanism visible.",
+      "The understanding check names common misconceptions and explains every answer."
+    ],
+    "uncertainty": "The demos teach the model; they do not replace a measurement or a full treatment."
+  },
+  "understanding": {
+    "intro": "Before you go, a quick check that the mechanism stuck. 4 questions, no stakes. Pick the reply you would actually send.",
+    "questions": [
+      {
+        "q": "Start at the top. A dynamic driver and a planar driver both turn current into force on a diaphragm. What is the actual difference between them?",
+        "options": [
+          {
+            "t": "where the force lands. a dynamic pushes at one point, the coil, and a planar pushes across the whole film",
+            "ok": true,
+            "why": "Right. The dynamic glues a voice coil to the cone and pushes there; the planar etches the conductor across the film so the force lands evenly over the whole surface. Everything else on this page follows from that."
+          },
+          {
+            "t": "the magnets. planars use big magnet arrays and dynamics use an electromagnet coil instead",
+            "why": "Both use both. The dynamic coil sits in a magnet gap, and the planar film hangs between magnet arrays. Scroll back to the first reply: the split is where the force lands, and the rest is downstream of that."
+          },
+          {
+            "t": "the shapes. a cone focuses the sound outward and a flat film spreads it out evenly",
+            "why": "The shape is a side effect. The cone needs its shape to stay stiff under a point push, and the film can be flat because the push is spread out. Point drive versus distributed drive is the load-bearing difference."
+          },
+          {
+            "t": "the stiffness. the planar film is more rigid, so it tracks the signal more accurately",
+            "why": "Backwards. The planar film is famously thin and floppy, and it gets away with that because it is driven everywhere at once, so it never needs to be stiff enough to resist a point load."
+          }
+        ]
+      },
+      {
+        "q": "You dragged the frequency slider in the demo. What happens to the dynamic cone as the frequency climbs?",
+        "options": [
+          {
+            "t": "the rim starts lagging the center, since the push has to travel outward from the coil",
+            "ok": true,
+            "why": "That is the whole demo. The motion propagates out from the coil as a bending wave, the phase lag grows with frequency, and past a point the surface stops moving as one piece. It breaks into modes."
+          },
+          {
+            "t": "the whole cone just moves less, since it can't keep up with the faster signal",
+            "why": "Watch the top panel again at high frequency: the cone still moves plenty. The failure is phase, with different parts of the surface falling out of step, and the ripples you see are exactly that lag."
+          },
+          {
+            "t": "both surfaces start rippling, the planar sheet just ripples a little less",
+            "why": "Drag the slider and watch the bottom panel: the film stays flat at every frequency, because every point gets pushed at the same instant. There is no wave that has to travel across it."
+          },
+          {
+            "t": "it was breaking up at low frequency too, you just couldn't see it yet",
+            "why": "At low frequency the wavelength inside the cone is long compared to the cone itself, so the whole thing moves as one piston either way. Breakup is specifically a high-frequency problem."
+          }
+        ]
+      },
+      {
+        "q": "When the cone breaks up like that, what does it do to what you actually hear?",
+        "options": [
+          {
+            "t": "it radiates sound that wasn't in the signal, showing up as treble resonances and distortion",
+            "ok": true,
+            "why": "Exactly. Regions moving out of step each radiate on their own, and the sum contains output the recording never asked for. That is why breakup lands as resonance peaks and extra distortion up high."
+          },
+          {
+            "t": "nothing much, the little ripples average out by the time the sound reaches your ear",
+            "why": "They do not average out. Each out-of-step region radiates on its own, and the extra energy sits at frequencies the signal never contained, which is the definition of distortion."
+          },
+          {
+            "t": "it mostly wrecks the bass, since that's where the cone has to move the furthest",
+            "why": "Bass is where the cone is happiest: at low frequencies it moves as one piston. Scroll back two replies, the trouble starts high, where the wavelength inside the diaphragm gets short."
+          },
+          {
+            "t": "the volume just drops, since the out-of-step parts cancel each other out",
+            "why": "Some cancellation happens, but the audible signature is added coloration: resonance peaks and distortion in the treble. The extra output is the problem, because it was never in the signal."
+          }
+        ]
+      },
+      {
+        "q": "Last one. If spreading the drive keeps the treble cleaner, why is nearly every headphone in the world still dynamic?",
+        "options": [
+          {
+            "t": "planars pay in weight, size, and amp power, and dynamics do easy bass cheaply off a phone",
+            "ok": true,
+            "why": "That is the tradeoff. Planars buy low treble distortion with heavy magnet arrays, an inefficient diaphragm, and amp hunger. Dynamics move a lot of air cheaply and efficiently, which is what most listeners need."
+          },
+          {
+            "t": "mostly patents and habit, the industry just hasn't moved over to planars yet",
+            "why": "The chat gave physical reasons rather than inertia: heavy magnet arrays, an inefficient flat diaphragm, and hunger for amp power. Those costs are real, so dynamics stay the sensible default."
+          },
+          {
+            "t": "planars can't really do deep bass, so dynamics stick around to cover the low end",
+            "why": "The page says deep bass is simple for dynamics, which is a weaker claim than bass being impossible for planars. The planar penalty is weight, size, and efficiency; the low octaves are still reachable."
+          },
+          {
+            "t": "planars do always sound better, dynamics just win because they're the cheap option",
+            "why": "The closing exchange cuts against that: the mechanism only sets tendencies. A well-engineered dynamic can beat a sloppy planar, because tuning and build decide the final result."
+          }
+        ]
+      }
+    ]
+  },
   "messages": [
     {
       "who": "you",

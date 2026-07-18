@@ -57,6 +57,29 @@ documented in [UNDERSTANDING-REVIEW.md](UNDERSTANDING-REVIEW.md): reconstruct
 the model, name a falsifier, inspect evidence, and leave residual uncertainty
 visible. The prompt is advisory; it is not a prose-quality or AI-scoring gate.
 
+## Author a new LWE or Garage explainer
+
+The page generators carry the current editorial contract forward. LWE authors
+write `lwe-pipeline/specs/<id>.json`; Garage authors write
+`garage-pipeline/specs/<id>.json` and register the page in
+`garage-pipeline/pages.json`. Both specs require a reader/problem/thesis/
+evidence/uncertainty card and a three-to-seven-question understanding check.
+
+```bash
+node lwe-pipeline/generate.mjs page <id>
+node lwe-pipeline/generate.mjs wire
+node garage-pipeline/generate.mjs page <id>
+node garage-pipeline/generate.mjs wire
+npm run pages:check
+```
+
+The shared contract lives in
+[`content-pipeline/page-contract.mjs`](content-pipeline/page-contract.mjs).
+It emits the shared quiz payload and runtime, checks the LRS/style guardrails,
+and keeps the understanding check diagnostic rather than a gate. Read the
+[LWE authoring guide](lwe-pipeline/README.md) and
+[Garage authoring guide](garage-pipeline/README.md) before starting a page.
+
 Key facts (don't hardcode these elsewhere, they drift):
 - RN_KV namespace id: `3cb8a107c58e47dc9244e75b33401f36`
 - R2 bucket: `aadhar-photos` (SOOC originals + full-res JPGs)

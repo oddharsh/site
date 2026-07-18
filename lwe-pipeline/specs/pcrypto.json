@@ -6,6 +6,131 @@
   "composeNote": "This is a recorded conversation. Hash a secret in the demo above.",
   "hasAsk": true,
   "disclosure": "<b>How to read this:</b> a first-pass walkthrough of <a href=\"https://otavi.ooo/files/programmable-cryptography.pdf\" rel=\"external\">\"Programmable Cryptography: Four Easy Pieces\"</a> by Evan Chen, Brian Lawrence, and Yan X Zhang (0xPARC, 2025), summarized under fair use with credit. The learner lines and pacing are AI; the SHA-256 demo hashes for real.",
+  "editorial": {
+    "reader": "A curious reader who knows the surface term but wants the mechanism.",
+    "problem": "The reader can recognize pcrypto vocabulary without being able to predict what its mechanism will do.",
+    "thesis": "The page should leave the reader able to explain pcrypto in plain language and predict its behavior.",
+    "evidence": [
+      "The conversation cites its sources and the demos make the mechanism visible.",
+      "The understanding check names common misconceptions and explains every answer."
+    ],
+    "uncertainty": "The demos teach the model; they do not replace a measurement or a full treatment."
+  },
+  "understanding": {
+    "intro": "Before you close the window: pop quiz, 5 questions, no grades. The demo up there keeps hashing if you need it.",
+    "questions": [
+      {
+        "q": "Start with the word itself. What separates second-generation, programmable cryptography from the first generation?",
+        "options": [
+          {
+            "t": "gen 1 hand-built one protocol per problem, gen 2 gives primitives you can program for any function",
+            "ok": true,
+            "why": "Right. RSA signs a message and the millionaire problem got its own bespoke protocol; second-generation primitives take any function you can write as code, and you compile the problem you have."
+          },
+          {
+            "t": "gen 2 runs on blockchains, that's where the programmable part comes in",
+            "why": "Blockchains arrive at the end of the story, as the demand that pulled the practical work forward. The definition lives up top: primitives you can program for any function, no chain required."
+          },
+          {
+            "t": "gen 1 was hardware, gen 2 does the same jobs in software",
+            "why": "The alarm-clock-to-smartphone line is an analogy about generality. Both generations are software; the jump it describes is from single-purpose tools to a general-purpose one."
+          },
+          {
+            "t": "gen 2 crypto can be patched and upgraded after it ships",
+            "why": "Programmable here means the primitive takes an arbitrary function as its input, the way a computer takes a program. It promises nothing about updating algorithms already deployed."
+          }
+        ]
+      },
+      {
+        "q": "Two millionaires settle who earns more with the 2PC protocol from this chat. What does each of them actually get to see?",
+        "options": [
+          {
+            "t": "both learn who won and nothing else, via a circuit one side garbles and the other evaluates blind",
+            "ok": true,
+            "why": "That's the 2PC promise: each party keeps their input and both get only F(x1, x2). The garbled circuit plus oblivious transfer is the engine, and past two parties this grows into MPC."
+          },
+          {
+            "t": "a trusted referee collects both incomes and announces the winner",
+            "why": "That's exactly the setup 2PC deletes. Nobody ever holds both inputs: the boolean circuit gets evaluated gate by gate on encrypted values, so there's no middleman to trust or to leak."
+          },
+          {
+            "t": "the winner gets to learn the loser's income, the loser learns nothing",
+            "why": "Neither side learns the other's number, whichever way it goes. The output is the single bit of who earns more, and both parties see exactly that and no more."
+          },
+          {
+            "t": "they swap encrypted incomes and each decrypts the other's copy locally",
+            "why": "If either side could decrypt the other's income the privacy would be gone. The trick is computing on values neither party can open alone: one garbles the circuit, the other evaluates it blind."
+          }
+        ]
+      },
+      {
+        "q": "The demo above hashes your secret M and prints sha256(M) live. What would a real SNARK add on top of what the demo already does?",
+        "options": [
+          {
+            "t": "a proof that i know some M behind that exact digest, without ever showing M",
+            "ok": true,
+            "why": "That's the statement shape from the chat: I know X such that F(X, Y) = Z, with F and the digest public and only the witness hidden. The demo gives you the public half; the SNARK adds the proof of knowledge."
+          },
+          {
+            "t": "it would encrypt the digest so nobody else can read the hash",
+            "why": "The digest stays public on purpose: it's the reference a verifier checks the proof against. Secrecy covers only the witness M, the thing you typed into the box."
+          },
+          {
+            "t": "it would let the verifier run sha256 backwards and recover M",
+            "why": "Nobody recovers M; that would defeat the exercise. The verifier ends up convinced you know a preimage while learning nothing about it, which is the whole trick the demo is teeing up."
+          },
+          {
+            "t": "it would swap in a faster hash so the proof is cheap to make",
+            "why": "F stays whatever the statement needs, here SHA-256 encoded as equations. And proving stays expensive: the chat's number is millions of times the cost of just running the computation."
+          }
+        ]
+      },
+      {
+        "q": "Suppose your records sit on a server fully encrypted, FHE-style, and the server can read none of them. What is left for ORAM to hide?",
+        "options": [
+          {
+            "t": "which records i touch, how often, and which ones together",
+            "ok": true,
+            "why": "The access pattern leaks even when every byte is ciphertext. ORAM scrambles each request into a batch of reads and writes so the server can't tell which one you actually wanted."
+          },
+          {
+            "t": "the key, in case the server tries to brute-force the ciphertext",
+            "why": "ORAM assumes the encryption already holds. The leak it plugs is behavioral: the server watching which ciphertexts you ask for, how often, and in what company."
+          },
+          {
+            "t": "my ip address, so the server can't tell who's connecting",
+            "why": "Hiding who connects is a network-layer job for tools like Tor. ORAM's server knows exactly who you are; what it can't learn is which of your records a request was really for."
+          },
+          {
+            "t": "nothing much, it's a caching layer that speeds up encrypted reads",
+            "why": "The RAM in the name fools people. ORAM spends extra reads and writes per request to bury the real one, so it pays performance to buy privacy."
+          }
+        ]
+      },
+      {
+        "q": "Last one. If this toolkit can compute on secrets and prove any statement you can encode, why did it spend a decade as mostly theory?",
+        "options": [
+          {
+            "t": "the overhead, proving a computation can cost millions of times just running it",
+            "ok": true,
+            "why": "The primer is blunt about that number. It stayed mostly theory until blockchains and other decentralized systems demanded it hard enough to pull the practical work forward."
+          },
+          {
+            "t": "it needs special trusted chips that most servers didn't have yet",
+            "why": "Backwards: this toolkit exists so you never have to trust a chip. Every guarantee here comes from protocols and math; betting on trusted hardware is the TEE, the far end of the spectrum."
+          },
+          {
+            "t": "the math was never proven secure so nobody dared to deploy it",
+            "why": "The theory was the mature half; constructions existed for years. Implementation is what lagged, because the costs were brutal until real demand showed up."
+          },
+          {
+            "t": "encoding programs as equations stayed an unsolved research problem",
+            "why": "Turning F into equations is standard machinery, it's how the SNARK statement gets built at all. The bottleneck was the sheer cost of proving, and demand is what finally moved it."
+          }
+        ]
+      }
+    ]
+  },
   "messages": [
     { "who": "you", "time": "22:30", "html": "<p>people keep saying \"programmable cryptography\" like it's one thing. RSA is cryptography, MPC is cryptography. what's the second word doing?</p>" },
     { "who": "bot", "time": "22:30", "html": "<p>0xPARC coined it for the <b>second generation</b> of crypto, roughly the last 15 years. First-generation crypto hand-builds a protocol per problem: RSA signs a message, and Yao's millionaire problem gets its own bespoke protocol to compare two incomes. Second-generation crypto hands you primitives you can <em>program</em> for any function you can write as code.</p>", "cite": { "url": "https://otavi.ooo/files/programmable-cryptography.pdf", "title": "Programmable Cryptography: Four Easy Pieces (0xPARC, 2025)" } },

@@ -90,6 +90,8 @@
     { label: "lwe · drivers", path: "/lwe/drivers", hint: "headphone drivers: planar magnetic vs dynamic, force and breakup" },
     { label: "lwe · knots", path: "/lwe/knots", hint: "knots: granny vs square, the Ian knot, why laces come undone" },
 // generated:lwe-pages:end
+    // generated:garage-pages:start
+    // generated:garage-pages:end
     { label: "garage · chunks", path: "/garage/chunks", hint: "content-addressed chunking" },
     { label: "garage · cloudflare", path: "/garage/cloudflare", hint: "free Cloudflare features" },
     { label: "garage · encoding", path: "/garage/encoding", hint: "thumbnail encoding study" },
