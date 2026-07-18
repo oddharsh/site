@@ -16,7 +16,8 @@
 
 import { createHash } from "node:crypto";
 import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
-import { transform } from "esbuild";
+import { transform as transformCss } from "lightningcss";
+import { minifySync } from "oxc-minify";
 
 const OUT = ".build";
 
@@ -82,8 +83,8 @@ async function checkInvariants() {
   // releases (the .window box-shadow + the whole .xp-button base rule dropped
   // from the CSSOM). Transform as CSS and block on any warning.
   try {
-    const res = await transform(luna, { loader: "css", minify: false });
-    for (const w of res.warnings) hard.push(`luna.css CSS parse warning: ${w.text}${w.location ? ` (line ${w.location.line})` : ""}`);
+    const res = transformCss({ filename: "holding/luna.css", code: Buffer.from(luna), minify: false });
+    for (const w of res.warnings) hard.push(`luna.css CSS parse warning: ${w.message}${w.loc ? ` (line ${w.loc.line})` : ""}`);
   } catch (e) {
     hard.push(`luna.css failed to parse as CSS: ${e.message.split("\n")[0]}`);
   }
@@ -176,12 +177,50 @@ await mkdir(OUT, { recursive: true });
 // build output never needs its own config. (Local dev uses wrangler.dev.jsonc.)
 await cp("holding", `${OUT}/holding`, { recursive: true });
 
+const minifyJavaScript = (filename, sourceText) => {
+  const result = minifySync(filename, sourceText, {
+    module: false,
+    compress: {
+      // The site deliberately targets modern browsers. This preserves modern
+      // syntax while enabling Oxc's full ESNext compression set.
+      target: "esnext",
+      dropDebugger: true,
+      unused: true,
+      joinVars: true,
+      sequences: true,
+      treeshake: {
+        annotations: true,
+        propertyReadSideEffects: "always",
+        propertyWriteSideEffects: true,
+        unknownGlobalSideEffects: true,
+        invalidImportSideEffects: true,
+      },
+    },
+    // Keep top-level names stable: several shell files expose globals that
+    // other site code discovers by name.
+    mangle: { toplevel: false },
+    codegen: { removeWhitespace: true, legalComments: "none" },
+  });
+  if (result.errors.length) {
+    throw new Error(`${filename}: Oxc parse/minify failed: ${result.errors.map((e) => e.message).join("; ")}`);
+  }
+  return result.code;
+};
+
+const minifyCss = (filename, sourceText) => {
+  const result = transformCss({ filename, code: Buffer.from(sourceText), minify: true });
+  if (result.warnings.length) {
+    throw new Error(`${filename}: Lightning CSS minify emitted warnings: ${result.warnings.map((w) => w.message).join("; ")}`);
+  }
+  return Buffer.from(result.code).toString();
+};
+
 // 2) shells: deploy the readable original as <name>.src.js, minify the served file
 for (const [file, srcPath, marker] of SHELLS) {
   const src = await readFile(`holding/${file}`, "utf8");
   await writeFile(`${OUT}/holding/${srcPath.slice(1)}`, src);
 
-  const { code } = await transform(src, { minify: true, target: "es2020" });
+  const code = minifyJavaScript(`holding/${file}`, src);
   const banner = `/*! minified at deploy - readable source: ${srcPath} */\n`;
   const min = banner + code;
 
@@ -204,8 +243,7 @@ for (const [file, srcPath, marker] of SHELLS) {
 {
   const src = await readFile("holding/luna.css", "utf8");
   await writeFile(`${OUT}/holding/luna.src.css`, src);
-  const { code, warnings } = await transform(src, { loader: "css", minify: true });
-  if (warnings.length) throw new Error(`luna.css minify emitted warnings: ${warnings.map(w => w.text).join("; ")}`);
+  const code = minifyCss("holding/luna.css", src);
   const out = `/*! minified at deploy - readable source: /luna.src.css */\n` + code;
   await writeFile(`${OUT}/holding/luna.css`, out);
   console.log(`luna.css: ${src.length} -> ${out.length} bytes (+ /luna.src.css)`);
@@ -228,17 +266,22 @@ for (const [file, srcPath, marker] of SHELLS) {
     for (const m of matches) {
       const cssLiteral = m[1];
       if (cssLiteral.includes("${")) throw new Error(`${rel}: a /*min*/ CSS literal carries interpolation`);
-      const { code, warnings } = await transform(cssLiteral, { loader: "css", minify: true });
-      if (warnings.length) throw new Error(`${rel}: /*min*/ CSS minify warning: ${warnings.map((w) => w.text).join("; ")}`);
-      const min = code.replace(/\n+$/, "");
+      const min = minifyCss(`holding/_worker.js/${rel}`, cssLiteral).replace(/\n+$/, "");
       out += src.slice(last, m.index) + "`" + min + "`";
       last = m.index + m[0].length;
       saved += m[0].length - (min.length + 2);
       litCount++;
     }
     out += src.slice(last);
-    try { await transform(out, { loader: "js", minify: false }); }
-    catch (e) { throw new Error(`${rel}: minifying CSS broke JS parse: ${e.message.split("\n")[0]}`); }
+    const parsed = minifySync(`holding/_worker.js/${rel}`, out, {
+      module: false,
+      compress: false,
+      mangle: false,
+      codegen: { removeWhitespace: false, legalComments: "inline" },
+    });
+    if (parsed.errors.length) {
+      throw new Error(`${rel}: minifying CSS broke JS parse: ${parsed.errors.map((e) => e.message).join("; ")}`);
+    }
     await writeFile(path, out);
     fileCount++;
   }

@@ -2,9 +2,9 @@
 // perf-budget.mjs — the pre-deploy performance budget gate for aadhar.sh.
 //
 // Deterministic, buildtime checks that catch a perf regression BEFORE it ships:
-//   1. luna.css parses clean (no esbuild CSS warnings) — the v143-corruption
+//   1. luna.css parses clean (no Lightning CSS warnings) — the v143-corruption
 //      tripwire, so a broken stylesheet can never reach a deploy.
-//   2. the build output is actually minified: the four shells + luna.css each
+//   2. the build output is actually minified: the five shells + luna.css each
 //      carry the "minified at deploy" banner, sit under their byte budget, and
 //      ship a readable twin (/<name>.src.js / /luna.src.css).
 //   3. the bundled Worker stays under the gzip budget (via wrangler --dry-run,
@@ -21,7 +21,7 @@
 
 import { execFileSync } from "node:child_process";
 import { readFile, stat } from "node:fs/promises";
-import { transform } from "esbuild";
+import { transform as transformCss } from "lightningcss";
 
 // byte ceilings for the minified build output (uncompressed), and the worker
 // bundle's gzip ceiling. Bump these deliberately, with a reason, when real
@@ -60,8 +60,8 @@ console.log("perf-budget: aadhar.sh pre-deploy gate\n");
 // 1) luna.css parses clean ---------------------------------------------------
 try {
   const css = await readFile("holding/luna.css", "utf8");
-  const { warnings } = await transform(css, { loader: "css", minify: false });
-  if (warnings.length) bad(`luna.css: ${warnings.length} CSS parse warning(s): ${warnings.map((w) => w.text).join("; ")}`);
+  const { warnings } = transformCss({ filename: "holding/luna.css", code: Buffer.from(css), minify: false });
+  if (warnings.length) bad(`luna.css: ${warnings.length} CSS parse warning(s): ${warnings.map((w) => w.message).join("; ")}`);
   else ok("luna.css parses clean (0 warnings)");
 } catch (e) {
   bad(`luna.css: could not read/parse (${e.message})`);
