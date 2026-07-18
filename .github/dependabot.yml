@@ -1,8 +1,9 @@
 version: 2
 updates:
-  # The root npm workspace owns the shared deploy toolchain and all workspace
-  # dependency resolution. Keep one update PR open at a time so its release
-  # notes and site-leverage review stay legible.
+  # The root npm workspace owns the shared deploy toolchain (including Wrangler,
+  # Oxc Minify, and Lightning CSS) and all workspace dependency resolution.
+  # Keep one update PR open at a time so its release notes and site-leverage
+  # review stay legible.
   - package-ecosystem: npm
     directory: "/"
     schedule:
