@@ -20,7 +20,7 @@
     "test": "node --test contract-tests.mjs"
   },
   "devDependencies": {
-    "esbuild": "^0.25.0",
+    "esbuild": "^0.28.1",
     "wrangler": "4.112.0"
   }
 }
