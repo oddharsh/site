@@ -2,7 +2,7 @@
 //
 // Authoring stays buildless: everything in holding/ is committed readable and is
 // the source of truth. This script stages a copy under .build/ and minifies
-// exactly five shell scripts (the assets pages load); index.html, the
+// exactly six client scripts (the assets pages load); index.html, the
 // garage/ and lwe/ HTML, images, _headers, and the worker modules ship
 // byte-identical to git. Each minified shell opens with a pointer to its
 // readable twin (/<name>.src.js, deployed alongside), because View Source is
@@ -153,7 +153,7 @@ async function checkInvariants() {
   console.log(`invariants ok: ${routeKeys.length + prefixProbes.length} routes mirrored (${prefixProbes.length} prefix), CSP style-src, blink-fix, generator, geometry, ${skillsChecked} skill digest${skillsChecked === 1 ? "" : "s"}${warn.length ? " (with warnings above)" : ""}`);
 }
 
-// the shells to minify: [file, banner pointer, tripwire the minified output MUST contain]
+// the client scripts to minify: [file, banner pointer, tripwire the minified output MUST contain]
 // sw.js left this list in v136: it's a ~15-line unregister stub now, shipped
 // readable and verbatim (no version string, no twin, nothing to tripwire).
 const SHELLS = [
@@ -162,6 +162,7 @@ const SHELLS = [
   ["lens.js",    "/lens.src.js",    "replaceState"],   // verify-routes.mjs marker
   ["lens-browser.js", "/lens-browser.src.js", "LensBrowser"],
   ["quiz.js",    "/quiz.src.js",    "luq-data"],       // the understanding-check widget
+  ["tooltip.js", "/tooltip.src.js", "function start"],
 ];
 
 // fail fast on a broken invariant before doing any staging work
