@@ -6,19 +6,22 @@
 #      <stem>-<SQ_SM>.avif — PRE-CROPPED CENTER SQUARES (what the grid shows:
 #      aspect-ratio:1 + object-fit:cover), metadata-stripped. mirrors
 #      reencode-thumbnails.sh exactly (keep the two encode paths in sync).
-#   2. uploads a BROWSER-RENDERABLE JPG to R2 as aadhar-photos/<stem>.jpg —
-#      this is what /images/full/<stem>.jpg returns on click, and the shareable
-#      R2 copy. for a JPG-source photo that's the original; for a HEIF source
-#      it's the q95 export from step 3.
-#   3. if the original is HEIF (.hif/.heic/.heif), generates a visually-lossless
-#      (formatOptions 95, full-res, EXIF-preserved) JPG export and uploads THAT.
+#   2. uploads a BROWSER-RENDERABLE full-resolution JPG to R2 as
+#      aadhar-photos/<stem>.jpg — this is what /images/full/<stem>.jpg returns
+#      on click, and the shareable R2 copy. for a JPG-source photo that's the
+#      original; for a HEIF source it's the maximum-quality q100 export from
+#      step 3.
+#   3. if the original is HEIF (.hif/.heic/.heif), generates a maximum-quality
+#      (formatOptions 100, full-res, EXIF-preserved) JPG export and uploads THAT.
 #      the .HIF original is NOT uploaded — it stays local-only (your drive + SSD
 #      are the archive). Chrome/Firefox can't render HEIF anyway, and R2 is for
 #      serving/sharing, not cold storage of originals.
 #
 # post-processing:
 #   4. regenerates holding/images/metadata.json + per-stem images/meta/<stem>.json
-#      (EXIF for the tooltip; histograms are computed client-side, not stored)
+#      (EXIF for the tooltip) and bakes the 64-bin RGB+luma histograms into
+#      meta.hist via photo-histograms.py — the tooltip renders the bars from
+#      that field, and the metadata regen drops it, so the bake runs right after
 #   5. busts the manifest:images KV key so the worker re-derives from R2
 #
 # safe to re-run. skips thumbnail generation when all three thumb files are
@@ -203,11 +206,11 @@ while IFS= read -r f; do
     continue
   fi
   out="$EXPORTS/${stem}.jpg"
-  # formatOptions 95 = visually-lossless JPEG (full-res, EXIF + orientation
-  # preserved) at ~half the bytes of q100. this export IS the R2 share/click copy
-  # — the .HIF original is NOT uploaded (stays on your drive/SSD), so it's
-  # share-worthy without being needlessly huge.
-  if sips -s format jpeg --setProperty formatOptions 95 "$f" --out "$out" >/dev/null 2>&1; then
+  # formatOptions 100 = maximum-quality JPEG (full-res, EXIF + orientation
+  # preserved). this export IS the R2 share/click copy — the .HIF original is
+  # NOT uploaded (stays on your drive/SSD); HEIF-to-JPEG is necessarily a
+  # transcode, but this preserves the maximum quality sips exposes.
+  if sips -s format jpeg --setProperty formatOptions 100 "$f" --out "$out" >/dev/null 2>&1; then
     H_OK=$((H_OK+1)); printf "."
   else
     H_FAIL=$((H_FAIL+1)); printf "✗"
@@ -283,6 +286,20 @@ if command -v exiftool >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
 else
   echo "  exiftool or jq missing — skipping metadata regen"
 fi
+
+# bake 64-bin RGB+luma histograms into per-stem meta. the photo tooltip renders
+# the histogram from meta.hist (index.html renderHistogramSvg), and
+# extract-photo-metadata.sh above does NOT emit hist — so this MUST run after it,
+# or every incremental add strips the bars off all existing photos. computed from
+# the shipped /i/ thumbnails via hashes.json; idempotent (unchanged thumbs re-bake
+# byte-identically), so running over the whole library each add is a no-op diff.
+if command -v python3 >/dev/null 2>&1 && python3 -c "import PIL" >/dev/null 2>&1; then
+  python3 "$SCRIPT_DIR/photo-histograms.py" 2>&1 | tail -1
+else
+  echo "  Pillow (python3 PIL) missing — install with 'python3 -m pip install -r holding/scripts/requirements.txt'"
+fi
+
+node "$PROJECT_DIR/holding/scripts/check-photo-pipeline.mjs"
 
 wrangler kv key delete --namespace-id="$NS" "manifest:images"        --remote >/dev/null 2>&1 || true
 wrangler kv key delete --namespace-id="$NS" "manifest:images:fresh"  --remote >/dev/null 2>&1 || true

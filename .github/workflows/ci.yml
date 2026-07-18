@@ -38,6 +38,9 @@ jobs:
       - name: Build homepage
         run: npm run build
 
+      - name: Check photo asset invariants
+        run: npm run photos:check
+
       - name: Enforce homepage performance budget
         run: npm run perf-budget
 

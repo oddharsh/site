@@ -1,7 +1,8 @@
 version: 2
 updates:
-  # Wrangler is a deploy tool for every Worker in this npm workspace. Keep
-  # its one exact root pin current and let the normal CI gate validate it.
+  # The root npm workspace owns the shared deploy toolchain and all workspace
+  # dependency resolution. Keep one update PR open at a time so its release
+  # notes and site-leverage review stay legible.
   - package-ecosystem: npm
     directory: "/"
     schedule:
@@ -10,11 +11,41 @@ updates:
       time: "09:17"
       timezone: America/New_York
     open-pull-requests-limit: 1
-    allow:
-      - dependency-name: wrangler
     labels:
       - dependencies
-      - wrangler
+    commit-message:
+      prefix: chore
+      include: scope
+
+  # Keep the action toolchain current too; its PRs get the same review note.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:17"
+      timezone: America/New_York
+    open-pull-requests-limit: 1
+    labels:
+      - dependencies
+      - github-actions
+    commit-message:
+      prefix: chore
+      include: scope
+
+  # The histogram bake is a small, reproducible Python toolchain. Keep its
+  # decoder pin current and send it through the same release-note review.
+  - package-ecosystem: pip
+    directory: "/holding/scripts"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:17"
+      timezone: America/New_York
+    open-pull-requests-limit: 1
+    labels:
+      - dependencies
+      - python
     commit-message:
       prefix: chore
       include: scope

@@ -129,6 +129,7 @@ this as the regression tripwire; keep it green on every future change.
 
 ```bash
 brew install exiftool jq mozjpeg libavif cmake ninja   # mozjpeg = jpegtran; libavif = avifenc (optional, sips falls back)
+python3 -m pip install -r holding/scripts/requirements.txt  # Pillow for histogram baking
 ./holding/scripts/build-jpegli.sh                      # builds cjpegli -> ~/.local/bin (Google's JPEG encoder)
 wrangler login                                         # Cloudflare auth (deploys + KV + R2 all use it)
 ```
@@ -143,9 +144,14 @@ wrangler login                                         # Cloudflare auth (deploy
 # regenerate metadata.json (calls extract-photo-metadata.sh) -> bust the manifest KV keys.
 ./holding/scripts/add-photos.sh "/path/to/photo.HIF" [more files...]
 # then it prints the deploy line; run it:
-wrangler deploy   # from the repo root; deploys the aadhar-sh Worker (holding/ as static assets)
+npm run deploy   # local fallback only; normal production is merge + CI promotion
 ```
-- Accepts JPG/PNG/HEIF/HIF. For HEIF it also uploads a visually-lossless JPG export as the `/images/full/<stem>.jpg` click target.
+- Accepts JPG/PNG/HEIF/HIF. JPGs are uploaded as supplied; HEIF/HIF sources
+  remain local archives and also produce a full-resolution maximum-quality
+  q100 JPG export as the `/images/full/<stem>.jpg` click target.
+- Emits the 600px JPG fallback, 600px AVIF, and 400px mobile AVIF tiers;
+  regenerates EXIF metadata; bakes the four 64-bin RGB/luminance histograms;
+  and runs `npm run photos:check` before busting the manifest cache.
 - It busts `manifest:images`, `idx:images`, `idx:imagesfull` so the worker re-derives the grid from R2 on the next request.
 - A thumbnail can't go stale anymore: its URL is its bytes (`/i/<stem>.<hash8>`). If one looks wrong, re-run `hash-thumbnails.sh` and bust the manifest (value + `:fresh`); a changed file gets a new URL automatically.
 
@@ -241,14 +247,15 @@ curl -s "https://aadhar.sh/images/manifest.json" | jq length          # photo co
 
 | script | what it does |
 |---|---|
-| `add-photos.sh` | Full pipeline for new photos: resize, EXIF-rotate, encode AVIF+JPG center-square thumbs, upload originals to R2, regenerate metadata, bust the manifest KV keys. Prints the deploy line. |
+| `add-photos.sh` | Full pipeline for new photos: resize, EXIF-rotate, encode AVIF+JPG center-square thumbs, upload the full-resolution browser copy to R2, regenerate metadata, bake histograms, validate the artifact graph, and bust the manifest KV keys. |
+| `check-photo-pipeline.mjs` | CI-safe invariant check: every metadata stem has all three hashed tiers, per-photo metadata, and four 64-bin histogram channels, with no orphaned pixel files. |
 | `extract-photo-metadata.sh` | Read EXIF from the SOOC folder, emit `images/metadata.json` + per-photo `images/meta/<stem>.json`. Pulls the Fuji recipe fields too. Requires exiftool + jq. |
 | `reencode-thumbnails.sh` | Re-encode every published grid thumb from the source folder at a new resolution (pre-cropped squares, two tiers). Pair with a THUMB_VERSION bump. |
 | `add-car-photo.sh` | One resto-mod reference photo -> `cars/<stem>.{avif,jpg}` for the homepage car tooltips. No EXIF, no R2. |
 | `build-jpegli.sh` | Build Google's `cjpegli`/`djpegli` from source to `~/.local/bin`. Idempotent; re-run to update. ~90s first build. Requires cmake + ninja + clang. |
 | `gen-alt-text.py` | AI alt text for grid photos via the Workers-AI caption endpoint -> `images/alt.json`. Resumable. |
 | `gen-encoding-samples.sh` | Regenerate the color sample set for `/garage/encoding` through every encoder; prints byte counts. |
-| `photo-histograms.py` | **Vestigial.** Its header says it feeds `metadata.json`, but histograms are computed client-side in the tooltip now. Kept on disk, not wired into anything. Safe to ignore (or delete).
+| `photo-histograms.py` | Bakes four 64-bin RGB/luminance histogram channels into each per-photo `images/meta/<stem>.json` from the shipped hashed JPG tier. Requires the pinned Pillow dependency in `holding/scripts/requirements.txt` and is called by both metadata extraction and `add-photos.sh`. |
 
 ---
 

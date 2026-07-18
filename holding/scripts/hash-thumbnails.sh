@@ -14,6 +14,11 @@
 #
 # Idempotent: re-running only adds/refreshes entries whose bytes changed
 # (a changed file gets a NEW hashed name; the old one is left for git rm).
+# The map is MERGED into the existing hashes.json, never rebuilt from scratch:
+# an incremental add only stages the NEW stems in holding/images/ (the earlier
+# tiers were git-rm'd after they were hashed into holding/i/), so a from-scratch
+# rebuild would drop every prior stem from the map and make buildImagesManifest
+# skip those photos. Merging keeps the full 1:1 map across incremental adds.
 #
 #   ./holding/scripts/hash-thumbnails.sh
 #
@@ -37,7 +42,16 @@ def h8(path):
         return hashlib.sha256(f.read()).hexdigest()[:8]
 
 stems = sorted(f[:-4] for f in os.listdir(src_dir) if f.endswith(".jpg"))
-hashes, copied = {}, 0
+# MERGE into the existing map (see header): start from what's already hashed so
+# an incremental add adds/refreshes its stems without dropping the rest.
+hashes = {}
+if os.path.exists(map_path):
+    try:
+        with open(map_path) as f:
+            hashes = json.load(f)
+    except Exception:
+        hashes = {}
+copied = 0
 for stem in stems:
     tiers = {
         "a": (f"{stem}.avif",     f"{stem}.{{h}}.avif"),

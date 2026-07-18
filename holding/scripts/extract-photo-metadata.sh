@@ -111,11 +111,11 @@ exiftool -json -q \
   '-Orientation#' \
   "$SRC_DIR" > "$TMP"
 
-# NB: histograms are no longer stored here. the Fuji LCD tooltip now computes the
-# {l,r,g,b} bars CLIENT-SIDE from the already-decoded thumbnail (canvas), which
-# dropped ~half of metadata.json and removed the Pillow dependency. photo-
-# histograms.py is kept on disk but unused. (when full-frame thumbnails ship, the
-# client-side bars become whole-image histograms for free.)
+# NB: metadata extraction intentionally emits only EXIF/Fuji fields. The
+# follow-up bake below adds the {l,r,g,b} histogram channels to each per-photo
+# meta file from the shipped hashed JPG tier. Keeping that as a separate step
+# makes incremental adds safe: extraction can rebuild metadata without
+# silently dropping histogram data.
 
 # transform into {stem: {camera, lens, aperture, shutter, iso, focal, date,
 # width, height}} keyed by stem (filename without extension). orientation-
