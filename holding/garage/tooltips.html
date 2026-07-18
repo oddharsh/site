@@ -16,11 +16,12 @@
 <style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}
 /* --x/--y carry the cursor position (clientX/Y in px), written by JS on
    pointermove. registering them as typed <length> properties (instead of
-   plain custom properties) lets CSS *transition* them, so the tooltip
-   eases toward the cursor instead of hard-snapping, with no JS rAF lerp.
-   the browser interpolates the value; the translate() that consumes it
-   updates each frame. initial-value keeps the first paint sane before
-   the first pointer event lands. */
+   plain custom properties) makes them transitionable, and initial-value
+   keeps the consuming calc()/clamp() sane on first paint, before the
+   first pointer event lands. the transition half sits unused: we tried
+   a 55ms ease toward the cursor and dropped it, so the shared transform
+   rule keeps position untransitioned and the tooltip hard-snaps (see
+   the comment on that rule). */
 @property --x { syntax: "<length>"; inherits: false; initial-value: 0px; }
 @property --y { syntax: "<length>"; inherits: false; initial-value: 0px; }
 
@@ -746,7 +747,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
       Variants I tried for the photo grid and tracklist on <a href="/">aadhar.sh</a>. Hover the slots and rows. The two photo variants below (Fuji LCD and XP-skinned camera readout) carry the same content shape under different chrome; the third (vinyl) targets tracks only. Status pills: <span class="status review">in review</span> marks a live candidate, <span class="status shipped">shipped</span> reached the homepage, <span class="status dead">rejected</span> got tried and lost, <span class="status ref">reference</span> sits here as a comparison point.
     </p>
     <p class="lede" style="margin-top: 4px;">
-      The live candidates share one architecture: popover API for show/hide, <code>@starting-style</code> for the entry fade, a small rAF-coalesced <code>translate3d</code> loop for cursor tracking. Roughly 100 lines of JS total.
+      The live candidates share one architecture: popover API for show/hide, <code>@starting-style</code> for the entry fade, and two custom-property writes per move (<code>--x</code>/<code>--y</code>) for cursor tracking, with a clamped CSS transform doing the actual placement. No rAF, no layout reads. Roughly 100 lines of JS total.
     </p>
     <p class="lede" style="margin-top: 4px;">
       &larr; back to <a href="/garage">garage</a>

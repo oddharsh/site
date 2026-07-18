@@ -150,35 +150,6 @@ a { color: oklch(41.92% 0.0962 250.51); }
 }
 .status.review { color: oklch(54.44% 0.1504 47.10); border-color: oklch(54.44% 0.1504 47.10); background: oklch(98% 0.03 95); }
 
-/* ── demo ── */
-.cas-controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 10px 0; }
-.cas-ta { width: 100%; min-height: 88px; font-family: var(--font-mono); font-size: 10pt; line-height: 1.45; padding: 8px; border: 2px solid; border-color: #808080 #fff #fff #808080; background: oklch(99% 0 0); field-sizing: content; max-height: 38vh; resize: vertical; }
-.xp-btn { font-family: var(--font-ui); font-size: 9.5pt; padding: 3px 12px; background: linear-gradient(#fff, #ece9d8); border: 1px solid #707070; border-radius: 3px; box-shadow: inset 1px 1px 0 #fff; cursor: pointer; }
-.xp-btn:active { box-shadow: inset 1px 1px 2px rgba(0,0,0,.3); }
-.method { margin: 16px 0; }
-.method h3 { font-size: 10.5pt; margin: 0 0 4px; font-family: var(--font-caption); color: oklch(41.92% 0.0962 250.51); display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
-.method h3 small { font-weight: normal; font-size: 9pt; color: oklch(50% 0 0); font-family: var(--font-ui); }
-.chunks { display: flex; flex-wrap: wrap; gap: 3px; padding: 8px; background: oklch(97% 0.005 250); border: 1px solid oklch(85% 0.02 250); border-radius: 4px; min-height: 30px; }
-.chunk { height: 26px; border-radius: 2px; display: flex; align-items: center; justify-content: center; font: 8px/1 "Courier New", monospace; color: #fff; text-shadow: 0 1px 1px rgba(0,0,0,.45); padding: 0 3px; overflow: hidden; white-space: nowrap; cursor: default; transition: background .18s; }
-.chunk.shared { background: oklch(52% 0.13 150); }
-.chunk.changed { background: oklch(58% 0.19 38); }
-.chunk.neutral { background: oklch(53% 0.10 255); }
-.stats { font-size: 9.5pt; color: oklch(42% 0 0); margin: 6px 0 0; font-family: var(--font-mono); }
-.stats b { color: oklch(22% 0 0); }
-.delta-good { color: oklch(43% 0.16 150); font-weight: bold; }
-.delta-bad { color: oklch(50% 0.19 38); font-weight: bold; }
-.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 9pt; color: oklch(45% 0 0); margin: 8px 0 0; }
-.legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
-.legend .sh::before { background: oklch(52% 0.13 150); }
-.legend .ch::before { background: oklch(58% 0.19 38); }
-.legend .nu::before { background: oklch(53% 0.10 255); }
-.callout { font-size: 10pt; background: oklch(97% 0.025 255); border-left: 3px solid oklch(51% 0.225 263); padding: 8px 12px; margin: 14px 0; color: oklch(28% 0.04 255); }
-.replaces { font-size: 9.5pt; color: oklch(33% 0 0); margin: 8px 0 0; border-left: 3px solid oklch(86% 0.03 250); padding-left: 8px; }
-.drop { border: 2px dashed oklch(62% 0.05 255); border-radius: 6px; padding: 16px; text-align: center; color: oklch(45% 0.03 255); font-size: 10pt; cursor: pointer; background: oklch(98% 0.01 255); }
-.drop.over { background: oklch(94% 0.04 255); border-color: oklch(51% 0.225 263); }
-footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67% 0.0294 259.59); font-size: 9.5pt; color: oklch(45% 0 0); }
-@media (prefers-reduced-motion: reduce) { .chunk { transition: none; } }
-
   /* OS-window geometry inlined so FIRST PAINT matches nav.js (no shell "pop"
      when the deferred desktop arrives). keep in sync with nav.js (search
      "app-shell"); degrades with JS off (.content scrolls natively). */
