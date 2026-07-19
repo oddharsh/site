@@ -247,10 +247,12 @@ const PREFIX = [
 
 async function route(request, env, ctx) {
   const url = new URL(request.url);
-  // Preserve the legacy Cal subdomain's root-based URL shape while its DNS
-  // route is migrated onto this Worker. The canonical public path remains
-  // /coffee; Cal's own dispatcher selects the empty base path for this host.
-  if (url.hostname === "cal.aadhar.sh") return routeCoffee(request, env, ctx);
+  // Preserve the legacy Cal subdomain while giving it a small, unlisted
+  // work-calendar escape hatch. The bare host is public and goes to the
+  // canonical booking page; only the exact secret slug redirects externally.
+  // The slug and destination stay in Worker secrets so rotating either one
+  // does not require a code change or a discoverable URL in the repository.
+  if (url.hostname === "cal.aadhar.sh") return routeCalHost(request, env, ctx, url);
   const exact = ROUTES.get(url.pathname);
   if (exact) return exact(request, env, ctx, url);
 
@@ -268,6 +270,40 @@ async function route(request, env, ctx) {
 // app-specific cache, auth, and persistence policies stay local to each module.
 function routeCoffee(request, env, ctx) {
   return calWorker.fetch(request, env, ctx);
+}
+
+function routeCalHost(request, env, ctx, url) {
+  const path = url.pathname.replace(/\/+$/, "") || "/";
+  if (path === "/") return noStoreRedirect("https://aadhar.sh/coffee");
+
+  if (env.WORK_CALENDAR_SLUG && path === `/${env.WORK_CALENDAR_SLUG}`) {
+    try {
+      const target = new URL(env.WORK_CALENDAR_URL || "");
+      if (target.protocol !== "https:" || target.hostname !== "calendar.app.google") {
+        throw new Error("unexpected work-calendar target");
+      }
+      return noStoreRedirect(target.href);
+    } catch {
+      // Fail closed: an absent or malformed target must not become an open
+      // redirect, and should not reveal whether the slug was correct.
+      return new Response("not found", { status: 404 });
+    }
+  }
+
+  // Keep the existing legacy Cal endpoint behavior for /coffee, /slots, and
+  // signed host actions while the alias remains a separate exact path.
+  return routeCoffee(request, env, ctx);
+}
+
+function noStoreRedirect(location) {
+  return new Response(null, {
+    status: 302,
+    headers: {
+      location,
+      "cache-control": "no-store",
+      "referrer-policy": "no-referrer",
+    },
+  });
 }
 
 async function routeSerendipity(request, env, ctx) {
