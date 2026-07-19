@@ -2,11 +2,11 @@
 //
 // Authoring stays buildless: everything in holding/ is committed readable and is
 // the source of truth. This script stages a copy under .build/ and minifies
-// exactly six client scripts (the assets pages load); index.html, the
-// garage/ and lwe/ HTML, images, _headers, and the worker modules ship
-// byte-identical to git. Each minified shell opens with a pointer to its
-// readable twin (/<name>.src.js, deployed alongside), because View Source is
-// part of the product and minification must not cost it.
+// exactly six client scripts (the assets pages load) plus the homepage HTML;
+// the garage/ and lwe/ HTML, images, _headers, and the worker modules ship
+// byte-identical to git. Each transformed asset gets a readable twin deployed
+// alongside it, because View Source is part of the product and minification
+// must not cost it.
 //
 //   node build.mjs                                   # stage .build/
 //   npm run deploy                                   # build + wrangler deploy -c .build/wrangler.jsonc
@@ -16,6 +16,7 @@
 
 import { createHash } from "node:crypto";
 import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import minifyHtml from "@minify-html/node";
 import { transform as transformCss } from "lightningcss";
 import { minifySync } from "oxc-minify";
 
@@ -216,7 +217,138 @@ const minifyCss = (filename, sourceText) => {
   return Buffer.from(result.code).toString();
 };
 
-// 2) shells: deploy the readable original as <name>.src.js, minify the served file
+// Homepage HTML uses minify-html for structure only; inline CSS/JS are passed
+// through the same Lightning CSS and Oxc settings used everywhere else in the
+// build. JSON-LD and speculation rules remain data, not JavaScript.
+const HTML_MINIFY_CFG = {
+  allow_noncompliant_unquoted_attribute_values: false,
+  allow_optimal_entities: false,
+  allow_removing_spaces_between_attributes: false,
+  keep_closing_tags: true,
+  keep_comments: false,
+  keep_html_and_head_opening_tags: true,
+  keep_input_type_text_attr: true,
+  keep_ssi_comments: true,
+  minify_css: false,
+  minify_doctype: false,
+  minify_js: false,
+  remove_bangs: false,
+  remove_processing_instructions: false,
+};
+const RAW_HTML_TAGS = new Set(["pre", "script", "style", "textarea"]);
+
+const findHtmlTagEnd = (source, start) => {
+  let quote = "";
+  for (let i = start + 1; i < source.length; i++) {
+    const ch = source[i];
+    if (quote) {
+      if (ch === quote) quote = "";
+    } else if (ch === '"' || ch === "'") {
+      quote = ch;
+    } else if (ch === ">") {
+      return i;
+    }
+  }
+  throw new Error("HTML inline transform: unterminated tag at byte " + start);
+};
+
+const scriptType = (openTag) => {
+  const match = openTag.match(/\btype\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>]+))/i);
+  return (match ? (match[1] || match[2] || match[3] || "") : "").toLowerCase();
+};
+
+const isJavaScriptScript = (openTag) => {
+  const type = scriptType(openTag);
+  return !type || ["text/javascript", "application/javascript", "text/ecmascript", "application/ecmascript", "module"].includes(type);
+};
+
+const transformInlineHtmlBlocks = (source) => {
+  let out = "";
+  let cursor = 0;
+
+  while (cursor < source.length) {
+    const lt = source.indexOf("<", cursor);
+    if (lt === -1) {
+      out += source.slice(cursor);
+      break;
+    }
+
+    out += source.slice(cursor, lt);
+    if (source.startsWith("<!--", lt)) {
+      const end = source.indexOf("-->", lt + 4);
+      if (end === -1) throw new Error("HTML inline transform: unterminated comment at byte " + lt);
+      out += source.slice(lt, end + 3);
+      cursor = end + 3;
+      continue;
+    }
+
+    const gt = findHtmlTagEnd(source, lt);
+    const token = source.slice(lt, gt + 1);
+    out += token;
+    cursor = gt + 1;
+
+    const match = token.match(/^<\s*(\/?)\s*([A-Za-z][^\s/>]*)/);
+    if (!match || match[1] || !RAW_HTML_TAGS.has(match[2].toLowerCase())) continue;
+
+    const tag = match[2].toLowerCase();
+    const close = new RegExp("<\\/\\s*" + tag + "\\s*>", "i").exec(source.slice(cursor));
+    if (!close) throw new Error("HTML inline transform: unterminated <" + tag + "> element");
+    const closeAt = cursor + close.index;
+    const body = source.slice(cursor, closeAt);
+
+    if (tag === "style") {
+      out += minifyCss("holding/index.html inline <style>", body);
+    } else if (tag === "script" && isJavaScriptScript(token)) {
+      out += minifyJavaScript("holding/index.html inline <script>", body);
+    } else {
+      out += body;
+    }
+
+    out += source.slice(closeAt, closeAt + close[0].length);
+    cursor = closeAt + close[0].length;
+  }
+
+  return out;
+};
+
+const inlineProbe = transformInlineHtmlBlocks(
+  '<style>/* probe */ .x { color: red; }</style>\n' +
+  '<script>/* probe */ const x = 1 + 2;</script>\n' +
+  '<script type="application/ld+json">\n{ "x": 1 }\n</script>'
+);
+if (inlineProbe.includes("/* probe */") ||
+    !inlineProbe.includes('<script type="application/ld+json">\n{ "x": 1 }\n</script>')) {
+  throw new Error("inline CSS/JS transform self-test failed");
+}
+
+const HTML_MARKERS = [
+  ["JSON-LD", /<script\b[^>]*\btype=(?:"application\/ld\+json"|application\/ld\+json)(?:\s|>)/i],
+  ["photos", /<section\b[^>]*\bclass=(?:"[^"]*\bphotos\b"|'[^']*\bphotos\b'|photos)(?:\s|>)/i],
+  ["playlist", /<(?:ol|ul)\b[^>]*\bid=(?:"np-list"|np-list)(?:\s|>)/i],
+  ["speculation rules", /<script\b[^>]*\btype=(?:"speculationrules"|speculationrules)(?:\s|>)/i],
+  ["footer", /<footer\b/i],
+];
+
+// 2) homepage HTML: deploy the readable original as /index.src.html and
+// minify only the served copy. The worker rewrites this response as a stream,
+// so doing this before ASSETS.fetch keeps the rewriter path allocation-free.
+{
+  const src = await readFile("holding/index.html", "utf8");
+  const srcPath = "/index.src.html";
+  const banner = `<!-- minified at deploy; readable source: ${srcPath} -->\n`;
+  const inlineMinified = transformInlineHtmlBlocks(src);
+  const body = minifyHtml.minify(Buffer.from(inlineMinified), HTML_MINIFY_CFG).toString();
+  const min = banner + body;
+  for (const [label, marker] of HTML_MARKERS) {
+    if (!marker.test(min)) throw new Error("index.html: HTML minifier lost required marker " + label);
+  }
+  await writeFile(`${OUT}/holding/${srcPath.slice(1)}`, src);
+  await writeFile(`${OUT}/holding/index.html`, min);
+  console.log(`index.html: ${src.length} -> ${min.length} bytes (+ ${srcPath}; inline JS/CSS use existing minifiers)`);
+}
+
+
+// 3) shells: deploy the readable original as <name>.src.js, minify the served file
 for (const [file, srcPath, marker] of SHELLS) {
   const src = await readFile(`holding/${file}`, "utf8");
   await writeFile(`${OUT}/holding/${srcPath.slice(1)}`, src);
@@ -234,7 +366,7 @@ for (const [file, srcPath, marker] of SHELLS) {
   console.log(`${file}: ${src.length} -> ${min.length} bytes (+ ${srcPath})`);
 }
 
-// 3) luna.css: the one shared external stylesheet, minified with a readable
+// 4) luna.css: the one shared external stylesheet, minified with a readable
 // /luna.src.css twin (same readable-twin philosophy as the shells). Repaired, it
 // goes 63KB->35KB raw / 16.0KB->7.35KB brotli — an ~8.7KB saving on a
 // render-blocking sheet every worker-rendered + garage/lwe page loads, almost
@@ -250,7 +382,7 @@ for (const [file, srcPath, marker] of SHELLS) {
   console.log(`luna.css: ${src.length} -> ${out.length} bytes (+ /luna.src.css)`);
 }
 
-// 4) worker-module CSS: minify static CSS template literals marked with a
+// 5) worker-module CSS: minify static CSS template literals marked with a
 // leading /*min*/ sentinel. Dynamic page CSS stays unmarked; readable source
 // remains in holding/ while only the staged worker bytes shrink on the wire.
 {

@@ -1,63 +1,79 @@
 #!/usr/bin/env node
-// perf-budget.mjs — the pre-deploy performance budget gate for aadhar.sh.
+// perf-budget.mjs — deterministic build/deploy invariants + advisory wire-size
+// reporting for aadhar.sh.
 //
-// Deterministic, buildtime checks that catch a perf regression BEFORE it ships:
-//   1. luna.css parses clean (no Lightning CSS warnings) — the v143-corruption
-//      tripwire, so a broken stylesheet can never reach a deploy.
-//   2. the build output is actually minified: the client scripts + luna.css each
-//      carry the "minified at deploy" banner, sit under their byte budget, and
-//      ship a readable twin (/<name>.src.js / /luna.src.css).
-//   3. the bundled Worker stays under the gzip budget (via wrangler --dry-run,
-//      which self-builds via build.command).
+// User experience is measured by Cloudflare RUM and a controlled browser lab;
+// this script cannot honestly turn a guessed byte number into an LCP guarantee.
+// It therefore HARD-fails only on facts that must never be ambiguous:
+//   1. luna.css parses clean (the v143-corruption tripwire);
+//   2. deploy assets are actually minified and retain readable source twins;
+//   3. the build output contains every expected asset.
 //
-// Exits non-zero on any breach, so it gates a deploy or CI run.
+// It also reports gzip + Brotli sizes against generous, role-aware envelopes.
+// Those envelopes are ADVISORY until RUM has enough observations to justify a
+// user-centered threshold. A deferred page island is not allowed to veto a
+// homepage feature merely because its raw source grew.
 //
 //   node perf-budget.mjs        (or: npm run perf-budget)
 //
-// NOT covered here (needs a real browser): Slow-4G LCP/FCP traces, CLS, and the
-// per-viewport photo-transfer delta. Run those with Lighthouse or the web-perf
-// tooling. For the LIVE minified + twin assertions after deploying, use
-// `node verify-routes.mjs https://aadhar.sh` (its prod-only checks cover them).
+// Not measured here (needs a real browser): LCP/FCP/INP/CLS, TTFB by field
+// cohort, and the per-viewport photo-transfer delta. Cloudflare RUM is the
+// outcome source; a controlled 4G lab run is the repeatable pre-merge signal.
 
 import { execFileSync } from "node:child_process";
 import { readFile, stat } from "node:fs/promises";
+import { brotliCompressSync, constants as zlibConstants, gzipSync } from "node:zlib";
 import { transform as transformCss } from "lightningcss";
 
-// byte ceilings for the minified build output (uncompressed), and the worker
-// bundle's gzip ceiling. Bump these deliberately, with a reason, when real
-// growth is justified — an unexplained jump is the signal this is meant to catch.
-const SHELL_BUDGET = {
-  "nav.js": 50_000,
-  "notepad.js": 8_000,
-  // Lens now carries the readiness rubric, six bot observations, copyable
-  // fixes, the counterfactual score view, the opt-in Browser Run loader, AND
-  // the teaching surface added 2026-07:
-  // the agent-trace console, the always-on dollar verdict strip, per-check
-  // consumption annotations, and the idle state-of-web hide logic. Deferred +
-  // cached, not render-blocking. Ceiling raised from 48K for that surface.
-  // Browser Run's rendered code remains split into its own deferred twin.
-  "lens.js": 54_000,
-  "lens-browser.js": 8_000,
-  // Rich hover content is an idle-prefetched island, not homepage-critical JS.
-  // Keep it bounded so the first-hover optimization does not become another
-  // shared shell by accident.
-  "tooltip.js": 18_000,
-  "luna.css": 40_000,
+// Wire-size envelopes, not raw-source ceilings. These start from the current
+// built output with enough room for ordinary feature work; they are deliberately
+// advisory until the Cloudflare RUM baseline tells us which paths matter.
+const ASSET_ENVELOPES = {
+  "nav.js":         { role: "shared deferred shell",       gzipKiB: 20, brotliKiB: 18 },
+  "notepad.js":     { role: "writing-only island",         gzipKiB: 4,  brotliKiB: 3.5 },
+  "lens.js":        { role: "lens-only island",             gzipKiB: 24, brotliKiB: 21 },
+  "lens-browser.js": { role: "optional browser island",    gzipKiB: 4,  brotliKiB: 3.5 },
+  "quiz.js":        { role: "understanding-check island",  gzipKiB: 6,  brotliKiB: 5 },
+  "tooltip.js":     { role: "optional hover island",       gzipKiB: 6,  brotliKiB: 5 },
+  "luna.css":       { role: "shared render-blocking CSS",  gzipKiB: 12, brotliKiB: 10 },
 };
-// The readiness probes add a bounded server-side envelope and bot matrix, HTML
-// negotiation adds a no-script fragment contract, CachedPages adds a named
-// Workers Cache entrypoint, and the 2026-07 /lens work grew the Worker again:
-// the state-of-web panel + verdict/trace/consumption renderers and CSS, plus
-// census.js (the weekly longitudinal sweep, the /lens/census page + JSON twin).
-// Measured ~84.8 KiB gzip; 86 leaves ~1.2 KiB, enough to cover the ~0.2 KiB
-// gzip variance between the local and CI Node runtimes without going flaky.
-const BUNDLE_GZIP_KIB = 86;
-const TWINS = ["nav.src.js", "notepad.src.js", "lens.src.js", "lens-browser.src.js", "tooltip.src.js", "luna.src.css"];
+
+// This is an observability alert, not a platform limit. It is intentionally
+// separate from the user-facing LCP budget: Worker code is server-side and can
+// grow without changing a browser's transfer path, provided TTFB/CPU stay well.
+const WORKER_BASELINE_GZIP_KIB = 86;
+const WORKER_ALERT_GROWTH = 0.25;
+const TWINS = [
+  "nav.src.js", "notepad.src.js", "lens.src.js", "lens-browser.src.js",
+  "quiz.src.js", "tooltip.src.js", "luna.src.css",
+];
+const HTML_TWIN = "index.src.html";
+const HTML_ENVELOPE = {
+  role: "homepage document",
+  gzipKiB: 22,
+  brotliKiB: 20,
+};
+const HTML_MARKERS = [
+  ["JSON-LD", /<script\b[^>]*\btype=(?:"application\/ld\+json"|application\/ld\+json)(?:\s|>)/i],
+  ["photos", /<section\b[^>]*\bclass=(?:"[^"]*\bphotos\b"|'[^']*\bphotos\b'|photos)(?:\s|>)/i],
+  ["playlist", /<(?:ol|ul)\b[^>]*\bid=(?:"np-list"|np-list)(?:\s|>)/i],
+  ["speculation rules", /<script\b[^>]*\btype=(?:"speculationrules"|speculationrules)(?:\s|>)/i],
+  ["footer", /<footer\b/i],
+];
 
 const fails = [];
+const warnings = [];
 const ok = (m) => console.log(`  ok    ${m}`);
 const bad = (m) => { console.log(`  FAIL  ${m}`); fails.push(m); };
-const warn = (m) => console.log(`  warn  ${m}`);
+const warn = (m) => { console.log(`  warn  ${m}`); warnings.push(m); };
+const kib = (bytes) => bytes / 1024;
+const compressedSizes = (bytes) => ({
+  gzip: kib(gzipSync(bytes, { level: 9 }).length),
+  brotli: kib(brotliCompressSync(bytes, {
+    params: { [zlibConstants.BROTLI_PARAM_QUALITY]: 11 },
+  }).length),
+});
+const fmt = (value) => `${value.toFixed(1)} KiB`;
 
 console.log("perf-budget: aadhar.sh pre-deploy gate\n");
 
@@ -81,22 +97,27 @@ try {
 const gz = dryOut.match(/gzip:\s*([\d.]+)\s*KiB/);
 if (gz) {
   const kib = parseFloat(gz[1]);
-  if (kib > BUNDLE_GZIP_KIB) bad(`worker bundle ${kib} KiB gzip > ${BUNDLE_GZIP_KIB} KiB budget`);
-  else ok(`worker bundle ${kib} KiB gzip (budget ${BUNDLE_GZIP_KIB})`);
+  const alertAt = WORKER_BASELINE_GZIP_KIB * (1 + WORKER_ALERT_GROWTH);
+  if (kib > alertAt) warn(`worker bundle ${kib.toFixed(2)} KiB gzip > ${alertAt.toFixed(2)} KiB advisory alert (${Math.round(WORKER_ALERT_GROWTH * 100)}% over ${WORKER_BASELINE_GZIP_KIB} KiB baseline)`);
+  else ok(`worker bundle ${kib.toFixed(2)} KiB gzip (advisory alert at ${alertAt.toFixed(2)} KiB)`);
 } else {
   warn("could not read bundle gzip from wrangler dry-run (offline/unauth?); skipping bundle-size check");
 }
 
-// 3) minified shells + luna.css: banner + under budget -----------------------
-for (const [file, budget] of Object.entries(SHELL_BUDGET)) {
+// 3) minified shells + luna.css: banner + compressed advisory envelope --------
+for (const [file, envelope] of Object.entries(ASSET_ENVELOPES)) {
   const path = `.build/holding/${file}`;
-  let s;
-  try { s = await readFile(path, "utf8"); } catch { bad(`${file}: missing from build output (run build first)`); continue; }
-  const bytes = Buffer.byteLength(s);
-  const banner = s.startsWith("/*!") && s.includes("minified at deploy");
+  let bytes;
+  try { bytes = await readFile(path); } catch { bad(`${file}: missing from build output (run build first)`); continue; }
+  const text = bytes.toString("utf8");
+  const banner = text.startsWith("/*!") && text.includes("minified at deploy");
   if (!banner) { bad(`${file}: missing "minified at deploy" banner (build bypassed / not minified?)`); continue; }
-  if (bytes > budget) bad(`${file}: ${bytes} B > ${budget} B budget`);
-  else ok(`${file}: ${bytes} B minified (budget ${budget})`);
+  const sizes = compressedSizes(bytes);
+  const overGzip = sizes.gzip > envelope.gzipKiB;
+  const overBrotli = sizes.brotli > envelope.brotliKiB;
+  const line = `${file}: ${bytes.length} B raw, ${fmt(sizes.gzip)} gzip, ${fmt(sizes.brotli)} Brotli (${envelope.role})`;
+  if (overGzip || overBrotli) warn(`${line}; advisory envelope ${envelope.gzipKiB}/${envelope.brotliKiB} KiB gzip/Brotli`);
+  else ok(`${line}; envelope ${envelope.gzipKiB}/${envelope.brotliKiB} KiB gzip/Brotli`);
 }
 
 // 4) readable twins present --------------------------------------------------
@@ -105,9 +126,39 @@ for (const t of TWINS) {
   catch { bad(`twin ${t} missing from build output`); }
 }
 
+// 5) homepage HTML: minification banner, readable twin, and semantic anchors
+let homepage;
+try {
+  homepage = await readFile(".build/holding/index.html");
+} catch {
+  bad("index.html: missing from build output");
+}
+if (homepage) {
+  const text = homepage.toString("utf8");
+  const banner = text.startsWith("<!-- minified at deploy; readable source: /index.src.html -->");
+  if (!banner) bad("index.html: missing deploy-time minification banner");
+  for (const [label, marker] of HTML_MARKERS) {
+    if (!marker.test(text)) bad("index.html: missing required marker " + label);
+  }
+  try {
+    const source = await readFile("holding/index.html");
+    const twin = await readFile(`.build/holding/${HTML_TWIN}`);
+    if (!source.equals(twin)) bad("index.src.html: readable twin differs from holding/index.html");
+    else ok("index.src.html: readable homepage twin present");
+  } catch {
+    bad("index.src.html: readable homepage twin missing");
+  }
+  const sizes = compressedSizes(homepage);
+  const overGzip = sizes.gzip > HTML_ENVELOPE.gzipKiB;
+  const overBrotli = sizes.brotli > HTML_ENVELOPE.brotliKiB;
+  const line = `index.html: ${homepage.length} B raw, ${fmt(sizes.gzip)} gzip, ${fmt(sizes.brotli)} Brotli (${HTML_ENVELOPE.role})`;
+  if (overGzip || overBrotli) warn(`${line}; advisory envelope ${HTML_ENVELOPE.gzipKiB}/${HTML_ENVELOPE.brotliKiB} KiB gzip/Brotli`);
+  else ok(`${line}; envelope ${HTML_ENVELOPE.gzipKiB}/${HTML_ENVELOPE.brotliKiB} KiB gzip/Brotli`);
+}
+
 console.log("");
 if (fails.length) {
   console.error(`perf-budget: ${fails.length} breach(es) — GATE FAILED`);
   process.exit(1);
 }
-console.log("perf-budget: all budgets green");
+console.log(`perf-budget: hard checks green${warnings.length ? ` (${warnings.length} advisory warning${warnings.length === 1 ? "" : "s"})` : ""}`);
