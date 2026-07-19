@@ -59,7 +59,13 @@ First-visit shared total ~38KB. Every visit after: 0 bytes, HTTP cache.
 
 **Conflict, resolved (the big one).** wire-max moves the 12-photo shuffle client-side and gets a cacheable homepage at ~1.1KB per return; 2 judges fatal-flagged the mechanism (the preload scanner never sees script-written images, so LCP hangs on an inline script, and JS-off gets a stale grid). The graft dies; the grid stays SSR per request. The surviving half of the idea is the counter move (below): the count leaves the document, every homepage GET becomes pure, and the homepage joins the prerender set for the first time. Per-visit spend drops from the measured ~31KB to ~14KB because the chrome moved into luna.css. That 14KB is the deliberate, priced cost of keeping the soul server-side.
 
-**Ceilings, CI-enforced at deploy:** font bytes 0, third-party bytes 0, cookie bytes 0, render-blocking JS 0, HTML ≤20KB wire (archive excepted at 24), JS executed before first interaction ≤3KB br, requests to first render ≤5 warm / ≤8 cold.
+**Hard invariants, CI-enforced at deploy:** font bytes 0, cookie bytes 0, no
+render-blocking JS, and the route/request contracts that keep the first render
+honest. HTML, CSS, JS, and Worker byte figures are measured at their actual wire
+compression and remain advisory until Cloudflare RUM plus a controlled mobile
+lab establish user-facing SLOs. The intended outcome targets are FCP/LCP/CLS,
+not arbitrary raw-source ceilings; the current 4G numbers below are aspirations
+to validate, not permission to block unrelated deferred features.
 
 ## The window shell: the zero-JS ledger
 
@@ -128,7 +134,10 @@ One shared luna.css, readable and commented, plus the inline critical subset per
 
 ## JS budget ledger
 
-Hard caps: 0 render-blocking script anywhere; ≤3KB br executed before first interaction on any page; anything more is earned per page class.
+Hard invariant: 0 render-blocking script anywhere. The earlier ≤3KB Brotli
+before-first-interaction figure remains a design target for the shared shell,
+but is reported as an advisory wire/CPU budget until field and lab evidence show
+that it is the metric constraining users.
 
 **shell.js, 12KB raw / ~3.3KB br, defer, itemized:**
 
@@ -271,4 +280,4 @@ Tiers stay as measured: 600px AVIF ~22KB and 400px AVIF ~12KB in one `<source sr
 2. **No service worker means HTTP-cache eviction bites.** iOS in particular can silently re-bill the ~38KB shared bundle on some returns. Accepted against deleting a whole poisonable subsystem; the decision reverses in an afternoon, and field timing data decides whether it ever needs reversing.
 3. **Fly-compression variance on the one per-request document.** The ~14KB homepage figure rides the edge compressor's gzip-class ratio; if it regresses, the per-visit spend drifts toward 17KB. Measure in the field; the pressure valve is baking the grid per 300s generation, at the cost of per-visit randomness for no-JS visitors.
 4. **Engine drift on the 2-engine calls** (@scope, position-try maturity, Temporal-less Safari stable, Safari's off-by-default prefetch). Contained by decoration-only @scope, tooltips that survive without flips, the Date branch, and warm-hop budgets that assume no speculation. Quarterly matrix retest; promotion to load-bearing only at 2 stable engines, and every demotion is a 1-line revert onto period behavior.
-5. **Governance decay at one maintainer.** GET purity, the motion greps, the byte gates, and the speculation checklist are the site's constitution, and they only hold while CI runs them. A flaked gate gets fixed or deleted the same week; a muted gate is how 2006 quietly becomes 2019.
+5. **Governance decay at one maintainer.** GET purity, the motion greps, the route/invariant checks, wire-size reports, and the speculation checklist are the site's constitution, and they only hold while CI runs them. A flaked check gets fixed or deleted the same week; a muted check is how 2006 quietly becomes 2019.

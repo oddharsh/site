@@ -37,6 +37,22 @@ production publisher. Configure one Workers Build project per Worker with
 `serendipity`), a blank dashboard Build command, and the repo-specific Deploy
 command. GitHub does not need Cloudflare production secrets for this path.
 
+### Performance budget semantics
+
+`npm run perf-budget` is intentionally split into hard build invariants and
+advisory wire-size observations. Hard failures cover CSS validity, deploy-time
+minification markers, readable source twins, and missing expected assets. The
+client asset envelopes are measured in gzip and Brotli, not raw authoring bytes;
+they are role-aware and deliberately have room for ordinary feature work. The
+Worker gzip number is a growth alert, not a user-experience ceiling: Worker code
+is server-side, so it must earn a hard limit through measured TTFB or CPU impact.
+
+Cloudflare Web Analytics/RUM is the outcome source for LCP, INP, CLS, FCP, and
+page-load behavior. Until it has a useful baseline, do not turn an advisory
+asset warning into a CI failure. Use a controlled mobile/4G browser run for
+repeatable pre-merge checks; once field data is sufficient, replace guessed
+byte ceilings with route/cohort SLOs and keep bytes as regression signals.
+
 The Workers Build projects should expose their build/deploy status on the
 release commit. After enabling them, verify the live homepage route surface plus
 `/coffee`, `/coffee/slots`, and `/serendipity`. This repository's current free
