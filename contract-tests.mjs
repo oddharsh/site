@@ -15,6 +15,9 @@ import {
   handleLensShot,
   renderLensShell,
 } from "./holding/_worker.js/lens.js";
+import { botHeaders } from "./holding/_worker.js/lib/botauth.js";
+import { mapWithConcurrency, readResponseCapped } from "./holding/_worker.js/lib/crawl.js";
+import { diffAroundRows, handleAroundChangesJson, readAroundChanges } from "./holding/_worker.js/around.js";
 import {
   handleRnTracks,
   handleRnTracksHtml,
@@ -64,6 +67,84 @@ function assertFullDocument(html) {
   assert.match(html, /<body\b/i);
   assert.match(html, /<\/html>/i);
 }
+
+test("AadharshBot refuses an external request without its signing key", async () => {
+  await assert.rejects(
+    botHeaders("https://example.com/", {}, { headers: { accept: "text/html" } }),
+    /signing key is unavailable/
+  );
+});
+
+test("self-dispatched bot headers can be built without putting a signature on the wire", async () => {
+  const headers = await botHeaders("https://aadhar.sh/", {}, { sign: false });
+  assert.equal(headers.get("user-agent"), "AadharshBot/1.0 (+https://aadhar.sh/bot)");
+  assert.equal(headers.get("signature"), null);
+});
+
+test("bounded response reads report truncation without buffering the tail", async () => {
+  const capped = await readResponseCapped(new Response("abcdef"), 3);
+  assert.equal(capped.text, "abc");
+  assert.equal(capped.bytesRead, 3);
+  assert.equal(capped.truncated, true);
+
+  const exact = await readResponseCapped(new Response("abc"), 3);
+  assert.equal(exact.text, "abc");
+  assert.equal(exact.truncated, false);
+});
+
+test("scheduled crawl fan-out respects its concurrency cap", async () => {
+  let active = 0;
+  let peak = 0;
+  const output = await mapWithConcurrency([1, 2, 3, 4, 5], 2, async (value) => {
+    active++;
+    peak = Math.max(peak, active);
+    await new Promise((resolve) => setTimeout(resolve, 1));
+    active--;
+    return value * 2;
+  });
+  assert.equal(peak, 2);
+  assert.deepEqual(output, [2, 4, 6, 8, 10]);
+});
+
+test("Change Radar reports normalized field and bounded-content changes", () => {
+  const changes = diffAroundRows(
+    { status: 200, title: "New title", body_hash: "b", robots: "allow" },
+    { status: 200, title: "Old title", body_hash: "a", robots: "allow" },
+  );
+  assert.deepEqual(changes, [
+    { field: "title", before: "Old title", after: "New title" },
+    { field: "content", detail: "bounded response sample changed" },
+  ]);
+});
+
+test("Change Radar keeps the latest two observations per target", async () => {
+  const db = {
+    prepare() {
+      return {
+        async all() {
+          return { results: [
+            { target: "https://example.com/", name: "Example", observed_at: 2000, status: 503, title: null, body_hash: null, robots: "allow" },
+            { target: "https://example.com/", name: "Example", observed_at: 1000, status: 200, title: "Example", body_hash: "a", robots: "allow" },
+          ] };
+        },
+      };
+    },
+  };
+  const payload = await readAroundChanges({ RESTORE_DB: db });
+  assert.equal(payload.available, true);
+  assert.equal(payload.changes.length, 1);
+  assert.equal(payload.changes[0].changes[0].field, "status");
+});
+
+test("Change Radar remains a stable public JSON surface without D1", async () => {
+  const response = await handleAroundChangesJson(
+    new Request("https://aadhar.sh/around/changes.json"),
+    {},
+  );
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("content-type") || "", /^application\/json/);
+  assert.equal((await response.json()).available, false);
+});
 
 
 test("Lens shell is a complete document, not a fragment", () => {

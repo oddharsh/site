@@ -1,9 +1,10 @@
 // build.mjs: the site's one build step, and it runs only at deploy.
 //
-// Authoring stays buildless: everything in holding/ is committed readable and is
-// the source of truth. This script stages a copy under .build/ and minifies
-// exactly six client scripts (the assets pages load) plus the homepage HTML;
-// the garage/ and lwe/ HTML, images, _headers, and the worker modules ship
+// Authoring stays buildless: everything in holding/, cal/, and serendipity/ is
+// committed readable and is the source of truth. This script stages the static
+// holding tree plus the two embedded application modules under .build/ and
+// minifies exactly six client scripts (the assets pages load) plus the homepage
+// HTML; the garage/ and lwe/ HTML, images, _headers, and the worker modules ship
 // byte-identical to git. Each transformed asset gets a readable twin deployed
 // alongside it, because View Source is part of the product and minification
 // must not cost it.
@@ -178,6 +179,10 @@ await mkdir(OUT, { recursive: true });
 // assets at .build/holding and runs THIS script via its build.command, so the
 // build output never needs its own config. (Local dev uses wrangler.dev.jsonc.)
 await cp("holding", `${OUT}/holding`, { recursive: true });
+await mkdir(`${OUT}/cal`, { recursive: true });
+await cp("cal/src", `${OUT}/cal/src`, { recursive: true });
+await mkdir(`${OUT}/serendipity`, { recursive: true });
+await cp("serendipity/serendipity.js", `${OUT}/serendipity/serendipity.js`);
 
 const minifyJavaScript = (filename, sourceText) => {
   const result = minifySync(filename, sourceText, {

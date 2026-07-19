@@ -89,5 +89,5 @@ jobs:
             echo "- workflow: [${GITHUB_RUN_ID}](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})"
             echo "- release branch: \`production\`"
             echo "- publisher: Cloudflare Workers Builds"
-            echo "- targets: homepage, coffee, Serendipity"
+            echo "- target: the aadhar-sh Worker (homepage, Lens, coffee, Serendipity)"
           } >> "$GITHUB_STEP_SUMMARY"

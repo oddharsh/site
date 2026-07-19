@@ -32,6 +32,15 @@
   "dependencies_instrumentation": { "enabled": true },
   // serve only on the custom domain (aadhar.sh); no public *.workers.dev URL.
   "workers_dev": false,
+  // The former coffee and Serendipity Workers are retired by this config. These
+  // route declarations move their public paths onto the same deployment; the
+  // old Worker routes/custom domain must be removed after the first successful
+  // production deploy.
+  "routes": [
+    { "pattern": "aadhar.sh/coffee*", "zone_name": "aadhar.sh" },
+    { "pattern": "aadhar.sh/serendipity*", "zone_name": "aadhar.sh" },
+    { "pattern": "cal.aadhar.sh/*", "zone_name": "aadhar.sh" }
+  ],
   "assets": {
     "directory": ".build/holding",
     "binding": "ASSETS",
@@ -56,10 +65,12 @@
       "/whoareyou", "/whoareyou.json", "/security",
       "/reading", "/updates", "/updates.json", "/restore",
       "/lens", "/lens/", "/lens/fetch", "/lens/shot", "/lens/browser", "/lens/census", "/lens/census.json",
+      "/coffee", "/coffee/*", "/serendipity", "/serendipity/*",
+      "/slots", "/book", "/approve", "/decline",
       "/llms-full.txt", "/ledger", "/ledger.json",
       "/writing", "/writing/*",
       "/rn", "/rn/tracks", "/rn/tracks.html", "/rn/admin", "/rn/set",
-      "/bot", "/around", "/around/json",
+      "/bot", "/around", "/around/json", "/around/changes.json",
       "/photos", "/photos/", "/run",
       "/images", "/images/", "/images/full", "/images/full/*",
       "/images/manifest.json", "/images/metadata.json", "/images/meta/*",
@@ -78,9 +89,10 @@
   // the request path only reads the KV snapshot this cron writes, around.js).
   // 17 8 * * 1 — the weekly /lens/census sweep into D1 (index.js switches on
   // event.cron). Odd minute so it doesn't collide with the :00/:30 crawl tick.
-  "triggers": { "crons": ["*/30 * * * *", "17 8 * * 1"] },
+  "triggers": { "crons": ["*/30 * * * *", "17 8 * * 1", "0 4 * * 7"] },
   "kv_namespaces": [
-    { "binding": "RN_KV", "id": "3cb8a107c58e47dc9244e75b33401f36" }
+    { "binding": "RN_KV", "id": "3cb8a107c58e47dc9244e75b33401f36" },
+    { "binding": "BOOKINGS", "id": "37acb65118fe485583a90a94cb89365e" }
   ],
   // the bot ledger: identified AI-crawler hits tick in here (ledger.js);
   // /ledger reads them back via the SQL API (needs ANALYTICS_READ_TOKEN).
@@ -91,7 +103,8 @@
     { "binding": "PHOTOS_R2", "bucket_name": "aadhar-photos" }
   ],
   "d1_databases": [
-    { "binding": "RESTORE_DB", "database_name": "aadhar-restore", "database_id": "88c8daf1-3a36-4f8e-a2ad-dba8a74e1b9f" }
+    { "binding": "RESTORE_DB", "database_name": "aadhar-restore", "database_id": "88c8daf1-3a36-4f8e-a2ad-dba8a74e1b9f" },
+    { "binding": "SERENDIPITY_DB", "database_name": "serendipity", "database_id": "d3aa3215-17c3-4389-b224-cf465ddbb786" }
   ],
   "durable_objects": {
     "bindings": [
@@ -110,8 +123,25 @@
     // one-time continuity: the new in-house Counter DO self-seeds to this on first
     // wake (carried over from cf-garage's counter, ~2375 at migration). idempotent;
     // safe to remove once the DO is seeded.
-    "COUNTER_SEED": "2375"
+    "COUNTER_SEED": "2375",
+    "HOST_TIMEZONE": "America/New_York",
+    "WORKING_HOURS_START": "9",
+    "WORKING_HOURS_END": "18",
+    "WORKING_DAYS": "1,2,3,4,5",
+    "SLOT_MINUTES": "30",
+    "BUFFER_MINUTES": "15",
+    "MIN_NOTICE_HOURS": "24",
+    "MAX_LOOKAHEAD_DAYS": "14",
+    "DAILY_LIMIT": "3",
+    "WEEKLY_LIMIT": "5",
+    "HOST_NAME": "aadharsh",
+    "HOST_EMAIL": "coffee@aadhar.sh",
+    "HOST_PUBLIC_URL": "https://aadhar.sh",
+    "EVENT_TITLE": "coffee with aadharsh",
+    "PENDING_TTL_DAYS": "7"
   }
   // Secrets are NOT here (set on the Worker with `wrangler secret put`):
   //   RN_SIGNING_KEY_JWK, BROWSER_RENDER_TOKEN (legacy, no longer read), RN_BUST_SECRET
+  //   ICAL_URL, RESEND_API_KEY, SIGNING_SECRET, SYNC_SECRET, EXA_API_KEY,
+  //   PARALLEL_API_KEY, COVER_SECRET
 }

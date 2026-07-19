@@ -175,8 +175,9 @@ A "depressed/active button" swaps to sunken while held. Selected slot buttons
   for ideas. They share the chrome (title-bar caption buttons, 720px width) but
   are *allowed* to be experimental inside. Don't homogenize their content; do
   keep their chrome on-token.
-- **Serendipity (`serendipity/serendipity.js`)** — separate Worker deploy, so it
-  can't share runtime CSS; it **mirrors** these tokens by hand (keep in sync).
+- **Serendipity (`serendipity/serendipity.js`)** — an embedded route module in
+  the same site Worker, with its own HTML/CSS policy; it **mirrors** these
+  tokens by hand (keep in sync).
   Known drift to fix: `border-radius: 11px` / `50%` → squared (or ≤3px).
 - **Coffee/cal (`cal/src/templates.js`)** — XP reskin; cleanest of the bunch,
   use it as a secondary reference. Mirrors tokens by hand like serendipity.

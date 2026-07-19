@@ -2,8 +2,9 @@
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
 import { BOT_NAME, BOT_UA, SIG_AGENT, signedFetch } from "./lib/botauth.js";
 import { cachedRender, deleteSWRKV } from "./lib/cache.js";
+import { crawlDocument, mapWithConcurrency, readResponseCapped } from "./lib/crawl.js";
 import { lunaPage } from "./lib/chrome.js";
-import { esc, extractMeta, extractTitle } from "./lib/http.js";
+import { esc, extractMeta, jsonResponse } from "./lib/http.js";
 import { lensParseRobots, lensRobotsVerdict } from "./lib/robots.js";
 
 // Obey robots.txt before crawling a neighbor. /bot promises AadharshBot reads and
@@ -23,7 +24,8 @@ async function robotsGate(env, url) {
     try {
       const r = await signedFetch(origin + "/robots.txt", env, { signal: AbortSignal.timeout(3000) });
       if (r.status >= 500) return { ok: false, kind: "undetermined", reason: "robots.txt " + r.status };   // 5xx: don't cache, retry next cron
-      parsed = r.ok ? lensParseRobots(await r.text()) : { groups: [], sitemaps: [] };   // 4xx / absent → allow-all, cacheable
+      const body = r.ok ? await readResponseCapped(r, 64 * 1024) : { text: "" };
+      parsed = r.ok ? lensParseRobots(body.text) : { groups: [], sitemaps: [] };   // 4xx / absent → allow-all, cacheable
       if (env.RN_KV) { try { await env.RN_KV.put(key, JSON.stringify(parsed), { expirationTtl: 43200 }); } catch {} }
     } catch { return { ok: false, kind: "undetermined", reason: "robots.txt unreachable" }; }
   }
@@ -101,6 +103,174 @@ export async function handleAroundJson(request, env, ctx) {
 }
 
 const AROUND_KEY = "around:report";
+const AROUND_HISTORY_TABLE = "around_crawl_history";
+
+async function ensureAroundHistoryTable(env) {
+  if (!env.RESTORE_DB) return false;
+  await env.RESTORE_DB.exec(
+    `CREATE TABLE IF NOT EXISTS ${AROUND_HISTORY_TABLE} (
+      target TEXT NOT NULL,
+      name TEXT NOT NULL,
+      observed_at INTEGER NOT NULL,
+      status INTEGER,
+      final_url TEXT,
+      title TEXT,
+      description TEXT,
+      content_type TEXT,
+      server TEXT,
+      last_modified TEXT,
+      body_hash TEXT,
+      bytes_read INTEGER,
+      truncated INTEGER NOT NULL DEFAULT 0,
+      robots TEXT,
+      skipped TEXT,
+      error TEXT,
+      PRIMARY KEY (target, observed_at)
+    );
+    CREATE INDEX IF NOT EXISTS idx_around_crawl_history_time
+      ON ${AROUND_HISTORY_TABLE} (observed_at DESC);`
+  );
+  return true;
+}
+
+// Persist only normalized observations and the digest of the bounded body
+// sample. The raw third-party response never enters D1.
+export async function persistAroundHistory(env, report) {
+  if (!env.RESTORE_DB || !report || !Array.isArray(report.results)) return { ok: false, reason: "unconfigured" };
+  try {
+    await ensureAroundHistoryTable(env);
+    const observedAt = Date.parse(report.crawledAt) || Date.now();
+    const statements = report.results.map((row) => env.RESTORE_DB.prepare(
+      `INSERT OR REPLACE INTO ${AROUND_HISTORY_TABLE}
+       (target, name, observed_at, status, final_url, title, description, content_type,
+        server, last_modified, body_hash, bytes_read, truncated, robots, skipped, error)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(
+      row.url || "",
+      row.name || "",
+      observedAt,
+      row.status ?? null,
+      row.finalUrl || null,
+      row.title || null,
+      row.description || null,
+      row.contentType || null,
+      row.server || null,
+      row.lastModified || null,
+      row.bodyHash || null,
+      row.bytesRead ?? null,
+      row.truncated ? 1 : 0,
+      row.robots || null,
+      row.skipped || null,
+      row.error || null,
+    ));
+    if (statements.length) await env.RESTORE_DB.batch(statements);
+    return { ok: true, written: statements.length };
+  } catch (e) {
+    return { ok: false, reason: String(e?.message || e) };
+  }
+}
+
+const CHANGE_FIELDS = [
+  ["status", "status"],
+  ["final_url", "final_url"],
+  ["title", "title"],
+  ["description", "description"],
+  ["content_type", "content_type"],
+  ["robots", "robots"],
+  ["skipped", "skipped"],
+  ["error", "error"],
+];
+
+export function diffAroundRows(current, previous) {
+  if (!current || !previous) return [];
+  const changes = [];
+  for (const [field, key] of CHANGE_FIELDS) {
+    const before = previous[key] ?? null;
+    const after = current[key] ?? null;
+    if (before !== after) changes.push({ field, before, after });
+  }
+  const liveCurrent = !current.error && current.status >= 200 && current.status < 400;
+  const livePrevious = !previous.error && previous.status >= 200 && previous.status < 400;
+  if (liveCurrent && livePrevious && current.body_hash && previous.body_hash && current.body_hash !== previous.body_hash) {
+    changes.push({ field: "content", detail: "bounded response sample changed" });
+  }
+  return changes;
+}
+
+export async function readAroundChanges(env, requestedLimit = 50) {
+  const limit = Math.min(100, Math.max(1, Number(requestedLimit) || 50));
+  if (!env.RESTORE_DB) {
+    return { ok: true, available: false, changes: [], note: "change history is not configured on this deployment" };
+  }
+  let rows;
+  try {
+    // The latest 200 rows cover several complete 30-minute snapshots for the
+    // current shortlist without making the public request scan the whole table.
+    const result = await env.RESTORE_DB.prepare(
+      `SELECT target, name, observed_at, status, final_url, title, description,
+              content_type, body_hash, robots, skipped, error
+         FROM ${AROUND_HISTORY_TABLE}
+        ORDER BY observed_at DESC
+        LIMIT 200`
+    ).all();
+    rows = result.results || [];
+  } catch (e) {
+    // Before the first cron run the lazy table does not exist yet. That is a
+    // valid empty state, not a broken public endpoint.
+    if (/no such table|does not exist/i.test(String(e?.message || e))) {
+      return { ok: true, available: true, changes: [], note: "change history starts with the next scheduled crawl" };
+    }
+    throw e;
+  }
+
+  const byTarget = new Map();
+  for (const row of rows) {
+    if (!byTarget.has(row.target)) byTarget.set(row.target, []);
+    const list = byTarget.get(row.target);
+    if (list.length < 2) list.push(row);
+  }
+  const changes = [];
+  let latestObservedAt = 0;
+  for (const [target, list] of byTarget) {
+    if (list[0]) latestObservedAt = Math.max(latestObservedAt, Number(list[0].observed_at) || 0);
+    if (list.length < 2) continue;
+    const current = list[0];
+    const previous = list[1];
+    const fields = diffAroundRows(current, previous);
+    if (!fields.length) continue;
+    changes.push({
+      target,
+      name: current.name,
+      observedAt: new Date(current.observed_at).toISOString(),
+      previousObservedAt: new Date(previous.observed_at).toISOString(),
+      changes: fields,
+    });
+  }
+  changes.sort((a, b) => String(b.observedAt).localeCompare(String(a.observedAt)));
+  return {
+    ok: true,
+    available: true,
+    latestObservedAt: latestObservedAt ? new Date(latestObservedAt).toISOString() : null,
+    targetCount: byTarget.size,
+    changes: changes.slice(0, limit),
+  };
+}
+
+export async function handleAroundChangesJson(request, env) {
+  const url = new URL(request.url);
+  try {
+    const payload = await readAroundChanges(env, url.searchParams.get("limit"));
+    return jsonResponse(payload, 200, {
+      "cache-control": "public, max-age=60, s-maxage=300",
+      "x-robots-tag": "noindex",
+    });
+  } catch (e) {
+    return jsonResponse({ ok: false, available: false, changes: [], error: String(e?.message || e) }, 503, {
+      "cache-control": "public, max-age=30, must-revalidate",
+      "x-robots-tag": "noindex",
+    });
+  }
+}
 
 // cron entry: crawl the neighborhood and persist the snapshot. A crawl where
 // EVERY neighbor errored stores nothing, so the last good snapshot keeps serving.
@@ -111,6 +281,7 @@ export async function cronAround(env) {
   if (report && Array.isArray(report.results) && report.results.some(r => !r.error) && env.RN_KV) {
     await env.RN_KV.put(AROUND_KEY, JSON.stringify(report));
   }
+  await persistAroundHistory(env, report);
 }
 
 async function readAroundReport(request, env) {
@@ -132,50 +303,39 @@ async function readAroundReport(request, env) {
 }
 
 export async function runAround(env) {
-  const results = await Promise.all(NEIGHBORS.map(async ({ name, url }) => {
+  // Four concurrent origins matches the census worker's bounded fan-out and
+  // avoids turning one cron tick into a burst against twenty sites.
+  const results = await mapWithConcurrency(NEIGHBORS, 4, async ({ name, url }) => {
     const t0 = Date.now();
     // honor robots.txt first. A disallow is a legitimate result (skipped row, no
     // error); an undetermined robots.txt is recorded as an error so a network-wide
     // outage can't overwrite the last-good snapshot with an all-skipped one.
     const gate = await robotsGate(env, url);
-    if (gate.kind === "disallow") return { name, url, skipped: "robots", robotsRule: gate.rule, elapsedMs: Date.now() - t0 };
-    if (gate.kind === "undetermined") return { name, url, error: gate.reason + ", not crawled", elapsedMs: Date.now() - t0 };
+    if (gate.kind === "disallow") return { name, url, skipped: "robots", robots: "disallow", robotsRule: gate.rule, elapsedMs: Date.now() - t0 };
+    if (gate.kind === "undetermined") return { name, url, robots: "undetermined", error: gate.reason + ", not crawled", elapsedMs: Date.now() - t0 };
     try {
-      // 4s deadline per neighbor: the 200KB body cap never bounded a tar-pit
-      // connection, so one hung homepage could stall the whole Promise.all.
-      // On timeout the catch below records an {error} row and the crawl moves on.
-      const res = await signedFetch(url, env, { signal: AbortSignal.timeout(4000) });
-      // some sites return 100MB+ — cap the body we read.
-      const reader = res.body?.getReader();
-      let body = "";
-      let received = 0;
-      const CAP = 200 * 1024;  // 200 KB plenty for <head>
-      if (reader) {
-        const dec = new TextDecoder();
-        while (received < CAP) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          received += value.byteLength;
-          body += dec.decode(value, { stream: true });
-        }
-        try { await reader.cancel(); } catch {}
-      }
-      const elapsed = Date.now() - t0;
+      // The kernel owns the deadline, stream cap, digest, and normalized signals.
+      const crawl = await crawlDocument(url, env, { timeoutMs: 4000, maxBytes: 200 * 1024 });
       return {
         name, url,
-        status:        res.status,
-        title:         extractTitle(body),
-        description:   extractMeta(body, "description") || extractMeta(body, "og:description") || "",
-        ogImage:       extractMeta(body, "og:image") || "",
-        server:        res.headers.get("server") || "",
-        lastModified:  res.headers.get("last-modified") || "",
-        contentType:   res.headers.get("content-type") || "",
-        elapsedMs:     elapsed,
+        finalUrl:      crawl.finalUrl,
+        status:        crawl.status,
+        title:         crawl.title,
+        description:   crawl.description,
+        ogImage:       extractMeta(crawl.text, "og:image") || "",
+        server:        crawl.server,
+        lastModified:  crawl.lastModified,
+        contentType:   crawl.contentType,
+        bodyHash:      crawl.bodyHash,
+        bytesRead:     crawl.bytesRead,
+        truncated:     crawl.truncated,
+        robots:        "allow",
+        elapsedMs:     crawl.elapsedMs,
       };
     } catch (e) {
-      return { name, url, error: String(e?.message || e), elapsedMs: Date.now() - t0 };
+      return { name, url, robots: "allow", error: String(e?.message || e), elapsedMs: Date.now() - t0 };
     }
-  }));
+  });
   // sort fastest → slowest; errors (no latency or huge values) fall to the
   // bottom so the table reads as a leaderboard.
   results.sort((a, b) => {
@@ -316,7 +476,8 @@ export function renderAroundHtml(report) {
     </table>
     <hr>
     <p class="dim" style="font-size:9pt">
-      Also available as JSON: <a href="/around/json">/around/json</a>.
+      Also available as JSON: <a href="/around/json">/around/json</a> &middot;
+      Change Radar: <a href="/around/changes.json">/around/changes.json</a>.
       Bot methodology and ethics: <a href="/bot">/bot</a>.
     </p>
     <footer>

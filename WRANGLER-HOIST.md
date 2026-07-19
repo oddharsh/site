@@ -1,6 +1,12 @@
-# Wrangler workspace hoist — migration notes (DO NOT MERGE until step 2 is done)
+# Wrangler workspace hoist — historical migration notes (superseded)
 
-This branch (`chore/wrangler-workspace-hoist`) collapses the five separate
+> The hoist described here is complete, and the later site consolidation made
+> the architecture simpler still: `holding/`, `cal/`, and `serendipity/` now
+> ship from the root `aadhar-sh` Worker. Do not follow the old satellite deploy
+> commands below; use the root `wrangler.jsonc` dry run and the current
+> `MAINTENANCE.md` runbook.
+
+This branch (`chore/wrangler-workspace-hoist`) collapsed the five separate
 Wrangler installs (root + `cal` + `cf-garage` + `lwe-ask` + `serendipity`, each
 carrying its own ~180MB toolchain) into **one hoisted install** via npm
 workspaces. Wrangler is declared and pinned exactly once in the root
@@ -8,11 +14,9 @@ workspaces. Wrangler is declared and pinned exactly once in the root
 workspace PATH. The re-pin to Wrangler 4.111.0 already landed separately; this
 is the "stop installing the same toolchain five times" change.
 
-**It cannot ship until the Cloudflare Workers Builds projects are reconfigured
-(step 2), because that is where the current per-subdir `npm ci` lives.** Merging
-this to `main` before the dashboard change would break the coffee and
-serendipity production deploys. It is staged on its own branch for exactly that
-reason.
+The historical dashboard prerequisite has been replaced by one root Workers
+Build project for the site Worker. The auxiliary Garage and LWE Workers still
+use their own configs; Cal and Serendipity do not.
 
 ## What the repo change does
 
@@ -26,9 +30,8 @@ reason.
   lockfile instead of five separate ones, and fails if a workspace adds a
   duplicate direct Wrangler declaration or install.
 - `.github/workflows/ci.yml` drops the four per-subdir `npm ci` steps; one root
-  `npm ci` now installs the whole workspace. The per-worker validation still runs
-  as `wrangler deploy --dry-run -c <dir>/wrangler.toml` from the root install
-  (the pattern CI already used for cal + serendipity).
+  `npm ci` now installs the whole workspace. Current CI validates the
+  consolidated site Worker once, then keeps the auxiliary Garage/LWE dry runs.
 - `.github/dependabot.yml` watches the root npm manifest weekly and opens one
   Wrangler-only PR. CI checks the exact root pin, lockfile, workspace tests,
   builds, and every Worker dry-run before merge.
@@ -40,9 +43,7 @@ git switch chore/wrangler-workspace-hoist
 rm -rf node_modules cal/node_modules cf-garage/node_modules lwe-ask/node_modules serendipity/node_modules
 npm install                 # one hoisted install for the whole workspace
 npm run check-wrangler      # must pass: one deploy-path Wrangler 4.111.0
-npx wrangler deploy --dry-run                              # homepage
-npx wrangler deploy --dry-run -c cal/wrangler.toml         # coffee
-npx wrangler deploy --dry-run -c serendipity/wrangler.toml # serendipity
+npx wrangler deploy --dry-run                              # site Worker
 npx wrangler deploy --dry-run -c lwe-ask/wrangler.toml
 npx wrangler deploy --dry-run -c cf-garage/wrangler.toml
 npm test        # homepage contracts
@@ -51,22 +52,18 @@ npm test -w cal # coffee worker tests (vitest resolves from the hoisted install)
 
 If every dry-run and test passes, the hoist works locally.
 
-## Step 2 — reconfigure Workers Builds (REQUIRED before merge; dashboard-only)
+## Step 2 — historical Workers Builds reconfiguration
 
-The three production Workers Builds projects deploy from the `production` branch.
-Today each is rooted at its own subdirectory and runs `npm ci` there. With one
-root lockfile, a subdir has no lockfile, so `npm ci` in a subdir fails. Point
-each build at the repo root and deploy the specific worker with `-c`:
+The current site Workers Build project deploys from the `production` branch and
+is rooted at `.`. It runs `npx wrangler deploy`, which invokes the root build
+and bundles all three site source islands:
 
 | Workers Builds project | Root directory | Deploy command |
 |---|---|---|
-| homepage (`aadhar-sh`) | `.` (unchanged) | `npx wrangler deploy` (unchanged — self-builds via build.command) |
-| coffee (`cal-aadhar-sh`) | change `cal` → `.` | `npx wrangler deploy -c cal/wrangler.toml` |
-| serendipity | change `serendipity` → `.` | `npx wrangler deploy -c serendipity/wrangler.toml` |
+| site (`aadhar-sh`) | `.` | `npx wrangler deploy` (self-builds via `build.command`) |
 
-Leave each project's separate dashboard Build command blank (Wrangler owns the
-homepage build via `wrangler.jsonc`'s `build.command`; the satellites have no
-build step). `lwe-ask` and `cf-garage` deploy by hand, not via Workers Builds —
+Leave the dashboard Build command blank (Wrangler owns the build via
+`wrangler.jsonc`'s `build.command`). `lwe-ask` and `cf-garage` deploy by hand, not via Workers Builds —
 run them from the repo root with `npx wrangler deploy -c <dir>/wrangler.toml`
 (or `npm run -w lwe-ask deploy`).
 
