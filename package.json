@@ -21,6 +21,7 @@
     "test": "node --test contract-tests.mjs"
   },
   "devDependencies": {
+    "@minify-html/node": "0.18.1",
     "lightningcss": "1.32.0",
     "oxc-minify": "0.140.0",
     "wrangler": "4.112.0"

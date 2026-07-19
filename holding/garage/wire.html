@@ -293,10 +293,10 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
     <p>The other five shells are <code class="m">notepad.js</code>, <code class="m">lens.js</code>,
       <code class="m">lens-browser.js</code>, <code class="m">quiz.js</code>, and
       <code class="m">tooltip.js</code>. <code class="m">sw.js</code> is now a tiny
-      unregister stub and stays readable. <code class="m">index.html</code> and every garage
-      page are
-      deliberately NOT touched: View Source on this site is supposed to read like
-      source.</p>
+      unregister stub and stays readable. Garage pages remain deliberately untouched:
+      View Source on this site is supposed to read like source. The homepage now gets
+      the same authoring/serving split, but only in the staged copy, with its readable
+      original kept as <code class="m">/index.src.html</code>.</p>
 
     <div class="cf-feat">
       <h2>Keeping View Source honest</h2>
@@ -314,6 +314,29 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
         uploaded": their bytes were identical to the shells the previous deploy had
         shipped. The readable originals were already in storage, just under a
         different name.</p>
+    </div>
+
+    <h2>The inline-block wrinkle</h2>
+    <p>External <code class="m">nav.js</code> and <code class="m">luna.css</code> have an obvious
+      place to put smaller bytes. The homepage also carries a large inline
+      <code class="m">&lt;style&gt;</code> block and several inline
+      <code class="m">&lt;script&gt;</code> blocks. Those are not pointers to the external
+      files: the code is literally inside the HTML document, so minifying the shells and
+      stylesheet never touched it.</p>
+    <p>The new profile closes that hole conservatively. Rust-backed
+      <code class="m">@minify-html/node</code> handles document structure with its own
+      JavaScript and CSS transforms disabled. Before that pass, homepage inline CSS goes
+      through the existing Lightning CSS settings and executable inline JavaScript goes
+      through the existing Oxc settings. JSON-LD and speculation rules are data, not
+      JavaScript, so they remain untouched.</p>
+    <div class="callout">
+      <strong>Structure gets smaller; meaning stays put.</strong> The served copy may lose
+      comments and formatting whitespace and normalize attribute spelling, but it keeps
+      the content, links, scripts, and semantic markers that crawlers and browsers use.
+      The readable authoring file is still one request away at
+      <code class="m">/index.src.html</code>. The current homepage build is
+      <code class="m">75.9KB &rarr; 46.3KB</code> raw, or
+      <code class="m">11.5KiB</code> gzip / <code class="m">9.9KiB</code> Brotli.
     </div>
 
     <h2>What about the CSS?</h2>
@@ -375,7 +398,7 @@ transition:filter 60ms ease-out}</pre></figure>
     <table class="cmp">
       <thead><tr><th>habitat</th><th>raw</th><th>on the wire (brotli)</th><th>verdict</th></tr></thead>
       <tbody>
-        <tr><td>homepage inline <code>&lt;style&gt;</code></td><td>30.4KB &rarr; 12.7KB</td><td class="y">~9.2KB &rarr; ~3.3KB</td><td class="n">protected: View Source is the exhibit</td></tr>
+        <tr><td>homepage inline <code>&lt;style&gt;</code></td><td>source block</td><td class="y">minified in the staged HTML</td><td>Lightning CSS; readable <code>/index.src.html</code> twin</td></tr>
         <tr><td>worker-rendered chrome (xpChromeCss)</td><td>9.4KB &rarr; 6.4KB</td><td>84 bytes saved in page context</td><td class="n">brotli already did the job</td></tr>
         <tr><td>shared external <code>luna.css</code></td><td>64.2KB &rarr; 36.0KB</td><td class="y">16.3KB &rarr; 7.4KB</td><td class="y">shipped: render-blocking + comment-heavy</td></tr>
         <tr><td>the CSS strings inside nav.js</td><td>&minus;703 bytes</td><td class="n">GREW by 44 bytes</td><td class="n">rejected by the measurement itself</td></tr>
@@ -389,10 +412,11 @@ transition:filter 60ms ease-out}</pre></figure>
       Minify-then-compress only wins where minification removes <em>information</em>, comments
       and long identifiers, which is why the JS build pays for itself. Where it only removes
       <em>redundancy</em>, whitespace and repeated patterns, brotli was going to erase that
-      anyway. The exception is the external <code class="m">luna.css</code>: it is shared,
-      render-blocking, and carries a large readable comment layer, so stripping that at deploy
-      saves about 9KB of local brotli without touching the source exhibit. The inline homepage
-      styles, garage HTML, and CSS-in-JS that became larger after brotli are still protected.
+      anyway. The exceptions are the external <code class="m">luna.css</code> and the homepage
+      staged copy: the sheet is shared, render-blocking, and carries a large readable comment
+      layer, so stripping that at deploy saves about 9KB of local brotli without touching the
+      source exhibit. Homepage inline CSS now goes through the same Lightning CSS pass; garage
+      HTML and CSS-in-JS that became larger after brotli are still protected.
     </div>
 
     <h2>The knobs are part of the contract</h2>
@@ -420,6 +444,9 @@ transition:filter 60ms ease-out}</pre></figure>
           <dt><code>removeWhitespace: true · legalComments: "none"</code></dt>
           <dd>Strip the serving prose, then add back one hand-written banner pointing to the
             readable twin. The source remains one click away.</dd>
+          <dt><code>scope: six shells + inline scripts</code></dt>
+          <dd>The six external client files and executable homepage inline scripts use Oxc.
+            JSON-LD, speculation rules, and garage-page scripts remain data or authored source.</dd>
         </dl>
         <p class="knob-foot"><span class="tag">guarded</span> Oxc parse errors and missing per-file
           markers stop the build; the client scripts remain separate and unbundled.</p>
@@ -437,9 +464,9 @@ transition:filter 60ms ease-out}</pre></figure>
           <dt><code>filename: ...</code></dt>
           <dd>Every transform gets a real source name, so a warning points back to the stylesheet
             or Worker module that caused it instead of becoming anonymous build noise.</dd>
-          <dt><code>scope: luna.css + /*min*/ literals</code></dt>
-          <dd>The shared external sheet and five static Worker CSS literals are eligible. Dynamic
-            CSS, interpolated templates, inline page styles, and garage HTML are not.</dd>
+          <dt><code>scope: luna.css + inline + /*min*/ literals</code></dt>
+          <dd>The shared external sheet, homepage inline style, and five static Worker CSS
+            literals are eligible. Dynamic CSS, interpolated templates, and garage HTML are not.</dd>
           <dt><code>source maps · CSS Modules · bundling</code></dt>
           <dd>Not enabled. There is no stylesheet graph to assemble and no transformed source that
             needs a separate map; the readable twin is the debugging surface.</dd>
@@ -455,10 +482,12 @@ transition:filter 60ms ease-out}</pre></figure>
         <tr><td>six JS shells</td><td>230.4KB raw</td><td class="y">128.2KB raw<br><small>64.2KB &rarr; 39.5KB local brotli</small></td><td>Oxc Minify; six readable <code>.src.js</code> twins</td></tr>
         <tr><td>shared <code>luna.css</code></td><td>64.2KB raw<br><small>16.3KB local brotli</small></td><td class="y">36.0KB raw<br><small>7.4KB local brotli</small></td><td>Lightning CSS; <code>/luna.src.css</code> twin</td></tr>
         <tr><td>Worker CSS</td><td>static template literals</td><td class="y">~3.8KB raw saved</td><td>only literals marked <code>/*min*/</code></td></tr>
-        <tr><td>HTML + inline CSS</td><td>readable source</td><td>unchanged</td><td>View Source is the exhibit</td></tr>
+        <tr><td>homepage HTML + inline CSS/JS</td><td>75.9KB raw</td><td class="y">46.3KB raw<br><small>11.5KiB gzip &rarr; 9.9KiB Brotli</small></td><td><code>minify-html</code> structure; existing Oxc/Lightning CSS; <code>/index.src.html</code> twin</td></tr>
+        <tr><td>garage HTML</td><td>readable source</td><td>unchanged</td><td>View Source is the exhibit</td></tr>
       </tbody>
       <caption>The build is deliberately asymmetric: minify the shared, render-blocking asset and
-        the JS islands; leave the things people inspect in their authored form.</caption>
+        the JS islands and homepage's inline code; leave garage pages and readable twins in their
+        authored form.</caption>
     </table>
 
     <div class="cf-feat">
@@ -522,9 +551,9 @@ transition:filter 60ms ease-out}</pre></figure>
         <tr><td>luna.css</td><td class="n">64.2KB raw</td><td class="y">36.0KB raw</td><td>Lightning CSS at deploy; readable twin</td></tr>
         <tr><td>Worker CSS literals</td><td class="n">5 static blocks</td><td class="y">~3.8KB raw saved</td><td>only <code>/*min*/</code> is eligible</td></tr>
         <tr><td>repeat /lens, /writing, /reading</td><td class="n">full re-render</td><td class="y">colo cache hit</td><td>caches.default, 200-only, short TTLs</td></tr>
-        <tr><td>readable source</td><td>served as written</td><td class="y">source twins</td><td><code>/&lt;name&gt;.src.js</code> + <code>/luna.src.css</code></td></tr>
+        <tr><td>readable source</td><td>served as written</td><td class="y">source twins</td><td><code>/&lt;name&gt;.src.js</code> + <code>/luna.src.css</code> + <code>/index.src.html</code></td></tr>
         <tr><td>authoring workflow</td><td>no build</td><td>no build</td><td>the transform lives in deploy, not in writing</td></tr>
-        <tr><td>homepage bytes</td><td>~31KB</td><td>~31KB</td><td>accepted floor: it re-renders per visit, by design</td></tr>
+        <tr><td>homepage bytes</td><td>75.9KB raw source</td><td class="y">46.3KB raw<br><small>11.5KiB gzip / 9.9KiB Brotli</small></td><td>structure + inline CSS/JS transform; per-visit re-render remains by design</td></tr>
       </tbody>
       <caption>The homepage line is the point of the whole page: per-visit randomization and a live
         counter are worth more here than 6KB of q11. Performance is a budget, and that is what this
@@ -533,7 +562,7 @@ transition:filter 60ms ease-out}</pre></figure>
 
     <footer>
       <p>&larr; back to the <a href="/garage">garage</a> &middot; <a href="/">aadhar.sh</a> &middot; kin: <a href="/garage/workers">off Pages, onto Workers</a> &middot; <a href="/garage/encoding">the thumbnail encoding study</a></p>
-      <p><small>build measurements refreshed 2026-07-18 on this site; the prober reads live production headers.</small></p>
+      <p><small>build measurements refreshed 2026-07-19 on this site; the prober reads live production headers.</small></p>
     </footer>
 
     <hr>
@@ -588,7 +617,7 @@ transition:filter 60ms ease-out}</pre></figure>
 <script type="application/json" id="luq-data">
 {
   "skin": "garage",
-  "intro": "The numbers above got measured twice; check your model once. 5 questions, every answer is somewhere upstream.",
+  "intro": "The numbers above got measured twice; check your model once. 6 questions, every answer is somewhere upstream.",
   "questions": [
     {
       "q": "The edge served the homepage at ~31KB while a local brotli q11 of the same document came out ~25KB. Where does that gap come from?",
@@ -653,6 +682,28 @@ transition:filter 60ms ease-out}</pre></figure>
         {
           "t": "The JS sample simply carried far more comment text than the CSS sample did.",
           "why": "Both snippet cards are comment-light; renaming drives the 44%. Comments star in the separate nav.js story, where prose was ~23KB of the raw file, and minification removed that too."
+        }
+      ]
+    },
+    {
+      "q": "What happens to the homepage's inline CSS and JavaScript in the new deploy-time profile?",
+      "options": [
+        {
+          "t": "minify-html handles document structure, while the existing Lightning CSS and Oxc settings minify the inline blocks; JSON-LD and speculation rules stay data",
+          "ok": true,
+          "why": "Right. The HTML tool owns the conservative structural pass, but it does not smuggle in a second JS or CSS policy. Inline executable code uses the same minifiers as the external assets, while data blocks remain untouched."
+        },
+        {
+          "t": "The inline blocks become pointers to /nav.js and /luna.css, so the browser downloads no code from the document",
+          "why": "They are still inline because they are homepage-specific code and data. The build shrinks those bodies in place; it does not create a second network dependency or rewrite the document's architecture."
+        },
+        {
+          "t": "minify-html's bundled JavaScript and CSS minifiers handle every code block automatically",
+          "why": "That would create a second minifier policy. The profile explicitly disables those bundled transforms and calls the existing Oxc and Lightning CSS functions instead."
+        },
+        {
+          "t": "The inline blocks stay verbatim because only external files can be minified safely",
+          "why": "That was the hole in the first pass. The new transform is careful about executable script types and leaves JSON-LD/speculation data alone, so inline code can shrink without treating data as JavaScript."
         }
       ]
     },
