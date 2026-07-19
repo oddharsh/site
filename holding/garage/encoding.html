@@ -6,11 +6,11 @@
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
 <title>aadhar.sh/garage/thumbnail encoding study</title>
-<meta name="description" content="The same photo run through every thumbnail encoding choice (AVIF/WebP/JPEG, jpegli vs system, chroma subsampling, quality, resolution), with real byte counts and the tradeoffs the site actually makes.">
+<meta name="description" content="The same photo run through AVIF, WebP, JPEG, jpegli, and a zenjpeg candidate, with real byte counts, quality measurements, encoder knobs, and the tradeoffs the site actually makes.">
 <link rel="canonical" href="https://aadhar.sh/garage/encoding">
 <meta property="og:type" content="website">
 <meta property="og:title" content="aadhar.sh/garage/thumbnail encoding study">
-<meta property="og:description" content="The same photo run through every thumbnail encoding choice (AVIF/WebP/JPEG, jpegli vs system, chroma subsampling, quality, resolution), with real byte counts and the tradeoffs the site actually makes.">
+<meta property="og:description" content="The same photo run through AVIF, WebP, JPEG, jpegli, and a zenjpeg candidate, with real byte counts, quality measurements, encoder knobs, and the tradeoffs the site actually makes.">
 <meta property="og:url" content="https://aadhar.sh/garage/encoding">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='3' y='6' width='7' height='20' rx='1' fill='%230855dd'/><rect x='12' y='6' width='5' height='20' rx='1' fill='%23166aee'/><rect x='19' y='6' width='10' height='20' rx='1' fill='%23003bda'/></svg>">
 <style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}
@@ -236,6 +236,11 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
 .enc-table th, .enc-table td { border: 1px solid oklch(80% 0.02 250); padding: 4px 10px; text-align: left; }
 .enc-table th { background: oklch(92.5% 0.018 95); font-family: var(--font-caption); }
 .enc-table td.num { font-family: var(--font-mono); text-align: right; }
+.enc-table-scroll { overflow-x: auto; margin: 8px 0 20px; }
+.zen-table { max-width: none; min-width: 650px; margin: 0; }
+.zen-table th:first-child, .zen-table td:first-child { width: 23%; }
+.zen-table td { vertical-align: top; }
+.zen-results { min-width: 480px; max-width: 620px; }
 .enc-ships { line-height: 1.6; }
 
   /* OS-window geometry inlined so FIRST PAINT matches nav.js (no shell "pop"
@@ -268,7 +273,8 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
       Every grid thumbnail ends a chain of choices: <em>format,
       quality, chroma subsampling, resolution</em>. Here I run one photo through all
       of them with real byte counts, so you can see the tradeoffs instead of taking them on faith.
-      The actual encoders the site uses (avifenc, jpegli, cwebp, sips) produced every number.
+      The actual encoders the site uses (avifenc, jpegli, cwebp, sips) produced the shipped
+      numbers; the zenjpeg candidate has its own fresh comparison below.
     </p>
     <p class="lede" style="margin-top:4px">
       <b>The verdict shipped:</b> the live pipeline (<code>holding/scripts/add-photos.sh</code>)
@@ -302,6 +308,64 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
       is why <code>~/.local/bin/cjpegli</code> exists and the pipeline shells out
       to it instead of the OS encoder. AVIF beats both, but JPEG still backs up
       every <code>&lt;img&gt;</code> as the universal fallback, so shrinking it still pays off.</p>
+
+    <h2>Zenjpeg enters the chat <span class="status review">candidate</span></h2>
+    <p>“Zenjpg” is a good shorthand, but the current Rust crate is published as
+      <a href="https://docs.rs/crate/zenjpeg/latest" rel="external"><code>zenjpeg</code></a>.
+      It is not a drop-in replacement for the shell command above: migrating would mean
+      checking in a small Rust encoder wrapper (or adopting a maintained CLI), then wiring
+      that binary into the remote photo Action. The interesting part is that it exposes the
+      quality/size search that jpegli currently leaves to us.</p>
+
+    <p class="callout"><b>Fresh matched-size result:</b> on the detailed 400&times;266 color fixture,
+      zenjpeg's hybrid mode at q80 landed within 52 bytes of current <code>cjpegli -q82 -p2</code>
+      and scored higher SSIM/PSNR. That is a migration lead, not a corpus-wide verdict.
+      It is also an apples-to-apples fresh run in progressive 4:4:4; the historical cards above
+      are the older 4:2:0 study.</p>
+
+    <h3>The knobs that matter</h3>
+    <div class="enc-table-scroll">
+      <table class="enc-table zen-table">
+        <thead><tr><th>knob</th><th>what it changes</th><th>thumbnail read</th></tr></thead>
+        <tbody>
+          <tr><td><code>quality</code></td><td>Quantization strength; zenjpeg's scale is jpegli-like, not a promise of equal bytes.</td><td>Calibrate by output size, not by matching <code>82</code> on the label.</td></tr>
+          <tr><td><code>ChromaSubsampling</code></td><td><code>None</code> = 4:4:4; <code>Quarter</code> = 4:2:0.</td><td>4:2:0 is the likely production candidate, but this first matched run used 4:4:4 because current cjpegli did.</td></tr>
+          <tr><td><code>progressive</code></td><td>Progressive versus baseline JPEG; progressive mode also optimizes Huffman coding.</td><td>Use progressive for the jpegli comparison; baseline is a separate decode/compatibility tradeoff.</td></tr>
+          <tr><td><code>ProgressiveScanMode</code></td><td>jpegli script, MozJPEG script, or <code>ProgressiveSearch</code> over 64 scan candidates.</td><td>Scan search can save about 2% more, but it is extra encode work worth testing only on the real batch.</td></tr>
+          <tr><td><code>auto_optimize(true)</code></td><td>Hybrid trellis: jpegli adaptive quantization plus rate-distortion optimization.</td><td>The promising mode: better matched-size quality here, about 3&times; the baseline zenjpeg encode time.</td></tr>
+          <tr><td><code>OptimizationPreset</code></td><td><code>Jpegli*</code>, <code>Mozjpeg*</code>, and <code>Hybrid*</code> bundle quant tables, AQ/trellis, scan strategy, and deringing policy.</td><td>Compare named profiles rather than accumulating unexplained flags in the Action.</td></tr>
+          <tr><td><code>deringing(true)</code></td><td>Overshoot deringing around saturated, high-contrast edges; enabled by default for jpegli/hybrid paths.</td><td>Useful protection, not a byte-saving knob: it changed nothing on this photo fixture, so it still needs an edge-heavy test image.</td></tr>
+          <tr><td><code>parallel</code></td><td>Optional Rayon-backed multi-threaded encoding, with restart markers supporting larger-image parallel work.</td><td>Potentially useful for a 158-photo Action batch; a 400px single-image benchmark is too small to justify it.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>First matched-size read</h3>
+    <p class="note">One 400&times;266 color fixture, current <code>zenjpeg 0.8.4</code>, progressive 4:4:4,
+      compared to the current <code>cjpegli -q82 -p2</code>. SSIM and PSNR are useful directional
+      signals, not a substitute for a multi-photo perceptual sweep.</p>
+    <div class="enc-table-scroll">
+      <table class="enc-table zen-table zen-results">
+        <thead><tr><th>encoder / mode</th><th>bytes</th><th>SSIM</th><th>PSNR</th></tr></thead>
+        <tbody>
+          <tr><td><b>cjpegli q82</b></td><td class="num">17,234</td><td class="num">.964791</td><td class="num">40.7492 dB</td></tr>
+          <tr><td>zenjpeg baseline q82</td><td class="num">17,252</td><td class="num">.964550</td><td class="num">40.7186 dB</td></tr>
+          <tr><td><b>zenjpeg hybrid q80</b></td><td class="num">17,286</td><td class="num">.967684</td><td class="num">41.2312 dB</td></tr>
+          <tr><td>zenjpeg hybrid q82</td><td class="num">18,317</td><td class="num">.969240</td><td class="num">41.5352 dB</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>So the useful comparison is not “q82 versus q82.” It is <b>same bytes versus same bytes</b>:
+      hybrid q80 was 52 bytes larger than cjpegli q82, while gaining about <b>0.0029 SSIM</b>
+      and <b>0.48 dB PSNR</b> on this frame. The cost was roughly 4.9 ms versus 1.7&ndash;2.0 ms
+      for zenjpeg's baseline path in the local in-process harness; real Action timings still need
+      a full 600px/400px batch and decode/write overhead.
+    </p>
+    <p class="note"><b>Migration gates:</b> re-run this against the full thumbnail corpus, include
+      4:2:0 and progressive-scan-search variants, inspect decoded output rather than only scalar
+      metrics, and measure the remote Action's wall time. Also review the crate's current
+      <a href="https://docs.rs/crate/zenjpeg/latest" rel="external">AGPL-3.0-or-later / commercial licensing</a>
+      before vendoring it into the production toolchain.</p>
 
     <h2>Grayscale: drop the chroma planes</h2>
     <p class="note">A black-and-white Leica frame (400&times;267). In a grayscale image the
@@ -344,7 +408,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
 
     <footer>
       <p>&larr; back to the <a href="/garage">garage</a> &middot; <a href="/">aadhar.sh</a></p>
-      <p><small>all byte counts are real output from <code style="font-family:var(--font-mono);font-size:9pt">avifenc · cjpegli · cwebp · sips</code>, run locally.</small></p>
+      <p><small>shipped byte counts are real output from <code style="font-family:var(--font-mono);font-size:9pt">avifenc · cjpegli · cwebp · sips</code>; the candidate table adds a reproducible <code style="font-family:var(--font-mono);font-size:9pt">zenjpeg 0.8.4</code> run.</small></p>
     </footer>
 
     <hr>
@@ -529,6 +593,28 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
         {
           "t": "Subsampling only applies to the JPEG fallback; the AVIF primary always keeps full chroma.",
           "why": "The AVIF cards are labeled 4:2:0 for a reason: the primary is subsampled too. Only the grayscale frames change mode, and that's to 4:0:0."
+        }
+      ]
+    },
+    {
+      "q": "Why is zenjpeg hybrid q80 interesting even though the current jpegli fallback is still shipped?",
+      "options": [
+        {
+          "t": "It matched the current jpegli byte budget on the test frame while improving SSIM/PSNR, but it costs more encode time and still needs a corpus-wide run.",
+          "ok": true,
+          "why": "The matched-size result is the lead: 17,286 bytes versus cjpegli's 17,234, with higher SSIM and PSNR. It is a candidate because one fixture and a local harness do not settle production CPU time or visual quality across every photo."
+        },
+        {
+          "t": "Hybrid trellis is a free smaller-file switch, so it should replace jpegli immediately without more measurements.",
+          "why": "The hybrid run was about 3x slower than zenjpeg's baseline path, and its q82 output was larger. The useful comparison is matched bytes, not a free size win."
+        },
+        {
+          "t": "Overshoot deringing removed the 52-byte difference on every image in the study.",
+          "why": "Deringing was byte-identical on the current fixtures. It is an edge-quality safeguard, not the source of the matched-size result."
+        },
+        {
+          "t": "The name change means zenjpeg is already the encoder used by the live remote Action.",
+          "why": "The live Action still builds and invokes cjpegli. Zenjpeg is documented here as a Rust candidate until the wrapper, licensing review, corpus benchmark, and migration are complete."
         }
       ]
     }
