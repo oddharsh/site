@@ -102,6 +102,10 @@ aggregations.
   Cloudflare KV; force-refresh with a known secret query param.
 - [/around/json](https://aadhar.sh/around/json): Same data as the /around
   HTML page, in JSON form. Cached 1 hour.
+- [/around/changes.json](https://aadhar.sh/around/changes.json): A bounded,
+  historical diff of the latest neighborhood observations — status, title,
+  description, robots policy, and bounded content-sample changes. It never
+  stores or returns the crawled page bodies.
 
 ## Redirects
 

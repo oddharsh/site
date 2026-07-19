@@ -102,6 +102,7 @@ const ROUTES = [
   { path: "/bot", status: 200, ct: "text/html" },
   { path: "/around", status: 200, ct: "text/html" },
   { path: "/around/json", status: 200, ct: "application/json" },
+  { path: "/around/changes.json", status: 200, ct: "application/json" },
   // the listings are retired: every listing URL 301s to the /photos archive
   { path: "/images", status: 301 },
   { path: "/images/", status: 301 },

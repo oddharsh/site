@@ -5,7 +5,7 @@
 
 import { WorkerEntrypoint } from "cloudflare:workers";
 import { handleAgentAuthClaim, handleAgentAuthRegister, handleAgentAuthRevoke, handleAgentAuthToken } from "./agent.js";
-import { cronAround, handleAround, handleAroundJson } from "./around.js";
+import { cronAround, handleAround, handleAroundChangesJson, handleAroundJson } from "./around.js";
 import { handleBotPage } from "./bot.js";
 import { cronCensus, handleCensus, handleCensusJson } from "./census.js";
 import { handleHitSvg } from "./counter.js";
@@ -35,7 +35,7 @@ export { Counter } from "./counter.js";
 // homepage, mutations, per-visitor views, and arbitrary inspection targets.
 // Query strings are excluded deliberately so owner bust tokens and future
 // query-bearing features cannot accidentally become shared cache keys.
-const WORKERS_CACHEABLE_PATHS = new Set("/favicon.ico /auth.md /.well-known/api-catalog /.well-known/agent-card.json /.well-known/oauth-protected-resource /.well-known/oauth-authorization-server /reading /updates /updates.json /restore /lens /ledger /writing /bot /around /around/json /photos /rn/tracks /rn/tracks.html /images/manifest.json /images/metadata.json".split(" "));
+const WORKERS_CACHEABLE_PATHS = new Set("/favicon.ico /auth.md /.well-known/api-catalog /.well-known/agent-card.json /.well-known/oauth-protected-resource /.well-known/oauth-authorization-server /reading /updates /updates.json /restore /lens /ledger /writing /bot /around /around/json /around/changes.json /photos /rn/tracks /rn/tracks.html /images/manifest.json /images/metadata.json".split(" "));
 
 function shouldUseWorkersCache(request) {
   if (request.method !== "GET" && request.method !== "HEAD") return false;
@@ -183,6 +183,7 @@ const ROUTES = new Map([
   ["/bot", handleBotPage],
   ["/around", handleAround],
   ["/around/json", handleAroundJson],
+  ["/around/changes.json", handleAroundChangesJson],
 
   ["/photos", handlePhotos],
   ["/photos/", routePhotosRedirect],
