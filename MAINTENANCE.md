@@ -18,11 +18,6 @@ the root `aadhar-sh` Worker. After the new route smoke tests pass, remove the
 old `cal-aadhar-sh` and `serendipity` route/custom-domain ownership so only
 the root Worker receives `/coffee*`, `/serendipity*`, and `cal.aadhar.sh/*`.
 
-The legacy `cal.aadhar.sh/` host redirects to the canonical `/coffee` page.
-The exact work-calendar slug and its Google Calendar destination are Worker
-secrets (`WORK_CALENDAR_SLUG`, `WORK_CALENDAR_URL`); both can be rotated
-without changing the route or source code.
-
 ## CI/CD release path
 
 `.github/workflows/ci.yml` is the pull-request gate. It installs locked

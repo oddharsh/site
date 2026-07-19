@@ -143,5 +143,5 @@
   // Secrets are NOT here (set on the Worker with `wrangler secret put`):
   //   RN_SIGNING_KEY_JWK, BROWSER_RENDER_TOKEN (legacy, no longer read), RN_BUST_SECRET
   //   ICAL_URL, RESEND_API_KEY, SIGNING_SECRET, SYNC_SECRET, EXA_API_KEY,
-  //   PARALLEL_API_KEY, COVER_SECRET, WORK_CALENDAR_SLUG, WORK_CALENDAR_URL
+  //   PARALLEL_API_KEY, COVER_SECRET
 }
