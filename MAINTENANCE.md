@@ -214,6 +214,8 @@ jpegli revision, runs the selected routine, and discards the source files when
 the job ends. The runner is the only execution host; nothing on the author's
 machine is part of the contract.
 
+The `Refresh image toolchain` workflow runs weekly and can be dispatched manually. It checks the upstream jpegli HEAD, opens a PR with the new pinned revision plus regenerated encoding-study evidence, and records Homebrew formula versions in the Actions summary. Dependabot covers the Actions, npm, and Pillow layers; Homebrew formulas and the jpegli source commit remain under this workflow's review.
+
 ## Local fallback setup
 
 ```bash
