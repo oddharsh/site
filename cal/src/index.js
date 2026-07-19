@@ -77,7 +77,7 @@ async function route_index(req, env, ctx) {
 
   const timings = {};
   const t0 = Date.now();
-  const { slots, cal } = await listOpenSlots(env, ctx, timings);
+  const { slots, cal } = await listOpenSlots(env, ctx, timings, { allowStale: true });
   const rs = Date.now();
   const html = bookingPage(slots, env);
   timings.render = Date.now() - rs;
@@ -221,7 +221,7 @@ async function route_decline(req, env, ctx, url) {
 // ok, source). Callers that only need the listing destructure { slots };
 // route_book also reads { cal } to fail closed on an unvouchable calendar.
 // timings (optional) collects per-step durations for a Server-Timing header.
-async function listOpenSlots(env, ctx, timings = null) {
+async function listOpenSlots(env, ctx, timings = null, options = {}) {
   const mark = (name, p) => {
     if (!timings) return p;
     const s = Date.now();
@@ -233,7 +233,7 @@ async function listOpenSlots(env, ctx, timings = null) {
   // bookings hold their slot for real — both must be seen or an approved coffee's
   // slot reopens and the caps undercount.
   const [cal, pending, confirmed] = await Promise.all([
-    mark("ics", fetchBusySWR(env, ctx)),
+    mark("ics", fetchBusySWR(env, ctx, options)),
     mark("pending", getRecent(env, "pending")),
     mark("confirmed", getRecent(env, "confirmed")),
   ]);

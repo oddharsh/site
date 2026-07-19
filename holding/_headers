@@ -125,6 +125,12 @@
   Cache-Control: public, max-age=2592000, s-maxage=2592000
   Content-Type: text/plain; charset=utf-8
 
+# Writing's registry is a deploy-time artifact consumed by the Run palette.
+# Keep browser revalidation cheap while allowing the edge to reuse it between
+# deploys; the deploy itself purges the old asset bytes.
+/writing/posts.json
+  Cache-Control: public, max-age=300, stale-while-revalidate=86400, s-maxage=86400
+
 # JWKS at the well-known location for Web Bot Auth. content-type must be
 # explicit because the path has no extension.
 /.well-known/http-message-signatures-directory
