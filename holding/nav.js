@@ -394,6 +394,41 @@
   // remembered desktop-icon positions (per label)
   function iconPos() { try { return JSON.parse(localStorage.getItem("axp-icons-pos") || "{}"); } catch (_) { return {}; } }
   function saveIconPos(p) { try { localStorage.setItem("axp-icons-pos", JSON.stringify(p)); } catch (_) {} }
+  var ICON_STEP = 86;
+  // Repair stale positions left behind when the profile set changed, or when
+  // two icons were accidentally dropped on one another.
+  function iconRectsOverlap(a, b) {
+    var gap = 4;
+    return a.left < b.right + gap && a.right + gap > b.left &&
+      a.top < b.bottom + gap && a.bottom + gap > b.top;
+  }
+  function iconRect(a) {
+    var r = a.getBoundingClientRect();
+    return { left: r.left, right: r.right, top: r.top, bottom: r.bottom };
+  }
+  function repairIconCollisions(wrap) {
+    var occupied = [], repaired = [], icons = wrap.querySelectorAll(".axp-ico");
+    [].forEach.call(icons, function (a, i) {
+      var r = iconRect(a);
+      if (occupied.some(function (other) { return iconRectsOverlap(r, other); })) {
+        var x = 9, y = 9 + i * ICON_STEP;
+        do {
+          a.style.left = x + "px";
+          a.style.top = y + "px";
+          r = iconRect(a);
+          if (!occupied.some(function (other) { return iconRectsOverlap(r, other); })) break;
+          y += ICON_STEP;
+        } while (y < innerHeight);
+        repaired.push({ key: a.dataset.key, x: x, y: y });
+      }
+      occupied.push(r);
+    });
+    if (repaired.length) {
+      var saved = iconPos();
+      repaired.forEach(function (p) { saved[p.key] = { x: p.x, y: p.y }; });
+      saveIconPos(saved);
+    }
+  }
 
   // build the desktop-shortcut layer on the wallpaper.
   // ADOPT-OR-BUILD: the static partial ships the icons at their default
@@ -407,6 +442,7 @@
         var p = savedPos[a.dataset.key];
         if (p) { a.style.left = p.x + "px"; a.style.top = p.y + "px"; }
       });
+      repairIconCollisions(existing);
       return;
     }
     var wrap = el('<nav id="axp-icons" aria-label="desktop shortcuts"></nav>');
@@ -419,7 +455,7 @@
       a.dataset.key = it.label;
       var p = saved[it.label];
       a.style.left = (p ? p.x : 9) + "px";
-      a.style.top = (p ? p.y : 9 + i * 86) + "px";
+      a.style.top = (p ? p.y : 9 + i * ICON_STEP) + "px";
       var cls = it.kind === "note" ? "note" : "";
       var style = ext ? ' style="background:' + qlColor(it.icon || it.label) + '"' : "";
       var inner = ext ? qlGlyph(it.icon || it.label) : "";
@@ -427,6 +463,7 @@
       wrap.appendChild(a);
     });
     D.body.appendChild(wrap);
+    repairIconCollisions(wrap);
   }
 
   // drag desktop icons around the wallpaper (transform-free: left/top, persisted).
