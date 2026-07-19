@@ -1,10 +1,12 @@
 # aadhar.sh — personal site
 
 A resto-mod 2003-aesthetic personal site for Aadharsh Pannirselvam, deployed
-as a Cloudflare Worker with static assets. Cohabiting projects in this directory:
+as a Cloudflare Worker with static assets. Cohabiting source modules in this
+directory, deployed by one site Worker:
 
-- **`holding/`** — the live `aadhar.sh` site (Workers static assets + the `_worker.js/` module worker)
-- **`cal/`** — a custom coffee/bagel booking system at `aadhar.sh/coffee` (its own Cloudflare Worker, LIVE via the aadhar.sh/coffee* zone route; deploy separately with `cd cal && npm run deploy`)
+- **`holding/`** — the live `aadhar.sh` site (Workers static assets + the `_worker.js/` dispatcher)
+- **`cal/`** — a custom coffee/bagel booking module at `aadhar.sh/coffee`, delegated by the root Worker
+- **`serendipity/`** — the event dashboard module at `aadhar.sh/serendipity`, delegated by the root Worker
 
 The look is deliberately Windows XP / Outlook Express era: blue title bars,
 Verdana/Tahoma fonts, raised 3D bevel buttons, sunken inputs, OKLCH-encoded
@@ -264,17 +266,17 @@ are installed on macOS, so the fallback path doesn't hit Helvetica/Arial.
 
 ---
 
-## cal/ — coffee booking worker
+## cal/ — coffee booking module
 
 Custom-built scheduler at `aadhar.sh/coffee`. Replaces Cal.com. Inspired by
 [jry.io/bagel](https://jry.io/bagel). Crediting Jacob Young in the footer.
 
-**Status: LIVE at aadhar.sh/coffee** (zone route -> cal-aadhar-sh worker).
-Deploys separately: `cd cal && npm run deploy` (secrets already set). The cal
-scripts pass `-c wrangler.toml` on purpose: a bare `wrangler deploy` from cal/
-wrongly inherits the repo-root `wrangler.jsonc` `build.command` (`node build.mjs`,
-which only stages the holding/ worker) and fails, so always go through the npm
-script or pass `-c wrangler.toml` yourself.
+**Status: LIVE at aadhar.sh/coffee**, delegated by the root `aadhar-sh` Worker.
+The source remains in `cal/src/` so its booking, calendar, and email policies
+stay readable and testable; `build.mjs` stages it beside the holding Worker
+entrypoint. Production secrets (`ICAL_URL`, `RESEND_API_KEY`, and
+`SIGNING_SECRET`) belong to the root Worker. `cal/wrangler.test.toml` is only a
+Vitest runtime fixture, never a deployment config.
 
 ### Architecture
 
@@ -297,7 +299,7 @@ script or pass `-c wrangler.toml` yourself.
 
 ```
 cal/
-├── wrangler.toml       — routes: aadhar.sh/coffee/*, cal.aadhar.sh/* (fallback)
+├── wrangler.test.toml  — test-only KV/vars config for Vitest (not deployed)
 ├── package.json
 └── src/
     ├── index.js        — router, request dispatch, KV state
@@ -312,12 +314,14 @@ cal/
 ### Required secrets (before deploy)
 
 ```bash
-cd cal && npm install
-npx wrangler kv namespace create CAL_BOOKINGS         # paste id into wrangler.toml
-npx wrangler secret put ICAL_URL                       # Google Calendar → "secret ICS"
-npx wrangler secret put RESEND_API_KEY                 # resend.com, DKIM-verify aadhar.sh
-openssl rand -hex 32 | npx wrangler secret put SIGNING_SECRET
-npx wrangler deploy
+npm install
+npx wrangler secret put -c wrangler.jsonc ICAL_URL        # Google Calendar → "secret ICS"
+npx wrangler secret put -c wrangler.jsonc RESEND_API_KEY  # resend.com, DKIM-verify aadhar.sh
+openssl rand -hex 32 | npx wrangler secret put -c wrangler.jsonc SIGNING_SECRET
+
+# Production still ships through merge -> CI -> production -> Workers Builds.
+# Local fallback, from the repository root only:
+npm run deploy
 ```
 
 ### Visual notes (XP reskin lives in `cal/src/templates.js`)

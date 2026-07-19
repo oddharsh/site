@@ -22,6 +22,11 @@
   },
   "dependencies_instrumentation": { "enabled": true },
   "workers_dev": false,
+  "routes": [
+    { "pattern": "aadhar.sh/coffee*", "zone_name": "aadhar.sh" },
+    { "pattern": "aadhar.sh/serendipity*", "zone_name": "aadhar.sh" },
+    { "pattern": "cal.aadhar.sh/*", "zone_name": "aadhar.sh" }
+  ],
   "assets": {
     "directory": "holding",
     "binding": "ASSETS",
@@ -36,6 +41,9 @@
       "/whoareyou", "/whoareyou.json", "/security",
       "/reading", "/updates", "/updates.json", "/restore",
       "/lens", "/lens/", "/lens/fetch", "/lens/shot", "/lens/browser",
+      "/lens/census", "/lens/census.json",
+      "/coffee", "/coffee/*", "/serendipity", "/serendipity/*",
+      "/slots", "/book", "/approve", "/decline",
       "/llms-full.txt", "/ledger", "/ledger.json",
       "/writing", "/writing/*",
       "/rn", "/rn/tracks", "/rn/tracks.html", "/rn/admin", "/rn/set",
@@ -50,9 +58,10 @@
   },
   "observability": { "enabled": true },
   "version_metadata": { "binding": "CF_VERSION_METADATA" },
-  "triggers": { "crons": ["*/30 * * * *", "17 8 * * 1"] },
+  "triggers": { "crons": ["*/30 * * * *", "17 8 * * 1", "0 4 * * 7"] },
   "kv_namespaces": [
-    { "binding": "RN_KV", "id": "3cb8a107c58e47dc9244e75b33401f36" }
+    { "binding": "RN_KV", "id": "3cb8a107c58e47dc9244e75b33401f36" },
+    { "binding": "BOOKINGS", "id": "37acb65118fe485583a90a94cb89365e" }
   ],
   "analytics_engine_datasets": [
     { "binding": "BOT_LEDGER", "dataset": "aadhar_bot_ledger" }
@@ -61,7 +70,8 @@
     { "binding": "PHOTOS_R2", "bucket_name": "aadhar-photos" }
   ],
   "d1_databases": [
-    { "binding": "RESTORE_DB", "database_name": "aadhar-restore", "database_id": "88c8daf1-3a36-4f8e-a2ad-dba8a74e1b9f" }
+    { "binding": "RESTORE_DB", "database_name": "aadhar-restore", "database_id": "88c8daf1-3a36-4f8e-a2ad-dba8a74e1b9f" },
+    { "binding": "SERENDIPITY_DB", "database_name": "serendipity", "database_id": "d3aa3215-17c3-4389-b224-cf465ddbb786" }
   ],
   "durable_objects": {
     "bindings": [
@@ -74,6 +84,21 @@
   // Quick Actions need remote mode during local Wrangler development.
   "browser": { "binding": "BROWSER", "remote": true },
   "vars": {
-    "COUNTER_SEED": "2375"
+    "COUNTER_SEED": "2375",
+    "HOST_TIMEZONE": "America/New_York",
+    "WORKING_HOURS_START": "9",
+    "WORKING_HOURS_END": "18",
+    "WORKING_DAYS": "1,2,3,4,5",
+    "SLOT_MINUTES": "30",
+    "BUFFER_MINUTES": "15",
+    "MIN_NOTICE_HOURS": "24",
+    "MAX_LOOKAHEAD_DAYS": "14",
+    "DAILY_LIMIT": "3",
+    "WEEKLY_LIMIT": "5",
+    "HOST_NAME": "aadharsh",
+    "HOST_EMAIL": "coffee@aadhar.sh",
+    "HOST_PUBLIC_URL": "https://aadhar.sh",
+    "EVENT_TITLE": "coffee with aadharsh",
+    "PENDING_TTL_DAYS": "7"
   }
 }

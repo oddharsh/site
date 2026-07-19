@@ -41,7 +41,11 @@ const ASSET_ENVELOPES = {
 // This is an observability alert, not a platform limit. It is intentionally
 // separate from the user-facing LCP budget: Worker code is server-side and can
 // grow without changing a browser's transfer path, provided TTFB/CPU stay well.
-const WORKER_BASELINE_GZIP_KIB = 86;
+// Intentional one-Worker consolidation baseline. The old homepage/Cal/
+// Serendipity aggregate measured 130.94 KiB gzip; the consolidated Worker is
+// 129.23 KiB gzip, so comparing it to the old homepage-only 86 KiB baseline
+// would report a misleading regression on every CI run.
+const WORKER_BASELINE_GZIP_KIB = 129.23;
 const WORKER_ALERT_GROWTH = 0.25;
 const TWINS = [
   "nav.src.js", "notepad.src.js", "lens.src.js", "lens-browser.src.js",

@@ -44,7 +44,7 @@ jobs:
       - name: Enforce homepage performance budget
         run: npm run perf-budget
 
-      - name: Validate homepage Worker config
+      - name: Validate site Worker config
         run: npx wrangler deploy --dry-run
 
       - name: Test homepage representation contracts
@@ -52,12 +52,6 @@ jobs:
 
       - name: Validate LWE and Garage page contracts
         run: npm run pages:check
-
-      - name: Validate coffee Worker config
-        run: npx wrangler deploy --dry-run -c cal/wrangler.toml
-
-      - name: Validate Serendipity Worker config
-        run: npx wrangler deploy --dry-run -c serendipity/wrangler.toml
 
       - name: Test coffee Worker
         run: npm test --workspace cal
@@ -68,8 +62,4 @@ jobs:
 
       - name: Validate LWE ask Worker config
         working-directory: lwe-ask
-        run: npx wrangler deploy --dry-run -c wrangler.toml
-
-      - name: Validate Serendipity Worker config
-        working-directory: serendipity
         run: npx wrangler deploy --dry-run -c wrangler.toml
