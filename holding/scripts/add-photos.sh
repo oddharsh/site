@@ -24,6 +24,11 @@
 #      that field, and the metadata regen drops it, so the bake runs right after
 #   5. busts the manifest:images KV key so the worker re-derives from R2
 #
+# REMOTE_RENDER_ONLY=1 skips R2 uploads and KV writes. The GitHub Actions
+# pipeline uses it because the source object is already in R2 and the generated
+# public tiers are returned as a normal PR; cache busting happens separately
+# after the production deploy.
+#
 # safe to re-run. skips thumbnail generation when all three thumb files are
 # already newer than the source. always uploads to R2 (wrangler r2 put is
 # idempotent). to add only new shots, pass just their paths (not the whole
@@ -221,15 +226,18 @@ echo "  exported: $H_OK  skipped (JPG sibling exists): $H_SKIP  failed: $H_FAIL"
 echo ""
 
 # ── phase 3: upload originals + HIF JPG exports to R2 ─────────────────
-echo "phase 3 — R2 uploads (parallel 4)"
-upload() {
-  local key="$1" file="$2" ct="$3"
-  if wrangler r2 object put "aadhar-photos/$key" --file="$file" --content-type="$ct" --remote >/dev/null 2>&1; then
-    printf "."
-  else
-    printf "✗"
-  fi
-}
+if [ "${REMOTE_RENDER_ONLY:-0}" = "1" ]; then
+  echo "phase 3 — R2 uploads skipped (source is already remote)"
+else
+  echo "phase 3 — R2 uploads (parallel 4)"
+  upload() {
+    local key="$1" file="$2" ct="$3"
+    if wrangler r2 object put "aadhar-photos/$key" --file="$file" --content-type="$ct" --remote >/dev/null 2>&1; then
+      printf "."
+    else
+      printf "✗"
+    fi
+  }
 
 # originals → R2. NB: HIF/HEIF originals are NOT uploaded — they stay local-only
 # (your drive + SSD are the archive); R2 gets their q100 JPG export instead
@@ -249,7 +257,7 @@ while IFS= read -r f; do
   if [ $PENDING -ge 4 ]; then wait; PENDING=0; fi
 done < "$SOURCES"
 wait
-echo ""
+  echo ""
 
 # HIF JPG exports (the click-through-friendly companion)
 if [ "$(ls -A "$EXPORTS" 2>/dev/null)" ]; then
@@ -264,6 +272,7 @@ if [ "$(ls -A "$EXPORTS" 2>/dev/null)" ]; then
   done
   wait
   echo ""
+fi
 fi
 echo ""
 
@@ -282,7 +291,9 @@ if [ -z "$META_SRC" ]; then
   META_SRC="$(dirname "$(head -1 "$SOURCES")")"
 fi
 if command -v exiftool >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
-  "$SCRIPT_DIR/extract-photo-metadata.sh" "$META_SRC" 2>&1 | tail -1
+  META_MODE=()
+  if [ "${REMOTE_RENDER_ONLY:-0}" = "1" ]; then META_MODE=(--merge); fi
+  "$SCRIPT_DIR/extract-photo-metadata.sh" "${META_MODE[@]}" "$META_SRC" 2>&1 | tail -1
 else
   echo "  exiftool or jq missing — skipping metadata regen"
 fi
@@ -301,9 +312,13 @@ fi
 
 node "$PROJECT_DIR/holding/scripts/check-photo-pipeline.mjs"
 
-wrangler kv key delete --namespace-id="$NS" "manifest:images"        --remote >/dev/null 2>&1 || true
-wrangler kv key delete --namespace-id="$NS" "manifest:images:fresh"  --remote >/dev/null 2>&1 || true
-echo "  manifest cache busted (value + fresh sentinel)"
+if [ "${REMOTE_RENDER_ONLY:-0}" = "1" ]; then
+  echo "  manifest cache bust deferred to the remote post-deploy workflow"
+else
+  wrangler kv key delete --namespace-id="$NS" "manifest:images"        --remote >/dev/null 2>&1 || true
+  wrangler kv key delete --namespace-id="$NS" "manifest:images:fresh"  --remote >/dev/null 2>&1 || true
+  echo "  manifest cache busted (value + fresh sentinel)"
+fi
 echo ""
 
 echo "✓ done. deploy with:"

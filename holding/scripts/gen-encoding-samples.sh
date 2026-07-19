@@ -10,20 +10,27 @@
 # formats + chroma subsampling) — XT509338 (Porsche: red calipers, yellow car,
 # blue accent, silver wheel, cobblestone) replaces the old near-monochrome tree.
 #
-#   ./holding/scripts/gen-encoding-samples.sh [STEM] [SRC_DIR]
+#   ./holding/scripts/gen-encoding-samples.sh [STEM] [SRC_DIR_OR_FILE]
+# With no source argument, the committed 400×266 PNG fixture is used, so the
+# study can be regenerated remotely without the private SOOC archive.
 #
 set -euo pipefail
 
-STEM="${1:-XT509338}"
-SRC_DIR="${2:-/Users/aadharsh/Downloads/to post (from ssd)}"
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 DEST="$( cd "$SCRIPT_DIR/.." && pwd )/garage/enc"
+STEM="${1:-XT509338}"
+SOURCE_ARG="${2:-$DEST/c-png.png}"
 CJPEGLI="$HOME/.local/bin/cjpegli"
 TMP="/tmp/enc-gen-$$"; mkdir -p "$TMP"; trap 'rm -rf "$TMP"' EXIT
 
 src=""
-for e in HIF hif HEIC heic jpg JPG; do [ -f "$SRC_DIR/$STEM.$e" ] && src="$SRC_DIR/$STEM.$e" && break; done
-[ -n "$src" ] || { echo "no source for $STEM in $SRC_DIR" >&2; exit 1; }
+if [ -f "$SOURCE_ARG" ]; then
+  src="$SOURCE_ARG"
+else
+  SRC_DIR="$SOURCE_ARG"
+  for e in HIF hif HEIC heic jpg JPG; do [ -f "$SRC_DIR/$STEM.$e" ] && src="$SRC_DIR/$STEM.$e" && break; done
+fi
+[ -n "$src" ] || { echo "no source for $STEM in $SOURCE_ARG" >&2; exit 1; }
 for c in "$CJPEGLI" avifenc cwebp sips exiftool; do command -v "$c" >/dev/null 2>&1 || [ -x "$c" ] || { echo "missing: $c" >&2; exit 1; }; done
 
 echo "source: $src"

@@ -1,39 +1,33 @@
 # Photo ingestion workflow
 
-This is the canonical path for adding photos. Full-resolution source files stay
-in the curated local source folder; JPGs are also retained in R2 as the public
-click-through copy, while HEIF/HIF originals remain local archive files and
-their full-resolution q100 JPG exports are retained in R2. Git receives only
-the public derived tiers and metadata.
+This is the canonical path for adding photos. Source objects live in the
+aadhar-photos R2 bucket; the GitHub Actions photo workflow downloads only the
+requested batch into ephemeral runner storage, generates the public derived
+tiers, and opens a normal artifact PR. Git receives only the public derived
+tiers and metadata. No image decoder or source archive is required on the
+author's machine.
 
 ## Input contract
 
-Drop full-quality `.jpg`, `.jpeg`, `.heic`, `.heif`, or `.hif` files into the
-canonical source folder:
+Upload a full-quality JPG, JPEG, HEIC, HEIF, or HIF object to the aadhar-photos
+R2 bucket using the Cloudflare dashboard or another remote upload path. Keep
+the exact flat object key; that is the value entered into the workflow. HEIF/HIF
+sources remain archive objects when possible, while a browser-renderable q100
+JPG companion remains the public click-through copy.
 
-```text
-/Users/aadharsh/Downloads/to post (from ssd)/
-```
+Run GitHub Actions → Remote photo pipeline and choose a routine:
 
-Then run from the repository root:
+- add-photo with one or more R2 keys, one per line;
+- reencode-thumbnails with all for the complete archive or selected keys;
+- refresh-metadata with the selected keys;
+- add-car-photo with one R2 key plus the car stem; or
+- regenerate-encoding-study, which uses the committed c-png.png fixture.
 
-```bash
-npm run photos -- "/path/to/photo.jpg" "/path/to/photo.HIF"
-# or process a curated folder
-npm run photos -- "/Users/aadharsh/Downloads/to post (from ssd)/"
-```
-
-The local prerequisites are the Homebrew tools in `MAINTENANCE.md` plus the
-pinned histogram decoder:
-
-```bash
-python3 -m pip install -r holding/scripts/requirements.txt
-```
-
-JPG inputs are uploaded to R2 as supplied. HEIF/HIF inputs remain local archive
-files and are converted to a full-resolution maximum-quality q100 JPG for the
-browser-visible R2 click target. HEIF-to-JPG is necessarily a transcode; q100
-is the highest quality exposed by the macOS conversion path.
+The workflow runs on an ephemeral GitHub-hosted macOS runner because the
+current decoder path deliberately uses macOS sips. It builds the pinned jpegli
+revision from holding/scripts/build-jpegli.sh, installs Homebrew's
+mozjpeg/libavif/exiftool/jq tools, and never commits the downloaded sources or
+the generated encoder binaries.
 
 ## Derived output
 
@@ -45,11 +39,15 @@ For every input, the pipeline:
 4. regenerates nullable EXIF/Fuji-recipe metadata;
 5. bakes four 64-bin RGB/luminance histograms from the shipped hashed JPG;
 6. validates the complete artifact graph with `npm run photos:check`;
-7. uploads the full-resolution R2 copy and busts the manifest cache.
+7. opens a PR containing the public files.
 
-The cache is not busted if the artifact validation fails. After reviewing the
-generated diff, commit the public files and merge through the normal release
-path; do not deploy the dirty photo-ingestion checkout directly.
+After reviewing the generated diff, merge through the normal release path.
+Once Workers Builds has deployed the merged photo PR, run the separate Bust
+remote photo manifest workflow. It deletes manifest:images and its freshness
+sentinel so the Worker re-derives the R2-backed listing against the new hashes.
+
+The local shell scripts remain the implementation source used by the runner
+and an emergency fallback; they are no longer the normal execution surface.
 
 To validate without rerunning ingestion:
 

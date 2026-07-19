@@ -14,8 +14,8 @@
 #
 # Deliberately does NOT touch R2 (it now holds only q100 JPG share copies, not
 # originals), metadata.json (its width/height are the ORIGINAL dims), or the
-# full-res click export. The true SOOC originals (.HIF) live in the local source
-# folder ($SRC) + your drive/SSD — that's the re-encode source, not R2.
+# full-res click export. The source folder may be a disposable directory
+# downloaded from R2 by the remote GitHub Actions workflow.
 #
 # FUTURE — native-aspect layout (when CSS masonry / grid-lanes ships in 2+
 # engines; today it's Safari 26 only, Chrome behind a flag — see /garage/horizon).
