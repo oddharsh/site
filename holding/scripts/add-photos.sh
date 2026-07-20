@@ -11,10 +11,13 @@
 #      on click, and the shareable R2 copy. for a JPG-source photo that's the
 #      original; for a HEIF source it's the maximum-quality q100 export from
 #      step 3.
-#   3. if the original is HEIF (.hif/.heic/.heif), generates a maximum-quality
-#      (formatOptions 100, full-res, EXIF-preserved) JPG export and uploads THAT.
-#      the .HIF original is NOT uploaded — it stays local-only (your drive + SSD
-#      are the archive). Chrome/Firefox can't render HEIF anyway, and R2 is for
+#   3. if the original is HEIF (.hif/.heic/.heif), generates a full-res archive
+#      JPG (sips decodes to lossless PNG, zenc re-encodes at q100 4:4:4 with the
+#      full trellis + scan-search, exiftool re-attaches source EXIF incl
+#      Orientation) and uploads THAT. Strictly better than the old sips q100 at
+#      ~the same size: higher quality, full chroma (sips shipped 4:2:0). The .HIF
+#      original is NOT uploaded — it stays local-only (your drive + SSD are the
+#      archive). Chrome/Firefox can't render HEIF anyway, and R2 is for
 #      serving/sharing, not cold storage of originals.
 #
 # post-processing:
@@ -217,14 +220,20 @@ while IFS= read -r f; do
     continue
   fi
   out="$EXPORTS/${stem}.jpg"
-  # formatOptions 100 = maximum-quality JPEG (full-res, EXIF + orientation
-  # preserved). this export IS the R2 share/click copy — the .HIF original is
-  # NOT uploaded (stays on your drive/SSD); HEIF-to-JPEG is necessarily a
-  # transcode, but this preserves the maximum quality sips exposes.
-  if sips -s format jpeg --setProperty formatOptions 100 "$f" --out "$out" >/dev/null 2>&1; then
-    H_OK=$((H_OK+1)); printf "."
+  # This export IS the R2 share/click copy; the .HIF original stays local-only.
+  # sips decodes the 10-bit HIF to a lossless PNG (sensor-native pixels, no
+  # orientation applied), zenc re-encodes it at q100 4:4:4 (full chroma, hybrid
+  # trellis + scan search), and exiftool copies the source EXIF back — including
+  # Orientation, so browsers rotate it exactly as the old sips export did. Net:
+  # strictly better than sips q100 (higher quality, full chroma) at ~the same
+  # size, and a big win at lower q. See /garage/encoding.
+  tmppng="$EXPORTS/${stem}.decode.png"
+  if sips -s format png "$f" --out "$tmppng" >/dev/null 2>&1 \
+     && "$ZENC" "$tmppng" "$out" -q 100 --yuv 444 >/dev/null 2>&1 \
+     && exiftool -TagsFromFile "$f" -all:all -overwrite_original "$out" >/dev/null 2>&1; then
+    rm -f "$tmppng"; H_OK=$((H_OK+1)); printf "."
   else
-    H_FAIL=$((H_FAIL+1)); printf "✗"
+    rm -f "$tmppng"; H_FAIL=$((H_FAIL+1)); printf "✗"
   fi
 done < "$SOURCES"
 echo ""
