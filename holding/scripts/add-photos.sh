@@ -147,8 +147,8 @@ avif_encode() {  # avif_encode <src.jpg> <out.avif>
   fi
 }
 
-# ── phase 1: square thumbnails (jpegli q82 JPG + AVIF, + mobile AVIF) ──
-echo "phase 1 — square thumbnails (${SQ}×${SQ} / ${SQ_SM}×${SQ_SM}, jpegli q82 + AVIF via $AVIF_ENCODER, metadata-stripped)"
+# ── phase 1: square thumbnails (zenc q84 JPG + 10-bit AVIF, + mobile AVIF) ──
+echo "phase 1 — square thumbnails (${SQ}×${SQ} / ${SQ_SM}×${SQ_SM}, zenc q84 + AVIF via $AVIF_ENCODER, metadata-stripped)"
 T_OK=0; T_SKIP=0; T_FAIL=0
 INTER="$TMP/inter"; mkdir -p "$INTER"
 while IFS= read -r f; do
