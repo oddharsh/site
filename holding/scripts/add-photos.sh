@@ -12,10 +12,13 @@
 #      original; for a HEIF source it's the maximum-quality q100 export from
 #      step 3.
 #   3. if the original is HEIF (.hif/.heic/.heif), generates a full-res archive
-#      JPG (sips decodes to lossless PNG, zenc re-encodes at q100 4:4:4 with the
+#      JPG (sips decodes to lossless PNG, zenc re-encodes at q100 4:2:2 with the
 #      full trellis + scan-search, exiftool re-attaches source EXIF incl
-#      Orientation) and uploads THAT. Strictly better than the old sips q100 at
-#      ~the same size: higher quality, full chroma (sips shipped 4:2:0). The .HIF
+#      Orientation) and uploads THAT. 4:2:2 matches the Fuji HIF's native chroma
+#      (the sensor records 10-bit 4:2:2): unlike 4:4:4 it doesn't spend bytes on
+#      interpolated horizontal chroma the sensor never sampled, and unlike 4:2:0
+#      it keeps the vertical chroma the sensor did record. Still a clear win over
+#      the old sips q100. The .HIF
 #      original is NOT uploaded — it stays local-only (your drive + SSD are the
 #      archive). Chrome/Firefox can't render HEIF anyway, and R2 is for
 #      serving/sharing, not cold storage of originals.
@@ -222,14 +225,16 @@ while IFS= read -r f; do
   out="$EXPORTS/${stem}.jpg"
   # This export IS the R2 share/click copy; the .HIF original stays local-only.
   # sips decodes the 10-bit HIF to a lossless PNG (sensor-native pixels, no
-  # orientation applied), zenc re-encodes it at q100 4:4:4 (full chroma, hybrid
-  # trellis + scan search), and exiftool copies the source EXIF back — including
-  # Orientation, so browsers rotate it exactly as the old sips export did. Net:
-  # strictly better than sips q100 (higher quality, full chroma) at ~the same
-  # size, and a big win at lower q. See /garage/encoding.
+  # orientation applied), zenc re-encodes it at q100 4:2:2 (the HIF's native
+  # chroma; hybrid trellis + scan search + sharp_yuv), and exiftool copies the
+  # source EXIF back, including Orientation, so browsers rotate it exactly as the
+  # old sips export did. Net: better than sips q100 and source-faithful on chroma
+  # (4:4:4 fabricates horizontal chroma the sensor never sampled; 4:2:0 drops the
+  # vertical chroma it did record). By Butteraugli 4:2:2 ties/beats both; by
+  # SSIMULACRA2 it gives up ~0.1-0.5 pt vs 4:4:4 for ~14% fewer bytes. /garage/encoding.
   tmppng="$EXPORTS/${stem}.decode.png"
   if sips -s format png "$f" --out "$tmppng" >/dev/null 2>&1 \
-     && "$ZENC" "$tmppng" "$out" -q 100 --yuv 444 >/dev/null 2>&1 \
+     && "$ZENC" "$tmppng" "$out" -q 100 --yuv 422 >/dev/null 2>&1 \
      && exiftool -TagsFromFile "$f" -all:all -overwrite_original "$out" >/dev/null 2>&1; then
     rm -f "$tmppng"; H_OK=$((H_OK+1)); printf "."
   else

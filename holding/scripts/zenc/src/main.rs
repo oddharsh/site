@@ -23,7 +23,11 @@ fn die(msg: String) -> ! {
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let (mut input, mut output, mut q): (Option<String>, Option<String>, u8) = (None, None, 82);
-    let mut chroma444 = false; // default 4:2:0 (thumbnails); --yuv 444 for the full-chroma archive
+    // Default 4:2:0 (thumbnails). --yuv 422 matches the Fuji HIF source (10-bit
+    // 4:2:2) for the archive: it neither discards the sensor's vertical chroma
+    // (as 4:2:0 does) nor fabricates horizontal chroma the sensor never sampled
+    // (as 4:4:4 does).
+    let mut chroma = ChromaSubsampling::Quarter;
     let mut i = 1;
     while i < args.len() {
         match args[i].as_str() {
@@ -36,16 +40,17 @@ fn main() {
             }
             "--yuv" => {
                 i += 1;
-                match args.get(i).map(String::as_str) {
-                    Some("444") => chroma444 = true,
-                    Some("420") => chroma444 = false,
-                    _ => die("--yuv takes 444 or 420".into()),
-                }
+                chroma = match args.get(i).map(String::as_str) {
+                    Some("444") => ChromaSubsampling::None,
+                    Some("422") => ChromaSubsampling::HalfHorizontal,
+                    Some("420") => ChromaSubsampling::Quarter,
+                    _ => die("--yuv takes 444, 422, or 420".into()),
+                };
             }
             "-h" | "--help" => {
-                println!("usage: zenc <input.(png|jpg)> <output.jpg> [-q N] [--yuv 444|420]");
+                println!("usage: zenc <input.(png|jpg)> <output.jpg> [-q N] [--yuv 444|422|420]");
                 println!("zenjpeg hybrid trellis + progressive scan search. default q=82, 4:2:0.");
-                println!("--yuv 444 keeps full chroma (archive); 4:2:0 adds sharp_yuv (thumbnails).");
+                println!("--yuv 422 matches the Fuji HIF source (archive); 4:2:0/4:2:2 add sharp_yuv.");
                 exit(0);
             }
             s if input.is_none() => input = Some(s.to_string()),
@@ -66,18 +71,13 @@ fn main() {
 
     // Order matters: auto_optimize() resets scan_mode to plain Progressive, so
     // request the scan SEARCH after it or the 64-candidate search is clobbered.
-    // sharp_yuv: linear-light 4:2:0 chroma downsampling, ~+0.2 SSIMULACRA2 on
-    // color photos (see /garage/encoding). It only touches the 4:2:0 downsample,
-    // so at 4:4:4 (the archive) there's nothing to sharpen and we skip it.
-    let chroma = if chroma444 {
-        ChromaSubsampling::None
-    } else {
-        ChromaSubsampling::Quarter
-    };
+    // sharp_yuv: linear-light chroma downsampling, ~+0.2 SSIMULACRA2 on color
+    // photos (see /garage/encoding). It only affects the downsample filter, so
+    // it's a no-op at 4:4:4 (nothing to sharpen) and helps at 4:2:2 / 4:2:0.
     let mut cfg = EncoderConfig::ycbcr(q, chroma)
         .auto_optimize(true)
         .scan_mode(ProgressiveScanMode::ProgressiveSearch);
-    if !chroma444 {
+    if chroma != ChromaSubsampling::None {
         cfg = cfg.sharp_yuv(true);
     }
 
