@@ -638,7 +638,7 @@
         if (!Object.prototype.hasOwnProperty.call(counterfactuals, key)) return;
         counterfactuals[key] = !counterfactuals[key];
         syncUrl(true);
-        withViewTransition(function () { renderMachine(); });
+        withViewTransition(function () { renderMachine(); }, true, ["axp-dialog"]);
       });
     });
   }
@@ -1198,13 +1198,16 @@
     }
   }
 
-  function withViewTransition(fn, animate) {
+  // Lens controls only replace content inside the existing page window. Tag
+  // those same-document transitions as dialogs so luna.css does not apply the
+  // cross-page minimize/restore choreography to the unchanged window shell.
+  function withViewTransition(fn, animate, types) {
     if (
       animate !== false &&
       document.startViewTransition &&
       !window.matchMedia("(prefers-reduced-motion: reduce)").matches
     ) {
-      return document.startViewTransition(fn);
+      return types ? document.startViewTransition({ update: fn, types: types }) : document.startViewTransition(fn);
     }
     return fn();
   }
@@ -1222,7 +1225,7 @@
         renderBrowser();
         renderStatus();
       } else { renderIdleLens(); renderBrowser(); }
-    }, animate);
+    }, animate, ["axp-dialog"]);
   }
   function setLens(l, animate, writeHistory) {
     lens = l;
@@ -1240,7 +1243,7 @@
         b.setAttribute("aria-selected", active ? "true" : "false");
       });
       if (data) renderMachine(); else { updateModeUi(); renderIdleLens(); }
-    }, shouldAnimate);
+    }, shouldAnimate, ["axp-dialog"]);
   }
 
   form.addEventListener("submit", function (e) { e.preventDefault(); run(urlInput.value); });

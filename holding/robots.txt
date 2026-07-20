@@ -29,6 +29,32 @@ Disallow: /around
 Disallow: /around/json
 Disallow: /lwe/ask
 
+# The named group is intentional: these crawlers otherwise stop inheriting the
+# wildcard group's rules under RFC 9309. Keep the same open Content-Signal and
+# private/action endpoint exclusions for every explicitly named AI agent.
+User-agent: GPTBot
+User-agent: ClaudeBot
+User-agent: Google-Extended
+User-agent: Applebot-Extended
+User-agent: Meta-ExternalAgent
+User-agent: CCBot
+User-agent: Bytespider
+User-agent: Amazonbot
+User-agent: OAI-SearchBot
+User-agent: ChatGPT-User
+User-agent: Claude-User
+User-agent: PerplexityBot
+User-agent: AadharshBot
+Content-Signal: search=yes,ai-input=yes,ai-train=yes
+Allow: /
+Disallow: /rn/admin
+Disallow: /rn/set
+Disallow: /rn/tracks
+Disallow: /whoareyou
+Disallow: /around
+Disallow: /around/json
+Disallow: /lwe/ask
+
 Sitemap: https://aadhar.sh/sitemap.xml
 
 # love, aadharsh
