@@ -65,11 +65,10 @@ export async function handleRn(request, env) {
 //
 // force-refresh with /rn/tracks?bust=<RN_BUST_SECRET>.
 // Spotify scrape goes through signedFetch (lib/botauth.js): the AadharshBot UA
-// plus a Web Bot Auth signature (RFC 9421) when the key is set, falling back to
-// UA-only if signing throws. That keeps the scrape honest with the promise /bot,
-// CLAUDE.md and AGENTS.md all make that EVERY outbound request is signed, and
-// matches the /around crawler. The embed pages are public + cacheable, so neither
-// the UA nor the signature affects what Spotify serves.
+// plus a required Web Bot Auth signature (RFC 9421). If the signing key is not
+// available, the scrape fails closed instead of making an unsigned request.
+// The embed pages are public + cacheable, so neither the UA nor the signature
+// affects what Spotify serves.
 export const RN_TRACKS_TTL  = 3600;
 
             // 1h: playlist tracks payload
@@ -337,10 +336,8 @@ export async function scrapeSpotifyEmbed(kindAndId, env) {
   const tryOnce = async (bustCache) => {
     const fresh = bustCache || isPlaylist;
     const qs = fresh ? `?_t=${Date.now()}` : "";
-    // signedFetch adds the Web Bot Auth signature (RFC 9421) when the key is set,
-    // and falls back to UA-only if signing throws — so the scrape now keeps the
-    // promise /bot, CLAUDE.md and AGENTS.md all make ("every request is signed"),
-    // where a plain fetch left this one path unsigned under the AadharshBot UA.
+    // signedFetch adds the required Web Bot Auth signature (RFC 9421), so a
+    // plain fetch can never accidentally put the AadharshBot UA on the wire.
     const res = await signedFetch(`https://open.spotify.com/embed/${kindAndId}${qs}`, env || {}, {
       // 5s deadline. scrapePlaylistTracks fans out to dozens of these embeds in
       // Promise.all, and one stuck fetch used to hang its whole branch. A timeout

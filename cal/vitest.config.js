@@ -9,18 +9,18 @@
 //
 // vitest-pool-workers v0.16 / vitest 4 model: the pool is wired as a Vite
 // plugin — `cloudflareTest({ wrangler })` — rather than via test.poolOptions
-// (the older defineWorkersConfig/"/config" entry is gone). wrangler.toml is the
-// single source of truth for bindings: the [vars] block and the BOOKINGS KV
+// (the older defineWorkersConfig/"/config" entry is gone). wrangler.test.toml
+// carries the test [vars] block and the BOOKINGS KV
 // namespace load automatically (the KV id is ignored locally — miniflare
 // simulates it). Secrets (SIGNING_SECRET, ICAL_URL, RESEND_API_KEY) are NOT in
-// wrangler.toml, so tests that need them pass values explicitly.
+// wrangler.test.toml, so tests that need them pass values explicitly.
 import { defineConfig } from "vitest/config";
 import { cloudflareTest } from "@cloudflare/vitest-pool-workers";
 
 export default defineConfig({
   plugins: [
     cloudflareTest({
-      wrangler: { configPath: "./wrangler.toml" },
+      wrangler: { configPath: "./wrangler.test.toml" },
     }),
   ],
 });

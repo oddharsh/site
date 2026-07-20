@@ -3,16 +3,27 @@
   "private": true,
   "description": "aadhar.sh - deploy-time transform only (authoring stays buildless; see build.mjs)",
   "type": "module",
+  "workspaces": [
+    "cal",
+    "cf-garage",
+    "lwe-ask",
+    "serendipity"
+  ],
   "scripts": {
     "build": "node build.mjs",
     "dev": "wrangler dev -c wrangler.dev.jsonc",
     "deploy": "wrangler deploy",
+    "photos": "bash holding/scripts/add-photos.sh",
+    "photos:check": "node holding/scripts/check-photo-pipeline.mjs",
     "perf-budget": "node perf-budget.mjs",
     "check-wrangler": "node scripts/check-wrangler.mjs",
+    "pages:check": "node scripts/check-page-contracts.mjs",
     "test": "node --test contract-tests.mjs"
   },
   "devDependencies": {
-    "esbuild": "^0.25.0",
-    "wrangler": "4.111.0"
+    "@minify-html/node": "0.18.1",
+    "lightningcss": "1.33.0",
+    "oxc-minify": "0.140.0",
+    "wrangler": "4.112.0"
   }
 }

@@ -28,6 +28,12 @@
       ]
     },
     {
+      "anchor": "https://aadhar.sh/around/changes.json",
+      "service-desc": [
+        { "href": "https://aadhar.sh/around/changes.json", "type": "application/json", "title": "Neighborhood Change Radar, as JSON" }
+      ]
+    },
+    {
       "anchor": "https://aadhar.sh/",
       "service-doc": [
         { "href": "https://aadhar.sh/llms.txt", "type": "text/plain", "title": "llms.txt site summary" },

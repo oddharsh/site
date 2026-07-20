@@ -169,11 +169,11 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
         ? ` data-size="${p.size}"` : "";
       const upAttr   = p.uploaded
         ? ` data-uploaded="${escAttr(p.uploaded)}"` : "";
-      // EXIF is NOT inlined. the tooltip lazy-fetches /images/meta/<stem>.json
-      // (per-photo EXIF; histogram is computed client-side) on first photo
-      // hover, keyed by stem (derivable from data-full). inlining it
-      // shipped ~14KB raw of EXIF on every no-store visit for a hover most
-      // visitors never make — lazy keeps the hot path lean. (the grid is a
+      // EXIF is NOT inlined. the tooltip idle-prefetches /images/meta/<stem>.json
+      // after page settle (with first-hover fetch as fallback), keyed by stem
+      // (derivable from data-full). inlining it shipped ~14KB raw of EXIF on
+      // every no-store visit for a hover most visitors never make — keeping it
+      // per-photo preserves the lean HTML path. (the grid is a
       // square 3-col CSS grid via aspect-ratio:1, so no per-tile --ar needed.)
       // dual-tier AVIF from the manifest: a 400px small tile + a 600px large.
       // mobile (<=560px) is pinned to 400px (its box is ~100px, so 400px is

@@ -125,6 +125,12 @@
   Cache-Control: public, max-age=2592000, s-maxage=2592000
   Content-Type: text/plain; charset=utf-8
 
+# Writing's registry is a deploy-time artifact consumed by the Run palette.
+# Keep browser revalidation cheap while allowing the edge to reuse it between
+# deploys; the deploy itself purges the old asset bytes.
+/writing/posts.json
+  Cache-Control: public, max-age=300, stale-while-revalidate=86400, s-maxage=86400
+
 # JWKS at the well-known location for Web Bot Auth. content-type must be
 # explicit because the path has no extension.
 /.well-known/http-message-signatures-directory
@@ -181,12 +187,23 @@
 /notepad.js
   Cache-Control: public, max-age=300, stale-while-revalidate=86400, s-maxage=86400
 
+# quiz.js — the understanding-check widget garage + lwe pages load. same
+# staleness model as the other shell scripts.
+/quiz.js
+  Cache-Control: public, max-age=300, stale-while-revalidate=86400, s-maxage=86400
+
 # lens.js — the /lens shell script. same class as nav.js/notepad.js (deferred,
 # SW-cached, one page loads it), but it had no rule so it shipped the platform
 # default (max-age=0, must-revalidate), paying a conditional 304 on every cold /
 # SW-less navigation to /lens. give it the same short-cache + SWR the other two
 # shell scripts get.
 /lens.js
+  Cache-Control: public, max-age=300, stale-while-revalidate=86400, s-maxage=86400
+
+# tooltip.js — the homepage's idle-prefetched interaction island. It is not
+# critical-path JS, but once a visitor warms it the browser should reuse it for
+# later hovers and the edge should serve it without a Worker invocation.
+/tooltip.js
   Cache-Control: public, max-age=300, stale-while-revalidate=86400, s-maxage=86400
 
 # the retired service worker's unregister stub (v136): revalidates on every

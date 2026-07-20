@@ -4,8 +4,9 @@
 // them in sync or a route silently goes static. Map in MAINTENANCE.md.
 
 import { WorkerEntrypoint } from "cloudflare:workers";
+import calWorker from "../../cal/src/index.js";
 import { handleAgentAuthClaim, handleAgentAuthRegister, handleAgentAuthRevoke, handleAgentAuthToken } from "./agent.js";
-import { cronAround, handleAround, handleAroundJson } from "./around.js";
+import { cronAround, handleAround, handleAroundChangesJson, handleAroundJson } from "./around.js";
 import { handleBotPage } from "./bot.js";
 import { cronCensus, handleCensus, handleCensusJson } from "./census.js";
 import { handleHitSvg } from "./counter.js";
@@ -25,6 +26,7 @@ import { handleSystemRestore, handleUpdatesJson, handleWindowsUpdate } from "./u
 import { handleWhoareyou, handleWhoareyouJson } from "./whoareyou.js";
 import { handleWritingIndex, handleWritingPost } from "./writing.js";
 import { handleLlmsFull } from "./x402.js";
+import { handleSerendipity, withSerendipitySecurityHeaders } from "../../serendipity/serendipity.js";
 
 // the homepage visit-counter Durable Object, hosted in-house (see counter.js).
 // must be a named export of the entry so the COUNTER binding can resolve it.
@@ -35,7 +37,7 @@ export { Counter } from "./counter.js";
 // homepage, mutations, per-visitor views, and arbitrary inspection targets.
 // Query strings are excluded deliberately so owner bust tokens and future
 // query-bearing features cannot accidentally become shared cache keys.
-const WORKERS_CACHEABLE_PATHS = new Set("/favicon.ico /auth.md /.well-known/api-catalog /.well-known/agent-card.json /.well-known/oauth-protected-resource /.well-known/oauth-authorization-server /reading /updates /updates.json /restore /lens /ledger /writing /bot /around /around/json /photos /rn/tracks /rn/tracks.html /images/manifest.json /images/metadata.json".split(" "));
+const WORKERS_CACHEABLE_PATHS = new Set("/favicon.ico /auth.md /.well-known/api-catalog /.well-known/agent-card.json /.well-known/oauth-protected-resource /.well-known/oauth-authorization-server /reading /updates /updates.json /restore /lens /ledger /writing /bot /around /around/json /around/changes.json /photos /rn/tracks /rn/tracks.html /images/manifest.json /images/metadata.json /coffee".split(" "));
 
 function shouldUseWorkersCache(request) {
   if (request.method !== "GET" && request.method !== "HEAD") return false;
@@ -121,6 +123,8 @@ export default {
   async scheduled(event, env, ctx) {
     if (event.cron === "17 8 * * 1") {
       ctx.waitUntil(cronCensus(env));   // Mondays 08:17 UTC — the longitudinal census
+    } else if (event.cron === "0 4 * * 7") {
+      ctx.waitUntil(calWorker.scheduled(event, env, ctx)); // Sundays 04:00 UTC — expire stale coffee bookings
     } else {
       ctx.waitUntil(cronAround(env));   // */30 — the neighborhood crawl
     }
@@ -183,6 +187,7 @@ const ROUTES = new Map([
   ["/bot", handleBotPage],
   ["/around", handleAround],
   ["/around/json", handleAroundJson],
+  ["/around/changes.json", handleAroundChangesJson],
 
   ["/photos", handlePhotos],
   ["/photos/", routePhotosRedirect],
@@ -204,6 +209,16 @@ const ROUTES = new Map([
 // Ordered prefix/pattern routes. Order is load-bearing: R2 originals and
 // per-photo metadata must win before the generic thumbnail clamp.
 const PREFIX = [
+  {
+    label: "/coffee/<path>",
+    match: (pathname) => pathname === "/coffee" || pathname.startsWith("/coffee/"),
+    handle: routeCoffee,
+  },
+  {
+    label: "/serendipity/<path>",
+    match: (pathname) => pathname === "/serendipity" || pathname.startsWith("/serendipity/"),
+    handle: routeSerendipity,
+  },
   {
     label: "/writing/<slug>",
     match: (pathname) => {
@@ -232,6 +247,12 @@ const PREFIX = [
 
 async function route(request, env, ctx) {
   const url = new URL(request.url);
+  // Preserve the legacy Cal subdomain while giving it a small, unlisted
+  // work-calendar escape hatch. The bare host is public and goes to the
+  // canonical booking page; only the exact secret slug redirects externally.
+  // The slug and destination stay in Worker secrets so rotating either one
+  // does not require a code change or a discoverable URL in the repository.
+  if (url.hostname === "cal.aadhar.sh") return routeCalHost(request, env, ctx, url);
   const exact = ROUTES.get(url.pathname);
   if (exact) return exact(request, env, ctx, url);
 
@@ -242,6 +263,52 @@ async function route(request, env, ctx) {
   // Static is the default: garage/lwe/cars/shell JS/discovery files fall through
   // to Workers static assets without a bespoke dispatcher branch.
   return env.ASSETS.fetch(request);
+}
+
+// These two applications remain separate source modules, but the public route
+// boundary is now owned by this Worker. Keeping the delegation here means the
+// app-specific cache, auth, and persistence policies stay local to each module.
+function routeCoffee(request, env, ctx) {
+  return calWorker.fetch(request, env, ctx);
+}
+
+function routeCalHost(request, env, ctx, url) {
+  const path = url.pathname.replace(/\/+$/, "") || "/";
+  if (path === "/") return noStoreRedirect("https://aadhar.sh/coffee");
+
+  if (env.WORK_CALENDAR_SLUG && path === `/${env.WORK_CALENDAR_SLUG}`) {
+    try {
+      const target = new URL(env.WORK_CALENDAR_URL || "");
+      if (target.protocol !== "https:" || target.hostname !== "calendar.app.google") {
+        throw new Error("unexpected work-calendar target");
+      }
+      return noStoreRedirect(target.href);
+    } catch {
+      // Fail closed: an absent or malformed target must not become an open
+      // redirect, and should not reveal whether the slug was correct.
+      return new Response("not found", { status: 404 });
+    }
+  }
+
+  // Keep the existing legacy Cal endpoint behavior for /coffee, /slots, and
+  // signed host actions while the alias remains a separate exact path.
+  return routeCoffee(request, env, ctx);
+}
+
+function noStoreRedirect(location) {
+  return new Response(null, {
+    status: 302,
+    headers: {
+      location,
+      "cache-control": "no-store",
+      "referrer-policy": "no-referrer",
+    },
+  });
+}
+
+async function routeSerendipity(request, env, ctx) {
+  const response = await handleSerendipity(request, env, ctx);
+  return withSerendipitySecurityHeaders(response);
 }
 
 // /favicon.ico — serve the inline traffic-cone SVG directly. without this,

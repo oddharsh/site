@@ -1,13 +1,19 @@
 #!/usr/bin/env bash
 # extract-photo-metadata.sh — read EXIF from a folder of SOOC photos and
 # emit /images/metadata.json keyed by R2 filename. the worker doesn't read
-# EXIF itself (would require bundling a JS library); this script runs
-# locally once per upload batch.
+# EXIF itself (would require bundling a JS library); this script runs in the
+# remote photo workflow once per upload batch.
 #
 # usage:
 #   ./extract-photo-metadata.sh /path/to/sooc-originals/
+#   ./extract-photo-metadata.sh --merge /path/to/selected-sources/
 #
 # requires: exiftool (brew install exiftool), jq (brew install jq)
+#
+# --merge updates only the supplied source batch and preserves metadata for
+# other photos. This is the mode used by the remote GitHub Actions pipeline,
+# where downloading the entire private archive for one new photo would be
+# wasteful.
 #
 # what's extracted (all values are nullable; tooltip skips lines that
 # are null rather than fabricate). discipline: read what the EXIF says,
@@ -51,8 +57,14 @@
 
 set -euo pipefail
 
+MERGE=0
+if [ "${1:-}" = "--merge" ]; then
+  MERGE=1
+  shift
+fi
+
 if [ $# -ne 1 ]; then
-  echo "usage: $0 /path/to/sooc-originals/" >&2
+  echo "usage: $0 [--merge] /path/to/sooc-originals/" >&2
   exit 1
 fi
 
@@ -78,6 +90,7 @@ OUT="$SCRIPT_DIR/../images/metadata.json"
 # exiftool can output JSON natively, but we want a custom shape keyed by
 # filename. dump per-file JSON and reduce with jq.
 TMP=$(mktemp)
+EXTRACTED=$(mktemp)
 # `-Orientation#` forces numeric output (1..8) for the rotation tag so
 # the jq below can compare integers. without the trailing #, exiftool
 # prints "Rotate 270 CW" which is human-readable but awkward to parse.
@@ -111,11 +124,11 @@ exiftool -json -q \
   '-Orientation#' \
   "$SRC_DIR" > "$TMP"
 
-# NB: histograms are no longer stored here. the Fuji LCD tooltip now computes the
-# {l,r,g,b} bars CLIENT-SIDE from the already-decoded thumbnail (canvas), which
-# dropped ~half of metadata.json and removed the Pillow dependency. photo-
-# histograms.py is kept on disk but unused. (when full-frame thumbnails ship, the
-# client-side bars become whole-image histograms for free.)
+# NB: metadata extraction intentionally emits only EXIF/Fuji fields. The
+# follow-up bake below adds the {l,r,g,b} histogram channels to each per-photo
+# meta file from the shipped hashed JPG tier. Keeping that as a separate step
+# makes incremental adds safe: extraction can rebuild metadata without
+# silently dropping histogram data.
 
 # transform into {stem: {camera, lens, aperture, shutter, iso, focal, date,
 # width, height}} keyed by stem (filename without extension). orientation-
@@ -167,9 +180,17 @@ jq '
       shadow_tone:    ($e.ShadowTone // null),
       saturation:     ($e.Saturation // null),
     })
-})' "$TMP" > "$OUT"
+})' "$TMP" > "$EXTRACTED"
 
-rm -f "$TMP"
+if [ "$MERGE" -eq 1 ] && [ -s "$OUT" ]; then
+  MERGED=$(mktemp)
+  jq -s '.[0] * .[1]' "$OUT" "$EXTRACTED" > "$MERGED"
+  mv "$MERGED" "$OUT"
+else
+  mv "$EXTRACTED" "$OUT"
+fi
+
+rm -f "$TMP" "$EXTRACTED"
 
 # also emit one file per photo for the tooltip's per-photo lazy fetch:
 # /images/meta/<stem>.json. these are immutable + content-addressed, so a visitor
@@ -179,16 +200,22 @@ rm -f "$TMP"
 # index.html (META_V) whenever this regenerates so caches refresh.
 META_DIR="$SCRIPT_DIR/../images/meta"
 mkdir -p "$META_DIR"
-rm -f "$META_DIR"/*.json   # drop stale per-stem files (e.g. removed photos)
+if [ "$MERGE" -eq 0 ]; then
+  rm -f "$META_DIR"/*.json   # drop stale per-stem files (e.g. removed photos)
+fi
 jq -c 'to_entries[]' "$OUT" | while IFS= read -r entry; do
   stem=$(printf '%s' "$entry" | jq -r '.key')
   printf '%s' "$entry" | jq -c '.value' > "$META_DIR/$stem.json"
 done
 
-# bake the 64-bin histograms back into the fresh meta files (the rm above
+# bake the 64-bin histograms back into the meta files (the full run may have
 # wiped them; the tooltip reads meta.hist instead of computing client-side)
 "$SCRIPT_DIR/photo-histograms.py" 2>&1 | tail -1
 
 COUNT=$(jq 'keys | length' "$OUT")
-echo "✓ extracted metadata for $COUNT photos → $OUT (+ $COUNT per-stem files in images/meta/, histograms baked)"
+if [ "$MERGE" -eq 1 ]; then
+  echo "✓ merged metadata for $COUNT photos → $OUT (+ per-stem files in images/meta/, histograms baked)"
+else
+  echo "✓ extracted metadata for $COUNT photos → $OUT (+ $COUNT per-stem files in images/meta/, histograms baked)"
+fi
 echo "  next: bump META_V in index.html if fields changed, commit + deploy."

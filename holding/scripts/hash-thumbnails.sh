@@ -14,6 +14,11 @@
 #
 # Idempotent: re-running only adds/refreshes entries whose bytes changed
 # (a changed file gets a NEW hashed name; the old one is left for git rm).
+# The map is MERGED into the existing hashes.json, never rebuilt from scratch:
+# an incremental add only stages the NEW stems in holding/images/ (the earlier
+# tiers were git-rm'd after they were hashed into holding/i/), so a from-scratch
+# rebuild would drop every prior stem from the map and make buildImagesManifest
+# skip those photos. Merging keeps the full 1:1 map across incremental adds.
 #
 #   ./holding/scripts/hash-thumbnails.sh
 #
@@ -37,7 +42,16 @@ def h8(path):
         return hashlib.sha256(f.read()).hexdigest()[:8]
 
 stems = sorted(f[:-4] for f in os.listdir(src_dir) if f.endswith(".jpg"))
-hashes, copied = {}, 0
+# MERGE into the existing map (see header): start from what's already hashed so
+# an incremental add adds/refreshes its stems without dropping the rest.
+hashes = {}
+if os.path.exists(map_path):
+    try:
+        with open(map_path) as f:
+            hashes = json.load(f)
+    except Exception:
+        hashes = {}
+copied = 0
 for stem in stems:
     tiers = {
         "a": (f"{stem}.avif",     f"{stem}.{{h}}.avif"),
@@ -61,9 +75,27 @@ for stem in stems:
 with open(map_path, "w") as f:
     json.dump(hashes, f, separators=(",", ":"), sort_keys=True)
 
+# Clean up so the tree matches the map (automates the old manual git rm):
+#   1. drop the un-hashed source tiers we just addressed — they live in /i/ now.
+#      metadata.json / alt.json / hashes.json / meta/ stay put.
+#   2. drop /i/ files a re-encode superseded (not referenced by the merged map),
+#      so holding/i/ is 1:1 with hashes.json and check-photo-pipeline.mjs passes.
+pruned_src = pruned_i = 0
+for stem in stems:
+    for name in (f"{stem}.avif", f"{stem}.jpg", f"{stem}-400.avif"):
+        p = os.path.join(src_dir, name)
+        if os.path.exists(p):
+            os.remove(p); pruned_src += 1
+expected = set()
+for st, e in hashes.items():
+    if "a" in e: expected.add(f"{st}.{e['a']}.avif")
+    if "j" in e: expected.add(f"{st}.{e['j']}.jpg")
+    if "s" in e: expected.add(f"{st}-400.{e['s']}.avif")
+for f in os.listdir(out_dir):
+    if f.endswith((".avif", ".jpg")) and f not in expected:
+        os.remove(os.path.join(out_dir, f)); pruned_i += 1
+
 print(f"hashed {len(hashes)} stems, copied {copied} new files -> {out_dir}")
+print(f"pruned {pruned_src} un-hashed source tiers, {pruned_i} superseded /i/ files")
 print(f"map: {map_path}")
 EOF
-
-echo "next: verify, then 'git rm' the un-hashed tier files from holding/images/"
-echo "      (metadata.json, alt.json, hashes.json, meta/ stay put)"

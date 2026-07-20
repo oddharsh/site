@@ -5,7 +5,7 @@
     "organization": "Aadharsh Pannirselvam",
     "url": "https://aadhar.sh/"
   },
-  "version": "1.0.0",
+  "version": "1.1.0",
   "documentationUrl": "https://aadhar.sh/llms.txt",
   "supportedInterfaces": [
     {
@@ -54,7 +54,7 @@
     {
       "id": "site-json-surfaces",
       "name": "Read public site data",
-      "description": "Read the site's public JSON surfaces, including the current playlist, photo archive indexes, neighborhood crawl, and crawl ledger.",
+      "description": "Read the site's public JSON surfaces, including the current playlist, photo archive indexes, neighborhood crawl, Change Radar, and crawl ledger.",
       "tags": [
         "http-json",
         "music",
@@ -139,6 +139,11 @@
         {
           "name": "Neighborhood crawl",
           "url": "https://aadhar.sh/around/json",
+          "authentication": "anonymous"
+        },
+        {
+          "name": "Neighborhood Change Radar",
+          "url": "https://aadhar.sh/around/changes.json",
           "authentication": "anonymous"
         },
         {

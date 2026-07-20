@@ -1,10 +1,12 @@
 # aadhar.sh — personal site
 
 A resto-mod 2003-aesthetic personal site for Aadharsh Pannirselvam, deployed
-as a Cloudflare Worker with static assets. Cohabiting projects in this directory:
+as a Cloudflare Worker with static assets. Cohabiting source modules in this
+directory, deployed by one site Worker:
 
-- **`holding/`** — the live `aadhar.sh` site (Workers static assets + the `_worker.js/` module worker)
-- **`cal/`** — a custom coffee/bagel booking system at `aadhar.sh/coffee` (its own Cloudflare Worker, LIVE via the aadhar.sh/coffee* zone route; deploy separately with `cd cal && npm run deploy`)
+- **`holding/`** — the live `aadhar.sh` site (Workers static assets + the `_worker.js/` dispatcher)
+- **`cal/`** — a custom coffee/bagel booking module at `aadhar.sh/coffee`, delegated by the root Worker
+- **`serendipity/`** — the event dashboard module at `aadhar.sh/serendipity`, delegated by the root Worker
 
 The look is deliberately Windows XP / Outlook Express era: blue title bars,
 Verdana/Tahoma fonts, raised 3D bevel buttons, sunken inputs, OKLCH-encoded
@@ -18,18 +20,26 @@ colors that read modern in source but render period-correct.
 > bust caches, version bumps, what every script does): [MAINTENANCE.md](MAINTENANCE.md).
 
 ```bash
-# deploy the homepage
-wrangler pages deploy holding --project-name aadhar-sh --branch holding --commit-dirty=true
+# production: merge to main; CI promotes the tested commit to production and
+# Workers Builds deploys it. Local fallback only:
+npm run deploy
 
 # add new photos (resize, EXIF-rotate, encode to AVIF+JPG, upload to R2,
-# regenerate metadata.json, bust manifest cache)
-./holding/scripts/add-photos.sh "/path/to/photo.HIF" /path/to/folder/
+# bake histograms, validate artifacts, and bust the manifest cache)
+npm run photos -- "/path/to/photo.HIF" "/path/to/folder/"
+
+# validate the committed photo artifact graph without uploading anything
+npm run photos:check
 
 # regenerate JUST the EXIF metadata (after photos are already uploaded)
 ./holding/scripts/extract-photo-metadata.sh "/Users/aadharsh/Downloads/to post (from ssd)"
 
-# rebuild jpegli (Google's JPEG encoder, ~25% smaller than mozjpeg)
-./holding/scripts/build-jpegli.sh
+# install the histogram decoder dependency
+python3 -m pip install -r holding/scripts/requirements.txt
+
+# build the JPEG thumbnail encoder (zenc = zenjpeg hybrid+scan). the pipeline
+# scripts auto-build it on first run; this is the explicit form.
+cargo build --release --manifest-path holding/scripts/zenc/Cargo.toml
 
 # bust caches via wrangler (RN_KV namespace ID hardcoded in scripts).
 # manifest busts need BOTH keys (value + freshness sentinel)
@@ -55,7 +65,9 @@ Single-page personal site at `aadhar.sh`. A Cloudflare Worker with static assets
 | `holding/index.html` | The whole page in one file. Inline CSS + JS. ~83KB uncompressed, ~24KB brotli (measured 2026-06; served `no-store`, so every visit pays it). Comments deliberately kept readable for View Source. |
 | `holding/writing/` | Written content as plain `.txt` files + `posts.json` registry `[{slug,title,date}]`. The worker renders each as an XP **Notepad** window at `/writing/<slug>` (a server-rendered `<textarea>` seeded with the canonical text — editable by nature, ephemeral by nature: no save → reload restores canonical, "writing in flux"), plus a "My Writing" folder index at `/writing`. Raw `.txt` stays fetchable at `/writing/<slug>.txt`. Author a post = drop a `.txt` + a `posts.json` entry. Render code (`handleWritingIndex`/`handleWritingPost`/`NOTEPAD_CSS`) lives in `_worker.js`. |
 | `holding/notepad.js` | Behavior for the `/writing` Notepad view (deferred, SW-cached): per-window `enhance()` wiring File/Edit/Format/View/Help menus, live Ln/Col + word-count status bar, Word-Wrap toggle, the classic **F5 time/date** stamp (Temporal w/ Date fallback), Select All, Print, About. Also opens folder notes as **popovers** that composite over the folder index, deliberately without touching the address bar (notes are `popover="manual"`, so several stay open at once and one URL couldn't honestly name three windows; Esc closes the topmost). The permalink stays real: each row is an `<a href="/writing/<slug>">` the worker serves standalone, and a modified click passes through to it. Chrome itself is SSR'd by `_worker.js`. No-op without a `.np-window`. |
-| `holding/nav.js` | Site-wide XP **desktop shell**. The ONE shared external asset (deferred, SW-cached) — every page includes `<script src="/nav.js" defer>`; it injects its own `<style>` + builds, into `<body>`: the **Bliss desktop** wallpaper, **draggable desktop icons** (Notepad + the 5 profiles, positions persisted in localStorage), the **taskbar** (Start orb → Run, first-level-subpage app buttons each with a per-section SVG icon, clock via Temporal), and the **Run** command palette (⌘K / Start). Also owns the **OS-window model**: body is a clipping flex desktop, each `.window`/`.np-window` is pinned + its content scrolls internally behind a **custom XP scrollbar**, windows are **draggable** (top is a hard boundary) + **resizable**, and View Transitions animate only the window. Sets each first-level route's **tab favicon** to its section icon. Run destinations: pages + profiles inline; 146 photos lazy-loaded from `/images/manifest.json` with `/images/alt.json` captions. Wired into homepage + all garage pages + worker-gen `/around`,`/whoareyou`,`/bot` + serendipity shell. |
+| `holding/tooltip.js` | Rich XP hover island for photos, tracks, artists, and car references. The homepage keeps only a tiny inline loader that idle-prefetches this module and replays a cold first hover; coarse-pointer visitors never load it. |
+| `holding/nav.js` | Site-wide XP **desktop shell**. The ONE shared external asset (deferred, SW-cached) — every page includes `<script src="/nav.js" defer>`; it injects its own `<style>` + builds, into `<body>`: the **Bliss desktop** wallpaper, **draggable desktop icons** (Notepad + the 5 profiles, positions persisted in localStorage), the **taskbar** (Start orb → Run, first-level-subpage app buttons each with a per-section SVG icon, clock via Temporal), and the **Run** command palette (⌘K / Start). Also owns the **OS-window model**: body is a clipping flex desktop, each `.window`/`.np-window` is pinned + its content scrolls internally behind a **custom XP scrollbar**, windows are **draggable** (top is a hard boundary) + **resizable**, and View Transitions animate only the window. Sets each first-level route's **tab favicon** to its section icon. Run destinations: pages + profiles inline; 158 photos lazy-loaded from `/images/manifest.json` with `/images/alt.json` captions. Wired into homepage + all garage pages + worker-gen `/around`,`/whoareyou`,`/bot` + serendipity shell. |
+| `holding/quiz.js` | The **understanding-check** widget (deferred, shared, minified at deploy with a `/quiz.src.js` twin). Every garage + LWE content page ends with an active-recall quiz rendered by this one script from an inline `<script type="application/json" id="luq-data">` block: garage pages get an XP GroupBox self-test (`<section id="luq">` mount), LWE pages get the quiz as a continuation of the MSN chat (appended into `.log`, no mount). Misconception-based distractors, deterministic option shuffle, per-page best score in localStorage. The idea is Geoffrey Litt's "Understanding is the new bottleneck" (credited in the widget footer); /lens carries the same pedagogy in copy (predict-then-check mode notes, the Delta counterfactual lab as a Papert micro-world). |
 | `holding/_worker.js` | The module worker (bundled by wrangler at deploy). Owns routing, photo serving from R2, manifest building, Spotify playlist scraping, AadharshBot crawler, the `/writing` Notepad pages, cache-control overrides. |
 | `holding/_headers` | Static-asset cache + security headers (CSP, Permissions-Policy, etc.). Applied to direct static-asset requests; the worker overrides cache-control for select paths. |
 | `holding/sw.js` | RETIRED (v136, 2026-07-03): now a ~15-line unregister stub (skipWaiting, delete caches, claim, unregister) that must keep serving 200 for a year+ so installed copies clean themselves up. No CACHE_VERSION anymore; the deploy-log vnum lives in D1 alone (bump-version.sh derives the next from MAX(vnum)). Repeat-visit speed comes from immutable assets + bfcache + speculation prerender. |
@@ -63,8 +75,8 @@ Single-page personal site at `aadhar.sh`. A Cloudflare Worker with static assets
 | `holding/index.md` | Markdown source of homepage copy (used by `/llms.txt` and as a fallback). |
 | `holding/sitemap.xml`, `robots.txt` | Standard SEO files. robots.txt explicitly allows AadharshBot. |
 | `holding/.well-known/http-message-signatures-directory` | JWKS for AadharshBot's Ed25519 public key (Web Bot Auth IETF draft). |
-| `holding/images/` + `holding/i/` | `images/` holds the photo DATA surfaces: `metadata.json` (EXIF index), `meta/<stem>.json` (per-photo EXIF the tooltip fetches), `alt.json` (AI captions), `hashes.json` (stem to hash8 map). The pixel tiers (600px AVIF+JPG squares + 400px mobile AVIF) live in `i/` under content-hashed names, 438 files for 146 photos. |
-| `holding/scripts/` | Photo-pipeline + asset scripts (see below). Beyond the core pipeline (`add-photos.sh`, `extract-photo-metadata.sh`, `build-jpegli.sh`): `add-car-photo.sh` (one resto-mod reference photo into the dual AVIF+JPG pair the car-link tooltips expect, output `holding/cars/<stem>.{avif,jpg}`, no EXIF/R2); `gen-alt-text.py` (AI alt text for every grid photo via the cf-garage Workers-AI caption endpoint, writes `holding/images/alt.json` `{stem: alt}`, resumable); `gen-encoding-samples.sh` (regenerates the color sample set for the `/garage/encoding` study through every encoder, prints byte counts + bytes-per-pixel); `reencode-thumbnails.sh` (re-encodes all published grid thumbnails as pre-cropped center squares from the canonical source folder, two square tiers); `photo-histograms.py` (kept on disk but unused: histograms are now computed client-side). |
+| `holding/images/` + `holding/i/` | `images/` holds the photo DATA surfaces: `metadata.json` (EXIF index), `meta/<stem>.json` (per-photo EXIF plus four 64-bin histogram channels the tooltip fetches), `alt.json` (AI captions), `hashes.json` (stem to hash8 map). The pixel tiers (600px AVIF+JPG squares + 400px mobile AVIF) live in `i/` under content-hashed names, 474 files for 158 photos. |
+| `holding/scripts/` | Photo-pipeline + asset scripts (see below). Beyond the core pipeline (`add-photos.sh`, `extract-photo-metadata.sh`, `check-photo-pipeline.mjs`, `zenc/` the JPEG encoder crate): `add-car-photo.sh` (one resto-mod reference photo into the dual AVIF+JPG pair the car-link tooltips expect, output `holding/cars/<stem>.{avif,jpg}`, no EXIF/R2); `gen-alt-text.py` (AI alt text for every grid photo via the cf-garage Workers-AI caption endpoint, writes `holding/images/alt.json` `{stem: alt}`, resumable); `gen-encoding-samples.sh` (regenerates the color sample set for the `/garage/encoding` study through every encoder, prints byte counts + bytes-per-pixel); `reencode-thumbnails.sh` (re-encodes all published grid thumbnails as pre-cropped center squares from the canonical source folder, two square tiers); `photo-histograms.py` (bakes the four 64-bin RGB/luminance channels into each per-photo meta file). |
 
 ### The photo pipeline
 
@@ -75,8 +87,10 @@ SOOC original (in /Users/aadharsh/Downloads/to post (from ssd)/)
 [add-photos.sh] — resize, rotate, encode:
    |   1. sips: resize to 1200px + format-convert (handles HEIF/HIF)
    |   2. jpegtran -rotate N (lossless EXIF orientation, mozjpeg's tool)
-   |   3. cjpegli -q 82 -p 2 (Google's encoder, ~25% smaller than mozjpeg)
-   |   4. avifenc CQ 30 (or sips formatOptions 60 fallback) — primary
+   |   3. zenc -q 84 (zenjpeg hybrid trellis + progressive scan search; ~4%
+   |      under the retired cjpegli at equal quality, q84 ≈ old cjpegli q82)
+   |   4. avifenc -q 63 -d 10 (10-bit AVIF, ~6% smaller at equal quality than
+   |      8-bit; sips formatOptions 60 fallback) — primary
    |
    v
 holding/images/<stem>.{avif,jpg}  +  R2 aadhar-photos/<filename>
@@ -88,10 +102,9 @@ holding/images/<stem>.{avif,jpg}  +  R2 aadhar-photos/<filename>
    |   Grain roughness + size, tone curves, saturation) plus standard
    |   exposure / focus / metering / WB shift / Kelvin temperature.
    |   also writes per-photo /images/meta/<stem>.json files (what the
-   |   tooltip actually fetches on hover). histograms are NO LONGER
-   |   stored — the Fuji LCD tooltip computes the 64-bin luminance
-   |   histogram client-side from the on-screen thumbnail
-   |   (photo-histograms.py is kept on disk but unused).
+   |   tooltip actually fetches on hover). photo-histograms.py then bakes
+   |   four 64-bin RGB/luminance channels into those files from the shipped
+   |   hashed JPG tier, so the tooltip has a stable, whole-image histogram.
    |   discipline: every field is nullable; the tooltip skips lines
    |   that are null rather than fabricate. never guess metadata.
 ```
@@ -100,15 +113,18 @@ Two encoders + one transform tool, all built from source:
 
 - **mozjpeg** (`brew install mozjpeg`, keg-only at `/opt/homebrew/opt/mozjpeg/`)
   — provides `jpegtran` for lossless EXIF-orientation rotation.
-- **jpegli** (built from `github.com/google/jpegli`, installed at
-  `~/.local/bin/cjpegli`) — JPEG universal-fallback encoder.
-  See `holding/scripts/build-jpegli.sh` to rebuild.
+- **zenc** (`holding/scripts/zenc/`, a Rust crate wrapping
+  `github.com/imazen/zenjpeg`) — the JPEG universal-fallback encoder: hybrid
+  trellis + 64-candidate progressive scan search + sharp_yuv chroma, ~4% under the
+  retired cjpegli at equal quality. Builds with `cargo`; dependabot tracks the
+  zenjpeg pin. Replaced the from-source jpegli build (2026-07). See `holding/scripts/zenc/src/main.rs`.
 - **libavif** (`brew install libavif`, optional) — `avifenc` for the
   primary AVIF thumbnail. Falls back to `sips -s format avif` (macOS
   native, no extra dep) when avifenc isn't installed.
 - **exiftool, jq** (`brew install exiftool jq`) — metadata extraction.
-- **Pillow** — no longer needed: histograms are computed client-side
-  from the thumbnail; `photo-histograms.py` is kept on disk but unused.
+- **Pillow** (`python3 -m pip install -r holding/scripts/requirements.txt`) — required by
+  `photo-histograms.py` to bake the four 64-bin RGB/luminance channels from
+  the shipped hashed JPG tier.
 
 ### `<picture>` + content-addressed thumbnails
 
@@ -191,7 +207,7 @@ the site doesn't actually serve. To verify:
   playlist tracks, photo manifest, artist profile pics, and a few crawler
   results. ~10K writes/day budget; we use a handful.
 - **PHOTOS_R2** — R2 bucket `aadhar-photos`, holds the SOOC originals
-  (~3 GB / 146 photos at FUJIFILM X-T5 + Leica resolution).
+  (~3 GB / 158 photos at FUJIFILM X-T5 + Leica resolution).
 - **ASSETS** — the Workers static-assets binding (wrangler.jsonc `assets`), serves files from holding/.
 - **RESTORE_DB** — D1 database `aadhar-restore` (id `88c8daf1-3a36-4f8e-a2ad-dba8a74e1b9f`),
   the **single source of truth for the deploy log**. One row per logged deploy
@@ -232,7 +248,7 @@ canonical token set (fonts, Luna palette, bevels, radii). Pull from those before
 hardcoding any color/font/bevel. Captions = Trebuchet MS, UI/body = Tahoma→Verdana,
 mono = Courier New — those three stacks only.
 
-**HARD RULES (strong owner preference):** (1) **internal/native fonts ONLY** — never ship `@font-face` with `url()`, web fonts, `@import`, or font preloads; the served pages carry ZERO font bytes (the design system's `@font-face local()` rules are reference-only, never inlined into a served page). (2) **keep perf lean** — fold design tokens in WITHOUT regressing the byte budget: on a brotli'd inline page, tokenizing repeated literals is a wash (brotli already dedupes) while token *definitions* are net-new bytes, so only the FONT tokens (`--font-*`) are inlined site-wide; color/gradient tokens are NOT inlined (they cost bytes for no brotli gain). no external stylesheet, no JS for styling. (3) **authoring stays buildless; serving is minified** — the ONLY build is `build.mjs` (deploy-time transform: minifies the three shell scripts + `luna.css` into a staged `.build/` copy, ships readable `/<name>.src.js` / `/luna.src.css` twins alongside; also hard-fails the deploy if `luna.css` doesn't parse). `wrangler.jsonc` self-builds via its `build.command` and points `main`+`assets` at `.build/holding`, so NO deploy path (bare `wrangler deploy`, `npm run deploy`, Workers Builds) can ship the readable originals; local dev uses `wrangler.dev.jsonc` (readable `holding/`, fast reload). Never minify `index.html` or the garage/lwe HTML (View Source is part of the design), never bundle, never extend the build to more CSS or HTML without the owner's say-so (`luna.css` was owner-approved 2026-07 for an ~8.7KB brotli win on a render-blocking sheet).
+**HARD RULES (strong owner preference):** (1) **internal/native fonts ONLY** — never ship `@font-face` with `url()`, web fonts, `@import`, or font preloads; the served pages carry ZERO font bytes (the design system's `@font-face local()` rules are reference-only, never inlined into a served page). (2) **keep perf lean** — fold design tokens in WITHOUT regressing the byte budget: on a brotli'd inline page, tokenizing repeated literals is a wash (brotli already dedupes) while token *definitions* are net-new bytes, so only the FONT tokens (`--font-*`) are inlined site-wide; color/gradient tokens are NOT inlined (they cost bytes for no brotli gain). no external stylesheet, no JS for styling. (3) **authoring stays buildless; serving is minified** — the ONLY build is `build.mjs` (deploy-time transform: minifies the six client scripts + `luna.css` into a staged `.build/` copy, ships readable `/<name>.src.js` / `/luna.src.css` twins alongside; also hard-fails the deploy if `luna.css` doesn't parse). `wrangler.jsonc` self-builds via its `build.command` and points `main`+`assets` at `.build/holding`, so NO deploy path (bare `wrangler deploy`, `npm run deploy`, Workers Builds) can ship the readable originals; local dev uses `wrangler.dev.jsonc` (readable `holding/`, fast reload). Never minify `index.html` or the garage/lwe HTML (View Source is part of the design), never bundle, never extend the build to more CSS or HTML without the owner's say-so (`luna.css` was owner-approved 2026-07 for an ~8.7KB brotli win on a render-blocking sheet).
 
 Reusable classes that show up across the site (homepage + future `/coffee`):
 
@@ -255,17 +271,17 @@ are installed on macOS, so the fallback path doesn't hit Helvetica/Arial.
 
 ---
 
-## cal/ — coffee booking worker
+## cal/ — coffee booking module
 
 Custom-built scheduler at `aadhar.sh/coffee`. Replaces Cal.com. Inspired by
 [jry.io/bagel](https://jry.io/bagel). Crediting Jacob Young in the footer.
 
-**Status: LIVE at aadhar.sh/coffee** (zone route -> cal-aadhar-sh worker).
-Deploys separately: `cd cal && npm run deploy` (secrets already set). The cal
-scripts pass `-c wrangler.toml` on purpose: a bare `wrangler deploy` from cal/
-wrongly inherits the repo-root `wrangler.jsonc` `build.command` (`node build.mjs`,
-which only stages the holding/ worker) and fails, so always go through the npm
-script or pass `-c wrangler.toml` yourself.
+**Status: LIVE at aadhar.sh/coffee**, delegated by the root `aadhar-sh` Worker.
+The source remains in `cal/src/` so its booking, calendar, and email policies
+stay readable and testable; `build.mjs` stages it beside the holding Worker
+entrypoint. Production secrets (`ICAL_URL`, `RESEND_API_KEY`, and
+`SIGNING_SECRET`) belong to the root Worker. `cal/wrangler.test.toml` is only a
+Vitest runtime fixture, never a deployment config.
 
 ### Architecture
 
@@ -288,7 +304,7 @@ script or pass `-c wrangler.toml` yourself.
 
 ```
 cal/
-├── wrangler.toml       — routes: aadhar.sh/coffee/*, cal.aadhar.sh/* (fallback)
+├── wrangler.test.toml  — test-only KV/vars config for Vitest (not deployed)
 ├── package.json
 └── src/
     ├── index.js        — router, request dispatch, KV state
@@ -303,12 +319,14 @@ cal/
 ### Required secrets (before deploy)
 
 ```bash
-cd cal && npm install
-npx wrangler kv namespace create CAL_BOOKINGS         # paste id into wrangler.toml
-npx wrangler secret put ICAL_URL                       # Google Calendar → "secret ICS"
-npx wrangler secret put RESEND_API_KEY                 # resend.com, DKIM-verify aadhar.sh
-openssl rand -hex 32 | npx wrangler secret put SIGNING_SECRET
-npx wrangler deploy
+npm install
+npx wrangler secret put -c wrangler.jsonc ICAL_URL        # Google Calendar → "secret ICS"
+npx wrangler secret put -c wrangler.jsonc RESEND_API_KEY  # resend.com, DKIM-verify aadhar.sh
+openssl rand -hex 32 | npx wrangler secret put -c wrangler.jsonc SIGNING_SECRET
+
+# Production still ships through merge -> CI -> production -> Workers Builds.
+# Local fallback, from the repository root only:
+npm run deploy
 ```
 
 ### Visual notes (XP reskin lives in `cal/src/templates.js`)
@@ -368,9 +386,9 @@ npx wrangler deploy
    `<span class="np-artist-link" role="link" tabindex="0" data-href="...">`
    + a delegated click handler.
 
-9. **HISTORICAL (Pages era): `wrangler pages deploy holding`** had to run from the project
-   root (`~/noodling/site/`), not from inside `holding/images/` etc.,
-   otherwise wrangler tries to scan `images/holding/` and ENOENTs.
+9. **HISTORICAL (Pages era): `wrangler pages deploy holding`** is retired.
+   Production is merge → CI promotion to `production` → Workers Builds; the
+   local fallback is `npm run deploy` from the repository root.
 
 10. **Hover-only features need `(hover: none)` gating.** Touch devices fire
     synthetic `mouseover`/`mouseout` on long-press, which was causing

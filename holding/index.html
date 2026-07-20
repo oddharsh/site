@@ -346,8 +346,7 @@ hr {
   height: 0;
 }
 
-/* now-playing list: a section backed by /rn/tracks (or its /rn/tracks.html
-   fallback) that renders each
+/* now-playing list: a section backed by the Worker's /rn/tracks snapshot that renders each
    track as a link to song.link (cross-platform redirect). styled like a
    period-correct Windows-list view — alternating row tint, monospace title
    column, navy heading, hairline divider. */
@@ -430,7 +429,6 @@ hr {
 }
 .np-list li:nth-child(even) { background: oklch(97.50% 0.0062 255.47); }
 .np-list li:last-child { border-bottom: none; }
-.np-list .np-loading,
 .np-list .np-empty {
   color: oklch(62.68% 0 0);
   font-style: italic;
@@ -537,14 +535,6 @@ hr {
   width: 100%;
   height: 100%;
   object-fit: cover;
-}
-
-/* tracks list loading fallback: most visits get a worker pre-render so the
-   list arrives populated. when KV cache is empty (race after a playlist
-   swap, etc), reserve list height while the JS fetches /rn/tracks.html so the
-   page below doesn't jump when the items land. */
-.np-list:has(.np-loading) {
-  min-height: 480px;
 }
 
 /* footer: copyright + "best viewed in" — the most reliable IE6-era tells */
@@ -1036,108 +1026,23 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
       </a>
     </section>
 
-    <!--
-      photo pool — worker pre-renders 12 random slots on every request
-      (cache-control: private,no-cache on /, so each visit re-rolls). the script
-      below is defense-in-depth, mirroring the now-playing fallback: if SSR
-      did NOT fill the slots for ANY reason (worker down, an edge-cached
-      static copy of this template, KV/R2 hiccup), the empty <picture> slots
-      render as broken images. it fetches /images/manifest.json + alt.json
-      and fills the grid client-side, matching the worker's markup. add
-      photos via holding/scripts/add-photos.sh.
-    -->
-    <script>
-    (async () => {
-      const grid = document.querySelector("section.photos");
-      if (!grid) return;
-      // The edge worker filled this dynamic island? Nothing to do.
-      if (grid.dataset.ssr === "1") return;
-      // Compatibility guard for an older/unmarked edge response: a real
-      // thumbnail still means the worker already filled the slots.
-      const firstImg = grid.querySelector("a picture img");
-      if (firstImg && firstImg.getAttribute("src")) return;
-      const esc = (s) => String(s ?? "")
-        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-      try {
-        const [mRes, aRes] = await Promise.all([
-          fetch("/images/manifest.json", { headers: { accept: "application/json" } }),
-          fetch("/images/alt.json").catch(() => null),
-        ]);
-        const data = await mRes.json();
-        const photos = (data && data.photos) || [];
-        if (!photos.length) return;                       // no manifest → honest empty grid
-        const alt = aRes && aRes.ok ? await aRes.json().catch(() => ({})) : {};
-        // shuffle, take 12 — same count + intent as the worker's pickRandom.
-        const pool = photos.slice();
-        for (let i = pool.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [pool[i], pool[j]] = [pool[j], pool[i]];
-        }
-        grid.innerHTML = pool.slice(0, 12).map((p, i) => {
-          // manifest URLs are absolute (/i/<stem>.<hash8>.<ext>, content-
-          // addressed); abs() tolerates the older relative shape so a stale
-          // cached manifest can never break the fallback grid.
-          const abs = (u) => (u && u.startsWith("/") ? u : `/images/${u}`);
-          // same responsive tiers as the worker path: mobile pinned to 400px,
-          // desktop 400w/600w @ sizes:174px so DPR<=2 gets 400px, DPR3 gets 600px.
-          const hasSmall = !!p.thumb_small;
-          const small = hasSmall ? abs(p.thumb_small) : null;
-          const large = abs(p.thumb_avif);
-          const load = i === 0 ? 'loading="eager" fetchpriority="high"' : 'loading="lazy"';
-          const sz = (typeof p.size === "number" && p.size > 0) ? ` data-size="${p.size}"` : "";
-          const up = p.uploaded ? ` data-uploaded="${esc(p.uploaded)}"` : "";
-          return `<a href="/images/full/${encodeURI(p.full)}" target="_blank" rel="noopener" data-full="${esc(p.full)}"${sz}${up}>` +
-            `<picture>` +
-              (hasSmall ? `<source type="image/avif" media="(max-width: 560px)" srcset="${esc(small)}">` : "") +
-              (hasSmall
-                ? `<source type="image/avif" srcset="${esc(small)} 400w, ${esc(large)} 600w" sizes="174px">`
-                : `<source type="image/avif" srcset="${esc(large)}">`) +
-              `<img alt="${esc(alt[p.stem] || "")}" width="600" height="600" ${load} decoding="async" src="${esc(abs(p.thumb_jpg))}">` +
-            `</picture></a>`;
-        }).join("");
-      } catch (e) { /* leave the slots empty rather than guess — honest */ }
-    })();
-    </script>
+    <!-- The Worker fills these reserved photo slots in the first HTML response.
+         There is no client fallback: if the edge cannot provide photos, the
+         honest path is the browse link below. -->
+    <noscript><p class="photos-nojs">Photos are server-rendered when available. <a href="/photos">Browse all photos</a>.</p></noscript>
 
 
     <section class="now-playing" aria-label="music">
       <h2><a href="/rn" title="open this playlist on Spotify">Music I'm listening to right now <span class="np-open">&#x2197;&#xFE0E; the playlist</span></a></h2>
       <ol class="np-list" id="np-list" data-ssr="0">
-        <li class="np-loading">Loading playlist&hellip; <a href="/rn">Open on Spotify &#x2197;&#xFE0E;</a></li>
+        <li class="np-empty">The current playlist is unavailable. <a href="/rn">Open on Spotify &#x2197;&#xFE0E;</a></li>
       </ol>
       <noscript><p class="np-nojs">The playlist is server-rendered when available. <a href="/rn">Open it on Spotify &#x2197;&#xFE0E;</a></p></noscript>
     </section>
 
-    <!--
-      now-playing list — worker pre-renders from KV-cached /rn/tracks on
-      every request (the only path under healthy conditions). the fallback
-      asks the explicit /rn/tracks.html endpoint for an HTML row fragment if
-      the worker did not populate the list. /rn/tracks remains JSON-only for
-      machine callers.
-    -->
-    <script>
-    (async () => {
-      const list = document.getElementById("np-list");
-      if (!list) return;
-      // The edge worker rendered this dynamic island? Nothing to do.
-      if (list.dataset.ssr === "1") return;
-      // Compatibility guard for an older/unmarked edge response.
-      if (!list.querySelector(".np-loading")) return;
-      try {
-        const res = await fetch("/rn/tracks.html");
-        // fetch() only rejects on a network fault, so a 500 / 522 / 1101 resolves
-        // normally and res.text() hands back an edge error PAGE, which would land in
-        // the tracklist verbatim (and left the catch below unreachable for exactly
-        // the failures it was written for). Require the worker's own marker: our
-        // fragment carries it even when it reports an error, an interstitial never does.
-        if (res.headers.get("x-rn-fragment") !== "1") throw new Error("not a track fragment");
-        const html = await res.text();
-        list.innerHTML = html || '<li class="np-empty">No tracks yet. <a href="/rn">Open on Spotify</a>.</li>';
-      } catch {
-        list.innerHTML = '<li class="np-empty">Couldn&#39;t load tracks. <a href="/rn">Open on Spotify</a>.</li>';
-      }
-    })();
-    </script>
+    <!-- The Worker fills the playlist in the first HTML response.
+         /rn remains the honest standalone destination if the edge has no
+         current snapshot. -->
 
     <!--
       delegated click + keyboard handler for .np-artist-link spans. these
@@ -1285,508 +1190,67 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
 <script>(function(){var t=function(){fetch("/hit.svg?tick=1")};document.prerendering?addEventListener("prerenderingchange",t,{once:true}):t()})();</script>
 
     <!--
-      NB: this script block lives at the END of the body (it used to sit
-      mid-page, before the now-playing section) — it is ~27KB of inline JS
-      and the HTML parser blocks on it, so everything below it painted
-      late. all its handlers are document-delegated and it only needs
-      #xp-tooltip to exist, so the bottom is the correct home.
-    -->
-    <!--
-      XP-style cursor-following hover tooltip. shows filename, file size,
-      thumbnail dimensions, and EXIF (camera/exposure/date/film recipe)
-      for photos; album art for track rows; profile photo for artist
-      links. EXIF is lazy-fetched per photo from /images/meta/&lt;stem&gt;.json
-      on first hover rather than inlined per-slot — keeps the uncacheable
-      homepage lean for the majority who never hover; the histogram is computed
-      client-side from the thumbnail, not stored. cursor-
-      follow positioning is the single bit of JS we couldn't replace with
-      CSS — it's the soul of the interaction.
+      Rich XP tooltips are an interaction island. The tiny loader below stays
+      inline so it can capture the very first hover; the cacheable implementation
+      is prefetched during idle and replayed against that target if necessary.
+      Touch/coarse-pointer visitors never load it.
     -->
     <script>
     (() => {
       const tip = document.getElementById("xp-tooltip");
-      if (!tip) return;
+      if (!tip || !window.matchMedia ||
+          window.matchMedia("(hover: none)").matches ||
+          window.matchMedia("(pointer: coarse)").matches) return;
 
-      // hover-only feature: long-press on touch devices fires synthetic
-      // mouseover/mouseout events and was causing tooltips to appear
-      // mid-scroll on mobile. opt out entirely when the device doesn't
-      // have a real hover-capable pointer. (`(hover: none)` is the
-      // touch-only signal; combined with `(any-hover: none)` to cover
-      // hybrid devices where the primary pointer is touch.)
-      if (window.matchMedia &&
-          (window.matchMedia("(hover: none)").matches ||
-           window.matchMedia("(pointer: coarse)").matches)) {
-        return;
-      }
+      const TARGETS = ".np-artist-link, .photos a, .np-list li[data-track-title], .car-link";
+      let modulePromise = null;
+      let pending = null;
 
-      let activeSlot = null;
-
-      // lazy DNS-prefetch for Spotify's image CDNs. these hosts only
-      // matter when the user hovers a track or artist row (to load the
-      // album cover or profile photo). shipping the hints in every page
-      // load is wasteful for visitors who never hover. inject on demand,
-      // exactly once per session.
-      let spotifyHintsInjected = false;
-      const injectSpotifyHints = () => {
-        if (spotifyHintsInjected) return;
-        spotifyHintsInjected = true;
-        const hosts = [
-          "https://image-cdn-ak.spotifycdn.com",
-          "https://image-cdn-fa.spotifycdn.com",
-          "https://i.scdn.co",
-        ];
-        for (const h of hosts) {
-          const link = document.createElement("link");
-          link.rel  = "dns-prefetch";
-          link.href = h;
-          document.head.appendChild(link);
-        }
+      const targetFor = (node) => node?.closest?.(TARGETS) || null;
+      const load = () => {
+        if (modulePromise) return modulePromise;
+        modulePromise = import("/tooltip.js?v=1").then((mod) => {
+          mod.start(pending);
+          pending = null;
+          return mod;
+        }).catch(() => {
+          modulePromise = null;
+          pending = null;
+          return null;
+        });
+        return modulePromise;
       };
 
-      const fmtBytes = (n) => {
-        if (!n) return "";
-        const b = Number(n);
-        if (b < 1024)       return `${b} B`;
-        if (b < 1024*1024)  return `${(b/1024).toFixed(1)} KB`;
-        if (b < 1024**3)    return `${(b/1024/1024).toFixed(1)} MB`;
-        return `${(b/1024**3).toFixed(2)} GB`;
-      };
-      const fmtDate = (raw) => {
-        // accept both ISO ("YYYY-MM-DDTHH:MM:SSZ" from R2 upload timestamps) and
-        // Fuji EXIF format ("YYYY:MM:DD HH:MM:SS" from exiftool). output is the
-        // site convention: MM-DD-YYYY, HH:MM.
-        // EXIF capture time is a WALL CLOCK with no zone — `new Date()` would
-        // reinterpret it in the viewer's timezone and shift it. So we use
-        // Temporal.PlainDateTime (shows it exactly as recorded, everywhere), and
-        // even the no-Temporal fallback parses the parts directly rather than via
-        // Date. Upload timestamps ARE instants → shown in the viewer's local zone.
-        if (!raw) return "";
-        const s = String(raw).trim()
-          .replace(/^(\d{4}):(\d{2}):(\d{2})/, "$1-$2-$3")
-          .replace(" ", "T");
-        const p2 = (n) => String(n).padStart(2, "0");
-        const isInstant = /[zZ]|[+-]\d{2}:?\d{2}$/.test(s);
-        if (isInstant) {
-          try {
-            if (typeof Temporal !== "undefined") {
-              const z = Temporal.Instant.from(s).toZonedDateTimeISO(Temporal.Now.timeZoneId());
-              return `${p2(z.month)}-${p2(z.day)}-${z.year}, ${p2(z.hour)}:${p2(z.minute)}`;
-            }
-          } catch (e) {}
-          const d = new Date(s);
-          if (isNaN(d)) return "";
-          return `${p2(d.getMonth() + 1)}-${p2(d.getDate())}-${d.getFullYear()}, ${p2(d.getHours())}:${p2(d.getMinutes())}`;
-        }
-        try {
-          if (typeof Temporal !== "undefined") {
-            const t = Temporal.PlainDateTime.from(s);
-            return `${p2(t.month)}-${p2(t.day)}-${t.year}, ${p2(t.hour)}:${p2(t.minute)}`;
-          }
-        } catch (e) {}
-        const m = s.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
-        return m ? `${m[2]}-${m[3]}-${m[1]}, ${m[4]}:${m[5]}` : "";
-      };
-      const esc = (s) => String(s ?? "")
-        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-
-      // ── camera-readout helpers (photo tooltip = XP camera-back review) ──
-      const fmtFocal = (raw) => raw ? String(raw).replace(/\s+mm$/i, " mm") + " FF" : "";
-      const flashBolt = (raw) => (raw && /\bFired\b|\bOn\b/i.test(raw))
-        ? `<span class="flash-bolt" title="${esc(raw)}"><svg viewBox="0 0 12 16" width="11" height="14"><path d="M10 1 L4 1 L2 9 L6 9 L3 15 L11 7 L7 7 Z" fill="currentColor"/></svg></span>`
-        : "";
-      // RGB+luminance histogram → SVG. {l,r,g,b}, each 64 ints (0..100): luma
-      // a filled polygon, R/G/B colored polylines (colors via CSS classes).
-      const renderHistogramSvg = (h) => {
-        if (!h || !Array.isArray(h.l) || !h.l.length) return "";
-        const yFor = v => (32 - (Math.max(0, Math.min(100, v)) * 30) / 100).toFixed(1);
-        const pts = a => a.map((v, i) => `${i},${yFor(v)}`).join(" ");
-        const n = h.l.length;
-        const luma = `<polygon class="luma" points="0,32 ${pts(h.l)} ${n - 1},32"/>`;
-        const r = Array.isArray(h.r) ? `<polyline class="r" points="${pts(h.r)}"/>` : "";
-        const g = Array.isArray(h.g) ? `<polyline class="g" points="${pts(h.g)}"/>` : "";
-        const b = Array.isArray(h.b) ? `<polyline class="b" points="${pts(h.b)}"/>` : "";
-        return `<svg class="hist-svg" viewBox="0 0 ${n - 1} 32" preserveAspectRatio="none">${luma}${r}${g}${b}</svg>`;
-      };
-      // histogram bins are BAKED at photo-add time (photo-histograms.py measures
-      // the shipped JPG twin, so the bars still show exactly what the visitor
-      // sees) and ride the same meta/<stem>.json the EXIF already arrives in.
-      // the old decode → canvas → getImageData → main-thread binning pipeline is
-      // gone; renderHistogramSvg draws the identical SVG from meta.hist.
-      const histFor = (stem) => (metaMap[stem] && metaMap[stem].hist) || null;
-      // EXIF is NOT inlined on the uncacheable homepage, and not shipped as one big
-      // index either — it's fetched PER PHOTO on hover from /images/meta/<stem>.json
-      // (tiny, immutable, content-addressed → edge + browser cached forever, busted
-      // by ?mv). so a visitor only pulls EXIF for the handful of photos they actually
-      // hover, not the whole pool; repeat hovers and repeat visits are served
-      // from the browser's HTTP cache with no network at all. the baked histogram
-      // rides the same file, so bars + EXIF land together in one tiny fetch.
-      const metaMap = Object.create(null);   // stem → exif object | null (fetched, none) | absent (not fetched)
-      const META_V = "mv=4";                 // bump when metadata is regenerated (4: histograms baked in)
-      const fetchMeta = (stem) => {
-        if (stem in metaMap) return;         // already in hand, or a fetch is in flight
-        metaMap[stem] = null;                // in-flight sentinel (renders as "no exif yet")
-        fetch(`/images/meta/${encodeURIComponent(stem)}.json?${META_V}`)
-          .then(r => {
-            // non-200, SPA-fallback html, or a transient bot-challenge → treat as a
-            // failure and fall to .catch (which clears the sentinel so we can retry).
-            if (!r.ok || !(r.headers.get("content-type") || "").includes("json")) throw 0;
-            return r.json();
-          })
-          .then(m => {
-            if (!m || typeof m !== "object") throw 0;
-            metaMap[stem] = m;
-            // re-render if this photo's tip is still the open one
-            if (activeSlot && activeSlot.matches?.(".photos a") &&
-                (activeSlot.dataset.full || "").replace(/\.[^.]+$/, "") === stem) showTipFor(activeSlot);
-          })
-          // CRUCIAL: drop the sentinel on failure so a later hover RE-FETCHES rather
-          // than the photo being stuck empty for the whole session. self-healing.
-          .catch(() => { delete metaMap[stem]; });
-      };
-      // EXIF/histogram is fetched lazily on first hover or keyboard focus (see
-      // buildPhotoContent → fetchMeta), NOT idle-warmed. the old warm loop fired
-      // ~12 requests / ~15KB on every no-store visit to make a first hover instant
-      // — but most visitors never hover a tile, so it was pure waste on the hot
-      // path. the first hover now pays one tiny immutable fetch (cached forever
-      // after, self-healing on failure); the grid itself never waits on it.
-
-      // unified hover target → "what was hovered?" lookup. one tooltip
-      // element, three content shapes: a photo slot (.photos a), a track
-      // row (.np-list li[data-track-title]), or an artist link inside a
-      // row (.np-artist-link). artist takes precedence over the row when
-      // both match, so hovering an artist's name shows the artist card,
-      // not the track card.
-      const findTarget = (el) =>
-        el?.closest?.(".np-artist-link, .photos a, .np-list li[data-track-title], .car-link") || null;
-
-      function buildContent(t) {
-        if (t.matches(".car-link"))   return buildCarContent(t);
-        if (t.matches(".np-artist-link")) {
-          injectSpotifyHints();
-          return buildArtistContent(t);
-        }
-        if (t.matches(".photos a"))   return buildPhotoContent(t);
-        if (t.matches(".np-list li")) {
-          injectSpotifyHints();
-          return buildTrackContent(t);
-        }
-        return "";
-      }
-
-      // resto-mod car tooltip: a landscape photo of the car the link names,
-      // in the paper-mat frame, with a small caption strip. graceful — if the
-      // image attrs are missing the tooltip suppresses itself and the link
-      // still click-throughs to its Google search.
-      function buildCarContent(a) {
-        const avif = a.dataset.carAvif || "";
-        const jpg  = a.dataset.carJpg  || "";
-        if (!avif && !jpg) return "";
-        const cap = a.dataset.carCaption || "";
-        const credit = a.dataset.carCredit || "";
-        return (
-          `<div class="car-pop">` +
-            `<picture>` +
-              (avif ? `<source type="image/avif" srcset="${esc(avif)}">` : ``) +
-              `<img src="${esc(jpg || avif)}" alt="" loading="lazy" decoding="async" width="240" height="160">` +
-            `</picture>` +
-            (cap || credit
-              ? `<div class="car-cap">` +
-                  (cap ? esc(cap) : ``) +
-                  (credit ? `<span class="car-credit">${esc(credit)}</span>` : ``) +
-                `</div>`
-              : ``) +
-          `</div>`
-        );
-      }
-
-      // XP camera-back review readout: a Luna header strip (filename + flash),
-      // a sunken histogram band, the exposure trio, the full Fuji recipe as
-      // label/value rows, and a date footer. EXIF is lazy-fetched per-photo from
-      // /images/meta/<stem>.json on first hover (see fetchMeta); the histogram is
-      // computed client-side from the thumbnail. first hover may render text-only
-      // for a beat, then re-renders when the EXIF fetch (or image decode) lands.
-      function buildPhotoContent(slot) {
-        const filename = slot.dataset.full || decodeURIComponent((slot.href || "").split("/").pop());
-        const stem = filename.replace(/\.[^.]+$/, "");
-        const img  = slot.querySelector("img");
-        fetchMeta(stem);                           // per-photo lazy fetch (no-op if already in hand)
-        const exif = metaMap[stem] || {};
-
-        // exposure trio
-        const aper = exif.aperture ? (String(exif.aperture).startsWith("f/") ? exif.aperture : "f/" + exif.aperture) : "";
-        const expo = [exif.shutter, aper, exif.iso ? "ISO " + exif.iso : ""].filter(Boolean).join(" ");
-
-        // EV · dimensions · size strip
-        // real EXIF dims only — a square thumbnail's naturalWidth is just 600, not
-        // the photo's size, so the old fallback flashed "600 × 600" before EXIF landed.
-        const w = exif.width, h = exif.height;
-        const dims = (w && h) ? `${w} × ${h}` : "";
-        const evStr = (typeof exif.ev === "number" && exif.ev !== 0) ? ((exif.ev > 0 ? "+" : "") + exif.ev + " EV") : "";
-        const metaStrip = [evStr, dims, slot.dataset.size ? fmtBytes(slot.dataset.size) : ""].filter(Boolean).join(" · ");
-
-        // Fuji recipe rows — only the populated/non-default ones
-        const isOn = v => v && !/^off$/i.test(String(v));
-        const trimTone = t => (t && t !== "0 (normal)") ? t.replace(/\s*\(.*\)$/, "") : "";
-        const chromeParts = [];
-        if (isOn(exif.chrome))      chromeParts.push(exif.chrome);
-        if (isOn(exif.chrome_blue)) chromeParts.push("blue " + exif.chrome_blue);
-        const grainVal = isOn(exif.grain) ? (exif.grain + (isOn(exif.grain_size) ? " " + exif.grain_size : "")) : "";
-        const toneVal = (trimTone(exif.highlight_tone) || trimTone(exif.shadow_tone))
-          ? `H ${trimTone(exif.highlight_tone) || "0"}  S ${trimTone(exif.shadow_tone) || "0"}` : "";
-        // Fuji stores B&W film sims (Acros / Monochrome, optionally with a Ye/R/G
-        // contrast filter) in the Saturation EXIF tag and leaves FilmMode blank — so
-        // "Acros Green Filter" is the FILM, not a color setting. route it to the Film
-        // row and drop the Color row for B&W frames; color shots keep "+3" etc.
-        const bwSim    = !!exif.saturation && /\b(acros|monochrome|b\s*&\s*w|bw|sepia)\b/i.test(String(exif.saturation));
-        const filmVal  = exif.film || (bwSim ? exif.saturation : "");
-        const colorVal = bwSim ? "" : trimTone(exif.saturation);
-        const recipe = [
-          ["Body",       exif.camera],
-          ["Lens",       [exif.lens, fmtFocal(exif.focal)].filter(Boolean).join(" · ")],
-          ["Film",       filmVal],
-          ["Dyn range",  exif.dr],
-          ["White bal",  exif.white_balance === "Kelvin" && exif.color_temp ? exif.color_temp + "K" : exif.white_balance],
-          ["Chrome FX",  chromeParts.join(" · ")],
-          ["Grain",      grainVal],
-          ["Tones",      toneVal],
-          ["Color",      colorVal],
-        ].filter(([, v]) => v && v !== "undefined")
-         .map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("");
-
-        const hist = histFor(stem);
-        const histSvg = hist ? renderHistogramSvg(hist) : "";
-        const dateStr = fmtDate(exif.date) || (slot.dataset.uploaded ? "up " + fmtDate(slot.dataset.uploaded) : "");
-
-        return `<div class="cam">` +
-            `<div class="header"><span>${esc(stem)}.jpg</span>${flashBolt(exif.flash)}</div>` +
-            `<div class="histogram-frame">${histSvg}</div>` +
-            `<div class="body">` +
-              (expo ? `<div class="exposure">${esc(expo)}</div>` : "") +
-              (metaStrip ? `<div class="meta-strip">${esc(metaStrip)}</div>` : "") +
-              (recipe ? `<dl class="recipe-rows">${recipe}</dl>` : "") +
-            `</div>` +
-            `<div class="footer"><span>${esc(dateStr)}</span></div>` +
-          `</div>`;
-      }
-
-      // artist tooltip: just the profile photo in an XP-frame border.
-      // mirrors the album-popover treatment — the name is already in the
-      // row, so the popover is purely visual. graceful: if image_url is
-      // missing, no tooltip at all (mouseover handler suppresses empty).
-      function buildArtistContent(span) {
-        const image = span.dataset.artistImage || "";
-        if (!image) return "";
-        return (
-          `<div class="album-pop">` +
-            `<img class="cover album" src="${esc(image)}" alt="" loading="lazy" decoding="async" width="120" height="120">` +
-          `</div>`
-        );
-      }
-
-      // track tooltip: the album art with an XP-frame border when we have
-      // it. when the cover URL is missing (Spotify embed scrape didn't
-      // return one — happens for a small fraction of tracks), fall back
-      // to a tiny text card so the row still has a hover affordance.
-      // textual info is duplicated from the row by design — without the
-      // cover, the only thing the tooltip can show IS the text, and
-      // showing nothing makes the row feel broken next to its siblings.
-      function buildTrackContent(li) {
-        const image = li.dataset.trackImage || "";
-        if (image) {
-          return (
-            `<div class="album-pop">` +
-              `<img class="cover album" src="${esc(image)}" alt="" loading="lazy" decoding="async" width="120" height="120">` +
-            `</div>`
-          );
-        }
-        // text fallback. title + artists + duration; flag explicit if it is.
-        const title    = li.dataset.trackTitle    || "";
-        const artists  = li.dataset.trackArtists  || "";
-        const duration = li.dataset.trackDuration || "";
-        const explicit = li.dataset.trackExplicit === "1";
-        if (!title && !artists) return ""; // truly nothing to show
-        const rows = [];
-        if (artists) rows.push(artists);
-        if (duration) rows.push(duration + (explicit ? " · explicit" : ""));
-        else if (explicit) rows.push("explicit");
-        return (
-          `<div class="filename">${esc(title)}</div>` +
-          rows.map(r => `<div class="row">${esc(r)}</div>`).join("")
-        );
-      }
-
-      // lightweight cursor tracking: JS writes --x/--y (the cursor's
-      // clientX/Y in px); CSS positions the tooltip via translate(clamp())
-      // with a hard snap, zero lag. no rAF, no getBoundingClientRect, no
-      // resize listener — edge-clamping uses the element's own size in CSS,
-      // so it stays correct as a cover image sizes the box. lastX/lastY are
-      // kept only for scroll re-evaluation (elementFromPoint).
-      let lastX = 0, lastY = 0;
-      const place = (e) => {
-        lastX = e.clientX; lastY = e.clientY;
-        tip.style.setProperty("--x", lastX + "px");
-        tip.style.setProperty("--y", lastY + "px");
-      };
-      // show/hide via the Popover API (top layer — no z-index juggling,
-      // and it unlocks the @starting-style fade). guard the calls because
-      // showPopover()/hidePopover() throw if the element is already in the
-      // target state. on engines without popover support (below the modern
-      // target), fall back to a plain display toggle so nothing breaks.
-      const supportsPopover = "popover" in HTMLElement.prototype;
-      const isOpen = () => supportsPopover
-        ? tip.matches(":popover-open")
-        : tip.style.display === "block";
-      // will-change is an "earn it" hint, not a permanent set (see the gotcha
-      // log): leaving it on while the tooltip is display:none would pin a
-      // compositor layer for an invisible element. so we promote it to its own
-      // layer ONLY while open — that makes the per-pointermove translate a pure
-      // compositor transform (off the main thread, no box repaint), which is
-      // what keeps tracking smooth on ProMotion / Low-Power VRR displays — then
-      // release the layer the instant it closes.
-      const openTip = () => {
-        tip.style.willChange = "transform";
-        if (supportsPopover) { if (!tip.matches(":popover-open")) tip.showPopover(); }
-        else tip.style.display = "block";
-      };
-      const closeTip = () => {
-        if (supportsPopover) { if (tip.matches(":popover-open")) tip.hidePopover(); }
-        else tip.style.display = "none";
-        tip.style.willChange = "auto";
-      };
-      // anchoredEl tracks the element a keyboard-focus tooltip is tethered to
-      // (via CSS anchor positioning) so we can release its anchor-name on hide.
-      let anchoredEl = null;
-      const dropAnchor = () => {
-        if (anchoredEl) { anchoredEl.style.removeProperty("anchor-name"); anchoredEl = null; }
-        tip.classList.remove("anchored");
-      };
-      const hideTip = () => {
-        closeTip();
-        dropAnchor();
-        activeSlot = null;
-      };
-      // dismissal is deferred by a hair (TIP_DISMISS_MS) so hopping from one hover
-      // target straight across the small gap to the NEXT one doesn't flash the
-      // tooltip off-then-on. a fresh pointerover cancels the pending hide; if the
-      // cursor instead comes to rest in the gap, the tooltip still clears after the
-      // delay, so the dead space between entries shows nothing. shared by every
-      // hover target here (photos, tracks, artists, car links) — one tooltip engine.
-      const TIP_DISMISS_MS = 50;
-      let hideTimer = 0;
-      // keyboard tips anchor via CSS anchor positioning where supported;
-      // pointer tips ALWAYS follow the cursor (owner re-ruling 2026-07-03:
-      // the anchored-hover experiment shipped and was rolled back the same
-      // day — gliding the album art with the cursor is part of the site's
-      // identity, same as the photo camera-back, and the 500ms cold-hover
-      // delay read as lag, not authenticity).
-      const ANCHOR_OK = window.CSS && CSS.supports &&
-        (CSS.supports("position-area: bottom") || CSS.supports("inset-area: bottom"));
-      // while the content is actively scrolling (and a hair after it settles) we
-      // suppress tooltips entirely — scrolling shouldn't trip a popover just
-      // because the cursor happens to pass over a photo or track. tooltips return
-      // on the next intentional hover-move.
-      let scrolling = false, scrollIdle = 0;
-      const cancelHide   = () => { clearTimeout(hideTimer); hideTimer = 0; };
-      const scheduleHide = () => { clearTimeout(hideTimer); hideTimer = setTimeout(hideTip, TIP_DISMISS_MS); };
-      const showTipFor = (target, e) => {
-        if (scrolling) return;               // don't pop a tooltip mid-scroll
-        cancelHide();                        // a fresh show cancels any pending gap-dismissal
-        dropAnchor();                        // pointer entry always uses cursor-follow
-        activeSlot = target;
-        const html = buildContent(target);
-        if (!html) { hideTip(); return; }   // e.g. track with no cover yet
-        tip.innerHTML = html;
-        if (e) place(e);                     // position before showing (no glide-in)
-        openTip();
-      };
-      // keyboard-only anchored show (pointer never routes here anymore)
-      const showAnchored = (target) => {
-        if (scrolling) return;
-        cancelHide();
-        const html = buildContent(target);
-        if (!html) { hideTip(); return; }
-        dropAnchor();
-        activeSlot = target;
-        tip.innerHTML = html;
-        target.style.setProperty("anchor-name", "--xp-tip");
-        anchoredEl = target;
-        tip.classList.add("anchored");
-        openTip();
-      };
-
+      // Capture the current pointer before the module arrives. start() replays
+      // it, so a genuinely cold first hover follows the same path as later ones.
       document.addEventListener("pointerover", (e) => {
-        const target = findTarget(e.target);
+        const target = targetFor(e.target);
         if (!target) return;
-        cancelHide();                        // re-entered a target (same or next) → keep it up
-        if (target === activeSlot) return;   // same target already shown
-        showTipFor(target, e);
+        pending = { target, clientX: e.clientX, clientY: e.clientY };
+        load();
       }, { passive: true });
-
-      // passive: lets the browser dispatch pointermove without waiting on
-      // our handler. the work is two CSS custom-property writes.
-      document.addEventListener("pointermove", (e) => {
-        if (isOpen()) place(e);
-      }, { passive: true });
-
       document.addEventListener("pointerout", (e) => {
-        const fromTarget = findTarget(e.target);
-        if (!fromTarget) return;
-        const toTarget = findTarget(e.relatedTarget);
-        // still inside the same target? ignore.
-        if (toTarget === fromTarget) return;
-        // moving to a *different* valid target (row → artist link, artist →
-        // adjacent artist)? let the next pointerover swap content without an
-        // intermediate hide+show flicker.
-        if (toTarget) return;
-        scheduleHide();                      // left to a gap — defer the hide briefly (TIP_DISMISS_MS)
+        if (!pending) return;
+        const from = targetFor(e.target);
+        const to = targetFor(e.relatedTarget);
+        if (from === pending.target && to !== from) pending = null;
+      }, { passive: true });
+      document.addEventListener("focusin", (e) => {
+        const target = targetFor(e.target);
+        if (!target) return;
+        pending = { target, focus: true };
+        load();
       }, { passive: true });
 
-      // scroll handling. any scroll (the window's internal content scroller
-      // bubbles to here in the capture phase) hides the tooltip and suppresses
-      // new ones WHILE scrolling — so you can wheel over the photo grid /
-      // tracklist freely without tooltip noise as rows fly past.
-      //
-      // the moment scrolling settles we re-show instantly. two reasons the old
-      // 120ms timer felt laggy on desktop: (1) the window itself, and (2) the
-      // tooltip is position:fixed — a wheel/trackpad scroll leaves the cursor
-      // dead still, so NO pointerover fires when a new photo slides under it,
-      // and the tooltip only came back if you jiggled the mouse. so on settle
-      // we actively re-target: elementFromPoint(lastX,lastY) → findTarget →
-      // show. position needs no update (cursor didn't move; --x/--y are already
-      // correct from the last place()), so we pass no event and only swap
-      // content. SCROLL_SETTLE_MS is just long enough to ride out trackpad
-      // momentum (events keep firing ~every frame until it fully stops) without
-      // flashing the tooltip back mid-decel — short enough to read as instant.
-      const SCROLL_SETTLE_MS = 60;
-      const reshowUnderCursor = () => {
-        if (!lastX && !lastY) return;            // pointer never moved → nothing to re-target
-        const target = findTarget(document.elementFromPoint(lastX, lastY));
-        if (target) showTipFor(target);          // no event: reuse the existing --x/--y
+      // Warm after the critical page work. This pays the module transfer for
+      // visitors who linger, but keeps it out of LCP and makes the first
+      // intentional tooltip as fast as the second. Never warm a prerender.
+      const warm = () => {
+        if (window.requestIdleCallback) requestIdleCallback(load, { timeout: 1500 });
+        else setTimeout(load, 1000);
       };
-      document.addEventListener("scroll", () => {
-        scrolling = true;
-        if (isOpen()) hideTip();
-        clearTimeout(scrollIdle);
-        scrollIdle = setTimeout(() => { scrolling = false; reshowUnderCursor(); }, SCROLL_SETTLE_MS);
-      }, { capture: true, passive: true });
-
-      // ── keyboard-focus fallback ────────────────────────────────────────
-      // mouse users get the cursor-following tooltip above; keyboard users
-      // get the same content tethered to the focused element via CSS anchor
-      // positioning (no pointer to track). only fires for :focus-visible so
-      // a mouse click that happens to focus a link doesn't double-trigger.
-      if (ANCHOR_OK) {
-        document.addEventListener("focusin", (e) => {
-          const target = findTarget(e.target);
-          if (!target) return;
-          try { if (!target.matches(":focus-visible")) return; } catch (_) {}
-          showAnchored(target);   // keyboard focus is deliberate: no cold delay
-        });
-        document.addEventListener("focusout", (e) => {
-          if (anchoredEl && findTarget(e.target) === anchoredEl) hideTip();
-        });
-      }
+      if (document.prerendering) addEventListener("prerenderingchange", warm, { once: true });
+      else warm();
     })();
     </script>
 
@@ -1826,6 +1290,6 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
     } catch (e) {}
   })();
   </script>
-<!-- axp:shell --><nav id="axp-icons" aria-label="desktop shortcuts"><a class="axp-ico" title="writing, in flux" href="/writing" data-key="Notepad" style="left:9px;top:9px"><span class="ic note" aria-hidden="true"></span><span class="t">Notepad</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Twitter (opens in a new tab)" href="https://twitter.com/oddhash" data-key="Twitter" style="left:9px;top:95px"><span class="ic " style="background:linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))" aria-hidden="true">@</span><span class="t">Twitter</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Instagram (opens in a new tab)" href="https://instagram.com/aadharsh.hif" data-key="Photos" style="left:9px;top:181px"><span class="ic " style="background:linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))" aria-hidden="true"><i class="cam" aria-hidden="true"></i></span><span class="t">Photos</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Curius (opens in a new tab)" href="https://curius.app/aadharsh-pannirselvam" data-key="Curius" style="left:9px;top:267px"><span class="ic " style="background:linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))" aria-hidden="true">C</span><span class="t">Curius</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Beli (opens in a new tab)" href="https://beliapp.com/users/aadharsh" data-key="Beli" style="left:9px;top:353px"><span class="ic " style="background:linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))" aria-hidden="true">B</span><span class="t">Beli</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Spotify (opens in a new tab)" href="https://open.spotify.com/user/aadharsh2010" data-key="Music" style="left:9px;top:439px"><span class="ic " style="background:linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))" aria-hidden="true">♪</span><span class="t">Music</span></a></nav><div id="axp-taskbar" role="navigation" aria-label="taskbar"><a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a><div id="axp-pins"><a class="axp-pin" title="prototypes + experiments" href="/garage"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="garageF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffb45a"/><stop offset=".5" stop-color="#ef8f24"/><stop offset="1" stop-color="#c2660a"/></linearGradient><linearGradient id="garageG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="garageS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#garageS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#garageF)" stroke="#8f4d06" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#garageG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><g fill="#fff"><rect x="14" y="5" width="4" height="22" rx="1.5"/><rect x="5" y="14" width="22" height="4" rx="1.5"/><rect x="14" y="5" width="4" height="22" rx="1.5" transform="rotate(45 16 16)"/><rect x="14" y="5" width="4" height="22" rx="1.5" transform="rotate(-45 16 16)"/><circle cx="16" cy="16" r="6.5"/></g><circle cx="16" cy="16" r="2.8" fill="#ef8f24"/></g></g></svg></span><span class="lbl">garage</span></a><a class="axp-pin" title="chat-style explainers + live demos" href="/lwe"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="lweF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#838ae6"/><stop offset=".5" stop-color="#4b53c9"/><stop offset="1" stop-color="#333aa0"/></linearGradient><linearGradient id="lweG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="lweS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#lweS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#lweF)" stroke="#272d82" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#lweG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><path d="M6 9 h20 a2 2 0 0 1 2 2 v9 a2 2 0 0 1-2 2 H14 l-5 4 v-4 H6 a2 2 0 0 1-2-2 v-9 a2 2 0 0 1 2-2 Z" fill="#fff"/><g stroke="#4b53c9" stroke-width="1.7" stroke-linecap="round" fill="none"><path d="M8.5 13.5 q2 -2.4 4 0 t4 0 t4 0"/><path d="M8.5 18 q2 -2.4 4 0 t4 0"/></g></g></g></svg></span><span class="lbl">lwe</span></a><a class="axp-pin" title="notes, in flux: an editable notepad" href="/writing"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="writingF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6fa0ee"/><stop offset=".5" stop-color="#2f6bd6"/><stop offset="1" stop-color="#1a4ba8"/></linearGradient><linearGradient id="writingG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="writingS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#writingS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#writingF)" stroke="#143c86" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#writingG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><g fill="#fff"><rect x="8" y="8" width="16" height="2.6" rx="1.3"/><rect x="8" y="14.7" width="16" height="2.6" rx="1.3"/><rect x="8" y="21.4" width="10" height="2.6" rx="1.3"/></g></g></g></svg></span><span class="lbl">writing</span></a><a class="axp-pin" title="what I've been reading, from Curius" href="/reading"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="readingF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#de8186"/><stop offset=".5" stop-color="#c1545a"/><stop offset="1" stop-color="#93333a"/></linearGradient><linearGradient id="readingG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="readingS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#readingS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#readingF)" stroke="#732830" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#readingG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><g fill="#fff"><path d="M16 9 C13 7.2 9 7 6 7.6 V24 C9 23.4 13 23.6 16 25 Z"/><path d="M16 9 C19 7.2 23 7 26 7.6 V24 C23 23.4 19 23.6 16 25 Z" opacity=".82"/></g><path d="M16 9 V25" stroke="#c1545a" stroke-width="1.4"/></g></g></svg></span><span class="lbl">reading</span></a><a class="axp-pin" title="events worth going to" href="/serendipity"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="serendipityF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a886e8"/><stop offset=".5" stop-color="#7c4dd6"/><stop offset="1" stop-color="#5a32a8"/></linearGradient><linearGradient id="serendipityG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="serendipityS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#serendipityS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#serendipityF)" stroke="#482788" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#serendipityG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><rect x="6" y="8" width="20" height="18" rx="2" fill="#fff"/><rect x="6" y="8" width="20" height="5" rx="2" fill="#e7e7ef"/><g fill="#7c4dd6"><rect x="9" y="16" width="3.4" height="3.4"/><rect x="14.3" y="16" width="3.4" height="3.4"/><rect x="19.6" y="16" width="3.4" height="3.4"/><rect x="9" y="21" width="3.4" height="3.4"/><rect x="14.3" y="21" width="3.4" height="3.4"/></g></g></g></svg></span><span class="lbl">serendipity</span></a><a class="axp-pin" title="the crypto-VC neighborhood" href="/around"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="aroundF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5cc6ba"/><stop offset=".5" stop-color="#1f9b8e"/><stop offset="1" stop-color="#137468"/></linearGradient><linearGradient id="aroundG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="aroundS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#aroundS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#aroundF)" stroke="#0d5a50" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#aroundG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><path d="M16 6 C11.6 6 8 9.3 8 13.6 C8 19 16 26 16 26 C16 26 24 19 24 13.6 C24 9.3 20.4 6 16 6 Z" fill="#fff"/><circle cx="16" cy="13.6" r="3.2" fill="#1f9b8e"/></g></g></svg></span><span class="lbl">around</span></a><a class="axp-pin" title="the other web: how machines read a URL" href="/lens"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="lensF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#79c7e6"/><stop offset=".5" stop-color="#2f9fc4"/><stop offset="1" stop-color="#1d7895"/></linearGradient><linearGradient id="lensG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="lensS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#lensS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#lensF)" stroke="#145d73" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#lensG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><rect x="5.5" y="5" width="15" height="19" rx="2" fill="#fff"/><g fill="#2f9fc4"><rect x="8.5" y="9.5" width="9" height="1.7" rx="0.6"/><rect x="8.5" y="13" width="9" height="1.7" rx="0.6"/><rect x="8.5" y="16.5" width="6" height="1.7" rx="0.6"/></g><circle cx="20.5" cy="20.5" r="6" fill="#2f9fc4" stroke="#fff" stroke-width="2.2"/><circle cx="18.6" cy="18.6" r="1.5" fill="#fff" opacity=".85"/><path d="M24.8 24.8 L28.5 28.5" stroke="#fff" stroke-width="3.2" stroke-linecap="round"/></g></g></svg></span><span class="lbl">lens</span></a><a class="axp-pin" title="what I'm listening to right now" href="/rn"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="musicF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6fcd8a"/><stop offset=".5" stop-color="#2faa55"/><stop offset="1" stop-color="#1d8040"/></linearGradient><linearGradient id="musicG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="musicS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#musicS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#musicF)" stroke="#156030" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#musicG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><g fill="#fff"><rect x="17" y="7" width="2.6" height="14"/><path d="M19.6 7 C23 8 25 10 24.4 13.6 C23 11 21 11 19.6 11.8 Z"/><ellipse cx="14" cy="21" rx="4.4" ry="3.5"/></g></g></g></svg></span><span class="lbl">music</span></a><a class="axp-pin" title="book a coffee / bagel" href="/coffee"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="coffeeF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b08858"/><stop offset=".5" stop-color="#875c34"/><stop offset="1" stop-color="#5e3c1e"/></linearGradient><linearGradient id="coffeeG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="coffeeS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#coffeeS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#coffeeF)" stroke="#472d16" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#coffeeG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><path d="M8 12 h13 v6 a6.5 6.5 0 0 1-13 0 Z" fill="#fff"/><path d="M21 13 h3 a2.6 2.6 0 0 1 0 5.2 h-3" fill="none" stroke="#fff" stroke-width="2.2"/><g stroke="#fff" stroke-width="1.8" stroke-linecap="round"><path d="M11 5.5 v3"/><path d="M14.5 5 v3.5"/></g></g></g></svg></span><span class="lbl">coffee</span></a></div><div id="axp-spacer"></div><div id="axp-tray"><button id="axp-sound" type="button" hidden></button><a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><svg viewBox="0 0 24 24"><defs><filter id="spSh" x="-30%" y="-20%" width="160%" height="150%"><feDropShadow dx="0" dy=".5" stdDeviation=".5" flood-color="#000" flood-opacity=".28"></feDropShadow></filter><linearGradient id="spBez" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f3efe4"></stop><stop offset=".5" stop-color="#d6d0be"></stop><stop offset="1" stop-color="#b1aa94"></stop></linearGradient><linearGradient id="spScr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6fb0e8"></stop><stop offset=".5" stop-color="#2f72b6"></stop><stop offset="1" stop-color="#16548f"></stop></linearGradient><linearGradient id="spGl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".5"></stop><stop offset="1" stop-color="#ffffff" stop-opacity="0"></stop></linearGradient></defs><g filter="url(#spSh)"><ellipse cx="12" cy="21.3" rx="5.2" ry="1" fill="#8f876f" opacity=".5"></ellipse><rect x="10.4" y="17.2" width="3.2" height="2.8" fill="#c3bca6"></rect><path d="M7 21 Q7 19.7 8.6 19.7 H15.4 Q17 19.7 17 21 Z" fill="url(#spBez)" stroke="#897f66" stroke-width=".4"></path><rect x="2.3" y="2.7" width="19.4" height="14.9" rx="2" fill="url(#spBez)" stroke="#857c63" stroke-width=".5"></rect><rect x="2.95" y="3.3" width="18.1" height="13.7" rx="1.5" fill="none" stroke="#ffffff" stroke-opacity=".5" stroke-width=".5"></rect><rect x="4.2" y="4.7" width="15.6" height="11" rx=".8" fill="#0f3d63"></rect><rect x="4.6" y="5.1" width="14.8" height="10.2" rx=".6" fill="url(#spScr)"></rect><path d="M4.6 5.1 H19.4 V7.9 Q12 11.8 4.6 9.1 Z" fill="url(#spGl)"></path><circle cx="20" cy="15.9" r=".8" fill="#84e85a" stroke="#3f7a2a" stroke-width=".3"></circle></g></svg></a><a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><svg viewBox="0 0 24 24"><defs><filter id="seSh" x="-30%" y="-15%" width="160%" height="150%"><feDropShadow dx="0" dy=".5" stdDeviation=".5" flood-color="#000" flood-opacity=".28"></feDropShadow></filter><linearGradient id="seF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7ed24f"></stop><stop offset=".5" stop-color="#3f9c24"></stop><stop offset="1" stop-color="#297818"></stop></linearGradient><linearGradient id="seGl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".55"></stop><stop offset="1" stop-color="#ffffff" stop-opacity="0"></stop></linearGradient></defs><g filter="url(#seSh)"><path d="M12 2.2 L4.4 4.9 V11.4 C4.4 16.2 8 19.7 12 21.6 C16 19.7 19.6 16.2 19.6 11.4 V4.9 Z" fill="url(#seF)" stroke="#1f5f12" stroke-width=".7"></path><path d="M12 3.4 L5.6 5.7 V11.3 C5.6 15.3 8.6 18.4 12 20.1 C15.4 18.4 18.4 15.3 18.4 11.3 V5.7 Z" fill="none" stroke="#c6f2a6" stroke-opacity=".5" stroke-width=".6"></path><path d="M12 3.4 L5.6 5.7 V8.8 Q12 10.8 18.4 8.8 V5.7 Z" fill="url(#seGl)"></path><path d="M8 11.5 L11 14.5 L16.2 8.4" fill="none" stroke="#103f08" stroke-opacity=".35" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round"></path><path d="M8 11.2 L11 14.2 L16.2 8.1" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path></g></svg></a><a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><svg viewBox="0 0 24 24"><defs><filter id="upSh" x="-25%" y="-20%" width="150%" height="155%"><feDropShadow dx="0" dy=".5" stdDeviation=".5" flood-color="#000" flood-opacity=".28"></feDropShadow></filter><radialGradient id="upG" cx=".36" cy=".3" r=".85"><stop offset="0" stop-color="#8eccf2"></stop><stop offset=".55" stop-color="#3f8fd0"></stop><stop offset="1" stop-color="#175a98"></stop></radialGradient><linearGradient id="upB" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#74cf52"></stop><stop offset="1" stop-color="#2c861d"></stop></linearGradient><radialGradient id="upGl" cx=".35" cy=".3" r=".5"><stop offset="0" stop-color="#ffffff" stop-opacity=".7"></stop><stop offset="1" stop-color="#ffffff" stop-opacity="0"></stop></radialGradient></defs><g filter="url(#upSh)"><circle cx="10.6" cy="10.6" r="8.2" fill="url(#upG)" stroke="#114e7d" stroke-width=".6"></circle><g fill="none" stroke="#dcefff" stroke-width=".55" opacity=".7"><path d="M2.5 10.6 H18.7"></path><path d="M3.6 7.1 H17.6"></path><path d="M3.6 14.1 H17.6"></path><path d="M10.6 2.4 V18.8"></path><ellipse cx="10.6" cy="10.6" rx="3.1" ry="8.2"></ellipse></g><ellipse cx="7.4" cy="7" rx="3.4" ry="2.2" fill="url(#upGl)"></ellipse><circle cx="17.8" cy="17.8" r="4.5" fill="url(#upB)" stroke="#ffffff" stroke-width=".9"></circle><path d="M17.8 15.6 A2.2 2.2 0 1 1 15.7 18.4" fill="none" stroke="#ffffff" stroke-width="1.1" stroke-linecap="round"></path><path d="M16.9 14.9 L18.8 15.3 L17.5 16.8 Z" fill="#ffffff"></path></g></svg></a><span id="axp-clock" aria-hidden="true"></span></div></div><!-- /axp:shell -->
+<!-- axp:shell --><nav id="axp-icons" aria-label="desktop shortcuts"><a class="axp-ico" title="writing, in flux" href="/writing" data-key="Notepad" style="left:9px;top:9px"><span class="ic note" aria-hidden="true"></span><span class="t">Notepad</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="GitHub (opens in a new tab)" href="https://github.com/oddharsh" data-key="GitHub" style="left:9px;top:95px"><span class="ic " style="background:linear-gradient(180deg,oklch(72% 0.05 255),oklch(60% 0.07 257))" aria-hidden="true">G</span><span class="t">GitHub</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Twitter (opens in a new tab)" href="https://twitter.com/oddhash" data-key="Twitter" style="left:9px;top:181px"><span class="ic " style="background:linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))" aria-hidden="true">@</span><span class="t">Twitter</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Instagram (opens in a new tab)" href="https://instagram.com/aadharsh.hif" data-key="Photos" style="left:9px;top:267px"><span class="ic " style="background:linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))" aria-hidden="true"><i class="cam" aria-hidden="true"></i></span><span class="t">Photos</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Curius (opens in a new tab)" href="https://curius.app/aadharsh-pannirselvam" data-key="Curius" style="left:9px;top:353px"><span class="ic " style="background:linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))" aria-hidden="true">C</span><span class="t">Curius</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Beli (opens in a new tab)" href="https://beliapp.com/users/aadharsh" data-key="Beli" style="left:9px;top:439px"><span class="ic " style="background:linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))" aria-hidden="true">B</span><span class="t">Beli</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Spotify (opens in a new tab)" href="https://open.spotify.com/user/aadharsh2010" data-key="Music" style="left:9px;top:525px"><span class="ic " style="background:linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))" aria-hidden="true">♪</span><span class="t">Music</span></a></nav><div id="axp-taskbar" role="navigation" aria-label="taskbar"><a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a><div id="axp-pins"><a class="axp-pin" title="prototypes + experiments" href="/garage"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="garageF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffb45a"/><stop offset=".5" stop-color="#ef8f24"/><stop offset="1" stop-color="#c2660a"/></linearGradient><linearGradient id="garageG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="garageS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#garageS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#garageF)" stroke="#8f4d06" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#garageG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><g fill="#fff"><rect x="14" y="5" width="4" height="22" rx="1.5"/><rect x="5" y="14" width="22" height="4" rx="1.5"/><rect x="14" y="5" width="4" height="22" rx="1.5" transform="rotate(45 16 16)"/><rect x="14" y="5" width="4" height="22" rx="1.5" transform="rotate(-45 16 16)"/><circle cx="16" cy="16" r="6.5"/></g><circle cx="16" cy="16" r="2.8" fill="#ef8f24"/></g></g></svg></span><span class="lbl">garage</span></a><a class="axp-pin" title="chat-style explainers + live demos" href="/lwe"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="lweF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#838ae6"/><stop offset=".5" stop-color="#4b53c9"/><stop offset="1" stop-color="#333aa0"/></linearGradient><linearGradient id="lweG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="lweS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#lweS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#lweF)" stroke="#272d82" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#lweG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><path d="M6 9 h20 a2 2 0 0 1 2 2 v9 a2 2 0 0 1-2 2 H14 l-5 4 v-4 H6 a2 2 0 0 1-2-2 v-9 a2 2 0 0 1 2-2 Z" fill="#fff"/><g stroke="#4b53c9" stroke-width="1.7" stroke-linecap="round" fill="none"><path d="M8.5 13.5 q2 -2.4 4 0 t4 0 t4 0"/><path d="M8.5 18 q2 -2.4 4 0 t4 0"/></g></g></g></svg></span><span class="lbl">lwe</span></a><a class="axp-pin" title="notes, in flux: an editable notepad" href="/writing"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="writingF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6fa0ee"/><stop offset=".5" stop-color="#2f6bd6"/><stop offset="1" stop-color="#1a4ba8"/></linearGradient><linearGradient id="writingG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="writingS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#writingS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#writingF)" stroke="#143c86" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#writingG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><g fill="#fff"><rect x="8" y="8" width="16" height="2.6" rx="1.3"/><rect x="8" y="14.7" width="16" height="2.6" rx="1.3"/><rect x="8" y="21.4" width="10" height="2.6" rx="1.3"/></g></g></g></svg></span><span class="lbl">writing</span></a><a class="axp-pin" title="what I've been reading, from Curius" href="/reading"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="readingF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#de8186"/><stop offset=".5" stop-color="#c1545a"/><stop offset="1" stop-color="#93333a"/></linearGradient><linearGradient id="readingG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="readingS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#readingS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#readingF)" stroke="#732830" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#readingG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><g fill="#fff"><path d="M16 9 C13 7.2 9 7 6 7.6 V24 C9 23.4 13 23.6 16 25 Z"/><path d="M16 9 C19 7.2 23 7 26 7.6 V24 C23 23.4 19 23.6 16 25 Z" opacity=".82"/></g><path d="M16 9 V25" stroke="#c1545a" stroke-width="1.4"/></g></g></svg></span><span class="lbl">reading</span></a><a class="axp-pin" title="events worth going to" href="/serendipity"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="serendipityF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a886e8"/><stop offset=".5" stop-color="#7c4dd6"/><stop offset="1" stop-color="#5a32a8"/></linearGradient><linearGradient id="serendipityG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="serendipityS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#serendipityS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#serendipityF)" stroke="#482788" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#serendipityG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><rect x="6" y="8" width="20" height="18" rx="2" fill="#fff"/><rect x="6" y="8" width="20" height="5" rx="2" fill="#e7e7ef"/><g fill="#7c4dd6"><rect x="9" y="16" width="3.4" height="3.4"/><rect x="14.3" y="16" width="3.4" height="3.4"/><rect x="19.6" y="16" width="3.4" height="3.4"/><rect x="9" y="21" width="3.4" height="3.4"/><rect x="14.3" y="21" width="3.4" height="3.4"/></g></g></g></svg></span><span class="lbl">serendipity</span></a><a class="axp-pin" title="the crypto-VC neighborhood" href="/around"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="aroundF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5cc6ba"/><stop offset=".5" stop-color="#1f9b8e"/><stop offset="1" stop-color="#137468"/></linearGradient><linearGradient id="aroundG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="aroundS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#aroundS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#aroundF)" stroke="#0d5a50" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#aroundG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><path d="M16 6 C11.6 6 8 9.3 8 13.6 C8 19 16 26 16 26 C16 26 24 19 24 13.6 C24 9.3 20.4 6 16 6 Z" fill="#fff"/><circle cx="16" cy="13.6" r="3.2" fill="#1f9b8e"/></g></g></svg></span><span class="lbl">around</span></a><a class="axp-pin" title="the other web: how machines read a URL" href="/lens"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="lensF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#79c7e6"/><stop offset=".5" stop-color="#2f9fc4"/><stop offset="1" stop-color="#1d7895"/></linearGradient><linearGradient id="lensG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="lensS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#lensS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#lensF)" stroke="#145d73" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#lensG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><rect x="5.5" y="5" width="15" height="19" rx="2" fill="#fff"/><g fill="#2f9fc4"><rect x="8.5" y="9.5" width="9" height="1.7" rx="0.6"/><rect x="8.5" y="13" width="9" height="1.7" rx="0.6"/><rect x="8.5" y="16.5" width="6" height="1.7" rx="0.6"/></g><circle cx="20.5" cy="20.5" r="6" fill="#2f9fc4" stroke="#fff" stroke-width="2.2"/><circle cx="18.6" cy="18.6" r="1.5" fill="#fff" opacity=".85"/><path d="M24.8 24.8 L28.5 28.5" stroke="#fff" stroke-width="3.2" stroke-linecap="round"/></g></g></svg></span><span class="lbl">lens</span></a><a class="axp-pin" title="what I'm listening to right now" href="/rn"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="musicF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6fcd8a"/><stop offset=".5" stop-color="#2faa55"/><stop offset="1" stop-color="#1d8040"/></linearGradient><linearGradient id="musicG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="musicS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#musicS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#musicF)" stroke="#156030" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#musicG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><g fill="#fff"><rect x="17" y="7" width="2.6" height="14"/><path d="M19.6 7 C23 8 25 10 24.4 13.6 C23 11 21 11 19.6 11.8 Z"/><ellipse cx="14" cy="21" rx="4.4" ry="3.5"/></g></g></g></svg></span><span class="lbl">music</span></a><a class="axp-pin" title="book a coffee / bagel" href="/coffee"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="coffeeF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b08858"/><stop offset=".5" stop-color="#875c34"/><stop offset="1" stop-color="#5e3c1e"/></linearGradient><linearGradient id="coffeeG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="coffeeS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#coffeeS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#coffeeF)" stroke="#472d16" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#coffeeG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><path d="M8 12 h13 v6 a6.5 6.5 0 0 1-13 0 Z" fill="#fff"/><path d="M21 13 h3 a2.6 2.6 0 0 1 0 5.2 h-3" fill="none" stroke="#fff" stroke-width="2.2"/><g stroke="#fff" stroke-width="1.8" stroke-linecap="round"><path d="M11 5.5 v3"/><path d="M14.5 5 v3.5"/></g></g></g></svg></span><span class="lbl">coffee</span></a></div><div id="axp-spacer"></div><div id="axp-tray"><button id="axp-sound" type="button" hidden></button><a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><svg viewBox="0 0 24 24"><defs><filter id="spSh" x="-30%" y="-20%" width="160%" height="150%"><feDropShadow dx="0" dy=".5" stdDeviation=".5" flood-color="#000" flood-opacity=".28"></feDropShadow></filter><linearGradient id="spBez" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f3efe4"></stop><stop offset=".5" stop-color="#d6d0be"></stop><stop offset="1" stop-color="#b1aa94"></stop></linearGradient><linearGradient id="spScr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6fb0e8"></stop><stop offset=".5" stop-color="#2f72b6"></stop><stop offset="1" stop-color="#16548f"></stop></linearGradient><linearGradient id="spGl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".5"></stop><stop offset="1" stop-color="#ffffff" stop-opacity="0"></stop></linearGradient></defs><g filter="url(#spSh)"><ellipse cx="12" cy="21.3" rx="5.2" ry="1" fill="#8f876f" opacity=".5"></ellipse><rect x="10.4" y="17.2" width="3.2" height="2.8" fill="#c3bca6"></rect><path d="M7 21 Q7 19.7 8.6 19.7 H15.4 Q17 19.7 17 21 Z" fill="url(#spBez)" stroke="#897f66" stroke-width=".4"></path><rect x="2.3" y="2.7" width="19.4" height="14.9" rx="2" fill="url(#spBez)" stroke="#857c63" stroke-width=".5"></rect><rect x="2.95" y="3.3" width="18.1" height="13.7" rx="1.5" fill="none" stroke="#ffffff" stroke-opacity=".5" stroke-width=".5"></rect><rect x="4.2" y="4.7" width="15.6" height="11" rx=".8" fill="#0f3d63"></rect><rect x="4.6" y="5.1" width="14.8" height="10.2" rx=".6" fill="url(#spScr)"></rect><path d="M4.6 5.1 H19.4 V7.9 Q12 11.8 4.6 9.1 Z" fill="url(#spGl)"></path><circle cx="20" cy="15.9" r=".8" fill="#84e85a" stroke="#3f7a2a" stroke-width=".3"></circle></g></svg></a><a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><svg viewBox="0 0 24 24"><defs><filter id="seSh" x="-30%" y="-15%" width="160%" height="150%"><feDropShadow dx="0" dy=".5" stdDeviation=".5" flood-color="#000" flood-opacity=".28"></feDropShadow></filter><linearGradient id="seF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7ed24f"></stop><stop offset=".5" stop-color="#3f9c24"></stop><stop offset="1" stop-color="#297818"></stop></linearGradient><linearGradient id="seGl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".55"></stop><stop offset="1" stop-color="#ffffff" stop-opacity="0"></stop></linearGradient></defs><g filter="url(#seSh)"><path d="M12 2.2 L4.4 4.9 V11.4 C4.4 16.2 8 19.7 12 21.6 C16 19.7 19.6 16.2 19.6 11.4 V4.9 Z" fill="url(#seF)" stroke="#1f5f12" stroke-width=".7"></path><path d="M12 3.4 L5.6 5.7 V11.3 C5.6 15.3 8.6 18.4 12 20.1 C15.4 18.4 18.4 15.3 18.4 11.3 V5.7 Z" fill="none" stroke="#c6f2a6" stroke-opacity=".5" stroke-width=".6"></path><path d="M12 3.4 L5.6 5.7 V8.8 Q12 10.8 18.4 8.8 V5.7 Z" fill="url(#seGl)"></path><path d="M8 11.5 L11 14.5 L16.2 8.4" fill="none" stroke="#103f08" stroke-opacity=".35" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round"></path><path d="M8 11.2 L11 14.2 L16.2 8.1" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path></g></svg></a><a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><svg viewBox="0 0 24 24"><defs><filter id="upSh" x="-25%" y="-20%" width="150%" height="155%"><feDropShadow dx="0" dy=".5" stdDeviation=".5" flood-color="#000" flood-opacity=".28"></feDropShadow></filter><radialGradient id="upG" cx=".36" cy=".3" r=".85"><stop offset="0" stop-color="#8eccf2"></stop><stop offset=".55" stop-color="#3f8fd0"></stop><stop offset="1" stop-color="#175a98"></stop></radialGradient><linearGradient id="upB" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#74cf52"></stop><stop offset="1" stop-color="#2c861d"></stop></linearGradient><radialGradient id="upGl" cx=".35" cy=".3" r=".5"><stop offset="0" stop-color="#ffffff" stop-opacity=".7"></stop><stop offset="1" stop-color="#ffffff" stop-opacity="0"></stop></radialGradient></defs><g filter="url(#upSh)"><circle cx="10.6" cy="10.6" r="8.2" fill="url(#upG)" stroke="#114e7d" stroke-width=".6"></circle><g fill="none" stroke="#dcefff" stroke-width=".55" opacity=".7"><path d="M2.5 10.6 H18.7"></path><path d="M3.6 7.1 H17.6"></path><path d="M3.6 14.1 H17.6"></path><path d="M10.6 2.4 V18.8"></path><ellipse cx="10.6" cy="10.6" rx="3.1" ry="8.2"></ellipse></g><ellipse cx="7.4" cy="7" rx="3.4" ry="2.2" fill="url(#upGl)"></ellipse><circle cx="17.8" cy="17.8" r="4.5" fill="url(#upB)" stroke="#ffffff" stroke-width=".9"></circle><path d="M17.8 15.6 A2.2 2.2 0 1 1 15.7 18.4" fill="none" stroke="#ffffff" stroke-width="1.1" stroke-linecap="round"></path><path d="M16.9 14.9 L18.8 15.3 L17.5 16.8 Z" fill="#ffffff"></path></g></svg></a><span id="axp-clock" aria-hidden="true"></span></div></div><!-- /axp:shell -->
 </body>
 </html>

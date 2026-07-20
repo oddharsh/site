@@ -33,7 +33,7 @@ from pathlib import Path
 try:
     from PIL import Image
 except ImportError:
-    sys.stderr.write("error: Pillow not installed. run: pip3 install --user pillow\n")
+    sys.stderr.write("error: Pillow not installed. run: python3 -m pip install -r holding/scripts/requirements.txt\n")
     sys.exit(2)
 
 BINS = 64

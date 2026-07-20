@@ -1,0 +1,71 @@
+name: Annotate Dependabot site review
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  annotate:
+    if: github.event.pull_request.user.login == 'dependabot[bot]' && github.repository == 'oddharsh/site'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@v3
+        with:
+          github-token: ${{ github.token }}
+
+      - name: Add or refresh the site review note
+        uses: actions/github-script@v9
+        env:
+          DEPENDENCY_NAMES: ${{ steps.metadata.outputs.dependency-names }}
+          DEPENDENCY_TYPE: ${{ steps.metadata.outputs.dependency-type }}
+          UPDATE_TYPE: ${{ steps.metadata.outputs.update-type }}
+          PREVIOUS_VERSION: ${{ steps.metadata.outputs.previous-version }}
+          NEW_VERSION: ${{ steps.metadata.outputs.new-version }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const marker = "<!-- dependabot-site-review -->";
+            const issue_number = context.payload.pull_request.number;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number,
+              per_page: 100,
+            });
+            const body = `${marker}
+            ## Dependabot site review
+
+            **Dependency:** ${process.env.DEPENDENCY_NAMES || "unknown"}
+            **Change:** ${process.env.PREVIOUS_VERSION || "?"} → ${process.env.NEW_VERSION || "?"}
+            **Type:** ${process.env.DEPENDENCY_TYPE || "unknown"} (${process.env.UPDATE_TYPE || "unknown"})
+
+            Dependabot's PR description contains the upstream release notes/changelog and commit details. Review those before merging.
+
+            ### Site leverage checklist
+
+            - [ ] Checked for new Cloudflare/Workers/R2/KV/D1/Workers Builds capabilities.
+            - [ ] Checked bundle, runtime, browser-support, and performance-budget impact.
+            - [ ] Checked whether this changes the photo or CI toolchain.
+            - [ ] Recorded a concrete leverage or an explicit “none” in review.
+            `;
+            const prior = comments.find((comment) => comment.body?.includes(marker));
+            if (prior) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: prior.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number,
+                body,
+              });
+            }

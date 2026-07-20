@@ -14,10 +14,11 @@ export const BOT_UA      = `${BOT_NAME}/${BOT_VERSION} (+https://aadhar.sh/bot)`
 
 export const SIG_AGENT   = "https://aadhar.sh/";
 
-// signed outbound fetch. always sets our UA. signs when the private key is
-// available; falls back to UA-only fetch if signing fails (better to crawl
-// unsigned than to silently break).
-export async function signedFetch(targetUrl, env, opts = {}) {
+// Build the headers for an identified outbound request. AadharshBot's public
+// identity promise is meaningful only when the signature is present, so this
+// fails closed when the key is missing or malformed. Callers that genuinely do
+// not need bot identity should use plain fetch with their own explicit policy.
+export async function botHeaders(targetUrl, env, opts = {}) {
   const headers = new Headers(opts.headers || {});
   headers.set("user-agent", BOT_UA);
   if (!headers.has("accept")) {
@@ -27,16 +28,19 @@ export async function signedFetch(targetUrl, env, opts = {}) {
     headers.set("accept-language", "en-US,en;q=0.9");
   }
 
-  if (env.RN_SIGNING_KEY_JWK) {
-    try {
-      const sig = await signRequestForWebBotAuth(targetUrl, env);
-      headers.set("Signature-Agent", `"${SIG_AGENT}"`);
-      headers.set("Signature-Input", `sig1=${sig.params}`);
-      headers.set("Signature", `sig1=:${sig.b64}:`);
-    } catch (_e) {
-      // keep going; recipient just won't be able to verify
-    }
+  if (opts.sign === false) return headers;
+  if (!env || !env.RN_SIGNING_KEY_JWK) {
+    throw new Error("AadharshBot signing key is unavailable");
   }
+  const sig = await signRequestForWebBotAuth(targetUrl, env);
+  headers.set("Signature-Agent", `"${SIG_AGENT}"`);
+  headers.set("Signature-Input", `sig1=${sig.params}`);
+  headers.set("Signature", `sig1=:${sig.b64}:`);
+  return headers;
+}
+
+export async function signedFetch(targetUrl, env, opts = {}) {
+  const headers = await botHeaders(targetUrl, env, { ...opts, sign: true });
 
   return fetch(targetUrl, {
     method: opts.method || "GET",

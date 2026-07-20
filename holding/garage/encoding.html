@@ -6,11 +6,11 @@
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
 <title>aadhar.sh/garage/thumbnail encoding study</title>
-<meta name="description" content="The same photo run through every thumbnail encoding choice (AVIF/WebP/JPEG, jpegli vs system, chroma subsampling, quality, resolution), with real byte counts and the tradeoffs the site actually makes.">
+<meta name="description" content="The same photo run through AVIF, WebP, and JPEG (zenjpeg/zenc, the shipped encoder that replaced jpegli), with real byte counts, quality measurements, encoder knobs, and the tradeoffs the site actually makes.">
 <link rel="canonical" href="https://aadhar.sh/garage/encoding">
 <meta property="og:type" content="website">
 <meta property="og:title" content="aadhar.sh/garage/thumbnail encoding study">
-<meta property="og:description" content="The same photo run through every thumbnail encoding choice (AVIF/WebP/JPEG, jpegli vs system, chroma subsampling, quality, resolution), with real byte counts and the tradeoffs the site actually makes.">
+<meta property="og:description" content="The same photo run through AVIF, WebP, and JPEG (zenjpeg/zenc, the shipped encoder that replaced jpegli), with real byte counts, quality measurements, encoder knobs, and the tradeoffs the site actually makes.">
 <meta property="og:url" content="https://aadhar.sh/garage/encoding">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='3' y='6' width='7' height='20' rx='1' fill='%230855dd'/><rect x='12' y='6' width='5' height='20' rx='1' fill='%23166aee'/><rect x='19' y='6' width='10' height='20' rx='1' fill='%23003bda'/></svg>">
 <style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}
@@ -236,6 +236,11 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
 .enc-table th, .enc-table td { border: 1px solid oklch(80% 0.02 250); padding: 4px 10px; text-align: left; }
 .enc-table th { background: oklch(92.5% 0.018 95); font-family: var(--font-caption); }
 .enc-table td.num { font-family: var(--font-mono); text-align: right; }
+.enc-table-scroll { overflow-x: auto; margin: 8px 0 20px; }
+.zen-table { max-width: none; min-width: 650px; margin: 0; }
+.zen-table th:first-child, .zen-table td:first-child { width: 23%; }
+.zen-table td { vertical-align: top; }
+.zen-results { min-width: 480px; max-width: 620px; }
 .enc-ships { line-height: 1.6; }
 
   /* OS-window geometry inlined so FIRST PAINT matches nav.js (no shell "pop"
@@ -268,12 +273,15 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
       Every grid thumbnail ends a chain of choices: <em>format,
       quality, chroma subsampling, resolution</em>. Here I run one photo through all
       of them with real byte counts, so you can see the tradeoffs instead of taking them on faith.
-      The actual encoders the site uses (avifenc, jpegli, cwebp, sips) produced every number.
+      The actual encoders the site uses (avifenc, zenc/zenjpeg, cwebp, sips) produced the shipped
+      numbers; the corpus study that put zenjpeg in the pipeline is below.
     </p>
     <p class="lede" style="margin-top:4px">
       <b>The verdict shipped:</b> the live pipeline (<code>holding/scripts/add-photos.sh</code>)
-      encodes every thumbnail as AVIF-primary + a <b>jpegli q82</b> JPG fallback. That combination
-      wins below, which is why the site builds jpegli from source.
+      encodes every thumbnail as AVIF-primary + a JPG fallback. The JPG encoder is now
+      <b>zenc</b> (<code>holding/scripts/zenc/</code>, a zenjpeg wrapper: hybrid trellis + progressive
+      scan search) at q84, which retired the from-source jpegli build in 2026-07 for a few percent
+      fewer bytes at equal quality. The corpus comparison that drove that switch is below.
     </p>
 
     <h2>Format showdown</h2>
@@ -283,9 +291,9 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
     <div class="enc-grid">
         <figure class="enc-card"><img src="/garage/enc/c-png.png?v=2" alt="" width="400" height="266" loading="lazy" decoding="async"><figcaption><b>PNG</b> lossless<span class="enc-sz">178.7 KB</span><span class="enc-bpp">1.72 b/px</span></figcaption></figure>
         <figure class="enc-card"><img src="/garage/enc/c-sips82.jpg?v=2" alt="" width="400" height="266" loading="lazy" decoding="async"><figcaption><b>JPG·sips</b> q82 · 4:2:0<span class="enc-sz">31.7 KB</span><span class="enc-bpp">0.31 b/px</span></figcaption></figure>
-        <figure class="enc-card"><img src="/garage/enc/c-jl60.jpg?v=2" alt="" width="400" height="266" loading="lazy" decoding="async"><figcaption><b>JPG·jpegli</b> q60 · 4:2:0<span class="enc-sz">11.0 KB</span><span class="enc-bpp">0.11 b/px</span></figcaption></figure>
-        <figure class="enc-card"><img src="/garage/enc/c-jl82.jpg?v=2" alt="" width="400" height="266" loading="lazy" decoding="async"><figcaption><b>JPG·jpegli</b> q82 · 4:2:0<span class="enc-sz">16.8 KB</span><span class="enc-bpp">0.16 b/px</span></figcaption></figure>
-        <figure class="enc-card"><img src="/garage/enc/c-jl95.jpg?v=2" alt="" width="400" height="266" loading="lazy" decoding="async"><figcaption><b>JPG·jpegli</b> q95 · 4:2:0<span class="enc-sz">34.5 KB</span><span class="enc-bpp">0.33 b/px</span></figcaption></figure>
+        <figure class="enc-card"><img src="/garage/enc/c-zc62.jpg?v=3" alt="" width="400" height="266" loading="lazy" decoding="async"><figcaption><b>JPG·zenc</b> q62 · 4:2:0<span class="enc-sz">9.7 KB</span><span class="enc-bpp">0.09 b/px</span></figcaption></figure>
+        <figure class="enc-card"><img src="/garage/enc/c-zc84.jpg?v=3" alt="" width="400" height="266" loading="lazy" decoding="async"><figcaption><b>JPG·zenc</b> q84 · 4:2:0 · <b>shipped</b><span class="enc-sz">15.9 KB</span><span class="enc-bpp">0.15 b/px</span></figcaption></figure>
+        <figure class="enc-card"><img src="/garage/enc/c-zc95.jpg?v=3" alt="" width="400" height="266" loading="lazy" decoding="async"><figcaption><b>JPG·zenc</b> q95 · 4:2:0<span class="enc-sz">32.0 KB</span><span class="enc-bpp">0.31 b/px</span></figcaption></figure>
         <figure class="enc-card"><img src="/garage/enc/c-wp60.webp?v=2" alt="" width="400" height="266" loading="lazy" decoding="async"><figcaption><b>WebP</b> q60 · 4:2:0<span class="enc-sz">7.8 KB</span><span class="enc-bpp">0.07 b/px</span></figcaption></figure>
         <figure class="enc-card"><img src="/garage/enc/c-wp80.webp?v=2" alt="" width="400" height="266" loading="lazy" decoding="async"><figcaption><b>WebP</b> q80 · 4:2:0<span class="enc-sz">11.8 KB</span><span class="enc-bpp">0.11 b/px</span></figcaption></figure>
         <figure class="enc-card"><img src="/garage/enc/c-av40.avif?v=2" alt="" width="400" height="266" loading="lazy" decoding="async"><figcaption><b>AVIF</b> q40 · 4:2:0<span class="enc-sz">4.6 KB</span><span class="enc-bpp">0.04 b/px</span></figcaption></figure>
@@ -294,14 +302,107 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
         <figure class="enc-card"><img src="/garage/enc/c-av63-444.avif?v=2" alt="" width="400" height="266" loading="lazy" decoding="async"><figcaption><b>AVIF</b> q63 · 4:4:4<span class="enc-sz">11.3 KB</span><span class="enc-bpp">0.11 b/px</span></figcaption></figure>
     </div>
 
-    <h2>Why the site builds jpegli from source</h2>
-    <p>Look at the two q82 JPEGs above: <b>system/sips</b> lands at 31.7 KB,
-      <b>jpegli</b> at 16.8 KB: <em>same nominal
-      quality, ~47% fewer bytes</em>.
-      Google's jpegli re-implements libjpeg and tunes it psychovisually; that win alone
-      is why <code>~/.local/bin/cjpegli</code> exists and the pipeline shells out
-      to it instead of the OS encoder. AVIF beats both, but JPEG still backs up
+    <h2>Why the site built jpegli from source (then moved past it)</h2>
+    <p>Look at the two JPEGs above at the shipped quality: <b>system/sips</b> q82 lands at 31.7 KB,
+      <b>zenc</b> q84 (the same visual quality) at 15.9 KB: <em>~50% fewer bytes</em>.
+      Google's jpegli first showed the win (re-implement libjpeg, tune it psychovisually); that is
+      why the pipeline shelled out to a from-source <code>cjpegli</code> for years instead of
+      the OS encoder. The site has since moved to <b>zenc/zenjpeg</b> (the corpus study below), which
+      takes another few percent at equal quality and, being a Rust crate, is dependabot-tracked and
+      builds on any machine, no cmake/ninja toolchain. AVIF beats both, but JPEG still backs up
       every <code>&lt;img&gt;</code> as the universal fallback, so shrinking it still pays off.</p>
+
+    <h2>Zenjpeg won and shipped <span class="status shipped">shipped</span></h2>
+    <p>“Zenjpg” is a good shorthand, but the crate is published as
+      <a href="https://docs.rs/crate/zenjpeg/latest" rel="external"><code>zenjpeg</code></a>.
+      It ships no CLI, so the site checks in a small Rust wrapper (<code>holding/scripts/zenc/</code>)
+      and the photo Action builds it with cargo; dependabot tracks the pin. That retired the
+      from-source jpegli build in 2026-07. The corpus run below is the evidence that drove the switch.</p>
+
+    <p class="callout"><b>Corpus verdict (158 photos):</b> the single-fixture read below was a lead,
+      so I ran the whole library through it (112 Fuji X-T5 + 46 Leica frames, resized to the 600px
+      thumbnail tier, each normalized so both encoders and the metric see identical pixels).
+      Across all 158, zenjpeg's realistic mode (hybrid trellis) needs about <b>1.6% fewer bytes</b>
+      than <code>cjpegli -q82 -p2</code> at equal SSIMULACRA2; its aggressive mode (hybrid plus a
+      64-candidate scan search) about <b>4%</b>. zenjpeg's fast path ties cjpegli. A real win,
+      but a small one on a fallback format AVIF already beats by ~40%.</p>
+
+    <h3>The knobs that matter</h3>
+    <div class="enc-table-scroll">
+      <table class="enc-table zen-table">
+        <thead><tr><th>knob</th><th>what it changes</th><th>thumbnail read</th></tr></thead>
+        <tbody>
+          <tr><td><code>quality</code></td><td>Quantization strength; zenjpeg's scale is jpegli-like, not a promise of equal bytes.</td><td>Calibrate by output size, not by matching <code>82</code> on the label.</td></tr>
+          <tr><td><code>ChromaSubsampling</code></td><td><code>None</code> = 4:4:4; <code>Quarter</code> = 4:2:0.</td><td>4:2:0 is the likely production candidate, but this first matched run used 4:4:4 because current cjpegli did.</td></tr>
+          <tr><td><code>progressive</code></td><td>Progressive versus baseline JPEG; progressive mode also optimizes Huffman coding.</td><td>Use progressive for the jpegli comparison; baseline is a separate decode/compatibility tradeoff.</td></tr>
+          <tr><td><code>ProgressiveScanMode</code></td><td>jpegli script, MozJPEG script, or <code>ProgressiveSearch</code> over 64 scan candidates.</td><td>On the corpus, scan search took the BD-rate from about 1.6% to 4%, at roughly 4&times; hybrid's encode time (13&times; cjpegli).</td></tr>
+          <tr><td><code>auto_optimize(true)</code></td><td>Hybrid trellis: jpegli adaptive quantization plus rate-distortion optimization.</td><td>The mode that actually beats cjpegli (+0.5 SSIMULACRA2 at matched bytes), about 3&times; the base encode time.</td></tr>
+          <tr><td><code>OptimizationPreset</code></td><td><code>Jpegli*</code>, <code>Mozjpeg*</code>, and <code>Hybrid*</code> bundle quant tables, AQ/trellis, scan strategy, and deringing policy.</td><td>Compare named profiles rather than accumulating unexplained flags in the Action.</td></tr>
+          <tr><td><code>deringing(true)</code></td><td>Overshoot deringing around saturated, high-contrast edges; enabled by default for jpegli/hybrid paths.</td><td>Useful protection, not a byte-saving knob: it changed nothing on this photo fixture, so it still needs an edge-heavy test image.</td></tr>
+          <tr><td><code>parallel</code></td><td>Optional Rayon-backed multi-threaded encoding, with restart markers supporting larger-image parallel work.</td><td>Moot at this scale: a 600px frame stays single-threaded, and the 158-photo batch already parallelizes at the job level. The whole library encodes in seconds either way.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Full-corpus read</h3>
+    <p class="note">158 real frames resized to 600px, each normalized to one canonical RGB buffer
+      so both encoders and the metric read identical pixels (the grayscale frames carry a Gray ICC
+      that different decoders expand differently, which will fake a quality collapse if you skip
+      this). Quality is <b>SSIMULACRA2</b>, the perceptual metric zenjpeg's own tuning targets,
+      cross-checked with PSNR/SSIM. BD-rate is the average byte difference at equal quality over a
+      5-point sweep; negative means fewer bytes for the same quality. Single thread, Apple Silicon.</p>
+    <div class="enc-table-scroll">
+      <table class="enc-table zen-table zen-results">
+        <thead><tr><th>encoder / mode</th><th>BD-rate vs cjpegli 4:2:0</th><th>encode speed</th><th>whole library</th></tr></thead>
+        <tbody>
+          <tr><td><b>cjpegli 4:2:0</b> (incumbent)</td><td class="num">baseline</td><td class="num">123.5 MP/s</td><td class="num">0.32 s</td></tr>
+          <tr><td>zenjpeg base (no trellis)</td><td class="num">+2.8%</td><td class="num">111.9 MP/s</td><td class="num">0.35 s</td></tr>
+          <tr><td><b>zenjpeg hybrid</b> (trellis)</td><td class="num">&minus;1.6%</td><td class="num">38.1 MP/s</td><td class="num">1.02 s</td></tr>
+          <tr><td>zenjpeg hybrid + scan search</td><td class="num">&minus;4.1%</td><td class="num">9.3 MP/s</td><td class="num">4.23 s</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Read together: zenjpeg's <b>base</b> path is basically cjpegli, a hair slower and a hair larger,
+      so the C-to-Rust rewrite is not the story. The <b>trellis</b> is: it buys the byte win by spending
+      3&times; to 13&times; the encode time. At matched bytes that lands as <b>+0.5 SSIMULACRA2</b> (hybrid)
+      to <b>+0.8</b> (scan search), real but below the threshold I would trust without a visual pass.
+      And even the 13&times; mode encodes the whole library in about 4 seconds, so encode speed does not
+      gate this decision at thumbnail scale.</p>
+    <p class="note"><b>Where this landed:</b> shipped. A 1.6% to 4% win is marginal, and on a JPEG
+      fallback AVIF already beats by ~40% the number alone does not force the move. But the site
+      already maintains a whole toolchain for marginally-superior output (jpegli-from-source, the
+      minified build, dependabot on a one-worker repo), so marginal-superior clears the bar here.
+      zenjpeg is
+      <a href="https://docs.rs/crate/zenjpeg/latest" rel="external">AGPL-3.0-or-later (or a $1 startup license)</a>,
+      a paper cut for a build-time encoder whose JPEG output is not a derivative work of it; the Rust
+      wrapper (<code>holding/scripts/zenc/</code>) is dependabot-tracked and builds anywhere, no
+      cmake/ninja. So it replaced the from-source <code>cjpegli</code> in the pipeline.</p>
+    <p class="note"><b>The knob I hoped would change the answer, and did not:</b> "encode every photo to a
+      fixed perceptual score instead of a fixed <code>q</code>" would be worth real effort, because a
+      fixed <code>q</code> scatters wildly. On these 158 photos, <code>cjpegli -q84</code> lands anywhere
+      from SSIMULACRA2 66.8 to 85.5. But zenjpeg 0.8.4's score targets (<code>Quality::ApproxSsim2</code>,
+      <code>ApproxButteraugli</code>) are open-loop approximations, not a measured loop. Asked for
+      SSIMULACRA2 85, the corpus landed at a mean of 77 with roughly the same spread as fixed <code>q</code>
+      (1 photo of 158 inside &plusmn;2 of the target). It is a relabeled quality scale, not consistency.
+      The measured closed loop that would actually hold a score is not in the forward encoder in this
+      release. Revisit if that ships.</p>
+
+    <details class="zen-hist">
+      <summary>The single-frame lead that prompted the corpus run</summary>
+      <p class="note">One 400&times;266 color fixture, <code>zenjpeg 0.8.4</code> progressive 4:4:4 vs
+        <code>cjpegli -q82 -p2</code>. Directional only; the corpus above supersedes it.</p>
+      <div class="enc-table-scroll">
+        <table class="enc-table zen-table zen-results">
+          <thead><tr><th>encoder / mode</th><th>bytes</th><th>SSIM</th><th>PSNR</th></tr></thead>
+          <tbody>
+            <tr><td><b>cjpegli q82</b></td><td class="num">17,234</td><td class="num">.964791</td><td class="num">40.7492 dB</td></tr>
+            <tr><td>zenjpeg baseline q82</td><td class="num">17,252</td><td class="num">.964550</td><td class="num">40.7186 dB</td></tr>
+            <tr><td><b>zenjpeg hybrid q80</b></td><td class="num">17,286</td><td class="num">.967684</td><td class="num">41.2312 dB</td></tr>
+            <tr><td>zenjpeg hybrid q82</td><td class="num">18,317</td><td class="num">.969240</td><td class="num">41.5352 dB</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </details>
 
     <h2>Grayscale: drop the chroma planes</h2>
     <p class="note">A black-and-white Leica frame (400&times;267). In a grayscale image the
@@ -312,28 +413,28 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
       switches to <code>--yuv 400</code>.</p>
     <div class="enc-grid">
         <figure class="enc-card"><img src="/garage/enc/g-png.png" alt="" width="400" height="267" loading="lazy" decoding="async"><figcaption><b>PNG</b> lossless<span class="enc-sz">51.0 KB</span><span class="enc-bpp">0.49 b/px</span></figcaption></figure>
-        <figure class="enc-card"><img src="/garage/enc/g-jl82.jpg" alt="" width="400" height="267" loading="lazy" decoding="async"><figcaption><b>JPG·jpegli</b> q82<span class="enc-sz">10.4 KB</span><span class="enc-bpp">0.10 b/px</span></figcaption></figure>
+        <figure class="enc-card"><img src="/garage/enc/g-zc82.jpg" alt="" width="400" height="267" loading="lazy" decoding="async"><figcaption><b>JPG·zenc</b> q84<span class="enc-sz">9.3 KB</span><span class="enc-bpp">0.09 b/px</span></figcaption></figure>
         <figure class="enc-card"><img src="/garage/enc/g-av63-420.avif" alt="" width="400" height="267" loading="lazy" decoding="async"><figcaption><b>AVIF</b> q63 · 4:2:0<span class="enc-sz">10.6 KB</span><span class="enc-bpp">0.10 b/px</span></figcaption></figure>
         <figure class="enc-card"><img src="/garage/enc/g-av63-400.avif" alt="" width="400" height="267" loading="lazy" decoding="async"><figcaption><b>AVIF</b> q63 · 4:0:0<span class="enc-sz">10.5 KB</span><span class="enc-bpp">0.10 b/px</span></figcaption></figure>
     </div>
 
     <h2>Resolution scales bytes ~quadratically</h2>
-    <p class="note">The color frame at three long edges, AVIF q63 vs jpegli q82. Doubling the long edge
-      roughly triples the bytes, and AVIF holds a steady <em>~35&ndash;38%</em> lead over JPEG at
+    <p class="note">The color frame at three long edges, AVIF q63 vs zenc q84. Doubling the long edge
+      roughly triples the bytes, and AVIF holds a steady <em>~34&ndash;36%</em> lead over JPEG at
       every size, which is why the grid stays AVIF-primary and small and square.</p>
     <table class="enc-table">
-      <thead><tr><th>resolution</th><th>AVIF q63</th><th>jpegli q82</th><th>AVIF saves</th></tr></thead>
+      <thead><tr><th>resolution</th><th>AVIF q63</th><th>zenc q84</th><th>AVIF saves</th></tr></thead>
       <tbody>
-        <tr><td>400×266</td><td class="num">10.4 KB</td><td class="num">16.8 KB</td><td class="num">38%</td></tr>
-        <tr><td>800×533</td><td class="num">33.3 KB</td><td class="num">54.1 KB</td><td class="num">38%</td></tr>
-        <tr><td>1200×800</td><td class="num">73.1 KB</td><td class="num">112.9 KB</td><td class="num">35%</td></tr>
+        <tr><td>400×266</td><td class="num">10.4 KB</td><td class="num">15.9 KB</td><td class="num">34%</td></tr>
+        <tr><td>800×533</td><td class="num">33.3 KB</td><td class="num">52.1 KB</td><td class="num">36%</td></tr>
+        <tr><td>1200×800</td><td class="num">73.1 KB</td><td class="num">110.2 KB</td><td class="num">34%</td></tr>
       </tbody>
     </table>
 
     <h2>What aadhar.sh actually ships</h2>
     <ul class="enc-ships">
       <li><b>AVIF primary</b> (<code>q63</code>, <code>4:2:0</code> color / <code>4:0:0</code> gray) +
-        <b>jpegli JPG q82</b> as the universal fallback, via <code>&lt;picture&gt;</code>.</li>
+        <b>zenc JPG q84</b> (zenjpeg hybrid+scan) as the universal fallback, via <code>&lt;picture&gt;</code>.</li>
       <li><b>Pre-cropped 600/400 squares</b>, metadata-stripped: the file <em>holds exactly</em> the displayed
         pixels, so no off-square or EXIF bytes ride along.</li>
       <li><b>4:2:0 over 4:4:4</b> for color: storing the full chroma at 4:4:4 costs ~8% more
@@ -344,8 +445,11 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
 
     <footer>
       <p>&larr; back to the <a href="/garage">garage</a> &middot; <a href="/">aadhar.sh</a></p>
-      <p><small>all byte counts are real output from <code style="font-family:var(--font-mono);font-size:9pt">avifenc · cjpegli · cwebp · sips</code>, run locally.</small></p>
+      <p><small>shipped byte counts are real output from <code style="font-family:var(--font-mono);font-size:9pt">avifenc · zenc · cwebp · sips</code>; the corpus table is a reproducible <code style="font-family:var(--font-mono);font-size:9pt">zenjpeg 0.8.4</code> run.</small></p>
     </footer>
+
+    <hr>
+    <section id="luq" aria-label="understanding check"></section>
   </div>
 </div>
 
@@ -415,7 +519,147 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
 }
 </script>
 
+<script type="application/json" id="luq-data">
+{
+  "skin": "garage",
+  "questions": [
+    {
+      "q": "Mouse the loupe over a low-quality JPEG card and a low-quality AVIF card at the same spot. How do the two codecs fail as quality drops?",
+      "options": [
+        {
+          "t": "JPEG breaks into hard 8x8 block edges; AVIF fails softer by smoothing fine detail away.",
+          "ok": true,
+          "why": "That's the signature the loupe magnifies with pixelated rendering: JPEG's DCT grid shows its seams, while AVIF's filtering blurs rather than blocks."
+        },
+        {
+          "t": "Both degrade the same way since both are block-transform codecs; only the byte counts differ.",
+          "why": "The bytes differ AND the artifacts differ. Put the glass on the q62 zenc card, then the q40 AVIF card: the failure modes look nothing alike."
+        },
+        {
+          "t": "AVIF collapses into blocky mosaics first; JPEG holds its shape but washes the colors out.",
+          "why": "That's the two codecs swapped. Blocking is JPEG's failure mode; AVIF trades fine detail for smoothness instead of showing block seams."
+        },
+        {
+          "t": "The loupe can't show a difference because the browser re-smooths both images when it upscales.",
+          "why": "The glass sets image-rendering to pixelated precisely so the browser's upscaler stays out of it and the encoded pixels read as-is."
+        }
+      ]
+    },
+    {
+      "q": "AVIF wins the showdown outright, so why bother with a custom JPEG encoder (zenc/zenjpeg) at all?",
+      "options": [
+        {
+          "t": "A JPEG still backs every thumbnail as the universal fallback, and zenc roughly halves it versus the system encoder at the same shipped quality.",
+          "ok": true,
+          "why": "15.9 KB (zenc q84) against the system encoder's 31.7 KB at the same visual quality. Shrinking the fallback tier pays even when most browsers take the AVIF."
+        },
+        {
+          "t": "Some detailed color frames come out smaller as JPEG than as AVIF, so the pipeline picks the winner per photo.",
+          "why": "The grid shows AVIF ahead at every quality tried, and the resolution table shows the lead holding at every size. There is no per-photo horse race."
+        },
+        {
+          "t": "zenc also emits the AVIF tier, so one tool from one build covers the whole picture pair.",
+          "why": "zenc (zenjpeg) outputs only JPEG. The AVIF primary comes from avifenc; they are separate encoders in the pipeline."
+        },
+        {
+          "t": "The system encoder strips the EXIF fields that the photo grid's hover tooltips still need.",
+          "why": "The ships list says the squares are metadata-stripped on purpose, so EXIF bytes ride along in neither encoder's output. The zenc win is bytes, per the shipped-quality cards."
+        }
+      ]
+    },
+    {
+      "q": "For black-and-white frames the pipeline encodes AVIF as 4:0:0, luma only. What's the main reason?",
+      "options": [
+        {
+          "t": "Correctness: with no chroma planes in the file, a faint color cast is impossible; the byte savings are nearly nothing.",
+          "ok": true,
+          "why": "The grayscale cards prove it: 4:2:0 lands at 10.6 KB and 4:0:0 at 10.5 KB, because nothing lived in those planes to begin with."
+        },
+        {
+          "t": "Dropping two of the image's three planes cuts the file size by roughly a third.",
+          "why": "That's the intuition the grayscale grid corrects: empty chroma planes compress to almost zero bytes, so removing them saves almost nothing."
+        },
+        {
+          "t": "The encoder reinvests the saved chroma bits into a visibly sharper luma plane.",
+          "why": "Nothing measurable gets reinvested; the two files sit within 0.1 KB of each other. The win is encoding the content honestly and ruling out color casts."
+        },
+        {
+          "t": "Luma-only AVIF files decode measurably faster when the photo grid loads.",
+          "why": "Decode speed never enters the study; every comparison on this page is bytes and visible quality. The stated reason is correctness."
+        }
+      ]
+    },
+    {
+      "q": "Per the resolution table, what happens to file size when the thumbnail's long edge doubles from 400 to 800?",
+      "options": [
+        {
+          "t": "Bytes roughly triple, and AVIF's 34 to 36% lead over the JPEG (zenc) holds steady at every size.",
+          "ok": true,
+          "why": "10.4 KB grows to 33.3 KB for AVIF. Under 4x because bigger images compress a bit more efficiently, and the steady lead is why the grid stays AVIF-primary, small, and square."
+        },
+        {
+          "t": "Bytes roughly double, since compressed size tracks the length of the edge.",
+          "why": "Pixel count grows with the square of the edge, so size grows much faster than the edge does. The table shows about 3x, well past doubling."
+        },
+        {
+          "t": "Bytes exactly quadruple, matching the four times larger pixel count.",
+          "why": "Larger images hand the encoder more redundancy to exploit, so growth comes in under the raw pixel ratio: about 3x in the table, off from 4x."
+        },
+        {
+          "t": "AVIF's lead over JPEG widens with resolution, so large sizes favor AVIF even more.",
+          "why": "The saves column reads 38, 38, 35 percent: a steady lead, wider at no size. The reason to stay small is the byte growth itself."
+        }
+      ]
+    },
+    {
+      "q": "Color thumbnails ship at 4:2:0 chroma subsampling instead of full 4:4:4. What tradeoff did the study measure?",
+      "options": [
+        {
+          "t": "4:4:4 costs about 8% more bytes and buys no visible gain at thumbnail size, so 4:2:0 is effectively free.",
+          "ok": true,
+          "why": "Compare the two AVIF q63 cards: 10.4 KB against 11.3 KB, with no difference you can point at under the loupe. That's quality budget for free."
+        },
+        {
+          "t": "4:2:0 halves the file size, which outweighs the visible color smearing it causes.",
+          "why": "Both halves of that overshoot: the measured gap is about 8%, and at 400px there's no smearing to see. Scroll back to the two q63 cards and check with the loupe."
+        },
+        {
+          "t": "4:4:4 fails to decode in some browsers, so 4:2:0 is the compatibility floor.",
+          "why": "Every sampling mode here decodes anywhere the format itself does; format support is what the picture element's fallback handles. The choice is purely bytes versus visible gain."
+        },
+        {
+          "t": "Subsampling only applies to the JPEG fallback; the AVIF primary always keeps full chroma.",
+          "why": "The AVIF cards are labeled 4:2:0 for a reason: the primary is subsampled too. Only the grayscale frames change mode, and that's to 4:0:0."
+        }
+      ]
+    },
+    {
+      "q": "The corpus win is only 1.6% to 4%, on a JPEG fallback AVIF already beats by ~40%. Why did the site ship zenjpeg anyway?",
+      "options": [
+        {
+          "t": "The site maintains a whole toolchain for marginally-superior output, so a real, measured marginal gain clears the bar here.",
+          "ok": true,
+          "why": "Same doctrine as building jpegli from source and minifying the client scripts: on this site marginal-superior is the point. A measured 1.6% (hybrid) to 4% (scan search) at equal quality qualifies. AGPL is a paper cut for a build-time encoder, and the Rust wrapper is dependabot-tracked and builds anywhere."
+        },
+        {
+          "t": "Because zenjpeg is dramatically smaller than jpegli, an obvious no-brainer.",
+          "why": "It is not dramatic: ~1.6% to 4% fewer bytes at equal quality. It shipped because the site treats a real marginal gain as worth the toolchain, not because the number was big."
+        },
+        {
+          "t": "Because hybrid trellis is free: it costs nothing extra to run.",
+          "why": "It spends 3x to 13x the encode time. That is only seconds for the 158-frame batch so speed did not gate it, but it is not free."
+        },
+        {
+          "t": "Because its closed-loop target makes every photo a consistent SSIMULACRA2, ending the fixed-q scatter.",
+          "why": "That knob (ApproxSsim2) is open-loop in 0.8.4 and did not hold the target on the corpus. It was not the reason to ship; the byte win plus the site's craft doctrine were."
+        }
+      ]
+    }
+  ]
+}
+</script>
+<script src="/quiz.js" defer></script>
   <script src="/nav.js" defer></script>
-<!-- axp:shell --><nav id="axp-icons" aria-label="desktop shortcuts"><a class="axp-ico" title="writing, in flux" href="/writing" data-key="Notepad" style="left:9px;top:9px"><span class="ic note" aria-hidden="true"></span><span class="t">Notepad</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Twitter (opens in a new tab)" href="https://twitter.com/oddhash" data-key="Twitter" style="left:9px;top:95px"><span class="ic " style="background:linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))" aria-hidden="true">@</span><span class="t">Twitter</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Instagram (opens in a new tab)" href="https://instagram.com/aadharsh.hif" data-key="Photos" style="left:9px;top:181px"><span class="ic " style="background:linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))" aria-hidden="true"><i class="cam" aria-hidden="true"></i></span><span class="t">Photos</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Curius (opens in a new tab)" href="https://curius.app/aadharsh-pannirselvam" data-key="Curius" style="left:9px;top:267px"><span class="ic " style="background:linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))" aria-hidden="true">C</span><span class="t">Curius</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Beli (opens in a new tab)" href="https://beliapp.com/users/aadharsh" data-key="Beli" style="left:9px;top:353px"><span class="ic " style="background:linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))" aria-hidden="true">B</span><span class="t">Beli</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Spotify (opens in a new tab)" href="https://open.spotify.com/user/aadharsh2010" data-key="Music" style="left:9px;top:439px"><span class="ic " style="background:linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))" aria-hidden="true">♪</span><span class="t">Music</span></a></nav><div id="axp-taskbar" role="navigation" aria-label="taskbar"><a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a><div id="axp-pins"><a class="axp-pin" title="prototypes + experiments" href="/garage"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="garageF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffb45a"/><stop offset=".5" stop-color="#ef8f24"/><stop offset="1" stop-color="#c2660a"/></linearGradient><linearGradient id="garageG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="garageS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#garageS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#garageF)" stroke="#8f4d06" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#garageG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><g fill="#fff"><rect x="14" y="5" width="4" height="22" rx="1.5"/><rect x="5" y="14" width="22" height="4" rx="1.5"/><rect x="14" y="5" width="4" height="22" rx="1.5" transform="rotate(45 16 16)"/><rect x="14" y="5" width="4" height="22" rx="1.5" transform="rotate(-45 16 16)"/><circle cx="16" cy="16" r="6.5"/></g><circle cx="16" cy="16" r="2.8" fill="#ef8f24"/></g></g></svg></span><span class="lbl">garage</span></a><a class="axp-pin" title="chat-style explainers + live demos" href="/lwe"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="lweF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#838ae6"/><stop offset=".5" stop-color="#4b53c9"/><stop offset="1" stop-color="#333aa0"/></linearGradient><linearGradient id="lweG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="lweS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#lweS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#lweF)" stroke="#272d82" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#lweG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><path d="M6 9 h20 a2 2 0 0 1 2 2 v9 a2 2 0 0 1-2 2 H14 l-5 4 v-4 H6 a2 2 0 0 1-2-2 v-9 a2 2 0 0 1 2-2 Z" fill="#fff"/><g stroke="#4b53c9" stroke-width="1.7" stroke-linecap="round" fill="none"><path d="M8.5 13.5 q2 -2.4 4 0 t4 0 t4 0"/><path d="M8.5 18 q2 -2.4 4 0 t4 0"/></g></g></g></svg></span><span class="lbl">lwe</span></a><a class="axp-pin" title="notes, in flux: an editable notepad" href="/writing"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="writingF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6fa0ee"/><stop offset=".5" stop-color="#2f6bd6"/><stop offset="1" stop-color="#1a4ba8"/></linearGradient><linearGradient id="writingG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="writingS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#writingS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#writingF)" stroke="#143c86" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#writingG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><g fill="#fff"><rect x="8" y="8" width="16" height="2.6" rx="1.3"/><rect x="8" y="14.7" width="16" height="2.6" rx="1.3"/><rect x="8" y="21.4" width="10" height="2.6" rx="1.3"/></g></g></g></svg></span><span class="lbl">writing</span></a><a class="axp-pin" title="what I've been reading, from Curius" href="/reading"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="readingF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#de8186"/><stop offset=".5" stop-color="#c1545a"/><stop offset="1" stop-color="#93333a"/></linearGradient><linearGradient id="readingG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="readingS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#readingS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#readingF)" stroke="#732830" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#readingG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><g fill="#fff"><path d="M16 9 C13 7.2 9 7 6 7.6 V24 C9 23.4 13 23.6 16 25 Z"/><path d="M16 9 C19 7.2 23 7 26 7.6 V24 C23 23.4 19 23.6 16 25 Z" opacity=".82"/></g><path d="M16 9 V25" stroke="#c1545a" stroke-width="1.4"/></g></g></svg></span><span class="lbl">reading</span></a><a class="axp-pin" title="events worth going to" href="/serendipity"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="serendipityF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a886e8"/><stop offset=".5" stop-color="#7c4dd6"/><stop offset="1" stop-color="#5a32a8"/></linearGradient><linearGradient id="serendipityG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="serendipityS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#serendipityS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#serendipityF)" stroke="#482788" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#serendipityG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><rect x="6" y="8" width="20" height="18" rx="2" fill="#fff"/><rect x="6" y="8" width="20" height="5" rx="2" fill="#e7e7ef"/><g fill="#7c4dd6"><rect x="9" y="16" width="3.4" height="3.4"/><rect x="14.3" y="16" width="3.4" height="3.4"/><rect x="19.6" y="16" width="3.4" height="3.4"/><rect x="9" y="21" width="3.4" height="3.4"/><rect x="14.3" y="21" width="3.4" height="3.4"/></g></g></g></svg></span><span class="lbl">serendipity</span></a><a class="axp-pin" title="the crypto-VC neighborhood" href="/around"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="aroundF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5cc6ba"/><stop offset=".5" stop-color="#1f9b8e"/><stop offset="1" stop-color="#137468"/></linearGradient><linearGradient id="aroundG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="aroundS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#aroundS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#aroundF)" stroke="#0d5a50" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#aroundG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><path d="M16 6 C11.6 6 8 9.3 8 13.6 C8 19 16 26 16 26 C16 26 24 19 24 13.6 C24 9.3 20.4 6 16 6 Z" fill="#fff"/><circle cx="16" cy="13.6" r="3.2" fill="#1f9b8e"/></g></g></svg></span><span class="lbl">around</span></a><a class="axp-pin" title="the other web: how machines read a URL" href="/lens"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="lensF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#79c7e6"/><stop offset=".5" stop-color="#2f9fc4"/><stop offset="1" stop-color="#1d7895"/></linearGradient><linearGradient id="lensG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="lensS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#lensS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#lensF)" stroke="#145d73" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#lensG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><rect x="5.5" y="5" width="15" height="19" rx="2" fill="#fff"/><g fill="#2f9fc4"><rect x="8.5" y="9.5" width="9" height="1.7" rx="0.6"/><rect x="8.5" y="13" width="9" height="1.7" rx="0.6"/><rect x="8.5" y="16.5" width="6" height="1.7" rx="0.6"/></g><circle cx="20.5" cy="20.5" r="6" fill="#2f9fc4" stroke="#fff" stroke-width="2.2"/><circle cx="18.6" cy="18.6" r="1.5" fill="#fff" opacity=".85"/><path d="M24.8 24.8 L28.5 28.5" stroke="#fff" stroke-width="3.2" stroke-linecap="round"/></g></g></svg></span><span class="lbl">lens</span></a><a class="axp-pin" title="what I'm listening to right now" href="/rn"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="musicF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6fcd8a"/><stop offset=".5" stop-color="#2faa55"/><stop offset="1" stop-color="#1d8040"/></linearGradient><linearGradient id="musicG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="musicS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#musicS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#musicF)" stroke="#156030" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#musicG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><g fill="#fff"><rect x="17" y="7" width="2.6" height="14"/><path d="M19.6 7 C23 8 25 10 24.4 13.6 C23 11 21 11 19.6 11.8 Z"/><ellipse cx="14" cy="21" rx="4.4" ry="3.5"/></g></g></g></svg></span><span class="lbl">music</span></a><a class="axp-pin" title="book a coffee / bagel" href="/coffee"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="coffeeF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b08858"/><stop offset=".5" stop-color="#875c34"/><stop offset="1" stop-color="#5e3c1e"/></linearGradient><linearGradient id="coffeeG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="coffeeS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#coffeeS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#coffeeF)" stroke="#472d16" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#coffeeG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><path d="M8 12 h13 v6 a6.5 6.5 0 0 1-13 0 Z" fill="#fff"/><path d="M21 13 h3 a2.6 2.6 0 0 1 0 5.2 h-3" fill="none" stroke="#fff" stroke-width="2.2"/><g stroke="#fff" stroke-width="1.8" stroke-linecap="round"><path d="M11 5.5 v3"/><path d="M14.5 5 v3.5"/></g></g></g></svg></span><span class="lbl">coffee</span></a></div><div id="axp-spacer"></div><div id="axp-tray"><button id="axp-sound" type="button" hidden></button><a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><svg viewBox="0 0 24 24"><defs><filter id="spSh" x="-30%" y="-20%" width="160%" height="150%"><feDropShadow dx="0" dy=".5" stdDeviation=".5" flood-color="#000" flood-opacity=".28"></feDropShadow></filter><linearGradient id="spBez" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f3efe4"></stop><stop offset=".5" stop-color="#d6d0be"></stop><stop offset="1" stop-color="#b1aa94"></stop></linearGradient><linearGradient id="spScr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6fb0e8"></stop><stop offset=".5" stop-color="#2f72b6"></stop><stop offset="1" stop-color="#16548f"></stop></linearGradient><linearGradient id="spGl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".5"></stop><stop offset="1" stop-color="#ffffff" stop-opacity="0"></stop></linearGradient></defs><g filter="url(#spSh)"><ellipse cx="12" cy="21.3" rx="5.2" ry="1" fill="#8f876f" opacity=".5"></ellipse><rect x="10.4" y="17.2" width="3.2" height="2.8" fill="#c3bca6"></rect><path d="M7 21 Q7 19.7 8.6 19.7 H15.4 Q17 19.7 17 21 Z" fill="url(#spBez)" stroke="#897f66" stroke-width=".4"></path><rect x="2.3" y="2.7" width="19.4" height="14.9" rx="2" fill="url(#spBez)" stroke="#857c63" stroke-width=".5"></rect><rect x="2.95" y="3.3" width="18.1" height="13.7" rx="1.5" fill="none" stroke="#ffffff" stroke-opacity=".5" stroke-width=".5"></rect><rect x="4.2" y="4.7" width="15.6" height="11" rx=".8" fill="#0f3d63"></rect><rect x="4.6" y="5.1" width="14.8" height="10.2" rx=".6" fill="url(#spScr)"></rect><path d="M4.6 5.1 H19.4 V7.9 Q12 11.8 4.6 9.1 Z" fill="url(#spGl)"></path><circle cx="20" cy="15.9" r=".8" fill="#84e85a" stroke="#3f7a2a" stroke-width=".3"></circle></g></svg></a><a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><svg viewBox="0 0 24 24"><defs><filter id="seSh" x="-30%" y="-15%" width="160%" height="150%"><feDropShadow dx="0" dy=".5" stdDeviation=".5" flood-color="#000" flood-opacity=".28"></feDropShadow></filter><linearGradient id="seF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7ed24f"></stop><stop offset=".5" stop-color="#3f9c24"></stop><stop offset="1" stop-color="#297818"></stop></linearGradient><linearGradient id="seGl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".55"></stop><stop offset="1" stop-color="#ffffff" stop-opacity="0"></stop></linearGradient></defs><g filter="url(#seSh)"><path d="M12 2.2 L4.4 4.9 V11.4 C4.4 16.2 8 19.7 12 21.6 C16 19.7 19.6 16.2 19.6 11.4 V4.9 Z" fill="url(#seF)" stroke="#1f5f12" stroke-width=".7"></path><path d="M12 3.4 L5.6 5.7 V11.3 C5.6 15.3 8.6 18.4 12 20.1 C15.4 18.4 18.4 15.3 18.4 11.3 V5.7 Z" fill="none" stroke="#c6f2a6" stroke-opacity=".5" stroke-width=".6"></path><path d="M12 3.4 L5.6 5.7 V8.8 Q12 10.8 18.4 8.8 V5.7 Z" fill="url(#seGl)"></path><path d="M8 11.5 L11 14.5 L16.2 8.4" fill="none" stroke="#103f08" stroke-opacity=".35" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round"></path><path d="M8 11.2 L11 14.2 L16.2 8.1" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path></g></svg></a><a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><svg viewBox="0 0 24 24"><defs><filter id="upSh" x="-25%" y="-20%" width="150%" height="155%"><feDropShadow dx="0" dy=".5" stdDeviation=".5" flood-color="#000" flood-opacity=".28"></feDropShadow></filter><radialGradient id="upG" cx=".36" cy=".3" r=".85"><stop offset="0" stop-color="#8eccf2"></stop><stop offset=".55" stop-color="#3f8fd0"></stop><stop offset="1" stop-color="#175a98"></stop></radialGradient><linearGradient id="upB" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#74cf52"></stop><stop offset="1" stop-color="#2c861d"></stop></linearGradient><radialGradient id="upGl" cx=".35" cy=".3" r=".5"><stop offset="0" stop-color="#ffffff" stop-opacity=".7"></stop><stop offset="1" stop-color="#ffffff" stop-opacity="0"></stop></radialGradient></defs><g filter="url(#upSh)"><circle cx="10.6" cy="10.6" r="8.2" fill="url(#upG)" stroke="#114e7d" stroke-width=".6"></circle><g fill="none" stroke="#dcefff" stroke-width=".55" opacity=".7"><path d="M2.5 10.6 H18.7"></path><path d="M3.6 7.1 H17.6"></path><path d="M3.6 14.1 H17.6"></path><path d="M10.6 2.4 V18.8"></path><ellipse cx="10.6" cy="10.6" rx="3.1" ry="8.2"></ellipse></g><ellipse cx="7.4" cy="7" rx="3.4" ry="2.2" fill="url(#upGl)"></ellipse><circle cx="17.8" cy="17.8" r="4.5" fill="url(#upB)" stroke="#ffffff" stroke-width=".9"></circle><path d="M17.8 15.6 A2.2 2.2 0 1 1 15.7 18.4" fill="none" stroke="#ffffff" stroke-width="1.1" stroke-linecap="round"></path><path d="M16.9 14.9 L18.8 15.3 L17.5 16.8 Z" fill="#ffffff"></path></g></svg></a><span id="axp-clock" aria-hidden="true"></span></div></div><!-- /axp:shell -->
+<!-- axp:shell --><nav id="axp-icons" aria-label="desktop shortcuts"><a class="axp-ico" title="writing, in flux" href="/writing" data-key="Notepad" style="left:9px;top:9px"><span class="ic note" aria-hidden="true"></span><span class="t">Notepad</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="GitHub (opens in a new tab)" href="https://github.com/oddharsh" data-key="GitHub" style="left:9px;top:95px"><span class="ic " style="background:linear-gradient(180deg,oklch(72% 0.05 255),oklch(60% 0.07 257))" aria-hidden="true">G</span><span class="t">GitHub</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Twitter (opens in a new tab)" href="https://twitter.com/oddhash" data-key="Twitter" style="left:9px;top:181px"><span class="ic " style="background:linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))" aria-hidden="true">@</span><span class="t">Twitter</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Instagram (opens in a new tab)" href="https://instagram.com/aadharsh.hif" data-key="Photos" style="left:9px;top:267px"><span class="ic " style="background:linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))" aria-hidden="true"><i class="cam" aria-hidden="true"></i></span><span class="t">Photos</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Curius (opens in a new tab)" href="https://curius.app/aadharsh-pannirselvam" data-key="Curius" style="left:9px;top:353px"><span class="ic " style="background:linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))" aria-hidden="true">C</span><span class="t">Curius</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Beli (opens in a new tab)" href="https://beliapp.com/users/aadharsh" data-key="Beli" style="left:9px;top:439px"><span class="ic " style="background:linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))" aria-hidden="true">B</span><span class="t">Beli</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Spotify (opens in a new tab)" href="https://open.spotify.com/user/aadharsh2010" data-key="Music" style="left:9px;top:525px"><span class="ic " style="background:linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))" aria-hidden="true">♪</span><span class="t">Music</span></a></nav><div id="axp-taskbar" role="navigation" aria-label="taskbar"><a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a><div id="axp-pins"><a class="axp-pin" title="prototypes + experiments" href="/garage"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="garageF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffb45a"/><stop offset=".5" stop-color="#ef8f24"/><stop offset="1" stop-color="#c2660a"/></linearGradient><linearGradient id="garageG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="garageS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#garageS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#garageF)" stroke="#8f4d06" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#garageG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><g fill="#fff"><rect x="14" y="5" width="4" height="22" rx="1.5"/><rect x="5" y="14" width="22" height="4" rx="1.5"/><rect x="14" y="5" width="4" height="22" rx="1.5" transform="rotate(45 16 16)"/><rect x="14" y="5" width="4" height="22" rx="1.5" transform="rotate(-45 16 16)"/><circle cx="16" cy="16" r="6.5"/></g><circle cx="16" cy="16" r="2.8" fill="#ef8f24"/></g></g></svg></span><span class="lbl">garage</span></a><a class="axp-pin" title="chat-style explainers + live demos" href="/lwe"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="lweF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#838ae6"/><stop offset=".5" stop-color="#4b53c9"/><stop offset="1" stop-color="#333aa0"/></linearGradient><linearGradient id="lweG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="lweS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#lweS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#lweF)" stroke="#272d82" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#lweG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><path d="M6 9 h20 a2 2 0 0 1 2 2 v9 a2 2 0 0 1-2 2 H14 l-5 4 v-4 H6 a2 2 0 0 1-2-2 v-9 a2 2 0 0 1 2-2 Z" fill="#fff"/><g stroke="#4b53c9" stroke-width="1.7" stroke-linecap="round" fill="none"><path d="M8.5 13.5 q2 -2.4 4 0 t4 0 t4 0"/><path d="M8.5 18 q2 -2.4 4 0 t4 0"/></g></g></g></svg></span><span class="lbl">lwe</span></a><a class="axp-pin" title="notes, in flux: an editable notepad" href="/writing"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="writingF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6fa0ee"/><stop offset=".5" stop-color="#2f6bd6"/><stop offset="1" stop-color="#1a4ba8"/></linearGradient><linearGradient id="writingG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="writingS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#writingS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#writingF)" stroke="#143c86" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#writingG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><g fill="#fff"><rect x="8" y="8" width="16" height="2.6" rx="1.3"/><rect x="8" y="14.7" width="16" height="2.6" rx="1.3"/><rect x="8" y="21.4" width="10" height="2.6" rx="1.3"/></g></g></g></svg></span><span class="lbl">writing</span></a><a class="axp-pin" title="what I've been reading, from Curius" href="/reading"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="readingF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#de8186"/><stop offset=".5" stop-color="#c1545a"/><stop offset="1" stop-color="#93333a"/></linearGradient><linearGradient id="readingG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="readingS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#readingS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#readingF)" stroke="#732830" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#readingG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><g fill="#fff"><path d="M16 9 C13 7.2 9 7 6 7.6 V24 C9 23.4 13 23.6 16 25 Z"/><path d="M16 9 C19 7.2 23 7 26 7.6 V24 C23 23.4 19 23.6 16 25 Z" opacity=".82"/></g><path d="M16 9 V25" stroke="#c1545a" stroke-width="1.4"/></g></g></svg></span><span class="lbl">reading</span></a><a class="axp-pin" title="events worth going to" href="/serendipity"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="serendipityF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a886e8"/><stop offset=".5" stop-color="#7c4dd6"/><stop offset="1" stop-color="#5a32a8"/></linearGradient><linearGradient id="serendipityG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="serendipityS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#serendipityS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#serendipityF)" stroke="#482788" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#serendipityG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><rect x="6" y="8" width="20" height="18" rx="2" fill="#fff"/><rect x="6" y="8" width="20" height="5" rx="2" fill="#e7e7ef"/><g fill="#7c4dd6"><rect x="9" y="16" width="3.4" height="3.4"/><rect x="14.3" y="16" width="3.4" height="3.4"/><rect x="19.6" y="16" width="3.4" height="3.4"/><rect x="9" y="21" width="3.4" height="3.4"/><rect x="14.3" y="21" width="3.4" height="3.4"/></g></g></g></svg></span><span class="lbl">serendipity</span></a><a class="axp-pin" title="the crypto-VC neighborhood" href="/around"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="aroundF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5cc6ba"/><stop offset=".5" stop-color="#1f9b8e"/><stop offset="1" stop-color="#137468"/></linearGradient><linearGradient id="aroundG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="aroundS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#aroundS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#aroundF)" stroke="#0d5a50" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#aroundG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><path d="M16 6 C11.6 6 8 9.3 8 13.6 C8 19 16 26 16 26 C16 26 24 19 24 13.6 C24 9.3 20.4 6 16 6 Z" fill="#fff"/><circle cx="16" cy="13.6" r="3.2" fill="#1f9b8e"/></g></g></svg></span><span class="lbl">around</span></a><a class="axp-pin" title="the other web: how machines read a URL" href="/lens"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="lensF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#79c7e6"/><stop offset=".5" stop-color="#2f9fc4"/><stop offset="1" stop-color="#1d7895"/></linearGradient><linearGradient id="lensG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="lensS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#lensS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#lensF)" stroke="#145d73" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#lensG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><rect x="5.5" y="5" width="15" height="19" rx="2" fill="#fff"/><g fill="#2f9fc4"><rect x="8.5" y="9.5" width="9" height="1.7" rx="0.6"/><rect x="8.5" y="13" width="9" height="1.7" rx="0.6"/><rect x="8.5" y="16.5" width="6" height="1.7" rx="0.6"/></g><circle cx="20.5" cy="20.5" r="6" fill="#2f9fc4" stroke="#fff" stroke-width="2.2"/><circle cx="18.6" cy="18.6" r="1.5" fill="#fff" opacity=".85"/><path d="M24.8 24.8 L28.5 28.5" stroke="#fff" stroke-width="3.2" stroke-linecap="round"/></g></g></svg></span><span class="lbl">lens</span></a><a class="axp-pin" title="what I'm listening to right now" href="/rn"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="musicF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6fcd8a"/><stop offset=".5" stop-color="#2faa55"/><stop offset="1" stop-color="#1d8040"/></linearGradient><linearGradient id="musicG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="musicS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#musicS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#musicF)" stroke="#156030" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#musicG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><g fill="#fff"><rect x="17" y="7" width="2.6" height="14"/><path d="M19.6 7 C23 8 25 10 24.4 13.6 C23 11 21 11 19.6 11.8 Z"/><ellipse cx="14" cy="21" rx="4.4" ry="3.5"/></g></g></g></svg></span><span class="lbl">music</span></a><a class="axp-pin" title="book a coffee / bagel" href="/coffee"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="coffeeF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b08858"/><stop offset=".5" stop-color="#875c34"/><stop offset="1" stop-color="#5e3c1e"/></linearGradient><linearGradient id="coffeeG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="coffeeS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#coffeeS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#coffeeF)" stroke="#472d16" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#coffeeG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><path d="M8 12 h13 v6 a6.5 6.5 0 0 1-13 0 Z" fill="#fff"/><path d="M21 13 h3 a2.6 2.6 0 0 1 0 5.2 h-3" fill="none" stroke="#fff" stroke-width="2.2"/><g stroke="#fff" stroke-width="1.8" stroke-linecap="round"><path d="M11 5.5 v3"/><path d="M14.5 5 v3.5"/></g></g></g></svg></span><span class="lbl">coffee</span></a></div><div id="axp-spacer"></div><div id="axp-tray"><button id="axp-sound" type="button" hidden></button><a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><svg viewBox="0 0 24 24"><defs><filter id="spSh" x="-30%" y="-20%" width="160%" height="150%"><feDropShadow dx="0" dy=".5" stdDeviation=".5" flood-color="#000" flood-opacity=".28"></feDropShadow></filter><linearGradient id="spBez" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f3efe4"></stop><stop offset=".5" stop-color="#d6d0be"></stop><stop offset="1" stop-color="#b1aa94"></stop></linearGradient><linearGradient id="spScr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6fb0e8"></stop><stop offset=".5" stop-color="#2f72b6"></stop><stop offset="1" stop-color="#16548f"></stop></linearGradient><linearGradient id="spGl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".5"></stop><stop offset="1" stop-color="#ffffff" stop-opacity="0"></stop></linearGradient></defs><g filter="url(#spSh)"><ellipse cx="12" cy="21.3" rx="5.2" ry="1" fill="#8f876f" opacity=".5"></ellipse><rect x="10.4" y="17.2" width="3.2" height="2.8" fill="#c3bca6"></rect><path d="M7 21 Q7 19.7 8.6 19.7 H15.4 Q17 19.7 17 21 Z" fill="url(#spBez)" stroke="#897f66" stroke-width=".4"></path><rect x="2.3" y="2.7" width="19.4" height="14.9" rx="2" fill="url(#spBez)" stroke="#857c63" stroke-width=".5"></rect><rect x="2.95" y="3.3" width="18.1" height="13.7" rx="1.5" fill="none" stroke="#ffffff" stroke-opacity=".5" stroke-width=".5"></rect><rect x="4.2" y="4.7" width="15.6" height="11" rx=".8" fill="#0f3d63"></rect><rect x="4.6" y="5.1" width="14.8" height="10.2" rx=".6" fill="url(#spScr)"></rect><path d="M4.6 5.1 H19.4 V7.9 Q12 11.8 4.6 9.1 Z" fill="url(#spGl)"></path><circle cx="20" cy="15.9" r=".8" fill="#84e85a" stroke="#3f7a2a" stroke-width=".3"></circle></g></svg></a><a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><svg viewBox="0 0 24 24"><defs><filter id="seSh" x="-30%" y="-15%" width="160%" height="150%"><feDropShadow dx="0" dy=".5" stdDeviation=".5" flood-color="#000" flood-opacity=".28"></feDropShadow></filter><linearGradient id="seF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7ed24f"></stop><stop offset=".5" stop-color="#3f9c24"></stop><stop offset="1" stop-color="#297818"></stop></linearGradient><linearGradient id="seGl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".55"></stop><stop offset="1" stop-color="#ffffff" stop-opacity="0"></stop></linearGradient></defs><g filter="url(#seSh)"><path d="M12 2.2 L4.4 4.9 V11.4 C4.4 16.2 8 19.7 12 21.6 C16 19.7 19.6 16.2 19.6 11.4 V4.9 Z" fill="url(#seF)" stroke="#1f5f12" stroke-width=".7"></path><path d="M12 3.4 L5.6 5.7 V11.3 C5.6 15.3 8.6 18.4 12 20.1 C15.4 18.4 18.4 15.3 18.4 11.3 V5.7 Z" fill="none" stroke="#c6f2a6" stroke-opacity=".5" stroke-width=".6"></path><path d="M12 3.4 L5.6 5.7 V8.8 Q12 10.8 18.4 8.8 V5.7 Z" fill="url(#seGl)"></path><path d="M8 11.5 L11 14.5 L16.2 8.4" fill="none" stroke="#103f08" stroke-opacity=".35" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round"></path><path d="M8 11.2 L11 14.2 L16.2 8.1" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path></g></svg></a><a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><svg viewBox="0 0 24 24"><defs><filter id="upSh" x="-25%" y="-20%" width="150%" height="155%"><feDropShadow dx="0" dy=".5" stdDeviation=".5" flood-color="#000" flood-opacity=".28"></feDropShadow></filter><radialGradient id="upG" cx=".36" cy=".3" r=".85"><stop offset="0" stop-color="#8eccf2"></stop><stop offset=".55" stop-color="#3f8fd0"></stop><stop offset="1" stop-color="#175a98"></stop></radialGradient><linearGradient id="upB" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#74cf52"></stop><stop offset="1" stop-color="#2c861d"></stop></linearGradient><radialGradient id="upGl" cx=".35" cy=".3" r=".5"><stop offset="0" stop-color="#ffffff" stop-opacity=".7"></stop><stop offset="1" stop-color="#ffffff" stop-opacity="0"></stop></radialGradient></defs><g filter="url(#upSh)"><circle cx="10.6" cy="10.6" r="8.2" fill="url(#upG)" stroke="#114e7d" stroke-width=".6"></circle><g fill="none" stroke="#dcefff" stroke-width=".55" opacity=".7"><path d="M2.5 10.6 H18.7"></path><path d="M3.6 7.1 H17.6"></path><path d="M3.6 14.1 H17.6"></path><path d="M10.6 2.4 V18.8"></path><ellipse cx="10.6" cy="10.6" rx="3.1" ry="8.2"></ellipse></g><ellipse cx="7.4" cy="7" rx="3.4" ry="2.2" fill="url(#upGl)"></ellipse><circle cx="17.8" cy="17.8" r="4.5" fill="url(#upB)" stroke="#ffffff" stroke-width=".9"></circle><path d="M17.8 15.6 A2.2 2.2 0 1 1 15.7 18.4" fill="none" stroke="#ffffff" stroke-width="1.1" stroke-linecap="round"></path><path d="M16.9 14.9 L18.8 15.3 L17.5 16.8 Z" fill="#ffffff"></path></g></svg></a><span id="axp-clock" aria-hidden="true"></span></div></div><!-- /axp:shell -->
 </body>
 </html>

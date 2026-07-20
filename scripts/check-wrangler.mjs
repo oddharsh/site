@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const PROJECTS = ["", "cal", "cf-garage", "lwe-ask", "serendipity"];
+const PROJECTS = ["cf-garage", "lwe-ask"];
 
 async function readJson(relativePath) {
   const absolutePath = path.join(ROOT, relativePath);
@@ -11,35 +11,39 @@ async function readJson(relativePath) {
 }
 
 const rootPackage = await readJson("package.json");
+const lock = await readJson("package-lock.json");
 const expected = (process.env.WRANGLER_VERSION || rootPackage.devDependencies?.wrangler || "").replace(/^v/, "");
 const errors = [];
+const rootLockPackage = lock.packages?.[""] || {};
+const rootDeclared = rootPackage.devDependencies?.wrangler || rootPackage.dependencies?.wrangler || "";
+const rootLockDeclared = rootLockPackage.devDependencies?.wrangler || rootLockPackage.dependencies?.wrangler || "";
+const installed = lock.packages?.["node_modules/wrangler"]?.version || "";
+const transitiveVersions = Object.entries(lock.packages || {})
+  .filter(([key]) => key.endsWith("/node_modules/wrangler") && key !== "node_modules/wrangler")
+  .map(([, value]) => value.version)
+  .filter(Boolean);
 
 if (!/^\d+\.\d+\.\d+$/.test(expected)) {
   errors.push(`root package must declare an exact Wrangler version, got ${JSON.stringify(expected)}`);
 }
+if (rootDeclared !== expected) errors.push(`root: package.json declares ${JSON.stringify(rootDeclared)}, expected ${expected}`);
+if (rootLockDeclared !== rootDeclared) errors.push(`root: package-lock declares ${JSON.stringify(rootLockDeclared)}, package.json declares ${JSON.stringify(rootDeclared)}`);
+if (installed !== expected) errors.push(`root: package-lock resolves Wrangler ${JSON.stringify(installed)}, expected ${expected}`);
+console.log(`root: Wrangler ${rootDeclared} (root lock ${installed}; ${transitiveVersions.length} transitive ${transitiveVersions.length === 1 ? "copy" : "copies"})`);
 
 for (const project of PROJECTS) {
-  const label = project || "root";
-  const packagePath = project ? `${project}/package.json` : "package.json";
-  const lockPath = project ? `${project}/package-lock.json` : "package-lock.json";
+  const label = project;
+  const packagePath = `${project}/package.json`;
   const pkg = await readJson(packagePath);
-  const lock = await readJson(lockPath);
   const declared = pkg.devDependencies?.wrangler || pkg.dependencies?.wrangler || "";
-  const lockDeclared = lock.packages?.[""]?.devDependencies?.wrangler || lock.packages?.[""]?.dependencies?.wrangler || "";
-  const installed = lock.packages?.["node_modules/wrangler"]?.version || "";
-  const transitiveVersions = Object.entries(lock.packages || {})
-    .filter(([key]) => key === "node_modules/wrangler" || key.endsWith("/node_modules/wrangler"))
-    .map(([, value]) => value.version)
-    .filter(Boolean);
+  const lockPackage = lock.packages?.[project || ""] || {};
+  const lockDeclared = lockPackage.devDependencies?.wrangler || lockPackage.dependencies?.wrangler || "";
 
-  if (declared !== expected) errors.push(`${label}: package.json declares ${JSON.stringify(declared)}, expected ${expected}`);
-  if (lockDeclared !== declared) errors.push(`${label}: package-lock root declares ${JSON.stringify(lockDeclared)}, package.json declares ${JSON.stringify(declared)}`);
-  if (installed !== expected) errors.push(`${label}: package-lock resolves Wrangler ${JSON.stringify(installed)}, expected ${expected}`);
-  for (const version of transitiveVersions) {
-    if (version !== expected) errors.push(`${label}: package-lock contains transitive Wrangler ${version}, expected ${expected}`);
-  }
-
-  console.log(`${label}: Wrangler ${declared} (lock ${installed}; ${transitiveVersions.length} resolved copy)`);
+  if (declared) errors.push(`${label}: package.json must not declare Wrangler; use the root pin ${expected}`);
+  if (lockDeclared) errors.push(`${label}: package-lock workspace entry must not declare Wrangler; use the root pin ${expected}`);
+  const key = `${project}/node_modules/wrangler`;
+  if (lock.packages?.[key]) errors.push(`${project}: direct Wrangler was not hoisted to the root lock`);
+  console.log(`${label}: uses root Wrangler ${expected}`);
 }
 
 if (errors.length) {
@@ -48,4 +52,4 @@ if (errors.length) {
   process.exit(1);
 }
 
-console.log(`All ${PROJECTS.length} Worker projects use Wrangler ${expected}.`);
+console.log(`All ${PROJECTS.length + 1} Worker projects use the root Wrangler ${expected}.`);

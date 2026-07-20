@@ -1,10 +1,11 @@
 # aadhar.sh — personal site
 
 A resto-mod 2003-aesthetic personal site for Aadharsh Pannirselvam, deployed
-to Cloudflare Workers. Two cohabiting projects in this directory:
+to Cloudflare Workers. Three source islands cohabit one deployed site Worker:
 
-- **`holding/`** — the live `aadhar.sh` homepage (Cloudflare Worker with static assets + `_worker.js`; migrated off Pages 2026-06-30)
-- **`cal/`** — a custom coffee/bagel booking system LIVE at `aadhar.sh/coffee` (its own Cloudflare Worker; deploy separately with `cd cal && npm run deploy`)
+- **`holding/`** — the live `aadhar.sh` homepage and Worker dispatcher (static assets + `_worker.js`; migrated off Pages 2026-06-30)
+- **`cal/`** — a custom coffee/bagel booking module LIVE at `aadhar.sh/coffee`, delegated by the root Worker
+- **`serendipity/`** — the event dashboard module LIVE at `aadhar.sh/serendipity`, delegated by the root Worker
 
 The look is deliberately Windows XP / Outlook Express era: blue title bars,
 Verdana/Tahoma fonts, raised 3D bevel buttons, sunken inputs, OKLCH-encoded
@@ -25,8 +26,9 @@ colors that read modern in source but render period-correct.
 # regenerate JUST the EXIF metadata (after photos are already uploaded)
 ./holding/scripts/extract-photo-metadata.sh "/Users/aadharsh/Downloads/to post (from ssd)"
 
-# rebuild jpegli (Google's JPEG encoder, ~25% smaller than mozjpeg)
-./holding/scripts/build-jpegli.sh
+# build the JPEG thumbnail encoder (zenc = zenjpeg hybrid+scan). the pipeline
+# scripts auto-build it on first run; this is the explicit form.
+cargo build --release --manifest-path holding/scripts/zenc/Cargo.toml
 
 # bust caches via wrangler (RN_KV namespace ID hardcoded in scripts)
 NS="3cb8a107c58e47dc9244e75b33401f36"
@@ -43,18 +45,19 @@ worktrees may edit freely, but a worktree is not a release surface.
   a named branch/worktree. Never use a stale local `main` as an agent base.
 - Keep each change on its own branch, commit it, push it, and open a PR. Do
   not deploy from a dirty worktree or push agent work directly to `main`.
-- PR CI builds the homepage, enforces the performance budget, dry-runs all
-  three Worker configs, and runs the coffee tests.
+- PR CI builds the site, enforces the performance budget, dry-runs the single
+  site Worker plus the auxiliary Garage/LWE configs, and runs the coffee tests.
 - Only a successful CI run for `main` associated with a merged PR can promote
   the exact tested commit to the machine-owned `production` branch. GitHub's
   current free private-repo plan cannot enforce branch protection, so the
   workflow guard is the release backstop. Cloudflare Workers Builds watches
-  `production` and is the only production publisher for `holding/`, `cal/`,
-  and `serendipity/`.
-- Configure one Workers Build project per Worker with `production` as its
-  production branch. Keep the dashboard Build command blank; use the repo's
-  Wrangler-owned build during each Deploy command. GitHub should not hold a
-  Cloudflare production API token for this path.
+  `production` and is the only production publisher for the site Worker, which
+  bundles `holding/`, `cal/`, and `serendipity/`. The Garage and LWE demos remain
+  auxiliary Worker projects.
+- Configure one Workers Build project for the site Worker with `production` as
+  its production branch and repository root `.`. Keep the dashboard Build
+  command blank; use the repo's Wrangler-owned build during the Deploy command.
+  GitHub should not hold a Cloudflare production API token for this path.
 
 ---
 
@@ -92,8 +95,10 @@ SOOC original (in /Users/aadharsh/Downloads/to post (from ssd)/)
 [add-photos.sh] — resize, rotate, encode:
    |   1. sips: resize to 1200px + format-convert (handles HEIF/HIF)
    |   2. jpegtran -rotate N (lossless EXIF orientation, mozjpeg's tool)
-   |   3. cjpegli -q 82 -p 2 (Google's encoder, ~25% smaller than mozjpeg)
-   |   4. avifenc CQ 30 (or sips formatOptions 60 fallback) — primary
+   |   3. zenc -q 84 (zenjpeg hybrid trellis + progressive scan search; ~4%
+   |      under the retired cjpegli at equal quality, q84 ≈ old cjpegli q82)
+   |   4. avifenc -q 63 -d 10 (10-bit AVIF, ~6% smaller at equal quality than
+   |      8-bit; sips formatOptions 60 fallback) — primary
    |
    v
 holding/images/<stem>.{avif,jpg}  +  R2 aadhar-photos/<filename>
@@ -117,9 +122,11 @@ Two encoders + one transform tool, all built from source:
 
 - **mozjpeg** (`brew install mozjpeg`, keg-only at `/opt/homebrew/opt/mozjpeg/`)
   — provides `jpegtran` for lossless EXIF-orientation rotation.
-- **jpegli** (built from `github.com/google/jpegli`, installed at
-  `~/.local/bin/cjpegli`) — JPEG universal-fallback encoder.
-  See `holding/scripts/build-jpegli.sh` to rebuild.
+- **zenc** (`holding/scripts/zenc/`, a Rust crate wrapping
+  `github.com/imazen/zenjpeg`) — the JPEG universal-fallback encoder: hybrid
+  trellis + 64-candidate progressive scan search + sharp_yuv chroma, ~4% under the
+  retired cjpegli at equal quality. Builds with `cargo`; dependabot tracks the
+  zenjpeg pin. Replaced the from-source jpegli build (2026-07). See `holding/scripts/zenc/src/main.rs`.
 - **libavif** (`brew install libavif`, optional) — `avifenc` for the
   primary AVIF thumbnail. Falls back to `sips -s format avif` (macOS
   native, no extra dep) when avifenc isn't installed.
@@ -235,15 +242,16 @@ are installed on macOS, so the fallback path doesn't hit Helvetica/Arial.
 
 ---
 
-## cal/ — coffee booking worker
+## cal/ — coffee booking module
 
 Custom-built scheduler at `aadhar.sh/coffee`. Replaces Cal.com. Inspired by
 [jry.io/bagel](https://jry.io/bagel). Crediting Jacob Young in the footer.
 
-**Status: LIVE at aadhar.sh/coffee** (zone route → `cal-aadhar-sh` worker).
-Deploys separately: `cd cal && npm run deploy` (secrets already set). The cal npm
-scripts pass `-c wrangler.toml`: a bare `wrangler deploy` from cal/ wrongly
-inherits the repo-root `build.command` (`node build.mjs`) and fails.
+**Status: LIVE at aadhar.sh/coffee**, delegated by the root `aadhar-sh` Worker.
+`cal/src/` remains a readable, independently testable module; `build.mjs` stages
+it beside the holding Worker entrypoint. Production secrets (`ICAL_URL`,
+`RESEND_API_KEY`, and `SIGNING_SECRET`) belong to the root Worker.
+`cal/wrangler.test.toml` is test-only and is never deployed.
 Availability is served from an SWR calendar snapshot (KV `cal:busy`, 2s upstream
 deadline, stale fallback), the GET page edge-caches 30s, and a booking fails
 closed if the calendar can't be vouched for (never books over an unseen event).
@@ -262,7 +270,7 @@ closed if the calendar can't be vouched for (never books over an unseen event).
 
 ```
 cal/
-├── wrangler.toml       — routes: aadhar.sh/coffee/*, cal.aadhar.sh/* (fallback)
+├── wrangler.test.toml  — test-only KV/vars config for Vitest (not deployed)
 ├── package.json
 └── src/
     ├── index.js        — router, request dispatch, KV state
@@ -277,12 +285,14 @@ cal/
 ### Required secrets (before deploy)
 
 ```bash
-cd cal && npm install
-npx wrangler kv namespace create CAL_BOOKINGS         # paste id into wrangler.toml
-npx wrangler secret put ICAL_URL                       # Google Calendar → "secret ICS"
-npx wrangler secret put RESEND_API_KEY                 # resend.com, DKIM-verify aadhar.sh
-openssl rand -hex 32 | npx wrangler secret put SIGNING_SECRET
-npx wrangler deploy
+npm install
+npx wrangler secret put -c wrangler.jsonc ICAL_URL       # Google Calendar → "secret ICS"
+npx wrangler secret put -c wrangler.jsonc RESEND_API_KEY # resend.com, DKIM-verify aadhar.sh
+openssl rand -hex 32 | npx wrangler secret put -c wrangler.jsonc SIGNING_SECRET
+
+# Production ships through merge -> CI -> production -> Workers Builds.
+# Local fallback, from the repository root only:
+npm run deploy
 ```
 
 ### Visual notes (XP reskin lives in `cal/src/templates.js`)

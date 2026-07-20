@@ -1,8 +1,9 @@
 // lens.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
-import { BOT_UA, SIG_AGENT, signRequestForWebBotAuth } from "./lib/botauth.js";
+import { BOT_UA, botHeaders } from "./lib/botauth.js";
 import { cachedRender } from "./lib/cache.js";
 import { CANONICAL_HOST } from "./lib/const.js";
+import { readResponseCapped } from "./lib/crawl.js";
 import { lensParseRobots, lensPathMatch, lensRobotsVerdict } from "./lib/robots.js";
 import { lunaPage } from "./lib/chrome.js";
 import { escAttr, escHtml, jsonResponse } from "./lib/http.js";
@@ -252,15 +253,18 @@ export function renderLensShell(initial, state, inputValue) {
     : "Human view &middot; the live page";
   const machineHeader = state.view === "machine" ? "Machine view &middot; Briefing" : state.view === "delta" ? "Delta view &middot; What changes" : "Machine view &middot; " + (LENS_TAB_LABELS[state.lens] || state.lens);
   const browserHeader = "Browser Run &middot; Rendered";
+  // Mode notes coach, they don't caption: each one asks for a prediction the
+  // pane will then confirm or correct. Keep the strings byte-identical to
+  // MODE_NOTE in holding/lens.js or the note visibly rewrites on hydrate.
   const modeNote = state.view === "human"
-    ? "Human shows the page as a person receives it in a browser."
+    ? "Human is the page as a person receives it. Every other view subtracts the person."
     : state.view === "machine"
-      ? "Machine turns the scan into an evidence-first briefing, then keeps the selected lens below it."
+      ? "Machine is an evidence-first briefing. Read claims first, then check each against its evidence."
       : state.view === "browser"
-        ? "Browser Run renders the URL after page JavaScript, then exposes the browser's structural evidence beside the HTTP scan."
+        ? "Browser Run renders after JavaScript beside HTTP. Disagreement reveals a JS dependency."
       : state.view === "delta"
-        ? "Delta keeps the page visible while you add hypothetical machine infrastructure to the route."
-        : "Compare puts Human, HTTP Machine, and the opt-in Browser Run render side by side.";
+        ? "Delta toggles hypothetical infrastructure. Predict, flip, check."
+        : "Compare puts Human, HTTP Machine, and Browser Run side by side. Predict the machine pane; the miss is the lesson.";
   const initialScript = initial ? '<script type="application/json" id="lx-initial-data">' + lensScriptJson(initial) + "</script>" : "";
   return lunaPage({
     title: "The Other Web · aadhar.sh",
@@ -440,6 +444,8 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 .lx-machine-block { border-top:1px solid oklch(86% 0.03 250); padding-top:9px; margin-top:11px; }
 .lx-machine-block .lx-sec-h { color:oklch(30% 0.10 250); }
 .lx-delta-intro { margin:0 0 10px; padding:7px 9px; border:1px solid oklch(82% 0.08 75); background:oklch(97% 0.035 85); color:oklch(39% 0.05 60); font-size:9pt; line-height:1.45; }
+.lx-cf-credit { margin-top:10px; font-size:8pt; color:oklch(55% 0 0); line-height:1.5; }
+.lx-cf-credit a { color:oklch(42.61% 0.2353 263.74); }
 .lx-cf-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; margin:5px 0 12px; }
 .lx-cf-card { border:1px solid oklch(82% 0.03 250); border-radius:3px; padding:7px 8px; background:oklch(99% 0.003 250); }
 .lx-cf-card.is-on { border-color:oklch(61% 0.13 150); background:oklch(97% 0.025 150); }
@@ -485,7 +491,7 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
 `,
     body: `
     <h1>The Other Web</h1>
-    <p class="lx-lede">Every page has a second life as data. Paste a URL to see what a person receives, what representative bots can retrieve, and which missing web surfaces limit them. The score is a map, not a verdict: every point stays tied to evidence. Fetched server-side, honestly, as <a href="/bot">AadharshBot</a>.</p>
+    <p class="lx-lede">Every page has a second life as data. Paste a URL to see what a person receives, what representative bots can retrieve, and which missing web surfaces limit them. The score is a map, not a verdict: every point stays tied to evidence. Scan a few sites and you start predicting the briefing before it loads; that mental model is the point, since you build differently once you carry it. Fetched server-side, honestly, as <a href="/bot">AadharshBot</a>.</p>
 
     <form class="lx-addr" id="lx-form" action="/lens" method="get">
       <span class="lx-globe" aria-hidden="true"></span>
@@ -545,7 +551,7 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
 `,
     // The shell is cached at the edge and browsers cache static scripts too;
     // version the client URL so a fresh shell cannot pair with an older lens.js.
-    scripts: `<script src="/lens.js?v=7" defer></script>`,   // BUMP on every holding/lens.js change: the shell is no-store but the script is cached, so a stale token pairs a fresh shell with an old script
+    scripts: `<script src="/lens.js?v=8" defer></script>`,   // BUMP on every holding/lens.js change: the shell is no-store but the script is cached, so a stale token pairs a fresh shell with an old script
     cache: "public, max-age=60, s-maxage=300",
     headers: {
       // No x-robots-tag here: the bare shell is meant to be indexed. handleLens
@@ -902,23 +908,25 @@ export async function lensInspect(targetUrl, env, opts) {
   return out;
 }
 
-// honest, identified fetch — AadharshBot UA + (when the key is set) a Web Bot
-// Auth signature, same identity the rest of the site crawls under.
+// honest, identified fetch — AadharshBot UA + a required Web Bot Auth
+// signature for external targets, the same identity the rest of the site
+// crawls under. Self-dispatch stays local and therefore has no wire signature.
 // `accept` override: the md-negotiation and MCP probes speak different Accepts.
 export async function lensFetch(targetUrl, env, signal, accept) {
-  const headers = new Headers({
+  env = env || {};
+  const baseHeaders = {
     "user-agent": BOT_UA,
     "accept": accept || "text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.7",
     "accept-language": "en-US,en;q=0.9",
-  });
-  if (env.RN_SIGNING_KEY_JWK) {
-    try {
-      const sig = await signRequestForWebBotAuth(targetUrl, env);
-      headers.set("Signature-Agent", `"${SIG_AGENT}"`);
-      headers.set("Signature-Input", `sig1=${sig.params}`);
-      headers.set("Signature", `sig1=:${sig.b64}:`);
-    } catch (_e) { /* recipient just can't verify */ }
-  }
+  };
+  let isSelf = false;
+  try {
+    const u = new URL(targetUrl);
+    isSelf = u.hostname.toLowerCase() === CANONICAL_HOST && !!(env.SELF_FETCH || env.ASSETS);
+  } catch (_e) {}
+  // Self-dispatch never leaves Cloudflare, so it does not need a wire
+  // signature. Every external target still requires the real AadharshBot key.
+  const headers = await botHeaders(targetUrl, env, { headers: baseHeaders, sign: !isSelf });
   // Fetching our own hostname over the network loops back through this same
   // worker, and Cloudflare kills the loop with a 522 — which is why the featured
   // "Try: aadhar.sh" example (and every self-probe: robots.txt, llms.txt, …) once
@@ -945,19 +953,8 @@ export async function lensFetch(targetUrl, env, signal, accept) {
 
 // read a response body but stop at `max` bytes so a giant page can't blow memory.
 export async function lensReadCapped(res, max) {
-  const reader = res.body && res.body.getReader ? res.body.getReader() : null;
-  if (!reader) { const t = await res.text(); return { text: t.length > max ? t.slice(0, max) : t, truncated: t.length > max }; }
-  const chunks = []; let total = 0, truncated = false;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    if (total + value.length > max) { chunks.push(value.subarray(0, max - total)); truncated = true; try { await reader.cancel(); } catch (_e) {} break; }
-    chunks.push(value); total += value.length;
-  }
-  let len = 0; for (const c of chunks) len += c.length;
-  const merged = new Uint8Array(len); let off = 0;
-  for (const c of chunks) { merged.set(c, off); off += c.length; }
-  return { text: new TextDecoder("utf-8").decode(merged), truncated };
+  const result = await readResponseCapped(res, max);
+  return { text: result.text, truncated: result.truncated };
 }
 
 // DNS-AID is a DNS surface, not an HTTP file. Query the three discovery names

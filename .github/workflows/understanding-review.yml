@@ -1,0 +1,59 @@
+name: Prompt understanding-first review
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  prompt:
+    if: github.repository == 'oddharsh/site'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add or refresh the understanding prompt
+        uses: actions/github-script@v9
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const marker = "<!-- understanding-review -->";
+            const issue_number = context.payload.pull_request.number;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number,
+              per_page: 100,
+            });
+            const body = [
+              marker,
+              "## Understanding-first review",
+              "",
+              "This is a prompt, not a score or merge gate. Before approving, reconstruct the change:",
+              "",
+              "- **My model:** What do I think this PR does?",
+              "- **Mechanism:** What path or invariant makes that behavior true?",
+              "- **Falsifier:** What would prove my model wrong?",
+              "- **Evidence:** What test, trace, dry-run, or live check did I inspect?",
+              "- **Residual uncertainty:** What remains unproven?",
+              "",
+              "For docs and dependency changes, a compact answer is enough. For behavior or production changes, include the causal path and one concrete counterexample. The author’s claim card belongs in the PR description; this prompt is for the reviewer’s independent reconstruction.",
+              "",
+              "See [UNDERSTANDING-REVIEW.md](https://github.com/oddharsh/site/blob/main/UNDERSTANDING-REVIEW.md).",
+            ].join(String.fromCharCode(10));
+            const prior = comments.find((comment) => comment.body?.includes(marker));
+            if (prior) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: prior.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number,
+                body,
+              });
+            }

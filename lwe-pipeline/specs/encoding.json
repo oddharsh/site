@@ -6,6 +6,109 @@
   "composeNote": "This is a recorded conversation. The demo above measures real files.",
   "hasAsk": true,
   "disclosure": "<b>Starter draft.</b> This grew out of the <a href=\"/garage/encoding\" rel=\"external\">garage encoding study</a>, where one photo runs through every encoder and the bytes get counted. The conversation is a first pass; the demo fetches the study's real output files and measures their actual sizes.",
+  "editorial": {
+    "reader": "A curious reader who knows the surface term but wants the mechanism.",
+    "problem": "The reader can recognize encoding vocabulary without being able to predict what its mechanism will do.",
+    "thesis": "The page should leave the reader able to explain encoding in plain language and predict its behavior.",
+    "evidence": [
+      "The conversation cites its sources and the demos make the mechanism visible.",
+      "The understanding check names common misconceptions and explains every answer."
+    ],
+    "uncertainty": "The demos teach the model; they do not replace a measurement or a full treatment."
+  },
+  "understanding": {
+    "intro": "Before you jump to the garage study: pop quiz, four questions. If the bytes-per-pixel table made sense, this takes a minute.",
+    "questions": [
+      {
+        "q": "Start from the top. One photo goes through three encoders and comes out at three different sizes. Where does the shrink actually come from?",
+        "options": [
+          {
+            "t": "it throws away detail my eye would skip anyway, then packs what survives",
+            "ok": true,
+            "why": "That is the whole game. Every lossy encoder discards what you would never notice, fine high-frequency detail and fine color, and the three differ in how cleverly they choose what to drop."
+          },
+          {
+            "t": "it scales the image down to fewer pixels and stretches it back up",
+            "why": "All three files keep every one of the 106,400 pixels; the live table divides real bytes by that same pixel count. The savings come from discarding invisible detail while the pixel grid stays put."
+          },
+          {
+            "t": "it just zips the bytes harder, like a better rar",
+            "why": "Lossless packing is what PNG does, and the live table shows it losing badly to every lossy format. The lossy three win because they are allowed to throw information away, and an eye model decides what."
+          },
+          {
+            "t": "newer formats have better math, so files shrink automatically with age",
+            "why": "Age alone explains little: jpegli writes the 1992 JPEG format and still roughly halves the baseline. The win is in how an encoder spends its bits, which the three-encoder grid shows directly."
+          }
+        ]
+      },
+      {
+        "q": "AVIF measures smallest on the full photo, so why does each thumbnail on this site ship a jpegli JPEG as well?",
+        "options": [
+          {
+            "t": "avif needs a modern decoder, so the jpeg is the fallback anything can read",
+            "why": "Right: AVIF decodes only on recent browsers, so the picture element offers AVIF first and the jpegli .jpg catches everything else. Universal but larger against modern but smaller, and each visitor downloads exactly one.",
+            "ok": true
+          },
+          {
+            "t": "browsers grab both versions and keep whichever one renders faster",
+            "why": "The picture element commits before downloading: the browser picks the first source it can decode and never fetches the rest. One visitor pays for one file, which is the point of dual-encoding."
+          },
+          {
+            "t": "the jpeg is the higher-quality copy, kept around for people who zoom in",
+            "why": "Both tiers target the same visual quality; jpegli just needs more bytes to hit it inside the old format. The fallback exists for decode support, as the 23:04 message lays out."
+          },
+          {
+            "t": "avif only wins on tiny crops, so full-size photos still need the jpeg",
+            "why": "Backwards on both ends: the live table shows AVIF winning outright on the full photo, while the 96-pixel zoom crops are where AVIF's fixed container overhead makes it look heavy. Reread the caption under the format grid."
+          }
+        ]
+      },
+      {
+        "q": "In the stripes demo, switching from 4:4:4 to 4:2:0 drops the stored samples to half. What did you actually see change on the canvas?",
+        "options": [
+          {
+            "t": "the black and white lines stayed sharp, the red-green ones dissolved",
+            "ok": true,
+            "why": "That is chroma subsampling in one picture: luma keeps full resolution and carries the sharpness, while the two chroma planes drop to one sample per 2x2 block. Your eye resolves brightness far better than color, so photos barely show it."
+          },
+          {
+            "t": "the whole test card went softer, both bands about equally",
+            "why": "Only the color band pays. Flip the demo again: the luma stripes hold razor sharp at every mode, because subsampling shrinks the two chroma planes and leaves luma at full resolution."
+          },
+          {
+            "t": "the colors washed out toward gray but kept their crisp edges",
+            "why": "The 2x2 averaging blends neighboring red and green stripes into mud, so the color detail loses exactly its edges; edges survive only in the untouched luma plane. Toggle 4:2:0 and study the bottom band."
+          },
+          {
+            "t": "the picture dimmed a little, since half the samples are gone",
+            "why": "Brightness survives untouched because every discarded sample is chroma. The 4:2:0 file keeps full luma plus quarter-resolution color, which is why the info line reads 50% of raw samples with zero visible dimming."
+          }
+        ]
+      },
+      {
+        "q": "Last one. jpegli writes the same JPEG bitstream as mozjpeg, at the same quality knob, and still measures smallest in the encoder grid. What is its actual edge?",
+        "options": [
+          {
+            "t": "it models the eye: xyb color, per-block quantization, smarter rounding",
+            "ok": true,
+            "why": "That is the psychovisual win: jpegli spends bits where your eye looks and starves detail you would never see, all while staying a standard JPEG a 1995 decoder reads. Roughly 25% over the old mozjpeg."
+          },
+          {
+            "t": "it sneaks avif-style prediction tricks inside the jpeg container",
+            "why": "The bitstream stays plain 1992 JPEG, which is the whole point of the fallback: ancient decoders read it. Larger blocks and sharper prediction are AVIF's tricks, and they require an AV1 decoder."
+          },
+          {
+            "t": "it quietly drops to 4:2:0 chroma while mozjpeg keeps full color",
+            "why": "The encoder grid pinned all three to the same settings; subsampling is a separate knob with its own two demos. jpegli's gain comes from where it rounds, per block, tuned to perception."
+          },
+          {
+            "t": "it runs a lower quality setting internally, trading sharpness for bytes",
+            "why": "The grid held all three encoders to the same q72 and jpegli still came out smallest at like quality. It aims its bits more accurately instead of spending fewer bits on a worse picture."
+          }
+        ]
+      }
+    ]
+  },
   "messages": [
     {
       "who": "you",

@@ -6,7 +6,7 @@ Turn a chat about a topic into a deployed Learning With Errors page, without han
 
 - `concepts.json` — the registry. One entry per concept drives the buddy list, the nav.js Run destinations, and the sitemap. Edit this, not the four downstream files.
 - `generate.mjs` — the generator.
-- `specs/<id>.json` — one page-spec per concept. Holds only what is unique to that page: the conversation, the demos, the disclosure. The window chrome and messenger shell come from the generator, so every page stays identical in its bones.
+- `specs/<id>.json` — one page-spec per concept. Holds what is unique to that page: the conversation, the demos, the disclosure, the editorial card, and the understanding check. The window chrome, messenger shell, and quiz wiring come from the generator, so every page stays identical in its bones.
 
 ## Commands
 
@@ -17,7 +17,7 @@ node lwe-pipeline/build-corpus.mjs         # rebuild the ask corpus from lwe-ask
 node lwe-pipeline/publish.mjs <id>         # one command: page -> corpus -> wire -> print the deploy steps
 ```
 
-`wire` rewrites three marked regions straight from the registry: the sitemap URLs (`sitemap.xml`), the buddy-list Online group (`lwe/index.html`), and the nav.js Run entries. Each region is bounded by a `generated:*:start` / `:end` marker pair, so `wire` is idempotent and re-runnable. Adding a concept is now: write its spec, add a registry entry, `generate.mjs page <id>`, `generate.mjs wire`. The per-buddy `.pic` CSS stays hand-authored (it rarely changes).
+`wire` rewrites three marked regions straight from the registry: the sitemap URLs (`sitemap.xml`), the buddy-list Online group (`lwe/index.html`), and the nav.js Run entries. Each region is bounded by a `generated:*:start` / `:end` marker pair, so `wire` is idempotent and re-runnable. Adding a concept is now: write its spec, add a registry entry, `generate.mjs page <id>`, `generate.mjs wire`. The per-buddy `.pic` CSS stays hand-authored (it rarely changes). Every generated page also emits the shared `/quiz.js` runtime with its own understanding payload.
 
 ## The spec format
 
@@ -38,6 +38,46 @@ node lwe-pipeline/publish.mjs <id>         # one command: page -> corpus -> wire
   "demoJs": "/* per-page demo behavior */"
 }
 ```
+
+## Editorial and understanding contract
+
+Every spec carries two records alongside the conversation:
+
+```json
+{
+  "editorial": {
+    "reader": "who is trying to understand this",
+    "problem": "what they cannot yet predict",
+    "thesis": "the model the page wants them to carry away",
+    "evidence": ["what supports the model"],
+    "uncertainty": "what the page still cannot claim"
+  },
+  "understanding": {
+    "intro": "a short invitation to reconstruct the model",
+    "questions": [
+      {
+        "q": "a mechanism or prediction question",
+        "options": [
+          { "t": "the correct model", "ok": true, "why": "why it works" },
+          { "t": "a real misconception", "why": "what the page should reopen" },
+          { "t": "another plausible model", "why": "what it gets wrong" }
+        ]
+      }
+    ]
+  }
+}
+```
+
+The generator requires three to seven questions, exactly one correct option per
+question, and feedback on every option. The check tests reconstruction rather
+than recognition: ask why the mechanism works, what it predicts, or what result
+would falsify the model. It diagnoses a second read; it never blocks the page.
+
+The shared contract applies the site's LRS and voice rules to author-facing copy.
+Write for a named reader, put the point near the front, keep the actor close to
+the verb, and let the new idea land at the end. Use concrete evidence and state
+the remaining uncertainty. The contract rejects em dashes, canned AI language,
+and the `not X, Y` negation pattern before the generator writes HTML.
 
 ## Content contract (the voice the structuring step must hit)
 

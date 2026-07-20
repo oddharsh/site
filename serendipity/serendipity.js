@@ -179,34 +179,16 @@ async function countContributors(d) {
   return r ? Number(r.n) : 0;
 }
 
-// ── chrome: self-contained Luna window (ported from aadhar.sh xpChromeCss) ───
+// ── page shell: shared Luna chrome plus serendipity-specific layout ─────────
 function shellCss() {
   return `
   *{box-sizing:border-box}
-/* cross-document View Transitions: a fast, reduced-motion-safe crossfade on real
-   navigations between same-origin pages. inline (not JS-injected) so the incoming
-   page has opted in by parse time. the persistent shell (wallpaper/taskbar) is
-   identical across pages, so visually only the changing window content fades. */
-@media (prefers-reduced-motion:no-preference){@view-transition{navigation:auto}::view-transition-old(root),::view-transition-new(root){animation-duration:140ms}}
   html,body{margin:0;padding:0;min-height:100%}
-  /* Bliss tone on the root so the cross-document View Transition (which freezes
-     the root group) shows the desktop colour, not a frame of white, before
-     nav.js paints the real wallpaper. */
-  html{background:linear-gradient(180deg,oklch(56% 0.13 250) 0%,oklch(73% 0.10 236) 50%,oklch(88% 0.05 232) 60%,oklch(60% 0.16 140) 100%)}
-  body{background:linear-gradient(160deg,oklch(70% 0.11 240) 0%,oklch(78% 0.075 235) 45%,oklch(85% 0.045 235) 100%);background-attachment:fixed;font-family:var(--font-ui);font-size:12px;line-height:1.5;color:oklch(16% 0 0);font-variant-numeric:tabular-nums;text-wrap:pretty;-webkit-font-smoothing:antialiased;scrollbar-color:oklch(64% 0.13 255) oklch(90% 0.025 250)}
+  body{font-family:var(--font-ui);font-size:12px;line-height:1.5;color:oklch(16% 0 0);font-variant-numeric:tabular-nums;text-wrap:pretty;-webkit-font-smoothing:antialiased}
   a{color:oklch(42% 0.235 264);text-decoration:underline}
   a:hover{color:oklch(60% 0.25 29)}
   h1,h2,h3{font-family:var(--font-caption);margin:0}
-  .wrap{max-width:980px;margin:22px auto;padding:0 12px 48px}
-  .window{background:#fff;border:2px solid #0831d9;border-right-color:#001ea0;border-bottom-color:#001ea0;border-top-left-radius:8px;border-top-right-radius:8px;overflow:hidden;box-shadow:inset 1px 1px 0 #166aee,inset 2px 2px 0 #0855dd,inset -1px -1px 0 #00138c,inset -2px -2px 0 #003bda,4px 4px 0 rgba(0,30,160,.35)}
-  .titlebar{display:flex;align-items:center;gap:6px;padding:4px 6px 4px 8px;font:bold 10pt var(--font-caption);color:#fff;text-shadow:1px 1px #0f1089;border-bottom:1px solid oklch(41.92% 0.0962 250.51);background:linear-gradient(180deg,oklch(70% 0.15 258) 0%,oklch(60% 0.20 261) 8%,oklch(51% 0.225 263) 18%,oklch(50% 0.225 263) 86%,oklch(58% 0.18 260) 100%)}
-  .titlebar .ico{width:18px;height:18px;flex:0 0 auto;background:oklch(69.58% 0.2043 43.49);border-radius:0;position:relative}
-  .titlebar .ico::before{content:"";position:absolute;inset:3px 4px;background:oklch(87.82% 0.0877 66.27);clip-path:polygon(50% 0,100% 100%,0 100%)}
-  .titlebar .t{flex:1}
-  .titlebar .x{width:21px;height:21px;border-radius:3px;position:relative;border:1px solid #d8401c;text-decoration:none;background:linear-gradient(180deg,#e8795f,#e45f40 30%,#e45d3d 52%,#e2552a 80%,#ae3110);transition:filter 60ms ease-out}
-  .titlebar .x:hover,.titlebar .x:focus-visible{border-color:#ff7a66;background:linear-gradient(180deg,#ff8b7d 0%,#ff7463 26%,#ff957c 55%,#fd7e64 82%,#d34936 100%);box-shadow:0 0 4px rgba(255,120,96,.7);outline:none}
-  .titlebar .x::before,.titlebar .x::after{content:"";position:absolute;left:50%;top:50%;width:13px;height:2px;margin:-1px 0 0 -6.5px;background:#fff;box-shadow:0 1px 0 rgba(0,0,0,.35)}
-  .titlebar .x::before{transform:rotate(45deg)}.titlebar .x::after{transform:rotate(-45deg)}
+  .wrap{max-width:980px;padding:22px 12px 48px}
   /* windows are resizable now, so stack the master-detail on WINDOW width, not
      just viewport. container query keys on .window; the @media below stays as the
      viewport / no-container-support fallback. */
@@ -302,19 +284,7 @@ function shellCss() {
      letterboxing inside it (bg fills) rather than distorting. */
   #ev-tip img{display:block;width:300px;height:auto;max-height:340px;object-fit:contain;background:oklch(94% 0.005 240);border:3px solid #fff;outline:1px solid oklch(61% 0.061 253);outline-offset:-1px;box-shadow:2px 3px 12px -2px rgba(0,20,90,.55)}
   @media(max-width:640px){.body{flex-direction:column}.pane{width:auto;border-right:0;border-bottom:2px solid #7a96c8}}
-  /* OS-window geometry inlined as the first-paint critical subset (no shell
-     "pop" before the linked luna.css lands; luna.css holds the canonical set).
-     !important beats this page's own body rule. serendipity's own
-     .window>.body{overflow:hidden !important} + .pane-body scroll still win. */
-  html{height:100dvh;overflow:hidden}
-  body{min-height:0 !important;height:calc(100vh - 30px) !important;height:calc(100dvh - 30px) !important;overflow-x:hidden !important;overflow-y:auto !important;box-sizing:border-box}
-  body:has(.window),body:has(.np-window),body:has(.wrap){overflow:hidden !important;display:flex !important;flex-direction:column !important;align-items:center !important;padding:8px !important}
-  .window,.np-window,.wrap{position:relative;z-index:2;flex:0 1 auto !important;min-height:0;max-height:100% !important;width:100%;margin:0 auto !important;box-sizing:border-box}
-  .window,.np-window{display:flex;flex-direction:column}
-  .window>.title-bar,.window>.titlebar,.np-window>.np-titlebar{flex:0 0 auto}
-  .window>.content,.window>.body{flex:1 1 auto;min-height:0;overflow:auto}
-  .wrap{display:flex;flex-direction:column;padding-bottom:0 !important}.wrap>.window{flex:0 1 auto;max-height:100%}
-  body::after{content:"";position:fixed;left:0;right:0;bottom:0;height:30px;z-index:1;background:linear-gradient(180deg,oklch(67% 0.15 256) 0%,oklch(58% 0.19 257) 4%,oklch(51% 0.20 258) 9%,oklch(49% 0.20 258) 50%,oklch(46% 0.20 259) 92%,oklch(40% 0.18 260) 100%)}`;
+}`;
 }
 
 function shell(title, currentPath, bodyHtml) {
@@ -328,11 +298,10 @@ function shell(title, currentPath, bodyHtml) {
 <title>${currentPath === PREFIX ? "aadhar.sh/serendipity" : "aadhar.sh/serendipity/" + esc(title)}</title>
 <meta name="description" content="A public, shared database of events worth going to and who's going — fed by the collective, queryable by humans and agents.">
 <style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}${shellCss()}</style>
-<link rel="stylesheet" href="/luna.css"></head><body>
+<link rel="preload" as="style" href="/luna.css"><link rel="stylesheet" href="/luna.css"></head><body>
 <div class="wrap"><div class="window">
-  <div class="titlebar"><span class="ico" aria-hidden="true"></span>
-    <span class="t">aadhar.sh/serendipity</span>
-    <a class="x" href="/" title="back to aadhar.sh" aria-label="back to aadhar.sh"></a>
+  <div class="title-bar"><span class="title-text"><span class="icon" aria-hidden="true"></span>aadhar.sh/serendipity</span>
+    <span class="controls"><a class="close" href="/" title="back to aadhar.sh" aria-label="back to aadhar.sh"></a></span>
   </div>
   <div class="body">
     <nav class="pane">
@@ -1900,9 +1869,11 @@ export async function handleSerendipity(request, env, ctx) {
   return res;
 }
 
-// ── standalone Worker entry (deployed on a aadhar.sh/serendipity/* route) ────
-// Self-contained: own security headers, no dependency on the Pages _worker.js.
-const SECURITY_HEADERS = {
+// ── embedded site module ─────────────────────────────────────────────────────
+// The root aadhar-sh Worker dispatches /serendipity/* here. These headers stay
+// local because this surface permits arbitrary HTTPS cover-image hosts while
+// the homepage CSP deliberately remains narrower.
+export const SERENDIPITY_SECURITY_HEADERS = {
   "content-security-policy":
     // img-src is `https:` (any host) because Luma lets organizers point covers
     // at arbitrary CDNs (lumacdn, unsplash, …); allow-listing hosts was whack-a-
@@ -1918,23 +1889,15 @@ const SECURITY_HEADERS = {
   "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=(), serial=(), bluetooth=(), midi=(), accelerometer=(), gyroscope=(), magnetometer=(), screen-wake-lock=(), hid=(), idle-detection=()",
 };
 
-export default {
-  async fetch(request, env, ctx) {
-    // canonical host: anything landing on the *.workers.dev subdomain gets
-    // 301'd to the equivalent path on aadhar.sh (no duplicate public footprint).
-    const u = new URL(request.url);
-    if (u.hostname.endsWith(".workers.dev")) {
-      return new Response(null, { status: 301, headers: { location: `https://aadhar.sh${u.pathname}${u.search}`, "cache-control": "public, max-age=3600" } });
-    }
-    const res = await handleSerendipity(request, env, ctx);
-    if (res.status >= 300 && res.status < 400) return res;
-    const ct = res.headers.get("content-type") || "";
-    const h = new Headers(res.headers);
-    for (const [k, v] of Object.entries(SECURITY_HEADERS)) {
-      // CSP only matters for HTML documents; skip it on JSON (MCP/api) responses
-      if (k === "content-security-policy" && !ct.startsWith("text/html")) continue;
-      if (!h.has(k)) h.set(k, v);
-    }
-    return new Response(res.body, { status: res.status, statusText: res.statusText, headers: h });
-  },
-};
+export function withSerendipitySecurityHeaders(response) {
+  if (response.status >= 300 && response.status < 400) return response;
+  const contentType = response.headers.get("content-type") || "";
+  const headers = new Headers(response.headers);
+  for (const [key, value] of Object.entries(SERENDIPITY_SECURITY_HEADERS)) {
+    // CSP only matters for HTML documents; JSON endpoints inherit the root
+    // Worker defaults when the outer dispatcher applies its common headers.
+    if (key === "content-security-policy" && !contentType.startsWith("text/html")) continue;
+    if (!headers.has(key)) headers.set(key, value);
+  }
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}

@@ -16,6 +16,7 @@ access public `aadhar.sh` resources, including:
 - `https://aadhar.sh/rn/tracks`
 - `https://aadhar.sh/images/manifest.json`
 - `https://aadhar.sh/around/json`
+- `https://aadhar.sh/around/changes.json`
 
 ## Discovery
 

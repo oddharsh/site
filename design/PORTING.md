@@ -116,18 +116,20 @@ byte-identical, so there is one source of truth with a packaged mirror.
   `design/tokens/` FIRST, then flow into luna.css, so the skill package and any
   future surface (coffee/cal, mocks) inherit them too.
 
-**The encoder recipe ports verbatim** (it is content, not incidental). Thumbnails stay dual-tier squares: JPG universal fallback via `cjpegli -q 82 -p 2` (jpegli, q82, progressive) with EXIF baked in losslessly by `jpegtran` before encode then stripped; AVIF primary via `avifenc -q 63 --speed 4 --yuv 420` (`--yuv 400` for grayscale), `--ignore-icc/exif/xmp`, `sips formatOptions 60` as the no-avifenc fallback. Two tiers, 600px desktop + 400px mobile. jpegli stays the encoder (~25% under mozjpeg at indistinguishable quality). The rewrite changes the render pipeline (histogram/EXIF bake, hover engine), never the pixels: same bytes on the wire, so the measured tier sizes (~22KB / ~12KB avif, ~38KB jpg) hold.
+**The encoder recipe ports verbatim** (it is content, not incidental). Thumbnails stay dual-tier squares: JPG universal fallback via `zenc -q 84` (zenjpeg hybrid trellis + progressive scan search; q84 matches the retired cjpegli q82 quality) with EXIF baked in losslessly by `jpegtran` before encode then stripped; AVIF primary via `avifenc -q 63 -d 10 --speed 4 --yuv 420` (`--yuv 400` for grayscale), `--ignore-icc/exif/xmp`, `sips formatOptions 60` as the no-avifenc fallback. Two tiers, 600px desktop + 400px mobile. zenc/zenjpeg is the JPEG encoder (a few % under the retired jpegli at equal quality; jpegli was ~25% under mozjpeg); AVIF is 10-bit (about 6% under 8-bit at equal quality, free at encode time, and it curbs gradient banding). The rewrite changes the render pipeline (histogram/EXIF bake, hover engine), never the pixels: measured tier sizes are roughly ~21KB / ~11KB avif, ~37KB jpg.
 
 **The encoder recipe ports verbatim** (it is content, not incidental). Thumbnails
-stay dual-tier squares: JPG universal fallback via `cjpegli -q 82 -p 2` (jpegli,
-q82, progressive) with EXIF orientation baked in losslessly by `jpegtran` before
-encode then stripped; AVIF primary via `avifenc -q 63 --speed 4 --yuv 420`
+stay dual-tier squares: JPG universal fallback via `zenc -q 84` (zenjpeg hybrid
+trellis + progressive scan search; q84 matches the retired cjpegli q82 quality)
+with EXIF orientation baked in losslessly by `jpegtran` before
+encode then stripped; AVIF primary via `avifenc -q 63 -d 10 --speed 4 --yuv 420`
 (`--yuv 400` for grayscale), `--ignore-icc/exif/xmp`, `sips formatOptions 60` as
-the no-avifenc fallback. Two tiers, 600px desktop + 400px mobile. jpegli stays
-the encoder (~25% under mozjpeg at indistinguishable quality). The rewrite
+the no-avifenc fallback. Two tiers, 600px desktop + 400px mobile. zenc/zenjpeg is
+the JPEG encoder (a few % under the retired jpegli at equal quality); AVIF is 10-bit
+(about 6% under 8-bit, free at encode time). The rewrite
 changes the render pipeline (histogram/EXIF bake, hover engine), never the
-pixels: same bytes on the wire, so the measured tier sizes (~22KB / ~12KB avif,
-~38KB jpg) hold.
+pixels: measured tier sizes are roughly (~21KB / ~11KB avif,
+~37KB jpg) hold.
 
 **Encoder A/B, run 2026-07-02 (aom vs SVT-AV1 mainline vs SVT-AV1-PSYEX), for the
 record.** Built PSYEX from source + a custom libavif to test it properly; swept all

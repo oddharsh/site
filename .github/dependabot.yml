@@ -1,0 +1,61 @@
+version: 2
+updates:
+  # The root npm workspace owns the shared deploy toolchain (including Wrangler,
+  # Oxc Minify, and Lightning CSS) and all workspace dependency resolution.
+  # Keep one update PR open at a time so its release notes and site-leverage
+  # review stay legible.
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:17"
+      timezone: America/New_York
+    open-pull-requests-limit: 1
+    commit-message:
+      prefix: chore
+      include: scope
+
+  # Keep the action toolchain current too; its PRs get the same review note.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:17"
+      timezone: America/New_York
+    open-pull-requests-limit: 1
+    labels:
+      - github-actions
+    commit-message:
+      prefix: chore
+      include: scope
+
+  # The histogram bake is a small, reproducible Python toolchain. Keep its
+  # decoder pin current and send it through the same release-note review.
+  - package-ecosystem: pip
+    directory: "/holding/scripts"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:17"
+      timezone: America/New_York
+    open-pull-requests-limit: 1
+    commit-message:
+      prefix: chore
+      include: scope
+
+  # The JPEG thumbnail encoder (holding/scripts/zenc) pins zenjpeg via Cargo.
+  # This is what retired the hand-rolled jpegli refresh workflow: dependabot now
+  # owns the production encoder's update cadence, same as every other toolchain.
+  - package-ecosystem: cargo
+    directory: "/holding/scripts/zenc"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:17"
+      timezone: America/New_York
+    open-pull-requests-limit: 1
+    commit-message:
+      prefix: chore
+      include: scope
