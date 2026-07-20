@@ -4,26 +4,38 @@ For future me. Every recurring chore on aadhar.sh, organized by "I want to ___",
 with the exact command and the gotcha that bit me last time. Deep design notes
 and the full conventions list live in [CLAUDE.md](CLAUDE.md); this is the ops sheet.
 
-Three deploy targets:
-- **holding/** (aadhar.sh): a **Cloudflare Worker with static assets** (migrated off Pages 2026-06-30). Config is `wrangler.jsonc` at the repo root: it points `main` + `assets.directory` at `.build/holding` and runs `build.mjs` via its `build.command`, so `assets.run_worker_first` (an allowlist mirroring the `ROUTES`/`PREFIX` tables in `index.js`; static is the default) applies to the built tree; `workers_dev:false` (custom domain only). **Production deploy: merge to `main`; GitHub CI promotes the exact tested commit to the machine-owned `production` branch, then Cloudflare Workers Builds deploys it.** The config self-builds, so the Workers Build Deploy command ships the minified tree; local dev uses `wrangler.dev.jsonc` (readable `holding/`, fast reload). A local `wrangler deploy` is fallback-only. Verify after every deploy with `node verify-routes.mjs https://aadhar.sh` (now also asserts `/nav.js` minified + `.src` twins resolve). Bindings live in `wrangler.jsonc` (KV/R2/D1/DO); secrets via `wrangler secret put` (`RN_SIGNING_KEY_JWK`, `BROWSER_RENDER_TOKEN`, `RN_BUST_SECRET`).
-- **serendipity/** (separate Worker, aadhar.sh/serendipity): its Workers Build project deploys from the `serendipity` root on the `production` branch.
-- **cal/** (coffee booker): **LIVE** at aadhar.sh/coffee (zone route → `cal-aadhar-sh` worker). Its Workers Build project deploys from the `cal` root on the `production` branch (the package script passes `-c wrangler.toml`). A local `cd cal && npm run deploy` remains the fallback. Availability serves from an SWR calendar snapshot (KV `cal:busy`, 2s upstream deadline, stale fallback); the GET page edge-caches 30s; booking fails closed if the calendar can't be vouched for. See [cal/README.md](cal/README.md).
+One site Worker, with three source islands:
+- **holding/** (aadhar.sh): the **Cloudflare Worker with static assets** (migrated off Pages 2026-06-30). Config is `wrangler.jsonc` at the repo root: it points `main` + `assets.directory` at `.build/holding` and runs `build.mjs` via its `build.command`, so `assets.run_worker_first` (an allowlist mirroring the `ROUTES`/`PREFIX` tables in `index.js`; static is the default) applies to the built tree; `workers_dev:false` (custom domain only). **Production deploy: merge to `main`; GitHub CI promotes the exact tested commit to the machine-owned `production` branch, then Cloudflare Workers Builds deploys it.** The config self-builds, so the Workers Build Deploy command ships the minified tree; local dev uses `wrangler.dev.jsonc` (readable `holding/`, fast reload). A local `wrangler deploy` is fallback-only. Verify after every deploy with `node verify-routes.mjs https://aadhar.sh` (now also asserts `/nav.js` minified + `.src` twins resolve). All site bindings live in `wrangler.jsonc`; secrets via `wrangler secret put`.
+- **cal/** (coffee booking module): **LIVE** at `aadhar.sh/coffee`, dispatched by the same `aadhar-sh` Worker. Availability still serves from an SWR calendar snapshot (KV `cal:busy`, 2s upstream deadline, stale fallback); the GET page edge-caches 30s; booking fails closed if the calendar can't be vouched for. See [cal/README.md](cal/README.md). `cal/wrangler.test.toml` is test-only; it is not a deployment target.
+- **serendipity/** (event dashboard module): **LIVE** at `aadhar.sh/serendipity`, dispatched by the same `aadhar-sh` Worker. Its D1, secrets, route-specific CSP, and dashboard cache policy remain isolated in the module and shared root bindings.
 
 **Deploy sanity:** after Workers Builds deploys the promoted commit, verify the live route oracle. `_headers` and `.assetsignore` (which excludes `_worker.js` from being served) both work natively on Workers static assets. `_worker.js/` is the bundled Worker entry, not a served asset. The old Pages "static-only, no Function" outage class no longer applies (a Worker deploy is atomic).
+
+**Consolidation cutover:** before the first production deploy, set the former
+Cal secrets (`ICAL_URL`, `RESEND_API_KEY`, `SIGNING_SECRET`) and Serendipity
+secrets (`SYNC_SECRET`, `EXA_API_KEY`, `PARALLEL_API_KEY`, `COVER_SECRET`) on
+the root `aadhar-sh` Worker. After the new route smoke tests pass, remove the
+old `cal-aadhar-sh` and `serendipity` route/custom-domain ownership so only
+the root Worker receives `/coffee*`, `/serendipity*`, and `cal.aadhar.sh/*`.
+
+The legacy `cal.aadhar.sh/` host redirects to the canonical `/coffee` page.
+The exact work-calendar slug and its Google Calendar destination are Worker
+secrets (`WORK_CALENDAR_SLUG`, `WORK_CALENDAR_URL`); both can be rotated
+without changing the route or source code.
 
 ## CI/CD release path
 
 `.github/workflows/ci.yml` is the pull-request gate. It installs locked
-dependencies, builds the homepage, enforces the performance budget, dry-runs
-the `holding/`, `cal/`, `cf-garage/`, `lwe-ask/`, and `serendipity/` Wrangler
-configs, and runs `cal/npm test`. The latter two auxiliary route Workers and
-the Cloudflare garage demo are not separate Workers Build production targets,
-but they remain public contract surfaces and their bundles/configs stay inside
-the pull-request gate.
+dependencies, builds the site, enforces the performance budget, dry-runs
+the single site Worker plus the `cf-garage/` and `lwe-ask/` auxiliary Wrangler
+configs, and runs `cal/npm test`. Cal and Serendipity are bundled into the site
+Worker; their source modules and Cal behavioral suite remain inside the
+pull-request gate.
 
 `.github/workflows/update-wrangler.yml` runs weekly (and on manual dispatch),
-resolves the newest published Wrangler, applies the same exact version to all
-five Worker projects and their lockfiles, then opens or refreshes a draft PR.
+resolves the newest published Wrangler, applies the same exact version to the
+root site Worker and auxiliary Worker projects through the shared lockfile, then
+opens or refreshes a draft PR.
 The exact lockfile pin keeps a release reproducible; the scheduled PR keeps it
 current. Wrangler's npm dependency metadata instrumentation is explicitly
 enabled in every Worker config.
@@ -32,9 +44,9 @@ enabled in every Worker config.
 `main` associated with a merged PR (or an explicit manual dispatch). It refuses
 unmerged commits, then advances the machine-owned `production` branch to the
 exact tested SHA. Cloudflare Workers Builds watches that branch and is the only
-production publisher. Configure one Workers Build project per Worker with
-`production` as the production branch, the correct monorepo root (`.`, `cal`, or
-`serendipity`), a blank dashboard Build command, and the repo-specific Deploy
+production publisher. Configure one Workers Build project for the site Worker
+with `production` as the production branch and monorepo root `.`, leave its
+dashboard Build command blank, and use `npx wrangler deploy` as the Deploy
 command. GitHub does not need Cloudflare production secrets for this path.
 
 ### Performance budget semantics
@@ -53,8 +65,8 @@ asset warning into a CI failure. Use a controlled mobile/4G browser run for
 repeatable pre-merge checks; once field data is sufficient, replace guessed
 byte ceilings with route/cohort SLOs and keep bytes as regression signals.
 
-The Workers Build projects should expose their build/deploy status on the
-release commit. After enabling them, verify the live homepage route surface plus
+The Workers Build project should expose its build/deploy status on the release
+commit. After enabling it, verify the live homepage route surface plus
 `/coffee`, `/coffee/slots`, and `/serendipity`. This repository's current free
 private-repo plan does not support branch/environment protection rules, so the
 promotion workflow guard is the release backstop; upgrade or make the repo
@@ -101,7 +113,9 @@ Key facts (don't hardcode these elsewhere, they drift):
 - R2 bucket: `aadhar-photos` (SOOC originals + full-res JPGs)
 - Thumbnails are content-addressed at `/i/<stem>.<hash8>.<ext>` (hashes.json via `hash-thumbnails.sh`); `THUMB_VERSION` in `lib/const.js` survives only for the legacy-fallback URL shape.
 - The service worker RETIRED in v136 (2026-07-03): `holding/sw.js` is an unregister stub that must keep serving 200 for a year+. There is no `CACHE_VERSION`; the deploy-log number lives in D1 (`bump-version.sh` derives the next from `MAX(vnum)`).
-- Canonical photo source folder: `/Users/aadharsh/Downloads/to post (from ssd)/`. Privacy rule: nothing else from elsewhere on disk feeds the pipeline.
+- Canonical photo source: the aadhar-photos R2 bucket. Raw source files are
+  never committed to GitHub; the Actions workflow downloads only the requested
+  object keys into disposable runner storage.
 
 ---
 
@@ -114,7 +128,7 @@ Static sections (`/garage/*`, `/lwe/*`, `/cars/*`, shell JS, most discovery
 files) are served straight from disk. Worker-owned routes are enumerated in
 `index.js`; keep that table and `assets.run_worker_first` in sync.
 
-| URL | Handler / mechanism | module (`holding/_worker.js/`) |
+| URL | Handler / mechanism | module / source |
 |---|---|---|
 | `/` | homepage prerender (HTMLRewriter over `index.html`) + markdown negotiation | `home.js` |
 | `/index.html` | 301 -> `/` | `index.js` |
@@ -126,6 +140,8 @@ files) are served straight from disk. Worker-owned routes are enumerated in
 | `/reading` | `handleReading` (Curius) | `reading.js` |
 | `/updates`, `/updates.json`, `/restore` | `handleWindowsUpdate` / `handleUpdatesJson` / `handleSystemRestore` (D1) | `updates.js` |
 | `/lens`, `/lens/`, `/lens/fetch`, `/lens/shot` | `handleLens` / `handleLensFetch` / `handleLensShot` | `lens.js` |
+| `/coffee`, `/coffee/*` | Cal booking module delegation | `../cal/src/index.js` |
+| `/serendipity`, `/serendipity/*` | Serendipity module delegation + local CSP | `../serendipity/serendipity.js` |
 | `/lens.js` | static client renderer | `holding/lens.js` (served asset) |
 | `/llms-full.txt` | `handleLlmsFull` (x402 bot paywall; free until `X402_PAY_TO` is set) | `x402.js` |
 | `/ledger`, `/ledger.json` | `handleLedger` / `handleLedgerJson` (AI-crawler invoice from Analytics Engine; counting via `countCrawlerHit` in `index.js`) | `ledger.js` |
@@ -155,6 +171,8 @@ guarded, so a missing binding degrades, it doesn't crash.
 | `RN_KV` | KV | tracks, manifest, artist pics, crawler caches (`3cb8a107c58e47dc9244e75b33401f36`) |
 | `PHOTOS_R2` | R2 | bucket `aadhar-photos`, SOOC originals |
 | `RESTORE_DB` | D1 | `/restore` + `/updates` changelog store |
+| `SERENDIPITY_DB` | D1 | Serendipity event dashboard |
+| `BOOKINGS` | KV | Cal pending/confirmed bookings + calendar snapshot |
 | `COUNTER` | Durable Object | cross-script binding to cf-garage's Counter (homepage visits) |
 | `RN_SIGNING_KEY_JWK` | secret | AadharshBot Ed25519 signing key (RFC 9421) |
 | `BROWSER_RENDER_TOKEN`, `CF_ACCOUNT_ID` | secret | Browser Rendering for `/lens/shot` |
@@ -173,41 +191,77 @@ this as the regression tripwire; keep it green on every future change.
 
 ---
 
-## One-time setup
+## Remote image pipeline
+
+The normal photo path is entirely remote:
+
+1. Upload the source object to the aadhar-photos R2 bucket.
+2. Run [Remote photo pipeline](https://github.com/oddharsh/site/actions/workflows/photo-pipeline.yml).
+3. Enter the exact R2 object key(s), or all for a complete thumbnail re-encode.
+4. Review and merge the generated artifact PR through the normal CI and
+   production-promotion path.
+5. After Workers Builds has deployed the merge, run
+   [Bust remote photo manifest](https://github.com/oddharsh/site/actions/workflows/bust-photo-manifest.yml).
+
+The photo-processing workflow needs no Cloudflare secret: it reads source
+objects through the public /images/full/<key> route and skips R2/KV writes.
+The cache-bust workflow needs repository secrets
+PHOTOS_CLOUDFLARE_API_TOKEN (Workers KV edit only) and
+CLOUDFLARE_ACCOUNT_ID.
+
+The GitHub-hosted macOS runner installs the Homebrew tools, builds the `zenc`
+encoder with cargo, runs the selected routine, and discards the source files when
+the job ends. The runner is the only execution host; nothing on the author's
+machine is part of the contract.
+
+Dependabot covers the encoder now: its cargo ecosystem tracks the zenjpeg pin in
+`holding/scripts/zenc`, opening a version-bump PR on the weekly cadence alongside
+the Actions, npm, and Pillow layers. This retired the old `Refresh image toolchain`
+workflow that hand-tracked the from-source jpegli commit. Only Homebrew formulas
+(mozjpeg, libavif) fall outside Dependabot and update on their own cadence.
+
+## Local fallback setup
 
 ```bash
-brew install exiftool jq mozjpeg libavif cmake ninja   # mozjpeg = jpegtran; libavif = avifenc (optional, sips falls back)
+brew install exiftool jq mozjpeg libavif              # mozjpeg = jpegtran; libavif = avifenc (optional, sips falls back)
 python3 -m pip install -r holding/scripts/requirements.txt  # Pillow for histogram baking
-./holding/scripts/build-jpegli.sh                      # builds cjpegli -> ~/.local/bin (Google's JPEG encoder)
+# the JPEG encoder (zenc) builds itself on first pipeline run; needs rust (rustup.rs)
+cargo build --release --manifest-path holding/scripts/zenc/Cargo.toml
 wrangler login                                         # Cloudflare auth (deploys + KV + R2 all use it)
 ```
-`sips` is macOS-native (no install). The pipeline is macOS-only as written.
+This is an emergency fallback only. sips is macOS-native (no install), and the
+normal path is the remote workflow above.
 
 ---
 
-## Add photos (the common one)
+## Add photos (local fallback only)
 
 ```bash
-# does everything: resize -> EXIF-rotate -> encode AVIF+JPG squares -> upload R2 ->
-# regenerate metadata.json (calls extract-photo-metadata.sh) -> bust the manifest KV keys.
+# The normal remote path is the Remote photo pipeline workflow above.
+# This local command remains for recovery when Actions or R2 ingress is unavailable.
 ./holding/scripts/add-photos.sh "/path/to/photo.HIF" [more files...]
 # then it prints the deploy line; run it:
 npm run deploy   # local fallback only; normal production is merge + CI promotion
 ```
 - Accepts JPG/PNG/HEIF/HIF. JPGs are uploaded as supplied; HEIF/HIF sources
-  remain local archives and also produce a full-resolution maximum-quality
+  remain archive objects and also produce a full-resolution maximum-quality
   q100 JPG export as the `/images/full/<stem>.jpg` click target.
 - Emits the 600px JPG fallback, 600px AVIF, and 400px mobile AVIF tiers;
   regenerates EXIF metadata; bakes the four 64-bin RGB/luminance histograms;
   and runs `npm run photos:check` before busting the manifest cache.
-- It busts `manifest:images`, `idx:images`, `idx:imagesfull` so the worker re-derives the grid from R2 on the next request.
+- The remote render-only path defers the `manifest:images` bust until the
+  separate post-deploy workflow; the local fallback performs its normal KV
+  writes.
 - A thumbnail can't go stale anymore: its URL is its bytes (`/i/<stem>.<hash8>`). If one looks wrong, re-run `hash-thumbnails.sh` and bust the manifest (value + `:fresh`); a changed file gets a new URL automatically.
 
 ### Regenerate just the EXIF metadata (photos already uploaded)
 ```bash
-./holding/scripts/extract-photo-metadata.sh "/Users/aadharsh/Downloads/to post (from ssd)"
+./holding/scripts/extract-photo-metadata.sh "/path/to/sooc-originals"
 ```
-Writes `holding/images/metadata.json` (keyed by stem) + per-photo `holding/images/meta/<stem>.json` (what the hover tooltip fetches). Every field is nullable; the tooltip skips nulls rather than guess. Then deploy.
+The normal remote equivalent is the `refresh-metadata` routine in the Remote
+photo pipeline workflow. Local `--merge` mode updates only a selected batch;
+the full directory mode rebuilds the metadata index. Every field is nullable;
+the tooltip skips nulls rather than guess.
 
 ### Re-encode ALL thumbnails (e.g. a new resolution/quality)
 ```bash
@@ -300,9 +354,10 @@ curl -s "https://aadhar.sh/images/manifest.json" | jq length          # photo co
 | `extract-photo-metadata.sh` | Read EXIF from the SOOC folder, emit `images/metadata.json` + per-photo `images/meta/<stem>.json`. Pulls the Fuji recipe fields too. Requires exiftool + jq. |
 | `reencode-thumbnails.sh` | Re-encode every published grid thumb from the source folder at a new resolution (pre-cropped squares, two tiers). Pair with a THUMB_VERSION bump. |
 | `add-car-photo.sh` | One resto-mod reference photo -> `cars/<stem>.{avif,jpg}` for the homepage car tooltips. No EXIF, no R2. |
-| `build-jpegli.sh` | Build Google's `cjpegli`/`djpegli` from source to `~/.local/bin`. Idempotent; re-run to update. ~90s first build. Requires cmake + ninja + clang. |
+| `zenc/` | The JPEG thumbnail encoder: a Rust crate wrapping zenjpeg (hybrid trellis + progressive scan search). `cargo build --release` (auto-built on first pipeline run). `zenc <in> <out> -q 84`. dependabot tracks the zenjpeg pin; replaced the from-source jpegli build in 2026-07. |
+| `download-remote-photos.sh` | Download selected R2 object keys into disposable runner storage for the GitHub Actions photo workflow; accepts `all` for the public manifest. |
 | `gen-alt-text.py` | AI alt text for grid photos via the Workers-AI caption endpoint -> `images/alt.json`. Resumable. |
-| `gen-encoding-samples.sh` | Regenerate the color sample set for `/garage/encoding` through every encoder; prints byte counts. |
+| `gen-encoding-samples.sh` | Regenerate the color sample set for `/garage/encoding` through every encoder; defaults to the committed `garage/enc/c-png.png` fixture and prints byte counts. |
 | `photo-histograms.py` | Bakes four 64-bin RGB/luminance histogram channels into each per-photo `images/meta/<stem>.json` from the shipped hashed JPG tier. Requires the pinned Pillow dependency in `holding/scripts/requirements.txt` and is called by both metadata extraction and `add-photos.sh`. |
 
 ---
@@ -312,7 +367,7 @@ curl -s "https://aadhar.sh/images/manifest.json" | jq length          # photo co
 - **Thumbnail 404s must be uncacheable.** Workers static assets no longer return homepage HTML for missing files, but a real miss under `/images/*` can still inherit the immutable cache rule unless the worker clamps it. Keep the thumbnail route worker-first and bump `THUMB_VERSION` when you need a fresh cache key.
 - **zsh eats `${var}:something`.** Brace-quote KV key names with colons (`"tracks:${OLD}:fresh"`), and use `${=flag}` if you need word-splitting in ad-hoc snippets (the scripts use `#!/usr/bin/env bash` so they are safe internally).
 - **`jpegtran` / mozjpeg strip EXIF.** Rotate losslessly with `jpegtran -copy none -rotate N` *before* recompressing, and send its binary stdout to a file (`2>/dev/null > out.jpg`), not through a pipe that could mix in stderr.
-- **Production deploy = merge to `main`, CI promotion to `production`, then Workers Builds**; the three Workers Build projects deploy the repo root, `cal/`, and `serendipity/` from that exact release branch. The homepage deploy config (`wrangler.jsonc`) points `main` + `assets` at `.build/holding` and runs `build.mjs` first through its `build.command`, so the production path self-builds and ships the minified client scripts + `luna.css`. Local dev is the exception: `wrangler dev -c wrangler.dev.jsonc` (`npm run dev`, wired into `.claude/launch.json`) serves the readable `holding/` tree directly. Before merging, CI runs `npm run perf-budget`; after configuring Workers Builds, verify its release status and run `node verify-routes.mjs https://aadhar.sh` plus the satellite-worker smoke checks.
+- **Production deploy = merge to `main`, CI promotion to `production`, then Workers Builds**; the single site Worker deploys the root `wrangler.jsonc`, bundling `holding/`, `cal/src/`, and `serendipity/` from that exact release branch. The deploy config points `main` + `assets` at `.build/holding` and runs `build.mjs` first through its `build.command`, so the production path self-builds and ships the minified client scripts + `luna.css`. Local dev is the exception: `wrangler dev -c wrangler.dev.jsonc` (`npm run dev`, wired into `.claude/launch.json`) serves the readable tree directly. Before merging, CI runs `npm run perf-budget`; after configuring Workers Builds, verify its release status and run `node verify-routes.mjs https://aadhar.sh` plus the `/coffee` and `/serendipity` route smoke checks.
 - **`_playlistId` is module-cached per isolate.** After changing `playlist-id`, redeploy to flush it (see the playlist section).
 - **The worker is bundled, not hand-concatenated.** `_worker.js/` imports sibling modules; wrangler bundles them at deploy via built-in esbuild.
 - **Authoring is buildless; SERVING is minified.** `build.mjs` (repo root, one devDependency: esbuild) copies `holding/` to `.build/` and minifies the client scripts (`nav.js`, `notepad.js`, `lens.js`, `lens-browser.js`, `quiz.js`, `tooltip.js`) plus `luna.css` (owner-approved 2026-07), deploying each readable original alongside as `/<name>.src.js` / `/luna.src.css` (the banner in each minified file points there). It also hard-fails the deploy if `luna.css` doesn't parse as valid CSS (the v143 corruption slipped through for three releases because esbuild only warns). Everything else — `index.html`, all garage/lwe HTML, images, `_headers`, worker modules — ships byte-identical to git. Do NOT extend the build into bundling, HTML minification, version auto-bumps, or CSS beyond `luna.css`; the scripts remain independently readable islands.

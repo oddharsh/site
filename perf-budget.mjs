@@ -41,11 +41,28 @@ const ASSET_ENVELOPES = {
 // This is an observability alert, not a platform limit. It is intentionally
 // separate from the user-facing LCP budget: Worker code is server-side and can
 // grow without changing a browser's transfer path, provided TTFB/CPU stay well.
-const WORKER_BASELINE_GZIP_KIB = 86;
+// Intentional one-Worker consolidation baseline. The old homepage/Cal/
+// Serendipity aggregate measured 130.94 KiB gzip; the consolidated Worker is
+// 129.23 KiB gzip, so comparing it to the old homepage-only 86 KiB baseline
+// would report a misleading regression on every CI run.
+const WORKER_BASELINE_GZIP_KIB = 129.23;
 const WORKER_ALERT_GROWTH = 0.25;
 const TWINS = [
   "nav.src.js", "notepad.src.js", "lens.src.js", "lens-browser.src.js",
   "quiz.src.js", "tooltip.src.js", "luna.src.css",
+];
+const HTML_TWIN = "index.src.html";
+const HTML_ENVELOPE = {
+  role: "homepage document",
+  gzipKiB: 22,
+  brotliKiB: 20,
+};
+const HTML_MARKERS = [
+  ["JSON-LD", /<script\b[^>]*\btype=(?:"application\/ld\+json"|application\/ld\+json)(?:\s|>)/i],
+  ["photos", /<section\b[^>]*\bclass=(?:"[^"]*\bphotos\b"|'[^']*\bphotos\b'|photos)(?:\s|>)/i],
+  ["playlist", /<(?:ol|ul)\b[^>]*\bid=(?:"np-list"|np-list)(?:\s|>)/i],
+  ["speculation rules", /<script\b[^>]*\btype=(?:"speculationrules"|speculationrules)(?:\s|>)/i],
+  ["footer", /<footer\b/i],
 ];
 
 const fails = [];
@@ -111,6 +128,36 @@ for (const [file, envelope] of Object.entries(ASSET_ENVELOPES)) {
 for (const t of TWINS) {
   try { await stat(`.build/holding/${t}`); ok(`twin ${t} present`); }
   catch { bad(`twin ${t} missing from build output`); }
+}
+
+// 5) homepage HTML: minification banner, readable twin, and semantic anchors
+let homepage;
+try {
+  homepage = await readFile(".build/holding/index.html");
+} catch {
+  bad("index.html: missing from build output");
+}
+if (homepage) {
+  const text = homepage.toString("utf8");
+  const banner = text.startsWith("<!-- minified at deploy; readable source: /index.src.html -->");
+  if (!banner) bad("index.html: missing deploy-time minification banner");
+  for (const [label, marker] of HTML_MARKERS) {
+    if (!marker.test(text)) bad("index.html: missing required marker " + label);
+  }
+  try {
+    const source = await readFile("holding/index.html");
+    const twin = await readFile(`.build/holding/${HTML_TWIN}`);
+    if (!source.equals(twin)) bad("index.src.html: readable twin differs from holding/index.html");
+    else ok("index.src.html: readable homepage twin present");
+  } catch {
+    bad("index.src.html: readable homepage twin missing");
+  }
+  const sizes = compressedSizes(homepage);
+  const overGzip = sizes.gzip > HTML_ENVELOPE.gzipKiB;
+  const overBrotli = sizes.brotli > HTML_ENVELOPE.brotliKiB;
+  const line = `index.html: ${homepage.length} B raw, ${fmt(sizes.gzip)} gzip, ${fmt(sizes.brotli)} Brotli (${HTML_ENVELOPE.role})`;
+  if (overGzip || overBrotli) warn(`${line}; advisory envelope ${HTML_ENVELOPE.gzipKiB}/${HTML_ENVELOPE.brotliKiB} KiB gzip/Brotli`);
+  else ok(`${line}; envelope ${HTML_ENVELOPE.gzipKiB}/${HTML_ENVELOPE.brotliKiB} KiB gzip/Brotli`);
 }
 
 console.log("");

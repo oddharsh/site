@@ -11,10 +11,13 @@
 #      on click, and the shareable R2 copy. for a JPG-source photo that's the
 #      original; for a HEIF source it's the maximum-quality q100 export from
 #      step 3.
-#   3. if the original is HEIF (.hif/.heic/.heif), generates a maximum-quality
-#      (formatOptions 100, full-res, EXIF-preserved) JPG export and uploads THAT.
-#      the .HIF original is NOT uploaded — it stays local-only (your drive + SSD
-#      are the archive). Chrome/Firefox can't render HEIF anyway, and R2 is for
+#   3. if the original is HEIF (.hif/.heic/.heif), generates a full-res archive
+#      JPG (sips decodes to lossless PNG, zenc re-encodes at q100 4:4:4 with the
+#      full trellis + scan-search, exiftool re-attaches source EXIF incl
+#      Orientation) and uploads THAT. Strictly better than the old sips q100 at
+#      ~the same size: higher quality, full chroma (sips shipped 4:2:0). The .HIF
+#      original is NOT uploaded — it stays local-only (your drive + SSD are the
+#      archive). Chrome/Firefox can't render HEIF anyway, and R2 is for
 #      serving/sharing, not cold storage of originals.
 #
 # post-processing:
@@ -23,6 +26,11 @@
 #      meta.hist via photo-histograms.py — the tooltip renders the bars from
 #      that field, and the metadata regen drops it, so the bake runs right after
 #   5. busts the manifest:images KV key so the worker re-derives from R2
+#
+# REMOTE_RENDER_ONLY=1 skips R2 uploads and KV writes. The GitHub Actions
+# pipeline uses it because the source object is already in R2 and the generated
+# public tiers are returned as a normal PR; cache busting happens separately
+# after the production deploy.
 #
 # safe to re-run. skips thumbnail generation when all three thumb files are
 # already newer than the source. always uploads to R2 (wrangler r2 put is
@@ -57,10 +65,15 @@ if [ $# -eq 0 ]; then
   echo "usage: $0 <file-or-dir>..." >&2
   exit 1
 fi
-# jpegli is the primary JPEG encoder (github.com/google/jpegli → ~/.local/bin/);
-# ~25% smaller than mozjpeg at indistinguishable quality. mozjpeg's jpegtran does
-# the lossless EXIF-orientation step (structural, not an encode).
-CJPEGLI="$HOME/.local/bin/cjpegli"
+# zenc (holding/scripts/zenc) is the JPEG encoder: a zenjpeg wrapper running
+# hybrid trellis + progressive scan search, ~4% smaller than the retired cjpegli
+# at equal quality (see /garage/encoding). It builds from source with cargo, so
+# any machine with rust runs this pipeline; dependabot tracks the zenjpeg pin.
+# q84 is calibrated to match the old cjpegli q82 quality at fewer bytes. mozjpeg's
+# jpegtran still does the lossless EXIF-orientation step (structural, not an encode).
+ZENC_DIR="$(cd "$(dirname "$0")/zenc" && pwd)"
+ZENC="$ZENC_DIR/target/release/zenc"
+ZENC_Q=84
 MOZJPEG_DIR="/opt/homebrew/opt/mozjpeg/bin"
 MOZ_JTRAN="$MOZJPEG_DIR/jpegtran"
 
@@ -73,10 +86,10 @@ for cmd in sips wrangler exiftool; do
     exit 1
   fi
 done
-if [ ! -x "$CJPEGLI" ]; then
-  echo "error: cjpegli not found at $CJPEGLI" >&2
-  echo "  build with: $(dirname "$0")/build-jpegli.sh" >&2
-  exit 1
+if [ ! -x "$ZENC" ]; then
+  command -v cargo >/dev/null 2>&1 || { echo "error: cargo (rust) not found; install from https://rustup.rs" >&2; exit 1; }
+  echo "building zenc (zenjpeg encoder) — first run only…" >&2
+  cargo build --release --manifest-path "$ZENC_DIR/Cargo.toml" >&2 || { echo "error: zenc build failed" >&2; exit 1; }
 fi
 if [ ! -x "$MOZ_JTRAN" ]; then
   echo "error: jpegtran not installed at $MOZJPEG_DIR" >&2
@@ -131,14 +144,14 @@ avif_encode() {  # avif_encode <src.jpg> <out.avif>
     # metadata is dead weight (and avifenc copies source EXIF by default).
     local space; space=$(sips -g space "$1" 2>/dev/null | awk '/space:/{print $2}')
     local yuv; [ "$space" = "Gray" ] && yuv=400 || yuv=420
-    avifenc -q 63 --ignore-icc --ignore-exif --ignore-xmp --speed 4 --jobs 4 --yuv "$yuv" "$1" "$2" >/dev/null 2>&1
+    avifenc -q 63 -d 10 --ignore-icc --ignore-exif --ignore-xmp --speed 4 --jobs 4 --yuv "$yuv" "$1" "$2" >/dev/null 2>&1
   else
     sips -s format avif --setProperty formatOptions 60 "$1" --out "$2" >/dev/null 2>&1
   fi
 }
 
-# ── phase 1: square thumbnails (jpegli q82 JPG + AVIF, + mobile AVIF) ──
-echo "phase 1 — square thumbnails (${SQ}×${SQ} / ${SQ_SM}×${SQ_SM}, jpegli q82 + AVIF via $AVIF_ENCODER, metadata-stripped)"
+# ── phase 1: square thumbnails (zenc q84 JPG + 10-bit AVIF, + mobile AVIF) ──
+echo "phase 1 — square thumbnails (${SQ}×${SQ} / ${SQ_SM}×${SQ_SM}, zenc q84 + AVIF via $AVIF_ENCODER, metadata-stripped)"
 T_OK=0; T_SKIP=0; T_FAIL=0
 INTER="$TMP/inter"; mkdir -p "$INTER"
 while IFS= read -r f; do
@@ -168,9 +181,10 @@ while IFS= read -r f; do
   if [ "$W" -le "$H" ]; then tl=$(( (SQ*H + W-1)/W )); else tl=$(( (SQ*W + H-1)/H )); fi
   sips -Z "$tl" "$work" >/dev/null 2>&1
   if ! sips -c "$SQ" "$SQ" "$work" --out "$sq" >/dev/null 2>&1; then T_FAIL=$((T_FAIL+1)); printf "✗"; continue; fi
-  # 4. desktop square JPG (jpegli q82) + strip any residual metadata (sips can
-  #    leave a grayscale ICC on B&W frames; keep formats consistent / sRGB).
-  if ! "$CJPEGLI" "$sq" "$jpg" -q 82 -p 2 >/dev/null 2>&1; then T_FAIL=$((T_FAIL+1)); printf "✗"; continue; fi
+  # 4. desktop square JPG (zenc: zenjpeg hybrid+scan, q84 ≈ old jpegli q82) + strip
+  #    any residual metadata (sips can leave a grayscale ICC on B&W frames; keep
+  #    formats consistent / sRGB).
+  if ! "$ZENC" "$sq" "$jpg" -q "$ZENC_Q" >/dev/null 2>&1; then T_FAIL=$((T_FAIL+1)); printf "✗"; continue; fi
   exiftool -all= -overwrite_original "$jpg" >/dev/null 2>&1 || true
   # 5. desktop square AVIF
   if ! avif_encode "$sq" "$avif"; then T_FAIL=$((T_FAIL+1)); printf "✗"; continue; fi
@@ -206,14 +220,20 @@ while IFS= read -r f; do
     continue
   fi
   out="$EXPORTS/${stem}.jpg"
-  # formatOptions 100 = maximum-quality JPEG (full-res, EXIF + orientation
-  # preserved). this export IS the R2 share/click copy — the .HIF original is
-  # NOT uploaded (stays on your drive/SSD); HEIF-to-JPEG is necessarily a
-  # transcode, but this preserves the maximum quality sips exposes.
-  if sips -s format jpeg --setProperty formatOptions 100 "$f" --out "$out" >/dev/null 2>&1; then
-    H_OK=$((H_OK+1)); printf "."
+  # This export IS the R2 share/click copy; the .HIF original stays local-only.
+  # sips decodes the 10-bit HIF to a lossless PNG (sensor-native pixels, no
+  # orientation applied), zenc re-encodes it at q100 4:4:4 (full chroma, hybrid
+  # trellis + scan search), and exiftool copies the source EXIF back — including
+  # Orientation, so browsers rotate it exactly as the old sips export did. Net:
+  # strictly better than sips q100 (higher quality, full chroma) at ~the same
+  # size, and a big win at lower q. See /garage/encoding.
+  tmppng="$EXPORTS/${stem}.decode.png"
+  if sips -s format png "$f" --out "$tmppng" >/dev/null 2>&1 \
+     && "$ZENC" "$tmppng" "$out" -q 100 --yuv 444 >/dev/null 2>&1 \
+     && exiftool -TagsFromFile "$f" -all:all -overwrite_original "$out" >/dev/null 2>&1; then
+    rm -f "$tmppng"; H_OK=$((H_OK+1)); printf "."
   else
-    H_FAIL=$((H_FAIL+1)); printf "✗"
+    rm -f "$tmppng"; H_FAIL=$((H_FAIL+1)); printf "✗"
   fi
 done < "$SOURCES"
 echo ""
@@ -221,15 +241,18 @@ echo "  exported: $H_OK  skipped (JPG sibling exists): $H_SKIP  failed: $H_FAIL"
 echo ""
 
 # ── phase 3: upload originals + HIF JPG exports to R2 ─────────────────
-echo "phase 3 — R2 uploads (parallel 4)"
-upload() {
-  local key="$1" file="$2" ct="$3"
-  if wrangler r2 object put "aadhar-photos/$key" --file="$file" --content-type="$ct" --remote >/dev/null 2>&1; then
-    printf "."
-  else
-    printf "✗"
-  fi
-}
+if [ "${REMOTE_RENDER_ONLY:-0}" = "1" ]; then
+  echo "phase 3 — R2 uploads skipped (source is already remote)"
+else
+  echo "phase 3 — R2 uploads (parallel 4)"
+  upload() {
+    local key="$1" file="$2" ct="$3"
+    if wrangler r2 object put "aadhar-photos/$key" --file="$file" --content-type="$ct" --remote >/dev/null 2>&1; then
+      printf "."
+    else
+      printf "✗"
+    fi
+  }
 
 # originals → R2. NB: HIF/HEIF originals are NOT uploaded — they stay local-only
 # (your drive + SSD are the archive); R2 gets their q100 JPG export instead
@@ -249,7 +272,7 @@ while IFS= read -r f; do
   if [ $PENDING -ge 4 ]; then wait; PENDING=0; fi
 done < "$SOURCES"
 wait
-echo ""
+  echo ""
 
 # HIF JPG exports (the click-through-friendly companion)
 if [ "$(ls -A "$EXPORTS" 2>/dev/null)" ]; then
@@ -264,6 +287,7 @@ if [ "$(ls -A "$EXPORTS" 2>/dev/null)" ]; then
   done
   wait
   echo ""
+fi
 fi
 echo ""
 
@@ -282,7 +306,9 @@ if [ -z "$META_SRC" ]; then
   META_SRC="$(dirname "$(head -1 "$SOURCES")")"
 fi
 if command -v exiftool >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
-  "$SCRIPT_DIR/extract-photo-metadata.sh" "$META_SRC" 2>&1 | tail -1
+  META_MODE=()
+  if [ "${REMOTE_RENDER_ONLY:-0}" = "1" ]; then META_MODE=(--merge); fi
+  "$SCRIPT_DIR/extract-photo-metadata.sh" "${META_MODE[@]}" "$META_SRC" 2>&1 | tail -1
 else
   echo "  exiftool or jq missing — skipping metadata regen"
 fi
@@ -301,9 +327,13 @@ fi
 
 node "$PROJECT_DIR/holding/scripts/check-photo-pipeline.mjs"
 
-wrangler kv key delete --namespace-id="$NS" "manifest:images"        --remote >/dev/null 2>&1 || true
-wrangler kv key delete --namespace-id="$NS" "manifest:images:fresh"  --remote >/dev/null 2>&1 || true
-echo "  manifest cache busted (value + fresh sentinel)"
+if [ "${REMOTE_RENDER_ONLY:-0}" = "1" ]; then
+  echo "  manifest cache bust deferred to the remote post-deploy workflow"
+else
+  wrangler kv key delete --namespace-id="$NS" "manifest:images"        --remote >/dev/null 2>&1 || true
+  wrangler kv key delete --namespace-id="$NS" "manifest:images:fresh"  --remote >/dev/null 2>&1 || true
+  echo "  manifest cache busted (value + fresh sentinel)"
+fi
 echo ""
 
 echo "✓ done. deploy with:"

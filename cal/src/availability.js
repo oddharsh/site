@@ -32,7 +32,7 @@ export const BOOK_MAX_STALE_MS = 15 * 60_000;  // booking refuses a calendar old
 // returns { busy, ageMs, ok, source }. ok:false only when there is neither a live
 // fetch nor any stored snapshot — that is the signal for the booking path to
 // refuse. source is one of fresh | live | stale | none (surfaced in Server-Timing).
-export async function fetchBusySWR(env, ctx) {
+export async function fetchBusySWR(env, ctx, { allowStale = false } = {}) {
   const kv = env.BOOKINGS;
   const now = Date.now();
   let snap = null;
@@ -41,6 +41,16 @@ export async function fetchBusySWR(env, ctx) {
 
   // fresh snapshot → serve it, skip the upstream entirely (no per-request writes)
   if (snap && age < CAL_FRESH_MS) return { busy: snap.busy || [], ageMs: age, ok: true, source: "fresh" };
+
+  // The initial GET page may render from a last-good snapshot while the refresh
+  // continues after the response. Booking and /slots callers leave this false:
+  // they must still wait for a live calendar or fail closed.
+  if (snap && allowStale) {
+    if (ctx && typeof ctx.waitUntil === "function") {
+      ctx.waitUntil(refreshBusy(env).catch(() => {}));
+    }
+    return { busy: snap.busy || [], ageMs: age, ok: true, source: "stale" };
+  }
 
   // stale or missing → refresh under a deadline
   try {

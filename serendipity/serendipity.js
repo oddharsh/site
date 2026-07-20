@@ -1869,9 +1869,11 @@ export async function handleSerendipity(request, env, ctx) {
   return res;
 }
 
-// ── standalone Worker entry (deployed on a aadhar.sh/serendipity/* route) ────
-// Self-contained: own security headers, no dependency on the Pages _worker.js.
-const SECURITY_HEADERS = {
+// ── embedded site module ─────────────────────────────────────────────────────
+// The root aadhar-sh Worker dispatches /serendipity/* here. These headers stay
+// local because this surface permits arbitrary HTTPS cover-image hosts while
+// the homepage CSP deliberately remains narrower.
+export const SERENDIPITY_SECURITY_HEADERS = {
   "content-security-policy":
     // img-src is `https:` (any host) because Luma lets organizers point covers
     // at arbitrary CDNs (lumacdn, unsplash, …); allow-listing hosts was whack-a-
@@ -1887,23 +1889,15 @@ const SECURITY_HEADERS = {
   "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=(), serial=(), bluetooth=(), midi=(), accelerometer=(), gyroscope=(), magnetometer=(), screen-wake-lock=(), hid=(), idle-detection=()",
 };
 
-export default {
-  async fetch(request, env, ctx) {
-    // canonical host: anything landing on the *.workers.dev subdomain gets
-    // 301'd to the equivalent path on aadhar.sh (no duplicate public footprint).
-    const u = new URL(request.url);
-    if (u.hostname.endsWith(".workers.dev")) {
-      return new Response(null, { status: 301, headers: { location: `https://aadhar.sh${u.pathname}${u.search}`, "cache-control": "public, max-age=3600" } });
-    }
-    const res = await handleSerendipity(request, env, ctx);
-    if (res.status >= 300 && res.status < 400) return res;
-    const ct = res.headers.get("content-type") || "";
-    const h = new Headers(res.headers);
-    for (const [k, v] of Object.entries(SECURITY_HEADERS)) {
-      // CSP only matters for HTML documents; skip it on JSON (MCP/api) responses
-      if (k === "content-security-policy" && !ct.startsWith("text/html")) continue;
-      if (!h.has(k)) h.set(k, v);
-    }
-    return new Response(res.body, { status: res.status, statusText: res.statusText, headers: h });
-  },
-};
+export function withSerendipitySecurityHeaders(response) {
+  if (response.status >= 300 && response.status < 400) return response;
+  const contentType = response.headers.get("content-type") || "";
+  const headers = new Headers(response.headers);
+  for (const [key, value] of Object.entries(SERENDIPITY_SECURITY_HEADERS)) {
+    // CSP only matters for HTML documents; JSON endpoints inherit the root
+    // Worker defaults when the outer dispatcher applies its common headers.
+    if (key === "content-security-policy" && !contentType.startsWith("text/html")) continue;
+    if (!headers.has(key)) headers.set(key, value);
+  }
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}

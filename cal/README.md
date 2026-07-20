@@ -1,6 +1,8 @@
-# cal — coffee booking worker
+# cal — coffee booking module
 
-cloudflare worker that replaces cal.com for `/coffee/` on aadhar.sh.
+Cloudflare Worker module that replaces cal.com for `/coffee/` on aadhar.sh.
+The root `aadhar-sh` Worker dispatches this module; there is no separate Cal
+deployment target.
 
 ## what it does
 
@@ -24,44 +26,37 @@ cloudflare worker that replaces cal.com for `/coffee/` on aadhar.sh.
 
 Everything on the Cloudflare free tier at personal volume.
 
-## setup
+## development and configuration
 
-### 1. dependencies
-
-```sh
-cd cal
-npm install            # installs wrangler
-```
-
-### 2. create the KV namespace
+Install from the repository root and run the module's Workers-runtime suite:
 
 ```sh
-npx wrangler kv namespace create CAL_BOOKINGS
-# wrangler prints a `id = "…"` line — paste it into wrangler.toml's
-# [[kv_namespaces]] block, replacing REPLACE_WITH_KV_NAMESPACE_ID
+npm install
+npm test --workspace cal
 ```
 
-### 3. set secrets
+`wrangler.test.toml` is a test-only fixture for the Vitest pool. Production
+bindings and vars live in the root `wrangler.jsonc`; tune them there if the
+booking policy changes. All times use IANA timezone names so DST is handled
+automatically.
+
+### production secrets
+
+Set these on the root Worker (from the repository root):
 
 ```sh
-# the public/secret iCal URL of your calendar (read-only).
-#   google: settings → "integrate calendar" → "secret address in iCal format"
-#   icloud: cal app → calendar settings → publish → public iCal URL
-npx wrangler secret put ICAL_URL
+# the public/secret iCal URL of your calendar (read-only)
+npx wrangler secret put -c wrangler.jsonc ICAL_URL
 
-# resend.com API key — sign up free, verify aadhar.sh domain via DKIM
-npx wrangler secret put RESEND_API_KEY
+# resend.com API key — verify aadhar.sh via DKIM first
+npx wrangler secret put -c wrangler.jsonc RESEND_API_KEY
 
-# HMAC signing secret — generate fresh, never share
-openssl rand -hex 32 | npx wrangler secret put SIGNING_SECRET
+# HMAC signing secret — generate once and keep it stable
+openssl rand -hex 32 | npx wrangler secret put -c wrangler.jsonc SIGNING_SECRET
 ```
 
-### 4. configure vars (in `wrangler.toml`, under `[vars]`)
-
-defaults are sensible. tune working hours, slot length, limits if needed.
-all times use IANA timezone names so DST is handled automatically.
-
-### 5. set up Resend
+Set up Resend as usual: add `aadhar.sh`, publish its DKIM/SPF records in
+Cloudflare DNS, and confirm `coffee@aadhar.sh` can send.
 
 1. sign up at [resend.com](https://resend.com) (free)
 2. add domain `aadhar.sh`
@@ -69,28 +64,15 @@ all times use IANA timezone names so DST is handled automatically.
 4. wait for verification (~5 min)
 5. confirm you can send from `noreply@aadhar.sh` and `coffee@aadhar.sh`
 
-### 6. deploy
+Production ships through merge → CI → `production` → Workers Builds. The root
+config owns both `aadhar.sh/coffee*` and the legacy `cal.aadhar.sh/*` alias after
+the route migration. Do not deploy from this package.
 
-```sh
-npm run deploy   # = wrangler deploy -c wrangler.toml
-```
-
-Use the npm script (or pass `-c wrangler.toml` yourself). A bare `wrangler deploy`
-from this dir inherits the repo-root `wrangler.jsonc` `build.command` (`node
-build.mjs`, which is only for the holding/ worker) and fails.
-
-then in the Cloudflare dashboard:
-- Workers → `cal-aadhar-sh` → Triggers → add custom domain `cal.aadhar.sh`
-- DNS for aadhar.sh → confirm a CNAME `cal` → `cal-aadhar-sh.<your-account>.workers.dev` was auto-added
-
-### 7. swap the site's coffee link
-
-once `cal.aadhar.sh` is live, update `site/coffee/index.html` to point at it
-instead of `cal.com/aadharsh/coffee`:
+The public site link should point at the canonical path:
 
 ```diff
 - <a href="https://cal.com/aadharsh/coffee" rel="external">cal.com/aadharsh/coffee</a>
-+ <a href="https://cal.aadhar.sh">cal.aadhar.sh</a>
++ <a href="https://aadhar.sh/coffee">aadhar.sh/coffee</a>
 ```
 
 then in cal.com, decommission the event type (or pause it) so requests don't
@@ -98,9 +80,9 @@ get split between the two systems.
 
 ## smoke test
 
-after deploy:
+after the consolidated Worker deploy:
 
-1. visit `https://cal.aadhar.sh` — should show available slots
+1. visit `https://aadhar.sh/coffee` — should show available slots
 2. book a slot using a throwaway email
 3. check your inbox at `coffee@aadhar.sh` — you should get an approval request with two big buttons
 4. click "approve" — should land on the confirmed page, requester should get an .ics invite within seconds

@@ -44,3 +44,18 @@ updates:
     commit-message:
       prefix: chore
       include: scope
+
+  # The JPEG thumbnail encoder (holding/scripts/zenc) pins zenjpeg via Cargo.
+  # This is what retired the hand-rolled jpegli refresh workflow: dependabot now
+  # owns the production encoder's update cadence, same as every other toolchain.
+  - package-ecosystem: cargo
+    directory: "/holding/scripts/zenc"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:17"
+      timezone: America/New_York
+    open-pull-requests-limit: 1
+    commit-message:
+      prefix: chore
+      include: scope

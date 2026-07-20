@@ -1,8 +1,9 @@
 // lens.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
-import { BOT_UA, SIG_AGENT, signRequestForWebBotAuth } from "./lib/botauth.js";
+import { BOT_UA, botHeaders } from "./lib/botauth.js";
 import { cachedRender } from "./lib/cache.js";
 import { CANONICAL_HOST } from "./lib/const.js";
+import { readResponseCapped } from "./lib/crawl.js";
 import { lensParseRobots, lensPathMatch, lensRobotsVerdict } from "./lib/robots.js";
 import { lunaPage } from "./lib/chrome.js";
 import { escAttr, escHtml, jsonResponse } from "./lib/http.js";
@@ -907,23 +908,25 @@ export async function lensInspect(targetUrl, env, opts) {
   return out;
 }
 
-// honest, identified fetch — AadharshBot UA + (when the key is set) a Web Bot
-// Auth signature, same identity the rest of the site crawls under.
+// honest, identified fetch — AadharshBot UA + a required Web Bot Auth
+// signature for external targets, the same identity the rest of the site
+// crawls under. Self-dispatch stays local and therefore has no wire signature.
 // `accept` override: the md-negotiation and MCP probes speak different Accepts.
 export async function lensFetch(targetUrl, env, signal, accept) {
-  const headers = new Headers({
+  env = env || {};
+  const baseHeaders = {
     "user-agent": BOT_UA,
     "accept": accept || "text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.7",
     "accept-language": "en-US,en;q=0.9",
-  });
-  if (env.RN_SIGNING_KEY_JWK) {
-    try {
-      const sig = await signRequestForWebBotAuth(targetUrl, env);
-      headers.set("Signature-Agent", `"${SIG_AGENT}"`);
-      headers.set("Signature-Input", `sig1=${sig.params}`);
-      headers.set("Signature", `sig1=:${sig.b64}:`);
-    } catch (_e) { /* recipient just can't verify */ }
-  }
+  };
+  let isSelf = false;
+  try {
+    const u = new URL(targetUrl);
+    isSelf = u.hostname.toLowerCase() === CANONICAL_HOST && !!(env.SELF_FETCH || env.ASSETS);
+  } catch (_e) {}
+  // Self-dispatch never leaves Cloudflare, so it does not need a wire
+  // signature. Every external target still requires the real AadharshBot key.
+  const headers = await botHeaders(targetUrl, env, { headers: baseHeaders, sign: !isSelf });
   // Fetching our own hostname over the network loops back through this same
   // worker, and Cloudflare kills the loop with a 522 — which is why the featured
   // "Try: aadhar.sh" example (and every self-probe: robots.txt, llms.txt, …) once
@@ -950,19 +953,8 @@ export async function lensFetch(targetUrl, env, signal, accept) {
 
 // read a response body but stop at `max` bytes so a giant page can't blow memory.
 export async function lensReadCapped(res, max) {
-  const reader = res.body && res.body.getReader ? res.body.getReader() : null;
-  if (!reader) { const t = await res.text(); return { text: t.length > max ? t.slice(0, max) : t, truncated: t.length > max }; }
-  const chunks = []; let total = 0, truncated = false;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    if (total + value.length > max) { chunks.push(value.subarray(0, max - total)); truncated = true; try { await reader.cancel(); } catch (_e) {} break; }
-    chunks.push(value); total += value.length;
-  }
-  let len = 0; for (const c of chunks) len += c.length;
-  const merged = new Uint8Array(len); let off = 0;
-  for (const c of chunks) { merged.set(c, off); off += c.length; }
-  return { text: new TextDecoder("utf-8").decode(merged), truncated };
+  const result = await readResponseCapped(res, max);
+  return { text: result.text, truncated: result.truncated };
 }
 
 // DNS-AID is a DNS surface, not an HTTP file. Query the three discovery names

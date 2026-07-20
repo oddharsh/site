@@ -14,8 +14,8 @@
 #
 # Deliberately does NOT touch R2 (it now holds only q100 JPG share copies, not
 # originals), metadata.json (its width/height are the ORIGINAL dims), or the
-# full-res click export. The true SOOC originals (.HIF) live in the local source
-# folder ($SRC) + your drive/SSD — that's the re-encode source, not R2.
+# full-res click export. The source folder may be a disposable directory
+# downloaded from R2 by the remote GitHub Actions workflow.
 #
 # FUTURE — native-aspect layout (when CSS masonry / grid-lanes ships in 2+
 # engines; today it's Safari 26 only, Chrome behind a flag — see /garage/horizon).
@@ -62,13 +62,19 @@ TMP="/tmp/aadhar-reencode-$$"
 mkdir -p "$TMP"
 trap 'rm -rf "$TMP"' EXIT
 
-CJPEGLI="$HOME/.local/bin/cjpegli"
+ZENC_DIR="$(cd "$(dirname "$0")/zenc" && pwd)"
+ZENC="$ZENC_DIR/target/release/zenc"
+ZENC_Q=84   # calibrated to match the retired cjpegli q82 quality at fewer bytes
 MOZ_JTRAN="/opt/homebrew/opt/mozjpeg/bin/jpegtran"
 
 for cmd in sips exiftool; do
   command -v "$cmd" >/dev/null 2>&1 || { echo "error: $cmd not in PATH" >&2; exit 1; }
 done
-[ -x "$CJPEGLI" ]  || { echo "error: cjpegli not at $CJPEGLI (build-jpegli.sh)" >&2; exit 1; }
+if [ ! -x "$ZENC" ]; then
+  command -v cargo >/dev/null 2>&1 || { echo "error: cargo (rust) not found; install from https://rustup.rs" >&2; exit 1; }
+  echo "building zenc (zenjpeg encoder) — first run only…" >&2
+  cargo build --release --manifest-path "$ZENC_DIR/Cargo.toml" >&2 || { echo "error: zenc build failed" >&2; exit 1; }
+fi
 [ -x "$MOZ_JTRAN" ] || { echo "error: jpegtran not installed (brew install mozjpeg)" >&2; exit 1; }
 [ -d "$SRC" ]      || { echo "error: source folder not found: $SRC" >&2; exit 1; }
 if command -v avifenc >/dev/null 2>&1; then AVIF_ENCODER="avifenc"; else AVIF_ENCODER="sips"; fi
@@ -94,9 +100,13 @@ find_source() {
   return 1
 }
 
-STEMS=$(for j in "$DEST"/*.jpg; do basename "$j" .jpg; done)
+# Enumerate published stems from the content-hashed JPG tiles in holding/i/. The
+# old images/*.jpg location emptied out in the /i/ cutover, so globbing $DEST would
+# match nothing (and, with no nullglob, silently loop once on the literal glob).
+STEMS=$(for j in "$PROJECT_DIR/holding/i/"*.jpg; do b=$(basename "$j" .jpg); echo "${b%.*}"; done | sort -u)
 TOTAL=$(echo "$STEMS" | grep -c . || true)
-echo "re-encoding $TOTAL thumbnails as ${SQ}×${SQ} / ${SQ_SM}×${SQ_SM} center squares  (jpegli q82 + AVIF via $AVIF_ENCODER)"
+[ "$TOTAL" -gt 0 ] || { echo "error: no published thumbnails found in holding/i/ (expected the content-hashed JPG tiles)" >&2; exit 1; }
+echo "re-encoding $TOTAL thumbnails as ${SQ}×${SQ} / ${SQ_SM}×${SQ_SM} center squares  (zenc q${ZENC_Q} + AVIF via $AVIF_ENCODER)"
 echo "  source: $SRC"
 echo ""
 
@@ -128,25 +138,25 @@ while IFS= read -r stem; do
   if [ "$W" -le "$H" ]; then tl=$(( (SQ*H + W-1)/W )); else tl=$(( (SQ*W + H-1)/H )); fi
   sips -Z "$tl" "$work" >/dev/null 2>&1
   if ! sips -c "$SQ" "$SQ" "$work" --out "$sqjpg" >/dev/null 2>&1; then FAIL=$((FAIL+1)); printf "✗"; continue; fi
-  # 4. desktop square: jpegli q82 + AVIF (yuv400 for grayscale, else yuv420).
+  # 4. desktop square: zenc (zenjpeg hybrid+scan+sharp_yuv, q84) + AVIF (yuv400 for grayscale, else yuv420).
   #    metadata is stripped: the grid reads EXIF/histogram from metadata.json, so
   #    embedded EXIF/XMP/ICC in the thumbnail files is dead weight (~1.5KB/AVIF
-  #    avg, up to ~5KB). avifenc gets --ignore-exif/--ignore-xmp (below); cjpegli
+  #    avg, up to ~5KB). avifenc gets --ignore-exif/--ignore-xmp (below); zenc
   #    already emits clean JPGs, but sips can leave a grayscale ICC on B&W frames,
   #    so strip the JPG too. assumes sRGB display (the AVIF primary has no profile
   #    either, so this keeps the two formats consistent).
-  if ! "$CJPEGLI" "$sqjpg" "$jpg" -q 82 -p 2 >/dev/null 2>&1; then FAIL=$((FAIL+1)); printf "✗"; continue; fi
+  if ! "$ZENC" "$sqjpg" "$jpg" -q "$ZENC_Q" >/dev/null 2>&1; then FAIL=$((FAIL+1)); printf "✗"; continue; fi
   exiftool -all= -overwrite_original "$jpg" >/dev/null 2>&1 || true
   space=$(sips -g space "$sqjpg" 2>/dev/null | awk '/space:/{print $2}'); [ "$space" = "Gray" ] && yuv=400 || yuv=420
   if [ "$AVIF_ENCODER" = "avifenc" ]; then
-    avifenc -q 63 --ignore-icc --ignore-exif --ignore-xmp --speed 4 --jobs 4 --yuv "$yuv" "$sqjpg" "$avif" >/dev/null 2>&1 || { FAIL=$((FAIL+1)); printf "✗"; continue; }
+    avifenc -q 63 -d 10 --ignore-icc --ignore-exif --ignore-xmp --speed 4 --jobs 4 --yuv "$yuv" "$sqjpg" "$avif" >/dev/null 2>&1 || { FAIL=$((FAIL+1)); printf "✗"; continue; }
   else
     sips -s format avif --setProperty formatOptions 60 "$sqjpg" --out "$avif" >/dev/null 2>&1 || { FAIL=$((FAIL+1)); printf "✗"; continue; }
   fi
   # 5. mobile square: downscale the SQ square to SQ_SM (square→square, no distortion)
   if sips -Z "$SQ_SM" "$sqjpg" --out "$smtmp" >/dev/null 2>&1; then
     if [ "$AVIF_ENCODER" = "avifenc" ]; then
-      avifenc -q 63 --ignore-icc --ignore-exif --ignore-xmp --speed 4 --jobs 4 --yuv "$yuv" "$smtmp" "$smavif" >/dev/null 2>&1 || printf "~"
+      avifenc -q 63 -d 10 --ignore-icc --ignore-exif --ignore-xmp --speed 4 --jobs 4 --yuv "$yuv" "$smtmp" "$smavif" >/dev/null 2>&1 || printf "~"
     else
       sips -s format avif --setProperty formatOptions 60 "$smtmp" --out "$smavif" >/dev/null 2>&1 || printf "~"
     fi

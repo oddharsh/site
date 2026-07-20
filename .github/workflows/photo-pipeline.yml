@@ -1,0 +1,184 @@
+name: Remote photo pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      routine:
+        description: "Which image routine should run?"
+        required: true
+        type: choice
+        options:
+          - add-photo
+          - reencode-thumbnails
+          - refresh-metadata
+          - add-car-photo
+          - regenerate-encoding-study
+        default: add-photo
+      source_keys:
+        description: "R2 object keys, one per line; use all for a full thumbnail re-encode"
+        required: false
+        type: string
+      car_stem:
+        description: "For add-car-photo: singer, tuthill, hwa-evo, or f355"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: remote-photo-pipeline
+  cancel-in-progress: false
+
+jobs:
+  process:
+    name: process images remotely
+    if: github.repository == 'oddharsh/site'
+    runs-on: macos-14
+    timeout-minutes: 60
+    env:
+      ROUTINE: ${{ inputs.routine }}
+      SOURCE_KEYS: ${{ inputs.source_keys }}
+      CAR_STEM: ${{ inputs.car_stem }}
+      PHOTO_SOURCE_ORIGIN: https://aadhar.sh
+
+    steps:
+      - name: Check out current main
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install image toolchain
+        run: |
+          brew install exiftool ffmpeg jq libavif mozjpeg webp
+          python -m venv "$RUNNER_TEMP/photo-venv"
+          "$RUNNER_TEMP/photo-venv/bin/pip" install --requirement holding/scripts/requirements.txt
+          echo "$RUNNER_TEMP/photo-venv/bin" >> "$GITHUB_PATH"
+
+      - name: Install repository dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Build the JPEG encoder (zenc)
+        # zenjpeg hybrid + progressive scan search; Cargo.lock pins the graph,
+        # dependabot tracks the zenjpeg version. macOS runners ship cargo.
+        run: cargo build --release --manifest-path holding/scripts/zenc/Cargo.toml
+
+      - name: Validate routine inputs
+        run: |
+          set -euo pipefail
+          case "$ROUTINE" in
+            add-photo|reencode-thumbnails|refresh-metadata)
+              [ -n "$SOURCE_KEYS" ] || { echo "source_keys is required for $ROUTINE" >&2; exit 1; }
+              ;;
+            add-car-photo)
+              [ -n "$SOURCE_KEYS" ] || { echo "source_keys is required for add-car-photo" >&2; exit 1; }
+              case "$CAR_STEM" in
+                singer|tuthill|hwa-evo|f355) ;;
+                *) echo "car_stem must be singer, tuthill, hwa-evo, or f355" >&2; exit 1 ;;
+              esac
+              key_count="$(printf '%s\n' "$SOURCE_KEYS" | awk 'NF { n++ } END { print n + 0 }')"
+              [ "$key_count" -eq 1 ] && [ "$SOURCE_KEYS" != "all" ] || { echo "add-car-photo needs exactly one source key" >&2; exit 1; }
+              ;;
+            regenerate-encoding-study)
+              ;;
+            *)
+              echo "unknown routine: $ROUTINE" >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Download source images from R2
+        if: inputs.routine != 'regenerate-encoding-study'
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$SOURCE_KEYS" > "$RUNNER_TEMP/photo-source-keys.txt"
+          ./holding/scripts/download-remote-photos.sh \
+            "$RUNNER_TEMP/photo-source-keys.txt" \
+            "$RUNNER_TEMP/photo-source"
+
+      - name: Run the selected photo routine
+        env:
+          REMOTE_RENDER_ONLY: "1"
+        run: |
+          set -euo pipefail
+          source_dir="$RUNNER_TEMP/photo-source"
+          case "$ROUTINE" in
+            add-photo)
+              npm run photos -- "$source_dir"
+              ;;
+            reencode-thumbnails)
+              ./holding/scripts/reencode-thumbnails.sh "$source_dir"
+              ./holding/scripts/hash-thumbnails.sh
+              python holding/scripts/photo-histograms.py
+              npm run photos:check
+              ;;
+            refresh-metadata)
+              ./holding/scripts/extract-photo-metadata.sh --merge "$source_dir"
+              npm run photos:check
+              ;;
+            add-car-photo)
+              key="$(find "$source_dir" -type f -print -quit)"
+              [ -n "$key" ] || { echo "no downloaded car source" >&2; exit 1; }
+              ./holding/scripts/add-car-photo.sh "$CAR_STEM" "$key"
+              ;;
+            regenerate-encoding-study)
+              ./holding/scripts/gen-encoding-samples.sh
+              ./holding/scripts/gen-encoding-grids.sh
+              ;;
+          esac
+
+      - name: Check generated files
+        run: git diff --check
+
+      - name: Open artifact pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          case "$ROUTINE" in
+            add-photo) paths=(holding/images holding/i); title="photos: process remote source batch";;
+            reencode-thumbnails) paths=(holding/images holding/i); title="photos: re-encode remote thumbnails";;
+            refresh-metadata) paths=(holding/images); title="photos: refresh remote metadata";;
+            add-car-photo) paths=(holding/cars); title="photos: update remote car image";;
+            regenerate-encoding-study) paths=(holding/garage/enc); title="garage: regenerate remote encoding study";;
+          esac
+
+          branch="photos/remote-$GITHUB_RUN_ID"
+          git switch --create "$branch"
+          git add -- "${paths[@]}"
+          if git diff --cached --quiet; then
+            echo "No generated changes; no pull request needed."
+            exit 0
+          fi
+          git diff --cached --stat
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "$title"
+          git push --set-upstream origin "$branch"
+          gh pr create \
+            --repo "$GITHUB_REPOSITORY" \
+            --base main \
+            --head "$branch" \
+            --title "$title" \
+            --body "$(printf '%s\n' \
+              'Generated by the Remote photo pipeline workflow.' \
+              '' \
+              "Routine: $ROUTINE" \
+              'Source: R2-backed public photo route' \
+              'Encoder: zenjpeg via holding/scripts/zenc (Cargo-pinned, dependabot-tracked)' \
+              '' \
+              'The source files were downloaded to ephemeral runner storage only. Merge this PR through the normal CI and production-promotion path.')"

@@ -6,8 +6,8 @@
 // It reads the real wall clock (Date.now()), so assertions are written as
 // structural invariants relative to "now" rather than fixed timestamps — no
 // fake timers, which are unreliable under the workers runtime.
-import { describe, it, expect } from "vitest";
-import { generateSlots } from "../src/availability.js";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { fetchBusySWR, generateSlots, CAL_FRESH_MS } from "../src/availability.js";
 
 const TZ = "America/New_York";
 const baseEnv = {
@@ -36,6 +36,50 @@ const localParts = (ms) => {
     hour: +p.find((x) => x.type === "hour").value % 24,
   };
 };
+
+afterEach(() => vi.unstubAllGlobals());
+
+describe("fetchBusySWR — stale GET behavior", () => {
+  it("serves a stale snapshot immediately and refreshes in the background when allowed", async () => {
+    const snapshot = { busy: [{ start: 100, end: 200 }], ts: Date.now() - CAL_FRESH_MS - 1 };
+    const env = {
+      BOOKINGS: {
+        get: vi.fn(async () => snapshot),
+        put: vi.fn(),
+      },
+      ICAL_URL: "https://calendar.test/availability.ics",
+    };
+    const ctx = { waitUntil: vi.fn() };
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("calendar unavailable"); }));
+
+    const result = await fetchBusySWR(env, ctx, { allowStale: true });
+
+    expect(result).toMatchObject({ busy: snapshot.busy, ok: true, source: "stale" });
+    expect(result.ageMs).toBeGreaterThanOrEqual(CAL_FRESH_MS);
+    expect(ctx.waitUntil).toHaveBeenCalledTimes(1);
+    expect(env.BOOKINGS.put).not.toHaveBeenCalled();
+  });
+
+  it("still blocks on a stale snapshot for strict callers", async () => {
+    const snapshot = { busy: [{ start: 100, end: 200 }], ts: Date.now() - CAL_FRESH_MS - 1 };
+    const env = {
+      BOOKINGS: {
+        get: vi.fn(async () => snapshot),
+        put: vi.fn(),
+      },
+      ICAL_URL: "https://calendar.test/availability.ics",
+    };
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n", {
+      status: 200,
+      headers: { "content-type": "text/calendar" },
+    })));
+
+    const result = await fetchBusySWR(env, null);
+
+    expect(result).toMatchObject({ busy: [], ok: true, source: "live", ageMs: 0 });
+    expect(env.BOOKINGS.put).toHaveBeenCalledTimes(1);
+  });
+});
 
 describe("generateSlots — invariants", () => {
   it("produces slots that obey window, length, working days and hours", () => {
