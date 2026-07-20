@@ -209,19 +209,24 @@ The cache-bust workflow needs repository secrets
 PHOTOS_CLOUDFLARE_API_TOKEN (Workers KV edit only) and
 CLOUDFLARE_ACCOUNT_ID.
 
-The GitHub-hosted macOS runner installs the Homebrew tools, builds the pinned
-jpegli revision, runs the selected routine, and discards the source files when
+The GitHub-hosted macOS runner installs the Homebrew tools, builds the `zenc`
+encoder with cargo, runs the selected routine, and discards the source files when
 the job ends. The runner is the only execution host; nothing on the author's
 machine is part of the contract.
 
-The `Refresh image toolchain` workflow runs weekly and can be dispatched manually. It checks the upstream jpegli HEAD, opens a PR with the new pinned revision plus regenerated encoding-study evidence, and records Homebrew formula versions in the Actions summary. Dependabot covers the Actions, npm, and Pillow layers; Homebrew formulas and the jpegli source commit remain under this workflow's review.
+Dependabot covers the encoder now: its cargo ecosystem tracks the zenjpeg pin in
+`holding/scripts/zenc`, opening a version-bump PR on the weekly cadence alongside
+the Actions, npm, and Pillow layers. This retired the old `Refresh image toolchain`
+workflow that hand-tracked the from-source jpegli commit. Only Homebrew formulas
+(mozjpeg, libavif) fall outside Dependabot and update on their own cadence.
 
 ## Local fallback setup
 
 ```bash
-brew install exiftool jq mozjpeg libavif cmake ninja   # mozjpeg = jpegtran; libavif = avifenc (optional, sips falls back)
+brew install exiftool jq mozjpeg libavif              # mozjpeg = jpegtran; libavif = avifenc (optional, sips falls back)
 python3 -m pip install -r holding/scripts/requirements.txt  # Pillow for histogram baking
-./holding/scripts/build-jpegli.sh                      # builds cjpegli -> ~/.local/bin (Google's JPEG encoder)
+# the JPEG encoder (zenc) builds itself on first pipeline run; needs rust (rustup.rs)
+cargo build --release --manifest-path holding/scripts/zenc/Cargo.toml
 wrangler login                                         # Cloudflare auth (deploys + KV + R2 all use it)
 ```
 This is an emergency fallback only. sips is macOS-native (no install), and the
@@ -349,7 +354,7 @@ curl -s "https://aadhar.sh/images/manifest.json" | jq length          # photo co
 | `extract-photo-metadata.sh` | Read EXIF from the SOOC folder, emit `images/metadata.json` + per-photo `images/meta/<stem>.json`. Pulls the Fuji recipe fields too. Requires exiftool + jq. |
 | `reencode-thumbnails.sh` | Re-encode every published grid thumb from the source folder at a new resolution (pre-cropped squares, two tiers). Pair with a THUMB_VERSION bump. |
 | `add-car-photo.sh` | One resto-mod reference photo -> `cars/<stem>.{avif,jpg}` for the homepage car tooltips. No EXIF, no R2. |
-| `build-jpegli.sh` | Build Google's `cjpegli`/`djpegli` from the pinned upstream revision to `~/.local/bin`; update `JPEGLI_COMMIT` deliberately. Requires cmake + ninja + clang. |
+| `zenc/` | The JPEG thumbnail encoder: a Rust crate wrapping zenjpeg (hybrid trellis + progressive scan search). `cargo build --release` (auto-built on first pipeline run). `zenc <in> <out> -q 84`. dependabot tracks the zenjpeg pin; replaced the from-source jpegli build in 2026-07. |
 | `download-remote-photos.sh` | Download selected R2 object keys into disposable runner storage for the GitHub Actions photo workflow; accepts `all` for the public manifest. |
 | `gen-alt-text.py` | AI alt text for grid photos via the Workers-AI caption endpoint -> `images/alt.json`. Resumable. |
 | `gen-encoding-samples.sh` | Regenerate the color sample set for `/garage/encoding` through every encoder; defaults to the committed `garage/enc/c-png.png` fixture and prints byte counts. |

@@ -20,7 +20,15 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 DEST="$( cd "$SCRIPT_DIR/.." && pwd )/garage/enc"
 STEM="${1:-XT509338}"
 SOURCE_ARG="${2:-$DEST/c-png.png}"
-CJPEGLI="$HOME/.local/bin/cjpegli"
+# zenc (zenjpeg hybrid trellis + progressive scan search) is the site's shipped
+# JPEG encoder, so the study shows it as the JPEG point. Auto-built via cargo,
+# like the pipeline scripts.
+ZENC_DIR="$(cd "$SCRIPT_DIR/zenc" && pwd)"
+ZENC="$ZENC_DIR/target/release/zenc"
+if [ ! -x "$ZENC" ]; then
+  command -v cargo >/dev/null 2>&1 || { echo "error: cargo (rust) not found; install from https://rustup.rs" >&2; exit 1; }
+  cargo build --release --manifest-path "$ZENC_DIR/Cargo.toml" >&2 || { echo "error: zenc build failed" >&2; exit 1; }
+fi
 TMP="/tmp/enc-gen-$$"; mkdir -p "$TMP"; trap 'rm -rf "$TMP"' EXIT
 
 src=""
@@ -31,7 +39,7 @@ else
   for e in HIF hif HEIC heic jpg JPG; do [ -f "$SRC_DIR/$STEM.$e" ] && src="$SRC_DIR/$STEM.$e" && break; done
 fi
 [ -n "$src" ] || { echo "no source for $STEM in $SOURCE_ARG" >&2; exit 1; }
-for c in "$CJPEGLI" avifenc cwebp sips exiftool; do command -v "$c" >/dev/null 2>&1 || [ -x "$c" ] || { echo "missing: $c" >&2; exit 1; }; done
+for c in avifenc cwebp sips exiftool; do command -v "$c" >/dev/null 2>&1 || [ -x "$c" ] || { echo "missing: $c" >&2; exit 1; }; done
 
 echo "source: $src"
 
@@ -51,8 +59,9 @@ report() { local f="$1" b; b=$(sz "$f"); printf "  %-18s %8s B   %6s KB   %s b/p
 cp "$base" "$DEST/c-png.png"                                                   # lossless baseline
 
 sips -s format jpeg --setProperty formatOptions 82 "$base" --out "$DEST/c-sips82.jpg" >/dev/null 2>&1
-for q in 60 82 95; do "$CJPEGLI" "$base" "$DEST/c-jl$q.jpg" -q "$q" -p 2 >/dev/null 2>&1; done
-exiftool -all= -overwrite_original "$DEST"/c-sips82.jpg "$DEST"/c-jl*.jpg >/dev/null 2>&1 || true
+# zenc quality ladder; q84 is the shipped thumbnail setting (≈ old jpegli q82).
+for q in 62 84 95; do "$ZENC" "$base" "$DEST/c-zc$q.jpg" -q "$q" >/dev/null 2>&1; done
+exiftool -all= -overwrite_original "$DEST"/c-sips82.jpg "$DEST"/c-zc*.jpg >/dev/null 2>&1 || true
 
 for q in 60 80; do cwebp -q "$q" "$base" -o "$DEST/c-wp$q.webp" >/dev/null 2>&1; done
 
@@ -63,20 +72,21 @@ avifenc -q 85 --yuv 420 $AV "$base" "$DEST/c-av85.avif" >/dev/null 2>&1
 avifenc -q 63 --yuv 444 $AV "$base" "$DEST/c-av63-444.avif" >/dev/null 2>&1
 
 echo ""; echo "COLOR set (${W}x${H}, ${PX}px):"
-for f in c-png.png c-sips82.jpg c-jl60.jpg c-jl82.jpg c-jl95.jpg c-wp60.webp c-wp80.webp c-av40.avif c-av63.avif c-av85.avif c-av63-444.avif; do report "$DEST/$f"; done
+for f in c-png.png c-sips82.jpg c-zc62.jpg c-zc84.jpg c-zc95.jpg c-wp60.webp c-wp80.webp c-av40.avif c-av63.avif c-av85.avif c-av63-444.avif; do report "$DEST/$f"; done
 
-# ── resolution table: avif q63 4:2:0 vs jpegli q82 at 400 / 800 / 1200 ───────
-echo ""; echo "RESOLUTION table (avif q63 4:2:0  ·  jpegli q82):"
+# ── resolution table: avif q63 4:2:0 vs zenc q84 at 400 / 800 / 1200 ─────────
+echo ""; echo "RESOLUTION table (avif q63 4:2:0  ·  zenc q84):"
 for long in 400 800 1200; do
   case $long in 400) w=400 h=266;; 800) w=800 h=533;; 1200) w=1200 h=800;; esac
   b="$TMP/r$long.png"
   sips -s format png -Z "$long" "$src" --out "$TMP/rb.png" >/dev/null 2>&1
   sips -c "$h" "$w" "$TMP/rb.png" --out "$b" >/dev/null 2>&1
   avifenc -q 63 --yuv 420 $AV "$b" "$TMP/r$long.avif" >/dev/null 2>&1
-  "$CJPEGLI" "$b" "$TMP/r$long.jpg" -q 82 -p 2 >/dev/null 2>&1
+  av=$(sz "$TMP/r$long.avif")
+  "$ZENC" "$b" "$TMP/r$long.jpg" -q 84 >/dev/null 2>&1
   exiftool -all= -overwrite_original "$TMP/r$long.jpg" >/dev/null 2>&1 || true
-  av=$(sz "$TMP/r$long.avif"); jl=$(sz "$TMP/r$long.jpg")
+  jl=$(sz "$TMP/r$long.jpg")
   save=$(awk -v a="$av" -v j="$jl" 'BEGIN{printf "%.0f", (1-a/j)*100}')
-  printf "  %sx%s   AVIF %6s KB   jpegli %6s KB   AVIF saves %s%%\n" "$w" "$h" "$(kb "$av")" "$(kb "$jl")" "$save"
+  printf "  %sx%s   AVIF %6s KB   zenc %6s KB   AVIF saves %s%%\n" "$w" "$h" "$(kb "$av")" "$(kb "$jl")" "$save"
 done
 echo ""; echo "done — update figcaptions/prose/table in holding/garage/encoding.html to match."

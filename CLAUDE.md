@@ -37,8 +37,9 @@ npm run photos:check
 # install the histogram decoder dependency
 python3 -m pip install -r holding/scripts/requirements.txt
 
-# rebuild jpegli (Google's JPEG encoder, ~25% smaller than mozjpeg)
-./holding/scripts/build-jpegli.sh
+# build the JPEG thumbnail encoder (zenc = zenjpeg hybrid+scan). the pipeline
+# scripts auto-build it on first run; this is the explicit form.
+cargo build --release --manifest-path holding/scripts/zenc/Cargo.toml
 
 # bust caches via wrangler (RN_KV namespace ID hardcoded in scripts).
 # manifest busts need BOTH keys (value + freshness sentinel)
@@ -75,7 +76,7 @@ Single-page personal site at `aadhar.sh`. A Cloudflare Worker with static assets
 | `holding/sitemap.xml`, `robots.txt` | Standard SEO files. robots.txt explicitly allows AadharshBot. |
 | `holding/.well-known/http-message-signatures-directory` | JWKS for AadharshBot's Ed25519 public key (Web Bot Auth IETF draft). |
 | `holding/images/` + `holding/i/` | `images/` holds the photo DATA surfaces: `metadata.json` (EXIF index), `meta/<stem>.json` (per-photo EXIF plus four 64-bin histogram channels the tooltip fetches), `alt.json` (AI captions), `hashes.json` (stem to hash8 map). The pixel tiers (600px AVIF+JPG squares + 400px mobile AVIF) live in `i/` under content-hashed names, 474 files for 158 photos. |
-| `holding/scripts/` | Photo-pipeline + asset scripts (see below). Beyond the core pipeline (`add-photos.sh`, `extract-photo-metadata.sh`, `check-photo-pipeline.mjs`, `build-jpegli.sh`): `add-car-photo.sh` (one resto-mod reference photo into the dual AVIF+JPG pair the car-link tooltips expect, output `holding/cars/<stem>.{avif,jpg}`, no EXIF/R2); `gen-alt-text.py` (AI alt text for every grid photo via the cf-garage Workers-AI caption endpoint, writes `holding/images/alt.json` `{stem: alt}`, resumable); `gen-encoding-samples.sh` (regenerates the color sample set for the `/garage/encoding` study through every encoder, prints byte counts + bytes-per-pixel); `reencode-thumbnails.sh` (re-encodes all published grid thumbnails as pre-cropped center squares from the canonical source folder, two square tiers); `photo-histograms.py` (bakes the four 64-bin RGB/luminance channels into each per-photo meta file). |
+| `holding/scripts/` | Photo-pipeline + asset scripts (see below). Beyond the core pipeline (`add-photos.sh`, `extract-photo-metadata.sh`, `check-photo-pipeline.mjs`, `zenc/` the JPEG encoder crate): `add-car-photo.sh` (one resto-mod reference photo into the dual AVIF+JPG pair the car-link tooltips expect, output `holding/cars/<stem>.{avif,jpg}`, no EXIF/R2); `gen-alt-text.py` (AI alt text for every grid photo via the cf-garage Workers-AI caption endpoint, writes `holding/images/alt.json` `{stem: alt}`, resumable); `gen-encoding-samples.sh` (regenerates the color sample set for the `/garage/encoding` study through every encoder, prints byte counts + bytes-per-pixel); `reencode-thumbnails.sh` (re-encodes all published grid thumbnails as pre-cropped center squares from the canonical source folder, two square tiers); `photo-histograms.py` (bakes the four 64-bin RGB/luminance channels into each per-photo meta file). |
 
 ### The photo pipeline
 
@@ -86,8 +87,10 @@ SOOC original (in /Users/aadharsh/Downloads/to post (from ssd)/)
 [add-photos.sh] — resize, rotate, encode:
    |   1. sips: resize to 1200px + format-convert (handles HEIF/HIF)
    |   2. jpegtran -rotate N (lossless EXIF orientation, mozjpeg's tool)
-   |   3. cjpegli -q 82 -p 2 (Google's encoder, ~25% smaller than mozjpeg)
-   |   4. avifenc CQ 30 (or sips formatOptions 60 fallback) — primary
+   |   3. zenc -q 84 (zenjpeg hybrid trellis + progressive scan search; ~4%
+   |      under the retired cjpegli at equal quality, q84 ≈ old cjpegli q82)
+   |   4. avifenc -q 63 -d 10 (10-bit AVIF, ~6% smaller at equal quality than
+   |      8-bit; sips formatOptions 60 fallback) — primary
    |
    v
 holding/images/<stem>.{avif,jpg}  +  R2 aadhar-photos/<filename>
@@ -110,9 +113,11 @@ Two encoders + one transform tool, all built from source:
 
 - **mozjpeg** (`brew install mozjpeg`, keg-only at `/opt/homebrew/opt/mozjpeg/`)
   — provides `jpegtran` for lossless EXIF-orientation rotation.
-- **jpegli** (built from `github.com/google/jpegli`, installed at
-  `~/.local/bin/cjpegli`) — JPEG universal-fallback encoder.
-  See `holding/scripts/build-jpegli.sh` to rebuild.
+- **zenc** (`holding/scripts/zenc/`, a Rust crate wrapping
+  `github.com/imazen/zenjpeg`) — the JPEG universal-fallback encoder: hybrid
+  trellis + 64-candidate progressive scan search + sharp_yuv chroma, ~4% under the
+  retired cjpegli at equal quality. Builds with `cargo`; dependabot tracks the
+  zenjpeg pin. Replaced the from-source jpegli build (2026-07). See `holding/scripts/zenc/src/main.rs`.
 - **libavif** (`brew install libavif`, optional) — `avifenc` for the
   primary AVIF thumbnail. Falls back to `sips -s format avif` (macOS
   native, no extra dep) when avifenc isn't installed.

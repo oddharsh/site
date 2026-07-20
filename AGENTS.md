@@ -26,8 +26,9 @@ colors that read modern in source but render period-correct.
 # regenerate JUST the EXIF metadata (after photos are already uploaded)
 ./holding/scripts/extract-photo-metadata.sh "/Users/aadharsh/Downloads/to post (from ssd)"
 
-# rebuild jpegli (Google's JPEG encoder, ~25% smaller than mozjpeg)
-./holding/scripts/build-jpegli.sh
+# build the JPEG thumbnail encoder (zenc = zenjpeg hybrid+scan). the pipeline
+# scripts auto-build it on first run; this is the explicit form.
+cargo build --release --manifest-path holding/scripts/zenc/Cargo.toml
 
 # bust caches via wrangler (RN_KV namespace ID hardcoded in scripts)
 NS="3cb8a107c58e47dc9244e75b33401f36"
@@ -94,8 +95,10 @@ SOOC original (in /Users/aadharsh/Downloads/to post (from ssd)/)
 [add-photos.sh] — resize, rotate, encode:
    |   1. sips: resize to 1200px + format-convert (handles HEIF/HIF)
    |   2. jpegtran -rotate N (lossless EXIF orientation, mozjpeg's tool)
-   |   3. cjpegli -q 82 -p 2 (Google's encoder, ~25% smaller than mozjpeg)
-   |   4. avifenc CQ 30 (or sips formatOptions 60 fallback) — primary
+   |   3. zenc -q 84 (zenjpeg hybrid trellis + progressive scan search; ~4%
+   |      under the retired cjpegli at equal quality, q84 ≈ old cjpegli q82)
+   |   4. avifenc -q 63 -d 10 (10-bit AVIF, ~6% smaller at equal quality than
+   |      8-bit; sips formatOptions 60 fallback) — primary
    |
    v
 holding/images/<stem>.{avif,jpg}  +  R2 aadhar-photos/<filename>
@@ -119,9 +122,11 @@ Two encoders + one transform tool, all built from source:
 
 - **mozjpeg** (`brew install mozjpeg`, keg-only at `/opt/homebrew/opt/mozjpeg/`)
   — provides `jpegtran` for lossless EXIF-orientation rotation.
-- **jpegli** (built from `github.com/google/jpegli`, installed at
-  `~/.local/bin/cjpegli`) — JPEG universal-fallback encoder.
-  See `holding/scripts/build-jpegli.sh` to rebuild.
+- **zenc** (`holding/scripts/zenc/`, a Rust crate wrapping
+  `github.com/imazen/zenjpeg`) — the JPEG universal-fallback encoder: hybrid
+  trellis + 64-candidate progressive scan search + sharp_yuv chroma, ~4% under the
+  retired cjpegli at equal quality. Builds with `cargo`; dependabot tracks the
+  zenjpeg pin. Replaced the from-source jpegli build (2026-07). See `holding/scripts/zenc/src/main.rs`.
 - **libavif** (`brew install libavif`, optional) — `avifenc` for the
   primary AVIF thumbnail. Falls back to `sips -s format avif` (macOS
   native, no extra dep) when avifenc isn't installed.

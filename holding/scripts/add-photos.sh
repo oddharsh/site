@@ -62,10 +62,15 @@ if [ $# -eq 0 ]; then
   echo "usage: $0 <file-or-dir>..." >&2
   exit 1
 fi
-# jpegli is the primary JPEG encoder (github.com/google/jpegli → ~/.local/bin/);
-# ~25% smaller than mozjpeg at indistinguishable quality. mozjpeg's jpegtran does
-# the lossless EXIF-orientation step (structural, not an encode).
-CJPEGLI="$HOME/.local/bin/cjpegli"
+# zenc (holding/scripts/zenc) is the JPEG encoder: a zenjpeg wrapper running
+# hybrid trellis + progressive scan search, ~4% smaller than the retired cjpegli
+# at equal quality (see /garage/encoding). It builds from source with cargo, so
+# any machine with rust runs this pipeline; dependabot tracks the zenjpeg pin.
+# q84 is calibrated to match the old cjpegli q82 quality at fewer bytes. mozjpeg's
+# jpegtran still does the lossless EXIF-orientation step (structural, not an encode).
+ZENC_DIR="$(cd "$(dirname "$0")/zenc" && pwd)"
+ZENC="$ZENC_DIR/target/release/zenc"
+ZENC_Q=84
 MOZJPEG_DIR="/opt/homebrew/opt/mozjpeg/bin"
 MOZ_JTRAN="$MOZJPEG_DIR/jpegtran"
 
@@ -78,10 +83,10 @@ for cmd in sips wrangler exiftool; do
     exit 1
   fi
 done
-if [ ! -x "$CJPEGLI" ]; then
-  echo "error: cjpegli not found at $CJPEGLI" >&2
-  echo "  build with: $(dirname "$0")/build-jpegli.sh" >&2
-  exit 1
+if [ ! -x "$ZENC" ]; then
+  command -v cargo >/dev/null 2>&1 || { echo "error: cargo (rust) not found; install from https://rustup.rs" >&2; exit 1; }
+  echo "building zenc (zenjpeg encoder) — first run only…" >&2
+  cargo build --release --manifest-path "$ZENC_DIR/Cargo.toml" >&2 || { echo "error: zenc build failed" >&2; exit 1; }
 fi
 if [ ! -x "$MOZ_JTRAN" ]; then
   echo "error: jpegtran not installed at $MOZJPEG_DIR" >&2
@@ -136,7 +141,7 @@ avif_encode() {  # avif_encode <src.jpg> <out.avif>
     # metadata is dead weight (and avifenc copies source EXIF by default).
     local space; space=$(sips -g space "$1" 2>/dev/null | awk '/space:/{print $2}')
     local yuv; [ "$space" = "Gray" ] && yuv=400 || yuv=420
-    avifenc -q 63 --ignore-icc --ignore-exif --ignore-xmp --speed 4 --jobs 4 --yuv "$yuv" "$1" "$2" >/dev/null 2>&1
+    avifenc -q 63 -d 10 --ignore-icc --ignore-exif --ignore-xmp --speed 4 --jobs 4 --yuv "$yuv" "$1" "$2" >/dev/null 2>&1
   else
     sips -s format avif --setProperty formatOptions 60 "$1" --out "$2" >/dev/null 2>&1
   fi
@@ -173,9 +178,10 @@ while IFS= read -r f; do
   if [ "$W" -le "$H" ]; then tl=$(( (SQ*H + W-1)/W )); else tl=$(( (SQ*W + H-1)/H )); fi
   sips -Z "$tl" "$work" >/dev/null 2>&1
   if ! sips -c "$SQ" "$SQ" "$work" --out "$sq" >/dev/null 2>&1; then T_FAIL=$((T_FAIL+1)); printf "✗"; continue; fi
-  # 4. desktop square JPG (jpegli q82) + strip any residual metadata (sips can
-  #    leave a grayscale ICC on B&W frames; keep formats consistent / sRGB).
-  if ! "$CJPEGLI" "$sq" "$jpg" -q 82 -p 2 >/dev/null 2>&1; then T_FAIL=$((T_FAIL+1)); printf "✗"; continue; fi
+  # 4. desktop square JPG (zenc: zenjpeg hybrid+scan, q84 ≈ old jpegli q82) + strip
+  #    any residual metadata (sips can leave a grayscale ICC on B&W frames; keep
+  #    formats consistent / sRGB).
+  if ! "$ZENC" "$sq" "$jpg" -q "$ZENC_Q" >/dev/null 2>&1; then T_FAIL=$((T_FAIL+1)); printf "✗"; continue; fi
   exiftool -all= -overwrite_original "$jpg" >/dev/null 2>&1 || true
   # 5. desktop square AVIF
   if ! avif_encode "$sq" "$avif"; then T_FAIL=$((T_FAIL+1)); printf "✗"; continue; fi

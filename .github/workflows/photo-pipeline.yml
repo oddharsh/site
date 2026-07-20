@@ -64,7 +64,7 @@ jobs:
 
       - name: Install image toolchain
         run: |
-          brew install cmake exiftool ffmpeg jq libavif mozjpeg ninja webp
+          brew install exiftool ffmpeg jq libavif mozjpeg webp
           python -m venv "$RUNNER_TEMP/photo-venv"
           "$RUNNER_TEMP/photo-venv/bin/pip" install --requirement holding/scripts/requirements.txt
           echo "$RUNNER_TEMP/photo-venv/bin" >> "$GITHUB_PATH"
@@ -72,8 +72,10 @@ jobs:
       - name: Install repository dependencies
         run: npm ci --no-audit --no-fund
 
-      - name: Build the pinned jpegli tools
-        run: ./holding/scripts/build-jpegli.sh
+      - name: Build the JPEG encoder (zenc)
+        # zenjpeg hybrid + progressive scan search; Cargo.lock pins the graph,
+        # dependabot tracks the zenjpeg version. macOS runners ship cargo.
+        run: cargo build --release --manifest-path holding/scripts/zenc/Cargo.toml
 
       - name: Validate routine inputs
         run: |
@@ -177,6 +179,6 @@ jobs:
               '' \
               "Routine: $ROUTINE" \
               'Source: R2-backed public photo route' \
-              'Encoder: pinned jpegli revision from holding/scripts/build-jpegli.sh' \
+              'Encoder: zenjpeg via holding/scripts/zenc (Cargo-pinned, dependabot-tracked)' \
               '' \
               'The source files were downloaded to ephemeral runner storage only. Merge this PR through the normal CI and production-promotion path.')"
