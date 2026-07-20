@@ -533,8 +533,9 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
           One photo run through every thumbnail choice (AVIF / WebP / JPEG,
           jpegli vs the system encoder, chroma subsampling, quality, resolution),
           with real byte counts. Why the pipeline builds <code style="font-family: var(--font-mono);font-size:9pt">cjpegli</code>
-          from source (~47% smaller JPEGs at the same quality), why grayscale
-          drops to 4:0:0, and what the grid actually ships.
+          from source (~47% smaller JPEGs at the same quality), how zenjpeg's hybrid
+          trellis candidate compares at matched size, why grayscale drops to 4:0:0,
+          and what the grid actually ships.
         </div>
         <div class="meta">
           shape: encoder benchmark + the pipeline&apos;s reasoning &middot; added 2026-06-06

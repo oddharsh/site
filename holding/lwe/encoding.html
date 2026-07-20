@@ -124,7 +124,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
         <div class="bubble"><p>so on this photo jpegli is about half the baseline JPEG, and avif is smaller still. what's the catch with avif then?</p></div></div></div>
 
       <div class="msg bot"><div class="pic"></div><div><div class="who"><b>thumbnail encoding</b><time>23:04</time></div>
-        <div class="bubble"><p>Decode support and encode time. AVIF leans on the AV1 codec, which is slower to encode and only decodes on recent browsers. jpegli is fast and universal. That is why the site <b>builds jpegli from source</b> for the universal fallback and uses AVIF as the primary <code>&lt;picture&gt;</code> source: the browser reaches for AVIF, and anything that cannot decode it falls back to the jpegli .jpg.</p></div></div></div>
+        <div class="bubble"><p>Decode support and encode time. AVIF leans on the AV1 codec, which is slower to encode and only decodes on recent browsers. A tuned JPEG is fast and universal. That is why the site ships a hand-built JPEG encoder (now <b>zenjpeg</b>, jpegli's Rust descendant, a few percent smaller still) for the universal fallback and uses AVIF as the primary <code>&lt;picture&gt;</code> source: the browser reaches for AVIF, and anything that cannot decode it falls back to the .jpg.</p></div></div></div>
 
       <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>23:05</time></div>
         <div class="bubble"><p>and the grayscale shots? why are those so much smaller?</p></div></div></div>
@@ -201,7 +201,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
         <div class="bubble"><p>so what does the site actually ship per thumbnail?</p></div></div></div>
 
       <div class="msg bot"><div class="pic"></div><div><div class="who"><b>thumbnail encoding</b><time>23:06</time></div>
-        <div class="bubble"><p>Each thumbnail is dual-encoded: an <b>AVIF primary</b> and a <b>jpegli JPEG fallback</b> inside one <code>&lt;picture&gt;</code>, plus a 400px AVIF tier for phones. The browser loads the smallest format it can decode and never downloads the others.</p></div></div></div>
+        <div class="bubble"><p>Each thumbnail is dual-encoded: an <b>AVIF primary</b> and a <b>zenjpeg JPEG fallback</b> inside one <code>&lt;picture&gt;</code>, plus a 400px AVIF tier for phones. The browser loads the smallest format it can decode and never downloads the others.</p></div></div></div>
 
       <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>23:07</time></div>
         <div class="bubble"><p>got it. one photo, several encoders, and the grid hands each browser the cheapest thing it can read. thanks.</p><p>→ <a href="/garage/encoding" rel="external">the full garage encoding study</a> · <a href="/lwe">back to Learning With Errors</a></p></div></div></div>

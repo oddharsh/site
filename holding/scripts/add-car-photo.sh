@@ -21,16 +21,22 @@ SRC="${2:?usage: add-car-photo.sh <stem> <input-image>}"
 
 DEST="$(cd "$(dirname "$0")/../cars" && pwd)"
 SIPS=/usr/bin/sips
-CJPEGLI="$HOME/.local/bin/cjpegli"
+ZENC_DIR="$(cd "$(dirname "$0")/zenc" && pwd)"
+ZENC="$ZENC_DIR/target/release/zenc"
 AVIFENC=/opt/homebrew/bin/avifenc
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
+if [ ! -x "$ZENC" ]; then
+  command -v cargo >/dev/null 2>&1 || { echo "error: cargo (rust) not found; install from https://rustup.rs" >&2; exit 1; }
+  cargo build --release --manifest-path "$ZENC_DIR/Cargo.toml" >&2 || { echo "error: zenc build failed" >&2; exit 1; }
+fi
+
 # 1. downscale (preserve aspect), strip to a clean sRGB JPG
 "$SIPS" -Z 480 "$SRC" --out "$TMP/x.jpg" >/dev/null 2>&1
 
-# 2. JPG fallback via jpegli (~25% smaller than mozjpeg)
-"$CJPEGLI" "$TMP/x.jpg" "$DEST/$STEM.jpg" -q 82 -p 2 >/dev/null 2>&1
+# 2. JPG fallback via zenc (zenjpeg hybrid+scan, q84 ≈ old jpegli q82)
+"$ZENC" "$TMP/x.jpg" "$DEST/$STEM.jpg" -q 84 >/dev/null 2>&1
 
 # 3. AVIF primary. grayscale shots get yuv400; everything else yuv420.
 space=$("$SIPS" -g space "$TMP/x.jpg" 2>/dev/null | /usr/bin/awk '/space:/{print $2}')

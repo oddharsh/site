@@ -13,7 +13,14 @@
 set -euo pipefail
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 DEST="$( cd "$SCRIPT_DIR/.." && pwd )/garage/enc"
-CJPEGLI="$HOME/.local/bin/cjpegli"
+# zenc (zenjpeg hybrid trellis + progressive scan search) is the site's shipped
+# JPEG encoder; the grids show it as the JPEG point. Auto-built via cargo.
+ZENC_DIR="$(cd "$SCRIPT_DIR/zenc" && pwd)"
+ZENC="$ZENC_DIR/target/release/zenc"
+if [ ! -x "$ZENC" ]; then
+  command -v cargo >/dev/null 2>&1 || { echo "error: cargo (rust) not found; install from https://rustup.rs" >&2; exit 1; }
+  cargo build --release --manifest-path "$ZENC_DIR/Cargo.toml" >&2 || { echo "error: zenc build failed" >&2; exit 1; }
+fi
 TMP="/tmp/encgrid-$$"; mkdir -p "$TMP"; trap 'rm -rf "$TMP"' EXIT
 
 # one centered 96x96 detail crop, shared by all three grids
@@ -23,7 +30,7 @@ cp "$TMP/crop.png" "$DEST/z-crop.png"
 sz(){ stat -f%z "$1"; }
 
 # 1. format x quality
-for q in 90 50 22; do "$CJPEGLI" "$TMP/crop.png" "$DEST/z-jl$q.jpg" -q $q -p 2 >/dev/null 2>&1; done
+for q in 90 50 22; do "$ZENC" "$TMP/crop.png" "$DEST/z-zc$q.jpg" -q $q >/dev/null 2>&1; done
 for q in 90 50 22; do cwebp -q $q "$TMP/crop.png" -o "$DEST/z-wp$q.webp" >/dev/null 2>&1; done
 AV="--speed 6 --jobs 4 --ignore-icc --ignore-exif --ignore-xmp --yuv 420"
 for q in 78 42 18; do avifenc -q $q $AV "$TMP/crop.png" "$DEST/z-av$q.avif" >/dev/null 2>&1; done
@@ -33,10 +40,10 @@ cjpeg -quality 40 -sample 1x1 "$TMP/crop.ppm" > "$DEST/z-ch444.jpg" 2>/dev/null
 cjpeg -quality 40 -sample 2x1 "$TMP/crop.ppm" > "$DEST/z-ch422.jpg" 2>/dev/null
 cjpeg -quality 40 -sample 2x2 "$TMP/crop.ppm" > "$DEST/z-ch420.jpg" 2>/dev/null
 
-# 3. jpeg encoders at the SAME quality setting (q72): baseline vs mozjpeg vs jpegli
+# 3. jpeg encoders at the SAME quality setting (q72): baseline vs mozjpeg vs zenc
 sips -s format jpeg --setProperty formatOptions 72 "$TMP/crop.png" --out "$DEST/z-enc-baseline.jpg" >/dev/null 2>&1
 cjpeg -quality 72 "$TMP/crop.ppm" > "$DEST/z-enc-mozjpeg.jpg" 2>/dev/null
-"$CJPEGLI" "$TMP/crop.png" "$DEST/z-enc-jpegli.jpg" -q 72 -p 2 >/dev/null 2>&1
+"$ZENC" "$TMP/crop.png" "$DEST/z-enc-zenc.jpg" -q 72 >/dev/null 2>&1
 
 exiftool -all= -overwrite_original "$DEST"/z-*.jpg >/dev/null 2>&1 || true
 

@@ -113,7 +113,9 @@ Key facts (don't hardcode these elsewhere, they drift):
 - R2 bucket: `aadhar-photos` (SOOC originals + full-res JPGs)
 - Thumbnails are content-addressed at `/i/<stem>.<hash8>.<ext>` (hashes.json via `hash-thumbnails.sh`); `THUMB_VERSION` in `lib/const.js` survives only for the legacy-fallback URL shape.
 - The service worker RETIRED in v136 (2026-07-03): `holding/sw.js` is an unregister stub that must keep serving 200 for a year+. There is no `CACHE_VERSION`; the deploy-log number lives in D1 (`bump-version.sh` derives the next from `MAX(vnum)`).
-- Canonical photo source folder: `/Users/aadharsh/Downloads/to post (from ssd)/`. Privacy rule: nothing else from elsewhere on disk feeds the pipeline.
+- Canonical photo source: the aadhar-photos R2 bucket. Raw source files are
+  never committed to GitHub; the Actions workflow downloads only the requested
+  object keys into disposable runner storage.
 
 ---
 
@@ -189,41 +191,77 @@ this as the regression tripwire; keep it green on every future change.
 
 ---
 
-## One-time setup
+## Remote image pipeline
+
+The normal photo path is entirely remote:
+
+1. Upload the source object to the aadhar-photos R2 bucket.
+2. Run [Remote photo pipeline](https://github.com/oddharsh/site/actions/workflows/photo-pipeline.yml).
+3. Enter the exact R2 object key(s), or all for a complete thumbnail re-encode.
+4. Review and merge the generated artifact PR through the normal CI and
+   production-promotion path.
+5. After Workers Builds has deployed the merge, run
+   [Bust remote photo manifest](https://github.com/oddharsh/site/actions/workflows/bust-photo-manifest.yml).
+
+The photo-processing workflow needs no Cloudflare secret: it reads source
+objects through the public /images/full/<key> route and skips R2/KV writes.
+The cache-bust workflow needs repository secrets
+PHOTOS_CLOUDFLARE_API_TOKEN (Workers KV edit only) and
+CLOUDFLARE_ACCOUNT_ID.
+
+The GitHub-hosted macOS runner installs the Homebrew tools, builds the `zenc`
+encoder with cargo, runs the selected routine, and discards the source files when
+the job ends. The runner is the only execution host; nothing on the author's
+machine is part of the contract.
+
+Dependabot covers the encoder now: its cargo ecosystem tracks the zenjpeg pin in
+`holding/scripts/zenc`, opening a version-bump PR on the weekly cadence alongside
+the Actions, npm, and Pillow layers. This retired the old `Refresh image toolchain`
+workflow that hand-tracked the from-source jpegli commit. Only Homebrew formulas
+(mozjpeg, libavif) fall outside Dependabot and update on their own cadence.
+
+## Local fallback setup
 
 ```bash
-brew install exiftool jq mozjpeg libavif cmake ninja   # mozjpeg = jpegtran; libavif = avifenc (optional, sips falls back)
+brew install exiftool jq mozjpeg libavif              # mozjpeg = jpegtran; libavif = avifenc (optional, sips falls back)
 python3 -m pip install -r holding/scripts/requirements.txt  # Pillow for histogram baking
-./holding/scripts/build-jpegli.sh                      # builds cjpegli -> ~/.local/bin (Google's JPEG encoder)
+# the JPEG encoder (zenc) builds itself on first pipeline run; needs rust (rustup.rs)
+cargo build --release --manifest-path holding/scripts/zenc/Cargo.toml
 wrangler login                                         # Cloudflare auth (deploys + KV + R2 all use it)
 ```
-`sips` is macOS-native (no install). The pipeline is macOS-only as written.
+This is an emergency fallback only. sips is macOS-native (no install), and the
+normal path is the remote workflow above.
 
 ---
 
-## Add photos (the common one)
+## Add photos (local fallback only)
 
 ```bash
-# does everything: resize -> EXIF-rotate -> encode AVIF+JPG squares -> upload R2 ->
-# regenerate metadata.json (calls extract-photo-metadata.sh) -> bust the manifest KV keys.
+# The normal remote path is the Remote photo pipeline workflow above.
+# This local command remains for recovery when Actions or R2 ingress is unavailable.
 ./holding/scripts/add-photos.sh "/path/to/photo.HIF" [more files...]
 # then it prints the deploy line; run it:
 npm run deploy   # local fallback only; normal production is merge + CI promotion
 ```
 - Accepts JPG/PNG/HEIF/HIF. JPGs are uploaded as supplied; HEIF/HIF sources
-  remain local archives and also produce a full-resolution maximum-quality
+  remain archive objects and also produce a full-resolution maximum-quality
   q100 JPG export as the `/images/full/<stem>.jpg` click target.
 - Emits the 600px JPG fallback, 600px AVIF, and 400px mobile AVIF tiers;
   regenerates EXIF metadata; bakes the four 64-bin RGB/luminance histograms;
   and runs `npm run photos:check` before busting the manifest cache.
-- It busts `manifest:images`, `idx:images`, `idx:imagesfull` so the worker re-derives the grid from R2 on the next request.
+- The remote render-only path defers the `manifest:images` bust until the
+  separate post-deploy workflow; the local fallback performs its normal KV
+  writes.
 - A thumbnail can't go stale anymore: its URL is its bytes (`/i/<stem>.<hash8>`). If one looks wrong, re-run `hash-thumbnails.sh` and bust the manifest (value + `:fresh`); a changed file gets a new URL automatically.
 
 ### Regenerate just the EXIF metadata (photos already uploaded)
 ```bash
-./holding/scripts/extract-photo-metadata.sh "/Users/aadharsh/Downloads/to post (from ssd)"
+./holding/scripts/extract-photo-metadata.sh "/path/to/sooc-originals"
 ```
-Writes `holding/images/metadata.json` (keyed by stem) + per-photo `holding/images/meta/<stem>.json` (what the hover tooltip fetches). Every field is nullable; the tooltip skips nulls rather than guess. Then deploy.
+The normal remote equivalent is the `refresh-metadata` routine in the Remote
+photo pipeline workflow. Local `--merge` mode updates only a selected batch;
+the full directory mode rebuilds the metadata index. Every field is nullable;
+the tooltip skips nulls rather than guess.
 
 ### Re-encode ALL thumbnails (e.g. a new resolution/quality)
 ```bash
@@ -316,9 +354,10 @@ curl -s "https://aadhar.sh/images/manifest.json" | jq length          # photo co
 | `extract-photo-metadata.sh` | Read EXIF from the SOOC folder, emit `images/metadata.json` + per-photo `images/meta/<stem>.json`. Pulls the Fuji recipe fields too. Requires exiftool + jq. |
 | `reencode-thumbnails.sh` | Re-encode every published grid thumb from the source folder at a new resolution (pre-cropped squares, two tiers). Pair with a THUMB_VERSION bump. |
 | `add-car-photo.sh` | One resto-mod reference photo -> `cars/<stem>.{avif,jpg}` for the homepage car tooltips. No EXIF, no R2. |
-| `build-jpegli.sh` | Build Google's `cjpegli`/`djpegli` from source to `~/.local/bin`. Idempotent; re-run to update. ~90s first build. Requires cmake + ninja + clang. |
+| `zenc/` | The JPEG thumbnail encoder: a Rust crate wrapping zenjpeg (hybrid trellis + progressive scan search). `cargo build --release` (auto-built on first pipeline run). `zenc <in> <out> -q 84`. dependabot tracks the zenjpeg pin; replaced the from-source jpegli build in 2026-07. |
+| `download-remote-photos.sh` | Download selected R2 object keys into disposable runner storage for the GitHub Actions photo workflow; accepts `all` for the public manifest. |
 | `gen-alt-text.py` | AI alt text for grid photos via the Workers-AI caption endpoint -> `images/alt.json`. Resumable. |
-| `gen-encoding-samples.sh` | Regenerate the color sample set for `/garage/encoding` through every encoder; prints byte counts. |
+| `gen-encoding-samples.sh` | Regenerate the color sample set for `/garage/encoding` through every encoder; defaults to the committed `garage/enc/c-png.png` fixture and prints byte counts. |
 | `photo-histograms.py` | Bakes four 64-bin RGB/luminance histogram channels into each per-photo `images/meta/<stem>.json` from the shipped hashed JPG tier. Requires the pinned Pillow dependency in `holding/scripts/requirements.txt` and is called by both metadata extraction and `add-photos.sh`. |
 
 ---
