@@ -30,3 +30,6 @@ cf-garage/node_modules/
 
 # zenc (JPEG thumbnail encoder) build artifacts — Cargo.lock is committed, target/ is not
 holding/scripts/zenc/target/
+
+# verify-routes.mjs dev baselines against local servers (transient, per-port)
+verify-baseline.localhost_*.json
