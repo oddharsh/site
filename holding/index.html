@@ -876,11 +876,20 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
 
   <div class="content">
 
-    <h1>Aadharsh Pannirselvam</h1>
+    <!-- microformats2 h-card — the IndieWeb "who is this" card, twin to the
+         schema.org Person JSON-LD up top. representative h-card: u-url + u-uid
+         both point at this same page, so parsers (IndieWebify, Bridgy,
+         webmention senders) resolve the identity to aadhar.sh as canonical.
+         no u-photo on purpose — the site ships no headshot, and an mf2 h-card
+         is valid on name + url alone. cross-site verification is carried by
+         the rel="me" profile links (desktop shell + footer). -->
+    <div class="h-card">
+    <h1 class="p-name">Aadharsh Pannirselvam</h1>
     <p class="lede">
-      Researching and investing at <a href="https://archetype.fund" rel="external">Archetype</a>.
-      Building <a href="https://aadhar.sh">this site</a> in the meantime.
+      Researching and investing at <a class="p-org" href="https://archetype.fund" rel="external">Archetype</a>.
+      Building <a class="u-url u-uid" href="https://aadhar.sh/">this site</a> in the meantime.
     </p>
+    </div>
 
     <p class="under-construction">Under Construction</p>
 
@@ -1098,6 +1107,8 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
         <p class="links">
           <a href="https://twitter.com/oddhash" rel="external me">Twitter</a> &middot;
           <a href="https://instagram.com/aadharsh.hif" rel="external me">Instagram</a> &middot;
+          <a href="https://www.linkedin.com/in/aadharsh-pannirselvam/" rel="external me">LinkedIn</a> &middot;
+          <a href="https://github.com/oddharsh" rel="external me">GitHub</a> &middot;
           <a href="https://curius.app/aadharsh-pannirselvam" rel="external me">Curius</a> &middot;
           <a href="https://beliapp.com/users/aadharsh" rel="external me">Beli</a> &middot;
           <a href="https://open.spotify.com/user/aadharsh2010" rel="external me" title="my Spotify profile">Spotify</a> &middot;
