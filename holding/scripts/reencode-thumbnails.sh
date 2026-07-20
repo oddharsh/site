@@ -100,9 +100,13 @@ find_source() {
   return 1
 }
 
-STEMS=$(for j in "$DEST"/*.jpg; do basename "$j" .jpg; done)
+# Enumerate published stems from the content-hashed JPG tiles in holding/i/. The
+# old images/*.jpg location emptied out in the /i/ cutover, so globbing $DEST would
+# match nothing (and, with no nullglob, silently loop once on the literal glob).
+STEMS=$(for j in "$PROJECT_DIR/holding/i/"*.jpg; do b=$(basename "$j" .jpg); echo "${b%.*}"; done | sort -u)
 TOTAL=$(echo "$STEMS" | grep -c . || true)
-echo "re-encoding $TOTAL thumbnails as ${SQ}×${SQ} / ${SQ_SM}×${SQ_SM} center squares  (jpegli q82 + AVIF via $AVIF_ENCODER)"
+[ "$TOTAL" -gt 0 ] || { echo "error: no published thumbnails found in holding/i/ (expected the content-hashed JPG tiles)" >&2; exit 1; }
+echo "re-encoding $TOTAL thumbnails as ${SQ}×${SQ} / ${SQ_SM}×${SQ_SM} center squares  (zenc q${ZENC_Q} + AVIF via $AVIF_ENCODER)"
 echo "  source: $SRC"
 echo ""
 
@@ -134,7 +138,7 @@ while IFS= read -r stem; do
   if [ "$W" -le "$H" ]; then tl=$(( (SQ*H + W-1)/W )); else tl=$(( (SQ*W + H-1)/H )); fi
   sips -Z "$tl" "$work" >/dev/null 2>&1
   if ! sips -c "$SQ" "$SQ" "$work" --out "$sqjpg" >/dev/null 2>&1; then FAIL=$((FAIL+1)); printf "✗"; continue; fi
-  # 4. desktop square: jpegli q82 + AVIF (yuv400 for grayscale, else yuv420).
+  # 4. desktop square: zenc (zenjpeg hybrid+scan+sharp_yuv, q84) + AVIF (yuv400 for grayscale, else yuv420).
   #    metadata is stripped: the grid reads EXIF/histogram from metadata.json, so
   #    embedded EXIF/XMP/ICC in the thumbnail files is dead weight (~1.5KB/AVIF
   #    avg, up to ~5KB). avifenc gets --ignore-exif/--ignore-xmp (below); zenc
