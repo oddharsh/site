@@ -426,4 +426,68 @@ for (const [file, srcPath, marker] of SHELLS) {
   console.log(`worker CSS: minified ${litCount} /*min*/ literals across ${fileCount} modules, ~${(saved / 1024).toFixed(1)}KB raw saved`);
 }
 
+// 6) content-hash the two critical-path shell assets (nav.js + luna.css) into
+// immutable /a/<name>.<hash8>.<ext> URLs, then repoint every <script src>/<link
+// href> that loads them. /a/<name>.<hash8> names exact bytes (same content-
+// addressed contract as /i/ thumbnails, and edge-direct for the same reason: not
+// in run_worker_first), so it earns the year + immutable cache Lighthouse's
+// "efficient cache lifetimes" audit wants — which the short-cached /nav.js +
+// /luna.css can't. Those unhashed files stay as fallbacks (cal/coffee's absolute
+// refs + any stale HTML still resolve). The rewrite is ATTRIBUTE-SCOPED (src=/href=
+// only), so the garage pages' documentary /nav.js mentions (path:"/nav.js",
+// wrangler "!/nav.js") are untouched, and it skips the shell scripts themselves
+// (nav.js carries its own /luna.css fallback string, which must stay plain and must
+// not desync the hash we just computed). Owner-approved 2026-07-21 — the one place
+// the build is allowed past the six shells + luna.css (hard rule 3).
+{
+  const hash8 = (buf) => createHash("sha256").update(buf).digest("hex").slice(0, 8);
+  const esc = (s) => s.replace(/[/.]/g, "\\$&");
+  await mkdir(`${OUT}/holding/a`, { recursive: true });
+
+  const ASSETS = [
+    { attr: "src",  from: "/nav.js",   base: "nav",  ext: "js"  },
+    { attr: "href", from: "/luna.css", base: "luna", ext: "css" },
+  ];
+  const reps = [], hashedFor = {};
+  for (const a of ASSETS) {
+    const bytes = await readFile(`${OUT}/holding${a.from}`);   // exact served bytes (banner incl.)
+    const to = `/a/${a.base}.${hash8(bytes)}.${a.ext}`;
+    hashedFor[a.base] = to;
+    await writeFile(`${OUT}/holding${to}`, bytes);
+    // one regex for quoted "x" AND backslash-escaped \"x\" (writing.js builds its
+    // <head> as an escaped string); a second for minify-html's unquoted x.
+    reps.push({ re: new RegExp(`\\b${a.attr}=(\\\\?")${esc(a.from)}\\1`, "g"), sub: `${a.attr}=$1${to}$1` });
+    reps.push({ re: new RegExp(`\\b${a.attr}=${esc(a.from)}(?=[\\s>])`, "g"),  sub: `${a.attr}=${to}` });
+    console.log(`hashed asset: ${a.from} -> ${to} (${bytes.length} bytes)`);
+  }
+
+  // repoint: every HTML file + the two worker tag-emitters (chrome.js, writing.js)
+  // + the serendipity shell. NOT the top-level shell scripts / luna.css.
+  const targets = [`${OUT}/serendipity/serendipity.js`];
+  for (const rel of await readdir(`${OUT}/holding`, { recursive: true })) {
+    if (rel.endsWith(".html") || (rel.startsWith("_worker.js/") && rel.endsWith(".js"))) {
+      targets.push(`${OUT}/holding/${rel}`);
+    }
+  }
+  let refCount = 0, filesTouched = 0;
+  for (const path of targets) {
+    let s; try { s = await readFile(path, "utf8"); } catch { continue; }
+    let out = s, hits = 0;
+    for (const { re, sub } of reps) {
+      const m = out.match(re);
+      if (m) { hits += m.length; out = out.replace(re, sub); }
+    }
+    if (hits) { await writeFile(path, out); refCount += hits; filesTouched++; }
+  }
+
+  // tripwires: the rewrite must fire, and the served homepage must load the hashed
+  // URLs (a moved ref or renamed asset would silently drop the immutable win).
+  if (!refCount) throw new Error("hashed-asset rewrite matched zero references — did the nav.js/luna.css ref shape change?");
+  const idx = await readFile(`${OUT}/holding/index.html`, "utf8");
+  for (const [base, to] of Object.entries(hashedFor)) {
+    if (!idx.includes(to)) throw new Error(`index.html was not repointed to hashed ${base} (${to})`);
+  }
+  console.log(`hashed-asset refs: repointed ${refCount} references across ${filesTouched} files`);
+}
+
 console.log(`staged ${OUT}/ - deploy with: wrangler deploy (self-builds via build.command) or npm run deploy`);
