@@ -89,7 +89,9 @@
   // the request path only reads the KV snapshot this cron writes, around.js).
   // 17 8 * * 1 — the weekly /lens/census sweep into D1 (index.js switches on
   // event.cron). Odd minute so it doesn't collide with the :00/:30 crawl tick.
-  "triggers": { "crons": ["*/30 * * * *", "17 8 * * 1", "0 4 * * 7"] },
+  // (The old 0 4 * * 7 coffee-booking sweep is retired: each pending booking now
+  // carries its own BookingWorkflow expiry timer — see the workflows binding.)
+  "triggers": { "crons": ["*/30 * * * *", "17 8 * * 1"] },
   "kv_namespaces": [
     { "binding": "RN_KV", "id": "3cb8a107c58e47dc9244e75b33401f36" },
     { "binding": "BOOKINGS", "id": "37acb65118fe485583a90a94cb89365e" }
@@ -115,6 +117,12 @@
   },
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["Counter"] }
+  ],
+  // one durable expiry timer per pending coffee booking (cal/src/workflow.js,
+  // re-exported from _worker.js/index.js). Replaced the weekly cron sweep. Must
+  // match wrangler.dev.jsonc + cal/wrangler.test.toml.
+  "workflows": [
+    { "name": "cal-booking-expiry", "binding": "BOOKING_WORKFLOW", "class_name": "BookingWorkflow" }
   ],
   // Browser Run Quick Actions. The binding is authenticated by Workers, so
   // Lens no longer needs a Browser Rendering API token for snapshots.

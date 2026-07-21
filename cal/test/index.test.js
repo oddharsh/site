@@ -5,10 +5,10 @@
 // and Resend are both stubbed below. The KV binding + working-hours vars come
 // from wrangler.toml via cloudflare:test's `env`.
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { env as baseEnv, createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
+import { env as baseEnv, createExecutionContext, waitOnExecutionContext, introspectWorkflow } from "cloudflare:test";
 import worker from "../src/index.js";
 import { sign } from "../src/sign.js";
-import { getBooking, getRecent } from "../src/booking.js";
+import { getBooking, listHeld } from "../src/booking.js";
 
 const SECRET = "integration-signing-secret";
 const env = {
@@ -26,6 +26,7 @@ const EMPTY_ICS = [
 ].join("\r\n");
 
 let mailCalls;
+let bookingWf;
 beforeEach(async () => {
   // start every test with an empty booking pool. storage isn't reliably
   // per-test in this pool version, and stale pending bookings from a prior
@@ -34,6 +35,18 @@ beforeEach(async () => {
   // an unrelated reason. clearing makes each test's preconditions explicit.
   const { keys } = await env.BOOKINGS.list();
   await Promise.all(keys.map((k) => env.BOOKINGS.delete(k.name)));
+
+  // route_book spins up a real expiry-timer instance per booking. Left alone,
+  // each would block on a 7-day waitForEvent that the pool rejects at teardown
+  // (uncaught) and leaks state between tests. These integration tests exercise
+  // the REQUEST flow, not the timer, so we deliver the benign "host decided"
+  // event to every instance: the workflow completes immediately as a no-op
+  // (it only touches KV on the timeout path), matching what cancelExpiry does
+  // in production. The timer's own logic is covered in workflow.test.js.
+  bookingWf = await introspectWorkflow(env.BOOKING_WORKFLOW);
+  await bookingWf.modifyAll(async (m) => {
+    await m.mockEvent({ type: "host-decision", payload: { resolved: true } });
+  });
 
   mailCalls = [];
   vi.stubGlobal("fetch", vi.fn(async (url, init) => {
@@ -49,7 +62,10 @@ beforeEach(async () => {
     });
   }));
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(async () => {
+  vi.unstubAllGlobals();
+  await bookingWf.dispose();   // tear down any booking expiry timers this test created
+});
 
 // dispatch a request through the worker and flush ctx.waitUntil (the emails)
 async function dispatch(path, init = {}) {
@@ -76,6 +92,13 @@ const firstSlot = async () => {
   return slots[Math.floor(slots.length / 2)];
 };
 const statusOf = async (id) => (await getBooking(env, id))?.status;
+// the host's approval email carries the only handle to the booking id (t=<id>):
+// there's no pending-index to scan anymore, so tests read the id the same way
+// the host does — off the signed link in the mail we just captured.
+const lastBookingId = () => {
+  const link = mailCalls.at(-1).body.html.match(/href="([^"]*\/approve[^"]*)"/)[1];
+  return new URL(link).searchParams.get("t");
+};
 
 describe("routing", () => {
   it("GET / renders the booking page with browser revalidation", async () => {
@@ -124,7 +147,7 @@ describe("POST /book validation", () => {
     const slot = await firstSlot();
     const res = await postBook({ name: "Bot", email: "b@b.co", topic: "spam", start: slot.start, website: "http://x" });
     expect(res.status).toBe(200);
-    expect(await getRecent(env, "pending")).toHaveLength(0);
+    expect(await listHeld(env)).toHaveLength(0);   // no slot held
     expect(mailCalls).toHaveLength(0);
   });
 });
@@ -135,15 +158,14 @@ describe("book → approve / decline lifecycle", () => {
     const res = await postBook({ name: "Dana", email: "dana@x.dev", topic: "workers chat", start: slot.start });
     expect(res.status).toBe(200);
 
-    const pending = await getRecent(env, "pending");
-    expect(pending).toHaveLength(1);
-    expect(pending[0]).toMatchObject({ name: "Dana", status: "pending", start: slot.start });
-
-    // approval email to the host, carrying the signed approve link for THIS id
+    // approval email to the host, carrying the signed approve link
     expect(mailCalls).toHaveLength(1);
     expect(mailCalls[0].body.to).toEqual([env.HOST_EMAIL]);
-    const approveUrl = mailCalls[0].body.html.match(/href="([^"]*\/approve[^"]*)"/)[1];
-    expect(approveUrl).toContain(`t=${pending[0].id}`);
+    const id = lastBookingId();
+
+    // the booking record is pending and its slot is held
+    expect(await getBooking(env, id)).toMatchObject({ name: "Dana", status: "pending", start: slot.start });
+    expect(await listHeld(env)).toContainEqual({ start: slot.start, end: slot.end });
 
     // the slot is no longer offered while the booking is pending
     const after = (await (await dispatch("/slots")).json()).slots;
@@ -153,13 +175,13 @@ describe("book → approve / decline lifecycle", () => {
   it("approving via the emailed link confirms it and sends the .ics invite", async () => {
     const slot = await firstSlot();
     await postBook({ name: "Dana", email: "dana@x.dev", topic: "hi", start: slot.start });
-    const b = (await getRecent(env, "pending"))[0];
+    const id = lastBookingId();
     mailCalls.length = 0;
 
-    const sig = await sign(`${b.id}|approve`, SECRET);
-    const res = await dispatch(`/approve?t=${b.id}&sig=${sig}`);
+    const sig = await sign(`${id}|approve`, SECRET);
+    const res = await dispatch(`/approve?t=${id}&sig=${sig}`);
     expect(res.status).toBe(200);
-    expect(await statusOf(b.id)).toBe("confirmed");
+    expect(await statusOf(id)).toBe("confirmed");
     expect(mailCalls).toHaveLength(1);
     expect(mailCalls[0].body.attachments[0].filename).toBe("coffee.ics");
   });
@@ -167,13 +189,13 @@ describe("book → approve / decline lifecycle", () => {
   it("declining frees the slot again and sends a decline note (no invite)", async () => {
     const slot = await firstSlot();
     await postBook({ name: "Eve", email: "eve@x.dev", topic: "hi", start: slot.start });
-    const b = (await getRecent(env, "pending"))[0];
+    const id = lastBookingId();
     mailCalls.length = 0;
 
-    const sig = await sign(`${b.id}|decline`, SECRET);
-    const res = await dispatch(`/decline?t=${b.id}&sig=${sig}`);
+    const sig = await sign(`${id}|decline`, SECRET);
+    const res = await dispatch(`/decline?t=${id}&sig=${sig}`);
     expect(res.status).toBe(200);
-    expect(await statusOf(b.id)).toBe("declined");
+    expect(await statusOf(id)).toBe("declined");
     expect(mailCalls).toHaveLength(1);
     expect(mailCalls[0].body.attachments).toBeUndefined();
 
@@ -193,11 +215,11 @@ describe("book → approve / decline lifecycle", () => {
   it("re-approving an already-confirmed booking is idempotent — no duplicate invite", async () => {
     const slot = await firstSlot();
     await postBook({ name: "Sam", email: "sam@x.dev", topic: "hi", start: slot.start });
-    const b = (await getRecent(env, "pending"))[0];
-    const sig = await sign(`${b.id}|approve`, SECRET);
-    await dispatch(`/approve?t=${b.id}&sig=${sig}`);   // first approve → invite
+    const id = lastBookingId();
+    const sig = await sign(`${id}|approve`, SECRET);
+    await dispatch(`/approve?t=${id}&sig=${sig}`);   // first approve → invite
     mailCalls.length = 0;
-    const res = await dispatch(`/approve?t=${b.id}&sig=${sig}`); // second
+    const res = await dispatch(`/approve?t=${id}&sig=${sig}`); // second
     expect(res.status).toBe(200);
     expect(mailCalls).toHaveLength(0);
   });

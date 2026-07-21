@@ -298,7 +298,13 @@ Vitest runtime fixture, never a deployment config.
   making every slot look free — a double-booking risk).
 - Host clicks approve → confirmed → `.ics` invite to requester
 - Host clicks decline → polite auto-reply
-- Cron triggers a weekly sweep of un-acted pending bookings
+- Each pending booking gets its own **BookingWorkflow** (Cloudflare Workflows)
+  expiry timer instead of a weekly cron sweep: it `waitForEvent`s up to
+  `PENDING_TTL_DAYS` for the host's approve/decline (which fire a `host-decision`
+  event to end it early), and on timeout reclaims the slot if it's still pending.
+  The class is defined in `cal/src/workflow.js`, re-exported from the root
+  `_worker.js/index.js`, and bound as `BOOKING_WORKFLOW`. Slots are held via
+  per-slot `held:<start>:<end>` KV keys (no more race-prone shared index).
 
 ### Files
 
