@@ -93,6 +93,12 @@ export function pageHtml(spec) {
 <meta property="og:title" content="aadhar.sh${html(path)}: ${html(spec.title)}">
 <meta property="og:description" content="${html(spec.description)}">
 <meta property="og:url" content="https://aadhar.sh${html(path)}">
+<meta name="twitter:card" content="summary_large_image">
+<meta property="og:image" content="https://aadhar.sh/og/garage-${spec.id}.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The aadhar.sh${html(path)} interactive demo, screenshotted">
+<meta name="twitter:image" content="https://aadhar.sh/og/garage-${spec.id}.png">
 <style>${BASE_CSS}${pageCss}</style>
 <link rel="stylesheet" href="/luna.css">
 </head>

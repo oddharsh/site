@@ -13,6 +13,7 @@
     "build": "node build.mjs",
     "dev": "wrangler dev -c wrangler.dev.jsonc",
     "deploy": "wrangler deploy",
+    "og-cards": "node holding/scripts/gen-og-cards.mjs",
     "photos": "bash holding/scripts/add-photos.sh",
     "photos:check": "node holding/scripts/check-photo-pipeline.mjs",
     "perf-budget": "node perf-budget.mjs",
@@ -24,6 +25,7 @@
     "@minify-html/node": "0.18.1",
     "lightningcss": "1.33.0",
     "oxc-minify": "0.140.0",
+    "playwright-core": "^1.61.1",
     "wrangler": "4.112.0"
   }
 }

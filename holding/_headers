@@ -46,6 +46,15 @@
 /cars/*
   Cache-Control: public, max-age=31536000, immutable
 
+# OG / Twitter card images (holding/og/<section>-<name>.png), rendered from each
+# garage + lwe demo by scripts/gen-og-cards.mjs. The URL is stable and the bytes
+# change only when a demo's look changes (rare), so NOT immutable — a 30-day
+# cache clears Lighthouse's "efficient cache lifetimes" bar while a regen + deploy
+# purges the edge so a refreshed card lands. Social crawlers cache on their own
+# side anyway; re-scrape on the platform if a card must update instantly.
+/og/*
+  Cache-Control: public, max-age=2592000, s-maxage=2592000
+
 # a mutable one-off document, replaced in place (the URL is the product; the
 # bytes change under it). browser revalidates every time (cheap edge 304), the
 # edge holds a day, a deploy purges it — same staleness model as the garage

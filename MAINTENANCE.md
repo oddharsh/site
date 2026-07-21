@@ -99,6 +99,7 @@ node lwe-pipeline/generate.mjs wire
 node garage-pipeline/generate.mjs page <id>
 node garage-pipeline/generate.mjs wire
 npm run pages:check
+npm run og-cards   # bake the page's OG/Twitter card once it's live (see below)
 ```
 
 The shared contract lives in
@@ -290,6 +291,35 @@ Prints byte counts + bytes-per-pixel so the figcaptions on `/garage/encoding` ca
 
 ---
 
+## Regenerate the OG / Twitter cards
+
+Every garage + lwe page unfurls as a 1200x630 card showing its live demo floated
+on the Bliss desktop (`holding/og/<section>-<name>.png`), wired via
+`og:image`/`twitter:card` in each page's `<head>`. Regenerate when a demo's look
+changes or a new page lands:
+
+```bash
+npm run og-cards                    # captures LIVE aadhar.sh (data-driven demos render populated)
+node holding/scripts/inject-og-meta.mjs   # add the meta to any page missing it (idempotent)
+# then deploy — a deploy purges the edge so the refreshed card lands.
+```
+
+- `gen-og-cards.mjs` drives the installed Chrome via `playwright-core` (a
+  scripts-only devDep). Hero selector per page lives in the `HERO{}` map at the
+  top; a page with no entry (or an essayistic one) falls back to the top of its
+  XP window, which still reads well. `garage-vt-b`/`garage-vt-check` are excluded
+  (diagnostic harnesses, not shareable).
+- Captures **production** by default so the photo grid, live counters, and the
+  routing prober come back full, not empty. Point `OG_BASE=http://localhost:8787`
+  at a local server to preview a not-yet-deployed page (it self-boots one).
+- A card that comes out weak (its hero grabbed prose): add/adjust the page's
+  `HERO{}` selector, optionally a `preset` click to populate the demo, re-run.
+- The LWE + Garage generators emit the same `og:image` block, so a future
+  pipeline-authored page gets a card automatically (its PNG still needs one
+  `npm run og-cards` run before the URL resolves).
+
+---
+
 ## Change the now-playing playlist
 
 The homepage scrapes a Spotify playlist; `playlist-id` in KV points at it. To swap it
@@ -359,6 +389,8 @@ curl -s "https://aadhar.sh/images/manifest.json" | jq length          # photo co
 | `gen-alt-text.py` | AI alt text for grid photos via the Workers-AI caption endpoint -> `images/alt.json`. Resumable. |
 | `gen-encoding-samples.sh` | Regenerate the color sample set for `/garage/encoding` through every encoder; defaults to the committed `garage/enc/c-png.png` fixture and prints byte counts. |
 | `photo-histograms.py` | Bakes four 64-bin RGB/luminance histogram channels into each per-photo `images/meta/<stem>.json` from the shipped hashed JPG tier. Requires the pinned Pillow dependency in `holding/scripts/requirements.txt` and is called by both metadata extraction and `add-photos.sh`. |
+| `gen-og-cards.mjs` | Render the 1200x630 OG/Twitter card per garage + lwe page (live demo on the Bliss desktop) into `holding/og/`. `npm run og-cards`. Drives the installed Chrome via `playwright-core`; captures production so data-driven demos render full. Hero selectors + presets in the `HERO{}` map. See "Regenerate the OG / Twitter cards". |
+| `inject-og-meta.mjs` | Idempotently add `og:image`/`twitter:card` meta to any garage + lwe page missing it, pointing at `/og/<section>-<name>.png`. `--check` reports gaps without writing. |
 
 ---
 
