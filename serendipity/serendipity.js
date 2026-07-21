@@ -506,10 +506,10 @@ async function renderContribute(d, path, uid, msg) {
     ${banner(msg)}
     ${own ? `<div class="connected">&#10003; You&apos;re contributing as <b>${esc(own.label || "unnamed")}</b> &mdash; ${cnt} event${cnt == 1 ? "" : "s"} from your feed are in the pool. Re-paste below to refresh your Luma session.</div>` : ""}
 
-    <div class="grp">Add an event by link</div>
-    <p class="note" style="margin:0 0 8px">Paste public Luma event links (<code>lu.ma/&hellip;</code> or <code>luma.com/&hellip;</code>) &mdash; one per line. No login needed; we pull each event&apos;s details into the pool. The full guest list fills in once someone going syncs their feed.</p>
+    <div class="grp">Add events by link</div>
+    <p class="note" style="margin:0 0 8px">Paste public Luma links (<code>lu.ma/&hellip;</code> or <code>luma.com/&hellip;</code>) &mdash; one per line. No login needed. A single <b>event</b> comes in whole; a <b>calendar</b> (e.g. <code>luma.com/newinterfaces</code>) or a <b>discovery page</b> (<code>luma.com/crypto</code>, <code>/ai</code>, <code>/nyc</code>) expands into its events, up to ${LIST_CAP} per link. Added events show as &ldquo;browsed&rdquo; until someone going syncs their feed and fills the guest list.</p>
     <form method="POST" action="${PREFIX}/add-event">
-      <textarea class="xp-field" name="links" rows="3" placeholder="https://lu.ma/your-event&#10;https://luma.com/another-one" autocomplete="off" spellcheck="false"></textarea>
+      <textarea class="xp-field" name="links" rows="3" placeholder="https://lu.ma/your-event&#10;https://luma.com/crypto&#10;https://luma.com/newinterfaces" autocomplete="off" spellcheck="false"></textarea>
       <button class="xp-button" type="submit">Add to the pool</button>
     </form>
 
@@ -804,6 +804,104 @@ async function fetchEventByLink(input) {
   } };
 }
 
+// ── calendar / discovery expansion ──────────────────────────────────────────
+// A pasted Luma URL can name a whole CALENDAR (lu.ma/<slug> → cal-XXX) or a
+// discovery CATEGORY / PLACE page (luma.com/crypto, luma.com/nyc). Both expand
+// to many events. We classify by the page's __NEXT_DATA__ `kind` (one
+// authoritative marker in initialData) and route to the matching list endpoint,
+// hard-capped so a 493-event category can't flood the pool. Expanded events land
+// as user_status 'unknown' — the same "in the pool, nobody's confirmed going"
+// tier link-adds use (rendered "browsed / not RSVP'd", sorted below real RSVPs).
+const LIST_CAP = 30;   // most events pulled from ONE calendar/category/place URL
+const POOL_CAP = 60;   // most events pulled across a whole submission
+// whole-globe viewport: /discover/get-paginated-events is map-region driven, so
+// a world box asks for every event in the category/place, ranked by Luma.
+const DISCOVER_BOX = "north=85&south=-85&east=179&west=-179";
+
+// classify a pasted Luma URL with ONE page fetch. Returns {kind,id,slug} where
+// kind is 'event'|'calendar'|'category'|'place' (id is the evt-/cal- id; slug
+// drives discovery), or null when it isn't a recognizable Luma surface. lu.ma
+// 301s to luma.com, whose HTML carries the __NEXT_DATA__ we read.
+async function resolveLumaSource(input) {
+  const s = (input || "").trim();
+  if (!s) return null;
+  const evt = s.match(/evt-[A-Za-z0-9]{6,}/);
+  if (evt) return { kind: "event", id: evt[0], slug: null };
+  let slug = s;
+  const um = s.match(/(?:lu\.ma|luma\.com)\/([A-Za-z0-9][A-Za-z0-9._-]*)/i);
+  if (um) slug = um[1];
+  slug = slug.replace(/[?#].*$/, "");
+  if (!/^[A-Za-z0-9._-]+$/.test(slug)) return null;
+  let text;
+  try {
+    const r = await fetch(`https://luma.com/${encodeURIComponent(slug)}`, {
+      headers: { "user-agent": "AadharshBot/1.0 (+https://aadhar.sh/bot)" }, redirect: "follow",
+    });
+    if (!r.ok) return null;
+    text = await r.text();
+  } catch { return null; }
+  // pageProps.initialData.kind is emitted once and names the page type. Places
+  // use the hyphenated "discover-place"; categories are "category".
+  const km = text.match(/"kind":"(event|calendar|category|discover-place)"/);
+  const kind = km ? km[1] : null;
+  if (kind === "calendar") {
+    const m = text.match(/"kind":"calendar"[\s\S]{0,240}?"api_id":"(cal-[A-Za-z0-9]+)"/);
+    return m ? { kind, id: m[1], slug } : null;
+  }
+  if (kind === "category" || kind === "discover-place") return { kind, id: null, slug };
+  // event page (or an older cache with no kind marker): pull the evt- id.
+  const m = text.match(/evt-[A-Za-z0-9]{6,}/);
+  return m ? { kind: "event", id: m[0], slug } : null;
+}
+
+// paginate a public user calendar's events via /calendar/get-items — no auth.
+// Entry shape == parseEvents' input, so hosts + featured guests carry through.
+// Upcoming events lead; once they run out we backfill with past ones up to `cap`,
+// so a plain calendar link still lands events even for a past-only series (e.g.
+// newinterfaces, whose run is over) instead of returning empty. Stops at `cap`
+// (subrequest budget).
+async function fetchCalendarEvents(calId, cap) {
+  const all = [];
+  for (const period of ["future", "past"]) {
+    if (all.length >= cap) break;
+    let cursor = null;
+    while (all.length < cap) {
+      const p = new URLSearchParams({ calendar_api_id: calId, period, pagination_limit: "50" });
+      if (cursor) p.set("pagination_cursor", cursor);
+      let data;
+      try { data = await (await lumaFetch(`${LUMA_API}/calendar/get-items?${p}`, "")).json(); }
+      catch { break; }  // rate-limit / transient error: keep whatever we have
+      all.push(...parseEvents(data, null));
+      if (!data.has_more || !data.next_cursor) break;
+      cursor = data.next_cursor;
+    }
+  }
+  return all.slice(0, cap);
+}
+
+// paginate a discovery category/place's events globally via
+// /discover/get-paginated-events?slug=…&<worldbox>. Same entry shape as the
+// calendar feed. Discovery is upcoming-oriented; drop anything already past so
+// the pool isn't seeded with stale events.
+async function fetchDiscoverEvents(slug, cap) {
+  const cutoff = Date.now() - 12 * 3600 * 1000;
+  const all = []; let cursor = null, pages = 0;
+  while (all.length < cap && pages < 3) {
+    pages++;
+    const p = new URLSearchParams({ slug, pagination_limit: "50" });
+    if (cursor) p.set("pagination_cursor", cursor);
+    let data;
+    try { data = await (await lumaFetch(`${LUMA_API}/discover/get-paginated-events?${p}&${DISCOVER_BOX}`, "")).json(); }
+    catch { break; }
+    for (const e of parseEvents(data, null)) {
+      if (!e.start_at || Date.parse(e.start_at) >= cutoff) all.push(e);
+    }
+    if (!data.has_more || !data.next_cursor) break;
+    cursor = data.next_cursor;
+  }
+  return all.slice(0, cap);
+}
+
 // single-statement attendee upsert (batch-friendly — no read-then-write).
 // preserves email/first_seen_at/times_seen on conflict; refreshes profile fields.
 const UPSERT_ATTENDEE = `INSERT INTO attendees (id,name,email,avatar_url,bio_short,website,twitter_handle,linkedin_handle,instagram_handle,tiktok_handle,youtube_handle,first_seen_at,times_seen)
@@ -849,30 +947,53 @@ async function syncEvents(d, userKey, cookiesJson) {
   } catch (err) { return { error: err instanceof Error ? err.message : String(err) }; }
 }
 
-// add events to the pool from pasted Luma links (no cookies needed). caps at 8
-// links/submission so 2 subrequests each (resolve + fetch) stays under the limit.
-// records the event + its hosts + a contribution by this uid. Returns {added,names,failed}.
+// add events to the pool from pasted Luma links (no cookies needed). Each URL is
+// classified: a single event pulls that event; a calendar / discovery category /
+// place URL expands into its events, capped (LIST_CAP per URL, POOL_CAP total) so
+// a 493-event category can't flood the pool. caps at 8 URLs/submission to stay
+// under the per-invocation subrequest limit. records each event + its hosts +
+// featured guests + a contribution by this uid. Returns {added,names,sources,failed}.
 async function addEventsByLink(d, uid, raw) {
   const urls = (raw || "").split(/[\s,]+/).map((s) => s.trim()).filter(Boolean).slice(0, 8);
-  const S = [], names = [], failed = [];
+  const S = [], names = [], sources = [], failed = [];
+  let total = 0;
   for (const u of urls) {
-    let r;
-    try { r = await fetchEventByLink(u); } catch (e) { r = { error: String(e) }; }
-    if (!r || r.error || !r.event) { failed.push(u.replace(/^https?:\/\//, "").slice(0, 32)); continue; }
-    const e = r.event;
-    // link-added events are user_status 'unknown' (the submitter isn't necessarily
-    // going); a later cookie-sync by an attendee upgrades it + fills the guest list.
-    S.push(d.stmt(UPSERT_EVENT, e.id, e.name, e.description, e.start_at, e.end_at, e.location, e.cover_url, e.url, e.geo_latitude, e.geo_longitude, null, "unknown"));
-    S.push(d.stmt(`INSERT INTO event_contributions (event_id,user_key,contributed_at) VALUES (?,?,datetime('now')) ON CONFLICT(event_id,user_key) DO UPDATE SET contributed_at=datetime('now')`, e.id, uid));
-    for (const h of e.hosts) {
-      if (!h.id) continue;
-      S.push(attendeeStmt(d, h));
-      S.push(d.stmt(`INSERT INTO event_attendees (event_id,attendee_id,is_host) VALUES (?,?,1) ON CONFLICT(event_id,attendee_id) DO UPDATE SET is_host=1`, e.id, h.id));
+    if (total >= POOL_CAP) break;
+    let src;
+    try { src = await resolveLumaSource(u); } catch { src = null; }
+    if (!src) { failed.push(u.replace(/^https?:\/\//, "").slice(0, 32)); continue; }
+    const room = POOL_CAP - total;
+    let events = [];
+    try {
+      // pass the resolved evt- id (not the URL) so fetchEventByLink skips a re-scrape.
+      if (src.kind === "event") { const r = await fetchEventByLink(src.id); if (r && r.event) events = [r.event]; }
+      else if (src.kind === "calendar") events = await fetchCalendarEvents(src.id, Math.min(LIST_CAP, room));
+      else events = await fetchDiscoverEvents(src.slug, Math.min(LIST_CAP, room));  // category | place
+    } catch { events = []; }
+    if (!events.length) { failed.push((src.slug || u.replace(/^https?:\/\//, "")).slice(0, 32)); continue; }
+    for (const e of events) {
+      // pooled-by-link events are user_status 'unknown' (the submitter isn't
+      // necessarily going); a later cookie-sync by an attendee upgrades it + fills
+      // the guest list. Descriptions backfill via /sync-descriptions.
+      S.push(d.stmt(UPSERT_EVENT, e.id, e.name, e.description || null, e.start_at, e.end_at, e.location, e.cover_url, e.url, e.geo_latitude, e.geo_longitude, null, "unknown"));
+      S.push(d.stmt(`INSERT INTO event_contributions (event_id,user_key,contributed_at) VALUES (?,?,datetime('now')) ON CONFLICT(event_id,user_key) DO UPDATE SET contributed_at=datetime('now')`, e.id, uid));
+      for (const h of (e.hosts || [])) {
+        if (!h.id) continue;
+        S.push(attendeeStmt(d, h));
+        S.push(d.stmt(`INSERT INTO event_attendees (event_id,attendee_id,is_host) VALUES (?,?,1) ON CONFLICT(event_id,attendee_id) DO UPDATE SET is_host=1`, e.id, h.id));
+      }
+      for (const g of (e.preview_guests || [])) {
+        if (!g.id) continue;
+        S.push(attendeeStmt(d, g));
+        S.push(d.stmt(`INSERT INTO event_attendees (event_id,attendee_id) VALUES (?,?) ON CONFLICT(event_id,attendee_id) DO NOTHING`, e.id, g.id));
+      }
     }
-    names.push(e.name || e.id);
+    total += events.length;
+    if (src.kind === "event") names.push(events[0].name || events[0].id);
+    else sources.push(`${src.slug} (${events.length})`);
   }
   if (S.length) await d.batch(S);
-  return { added: names.length, names, failed };
+  return { added: total, names, sources, failed };
 }
 
 // POST /serendipity/add-event — public: add events to the pool by Luma link.
@@ -881,11 +1002,13 @@ async function handleAddEvent(request, env, d, uid) {
   let form;
   try { form = await request.formData(); } catch { return back("Couldn't read the form"); }
   const raw = (form.get("links") || "").toString();
-  if (!raw.trim()) return back("Paste at least one Luma event link");
+  if (!raw.trim()) return back("Paste at least one Luma event, calendar, or discovery-page link");
   let r;
   try { r = await addEventsByLink(d, uid, raw); } catch (e) { return back("Add failed: " + (e instanceof Error ? e.message : String(e))); }
-  if (!r.added) return back("Couldn't resolve those — make sure they're public Luma event links");
-  let msg = `Added ${r.added} event${r.added === 1 ? "" : "s"} to the pool` + (r.names[0] ? `: ${r.names.slice(0, 2).join(", ")}${r.names.length > 2 ? " …" : ""}` : "");
+  if (!r.added) return back("Couldn't resolve those — make sure they're public Luma event, calendar, or discovery-page links");
+  let msg = `Added ${r.added} event${r.added === 1 ? "" : "s"} to the pool`;
+  const bits = [...r.names.slice(0, 2), ...r.sources.slice(0, 2)];
+  if (bits.length) msg += `: ${bits.join(", ")}${(r.names.length + r.sources.length) > bits.length ? " …" : ""}`;
   if (r.failed.length) msg += ` · ${r.failed.length} couldn't be resolved`;
   return back(msg, true);
 }
