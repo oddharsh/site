@@ -1773,20 +1773,37 @@ ctx.drawElementImage(el, 0, 0);            // &lt;- the new primitive (el has la
         // prefer the new name, fall back to the old for pre-OT builds.
         var draw = ctx && (typeof ctx.drawElementImage === "function" ? "drawElementImage"
                  : typeof ctx.drawElement === "function" ? "drawElement" : null);
-        if (ctx && draw && el) {
-          try {
-            ctx.clearRect(0, 0, c.width, c.height);
-            ctx.save(); ctx.translate(20, 14);
-            ctx.transform(1, 0.06, -0.10, 1, 0, 0);   // slight skew
-            ctx[draw](el, 0, 0); ctx.restore(); return;
-          } catch (e) {}
+        // The demo draws in a fixed 320x120 design space, but the canvas has CSS
+        // width:100% (no max-width), so it stretches wider than 320 and the fixed
+        // bitmap gets upscaled and reads soft. Size the backing store to the DISPLAYED
+        // width x devicePixelRatio (capped 2x) and scale the context so the 320x120
+        // drawing maps onto it at full device resolution.
+        var LW = 320, LH = 120;
+        function fit() {
+          var dpr = Math.min(window.devicePixelRatio || 1, 2), cssW = c.clientWidth || LW;
+          var scale = cssW / LW * dpr;
+          c.width = Math.round(LW * scale); c.height = Math.round(LH * scale);
+          ctx.setTransform(scale, 0, 0, scale, 0, 0);
         }
-        // unavailable here -> honest placeholder, not a confusing blank box
-        ctx.fillStyle = "#f3f4f8"; ctx.fillRect(0, 0, c.width, c.height);
-        ctx.fillStyle = "#7a808c"; ctx.textAlign = "center";
-        ctx.font = "11px Tahoma, sans-serif";
-        ctx.fillText("ctx.drawElementImage() unavailable", c.width / 2, c.height / 2 - 6);
-        ctx.fillText("enable #canvas-draw-element", c.width / 2, c.height / 2 + 12);
+        function render() {
+          fit();
+          if (ctx && draw && el) {
+            try {
+              ctx.clearRect(0, 0, LW, LH);
+              ctx.save(); ctx.translate(20, 14);
+              ctx.transform(1, 0.06, -0.10, 1, 0, 0);   // slight skew
+              ctx[draw](el, 0, 0); ctx.restore(); return;
+            } catch (e) {}
+          }
+          // unavailable here -> honest placeholder, not a confusing blank box
+          ctx.fillStyle = "#f3f4f8"; ctx.fillRect(0, 0, LW, LH);
+          ctx.fillStyle = "#7a808c"; ctx.textAlign = "center";
+          ctx.font = "11px Tahoma, sans-serif";
+          ctx.fillText("ctx.drawElementImage() unavailable", LW / 2, LH / 2 - 6);
+          ctx.fillText("enable #canvas-draw-element", LW / 2, LH / 2 + 12);
+        }
+        render();
+        window.addEventListener("resize", render);
       })();
       </script>
     </section>

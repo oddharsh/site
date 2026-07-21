@@ -162,6 +162,11 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
   var btn = document.getElementById('knotToggle'), verdict = document.getElementById('knotVerdict');
   var pull = document.getElementById('knotPull');
   var W = c.width, H = c.height, topY = H * 0.36, botY = H * 0.64;
+  // Retina-crisp: scale the backing store by devicePixelRatio (capped 2x, matching
+  // pretext.html) and the context to match, so all drawing stays in logical W/H.
+  // Without it the fixed 560x200 bitmap is upscaled by CSS and reads soft.
+  var DPR = Math.min(window.devicePixelRatio || 1, 2);
+  c.width = W * DPR; c.height = H * DPR; ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   var square = true, t = 0, anim = 0; // t: pull progress 0..1
   var RED = '#b03a4a', BLUE = '#2f6fd0';
   function ss(a, b, u) { u = u < 0 ? 0 : u > 1 ? 1 : u; u = u * u * (3 - 2 * u); return a + (b - a) * u; }
