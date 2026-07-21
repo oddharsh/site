@@ -14,6 +14,7 @@ import { homepageHeadResponse, serveHomepageWithPrerenderedTracks, serveMarkdown
 import { countCrawlerHit, handleLedger, handleLedgerJson } from "./ledger.js";
 import { handleLens, handleLensBrowser, handleLensFetch, handleLensShot } from "./lens.js";
 import { serveAssetWith404Clamp, serveFreshAsset } from "./lib/assets.js";
+import { BOT_UA } from "./lib/botauth.js";
 import { CANONICAL_HOST } from "./lib/const.js";
 import { wantsMarkdown } from "./lib/http.js";
 import { withSecurityHeaders } from "./lib/security.js";
@@ -272,17 +273,25 @@ function routeCoffee(request, env, ctx) {
   return calWorker.fetch(request, env, ctx);
 }
 
-function routeCalHost(request, env, ctx, url) {
+async function routeCalHost(request, env, ctx, url) {
   const path = url.pathname.replace(/\/+$/, "") || "/";
   if (path === "/") return noStoreRedirect("https://aadhar.sh/coffee");
 
   if (env.WORK_CALENDAR_SLUG && path === `/${env.WORK_CALENDAR_SLUG}`) {
     try {
-      const target = new URL(env.WORK_CALENDAR_URL || "");
-      if (target.protocol !== "https:" || target.hostname !== "calendar.app.google") {
+      // The stored secret is always the calendar.app.google SHORT link — the
+      // stable, trusted seed. But that short link costs the visitor an extra
+      // browser round trip: it 30x-bounces to the full calendar.google.com
+      // appointment URL. We resolve that bounce server-side once, cache the
+      // final URL in KV, and redirect straight to it — collapsing two
+      // client-visible navigations into one. If resolution fails for any
+      // reason, we fall back to the short link, so behavior never regresses.
+      const seed = new URL(env.WORK_CALENDAR_URL || "");
+      if (seed.protocol !== "https:" || seed.hostname !== "calendar.app.google") {
         throw new Error("unexpected work-calendar target");
       }
-      return noStoreRedirect(target.href);
+      const resolved = await resolveWorkCalendar(seed.href, env, ctx);
+      return noStoreRedirect(resolved || seed.href);
     } catch {
       // Fail closed: an absent or malformed target must not become an open
       // redirect, and should not reveal whether the slug was correct.
@@ -304,6 +313,74 @@ function noStoreRedirect(location) {
       "referrer-policy": "no-referrer",
     },
   });
+}
+
+// The final calendar.google.com URL a calendar.app.google short link resolves
+// to, cached so only the first visitor after a TTL window pays the resolution
+// latency. 24h is well inside how long Google keeps an appointment-schedule URL
+// stable, and a miss just re-resolves — never a hard failure.
+const WORK_CAL_CACHE_KEY = "workcal:resolved";
+const WORK_CAL_TTL = 86400; // 24h
+
+// Resolve the short link to its full destination, reading/writing the KV cache.
+// Returns a validated calendar.google.com URL string, or null (caller falls
+// back to the short link). Never throws.
+async function resolveWorkCalendar(shortUrl, env, ctx) {
+  if (env.RN_KV) {
+    try {
+      const cached = await env.RN_KV.get(WORK_CAL_CACHE_KEY);
+      if (cached && isResolvedCalendarUrl(cached)) return cached;
+    } catch {}
+  }
+  const resolved = await followToCalendar(shortUrl);
+  if (resolved && env.RN_KV) {
+    // Warm the cache off the response path when we can; the visitor should not
+    // wait on the KV write.
+    const write = env.RN_KV.put(WORK_CAL_CACHE_KEY, resolved, { expirationTtl: WORK_CAL_TTL });
+    if (ctx && ctx.waitUntil) ctx.waitUntil(write.catch(() => {}));
+    else { try { await write; } catch {} }
+  }
+  return resolved;
+}
+
+// Follow the short link's 30x chain by header only (redirect: "manual"), never
+// fetching the heavy calendar page body. Stops as soon as it lands on
+// calendar.google.com. Bounded hops + timeout so a slow/hostile upstream can't
+// stall the redirect. Identifies honestly as AadharshBot.
+async function followToCalendar(startUrl) {
+  let current = startUrl;
+  for (let hop = 0; hop < 4; hop++) {
+    let resp;
+    try {
+      resp = await fetch(current, {
+        method: "GET",
+        redirect: "manual",
+        headers: { "user-agent": BOT_UA },
+        signal: AbortSignal.timeout(4000),
+      });
+    } catch {
+      return null;
+    }
+    if (resp.status < 300 || resp.status >= 400) return null; // not a redirect; give up
+    const loc = resp.headers.get("location");
+    if (!loc) return null;
+    try {
+      current = new URL(loc, current).href;
+    } catch {
+      return null;
+    }
+    if (isResolvedCalendarUrl(current)) return current;
+  }
+  return null;
+}
+
+function isResolvedCalendarUrl(href) {
+  try {
+    const u = new URL(href);
+    return u.protocol === "https:" && u.hostname === "calendar.google.com";
+  } catch {
+    return false;
+  }
 }
 
 async function routeSerendipity(request, env, ctx) {
