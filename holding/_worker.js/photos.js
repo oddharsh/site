@@ -2,6 +2,7 @@
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
 import { cachedRender, swrKV } from "./lib/cache.js";
 import { lunaPage } from "./lib/chrome.js";
+import { ARCHIVE_VERSION } from "./lib/const.js";
 import { errorResp, escAttr, escHtml, jsonResp } from "./lib/http.js";
 
 // ── /images/full/<key> → R2 ─────────────────────────────────────────
@@ -37,8 +38,15 @@ export async function servePhotoFromR2(request, env, ctx) {
   // and keeps proving it on every request.
   const cacheable = request.method === "GET" && !range && !ifNoneMatch;
   const cache = caches.default;
+  // Version-scoped Cache API key. The public URL stays clean (/images/full/<stem>),
+  // but the caches.default entry is stored under ?av=ARCHIVE_VERSION. Cloudflare's
+  // purge does not evict these per-colo Cache API entries, so an in-place R2
+  // overwrite (e.g. re-encoding an existing original) is busted by bumping
+  // ARCHIVE_VERSION in lib/const.js: the new key misses, falling through to fresh
+  // R2 bytes. The token never rides the served URL, only this internal lookup.
+  const cacheKey = new Request(`${url.origin}${url.pathname}?av=${ARCHIVE_VERSION}`, request);
   if (cacheable) {
-    const hit = await cache.match(request);
+    const hit = await cache.match(cacheKey);
     if (hit) {
       const r = new Response(hit.body, hit);
       r.headers.set("x-photo-cache", "hit");
@@ -99,7 +107,7 @@ export async function servePhotoFromR2(request, env, ctx) {
   if (cacheable && ctx) {
     // store a clean clone (no x-photo-cache marker) for future hits, then mark
     // THIS response a miss. resp.clone() tees the R2 stream to both consumers.
-    ctx.waitUntil(cache.put(request, resp.clone()));
+    ctx.waitUntil(cache.put(cacheKey, resp.clone()));
     resp.headers.set("x-photo-cache", "miss");
   }
   return resp;
