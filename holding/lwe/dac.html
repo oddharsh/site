@@ -239,6 +239,12 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
 { "prerender": [ { "where": { "and": [ { "href_matches": "/*" }, { "not": { "href_matches": "/whoareyou*" } } ] }, "eagerness": "moderate" } ], "prefetch": [ { "where": { "and": [ { "or": [ { "href_matches": "/garage/*" }, { "href_matches": "/lwe/*" } ] }, { "not": { "href_matches": "/lwe/ask*" } } ] }, "eagerness": "eager" } ] }
 </script>
 <script>
+// Retina-crisp canvas: enlarge the backing store by devicePixelRatio (capped 2x,
+// matching pretext.html) and scale the context so all drawing keeps using the
+// canvas's logical width/height. Returns the logical {w,h} to read in draw code
+// (reading cv.width after this returns the scaled size). Without it the fixed-size
+// bitmap is upscaled by CSS and reads soft on Retina. Call once per canvas.
+function hd(cv, cx){ var d = Math.min(window.devicePixelRatio || 1, 2), w = cv.width, h = cv.height; cv.width = w * d; cv.height = h * d; cx.setTransform(d, 0, 0, d, 0, 0); return { w: w, h: h }; }
 // ── shared live audio for the demos ──────────────────────────────────
 // One AudioContext, one voice at a time (starting a demo stops the others), so
 // you hit play once and then HEAR the knobs move: turning a slider or flipping a
@@ -292,7 +298,7 @@ var DACAudio = (function(){
 (function(){
   var c=document.getElementById('stairCanvas'); if(!c) return;
   var ctx=c.getContext('2d'), bits=document.getElementById('stairBits'), lbl=document.getElementById('stairN');
-  var W=c.width, H=c.height, mid=H/2, amp=H*0.40, cycles=2, samples=48;
+  var W=c.width, H=c.height, mid=H/2, amp=H*0.40, cycles=2, samples=48; hd(c, ctx);
   function draw(){
     var N=+bits.value, L=Math.pow(2,N), maxv=L/2-1;
     lbl.textContent=N+'-bit · '+L.toLocaleString()+' levels';
@@ -315,7 +321,7 @@ var DACAudio = (function(){
 (function(){
   var c=document.getElementById('nsCanvas'); if(!c) return;
   var ctx=c.getContext('2d'), btn=document.getElementById('nsToggle'), info=document.getElementById('nsInfo');
-  var W=c.width, H=c.height, N=512, shape=true, BITS=3;
+  var W=c.width, H=c.height, N=512, shape=true, BITS=3; hd(c, ctx);
   function clamp(v){ return v>1?1:(v<-1?-1:v); }
   function spectrum(){
     var maxv=Math.pow(2,BITS)/2-1, k0=6, y=new Array(N), e=0;
@@ -385,6 +391,7 @@ var DACAudio = (function(){
   var wrap = document.getElementById('ladderBits'); if (!wrap) return;
   var out = document.getElementById('ladderOut'), tol = document.getElementById('ladderTol'), tolL = document.getElementById('ladderTolL');
   var xfer = document.getElementById('ladderXfer'), xctx = xfer && xfer.getContext('2d');
+  var xdim = xctx ? hd(xfer, xctx) : { w: 0, h: 0 };
   var N = 6, MAX = (1 << N) - 1, code = 1 << (N - 1);
   var dir = [0.7, -0.9, 0.4, -0.6, 0.85, -0.3]; // fixed error direction per bit (index = bit i, LSB..MSB)
   var html = '';
@@ -399,7 +406,7 @@ var DACAudio = (function(){
     var btns = wrap.querySelectorAll('.dac-bit');
     for (var k = 0; k < btns.length; k++) { var bb = +btns[k].getAttribute('data-b'); btns[k].setAttribute('aria-pressed', (code & (1 << bb)) ? 'true' : 'false'); }
     if (!xctx) return;
-    var W = xfer.width, H = xfer.height; xctx.clearRect(0, 0, W, H);
+    var W = xdim.w, H = xdim.h; xctx.clearRect(0, 0, W, H);
     xctx.strokeStyle = '#cbb89e'; xctx.lineWidth = 1.2; xctx.beginPath();
     for (var c = 0; c <= MAX; c++) { var x = 5 + c / MAX * (W - 10), y = H - 5 - (c / MAX) * (H - 10); c ? xctx.lineTo(x, y) : xctx.moveTo(x, y); }
     xctx.stroke();
@@ -432,6 +439,7 @@ var DACAudio = (function(){
   var shL = document.getElementById('filtSharpL');
   var tC = document.getElementById('filtTime'), fC = document.getElementById('filtFreq');
   var tctx = tC && tC.getContext('2d'), fctx = fC && fC.getContext('2d');
+  var td = tctx ? hd(tC, tctx) : { w: 0, h: 0 }, fd = fctx ? hd(fC, fctx) : { w: 0, h: 0 };
   function sinc(x) { return x === 0 ? 1 : Math.sin(Math.PI * x) / (Math.PI * x); }
   function build(s) {
     var L = Math.round(7 + s * 7) * 2 + 1, c = (L - 1) / 2, fc = 0.45, h = [];
@@ -455,14 +463,14 @@ var DACAudio = (function(){
     var s = +sh.value; if (shL) shL.textContent = (s < 3 ? 'gentle' : s < 6 ? 'medium' : 'sharp') + ' (' + (Math.round(7 + s * 7) * 2 + 1) + ' taps)';
     var h = build(s);
     if (tctx) {
-      var W = tC.width, H = tC.height, mid = H / 2; tctx.clearRect(0, 0, W, H);
+      var W = td.w, H = td.h, mid = H / 2; tctx.clearRect(0, 0, W, H);
       tctx.strokeStyle = '#efe6d8'; tctx.beginPath(); tctx.moveTo(0, mid); tctx.lineTo(W, mid); tctx.stroke();
       tctx.strokeStyle = '#a8541f'; tctx.lineWidth = 1.6; tctx.beginPath();
       for (var n = 0; n < h.length; n++) { var x = n / (h.length - 1) * W, y = mid - h[n] * (H * 0.40); n ? tctx.lineTo(x, y) : tctx.moveTo(x, y); }
       tctx.stroke();
     }
     if (fctx) {
-      var W2 = fC.width, H2 = fC.height, mag = dft(h, 160); fctx.clearRect(0, 0, W2, H2);
+      var W2 = fd.w, H2 = fd.h, mag = dft(h, 160); fctx.clearRect(0, 0, W2, H2);
       fctx.fillStyle = '#f3ece1'; fctx.fillRect(0, 0, 0.9 * W2, H2); // passband shade to ~0.45 Nyquist
       fctx.strokeStyle = '#a8541f'; fctx.lineWidth = 1.6; fctx.beginPath();
       for (var k = 0; k < mag.length; k++) { var db = 20 * Math.log10(mag[k] + 1e-6), x2 = k / (mag.length - 1) * W2, y2 = H2 - ((db + 80) / 80) * H2; k ? fctx.lineTo(x2, y2) : fctx.moveTo(x2, y2); }
@@ -493,6 +501,7 @@ var DACAudio = (function(){
   var bitsL = document.getElementById('muBitsL');
   var mbC = document.getElementById('muMbCanvas'), dsC = document.getElementById('muDsCanvas');
   var mbCtx = mbC && mbC.getContext('2d'), dsCtx = dsC && dsC.getContext('2d');
+  var mbd = mbCtx ? hd(mbC, mbCtx) : { w: 0, h: 0 }, dsd = dsCtx ? hd(dsC, dsCtx) : { w: 0, h: 0 };
   var mbInfo = document.getElementById('muMbInfo'), dsInfo = document.getElementById('muDsInfo');
   var N = 512, K0 = 5, AMP = 0.08, actx = null; // a quiet tone at bin K0
   function clamp(v){ return v > 1 ? 1 : v < -1 ? -1 : v; }
@@ -511,8 +520,8 @@ var DACAudio = (function(){
     for (var k = 0; k < half; k++){ var re = 0, im = 0; for (var n = 0; n < N; n++){ var a = 2 * Math.PI * k * n / N; re += y[n] * Math.cos(a); im -= y[n] * Math.sin(a); } mag[k] = Math.sqrt(re * re + im * im) / N; }
     return mag;
   }
-  function drawSpec(ctx, C, mag, accent){
-    var W = C.width, H = C.height, half = mag.length;
+  function drawSpec(ctx, mag, accent, dim){
+    var W = dim.w, H = dim.h, half = mag.length;
     ctx.clearRect(0, 0, W, H);
     ctx.fillStyle = '#f3ece1'; ctx.fillRect((K0 - 1) / half * W, 0, 3 / half * W, H); // tone band
     function py(db){ return H - ((db + 120) / 120) * H; }
@@ -523,8 +532,8 @@ var DACAudio = (function(){
   function render(){
     var B = +bits.value; if (bitsL) bitsL.textContent = B + '-bit';
     var sm = spectrum(quantize(B, false)), sd = spectrum(quantize(B, true));
-    if (mbCtx) drawSpec(mbCtx, mbC, sm, '#a8541f');
-    if (dsCtx) drawSpec(dsCtx, dsC, sd, '#2f6fd0');
+    if (mbCtx) drawSpec(mbCtx, sm, '#a8541f', mbd);
+    if (dsCtx) drawSpec(dsCtx, sd, '#2f6fd0', dsd);
     var harm = 0; for (var h = 2; h * K0 < N / 2; h++) harm += sm[h * K0] * sm[h * K0];      // multibit distortion
     var noise = 0; for (var k = 1; k < N / 2; k++){ if (Math.abs(k - K0) <= 1) continue; noise += sd[k] * sd[k]; } // ds noise
     if (mbInfo) mbInfo.textContent = harm > 2e-6 ? 'harmonic distortion' : 'clean';
@@ -565,6 +574,7 @@ var DACAudio = (function(){
   var driveL = document.getElementById('tubeDriveL'), info = document.getElementById('tubeInfo');
   var xferC = document.getElementById('tubeXfer'), waveC = document.getElementById('tubeWave'), specC = document.getElementById('tubeSpec');
   var xc = xferC && xferC.getContext('2d'), wc = waveC && waveC.getContext('2d'), sc = specC && specC.getContext('2d');
+  var xd = xc ? hd(xferC, xc) : { w: 0, h: 0 }, wd = wc ? hd(waveC, wc) : { w: 0, h: 0 }, sd = sc ? hd(specC, sc) : { w: 0, h: 0 };
   var modeBtns = document.querySelectorAll('.tmode'), playBtn = document.getElementById('tubePlay');
   var mode = 'tube', A = 0.9, N = 600, K0 = 6;
   function clampv(v){ return v > 1 ? 1 : v < -1 ? -1 : v; }
@@ -591,7 +601,7 @@ var DACAudio = (function(){
     if (info) info.textContent = mode === 'tube' ? 'asymmetric curve · even (2nd)' : 'symmetric clip · odd → square';
     var y = series(drive);
     if (xc){                                                                 // transfer curve: output vs input, identity ghosted
-      var W = xferC.width, H = xferC.height; xc.clearRect(0, 0, W, H);
+      var W = xd.w, H = xd.h; xc.clearRect(0, 0, W, H);
       xc.strokeStyle = '#efe6d8'; xc.lineWidth = 1; xc.beginPath(); xc.moveTo(0, H / 2); xc.lineTo(W, H / 2); xc.moveTo(W / 2, 0); xc.lineTo(W / 2, H); xc.stroke();
       xc.strokeStyle = '#d9cbb6'; xc.setLineDash([3, 3]); xc.beginPath(); xc.moveTo(6, H - 6); xc.lineTo(W - 6, 6); xc.stroke(); xc.setLineDash([]);
       var pk = 1e-9; for (var t = 0; t <= 140; t++){ var av = Math.abs(shape(t / 140 * 2 - 1, drive)); if (av > pk) pk = av; }   // scale the curve to fill the box (honest asymmetry, no false clamp)
@@ -600,7 +610,7 @@ var DACAudio = (function(){
       xc.stroke();
     }
     if (wc){                                                                 // waveform: input sine (ghost) + driven output
-      var W2 = waveC.width, H2 = waveC.height, mid = H2 / 2, amp = H2 * 0.40; wc.clearRect(0, 0, W2, H2);
+      var W2 = wd.w, H2 = wd.h, mid = H2 / 2, amp = H2 * 0.40; wc.clearRect(0, 0, W2, H2);
       wc.strokeStyle = '#efe6d8'; wc.beginPath(); wc.moveTo(0, mid); wc.lineTo(W2, mid); wc.stroke();
       wc.strokeStyle = '#cbb89e'; wc.lineWidth = 1.2; wc.beginPath();
       for (var s = 0; s <= W2; s++){ var th = s / W2 * 4 * Math.PI, yy = mid - Math.sin(th) * amp * A; s ? wc.lineTo(s, yy) : wc.moveTo(s, yy); }
@@ -611,7 +621,7 @@ var DACAudio = (function(){
       wc.stroke();
     }
     if (sc){                                                                 // harmonic bars, labeled by multiple of the note
-      var W3 = specC.width, H3 = specC.height, HN = 12, mags = harmonics(y, HN), f0 = mags[0] || 1e-9;
+      var W3 = sd.w, H3 = sd.h, HN = 12, mags = harmonics(y, HN), f0 = mags[0] || 1e-9;
       var base = H3 - 16, top = 10, slot = W3 / (HN + 1); sc.clearRect(0, 0, W3, H3);
       sc.strokeStyle = '#e0d3c2'; sc.lineWidth = 1; sc.beginPath(); sc.moveTo(0, base); sc.lineTo(W3, base); sc.stroke();
       sc.font = '7.5pt "Courier New",monospace'; sc.textAlign = 'center';
