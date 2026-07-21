@@ -32,6 +32,11 @@ import { handleSerendipity, withSerendipitySecurityHeaders } from "../../serendi
 // must be a named export of the entry so the COUNTER binding can resolve it.
 export { Counter } from "./counter.js";
 
+// the coffee-booking expiry timer (Workflows). One durable instance per pending
+// booking replaces the old weekly cron sweep; its class_name must resolve on
+// this entry so the BOOKING_WORKFLOW binding can find it (see cal/src/workflow.js).
+export { BookingWorkflow } from "../../cal/src/workflow.js";
+
 // Workers Cache only fronts responses whose route contract is already public
 // and reusable. Keep the default export as an uncached gateway: it handles the
 // homepage, mutations, per-visitor views, and arbitrary inspection targets.
@@ -123,11 +128,11 @@ export default {
   async scheduled(event, env, ctx) {
     if (event.cron === "17 8 * * 1") {
       ctx.waitUntil(cronCensus(env));   // Mondays 08:17 UTC — the longitudinal census
-    } else if (event.cron === "0 4 * * 7") {
-      ctx.waitUntil(calWorker.scheduled(event, env, ctx)); // Sundays 04:00 UTC — expire stale coffee bookings
     } else {
       ctx.waitUntil(cronAround(env));   // */30 — the neighborhood crawl
     }
+    // NOTE: the weekly coffee-booking sweep (0 4 * * 7) is gone — each pending
+    // booking now carries its own BookingWorkflow expiry timer (cal/src/workflow.js).
   },
 };
 

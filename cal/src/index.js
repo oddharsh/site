@@ -5,8 +5,9 @@
 //   2. visitor POST /book    → creates pending booking in KV, emails host
 //                              with signed approve/decline links
 //   3. host clicks /approve  → marks confirmed, emails requester an .ics invite
-//   4. host clicks /decline  → marks declined, emails requester a polite no
-//   5. cron sweep            → expires pending bookings older than PENDING_TTL_DAYS
+//   4. host clicks /decline  → marks declined, frees the slot, emails a polite no
+//   5. expiry timer          → each booking's BookingWorkflow reclaims the slot
+//                              if the host never acts within PENDING_TTL_DAYS
 //
 // design notes:
 //   - all state in KV; nothing in memory, Worker can scale to zero
@@ -16,17 +17,27 @@
 //   - the public ICS calendar is read-only; we never write back. confirmed
 //     events are pushed to the host's real calendar via the .ics invite
 //     they accept in their own inbox.
+//   - abandoned bookings expire via a durable per-booking Workflow, not a cron:
+//     /book spins up one instance (id = booking id) that waits PENDING_TTL_DAYS
+//     for a "host-decision" event; approve/decline fire that event to end it
+//     early, and a timeout reclaims the slot (see cal/src/workflow.js).
 
 import { generateSlots, fetchBusySWR,
          BOOK_MAX_STALE_MS }               from "./availability.js";
-import { createBooking, getBooking,
-         setStatus, expireOld, getRecent } from "./booking.js";
+import { createBooking, getBooking, setStatus,
+         holdSlot, releaseSlot, listHeld } from "./booking.js";
 import { sendApprovalRequest, sendInvite,
          sendDecline }                     from "./email.js";
 import { sign, verify }                    from "./sign.js";
 import { bookingPage, successPage,
          confirmedPage, declinedPage,
          errorPage }                       from "./templates.js";
+
+// Re-export the expiry-timer Workflow so it resolves as a class_name both from
+// the root worker (which imports this module) and from the Vitest pool, whose
+// `main` is this file. Production's BOOKING_WORKFLOW binding is defined on the
+// root aadhar-sh Worker; this named export just keeps the class reachable here.
+export { BookingWorkflow } from "./workflow.js";
 
 export default {
   async fetch(req, env, ctx) {
@@ -53,12 +64,6 @@ export default {
                           { status: 500, headers: htmlHeaders() });
     }
   },
-
-  // weekly cleanup — expire pending bookings the host never acted on so their
-  // slots become bookable again. doesn't email anyone; silent reclaim.
-  async scheduled(event, env, ctx) {
-    ctx.waitUntil(expireOld(env));
-  }
 };
 
 async function route_index(req, env, ctx) {
@@ -154,6 +159,23 @@ async function route_book(req, env, ctx) {
     created: Date.now(),
     status: "pending",
   });
+  // hold the slot SYNCHRONOUSLY (before responding) so a second booker in the
+  // same instant can't grab it — /slots and the next /book both read this.
+  await holdSlot(env, booking);
+
+  // spin up the durable expiry timer for this booking. Instance id = booking id,
+  // so approve/decline can address it directly. Best-effort + guarded: if the
+  // binding is missing (older config) the booking still works, it just won't
+  // auto-expire — no worse than before, and there's no cron to lean on now.
+  if (env.BOOKING_WORKFLOW) {
+    ctx.waitUntil((async () => {
+      try {
+        await env.BOOKING_WORKFLOW.create({ id: booking.id, params: { id: booking.id } });
+      } catch (e) {
+        console.error("booking workflow create failed", e?.stack || e);
+      }
+    })());
+  }
 
   // sign approve/decline links so only someone with the secret can act on them
   const approveSig = await sign(`${booking.id}|approve`, env.SIGNING_SECRET);
@@ -169,6 +191,21 @@ async function route_book(req, env, ctx) {
   ctx.waitUntil(caches.default.delete(calIndexKey(req, env)));  // slot now held: drop the stale SSR page
 
   return new Response(successPage(env), { headers: htmlHeaders() });
+}
+
+// tell a booking's expiry timer the host has acted, so it stops waiting and
+// completes instead of sitting idle until the PENDING_TTL_DAYS timeout. Fire-
+// and-forget: if the instance is already gone (completed/expired), sendEvent
+// throws and we swallow it — the route already owns the state transition, so a
+// missed cancel only means the workflow times out later and no-ops on the guard.
+function cancelExpiry(env, ctx, id) {
+  if (!env.BOOKING_WORKFLOW) return;
+  ctx.waitUntil((async () => {
+    try {
+      const instance = await env.BOOKING_WORKFLOW.get(id);
+      await instance.sendEvent({ type: "host-decision", payload: { resolved: true } });
+    } catch { /* instance already finished or never created */ }
+  })());
 }
 
 async function route_approve(req, env, ctx, url) {
@@ -187,8 +224,9 @@ async function route_approve(req, env, ctx, url) {
     return new Response(confirmedPage(booking, env, /*already=*/true),
                         { headers: htmlHeaders() });
   }
-  await setStatus(env, id, "confirmed");
+  await setStatus(env, id, "confirmed");   // slot stays held (confirmed coffees hold their slot + count toward caps)
   ctx.waitUntil(sendInvite(env, booking));
+  cancelExpiry(env, ctx, id);                                   // end the durable timer early
   ctx.waitUntil(caches.default.delete(calIndexKey(req, env)));  // pending slot resolved
   return new Response(confirmedPage(booking, env, /*already=*/false),
                       { headers: htmlHeaders() });
@@ -211,7 +249,9 @@ async function route_decline(req, env, ctx, url) {
                         { headers: htmlHeaders() });
   }
   await setStatus(env, id, "declined");
+  await releaseSlot(env, booking);         // free the slot NOW so /slots reoffers it immediately
   ctx.waitUntil(sendDecline(env, booking));
+  cancelExpiry(env, ctx, id);                                   // end the durable timer early
   ctx.waitUntil(caches.default.delete(calIndexKey(req, env)));  // slot freed again
   return new Response(declinedPage(booking, env, /*already=*/false),
                       { headers: htmlHeaders() });
@@ -228,19 +268,17 @@ async function listOpenSlots(env, ctx, timings = null, options = {}) {
     return p.then(v => { timings[name] = Date.now() - s; return v; },
                   e => { timings[name] = Date.now() - s; throw e; });
   };
-  // pending bookings hold slots optimistically (reserved until the host approves
-  // or declines; the cron sweep reclaims stale pending after TTL). confirmed
-  // bookings hold their slot for real — both must be seen or an approved coffee's
-  // slot reopens and the caps undercount.
-  const [cal, pending, confirmed] = await Promise.all([
+  // every held slot (pending reservation OR confirmed coffee) blocks its exact
+  // slot AND counts toward the caps. A pending hold is reclaimed by the booking's
+  // expiry Workflow if the host never acts; a confirmed hold self-expires just
+  // after the event. listHeld reads them all in one shot (one key per slot).
+  const [cal, held] = await Promise.all([
     mark("ics", fetchBusySWR(env, ctx, options)),
-    mark("pending", getRecent(env, "pending")),
-    mark("confirmed", getRecent(env, "confirmed")),
+    mark("held", listHeld(env)),
   ]);
-  const held = [...pending, ...confirmed].map(b => ({ start: b.start, end: b.end }));
-  // busy → conflict-only (your real calendar); coffee bookings (pending +
-  // confirmed) → conflict + count toward DAILY/WEEKLY_LIMIT. keeping them
-  // separate is what stops a packed calendar from zeroing out availability.
+  // busy → conflict-only (your real calendar); coffee bookings (held) → conflict
+  // + count toward DAILY/WEEKLY_LIMIT. keeping them separate is what stops a
+  // packed calendar from zeroing out availability.
   const t = Date.now();
   const slots = generateSlots(env, cal.busy, held);
   if (timings) timings.slots = Date.now() - t;
