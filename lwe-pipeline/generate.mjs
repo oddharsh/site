@@ -146,6 +146,12 @@ function pageHtml(spec) {
 <meta property="og:type" content="article">
 <meta property="og:title" content="aadhar.sh${c.path} — ${titleSuffix}">
 <meta property="og:url" content="https://aadhar.sh${c.path}">
+<meta name="twitter:card" content="summary_large_image">
+<meta property="og:image" content="https://aadhar.sh/og/${c.path.slice(1).replace(/\//g, "-")}.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The aadhar.sh${c.path} interactive demo, screenshotted">
+<meta name="twitter:image" content="https://aadhar.sh/og/${c.path.slice(1).replace(/\//g, "-")}.png">
 
 <style>${chromeCss(c)}
 ${spec.demoCss || ""}</style>

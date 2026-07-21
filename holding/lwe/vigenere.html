@@ -12,6 +12,12 @@
 <meta property="og:type" content="article">
 <meta property="og:title" content="aadhar.sh/lwe/vigenere · the Vigenère cipher & Kryptos">
 <meta property="og:url" content="https://aadhar.sh/lwe/vigenere">
+<meta name="twitter:card" content="summary_large_image">
+<meta property="og:image" content="https://aadhar.sh/og/lwe-vigenere.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="aadhar.sh/lwe/vigenere · the Vigenère cipher & Kryptos, live demo screenshotted">
+<meta name="twitter:image" content="https://aadhar.sh/og/lwe-vigenere.png">
 
 <style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace; --accent:#7a5c1e; --accent-soft:#f6efdc}
 * { box-sizing: border-box; }
@@ -255,7 +261,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
           <div class="bubble"><p>back up to the <b>transposition</b> stage for a sec. K3 of Kryptos is pure transposition, no substitution at all, right? show me <b>columnar</b> specifically, and the double version.</p></div></div></div>
 
         <div class="msg bot"><div class="pic"></div><div><div class="who"><b>Vigen&egrave;re</b><time>23:09</time></div>
-          <div class="bubble"><p>Right: in K3 no letter ever changes, only its <em>position</em>. Columnar is the workhorse. Write the message into a grid <b>row by row</b> under a keyword, then read it back <b>column by column</b>, taking the columns in the <b>alphabetical order of the keyword's letters</b>. <code>KRYPTOS</code> ranks its seven columns <code>0&nbsp;3&nbsp;6&nbsp;2&nbsp;5&nbsp;1&nbsp;4</code>, so you read the <b>K</b> column first, then <b>O</b>, then <b>P</b>, and so on. Same letters, new order, and a ragged last row is the only bookkeeping. <b>Double</b> columnar just runs that twice, the first ciphertext poured into a fresh grid under a second keyword; the two passes scramble the column structure enough that the hand version resisted cryptanalysis for decades. There's a clean step-by-step <a href="https://mathweb.ucsd.edu/~crypto/Projects/KarlWang/index2.html" rel="external">walkthrough here</a>. Drag the grid:</p></div></div></div>
+          <div class="bubble"><p>Right: in K3 no letter ever changes, only its <em>position</em>. Columnar is the workhorse. Write the message into a grid <b>row by row</b> under a keyword, then read it back <b>column by column</b>, taking the columns in the <b>alphabetical order of the keyword's letters</b>. <code>KRYPTOS</code> ranks its seven columns <code>1&nbsp;4&nbsp;7&nbsp;3&nbsp;6&nbsp;2&nbsp;5</code>, so you read the <b>K</b> column first, then <b>O</b>, then <b>P</b>, and so on. Same letters, new order, and a ragged last row is the only bookkeeping. <b>Double</b> columnar just runs that twice, the first ciphertext poured into a fresh grid under a second keyword; the two passes scramble the column structure enough that the hand version resisted cryptanalysis for decades. There's a clean step-by-step <a href="https://mathweb.ucsd.edu/~crypto/Projects/KarlWang/index2.html" rel="external">walkthrough here</a>. Drag the grid:</p></div></div></div>
 
         <div class="msg bot"><div class="pic"></div><div style="min-width:0"><div class="who"><b>Vigen&egrave;re</b><time>23:09</time></div>
           <div class="demo" id="demo-colt">
