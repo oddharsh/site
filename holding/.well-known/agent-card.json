@@ -1,13 +1,18 @@
 {
   "name": "Aadharsh Site Agent",
-  "description": "Discovery card for the read-only machine interfaces published by aadhar.sh. This host does not expose an A2A task endpoint; use the declared MCP or HTTP JSON interfaces for public data.",
+  "description": "Discovery card for the read-only machine interfaces published by aadhar.sh. This host does not expose an A2A task endpoint; use the site-level MCP or declared HTTP JSON interfaces for public data.",
   "provider": {
     "organization": "Aadharsh Pannirselvam",
     "url": "https://aadhar.sh/"
   },
-  "version": "1.1.0",
+  "version": "1.2.0",
   "documentationUrl": "https://aadhar.sh/llms.txt",
   "supportedInterfaces": [
+    {
+      "url": "https://aadhar.sh/mcp",
+      "protocolBinding": "https://modelcontextprotocol.io/specification/2025-06-18",
+      "protocolVersion": "2025-06-18"
+    },
     {
       "url": "https://aadhar.sh/serendipity/mcp",
       "protocolBinding": "https://modelcontextprotocol.io/specification/2025-06-18",
@@ -75,6 +80,30 @@
       ]
     },
     {
+      "id": "site-utilities",
+      "name": "Site utilities",
+      "description": "Use the canonical site-level read-only interface for search, photo metadata, coffee availability, Change Radar, current music, and compact Lens inspection/comparison.",
+      "tags": [
+        "search",
+        "photos",
+        "coffee",
+        "lens",
+        "read-only"
+      ],
+      "examples": [
+        "Search aadhar.sh for writing about agents.",
+        "Find photos shot on the X-T50 with Classic Chrome.",
+        "Compare the agent-readiness of two public sites."
+      ],
+      "inputModes": [
+        "application/json",
+        "text/plain"
+      ],
+      "outputModes": [
+        "application/json"
+      ]
+    },
+    {
       "id": "webmcp-read-only",
       "name": "Browser-local read-only tools",
       "description": "On the homepage, browsers that implement navigator.modelContext can discover two same-origin tools: whats_playing and find_events.",
@@ -105,6 +134,14 @@
     },
     "interfaces": {
       "mcp": [
+        {
+          "name": "Aadharsh Site MCP",
+          "url": "https://aadhar.sh/mcp",
+          "transport": "streamable-http",
+          "protocolVersion": "2025-06-18",
+          "authentication": "optional bearer credential; public read-only access works anonymously",
+          "documentationUrl": "https://aadhar.sh/llms.txt"
+        },
         {
           "name": "Serendipity MCP",
           "url": "https://aadhar.sh/serendipity/mcp",
@@ -144,6 +181,26 @@
         {
           "name": "Neighborhood Change Radar",
           "url": "https://aadhar.sh/around/changes.json",
+          "authentication": "anonymous"
+        },
+        {
+          "name": "Site search",
+          "url": "https://aadhar.sh/search.json?q=…",
+          "authentication": "anonymous"
+        },
+        {
+          "name": "Photo query",
+          "url": "https://aadhar.sh/photos/query.json?q=…",
+          "authentication": "anonymous"
+        },
+        {
+          "name": "Coffee availability",
+          "url": "https://aadhar.sh/coffee/availability.json",
+          "authentication": "anonymous"
+        },
+        {
+          "name": "Lens comparison",
+          "url": "https://aadhar.sh/lens/compare.json?left=…&right=…",
           "authentication": "anonymous"
         },
         {

@@ -261,7 +261,7 @@ async function route_decline(req, env, ctx, url) {
 // ok, source). Callers that only need the listing destructure { slots };
 // route_book also reads { cal } to fail closed on an unvouchable calendar.
 // timings (optional) collects per-step durations for a Server-Timing header.
-async function listOpenSlots(env, ctx, timings = null, options = {}) {
+export async function listOpenSlots(env, ctx, timings = null, options = {}) {
   const mark = (name, p) => {
     if (!timings) return p;
     const s = Date.now();
@@ -283,6 +283,31 @@ async function listOpenSlots(env, ctx, timings = null, options = {}) {
   const slots = generateSlots(env, cal.busy, held);
   if (timings) timings.slots = Date.now() - t;
   return { slots, cal };
+}
+
+// Public read-only availability. Unlike the human booking page's stale render,
+// this contract is a scheduling signal: it returns no slots when the calendar
+// cannot be vouched for within the same 15-minute bound used by /book.
+export async function getPublicAvailability(env, ctx) {
+  const { slots, cal } = await listOpenSlots(env, ctx);
+  const ageMs = Number.isFinite(cal.ageMs) ? Math.max(0, cal.ageMs) : null;
+  const available = !!cal.ok && ageMs != null && ageMs <= BOOK_MAX_STALE_MS;
+  return {
+    available,
+    stale: !available || cal.source === "stale",
+    source: cal.source,
+    checkedAt: new Date().toISOString(),
+    ageSeconds: ageMs == null ? null : Math.floor(ageMs / 1000),
+    timezone: env.HOST_TIMEZONE || "UTC",
+    bookingUrl: "https://aadhar.sh/coffee",
+    slots: available ? slots.map(({ start, end }) => ({
+      start: new Date(start).toISOString(),
+      end: new Date(end).toISOString(),
+      startMs: start,
+      endMs: end,
+      durationMinutes: Math.round((end - start) / 60000),
+    })) : [],
+  };
 }
 
 // one edge-cache entry per (origin, basePath): aadhar.sh/coffee and

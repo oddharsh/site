@@ -68,6 +68,50 @@ Production ships through merge → CI → `production` → Workers Builds. The r
 config owns both `aadhar.sh/coffee*` and the legacy `cal.aadhar.sh/*` alias after
 the route migration. Do not deploy from this package.
 
+### Change or rotate production secrets
+
+Run these commands from the repository root. They update secrets on the live
+`aadhar-sh` Worker; they do not create a GitHub diff or require a code deploy.
+
+`ICAL_URL` is the private read-only availability feed. It is not the same as
+the optional unlisted work-calendar redirect (`WORK_CALENDAR_URL`):
+
+```sh
+# Google Calendar: create a new "secret address in iCal format" first.
+npx wrangler secret put -c wrangler.jsonc ICAL_URL
+```
+
+The calendar snapshot is normally freshened within five minutes. For an
+immediate refresh, delete only the derived snapshot and check the live JSON:
+
+```sh
+BOOKINGS_NS="37acb65118fe485583a90a94cb89365e"
+npx wrangler kv key delete --namespace-id="$BOOKINGS_NS" "cal:busy" --remote
+curl -fsS https://aadhar.sh/coffee/slots | jq .
+```
+
+To rotate the unlisted redirect, set its destination before its path segment:
+
+```sh
+npx wrangler secret put -c wrangler.jsonc WORK_CALENDAR_URL
+npx wrangler secret put -c wrangler.jsonc WORK_CALENDAR_SLUG
+curl -fsSI "https://cal.aadhar.sh/<new-slug>"
+```
+
+The destination must be an `https://calendar.app.google/...` URL. The old slug
+should return `404` after the new slug is active; neither value belongs in
+Git.
+
+The random HMAC value is `SIGNING_SECRET`:
+
+```sh
+openssl rand -hex 32 | npx wrangler secret put -c wrangler.jsonc SIGNING_SECRET
+```
+
+Rotating it invalidates all outstanding approval and decline links but does not
+delete pending bookings. Handle those requests manually or let them expire
+after `PENDING_TTL_DAYS`.
+
 The public site link should point at the canonical path:
 
 ```diff

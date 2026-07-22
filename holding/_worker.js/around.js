@@ -128,7 +128,9 @@ async function ensureAroundHistoryTable(env) {
       PRIMARY KEY (target, observed_at)
     );
     CREATE INDEX IF NOT EXISTS idx_around_crawl_history_time
-      ON ${AROUND_HISTORY_TABLE} (observed_at DESC);`
+      ON ${AROUND_HISTORY_TABLE} (observed_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_around_crawl_history_target_time
+      ON ${AROUND_HISTORY_TABLE} (target, observed_at DESC);`
   );
   return true;
 }
@@ -164,6 +166,11 @@ export async function persistAroundHistory(env, report) {
       row.error || null,
     ));
     if (statements.length) await env.RESTORE_DB.batch(statements);
+    // Keep the history explainable without letting a frequent cron grow D1
+    // forever. The public reader still uses a small recent window.
+    await env.RESTORE_DB.prepare(
+      `DELETE FROM ${AROUND_HISTORY_TABLE} WHERE observed_at < ?`
+    ).bind(Date.now() - 90 * 24 * 60 * 60 * 1000).run();
     return { ok: true, written: statements.length };
   } catch (e) {
     return { ok: false, reason: String(e?.message || e) };
@@ -180,6 +187,13 @@ const CHANGE_FIELDS = [
   ["skipped", "skipped"],
   ["error", "error"],
 ];
+
+function changeSeverity(changes, current) {
+  if (changes.some((change) => change.field === "status" || change.field === "error")) return "high";
+  if (changes.some((change) => ["content", "title", "description", "final_url"].includes(change.field))) return "medium";
+  if (changes.some((change) => ["robots", "skipped"].includes(change.field))) return "medium";
+  return current?.truncated ? "medium" : "low";
+}
 
 export function diffAroundRows(current, previous) {
   if (!current || !previous) return [];
@@ -243,6 +257,8 @@ export async function readAroundChanges(env, requestedLimit = 50) {
       name: current.name,
       observedAt: new Date(current.observed_at).toISOString(),
       previousObservedAt: new Date(previous.observed_at).toISOString(),
+      ageMs: Math.max(0, Date.now() - Number(current.observed_at || Date.now())),
+      severity: changeSeverity(fields, current),
       changes: fields,
     });
   }

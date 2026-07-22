@@ -759,6 +759,98 @@ export function lensHostBlocked(host) {
   return false;
 }
 
+function lensDoorCount(agent) {
+  return ["mcp", "nlweb", "webmcp", "agentCard", "openapi", "apiCatalog"]
+    .map((key) => agent?.[key])
+    .filter((door) => door && (door.verdict === "yes" || door.verdict === "likely" || door.verdict === "maybe" || door.present || door.found)).length;
+}
+
+// Compact, stable Lens output for comparison and machine callers. Full scans
+// remain available from /lens/fetch; these helpers deliberately exclude raw
+// HTML, headers, and third-party response bodies.
+export function lensObservationSummary(result) {
+  const readiness = result?.readiness || {};
+  const terms = result?.terms || {};
+  const spectrum = terms.spectrum || {};
+  const anatomy = result?.anatomy || {};
+  const structured = result?.structured || {};
+  const title = structured.title || result?.title || "";
+  return {
+    url: result?.url || "",
+    finalUrl: result?.finalUrl || result?.url || "",
+    redirected: !!result?.redirected,
+    status: result?.status ?? null,
+    contentType: result?.contentType || "",
+    elapsedMs: result?.elapsedMs ?? null,
+    truncated: !!result?.truncated,
+    title: String(title).slice(0, 240),
+    wordCount: anatomy.wordCount ?? 0,
+    bytes: anatomy.rawBytes ?? null,
+    readiness: readiness.overall ?? null,
+    level: readiness.level ?? null,
+    tier: spectrum.tier || "unknown",
+    doors: lensDoorCount(result?.agent),
+    surfaces: {
+      llms: !!result?.discovery?.llmsTxt?.ok,
+      markdown: !!result?.agent?.mdNegotiation?.supported,
+      mcp: !!(result?.agent?.mcp && ["yes", "likely"].includes(result.agent.mcp.verdict)),
+      agentCard: !!(result?.agent?.agentCard?.present || result?.agent?.agentCard?.found),
+      apiCatalog: !!(result?.agent?.apiCatalog?.present || result?.agent?.apiCatalog?.found),
+    },
+  };
+}
+
+export function compareLensObservations(left, right) {
+  const fields = [
+    ["status", "status"], ["finalUrl", "final URL"], ["contentType", "content type"],
+    ["title", "title"], ["wordCount", "word count"], ["bytes", "bytes"],
+    ["readiness", "readiness"], ["level", "readiness level"], ["tier", "spectrum tier"],
+    ["doors", "agent doors"],
+  ];
+  const changes = fields.filter(([key]) => left?.[key] !== right?.[key]).map(([key, label]) => ({
+    field: key, label, before: left?.[key] ?? null, after: right?.[key] ?? null,
+  }));
+  for (const key of ["llms", "markdown", "mcp", "agentCard", "apiCatalog"]) {
+    if (left?.surfaces?.[key] !== right?.surfaces?.[key]) changes.push({
+      field: `surfaces.${key}`, label: `surface: ${key}`,
+      before: !!left?.surfaces?.[key], after: !!right?.surfaces?.[key],
+    });
+  }
+  return changes;
+}
+
+export async function compareLensTargets(leftUrl, rightUrl, env, opts = {}) {
+  const [left, right] = await Promise.all([
+    lensInspect(leftUrl, env, { skipBotViews: opts.skipBotViews !== false }),
+    lensInspect(rightUrl, env, { skipBotViews: opts.skipBotViews !== false }),
+  ]);
+  const leftSummary = lensObservationSummary(left);
+  const rightSummary = lensObservationSummary(right);
+  return { left: leftSummary, right: rightSummary, changes: compareLensObservations(leftSummary, rightSummary) };
+}
+
+export async function handleLensCompare(request, env, ctx) {
+  const url = new URL(request.url);
+  const left = validateLensTarget(url.searchParams.get("left") || "");
+  const right = validateLensTarget(url.searchParams.get("right") || "");
+  if (!left.ok || !right.ok) return jsonResponse({ ok: false, error: left.ok ? `right: ${right.error}` : `left: ${left.error}` }, 400);
+  const ip = request.headers.get("cf-connecting-ip") || "0.0.0.0";
+  if (env.RN_KV) {
+    const bucket = `lens:comparerl:${ip}:${Math.floor(Date.now() / 60000)}`;
+    let count = 0;
+    try { count = Number(await env.RN_KV.get(bucket) || 0); } catch {}
+    if (count >= 4) return jsonResponse({ ok: false, error: "Lens comparisons are rate-limited to 4/min." }, 429);
+    const write = env.RN_KV.put(bucket, String(count + 1), { expirationTtl: 120 });
+    if (ctx?.waitUntil) ctx.waitUntil(write.catch(() => {}));
+    else await write.catch(() => {});
+  }
+  try {
+    return jsonResponse({ ok: true, comparedAt: new Date().toISOString(), ...(await compareLensTargets(left.url, right.url, env)) });
+  } catch (error) {
+    return jsonResponse({ ok: false, error: "Lens comparison failed.", detail: String(error?.message || error).slice(0, 240) }, 502);
+  }
+}
+
 // the orchestrator: fetch the target, parse it, then probe the origin's
 // site-level files in parallel. returns the full lens envelope.
 export async function lensInspect(targetUrl, env, opts) {
