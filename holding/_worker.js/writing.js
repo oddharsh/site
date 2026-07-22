@@ -128,7 +128,7 @@ export function notepadWindow(filename, text, closeHref, date, popId) {
       "<span class=\"np-controls\"><span class=\"min\" aria-hidden=\"true\"></span><span class=\"max\" aria-hidden=\"true\"></span>" +
       "<a class=\"close\" href=\"" + escAttr(closeHref) + "\"" + (popId ? " data-pop" : "") + " title=\"back to writing\" aria-label=\"Close\">✕</a></span></div>" +
     "<div class=\"np-menubar\" role=\"menubar\" aria-label=\"menu\">" +
-      "<span class=\"np-menu\">File</span><span class=\"np-menu\">Edit</span><span class=\"np-menu\">Format</span><span class=\"np-menu\">View</span><span class=\"np-menu\">Help</span></div>" +
+      "<span class=\"np-menu\" role=\"menuitem\">File</span><span class=\"np-menu\" role=\"menuitem\">Edit</span><span class=\"np-menu\" role=\"menuitem\">Format</span><span class=\"np-menu\" role=\"menuitem\">View</span><span class=\"np-menu\" role=\"menuitem\">Help</span></div>" +
     "<textarea class=\"np-text\" spellcheck=\"false\" aria-label=\"" + escAttr(filename) + "\">" + escHtml(text) + "</textarea>" +
     "<div class=\"np-status\"><span class=\"np-pos\">Ln 1, Col 1</span><span class=\"np-wc\"></span><span class=\"np-flex\"></span>" +
       (date ? "<span class=\"np-edited\">last changed " + escHtml(date) + "</span>" : "") + "</div></div>";

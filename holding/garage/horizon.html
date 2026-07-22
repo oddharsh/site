@@ -673,7 +673,7 @@ placeholder
    These rules only style the explanatory card body + code sketch. */
 .sy-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
 @media (max-width: 520px) { .sy-grid { grid-template-columns: 1fr; } }
-.sy-col h4 {
+.sy-col h3 {
   font-family: var(--font-caption); font-size: 9.5pt; font-weight: bold;
   margin: 0 0 4px; color: oklch(41.92% 0.0962 250.51);
 }
@@ -811,7 +811,7 @@ placeholder
   border-top-color: oklch(47.12% 0.0555 253.58); border-left-color: oklch(47.12% 0.0555 253.58);
   background: oklch(98% 0.004 250); padding: 8px 9px;
 }
-.jxl-fmt h4 {
+.jxl-fmt h3 {
   font-family: var(--font-mono); font-size: 9.5pt; font-weight: bold;
   margin: 0 0 5px; color: oklch(38% 0.04 250);
 }
@@ -956,6 +956,102 @@ placeholder
 
 </style>
 <link rel="stylesheet" href="/luna.css">
+<script>
+/* Decide feature support BEFORE first paint.
+   Each demo card ships its fallback note (.unsupported / .hic-fail) as
+   display:none, revealed by adding .no-support. That flag used to be set by the
+   big script at the END of this 3600-line body, long after Chrome had painted,
+   so every unsupported card suddenly grew by a paragraph and shoved the rest of
+   the page down. Lighthouse measured CLS 0.26, the worst on the site.
+   Running the DOM-free probes up here and emitting the matching display rules
+   before the body parses means the notes are already correct on the first paint.
+   base-select needs a real element, so it stays in the late pass below. */
+window.__horizonCaps = (function () {
+  var sup = function (fn) { try { return !!fn(); } catch (e) { return false; } };
+    var checks = {
+      "text-box-trim": function () { return CSS.supports("text-box-trim: trim-both"); },
+      "contrast-color": function () { return CSS.supports("color: contrast-color(red)"); },
+      "interestfor": function () { return "interestForElement" in HTMLAnchorElement.prototype; },
+      "anchor-positioning": function () { return (CSS.supports('anchor-name: --a') && CSS.supports('position-anchor: --a')); },
+      "scroll-driven": function () { return (CSS.supports('animation-timeline: scroll()')); },
+      "popover-hint": function () { return ((function(){var d=document.createElement('div');try{d.popover='hint';return d.popover==='hint';}catch(e){return false;}})()); },
+      "field-sizing": function () { return (CSS.supports('field-sizing: content')); },
+      "view-transitions": function () { return (typeof document.startViewTransition === "function"); },
+      "corner-shape": function () { return (CSS.supports('corner-shape: squircle') || CSS.supports('corner-shape: superellipse(1)')); },
+      "interpolate-size": function () { return (CSS.supports('interpolate-size: allow-keywords')); },
+      "scheduler-yield": function () { return (!!(window.scheduler && typeof scheduler.yield === "function")); },
+      "html-in-canvas": function () { return (!!(window.CanvasRenderingContext2D && CanvasRenderingContext2D.prototype && 'drawElement' in CanvasRenderingContext2D.prototype)); },
+      "masonry": function () {
+        // CSS.supports() can return false even when the feature IS live (Chrome
+        // Canary "Grid Lanes" flag gates the value via a different path than
+        // CSS.supports). DOM-style probe: assign + read back to confirm acceptance.
+        if (CSS.supports('grid-template-rows: masonry') || CSS.supports('grid-template-columns: masonry')) return true;
+        if (CSS.supports('masonry-template-tracks: 1fr') || CSS.supports('item-pack: balance')) return true;
+        if (CSS.supports('display: masonry')) return true;
+        if (CSS.supports('display: grid-lanes')) return true;  // Safari 26 shipped this syntax
+        try {
+          var p = document.createElement('div');
+          p.style.display = 'grid';
+          p.style.gridTemplateRows = 'masonry';
+          if (p.style.gridTemplateRows === 'masonry') return true;
+          p.style.gridTemplateRows = '';
+          p.style.gridTemplateColumns = 'masonry';
+          if (p.style.gridTemplateColumns === 'masonry') return true;
+          p.style.display = 'masonry';
+          if (p.style.display === 'masonry') return true;
+        } catch (e) {}
+        return false;
+      },
+      "jpeg-xl": function () { return (false); },
+      "hdr-agtm": function () { return (CSS.supports('(dynamic-range: high)') && matchMedia('(dynamic-range: high)').matches); },
+      "route-matching": function () { return (false); },
+      "install-element": function () { return ("install" in navigator); },
+      "css-carousel": function () { return CSS.supports("scroll-marker-group: after"); },
+      "invoker-commands": function () { return ("commandForElement" in HTMLButtonElement.prototype); },
+      "css-scope": function () { return ("CSSScopeRule" in window); },
+      "custom-highlight": function () { return (("highlights" in CSS) && (typeof Highlight !== "undefined")); },
+      "hidden-until-found": function () { return ("onbeforematch" in window); },
+      "relative-color": function () { return CSS.supports("color: rgb(from white r g b)"); },
+      "at-property": function () { return ("registerProperty" in CSS); },
+      "starting-style": function () { return CSS.supports("transition-behavior: allow-discrete"); },
+      "light-dark": function () { return CSS.supports("color: light-dark(#000, #fff)"); },
+      "dsd": function () { return ("shadowRootMode" in HTMLTemplateElement.prototype); },
+      "model": function () { return ("HTMLModelElement" in window); },
+      "close-watcher": function () { return ("CloseWatcher" in window); },
+      "switch-control": function () { return ("switch" in document.createElement("input")); },
+      "css-if": function () { return (CSS.supports("top: calc(sibling-index() * 1px)") || CSS.supports("width: if(style(--x: 1): 1px; else: 2px)")); },
+      "scroll-state": function () { return CSS.supports("container-type: scroll-state"); },
+      "reading-flow": function () { return (CSS.supports("reading-flow: flex-visual") || CSS.supports("reading-order: 1")); },
+      "doc-pip": function () { return ("documentPictureInPicture" in window); },
+      "temporal": function () { return (typeof Temporal !== "undefined"); },
+      "move-before": function () { return ("moveBefore" in Element.prototype); },
+      "cross-doc-vt": function () { return ("startViewTransition" in document); },
+      "css-shape": function () { return CSS.supports("clip-path: shape(from 0 0, line to 10px 10px)"); },
+      "text-wrap-pretty": function () { return CSS.supports("text-wrap: pretty"); },
+      "css-function": function () { return ("CSSFunctionRule" in window); },
+      "webtransport": function () { return ("WebTransport" in window); },
+      "sw-static-routing": function () { return (typeof InstallEvent !== "undefined" && "addRoutes" in InstallEvent.prototype); },
+      "local-fonts": function () { return ("queryLocalFonts" in window); },
+      "webgpu": function () { return ("gpu" in navigator); },
+      "background-clip-border-area": function () { return CSS.supports("background-clip: border-area"); },
+      "text-fit": function () { return (CSS.supports("text-fit: scale-inline") || ("textFit" in document.documentElement.style)); },
+      "css-random": function () { return CSS.supports("width: random(1px, 2px)"); },
+      "speculation-rules": function () { return (typeof HTMLScriptElement !== "undefined" && HTMLScriptElement.supports && HTMLScriptElement.supports("speculationrules")); },
+    };
+  var state = {};
+  Object.keys(checks).forEach(function (k) { state[k] = sup(checks[k]); });
+  var rules = [];
+  Object.keys(state).forEach(function (k) {
+    if (state[k] === false) rules.push('.demo[data-cap="' + k + '"] .unsupported,.demo[data-cap="' + k + '"] .hic-fail{display:block}');
+  });
+  if (rules.length) {
+    var s = document.createElement("style");
+    s.textContent = rules.join("");
+    document.head.appendChild(s);
+  }
+  return { sup: sup, checks: checks, state: state };
+})();
+</script>
 </head>
 <body>
 <!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
@@ -989,11 +1085,12 @@ placeholder
     <hr>
 
     <!-- ───────────────────── text-box-trim ───────────────────── -->
-    <section class="demo" data-cap="text-box-trim">
+    <section class="demo shipped" data-cap="text-box-trim">
       <h2>
         <span>text-box-trim <span class="mono">/ text-box-edge</span></span>
         <span class="stat cross">Chrome · Safari · Firefox</span>
       </h2>
+      <p class="ship-tag">✓ shipped on the site</p>
       <p class="note">
         Trims the half-leading above the cap line and below the baseline, so
         text sits flush in its box. The highlight shows the line box; on the
@@ -1020,11 +1117,12 @@ placeholder
     </section>
 
     <!-- ───────────────────── contrast-color() ───────────────────── -->
-    <section class="demo" data-cap="contrast-color">
+    <section class="demo shipped" data-cap="contrast-color">
       <h2>
         <span>contrast-color()</span>
         <span class="stat cross">Chrome 147 &middot; Safari &middot; Firefox</span>
       </h2>
+      <p class="ship-tag">✓ shipped on the site</p>
       <p class="note">
         Auto-picks a legible (black/white) text color for a given background.
         Top label in each swatch is naive fixed-white; bottom is
@@ -1119,11 +1217,12 @@ pointerout   -&gt; hidePopover()
     </section>
 
     <!-- ───────────────────── feature cards ───────────────────── -->
-    <section class="demo" data-cap="anchor-positioning">
+    <section class="demo shipped" data-cap="anchor-positioning">
       <h2>
         <span>anchor positioning <span class="mono">/ position-area + position-try</span></span>
         <span class="stat cross">Chrome · Safari · Firefox</span>
       </h2>
+      <p class="ship-tag">✓ shipped on the site</p>
       <p class="note">
         Tether one element to another in pure CSS: give the target an
         <code>anchor-name</code>, point a popover at it with
@@ -1294,15 +1393,15 @@ pointerout   -&gt; hidePopover()
       <div class="fs-grid">
         <div>
           <p class="fs-cap">default: fixed <code>rows="2"</code>, scrolls</p>
-          <textarea class="fs-field" rows="2" spellcheck="false">Send me a note, this box stays the same height no matter how much you write, so long messages scroll inside a tiny window.</textarea>
+          <textarea class="fs-field" rows="2" aria-label="Fixed-size textarea, for comparison" spellcheck="false">Send me a note, this box stays the same height no matter how much you write, so long messages scroll inside a tiny window.</textarea>
         </div>
         <div>
           <p class="fs-cap"><code>field-sizing: content</code>, auto-grows</p>
-          <textarea class="fs-field fs-auto" rows="2" spellcheck="false">Send me a note, this box grows to fit, line by line, and shrinks again when you delete. No JS, no scroll-height bookkeeping.</textarea>
+          <textarea class="fs-field fs-auto" rows="2" aria-label="Auto-sizing textarea using field-sizing: content" spellcheck="false">Send me a note, this box grows to fit, line by line, and shrinks again when you delete. No JS, no scroll-height bookkeeping.</textarea>
         </div>
       </div>
       <p class="fs-cap" style="margin-top:10px">single-line input that hugs its value:
-        <input class="fs-input" type="text" value="aadharsh@archetype.fund" spellcheck="false"></p>
+        <input class="fs-input" aria-label="Auto-sizing text input using field-sizing: content" type="text" value="aadharsh@archetype.fund" spellcheck="false"></p>
       <p class="replaces">
         On the site: this is the native kill-switch for the classic
         <code>input</code>/<code>scrollHeight</code> auto-resize handler:
@@ -1324,11 +1423,12 @@ pointerout   -&gt; hidePopover()
       </p>
     </section>
 
-    <section class="demo" data-cap="view-transitions">
+    <section class="demo shipped" data-cap="view-transitions">
       <h2>
         <span>View Transitions <span class="mono">/ document.startViewTransition()</span></span>
         <span class="stat cross">Chrome &middot; Safari &middot; FF 144</span>
       </h2>
+      <p class="ship-tag">✓ shipped on the site</p>
       <p class="note">
         Wrap a DOM mutation in <code>document.startViewTransition(cb)</code> and
         the browser snapshots before + after, then cross-fades (or morphs, for
@@ -1590,12 +1690,12 @@ pointerout   -&gt; hidePopover()
 
       <div class="sy-grid">
         <div class="sy-col">
-          <h4>one long synchronous task</h4>
+          <h3>one long synchronous task</h3>
           <div class="sy-track blocked"><span class="blk"></span><span class="tap" title="a tap arrives here"></span></div>
           <p class="sy-leg">the <span class="red">red</span> tap waits for the whole block to finish, janky.</p>
         </div>
         <div class="sy-col">
-          <h4>broken with <code>await scheduler.yield()</code></h4>
+          <h3>broken with <code>await scheduler.yield()</code></h3>
           <div class="sy-track yielded"><span class="blk a"></span><span class="blk b"></span><span class="blk c"></span><span class="blk d"></span><span class="tap" title="a tap arrives here"></span></div>
           <p class="sy-leg">the same tap lands in a gap and gets serviced, smooth.</p>
         </div>
@@ -1902,19 +2002,19 @@ ctx.drawElementImage(el, 0, 0);            // &lt;- the new primitive (el has la
 
       <div class="jxl-compare" aria-label="illustrative file size at matched high quality">
         <div class="jxl-fmt">
-          <h4>JPG (jpegli)</h4>
+          <h3>JPG (jpegli)</h3>
           <div class="jxl-bar"><i style="width:100%"></i></div>
           <p class="jxl-kb">baseline, today&apos;s universal fallback</p>
           <p class="jxl-ships">everywhere</p>
         </div>
         <div class="jxl-fmt">
-          <h4>AVIF</h4>
+          <h3>AVIF</h3>
           <div class="jxl-bar"><i style="width:74%"></i></div>
           <p class="jxl-kb">~25% smaller, but softens fine grain at high q</p>
           <p class="jxl-ships">Cr 85+ &middot; Saf 16+ &middot; FF 93+</p>
         </div>
         <div class="jxl-fmt win">
-          <h4>JPEG XL</h4>
+          <h3>JPEG XL</h3>
           <div class="jxl-bar"><i style="width:62%"></i></div>
           <p class="jxl-kb">smaller still at the high-q end + progressive</p>
           <p class="jxl-ships">Safari 16.4+ only</p>
@@ -2351,11 +2451,12 @@ myButton.onclick = async () =&gt; {
       </p>
     </section>
 
-    <section class="demo" data-cap="hidden-until-found">
+    <section class="demo shipped" data-cap="hidden-until-found">
       <h2>
         <span><code>hidden=until-found</code> <span class="mono">+ scroll-to-text</span></span>
         <span class="stat cross">Chrome 102 &middot; Safari 26 &middot; FF 148</span>
       </h2>
+      <p class="ship-tag">✓ shipped on the site</p>
       <p class="note">
         Content that is collapsed <em>but still findable</em>: <code>hidden="until-found"</code>
         hides a region, yet in-page find (<kbd>Ctrl/&#8984;-F</kbd>) and
@@ -2449,11 +2550,12 @@ myButton.onclick = async () =&gt; {
     </style>
 
     <!-- ───────────────────── relative color syntax ───────────────────── -->
-    <section class="demo" data-cap="relative-color">
+    <section class="demo shipped" data-cap="relative-color">
       <h2>
         <span>relative color syntax <span class="mono">oklch(from &hellip;)</span></span>
         <span class="stat cross">Chrome 119 &middot; Safari 16.4 &middot; FF 128</span>
       </h2>
+      <p class="ship-tag">✓ shipped on the site</p>
       <p class="note">
         Derive a color <em>from another color</em>: pull out its <code>l c h</code>
         channels and recombine them. One base, every tint, shade, and
@@ -2476,11 +2578,12 @@ myButton.onclick = async () =&gt; {
     </section>
 
     <!-- ───────────────────── @property ───────────────────── -->
-    <section class="demo" data-cap="at-property">
+    <section class="demo shipped" data-cap="at-property">
       <h2>
         <span>@property <span class="mono">/ registered custom props</span></span>
         <span class="stat cross">Chrome &middot; Safari &middot; Firefox</span>
       </h2>
+      <p class="ship-tag">✓ shipped on the site</p>
       <p class="note">
         Registering a custom property with a <code>syntax</code> type makes it
         <em>animatable</em>. The gradient angle below is a <code>&lt;angle&gt;</code>
@@ -2496,11 +2599,12 @@ myButton.onclick = async () =&gt; {
     </section>
 
     <!-- ───────────────────── @starting-style ───────────────────── -->
-    <section class="demo" data-cap="starting-style">
+    <section class="demo shipped" data-cap="starting-style">
       <h2>
         <span>@starting-style <span class="mono">+ transition-behavior: allow-discrete</span></span>
         <span class="stat cross">Chrome 117 &middot; Safari 18 &middot; FF 129</span>
       </h2>
+      <p class="ship-tag">✓ shipped on the site</p>
       <p class="note">
         Animate an element <em>as it appears</em> from <code>display: none</code>: no
         JS, no double-rAF hacks. <code>@starting-style</code> gives the entry its
@@ -2714,11 +2818,12 @@ myButton.onclick = async () =&gt; {
     </section>
 
     <!-- ───────────────────── Temporal ───────────────────── -->
-    <section class="demo" data-cap="temporal">
+    <section class="demo shipped" data-cap="temporal">
       <h2>
         <span>Temporal <span class="mono">/ the date/time rewrite</span></span>
         <span class="stat cross">Chrome 144 &middot; FF 139 &middot; Safari TP</span>
       </h2>
+      <p class="ship-tag">✓ shipped on the site</p>
       <p class="note">
         The long-awaited replacement for <code>Date</code>: immutable objects,
         first-class time zones and calendars, no more month-zero footguns. Live
@@ -2948,11 +3053,12 @@ myButton.onclick = async () =&gt; {
     </section>
 
     <!-- ───────────────────── cross-document view transitions ───────────────────── -->
-    <section class="demo" data-cap="cross-doc-vt">
+    <section class="demo shipped" data-cap="cross-doc-vt">
       <h2>
         <span>Cross-document transitions <span class="mono">@view-transition</span></span>
         <span class="stat cross">Chrome 126 &middot; Safari 18.2 &middot; FF building</span>
       </h2>
+      <p class="ship-tag">✓ shipped on the site</p>
       <p class="note">
         The multi-page sibling of the View Transitions already used in the window shell. One
         rule (<code>@view-transition { navigation: auto }</code> on both pages) animates a
@@ -3050,11 +3156,12 @@ myButton.onclick = async () =&gt; {
     </section>
 
     <!-- ───────────────────── Service Worker static routing ───────────────────── -->
-    <section class="demo" data-cap="sw-static-routing">
+    <section class="demo shipped" data-cap="sw-static-routing">
       <h2>
         <span>SW static routing <span class="mono">InstallEvent.addRoutes()</span></span>
         <span class="stat chrome">Chrome &middot; Gecko positive &middot; WebKit no-signal</span>
       </h2>
+      <p class="ship-tag">✓ shipped on the site</p>
       <p class="note">
         Declare routing rules at install time so the browser can <em>skip booting the service
         worker entirely</em> for paths that always go the same place (straight to network or
@@ -3090,11 +3197,12 @@ myButton.onclick = async () =&gt; {
     </section>
 
     <!-- ───────────────────── Speculation Rules ───────────────────── -->
-    <section class="demo" data-cap="speculation-rules">
+    <section class="demo shipped" data-cap="speculation-rules">
       <h2>
         <span>Speculation Rules <span class="mono">prefetch / prerender</span></span>
         <span class="stat chrome">Chrome &middot; Safari 26.2 (off) &middot; FF no</span>
       </h2>
+      <p class="ship-tag">✓ shipped on the site</p>
       <p class="note">
         A <code>&lt;script type="speculationrules"&gt;</code> JSON block tells the browser which
         links to prefetch or fully <em>prerender</em> ahead of the click, so the next page is
@@ -3395,77 +3503,11 @@ myButton.onclick = async () =&gt; {
     var d = document.createElement("div");
     try { d.popover = "hint"; return d.popover === "hint"; } catch (e) { return false; }
   };
-  var checks = {
-    "text-box-trim": function () { return CSS.supports("text-box-trim: trim-both"); },
-    "contrast-color": function () { return CSS.supports("color: contrast-color(red)"); },
-    "interestfor": function () { return "interestForElement" in HTMLAnchorElement.prototype; },
-    "anchor-positioning": function () { return (CSS.supports('anchor-name: --a') && CSS.supports('position-anchor: --a')); },
-    "scroll-driven": function () { return (CSS.supports('animation-timeline: scroll()')); },
-    "popover-hint": function () { return ((function(){var d=document.createElement('div');try{d.popover='hint';return d.popover==='hint';}catch(e){return false;}})()); },
-    "field-sizing": function () { return (CSS.supports('field-sizing: content')); },
-    "view-transitions": function () { return (typeof document.startViewTransition === "function"); },
+  // probes were hoisted into <head> so the fallback notes paint correctly the
+  // first time (see the comment up there). Reuse them; base-select needs the DOM.
+  var checks = Object.assign({}, (window.__horizonCaps && window.__horizonCaps.checks) || {}, {
     "base-select": function () { var el = document.querySelector('.bsel-field'); try { return !!(el && getComputedStyle(el).appearance === 'base-select'); } catch (e) { return false; } },
-    "corner-shape": function () { return (CSS.supports('corner-shape: squircle') || CSS.supports('corner-shape: superellipse(1)')); },
-    "interpolate-size": function () { return (CSS.supports('interpolate-size: allow-keywords')); },
-    "scheduler-yield": function () { return (!!(window.scheduler && typeof scheduler.yield === "function")); },
-    "html-in-canvas": function () { return (!!(window.CanvasRenderingContext2D && CanvasRenderingContext2D.prototype && 'drawElement' in CanvasRenderingContext2D.prototype)); },
-    "masonry": function () {
-      // CSS.supports() can return false even when the feature IS live (Chrome
-      // Canary "Grid Lanes" flag gates the value via a different path than
-      // CSS.supports). DOM-style probe: assign + read back to confirm acceptance.
-      if (CSS.supports('grid-template-rows: masonry') || CSS.supports('grid-template-columns: masonry')) return true;
-      if (CSS.supports('masonry-template-tracks: 1fr') || CSS.supports('item-pack: balance')) return true;
-      if (CSS.supports('display: masonry')) return true;
-      if (CSS.supports('display: grid-lanes')) return true;  // Safari 26 shipped this syntax
-      try {
-        var p = document.createElement('div');
-        p.style.display = 'grid';
-        p.style.gridTemplateRows = 'masonry';
-        if (p.style.gridTemplateRows === 'masonry') return true;
-        p.style.gridTemplateRows = '';
-        p.style.gridTemplateColumns = 'masonry';
-        if (p.style.gridTemplateColumns === 'masonry') return true;
-        p.style.display = 'masonry';
-        if (p.style.display === 'masonry') return true;
-      } catch (e) {}
-      return false;
-    },
-    "jpeg-xl": function () { return (false); },
-    "hdr-agtm": function () { return (CSS.supports('(dynamic-range: high)') && matchMedia('(dynamic-range: high)').matches); },
-    "route-matching": function () { return (false); },
-    "install-element": function () { return ("install" in navigator); },
-    "css-carousel": function () { return CSS.supports("scroll-marker-group: after"); },
-    "invoker-commands": function () { return ("commandForElement" in HTMLButtonElement.prototype); },
-    "css-scope": function () { return ("CSSScopeRule" in window); },
-    "custom-highlight": function () { return (("highlights" in CSS) && (typeof Highlight !== "undefined")); },
-    "hidden-until-found": function () { return ("onbeforematch" in window); },
-    "relative-color": function () { return CSS.supports("color: rgb(from white r g b)"); },
-    "at-property": function () { return ("registerProperty" in CSS); },
-    "starting-style": function () { return CSS.supports("transition-behavior: allow-discrete"); },
-    "light-dark": function () { return CSS.supports("color: light-dark(#000, #fff)"); },
-    "dsd": function () { return ("shadowRootMode" in HTMLTemplateElement.prototype); },
-    "model": function () { return ("HTMLModelElement" in window); },
-    "close-watcher": function () { return ("CloseWatcher" in window); },
-    "switch-control": function () { return ("switch" in document.createElement("input")); },
-    "css-if": function () { return (CSS.supports("top: calc(sibling-index() * 1px)") || CSS.supports("width: if(style(--x: 1): 1px; else: 2px)")); },
-    "scroll-state": function () { return CSS.supports("container-type: scroll-state"); },
-    "reading-flow": function () { return (CSS.supports("reading-flow: flex-visual") || CSS.supports("reading-order: 1")); },
-    "doc-pip": function () { return ("documentPictureInPicture" in window); },
-    "temporal": function () { return (typeof Temporal !== "undefined"); },
-    "move-before": function () { return ("moveBefore" in Element.prototype); },
-    "cross-doc-vt": function () { return ("startViewTransition" in document); },
-    "css-shape": function () { return CSS.supports("clip-path: shape(from 0 0, line to 10px 10px)"); },
-    "text-wrap-pretty": function () { return CSS.supports("text-wrap: pretty"); },
-    "css-function": function () { return ("CSSFunctionRule" in window); },
-    "webtransport": function () { return ("WebTransport" in window); },
-    "sw-static-routing": function () { return (typeof InstallEvent !== "undefined" && "addRoutes" in InstallEvent.prototype); },
-    "local-fonts": function () { return ("queryLocalFonts" in window); },
-    "webgpu": function () { return ("gpu" in navigator); },
-    "background-clip-border-area": function () { return CSS.supports("background-clip: border-area"); },
-    "text-fit": function () { return (CSS.supports("text-fit: scale-inline") || ("textFit" in document.documentElement.style)); },
-    "css-random": function () { return CSS.supports("width: random(1px, 2px)"); },
-    "speculation-rules": function () { return (typeof HTMLScriptElement !== "undefined" && HTMLScriptElement.supports && HTMLScriptElement.supports("speculationrules")); },
-  };
+  });
   var label = {
     "text-box-trim": "text-box-trim",
     "contrast-color": "contrast-color()",
@@ -3541,24 +3583,10 @@ myButton.onclick = async () =&gt; {
     if (n) n.style.opacity = state[k] ? "1" : "0.55";
   });
 
-  // mark the cards that are actually LIVE on the real site (not just feasible /
-  // demoed here) — fill them green + tag them. hand-kept list; audited against
-  // production usage in index.html / nav.js / _worker.js / sw.js / serendipity.
-  var shipped = ["text-box-trim", "anchor-positioning", "view-transitions", "cross-doc-vt",
-    "relative-color", "at-property", "starting-style", "temporal", "speculation-rules",
-    "sw-static-routing", "hidden-until-found", "contrast-color"];
-  shipped.forEach(function (k) {
-    var el = document.querySelector('.demo[data-cap="' + k + '"]');
-    if (!el) return;
-    el.classList.add("shipped");
-    var h2 = el.querySelector("h2");
-    if (h2 && !el.querySelector(".ship-tag")) {
-      var tag = document.createElement("p");
-      tag.className = "ship-tag";
-      tag.textContent = "✓ shipped on the site";
-      h2.insertAdjacentElement("afterend", tag);
-    }
-  });
+  // NOTE: the "shipped" fill + ✓ tag used to be injected here from a hand-kept
+  // list. That list never depended on feature detection, and injecting a <p> into
+  // 12 cards after paint grew each one and shoved the page down (CLS 0.26 on
+  // mobile). Both now ship as static markup on the sections themselves.
 })();
 </script>
 

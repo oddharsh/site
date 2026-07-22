@@ -156,7 +156,7 @@
       if (!menubar) return;
       menubar.innerHTML = "";
       MENUS.forEach(function (m) {
-        var btn = el('<button type="button" class="np-menu" aria-haspopup="true" aria-expanded="false">' + esc(m.name) + "</button>");
+        var btn = el('<button type="button" role="menuitem" class="np-menu" aria-haspopup="true" aria-expanded="false">' + esc(m.name) + "</button>");
         btn.addEventListener("click", function (e) { e.stopPropagation(); var was = openMenu && openMenu.btn === btn; closeMenu(); if (!was) open(m, btn); });
         btn.addEventListener("mouseenter", function () { if (openMenu && openMenu.btn !== btn) { closeMenu(); open(m, btn); } });
         menubar.appendChild(btn);
