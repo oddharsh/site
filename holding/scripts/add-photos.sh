@@ -28,7 +28,11 @@
 #      (EXIF for the tooltip) and bakes the 64-bin RGB+luma histograms into
 #      meta.hist via photo-histograms.py — the tooltip renders the bars from
 #      that field, and the metadata regen drops it, so the bake runs right after
-#   5. busts the manifest:images KV key so the worker re-derives from R2
+#   5. captions anything still missing alt text (gen-alt-text.py), then validates
+#      the whole artifact graph — pixels, EXIF, histograms, captions — via
+#      check-photo-pipeline.mjs, which fails the run rather than let an
+#      unlabelled image reach a deploy
+#   6. busts the manifest:images KV key so the worker re-derives from R2
 #
 # REMOTE_RENDER_ONLY=1 skips R2 uploads and KV writes. The GitHub Actions
 # pipeline uses it because the source object is already in R2 and the generated
@@ -328,6 +332,20 @@ if command -v python3 >/dev/null 2>&1 && python3 -c "import PIL" >/dev/null 2>&1
   python3 "$SCRIPT_DIR/photo-histograms.py" 2>&1 | tail -1
 else
   echo "  Pillow (python3 PIL) missing — skipping histogram bake (run photo-histograms.py after 'pip3 install --user pillow')"
+fi
+
+# caption anything still missing alt text. runs AFTER hash-thumbnails.sh because
+# it reads the committed holding/i/ square via hashes.json and posts those exact
+# bytes to Workers AI — no round trip to production, so a photo added seconds ago
+# gets captioned here rather than waiting for a deploy. resumable and idempotent:
+# already-captioned stems cost nothing. a 429 (the free 10k neurons/day) stops it
+# early, which is why the failure is tolerated here and the real gate is
+# check-photo-pipeline.mjs below.
+if command -v python3 >/dev/null 2>&1; then
+  python3 "$SCRIPT_DIR/gen-alt-text.py" || \
+    echo "  captions incomplete — re-run 'npm run captions' before deploying"
+else
+  echo "  python3 missing — skipping alt-text generation"
 fi
 
 node "$PROJECT_DIR/holding/scripts/check-photo-pipeline.mjs"

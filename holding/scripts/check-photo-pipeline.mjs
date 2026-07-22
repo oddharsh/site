@@ -23,6 +23,7 @@ const fail = (message) => {
 
 const metadata = await json(path.join(IMAGES, "metadata.json"));
 const hashes = await json(path.join(IMAGES, "hashes.json"));
+const alt = await json(path.join(IMAGES, "alt.json"));
 const stems = Object.keys(hashes).sort();
 const metadataStems = Object.keys(metadata).sort();
 
@@ -61,4 +62,13 @@ const actualFiles = (await readdir(HASHED)).filter((file) => /\.(avif|jpg)$/.tes
 const orphans = actualFiles.filter((file) => !expectedFiles.has(file));
 if (orphans.length) fail(`unreferenced hashed pixel files: ${orphans.join(", ")}`);
 
-console.log(`photo-pipeline: ${stems.length} photos, ${expectedFiles.size} hashed tiers, complete EXIF + histogram metadata`);
+// alt text is a served artifact like the pixels and the EXIF, so a gap fails here
+// rather than shipping an unlabelled image. add-photos.sh generates captions just
+// above this check, so reaching it means the captioner was rate-limited or skipped.
+const uncaptioned = stems.filter((stem) => !(alt[stem] || "").trim());
+if (uncaptioned.length) {
+  fail(`${uncaptioned.length} photo(s) without alt text: ${uncaptioned.slice(0, 8).join(", ")}` +
+       `${uncaptioned.length > 8 ? " …" : ""}\n  fix with: npm run captions`);
+}
+
+console.log(`photo-pipeline: ${stems.length} photos, ${expectedFiles.size} hashed tiers, complete EXIF + histogram + alt-text metadata`);

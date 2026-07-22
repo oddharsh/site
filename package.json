@@ -16,6 +16,7 @@
     "og-cards": "node holding/scripts/gen-og-cards.mjs",
     "photos": "bash holding/scripts/add-photos.sh",
     "photos:check": "node holding/scripts/check-photo-pipeline.mjs",
+    "captions": "python3 holding/scripts/gen-alt-text.py",
     "perf-budget": "node perf-budget.mjs",
     "check-wrangler": "node scripts/check-wrangler.mjs",
     "pages:check": "node scripts/check-page-contracts.mjs",
