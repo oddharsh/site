@@ -461,11 +461,15 @@ for (const [file, srcPath, marker] of SHELLS) {
     console.log(`hashed asset: ${a.from} -> ${to} (${bytes.length} bytes)`);
   }
 
-  // repoint: every HTML file + the two worker tag-emitters (chrome.js, writing.js)
-  // + the serendipity shell. NOT the top-level shell scripts / luna.css.
+  // repoint: every served HTML file + the two worker tag-emitters (chrome.js,
+  // writing.js) + the serendipity shell. NOT the top-level shell scripts /
+  // luna.css, and NOT the readable *.src.html twin (it must stay byte-identical
+  // to holding/index.html for the perf-budget twin check — View Source is the
+  // authoring source, which keeps the plain /nav.js the fallback still serves).
   const targets = [`${OUT}/serendipity/serendipity.js`];
   for (const rel of await readdir(`${OUT}/holding`, { recursive: true })) {
-    if (rel.endsWith(".html") || (rel.startsWith("_worker.js/") && rel.endsWith(".js"))) {
+    if ((rel.endsWith(".html") && !rel.endsWith(".src.html")) ||
+        (rel.startsWith("_worker.js/") && rel.endsWith(".js"))) {
       targets.push(`${OUT}/holding/${rel}`);
     }
   }
