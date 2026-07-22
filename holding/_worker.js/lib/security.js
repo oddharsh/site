@@ -8,7 +8,7 @@ export const SECURITY_HEADERS = {
   "content-security-policy":
     "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://i.scdn.co https://*.spotifycdn.com; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; worker-src 'self'; manifest-src 'self'; upgrade-insecure-requests",
   "permissions-policy":
-    "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=(), serial=(), bluetooth=(), midi=(), accelerometer=(), gyroscope=(), magnetometer=(), screen-wake-lock=(), hid=(), idle-detection=()",
+    "camera=(), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=(), serial=(), bluetooth=(), midi=(), accelerometer=(), gyroscope=(), magnetometer=(), screen-wake-lock=(), hid=(), idle-detection=()",
   "x-frame-options":         "DENY",
   "x-content-type-options":  "nosniff",
   "referrer-policy":         "strict-origin-when-cross-origin",

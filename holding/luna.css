@@ -476,6 +476,10 @@ box-shadow:inset 0 1px 0 oklch(82% 0.11 250)}
 /* the only chrome is an engraved vertical separator on the tray's left edge. */
 #axp-tray{flex:0 0 auto;display:flex;align-items:center;padding:0 14px 0 13px;color:oklch(100% 0 0);white-space:nowrap;
 font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);box-shadow:inset 1px 0 0 oklch(64% 0.15 254)}
+/* reserve the clock's width so the tray doesn't reflow when Temporal fills the
+   time a tick after mount (empty → "12:00 PM"). widest 12h stamp fits in ~56px
+   at 11px Tahoma; right-align keeps the colon steady. kills the ~0.0006 shift. */
+#axp-clock{display:inline-block;min-width:56px;text-align:right}
 /* notification-area icons: System Properties, Security Center, Windows Update. */
 /* where the little XP "system" tray bits actually lived, right of the engraved */
 /* separator. shared class so the three line up identically. */
