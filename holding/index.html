@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#2D78BD">
-<!-- discover the one shared stylesheet at the top of head so its bytes are in
-     flight before the inline <style> block; the real stylesheet link stays
-     put (line ~869) so the cascade order is unchanged. same href -> one req. -->
+<!-- warm the one shared stylesheet at high priority up top so its bytes are in
+     flight during parse; the applying link lower in head loads it non-blocking
+     (media=print swap) and keeps the cascade slot. same href -> one request. -->
 <link rel="preload" as="style" href="/luna.css">
 <title>Aadharsh Pannirselvam</title>
 <meta name="description" content="Aadharsh Pannirselvam. I research and invest in interesting tech-oriented stuff and the people that make them.">
@@ -861,7 +861,16 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
   }
 
 </style>
-<link rel="stylesheet" href="/luna.css">
+<!-- luna.css applies non-render-blocking: the visible window above is fully
+     styled by the inline block, and luna.css only dresses the JS-injected
+     .axp-* desktop shell (which nav.js builds after defer anyway). media="print"
+     lets the browser download without blocking first paint, then onload flips
+     it to all. The link stays HERE (not the head-top preload) so its cascade
+     slot is unchanged: luna still applies after the inline block. Preloaded up
+     top at high priority, so the flip resolves from cache. noscript keeps it
+     render-blocking when JS is off (nothing flips media there). -->
+<link rel="stylesheet" href="/luna.css" media="print" onload="this.media='all';this.onload=null">
+<noscript><link rel="stylesheet" href="/luna.css"></noscript>
 </head>
 <body>
 <!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
