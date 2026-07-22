@@ -99,6 +99,18 @@
 /lwe/*
   Cache-Control: public, max-age=0, must-revalidate, s-maxage=86400
 
+# pixel-peeper — the compression eye exam (/pixel-peeper). a static XP-window
+# game: the shell + metadata manifest revalidate like the garage pages (a deploy
+# purges the edge, so fresh copy always lands), while the per-tile encodes carry
+# content-hashed names, so they're immutable-1y like /i/ — a re-encode mints a
+# new filename and can never shadow old bytes.
+/pixel-peeper
+  Cache-Control: public, max-age=0, must-revalidate, s-maxage=86400
+/pixel-peeper/manifest.json
+  Cache-Control: public, max-age=0, must-revalidate, s-maxage=86400
+/pixel-peeper/tiles/*
+  Cache-Control: public, max-age=31536000, immutable
+
 # homepage: the worker pre-renders a fresh 12-photo random pick on every
 # request, and the visitor counter increments per human pageview. both
 # need the worker to run each visit, so no SHARED cache (CF edge, proxy)

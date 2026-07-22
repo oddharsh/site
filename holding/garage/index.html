@@ -363,6 +363,26 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
 
       <li>
         <div class="title-row">
+          <span class="name"><a href="/pixel-peeper">Pixel Peeper: whose eye do you have?</a></span>
+          <span class="status review">prototype</span>
+        </div>
+        <div class="desc">
+          A vision test for image compression, in the ismy.blue spirit. Each call shows the
+          same photo squeezed two or three ways; you pick the best on instinct, over and over,
+          and it profiles what your eye is quietly tuned to. Every tile is a real encode
+          (zenc, jpegli, mozjpeg, sips; honest 4:2:2 vs 4:2:0 on the 4:2:2-native Fuji files),
+          scored offline by <code style="font-family: var(--font-mono);font-size:9pt">ssimulacra2</code>
+          and <code style="font-family: var(--font-mono);font-size:9pt">butteraugli</code>. The twist:
+          the two metrics are rival models of human vision that disagree, so the end reads which
+          one your eye sides with. Closes with an understanding check.
+        </div>
+        <div class="meta">
+          shape: blind A/B/C compression test + metric-alignment read &middot; added 2026-07-21
+        </div>
+      </li>
+
+      <li>
+        <div class="title-row">
           <span class="name"><a href="/garage/gpt56">5.6 Sol&apos;s performance pass</a></span>
           <span class="status review">field note</span>
         </div>
