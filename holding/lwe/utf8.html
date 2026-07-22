@@ -149,7 +149,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
             <div class="pad">
               <p class="lead">Type anything (or pick a preset). See each character's code point, and how three encodings store it as bytes:</p>
               <div class="enc-in">
-                <input id="enc-input" type="text" value="A é 中 😀" spellcheck="false" autocomplete="off">
+                <input id="enc-input" aria-label="Text to inspect, shown as code points and encoded bytes" type="text" value="A é 中 😀" spellcheck="false" autocomplete="off">
                 <button class="preset" data-set="Hello">Hello</button>
                 <button class="preset" data-set="café">café</button>
                 <button class="preset" data-set="中文">中文</button>
@@ -180,7 +180,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
             <div class="pad">
               <p class="lead">One character, byte by byte. <span class="mono" style="color:#6b7d93">grey</span> = structure bits (the prefix that says "start of N-byte char" or "continuation"); <span class="mono" style="color:#b8860b">gold</span> = the actual code-point payload. Read the gold bits in order and you rebuild the character:</p>
               <div class="enc-in" style="margin-bottom:6px">
-                <input id="anat-input" type="text" value="中" spellcheck="false" autocomplete="off" maxlength="2" style="width:70px">
+                <input id="anat-input" aria-label="Single character to break into its encoded bits" type="text" value="中" spellcheck="false" autocomplete="off" maxlength="2" style="width:70px">
                 <button class="preset" data-anat="A">A</button>
                 <button class="preset" data-anat="é">é</button>
                 <button class="preset" data-anat="中">中</button>

@@ -673,7 +673,7 @@ placeholder
    These rules only style the explanatory card body + code sketch. */
 .sy-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
 @media (max-width: 520px) { .sy-grid { grid-template-columns: 1fr; } }
-.sy-col h4 {
+.sy-col h3 {
   font-family: var(--font-caption); font-size: 9.5pt; font-weight: bold;
   margin: 0 0 4px; color: oklch(41.92% 0.0962 250.51);
 }
@@ -811,7 +811,7 @@ placeholder
   border-top-color: oklch(47.12% 0.0555 253.58); border-left-color: oklch(47.12% 0.0555 253.58);
   background: oklch(98% 0.004 250); padding: 8px 9px;
 }
-.jxl-fmt h4 {
+.jxl-fmt h3 {
   font-family: var(--font-mono); font-size: 9.5pt; font-weight: bold;
   margin: 0 0 5px; color: oklch(38% 0.04 250);
 }
@@ -1393,15 +1393,15 @@ pointerout   -&gt; hidePopover()
       <div class="fs-grid">
         <div>
           <p class="fs-cap">default: fixed <code>rows="2"</code>, scrolls</p>
-          <textarea class="fs-field" rows="2" spellcheck="false">Send me a note, this box stays the same height no matter how much you write, so long messages scroll inside a tiny window.</textarea>
+          <textarea class="fs-field" rows="2" aria-label="Fixed-size textarea, for comparison" spellcheck="false">Send me a note, this box stays the same height no matter how much you write, so long messages scroll inside a tiny window.</textarea>
         </div>
         <div>
           <p class="fs-cap"><code>field-sizing: content</code>, auto-grows</p>
-          <textarea class="fs-field fs-auto" rows="2" spellcheck="false">Send me a note, this box grows to fit, line by line, and shrinks again when you delete. No JS, no scroll-height bookkeeping.</textarea>
+          <textarea class="fs-field fs-auto" rows="2" aria-label="Auto-sizing textarea using field-sizing: content" spellcheck="false">Send me a note, this box grows to fit, line by line, and shrinks again when you delete. No JS, no scroll-height bookkeeping.</textarea>
         </div>
       </div>
       <p class="fs-cap" style="margin-top:10px">single-line input that hugs its value:
-        <input class="fs-input" type="text" value="aadharsh@archetype.fund" spellcheck="false"></p>
+        <input class="fs-input" aria-label="Auto-sizing text input using field-sizing: content" type="text" value="aadharsh@archetype.fund" spellcheck="false"></p>
       <p class="replaces">
         On the site: this is the native kill-switch for the classic
         <code>input</code>/<code>scrollHeight</code> auto-resize handler:
@@ -1690,12 +1690,12 @@ pointerout   -&gt; hidePopover()
 
       <div class="sy-grid">
         <div class="sy-col">
-          <h4>one long synchronous task</h4>
+          <h3>one long synchronous task</h3>
           <div class="sy-track blocked"><span class="blk"></span><span class="tap" title="a tap arrives here"></span></div>
           <p class="sy-leg">the <span class="red">red</span> tap waits for the whole block to finish, janky.</p>
         </div>
         <div class="sy-col">
-          <h4>broken with <code>await scheduler.yield()</code></h4>
+          <h3>broken with <code>await scheduler.yield()</code></h3>
           <div class="sy-track yielded"><span class="blk a"></span><span class="blk b"></span><span class="blk c"></span><span class="blk d"></span><span class="tap" title="a tap arrives here"></span></div>
           <p class="sy-leg">the same tap lands in a gap and gets serviced, smooth.</p>
         </div>
@@ -2002,19 +2002,19 @@ ctx.drawElementImage(el, 0, 0);            // &lt;- the new primitive (el has la
 
       <div class="jxl-compare" aria-label="illustrative file size at matched high quality">
         <div class="jxl-fmt">
-          <h4>JPG (jpegli)</h4>
+          <h3>JPG (jpegli)</h3>
           <div class="jxl-bar"><i style="width:100%"></i></div>
           <p class="jxl-kb">baseline, today&apos;s universal fallback</p>
           <p class="jxl-ships">everywhere</p>
         </div>
         <div class="jxl-fmt">
-          <h4>AVIF</h4>
+          <h3>AVIF</h3>
           <div class="jxl-bar"><i style="width:74%"></i></div>
           <p class="jxl-kb">~25% smaller, but softens fine grain at high q</p>
           <p class="jxl-ships">Cr 85+ &middot; Saf 16+ &middot; FF 93+</p>
         </div>
         <div class="jxl-fmt win">
-          <h4>JPEG XL</h4>
+          <h3>JPEG XL</h3>
           <div class="jxl-bar"><i style="width:62%"></i></div>
           <p class="jxl-kb">smaller still at the high-q end + progressive</p>
           <p class="jxl-ships">Safari 16.4+ only</p>

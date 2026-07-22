@@ -601,7 +601,10 @@ box-shadow:inset 1px 1px 0 oklch(100% 0 0),inset -1px -1px 0 oklch(84% 0.02 90)}
   :where(.title-bar .title-text) { display: flex; align-items: center; flex: 1; min-width: 0; }
   :where(.title-bar .icon) { display: inline-block; width: 16px; height: 16px; margin-right: 6px; background: oklch(69.58% 0.2043 43.49); position: relative; flex-shrink: 0; }
   :where(.title-bar .icon)::before { content: ""; position: absolute; inset: 2px 4px; background: oklch(87.82% 0.0877 66.27); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
-  :where(.title-bar .controls) { display: flex; align-items: center; gap: 2px; letter-spacing: 0; }
+  /* gap 4px (not 2) so each 21px caption button clears the 24px spacing circle
+     that WCAG 2.5.8 accepts in lieu of a 24x24 target. Keeps Luna's exact
+     21x21 gel lozenges instead of inflating them to satisfy the audit. */
+  :where(.title-bar .controls) { display: flex; align-items: center; gap: 4px; letter-spacing: 0; }
 /* authentic Luna caption buttons: 21x21 glossy "gel" lozenges with a top specular
    highlight + CSS-drawn white glyphs (no text, no images). min/max are blue, CLOSE
    is RED at rest. CLASS-BASED (.min/.max/.close) so decorative demo windows that use
