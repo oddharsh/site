@@ -3,7 +3,7 @@
 // functions used by the corresponding HTTP endpoints.
 import { readAroundChanges } from "./around.js";
 import { readCoffeeAvailability } from "./coffee.js";
-import { compareLensTargets, lensInspect, lensObservationSummary, validateLensTarget } from "./lens.js";
+import { LENS_BUDGETS, compareLensTargets, lensInspect, lensObservationSummary, overLensBudget, validateLensTarget } from "./lens.js";
 import { jsonResponse } from "./lib/http.js";
 import { queryPhotos } from "./photos.js";
 import { RN_FALLBACK, getTracksSWR } from "./rn.js";
@@ -11,6 +11,10 @@ import { searchSite } from "./search.js";
 
 const MCP_PROTOCOL = "2025-06-18";
 const MCP_SUPPORTED = ["2025-06-18", "2025-03-26", "2024-11-05"];
+// Generous for a real client (they batch a handful of calls, not hundreds) and
+// small enough that a batch can't outrun the per-IP crawl budgets. See the note
+// at the batch branch in handleSiteMcp.
+const MCP_MAX_BATCH = 16;
 
 const MCP_TOOLS = [
   {
@@ -61,18 +65,12 @@ function mcpCors() {
 
 function errorResult(message) { return { _error: String(message).slice(0, 400) }; }
 
-async function lensRateLimit(request, env, ctx) {
-  if (!env.RN_KV) return true;
-  const ip = request.headers.get("cf-connecting-ip") || "0.0.0.0";
-  const key = `mcp:lensrl:${ip}:${Math.floor(Date.now() / 60000)}`;
-  let count = 0;
-  try { count = Number(await env.RN_KV.get(key) || 0); } catch {}
-  if (count >= 8) return false;
-  const write = env.RN_KV.put(key, String(count + 1), { expirationTtl: 120 });
-  if (ctx?.waitUntil) ctx.waitUntil(write.catch(() => {}));
-  else await write.catch(() => {});
-  return true;
-}
+// The crawl tools bill against the SAME per-IP buckets as their HTTP twins
+// (lens.js LENS_BUDGETS), not a private `mcp:lensrl:` one. A separate bucket let
+// a caller stack budgets: 30 inspections via /lens/fetch AND another 8 here, and
+// lens_compare was metered at 8/min through JSON-RPC while /lens/compare allows
+// 4, so the cheaper door was the expensive operation. One bucket, one ceiling,
+// whichever door you knock on.
 
 async function callTool(name, args, request, env, ctx) {
   args = args && typeof args === "object" ? args : {};
@@ -91,7 +89,7 @@ async function callTool(name, args, request, env, ctx) {
   if (name === "lens_inspect") {
     const target = validateLensTarget(args.url || "");
     if (!target.ok) return errorResult(target.error);
-    if (!(await lensRateLimit(request, env, ctx))) return errorResult("Lens calls are rate-limited to 8/min.");
+    if (await overLensBudget(LENS_BUDGETS.inspect, request, env, ctx)) return errorResult("Lens lookups are rate-limited to 30/min, shared with /lens/fetch.");
     try { return lensObservationSummary(await lensInspect(target.url, env, { skipBotViews: true })); }
     catch { return errorResult("Lens inspection failed."); }
   }
@@ -100,7 +98,7 @@ async function callTool(name, args, request, env, ctx) {
     const right = validateLensTarget(args.right || "");
     if (!left.ok) return errorResult(`left: ${left.error}`);
     if (!right.ok) return errorResult(`right: ${right.error}`);
-    if (!(await lensRateLimit(request, env, ctx))) return errorResult("Lens calls are rate-limited to 8/min.");
+    if (await overLensBudget(LENS_BUDGETS.compare, request, env, ctx)) return errorResult("Lens comparisons are rate-limited to 4/min, shared with /lens/compare.");
     try { return await compareLensTargets(left.url, right.url, env); }
     catch { return errorResult("Lens comparison failed."); }
   }
@@ -150,6 +148,15 @@ export async function handleSiteMcp(request, env, ctx) {
     }
   };
   if (Array.isArray(payload)) {
+    // Cap the batch. Every rate limit here is a KV read-then-write, which is not
+    // atomic: a batch runs through Promise.all, so N concurrent tool calls all
+    // read the same pre-increment count and all decide they're under budget.
+    // Unbounded, one POST carrying N lens_inspect calls turns a 30/min ceiling
+    // into N outbound crawls. KV can't be made atomic without a Durable Object,
+    // so bounding the batch is what makes the ceiling mean anything.
+    if (payload.length > MCP_MAX_BATCH) {
+      return respond(rpcError(null, -32600, `Batch too large: ${payload.length} messages, limit ${MCP_MAX_BATCH}.`), 413);
+    }
     const output = (await Promise.all(payload.map(handleOne))).filter(Boolean);
     return output.length ? respond(output) : respond(null, 202);
   }

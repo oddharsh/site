@@ -8,6 +8,32 @@ import { lensParseRobots, lensPathMatch, lensRobotsVerdict } from "./lib/robots.
 import { lunaPage } from "./lib/chrome.js";
 import { escAttr, escHtml, jsonResponse } from "./lib/http.js";
 
+// Per-IP crawl budgets, one place. These used to be inlined at each call site,
+// which was fine until /mcp grew tools that call the same crawler: sharing the
+// literal KV bucket is the whole point, because a second unmetered door (30 via
+// /lens/fetch AND unlimited via JSON-RPC) is not a rate limit. Keys and ceilings
+// are unchanged from the inlined versions, so live buckets carry over.
+export const LENS_BUDGETS = {
+  inspect: { key: "lens:rl",        max: 30 },
+  shot:    { key: "lens:shotrl",    max: 8  },
+  compare: { key: "lens:comparerl", max: 4  },
+};
+
+// Best-effort minute bucket. Returns true when the caller is already over.
+// Fails OPEN when RN_KV is missing (dev), same as the code it replaces: this is
+// abuse control, not authorization, and the SSRF guard is what enforces safety.
+export async function overLensBudget(budget, request, env, ctx) {
+  if (!env.RN_KV) return false;
+  const ip = request.headers.get("cf-connecting-ip") || "0.0.0.0";
+  const bucket = `${budget.key}:${ip}:${Math.floor(Date.now() / 60000)}`;
+  let n = 0;
+  try { n = parseInt((await env.RN_KV.get(bucket)) || "0", 10) || 0; } catch {}
+  if (n >= budget.max) return true;
+  const write = env.RN_KV.put(bucket, String(n + 1), { expirationTtl: 120 }).catch(() => {});
+  if (ctx?.waitUntil) ctx.waitUntil(write); else await write;
+  return false;
+}
+
 // ── /lens — "the other web" -----------------------------------------------
 // A URL goes in; what a MACHINE sees comes out, across five lenses: page
 // anatomy (raw HTML, headers, headings, stripped text), structured/semantic
@@ -174,12 +200,9 @@ async function inspectLensRequest(request, env, ctx) {
   if (!v.ok) return { status: 400, payload: { ok: false, error: v.error } };
 
   // best-effort per-IP rate limit so the proxy can't be turned into a firehose.
-  const ip = request.headers.get("cf-connecting-ip") || "0.0.0.0";
-  if (env.RN_KV) {
-    const bucket = `lens:rl:${ip}:${Math.floor(Date.now() / 60000)}`;
-    const n = parseInt((await env.RN_KV.get(bucket)) || "0", 10);
-    if (n >= 30) return { status: 429, payload: { ok: false, error: "Slow down — 30 lookups a minute. Try again shortly." } };
-    ctx.waitUntil(env.RN_KV.put(bucket, String(n + 1), { expirationTtl: 120 }));
+  // Shared with /mcp's lens_inspect tool (same bucket, see LENS_BUDGETS).
+  if (await overLensBudget(LENS_BUDGETS.inspect, request, env, ctx)) {
+    return { status: 429, payload: { ok: false, error: "Slow down — 30 lookups a minute. Try again shortly." } };
   }
 
   try {
@@ -834,15 +857,9 @@ export async function handleLensCompare(request, env, ctx) {
   const left = validateLensTarget(url.searchParams.get("left") || "");
   const right = validateLensTarget(url.searchParams.get("right") || "");
   if (!left.ok || !right.ok) return jsonResponse({ ok: false, error: left.ok ? `right: ${right.error}` : `left: ${left.error}` }, 400);
-  const ip = request.headers.get("cf-connecting-ip") || "0.0.0.0";
-  if (env.RN_KV) {
-    const bucket = `lens:comparerl:${ip}:${Math.floor(Date.now() / 60000)}`;
-    let count = 0;
-    try { count = Number(await env.RN_KV.get(bucket) || 0); } catch {}
-    if (count >= 4) return jsonResponse({ ok: false, error: "Lens comparisons are rate-limited to 4/min." }, 429);
-    const write = env.RN_KV.put(bucket, String(count + 1), { expirationTtl: 120 });
-    if (ctx?.waitUntil) ctx.waitUntil(write.catch(() => {}));
-    else await write.catch(() => {});
+  // Shared with /mcp's lens_compare tool (same bucket, see LENS_BUDGETS).
+  if (await overLensBudget(LENS_BUDGETS.compare, request, env, ctx)) {
+    return jsonResponse({ ok: false, error: "Lens comparisons are rate-limited to 4/min." }, 429);
   }
   try {
     return jsonResponse({ ok: true, comparedAt: new Date().toISOString(), ...(await compareLensTargets(left.url, right.url, env)) });
