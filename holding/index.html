@@ -15,12 +15,19 @@
 <link rel="alternate" type="text/plain" title="llms.txt summary" href="/llms.txt">
 <link rel="alternate" type="text/markdown" title="markdown source" href="/index.md">
 
-<!-- one preconnect — song.link, the per-track click target that every
-     visitor with a music-playing intention clicks. previous build had a
-     fan of 8 preconnect/dns-prefetch hints across spotify, cal.com,
-     twitter, curius, beli, archetype, scdn — all speculative and most
-     never clicked. Tuthill move: ship the one that earns its place. -->
-<link rel="preconnect" href="https://song.link">
+<!-- (no connection hints at all. this used to be a fan of 8 preconnect /
+     dns-prefetch entries across spotify, cal.com, twitter, curius, beli,
+     archetype, scdn; then just song.link, the per-track click target.
+     even that one is cut now. two reasons. (1) it barely worked: chrome
+     partitions the connection pool by top-frame site, so a socket warmed
+     under aadhar.sh is not reused when the click navigates (target=_blank,
+     top-level) to song.link. all that survived was a warm DNS entry, and
+     only for a click inside the ~10s before chrome drops an unused
+     preconnect. (2) per-song click odds are low, so nearly every visitor
+     paid a third-party handshake for nothing. dropping it means a cold
+     homepage load speaks to exactly one origin: this one. every remaining
+     external URL here is a plain navigation link, fetched on click.
+     same call as the hover-prefetch IIFE further down.) -->
 
 <!-- traffic cone favicon. period-correct for the holding page. swap once
      the real site lands. -->
