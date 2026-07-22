@@ -227,8 +227,10 @@
   // parse time — see the shell-rewrite phase A). Pages link it at the end of
   // <head>; this fallback only covers stale cached HTML from before the
   // extraction, injecting the same <link> so the desktop still dresses itself.
+  // Guard matches BOTH the plain /luna.css and the build's hashed
+  // /a/luna.<hash>.css (substring "luna."), so a hashed page is never double-linked.
   function ensureLunaCss() {
-    if (D.querySelector('link[href^="/luna.css"]') || D.getElementById("axp-css")) return;
+    if (D.querySelector('link[href*="luna."]') || D.getElementById("axp-css")) return;
     var l = D.createElement("link"); l.rel = "stylesheet"; l.href = "/luna.css";
     (D.head || D.documentElement).appendChild(l);
   }

@@ -1198,7 +1198,7 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
      bfcache restores re-run nothing, so back/forward stays tick-free. the
      display above is a read-only peek; script-off visitors tick via the
      <noscript> pixel instead. -->
-<script>(function(){var t=function(){fetch("/hit.svg?tick=1")};document.prerendering?addEventListener("prerenderingchange",t,{once:true}):t()})();</script>
+<script>(function(){var t=function(){fetch("/hit.svg?tick=1",{keepalive:true}).catch(function(){})};document.prerendering?addEventListener("prerenderingchange",t,{once:true}):t()})();</script>
 
     <!--
       Rich XP tooltips are an interaction island. The tiny loader below stays
