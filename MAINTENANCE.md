@@ -278,10 +278,24 @@ the tooltip skips nulls rather than guess.
 Outputs `holding/cars/<stem>.{avif,jpg}` (no EXIF, no R2). Bump the `?v=` on that car image in `index.html` if you replace one in place, then deploy.
 
 ### Generate AI alt text for the grid
+`add-photos.sh` already does this in phase 4, so a normal add needs nothing here.
+Run it by hand to backfill or to retry after a rate limit:
 ```bash
-python3 holding/scripts/gen-alt-text.py     # writes holding/images/alt.json {stem: alt}
+npm run captions                            # writes holding/images/alt.json {stem: alt}
 ```
-Resumable: only fills uncaptioned stems, so a 429 (Workers-AI neuron budget) just means run again later. Deploy after.
+Resumable: only fills uncaptioned stems, so a 429 (Workers-AI neuron budget) just means run again later.
+
+**Set a token once and captions work pre-deploy.** With `CLOUDFLARE_API_TOKEN` in
+the environment, the script reads the committed `holding/i/<stem>.<hash8>.jpg` and
+posts those bytes straight to Workers AI, so a photo added seconds ago gets
+captioned in the same run. Without one it falls back to handing a stem to
+`/garage/cf/caption`, which fetches the thumbnail from production and therefore
+only sees photos that are already live.
+```bash
+export CLOUDFLARE_API_TOKEN=...             # Account · Workers AI · Read
+```
+`check-photo-pipeline.mjs` fails on any stem with no caption, the same way it does
+for a missing pixel tier or histogram, so an unlabelled image can't reach a deploy.
 
 ### Regenerate the /garage/encoding study samples
 ```bash
@@ -386,7 +400,7 @@ curl -s "https://aadhar.sh/images/manifest.json" | jq length          # photo co
 | `add-car-photo.sh` | One resto-mod reference photo -> `cars/<stem>.{avif,jpg}` for the homepage car tooltips. No EXIF, no R2. |
 | `zenc/` | The JPEG thumbnail encoder: a Rust crate wrapping zenjpeg (hybrid trellis + progressive scan search). `cargo build --release` (auto-built on first pipeline run). `zenc <in> <out> -q 84`. dependabot tracks the zenjpeg pin; replaced the from-source jpegli build in 2026-07. |
 | `download-remote-photos.sh` | Download selected R2 object keys into disposable runner storage for the GitHub Actions photo workflow; accepts `all` for the public manifest. |
-| `gen-alt-text.py` | AI alt text for grid photos via the Workers-AI caption endpoint -> `images/alt.json`. Resumable. |
+| `gen-alt-text.py` | AI alt text for grid photos -> `images/alt.json`. Run by `add-photos.sh` phase 4. Posts the committed `i/` thumbnail to Workers AI when `CLOUDFLARE_API_TOKEN` is set (captions pre-deploy), else asks `/garage/cf/caption` by stem (deployed photos only). Resumable. |
 | `gen-encoding-samples.sh` | Regenerate the color sample set for `/garage/encoding` through every encoder; defaults to the committed `garage/enc/c-png.png` fixture and prints byte counts. |
 | `photo-histograms.py` | Bakes four 64-bin RGB/luminance histogram channels into each per-photo `images/meta/<stem>.json` from the shipped hashed JPG tier. Requires the pinned Pillow dependency in `holding/scripts/requirements.txt` and is called by both metadata extraction and `add-photos.sh`. |
 | `gen-og-cards.mjs` | Render the 1200x630 OG/Twitter card per garage + lwe page (live demo on the Bliss desktop) into `holding/og/`. `npm run og-cards`. Drives the installed Chrome via `playwright-core`; captures production so data-driven demos render full. Hero selectors + presets in the `HERO{}` map. See "Regenerate the OG / Twitter cards". |

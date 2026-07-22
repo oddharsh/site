@@ -77,7 +77,7 @@ Single-page personal site at `aadhar.sh`. A Cloudflare Worker with static assets
 | `holding/.well-known/http-message-signatures-directory` | JWKS for AadharshBot's Ed25519 public key (Web Bot Auth IETF draft). |
 | `holding/images/` + `holding/i/` | `images/` holds the photo DATA surfaces: `metadata.json` (EXIF index), `meta/<stem>.json` (per-photo EXIF plus four 64-bin histogram channels the tooltip fetches), `alt.json` (AI captions), `hashes.json` (stem to hash8 map). The pixel tiers (600px AVIF+JPG squares + 400px mobile AVIF) live in `i/` under content-hashed names, 474 files for 158 photos. |
 | `holding/og/` | Pre-baked 1200x630 OG/Twitter cards, one per garage + lwe page (`<section>-<name>.png`): the page's live demo floated on the Bliss desktop with an XP dock naming the route, so a shared link unfurls as the interaction, not a bare title. Wired via `og:image`/`twitter:card` in each page's `<head>` (edge-direct static pages can't be worker-injected). Built by `scripts/gen-og-cards.mjs` (playwright-core → Chrome, captures production for live data); meta added by `scripts/inject-og-meta.mjs`. Regen recipe in MAINTENANCE.md. Cached 30d, deploy purges the edge. |
-| `holding/scripts/` | Photo-pipeline + asset scripts (see below). Beyond the core pipeline (`add-photos.sh`, `extract-photo-metadata.sh`, `check-photo-pipeline.mjs`, `zenc/` the JPEG encoder crate): `add-car-photo.sh` (one resto-mod reference photo into the dual AVIF+JPG pair the car-link tooltips expect, output `holding/cars/<stem>.{avif,jpg}`, no EXIF/R2); `gen-alt-text.py` (AI alt text for every grid photo via the cf-garage Workers-AI caption endpoint, writes `holding/images/alt.json` `{stem: alt}`, resumable); `gen-encoding-samples.sh` (regenerates the color sample set for the `/garage/encoding` study through every encoder, prints byte counts + bytes-per-pixel); `reencode-thumbnails.sh` (re-encodes all published grid thumbnails as pre-cropped center squares from the canonical source folder, two square tiers); `photo-histograms.py` (bakes the four 64-bin RGB/luminance channels into each per-photo meta file). |
+| `holding/scripts/` | Photo-pipeline + asset scripts (see below). Beyond the core pipeline (`add-photos.sh`, `extract-photo-metadata.sh`, `check-photo-pipeline.mjs`, `zenc/` the JPEG encoder crate): `add-car-photo.sh` (one resto-mod reference photo into the dual AVIF+JPG pair the car-link tooltips expect, output `holding/cars/<stem>.{avif,jpg}`, no EXIF/R2); `gen-alt-text.py` (AI alt text for every grid photo, writes `holding/images/alt.json` `{stem: alt}`, resumable; run by `add-photos.sh` phase 4 — posts the committed `i/` thumbnail bytes to Workers AI when `CLOUDFLARE_API_TOKEN` is set so a brand-new photo captions pre-deploy, else falls back to the cf-garage `/garage/cf/caption` endpoint by stem, which only sees deployed photos); `gen-encoding-samples.sh` (regenerates the color sample set for the `/garage/encoding` study through every encoder, prints byte counts + bytes-per-pixel); `reencode-thumbnails.sh` (re-encodes all published grid thumbnails as pre-cropped center squares from the canonical source folder, two square tiers); `photo-histograms.py` (bakes the four 64-bin RGB/luminance channels into each per-photo meta file). |
 
 ### The photo pipeline
 
@@ -108,6 +108,13 @@ holding/images/<stem>.{avif,jpg}  +  R2 aadhar-photos/<filename>
    |   hashed JPG tier, so the tooltip has a stable, whole-image histogram.
    |   discipline: every field is nullable; the tooltip skips lines
    |   that are null rather than fabricate. never guess metadata.
+   |
+   v
+[gen-alt-text.py] captions any stem missing one -> holding/images/alt.json
+   |   with CLOUDFLARE_API_TOKEN set it posts the committed i/ thumbnail
+   |   bytes to Workers AI, so a photo added seconds ago captions here
+   |   instead of waiting for a deploy. check-photo-pipeline.mjs then
+   |   FAILS on any uncaptioned stem, same as a missing pixel tier.
 ```
 
 Two encoders + one transform tool, all built from source:

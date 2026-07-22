@@ -81,8 +81,8 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
   );
   // the visit count is displayed as SSR'd text via a READ-ONLY DO peek:
   // rendering never mutates, so homepage GETs stay pure and prerender-safe.
-  // The actual tick is the /hit.svg?tick=1 beacon (plus a <noscript> pixel)
-  // in index.html. Fired now, awaited inside the footer .counter rewriter,
+  // The actual tick is the /hit beacon (plus a <noscript> pixel) in
+  // index.html. Fired now, awaited inside the footer .counter rewriter,
   // so the read overlaps the whole page stream and never gates first byte.
   const counterPeek = env.COUNTER
     ? env.COUNTER.get(env.COUNTER.idFromName("homepage-visits"))

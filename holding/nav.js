@@ -1062,9 +1062,10 @@
   // shell-wide Speculation Rules: prerender the shell's safe destinations on
   // hover-intent (eagerness "moderate"), so opening a "window" (garage, writing,
   // serendipity, coffee…) is near-instant and the View Transition plays on
-  // already-loaded content. the homepage is prerenderable now (the counter left
-  // the document for /hit.svg) and so is /around (its crawl moved to a cron; a
-  // visit is a pure KV read). excluded: /whoareyou (per-request fingerprint),
+  // already-loaded content. the homepage is prerenderable now (its counter only
+  // PEEKS on render; the tick left the document for the /hit beacon) and so is
+  // /around (its crawl moved to a cron; a visit is a pure KV read).
+  // excluded: /whoareyou (per-request fingerprint),
   // /rn (redirect), images + raw text. /coffee IS prerendered: GET is read-only
   // (booking is POST) so a speculative open is safe.
   // unsupported browsers ignore the script → plain navigation. skips the homepage,
