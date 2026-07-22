@@ -48,7 +48,7 @@ const ROUTES = [
   { path: "/index.html", status: 301 },
   { path: "/favicon.ico", status: 200, ct: "image/svg+xml" },
   // ?peek=1 so the oracle never advances the visitor count
-  { path: "/hit.svg?peek=1", status: 200, ct: "image/svg+xml", marker: "<svg" },
+  { path: "/hit?peek=1", status: 200, ct: "image/svg+xml", marker: "<svg" },
   { path: "/auth.md", status: 200, ct: "text/markdown" },
   { path: "/.well-known/api-catalog", status: 200, ct: "application/linkset+json" },
   { path: "/.well-known/agent-card.json", status: 200, ct: "application/json", marker: "discovery-only" },
