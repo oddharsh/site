@@ -2007,9 +2007,11 @@ export const SERENDIPITY_SECURITY_HEADERS = {
   "x-content-type-options": "nosniff",
   "referrer-policy": "strict-origin-when-cross-origin",
   "x-frame-options": "DENY",
-  // parity with the Pages _headers set: this is a first-class page of the site
+  // parity with the _headers set: this is a first-class page of the site
   // (the shared XP shell runs here too), so deny the same unused browser APIs.
-  "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=(), serial=(), bluetooth=(), midi=(), accelerometer=(), gyroscope=(), magnetometer=(), screen-wake-lock=(), hid=(), idle-detection=()",
+  // `browsing-topics=()` is the Topics-API opt-out; the older `interest-cohort`
+  // token went away with FLoC and now logs an "unrecognized feature" warning.
+  "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=(), serial=(), bluetooth=(), midi=(), accelerometer=(), gyroscope=(), magnetometer=(), screen-wake-lock=(), hid=(), idle-detection=()",
 };
 
 export function withSerendipitySecurityHeaders(response) {

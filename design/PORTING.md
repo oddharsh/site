@@ -57,7 +57,7 @@ never the copy).
 | trick | today | in the rewrite |
 |---|---|---|
 | Two-key SWR: persistent value + `:fresh` TTL sentinel; stale serves instantly, rebuild rides ctx.waitUntil; empty-rebuild guard protects good stale data | lib/cache.js swrKV (just consolidated from 4 hand-rolled copies) | the cron lanes' cache shape; the guard is now a built-in option |
-| Stream-overlap reads: fire per-request reads concurrently, await them INSIDE the late HTMLRewriter handler so they overlap the streaming body and never gate TTFB | home.js:69-72 (the counter) | the counter leaves the document (hit.svg) but the trick ports for ANY per-request data on the streamed homepage |
+| Stream-overlap reads: fire per-request reads concurrently, await them INSIDE the late HTMLRewriter handler so they overlap the streaming body and never gate TTFB | home.js:69-72 (the counter) | the counter's tick leaves the document (/hit) but its PEEK stays, and the trick ports for ANY per-request data on the streamed homepage |
 | SSR + stand-down client fallback: ~30 lines that detect "already populated" and quit; catches cold KV, stale HTML, edge hiccups | index.html:1020-1159 | invariant on every dynamic surface (`data-ssr` stamp) |
 | Bad-cached-response retry: entity-looks-empty detect, then one retry with cacheTtl:0 + cache-busting query | rn.js:264-313 | ported into the cron scraper |
 | The playlist-listing fetch always bypasses the CDN cache; near-immutable track/artist embeds keep 24h | rn.js (this week's staleness fix) | ported; the cron thinks per generation |
@@ -65,7 +65,7 @@ never the copy).
 | cachedRender: caches.default with 200-ONLY puts (the 404-poison scar), version-keyed on CF_VERSION_METADATA so a deploy busts every shell cleanly (TTL bounds the entry within a version), x-edge-cache/x-photo-cache observability headers | lib/cache.js | wraps /reading, /run, /writing, /lens, /photos, /bot |
 | ?bust=SECRET evicts KV AND the edge entry | reading.js | ported per cron lane |
 | 404 cache-control clamp under /images/* (a miss must never inherit the immutable rule) | index.js (the one guard GPT's cleanup kept) | ported; content-hashed image URLs make it belt-and-suspenders |
-| Counter purity: HEAD never ticks, verified bots peek, prerender ticks exactly once on activation | home.js + counter.js | already the hit.svg design |
+| Counter purity: HEAD never ticks, verified bots peek, prerender ticks exactly once on activation | home.js + counter.js | already the /hit design |
 
 ## 5. The long game (what keeps it snappy in year 3)
 
@@ -197,13 +197,18 @@ edge-direct again permanently.
    (sweep 4 crfs on ~10 photos against current aom sizes), fleet-encode color
    thumbs via ffmpeg/libsvtav1 tune=iq (mono keeps aom yuv400 bytes), visual
    spot-check at 2x, then hash-thumbnails.sh + manifest bust does the rest.
-5. DONE (2026-07-02, v133), amended: the footer is <img src="/hit.svg"> + the
-   prerenderingchange beacon, but the store stayed the Counter DO (hit.svg
-   ticks it directly), which deleted the KV-seeding step and kept increments
-   atomic. The COUNTER binding therefore stays; COUNTER_SEED can retire once
-   the DO's self-seed is confirmed moot.
-6. IN EFFECT (hit.svg, /photos, /run all registered 3x): every NEW route needs
-   wrangler allowlist + index.js ROUTES/PREFIX + verify-routes.mjs.
+5. DONE (2026-07-02, v133), amended twice: the footer was <img src="/hit.svg">
+   + the prerenderingchange beacon, but the store stayed the Counter DO
+   (the route ticks it directly), which deleted the KV-seeding step and kept
+   increments atomic. The COUNTER binding therefore stays; COUNTER_SEED can
+   retire once the DO's self-seed is confirmed moot. Amendment 2 (v138): the
+   count came back into the document as SSR'd TEXT from a read-only peek,
+   which is lighter (no second request, no 330B SVG) and keeps the purity win,
+   since a peek mutates nothing. The route survived as the tick endpoint, and
+   was renamed /hit once only the easter-egg path still served an image.
+6. IN EFFECT (/hit, /photos, /run all registered 3x): every NEW route needs
+   wrangler allowlist + index.js ROUTES/PREFIX + verify-routes.mjs. A RENAMED
+   route needs the same three touched together, plus verify-baseline.
 7. DONE (2026-07-02): no-store -> private,no-cache on /updates + /restore keeps
    them origin-fresh (the owner's freshness intent) while restoring bfcache
    eligibility. The balloon's /updates.json stays no-store (subresource, no

@@ -9,7 +9,7 @@ import { handleAgentAuthClaim, handleAgentAuthRegister, handleAgentAuthRevoke, h
 import { cronAround, handleAround, handleAroundChangesJson, handleAroundJson } from "./around.js";
 import { handleBotPage } from "./bot.js";
 import { cronCensus, handleCensus, handleCensusJson } from "./census.js";
-import { handleHitSvg } from "./counter.js";
+import { handleHit } from "./counter.js";
 import { homepageHeadResponse, serveHomepageWithPrerenderedTracks, serveMarkdown } from "./home.js";
 import { countCrawlerHit, handleLedger, handleLedgerJson } from "./ledger.js";
 import { handleLens, handleLensBrowser, handleLensFetch, handleLensShot } from "./lens.js";
@@ -154,7 +154,7 @@ const ROUTES = new Map([
   ["/oauth2/token", handleAgentAuthToken],
   ["/oauth2/revoke", handleAgentAuthRevoke],
 
-  ["/hit.svg", handleHitSvg],
+  ["/hit", handleHit],
 
   ["/whoareyou", handleWhoareyou],
   ["/whoareyou.json", handleWhoareyouJson],
