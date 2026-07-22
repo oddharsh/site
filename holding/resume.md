@@ -1,6 +1,6 @@
 # Aadharsh Pannirselvam
 
-resume@aadhar.sh · [aadhar.sh](https://aadhar.sh) (check out [/lwe](https://aadhar.sh/lwe) and the source for the site) · aadharsh.eth · [@oddhash](https://twitter.com/oddhash)
+resume@aadhar.sh · [aadhar.sh](https://aadhar.sh) (check out [/lwe](https://aadhar.sh/lwe) and the source for the site) · aadharsh.eth · [@oddhash](https://x.com/oddhash)
 
 Plain-text mirror of resume.pdf (the canonical copy). Structured data lives in resume.json.
 

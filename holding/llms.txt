@@ -150,10 +150,10 @@ aggregations.
 
 ## Identity
 
-- [Twitter](https://twitter.com/oddhash): Day-to-day thinking out loud.
-- [Instagram](https://instagram.com/aadharsh.hif): Photographs.
+- [Twitter](https://x.com/oddhash): Day-to-day thinking out loud.
+- [Instagram](https://www.instagram.com/aadharsh.hif): Photographs.
 - [GitHub](https://github.com/oddharsh): Code.
-- [LinkedIn](https://www.linkedin.com/in/aadharsh-pannirselvam/): Professional profile.
+- [LinkedIn](https://www.linkedin.com/in/aadharsh-pannirselvam): Professional profile.
 - [Spotify](https://open.spotify.com/user/aadharsh2010): My profile;
   individual eras live as renamed playlists.
 - [Curius](https://curius.app/aadharsh-pannirselvam): Reading I want to
@@ -166,7 +166,7 @@ aggregations.
 
 ## Optional
 
-- [Archetype](https://archetype.fund): The crypto-native venture firm
+- [Archetype](https://www.archetype.fund/): The crypto-native venture firm
   where I research and invest.
 - [song.link](https://song.link): The redirector used in `/rn/tracks` so
   music links work across Spotify, Apple Music, YouTube Music, Tidal, etc.
