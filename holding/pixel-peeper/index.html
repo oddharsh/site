@@ -15,9 +15,12 @@
   --hi:#FFFFFF; --sh:#ACA899; --dsh:#716F64;
   --frame:#7f9bd6; --navy:#0a246a; --navy2:#3a6ea5;
   --win:#FFFFFF; --paper:#fbfbf7;
-  --ink:#1a1a1a; --ink-soft:#454545; --ink-dim:#6b6b6b;
+  --ink:#1a1a1a; --ink-soft:#454545; --ink-dim:#636363;
   --link:#0b3fae; --danger:#c8402f; --go:#3a7d2c; --gold:#e8c14a;
   --s2:#0b57c9; --bt:#c8811c;   /* the two metric identities: ssimulacra2 blue, butteraugli amber */
+  /* --bt is the chart/border identity; as TEXT the amber only hits 3.06:1 on the
+     panel, so text uses this darker sibling (4.8:1) and the graphics keep --bt. */
+  --bt-ink:#9c640d;
   --blue95:#4aa3ff; --blue80:#2f7bf0; --blue65:#0054E3; --blue60:#0048c4; --blue55:#2f6fe0;
   --bevel-raised:inset 1px 1px 0 var(--hi),inset -1px -1px 0 var(--sh);
   --bevel-sunken:inset 1px 1px 0 var(--sh),inset -1px -1px 0 var(--hi);
@@ -70,7 +73,7 @@ b{color:var(--ink)}
 .cap{font-family:var(--font-mono);font-size:8pt;line-height:1.4;color:var(--ink-dim);text-align:center;min-height:1px}
 .cap .lab{color:var(--ink);font-weight:700;display:block}
 .cap .m{display:inline-block;margin:0 3px}
-.cap .m.s2{color:var(--s2)} .cap .m.bt{color:var(--bt)}
+.cap .m.s2{color:var(--s2)} .cap .m.bt{color:var(--bt-ink)}
 .cap .yours{display:block;color:var(--navy);font-size:7.5pt}
 #loupe{position:fixed;z-index:50;width:150px;height:150px;border:2px solid var(--navy);box-shadow:2px 2px 0 rgba(0,0,0,.35);display:none;pointer-events:none;background:#000;image-rendering:pixelated;border-radius:2px}
 .banner{display:flex;gap:8px;align-items:flex-start;padding:8px 10px;border:1px solid;border-radius:2px;font-size:10pt;margin:10px 0;line-height:1.45}
@@ -110,7 +113,7 @@ a{color:var(--link)}
 /* metric-alignment axis (the hero) */
 .axiswrap{margin:4px 2px 2px}
 .axislabels{display:flex;justify-content:space-between;font-family:var(--font-caption);font-weight:700;font-size:10pt}
-.axislabels .l{color:var(--s2)} .axislabels .r{color:var(--bt)}
+.axislabels .l{color:var(--s2)} .axislabels .r{color:var(--bt-ink)}
 .axislabels small{display:block;font-family:var(--font-mono);font-weight:400;font-size:8pt;color:var(--ink-dim)}
 .axis{position:relative;height:54px;margin-top:4px}
 .axis svg{display:block;width:100%;height:54px}
@@ -206,7 +209,7 @@ function screenIntro(){
    <h1>whose eye do you have?</h1>
    <p class="lede">a vision test for image compression. each call shows the same photo squeezed two or three ways, and you <b>pick the one that looks best.</b> we won't say what changed, on purpose: if we told you to watch the color, you'd watch the color. so answer on instinct.</p>
    <div class="gb"><span class="gb-legend">${RUN_SIZE} quick calls</span>
-     <p style="margin:0 0 6px">behind the scenes, every set is judged by two machine metrics too, <b style="color:var(--s2)">ssimulacra2</b> and <b style="color:var(--bt)">butteraugli</b>. they're rival models of human vision, not ground truth, and they <b>disagree</b>. at the end you'll see what your eye is quietly tuned to, and which metric it thinks like.</p>
+     <p style="margin:0 0 6px">behind the scenes, every set is judged by two machine metrics too, <b style="color:var(--s2)">ssimulacra2</b> and <b style="color:var(--bt-ink)">butteraugli</b>. they're rival models of human vision, not ground truth, and they <b>disagree</b>. at the end you'll see what your eye is quietly tuned to, and which metric it thinks like.</p>
    </div>
    <div class="row spread" style="margin-top:12px">
      <small>hover any tile to pixel-peep · <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> or click</small>
@@ -265,7 +268,7 @@ function onPick(pos,order,trial){
   let cls,head,extra;
   if(trial.disagree){cls="split";head="⚖ the metrics split here";
     extra = sided==="s2"?` your eye sided with <b style="color:var(--s2)">ssimulacra2</b> (the sharper one).`
-          : sided==="butter"?` your eye sided with <b style="color:var(--bt)">butteraugli</b> (the truer color).`
+          : sided==="butter"?` your eye sided with <b style="color:var(--bt-ink)">butteraugli</b> (the truer color).`
           : ` you picked the one <b>neither</b> metric ranked first. rebel.`;
   } else {const right=chosen.s2best&&chosen.butterbest;
     cls=right?"ok":"no";head=right?"✓ both metrics agree, and so did you":"✕ both metrics picked another one";extra="";}
@@ -294,7 +297,7 @@ function screenResult(){
   if(!dis.length) alignCap=`this run didn't hit any of the calls where the two metrics disagree. play again for a different mix.`;
   else if(!decisive) alignCap=`on the ${dis.length} calls where the metrics split, you never picked either metric's favorite. your eye does its own thing, which is the honest truth about these razor-edge cases.`;
   else if(leaner==="neither") alignCap=`you split evenly (${s2n} vs ${btn}) on the calls where the metrics disagreed. no lean either way, itself a fair verdict: at these margins it's close to a coin flip.`;
-  else alignCap=`on the ${dis.length} calls where <b style="color:var(--s2)">ssimulacra2</b> and <b style="color:var(--bt)">butteraugli</b> disagreed, your eye sided with <b>${leaner}</b> ${leaner==="butteraugli"?btn:s2n} of ${decisive} times${own?` (and went rogue on ${own})`:``}. you weight <b>${leaner==="butteraugli"?"color":"structure"}</b> the way ${leaner} does. fair warning: these are the closest calls in the test, so take it with salt.`;
+  else alignCap=`on the ${dis.length} calls where <b style="color:var(--s2)">ssimulacra2</b> and <b style="color:var(--bt-ink)">butteraugli</b> disagreed, your eye sided with <b>${leaner}</b> ${leaner==="butteraugli"?btn:s2n} of ${decisive} times${own?` (and went rogue on ${own})`:``}. you weight <b>${leaner==="butteraugli"?"color":"structure"}</b> the way ${leaner} does. fair warning: these are the closest calls in the test, so take it with salt.`;
   let colorAha = color===null?"" : color<=45
     ? ` you mostly couldn't see color being thrown away, like most people: human eyes resolve almost no color detail, which is why 4:2:0 is free most of the time.`
     : color>=70 ? ` and you caught chroma subsampling most people miss, so keep 4:2:2 on saturated work.` : ``;
@@ -314,7 +317,7 @@ function screenResult(){
       ${bar("Encoders",enc,"separating real encoders at equal bytes")}</div>
     <div class="banner info"><span class="g">the takeaway</span><span>the metrics agree on the obvious calls and only split at the margins, where the differences are near invisible.${colorAha} that margin is exactly where an export preset should live: the setting no human, and barely a metric, can flag.</span></div>
     <div class="gb"><span class="gb-legend">what's real, what's next</span>
-      <p style="margin:0">every tile was a genuine encode (zenc · jpegli · mozjpeg · sips; real 4:2:2 / 4:2:0 on 4:2:2-native files), scored by <b style="color:var(--s2)">ssimulacra2</b> and <b style="color:var(--bt)">butteraugli</b> against the original. next: <b>sharpYUV</b>, a bigger photo set, everyone's picks pooled, and the crowd threshold read into an <b>instagram export preset</b>.</p></div>
+      <p style="margin:0">every tile was a genuine encode (zenc · jpegli · mozjpeg · sips; real 4:2:2 / 4:2:0 on 4:2:2-native files), scored by <b style="color:var(--s2)">ssimulacra2</b> and <b style="color:var(--bt-ink)">butteraugli</b> against the original. next: <b>sharpYUV</b>, a bigger photo set, everyone's picks pooled, and the crowd threshold read into an <b>instagram export preset</b>.</p></div>
     ${quizHTML()}
     <div class="row spread" style="margin-top:14px">
       <button class="btn" id="share">Copy my result</button><button class="btn primary" id="again">Play again ▸</button></div>`;
@@ -340,7 +343,7 @@ function axisSVG(lean,decisive){
     <line x1="${x}" y1="6" x2="${x}" y2="44" stroke="#0a246a" stroke-width="2"/>
     <polygon points="${x-5},6 ${x+5},6 ${x},14" fill="#0a246a"/>
     <circle cx="${x}" cy="40" r="4.5" fill="#fff" stroke="#0a246a" stroke-width="2"/>`
-    :`<text x="${W/2}" y="26" text-anchor="middle" font-family="Courier New,monospace" font-size="10" fill="#6b6b6b">no decisive lean</text>`;
+    :`<text x="${W/2}" y="26" text-anchor="middle" font-family="Courier New,monospace" font-size="10" fill="#636363">no decisive lean</text>`;
   return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="metric alignment">
     <defs><linearGradient id="mg" x1="0" x2="1"><stop offset="0" stop-color="#0b57c9"/><stop offset="1" stop-color="#c8811c"/></linearGradient></defs>
     <path d="${d}" fill="#0a246a" opacity="0.10"/>

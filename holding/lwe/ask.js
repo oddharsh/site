@@ -24,7 +24,7 @@
     ".compose .lwe-ask{display:flex;flex-direction:column;gap:6px}" +
     ".lwe-row{display:flex;gap:6px}" +
     ".lwe-q{flex:1;min-width:0;border:1px solid #7d8aa3;background:#fff;box-shadow:inset 1px 1px 0 #c3cbdb;padding:4px 7px;font-family:var(--font-ui);font-size:9.5pt}" +
-    ".lwe-q:disabled{background:#f1f1f1;color:#9aa3b2}" +
+    ".lwe-q:disabled{background:#f1f1f1;color:#66707d}" +
     ".lwe-btn{font-family:var(--font-ui);font-size:9.5pt;padding:3px 11px;cursor:pointer;color:#1a2030;background:linear-gradient(to bottom,#fff 0%,#e9edf5 100%);border:1px solid #7d8aa3;box-shadow:inset 1px 1px 0 #fff,inset -1px -1px 0 #b9c2d4;white-space:nowrap}" +
     ".lwe-btn:hover{border-color:#3a71f5;background:linear-gradient(to bottom,#fff,#dce8fb)}" +
     ".lwe-btn:active{box-shadow:inset 1px 1px 0 #b9c2d4,inset -1px -1px 0 #fff}" +

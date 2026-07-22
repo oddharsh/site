@@ -63,7 +63,7 @@ body::after { content: ""; position: fixed; left: 0; right: 0; bottom: 0; height
 .msg.you .pic::before { content: ":)"; position: absolute; inset: 0; display: grid; place-items: center; color: #7a3d00; font-weight: bold; font-size: 9px; transform: rotate(90deg); }
 .msg .who { font-size: 8.5pt; margin-bottom: 1px; } .msg .who b { font-family: var(--font-caption); }
 .msg.bot .who b { color: #7c2a50; } .msg.you .who b { color: #b5560c; }
-.msg .who time { color: #9aa3b2; font-family: var(--font-mono); font-size: 8pt; margin-left: 5px; }
+.msg .who time { color:#66707d; font-family: var(--font-mono); font-size: 8pt; margin-left: 5px; }
 .msg .bubble { font-size: 10.5pt; } .msg.bot .bubble { color: #15243f; } .msg.you .bubble { color: #3a2a12; }
 .msg .bubble p { margin: 0 0 7px; } .msg .bubble p:last-child { margin-bottom: 0; } .msg .bubble em { font-style: italic; }
 .msg .bubble code { font-family: var(--font-mono); font-size: 9.5pt; background: #f1ece0; padding: 0 3px; border-radius: 2px; }
@@ -76,10 +76,10 @@ body::after { content: ""; position: fixed; left: 0; right: 0; bottom: 0; height
 .mono { font-family: var(--font-mono); }
 .btn { font-family: var(--font-ui); font-size: 9pt; padding: 3px 9px; cursor: pointer; background: linear-gradient(to bottom,#fff,#e9edf5); border: 1px solid #7d8aa3; border-radius: 2px; box-shadow: inset 1px 1px 0 #fff; }
 .btn:hover { border-color: var(--accent); }
-.scrollnote { text-align: center; font-size: 8pt; color: #9aa3b2; padding: 3px 0 9px; }
+.scrollnote { text-align: center; font-size: 8pt; color:#66707d; padding: 3px 0 9px; }
 .compose { border-top: 1px solid #e0cf9e; background: linear-gradient(180deg,#fffdf6,#f3ead0); padding: 7px 10px; }
 .compose .box { display: flex; gap: 7px; }
-.compose .ta { flex: 1; min-height: 30px; border: 1px solid #7d8aa3; background: #fff; box-shadow: inset 1px 1px 0 #c3cbdb; padding: 4px 6px; font-family: var(--font-ui); font-size: 9.5pt; color: #9aa3b2; }
+.compose .ta { flex: 1; min-height: 30px; border: 1px solid #7d8aa3; background: #fff; box-shadow: inset 1px 1px 0 #c3cbdb; padding: 4px 6px; font-family: var(--font-ui); font-size: 9.5pt; color:#66707d; }
 @media (max-width: 520px){ body { padding: 8px 4px 32px; } .msgr-head .pets { display:none } }
 .lead{font-size:9.5pt;color:#5a4250;margin:0 0 9px;line-height:1.5}.drv-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:4px 0 10px}.drv-row label{display:flex;align-items:center;gap:8px;font-size:9pt;color:#6b4658}.drv-row input[type=range]{accent-color:#a23b6c}canvas#drvCanvas{width:100%;max-width:560px;height:auto;border:1px solid #e0cdd6;border-radius:4px;background:#fffafc;display:block}.demo .mono{font-family:var(--font-mono)}
 body { text-wrap: pretty; } /* progressive; older engines ignore it */
@@ -196,7 +196,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
     var f = +fr.value;
     if (frL) frL.textContent = (f < 2.5 ? 'low' : f < 5 ? 'mid' : 'high') + ' (lag ' + (f).toFixed(1) + ' rad at the rim)';
     ctx.clearRect(0, 0, W, H);
-    ctx.fillStyle = '#9aa3b2'; ctx.font = '10px monospace';
+    ctx.fillStyle = '#66707d'; ctx.font = '10px monospace';
     ctx.fillText('dynamic cone (driven at the coil)', 18, 14);
     ctx.fillText('planar membrane (driven everywhere)', 18, H / 2 + 12);
     panel(H * 0.30, true, f);

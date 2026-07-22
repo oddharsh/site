@@ -104,7 +104,7 @@ body::after { content: ""; position: fixed; left: 0; right: 0; bottom: 0; height
 .msg .who b { font-family: var(--font-caption); }
 .msg.bot .who b { color: #1d3a8a; }
 .msg.you .who b { color: #b5560c; }
-.msg .who time { color: #9aa3b2; font-family: var(--font-mono); font-size: 8pt; margin-left: 5px; }
+.msg .who time { color:#66707d; font-family: var(--font-mono); font-size: 8pt; margin-left: 5px; }
 .msg .bubble { font-size: 10.5pt; }
 .msg.bot .bubble { color: #15243f; }
 .msg.you .bubble { color: #3a2a12; }
@@ -146,7 +146,7 @@ body::after { content: ""; position: fixed; left: 0; right: 0; bottom: 0; height
 .he-server b { color: #15243f; }
 .he-out { margin-top: 9px; padding: 7px 10px; border: 1px solid #4a9a52; border-radius: 4px; background: #eaf6ec; font-size: 9.5pt; }
 .he-out .ok { color: #2c7a36; font-weight: bold; }
-.he-noise { color: #9a6a16; }
+.he-noise { color: #966715; }
 
 /* demo 2 — noise + bootstrapping meter */
 .nz-wrap { margin: 2px 0 4px; }
@@ -174,10 +174,10 @@ body::after { content: ""; position: fixed; left: 0; right: 0; bottom: 0; height
 .compose .fmt { display: flex; gap: 6px; margin-bottom: 5px; font-size: 9pt; color: #6b7280; }
 .compose .fmt span { width: 19px; height: 18px; display: grid; place-items: center; border: 1px solid #bcccea; background: #fff; border-radius: 2px; }
 .compose .box { display: flex; gap: 7px; }
-.compose .ta { flex: 1; min-height: 30px; border: 1px solid #7d8aa3; background: #fff; box-shadow: inset 1px 1px 0 #c3cbdb; padding: 4px 6px; font-family: var(--font-ui); font-size: 9.5pt; color: #9aa3b2; }
+.compose .ta { flex: 1; min-height: 30px; border: 1px solid #7d8aa3; background: #fff; box-shadow: inset 1px 1px 0 #c3cbdb; padding: 4px 6px; font-family: var(--font-ui); font-size: 9.5pt; color:#66707d; }
 .compose .send { align-self: stretch; }
 
-.scrollnote { text-align: center; font-size: 8pt; color: #9aa3b2; padding: 3px 0 9px; }
+.scrollnote { text-align: center; font-size: 8pt; color:#66707d; padding: 3px 0 9px; }
 
 @media (max-width: 520px) {
   body { padding: 8px 4px 32px; }
@@ -241,7 +241,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
           <div class="demo" id="demo-add">
             <div class="bar">FHE shared a demo: add two secret numbers</div>
             <div class="pad">
-              <p class="lead">Pick two numbers. We <b>encrypt</b> each as a big noisy value, hand <b>only the ciphertexts</b> to a server, let it <b>add them</b>, and decrypt the result. The server never sees your numbers. <span class="mono" style="font-size:8pt;color:#9a6a16">(toy LWE: c = m&times;1000 + small noise; rounding recovers m)</span></p>
+              <p class="lead">Pick two numbers. We <b>encrypt</b> each as a big noisy value, hand <b>only the ciphertexts</b> to a server, let it <b>add them</b>, and decrypt the result. The server never sees your numbers. <span class="mono" style="font-size:8pt;color:#966715">(toy LWE: c = m&times;1000 + small noise; rounding recovers m)</span></p>
               <div class="he-row"><span class="lbl">your secrets</span>
                 <span><span class="kbd-step"><button data-add-a="-1">&minus;</button><span class="v" id="add-a">5</span><button data-add-a="1">+</button></span>
                 &nbsp;and&nbsp;
@@ -297,10 +297,10 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
           <div class="demo" id="demo-noise">
             <div class="bar">FHE shared a demo: noise vs the plaintext (encode → operate → decode)</div>
             <div class="pad">
-              <p class="lead">Your <b>secret</b> rides in the HIGH bits; <b>noise</b> fills the LOW bits, with a gap between them. Every op grows the noise: <b>add</b> nudges it, <b>multiply</b> blows it up. Once the noise climbs past the gap, <b>decoding rounds to the WRONG number</b> and corrupts the plaintext. <span class="mono" style="font-size:8pt;color:#9a6a16">(toy: ciphertext = m&times;256 + noise; decode = round(&divide;256))</span></p>
+              <p class="lead">Your <b>secret</b> rides in the HIGH bits; <b>noise</b> fills the LOW bits, with a gap between them. Every op grows the noise: <b>add</b> nudges it, <b>multiply</b> blows it up. Once the noise climbs past the gap, <b>decoding rounds to the WRONG number</b> and corrupts the plaintext. <span class="mono" style="font-size:8pt;color:#966715">(toy: ciphertext = m&times;256 + noise; decode = round(&divide;256))</span></p>
               <div class="dc-pick">secret <b>m</b> =
                 <span class="kbd-step"><button id="dc-mdn">&minus;</button><span class="v" id="dc-m">9</span><button id="dc-mup">+</button></span>
-                <span class="mono" style="font-size:8pt;color:#9aa3b2">&nbsp;encode → ciphertext below</span>
+                <span class="mono" style="font-size:8pt;color:#66707d">&nbsp;encode → ciphertext below</span>
               </div>
               <div class="dc-line">ciphertext <span class="mono" id="dc-ct">2307</span> = <span class="hi" id="dc-hi">9&times;256</span> &nbsp;+&nbsp; <span class="lo" id="dc-lo">noise 3</span></div>
               <div class="nz-wrap">

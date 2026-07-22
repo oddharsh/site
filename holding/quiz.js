@@ -165,7 +165,7 @@
       ".luq-opts{display:flex;flex-direction:column;gap:5px;margin-top:7px}" +
       ".luq-opt{font-family:var(--font-ui);font-size:9.5pt;text-align:left;padding:4px 10px;cursor:pointer;color:#1a2030;background:linear-gradient(to bottom,#fff,#e9edf5);border:1px solid #7d8aa3;border-radius:3px;box-shadow:inset 1px 1px 0 #fff}" +
       ".luq-opt:hover{border-color:var(--accent,#3a71f5);background:linear-gradient(to bottom,#fff,#e6efe8)}" +
-      ".luq-opt:disabled{cursor:default;color:#9aa3b2;background:#f4f4f0;box-shadow:none}" +
+      ".luq-opt:disabled{cursor:default;color:#66707d;background:#f4f4f0;box-shadow:none}" +
       ".luq-opt.was-pick:disabled{color:#1a2030;border-color:var(--accent,#3a71f5)}" +
       ".luq-verdict b.hit{color:#2c7a36}.luq-verdict b.miss{color:#c43636}" +
       ".luq-credit{font-size:8pt;color:#8a93a5;margin-top:6px;line-height:1.5}.luq-credit a{color:#1a4fc4}";
