@@ -1,7 +1,7 @@
 // Public, read-only coffee availability. Booking remains delegated to cal and
 // keeps its own fail-closed validation; this route is a small machine-facing
 // view over the same slot calculation.
-import { getPublicAvailability } from "../../cal/src/index.js";
+import { getPublicAvailability } from "../../cal/src/slots.js";
 import { jsonResponse } from "./lib/http.js";
 
 export async function readCoffeeAvailability(env, ctx) {

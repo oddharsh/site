@@ -20,7 +20,7 @@ import { handleCoffeeAvailability, readCoffeeAvailability } from "./holding/_wor
 import { handleSiteMcp } from "./holding/_worker.js/mcp.js";
 import { handlePhotoQuery, queryPhotos } from "./holding/_worker.js/photos.js";
 import { handleSearchJson, searchSite } from "./holding/_worker.js/search.js";
-import { getPublicAvailability } from "./cal/src/index.js";
+import { getPublicAvailability } from "./cal/src/slots.js";
 import { botHeaders } from "./holding/_worker.js/lib/botauth.js";
 import { mapWithConcurrency, readResponseCapped } from "./holding/_worker.js/lib/crawl.js";
 import { diffAroundRows, handleAroundChangesJson, readAroundChanges } from "./holding/_worker.js/around.js";
@@ -323,7 +323,12 @@ function coffeeEnv() {
     HOST_TIMEZONE: "America/New_York", WORKING_HOURS_START: "9", WORKING_HOURS_END: "18",
     WORKING_DAYS: "1,2,3,4,5", SLOT_MINUTES: "30", BUFFER_MINUTES: "15",
     MIN_NOTICE_HOURS: "0", MAX_LOOKAHEAD_DAYS: "2", DAILY_LIMIT: "3", WEEKLY_LIMIT: "5",
-    BOOKINGS: { async get(key, type) { if (key === "cal:busy" && type === "json") return snapshot; return null; } },
+    // listHeld pages KV with list({ prefix: "held:" }), one key per held slot.
+    // An empty first page is the "nothing booked" fixture.
+    BOOKINGS: {
+      async get(key, type) { if (key === "cal:busy" && type === "json") return snapshot; return null; },
+      async list() { return { keys: [], list_complete: true, cursor: null }; },
+    },
   };
 }
 

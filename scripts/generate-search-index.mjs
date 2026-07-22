@@ -25,7 +25,15 @@ function stripMarkup(value) {
   return String(value || "")
     .replace(/<script\b[\s\S]*?<\/script>/gi, " ")
     .replace(/<style\b[\s\S]*?<\/style>/gi, " ")
-    .replace(/<[^>]+>/g, " ")
+    // comments BEFORE tags. this site's HTML is deliberately comment-heavy for
+    // View Source, and a `>` inside a comment (an arrow, a shell redirect, a
+    // nested tag name) made the tag pattern below match only as far as that
+    // `>` and spill the rest of the comment into the indexed text.
+    .replace(/<!--[\s\S]*?-->/g, " ")
+    // quote-aware tag match: `[^>]+` stopped at the first `>` even when it sat
+    // inside an attribute value, leaving a `">` fragment in 28 of 47 records.
+    // Consume quoted runs whole so only a real tag-closing `>` ends the match.
+    .replace(/<(?:[^>"']|"[^"]*"|'[^']*')*>/g, " ")
     .replace(/&(?:amp|lt|gt|quot|#39|nbsp);/g, (m) => ({ "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"', "&#39;": "'", "&nbsp;": " " }[m] || " "))
     .replace(/\s+/g, " ")
     .trim();
