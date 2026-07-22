@@ -10,7 +10,7 @@
     "email": "resume@aadhar.sh",
     "url": "https://aadhar.sh",
     "profiles": [
-      { "network": "X", "username": "oddhash", "url": "https://twitter.com/oddhash" },
+      { "network": "X", "username": "oddhash", "url": "https://x.com/oddhash" },
       { "network": "ENS", "username": "aadharsh.eth" }
     ]
   },

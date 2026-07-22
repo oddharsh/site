@@ -1422,7 +1422,7 @@ function mcpAttendee(a) {
   if (a.twitter_handle) socials.x = "https://x.com/" + String(a.twitter_handle).replace(/^@/, "");
   if (a.linkedin_url) socials.linkedin = a.linkedin_url;
   else if (a.linkedin_handle) socials.linkedin = "https://linkedin.com/in/" + a.linkedin_handle;
-  if (a.instagram_handle) socials.instagram = "https://instagram.com/" + String(a.instagram_handle).replace(/^@/, "");
+  if (a.instagram_handle) socials.instagram = "https://www.instagram.com/" + String(a.instagram_handle).replace(/^@/, "");
   if (a.website) socials.website = a.website;
   const o = {
     name: a.name,

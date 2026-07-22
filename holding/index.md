@@ -1,6 +1,6 @@
 # Aadharsh Pannirselvam
 
-Researching and investing at [Archetype](https://archetype.fund). Building
+Researching and investing at [Archetype](https://www.archetype.fund/). Building
 [this site](https://aadhar.sh) in the meantime.
 
 **Under construction.**
@@ -49,8 +49,8 @@ archive is browsable at `/photos`, and machine-readable at
 
 ## Links
 
-- Twitter: <https://twitter.com/oddhash>
-- Instagram: <https://instagram.com/aadharsh.hif>
+- Twitter: <https://x.com/oddhash>
+- Instagram: <https://www.instagram.com/aadharsh.hif>
 - Curius: <https://curius.app/aadharsh-pannirselvam>
 - Beli: <https://beliapp.com/users/aadharsh>
 - Spotify: <https://open.spotify.com/user/aadharsh2010>
