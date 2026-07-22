@@ -1,10 +1,10 @@
 Big screens and small screens
 ─────────────────────────────
 
-The boundaries of consumer modalities are shaped by the Overton window and by culture as much as by incentives. Buying stocks or booking flights as strictly big-screen activities feels natural because we've learned to treat them that way. That's especially true for general-purpose modalities, like humanoids or RGB cameras for FSD. For early adopters, narrative can matter more than the immediate incentive.
+What makes something a big-screen task is cultural as much as it's about incentives. We buy stocks and book flights on a laptop because we learned to treat them that way, not because a phone handles them any worse. That pull runs hardest on general-purpose modalities, humanoids or the RGB camera steering a car, where no single obvious job anchors how people use the thing. So for early adopters, the narrative around a modality outweighs whatever it saves them.
 
-Is a change in modality really a change in consumer behavior? Or is it a precondition for consumer behavior to change?
+Which leaves a real question: does a new modality change consumer behavior, or does it just clear the way for behavior that was already waiting?
 
-Hailing a cab, calling one by phone, and using an app like Uber all solve the same basic problem, but each modality changes what feels easy, available, and normal. The behavior shifts because the interface makes a different version of it legible.
+Hailing a cab on the street, phoning for one, opening Uber: same problem, three modalities. Each one resets what feels easy and what feels normal. The behavior shifts because a new interface makes a different version of the task legible.
 
-Next up: foldables breaking down the distinction between big-screen tasks and small-screen tasks. My guess is that they'll work well for reading and less well for media consumption. More interestingly, they may push people to do more traditionally big-screen tasks on the go, perhaps making filesystem literacy even rarer.
+Foldables are next, folding down the wall between big-screen and small-screen work. My guess is they'll read well and stream badly. The more interesting bet is that they push traditionally big-screen tasks onto the go, and make filesystem literacy rarer than it already is.
