@@ -2825,14 +2825,18 @@ myButton.onclick = async () =&gt; {
       </h2>
       <p class="note">
         Declarative arrow-key navigation for a set of controls: put
-        <code>focusgroup</code> on a container and the browser gives its children a
-        single tab stop, arrow-key movement between them, and last-focused memory,
-        the roving-<code>tabindex</code> pattern every toolbar and menu hand-rolls in
-        JS. Shipped default-on in Chrome&nbsp;150; no Safari or Firefox yet, where it
+        <code>focusgroup="toolbar"</code> on a container and the browser gives its
+        children a single tab stop, arrow-key movement between them, and last-focused
+        memory, the roving-<code>tabindex</code> pattern every toolbar and menu
+        hand-rolls in JS. The value is a behavior token naming the widget pattern
+        (<code>toolbar</code>, <code>tablist</code>, <code>radiogroup</code>,
+        <code>listbox</code>, <code>menu</code>, <code>menubar</code>); a bare
+        <code>focusgroup</code> is rejected with a console error and buys you nothing.
+        Shipped default-on in Chrome&nbsp;150; no Safari or Firefox yet, where it
         degrades to each control being its own tab stop. Tab into the toolbar below,
         then use the arrow keys (in Chrome&nbsp;150):
       </p>
-      <div focusgroup role="toolbar" aria-label="focusgroup demo" style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+      <div focusgroup="toolbar" role="toolbar" aria-label="focusgroup demo" style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
         <button class="xp-button" type="button">Cut</button>
         <button class="xp-button" type="button">Copy</button>
         <button class="xp-button" type="button">Paste</button>
