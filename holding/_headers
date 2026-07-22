@@ -20,9 +20,11 @@
   Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://i.scdn.co https://*.spotifycdn.com; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; worker-src 'self'; manifest-src 'self'; upgrade-insecure-requests
   # Permissions-Policy: explicitly opt out of every browser API we don't
   # use. shrinks fingerprinting surface and prevents stray code from popping
-  # permission prompts. `interest-cohort=()` opts out of Google's FLoC/Topics
-  # tracking experiment.
-  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=(), serial=(), bluetooth=(), midi=(), accelerometer=(), gyroscope=(), magnetometer=(), screen-wake-lock=(), hid=(), idle-detection=()
+  # permission prompts. `browsing-topics=()` opts out of Google's Topics API
+  # (the successor to FLoC — the old `interest-cohort` token was removed from
+  # Chrome, so it now logs an "unrecognized feature" warning; Topics is the
+  # live directive).
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=(), serial=(), bluetooth=(), midi=(), accelerometer=(), gyroscope=(), magnetometer=(), screen-wake-lock=(), hid=(), idle-detection=()
   X-Frame-Options: DENY
 
 # thumbnails are content-addressed by filename (uploads keep their SOOC

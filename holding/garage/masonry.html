@@ -85,12 +85,20 @@ hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px
 .seg button[aria-pressed="true"] { color: oklch(100% 0 0);
   background: linear-gradient(180deg, oklch(60% 0.20 261), oklch(50% 0.225 263)); box-shadow: inset 1px 1px 2px oklch(36% 0.16 263); }
 .seg button:disabled { color: oklch(62% 0 0); cursor: not-allowed; }
-.note { font-size: 9pt; color: oklch(45% 0 0); margin: -6px 0 14px; }
+/* reserve the note's height (JS fills it a tick after load, and the longer
+   "no Grid Lanes" message runs ~3 lines) so the sheet below doesn't get shoved
+   down. kills a ~0.02 CLS. */
+.note { font-size: 9pt; color: oklch(45% 0 0); margin: -6px 0 14px; min-height: 3.4em; }
 
 /* ── the contact sheet ───────────────────────────────────────────────── */
 /* FALLBACK (everywhere): fixed-area squares, object-fit:cover — what the
    homepage ships today. one row-height, every photo cropped to 1:1. */
-.sheet { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; }
+/* reserve the sheet's height while the pool loads (it ships empty with just a
+   "Loading…" line, then fetches up to 40 tiles). Without this the collapsed
+   sheet keeps #luq high in the viewport, so the quiz mount + tile load shove
+   on-screen content — a ~0.25 CLS. Holding ~a viewport keeps #luq below the
+   fold from the first paint; a 40-tile sheet is taller than this, so no gap. */
+.sheet { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; min-height: 100vh; }
 .tile { display: block; background: oklch(100% 0 0); padding: 4px; line-height: 0; overflow: hidden;
   border: 1px solid oklch(61.14% 0.0611 253.60); box-shadow: 1px 1px 0 oklch(61.14% 0.0611 253.60 / 0.3); aspect-ratio: 1; }
 .tile:hover { border-color: oklch(41.92% 0.13 250.51); }
