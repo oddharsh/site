@@ -198,7 +198,12 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
         `<picture>` +
           (small ? `<source type="image/avif" media="(max-width: 560px)" srcset="${escAttr(small)}">` : "") +
           desktopSrc +
-          `<img alt="${escAttr(altMap[p.stem] || "")}" width="600" height="600" ${imgLoad} decoding="async" src="${escAttr(absThumb(p.thumb_jpg))}">` +
+          // fall back to the stem (matching photos.js) rather than alt="": the
+          // grid tile IS the link, so an empty alt makes the <a> nameless for
+          // screen readers and agents. 12 of 158 stems have no alt.json caption
+          // yet, and the homepage draws 12 at random, so a nameless link showed
+          // up intermittently (Lighthouse link-name + agent-accessibility-tree).
+          `<img alt="${escAttr(altMap[p.stem] || p.stem)}" width="600" height="600" ${imgLoad} decoding="async" src="${escAttr(absThumb(p.thumb_jpg))}">` +
         `</picture>` +
       `</a>`;
     }).join("");
