@@ -114,8 +114,8 @@
   // search alias + tooltip, so "Photos"/"Music" still resolve to insta/spotify.
   var PROFILES = [
     { label: "GitHub", url: "https://github.com/oddharsh" },
-    { label: "Twitter", url: "https://twitter.com/oddhash" },
-    { label: "Photos", icon: "Instagram", hint: "Instagram", url: "https://instagram.com/aadharsh.hif" },
+    { label: "Twitter", url: "https://x.com/oddhash" },
+    { label: "Photos", icon: "Instagram", hint: "Instagram", url: "https://www.instagram.com/aadharsh.hif" },
     { label: "Curius", url: "https://curius.app/aadharsh-pannirselvam" },
     { label: "Beli", url: "https://beliapp.com/users/aadharsh" },
     { label: "Music", icon: "Spotify", hint: "Spotify", url: "https://open.spotify.com/user/aadharsh2010" }
@@ -397,6 +397,25 @@
   function iconPos() { try { return JSON.parse(localStorage.getItem("axp-icons-pos") || "{}"); } catch (_) { return {}; } }
   function saveIconPos(p) { try { localStorage.setItem("axp-icons-pos", JSON.stringify(p)); } catch (_) {} }
   var ICON_STEP = 86;
+  // SELF-HEAL: several icons sharing one exact position can't come from
+  // dragging (the drop persists one key, and the repair below keeps them
+  // apart) — it's the unlaid-out stampede repairIconCollisions used to run
+  // below, already written to real visitors' localStorage. Every key at a
+  // duplicated spot is untrustworthy, so drop the lot and let the shipped
+  // defaults win back.
+  function pruneStackedPos(saved) {
+    var count = {}, dirty = false;
+    Object.keys(saved).forEach(function (k) {
+      var p = saved[k];
+      if (p) count[p.x + ":" + p.y] = (count[p.x + ":" + p.y] || 0) + 1;
+    });
+    Object.keys(saved).forEach(function (k) {
+      var p = saved[k];
+      if (p && count[p.x + ":" + p.y] > 1) { delete saved[k]; dirty = true; }
+    });
+    if (dirty) saveIconPos(saved);
+    return saved;
+  }
   // Repair stale positions left behind when the profile set changed, or when
   // two icons were accidentally dropped on one another.
   function iconRectsOverlap(a, b) {
@@ -409,19 +428,40 @@
     return { left: r.left, right: r.right, top: r.top, bottom: r.bottom };
   }
   function repairIconCollisions(wrap) {
+    // BAIL unless the icons are really laid out as an absolute column, because
+    // this whole routine reasons about rects and two states lie about them:
+    //   • display:none (luna hides #axp-icons under 1024px) → every icon is a
+    //     0x0 rect at the origin, so every pair "overlaps";
+    //   • luna.css not applied yet (the homepage flips it from media=print
+    //     AFTER DOMContentLoaded, and boot() runs at DOMContentLoaded) → the
+    //     icons are still inline anchors sitting shoulder to shoulder on one
+    //     line, so adjacent ones "overlap" inside the 4px gap tolerance.
+    // In both states style.left/top can't move the element, so the search below
+    // never finds a free slot and persists one stacked position for all six
+    // profiles. That poisoned localStorage for good: later visits replayed the
+    // pile and only Notepad (index 0, nothing before it to collide with) still
+    // landed anywhere visible.
+    var probe = wrap.querySelector(".axp-ico");
+    if (!probe || !probe.getClientRects().length ||
+        getComputedStyle(probe).position !== "absolute") return;
     var occupied = [], repaired = [], icons = wrap.querySelectorAll(".axp-ico");
     [].forEach.call(icons, function (a, i) {
       var r = iconRect(a);
       if (occupied.some(function (other) { return iconRectsOverlap(r, other); })) {
-        var x = 9, y = 9 + i * ICON_STEP;
+        // search from the TOP of the column, so a displaced icon takes the
+        // first free slot instead of leaving a hole at its own index.
+        var x = 9, y = 9, placed = y, floor = innerHeight - 30 - 72;
         do {
+          placed = y;
           a.style.left = x + "px";
           a.style.top = y + "px";
           r = iconRect(a);
           if (!occupied.some(function (other) { return iconRectsOverlap(r, other); })) break;
           y += ICON_STEP;
-        } while (y < innerHeight);
-        repaired.push({ key: a.dataset.key, x: x, y: y });
+        } while (y <= floor);
+        // persist the slot we actually applied, never the overshoot the loop
+        // exits on — otherwise a crowded desktop saves a position under the taskbar.
+        repaired.push({ key: a.dataset.key, x: x, y: placed });
       }
       occupied.push(r);
     });
@@ -439,7 +479,7 @@
   function buildIcons() {
     var existing = D.getElementById("axp-icons");
     if (existing) {
-      var savedPos = iconPos();
+      var savedPos = pruneStackedPos(iconPos());
       [].forEach.call(existing.querySelectorAll(".axp-ico"), function (a) {
         var p = savedPos[a.dataset.key];
         if (p) { a.style.left = p.x + "px"; a.style.top = p.y + "px"; }
@@ -448,7 +488,7 @@
       return;
     }
     var wrap = el('<nav id="axp-icons" aria-label="desktop shortcuts"></nav>');
-    var saved = iconPos();
+    var saved = pruneStackedPos(iconPos());
     DESKTOP.forEach(function (it, i) {
       var ext = it.kind === "profile";
       var a = el('<a class="axp-ico"' + (ext ? ' target="_blank" rel="noopener me external"' : "") +
