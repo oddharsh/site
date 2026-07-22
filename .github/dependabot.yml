@@ -7,9 +7,8 @@ updates:
   - package-ecosystem: npm
     directory: "/"
     schedule:
-      interval: weekly
-      day: monday
-      time: "09:17"
+      interval: daily
+      time: "09:00"
       timezone: America/New_York
     open-pull-requests-limit: 1
     commit-message:
@@ -20,9 +19,8 @@ updates:
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
-      interval: weekly
-      day: monday
-      time: "09:17"
+      interval: daily
+      time: "09:00"
       timezone: America/New_York
     open-pull-requests-limit: 1
     labels:
@@ -36,9 +34,8 @@ updates:
   - package-ecosystem: pip
     directory: "/holding/scripts"
     schedule:
-      interval: weekly
-      day: monday
-      time: "09:17"
+      interval: daily
+      time: "09:00"
       timezone: America/New_York
     open-pull-requests-limit: 1
     commit-message:
@@ -51,9 +48,8 @@ updates:
   - package-ecosystem: cargo
     directory: "/holding/scripts/zenc"
     schedule:
-      interval: weekly
-      day: monday
-      time: "09:17"
+      interval: daily
+      time: "09:00"
       timezone: America/New_York
     open-pull-requests-limit: 1
     commit-message:
