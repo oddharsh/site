@@ -1651,7 +1651,7 @@ async function mcpSharedEvents(d, qa, qb) {
   return { a: mcpAttendee(a), b: mcpAttendee(b), shared_count: rows.length, shared_events: rows.map(mcpEventSummary) };
 }
 
-const MCP_TOOLS = [
+export const MCP_TOOLS = [
   {
     name: "list_events",
     description: "List events in the Serendipity pool, each with a head count of who's going and an RSVP tier. The pool mixes events a contributor actually RSVP'd to or hosts (rsvp:\"going\" — first-class, the ones with real rosters) with events synced from just browsing a Luma feed (rsvp:\"invited\"/\"pending\"/etc — no roster, second-class). By default only the going (RSVP'd) events are returned, with a discovered_hidden count noting how many browsed events were omitted; pass rsvp:\"all\" to include them (first-class first) or rsvp:\"discovered\" for only the browsed ones. Each event carries attending (bool) + rsvp (raw status). Defaults to upcoming, soonest first.",
