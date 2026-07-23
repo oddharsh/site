@@ -13,10 +13,14 @@ Use this file if you are an agent or MCP client trying to understand how to
 access public `aadhar.sh` resources, including:
 
 - `https://aadhar.sh/serendipity/mcp`
+- `https://aadhar.sh/mcp`
 - `https://aadhar.sh/rn/tracks`
 - `https://aadhar.sh/images/manifest.json`
 - `https://aadhar.sh/around/json`
 - `https://aadhar.sh/around/changes.json`
+- `https://aadhar.sh/search.json?q=agents`
+- `https://aadhar.sh/photos/query.json?q=car`
+- `https://aadhar.sh/coffee/availability.json`
 
 ## Discovery
 

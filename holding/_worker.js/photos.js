@@ -174,6 +174,94 @@ export async function getThumbHashes(env) {
   return _thumbHashes;
 }
 
+const PHOTO_PUBLIC_FIELDS = [
+  "camera", "lens", "aperture", "shutter", "iso", "focal", "ev", "date",
+  "width", "height", "color_space", "white_balance", "color_temp", "wb_shift",
+  "flash", "exposure_mode", "meter", "focus_mode", "drive", "sharpness",
+  "noise_reduction", "film", "dr", "chrome", "chrome_blue", "grain", "grain_size",
+  "highlight_tone", "shadow_tone", "saturation",
+];
+
+async function getStaticPhotoJson(env, path, fallback) {
+  try {
+    const r = await env.ASSETS.fetch(`https://assets.local/${path}`);
+    return r.ok ? await r.json() : fallback;
+  } catch { return fallback; }
+}
+
+function photoMetadata(record) {
+  return Object.fromEntries(PHOTO_PUBLIC_FIELDS.filter((key) => record && record[key] !== undefined).map((key) => [key, record[key]]));
+}
+
+// Shared photo query used by /photos/query.json and the site MCP tool. GPS and
+// other unlisted EXIF fields never cross this boundary, even if the source
+// metadata grows later.
+export async function queryPhotos(env, options = {}, ctx = null) {
+  const q = String(options.q || "").trim().slice(0, 120).toLowerCase();
+  const camera = String(options.camera || "").trim().slice(0, 120).toLowerCase();
+  const lens = String(options.lens || "").trim().slice(0, 120).toLowerCase();
+  const film = String(options.film || "").trim().slice(0, 120).toLowerCase();
+  const from = String(options.from || "").trim().slice(0, 32);
+  const to = String(options.to || "").trim().slice(0, 32);
+  const limit = Math.min(100, Math.max(1, Number(options.limit) || 25));
+  const offset = Math.min(10000, Math.max(0, Number(options.offset) || 0));
+  const [metadata, altMap, hashes] = await Promise.all([
+    getStaticPhotoJson(env, "images/metadata.json", {}),
+    getAltMap(env),
+    getThumbHashes(env),
+  ]);
+  let manifest = [];
+  if (env.PHOTOS_R2) {
+    try { manifest = await getImagesManifest(env, ctx); } catch { manifest = []; }
+  }
+  const manifestByStem = new Map((manifest || []).map((photo) => [photo.stem, photo]));
+  const rows = Object.entries(metadata || {}).filter(([stem, record]) => {
+    const haystack = [stem, altMap?.[stem], record.camera, record.lens, record.film].filter(Boolean).join(" ").toLowerCase();
+    if (q && !haystack.includes(q)) return false;
+    if (camera && !String(record.camera || "").toLowerCase().includes(camera)) return false;
+    if (lens && !String(record.lens || "").toLowerCase().includes(lens)) return false;
+    if (film && !String(record.film || "").toLowerCase().includes(film)) return false;
+    const date = String(record.date || "").slice(0, 10).replaceAll(":", "-");
+    if (from && date < from) return false;
+    if (to && date > to) return false;
+    return true;
+  }).sort(([a], [b]) => a.localeCompare(b)).map(([stem, record]) => {
+    const manifestPhoto = manifestByStem.get(stem);
+    const hash = hashes?.[stem] || {};
+    return {
+      stem,
+      alt: String(altMap?.[stem] || "").slice(0, 240),
+      full: manifestPhoto?.full ? `/images/full/${encodeURIComponent(manifestPhoto.full).replace(/%2F/g, "/")}` : null,
+      thumb: {
+        avif: hash.a ? `/i/${stem}.${hash.a}.avif` : null,
+        jpg: hash.j ? `/i/${stem}.${hash.j}.jpg` : null,
+        small: hash.s ? `/i/${stem}-400.${hash.s}.avif` : null,
+      },
+      metadata: photoMetadata(record),
+    };
+  });
+  return {
+    query: { q, camera, lens, film, from, to },
+    total: rows.length,
+    offset,
+    limit,
+    photos: rows.slice(offset, offset + limit),
+  };
+}
+
+export async function handlePhotoQuery(request, env, ctx) {
+  const url = new URL(request.url);
+  const payload = await queryPhotos(env, {
+    q: url.searchParams.get("q"), camera: url.searchParams.get("camera"),
+    lens: url.searchParams.get("lens"), film: url.searchParams.get("film"),
+    from: url.searchParams.get("from"), to: url.searchParams.get("to"),
+    limit: url.searchParams.get("limit"), offset: url.searchParams.get("offset"),
+  }, ctx);
+  const response = jsonResp(payload);
+  response.headers.set("x-robots-tag", "noindex");
+  return response;
+}
+
 export async function getImagesManifest(env, ctx) {
   // two-key stale-while-revalidate via lib/cache.js: the manifest is the
   // persistent value, and `manifest:images:fresh` carries the 1h freshness TTL.

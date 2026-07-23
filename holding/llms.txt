@@ -73,6 +73,14 @@ aggregations.
   score, agent doors), tracked over time so you can watch the agentic web move
   rather than sampling one URL. JSON twin at
   [/lens/census.json](https://aadhar.sh/lens/census.json).
+- [/search](https://aadhar.sh/search): Server-rendered search over the public
+  pages, writing, garage notes, and utility descriptions. The machine twin is
+  [/search.json?q=…](https://aadhar.sh/search.json?q=agents), capped at 50
+  results.
+- [/lens/compare.json?left=…&right=…](https://aadhar.sh/lens/compare.json):
+  Compact, read-only comparison of two public URLs through Lens. The full
+  inspection remains at [/lens/fetch](https://aadhar.sh/lens/fetch); comparison
+  requests are bounded and rate-limited.
 - [/ledger](https://aadhar.sh/ledger): The crawl ledger — the last 30 days
   of identified AI-crawler visits rendered as an invoice (one cent a page,
   issued monthly, collected never). A commentary page, not a demand letter;
@@ -106,6 +114,16 @@ aggregations.
   historical diff of the latest neighborhood observations — status, title,
   description, robots policy, and bounded content-sample changes. It never
   stores or returns the crawled page bodies.
+- [/photos/query.json](https://aadhar.sh/photos/query.json): Bounded photo
+  utility. Filter the published archive by caption, camera, lens, Fuji film
+  recipe, or date range; returned EXIF is an explicit public-safe allowlist.
+- [/coffee/availability.json](https://aadhar.sh/coffee/availability.json):
+  Current bookable coffee slots in the host timezone. It fails closed and
+  returns no slots when the calendar is too old or unavailable.
+- [/mcp](https://aadhar.sh/mcp): The canonical stateless, read-only MCP
+  interface for site search, music, photo queries, coffee availability, Change
+  Radar, and Lens inspection/comparison. Serendipity's specialized MCP remains
+  available at [/serendipity/mcp](https://aadhar.sh/serendipity/mcp).
 
 ## Redirects
 

@@ -1,6 +1,12 @@
 {
   "linkset": [
     {
+      "anchor": "https://aadhar.sh/mcp",
+      "service-doc": [
+        { "href": "https://aadhar.sh/llms.txt", "type": "text/plain", "title": "Aadharsh site MCP and utility catalog" }
+      ]
+    },
+    {
       "anchor": "https://aadhar.sh/serendipity/mcp",
       "service-desc": [
         { "href": "https://aadhar.sh/.well-known/mcp.json", "type": "application/json", "title": "Serendipity MCP server card" }
@@ -31,6 +37,30 @@
       "anchor": "https://aadhar.sh/around/changes.json",
       "service-desc": [
         { "href": "https://aadhar.sh/around/changes.json", "type": "application/json", "title": "Neighborhood Change Radar, as JSON" }
+      ]
+    },
+    {
+      "anchor": "https://aadhar.sh/search.json",
+      "service-desc": [
+        { "href": "https://aadhar.sh/search.json?q=agents", "type": "application/json", "title": "Public site search" }
+      ]
+    },
+    {
+      "anchor": "https://aadhar.sh/photos/query.json",
+      "service-desc": [
+        { "href": "https://aadhar.sh/photos/query.json?q=car", "type": "application/json", "title": "Bounded public photo query" }
+      ]
+    },
+    {
+      "anchor": "https://aadhar.sh/coffee/availability.json",
+      "service-desc": [
+        { "href": "https://aadhar.sh/coffee/availability.json", "type": "application/json", "title": "Public coffee availability" }
+      ]
+    },
+    {
+      "anchor": "https://aadhar.sh/lens/compare.json",
+      "service-desc": [
+        { "href": "https://aadhar.sh/lens/compare.json?left=https%3A%2F%2Fexample.com%2F&right=https%3A%2F%2Faadhar.sh%2F", "type": "application/json", "title": "Compact Lens comparison" }
       ]
     },
     {
