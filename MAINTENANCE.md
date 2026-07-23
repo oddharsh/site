@@ -297,6 +297,30 @@ guarded, so a missing binding degrades, it doesn't crash.
 | `WORK_CALENDAR_URL` | secret | validated `https://calendar.app.google/...` destination for that redirect |
 | `SYNC_SECRET`, `EXA_API_KEY`, `PARALLEL_API_KEY`, `COVER_SECRET` | secret | Serendipity sync, enrichment, and image-proxy credentials |
 
+### Files whose only consumer lives outside this repo
+
+Two files have zero inbound references in the tree, so a reference sweep reads
+them as detritus. Both have real consumers. Leave them, and re-run the checks
+below whenever they look unreferenced again:
+
+- **`holding/bimi.svg`** is the BIMI logo (SVG Tiny-PS, square and full-bleed
+  because inboxes circle-crop it). Its consumer is a Cloudflare DNS record, so
+  deleting the file breaks mail rather than the site and nothing here goes red:
+
+  ```bash
+  dig +short default._bimi.aadhar.sh TXT   # "v=BIMI1; l=https://aadhar.sh/bimi.svg"
+  ```
+
+- **`design/styles.css`** is the design system's entry point, four `@import`s
+  over `design/tokens/`. Nothing the site serves links it (the site inlines only
+  the font tokens, per the byte-budget rule in CLAUDE.md). Its consumer is the
+  `aadhar-sh-design` skill package, which lists it in `globalCssPaths` and tells
+  prototypes to link it. Check with:
+
+  ```bash
+  grep -l styles.css ~/.claude/skills/aadhar-sh-design/SKILL.md
+  ```
+
 ### Verify the whole route surface
 
 `node verify-routes.mjs [baseUrl]` curls every route and asserts status +
@@ -307,6 +331,13 @@ this as the regression tripwire; keep it green on every future change.
 ---
 
 ## Remote image pipeline
+
+> Three files cover photos and they do not overlap: this section is the
+> **runbook** (which button, in what order), [PHOTO-PIPELINE.md](PHOTO-PIPELINE.md)
+> is the **input contract** (accepted source formats, the five workflow routines,
+> what lands in git versus what stays in R2), and CLAUDE.md explains the
+> **encoder choices** behind both. Start here; reach for the contract when a
+> source file is unusual or a routine misbehaves.
 
 The normal photo path is entirely remote:
 
@@ -509,7 +540,7 @@ curl -s "https://aadhar.sh/images/manifest.json" | jq length          # photo co
 | script | what it does |
 |---|---|
 | `add-photos.sh` | Full pipeline for new photos: resize, EXIF-rotate, encode AVIF+JPG center-square thumbs, upload the full-resolution browser copy to R2, regenerate metadata, bake histograms, validate the artifact graph, and bust the manifest KV keys. |
-| `check-photo-pipeline.mjs` | CI-safe invariant check: every metadata stem has all three hashed tiers, per-photo metadata, and four 64-bin histogram channels, with no orphaned pixel files. |
+| `check-photo-pipeline.mjs` | CI-safe invariant check: every metadata stem has all three hashed tiers, per-photo metadata, and four 64-bin histogram channels, with no orphaned pixel files. Also walks the authored HTML/JS for hardcoded `/i/<stem>.<hash>` URLs (the `/garage/tooltips` demo slots have three) and fails if a re-encode has pruned the bytes one of them names. |
 | `extract-photo-metadata.sh` | Read EXIF from the SOOC folder, emit `images/metadata.json` + per-photo `images/meta/<stem>.json`. Pulls the Fuji recipe fields too. Requires exiftool + jq. |
 | `reencode-thumbnails.sh` | Re-encode every published grid thumb from the source folder at a new resolution (pre-cropped squares, two tiers). Follow with `hash-thumbnails.sh` + a manifest bust. |
 | `add-car-photo.sh` | One resto-mod reference photo -> `cars/<stem>.{avif,jpg}` for the homepage car tooltips. No EXIF, no R2. |
@@ -520,6 +551,10 @@ curl -s "https://aadhar.sh/images/manifest.json" | jq length          # photo co
 | `photo-histograms.py` | Bakes four 64-bin RGB/luminance histogram channels into each per-photo `images/meta/<stem>.json` from the shipped hashed JPG tier. Requires the pinned Pillow dependency in `holding/scripts/requirements.txt` and is called by both metadata extraction and `add-photos.sh`. |
 | `gen-og-cards.mjs` | Render the 1200x630 OG/Twitter card per garage + lwe page (live demo on the Bliss desktop) into `holding/og/`. `npm run og-cards`. Drives the installed Chrome via `playwright-core`; captures production so data-driven demos render full. Hero selectors + presets in the `HERO{}` map. See "Regenerate the OG / Twitter cards". |
 | `inject-og-meta.mjs` | Idempotently add `og:image`/`twitter:card` meta to any garage + lwe page missing it, pointing at `/og/<section>-<name>.png`. `--check` reports gaps without writing. |
+| `hash-thumbnails.sh` | sha256 each pixel tier into `holding/i/<stem>.<hash8>.<ext>`, write `images/hashes.json`, and prune tiers no longer named by it. Run by `add-photos.sh`; a re-encode mints new URLs, so there is no version to bump. |
+| `gen-encoding-grids.sh` | Regenerate the ZOOMED 96px comparison crops (`garage/enc/z-*`) that `/lwe/encoding` fetches. Run by the `regenerate-encoding-study` routine of the photo workflow. |
+| `gen-desktop-partial.mjs` | Bake the XP desktop shell into `_worker.js/lib/desktop.js` and patch it into the 28 static pages, generated from nav.js's own `PROFILES`/`SUBPAGES`/`SECTION_ICONS`/tray template so the two cannot drift. Re-run after editing any of those. A run on an unchanged tree is a byte-exact no-op. |
+| `bump-version.sh` | Insert one `checkpoints` row into the `aadhar-restore` D1 database, deriving the next vnum from `MAX(vnum)`. Both `/restore` and `/updates` read that table, so this is the only place a deploy gets logged. `./holding/scripts/bump-version.sh <slug> "<title>"`. |
 
 ---
 

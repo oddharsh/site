@@ -24,9 +24,17 @@ review policy and entry point for future agent runs.
   packages run only in the build environment; they add no browser or Worker
   runtime dependency. Dependabot should review their release notes for output,
   target-browser, and native-install changes.
-- The direct esbuild dependency was removed. Wrangler still brings its own
-  nested esbuild because Cloudflare's Worker bundler uses it; that transitive
-  package is not part of the site's authored minification path.
+- esbuild 0.28.1 left the minification path when Oxc took over, but it stays a
+  direct pin: `scripts/check-page-contracts.mjs` uses its `transform()` to parse
+  each garage/LWE page's inline JS while validating page contracts. Wrangler
+  also carries its own nested copy for Cloudflare's Worker bundler; that
+  transitive package is separate from this pin.
+- minify-html 0.18.1 is the exact root pin for the deploy-time HTML pass over
+  `index.html` and the worker shells.
+- playwright-core is a scripts-only devDep (caret-ranged, not pinned: it drives
+  the locally installed Google Chrome rather than a bundled browser). Only
+  `holding/scripts/gen-og-cards.mjs` uses it, and only on demand; no CI job and
+  no deploy path touches it.
 - Pillow 12.3.0 is pinned in `holding/scripts/requirements.txt` for the
   histogram bake.
 - The root workspace lockfile is authoritative; workspace-local Wrangler pins

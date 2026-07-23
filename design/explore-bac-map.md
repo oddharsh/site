@@ -1,3 +1,7 @@
+<!-- STATUS: HISTORY, not a spec. Kept for the reasoning, not the targets.
+     The site did not converge on this; its measurements and file:line
+     citations are stale. See design/README.md before acting on anything
+     in here. -->
 <!-- design/explore-bac-map.md — the four-quadrant map from an explore-unknowns
 walk (2026-07-05), target: the B/A/C cleanup-and-guard program. Produced from
 three parallel codebase scans + a landmine sweep, every claim cited to a file
