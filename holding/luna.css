@@ -352,6 +352,20 @@ body:has(.window),body:has(.np-window),body:has(.wrap){overflow:hidden !importan
 /* the old/new images to animation:none keeps the old Bliss fully opaque the whole time; */
 /* since the shell is identical across pages, the live new shell takes over seamlessly. */
 ::view-transition-old(axp-desktop),::view-transition-new(axp-desktop),::view-transition-old(axp-taskbar),::view-transition-new(axp-taskbar),::view-transition-old(axp-icons),::view-transition-new(axp-icons){animation:none !important;mix-blend-mode:normal}
+/* …but the icons layer is the one shell layer that is mostly TRANSPARENT, so */
+/* holding both of its images opaque stacks two identical copies and the alpha */
+/* compositing doubles every translucent pixel: a 50%-alpha shadow pixel comes */
+/* out at 75%. The desktop and taskbar are opaque rectangles, so their new image */
+/* simply covers the old and nothing doubles — only the icons visibly darken, */
+/* every label halo and tile shadow deepening for the length of the transition */
+/* and snapping back when the pseudo-elements are dropped (the "shadows */
+/* re-render on every subpage switch" bug, 2026-07-23). Drop the OLD image and */
+/* the shadows paint exactly once: the shell partial ships in the HTML of every */
+/* page now (scripts/gen-desktop-partial.mjs), so the incoming icons are already */
+/* there to be captured — the 2026-07-03 nav.js race the rule above was written */
+/* for is gone. Hiding the OLD (not the new) is what keeps the hand-off clean: */
+/* the new image is what the live DOM becomes when the transition ends. */
+::view-transition-old(axp-icons){opacity:0}
 /* map to XP's "animate windows when minimizing/maximizing": the outgoing window */
 /* zooms DOWN toward the taskbar and the incoming one zooms UP out of it — scale */
 /* origin biased below-centre (toward the bar at the bottom), fast + near-linear, */
