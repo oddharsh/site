@@ -2,7 +2,7 @@
 // gated by a homemade photo-CAPTCHA ("click the cars") built from the author's
 // own pictures, with ground truth from the accessibility alt-text.
 //
-//   GET  /lwe/ask/challenge -> { stems[9], exp, token, thumb }   (no answer leaked)
+//   GET  /lwe/ask/challenge -> { stems[9], exp, token }   (no answer leaked)
 //   POST /lwe/ask/verify    { stems, exp, token, selected[] } -> { ok, askToken, askExp }
 //   POST /lwe/ask           { question, concept?, askToken, askExp } -> { answer, sources[] }
 //   POST /lwe/ask/search    { question } -> best-matching concept page (Search Companion)
@@ -69,7 +69,7 @@ async function challenge(env) {
   const correct = tiles.map((t, i) => (t.car ? i : -1)).filter(i => i >= 0).sort((a, b) => a - b);
   const exp = Date.now() + 90_000;
   const token = await hmac(env.SIGNING_SECRET, stems.join(",") + "|" + exp + "|" + correct.join(","));
-  return json({ stems, exp, token, thumb: env.THUMB_VERSION || "1" });
+  return json({ stems, exp, token });
 }
 
 // ── CAPTCHA: verify selection, mint askToken ──────────────────────────────────

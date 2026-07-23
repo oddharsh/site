@@ -1,7 +1,7 @@
 // notepad.js — behavior for the /writing Notepad view. The window chrome, menu
 // bar, textarea (seeded with the canonical text) and status bar are server-rendered
 // by _worker.js; this just wires the authentic Notepad interactions. Deferred,
-// SW-cached, and a no-op on any page without a .np-window.
+// short-cached with SWR, and a no-op on any page without a .np-window.
 //
 // The text is a real <textarea>: editable by nature, and ephemeral by nature — there
 // is no save, so a reload re-seeds it from the server's canonical copy. That IS the

@@ -4,7 +4,7 @@
 // fetching arbitrary origins itself), then renders the result through six
 // machine "lenses" — Readiness, Anatomy, Structured data, AI view, Terms, Discovery
 // files — next to a plain human read and an opt-in Browser Run render. No deps, no
-// build. Deferred + SW-cached.
+// build. Deferred, short-cached with SWR.
 (function () {
   "use strict";
   var form = document.getElementById("lx-form");

@@ -1,6 +1,6 @@
 // cf-garage — backend for the /garage/cloudflare demo. Exercises four free-tier
 // Cloudflare platform features live, one endpoint each. Routed at
-// aadhar.sh/garage/cf/* (ahead of the Pages project). Every request logs a
+// aadhar.sh/garage/cf/* (ahead of the site Worker). Every request logs a
 // structured line (Workers Logs, feature #4).
 
 const ORIGIN = "https://aadhar.sh";
@@ -96,7 +96,7 @@ export default {
       // Feature #2 — Workers AI: caption a real grid photo (10k neurons/day free)
       if (path === "/garage/cf/caption") {
         const stem = (url.searchParams.get("img") || "XT508165").replace(/[^A-Za-z0-9_-]/g, "");
-        const img = await fetch(`${ORIGIN}/images/${stem}.jpg?v=17`);
+        const img = await fetch(`${ORIGIN}/images/${stem}.jpg`);
         if (!img.ok) { log({ feature: "workers-ai", err: "thumb-missing" }); return json({ ok: false, error: "thumbnail not found" }, 404); }
         const bytes = [...new Uint8Array(await img.arrayBuffer())];
         // ?mode=alt → tight, factual alt text (used to bake <img alt> for the grid).

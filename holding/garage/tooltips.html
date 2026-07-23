@@ -18,7 +18,7 @@
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="aadhar.sh/garage/tooltip experiments, live demo screenshotted">
 <meta name="twitter:image" content="https://aadhar.sh/og/garage-tooltips.png">
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='2.5' y='4' width='20' height='13' rx='2.5' fill='%230855dd'/><path d='M8 16 L8 21.5 L13 16 Z' fill='%230855dd'/><rect x='5.5' y='8' width='14' height='1.8' rx='0.9' fill='%23cfe0fb'/><rect x='5.5' y='11.5' width='9.5' height='1.8' rx='0.9' fill='%23cfe0fb'/><path d='M17.5 18.5 L17.5 29 L20.2 26.3 L22.3 31.2 L24.1 30.4 L22 25.7 L25.5 25.7 Z' fill='%23ffffff' stroke='%23001ea0' stroke-width='1' stroke-linejoin='round'/></svg>">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20x='2.5'%20y='4'%20width='20'%20height='13'%20rx='2.5'%20fill='%230855dd'/%3E%3Cpath%20d='M8%2016%20L8%2021.5%20L13%2016%20Z'%20fill='%230855dd'/%3E%3Crect%20x='5.5'%20y='8'%20width='14'%20height='1.8'%20rx='0.9'%20fill='%23cfe0fb'/%3E%3Crect%20x='5.5'%20y='11.5'%20width='9.5'%20height='1.8'%20rx='0.9'%20fill='%23cfe0fb'/%3E%3Cpath%20d='M17.5%2018.5%20L17.5%2029%20L20.2%2026.3%20L22.3%2031.2%20L24.1%2030.4%20L22%2025.7%20L25.5%2025.7%20Z'%20fill='%23ffffff'%20stroke='%23001ea0'%20stroke-width='1'%20stroke-linejoin='round'/%3E%3C/svg%3E">
 <style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}
 /* --x/--y carry the cursor position (clientX/Y in px), written by JS on
    pointermove. registering them as typed <length> properties (instead of
@@ -1245,8 +1245,6 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
 }
 </script>
 
-<!-- register the service worker on idle so deep-link visitors (who skip the
-     homepage) still install it and get cached, instant subsequent navs. -->
 <script type="application/json" id="luq-data">
 {
   "skin": "garage",

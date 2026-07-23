@@ -97,7 +97,7 @@ Every LWE page can carry a live "ask a follow-up" box, grounded only in that con
 
 1. Set `"hasAsk": true` on the registry entry. The generated page then ships `ask.js`, and `wire` adds the concept to ask.js's CONCEPTS allow-list, so the include set never drifts from the allow-list.
 2. Add `lwe-ask/corpus/<concept>.json`: an array of `{ text, source, title }` passages. `build-corpus.mjs` injects them into the worker's corpus tagged by concept, each carrying its own source link.
-3. Ship it: `wrangler pages deploy` (page + ask.js), then `cd lwe-ask && wrangler deploy` + `POST /lwe/ask/reindex` (the corpus).
+3. Ship it: merge to `main` (CI promotes to `production`; Workers Builds deploys the site Worker carrying the page + ask.js), then `cd lwe-ask && wrangler deploy` + `POST /lwe/ask/reindex` (the corpus).
 
 **Copyright rule (convention, enforced in code review).** A corpus file may hold the author's own writing, the site's own AI-authored explanation of a topic, or genuinely republishable sources (Wikipedia with attribution, public domain). It must NEVER hold third-party copyrighted text. Copyrighted material (the 0xPARC primer, a book) informs the AI-authored page copy and shows up as a `cite` link, but never enters the retrieval corpus. The "found when building" case (no source supplied) defaults to a few relevant Wikipedia sections, chunked with attribution.
 

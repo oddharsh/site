@@ -1,6 +1,6 @@
 // nav.js — site-wide XP "Luna" taskbar + Run command palette.
 //
-// One deferred, self-contained widget shared across every page (SW-cached) instead
+// One deferred, self-contained widget shared across every page (immutable /a/ URL) instead
 // of 10 inline copies — it injects its own <style> once (the same pattern the design
 // system's components use) and builds the taskbar + Run dialog into <body>.
 //

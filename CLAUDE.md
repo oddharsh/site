@@ -231,16 +231,16 @@ the site doesn't actually serve. To verify:
   `./holding/scripts/bump-version.sh <slug> "<title>"`, then deploy. It derives
   the next vnum from `SELECT MAX(vnum)` and inserts the checkpoint (no file edit;
   the SW that used to carry the version string retired in v136).
-- **CF_ACCOUNT_ID + BROWSER_RENDER_TOKEN** — CF_ACCOUNT_ID is a var in
-  `wrangler.jsonc`; BROWSER_RENDER_TOKEN is a Worker secret (`wrangler secret put`) that power `/lens/shot`, the
-  Browser Rendering screenshot fallback inside **`/lens`** ("The Other Web", which shows
-  any URL the way a machine does). `/lens`'s Human view embeds framable sites in a live
-  cross-origin `<iframe>` (loaded by the visitor's own browser) and screenshots the rest
-  server-side via Cloudflare Browser Rendering's REST API (`POST /accounts/<id>/browser-rendering/screenshot`,
-  returns raw PNG bytes). `CF_ACCOUNT_ID` is the plain account id; `BROWSER_RENDER_TOKEN`
-  is a secret API token scoped to **Account · Browser Rendering · Edit**. Without both,
-  `/lens/shot` returns a clean 503 and the Human view falls back to the readable-text
-  reader, so the live iframe + all four machine lenses keep working regardless.
+- **BROWSER (Browser Rendering binding)** — powers `/lens/shot` and
+  `/lens/browser` inside **`/lens`** ("The Other Web", which shows any URL the way a
+  machine does). `/lens`'s Human view embeds framable sites in a live cross-origin
+  `<iframe>` (loaded by the visitor's own browser) and screenshots the rest
+  server-side via the binding's `quickAction("screenshot", …)` (real headless
+  Chrome; the old REST-API path with `BROWSER_RENDER_TOKEN` is retired). Without
+  the binding, `/lens/shot` returns a clean 503 and the Human view falls back to
+  the readable-text reader, so the live iframe + all machine lenses keep working
+  regardless. (`CF_ACCOUNT_ID` stays a var, but only for `/ledger`'s Analytics
+  Engine SQL reads alongside `ANALYTICS_READ_TOKEN`.)
   Screenshots are KV-cached 1h (`lens:shot:<sha256(url)>` in RN_KV) and rate-limited to
   8/min/IP; `/lens/fetch` (the parsing engine) is rate-limited 30/min/IP. Both `/lens/*`
   fetch routes guard against SSRF (http(s) only, no localhost / private / link-local /
@@ -256,7 +256,7 @@ canonical token set (fonts, Luna palette, bevels, radii). Pull from those before
 hardcoding any color/font/bevel. Captions = Trebuchet MS, UI/body = Tahoma→Verdana,
 mono = Courier New — those three stacks only.
 
-**HARD RULES (strong owner preference):** (1) **internal/native fonts ONLY** — never ship `@font-face` with `url()`, web fonts, `@import`, or font preloads; the served pages carry ZERO font bytes (the design system's `@font-face local()` rules are reference-only, never inlined into a served page). (2) **keep perf lean** — fold design tokens in WITHOUT regressing the byte budget: on a brotli'd inline page, tokenizing repeated literals is a wash (brotli already dedupes) while token *definitions* are net-new bytes, so only the FONT tokens (`--font-*`) are inlined site-wide; color/gradient tokens are NOT inlined (they cost bytes for no brotli gain). no external stylesheet, no JS for styling. (3) **authoring stays buildless; serving is minified** — the ONLY build is `build.mjs` (deploy-time transform: minifies the six client scripts + `luna.css` into a staged `.build/` copy, ships readable `/<name>.src.js` / `/luna.src.css` twins alongside; hard-fails the deploy if `luna.css` doesn't parse; and content-hashes `nav.js` + `luna.css` into immutable `/a/<name>.<hash8>.<ext>` URLs, repointing every `src=`/`href=` ref to them so the shell earns a 1-year immutable cache — the unhashed `/nav.js` + `/luna.css` stay as short-cached fallbacks for cal/coffee's absolute refs + any stale HTML). `wrangler.jsonc` self-builds via its `build.command` and points `main`+`assets` at `.build/holding`, so NO deploy path (bare `wrangler deploy`, `npm run deploy`, Workers Builds) can ship the readable originals; local dev uses `wrangler.dev.jsonc` (readable `holding/`, fast reload). Never minify `index.html` or the garage/lwe HTML (View Source is part of the design), never bundle, never extend the build to more CSS or HTML without the owner's say-so (`luna.css` was owner-approved 2026-07 for an ~8.7KB brotli win on a render-blocking sheet; the `/a/` content-hashing of `nav.js` + `luna.css` was owner-approved 2026-07-21 to clear PSI's "efficient cache lifetimes" audit).
+**HARD RULES (strong owner preference):** (1) **internal/native fonts ONLY** — never ship `@font-face` with `url()`, web fonts, `@import`, or font preloads; the served pages carry ZERO font bytes (the design system's `@font-face local()` rules are reference-only, never inlined into a served page). (2) **keep perf lean** — fold design tokens in WITHOUT regressing the byte budget: on a brotli'd inline page, tokenizing repeated literals is a wash (brotli already dedupes) while token *definitions* are net-new bytes, so only the FONT tokens (`--font-*`) are inlined site-wide; color/gradient tokens are NOT inlined (they cost bytes for no brotli gain). no external stylesheet, no JS for styling. (3) **authoring stays buildless; serving is minified** — the ONLY build is `build.mjs` (deploy-time transform: minifies `index.html` (structure + inline CSS/JS, readable `/index.src.html` twin, marker tripwires), the six client scripts + `luna.css`, and the worker modules' `/*min*/` CSS literals into a staged `.build/` copy, ships readable `/<name>.src.js` / `/luna.src.css` twins alongside; hard-fails the deploy if `luna.css` doesn't parse; and content-hashes `nav.js` + `luna.css` into immutable `/a/<name>.<hash8>.<ext>` URLs, repointing every `src=`/`href=` ref to them so the shell earns a 1-year immutable cache — the unhashed `/nav.js` + `/luna.css` stay as short-cached fallbacks for cal/coffee's absolute refs + any stale HTML). `wrangler.jsonc` self-builds via its `build.command` and points `main`+`assets` at `.build/holding`, so NO deploy path (bare `wrangler deploy`, `npm run deploy`, Workers Builds) can ship the readable originals; local dev uses `wrangler.dev.jsonc` (readable `holding/`, fast reload). Never minify the garage/lwe HTML (View Source is part of the design; the homepage serves minified with the readable `/index.src.html` twin one banner-click away), never bundle, never extend the build to more CSS or HTML without the owner's say-so (`luna.css` was owner-approved 2026-07 for an ~8.7KB brotli win on a render-blocking sheet; the `/a/` content-hashing of `nav.js` + `luna.css` was owner-approved 2026-07-21 to clear PSI's "efficient cache lifetimes" audit).
 
 Reusable classes that show up across the site (homepage + future `/coffee`):
 
@@ -359,8 +359,8 @@ npm run deploy
 1. **Thumbnail 404s must be uncacheable.** Workers static assets no longer
    return homepage HTML for missing files, but a real miss under `/images/*`
    can still inherit the immutable cache rule unless the worker clamps it.
-   Mitigations: keep `/images/<thumb>` worker-first and bump `THUMB_VERSION`
-   when you need a fresh cache key.
+   Mitigation: keep `/images/<thumb>` worker-first; a re-encode mints a fresh
+   content-addressed `/i/` URL by itself, so there is no version to bump.
 
 2. **zsh doesn't word-split unquoted parameters** — bash does. The
    `add-photos.sh` script uses `#!/usr/bin/env bash` so this isn't a problem
@@ -417,9 +417,9 @@ npm run deploy
 
 12. **Cloudflare asset uploads are content-addressed.** Re-deploying the
     same bytes may upload 0 files even when you are trying to change cache
-    behavior. If a thumb looks stale, hit it with a fresh `?cb=$RANDOM`: if
-    that differs from `?v=N`, you are looking at cache state, not missing
-    bytes.
+    behavior. If an asset looks stale, hit it with a fresh `?cb=$RANDOM`: if
+    that differs from the plain URL's response, you are looking at cache
+    state, not missing bytes.
 
 ---
 
