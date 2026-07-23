@@ -484,6 +484,36 @@ for (const [file, srcPath, marker] of SHELLS) {
     if (hits) { await writeFile(path, out); refCount += hits; filesTouched++; }
   }
 
+  // point the worker's Early-Hints `Link: rel=preload` header at the SAME hashed
+  // URLs. shell-assets.js ships a readable-dev fallback (unhashed /nav.js +
+  // /luna.css); here we overwrite just its marked SHELL_ASSETS line so the served
+  // 103 preloads the exact bytes the rewritten HTML requests.
+  {
+    const p = `${OUT}/holding/_worker.js/lib/shell-assets.js`;
+    const src = await readFile(p, "utf8");
+    const line = `export const SHELL_ASSETS = { luna: ${JSON.stringify(hashedFor.luna)}, nav: ${JSON.stringify(hashedFor.nav)} }; // build:shell-assets`;
+    const out = src.replace(/^export const SHELL_ASSETS = .*\/\/ build:shell-assets$/m, line);
+    if (out === src) throw new Error("shell-assets.js: the `// build:shell-assets` marker line was not found — did the export shape change?");
+    await writeFile(p, out);
+    console.log(`shell-assets: Early-Hints Link -> ${hashedFor.luna} + ${hashedFor.nav}`);
+  }
+
+  // same Early-Hints preload for the STATIC garage/lwe pages: rewrite the
+  // angle-bracketed Link targets in the staged _headers to the hashed URLs. only
+  // the `</luna.css>` / `</nav.js>` Link forms are touched; the bare `/nav.js` +
+  // `/luna.css` PATH-pattern rules (their own cache blocks) have no angle
+  // brackets, so they're left alone.
+  {
+    const p = `${OUT}/holding/_headers`;
+    const src = await readFile(p, "utf8");
+    const out = src
+      .split("</luna.css>").join(`<${hashedFor.luna}>`)
+      .split("</nav.js>").join(`<${hashedFor.nav}>`);
+    if (out === src) throw new Error("_headers: no `</luna.css>`/`</nav.js>` Link target found to hash — did the Early-Hints rule move?");
+    await writeFile(p, out);
+    console.log(`_headers: Early-Hints Link rewritten to hashed shell URLs`);
+  }
+
   // tripwires: the rewrite must fire, and the served homepage must load the hashed
   // URLs (a moved ref or renamed asset would silently drop the immutable win).
   if (!refCount) throw new Error("hashed-asset rewrite matched zero references — did the nav.js/luna.css ref shape change?");

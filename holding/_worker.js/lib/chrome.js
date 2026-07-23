@@ -2,6 +2,7 @@
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
 import { DESKTOP_CHROME, DESKTOP_TOP } from "./desktop.js";
 import { escAttr, escHtml } from "./http.js";
+import { SHELL_PRELOAD_LINK } from "./shell-assets.js";
 
 // shared XP window chrome for the server-rendered pages (/around, /bot,
 // /whoareyou, /rn/set). these four used to each carry their own copy of
@@ -130,6 +131,9 @@ ${scriptHtml}
     headers: {
       "content-type": "text/html; charset=utf-8",
       "cache-control": cache,
+      // preload the shell assets ahead of the body (Cloudflare Early Hints
+      // replays these as a 103). a caller's own `link` in headers still wins.
+      "link": SHELL_PRELOAD_LINK,
       ...headers,
     },
   });
