@@ -140,13 +140,12 @@ configs, and runs `cal/npm test`. Cal and Serendipity are bundled into the site
 Worker; their source modules and Cal behavioral suite remain inside the
 pull-request gate.
 
-`.github/workflows/update-wrangler.yml` runs weekly (and on manual dispatch),
-resolves the newest published Wrangler, applies the same exact version to the
-root site Worker and auxiliary Worker projects through the shared lockfile, then
-opens or refreshes a draft PR.
-The exact lockfile pin keeps a release reproducible; the scheduled PR keeps it
-current. Wrangler's npm dependency metadata instrumentation is explicitly
-enabled in every Worker config.
+Dependabot (`.github/dependabot.yml`) keeps the Wrangler pin current: the npm
+ecosystem entry at the repository root bumps the single exact root pin (and the
+shared lockfile) via PR, alongside the cargo, pip, and github-actions
+ecosystems. The exact lockfile pin keeps a release reproducible; the Dependabot
+PR keeps it current. Wrangler's npm dependency metadata instrumentation is
+explicitly enabled in every Worker config.
 
 `.github/workflows/promote-production.yml` runs after a successful `CI` run for
 `main` associated with a merged PR (or an explicit manual dispatch). It refuses
@@ -220,7 +219,7 @@ and keeps the understanding check diagnostic rather than a gate. Read the
 Key facts (don't hardcode these elsewhere, they drift):
 - RN_KV namespace id: `3cb8a107c58e47dc9244e75b33401f36`
 - R2 bucket: `aadhar-photos` (SOOC originals + full-res JPGs)
-- Thumbnails are content-addressed at `/i/<stem>.<hash8>.<ext>` (hashes.json via `hash-thumbnails.sh`); `THUMB_VERSION` in `lib/const.js` survives only for the legacy-fallback URL shape.
+- Thumbnails are content-addressed at `/i/<stem>.<hash8>.<ext>` (hashes.json via `hash-thumbnails.sh`); `THUMB_VERSION` is gone entirely (retired with the last legacy fallback — `lib/const.js` keeps only `CANONICAL_HOST` + `ARCHIVE_VERSION`).
 - The service worker RETIRED in v136 (2026-07-03): `holding/sw.js` is an unregister stub that must keep serving 200 for a year+. There is no `CACHE_VERSION`; the deploy-log number lives in D1 (`bump-version.sh` derives the next from `MAX(vnum)`).
 - Canonical photo source: the aadhar-photos R2 bucket. Raw source files are
   never committed to GitHub; the Actions workflow downloads only the requested
@@ -262,7 +261,7 @@ files) are served straight from disk. Worker-owned routes are enumerated in
 | `/images`, `/images/full` | 301 -> trailing slash | `index.js` |
 | `/images/*` selected routes (listings, manifest, metadata, R2 originals, thumb 404 clamp) | `handleImages*` / `servePhotoFromR2` + asset 404 clamp in `index.js` | `photos.js` (+ `index.js`) |
 
-The shared toolbox: `lib/const.js` (THUMB_VERSION, CANONICAL_HOST), `lib/http.js`
+The shared toolbox: `lib/const.js` (CANONICAL_HOST, ARCHIVE_VERSION), `lib/http.js`
 (esc, json/error responses, markdown negotiation), `lib/security.js` (security +
 discovery headers), `lib/chrome.js` (the XP window CSS + `lunaPage` shell),
 `lib/cache.js` (`swrKV` + `cachedRender`), `lib/botauth.js` (AadharshBot signed
@@ -284,7 +283,8 @@ guarded, so a missing binding degrades, it doesn't crash.
 | `BOOKINGS` | KV | Cal pending/confirmed bookings + calendar snapshot |
 | `COUNTER` | Durable Object | cross-script binding to cf-garage's Counter (homepage visits) |
 | `RN_SIGNING_KEY_JWK` | secret | AadharshBot Ed25519 signing key (RFC 9421) |
-| `BROWSER_RENDER_TOKEN`, `CF_ACCOUNT_ID` | secret | Browser Rendering for `/lens/shot` |
+| `BROWSER` | Browser Rendering | binding behind `/lens/shot` + `/lens/browser` (Browser Run); absent → clean 503 |
+| `CF_ACCOUNT_ID` | var | account id for the Analytics Engine SQL API (`/ledger` reads) |
 | `BOT_LEDGER` | Analytics Engine | dataset `aadhar_bot_ledger` — AI-crawler hit counts for `/ledger` (absent → counting silently off) |
 | `ANALYTICS_READ_TOKEN` | secret | API token (Account Analytics : Read) so `/ledger` can query the dataset back; absent → invoice renders with a "meter not readable" note |
 | `X402_PAY_TO` | var or secret | receiving EVM address for the `/llms-full.txt` x402 paywall; absent → file serves free with `x-payment-note` |
@@ -381,7 +381,8 @@ the tooltip skips nulls rather than guess.
 ### Re-encode ALL thumbnails (e.g. a new resolution/quality)
 ```bash
 ./holding/scripts/reencode-thumbnails.sh           # re-encodes every grid thumb as pre-cropped center squares
-# bump THUMB_VERSION in holding/_worker.js/lib/const.js, then deploy
+./holding/scripts/hash-thumbnails.sh               # re-hash the tiers into /i/ + rewrite hashes.json
+# bust manifest:images + manifest:images:fresh in KV, then deploy (new bytes = new URLs, nothing else to bump)
 ```
 `SQ_SM` (mobile tier) must match `THUMB_SMALL_PX` in `_worker.js` (the `-<N>.avif` suffix). add-photos.sh mirrors this script's two encode paths; keep them in sync.
 
@@ -484,8 +485,8 @@ wrangler kv key delete --namespace-id="$NS" "tracks:<id>" --remote
 wrangler kv key delete --namespace-id="$NS" "tracks:<id>:fresh" --remote
 ```
 
-### Bump THUMB_VERSION
-Mostly retired (hash cutover 2026-07-03): thumbnails are content-addressed at `/i/<stem>.<hash8>.<ext>`, so a re-encode mints new URLs by itself — run `./holding/scripts/hash-thumbnails.sh` after re-encoding, bust `manifest:images` + `manifest:images:fresh`, deploy. `THUMB_VERSION` survives only in the legacy-fallback URL shape (stems missing from hashes.json) and in the `/images/<thumb>` 301 layer's inputs; it should never need bumping. The worker route still clamps unknown-thumb 404s to `max-age=0` so misses do not inherit immutable caching.
+### Bump THUMB_VERSION (retired — nothing to bump)
+Fully retired (hash cutover 2026-07-03): thumbnails are content-addressed at `/i/<stem>.<hash8>.<ext>`, so a re-encode mints new URLs by itself — run `./holding/scripts/hash-thumbnails.sh` after re-encoding, bust `manifest:images` + `manifest:images:fresh`, deploy. The constant no longer exists in `lib/const.js`; legacy `/images/<stem>.<ext>[?v=N]` URLs just 301 into `/i/` regardless of their `?v`. The worker route still clamps unknown-thumb 404s to `max-age=0` so misses do not inherit immutable caching.
 
 ### Log a deploy (bump-version.sh)
 `./holding/scripts/bump-version.sh <slug> "<title>"`, then deploy. Inserts the next checkpoint into D1 (vnum from `SELECT MAX(vnum)`), which is what `/updates` and `/restore` render. Nothing edits sw.js anymore: the service worker retired in v136, `nav.js`/`notepad.js` updates land via their short `_headers` max-age plus the per-deploy edge purge, and the stub at `/sw.js` cleans up old installs.
@@ -510,7 +511,7 @@ curl -s "https://aadhar.sh/images/manifest.json" | jq length          # photo co
 | `add-photos.sh` | Full pipeline for new photos: resize, EXIF-rotate, encode AVIF+JPG center-square thumbs, upload the full-resolution browser copy to R2, regenerate metadata, bake histograms, validate the artifact graph, and bust the manifest KV keys. |
 | `check-photo-pipeline.mjs` | CI-safe invariant check: every metadata stem has all three hashed tiers, per-photo metadata, and four 64-bin histogram channels, with no orphaned pixel files. |
 | `extract-photo-metadata.sh` | Read EXIF from the SOOC folder, emit `images/metadata.json` + per-photo `images/meta/<stem>.json`. Pulls the Fuji recipe fields too. Requires exiftool + jq. |
-| `reencode-thumbnails.sh` | Re-encode every published grid thumb from the source folder at a new resolution (pre-cropped squares, two tiers). Pair with a THUMB_VERSION bump. |
+| `reencode-thumbnails.sh` | Re-encode every published grid thumb from the source folder at a new resolution (pre-cropped squares, two tiers). Follow with `hash-thumbnails.sh` + a manifest bust. |
 | `add-car-photo.sh` | One resto-mod reference photo -> `cars/<stem>.{avif,jpg}` for the homepage car tooltips. No EXIF, no R2. |
 | `zenc/` | The JPEG thumbnail encoder: a Rust crate wrapping zenjpeg (hybrid trellis + progressive scan search). `cargo build --release` (auto-built on first pipeline run). `zenc <in> <out> -q 84`. dependabot tracks the zenjpeg pin; replaced the from-source jpegli build in 2026-07. |
 | `download-remote-photos.sh` | Download selected R2 object keys into disposable runner storage for the GitHub Actions photo workflow; accepts `all` for the public manifest. |
@@ -524,10 +525,10 @@ curl -s "https://aadhar.sh/images/manifest.json" | jq length          # photo co
 
 ## Gotchas that have bitten me
 
-- **Thumbnail 404s must be uncacheable.** Workers static assets no longer return homepage HTML for missing files, but a real miss under `/images/*` can still inherit the immutable cache rule unless the worker clamps it. Keep the thumbnail route worker-first and bump `THUMB_VERSION` when you need a fresh cache key.
+- **Thumbnail 404s must be uncacheable.** Workers static assets no longer return homepage HTML for missing files, but a real miss under `/images/*` can still inherit the immutable cache rule unless the worker clamps it. Keep the thumbnail route worker-first; a re-encode mints a fresh `/i/` URL by itself, so there is no version to bump.
 - **zsh eats `${var}:something`.** Brace-quote KV key names with colons (`"tracks:${OLD}:fresh"`), and use `${=flag}` if you need word-splitting in ad-hoc snippets (the scripts use `#!/usr/bin/env bash` so they are safe internally).
 - **`jpegtran` / mozjpeg strip EXIF.** Rotate losslessly with `jpegtran -copy none -rotate N` *before* recompressing, and send its binary stdout to a file (`2>/dev/null > out.jpg`), not through a pipe that could mix in stderr.
 - **Production deploy = merge to `main`, CI promotion to `production`, then Workers Builds**; the single site Worker deploys the root `wrangler.jsonc`, bundling `holding/`, `cal/src/`, and `serendipity/` from that exact release branch. The deploy config points `main` + `assets` at `.build/holding` and runs `build.mjs` first through its `build.command`, so the production path self-builds and ships the minified client scripts + `luna.css`. Local dev is the exception: `wrangler dev -c wrangler.dev.jsonc` (`npm run dev`, wired into `.claude/launch.json`) serves the readable tree directly. Before merging, CI runs `npm run perf-budget`; after configuring Workers Builds, verify its release status and run `node verify-routes.mjs https://aadhar.sh` plus the `/coffee` and `/serendipity` route smoke checks.
 - **`_playlistId` is module-cached per isolate.** After changing `playlist-id`, redeploy to flush it (see the playlist section).
 - **The worker is bundled, not hand-concatenated.** `_worker.js/` imports sibling modules; wrangler bundles them at deploy via built-in esbuild.
-- **Authoring is buildless; SERVING is minified.** `build.mjs` (repo root, one devDependency: esbuild) copies `holding/` to `.build/` and minifies the client scripts (`nav.js`, `notepad.js`, `lens.js`, `lens-browser.js`, `quiz.js`, `tooltip.js`) plus `luna.css` (owner-approved 2026-07), deploying each readable original alongside as `/<name>.src.js` / `/luna.src.css` (the banner in each minified file points there). It also hard-fails the deploy if `luna.css` doesn't parse as valid CSS (the v143 corruption slipped through for three releases because esbuild only warns). Everything else — `index.html`, all garage/lwe HTML, images, `_headers`, worker modules — ships byte-identical to git. Do NOT extend the build into bundling, HTML minification, version auto-bumps, or CSS beyond `luna.css`; the scripts remain independently readable islands.
+- **Authoring is buildless; SERVING is minified.** `build.mjs` (repo root; minifier devDependencies: `@minify-html/node`, `lightningcss`, `oxc-minify`) copies `holding/` to `.build/` and minifies: `index.html` (structure via minify-html, inline CSS/JS through the same Lightning CSS + Oxc settings, with marker tripwires and a readable `/index.src.html` twin), the six client scripts (`nav.js`, `notepad.js`, `lens.js`, `lens-browser.js`, `quiz.js`, `tooltip.js`), `luna.css` (owner-approved 2026-07), and the worker modules' `/*min*/` CSS literals — each with a readable `/<name>.src.*` twin (the banner in each minified file points there). It hard-fails the deploy if `luna.css` doesn't parse as valid CSS (the v143 corruption slipped through for three releases), and content-hashes `nav.js` + `luna.css` into immutable `/a/` URLs. Garage/lwe HTML, images, and `_headers` ship byte-identical to git (View Source is part of the design). Do NOT extend the build into bundling or version auto-bumps; the scripts remain independently readable islands.

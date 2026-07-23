@@ -45,7 +45,8 @@
 # folder) so the 100+ existing originals aren't re-uploaded.
 #
 # NB: this only ADDS at the current SQ/SQ_SM. to change the square size for the
-# whole library, that's reencode-thumbnails.sh's job (+ a THUMB_VERSION bump).
+# whole library, that's reencode-thumbnails.sh's job (then hash-thumbnails.sh
+# mints the new content-addressed /i/ URLs).
 #
 # usage:
 #   ./holding/scripts/add-photos.sh /path/to/photo.HIF

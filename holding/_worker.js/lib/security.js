@@ -4,6 +4,8 @@
 // what's set on static assets via _headers — without this wrapper, the
 // worker-rendered pages (/whoareyou, /around, /bot, /rn/admin, etc.)
 // would skip _headers entirely and ship without CSP / Permissions-Policy.
+import { SHELL_PRELOAD_LINK } from "./shell-assets.js";
+
 export const SECURITY_HEADERS = {
   "content-security-policy":
     "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://i.scdn.co https://*.spotifycdn.com; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; worker-src 'self'; manifest-src 'self'; upgrade-insecure-requests",
@@ -29,6 +31,10 @@ const HOMEPAGE_DISCOVERY_LINKS = [
 
 export const HOMEPAGE_DISCOVERY_LINK = HOMEPAGE_DISCOVERY_LINKS.join(", ");
 
+// preload the two shell assets ahead of the discovery links, so Cloudflare
+// Early Hints (which harvests only the rel=preload entries) sends them in a 103.
+const HOMEPAGE_LINK = `${SHELL_PRELOAD_LINK}, ${HOMEPAGE_DISCOVERY_LINK}`;
+
 export function withSecurityHeaders(response) {
   // redirects don't need (and shouldn't carry) document-level headers
   if (response.status >= 300 && response.status < 400) return response;
@@ -49,7 +55,7 @@ export function withSecurityHeaders(response) {
 
 export function withHomepageDiscoveryHeaders(response) {
   const headers = new Headers(response.headers);
-  headers.set("link", HOMEPAGE_DISCOVERY_LINK);
+  headers.set("link", HOMEPAGE_LINK);
   appendVary(headers, "accept");
   return new Response(response.body, {
     status:     response.status,

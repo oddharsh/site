@@ -17,7 +17,7 @@ export const SOURCE_TITLE = "Privacy 2.0: PETs and the Promise of Private Shared
 // A content hash of the whole corpus, maintained by lwe-pipeline/build-corpus.mjs.
 // Folded into the ask cache key, so changing any passage (then reindexing) bumps the
 // version and busts every stale cached answer.
-export const CORPUS_VERSION = "efae362b2b";
+export const CORPUS_VERSION = "4df33f6d50";
 
 export const PASSAGES = [
   // ── FHE ──────────────────────────────────────────────────────────────────
@@ -114,7 +114,7 @@ export const PASSAGES = [
   { id: "encoding-4", concept: "encoding", text:
     "Grayscale shots encode much smaller because a color image carries one luma plane (brightness) plus two chroma planes (color). Converting to grayscale deletes both chroma planes, roughly two-thirds of the color information, so the file size falls hard.", source: "https://aadhar.sh/lwe/encoding", title: "aadhar.sh: thumbnail encoding" },
   { id: "encoding-5", concept: "encoding", text:
-    "Each thumbnail on the site is dual-encoded: an AVIF primary and a jpegli JPEG fallback inside one <picture> element, plus a 400px AVIF tier for phones. The browser loads the smallest format it can decode and never downloads the others.", source: "https://aadhar.sh/lwe/encoding", title: "aadhar.sh: thumbnail encoding" },
+    "Each thumbnail on the site is dual-encoded: an AVIF primary and a zenjpeg JPEG fallback inside one <picture> element, plus a 400px AVIF tier for phones. The browser loads the smallest format it can decode and never downloads the others.", source: "https://aadhar.sh/lwe/encoding", title: "aadhar.sh: thumbnail encoding" },
   { id: "encoding-6", concept: "encoding", text:
     "On one measured 400x266 photo (106,400 pixels), the encoders land at very different sizes against the lossless PNG baseline: baseline JPEG at quality 82, jpegli at quality 82 (roughly half the baseline JPEG), WebP at quality 80, and AVIF at quality 63, with AVIF the smallest of the lossy set. Bytes per pixel is computed by dividing each file's byte size by the pixel count, which makes the encoders directly comparable on a single photo.", source: "https://aadhar.sh/lwe/encoding", title: "aadhar.sh: thumbnail encoding" },
   { id: "encoding-7", concept: "encoding", text:

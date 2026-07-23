@@ -13,7 +13,7 @@
 .vscode/
 .idea/
 
-# node (root: esbuild for build.mjs; cal/ + cf-garage have their own)
+# node (root: build.mjs minifiers + wrangler; workspaces cal/ cf-garage/ lwe-ask/ serendipity/)
 node_modules/
 npm-debug.log
 

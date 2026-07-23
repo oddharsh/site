@@ -55,6 +55,16 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
     timings.total = Date.now() - t0;
     return Object.entries(timings).map(([k, v]) => `${k};dur=${v}`).join(", ");
   };
+  // finalize a homepage response: drop the static index.html's ETag/Last-Modified
+  // (the body is dynamic — a fresh random grid + live tracks — so a stable
+  // validator is a lie that would let a no-cache revalidation 304 and freeze the
+  // grid), then stamp Server-Timing. no-cache (not no-store) keeps bfcache.
+  const finish = (out) => {
+    out.headers.delete("etag");
+    out.headers.delete("last-modified");
+    out.headers.set("server-timing", serverTiming());
+    return out;
+  };
   // the page is private,no-cache, so the worker runs on every visit. these reads
   // are mutually independent (the static asset, the tracks payload, the
   // photo manifest, the alt map), so fire them concurrently instead
@@ -92,8 +102,26 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
     : Promise.resolve(null);
   ctx.waitUntil(counterPeek.catch(() => {}));
 
+  // fetch the static shell WITHOUT the visitor's conditional headers. index.html
+  // carries a stable content ETag, but the page we build from it is different
+  // every visit (a fresh random 12-photo grid + live tracks). Forwarding the
+  // browser's If-None-Match let ASSETS answer 304, which the worker propagated —
+  // so a no-cache revalidation reused the cached page and the "random" grid
+  // FROZE on whatever 12 first loaded. Strip the validators so ASSETS always
+  // hands back the full body to enhance; `finish()` below then drops the stale
+  // ETag off the dynamic response so no later revalidation can 304 it either.
+  const assetRequest = new Request(request.url, {
+    method: "GET",
+    headers: (() => {
+      const h = new Headers(request.headers);
+      h.delete("if-none-match");
+      h.delete("if-modified-since");
+      return h;
+    })(),
+  });
+
   const [res, tracksPayload, photos, altMap] = await Promise.all([
-    timed("assets", env.ASSETS.fetch(request)),
+    timed("assets", env.ASSETS.fetch(assetRequest)),
     timed("tracks", tracksChain),
     timed("manifest", manifestP),
     timed("alt", getAltMap(env)),   // AI alt text; module-cached, so this is free on warm isolates
@@ -119,9 +147,7 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
   // JS will pick up the slack on the client (and the hardcoded "000042"
   // stays in the footer as a graceful fallback).
   if (!tracksPayload?.tracks?.length && !photos && !env.COUNTER && !lastModStr) {
-    const out = withHomepageDiscoveryHeaders(res);
-    out.headers.set("server-timing", serverTiming());
-    return out;
+    return finish(withHomepageDiscoveryHeaders(res));
   }
 
   const rewriter = new HTMLRewriter();
@@ -176,12 +202,15 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
       // per-photo preserves the lean HTML path. (the grid is a
       // square 3-col CSS grid via aspect-ratio:1, so no per-tile --ar needed.)
       // dual-tier AVIF from the manifest: a 400px small tile + a 600px large.
-      // mobile (<=560px) is pinned to 400px (its box is ~100px, so 400px is
-      // already 2x-dense even on DPR3). desktop is responsive: the tile renders
-      // 174px (184px column − 4px padding − 1px frame, both sides), so a
-      // 400w/600w srcset + sizes:174px lands 400px on DPR1/DPR2 and 600px only
-      // on DPR3 — the old 600px-everywhere source shipped ~10-15KB of unseen
-      // detail to every DPR2 desktop tile. small missing → single 600px source.
+      // mobile (<=560px) is pinned to the 400px tier (the tile renders 174px
+      // there too, so 400px is already 2x-dense). desktop is responsive: the
+      // tile renders 174px (184px column − 4px padding − 1px frame, both
+      // sides), so a 400w/600w srcset + sizes:174px lands 400px on DPR1/DPR2
+      // and 600px only on DPR3 — the old 600px-everywhere source shipped
+      // ~10-15KB of unseen detail to every DPR2 desktop tile. the mobile
+      // source carries the same 400w + sizes shape (not a bare URL): the HTML
+      // spec wants descriptor use to be uniform across a picture's sources,
+      // and Nu flags the mixed form. small missing → single 600px source.
       // ordered first: <picture> uses the first source whose media matches.
       // URLs come from the manifest verbatim (absThumb tolerates a stale
       // pre-hash manifest during the cutover window).
@@ -196,7 +225,7 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
              ` target="_blank" rel="noopener"` +
              ` data-full="${escAttr(full)}"${sizeAttr}${upAttr}>` +
         `<picture>` +
-          (small ? `<source type="image/avif" media="(max-width: 560px)" srcset="${escAttr(small)}">` : "") +
+          (small ? `<source type="image/avif" media="(max-width: 560px)" srcset="${escAttr(small)} 400w" sizes="174px">` : "") +
           desktopSrc +
           // fall back to the stem (matching photos.js) rather than alt="": the
           // grid tile IS the link, so an empty alt makes the <a> nameless for
@@ -264,9 +293,7 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
       (lcpSmall ? `<link rel="preload" as="image" type="image/avif" fetchpriority="high" media="(max-width: 560px)" href="${escAttr(lcpSmall)}">` : "");
     rewriter.on("head", { element(el) { el.prepend(links, { html: true }); } });
   }
-  const out = withHomepageDiscoveryHeaders(rewriter.transform(res));
-  out.headers.set("server-timing", serverTiming());
-  return out;
+  return finish(withHomepageDiscoveryHeaders(rewriter.transform(res)));
 }
 
 // fisher-yates shuffle, return first N elements. doesn't mutate input.

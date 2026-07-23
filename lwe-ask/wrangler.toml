@@ -31,7 +31,6 @@ EMBED_MODEL   = "@cf/baai/bge-base-en-v1.5"        # 768-dim, matches the index
 GEN_MODEL     = "@cf/meta/llama-3.3-70b-instruct-fp8-fast"   # current (3.1-8b was deprecated 2026-05-30)
 TOP_K         = "4"
 MAX_Q_LEN     = "400"
-THUMB_VERSION = "18"   # cache-bust for /images/<stem> thumbs in the CAPTCHA grid; keep in sync with holding/_worker.js
 # secrets (wrangler secret put):
 #   SIGNING_SECRET — HMAC for the CAPTCHA challenge + askToken (openssl rand -hex 32)
 #   REINDEX_SECRET — gates the /lwe/ask/reindex route

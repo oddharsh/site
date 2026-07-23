@@ -25,17 +25,19 @@ what every script in `scripts/` does) live in the ops runbook:
 - `nav.js` — the shared desktop shell injected on every page: taskbar (with
   per-section app icons), Start → Run palette, desktop shortcut icons,
   draggable/resizable windows, the custom XP scrollbar, and per-route
-  favicons. One external asset, deferred + SW-cached.
+  favicons. One external asset, deferred, served from an immutable
+  content-hashed `/a/` URL.
 - `notepad.js` — behavior for the `/writing` Notepad view (menus, status
   bar, F5 stamp), incl. opening notes as popovers over the folder.
 - `tooltip.js` — the rich hover island for photos, tracks, artists, and car
   references. A tiny inline loader warms it during idle and replays a cold
   first hover; touch visitors never load it.
-- `sw.js` — service worker (cache-first images, SWR for static text).
+- `sw.js` — the retired service worker's unregister stub (v136): it deletes
+  old caches and unregisters itself, and must keep serving 200 for a year+.
 - `writing/` — `.txt` notes + `posts.json`; rendered as Notepad windows.
 - `images/` + `i/` — full photo metadata plus content-addressed AVIF/JPG
   thumbnail tiers; per-photo metadata includes the baked histogram channels.
-- `scripts/` — the photo pipeline (resize → rotate → jpegli/avif → R2).
+- `scripts/` — the photo pipeline (resize → rotate → zenc/avif → R2).
 - `llms.txt`, `sitemap.xml`, `robots.txt`, `.well-known/` — discovery + SEO.
 
 See the repo-root `CLAUDE.md` for the full architecture, the photo pipeline,

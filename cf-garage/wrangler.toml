@@ -3,7 +3,7 @@ main = "src/index.js"
 compatibility_date = "2026-06-16"
 compatibility_flags = ["nodejs_compat"]
 
-# intercepts /garage/cf/* ahead of the Pages project (which serves the rest of /garage/*)
+# intercepts /garage/cf/* ahead of the site Worker (which serves the rest of /garage/*)
 routes = [{ pattern = "aadhar.sh/garage/cf/*", zone_name = "aadhar.sh" }]
 
 # Workers Logs — free observability (200k events/day)

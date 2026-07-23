@@ -122,10 +122,13 @@ export function start(initial) {
       // histogram rides the same file, so bars + EXIF land together in one fetch.
       const metaMap = Object.create(null);   // stem → exif object | null (fetched, none) | absent (not fetched)
       const META_V = "mv=4";                 // bump when metadata is regenerated (4: histograms baked in)
-      const fetchMeta = (stem) => {
+      const fetchMeta = (stem, priority) => {
         if (stem in metaMap) return;         // already in hand, or a fetch is in flight
         metaMap[stem] = null;                // in-flight sentinel (renders as "no exif yet")
-        fetch(`/images/meta/${encodeURIComponent(stem)}.json?${META_V}`)
+        // warm-up fetches ride at low priority so the browser (and Lighthouse's
+        // critical-request-chain audit) treats them as the idle filler they are;
+        // a hover-triggered fetch keeps the default because someone is waiting.
+        fetch(`/images/meta/${encodeURIComponent(stem)}.json?${META_V}`, priority ? { priority } : undefined)
           .then(r => {
             // non-200, SPA-fallback html, or a transient bot-challenge → treat as a
             // failure and fall to .catch (which clears the sentinel so we can retry).
@@ -159,7 +162,7 @@ export function start(initial) {
           const stem = photoStem(slot);
           if (stem) stems.add(stem);
         });
-        stems.forEach(fetchMeta);
+        stems.forEach((stem) => fetchMeta(stem, "low"));
       };
       let metaWarmupQueued = false;
       const queuePhotoMetaWarmup = () => {

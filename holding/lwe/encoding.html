@@ -8,7 +8,7 @@
 <title>aadhar.sh/lwe/encoding</title>
 <meta name="description" content="Why three encoders make three file sizes from one photo, explained at the pace of an MSN chat. AVIF vs JPEG vs jpegli, with a bytes-per-pixel demo that fetches the real encoded files live.">
 <link rel="canonical" href="https://aadhar.sh/lwe/encoding">
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%235f7da3'/><text x='16' y='23' font-size='20' font-family='Trebuchet MS,sans-serif' fill='%23fff' text-anchor='middle'>▦</text></svg>">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='7'%20fill='%235f7da3'/%3E%3Ctext%20x='16'%20y='23'%20font-size='20'%20font-family='Trebuchet%20MS,sans-serif'%20fill='%23fff'%20text-anchor='middle'%3E▦%3C/text%3E%3C/svg%3E">
 <meta property="og:type" content="article">
 <meta property="og:title" content="aadhar.sh/lwe/encoding — thumbnail encoding">
 <meta property="og:url" content="https://aadhar.sh/lwe/encoding">
@@ -306,11 +306,11 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
       ]
     },
     {
-      "q": "AVIF measures smallest on the full photo, so why does each thumbnail on this site ship a jpegli JPEG as well?",
+      "q": "AVIF measures smallest on the full photo, so why does each thumbnail on this site ship a zenjpeg JPEG as well?",
       "options": [
         {
           "t": "avif needs a modern decoder, so the jpeg is the fallback anything can read",
-          "why": "Right: AVIF decodes only on recent browsers, so the picture element offers AVIF first and the jpegli .jpg catches everything else. Universal but larger against modern but smaller, and each visitor downloads exactly one.",
+          "why": "Right: AVIF decodes only on recent browsers, so the picture element offers AVIF first and the zenjpeg .jpg catches everything else. Universal but larger against modern but smaller, and each visitor downloads exactly one.",
           "ok": true
         },
         {
@@ -319,7 +319,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
         },
         {
           "t": "the jpeg is the higher-quality copy, kept around for people who zoom in",
-          "why": "Both tiers target the same visual quality; jpegli just needs more bytes to hit it inside the old format. The fallback exists for decode support, as the 23:04 message lays out."
+          "why": "Both tiers target the same visual quality; the JPEG tier just needs more bytes to hit it inside the old format. The fallback exists for decode support, as the 23:04 message lays out."
         },
         {
           "t": "avif only wins on tiny crops, so full-size photos still need the jpeg",

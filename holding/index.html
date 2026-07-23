@@ -31,7 +31,7 @@
 
 <!-- traffic cone favicon. period-correct for the holding page. swap once
      the real site lands. -->
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='4' y='25' width='24' height='3' rx='0.5' fill='%231a1a1a'/><path d='M 16 4 L 9 25 L 23 25 Z' fill='%23ff6600'/><path d='M 11.3 18 L 20.7 18 L 21.7 21 L 10.3 21 Z' fill='%23ffffff'/><path d='M 13.7 11 L 18.3 11 L 19 13 L 13 13 Z' fill='%23ffffff'/></svg>">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20x='4'%20y='25'%20width='24'%20height='3'%20rx='0.5'%20fill='%231a1a1a'/%3E%3Cpath%20d='M%2016%204%20L%209%2025%20L%2023%2025%20Z'%20fill='%23ff6600'/%3E%3Cpath%20d='M%2011.3%2018%20L%2020.7%2018%20L%2021.7%2021%20L%2010.3%2021%20Z'%20fill='%23ffffff'/%3E%3Cpath%20d='M%2013.7%2011%20L%2018.3%2011%20L%2019%2013%20L%2013%2013%20Z'%20fill='%23ffffff'/%3E%3C/svg%3E">
 
 <meta property="og:type" content="profile">
 <meta property="og:title" content="Aadharsh Pannirselvam">
@@ -513,6 +513,15 @@ hr {
   text-decoration: none;
   background: oklch(100.00% 0 0);
   padding: 4px;
+  /* skip rendering (layout + paint + style) for tiles scrolled out of view.
+     the grid is 12 tiles in an internally-scrolling window, so the below-fold
+     rows cost nothing until you reach them. contain-intrinsic-size reserves the
+     tile's box so the scrollbar + column reflow stay stable while skipped, and
+     `auto` lets the browser remember each tile's real size once painted. the
+     eager LCP tile (slot 0) is on-screen at load, so it renders normally and is
+     untouched. progressive: engines without content-visibility just render all. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 184px;
   /* one base token for the contact-sheet frame. the hover shade is DERIVED from
      it below with relative color — oklch(from var(--photo-frame) …) — so retuning
      this one value retunes the hover automatically. */
@@ -850,12 +859,13 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
   .window > .title-bar { flex: 0 0 auto; }
   /* reserve the custom-scrollbar gutter at FIRST PAINT, and make it AUTHORITATIVE.
      nav.js also pads the scroller via .axp-sb-pad once it mounts the XP scrollbar,
-     but nav.js is service-worker-cached: during a version bump a STALE cached
-     nav.js (its .axp-sb-pad is !important) would override a non-important reserve
-     here and shrink the gutter — the panel-kisses-scrollbar bug. So this rule is
+     but a visitor can hold a STALE nav.js across a deploy (the unhashed /nav.js
+     fallback is short-cached with SWR): its .axp-sb-pad is !important and would
+     override a non-important reserve here and shrink the gutter — the
+     panel-kisses-scrollbar bug. So this rule is
      !important AND more specific (.window > .content = 0,2,0 beats .axp-sb-pad =
      0,1,0), making the deployed HTML the single source of truth for the gutter,
-     regardless of which nav.js a visitor has cached. 28px → a ~9px gap to the
+     regardless of which nav.js version a visitor has cached. 28px → a ~9px gap to the
      scrollbar. Also kills the paint→mount reflow (the grid lays out at its final
      width immediately). top/left/bottom keep .content's 12/16/16. */
   .window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 12px !important; }
@@ -1257,7 +1267,7 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
       const targetFor = (node) => node?.closest?.(TARGETS) || null;
       const load = () => {
         if (modulePromise) return modulePromise;
-        modulePromise = import("/tooltip.js?v=1").then((mod) => {
+        modulePromise = import("/tooltip.js").then((mod) => {
           mod.start(pending);
           pending = null;
           return mod;

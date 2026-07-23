@@ -1,6 +1,6 @@
 // ask.js — the live "ask a follow-up" widget for the LWE concept pages.
 //
-// Shared, deferred, SW-cached. Derives the concept from the URL, turns the
+// Shared, deferred, edge-cached. Derives the concept from the URL, turns the
 // page's decorative compose bar into an ask box gated by a homemade
 // "click the cars" CAPTCHA that pops out as an XP-styled <dialog> window
 // (bigger tiles, dimmed backdrop). On solve → the question + a grounded, cited
@@ -104,7 +104,7 @@
     fetch("/lwe/ask/challenge").then(function (r) { return r.json(); }).then(function (ch) {
       var sel = {};
       tilesEl.innerHTML = ch.stems.map(function (s, i) {
-        return '<button type="button" class="lwe-tile" data-i="' + i + '"><img loading="lazy" decoding="async" src="/images/' + esc(s) + '.jpg?v=' + esc(ch.thumb) + '" alt=""></button>';
+        return '<button type="button" class="lwe-tile" data-i="' + i + '"><img loading="lazy" decoding="async" src="/images/' + esc(s) + '.jpg" alt=""></button>';
       }).join("");
       setBar(""); setDlg("");
       tilesEl.onclick = function (e) {

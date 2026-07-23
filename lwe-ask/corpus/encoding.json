@@ -20,7 +20,7 @@
     "title": "aadhar.sh: thumbnail encoding"
   },
   {
-    "text": "Each thumbnail on the site is dual-encoded: an AVIF primary and a jpegli JPEG fallback inside one <picture> element, plus a 400px AVIF tier for phones. The browser loads the smallest format it can decode and never downloads the others.",
+    "text": "Each thumbnail on the site is dual-encoded: an AVIF primary and a zenjpeg JPEG fallback inside one <picture> element, plus a 400px AVIF tier for phones. The browser loads the smallest format it can decode and never downloads the others.",
     "source": "https://aadhar.sh/lwe/encoding",
     "title": "aadhar.sh: thumbnail encoding"
   },

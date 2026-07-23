@@ -42,11 +42,11 @@
         ]
       },
       {
-        "q": "AVIF measures smallest on the full photo, so why does each thumbnail on this site ship a jpegli JPEG as well?",
+        "q": "AVIF measures smallest on the full photo, so why does each thumbnail on this site ship a zenjpeg JPEG as well?",
         "options": [
           {
             "t": "avif needs a modern decoder, so the jpeg is the fallback anything can read",
-            "why": "Right: AVIF decodes only on recent browsers, so the picture element offers AVIF first and the jpegli .jpg catches everything else. Universal but larger against modern but smaller, and each visitor downloads exactly one.",
+            "why": "Right: AVIF decodes only on recent browsers, so the picture element offers AVIF first and the zenjpeg .jpg catches everything else. Universal but larger against modern but smaller, and each visitor downloads exactly one.",
             "ok": true
           },
           {
@@ -55,7 +55,7 @@
           },
           {
             "t": "the jpeg is the higher-quality copy, kept around for people who zoom in",
-            "why": "Both tiers target the same visual quality; jpegli just needs more bytes to hit it inside the old format. The fallback exists for decode support, as the 23:04 message lays out."
+            "why": "Both tiers target the same visual quality; the JPEG tier just needs more bytes to hit it inside the old format. The fallback exists for decode support, as the 23:04 message lays out."
           },
           {
             "t": "avif only wins on tiny crops, so full-size photos still need the jpeg",
@@ -258,7 +258,7 @@
     {
       "who": "bot",
       "time": "23:06",
-      "html": "<p>Each thumbnail is dual-encoded: an <b>AVIF primary</b> and a <b>jpegli JPEG fallback</b> inside one <code>&lt;picture&gt;</code>, plus a 400px AVIF tier for phones. The browser loads the smallest format it can decode and never downloads the others.</p>"
+      "html": "<p>Each thumbnail is dual-encoded: an <b>AVIF primary</b> and a <b>zenjpeg JPEG fallback</b> inside one <code>&lt;picture&gt;</code>, plus a 400px AVIF tier for phones. The browser loads the smallest format it can decode and never downloads the others.</p>"
     },
     {
       "who": "you",

@@ -19,7 +19,7 @@ review policy and entry point for future agent runs.
 ## Current baseline
 
 - Wrangler 4.112.0 is the exact root pin shared by all Worker projects.
-- Oxc Minify 0.140.0 and Lightning CSS 1.32.0 are exact root pins for the
+- Oxc Minify 0.140.0 and Lightning CSS 1.33.0 are exact root pins for the
   deploy-time JavaScript and CSS minifiers. Their platform-specific optional
   packages run only in the build environment; they add no browser or Worker
   runtime dependency. Dependabot should review their release notes for output,
@@ -27,7 +27,7 @@ review policy and entry point for future agent runs.
 - The direct esbuild dependency was removed. Wrangler still brings its own
   nested esbuild because Cloudflare's Worker bundler uses it; that transitive
   package is not part of the site's authored minification path.
-- Pillow 12.2.0 is pinned in `holding/scripts/requirements.txt` for the
+- Pillow 12.3.0 is pinned in `holding/scripts/requirements.txt` for the
   histogram bake.
 - The root workspace lockfile is authoritative; workspace-local Wrangler pins
   are rejected by `npm run check-wrangler`.

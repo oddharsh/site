@@ -109,7 +109,7 @@ export function writingShell(o) {
     "<title>" + escHtml(o.title) + "</title>" +
     "<meta name=\"description\" content=\"" + escAttr(o.desc) + "\">" +
     "<link rel=\"canonical\" href=\"https://aadhar.sh" + escAttr(o.path) + "\">" +
-    "<link rel=\"icon\" type=\"image/svg+xml\" href=\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='7' y='3' width='18' height='26' rx='1' fill='%23ffffff' stroke='%230855dd' stroke-width='2'/><rect x='10' y='9' width='12' height='1.6' fill='%23166aee'/><rect x='10' y='14' width='12' height='1.6' fill='%23166aee'/><rect x='10' y='19' width='8' height='1.6' fill='%23166aee'/></svg>\">" +
+    "<link rel=\"icon\" type=\"image/svg+xml\" href=\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20x='7'%20y='3'%20width='18'%20height='26'%20rx='1'%20fill='%23ffffff'%20stroke='%230855dd'%20stroke-width='2'/%3E%3Crect%20x='10'%20y='9'%20width='12'%20height='1.6'%20fill='%23166aee'/%3E%3Crect%20x='10'%20y='14'%20width='12'%20height='1.6'%20fill='%23166aee'/%3E%3Crect%20x='10'%20y='19'%20width='8'%20height='1.6'%20fill='%23166aee'/%3E%3C/svg%3E\">" +
     "<style>:root{--font-caption:\"Trebuchet MS\",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:\"Courier New\",Courier,monospace}</style>" +
     "<style>" + NOTEPAD_CSS + "</style><link rel=\"stylesheet\" href=\"/luna.css\"></head><body class=\"np-page\">" + DESKTOP_TOP +
     o.body +

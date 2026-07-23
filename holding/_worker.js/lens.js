@@ -47,7 +47,7 @@ export async function overLensBudget(budget, request, env, ctx) {
 
 // /lens — the SSR shell: IE6 address bar, a Human/Machine view toggle, the
 // six lens tabs, two panes, seeded examples. The renderer lives in /lens.js
-// (a real static file, SW-cached like nav.js) so it can use normal JS without
+// (a real static file, cached like nav.js) so it can use normal JS without
 // fighting this template literal's ${} and backticks.
 // the /lens shell is static when it has no target. A shareable ?url= request is
 // intentionally inspected server-side and seeded with the same HTML floor as
