@@ -134,7 +134,7 @@ const ROUTES = [
   { path: "/garage/wire", status: 200, ct: "text/html", marker: "x-edge-cache" },
   { path: "/garage/blueprint", status: 200, ct: "text/html", marker: "run_worker_first" },
   { path: "/garage/gpt56", status: 200, ct: "text/html", marker: "5.6 Sol" },
-  { path: "/garage/enc/z-jl90.jpg", status: 200, ct: "image/jpeg" },
+  { path: "/garage/enc/z-zc90.jpg", status: 200, ct: "image/jpeg" },   // the JPEG cell /lwe/encoding actually loads (was z-jl90 until zenjpeg replaced jpegli in the ladder)
   { path: "/lwe", status: 200, ct: "text/html" },
   { path: "/lwe/", status: [301, 307, 308] },   // drop-trailing-slash
   { path: "/lwe/utf8", status: 200, ct: "text/html" },
