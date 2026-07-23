@@ -513,6 +513,15 @@ hr {
   text-decoration: none;
   background: oklch(100.00% 0 0);
   padding: 4px;
+  /* skip rendering (layout + paint + style) for tiles scrolled out of view.
+     the grid is 12 tiles in an internally-scrolling window, so the below-fold
+     rows cost nothing until you reach them. contain-intrinsic-size reserves the
+     tile's box so the scrollbar + column reflow stay stable while skipped, and
+     `auto` lets the browser remember each tile's real size once painted. the
+     eager LCP tile (slot 0) is on-screen at load, so it renders normally and is
+     untouched. progressive: engines without content-visibility just render all. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 184px;
   /* one base token for the contact-sheet frame. the hover shade is DERIVED from
      it below with relative color — oklch(from var(--photo-frame) …) — so retuning
      this one value retunes the hover automatically. */
@@ -1258,7 +1267,7 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
       const targetFor = (node) => node?.closest?.(TARGETS) || null;
       const load = () => {
         if (modulePromise) return modulePromise;
-        modulePromise = import("/tooltip.js?v=1").then((mod) => {
+        modulePromise = import("/tooltip.js").then((mod) => {
           mod.start(pending);
           pending = null;
           return mod;
