@@ -572,9 +572,13 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
     <footer>&larr; <a href="/">aadhar.sh</a> &middot; a research toy about how machines read the web &middot; fetched by <a href="/bot">AadharshBot</a></footer>
     ${initialScript}
 `,
-    // The shell is cached at the edge and browsers cache static scripts too;
-    // version the client URL so a fresh shell cannot pair with an older lens.js.
-    scripts: `<script src="/lens.js?v=8" defer></script>`,   // BUMP on every holding/lens.js change: the shell is no-store but the script is cached, so a stale token pairs a fresh shell with an old script
+    // The shell is cached at the edge and browsers cache static scripts too, so a
+    // fresh shell must not be able to pair with an older lens.js. This used to be a
+    // hand-bumped ?v=N, which only worked as long as nobody forgot. build.mjs now
+    // rewrites this src to /a/lens.<hash8>.js (same treatment as nav.js + luna.css),
+    // so the URL names exact bytes and the pairing is enforced, not remembered. The
+    // plain /lens.js below stays served, short-cached, for dev and any stale HTML.
+    scripts: `<script src="/lens.js" defer></script>`,
     cache: "public, max-age=60, s-maxage=300",
     headers: {
       // No x-robots-tag here: the bare shell is meant to be indexed. handleLens
