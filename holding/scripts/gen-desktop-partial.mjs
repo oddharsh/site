@@ -117,9 +117,13 @@ const pages = ["holding/index.html"]
 let patched = 0;
 for (const f of pages) {
   let src = readFileSync(f, "utf8");
-  // replace existing blocks (regen) or insert fresh
-  src = src.replace(new RegExp(`${TOP_OPEN}[\\s\\S]*?${TOP_CLOSE}\\n?`), "");
-  src = src.replace(new RegExp(`${CHROME_OPEN}[\\s\\S]*?${CHROME_CLOSE}\\n?`), "");
+  // replace existing blocks (regen) or insert fresh. The /g matters: replace()
+  // with a non-global RegExp strips only the FIRST match, so a page carrying two
+  // marker blocks kept the second and gained a third on every run. /garage/gpt56
+  // hit exactly that, having wrapped its own <script src="/nav.js"> in the
+  // markers; a regen ate the shell script and duplicated the desktop chrome.
+  src = src.replace(new RegExp(`${TOP_OPEN}[\\s\\S]*?${TOP_CLOSE}\\n?`, "g"), "");
+  src = src.replace(new RegExp(`${CHROME_OPEN}[\\s\\S]*?${CHROME_CLOSE}\\n?`, "g"), "");
   const bodyOpen = src.match(/<body[^>]*>/);
   if (!bodyOpen) { console.error("no <body> in " + f); continue; }
   src = src.replace(bodyOpen[0], bodyOpen[0] + "\n" + topBlock);

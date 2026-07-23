@@ -283,10 +283,18 @@
   })();
 
   function buildTaskbar() {
-    // ADOPT-OR-BUILD (shell rewrite phase B): pages ship the taskbar as static
-    // markup now, so the desktop exists for curl, readers, and JS-off visitors
-    // and CLS is 0. This function only constructs on legacy cached HTML that
-    // predates the partial; either way, wireTaskbar() below binds behavior.
+    // ADOPT-OR-BUILD (shell rewrite phase B): most pages ship the taskbar as
+    // static markup now, so the desktop exists for curl, readers, and JS-off
+    // visitors and CLS is 0. Those pages take the adopt path one line down.
+    //
+    // The construct path below is NOT a legacy fallback. Two live routes load
+    // /nav.js without the partial and still build here every visit: /coffee
+    // (cal/src/templates.js, which ships a bare bottom strip as a placeholder)
+    // and /serendipity (serendipity.js). Both are separate Worker modules that
+    // predate lib/desktop.js and don't import it; until they do, this is their
+    // taskbar. gen-desktop-partial.mjs also evals the tray template out of this
+    // function, so the markup here stays the single source of truth either way.
+    // Whichever path runs, wireTaskbar() below binds behavior.
     var bar = D.getElementById("axp-taskbar");
     if (bar) { wireTaskbar(bar); return; }
     bar = el('<div id="axp-taskbar" role="navigation" aria-label="taskbar"></div>');
@@ -305,6 +313,10 @@
     });
     bar.appendChild(pins);
     bar.appendChild(el('<div id="axp-spacer"></div>'));
+    // GENERATOR INPUT: scripts/gen-desktop-partial.mjs slices this expression by
+    // its first line and its closing `</div>');`, then evals it to bake the tray
+    // into lib/desktop.js. Keep it one string-concatenation expression with that
+    // exact opening and closing shape; the generator throws if the marker moves.
     var tray = el('<div id="axp-tray">' +
       '<a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><svg viewBox="0 0 24 24"><defs><filter id="spSh" x="-30%" y="-20%" width="160%" height="150%"><feDropShadow dx="0" dy=".5" stdDeviation=".5" flood-color="#000" flood-opacity=".28"></feDropShadow></filter><linearGradient id="spBez" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f3efe4"></stop><stop offset=".5" stop-color="#d6d0be"></stop><stop offset="1" stop-color="#b1aa94"></stop></linearGradient><linearGradient id="spScr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6fb0e8"></stop><stop offset=".5" stop-color="#2f72b6"></stop><stop offset="1" stop-color="#16548f"></stop></linearGradient><linearGradient id="spGl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".5"></stop><stop offset="1" stop-color="#ffffff" stop-opacity="0"></stop></linearGradient></defs><g filter="url(#spSh)"><ellipse cx="12" cy="21.3" rx="5.2" ry="1" fill="#8f876f" opacity=".5"></ellipse><rect x="10.4" y="17.2" width="3.2" height="2.8" fill="#c3bca6"></rect><path d="M7 21 Q7 19.7 8.6 19.7 H15.4 Q17 19.7 17 21 Z" fill="url(#spBez)" stroke="#897f66" stroke-width=".4"></path><rect x="2.3" y="2.7" width="19.4" height="14.9" rx="2" fill="url(#spBez)" stroke="#857c63" stroke-width=".5"></rect><rect x="2.95" y="3.3" width="18.1" height="13.7" rx="1.5" fill="none" stroke="#ffffff" stroke-opacity=".5" stroke-width=".5"></rect><rect x="4.2" y="4.7" width="15.6" height="11" rx=".8" fill="#0f3d63"></rect><rect x="4.6" y="5.1" width="14.8" height="10.2" rx=".6" fill="url(#spScr)"></rect><path d="M4.6 5.1 H19.4 V7.9 Q12 11.8 4.6 9.1 Z" fill="url(#spGl)"></path><circle cx="20" cy="15.9" r=".8" fill="#84e85a" stroke="#3f7a2a" stroke-width=".3"></circle></g></svg></a>' +
       '<a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><svg viewBox="0 0 24 24"><defs><filter id="seSh" x="-30%" y="-15%" width="160%" height="150%"><feDropShadow dx="0" dy=".5" stdDeviation=".5" flood-color="#000" flood-opacity=".28"></feDropShadow></filter><linearGradient id="seF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7ed24f"></stop><stop offset=".5" stop-color="#3f9c24"></stop><stop offset="1" stop-color="#297818"></stop></linearGradient><linearGradient id="seGl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".55"></stop><stop offset="1" stop-color="#ffffff" stop-opacity="0"></stop></linearGradient></defs><g filter="url(#seSh)"><path d="M12 2.2 L4.4 4.9 V11.4 C4.4 16.2 8 19.7 12 21.6 C16 19.7 19.6 16.2 19.6 11.4 V4.9 Z" fill="url(#seF)" stroke="#1f5f12" stroke-width=".7"></path><path d="M12 3.4 L5.6 5.7 V11.3 C5.6 15.3 8.6 18.4 12 20.1 C15.4 18.4 18.4 15.3 18.4 11.3 V5.7 Z" fill="none" stroke="#c6f2a6" stroke-opacity=".5" stroke-width=".6"></path><path d="M12 3.4 L5.6 5.7 V8.8 Q12 10.8 18.4 8.8 V5.7 Z" fill="url(#seGl)"></path><path d="M8 11.5 L11 14.5 L16.2 8.4" fill="none" stroke="#103f08" stroke-opacity=".35" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round"></path><path d="M8 11.2 L11 14.2 L16.2 8.1" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path></g></svg></a>' +
@@ -400,11 +412,16 @@
   // came back was a stack rather than the arrangement anyone chose. Icons drag
   // freely within a visit and the shipped column is always what you open to.
   // One-shot sweep of the retired key so old visitors don't carry dead state.
+  // Shipped 2026-07-22; safe to delete once returning visitors have cycled
+  // through (any time after ~2027-07), because a leftover key with no reader
+  // is inert, it just wastes a slot in someone's localStorage.
   try { localStorage.removeItem("axp-icons-pos"); } catch (_) {}
 
   // build the desktop-shortcut layer on the wallpaper.
-  // ADOPT-OR-BUILD: the static partial already ships the icons at their default
-  // positions (inline left/top), so adopting is a no-op.
+  // ADOPT-OR-BUILD: on pages carrying the static partial the icons already ship
+  // at their default positions (inline left/top), so adopting is a no-op. The
+  // construct path below runs on the two partial-less routes named at
+  // buildTaskbar (/coffee and /serendipity).
   function buildIcons() {
     if (D.getElementById("axp-icons")) return;
     var wrap = el('<nav id="axp-icons" aria-label="desktop shortcuts"></nav>');
