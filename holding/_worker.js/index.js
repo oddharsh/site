@@ -9,19 +9,22 @@ import { handleAgentAuthClaim, handleAgentAuthRegister, handleAgentAuthRevoke, h
 import { cronAround, handleAround, handleAroundChangesJson, handleAroundJson } from "./around.js";
 import { handleBotPage } from "./bot.js";
 import { cronCensus, handleCensus, handleCensusJson } from "./census.js";
+import { handleCoffeeAvailability } from "./coffee.js";
 import { handleHit } from "./counter.js";
 import { homepageHeadResponse, serveHomepageWithPrerenderedTracks, serveMarkdown } from "./home.js";
 import { countCrawlerHit, handleLedger, handleLedgerJson } from "./ledger.js";
-import { handleLens, handleLensBrowser, handleLensFetch, handleLensShot } from "./lens.js";
+import { handleLens, handleLensBrowser, handleLensCompare, handleLensFetch, handleLensShot } from "./lens.js";
 import { serveAssetWith404Clamp, serveFreshAsset } from "./lib/assets.js";
 import { BOT_UA } from "./lib/botauth.js";
 import { CANONICAL_HOST } from "./lib/const.js";
 import { wantsMarkdown } from "./lib/http.js";
+import { handleSiteMcp } from "./mcp.js";
 import { withSecurityHeaders } from "./lib/security.js";
-import { getThumbHashes, handleImagesManifest, handlePhotos, servePhotoFromR2 } from "./photos.js";
+import { getThumbHashes, handleImagesManifest, handlePhotoQuery, handlePhotos, servePhotoFromR2 } from "./photos.js";
 import { handleReading } from "./reading.js";
 import { handleRun } from "./run.js";
 import { handleRn, handleRnAdmin, handleRnSet, handleRnTracks, handleRnTracksHtml } from "./rn.js";
+import { handleSearch, handleSearchJson } from "./search.js";
 import { handleSecurityCenter } from "./security.js";
 import { handleSystemRestore, handleUpdatesJson, handleWindowsUpdate } from "./updates.js";
 import { handleWhoareyou, handleWhoareyouJson } from "./whoareyou.js";
@@ -43,7 +46,7 @@ export { BookingWorkflow } from "../../cal/src/workflow.js";
 // homepage, mutations, per-visitor views, and arbitrary inspection targets.
 // Query strings are excluded deliberately so owner bust tokens and future
 // query-bearing features cannot accidentally become shared cache keys.
-const WORKERS_CACHEABLE_PATHS = new Set("/favicon.ico /auth.md /.well-known/api-catalog /.well-known/agent-card.json /.well-known/oauth-protected-resource /.well-known/oauth-authorization-server /reading /updates /updates.json /restore /lens /ledger /writing /bot /around /around/json /around/changes.json /photos /rn/tracks /rn/tracks.html /images/manifest.json /images/metadata.json /coffee".split(" "));
+const WORKERS_CACHEABLE_PATHS = new Set("/favicon.ico /auth.md /.well-known/api-catalog /.well-known/agent-card.json /.well-known/oauth-protected-resource /.well-known/oauth-authorization-server /reading /updates /updates.json /restore /lens /ledger /writing /bot /around /around/json /around/changes.json /photos /rn/tracks /rn/tracks.html /images/manifest.json /images/metadata.json /coffee /coffee/availability.json /search /photos/query.json".split(" "));
 
 function shouldUseWorkersCache(request) {
   if (request.method !== "GET" && request.method !== "HEAD") return false;
@@ -169,8 +172,14 @@ const ROUTES = new Map([
   ["/lens/fetch", handleLensFetch],
   ["/lens/shot", handleLensShot],
   ["/lens/browser", handleLensBrowser],
+  ["/lens/compare.json", handleLensCompare],
   ["/lens/census", handleCensus],
   ["/lens/census.json", handleCensusJson],
+
+  ["/mcp", handleSiteMcp],
+
+  ["/search", handleSearch],
+  ["/search.json", handleSearchJson],
 
   // the x402 bot paywall: llms.txt's map is free, the full corpus costs $0.01
   // by machine payment (ungated until X402_PAY_TO is set).
@@ -197,6 +206,8 @@ const ROUTES = new Map([
 
   ["/photos", handlePhotos],
   ["/photos/", routePhotosRedirect],
+  ["/photos/query.json", handlePhotoQuery],
+  ["/coffee/availability.json", handleCoffeeAvailability],
   ["/run", handleRun],
 
   // the Apache-styled listings are retired (owner decree 2026-07-02): /photos

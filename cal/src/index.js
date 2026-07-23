@@ -22,10 +22,10 @@
 //     for a "host-decision" event; approve/decline fire that event to end it
 //     early, and a timeout reclaims the slot (see cal/src/workflow.js).
 
-import { generateSlots, fetchBusySWR,
-         BOOK_MAX_STALE_MS }               from "./availability.js";
+import { BOOK_MAX_STALE_MS }               from "./availability.js";
+import { listOpenSlots }                   from "./slots.js";
 import { createBooking, getBooking, setStatus,
-         holdSlot, releaseSlot, listHeld } from "./booking.js";
+         holdSlot, releaseSlot }           from "./booking.js";
 import { sendApprovalRequest, sendInvite,
          sendDecline }                     from "./email.js";
 import { sign, verify }                    from "./sign.js";
@@ -255,34 +255,6 @@ async function route_decline(req, env, ctx, url) {
   ctx.waitUntil(caches.default.delete(calIndexKey(req, env)));  // slot freed again
   return new Response(declinedPage(booking, env, /*already=*/false),
                       { headers: htmlHeaders() });
-}
-
-// returns { slots, cal } where cal is the SWR calendar metadata (busy, ageMs,
-// ok, source). Callers that only need the listing destructure { slots };
-// route_book also reads { cal } to fail closed on an unvouchable calendar.
-// timings (optional) collects per-step durations for a Server-Timing header.
-async function listOpenSlots(env, ctx, timings = null, options = {}) {
-  const mark = (name, p) => {
-    if (!timings) return p;
-    const s = Date.now();
-    return p.then(v => { timings[name] = Date.now() - s; return v; },
-                  e => { timings[name] = Date.now() - s; throw e; });
-  };
-  // every held slot (pending reservation OR confirmed coffee) blocks its exact
-  // slot AND counts toward the caps. A pending hold is reclaimed by the booking's
-  // expiry Workflow if the host never acts; a confirmed hold self-expires just
-  // after the event. listHeld reads them all in one shot (one key per slot).
-  const [cal, held] = await Promise.all([
-    mark("ics", fetchBusySWR(env, ctx, options)),
-    mark("held", listHeld(env)),
-  ]);
-  // busy → conflict-only (your real calendar); coffee bookings (held) → conflict
-  // + count toward DAILY/WEEKLY_LIMIT. keeping them separate is what stops a
-  // packed calendar from zeroing out availability.
-  const t = Date.now();
-  const slots = generateSlots(env, cal.busy, held);
-  if (timings) timings.slots = Date.now() - t;
-  return { slots, cal };
 }
 
 // one edge-cache entry per (origin, basePath): aadhar.sh/coffee and

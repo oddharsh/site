@@ -8,6 +8,32 @@ import { lensParseRobots, lensPathMatch, lensRobotsVerdict } from "./lib/robots.
 import { lunaPage } from "./lib/chrome.js";
 import { escAttr, escHtml, jsonResponse } from "./lib/http.js";
 
+// Per-IP crawl budgets, one place. These used to be inlined at each call site,
+// which was fine until /mcp grew tools that call the same crawler: sharing the
+// literal KV bucket is the whole point, because a second unmetered door (30 via
+// /lens/fetch AND unlimited via JSON-RPC) is not a rate limit. Keys and ceilings
+// are unchanged from the inlined versions, so live buckets carry over.
+export const LENS_BUDGETS = {
+  inspect: { key: "lens:rl",        max: 30 },
+  shot:    { key: "lens:shotrl",    max: 8  },
+  compare: { key: "lens:comparerl", max: 4  },
+};
+
+// Best-effort minute bucket. Returns true when the caller is already over.
+// Fails OPEN when RN_KV is missing (dev), same as the code it replaces: this is
+// abuse control, not authorization, and the SSRF guard is what enforces safety.
+export async function overLensBudget(budget, request, env, ctx) {
+  if (!env.RN_KV) return false;
+  const ip = request.headers.get("cf-connecting-ip") || "0.0.0.0";
+  const bucket = `${budget.key}:${ip}:${Math.floor(Date.now() / 60000)}`;
+  let n = 0;
+  try { n = parseInt((await env.RN_KV.get(bucket)) || "0", 10) || 0; } catch {}
+  if (n >= budget.max) return true;
+  const write = env.RN_KV.put(bucket, String(n + 1), { expirationTtl: 120 }).catch(() => {});
+  if (ctx?.waitUntil) ctx.waitUntil(write); else await write;
+  return false;
+}
+
 // ── /lens — "the other web" -----------------------------------------------
 // A URL goes in; what a MACHINE sees comes out, across five lenses: page
 // anatomy (raw HTML, headers, headings, stripped text), structured/semantic
@@ -174,12 +200,9 @@ async function inspectLensRequest(request, env, ctx) {
   if (!v.ok) return { status: 400, payload: { ok: false, error: v.error } };
 
   // best-effort per-IP rate limit so the proxy can't be turned into a firehose.
-  const ip = request.headers.get("cf-connecting-ip") || "0.0.0.0";
-  if (env.RN_KV) {
-    const bucket = `lens:rl:${ip}:${Math.floor(Date.now() / 60000)}`;
-    const n = parseInt((await env.RN_KV.get(bucket)) || "0", 10);
-    if (n >= 30) return { status: 429, payload: { ok: false, error: "Slow down — 30 lookups a minute. Try again shortly." } };
-    ctx.waitUntil(env.RN_KV.put(bucket, String(n + 1), { expirationTtl: 120 }));
+  // Shared with /mcp's lens_inspect tool (same bucket, see LENS_BUDGETS).
+  if (await overLensBudget(LENS_BUDGETS.inspect, request, env, ctx)) {
+    return { status: 429, payload: { ok: false, error: "Slow down — 30 lookups a minute. Try again shortly." } };
   }
 
   try {
@@ -757,6 +780,92 @@ export function lensHostBlocked(host) {
     if (a >= 224) return true;                        // multicast / reserved
   }
   return false;
+}
+
+function lensDoorCount(agent) {
+  return ["mcp", "nlweb", "webmcp", "agentCard", "openapi", "apiCatalog"]
+    .map((key) => agent?.[key])
+    .filter((door) => door && (door.verdict === "yes" || door.verdict === "likely" || door.verdict === "maybe" || door.present || door.found)).length;
+}
+
+// Compact, stable Lens output for comparison and machine callers. Full scans
+// remain available from /lens/fetch; these helpers deliberately exclude raw
+// HTML, headers, and third-party response bodies.
+export function lensObservationSummary(result) {
+  const readiness = result?.readiness || {};
+  const terms = result?.terms || {};
+  const spectrum = terms.spectrum || {};
+  const anatomy = result?.anatomy || {};
+  const structured = result?.structured || {};
+  const title = structured.title || result?.title || "";
+  return {
+    url: result?.url || "",
+    finalUrl: result?.finalUrl || result?.url || "",
+    redirected: !!result?.redirected,
+    status: result?.status ?? null,
+    contentType: result?.contentType || "",
+    elapsedMs: result?.elapsedMs ?? null,
+    truncated: !!result?.truncated,
+    title: String(title).slice(0, 240),
+    wordCount: anatomy.wordCount ?? 0,
+    bytes: anatomy.rawBytes ?? null,
+    readiness: readiness.overall ?? null,
+    level: readiness.level ?? null,
+    tier: spectrum.tier || "unknown",
+    doors: lensDoorCount(result?.agent),
+    surfaces: {
+      llms: !!result?.discovery?.llmsTxt?.ok,
+      markdown: !!result?.agent?.mdNegotiation?.supported,
+      mcp: !!(result?.agent?.mcp && ["yes", "likely"].includes(result.agent.mcp.verdict)),
+      agentCard: !!(result?.agent?.agentCard?.present || result?.agent?.agentCard?.found),
+      apiCatalog: !!(result?.agent?.apiCatalog?.present || result?.agent?.apiCatalog?.found),
+    },
+  };
+}
+
+export function compareLensObservations(left, right) {
+  const fields = [
+    ["status", "status"], ["finalUrl", "final URL"], ["contentType", "content type"],
+    ["title", "title"], ["wordCount", "word count"], ["bytes", "bytes"],
+    ["readiness", "readiness"], ["level", "readiness level"], ["tier", "spectrum tier"],
+    ["doors", "agent doors"],
+  ];
+  const changes = fields.filter(([key]) => left?.[key] !== right?.[key]).map(([key, label]) => ({
+    field: key, label, before: left?.[key] ?? null, after: right?.[key] ?? null,
+  }));
+  for (const key of ["llms", "markdown", "mcp", "agentCard", "apiCatalog"]) {
+    if (left?.surfaces?.[key] !== right?.surfaces?.[key]) changes.push({
+      field: `surfaces.${key}`, label: `surface: ${key}`,
+      before: !!left?.surfaces?.[key], after: !!right?.surfaces?.[key],
+    });
+  }
+  return changes;
+}
+
+export async function compareLensTargets(leftUrl, rightUrl, env, opts = {}) {
+  const [left, right] = await Promise.all([
+    lensInspect(leftUrl, env, { skipBotViews: opts.skipBotViews !== false }),
+    lensInspect(rightUrl, env, { skipBotViews: opts.skipBotViews !== false }),
+  ]);
+  const leftSummary = lensObservationSummary(left);
+  const rightSummary = lensObservationSummary(right);
+  return { left: leftSummary, right: rightSummary, changes: compareLensObservations(leftSummary, rightSummary) };
+}
+
+export async function handleLensCompare(request, env, ctx) {
+  const url = new URL(request.url);
+  const left = validateLensTarget(url.searchParams.get("left") || "");
+  const right = validateLensTarget(url.searchParams.get("right") || "");
+  if (!left.ok || !right.ok) return jsonResponse({ ok: false, error: left.ok ? `right: ${right.error}` : `left: ${left.error}` }, 400);
+  // Shared with /mcp's lens_compare tool (same bucket, see LENS_BUDGETS).
+  if (await overLensBudget(LENS_BUDGETS.compare, request, env, ctx)) {
+    return jsonResponse({ ok: false, error: "Lens comparisons are rate-limited to 4/min." }, 429);
+  }
+  try {
+    return jsonResponse({ ok: true, comparedAt: new Date().toISOString(), ...(await compareLensTargets(left.url, right.url, env)) });
+  } catch (error) {
+    return jsonResponse({ ok: false, error: "Lens comparison failed.", detail: String(error?.message || error).slice(0, 240) }, 502);
+  }
 }
 
 // the orchestrator: fetch the target, parse it, then probe the origin's

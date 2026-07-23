@@ -23,6 +23,114 @@ The exact work-calendar slug and its Google Calendar destination are Worker
 secrets (`WORK_CALENDAR_SLUG`, `WORK_CALENDAR_URL`); both can be rotated
 without changing the route or source code.
 
+## Repository boundary and fresh checkouts
+
+Git is the source of truth for the site code, checked-in configuration, tests,
+workflows, and runbooks. A clean clone is intended to be buildable and
+pushable; it is not intended to contain every piece of live operational state.
+
+```bash
+git clone git@github.com:oddharsh/site.git
+cd site
+npm ci
+npm test --workspace cal
+npm run build
+npx wrangler deploy --dry-run -c wrangler.jsonc
+```
+
+The following are deliberately not committed and should be recreated rather
+than copied between checkouts:
+
+- `node_modules/`, `.build/`, `.wrangler/`, `.dev.vars`, and `.DS_Store` are
+  local dependencies, build output, credentials, or caches covered by
+  `.gitignore`.
+- Worker secret values live in Cloudflare, not GitHub: `wrangler.jsonc` names
+  them but does not contain them. Workers Build project settings, DNS records,
+  Resend verification, and the contents of KV/R2/D1 are also external state.
+- The curated photo source folder is outside the repository by design; the
+  checked-in derivative metadata and image tiers are the repo-facing artifacts.
+
+There are currently no repository symlinks. Do not rely on a case-insensitive
+filesystem making two names look like one file. If a symlink becomes a real
+repository contract, create it explicitly and confirm Git records mode `120000`:
+
+```bash
+git ls-files --stage | awk '$1 == 120000 { print }'
+```
+
+Before committing, `git status --short` should show only intentional source
+changes, and `git ls-files --others --exclude-standard` should be empty.
+
+## Rotate Cal's calendar or approval secret
+
+Run these from the repository root. They update the live `aadhar-sh` Worker
+directly; no GitHub commit or code deploy is required because the values are
+Worker secrets. Use `npx wrangler secret list -c wrangler.jsonc` to confirm the
+secret is present without printing its value.
+
+### Change the availability calendar (`ICAL_URL`)
+
+Create a new Google Calendar **secret address in iCal format** (or the
+equivalent read-only iCloud feed), then replace the secret:
+
+```bash
+npx wrangler secret put -c wrangler.jsonc ICAL_URL
+```
+
+Paste the new feed URL when prompted. To make the new source take effect
+immediately instead of waiting for the current `cal:busy` snapshot to age out,
+delete only that derived snapshot and ask the live slots endpoint to refresh:
+
+```bash
+BOOKINGS_NS="37acb65118fe485583a90a94cb89365e"
+npx wrangler kv key delete --namespace-id="$BOOKINGS_NS" "cal:busy" --remote
+curl -fsS https://aadhar.sh/coffee/slots | jq .
+```
+
+The feed is cached for up to five minutes at the edge; a changed URL normally
+gets a new cache key. The booking path fails closed if the new feed cannot be
+read, so verify that `/coffee/slots` returns JSON before relying on it.
+
+### Change the unlisted Google Calendar redirect
+
+This is separate from `ICAL_URL`. `WORK_CALENDAR_URL` is the destination that
+the exact secret path on `cal.aadhar.sh` redirects to, and the Worker accepts
+only an `https://calendar.app.google/...` destination. Set the destination
+first, then the new random-looking path segment:
+
+```bash
+npx wrangler secret put -c wrangler.jsonc WORK_CALENDAR_URL
+npx wrangler secret put -c wrangler.jsonc WORK_CALENDAR_SLUG
+```
+
+Verify the new path without following the redirect and confirm that the old
+path no longer matches:
+
+```bash
+curl -fsSI "https://cal.aadhar.sh/<new-slug>"
+curl -sSI "https://cal.aadhar.sh/<old-slug>" | head
+```
+
+The response should be `302` with the expected Google Calendar `Location` for
+the new path, and the old path should be `404`. Do not put either value in
+GitHub or in a public page.
+
+### Rotate the Cal approval/decline signing secret (`SIGNING_SECRET`)
+
+Generate a new value and replace the Worker secret:
+
+```bash
+openssl rand -hex 32 | npx wrangler secret put -c wrangler.jsonc SIGNING_SECRET
+```
+
+This immediately invalidates every outstanding approve and decline link. It
+does not delete bookings, so any pending requests whose links were invalidated
+must be handled manually or allowed to expire after `PENDING_TTL_DAYS`.
+
+For a routine rotation, send one throwaway booking after the change and verify
+that the new approval link works. For an emergency rotation, prioritize the
+rotation and treat all previously emailed links as compromised.
+
 ## CI/CD release path
 
 `.github/workflows/ci.yml` is the pull-request gate. It installs locked
@@ -182,6 +290,12 @@ guarded, so a missing binding degrades, it doesn't crash.
 | `X402_PAY_TO` | var or secret | receiving EVM address for the `/llms-full.txt` x402 paywall; absent → file serves free with `x-payment-note` |
 | `X402_NETWORK`, `X402_FACILITATOR` | var | optional x402 overrides: network (`base` default, `base-sepolia` for tests) + verify/settle facilitator URL (default `https://x402.org/facilitator`, which is testnet-only — mainnet needs e.g. Coinbase CDP's) |
 | `RN_BUST_SECRET` | secret | guards `/rn/admin` + `/rn/set` |
+| `ICAL_URL` | secret | Cal's read-only Google/iCloud availability feed; changing it changes which busy events block slots |
+| `RESEND_API_KEY` | secret | Resend API credential used for booking and invite email |
+| `SIGNING_SECRET` | secret | Cal HMAC key for approve/decline links; rotating it invalidates outstanding links |
+| `WORK_CALENDAR_SLUG` | secret | exact unlisted path segment on `cal.aadhar.sh` for the external calendar redirect |
+| `WORK_CALENDAR_URL` | secret | validated `https://calendar.app.google/...` destination for that redirect |
+| `SYNC_SECRET`, `EXA_API_KEY`, `PARALLEL_API_KEY`, `COVER_SECRET` | secret | Serendipity sync, enrichment, and image-proxy credentials |
 
 ### Verify the whole route surface
 

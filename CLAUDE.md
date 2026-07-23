@@ -49,6 +49,39 @@ wrangler kv key delete --namespace-id="$NS" "manifest:images:fresh" --remote
 wrangler kv key delete --namespace-id="$NS" "tracks:4IRq9W1N2tOWHhH0O3vXiF" --remote
 ```
 
+## Collaboration and release discipline
+
+`origin/main` is the production source of truth. Claude, Codex, and local
+worktrees may edit freely, but a worktree is not a release surface.
+
+- Start work from a fresh `origin/main`: `git fetch --prune origin`, then make
+  a named branch/worktree. Never use a stale local `main` as an agent base.
+- **Assume another session is in this tree.** Several agents work here at once,
+  so a modified file is not necessarily one you modified, and `HEAD` can move
+  under you mid-task. Check `git status` and `git reflog` before you attribute a
+  change to yourself, and never revert or commit a hunk you did not write. When
+  the work is more than a couple of edits, take a worktree so nobody can move
+  your branch out from under you.
+- Keep each change on its own branch, commit it, push it, and open a PR. Do
+  not deploy from a dirty worktree or push agent work directly to `main`.
+- PR CI builds the site, enforces the performance budget, dry-runs the single
+  site Worker plus the auxiliary Garage/LWE configs (`cf-garage/`, `lwe-ask/`),
+  and runs the coffee tests.
+- Only a successful CI run for `main` associated with a merged PR can promote
+  the exact tested commit to the machine-owned `production` branch. GitHub's
+  current free private-repo plan cannot enforce branch protection, so the
+  workflow guard is the release backstop. Cloudflare Workers Builds watches
+  `production` and is the only production publisher for the site Worker, which
+  bundles `holding/`, `cal/`, and `serendipity/`. The Garage and LWE demos remain
+  auxiliary Worker projects.
+- Configure one Workers Build project for the site Worker with `production` as
+  its production branch and repository root `.`. Keep the dashboard Build
+  command blank; use the repo's Wrangler-owned build during the Deploy command.
+  GitHub should not hold a Cloudflare production API token for this path.
+
+> `AGENTS.md` is a symlink to this file. One source of truth, so the two cannot
+> drift again (they had, badly, by 2026-07-22). Edit this file.
+
 ---
 
 ## holding/ — homepage architecture
@@ -66,7 +99,7 @@ Single-page personal site at `aadhar.sh`. A Cloudflare Worker with static assets
 | `holding/writing/` | Written content as plain `.txt` files + `posts.json` registry `[{slug,title,date}]`. The worker renders each as an XP **Notepad** window at `/writing/<slug>` (a server-rendered `<textarea>` seeded with the canonical text — editable by nature, ephemeral by nature: no save → reload restores canonical, "writing in flux"), plus a "My Writing" folder index at `/writing`. Raw `.txt` stays fetchable at `/writing/<slug>.txt`. Author a post = drop a `.txt` + a `posts.json` entry. Render code (`handleWritingIndex`/`handleWritingPost`/`NOTEPAD_CSS`) lives in `_worker.js`. |
 | `holding/notepad.js` | Behavior for the `/writing` Notepad view (deferred, SW-cached): per-window `enhance()` wiring File/Edit/Format/View/Help menus, live Ln/Col + word-count status bar, Word-Wrap toggle, the classic **F5 time/date** stamp (Temporal w/ Date fallback), Select All, Print, About. Also opens folder notes as **popovers** that composite over the folder index, deliberately without touching the address bar (notes are `popover="manual"`, so several stay open at once and one URL couldn't honestly name three windows; Esc closes the topmost). The permalink stays real: each row is an `<a href="/writing/<slug>">` the worker serves standalone, and a modified click passes through to it. Chrome itself is SSR'd by `_worker.js`. No-op without a `.np-window`. |
 | `holding/tooltip.js` | Rich XP hover island for photos, tracks, artists, and car references. The homepage keeps only a tiny inline loader that idle-prefetches this module and replays a cold first hover; coarse-pointer visitors never load it. |
-| `holding/nav.js` | Site-wide XP **desktop shell**. The ONE shared external asset (deferred, SW-cached) — every page includes `<script src="/nav.js" defer>`; it injects its own `<style>` + builds, into `<body>`: the **Bliss desktop** wallpaper, **draggable desktop icons** (Notepad + the 5 profiles, positions persisted in localStorage), the **taskbar** (Start orb → Run, first-level-subpage app buttons each with a per-section SVG icon, clock via Temporal), and the **Run** command palette (⌘K / Start). Also owns the **OS-window model**: body is a clipping flex desktop, each `.window`/`.np-window` is pinned + its content scrolls internally behind a **custom XP scrollbar**, windows are **draggable** (top is a hard boundary) + **resizable**, and View Transitions animate only the window. Sets each first-level route's **tab favicon** to its section icon. Run destinations: pages + profiles inline; 158 photos lazy-loaded from `/images/manifest.json` with `/images/alt.json` captions. Wired into homepage + all garage pages + worker-gen `/around`,`/whoareyou`,`/bot` + serendipity shell. |
+| `holding/nav.js` | Site-wide XP **desktop shell**. The ONE shared external asset (deferred, SW-cached) — every page includes `<script src="/nav.js" defer>`; it injects its own `<style>` + builds, into `<body>`: the **Bliss desktop** wallpaper, **draggable desktop icons** (Notepad + the 5 profiles; icons drag freely within a visit but positions are DELIBERATELY not persisted, since the stored layout was read back in states that couldn't honour it and came back as a stack), the **taskbar** (Start orb → Run, first-level-subpage app buttons each with a per-section SVG icon, clock via Temporal), and the **Run** command palette (⌘K / Start). Also owns the **OS-window model**: body is a clipping flex desktop, each `.window`/`.np-window` is pinned + its content scrolls internally behind a **custom XP scrollbar**, windows are **draggable** (top is a hard boundary) + **resizable**, and View Transitions animate only the window. Sets each first-level route's **tab favicon** to its section icon. Run destinations: pages + profiles inline; 158 photos lazy-loaded from `/images/manifest.json` with `/images/alt.json` captions. Wired into homepage + all garage pages + worker-gen `/around`,`/whoareyou`,`/bot` + serendipity shell. |
 | `holding/quiz.js` | The **understanding-check** widget (deferred, shared, minified at deploy with a `/quiz.src.js` twin). Every garage + LWE content page ends with an active-recall quiz rendered by this one script from an inline `<script type="application/json" id="luq-data">` block: garage pages get an XP GroupBox self-test (`<section id="luq">` mount), LWE pages get the quiz as a continuation of the MSN chat (appended into `.log`, no mount). Misconception-based distractors, deterministic option shuffle, per-page best score in localStorage. The idea is Geoffrey Litt's "Understanding is the new bottleneck" (credited in the widget footer); /lens carries the same pedagogy in copy (predict-then-check mode notes, the Delta counterfactual lab as a Papert micro-world). |
 | `holding/_worker.js` | The module worker (bundled by wrangler at deploy). Owns routing, photo serving from R2, manifest building, Spotify playlist scraping, AadharshBot crawler, the `/writing` Notepad pages, cache-control overrides. |
 | `holding/_headers` | Static-asset cache + security headers (CSP, Permissions-Policy, etc.). Applied to direct static-asset requests; the worker overrides cache-control for select paths. |

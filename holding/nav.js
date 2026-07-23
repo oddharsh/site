@@ -393,111 +393,29 @@
     return { Twitter: "@", Spotify: "♪", Curius: "C", Beli: "B" }[name] || name.charAt(0);
   }
 
-  // remembered desktop-icon positions (per label)
-  function iconPos() { try { return JSON.parse(localStorage.getItem("axp-icons-pos") || "{}"); } catch (_) { return {}; } }
-  function saveIconPos(p) { try { localStorage.setItem("axp-icons-pos", JSON.stringify(p)); } catch (_) {} }
   var ICON_STEP = 86;
-  // SELF-HEAL: several icons sharing one exact position can't come from
-  // dragging (the drop persists one key, and the repair below keeps them
-  // apart) — it's the unlaid-out stampede repairIconCollisions used to run
-  // below, already written to real visitors' localStorage. Every key at a
-  // duplicated spot is untrustworthy, so drop the lot and let the shipped
-  // defaults win back.
-  function pruneStackedPos(saved) {
-    var count = {}, dirty = false;
-    Object.keys(saved).forEach(function (k) {
-      var p = saved[k];
-      if (p) count[p.x + ":" + p.y] = (count[p.x + ":" + p.y] || 0) + 1;
-    });
-    Object.keys(saved).forEach(function (k) {
-      var p = saved[k];
-      if (p && count[p.x + ":" + p.y] > 1) { delete saved[k]; dirty = true; }
-    });
-    if (dirty) saveIconPos(saved);
-    return saved;
-  }
-  // Repair stale positions left behind when the profile set changed, or when
-  // two icons were accidentally dropped on one another.
-  function iconRectsOverlap(a, b) {
-    var gap = 4;
-    return a.left < b.right + gap && a.right + gap > b.left &&
-      a.top < b.bottom + gap && a.bottom + gap > b.top;
-  }
-  function iconRect(a) {
-    var r = a.getBoundingClientRect();
-    return { left: r.left, right: r.right, top: r.top, bottom: r.bottom };
-  }
-  function repairIconCollisions(wrap) {
-    // BAIL unless the icons are really laid out as an absolute column, because
-    // this whole routine reasons about rects and two states lie about them:
-    //   • display:none (luna hides #axp-icons under 1024px) → every icon is a
-    //     0x0 rect at the origin, so every pair "overlaps";
-    //   • luna.css not applied yet (the homepage flips it from media=print
-    //     AFTER DOMContentLoaded, and boot() runs at DOMContentLoaded) → the
-    //     icons are still inline anchors sitting shoulder to shoulder on one
-    //     line, so adjacent ones "overlap" inside the 4px gap tolerance.
-    // In both states style.left/top can't move the element, so the search below
-    // never finds a free slot and persists one stacked position for all six
-    // profiles. That poisoned localStorage for good: later visits replayed the
-    // pile and only Notepad (index 0, nothing before it to collide with) still
-    // landed anywhere visible.
-    var probe = wrap.querySelector(".axp-ico");
-    if (!probe || !probe.getClientRects().length ||
-        getComputedStyle(probe).position !== "absolute") return;
-    var occupied = [], repaired = [], icons = wrap.querySelectorAll(".axp-ico");
-    [].forEach.call(icons, function (a, i) {
-      var r = iconRect(a);
-      if (occupied.some(function (other) { return iconRectsOverlap(r, other); })) {
-        // search from the TOP of the column, so a displaced icon takes the
-        // first free slot instead of leaving a hole at its own index.
-        var x = 9, y = 9, placed = y, floor = innerHeight - 30 - 72;
-        do {
-          placed = y;
-          a.style.left = x + "px";
-          a.style.top = y + "px";
-          r = iconRect(a);
-          if (!occupied.some(function (other) { return iconRectsOverlap(r, other); })) break;
-          y += ICON_STEP;
-        } while (y <= floor);
-        // persist the slot we actually applied, never the overshoot the loop
-        // exits on — otherwise a crowded desktop saves a position under the taskbar.
-        repaired.push({ key: a.dataset.key, x: x, y: placed });
-      }
-      occupied.push(r);
-    });
-    if (repaired.length) {
-      var saved = iconPos();
-      repaired.forEach(function (p) { saved[p.key] = { x: p.x, y: p.y }; });
-      saveIconPos(saved);
-    }
-  }
+  // Desktop icon positions are DELIBERATELY not persisted. The stored layout
+  // was read back in states that couldn't honour it (luna hides #axp-icons
+  // under 1024px; on the homepage luna itself lands after boot() runs), so what
+  // came back was a stack rather than the arrangement anyone chose. Icons drag
+  // freely within a visit and the shipped column is always what you open to.
+  // One-shot sweep of the retired key so old visitors don't carry dead state.
+  try { localStorage.removeItem("axp-icons-pos"); } catch (_) {}
 
   // build the desktop-shortcut layer on the wallpaper.
-  // ADOPT-OR-BUILD: the static partial ships the icons at their default
-  // positions (inline left/top); adopting means just replaying any positions
-  // the visitor dragged them to (localStorage) over those defaults.
+  // ADOPT-OR-BUILD: the static partial already ships the icons at their default
+  // positions (inline left/top), so adopting is a no-op.
   function buildIcons() {
-    var existing = D.getElementById("axp-icons");
-    if (existing) {
-      var savedPos = pruneStackedPos(iconPos());
-      [].forEach.call(existing.querySelectorAll(".axp-ico"), function (a) {
-        var p = savedPos[a.dataset.key];
-        if (p) { a.style.left = p.x + "px"; a.style.top = p.y + "px"; }
-      });
-      repairIconCollisions(existing);
-      return;
-    }
+    if (D.getElementById("axp-icons")) return;
     var wrap = el('<nav id="axp-icons" aria-label="desktop shortcuts"></nav>');
-    var saved = pruneStackedPos(iconPos());
     DESKTOP.forEach(function (it, i) {
       var ext = it.kind === "profile";
       var a = el('<a class="axp-ico"' + (ext ? ' target="_blank" rel="noopener me external"' : "") +
         ' title="' + esc(it.hint || it.label) + (ext ? " (opens in a new tab)" : "") + '"></a>');
       a.href = it.path;
       a.dataset.key = it.label;
-      var p = saved[it.label];
-      a.style.left = (p ? p.x : 9) + "px";
-      a.style.top = (p ? p.y : 9 + i * ICON_STEP) + "px";
+      a.style.left = "9px";
+      a.style.top = (9 + i * ICON_STEP) + "px";
       var cls = it.kind === "note" ? "note" : "";
       var style = ext ? ' style="background:' + qlColor(it.icon || it.label) + '"' : "";
       var inner = ext ? qlGlyph(it.icon || it.label) : "";
@@ -505,10 +423,9 @@
       wrap.appendChild(a);
     });
     D.body.appendChild(wrap);
-    repairIconCollisions(wrap);
   }
 
-  // drag desktop icons around the wallpaper (transform-free: left/top, persisted).
+  // drag desktop icons around the wallpaper (transform-free: left/top).
   // a movement threshold distinguishes a drag from a click so links still open.
   function initIconDrag() {
     var icons = D.getElementById("axp-icons"); if (!icons) return;
@@ -532,7 +449,6 @@
         cur.style.left = nx + "px"; cur.style.top = ny + "px";
         cur.style.transform = "";
         cur.classList.remove("axp-dragging");
-        var p = iconPos(); p[cur.dataset.key] = { x: nx, y: ny }; saveIconPos(p);
       }
       cur = null;
     }

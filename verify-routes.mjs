@@ -86,6 +86,10 @@ const ROUTES = [
   { path: "/lens/fetch?url=https://example.com", status: 200, ct: "application/json", headers: { accept: "text/html" } },
   { path: "/lens/shot?url=https://example.com", status: [200, 503], flaky: true },
   { path: "/lens/browser?url=javascript%3Aalert(1)", status: 400, ct: "application/json", headers: { accept: "text/html" } },
+  { path: "/lens/compare.json?left=javascript%3Aalert(1)&right=https%3A%2F%2Fexample.com", status: 400, ct: "application/json" },
+  { path: "/mcp", status: 405, ct: "application/json" },
+  { path: "/search", status: 200, ct: "text/html", marker: "Search aadhar.sh", fullPage: true },
+  { path: "/search.json?q=photo", status: 200, ct: "application/json" },
   // 200 text/plain when the x402 gate is unconfigured; 402 json once X402_PAY_TO is set
   { path: "/llms-full.txt", status: [200, 402], ct: ["text/plain", "application/json"] },
   { path: "/ledger", status: 200, ct: "text/html", marker: "Crawl Ledger" },
@@ -103,6 +107,8 @@ const ROUTES = [
   { path: "/around", status: 200, ct: "text/html" },
   { path: "/around/json", status: 200, ct: "application/json" },
   { path: "/around/changes.json", status: 200, ct: "application/json" },
+  { path: "/photos/query.json?q=XT", status: 200, ct: "application/json" },
+  { path: "/coffee/availability.json", status: [200, 503], ct: "application/json", flaky: true },
   // the listings are retired: every listing URL 301s to the /photos archive
   { path: "/images", status: 301 },
   { path: "/images/", status: 301 },
