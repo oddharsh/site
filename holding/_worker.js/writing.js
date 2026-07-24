@@ -166,7 +166,11 @@ async function renderWritingPost(slug, env) {
   const desc = text.replace(/\s+/g, " ").trim().slice(0, 155);
   const body = notepadWindow(title + ".txt", text, "/writing", post.date);
   return new Response(writingShell({ title: "aadhar.sh/writing/" + title + ".txt", path: "/writing/" + safe, desc: desc, body: body }),
-    { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=300" } });
+    // the webmention Link tells other sites where to say "I linked to you"; the
+    // garage/lwe statics carry the same header from _headers. A note qualifies
+    // because /writing is flagged webmention in site-manifest.json, which
+    // vouches for the posts in posts.json.
+    { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=300", "link": '</webmention>; rel="webmention"' } });
 }
 
 export function handleWritingIndex(request, env, ctx) {

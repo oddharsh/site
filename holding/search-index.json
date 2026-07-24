@@ -157,6 +157,13 @@
       "kind": "page"
     },
     {
+      "url": "/inbox",
+      "title": "Inbox",
+      "description": "Webmentions from the open web: who linked to aadhar.sh, moderated and rendered as Outlook Express mail.",
+      "text": "Inbox Webmentions from the open web: who linked to aadhar.sh, moderated and rendered as Outlook Express mail.",
+      "kind": "utility"
+    },
+    {
       "url": "/ledger",
       "title": "Crawl ledger",
       "description": "A commentary ledger of identified AI-crawler visits.",
