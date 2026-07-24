@@ -62,6 +62,31 @@ const actualFiles = (await readdir(HASHED)).filter((file) => /\.(avif|jpg)$/.tes
 const orphans = actualFiles.filter((file) => !expectedFiles.has(file));
 if (orphans.length) fail(`unreferenced hashed pixel files: ${orphans.join(", ")}`);
 
+// Hand-written pages may hardcode an /i/ URL (the /garage/tooltips demo slots do).
+// A /i/ URL names exact bytes, so a re-encode mints a new hash and hash-thumbnails.sh
+// prunes the old file — which would leave those pages 404ing on images with nothing
+// to catch it. Walk the authored HTML/JS and hold every hardcoded reference to the
+// same standard as the manifest's own tiers.
+const HARDCODED_ROOTS = ["holding/garage", "holding/lwe", "holding/index.html"];
+const walk = async (target) => {
+  const entry = await stat(target);
+  if (!entry.isDirectory()) return [target];
+  const kids = await readdir(target, { withFileTypes: true });
+  const nested = await Promise.all(kids.map((k) => walk(path.join(target, k.name))));
+  return nested.flat();
+};
+const authored = (await Promise.all(HARDCODED_ROOTS.map((r) => walk(path.join(ROOT, r)))))
+  .flat().filter((file) => /\.(html|js)$/.test(file));
+for (const file of authored) {
+  const body = await readFile(file, "utf8");
+  for (const [, name] of body.matchAll(/\/i\/([A-Za-z0-9_-]+\.[a-f0-9]{8}\.(?:avif|jpg))/g)) {
+    if (!expectedFiles.has(name)) {
+      fail(`${path.relative(ROOT, file)} references /i/${name}, which no longer exists\n` +
+           `  the tier was re-encoded; re-point it at the current hash in images/hashes.json`);
+    }
+  }
+}
+
 // alt text is a served artifact like the pixels and the EXIF, so a gap fails here
 // rather than shipping an unlabelled image. add-photos.sh generates captions just
 // above this check, so reaching it means the captioner was rate-limited or skipped.

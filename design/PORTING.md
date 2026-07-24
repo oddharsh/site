@@ -1,3 +1,7 @@
+<!-- STATUS: HISTORY, not a spec. Kept for the reasoning, not the targets.
+     The site did not converge on this; its measurements and file:line
+     citations are stale. See design/README.md before acting on anything
+     in here. -->
 <!-- design/PORTING.md — what the rewrite carries over from the as-built site.
 Compiled 2026-07-02 from three full-repo sweeps (client, worker, content+tooling)
 plus this session's measurements. Companion to GREENFIELD.md: that file says what

@@ -287,7 +287,11 @@ the site doesn't actually serve. To verify:
 reference + DON'T-modernize guardrails); [`design/tokens/`](design/tokens/) is the
 canonical token set (fonts, Luna palette, bevels, radii). Pull from those before
 hardcoding any color/font/bevel. Captions = Trebuchet MS, UI/body = Tahoma→Verdana,
-mono = Courier New — those three stacks only.
+mono = Courier New — those three stacks only. The rest of `design/` is HISTORY,
+not spec: `GREENFIELD.md`, `PORTING.md`, and `explore-bac-map.md` are July-2026
+design passes the site did not converge on, and their byte budgets and file:line
+citations are stale. [`design/README.md`](design/README.md) draws that line; read
+it before treating anything in there as a target.
 
 **HARD RULES (strong owner preference):** (1) **internal/native fonts ONLY** — never ship `@font-face` with `url()`, web fonts, `@import`, or font preloads; the served pages carry ZERO font bytes (the design system's `@font-face local()` rules are reference-only, never inlined into a served page). (2) **keep perf lean** — fold design tokens in WITHOUT regressing the byte budget: on a brotli'd inline page, tokenizing repeated literals is a wash (brotli already dedupes) while token *definitions* are net-new bytes, so only the FONT tokens (`--font-*`) are inlined site-wide; color/gradient tokens are NOT inlined (they cost bytes for no brotli gain). no external stylesheet, no JS for styling. (3) **authoring stays buildless; serving is minified** — the ONLY build is `build.mjs` (deploy-time transform: minifies `index.html` (structure + inline CSS/JS, readable `/index.src.html` twin, marker tripwires), the six client scripts + `luna.css`, and the worker modules' `/*min*/` CSS literals into a staged `.build/` copy, ships readable `/<name>.src.js` / `/luna.src.css` twins alongside; hard-fails the deploy if `luna.css` doesn't parse; and content-hashes `nav.js` + `luna.css` into immutable `/a/<name>.<hash8>.<ext>` URLs, repointing every `src=`/`href=` ref to them so the shell earns a 1-year immutable cache — the unhashed `/nav.js` + `/luna.css` stay as short-cached fallbacks for cal/coffee's absolute refs + any stale HTML). `wrangler.jsonc` self-builds via its `build.command` and points `main`+`assets` at `.build/holding`, so NO deploy path (bare `wrangler deploy`, `npm run deploy`, Workers Builds) can ship the readable originals; local dev uses `wrangler.dev.jsonc` (readable `holding/`, fast reload). Never minify the garage/lwe HTML (View Source is part of the design; the homepage serves minified with the readable `/index.src.html` twin one banner-click away), never bundle, never extend the build to more CSS or HTML without the owner's say-so (`luna.css` was owner-approved 2026-07 for an ~8.7KB brotli win on a render-blocking sheet; the `/a/` content-hashing of `nav.js` + `luna.css` was owner-approved 2026-07-21 to clear PSI's "efficient cache lifetimes" audit).
 
@@ -475,3 +479,10 @@ curated this folder; treat it as the canonical photo source.
 - The GitHub remote exists: `origin` points at `git@github.com:oddharsh/site.git`.
 - `node_modules/`, `.wrangler/` build cache, and `.DS_Store` files were
   intentionally not copied. They'll regenerate as needed.
+- **`codemode/`** was a spike against Cloudflare's code-mode pattern: generate a
+  typed client from the Serendipity MCP's own `tools/list`, then let a model
+  write one program instead of chaining tool calls. The codegen worked; the
+  production half (running that program in a Worker Loader isolate with the MCP
+  bound by RPC) sat in Cloudflare's closed beta, so it never wired into
+  anything. Removed 2026-07-23 after a month unreferenced by any page, script,
+  or CI job. `git log --diff-filter=D -- codemode/` finds it if the beta opens.

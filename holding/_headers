@@ -42,12 +42,13 @@
 /i/*
   Cache-Control: public, max-age=31536000, immutable
 
-# hashed app-shell assets: /a/<name>.<hash8>.<ext> (nav.js + luna.css). build.mjs
+# hashed app-shell assets: /a/<name>.<hash8>.<ext> (nav.js + luna.css + lens.js). build.mjs
 # mints a fresh hash whenever the shell bytes change, so the URL names exact bytes
 # and a year + immutable is structurally safe — same content-addressed contract as
 # /i/ thumbnails, and edge-direct for the same reason (not in run_worker_first).
-# The unhashed /nav.js + /luna.css below stay short-cached as fallbacks (cal/coffee's
-# absolute refs, any stale HTML); every page the build touches loads the hashed URL.
+# The unhashed /nav.js + /luna.css + /lens.js below stay short-cached as fallbacks
+# (cal/coffee's absolute refs, dev, any stale HTML); every page the build touches
+# loads the hashed URL.
 /a/*
   Cache-Control: public, max-age=31536000, immutable
 
@@ -239,7 +240,8 @@
 # one page loads it), but it had no rule so it shipped the platform default
 # (max-age=0, must-revalidate), paying a conditional 304 on every cold
 # navigation to /lens. give it the same short-cache + SWR the other two
-# shell scripts get.
+# shell scripts get. Served pages request the /a/<hash> twin above; this rule
+# now covers dev and stale HTML, the same role /nav.js's block plays.
 /lens.js
   Cache-Control: public, max-age=300, stale-while-revalidate=86400, s-maxage=86400
 

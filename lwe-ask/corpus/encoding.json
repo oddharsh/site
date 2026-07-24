@@ -10,7 +10,7 @@
     "title": "aadhar.sh: thumbnail encoding"
   },
   {
-    "text": "AVIF's catch is decode support and encode time. It leans on the AV1 codec, which is slower to encode and only decodes on recent browsers, while jpegli is fast and universal. For that reason the site builds jpegli from source for the universal fallback and uses AVIF as the primary <picture> source: the browser reaches for AVIF first, and anything that cannot decode it falls back to the jpegli .jpg.",
+    "text": "AVIF's catch is decode support and encode time. It leans on the AV1 codec, which is slower to encode and only decodes on recent browsers, while jpegli is fast and universal. For that reason the site ships a tuned JPEG encoder for the universal fallback and uses AVIF as the primary <picture> source. That encoder was jpegli, built from source, until 2026-07; it is now zenjpeg (hybrid trellis quantization plus a search across 64 candidate progressive scan scripts), which lands a few percent under jpegli at matched quality: the browser reaches for AVIF first, and anything that cannot decode it falls back to the jpegli .jpg.",
     "source": "https://aadhar.sh/lwe/encoding",
     "title": "aadhar.sh: thumbnail encoding"
   },
@@ -25,7 +25,7 @@
     "title": "aadhar.sh: thumbnail encoding"
   },
   {
-    "text": "On one measured 400x266 photo (106,400 pixels), the encoders land at very different sizes against the lossless PNG baseline: baseline JPEG at quality 82, jpegli at quality 82 (roughly half the baseline JPEG), WebP at quality 80, and AVIF at quality 63, with AVIF the smallest of the lossy set. Bytes per pixel is computed by dividing each file's byte size by the pixel count, which makes the encoders directly comparable on a single photo.",
+    "text": "On one measured 400x266 photo (106,400 pixels), the encoders land at very different sizes against the lossless PNG baseline: baseline JPEG at quality 82, jpegli at quality 82 (roughly half the baseline JPEG), zenjpeg at quality 84 (the encoder the site ships), WebP at quality 80, and AVIF at quality 63, with AVIF the smallest of the lossy set. Bytes per pixel is computed by dividing each file's byte size by the pixel count, which makes the encoders directly comparable on a single photo.",
     "source": "https://aadhar.sh/lwe/encoding",
     "title": "aadhar.sh: thumbnail encoding"
   },

@@ -426,7 +426,7 @@ for (const [file, srcPath, marker] of SHELLS) {
   console.log(`worker CSS: minified ${litCount} /*min*/ literals across ${fileCount} modules, ~${(saved / 1024).toFixed(1)}KB raw saved`);
 }
 
-// 6) content-hash the two critical-path shell assets (nav.js + luna.css) into
+// 6) content-hash the critical-path shell assets (nav.js + luna.css + lens.js) into
 // immutable /a/<name>.<hash8>.<ext> URLs, then repoint every <script src>/<link
 // href> that loads them. /a/<name>.<hash8> names exact bytes (same content-
 // addressed contract as /i/ thumbnails, and edge-direct for the same reason: not
@@ -445,8 +445,14 @@ for (const [file, srcPath, marker] of SHELLS) {
   await mkdir(`${OUT}/holding/a`, { recursive: true });
 
   const ASSETS = [
-    { attr: "src",  from: "/nav.js",   base: "nav",  ext: "js"  },
-    { attr: "href", from: "/luna.css", base: "luna", ext: "css" },
+    { attr: "src",  from: "/nav.js",   base: "nav",  ext: "js",  witness: "index.html" },
+    { attr: "href", from: "/luna.css", base: "luna", ext: "css", witness: "index.html" },
+    // lens.js is emitted by ONE tag (lens.js `scripts:`), which used to carry a
+    // hand-bumped ?v=N. The /lens shell is no-store but the script was cached, so
+    // a forgotten bump paired a fresh shell with an old script — the comment at
+    // the tag said so out loud. A content hash retires the ritual. Not in
+    // run_worker_first, so /a/ is edge-direct and inherits the immutable rule.
+    { attr: "src",  from: "/lens.js",  base: "lens", ext: "js",  witness: "_worker.js/lens.js" },
   ];
   const reps = [], hashedFor = {};
   for (const a of ASSETS) {
@@ -514,12 +520,16 @@ for (const [file, srcPath, marker] of SHELLS) {
     console.log(`_headers: Early-Hints Link rewritten to hashed shell URLs`);
   }
 
-  // tripwires: the rewrite must fire, and the served homepage must load the hashed
-  // URLs (a moved ref or renamed asset would silently drop the immutable win).
-  if (!refCount) throw new Error("hashed-asset rewrite matched zero references — did the nav.js/luna.css ref shape change?");
-  const idx = await readFile(`${OUT}/holding/index.html`, "utf8");
-  for (const [base, to] of Object.entries(hashedFor)) {
-    if (!idx.includes(to)) throw new Error(`index.html was not repointed to hashed ${base} (${to})`);
+  // tripwires: the rewrite must fire, and each asset's own entry point must load
+  // the hashed URL (a moved ref or renamed asset would silently drop the immutable
+  // win). Each asset names its WITNESS: the served file that must carry the hashed
+  // ref. index.html for the two shell assets it loads; the lens shell for lens.js,
+  // which the homepage never loads.
+  if (!refCount) throw new Error("hashed-asset rewrite matched zero references — did the src=/href= ref shape change?");
+  for (const a of ASSETS) {
+    const to = hashedFor[a.base];
+    const body = await readFile(`${OUT}/holding/${a.witness}`, "utf8");
+    if (!body.includes(to)) throw new Error(`${a.witness} was not repointed to hashed ${a.base} (${to})`);
   }
   console.log(`hashed-asset refs: repointed ${refCount} references across ${filesTouched} files`);
 }

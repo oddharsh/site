@@ -1,3 +1,7 @@
+<!-- STATUS: HISTORY, not a spec. Kept for the reasoning, not the targets.
+     The site did not converge on this; its measurements and file:line
+     citations are stale. See design/README.md before acting on anything
+     in here. -->
 <!-- design/GREENFIELD.md — the blank-slate blueprint. Produced 2026-07-02 by a
 Fable 5 ultracode pass: 4 independent architectures (css-max, wire-max,
 declarative-max, period-purist), 4 judge lenses, one synthesis, then a 14-claim

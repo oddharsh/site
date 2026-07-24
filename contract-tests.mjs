@@ -7,6 +7,7 @@
 // the same assertions against a deployed or local HTTP surface.
 
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
@@ -18,6 +19,7 @@ import {
 } from "./holding/_worker.js/lens.js";
 import { handleCoffeeAvailability, readCoffeeAvailability } from "./holding/_worker.js/coffee.js";
 import { handleSiteMcp } from "./holding/_worker.js/mcp.js";
+import { MCP_TOOLS } from "./serendipity/serendipity.js";
 import { handlePhotoQuery, queryPhotos } from "./holding/_worker.js/photos.js";
 import { handleSearchJson, searchSite } from "./holding/_worker.js/search.js";
 import { getPublicAvailability } from "./cal/src/slots.js";
@@ -360,4 +362,22 @@ test("site MCP exposes one read-only tool catalog and calls shared search", asyn
   const callBody = await call.json();
   assert.equal(callBody.result.structuredContent.returned, 1);
   assert.equal((await handleSiteMcp(new Request("https://aadhar.sh/mcp"), env, context())).status, 405);
+});
+
+// The Serendipity server card is published twice, at /.well-known/mcp.json (the
+// api-catalog's service-desc) and /.well-known/mcp/server-card.json (the path
+// Lens probes on any origin). Both are hand-written transcriptions of MCP_TOOLS,
+// so they drift the moment a tool is added or renamed. A third copy,
+// mcp/server-cards.json, sat unreferenced for weeks carrying a stale
+// list_events description; this test is why it cannot come back unnoticed.
+test("published MCP server cards enumerate the live Serendipity tool catalog", async () => {
+  const live = MCP_TOOLS.map((tool) => tool.name).sort();
+  for (const file of ["holding/.well-known/mcp.json", "holding/.well-known/mcp/server-card.json"]) {
+    const card = JSON.parse(await readFile(new URL(file, import.meta.url), "utf8"));
+    assert.deepEqual(card.tools.map((tool) => tool.name).sort(), live, `${file} tool set drifted from MCP_TOOLS`);
+    assert.equal(card.transport.url, "https://aadhar.sh/serendipity/mcp", `${file} points at the wrong transport`);
+    for (const tool of card.tools) {
+      assert.ok((tool.description || "").trim(), `${file}: ${tool.name} needs a description`);
+    }
+  }
 });
