@@ -12,8 +12,8 @@
     {
       "url": "/around",
       "title": "Around",
-      "description": "AadharshBot's scheduled neighborhood crawl.",
-      "text": "Around AadharshBot's scheduled neighborhood crawl.",
+      "description": "AadharshBot's scheduled crawl of the crypto-VC neighborhood.",
+      "text": "Around AadharshBot's scheduled crawl of the crypto-VC neighborhood.",
       "kind": "utility"
     },
     {
@@ -166,8 +166,8 @@
     {
       "url": "/lens",
       "title": "The Other Web",
-      "description": "Inspect how a public URL reads to people and machines.",
-      "text": "The Other Web Inspect how a public URL reads to people and machines.",
+      "description": "Inspect how a public URL reads to people and machines: raw HTML, JSON-LD, llms.txt.",
+      "text": "The Other Web Inspect how a public URL reads to people and machines: raw HTML, JSON-LD, llms.txt.",
       "kind": "utility"
     },
     {
@@ -278,8 +278,8 @@
     {
       "url": "/reading",
       "title": "Reading",
-      "description": "A native mirror of Aadharsh's saved reading list.",
-      "text": "Reading A native mirror of Aadharsh's saved reading list.",
+      "description": "A native mirror of Aadharsh's saved reading list, synced from Curius.",
+      "text": "Reading A native mirror of Aadharsh's saved reading list, synced from Curius.",
       "kind": "utility"
     },
     {

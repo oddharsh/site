@@ -8,6 +8,7 @@ import { jsonResponse } from "./lib/http.js";
 import { queryPhotos } from "./photos.js";
 import { RN_FALLBACK, getTracksSWR } from "./rn.js";
 import { searchSite } from "./search.js";
+import { AGENT_SURFACES } from "./lib/site-manifest.js";
 
 const MCP_PROTOCOL = "2025-06-18";
 const MCP_SUPPORTED = ["2025-06-18", "2025-03-26", "2024-11-05"];
@@ -53,6 +54,46 @@ const MCP_TOOLS = [
     inputSchema: { type: "object", properties: { left: { type: "string" }, right: { type: "string" } }, required: ["left", "right"] },
   },
 ];
+
+// The site's public surfaces as MCP resources, projected from the generated
+// agent catalog (lib/site-manifest.js, itself derived from site-manifest.json).
+// name is the stable path; uri is absolute so a client can dereference it
+// directly. resources/read below fetches these same paths, so listing here
+// promises nothing the server can't serve.
+const MCP_RESOURCE_PATHS = new Set(AGENT_SURFACES.map((s) => s.path));
+function mcpResources(origin) {
+  return AGENT_SURFACES.map((s) => ({
+    uri: origin + s.path,
+    name: s.path,
+    title: s.title,
+    description: s.description,
+    mimeType: "text/html",
+  }));
+}
+
+// resources/read: fetch one listed surface, same-origin only. Restricting to
+// MCP_RESOURCE_PATHS keeps this from being a general-purpose fetcher (no SSRF to
+// other hosts, no arbitrary path), and every listed resource is genuinely
+// readable, so list and read stay in lockstep.
+async function readResource(uri, request) {
+  let target;
+  try { target = new URL(uri); } catch { return null; }
+  const origin = new URL(request.url).origin;
+  if (target.origin !== origin || !MCP_RESOURCE_PATHS.has(target.pathname)) return null;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 8000);
+  try {
+    const res = await fetch(origin + target.pathname, {
+      headers: { "user-agent": "AadharshBot/1.0 (+https://aadhar.sh/bot)", accept: "text/html" },
+      redirect: "follow",
+      signal: ctrl.signal,
+    });
+    const mimeType = (res.headers.get("content-type") || "text/html").split(";")[0].trim();
+    const text = (await res.text()).slice(0, 200000);
+    return { uri, mimeType, text };
+  } catch { return null; }
+  finally { clearTimeout(timer); }
+}
 
 function mcpCors() {
   return {
@@ -125,14 +166,20 @@ export async function handleSiteMcp(request, env, ctx) {
         const requested = msg.params?.protocolVersion;
         return { jsonrpc: "2.0", id, result: {
           protocolVersion: MCP_SUPPORTED.includes(requested) ? requested : MCP_PROTOCOL,
-          capabilities: { tools: {} },
+          capabilities: { tools: {}, resources: {} },
           serverInfo: { name: "aadhar.sh", title: "Aadharsh Site", version: "1.0.0" },
-          instructions: "Read-only public utilities for aadhar.sh: search, music, photos, coffee availability, Change Radar, and Lens. No mutations or private data are exposed.",
+          instructions: "Read-only public utilities for aadhar.sh: search, music, photos, coffee availability, Change Radar, and Lens. resources/list enumerates the site's public pages; resources/read fetches one. No mutations or private data are exposed.",
         } };
       }
       if (msg.method === "ping") return { jsonrpc: "2.0", id, result: {} };
       if (msg.method === "tools/list") return { jsonrpc: "2.0", id, result: { tools: MCP_TOOLS } };
-      if (msg.method === "resources/list") return { jsonrpc: "2.0", id, result: { resources: [] } };
+      if (msg.method === "resources/list") return { jsonrpc: "2.0", id, result: { resources: mcpResources(new URL(request.url).origin) } };
+      if (msg.method === "resources/read") {
+        const uri = msg.params?.uri;
+        const content = await readResource(uri, request);
+        if (!content) return rpcError(id, -32602, `Unknown or unreadable resource: ${uri}`);
+        return { jsonrpc: "2.0", id, result: { contents: [content] } };
+      }
       if (msg.method === "prompts/list") return { jsonrpc: "2.0", id, result: { prompts: [] } };
       if (msg.method.startsWith("notifications/")) return null;
       if (msg.method === "tools/call") {
