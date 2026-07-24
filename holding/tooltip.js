@@ -111,8 +111,17 @@ export function start(initial) {
       // the shipped JPG twin, so the bars stay tied to the published thumbnail)
       // and ride the same meta/<stem>.json as the EXIF. The old decode → canvas
       // → getImageData → main-thread binning pipeline is gone; renderHistogramSvg
-      // draws the prebuilt SVG data from meta.hist.
-      const histFor = (stem) => (metaMap[stem] && metaMap[stem].hist) || null;
+      // draws the prebuilt SVG data from meta.hi.
+      //
+      // the per-photo files are the HOT PATH (one fetch per hover), so they use
+      // SHORT keys and carry only what this tooltip renders. they are a render
+      // cache, not the record: the full, self-documenting Fuji recipe (long key
+      // names, fujixweekly-style card) lives in /images/metadata.json.
+      // cm camera · ln lens · ap aperture · sp shutter · is iso · fl focal · ev ·
+      // dt date · w · h · wb white-balance · ct color-temp · fs flash · fm film ·
+      // dr · cc chrome · cb chrome-blue · gr grain · gs grain-size · ht highlight ·
+      // st shadow · sa saturation · hi {l,r,g,b} histogram. nulls dropped.
+      const histFor = (stem) => (metaMap[stem] && metaMap[stem].hi) || null;
       // EXIF is NOT inlined on the uncacheable homepage, and not shipped as one big
       // index either — it's fetched PER PHOTO from /images/meta/<stem>.json after
       // page settle (with first-hover fetch as fallback). The tiny files are edge
@@ -121,7 +130,7 @@ export function start(initial) {
       // served from the browser's HTTP cache with no network at all. The baked
       // histogram rides the same file, so bars + EXIF land together in one fetch.
       const metaMap = Object.create(null);   // stem → exif object | null (fetched, none) | absent (not fetched)
-      const META_V = "mv=4";                 // bump when metadata is regenerated (4: histograms baked in)
+      const META_V = "mv=5";                 // bump when metadata is regenerated (5: compact per-photo schema)
       const fetchMeta = (stem, priority) => {
         if (stem in metaMap) return;         // already in hand, or a fetch is in flight
         metaMap[stem] = null;                // in-flight sentinel (renders as "no exif yet")
@@ -254,13 +263,13 @@ export function start(initial) {
         const exif = metaMap[stem] || {};
 
         // exposure trio
-        const aper = exif.aperture ? (String(exif.aperture).startsWith("f/") ? exif.aperture : "f/" + exif.aperture) : "";
-        const expo = [exif.shutter, aper, exif.iso ? "ISO " + exif.iso : ""].filter(Boolean).join(" ");
+        const aper = exif.ap ? (String(exif.ap).startsWith("f/") ? exif.ap : "f/" + exif.ap) : "";
+        const expo = [exif.sp, aper, exif.is ? "ISO " + exif.is : ""].filter(Boolean).join(" ");
 
         // EV · dimensions · size strip
         // real EXIF dims only — a square thumbnail's naturalWidth is just 600, not
         // the photo's size, so the old fallback flashed "600 × 600" before EXIF landed.
-        const w = exif.width, h = exif.height;
+        const w = exif.w, h = exif.h;
         const dims = (w && h) ? `${w} × ${h}` : "";
         const evStr = (typeof exif.ev === "number" && exif.ev !== 0) ? ((exif.ev > 0 ? "+" : "") + exif.ev + " EV") : "";
         const metaStrip = [evStr, dims, slot.dataset.size ? fmtBytes(slot.dataset.size) : ""].filter(Boolean).join(" · ");
@@ -269,24 +278,24 @@ export function start(initial) {
         const isOn = v => v && !/^off$/i.test(String(v));
         const trimTone = t => (t && t !== "0 (normal)") ? t.replace(/\s*\(.*\)$/, "") : "";
         const chromeParts = [];
-        if (isOn(exif.chrome))      chromeParts.push(exif.chrome);
-        if (isOn(exif.chrome_blue)) chromeParts.push("blue " + exif.chrome_blue);
-        const grainVal = isOn(exif.grain) ? (exif.grain + (isOn(exif.grain_size) ? " " + exif.grain_size : "")) : "";
-        const toneVal = (trimTone(exif.highlight_tone) || trimTone(exif.shadow_tone))
-          ? `H ${trimTone(exif.highlight_tone) || "0"}  S ${trimTone(exif.shadow_tone) || "0"}` : "";
+        if (isOn(exif.cc))      chromeParts.push(exif.cc);
+        if (isOn(exif.cb)) chromeParts.push("blue " + exif.cb);
+        const grainVal = isOn(exif.gr) ? (exif.gr + (isOn(exif.gs) ? " " + exif.gs : "")) : "";
+        const toneVal = (trimTone(exif.ht) || trimTone(exif.st))
+          ? `H ${trimTone(exif.ht) || "0"}  S ${trimTone(exif.st) || "0"}` : "";
         // Fuji stores B&W film sims (Acros / Monochrome, optionally with a Ye/R/G
         // contrast filter) in the Saturation EXIF tag and leaves FilmMode blank — so
         // "Acros Green Filter" is the FILM, not a color setting. route it to the Film
         // row and drop the Color row for B&W frames; color shots keep "+3" etc.
-        const bwSim    = !!exif.saturation && /\b(acros|monochrome|b\s*&\s*w|bw|sepia)\b/i.test(String(exif.saturation));
-        const filmVal  = exif.film || (bwSim ? exif.saturation : "");
-        const colorVal = bwSim ? "" : trimTone(exif.saturation);
+        const bwSim    = !!exif.sa && /\b(acros|monochrome|b\s*&\s*w|bw|sepia)\b/i.test(String(exif.sa));
+        const filmVal  = exif.fm || (bwSim ? exif.sa : "");
+        const colorVal = bwSim ? "" : trimTone(exif.sa);
         const recipe = [
-          ["Body",       exif.camera],
-          ["Lens",       [exif.lens, fmtFocal(exif.focal)].filter(Boolean).join(" · ")],
+          ["Body",       exif.cm],
+          ["Lens",       [exif.ln, fmtFocal(exif.fl)].filter(Boolean).join(" · ")],
           ["Film",       filmVal],
           ["Dyn range",  exif.dr],
-          ["White bal",  exif.white_balance === "Kelvin" && exif.color_temp ? exif.color_temp + "K" : exif.white_balance],
+          ["White bal",  exif.wb === "Kelvin" && exif.ct ? exif.ct + "K" : exif.wb],
           ["Chrome FX",  chromeParts.join(" · ")],
           ["Grain",      grainVal],
           ["Tones",      toneVal],
@@ -296,10 +305,10 @@ export function start(initial) {
 
         const hist = histFor(stem);
         const histSvg = hist ? renderHistogramSvg(hist) : "";
-        const dateStr = fmtDate(exif.date) || (slot.dataset.uploaded ? "up " + fmtDate(slot.dataset.uploaded) : "");
+        const dateStr = fmtDate(exif.dt) || (slot.dataset.uploaded ? "up " + fmtDate(slot.dataset.uploaded) : "");
 
         return `<div class="cam">` +
-            `<div class="header"><span>${esc(stem)}.jpg</span>${flashBolt(exif.flash)}</div>` +
+            `<div class="header"><span>${esc(stem)}.jpg</span>${flashBolt(exif.fs)}</div>` +
             `<div class="histogram-frame">${histSvg}</div>` +
             `<div class="body">` +
               (expo ? `<div class="exposure">${esc(expo)}</div>` : "") +

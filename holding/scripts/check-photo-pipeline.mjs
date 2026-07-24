@@ -52,7 +52,7 @@ for (const stem of stems) {
   let perPhoto;
   try { perPhoto = await json(path.join(META, `${stem}.json`)); }
   catch { fail(`${stem}: missing per-photo metadata`); }
-  const hist = perPhoto.hist;
+  const hist = perPhoto.hi;
   if (!hist || !["l", "r", "g", "b"].every((channel) => Array.isArray(hist[channel]) && hist[channel].length === 64)) {
     fail(`${stem}: histogram must contain four 64-bin channels`);
   }
