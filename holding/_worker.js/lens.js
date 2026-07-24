@@ -332,6 +332,8 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 .lx-lenses { display:inline-flex; gap:2px; }
 .lx-tab { font-size:9.2pt; padding:5px 12px 6px; color:oklch(35% 0.04 255); background:linear-gradient(180deg, oklch(96% 0.01 250), oklch(88% 0.02 250)); border:1px solid oklch(60% 0.05 250); border-bottom:none; border-radius:5px 5px 0 0; position:relative; top:1px; }
 .lx-tab.is-on { color:oklch(33% 0.10 263); font-weight:bold; background:#fff; top:2px; padding-bottom:7px; }
+/* the lens tabs only steer the machine pane, so they hide in the views that don't render it (human, browser) or ignore it (delta). shown for machine + compare. */
+.lx-toolbar.is-human .lx-lenses, .lx-toolbar.is-browser .lx-lenses, .lx-toolbar.is-delta .lx-lenses { display:none; }
 
 /* panes */
 .lx-panes { display:flex; gap:8px; margin-top:8px; min-height:560px; }
@@ -541,7 +543,7 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
       <button class="lx-chip" data-url="https://example.com/">the bare minimum</button>
     </div>
 
-    <div class="lx-toolbar">
+    <div class="lx-toolbar is-${state.view}" id="lx-toolbar">
       <div class="lx-view" role="radiogroup" aria-label="page mode">
         <button class="lx-seg${state.view === "both" ? " is-on" : ""}" data-view="both" role="radio" aria-checked="${state.view === "both" ? "true" : "false"}" type="button">Compare</button>
         <button class="lx-seg${state.view === "human" ? " is-on" : ""}" data-view="human" role="radio" aria-checked="${state.view === "human" ? "true" : "false"}" type="button">Human</button>

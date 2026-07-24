@@ -19,6 +19,7 @@
   var humanH = document.getElementById("lx-human-h");
   var modeNote = document.getElementById("lx-mode-note");
   var statusBar = document.getElementById("lx-status");
+  var toolbar = document.getElementById("lx-toolbar");
 
   var data = null;       // last successful HTTP envelope
   var browserData = null; // last opt-in Browser Run snapshot
@@ -1186,6 +1187,9 @@
   // ---- controls ---------------------------------------------------------
   function updateModeUi() {
     if (modeNote) modeNote.textContent = MODE_NOTE[view] || MODE_NOTE.both;
+    // Keep the toolbar's view-class current so CSS can hide the lens tabs in the
+    // views that don't use them (human, browser, delta). Matches the SSR class.
+    if (toolbar) toolbar.className = "lx-toolbar is-" + view;
     [].forEach.call(document.querySelectorAll(".lx-seg"), function (b) {
       var active = b.getAttribute("data-view") === view;
       b.classList.toggle("is-on", active);
