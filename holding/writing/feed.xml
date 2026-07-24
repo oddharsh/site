@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>aadhar.sh · writing</title>
+    <link>https://aadhar.sh/writing</link>
+    <description>Notes, in flux. Written in a Notepad window that reverts on reload.</description>
+    <language>en-us</language>
+    <atom:link href="https://aadhar.sh/writing/feed.xml" rel="self" type="application/rss+xml"/>
+    <generator>aadhar.sh</generator>
+    <lastBuildDate>Mon, 13 Jul 2026 00:00:00 GMT</lastBuildDate>
+    <item>
+      <title>big screens and small screens</title>
+      <link>https://aadhar.sh/writing/big-screens-and-small-screens</link>
+      <guid isPermaLink="true">https://aadhar.sh/writing/big-screens-and-small-screens</guid>
+      <description>Big screens and small screens ───────────────────────────── What makes something a big-screen task is cultural as much as it&apos;s about incentives. We buy stocks and book flights on a laptop because we learned to treat them that way, not because a phone handles them any worse. That pull runs hardest on general-purpose modalities, humanoids or the RGB camera steering a car, where no single obvious job anchors how people use the thing. So for early adopters, the narrative around a modality outweighs whatever it saves them. Which leaves a real question: does a new modality change consumer behavior, or does it just clear the way for behavior that was already waiting? Hailing a cab on the street, phoning for one, opening Uber: same problem, three modalities. Each one resets what feels easy and what feels normal. The behavior shifts because a new interface makes a different version of the task legible. Foldables are next, folding down the wall between big-screen and small-screen work. My guess is they&apos;ll read well and stream badly. The more interesting bet is that they push traditionally big-screen tasks onto the go, and make filesystem literacy rarer than it already is.</description>
+      <dc:creator>Aadharsh Pannirselvam</dc:creator>
+      <pubDate>Mon, 13 Jul 2026 00:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Education in tech</title>
+      <link>https://aadhar.sh/writing/education-in-tech</link>
+      <guid isPermaLink="true">https://aadhar.sh/writing/education-in-tech</guid>
+      <description>Education in tech ───────────────── The B in BSD is Berkeley. The S in Sun Microsystems is Stanford.</description>
+      <dc:creator>Aadharsh Pannirselvam</dc:creator>
+      <pubDate>Tue, 09 Jun 2026 00:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>a note on this notepad</title>
+      <link>https://aadhar.sh/writing/in-flux</link>
+      <guid isPermaLink="true">https://aadhar.sh/writing/in-flux</guid>
+      <description>a note on this notepad ────────────────────── you can type in here. go ahead — fix a typo, rewrite a sentence, delete the whole thing. it&apos;s a real text field, not a screenshot of one. but none of it saves. reload the page and the words snap back to whatever i last wrote. the writing on this site is always in flux: i keep changing the canonical version, and your edits live only as long as this tab stays open. that&apos;s the point. a piece of writing is never really finished — it&apos;s just abandoned at the moment you stop touching it. so this lets you touch it without consequence, and lets me keep changing my mind in public. if you want to keep something you typed, copy it out before you go. the only version that persists is mine, and even that one moves. — aadharsh</description>
+      <dc:creator>Aadharsh Pannirselvam</dc:creator>
+      <pubDate>Sat, 06 Jun 2026 00:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>colophon</title>
+      <link>https://aadhar.sh/writing/colophon</link>
+      <guid isPermaLink="true">https://aadhar.sh/writing/colophon</guid>
+      <description>colophon ──────── this site is a resto-mod. the look is Windows XP &quot;Luna&quot; — blue title bars, raised 3D bevels, Tahoma and Trebuchet and Courier — but the guts are 2026: it&apos;s served from the edge, the colors are authored in OKLCH and read period-correct, and there isn&apos;t a single font file shipped over the wire (everything&apos;s a system font you already have). a few of the moving parts: · the homepage is one HTML file. inline CSS, inline JS, no build step, no framework. you&apos;re meant to be able to read the whole thing — just View Source. · photos are shot on a Fujifilm X-T50 and a Leica, then run through a little pipeline: resized, EXIF-rotated, and encoded twice — AVIF first, with a jpegli JPEG as the fallback. jpegli (Google&apos;s encoder, built from source) lands ~25% smaller than the system one at the same quality. see /garage/encoding for the byte counts. · the visitor counter is a Durable Object now, not a spreadsheet cell. the &quot;now playing&quot; list is scraped from a Spotify playlist by a little crawler that signs its own requests. · this page is a Notepad window. you can edit it. it won&apos;t save. see the note in flux for why. the whole thing is a slow project — a place to learn how the modern web actually works by dressing it up like the web i grew up on. built in public. always under construction, on purpose. — aadharsh</description>
+      <dc:creator>Aadharsh Pannirselvam</dc:creator>
+      <pubDate>Sat, 06 Jun 2026 00:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>

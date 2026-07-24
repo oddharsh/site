@@ -33,6 +33,7 @@ import { cronJob } from "./holding/_worker.js/lib/cron.js";
 import { serveStaticPage } from "./holding/_worker.js/lib/assets.js";
 import { serveMarkdown } from "./holding/_worker.js/home.js";
 import { readManifest, workerModule, navFenceBody, readFenceBody } from "./scripts/gen-manifest.mjs";
+import { FEED_SECTIONS, renderFeed } from "./scripts/gen-feeds.mjs";
 import { INDEXED_SECTIONS, TWIN_FACTS, buildTwins, checkTwinFacts, htmlFileFor, twinPath } from "./scripts/gen-md-twins.mjs";
 import { collectBlockClasses, readDocument } from "./scripts/lib/html-to-md.mjs";
 import { MCP_TOOLS, SERENDIPITY_MCP_SERVER_INFO, cookieJar, parseCookies } from "./serendipity/serendipity.js";
@@ -1316,6 +1317,60 @@ test("endpoint discovery survives the webmention.rocks decoys", () => {
   for (const [n, html, header, expected] of cases) {
     assert.equal(findEndpointIn(html, header, at(n)), expected, `webmention.rocks discovery test #${n}`);
   }
+});
+
+function feedData() {
+  return {
+    posts: [
+      { slug: "in-flux", title: "a note on this notepad", date: "2026-06-06" },
+      { slug: "later", title: "a later note", date: "2026-07-13" },
+    ],
+    bodies: new Map([
+      ["in-flux", "the note body, with an & ampersand and <angle> brackets"],
+      ["later", "the complete later note"],
+    ]),
+    surfaces: [
+      { path: "/garage/chunks", title: "Chunks", description: "A dated page", kind: "content" },
+      { path: "/garage/undated", title: "Undated", description: "A page without a date", kind: "content" },
+      { path: "/lwe/vigenere", title: "Vigenère", description: "An explainer", kind: "content" },
+    ],
+    dates: new Map([["/garage/chunks", "2026-06-07"]]),
+  };
+}
+
+test("each section feed is well-formed RSS 2.0 with a self link", () => {
+  for (const section of Object.keys(FEED_SECTIONS)) {
+    const xml = renderFeed(section, feedData());
+    assert.match(xml, /^<\?xml version="1\.0" encoding="UTF-8"\?>/);
+    assert.match(xml, /<rss version="2\.0"/);
+    assert.ok(
+      xml.includes(`<atom:link href="https://aadhar.sh/${section}/feed.xml" rel="self"`),
+      `${section} declares its own address`,
+    );
+    assert.ok(xml.trimEnd().endsWith("</rss>"));
+  }
+});
+
+test("feed items carry absolute permalink guids, dates, and escaped content", () => {
+  const xml = renderFeed("writing", feedData());
+  assert.ok(xml.includes('<guid isPermaLink="true">https://aadhar.sh/writing/in-flux</guid>'));
+  assert.ok(xml.includes("<pubDate>Mon, 13 Jul 2026 00:00:00 GMT</pubDate>"));
+  assert.ok(xml.includes("<pubDate>Sat, 06 Jun 2026 00:00:00 GMT</pubDate>"));
+  assert.ok(xml.indexOf("a later note") < xml.indexOf("a note on this notepad"), "sorted newest first");
+  assert.ok(!/<description>[^<]*<angle>/.test(xml), "angle brackets in body content are escaped");
+  assert.ok(xml.includes("&amp; ampersand"), "ampersands in body content are escaped");
+});
+
+test("a feed never invents a date it does not have", () => {
+  const xml = renderFeed("garage", feedData());
+  const items = (xml.match(/<item>/g) || []).length;
+  const dates = (xml.match(/<pubDate>/g) || []).length;
+  assert.ok(items > dates, "pages with no recorded date are emitted without a pubDate");
+  assert.ok(dates >= 1, "the one page with a lastmod keeps its date");
+});
+
+test("the feed generator rejects an unknown section", () => {
+  assert.throws(() => renderFeed("nope", feedData()), /unknown feed section/);
 });
 
 test("site-manifest.json is a well-formed registry with unique paths", async () => {

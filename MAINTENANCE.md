@@ -779,6 +779,7 @@ files) are served straight from disk. Worker-owned routes are enumerated in
 | `/ledger`, `/ledger.json` | `handleLedger` / `handleLedgerJson` (AI-crawler invoice from Analytics Engine; counting via `countCrawlerHit` in `index.js`) | `ledger.js` |
 | `/writing`, `/writing/`, `/writing/<slug>` | `handleWritingIndex` / `handleWritingPost` (Notepad) | `writing.js` |
 | `/writing/<slug>.txt`, `/writing/posts.json` | ASSETS passthrough (dotted paths fall through) | n/a |
+| `/writing/feed.xml`, `/garage/feed.xml`, `/lwe/feed.xml` | Generated static RSS 2.0 + exact cache/header wrapper | `scripts/gen-feeds.mjs` + `index.js` |
 | `/rn`, `/rn/tracks`, `/rn/admin`, `/rn/set` | `handleRn` / `handleRnTracks` / `handleRnAdmin` / `handleRnSet` | `rn.js` |
 | `/bot` | `handleBotPage` | `bot.js` |
 | `/around`, `/around/json` | `handleAround` / `handleAroundJson` (AadharshBot crawl) | `around.js` |

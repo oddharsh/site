@@ -33,6 +33,7 @@ import minifyHtml from "@minify-html/node";
 import { transform as transformCss } from "lightningcss";
 import { minifySync } from "oxc-minify";
 import { readManifest, workerModule, navFenceBody, readFenceBody } from "./scripts/gen-manifest.mjs";
+import { buildFeedDocuments } from "./scripts/gen-feeds.mjs";
 import { HTML_MARKERS } from "./scripts/lib/html-markers.mjs";
 
 const OUT = ".build";
@@ -322,6 +323,16 @@ async function checkInvariants() {
     }
     manifestChecked = surfaces.length;
   } catch (e) { hard.push(`site-manifest check could not run: ${e.message}`); }
+
+  // 8d — feeds are committed generated artifacts so local dev serves the same
+  // bytes as production. Rebuild them from their registries on every deploy and
+  // fail on drift instead of maintaining a second, hand-edited content list.
+  try {
+    for (const [section, expected] of await buildFeedDocuments()) {
+      const path = `holding/${section}/feed.xml`;
+      if (await read(path) !== expected) hard.push(`${path} drifted from its source registries — run npm run gen:feeds`);
+    }
+  } catch (e) { hard.push(`feed projection check could not run: ${e.message}`); }
 
   // 9 — the taste tripwires GREENFIELD.md asked for, calibrated against what the
   // site actually ships. Its list (ban cubic-bezier, any easing beyond linear,

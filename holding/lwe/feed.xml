@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>aadhar.sh · learning with errors</title>
+    <link>https://aadhar.sh/lwe</link>
+    <description>Chat-style explainers with live demos, at the pace of a 2009 MSN conversation.</description>
+    <language>en-us</language>
+    <atom:link href="https://aadhar.sh/lwe/feed.xml" rel="self" type="application/rss+xml"/>
+    <generator>aadhar.sh</generator>
+    <lastBuildDate>Fri, 31 Jul 2026 00:00:00 GMT</lastBuildDate>
+    <item>
+      <title>Lean</title>
+      <link>https://aadhar.sh/lwe/lean</link>
+      <guid isPermaLink="true">https://aadhar.sh/lwe/lean</guid>
+      <description>Lean and formal verification: why a proof is not an inspection, how a vacuous spec passes, a toy verified compiler you can break, and the 1,765 lines of statement holding up OpenAI&apos;s ten proofs.</description>
+      <dc:creator>Aadharsh Pannirselvam</dc:creator>
+      <pubDate>Fri, 31 Jul 2026 00:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>DAC</title>
+      <link>https://aadhar.sh/lwe/dac</link>
+      <guid isPermaLink="true">https://aadhar.sh/lwe/dac</guid>
+      <description>Multibit versus delta-sigma DACs: an R-2R ladder you can mismatch and a live noise-shaping demo.</description>
+      <dc:creator>Aadharsh Pannirselvam</dc:creator>
+      <pubDate>Mon, 22 Jun 2026 00:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Headphone drivers</title>
+      <link>https://aadhar.sh/lwe/drivers</link>
+      <guid isPermaLink="true">https://aadhar.sh/lwe/drivers</guid>
+      <description>Planar magnetic versus dynamic headphone drivers, with a live diaphragm-motion demo.</description>
+      <dc:creator>Aadharsh Pannirselvam</dc:creator>
+      <pubDate>Mon, 22 Jun 2026 00:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Knots</title>
+      <link>https://aadhar.sh/lwe/knots</link>
+      <guid isPermaLink="true">https://aadhar.sh/lwe/knots</guid>
+      <description>Why shoelaces come undone: granny versus square, the Ian knot, and bunny ears, with a live demo.</description>
+      <dc:creator>Aadharsh Pannirselvam</dc:creator>
+      <pubDate>Mon, 22 Jun 2026 00:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>FHE</title>
+      <link>https://aadhar.sh/lwe/fhe</link>
+      <guid isPermaLink="true">https://aadhar.sh/lwe/fhe</guid>
+      <description>Fully Homomorphic Encryption, explained at the pace of a 2009 MSN conversation.</description>
+      <dc:creator>Aadharsh Pannirselvam</dc:creator>
+      <pubDate>Sun, 21 Jun 2026 00:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>MPC</title>
+      <link>https://aadhar.sh/lwe/mpc</link>
+      <guid isPermaLink="true">https://aadhar.sh/lwe/mpc</guid>
+      <description>Multi-Party Computation: honest majority, dishonest majority, and traitor tracing.</description>
+      <dc:creator>Aadharsh Pannirselvam</dc:creator>
+      <pubDate>Sun, 21 Jun 2026 00:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>TEE</title>
+      <link>https://aadhar.sh/lwe/tee</link>
+      <guid isPermaLink="true">https://aadhar.sh/lwe/tee</guid>
+      <description>Trusted Execution Environments: the secret room in the chip, and the side-channels that leak it.</description>
+      <dc:creator>Aadharsh Pannirselvam</dc:creator>
+      <pubDate>Sun, 21 Jun 2026 00:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>UTF-8</title>
+      <link>https://aadhar.sh/lwe/utf8</link>
+      <guid isPermaLink="true">https://aadhar.sh/lwe/utf8</guid>
+      <description>Text encoding: ASCII vs UTF-32 vs UTF-8, with live byte demos.</description>
+      <dc:creator>Aadharsh Pannirselvam</dc:creator>
+      <pubDate>Sun, 21 Jun 2026 00:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Vigenère</title>
+      <link>https://aadhar.sh/lwe/vigenere</link>
+      <guid isPermaLink="true">https://aadhar.sh/lwe/vigenere</guid>
+      <description>The Vigenère cipher and Kryptos: keyed alphabets, autokeys, K1–K3, and a keystream workbench.</description>
+      <dc:creator>Aadharsh Pannirselvam</dc:creator>
+      <pubDate>Sun, 21 Jun 2026 00:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Image encoding</title>
+      <link>https://aadhar.sh/lwe/encoding</link>
+      <guid isPermaLink="true">https://aadhar.sh/lwe/encoding</guid>
+      <description>Why one photo gives three file sizes: AVIF vs JPEG vs the tuned JPEG encoders.</description>
+      <dc:creator>Aadharsh Pannirselvam</dc:creator>
+      <pubDate>Sun, 21 Jun 2026 00:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Programmable cryptography</title>
+      <link>https://aadhar.sh/lwe/pcrypto</link>
+      <guid isPermaLink="true">https://aadhar.sh/lwe/pcrypto</guid>
+      <description>Programmable cryptography: 2PC and garbled circuits, SNARKs, FHE, and ORAM as one toolkit.</description>
+      <dc:creator>Aadharsh Pannirselvam</dc:creator>
+      <pubDate>Sun, 21 Jun 2026 00:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>

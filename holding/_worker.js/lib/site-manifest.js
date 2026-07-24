@@ -347,6 +347,24 @@ export const AGENT_SURFACES = [
     "title": "Crawl ledger",
     "kind": "utility",
     "description": "A commentary ledger of identified AI-crawler visits."
+  },
+  {
+    "path": "/writing/feed.xml",
+    "title": "Writing feed",
+    "kind": "feed",
+    "description": "RSS 2.0 feed of the notes at /writing, full text."
+  },
+  {
+    "path": "/garage/feed.xml",
+    "title": "Garage feed",
+    "kind": "feed",
+    "description": "RSS 2.0 feed of the garage prototypes and experiments."
+  },
+  {
+    "path": "/lwe/feed.xml",
+    "title": "Learning with Errors feed",
+    "kind": "feed",
+    "description": "RSS 2.0 feed of the chat-style explainers at /lwe."
   }
 ];
 

@@ -297,6 +297,21 @@
     { "path": "/run", "title": "Run", "section": "utility", "kind": "utility",
       "description": "The site's command palette and route launcher.",
       "hint": "the command palette",
-      "flags": { "run": false, "taskbar": false, "sitemap": false, "gallery": false, "agents": false, "searchIndex": true, "webmention": false } }
+      "flags": { "run": false, "taskbar": false, "sitemap": false, "gallery": false, "agents": false, "searchIndex": true, "webmention": false } },
+
+    { "path": "/writing/feed.xml", "title": "Writing feed", "section": "writing", "kind": "feed",
+      "description": "RSS 2.0 feed of the notes at /writing, full text.",
+      "hint": "writing — subscribe by RSS",
+      "flags": { "run": false, "taskbar": false, "sitemap": false, "gallery": false, "agents": true, "searchIndex": false, "webmention": false } },
+
+    { "path": "/garage/feed.xml", "title": "Garage feed", "section": "garage", "kind": "feed",
+      "description": "RSS 2.0 feed of the garage prototypes and experiments.",
+      "hint": "garage — subscribe by RSS",
+      "flags": { "run": false, "taskbar": false, "sitemap": false, "gallery": false, "agents": true, "searchIndex": false, "webmention": false } },
+
+    { "path": "/lwe/feed.xml", "title": "Learning with Errors feed", "section": "lwe", "kind": "feed",
+      "description": "RSS 2.0 feed of the chat-style explainers at /lwe.",
+      "hint": "lwe — subscribe by RSS",
+      "flags": { "run": false, "taskbar": false, "sitemap": false, "gallery": false, "agents": true, "searchIndex": false, "webmention": false } }
   ]
 }

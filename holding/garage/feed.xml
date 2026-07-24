@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>aadhar.sh · garage</title>
+    <link>https://aadhar.sh/garage</link>
+    <description>Prototypes and experiments: the site&apos;s workshop, with live demos.</description>
+    <language>en-us</language>
+    <atom:link href="https://aadhar.sh/garage/feed.xml" rel="self" type="application/rss+xml"/>
+    <generator>aadhar.sh</generator>
+    <lastBuildDate>Fri, 31 Jul 2026 00:00:00 GMT</lastBuildDate>
+    <item>
+      <title>Octane, priced against no framework</title>
+      <link>https://aadhar.sh/garage/octane</link>
+      <guid isPermaLink="true">https://aadhar.sh/garage/octane</guid>
+      <description>Nextane&apos;s 60.9% win over Next.js, re-measured on the live demo, then given the row every framework benchmark leaves out: a site that ships no framework at all.</description>
+      <dc:creator>Aadharsh Pannirselvam</dc:creator>
+      <pubDate>Fri, 31 Jul 2026 00:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Compression teardown</title>
+      <link>https://aadhar.sh/garage/compression</link>
+      <guid isPermaLink="true">https://aadhar.sh/garage/compression</guid>
+      <description>Shipping brotli q11 and zstd shared-dictionary deltas: what the edge really does, three platform limits that turned out innocent, and the one-line bug behind all of them.</description>
+      <dc:creator>Aadharsh Pannirselvam</dc:creator>
+      <pubDate>Mon, 27 Jul 2026 00:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Post-quantum signatures, priced</title>
+      <link>https://aadhar.sh/garage/pqc</link>
+      <guid isPermaLink="true">https://aadhar.sh/garage/pqc</guid>
+      <description>What ML-DSA-44 and the hash-based alternatives cost on the one signature this site controls: its crawler&apos;s RFC 9421 request signing, which now carries two.</description>
+      <dc:creator>Aadharsh Pannirselvam</dc:creator>
+      <pubDate>Mon, 27 Jul 2026 00:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Blueprint</title>
+      <link>https://aadhar.sh/garage/blueprint</link>
+      <guid isPermaLink="true">https://aadhar.sh/garage/blueprint</guid>
+      <description>The teardown&apos;s sequel: Fable 5 read every file in the repo and drew the blueprint it would rebuild from.</description>
+      <dc:creator>Aadharsh Pannirselvam</dc:creator>
+      <pubDate>Thu, 23 Jul 2026 00:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Bytes on the wire</title>
+      <link>https://aadhar.sh/garage/wire</link>
+      <guid isPermaLink="true">https://aadhar.sh/garage/wire</guid>
+      <description>The site&apos;s first build step, and the brotli rabbit hole that led there: where Cloudflare compresses.</description>
+      <dc:creator>Aadharsh Pannirselvam</dc:creator>
+      <pubDate>Thu, 23 Jul 2026 00:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Off Pages, onto Workers</title>
+      <link>https://aadhar.sh/garage/workers</link>
+      <guid isPermaLink="true">https://aadhar.sh/garage/workers</guid>
+      <description>Why this site moved from Cloudflare Pages advanced mode to Workers with static assets: an atomic deploy.</description>
+      <dc:creator>Aadharsh Pannirselvam</dc:creator>
+      <pubDate>Thu, 23 Jul 2026 00:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>5.6 Sol</title>
+      <link>https://aadhar.sh/garage/gpt56</link>
+      <guid isPermaLink="true">https://aadhar.sh/garage/gpt56</guid>
+      <description>The performance pass outlined with 5.6 Sol: the bytes, cache boundaries, and first-paint decisions.</description>
+      <dc:creator>Aadharsh Pannirselvam</dc:creator>
+      <pubDate>Fri, 10 Jul 2026 00:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>iroh</title>
+      <link>https://aadhar.sh/garage/iroh</link>
+      <guid isPermaLink="true">https://aadhar.sh/garage/iroh</guid>
+      <description>iroh 1.0: dial a machine by its public key, not its IP. A native in-browser NodeId generator.</description>
+      <dc:creator>Aadharsh Pannirselvam</dc:creator>
+      <pubDate>Mon, 15 Jun 2026 00:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Teardown</title>
+      <link>https://aadhar.sh/garage/teardown</link>
+      <guid isPermaLink="true">https://aadhar.sh/garage/teardown</guid>
+      <description>What Fable 5&apos;s multi-agent audit found and fixed across aadhar.sh, from a cache-poisoning hole on down.</description>
+      <dc:creator>Aadharsh Pannirselvam</dc:creator>
+      <pubDate>Thu, 11 Jun 2026 00:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Masonry</title>
+      <link>https://aadhar.sh/garage/masonry</link>
+      <guid isPermaLink="true">https://aadhar.sh/garage/masonry</guid>
+      <description>A ragged-height contact-sheet photo grid with CSS Grid Lanes, falling back to the fixed-square grid.</description>
+      <dc:creator>Aadharsh Pannirselvam</dc:creator>
+      <pubDate>Tue, 09 Jun 2026 00:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Safari 27</title>
+      <link>https://aadhar.sh/garage/safari27</link>
+      <guid isPermaLink="true">https://aadhar.sh/garage/safari27</guid>
+      <description>What WWDC26&apos;s Safari 27 ships that this site already leans on: base-select, anchor-positioning, more.</description>
+      <dc:creator>Aadharsh Pannirselvam</dc:creator>
+      <pubDate>Tue, 09 Jun 2026 00:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Content-addressed chunking</title>
+      <link>https://aadhar.sh/garage/chunks</link>
+      <guid isPermaLink="true">https://aadhar.sh/garage/chunks</guid>
+      <description>Live FastCDC content-defined chunking and content-addressing in the browser: pure JS + crypto.subtle.</description>
+      <dc:creator>Aadharsh Pannirselvam</dc:creator>
+      <pubDate>Sun, 07 Jun 2026 00:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Four free Cloudflare features</title>
+      <link>https://aadhar.sh/garage/cloudflare</link>
+      <guid isPermaLink="true">https://aadhar.sh/garage/cloudflare</guid>
+      <description>Live demos of four free Cloudflare Workers platform features, from Durable Objects to Workers AI.</description>
+      <dc:creator>Aadharsh Pannirselvam</dc:creator>
+      <pubDate>Sun, 07 Jun 2026 00:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Thumbnail encoding study</title>
+      <link>https://aadhar.sh/garage/encoding</link>
+      <guid isPermaLink="true">https://aadhar.sh/garage/encoding</guid>
+      <description>The same photo through AVIF, WebP, and JPEG (zenc), with real byte counts and quality measurements.</description>
+      <dc:creator>Aadharsh Pannirselvam</dc:creator>
+      <pubDate>Sun, 07 Jun 2026 00:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Web-platform horizon</title>
+      <link>https://aadhar.sh/garage/horizon</link>
+      <guid isPermaLink="true">https://aadhar.sh/garage/horizon</guid>
+      <description>Test-driving upcoming web-platform features (text-box-trim, contrast-color, anchor positioning).</description>
+      <dc:creator>Aadharsh Pannirselvam</dc:creator>
+      <pubDate>Sun, 07 Jun 2026 00:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>DOM-free text measurement</title>
+      <link>https://aadhar.sh/garage/pretext</link>
+      <guid isPermaLink="true">https://aadhar.sh/garage/pretext</guid>
+      <description>chenglou/pretext measures and lays out multiline text with canvas as ground truth instead of the DOM.</description>
+      <dc:creator>Aadharsh Pannirselvam</dc:creator>
+      <pubDate>Sun, 07 Jun 2026 00:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>XP scroll chrome</title>
+      <link>https://aadhar.sh/garage/scroll</link>
+      <guid isPermaLink="true">https://aadhar.sh/garage/scroll</guid>
+      <description>Scroll-driven animations in a period-correct Windows XP idiom: the Luna file-copy progress bar and more.</description>
+      <dc:creator>Aadharsh Pannirselvam</dc:creator>
+      <pubDate>Sun, 07 Jun 2026 00:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Tooltip experiments</title>
+      <link>https://aadhar.sh/garage/tooltips</link>
+      <guid isPermaLink="true">https://aadhar.sh/garage/tooltips</guid>
+      <description>Cursor-following tooltip styles for the photo grid and tracklist. Hover the slots and rows to compare.</description>
+      <dc:creator>Aadharsh Pannirselvam</dc:creator>
+      <pubDate>Sun, 07 Jun 2026 00:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>

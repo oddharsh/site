@@ -332,6 +332,9 @@ const ROUTES = new Map([
 
   ["/writing", routeWritingIndex],
   ["/writing/", routeDropSlash],
+  ["/writing/feed.xml", routeFeed],
+  ["/garage/feed.xml", routeFeed],
+  ["/lwe/feed.xml", routeFeed],
 
   // webmention: the open web's way to say "I linked to you." The endpoint takes
   // the POST; the approve/decline pair are HMAC-signed host actions (same
@@ -819,6 +822,18 @@ function routeImagesMeta(request, env) {
 // through to the asset layer with the 404 cache-clamp, same as before.
 function routeStaticPage(request, env) {
   return serveStaticPage(request, env);
+}
+
+async function routeFeed(request, env) {
+  const response = await serveAssetWith404Clamp(request, env);
+  if (!response.ok) return response;
+  const feed = new Response(response.body, response);
+  // /garage/* and /lwe/* advertise page-only preloads and Webmention through
+  // _headers. A feed is neither, so the exact route strips that inherited Link.
+  feed.headers.delete("link");
+  feed.headers.set("content-type", "application/rss+xml; charset=utf-8");
+  feed.headers.set("cache-control", "public, max-age=0, s-maxage=1800, must-revalidate");
+  return feed;
 }
 
 function routeShellAsset(request, env) {

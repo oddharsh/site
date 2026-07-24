@@ -207,6 +207,7 @@ const ROUTES = [
   { path: `/writing/${SLUG}`, status: 200, ct: "text/html" },
   { path: `/writing/${SLUG}.txt`, status: 200, ct: "text/plain" },
   { path: "/writing/posts.json", status: 200, ct: "application/json" },
+  { path: "/writing/feed.xml", status: 200, ct: "application/rss+xml", marker: "<rss version=\"2.0\"" },
   { path: "/rn", status: 302 },
   // /rn has no page to twin, so its Markdown is rendered live. The negotiated
   // form is the one that matters: it is the arm that stops an agent following
@@ -250,6 +251,7 @@ const ROUTES = [
   ...(HASHED ? [{ path: HASHED, status: 200, ct: "image/avif" }] : []),
   // static section pages that are already URL-skeuomorphic (must not regress)
   { path: "/garage", status: 200, ct: "text/html" },
+  { path: "/garage/feed.xml", status: 200, ct: "application/rss+xml", marker: "https://aadhar.sh/garage/feed.xml" },
   { path: "/garage/", status: [301, 307, 308] },   // drop-trailing-slash: /garage serves, /garage/ redirects
   { path: "/garage/scroll", status: 200, ct: "text/html" },
   { path: "/garage/workers", status: 200, ct: "text/html", marker: "run_worker_first" },
@@ -258,6 +260,7 @@ const ROUTES = [
   { path: "/garage/gpt56", status: 200, ct: "text/html", marker: "5.6 Sol" },
   { path: "/garage/enc/z-zc90.jpg", status: 200, ct: "image/jpeg" },   // the JPEG cell /lwe/encoding actually loads (was z-jl90 until zenjpeg replaced jpegli in the ladder)
   { path: "/lwe", status: 200, ct: "text/html" },
+  { path: "/lwe/feed.xml", status: 200, ct: "application/rss+xml", marker: "https://aadhar.sh/lwe/feed.xml" },
   { path: "/lwe/", status: [301, 307, 308] },   // drop-trailing-slash
   { path: "/lwe/utf8", status: 200, ct: "text/html" },
   { path: "/pixel-peeper", status: 200, ct: "text/html", marker: "compression eye exam" },
@@ -290,7 +293,7 @@ async function probe(r) {
     const ct = res.headers.get("content-type") || "";
     let body = "", bytes = null;
     // read the body when we need a marker or a size assertion on a text response
-    if ((r.marker || r.maxBytes || r.fullPage || r.fragment) && /text|json|javascript|markdown|svg|css/.test(ct)) {
+    if ((r.marker || r.maxBytes || r.fullPage || r.fragment) && /text|json|javascript|markdown|svg|css|xml/.test(ct)) {
       const full = await res.text();
       bytes = Buffer.byteLength(full);
       body = full.slice(0, 200000);
