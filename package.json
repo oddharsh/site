@@ -14,6 +14,7 @@
     "dev": "wrangler dev -c wrangler.dev.jsonc",
     "deploy": "wrangler deploy",
     "og-cards": "node holding/scripts/gen-og-cards.mjs",
+    "gen:manifest": "node scripts/gen-manifest.mjs",
     "search:index": "node scripts/generate-search-index.mjs",
     "photos": "bash holding/scripts/add-photos.sh",
     "photos:check": "node holding/scripts/check-photo-pipeline.mjs",

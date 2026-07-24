@@ -91,17 +91,22 @@
     { label: "lwe · knots", path: "/lwe/knots", hint: "knots: granny vs square, the Ian knot, why laces come undone" },
 // generated:lwe-pages:end
     // generated:garage-pages:start
-    // generated:garage-pages:end
+    { label: "garage · blueprint", path: "/garage/blueprint", hint: "the repo, blueprinted by Fable 5" },
     { label: "garage · chunks", path: "/garage/chunks", hint: "content-addressed chunking" },
     { label: "garage · cloudflare", path: "/garage/cloudflare", hint: "free Cloudflare features" },
     { label: "garage · encoding", path: "/garage/encoding", hint: "thumbnail encoding study" },
+    { label: "garage · 5.6 sol", path: "/garage/gpt56", hint: "the performance pass outlined with 5.6 Sol" },
     { label: "garage · horizon", path: "/garage/horizon", hint: "web-platform horizon" },
+    { label: "garage · iroh", path: "/garage/iroh", hint: "dial a machine by its public key" },
     { label: "garage · masonry", path: "/garage/masonry", hint: "Grid Lanes masonry photo grid (with fixed-square fallback)" },
     { label: "garage · pretext", path: "/garage/pretext", hint: "DOM-free text measurement" },
     { label: "garage · safari 27", path: "/garage/safari27", hint: "WWDC26 Safari 27 features, through this site's lens" },
-    { label: "garage · 5.6 sol", path: "/garage/gpt56", hint: "the performance pass outlined with 5.6 Sol" },
     { label: "garage · scroll", path: "/garage/scroll", hint: "XP scroll chrome" },
+    { label: "garage · teardown", path: "/garage/teardown", hint: "what a multi-agent audit found + fixed" },
     { label: "garage · tooltips", path: "/garage/tooltips", hint: "tooltip experiments" },
+    { label: "garage · wire", path: "/garage/wire", hint: "the first build step + the brotli rabbit hole" },
+    { label: "garage · workers", path: "/garage/workers", hint: "off Pages, onto Workers" },
+    // generated:garage-pages:end
     // Raycast deep-link easter eggs — fire built-in Raycast commands (every Raycast
     // user has these). kind "raycast" → location.href to the protocol URL: the OS
     // hands it to Raycast and the page stays put. Without Raycast it's a harmless

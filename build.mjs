@@ -20,6 +20,7 @@ import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import minifyHtml from "@minify-html/node";
 import { transform as transformCss } from "lightningcss";
 import { minifySync } from "oxc-minify";
+import { readManifest, workerModule, navFenceBody, readFenceBody } from "./scripts/gen-manifest.mjs";
 
 const OUT = ".build";
 
@@ -151,9 +152,67 @@ async function checkInvariants() {
     }
   } catch (e) { warn.push(`agent-skills digest check could not run: ${e.message}`); }
 
+  // 8 (hard) — the site surface registry (site-manifest.json) is the single truth
+  // for which pages exist and where they show. Its two GENERATED projections must
+  // match a fresh regen, and its three HAND-authored consumers (nav's Run palette,
+  // sitemap.xml, the garage gallery) must agree with the registry's flags. This is
+  // the check that would have caught the 10-vs-12-vs-15 garage drift these three
+  // surfaces had accumulated before the manifest existed.
+  let manifestChecked = 0;
+  try {
+    const { surfaces } = readManifest();
+    const nav = await read("holding/nav.js");
+
+    // 8a — generated projections match `npm run gen:manifest` output exactly.
+    const modActual = (await read("holding/_worker.js/lib/site-manifest.js")).trim();
+    if (modActual !== workerModule(surfaces).trim()) hard.push("lib/site-manifest.js drifted from site-manifest.json — run npm run gen:manifest");
+    for (const [section, marker] of [["garage", "garage-pages"], ["lwe", "lwe-pages"]]) {
+      if (readFenceBody(nav, marker) !== navFenceBody(surfaces, section)) hard.push(`nav.js generated:${marker} drifted from site-manifest.json — run npm run gen:manifest`);
+    }
+
+    // parse the live surfaces out of each hand-authored consumer.
+    const navPagesBlock = (nav.match(/var PAGES = \[([\s\S]*?)\n {2}\];/) || [, ""])[1];
+    const navRun = new Set([...navPagesBlock.matchAll(/path:\s*"(\/[^"]*)"/g)].map((m) => m[1]));
+    const subBlock = (nav.match(/var SUBPAGES = \[([\s\S]*?)\];/) || [, ""])[1];
+    const navTaskbar = new Set([...subBlock.matchAll(/path:\s*"([^"]+)"/g)].map((m) => m[1]));
+    const sitemap = await read("holding/sitemap.xml");
+    const smLocs = new Set([...sitemap.matchAll(/<loc>https:\/\/aadhar\.sh([^<]*)<\/loc>/g)].map((m) => m[1] || "/"));
+    const gallery = await read("holding/garage/index.html");
+    const galLinks = new Set([...gallery.matchAll(/href="(\/(?:garage\/[a-z0-9]+|pixel-peeper))"/g)].map((m) => m[1]));
+
+    // 8b — each flag is the registry's contract with exactly one surface; assert
+    // both directions so neither the registry nor the surface can drift alone.
+    const want = (f) => surfaces.filter((s) => s.flags[f]).map((s) => s.path);
+    const bidi = (label, wantPaths, have, opts = {}) => {
+      const w = new Set(wantPaths);
+      for (const p of w) if (!have.has(p)) hard.push(`${label}: ${p} is flagged in site-manifest.json but missing from the surface`);
+      if (!opts.subsetOnly) for (const p of have) if (!w.has(p)) hard.push(`${label}: ${p} is in the surface but not flagged in site-manifest.json`);
+    };
+    bidi("run/nav PAGES", want("run"), navRun);
+    bidi("taskbar/nav SUBPAGES", want("taskbar"), navTaskbar);
+    bidi("gallery/garage index", want("gallery"), galLinks);
+    // sitemap carries leaf content the registry doesn't own (writing posts,
+    // resume files), so forward is full but reverse is scoped to garage/lwe.
+    for (const p of want("sitemap")) if (!smLocs.has(p)) hard.push(`sitemap: ${p} is flagged sitemap in site-manifest.json but has no <loc>`);
+    for (const p of smLocs) if (/^\/(garage|lwe)\//.test(p) && !surfaces.some((s) => s.path === p)) hard.push(`sitemap: ${p} has a <loc> but is not registered in site-manifest.json`);
+
+    // 8c — every garage/lwe page on disk is registered (or an explicit exclusion),
+    // so adding a page forces a registry entry rather than a silent omission.
+    const BARE = new Set(["index.html", "vt-b.html", "vt-check.html"]);
+    const known = new Set(surfaces.map((s) => s.path));
+    for (const dir of ["garage", "lwe"]) {
+      for (const f of await readdir(`holding/${dir}`)) {
+        if (!f.endsWith(".html") || BARE.has(f)) continue;
+        const p = `/${dir}/${f.slice(0, -5)}`;
+        if (!known.has(p)) hard.push(`${p} exists on disk but is not registered in site-manifest.json`);
+      }
+    }
+    manifestChecked = surfaces.length;
+  } catch (e) { hard.push(`site-manifest check could not run: ${e.message}`); }
+
   if (warn.length) console.warn("build: invariant WARNINGS (deploy continues):\n  - " + warn.join("\n  - "));
   if (hard.length) throw new Error("build: invariant tripwires FAILED, deploy blocked:\n  - " + hard.join("\n  - "));
-  console.log(`invariants ok: ${routeKeys.length + prefixProbes.length} routes mirrored (${prefixProbes.length} prefix), CSP style-src, blink-fix, generator, geometry, ${skillsChecked} skill digest${skillsChecked === 1 ? "" : "s"}${warn.length ? " (with warnings above)" : ""}`);
+  console.log(`invariants ok: ${routeKeys.length + prefixProbes.length} routes mirrored (${prefixProbes.length} prefix), CSP style-src, blink-fix, generator, geometry, ${skillsChecked} skill digest${skillsChecked === 1 ? "" : "s"}, ${manifestChecked} surfaces registered${warn.length ? " (with warnings above)" : ""}`);
 }
 
 // the client scripts to minify: [file, banner pointer, tripwire the minified output MUST contain]

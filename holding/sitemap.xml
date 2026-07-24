@@ -135,13 +135,29 @@
     <priority>0.3</priority>
   </url>
 <!-- generated:lwe:end -->
-<!-- generated:garage-pages:start -->
-<!-- generated:garage-pages:end -->
   <url>
     <loc>https://aadhar.sh/garage</loc>
     <lastmod>2026-06-07</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.4</priority>
+  </url>
+  <url>
+    <loc>https://aadhar.sh/garage/blueprint</loc>
+    <lastmod>2026-07-23</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://aadhar.sh/garage/wire</loc>
+    <lastmod>2026-07-23</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://aadhar.sh/garage/workers</loc>
+    <lastmod>2026-07-23</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
   </url>
   <url>
     <loc>https://aadhar.sh/garage/iroh</loc>

@@ -8,18 +8,13 @@ const ROOT = "holding";
 const OUT = join(ROOT, "search-index.json");
 const MAX_TEXT = 1800;
 const SKIP_DIRS = new Set(["images", "i", "meta", "full", ".wrangler"]);
-const MANUAL = [
-  ["/search", "Site search", "Search the public pages and writing on aadhar.sh.", "utility"],
-  ["/photos", "Photos", "The straight-out-of-camera photo archive and public photo query utility.", "utility"],
-  ["/coffee", "Coffee", "Book a coffee in NYC or inspect the current public availability.", "utility"],
-  ["/lens", "The Other Web", "Inspect how a public URL reads to people and machines.", "utility"],
-  ["/lens/census", "Lens census", "Weekly longitudinal history of agent readiness across representative sites.", "utility"],
-  ["/around", "Around", "AadharshBot's scheduled neighborhood crawl.", "utility"],
-  ["/ledger", "Crawl ledger", "A commentary ledger of identified AI-crawler visits.", "utility"],
-  ["/reading", "Reading", "A native mirror of Aadharsh's saved reading list.", "utility"],
-  ["/serendipity", "Serendipity", "A public pool of events worth going to.", "utility"],
-  ["/run", "Run", "The site's command palette and route launcher.", "utility"],
-];
+// Worker-rendered utilities the source-tree walk below can't see (no static
+// file), injected from the surface registry so search and the shell share one
+// list. Static pages are auto-indexed by the walk regardless of the manifest.
+const manifest = JSON.parse(await readFile("site-manifest.json", "utf8"));
+const MANUAL = manifest.surfaces
+  .filter((s) => s.flags.searchIndex)
+  .map((s) => [s.path, s.title, s.description, "utility"]);
 
 function stripMarkup(value) {
   return String(value || "")

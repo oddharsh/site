@@ -19,6 +19,8 @@ import {
 } from "./holding/_worker.js/lens.js";
 import { handleCoffeeAvailability, readCoffeeAvailability } from "./holding/_worker.js/coffee.js";
 import { handleSiteMcp } from "./holding/_worker.js/mcp.js";
+import { AGENT_SURFACES } from "./holding/_worker.js/lib/site-manifest.js";
+import { readManifest, workerModule, navFenceBody, readFenceBody } from "./scripts/gen-manifest.mjs";
 import { MCP_TOOLS } from "./serendipity/serendipity.js";
 import { handlePhotoQuery, queryPhotos } from "./holding/_worker.js/photos.js";
 import { handleSearchJson, searchSite } from "./holding/_worker.js/search.js";
@@ -362,6 +364,61 @@ test("site MCP exposes one read-only tool catalog and calls shared search", asyn
   const callBody = await call.json();
   assert.equal(callBody.result.structuredContent.returned, 1);
   assert.equal((await handleSiteMcp(new Request("https://aadhar.sh/mcp"), env, context())).status, 405);
+});
+
+test("site-manifest.json is a well-formed registry with unique paths", async () => {
+  const { surfaces } = readManifest();
+  assert.ok(surfaces.length > 0);
+  const seen = new Set();
+  for (const s of surfaces) {
+    assert.match(s.path, /^\//, `path must be absolute: ${s.path}`);
+    assert.ok(s.title && s.description && s.hint, `${s.path} missing title/description/hint`);
+    for (const f of ["run", "taskbar", "sitemap", "gallery", "agents", "searchIndex"]) {
+      assert.equal(typeof s.flags?.[f], "boolean", `${s.path} flag ${f} must be boolean`);
+    }
+    assert.ok(!seen.has(s.path), `duplicate path ${s.path}`);
+    seen.add(s.path);
+  }
+});
+
+test("committed manifest projections match a fresh generation", async () => {
+  // guards against a commit that edits site-manifest.json but forgets
+  // `npm run gen:manifest` — the same drift build.mjs #8 blocks, checked here too.
+  const { surfaces } = readManifest();
+  const mod = await readFile("holding/_worker.js/lib/site-manifest.js", "utf8");
+  assert.equal(mod.trim(), workerModule(surfaces).trim(), "lib/site-manifest.js is stale — run npm run gen:manifest");
+  const nav = await readFile("holding/nav.js", "utf8");
+  for (const [section, marker] of [["garage", "garage-pages"], ["lwe", "lwe-pages"]]) {
+    assert.equal(readFenceBody(nav, marker), navFenceBody(surfaces, section), `nav.js generated:${marker} is stale — run npm run gen:manifest`);
+  }
+});
+
+test("site MCP lists the agent surfaces as resources", async () => {
+  const init = await handleSiteMcp(new Request("https://aadhar.sh/mcp", { method: "POST", body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} }), headers: { "content-type": "application/json" } }), {}, context());
+  assert.deepEqual((await init.json()).result.capabilities.resources, {}, "initialize must declare the resources capability");
+  const list = await handleSiteMcp(new Request("https://aadhar.sh/mcp", { method: "POST", body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "resources/list" }), headers: { "content-type": "application/json" } }), {}, context());
+  const resources = (await list.json()).result.resources;
+  assert.equal(resources.length, AGENT_SURFACES.length);
+  assert.ok(resources.length > 0);
+  const home = resources.find((r) => r.name === "/");
+  assert.equal(home.uri, "https://aadhar.sh/", "uri is absolute against the request origin");
+  assert.equal(home.mimeType, "text/html");
+});
+
+test("site MCP resources/read serves listed surfaces only, same-origin", async () => {
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response("<!doctype html><title>ok</title>", { headers: { "content-type": "text/html; charset=utf-8" } });
+  try {
+    const read = await handleSiteMcp(new Request("https://aadhar.sh/mcp", { method: "POST", body: JSON.stringify({ jsonrpc: "2.0", id: 3, method: "resources/read", params: { uri: "https://aadhar.sh/whoareyou" } }), headers: { "content-type": "application/json" } }), {}, context());
+    const content = (await read.json()).result.contents[0];
+    assert.equal(content.uri, "https://aadhar.sh/whoareyou");
+    assert.match(content.text, /ok/);
+    // an unlisted path and a cross-origin host are both rejected without fetching.
+    for (const uri of ["https://aadhar.sh/etc/passwd", "https://evil.example.com/whoareyou"]) {
+      const bad = await handleSiteMcp(new Request("https://aadhar.sh/mcp", { method: "POST", body: JSON.stringify({ jsonrpc: "2.0", id: 4, method: "resources/read", params: { uri } }), headers: { "content-type": "application/json" } }), {}, context());
+      assert.equal((await bad.json()).error.code, -32602, `must reject ${uri}`);
+    }
+  } finally { globalThis.fetch = realFetch; }
 });
 
 // The Serendipity server card is published twice, at /.well-known/mcp.json (the
