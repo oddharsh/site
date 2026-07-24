@@ -19,6 +19,7 @@
   var humanH = document.getElementById("lx-human-h");
   var modeNote = document.getElementById("lx-mode-note");
   var statusBar = document.getElementById("lx-status");
+  var toolbar = document.getElementById("lx-toolbar");
 
   var data = null;       // last successful HTTP envelope
   var browserData = null; // last opt-in Browser Run snapshot
@@ -160,12 +161,14 @@
     } catch (e) {}
   }
 
-  // The SSR "state of the machine web" exhibit is the cold-start argument; once a
-  // real scan lands it steps aside so the panes own the screen. Re-shown when the
-  // user navigates back to the empty shell.
-  function stateWeb(show) {
-    var el = document.getElementById("lx-stateweb");
-    if (el) el.style.display = show ? "" : "none";
+  // The "state of the machine web" exhibit is the cold-start argument. It lives in
+  // an XP dialog now instead of inline, so it sits over the tool on nav-in rather
+  // than pushing the panes below the fold. showModal() gives the native focus trap,
+  // Esc, and inert-page for free. openStateWeb() is called once a session on the
+  // idle shell and by the footer link; it's a no-op if the dialog isn't present.
+  function openStateWeb() {
+    var d = document.getElementById("lx-sow-dialog");
+    if (d && !d.open && d.showModal) { try { d.showModal(); } catch (e) {} }
   }
 
   function showError(j) {
@@ -224,7 +227,6 @@
           return;
         }
         data = j;
-        stateWeb(false);
         renderHuman();
         renderMachine();
         renderBrowser();
@@ -1185,6 +1187,9 @@
   // ---- controls ---------------------------------------------------------
   function updateModeUi() {
     if (modeNote) modeNote.textContent = MODE_NOTE[view] || MODE_NOTE.both;
+    // Keep the toolbar's view-class current so CSS can hide the lens tabs in the
+    // views that don't use them (human, browser, delta). Matches the SSR class.
+    if (toolbar) toolbar.className = "lx-toolbar is-" + view;
     [].forEach.call(document.querySelectorAll(".lx-seg"), function (b) {
       var active = b.getAttribute("data-view") === view;
       b.classList.toggle("is-on", active);
@@ -1262,6 +1267,18 @@
       setLens(b.getAttribute("data-lens"));
     });
   });
+
+  // "state of the machine web" dialog: close button, backdrop light-dismiss, and
+  // the footer link that reopens it after dismissal.
+  var sowDialog = document.getElementById("lx-sow-dialog");
+  if (sowDialog) {
+    var sowClose = document.getElementById("lx-sow-close");
+    if (sowClose) sowClose.addEventListener("click", function () { sowDialog.close(); });
+    sowDialog.addEventListener("click", function (e) { if (e.target === sowDialog) sowDialog.close(); });
+  }
+  var sowOpen = document.getElementById("lx-sow-open");
+  if (sowOpen) sowOpen.addEventListener("click", openStateWeb);
+
   var urlState = readUrlState();
   try {
     var savedView = localStorage.getItem("lx-mode");
@@ -1285,7 +1302,6 @@
     if (!state.url && data) {
       data = null;
       browserData = null;
-      stateWeb(true);
       humanBody.innerHTML = '<div class="lx-empty">Paste a URL above to see it through both eyes.</div>';
       machineBody.innerHTML = '<div class="lx-empty">The markup, metadata, and machine directives land here.</div>';
       renderBrowser();
@@ -1317,6 +1333,19 @@
       } else {
         run(qp);
       }
+    } else {
+      // idle shell: pop the "state of the machine web" once a session, so a fresh
+      // visit meets the cold-start argument but a reload doesn't nag. Held until the
+      // visit is real, same as the autorun above (no modal over a prerender).
+      var popSow = function () {
+        try {
+          if (sessionStorage.getItem("lx-sow-seen")) return;
+          sessionStorage.setItem("lx-sow-seen", "1");
+        } catch (e) {}
+        openStateWeb();
+      };
+      if (document.prerendering) document.addEventListener("prerenderingchange", popSow, { once: true });
+      else popSow();
     }
   } catch (e) {}
 })();
