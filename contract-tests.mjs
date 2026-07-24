@@ -21,6 +21,7 @@ import { handleCoffeeAvailability, readCoffeeAvailability } from "./holding/_wor
 import { handleSiteMcp } from "./holding/_worker.js/mcp.js";
 import { handleWebmention, handleWebmentionDecision } from "./holding/_worker.js/webmention.js";
 import { handleInbox } from "./holding/_worker.js/inbox.js";
+import { citationsIn, findEndpointIn, SELF_LINK_HOSTS } from "./holding/_worker.js/webmention-send.js";
 import { sign } from "./cal/src/sign.js";
 import { AGENT_SURFACES } from "./holding/_worker.js/lib/site-manifest.js";
 import { readManifest, workerModule, navFenceBody, readFenceBody } from "./scripts/gen-manifest.mjs";
@@ -536,6 +537,68 @@ test("/inbox degrades honestly when the mention store is unbound", async () => {
   assert.equal(res.status, 200);
   const html = await res.text();
   assert.match(html, /not connected/i, "says the store is missing rather than pretending there is no mail");
+});
+
+// ── webmention (outbound) ───────────────────────────────────────────────────
+test("outbound citations exclude the shell, self-links, and non-public URLs", () => {
+  const origin = "https://aadhar.sh";
+  const page = `
+    <head><link rel="canonical" href="https://aadhar.sh/garage/chunks"><a href="https://head-link.example/nope">head</a></head>
+    <body>
+      <!-- axp:desktop --><div id="axp-desktop"></div><!-- /axp:desktop -->
+      <p>Concepts credit <a href="https://github.com/officialunofficial/mkit">officialunofficial/mkit</a>,
+         and the streaming docs at <a href="https://mkit.makechain.net/streaming">makechain</a>.</p>
+      <p>See also <a href="https://docs.makechain.net/#anchor">the docs</a> and
+         <a href="/garage/encoding">my own page</a> and <a href="mailto:a@b.c">mail</a>.</p>
+      <p>Dupe: <a href="https://github.com/officialunofficial/mkit">same repo again</a></p>
+      <p>Blocked: <a href="http://127.0.0.1/x">local</a> <a href="http://169.254.169.254/meta">metadata</a></p>
+      <!-- axp:shell -->
+        <a href="https://github.com/oddharsh">GitHub</a>
+        <a href="https://open.spotify.com/user/aadharsh2010">Music</a>
+        <a href="https://www.instagram.com/aadharsh.hif">Photos</a>
+      <!-- /axp:shell -->
+    </body>`;
+  const found = citationsIn(page, origin);
+
+  assert.ok(found.includes("https://github.com/officialunofficial/mkit"), "a real citation is sent");
+  assert.ok(found.includes("https://mkit.makechain.net/streaming"), "a second real citation is sent");
+  assert.ok(found.some((u) => u.startsWith("https://docs.makechain.net/")), "anchors are normalized, not dropped");
+  assert.equal(found.filter((u) => u.includes("officialunofficial")).length, 1, "deduped");
+
+  for (const bad of ["oddharsh", "spotify", "instagram", "aadhar.sh/garage", "127.0.0.1", "169.254", "mailto", "head-link"]) {
+    assert.ok(!found.some((u) => u.includes(bad)), `must not send to ${bad}`);
+  }
+});
+
+test("outbound self-link list stays in sync with the desktop shell profiles", async () => {
+  // the filter is only correct while it knows every profile nav.js stamps on
+  // every page; a new profile added there must be excluded here too.
+  const nav = await readFile("holding/nav.js", "utf8");
+  const block = (nav.match(/var PROFILES = \[([\s\S]*?)\];/) || [, ""])[1];
+  const urls = [...block.matchAll(/url:\s*"([^"]+)"/g)].map((m) => m[1]);
+  assert.ok(urls.length >= 5);
+  for (const raw of urls) {
+    const u = new URL(raw);
+    const bare = (u.host + u.pathname).replace(/^www\./, "").replace(/\/$/, "");
+    assert.ok(
+      SELF_LINK_HOSTS.some((self) => bare === self || bare.startsWith(self + "/")),
+      `nav.js PROFILES has ${bare} but webmention-send.js SELF_LINK_HOSTS does not exclude it`
+    );
+  }
+});
+
+test("outbound endpoint discovery follows the spec's precedence", () => {
+  const base = "https://example.com/post";
+  // Link header wins over markup.
+  assert.equal(
+    findEndpointIn('<link rel="webmention" href="/from-markup">', '</from-header>; rel="webmention"', base),
+    "https://example.com/from-header");
+  // then <link>, resolved relative to the fetched URL
+  assert.equal(findEndpointIn('<link rel="webmention" href="/wm">', null, base), "https://example.com/wm");
+  // then <a>, and rel lists with extra tokens still count
+  assert.equal(findEndpointIn('<a rel="me webmention" href="https://wm.example/e">x</a>', null, base), "https://wm.example/e");
+  // no endpoint is the common case, and is not an error
+  assert.equal(findEndpointIn("<p>nothing here</p>", null, base), null);
 });
 
 test("site-manifest.json is a well-formed registry with unique paths", async () => {

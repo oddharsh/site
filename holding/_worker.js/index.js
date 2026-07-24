@@ -14,6 +14,7 @@ import { handleHit } from "./counter.js";
 import { homepageHeadResponse, serveHomepageWithPrerenderedTracks, serveMarkdown } from "./home.js";
 import { handleInbox } from "./inbox.js";
 import { handleWebmention, handleWebmentionDecision } from "./webmention.js";
+import { cronSendWebmentions } from "./webmention-send.js";
 import { countCrawlerHit, handleLedger, handleLedgerJson } from "./ledger.js";
 import { handleLens, handleLensBrowser, handleLensCompare, handleLensFetch, handleLensShot } from "./lens.js";
 import { serveAssetWith404Clamp, serveFreshAsset } from "./lib/assets.js";
@@ -134,6 +135,11 @@ export default {
   async scheduled(event, env, ctx) {
     if (event.cron === "17 8 * * 1") {
       ctx.waitUntil(cronCensus(env));   // Mondays 08:17 UTC — the longitudinal census
+    } else if (event.cron === "41 5 * * *") {
+      // 05:41 UTC daily — tell the sources these pages cite that they were
+      // cited. Its own schedule (not the */30 tick) because it reads my own
+      // pages and then probes third-party hosts: a slow, polite, once-a-day job.
+      ctx.waitUntil(cronSendWebmentions(env));
     } else {
       ctx.waitUntil(cronAround(env));   // */30 — the neighborhood crawl
     }
