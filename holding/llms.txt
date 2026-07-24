@@ -115,8 +115,13 @@ aggregations.
   description, robots policy, and bounded content-sample changes. It never
   stores or returns the crawled page bodies.
 - [/photos/query.json](https://aadhar.sh/photos/query.json): Bounded photo
-  utility. Filter the published archive by caption, camera, lens, Fuji film
-  recipe, or date range; returned EXIF is an explicit public-safe allowlist.
+  utility. Filter the published archive by caption, camera, lens, film
+  simulation, or date range; returned EXIF is an explicit public-safe
+  allowlist. Every Fuji frame carries a `recipe` card naming the settings it
+  was shot with (film sim, dynamic range, grain, color chrome, WB shift,
+  tone/color/sharpness/clarity), and `?recipe=` matches anywhere inside it —
+  `?recipe=DR400`, `?recipe=Clarity:%20-2` — so a look can be read back and
+  re-shot rather than guessed at.
 - [/coffee/availability.json](https://aadhar.sh/coffee/availability.json):
   Current bookable coffee slots in the host timezone. It fails closed and
   returns no slots when the calendar is too old or unavailable.
