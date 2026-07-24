@@ -214,10 +214,11 @@ async function inspectLensRequest(request, env, ctx) {
 }
 
 // A dated, source-linked exhibit of where the machine web actually stands, so a
-// cold visitor reads every per-URL verdict below as a claim about the web, not
-// one site's laziness. Hand-maintained; each fact carries a "checked" date and a
-// source. Shown only on the idle shell (no ?url= scan) and hidden by the client
-// once a scan runs. Update the dates when you refresh the numbers.
+// cold visitor reads every per-URL verdict as a claim about the web, not one
+// site's laziness. Hand-maintained; each fact carries a "checked" date and a
+// source. Rendered as an XP dialog the client pops open on nav-in (once a
+// session) and that the footer link reopens — it sits over the tool instead of
+// pushing it below the fold. Update the dates when you refresh the numbers.
 function lensStateOfWebPanel() {
   const facts = [
     {
@@ -257,12 +258,13 @@ function lensStateOfWebPanel() {
     '<div class="lx-sow-claim">' + escHtml(f.claim) + "</div>" +
     '<div class="lx-sow-src"><a href="' + escAttr(f.href) + '" target="_blank" rel="noopener">' + escHtml(f.src) + "</a> &middot; " + checked + "</div></div>"
   ).join("");
-  return '<section class="lx-stateweb" id="lx-stateweb">' +
-    '<div class="lx-sow-h"><span class="lx-sow-kicker">The state of the machine web</span>' +
-    '<span class="lx-sow-sub">mid-2026 &middot; the population every scan below is a sample of</span></div>' +
+  return '<dialog class="lx-sow-dialog" id="lx-sow-dialog" aria-labelledby="lx-sow-title">' +
+    '<div class="lx-sow-tb"><span class="lx-sow-kicker" id="lx-sow-title">The state of the machine web</span>' +
+    '<button class="lx-sow-x" type="button" id="lx-sow-close" title="Close" aria-label="Close"></button></div>' +
+    '<div class="lx-sow-inner">' +
     '<div class="lx-sow-grid">' + cards + "</div>" +
-    '<div class="lx-sow-foot">A page\'s second life as data is now the busier one. Whether a machine can actually <b>read</b>, <b>understand</b>, and <b>act</b> on a page — not just fetch it — is what the lenses below measure. Paste a URL to see one site\'s answer, or watch the movement over time in <a href="/lens/census">the weekly census</a> of 16 representative sites.</div>' +
-    "</section>";
+    '<div class="lx-sow-foot">A page\'s second life as data is now the busier one. Whether a machine can actually <b>read</b>, <b>understand</b>, and <b>act</b> on a page — not just fetch it — is what the lenses here measure. Paste a URL to see one site\'s answer, or watch the movement over time in <a href="/lens/census">the weekly census</a> of 16 representative sites.</div>' +
+    "</div></dialog>";
 }
 
 export function renderLensShell(initial, state, inputValue) {
@@ -489,20 +491,26 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 .lx-proof b { color:oklch(38% 0.06 255); }
 @media (max-width:560px){ .lx-cf-grid{ grid-template-columns:1fr; } .lx-stage{ grid-template-columns:74px 1fr; } .lx-readiness-cats{ grid-template-columns:1fr; } .lx-readiness-hero{ align-items:flex-start; } .lx-next-actions div{ grid-template-columns:1fr; gap:2px; } .lx-bot-matrix{ min-width:620px; } }
 
-/* state of the machine web — the idle exhibit */
-.lx-stateweb { margin:10px 0 4px; border:1px solid oklch(80% 0.05 250); border-radius:4px; background:linear-gradient(180deg,oklch(98% 0.012 250),oklch(95% 0.02 250)); padding:10px 12px 11px; }
-.lx-sow-h { display:flex; align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:4px 10px; margin:0 0 8px; }
-.lx-sow-kicker { font:bold 11pt "Trebuchet MS",Verdana,sans-serif; color:oklch(33% 0.10 263); }
-.lx-sow-sub { font-size:8.2pt; color:oklch(52% 0 0); font-style:italic; }
-.lx-sow-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px; }
-.lx-sow-card { border:1px solid oklch(86% 0.02 250); border-radius:3px; background:#fff; padding:7px 9px; }
+/* state of the machine web — an XP dialog shown on nav-in, reopenable from the footer */
+.lx-sow-dialog { padding:0; margin:auto; width:min(660px,calc(100vw - 26px)); max-height:min(88vh,700px); color:oklch(28% 0.02 255); background:oklch(96% 0.014 250); border:1px solid oklch(44% 0.09 258); border-radius:6px 6px 3px 3px; box-shadow:0 10px 40px oklch(20% 0.05 258 / .42); overflow:hidden; display:flex; flex-direction:column; }
+.lx-sow-dialog::backdrop { background:oklch(22% 0.04 258 / .38); }
+.lx-sow-tb { display:flex; align-items:center; gap:8px; flex:0 0 auto; padding:4px 5px 5px 10px; background:linear-gradient(180deg, oklch(62% 0.16 256), oklch(45% 0.19 260)); }
+.lx-sow-kicker { font:bold 10.5pt "Trebuchet MS",Verdana,sans-serif; color:#fff; text-shadow:0 1px 1px oklch(24% 0.1 260 / .6); }
+.lx-sow-x { margin-left:auto; width:20px; height:20px; padding:0; overflow:hidden; font-size:0; cursor:pointer; position:relative; border:1px solid #d8401c; border-radius:3px; background-color:#e45f3e; background-image:linear-gradient(180deg,#e8795f,#e45d3d 55%,#ae3110); }
+.lx-sow-x:hover, .lx-sow-x:focus-visible { filter:brightness(1.12); outline:none; box-shadow:0 0 4px oklch(70% 0.18 30 / .7); }
+.lx-sow-x::before, .lx-sow-x::after { content:''; position:absolute; left:50%; top:50%; width:11px; height:2px; margin:-1px 0 0 -5.5px; background:#fff; }
+.lx-sow-x::before { transform:rotate(45deg); } .lx-sow-x::after { transform:rotate(-45deg); }
+.lx-sow-inner { padding:11px 13px 13px; overflow:auto; }
+.lx-sow-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+.lx-sow-card { border:1px solid oklch(86% 0.02 250); border-radius:3px; background:#fff; padding:8px 10px; }
 .lx-sow-stat { font:bold 12pt "Courier New",monospace; color:oklch(40% 0.14 255); margin:0 0 3px; line-height:1.1; }
-.lx-sow-claim { font-size:8.5pt; line-height:1.4; color:oklch(30% 0.02 255); }
+.lx-sow-claim { font-size:8.6pt; line-height:1.42; color:oklch(30% 0.02 255); }
 .lx-sow-src { margin-top:4px; font-size:7.8pt; color:oklch(55% 0 0); }
 .lx-sow-src a { color:oklch(42.61% 0.2353 263.74); text-decoration:none; }
-.lx-sow-foot { margin-top:9px; padding-top:7px; border-top:1px solid oklch(88% 0.02 250); font-size:8.8pt; line-height:1.45; color:oklch(38% 0.02 255); }
+.lx-sow-foot { margin-top:10px; padding-top:8px; border-top:1px solid oklch(88% 0.02 250); font-size:8.8pt; line-height:1.45; color:oklch(38% 0.02 255); }
 .lx-sow-foot b { color:oklch(33% 0.10 263); }
-@media (max-width:720px){ .lx-sow-grid{ grid-template-columns:1fr; } }
+.lx-sow-open { font:inherit; color:oklch(42.61% 0.2353 263.74); background:none; border:none; padding:0; cursor:pointer; text-decoration:underline; }
+@media (max-width:520px){ .lx-sow-grid{ grid-template-columns:1fr; } }
 
 /* status bar */
 .lx-status { margin-top:9px; border-top:1px solid oklch(86% 0.03 260); padding-top:6px; display:flex; flex-wrap:wrap; gap:5px 14px; font-size:8.6pt; color:oklch(45% 0 0); }
@@ -551,7 +559,6 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
       </div>
     </div>
     <div class="lx-mode-note" id="lx-mode-note">${modeNote}</div>
-    ${seeded ? "" : lensStateOfWebPanel()}
 
     <div class="lx-panes is-${state.view}" id="lx-panes">
       <section class="lx-pane lx-pane-human" id="lx-human">
@@ -569,7 +576,8 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
     </div>
 
     <div class="lx-status" id="lx-status">${seeded || (initial && !initial.ok) ? lensStatusFragment(initial, state) : '<span>Idle. Nothing is fetched until you ask, and then just once, server-side, with no logging.</span>'}</div>
-    <footer>&larr; <a href="/">aadhar.sh</a> &middot; a research toy about how machines read the web &middot; fetched by <a href="/bot">AadharshBot</a></footer>
+    <footer>&larr; <a href="/">aadhar.sh</a> &middot; a research toy about how machines read the web &middot; <button type="button" class="lx-sow-open" id="lx-sow-open">the state of the machine web</button> &middot; fetched by <a href="/bot">AadharshBot</a></footer>
+    ${lensStateOfWebPanel()}
     ${initialScript}
 `,
     // The shell is cached at the edge and browsers cache static scripts too, so a
