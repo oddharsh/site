@@ -15,8 +15,9 @@ so the histogram measures exactly what the visitor sees, the same property
 the client-side compute had. Merges into existing meta files (EXIF fields
 untouched); creates the file if extract-photo-metadata.sh hasn't yet.
 
-output per photo, merged under "hist":
-  {"hist": {"l": [64 x 0..100], "r": [...], "g": [...], "b": [...]}}
+output per photo, merged under "hi" (short key; the per-photo files use the
+compact schema documented in extract-photo-metadata.sh and tooltip.js):
+  {"hi": {"l": [64 x 0..100], "r": [...], "g": [...], "b": [...]}}
 each channel normalized so its tallest bin reads 100, matching a camera
 back's per-channel display.
 
@@ -96,7 +97,7 @@ def main():
                 meta = json.loads(meta_path.read_text())
             except Exception:
                 meta = {}
-        meta["hist"] = hist
+        meta["hi"] = hist
         meta_path.write_text(json.dumps(meta, separators=(",", ":")) + "\n")
         done += 1
 
