@@ -17,9 +17,18 @@
 //   dns   no secrets.  Public DoH. Every declared record, checked against two
 //                      independent resolvers. This is most of the value and it
 //                      runs in CI with no credential at all.
+//   edge  no secrets.  Zone settings that are load-bearing for something this
+//                      repo does, read as observed responses from production
+//                      rather than as dashboard toggles. A response needs no
+//                      credential, and a toggle can read "on" while a cache rule
+//                      overrides it for one path.
 //   api   needs a token. CLOUDFLARE_API_TOKEN, read-only scopes. Resources the
 //                      bindings point at, plus the Worker inventory. Skipped
 //                      when the token is absent, so CI stays secret-free.
+//
+// The edge tier tests PRODUCTION, not the branch under review, so a failure
+// there is not caused by the PR that surfaced it. Its findings are prefixed to
+// say so, because "your PR broke HSTS" would be a lie worth avoiding.
 //
 // Hard failures are "we checked and it is wrong". Advisories are "we could not
 // check" (resolver unreachable, no token) and never fail the run — same split
@@ -36,6 +45,11 @@ import { join } from "node:path";
 const ROOT = new URL("../", import.meta.url).pathname;
 const OFFLINE = process.argv.includes("--offline");
 const STRICT = process.argv.includes("--strict");
+
+// Identify honestly in the edge tier's own logs, same rule the Worker's
+// outbound fetches follow. This is not AadharshBot: it does not sign, and
+// pretending otherwise in the access log would be a small lie.
+const BOT_UA = "aadhar-sh-infra-check/1.0 (+https://aadhar.sh/bot)";
 
 const hard = [];
 const advisory = [];
@@ -292,6 +306,100 @@ async function checkDns(infra) {
   else fail(`DNSSEC DS drifted\n      declared: ${infra.zone.dnssec.ds}\n      live:     ${ds.answers.join(" | ") || "(none)"}`);
 }
 
+// ----------------------------------------------------------- tier: edge ----
+
+async function fetchEdge(url, headers = {}) {
+  const res = await fetch(url, {
+    headers: { "user-agent": `${BOT_UA}`, ...headers },
+    redirect: "follow",
+    signal: AbortSignal.timeout(12000),
+  });
+  return res;
+}
+
+// The thumbnail URLs are content-hashed, so a re-encode mints new ones and any
+// URL pinned in infra.json would rot within a release. Resolve one from the
+// live manifest instead, which is the same indirection the site itself uses.
+async function sampleImageUrl(origin) {
+  const res = await fetchEdge(`${origin}/images/manifest.json`);
+  if (!res.ok) throw new Error(`manifest returned HTTP ${res.status}`);
+  const manifest = await res.json();
+  const photo = (manifest.photos || manifest.images || [])[0];
+  const path = photo?.thumb_jpg || photo?.thumb_avif;
+  if (!path) throw new Error("manifest carried no thumbnail path");
+  return path.startsWith("http") ? path : `${origin}${path}`;
+}
+
+async function checkEdge(infra) {
+  const { origin, checks } = infra.edge;
+  // Prefix findings so nobody reads a production drift as a regression in the
+  // branch being reviewed.
+  const drift = (m) => fail(`production edge: ${m}`);
+
+  let sample = null;
+  const targetUrl = async (target) => {
+    if (target === "homepage") return `${origin}/`;
+    if (target === "sample-image") return (sample ??= await sampleImageUrl(origin));
+    throw new Error(`unknown edge target ${JSON.stringify(target)}`);
+  };
+
+  for (const check of checks) {
+    let url;
+    try {
+      url = await targetUrl(check.target);
+    } catch (e) {
+      warn(`edge check ${check.id} could not resolve its target: ${e.message}`);
+      continue;
+    }
+
+    try {
+      const { assert: want } = check;
+
+      // Compression is the one assertion that needs its own request per
+      // encoding: ask for exactly one and require the edge to answer in it.
+      if (want.compression) {
+        const missing = [];
+        for (const encoding of want.compression) {
+          const res = await fetchEdge(url, { "accept-encoding": encoding });
+          const got = (res.headers.get("content-encoding") || "").trim().toLowerCase();
+          if (got !== encoding) missing.push(`${encoding} (got ${got || "none"})`);
+        }
+        missing.length ? drift(`${check.id}: edge did not compress as ${missing.join(", ")} — ${check.why.split(".")[0]}`)
+                       : pass(`edge ${check.id}: ${want.compression.join(", ")} all served`);
+        continue;
+      }
+
+      const res = await fetchEdge(url);
+      const problems = [];
+
+      for (const name of want.headerAbsent || []) {
+        const got = res.headers.get(name);
+        if (got !== null) problems.push(`${name} is present (${got})`);
+      }
+      for (const [name, expected] of Object.entries(want.headerEquals || {})) {
+        const got = (res.headers.get(name) || "").trim();
+        if (got !== expected) problems.push(`${name} is ${JSON.stringify(got || "(absent)")}, declared ${JSON.stringify(expected)}`);
+      }
+      for (const [name, needle] of Object.entries(want.headerContains || {})) {
+        const got = res.headers.get(name) || "";
+        if (!got.includes(needle)) problems.push(`${name} does not contain ${JSON.stringify(needle)} (got ${JSON.stringify(got || "(absent)")})`);
+      }
+      if (want.bodyLacks) {
+        const body = await res.text();
+        for (const needle of want.bodyLacks) {
+          if (body.includes(needle)) problems.push(`response body contains ${JSON.stringify(needle)}`);
+        }
+      }
+
+      problems.length ? drift(`${check.id}: ${problems.join("; ")} — ${check.why.split(".")[0]}`)
+                      : pass(`edge ${check.id} holds`);
+    } catch (e) {
+      // Production being unreachable is an availability problem, not drift.
+      warn(`edge check ${check.id} could not run: ${e.message}`);
+    }
+  }
+}
+
 // ------------------------------------------------------------ tier: api ----
 
 const API = "https://api.cloudflare.com/client/v4";
@@ -398,6 +506,7 @@ if (OFFLINE) {
   warn("--offline: skipped the DNS and API tiers");
 } else {
   await checkDns(infra);
+  await checkEdge(infra);
 
   const token = process.env.CLOUDFLARE_API_TOKEN;
   if (!token) {
