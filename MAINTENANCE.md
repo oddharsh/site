@@ -45,8 +45,12 @@ than copied between checkouts:
   local dependencies, build output, credentials, or caches covered by
   `.gitignore`.
 - Worker secret values live in Cloudflare, not GitHub: `wrangler.jsonc` names
-  them but does not contain them. Workers Build project settings, DNS records,
-  Resend verification, and the contents of KV/R2/D1 are also external state.
+  them but does not contain them. The contents of KV/R2/D1 are external state
+  too, as is Resend's domain verification.
+- DNS records, the account resources the bindings point at, the Worker
+  inventory, and the Workers Build project settings are still external state,
+  but their intended values are now declared in [`infra.json`](infra.json) and
+  diffed by `npm run infra:check`. See "Infrastructure declaration" below.
 - The curated photo source folder is outside the repository by design; the
   checked-in derivative metadata and image tiers are the repo-facing artifacts.
 
@@ -154,7 +158,54 @@ exact tested SHA. Cloudflare Workers Builds watches that branch and is the only
 production publisher. Configure one Workers Build project for the site Worker
 with `production` as the production branch and monorepo root `.`, leave its
 dashboard Build command blank, and use `npx wrangler deploy` as the Deploy
-command. GitHub does not need Cloudflare production secrets for this path.
+command. GitHub never holds a Cloudflare token that can write, so it cannot
+publish to production even if the workflow guard is defeated.
+
+### Infrastructure declaration
+
+`wrangler.jsonc` declares the compute layer and CI dry-runs it, so a bad route
+or a missing binding already fails a PR. [`infra.json`](infra.json) covers the
+layer above that: DNS records, the account resources the bindings point at, the
+Worker inventory, and the Workers Build settings. `npm run infra:check` diffs
+the declaration against reality. It is read-only by design and has no apply
+path; editing `infra.json` changes what the check demands of production, never
+production itself.
+
+Three tiers, by what they cost to run:
+
+| tier | needs | covers |
+|---|---|---|
+| tree | nothing | binding names agree with `wrangler.jsonc`; every `consumer` file exists; the release block agrees with the Worker config |
+| dns | network | every declared record, via DoH against two independent resolvers, plus the nameservers and the DNSSEC `DS` |
+| account | a read-only token | the KV/R2/D1 IDs actually resolve; declared Workers are deployed and retired ones are gone |
+
+Same hard-versus-advisory split as the performance budget. A hard failure means
+"we checked and it is wrong." An advisory means "we could not check" (resolver
+unreachable, no token) and never fails the run, so a network blip cannot redden
+a PR that only touched CSS. Use `--strict` to promote advisories to failures
+when you want a real audit, and `--offline` for the no-network tier alone.
+
+Resource IDs live in `wrangler.jsonc` and nowhere else. `infra.json` names what
+must exist and why, and the checker joins the two by binding name, so the two
+files cannot drift into describing different worlds.
+
+**The token.** CI reads `secrets.CLOUDFLARE_API_TOKEN` and the optional
+`vars.CLOUDFLARE_ACCOUNT_ID`; with neither set the account tier just skips.
+Scope the token to reads only — Account Settings:Read, Workers Scripts:Read,
+Workers KV Storage:Read, D1:Read, and Zone:Read on `aadhar.sh`. Nothing in this
+repo may hold an `Edit` scope, because Workers Builds being the only publisher
+is the release backstop.
+
+```bash
+gh secret set CLOUDFLARE_API_TOKEN --repo oddharsh/site
+```
+
+**Known blind spot.** Cloudflare publishes no REST endpoint for Workers Builds
+project configuration, so the `release` block in `infra.json` is recorded but
+unverifiable, and the checker says so on every run. It matters more than most of
+what is checked: a non-empty dashboard Build command builds twice, and a command
+that runs anything other than `build.mjs` is how production once served an
+unminified 78KB `nav.js`. Review it by eye when you touch build settings.
 
 ### Performance budget semantics
 
@@ -305,7 +356,13 @@ below whenever they look unreferenced again:
 
 - **`holding/bimi.svg`** is the BIMI logo (SVG Tiny-PS, square and full-bleed
   because inboxes circle-crop it). Its consumer is a Cloudflare DNS record, so
-  deleting the file breaks mail rather than the site and nothing here goes red:
+  deleting the file breaks mail rather than the site.
+
+  **This one now goes red.** The BIMI record in [`infra.json`](infra.json)
+  carries a `consumer` field naming this path, and `npm run infra:check` fails
+  if the file disappears. That is the whole reason the `consumer` field exists;
+  a DNS record pointing into the tree makes a file load-bearing even though
+  nothing here links it. Point any future record at its file the same way.
 
   ```bash
   dig +short default._bimi.aadhar.sh TXT   # "v=BIMI1; l=https://aadhar.sh/bimi.svg"
