@@ -177,6 +177,7 @@ Three tiers, by what they cost to run:
 |---|---|---|
 | tree | nothing | binding names agree with `wrangler.jsonc`; every `consumer` file exists; the release block agrees with the Worker config |
 | dns | network | every declared record, via DoH against two independent resolvers, plus the nameservers and the DNSSEC `DS` |
+| edge | network | zone settings that are load-bearing for something this repo does, read as observed production responses |
 | account | a read-only token | the KV/R2/D1 IDs actually resolve; declared Workers are deployed and retired ones are gone |
 
 Same hard-versus-advisory split as the performance budget. A hard failure means
@@ -204,6 +205,35 @@ Each resource class is queried independently, so a token missing one scope
 degrades only that section and the advisory names the scope to add. Cloudflare
 returns error 10000 for both "bad token" and "token lacks this scope", so the
 message says which permission the failing section wanted.
+
+**The edge tier.** Cloudflare exposes dozens of zone toggles and almost all of
+them are defaults nobody here has an opinion about. The five in `infra.json`'s
+`edge` block are the ones with a real consequence for something this repo does,
+and three of the five are must-stay-OFF, which is the category that rots
+quietest: enabling a helpful-sounding feature never looks like a regression at
+the time.
+
+- **Polish off.** It would re-encode images at the edge and silently discard the
+  whole encoder toolchain (zenc, 10-bit AVIF, the q84 tuning, the benchmark
+  behind those choices). The site would look fine and the craft would be gone.
+- **Rocket Loader off.** It rewrites script loading, over the top of the
+  hand-tuned inline-loader and `defer` order in `index.html`.
+- **HTTP/3 on**, because the DNS-AID SVCB record advertises `alpn=h2,h3`. Turn
+  it off and DNS promises a protocol the edge cannot speak, while the DNS tier
+  stays green because the record itself never changed.
+- **Compression on**, because the performance budget is denominated in
+  compressed bytes and `perf-budget.mjs` compresses locally, so it would keep
+  passing while real visitors stopped getting compressed responses.
+- **HSTS** exact-matched like SPF and DMARC, because it is hand-chosen policy.
+  Raising `max-age` is fine and should update the declaration.
+
+They are checked as observed responses, not dashboard toggles. That needs no
+credential, so the tier runs on every PR, and it asserts the thing that actually
+matters: a toggle can read `on` while a cache rule overrides it for one path.
+
+**This tier tests production, not the branch.** A failure here is not caused by
+the PR that surfaced it, so its findings are prefixed `production edge:`. If one
+fires on an unrelated PR, fix the zone rather than the branch.
 
 **Known blind spot.** Cloudflare publishes no REST endpoint for Workers Builds
 project configuration, so the `release` block in `infra.json` is recorded but

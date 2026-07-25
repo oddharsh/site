@@ -31,9 +31,9 @@ npm run photos -- "/path/to/photo.HIF" "/path/to/folder/"
 # validate the committed photo artifact graph without uploading anything
 npm run photos:check
 
-# diff infra.json (DNS, account resources, Worker inventory) against reality.
-# read-only; never mutates Cloudflare. add CLOUDFLARE_API_TOKEN for the
-# account tier, or --offline for the no-network tier.
+# diff infra.json (DNS, zone/edge settings, account resources, Workers) against
+# reality. read-only; never mutates Cloudflare. add CLOUDFLARE_API_TOKEN for
+# the account tier, or --offline for the no-network tier.
 npm run infra:check
 
 # regenerate JUST the EXIF metadata (after photos are already uploaded)
