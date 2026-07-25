@@ -102,7 +102,7 @@ const exists = (rel) => access(join(ROOT, rel)).then(() => true, () => false);
 
 // ------------------------------------------------------------------ DoH ----
 
-const RRTYPE = { A: 1, NS: 2, CNAME: 5, MX: 15, TXT: 16, AAAA: 28, DS: 43, SVCB: 64 };
+const RRTYPE = { A: 1, NS: 2, CNAME: 5, MX: 15, TXT: 16, AAAA: 28, DS: 43, SVCB: 64, HTTPS: 65 };
 
 // Two independent resolvers. Google renders SVCB in presentation format;
 // Cloudflare returns the RFC 3597 generic form, which decodeSvcb() normalizes
@@ -274,6 +274,17 @@ async function checkDns(infra) {
     } else if (match === "present") {
       if (got.answers.length) pass(`${type} ${name} present (${got.answers.length} record${got.answers.length === 1 ? "" : "s"})`);
       else fail(`${type} ${name} is missing entirely — ${record.why?.split(".")[0] || "declared as required"}`);
+    } else if (match === "contains") {
+      // For records whose full value is Cloudflare's to rotate (the HTTPS RR's
+      // ipv6hint moves, its ech= key rotates hourly) but whose PARAMETERS are
+      // ours to insist on. Exact-matching would fail on every key rotation;
+      // present-matching would miss the case that matters, a zone toggle
+      // silently dropping a parameter out of an otherwise healthy record.
+      const joined = got.answers.join(" ");
+      const missing = record.expect.filter((needle) => !joined.includes(needle));
+      if (!got.answers.length) fail(`${type} ${name} is missing entirely — ${record.why?.split(".")[0] || "declared as required"}`);
+      else if (missing.length) fail(`${type} ${name} lost ${missing.map((m) => JSON.stringify(m)).join(", ")}\n      live: ${joined}`);
+      else pass(`${type} ${name} carries ${record.expect.map((e) => JSON.stringify(e)).join(", ")}`);
     } else if (match === "proxied") {
       const v6 = await resolveWithFallback(name, "AAAA");
       if (!got.answers.length) fail(`${type} ${name} has no A records — the apex is not resolving`);
