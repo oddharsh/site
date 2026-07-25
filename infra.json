@@ -129,7 +129,8 @@
     "retired": [
       {
         "name": "serendipity-collective",
-        "why": "CLAUDE.md says the former Serendipity Worker's routes and custom domain must be removed after the first successful production deploy, because wrangler.jsonc now serves /serendipity* from the site Worker. The Worker is still present in the account. Until it is deleted, two deployments claim overlapping surface and the older one is unversioned by this repo."
+        "deleted": "2026-07-25",
+        "why": "The former Serendipity Worker. wrangler.jsonc now serves /serendipity* from the site Worker, so CLAUDE.md called for removing this one after the first successful production deploy. It was still deployed months later, which is what the first real run of the account tier caught. Deleted 2026-07-25 after confirming /serendipity still served 200 from the site Worker. The entry stays so the check keeps asserting it is gone: two deployments claiming overlapping surface, with the older one unversioned by this repo, is the state worth never returning to."
       }
     ],
     "unmanaged": [
