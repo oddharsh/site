@@ -206,6 +206,54 @@ degrades only that section and the advisory names the scope to add. Cloudflare
 returns error 10000 for both "bad token" and "token lacks this scope", so the
 message says which permission the failing section wanted.
 
+### Rebuilding the zone
+
+`npm run infra:apply` is the write path, and the only thing in this repo that
+can mutate Cloudflare. It prints a plan and stops; `--confirm` applies it.
+
+```bash
+npm run infra:apply                # plan; needs no credential at all
+npm run infra:apply -- --confirm   # apply; needs CLOUDFLARE_API_TOKEN_WRITE
+npm run infra:apply -- --prune     # also remove undeclared values on declared names
+```
+
+The plan diffs `infra.json` against public DNS over DoH, so producing one costs
+nothing and reveals nothing. Only the write needs a token, and it reads a
+**different environment variable** (`CLOUDFLARE_API_TOKEN_WRITE`) from the
+read-only `CLOUDFLARE_API_TOKEN` the check uses. Two names means the write token
+can never be picked up by the check path by accident, and CI's read-only token
+can never satisfy the write path.
+
+**It refuses to run in CI.** Production is unreachable from GitHub on purpose:
+Workers Builds is the only publisher, and CI holds a read-only token so it
+cannot become a second one. A write token in Actions would dissolve that, so the
+script exits 1 the moment it sees `CI`.
+
+**Scope is DNS records whose `match` is `exact`, and nothing else.** That is the
+exact set where `infra.json` knows the whole desired value, so it is the only set
+recreatable from this file without inventing something. The plan lists what it
+will not fix, and who owns it instead: Resend owns the DKIM key, Cloudflare
+creates the proxied apex with the Worker custom domain, wrangler creates KV/R2/D1,
+and Workers Builds deploys the Worker. Creates and updates happen by default;
+deleting needs `--prune`, because an undeclared record is more often a
+third-party verification TXT than junk.
+
+**Full rebuild order**, if the zone is ever gone. Each step feeds the next:
+
+1. Point the registrar at the nameservers in `infra.json` (`zone.nameservers`),
+   then republish the DS record so `zone.dnssec.ds` matches again.
+2. Create the storage with wrangler (`kv namespace create`, `r2 bucket create`,
+   `d1 create`, `vectorize create`). Each mints a NEW id; paste them into
+   `wrangler.jsonc`, which stays the only place ids live.
+3. Ship the Worker through the normal path (merge to `main`, CI promotes to
+   `production`, Workers Builds deploys). This is what creates the proxied
+   `aadhar.sh`, `www` and `cal` records, so do not hand-author them.
+4. `npm run infra:apply -- --confirm` for the mail and agent-discovery records:
+   MX, SPF, DMARC, BIMI, SVCB. Nothing else rebuilds these, which is exactly why
+   this path exists.
+5. Re-verify the domain in Resend to reissue the DKIM key.
+6. `npm run infra:check` should come back green.
+
 **The edge tier.** Cloudflare exposes dozens of zone toggles and almost all of
 them are defaults nobody here has an opinion about. The five in `infra.json`'s
 `edge` block are the ones with a real consequence for something this repo does,

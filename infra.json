@@ -138,6 +138,48 @@
     ]
   },
 
+  "apply": {
+    "$comment": [
+      "Policy for `npm run infra:apply`, the rebuild path. Everything else in",
+      "this file is read-only; this block is the one place that describes writes.",
+      "",
+      "SCOPE: DNS records whose `match` is `exact`, and nothing else. That is not",
+      "an arbitrary line. `exact` is precisely the set where infra.json knows the",
+      "whole desired value, so it is the only set that can be recreated from this",
+      "file without inventing something. Everything excluded is excluded because",
+      "some other system is its rightful owner:",
+      "",
+      "  match: present   the DKIM key. Resend owns rotation and this file",
+      "                   deliberately does not pin the value, so it cannot",
+      "                   recreate it. Re-verify the domain in Resend instead.",
+      "  match: proxied   the apex. Cloudflare creates and owns this record when",
+      "  match: sameAs    the Worker custom domain is attached, so a rebuild gets",
+      "                   it from deploying the Worker, never from here.",
+      "  resources        KV/R2/D1 creation mints NEW ids that would have to be",
+      "                   written back into wrangler.jsonc by hand. Wrangler",
+      "                   already creates these; see MAINTENANCE.md for the order.",
+      "  the Worker       Workers Builds is the only publisher. Nothing here may",
+      "                   ever deploy it, or the release backstop is gone.",
+      "",
+      "SAFETY: never runs in CI (a write token must not live in GitHub, which is",
+      "the whole reason production is unreachable from there). Prints a plan and",
+      "the exact API payloads before touching anything. Creates and updates only;",
+      "deleting needs --prune and is still confined to declared names, because an",
+      "undeclared record is more likely a third-party verification TXT than junk.",
+      "",
+      "The plan itself needs NO credential: it diffs infra.json against public DNS",
+      "over DoH, same as the check. Only the write needs a token."
+    ],
+    "zone": "aadhar.sh",
+    "default_ttl": 1,
+    "ttl_note": "1 means Cloudflare 'automatic'. Public DNS reports remaining TTL rather than configured TTL, so the plan cannot diff TTL and does not try; it only sets TTL on records it creates.",
+    "token": {
+      "env": "CLOUDFLARE_API_TOKEN_WRITE",
+      "scopes": ["Zone:DNS:Edit on aadhar.sh", "Zone:Zone:Read on aadhar.sh"],
+      "why": "A DELIBERATELY DIFFERENT env var from the read-only CLOUDFLARE_API_TOKEN the check uses. Two names means a write token can never be picked up by the check path by accident, and the read token in CI can never satisfy this one."
+    }
+  },
+
   "edge": {
     "$comment": [
       "Zone settings that are load-bearing for something this repo does.",
