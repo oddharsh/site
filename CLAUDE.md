@@ -88,10 +88,11 @@ worktrees may edit freely, but a worktree is not a release surface.
 - **GitHub must never hold a Cloudflare token that can write.** The point is
   that GitHub cannot publish to production; only Workers Builds can, and only
   from `production`. A READ-ONLY token is a different thing and is fine: CI uses
-  one for `npm run infra:check`. Scope it to exactly these four reads and
-  nothing else — Account Settings:Read, Workers Scripts:Read, Workers KV
-  Storage:Read, D1:Read — plus Zone:Read on `aadhar.sh`. If a token in this repo
-  ever needs an `Edit` scope, the answer is no.
+  one for `npm run infra:check`. Scope it to exactly these five reads and
+  nothing else: Account Settings:Read, Workers Scripts:Read, Workers KV
+  Storage:Read, Workers R2 Storage:Read, D1:Read. If a token in this repo ever
+  needs an `Edit` scope, the answer is no. A token missing one of these degrades
+  only the section that needed it, and the check names the missing scope.
 
 > `AGENTS.md` is a symlink to this file. One source of truth, so the two cannot
 > drift again (they had, badly, by 2026-07-22). Edit this file.

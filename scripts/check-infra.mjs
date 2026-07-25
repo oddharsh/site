@@ -309,6 +309,25 @@ async function cf(token, path) {
   return body.result;
 }
 
+// Each resource class is checked independently. A token missing ONE read scope
+// must not blank the whole tier: the first version batched these into a
+// Promise.all under a single catch, so an absent R2 scope silently took KV, D1
+// and the Worker inventory down with it and reported one opaque auth error.
+// Cloudflare returns 10000 for both "bad token" and "token lacks this scope",
+// so name the scope each section needs and let the reader tell them apart.
+async function section(label, scope, fn) {
+  try {
+    await fn();
+  } catch (e) {
+    // Cloudflare is not consistent here: the same missing scope surfaces as
+    // 10000 "Authentication error" on some endpoints and 9106 "Authentication
+    // failed" on others, so match the family rather than one code.
+    const authy = /\b(10000|9106|9109)\b|authentication|unauthorized|forbidden/i.test(e.message);
+    warn(authy ? `${label} unchecked: token is missing ${scope} (${e.message})`
+               : `${label} unchecked: ${e.message}`);
+  }
+}
+
 async function checkApi(infra, wrangler, token) {
   let accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
   if (!accountId) {
@@ -322,44 +341,49 @@ async function checkApi(infra, wrangler, token) {
 
   // Resources the bindings point at. wrangler deploy --dry-run validates the
   // config's shape but never asks whether the IDs resolve to anything.
-  const [kv, r2, d1] = await Promise.all([
-    cf(token, `/accounts/${accountId}/storage/kv/namespaces?per_page=100`),
-    cf(token, `/accounts/${accountId}/r2/buckets`),
-    cf(token, `/accounts/${accountId}/d1/database?per_page=100`),
-  ]);
-
-  const kvIds = new Set(kv.map((n) => n.id));
-  for (const n of wrangler.kv_namespaces || []) {
-    kvIds.has(n.id) ? pass(`KV ${n.binding} resolves (${n.id})`)
+  await section("KV namespaces", "Workers KV Storage:Read", async () => {
+    const kv = await cf(token, `/accounts/${accountId}/storage/kv/namespaces?per_page=100`);
+    const ids = new Set(kv.map((n) => n.id));
+    for (const n of wrangler.kv_namespaces || []) {
+      ids.has(n.id) ? pass(`KV ${n.binding} resolves (${n.id})`)
                     : fail(`KV binding ${n.binding} points at namespace ${n.id}, which does not exist in this account`);
-  }
+    }
+  });
 
-  const bucketNames = new Set((r2.buckets || r2).map((b) => b.name));
-  for (const b of wrangler.r2_buckets || []) {
-    bucketNames.has(b.bucket_name) ? pass(`R2 ${b.binding} resolves (${b.bucket_name})`)
-                                   : fail(`R2 binding ${b.binding} points at bucket ${b.bucket_name}, which does not exist`);
-  }
+  await section("R2 buckets", "Workers R2 Storage:Read", async () => {
+    const r2 = await cf(token, `/accounts/${accountId}/r2/buckets`);
+    const names = new Set((r2.buckets || r2).map((b) => b.name));
+    for (const b of wrangler.r2_buckets || []) {
+      names.has(b.bucket_name) ? pass(`R2 ${b.binding} resolves (${b.bucket_name})`)
+                               : fail(`R2 binding ${b.binding} points at bucket ${b.bucket_name}, which does not exist`);
+    }
+  });
 
-  const dbs = new Map(d1.map((d) => [d.uuid, d.name]));
-  for (const d of wrangler.d1_databases || []) {
-    if (!dbs.has(d.database_id)) fail(`D1 binding ${d.binding} points at database ${d.database_id}, which does not exist`);
-    else if (dbs.get(d.database_id) !== d.database_name) fail(`D1 binding ${d.binding} expects ${d.database_name} but ${d.database_id} is named ${dbs.get(d.database_id)}`);
-    else pass(`D1 ${d.binding} resolves (${d.database_name})`);
-  }
+  await section("D1 databases", "D1:Read", async () => {
+    const d1 = await cf(token, `/accounts/${accountId}/d1/database?per_page=100`);
+    const dbs = new Map(d1.map((d) => [d.uuid, d.name]));
+    for (const d of wrangler.d1_databases || []) {
+      if (!dbs.has(d.database_id)) fail(`D1 binding ${d.binding} points at database ${d.database_id}, which does not exist`);
+      else if (dbs.get(d.database_id) !== d.database_name) fail(`D1 binding ${d.binding} expects ${d.database_name} but ${d.database_id} is named ${dbs.get(d.database_id)}`);
+      else pass(`D1 ${d.binding} resolves (${d.database_name})`);
+    }
+  });
 
   // Worker inventory. A retired Worker that is still deployed keeps its routes,
   // which is invisible from inside this repo.
-  const scripts = await cf(token, `/accounts/${accountId}/workers/scripts`);
-  const live = new Set(scripts.map((s) => s.id));
-  for (const w of infra.workers.expected) {
-    live.has(w.name) ? pass(`Worker ${w.name} deployed`) : fail(`Worker ${w.name} is declared but not deployed`);
-  }
-  for (const w of infra.workers.retired) {
-    if (live.has(w.name)) fail(`Worker ${w.name} is retired but still deployed — ${w.why}`);
-    else pass(`retired Worker ${w.name} is gone`);
-  }
-  const known = new Set([...infra.workers.expected, ...infra.workers.retired, ...infra.workers.unmanaged].map((w) => w.name));
-  for (const name of live) if (!known.has(name)) warn(`Worker ${name} is deployed but not accounted for in infra.json`);
+  await section("Worker inventory", "Workers Scripts:Read", async () => {
+    const scripts = await cf(token, `/accounts/${accountId}/workers/scripts`);
+    const live = new Set(scripts.map((s) => s.id));
+    for (const w of infra.workers.expected) {
+      live.has(w.name) ? pass(`Worker ${w.name} deployed`) : fail(`Worker ${w.name} is declared but not deployed`);
+    }
+    for (const w of infra.workers.retired) {
+      if (live.has(w.name)) fail(`Worker ${w.name} is retired but still deployed — ${w.why}`);
+      else pass(`retired Worker ${w.name} is gone`);
+    }
+    const known = new Set([...infra.workers.expected, ...infra.workers.retired, ...infra.workers.unmanaged].map((w) => w.name));
+    for (const name of live) if (!known.has(name)) warn(`Worker ${name} is deployed but not accounted for in infra.json`);
+  });
 }
 
 // ----------------------------------------------------------------- main ----

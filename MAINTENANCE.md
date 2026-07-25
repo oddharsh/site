@@ -191,14 +191,19 @@ files cannot drift into describing different worlds.
 
 **The token.** CI reads `secrets.CLOUDFLARE_API_TOKEN` and the optional
 `vars.CLOUDFLARE_ACCOUNT_ID`; with neither set the account tier just skips.
-Scope the token to reads only — Account Settings:Read, Workers Scripts:Read,
-Workers KV Storage:Read, D1:Read, and Zone:Read on `aadhar.sh`. Nothing in this
-repo may hold an `Edit` scope, because Workers Builds being the only publisher
-is the release backstop.
+Scope the token to reads only: Account Settings:Read, Workers Scripts:Read,
+Workers KV Storage:Read, Workers R2 Storage:Read, D1:Read. Nothing in this repo
+may hold an `Edit` scope, because Workers Builds being the only publisher is the
+release backstop.
 
 ```bash
 gh secret set CLOUDFLARE_API_TOKEN --repo oddharsh/site
 ```
+
+Each resource class is queried independently, so a token missing one scope
+degrades only that section and the advisory names the scope to add. Cloudflare
+returns error 10000 for both "bad token" and "token lacks this scope", so the
+message says which permission the failing section wanted.
 
 **Known blind spot.** Cloudflare publishes no REST endpoint for Workers Builds
 project configuration, so the `release` block in `infra.json` is recorded but
