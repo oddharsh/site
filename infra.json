@@ -1,0 +1,163 @@
+{
+  "$comment": [
+    "Account- and zone-level infrastructure that wrangler.jsonc cannot reach.",
+    "",
+    "wrangler.jsonc already declares the compute layer (routes, crons, bindings,",
+    "DO migrations) and CI dry-runs it on every PR. This file covers the rest: the",
+    "DNS records, the resources those bindings point at, the Worker inventory, and",
+    "the release wiring. Until this existed, all of that lived in prose in",
+    "CLAUDE.md and in the Cloudflare dashboard, so a wiped record or a fat-fingered",
+    "dashboard field left no red mark anywhere in the tree.",
+    "",
+    "This is a DECLARATION, not an apply path. `npm run infra:check` reads it and",
+    "diffs against reality; nothing here mutates Cloudflare. Changing a value here",
+    "does not change production, it changes what the check demands of production.",
+    "",
+    "Resource IDs deliberately live in wrangler.jsonc alone. This file names what",
+    "must exist and why; the checker reads the IDs from wrangler.jsonc so the two",
+    "cannot drift into two different answers."
+  ],
+
+  "zone": {
+    "name": "aadhar.sh",
+    "nameservers": ["daisy.ns.cloudflare.com.", "harlan.ns.cloudflare.com."],
+    "dnssec": {
+      "algorithm": "ECDSAP256SHA256",
+      "ds": "2371 13 2 5E0FBF232ED807AD0EA22563D9338B1D6B15AF1E2DE9CB4C29275A9189B97FB0",
+      "why": "DS is published at the registrar, so the chain of trust is out of Cloudflare's hands. If it ever stops matching, the DNS-AID SVCB answer below stops being authenticated and validating resolvers start refusing the zone outright."
+    }
+  },
+
+  "dns": [
+    {
+      "name": "aadhar.sh",
+      "type": "A",
+      "match": "proxied",
+      "why": "The apex, proxied through Cloudflare. Public DNS shows anycast edge addresses rather than an origin, so the check asserts the shape (at least one A and one AAAA) instead of pinning IPs Cloudflare is free to rotate."
+    },
+    {
+      "name": "www.aadhar.sh",
+      "type": "A",
+      "match": "sameAs",
+      "expect": "aadhar.sh",
+      "why": "www must land on the same proxied edge as the apex."
+    },
+    {
+      "name": "cal.aadhar.sh",
+      "type": "A",
+      "match": "sameAs",
+      "expect": "aadhar.sh",
+      "why": "Backs the `cal.aadhar.sh/*` route in wrangler.jsonc. The route is declared in code but the hostname it needs is not, so without this entry the coffee module can lose its domain and every config in the repo still validates clean."
+    },
+
+    {
+      "name": "_index._agents.aadhar.sh",
+      "type": "SVCB",
+      "match": "exact",
+      "expect": ["1 aadhar.sh. mandatory=alpn,port alpn=h2,h3 port=443"],
+      "why": "DNS-AID agent discovery (draft-mozleywilliams-dnsop-dnsaid + RFC 9460). Deliberately only _index is published, never _a2a: the site runs no Agent2Agent server, and a dangling _a2a would pass a scanner while breaking any agent that connected.",
+      "gotcha": "macOS ships dig 9.10.6, which does not know the SVCB mnemonic and silently degrades the query to an A lookup, reporting this record as missing when it is fine. The checker uses DoH and asks for type 64 by number."
+    },
+
+    {
+      "name": "aadhar.sh",
+      "type": "MX",
+      "match": "exact",
+      "expect": [
+        "25 route3.mx.cloudflare.net.",
+        "28 route2.mx.cloudflare.net.",
+        "42 route1.mx.cloudflare.net."
+      ],
+      "why": "Cloudflare Email Routing. coffee@aadhar.sh is the host address the booking flow sends from and the DMARC rua target, so losing MX breaks /coffee's approve/decline loop quietly."
+    },
+    {
+      "name": "aadhar.sh",
+      "type": "TXT",
+      "match": "exact",
+      "expect": ["v=spf1 include:_spf.mx.cloudflare.net include:_spf.google.com ~all"],
+      "why": "SPF for the two senders that actually exist: Cloudflare Email Routing and Google. Exact-matched because this is hand-authored policy, so any change should be deliberate rather than discovered later in a spam folder."
+    },
+    {
+      "name": "_dmarc.aadhar.sh",
+      "type": "TXT",
+      "match": "exact",
+      "expect": ["v=DMARC1; p=reject; rua=mailto:coffee@aadhar.sh,mailto:f528361e6ec148c8a4ee78398c1c1ab4@dmarc-reports.cloudflare.net; aspf=s; adkim=s"],
+      "why": "p=reject with strict alignment on both SPF and DKIM. Strict alignment is unforgiving by design, which makes the DKIM record below load-bearing rather than optional."
+    },
+    {
+      "name": "resend._domainkey.aadhar.sh",
+      "type": "TXT",
+      "match": "present",
+      "why": "Resend's DKIM key, which signs the /coffee confirmation and invite mail. Presence-matched, not exact: Resend owns rotation, so pinning the key would turn a routine rotation into a CI failure. Deletion still fails, which is the case that matters under adkim=s.",
+      "consumer": "cal/src/email.js"
+    },
+    {
+      "name": "default._bimi.aadhar.sh",
+      "type": "TXT",
+      "match": "exact",
+      "expect": ["v=BIMI1; l=https://aadhar.sh/bimi.svg"],
+      "why": "BIMI logo for inbox display. This record is the ONLY consumer of holding/bimi.svg anywhere in the world, which is why that file reads as detritus to every reference sweep in this tree. The `consumer` field below is what closes the loop: the checker asserts the file exists, so deleting it now goes red here instead of silently breaking mail.",
+      "consumer": "holding/bimi.svg"
+    }
+  ],
+
+  "resources": {
+    "$comment": "IDs live in wrangler.jsonc. This lists what must exist in the account and why, and the checker joins the two by binding name.",
+    "kv_namespaces": [
+      { "binding": "RN_KV", "title": "rn-cache", "why": "Playlist tracks, photo manifest, artist pics, Lens screenshots, the /around crawl snapshot." },
+      { "binding": "BOOKINGS", "title": "cal-aadhar-sh-CAL_BOOKINGS", "why": "Pending and confirmed coffee bookings, plus the per-slot held: keys." }
+    ],
+    "r2_buckets": [
+      { "binding": "PHOTOS_R2", "bucket": "aadhar-photos", "why": "The SOOC originals, ~3GB over 158 photos. The only copy that is not on the owner's SSD." }
+    ],
+    "d1_databases": [
+      { "binding": "RESTORE_DB", "database": "aadhar-restore", "why": "The deploy log. Single source for both /restore and /updates, which is what stops those two pages drifting apart." },
+      { "binding": "SERENDIPITY_DB", "database": "serendipity", "why": "Event pool behind /serendipity." }
+    ],
+    "vectorize_indexes": [
+      { "binding": "VECTORIZE", "index": "lwe-passages", "config": "lwe-ask/wrangler.toml", "why": "Passage index for the /lwe/ask RAG endpoint. Created once by hand; the create command survives only as a comment in that config." }
+    ]
+  },
+
+  "workers": {
+    "$comment": "Worker inventory. `retired` is the interesting half: a Worker that should be gone but is not still holds its routes, and that is invisible from inside this repo.",
+    "expected": [
+      { "name": "aadhar-sh", "config": "wrangler.jsonc", "why": "The site Worker: homepage, Lens, coffee, Serendipity." },
+      { "name": "cf-garage", "config": "cf-garage/wrangler.toml", "why": "Intercepts /garage/cf/* ahead of the site Worker." },
+      { "name": "lwe-ask", "config": "lwe-ask/wrangler.toml", "why": "The /lwe/ask RAG endpoints." }
+    ],
+    "retired": [
+      {
+        "name": "serendipity-collective",
+        "deleted": "2026-07-25",
+        "why": "The former Serendipity Worker. wrangler.jsonc now serves /serendipity* from the site Worker, so CLAUDE.md called for removing this one after the first successful production deploy. It was still deployed months later, which is what the first real run of the account tier caught. Deleted 2026-07-25 after confirming /serendipity still served 200 from the site Worker. The entry stays so the check keeps asserting it is gone: two deployments claiming overlapping surface, with the older one unversioned by this repo, is the state worth never returning to."
+      }
+    ],
+    "unmanaged": [
+      { "name": "archie-kit-slack-oauth", "why": "Belongs to a different project on the same account. Listed so the check does not flag it as a stray." }
+    ]
+  },
+
+  "release": {
+    "$comment": [
+      "Workers Builds is the only production publisher for the site Worker, and its",
+      "settings are the release backstop. There is no public REST endpoint for",
+      "Workers Builds project configuration, so the checker CANNOT verify any of",
+      "this. It is recorded here as intent so the values survive outside one",
+      "person's memory of a dashboard form. Treat it as a manual review item.",
+      "",
+      "The build_command MUST stay blank. wrangler.jsonc's build.command runs",
+      "build.mjs during `wrangler deploy`, so a non-empty field here builds twice,",
+      "and a field that runs something other than build.mjs is how production once",
+      "ended up serving an unminified 78KB nav.js."
+    ],
+    "publisher": "cloudflare-workers-builds",
+    "worker": "aadhar-sh",
+    "production_branch": "production",
+    "root_directory": ".",
+    "build_command": "",
+    "deploy_command": "npx wrangler deploy",
+    "verifiable": false,
+    "promoted_by": ".github/workflows/promote-production.yml"
+  }
+}

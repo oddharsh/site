@@ -35,6 +35,17 @@ jobs:
       - name: Check Wrangler versions and lockfiles
         run: npm run check-wrangler
 
+      # infra.json against reality. The tree and DNS tiers need no credential;
+      # the account tier runs only when the read-only token secret exists and
+      # skips cleanly otherwise. Everything this cannot reach (an unreachable
+      # resolver, a missing token) is an advisory, never a failure, so a network
+      # blip cannot redden a PR that only touched CSS.
+      - name: Check infrastructure declaration
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: npm run infra:check
+
       - name: Build homepage
         run: npm run build
 

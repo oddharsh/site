@@ -31,6 +31,11 @@ npm run photos -- "/path/to/photo.HIF" "/path/to/folder/"
 # validate the committed photo artifact graph without uploading anything
 npm run photos:check
 
+# diff infra.json (DNS, account resources, Worker inventory) against reality.
+# read-only; never mutates Cloudflare. add CLOUDFLARE_API_TOKEN for the
+# account tier, or --offline for the no-network tier.
+npm run infra:check
+
 # regenerate JUST the EXIF metadata (after photos are already uploaded)
 ./holding/scripts/extract-photo-metadata.sh "/Users/aadharsh/Downloads/to post (from ssd)"
 
@@ -77,7 +82,17 @@ worktrees may edit freely, but a worktree is not a release surface.
 - Configure one Workers Build project for the site Worker with `production` as
   its production branch and repository root `.`. Keep the dashboard Build
   command blank; use the repo's Wrangler-owned build during the Deploy command.
-  GitHub should not hold a Cloudflare production API token for this path.
+  Those settings are recorded in [`infra.json`](infra.json) under `release`,
+  because Cloudflare exposes no public API for Workers Builds configuration and
+  the dashboard form is otherwise the only copy.
+- **GitHub must never hold a Cloudflare token that can write.** The point is
+  that GitHub cannot publish to production; only Workers Builds can, and only
+  from `production`. A READ-ONLY token is a different thing and is fine: CI uses
+  one for `npm run infra:check`. Scope it to exactly these five reads and
+  nothing else: Account Settings:Read, Workers Scripts:Read, Workers KV
+  Storage:Read, Workers R2 Storage:Read, D1:Read. If a token in this repo ever
+  needs an `Edit` scope, the answer is no. A token missing one of these degrades
+  only the section that needed it, and the check names the missing scope.
 
 > `AGENTS.md` is a symlink to this file. One source of truth, so the two cannot
 > drift again (they had, badly, by 2026-07-22). Edit this file.
@@ -227,7 +242,9 @@ per RFC 9421 + Web Bot Auth IETF draft. JWKS at
 
 ### DNS-AID (agent discovery)
 
-DNS record, not in this repo — lives in Cloudflare DNS for the zone.
+A DNS record, so it lives in Cloudflare DNS rather than in a Worker config.
+Its intended value IS declared here, in [`infra.json`](infra.json), and
+`npm run infra:check` fails if the live record stops matching.
 `_index._agents.aadhar.sh` is a ServiceMode SVCB record
 (`1 aadhar.sh. alpn="h2,h3" port=443 mandatory=alpn,port`, TTL 3600) per
 draft-mozleywilliams-dnsop-dnsaid + RFC 9460. It points agents at this
@@ -239,8 +256,14 @@ Deliberately only `_index` is published, not `_a2a`: the site has no
 Agent2Agent server, so an `_a2a` record would be a dangling pointer that
 passes a scanner but breaks any agent that connects. Same honesty rule
 as the `/whoareyou` "no third party" claim — don't advertise capability
-the site doesn't actually serve. To verify:
-`dig _index._agents.aadhar.sh SVCB +dnssec +short`.
+the site doesn't actually serve.
+
+To verify, use `npm run infra:check`, NOT `dig ... SVCB`. macOS ships dig
+9.10.6, which doesn't know the `SVCB` mnemonic and silently degrades the
+query to an `A` lookup, so it prints nothing and the record reads as
+missing when it's fine. If you want the raw answer, ask for the type by
+number (`dig _index._agents.aadhar.sh TYPE64 +short`) and expect RFC 3597
+generic hex back.
 
 ### Cloudflare bindings
 
