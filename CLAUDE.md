@@ -36,6 +36,11 @@ npm run photos:check
 # the account tier, or --offline for the no-network tier.
 npm run infra:check
 
+# the rebuild path, and the ONLY thing here that can mutate Cloudflare. plans
+# for free (public DNS, no credential); --confirm writes and needs the separate
+# CLOUDFLARE_API_TOKEN_WRITE. refuses to run in CI, by design.
+npm run infra:apply
+
 # regenerate JUST the EXIF metadata (after photos are already uploaded)
 ./holding/scripts/extract-photo-metadata.sh "/Users/aadharsh/Downloads/to post (from ssd)"
 
@@ -93,6 +98,10 @@ worktrees may edit freely, but a worktree is not a release surface.
   Storage:Read, Workers R2 Storage:Read, D1:Read. If a token in this repo ever
   needs an `Edit` scope, the answer is no. A token missing one of these degrades
   only the section that needed it, and the check names the missing scope.
+- The one write path, `npm run infra:apply`, is **workstation-only** and reads a
+  different variable (`CLOUDFLARE_API_TOKEN_WRITE`, scoped to DNS on this zone
+  alone). It refuses to run in CI and cannot touch the Worker. GitHub stays
+  unable to reach production, which is the property the release design rests on.
 
 > `AGENTS.md` is a symlink to this file. One source of truth, so the two cannot
 > drift again (they had, badly, by 2026-07-22). Edit this file.

@@ -22,6 +22,7 @@
     "perf-budget": "node perf-budget.mjs",
     "check-wrangler": "node scripts/check-wrangler.mjs",
     "infra:check": "node scripts/check-infra.mjs",
+    "infra:apply": "node scripts/apply-infra.mjs",
     "pages:check": "node scripts/check-page-contracts.mjs",
     "test": "node --test contract-tests.mjs"
   },

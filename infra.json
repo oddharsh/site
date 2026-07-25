@@ -61,6 +61,17 @@
 
     {
       "name": "aadhar.sh",
+      "type": "HTTPS",
+      "match": "contains",
+      "expect": ["alpn=h3,h2", "ech="],
+      "why": "The record that actually drives how a browser connects, and the DNS half of two zone toggles that have no other representation anywhere in this repo. `alpn=h3,h2` is HTTP/3 advertised in DNS (Speed > Settings > Protocol Optimization), and `ech=` is Encrypted ClientHello being on. Cloudflare generates and rotates this record; we do not author it, we assert its shape. Either toggle could be flipped in a dashboard and nothing in this tree would notice, which is the whole reason it is declared here.",
+      "gotcha": "Matched with `contains`, not `exact`, because Cloudflare owns the parts that move: the ech= key rotates and the ipv4/ipv6 hints change with the edge. Exact-matching would fail on every rotation; present-matching would miss the case that actually matters, which is a toggle silently dropping one parameter out of an otherwise healthy record.",
+      "pairs_with": "The edge tier's http3-on check. This asserts h3 is advertised in DNS; that one asserts the edge really answers with alt-svc h3. A client needs both, and either half can break alone.",
+      "esni": "There is deliberately no ESNI here. ESNI was the 2018 draft, it had known weaknesses, and Cloudflare removed support for it years ago. ECH is its replacement and is what `ech=` above refers to. If someone goes looking for an ESNI setting later, this is the note saying there is nothing to find."
+    },
+
+    {
+      "name": "aadhar.sh",
       "type": "MX",
       "match": "exact",
       "expect": [
@@ -136,6 +147,48 @@
     "unmanaged": [
       { "name": "archie-kit-slack-oauth", "why": "Belongs to a different project on the same account. Listed so the check does not flag it as a stray." }
     ]
+  },
+
+  "apply": {
+    "$comment": [
+      "Policy for `npm run infra:apply`, the rebuild path. Everything else in",
+      "this file is read-only; this block is the one place that describes writes.",
+      "",
+      "SCOPE: DNS records whose `match` is `exact`, and nothing else. That is not",
+      "an arbitrary line. `exact` is precisely the set where infra.json knows the",
+      "whole desired value, so it is the only set that can be recreated from this",
+      "file without inventing something. Everything excluded is excluded because",
+      "some other system is its rightful owner:",
+      "",
+      "  match: present   the DKIM key. Resend owns rotation and this file",
+      "                   deliberately does not pin the value, so it cannot",
+      "                   recreate it. Re-verify the domain in Resend instead.",
+      "  match: proxied   the apex. Cloudflare creates and owns this record when",
+      "  match: sameAs    the Worker custom domain is attached, so a rebuild gets",
+      "                   it from deploying the Worker, never from here.",
+      "  resources        KV/R2/D1 creation mints NEW ids that would have to be",
+      "                   written back into wrangler.jsonc by hand. Wrangler",
+      "                   already creates these; see MAINTENANCE.md for the order.",
+      "  the Worker       Workers Builds is the only publisher. Nothing here may",
+      "                   ever deploy it, or the release backstop is gone.",
+      "",
+      "SAFETY: never runs in CI (a write token must not live in GitHub, which is",
+      "the whole reason production is unreachable from there). Prints a plan and",
+      "the exact API payloads before touching anything. Creates and updates only;",
+      "deleting needs --prune and is still confined to declared names, because an",
+      "undeclared record is more likely a third-party verification TXT than junk.",
+      "",
+      "The plan itself needs NO credential: it diffs infra.json against public DNS",
+      "over DoH, same as the check. Only the write needs a token."
+    ],
+    "zone": "aadhar.sh",
+    "default_ttl": 1,
+    "ttl_note": "1 means Cloudflare 'automatic'. Public DNS reports remaining TTL rather than configured TTL, so the plan cannot diff TTL and does not try; it only sets TTL on records it creates.",
+    "token": {
+      "env": "CLOUDFLARE_API_TOKEN_WRITE",
+      "scopes": ["Zone:DNS:Edit on aadhar.sh", "Zone:Zone:Read on aadhar.sh"],
+      "why": "A DELIBERATELY DIFFERENT env var from the read-only CLOUDFLARE_API_TOKEN the check uses. Two names means a write token can never be picked up by the check path by accident, and the read token in CI can never satisfy this one."
+    }
   },
 
   "edge": {
