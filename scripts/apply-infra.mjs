@@ -59,7 +59,21 @@ const OWNER = {
   present: "owned elsewhere (value deliberately unpinned)",
   proxied: "created by Cloudflare with the Worker custom domain",
   sameAs: "created by Cloudflare with the Worker custom domain",
+  contains: "generated and rotated by Cloudflare; only its parameters are ours",
 };
+
+// A match mode with no OWNER entry falls back to printing its own name, which
+// reads as a category rather than a reason ("HTTPS aadhar.sh  contains"). That
+// is how the HTTPS RR looked after the `contains` mode arrived in a later
+// change than this map. Fail loudly instead, so the next new mode cannot
+// quietly degrade the one list whose entire job is explaining what is skipped.
+for (const mode of new Set(infra.dns.map((r) => r.match))) {
+  if (mode !== "exact" && !OWNER[mode]) {
+    console.error(`infra.json uses match mode ${JSON.stringify(mode)}, which has no owner explanation in apply-infra.mjs.`);
+    console.error(`Add one to OWNER so the out-of-scope list says who owns those records instead of naming the mode.`);
+    process.exit(1);
+  }
+}
 
 // ------------------------------------------------------------------- live --
 
