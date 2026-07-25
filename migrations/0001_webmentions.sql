@@ -8,6 +8,19 @@
 --   wrangler d1 create aadhar-social
 --   wrangler d1 execute aadhar-social --remote --file=migrations/0001_webmentions.sql
 --
+-- SETUP, in order. The SOCIAL_DB binding is deliberately NOT in wrangler.jsonc
+-- yet: a binding whose database_id does not exist fails a real deploy (a
+-- --dry-run does not catch it, which is how it reached CI once). So create the
+-- database FIRST, then paste this into the "d1_databases" array of BOTH
+-- wrangler.jsonc and wrangler.dev.jsonc with the real id:
+--
+--   { "binding": "SOCIAL_DB", "database_name": "aadhar-social",
+--     "database_id": "<the id wrangler d1 create printed>" }
+--
+-- Until that binding exists, /webmention accepts and verifies but drops the
+-- mention with a warning, and /inbox renders its honest "not connected" state.
+-- Nothing errors, and no reader sees a broken page.
+--
 -- Deliberately a SEPARATE database from aadhar-restore: that one is this site's
 -- own append-only deploy history, this one is moderated third-party content.
 
