@@ -229,6 +229,12 @@ Workers Builds is the only publisher, and CI holds a read-only token so it
 cannot become a second one. A write token in Actions would dissolve that, so the
 script exits 1 the moment it sees `CI`.
 
+**Deleting a record means emptying its `expect`, not deleting its entry.**
+Removing the block from `infra.json` makes the record undeclared, and `--prune`
+only ever touches declared names, so the record becomes invisible rather than
+removed. To actually delete one, keep the entry and set `"expect": []`, run
+`--prune --confirm`, then remove the entry once the record is gone.
+
 **Scope is DNS records whose `match` is `exact`, and nothing else.** That is the
 exact set where `infra.json` knows the whole desired value, so it is the only set
 recreatable from this file without inventing something. The plan lists what it
