@@ -61,6 +61,17 @@
 
     {
       "name": "aadhar.sh",
+      "type": "HTTPS",
+      "match": "contains",
+      "expect": ["alpn=h3,h2", "ech="],
+      "why": "The record that actually drives how a browser connects, and the DNS half of two zone toggles that have no other representation anywhere in this repo. `alpn=h3,h2` is HTTP/3 advertised in DNS (Speed > Settings > Protocol Optimization), and `ech=` is Encrypted ClientHello being on. Cloudflare generates and rotates this record; we do not author it, we assert its shape. Either toggle could be flipped in a dashboard and nothing in this tree would notice, which is the whole reason it is declared here.",
+      "gotcha": "Matched with `contains`, not `exact`, because Cloudflare owns the parts that move: the ech= key rotates and the ipv4/ipv6 hints change with the edge. Exact-matching would fail on every rotation; present-matching would miss the case that actually matters, which is a toggle silently dropping one parameter out of an otherwise healthy record.",
+      "pairs_with": "The edge tier's http3-on check. This asserts h3 is advertised in DNS; that one asserts the edge really answers with alt-svc h3. A client needs both, and either half can break alone.",
+      "esni": "There is deliberately no ESNI here. ESNI was the 2018 draft, it had known weaknesses, and Cloudflare removed support for it years ago. ECH is its replacement and is what `ech=` above refers to. If someone goes looking for an ESNI setting later, this is the note saying there is nothing to find."
+    },
+
+    {
+      "name": "aadhar.sh",
       "type": "MX",
       "match": "exact",
       "expect": [
