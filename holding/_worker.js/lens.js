@@ -316,11 +316,16 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 .lx-go { font-size:9.5pt; font-weight:bold; padding:3px 14px; color:oklch(20% 0 0); background:linear-gradient(180deg,#fdfdfd,#dcdcd2); border:1px solid; border-color:#fff oklch(45% 0 0) oklch(45% 0 0) #fff; border-radius:3px; }
 .lx-go:active { border-color:oklch(45% 0 0) #fff #fff oklch(45% 0 0); }
 
-/* example chips */
+/* example buttons. These are real <button>s, so they carry the same raised
+   bevel as .lx-go above (light top-left, dark bottom-right, inverted on
+   :active) rather than the flat 10px pill they used to be — which made them the
+   only clickable thing on this page that didn't look pressable. Lighter weight
+   than .lx-go on purpose: these are suggestions, that one is the action. */
 .lx-chips { display:flex; align-items:center; flex-wrap:wrap; gap:5px; margin:7px 0 9px; }
 .lx-chips-label { font-size:9pt; color:oklch(48% 0 0); }
-.lx-chip { font-size:8.8pt; padding:2px 8px; color:oklch(35% 0.06 255); background:oklch(97% 0.006 250); border:1px solid oklch(74% 0.03 250); border-radius:10px; }
-.lx-chip:hover { background:oklch(90% 0.04 250); }
+.lx-chip { font-size:8.8pt; padding:2px 9px; color:oklch(20% 0 0); background:linear-gradient(180deg,#fdfdfd,#e6e6dd); border:1px solid; border-color:#fff oklch(45% 0 0) oklch(45% 0 0) #fff; border-radius:3px; }
+.lx-chip:hover { background:linear-gradient(180deg,#fff,#efefe7); }
+.lx-chip:active { border-color:oklch(45% 0 0) #fff #fff oklch(45% 0 0); }
 
 /* toolbar: view toggle + lens tabs */
 .lx-toolbar { display:flex; align-items:flex-end; justify-content:space-between; gap:10px; flex-wrap:wrap; border-bottom:2px solid oklch(58% 0.10 250); margin-top:2px; }
@@ -494,7 +499,11 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 @media (max-width:560px){ .lx-cf-grid{ grid-template-columns:1fr; } .lx-stage{ grid-template-columns:74px 1fr; } .lx-readiness-cats{ grid-template-columns:1fr; } .lx-readiness-hero{ align-items:flex-start; } .lx-next-actions div{ grid-template-columns:1fr; gap:2px; } .lx-bot-matrix{ min-width:620px; } }
 
 /* state of the machine web — an XP dialog shown on nav-in, reopenable from the footer */
-.lx-sow-dialog { padding:0; margin:auto; width:min(660px,calc(100vw - 26px)); max-height:min(88vh,700px); color:oklch(28% 0.02 255); background:oklch(96% 0.014 250); border:1px solid oklch(44% 0.09 258); border-radius:6px 6px 3px 3px; box-shadow:0 10px 40px oklch(20% 0.05 258 / .42); overflow:hidden; display:flex; flex-direction:column; }
+/* the shadow is luna.css's modal idiom verbatim (#axp-run): a hard 4px offset
+   with NO blur, plus one tight ambient. XP dialogs really did drop a shadow,
+   but it was cast, not diffused — the single 0 10px 40px this replaced read as
+   a 2015 elevation surface. */
+.lx-sow-dialog { padding:0; margin:auto; width:min(660px,calc(100vw - 26px)); max-height:min(88vh,700px); color:oklch(28% 0.02 255); background:oklch(96% 0.014 250); border:1px solid oklch(44% 0.09 258); border-radius:6px 6px 3px 3px; box-shadow:4px 4px 0 rgba(0,30,160,.35),2px 3px 12px -2px oklch(30% 0.12 263 / .55); overflow:hidden; display:flex; flex-direction:column; }
 .lx-sow-dialog::backdrop { background:oklch(22% 0.04 258 / .38); }
 .lx-sow-tb { display:flex; align-items:center; gap:8px; flex:0 0 auto; padding:4px 5px 5px 10px; background:linear-gradient(180deg, oklch(62% 0.16 256), oklch(45% 0.19 260)); }
 .lx-sow-kicker { font:bold 10.5pt "Trebuchet MS",Verdana,sans-serif; color:#fff; text-shadow:0 1px 1px oklch(24% 0.1 260 / .6); }
