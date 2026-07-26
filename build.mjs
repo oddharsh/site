@@ -590,6 +590,10 @@ for (const [file, srcPath, marker] of SHELLS) {
     // the tag said so out loud. A content hash retires the ritual. Not in
     // run_worker_first, so /a/ is edge-direct and inherits the immutable rule.
     { attr: "src",  from: "/lens.js",  base: "lens", ext: "js",  witness: "_worker.js/lens.js" },
+    // the desktop icon sprite. Unlike the three above, every ref carries a
+    // #fragment (href="/icons.svg#pin-garage"), so `frag` widens the match to
+    // keep it. Its witness is the desktop partial, which is where all 12 live.
+    { attr: "href", from: "/icons.svg", base: "icons", ext: "svg", frag: true, witness: "_worker.js/lib/desktop.js" },
   ];
   const reps = [], hashedFor = {};
   for (const a of ASSETS) {
@@ -599,8 +603,10 @@ for (const [file, srcPath, marker] of SHELLS) {
     await writeFile(`${OUT}/holding${to}`, bytes);
     // one regex for quoted "x" AND backslash-escaped \"x\" (writing.js builds its
     // <head> as an escaped string); a second for minify-html's unquoted x.
-    reps.push({ re: new RegExp(`\\b${a.attr}=(\\\\?")${esc(a.from)}\\1`, "g"), sub: `${a.attr}=$1${to}$1` });
-    reps.push({ re: new RegExp(`\\b${a.attr}=${esc(a.from)}(?=[\\s>])`, "g"),  sub: `${a.attr}=${to}` });
+    const frag = a.frag ? "(#[\\w-]+)" : "";
+    const keep = a.frag ? "$2" : "";
+    reps.push({ re: new RegExp(`\\b${a.attr}=(\\\\?")${esc(a.from)}${frag}\\1`, "g"), sub: `${a.attr}=$1${to}${keep}$1` });
+    reps.push({ re: new RegExp(`\\b${a.attr}=${esc(a.from)}${a.frag ? "(#[\\w-]+)" : ""}(?=[\\s/>])`, "g"), sub: `${a.attr}=${to}${a.frag ? "$1" : ""}` });
     console.log(`hashed asset: ${a.from} -> ${to} (${bytes.length} bytes)`);
   }
 
