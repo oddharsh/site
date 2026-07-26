@@ -579,22 +579,31 @@ const HTML_MARKERS = [
 // minify only the served copy. The worker rewrites this response as a stream,
 // so doing this before ASSETS.fetch keeps the rewriter path allocation-free.
 {
-  // the STAGED copy, not holding/index.html: step 1b already injected the client
-  // edge into it, and reading the original here would drop that on the floor. The
-  // readable twin is written from the same staged bytes, so /index.src.html stays
-  // an honest rendering of what is actually served.
-  const src = await readFile(`${OUT}/holding/index.html`, "utf8");
+  // TWO sources on purpose, and the split is the whole point of the twin:
+  //   - `authored` is holding/index.html untouched. It is what /index.src.html
+  //     ships, and perf-budget.mjs asserts the twin is byte-identical to it.
+  //     "Readable source" means the file a human wrote, not a build artifact.
+  //   - `staged` is that file plus step 1b's injected client edge, and it is what
+  //     gets minified and served. Reading `authored` here instead would drop the
+  //     injection on the floor and quietly cost the homepage its first-paint
+  //     mirror (it did, for one commit).
+  // The twin is not lying by omission: the inline block says in so many words
+  // that the client edge is injected by build.mjs from luna.css.
+  const authored = await readFile("holding/index.html", "utf8");
+  const staged = await readFile(`${OUT}/holding/index.html`, "utf8");
   const srcPath = "/index.src.html";
   const banner = `<!-- minified at deploy; readable source: ${srcPath} -->\n`;
-  const inlineMinified = transformInlineHtmlBlocks(src);
+  const inlineMinified = transformInlineHtmlBlocks(staged);
   const body = minifyHtml.minify(Buffer.from(inlineMinified), HTML_MINIFY_CFG).toString();
   const min = banner + body;
   for (const [label, marker] of HTML_MARKERS) {
     if (!marker.test(min)) throw new Error("index.html: HTML minifier lost required marker " + label);
   }
-  await writeFile(`${OUT}/holding/${srcPath.slice(1)}`, src);
+  // the served copy must actually carry the injection; the twin must not
+  if (!/border:\s*6px solid #ece9d8/.test(min)) throw new Error("index.html: the minified homepage lost the injected client edge");
+  await writeFile(`${OUT}/holding/${srcPath.slice(1)}`, authored);
   await writeFile(`${OUT}/holding/index.html`, min);
-  console.log(`index.html: ${src.length} -> ${min.length} bytes (+ ${srcPath}; inline JS/CSS use existing minifiers)`);
+  console.log(`index.html: ${staged.length} -> ${min.length} bytes (+ ${srcPath}, byte-identical to source; inline JS/CSS use existing minifiers)`);
 }
 
 
