@@ -1037,6 +1037,41 @@ window.__horizonCaps = (function () {
       "text-fit": function () { return (CSS.supports("text-fit: scale-inline") || ("textFit" in document.documentElement.style)); },
       "css-random": function () { return CSS.supports("width: random(1px, 2px)"); },
       "speculation-rules": function () { return (typeof HTMLScriptElement !== "undefined" && HTMLScriptElement.supports && HTMLScriptElement.supports("speculationrules")); },
+      // ── added in the 2026-07-26 refresh ──
+      // No honest synchronous probe. img.sizes is an unvalidated reflected
+      // DOMString, so setting "auto" and reading it back returns "auto" in
+      // EVERY engine, supporting or not. Proving it properly means laying out
+      // a lazy <img> in a narrow box with straddling width descriptors and
+      // waiting on currentSrc, which is async and far too much machinery for a
+      // status chip. Same honest-false convention as jpeg-xl below.
+      "sizes-auto": function () { return (false); },
+      "gap-decorations": function () { return CSS.supports("row-rule: 1px solid red") || CSS.supports("row-rule-style: solid"); },
+      "border-shape": function () { return CSS.supports("border-shape: circle(50%)"); },
+      "heading-pseudo": function () { return CSS.supports("selector(:heading)"); },
+      "stretch-sizing": function () { return CSS.supports("width: stretch"); },
+      // Firefox 153 answers @supports for ::-webkit-scrollbar even though it
+      // only implements a subset, which is the whole point of the card: the
+      // probe tells you the selector parses, never that the styling lands.
+      "wk-scrollbar": function () { return CSS.supports("selector(::-webkit-scrollbar)"); },
+      "reference-target": function () { return (typeof ShadowRoot !== "undefined" && "referenceTarget" in ShadowRoot.prototype); },
+      "scoped-registries": function () {
+        if (typeof CustomElementRegistry === "undefined") return false;
+        try { return !!new CustomElementRegistry(); } catch (e) { return false; }
+      },
+      "wasm-jspi": function () { return (typeof WebAssembly !== "undefined" && typeof WebAssembly.Suspending === "function"); },
+      // No synchronous probe exists for either of these, so they follow the
+      // same honest-false convention as jpeg-xl and route-matching above: a
+      // bad import-attribute type rejects the module load asynchronously, and
+      // an ML-DSA key generation is a Promise. Better a chip that reads "no"
+      // than a probe that pretends to know. The card text carries the status.
+      "import-text": function () { return (false); },
+      "pq-webcrypto": function () { return (false); },
+      "cpu-performance": function () { return ("cpuPerformance" in navigator); },
+      "container-timing": function () {
+        return (typeof PerformanceObserver !== "undefined" &&
+                Array.isArray(PerformanceObserver.supportedEntryTypes) &&
+                PerformanceObserver.supportedEntryTypes.indexOf("container") !== -1);
+      },
     };
   var state = {};
   Object.keys(checks).forEach(function (k) { state[k] = sup(checks[k]); });
@@ -1078,6 +1113,16 @@ window.__horizonCaps = (function () {
       chips that quote Safari&apos;s team directly from
       <a href="https://webkit.org/standards-positions/" rel="external">webkit.org/standards-positions</a>,
       so Safari answers &quot;will Safari ever do this&quot; instead of me inferring it.
+    </p>
+    <p class="note">
+      <strong>Last swept 2026-07-26</strong>, against Chrome&nbsp;149&ndash;152, Safari&nbsp;27
+      beta (WWDC26), and Firefox&nbsp;152&ndash;153. A page like this rots in two directions
+      and only one of them is obvious: features arrive, and features I already wrote up
+      quietly change status underneath me. This sweep moved four cards
+      (<code>InstallEvent.addRoutes()</code>, compression dictionaries,
+      <code>appearance: base-select</code>, Temporal) and demoted one of them off
+      &quot;shipped on the site&quot; entirely, which is the more interesting half. Dates
+      here are when I checked, never when I guessed.
     </p>
 
     <div class="cap-strip" id="caps" aria-label="feature support in your browser"></div>
@@ -1511,7 +1556,7 @@ pointerout   -&gt; hidePopover()
     <section class="demo" data-cap="base-select">
       <h2>
         <span>appearance: base-select <span class="mono">/ customizable &lt;select&gt;</span></span>
-        <span class="stat chrome">Chrome 135 &middot; Safari 27 beta &middot; FF flag</span>
+        <span class="stat cross">Chrome 135 &middot; Safari 27 beta &middot; FF 153 parser</span>
       </h2>
       <p class="note">
         For two decades the <code>&lt;select&gt;</code> popup has been a sealed
@@ -1547,7 +1592,13 @@ pointerout   -&gt; hidePopover()
         Chrome shipped it (~m135) and <strong>Safari&nbsp;27</strong> now ships it
         too (<a href="https://github.com/WebKit/standards-positions/issues/386" rel="external">WebKit #386</a>).
         Firefox still renders the native widget, so keep it progressive: wrap the
-        enhancement in <code>@supports (appearance: base-select)</code>. WebKit&apos;s
+        enhancement in <code>@supports (appearance: base-select)</code>. Gecko is moving
+        though, and the tell is a parser change: Firefox&nbsp;153 now parses <em>all</em>
+        nested elements inside a <code>&lt;select&gt;</code> into the DOM rather than
+        discarding everything that is not an <code>&lt;option&gt;</code>,
+        <code>&lt;optgroup&gt;</code>, or <code>&lt;hr&gt;</code>. That is groundwork with
+        no user-visible effect, and it is exactly what shipping this later requires.
+        WebKit&apos;s
         <strong>golden rule</strong>: always give every <code>&lt;option&gt;</code>
         real text content or an accessible text attribute, because a base-select
         stays a genuine native <code>&lt;select&gt;</code> underneath (keyboard,
@@ -1987,7 +2038,7 @@ ctx.drawElementImage(el, 0, 0);            // &lt;- the new primitive (el has la
     <section class="demo" data-cap="jpeg-xl">
       <h2>
         <span>JPEG XL <span class="mono">image/jxl</span></span>
-        <span class="stat contested">Safari &middot; Chrome 145 flag &middot; Firefox 152 flag</span>
+        <span class="stat contested">Safari &middot; Chrome 145 flag &middot; Firefox 153 Nightly</span>
       </h2>
       <p class="note">
         The format the photo pipeline actually wants: smaller than AVIF at the
@@ -2068,8 +2119,9 @@ cjxl -q 90 -e 7 &lt;stem&gt;.png &lt;stem&gt;.jxl</pre>
       <p class="unsupported">
         Nothing to decode live regardless of your browser, this card is a
         static mock by design. To actually <em>view</em> a <code>.jxl</code>
-        today you need Safari 16.4+; in Chrome&nbsp;145+ or Firefox&nbsp;152+ enable
-        <code>chrome://flags#enable-jxl-image-format</code> (or the Firefox Labs pref).
+        today you need Safari 16.4+; in Chrome&nbsp;145+ enable
+        <code>chrome://flags#enable-jxl-image-format</code>, and in Firefox&nbsp;153
+        the <code>image.jxl.enabled</code> pref is on by default in Nightly.
       </p>
     </section>
 
@@ -2736,14 +2788,18 @@ myButton.onclick = async () =&gt; {
     <section class="demo" data-cap="css-if">
       <h2>
         <span>if() &amp; sibling-index() <span class="mono">/ CSS Values 5</span></span>
-        <span class="stat trial">Chrome 137+ &middot; flag</span>
+        <span class="stat trial">Chrome 137+ &middot; FF 153 flag</span>
       </h2>
       <p class="note">
         Two bleeding-edge CSS primitives: <code>if()</code> for inline conditionals
         (<code>style()</code>/<code>media()</code> queries as values) and
         <code>sibling-index()</code>, which yields an element&apos;s position among its
         siblings, so a staggered animation needs <em>no</em> per-item variables.
-        Each row below delays by <code>sibling-index() &times; 90ms</code> (reload to replay):
+        The two are drifting apart in status: Chrome ships the sibling functions default-on
+        and keeps <code>if()</code> experimental, and Firefox&nbsp;153 added
+        <code>sibling-index()</code> / <code>sibling-count()</code> behind
+        <code>layout.css.tree-counting-functions.enabled</code> with no <code>if()</code> in
+        sight. Each row below delays by <code>sibling-index() &times; 90ms</code> (reload to replay):
       </p>
       <ul class="si-list"><li>row one</li><li>row two</li><li>row three</li><li>row four</li><li>row five</li></ul>
       <p class="replaces">
@@ -2821,18 +2877,27 @@ myButton.onclick = async () =&gt; {
     <section class="demo shipped" data-cap="temporal">
       <h2>
         <span>Temporal <span class="mono">/ the date/time rewrite</span></span>
-        <span class="stat cross">Chrome 144 &middot; FF 139 &middot; Safari TP</span>
+        <span class="stat cross">ES2026 &middot; Chrome 144 &middot; FF 139 &middot; no Safari</span>
       </h2>
       <p class="ship-tag">✓ shipped on the site</p>
       <p class="note">
         The long-awaited replacement for <code>Date</code>: immutable objects,
-        first-class time zones and calendars, no more month-zero footguns. Live
-        output from <code>Temporal.Now.zonedDateTimeISO()</code> in your browser:
+        first-class time zones and calendars, no more month-zero footguns. It reached
+        <strong>TC39 stage&nbsp;4</strong> in March&nbsp;2026, so it is part of the
+        ECMAScript&nbsp;2026 language rather than a proposal. Shipping is a separate
+        question from standardising, and Safari is the reminder: Blink and Gecko both
+        shipped it in spring&nbsp;2026, Safari&nbsp;27 does <em>not</em> include it, and it
+        remains flag-gated in Technology Preview. Live output from
+        <code>Temporal.Now.zonedDateTimeISO()</code> in your browser:
       </p>
       <div class="tmp-out" id="tmp-out">checking for Temporal&hellip;</div>
       <p class="replaces">
         On the site: photo &quot;uploaded&quot; stamps and serendipity event times become
-        zone-correct and DST-safe without a date library.
+        zone-correct and DST-safe without a date library. This is the one card on the page
+        that breaks the two-engine rule on purpose, and the reason it gets away with it is
+        that every use is a progressive enhancement over a working <code>Date</code> path:
+        the taskbar clock and the Notepad F5 stamp both try <code>Temporal</code> and fall
+        back. Safari visitors get the fallback and notice nothing.
       </p>
       <p class="unsupported">Your browser doesn&apos;t expose <code>Temporal</code> yet, the box above says so.</p>
     </section>
@@ -3025,6 +3090,299 @@ myButton.onclick = async () =&gt; {
       <p class="unsupported">Your browser doesn&apos;t support <code>random()</code> yet, so a fixed fallback value is used.</p>
     </section>
 
+    <!-- ═════════════════════════════════════════════════════════════════
+         Added in the 2026-07-26 refresh. Everything below this marker came
+         out of Chrome 149-152, Safari 27 beta (WWDC26), and Firefox 152-153.
+         ═════════════════════════════════════════════════════════════════ -->
+
+    <!-- ───────────────────── img sizes=auto ───────────────────── -->
+    <section class="demo" data-cap="sizes-auto">
+      <h2>
+        <span>sizes=&quot;auto&quot; <span class="mono">on lazy images</span></span>
+        <span class="stat cross">Chrome 126 &middot; FF 150 &middot; Safari 27 beta</span>
+      </h2>
+      <p class="note">
+        A responsive-images <code>sizes</code> attribute is normally a promise you
+        make at authoring time: <em>this image will render about this wide</em>, written
+        as media queries the browser trusts before layout exists.
+        <code>sizes="auto"</code> deletes the promise. Because a
+        <code>loading="lazy"</code> image is fetched after layout has already run, the
+        browser knows the tile&apos;s real width and picks from <code>srcset</code>
+        against the measured box. The attribute only works on lazy images, which is
+        the constraint that makes it sound rather than a shortcut.
+      </p>
+      <p class="replaces">
+        On the site: the photo grid picks its tier by <em>viewport</em> today, a
+        <code>&lt;source media="(max-width: 560px)"&gt;</code> that swaps the 600px square
+        for the 400px mobile AVIF. That breakpoint is a hand-guess about how wide a tile
+        ends up in a 3&times;3 contact sheet, and it is wrong in every window the guess
+        did not anticipate: a resized desktop window, the Run palette&apos;s photo
+        preview, a tablet in portrait. Width descriptors plus <code>sizes="auto"</code>
+        would replace the guess with the measurement. Two tiers bounds the prize (there
+        are only so many wrong answers available), so this is accuracy rather than
+        bytes. It degrades perfectly: an engine that ignores <code>sizes</code> falls
+        back to the <code>&lt;source&gt;</code> ladder already there, which is why this
+        is the closest thing on this page to a graduation candidate.
+      </p>
+      <p class="unsupported">
+        The chip above always reads &quot;no,&quot; and that is a limitation of the probe
+        rather than a claim about your browser. <code>img.sizes</code> is an unvalidated
+        reflected string, so assigning <code>"auto"</code> and reading it back returns
+        <code>"auto"</code> everywhere; an honest test has to lay out a lazy image and wait
+        on <code>currentSrc</code>, which is more machinery than a chip deserves. Chrome
+        126+ and Firefox 150+ have it; Safari 27 beta adds it.
+      </p>
+    </section>
+
+    <!-- ───────────────────── gap decorations ───────────────────── -->
+    <section class="demo" data-cap="gap-decorations">
+      <h2>
+        <span>Gap decorations <span class="mono">column-rule / row-rule</span></span>
+        <span class="stat chrome">Chrome 149 &middot; Safari TP &middot; FF no</span>
+      </h2>
+      <p class="note">
+        <code>column-rule</code> has drawn a line between multicol columns since forever.
+        Gap decorations extend it to grid and flex, and add <code>row-rule</code> for the
+        horizontal gaps, so a separator between items stops requiring a border on each
+        item or an empty pseudo-element per seam. The rules paint in the gap that already
+        exists, so nothing about the layout moves. The grid below draws both:
+      </p>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;column-rule:1px solid oklch(62% 0.02 258);row-rule:1px solid oklch(62% 0.02 258);margin-top:8px;font:9pt Tahoma,sans-serif;text-align:center">
+        <span>IMG_0421</span><span>IMG_0422</span><span>IMG_0423</span>
+        <span>IMG_0424</span><span>IMG_0425</span><span>IMG_0426</span>
+      </div>
+      <p class="replaces">
+        On the site: the homepage photo grid is a literal contact sheet, and a contact
+        sheet has seams. Those seams are per-tile frames today, which means nine borders
+        drawing what is really four lines, and it means the outer edge of the sheet is
+        drawn by the same rule that draws the inside. <code>row-rule</code> and
+        <code>column-rule</code> separate the two ideas: the frame belongs to the photo,
+        the seam belongs to the sheet. Chrome-only for now, so the per-tile borders stay.
+      </p>
+      <p class="unsupported">Your browser doesn&apos;t support gap decorations, so the grid above shows no seams.</p>
+    </section>
+
+    <!-- ───────────────────── border-shape ───────────────────── -->
+    <section class="demo" data-cap="border-shape">
+      <h2>
+        <span>border-shape <span class="mono">non-rectangular borders</span></span>
+        <span class="stat chrome">Chrome 147 &middot; Safari/FF no</span>
+      </h2>
+      <p class="note">
+        <code>corner-shape</code> (above) bends the corners of a rectangle.
+        <code>border-shape</code> replaces the rectangle: it sets the geometry of the
+        border box itself, so the border, the border image, the focus ring, and the
+        shadow all follow an arbitrary <code>shape()</code>, <code>polygon()</code>, or
+        <code>circle()</code>. That is the part <code>clip-path</code> never did.
+        Clipping cuts the box and takes the border with it, leaving you to fake a stroke;
+        <code>border-shape</code> keeps a real border and clips only the inside.
+      </p>
+      <p class="replaces">
+        On the site: honestly, close to nothing, and that is worth saying out loud.
+        Luna is rectilinear on purpose. A window that is not a rectangle is not a window,
+        it is a skin, and the whole point of the resto-mod is that the chrome stays
+        period-correct. Where it could matter is the focus ring: the site&apos;s bevels
+        are stacked <code>box-shadow</code>s, and an outline around a bevelled control
+        currently traces the box rather than the bevel. Filed next to
+        <code>corner-shape</code> as the other half of that spec, and parked.
+      </p>
+      <p class="unsupported">Your browser doesn&apos;t support <code>border-shape</code> yet.</p>
+    </section>
+
+    <!-- ───────────────────── :heading ───────────────────── -->
+    <section class="demo" data-cap="heading-pseudo">
+      <h2>
+        <span>:heading <span class="mono">and :heading()</span></span>
+        <span class="stat trial">Safari 27 beta &middot; FF 142 flag &middot; Chrome no</span>
+      </h2>
+      <p class="note">
+        <code>:heading</code> matches any of <code>h1</code> through <code>h6</code>, and
+        <code>:heading(2, 3)</code> matches the levels you name. Selectors&nbsp;5, shipped
+        first in Safari&nbsp;27 beta, behind <code>layout.css.heading-selector.enabled</code>
+        in Firefox, absent in Chrome.
+      </p>
+      <p class="replaces">
+        On the site: every garage page opens its stylesheet with some variant of
+        <code>h1, h2, h3</code> repeated across a handful of rules, because Luna styles
+        headings as a family and then varies the size. On a page whose CSS ships inline
+        in the HTML, that repetition is real bytes on every request. It is a small win
+        per rule and a boring one, which is exactly the kind that compounds across
+        fifteen garage pages. Waiting on a second engine.
+      </p>
+      <p class="unsupported">Your browser doesn&apos;t support <code>:heading</code>; the selector never matches.</p>
+    </section>
+
+    <!-- ───────────────────── width: stretch ───────────────────── -->
+    <section class="demo" data-cap="stretch-sizing">
+      <h2>
+        <span>width: stretch <span class="mono">sizing keyword</span></span>
+        <span class="stat chrome">Chrome &middot; Safari 27 beta &middot; FF prefixed</span>
+      </h2>
+      <p class="note">
+        <code>width: 100%</code> resolves against the containing block and then adds your
+        margins on top, which is why a full-width element with side margins overflows.
+        <code>stretch</code> fills the available space and applies the result to the
+        <em>margin</em> box, so the margins come out of the width instead of adding to it.
+        It standardises two old prefixes that did the same job:
+        <code>-webkit-fill-available</code> and <code>-moz-available</code>. Chromium
+        shipped it first, Safari&nbsp;27 beta unprefixes it, Firefox still answers only to
+        <code>-moz-available</code>.
+      </p>
+      <p class="replaces">
+        On the site: the <code>calc(100% - 2 * var(--pad))</code> pattern shows up wherever
+        a pane has to fill its window and keep its inset, and every one of those is a
+        subtraction the browser could do. Once Firefox unprefixes, this collapses a
+        family of arithmetic into one keyword.
+      </p>
+      <p class="unsupported">Your browser doesn&apos;t support the unprefixed <code>stretch</code> keyword.</p>
+    </section>
+
+    <!-- ───────────────────── ::-webkit-scrollbar in Firefox ───────────────────── -->
+    <section class="demo" data-cap="wk-scrollbar">
+      <h2>
+        <span>::-webkit-scrollbar <span class="mono">the compat surrender</span></span>
+        <span class="stat trial">Chromium &middot; Safari &middot; FF 153 subset</span>
+      </h2>
+      <p class="note">
+        Firefox&nbsp;153 began implementing a limited subset of
+        <code>::-webkit-scrollbar</code>. Not because it is a good API (it is a vendor
+        prefix from 2009 that never became a standard), but because enough of the web
+        styles scrollbars through it that ignoring it was the bigger compat problem.
+        The subset is deliberately narrow: a rule with a non-zero
+        <code>width</code>/<code>height</code> disables overlay scrollbars, and
+        <code>display: none</code> behaves like <code>scrollbar-width: none</code>. The
+        standard <code>scrollbar-width</code> and <code>scrollbar-color</code> remain
+        the actual answer.
+      </p>
+      <p class="replaces">
+        On the site: <code>nav.js</code> paints a custom XP scrollbar through the
+        <code>::-webkit-scrollbar</code> family, since a Luna scrollbar needs a raised
+        3D thumb and stepper arrows that <code>scrollbar-color</code> cannot express.
+        Firefox visitors get the standards-track properties and a plain scrollbar. This
+        change does <em>not</em> fix that, and the card is here mostly as a warning about
+        its own chip: <code>@supports</code> now answers yes in Firefox for a selector
+        whose styling still mostly does not land, so feature-detecting it tells you the
+        selector parsed and nothing about whether the thumb rendered.
+      </p>
+      <p class="unsupported">Your browser doesn&apos;t recognise the <code>::-webkit-scrollbar</code> selector at all.</p>
+    </section>
+
+    <!-- ───────────────────── Reference Target ───────────────────── -->
+    <section class="demo" data-cap="reference-target">
+      <h2>
+        <span>Reference Target <span class="mono">cross-root ARIA</span></span>
+        <span class="stat chrome">Chrome 151 &middot; Safari/FF no</span>
+      </h2>
+      <p class="note">
+        The oldest real hole in shadow DOM: an ID reference cannot cross the shadow
+        boundary. A <code>&lt;label for="x"&gt;</code> outside a component can never
+        reach the <code>&lt;input id="x"&gt;</code> the component hides, and the same
+        breaks <code>aria-labelledby</code>, <code>aria-controls</code>,
+        <code>popovertarget</code>, and <code>commandfor</code>. The usual escape is to
+        give up encapsulation. Reference Target lets the component nominate one inner
+        element as the thing outside references resolve to, declaratively via
+        <code>shadowrootreferencetarget</code> on the template or imperatively via
+        <code>ShadowRoot.referenceTarget</code>, so the reference lands and the internals
+        stay private.
+      </p>
+      <p class="replaces">
+        On the site: this is the missing piece under the declarative-shadow-DOM card
+        above. An <code>&lt;xp-window&gt;</code> that encapsulates its own title bar is
+        appealing right up to the moment something outside it needs to label or control
+        that window, and today the answer is to stop encapsulating. It is Chrome-only and
+        the accessibility of the current markup is already fine, so this stays a
+        prerequisite I am watching rather than a change I want.
+      </p>
+      <p class="unsupported">No <code>referenceTarget</code> on <code>ShadowRoot</code> here.</p>
+    </section>
+
+    <!-- ───────────────────── scoped custom element registries ───────────────────── -->
+    <section class="demo" data-cap="scoped-registries">
+      <h2>
+        <span>Scoped custom element registries</span>
+        <span class="stat cross">Chrome 146 &middot; Safari 26 &middot; FF no</span>
+      </h2>
+      <p class="note">
+        <code>customElements.define()</code> writes into one global map keyed by tag name,
+        so two copies of a component library on one page fight over
+        <code>&lt;my-button&gt;</code> and the loser throws. <code>new
+        CustomElementRegistry()</code> makes a registry you hand to
+        <code>attachShadow({ registry })</code>, so definitions apply to that subtree
+        alone and identical tag names coexist. In two engines already, which is further
+        along than most of this page; Firefox has not shipped it. (One sharp edge: a
+        scoped registry rejects the <code>extends</code> option, so customized built-ins
+        stay global.)
+      </p>
+      <p class="replaces">
+        On the site: nothing today, because the site defines no custom elements at all,
+        and that is the interesting part. It is on this page as a precondition. The
+        reason the XP chrome is server-rendered markup plus one shared
+        <code>nav.js</code> instead of a component library is partly that web components
+        have historically been a worse deal than the thing they replace. Scoped
+        registries and Reference Target are the two repairs that would change that
+        arithmetic, and they are both landing at once. Worth knowing before the next
+        rewrite tempts anyone.
+      </p>
+      <p class="unsupported">No <code>CustomElementRegistry</code> constructor here.</p>
+    </section>
+
+    <!-- ───────────────────── Wasm JSPI ───────────────────── -->
+    <section class="demo" data-cap="wasm-jspi">
+      <h2>
+        <span>WebAssembly JSPI <span class="mono">JS Promise Integration</span></span>
+        <span class="stat cross">Chrome &middot; FF 153 &middot; Safari 27 beta</span>
+      </h2>
+      <p class="note">
+        Wasm code is synchronous and the web is not, so any Wasm module that wants to
+        <code>fetch</code> has had to be rewritten inside out (Emscripten&apos;s
+        Asyncify) at real cost in size and speed. JSPI lets a Wasm stack
+        <em>suspend</em> on a JavaScript Promise and resume when it settles:
+        <code>WebAssembly.Suspending</code> wraps the async import,
+        <code>WebAssembly.promising</code> wraps the export, and the C code in between
+        keeps its blocking call. Firefox&nbsp;153 turned it on by default and
+        Safari&nbsp;27 beta implements it, so this went cross-engine in about six weeks
+        and is an Interop&nbsp;2026 focus area.
+      </p>
+      <p class="replaces">
+        On the site: no Wasm ships here, so this changes nothing directly. It matters
+        one level down. The photo pipeline&apos;s encoders (<code>zenc</code> wrapping
+        zenjpeg, <code>avifenc</code>) are native binaries that run on my machine at
+        build time; the reason they are not a browser-side tool is the cost of making a
+        synchronous codec behave in an async page. JSPI is what would make a
+        &quot;drop a HIF here and watch it encode&quot; page cheap to build. Filed
+        against the encoding study rather than the homepage.
+      </p>
+      <p class="unsupported">No <code>WebAssembly.Suspending</code> here, so JSPI is unavailable.</p>
+    </section>
+
+    <!-- ───────────────────── text module imports ───────────────────── -->
+    <section class="demo" data-cap="import-text">
+      <h2>
+        <span>Text module imports <span class="mono">with { type: &quot;text&quot; }</span></span>
+        <span class="stat trial">TC39 stage 3 &middot; Chrome &middot; FF 153 flag</span>
+      </h2>
+      <p class="note">
+        Import attributes gave JSON modules a safe syntax
+        (<code>with { type: "json" }</code>); the text proposal adds the other obvious
+        one. <code>import banner from "./banner.txt" with { type: "text" }</code> hands
+        you the file as a string, with the type asserted at load time so a server that
+        answers with something else fails the import instead of executing it. That
+        assertion is the entire security argument for import attributes, and it is why
+        this is a language feature rather than a bundler trick. Firefox&nbsp;153 has it
+        behind <code>javascript.options.experimental.import_text</code>.
+      </p>
+      <p class="replaces">
+        On the site: <code>/writing</code> is plain <code>.txt</code> files plus a
+        <code>posts.json</code> registry, and the worker reads each one and seeds it into
+        a Notepad <code>&lt;textarea&gt;</code>. Today that is a fetch and a string. As a
+        text module it would be an import the bundler can see, which matters because the
+        worker is bundled at deploy: a post would become a build-time dependency instead
+        of a runtime read, and a missing file would fail the deploy rather than the
+        request. Tempting. Also a real coupling change, so it waits until it is not
+        flag-gated.
+      </p>
+    </section>
+
     <!-- ───────────────────── Element.moveBefore() ───────────────────── -->
     <section class="demo" data-cap="move-before">
       <h2>
@@ -3156,23 +3514,28 @@ myButton.onclick = async () =&gt; {
     </section>
 
     <!-- ───────────────────── Service Worker static routing ───────────────────── -->
-    <section class="demo shipped" data-cap="sw-static-routing">
+    <section class="demo" data-cap="sw-static-routing">
       <h2>
         <span>SW static routing <span class="mono">InstallEvent.addRoutes()</span></span>
-        <span class="stat chrome">Chrome &middot; Gecko positive &middot; WebKit no-signal</span>
+        <span class="stat cross">Chrome &middot; Safari 27 beta &middot; Gecko positive</span>
       </h2>
-      <p class="ship-tag">✓ shipped on the site</p>
       <p class="note">
         Declare routing rules at install time so the browser can <em>skip booting the service
         worker entirely</em> for paths that always go the same place (straight to network or
-        straight to cache), shaving the SW startup cost off those requests.
+        straight to cache), shaving the SW startup cost off those requests. Safari&nbsp;27 beta
+        implements it, which moves this from Chrome-only to two engines.
       </p>
       <p class="replaces">
-        On the site: live now. <code>sw.js</code> declares static routes that send
-        <code>/</code>, the crawlers, and the JSON APIs straight to the network without booting
-        the worker (they were network-only anyway, so the SW was waking just to no-op). Same
-        caching policy as before, minus the boot latency. The biggest win lands on <code>/</code>,
-        which is no-store + hit every visit.
+        On the site: <strong>it used to be, and the feature outlived the thing it optimised.</strong>
+        <code>sw.js</code> did declare static routes sending <code>/</code>, the crawlers, and
+        the JSON APIs straight to network without booting the worker. Then the service worker
+        itself retired in build&nbsp;v136 (July&nbsp;2026): immutable content-addressed assets,
+        bfcache, and speculation-rules prerender already made repeat visits instant, so the
+        SW&apos;s remaining job was insurance priced at a cache-version ritual per deploy plus a
+        second poisonable cache. <code>sw.js</code> is now a fifteen-line unregister stub, and
+        the routes went with it. Worth keeping the card, because the lesson is the useful part:
+        static routing made a service worker cheaper to keep, and the better answer turned out
+        to be not having one. A feature that optimises a layer is not an argument for the layer.
       </p>
       <p class="unsupported">No <code>addRoutes()</code> on <code>InstallEvent</code> here.</p>
     </section>
@@ -3208,6 +3571,10 @@ myButton.onclick = async () =&gt; {
         links to prefetch or fully <em>prerender</em> ahead of the click, so the next page is
         already painted by the time you navigate: the trick behind McMaster-Carr feeling
         instant.
+        <strong>Chrome&nbsp;151</strong> adds a <code>form_submission</code> field to prerender
+        rules: an ordinary form submission could never activate a prerender, because it carries
+        extra navigation state the speculation was not prepared for, so a GET search form had to
+        be declared as such up front. GET only.
       </p>
       <p class="replaces">
         On the site: live already. The homepage and garage pages prerender internal links
@@ -3225,7 +3592,7 @@ myButton.onclick = async () =&gt; {
     <section class="demo" data-cap="compression-dict">
       <h2>
         <span>Compression dictionaries <span class="mono">dcb / dcz</span></span>
-        <span class="stat chrome">Chrome 130 &middot; Firefox building &middot; transport-level</span>
+        <span class="stat cross">Chrome 130 &middot; Firefox 153 &middot; transport-level</span>
       </h2>
       <p class="note">
         Use a file you&apos;ve already downloaded (or a shipped static dictionary) as the
@@ -3235,6 +3602,8 @@ myButton.onclick = async () =&gt; {
         it negotiates entirely through <code>Accept-Encoding: dcb/dcz</code> +
         <code>Use-As-Dictionary</code> / <code>Available-Dictionary</code> headers
         (Chrome/Edge&nbsp;130+), so there&apos;s no chip above.
+        <strong>Firefox&nbsp;153</strong> (July&nbsp;2026) enabled it by rollout, so this is
+        now two engines rather than one and a plan.
       </p>
       <p class="replaces">
         On the site: marginal, honestly. The homepage is ~22&nbsp;KB brotli and
@@ -3322,6 +3691,117 @@ myButton.onclick = async () =&gt; {
       </p>
       <p class="unsupported">No <code>navigator.gpu</code> in this browser.</p>
     </section>
+
+    <!-- ───────────────────── post-quantum WebCrypto ───────────────────── -->
+    <section class="demo" data-cap="pq-webcrypto">
+      <h2>
+        <span>Post-quantum WebCrypto <span class="mono">ML-KEM &middot; ML-DSA &middot; X-Wing</span></span>
+        <span class="stat trial">Origin trial Ch151 &middot; not shipped</span>
+      </h2>
+      <p class="note">
+        The Web Cryptography API is getting the NIST post-quantum primitives natively:
+        <strong>ML-KEM</strong> (key encapsulation, formerly Kyber),
+        <strong>ML-DSA</strong> (signatures, formerly Dilithium), the
+        <strong>X-Wing</strong> hybrid key exchange, and ChaCha20-Poly1305 alongside them.
+        Origin trial in Chrome&nbsp;151. The two halves carry very different urgency, and
+        conflating them is the usual mistake. Key exchange is urgent because of
+        harvest-now-decrypt-later: traffic recorded today is decryptable the day a
+        cryptographically relevant quantum computer exists, so hybrid key agreement had to
+        arrive early. Signatures are not, because a signature only has to resist forgery
+        during the window it is trusted in, and nobody can retroactively forge one.
+      </p>
+      <p class="replaces">
+        On the site: AadharshBot signs its outbound requests with <strong>Ed25519</strong>
+        per RFC&nbsp;9421, and publishes the public half as a JWKS at
+        <a href="/.well-known/http-message-signatures-directory">/.well-known/http-message-signatures-directory</a>.
+        ML-DSA is the thing that eventually replaces that key. Eventually is doing real
+        work in that sentence: a bot signature covers one request and expires in seconds,
+        which puts it squarely in the &quot;not urgent&quot; column above, and the Web Bot
+        Auth draft pins Ed25519 today, so switching unilaterally would produce a signature
+        no verifier recognises. The half that already affects visitors is the key exchange,
+        and it is not mine to ship: TLS terminates at Cloudflare&apos;s edge, which has
+        been negotiating hybrid post-quantum key agreement for a while now.
+        <a href="/whoareyou">/whoareyou</a> prints the <code>kex</code> field from
+        <code>/cdn-cgi/trace</code>, so you can read what your own connection actually
+        negotiated rather than take my word for it.
+      </p>
+    </section>
+
+    <!-- ───────────────────── navigator.cpuPerformance ───────────────────── -->
+    <section class="demo" data-cap="cpu-performance">
+      <h2>
+        <span>navigator.cpuPerformance <span class="mono">device tier</span></span>
+        <span class="stat chrome">Chrome 152 &middot; Safari/FF no</span>
+      </h2>
+      <p class="note">
+        A read-only integer from 1 (weak) to 4 (fast), with 0 meaning the browser could not
+        classify the device. It exists because the alternatives are worse: sites currently
+        infer device class from <code>hardwareConcurrency</code>, from the user-agent
+        string, or from timing a synthetic benchmark during page load, and all three are
+        some mix of inaccurate and user-hostile. Coarse buckets also leak far less
+        fingerprinting surface than a core count. Chrome&nbsp;152; no signal from the other
+        engines, and a permission-free hardware read is exactly the kind of thing they tend
+        to push back on. Your device reports:
+      </p>
+      <p><output id="cpu-out" class="mono" style="display:block;margin-top:6px;font:9pt 'Courier New',monospace">reading&hellip;</output></p>
+      <p class="replaces">
+        On the site: the site already makes this judgement, just blindly. The tooltip layer
+        toggles <code>will-change: transform</code> on and off around the hover lifecycle
+        because leaving a compositor layer allocated measurably hurts Low Power mode and
+        variable-refresh displays, and the <code>@property</code> gradient on this very page
+        pauses itself when off-screen because it repaints every frame. Those are both
+        guesses at a device tier, applied to every visitor. A real tier would let the
+        expensive effects stay off on a 1 and stop apologising on a 4. Single-engine, and
+        <code>prefers-reduced-motion</code> plus the existing IntersectionObserver already
+        cover the honest majority of the win, so this parks.
+      </p>
+      <p class="unsupported">Your browser doesn&apos;t expose <code>navigator.cpuPerformance</code>.</p>
+    </section>
+
+    <!-- ───────────────────── Container Timing ───────────────────── -->
+    <section class="demo" data-cap="container-timing">
+      <h2>
+        <span>Container Timing <span class="mono">containertiming attribute</span></span>
+        <span class="stat trial">Chrome flag &middot; WICG</span>
+      </h2>
+      <p class="note">
+        Largest Contentful Paint tells you when the single biggest element painted, which is
+        a page-level number that a component cannot ask about. Container Timing lets you mark
+        a subtree with <code>containertiming</code> and get a
+        <code>PerformanceObserver</code> entry when <em>that section</em> finishes its
+        initial paint, the way <code>elementtiming</code> works for one element. Behind the
+        experimental flag in Chrome; a WICG proposal rather than a shipped feature.
+      </p>
+      <p class="replaces">
+        On the site: the homepage&apos;s LCP is a photo tile, so LCP is already roughly
+        &quot;when did the grid start.&quot; What it cannot answer is when the grid
+        <em>finished</em>, and that is the number that matters here, because the worker
+        server-renders twelve tiles into the HTML and the interesting failure is nine of
+        them arriving fast while three straggle. That distinction is invisible to LCP and
+        would be one <code>containertiming</code> attribute on
+        <code>&lt;section class="photos"&gt;</code>. The same applies to the now-playing
+        list, which is the other server-rendered chunk. Genuinely useful, genuinely
+        single-engine, and measurement rather than user-facing behaviour, so it costs
+        nothing to wait.
+      </p>
+      <p class="unsupported">No <code>container</code> entry type in this browser&apos;s <code>PerformanceObserver</code>.</p>
+    </section>
+
+    <script>
+      // cpuPerformance readout: a plain synchronous property read, so no probe
+      // dance. 0 means the browser has the API but declined to classify.
+      (function () {
+        var out = document.getElementById("cpu-out");
+        if (!out) return;
+        if (!("cpuPerformance" in navigator)) {
+          out.textContent = "navigator.cpuPerformance is not available in this browser.";
+          return;
+        }
+        var t = navigator.cpuPerformance;
+        var names = { 0: "unknown (the browser declined to classify)", 1: "1 · low", 2: "2 · mid", 3: "3 · high", 4: "4 · fastest" };
+        out.textContent = "navigator.cpuPerformance = " + t + "  →  " + (names[t] || "unrecognised tier");
+      })();
+    </script>
 
     <script>
       // moveBefore reparent demo + Local Font Access enumeration.
@@ -3484,7 +3964,7 @@ myButton.onclick = async () =&gt; {
 
     <footer>
       <p>&larr; back to the <a href="/garage">garage</a> &middot; <a href="/">aadhar.sh</a></p>
-      <p><small>&copy; 2026 Aadharsh Pannirselvam &middot; built in the open &middot; triangulated from chromestatus.com + chrome://flags (Canary) + webkit.org/standards-positions</small></p>
+      <p><small>&copy; 2026 Aadharsh Pannirselvam &middot; built in the open &middot; triangulated from chromestatus.com + chrome://flags (Canary) + webkit.org/standards-positions &middot; last swept 2026-07-26</small></p>
     </footer>
 
     <hr>
@@ -3558,6 +4038,19 @@ myButton.onclick = async () =&gt; {
     "text-fit": "text-fit",
     "css-random": "random()",
     "speculation-rules": "speculation",
+    "sizes-auto": "sizes=auto",
+    "gap-decorations": "gap decorations",
+    "border-shape": "border-shape",
+    "heading-pseudo": ":heading",
+    "stretch-sizing": "width:stretch",
+    "wk-scrollbar": "::-webkit-scrollbar",
+    "reference-target": "referenceTarget",
+    "scoped-registries": "scoped registries",
+    "wasm-jspi": "Wasm JSPI",
+    "import-text": "import type:text",
+    "pq-webcrypto": "ML-DSA",
+    "cpu-performance": "cpuPerformance",
+    "container-timing": "container timing",
   };
   var state = {};
   Object.keys(checks).forEach(function (k) { state[k] = sup(checks[k]); });
