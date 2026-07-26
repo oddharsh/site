@@ -4,10 +4,15 @@
 // committed readable and is the source of truth. This script stages the static
 // holding tree plus the two embedded application modules under .build/ and
 // minifies exactly six client scripts (the assets pages load) plus the homepage
-// HTML; the garage/ and lwe/ HTML, images, _headers, and the worker modules ship
-// byte-identical to git. Each transformed asset gets a readable twin deployed
-// alongside it, because View Source is part of the product and minification
-// must not cost it.
+// HTML; images and _headers ship byte-identical to git. Each transformed asset
+// gets a readable twin deployed alongside it, because View Source is part of the
+// product and minification must not cost it.
+//
+// The garage/ and lwe/ HTML and the worker modules are NOT minified, but they are
+// no longer byte-identical to git either: step 1b injects the client-edge CSS
+// mirror into every staged page that carries the window geometry, derived from
+// luna.css. It is one commented, readable line in a readable file — View Source
+// still reads as hand-written CSS, and the line says where it came from.
 //
 //   node build.mjs                                   # stage .build/
 //   npm run deploy                                   # build + wrangler deploy -c .build/wrangler.jsonc
@@ -124,34 +129,12 @@ async function checkInvariants() {
   const floorVals = new Set(floors.values());
   if (floorVals.size > 1) warn.push(`taskbar-floor height disagrees across the critical-geometry copies (${[...floors].map(([f, v]) => `${f.split("/").pop()}:${v}px`).join(", ")}) — luna.css and the inline copies must match`);
 
-  // 5b (warn) — the client edge (luna.css, search "THE CLIENT EDGE") is defined
-  // ONCE and inherited by every windowed page; the inline copies exist only so
-  // first paint lands at the final width, since the gutter is layout. A page
-  // that mirrors the window geometry but not the edge still renders correctly —
-  // it just re-wraps when luna arrives — so this warns rather than blocks. It
-  // also catches the worse case: an inline copy drifting off luna's values.
-  try {
-    const luna = await read("holding/luna.css");
-    const grab = (s) => (/border:\s*(\d+)px solid #ece9d8[^}]*?outline-offset:\s*-(\d+)px/.exec(s) || []).slice(1).join("/");
-    const want = grab(luna);
-    if (!want) warn.push("luna.css: the client-edge rule went missing — every windowed page inherits it from there");
-    else {
-      // only pages that carry a first-paint geometry mirror need an edge mirror;
-      // a page that loads luna.css render-blocking (garage/gpt56) needs neither.
-      const mirrors = (await readdir("holding", { recursive: true }))
-        .filter((f) => /\.(html|css|js)$/.test(f) && !/\.src\.|^(i|images|og|cars)\//.test(f))
-        .map((f) => `holding/${f}`)
-        .concat(["cal/src/templates.js", "serendipity/serendipity.js"]);
-      for (const f of mirrors) {
-        if (f.endsWith("luna.css")) continue;
-        let s; try { s = await read(f); } catch { continue; }
-        if (!/\.window\s*>\s*\.content[^{]*\{[^}]*overflow:\s*auto/.test(s)) continue;
-        const got = grab(s);
-        if (!got) warn.push(`${f}: mirrors the window geometry but not the client edge — first paint will re-wrap when luna.css lands`);
-        else if (got !== want) warn.push(`${f}: client edge is ${got} but luna.css says ${want} — the inline copy drifted`);
-      }
-    }
-  } catch (e) { warn.push(`client-edge mirror check could not run: ${e.message}`); }
+  // 5b (hard) — the client edge (luna.css, search "THE CLIENT EDGE") is authored
+  // exactly once and injected into the staged pages by clientEdgeMirror() below.
+  // If the declaration can't be found in luna.css there is nothing to inject and
+  // every page silently loses its first-paint mirror, so this blocks rather than
+  // warns: a missing rule here is a rename or a bad edit, not a taste call.
+  if (!clientEdgeDecl(await read("holding/luna.css"))) hard.push("luna.css: the client-edge declaration went missing (search \"THE CLIENT EDGE\") — build.mjs injects it into every windowed page and has nothing to inject");
 
   // 6 (warn) — the local-dev twin (wrangler.dev.jsonc) must declare the same
   // bindings as the deploy config (wrangler.jsonc), or local `wrangler dev`
@@ -340,6 +323,48 @@ async function checkInvariants() {
   console.log(`invariants ok: ${routeKeys.length + prefixProbes.length} routes mirrored (${prefixProbes.length} prefix), CSP style-src, blink-fix, generator, geometry, ${skillsChecked} skill digest${skillsChecked === 1 ? "" : "s"}, ${manifestChecked} surfaces registered, ${tasteScanned} files taste-scanned${tasteOk.length ? ` (${tasteOk.length} taste-ok: ${tasteOk.join("; ")})` : ""}${warn.length ? " (with warnings above)" : ""}`);
 }
 
+// ── the client edge, authored once and mirrored at deploy ────────────────────
+// luna.css owns the rule (search "THE CLIENT EDGE") and every windowed page
+// inherits it at runtime, so the SOURCE is already correct with nothing to
+// remember on a new page. The mirror below exists purely for first paint: luna
+// loads non-render-blocking and the edge's 6px gutter is layout, so without a
+// copy in the page's own inline block the document lays out 12px wider and
+// re-wraps once when luna lands.
+//
+// Hand-maintaining that copy in ~30 files was the thing worth deleting: it is
+// derived data, it drifts, and forgetting it on a new page is invisible until
+// someone watches a reflow. So the build derives it instead, from luna.css, and
+// a page author never writes it. Local dev (wrangler.dev.jsonc) serves the
+// unbuilt tree, where the edge simply arrives with luna.css.
+//
+// This is the ONLY generated CSS in the build. It adds no new rule and changes
+// no cascade: the injected declaration is byte-identical to luna's, so when luna
+// applies, nothing moves.
+
+// pull the declaration body out of luna.css so there is one definition of it
+const clientEdgeDecl = (luna) => {
+  const m = /\.window>\.content,\.window>\.body\{(border:\d+px solid #ece9d8[^}]*outline-offset:-\d+px)\}/.exec(luna);
+  return m ? m[1] : null;
+};
+
+// the geometry mirror every windowed page already carries; the edge goes after it
+const GEOMETRY_MIRROR = /^([ \t]*)(\.window\s*>\s*\.content(?:\s*,\s*\.window\s*>\s*\.body)?\s*\{[^}]*overflow:\s*auto[^}]*\})[ \t]*$/m;
+
+// insert the edge right after the geometry mirror, matching the file's own
+// spacing so garage/lwe View Source still reads as hand-written CSS.
+const clientEdgeMirror = (source, decl) => {
+  const m = GEOMETRY_MIRROR.exec(source);
+  if (!m) return null;
+  const [, indent, rule] = m;
+  const sel = rule.slice(0, rule.indexOf("{")).trim();
+  const spaced = sel.includes(" > ");
+  const body = spaced ? decl.replace(/([:,])(?! )/g, "$1 ").replace(/;/g, "; ") : decl;
+  const line = spaced
+    ? `${indent}/* client edge — generated by build.mjs from luna.css */\n${indent}${sel} { ${body}; }`
+    : `${indent}/* client edge — generated by build.mjs from luna.css */\n${indent}${sel}{${body}}`;
+  return source.slice(0, m.index + m[0].length) + "\n" + line + source.slice(m.index + m[0].length);
+};
+
 // the client scripts to minify: [file, banner pointer, tripwire the minified output MUST contain]
 // sw.js left this list in v136: it's a ~15-line unregister stub now, shipped
 // readable and verbatim (no version string, no twin, nothing to tripwire).
@@ -372,6 +397,33 @@ await mkdir(`${OUT}/cal`, { recursive: true });
 await cp("cal/src", `${OUT}/cal/src`, { recursive: true });
 await mkdir(`${OUT}/serendipity`, { recursive: true });
 await cp("serendipity/serendipity.js", `${OUT}/serendipity/serendipity.js`);
+
+// 1b) inject the client edge into every staged page that carries the window
+// geometry mirror. Runs BEFORE minification so the injected CSS is minified with
+// the rest of the page rather than riding along as a readable line in a minified
+// file. Pages that load luna.css render-blocking (garage/gpt56.html) carry no
+// geometry mirror and correctly get nothing.
+{
+  const decl = clientEdgeDecl(await readFile("holding/luna.css", "utf8"));
+  const targets = (await readdir(`${OUT}/holding`, { recursive: true }))
+    .filter((f) => /\.(html|js)$/.test(f) && !/\.src\.|^(i|images|og|cars)\//.test(f))
+    .map((f) => `${OUT}/holding/${f}`)
+    .concat([`${OUT}/cal/src/templates.js`, `${OUT}/serendipity/serendipity.js`]);
+
+  let mirrored = 0, skipped = 0;
+  for (const f of targets) {
+    let src; try { src = await readFile(f, "utf8"); } catch { continue; }
+    if (!GEOMETRY_MIRROR.test(src)) { skipped++; continue; }
+    const out = clientEdgeMirror(src, decl);
+    if (!out) throw new Error(`client edge: ${f} matched the geometry mirror but the injection did not fire`);
+    await writeFile(f, out);
+    mirrored++;
+  }
+  // a rename in luna.css or in the geometry mirror would silently mirror nothing
+  // and cost every page a reflow, so the count is the tripwire.
+  if (mirrored < 25) throw new Error(`client edge: mirrored into only ${mirrored} pages (expected 25+) — did the geometry-mirror shape change?`);
+  console.log(`client edge: mirrored into ${mirrored} staged pages from luna.css (${skipped} files carry no window geometry)`);
+}
 
 const minifyJavaScript = (filename, sourceText) => {
   const result = minifySync(filename, sourceText, {
@@ -527,7 +579,11 @@ const HTML_MARKERS = [
 // minify only the served copy. The worker rewrites this response as a stream,
 // so doing this before ASSETS.fetch keeps the rewriter path allocation-free.
 {
-  const src = await readFile("holding/index.html", "utf8");
+  // the STAGED copy, not holding/index.html: step 1b already injected the client
+  // edge into it, and reading the original here would drop that on the floor. The
+  // readable twin is written from the same staged bytes, so /index.src.html stays
+  // an honest rendering of what is actually served.
+  const src = await readFile(`${OUT}/holding/index.html`, "utf8");
   const srcPath = "/index.src.html";
   const banner = `<!-- minified at deploy; readable source: ${srcPath} -->\n`;
   const inlineMinified = transformInlineHtmlBlocks(src);

@@ -891,12 +891,11 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
      puts content 22px in from the frame and the grip is clear without depending
      on a scrollbar being there to do it. */
   .window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 16px !important; }
-  /* client edge, mirrored VERBATIM from luna.css (search "THE CLIENT EDGE" — the
-     reasoning lives there, and luna.css is what actually governs). Repeated here
-     only because luna loads non-render-blocking and the 6px gutter is layout: a
-     page that omits this line still gets the edge, it just re-wraps once when
-     luna lands. */
-  .window > .content { border: 6px solid #ece9d8; background-clip: padding-box; outline: 1px solid #7f9db9; outline-offset: -6px; }
+  /* The CLIENT EDGE that sits alongside this line at first paint is NOT authored
+     here — build.mjs injects it, reading the declaration out of luna.css so there
+     is exactly one definition of it (luna.css, search "THE CLIENT EDGE"). Nothing
+     to keep in sync, and nothing to remember on a new page. Local dev serves this
+     file unbuilt, so the edge arrives with luna.css there instead. */
   /* pre-JS taskbar strip — the real #axp-taskbar (z 99999) covers it once nav.js
      mounts; gradient matches it so there's no colour pop either. */
   body::after {
