@@ -14,7 +14,7 @@ import { handleHit } from "./counter.js";
 import { homepageHeadResponse, serveHomepageWithPrerenderedTracks, serveMarkdown } from "./home.js";
 import { countCrawlerHit, handleLedger, handleLedgerJson } from "./ledger.js";
 import { handleLens, handleLensBrowser, handleLensCompare, handleLensFetch, handleLensShot } from "./lens.js";
-import { serveAssetWith404Clamp, serveFreshAsset } from "./lib/assets.js";
+import { serveAssetWith404Clamp, serveFreshAsset, servePrecompressedShell } from "./lib/assets.js";
 import { BOT_UA } from "./lib/botauth.js";
 import { CANONICAL_HOST } from "./lib/const.js";
 import { wantsMarkdown } from "./lib/http.js";
@@ -260,6 +260,18 @@ const PREFIX = [
     match: (pathname) => /^\/images\/[^/]+\.(avif|jpe?g|png|gif|heic|heif|hif)$/i.test(pathname),
     handle: routeImageThumb,
   },
+  // /a/<name>.<hash8>.<ext> — the content-hashed shell (nav.js, luna.css, lens.js,
+  // icons.svg). This was edge-direct until 2026-07-26 and the _headers comment said
+  // so deliberately; it moved behind the worker to hand out build.mjs's brotli q11
+  // twin, which the edge would not have produced (it fly-compresses at ~q4 and
+  // prefers zstd, measured LARGER than its own brotli here). The `.br` suffix is
+  // excluded so the twin itself stays a plain static asset — the worker fetches it
+  // through ASSETS, and matching it here would recurse.
+  {
+    label: "/a/<asset>",
+    match: (pathname) => /^\/a\/[^/]+\.[0-9a-f]{8}\.(js|css|svg)$/.test(pathname),
+    handle: routeShellAsset,
+  },
 ];
 
 async function route(request, env, ctx) {
@@ -471,6 +483,10 @@ function routeImagesMeta(request, env) {
 // addressed /i/ twins, so every old link, bookmark, and cached page keeps
 // resolving for at least a year after the hash cutover. Unknown names fall
 // through to the asset layer with the 404 cache-clamp, same as before.
+function routeShellAsset(request, env) {
+  return servePrecompressedShell(request, env);
+}
+
 async function routeImageThumb(request, env, _ctx, url) {
   const m = url.pathname.match(/^\/images\/([^/]+?)(-400)?\.(avif|jpe?g)$/i);
   if (m) {

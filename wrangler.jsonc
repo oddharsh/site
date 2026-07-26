@@ -2,8 +2,13 @@
   // Cloudflare Workers (static assets) config for aadhar.sh — the DEPLOY config.
   // Migrated from the Pages project of the same name. run_worker_first is an
   // allowlist that mirrors holding/_worker.js/index.js: static is the default,
-  // and compute only runs where a route earns it. Compression is left to the
-  // platform default for now (no precompression / q11 change in this migration).
+  // and compute only runs where a route earns it. Compression is NO LONGER left
+  // entirely to the platform: /a/* (the content-hashed shell) is worker-first so it
+  // can serve build.mjs's brotli q11 twin. The edge fly-compresses at about q4 and
+  // prefers zstd when a browser offers everything, which measured LARGER than its
+  // own brotli here (homepage: 13,264 zstd vs 12,457 br vs 10,524 br q11, 2026-07-26).
+  // Everything else still takes the platform default; the SSR'd homepage cannot be
+  // precompressed at all, because its bytes differ per request.
   //
   // UNBYPASSABLE BUILD: main + assets point at .build/holding (the minified
   // tree), and the "build" block below runs build.mjs FIRST on every deploy.
@@ -58,6 +63,8 @@
     // asset 404 cache-control and passes every non-404 response through.
     "run_worker_first": [
       "/", "/index.html", "/favicon.ico", "/hit",
+      // the content-hashed shell: worker-first so it can hand out the q11 .br twin
+      "/a/*",
       "/auth.md", "/.well-known/api-catalog", "/.well-known/agent-card.json",
       "/.well-known/oauth-protected-resource",
       "/.well-known/oauth-authorization-server",

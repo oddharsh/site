@@ -500,6 +500,28 @@ npm run deploy
     that differs from the plain URL's response, you are looking at cache
     state, not missing bytes.
 
+13. **A Worker cannot read the client's `Accept-Encoding`, so it cannot
+    negotiate compression.** The runtime rewrites the header to a constant
+    before the worker sees it. Measured 2026-07-26 in `wrangler dev`: four
+    requests sending `identity`, `br`, `gzip`, and `br;q=0, gzip` ALL arrived
+    as `"br, gzip"`. That value describes what the EDGE can accept, never what
+    the client asked for, so `if (acceptsBrotli(request))` is dead code that
+    always takes the true arm. Serving precompressed bytes therefore relies on
+    the edge down-converting for clients that can't take br ("serve Brotli from
+    origin"), and `encodeBody: "manual"` is mandatory or the runtime
+    re-compresses your already-compressed body.
+
+    **`wrangler dev` does not emulate that edge layer**, so it cannot validate
+    the design — it only proves the negotiation is impossible. Locally, three
+    of four client cases came back mangled (identity got raw brotli with the
+    content-encoding stripped, br got brotli-in-brotli at 13,051 bytes, gzip
+    got gzip-of-brotli). Anything touching response encoding on a
+    render-blocking path (`/a/*` is nav.js + luna.css) must be verified against
+    production behind a canary before it becomes the default, because the
+    failure mode is a white screen rather than a slow page. That is why
+    `SHELL_PRECOMPRESS_DEFAULT_ON` in `lib/assets.js` is `false` with a `?br=1`
+    canary instead of just shipping.
+
 ---
 
 ## Source folder for new photos
