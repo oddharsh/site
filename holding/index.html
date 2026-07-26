@@ -423,9 +423,22 @@ hr {
   list-style: none;
   padding: 0;
   margin: 0;
+  /* A real sunken client area, two pixels deep, not the 1px hairline this used
+     to be. The window scroller clips this list wherever the scroll happens to
+     land, so a row is often cut in half at the bottom edge; with only a
+     hairline frame that cut landed visually on the window's blue border and
+     read as a rendering fault rather than as "there is more below". The deeper
+     well is what every XP list control had, and it is what makes a partial row
+     read as a viewport instead of as breakage.
+     Shape is canon's --bevel-sunken-deep (inset dark top-left, inset light
+     bottom-right). Colours are the list's OWN blue-grey pair rather than the
+     token literals, because the beige --darkshadow would clash here and colour
+     tokens are deliberately not inlined into served pages (CLAUDE.md hard rule 2). */
   border: 1px solid oklch(61.14% 0.0611 253.60);
   border-top-color: oklch(47.12% 0.0555 253.58);
   border-left-color: oklch(47.12% 0.0555 253.58);
+  box-shadow: inset 1px 1px 0 oklch(47.12% 0.0555 253.58),
+              inset -1px -1px 0 oklch(100.00% 0 0);
   background: oklch(100.00% 0 0);
 }
 .np-list li {
@@ -865,10 +878,19 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
      panel-kisses-scrollbar bug. So this rule is
      !important AND more specific (.window > .content = 0,2,0 beats .axp-sb-pad =
      0,1,0), making the deployed HTML the single source of truth for the gutter,
-     regardless of which nav.js version a visitor has cached. 28px → a ~9px gap to the
-     scrollbar. Also kills the paint→mount reflow (the grid lays out at its final
-     width immediately). top/left/bottom keep .content's 12/16/16. */
-  .window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 12px !important; }
+     regardless of which nav.js version a visitor has cached. Also kills the
+     paint→mount reflow (the grid lays out at its final width immediately).
+     top/left/bottom keep .content's 12/16/16.
+
+     20px, raised from 12px: .window carries `resize: both`, so the BROWSER draws
+     its own hatched grip in the bottom-right corner, on top of whatever content
+     is scrolled under it — measured at ~18px square (it hit-tests as .window out
+     to 18px in from the corner). Where scrollbars take layout space the old 12px
+     was already clear, because the 16px scrollbar sat between; but macOS defaults
+     to OVERLAY scrollbars, which reserve nothing, so there the grip landed
+     directly on the tracklist's runtime column. 20px clears the grip on its own,
+     without depending on a scrollbar being there to do it. */
+  .window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 20px !important; }
   /* pre-JS taskbar strip — the real #axp-taskbar (z 99999) covers it once nav.js
      mounts; gradient matches it so there's no colour pop either. */
   body::after {
