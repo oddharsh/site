@@ -1289,6 +1289,16 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
       const targetFor = (node) => node?.closest?.(TARGETS) || null;
       const load = () => {
         if (modulePromise) return modulePromise;
+        // hoist.js is tooltip.js's one static import, so the parser can't
+        // discover it until tooltip.js has already landed: a cache-off Chrome
+        // capture had tooltip.js finishing at 241ms and hoist.js only STARTING
+        // at 272ms, the single serialized fetch on the page. Kicking it off
+        // here runs the two in parallel instead. Deliberately NOT a
+        // <link rel="modulepreload"> in <head>: that would fetch the hover
+        // engine for coarse-pointer visitors, who return above and are the
+        // whole reason this loader is gated. The result is unused on purpose,
+        // since the import cache is what tooltip.js's own import hits.
+        import("/hoist.js").catch(() => {});
         modulePromise = import("/tooltip.js").then((mod) => {
           mod.start(pending);
           pending = null;
