@@ -12,7 +12,7 @@
   "scripts": {
     "build": "node build.mjs",
     "dev": "wrangler dev -c wrangler.dev.jsonc",
-    "deploy": "wrangler deploy",
+    "deploy": "wrangler deploy --x-provision=false --x-auto-create=false --strict",
     "og-cards": "node holding/scripts/gen-og-cards.mjs",
     "gen:manifest": "node scripts/gen-manifest.mjs",
     "search:index": "node scripts/generate-search-index.mjs",

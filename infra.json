@@ -256,14 +256,22 @@
       "The build_command MUST stay blank. wrangler.jsonc's build.command runs",
       "build.mjs during `wrangler deploy`, so a non-empty field here builds twice,",
       "and a field that runs something other than build.mjs is how production once",
-      "ended up serving an unminified 78KB nav.js."
+      "ended up serving an unminified 78KB nav.js.",
+      "",
+      "The deploy_command carries two hidden wrangler flags that both DEFAULT TO",
+      "TRUE: --x-provision and --x-auto-create let a deploy create real KV/R2/D1",
+      "resources for any binding declared without an id. 4.114 relaxed the config",
+      "schema so more binding types can ship id-less, which makes that easier to",
+      "trip into. Resource IDs live in wrangler.jsonc and resources are created by",
+      "`npm run infra:apply` alone, so the deploy path is pinned off and a missing",
+      "id fails loudly instead of minting something nobody declared."
     ],
     "publisher": "cloudflare-workers-builds",
     "worker": "aadhar-sh",
     "production_branch": "production",
     "root_directory": ".",
     "build_command": "",
-    "deploy_command": "npx wrangler deploy",
+    "deploy_command": "npx wrangler deploy --x-provision=false --x-auto-create=false",
     "verifiable": false,
     "promoted_by": ".github/workflows/promote-production.yml"
   }
