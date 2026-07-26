@@ -204,7 +204,10 @@
         return tag("photo", {
           label: p.stem,
           path: "/images/full/" + encodeURI(p.full),
-          hint: alt[p.stem] || "full-resolution photo"
+          hint: alt[p.stem] || "full-resolution photo",
+          // the 400px AVIF tier the mobile grid already ships (~12KB), reused
+          // by the Run preview card. Absolute + content-hashed in the manifest.
+          thumb: p.thumb_small || p.thumb_avif || ""
         });
       });
       PHOTOS = photos;
@@ -242,6 +245,7 @@
 
   // ── build DOM ────────────────────────────────────────────────────────────────
   var run, input, list, results = [], sel = -1, lastQuery = null, semantic = { q: "", items: [] }, searchTimer = null;
+  var preview = null, previewHoist = null, previewLoading = false;
   // System Properties tray popout state
   var balloon = null, balloonKind = null, sysData = null, updData = null;
 
@@ -522,13 +526,22 @@
       '</dialog>'
     );
     D.body.appendChild(run);
+    // the preview card lives OUTSIDE the dialog and hoists into the top layer,
+    // because the list is its own scroller and would otherwise clip it. Shown
+    // after the modal opens, so it stacks above it.
+    preview = el('<div id="axp-run-preview" popover="manual" aria-hidden="true"></div>');
+    D.body.appendChild(preview);
     run.style.viewTransitionName = "axp-run";
     // ::backdrop click = light dismiss: a click landing on the dialog element
     // itself (not its children) can only be the backdrop-covered margin area
     run.addEventListener("click", function (e) { if (e.target === run) closeRun(); });
     // native close (Esc/cancel, or run.close()): one place for the side effects
+    // native Esc fires cancel (then close) WITHOUT routing through closeRun, so
+    // the card needs its own hook on that path too.
+    run.addEventListener("cancel", function () { if (previewHoist) previewHoist.hide(); });
     run.addEventListener("close", function () {
       AXP_SND.play("close");
+      if (previewHoist) previewHoist.hide();   // belt and braces with closeRun
       var s = D.getElementById("axp-start"); if (s) s.setAttribute("aria-expanded", "false");
     });
     input = run.querySelector("#axp-run-in");
@@ -546,9 +559,7 @@
     // so OK / Enter act on whatever you're hovering (not a stale keyboard pick).
     list.addEventListener("mouseover", function (e) {
       var o = e.target.closest(".opt"); if (!o) return;
-      var i = +o.dataset.i; if (i === sel) return;
-      sel = i;
-      [].forEach.call(list.querySelectorAll(".opt"), function (x) { x.setAttribute("aria-selected", +x.dataset.i === sel); });
+      setSel(+o.dataset.i);
     });
   }
 
@@ -621,14 +632,18 @@
       if (!groups[k].length) return;
       html += '<div class="grp">' + names[k] + "</div>";
       groups[k].forEach(function (g) {
-        html += '<div class="opt" role="option" data-i="' + g.i + '" aria-selected="' + (g.i === sel) + '">' +
+        html += '<div class="opt" role="option" data-i="' + g.i + '"' +
+          (g.it.thumb ? ' data-thumb="' + esc(g.it.thumb) + '"' : "") +
+          ' aria-selected="' + (g.i === sel) + '">' +
           '<span class="nm">' + esc(g.it.label) + "</span>" +
           (g.it.hint ? '<span class="ht">' + esc(g.it.hint) + "</span>" : "") +
           '<span class="pa">' + esc(g.it.kind === "profile" ? "↗" : g.it.kind === "raycast" ? "↗ raycast" : g.it.kind === "accessory" ? "↗ window" : g.it.path) + "</span></div>";
       });
     });
     list.innerHTML = html || '<div class="empty">No match. Try a page name, a photo stem, or a profile — or <a href="/photos">browse all photos</a>.</div>';
-    ensureVisible();
+    // route the freshly-rendered selection through the one funnel, so a new
+    // query re-points the preview card instead of stranding it on a dead row.
+    setSel(sel);
   }
 
   // ── Search Companion: debounced semantic search over the LWE index ─────────────
@@ -658,10 +673,57 @@
     if (!results.length) return;
     // clamp, don't wrap — XP's Run combobox (and Windows list controls) stop at
     // the ends rather than looping; wrapping reads as janky.
-    sel = Math.max(0, Math.min(results.length - 1, sel + d));
-    [].forEach.call(list.querySelectorAll(".opt"), function (o) { o.setAttribute("aria-selected", +o.dataset.i === sel); });
-    ensureVisible();
+    setSel(Math.max(0, Math.min(results.length - 1, sel + d)));
   }
+
+  // THE single selection funnel. Arrow keys, mouse hot-track, and render()'s
+  // initial pick all route through here, which is what makes the preview card
+  // honest: it is tethered to the SELECTED row, never the merely-hovered one, so
+  // it can never show something that pressing Enter would not open.
+  function setSel(i) {
+    sel = i;
+    var cur = null;
+    [].forEach.call(list.querySelectorAll(".opt"), function (o) {
+      var on = +o.dataset.i === sel;
+      o.setAttribute("aria-selected", on);
+      if (on) cur = o;
+    });
+    ensureVisible();
+    showPreview(cur);
+  }
+
+  // ── Run preview card ────────────────────────────────────────────────────────
+  // Only rows carrying data-thumb ever mount one (photos, and semantic hits that
+  // resolve to an image); pages, profiles and notes never do. Nothing is fetched
+  // until such a row is actually selected, and then it's the 400px AVIF tier the
+  // photo grid already ships. The engine is the shared one in /hoist.js, driven
+  // manually here: this surface follows SELECTION, not the cursor, so it passes
+  // no findTarget and wires no listeners of its own.
+  function showPreview(row) {
+    if (!previewHoist) return;                     // module still loading, or coarse pointer
+    var src = row && row.dataset ? row.dataset.thumb : "";
+    if (!src) { previewHoist.hide(); return; }
+    previewHoist.showAnchored(row);
+  }
+  function loadPreview() {
+    if (previewHoist || previewLoading || !preview) return;
+    previewLoading = true;
+    import("/hoist.js").then(function (m) {
+      previewHoist = m.createHoist({
+        node: preview,
+        followPointer: false,                      // anchored only; there is no cursor to glide with
+        anchorName: "--axp-run-preview",
+        contentFor: function (row) {
+          var src = row.dataset.thumb;
+          if (!src) return "";
+          // width/height are reserved so the card never reflows as it decodes.
+          return '<img src="' + esc(src) + '" alt="" width="400" height="400" decoding="async">';
+        }
+      });
+      showPreview(list.querySelector('.opt[aria-selected=true]'));
+    }).catch(function () { /* no preview is a fine outcome; Run still navigates */ });
+  }
+
   function ensureVisible() {
     var o = list.querySelector('.opt[aria-selected=true]'); if (o) o.scrollIntoView({ block: "nearest" });
   }
@@ -778,6 +840,9 @@
     if (run.open) return;
     if (!PHOTOS) loadPhotos().then(function () { if (run.open) render(); });
     if (!WRITING) loadWriting().then(function () { if (run.open) render(); });
+    // the hover engine is fetched on the FIRST Run open, never on page load:
+    // a visitor who never opens the palette never pays for it.
+    loadPreview();
     withViewTransition(function () {
       run.showModal(); AXP_SND.play("open");
       var s = D.getElementById("axp-start"); if (s) s.setAttribute("aria-expanded", "true");
@@ -786,7 +851,14 @@
     }, ["axp-dialog"]);
   }
   function closeRun() {
-    if (run && run.open) withViewTransition(function () { run.close(); }, ["axp-dialog"]);   // side effects ride the "close" event
+    // The card is in the TOP LAYER, so if it outlives the dialog it floats over
+    // a page with nothing to explain it. Hide it here rather than only on the
+    // dialog's "close" event: that event is the tidy place for side effects, but
+    // it is not guaranteed to reach us (it does not fire at all in some
+    // embedded browser builds — measured), and a stranded card is too visible a
+    // failure to hang on an event. Cheap and idempotent, so both paths can run.
+    if (previewHoist) previewHoist.hide();
+    if (run && run.open) withViewTransition(function () { run.close(); }, ["axp-dialog"]);   // other side effects ride the "close" event
   }
 
   // ── tray balloons: brief XP notification-bubble popouts for the system-utility
