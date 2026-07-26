@@ -346,6 +346,8 @@ body { min-height: 0; height: calc(100vh - 30px); height: calc(100dvh - 30px);
 .window { flex: 0 1 auto; min-height: 0; max-height: 100%; display: flex; flex-direction: column; }
 .window > .title-bar { flex: 0 0 auto; }
 .window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 12px; }
+/* client edge, mirrored from luna.css (search "THE CLIENT EDGE") */
+.window > .content { border: 6px solid #ece9d8; background-clip: padding-box; outline: 1px solid #7f9db9; outline-offset: -6px; }
 `;
 
 // the coffee section glyph — mirrors nav.js SECTION_ICONS.coffee + the taskbar

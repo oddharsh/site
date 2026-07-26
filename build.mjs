@@ -124,6 +124,35 @@ async function checkInvariants() {
   const floorVals = new Set(floors.values());
   if (floorVals.size > 1) warn.push(`taskbar-floor height disagrees across the critical-geometry copies (${[...floors].map(([f, v]) => `${f.split("/").pop()}:${v}px`).join(", ")}) — luna.css and the inline copies must match`);
 
+  // 5b (warn) — the client edge (luna.css, search "THE CLIENT EDGE") is defined
+  // ONCE and inherited by every windowed page; the inline copies exist only so
+  // first paint lands at the final width, since the gutter is layout. A page
+  // that mirrors the window geometry but not the edge still renders correctly —
+  // it just re-wraps when luna arrives — so this warns rather than blocks. It
+  // also catches the worse case: an inline copy drifting off luna's values.
+  try {
+    const luna = await read("holding/luna.css");
+    const grab = (s) => (/border:\s*(\d+)px solid #ece9d8[^}]*?outline-offset:\s*-(\d+)px/.exec(s) || []).slice(1).join("/");
+    const want = grab(luna);
+    if (!want) warn.push("luna.css: the client-edge rule went missing — every windowed page inherits it from there");
+    else {
+      // only pages that carry a first-paint geometry mirror need an edge mirror;
+      // a page that loads luna.css render-blocking (garage/gpt56) needs neither.
+      const mirrors = (await readdir("holding", { recursive: true }))
+        .filter((f) => /\.(html|css|js)$/.test(f) && !/\.src\.|^(i|images|og|cars)\//.test(f))
+        .map((f) => `holding/${f}`)
+        .concat(["cal/src/templates.js", "serendipity/serendipity.js"]);
+      for (const f of mirrors) {
+        if (f.endsWith("luna.css")) continue;
+        let s; try { s = await read(f); } catch { continue; }
+        if (!/\.window\s*>\s*\.content[^{]*\{[^}]*overflow:\s*auto/.test(s)) continue;
+        const got = grab(s);
+        if (!got) warn.push(`${f}: mirrors the window geometry but not the client edge — first paint will re-wrap when luna.css lands`);
+        else if (got !== want) warn.push(`${f}: client edge is ${got} but luna.css says ${want} — the inline copy drifted`);
+      }
+    }
+  } catch (e) { warn.push(`client-edge mirror check could not run: ${e.message}`); }
+
   // 6 (warn) — the local-dev twin (wrangler.dev.jsonc) must declare the same
   // bindings as the deploy config (wrangler.jsonc), or local `wrangler dev`
   // diverges from prod. Compare the set of binding identifiers by name; a
