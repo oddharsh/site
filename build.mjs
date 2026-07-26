@@ -210,9 +210,87 @@ async function checkInvariants() {
     manifestChecked = surfaces.length;
   } catch (e) { hard.push(`site-manifest check could not run: ${e.message}`); }
 
+  // 9 — the taste tripwires GREENFIELD.md asked for, calibrated against what the
+  // site actually ships. Its list (ban cubic-bezier, any easing beyond linear,
+  // any radius over 3px, any blurred shadow) would block this deploy today: the
+  // window minimize/restore morph IS a cubic-bezier, luna.css runs 60ms ease-out
+  // everywhere, canon defines --radius-window: 8px, and XP menus really did drop
+  // a soft shadow. Banning those bans the site. So the split here is between the
+  // one rule that is owner LAW (zero font bytes, hard) and the drift signals that
+  // want a human look (warn). Demo pages are exempt from the taste warnings and
+  // NOT from the font law: /garage and /lwe exist to show the platform off, so
+  // frontier CSS in them is the point, while a web font anywhere is still fatal.
+  let tasteScanned = 0;
+  try {
+    const walk = async (dir, out = []) => {
+      for (const e of await readdir(dir, { withFileTypes: true })) {
+        const p = `${dir}/${e.name}`;
+        if (e.isDirectory()) { if (!/^(i|images|og|cars|node_modules|\.well-known)$/.test(e.name)) await walk(p, out); }
+        else if (/\.(css|html|js)$/.test(e.name) && !/\.src\.(js|css|html)$/.test(e.name)) out.push(p);
+      }
+      return out;
+    };
+    const served = [...await walk("holding"), "cal/src/templates.js", "serendipity/serendipity.js"];
+    const isDemo = (p) => /^holding\/(garage|lwe)\//.test(p);
+    // strip block comments before pattern-matching: luna.css discusses @font-face
+    // in prose twice, and a guard that fires on its own documentation gets muted.
+    const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, "");
+
+    for (const f of served) {
+      let src; try { src = strip(await read(f)); } catch { continue; }
+      tasteScanned++;
+
+      // 9a (hard) — zero font bytes, the one rule with no taste component. Every
+      // way a page could acquire a downloadable face, not just @font-face.
+      if (/@font-face\s*\{[^}]*url\(/i.test(src)) hard.push(`${f}: @font-face with url() — the site ships 0 font bytes (local() reference rules belong in design/tokens/fonts.css, never in a served file)`);
+      if (/@import[^;]*(font|typekit)/i.test(src)) hard.push(`${f}: @import of a font stylesheet — the site ships 0 font bytes`);
+      if (/as\s*=\s*"?font"?/i.test(src)) hard.push(`${f}: rel=preload as=font — the site ships 0 font bytes`);
+      for (const host of ["fonts.googleapis.com", "fonts.gstatic.com", "use.typekit.net", "fonts.bunny.net"]) {
+        if (src.includes(host)) hard.push(`${f}: references ${host} — the site ships 0 font bytes`);
+      }
+
+      // 9b (hard) — an overshoot easing curve. Unlike "is 300ms too slow", this
+      // one is decidable: y outside [0,1] means the value springs past its target
+      // and settles back, which is a 2015 motion language no Luna control had.
+      for (const m of src.matchAll(/cubic-bezier\(\s*([-\d.]+)\s*,\s*([-\d.]+)\s*,\s*([-\d.]+)\s*,\s*([-\d.]+)\s*\)/g)) {
+        const [y1, y2] = [Number(m[2]), Number(m[4])];
+        if (y1 < 0 || y1 > 1 || y2 < 0 || y2 > 1) hard.push(`${f}: ${m[0]} overshoots — springy easing reads as a different era`);
+      }
+      if (isDemo(f)) continue;
+
+      // 9c (warn) — a NEW easing curve outside the two the window morph uses.
+      // Tuning one of these is a taste call, so this prompts a look, never a block.
+      for (const m of src.matchAll(/cubic-bezier\([^)]*\)/g)) {
+        const v = m[0].replace(/\s+/g, "");
+        if (!["cubic-bezier(.4,0,1,1)", "cubic-bezier(0,0,.2,1)"].includes(v)) warn.push(`${f}: ${m[0]} is not one of the two window-morph curves — taste review`);
+      }
+      // 9d (warn) — radius past --radius-window (8px). Elliptical radii are
+      // skipped: the Start orb is a real pill and its 9px/14px is correct.
+      for (const m of src.matchAll(/border-radius:\s*([^;}"']+)/g)) {
+        if (m[1].includes("/")) continue;
+        for (const px of m[1].matchAll(/([\d.]+)px/g)) {
+          if (Number(px[1]) > 8) warn.push(`${f}: border-radius ${m[1].trim()} exceeds --radius-window (8px) — taste review`);
+        }
+      }
+      // 9e (warn) — a soft shadow. XP dropped shadows on menus and dialogs, so
+      // this can't be zero; luna.css's widest is 9px. Past 12px it stops reading
+      // as a drop shadow and starts reading as a 2015 elevation surface.
+      for (const m of src.matchAll(/box-shadow:\s*([^;}"']+)/g)) {
+        if (/\binset\b/.test(m[1])) continue;
+        // offsets may be a unitless 0 ("0 4px 24px"), so px is optional on them
+        for (const px of m[1].matchAll(/-?[\d.]+(?:px)?\s+-?[\d.]+(?:px)?\s+([\d.]+)px/g)) {
+          if (Number(px[1]) > 12) warn.push(`${f}: box-shadow blur ${px[1]}px reads as a modern elevation shadow — taste review`);
+        }
+      }
+      // 9f (warn) — smooth scrolling. XP scrolled instantly; a demo page showing
+      // the property off is exempt above.
+      if (/scroll-behavior:\s*smooth/.test(src)) warn.push(`${f}: scroll-behavior: smooth — XP scrolled instantly`);
+    }
+  } catch (e) { warn.push(`taste tripwire could not run: ${e.message}`); }
+
   if (warn.length) console.warn("build: invariant WARNINGS (deploy continues):\n  - " + warn.join("\n  - "));
   if (hard.length) throw new Error("build: invariant tripwires FAILED, deploy blocked:\n  - " + hard.join("\n  - "));
-  console.log(`invariants ok: ${routeKeys.length + prefixProbes.length} routes mirrored (${prefixProbes.length} prefix), CSP style-src, blink-fix, generator, geometry, ${skillsChecked} skill digest${skillsChecked === 1 ? "" : "s"}, ${manifestChecked} surfaces registered${warn.length ? " (with warnings above)" : ""}`);
+  console.log(`invariants ok: ${routeKeys.length + prefixProbes.length} routes mirrored (${prefixProbes.length} prefix), CSP style-src, blink-fix, generator, geometry, ${skillsChecked} skill digest${skillsChecked === 1 ? "" : "s"}, ${manifestChecked} surfaces registered, ${tasteScanned} files taste-scanned${warn.length ? " (with warnings above)" : ""}`);
 }
 
 // the client scripts to minify: [file, banner pointer, tripwire the minified output MUST contain]
