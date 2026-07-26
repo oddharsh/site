@@ -1,24 +1,23 @@
 // tooltip.js — the rich hover island for photos, tracks, artists, and car links.
 // Loaded after first paint and prefetched during idle so the first intentional
 // tooltip gets the same interaction path as every later one.
+//
+// The hover ENGINE moved to hoist.js, shared with serendipity's event covers
+// and nav.js's Run preview. What stays here is the part that is actually about
+// this page's content: the EXIF meta fetch, the Spotify DNS hints, and the four
+// content builders.
+
+import { createHoist, hoverCapable, ANCHOR_OK } from "/hoist.js";
 
 export function start(initial) {
       const tip = document.getElementById("xp-tooltip");
       if (!tip) return;
 
-      // hover-only feature: long-press on touch devices fires synthetic
-      // mouseover/mouseout events and was causing tooltips to appear
-      // mid-scroll on mobile. opt out entirely when the device doesn't
-      // have a real hover-capable pointer. (`(hover: none)` is the
-      // touch-only signal; combined with `(any-hover: none)` to cover
-      // hybrid devices where the primary pointer is touch.)
-      if (window.matchMedia &&
-          (window.matchMedia("(hover: none)").matches ||
-           window.matchMedia("(pointer: coarse)").matches)) {
-        return;
-      }
+      // Bail before building any of the content machinery below. createHoist
+      // would no-op on a coarse pointer anyway, but the fetches, formatters,
+      // and builders are all dead weight for a surface that can never show.
+      if (!hoverCapable()) return;
 
-      let activeSlot = null;
 
       // lazy DNS-prefetch for Spotify's image CDNs. these hosts only
       // matter when the user hovers a track or artist row (to load the
@@ -147,9 +146,12 @@ export function start(initial) {
           .then(m => {
             if (!m || typeof m !== "object") throw 0;
             metaMap[stem] = m;
-            // re-render if this photo's tip is still the open one
-            if (activeSlot && activeSlot.matches?.(".photos a") &&
-                (activeSlot.dataset.full || "").replace(/\.[^.]+$/, "") === stem) showTipFor(activeSlot);
+            // re-render if this photo's tip is still the open one. `hoist` is
+            // declared below but always initialized by the time this fetch
+            // resolves, and hoist.active() is the live target.
+            const open = hoist.active();
+            if (open && open.matches?.(".photos a") &&
+                (open.dataset.full || "").replace(/\.[^.]+$/, "") === stem) hoist.show(open);
           })
           // CRUCIAL: drop the sentinel on failure so a later hover RE-FETCHES rather
           // than the photo being stuck empty for the whole session. self-healing.
@@ -365,177 +367,16 @@ export function start(initial) {
         );
       }
 
-      // lightweight cursor tracking: JS writes --x/--y (the cursor's
-      // clientX/Y in px); CSS positions the tooltip via translate(clamp())
-      // with a hard snap, zero lag. no rAF, no getBoundingClientRect, no
-      // resize listener — edge-clamping uses the element's own size in CSS,
-      // so it stays correct as a cover image sizes the box. lastX/lastY are
-      // kept only for scroll re-evaluation (elementFromPoint).
-      let lastX = 0, lastY = 0;
-      const place = (e) => {
-        lastX = e.clientX; lastY = e.clientY;
-        tip.style.setProperty("--x", lastX + "px");
-        tip.style.setProperty("--y", lastY + "px");
-      };
-      // show/hide via the Popover API (top layer — no z-index juggling,
-      // and it unlocks the @starting-style fade). guard the calls because
-      // showPopover()/hidePopover() throw if the element is already in the
-      // target state. on engines without popover support (below the modern
-      // target), fall back to a plain display toggle so nothing breaks.
-      const supportsPopover = "popover" in HTMLElement.prototype;
-      const isOpen = () => supportsPopover
-        ? tip.matches(":popover-open")
-        : tip.style.display === "block";
-      // will-change is an "earn it" hint, not a permanent set (see the gotcha
-      // log): leaving it on while the tooltip is display:none would pin a
-      // compositor layer for an invisible element. so we promote it to its own
-      // layer ONLY while open — that makes the per-pointermove translate a pure
-      // compositor transform (off the main thread, no box repaint), which is
-      // what keeps tracking smooth on ProMotion / Low-Power VRR displays — then
-      // release the layer the instant it closes.
-      const openTip = () => {
-        tip.style.willChange = "transform";
-        if (supportsPopover) { if (!tip.matches(":popover-open")) tip.showPopover(); }
-        else tip.style.display = "block";
-      };
-      const closeTip = () => {
-        if (supportsPopover) { if (tip.matches(":popover-open")) tip.hidePopover(); }
-        else tip.style.display = "none";
-        tip.style.willChange = "auto";
-      };
-      // anchoredEl tracks the element a keyboard-focus tooltip is tethered to
-      // (via CSS anchor positioning) so we can release its anchor-name on hide.
-      let anchoredEl = null;
-      const dropAnchor = () => {
-        if (anchoredEl) { anchoredEl.style.removeProperty("anchor-name"); anchoredEl = null; }
-        tip.classList.remove("anchored");
-      };
-      const hideTip = () => {
-        closeTip();
-        dropAnchor();
-        activeSlot = null;
-      };
-      // dismissal is deferred by a hair (TIP_DISMISS_MS) so hopping from one hover
-      // target straight across the small gap to the NEXT one doesn't flash the
-      // tooltip off-then-on. a fresh pointerover cancels the pending hide; if the
-      // cursor instead comes to rest in the gap, the tooltip still clears after the
-      // delay, so the dead space between entries shows nothing. shared by every
-      // hover target here (photos, tracks, artists, car links) — one tooltip engine.
-      const TIP_DISMISS_MS = 50;
-      let hideTimer = 0;
-      // keyboard tips anchor via CSS anchor positioning where supported;
-      // pointer tips ALWAYS follow the cursor (owner re-ruling 2026-07-03:
-      // the anchored-hover experiment shipped and was rolled back the same
-      // day — gliding the album art with the cursor is part of the site's
-      // identity, same as the photo camera-back, and the 500ms cold-hover
-      // delay read as lag, not authenticity).
-      const ANCHOR_OK = window.CSS && CSS.supports &&
-        (CSS.supports("position-area: bottom") || CSS.supports("inset-area: bottom"));
-      // while the content is actively scrolling (and a hair after it settles) we
-      // suppress tooltips entirely — scrolling shouldn't trip a popover just
-      // because the cursor happens to pass over a photo or track. tooltips return
-      // on the next intentional hover-move.
-      let scrolling = false, scrollIdle = 0;
-      const cancelHide   = () => { clearTimeout(hideTimer); hideTimer = 0; };
-      const scheduleHide = () => { clearTimeout(hideTimer); hideTimer = setTimeout(hideTip, TIP_DISMISS_MS); };
-      const showTipFor = (target, e) => {
-        if (scrolling) return;               // don't pop a tooltip mid-scroll
-        cancelHide();                        // a fresh show cancels any pending gap-dismissal
-        dropAnchor();                        // pointer entry always uses cursor-follow
-        activeSlot = target;
-        const html = buildContent(target);
-        if (!html) { hideTip(); return; }   // e.g. track with no cover yet
-        tip.innerHTML = html;
-        if (e) place(e);                     // position before showing (no glide-in)
-        openTip();
-      };
-      // keyboard-only anchored show (pointer never routes here anymore)
-      const showAnchored = (target) => {
-        if (scrolling) return;
-        cancelHide();
-        const html = buildContent(target);
-        if (!html) { hideTip(); return; }
-        dropAnchor();
-        activeSlot = target;
-        tip.innerHTML = html;
-        target.style.setProperty("anchor-name", "--xp-tip");
-        anchoredEl = target;
-        tip.classList.add("anchored");
-        openTip();
-      };
-
-      document.addEventListener("pointerover", (e) => {
-        const target = findTarget(e.target);
-        if (!target) return;
-        cancelHide();                        // re-entered a target (same or next) → keep it up
-        if (target === activeSlot) return;   // same target already shown
-        showTipFor(target, e);
-      }, { passive: true });
-
-      // passive: lets the browser dispatch pointermove without waiting on
-      // our handler. the work is two CSS custom-property writes.
-      document.addEventListener("pointermove", (e) => {
-        if (isOpen()) place(e);
-      }, { passive: true });
-
-      document.addEventListener("pointerout", (e) => {
-        const fromTarget = findTarget(e.target);
-        if (!fromTarget) return;
-        const toTarget = findTarget(e.relatedTarget);
-        // still inside the same target? ignore.
-        if (toTarget === fromTarget) return;
-        // moving to a *different* valid target (row → artist link, artist →
-        // adjacent artist)? let the next pointerover swap content without an
-        // intermediate hide+show flicker.
-        if (toTarget) return;
-        scheduleHide();                      // left to a gap — defer the hide briefly (TIP_DISMISS_MS)
-      }, { passive: true });
-
-      // scroll handling. any scroll (the window's internal content scroller
-      // bubbles to here in the capture phase) hides the tooltip and suppresses
-      // new ones WHILE scrolling — so you can wheel over the photo grid /
-      // tracklist freely without tooltip noise as rows fly past.
-      //
-      // the moment scrolling settles we re-show instantly. two reasons the old
-      // 120ms timer felt laggy on desktop: (1) the window itself, and (2) the
-      // tooltip is position:fixed — a wheel/trackpad scroll leaves the cursor
-      // dead still, so NO pointerover fires when a new photo slides under it,
-      // and the tooltip only came back if you jiggled the mouse. so on settle
-      // we actively re-target: elementFromPoint(lastX,lastY) → findTarget →
-      // show. position needs no update (cursor didn't move; --x/--y are already
-      // correct from the last place()), so we pass no event and only swap
-      // content. SCROLL_SETTLE_MS is just long enough to ride out trackpad
-      // momentum (events keep firing ~every frame until it fully stops) without
-      // flashing the tooltip back mid-decel — short enough to read as instant.
-      const SCROLL_SETTLE_MS = 60;
-      const reshowUnderCursor = () => {
-        if (!lastX && !lastY) return;            // pointer never moved → nothing to re-target
-        const target = findTarget(document.elementFromPoint(lastX, lastY));
-        if (target) showTipFor(target);          // no event: reuse the existing --x/--y
-      };
-      document.addEventListener("scroll", () => {
-        scrolling = true;
-        if (isOpen()) hideTip();
-        clearTimeout(scrollIdle);
-        scrollIdle = setTimeout(() => { scrolling = false; reshowUnderCursor(); }, SCROLL_SETTLE_MS);
-      }, { capture: true, passive: true });
-
-      // ── keyboard-focus fallback ────────────────────────────────────────
-      // mouse users get the cursor-following tooltip above; keyboard users
-      // get the same content tethered to the focused element via CSS anchor
-      // positioning (no pointer to track). only fires for :focus-visible so
-      // a mouse click that happens to focus a link doesn't double-trigger.
-      if (ANCHOR_OK) {
-        document.addEventListener("focusin", (e) => {
-          const target = findTarget(e.target);
-          if (!target) return;
-          try { if (!target.matches(":focus-visible")) return; } catch (_) {}
-          showAnchored(target);   // keyboard focus is deliberate: no cold delay
-        });
-        document.addEventListener("focusout", (e) => {
-          if (anchoredEl && findTarget(e.target) === anchoredEl) hideTip();
-        });
-      }
-      if (initial && initial.focus && ANCHOR_OK) showAnchored(initial.target);
-      else if (initial && initial.target) showTipFor(initial.target, initial);
+      // The hover engine lives in hoist.js — top-layer hoist, cursor-follow vs
+      // anchored placement, the gap-hop dismissal timer, the scroll model, and
+      // the compositor-layer lifecycle. This module keeps only what is actually
+      // about photos, tracks, artists, and car links: which elements are
+      // targets, and what the tooltip says about one.
+      const hoist = createHoist({
+        node: tip,
+        findTarget,
+        contentFor: buildContent,
+      });
+      if (initial && initial.focus && ANCHOR_OK) hoist.showAnchored(initial.target);
+      else if (initial && initial.target) hoist.show(initial.target, initial);
 }

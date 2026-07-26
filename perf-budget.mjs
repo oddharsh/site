@@ -35,6 +35,7 @@ const ASSET_ENVELOPES = {
   "lens-browser.js": { role: "optional browser island",    gzipKiB: 4,  brotliKiB: 3.5 },
   "quiz.js":        { role: "understanding-check island",  gzipKiB: 6,  brotliKiB: 5 },
   "tooltip.js":     { role: "optional hover island",       gzipKiB: 6,  brotliKiB: 5 },
+  "hoist.js":       { role: "shared hover engine",         gzipKiB: 2,  brotliKiB: 1.5 },
   "luna.css":       { role: "shared render-blocking CSS",  gzipKiB: 12, brotliKiB: 10 },
 };
 
@@ -49,7 +50,7 @@ const WORKER_BASELINE_GZIP_KIB = 129.23;
 const WORKER_ALERT_GROWTH = 0.25;
 const TWINS = [
   "nav.src.js", "notepad.src.js", "lens.src.js", "lens-browser.src.js",
-  "quiz.src.js", "tooltip.src.js", "luna.src.css",
+  "quiz.src.js", "tooltip.src.js", "hoist.src.js", "luna.src.css",
 ];
 const HTML_TWIN = "index.src.html";
 const HTML_ENVELOPE = {
