@@ -90,6 +90,16 @@ worktrees may edit freely, but a worktree is not a release surface.
   Those settings are recorded in [`infra.json`](infra.json) under `release`,
   because Cloudflare exposes no public API for Workers Builds configuration and
   the dashboard form is otherwise the only copy.
+- **No deploy path may create Cloudflare resources.** Wrangler's
+  `--x-provision` and `--x-auto-create` are hidden flags that both default to
+  TRUE, and they provision real KV/R2/D1 for any binding declared without an
+  id. `npm run deploy` and the Workers Builds Deploy command both pin them off,
+  so resource creation stays with `npm run infra:apply` and a missing id fails
+  loudly. `npm run deploy` additionally passes `--strict`, which aborts rather
+  than prompting when the Worker's last deployment came from the dashboard and
+  its remote config has drifted from this repo. Workers Builds deliberately
+  does NOT pass `--strict`: it is the authoritative publisher, and a release
+  should reclaim a dashboard edit instead of stalling on it.
 - **GitHub must never hold a Cloudflare token that can write.** The point is
   that GitHub cannot publish to production; only Workers Builds can, and only
   from `production`. A READ-ONLY token is a different thing and is fine: CI uses

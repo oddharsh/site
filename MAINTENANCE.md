@@ -306,6 +306,13 @@ they are role-aware and deliberately have room for ordinary feature work. The
 Worker gzip number is a growth alert, not a user-experience ceiling: Worker code
 is server-side, so it must earn a hard limit through measured TTFB or CPU impact.
 
+That growth alert now names its cause. The dry-run passes `--metafile`, so
+esbuild writes per-input byte attribution to `.build/.perfbudget/bundle-meta.json`
+and the script reads it back. A green run prints one line (module count plus the
+largest single module); a run over the advisory threshold prints the top 5 with
+sizes, so "the bundle grew" arrives with the modules that grew it instead of a
+number to bisect by hand.
+
 Cloudflare Web Analytics/RUM is the outcome source for LCP, INP, CLS, FCP, and
 page-load behavior. Until it has a useful baseline, do not turn an advisory
 asset warning into a CI failure. Use a controlled mobile/4G browser run for
