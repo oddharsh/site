@@ -225,6 +225,11 @@ const SHELLS = [
   ["lens-browser.js", "/lens-browser.src.js", "LensBrowser"],
   ["quiz.js",    "/quiz.src.js",    "luq-data"],       // the understanding-check widget
   ["tooltip.js", "/tooltip.src.js", "function start"],
+  // the shared hover engine. tooltip.js imports it statically; the serendipity
+  // shell and nav.js import it dynamically. Deliberately NOT content-hashed:
+  // the /a/ repointer is attribute-scoped (src=/href= only) and would never
+  // rewrite an `import` specifier, so it stays a plain /hoist.js like its peers.
+  ["hoist.js",   "/hoist.src.js",   "createHoist"],
 ];
 
 // fail fast on a broken invariant before doing any staging work
