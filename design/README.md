@@ -22,7 +22,7 @@ numbers in them are stale.** Do not read a byte budget or an architecture out of
 these files and treat it as a target.
 
 - **`GREENFIELD.md`** (2026-07-02) — the blank-slate blueprint from a 4-design,
-  4-judge pass. Most of its verdict list shipped; its shell rewrite did not.
+  4-judge pass. Worked through to completion; nothing in it is still pending.
   Full item-by-item accounting below, measured 2026-07-26.
 - **`PORTING.md`** (2026-07-02) — the companion manifest of which tricks and
   which copy survive that rewrite. Its file:line citations point at a tree that
@@ -38,8 +38,13 @@ re-measure everything it asserts first.
 
 The doc reads as one undelivered blueprint, which undersells it: roughly two
 thirds of it either shipped or was deliberately overruled in the three weeks
-after it was written. What's left is the shell rewrite, and the case for that
-has weakened. This section is the accounting so nobody has to re-derive it.
+after it was written, and the remainder was worked through on 2026-07-26. This
+section is the accounting so nobody has to re-derive it.
+
+**GREENFIELD.md is now closed.** Every item it proposed has either shipped, been
+overruled on the record, or been declined with a measured reason. Nothing in it
+is waiting to be built. If the doc reads like a plan, read "What is actually
+left" at the end of this section first.
 
 **Measured today, against the doc's own 2026-07-02 figures:**
 
@@ -75,6 +80,25 @@ Treat every remaining number in GREENFIELD.md as wrong by a similar margin.
 - **Sound pack, System Properties tray popout, Windows Update balloon**: all
   three owner-kept ledger items are live.
 
+Then, on 2026-07-26, the rest of the open list was worked through:
+
+- **`icons.svg`** (#96). The 12 taskbar + tray icons became one generated
+  `<symbol>` sprite, content-hashed into `/a/`. Homepage went 10,348 to 8,288
+  brotli, roughly 2,080 off every page, against 2,344 brotli fetched once at a
+  year immutable. Built differently from the doc, which had the mechanism wrong
+  twice: the icons are hardcoded gradient art rather than `currentColor`-tinted,
+  and the sprite could NOT replace nav.js's `SECTION_ICONS`, because that markup
+  is also serialized into each route's `data:` favicon where an external `<use>`
+  cannot resolve. `gen-desktop-partial.mjs` generates the sprite from those bytes
+  instead, so nav.js stays the single source of truth.
+- **The taste tripwires** (#95), calibrated rather than literal, plus a
+  `/* taste-ok: reason */` marker for deliberate deviations (#100). Its first
+  three findings were real and are fixed (#100).
+- **The Run hover-preview** (#99), built on a hover engine extracted from
+  tooltip.js and serendipity's drifted copy (#98) rather than as a fourth copy.
+- **cal and serendipity adopt the desktop partial** (#97), the prerequisite the
+  shell diet turned out to be blocked on.
+
 ### Overruled, reversed, or declined
 
 - **Tooltips anchor at the control**: tried live 2026-07-03, rolled back within
@@ -86,50 +110,54 @@ Treat every remaining number in GREENFIELD.md as wrong by a similar margin.
 - **The `@layer` cascade spine**: declined. luna.css says so at line 14.
 - Everything already in the Refusals section stayed refused.
 
-### Still open, and whether it's still worth it
+### What is actually left (2026-07-26)
 
-1. **`shell.js` at 3.3KB br: the number is dead, one piece of the work isn't.**
-   The doc assumed nav.js's construct path was a legacy fallback to delete. It
-   isn't: `/coffee` (cal/src/templates.js) and `/serendipity` load nav.js
-   without the partial and build the taskbar there every visit, and
-   gen-desktop-partial.mjs evals the tray template out of that same function, so
-   nav.js is the generator's source of truth. Deleting it today breaks two
-   routes. The real prerequisite is wiring cal and serendipity to
-   lib/desktop.js, which is worth doing on its own. After that the remaining
-   prize is small: nav.js ships from `/a/nav.<hash>.js` at 1-year immutable, so
-   its bytes are a first-visit cost, and the 15KB destinations table is
-   generated data that a diet wouldn't touch.
-2. **`icons.svg`: the one open item with a measured payoff.** The 12 icon SVGs
-   cost 2,204 br in *every document, every visit*, because HTML ships
-   `private, no-cache`. That's ~11% of the homepage's wire and a larger share of
-   a small garage page. A same-origin sprite at 1-year immutable collects that
-   once. Two caveats the doc got wrong: the icons are hardcoded gradient art,
-   not `currentColor`-tinted, so its stated mechanism doesn't apply; and an
-   external `<use>` turns above-fold art into a second request. They're
-   `aria-hidden` decoration, so a late paint is cheap, but prototype and measure
-   LCP, not just bytes.
-3. **The zero-JS ledger (checkbox minimize, `popover` Start menu): mostly not
-   worth it now.** Its actual prizes, CLS 0 and a desktop for curl and JS-off
-   visitors, were won by the SSR partial instead. What's left is that minimize
-   and Start don't work with scripting off, which is a much smaller thing than
-   it looked when the same change was also buying an 88% byte cut. The doc's own
-   risk #1 flags the checkbox as unusual AT semantics. Skip it. `details name=`
-   for the changelog years on /updates is separable and still cheap.
-4. **The Run hover-preview: worth building, and it's the most fun thing left.**
-   ~1.1KB, self-contained, and anchor positioning is Baseline across all three
-   engines now. It's a feature rather than a byte play, and its honesty property
-   (the card can only ever show what Enter would open) still holds.
-5. **Verdict 7, SSR'ing EXIF and histograms into the tooltip markup: decline
-   it.** The premise flipped. Per-photo meta averages 977B; inlining the reduced
-   form for 12 homepage photos costs ~2 to 2.5KB br paid by every visitor,
-   including mobile, which can never hover (tooltip.js doesn't even load on a
-   coarse pointer). The current hover fetch is one request over an already-open
-   h3 connection. Baking the data was the good half of the verdict and it
-   shipped; the inlining half is now a regression.
-6. **The aesthetic deploy greps** (cubic-bezier, radius above 3px, blur shadows,
-   curly quotes): worth it, and cheap. build.mjs already has the eight-tripwire
-   scaffold to hang them on, and the doc's governance risk (#5) is the one risk
-   on its list that ages badly by doing nothing.
-7. **103 Early Hints: close it, effectively done.** The worker emits the
-   `rel=preload` links that Cloudflare's Early Hints harvests into a 103. The
-   doc wanted the outcome, not a hand-rolled 103, and the outcome is live.
+The seven-item open list this audit originally carried is closed. Three shipped,
+three were closed with a reason rather than built, and one turned out to be two
+separate things. Recorded so nobody re-opens a decision that was already made.
+
+| item | outcome |
+|---|---|
+| `icons.svg` | **Shipped** (#96) |
+| Aesthetic deploy greps | **Shipped** (#95, #100) |
+| Run hover-preview | **Shipped** (#98, #99) |
+| `shell.js` at 3.3KB br | **Closed.** Prerequisite shipped (#97); the remainder is not worth doing |
+| Zero-JS ledger | **Closed.** Its real prizes were won by the SSR partial |
+| Verdict 7 (inline EXIF/histograms) | **Declined.** The premise inverted |
+| 103 Early Hints | **Closed.** Already live via Cloudflare's harvest |
+
+Three of those deserve their reasoning kept, because each is a decision a future
+session would otherwise re-derive from the doc and get wrong.
+
+**The shell diet is closed, and its byte case is dead.** cal and serendipity
+adopting the partial (#97) removed the real blocker, so nav.js's construct path
+*could* now be deleted. It should not be, for the number: that path is ~2.2KB of
+`buildTaskbar` plus ~1.1KB of `buildIcons`, under a kilobyte brotli, from a file
+served immutable from `/a/`. Once per visitor per year. The doc's 88% figure was
+never reachable, because the two largest things in nav.js are a generated
+destinations table and a tray template that `gen-desktop-partial.mjs` evals as
+its own input. #97 was still worth doing, for consistency rather than bytes.
+
+**The zero-JS ledger stays skipped.** CLS 0 and a desktop for curl and JS-off
+visitors were the prizes, and the SSR partial won both. What remains is that
+minimize and Start need script, far smaller than it looked when the same change
+was also buying a byte cut that turned out not to exist. The doc's own risk #1
+flags the checkbox minimize as unusual AT semantics.
+
+**Verdict 7 is declined on measurement.** Per-photo meta averages 977B; inlining
+the reduced form for 12 homepage photos costs ~2 to 2.5KB brotli billed to every
+visitor, including mobile, where `tooltip.js` never loads at all because the
+pointer is coarse. Baking the data at photo-add time was the good half of that
+verdict and shipped in v139; the inlining half would now be a regression.
+
+Genuinely still open, both small, and neither blocking:
+
+- **`details name=` for the changelog years on /updates.** Separable from the
+  rest of the zero-JS ledger and still cheap.
+- **A nested ListView for the tracklist.** Not from GREENFIELD.md; it came out
+  of #101. The homepage tracklist now has a proper sunken well, so a row cut by
+  the scroll boundary reads as a viewport edge rather than breakage, but with a
+  single scroller a row can still be bisected. The full fix is the list
+  scrolling inside its own sunken client area with its own scrollbar, which is
+  what Outlook Express's message list did. Deferred as too large for the
+  complaint that prompted it.
