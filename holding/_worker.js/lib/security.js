@@ -9,8 +9,12 @@ import { SHELL_PRELOAD_LINK } from "./shell-assets.js";
 export const SECURITY_HEADERS = {
   "content-security-policy":
     "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://i.scdn.co https://*.spotifycdn.com; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; worker-src 'self'; manifest-src 'self'; upgrade-insecure-requests",
+  // keep every token one a shipping browser still knows — an unrecognized
+  // feature is inert and logs a console error. `browsing-topics` was dropped
+  // 2026-07 for that reason (Topics API deprecated in Chrome 144, feature
+  // removed), same fate as `interest-cohort` before it.
   "permissions-policy":
-    "camera=(), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=(), serial=(), bluetooth=(), midi=(), accelerometer=(), gyroscope=(), magnetometer=(), screen-wake-lock=(), hid=(), idle-detection=()",
+    "camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), bluetooth=(), midi=(), accelerometer=(), gyroscope=(), magnetometer=(), screen-wake-lock=(), hid=(), idle-detection=()",
   "x-frame-options":         "DENY",
   "x-content-type-options":  "nosniff",
   "referrer-policy":         "strict-origin-when-cross-origin",
