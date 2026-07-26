@@ -220,7 +220,7 @@ async function checkInvariants() {
   // want a human look (warn). Demo pages are exempt from the taste warnings and
   // NOT from the font law: /garage and /lwe exist to show the platform off, so
   // frontier CSS in them is the point, while a web font anywhere is still fatal.
-  let tasteScanned = 0;
+  let tasteScanned = 0, tasteOk = [];
   try {
     const walk = async (dir, out = []) => {
       for (const e of await readdir(dir, { withFileTypes: true })) {
@@ -232,12 +232,29 @@ async function checkInvariants() {
     };
     const served = [...await walk("holding"), "cal/src/templates.js", "serendipity/serendipity.js"];
     const isDemo = (p) => /^holding\/(garage|lwe)\//.test(p);
-    // strip block comments before pattern-matching: luna.css discusses @font-face
-    // in prose twice, and a guard that fires on its own documentation gets muted.
-    const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, "");
+    // Blank block comments before pattern-matching (luna.css discusses @font-face
+    // in prose twice, and a guard that fires on its own documentation gets
+    // muted). BLANK rather than delete: same length, newlines kept, so a match
+    // offset still maps to its real line — which is what lets a finding be
+    // traced back to the source line and checked for a taste-ok marker.
+    const blank = (s) => s.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "));
 
     for (const f of served) {
-      let src; try { src = strip(await read(f)); } catch { continue; }
+      let raw; try { raw = await read(f); } catch { continue; }
+      const src = blank(raw);
+      const lines = raw.split("\n");
+      const lineAt = (off) => lines[src.slice(0, off).split("\n").length - 1] || "";
+      // A deliberate deviation is recorded ON THE LINE, as /* taste-ok: why */.
+      // It silences the WARN-level checks only. There is no way to mark yourself
+      // exempt from zero font bytes or from an overshoot curve, because those
+      // are not taste calls. Reasons are printed in the build summary, so an
+      // exemption stays visible instead of quietly becoming the new normal.
+      const okOn = (off) => {
+        const m = /taste-ok:\s*([^*\/]+)/.exec(lineAt(off));
+        if (!m) return false;
+        tasteOk.push(`${f}: ${m[1].trim()}`);
+        return true;
+      };
       tasteScanned++;
 
       // 9a (hard) — zero font bytes, the one rule with no taste component. Every
@@ -262,14 +279,14 @@ async function checkInvariants() {
       // Tuning one of these is a taste call, so this prompts a look, never a block.
       for (const m of src.matchAll(/cubic-bezier\([^)]*\)/g)) {
         const v = m[0].replace(/\s+/g, "");
-        if (!["cubic-bezier(.4,0,1,1)", "cubic-bezier(0,0,.2,1)"].includes(v)) warn.push(`${f}: ${m[0]} is not one of the two window-morph curves — taste review`);
+        if (!["cubic-bezier(.4,0,1,1)", "cubic-bezier(0,0,.2,1)"].includes(v) && !okOn(m.index)) warn.push(`${f}: ${m[0]} is not one of the two window-morph curves — taste review`);
       }
       // 9d (warn) — radius past --radius-window (8px). Elliptical radii are
       // skipped: the Start orb is a real pill and its 9px/14px is correct.
       for (const m of src.matchAll(/border-radius:\s*([^;}"']+)/g)) {
         if (m[1].includes("/")) continue;
         for (const px of m[1].matchAll(/([\d.]+)px/g)) {
-          if (Number(px[1]) > 8) warn.push(`${f}: border-radius ${m[1].trim()} exceeds --radius-window (8px) — taste review`);
+          if (Number(px[1]) > 8 && !okOn(m.index)) warn.push(`${f}: border-radius ${m[1].trim()} exceeds --radius-window (8px) — taste review`);
         }
       }
       // 9e (warn) — a soft shadow. XP dropped shadows on menus and dialogs, so
@@ -279,18 +296,19 @@ async function checkInvariants() {
         if (/\binset\b/.test(m[1])) continue;
         // offsets may be a unitless 0 ("0 4px 24px"), so px is optional on them
         for (const px of m[1].matchAll(/-?[\d.]+(?:px)?\s+-?[\d.]+(?:px)?\s+([\d.]+)px/g)) {
-          if (Number(px[1]) > 12) warn.push(`${f}: box-shadow blur ${px[1]}px reads as a modern elevation shadow — taste review`);
+          if (Number(px[1]) > 12 && !okOn(m.index)) warn.push(`${f}: box-shadow blur ${px[1]}px reads as a modern elevation shadow — taste review`);
         }
       }
       // 9f (warn) — smooth scrolling. XP scrolled instantly; a demo page showing
       // the property off is exempt above.
-      if (/scroll-behavior:\s*smooth/.test(src)) warn.push(`${f}: scroll-behavior: smooth — XP scrolled instantly`);
+      const sb = /scroll-behavior:\s*smooth/.exec(src);
+      if (sb && !okOn(sb.index)) warn.push(`${f}: scroll-behavior: smooth — XP scrolled instantly`);
     }
   } catch (e) { warn.push(`taste tripwire could not run: ${e.message}`); }
 
   if (warn.length) console.warn("build: invariant WARNINGS (deploy continues):\n  - " + warn.join("\n  - "));
   if (hard.length) throw new Error("build: invariant tripwires FAILED, deploy blocked:\n  - " + hard.join("\n  - "));
-  console.log(`invariants ok: ${routeKeys.length + prefixProbes.length} routes mirrored (${prefixProbes.length} prefix), CSP style-src, blink-fix, generator, geometry, ${skillsChecked} skill digest${skillsChecked === 1 ? "" : "s"}, ${manifestChecked} surfaces registered, ${tasteScanned} files taste-scanned${warn.length ? " (with warnings above)" : ""}`);
+  console.log(`invariants ok: ${routeKeys.length + prefixProbes.length} routes mirrored (${prefixProbes.length} prefix), CSP style-src, blink-fix, generator, geometry, ${skillsChecked} skill digest${skillsChecked === 1 ? "" : "s"}, ${manifestChecked} surfaces registered, ${tasteScanned} files taste-scanned${tasteOk.length ? ` (${tasteOk.length} taste-ok: ${tasteOk.join("; ")})` : ""}${warn.length ? " (with warnings above)" : ""}`);
 }
 
 // the client scripts to minify: [file, banner pointer, tripwire the minified output MUST contain]
