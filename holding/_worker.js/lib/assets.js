@@ -116,7 +116,52 @@ export async function servePrecompressedShell(request, env) {
   if (request.method !== "GET" || !SHELL_TYPES[ext]) {
     return serveAssetWith404Clamp(request, env);
   }
-  if (!wantsPrecompressed(url)) return serveAssetWith404Clamp(request, env);
+
+  // ?br=probe — the one-deploy experiment behind gotcha 13. We measured that the
+  // runtime rewrites Accept-Encoding to a constant before a worker sees it, which
+  // kills compression negotiation here. Shared dictionaries need the worker to read
+  // `Available-Dictionary`, an encoding-negotiation header of exactly the class the
+  // runtime was just observed rewriting, so whether Worker-served dcb is possible AT
+  // ALL is an open question that no local test can answer.
+  //
+  // This reports what actually arrived at the worker in production. Named headers
+  // only, never a blanket reflection of the request: these four carry no credential
+  // and no visitor identity, and echoing arbitrary headers would be a real smell.
+  // REMOVE THIS once the dictionary question is settled — it is an experiment, not a
+  // feature, and site-manifest.json deliberately does not list it as a surface.
+  if (url.searchParams.get("br") === "probe") {
+    return new Response(JSON.stringify({
+      note: "encoding-negotiation headers as the Worker received them",
+      "accept-encoding":     request.headers.get("accept-encoding"),
+      "available-dictionary": request.headers.get("available-dictionary"),
+      "dictionary-id":       request.headers.get("dictionary-id"),
+      "cf-ray":              request.headers.get("cf-ray"),
+    }, null, 2) + "\n", {
+      headers: {
+        "content-type":  "application/json; charset=utf-8",
+        "cache-control": "no-store",
+      },
+    });
+  }
+
+  // The identity path, which is what everyone gets while the gate is off. It carries
+  // one extra header: Use-As-Dictionary offers these bytes to the browser as a
+  // compression dictionary for future /a/ requests (RFC 9842). That offer is what
+  // makes a Chromium client start sending `Available-Dictionary` back, which is the
+  // ONLY way ?br=probe above can answer whether the runtime lets that header through.
+  //
+  // Safe to serve unconditionally: it is purely additive. A client may ignore it, and
+  // a server is always free to ignore the resulting Available-Dictionary — which we
+  // do, since nothing here returns dcb yet. So the worst case is that Chromium stores
+  // 13KB it already downloaded and adds a request header we don't read.
+  //
+  // match="/a/*" scopes it to the content-hashed shell, so a new deploy's
+  // /a/nav.<newhash>.js is exactly the request that would carry the old bytes' hash.
+  const DICTIONARY_OFFER = { "use-as-dictionary": 'match="/a/*"' };
+
+  if (!wantsPrecompressed(url)) {
+    return serveAssetWith404Clamp(request, env, { headers: DICTIONARY_OFFER });
+  }
 
   let br;
   try {
@@ -142,6 +187,7 @@ export async function servePrecompressedShell(request, env) {
   const headers = new Headers(br.headers);
   headers.set("content-type", SHELL_TYPES[ext]);
   headers.set("content-encoding", "br");
+  headers.set("use-as-dictionary", DICTIONARY_OFFER["use-as-dictionary"]);
   // The URL is content-addressed, so these bytes never change identity. Vary still
   // has to name accept-encoding: the same URL answers with br or identity depending
   // on the request, and a shared cache must not serve one to a client that asked for
