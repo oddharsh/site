@@ -316,6 +316,10 @@ body {
   box-shadow: inset 1px 1px 0 #166aee, inset 2px 2px 0 #0855dd,
               inset -1px -1px 0 #00138c, inset -2px -2px 0 #003bda,
               4px 4px 0 rgba(0,30,160,.35);
+  /* Luna face, and it is load-bearing rather than decorative: it is the colour
+     of the gutter between the blue frame and the client area below. The window
+     used to be white, which made the gutter invisible. */
+  background: #ece9d8;
 }
 
 .content {
@@ -882,15 +886,40 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
      paint→mount reflow (the grid lays out at its final width immediately).
      top/left/bottom keep .content's 12/16/16.
 
-     20px, raised from 12px: .window carries `resize: both`, so the BROWSER draws
-     its own hatched grip in the bottom-right corner, on top of whatever content
-     is scrolled under it — measured at ~18px square (it hit-tests as .window out
-     to 18px in from the corner). Where scrollbars take layout space the old 12px
-     was already clear, because the 16px scrollbar sat between; but macOS defaults
-     to OVERLAY scrollbars, which reserve nothing, so there the grip landed
-     directly on the tracklist's runtime column. 20px clears the grip on its own,
+     16px is back down from 20px, and the client edge below is why. .window
+     carries `resize: both`, so the BROWSER draws its own hatched grip in the
+     bottom-right corner on top of whatever is scrolled under it — measured at
+     ~18px square (it hit-tests as .window out to 18px in from the corner).
+     Padding alone used to have to clear that grip, because content ran to the
+     frame; now the 5px margin + 1px client edge sit outside the padding, so
+     16px of padding puts content 22px in from the frame and the grip is clear
      without depending on a scrollbar being there to do it. */
-  .window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 20px !important; }
+  .window > .content {
+    flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 16px !important;
+    /* THE CLIENT EDGE. The scroller used to be flush with the window frame on
+       all four sides, so a scroll position that cut a photo tile or a tracklist
+       row in half landed that cut directly on the blue chrome — content reading
+       as though it were painting over the window's edge. Every XP window with a
+       scrolling client area (Explorer, Outlook Express) inset that area into a
+       sunken well first, and a half-item clipped at a sunken well reads as "there
+       is more below" instead of as breakage. Same reason #101 gave the tracklist
+       its own well, one level further out.
+
+       Still exactly ONE scroller — this is a frame around the existing one, not
+       a second scroll region.
+
+       Drawn as a BORDER, deliberately, not the inset box-shadow the rest of the
+       site's wells use: a scroller clips its descendants to the PADDING box, so a
+       border can never be painted over, while an inset shadow paints underneath
+       descendant backgrounds and the white photo tiles would walk straight across
+       it — which is the bug, not the fix. The margin exposes .window's Luna face
+       as the gutter. Colours are the sunken pair (dark top-left, white
+       bottom-right); #7f9db9 is the same field edge .xp-input uses. */
+    margin: 5px;
+    border: 1px solid;
+    border-color: #7f9db9 #fff #fff #7f9db9;
+    background: #fff;
+  }
   /* pre-JS taskbar strip — the real #axp-taskbar (z 99999) covers it once nav.js
      mounts; gradient matches it so there's no colour pop either. */
   body::after {
