@@ -18,6 +18,13 @@
 // inline JS endpoints are prefixed with whatever path the request came
 // in on; the router sets env.BASE_PATH per-request.
 
+// The desktop partial the rest of the site ships. cal is staged beside holding/
+// in .build with the same relative layout as the source tree, so this one path
+// resolves in both. Emitted only under /coffee (see `onShell` in shell()): on
+// the bare cal.aadhar.sh fallback the shell's links would be cross-origin and
+// /nav.js 404s, so that host stays a standalone window, as it always has.
+import { DESKTOP_CHROME, DESKTOP_TOP } from "../../holding/_worker.js/lib/desktop.js";
+
 const STYLES = `
 * { box-sizing: border-box; }
 
@@ -324,10 +331,14 @@ form.book .actions {
 // OS-window geometry — emitted only under aadhar.sh/coffee, where /nav.js is
 // same-origin and turns this into a real desktop window (Bliss wallpaper,
 // taskbar, draggable + resizable) like the garage. Inlined so FIRST PAINT
-// matches nav.js (no shell "pop" when the deferred desktop arrives); keep in
-// sync with nav.js. The bottom strip is a taskbar placeholder until the real
-// one builds. On the cal.aadhar.sh fallback /nav.js 404s, so this is skipped
-// and the page stays a standalone centered window (degrades cleanly).
+// matches nav.js (no shell "pop" when the deferred desktop arrives).
+// On the cal.aadhar.sh fallback /nav.js 404s, so this is skipped and the page
+// stays a standalone centered window (degrades cleanly).
+//
+// The painted taskbar placeholder that used to sit here (a body::after strip
+// gradient, hand-kept "in sync with nav.js") is GONE: the page now ships the
+// real DESKTOP_CHROME, so there is nothing to stand in for and nothing left to
+// keep in sync by hand.
 const SHELL_GEOMETRY = `
 html { height: 100dvh; overflow: hidden; }
 body { min-height: 0; height: calc(100vh - 30px); height: calc(100dvh - 30px);
@@ -335,9 +346,6 @@ body { min-height: 0; height: calc(100vh - 30px); height: calc(100dvh - 30px);
 .window { flex: 0 1 auto; min-height: 0; max-height: 100%; display: flex; flex-direction: column; }
 .window > .title-bar { flex: 0 0 auto; }
 .window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 12px; }
-body::after { content: ""; position: fixed; left: 0; right: 0; bottom: 0; height: 30px; z-index: 1;
-  background: linear-gradient(180deg, oklch(67% 0.15 256) 0%, oklch(58% 0.19 257) 4%,
-  oklch(51% 0.20 258) 9%, oklch(49% 0.20 258) 50%, oklch(46% 0.20 259) 92%, oklch(40% 0.18 260) 100%); }
 `;
 
 // the coffee section glyph — mirrors nav.js SECTION_ICONS.coffee + the taskbar
@@ -364,7 +372,7 @@ function shell(title, body, env) {
 <link rel="icon" type="image/svg+xml" href="${COFFEE_FAVICON}">
 <style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}${STYLES}${onShell ? SHELL_GEOMETRY : ""}</style>
 </head>
-<body>
+<body>${onShell ? DESKTOP_TOP : ""}
 <div class="window">
   <div class="title-bar" aria-hidden="true">
     <span class="title-text"><span class="icon"></span>${esc(fullTitle)}</span>
@@ -382,7 +390,7 @@ function shell(title, body, env) {
       <span>cloudflare workers · ${esc(env.HOST_TIMEZONE || "UTC").replace(/_/g, " ")}</span>
     </div>
   </div>
-</div>${onShell ? `
+</div>${onShell ? `${DESKTOP_CHROME}
 <script src="/nav.js" defer></script>` : ""}
 </body>
 </html>`;

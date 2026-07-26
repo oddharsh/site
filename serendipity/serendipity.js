@@ -14,6 +14,14 @@
 
 const PREFIX = "/serendipity";
 
+// The desktop partial the rest of the site ships. serendipity is staged beside
+// holding/ in .build with the same relative layout as the source tree, so this
+// one path resolves in both. Before this, /serendipity loaded /nav.js and let
+// it CONSTRUCT the desktop after load: curl and JS-off visitors got no desktop
+// at all, and everyone else got a shell pop. Now the markup is in the document
+// and nav.js only wires behavior, same as every other page.
+import { DESKTOP_CHROME, DESKTOP_TOP } from "../holding/_worker.js/lib/desktop.js";
+
 // ── tiny helpers ────────────────────────────────────────────────────────────
 const esc = (v) =>
   String(v == null ? "" : v).replace(/[&<>"']/g, (c) =>
@@ -304,7 +312,7 @@ function shell(title, currentPath, bodyHtml) {
 <title>${currentPath === PREFIX ? "aadhar.sh/serendipity" : "aadhar.sh/serendipity/" + esc(title)}</title>
 <meta name="description" content="A public, shared database of events worth going to and who's going — fed by the collective, queryable by humans and agents.">
 <style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}${shellCss()}</style>
-<link rel="preload" as="style" href="/luna.css"><link rel="stylesheet" href="/luna.css"></head><body>
+<link rel="preload" as="style" href="/luna.css"><link rel="stylesheet" href="/luna.css"></head><body>${DESKTOP_TOP}
 <div class="wrap"><div class="window">
   <div class="title-bar"><span class="title-text"><span class="icon" aria-hidden="true"></span>aadhar.sh/serendipity</span>
     <span class="controls"><a class="close" href="/" title="back to aadhar.sh" aria-label="back to aadhar.sh"></a></span>
@@ -324,7 +332,7 @@ function shell(title, currentPath, bodyHtml) {
     </nav>
     <main class="content">${bodyHtml}</main>
   </div>
-</div></div>
+</div></div>${DESKTOP_CHROME}
   <script src="/nav.js" defer></script>
 </body></html>`;
 }
