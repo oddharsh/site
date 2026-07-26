@@ -241,6 +241,11 @@ done
 # wiped them; the tooltip reads meta.hi instead of computing client-side)
 "$SCRIPT_DIR/photo-histograms.py" 2>&1 | tail -1
 
+# roll the per-photo EXIF (minus histograms) into the one shared index the
+# tooltip warms on idle. derived data, so it MUST be rebuilt whenever the
+# per-photo files change; check-photo-pipeline.mjs fails on any drift.
+node "$SCRIPT_DIR/build-exif-index.mjs"
+
 COUNT=$(jq 'keys | length' "$OUT")
 if [ "$MERGE" -eq 1 ]; then
   echo "✓ merged metadata for $COUNT photos → $OUT (+ per-stem files in images/meta/, histograms baked)"

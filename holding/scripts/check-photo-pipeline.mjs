@@ -9,6 +9,7 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { buildExifIndex } from "./build-exif-index.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const IMAGES = path.join(ROOT, "holding/images");
@@ -86,6 +87,27 @@ for (const file of authored) {
     }
   }
 }
+
+// The shared EXIF index (/images/exif.json) is what the tooltip reads for its
+// text on every hover, so a stale or partial one is a silently blanker tooltip
+// rather than an error anyone would notice. It is DERIVED from the per-photo
+// files, so rebuild it here and compare: any drift means extract-photo-metadata.sh
+// ran without regenerating it. The tooltip still self-heals per photo, but the
+// point of the index is that it should not have to.
+const exifIndex = await json(path.join(IMAGES, "exif.json"));
+const rebuilt = await buildExifIndex();
+const missing = stems.filter((stem) => !exifIndex[stem]);
+if (missing.length) {
+  fail(`${missing.length} photo(s) absent from images/exif.json: ${missing.slice(0, 8).join(", ")}` +
+       `${missing.length > 8 ? " …" : ""}\n  fix with: node holding/scripts/build-exif-index.mjs`);
+}
+const stale = stems.filter((stem) => JSON.stringify(exifIndex[stem]) !== JSON.stringify(rebuilt[stem]));
+if (stale.length) {
+  fail(`images/exif.json disagrees with images/meta/ for ${stale.length} photo(s): ${stale.slice(0, 8).join(", ")}` +
+       `${stale.length > 8 ? " …" : ""}\n  fix with: node holding/scripts/build-exif-index.mjs`);
+}
+const strays = Object.keys(exifIndex).filter((stem) => !hashes[stem]);
+if (strays.length) fail(`images/exif.json carries unpublished stems: ${strays.join(", ")}`);
 
 // alt text is a served artifact like the pixels and the EXIF, so a gap fails here
 // rather than shipping an unlabelled image. add-photos.sh generates captions just
