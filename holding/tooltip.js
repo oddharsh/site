@@ -121,31 +121,47 @@ export function start(initial) {
       // dr · cc chrome · cb chrome-blue · gr grain · gs grain-size · ht highlight ·
       // st shadow · sa saturation · hi {l,r,g,b} histogram. nulls dropped.
       const histFor = (stem) => (metaMap[stem] && metaMap[stem].hi) || null;
-      // EXIF is NOT inlined on the uncacheable homepage, and not shipped as one big
-      // index either — it's fetched PER PHOTO from /images/meta/<stem>.json after
-      // page settle (with first-hover fetch as fallback). The tiny files are edge
-      // and browser cached, busted by ?mv, so the warm-up covers only the current
-      // selection rather than the whole pool; repeat hovers and repeat visits are
-      // served from the browser's HTTP cache with no network at all. The baked
-      // histogram rides the same file, so bars + EXIF land together in one fetch.
-      const metaMap = Object.create(null);   // stem → exif object | null (fetched, none) | absent (not fetched)
-      const META_V = "mv=5";                 // bump when metadata is regenerated (5: compact per-photo schema)
+      // EXIF is NOT inlined on the uncacheable homepage. It arrives in two tiers.
+      //
+      // TEXT: one shared /images/exif.json for all 158 photos, 2.6KB brotli,
+      // immutable and busted by ?mv. This used to be 12 per-photo fetches warmed
+      // for the current selection, on the reasoning that a repeat visit would
+      // replay them from cache. The homepage draws a fresh RANDOM 12 of 158 per
+      // request, so a given slot repeats about 7.6% of the time and that cache
+      // almost never hit: a cache-off capture showed ~8.9KB across 12 cold
+      // requests, and the next visit paid it again. The whole-library index is
+      // smaller than that on the FIRST visit (11 fewer sets of response headers,
+      // and 158 records compress against each other) and free on every visit
+      // after, whatever the draw.
+      //
+      // BARS: the four 64-bin histogram channels stay PER PHOTO, because they are
+      // 623 of a meta file's ~977 bytes and would take the index from 2.6KB to
+      // 24KB for bars most visitors never see. So a hover renders its text
+      // immediately from the index and fetches the one histogram it needs.
+      const metaMap = Object.create(null);   // stem → exif object (may lack .hi) | absent
+      const inFlight = new Set();            // stems with a per-photo fetch open
+      const META_V = "mv=6";                 // bump when metadata is regenerated (6: shared EXIF index + per-photo histograms)
       const fetchMeta = (stem, priority) => {
-        if (stem in metaMap) return;         // already in hand, or a fetch is in flight
-        metaMap[stem] = null;                // in-flight sentinel (renders as "no exif yet")
+        const have = metaMap[stem];
+        if (have && have.hi) return;         // text + bars both in hand
+        if (inFlight.has(stem)) return;
+        inFlight.add(stem);
+        // A stem missing from the index (a photo added since the visitor cached
+        // it) lands here too, and this fetch carries the text as well as the
+        // bars, so a stale index self-heals instead of rendering blank.
         // warm-up fetches ride at low priority so the browser (and Lighthouse's
         // critical-request-chain audit) treats them as the idle filler they are;
         // a hover-triggered fetch keeps the default because someone is waiting.
         fetch(`/images/meta/${encodeURIComponent(stem)}.json?${META_V}`, priority ? { priority } : undefined)
           .then(r => {
             // non-200, SPA-fallback html, or a transient bot-challenge → treat as a
-            // failure and fall to .catch (which clears the sentinel so we can retry).
+            // failure and fall to .catch (which frees the stem so we can retry).
             if (!r.ok || !(r.headers.get("content-type") || "").includes("json")) throw 0;
             return r.json();
           })
           .then(m => {
             if (!m || typeof m !== "object") throw 0;
-            metaMap[stem] = m;
+            metaMap[stem] = m;   // superset of the index entry: EXIF plus .hi
             // re-render if this photo's tip is still the open one. `hoist` is
             // declared below but always initialized by the time this fetch
             // resolves, and hoist.active() is the live target.
@@ -153,27 +169,49 @@ export function start(initial) {
             if (open && open.matches?.(".photos a") &&
                 (open.dataset.full || "").replace(/\.[^.]+$/, "") === stem) hoist.show(open);
           })
-          // CRUCIAL: drop the sentinel on failure so a later hover RE-FETCHES rather
-          // than the photo being stuck empty for the whole session. self-healing.
-          .catch(() => { delete metaMap[stem]; });
+          // Deliberately does NOT drop metaMap[stem] on failure any more: the entry
+          // is usually the index's EXIF, and discarding it would turn a missing
+          // histogram into a blank tooltip. Clearing inFlight is what keeps a later
+          // hover able to retry, which is the self-healing property that matters.
+          .catch(() => {})
+          .finally(() => { inFlight.delete(stem); });
       };
-      // EXIF/histogram is idle-prefetched for the current photo selection after
-      // page settle (see warmPhotoMeta below). A first-hover fetch remains the
-      // fallback for a busy page or a client-rendered grid. The warm-up costs a
-      // small burst for the visible slots, never the full photo library, and
-      // repeat visits are served from the browser/edge cache.
+
+      // The shared index, fetched once during idle. Every stem it carries means a
+      // hover that renders its text with no network at all, whichever 12 the
+      // server drew. Failure is silent and harmless: fetchMeta's per-photo path
+      // still covers every stem, which is exactly the pre-index behaviour.
+      let indexRequested = false;
+      const fetchExifIndex = () => {
+        if (indexRequested) return;
+        indexRequested = true;
+        fetch(`/images/exif.json?${META_V}`, { priority: "low" })
+          .then(r => {
+            if (!r.ok || !(r.headers.get("content-type") || "").includes("json")) throw 0;
+            return r.json();
+          })
+          .then(all => {
+            if (!all || typeof all !== "object") throw 0;
+            for (const stem of Object.keys(all)) {
+              // never clobber a per-photo record already in hand: that one has .hi
+              if (!metaMap[stem]) metaMap[stem] = all[stem];
+            }
+            const open = hoist.active();
+            if (open && open.matches?.(".photos a")) hoist.show(open);
+          })
+          .catch(() => { indexRequested = false; });
+      };
 
       const photoStem = (slot) => {
         const filename = slot.dataset.full || decodeURIComponent((slot.href || "").split("/").pop());
         return filename.replace(/\.[^.]+$/, "");
       };
+      // One request instead of one per visible slot. The grid it is warming is a
+      // random draw, so warming "just the current selection" was warming a set
+      // nobody would see again; the index covers every draw and every later visit.
+      // Histograms stay unwarmed on purpose and load on the hover that needs them.
       const warmPhotoMeta = () => {
-        const stems = new Set();
-        document.querySelectorAll(".photos a[data-full]").forEach((slot) => {
-          const stem = photoStem(slot);
-          if (stem) stems.add(stem);
-        });
-        stems.forEach((stem) => fetchMeta(stem, "low"));
+        if (document.querySelector(".photos a[data-full]")) fetchExifIndex();
       };
       let metaWarmupQueued = false;
       const queuePhotoMetaWarmup = () => {

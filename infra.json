@@ -239,8 +239,26 @@
       {
         "id": "hsts-preload",
         "target": "homepage",
-        "assert": { "headerEquals": { "strict-transport-security": "max-age=15552000; includeSubDomains; preload" } },
-        "why": "Exact-matched like SPF and DMARC above, because it is hand-chosen policy rather than a platform default. Weakening a preloaded policy is slow to undo, since browsers keep honouring the old max-age until it expires. Raising it is fine and should update this line."
+        "assert": { "headerEquals": { "strict-transport-security": "max-age=31536000; includeSubDomains; preload" } },
+        "why": "Exact-matched like SPF and DMARC above, because it is hand-chosen policy rather than a platform default. Weakening a preloaded policy is slow to undo, since browsers keep honouring the old max-age until it expires. Raising it is fine and should update this line. Raised from 15552000 (180d) to a full year on 2026-07-26: hstspreload.org rejects anything under 31536000 with max_age.below_1_year, so the `preload` token had been a claim the zone could not cash, and the domain was not on the list."
+      },
+      {
+        "id": "app-owns-security-headers",
+        "target": "homepage",
+        "assert": {
+          "headerEquals": {
+            "x-frame-options": "DENY",
+            "referrer-policy": "strict-origin-when-cross-origin"
+          },
+          "headerAbsent": ["expect-ct", "x-xss-protection"]
+        },
+        "why": "The repo declares these in _headers AND in the worker's SECURITY_HEADERS, and for an unknown stretch before 2026-07-26 the edge quietly overrode both: Cloudflare's `Add security headers` managed transform served x-frame-options SAMEORIGIN over the declared DENY, referrer-policy same-origin over strict-origin-when-cross-origin, plus two headers nobody asked for (expect-ct, an obsolete spec, and x-xss-protection: 1; mode=block, whose recommended value is now 0). Nothing in the repo could see it, because every local check reads the source rather than the wire. That is the whole argument for asserting observed responses: a header the code sets is not a header the visitor gets."
+      },
+      {
+        "id": "speed-brain-off",
+        "target": "homepage",
+        "assert": { "headerAbsent": ["speculation-rules"] },
+        "why": "index.html ships hand-tuned speculation rules with a deliberate exclusion list (/whoareyou keeps a per-request fingerprint honest, /rn* and /images* are endpoints and multi-megabyte R2 originals rather than pages). Speed Brain injected a second rule set over the top via this header: a blanket href_matches /* prefetch with no exclusions at all. Same failure shape as Polish above, where a helpful-sounding toggle silently overrides a deliberate choice the repo cannot see being overridden."
       }
     ]
   },
