@@ -47,7 +47,16 @@
 # hashed app-shell assets: /a/<name>.<hash8>.<ext> (nav.js + luna.css + lens.js). build.mjs
 # mints a fresh hash whenever the shell bytes change, so the URL names exact bytes
 # and a year + immutable is structurally safe — same content-addressed contract as
-# /i/ thumbnails, and edge-direct for the same reason (not in run_worker_first).
+# /i/ thumbnails.
+#
+# NO LONGER edge-direct (changed 2026-07-26). /a/* is in run_worker_first so the
+# worker can hand out build.mjs's brotli q11 `.br` twin, which the edge would not
+# have produced: it fly-compresses at about q4 and prefers zstd when a browser
+# offers everything, and zstd measured LARGER than its own brotli on this site.
+# Worth ~19% of nav.js + luna.css on the wire. This rule still applies to both the
+# asset and its `.br` twin (the glob matches each), so the immutable cache survives
+# the move; the worker carries the asset layer's headers through and only corrects
+# content-type, content-encoding, vary, and the ETag.
 # The unhashed /nav.js + /luna.css + /lens.js below stay short-cached as fallbacks
 # (cal/coffee's absolute refs, dev, any stale HTML); every page the build touches
 # loads the hashed URL.

@@ -17,6 +17,7 @@
 
 import { createHash } from "node:crypto";
 import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { brotliCompressSync, constants as zlibConstants } from "node:zlib";
 import minifyHtml from "@minify-html/node";
 import { transform as transformCss } from "lightningcss";
 import { minifySync } from "oxc-minify";
@@ -698,6 +699,56 @@ for (const [file, srcPath, marker] of SHELLS) {
     if (!body.includes(to)) throw new Error(`${a.witness} was not repointed to hashed ${a.base} (${to})`);
   }
   console.log(`hashed-asset refs: repointed ${refCount} references across ${filesTouched} files`);
+}
+
+// 7) precompress the /a/ shell assets at brotli q11, next to the bytes they encode.
+//
+// The edge compresses on the fly at about q4, and when a browser offers everything
+// it picks zstd — which measured LARGER than Cloudflare's own brotli on this site
+// (13,264 vs 12,457 bytes on the homepage, 2026-07-26). Encoding offline at q11 is
+// a measured ~19% off the wire for the two render-path assets, and it is free at
+// decode: brotli decode time is independent of encode QUALITY, because the decoder
+// makes one pass over a stream that is now smaller (0.070ms at q4 vs 0.081ms at q11
+// on a 47KB document, in-process, 300 iterations). GREENFIELD.md asked for exactly
+// this in July 2026 ("static documents precompress offline at brotli q11") and
+// measured the same ~19% tax; wrangler.jsonc deferred it as migration scope rather
+// than rejecting it.
+//
+// Only /a/ is precompressed. Those four files are content-addressed, immutable, and
+// on the render path, so they are the whole win in one bounded directory. The static
+// garage/lwe HTML is the next candidate and needs its own routing decision.
+//
+// This is safe to add because it degrades to exactly today's behavior: the worker
+// serves a .br twin only when the request actually offers `br` AND the twin exists.
+// A skipped build step, or a client without brotli, gets the identity bytes.
+{
+  const dir = `${OUT}/holding/a`;
+  const files = (await readdir(dir)).filter((f) => /\.(js|css|svg)$/.test(f));
+  if (!files.length) throw new Error("precompression found no /a/ shell assets — did step 6 stop emitting them?");
+  let raw = 0, enc = 0;
+  for (const f of files) {
+    const bytes = await readFile(`${dir}/${f}`);
+    const out = brotliCompressSync(bytes, {
+      params: {
+        [zlibConstants.BROTLI_PARAM_QUALITY]: 11,
+        // 24 is the largest window a `Content-Encoding: br` response may use (RFC 7932
+        // §4). Large-window brotli reaches 2^30 but is not legal on the wire, so a
+        // decoder is entitled to reject it — never raise this.
+        [zlibConstants.BROTLI_PARAM_LGWIN]: 24,
+        [zlibConstants.BROTLI_PARAM_SIZE_HINT]: bytes.length,
+      },
+    });
+    // Refuse to ship a "compressed" twin that isn't smaller. Cheap guard against a
+    // future asset type where q11 loses (already-compressed bytes, tiny files).
+    if (out.length >= bytes.length) {
+      console.log(`precompress: SKIPPED /a/${f} (br ${out.length} >= raw ${bytes.length})`);
+      continue;
+    }
+    await writeFile(`${dir}/${f}.br`, out);
+    raw += bytes.length; enc += out.length;
+    console.log(`precompressed: /a/${f} ${bytes.length} -> ${out.length} bytes (br q11)`);
+  }
+  console.log(`precompress: ${(raw / 1024).toFixed(1)}KB -> ${(enc / 1024).toFixed(1)}KB brotli q11 across ${files.length} shell assets`);
 }
 
 console.log(`staged ${OUT}/ - deploy with: wrangler deploy (self-builds via build.command) or npm run deploy`);
