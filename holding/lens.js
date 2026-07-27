@@ -25,7 +25,7 @@
   var browserData = null; // last opt-in Browser Run snapshot
   var view = "both";     // both | human | machine | browser | delta
   var lens = "readiness"; // readiness | anatomy | structured | ai | terms | discovery
-  var counterfactuals = { markdown: false, semantic: false, contract: false, authority: false, receipt: false };
+  var counterfactuals = { markdown: false, semantic: false, contract: false, authority: false, receipt: false, dictionary: false, ech: false };
   var busy = false;
   var browserBusy = false;
   var lastShotUrl = null;   // the live snapshot object URL, revoked before the next mint / on decode
@@ -130,7 +130,7 @@
     // hasOwnProperty — so returning only the keys ?cf= mentioned (i.e. none, on a
     // normal visit) left every Delta switch dead and the Readiness projection
     // banner permanently empty. The seed doubles as the allowlist.
-    var cf = { markdown: false, semantic: false, contract: false, authority: false, receipt: false };
+    var cf = { markdown: false, semantic: false, contract: false, authority: false, receipt: false, dictionary: false, ech: false };
     (p.get("cf") || "").split(",").forEach(function (key) {
       if (Object.prototype.hasOwnProperty.call(cf, key)) cf[key] = true;
     });
@@ -194,7 +194,7 @@
     // B). Only reset when we already hold data for a *different* URL, so a shared
     // /lens?url=X&cf=… deep link still lands with its switches intact on first load.
     if (data && (data.finalUrl || data.url) !== url) {
-      counterfactuals = { markdown: false, semantic: false, contract: false, authority: false, receipt: false };
+      counterfactuals = { markdown: false, semantic: false, contract: false, authority: false, receipt: false, dictionary: false, ech: false };
     }
     // reflect the scanned URL in the address bar so every scan is a shareable link.
     // replaceState (not pushState): no reload, and repeated scans don't spam the
@@ -627,9 +627,40 @@
     var intro = '<div class="lx-delta-intro"><b>Counterfactual lab.</b> Turn on one piece of web infrastructure and watch the route change. Green means Lens observed a signal. Amber means this page is simulating the addition locally.</div>';
     var proof = '<div class="lx-proof"><b>Current evidence:</b> ' + esc((d.llmsTxt && d.llmsTxt.ok ? "llms.txt is present. " : "No llms.txt observed. ") + (action ? "An action surface answered. " : "No action surface answered. ") + (semantic ? "Structured data exists." : "Structured entity data is absent.")) + '</div>';
     var deltaText = cf.filter(function (x) { return counterfactuals[x.key]; }).map(function (x) { return "+ " + x.stage.toLowerCase() + " · " + x.label; }).join("\n");
+
+    // The wire group: transport counterfactuals that sit under the same task path.
+    // Both read straight off data.wire (dictionary from the site's own response
+    // headers, ECH from a DoH HTTPS-record lookup), so "observed" here is real, not
+    // a projection. Deliberately kept below the task path — this is the knob folks
+    // rarely turn on, not the headline.
+    var w = data.wire || {};
+    var wireDict = w.dictionary || {};
+    var wireEch = w.ech || {};
+    var wire = [
+      { key: "dictionary", label: "Shared compression dictionary", observed: !!wireDict.observed,
+        state: wireDict.observed ? { text: "advertised", kind: "ok" } : counterfactuals.dictionary ? { text: "counterfactual", kind: "warn" } : { text: "not offered", kind: "off" },
+        detail: "Advertise a compression dictionary so a returning agent fetches a small delta against the copy it already holds, in place of the whole page." },
+      { key: "ech", label: "Encrypted Client Hello", observed: !!wireEch.observed,
+        state: wireEch.observed ? { text: "configured", kind: "ok" } : wireEch.recordPresent && !wireEch.parsed ? { text: "record unread", kind: "warn" } : counterfactuals.ech ? { text: "counterfactual", kind: "warn" } : { text: "not configured", kind: "off" },
+        detail: "Encrypt the TLS handshake server name so an on-path observer cannot see which site the fetch is for." },
+    ];
+    var wireControls = '<div class="lx-cf-grid">' + wire.map(function (x) {
+      var on = !!counterfactuals[x.key];
+      return '<div class="lx-cf-card' + (on ? " is-on" : "") + '"><h4>' + esc(x.label) + " " + badge(x.state.text, x.state.kind) + "</h4><p>" + esc(x.detail) + "</p>" +
+        '<button class="lx-cf-toggle" type="button" data-cf="' + esc(x.key) + '" aria-pressed="' + (on ? "true" : "false") + '"><span class="lx-cf-dot" aria-hidden="true"></span>' + (on ? "on" : "off") + "</button></div>";
+    }).join("") + "</div>";
+    var wireProof = '<div class="lx-proof"><b>On the wire:</b> ' + esc(
+      (wireDict.observed ? "This site advertises a compression dictionary, so a returning fetch can be a delta against the copy the client already holds. " : "This site ships full responses, so a returning fetch re-transfers the whole page. ") +
+      (wireEch.observed ? "ECH is configured in DNS, so the handshake hides which site the fetch is for." : wireEch.recordPresent ? "An HTTPS record is published but carries no ECH, so the destination name travels in the clear." : "No ECH in DNS, so the destination name travels in the clear.")
+    ) + "</div>";
+    var wireCap = "A dictionary was worth 87-97% fewer bytes on the aadhar.sh shell (measured 2026-07); the token win follows for an agent that re-reads only the delta. ECH changes what a network observer learns, leaving the byte count alone.";
+    var wireOn = wire.filter(function (x) { return !!counterfactuals[x.key]; }).map(function (x) { return "+ wire · " + x.label; }).join("\n");
+    var allDelta = [deltaText, wireOn].filter(Boolean).join("\n");
+
     return intro + section("Infrastructure switches", null, "Each switch changes one stage of the path and nothing else.", controls) +
       section("The route", { text: "no score" }, "A task path is more useful here than a readiness number.", '<div class="lx-path">' + path + '</div>' + proof) +
-      section("What this proves", { text: "local simulation", kind: "warn" }, "Counterfactuals clarify a missing contract; they do not create a real endpoint on the scanned site.", pre("# delta\n" + (deltaText || "(no switches on)"), true)) +
+      section("The wire", { text: "transport" }, "Two knobs under the same task path: what the wire carries, and what it hides. Folks rarely turn either on.", wireControls + wireProof + '<div class="lx-cap">' + esc(wireCap) + "</div>") +
+      section("What this proves", { text: "local simulation", kind: "warn" }, "Counterfactuals clarify a missing contract; they do not create a real endpoint on the scanned site.", pre("# delta\n" + (allDelta || "(no switches on)"), true)) +
       '<div class="lx-cf-credit">Papert&rsquo;s micro-world: flip, predict, check. After <a href="https://www.geoffreylitt.com/2026/07/02/understanding-is-the-new-bottleneck">Geoffrey Litt&rsquo;s &ldquo;Understanding is the new bottleneck&rdquo;</a>.</div>';
   }
 
