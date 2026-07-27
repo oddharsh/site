@@ -88,6 +88,50 @@ function wantsPrecompressed(url) {
   return SHELL_PRECOMPRESS_DEFAULT_ON || url.searchParams.get("br") === "1";
 }
 
+// serveEncodingSelfTest: the decisive experiment, isolating WHERE the double
+// compression comes from.
+//
+// Both failing canaries went through `env.ASSETS`, so "a worker cannot emit a
+// pre-encoded body" may be too broad a conclusion: the static-assets layer is a real
+// suspect, since it does its own content negotiation. Cloudflare's own shared-dictionary
+// demo (canicompress.com) delta-compresses at the edge reading bytes from R2, never from
+// static assets, which is consistent with the assets path being the problem.
+//
+// This response involves NO asset fetch at all. The body is a constant: brotli q11 of
+// "ENCODING-TEST-OK " x64, 1088 plaintext bytes down to 30. Read the result as:
+//
+//   30 bytes  -> encodeBody: "manual" WORKS on a worker-built response. The wall is the
+//                static-assets layer, and dcb/dcz from a worker is viable (which puts
+//                the homepage's 13,264 -> ~870 back on the table).
+//   34ish     -> brotli-in-brotli. No worker on this platform can emit a pre-encoded
+//                body, and only Cloudflare's managed (Phase 2) mode can ever help.
+//
+// `?raw=1` omits encodeBody at the route. It WAS the control that proved this test
+// sensitive: before the fix both arms returned 34 bytes in two brotli layers. Now both
+// return 30 in one, because withSecurityHeaders re-applies `manual` for any response
+// carrying a content-encoding, which is deliberately not overridable per-route. Kept
+// only so the two arms can be compared again if this ever regresses.
+const ENCODING_TEST_BR = "Gz8E+I3UWq04bGqQlicqWbQ0VYb0ViC4ZIxP794C";
+const ENCODING_TEST_PLAIN_LEN = 1088;
+
+export function serveEncodingSelfTest(request) {
+  const url = new URL(request.url);
+  const bytes = Uint8Array.from(atob(ENCODING_TEST_BR), (c) => c.charCodeAt(0));
+  const init = {
+    headers: {
+      "content-type":     "text/plain; charset=utf-8",
+      "content-encoding": "br",
+      "cache-control":    "no-store",
+      "x-test-br-bytes":  String(bytes.length),
+      "x-test-plain-len": String(ENCODING_TEST_PLAIN_LEN),
+    },
+  };
+  // the control arm deliberately omits encodeBody, so a reader can tell a working
+  // passthrough from a test that simply never exercised the runtime's re-encoder.
+  if (url.searchParams.get("raw") !== "1") init.encodeBody = "manual";
+  return new Response(bytes, init);
+}
+
 // servePrecompressedShell: /a/<name>.<hash8>.<ext> from the worker, so the response
 // can carry bytes the platform would not have produced.
 //

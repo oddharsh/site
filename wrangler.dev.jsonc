@@ -35,7 +35,7 @@
     "run_worker_first": [
       "/", "/index.html", "/favicon.ico", "/hit",
       // the content-hashed shell: worker-first so it can hand out the q11 .br twin
-      "/a/*",
+      "/a/*", "/encoding-test",
       "/auth.md", "/.well-known/api-catalog", "/.well-known/agent-card.json",
       "/.well-known/oauth-protected-resource",
       "/.well-known/oauth-authorization-server",

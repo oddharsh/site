@@ -14,7 +14,7 @@ import { handleHit } from "./counter.js";
 import { homepageHeadResponse, serveHomepageWithPrerenderedTracks, serveMarkdown } from "./home.js";
 import { countCrawlerHit, handleLedger, handleLedgerJson } from "./ledger.js";
 import { handleLens, handleLensBrowser, handleLensCompare, handleLensFetch, handleLensShot } from "./lens.js";
-import { serveAssetWith404Clamp, serveFreshAsset, servePrecompressedShell } from "./lib/assets.js";
+import { serveAssetWith404Clamp, serveEncodingSelfTest, serveFreshAsset, servePrecompressedShell } from "./lib/assets.js";
 import { BOT_UA } from "./lib/botauth.js";
 import { CANONICAL_HOST } from "./lib/const.js";
 import { wantsMarkdown } from "./lib/http.js";
@@ -218,6 +218,9 @@ const ROUTES = new Map([
   ["/images/full/", routePhotosRedirect],
   ["/images/manifest.json", handleImagesManifest],
   ["/images/metadata.json", routeImagesMetadata],
+  // temporary: isolates whether the double compression comes from the static-assets
+  // layer or from every worker response. Remove once gotcha 13 is settled.
+  ["/encoding-test", (request) => serveEncodingSelfTest(request)],
 
   ["/index.html", routeIndexHtml],
   ["/", routeHomepage],
