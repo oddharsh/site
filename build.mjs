@@ -719,6 +719,18 @@ for (const [file, srcPath, marker] of SHELLS) {
     // src= rather than href= because the refs are <img> against <view>s, not
     // <svg><use> against <symbol>s — see the WebKit note in gen-desktop-partial.mjs.
     { attr: "src", from: "/icons.svg", base: "icons", ext: "svg", frag: true, witness: "_worker.js/lib/desktop.js" },
+    // quiz.js + notepad.js joined 2026-07-27. Both were served unhashed at max-age=300,
+    // so hashing them buys a year + immutable outright, and enrolling them in /a/ means
+    // they inherit the brotli q11 twin and the dcz delta path for free.
+    //
+    // These two and no others of the five deferred islands. tooltip.js and hoist.js load
+    // via `import("/tooltip.js")`, and lens-browser.js via `script.src = "..."`: all three
+    // are JS STRING literals, not attributes. The repointer below is attribute-scoped on
+    // purpose, so that it cannot rewrite the garage pages' documentary /nav.js mentions.
+    // It would silently miss those three and the witness tripwire would fail the deploy.
+    // Moving them needs a different mechanism, not another line here.
+    { attr: "src", from: "/quiz.js",    base: "quiz",    ext: "js", witness: "garage/encoding.html" },
+    { attr: "src", from: "/notepad.js", base: "notepad", ext: "js", witness: "_worker.js/writing.js" },
   ];
   const reps = [], hashedFor = {};
   for (const a of ASSETS) {
