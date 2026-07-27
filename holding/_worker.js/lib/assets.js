@@ -154,7 +154,7 @@ function dictionaryTag(request) {
   } catch { return null; }
 }
 
-// serveDictionaryDelta: hand back the precomputed dcb for the dictionary this client
+// serveDictionaryDelta: hand back the precomputed dcz for the dictionary this client
 // says it holds, or null to let the caller fall through.
 async function serveDictionaryDelta(url, ext, request, env) {
   const tag = dictionaryTag(request);
@@ -164,7 +164,7 @@ async function serveDictionaryDelta(url, ext, request, env) {
   const stem = url.pathname.slice("/a/".length).replace(new RegExp(`\\.${ext}$`), "");
   let res;
   try {
-    res = await env.ASSETS.fetch(new Request(`${url.origin}/ad/${stem}.${tag}.dcb`, {
+    res = await env.ASSETS.fetch(new Request(`${url.origin}/ad/${stem}.${tag}.dcz`, {
       headers: { "accept-encoding": "identity" },
     }));
   } catch { return null; }
@@ -172,7 +172,7 @@ async function serveDictionaryDelta(url, ext, request, env) {
 
   const headers = new Headers(res.headers);
   headers.set("content-type", SHELL_TYPES[ext]);
-  headers.set("content-encoding", "dcb");
+  headers.set("content-encoding", "dcz");
   headers.set("cache-control", "public, max-age=31536000, immutable");
   // Both dimensions matter to a shared cache: the same URL now answers with identity, br,
   // or a dcb that is only decodable against ONE dictionary. Cloudflare varies its cache on
@@ -181,7 +181,7 @@ async function serveDictionaryDelta(url, ext, request, env) {
   // Keep offering the shell as a dictionary, so a client that just delta-updated adopts
   // the new bytes and the chain continues on the next deploy.
   headers.set("use-as-dictionary", 'match="/a/*"');
-  headers.delete("etag");   // described the .dcb file, not this resource
+  headers.delete("etag");   // described the .dcz file, not this resource
   return new Response(res.body, { status: 200, headers, encodeBody: "manual" });
 }
 
@@ -287,22 +287,25 @@ export async function servePrecompressedShell(request, env) {
     try { await passthrough.body?.cancel(); } catch {}
   }
 
-  // ── dcb: the delta path ────────────────────────────────────────────────────────
+  // ── dcz: the delta path ────────────────────────────────────────────────────────
   // A Chromium client that accepted our Use-As-Dictionary offer sends back the SHA-256
   // of the shell bytes it already holds. scripts/gen-shell-deltas.mjs has precomputed
-  // brotli-against-that-dictionary offline, so serving the diff is a filename lookup:
-  // /ad/<base>.<hash8>.<dicttag>.dcb. Measured 93-97% under plain brotli on a real
-  // deploy-to-deploy change (luna.css 17,350 -> 489).
+  // zstd-against-that-dictionary offline, so serving the diff is a filename lookup:
+  // /ad/<base>.<hash8>.<dicttag>.dcz. The first real one: luna.css in 115 bytes instead
+  // of 7,615, a 98.5% cut, from an ordinary CSS change.
   //
-  // dcb rather than dcz because Cloudflare passes both through identically on all plans,
-  // so it is purely a ratio question, and brotli won every measurement by 5-8%.
+  // dcz rather than dcb because Cloudflare passes both through identically on all plans,
+  // so the choice is bytes vs decode time. zstd decodes ~2x faster (0.046ms vs 0.094ms on
+  // a bare 46KB asset), and on the real shipping pair brotli was smaller by exactly ONE
+  // byte (79 vs 80). Bytes are the proxy; latency is the goal, and the decode gap widens
+  // on the slow phones that need it most.
   //
   // Any miss falls through to the br path below and then to identity, so a client whose
   // dictionary we have no delta for (skipped several deploys, or a hand-crafted header)
   // just gets the ordinary asset.
-  if (wantsPrecompressed(url) || url.searchParams.get("br") === "dcb") {
-    const dcb = await serveDictionaryDelta(url, ext, request, env);
-    if (dcb) return dcb;
+  if (wantsPrecompressed(url) || url.searchParams.get("br") === "dcz") {
+    const delta = await serveDictionaryDelta(url, ext, request, env);
+    if (delta) return delta;
   }
 
   if (!wantsPrecompressed(url)) {

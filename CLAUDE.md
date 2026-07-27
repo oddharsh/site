@@ -557,6 +557,28 @@ npm run deploy
     the SSR'd homepage would need a runtime compressor, because the runtime ships
     no brotli encoder at all (CompressionStream is gzip/deflate only).
 
+14. **The shell ships dcz (zstd) deltas, not dcb (brotli), and the reason is
+    latency rather than bytes.** Cloudflare passes both through identically on all
+    plans, so it is a free engineering choice. zstd decodes about 2x faster
+    (0.046ms vs 0.094ms on a bare 46KB asset; 954 vs 471 MB/s), and on the REAL
+    shipping pair brotli was smaller by exactly one byte (79 vs 80) — the 5-8%
+    brotli edge only appears on much larger source-level deltas. Bytes are the
+    proxy; latency is the goal, and the decode gap widens on slow phones. Owner
+    call, 2026-07-27. `--patch-from` was measured and buys nothing at this scale.
+
+    dcz's framing is also the tidier of the two: the dictionary hash rides in a
+    Zstandard SKIPPABLE frame (magic `0x184D2A5E` LE, then a 4-byte LE length of
+    32, then the raw SHA-256), so any conforming decoder skips it and
+    `zstd -d -D dict` round-trips the whole file untouched. dcb instead needs
+    format-specific handling of its 36-byte prefix.
+
+    Deltas are generated on the WORKSTATION and committed (`npm run shell:deltas`),
+    because dictionary compression is unreachable from Node's zlib and the `zstd`
+    CLI does not exist in Workers Builds. Same split as the photo pipeline. The
+    dictionary set lives in `holding/a-dict/` and is `.assetsignore`d; the deltas in
+    `holding/ad/` are NOT, since the worker fetches them through ASSETS. build.mjs
+    WARNS when the shell moved without a regen.
+
 ---
 
 ## Source folder for new photos
