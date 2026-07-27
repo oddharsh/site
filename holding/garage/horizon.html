@@ -3575,11 +3575,28 @@ myButton.onclick = async () =&gt; {
         rules: an ordinary form submission could never activate a prerender, because it carries
         extra navigation state the speculation was not prepared for, so a GET search form had to
         be declared as such up front. GET only.
+        A third action, <code>prerender_until_script</code>, is still origin-trial-only at
+        <strong>152</strong> (the trial opened at Chrome&nbsp;144 in January&nbsp;2026 and was
+        extended through&nbsp;154). It prefetches the document and starts rendering, so the preload
+        scanner pulls stylesheets and images, then parks at the first <code>&lt;script&gt;</code>
+        and executes nothing until the click lands. That buys most of a prerender&apos;s head start
+        while leaving analytics, ads, and anything else that mutates client state unrun on a page
+        nobody has asked for yet. The cost is that such a page can&apos;t read
+        <code>document.prerendering</code>, never gets a <code>prerenderingchange</code> event, and
+        can&apos;t be promoted to a full prerender later.
       </p>
       <p class="replaces">
         On the site: live already. The homepage and garage pages prerender internal links
         (eagerness &quot;moderate&quot;, minus the live <code>/around</code> + <code>/whoareyou</code>
-        crawlers), which is most of why navigation here feels instant. Cloudflare sells the managed
+        crawlers), which is most of why navigation here feels instant. That one word sets two limits
+        worth naming out loud. Chrome caps &quot;moderate&quot; at 2&nbsp;prefetches and
+        2&nbsp;prerenders and evicts FIFO, so at any moment this site is speculating on the last two
+        links you lingered over and no more. And &quot;hover for 200ms&quot; means nothing on a
+        touchscreen, so phones get viewport heuristics instead: since August&nbsp;2025 Chrome
+        speculates 500ms after you stop scrolling, for anchors sitting within 30% of the vertical
+        distance from your last tap that are at least half the size of the largest anchor on screen.
+        Same rule block, two quite different machines underneath, and the phone one is the half I
+        can least predict from a desk. Cloudflare sells the managed
         version as <a href="https://developers.cloudflare.com/speed/optimization/content/speed-brain/" rel="external">Speed&nbsp;Brain</a>,
         which injects a hosted rule set from the edge via a <code>Speculation-Rules</code> response
         header; I hand-write the inline block instead, to keep eagerness where I want it and to skip
