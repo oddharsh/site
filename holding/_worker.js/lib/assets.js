@@ -77,12 +77,22 @@ const SHELL_TYPES = {
 // So local testing can tell us the negotiation is impossible, but it CANNOT tell us
 // whether production is correct.
 //
-// Until that is settled against the real edge, this path is OFF by default. /a/ carries
-// nav.js and luna.css, which are render-blocking: a mislabelled content-encoding here
-// is a white screen, not a slow page. `?br=1` is the canary — it exercises the exact
-// production path on one throwaway URL (the query busts the immutable cache) so the
-// question can be answered with one deploy and no blast radius.
-const SHELL_PRECOMPRESS_DEFAULT_ON = false;
+// SETTLED IN PRODUCTION, 2026-07-27. The canary answered both questions on aadhar.sh:
+// /encoding-test returned 30 bytes in ONE brotli layer (it was 34 in two before the
+// withSecurityHeaders fix), and ?br=1 returned 13,047 in one layer decoding to 46,268
+// bytes of valid JavaScript. So this is now ON by default, and every /a/ request that the
+// edge tells us can take br gets the q11 twin instead of the edge's ~q4 fly-compression.
+//
+// The DELTA path below keeps its own separate gate. Flipping one switch for both would
+// have enabled dcz on the strength of a precompression measurement, and those are
+// different code paths with different failure modes: a bad delta means an unstyled site
+// for Chromium visitors specifically.
+const SHELL_PRECOMPRESS_DEFAULT_ON = true;
+
+// dcz deltas: verified end to end locally (120 bytes, byte-exact round-trip) but NOT yet
+// against the real edge, which is the same bar precompression had to clear. `?br=dcz`
+// exercises it on one throwaway URL. Flip after production confirms.
+const SHELL_DELTA_DEFAULT_ON = false;
 
 function wantsPrecompressed(url) {
   return SHELL_PRECOMPRESS_DEFAULT_ON || url.searchParams.get("br") === "1";
@@ -303,7 +313,7 @@ export async function servePrecompressedShell(request, env) {
   // Any miss falls through to the br path below and then to identity, so a client whose
   // dictionary we have no delta for (skipped several deploys, or a hand-crafted header)
   // just gets the ordinary asset.
-  if (wantsPrecompressed(url) || url.searchParams.get("br") === "dcz") {
+  if (SHELL_DELTA_DEFAULT_ON || url.searchParams.get("br") === "dcz") {
     const delta = await serveDictionaryDelta(url, ext, request, env);
     if (delta) return delta;
   }
