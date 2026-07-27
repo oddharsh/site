@@ -9,8 +9,10 @@
 #   2. uploads a BROWSER-RENDERABLE full-resolution JPG to R2 as
 #      aadhar-photos/<stem>.jpg — this is what /images/full/<stem>.jpg returns
 #      on click, and the shareable R2 copy. for a JPG-source photo that's the
-#      original; for a HEIF source it's the maximum-quality q100 export from
-#      step 3.
+#      original, rearranged to progressive by jpegtran on the way up (lossless
+#      coefficient reorder, not a re-encode; the local source folder is never
+#      modified); for a HEIF source it's the maximum-quality q100 export from
+#      step 3, which zenc already writes progressive.
 #   3. if the original is HEIF (.hif/.heic/.heif), generates a full-res archive
 #      JPG (sips decodes to lossless PNG, zenc re-encodes at q100 4:2:2 with the
 #      full trellis + scan-search, exiftool re-attaches source EXIF incl
@@ -267,8 +269,32 @@ else
 # originals → R2. NB: HIF/HEIF originals are NOT uploaded — they stay local-only
 # (your drive + SSD are the archive); R2 gets their q100 JPG export instead
 # (phase 2 / below), which is browser-renderable + shareable. only JPG-source
-# originals (already max-quality SOOC) go up as-is. extension lowercased so keys
+# originals (already max-quality SOOC) go up. extension lowercased so keys
 # are stable; stem case preserved.
+#
+# The R2 copy is rearranged to PROGRESSIVE on the way up (see prep_original).
+# Camera JPGs are written baseline, and /images/full/<stem>.jpg is served as bare
+# image/jpeg with no AVIF tier and no <picture> — it is the one surface here where
+# a multi-MB file is the whole payload, so scan order is the entire loading
+# experience. jpegtran reorders the existing DCT coefficients; it never decodes to
+# pixels, so this is not a re-encode and there is no generational loss.
+PROGDIR="$TMP/progressive"
+mkdir -p "$PROGDIR"
+
+# jpegtran -progressive on a COPY. The file in the source folder is never touched:
+# that folder is the SOOC archive and stays byte-for-byte what the camera wrote.
+# -copy all keeps EXIF (incl. Orientation) — gotcha 3/4 in CLAUDE.md, and the
+# metadata pipeline reads these tags later. Falls back to the untouched original
+# if jpegtran fails, so a bad file costs the optimisation and not the upload.
+prep_original() {
+  local src="$1" out="$2"
+  if "$MOZ_JTRAN" -progressive -copy all -outfile "$out" "$src" 2>/dev/null && [ -s "$out" ]; then
+    printf "%s" "$out"
+  else
+    printf "%s" "$src"
+  fi
+}
+
 PENDING=0
 while IFS= read -r f; do
   base=$(basename "$f")
@@ -277,7 +303,8 @@ while IFS= read -r f; do
   case "$ext_lc" in
     heic|heif|hif) continue ;;   # local-only; the q100 JPG export is the R2 copy
   esac
-  upload "${stem}.${ext_lc}" "$f" "image/jpeg" &
+  ( send=$(prep_original "$f" "$PROGDIR/$stem.$ext_lc")
+    upload "${stem}.${ext_lc}" "$send" "image/jpeg" ) &
   PENDING=$((PENDING+1))
   if [ $PENDING -ge 4 ]; then wait; PENDING=0; fi
 done < "$SOURCES"

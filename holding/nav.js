@@ -78,6 +78,7 @@
     { label: "inbox", path: "/inbox", hint: "who linked here — webmentions from the open web, rendered as Outlook Express mail" },
     { label: "reading", path: "/reading", hint: "what I've been reading — saved to Curius, mirrored here" },
     { label: "lens", path: "/lens", hint: "the other web: see any URL the way a machine does — raw HTML, JSON-LD, llms.txt" },
+    { label: "pixel peeper", path: "/pixel-peeper", hint: "whose eye do you have? a compression vision test — pick the best encode, blind" },
     { label: "learning with errors", path: "/lwe", hint: "chat-style explainers + live demos" },
     // generated:lwe-pages:start
     { label: "lwe · fhe", path: "/lwe/fhe", hint: "fully homomorphic encryption, explained" },
@@ -145,6 +146,7 @@
     { label: "serendipity", path: "/serendipity", hint: "events worth going to" },
     { label: "around", path: "/around", hint: "the crypto-VC neighborhood" },
     { label: "lens", path: "/lens", hint: "the other web: how machines read a URL" },
+    { label: "pixel peeper", path: "/pixel-peeper", hint: "a compression vision test — whose eye do you have?" },
     { label: "music", path: "/rn", hint: "what I'm listening to right now" },
     { label: "coffee", path: "/coffee", hint: "book a coffee / bagel" }
   ];
@@ -184,7 +186,12 @@
     music:       sectionTile("music", ["#6fcd8a","#2faa55","#1d8040","#156030"], '<g fill="#fff"><rect x="17" y="7" width="2.6" height="14"/><path d="M19.6 7 C23 8 25 10 24.4 13.6 C23 11 21 11 19.6 11.8 Z"/><ellipse cx="14" cy="21" rx="4.4" ry="3.5"/></g>'),
     coffee:      sectionTile("coffee", ["#b08858","#875c34","#5e3c1e","#472d16"], '<path d="M8 12 h13 v6 a6.5 6.5 0 0 1-13 0 Z" fill="#fff"/><path d="M21 13 h3 a2.6 2.6 0 0 1 0 5.2 h-3" fill="none" stroke="#fff" stroke-width="2.2"/><g stroke="#fff" stroke-width="1.8" stroke-linecap="round"><path d="M11 5.5 v3"/><path d="M14.5 5 v3.5"/></g>'),
     lwe:         sectionTile("lwe", ["#838ae6","#4b53c9","#333aa0","#272d82"], '<path d="M6 9 h20 a2 2 0 0 1 2 2 v9 a2 2 0 0 1-2 2 H14 l-5 4 v-4 H6 a2 2 0 0 1-2-2 v-9 a2 2 0 0 1 2-2 Z" fill="#fff"/><g stroke="#4b53c9" stroke-width="1.7" stroke-linecap="round" fill="none"><path d="M8.5 13.5 q2 -2.4 4 0 t4 0 t4 0"/><path d="M8.5 18 q2 -2.4 4 0 t4 0"/></g>'),
-    lens:        sectionTile("lens", ["#79c7e6","#2f9fc4","#1d7895","#145d73"], '<rect x="5.5" y="5" width="15" height="19" rx="2" fill="#fff"/><g fill="#2f9fc4"><rect x="8.5" y="9.5" width="9" height="1.7" rx="0.6"/><rect x="8.5" y="13" width="9" height="1.7" rx="0.6"/><rect x="8.5" y="16.5" width="6" height="1.7" rx="0.6"/></g><circle cx="20.5" cy="20.5" r="6" fill="#2f9fc4" stroke="#fff" stroke-width="2.2"/><circle cx="18.6" cy="18.6" r="1.5" fill="#fff" opacity=".85"/><path d="M24.8 24.8 L28.5 28.5" stroke="#fff" stroke-width="3.2" stroke-linecap="round"/>')
+    lens:        sectionTile("lens", ["#79c7e6","#2f9fc4","#1d7895","#145d73"], '<rect x="5.5" y="5" width="15" height="19" rx="2" fill="#fff"/><g fill="#2f9fc4"><rect x="8.5" y="9.5" width="9" height="1.7" rx="0.6"/><rect x="8.5" y="13" width="9" height="1.7" rx="0.6"/><rect x="8.5" y="16.5" width="6" height="1.7" rx="0.6"/></g><circle cx="20.5" cy="20.5" r="6" fill="#2f9fc4" stroke="#fff" stroke-width="2.2"/><circle cx="18.6" cy="18.6" r="1.5" fill="#fff" opacity=".85"/><path d="M24.8 24.8 L28.5 28.5" stroke="#fff" stroke-width="3.2" stroke-linecap="round"/>'),
+    // an eye whose pupil is a literal pixel — the whole premise in one glyph. The
+    // magenta is the one hue the tile set had left (serendipity owns violet,
+    // reading owns dusty rose), so it stays legible at 15px on the taskbar. Key is
+    // the SUBPAGES label, so it carries the space; the sprite id gets slugged.
+    "pixel peeper": sectionTile("peeper", ["#f19ad0","#d24d9c","#a32d73","#82205a"], '<path d="M2.6 16 C7 9.6 11.4 7.1 16 7.1 C20.6 7.1 25 9.6 29.4 16 C25 22.4 20.6 24.9 16 24.9 C11.4 24.9 7 22.4 2.6 16 Z" fill="#fff"/><rect x="11.1" y="11.1" width="9.8" height="9.8" rx="1" fill="#a32d73"/><rect x="12.9" y="12.9" width="3.1" height="3.1" rx=".5" fill="#fff" opacity=".92"/>')
   };
   var PHOTOS = null;          // lazy: [{ label, path, hint, kind:'photo' }]
   var WRITING = null;         // lazy: [{ label, path, hint, kind:'writing' }]
@@ -1004,7 +1011,7 @@
   // so it composes instead of jumping, which also makes the Run dialog draggable.
   // caption buttons + links are skipped so close/min/max keep working; touch scrolls.
   function initDrag() {
-    var win = null, sx = 0, sy = 0, base = "", r = null;
+    var win = null, sx = 0, sy = 0, base = "", r = null, topLayer = false;
     // clamp so the title bar can't leave the desktop: the TOP is a hard wall (you
     // can't retrieve a window dragged off the top — there's no menu up there), and
     // the bar can't slide under the taskbar or fully off the sides either.
@@ -1012,7 +1019,19 @@
       if (!win) return;
       var dx = e.clientX - sx, dy = e.clientY - sy;
       var vw = innerWidth, vh = innerHeight;
-      dy = Math.max(8 - r.top, Math.min(dy, (vh - 30 - 24) - r.top));
+      // Ordinary windows are clamped by their TITLE BAR and are free to let their
+      // body slide under the taskbar, which is what XP does and what reads right:
+      // the taskbar's z-index 99999 covers them.
+      var maxDy = (vh - 30 - 24) - r.top;
+      // A /writing folder note is popover="manual", so it lives in the TOP LAYER,
+      // and the top layer paints above every z-index there is — 99999 included.
+      // Dragged down, it went OVER the taskbar instead of under it. No stacking
+      // rule can fix that from CSS, so the honest fallback is to stop the whole
+      // window at the taskbar: the note never crosses it, in either direction.
+      // Always satisfiable — .np-note[popover] caps at 100dvh - 48, which leaves
+      // more room than the 38px this needs, so maxDy never falls below the top wall.
+      if (topLayer) maxDy = Math.min(maxDy, (vh - 30) - r.bottom);
+      dy = Math.max(8 - r.top, Math.min(dy, maxDy));
       dx = Math.max((60 - r.width) - r.left, Math.min(dx, (vw - 60) - r.left));
       win.style.transform = base + "translate(" + dx + "px," + dy + "px)";
     }
@@ -1028,6 +1047,9 @@
       var t = getComputedStyle(w).transform;
       base = (t && t !== "none") ? t + " " : "";
       r = w.getBoundingClientRect();
+      // :popover-open is the top-layer test — a popover only joins the top layer
+      // while it is showing, and a hidden one can't be dragged anyway.
+      topLayer = w.matches(":popover-open");
       w.classList.add("axp-dragging");
       win = w; sx = e.clientX; sy = e.clientY;
       try { b.setPointerCapture(e.pointerId); } catch (_) {}
@@ -1091,7 +1113,15 @@
         if (f.classList.contains("axp-max")) return;
         var r = f.getBoundingClientRect();
         if (r.right - e.clientX < 20 && r.bottom - e.clientY < 20) {
-          f.style.maxWidth = "none"; f.style.maxHeight = "none";
+          f.style.maxWidth = "none";
+          // A popover note is in the TOP LAYER, so the taskbar cannot cover it (see
+          // initDrag) — the grip has to stop where the taskbar starts instead of
+          // lifting the ceiling entirely. setProperty(..., "important") because
+          // .np-note[popover]'s own max-height is !important, which is also why the
+          // plain assignment below was already a no-op for these: the lift never
+          // applied, yet a short note dragged down could still grow past the bar.
+          if (f.matches(":popover-open")) f.style.setProperty("max-height", Math.max(120, (innerHeight - 30) - r.top) + "px", "important");
+          else f.style.maxHeight = "none";
         }
       });
     });

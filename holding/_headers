@@ -128,9 +128,11 @@
 # game: the shell + metadata manifest revalidate like the garage pages (a deploy
 # purges the edge, so fresh copy always lands), while the per-tile encodes carry
 # content-hashed names, so they're immutable-1y like /i/ — a re-encode mints a
-# new filename and can never shadow old bytes.
+# new filename and can never shadow old bytes. It is a first-level taskbar app
+# now, so it also preloads the shared shell the way /lwe/* and /garage/* do.
 /pixel-peeper
   Cache-Control: public, max-age=0, must-revalidate, s-maxage=86400
+  Link: </luna.css>; rel=preload; as=style, </nav.js>; rel=preload; as=script
 /pixel-peeper/manifest.json
   Cache-Control: public, max-age=0, must-revalidate, s-maxage=86400
 /pixel-peeper/tiles/*

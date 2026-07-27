@@ -1072,6 +1072,13 @@ window.__horizonCaps = (function () {
                 Array.isArray(PerformanceObserver.supportedEntryTypes) &&
                 PerformanceObserver.supportedEntryTypes.indexOf("container") !== -1);
       },
+      // Support only. Whether entries ever ARRIVE also depends on the document
+      // being visible, which no synchronous probe can answer for a future frame.
+      "loaf": function () {
+        return (typeof PerformanceObserver !== "undefined" &&
+                Array.isArray(PerformanceObserver.supportedEntryTypes) &&
+                PerformanceObserver.supportedEntryTypes.indexOf("long-animation-frame") !== -1);
+      },
     };
   var state = {};
   Object.keys(checks).forEach(function (k) { state[k] = sup(checks[k]); });
@@ -3775,6 +3782,54 @@ myButton.onclick = async () =&gt; {
       <p class="unsupported">Your browser doesn&apos;t expose <code>navigator.cpuPerformance</code>.</p>
     </section>
 
+    <!-- ───────────────────── Long Animation Frames ───────────────────── -->
+    <section class="demo" data-cap="loaf">
+      <h2>
+        <span>Long Animation Frames <span class="mono">LoAF</span></span>
+        <span class="stat chrome">Chrome 123 &middot; Safari/FF no</span>
+      </h2>
+      <p class="note">
+        A <code>PerformanceObserver</code> entry for every rendering update that slips past
+        50ms. The older Long Tasks API could tell you the main thread was busy and almost
+        nothing about why; LoAF reports the <em>frame</em>, so work split across several
+        small tasks that together miss a frame still shows up. Any script that ran for over
+        5ms inside it comes back with <code>sourceURL</code>,
+        <code>sourceFunctionName</code>, <code>sourceCharPosition</code>, and an
+        <code>invokerType</code> naming what called it, alongside
+        <code>forcedStyleAndLayoutDuration</code> for layout thrash and
+        <code>pauseDuration</code> for the synchronous stalls. Chrome&nbsp;123 since
+        February&nbsp;2024, nothing from the other two engines, so it is not Baseline and
+        the field data it gathers is Chromium&apos;s view of your users rather than all of
+        them.
+        The sharp edge is in the spec rather than the docs: recording bails out early
+        <a href="https://w3c.github.io/long-animation-frames/" rel="external">if the document
+        is hidden</a>. A background tab reports nothing, so a zero here means either that
+        nothing was slow or that nobody was watching, and the API will not tell you which. I
+        walked into exactly that measuring this site through an automated browser whose tab
+        reported <code>hidden</code>: load, opening the Run palette, and typing into it all
+        came back with zero long frames, and so did a deliberate 180ms blocking frame I
+        added to check the instrument. A clean result and a dead probe look identical.
+      </p>
+      <p class="replaces">
+        On the site: the gap is real and it stays open for now. Nothing here collects field
+        data at all, and <code>nav.js</code> carries about fifty
+        <code>addEventListener</code> calls driving window drag, resize, the taskbar, and a
+        Run palette that filters 158 photos, none of it instrumented. LoAF only earns its
+        keep against real visitors on real hardware, which is precisely the thing a site with
+        no RUM does not have; measuring it once from my own desk would mostly prove that an
+        M-series Mac is fast. There is a second wrinkle if I ever wire it up. Attribution
+        keys on <code>sourceURL</code>, and the shell ships as
+        <code>/a/nav.&lt;hash8&gt;.js</code> precisely so it can be cached for a year, so the
+        URL changes on every deploy and nothing aggregates across releases without
+        normalising the hash back out first. The cache win and the attribution story pull
+        against each other, which is worth knowing before rather than after.
+      </p>
+      <p class="unsupported">
+        No <code>long-animation-frame</code> entry type here, so this browser has no view of
+        which frames ran long.
+      </p>
+    </section>
+
     <!-- ───────────────────── Container Timing ───────────────────── -->
     <section class="demo" data-cap="container-timing">
       <h2>
@@ -4068,6 +4123,7 @@ myButton.onclick = async () =&gt; {
     "pq-webcrypto": "ML-DSA",
     "cpu-performance": "cpuPerformance",
     "container-timing": "container timing",
+    "loaf": "LoAF",
   };
   var state = {};
   Object.keys(checks).forEach(function (k) { state[k] = sup(checks[k]); });
@@ -4250,6 +4306,6 @@ myButton.onclick = async () =&gt; {
 </script>
 <script src="/quiz.js" defer></script>
   <script src="/nav.js" defer></script>
-<!-- axp:shell --><nav id="axp-icons" aria-label="desktop shortcuts"><a class="axp-ico" title="writing, in flux" href="/writing" data-key="Notepad" style="left:9px;top:9px"><span class="ic note" aria-hidden="true"></span><span class="t">Notepad</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="GitHub (opens in a new tab)" href="https://github.com/oddharsh" data-key="GitHub" style="left:9px;top:95px"><span class="ic " style="background:linear-gradient(180deg,oklch(72% 0.05 255),oklch(60% 0.07 257))" aria-hidden="true">G</span><span class="t">GitHub</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Twitter (opens in a new tab)" href="https://x.com/oddhash" data-key="Twitter" style="left:9px;top:181px"><span class="ic " style="background:linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))" aria-hidden="true">@</span><span class="t">Twitter</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Instagram (opens in a new tab)" href="https://www.instagram.com/aadharsh.hif" data-key="Photos" style="left:9px;top:267px"><span class="ic " style="background:linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))" aria-hidden="true"><i class="cam" aria-hidden="true"></i></span><span class="t">Photos</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Curius (opens in a new tab)" href="https://curius.app/aadharsh-pannirselvam" data-key="Curius" style="left:9px;top:353px"><span class="ic " style="background:linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))" aria-hidden="true">C</span><span class="t">Curius</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Beli (opens in a new tab)" href="https://beliapp.com/users/aadharsh" data-key="Beli" style="left:9px;top:439px"><span class="ic " style="background:linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))" aria-hidden="true">B</span><span class="t">Beli</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Spotify (opens in a new tab)" href="https://open.spotify.com/user/aadharsh2010" data-key="Music" style="left:9px;top:525px"><span class="ic " style="background:linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))" aria-hidden="true">♪</span><span class="t">Music</span></a></nav><div id="axp-taskbar" role="navigation" aria-label="taskbar"><a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a><div id="axp-pins"><a class="axp-pin" title="prototypes + experiments" href="/garage"><span class="fav" aria-hidden="true"><svg viewBox="0 0 32 32"><use href="/icons.svg#pin-garage"/></svg></span><span class="lbl">garage</span></a><a class="axp-pin" title="chat-style explainers + live demos" href="/lwe"><span class="fav" aria-hidden="true"><svg viewBox="0 0 32 32"><use href="/icons.svg#pin-lwe"/></svg></span><span class="lbl">lwe</span></a><a class="axp-pin" title="notes, in flux: an editable notepad" href="/writing"><span class="fav" aria-hidden="true"><svg viewBox="0 0 32 32"><use href="/icons.svg#pin-writing"/></svg></span><span class="lbl">writing</span></a><a class="axp-pin" title="what I've been reading, from Curius" href="/reading"><span class="fav" aria-hidden="true"><svg viewBox="0 0 32 32"><use href="/icons.svg#pin-reading"/></svg></span><span class="lbl">reading</span></a><a class="axp-pin" title="events worth going to" href="/serendipity"><span class="fav" aria-hidden="true"><svg viewBox="0 0 32 32"><use href="/icons.svg#pin-serendipity"/></svg></span><span class="lbl">serendipity</span></a><a class="axp-pin" title="the crypto-VC neighborhood" href="/around"><span class="fav" aria-hidden="true"><svg viewBox="0 0 32 32"><use href="/icons.svg#pin-around"/></svg></span><span class="lbl">around</span></a><a class="axp-pin" title="the other web: how machines read a URL" href="/lens"><span class="fav" aria-hidden="true"><svg viewBox="0 0 32 32"><use href="/icons.svg#pin-lens"/></svg></span><span class="lbl">lens</span></a><a class="axp-pin" title="what I'm listening to right now" href="/rn"><span class="fav" aria-hidden="true"><svg viewBox="0 0 32 32"><use href="/icons.svg#pin-music"/></svg></span><span class="lbl">music</span></a><a class="axp-pin" title="book a coffee / bagel" href="/coffee"><span class="fav" aria-hidden="true"><svg viewBox="0 0 32 32"><use href="/icons.svg#pin-coffee"/></svg></span><span class="lbl">coffee</span></a></div><div id="axp-spacer"></div><div id="axp-tray"><button id="axp-sound" type="button" hidden></button><a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><svg viewBox="0 0 24 24"><use href="/icons.svg#tray-sysprop"/></svg></a><a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><svg viewBox="0 0 24 24"><use href="/icons.svg#tray-security"/></svg></a><a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><svg viewBox="0 0 24 24"><use href="/icons.svg#tray-updates"/></svg></a><span id="axp-clock" aria-hidden="true"></span></div></div><!-- /axp:shell -->
+<!-- axp:shell --><nav id="axp-icons" aria-label="desktop shortcuts"><a class="axp-ico" title="writing, in flux" href="/writing" data-key="Notepad" style="left:9px;top:9px"><span class="ic note" aria-hidden="true"></span><span class="t">Notepad</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="GitHub (opens in a new tab)" href="https://github.com/oddharsh" data-key="GitHub" style="left:9px;top:95px"><span class="ic " style="background:linear-gradient(180deg,oklch(72% 0.05 255),oklch(60% 0.07 257))" aria-hidden="true">G</span><span class="t">GitHub</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Twitter (opens in a new tab)" href="https://x.com/oddhash" data-key="Twitter" style="left:9px;top:181px"><span class="ic " style="background:linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))" aria-hidden="true">@</span><span class="t">Twitter</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Instagram (opens in a new tab)" href="https://www.instagram.com/aadharsh.hif" data-key="Photos" style="left:9px;top:267px"><span class="ic " style="background:linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))" aria-hidden="true"><i class="cam" aria-hidden="true"></i></span><span class="t">Photos</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Curius (opens in a new tab)" href="https://curius.app/aadharsh-pannirselvam" data-key="Curius" style="left:9px;top:353px"><span class="ic " style="background:linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))" aria-hidden="true">C</span><span class="t">Curius</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Beli (opens in a new tab)" href="https://beliapp.com/users/aadharsh" data-key="Beli" style="left:9px;top:439px"><span class="ic " style="background:linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))" aria-hidden="true">B</span><span class="t">Beli</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Spotify (opens in a new tab)" href="https://open.spotify.com/user/aadharsh2010" data-key="Music" style="left:9px;top:525px"><span class="ic " style="background:linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))" aria-hidden="true">♪</span><span class="t">Music</span></a></nav><div id="axp-taskbar" role="navigation" aria-label="taskbar"><a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a><div id="axp-pins"><a class="axp-pin" title="prototypes + experiments" href="/garage"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-garage" alt=""></span><span class="lbl">garage</span></a><a class="axp-pin" title="chat-style explainers + live demos" href="/lwe"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lwe" alt=""></span><span class="lbl">lwe</span></a><a class="axp-pin" title="notes, in flux: an editable notepad" href="/writing"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-writing" alt=""></span><span class="lbl">writing</span></a><a class="axp-pin" title="what I've been reading, from Curius" href="/reading"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-reading" alt=""></span><span class="lbl">reading</span></a><a class="axp-pin" title="events worth going to" href="/serendipity"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-serendipity" alt=""></span><span class="lbl">serendipity</span></a><a class="axp-pin" title="the crypto-VC neighborhood" href="/around"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-around" alt=""></span><span class="lbl">around</span></a><a class="axp-pin" title="the other web: how machines read a URL" href="/lens"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lens" alt=""></span><span class="lbl">lens</span></a><a class="axp-pin" title="a compression vision test — whose eye do you have?" href="/pixel-peeper"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-pixel-peeper" alt=""></span><span class="lbl">pixel peeper</span></a><a class="axp-pin" title="what I'm listening to right now" href="/rn"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-music" alt=""></span><span class="lbl">music</span></a><a class="axp-pin" title="book a coffee / bagel" href="/coffee"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-coffee" alt=""></span><span class="lbl">coffee</span></a></div><div id="axp-spacer"></div><div id="axp-tray"><button id="axp-sound" type="button" hidden></button><a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><img src="/icons.svg#tray-sysprop" alt=""></a><a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><img src="/icons.svg#tray-security" alt=""></a><a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><img src="/icons.svg#tray-updates" alt=""></a><span id="axp-clock" aria-hidden="true"></span></div></div><!-- /axp:shell -->
 </body>
 </html>
