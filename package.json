@@ -25,7 +25,7 @@
     "infra:apply": "node scripts/apply-infra.mjs",
     "pages:check": "node scripts/check-page-contracts.mjs",
     "test": "node --test contract-tests.mjs",
-    "shell:deltas": "node scripts/gen-shell-deltas.mjs"
+    "shell:roll": "node scripts/roll-shell-dictionary.mjs"
   },
   "devDependencies": {
     "@minify-html/node": "0.18.1",
