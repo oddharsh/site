@@ -90,6 +90,12 @@ export const AGENT_SURFACES = [
     "description": "Inspect how a public URL reads to people and machines: raw HTML, JSON-LD, llms.txt."
   },
   {
+    "path": "/pixel-peeper",
+    "title": "Pixel Peeper",
+    "kind": "utility",
+    "description": "A vision test for image compression, in the ismy.blue spirit: pick the best encode on instinct, repeatedly."
+  },
+  {
     "path": "/lwe",
     "title": "Learning with Errors",
     "kind": "section",
@@ -250,12 +256,6 @@ export const AGENT_SURFACES = [
     "title": "Off Pages, onto Workers",
     "kind": "content",
     "description": "Why this site moved from Cloudflare Pages advanced mode to Workers with static assets: an atomic deploy."
-  },
-  {
-    "path": "/pixel-peeper",
-    "title": "Pixel Peeper",
-    "kind": "content",
-    "description": "A vision test for image compression, in the ismy.blue spirit: pick the best encode on instinct, repeatedly."
   },
   {
     "path": "/bot",
