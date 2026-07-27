@@ -63,28 +63,6 @@
 /a/*
   Cache-Control: public, max-age=31536000, immutable
 
-# /abr/* — the SAME brotli q11 bytes as /a/, under the asset's real extension, with
-# the encoding declared HERE rather than in the worker. Production (2026-07-26) showed
-# that a worker rebuilding a Response drops the runtime's "already encoded" state and
-# the body gets compressed a second time (13,051 bytes of brotli-in-brotli vs the
-# 13,047 on disk). Declaring content-encoding at the asset layer lets the worker return
-# the subrequest response UNMODIFIED, which is the documented pass-through contract.
-# Not linked from anywhere; the worker fetches it. immutable for the same
-# content-addressed reason as /a/.
-/abr/*
-  Cache-Control: public, max-age=31536000, immutable
-  Content-Encoding: br
-  Vary: Accept-Encoding
-
-/abr/*.js
-  Content-Type: text/javascript; charset=utf-8
-
-/abr/*.css
-  Content-Type: text/css; charset=utf-8
-
-/abr/*.svg
-  Content-Type: image/svg+xml; charset=utf-8
-
 # resto-mod car reference photos (homepage car-link tooltips). versioned via
 # ?v=N in the markup, so safe to cache a year + immutable like the thumbnails.
 # bump the ?v in index.html if a car image is replaced in place.

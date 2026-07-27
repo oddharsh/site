@@ -22,7 +22,7 @@
 
 import { createHash } from "node:crypto";
 import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
-import { brotliCompressSync, constants as zlibConstants } from "node:zlib";
+import { brotliCompressSync, constants as zlibConstants, zstdCompressSync } from "node:zlib";
 import minifyHtml from "@minify-html/node";
 import { transform as transformCss } from "lightningcss";
 import { minifySync } from "oxc-minify";
@@ -839,54 +839,76 @@ for (const [file, srcPath, marker] of SHELLS) {
       continue;
     }
     await writeFile(`${dir}/${f}.br`, out);
-    // ALSO emit under /abr/ with the asset's REAL extension. Production proved that
-    // reconstructing a Response (`new Response(res.body, {...})`) loses whatever
-    // internal "already encoded" state the runtime uses, so `encodeBody: "manual"`
-    // did not stop it re-compressing: the br client got 13,051 bytes of
-    // brotli-in-brotli instead of 13,047. The documented pass-through requires
-    // returning the subrequest's response WITHOUT rebuilding it, which means the
-    // asset layer itself has to supply both content-type and content-encoding. It can:
-    // _headers maps /abr/*.<ext> to the right type plus `Content-Encoding: br`, so the
-    // worker can hand that response straight back. Same bytes, different envelope.
-    await mkdir(`${OUT}/holding/abr`, { recursive: true });
-    await writeFile(`${OUT}/holding/abr/${f}`, out);
+
     raw += bytes.length; enc += out.length;
     console.log(`precompressed: /a/${f} ${bytes.length} -> ${out.length} bytes (br q11)`);
   }
   console.log(`precompress: ${(raw / 1024).toFixed(1)}KB -> ${(enc / 1024).toFixed(1)}KB brotli q11 across ${files.length} shell assets`);
 
-  // Shell-delta freshness. Now that the built hashes exist, "a delta is missing" is
-  // decidable: a dictionary whose hash8 differs from what is shipping is exactly a pair
-  // scripts/gen-shell-deltas.mjs should have covered. A dictionary IDENTICAL to the
-  // shipping bytes needs no delta, because a content-hashed URL that did not change is
-  // never re-requested — that case is why the earlier version of this check false-fired.
+  // ── dcz deltas, generated HERE rather than committed ─────────────────────────
+  // A returning Chromium visitor that accepted our Use-As-Dictionary offer sends back the
+  // SHA-256 of the shell it holds; the worker answers with the diff. Measured on a real
+  // luna.css change: 116 bytes against 7,615.
   //
-  // WARN, never hard: brotli -D is unreachable from Node, so deltas are committed
-  // artifacts and this cannot self-heal inside Workers Builds. A missing delta costs
-  // repeat Chromium visitors the 93-97% win and nothing else.
-  try {
-    const shipping = new Map();               // base -> hash8 actually shipping
-    for (const f of files) {
-      const m = f.match(/^(.+)\.([0-9a-f]{8})\.(js|css|svg)$/);
-      if (m) shipping.set(m[1], m[2]);
+  // This used to be a workstation script with committed artifacts, on the belief that
+  // dictionary compression was unreachable from Node. That was true of BROTLI and I wrongly
+  // generalized it: node:zlib's zstd DOES take a `dictionary` option. It is also better
+  // than shelling out — 116 bytes where the zstd CLI produced 120 — and portable, verified
+  // by having the foreign `zstd -d -D` CLI decode Node's bytes byte-exact, skippable prefix
+  // and all. That interop check is the one that matters, because the real decoder is a
+  // browser, not Node.
+  //
+  // Consequences worth naming: no zstd CLI in the deploy path, no committed .dcz artifacts,
+  // no `npm run shell:deltas` step to forget, and no staleness tripwire needed at all,
+  // because a delta is now a pure function of bytes this build just produced.
+  //
+  // Still committed, and unavoidably so: holding/a-dict/, the DICTIONARY set. A dictionary
+  // has to be bytes the BROWSER already holds, which no build can derive from source.
+  {
+    const dictDir = "holding/a-dict";
+    const dicts = await readdir(dictDir).catch(() => []);
+    const parse = (n) => { const m = n.match(/^(.+)\.([0-9a-f]{8})\.(js|css|svg)$/); return m ? { base: m[1], hash8: m[2], ext: m[3], name: n } : null; };
+    const shell = files.map(parse).filter(Boolean);
+    const cands = dicts.map(parse).filter(Boolean);
+    if (cands.length) await mkdir(`${OUT}/holding/ad`, { recursive: true });
+    let n = 0, deltaBytes = 0;
+    for (const asset of shell) {
+      const targetBytes = await readFile(`${dir}/${asset.name}`);
+      for (const d of cands) {
+        if (d.base !== asset.base || d.ext !== asset.ext) continue;
+        const dictBytes = await readFile(`${dictDir}/${d.name}`);
+        // Identical bytes mean the content-hashed URL did not change, so no client will
+        // ever request a new URL for them — a delta here could not be asked for.
+        if (dictBytes.equals(targetBytes)) continue;
+
+        const frame = zstdCompressSync(targetBytes, {
+          dictionary: dictBytes,
+          params: { [zlibConstants.ZSTD_c_compressionLevel]: 19 },
+        });
+        // dcz framing (RFC 9842): the dictionary hash rides in a Zstandard SKIPPABLE frame,
+        // magic 0x184D2A5E little-endian then a 4-byte LE length of 32 then the raw digest.
+        // Being valid zstd, that prefix is skipped by any conforming decoder.
+        const digest = createHash("sha256").update(dictBytes).digest();
+        const len = Buffer.alloc(4); len.writeUInt32LE(digest.length, 0);
+        const out = Buffer.concat([Buffer.from([0x5e, 0x2a, 0x4d, 0x18]), len, digest, frame]);
+
+        // A delta that lost to the plain q11 twin is worse than no delta: the worker would
+        // serve more bytes AND cost the client a dictionary lookup.
+        const plainTwin = (await readFile(`${dir}/${asset.name}.br`).catch(() => null))?.length ?? Infinity;
+        if (out.length >= plainTwin) {
+          console.log(`delta: SKIPPED ${asset.name} vs ${d.hash8} (dcz ${out.length} >= br ${plainTwin})`);
+          continue;
+        }
+        const tag = digest.toString("hex").slice(0, 16);
+        await writeFile(`${OUT}/holding/ad/${asset.base}.${asset.hash8}.${tag}.dcz`, out);
+        n++; deltaBytes += out.length;
+        console.log(`delta: /ad/${asset.base}.${asset.hash8}.${tag}.dcz ${out.length} bytes (vs ${plainTwin} plain br)`);
+      }
     }
-    const dicts  = await readdir("holding/a-dict").catch(() => []);
-    const deltas = await readdir("holding/ad").catch(() => []);
-    const missing = [];
-    for (const d of dicts) {
-      const m = d.match(/^(.+)\.([0-9a-f]{8})\.(js|css|svg)$/);
-      if (!m) continue;
-      const [, base, dictHash8] = m;
-      const now = shipping.get(base);
-      if (!now || now === dictHash8) continue;              // unchanged: no delta wanted
-      if (!deltas.some((n) => n.startsWith(`${base}.${now}.`))) missing.push(`${base} (${dictHash8} -> ${now})`);
-    }
-    if (missing.length) {
-      console.log(`precompress: WARNING shell deltas missing for ${missing.join(", ")} — run \`npm run shell:deltas\``);
-    } else if (deltas.length) {
-      console.log(`precompress: ${deltas.length} committed shell delta(s) current with the shipping shell`);
-    }
-  } catch {}
+    console.log(n ? `delta: ${n} dcz delta(s), ${deltaBytes} bytes total`
+                  : `delta: none needed (every dictionary candidate matches the shipping shell)`);
+  }
+
 }
 
 console.log(`staged ${OUT}/ - deploy with: wrangler deploy (self-builds via build.command) or npm run deploy`);

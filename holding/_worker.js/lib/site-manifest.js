@@ -180,6 +180,12 @@ export const AGENT_SURFACES = [
     "description": "The same photo through AVIF, WebP, and JPEG (zenc), with real byte counts and quality measurements."
   },
   {
+    "path": "/garage/compression",
+    "title": "Compression teardown",
+    "kind": "content",
+    "description": "Shipping brotli q11 and zstd shared-dictionary deltas: what the edge really does, three platform limits that turned out innocent, and the one-line bug behind all of them."
+  },
+  {
     "path": "/garage/gpt56",
     "title": "5.6 Sol",
     "kind": "content",

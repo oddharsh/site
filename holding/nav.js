@@ -95,6 +95,7 @@
     { label: "garage · chunks", path: "/garage/chunks", hint: "content-addressed chunking" },
     { label: "garage · cloudflare", path: "/garage/cloudflare", hint: "free Cloudflare features" },
     { label: "garage · encoding", path: "/garage/encoding", hint: "thumbnail encoding study" },
+    { label: "garage · compression", path: "/garage/compression", hint: "brotli q11 + dcz deltas" },
     { label: "garage · 5.6 sol", path: "/garage/gpt56", hint: "the performance pass outlined with 5.6 Sol" },
     { label: "garage · horizon", path: "/garage/horizon", hint: "web-platform horizon" },
     { label: "garage · iroh", path: "/garage/iroh", hint: "dial a machine by its public key" },

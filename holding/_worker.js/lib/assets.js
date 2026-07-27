@@ -62,6 +62,14 @@ const SHELL_TYPES = {
   svg: "image/svg+xml; charset=utf-8",
 };
 
+// Offer the shell's own bytes as a compression dictionary for future /a/ requests
+// (RFC 9842). This is what makes a Chromium client send `Available-Dictionary` back, which
+// is the whole basis of the delta path. Purely additive: a client may ignore the offer, and
+// a server may ignore the resulting header. match="/a/*" scopes it to the content-hashed
+// shell, so the next deploy's /a/nav.<newhash>.js is exactly the request that arrives
+// carrying the OLD bytes' hash.
+const DICTIONARY_OFFER = { "use-as-dictionary": 'match="/a/*"' };
+
 // A WORKER CANNOT NEGOTIATE COMPRESSION. Measured in wrangler dev 2026-07-26: the
 // runtime rewrites the request's Accept-Encoding to a constant before the worker sees
 // it. Four probes sending `identity`, `br`, `gzip`, and `br;q=0, gzip` ALL arrived as
@@ -77,76 +85,18 @@ const SHELL_TYPES = {
 // So local testing can tell us the negotiation is impossible, but it CANNOT tell us
 // whether production is correct.
 //
-// SETTLED IN PRODUCTION, 2026-07-27. The canary answered both questions on aadhar.sh:
-// /encoding-test returned 30 bytes in ONE brotli layer (it was 34 in two before the
-// withSecurityHeaders fix), and ?br=1 returned 13,047 in one layer decoding to 46,268
-// bytes of valid JavaScript. So this is now ON by default, and every /a/ request that the
-// edge tells us can take br gets the q11 twin instead of the edge's ~q4 fly-compression.
+// Both paths are ON, each verified in production on 2026-07-27 before its gate came out,
+// and the canaries that proved them are gone now that the default paths exercise the same
+// code. CLAUDE.md gotchas 13 and 14 record how to rebuild them if a regression ever needs
+// bisecting.
 //
-// The DELTA path below keeps its own separate gate. Flipping one switch for both would
-// have enabled dcz on the strength of a precompression measurement, and those are
-// different code paths with different failure modes: a bad delta means an unstyled site
-// for Chromium visitors specifically.
-const SHELL_PRECOMPRESS_DEFAULT_ON = true;
+//   precompression: /encoding-test returned 30 bytes in ONE brotli layer (34 in two before
+//   the withSecurityHeaders fix), and the shell twin measured 13,047 decoding to 46,268
+//   bytes of valid JS. About 19% under the edge's ~q4 fly-compression, for every browser.
+//
+//   dcz deltas: luna.css served as 116 bytes against its previous version, round-tripping
+//   byte-exact. 65x under the plain response for a returning Chromium visitor.
 
-// SETTLED IN PRODUCTION, 2026-07-27, on the same bar precompression had to clear. The
-// canary served /a/luna.0f879f03.css against the 78b35410 dictionary as 120 bytes with
-// `Content-Encoding: dcz`, and `zstd -d -D` round-tripped it byte-exact to the shipped
-// asset. The canary exercised THIS function, so flipping the trigger changes who reaches
-// it, not what it does.
-//
-// So a returning Chromium visitor now pays 120 bytes for that luna.css change instead of
-// 7,615. Everyone else is unaffected: no Available-Dictionary means no delta, and a
-// dictionary we have no precomputed delta for falls through to the brotli q11 twin.
-const SHELL_DELTA_DEFAULT_ON = true;
-
-function wantsPrecompressed(url) {
-  return SHELL_PRECOMPRESS_DEFAULT_ON || url.searchParams.get("br") === "1";
-}
-
-// serveEncodingSelfTest: the decisive experiment, isolating WHERE the double
-// compression comes from.
-//
-// Both failing canaries went through `env.ASSETS`, so "a worker cannot emit a
-// pre-encoded body" may be too broad a conclusion: the static-assets layer is a real
-// suspect, since it does its own content negotiation. Cloudflare's own shared-dictionary
-// demo (canicompress.com) delta-compresses at the edge reading bytes from R2, never from
-// static assets, which is consistent with the assets path being the problem.
-//
-// This response involves NO asset fetch at all. The body is a constant: brotli q11 of
-// "ENCODING-TEST-OK " x64, 1088 plaintext bytes down to 30. Read the result as:
-//
-//   30 bytes  -> encodeBody: "manual" WORKS on a worker-built response. The wall is the
-//                static-assets layer, and dcb/dcz from a worker is viable (which puts
-//                the homepage's 13,264 -> ~870 back on the table).
-//   34ish     -> brotli-in-brotli. No worker on this platform can emit a pre-encoded
-//                body, and only Cloudflare's managed (Phase 2) mode can ever help.
-//
-// `?raw=1` omits encodeBody at the route. It WAS the control that proved this test
-// sensitive: before the fix both arms returned 34 bytes in two brotli layers. Now both
-// return 30 in one, because withSecurityHeaders re-applies `manual` for any response
-// carrying a content-encoding, which is deliberately not overridable per-route. Kept
-// only so the two arms can be compared again if this ever regresses.
-const ENCODING_TEST_BR = "Gz8E+I3UWq04bGqQlicqWbQ0VYb0ViC4ZIxP794C";
-const ENCODING_TEST_PLAIN_LEN = 1088;
-
-export function serveEncodingSelfTest(request) {
-  const url = new URL(request.url);
-  const bytes = Uint8Array.from(atob(ENCODING_TEST_BR), (c) => c.charCodeAt(0));
-  const init = {
-    headers: {
-      "content-type":     "text/plain; charset=utf-8",
-      "content-encoding": "br",
-      "cache-control":    "no-store",
-      "x-test-br-bytes":  String(bytes.length),
-      "x-test-plain-len": String(ENCODING_TEST_PLAIN_LEN),
-    },
-  };
-  // the control arm deliberately omits encodeBody, so a reader can tell a working
-  // passthrough from a test that simply never exercised the runtime's re-encoder.
-  if (url.searchParams.get("raw") !== "1") init.encodeBody = "manual";
-  return new Response(bytes, init);
-}
 
 // Available-Dictionary is a Structured Field Byte Sequence: `:<base64 sha256>:`. Returns
 // the first 16 hex chars of that hash, which is the tag gen-shell-deltas.mjs put in the
@@ -230,79 +180,6 @@ export async function servePrecompressedShell(request, env) {
     return serveAssetWith404Clamp(request, env);
   }
 
-  // ?br=probe — the one-deploy experiment behind gotcha 13. We measured that the
-  // runtime rewrites Accept-Encoding to a constant before a worker sees it, which
-  // kills compression negotiation here. Shared dictionaries need the worker to read
-  // `Available-Dictionary`, an encoding-negotiation header of exactly the class the
-  // runtime was just observed rewriting, so whether Worker-served dcb is possible AT
-  // ALL is an open question that no local test can answer.
-  //
-  // This reports what actually arrived at the worker in production. Named headers
-  // only, never a blanket reflection of the request: these four carry no credential
-  // and no visitor identity, and echoing arbitrary headers would be a real smell.
-  // REMOVE THIS once the dictionary question is settled — it is an experiment, not a
-  // feature, and site-manifest.json deliberately does not list it as a surface.
-  if (url.searchParams.get("br") === "probe") {
-    return new Response(JSON.stringify({
-      note: "encoding-negotiation headers as the Worker received them",
-      "accept-encoding":     request.headers.get("accept-encoding"),
-      "available-dictionary": request.headers.get("available-dictionary"),
-      "dictionary-id":       request.headers.get("dictionary-id"),
-      "cf-ray":              request.headers.get("cf-ray"),
-    }, null, 2) + "\n", {
-      headers: {
-        "content-type":  "application/json; charset=utf-8",
-        "cache-control": "no-store",
-      },
-    });
-  }
-
-  // The identity path, which is what everyone gets while the gate is off. It carries
-  // one extra header: Use-As-Dictionary offers these bytes to the browser as a
-  // compression dictionary for future /a/ requests (RFC 9842). That offer is what
-  // makes a Chromium client start sending `Available-Dictionary` back, which is the
-  // ONLY way ?br=probe above can answer whether the runtime lets that header through.
-  //
-  // Safe to serve unconditionally: it is purely additive. A client may ignore it, and
-  // a server is always free to ignore the resulting Available-Dictionary — which we
-  // do, since nothing here returns dcb yet. So the worst case is that Chromium stores
-  // 13KB it already downloaded and adds a request header we don't read.
-  //
-  // match="/a/*" scopes it to the content-hashed shell, so a new deploy's
-  // /a/nav.<newhash>.js is exactly the request that would carry the old bytes' hash.
-  const DICTIONARY_OFFER = { "use-as-dictionary": 'match="/a/*"' };
-
-  // ?br=2 — the second canary, testing the ONE hypothesis left standing after ?br=1
-  // failed in production. ?br=1 fetches /a/<name>.<ext>.br and rebuilds the response
-  // to fix its content-type; that rebuild is what appears to lose the runtime's
-  // internal "this body is already encoded" state, so the body got compressed again
-  // (13,051 bytes of brotli-in-brotli against 13,047 on disk).
-  //
-  // Here the asset layer supplies the whole envelope: /abr/<name>.<ext> holds the same
-  // q11 bytes, and _headers gives that path both `Content-Encoding: br` and the correct
-  // Content-Type. So this returns the subrequest response WITHOUT constructing a new
-  // Response, which is the documented pass-through contract ("do not read the body,
-  // keep the Content-Encoding intact"). Nothing is rebuilt, so there is no state to lose.
-  //
-  // If ?br=2 returns 13,047 bytes of valid JS, precompression is viable and the same
-  // envelope trick carries dcb (Available-Dictionary already reaches the worker —
-  // verified in production, cf-ray a2174bfc). If it returns 13,051 again, a worker on
-  // this platform cannot emit a pre-encoded body at all, and both precompression and
-  // Worker-served dictionaries are dead ends. That is the whole question.
-  if (url.searchParams.get("br") === "2") {
-    // accept-encoding: identity on the SUBREQUEST. There are two places a body can get
-    // compressed, and they have to be separated: the asset layer compresses what it
-    // serves when the caller accepts it, so forwarding the original request's
-    // "br, gzip" makes IT produce the br-in-br. Asking for identity gets the file's raw
-    // q11 bytes while _headers still supplies `Content-Encoding: br`, leaving exactly
-    // one encoding on the response and nothing for the outbound side to redo.
-    const passthrough = await env.ASSETS.fetch(new Request(`${url.origin}/abr${url.pathname.slice(2)}`, {
-      headers: { "accept-encoding": "identity" },
-    }));
-    if (passthrough.ok) return passthrough;
-    try { await passthrough.body?.cancel(); } catch {}
-  }
-
   // ── dcz: the delta path ────────────────────────────────────────────────────────
   // A Chromium client that accepted our Use-As-Dictionary offer sends back the SHA-256
   // of the shell bytes it already holds. scripts/gen-shell-deltas.mjs has precomputed
@@ -319,14 +196,11 @@ export async function servePrecompressedShell(request, env) {
   // Any miss falls through to the br path below and then to identity, so a client whose
   // dictionary we have no delta for (skipped several deploys, or a hand-crafted header)
   // just gets the ordinary asset.
-  if (SHELL_DELTA_DEFAULT_ON || url.searchParams.get("br") === "dcz") {
-    const delta = await serveDictionaryDelta(url, ext, request, env);
-    if (delta) return delta;
-  }
+  const delta = await serveDictionaryDelta(url, ext, request, env);
+  if (delta) return delta;
 
-  if (!wantsPrecompressed(url)) {
-    return serveAssetWith404Clamp(request, env, { headers: DICTIONARY_OFFER });
-  }
+  // No Available-Dictionary, or no delta for the dictionary this client holds: fall through
+  // to the brotli q11 twin below, which carries the dictionary offer itself.
 
   let br;
   try {

@@ -146,6 +146,10 @@
       "description": "The same photo through AVIF, WebP, and JPEG (zenc), with real byte counts and quality measurements.",
       "hint": "thumbnail encoding study",
       "flags": { "run": true, "taskbar": false, "sitemap": true, "gallery": true, "agents": true, "searchIndex": false } },
+    { "path": "/garage/compression", "title": "Compression teardown", "section": "garage", "kind": "content",
+      "description": "Shipping brotli q11 and zstd shared-dictionary deltas: what the edge really does, three platform limits that turned out innocent, and the one-line bug behind all of them.",
+      "hint": "brotli q11 + dcz deltas",
+      "flags": { "run": true, "taskbar": false, "sitemap": true, "gallery": true, "agents": true, "searchIndex": false } },
 
     { "path": "/garage/gpt56", "title": "5.6 Sol", "section": "garage", "kind": "content", "short": "5.6 sol",
       "description": "The performance pass outlined with 5.6 Sol: the bytes, cache boundaries, and first-paint decisions.",

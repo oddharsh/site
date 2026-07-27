@@ -543,6 +543,25 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
 
       <li>
         <div class="title-row">
+          <span class="name"><a href="/garage/compression">Compression teardown</a></span>
+          <span class="status shipped">shipped</span>
+        </div>
+        <div class="desc">
+          The edge was handing browsers <em>more</em> bytes than its own second choice, and
+          compressing at about a third of the effort brotli can reach offline. Fixing it took
+          four rounds, three of them spent blaming the platform for a one-line bug in my own
+          code (<code style="font-family: var(--font-mono);font-size:9pt">encodeBody</code> is
+          write-only Response init, so rebuilding a response drops it silently). Ends at
+          ~19% off the shell for every browser and 116 bytes for a returning Chromium visitor,
+          via zstd shared-dictionary deltas. Keeps the wrong turns, since those transfer.
+        </div>
+        <div class="meta">
+          shape: measured teardown + shipped fix &middot; added 2026-07-27
+        </div>
+      </li>
+
+      <li>
+        <div class="title-row">
           <span class="name"><a href="/garage/encoding">Thumbnail encoding study</a></span>
           <span class="status shipped">shipped</span>
         </div>

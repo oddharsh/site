@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#2D78BD">
+<link rel="preload" as="style" href="/luna.css">
+<title>aadhar.sh/garage/compression teardown</title>
+<meta name="description" content="Shipping brotli q11 and zstd shared-dictionary deltas on this site: what the edge actually does with Accept-Encoding, the three platform limits that turned out innocent, the one-line bug that impersonated all of them, and why the deltas ship as dcz instead of dcb.">
+<link rel="canonical" href="https://aadhar.sh/garage/compression">
+<meta property="og:type" content="website">
+<meta property="og:title" content="aadhar.sh/garage/compression teardown">
+<meta property="og:description" content="Shipping brotli q11 and zstd shared-dictionary deltas on this site: what the edge actually does with Accept-Encoding, the three platform limits that turned out innocent, the one-line bug that impersonated all of them, and why the deltas ship as dcz instead of dcb.">
+<meta property="og:url" content="https://aadhar.sh/garage/compression">
+<meta name="twitter:card" content="summary_large_image">
+<meta property="og:image" content="https://aadhar.sh/og/garage-compression.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="aadhar.sh/garage/compression teardown, live demo screenshotted">
+<meta name="twitter:image" content="https://aadhar.sh/og/garage-compression.png">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20x='3'%20y='6'%20width='7'%20height='20'%20rx='1'%20fill='%230855dd'/%3E%3Crect%20x='12'%20y='6'%20width='5'%20height='20'%20rx='1'%20fill='%23166aee'/%3E%3Crect%20x='19'%20y='6'%20width='10'%20height='20'%20rx='1'%20fill='%23003bda'/%3E%3C/svg%3E">
+<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}
+* { box-sizing: border-box; }
+/* cross-document View Transitions: a fast, reduced-motion-safe crossfade on real
+   navigations between same-origin pages. inline (not JS-injected) so the incoming
+   page has opted in by parse time. the persistent shell (wallpaper/taskbar) is
+   identical across pages, so visually only the changing window content fades. */
+@media (prefers-reduced-motion:no-preference){@view-transition{navigation:auto}::view-transition-old(root),::view-transition-new(root){animation-duration:140ms}}
+html, body { margin: 0; padding: 0; } html{background:linear-gradient(180deg,oklch(56% 0.13 250) 0%,oklch(73% 0.10 236) 50%,oklch(88% 0.05 232) 60%,oklch(60% 0.16 140) 100%)}
+html { scrollbar-color: oklch(62% 0.14 255) oklch(91% 0.02 248); }
+body {
+  background: linear-gradient(180deg, oklch(56% 0.13 250) 0%, oklch(73% 0.10 236) 50%, oklch(88% 0.05 232) 60%, oklch(60% 0.16 140) 100%);
+  font-family: var(--font-ui);
+  font-size: 10.5pt;
+  line-height: 1.5;
+  color: oklch(21.78% 0 0);
+  padding: 24px 12px 60px;
+  min-height: 100vh;
+}
+.window {
+  max-width: 720px;
+  margin: 0 auto;
+  background: oklch(100% 0 0);
+  border: 2px solid #0831d9; border-right-color: #001ea0; border-bottom-color: #001ea0;
+  border-top-left-radius: 8px; border-top-right-radius: 8px; overflow: hidden;
+  box-shadow: inset 1px 1px 0 #166aee, inset 2px 2px 0 #0855dd,
+              inset -1px -1px 0 #00138c, inset -2px -2px 0 #003bda,
+              4px 4px 0 rgba(0,30,160,.35);
+}
+.title-bar {
+  background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
+  color: oklch(100.00% 0 0);
+  font-family: var(--font-caption);
+  font-size: 10pt; font-weight: bold;
+  padding: 4px 8px;
+  border-bottom: 1px solid oklch(41.92% 0.0962 250.51);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.title-bar .icon {
+  display: inline-block; width: 16px; height: 16px; margin-right: 6px;
+  vertical-align: middle; background: oklch(87.82% 0.0877 66.27);
+  position: relative; flex-shrink: 0;
+}
+.title-bar .icon::before {
+  content: ""; position: absolute; inset: 3px;
+  background: oklch(69.58% 0.2043 43.49);
+  clip-path: polygon(20% 0, 100% 50%, 20% 100%, 0 50%);
+}
+.title-bar .title-text { flex: 1; padding-left: 4px; }
+.title-bar .controls { display: flex; align-items: center; gap: 2px; letter-spacing: 0; }
+/* authentic Luna caption buttons: 21x21 glossy "gel" lozenges with a top specular
+   highlight + CSS-drawn white glyphs (no text, no images). min/max are blue, CLOSE
+   is RED at rest. CLASS-BASED (.min/.max/.close) so decorative demo windows that use
+   <span class="close"> get the identical skin as a real <a class="close">. sRGB hex
+   traced from the Luna .msstyles bitmap, kept as hex on purpose. */
+.title-bar .controls .min,
+.title-bar .controls .max,
+.title-bar .controls .close {
+  position: relative; box-sizing: border-box;
+  width: 21px; height: 21px; padding: 0; margin: 0;
+  display: inline-block; overflow: hidden; font-size: 0; color: transparent;
+  border: 1px solid #6696eb; border-radius: 3px;
+  text-decoration: none; cursor: pointer;
+  background-color: #3e73f5;
+  background-image: linear-gradient(180deg, #5f8cf7 0%, #3a71f5 22%, #3e73f5 55%, #2a70f2 82%, #1045be 100%);
+  transition: filter 60ms ease-out;
+}
+/* "wet plastic" gloss band over the top ~45% (close uses ::after for its X stroke) */
+.title-bar .controls .min::after,
+.title-bar .controls .max::after {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 45%;
+  background: linear-gradient(180deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.12) 70%, rgba(255,255,255,0) 100%);
+  pointer-events: none; border-radius: 2px 2px 5px 5px;
+}
+.title-bar .controls .min:hover, .title-bar .controls .min:focus-visible,
+.title-bar .controls .max:hover, .title-bar .controls .max:focus-visible {
+  border-color: #8fb4ff; background-color: #4fa4ff;
+  background-image: linear-gradient(180deg, #689bff 0%, #468aff 22%, #4fa4ff 55%, #3990fc 82%, #1858c8 100%);
+  outline: none;
+}
+/* CLOSE = red at rest */
+.title-bar .controls .close {
+  border-color: #d8401c; background-color: #e45f3e;
+  background-image: linear-gradient(180deg, #e8795f 0%, #e45f40 30%, #e45d3d 52%, #e2552a 80%, #ae3110 100%);
+}
+.title-bar .controls .close:hover, .title-bar .controls .close:focus-visible {
+  border-color: #ff7a66; background-color: #ff957c;
+  background-image: linear-gradient(180deg, #ff8b7d 0%, #ff7463 26%, #ff957c 55%, #fd7e64 82%, #d34936 100%);
+  box-shadow: 0 0 4px rgba(255,120,96,.7); outline: none;
+}
+.title-bar .controls .min:active,
+.title-bar .controls .max:active,
+.title-bar .controls .close:active { filter: brightness(.9); }
+/* white glyphs drawn with pseudo-elements */
+.title-bar .controls .min::before {
+  content: ""; position: absolute; left: 5px; right: 5px; bottom: 5px; height: 2px;
+  background: #fff; box-shadow: 0 1px 0 rgba(0,0,0,.35);
+}
+.title-bar .controls .max::before {
+  content: ""; position: absolute; left: 5px; top: 5px; width: 11px; height: 9px;
+  box-sizing: border-box; border: 1px solid #fff; border-top-width: 2px;
+  filter: drop-shadow(0 1px 0 rgba(0,0,0,.35));
+}
+.title-bar .controls .close::before,
+.title-bar .controls .close::after {
+  content: ""; position: absolute; left: 50%; top: 50%;
+  width: 13px; height: 2px; margin: -1px 0 0 -6.5px; background: #fff;
+  box-shadow: 0 1px 0 rgba(0,0,0,.35);
+}
+.title-bar .controls .close::before { transform: rotate(45deg); }
+.title-bar .controls .close::after  { transform: rotate(-45deg); }
+/* --- Luna polish: caption text shadow (matches horizon/scroll) --- */
+.title-bar { text-shadow: 1px 1px #0f1089; }
+.content { padding: 12px 16px 18px; }
+h1 {
+  font-family: var(--font-caption);
+  font-size: 14pt;
+  color: oklch(41.92% 0.0962 250.51);
+  margin: 0 0 6px;
+}
+.lede { color: oklch(38.67% 0 0); font-size: 10.5pt; margin: 0 0 4px; }
+h2 {
+  font-family: var(--font-caption);
+  font-size: 13pt;
+  color: oklch(41.92% 0.0962 250.51);
+  margin: 28px 0 4px;
+}
+.note { color: oklch(44.95% 0 0); font-size: 10pt; margin: 0 0 14px; }
+.note code, p code, li code { background: oklch(96.72% 0 0); border: 1px solid oklch(88.22% 0 0); padding: 0 4px; font-family: var(--font-mono); font-size: 9.5pt; }
+hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px 0; }
+a { color: oklch(41.92% 0.0962 250.51); }
+.status {
+  display: inline-block; font-family: var(--font-mono); font-size: 8.5pt;
+  font-weight: bold; letter-spacing: 0.05em; padding: 1px 6px; border: 1px solid;
+  border-radius: 2px; text-transform: uppercase; vertical-align: middle;
+}
+.status.review { color: oklch(54.44% 0.1504 47.10); border-color: oklch(54.44% 0.1504 47.10); background: oklch(98% 0.03 95); }
+
+/* ── demo ── */
+.cas-controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 10px 0; }
+.cas-ta { width: 100%; min-height: 88px; font-family: var(--font-mono); font-size: 10pt; line-height: 1.45; padding: 8px; border: 2px solid; border-color: #808080 #fff #fff #808080; background: oklch(99% 0 0); field-sizing: content; max-height: 38vh; resize: vertical; }
+.xp-btn { font-family: var(--font-ui); font-size: 9.5pt; padding: 3px 12px; background: linear-gradient(#fff, #ece9d8); border: 1px solid #707070; border-radius: 3px; box-shadow: inset 1px 1px 0 #fff; cursor: pointer; }
+.xp-btn:active { box-shadow: inset 1px 1px 2px rgba(0,0,0,.3); }
+.method { margin: 16px 0; }
+.method h3 { font-size: 10.5pt; margin: 0 0 4px; font-family: var(--font-caption); color: oklch(41.92% 0.0962 250.51); display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.method h3 small { font-weight: normal; font-size: 9pt; color: oklch(50% 0 0); font-family: var(--font-ui); }
+.chunks { display: flex; flex-wrap: wrap; gap: 3px; padding: 8px; background: oklch(97% 0.005 250); border: 1px solid oklch(85% 0.02 250); border-radius: 4px; min-height: 30px; }
+.chunk { height: 26px; border-radius: 2px; display: flex; align-items: center; justify-content: center; font: 8px/1 "Courier New", monospace; color: #fff; text-shadow: 0 1px 1px rgba(0,0,0,.45); padding: 0 3px; overflow: hidden; white-space: nowrap; cursor: default; transition: background .18s; }
+.chunk.shared { background: oklch(52% 0.13 150); }
+.chunk.changed { background: oklch(58% 0.19 38); }
+.chunk.neutral { background: oklch(53% 0.10 255); }
+.stats { font-size: 9.5pt; color: oklch(42% 0 0); margin: 6px 0 0; font-family: var(--font-mono); }
+.stats b { color: oklch(22% 0 0); }
+.delta-good { color: oklch(43% 0.16 150); font-weight: bold; }
+.delta-bad { color: oklch(50% 0.19 38); font-weight: bold; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 9pt; color: oklch(45% 0 0); margin: 8px 0 0; }
+.legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+.legend .sh::before { background: oklch(52% 0.13 150); }
+.legend .ch::before { background: oklch(58% 0.19 38); }
+.legend .nu::before { background: oklch(53% 0.10 255); }
+.callout { font-size: 10pt; background: oklch(97% 0.025 255); border-left: 3px solid oklch(51% 0.225 263); padding: 8px 12px; margin: 14px 0; color: oklch(28% 0.04 255); }
+.replaces { font-size: 9.5pt; color: oklch(33% 0 0); margin: 8px 0 0; border-left: 3px solid oklch(86% 0.03 250); padding-left: 8px; }
+.drop { border: 2px dashed oklch(62% 0.05 255); border-radius: 6px; padding: 16px; text-align: center; color: oklch(45% 0.03 255); font-size: 10pt; cursor: pointer; background: oklch(98% 0.01 255); }
+.drop.over { background: oklch(94% 0.04 255); border-color: oklch(51% 0.225 263); }
+footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67% 0.0294 259.59); font-size: 9.5pt; color: oklch(45% 0 0); }
+@media (prefers-reduced-motion: reduce) { .chunk { transition: none; } }
+
+/* encoding study */
+.enc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin: 12px 0 20px; }
+.enc-card { margin: 0; background: oklch(97% 0.004 250); border: 1px solid oklch(61.14% 0.0611 253.60); padding: 4px; }
+.enc-card img { display: block; width: 100%; height: auto; background: #fff; cursor: crosshair; }
+@media (hover: none) { .enc-card img { cursor: default; } }
+
+/* ── loupe / magnifier ──────────────────────────────────────────────────────
+   Mouse over any sample to inspect compression artifacts at zoom. Reuses the
+   site's cursor-following tooltip architecture: a popover positioned off --lx/--ly
+   (cursor clientX/Y), shown on pointer enter / hidden on leave, hover-gated. Round
+   glass centred ON the cursor; image-rendering:pixelated so the actual encoded
+   pixels (JPEG 8×8 blocking vs AVIF's smoothing) read crisp instead of being
+   re-smoothed by the browser's upscaler. */
+/* squared XP "Luna" mini-window: blue double-bevel frame + 5-stop title strip,
+   the magnified image sunken in a 3D well below. matches the page's own .window /
+   .title-bar literals. fixed geometry (184 frame · 18 bar · 180 glass) so the glass
+   centre lands exactly on the cursor via the translate offset below. */
+.loupe {
+  position: fixed; margin: 0; inset: auto; top: 0; left: 0;
+  width: 184px;
+  background: oklch(100% 0 0);
+  border: 2px solid #0831d9; border-right-color: #001ea0; border-bottom-color: #001ea0;
+  box-shadow: inset 1px 1px 0 #166aee, inset -1px -1px 0 #00138c, 3px 3px 0 oklch(46% 0.16 263 / 0.35);
+  pointer-events: none; z-index: 10000;
+  opacity: 1; transition: opacity 90ms ease-out, display 90ms allow-discrete;
+  /* glass centre on the cursor: 2px border + 90px to glass mid (x); 2 + 18 bar + 90 (y) */
+  transform: translate(calc(var(--lx, 0px) - 92px), calc(var(--ly, 0px) - 110px));
+}
+.loupe .bar {
+  height: 18px; box-sizing: border-box; display: flex; align-items: center; gap: 5px;
+  padding: 0 6px; border-bottom: 1px solid oklch(41.92% 0.0962 250.51);
+  font: bold 8.5pt var(--font-caption); color: oklch(100% 0 0); text-shadow: 1px 1px #0f1089;
+  background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
+}
+.loupe .bar .z { margin-left: auto; font: bold 8pt var(--font-mono); text-shadow: none; color: oklch(96% 0.03 250); }
+.loupe .glass {
+  width: 180px; height: 180px; box-sizing: border-box; position: relative;
+  background-repeat: no-repeat; background-color: oklch(100% 0 0);
+  image-rendering: pixelated;
+  box-shadow: inset 1px 1px 0 #808080, inset -1px -1px 0 oklch(100% 0 0);  /* sunken well */
+}
+/* squared centre reticle so you know exactly what's under the glass */
+.loupe .glass::after {
+  content: ""; position: absolute; left: 50%; top: 50%; width: 11px; height: 11px;
+  transform: translate(-50%, -50%); box-sizing: border-box;
+  border: 1px solid oklch(100% 0 0 / 0.85); box-shadow: 0 0 0 1px oklch(0% 0 0 / 0.55);
+}
+.loupe:not(:popover-open) { opacity: 0; }
+@starting-style { .loupe:popover-open { opacity: 0; } }
+.enc-card figcaption { font: 8.5pt var(--font-ui); color: oklch(30% 0.01 250); padding: 4px 2px 1px; line-height: 1.4; }
+.enc-card figcaption b { color: oklch(41.92% 0.0962 250.51); }
+.enc-sz { float: right; font-family: var(--font-mono); font-weight: bold; }
+.enc-bpp { display: block; font-family: var(--font-mono); color: oklch(54% 0 0); font-size: 8pt; }
+.enc-table { border-collapse: collapse; margin: 8px 0 20px; font-size: 10pt; width: 100%; max-width: 460px; }
+.enc-table th, .enc-table td { border: 1px solid oklch(80% 0.02 250); padding: 4px 10px; text-align: left; }
+.enc-table th { background: oklch(92.5% 0.018 95); font-family: var(--font-caption); }
+.enc-table td.num { font-family: var(--font-mono); text-align: right; }
+.enc-table-scroll { overflow-x: auto; margin: 8px 0 20px; }
+.zen-table { max-width: none; min-width: 650px; margin: 0; }
+.zen-table th:first-child, .zen-table td:first-child { width: 23%; }
+.zen-table td { vertical-align: top; }
+.zen-results { min-width: 480px; max-width: 620px; }
+.enc-ships { line-height: 1.6; }
+
+  /* OS-window geometry inlined so FIRST PAINT matches nav.js (no shell "pop"
+     when the deferred desktop arrives). keep in sync with nav.js (search
+     "app-shell"); degrades with JS off (.content scrolls natively). */
+  html { height: 100dvh; overflow: hidden; }
+  body { min-height: 0; height: calc(100vh - 30px); height: calc(100dvh - 30px);
+    overflow: hidden; box-sizing: border-box; display: flex; flex-direction: column;
+    align-items: center; padding: 8px; }
+  .window { flex: 0 1 auto; min-height: 0; max-height: 100%; width: 100%;
+    display: flex; flex-direction: column; }
+  .window > .title-bar { flex: 0 0 auto; }
+  .window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 12px !important; }
+  body::after { content: ""; position: fixed; left: 0; right: 0; bottom: 0; height: 30px;
+    z-index: 1; background: linear-gradient(180deg, oklch(67% 0.15 256) 0%, oklch(58% 0.19 257) 4%,
+    oklch(51% 0.20 258) 9%, oklch(49% 0.20 258) 50%, oklch(46% 0.20 259) 92%, oklch(40% 0.18 260) 100%); }
+
+body { text-wrap: pretty; } /* progressive; older engines ignore it */
+/* comparison tables + the winning-cell tint, matching the convention the other
+   garage pages use (wire.html, workers.html). Kept inline per page: the garage HTML
+   is never minified, so View Source stays the authoring source. */
+.cmp { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 9.5pt; }
+.cmp th, .cmp td { border: 1px solid oklch(85% 0.02 250); padding: 5px 8px; text-align: left; vertical-align: top; }
+.cmp th { background: oklch(96% 0.01 250); font-family: var(--font-caption); color: oklch(41.92% 0.0962 250.51); font-weight: normal; }
+.cmp td:first-child { font-family: var(--font-caption); color: oklch(33% 0 0); }
+.cmp .y { color: oklch(43% 0.16 150); font-weight: bold; }
+.cmt { color: oklch(52% 0.02 250); }
+</style>
+<link rel="stylesheet" href="/luna.css">
+</head>
+<body>
+<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<div class="window">
+  <div class="title-bar" aria-hidden="true"><span class="title-text"><span class="icon"></span>aadhar.sh/garage/compression teardown</span><span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span></div>
+  <div class="content">
+    <h1>Compression teardown <span class="status shipped">shipped</span></h1>
+
+    <p class="lede">
+      Putting a site behind a CDN is supposed to end the compression conversation. The edge
+      negotiates, the edge compresses, you stop thinking about it. That held here for a year,
+      and then I measured it: the edge was handing browsers <strong>more</strong> bytes than
+      its own second choice would have, and compressing at roughly a third of the effort the
+      same algorithm can reach offline.
+    </p>
+    <p class="lede" style="margin-top:4px">
+      Fixing that took four rounds, three of which I spent blaming the platform for a bug in
+      my own code. This page keeps the wrong turns, because the wrong turns are the reusable
+      part.
+    </p>
+
+    <h2>What the edge was actually doing</h2>
+    <p>
+      Cloudflare prefers zstd when a browser offers everything. Reasonable default. On this
+      site it lost to brotli on every asset I checked, because these are small text documents
+      and brotli's static dictionary is tuned for exactly that:
+    </p>
+    <table class="cmp">
+      <thead><tr><th>document</th><th>raw</th><th>what browsers got</th><th>brotli q11, offline</th><th>gap</th></tr></thead>
+      <tbody>
+        <tr><td>homepage</td><td>47,399</td><td>13,264 zstd</td><td>10,524</td><td>20.7%</td></tr>
+        <tr><td>/lens</td><td>40,923</td><td>11,625</td><td>8,835</td><td>24.0%</td></tr>
+        <tr><td>nav.js</td><td>46,268</td><td>15,909</td><td>13,047</td><td>18.0%</td></tr>
+        <tr><td>luna.css</td><td>36,980</td><td>9,522</td><td>7,590</td><td>20.3%</td></tr>
+      </tbody>
+    </table>
+    <p>
+      Two separate losses hide in that table. The edge picked the weaker algorithm, and it
+      compressed at about quality 4, because it is compressing on the fly for everyone and
+      cannot afford quality 11. Neither is a mistake on Cloudflare's part. Both are recoverable
+      by a site small enough to compress its own bytes ahead of time.
+    </p>
+
+    <h2>Three limits that turned out innocent</h2>
+    <p>
+      Serving my own pre-compressed bytes from a Worker produced brotli inside brotli: a body
+      that decodes once into more compressed bytes, which no client can read. I diagnosed that
+      three times and was wrong three times. Each suspect was a <em>real</em> behavior, which is
+      what made them so convincing:
+    </p>
+    <ol>
+      <li>
+        <strong>A Worker cannot read the client's Accept-Encoding.</strong> True, and worth
+        knowing. Four requests sending <code>identity</code>, <code>br</code>, <code>gzip</code>
+        and <code>br;q=0</code> all arrived at the Worker as <code>"gzip, br"</code>. The runtime
+        normalizes it, so any <code>if (acceptsBrotli(request))</code> branch is dead code that
+        always takes the true arm.
+      </li>
+      <li>
+        <strong>The edge does not down-convert.</strong> Also true. Hand it brotli, ask as a
+        client that cannot decode brotli, and you get raw brotli anyway. So negotiation cannot
+        be faked from behind either.
+      </li>
+      <li>
+        <strong>The static-assets layer re-compresses.</strong> False, and I built a whole
+        parallel <code>/abr/</code> path to route around it before finding out.
+      </li>
+    </ol>
+    <p>
+      What finally isolated it was deleting every variable: a 30-byte brotli constant, built in
+      the Worker, touching no assets at all. It came back as 34 bytes in two layers. With no
+      asset fetch in the path, the assets layer was exonerated and the bug had to be mine.
+    </p>
+
+    <h2>The actual bug, which was one line long</h2>
+    <p>
+      Cloudflare's <code>encodeBody: "manual"</code> tells the runtime a body is already
+      encoded, so leave it alone. It is <strong>write-only</strong> Response init. There is no
+      getter. So this, which every response on the site passed through, silently discarded it:
+    </p>
+    <pre><code>return new Response(response.body, {
+  status:     response.status,
+  statusText: response.statusText,
+  headers,          // <span class="cmt">encodeBody is gone, and content-encoding survives</span>
+});</code></pre>
+    <p>
+      The runtime then saw a <code>content-encoding: br</code> header on a body it believed was
+      raw, and helpfully compressed it to match. Because a security-header wrapper rebuilt every
+      response, <code>manual</code> had never worked anywhere on this site, and the symptom looked
+      exactly like a platform that refuses to serve pre-compressed bodies. I had written that
+      conclusion into the repo's own notes before disproving it.
+    </p>
+    <p>
+      The generalizable rule: <strong>anything that rebuilds a Response must carry
+      <code>encodeBody</code> forward.</strong> Since there is no getter, the loss is invisible
+      at the call site, and the damage surfaces one layer downstream wearing someone else's
+      clothes.
+    </p>
+
+    <h2>Deltas, and why they ship as dcz</h2>
+    <p>
+      With the emit path fixed, shared dictionaries became reachable. Every shell asset is served
+      with <code>Use-As-Dictionary</code>, so a returning Chromium visitor sends back the SHA-256
+      of the copy it already holds, and the build has already computed the diff against it. A
+      CSS change costs 116 bytes instead of 7,615.
+    </p>
+    <p>
+      RFC 9842 defines two encodings for this, and Cloudflare passes both through identically, so
+      the choice is free and purely about engineering. Brotli is nominally smaller. zstd decodes
+      about twice as fast:
+    </p>
+    <table class="cmp">
+      <thead><tr><th>measure</th><th>dcb (brotli)</th><th>dcz (zstd)</th></tr></thead>
+      <tbody>
+        <tr><td>the real luna.css delta</td><td>79 bytes</td><td>80 bytes</td></tr>
+        <tr><td>source-level deltas, larger</td><td class="y">5-8% smaller</td><td>n/a</td></tr>
+        <tr><td>decode, bare 46KB asset</td><td>0.094 ms</td><td class="y">0.046 ms</td></tr>
+        <tr><td>throughput</td><td>471 MB/s</td><td class="y">954 MB/s</td></tr>
+      </tbody>
+    </table>
+    <p>
+      I argued for brotli on bytes and got talked out of it, correctly. Bytes are a proxy;
+      latency is the thing you actually want. And the byte case collapses on inspection: on the
+      pair this site really ships, brotli wins by <em>one byte</em>. The 5-8% edge only appears
+      on much larger deltas than a shell asset produces. Meanwhile the decode numbers came off a
+      fast laptop, so the gap widens on the phones that need it most.
+    </p>
+    <p>
+      dcz's framing is the tidier of the two as a bonus. The dictionary hash rides in a Zstandard
+      <em>skippable frame</em>, which is valid zstd, so any conforming decoder steps over it
+      without special handling. dcb needs bespoke treatment of its 36-byte prefix.
+    </p>
+
+    <h2>One more over-generalization</h2>
+    <p>
+      Dictionary compression is unreachable from Node's zlib, so the deltas started life as a
+      workstation script with committed artifacts. That sentence is true of brotli. I applied it
+      to zstd without checking, and <code>zstdCompressSync</code> takes a <code>dictionary</code>
+      option. It also beats shelling out to the CLI: 116 bytes against 120.
+    </p>
+    <p>
+      So the deltas moved into the build, which removed the CLI dependency, the committed
+      artifacts, a manual step, and the tripwire that existed to catch you forgetting the manual
+      step. Four things deleted because one assumption got tested. The check that mattered was
+      interop: the foreign <code>zstd -d -D</code> CLI decodes Node's output byte-exact, prefix
+      included, because the real decoder is a browser and not Node.
+    </p>
+
+    <h2>What shipped</h2>
+    <table class="cmp">
+      <thead><tr><th>asset</th><th>before</th><th>every browser now</th><th>returning Chromium</th></tr></thead>
+      <tbody>
+        <tr><td>nav.js</td><td>15,909 zstd</td><td class="y">13,047</td><td>delta on change</td></tr>
+        <tr><td>luna.css</td><td>9,124</td><td class="y">7,615</td><td class="y">116</td></tr>
+        <tr><td>lens.js</td><td>n/a</td><td class="y">16,491</td><td>delta on change</td></tr>
+        <tr><td>icons.svg</td><td>n/a</td><td class="y">2,344</td><td>delta on change</td></tr>
+      </tbody>
+    </table>
+    <p>
+      Roughly 19% off the shell for everyone, and 65x off a CSS change for a returning Chromium
+      visitor. An unplanned side effect: because the Worker now hands over its own brotli, a
+      client offering <code>zstd, br, gzip</code> stops getting the zstd that started this whole
+      investigation.
+    </p>
+
+    <h2>The part that transfers</h2>
+    <p>
+      Every fact I gathered about the platform was correct. The conclusion I built out of them
+      was wrong, and it survived three rounds because each new measurement kept confirming a real
+      constraint that simply was not the constraint doing the damage. Accumulating true facts
+      feels like converging on a cause.
+    </p>
+    <p>
+      What broke the loop was a test with none of my code in the path. That is the cheap move I
+      should reach for first, and the honest version of "it's a platform limit" is a reproduction
+      the platform owner could run. Until you have that, the call is coming from inside the house.
+    </p>
+
+    <section id="luq" aria-label="understanding check"></section>
+  </div>
+</div>
+<script type="application/json" id="luq-data">
+{
+  "skin": "garage",
+  "questions": [
+    {
+      "q": "A Worker reads request.headers.get(\"accept-encoding\") and gets \"gzip, br\". What does that value tell you?",
+      "options": [
+        {
+          "t": "Nothing about the client. It describes what the EDGE can handle, and the runtime normalizes it to a constant.",
+          "ok": true,
+          "why": "Four probes sending identity, br, gzip and br;q=0 all arrived as the same string. Any branch on it always takes the true arm."
+        },
+        {
+          "t": "That the client supports gzip and brotli but not zstd, so serving zstd would break it.",
+          "why": "The value is the same no matter what the client sent, including a client that sent identity only. It is not the client's header."
+        },
+        {
+          "t": "That the client refused zstd via q=0, so the edge stripped it from the list.",
+          "why": "No stripping happened. A client offering zstd, br, gzip produces the identical value, because the runtime replaces the header rather than filtering it."
+        }
+      ]
+    },
+    {
+      "q": "A Worker sets Content-Encoding: br with encodeBody: \"manual\", and the client still receives brotli-inside-brotli. What is the first thing to check?",
+      "options": [
+        {
+          "t": "Whether anything downstream rebuilt the Response, since encodeBody is write-only init and rebuilding drops it silently.",
+          "ok": true,
+          "why": "That was the bug here: a security-header wrapper reconstructed every response, so manual never applied anywhere on the site."
+        },
+        {
+          "t": "Whether the static-assets layer re-compressed it on the way out.",
+          "why": "Worth suspecting, and wrong here. A body built in the Worker with no asset fetch at all still double-encoded, which exonerated that layer."
+        },
+        {
+          "t": "Whether the brotli_content_encoding compatibility flag is enabled.",
+          "why": "It has been on by default since 2024-04-29, so any recent compatibility_date already has it. Not the cause."
+        }
+      ]
+    },
+    {
+      "q": "The deltas ship as dcz even though brotli measured smaller. Why?",
+      "options": [
+        {
+          "t": "zstd decodes about 2x faster, and on the pair this site actually ships brotli's advantage was one byte.",
+          "ok": true,
+          "why": "Bytes are a proxy for latency. The 5-8% brotli edge only shows up on deltas far larger than a shell asset produces, while the decode gap grows on slow CPUs."
+        },
+        {
+          "t": "Cloudflare only passes dcz through; dcb is not supported at the edge.",
+          "why": "Both are passed through identically, on all plans. That is exactly why the choice was free to make on engineering grounds."
+        },
+        {
+          "t": "Because brotli cannot use a custom dictionary, so dcb was never actually available.",
+          "why": "Brotli does custom dictionaries fine via its CLI. What it lacks is a dictionary option in Node's zlib, which is a tooling gap rather than a format limit."
+        }
+      ]
+    },
+    {
+      "q": "Why did the wrong diagnosis survive three rounds of measurement?",
+      "options": [
+        {
+          "t": "Each round confirmed a real platform constraint that was not the one causing the damage.",
+          "ok": true,
+          "why": "Accept-Encoding normalization and the missing down-convert are both genuinely true. Collecting true facts feels like converging on a cause, which is the trap."
+        },
+        {
+          "t": "The measurements were unreliable, and local results disagreed with production.",
+          "why": "The opposite. Local matched production byte-for-byte on the failure, which is what made the wrong conclusion so credible."
+        },
+        {
+          "t": "The bug was intermittent, so tests passed about as often as they failed.",
+          "why": "It was perfectly deterministic: every affected response double-encoded, every time. Determinism did not help, because the reasoning was what was broken."
+        }
+      ]
+    }
+  ]
+}
+</script>
+<script src="/quiz.js" defer></script>
+  <script src="/nav.js" defer></script>
+<!-- axp:shell --><nav id="axp-icons" aria-label="desktop shortcuts"><a class="axp-ico" title="writing, in flux" href="/writing" data-key="Notepad" style="left:9px;top:9px"><span class="ic note" aria-hidden="true"></span><span class="t">Notepad</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="GitHub (opens in a new tab)" href="https://github.com/oddharsh" data-key="GitHub" style="left:9px;top:95px"><span class="ic " style="background:linear-gradient(180deg,oklch(72% 0.05 255),oklch(60% 0.07 257))" aria-hidden="true">G</span><span class="t">GitHub</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Twitter (opens in a new tab)" href="https://x.com/oddhash" data-key="Twitter" style="left:9px;top:181px"><span class="ic " style="background:linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))" aria-hidden="true">@</span><span class="t">Twitter</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Instagram (opens in a new tab)" href="https://www.instagram.com/aadharsh.hif" data-key="Photos" style="left:9px;top:267px"><span class="ic " style="background:linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))" aria-hidden="true"><i class="cam" aria-hidden="true"></i></span><span class="t">Photos</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Curius (opens in a new tab)" href="https://curius.app/aadharsh-pannirselvam" data-key="Curius" style="left:9px;top:353px"><span class="ic " style="background:linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))" aria-hidden="true">C</span><span class="t">Curius</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Beli (opens in a new tab)" href="https://beliapp.com/users/aadharsh" data-key="Beli" style="left:9px;top:439px"><span class="ic " style="background:linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))" aria-hidden="true">B</span><span class="t">Beli</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Spotify (opens in a new tab)" href="https://open.spotify.com/user/aadharsh2010" data-key="Music" style="left:9px;top:525px"><span class="ic " style="background:linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))" aria-hidden="true">♪</span><span class="t">Music</span></a></nav><div id="axp-taskbar" role="navigation" aria-label="taskbar"><a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a><div id="axp-pins"><a class="axp-pin" title="prototypes + experiments" href="/garage"><span class="fav" aria-hidden="true"><svg viewBox="0 0 32 32"><use href="/icons.svg#pin-garage"/></svg></span><span class="lbl">garage</span></a><a class="axp-pin" title="chat-style explainers + live demos" href="/lwe"><span class="fav" aria-hidden="true"><svg viewBox="0 0 32 32"><use href="/icons.svg#pin-lwe"/></svg></span><span class="lbl">lwe</span></a><a class="axp-pin" title="notes, in flux: an editable notepad" href="/writing"><span class="fav" aria-hidden="true"><svg viewBox="0 0 32 32"><use href="/icons.svg#pin-writing"/></svg></span><span class="lbl">writing</span></a><a class="axp-pin" title="what I've been reading, from Curius" href="/reading"><span class="fav" aria-hidden="true"><svg viewBox="0 0 32 32"><use href="/icons.svg#pin-reading"/></svg></span><span class="lbl">reading</span></a><a class="axp-pin" title="events worth going to" href="/serendipity"><span class="fav" aria-hidden="true"><svg viewBox="0 0 32 32"><use href="/icons.svg#pin-serendipity"/></svg></span><span class="lbl">serendipity</span></a><a class="axp-pin" title="the crypto-VC neighborhood" href="/around"><span class="fav" aria-hidden="true"><svg viewBox="0 0 32 32"><use href="/icons.svg#pin-around"/></svg></span><span class="lbl">around</span></a><a class="axp-pin" title="the other web: how machines read a URL" href="/lens"><span class="fav" aria-hidden="true"><svg viewBox="0 0 32 32"><use href="/icons.svg#pin-lens"/></svg></span><span class="lbl">lens</span></a><a class="axp-pin" title="what I'm listening to right now" href="/rn"><span class="fav" aria-hidden="true"><svg viewBox="0 0 32 32"><use href="/icons.svg#pin-music"/></svg></span><span class="lbl">music</span></a><a class="axp-pin" title="book a coffee / bagel" href="/coffee"><span class="fav" aria-hidden="true"><svg viewBox="0 0 32 32"><use href="/icons.svg#pin-coffee"/></svg></span><span class="lbl">coffee</span></a></div><div id="axp-spacer"></div><div id="axp-tray"><button id="axp-sound" type="button" hidden></button><a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><svg viewBox="0 0 24 24"><use href="/icons.svg#tray-sysprop"/></svg></a><a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><svg viewBox="0 0 24 24"><use href="/icons.svg#tray-security"/></svg></a><a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><svg viewBox="0 0 24 24"><use href="/icons.svg#tray-updates"/></svg></a><span id="axp-clock" aria-hidden="true"></span></div></div><!-- /axp:shell -->
+</body>
+</html>
