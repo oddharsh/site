@@ -732,7 +732,63 @@ for (const [file, srcPath, marker] of SHELLS) {
     { attr: "src", from: "/quiz.js",    base: "quiz",    ext: "js", witness: "garage/encoding.html" },
     { attr: "src", from: "/notepad.js", base: "notepad", ext: "js", witness: "_worker.js/writing.js" },
   ];
-  const reps = [], hashedFor = {};
+  const hashedFor = {};
+  // ── phase 0: the three JS-STRING-loaded islands (tooltip, hoist, lens-browser) ──
+  // These load via `import("/hoist.js")` / `script.src = "/lens-browser.js?v=1"`, which
+  // the attribute-scoped repointer below cannot touch. They are hashed FIRST, and their
+  // loader strings rewritten across the staged tree BEFORE nav.js / lens.js are hashed,
+  // so a dependent's hash covers its final bytes (nav.js imports hoist; lens.js loads
+  // lens-browser). The patterns are exact call-syntax matches — `import((["'`])/x.js\1)`
+  // — so the garage pages' documentary "/hoist.js" prose mentions cannot be caught, which
+  // is the precision the attribute rule existed to protect. The ?v=1 ritual on
+  // lens-browser retires here: the hash IS the version.
+  const STRING_ASSETS = [
+    { file: "/hoist.js",        base: "hoist",        mk: (to) => [
+      [/import\((["'`])\/hoist\.js\1\)/g, `import($1${to}$1)`] ] },
+    { file: "/lens-browser.js", base: "lens-browser", mk: (to) => [
+      [/(["'`])\/lens-browser\.js\?v=1\1/g, `$1${to}$1`] ] },
+    { file: "/tooltip.js",      base: "tooltip",      mk: (to) => [
+      [/import\((["'`])\/tooltip\.js\1\)/g, `import($1${to}$1)`] ] },
+  ];
+  {
+    const stringReps = [];
+    for (const a of STRING_ASSETS) {
+      const bytes = await readFile(`${OUT}/holding${a.file}`);
+      const to = `/a/${a.base}.${createHash("sha256").update(bytes).digest("hex").slice(0, 8)}.js`;
+      await writeFile(`${OUT}/holding${to}`, bytes);
+      hashedFor[a.base] = to;
+      for (const [re, sub] of a.mk(to)) stringReps.push({ re, sub });
+      console.log(`hashed asset (string-loaded): ${a.file} -> ${to} (${bytes.length} bytes)`);
+    }
+    // Rewrite across every staged surface that can carry a loader: HTML pages, the
+    // top-level shell scripts themselves (nav.js imports hoist — hashed AFTER this, so
+    // ordering keeps its hash honest), worker modules, serendipity. NOT the .src twins.
+    const stringTargets = [`${OUT}/serendipity/serendipity.js`];
+    for (const rel of await readdir(`${OUT}/holding`, { recursive: true })) {
+      if (rel.includes(".src.")) continue;
+      if (rel.endsWith(".html") || (rel.endsWith(".js") && !rel.startsWith("a/"))) {
+        stringTargets.push(`${OUT}/holding/${rel}`);
+      }
+    }
+    let hits = 0;
+    for (const path of stringTargets) {
+      let t; try { t = await readFile(path, "utf8"); } catch { continue; }
+      let out = t;
+      for (const { re, sub } of stringReps) out = out.replace(re, sub);
+      if (out !== t) { await writeFile(path, out); hits++; }
+    }
+    // Witnesses: each island's loader must now carry the hashed URL, or the enrolment
+    // silently did nothing and the deploy must not proceed.
+    const idx = await readFile(`${OUT}/holding/index.html`, "utf8");
+    const nav = await readFile(`${OUT}/holding/nav.js`, "utf8");
+    const lens = await readFile(`${OUT}/holding/lens.js`, "utf8");
+    if (!idx.includes(hashedFor.tooltip)) throw new Error("index.html was not repointed to hashed tooltip.js");
+    if (!idx.includes(hashedFor.hoist) || !nav.includes(hashedFor.hoist)) throw new Error("a hoist.js loader was not repointed (index.html or nav.js)");
+    if (!lens.includes(hashedFor["lens-browser"])) throw new Error("lens.js was not repointed to hashed lens-browser.js");
+    console.log(`string-loaded islands: rewritten across ${hits} staged files`);
+  }
+
+  const reps = [];
   for (const a of ASSETS) {
     const bytes = await readFile(`${OUT}/holding${a.from}`);   // exact served bytes (banner incl.)
     const to = `/a/${a.base}.${hash8(bytes)}.${a.ext}`;
@@ -752,7 +808,14 @@ for (const [file, srcPath, marker] of SHELLS) {
   // luna.css, and NOT the readable *.src.html twin (it must stay byte-identical
   // to holding/index.html for the perf-budget twin check — View Source is the
   // authoring source, which keeps the plain /nav.js the fallback still serves).
+  // cal/src rides along: /coffee's SSR templates load the shell too, and were the
+  // whole reason the unhashed fallbacks existed. Their nav ref is attribute-shaped so
+  // the ordinary reps catch it; the luna refs are ABSOLUTE (cal.aadhar.sh serves the
+  // same templates, where a relative /luna.css would 404) and get their own pass below.
   const targets = [`${OUT}/serendipity/serendipity.js`];
+  for (const rel of await readdir(`${OUT}/cal/src`).catch(() => [])) {
+    if (rel.endsWith(".js")) targets.push(`${OUT}/cal/src/${rel}`);
+  }
   for (const rel of await readdir(`${OUT}/holding`, { recursive: true })) {
     if ((rel.endsWith(".html") && !rel.endsWith(".src.html")) ||
         (rel.startsWith("_worker.js/") && rel.endsWith(".js"))) {
@@ -768,6 +831,22 @@ for (const [file, srcPath, marker] of SHELLS) {
       if (m) { hits += m.length; out = out.replace(re, sub); }
     }
     if (hits) { await writeFile(path, out); refCount += hits; filesTouched++; }
+  }
+
+  // /coffee's absolute shell refs (https://aadhar.sh/luna.css) — the attr reps above
+  // only match leading-slash paths, so the absolute form is rewritten here, scoped to
+  // the staged cal modules alone.
+  {
+    const p = `${OUT}/cal/src/templates.js`;
+    let t; try { t = await readFile(p, "utf8"); } catch { t = null; }
+    if (t !== null) {
+      const out = t.split("https://aadhar.sh/luna.css").join(`https://aadhar.sh${hashedFor.luna}`);
+      if (out !== t) await writeFile(p, out);
+      const now = await readFile(p, "utf8");
+      if (!now.includes(hashedFor.luna)) throw new Error("cal/src/templates.js was not repointed to hashed luna.css");
+      if (!now.includes(hashedFor.nav)) throw new Error("cal/src/templates.js was not repointed to hashed nav.js");
+      console.log(`cal: /coffee templates repointed to ${hashedFor.luna} + ${hashedFor.nav}`);
+    }
   }
 
   // point the worker's Early-Hints `Link: rel=preload` header at the SAME hashed

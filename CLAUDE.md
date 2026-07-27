@@ -590,6 +590,17 @@ npm run deploy
     build.mjs must never do. Not urgent either — a dictionary 11 days stale still
     gave 87-93%. `a-dict` is `.assetsignore`d (build input, not a public URL).
 
+    **Plain (non-delta) responses stay brotli q11, and that is forced, not chosen.**
+    A worker cannot see the client's Accept-Encoding (gotcha 13), so plain zstd is
+    unnegotiable server-side; the ONLY safe zstd trigger is `Available-Dictionary`,
+    which doubles as proof the client speaks dcz. So "zstd where it wins" IS the
+    delta path. Loader classes differ (#119): js/css dcz proven in production, html
+    server-side proven (149-byte page delta decodes to the live page), svg OFF by
+    design (Chromium's image loader chokes). `npm run dcz:check` asserts all of
+    this against production. Roll dictionaries FROM THE DEPLOYED BUILD (main,
+    post-deploy), never from a feature branch: the dictionary must be bytes
+    browsers actually hold, and a branch build is not that.
+
 ---
 
 ## Source folder for new photos
