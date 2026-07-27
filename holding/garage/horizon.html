@@ -1072,6 +1072,13 @@ window.__horizonCaps = (function () {
                 Array.isArray(PerformanceObserver.supportedEntryTypes) &&
                 PerformanceObserver.supportedEntryTypes.indexOf("container") !== -1);
       },
+      // Support only. Whether entries ever ARRIVE also depends on the document
+      // being visible, which no synchronous probe can answer for a future frame.
+      "loaf": function () {
+        return (typeof PerformanceObserver !== "undefined" &&
+                Array.isArray(PerformanceObserver.supportedEntryTypes) &&
+                PerformanceObserver.supportedEntryTypes.indexOf("long-animation-frame") !== -1);
+      },
     };
   var state = {};
   Object.keys(checks).forEach(function (k) { state[k] = sup(checks[k]); });
@@ -3775,6 +3782,54 @@ myButton.onclick = async () =&gt; {
       <p class="unsupported">Your browser doesn&apos;t expose <code>navigator.cpuPerformance</code>.</p>
     </section>
 
+    <!-- ───────────────────── Long Animation Frames ───────────────────── -->
+    <section class="demo" data-cap="loaf">
+      <h2>
+        <span>Long Animation Frames <span class="mono">LoAF</span></span>
+        <span class="stat chrome">Chrome 123 &middot; Safari/FF no</span>
+      </h2>
+      <p class="note">
+        A <code>PerformanceObserver</code> entry for every rendering update that slips past
+        50ms. The older Long Tasks API could tell you the main thread was busy and almost
+        nothing about why; LoAF reports the <em>frame</em>, so work split across several
+        small tasks that together miss a frame still shows up. Any script that ran for over
+        5ms inside it comes back with <code>sourceURL</code>,
+        <code>sourceFunctionName</code>, <code>sourceCharPosition</code>, and an
+        <code>invokerType</code> naming what called it, alongside
+        <code>forcedStyleAndLayoutDuration</code> for layout thrash and
+        <code>pauseDuration</code> for the synchronous stalls. Chrome&nbsp;123 since
+        February&nbsp;2024, nothing from the other two engines, so it is not Baseline and
+        the field data it gathers is Chromium&apos;s view of your users rather than all of
+        them.
+        The sharp edge is in the spec rather than the docs: recording bails out early
+        <a href="https://w3c.github.io/long-animation-frames/" rel="external">if the document
+        is hidden</a>. A background tab reports nothing, so a zero here means either that
+        nothing was slow or that nobody was watching, and the API will not tell you which. I
+        walked into exactly that measuring this site through an automated browser whose tab
+        reported <code>hidden</code>: load, opening the Run palette, and typing into it all
+        came back with zero long frames, and so did a deliberate 180ms blocking frame I
+        added to check the instrument. A clean result and a dead probe look identical.
+      </p>
+      <p class="replaces">
+        On the site: the gap is real and it stays open for now. Nothing here collects field
+        data at all, and <code>nav.js</code> carries about fifty
+        <code>addEventListener</code> calls driving window drag, resize, the taskbar, and a
+        Run palette that filters 158 photos, none of it instrumented. LoAF only earns its
+        keep against real visitors on real hardware, which is precisely the thing a site with
+        no RUM does not have; measuring it once from my own desk would mostly prove that an
+        M-series Mac is fast. There is a second wrinkle if I ever wire it up. Attribution
+        keys on <code>sourceURL</code>, and the shell ships as
+        <code>/a/nav.&lt;hash8&gt;.js</code> precisely so it can be cached for a year, so the
+        URL changes on every deploy and nothing aggregates across releases without
+        normalising the hash back out first. The cache win and the attribution story pull
+        against each other, which is worth knowing before rather than after.
+      </p>
+      <p class="unsupported">
+        No <code>long-animation-frame</code> entry type here, so this browser has no view of
+        which frames ran long.
+      </p>
+    </section>
+
     <!-- ───────────────────── Container Timing ───────────────────── -->
     <section class="demo" data-cap="container-timing">
       <h2>
@@ -4068,6 +4123,7 @@ myButton.onclick = async () =&gt; {
     "pq-webcrypto": "ML-DSA",
     "cpu-performance": "cpuPerformance",
     "container-timing": "container timing",
+    "loaf": "LoAF",
   };
   var state = {};
   Object.keys(checks).forEach(function (k) { state[k] = sup(checks[k]); });
