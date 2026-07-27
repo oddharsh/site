@@ -75,6 +75,7 @@
     { label: "music", path: "/rn", hint: "what I'm listening to right now" },
     { label: "coffee", path: "/coffee", hint: "book a coffee / bagel" },
     { label: "writing", path: "/writing", hint: "notes, in flux — an editable notepad" },
+    { label: "inbox", path: "/inbox", hint: "who linked here — webmentions from the open web, rendered as Outlook Express mail" },
     { label: "reading", path: "/reading", hint: "what I've been reading — saved to Curius, mirrored here" },
     { label: "lens", path: "/lens", hint: "the other web: see any URL the way a machine does — raw HTML, JSON-LD, llms.txt" },
     { label: "pixel peeper", path: "/pixel-peeper", hint: "whose eye do you have? a compression vision test — pick the best encode, blind" },

@@ -114,6 +114,7 @@
 /garage/*
   Cache-Control: public, max-age=0, must-revalidate, s-maxage=86400
   Link: </luna.css>; rel=preload; as=style, </nav.js>; rel=preload; as=script
+  Link: </webmention>; rel="webmention"
 
 # LWE concept pages: same deal as the garage mules. static content that changes
 # rarely, so let the edge serve a cheap 304 (s-maxage) instead of revalidating
@@ -121,6 +122,7 @@
 /lwe/*
   Cache-Control: public, max-age=0, must-revalidate, s-maxage=86400
   Link: </luna.css>; rel=preload; as=style, </nav.js>; rel=preload; as=script
+  Link: </webmention>; rel="webmention"
 
 # pixel-peeper — the compression eye exam (/pixel-peeper). a static XP-window
 # game: the shell + metadata manifest revalidate like the garage pages (a deploy

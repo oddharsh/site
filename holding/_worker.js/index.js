@@ -12,6 +12,8 @@ import { cronCensus, handleCensus, handleCensusJson } from "./census.js";
 import { handleCoffeeAvailability } from "./coffee.js";
 import { handleHit } from "./counter.js";
 import { homepageHeadResponse, serveHomepageWithPrerenderedTracks, serveMarkdown } from "./home.js";
+import { handleInbox } from "./inbox.js";
+import { handleWebmention, handleWebmentionDecision } from "./webmention.js";
 import { countCrawlerHit, handleLedger, handleLedgerJson } from "./ledger.js";
 import { handleLens, handleLensBrowser, handleLensCompare, handleLensFetch, handleLensShot } from "./lens.js";
 import { serveAssetWith404Clamp, serveFreshAsset, servePrecompressedShell, serveStaticPage } from "./lib/assets.js";
@@ -192,6 +194,14 @@ const ROUTES = new Map([
 
   ["/writing", handleWritingIndex],
   ["/writing/", routeDropSlash],
+
+  // webmention: the open web's way to say "I linked to you." The endpoint takes
+  // the POST; the approve/decline pair are HMAC-signed host actions (same
+  // construction as cal's booking approvals); /inbox displays what I approved.
+  ["/webmention", handleWebmention],
+  ["/webmention/approve", handleWebmentionDecision],
+  ["/webmention/decline", handleWebmentionDecision],
+  ["/inbox", handleInbox],
 
   ["/rn", handleRn],
   ["/rn/tracks", handleRnTracks],

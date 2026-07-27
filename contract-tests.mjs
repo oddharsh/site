@@ -19,6 +19,9 @@ import {
 } from "./holding/_worker.js/lens.js";
 import { handleCoffeeAvailability, readCoffeeAvailability } from "./holding/_worker.js/coffee.js";
 import { handleSiteMcp } from "./holding/_worker.js/mcp.js";
+import { handleWebmention, handleWebmentionDecision } from "./holding/_worker.js/webmention.js";
+import { handleInbox } from "./holding/_worker.js/inbox.js";
+import { sign } from "./cal/src/sign.js";
 import { AGENT_SURFACES } from "./holding/_worker.js/lib/site-manifest.js";
 import { readManifest, workerModule, navFenceBody, readFenceBody } from "./scripts/gen-manifest.mjs";
 import { MCP_TOOLS } from "./serendipity/serendipity.js";
@@ -364,6 +367,175 @@ test("site MCP exposes one read-only tool catalog and calls shared search", asyn
   const callBody = await call.json();
   assert.equal(callBody.result.structuredContent.returned, 1);
   assert.equal((await handleSiteMcp(new Request("https://aadhar.sh/mcp"), env, context())).status, 405);
+});
+
+// ── webmention (inbound) ────────────────────────────────────────────────────
+// A tiny in-memory D1 stand-in: enough SQL surface for the handful of statements
+// webmention.js issues, so the verify → store → approve → display path runs end
+// to end without a real database.
+function fakeD1() {
+  const rows = [];
+  const run = (sql, args) => {
+    const s = sql.replace(/\s+/g, " ").trim();
+    if (/^CREATE/i.test(s)) return { results: [], meta: { changes: 0 } };
+    if (/^INSERT INTO webmentions/i.test(s)) {
+      const [id, source, target, kind, author, author_url, title, excerpt, received_at] = args;
+      const existing = rows.find((r) => r.source === source && r.target === target);
+      if (existing) Object.assign(existing, { kind, author, author_url, title, excerpt, received_at });
+      else rows.push({ id, source, target, kind, author, author_url, title, excerpt, status: "pending", received_at, approved_at: null });
+      return { meta: { changes: 1 } };
+    }
+    if (/^SELECT status FROM webmentions/i.test(s)) {
+      const [source, target] = args;
+      return rows.find((r) => r.source === source && r.target === target) || null;
+    }
+    if (/^UPDATE webmentions SET status = 'approved'/i.test(s)) {
+      const [ts, id] = args;
+      const r = rows.find((x) => x.id === id);
+      if (r) { r.status = "approved"; r.approved_at = ts; }
+      return { meta: { changes: r ? 1 : 0 } };
+    }
+    if (/^DELETE FROM webmentions WHERE id/i.test(s)) {
+      const i = rows.findIndex((x) => x.id === args[0]);
+      if (i >= 0) rows.splice(i, 1);
+      return { meta: { changes: i >= 0 ? 1 : 0 } };
+    }
+    if (/^DELETE FROM webmentions WHERE source/i.test(s)) {
+      const [source, target] = args;
+      const i = rows.findIndex((x) => x.source === source && x.target === target);
+      if (i >= 0) rows.splice(i, 1);
+      return { meta: { changes: i >= 0 ? 1 : 0 } };
+    }
+    if (/^SELECT source, target/i.test(s)) {
+      return { results: rows.filter((r) => r.status === "approved").sort((a, b) => b.approved_at - a.approved_at) };
+    }
+    return { results: [], meta: { changes: 0 } };
+  };
+  return {
+    rows,
+    prepare(sql) {
+      let bound = [];
+      const api = {
+        bind: (...a) => { bound = a; return api; },
+        run: async () => run(sql, bound),
+        all: async () => run(sql, bound),
+        first: async () => run(sql, bound),
+      };
+      return api;
+    },
+  };
+}
+
+const WM_SECRET = "test-signing-secret";
+function wmEnv(db) {
+  return {
+    SOCIAL_DB: db,
+    SIGNING_SECRET: WM_SECRET,
+    ASSETS: staticAssets({ "/writing/posts.json": [{ slug: "in-flux", title: "in flux", date: "2026-01-01" }] }),
+  };
+}
+// the shared context() discards waitUntil promises; webmention does its real
+// work there (verification is deliberately off the request path), so the test
+// needs a context it can await.
+function deferredContext() {
+  const pending = [];
+  return { waitUntil: (p) => pending.push(p), settle: () => Promise.all(pending) };
+}
+const wmPost = (source, target) => new Request("https://aadhar.sh/webmention", {
+  method: "POST",
+  headers: { "content-type": "application/x-www-form-urlencoded" },
+  body: new URLSearchParams({ source, target }).toString(),
+});
+
+test("webmention rejects targets that do not accept mentions", async () => {
+  const env = wmEnv(fakeD1());
+  // /ledger is a real page but is not flagged webmention in the registry.
+  for (const target of ["https://aadhar.sh/ledger", "https://elsewhere.example/post", "https://aadhar.sh/writing/nope"]) {
+    const res = await handleWebmention(wmPost("https://mari.example/post", target), env, context());
+    assert.equal(res.status, 400, `should reject target ${target}`);
+  }
+});
+
+test("webmention rejects private, non-http, and same-origin sources", async () => {
+  const env = wmEnv(fakeD1());
+  const target = "https://aadhar.sh/garage/chunks";
+  for (const source of ["http://127.0.0.1/x", "http://169.254.169.254/latest/meta-data", "javascript:alert(1)", "https://aadhar.sh/writing/in-flux"]) {
+    const res = await handleWebmention(wmPost(source, target), env, context());
+    assert.equal(res.status, 400, `should reject source ${source}`);
+  }
+});
+
+test("webmention verifies the source really links back, then moderates before publishing", async () => {
+  const db = fakeD1();
+  const env = wmEnv(db);
+  const target = "https://aadhar.sh/writing/in-flux";   // a post, via the /writing section flag
+  const source = "https://mari.example/resto-mod-web";
+  const realFetch = globalThis.fetch;
+
+  // 1. a source that does NOT link back is verified away and never stored.
+  globalThis.fetch = async () => new Response("<html><a href='https://example.com'>elsewhere</a></html>", { headers: { "content-type": "text/html" } });
+  try {
+    let ctx1 = deferredContext();
+    let res = await handleWebmention(wmPost(source, target), env, ctx1);
+    assert.equal(res.status, 202, "the sender is always accepted; verification is async");
+    await ctx1.settle();
+    assert.equal(db.rows.length, 0, "an unverified mention must never be stored");
+
+    // 2. a source that DOES link back is stored, but only as pending.
+    globalThis.fetch = async () => new Response(
+      `<html><head><title>Resto-mod web</title><meta name="author" content="Mari"></head>
+       <body><p class="e-content">A lovely note about <a class="u-in-reply-to" href="${target}">in flux</a> and its ideas.</p></body></html>`,
+      { headers: { "content-type": "text/html" } });
+    const ctx2 = deferredContext();
+    res = await handleWebmention(wmPost(source, target), env, ctx2);
+    assert.equal(res.status, 202);
+    await ctx2.settle();
+    assert.equal(db.rows.length, 1);
+    assert.equal(db.rows[0].status, "pending", "nothing is displayed unmoderated");
+    assert.equal(db.rows[0].kind, "reply", "u-in-reply-to reads as a reply");
+    assert.equal(db.rows[0].author, "Mari");
+
+    // 3. it stays out of /inbox until approved.
+    let inbox = await handleInbox(new Request("https://aadhar.sh/inbox"), env, context());
+    let html = await inbox.text();
+    assert.ok(!html.includes("Resto-mod web"), "a pending mention must not render");
+    assert.match(inbox.headers.get("link") || "", /rel="webmention"/, "the inbox advertises the endpoint");
+
+    // 4. a forged approval is refused; only the HMAC-signed one works.
+    const id = db.rows[0].id;
+    const badUrl = new URL(`https://aadhar.sh/webmention/approve?t=${id}&sig=nope`);
+    const forged = await handleWebmentionDecision(new Request(badUrl), env, context(), badUrl);
+    assert.equal(forged.status, 403, "nobody can approve their own mention");
+    assert.equal(db.rows[0].status, "pending");
+
+    const sig = await sign(`${id}|approve`, WM_SECRET);
+    const okUrl = new URL(`https://aadhar.sh/webmention/approve?t=${id}&sig=${sig}`);
+    const approved = await handleWebmentionDecision(new Request(okUrl), env, context(), okUrl);
+    assert.equal(approved.status, 200);
+    assert.equal(db.rows[0].status, "approved");
+
+    // 5. now it renders, links out to the source, and is filed under its page.
+    inbox = await handleInbox(new Request("https://aadhar.sh/inbox"), env, context());
+    html = await inbox.text();
+    assert.ok(html.includes("Resto-mod web"), "an approved mention renders");
+    assert.ok(html.includes(source), "the row links out to the source");
+    assert.ok(html.includes("/writing/in-flux"), "filed under the page it mentions");
+
+    // 6. re-sending after the link is removed retracts it (the spec's delete signal).
+    globalThis.fetch = async () => new Response("<html><p>rewritten, no link anymore</p></html>", { headers: { "content-type": "text/html" } });
+    const ctx3 = deferredContext();
+    res = await handleWebmention(wmPost(source, target), env, ctx3);
+    assert.equal(res.status, 202);
+    await ctx3.settle();
+    assert.equal(db.rows.length, 0, "a mention whose source dropped the link is retracted");
+  } finally { globalThis.fetch = realFetch; }
+});
+
+test("/inbox degrades honestly when the mention store is unbound", async () => {
+  const res = await handleInbox(new Request("https://aadhar.sh/inbox"), { ASSETS: staticAssets({}) }, context());
+  assert.equal(res.status, 200);
+  const html = await res.text();
+  assert.match(html, /not connected/i, "says the store is missing rather than pretending there is no mail");
 });
 
 test("site-manifest.json is a well-formed registry with unique paths", async () => {

@@ -72,7 +72,9 @@ export async function sendDecline(env, booking) {
   });
 }
 
-async function resendSend(env, payload) {
+// exported: the root worker's webmention moderation mail reuses this exact
+// transport (same key, same error posture) rather than opening a second one.
+export async function resendSend(env, payload) {
   const r = await fetch(RESEND_API, {
     method: "POST",
     headers: {
