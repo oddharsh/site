@@ -524,26 +524,38 @@ npm run deploy
     `SHELL_PRECOMPRESS_DEFAULT_ON` in `lib/assets.js` is `false` with a `?br=1`
     canary instead of just shipping.
 
-    **Production verdict (2026-07-26): a worker here cannot emit a pre-encoded
-    body at all.** The canary was deployed and measured. `?br=1` returned 13,051
-    bytes in production, byte-for-byte the same failure as dev, so the runtime
-    re-compressed a body that `encodeBody: "manual"` had declared final. An
-    `identity` client got raw brotli, which means the edge does NOT down-convert
-    either, so there is no safe fallback. A second mechanism (`?br=2`) removed
-    every suspected cause — the response is never reconstructed, and `_headers`
-    supplies `Content-Encoding` plus `Content-Type` from the asset layer while the
-    subrequest asks for identity so only one encoding exists — and it still
-    returned 13,051. Two independent mechanisms, same result.
+    **ROOT CAUSE (2026-07-26), after three wrong suspects.** The double
+    compression was OURS, not the platform's. `encodeBody` is **write-only**
+    Response init, so rebuilding a response drops it while leaving the
+    `content-encoding` header visible, and the runtime then compresses the body a
+    second time to match. `withSecurityHeaders` (`lib/security.js`) rebuilds
+    EVERY worker response, which made `encodeBody: "manual"` a no-op site-wide.
+    It now carries the flag forward whenever a content-encoding is present.
 
-    Two consequences. Worker-served precompression is a dead end on this
-    platform path, so the ~20% q11 win has to come from a **Compression Rule**
-    (all plans, 10 rules on Free) ordering brotli ahead of zstd, which is worth
-    about 6% and costs nothing. And Worker-served **shared dictionaries are
-    blocked by the same wall**, even though `Available-Dictionary` demonstrably
-    reaches the worker in production (verified, cf-ray a2174bfc) — reading the
-    header was never the problem, emitting `Content-Encoding: dcb` is. Getting
-    the 93-97% shell delta would need Cloudflare to compute deltas at the edge,
-    which its passthrough beta explicitly does not do.
+    Isolated with `/encoding-test`: a constant 30-byte brotli payload built in the
+    worker, touching no assets. 34 wire bytes in two brotli layers before the fix,
+    30 in one layer after. `?br=1` went 13,051 (two layers) to 13,047 (one layer,
+    decoding to 46,268 valid JS).
+
+    **Anything that rebuilds a Response must preserve `encodeBody`.** There is no
+    getter for it, so the loss is silent and the symptom (a body that decodes once
+    into more compressed bytes) looks like a platform bug. Check this FIRST.
+
+    Three suspects were investigated and exonerated. Two of the three are real
+    facts worth keeping, they just weren't the cause: (1) a worker cannot read the
+    client's Accept-Encoding, so it genuinely cannot negotiate compression;
+    (2) the edge does NOT down-convert, so an `identity` client handed br gets raw
+    brotli, which is why negotiation can't be faked either; (3) the static-assets
+    layer was innocent — `/abr/` exists only because it was built to bypass a
+    suspect that turned out not to matter, and it can go.
+
+    What this unlocks: q11 precompression (~19% off nav.js + luna.css), and
+    `Content-Encoding: dcb` from a worker, since `Available-Dictionary` demonstrably
+    reaches it in production (cf-ray a2174bfc). Shell deltas measured 93-97%
+    across a real deploy, and a dictionary 11 days stale still gave 87-93%, so
+    build-time deltas against a committed dictionary work and need NO wasm. Only
+    the SSR'd homepage would need a runtime compressor, because the runtime ships
+    no brotli encoder at all (CompressionStream is gzip/deflate only).
 
 ---
 
