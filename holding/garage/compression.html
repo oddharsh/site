@@ -408,6 +408,21 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
       <em>skippable frame</em>, which is valid zstd, so any conforming decoder steps over it
       without special handling. dcb needs bespoke treatment of its 36-byte prefix.
     </p>
+    <p>
+      Cloudflare runs a live demo of the mechanism at
+      <a href="https://canicompress.com" rel="external">canicompress.com</a>: a 94KB mock SPA
+      bundle redeployed every minute, each version delivered as a delta against the one before.
+      Running its curl recipe from this laptop gave 95,425 bytes raw, 21,702 through gzip, and
+      <strong>134 as dcz</strong>. That is 162x under gzip, and it lands in the same couple of
+      hundred bytes as a change to this site's far smaller stylesheet, because a delta is priced
+      by what changed rather than by what the file weighs.
+    </p>
+    <p>
+      The two do the work in different places. Cloudflare's edge holds the dictionary and computes
+      each delta on demand, so the encoder runs per request; here the build computes it once and
+      the Worker only has to pick the right file. The demo lands on dcz too, which is some outside
+      evidence for the call above.
+    </p>
 
     <h2>One more over-generalization</h2>
     <p>
