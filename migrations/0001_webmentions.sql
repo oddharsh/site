@@ -43,3 +43,16 @@ CREATE TABLE IF NOT EXISTS webmentions (
 -- the approved rows rather than the whole table.
 CREATE INDEX IF NOT EXISTS webmentions_status_approved
   ON webmentions (status, approved_at DESC);
+
+-- The outbound half (webmention-send.js, daily cron): what this site has told
+-- the sources it cites. Purely a dedupe ledger — it exists so a daily run does
+-- not re-notify the same pair, and so a target advertising no endpoint is not
+-- re-probed every day. Nothing in this table is ever displayed.
+CREATE TABLE IF NOT EXISTS webmentions_sent (
+  source TEXT NOT NULL,             -- my page that did the citing
+  target TEXT NOT NULL,             -- the source it cited
+  endpoint TEXT,                    -- NULL when the target advertises none (the common case)
+  status INTEGER,                   -- their HTTP response, or 0 if the POST failed
+  last_sent_at INTEGER NOT NULL,
+  PRIMARY KEY (source, target)
+);

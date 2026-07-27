@@ -102,7 +102,11 @@
   // event.cron). Odd minute so it doesn't collide with the :00/:30 crawl tick.
   // (The old 0 4 * * 7 coffee-booking sweep is retired: each pending booking now
   // carries its own BookingWorkflow expiry timer — see the workflows binding.)
-  "triggers": { "crons": ["*/30 * * * *", "17 8 * * 1"] },
+  // 41 5 * * * — the daily outbound webmention pass: read this site's own
+  // mention-enabled pages, find the sources they cite, and tell those sources
+  // they were cited (webmention-send.js). Daily and off-peak because it probes
+  // third-party hosts, and a citation graph does not change by the half hour.
+  "triggers": { "crons": ["*/30 * * * *", "17 8 * * 1", "41 5 * * *"] },
   "kv_namespaces": [
     { "binding": "RN_KV", "id": "3cb8a107c58e47dc9244e75b33401f36" },
     { "binding": "BOOKINGS", "id": "37acb65118fe485583a90a94cb89365e" }
