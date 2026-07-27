@@ -159,6 +159,37 @@ export async function servePrecompressedShell(request, env) {
   // /a/nav.<newhash>.js is exactly the request that would carry the old bytes' hash.
   const DICTIONARY_OFFER = { "use-as-dictionary": 'match="/a/*"' };
 
+  // ?br=2 — the second canary, testing the ONE hypothesis left standing after ?br=1
+  // failed in production. ?br=1 fetches /a/<name>.<ext>.br and rebuilds the response
+  // to fix its content-type; that rebuild is what appears to lose the runtime's
+  // internal "this body is already encoded" state, so the body got compressed again
+  // (13,051 bytes of brotli-in-brotli against 13,047 on disk).
+  //
+  // Here the asset layer supplies the whole envelope: /abr/<name>.<ext> holds the same
+  // q11 bytes, and _headers gives that path both `Content-Encoding: br` and the correct
+  // Content-Type. So this returns the subrequest response WITHOUT constructing a new
+  // Response, which is the documented pass-through contract ("do not read the body,
+  // keep the Content-Encoding intact"). Nothing is rebuilt, so there is no state to lose.
+  //
+  // If ?br=2 returns 13,047 bytes of valid JS, precompression is viable and the same
+  // envelope trick carries dcb (Available-Dictionary already reaches the worker —
+  // verified in production, cf-ray a2174bfc). If it returns 13,051 again, a worker on
+  // this platform cannot emit a pre-encoded body at all, and both precompression and
+  // Worker-served dictionaries are dead ends. That is the whole question.
+  if (url.searchParams.get("br") === "2") {
+    // accept-encoding: identity on the SUBREQUEST. There are two places a body can get
+    // compressed, and they have to be separated: the asset layer compresses what it
+    // serves when the caller accepts it, so forwarding the original request's
+    // "br, gzip" makes IT produce the br-in-br. Asking for identity gets the file's raw
+    // q11 bytes while _headers still supplies `Content-Encoding: br`, leaving exactly
+    // one encoding on the response and nothing for the outbound side to redo.
+    const passthrough = await env.ASSETS.fetch(new Request(`${url.origin}/abr${url.pathname.slice(2)}`, {
+      headers: { "accept-encoding": "identity" },
+    }));
+    if (passthrough.ok) return passthrough;
+    try { await passthrough.body?.cancel(); } catch {}
+  }
+
   if (!wantsPrecompressed(url)) {
     return serveAssetWith404Clamp(request, env, { headers: DICTIONARY_OFFER });
   }

@@ -745,6 +745,17 @@ for (const [file, srcPath, marker] of SHELLS) {
       continue;
     }
     await writeFile(`${dir}/${f}.br`, out);
+    // ALSO emit under /abr/ with the asset's REAL extension. Production proved that
+    // reconstructing a Response (`new Response(res.body, {...})`) loses whatever
+    // internal "already encoded" state the runtime uses, so `encodeBody: "manual"`
+    // did not stop it re-compressing: the br client got 13,051 bytes of
+    // brotli-in-brotli instead of 13,047. The documented pass-through requires
+    // returning the subrequest's response WITHOUT rebuilding it, which means the
+    // asset layer itself has to supply both content-type and content-encoding. It can:
+    // _headers maps /abr/*.<ext> to the right type plus `Content-Encoding: br`, so the
+    // worker can hand that response straight back. Same bytes, different envelope.
+    await mkdir(`${OUT}/holding/abr`, { recursive: true });
+    await writeFile(`${OUT}/holding/abr/${f}`, out);
     raw += bytes.length; enc += out.length;
     console.log(`precompressed: /a/${f} ${bytes.length} -> ${out.length} bytes (br q11)`);
   }
