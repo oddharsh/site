@@ -1010,7 +1010,7 @@
   // so it composes instead of jumping, which also makes the Run dialog draggable.
   // caption buttons + links are skipped so close/min/max keep working; touch scrolls.
   function initDrag() {
-    var win = null, sx = 0, sy = 0, base = "", r = null;
+    var win = null, sx = 0, sy = 0, base = "", r = null, topLayer = false;
     // clamp so the title bar can't leave the desktop: the TOP is a hard wall (you
     // can't retrieve a window dragged off the top — there's no menu up there), and
     // the bar can't slide under the taskbar or fully off the sides either.
@@ -1018,7 +1018,19 @@
       if (!win) return;
       var dx = e.clientX - sx, dy = e.clientY - sy;
       var vw = innerWidth, vh = innerHeight;
-      dy = Math.max(8 - r.top, Math.min(dy, (vh - 30 - 24) - r.top));
+      // Ordinary windows are clamped by their TITLE BAR and are free to let their
+      // body slide under the taskbar, which is what XP does and what reads right:
+      // the taskbar's z-index 99999 covers them.
+      var maxDy = (vh - 30 - 24) - r.top;
+      // A /writing folder note is popover="manual", so it lives in the TOP LAYER,
+      // and the top layer paints above every z-index there is — 99999 included.
+      // Dragged down, it went OVER the taskbar instead of under it. No stacking
+      // rule can fix that from CSS, so the honest fallback is to stop the whole
+      // window at the taskbar: the note never crosses it, in either direction.
+      // Always satisfiable — .np-note[popover] caps at 100dvh - 48, which leaves
+      // more room than the 38px this needs, so maxDy never falls below the top wall.
+      if (topLayer) maxDy = Math.min(maxDy, (vh - 30) - r.bottom);
+      dy = Math.max(8 - r.top, Math.min(dy, maxDy));
       dx = Math.max((60 - r.width) - r.left, Math.min(dx, (vw - 60) - r.left));
       win.style.transform = base + "translate(" + dx + "px," + dy + "px)";
     }
@@ -1034,6 +1046,9 @@
       var t = getComputedStyle(w).transform;
       base = (t && t !== "none") ? t + " " : "";
       r = w.getBoundingClientRect();
+      // :popover-open is the top-layer test — a popover only joins the top layer
+      // while it is showing, and a hidden one can't be dragged anyway.
+      topLayer = w.matches(":popover-open");
       w.classList.add("axp-dragging");
       win = w; sx = e.clientX; sy = e.clientY;
       try { b.setPointerCapture(e.pointerId); } catch (_) {}
@@ -1097,7 +1112,15 @@
         if (f.classList.contains("axp-max")) return;
         var r = f.getBoundingClientRect();
         if (r.right - e.clientX < 20 && r.bottom - e.clientY < 20) {
-          f.style.maxWidth = "none"; f.style.maxHeight = "none";
+          f.style.maxWidth = "none";
+          // A popover note is in the TOP LAYER, so the taskbar cannot cover it (see
+          // initDrag) — the grip has to stop where the taskbar starts instead of
+          // lifting the ceiling entirely. setProperty(..., "important") because
+          // .np-note[popover]'s own max-height is !important, which is also why the
+          // plain assignment below was already a no-op for these: the lift never
+          // applied, yet a short note dragged down could still grow past the bar.
+          if (f.matches(":popover-open")) f.style.setProperty("max-height", Math.max(120, (innerHeight - 30) - r.top) + "px", "important");
+          else f.style.maxHeight = "none";
         }
       });
     });
