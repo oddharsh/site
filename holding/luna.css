@@ -304,6 +304,36 @@ body:has(.window),body:has(.np-window),body:has(.wrap){overflow:hidden !importan
 .window>.title-bar,.window>.titlebar,.np-window>.np-titlebar{flex:0 0 auto}
 /* the scrolling region inside the frame (Notepad's .np-text already scrolls) */
 .window>.content,.window>.body{flex:1 1 auto;min-height:0;overflow:auto}
+/* THE CLIENT EDGE, and this is its ONE definition — every windowed page inherits
+   it from here, none of them re-implement it. The scroller used to be flush with
+   the window frame on all four sides, so a scroll position that cut a photo tile
+   or a list row in half landed that cut directly on the blue chrome, and content
+   read as though it were painting over the window's edge. Every XP window with a
+   scrolling client area (Explorer, Outlook Express) inset that area into a sunken
+   well first, and a half-item clipped at a well reads as "there is more below"
+   instead of as breakage.
+
+   Still exactly ONE scroller: this frames the existing one, it does not add a
+   second scroll region.
+
+   Why this shape and not the obvious one:
+   - the gutter is a BORDER, not padding or a margin, so it needs no cooperation
+     from .window (whose background differs per page — white here, cream on lwe).
+   - background-clip:padding-box so a page that gives .content its own background
+     (lwe's cream) fills the client area without flooding the gutter.
+   - the sunken line is an OUTLINE, not the inset box-shadow the site's other
+     wells use: a scroller clips descendants to its padding box, so an outline (or
+     a border) can never be painted over, while an inset shadow paints UNDER
+     descendant backgrounds and the white photo tiles walk straight across it —
+     that is the bug, not the fix. offset -6px keeps the line inside the border
+     area, so it never overlaps the 16px XP scrollbar either.
+   - 6px clears the browser's ~18px resize grip on pages whose .content padding is
+     only 12px, so no page has to pad around the grip on its own.
+   Colours are the Luna face and the same #7f9db9 field edge .xp-input uses. */
+.window>.content,.window>.body{border:6px solid #ece9d8;background-clip:padding-box;outline:1px solid #7f9db9;outline-offset:-6px}
+/* an author outline beats the UA focus ring by origin, so hand keyboard focus a
+   real one back (Firefox lets you tab to a scrollable region). */
+.window>.content:focus-visible,.window>.body:focus-visible{outline:2px solid #316ac5}
 .np-window .np-text{flex:1 1 auto;min-height:0}   /* textarea fills the window (so resizing a note grows the editor, not empty space) */
 /* serendipity nests its window in .wrap — make it a transparent flex pass-through */
 .wrap{display:flex;flex-direction:column;padding-bottom:0 !important}.wrap>.window{flex:0 1 auto;max-height:100%}
