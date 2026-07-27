@@ -644,6 +644,43 @@ test("outbound endpoint discovery follows the spec's precedence", () => {
   assert.equal(findEndpointIn("<p>nothing here</p>", null, base), null);
 });
 
+test("endpoint discovery survives the webmention.rocks decoys", () => {
+  // Fixtures lifted from the live pages at webmention.rocks/test/N, the
+  // IndieWeb conformance suite. Kept as fixtures rather than live fetches
+  // because this file is deliberately network-free; the real 23 were run
+  // against the deployed implementation and all pass. Numbers name the test.
+  const at = (n) => `https://webmention.rocks/test/${n}`;
+  const cases = [
+    // #1 relative Link header, unquoted rel. #2 absolute. #7 odd casing.
+    [1, "", "</test/1/webmention>; rel=webmention", at(1) + "/webmention"],
+    [8, "", '<https://webmention.rocks/test/8/webmention>; rel="webmention"', at(8) + "/webmention"],
+    // #10 the rel is a token LIST; webmention is one of several.
+    [10, "", '<https://webmention.rocks/test/10/webmention>; rel="webmention somethingelse"', at(10) + "/webmention"],
+    // #19 one header, several values: the non-webmention one must not win.
+    [19, "", '<https://webmention.rocks/test/19/webmention/error>; rel="other", <https://webmention.rocks/test/19/webmention>; rel="webmention"', at(19) + "/webmention"],
+    // #12 rel="not-webmention" is a DIFFERENT rel. A \bwebmention\b regex
+    // matches it anyway, because "-" is a word boundary.
+    [12, '<link rel="not-webmention" href="/test/12/webmention/error"><a href="/test/12/webmention" rel="webmention">ok</a>', null, at(12) + "/webmention"],
+    // #13 a decoy inside an HTML comment is not markup.
+    [13, 'comment <!-- <a href="/test/13/webmention/error" rel="webmention"></a> --> then <a href="/test/13/webmention" rel="webmention">correct</a>', null, at(13) + "/webmention"],
+    // #14 the same decoy, escaped. Never matched a "<"-anchored pattern.
+    [14, '<code>&lt;a href="/test/14/webmention/error" rel="webmention"&gt;&lt;/a&gt;</code><a href="/test/14/webmention" rel="webmention">x</a>', null, at(14) + "/webmention"],
+    // #15 href="" is a legitimate self-reference, not a missing href.
+    [15, '<link rel="webmention" href="">', null, at(15)],
+    // #16 <a> first, <link> later: DOCUMENT ORDER decides, not tag name. An
+    // implementation that scans every <link> before any <a> takes the decoy.
+    [16, '<a href="/test/16/webmention" rel="webmention">a</a><link rel="webmention" href="/test/16/webmention/error">', null, at(16) + "/webmention"],
+    // #17 the same page with the tags swapped, to catch the opposite bias.
+    [17, '<link rel="webmention" href="/test/17/webmention"><a href="/test/17/webmention/error" rel="webmention">a</a>', null, at(17) + "/webmention"],
+    // #20 a candidate with NO href is not an endpoint. Skip it and keep
+    // looking, rather than letting it shadow the real one below.
+    [20, '<link rel="webmention"><a href="/test/20/webmention" rel="webmention">x</a>', null, at(20) + "/webmention"],
+  ];
+  for (const [n, html, header, expected] of cases) {
+    assert.equal(findEndpointIn(html, header, at(n)), expected, `webmention.rocks discovery test #${n}`);
+  }
+});
+
 test("site-manifest.json is a well-formed registry with unique paths", async () => {
   const { surfaces } = readManifest();
   assert.ok(surfaces.length > 0);
