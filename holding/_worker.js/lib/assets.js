@@ -243,3 +243,71 @@ export async function servePrecompressedShell(request, env) {
     encodeBody: "manual",
   });
 }
+
+
+// serveStaticPage: the 30 static garage/lwe pages, with the same two-tier treatment the
+// hashed shell gets — a dcz delta when the client holds a version we diffed against,
+// otherwise the brotli q11 twin, otherwise the plain asset.
+//
+// These fit dictionary transport BETTER than the shell does. The shell is
+// content-addressed, so a change mints a new URL and the old bytes are never requested
+// again. A garage page is mutable at a STABLE url under `max-age=0, must-revalidate`,
+// which is the case the RFC was written for: the browser revalidates, the bytes moved,
+// and the server answers with the diff instead of the whole document.
+//
+// The delta is keyed by SLUG plus dictionary tag rather than by a content hash, because
+// the request path carries no hash to key off. Only one version of a page is current at a
+// time, so slug + dictionary is already unambiguous.
+export async function serveStaticPage(request, env) {
+  const url = new URL(request.url);
+  if (request.method !== "GET") return serveAssetWith404Clamp(request, env);
+
+  // /garage/compression -> asset garage/compression.html, slug garage__compression.
+  // html_handling drops the trailing slash, so the path never carries the extension.
+  const rel = url.pathname.replace(/^\/+/, "").replace(/\/+$/, "");
+  if (!rel || rel.includes("..") || /\.[a-z0-9]+$/i.test(rel)) {
+    // Sub-resources under these prefixes (the garage's images, ask.js) are not pages and
+    // have no twin; hand them straight to the asset layer untouched.
+    return serveAssetWith404Clamp(request, env);
+  }
+  const slug = rel.replace(/\//g, "__");
+  const offer = { "use-as-dictionary": `match="/${rel}"` };
+
+  const tag = dictionaryTag(request);
+  if (tag) {
+    try {
+      const d = await env.ASSETS.fetch(new Request(`${url.origin}/pd/${slug}.${tag}.dcz`, {
+        headers: { "accept-encoding": "identity" },
+      }));
+      if (d.ok) {
+        const h = new Headers(d.headers);
+        h.set("content-type", "text/html; charset=utf-8");
+        h.set("content-encoding", "dcz");
+        h.set("vary", "accept-encoding, available-dictionary");
+        h.set("use-as-dictionary", offer["use-as-dictionary"]);
+        h.delete("etag");                       // described the .dcz file, not this page
+        return new Response(d.body, { status: 200, headers: h, encodeBody: "manual" });
+      }
+      try { await d.body?.cancel(); } catch {}
+    } catch { /* fall through to the twin */ }
+  }
+
+  try {
+    const br = await env.ASSETS.fetch(new Request(`${url.origin}/${rel}.html.br`, {
+      headers: { "accept-encoding": "identity" },
+    }));
+    if (br.ok && !br.headers.get("content-encoding")) {
+      const h = new Headers(br.headers);
+      h.set("content-type", "text/html; charset=utf-8");
+      h.set("content-encoding", "br");
+      h.append("vary", "accept-encoding");
+      h.set("use-as-dictionary", offer["use-as-dictionary"]);
+      const etag = h.get("etag");
+      if (etag) h.set("etag", `W/${etag.replace(/^W\//, "").replace(/"$/, "-br\"")}`);
+      return new Response(br.body, { status: 200, headers: h, encodeBody: "manual" });
+    }
+    try { await br.body?.cancel(); } catch {}
+  } catch { /* fall through to the plain asset */ }
+
+  return serveAssetWith404Clamp(request, env, { headers: offer });
+}
