@@ -53,5 +53,19 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
   const r = await get(`https://aadhar.sh${icons}`);
   report("svg stays off (icons)", !r.headers.get("use-as-dictionary"), `use-as-dictionary=${r.headers.get("use-as-dictionary")}`);
 }
+// 4. offers are SCOPED to destinations we answer. The spec defaults match-dest to every
+// destination, so a bare `match=` promises deltas for image/fetch/etc too. Assert the
+// scope AND that a delta still comes back — a malformed inner list would make Chromium
+// drop the offer and every delta would vanish silently into plain brotli.
+{
+  const home = await (await fetch("https://aadhar.sh/", { headers: { "accept-encoding": "identity" } })).text();
+  const live = home.match(/\/a\/nav\.([0-9a-f]{8})\.js/)?.[1];
+  const r = await get(`https://aadhar.sh/a/nav.${live}.js`);
+  const uad = r.headers.get("use-as-dictionary") || "";
+  report("shell offer scoped", /match-dest=\("script" "style"\)/.test(uad), `uad=${uad || "(absent)"}`);
+  const p = await get("https://aadhar.sh/garage/pretext");
+  const puad = p.headers.get("use-as-dictionary") || "";
+  report("page offer scoped", /match-dest=\("document"\)/.test(puad), `uad=${puad || "(absent)"}`);
+}
 console.log("  BLOCKED (by platform, not by us): SSR'd pages — workerd zstd ignores `dictionary`; re-run the scratchpad spike or watch for CF shared-dictionaries Phase 2.");
 process.exit(fail ? 1 : 0);
