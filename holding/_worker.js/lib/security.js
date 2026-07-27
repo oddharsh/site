@@ -9,8 +9,12 @@ import { SHELL_PRELOAD_LINK } from "./shell-assets.js";
 export const SECURITY_HEADERS = {
   "content-security-policy":
     "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://i.scdn.co https://*.spotifycdn.com; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; worker-src 'self'; manifest-src 'self'; upgrade-insecure-requests",
+  // keep every token one a shipping browser still knows — an unrecognized
+  // feature is inert and logs a console error. `browsing-topics` was dropped
+  // 2026-07 for that reason (Topics API deprecated in Chrome 144, feature
+  // removed), same fate as `interest-cohort` before it.
   "permissions-policy":
-    "camera=(), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=(), serial=(), bluetooth=(), midi=(), accelerometer=(), gyroscope=(), magnetometer=(), screen-wake-lock=(), hid=(), idle-detection=()",
+    "camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), bluetooth=(), midi=(), accelerometer=(), gyroscope=(), magnetometer=(), screen-wake-lock=(), hid=(), idle-detection=()",
   "x-frame-options":         "DENY",
   "x-content-type-options":  "nosniff",
   "referrer-policy":         "strict-origin-when-cross-origin",
@@ -50,6 +54,18 @@ export function withSecurityHeaders(response) {
     status:     response.status,
     statusText: response.statusText,
     headers,
+    // `encodeBody` is write-only Response init, so rebuilding a response SILENTLY
+    // drops it, and the runtime then compresses the body a second time to match the
+    // content-encoding header it can still see. Because every worker response passes
+    // through here, that made `encodeBody: "manual"` a no-op site-wide, which is what
+    // produced brotli-in-brotli on both /a/ canaries AND on a worker-built body with
+    // no asset fetch at all (34 bytes for a 30-byte payload, control arm identical).
+    //
+    // A content-encoding header means the body is ALREADY encoded, so carrying the
+    // flag forward is the correct reading in every case: the alternative is a
+    // double-encoded body no client can read. Responses with no content-encoding are
+    // unaffected, which is nearly all of them.
+    ...(response.headers.has("content-encoding") ? { encodeBody: "manual" } : {}),
   });
 }
 

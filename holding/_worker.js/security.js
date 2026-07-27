@@ -16,7 +16,9 @@ h1{margin:0 0 4px}
 .sc-panel{border:1px solid #b7c0d0;border-radius:4px;margin:0 0 9px;overflow:hidden;box-shadow:inset 0 1px 0 #fff}
 .sc-bar{display:flex;align-items:center;gap:8px;padding:6px 11px;font-weight:bold;font-family:var(--font-caption);font-size:10.5pt;color:#fff;background:linear-gradient(180deg,#62b043,#3c8f24);text-shadow:0 1px 1px rgba(0,0,0,.25)}
 .sc-bar .shield{width:17px;height:17px;flex:0 0 17px}
-.sc-bar .state{margin-left:auto;font-size:8.5pt;font-weight:normal;background:rgba(255,255,255,.24);padding:1px 9px;border-radius:9px;letter-spacing:.04em}
+/* 3px, not the 9px pill it was: the only other radius on this page is 4px, and
+   a fully-rounded lozenge is the one shape Luna never used for a status read. */
+.sc-bar .state{margin-left:auto;font-size:8.5pt;font-weight:normal;background:rgba(255,255,255,.24);padding:1px 9px;border-radius:3px;letter-spacing:.04em}
 .sc-body{padding:8px 12px;background:#fbfdff;font-size:9.5pt;color:#33415c;line-height:1.5}
 .sc-body b{color:#15243f}
 .sc-body code,.sc-body .mono{font-family:var(--font-mono);font-size:8.5pt}

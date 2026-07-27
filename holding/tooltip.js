@@ -1,24 +1,23 @@
 // tooltip.js — the rich hover island for photos, tracks, artists, and car links.
 // Loaded after first paint and prefetched during idle so the first intentional
 // tooltip gets the same interaction path as every later one.
+//
+// The hover ENGINE moved to hoist.js, shared with serendipity's event covers
+// and nav.js's Run preview. What stays here is the part that is actually about
+// this page's content: the EXIF meta fetch, the Spotify DNS hints, and the four
+// content builders.
+
+import { createHoist, hoverCapable, ANCHOR_OK } from "/hoist.js";
 
 export function start(initial) {
       const tip = document.getElementById("xp-tooltip");
       if (!tip) return;
 
-      // hover-only feature: long-press on touch devices fires synthetic
-      // mouseover/mouseout events and was causing tooltips to appear
-      // mid-scroll on mobile. opt out entirely when the device doesn't
-      // have a real hover-capable pointer. (`(hover: none)` is the
-      // touch-only signal; combined with `(any-hover: none)` to cover
-      // hybrid devices where the primary pointer is touch.)
-      if (window.matchMedia &&
-          (window.matchMedia("(hover: none)").matches ||
-           window.matchMedia("(pointer: coarse)").matches)) {
-        return;
-      }
+      // Bail before building any of the content machinery below. createHoist
+      // would no-op on a coarse pointer anyway, but the fetches, formatters,
+      // and builders are all dead weight for a surface that can never show.
+      if (!hoverCapable()) return;
 
-      let activeSlot = null;
 
       // lazy DNS-prefetch for Spotify's image CDNs. these hosts only
       // matter when the user hovers a track or artist row (to load the
@@ -111,58 +110,108 @@ export function start(initial) {
       // the shipped JPG twin, so the bars stay tied to the published thumbnail)
       // and ride the same meta/<stem>.json as the EXIF. The old decode → canvas
       // → getImageData → main-thread binning pipeline is gone; renderHistogramSvg
-      // draws the prebuilt SVG data from meta.hist.
-      const histFor = (stem) => (metaMap[stem] && metaMap[stem].hist) || null;
-      // EXIF is NOT inlined on the uncacheable homepage, and not shipped as one big
-      // index either — it's fetched PER PHOTO from /images/meta/<stem>.json after
-      // page settle (with first-hover fetch as fallback). The tiny files are edge
-      // and browser cached, busted by ?mv, so the warm-up covers only the current
-      // selection rather than the whole pool; repeat hovers and repeat visits are
-      // served from the browser's HTTP cache with no network at all. The baked
-      // histogram rides the same file, so bars + EXIF land together in one fetch.
-      const metaMap = Object.create(null);   // stem → exif object | null (fetched, none) | absent (not fetched)
-      const META_V = "mv=4";                 // bump when metadata is regenerated (4: histograms baked in)
+      // draws the prebuilt SVG data from meta.hi.
+      //
+      // the per-photo files are the HOT PATH (one fetch per hover), so they use
+      // SHORT keys and carry only what this tooltip renders. they are a render
+      // cache, not the record: the full, self-documenting Fuji recipe (long key
+      // names, fujixweekly-style card) lives in /images/metadata.json.
+      // cm camera · ln lens · ap aperture · sp shutter · is iso · fl focal · ev ·
+      // dt date · w · h · wb white-balance · ct color-temp · fs flash · fm film ·
+      // dr · cc chrome · cb chrome-blue · gr grain · gs grain-size · ht highlight ·
+      // st shadow · sa saturation · hi {l,r,g,b} histogram. nulls dropped.
+      const histFor = (stem) => (metaMap[stem] && metaMap[stem].hi) || null;
+      // EXIF is NOT inlined on the uncacheable homepage. It arrives in two tiers.
+      //
+      // TEXT: one shared /images/exif.json for all 158 photos, 2.6KB brotli,
+      // immutable and busted by ?mv. This used to be 12 per-photo fetches warmed
+      // for the current selection, on the reasoning that a repeat visit would
+      // replay them from cache. The homepage draws a fresh RANDOM 12 of 158 per
+      // request, so a given slot repeats about 7.6% of the time and that cache
+      // almost never hit: a cache-off capture showed ~8.9KB across 12 cold
+      // requests, and the next visit paid it again. The whole-library index is
+      // smaller than that on the FIRST visit (11 fewer sets of response headers,
+      // and 158 records compress against each other) and free on every visit
+      // after, whatever the draw.
+      //
+      // BARS: the four 64-bin histogram channels stay PER PHOTO, because they are
+      // 623 of a meta file's ~977 bytes and would take the index from 2.6KB to
+      // 24KB for bars most visitors never see. So a hover renders its text
+      // immediately from the index and fetches the one histogram it needs.
+      const metaMap = Object.create(null);   // stem → exif object (may lack .hi) | absent
+      const inFlight = new Set();            // stems with a per-photo fetch open
+      const META_V = "mv=6";                 // bump when metadata is regenerated (6: shared EXIF index + per-photo histograms)
       const fetchMeta = (stem, priority) => {
-        if (stem in metaMap) return;         // already in hand, or a fetch is in flight
-        metaMap[stem] = null;                // in-flight sentinel (renders as "no exif yet")
+        const have = metaMap[stem];
+        if (have && have.hi) return;         // text + bars both in hand
+        if (inFlight.has(stem)) return;
+        inFlight.add(stem);
+        // A stem missing from the index (a photo added since the visitor cached
+        // it) lands here too, and this fetch carries the text as well as the
+        // bars, so a stale index self-heals instead of rendering blank.
         // warm-up fetches ride at low priority so the browser (and Lighthouse's
         // critical-request-chain audit) treats them as the idle filler they are;
         // a hover-triggered fetch keeps the default because someone is waiting.
         fetch(`/images/meta/${encodeURIComponent(stem)}.json?${META_V}`, priority ? { priority } : undefined)
           .then(r => {
             // non-200, SPA-fallback html, or a transient bot-challenge → treat as a
-            // failure and fall to .catch (which clears the sentinel so we can retry).
+            // failure and fall to .catch (which frees the stem so we can retry).
             if (!r.ok || !(r.headers.get("content-type") || "").includes("json")) throw 0;
             return r.json();
           })
           .then(m => {
             if (!m || typeof m !== "object") throw 0;
-            metaMap[stem] = m;
-            // re-render if this photo's tip is still the open one
-            if (activeSlot && activeSlot.matches?.(".photos a") &&
-                (activeSlot.dataset.full || "").replace(/\.[^.]+$/, "") === stem) showTipFor(activeSlot);
+            metaMap[stem] = m;   // superset of the index entry: EXIF plus .hi
+            // re-render if this photo's tip is still the open one. `hoist` is
+            // declared below but always initialized by the time this fetch
+            // resolves, and hoist.active() is the live target.
+            const open = hoist.active();
+            if (open && open.matches?.(".photos a") &&
+                (open.dataset.full || "").replace(/\.[^.]+$/, "") === stem) hoist.show(open);
           })
-          // CRUCIAL: drop the sentinel on failure so a later hover RE-FETCHES rather
-          // than the photo being stuck empty for the whole session. self-healing.
-          .catch(() => { delete metaMap[stem]; });
+          // Deliberately does NOT drop metaMap[stem] on failure any more: the entry
+          // is usually the index's EXIF, and discarding it would turn a missing
+          // histogram into a blank tooltip. Clearing inFlight is what keeps a later
+          // hover able to retry, which is the self-healing property that matters.
+          .catch(() => {})
+          .finally(() => { inFlight.delete(stem); });
       };
-      // EXIF/histogram is idle-prefetched for the current photo selection after
-      // page settle (see warmPhotoMeta below). A first-hover fetch remains the
-      // fallback for a busy page or a client-rendered grid. The warm-up costs a
-      // small burst for the visible slots, never the full photo library, and
-      // repeat visits are served from the browser/edge cache.
+
+      // The shared index, fetched once during idle. Every stem it carries means a
+      // hover that renders its text with no network at all, whichever 12 the
+      // server drew. Failure is silent and harmless: fetchMeta's per-photo path
+      // still covers every stem, which is exactly the pre-index behaviour.
+      let indexRequested = false;
+      const fetchExifIndex = () => {
+        if (indexRequested) return;
+        indexRequested = true;
+        fetch(`/images/exif.json?${META_V}`, { priority: "low" })
+          .then(r => {
+            if (!r.ok || !(r.headers.get("content-type") || "").includes("json")) throw 0;
+            return r.json();
+          })
+          .then(all => {
+            if (!all || typeof all !== "object") throw 0;
+            for (const stem of Object.keys(all)) {
+              // never clobber a per-photo record already in hand: that one has .hi
+              if (!metaMap[stem]) metaMap[stem] = all[stem];
+            }
+            const open = hoist.active();
+            if (open && open.matches?.(".photos a")) hoist.show(open);
+          })
+          .catch(() => { indexRequested = false; });
+      };
 
       const photoStem = (slot) => {
         const filename = slot.dataset.full || decodeURIComponent((slot.href || "").split("/").pop());
         return filename.replace(/\.[^.]+$/, "");
       };
+      // One request instead of one per visible slot. The grid it is warming is a
+      // random draw, so warming "just the current selection" was warming a set
+      // nobody would see again; the index covers every draw and every later visit.
+      // Histograms stay unwarmed on purpose and load on the hover that needs them.
       const warmPhotoMeta = () => {
-        const stems = new Set();
-        document.querySelectorAll(".photos a[data-full]").forEach((slot) => {
-          const stem = photoStem(slot);
-          if (stem) stems.add(stem);
-        });
-        stems.forEach((stem) => fetchMeta(stem, "low"));
+        if (document.querySelector(".photos a[data-full]")) fetchExifIndex();
       };
       let metaWarmupQueued = false;
       const queuePhotoMetaWarmup = () => {
@@ -254,13 +303,13 @@ export function start(initial) {
         const exif = metaMap[stem] || {};
 
         // exposure trio
-        const aper = exif.aperture ? (String(exif.aperture).startsWith("f/") ? exif.aperture : "f/" + exif.aperture) : "";
-        const expo = [exif.shutter, aper, exif.iso ? "ISO " + exif.iso : ""].filter(Boolean).join(" ");
+        const aper = exif.ap ? (String(exif.ap).startsWith("f/") ? exif.ap : "f/" + exif.ap) : "";
+        const expo = [exif.sp, aper, exif.is ? "ISO " + exif.is : ""].filter(Boolean).join(" ");
 
         // EV · dimensions · size strip
         // real EXIF dims only — a square thumbnail's naturalWidth is just 600, not
         // the photo's size, so the old fallback flashed "600 × 600" before EXIF landed.
-        const w = exif.width, h = exif.height;
+        const w = exif.w, h = exif.h;
         const dims = (w && h) ? `${w} × ${h}` : "";
         const evStr = (typeof exif.ev === "number" && exif.ev !== 0) ? ((exif.ev > 0 ? "+" : "") + exif.ev + " EV") : "";
         const metaStrip = [evStr, dims, slot.dataset.size ? fmtBytes(slot.dataset.size) : ""].filter(Boolean).join(" · ");
@@ -269,24 +318,24 @@ export function start(initial) {
         const isOn = v => v && !/^off$/i.test(String(v));
         const trimTone = t => (t && t !== "0 (normal)") ? t.replace(/\s*\(.*\)$/, "") : "";
         const chromeParts = [];
-        if (isOn(exif.chrome))      chromeParts.push(exif.chrome);
-        if (isOn(exif.chrome_blue)) chromeParts.push("blue " + exif.chrome_blue);
-        const grainVal = isOn(exif.grain) ? (exif.grain + (isOn(exif.grain_size) ? " " + exif.grain_size : "")) : "";
-        const toneVal = (trimTone(exif.highlight_tone) || trimTone(exif.shadow_tone))
-          ? `H ${trimTone(exif.highlight_tone) || "0"}  S ${trimTone(exif.shadow_tone) || "0"}` : "";
+        if (isOn(exif.cc))      chromeParts.push(exif.cc);
+        if (isOn(exif.cb)) chromeParts.push("blue " + exif.cb);
+        const grainVal = isOn(exif.gr) ? (exif.gr + (isOn(exif.gs) ? " " + exif.gs : "")) : "";
+        const toneVal = (trimTone(exif.ht) || trimTone(exif.st))
+          ? `H ${trimTone(exif.ht) || "0"}  S ${trimTone(exif.st) || "0"}` : "";
         // Fuji stores B&W film sims (Acros / Monochrome, optionally with a Ye/R/G
         // contrast filter) in the Saturation EXIF tag and leaves FilmMode blank — so
         // "Acros Green Filter" is the FILM, not a color setting. route it to the Film
         // row and drop the Color row for B&W frames; color shots keep "+3" etc.
-        const bwSim    = !!exif.saturation && /\b(acros|monochrome|b\s*&\s*w|bw|sepia)\b/i.test(String(exif.saturation));
-        const filmVal  = exif.film || (bwSim ? exif.saturation : "");
-        const colorVal = bwSim ? "" : trimTone(exif.saturation);
+        const bwSim    = !!exif.sa && /\b(acros|monochrome|b\s*&\s*w|bw|sepia)\b/i.test(String(exif.sa));
+        const filmVal  = exif.fm || (bwSim ? exif.sa : "");
+        const colorVal = bwSim ? "" : trimTone(exif.sa);
         const recipe = [
-          ["Body",       exif.camera],
-          ["Lens",       [exif.lens, fmtFocal(exif.focal)].filter(Boolean).join(" · ")],
+          ["Body",       exif.cm],
+          ["Lens",       [exif.ln, fmtFocal(exif.fl)].filter(Boolean).join(" · ")],
           ["Film",       filmVal],
           ["Dyn range",  exif.dr],
-          ["White bal",  exif.white_balance === "Kelvin" && exif.color_temp ? exif.color_temp + "K" : exif.white_balance],
+          ["White bal",  exif.wb === "Kelvin" && exif.ct ? exif.ct + "K" : exif.wb],
           ["Chrome FX",  chromeParts.join(" · ")],
           ["Grain",      grainVal],
           ["Tones",      toneVal],
@@ -296,10 +345,10 @@ export function start(initial) {
 
         const hist = histFor(stem);
         const histSvg = hist ? renderHistogramSvg(hist) : "";
-        const dateStr = fmtDate(exif.date) || (slot.dataset.uploaded ? "up " + fmtDate(slot.dataset.uploaded) : "");
+        const dateStr = fmtDate(exif.dt) || (slot.dataset.uploaded ? "up " + fmtDate(slot.dataset.uploaded) : "");
 
         return `<div class="cam">` +
-            `<div class="header"><span>${esc(stem)}.jpg</span>${flashBolt(exif.flash)}</div>` +
+            `<div class="header"><span>${esc(stem)}.jpg</span>${flashBolt(exif.fs)}</div>` +
             `<div class="histogram-frame">${histSvg}</div>` +
             `<div class="body">` +
               (expo ? `<div class="exposure">${esc(expo)}</div>` : "") +
@@ -356,177 +405,16 @@ export function start(initial) {
         );
       }
 
-      // lightweight cursor tracking: JS writes --x/--y (the cursor's
-      // clientX/Y in px); CSS positions the tooltip via translate(clamp())
-      // with a hard snap, zero lag. no rAF, no getBoundingClientRect, no
-      // resize listener — edge-clamping uses the element's own size in CSS,
-      // so it stays correct as a cover image sizes the box. lastX/lastY are
-      // kept only for scroll re-evaluation (elementFromPoint).
-      let lastX = 0, lastY = 0;
-      const place = (e) => {
-        lastX = e.clientX; lastY = e.clientY;
-        tip.style.setProperty("--x", lastX + "px");
-        tip.style.setProperty("--y", lastY + "px");
-      };
-      // show/hide via the Popover API (top layer — no z-index juggling,
-      // and it unlocks the @starting-style fade). guard the calls because
-      // showPopover()/hidePopover() throw if the element is already in the
-      // target state. on engines without popover support (below the modern
-      // target), fall back to a plain display toggle so nothing breaks.
-      const supportsPopover = "popover" in HTMLElement.prototype;
-      const isOpen = () => supportsPopover
-        ? tip.matches(":popover-open")
-        : tip.style.display === "block";
-      // will-change is an "earn it" hint, not a permanent set (see the gotcha
-      // log): leaving it on while the tooltip is display:none would pin a
-      // compositor layer for an invisible element. so we promote it to its own
-      // layer ONLY while open — that makes the per-pointermove translate a pure
-      // compositor transform (off the main thread, no box repaint), which is
-      // what keeps tracking smooth on ProMotion / Low-Power VRR displays — then
-      // release the layer the instant it closes.
-      const openTip = () => {
-        tip.style.willChange = "transform";
-        if (supportsPopover) { if (!tip.matches(":popover-open")) tip.showPopover(); }
-        else tip.style.display = "block";
-      };
-      const closeTip = () => {
-        if (supportsPopover) { if (tip.matches(":popover-open")) tip.hidePopover(); }
-        else tip.style.display = "none";
-        tip.style.willChange = "auto";
-      };
-      // anchoredEl tracks the element a keyboard-focus tooltip is tethered to
-      // (via CSS anchor positioning) so we can release its anchor-name on hide.
-      let anchoredEl = null;
-      const dropAnchor = () => {
-        if (anchoredEl) { anchoredEl.style.removeProperty("anchor-name"); anchoredEl = null; }
-        tip.classList.remove("anchored");
-      };
-      const hideTip = () => {
-        closeTip();
-        dropAnchor();
-        activeSlot = null;
-      };
-      // dismissal is deferred by a hair (TIP_DISMISS_MS) so hopping from one hover
-      // target straight across the small gap to the NEXT one doesn't flash the
-      // tooltip off-then-on. a fresh pointerover cancels the pending hide; if the
-      // cursor instead comes to rest in the gap, the tooltip still clears after the
-      // delay, so the dead space between entries shows nothing. shared by every
-      // hover target here (photos, tracks, artists, car links) — one tooltip engine.
-      const TIP_DISMISS_MS = 50;
-      let hideTimer = 0;
-      // keyboard tips anchor via CSS anchor positioning where supported;
-      // pointer tips ALWAYS follow the cursor (owner re-ruling 2026-07-03:
-      // the anchored-hover experiment shipped and was rolled back the same
-      // day — gliding the album art with the cursor is part of the site's
-      // identity, same as the photo camera-back, and the 500ms cold-hover
-      // delay read as lag, not authenticity).
-      const ANCHOR_OK = window.CSS && CSS.supports &&
-        (CSS.supports("position-area: bottom") || CSS.supports("inset-area: bottom"));
-      // while the content is actively scrolling (and a hair after it settles) we
-      // suppress tooltips entirely — scrolling shouldn't trip a popover just
-      // because the cursor happens to pass over a photo or track. tooltips return
-      // on the next intentional hover-move.
-      let scrolling = false, scrollIdle = 0;
-      const cancelHide   = () => { clearTimeout(hideTimer); hideTimer = 0; };
-      const scheduleHide = () => { clearTimeout(hideTimer); hideTimer = setTimeout(hideTip, TIP_DISMISS_MS); };
-      const showTipFor = (target, e) => {
-        if (scrolling) return;               // don't pop a tooltip mid-scroll
-        cancelHide();                        // a fresh show cancels any pending gap-dismissal
-        dropAnchor();                        // pointer entry always uses cursor-follow
-        activeSlot = target;
-        const html = buildContent(target);
-        if (!html) { hideTip(); return; }   // e.g. track with no cover yet
-        tip.innerHTML = html;
-        if (e) place(e);                     // position before showing (no glide-in)
-        openTip();
-      };
-      // keyboard-only anchored show (pointer never routes here anymore)
-      const showAnchored = (target) => {
-        if (scrolling) return;
-        cancelHide();
-        const html = buildContent(target);
-        if (!html) { hideTip(); return; }
-        dropAnchor();
-        activeSlot = target;
-        tip.innerHTML = html;
-        target.style.setProperty("anchor-name", "--xp-tip");
-        anchoredEl = target;
-        tip.classList.add("anchored");
-        openTip();
-      };
-
-      document.addEventListener("pointerover", (e) => {
-        const target = findTarget(e.target);
-        if (!target) return;
-        cancelHide();                        // re-entered a target (same or next) → keep it up
-        if (target === activeSlot) return;   // same target already shown
-        showTipFor(target, e);
-      }, { passive: true });
-
-      // passive: lets the browser dispatch pointermove without waiting on
-      // our handler. the work is two CSS custom-property writes.
-      document.addEventListener("pointermove", (e) => {
-        if (isOpen()) place(e);
-      }, { passive: true });
-
-      document.addEventListener("pointerout", (e) => {
-        const fromTarget = findTarget(e.target);
-        if (!fromTarget) return;
-        const toTarget = findTarget(e.relatedTarget);
-        // still inside the same target? ignore.
-        if (toTarget === fromTarget) return;
-        // moving to a *different* valid target (row → artist link, artist →
-        // adjacent artist)? let the next pointerover swap content without an
-        // intermediate hide+show flicker.
-        if (toTarget) return;
-        scheduleHide();                      // left to a gap — defer the hide briefly (TIP_DISMISS_MS)
-      }, { passive: true });
-
-      // scroll handling. any scroll (the window's internal content scroller
-      // bubbles to here in the capture phase) hides the tooltip and suppresses
-      // new ones WHILE scrolling — so you can wheel over the photo grid /
-      // tracklist freely without tooltip noise as rows fly past.
-      //
-      // the moment scrolling settles we re-show instantly. two reasons the old
-      // 120ms timer felt laggy on desktop: (1) the window itself, and (2) the
-      // tooltip is position:fixed — a wheel/trackpad scroll leaves the cursor
-      // dead still, so NO pointerover fires when a new photo slides under it,
-      // and the tooltip only came back if you jiggled the mouse. so on settle
-      // we actively re-target: elementFromPoint(lastX,lastY) → findTarget →
-      // show. position needs no update (cursor didn't move; --x/--y are already
-      // correct from the last place()), so we pass no event and only swap
-      // content. SCROLL_SETTLE_MS is just long enough to ride out trackpad
-      // momentum (events keep firing ~every frame until it fully stops) without
-      // flashing the tooltip back mid-decel — short enough to read as instant.
-      const SCROLL_SETTLE_MS = 60;
-      const reshowUnderCursor = () => {
-        if (!lastX && !lastY) return;            // pointer never moved → nothing to re-target
-        const target = findTarget(document.elementFromPoint(lastX, lastY));
-        if (target) showTipFor(target);          // no event: reuse the existing --x/--y
-      };
-      document.addEventListener("scroll", () => {
-        scrolling = true;
-        if (isOpen()) hideTip();
-        clearTimeout(scrollIdle);
-        scrollIdle = setTimeout(() => { scrolling = false; reshowUnderCursor(); }, SCROLL_SETTLE_MS);
-      }, { capture: true, passive: true });
-
-      // ── keyboard-focus fallback ────────────────────────────────────────
-      // mouse users get the cursor-following tooltip above; keyboard users
-      // get the same content tethered to the focused element via CSS anchor
-      // positioning (no pointer to track). only fires for :focus-visible so
-      // a mouse click that happens to focus a link doesn't double-trigger.
-      if (ANCHOR_OK) {
-        document.addEventListener("focusin", (e) => {
-          const target = findTarget(e.target);
-          if (!target) return;
-          try { if (!target.matches(":focus-visible")) return; } catch (_) {}
-          showAnchored(target);   // keyboard focus is deliberate: no cold delay
-        });
-        document.addEventListener("focusout", (e) => {
-          if (anchoredEl && findTarget(e.target) === anchoredEl) hideTip();
-        });
-      }
-      if (initial && initial.focus && ANCHOR_OK) showAnchored(initial.target);
-      else if (initial && initial.target) showTipFor(initial.target, initial);
+      // The hover engine lives in hoist.js — top-layer hoist, cursor-follow vs
+      // anchored placement, the gap-hop dismissal timer, the scroll model, and
+      // the compositor-layer lifecycle. This module keeps only what is actually
+      // about photos, tracks, artists, and car links: which elements are
+      // targets, and what the tooltip says about one.
+      const hoist = createHoist({
+        node: tip,
+        findTarget,
+        contentFor: buildContent,
+      });
+      if (initial && initial.focus && ANCHOR_OK) hoist.showAnchored(initial.target);
+      else if (initial && initial.target) hoist.show(initial.target, initial);
 }

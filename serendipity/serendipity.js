@@ -14,6 +14,14 @@
 
 const PREFIX = "/serendipity";
 
+// The desktop partial the rest of the site ships. serendipity is staged beside
+// holding/ in .build with the same relative layout as the source tree, so this
+// one path resolves in both. Before this, /serendipity loaded /nav.js and let
+// it CONSTRUCT the desktop after load: curl and JS-off visitors got no desktop
+// at all, and everyone else got a shell pop. Now the markup is in the document
+// and nav.js only wires behavior, same as every other page.
+import { DESKTOP_CHROME, DESKTOP_TOP } from "../holding/_worker.js/lib/desktop.js";
+
 // ── tiny helpers ────────────────────────────────────────────────────────────
 const esc = (v) =>
   String(v == null ? "" : v).replace(/[&<>"']/g, (c) =>
@@ -276,14 +284,30 @@ function shellCss() {
   .chip.on{color:#fff;border-color:#2c4d7e;font-weight:bold;background:linear-gradient(180deg,#5b9bf0,#2f6fde 60%,#2a60cc)}
   .ev[hidden],.grp[hidden]{display:none}
   .empty-filter{display:none;color:oklch(50% 0.01 250);padding:24px 12px;border:1px dashed oklch(78% 0.04 250);border-radius:0;background:oklch(98% 0.01 250);text-align:center;font-size:11px}
-  /* cursor-following cover tooltip — ported from the homepage photo/car-link tooltip.
+  /* cursor-following cover tooltip, driven by the shared engine in /hoist.js.
      --x/--y are typed <length> so the translate() positions it with no JS rAF; clamp
-     keeps it on-screen. only events with a cover_url get one. */
+     keeps it on-screen. only events with a cover_url get one. The engine owns
+     WHEN it shows; this owns what it looks like. */
   @property --x { syntax:"<length>"; inherits:false; initial-value:0px }
   @property --y { syntax:"<length>"; inherits:false; initial-value:0px }
-  #ev-tip{position:fixed;z-index:9999;top:0;left:0;display:none;pointer-events:none;
+  /* the margin/padding/border/background/inset resets undo the UA popover
+     defaults (which set inset:0 and a solid border box); without them the cover
+     picks up a stray frame and an off-by-a-corner start position. */
+  #ev-tip{position:fixed;z-index:9999;top:0;left:0;right:auto;bottom:auto;display:none;pointer-events:none;
+    margin:0;padding:0;border:0;background:none;overflow:visible;width:auto;height:auto;
     transform:translate(clamp(4px,calc(var(--x) + 18px),calc(100vw - 100% - 8px)),clamp(4px,calc(var(--y) + 18px),calc(100vh - 100% - 8px)))}
-  #ev-tip.on{display:block}
+  /* popover path: the top layer is what stops a cover from being clipped by the
+     scrolling content pane. Engines without :popover-open keep the display:none
+     above and the engine's inline display:block fallback drives them instead. */
+  @supports selector(:popover-open){
+    #ev-tip:popover-open{display:block}
+    #ev-tip.anchored:popover-open{transition:opacity 120ms ease-out}
+    @starting-style{ #ev-tip.anchored:popover-open{opacity:0} }
+  }
+  /* keyboard focus tethers instead of tracking (there is no cursor to follow) */
+  #ev-tip.anchored{position-anchor:--ev-tip;position-area:bottom span-right;
+    top:auto;left:auto;transform:none;margin:6px 0 0;
+    position-try-fallbacks:flip-block,flip-inline}
   /* show the WHOLE banner — fixed width, natural aspect (no crop): Luma covers
      often place text/faces near an edge that object-fit:cover would chop. height:
      auto follows the image; max-height caps a rare portrait cover, with contain
@@ -304,7 +328,7 @@ function shell(title, currentPath, bodyHtml) {
 <title>${currentPath === PREFIX ? "aadhar.sh/serendipity" : "aadhar.sh/serendipity/" + esc(title)}</title>
 <meta name="description" content="A public, shared database of events worth going to and who's going — fed by the collective, queryable by humans and agents.">
 <style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}${shellCss()}</style>
-<link rel="preload" as="style" href="/luna.css"><link rel="stylesheet" href="/luna.css"></head><body>
+<link rel="preload" as="style" href="/luna.css"><link rel="stylesheet" href="/luna.css"></head><body>${DESKTOP_TOP}
 <div class="wrap"><div class="window">
   <div class="title-bar"><span class="title-text"><span class="icon" aria-hidden="true"></span>aadhar.sh/serendipity</span>
     <span class="controls"><a class="close" href="/" title="back to aadhar.sh" aria-label="back to aadhar.sh"></a></span>
@@ -324,7 +348,7 @@ function shell(title, currentPath, bodyHtml) {
     </nav>
     <main class="content">${bodyHtml}</main>
   </div>
-</div></div>
+</div></div>${DESKTOP_CHROME}
   <script src="/nav.js" defer></script>
 </body></html>`;
 }
@@ -387,35 +411,25 @@ const DASHBOARD_JS = `
     [].forEach.call(chips.children,function(c){c.classList.toggle('on',c===b);});
     apply();
   });
+  // the cover tooltip runs on the SHARED hover engine (/hoist.js) that the
+  // homepage photo/track/artist tips use. This was a hand-ported copy whose own
+  // comment asked the next editor to keep TIP_DISMISS_MS in sync with the
+  // homepage by hand, and it had already drifted from the original on three
+  // counts: no popover hoist (so it was clippable and got no fade), no keyboard
+  // path, no will-change lifecycle. It gains all three here. Deferred import,
+  // because a hover nicety must never sit in front of the event list rendering.
   if(tip&&!matchMedia('(hover: none)').matches){
-    var cur=null,lastX=0,lastY=0,hideT=0;
-    // dismissal is deferred by TIP_DISMISS_MS so hopping card→card across the gap
-    // doesn't flash the cover off-then-on; a fresh pointerover cancels it, but if the
-    // cursor rests in the gap the cover still clears after the delay (no tooltip in
-    // dead space). mirrors the homepage tooltip's TIP_DISMISS_MS — separate deploy,
-    // same setting (keep the two in sync).
-    var TIP_DISMISS_MS=50;
-    function cancelHide(){ clearTimeout(hideT); hideT=0; }
-    function scheduleHide(){ clearTimeout(hideT); hideT=setTimeout(hide, TIP_DISMISS_MS); }
-    function show(a){ cancelHide(); cur=a; var img=new Image(); img.loading='lazy'; img.decoding='async'; img.alt=''; img.src=a.getAttribute('data-cover'); tip.textContent=''; tip.appendChild(img); tip.classList.add('on'); }
-    function hide(){ cur=null; tip.classList.remove('on'); tip.textContent=''; }
-    document.addEventListener('pointerover',function(e){
-      lastX=e.clientX; lastY=e.clientY;
-      var a=e.target.closest&&e.target.closest('.ev[data-cover]');
-      if(a){ cancelHide(); if(a!==cur)show(a); return; }
-      if(cur)scheduleHide();   // only when a cover is open — no timer churn on plain mouse moves
-    },{passive:true});
-    document.addEventListener('pointermove',function(e){ lastX=e.clientX; lastY=e.clientY; if(!cur)return; tip.style.setProperty('--x',lastX+'px'); tip.style.setProperty('--y',lastY+'px'); },{passive:true});
-    document.addEventListener('pointerout',function(e){ if(cur&&!e.relatedTarget)scheduleHide(); });
-    // scroll re-evaluation (ported from the homepage tooltip): the tip is
-    // position:fixed and the cursor stays put during scroll, but the CARD under
-    // it shifts — browsers (Safari esp.) don't reliably fire pointer enter/leave
-    // for that, so without this the cover stays stuck on a row no longer under
-    // the pointer. each scroll tick (rAF-coalesced) we look up what's actually
-    // under the cursor and re-target or hide. --x/--y stay correct (no cursor move).
-    var sf=0;
-    function reeval(){ sf=0; if(!cur)return; var u=document.elementFromPoint(lastX,lastY); var a=u&&u.closest&&u.closest('.ev[data-cover]'); if(!a){scheduleHide();return;} if(a!==cur)show(a); }
-    document.addEventListener('scroll',function(){ if(!cur)return; if(!sf)sf=requestAnimationFrame(reeval); },{capture:true,passive:true});
+    import('/hoist.js').then(function(m){
+      m.createHoist({
+        node: tip,
+        anchorName: '--ev-tip',
+        findTarget: function(el){ return (el&&el.closest&&el.closest('.ev[data-cover]'))||null; },
+        contentFor: function(a){
+          var u=a.getAttribute('data-cover');
+          return u ? '<img loading="lazy" decoding="async" alt="" src="'+u.replace(/"/g,'&quot;')+'">' : '';
+        }
+      });
+    }).catch(function(){});   // no covers is a fine outcome; the list still works
   }
 })();
 `;
@@ -458,7 +472,7 @@ async function renderDashboard(d, path, msg, env) {
       ${upcoming.length ? `<div class="grp" data-grp>Upcoming (${upcoming.length})</div>${goingFirst(upcoming).map((e) => eventCard(e, false)).join("")}` : ""}
       ${pastAll.length ? `<div class="grp" data-grp>Past ${pastAll.length > PAST_CAP ? `(${PAST_CAP} of ${pastAll.length})` : `(${pastAll.length})`}</div>${past.map((e) => eventCard(e, true)).join("")}` : ""}
       <p class="empty-filter" id="ev-none">No events match — clear the search or pick a wider range.</p>
-      <div id="ev-tip" aria-hidden="true"></div>
+      <div id="ev-tip" popover="manual" aria-hidden="true"></div>
       <script>${DASHBOARD_JS}</script>`;
   }
   return html(200, shell("Events", path, banner(msg) + body));
@@ -2015,9 +2029,10 @@ export const SERENDIPITY_SECURITY_HEADERS = {
   "x-frame-options": "DENY",
   // parity with the _headers set: this is a first-class page of the site
   // (the shared XP shell runs here too), so deny the same unused browser APIs.
-  // `browsing-topics=()` is the Topics-API opt-out; the older `interest-cohort`
-  // token went away with FLoC and now logs an "unrecognized feature" warning.
-  "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=(), serial=(), bluetooth=(), midi=(), accelerometer=(), gyroscope=(), magnetometer=(), screen-wake-lock=(), hid=(), idle-detection=()",
+  // tokens must be ones a shipping browser still recognizes, or they're inert
+  // and log a console error: `browsing-topics` went the way of `interest-cohort`
+  // when Chrome removed the Topics API feature (dropped here 2026-07).
+  "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), bluetooth=(), midi=(), accelerometer=(), gyroscope=(), magnetometer=(), screen-wake-lock=(), hid=(), idle-detection=()",
 };
 
 export function withSerendipitySecurityHeaders(response) {

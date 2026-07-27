@@ -1037,6 +1037,41 @@ window.__horizonCaps = (function () {
       "text-fit": function () { return (CSS.supports("text-fit: scale-inline") || ("textFit" in document.documentElement.style)); },
       "css-random": function () { return CSS.supports("width: random(1px, 2px)"); },
       "speculation-rules": function () { return (typeof HTMLScriptElement !== "undefined" && HTMLScriptElement.supports && HTMLScriptElement.supports("speculationrules")); },
+      // ── added in the 2026-07-26 refresh ──
+      // No honest synchronous probe. img.sizes is an unvalidated reflected
+      // DOMString, so setting "auto" and reading it back returns "auto" in
+      // EVERY engine, supporting or not. Proving it properly means laying out
+      // a lazy <img> in a narrow box with straddling width descriptors and
+      // waiting on currentSrc, which is async and far too much machinery for a
+      // status chip. Same honest-false convention as jpeg-xl below.
+      "sizes-auto": function () { return (false); },
+      "gap-decorations": function () { return CSS.supports("row-rule: 1px solid red") || CSS.supports("row-rule-style: solid"); },
+      "border-shape": function () { return CSS.supports("border-shape: circle(50%)"); },
+      "heading-pseudo": function () { return CSS.supports("selector(:heading)"); },
+      "stretch-sizing": function () { return CSS.supports("width: stretch"); },
+      // Firefox 153 answers @supports for ::-webkit-scrollbar even though it
+      // only implements a subset, which is the whole point of the card: the
+      // probe tells you the selector parses, never that the styling lands.
+      "wk-scrollbar": function () { return CSS.supports("selector(::-webkit-scrollbar)"); },
+      "reference-target": function () { return (typeof ShadowRoot !== "undefined" && "referenceTarget" in ShadowRoot.prototype); },
+      "scoped-registries": function () {
+        if (typeof CustomElementRegistry === "undefined") return false;
+        try { return !!new CustomElementRegistry(); } catch (e) { return false; }
+      },
+      "wasm-jspi": function () { return (typeof WebAssembly !== "undefined" && typeof WebAssembly.Suspending === "function"); },
+      // No synchronous probe exists for either of these, so they follow the
+      // same honest-false convention as jpeg-xl and route-matching above: a
+      // bad import-attribute type rejects the module load asynchronously, and
+      // an ML-DSA key generation is a Promise. Better a chip that reads "no"
+      // than a probe that pretends to know. The card text carries the status.
+      "import-text": function () { return (false); },
+      "pq-webcrypto": function () { return (false); },
+      "cpu-performance": function () { return ("cpuPerformance" in navigator); },
+      "container-timing": function () {
+        return (typeof PerformanceObserver !== "undefined" &&
+                Array.isArray(PerformanceObserver.supportedEntryTypes) &&
+                PerformanceObserver.supportedEntryTypes.indexOf("container") !== -1);
+      },
     };
   var state = {};
   Object.keys(checks).forEach(function (k) { state[k] = sup(checks[k]); });
@@ -1078,6 +1113,16 @@ window.__horizonCaps = (function () {
       chips that quote Safari&apos;s team directly from
       <a href="https://webkit.org/standards-positions/" rel="external">webkit.org/standards-positions</a>,
       so Safari answers &quot;will Safari ever do this&quot; instead of me inferring it.
+    </p>
+    <p class="note">
+      <strong>Last swept 2026-07-26</strong>, against Chrome&nbsp;149&ndash;152, Safari&nbsp;27
+      beta (WWDC26), and Firefox&nbsp;152&ndash;153. A page like this rots in two directions
+      and only one of them is obvious: features arrive, and features I already wrote up
+      quietly change status underneath me. This sweep moved four cards
+      (<code>InstallEvent.addRoutes()</code>, compression dictionaries,
+      <code>appearance: base-select</code>, Temporal) and demoted one of them off
+      &quot;shipped on the site&quot; entirely, which is the more interesting half. Dates
+      here are when I checked, never when I guessed.
     </p>
 
     <div class="cap-strip" id="caps" aria-label="feature support in your browser"></div>
@@ -1511,7 +1556,7 @@ pointerout   -&gt; hidePopover()
     <section class="demo" data-cap="base-select">
       <h2>
         <span>appearance: base-select <span class="mono">/ customizable &lt;select&gt;</span></span>
-        <span class="stat chrome">Chrome 135 &middot; Safari 27 beta &middot; FF flag</span>
+        <span class="stat cross">Chrome 135 &middot; Safari 27 beta &middot; FF 153 parser</span>
       </h2>
       <p class="note">
         For two decades the <code>&lt;select&gt;</code> popup has been a sealed
@@ -1547,7 +1592,13 @@ pointerout   -&gt; hidePopover()
         Chrome shipped it (~m135) and <strong>Safari&nbsp;27</strong> now ships it
         too (<a href="https://github.com/WebKit/standards-positions/issues/386" rel="external">WebKit #386</a>).
         Firefox still renders the native widget, so keep it progressive: wrap the
-        enhancement in <code>@supports (appearance: base-select)</code>. WebKit&apos;s
+        enhancement in <code>@supports (appearance: base-select)</code>. Gecko is moving
+        though, and the tell is a parser change: Firefox&nbsp;153 now parses <em>all</em>
+        nested elements inside a <code>&lt;select&gt;</code> into the DOM rather than
+        discarding everything that is not an <code>&lt;option&gt;</code>,
+        <code>&lt;optgroup&gt;</code>, or <code>&lt;hr&gt;</code>. That is groundwork with
+        no user-visible effect, and it is exactly what shipping this later requires.
+        WebKit&apos;s
         <strong>golden rule</strong>: always give every <code>&lt;option&gt;</code>
         real text content or an accessible text attribute, because a base-select
         stays a genuine native <code>&lt;select&gt;</code> underneath (keyboard,
@@ -1987,7 +2038,7 @@ ctx.drawElementImage(el, 0, 0);            // &lt;- the new primitive (el has la
     <section class="demo" data-cap="jpeg-xl">
       <h2>
         <span>JPEG XL <span class="mono">image/jxl</span></span>
-        <span class="stat contested">Safari &middot; Chrome 145 flag &middot; Firefox 152 flag</span>
+        <span class="stat contested">Safari &middot; Chrome 145 flag &middot; Firefox 153 Nightly</span>
       </h2>
       <p class="note">
         The format the photo pipeline actually wants: smaller than AVIF at the
@@ -2068,8 +2119,9 @@ cjxl -q 90 -e 7 &lt;stem&gt;.png &lt;stem&gt;.jxl</pre>
       <p class="unsupported">
         Nothing to decode live regardless of your browser, this card is a
         static mock by design. To actually <em>view</em> a <code>.jxl</code>
-        today you need Safari 16.4+; in Chrome&nbsp;145+ or Firefox&nbsp;152+ enable
-        <code>chrome://flags#enable-jxl-image-format</code> (or the Firefox Labs pref).
+        today you need Safari 16.4+; in Chrome&nbsp;145+ enable
+        <code>chrome://flags#enable-jxl-image-format</code>, and in Firefox&nbsp;153
+        the <code>image.jxl.enabled</code> pref is on by default in Nightly.
       </p>
     </section>
 
@@ -2736,14 +2788,18 @@ myButton.onclick = async () =&gt; {
     <section class="demo" data-cap="css-if">
       <h2>
         <span>if() &amp; sibling-index() <span class="mono">/ CSS Values 5</span></span>
-        <span class="stat trial">Chrome 137+ &middot; flag</span>
+        <span class="stat trial">Chrome 137+ &middot; FF 153 flag</span>
       </h2>
       <p class="note">
         Two bleeding-edge CSS primitives: <code>if()</code> for inline conditionals
         (<code>style()</code>/<code>media()</code> queries as values) and
         <code>sibling-index()</code>, which yields an element&apos;s position among its
         siblings, so a staggered animation needs <em>no</em> per-item variables.
-        Each row below delays by <code>sibling-index() &times; 90ms</code> (reload to replay):
+        The two are drifting apart in status: Chrome ships the sibling functions default-on
+        and keeps <code>if()</code> experimental, and Firefox&nbsp;153 added
+        <code>sibling-index()</code> / <code>sibling-count()</code> behind
+        <code>layout.css.tree-counting-functions.enabled</code> with no <code>if()</code> in
+        sight. Each row below delays by <code>sibling-index() &times; 90ms</code> (reload to replay):
       </p>
       <ul class="si-list"><li>row one</li><li>row two</li><li>row three</li><li>row four</li><li>row five</li></ul>
       <p class="replaces">
@@ -2821,18 +2877,27 @@ myButton.onclick = async () =&gt; {
     <section class="demo shipped" data-cap="temporal">
       <h2>
         <span>Temporal <span class="mono">/ the date/time rewrite</span></span>
-        <span class="stat cross">Chrome 144 &middot; FF 139 &middot; Safari TP</span>
+        <span class="stat cross">ES2026 &middot; Chrome 144 &middot; FF 139 &middot; no Safari</span>
       </h2>
       <p class="ship-tag">✓ shipped on the site</p>
       <p class="note">
         The long-awaited replacement for <code>Date</code>: immutable objects,
-        first-class time zones and calendars, no more month-zero footguns. Live
-        output from <code>Temporal.Now.zonedDateTimeISO()</code> in your browser:
+        first-class time zones and calendars, no more month-zero footguns. It reached
+        <strong>TC39 stage&nbsp;4</strong> in March&nbsp;2026, so it is part of the
+        ECMAScript&nbsp;2026 language rather than a proposal. Shipping is a separate
+        question from standardising, and Safari is the reminder: Blink and Gecko both
+        shipped it in spring&nbsp;2026, Safari&nbsp;27 does <em>not</em> include it, and it
+        remains flag-gated in Technology Preview. Live output from
+        <code>Temporal.Now.zonedDateTimeISO()</code> in your browser:
       </p>
       <div class="tmp-out" id="tmp-out">checking for Temporal&hellip;</div>
       <p class="replaces">
         On the site: photo &quot;uploaded&quot; stamps and serendipity event times become
-        zone-correct and DST-safe without a date library.
+        zone-correct and DST-safe without a date library. This is the one card on the page
+        that breaks the two-engine rule on purpose, and the reason it gets away with it is
+        that every use is a progressive enhancement over a working <code>Date</code> path:
+        the taskbar clock and the Notepad F5 stamp both try <code>Temporal</code> and fall
+        back. Safari visitors get the fallback and notice nothing.
       </p>
       <p class="unsupported">Your browser doesn&apos;t expose <code>Temporal</code> yet, the box above says so.</p>
     </section>
@@ -3025,6 +3090,299 @@ myButton.onclick = async () =&gt; {
       <p class="unsupported">Your browser doesn&apos;t support <code>random()</code> yet, so a fixed fallback value is used.</p>
     </section>
 
+    <!-- ═════════════════════════════════════════════════════════════════
+         Added in the 2026-07-26 refresh. Everything below this marker came
+         out of Chrome 149-152, Safari 27 beta (WWDC26), and Firefox 152-153.
+         ═════════════════════════════════════════════════════════════════ -->
+
+    <!-- ───────────────────── img sizes=auto ───────────────────── -->
+    <section class="demo" data-cap="sizes-auto">
+      <h2>
+        <span>sizes=&quot;auto&quot; <span class="mono">on lazy images</span></span>
+        <span class="stat cross">Chrome 126 &middot; FF 150 &middot; Safari 27 beta</span>
+      </h2>
+      <p class="note">
+        A responsive-images <code>sizes</code> attribute is normally a promise you
+        make at authoring time: <em>this image will render about this wide</em>, written
+        as media queries the browser trusts before layout exists.
+        <code>sizes="auto"</code> deletes the promise. Because a
+        <code>loading="lazy"</code> image is fetched after layout has already run, the
+        browser knows the tile&apos;s real width and picks from <code>srcset</code>
+        against the measured box. The attribute only works on lazy images, which is
+        the constraint that makes it sound rather than a shortcut.
+      </p>
+      <p class="replaces">
+        On the site: the photo grid picks its tier by <em>viewport</em> today, a
+        <code>&lt;source media="(max-width: 560px)"&gt;</code> that swaps the 600px square
+        for the 400px mobile AVIF. That breakpoint is a hand-guess about how wide a tile
+        ends up in a 3&times;3 contact sheet, and it is wrong in every window the guess
+        did not anticipate: a resized desktop window, the Run palette&apos;s photo
+        preview, a tablet in portrait. Width descriptors plus <code>sizes="auto"</code>
+        would replace the guess with the measurement. Two tiers bounds the prize (there
+        are only so many wrong answers available), so this is accuracy rather than
+        bytes. It degrades perfectly: an engine that ignores <code>sizes</code> falls
+        back to the <code>&lt;source&gt;</code> ladder already there, which is why this
+        is the closest thing on this page to a graduation candidate.
+      </p>
+      <p class="unsupported">
+        The chip above always reads &quot;no,&quot; and that is a limitation of the probe
+        rather than a claim about your browser. <code>img.sizes</code> is an unvalidated
+        reflected string, so assigning <code>"auto"</code> and reading it back returns
+        <code>"auto"</code> everywhere; an honest test has to lay out a lazy image and wait
+        on <code>currentSrc</code>, which is more machinery than a chip deserves. Chrome
+        126+ and Firefox 150+ have it; Safari 27 beta adds it.
+      </p>
+    </section>
+
+    <!-- ───────────────────── gap decorations ───────────────────── -->
+    <section class="demo" data-cap="gap-decorations">
+      <h2>
+        <span>Gap decorations <span class="mono">column-rule / row-rule</span></span>
+        <span class="stat chrome">Chrome 149 &middot; Safari TP &middot; FF no</span>
+      </h2>
+      <p class="note">
+        <code>column-rule</code> has drawn a line between multicol columns since forever.
+        Gap decorations extend it to grid and flex, and add <code>row-rule</code> for the
+        horizontal gaps, so a separator between items stops requiring a border on each
+        item or an empty pseudo-element per seam. The rules paint in the gap that already
+        exists, so nothing about the layout moves. The grid below draws both:
+      </p>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;column-rule:1px solid oklch(62% 0.02 258);row-rule:1px solid oklch(62% 0.02 258);margin-top:8px;font:9pt Tahoma,sans-serif;text-align:center">
+        <span>IMG_0421</span><span>IMG_0422</span><span>IMG_0423</span>
+        <span>IMG_0424</span><span>IMG_0425</span><span>IMG_0426</span>
+      </div>
+      <p class="replaces">
+        On the site: the homepage photo grid is a literal contact sheet, and a contact
+        sheet has seams. Those seams are per-tile frames today, which means nine borders
+        drawing what is really four lines, and it means the outer edge of the sheet is
+        drawn by the same rule that draws the inside. <code>row-rule</code> and
+        <code>column-rule</code> separate the two ideas: the frame belongs to the photo,
+        the seam belongs to the sheet. Chrome-only for now, so the per-tile borders stay.
+      </p>
+      <p class="unsupported">Your browser doesn&apos;t support gap decorations, so the grid above shows no seams.</p>
+    </section>
+
+    <!-- ───────────────────── border-shape ───────────────────── -->
+    <section class="demo" data-cap="border-shape">
+      <h2>
+        <span>border-shape <span class="mono">non-rectangular borders</span></span>
+        <span class="stat chrome">Chrome 147 &middot; Safari/FF no</span>
+      </h2>
+      <p class="note">
+        <code>corner-shape</code> (above) bends the corners of a rectangle.
+        <code>border-shape</code> replaces the rectangle: it sets the geometry of the
+        border box itself, so the border, the border image, the focus ring, and the
+        shadow all follow an arbitrary <code>shape()</code>, <code>polygon()</code>, or
+        <code>circle()</code>. That is the part <code>clip-path</code> never did.
+        Clipping cuts the box and takes the border with it, leaving you to fake a stroke;
+        <code>border-shape</code> keeps a real border and clips only the inside.
+      </p>
+      <p class="replaces">
+        On the site: honestly, close to nothing, and that is worth saying out loud.
+        Luna is rectilinear on purpose. A window that is not a rectangle is not a window,
+        it is a skin, and the whole point of the resto-mod is that the chrome stays
+        period-correct. Where it could matter is the focus ring: the site&apos;s bevels
+        are stacked <code>box-shadow</code>s, and an outline around a bevelled control
+        currently traces the box rather than the bevel. Filed next to
+        <code>corner-shape</code> as the other half of that spec, and parked.
+      </p>
+      <p class="unsupported">Your browser doesn&apos;t support <code>border-shape</code> yet.</p>
+    </section>
+
+    <!-- ───────────────────── :heading ───────────────────── -->
+    <section class="demo" data-cap="heading-pseudo">
+      <h2>
+        <span>:heading <span class="mono">and :heading()</span></span>
+        <span class="stat trial">Safari 27 beta &middot; FF 142 flag &middot; Chrome no</span>
+      </h2>
+      <p class="note">
+        <code>:heading</code> matches any of <code>h1</code> through <code>h6</code>, and
+        <code>:heading(2, 3)</code> matches the levels you name. Selectors&nbsp;5, shipped
+        first in Safari&nbsp;27 beta, behind <code>layout.css.heading-selector.enabled</code>
+        in Firefox, absent in Chrome.
+      </p>
+      <p class="replaces">
+        On the site: every garage page opens its stylesheet with some variant of
+        <code>h1, h2, h3</code> repeated across a handful of rules, because Luna styles
+        headings as a family and then varies the size. On a page whose CSS ships inline
+        in the HTML, that repetition is real bytes on every request. It is a small win
+        per rule and a boring one, which is exactly the kind that compounds across
+        fifteen garage pages. Waiting on a second engine.
+      </p>
+      <p class="unsupported">Your browser doesn&apos;t support <code>:heading</code>; the selector never matches.</p>
+    </section>
+
+    <!-- ───────────────────── width: stretch ───────────────────── -->
+    <section class="demo" data-cap="stretch-sizing">
+      <h2>
+        <span>width: stretch <span class="mono">sizing keyword</span></span>
+        <span class="stat chrome">Chrome &middot; Safari 27 beta &middot; FF prefixed</span>
+      </h2>
+      <p class="note">
+        <code>width: 100%</code> resolves against the containing block and then adds your
+        margins on top, which is why a full-width element with side margins overflows.
+        <code>stretch</code> fills the available space and applies the result to the
+        <em>margin</em> box, so the margins come out of the width instead of adding to it.
+        It standardises two old prefixes that did the same job:
+        <code>-webkit-fill-available</code> and <code>-moz-available</code>. Chromium
+        shipped it first, Safari&nbsp;27 beta unprefixes it, Firefox still answers only to
+        <code>-moz-available</code>.
+      </p>
+      <p class="replaces">
+        On the site: the <code>calc(100% - 2 * var(--pad))</code> pattern shows up wherever
+        a pane has to fill its window and keep its inset, and every one of those is a
+        subtraction the browser could do. Once Firefox unprefixes, this collapses a
+        family of arithmetic into one keyword.
+      </p>
+      <p class="unsupported">Your browser doesn&apos;t support the unprefixed <code>stretch</code> keyword.</p>
+    </section>
+
+    <!-- ───────────────────── ::-webkit-scrollbar in Firefox ───────────────────── -->
+    <section class="demo" data-cap="wk-scrollbar">
+      <h2>
+        <span>::-webkit-scrollbar <span class="mono">the compat surrender</span></span>
+        <span class="stat trial">Chromium &middot; Safari &middot; FF 153 subset</span>
+      </h2>
+      <p class="note">
+        Firefox&nbsp;153 began implementing a limited subset of
+        <code>::-webkit-scrollbar</code>. Not because it is a good API (it is a vendor
+        prefix from 2009 that never became a standard), but because enough of the web
+        styles scrollbars through it that ignoring it was the bigger compat problem.
+        The subset is deliberately narrow: a rule with a non-zero
+        <code>width</code>/<code>height</code> disables overlay scrollbars, and
+        <code>display: none</code> behaves like <code>scrollbar-width: none</code>. The
+        standard <code>scrollbar-width</code> and <code>scrollbar-color</code> remain
+        the actual answer.
+      </p>
+      <p class="replaces">
+        On the site: <code>nav.js</code> paints a custom XP scrollbar through the
+        <code>::-webkit-scrollbar</code> family, since a Luna scrollbar needs a raised
+        3D thumb and stepper arrows that <code>scrollbar-color</code> cannot express.
+        Firefox visitors get the standards-track properties and a plain scrollbar. This
+        change does <em>not</em> fix that, and the card is here mostly as a warning about
+        its own chip: <code>@supports</code> now answers yes in Firefox for a selector
+        whose styling still mostly does not land, so feature-detecting it tells you the
+        selector parsed and nothing about whether the thumb rendered.
+      </p>
+      <p class="unsupported">Your browser doesn&apos;t recognise the <code>::-webkit-scrollbar</code> selector at all.</p>
+    </section>
+
+    <!-- ───────────────────── Reference Target ───────────────────── -->
+    <section class="demo" data-cap="reference-target">
+      <h2>
+        <span>Reference Target <span class="mono">cross-root ARIA</span></span>
+        <span class="stat chrome">Chrome 151 &middot; Safari/FF no</span>
+      </h2>
+      <p class="note">
+        The oldest real hole in shadow DOM: an ID reference cannot cross the shadow
+        boundary. A <code>&lt;label for="x"&gt;</code> outside a component can never
+        reach the <code>&lt;input id="x"&gt;</code> the component hides, and the same
+        breaks <code>aria-labelledby</code>, <code>aria-controls</code>,
+        <code>popovertarget</code>, and <code>commandfor</code>. The usual escape is to
+        give up encapsulation. Reference Target lets the component nominate one inner
+        element as the thing outside references resolve to, declaratively via
+        <code>shadowrootreferencetarget</code> on the template or imperatively via
+        <code>ShadowRoot.referenceTarget</code>, so the reference lands and the internals
+        stay private.
+      </p>
+      <p class="replaces">
+        On the site: this is the missing piece under the declarative-shadow-DOM card
+        above. An <code>&lt;xp-window&gt;</code> that encapsulates its own title bar is
+        appealing right up to the moment something outside it needs to label or control
+        that window, and today the answer is to stop encapsulating. It is Chrome-only and
+        the accessibility of the current markup is already fine, so this stays a
+        prerequisite I am watching rather than a change I want.
+      </p>
+      <p class="unsupported">No <code>referenceTarget</code> on <code>ShadowRoot</code> here.</p>
+    </section>
+
+    <!-- ───────────────────── scoped custom element registries ───────────────────── -->
+    <section class="demo" data-cap="scoped-registries">
+      <h2>
+        <span>Scoped custom element registries</span>
+        <span class="stat cross">Chrome 146 &middot; Safari 26 &middot; FF no</span>
+      </h2>
+      <p class="note">
+        <code>customElements.define()</code> writes into one global map keyed by tag name,
+        so two copies of a component library on one page fight over
+        <code>&lt;my-button&gt;</code> and the loser throws. <code>new
+        CustomElementRegistry()</code> makes a registry you hand to
+        <code>attachShadow({ registry })</code>, so definitions apply to that subtree
+        alone and identical tag names coexist. In two engines already, which is further
+        along than most of this page; Firefox has not shipped it. (One sharp edge: a
+        scoped registry rejects the <code>extends</code> option, so customized built-ins
+        stay global.)
+      </p>
+      <p class="replaces">
+        On the site: nothing today, because the site defines no custom elements at all,
+        and that is the interesting part. It is on this page as a precondition. The
+        reason the XP chrome is server-rendered markup plus one shared
+        <code>nav.js</code> instead of a component library is partly that web components
+        have historically been a worse deal than the thing they replace. Scoped
+        registries and Reference Target are the two repairs that would change that
+        arithmetic, and they are both landing at once. Worth knowing before the next
+        rewrite tempts anyone.
+      </p>
+      <p class="unsupported">No <code>CustomElementRegistry</code> constructor here.</p>
+    </section>
+
+    <!-- ───────────────────── Wasm JSPI ───────────────────── -->
+    <section class="demo" data-cap="wasm-jspi">
+      <h2>
+        <span>WebAssembly JSPI <span class="mono">JS Promise Integration</span></span>
+        <span class="stat cross">Chrome &middot; FF 153 &middot; Safari 27 beta</span>
+      </h2>
+      <p class="note">
+        Wasm code is synchronous and the web is not, so any Wasm module that wants to
+        <code>fetch</code> has had to be rewritten inside out (Emscripten&apos;s
+        Asyncify) at real cost in size and speed. JSPI lets a Wasm stack
+        <em>suspend</em> on a JavaScript Promise and resume when it settles:
+        <code>WebAssembly.Suspending</code> wraps the async import,
+        <code>WebAssembly.promising</code> wraps the export, and the C code in between
+        keeps its blocking call. Firefox&nbsp;153 turned it on by default and
+        Safari&nbsp;27 beta implements it, so this went cross-engine in about six weeks
+        and is an Interop&nbsp;2026 focus area.
+      </p>
+      <p class="replaces">
+        On the site: no Wasm ships here, so this changes nothing directly. It matters
+        one level down. The photo pipeline&apos;s encoders (<code>zenc</code> wrapping
+        zenjpeg, <code>avifenc</code>) are native binaries that run on my machine at
+        build time; the reason they are not a browser-side tool is the cost of making a
+        synchronous codec behave in an async page. JSPI is what would make a
+        &quot;drop a HIF here and watch it encode&quot; page cheap to build. Filed
+        against the encoding study rather than the homepage.
+      </p>
+      <p class="unsupported">No <code>WebAssembly.Suspending</code> here, so JSPI is unavailable.</p>
+    </section>
+
+    <!-- ───────────────────── text module imports ───────────────────── -->
+    <section class="demo" data-cap="import-text">
+      <h2>
+        <span>Text module imports <span class="mono">with { type: &quot;text&quot; }</span></span>
+        <span class="stat trial">TC39 stage 3 &middot; Chrome &middot; FF 153 flag</span>
+      </h2>
+      <p class="note">
+        Import attributes gave JSON modules a safe syntax
+        (<code>with { type: "json" }</code>); the text proposal adds the other obvious
+        one. <code>import banner from "./banner.txt" with { type: "text" }</code> hands
+        you the file as a string, with the type asserted at load time so a server that
+        answers with something else fails the import instead of executing it. That
+        assertion is the entire security argument for import attributes, and it is why
+        this is a language feature rather than a bundler trick. Firefox&nbsp;153 has it
+        behind <code>javascript.options.experimental.import_text</code>.
+      </p>
+      <p class="replaces">
+        On the site: <code>/writing</code> is plain <code>.txt</code> files plus a
+        <code>posts.json</code> registry, and the worker reads each one and seeds it into
+        a Notepad <code>&lt;textarea&gt;</code>. Today that is a fetch and a string. As a
+        text module it would be an import the bundler can see, which matters because the
+        worker is bundled at deploy: a post would become a build-time dependency instead
+        of a runtime read, and a missing file would fail the deploy rather than the
+        request. Tempting. Also a real coupling change, so it waits until it is not
+        flag-gated.
+      </p>
+    </section>
+
     <!-- ───────────────────── Element.moveBefore() ───────────────────── -->
     <section class="demo" data-cap="move-before">
       <h2>
@@ -3156,23 +3514,28 @@ myButton.onclick = async () =&gt; {
     </section>
 
     <!-- ───────────────────── Service Worker static routing ───────────────────── -->
-    <section class="demo shipped" data-cap="sw-static-routing">
+    <section class="demo" data-cap="sw-static-routing">
       <h2>
         <span>SW static routing <span class="mono">InstallEvent.addRoutes()</span></span>
-        <span class="stat chrome">Chrome &middot; Gecko positive &middot; WebKit no-signal</span>
+        <span class="stat cross">Chrome &middot; Safari 27 beta &middot; Gecko positive</span>
       </h2>
-      <p class="ship-tag">✓ shipped on the site</p>
       <p class="note">
         Declare routing rules at install time so the browser can <em>skip booting the service
         worker entirely</em> for paths that always go the same place (straight to network or
-        straight to cache), shaving the SW startup cost off those requests.
+        straight to cache), shaving the SW startup cost off those requests. Safari&nbsp;27 beta
+        implements it, which moves this from Chrome-only to two engines.
       </p>
       <p class="replaces">
-        On the site: live now. <code>sw.js</code> declares static routes that send
-        <code>/</code>, the crawlers, and the JSON APIs straight to the network without booting
-        the worker (they were network-only anyway, so the SW was waking just to no-op). Same
-        caching policy as before, minus the boot latency. The biggest win lands on <code>/</code>,
-        which is no-store + hit every visit.
+        On the site: <strong>it used to be, and the feature outlived the thing it optimised.</strong>
+        <code>sw.js</code> did declare static routes sending <code>/</code>, the crawlers, and
+        the JSON APIs straight to network without booting the worker. Then the service worker
+        itself retired in build&nbsp;v136 (July&nbsp;2026): immutable content-addressed assets,
+        bfcache, and speculation-rules prerender already made repeat visits instant, so the
+        SW&apos;s remaining job was insurance priced at a cache-version ritual per deploy plus a
+        second poisonable cache. <code>sw.js</code> is now a fifteen-line unregister stub, and
+        the routes went with it. Worth keeping the card, because the lesson is the useful part:
+        static routing made a service worker cheaper to keep, and the better answer turned out
+        to be not having one. A feature that optimises a layer is not an argument for the layer.
       </p>
       <p class="unsupported">No <code>addRoutes()</code> on <code>InstallEvent</code> here.</p>
     </section>
@@ -3208,11 +3571,32 @@ myButton.onclick = async () =&gt; {
         links to prefetch or fully <em>prerender</em> ahead of the click, so the next page is
         already painted by the time you navigate: the trick behind McMaster-Carr feeling
         instant.
+        <strong>Chrome&nbsp;151</strong> adds a <code>form_submission</code> field to prerender
+        rules: an ordinary form submission could never activate a prerender, because it carries
+        extra navigation state the speculation was not prepared for, so a GET search form had to
+        be declared as such up front. GET only.
+        A third action, <code>prerender_until_script</code>, is still origin-trial-only at
+        <strong>152</strong> (the trial opened at Chrome&nbsp;144 in January&nbsp;2026 and was
+        extended through&nbsp;154). It prefetches the document and starts rendering, so the preload
+        scanner pulls stylesheets and images, then parks at the first <code>&lt;script&gt;</code>
+        and executes nothing until the click lands. That buys most of a prerender&apos;s head start
+        while leaving analytics, ads, and anything else that mutates client state unrun on a page
+        nobody has asked for yet. The cost is that such a page can&apos;t read
+        <code>document.prerendering</code>, never gets a <code>prerenderingchange</code> event, and
+        can&apos;t be promoted to a full prerender later.
       </p>
       <p class="replaces">
         On the site: live already. The homepage and garage pages prerender internal links
         (eagerness &quot;moderate&quot;, minus the live <code>/around</code> + <code>/whoareyou</code>
-        crawlers), which is most of why navigation here feels instant. Cloudflare sells the managed
+        crawlers), which is most of why navigation here feels instant. That one word sets two limits
+        worth naming out loud. Chrome caps &quot;moderate&quot; at 2&nbsp;prefetches and
+        2&nbsp;prerenders and evicts FIFO, so at any moment this site is speculating on the last two
+        links you lingered over and no more. And &quot;hover for 200ms&quot; means nothing on a
+        touchscreen, so phones get viewport heuristics instead: since August&nbsp;2025 Chrome
+        speculates 500ms after you stop scrolling, for anchors sitting within 30% of the vertical
+        distance from your last tap that are at least half the size of the largest anchor on screen.
+        Same rule block, two quite different machines underneath, and the phone one is the half I
+        can least predict from a desk. Cloudflare sells the managed
         version as <a href="https://developers.cloudflare.com/speed/optimization/content/speed-brain/" rel="external">Speed&nbsp;Brain</a>,
         which injects a hosted rule set from the edge via a <code>Speculation-Rules</code> response
         header; I hand-write the inline block instead, to keep eagerness where I want it and to skip
@@ -3225,7 +3609,7 @@ myButton.onclick = async () =&gt; {
     <section class="demo" data-cap="compression-dict">
       <h2>
         <span>Compression dictionaries <span class="mono">dcb / dcz</span></span>
-        <span class="stat chrome">Chrome 130 &middot; Firefox building &middot; transport-level</span>
+        <span class="stat cross">Chrome 130 &middot; Firefox 153 &middot; transport-level</span>
       </h2>
       <p class="note">
         Use a file you&apos;ve already downloaded (or a shipped static dictionary) as the
@@ -3235,6 +3619,8 @@ myButton.onclick = async () =&gt; {
         it negotiates entirely through <code>Accept-Encoding: dcb/dcz</code> +
         <code>Use-As-Dictionary</code> / <code>Available-Dictionary</code> headers
         (Chrome/Edge&nbsp;130+), so there&apos;s no chip above.
+        <strong>Firefox&nbsp;153</strong> (July&nbsp;2026) enabled it by rollout, so this is
+        now two engines rather than one and a plan.
       </p>
       <p class="replaces">
         On the site: marginal, honestly. The homepage is ~22&nbsp;KB brotli and
@@ -3322,6 +3708,117 @@ myButton.onclick = async () =&gt; {
       </p>
       <p class="unsupported">No <code>navigator.gpu</code> in this browser.</p>
     </section>
+
+    <!-- ───────────────────── post-quantum WebCrypto ───────────────────── -->
+    <section class="demo" data-cap="pq-webcrypto">
+      <h2>
+        <span>Post-quantum WebCrypto <span class="mono">ML-KEM &middot; ML-DSA &middot; X-Wing</span></span>
+        <span class="stat trial">Origin trial Ch151 &middot; not shipped</span>
+      </h2>
+      <p class="note">
+        The Web Cryptography API is getting the NIST post-quantum primitives natively:
+        <strong>ML-KEM</strong> (key encapsulation, formerly Kyber),
+        <strong>ML-DSA</strong> (signatures, formerly Dilithium), the
+        <strong>X-Wing</strong> hybrid key exchange, and ChaCha20-Poly1305 alongside them.
+        Origin trial in Chrome&nbsp;151. The two halves carry very different urgency, and
+        conflating them is the usual mistake. Key exchange is urgent because of
+        harvest-now-decrypt-later: traffic recorded today is decryptable the day a
+        cryptographically relevant quantum computer exists, so hybrid key agreement had to
+        arrive early. Signatures are not, because a signature only has to resist forgery
+        during the window it is trusted in, and nobody can retroactively forge one.
+      </p>
+      <p class="replaces">
+        On the site: AadharshBot signs its outbound requests with <strong>Ed25519</strong>
+        per RFC&nbsp;9421, and publishes the public half as a JWKS at
+        <a href="/.well-known/http-message-signatures-directory">/.well-known/http-message-signatures-directory</a>.
+        ML-DSA is the thing that eventually replaces that key. Eventually is doing real
+        work in that sentence: a bot signature covers one request and expires in seconds,
+        which puts it squarely in the &quot;not urgent&quot; column above, and the Web Bot
+        Auth draft pins Ed25519 today, so switching unilaterally would produce a signature
+        no verifier recognises. The half that already affects visitors is the key exchange,
+        and it is not mine to ship: TLS terminates at Cloudflare&apos;s edge, which has
+        been negotiating hybrid post-quantum key agreement for a while now.
+        <a href="/whoareyou">/whoareyou</a> prints the <code>kex</code> field from
+        <code>/cdn-cgi/trace</code>, so you can read what your own connection actually
+        negotiated rather than take my word for it.
+      </p>
+    </section>
+
+    <!-- ───────────────────── navigator.cpuPerformance ───────────────────── -->
+    <section class="demo" data-cap="cpu-performance">
+      <h2>
+        <span>navigator.cpuPerformance <span class="mono">device tier</span></span>
+        <span class="stat chrome">Chrome 152 &middot; Safari/FF no</span>
+      </h2>
+      <p class="note">
+        A read-only integer from 1 (weak) to 4 (fast), with 0 meaning the browser could not
+        classify the device. It exists because the alternatives are worse: sites currently
+        infer device class from <code>hardwareConcurrency</code>, from the user-agent
+        string, or from timing a synthetic benchmark during page load, and all three are
+        some mix of inaccurate and user-hostile. Coarse buckets also leak far less
+        fingerprinting surface than a core count. Chrome&nbsp;152; no signal from the other
+        engines, and a permission-free hardware read is exactly the kind of thing they tend
+        to push back on. Your device reports:
+      </p>
+      <p><output id="cpu-out" class="mono" style="display:block;margin-top:6px;font:9pt 'Courier New',monospace">reading&hellip;</output></p>
+      <p class="replaces">
+        On the site: the site already makes this judgement, just blindly. The tooltip layer
+        toggles <code>will-change: transform</code> on and off around the hover lifecycle
+        because leaving a compositor layer allocated measurably hurts Low Power mode and
+        variable-refresh displays, and the <code>@property</code> gradient on this very page
+        pauses itself when off-screen because it repaints every frame. Those are both
+        guesses at a device tier, applied to every visitor. A real tier would let the
+        expensive effects stay off on a 1 and stop apologising on a 4. Single-engine, and
+        <code>prefers-reduced-motion</code> plus the existing IntersectionObserver already
+        cover the honest majority of the win, so this parks.
+      </p>
+      <p class="unsupported">Your browser doesn&apos;t expose <code>navigator.cpuPerformance</code>.</p>
+    </section>
+
+    <!-- ───────────────────── Container Timing ───────────────────── -->
+    <section class="demo" data-cap="container-timing">
+      <h2>
+        <span>Container Timing <span class="mono">containertiming attribute</span></span>
+        <span class="stat trial">Chrome flag &middot; WICG</span>
+      </h2>
+      <p class="note">
+        Largest Contentful Paint tells you when the single biggest element painted, which is
+        a page-level number that a component cannot ask about. Container Timing lets you mark
+        a subtree with <code>containertiming</code> and get a
+        <code>PerformanceObserver</code> entry when <em>that section</em> finishes its
+        initial paint, the way <code>elementtiming</code> works for one element. Behind the
+        experimental flag in Chrome; a WICG proposal rather than a shipped feature.
+      </p>
+      <p class="replaces">
+        On the site: the homepage&apos;s LCP is a photo tile, so LCP is already roughly
+        &quot;when did the grid start.&quot; What it cannot answer is when the grid
+        <em>finished</em>, and that is the number that matters here, because the worker
+        server-renders twelve tiles into the HTML and the interesting failure is nine of
+        them arriving fast while three straggle. That distinction is invisible to LCP and
+        would be one <code>containertiming</code> attribute on
+        <code>&lt;section class="photos"&gt;</code>. The same applies to the now-playing
+        list, which is the other server-rendered chunk. Genuinely useful, genuinely
+        single-engine, and measurement rather than user-facing behaviour, so it costs
+        nothing to wait.
+      </p>
+      <p class="unsupported">No <code>container</code> entry type in this browser&apos;s <code>PerformanceObserver</code>.</p>
+    </section>
+
+    <script>
+      // cpuPerformance readout: a plain synchronous property read, so no probe
+      // dance. 0 means the browser has the API but declined to classify.
+      (function () {
+        var out = document.getElementById("cpu-out");
+        if (!out) return;
+        if (!("cpuPerformance" in navigator)) {
+          out.textContent = "navigator.cpuPerformance is not available in this browser.";
+          return;
+        }
+        var t = navigator.cpuPerformance;
+        var names = { 0: "unknown (the browser declined to classify)", 1: "1 · low", 2: "2 · mid", 3: "3 · high", 4: "4 · fastest" };
+        out.textContent = "navigator.cpuPerformance = " + t + "  →  " + (names[t] || "unrecognised tier");
+      })();
+    </script>
 
     <script>
       // moveBefore reparent demo + Local Font Access enumeration.
@@ -3484,7 +3981,7 @@ myButton.onclick = async () =&gt; {
 
     <footer>
       <p>&larr; back to the <a href="/garage">garage</a> &middot; <a href="/">aadhar.sh</a></p>
-      <p><small>&copy; 2026 Aadharsh Pannirselvam &middot; built in the open &middot; triangulated from chromestatus.com + chrome://flags (Canary) + webkit.org/standards-positions</small></p>
+      <p><small>&copy; 2026 Aadharsh Pannirselvam &middot; built in the open &middot; triangulated from chromestatus.com + chrome://flags (Canary) + webkit.org/standards-positions &middot; last swept 2026-07-26</small></p>
     </footer>
 
     <hr>
@@ -3558,6 +4055,19 @@ myButton.onclick = async () =&gt; {
     "text-fit": "text-fit",
     "css-random": "random()",
     "speculation-rules": "speculation",
+    "sizes-auto": "sizes=auto",
+    "gap-decorations": "gap decorations",
+    "border-shape": "border-shape",
+    "heading-pseudo": ":heading",
+    "stretch-sizing": "width:stretch",
+    "wk-scrollbar": "::-webkit-scrollbar",
+    "reference-target": "referenceTarget",
+    "scoped-registries": "scoped registries",
+    "wasm-jspi": "Wasm JSPI",
+    "import-text": "import type:text",
+    "pq-webcrypto": "ML-DSA",
+    "cpu-performance": "cpuPerformance",
+    "container-timing": "container timing",
   };
   var state = {};
   Object.keys(checks).forEach(function (k) { state[k] = sup(checks[k]); });
@@ -3740,6 +4250,6 @@ myButton.onclick = async () =&gt; {
 </script>
 <script src="/quiz.js" defer></script>
   <script src="/nav.js" defer></script>
-<!-- axp:shell --><nav id="axp-icons" aria-label="desktop shortcuts"><a class="axp-ico" title="writing, in flux" href="/writing" data-key="Notepad" style="left:9px;top:9px"><span class="ic note" aria-hidden="true"></span><span class="t">Notepad</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="GitHub (opens in a new tab)" href="https://github.com/oddharsh" data-key="GitHub" style="left:9px;top:95px"><span class="ic " style="background:linear-gradient(180deg,oklch(72% 0.05 255),oklch(60% 0.07 257))" aria-hidden="true">G</span><span class="t">GitHub</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Twitter (opens in a new tab)" href="https://x.com/oddhash" data-key="Twitter" style="left:9px;top:181px"><span class="ic " style="background:linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))" aria-hidden="true">@</span><span class="t">Twitter</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Instagram (opens in a new tab)" href="https://www.instagram.com/aadharsh.hif" data-key="Photos" style="left:9px;top:267px"><span class="ic " style="background:linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))" aria-hidden="true"><i class="cam" aria-hidden="true"></i></span><span class="t">Photos</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Curius (opens in a new tab)" href="https://curius.app/aadharsh-pannirselvam" data-key="Curius" style="left:9px;top:353px"><span class="ic " style="background:linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))" aria-hidden="true">C</span><span class="t">Curius</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Beli (opens in a new tab)" href="https://beliapp.com/users/aadharsh" data-key="Beli" style="left:9px;top:439px"><span class="ic " style="background:linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))" aria-hidden="true">B</span><span class="t">Beli</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Spotify (opens in a new tab)" href="https://open.spotify.com/user/aadharsh2010" data-key="Music" style="left:9px;top:525px"><span class="ic " style="background:linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))" aria-hidden="true">♪</span><span class="t">Music</span></a></nav><div id="axp-taskbar" role="navigation" aria-label="taskbar"><a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a><div id="axp-pins"><a class="axp-pin" title="prototypes + experiments" href="/garage"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="garageF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffb45a"/><stop offset=".5" stop-color="#ef8f24"/><stop offset="1" stop-color="#c2660a"/></linearGradient><linearGradient id="garageG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="garageS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#garageS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#garageF)" stroke="#8f4d06" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#garageG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><g fill="#fff"><rect x="14" y="5" width="4" height="22" rx="1.5"/><rect x="5" y="14" width="22" height="4" rx="1.5"/><rect x="14" y="5" width="4" height="22" rx="1.5" transform="rotate(45 16 16)"/><rect x="14" y="5" width="4" height="22" rx="1.5" transform="rotate(-45 16 16)"/><circle cx="16" cy="16" r="6.5"/></g><circle cx="16" cy="16" r="2.8" fill="#ef8f24"/></g></g></svg></span><span class="lbl">garage</span></a><a class="axp-pin" title="chat-style explainers + live demos" href="/lwe"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="lweF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#838ae6"/><stop offset=".5" stop-color="#4b53c9"/><stop offset="1" stop-color="#333aa0"/></linearGradient><linearGradient id="lweG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="lweS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#lweS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#lweF)" stroke="#272d82" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#lweG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><path d="M6 9 h20 a2 2 0 0 1 2 2 v9 a2 2 0 0 1-2 2 H14 l-5 4 v-4 H6 a2 2 0 0 1-2-2 v-9 a2 2 0 0 1 2-2 Z" fill="#fff"/><g stroke="#4b53c9" stroke-width="1.7" stroke-linecap="round" fill="none"><path d="M8.5 13.5 q2 -2.4 4 0 t4 0 t4 0"/><path d="M8.5 18 q2 -2.4 4 0 t4 0"/></g></g></g></svg></span><span class="lbl">lwe</span></a><a class="axp-pin" title="notes, in flux: an editable notepad" href="/writing"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="writingF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6fa0ee"/><stop offset=".5" stop-color="#2f6bd6"/><stop offset="1" stop-color="#1a4ba8"/></linearGradient><linearGradient id="writingG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="writingS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#writingS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#writingF)" stroke="#143c86" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#writingG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><g fill="#fff"><rect x="8" y="8" width="16" height="2.6" rx="1.3"/><rect x="8" y="14.7" width="16" height="2.6" rx="1.3"/><rect x="8" y="21.4" width="10" height="2.6" rx="1.3"/></g></g></g></svg></span><span class="lbl">writing</span></a><a class="axp-pin" title="what I've been reading, from Curius" href="/reading"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="readingF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#de8186"/><stop offset=".5" stop-color="#c1545a"/><stop offset="1" stop-color="#93333a"/></linearGradient><linearGradient id="readingG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="readingS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#readingS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#readingF)" stroke="#732830" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#readingG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><g fill="#fff"><path d="M16 9 C13 7.2 9 7 6 7.6 V24 C9 23.4 13 23.6 16 25 Z"/><path d="M16 9 C19 7.2 23 7 26 7.6 V24 C23 23.4 19 23.6 16 25 Z" opacity=".82"/></g><path d="M16 9 V25" stroke="#c1545a" stroke-width="1.4"/></g></g></svg></span><span class="lbl">reading</span></a><a class="axp-pin" title="events worth going to" href="/serendipity"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="serendipityF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a886e8"/><stop offset=".5" stop-color="#7c4dd6"/><stop offset="1" stop-color="#5a32a8"/></linearGradient><linearGradient id="serendipityG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="serendipityS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#serendipityS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#serendipityF)" stroke="#482788" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#serendipityG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><rect x="6" y="8" width="20" height="18" rx="2" fill="#fff"/><rect x="6" y="8" width="20" height="5" rx="2" fill="#e7e7ef"/><g fill="#7c4dd6"><rect x="9" y="16" width="3.4" height="3.4"/><rect x="14.3" y="16" width="3.4" height="3.4"/><rect x="19.6" y="16" width="3.4" height="3.4"/><rect x="9" y="21" width="3.4" height="3.4"/><rect x="14.3" y="21" width="3.4" height="3.4"/></g></g></g></svg></span><span class="lbl">serendipity</span></a><a class="axp-pin" title="the crypto-VC neighborhood" href="/around"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="aroundF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5cc6ba"/><stop offset=".5" stop-color="#1f9b8e"/><stop offset="1" stop-color="#137468"/></linearGradient><linearGradient id="aroundG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="aroundS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#aroundS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#aroundF)" stroke="#0d5a50" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#aroundG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><path d="M16 6 C11.6 6 8 9.3 8 13.6 C8 19 16 26 16 26 C16 26 24 19 24 13.6 C24 9.3 20.4 6 16 6 Z" fill="#fff"/><circle cx="16" cy="13.6" r="3.2" fill="#1f9b8e"/></g></g></svg></span><span class="lbl">around</span></a><a class="axp-pin" title="the other web: how machines read a URL" href="/lens"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="lensF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#79c7e6"/><stop offset=".5" stop-color="#2f9fc4"/><stop offset="1" stop-color="#1d7895"/></linearGradient><linearGradient id="lensG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="lensS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#lensS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#lensF)" stroke="#145d73" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#lensG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><rect x="5.5" y="5" width="15" height="19" rx="2" fill="#fff"/><g fill="#2f9fc4"><rect x="8.5" y="9.5" width="9" height="1.7" rx="0.6"/><rect x="8.5" y="13" width="9" height="1.7" rx="0.6"/><rect x="8.5" y="16.5" width="6" height="1.7" rx="0.6"/></g><circle cx="20.5" cy="20.5" r="6" fill="#2f9fc4" stroke="#fff" stroke-width="2.2"/><circle cx="18.6" cy="18.6" r="1.5" fill="#fff" opacity=".85"/><path d="M24.8 24.8 L28.5 28.5" stroke="#fff" stroke-width="3.2" stroke-linecap="round"/></g></g></svg></span><span class="lbl">lens</span></a><a class="axp-pin" title="what I'm listening to right now" href="/rn"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="musicF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6fcd8a"/><stop offset=".5" stop-color="#2faa55"/><stop offset="1" stop-color="#1d8040"/></linearGradient><linearGradient id="musicG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="musicS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#musicS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#musicF)" stroke="#156030" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#musicG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><g fill="#fff"><rect x="17" y="7" width="2.6" height="14"/><path d="M19.6 7 C23 8 25 10 24.4 13.6 C23 11 21 11 19.6 11.8 Z"/><ellipse cx="14" cy="21" rx="4.4" ry="3.5"/></g></g></g></svg></span><span class="lbl">music</span></a><a class="axp-pin" title="book a coffee / bagel" href="/coffee"><span class="fav" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="coffeeF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b08858"/><stop offset=".5" stop-color="#875c34"/><stop offset="1" stop-color="#5e3c1e"/></linearGradient><linearGradient id="coffeeG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="coffeeS" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter></defs><g filter="url(#coffeeS)"><rect x="1" y="1" width="30" height="30" rx="7" fill="url(#coffeeF)" stroke="#472d16" stroke-width="1"/><rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/><path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#coffeeG)"/><g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))"><path d="M8 12 h13 v6 a6.5 6.5 0 0 1-13 0 Z" fill="#fff"/><path d="M21 13 h3 a2.6 2.6 0 0 1 0 5.2 h-3" fill="none" stroke="#fff" stroke-width="2.2"/><g stroke="#fff" stroke-width="1.8" stroke-linecap="round"><path d="M11 5.5 v3"/><path d="M14.5 5 v3.5"/></g></g></g></svg></span><span class="lbl">coffee</span></a></div><div id="axp-spacer"></div><div id="axp-tray"><button id="axp-sound" type="button" hidden></button><a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><svg viewBox="0 0 24 24"><defs><filter id="spSh" x="-30%" y="-20%" width="160%" height="150%"><feDropShadow dx="0" dy=".5" stdDeviation=".5" flood-color="#000" flood-opacity=".28"></feDropShadow></filter><linearGradient id="spBez" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f3efe4"></stop><stop offset=".5" stop-color="#d6d0be"></stop><stop offset="1" stop-color="#b1aa94"></stop></linearGradient><linearGradient id="spScr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6fb0e8"></stop><stop offset=".5" stop-color="#2f72b6"></stop><stop offset="1" stop-color="#16548f"></stop></linearGradient><linearGradient id="spGl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".5"></stop><stop offset="1" stop-color="#ffffff" stop-opacity="0"></stop></linearGradient></defs><g filter="url(#spSh)"><ellipse cx="12" cy="21.3" rx="5.2" ry="1" fill="#8f876f" opacity=".5"></ellipse><rect x="10.4" y="17.2" width="3.2" height="2.8" fill="#c3bca6"></rect><path d="M7 21 Q7 19.7 8.6 19.7 H15.4 Q17 19.7 17 21 Z" fill="url(#spBez)" stroke="#897f66" stroke-width=".4"></path><rect x="2.3" y="2.7" width="19.4" height="14.9" rx="2" fill="url(#spBez)" stroke="#857c63" stroke-width=".5"></rect><rect x="2.95" y="3.3" width="18.1" height="13.7" rx="1.5" fill="none" stroke="#ffffff" stroke-opacity=".5" stroke-width=".5"></rect><rect x="4.2" y="4.7" width="15.6" height="11" rx=".8" fill="#0f3d63"></rect><rect x="4.6" y="5.1" width="14.8" height="10.2" rx=".6" fill="url(#spScr)"></rect><path d="M4.6 5.1 H19.4 V7.9 Q12 11.8 4.6 9.1 Z" fill="url(#spGl)"></path><circle cx="20" cy="15.9" r=".8" fill="#84e85a" stroke="#3f7a2a" stroke-width=".3"></circle></g></svg></a><a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><svg viewBox="0 0 24 24"><defs><filter id="seSh" x="-30%" y="-15%" width="160%" height="150%"><feDropShadow dx="0" dy=".5" stdDeviation=".5" flood-color="#000" flood-opacity=".28"></feDropShadow></filter><linearGradient id="seF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7ed24f"></stop><stop offset=".5" stop-color="#3f9c24"></stop><stop offset="1" stop-color="#297818"></stop></linearGradient><linearGradient id="seGl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".55"></stop><stop offset="1" stop-color="#ffffff" stop-opacity="0"></stop></linearGradient></defs><g filter="url(#seSh)"><path d="M12 2.2 L4.4 4.9 V11.4 C4.4 16.2 8 19.7 12 21.6 C16 19.7 19.6 16.2 19.6 11.4 V4.9 Z" fill="url(#seF)" stroke="#1f5f12" stroke-width=".7"></path><path d="M12 3.4 L5.6 5.7 V11.3 C5.6 15.3 8.6 18.4 12 20.1 C15.4 18.4 18.4 15.3 18.4 11.3 V5.7 Z" fill="none" stroke="#c6f2a6" stroke-opacity=".5" stroke-width=".6"></path><path d="M12 3.4 L5.6 5.7 V8.8 Q12 10.8 18.4 8.8 V5.7 Z" fill="url(#seGl)"></path><path d="M8 11.5 L11 14.5 L16.2 8.4" fill="none" stroke="#103f08" stroke-opacity=".35" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round"></path><path d="M8 11.2 L11 14.2 L16.2 8.1" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path></g></svg></a><a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><svg viewBox="0 0 24 24"><defs><filter id="upSh" x="-25%" y="-20%" width="150%" height="155%"><feDropShadow dx="0" dy=".5" stdDeviation=".5" flood-color="#000" flood-opacity=".28"></feDropShadow></filter><radialGradient id="upG" cx=".36" cy=".3" r=".85"><stop offset="0" stop-color="#8eccf2"></stop><stop offset=".55" stop-color="#3f8fd0"></stop><stop offset="1" stop-color="#175a98"></stop></radialGradient><linearGradient id="upB" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#74cf52"></stop><stop offset="1" stop-color="#2c861d"></stop></linearGradient><radialGradient id="upGl" cx=".35" cy=".3" r=".5"><stop offset="0" stop-color="#ffffff" stop-opacity=".7"></stop><stop offset="1" stop-color="#ffffff" stop-opacity="0"></stop></radialGradient></defs><g filter="url(#upSh)"><circle cx="10.6" cy="10.6" r="8.2" fill="url(#upG)" stroke="#114e7d" stroke-width=".6"></circle><g fill="none" stroke="#dcefff" stroke-width=".55" opacity=".7"><path d="M2.5 10.6 H18.7"></path><path d="M3.6 7.1 H17.6"></path><path d="M3.6 14.1 H17.6"></path><path d="M10.6 2.4 V18.8"></path><ellipse cx="10.6" cy="10.6" rx="3.1" ry="8.2"></ellipse></g><ellipse cx="7.4" cy="7" rx="3.4" ry="2.2" fill="url(#upGl)"></ellipse><circle cx="17.8" cy="17.8" r="4.5" fill="url(#upB)" stroke="#ffffff" stroke-width=".9"></circle><path d="M17.8 15.6 A2.2 2.2 0 1 1 15.7 18.4" fill="none" stroke="#ffffff" stroke-width="1.1" stroke-linecap="round"></path><path d="M16.9 14.9 L18.8 15.3 L17.5 16.8 Z" fill="#ffffff"></path></g></svg></a><span id="axp-clock" aria-hidden="true"></span></div></div><!-- /axp:shell -->
+<!-- axp:shell --><nav id="axp-icons" aria-label="desktop shortcuts"><a class="axp-ico" title="writing, in flux" href="/writing" data-key="Notepad" style="left:9px;top:9px"><span class="ic note" aria-hidden="true"></span><span class="t">Notepad</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="GitHub (opens in a new tab)" href="https://github.com/oddharsh" data-key="GitHub" style="left:9px;top:95px"><span class="ic " style="background:linear-gradient(180deg,oklch(72% 0.05 255),oklch(60% 0.07 257))" aria-hidden="true">G</span><span class="t">GitHub</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Twitter (opens in a new tab)" href="https://x.com/oddhash" data-key="Twitter" style="left:9px;top:181px"><span class="ic " style="background:linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))" aria-hidden="true">@</span><span class="t">Twitter</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Instagram (opens in a new tab)" href="https://www.instagram.com/aadharsh.hif" data-key="Photos" style="left:9px;top:267px"><span class="ic " style="background:linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))" aria-hidden="true"><i class="cam" aria-hidden="true"></i></span><span class="t">Photos</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Curius (opens in a new tab)" href="https://curius.app/aadharsh-pannirselvam" data-key="Curius" style="left:9px;top:353px"><span class="ic " style="background:linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))" aria-hidden="true">C</span><span class="t">Curius</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Beli (opens in a new tab)" href="https://beliapp.com/users/aadharsh" data-key="Beli" style="left:9px;top:439px"><span class="ic " style="background:linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))" aria-hidden="true">B</span><span class="t">Beli</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Spotify (opens in a new tab)" href="https://open.spotify.com/user/aadharsh2010" data-key="Music" style="left:9px;top:525px"><span class="ic " style="background:linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))" aria-hidden="true">♪</span><span class="t">Music</span></a></nav><div id="axp-taskbar" role="navigation" aria-label="taskbar"><a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a><div id="axp-pins"><a class="axp-pin" title="prototypes + experiments" href="/garage"><span class="fav" aria-hidden="true"><svg viewBox="0 0 32 32"><use href="/icons.svg#pin-garage"/></svg></span><span class="lbl">garage</span></a><a class="axp-pin" title="chat-style explainers + live demos" href="/lwe"><span class="fav" aria-hidden="true"><svg viewBox="0 0 32 32"><use href="/icons.svg#pin-lwe"/></svg></span><span class="lbl">lwe</span></a><a class="axp-pin" title="notes, in flux: an editable notepad" href="/writing"><span class="fav" aria-hidden="true"><svg viewBox="0 0 32 32"><use href="/icons.svg#pin-writing"/></svg></span><span class="lbl">writing</span></a><a class="axp-pin" title="what I've been reading, from Curius" href="/reading"><span class="fav" aria-hidden="true"><svg viewBox="0 0 32 32"><use href="/icons.svg#pin-reading"/></svg></span><span class="lbl">reading</span></a><a class="axp-pin" title="events worth going to" href="/serendipity"><span class="fav" aria-hidden="true"><svg viewBox="0 0 32 32"><use href="/icons.svg#pin-serendipity"/></svg></span><span class="lbl">serendipity</span></a><a class="axp-pin" title="the crypto-VC neighborhood" href="/around"><span class="fav" aria-hidden="true"><svg viewBox="0 0 32 32"><use href="/icons.svg#pin-around"/></svg></span><span class="lbl">around</span></a><a class="axp-pin" title="the other web: how machines read a URL" href="/lens"><span class="fav" aria-hidden="true"><svg viewBox="0 0 32 32"><use href="/icons.svg#pin-lens"/></svg></span><span class="lbl">lens</span></a><a class="axp-pin" title="what I'm listening to right now" href="/rn"><span class="fav" aria-hidden="true"><svg viewBox="0 0 32 32"><use href="/icons.svg#pin-music"/></svg></span><span class="lbl">music</span></a><a class="axp-pin" title="book a coffee / bagel" href="/coffee"><span class="fav" aria-hidden="true"><svg viewBox="0 0 32 32"><use href="/icons.svg#pin-coffee"/></svg></span><span class="lbl">coffee</span></a></div><div id="axp-spacer"></div><div id="axp-tray"><button id="axp-sound" type="button" hidden></button><a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><svg viewBox="0 0 24 24"><use href="/icons.svg#tray-sysprop"/></svg></a><a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><svg viewBox="0 0 24 24"><use href="/icons.svg#tray-security"/></svg></a><a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><svg viewBox="0 0 24 24"><use href="/icons.svg#tray-updates"/></svg></a><span id="axp-clock" aria-hidden="true"></span></div></div><!-- /axp:shell -->
 </body>
 </html>
