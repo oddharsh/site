@@ -916,6 +916,10 @@ for (const [file, srcPath, marker] of SHELLS) {
     if (cands.length) await mkdir(`${OUT}/holding/ad`, { recursive: true });
     let n = 0, deltaBytes = 0;
     for (const asset of shell) {
+      // Images sit out the dictionary path — see DICTIONARY_TYPES in lib/assets.js. The
+      // worker will never answer an svg with a dcz, so building one here would ship a
+      // delta nothing can ask for.
+      if (asset.ext === "svg") continue;
       const targetBytes = await readFile(`${dir}/${asset.name}`);
       for (const d of cands) {
         if (d.base !== asset.base || d.ext !== asset.ext) continue;
