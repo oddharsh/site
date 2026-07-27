@@ -91,7 +91,7 @@ function lensState(url) {
   const lens = validLenses.includes(url.searchParams.get("lens")) ? url.searchParams.get("lens") : "readiness";
   const counterfactuals = {};
   for (const key of (url.searchParams.get("cf") || "").split(",")) {
-    if (["markdown", "semantic", "contract", "authority", "receipt"].includes(key)) counterfactuals[key] = true;
+    if (["markdown", "semantic", "contract", "authority", "receipt", "dictionary", "ech"].includes(key)) counterfactuals[key] = true;
   }
   return { view, lens, counterfactuals };
 }
@@ -270,7 +270,7 @@ function lensStateOfWebPanel() {
 export function renderLensShell(initial, state, inputValue) {
   // defaults must match the client (lens.js) and lensState(), or a plain /lens
   // SSRs one tab and the deferred script silently flips to another on hydrate.
-  state = state || { view: "both", lens: "readiness", counterfactuals: { markdown: false, semantic: false, contract: false, authority: false, receipt: false } };
+  state = state || { view: "both", lens: "readiness", counterfactuals: { markdown: false, semantic: false, contract: false, authority: false, receipt: false, dictionary: false, ech: false } };
   const seeded = initial && initial.ok;
   const value = inputValue || (seeded ? initial.finalUrl || initial.url : "");
   const humanHeader = seeded && !initial.framable
@@ -978,7 +978,7 @@ export async function lensInspect(targetUrl, env, opts) {
         return u.hostname.toLowerCase() === CANONICAL_HOST && /^\/lens(\/|$)/.test(u.pathname);
       } catch { return false; }
     })();
-    const [robots, sitemap, llms, llmsFull, aiTxt, secTxt, tdmrep, agentCard, openapi, aiPlugin, apiCatalog, mcp, nlweb, mdNego, webBotAuth, openidConfig, oauthServer, oauthResource, authMd, mcpServerCard, agentSkills, ucp, acp, ap2, agentsMd, dnsAid, botViews] = await Promise.all([
+    const [robots, sitemap, llms, llmsFull, aiTxt, secTxt, tdmrep, agentCard, openapi, aiPlugin, apiCatalog, mcp, nlweb, mdNego, webBotAuth, openidConfig, oauthServer, oauthResource, authMd, mcpServerCard, agentSkills, ucp, acp, ap2, agentsMd, dnsAid, ech, botViews] = await Promise.all([
       lensProbe(origin + "/robots.txt", env), lensProbe(origin + "/sitemap.xml", env),
       lensProbe(origin + "/llms.txt", env), lensProbe(origin + "/llms-full.txt", env),
       lensProbe(origin + "/ai.txt", env), lensProbe(origin + "/.well-known/security.txt", env),
@@ -1002,6 +1002,7 @@ export async function lensInspect(targetUrl, env, opts) {
       lensProbe(origin + "/.well-known/ap2", env),
       lensProbeAgentsMd(origin, env),
       lensProbeDnsAid(new URL(finalUrl).hostname),
+      lensProbeEch(new URL(finalUrl).hostname),
       // bot-view sampling is 6 extra fetches per scan. The census (opts.skipBotViews)
       // only needs tier/score/doors, so it skips them to stay well under the
       // per-invocation subrequest budget when sweeping the whole roster.
@@ -1016,6 +1017,10 @@ export async function lensInspect(targetUrl, env, opts) {
       oauthProtectedResource: oauthResource, authMd, mcpServerCard, agentSkills,
       commerce: { ucp, acp, ap2 },
     };
+    // The transport-layer counterfactuals: what the wire carries (a shared
+    // dictionary, so a repeat fetch is a delta) and what it hides (ECH, so the
+    // destination name isn't in the clear). Both read off signals already gathered.
+    out.wire = { dictionary: lensDetectDictionary(headers), ech };
     out.ai = out.ai || {};
     out.ai.llmsTxtPresent = llms.ok;
     out.ai.directives = {
@@ -1087,6 +1092,77 @@ export async function lensFetch(targetUrl, env, signal, accept) {
 export async function lensReadCapped(res, max) {
   const result = await readResponseCapped(res, max);
   return { text: result.text, truncated: result.truncated };
+}
+
+// The "wire" counterfactuals in the Delta lab are transport properties, not task
+// stages, and both are genuinely observable — no simulation needed to tell whether
+// a site already ships them.
+//
+// A shared compression dictionary shows up in the site's OWN response headers: a
+// server that offers one sends `Use-As-Dictionary` and lists `available-dictionary`
+// in `Vary` (RFC 9842), and a delta response is tagged `Content-Encoding: dcb|dcz`.
+// Lens never sends `Available-Dictionary` on its identified fetch, so it won't see
+// the delta encoding itself, but the OFFER (the thing folks don't tend to turn on)
+// is right there in the headers it already captured.
+function lensDetectDictionary(headers) {
+  const offer = headers["use-as-dictionary"] || "";
+  const vary = (headers["vary"] || "").toLowerCase();
+  const ce = (headers["content-encoding"] || "").toLowerCase();
+  const negotiates = /available-dictionary/.test(vary);
+  const deltaCoded = ce === "dcb" || ce === "dcz";
+  return {
+    observed: !!offer || negotiates || deltaCoded,
+    offer: offer || null,               // the Use-As-Dictionary match/scope, verbatim
+    negotiates,                          // Vary advertises available-dictionary
+    activeEncoding: deltaCoded ? ce : null,
+  };
+}
+
+// Encrypted Client Hello lives in the HTTPS/SVCB DNS record (SvcParamKey 5, `ech`),
+// not in any HTTP response, so it takes one DoH lookup. Cloudflare's DNS-JSON returns
+// type-65 rdata as RFC 3597 generic form (`\# <len> <hex...>`), so read the SvcParams
+// off the wire bytes and look for key 5. A presentation-form answer (`... ech="..."`)
+// from some other resolver is caught as a substring fallback.
+function svcbHasEch(dataStr) {
+  const s = String(dataStr || "").trim();
+  if (/(?:^|[\s"])ech=/i.test(s)) return { ech: true, parsed: true };
+  const m = s.match(/^\\#\s+\d+\s+([0-9a-fA-F\s]+)$/);
+  if (!m) return { ech: false, parsed: false };
+  const bytes = m[1].trim().split(/\s+/).map((h) => parseInt(h, 16));
+  if (bytes.some((b) => Number.isNaN(b))) return { ech: false, parsed: false };
+  let i = 2;                                   // skip 2-byte SvcPriority
+  while (i < bytes.length) {                    // skip the TargetName (length-prefixed labels, 0x00-terminated)
+    const l = bytes[i];
+    if (l === 0) { i += 1; break; }
+    i += 1 + l;
+  }
+  while (i + 4 <= bytes.length) {               // walk SvcParams: key(2) len(2) value(len)
+    const key = (bytes[i] << 8) | bytes[i + 1];
+    const len = (bytes[i + 2] << 8) | bytes[i + 3];
+    i += 4;
+    if (key === 5) return { ech: true, parsed: true };   // SvcParamKey 5 = ech
+    i += len;
+  }
+  return { ech: false, parsed: true };
+}
+async function lensProbeEch(hostname) {
+  const ctrl = new AbortController();
+  const to = setTimeout(() => ctrl.abort(), 4500);
+  try {
+    const url = "https://cloudflare-dns.com/dns-query?name=" + encodeURIComponent(hostname) + "&type=HTTPS&do=1";
+    const res = await fetch(url, { headers: { accept: "application/dns-json" }, signal: ctrl.signal, cf: { cacheTtl: 0 } });
+    const body = await res.json();
+    const answers = Array.isArray(body.Answer) ? body.Answer : [];
+    const https = answers.filter((a) => a.type === 65).map((a) => svcbHasEch(a.data));
+    return {
+      observed: https.some((r) => r.ech),
+      recordPresent: https.length > 0,
+      parsed: https.length === 0 || https.some((r) => r.parsed),   // false only when a record exists but no answer parsed
+      dnssecValidated: body.AD === true,
+    };
+  } catch (e) {
+    return { observed: false, recordPresent: false, parsed: false, error: (e && e.message) || String(e) };
+  } finally { clearTimeout(to); }
 }
 
 // DNS-AID is a DNS surface, not an HTTP file. Query the three discovery names
