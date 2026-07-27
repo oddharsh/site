@@ -1,26 +1,38 @@
 #!/usr/bin/env node
-// gen-shell-deltas.mjs — precompute Dictionary-Compressed Brotli (dcb) deltas for the
+// gen-shell-deltas.mjs — precompute Dictionary-Compressed Zstandard (dcz) deltas for the
 // content-hashed shell, so a returning Chromium visitor downloads the DIFF between the
 // shell it already has and the one this deploy ships.
 //
-//   node scripts/gen-shell-deltas.mjs            # regenerate holding/ad/*.dcb
+//   node scripts/gen-shell-deltas.mjs            # regenerate holding/ad/*.dcz
 //   node scripts/gen-shell-deltas.mjs --roll     # ...and adopt this build's shell as a
 //                                                # future dictionary (holding/a-dict/)
 //
 // WHY THIS IS A WORKSTATION SCRIPT AND NOT PART OF build.mjs
 //
-// Brotli with a CUSTOM DICTIONARY is not reachable from Node: zlib exposes quality and
-// window but no dictionary parameter, so this shells out to the `brotli` CLI (1.2.0+).
+// Compression with a CUSTOM DICTIONARY is not reachable from Node: zlib exposes level and
+// window but no dictionary parameter, so this shells out to the `zstd` CLI (1.5+).
 // build.mjs runs inside Workers Builds, where that binary does not exist, so generating
 // there would fail the deploy. Instead the .dcb artifacts are committed, exactly like
 // holding/i/ thumbnails, and build.mjs only stages and validates them. Same split as the
 // photo pipeline: heavy encoders on the workstation, deploy stays pure Node.
 //
-// WHY dcb AND NOT dcz
+// WHY dcz AND NOT dcb
 //
-// Cloudflare passes both through identically on all plans, so it is purely a quality
-// question, and brotli won every measurement (2026-07-26, real deploy-to-deploy deltas):
-// nav.js 1,466 vs 1,537, luna.css 489 vs 533, tooltip.js 2,085 vs 2,223. 5-8% better.
+// Cloudflare passes both through identically on all plans, so this is a pure engineering
+// choice, and it comes down to bytes vs decode time. zstd decodes about 2x faster than
+// brotli (0.046ms vs 0.094ms on a bare 46KB asset; 954 MB/s vs 471 MB/s) and 26% faster
+// on a 1.7MB dictionary corpus.
+//
+// Brotli is nominally smaller, but on the REAL shipping pair the gap is 1 byte: luna.css
+// 78b35410 -> 0f879f03 measured 79 bytes dcb against 80 dcz. The 5-8% brotli edge only
+// showed up on much larger source-level deltas. So the size argument costs a byte while
+// the decode win is real and grows on slower CPUs, where a mid-range phone decodes several
+// times slower than the machine those numbers came from. Bytes are the proxy; latency is
+// the goal. (Owner call, 2026-07-27.)
+//
+// `--patch-from` was measured too and buys nothing at this scale (also 80 bytes), so plain
+// `-D` stays: same result, and the output is decodable by any `zstd -D`, which is exactly
+// the guarantee the dcz wire format needs.
 //
 // WHY A COMMITTED DICTIONARY SET RATHER THAN "the previous commit"
 //
@@ -46,10 +58,17 @@ const DELTA_DIR   = "holding/ad";
 // point where the tail stops being worth the bytes.
 const KEEP_DICTIONARIES = 3;
 
-// dcb framing, RFC 9842 §3: a 4-byte magic then the raw SHA-256 of the dictionary, then
-// a brotli stream compressed against it. The hash is what lets a client (and Cloudflare's
-// cache) prove the delta is being applied to the dictionary it was built from.
-const DCB_MAGIC = Buffer.from([0xff, 0x44, 0x43, 0x42]);
+// dcz framing, RFC 9842: the dictionary hash rides in a Zstandard SKIPPABLE FRAME ahead of
+// the real frame — magic 0x184D2A5E little-endian, then a 4-byte little-endian length (32),
+// then the raw SHA-256. That design is why dcz is neater than dcb: the prefix is valid
+// zstd, so any conforming decoder skips it instead of needing format-specific handling,
+// and `zstd -d -D dict` round-trips the bytes unmodified (verified).
+const DCZ_SKIPPABLE_MAGIC = Buffer.from([0x5e, 0x2a, 0x4d, 0x18]);
+const dczHeader = (digest) => {
+  const len = Buffer.alloc(4);
+  len.writeUInt32LE(digest.length, 0);        // always 32 for SHA-256
+  return Buffer.concat([DCZ_SKIPPABLE_MAGIC, len, digest]);
+};
 
 const sha256 = (buf) => createHash("sha256").update(buf).digest();
 // The worker has to derive this filename from a request header alone, so the tag must be
@@ -64,31 +83,34 @@ const parseShellName = (name) => {
   return m ? { base: m[1], hash8: m[2], ext: m[3], name } : null;
 };
 
-function brotliWithDictionary(dictPath, inputPath) {
-  // -q 11 for maximum ratio (this is offline, so encode time is free) and -w 24, the
-  // largest window a `Content-Encoding` response may legally use per RFC 7932 §4.
-  return execFileSync("brotli", ["-q", "11", "-w", "24", "-D", dictPath, "-c", inputPath], {
+function zstdWithDictionary(dictPath, inputPath) {
+  // -19 is the top non-ultra level. This is offline, so encode time is free, but --ultra
+  // -22 measured identical on real pairs and raises the decoder's window requirement for
+  // nothing, so it stays off.
+  return execFileSync("zstd", ["-q", "-f", "-19", "-D", dictPath, "-c", inputPath], {
     maxBuffer: 64 * 1024 * 1024,
     encoding: "buffer",
   });
 }
 
-function requireBrotliCli() {
+function requireZstdCli() {
   try {
-    const v = execFileSync("brotli", ["--version"], { encoding: "utf8" }).trim();
-    const m = v.match(/(\d+)\.(\d+)/);
-    // -D landed well before 1.1, but be explicit rather than emit silently-wrong bytes.
-    if (m && Number(m[1]) < 1) throw new Error(`brotli ${v} is too old for -D`);
+    const v = execFileSync("zstd", ["--version"], { encoding: "utf8" }).trim();
+    const m = v.match(/v(\d+)\.(\d+)/);
+    // Raw-content -D dictionaries need 1.4+; be explicit rather than emit wrong bytes.
+    if (m && (Number(m[1]) < 1 || (Number(m[1]) === 1 && Number(m[2]) < 4))) {
+      throw new Error(`zstd ${v} is too old for raw -D dictionaries`);
+    }
     return v;
   } catch (e) {
-    console.error("gen-shell-deltas: needs the `brotli` CLI (brew install brotli).");
+    console.error("gen-shell-deltas: needs the `zstd` CLI (brew install zstd).");
     console.error(`  ${e.message}`);
     process.exit(1);
   }
 }
 
 const roll = process.argv.includes("--roll");
-const version = requireBrotliCli();
+const version = requireZstdCli();
 
 if (!existsSync(BUILT_SHELL)) {
   console.error(`gen-shell-deltas: ${BUILT_SHELL} is missing. Run \`node build.mjs\` first —`);
@@ -121,7 +143,7 @@ for (const asset of shell) {
   const targetBytes = await readFile(targetPath);
   // The honest comparison for "was the delta worth it" is against the SAME encoder with
   // no dictionary, not against whatever the edge would have produced.
-  const plain = execFileSync("brotli", ["-q", "11", "-w", "24", "-c", targetPath], {
+  const plain = execFileSync("zstd", ["-q", "-f", "-19", "-c", targetPath], {
     maxBuffer: 64 * 1024 * 1024, encoding: "buffer",
   });
 
@@ -134,21 +156,21 @@ for (const asset of shell) {
     // new URL for them, so this pair can only produce a delta nobody can ask for.
     if (dictBytes.equals(targetBytes)) continue;
 
-    const stream = brotliWithDictionary(dictPath, targetPath);
-    const out = Buffer.concat([DCB_MAGIC, sha256(dictBytes), stream]);
+    const stream = zstdWithDictionary(dictPath, targetPath);
+    const out = Buffer.concat([dczHeader(sha256(dictBytes)), stream]);
 
-    // Refuse to ship a delta that lost to plain brotli. Happens when a rewrite leaves
-    // almost nothing in common, and in that case the plain .br twin is the better answer.
+    // Refuse to ship a delta that lost to plain zstd. Happens when a rewrite leaves almost
+    // nothing in common, and in that case the plain .br twin is the better answer.
     if (out.length >= plain.length) {
-      summary.push(`  skip  ${asset.name} vs ${dict.hash8}: dcb ${out.length} >= br ${plain.length}`);
+      summary.push(`  skip  ${asset.name} vs ${dict.hash8}: dcz ${out.length} >= zstd ${plain.length}`);
       continue;
     }
 
-    const name = `${asset.base}.${asset.hash8}.${dictTag(dictBytes)}.dcb`;
+    const name = `${asset.base}.${asset.hash8}.${dictTag(dictBytes)}.dcz`;
     await writeFile(`${DELTA_DIR}/${name}`, out);
     written++; totalDelta += out.length; totalPlain += plain.length;
     const pct = (100 * (plain.length - out.length) / plain.length).toFixed(1);
-    summary.push(`  dcb   ${name}  ${out.length} bytes vs ${plain.length} plain br  (-${pct}%)`);
+    summary.push(`  dcz   ${name}  ${out.length} bytes vs ${plain.length} plain zstd  (-${pct}%)`);
   }
 }
 
@@ -162,7 +184,7 @@ if (!written) {
   console.log("  deploy that actually changes nav.js / luna.css / lens.js / icons.svg.");
 } else {
   const pct = (100 * (totalPlain - totalDelta) / totalPlain).toFixed(1);
-  console.log(`\ngen-shell-deltas: ${written} deltas, ${totalDelta} bytes vs ${totalPlain} plain brotli (-${pct}%)`);
+  console.log(`\ngen-shell-deltas: ${written} deltas, ${totalDelta} bytes vs ${totalPlain} plain zstd (-${pct}%)`);
 }
 
 if (roll) {

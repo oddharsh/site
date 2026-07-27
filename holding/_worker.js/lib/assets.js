@@ -77,12 +77,22 @@ const SHELL_TYPES = {
 // So local testing can tell us the negotiation is impossible, but it CANNOT tell us
 // whether production is correct.
 //
-// Until that is settled against the real edge, this path is OFF by default. /a/ carries
-// nav.js and luna.css, which are render-blocking: a mislabelled content-encoding here
-// is a white screen, not a slow page. `?br=1` is the canary — it exercises the exact
-// production path on one throwaway URL (the query busts the immutable cache) so the
-// question can be answered with one deploy and no blast radius.
-const SHELL_PRECOMPRESS_DEFAULT_ON = false;
+// SETTLED IN PRODUCTION, 2026-07-27. The canary answered both questions on aadhar.sh:
+// /encoding-test returned 30 bytes in ONE brotli layer (it was 34 in two before the
+// withSecurityHeaders fix), and ?br=1 returned 13,047 in one layer decoding to 46,268
+// bytes of valid JavaScript. So this is now ON by default, and every /a/ request that the
+// edge tells us can take br gets the q11 twin instead of the edge's ~q4 fly-compression.
+//
+// The DELTA path below keeps its own separate gate. Flipping one switch for both would
+// have enabled dcz on the strength of a precompression measurement, and those are
+// different code paths with different failure modes: a bad delta means an unstyled site
+// for Chromium visitors specifically.
+const SHELL_PRECOMPRESS_DEFAULT_ON = true;
+
+// dcz deltas: verified end to end locally (120 bytes, byte-exact round-trip) but NOT yet
+// against the real edge, which is the same bar precompression had to clear. `?br=dcz`
+// exercises it on one throwaway URL. Flip after production confirms.
+const SHELL_DELTA_DEFAULT_ON = false;
 
 function wantsPrecompressed(url) {
   return SHELL_PRECOMPRESS_DEFAULT_ON || url.searchParams.get("br") === "1";
@@ -130,6 +140,59 @@ export function serveEncodingSelfTest(request) {
   // passthrough from a test that simply never exercised the runtime's re-encoder.
   if (url.searchParams.get("raw") !== "1") init.encodeBody = "manual";
   return new Response(bytes, init);
+}
+
+// Available-Dictionary is a Structured Field Byte Sequence: `:<base64 sha256>:`. Returns
+// the first 16 hex chars of that hash, which is the tag gen-shell-deltas.mjs put in the
+// .dcb filename, or null if the header is absent or malformed.
+//
+// Deliberately strict. This value selects a file path, so anything unexpected must become
+// null rather than something that could escape the /ad/ prefix: the base64 is length-
+// checked to a 32-byte digest and the result is re-derived as hex, so only [0-9a-f] can
+// ever reach the URL.
+function dictionaryTag(request) {
+  const raw = request.headers.get("available-dictionary");
+  if (!raw) return null;
+  const m = raw.trim().match(/^:([A-Za-z0-9+/=]+):$/);
+  if (!m) return null;
+  try {
+    const bin = atob(m[1]);
+    if (bin.length !== 32) return null;          // not a SHA-256 digest
+    let hex = "";
+    for (let i = 0; i < 16; i++) hex += bin.charCodeAt(i).toString(16).padStart(2, "0");
+    return hex.slice(0, 16);
+  } catch { return null; }
+}
+
+// serveDictionaryDelta: hand back the precomputed dcz for the dictionary this client
+// says it holds, or null to let the caller fall through.
+async function serveDictionaryDelta(url, ext, request, env) {
+  const tag = dictionaryTag(request);
+  if (!tag) return null;
+
+  // /a/<base>.<hash8>.<ext> -> /ad/<base>.<hash8>.<tag>.dcb
+  const stem = url.pathname.slice("/a/".length).replace(new RegExp(`\\.${ext}$`), "");
+  let res;
+  try {
+    res = await env.ASSETS.fetch(new Request(`${url.origin}/ad/${stem}.${tag}.dcz`, {
+      headers: { "accept-encoding": "identity" },
+    }));
+  } catch { return null; }
+  if (!res.ok) { try { await res.body?.cancel(); } catch {} return null; }
+
+  const headers = new Headers(res.headers);
+  headers.set("content-type", SHELL_TYPES[ext]);
+  headers.set("content-encoding", "dcz");
+  headers.set("cache-control", "public, max-age=31536000, immutable");
+  // Both dimensions matter to a shared cache: the same URL now answers with identity, br,
+  // or a dcb that is only decodable against ONE dictionary. Cloudflare varies its cache on
+  // exactly these two for shared dictionaries.
+  headers.set("vary", "accept-encoding, available-dictionary");
+  // Keep offering the shell as a dictionary, so a client that just delta-updated adopts
+  // the new bytes and the chain continues on the next deploy.
+  headers.set("use-as-dictionary", 'match="/a/*"');
+  headers.delete("etag");   // described the .dcz file, not this resource
+  return new Response(res.body, { status: 200, headers, encodeBody: "manual" });
 }
 
 // servePrecompressedShell: /a/<name>.<hash8>.<ext> from the worker, so the response
@@ -232,6 +295,27 @@ export async function servePrecompressedShell(request, env) {
     }));
     if (passthrough.ok) return passthrough;
     try { await passthrough.body?.cancel(); } catch {}
+  }
+
+  // ── dcz: the delta path ────────────────────────────────────────────────────────
+  // A Chromium client that accepted our Use-As-Dictionary offer sends back the SHA-256
+  // of the shell bytes it already holds. scripts/gen-shell-deltas.mjs has precomputed
+  // zstd-against-that-dictionary offline, so serving the diff is a filename lookup:
+  // /ad/<base>.<hash8>.<dicttag>.dcz. The first real one: luna.css in 115 bytes instead
+  // of 7,615, a 98.5% cut, from an ordinary CSS change.
+  //
+  // dcz rather than dcb because Cloudflare passes both through identically on all plans,
+  // so the choice is bytes vs decode time. zstd decodes ~2x faster (0.046ms vs 0.094ms on
+  // a bare 46KB asset), and on the real shipping pair brotli was smaller by exactly ONE
+  // byte (79 vs 80). Bytes are the proxy; latency is the goal, and the decode gap widens
+  // on the slow phones that need it most.
+  //
+  // Any miss falls through to the br path below and then to identity, so a client whose
+  // dictionary we have no delta for (skipped several deploys, or a hand-crafted header)
+  // just gets the ordinary asset.
+  if (SHELL_DELTA_DEFAULT_ON || url.searchParams.get("br") === "dcz") {
+    const delta = await serveDictionaryDelta(url, ext, request, env);
+    if (delta) return delta;
   }
 
   if (!wantsPrecompressed(url)) {
