@@ -132,59 +132,6 @@ export function serveEncodingSelfTest(request) {
   return new Response(bytes, init);
 }
 
-// Available-Dictionary is a Structured Field Byte Sequence: `:<base64 sha256>:`. Returns
-// the first 16 hex chars of that hash, which is the tag gen-shell-deltas.mjs put in the
-// .dcb filename, or null if the header is absent or malformed.
-//
-// Deliberately strict. This value selects a file path, so anything unexpected must become
-// null rather than something that could escape the /ad/ prefix: the base64 is length-
-// checked to a 32-byte digest and the result is re-derived as hex, so only [0-9a-f] can
-// ever reach the URL.
-function dictionaryTag(request) {
-  const raw = request.headers.get("available-dictionary");
-  if (!raw) return null;
-  const m = raw.trim().match(/^:([A-Za-z0-9+/=]+):$/);
-  if (!m) return null;
-  try {
-    const bin = atob(m[1]);
-    if (bin.length !== 32) return null;          // not a SHA-256 digest
-    let hex = "";
-    for (let i = 0; i < 16; i++) hex += bin.charCodeAt(i).toString(16).padStart(2, "0");
-    return hex.slice(0, 16);
-  } catch { return null; }
-}
-
-// serveDictionaryDelta: hand back the precomputed dcb for the dictionary this client
-// says it holds, or null to let the caller fall through.
-async function serveDictionaryDelta(url, ext, request, env) {
-  const tag = dictionaryTag(request);
-  if (!tag) return null;
-
-  // /a/<base>.<hash8>.<ext> -> /ad/<base>.<hash8>.<tag>.dcb
-  const stem = url.pathname.slice("/a/".length).replace(new RegExp(`\\.${ext}$`), "");
-  let res;
-  try {
-    res = await env.ASSETS.fetch(new Request(`${url.origin}/ad/${stem}.${tag}.dcb`, {
-      headers: { "accept-encoding": "identity" },
-    }));
-  } catch { return null; }
-  if (!res.ok) { try { await res.body?.cancel(); } catch {} return null; }
-
-  const headers = new Headers(res.headers);
-  headers.set("content-type", SHELL_TYPES[ext]);
-  headers.set("content-encoding", "dcb");
-  headers.set("cache-control", "public, max-age=31536000, immutable");
-  // Both dimensions matter to a shared cache: the same URL now answers with identity, br,
-  // or a dcb that is only decodable against ONE dictionary. Cloudflare varies its cache on
-  // exactly these two for shared dictionaries.
-  headers.set("vary", "accept-encoding, available-dictionary");
-  // Keep offering the shell as a dictionary, so a client that just delta-updated adopts
-  // the new bytes and the chain continues on the next deploy.
-  headers.set("use-as-dictionary", 'match="/a/*"');
-  headers.delete("etag");   // described the .dcb file, not this resource
-  return new Response(res.body, { status: 200, headers, encodeBody: "manual" });
-}
-
 // servePrecompressedShell: /a/<name>.<hash8>.<ext> from the worker, so the response
 // can carry bytes the platform would not have produced.
 //
@@ -285,24 +232,6 @@ export async function servePrecompressedShell(request, env) {
     }));
     if (passthrough.ok) return passthrough;
     try { await passthrough.body?.cancel(); } catch {}
-  }
-
-  // ── dcb: the delta path ────────────────────────────────────────────────────────
-  // A Chromium client that accepted our Use-As-Dictionary offer sends back the SHA-256
-  // of the shell bytes it already holds. scripts/gen-shell-deltas.mjs has precomputed
-  // brotli-against-that-dictionary offline, so serving the diff is a filename lookup:
-  // /ad/<base>.<hash8>.<dicttag>.dcb. Measured 93-97% under plain brotli on a real
-  // deploy-to-deploy change (luna.css 17,350 -> 489).
-  //
-  // dcb rather than dcz because Cloudflare passes both through identically on all plans,
-  // so it is purely a ratio question, and brotli won every measurement by 5-8%.
-  //
-  // Any miss falls through to the br path below and then to identity, so a client whose
-  // dictionary we have no delta for (skipped several deploys, or a hand-crafted header)
-  // just gets the ordinary asset.
-  if (wantsPrecompressed(url) || url.searchParams.get("br") === "dcb") {
-    const dcb = await serveDictionaryDelta(url, ext, request, env);
-    if (dcb) return dcb;
   }
 
   if (!wantsPrecompressed(url)) {

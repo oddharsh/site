@@ -882,15 +882,20 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
      paint→mount reflow (the grid lays out at its final width immediately).
      top/left/bottom keep .content's 12/16/16.
 
-     20px, raised from 12px: .window carries `resize: both`, so the BROWSER draws
-     its own hatched grip in the bottom-right corner, on top of whatever content
-     is scrolled under it — measured at ~18px square (it hit-tests as .window out
-     to 18px in from the corner). Where scrollbars take layout space the old 12px
-     was already clear, because the 16px scrollbar sat between; but macOS defaults
-     to OVERLAY scrollbars, which reserve nothing, so there the grip landed
-     directly on the tracklist's runtime column. 20px clears the grip on its own,
-     without depending on a scrollbar being there to do it. */
-  .window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 20px !important; }
+     16px is back down from 20px, and the client edge below is why. .window
+     carries `resize: both`, so the BROWSER draws its own hatched grip in the
+     bottom-right corner on top of whatever is scrolled under it — measured at
+     ~18px square (it hit-tests as .window out to 18px in from the corner).
+     Padding alone used to have to clear that grip, because content ran to the
+     frame; now the client edge's 6px gutter sits outside the padding, so 16px
+     puts content 22px in from the frame and the grip is clear without depending
+     on a scrollbar being there to do it. */
+  .window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 16px !important; }
+  /* The CLIENT EDGE that sits alongside this line at first paint is NOT authored
+     here — build.mjs injects it, reading the declaration out of luna.css so there
+     is exactly one definition of it (luna.css, search "THE CLIENT EDGE"). Nothing
+     to keep in sync, and nothing to remember on a new page. Local dev serves this
+     file unbuilt, so the edge arrives with luna.css there instead. */
   /* pre-JS taskbar strip — the real #axp-taskbar (z 99999) covers it once nav.js
      mounts; gradient matches it so there's no colour pop either. */
   body::after {
