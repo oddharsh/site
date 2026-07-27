@@ -89,10 +89,16 @@ const SHELL_TYPES = {
 // for Chromium visitors specifically.
 const SHELL_PRECOMPRESS_DEFAULT_ON = true;
 
-// dcz deltas: verified end to end locally (120 bytes, byte-exact round-trip) but NOT yet
-// against the real edge, which is the same bar precompression had to clear. `?br=dcz`
-// exercises it on one throwaway URL. Flip after production confirms.
-const SHELL_DELTA_DEFAULT_ON = false;
+// SETTLED IN PRODUCTION, 2026-07-27, on the same bar precompression had to clear. The
+// canary served /a/luna.0f879f03.css against the 78b35410 dictionary as 120 bytes with
+// `Content-Encoding: dcz`, and `zstd -d -D` round-tripped it byte-exact to the shipped
+// asset. The canary exercised THIS function, so flipping the trigger changes who reaches
+// it, not what it does.
+//
+// So a returning Chromium visitor now pays 120 bytes for that luna.css change instead of
+// 7,615. Everyone else is unaffected: no Available-Dictionary means no delta, and a
+// dictionary we have no precomputed delta for falls through to the brotli q11 twin.
+const SHELL_DELTA_DEFAULT_ON = true;
 
 function wantsPrecompressed(url) {
   return SHELL_PRECOMPRESS_DEFAULT_ON || url.searchParams.get("br") === "1";
