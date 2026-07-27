@@ -127,9 +127,13 @@ export async function handleWebmention(request, env, ctx) {
     .catch((e) => console.error("webmention processing failed", e?.message || e));
   if (ctx?.waitUntil) ctx.waitUntil(job); else await job;
 
-  return text("Accepted. It will appear at /inbox once verified and approved.", 202, {
-    location: origin + "/inbox",
-  });
+  // 202 and NO Location header. The spec ties Location to 201, where it must
+  // point at a status URL the sender can poll; on a 200 or 202 it has no
+  // defined meaning, and webmention.rocks receiver test #1 fails a 202 that
+  // carries one. /inbox was never a status URL for this mention anyway, since
+  // a pending mention deliberately does not appear there. It stays in the body,
+  // which is where a human poking at the endpoint will read it.
+  return text("Accepted. It will appear at /inbox once verified and approved.", 202);
 }
 
 // verify → parse → store pending → email the host.
@@ -249,11 +253,30 @@ function excerptAround(html, target) {
   const stripped = String(html)
     .replace(/<script\b[\s\S]*?<\/script>/gi, " ")
     .replace(/<style\b[\s\S]*?<\/style>/gi, " ")
+    // <svg> matters as much as <script> here: an inline icon carries a d="M9.64a1.998
+    // 2 0 0 0 2.83 0l1.25-1.25…" path, and a page like a GitHub gist is full of them.
+    // Left in, that geometry is what lands in the excerpt and makes a real mention
+    // read like spam.
+    .replace(/<svg\b[\s\S]*?<\/svg>/gi, " ")
+    .replace(/<noscript\b[\s\S]*?<\/noscript>/gi, " ")
     .replace(/<!--[\s\S]*?-->/g, " ");
   const e = firstMatch(stripped, /class="[^"]*\be-content\b[^"]*"[^>]*>([\s\S]{0,1200})</i);
   const hay = e || stripped;
   const idx = hay.indexOf(target);
-  const slice = idx === -1 ? hay.slice(0, 1200) : hay.slice(Math.max(0, idx - 400), idx + 400);
+  const start = idx === -1 ? 0 : Math.max(0, idx - 400);
+  let slice = idx === -1 ? hay.slice(0, 1200) : hay.slice(start, idx + 400);
+
+  // The window is cut at a byte offset, so it can open in the middle of a tag,
+  // or worse, inside an attribute value: the tag stripper below only removes
+  // COMPLETE tags, so a leading fragment survives as text. The target URL lives
+  // in an href, which guarantees the cut lands mid-tag whenever it is centred on
+  // a link. Detect it by which of < and > comes first, and drop both partials.
+  if (start > 0) {
+    const lt = slice.indexOf("<"), gt = slice.indexOf(">");
+    if (gt !== -1 && (lt === -1 || gt < lt)) slice = slice.slice(gt + 1);
+  }
+  slice = slice.replace(/<[^>]*$/, "");
+
   const textOnly = clean(slice.replace(/<(?:[^>"']|"[^"]*"|'[^']*')*>/g, " "));
   return textOnly.slice(0, EXCERPT_MAX);
 }
