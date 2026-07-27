@@ -31,6 +31,16 @@ npm run photos -- "/path/to/photo.HIF" "/path/to/folder/"
 # validate the committed photo artifact graph without uploading anything
 npm run photos:check
 
+# diff infra.json (DNS, zone/edge settings, account resources, Workers) against
+# reality. read-only; never mutates Cloudflare. add CLOUDFLARE_API_TOKEN for
+# the account tier, or --offline for the no-network tier.
+npm run infra:check
+
+# the rebuild path, and the ONLY thing here that can mutate Cloudflare. plans
+# for free (public DNS, no credential); --confirm writes and needs the separate
+# CLOUDFLARE_API_TOKEN_WRITE. refuses to run in CI, by design.
+npm run infra:apply
+
 # regenerate JUST the EXIF metadata (after photos are already uploaded)
 ./holding/scripts/extract-photo-metadata.sh "/Users/aadharsh/Downloads/to post (from ssd)"
 
@@ -77,7 +87,31 @@ worktrees may edit freely, but a worktree is not a release surface.
 - Configure one Workers Build project for the site Worker with `production` as
   its production branch and repository root `.`. Keep the dashboard Build
   command blank; use the repo's Wrangler-owned build during the Deploy command.
-  GitHub should not hold a Cloudflare production API token for this path.
+  Those settings are recorded in [`infra.json`](infra.json) under `release`,
+  because Cloudflare exposes no public API for Workers Builds configuration and
+  the dashboard form is otherwise the only copy.
+- **No deploy path may create Cloudflare resources.** Wrangler's
+  `--x-provision` and `--x-auto-create` are hidden flags that both default to
+  TRUE, and they provision real KV/R2/D1 for any binding declared without an
+  id. `npm run deploy` and the Workers Builds Deploy command both pin them off,
+  so resource creation stays with `npm run infra:apply` and a missing id fails
+  loudly. `npm run deploy` additionally passes `--strict`, which aborts rather
+  than prompting when the Worker's last deployment came from the dashboard and
+  its remote config has drifted from this repo. Workers Builds deliberately
+  does NOT pass `--strict`: it is the authoritative publisher, and a release
+  should reclaim a dashboard edit instead of stalling on it.
+- **GitHub must never hold a Cloudflare token that can write.** The point is
+  that GitHub cannot publish to production; only Workers Builds can, and only
+  from `production`. A READ-ONLY token is a different thing and is fine: CI uses
+  one for `npm run infra:check`. Scope it to exactly these five reads and
+  nothing else: Account Settings:Read, Workers Scripts:Read, Workers KV
+  Storage:Read, Workers R2 Storage:Read, D1:Read. If a token in this repo ever
+  needs an `Edit` scope, the answer is no. A token missing one of these degrades
+  only the section that needed it, and the check names the missing scope.
+- The one write path, `npm run infra:apply`, is **workstation-only** and reads a
+  different variable (`CLOUDFLARE_API_TOKEN_WRITE`, scoped to DNS on this zone
+  alone). It refuses to run in CI and cannot touch the Worker. GitHub stays
+  unable to reach production, which is the property the release design rests on.
 
 > `AGENTS.md` is a symlink to this file. One source of truth, so the two cannot
 > drift again (they had, badly, by 2026-07-22). Edit this file.
@@ -108,7 +142,7 @@ Single-page personal site at `aadhar.sh`. A Cloudflare Worker with static assets
 | `holding/index.md` | Markdown source of homepage copy (used by `/llms.txt` and as a fallback). |
 | `holding/sitemap.xml`, `robots.txt` | Standard SEO files. robots.txt explicitly allows AadharshBot. |
 | `holding/.well-known/http-message-signatures-directory` | JWKS for AadharshBot's Ed25519 public key (Web Bot Auth IETF draft). |
-| `holding/images/` + `holding/i/` | `images/` holds the photo DATA surfaces: `metadata.json` (EXIF index), `meta/<stem>.json` (per-photo EXIF plus four 64-bin histogram channels the tooltip fetches), `alt.json` (AI captions), `hashes.json` (stem to hash8 map). The pixel tiers (600px AVIF+JPG squares + 400px mobile AVIF) live in `i/` under content-hashed names, 474 files for 158 photos. |
+| `holding/images/` + `holding/i/` | `images/` holds the photo DATA surfaces: `metadata.json` (the EXIF RECORD, long field names + the Fuji recipe card), `exif.json` (the tooltip's TEXT tier: every photo's short-key EXIF in one 2.6KB-brotli file, warmed once on idle because the homepage draws a fresh random 12 of 158 per request and a per-slot warm-up was cold nearly every visit), `meta/<stem>.json` (per-photo EXIF plus the four 64-bin histogram channels — the BARS tier, fetched only on the hover that needs them, and the self-healing fallback for a stem missing from a cached `exif.json`), `alt.json` (AI captions), `hashes.json` (stem to hash8 map). The pixel tiers (600px AVIF+JPG squares + 400px mobile AVIF) live in `i/` under content-hashed names, 474 files for 158 photos. |
 | `holding/og/` | Pre-baked 1200x630 OG/Twitter cards, one per garage + lwe page (`<section>-<name>.png`): the page's live demo floated on the Bliss desktop with an XP dock naming the route, so a shared link unfurls as the interaction, not a bare title. Wired via `og:image`/`twitter:card` in each page's `<head>` (edge-direct static pages can't be worker-injected). Built by `scripts/gen-og-cards.mjs` (playwright-core → Chrome, captures production for live data); meta added by `scripts/inject-og-meta.mjs`. Regen recipe in MAINTENANCE.md. Cached 30d, deploy purges the edge. |
 | `holding/scripts/` | Photo-pipeline + asset scripts (see below). Beyond the core pipeline (`add-photos.sh`, `extract-photo-metadata.sh`, `check-photo-pipeline.mjs`, `zenc/` the JPEG encoder crate): `add-car-photo.sh` (one resto-mod reference photo into the dual AVIF+JPG pair the car-link tooltips expect, output `holding/cars/<stem>.{avif,jpg}`, no EXIF/R2); `gen-alt-text.py` (AI alt text for every grid photo, writes `holding/images/alt.json` `{stem: alt}`, resumable; run by `add-photos.sh` phase 4 — posts the committed `i/` thumbnail bytes to Workers AI when `CLOUDFLARE_API_TOKEN` is set so a brand-new photo captions pre-deploy, else falls back to the cf-garage `/garage/cf/caption` endpoint by stem, which only sees deployed photos); `gen-encoding-samples.sh` (regenerates the color sample set for the `/garage/encoding` study through every encoder, prints byte counts + bytes-per-pixel); `reencode-thumbnails.sh` (re-encodes all published grid thumbnails as pre-cropped center squares from the canonical source folder, two square tiers); `photo-histograms.py` (bakes the four 64-bin RGB/luminance channels into each per-photo meta file). |
 
@@ -135,10 +169,12 @@ holding/images/<stem>.{avif,jpg}  +  R2 aadhar-photos/<filename>
    |   pulls Fuji recipe (FilmMode, DynamicRange, ColorChrome FX +Blue,
    |   Grain roughness + size, tone curves, saturation) plus standard
    |   exposure / focus / metering / WB shift / Kelvin temperature.
-   |   also writes per-photo /images/meta/<stem>.json files (what the
-   |   tooltip actually fetches on hover). photo-histograms.py then bakes
-   |   four 64-bin RGB/luminance channels into those files from the shipped
-   |   hashed JPG tier, so the tooltip has a stable, whole-image histogram.
+   |   also writes per-photo /images/meta/<stem>.json files. photo-histograms.py
+   |   then bakes four 64-bin RGB/luminance channels into those files from the
+   |   shipped hashed JPG tier, so the tooltip has a stable, whole-image
+   |   histogram. build-exif-index.mjs finally rolls every per-photo file MINUS
+   |   its histogram into the one /images/exif.json the tooltip warms on idle
+   |   (derived data: check-photo-pipeline.mjs rebuilds it and fails on drift).
    |   discipline: every field is nullable; the tooltip skips lines
    |   that are null rather than fabricate. never guess metadata.
    |
@@ -227,7 +263,9 @@ per RFC 9421 + Web Bot Auth IETF draft. JWKS at
 
 ### DNS-AID (agent discovery)
 
-DNS record, not in this repo — lives in Cloudflare DNS for the zone.
+A DNS record, so it lives in Cloudflare DNS rather than in a Worker config.
+Its intended value IS declared here, in [`infra.json`](infra.json), and
+`npm run infra:check` fails if the live record stops matching.
 `_index._agents.aadhar.sh` is a ServiceMode SVCB record
 (`1 aadhar.sh. alpn="h2,h3" port=443 mandatory=alpn,port`, TTL 3600) per
 draft-mozleywilliams-dnsop-dnsaid + RFC 9460. It points agents at this
@@ -239,8 +277,14 @@ Deliberately only `_index` is published, not `_a2a`: the site has no
 Agent2Agent server, so an `_a2a` record would be a dangling pointer that
 passes a scanner but breaks any agent that connects. Same honesty rule
 as the `/whoareyou` "no third party" claim — don't advertise capability
-the site doesn't actually serve. To verify:
-`dig _index._agents.aadhar.sh SVCB +dnssec +short`.
+the site doesn't actually serve.
+
+To verify, use `npm run infra:check`, NOT `dig ... SVCB`. macOS ships dig
+9.10.6, which doesn't know the `SVCB` mnemonic and silently degrades the
+query to an `A` lookup, so it prints nothing and the record reads as
+missing when it's fine. If you want the raw answer, ask for the type by
+number (`dig _index._agents.aadhar.sh TYPE64 +short`) and expect RFC 3597
+generic hex back.
 
 ### Cloudflare bindings
 
@@ -457,6 +501,94 @@ npm run deploy
     behavior. If an asset looks stale, hit it with a fresh `?cb=$RANDOM`: if
     that differs from the plain URL's response, you are looking at cache
     state, not missing bytes.
+
+13. **A Worker cannot read the client's `Accept-Encoding`, so it cannot
+    negotiate compression.** The runtime rewrites the header to a constant
+    before the worker sees it. Measured 2026-07-26 in `wrangler dev`: four
+    requests sending `identity`, `br`, `gzip`, and `br;q=0, gzip` ALL arrived
+    as `"br, gzip"`. That value describes what the EDGE can accept, never what
+    the client asked for, so `if (acceptsBrotli(request))` is dead code that
+    always takes the true arm. Serving precompressed bytes therefore relies on
+    the edge down-converting for clients that can't take br ("serve Brotli from
+    origin"), and `encodeBody: "manual"` is mandatory or the runtime
+    re-compresses your already-compressed body.
+
+    **`wrangler dev` does not emulate that edge layer**, so it cannot validate
+    the design — it only proves the negotiation is impossible. Locally, three
+    of four client cases came back mangled (identity got raw brotli with the
+    content-encoding stripped, br got brotli-in-brotli at 13,051 bytes, gzip
+    got gzip-of-brotli). Anything touching response encoding on a
+    render-blocking path (`/a/*` is nav.js + luna.css) must be verified against
+    production behind a canary before it becomes the default, because the
+    failure mode is a white screen rather than a slow page. That is why
+    `SHELL_PRECOMPRESS_DEFAULT_ON` in `lib/assets.js` is `false` with a `?br=1`
+    canary instead of just shipping.
+
+    **ROOT CAUSE (2026-07-26), after three wrong suspects.** The double
+    compression was OURS, not the platform's. `encodeBody` is **write-only**
+    Response init, so rebuilding a response drops it while leaving the
+    `content-encoding` header visible, and the runtime then compresses the body a
+    second time to match. `withSecurityHeaders` (`lib/security.js`) rebuilds
+    EVERY worker response, which made `encodeBody: "manual"` a no-op site-wide.
+    It now carries the flag forward whenever a content-encoding is present.
+
+    Isolated with `/encoding-test`: a constant 30-byte brotli payload built in the
+    worker, touching no assets. 34 wire bytes in two brotli layers before the fix,
+    30 in one layer after. `?br=1` went 13,051 (two layers) to 13,047 (one layer,
+    decoding to 46,268 valid JS).
+
+    **Anything that rebuilds a Response must preserve `encodeBody`.** There is no
+    getter for it, so the loss is silent and the symptom (a body that decodes once
+    into more compressed bytes) looks like a platform bug. Check this FIRST.
+
+    Three suspects were investigated and exonerated. Two of the three are real
+    facts worth keeping, they just weren't the cause: (1) a worker cannot read the
+    client's Accept-Encoding, so it genuinely cannot negotiate compression;
+    (2) the edge does NOT down-convert, so an `identity` client handed br gets raw
+    brotli, which is why negotiation can't be faked either; (3) the static-assets
+    layer was innocent — `/abr/` exists only because it was built to bypass a
+    suspect that turned out not to matter, and it can go.
+
+    What this unlocks: q11 precompression (~19% off nav.js + luna.css), and
+    `Content-Encoding: dcb` from a worker, since `Available-Dictionary` demonstrably
+    reaches it in production (cf-ray a2174bfc). Shell deltas measured 93-97%
+    across a real deploy, and a dictionary 11 days stale still gave 87-93%, so
+    build-time deltas against a committed dictionary work and need NO wasm. Only
+    the SSR'd homepage would need a runtime compressor, because the runtime ships
+    no brotli encoder at all (CompressionStream is gzip/deflate only).
+
+14. **The shell ships dcz (zstd) deltas, not dcb (brotli), and the reason is
+    latency rather than bytes.** Cloudflare passes both through identically on all
+    plans, so it is a free engineering choice. zstd decodes about 2x faster
+    (0.046ms vs 0.094ms on a bare 46KB asset; 954 vs 471 MB/s), and on the REAL
+    shipping pair brotli was smaller by exactly one byte (79 vs 80) — the 5-8%
+    brotli edge only appears on much larger source-level deltas. Bytes are the
+    proxy; latency is the goal, and the decode gap widens on slow phones. Owner
+    call, 2026-07-27. `--patch-from` was measured and buys nothing at this scale.
+
+    dcz's framing is also the tidier of the two: the dictionary hash rides in a
+    Zstandard SKIPPABLE frame (magic `0x184D2A5E` LE, then a 4-byte LE length of
+    32, then the raw SHA-256), so any conforming decoder skips it and
+    `zstd -d -D dict` round-trips the whole file untouched. dcb instead needs
+    format-specific handling of its 36-byte prefix.
+
+    Deltas are BUILD OUTPUT, generated by build.mjs with `node:zlib`'s zstd. An
+    earlier version of this note said dictionary compression was "unreachable from
+    Node" and shipped a workstation script with committed artifacts; that limit is
+    BROTLI's, and generalizing it to zstd was wrong. `zstdCompressSync` takes a
+    `dictionary` option, it beats shelling out (116 bytes where the zstd CLI gave
+    120), and the foreign `zstd -d -D` CLI decodes Node's output byte-exact,
+    skippable prefix included — the interop check that matters, since the real
+    decoder is a browser. So: no CLI in the deploy path, no committed `.dcz`, no
+    step to forget, and no staleness tripwire needed, because a delta is a pure
+    function of bytes the build just produced.
+
+    What still has to be committed is `holding/a-dict/`, the DICTIONARY set, because
+    a dictionary must be bytes the BROWSER already holds and no build can derive
+    that from source. `npm run shell:roll` adopts the current shell and prunes to 3
+    per asset; it stays a human step because it writes into the source tree, which
+    build.mjs must never do. Not urgent either — a dictionary 11 days stale still
+    gave 87-93%. `a-dict` is `.assetsignore`d (build input, not a public URL).
 
 ---
 

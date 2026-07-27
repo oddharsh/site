@@ -45,8 +45,12 @@ than copied between checkouts:
   local dependencies, build output, credentials, or caches covered by
   `.gitignore`.
 - Worker secret values live in Cloudflare, not GitHub: `wrangler.jsonc` names
-  them but does not contain them. Workers Build project settings, DNS records,
-  Resend verification, and the contents of KV/R2/D1 are also external state.
+  them but does not contain them. The contents of KV/R2/D1 are external state
+  too, as is Resend's domain verification.
+- DNS records, the account resources the bindings point at, the Worker
+  inventory, and the Workers Build project settings are still external state,
+  but their intended values are now declared in [`infra.json`](infra.json) and
+  diffed by `npm run infra:check`. See "Infrastructure declaration" below.
 - The curated photo source folder is outside the repository by design; the
   checked-in derivative metadata and image tiers are the repo-facing artifacts.
 
@@ -154,7 +158,143 @@ exact tested SHA. Cloudflare Workers Builds watches that branch and is the only
 production publisher. Configure one Workers Build project for the site Worker
 with `production` as the production branch and monorepo root `.`, leave its
 dashboard Build command blank, and use `npx wrangler deploy` as the Deploy
-command. GitHub does not need Cloudflare production secrets for this path.
+command. GitHub never holds a Cloudflare token that can write, so it cannot
+publish to production even if the workflow guard is defeated.
+
+### Infrastructure declaration
+
+`wrangler.jsonc` declares the compute layer and CI dry-runs it, so a bad route
+or a missing binding already fails a PR. [`infra.json`](infra.json) covers the
+layer above that: DNS records, the account resources the bindings point at, the
+Worker inventory, and the Workers Build settings. `npm run infra:check` diffs
+the declaration against reality. It is read-only by design and has no apply
+path; editing `infra.json` changes what the check demands of production, never
+production itself.
+
+Three tiers, by what they cost to run:
+
+| tier | needs | covers |
+|---|---|---|
+| tree | nothing | binding names agree with `wrangler.jsonc`; every `consumer` file exists; the release block agrees with the Worker config |
+| dns | network | every declared record, via DoH against two independent resolvers, plus the nameservers and the DNSSEC `DS` |
+| edge | network | zone settings that are load-bearing for something this repo does, read as observed production responses |
+| account | a read-only token | the KV/R2/D1 IDs actually resolve; declared Workers are deployed and retired ones are gone |
+
+Same hard-versus-advisory split as the performance budget. A hard failure means
+"we checked and it is wrong." An advisory means "we could not check" (resolver
+unreachable, no token) and never fails the run, so a network blip cannot redden
+a PR that only touched CSS. Use `--strict` to promote advisories to failures
+when you want a real audit, and `--offline` for the no-network tier alone.
+
+Resource IDs live in `wrangler.jsonc` and nowhere else. `infra.json` names what
+must exist and why, and the checker joins the two by binding name, so the two
+files cannot drift into describing different worlds.
+
+**The token.** CI reads `secrets.CLOUDFLARE_API_TOKEN` and the optional
+`vars.CLOUDFLARE_ACCOUNT_ID`; with neither set the account tier just skips.
+Scope the token to reads only: Account Settings:Read, Workers Scripts:Read,
+Workers KV Storage:Read, Workers R2 Storage:Read, D1:Read. Nothing in this repo
+may hold an `Edit` scope, because Workers Builds being the only publisher is the
+release backstop.
+
+```bash
+gh secret set CLOUDFLARE_API_TOKEN --repo oddharsh/site
+```
+
+Each resource class is queried independently, so a token missing one scope
+degrades only that section and the advisory names the scope to add. Cloudflare
+returns error 10000 for both "bad token" and "token lacks this scope", so the
+message says which permission the failing section wanted.
+
+### Rebuilding the zone
+
+`npm run infra:apply` is the write path, and the only thing in this repo that
+can mutate Cloudflare. It prints a plan and stops; `--confirm` applies it.
+
+```bash
+npm run infra:apply                # plan; needs no credential at all
+npm run infra:apply -- --confirm   # apply; needs CLOUDFLARE_API_TOKEN_WRITE
+npm run infra:apply -- --prune     # also remove undeclared values on declared names
+```
+
+The plan diffs `infra.json` against public DNS over DoH, so producing one costs
+nothing and reveals nothing. Only the write needs a token, and it reads a
+**different environment variable** (`CLOUDFLARE_API_TOKEN_WRITE`) from the
+read-only `CLOUDFLARE_API_TOKEN` the check uses. Two names means the write token
+can never be picked up by the check path by accident, and CI's read-only token
+can never satisfy the write path.
+
+**It refuses to run in CI.** Production is unreachable from GitHub on purpose:
+Workers Builds is the only publisher, and CI holds a read-only token so it
+cannot become a second one. A write token in Actions would dissolve that, so the
+script exits 1 the moment it sees `CI`.
+
+**Deleting a record means emptying its `expect`, not deleting its entry.**
+Removing the block from `infra.json` makes the record undeclared, and `--prune`
+only ever touches declared names, so the record becomes invisible rather than
+removed. To actually delete one, keep the entry and set `"expect": []`, run
+`--prune --confirm`, then remove the entry once the record is gone.
+
+**Scope is DNS records whose `match` is `exact`, and nothing else.** That is the
+exact set where `infra.json` knows the whole desired value, so it is the only set
+recreatable from this file without inventing something. The plan lists what it
+will not fix, and who owns it instead: Resend owns the DKIM key, Cloudflare
+creates the proxied apex with the Worker custom domain, wrangler creates KV/R2/D1,
+and Workers Builds deploys the Worker. Creates and updates happen by default;
+deleting needs `--prune`, because an undeclared record is more often a
+third-party verification TXT than junk.
+
+**Full rebuild order**, if the zone is ever gone. Each step feeds the next:
+
+1. Point the registrar at the nameservers in `infra.json` (`zone.nameservers`),
+   then republish the DS record so `zone.dnssec.ds` matches again.
+2. Create the storage with wrangler (`kv namespace create`, `r2 bucket create`,
+   `d1 create`, `vectorize create`). Each mints a NEW id; paste them into
+   `wrangler.jsonc`, which stays the only place ids live.
+3. Ship the Worker through the normal path (merge to `main`, CI promotes to
+   `production`, Workers Builds deploys). This is what creates the proxied
+   `aadhar.sh`, `www` and `cal` records, so do not hand-author them.
+4. `npm run infra:apply -- --confirm` for the mail and agent-discovery records:
+   MX, SPF, DMARC, BIMI, SVCB. Nothing else rebuilds these, which is exactly why
+   this path exists.
+5. Re-verify the domain in Resend to reissue the DKIM key.
+6. `npm run infra:check` should come back green.
+
+**The edge tier.** Cloudflare exposes dozens of zone toggles and almost all of
+them are defaults nobody here has an opinion about. The five in `infra.json`'s
+`edge` block are the ones with a real consequence for something this repo does,
+and three of the five are must-stay-OFF, which is the category that rots
+quietest: enabling a helpful-sounding feature never looks like a regression at
+the time.
+
+- **Polish off.** It would re-encode images at the edge and silently discard the
+  whole encoder toolchain (zenc, 10-bit AVIF, the q84 tuning, the benchmark
+  behind those choices). The site would look fine and the craft would be gone.
+- **Rocket Loader off.** It rewrites script loading, over the top of the
+  hand-tuned inline-loader and `defer` order in `index.html`.
+- **HTTP/3 on**, because the DNS-AID SVCB record advertises `alpn=h2,h3`. Turn
+  it off and DNS promises a protocol the edge cannot speak, while the DNS tier
+  stays green because the record itself never changed.
+- **Compression on**, because the performance budget is denominated in
+  compressed bytes and `perf-budget.mjs` compresses locally, so it would keep
+  passing while real visitors stopped getting compressed responses.
+- **HSTS** exact-matched like SPF and DMARC, because it is hand-chosen policy.
+  Raising `max-age` is fine and should update the declaration.
+
+They are checked as observed responses, not dashboard toggles. That needs no
+credential, so the tier runs on every PR, and it asserts the thing that actually
+matters: a toggle can read `on` while a cache rule overrides it for one path.
+
+**This tier tests production, not the branch.** A failure here is not caused by
+the PR that surfaced it, so its findings are prefixed `production edge:`. If one
+fires on an unrelated PR, fix the zone rather than the branch.
+
+**Known blind spot.** Cloudflare publishes no REST endpoint for Workers Builds
+project configuration, so the `release` block in `infra.json` is recorded but
+unverifiable, and the checker says so on every run. It matters more than most of
+what is checked: a non-empty dashboard Build command builds twice, and a command
+that runs anything other than `build.mjs` is how production once served an
+unminified 78KB `nav.js`. Review it by eye when you touch build settings.
 
 ### Performance budget semantics
 
@@ -165,6 +305,13 @@ client asset envelopes are measured in gzip and Brotli, not raw authoring bytes;
 they are role-aware and deliberately have room for ordinary feature work. The
 Worker gzip number is a growth alert, not a user-experience ceiling: Worker code
 is server-side, so it must earn a hard limit through measured TTFB or CPU impact.
+
+That growth alert now names its cause. The dry-run passes `--metafile`, so
+esbuild writes per-input byte attribution to `.build/.perfbudget/bundle-meta.json`
+and the script reads it back. A green run prints one line (module count plus the
+largest single module); a run over the advisory threshold prints the top 5 with
+sizes, so "the bundle grew" arrives with the modules that grew it instead of a
+number to bisect by hand.
 
 Cloudflare Web Analytics/RUM is the outcome source for LCP, INP, CLS, FCP, and
 page-load behavior. Until it has a useful baseline, do not turn an advisory
@@ -305,7 +452,13 @@ below whenever they look unreferenced again:
 
 - **`holding/bimi.svg`** is the BIMI logo (SVG Tiny-PS, square and full-bleed
   because inboxes circle-crop it). Its consumer is a Cloudflare DNS record, so
-  deleting the file breaks mail rather than the site and nothing here goes red:
+  deleting the file breaks mail rather than the site.
+
+  **This one now goes red.** The BIMI record in [`infra.json`](infra.json)
+  carries a `consumer` field naming this path, and `npm run infra:check` fails
+  if the file disappears. That is the whole reason the `consumer` field exists;
+  a DNS record pointing into the tree makes a file load-bearing even though
+  nothing here links it. Point any future record at its file the same way.
 
   ```bash
   dig +short default._bimi.aadhar.sh TXT   # "v=BIMI1; l=https://aadhar.sh/bimi.svg"
@@ -541,7 +694,9 @@ curl -s "https://aadhar.sh/images/manifest.json" | jq length          # photo co
 |---|---|
 | `add-photos.sh` | Full pipeline for new photos: resize, EXIF-rotate, encode AVIF+JPG center-square thumbs, upload the full-resolution browser copy to R2, regenerate metadata, bake histograms, validate the artifact graph, and bust the manifest KV keys. |
 | `check-photo-pipeline.mjs` | CI-safe invariant check: every metadata stem has all three hashed tiers, per-photo metadata, and four 64-bin histogram channels, with no orphaned pixel files. Also walks the authored HTML/JS for hardcoded `/i/<stem>.<hash>` URLs (the `/garage/tooltips` demo slots have three) and fails if a re-encode has pruned the bytes one of them names. |
-| `extract-photo-metadata.sh` | Read EXIF from the SOOC folder, emit `images/metadata.json` + per-photo `images/meta/<stem>.json`. Pulls the Fuji recipe fields too. Requires exiftool + jq. |
+| `extract-photo-metadata.sh` | Read EXIF from the SOOC folder, emit `images/metadata.json` + per-photo `images/meta/<stem>.json`. Pulls the Fuji recipe fields too. Requires exiftool + jq. **Two schemas, on purpose:** `metadata.json` is the RECORD (long, self-documenting field names, plus the derived `recipe` card) and the per-photo files are the tooltip's RENDER CACHE (short keys, tooltip-only fields, nulls dropped, ~28% smaller compressed because one is fetched per hover). Bump `META_V` in `tooltip.js` when the per-photo shape changes. |
+| `build-exif-index.mjs` | Roll every per-photo `images/meta/<stem>.json` MINUS its histogram into one `images/exif.json` (158 photos, 2.6KB brotli). Called by `extract-photo-metadata.sh`, so `npm run photos` keeps it current, and `check-photo-pipeline.mjs` rebuilds it to fail on drift. **Why it exists:** the homepage draws a random 12 of 158 per request, so warming metadata per visible slot was 12 cold requests on nearly every visit (a given slot repeats ~7.6% of the time). One immutable index is smaller than that on the first visit and free after. Histograms stay per-photo because they are 623 of a meta file's ~977 bytes, so folding them in would take the index from 2.6KB to 24KB for bars most visitors never see. |
+| `build-recipes.py` | Derive the self-documenting Fuji film-recipe card (`recipe`) for each photo in `images/metadata.json`, in the idiom fujixweekly.com publishes recipes in (`Dynamic Range: DR400`, `White Balance: Kelvin (5900K), -1 Red & +4 Blue`, `Clarity: -2`). Called by `extract-photo-metadata.sh`. Values are transformed from the NUMERIC EXIF tags (`FujiFilm:Sharpness`, `Clarity`, `DevelopmentDynamicRange`), never guessed back from friendly words; a non-Fuji frame gets no recipe block. Query it with `/photos/query.json?recipe=DR400`. |
 | `reencode-thumbnails.sh` | Re-encode every published grid thumb from the source folder at a new resolution (pre-cropped squares, two tiers). Follow with `hash-thumbnails.sh` + a manifest bust. |
 | `add-car-photo.sh` | One resto-mod reference photo -> `cars/<stem>.{avif,jpg}` for the homepage car tooltips. No EXIF, no R2. |
 | `zenc/` | The JPEG thumbnail encoder: a Rust crate wrapping zenjpeg (hybrid trellis + progressive scan search). `cargo build --release` (auto-built on first pipeline run). `zenc <in> <out> -q 84`. dependabot tracks the zenjpeg pin; replaced the from-source jpegli build in 2026-07. |

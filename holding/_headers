@@ -20,11 +20,13 @@
   Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://i.scdn.co https://*.spotifycdn.com; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; worker-src 'self'; manifest-src 'self'; upgrade-insecure-requests
   # Permissions-Policy: explicitly opt out of every browser API we don't
   # use. shrinks fingerprinting surface and prevents stray code from popping
-  # permission prompts. `browsing-topics=()` opts out of Google's Topics API
-  # (the successor to FLoC — the old `interest-cohort` token was removed from
-  # Chrome, so it now logs an "unrecognized feature" warning; Topics is the
-  # live directive).
-  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=(), serial=(), bluetooth=(), midi=(), accelerometer=(), gyroscope=(), magnetometer=(), screen-wake-lock=(), hid=(), idle-detection=()
+  # permission prompts. every token here must be one a shipping browser still
+  # recognizes: an unknown one is inert AND logs a console error. that has now
+  # eaten both ad-targeting opt-outs — `interest-cohort` died with FLoC, and
+  # `browsing-topics` went with the Topics API (deprecated Chrome 144, feature
+  # removed, so it warns as of 2026-07). nothing is lost: strict CSP means no
+  # third-party code runs here to call Topics in the first place.
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), bluetooth=(), midi=(), accelerometer=(), gyroscope=(), magnetometer=(), screen-wake-lock=(), hid=(), idle-detection=()
   X-Frame-Options: DENY
 
 # thumbnails are content-addressed by filename (uploads keep their SOOC
@@ -45,7 +47,16 @@
 # hashed app-shell assets: /a/<name>.<hash8>.<ext> (nav.js + luna.css + lens.js). build.mjs
 # mints a fresh hash whenever the shell bytes change, so the URL names exact bytes
 # and a year + immutable is structurally safe — same content-addressed contract as
-# /i/ thumbnails, and edge-direct for the same reason (not in run_worker_first).
+# /i/ thumbnails.
+#
+# NO LONGER edge-direct (changed 2026-07-26). /a/* is in run_worker_first so the
+# worker can hand out build.mjs's brotli q11 `.br` twin, which the edge would not
+# have produced: it fly-compresses at about q4 and prefers zstd when a browser
+# offers everything, and zstd measured LARGER than its own brotli on this site.
+# Worth ~19% of nav.js + luna.css on the wire. This rule still applies to both the
+# asset and its `.br` twin (the glob matches each), so the immutable cache survives
+# the move; the worker carries the asset layer's headers through and only corrects
+# content-type, content-encoding, vary, and the ETag.
 # The unhashed /nav.js + /luna.css + /lens.js below stay short-cached as fallbacks
 # (cal/coffee's absolute refs, dev, any stale HTML); every page the build touches
 # loads the hashed URL.
@@ -251,6 +262,17 @@
 # critical-path JS, but once a visitor warms it the browser should reuse it for
 # later hovers and the edge should serve it without a Worker invocation.
 /tooltip.js
+  Cache-Control: public, max-age=300, stale-while-revalidate=86400, s-maxage=86400
+
+# hoist.js — the shared tooltip/popover engine tooltip.js + notepad.js import,
+# and lens-browser.js — the /lens browser-view island. Both were missing a rule
+# and shipped the platform default (max-age=0, must-revalidate), so hoist.js
+# cost a 304 on every warm homepage load: it was the ONLY revalidation left in
+# a cache-on Safari capture (2026-07-26). Same fix, same reasoning as /lens.js.
+/hoist.js
+  Cache-Control: public, max-age=300, stale-while-revalidate=86400, s-maxage=86400
+
+/lens-browser.js
   Cache-Control: public, max-age=300, stale-while-revalidate=86400, s-maxage=86400
 
 # the retired service worker's unregister stub (v136): revalidates on every

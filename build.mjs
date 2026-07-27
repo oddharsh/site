@@ -4,10 +4,15 @@
 // committed readable and is the source of truth. This script stages the static
 // holding tree plus the two embedded application modules under .build/ and
 // minifies exactly six client scripts (the assets pages load) plus the homepage
-// HTML; the garage/ and lwe/ HTML, images, _headers, and the worker modules ship
-// byte-identical to git. Each transformed asset gets a readable twin deployed
-// alongside it, because View Source is part of the product and minification
-// must not cost it.
+// HTML; images and _headers ship byte-identical to git. Each transformed asset
+// gets a readable twin deployed alongside it, because View Source is part of the
+// product and minification must not cost it.
+//
+// The garage/ and lwe/ HTML and the worker modules are NOT minified, but they are
+// no longer byte-identical to git either: step 1b injects the client-edge CSS
+// mirror into every staged page that carries the window geometry, derived from
+// luna.css. It is one commented, readable line in a readable file — View Source
+// still reads as hand-written CSS, and the line says where it came from.
 //
 //   node build.mjs                                   # stage .build/
 //   npm run deploy                                   # build + wrangler deploy -c .build/wrangler.jsonc
@@ -17,6 +22,7 @@
 
 import { createHash } from "node:crypto";
 import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { brotliCompressSync, constants as zlibConstants, zstdCompressSync } from "node:zlib";
 import minifyHtml from "@minify-html/node";
 import { transform as transformCss } from "lightningcss";
 import { minifySync } from "oxc-minify";
@@ -124,6 +130,13 @@ async function checkInvariants() {
   const floorVals = new Set(floors.values());
   if (floorVals.size > 1) warn.push(`taskbar-floor height disagrees across the critical-geometry copies (${[...floors].map(([f, v]) => `${f.split("/").pop()}:${v}px`).join(", ")}) — luna.css and the inline copies must match`);
 
+  // 5b (hard) — the client edge (luna.css, search "THE CLIENT EDGE") is authored
+  // exactly once and injected into the staged pages by clientEdgeMirror() below.
+  // If the declaration can't be found in luna.css there is nothing to inject and
+  // every page silently loses its first-paint mirror, so this blocks rather than
+  // warns: a missing rule here is a rename or a bad edit, not a taste call.
+  if (!clientEdgeDecl(await read("holding/luna.css"))) hard.push("luna.css: the client-edge declaration went missing (search \"THE CLIENT EDGE\") — build.mjs injects it into every windowed page and has nothing to inject");
+
   // 6 (warn) — the local-dev twin (wrangler.dev.jsonc) must declare the same
   // bindings as the deploy config (wrangler.jsonc), or local `wrangler dev`
   // diverges from prod. Compare the set of binding identifiers by name; a
@@ -210,10 +223,148 @@ async function checkInvariants() {
     manifestChecked = surfaces.length;
   } catch (e) { hard.push(`site-manifest check could not run: ${e.message}`); }
 
+  // 9 — the taste tripwires GREENFIELD.md asked for, calibrated against what the
+  // site actually ships. Its list (ban cubic-bezier, any easing beyond linear,
+  // any radius over 3px, any blurred shadow) would block this deploy today: the
+  // window minimize/restore morph IS a cubic-bezier, luna.css runs 60ms ease-out
+  // everywhere, canon defines --radius-window: 8px, and XP menus really did drop
+  // a soft shadow. Banning those bans the site. So the split here is between the
+  // one rule that is owner LAW (zero font bytes, hard) and the drift signals that
+  // want a human look (warn). Demo pages are exempt from the taste warnings and
+  // NOT from the font law: /garage and /lwe exist to show the platform off, so
+  // frontier CSS in them is the point, while a web font anywhere is still fatal.
+  let tasteScanned = 0, tasteOk = [];
+  try {
+    const walk = async (dir, out = []) => {
+      for (const e of await readdir(dir, { withFileTypes: true })) {
+        const p = `${dir}/${e.name}`;
+        if (e.isDirectory()) { if (!/^(i|images|og|cars|node_modules|\.well-known)$/.test(e.name)) await walk(p, out); }
+        else if (/\.(css|html|js)$/.test(e.name) && !/\.src\.(js|css|html)$/.test(e.name)) out.push(p);
+      }
+      return out;
+    };
+    const served = [...await walk("holding"), "cal/src/templates.js", "serendipity/serendipity.js"];
+    const isDemo = (p) => /^holding\/(garage|lwe)\//.test(p);
+    // Blank block comments before pattern-matching (luna.css discusses @font-face
+    // in prose twice, and a guard that fires on its own documentation gets
+    // muted). BLANK rather than delete: same length, newlines kept, so a match
+    // offset still maps to its real line — which is what lets a finding be
+    // traced back to the source line and checked for a taste-ok marker.
+    const blank = (s) => s.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "));
+
+    for (const f of served) {
+      let raw; try { raw = await read(f); } catch { continue; }
+      const src = blank(raw);
+      const lines = raw.split("\n");
+      const lineAt = (off) => lines[src.slice(0, off).split("\n").length - 1] || "";
+      // A deliberate deviation is recorded ON THE LINE, as /* taste-ok: why */.
+      // It silences the WARN-level checks only. There is no way to mark yourself
+      // exempt from zero font bytes or from an overshoot curve, because those
+      // are not taste calls. Reasons are printed in the build summary, so an
+      // exemption stays visible instead of quietly becoming the new normal.
+      const okOn = (off) => {
+        const m = /taste-ok:\s*([^*\/]+)/.exec(lineAt(off));
+        if (!m) return false;
+        tasteOk.push(`${f}: ${m[1].trim()}`);
+        return true;
+      };
+      tasteScanned++;
+
+      // 9a (hard) — zero font bytes, the one rule with no taste component. Every
+      // way a page could acquire a downloadable face, not just @font-face.
+      if (/@font-face\s*\{[^}]*url\(/i.test(src)) hard.push(`${f}: @font-face with url() — the site ships 0 font bytes (local() reference rules belong in design/tokens/fonts.css, never in a served file)`);
+      if (/@import[^;]*(font|typekit)/i.test(src)) hard.push(`${f}: @import of a font stylesheet — the site ships 0 font bytes`);
+      if (/as\s*=\s*"?font"?/i.test(src)) hard.push(`${f}: rel=preload as=font — the site ships 0 font bytes`);
+      for (const host of ["fonts.googleapis.com", "fonts.gstatic.com", "use.typekit.net", "fonts.bunny.net"]) {
+        if (src.includes(host)) hard.push(`${f}: references ${host} — the site ships 0 font bytes`);
+      }
+
+      // 9b (hard) — an overshoot easing curve. Unlike "is 300ms too slow", this
+      // one is decidable: y outside [0,1] means the value springs past its target
+      // and settles back, which is a 2015 motion language no Luna control had.
+      for (const m of src.matchAll(/cubic-bezier\(\s*([-\d.]+)\s*,\s*([-\d.]+)\s*,\s*([-\d.]+)\s*,\s*([-\d.]+)\s*\)/g)) {
+        const [y1, y2] = [Number(m[2]), Number(m[4])];
+        if (y1 < 0 || y1 > 1 || y2 < 0 || y2 > 1) hard.push(`${f}: ${m[0]} overshoots — springy easing reads as a different era`);
+      }
+      if (isDemo(f)) continue;
+
+      // 9c (warn) — a NEW easing curve outside the two the window morph uses.
+      // Tuning one of these is a taste call, so this prompts a look, never a block.
+      for (const m of src.matchAll(/cubic-bezier\([^)]*\)/g)) {
+        const v = m[0].replace(/\s+/g, "");
+        if (!["cubic-bezier(.4,0,1,1)", "cubic-bezier(0,0,.2,1)"].includes(v) && !okOn(m.index)) warn.push(`${f}: ${m[0]} is not one of the two window-morph curves — taste review`);
+      }
+      // 9d (warn) — radius past --radius-window (8px). Elliptical radii are
+      // skipped: the Start orb is a real pill and its 9px/14px is correct.
+      for (const m of src.matchAll(/border-radius:\s*([^;}"']+)/g)) {
+        if (m[1].includes("/")) continue;
+        for (const px of m[1].matchAll(/([\d.]+)px/g)) {
+          if (Number(px[1]) > 8 && !okOn(m.index)) warn.push(`${f}: border-radius ${m[1].trim()} exceeds --radius-window (8px) — taste review`);
+        }
+      }
+      // 9e (warn) — a soft shadow. XP dropped shadows on menus and dialogs, so
+      // this can't be zero; luna.css's widest is 9px. Past 12px it stops reading
+      // as a drop shadow and starts reading as a 2015 elevation surface.
+      for (const m of src.matchAll(/box-shadow:\s*([^;}"']+)/g)) {
+        if (/\binset\b/.test(m[1])) continue;
+        // offsets may be a unitless 0 ("0 4px 24px"), so px is optional on them
+        for (const px of m[1].matchAll(/-?[\d.]+(?:px)?\s+-?[\d.]+(?:px)?\s+([\d.]+)px/g)) {
+          if (Number(px[1]) > 12 && !okOn(m.index)) warn.push(`${f}: box-shadow blur ${px[1]}px reads as a modern elevation shadow — taste review`);
+        }
+      }
+      // 9f (warn) — smooth scrolling. XP scrolled instantly; a demo page showing
+      // the property off is exempt above.
+      const sb = /scroll-behavior:\s*smooth/.exec(src);
+      if (sb && !okOn(sb.index)) warn.push(`${f}: scroll-behavior: smooth — XP scrolled instantly`);
+    }
+  } catch (e) { warn.push(`taste tripwire could not run: ${e.message}`); }
+
   if (warn.length) console.warn("build: invariant WARNINGS (deploy continues):\n  - " + warn.join("\n  - "));
   if (hard.length) throw new Error("build: invariant tripwires FAILED, deploy blocked:\n  - " + hard.join("\n  - "));
-  console.log(`invariants ok: ${routeKeys.length + prefixProbes.length} routes mirrored (${prefixProbes.length} prefix), CSP style-src, blink-fix, generator, geometry, ${skillsChecked} skill digest${skillsChecked === 1 ? "" : "s"}, ${manifestChecked} surfaces registered${warn.length ? " (with warnings above)" : ""}`);
+  console.log(`invariants ok: ${routeKeys.length + prefixProbes.length} routes mirrored (${prefixProbes.length} prefix), CSP style-src, blink-fix, generator, geometry, ${skillsChecked} skill digest${skillsChecked === 1 ? "" : "s"}, ${manifestChecked} surfaces registered, ${tasteScanned} files taste-scanned${tasteOk.length ? ` (${tasteOk.length} taste-ok: ${tasteOk.join("; ")})` : ""}${warn.length ? " (with warnings above)" : ""}`);
 }
+
+// ── the client edge, authored once and mirrored at deploy ────────────────────
+// luna.css owns the rule (search "THE CLIENT EDGE") and every windowed page
+// inherits it at runtime, so the SOURCE is already correct with nothing to
+// remember on a new page. The mirror below exists purely for first paint: luna
+// loads non-render-blocking and the edge's 6px gutter is layout, so without a
+// copy in the page's own inline block the document lays out 12px wider and
+// re-wraps once when luna lands.
+//
+// Hand-maintaining that copy in ~30 files was the thing worth deleting: it is
+// derived data, it drifts, and forgetting it on a new page is invisible until
+// someone watches a reflow. So the build derives it instead, from luna.css, and
+// a page author never writes it. Local dev (wrangler.dev.jsonc) serves the
+// unbuilt tree, where the edge simply arrives with luna.css.
+//
+// This is the ONLY generated CSS in the build. It adds no new rule and changes
+// no cascade: the injected declaration is byte-identical to luna's, so when luna
+// applies, nothing moves.
+
+// pull the declaration body out of luna.css so there is one definition of it
+const clientEdgeDecl = (luna) => {
+  const m = /\.window>\.content,\.window>\.body\{(border:\d+px solid #ece9d8[^}]*outline-offset:-\d+px)\}/.exec(luna);
+  return m ? m[1] : null;
+};
+
+// the geometry mirror every windowed page already carries; the edge goes after it
+const GEOMETRY_MIRROR = /^([ \t]*)(\.window\s*>\s*\.content(?:\s*,\s*\.window\s*>\s*\.body)?\s*\{[^}]*overflow:\s*auto[^}]*\})[ \t]*$/m;
+
+// insert the edge right after the geometry mirror, matching the file's own
+// spacing so garage/lwe View Source still reads as hand-written CSS.
+const clientEdgeMirror = (source, decl) => {
+  const m = GEOMETRY_MIRROR.exec(source);
+  if (!m) return null;
+  const [, indent, rule] = m;
+  const sel = rule.slice(0, rule.indexOf("{")).trim();
+  const spaced = sel.includes(" > ");
+  const body = spaced ? decl.replace(/([:,])(?! )/g, "$1 ").replace(/;/g, "; ") : decl;
+  const line = spaced
+    ? `${indent}/* client edge — generated by build.mjs from luna.css */\n${indent}${sel} { ${body}; }`
+    : `${indent}/* client edge — generated by build.mjs from luna.css */\n${indent}${sel}{${body}}`;
+  return source.slice(0, m.index + m[0].length) + "\n" + line + source.slice(m.index + m[0].length);
+};
 
 // the client scripts to minify: [file, banner pointer, tripwire the minified output MUST contain]
 // sw.js left this list in v136: it's a ~15-line unregister stub now, shipped
@@ -225,6 +376,11 @@ const SHELLS = [
   ["lens-browser.js", "/lens-browser.src.js", "LensBrowser"],
   ["quiz.js",    "/quiz.src.js",    "luq-data"],       // the understanding-check widget
   ["tooltip.js", "/tooltip.src.js", "function start"],
+  // the shared hover engine. tooltip.js imports it statically; the serendipity
+  // shell and nav.js import it dynamically. Deliberately NOT content-hashed:
+  // the /a/ repointer is attribute-scoped (src=/href= only) and would never
+  // rewrite an `import` specifier, so it stays a plain /hoist.js like its peers.
+  ["hoist.js",   "/hoist.src.js",   "createHoist"],
 ];
 
 // fail fast on a broken invariant before doing any staging work
@@ -242,6 +398,33 @@ await mkdir(`${OUT}/cal`, { recursive: true });
 await cp("cal/src", `${OUT}/cal/src`, { recursive: true });
 await mkdir(`${OUT}/serendipity`, { recursive: true });
 await cp("serendipity/serendipity.js", `${OUT}/serendipity/serendipity.js`);
+
+// 1b) inject the client edge into every staged page that carries the window
+// geometry mirror. Runs BEFORE minification so the injected CSS is minified with
+// the rest of the page rather than riding along as a readable line in a minified
+// file. Pages that load luna.css render-blocking (garage/gpt56.html) carry no
+// geometry mirror and correctly get nothing.
+{
+  const decl = clientEdgeDecl(await readFile("holding/luna.css", "utf8"));
+  const targets = (await readdir(`${OUT}/holding`, { recursive: true }))
+    .filter((f) => /\.(html|js)$/.test(f) && !/\.src\.|^(i|images|og|cars)\//.test(f))
+    .map((f) => `${OUT}/holding/${f}`)
+    .concat([`${OUT}/cal/src/templates.js`, `${OUT}/serendipity/serendipity.js`]);
+
+  let mirrored = 0, skipped = 0;
+  for (const f of targets) {
+    let src; try { src = await readFile(f, "utf8"); } catch { continue; }
+    if (!GEOMETRY_MIRROR.test(src)) { skipped++; continue; }
+    const out = clientEdgeMirror(src, decl);
+    if (!out) throw new Error(`client edge: ${f} matched the geometry mirror but the injection did not fire`);
+    await writeFile(f, out);
+    mirrored++;
+  }
+  // a rename in luna.css or in the geometry mirror would silently mirror nothing
+  // and cost every page a reflow, so the count is the tripwire.
+  if (mirrored < 25) throw new Error(`client edge: mirrored into only ${mirrored} pages (expected 25+) — did the geometry-mirror shape change?`);
+  console.log(`client edge: mirrored into ${mirrored} staged pages from luna.css (${skipped} files carry no window geometry)`);
+}
 
 const minifyJavaScript = (filename, sourceText) => {
   const result = minifySync(filename, sourceText, {
@@ -397,18 +580,31 @@ const HTML_MARKERS = [
 // minify only the served copy. The worker rewrites this response as a stream,
 // so doing this before ASSETS.fetch keeps the rewriter path allocation-free.
 {
-  const src = await readFile("holding/index.html", "utf8");
+  // TWO sources on purpose, and the split is the whole point of the twin:
+  //   - `authored` is holding/index.html untouched. It is what /index.src.html
+  //     ships, and perf-budget.mjs asserts the twin is byte-identical to it.
+  //     "Readable source" means the file a human wrote, not a build artifact.
+  //   - `staged` is that file plus step 1b's injected client edge, and it is what
+  //     gets minified and served. Reading `authored` here instead would drop the
+  //     injection on the floor and quietly cost the homepage its first-paint
+  //     mirror (it did, for one commit).
+  // The twin is not lying by omission: the inline block says in so many words
+  // that the client edge is injected by build.mjs from luna.css.
+  const authored = await readFile("holding/index.html", "utf8");
+  const staged = await readFile(`${OUT}/holding/index.html`, "utf8");
   const srcPath = "/index.src.html";
   const banner = `<!-- minified at deploy; readable source: ${srcPath} -->\n`;
-  const inlineMinified = transformInlineHtmlBlocks(src);
+  const inlineMinified = transformInlineHtmlBlocks(staged);
   const body = minifyHtml.minify(Buffer.from(inlineMinified), HTML_MINIFY_CFG).toString();
   const min = banner + body;
   for (const [label, marker] of HTML_MARKERS) {
     if (!marker.test(min)) throw new Error("index.html: HTML minifier lost required marker " + label);
   }
-  await writeFile(`${OUT}/holding/${srcPath.slice(1)}`, src);
+  // the served copy must actually carry the injection; the twin must not
+  if (!/border:\s*6px solid #ece9d8/.test(min)) throw new Error("index.html: the minified homepage lost the injected client edge");
+  await writeFile(`${OUT}/holding/${srcPath.slice(1)}`, authored);
   await writeFile(`${OUT}/holding/index.html`, min);
-  console.log(`index.html: ${src.length} -> ${min.length} bytes (+ ${srcPath}; inline JS/CSS use existing minifiers)`);
+  console.log(`index.html: ${staged.length} -> ${min.length} bytes (+ ${srcPath}, byte-identical to source; inline JS/CSS use existing minifiers)`);
 }
 
 
@@ -512,6 +708,10 @@ for (const [file, srcPath, marker] of SHELLS) {
     // the tag said so out loud. A content hash retires the ritual. Not in
     // run_worker_first, so /a/ is edge-direct and inherits the immutable rule.
     { attr: "src",  from: "/lens.js",  base: "lens", ext: "js",  witness: "_worker.js/lens.js" },
+    // the desktop icon sprite. Unlike the three above, every ref carries a
+    // #fragment (href="/icons.svg#pin-garage"), so `frag` widens the match to
+    // keep it. Its witness is the desktop partial, which is where all 12 live.
+    { attr: "href", from: "/icons.svg", base: "icons", ext: "svg", frag: true, witness: "_worker.js/lib/desktop.js" },
   ];
   const reps = [], hashedFor = {};
   for (const a of ASSETS) {
@@ -521,8 +721,10 @@ for (const [file, srcPath, marker] of SHELLS) {
     await writeFile(`${OUT}/holding${to}`, bytes);
     // one regex for quoted "x" AND backslash-escaped \"x\" (writing.js builds its
     // <head> as an escaped string); a second for minify-html's unquoted x.
-    reps.push({ re: new RegExp(`\\b${a.attr}=(\\\\?")${esc(a.from)}\\1`, "g"), sub: `${a.attr}=$1${to}$1` });
-    reps.push({ re: new RegExp(`\\b${a.attr}=${esc(a.from)}(?=[\\s>])`, "g"),  sub: `${a.attr}=${to}` });
+    const frag = a.frag ? "(#[\\w-]+)" : "";
+    const keep = a.frag ? "$2" : "";
+    reps.push({ re: new RegExp(`\\b${a.attr}=(\\\\?")${esc(a.from)}${frag}\\1`, "g"), sub: `${a.attr}=$1${to}${keep}$1` });
+    reps.push({ re: new RegExp(`\\b${a.attr}=${esc(a.from)}${a.frag ? "(#[\\w-]+)" : ""}(?=[\\s/>])`, "g"), sub: `${a.attr}=${to}${a.frag ? "$1" : ""}` });
     console.log(`hashed asset: ${a.from} -> ${to} (${bytes.length} bytes)`);
   }
 
@@ -591,6 +793,122 @@ for (const [file, srcPath, marker] of SHELLS) {
     if (!body.includes(to)) throw new Error(`${a.witness} was not repointed to hashed ${a.base} (${to})`);
   }
   console.log(`hashed-asset refs: repointed ${refCount} references across ${filesTouched} files`);
+}
+
+// 7) precompress the /a/ shell assets at brotli q11, next to the bytes they encode.
+//
+// The edge compresses on the fly at about q4, and when a browser offers everything
+// it picks zstd — which measured LARGER than Cloudflare's own brotli on this site
+// (13,264 vs 12,457 bytes on the homepage, 2026-07-26). Encoding offline at q11 is
+// a measured ~19% off the wire for the two render-path assets, and it is free at
+// decode: brotli decode time is independent of encode QUALITY, because the decoder
+// makes one pass over a stream that is now smaller (0.070ms at q4 vs 0.081ms at q11
+// on a 47KB document, in-process, 300 iterations). GREENFIELD.md asked for exactly
+// this in July 2026 ("static documents precompress offline at brotli q11") and
+// measured the same ~19% tax; wrangler.jsonc deferred it as migration scope rather
+// than rejecting it.
+//
+// Only /a/ is precompressed. Those four files are content-addressed, immutable, and
+// on the render path, so they are the whole win in one bounded directory. The static
+// garage/lwe HTML is the next candidate and needs its own routing decision.
+//
+// This is safe to add because it degrades to exactly today's behavior: the worker
+// serves a .br twin only when the request actually offers `br` AND the twin exists.
+// A skipped build step, or a client without brotli, gets the identity bytes.
+{
+  const dir = `${OUT}/holding/a`;
+  const files = (await readdir(dir)).filter((f) => /\.(js|css|svg)$/.test(f));
+  if (!files.length) throw new Error("precompression found no /a/ shell assets — did step 6 stop emitting them?");
+  let raw = 0, enc = 0;
+  for (const f of files) {
+    const bytes = await readFile(`${dir}/${f}`);
+    const out = brotliCompressSync(bytes, {
+      params: {
+        [zlibConstants.BROTLI_PARAM_QUALITY]: 11,
+        // 24 is the largest window a `Content-Encoding: br` response may use (RFC 7932
+        // §4). Large-window brotli reaches 2^30 but is not legal on the wire, so a
+        // decoder is entitled to reject it — never raise this.
+        [zlibConstants.BROTLI_PARAM_LGWIN]: 24,
+        [zlibConstants.BROTLI_PARAM_SIZE_HINT]: bytes.length,
+      },
+    });
+    // Refuse to ship a "compressed" twin that isn't smaller. Cheap guard against a
+    // future asset type where q11 loses (already-compressed bytes, tiny files).
+    if (out.length >= bytes.length) {
+      console.log(`precompress: SKIPPED /a/${f} (br ${out.length} >= raw ${bytes.length})`);
+      continue;
+    }
+    await writeFile(`${dir}/${f}.br`, out);
+
+    raw += bytes.length; enc += out.length;
+    console.log(`precompressed: /a/${f} ${bytes.length} -> ${out.length} bytes (br q11)`);
+  }
+  console.log(`precompress: ${(raw / 1024).toFixed(1)}KB -> ${(enc / 1024).toFixed(1)}KB brotli q11 across ${files.length} shell assets`);
+
+  // ── dcz deltas, generated HERE rather than committed ─────────────────────────
+  // A returning Chromium visitor that accepted our Use-As-Dictionary offer sends back the
+  // SHA-256 of the shell it holds; the worker answers with the diff. Measured on a real
+  // luna.css change: 116 bytes against 7,615.
+  //
+  // This used to be a workstation script with committed artifacts, on the belief that
+  // dictionary compression was unreachable from Node. That was true of BROTLI and I wrongly
+  // generalized it: node:zlib's zstd DOES take a `dictionary` option. It is also better
+  // than shelling out — 116 bytes where the zstd CLI produced 120 — and portable, verified
+  // by having the foreign `zstd -d -D` CLI decode Node's bytes byte-exact, skippable prefix
+  // and all. That interop check is the one that matters, because the real decoder is a
+  // browser, not Node.
+  //
+  // Consequences worth naming: no zstd CLI in the deploy path, no committed .dcz artifacts,
+  // no `npm run shell:deltas` step to forget, and no staleness tripwire needed at all,
+  // because a delta is now a pure function of bytes this build just produced.
+  //
+  // Still committed, and unavoidably so: holding/a-dict/, the DICTIONARY set. A dictionary
+  // has to be bytes the BROWSER already holds, which no build can derive from source.
+  {
+    const dictDir = "holding/a-dict";
+    const dicts = await readdir(dictDir).catch(() => []);
+    const parse = (n) => { const m = n.match(/^(.+)\.([0-9a-f]{8})\.(js|css|svg)$/); return m ? { base: m[1], hash8: m[2], ext: m[3], name: n } : null; };
+    const shell = files.map(parse).filter(Boolean);
+    const cands = dicts.map(parse).filter(Boolean);
+    if (cands.length) await mkdir(`${OUT}/holding/ad`, { recursive: true });
+    let n = 0, deltaBytes = 0;
+    for (const asset of shell) {
+      const targetBytes = await readFile(`${dir}/${asset.name}`);
+      for (const d of cands) {
+        if (d.base !== asset.base || d.ext !== asset.ext) continue;
+        const dictBytes = await readFile(`${dictDir}/${d.name}`);
+        // Identical bytes mean the content-hashed URL did not change, so no client will
+        // ever request a new URL for them — a delta here could not be asked for.
+        if (dictBytes.equals(targetBytes)) continue;
+
+        const frame = zstdCompressSync(targetBytes, {
+          dictionary: dictBytes,
+          params: { [zlibConstants.ZSTD_c_compressionLevel]: 19 },
+        });
+        // dcz framing (RFC 9842): the dictionary hash rides in a Zstandard SKIPPABLE frame,
+        // magic 0x184D2A5E little-endian then a 4-byte LE length of 32 then the raw digest.
+        // Being valid zstd, that prefix is skipped by any conforming decoder.
+        const digest = createHash("sha256").update(dictBytes).digest();
+        const len = Buffer.alloc(4); len.writeUInt32LE(digest.length, 0);
+        const out = Buffer.concat([Buffer.from([0x5e, 0x2a, 0x4d, 0x18]), len, digest, frame]);
+
+        // A delta that lost to the plain q11 twin is worse than no delta: the worker would
+        // serve more bytes AND cost the client a dictionary lookup.
+        const plainTwin = (await readFile(`${dir}/${asset.name}.br`).catch(() => null))?.length ?? Infinity;
+        if (out.length >= plainTwin) {
+          console.log(`delta: SKIPPED ${asset.name} vs ${d.hash8} (dcz ${out.length} >= br ${plainTwin})`);
+          continue;
+        }
+        const tag = digest.toString("hex").slice(0, 16);
+        await writeFile(`${OUT}/holding/ad/${asset.base}.${asset.hash8}.${tag}.dcz`, out);
+        n++; deltaBytes += out.length;
+        console.log(`delta: /ad/${asset.base}.${asset.hash8}.${tag}.dcz ${out.length} bytes (vs ${plainTwin} plain br)`);
+      }
+    }
+    console.log(n ? `delta: ${n} dcz delta(s), ${deltaBytes} bytes total`
+                  : `delta: none needed (every dictionary candidate matches the shipping shell)`);
+  }
+
 }
 
 console.log(`staged ${OUT}/ - deploy with: wrangler deploy (self-builds via build.command) or npm run deploy`);

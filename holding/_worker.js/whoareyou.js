@@ -95,9 +95,13 @@ export async function fetchRdap(ip) {
 export async function gatherWhoareyou(request) {
   const cf = request.cf || {};
   const h  = request.headers;
+  const url = new URL(request.url);
 
   const bm = cf.botManagement || {};
   const data = {
+    host:           url.hostname,
+    scheme:         url.protocol.replace(":", ""),
+    ray:            h.get("cf-ray") || "—",
     ip:             h.get("cf-connecting-ip") || "—",
     asn:            cf.asn || "—",
     asOrg:          cf.asOrganization || "—",
@@ -112,9 +116,15 @@ export async function gatherWhoareyou(request) {
     timezone:       cf.timezone || "—",
     colo:           cf.colo || "—",
     clientTcpRtt:   cf.clientTcpRtt ?? null,
+    // QUIC's counterpart to clientTcpRtt: only populated on HTTP/3, so the two
+    // are mutually exclusive and together they always name the transport.
+    clientQuicRtt:  cf.clientQuicRtt ?? null,
+    deliveryRate:   cf.edgeL4?.deliveryRate ?? null,
+    requestPriority: cf.requestPriority || null,
     httpProtocol:   cf.httpProtocol || "—",
     tlsVersion:     cf.tlsVersion || "—",
     tlsCipher:      cf.tlsCipher || "—",
+    tlsExtensions:  cf.tlsClientExtensionsSha1 || null,
     acceptEncoding: h.get("accept-encoding") || "—",
     userAgent:      h.get("user-agent") || "—",
     acceptLanguage: h.get("accept-language") || "—",
@@ -158,14 +168,19 @@ export function buildWhoareyouGroups(data, ua, rdap) {
     data.latitude ? { k: "Approx. coords", v: `${data.latitude}, ${data.longitude}` } : null,
     { k: "Cloudflare colo", v: data.colo },
     data.clientTcpRtt !== null ? { k: "TCP round-trip", v: `${data.clientTcpRtt} ms` } : null,
+    data.clientQuicRtt !== null ? { k: "QUIC round-trip", v: `${data.clientQuicRtt} ms` } : null,
+    data.deliveryRate !== null ? { k: "Delivery rate", v: `${data.deliveryRate} B/s` } : null,
   ];
   const transport = [
+    { k: "Host asked for", v: `${data.scheme}://${data.host}` },
     { k: "HTTP version", v: data.httpProtocol + (data.httpProtocol === "HTTP/3" ? " (over QUIC)" : "") },
     { k: "TLS version", v: data.tlsVersion },
     { k: "TLS cipher", v: data.tlsCipher },
     { k: "Accept-Encoding", v: data.acceptEncoding },
+    data.requestPriority ? { k: "Stream priority", v: data.requestPriority } : null,
     data.ja3Hash ? { k: "JA3", v: data.ja3Hash } : null,
     data.ja4 ? { k: "JA4", v: data.ja4 } : null,
+    data.tlsExtensions ? { k: "TLS extensions hash", v: data.tlsExtensions } : null,
   ];
   const computer = [
     { k: "Best guess", v: `${ua.browser} on ${ua.os} ${ua.device}` },
@@ -180,7 +195,13 @@ export function buildWhoareyouGroups(data, ua, rdap) {
     data.botScore !== null ? { k: "CF bot score", v: `${data.botScore} / 99` } : null,
     data.verifiedBot ? { k: "Verified bot", v: "yes" } : null,
     data.corporateProxy ? { k: "Corporate proxy", v: "detected" } : null,
+    { k: "Cloudflare ray", v: data.ray },
   ];
+  // NOTE: the edge-trace fields (sni/warp/gateway/rbi/kex/sliver) are absent
+  // here on purpose. They exist only in Cloudflare's /cdn-cgi/trace response
+  // and are not exposed on request.cf, so the worker genuinely cannot know
+  // them. The page fills them in the browser; this JSON feed is server-rendered
+  // and would have to invent them, so it says nothing instead.
   return [
     { title: "Network adapter", fields: net.filter(Boolean) },
     { title: "Transport & security", fields: transport.filter(Boolean) },
@@ -386,6 +407,8 @@ footer .signature small { color: oklch(56.93% 0 0); }
       ${data.latitude ? `<dt>Approx. coords</dt><dd>${esc(data.latitude)}, ${esc(data.longitude)} <a href="https://www.openstreetmap.org/?mlat=${data.latitude}&mlon=${data.longitude}&zoom=10" target="_blank" rel="noopener">(see on map)</a></dd>` : ""}
       <dt>Cloudflare colo</dt>      <dd>${esc(data.colo)} <span class="dim">(nearest CF data center serving you)</span></dd>
       ${data.clientTcpRtt !== null ? `<dt>TCP round-trip</dt><dd>${esc(data.clientTcpRtt)} ms</dd>` : ""}
+      ${data.clientQuicRtt !== null ? `<dt>QUIC round-trip</dt><dd>${esc(data.clientQuicRtt)} ms <span class="dim">(only set on HTTP/3, so it and the TCP row never both appear)</span></dd>` : ""}
+      ${data.deliveryRate !== null ? `<dt>Delivery rate</dt><dd>${esc(data.deliveryRate)} B/s <span class="dim">(most recent edge estimate for this connection)</span></dd>` : ""}
     </dl>
 
     <h2>Transport and security</h2>
@@ -394,9 +417,30 @@ footer .signature small { color: oklch(56.93% 0 0); }
       <dt>TLS version</dt>          <dd>${esc(data.tlsVersion)}</dd>
       <dt>TLS cipher</dt>           <dd>${esc(data.tlsCipher)}</dd>
       <dt>Accept-Encoding</dt>      <dd>${esc(data.acceptEncoding)}</dd>
+      ${data.requestPriority ? `<dt>Stream priority</dt><dd class="muted">${esc(data.requestPriority)}</dd>` : ""}
       ${data.ja3Hash ? `<dt>JA3 fingerprint</dt><dd>${esc(data.ja3Hash)} <span class="dim">(TLS ClientHello hash)</span></dd>` : ""}
       ${data.ja4 ? `<dt>JA4 fingerprint</dt><dd>${esc(data.ja4)}</dd>` : ""}
+      ${data.tlsExtensions ? `<dt>TLS extensions</dt><dd class="muted">${esc(data.tlsExtensions)} <span class="dim">(SHA-1 of the extension list)</span></dd>` : ""}
     </dl>
+
+    <h2>Edge Trace</h2>
+    <p class="lede">Seven things Cloudflare's edge knows about this connection that
+    it never tells the worker. <code>request.cf</code> carries geography, TLS
+    version and protocol, but not whether your SNI was encrypted, nor whether you
+    arrived through WARP. Those live only in
+    <a href="/cdn-cgi/trace"><code>/cdn-cgi/trace</code></a>, so this section is
+    the one part of the page your browser fetches for itself, from this same
+    origin, after the page has loaded.</p>
+    <dl class="field-grid" id="trace-grid">
+      <dt>Encrypted SNI</dt>        <dd data-trace="sni">…</dd>
+      <dt>Key exchange</dt>         <dd data-trace="kex">…</dd>
+      <dt>HTTP version seen</dt>    <dd data-trace="http">…</dd>
+      <dt>Through WARP</dt>         <dd data-trace="warp">…</dd>
+      <dt>Through Zero Trust</dt>   <dd data-trace="gateway">…</dd>
+      <dt>Browser isolation</dt>    <dd data-trace="rbi">…</dd>
+      <dt>Edge sliver</dt>          <dd data-trace="sliver">…</dd>
+    </dl>
+    <p class="dim" id="trace-note">Fetching…</p>
 
     <h2>Computer</h2>
     <dl class="field-grid">
@@ -411,6 +455,7 @@ footer .signature small { color: oklch(56.93% 0 0); }
       <dt>Received at</dt>          <dd>${esc(data.when)}</dd>
       <dt>Referrer</dt>             <dd>${esc(data.referer)}</dd>
       <dt>Cookies sent</dt>         <dd>${esc(data.cookies)}</dd>
+      <dt>Cloudflare ray</dt>       <dd class="muted">${esc(data.ray)} <span class="dim">(the edge's id for this one request)</span></dd>
       ${data.botScore !== null ? `<dt>CF bot score</dt><dd>${esc(data.botScore)} / 99 <span class="dim">(higher = more human-like)</span></dd>` : ""}
       ${data.detectionIds ? `<dt>Bot detection IDs</dt><dd class="muted">${esc(JSON.stringify(data.detectionIds))}</dd>` : ""}
       ${data.corporateProxy ? `<dt>Corporate proxy</dt><dd>detected</dd>` : ""}
@@ -437,12 +482,14 @@ footer .signature small { color: oklch(56.93% 0 0); }
 
     <div class="callout">
       <strong>About this page:</strong> The Cloudflare edge renders it. Your
-      browser never speaks to a third party. The only outbound call is one
-      server-side RDAP lookup to your IP's registry, which the edge caches for
-      24h so visitors from the same block don't re-hit ARIN. No analytics. The
-      data above lives for one HTTP request, then nothing writes
-      it to storage. View-source if you want, since it's a single JavaScript file
-      you can read end-to-end.
+      browser never speaks to a third party. There are exactly two outbound
+      calls: one server-side RDAP lookup to your IP's registry, which the edge
+      caches for 24h so visitors from the same block don't re-hit ARIN, and the
+      Edge Trace section's fetch of <code>/cdn-cgi/trace</code>, which your own
+      browser makes to this same origin because those seven fields are the ones
+      the worker is never told. No analytics. The data above lives for as long as
+      it takes to render, then nothing writes it to storage. View-source if you
+      want, since it's a single JavaScript file you can read end-to-end.
     </div>
 
     <footer>
@@ -456,6 +503,42 @@ footer .signature small { color: oklch(56.93% 0 0); }
     </footer>
 
 `,
+    // The one script on the page. It fills the Edge Trace section from
+    // /cdn-cgi/trace, which is the only source for those fields: request.cf
+    // never carries them, so the worker cannot render them and would have to
+    // guess. Same-origin, no third party, and the page states plainly that this
+    // second request happens. Failure is reported rather than hidden, because a
+    // page whose whole subject is what a request reveals should not quietly
+    // show blanks where it could not look.
+    scripts: `<script>
+(function () {
+  var grid = document.getElementById("trace-grid");
+  var note = document.getElementById("trace-note");
+  if (!grid || !note || !window.fetch) return;
+  var PRETTY = { plaintext: "no, sent in the clear", encrypted: "yes (ECH)", off: "no", on: "yes", none: "none" };
+  fetch("/cdn-cgi/trace", { cache: "no-store" })
+    .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); })
+    .then(function (text) {
+      var kv = {};
+      text.trim().split("\\n").forEach(function (line) {
+        var i = line.indexOf("=");
+        if (i > 0) kv[line.slice(0, i)] = line.slice(i + 1);
+      });
+      var missing = 0;
+      grid.querySelectorAll("[data-trace]").forEach(function (cell) {
+        var raw = kv[cell.getAttribute("data-trace")];
+        if (raw === undefined) { cell.textContent = "not reported"; cell.className = "dim"; missing++; return; }
+        cell.textContent = PRETTY[raw] || raw;
+      });
+      note.textContent = "Read from /cdn-cgi/trace by your browser at " + new Date().toISOString() +
+        (missing ? " (" + missing + " field(s) absent from the response)" : "") + ".";
+    })
+    .catch(function (e) {
+      grid.querySelectorAll("[data-trace]").forEach(function (cell) { cell.textContent = "unavailable"; cell.className = "dim"; });
+      note.textContent = "Could not reach /cdn-cgi/trace (" + e.message + "), so these seven fields are unknown rather than assumed.";
+    });
+})();
+</script>`,
     cache: "no-store, must-revalidate",
     headers: {
       "x-robots-tag":    "noindex",

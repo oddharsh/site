@@ -35,6 +35,7 @@ const ASSET_ENVELOPES = {
   "lens-browser.js": { role: "optional browser island",    gzipKiB: 4,  brotliKiB: 3.5 },
   "quiz.js":        { role: "understanding-check island",  gzipKiB: 6,  brotliKiB: 5 },
   "tooltip.js":     { role: "optional hover island",       gzipKiB: 6,  brotliKiB: 5 },
+  "hoist.js":       { role: "shared hover engine",         gzipKiB: 2,  brotliKiB: 1.5 },
   "luna.css":       { role: "shared render-blocking CSS",  gzipKiB: 12, brotliKiB: 10 },
 };
 
@@ -49,7 +50,7 @@ const WORKER_BASELINE_GZIP_KIB = 129.23;
 const WORKER_ALERT_GROWTH = 0.25;
 const TWINS = [
   "nav.src.js", "notepad.src.js", "lens.src.js", "lens-browser.src.js",
-  "quiz.src.js", "tooltip.src.js", "luna.src.css",
+  "quiz.src.js", "tooltip.src.js", "hoist.src.js", "luna.src.css",
 ];
 const HTML_TWIN = "index.src.html";
 const HTML_ENVELOPE = {
@@ -94,18 +95,40 @@ try {
 // 2) worker bundle gzip via wrangler dry-run (self-builds .build/holding) -----
 let dryOut = "";
 try {
-  dryOut = execFileSync("npx", ["wrangler", "deploy", "--dry-run", "--outdir", ".build/.perfbudget"], { encoding: "utf8" });
+  dryOut = execFileSync("npx", ["wrangler", "deploy", "--dry-run", "--outdir", ".build/.perfbudget", "--metafile"], { encoding: "utf8" });
 } catch (e) {
   dryOut = (e.stdout || "") + "\n" + (e.stderr || "");
 }
 const gz = dryOut.match(/gzip:\s*([\d.]+)\s*KiB/);
+let overBudget = false;
 if (gz) {
   const kib = parseFloat(gz[1]);
   const alertAt = WORKER_BASELINE_GZIP_KIB * (1 + WORKER_ALERT_GROWTH);
-  if (kib > alertAt) warn(`worker bundle ${kib.toFixed(2)} KiB gzip > ${alertAt.toFixed(2)} KiB advisory alert (${Math.round(WORKER_ALERT_GROWTH * 100)}% over ${WORKER_BASELINE_GZIP_KIB} KiB baseline)`);
+  overBudget = kib > alertAt;
+  if (overBudget) warn(`worker bundle ${kib.toFixed(2)} KiB gzip > ${alertAt.toFixed(2)} KiB advisory alert (${Math.round(WORKER_ALERT_GROWTH * 100)}% over ${WORKER_BASELINE_GZIP_KIB} KiB baseline)`);
   else ok(`worker bundle ${kib.toFixed(2)} KiB gzip (advisory alert at ${alertAt.toFixed(2)} KiB)`);
 } else {
   warn("could not read bundle gzip from wrangler dry-run (offline/unauth?); skipping bundle-size check");
+}
+
+// 2b) bundle attribution, from esbuild's metafile (--metafile, above) ---------
+// The gzip number above says the bundle grew; it cannot say WHAT grew. The
+// metafile carries per-input bytes, so the advisory can name the modules
+// instead of leaving a number for someone to bisect by hand. Attribution only
+// prints when the advisory fires: on a green run it is noise.
+try {
+  const meta = JSON.parse(await readFile(".build/.perfbudget/bundle-meta.json", "utf8"));
+  const entry = Object.entries(meta.outputs).find(([name]) => name.endsWith(".js") && !name.endsWith(".map"));
+  const inputs = Object.entries(entry?.[1]?.inputs ?? {})
+    .map(([name, v]) => [name, v.bytesInOutput ?? 0])
+    .sort((a, b) => b[1] - a[1]);
+  if (!inputs.length) warn("metafile carried no input attribution; skipping bundle breakdown");
+  else if (overBudget) {
+    console.log(`        ${inputs.length} modules in the bundle; largest:`);
+    for (const [name, bytes] of inputs.slice(0, 5)) console.log(`          ${fmt(kib(bytes)).padStart(9)}  ${name}`);
+  } else ok(`bundle attribution available (${inputs.length} modules, largest ${inputs[0][0]} at ${fmt(kib(inputs[0][1]))})`);
+} catch (e) {
+  warn(`could not read bundle metafile (${e.message}); skipping bundle breakdown`);
 }
 
 // 3) minified shells + luna.css: banner + compressed advisory envelope --------

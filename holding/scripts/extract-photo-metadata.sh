@@ -117,7 +117,8 @@ exiftool -json -q \
   -FilmMode \
   -DynamicRange \
   -FocusMode -DriveMode \
-  -Sharpness -NoiseReduction \
+  -FujiFilm:Sharpness -NoiseReduction -Clarity \
+  -DevelopmentDynamicRange \
   -ColorChromeEffect -ColorChromeFXBlue \
   -GrainEffectRoughness -GrainEffectSize \
   -HighlightTone -ShadowTone -Saturation \
@@ -167,8 +168,15 @@ jq '
       meter:          ($e.MeteringMode // null),
       focus_mode:     ($e.FocusMode // null),
       drive:          ($e.DriveMode // null),
+      # Fuji writes TWO Sharpness tags: the standard ExifIFD one is a coarse
+      # Soft/Normal/Hard, while FujiFilm:Sharpness carries the real -4..+4 the
+      # recipe card needs. we ask for the FujiFilm one explicitly above.
       sharpness:      ($e.Sharpness // null),
       noise_reduction:($e.NoiseReduction // null),
+      clarity:        ($e.Clarity // null),
+      # DynamicRange reads "Standard"; DevelopmentDynamicRange is the real
+      # 100/200/400 that prints as DR100/DR200/DR400.
+      dr_value:       ($e.DevelopmentDynamicRange // null),
       # Fuji-only film-recipe fields. silently null on Leica/iPhone shots.
       film:           ($e.FilmMode // null),
       dr:             ($e.DynamicRange // null),
@@ -196,21 +204,47 @@ rm -f "$TMP" "$EXTRACTED"
 # /images/meta/<stem>.json. these are immutable + content-addressed, so a visitor
 # only pulls EXIF for the photos they actually hover (not the whole index), and
 # repeat visits are served from the browser cache. metadata.json stays as the full
-# index (the /images/metadata.json endpoint + a fallback). bump the ?mv version in
-# index.html (META_V) whenever this regenerates so caches refresh.
+# index (the /images/metadata.json endpoint + a fallback). bump the ?mv version
+# (META_V in tooltip.js) whenever this regenerates so caches refresh.
 META_DIR="$SCRIPT_DIR/../images/meta"
 mkdir -p "$META_DIR"
 if [ "$MERGE" -eq 0 ]; then
   rm -f "$META_DIR"/*.json   # drop stale per-stem files (e.g. removed photos)
 fi
+# per-photo files carry a COMPACT schema, not a verbatim copy of the metadata.json
+# entry: SHORT keys, only the fields the tooltip actually renders, and null-valued
+# fields dropped. these are fetched once per hover (the hot path), so every byte is
+# on someone's cursor. metadata.json keeps the full, readable, long-key schema — it
+# is the public /photos index (photos.js PHOTO_PUBLIC_FIELDS reads it) and the
+# archive. KEEP THIS MAP IN SYNC with tooltip.js (reader) and photo-histograms.py
+# (which merges the "hi" histogram into these same files):
+#   cm camera · ln lens · ap aperture · sp shutter · is iso · fl focal · ev ·
+#   dt date · w width · h height · wb white_balance · ct color_temp · fs flash ·
+#   fm film · dr · cc chrome · cb chrome_blue · gr grain · gs grain_size ·
+#   ht highlight_tone · st shadow_tone · sa saturation  (hi added later by histograms)
 jq -c 'to_entries[]' "$OUT" | while IFS= read -r entry; do
   stem=$(printf '%s' "$entry" | jq -r '.key')
-  printf '%s' "$entry" | jq -c '.value' > "$META_DIR/$stem.json"
+  printf '%s' "$entry" | jq -c '.value | {
+    cm: .camera, ln: .lens, ap: .aperture, sp: .shutter, is: .iso, fl: .focal,
+    ev: .ev, dt: .date, w: .width, h: .height, wb: .white_balance, ct: .color_temp,
+    fs: .flash, fm: .film, dr: .dr, cc: .chrome, cb: .chrome_blue, gr: .grain,
+    gs: .grain_size, ht: .highlight_tone, st: .shadow_tone, sa: .saturation
+  } | with_entries(select(.value != null))' > "$META_DIR/$stem.json"
 done
 
+# derive the self-documenting Fuji recipe card for each photo (fujixweekly
+# idiom) into metadata.json. runs on the full index, so it also refreshes
+# photos outside a --merge batch whose recipe format may have changed.
+"$SCRIPT_DIR/build-recipes.py" 2>&1 | tail -1
+
 # bake the 64-bin histograms back into the meta files (the full run may have
-# wiped them; the tooltip reads meta.hist instead of computing client-side)
+# wiped them; the tooltip reads meta.hi instead of computing client-side)
 "$SCRIPT_DIR/photo-histograms.py" 2>&1 | tail -1
+
+# roll the per-photo EXIF (minus histograms) into the one shared index the
+# tooltip warms on idle. derived data, so it MUST be rebuilt whenever the
+# per-photo files change; check-photo-pipeline.mjs fails on any drift.
+node "$SCRIPT_DIR/build-exif-index.mjs"
 
 COUNT=$(jq 'keys | length' "$OUT")
 if [ "$MERGE" -eq 1 ]; then
@@ -218,4 +252,4 @@ if [ "$MERGE" -eq 1 ]; then
 else
   echo "✓ extracted metadata for $COUNT photos → $OUT (+ $COUNT per-stem files in images/meta/, histograms baked)"
 fi
-echo "  next: bump META_V in index.html if fields changed, commit + deploy."
+echo "  next: bump META_V in tooltip.js if fields changed, commit + deploy."

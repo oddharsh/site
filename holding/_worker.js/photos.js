@@ -178,8 +178,11 @@ const PHOTO_PUBLIC_FIELDS = [
   "camera", "lens", "aperture", "shutter", "iso", "focal", "ev", "date",
   "width", "height", "color_space", "white_balance", "color_temp", "wb_shift",
   "flash", "exposure_mode", "meter", "focus_mode", "drive", "sharpness",
-  "noise_reduction", "film", "dr", "chrome", "chrome_blue", "grain", "grain_size",
-  "highlight_tone", "shadow_tone", "saturation",
+  "noise_reduction", "clarity", "film", "dr", "dr_value", "chrome", "chrome_blue",
+  "grain", "grain_size", "highlight_tone", "shadow_tone", "saturation",
+  // the derived film-recipe card (build-recipes.py): the same knobs, spelled the
+  // way a recipe is written down, so a reader can re-shoot the look directly.
+  "recipe",
 ];
 
 async function getStaticPhotoJson(env, path, fallback) {
@@ -201,6 +204,9 @@ export async function queryPhotos(env, options = {}, ctx = null) {
   const camera = String(options.camera || "").trim().slice(0, 120).toLowerCase();
   const lens = String(options.lens || "").trim().slice(0, 120).toLowerCase();
   const film = String(options.film || "").trim().slice(0, 120).toLowerCase();
+  // `recipe` matches anywhere in the derived card ("DR400", "Acros", "+2 Red"),
+  // so one param answers "which shots used this look?" without a client-side scan.
+  const recipe = String(options.recipe || "").trim().slice(0, 120).toLowerCase();
   const from = String(options.from || "").trim().slice(0, 32);
   const to = String(options.to || "").trim().slice(0, 32);
   const limit = Math.min(100, Math.max(1, Number(options.limit) || 25));
@@ -221,6 +227,10 @@ export async function queryPhotos(env, options = {}, ctx = null) {
     if (camera && !String(record.camera || "").toLowerCase().includes(camera)) return false;
     if (lens && !String(record.lens || "").toLowerCase().includes(lens)) return false;
     if (film && !String(record.film || "").toLowerCase().includes(film)) return false;
+    if (recipe) {
+      const card = Object.entries(record.recipe || {}).map(([k, v]) => `${k}: ${v}`).join("\n").toLowerCase();
+      if (!card.includes(recipe)) return false;
+    }
     const date = String(record.date || "").slice(0, 10).replaceAll(":", "-");
     if (from && date < from) return false;
     if (to && date > to) return false;
@@ -241,7 +251,7 @@ export async function queryPhotos(env, options = {}, ctx = null) {
     };
   });
   return {
-    query: { q, camera, lens, film, from, to },
+    query: { q, camera, lens, film, recipe, from, to },
     total: rows.length,
     offset,
     limit,
@@ -254,6 +264,7 @@ export async function handlePhotoQuery(request, env, ctx) {
   const payload = await queryPhotos(env, {
     q: url.searchParams.get("q"), camera: url.searchParams.get("camera"),
     lens: url.searchParams.get("lens"), film: url.searchParams.get("film"),
+    recipe: url.searchParams.get("recipe"),
     from: url.searchParams.get("from"), to: url.searchParams.get("to"),
     limit: url.searchParams.get("limit"), offset: url.searchParams.get("offset"),
   }, ctx);
