@@ -121,7 +121,14 @@
   ],
   "d1_databases": [
     { "binding": "RESTORE_DB", "database_name": "aadhar-restore", "database_id": "88c8daf1-3a36-4f8e-a2ad-dba8a74e1b9f" },
-    { "binding": "SERENDIPITY_DB", "database_name": "serendipity", "database_id": "d3aa3215-17c3-4389-b224-cf465ddbb786" }
+    { "binding": "SERENDIPITY_DB", "database_name": "serendipity", "database_id": "d3aa3215-17c3-4389-b224-cf465ddbb786" },
+    // third-party social content (webmentions), deliberately its own database:
+    // it is moderated, mutable, and written by strangers, where checkpoints is
+    // this site's own append-only history. Created 2026-07-27 and the schema
+    // applied from migrations/0001_webmentions.sql, so this id is real — a
+    // d1_databases entry pointing at an id that does not exist fails the deploy,
+    // and a --dry-run will not catch it.
+    { "binding": "SOCIAL_DB", "database_name": "aadhar-social", "database_id": "b3ab51c4-da04-40ec-9b36-c7e06611f4ab" }
   ],
   "durable_objects": {
     "bindings": [

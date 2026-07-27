@@ -75,7 +75,11 @@
   ],
   "d1_databases": [
     { "binding": "RESTORE_DB", "database_name": "aadhar-restore", "database_id": "88c8daf1-3a36-4f8e-a2ad-dba8a74e1b9f" },
-    { "binding": "SERENDIPITY_DB", "database_name": "serendipity", "database_id": "d3aa3215-17c3-4389-b224-cf465ddbb786" }
+    { "binding": "SERENDIPITY_DB", "database_name": "serendipity", "database_id": "d3aa3215-17c3-4389-b224-cf465ddbb786" },
+    // webmentions (see wrangler.jsonc). Local dev gets its own local D1 file from
+    // this name, so /inbox and the endpoint work end-to-end under `npm run dev`
+    // without touching the remote database.
+    { "binding": "SOCIAL_DB", "database_name": "aadhar-social", "database_id": "b3ab51c4-da04-40ec-9b36-c7e06611f4ab" }
   ],
   "durable_objects": {
     "bindings": [

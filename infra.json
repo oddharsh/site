@@ -123,7 +123,8 @@
     ],
     "d1_databases": [
       { "binding": "RESTORE_DB", "database": "aadhar-restore", "why": "The deploy log. Single source for both /restore and /updates, which is what stops those two pages drifting apart." },
-      { "binding": "SERENDIPITY_DB", "database": "serendipity", "why": "Event pool behind /serendipity." }
+      { "binding": "SERENDIPITY_DB", "database": "serendipity", "why": "Event pool behind /serendipity." },
+      { "binding": "SOCIAL_DB", "database": "aadhar-social", "why": "Inbound webmentions behind /inbox, plus the outbound send ledger. Deliberately NOT aadhar-restore: this is moderated, mutable content written by strangers, where checkpoints is the site's own append-only history." }
     ],
     "vectorize_indexes": [
       { "binding": "VECTORIZE", "index": "lwe-passages", "config": "lwe-ask/wrangler.toml", "why": "Passage index for the /lwe/ask RAG endpoint. Created once by hand; the create command survives only as a comment in that config." }
