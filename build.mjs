@@ -854,6 +854,39 @@ for (const [file, srcPath, marker] of SHELLS) {
     console.log(`precompressed: /a/${f} ${bytes.length} -> ${out.length} bytes (br q11)`);
   }
   console.log(`precompress: ${(raw / 1024).toFixed(1)}KB -> ${(enc / 1024).toFixed(1)}KB brotli q11 across ${files.length} shell assets`);
+
+  // Shell-delta freshness. Now that the built hashes exist, "a delta is missing" is
+  // decidable: a dictionary whose hash8 differs from what is shipping is exactly a pair
+  // scripts/gen-shell-deltas.mjs should have covered. A dictionary IDENTICAL to the
+  // shipping bytes needs no delta, because a content-hashed URL that did not change is
+  // never re-requested — that case is why the earlier version of this check false-fired.
+  //
+  // WARN, never hard: brotli -D is unreachable from Node, so deltas are committed
+  // artifacts and this cannot self-heal inside Workers Builds. A missing delta costs
+  // repeat Chromium visitors the 93-97% win and nothing else.
+  try {
+    const shipping = new Map();               // base -> hash8 actually shipping
+    for (const f of files) {
+      const m = f.match(/^(.+)\.([0-9a-f]{8})\.(js|css|svg)$/);
+      if (m) shipping.set(m[1], m[2]);
+    }
+    const dicts  = await readdir("holding/a-dict").catch(() => []);
+    const deltas = await readdir("holding/ad").catch(() => []);
+    const missing = [];
+    for (const d of dicts) {
+      const m = d.match(/^(.+)\.([0-9a-f]{8})\.(js|css|svg)$/);
+      if (!m) continue;
+      const [, base, dictHash8] = m;
+      const now = shipping.get(base);
+      if (!now || now === dictHash8) continue;              // unchanged: no delta wanted
+      if (!deltas.some((n) => n.startsWith(`${base}.${now}.`))) missing.push(`${base} (${dictHash8} -> ${now})`);
+    }
+    if (missing.length) {
+      console.log(`precompress: WARNING shell deltas missing for ${missing.join(", ")} — run \`npm run shell:deltas\``);
+    } else if (deltas.length) {
+      console.log(`precompress: ${deltas.length} committed shell delta(s) current with the shipping shell`);
+    }
+  } catch {}
 }
 
 console.log(`staged ${OUT}/ - deploy with: wrangler deploy (self-builds via build.command) or npm run deploy`);
