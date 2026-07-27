@@ -22,7 +22,7 @@
 
 import { createHash } from "node:crypto";
 import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
-import { brotliCompressSync, constants as zlibConstants, zstdCompressSync } from "node:zlib";
+import { brotliCompressSync, brotliDecompressSync, constants as zlibConstants, zstdCompressSync } from "node:zlib";
 import minifyHtml from "@minify-html/node";
 import { transform as transformCss } from "lightningcss";
 import { minifySync } from "oxc-minify";
@@ -961,6 +961,84 @@ for (const [file, srcPath, marker] of SHELLS) {
     else console.log("delta: none needed (every dictionary candidate matches the shipping shell)");
   }
 
+}
+
+// 8) the static garage/lwe pages: brotli q11 twins + dcz deltas.
+//
+// These are the biggest text payloads on the site (10-17KB on the wire each, 30 of them)
+// and they fit dictionary transport BETTER than the hashed shell does. The shell is
+// content-addressed, so a changed asset is a new URL. A garage page is mutable at a
+// STABLE url under `max-age=0, must-revalidate`, which is the canonical case the RFC was
+// written for: the browser revalidates, the bytes moved, and the server answers with the
+// diff instead of the document.
+//
+// Naming differs from /a/ for that same reason. A shell delta can key off the hash in the
+// request path; a page cannot, because the path never changes. So a page delta is keyed by
+// SLUG plus the dictionary tag alone: /pd/<slug>.<dicttag>.dcz. Only one version of a page
+// is current at a time, so slug+dictionary already identifies it uniquely.
+{
+  const pages = [];
+  for (const dir of ["garage", "lwe"]) {
+    for (const rel of await readdir(`${OUT}/holding/${dir}`, { recursive: true }).catch(() => [])) {
+      if (!rel.endsWith(".html") || rel.endsWith(".src.html")) continue;
+      pages.push(`${dir}/${rel}`);
+    }
+  }
+  // slug: the request path with separators folded, so it survives as one filename segment.
+  const slugOf = (assetPath) => assetPath.replace(/\.html$/, "").replace(/\//g, "__");
+
+  const dictDir = "holding/p-dict";
+  const dicts = await readdir(dictDir).catch(() => []);
+  // <slug>.<hash16>.html — the previous shipped bytes for that exact page.
+  // Snapshots are stored BROTLI'd. They are only ever build input, never served, and
+  // brotli round-trips exactly, so compressing them cuts the committed weight ~75%
+  // (1.4MB -> 352KB across 30 pages) with no effect on the dictionary bytes themselves.
+  const parseDict = (n) => { const m = n.match(/^(.+)\.([0-9a-f]{16})\.html\.br$/); return m ? { slug: m[1], tag: m[2], name: n } : null; };
+  const cands = dicts.map(parseDict).filter(Boolean);
+  if (cands.length) await mkdir(`${OUT}/holding/pd`, { recursive: true });
+
+  let brCount = 0, brRaw = 0, brEnc = 0, dCount = 0, dBytes = 0, dPlain = 0;
+  for (const page of pages) {
+    const bytes = await readFile(`${OUT}/holding/${page}`);
+    const br = brotliCompressSync(bytes, {
+      params: {
+        [zlibConstants.BROTLI_PARAM_QUALITY]: 11,
+        [zlibConstants.BROTLI_PARAM_LGWIN]: 24,
+        [zlibConstants.BROTLI_PARAM_SIZE_HINT]: bytes.length,
+      },
+    });
+    if (br.length < bytes.length) {
+      await writeFile(`${OUT}/holding/${page}.br`, br);
+      brCount++; brRaw += bytes.length; brEnc += br.length;
+    }
+
+    const slug = slugOf(page);
+    for (const d of cands) {
+      if (d.slug !== slug) continue;
+      // Snapshots are stored brotli'd (build input only, never served, and brotli
+      // round-trips exactly), which cuts the committed weight from 1.4MB to 412KB.
+      const dictBytes = brotliDecompressSync(await readFile(`${dictDir}/${d.name}`));
+      if (dictBytes.equals(bytes)) continue;            // unchanged: nothing to diff
+      const frame = zstdCompressSync(bytes, {
+        dictionary: dictBytes,
+        params: { [zlibConstants.ZSTD_c_compressionLevel]: 19 },
+      });
+      const digest = createHash("sha256").update(dictBytes).digest();
+      const len = Buffer.alloc(4); len.writeUInt32LE(digest.length, 0);
+      const out = Buffer.concat([Buffer.from([0x5e, 0x2a, 0x4d, 0x18]), len, digest, frame]);
+      // A delta that lost to the plain twin would cost bytes AND a dictionary lookup.
+      if (out.length >= br.length) {
+        console.log(`page-delta: SKIPPED ${slug} vs ${d.tag.slice(0, 8)} (dcz ${out.length} >= br ${br.length})`);
+        continue;
+      }
+      await writeFile(`${OUT}/holding/pd/${slug}.${digest.toString("hex").slice(0, 16)}.dcz`, out);
+      dCount++; dBytes += out.length; dPlain += br.length;
+    }
+  }
+  console.log(`pages: ${brCount} brotli q11 twins, ${(brRaw / 1024).toFixed(1)}KB -> ${(brEnc / 1024).toFixed(1)}KB`);
+  console.log(dCount
+    ? `page-delta: ${dCount} dcz delta(s), ${dBytes} bytes against ${dPlain} plain brotli`
+    : `page-delta: none (no page changed since its dictionary snapshot)`);
 }
 
 console.log(`staged ${OUT}/ - deploy with: wrangler deploy (self-builds via build.command) or npm run deploy`);
