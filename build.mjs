@@ -324,9 +324,52 @@ async function checkInvariants() {
     }
   } catch (e) { warn.push(`taste tripwire could not run: ${e.message}`); }
 
+  // 10 (hard) — no git conflict markers in anything the site serves. A rebase on
+  // 2026-07-27 left an empty-vs-empty conflict in holding/garage/compression.html;
+  // `git add -A` swallowed the three residue lines, and the build, the perf
+  // budget, and all 24 contract tests passed. A human caught them by eye, in a
+  // screenshot, rendering as visible text above the taskbar. Nothing in the
+  // toolchain would have stopped them. A marker in a served file is never
+  // intentional, so this blocks rather than warns.
+  //
+  // Anchored at line start ONLY, and `=======` must be the WHOLE line. The garage
+  // pages legitimately discuss diffs, heredocs, and shell redirection in prose and
+  // in code samples, so an unanchored match would false-fire on real content —
+  // which is exactly how a guard on the one deploy path ends up commented out.
+  let conflictScanned = 0;
+  try {
+    const collect = async (dir, match, skip = /^$/, out = []) => {
+      for (const e of await readdir(dir, { withFileTypes: true })) {
+        const p = `${dir}/${e.name}`;
+        if (e.isDirectory()) { if (!skip.test(e.name)) await collect(p, match, skip, out); }
+        else if (match.test(e.name)) out.push(p);
+      }
+      return out;
+    };
+    const flat = async (dir, match) =>
+      (await readdir(dir, { withFileTypes: true })).filter((e) => e.isFile() && match.test(e.name)).map((e) => `${dir}/${e.name}`);
+    const files = [
+      ...await collect("holding", /\.html$/, /^(i|images|og|cars|node_modules)$/),
+      ...await flat("holding", /\.(js|css)$/),
+      ...await collect("holding/_worker.js", /\.js$/),
+      ...await flat("cal/src", /\.js$/),
+      ...await flat("serendipity", /\.js$/),
+    ];
+    const MARKER = /^(<{7} |={7}$|>{7} )/;
+    for (const f of files) {
+      let src; try { src = await read(f); } catch { continue; }
+      conflictScanned++;
+      const lines = src.split("\n");
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].replace(/\r$/, "");
+        if (MARKER.test(line)) hard.push(`${f}:${i + 1}: git conflict marker in a served file — ${line.slice(0, 60)}`);
+      }
+    }
+  } catch (e) { hard.push(`conflict-marker check could not run: ${e.message}`); }
+
   if (warn.length) console.warn("build: invariant WARNINGS (deploy continues):\n  - " + warn.join("\n  - "));
   if (hard.length) throw new Error("build: invariant tripwires FAILED, deploy blocked:\n  - " + hard.join("\n  - "));
-  console.log(`invariants ok: ${routeKeys.length + prefixProbes.length} routes mirrored (${prefixProbes.length} prefix), CSP style-src, blink-fix, generator, geometry, ${skillsChecked} skill digest${skillsChecked === 1 ? "" : "s"}, ${manifestChecked} surfaces registered, ${tasteScanned} files taste-scanned${tasteOk.length ? ` (${tasteOk.length} taste-ok: ${tasteOk.join("; ")})` : ""}${warn.length ? " (with warnings above)" : ""}`);
+  console.log(`invariants ok: ${routeKeys.length + prefixProbes.length} routes mirrored (${prefixProbes.length} prefix), CSP style-src, blink-fix, generator, geometry, ${skillsChecked} skill digest${skillsChecked === 1 ? "" : "s"}, ${manifestChecked} surfaces registered, ${tasteScanned} files taste-scanned${tasteOk.length ? ` (${tasteOk.length} taste-ok: ${tasteOk.join("; ")})` : ""}, ${conflictScanned} files conflict-free${warn.length ? " (with warnings above)" : ""}`);
 }
 
 // ── the client edge, authored once and mirrored at deploy ────────────────────
