@@ -62,6 +62,31 @@ const SHELL_TYPES = {
   svg: "image/svg+xml; charset=utf-8",
 };
 
+// Which of those may travel the SHARED-DICTIONARY path (the `use-as-dictionary` offer
+// and the dcz delta). Deliberately NOT svg.
+//
+// The icon sprite went onto /a/ as a <use> target, where a browser fetches it as a
+// document. #114 turned it into an <img>, and the very next deploy the 12 taskbar and
+// tray icons vanished in Chromium for anyone who had visited before it — a warm
+// Chromium, the only engine that implements shared dictionaries, and the only client
+// that gets the dcz instead of the plain brotli. A hard reload dropped
+// Available-Dictionary and everything came back, which is the whole diagnosis: on a
+// brand-new content-hashed URL nothing else about the client can differ.
+//
+// The delta itself is fine. It round-trips byte-exact under `zstd -d -D`, and
+// luna.css shipped its own dcz in the same deploy and rendered normally. What broke is
+// a dcz response consumed by the IMAGE loader rather than by the CSS or script loader,
+// and that is not something any local test here can reproduce — reproducing it needs a
+// Chromium that already holds the previous deploy's bytes.
+//
+// So the sprite keeps the q11 brotli twin (verified decoding in both engines from
+// production) and steps off the dictionary path entirely. The cost is the ~2.1KB the
+// delta saved, once per deploy, on a file cached for a year. Cheap next to blanking the
+// site's most visible chrome for returning visitors. Re-extending this to images is
+// fine later, behind the ?br= canary the rest of this file was built with, which is how
+// this path is supposed to earn a default in the first place (gotcha 13).
+const DICTIONARY_TYPES = { js: 1, css: 1 };
+
 // Offer the shell's own bytes as a compression dictionary for future /a/ requests
 // (RFC 9842). This is what makes a Chromium client send `Available-Dictionary` back, which
 // is the whole basis of the delta path. Purely additive: a client may ignore the offer, and
@@ -196,8 +221,11 @@ export async function servePrecompressedShell(request, env) {
   // Any miss falls through to the br path below and then to identity, so a client whose
   // dictionary we have no delta for (skipped several deploys, or a hand-crafted header)
   // just gets the ordinary asset.
-  const delta = await serveDictionaryDelta(url, ext, request, env);
-  if (delta) return delta;
+  // DICTIONARY_TYPES gates this: images sit it out, for the reason recorded there.
+  if (DICTIONARY_TYPES[ext]) {
+    const delta = await serveDictionaryDelta(url, ext, request, env);
+    if (delta) return delta;
+  }
 
   // No Available-Dictionary, or no delta for the dictionary this client holds: fall through
   // to the brotli q11 twin below, which carries the dictionary offer itself.
@@ -226,7 +254,11 @@ export async function servePrecompressedShell(request, env) {
   const headers = new Headers(br.headers);
   headers.set("content-type", SHELL_TYPES[ext]);
   headers.set("content-encoding", "br");
-  headers.set("use-as-dictionary", DICTIONARY_OFFER["use-as-dictionary"]);
+  // Only offer a type we are willing to answer with a delta. Offering the sprite would
+  // teach Chromium to send Available-Dictionary for it and then get plain br anyway:
+  // wasted storage on the client and a header we deliberately ignore.
+  if (DICTIONARY_TYPES[ext]) headers.set("use-as-dictionary", DICTIONARY_OFFER["use-as-dictionary"]);
+  else headers.delete("use-as-dictionary");
   // The URL is content-addressed, so these bytes never change identity. Vary still
   // has to name accept-encoding: the same URL answers with br or identity depending
   // on the request, and a shared cache must not serve one to a client that asked for

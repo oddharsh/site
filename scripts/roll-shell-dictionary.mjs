@@ -24,8 +24,12 @@ const DICTS = "holding/a-dict";
 // fan-out, while only serving visitors who skipped exactly that many deploys.
 const KEEP = 3;
 
+// js and css only, matching DICTIONARY_TYPES in _worker.js/lib/assets.js. The icon
+// sprite is served as plain brotli and never as a delta, so adopting it would file
+// candidates nothing can ever read — and the roller would keep filing a new one on
+// every sprite change, forever.
 const parse = (n) => {
-  const m = n.match(/^(.+)\.([0-9a-f]{8})\.(js|css|svg)$/);
+  const m = n.match(/^(.+)\.([0-9a-f]{8})\.(js|css)$/);
   return m ? { base: m[1], hash8: m[2], ext: m[3], name: n } : null;
 };
 
