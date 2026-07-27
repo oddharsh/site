@@ -865,6 +865,30 @@ for (const [file, srcPath, marker] of SHELLS) {
   // Still committed, and unavoidably so: holding/a-dict/, the DICTIONARY set. A dictionary
   // has to be bytes the BROWSER already holds, which no build can derive from source.
   {
+    // HARD CHECK: is the `dictionary` option actually honored by this Node?
+    //
+    // Node 22 ACCEPTS the option and silently ignores it. That produced a dictionary-less
+    // "delta" of 8,197 bytes against luna.css in Workers Builds (plain zstd-19 is ~8,161),
+    // which lost to the plain brotli twin, so the guard below discarded it and printed
+    // "delta: none needed". The feature shipped as a no-op for a full deploy and the log
+    // read like everything was fine. Local Node 26 honored the option, so it worked here
+    // and nowhere else.
+    //
+    // Feature-detect rather than version-sniff: compressing a buffer against ITSELF must
+    // collapse to almost nothing if the dictionary is real. Throwing is correct because
+    // .node-version pins the runtime, so this firing means the pin was lost, and a silent
+    // no-op is exactly the failure this whole page-worth of debugging came from.
+    const probe = Buffer.from("the quick brown fox jumps over the lazy dog ".repeat(200));
+    const withDict = zstdCompressSync(probe, { dictionary: probe, params: { [zlibConstants.ZSTD_c_compressionLevel]: 19 } });
+    const noDict = zstdCompressSync(probe, { params: { [zlibConstants.ZSTD_c_compressionLevel]: 19 } });
+    if (withDict.length >= noDict.length * 0.5) {
+      throw new Error(
+        `zstd dictionary compression is not honored by ${process.version} ` +
+        `(probe: ${withDict.length} bytes with a dictionary vs ${noDict.length} without; expected a collapse). ` +
+        `Node 24+ is required — see .node-version. Shell deltas would silently ship as no-ops.`,
+      );
+    }
+
     const dictDir = "holding/a-dict";
     const dicts = await readdir(dictDir).catch(() => []);
     const parse = (n) => { const m = n.match(/^(.+)\.([0-9a-f]{8})\.(js|css|svg)$/); return m ? { base: m[1], hash8: m[2], ext: m[3], name: n } : null; };
@@ -905,8 +929,13 @@ for (const [file, srcPath, marker] of SHELLS) {
         console.log(`delta: /ad/${asset.base}.${asset.hash8}.${tag}.dcz ${out.length} bytes (vs ${plainTwin} plain br)`);
       }
     }
-    console.log(n ? `delta: ${n} dcz delta(s), ${deltaBytes} bytes total`
-                  : `delta: none needed (every dictionary candidate matches the shipping shell)`);
+    // Distinguish the two reasons for zero deltas. "Every candidate matches" is normal and
+    // expected. "Candidates exist but none produced a delta" means every pair lost to plain
+    // brotli, which is the shape the Node 22 bug wore, so say so loudly.
+    const changed = shell.some((a) => cands.some((d) => d.base === a.base && d.ext === a.ext && d.hash8 !== a.hash8));
+    if (n) console.log(`delta: ${n} dcz delta(s), ${deltaBytes} bytes total`);
+    else if (changed) console.log("delta: WARNING the shell changed but every candidate lost to plain brotli — dictionary compression may not be working");
+    else console.log("delta: none needed (every dictionary candidate matches the shipping shell)");
   }
 
 }
