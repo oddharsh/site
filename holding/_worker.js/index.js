@@ -16,7 +16,7 @@ import { handleInbox } from "./inbox.js";
 import { handleWebmention, handleWebmentionDecision } from "./webmention.js";
 import { countCrawlerHit, handleLedger, handleLedgerJson } from "./ledger.js";
 import { handleLens, handleLensBrowser, handleLensCompare, handleLensFetch, handleLensShot } from "./lens.js";
-import { serveAssetWith404Clamp, serveFreshAsset, servePrecompressedShell } from "./lib/assets.js";
+import { serveAssetWith404Clamp, serveFreshAsset, servePrecompressedShell, serveStaticPage } from "./lib/assets.js";
 import { BOT_UA } from "./lib/botauth.js";
 import { CANONICAL_HOST } from "./lib/const.js";
 import { wantsMarkdown } from "./lib/http.js";
@@ -277,6 +277,19 @@ const PREFIX = [
   // prefers zstd, measured LARGER than its own brotli here). The `.br` suffix is
   // excluded so the twin itself stays a plain static asset — the worker fetches it
   // through ASSETS, and matching it here would recurse.
+  // the 30 static garage/lwe pages. Worker-first so they can be answered with a dcz delta
+  // or the brotli q11 twin; a sub-resource under either prefix (images, ask.js) is matched
+  // out by the extension test inside the handler and passes straight through.
+  {
+    label: "/garage/<page>",
+    match: (pathname) => pathname.startsWith("/garage/"),
+    handle: routeStaticPage,
+  },
+  {
+    label: "/lwe/<page>",
+    match: (pathname) => pathname.startsWith("/lwe/"),
+    handle: routeStaticPage,
+  },
   {
     label: "/a/<asset>",
     match: (pathname) => /^\/a\/[^/]+\.[0-9a-f]{8}\.(js|css|svg)$/.test(pathname),
@@ -493,6 +506,10 @@ function routeImagesMeta(request, env) {
 // addressed /i/ twins, so every old link, bookmark, and cached page keeps
 // resolving for at least a year after the hash cutover. Unknown names fall
 // through to the asset layer with the 404 cache-clamp, same as before.
+function routeStaticPage(request, env) {
+  return serveStaticPage(request, env);
+}
+
 function routeShellAsset(request, env) {
   return servePrecompressedShell(request, env);
 }
