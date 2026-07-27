@@ -75,7 +75,7 @@
     { "path": "/pixel-peeper", "title": "Pixel Peeper", "section": "pixel-peeper", "kind": "utility",
       "description": "A vision test for image compression, in the ismy.blue spirit: pick the best encode on instinct, repeatedly.",
       "hint": "whose eye do you have? a compression vision test",
-      "flags": { "run": true, "taskbar": true, "sitemap": true, "gallery": false, "agents": true, "searchIndex": false } },
+      "flags": { "run": true, "taskbar": true, "sitemap": true, "gallery": true, "agents": true, "searchIndex": false } },
 
     { "path": "/lwe", "title": "Learning with Errors", "section": "lwe", "kind": "section",
       "description": "Chat-style explainers with live demos, at the pace of a 2009 MSN conversation.",
