@@ -23,7 +23,8 @@ import { handleWebmention, handleWebmentionDecision } from "./holding/_worker.js
 import { handleInbox } from "./holding/_worker.js/inbox.js";
 import { citationsIn, findEndpointIn, SELF_LINK_HOSTS } from "./holding/_worker.js/webmention-send.js";
 import { sign } from "./cal/src/sign.js";
-import { AGENT_SURFACES } from "./holding/_worker.js/lib/site-manifest.js";
+import { AGENT_SURFACES, WEBMENTION_PATHS } from "./holding/_worker.js/lib/site-manifest.js";
+import { handleWritingIndex } from "./holding/_worker.js/writing.js";
 import { readManifest, workerModule, navFenceBody, readFenceBody } from "./scripts/gen-manifest.mjs";
 import { MCP_TOOLS } from "./serendipity/serendipity.js";
 import { handlePhotoQuery, queryPhotos } from "./holding/_worker.js/photos.js";
@@ -537,6 +538,48 @@ test("/inbox degrades honestly when the mention store is unbound", async () => {
   assert.equal(res.status, 200);
   const html = await res.text();
   assert.match(html, /not connected/i, "says the store is missing rather than pretending there is no mail");
+});
+
+test("every page that accepts a mention also advertises where to send it", async () => {
+  // Accepting a webmention it never advertises makes a page undiscoverable to a
+  // spec-compliant sender, which is the same as not accepting it. /writing was
+  // exactly that for one deploy: flagged in the registry, 202 on POST, and no
+  // Link header on the folder itself. Tie the two together so they cannot drift.
+  const headers = await readFile("holding/_headers", "utf8");
+  const advertisedByHeaders = headers
+    .split(/\n(?=\S)/)
+    .filter((block) => /Link:.*rel="webmention"/.test(block))
+    .map((block) => block.split("\n")[0].trim());
+
+  const coveredByStatics = (path) =>
+    advertisedByHeaders.some((rule) =>
+      rule.endsWith("/*") ? path.startsWith(rule.slice(0, -1)) : rule === path);
+
+  for (const path of WEBMENTION_PATHS) {
+    if (coveredByStatics(path)) continue;
+    // anything the statics don't cover is worker-rendered, so ask the worker.
+    // Going through the real handler (not the inner render) also catches an
+    // edge-cache wrapper that drops the header on its way out.
+    assert.equal(path, "/writing", `no advertisement path known for ${path}`);
+    const priorCaches = globalThis.caches;
+    globalThis.caches = { default: { match: async () => undefined, put: async () => {} } };
+    let res;
+    try {
+      res = await handleWritingIndex(
+        new Request("https://aadhar.sh/writing"),
+        { ASSETS: staticAssets({}) },
+        context()
+      );
+    } finally {
+      if (priorCaches === undefined) delete globalThis.caches;
+      else globalThis.caches = priorCaches;
+    }
+    assert.match(
+      res.headers.get("link") || "",
+      /rel="webmention"/,
+      "/writing accepts mentions, so it must say where to send them"
+    );
+  }
 });
 
 // ── webmention (outbound) ───────────────────────────────────────────────────
