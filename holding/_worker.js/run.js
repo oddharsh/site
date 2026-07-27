@@ -20,6 +20,7 @@ const DESTS = [
   ["serendipity", "/serendipity", "the event pool"],
   ["around",      "/around",      "the crypto-VC neighborhood"],
   ["lens",        "/lens",        "the other web"],
+  ["pixel peeper", "/pixel-peeper", "a compression vision test"],
   ["music",       "/rn",          "now playing"],
   ["coffee",      "/coffee",      "book a coffee"],
   ["whoareyou",   "/whoareyou",   "System Properties"],

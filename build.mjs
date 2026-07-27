@@ -190,7 +190,12 @@ async function checkInvariants() {
     const navTaskbar = new Set([...subBlock.matchAll(/path:\s*"([^"]+)"/g)].map((m) => m[1]));
     const sitemap = await read("holding/sitemap.xml");
     const smLocs = new Set([...sitemap.matchAll(/<loc>https:\/\/aadhar\.sh([^<]*)<\/loc>/g)].map((m) => m[1] || "/"));
-    const gallery = await read("holding/garage/index.html");
+    // the generated desktop partial is chrome, not gallery content, and it links
+    // every taskbar app — so a pin whose path matches the gallery shape (e.g.
+    // /pixel-peeper) would otherwise read as a gallery card that isn't there.
+    // Strip the partial before scanning so this only ever sees hand-written cards.
+    const gallery = (await read("holding/garage/index.html"))
+      .replace(/<!-- axp:shell -->[\s\S]*?<!-- \/axp:shell -->/g, "");
     const galLinks = new Set([...gallery.matchAll(/href="(\/(?:garage\/[a-z0-9]+|pixel-peeper))"/g)].map((m) => m[1]));
 
     // 8b — each flag is the registry's contract with exactly one surface; assert

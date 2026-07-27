@@ -72,6 +72,11 @@
       "hint": "the other web: see any URL the way a machine does — raw HTML, JSON-LD, llms.txt",
       "flags": { "run": true, "taskbar": true, "sitemap": false, "gallery": false, "agents": true, "searchIndex": true } },
 
+    { "path": "/pixel-peeper", "title": "Pixel Peeper", "section": "pixel-peeper", "kind": "utility",
+      "description": "A vision test for image compression, in the ismy.blue spirit: pick the best encode on instinct, repeatedly.",
+      "hint": "whose eye do you have? a compression vision test",
+      "flags": { "run": true, "taskbar": true, "sitemap": true, "gallery": false, "agents": true, "searchIndex": false } },
+
     { "path": "/lwe", "title": "Learning with Errors", "section": "lwe", "kind": "section",
       "description": "Chat-style explainers with live demos, at the pace of a 2009 MSN conversation.",
       "hint": "chat-style explainers + live demos",
@@ -205,11 +210,6 @@
       "description": "Why this site moved from Cloudflare Pages advanced mode to Workers with static assets: an atomic deploy.",
       "hint": "off Pages, onto Workers",
       "flags": { "run": true, "taskbar": false, "sitemap": true, "gallery": true, "agents": true, "searchIndex": false } },
-
-    { "path": "/pixel-peeper", "title": "Pixel Peeper", "section": "garage", "kind": "content",
-      "description": "A vision test for image compression, in the ismy.blue spirit: pick the best encode on instinct, repeatedly.",
-      "hint": "whose eye do you have? a compression vision test",
-      "flags": { "run": false, "taskbar": false, "sitemap": true, "gallery": true, "agents": true, "searchIndex": false } },
 
     { "path": "/bot", "title": "AadharshBot", "section": "identity", "kind": "page",
       "description": "The site's branded crawler: who it is, how it signs requests, and where its keys live.",

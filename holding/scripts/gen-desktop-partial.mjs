@@ -114,7 +114,10 @@ const iconsHtml = '<nav id="axp-icons" aria-label="desktop shortcuts">' +
 
 const pinsHtml = SUBPAGES.map(s =>
   `<a class="axp-pin" title="${esc(s.hint)}" href="${esc(s.path)}">` +
-  `<span class="fav" aria-hidden="true">${SECTION_ICONS[s.label] ? spriteRef("pin-" + s.label, SECTION_ICONS[s.label]) : ""}</span>` +
+  // the sprite name becomes an SVG <view> id, which cannot carry a space, so a
+  // multi-word pin label ("pixel peeper") is slugged. nav.js keeps keying
+  // SECTION_ICONS by the raw label — only the sprite id is constrained.
+  `<span class="fav" aria-hidden="true">${SECTION_ICONS[s.label] ? spriteRef("pin-" + s.label.replace(/\s+/g, "-"), SECTION_ICONS[s.label]) : ""}</span>` +
   `<span class="lbl">${esc(s.label)}</span></a>`).join("");
 
 // the tray template carries its three icons inline; swap each for a sprite ref
@@ -174,7 +177,7 @@ import { readdirSync } from "node:fs";
 // vt-check/vt-b are deliberately shell-free diagnostic mules — they test the
 // bare platform, so the desktop partial must never touch them
 const BARE = new Set(["vt-check.html", "vt-b.html"]);
-const pages = ["holding/index.html"]
+const pages = ["holding/index.html", "holding/pixel-peeper/index.html"]
   .concat(readdirSync("holding/garage").filter(f => f.endsWith(".html") && !BARE.has(f)).map(f => "holding/garage/" + f))
   .concat(readdirSync("holding/lwe").filter(f => f.endsWith(".html")).map(f => "holding/lwe/" + f));
 
