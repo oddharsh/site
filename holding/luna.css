@@ -514,7 +514,9 @@ box-shadow:inset 0 1px 0 oklch(82% 0.11 250)}
    real XP taskbar behavior. same sunken recipe as :active, held; wireTaskbar
    marks the pin whose section owns the current path (aria-current="page"). */
 .axp-pin.cur,.axp-pin.cur:hover{background:linear-gradient(180deg,oklch(50% 0.18 260),oklch(57% 0.16 258));box-shadow:inset 1px 1px 3px oklch(34% 0.16 263);border-color:oklch(46% 0.16 260);border-bottom-color:oklch(66% 0.13 255)}
-.axp-pin .fav{width:15px;height:15px;flex:0 0 auto;display:flex;line-height:0;filter:drop-shadow(0 1px 1px oklch(0% 0 0 / .3))}.axp-pin .fav svg{width:100%;height:100%;display:block}
+/* svg AND img: the static partial ships <img> refs into the /icons.svg sprite,
+   while nav.js's constructed path (/coffee, /serendipity) still inlines <svg>. */
+.axp-pin .fav{width:15px;height:15px;flex:0 0 auto;display:flex;line-height:0;filter:drop-shadow(0 1px 1px oklch(0% 0 0 / .3))}.axp-pin .fav svg,.axp-pin .fav img{width:100%;height:100%;display:block}
 #axp-spacer{flex:1}
 /* tray + clock — flat, NOT a sunken box (the real XP clock is just text on the bar); */
 /* the only chrome is an engraved vertical separator on the tray's left edge. */
@@ -529,7 +531,7 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
 /* separator. shared class so the three line up identically. */
 .axp-trayico{display:flex;align-items:center;justify-content:center;width:22px;height:22px;margin-right:8px;border-radius:3px;text-decoration:none;opacity:.85;cursor:pointer}
 .axp-trayico:hover{background:oklch(64% 0.15 254);opacity:1}
-.axp-trayico svg{width:15px;height:15px;display:block;filter:drop-shadow(0 1px 1px oklch(0% 0 0 / .3))}
+.axp-trayico svg,.axp-trayico img{width:15px;height:15px;display:block;filter:drop-shadow(0 1px 1px oklch(0% 0 0 / .3))}
 /* mute/unmute speaker, sits just left of System Properties; matches its tray styling */
 #axp-sound{display:flex;align-items:center;justify-content:center;width:22px;height:22px;margin-right:7px;padding:0;border:0;background:transparent;border-radius:3px;cursor:pointer;opacity:.88}
 #axp-sound:hover{background:oklch(64% 0.15 254);opacity:1}
