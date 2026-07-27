@@ -93,7 +93,18 @@ const DICTIONARY_TYPES = { js: 1, css: 1 };
 // a server may ignore the resulting header. match="/a/*" scopes it to the content-hashed
 // shell, so the next deploy's /a/nav.<newhash>.js is exactly the request that arrives
 // carrying the OLD bytes' hash.
-const DICTIONARY_OFFER = { "use-as-dictionary": 'match="/a/*"' };
+// match-dest scopes the offer to the fetch destinations we will actually answer with a
+// delta. RFC 9842 makes it optional and DEFAULTS IT TO EVERY DESTINATION, so the earlier
+// bare `match="/a/*"` told Chromium these bytes were a dictionary for any /a/ request —
+// including the icon sprite, fetched as an `image`. Nothing broke, because DICTIONARY_TYPES
+// stops the worker answering an svg with a dcz, but the offer promised more than the server
+// honours: the client stored state and sent Available-Dictionary on requests we ignore.
+//
+// This is #119's lesson moved into the protocol instead of living only in a JS gate. The
+// sprite stays out on purpose — see DICTIONARY_TYPES — and naming destinations is how the
+// wire says so.
+const SHELL_DESTS = '("script" "style")';   // js + css; deliberately not "image"
+const DICTIONARY_OFFER = { "use-as-dictionary": `match="/a/*", match-dest=${SHELL_DESTS}` };
 
 // A WORKER CANNOT NEGOTIATE COMPRESSION. Measured in wrangler dev 2026-07-26: the
 // runtime rewrites the request's Accept-Encoding to a constant before the worker sees
@@ -171,7 +182,7 @@ async function serveDictionaryDelta(url, ext, request, env) {
   headers.set("vary", "accept-encoding, available-dictionary");
   // Keep offering the shell as a dictionary, so a client that just delta-updated adopts
   // the new bytes and the chain continues on the next deploy.
-  headers.set("use-as-dictionary", 'match="/a/*"');
+  headers.set("use-as-dictionary", DICTIONARY_OFFER["use-as-dictionary"]);
   headers.delete("etag");   // described the .dcz file, not this resource
   return new Response(res.body, { status: 200, headers, encodeBody: "manual" });
 }
@@ -303,7 +314,10 @@ export async function serveStaticPage(request, env) {
     return serveAssetWith404Clamp(request, env);
   }
   const slug = rel.replace(/\//g, "__");
-  const offer = { "use-as-dictionary": `match="/${rel}"` };
+  // A page is only ever fetched as a document (a navigation). Scoping it says so, and
+  // keeps a prefetch/subresource fetch of the same URL from banking a dictionary the
+  // worker would not answer with a delta.
+  const offer = { "use-as-dictionary": `match="/${rel}", match-dest=("document")` };
 
   const tag = dictionaryTag(request);
   if (tag) {
