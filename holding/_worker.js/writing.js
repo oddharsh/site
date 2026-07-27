@@ -212,5 +212,9 @@ async function renderWritingIndex(env) {
       "<span>" + fmtNum(entries.reduce(function (a, e) { return a + e.chars; }, 0)) + " characters</span></div></div>" +
     notes;
   return new Response(writingShell({ title: "aadhar.sh/writing", path: "/writing", desc: "Notes in flux: an editable Notepad of writing that reverts to canonical on reload.", body: body }),
-    { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=120" } });
+    // same webmention Link the individual notes carry. /writing is the surface
+    // actually flagged in site-manifest.json (the notes inherit it, by vouching),
+    // so the folder itself accepting a mention it never advertised was the one
+    // page on the site a spec-compliant sender could not discover.
+    { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=120", "link": '</webmention>; rel="webmention"' } });
 }
