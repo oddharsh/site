@@ -709,9 +709,11 @@ for (const [file, srcPath, marker] of SHELLS) {
     // run_worker_first, so /a/ is edge-direct and inherits the immutable rule.
     { attr: "src",  from: "/lens.js",  base: "lens", ext: "js",  witness: "_worker.js/lens.js" },
     // the desktop icon sprite. Unlike the three above, every ref carries a
-    // #fragment (href="/icons.svg#pin-garage"), so `frag` widens the match to
+    // #fragment (src="/icons.svg#pin-garage"), so `frag` widens the match to
     // keep it. Its witness is the desktop partial, which is where all 12 live.
-    { attr: "href", from: "/icons.svg", base: "icons", ext: "svg", frag: true, witness: "_worker.js/lib/desktop.js" },
+    // src= rather than href= because the refs are <img> against <view>s, not
+    // <svg><use> against <symbol>s — see the WebKit note in gen-desktop-partial.mjs.
+    { attr: "src", from: "/icons.svg", base: "icons", ext: "svg", frag: true, witness: "_worker.js/lib/desktop.js" },
   ];
   const reps = [], hashedFor = {};
   for (const a of ASSETS) {
