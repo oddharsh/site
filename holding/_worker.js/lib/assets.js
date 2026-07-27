@@ -88,6 +88,50 @@ function wantsPrecompressed(url) {
   return SHELL_PRECOMPRESS_DEFAULT_ON || url.searchParams.get("br") === "1";
 }
 
+// serveEncodingSelfTest: the decisive experiment, isolating WHERE the double
+// compression comes from.
+//
+// Both failing canaries went through `env.ASSETS`, so "a worker cannot emit a
+// pre-encoded body" may be too broad a conclusion: the static-assets layer is a real
+// suspect, since it does its own content negotiation. Cloudflare's own shared-dictionary
+// demo (canicompress.com) delta-compresses at the edge reading bytes from R2, never from
+// static assets, which is consistent with the assets path being the problem.
+//
+// This response involves NO asset fetch at all. The body is a constant: brotli q11 of
+// "ENCODING-TEST-OK " x64, 1088 plaintext bytes down to 30. Read the result as:
+//
+//   30 bytes  -> encodeBody: "manual" WORKS on a worker-built response. The wall is the
+//                static-assets layer, and dcb/dcz from a worker is viable (which puts
+//                the homepage's 13,264 -> ~870 back on the table).
+//   34ish     -> brotli-in-brotli. No worker on this platform can emit a pre-encoded
+//                body, and only Cloudflare's managed (Phase 2) mode can ever help.
+//
+// `?raw=1` omits encodeBody at the route. It WAS the control that proved this test
+// sensitive: before the fix both arms returned 34 bytes in two brotli layers. Now both
+// return 30 in one, because withSecurityHeaders re-applies `manual` for any response
+// carrying a content-encoding, which is deliberately not overridable per-route. Kept
+// only so the two arms can be compared again if this ever regresses.
+const ENCODING_TEST_BR = "Gz8E+I3UWq04bGqQlicqWbQ0VYb0ViC4ZIxP794C";
+const ENCODING_TEST_PLAIN_LEN = 1088;
+
+export function serveEncodingSelfTest(request) {
+  const url = new URL(request.url);
+  const bytes = Uint8Array.from(atob(ENCODING_TEST_BR), (c) => c.charCodeAt(0));
+  const init = {
+    headers: {
+      "content-type":     "text/plain; charset=utf-8",
+      "content-encoding": "br",
+      "cache-control":    "no-store",
+      "x-test-br-bytes":  String(bytes.length),
+      "x-test-plain-len": String(ENCODING_TEST_PLAIN_LEN),
+    },
+  };
+  // the control arm deliberately omits encodeBody, so a reader can tell a working
+  // passthrough from a test that simply never exercised the runtime's re-encoder.
+  if (url.searchParams.get("raw") !== "1") init.encodeBody = "manual";
+  return new Response(bytes, init);
+}
+
 // servePrecompressedShell: /a/<name>.<hash8>.<ext> from the worker, so the response
 // can carry bytes the platform would not have produced.
 //
@@ -158,6 +202,37 @@ export async function servePrecompressedShell(request, env) {
   // match="/a/*" scopes it to the content-hashed shell, so a new deploy's
   // /a/nav.<newhash>.js is exactly the request that would carry the old bytes' hash.
   const DICTIONARY_OFFER = { "use-as-dictionary": 'match="/a/*"' };
+
+  // ?br=2 — the second canary, testing the ONE hypothesis left standing after ?br=1
+  // failed in production. ?br=1 fetches /a/<name>.<ext>.br and rebuilds the response
+  // to fix its content-type; that rebuild is what appears to lose the runtime's
+  // internal "this body is already encoded" state, so the body got compressed again
+  // (13,051 bytes of brotli-in-brotli against 13,047 on disk).
+  //
+  // Here the asset layer supplies the whole envelope: /abr/<name>.<ext> holds the same
+  // q11 bytes, and _headers gives that path both `Content-Encoding: br` and the correct
+  // Content-Type. So this returns the subrequest response WITHOUT constructing a new
+  // Response, which is the documented pass-through contract ("do not read the body,
+  // keep the Content-Encoding intact"). Nothing is rebuilt, so there is no state to lose.
+  //
+  // If ?br=2 returns 13,047 bytes of valid JS, precompression is viable and the same
+  // envelope trick carries dcb (Available-Dictionary already reaches the worker —
+  // verified in production, cf-ray a2174bfc). If it returns 13,051 again, a worker on
+  // this platform cannot emit a pre-encoded body at all, and both precompression and
+  // Worker-served dictionaries are dead ends. That is the whole question.
+  if (url.searchParams.get("br") === "2") {
+    // accept-encoding: identity on the SUBREQUEST. There are two places a body can get
+    // compressed, and they have to be separated: the asset layer compresses what it
+    // serves when the caller accepts it, so forwarding the original request's
+    // "br, gzip" makes IT produce the br-in-br. Asking for identity gets the file's raw
+    // q11 bytes while _headers still supplies `Content-Encoding: br`, leaving exactly
+    // one encoding on the response and nothing for the outbound side to redo.
+    const passthrough = await env.ASSETS.fetch(new Request(`${url.origin}/abr${url.pathname.slice(2)}`, {
+      headers: { "accept-encoding": "identity" },
+    }));
+    if (passthrough.ok) return passthrough;
+    try { await passthrough.body?.cancel(); } catch {}
+  }
 
   if (!wantsPrecompressed(url)) {
     return serveAssetWith404Clamp(request, env, { headers: DICTIONARY_OFFER });

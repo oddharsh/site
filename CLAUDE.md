@@ -524,6 +524,39 @@ npm run deploy
     `SHELL_PRECOMPRESS_DEFAULT_ON` in `lib/assets.js` is `false` with a `?br=1`
     canary instead of just shipping.
 
+    **ROOT CAUSE (2026-07-26), after three wrong suspects.** The double
+    compression was OURS, not the platform's. `encodeBody` is **write-only**
+    Response init, so rebuilding a response drops it while leaving the
+    `content-encoding` header visible, and the runtime then compresses the body a
+    second time to match. `withSecurityHeaders` (`lib/security.js`) rebuilds
+    EVERY worker response, which made `encodeBody: "manual"` a no-op site-wide.
+    It now carries the flag forward whenever a content-encoding is present.
+
+    Isolated with `/encoding-test`: a constant 30-byte brotli payload built in the
+    worker, touching no assets. 34 wire bytes in two brotli layers before the fix,
+    30 in one layer after. `?br=1` went 13,051 (two layers) to 13,047 (one layer,
+    decoding to 46,268 valid JS).
+
+    **Anything that rebuilds a Response must preserve `encodeBody`.** There is no
+    getter for it, so the loss is silent and the symptom (a body that decodes once
+    into more compressed bytes) looks like a platform bug. Check this FIRST.
+
+    Three suspects were investigated and exonerated. Two of the three are real
+    facts worth keeping, they just weren't the cause: (1) a worker cannot read the
+    client's Accept-Encoding, so it genuinely cannot negotiate compression;
+    (2) the edge does NOT down-convert, so an `identity` client handed br gets raw
+    brotli, which is why negotiation can't be faked either; (3) the static-assets
+    layer was innocent — `/abr/` exists only because it was built to bypass a
+    suspect that turned out not to matter, and it can go.
+
+    What this unlocks: q11 precompression (~19% off nav.js + luna.css), and
+    `Content-Encoding: dcb` from a worker, since `Available-Dictionary` demonstrably
+    reaches it in production (cf-ray a2174bfc). Shell deltas measured 93-97%
+    across a real deploy, and a dictionary 11 days stale still gave 87-93%, so
+    build-time deltas against a committed dictionary work and need NO wasm. Only
+    the SSR'd homepage would need a runtime compressor, because the runtime ships
+    no brotli encoder at all (CompressionStream is gzip/deflate only).
+
 ---
 
 ## Source folder for new photos
