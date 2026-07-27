@@ -456,6 +456,25 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
 
       <li>
         <div class="title-row">
+          <span class="name"><a href="/garage/pqc">Post-quantum signatures, priced</a></span>
+          <span class="status shipped">shipped</span>
+        </div>
+        <div class="desc">
+          This site's TLS key agreement went post-quantum on its own; its signatures did not.
+          What ML-DSA-44 and both SLH-DSA parameter sets actually cost on the one signature a
+          personal site controls, measured on the real signature base: header bytes, signing
+          time, and why hash-based lost twice (22,784 bytes of header one way, 2.5 seconds per
+          signature the other). Ends with the migration shipped, since
+          <code style="font-family: var(--font-mono);font-size:9pt">Signature-Input</code> is a
+          dictionary and a second label costs a verifier nothing to ignore.
+        </div>
+        <div class="meta">
+          shape: measurements + a shipped migration &middot; added 2026-07-27
+        </div>
+      </li>
+
+      <li>
+        <div class="title-row">
           <span class="name"><a href="/garage/workers">Off Pages, onto Workers</a></span>
           <span class="status shipped">shipped</span>
         </div>
