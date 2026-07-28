@@ -8,6 +8,132 @@ import { lensParseRobots, lensPathMatch, lensRobotsVerdict } from "./lib/robots.
 import { lunaPage } from "./lib/chrome.js";
 import { escAttr, escHtml, jsonResponse } from "./lib/http.js";
 
+// The glossary. This page's whole subject is protocol names, which is fine for
+// the audience that already has them and a wall for the audience that doesn't.
+// Every definition here is written for someone who has never read a spec: plain
+// sentence first, no term defined using another term on this list.
+//
+// `plain` is the one-liner. `more` is the second sentence the hover adds, and
+// is optional — several terms are genuinely one sentence and padding them would
+// be worse. Keys are stable ids, so the same definition can be attached from the
+// worker's SSR and from the client's rendered checks without a second copy.
+export const LENS_GLOSSARY = {
+  "llms-txt": {
+    label: "llms.txt",
+    plain: "A plain-text file a site publishes to tell AI models what it is about and where its real content lives.",
+    more: "A welcome sign written for machines instead of people. About 1 in 18 of the top sites has one.",
+  },
+  mcp: {
+    label: "MCP",
+    plain: "Model Context Protocol: a common plug shape that lets an AI assistant use an outside tool or data source.",
+    more: "It won the tool layer the way USB won cables. One protocol, and everything speaks it.",
+  },
+  x402: {
+    label: "x402",
+    plain: "A way for software to pay software, a few cents at a time.",
+    more: "It revives an unused \"payment required\" code from the early web, so a bot can pay for a page instead of being blocked.",
+  },
+  "robots-txt": {
+    label: "robots.txt",
+    plain: "A file at the root of a site listing which automated visitors may fetch what.",
+    more: "A posted rule, not a lock. Polite crawlers obey it; rude ones ignore it and nothing stops them.",
+  },
+  sitemap: {
+    label: "sitemap.xml",
+    plain: "A machine-readable table of contents listing every page a site wants found.",
+  },
+  "dns-aid": {
+    label: "DNS-AID",
+    plain: "A proposed way to announce, in the internet's phone book, that a domain offers services built for AI agents.",
+    more: "Proposed in 2026 and barely deployed anywhere, so a site failing this check is in almost everyone's company.",
+  },
+  "link-headers": {
+    label: "Link headers",
+    alt: ["Link relations"],
+    plain: "Pointers a server attaches to a response saying \"the site map is here, the docs are there.\"",
+    more: "A machine reads them without downloading or parsing the page itself.",
+  },
+  "md-nego": {
+    label: "Markdown negotiation",
+    alt: ["text/markdown"],
+    plain: "Serving the same page as clean, plain text when a machine asks for it, while people still get the normal page.",
+    more: "Far cheaper for a model to read, and much harder for it to misread.",
+  },
+  "content-signals": {
+    label: "Content Signals",
+    alt: ["Content-Signal"],
+    plain: "Lines in a site's robots file saying what a crawler may DO with the content: train on it, answer questions with it, or only index it.",
+  },
+  dnssec: {
+    label: "DNSSEC",
+    plain: "Cryptographic signing for the internet's phone book, so the answer you get back cannot be forged along the way.",
+  },
+  token: {
+    label: "tokens",
+    plain: "The unit AI models read and bill by, roughly three-quarters of a word.",
+    more: "Messy HTML burns far more of them than clean text, which is why the same page can cost wildly different amounts to read.",
+  },
+  agent: {
+    label: "agent",
+    plain: "Software that acts on your behalf rather than just showing you a page: it reads, decides, and does.",
+  },
+  bot: {
+    label: "bots",
+    plain: "Automated visitors. They request pages like a browser does, but nobody is watching the screen.",
+    more: "They are feeding a search index or an AI model. As of 2026 they make more of the web's requests than people do.",
+  },
+  "browser-run": {
+    label: "Browser Run",
+    plain: "This page's own term: fetching the URL with a real headless Chrome, so the site's JavaScript actually runs.",
+    more: "A plain fetch sees only the file the server sent. Many sites look empty until the JavaScript fills them in.",
+  },
+};
+
+// Wrap known glossary terms in the hover markup. Input MUST already be escaped:
+// this inserts real tags, and it is only safe because escHtml has already
+// removed every < and > the source string could have carried.
+//
+// First occurrence per term per string, longest spelling first so "llms.txt" is
+// never eaten by a shorter overlapping match. A term may carry `alt` spellings,
+// because the checks say "Link relations" where the glossary says "Link headers"
+// and one definition should serve both.
+//
+// Boundaries are hand-rolled: \b is useless against labels carrying dots, digits
+// and slashes (llms.txt, x402, text/markdown). Leading guard is "not a word char,
+// dot or dash". Trailing is TWO lookaheads, both load-bearing and both learned
+// from a failing case:
+//   (?!\w)    refuses llms.txtfoo, but must NOT include "-", or "DNSSEC-signed"
+//             stops matching DNSSEC. A term used as a compound modifier is still
+//             the term.
+//   (?!\.\w)  refuses sitemap.xml.gz while still letting "robots.txt." at the end
+//             of a sentence through, which the naive version got wrong.
+const LENS_SPELLINGS = Object.keys(LENS_GLOSSARY)
+  .flatMap((key) => [LENS_GLOSSARY[key].label, ...(LENS_GLOSSARY[key].alt || [])].map((s) => [key, s]))
+  .sort((a, b) => b[1].length - a[1].length);
+
+export function glossify(escaped, only) {
+  let out = String(escaped);
+  const seen = new Set();
+  const pairs = only
+    ? LENS_SPELLINGS.filter(([key]) => only.indexOf(key) !== -1)
+    : LENS_SPELLINGS;
+  for (const [key, spelling] of pairs) {
+    if (seen.has(key)) continue;         // one definition per string, not one per spelling
+    const re = new RegExp("(^|[^\\w.-])(" + spelling.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ")(?!\\w)(?!\\.\\w)");
+    const m = out.match(re);
+    if (!m) continue;
+    seen.add(key);
+    const at = m.index + m[1].length;
+    // The title is the no-JS / touch fallback and what a screen reader reads.
+    // On a hover-capable pointer the client strips it the moment the richer
+    // surface is live, so the two tips never stack on one word.
+    out = out.slice(0, at) +
+      '<abbr class="lx-term" data-t="' + escAttr(key) + '" title="' + escAttr(LENS_GLOSSARY[key].plain) + '">' + m[2] + "</abbr>" +
+      out.slice(at + m[2].length);
+  }
+  return out;
+}
+
 // Per-IP crawl budgets, one place. These used to be inlined at each call site,
 // which was fine until /mcp grew tools that call the same crawler: sharing the
 // literal KV bucket is the whole point, because a second unmetered door (30 via
@@ -271,8 +397,11 @@ const LENS_SOW_FACTS = [
 function lensStateOfWebRail() {
   // Past the first two, facts drop out under 560px rather than turning the strip
   // into a five-line block above the address bar. The "?" holds all six anyway.
+  // The rail is the first screen, and it opens on llms.txt / MCP / x402 — three
+  // terms that lose a non-technical reader in the first four seconds. glossify
+  // makes each one hoverable in place rather than rewriting the fact around it.
   const items = LENS_SOW_FACTS.filter((f) => f.rail).map((f, i) =>
-    '<span class="lx-sow-i' + (i > 1 ? " lx-sow-i-x" : "") + '"><b>' + escHtml(f.railStat || f.stat) + "</b> " + escHtml(f.rail) + "</span>"
+    '<span class="lx-sow-i' + (i > 1 ? " lx-sow-i-x" : "") + '"><b>' + escHtml(f.railStat || f.stat) + "</b> " + glossify(escHtml(f.rail)) + "</span>"
   ).join("");
   return '<div class="lx-sow-rail">' +
     '<span class="lx-sow-facts">' +
@@ -338,6 +467,33 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 .lx-lede { margin:0 0 10px; color:oklch(40% 0 0); font-size:10pt; }
 .lx-lede a { color:oklch(42.61% 0.2353 263.74); }
 
+/* glossary terms. A dotted underline has meant "this word carries a definition"
+   since IE rendered <abbr> that way, so the affordance is both period-correct
+   and the one a modern reader still knows. text-decoration rather than a border
+   so it wraps with the word. The surface is hover-only (hoist.js bails on touch),
+   which is why the markup is <abbr>: the title attribute is the honest fallback
+   and screen readers announce it either way. */
+.lx-term { text-decoration:underline dotted oklch(60% 0.09 258); text-underline-offset:2px; text-decoration-thickness:1px; cursor:help; }
+.lx-term:focus-visible { outline:1px dotted oklch(42.61% 0.2353 263.74); outline-offset:2px; }
+
+/* the definition surface. XP's info tip: pale yellow, hairline black border, one
+   hard offset shadow. Cursor-following, so it hard-snaps (no transition on the
+   transform) and clamps against its own size against the viewport, exactly like
+   the homepage's .xp-tooltip — that CSS is inline on the homepage, so /lens
+   carries its own copy rather than promoting it into render-blocking luna.css. */
+.lx-tip { position:fixed; inset:auto; top:0; left:0; margin:0; padding:6px 9px; max-width:290px; z-index:10000; pointer-events:none; display:none;
+  transform:translate(clamp(4px, calc(var(--x) + 16px), calc(100vw - 100% - 8px)), clamp(4px, calc(var(--y) + 16px), calc(100vh - 100% - 8px)));
+  font:11px/1.5 Tahoma,Verdana,Geneva,sans-serif; color:oklch(20% 0 0); background:oklch(98.92% 0.0398 96.79); border:1px solid oklch(15% 0 0); box-shadow:2px 2px 0 oklch(15% 0 0 / .15); }
+.lx-tip b { display:block; margin-bottom:2px; font-family:"Trebuchet MS",Verdana,sans-serif; font-size:11.5px; color:oklch(33% 0.10 263); }
+.lx-tip i { display:block; margin-top:4px; font-style:normal; color:oklch(42% 0 0); }
+.lx-tip.anchored { position-anchor:--lx-tip; position-area:bottom span-right; top:auto; left:auto; transform:none; margin:6px 0 0; position-try-fallbacks:flip-block,flip-inline; }
+@supports selector(:popover-open){
+  .lx-tip:popover-open { display:block; }
+  .lx-tip.anchored:popover-open { transition:opacity 120ms ease-out; }
+  @starting-style { .lx-tip.anchored:popover-open { opacity:0; } }
+}
+@media (prefers-reduced-motion:reduce){ .lx-tip.anchored:popover-open { transition:none; } }
+
 /* IE6 address bar */
 .lx-addr { display:flex; align-items:center; gap:6px; background:oklch(94.66% 0.0114 252.09); border:1px solid oklch(72% 0.03 250); border-radius:3px; padding:5px 6px; }
 .lx-addr-label { font-size:9pt; color:oklch(45% 0 0); padding:0 2px; }
@@ -355,7 +511,11 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
    than .lx-go on purpose: these are suggestions, that one is the action. */
 .lx-chips { display:flex; align-items:center; flex-wrap:wrap; gap:5px; margin:7px 0 9px; }
 .lx-chips-label { font-size:9pt; color:oklch(48% 0 0); }
-.lx-chip { font-size:8.8pt; padding:2px 9px; color:oklch(20% 0 0); background:linear-gradient(180deg,#fdfdfd,#e6e6dd); border:1px solid; border-color:#fff oklch(45% 0 0) oklch(45% 0 0) #fff; border-radius:3px; }
+/* 4px vertical padding, not 2px, puts these at 24px tall. XP's own command
+   button was 50x14 dialog units = 75x23px at 8pt Tahoma, so the period-correct
+   number was already a pixel off WCAG 2.5.8's 24px floor and these were four
+   under it. Rounding up to 24 is closer to Luna than what was here. */
+.lx-chip { font-size:8.8pt; padding:4px 9px; color:oklch(20% 0 0); background:linear-gradient(180deg,#fdfdfd,#e6e6dd); border:1px solid; border-color:#fff oklch(45% 0 0) oklch(45% 0 0) #fff; border-radius:3px; }
 .lx-chip:hover { background:linear-gradient(180deg,#fff,#efefe7); }
 .lx-chip:active { border-color:oklch(45% 0 0) #fff #fff oklch(45% 0 0); }
 
@@ -383,7 +543,12 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 .lx-pane-human .lx-pane-h { background:linear-gradient(180deg, oklch(58% 0.06 150), oklch(46% 0.09 155)); }
 .lx-pane-browser .lx-pane-h { background:linear-gradient(180deg, oklch(58% 0.10 205), oklch(45% 0.14 220)); }
 .lx-body { flex:1 1 auto; overflow:auto; padding:10px 11px; }
-.lx-empty { color:oklch(55% 0 0); font-size:9.5pt; padding:18px 6px; text-align:center; }
+/* Empty states name what this place is and what fills it, rather than only
+   naming the action. "Paste a URL to compare the three surfaces" told a stranger
+   the mechanic and none of the reason. First line is the instruction, the <span>
+   is the payoff, deliberately quieter. */
+.lx-empty { color:oklch(45% 0 0); font-size:10pt; padding:18px 14px; text-align:center; text-wrap:pretty; }
+.lx-empty span { display:block; max-width:34ch; margin:5px auto 0; font-size:9pt; line-height:1.5; color:oklch(58% 0 0); }
 .lx-spin { color:oklch(42.61% 0.2353 263.74); font-size:9.5pt; padding:18px 6px; text-align:center; }
 .lx-idle-lens { max-width:620px; margin:22px auto; padding:16px 18px; border:1px solid oklch(78% 0.04 250); border-radius:4px; background:linear-gradient(180deg,#fff,oklch(97% 0.008 250)); color:oklch(31% 0.02 255); }
 .lx-idle-kicker { color:oklch(46% 0.13 252); font:9pt Tahoma,Verdana,sans-serif; text-transform:uppercase; letter-spacing:.06em; }
@@ -466,7 +631,11 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 .lx-readiness-detail { margin-top:2px; font-size:8.4pt; color:oklch(52% 0 0); }
 .lx-readiness-consume { margin-top:3px; font-size:8pt; color:oklch(46% 0.06 255); border-left:2px solid oklch(78% 0.06 255); padding-left:6px; }
 .lx-readiness-fix { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:5px; padding-top:5px; border-top:1px dotted oklch(85% 0.02 250); font-size:8.4pt; color:oklch(42% 0.07 50); }
-.lx-copy-fix, .lx-copy-all { border:1px solid oklch(62% 0.05 250); border-radius:3px; padding:2px 7px; background:linear-gradient(180deg,#fff,oklch(91% 0.012 250)); color:oklch(34% 0.07 255); font:8pt Tahoma,Verdana,sans-serif; cursor:pointer; white-space:nowrap; }
+/* 19 -> 24px tall, and it costs NOTHING: every .lx-readiness-fix row is already
+   40-56px because the fix text wraps, so the row was never sized by this button.
+   Measured on the live page: all 14 row heights are identical before and after.
+   Also lands them on the same 23-24px as .lx-go, .lx-seg and .lx-chip. */
+.lx-copy-fix, .lx-copy-all { box-sizing:border-box; min-height:24px; border:1px solid oklch(62% 0.05 250); border-radius:3px; padding:2px 7px; background:linear-gradient(180deg,#fff,oklch(91% 0.012 250)); color:oklch(34% 0.07 255); font:8pt Tahoma,Verdana,sans-serif; cursor:pointer; white-space:nowrap; }
 .lx-copy-fix:hover, .lx-copy-all:hover { background:oklch(93% 0.04 250); }
 .lx-copy-all { margin:0 0 7px; font-weight:bold; }
 .lx-next-actions { display:grid; gap:4px; margin:0 0 9px; }
@@ -483,9 +652,14 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 .lx-mult { font-family:"Courier New",monospace; font-size:7.8pt; color:oklch(38% 0.09 150); background:oklch(94% 0.04 150); border:1px solid oklch(80% 0.06 150); border-radius:8px; padding:1px 7px; white-space:nowrap; }
 .lx-bots th.num, .lx-bots td.num { text-align:right; font-family:"Courier New",monospace; white-space:nowrap; padding-right:10px; }
 
-/* the dollar-thesis verdict strip, above every scanned lens */
-.lx-verdict { margin:0 0 11px; padding:8px 11px; border:1px solid oklch(74% 0.09 150); border-left:4px solid oklch(52% 0.14 150); border-radius:3px; background:linear-gradient(180deg,oklch(98% 0.02 150),oklch(96% 0.03 150)); color:oklch(30% 0.03 255); font-size:9.4pt; line-height:1.5; }
-.lx-verdict b { color:oklch(34% 0.13 150); font-family:"Courier New",monospace; }
+/* the dollar-thesis verdict strip, above every scanned lens. This is the one
+   claim on the page a non-technical reader repeats afterward, so it is the one
+   block sized to be read across a room rather than over a shoulder: 10.6pt
+   against the 9.4pt it replaces, which is the largest body text in the pane
+   without competing with the readiness score's 29pt hero below it. Deliberately
+   NOT a second hero number — two 30pt figures stacked would make neither read. */
+.lx-verdict { margin:0 0 11px; padding:9px 12px; border:1px solid oklch(74% 0.09 150); border-left:4px solid oklch(52% 0.14 150); border-radius:3px; background:linear-gradient(180deg,oklch(98% 0.02 150),oklch(96% 0.03 150)); color:oklch(30% 0.03 255); font-size:10.6pt; line-height:1.5; text-wrap:pretty; }
+.lx-verdict b { color:oklch(34% 0.13 150); font-family:"Courier New",monospace; font-size:10.2pt; }
 
 /* agent trace: an XP console of what an agent would do */
 .lx-trace { font-family:"Courier New",Courier,monospace; font-size:8.7pt; line-height:1.5; background:oklch(22% 0.02 255); border-radius:3px; padding:9px 10px; color:oklch(90% 0.02 150); }
@@ -541,7 +715,14 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 .lx-sow-rail-k { color:oklch(52% 0 0); }
 .lx-sow-i { white-space:nowrap; }
 .lx-sow-i b { font-family:"Courier New",monospace; font-size:9pt; color:oklch(40% 0.14 255); }
-.lx-sow-q { flex:0 0 auto; min-width:0; width:19px; height:19px; padding:0; font-weight:bold; font-size:9pt; line-height:17px; color:oklch(35% 0.10 258); }
+/* the one control here that does NOT grow: a 24px "?" turns this status strip
+   into a toolbar (measured: the rail goes 29px -> 34px). So the face stays
+   19x19 and only the TARGET grows, via a transparent ::after. -3.5px, not -3:
+   an abs-positioned child insets from the PADDING box, which is 17px once the
+   1px borders come off, so 17 + 3.5 + 3.5 = exactly 24. The 8px gap to
+   .lx-sow-facts is text rather than a target, so nothing can collide. */
+.lx-sow-q { position:relative; flex:0 0 auto; min-width:0; width:19px; height:19px; padding:0; font-weight:bold; font-size:9pt; line-height:17px; color:oklch(35% 0.10 258); }
+.lx-sow-q::after { content:''; position:absolute; inset:-3.5px; }
 .lx-sow-q:active { padding:0 0 0 1px; }
 @media (max-width:560px){ .lx-sow-i-x { display:none; } }
 /* the shadow is luna.css's modal idiom verbatim (#axp-run): a hard 4px offset
@@ -562,9 +743,13 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
   .lx-sow-dialog[open]::backdrop { opacity:1; }
   @starting-style { .lx-sow-dialog[open]::backdrop { opacity:0; } }
 }
-.lx-sow-tb { display:flex; align-items:center; gap:8px; flex:0 0 auto; padding:4px 5px 5px 10px; background:linear-gradient(180deg, oklch(62% 0.16 256), oklch(45% 0.19 260)); }
+.lx-sow-tb { display:flex; align-items:center; gap:8px; flex:0 0 auto; padding:3px 4px 4px 10px; background:linear-gradient(180deg, oklch(62% 0.16 256), oklch(45% 0.19 260)); }
 .lx-sow-kicker { font:bold 10.5pt "Trebuchet MS",Verdana,sans-serif; color:#fff; text-shadow:0 1px 1px oklch(24% 0.1 260 / .6); }
-.lx-sow-x { margin-left:auto; width:20px; height:20px; padding:0; overflow:hidden; font-size:0; cursor:pointer; position:relative; border:1px solid #d8401c; border-radius:3px; background-color:#e45f3e; background-image:linear-gradient(180deg,#e8795f,#e45d3d 55%,#ae3110); }
+/* 24x24 rather than the ::after trick the other two use, because both pseudos
+   here already draw the X. XP's own caption close was 21px tall, so this is
+   nearer the real thing than the 20 it replaces; .lx-sow-tb sheds 2px of
+   padding so the caption bar grows 2px rather than 4. */
+.lx-sow-x { margin-left:auto; width:24px; height:24px; padding:0; overflow:hidden; font-size:0; cursor:pointer; position:relative; border:1px solid #d8401c; border-radius:3px; background-color:#e45f3e; background-image:linear-gradient(180deg,#e8795f,#e45d3d 55%,#ae3110); }
 .lx-sow-x:hover, .lx-sow-x:focus-visible { filter:brightness(1.12); outline:none; box-shadow:0 0 4px oklch(70% 0.18 30 / .7); }
 .lx-sow-x::before, .lx-sow-x::after { content:''; position:absolute; left:50%; top:50%; width:11px; height:2px; margin:-1px 0 0 -5.5px; background:#fff; }
 .lx-sow-x::before { transform:rotate(45deg); } .lx-sow-x::after { transform:rotate(-45deg); }
@@ -636,11 +821,11 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
     <div class="lx-panes is-${state.view}" id="lx-panes">
       <section class="lx-pane lx-pane-human" id="lx-human">
         <div class="lx-pane-h" id="lx-human-h">${humanHeader}</div>
-        <div class="lx-body" id="lx-human-body">${seeded ? lensHumanFragment(initial) : '<div class="lx-empty">Paste a URL above to compare the three surfaces.</div>'}</div>
+        <div class="lx-body" id="lx-human-body">${seeded ? lensHumanFragment(initial) : '<div class="lx-empty">Paste any URL above.<span>You get the page a person sees, the raw file a machine gets instead, and what that difference costs.</span></div>'}</div>
       </section>
       <section class="lx-pane lx-pane-machine" id="lx-machine">
         <div class="lx-pane-h" id="lx-machine-h">${machineHeader}</div>
-        <div class="lx-body" id="lx-machine-body">${seeded ? lensMachineFragment(initial, state) : '<div class="lx-empty">The markup, metadata, and machine directives land here.</div>'}</div>
+        <div class="lx-body" id="lx-machine-body">${seeded ? lensMachineFragment(initial, state) : '<div class="lx-empty">What the machine actually receives.<span>The raw file, the rules it is handed, and the bill for reading them.</span></div>'}</div>
       </section>
       <section class="lx-pane lx-pane-browser" id="lx-browser">
         <div class="lx-pane-h" id="lx-browser-h">${browserHeader}</div>
@@ -651,6 +836,8 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
     <div class="lx-status" id="lx-status">${seeded || (initial && !initial.ok) ? lensStatusFragment(initial, state) : '<span>Idle. Nothing is fetched until you ask, and then just once, server-side, with no logging.</span>'}</div>
     <footer>&larr; <a href="/">aadhar.sh</a> &middot; a research toy about how machines read the web &middot; <button type="button" class="lx-sow-open" data-sow-open>the state of the machine web</button> &middot; fetched by <a href="/bot">AadharshBot</a></footer>
     ${lensStateOfWebPanel()}
+    <div class="lx-tip" id="lx-tip" popover="manual" role="tooltip"></div>
+    <script type="application/json" id="lx-glossary">${lensScriptJson(LENS_GLOSSARY)}</script>
     ${initialScript}
 `,
     // The shell is cached at the edge and browsers cache static scripts too, so a
