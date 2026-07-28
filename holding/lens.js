@@ -39,6 +39,91 @@
       .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;");
   }
+  // ── glossary ──────────────────────────────────────────────────────────────
+  // The definitions are the worker's (one copy, serialized into the page as
+  // #lx-glossary), because the same term gets marked up from both sides: the
+  // worker owns the facts rail, this file owns the checks. A second hand-kept
+  // copy here is exactly the drift the /*luq-data*/ pattern exists to avoid.
+  var GLOSS = (function () {
+    try { return JSON.parse(document.getElementById("lx-glossary").textContent); }
+    catch (e) { return {}; }
+  })();
+  // Flattened [key, spelling] pairs, longest spelling first so "llms.txt" is
+  // never eaten by a shorter overlap. A term may carry alt spellings because the
+  // checks say "Link relations" where the glossary says "Link headers".
+  var GLOSS_SPELLINGS = [];
+  Object.keys(GLOSS).forEach(function (key) {
+    [GLOSS[key].label].concat(GLOSS[key].alt || []).forEach(function (s) {
+      GLOSS_SPELLINGS.push([key, s]);
+    });
+  });
+  GLOSS_SPELLINGS.sort(function (a, b) { return b[1].length - a[1].length; });
+
+  // Mirrors glossify() in _worker.js/lens.js. Input MUST already be escaped:
+  // this inserts real tags, and only esc() having removed every < and > makes
+  // that safe. First occurrence per term per string.
+  // hoistLive flips once the rich surface is wired. While it is false (touch, no
+  // module support, hoist.js failed to load) every term carries a title, which is
+  // the browser's own tooltip and the honest fallback. Once true, new markup omits
+  // it so the native tip never stacks on top of the XP one.
+  var hoistLive = false;
+
+  // Boundary rules mirror glossify() in _worker.js/lens.js, including the two
+  // trailing lookaheads: (?![\w-]) alone rejected "robots.txt." at the end of a
+  // sentence, so the second one lets a bare period through while still refusing
+  // llms.txtfoo and sitemap.xml.gz.
+  function glossify(escaped, only) {
+    var out = String(escaped);
+    var seen = {};
+    for (var i = 0; i < GLOSS_SPELLINGS.length; i++) {
+      var key = GLOSS_SPELLINGS[i][0], spelling = GLOSS_SPELLINGS[i][1];
+      if (seen[key]) continue;           // one definition per string, not one per spelling
+      if (only && only.indexOf(key) === -1) continue;
+      var lit = spelling.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      var m = out.match(new RegExp("(^|[^\\w.-])(" + lit + ")(?!\\w)(?!\\.\\w)"));
+      if (!m) continue;
+      seen[key] = 1;
+      var at = m.index + m[1].length;
+      out = out.slice(0, at) +
+        '<abbr class="lx-term" data-t="' + esc(key) + '"' +
+        (hoistLive ? "" : ' title="' + esc(GLOSS[key].plain) + '"') + ">" + m[2] + "</abbr>" +
+        out.slice(at + m[2].length);
+    }
+    return out;
+  }
+
+  // The hover surface rides the site's shared engine (hoist.js): top-layer
+  // popover, cursor-following, gap-hop dismissal, keyboard-focus anchoring, and
+  // the scroll model all come for free. Loaded dynamically and ONLY on a
+  // hover-capable pointer, same bargain the homepage strikes with tooltip.js —
+  // a touch visitor never fetches an engine that would return a dead surface.
+  // The <abbr title> stays the honest fallback for everyone else.
+  if (!(window.matchMedia && (matchMedia("(hover: none)").matches || matchMedia("(pointer: coarse)").matches))) {
+    import("/hoist.js").then(function (h) {
+      var node = document.getElementById("lx-tip");
+      if (!node) return;
+      h.createHoist({
+        node: node,
+        anchorName: "--lx-tip",
+        findTarget: function (el) {
+          return el && el.closest ? el.closest(".lx-term") : null;
+        },
+        contentFor: function (t) {
+          var g = GLOSS[t.getAttribute("data-t")];
+          if (!g) return "";
+          return "<b>" + esc(g.label) + "</b>" + esc(g.plain) +
+            (g.more ? "<i>" + esc(g.more) + "</i>" : "");
+        },
+      });
+      hoistLive = true;
+      // The shell was server-rendered before this file ran, so its terms already
+      // carry the fallback title. Retire those now that the real surface exists;
+      // everything rendered from here on is emitted without one.
+      var pre = document.querySelectorAll(".lx-term[title]");
+      for (var i = 0; i < pre.length; i++) pre[i].removeAttribute("title");
+    }).catch(function () {});
+  }
+
   function bytes(n) {
     if (n == null) return "?";
     if (n < 1024) return n + " B";
@@ -788,8 +873,11 @@
       var state = readinessStatus(item);
       var copy = readinessCopy(item);
       var fix = copy.fix;
-      var consume = CONSUMPTION[item.key] ? '<div class="lx-readiness-consume">Who reads it: ' + esc(CONSUMPTION[item.key]) + '</div>' : "";
-      return '<div class="lx-readiness-check" data-status="' + esc(item.status) + '" data-label="' + esc(copy.label) + '" data-fix="' + esc(fix) + '"><div class="lx-readiness-check-top"><b>' + esc(copy.label) + '</b>' + badge(state.text, state.kind) + '</div><div class="lx-readiness-detail">' + esc(item.detail || "") + '</div>' + consume + (item.status === "fail" ? '<div class="lx-readiness-fix"><span>' + esc(fix) + '</span><button class="lx-copy-fix" type="button" data-fix="' + esc(fix) + '">Copy fix</button></div>' : "") + '</div>';
+      var consume = CONSUMPTION[item.key] ? '<div class="lx-readiness-consume">Who reads it: ' + glossify(esc(CONSUMPTION[item.key])) + '</div>' : "";
+      // Glossify the VISIBLE strings only. data-label and data-fix stay plain:
+      // one is an attribute, the other is what the Copy fix button puts on the
+      // clipboard, and neither should carry markup.
+      return '<div class="lx-readiness-check" data-status="' + esc(item.status) + '" data-label="' + esc(copy.label) + '" data-fix="' + esc(fix) + '"><div class="lx-readiness-check-top"><b>' + glossify(esc(copy.label)) + '</b>' + badge(state.text, state.kind) + '</div><div class="lx-readiness-detail">' + glossify(esc(item.detail || "")) + '</div>' + consume + (item.status === "fail" ? '<div class="lx-readiness-fix"><span>' + glossify(esc(fix)) + '</span><button class="lx-copy-fix" type="button" data-fix="' + esc(fix) + '">Copy fix</button></div>' : "") + '</div>';
     }).join("") + '</div>';
 
     var bots = r.botViews || [];
