@@ -12,6 +12,23 @@
 //   this fallback still covers local dev, internal self-dispatch, and a miss
 //   where the per-colo response is already warm.
 
+// opts.cacheTtl (seconds, KV floor 30) keeps the value cached at the colo that
+// read it. Without it KV's default is 60s, and this site's traffic is thin
+// enough that most real visits are the first at their colo in over a minute, so
+// they pay the central-store round trip: 120-200ms against a colo-local 3-5ms.
+// Measured on the homepage 2026-07-27 (manifest 126ms / counter 149ms /
+// tracks 204ms cold, versus 3-5ms each once warm).
+//
+// Two things follow from it, and both are the caller's call to price:
+//   - a write or delete from ANOTHER colo stays invisible here for up to
+//     cacheTtl, so a manual `wrangler kv key delete` bust lands late. Callers
+//     that document a bust step keep this short.
+//   - the sentinel gets the SAME cacheTtl on purpose. It rides the Promise.all
+//     below, so leaving it uncached just moves the cold read rather than
+//     removing it. The cost is that the effective freshness window at a colo
+//     stretches to ttl + cacheTtl, and a lapsed sentinel reads as absent for up
+//     to cacheTtl, so a colo can fire an extra background rebuild or two before
+//     its own write settles. Both are bounded; neither touches the response.
 export async function swrKV(env, ctx, key, ttl, buildFn, opts = {}) {
   const kv = env && env.RN_KV;
   const type = opts.type || "json";
@@ -19,6 +36,7 @@ export async function swrKV(env, ctx, key, ttl, buildFn, opts = {}) {
   const isValid = opts.isValid || ((value) => value !== null && value !== undefined);
   const shouldStore = opts.shouldStore || isValid;
   const buildOnMiss = opts.buildOnMiss !== false;
+  const cacheTtl = opts.cacheTtl;
 
   const store = async (value) => {
     if (!kv || !shouldStore(value)) return value;
@@ -34,8 +52,8 @@ export async function swrKV(env, ctx, key, ttl, buildFn, opts = {}) {
     let value = null, fresh = null;
     try {
       [value, fresh] = await Promise.all([
-        kv.get(key, type),
-        kv.get(freshKey),
+        kv.get(key, cacheTtl ? { type, cacheTtl } : type),
+        kv.get(freshKey, cacheTtl ? { type: "text", cacheTtl } : "text"),
       ]);
     } catch {}
 

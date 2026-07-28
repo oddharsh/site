@@ -65,9 +65,20 @@ function context() {
   return { waitUntil() {} };
 }
 
+// KV's get() takes the type either bare ("json") or inside an options object
+// ({ type, cacheTtl }). Reads that pass cacheTtl use the second form, so a stub
+// that only understands the first silently hands back a string where the caller
+// expected a parsed object — which reads downstream as a cache miss, not as a
+// broken fake. Normalize once, here.
+function kvType(typeOrOptions) {
+  if (typeOrOptions && typeof typeOrOptions === "object") return typeOrOptions.type || "text";
+  return typeOrOptions || "text";
+}
+
 function kvForTracks() {
   return {
-    async get(key, type) {
+    async get(key, typeOrOptions) {
+      const type = kvType(typeOrOptions);
       if (key === "playlist-id") return PLAYLIST_ID;
       if (key === `tracks:${PLAYLIST_ID}`) return type === "json" ? TRACKS : JSON.stringify(TRACKS);
       if (key === `tracks:${PLAYLIST_ID}:fresh`) return "1";
@@ -429,7 +440,7 @@ function coffeeEnv() {
     // listHeld pages KV with list({ prefix: "held:" }), one key per held slot.
     // An empty first page is the "nothing booked" fixture.
     BOOKINGS: {
-      async get(key, type) { if (key === "cal:busy" && type === "json") return snapshot; return null; },
+      async get(key, typeOrOptions) { if (key === "cal:busy" && kvType(typeOrOptions) === "json") return snapshot; return null; },
       async list() { return { keys: [], list_complete: true, cursor: null }; },
     },
   };

@@ -277,7 +277,12 @@ export async function getImagesManifest(env, ctx) {
   // two-key stale-while-revalidate via lib/cache.js: the manifest is the
   // persistent value, and `manifest:images:fresh` carries the 1h freshness TTL.
   // stale serves instantly; only a true first run / manual bust rebuilds inline.
+  // cacheTtl 300, deliberately shorter than the tracks payload's 1800: adding
+  // photos ends by deleting manifest:images + its sentinel (MAINTENANCE.md), and
+  // that documented bust has to land in minutes rather than half an hour. Five
+  // minutes still converts most cold reads at this site's traffic.
   const manifest = await swrKV(env, ctx, "manifest:images", 3600, () => buildImagesManifest(env), {
+    cacheTtl: 300,
     isValid: Array.isArray,
     shouldStore: (m) => Array.isArray(m) && m.length > 0,
   });

@@ -79,7 +79,12 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
   const tracksChain = (async () => {
     if (!env.RN_KV) return null;
     try {
-      const pid = await env.RN_KV.get("playlist-id");
+      // cacheTtl 300: this get is SERIAL in front of getTracksSWR, so a cold read
+      // here is additive on the homepage's slowest span (204ms on 2026-07-27 was
+      // two cold round trips stacked, against 126-149ms for the single-hop reads
+      // beside it). 300 keeps a /rn/set rollover visible within 5 minutes, which
+      // is the price of not caching it for the hour the key's write rate invites.
+      const pid = await env.RN_KV.get("playlist-id", { cacheTtl: 300 });
       if (pid && /^[0-9A-Za-z]{22}$/.test(pid)) {
         return await getTracksSWR(env, ctx, pid);
       }
@@ -105,8 +110,14 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
   // not, because nav.js and the entire desktop shell queue behind the last chunk.
   // A KV read is colo-local at 5-8ms and rides the Promise.all below, so the count
   // now costs the render nothing and the stream never suspends.
+  //
+  // cacheTtl 300 because "colo-local at 5-8ms" only describes a WARM read: cold,
+  // this one measured 149ms on 2026-07-27. The mirror already trails real time by
+  // up to MIRROR_TTL (60s) by design, so the honest statement of the trade is that
+  // the odometer can now sit ~6 minutes behind instead of ~1. Still not a number
+  // anyone audits, and the /hit beacon remains the thing that actually counts.
   const counterP = env.RN_KV
-    ? env.RN_KV.get(COUNT_KEY).then(
+    ? env.RN_KV.get(COUNT_KEY, { type: "text", cacheTtl: 300 }).then(
         (v) => { const n = parseInt(v, 10); return Number.isFinite(n) ? n : null; },
         () => null,
       )
