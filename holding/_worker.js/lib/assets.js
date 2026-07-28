@@ -1,5 +1,6 @@
-// lib/assets.js: the two ways this worker hands out a static file when the
-// default asset path would lie.
+// lib/assets.js: the ways this worker hands out a static file when the default
+// asset path would lie.
+import { wantsMarkdown } from "./http.js";
 //
 // serveFreshAsset: fetch the asset under a unique query (which busts the
 // read-through asset cache), then re-emit it at the canonical URL with an honest
@@ -29,6 +30,45 @@ export async function serveFreshAsset(request, env, contentType) {
   if (contentType) headers.set("content-type", contentType);
   headers.set("cache-control", "public, max-age=0, must-revalidate, s-maxage=300");
   return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
+}
+
+// serveMarkdownTwin: answer `Accept: text/markdown` at a page's own URL with the
+// .md twin build.mjs generated for it. The twin also lives at a stable, cacheable
+// URL of its own (/garage/encoding -> /garage/encoding.md), which is what
+// llms.txt links and what an agent without a precise Accept header should use.
+// This is the same-URL convenience layered on that, not a replacement for it.
+//
+// Returns null when no twin exists, so the caller falls through to HTML rather
+// than 404ing. Negotiation is a courtesy and every one of these paths has a real
+// page to serve; failing a navigation because a twin did not generate would be
+// the worse trade.
+export async function serveMarkdownTwin(request, env, twinPath, extraHeaders = {}) {
+  const u = new URL(request.url);
+  u.pathname = twinPath;
+  u.search = "";
+  const res = await env.ASSETS.fetch(new Request(u.toString(), { headers: request.headers }));
+  if (!res.ok) {
+    try { await res.body?.cancel(); } catch {}
+    return null;
+  }
+  const body = await res.text();
+  return new Response(body, {
+    status: 200,
+    headers: {
+      "content-type": "text/markdown; charset=utf-8",
+      // rough estimate at ~4 chars/token, the same honest approximation the
+      // homepage twin has always advertised
+      "x-markdown-tokens": String(Math.ceil(body.length / 4)),
+      // The edge caches per URL, not per Accept, so a cached negotiated response
+      // here could later be handed to a client that asked for HTML. The .md URL
+      // is the cacheable representation; this one must not be. Same reasoning as
+      // the homepage's negotiated "/" in home.js.
+      "cache-control": "no-store, must-revalidate",
+      "vary": "accept",
+      "x-content-type-options": "nosniff",
+      ...extraHeaders,
+    },
+  });
 }
 
 // serveAssetWith404Clamp: pass real assets through untouched; clamp only a 404
@@ -326,6 +366,14 @@ export async function serveStaticPage(request, env) {
     // have no twin; hand them straight to the asset layer untouched.
     return serveAssetWith404Clamp(request, env);
   }
+  // Markdown negotiation runs before the dictionary/delta machinery below, which
+  // is all about shipping the HTML cheaply. An agent asking for text/markdown is
+  // not going to use a delta against an HTML dictionary it does not hold.
+  if (wantsMarkdown(request)) {
+    const md = await serveMarkdownTwin(request, env, `/${rel}.md`);
+    if (md) return md;
+  }
+
   const slug = rel.replace(/\//g, "__");
   // A page is only ever fetched as a document (a navigation). Scoping it says so, and
   // keeps a prefetch/subresource fetch of the same URL from banking a dictionary the

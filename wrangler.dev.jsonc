@@ -62,13 +62,14 @@
   },
   "observability": { "enabled": true },
   "version_metadata": { "binding": "CF_VERSION_METADATA" },
-  "triggers": { "crons": ["*/30 * * * *", "17 8 * * 1"] },
+  "triggers": { "crons": ["*/30 * * * *", "17 8 * * 1", "7,37 * * * *"] },
   "kv_namespaces": [
     { "binding": "RN_KV", "id": "3cb8a107c58e47dc9244e75b33401f36" },
     { "binding": "BOOKINGS", "id": "37acb65118fe485583a90a94cb89365e" }
   ],
   "analytics_engine_datasets": [
-    { "binding": "BOT_LEDGER", "dataset": "aadhar_bot_ledger" }
+    { "binding": "BOT_LEDGER", "dataset": "aadhar_bot_ledger" },
+    { "binding": "PERF_PROBE", "dataset": "aadhar_perf_probe" }
   ],
   "r2_buckets": [
     { "binding": "PHOTOS_R2", "bucket_name": "aadhar-photos" }

@@ -88,9 +88,10 @@ export async function seedCountMirror(env) {
 // wanting one of two things:
 //   ?tick=1  the scripted beacon at the end of index.html's body (deferred to
 //            prerenderingchange on speculative loads). It wants the side effect
-//            and no bytes → 204.
+//            and no bytes → 204, returned WITHOUT waiting on the DO (see below).
 //   bare     the <noscript> pixel and anyone who curls the route. An <img> asked,
-//            so an image answers → ~330B of SVG odometer.
+//            so an image answers → ~330B of SVG odometer, which needs the number
+//            and therefore does wait for it.
 // HEAD, ?peek, verified bots, and Sec-Purpose speculative loads read without
 // advancing, whichever shape they asked for.
 //
@@ -108,36 +109,49 @@ export async function handleHit(request, env, ctx) {
     || request.cf?.botManagement?.verifiedBot === true
     || PEEK_UA.test(ua);
 
-  let n = null;
-  if (env.COUNTER) {
+  // The one DO round trip. A DO is a single global instance, so this costs a trip
+  // to wherever it lives: 185-308ms measured from SJC, and 630ms on a cold
+  // contended incognito load (devtools, 2026-07-28) where it competed with the
+  // grid's 12 AVIF tiles for the connection pool.
+  const readCount = async () => {
+    if (!env.COUNTER) return null;
     try {
       const stub = env.COUNTER.get(env.COUNTER.idFromName("homepage-visits"));
-      n = (await (await stub.fetch(`https://do/${peek ? "?peek=1" : ""}`)).json()).n;
-    } catch {}
-  }
-
+      return (await (await stub.fetch(`https://do/${peek ? "?peek=1" : ""}`)).json()).n;
+    } catch { return null; }
+  };
   // Mirror the fresh count into KV so the homepage render never has to ask the DO.
-  // A DO is a single global instance, so a read from it costs a round trip to
-  // wherever it lives: measured 185-308ms from SJC against 112-176ms for a
-  // colo-local asset. home.js used to await that read inside its `.counter`
-  // HTMLRewriter handler, which suspended the HTML output stream at the footer —
-  // a devtools trace on 2026-07-27 caught the parser idle from 635ms to 901ms,
-  // and that tail gates DCL, nav.js, and the whole desktop shell behind it.
-  // Reading KV instead folds the count into the render's existing parallel
-  // fan-out at 5-8ms. The number can lag by up to MIRROR_TTL, which is invisible
-  // on an odometer and cheaper than stalling every visitor's shell.
-  if (env.RN_KV && typeof n === "number") ctx?.waitUntil(mirrorCount(env, n));
+  // home.js used to await the DO read inside its `.counter` HTMLRewriter handler,
+  // which suspended the HTML output stream at the footer — a devtools trace on
+  // 2026-07-27 caught the parser idle from 635ms to 901ms, and that tail gates
+  // DCL, nav.js, and the whole desktop shell behind it. Reading KV instead folds
+  // the count into the render's existing parallel fan-out at 5-8ms. The number
+  // can lag by up to MIRROR_TTL, which is invisible on an odometer and cheaper
+  // than stalling every visitor's shell.
+  const mirror = (n) => (env.RN_KV && typeof n === "number" ? mirrorCount(env, n) : null);
 
-  // the activation beacon wants the tick, never the pixels. it already landed
-  // above, so hand back nothing rather than bytes the beacon would discard.
+  // The activation beacon wants the tick and discards the number, so there is
+  // nothing here for the client to wait on. Hand back the 204 immediately and
+  // finish the DO trip (and the mirror it feeds) under waitUntil, which keeps
+  // the worker alive until they settle — the side effect is just as durable,
+  // and the beacon stops holding a socket for ~630ms against the same pool the
+  // photo tiles are queued in. Without a ctx (tests, direct calls) fall back to
+  // awaiting, so the tick can never be silently dropped.
   if (url.searchParams.has("tick")) {
+    const work = readCount().then(mirror).catch(() => {});
+    if (ctx) ctx.waitUntil(work); else await work;
     return new Response(null, { status: 204, headers: { "cache-control": "no-store" } });
   }
 
-  // everyone else asked for an image. bare transparent digits in the footer
-  // pill's own ink, so the standalone render reads as the same odometer minus
-  // its housing. null DO reads render the classic dead-counter dashes rather
-  // than a fabricated number.
+  // everyone else asked for an image, which means they asked for the NUMBER, so
+  // this path still waits for the DO. The mirror stays off it. bare transparent
+  // digits in the footer pill's own ink, so the standalone render reads as the
+  // same odometer minus its housing. null DO reads render the classic
+  // dead-counter dashes rather than a fabricated number.
+  const n = await readCount();
+  const pending = mirror(n);
+  if (pending && ctx) ctx.waitUntil(pending);
+
   const digits = typeof n === "number" ? String(n).padStart(6, "0") : "------";
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="52" height="12" viewBox="0 0 52 12" role="img" aria-label="visitor ${digits}"><text x="0" y="10" font-family="'Courier New',Courier,monospace" font-size="12" font-weight="bold" letter-spacing="1.2" fill="oklch(86.52% 0.1768 90.38)">${digits}</text></svg>`;
   return new Response(svg, {

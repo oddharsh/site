@@ -247,11 +247,21 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
       // and a candidate LCP element (the grid sits below the lede, so
       // it's a coin-flip with the text — but when the photo is LCP this
       // removes the lazy-load delay + bumps it from Low to High priority).
-      // the other 11 stay lazy. fetchpriority: Chrome 102+/Safari 17.2+,
-      // ignored harmlessly elsewhere.
+      // fetchpriority: Chrome 102+/Safari 17.2+, ignored harmlessly elsewhere.
+      //
+      // the other 11 are lazy AND explicitly low priority. lazy alone only
+      // defers images outside the viewport; the tiles that land IN the first
+      // viewport re-enter the queue at Chrome's default image priority and race
+      // the shell for a cold connection's bandwidth. A cold-incognito trace
+      // (2026-07-28) caught exactly that: icons.svg — 2.7KB of taskbar chrome —
+      // spent 280ms in "content download" while grid tiles streamed beside it.
+      // fetchpriority=low keeps every non-hero tile behind the shell (nav.js,
+      // luna.css, icons.svg) without delaying anything the visitor is waiting
+      // on: the hero tile keeps its high lane, and photos below the fold were
+      // never urgent.
       const imgLoad = i === 0
         ? `loading="eager" fetchpriority="high"`
-        : `loading="lazy"`;
+        : `loading="lazy" fetchpriority="low"`;
       const sizeAttr = (typeof p.size === "number" && p.size > 0)
         ? ` data-size="${p.size}"` : "";
       const upAttr   = p.uploaded
