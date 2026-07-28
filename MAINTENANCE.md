@@ -689,6 +689,24 @@ wrangler kv key delete --namespace-id="$NS" "tracks:<id>:fresh" --remote
 ### Bump THUMB_VERSION (retired — nothing to bump)
 Fully retired (hash cutover 2026-07-03): thumbnails are content-addressed at `/i/<stem>.<hash8>.<ext>`, so a re-encode mints new URLs by itself — run `./holding/scripts/hash-thumbnails.sh` after re-encoding, commit, deploy (the bundled index/hashes make the deploy the bust). The constant no longer exists in `lib/const.js`; legacy `/images/<stem>.<ext>[?v=N]` URLs just 301 into `/i/` regardless of their `?v`. The worker route still clamps unknown-thumb 404s to `max-age=0` so misses do not inherit immutable caching.
 
+### Read the homepage perf probe
+A cron (`7,37 * * * *`) renders `/` in-process, parses its own Server-Timing,
+and writes the spans to the `aadhar_perf_probe` Analytics Engine dataset
+(perf-probe.js). Columns are positional: `double1..5` = assets, tracks, alt,
+counter, total (`-1` = span absent); `blob1` = CSV of spans that hit the 25ms
+SSR deadline (`""` = none); `blob2` = the worker version id, so consecutive
+deploys A/B directly. Read it with the same token /ledger uses:
+```bash
+curl -s "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/analytics_engine/sql" \
+  -H "Authorization: Bearer $ANALYTICS_READ_TOKEN" \
+  -d "SELECT timestamp, double1 AS assets, double2 AS tracks, double3 AS alt,
+      double4 AS counter, double5 AS total, blob1 AS deadlined, blob2 AS version
+      FROM aadhar_perf_probe WHERE timestamp > NOW() - INTERVAL '2' DAY
+      ORDER BY timestamp DESC FORMAT JSON"
+```
+A gap in the series means the probe itself failed — it writes nothing rather
+than fabricate a datapoint.
+
 ### Log a deploy (bump-version.sh)
 `./holding/scripts/bump-version.sh <slug> "<title>"`, then deploy. Inserts the next checkpoint into D1 (vnum from `SELECT MAX(vnum)`), which is what `/updates` and `/restore` render. Nothing edits sw.js anymore: the service worker retired in v136, `nav.js`/`notepad.js` updates land via their short `_headers` max-age plus the per-deploy edge purge, and the stub at `/sw.js` cleans up old installs.
 

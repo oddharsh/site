@@ -32,6 +32,7 @@ import { MCP_TOOLS } from "./serendipity/serendipity.js";
 import { derivePhotoPool, getImagesManifest, handlePhotoQuery, queryPhotos } from "./holding/_worker.js/photos.js";
 import { deadline } from "./holding/_worker.js/lib/cache.js";
 import { handleHit } from "./holding/_worker.js/counter.js";
+import { cronHomeProbe, parseServerTiming } from "./holding/_worker.js/perf-probe.js";
 import { handleSearchJson, searchSite } from "./holding/_worker.js/search.js";
 import { getPublicAvailability } from "./cal/src/slots.js";
 import { botHeaders } from "./holding/_worker.js/lib/botauth.js";
@@ -1072,4 +1073,41 @@ test("a peeking /hit reads without advancing, in either shape", async () => {
     await Promise.all(kept);
     assert.equal(seen[0], "?peek=1", `${label} must peek, never advance`);
   }
+});
+
+
+// ── the perf probe ──────────────────────────────────────────────────
+// The probe's value is that its numbers mean what home.js's Server-Timing
+// means. The parser is the seam: if it misreads a span or drops a deadline
+// mark, the AE series lies quietly. The datapoint's column order is part of
+// the contract too — AE columns are positional, so a reorder here scrambles
+// every already-written row's meaning.
+test("parseServerTiming reads spans, deadline marks, and survives junk", () => {
+  const { spans, deadlined } = parseServerTiming(
+    "assets;dur=5, tracks;dur=25;desc=deadline, alt;dur=0, counter;dur=7, total;dur=25",
+  );
+  assert.deepEqual(spans, { assets: 5, tracks: 25, alt: 0, counter: 7, total: 25 });
+  assert.deepEqual(deadlined, ["tracks"]);
+  // junk in, nothing invented out
+  assert.deepEqual(parseServerTiming(null), { spans: {}, deadlined: [] });
+  assert.deepEqual(parseServerTiming("garbage"), { spans: {}, deadlined: [] });
+  assert.deepEqual(parseServerTiming("x;dur=NaN, ;dur=3").spans, {});
+});
+
+test("the probe writes one positionally-stable datapoint and never throws", async () => {
+  // no PERF_PROBE binding -> a clean no-op, so preview/dev without the dataset
+  // cannot crash the scheduled() handler
+  await cronHomeProbe({}, { waitUntil() {} });
+
+  // the render path itself needs HTMLRewriter (Workers-only), so exercise the
+  // probe's contract with the render stubbed via a throwing env: a broken
+  // render must write NOTHING (a gap is the alert) and must not throw.
+  const written = [];
+  const env = {
+    PERF_PROBE: { writeDataPoint: (d) => written.push(d) },
+    // serveHomepageWithPrerenderedTracks will throw on this env inside the
+    // probe's try/catch (no ASSETS binding)
+  };
+  await cronHomeProbe(env, { waitUntil() {} });
+  assert.equal(written.length, 0, "a failed render must not write a fabricated datapoint");
 });

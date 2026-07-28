@@ -27,6 +27,7 @@ import { getThumbHashes, handleImagesManifest, handlePhotoQuery, handlePhotos, s
 import { handleReading } from "./reading.js";
 import { handleRun } from "./run.js";
 import { handleRn, handleRnAdmin, handleRnSet, handleRnTracks, handleRnTracksHtml } from "./rn.js";
+import { cronHomeProbe } from "./perf-probe.js";
 import { handleSearch, handleSearchJson } from "./search.js";
 import { handleSecurityCenter } from "./security.js";
 import { handleSystemRestore, handleUpdatesJson, handleWindowsUpdate } from "./updates.js";
@@ -133,7 +134,9 @@ export default {
   // schedule so the request path stays a pure KV read and the page is safe to
   // prerender. The weekly schedule sweeps the /lens/census roster into D1.
   async scheduled(event, env, ctx) {
-    if (event.cron === "17 8 * * 1") {
+    if (event.cron === "7,37 * * * *") {
+      ctx.waitUntil(cronHomeProbe(env, ctx));   // :07/:37 — homepage Server-Timing -> Analytics Engine
+    } else if (event.cron === "17 8 * * 1") {
       ctx.waitUntil(cronCensus(env));   // Mondays 08:17 UTC — the longitudinal census
     } else if (event.cron === "41 5 * * *") {
       // 05:41 UTC daily — tell the sources these pages cite that they were
