@@ -429,7 +429,8 @@ guarded, so a missing binding degrades, it doesn't crash.
 | `SERENDIPITY_DB` | D1 | Serendipity event dashboard |
 | `BOOKINGS` | KV | Cal pending/confirmed bookings + calendar snapshot |
 | `COUNTER` | Durable Object | cross-script binding to cf-garage's Counter (homepage visits) |
-| `RN_SIGNING_KEY_JWK` | secret | AadharshBot Ed25519 signing key (RFC 9421) |
+| `RN_SIGNING_KEY_JWK` | secret | AadharshBot Ed25519 signing key (RFC 9421). Absent → every signed outbound fetch throws, by design |
+| `RN_SIGNING_KEY_MLDSA_JWK` | secret | AadharshBot ML-DSA-44 signing key: an RFC 9964 AKP JWK whose `priv` is the 32-byte seed, base64url. Absent → requests carry `sig1` only; malformed → throws. **Set this BEFORE deploying a directory that advertises the AKP key**, or the JWKS names a key the bot isn't using |
 | `BROWSER` | Browser Rendering | binding behind `/lens/shot` + `/lens/browser` (Browser Run); absent → clean 503 |
 | `CF_ACCOUNT_ID` | var | account id for the Analytics Engine SQL API (`/ledger` reads) |
 | `BOT_LEDGER` | Analytics Engine | dataset `aadhar_bot_ledger` — AI-crawler hit counts for `/ledger` (absent → counting silently off) |

@@ -13,16 +13,33 @@ that LWE pages use. The experiment still owns its body HTML, CSS, and JavaScript
    the mechanism or a prediction. Give every option a `why`, including the
    misconception.
 4. Add the page to `garage-pipeline/pages.json`.
-5. Run the generator and wire the indexes:
+5. Render the page:
 
 ```bash
 node garage-pipeline/generate.mjs page <id>
-node garage-pipeline/generate.mjs wire
 ```
 
-`wire` updates the Garage shelf, the Run palette, and the sitemap. The generator
-always emits the quiz data block and `/quiz.js`; a new page cannot silently omit
-the understanding check.
+6. Register the surface in [`site-manifest.json`](../site-manifest.json) and
+   project it into the Run palette:
+
+```bash
+npm run gen:manifest
+```
+
+7. Add the sitemap entry and the Garage shelf card by hand.
+
+The generator always emits the quiz data block and `/quiz.js`, so a new page
+cannot silently omit the understanding check.
+
+> **`generate.mjs wire` is stale. Do not run it.** It predates
+> [`scripts/gen-manifest.mjs`](../scripts/gen-manifest.mjs), which now owns the
+> `generated:garage-pages` fence in `nav.js` and derives it from
+> `site-manifest.json`. `wire` also wants to own `garage/index.html` and
+> `sitemap.xml`, which are deliberately hand-authored: the shelf cards are
+> written prose, and the sitemap carries per-page `<lastmod>` values that a
+> generator would flatten into one date and destroy as a freshness signal.
+> `build.mjs` check #8 verifies coverage of both instead. Steps 6 and 7 above
+> are the current path; `/garage/pqc` was the first page through it.
 
 ## Spec shape
 

@@ -223,6 +223,12 @@ export const AGENT_SURFACES = [
     "description": "chenglou/pretext measures and lays out multiline text with canvas as ground truth instead of the DOM."
   },
   {
+    "path": "/garage/pqc",
+    "title": "Post-quantum signatures, priced",
+    "kind": "content",
+    "description": "What ML-DSA-44 and the hash-based alternatives cost on the one signature this site controls: its crawler's RFC 9421 request signing, which now carries two."
+  },
+  {
     "path": "/garage/safari27",
     "title": "Safari 27",
     "kind": "content",
@@ -314,6 +320,7 @@ export const WEBMENTION_PATHS = [
   "/garage/iroh",
   "/garage/masonry",
   "/garage/pretext",
+  "/garage/pqc",
   "/garage/safari27",
   "/garage/scroll",
   "/garage/teardown",

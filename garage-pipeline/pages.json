@@ -1,3 +1,13 @@
 {
-  "pages": []
+  "pages": [
+    {
+      "id": "pqc",
+      "title": "Post-quantum signatures, priced",
+      "summary": "What ML-DSA-44 and the hash-based alternatives actually cost on the one signature this site controls, and why the crawler now sends two.",
+      "status": "shipped",
+      "lastmod": "2026-07-27",
+      "navLabel": "post-quantum",
+      "navHint": "what a PQ signature costs in bytes and milliseconds"
+    }
+  ]
 }

@@ -476,7 +476,9 @@ export function renderAroundHtml(report) {
       <a href="https://datatracker.ietf.org/wg/webbotauth/about/" target="_blank" rel="noopener">Web Bot Auth</a>;
       the shortlist is funds whose work I follow. Receiving sites can
       verify the signatures against
-      <a href="/.well-known/http-message-signatures-directory">our JWKS</a>.
+      <a href="/.well-known/http-message-signatures-directory">our JWKS</a>. Each
+      request carries two: Ed25519, and a provisional post-quantum ML-DSA-44
+      second label (<a href="/garage/pqc">why</a>).
     </p>
     <div class="meta">
       <strong>Last crawl:</strong> ${esc(report.crawledAt)} &middot;

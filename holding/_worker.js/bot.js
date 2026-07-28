@@ -38,7 +38,8 @@ function renderBotPage() {
       <dt>User-Agent</dt><dd>${esc(BOT_UA)}</dd>
       <dt>Signature-Agent</dt><dd>${esc(SIG_AGENT)}</dd>
       <dt>JWKS</dt><dd><a href="/.well-known/http-message-signatures-directory">/.well-known/http-message-signatures-directory</a></dd>
-      <dt>Algorithm</dt><dd>Ed25519 (EdDSA), per RFC 9421 + Web Bot Auth draft</dd>
+      <dt>Algorithm</dt><dd>sig1: Ed25519 (EdDSA), per RFC 9421 + Web Bot Auth draft</dd>
+      <dt></dt><dd>sig2: ML-DSA-44 (FIPS 204), provisional. See below.</dd>
       <dt>Operator</dt><dd><!--email_off--><a href="mailto:coffee@aadhar.sh">coffee@aadhar.sh</a><!--/email_off--></dd>
     </dl>
 
@@ -61,6 +62,27 @@ function renderBotPage() {
       at the URL above, find the key with the matching <code>kid</code>, and verify the
       Ed25519 signature over the canonical components listed in <code>Signature-Input</code>.
       If the verification fails, the request is not from this site.
+    </p>
+
+    <h2>The second signature</h2>
+    <p>
+      Both header fields are structured-fields Dictionaries, so every request carries
+      two labels over the same covered components: <code>sig1</code> is the Ed25519
+      signature described above, and <code>sig2</code> is a post-quantum
+      <a href="https://csrc.nist.gov/pubs/fips/204/final" target="_blank" rel="noopener">ML-DSA-44</a>
+      signature. The public key is the <code>AKP</code> entry in the same JWKS, formatted per
+      <a href="https://www.rfc-editor.org/rfc/rfc9964.html" target="_blank" rel="noopener">RFC 9964</a>.
+    </p>
+    <p>
+      <strong>Verify <code>sig1</code>, not <code>sig2</code>.</strong> The
+      <a href="https://www.iana.org/assignments/http-message-signature/http-message-signature.xhtml" target="_blank" rel="noopener">IANA
+      HTTP Signature Algorithms registry</a> holds six entries and none of them are
+      post-quantum, so <code>alg="ml-dsa-44"</code> is this site's spelling rather than a
+      registered codepoint. It is here because the migration is cheap now and awkward
+      later, and because a running example is worth more than a writeup. Treat it as
+      provisional: if a real registration lands with a different token, this one changes.
+      Ignoring <code>sig2</code> entirely costs you nothing, which is the point.
+      <a href="/garage/pqc">/garage/pqc</a> has the measurements and the reasoning.
     </p>
 
     <h2>How to opt out</h2>

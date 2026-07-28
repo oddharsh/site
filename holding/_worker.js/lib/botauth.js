@@ -5,7 +5,18 @@
 // RFC 9421 (HTTP Message Signatures), profile per the Web Bot Auth IETF
 // draft. signatures cover @authority + signature-agent; receiving sites
 // can fetch the JWKS at https://aadhar.sh/.well-known/http-message-signatures-directory
-// and verify against the published Ed25519 public key.
+// and verify against the published public keys.
+//
+// Every request carries TWO signatures over the same components:
+//
+//   sig1  ed25519     the one verifiers actually check today
+//   sig2  ml-dsa-44   post-quantum, additive, nothing verifies it yet
+//
+// sig2 exists because the migration is cheap here and expensive later, and
+// because a live example beats a writeup. Read /garage/pqc for the numbers.
+// It is deliberately NOT load-bearing: see MLDSA_ALG on why it cannot be.
+import { ml_dsa44 } from "@noble/post-quantum/ml-dsa.js";
+
 export const BOT_NAME    = "AadharshBot";
 
 const BOT_VERSION = "1.0";   // module-private: only BOT_UA below consumes it
@@ -32,10 +43,13 @@ export async function botHeaders(targetUrl, env, opts = {}) {
   if (!env || !env.RN_SIGNING_KEY_JWK) {
     throw new Error("AadharshBot signing key is unavailable");
   }
-  const sig = await signRequestForWebBotAuth(targetUrl, env);
+  const sigs = await signRequestForWebBotAuth(targetUrl, env);
   headers.set("Signature-Agent", `"${SIG_AGENT}"`);
-  headers.set("Signature-Input", `sig1=${sig.params}`);
-  headers.set("Signature", `sig1=:${sig.b64}:`);
+  // both fields are structured-fields Dictionaries, so a second label appends
+  // rather than replaces. a verifier that only knows ed25519 reads sig1 and
+  // ignores sig2, which is the whole reason this can ship before the registry.
+  headers.set("Signature-Input", sigs.map((s) => `${s.label}=${s.params}`).join(", "));
+  headers.set("Signature", sigs.map((s) => `${s.label}=:${s.b64}:`).join(", "));
   return headers;
 }
 
@@ -51,32 +65,106 @@ export async function signedFetch(targetUrl, env, opts = {}) {
   });
 }
 
-// build + sign a Web Bot Auth signature over (@authority, signature-agent).
-export async function signRequestForWebBotAuth(targetUrl, env) {
-  const u = new URL(targetUrl);
-  const jwk = JSON.parse(env.RN_SIGNING_KEY_JWK);
-  const keyId = jwk.kid || "rn";
-  const cryptoKey = await crypto.subtle.importKey(
-    "jwk", jwk, { name: "Ed25519" }, false, ["sign"]
-  );
+// The IANA HTTP Signature Algorithms registry holds six entries and none of
+// them are post-quantum, so this token is OURS, not a codepoint. It is spelled
+// to match the registry's existing convention (ed25519, ecdsa-p256-sha256) so
+// it slots straight in if a real registration ever lands. Until then nothing
+// on the internet verifies sig2, and the site says so on /bot rather than
+// implying a standard it does not have.
+const MLDSA_ALG = "ml-dsa-44";
 
-  const created = Math.floor(Date.now() / 1000);
-  const params  = `("@authority" "signature-agent");created=${created};keyid="${keyId}";alg="ed25519";tag="web-bot-auth"`;
+// ML-DSA-44 keygen expands a 32-byte seed into a 2560-byte secret key, which
+// costs real milliseconds. Workers isolates outlive a request, so derive once
+// and keep it. Keyed by the raw secret so rotating it inside a live isolate
+// re-derives instead of signing with the retired key.
+let mldsaCache = null;
 
-  // RFC 9421 signature base: one component per line, then @signature-params.
-  const base = [
-    `"@authority": ${u.host}`,
+function b64urlToBytes(s) {
+  const b64 = s.replace(/-/g, "+").replace(/_/g, "/");
+  const bin = atob(b64.padEnd(Math.ceil(b64.length / 4) * 4, "="));
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+function bytesToB64(bytes) {
+  // structured-fields binary content: base64 with padding, wrapped in colons by the caller
+  let bin = "";
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin);
+}
+
+// RFC 9964 AKP JWK (kty AKP, alg ML-DSA-44, priv = the 32-byte seed). Absent is
+// fine and means "ed25519 only", because sig2 promises nothing yet and a crawl
+// that still verifies beats a crawl that 500s. Malformed is NOT fine: the key
+// directory advertises this key, so a broken one has to be loud.
+function mldsaSigner(env) {
+  const raw = env && env.RN_SIGNING_KEY_MLDSA_JWK;
+  if (!raw) return null;
+  if (mldsaCache && mldsaCache.raw === raw) return mldsaCache;
+
+  const jwk = JSON.parse(raw);
+  if (jwk.kty !== "AKP" || jwk.alg !== "ML-DSA-44" || typeof jwk.priv !== "string") {
+    throw new Error("AadharshBot ML-DSA key is malformed: expected an RFC 9964 AKP JWK with alg ML-DSA-44");
+  }
+  const seed = b64urlToBytes(jwk.priv);
+  if (seed.length !== 32) {
+    throw new Error(`AadharshBot ML-DSA seed is ${seed.length} bytes, expected 32`);
+  }
+  mldsaCache = {
+    raw,
+    keyId: jwk.kid || "rn-mldsa",
+    secretKey: ml_dsa44.keygen(seed).secretKey,
+  };
+  return mldsaCache;
+}
+
+// RFC 9421 signature base: one covered component per line, then the parameters
+// of the label being signed. Each label signs its own params, so sig1 and sig2
+// cover identical components but are never byte-identical inputs.
+function signatureBase(host, params) {
+  return new TextEncoder().encode([
+    `"@authority": ${host}`,
     `"signature-agent": "${SIG_AGENT}"`,
     `"@signature-params": ${params}`,
-  ].join("\n");
+  ].join("\n"));
+}
 
-  const sigBytes = new Uint8Array(await crypto.subtle.sign(
-    "Ed25519", cryptoKey, new TextEncoder().encode(base)
-  ));
-  // structured-fields binary content: base64 (with padding), wrapped in colons by caller
-  let bin = "";
-  for (let i = 0; i < sigBytes.length; i++) bin += String.fromCharCode(sigBytes[i]);
-  const b64 = btoa(bin);
+function paramsFor(created, keyId, alg) {
+  return `("@authority" "signature-agent");created=${created};keyid="${keyId}";alg="${alg}";tag="web-bot-auth"`;
+}
 
-  return { params, b64 };
+// build + sign the Web Bot Auth signatures over (@authority, signature-agent).
+// returns one entry per label, in the order they go on the wire.
+export async function signRequestForWebBotAuth(targetUrl, env) {
+  const host = new URL(targetUrl).host;
+  // one timestamp for both labels: they describe the same request, and a
+  // verifier comparing created across labels should not see a skew we invented.
+  const created = Math.floor(Date.now() / 1000);
+  const out = [];
+
+  const jwk = JSON.parse(env.RN_SIGNING_KEY_JWK);
+  const edParams = paramsFor(created, jwk.kid || "rn", "ed25519");
+  const edKey = await crypto.subtle.importKey("jwk", jwk, { name: "Ed25519" }, false, ["sign"]);
+  out.push({
+    label: "sig1",
+    params: edParams,
+    b64: bytesToB64(new Uint8Array(await crypto.subtle.sign(
+      "Ed25519", edKey, signatureBase(host, edParams)
+    ))),
+  });
+
+  // workerd's WebCrypto has no ML-DSA (it is still a WICG proposal), so this
+  // one is pure JS. ~8.5ms and ~3.2KB of header, measured on /garage/pqc.
+  const pq = mldsaSigner(env);
+  if (pq) {
+    const pqParams = paramsFor(created, pq.keyId, MLDSA_ALG);
+    out.push({
+      label: "sig2",
+      params: pqParams,
+      b64: bytesToB64(ml_dsa44.sign(signatureBase(host, pqParams), pq.secretKey)),
+    });
+  }
+
+  return out;
 }

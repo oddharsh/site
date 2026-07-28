@@ -31,6 +31,7 @@ import { handlePhotoQuery, queryPhotos } from "./holding/_worker.js/photos.js";
 import { handleSearchJson, searchSite } from "./holding/_worker.js/search.js";
 import { getPublicAvailability } from "./cal/src/slots.js";
 import { botHeaders } from "./holding/_worker.js/lib/botauth.js";
+import { ml_dsa44 } from "@noble/post-quantum/ml-dsa.js";
 import { mapWithConcurrency, readResponseCapped } from "./holding/_worker.js/lib/crawl.js";
 import { diffAroundRows, handleAroundChangesJson, readAroundChanges } from "./holding/_worker.js/around.js";
 import {
@@ -94,6 +95,99 @@ test("self-dispatched bot headers can be built without putting a signature on th
   const headers = await botHeaders("https://aadhar.sh/", {}, { sign: false });
   assert.equal(headers.get("user-agent"), "AadharshBot/1.0 (+https://aadhar.sh/bot)");
   assert.equal(headers.get("signature"), null);
+});
+
+// ── Web Bot Auth: the post-quantum second label ──────────────────────
+// sig2 is additive by design. These tests pin the two properties that make it
+// safe to ship before the IANA registry has a codepoint: sig1 must survive
+// untouched, and sig2 must verify against the key the directory publishes.
+
+async function edEnv() {
+  const pair = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
+  const jwk = await crypto.subtle.exportKey("jwk", pair.privateKey);
+  jwk.kid = "test-ed";
+  return { RN_SIGNING_KEY_JWK: JSON.stringify(jwk) };
+}
+
+function mldsaEnv(seed = crypto.getRandomValues(new Uint8Array(32))) {
+  const { publicKey } = ml_dsa44.keygen(seed);
+  return {
+    publicKey,
+    RN_SIGNING_KEY_MLDSA_JWK: JSON.stringify({
+      kty: "AKP", alg: "ML-DSA-44", kid: "test-mldsa", use: "sig",
+      priv: Buffer.from(seed).toString("base64url"),
+    }),
+  };
+}
+
+function labels(headers) {
+  return (headers.get("signature-input").match(/(^|, )(sig\d+)=/g) || [])
+    .map((m) => m.replace(/^, /, "").replace(/=$/, ""));
+}
+
+test("a missing ML-DSA key leaves the ed25519 signature alone", async () => {
+  const headers = await botHeaders("https://example.com/", await edEnv());
+  assert.deepEqual(labels(headers), ["sig1"]);
+  assert.match(headers.get("signature-input"), /alg="ed25519"/);
+});
+
+test("a configured ML-DSA key adds sig2 without disturbing sig1", async () => {
+  const env = { ...(await edEnv()), ...mldsaEnv() };
+  const headers = await botHeaders("https://example.com/", env);
+  assert.deepEqual(labels(headers), ["sig1", "sig2"]);
+
+  const input = headers.get("signature-input");
+  assert.match(input, /sig1=\("@authority" "signature-agent"\);created=\d+;keyid="test-ed";alg="ed25519";tag="web-bot-auth"/);
+  assert.match(input, /sig2=\("@authority" "signature-agent"\);created=\d+;keyid="test-mldsa";alg="ml-dsa-44";tag="web-bot-auth"/);
+
+  // one request, one instant: a verifier comparing the two labels must not see
+  // a skew we invented between them.
+  const created = [...input.matchAll(/created=(\d+)/g)].map((m) => m[1]);
+  assert.equal(created.length, 2);
+  assert.equal(created[0], created[1]);
+});
+
+test("sig2 verifies against the ML-DSA key the JWKS publishes", async () => {
+  const pq = mldsaEnv();
+  const headers = await botHeaders("https://example.com/robots.txt", { ...(await edEnv()), ...pq });
+
+  const params = headers.get("signature-input").match(/sig2=(.+)$/)[1];
+  const base = new TextEncoder().encode([
+    `"@authority": example.com`,
+    `"signature-agent": "https://aadhar.sh/"`,
+    `"@signature-params": ${params}`,
+  ].join("\n"));
+  const sig = Uint8Array.from(atob(headers.get("signature").match(/sig2=:([^:]+):/)[1]), (c) => c.charCodeAt(0));
+
+  assert.equal(sig.length, 2420);
+  assert.equal(ml_dsa44.verify(sig, base, pq.publicKey), true);
+  // and it must not verify a base it did not sign
+  base[13] ^= 1;
+  assert.equal(ml_dsa44.verify(sig, base, pq.publicKey), false);
+});
+
+test("the published key directory carries a usable ML-DSA-44 key", async () => {
+  const dir = JSON.parse(await readFile(new URL("./holding/.well-known/http-message-signatures-directory", import.meta.url), "utf8"));
+  const key = dir.keys.find((k) => k.kty === "AKP");
+  assert.ok(key, "directory must publish the AKP key the bot signs sig2 with");
+  assert.equal(key.alg, "ML-DSA-44");           // RFC 9964 names the algorithm here
+  assert.equal(key.use, "sig");
+  assert.equal(Buffer.from(key.pub, "base64url").length, 1312);
+  assert.equal(key.priv, undefined, "a published key must never carry the seed");
+  // the ed25519 key Cloudflare actually verifies has to survive the addition
+  assert.ok(dir.keys.some((k) => k.kty === "OKP" && k.crv === "Ed25519"));
+});
+
+test("a malformed ML-DSA key fails loudly rather than silently dropping sig2", async () => {
+  const ed = await edEnv();
+  await assert.rejects(
+    botHeaders("https://example.com/", { ...ed, RN_SIGNING_KEY_MLDSA_JWK: JSON.stringify({ kty: "OKP", alg: "EdDSA", priv: "x" }) }),
+    /ML-DSA key is malformed/
+  );
+  await assert.rejects(
+    botHeaders("https://example.com/", { ...ed, RN_SIGNING_KEY_MLDSA_JWK: JSON.stringify({ kty: "AKP", alg: "ML-DSA-44", priv: "AAAA" }) }),
+    /ML-DSA seed is 3 bytes, expected 32/
+  );
 });
 
 test("bounded response reads report truncation without buffering the tail", async () => {
