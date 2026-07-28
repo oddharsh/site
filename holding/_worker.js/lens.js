@@ -355,7 +355,11 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
    than .lx-go on purpose: these are suggestions, that one is the action. */
 .lx-chips { display:flex; align-items:center; flex-wrap:wrap; gap:5px; margin:7px 0 9px; }
 .lx-chips-label { font-size:9pt; color:oklch(48% 0 0); }
-.lx-chip { font-size:8.8pt; padding:2px 9px; color:oklch(20% 0 0); background:linear-gradient(180deg,#fdfdfd,#e6e6dd); border:1px solid; border-color:#fff oklch(45% 0 0) oklch(45% 0 0) #fff; border-radius:3px; }
+/* 4px vertical padding, not 2px, puts these at 24px tall. XP's own command
+   button was 50x14 dialog units = 75x23px at 8pt Tahoma, so the period-correct
+   number was already a pixel off WCAG 2.5.8's 24px floor and these were four
+   under it. Rounding up to 24 is closer to Luna than what was here. */
+.lx-chip { font-size:8.8pt; padding:4px 9px; color:oklch(20% 0 0); background:linear-gradient(180deg,#fdfdfd,#e6e6dd); border:1px solid; border-color:#fff oklch(45% 0 0) oklch(45% 0 0) #fff; border-radius:3px; }
 .lx-chip:hover { background:linear-gradient(180deg,#fff,#efefe7); }
 .lx-chip:active { border-color:oklch(45% 0 0) #fff #fff oklch(45% 0 0); }
 
@@ -466,7 +470,11 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 .lx-readiness-detail { margin-top:2px; font-size:8.4pt; color:oklch(52% 0 0); }
 .lx-readiness-consume { margin-top:3px; font-size:8pt; color:oklch(46% 0.06 255); border-left:2px solid oklch(78% 0.06 255); padding-left:6px; }
 .lx-readiness-fix { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:5px; padding-top:5px; border-top:1px dotted oklch(85% 0.02 250); font-size:8.4pt; color:oklch(42% 0.07 50); }
-.lx-copy-fix, .lx-copy-all { border:1px solid oklch(62% 0.05 250); border-radius:3px; padding:2px 7px; background:linear-gradient(180deg,#fff,oklch(91% 0.012 250)); color:oklch(34% 0.07 255); font:8pt Tahoma,Verdana,sans-serif; cursor:pointer; white-space:nowrap; }
+/* 19 -> 24px tall, and it costs NOTHING: every .lx-readiness-fix row is already
+   40-56px because the fix text wraps, so the row was never sized by this button.
+   Measured on the live page: all 14 row heights are identical before and after.
+   Also lands them on the same 23-24px as .lx-go, .lx-seg and .lx-chip. */
+.lx-copy-fix, .lx-copy-all { box-sizing:border-box; min-height:24px; border:1px solid oklch(62% 0.05 250); border-radius:3px; padding:2px 7px; background:linear-gradient(180deg,#fff,oklch(91% 0.012 250)); color:oklch(34% 0.07 255); font:8pt Tahoma,Verdana,sans-serif; cursor:pointer; white-space:nowrap; }
 .lx-copy-fix:hover, .lx-copy-all:hover { background:oklch(93% 0.04 250); }
 .lx-copy-all { margin:0 0 7px; font-weight:bold; }
 .lx-next-actions { display:grid; gap:4px; margin:0 0 9px; }
@@ -541,7 +549,14 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 .lx-sow-rail-k { color:oklch(52% 0 0); }
 .lx-sow-i { white-space:nowrap; }
 .lx-sow-i b { font-family:"Courier New",monospace; font-size:9pt; color:oklch(40% 0.14 255); }
-.lx-sow-q { flex:0 0 auto; min-width:0; width:19px; height:19px; padding:0; font-weight:bold; font-size:9pt; line-height:17px; color:oklch(35% 0.10 258); }
+/* the one control here that does NOT grow: a 24px "?" turns this status strip
+   into a toolbar (measured: the rail goes 29px -> 34px). So the face stays
+   19x19 and only the TARGET grows, via a transparent ::after. -3.5px, not -3:
+   an abs-positioned child insets from the PADDING box, which is 17px once the
+   1px borders come off, so 17 + 3.5 + 3.5 = exactly 24. The 8px gap to
+   .lx-sow-facts is text rather than a target, so nothing can collide. */
+.lx-sow-q { position:relative; flex:0 0 auto; min-width:0; width:19px; height:19px; padding:0; font-weight:bold; font-size:9pt; line-height:17px; color:oklch(35% 0.10 258); }
+.lx-sow-q::after { content:''; position:absolute; inset:-3.5px; }
 .lx-sow-q:active { padding:0 0 0 1px; }
 @media (max-width:560px){ .lx-sow-i-x { display:none; } }
 /* the shadow is luna.css's modal idiom verbatim (#axp-run): a hard 4px offset
@@ -562,9 +577,13 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
   .lx-sow-dialog[open]::backdrop { opacity:1; }
   @starting-style { .lx-sow-dialog[open]::backdrop { opacity:0; } }
 }
-.lx-sow-tb { display:flex; align-items:center; gap:8px; flex:0 0 auto; padding:4px 5px 5px 10px; background:linear-gradient(180deg, oklch(62% 0.16 256), oklch(45% 0.19 260)); }
+.lx-sow-tb { display:flex; align-items:center; gap:8px; flex:0 0 auto; padding:3px 4px 4px 10px; background:linear-gradient(180deg, oklch(62% 0.16 256), oklch(45% 0.19 260)); }
 .lx-sow-kicker { font:bold 10.5pt "Trebuchet MS",Verdana,sans-serif; color:#fff; text-shadow:0 1px 1px oklch(24% 0.1 260 / .6); }
-.lx-sow-x { margin-left:auto; width:20px; height:20px; padding:0; overflow:hidden; font-size:0; cursor:pointer; position:relative; border:1px solid #d8401c; border-radius:3px; background-color:#e45f3e; background-image:linear-gradient(180deg,#e8795f,#e45d3d 55%,#ae3110); }
+/* 24x24 rather than the ::after trick the other two use, because both pseudos
+   here already draw the X. XP's own caption close was 21px tall, so this is
+   nearer the real thing than the 20 it replaces; .lx-sow-tb sheds 2px of
+   padding so the caption bar grows 2px rather than 4. */
+.lx-sow-x { margin-left:auto; width:24px; height:24px; padding:0; overflow:hidden; font-size:0; cursor:pointer; position:relative; border:1px solid #d8401c; border-radius:3px; background-color:#e45f3e; background-image:linear-gradient(180deg,#e8795f,#e45d3d 55%,#ae3110); }
 .lx-sow-x:hover, .lx-sow-x:focus-visible { filter:brightness(1.12); outline:none; box-shadow:0 0 4px oklch(70% 0.18 30 / .7); }
 .lx-sow-x::before, .lx-sow-x::after { content:''; position:absolute; left:50%; top:50%; width:11px; height:2px; margin:-1px 0 0 -5.5px; background:#fff; }
 .lx-sow-x::before { transform:rotate(45deg); } .lx-sow-x::after { transform:rotate(-45deg); }
