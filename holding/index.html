@@ -935,9 +935,40 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
   /* the taskbar's flex ROW too: without it the start/pins/tray children stack as
      blocks and overflow the 30px bar, then snap into the row when luna lands (a
      ~0.04 shift). spacer:flex-1 pins the tray right. luna.css:458/474/477. */
-  #axp-pins    { display: flex; align-items: center; min-width: 0; }
+  #axp-pins    { display: flex; align-items: center; min-width: 0; gap: 3px; padding: 0 3px; }
   #axp-spacer  { flex: 1; }
-  #axp-tray    { flex: 0 0 auto; display: flex; align-items: center; }
+  #axp-tray    { flex: 0 0 auto; display: flex; align-items: center; padding: 0 8px 0 7px; }
+  /* ...and the taskbar's INTRINSIC WIDTHS, which is a separate race from the flex
+     row above. The bar ships fully SSR'd, so before luna lands it is real content
+     styled by nothing: labels render at the body's 16px Verdana instead of 11px
+     Tahoma, the start orb has no padding, and .lbl has no 92px clamp. Everything
+     then resizes when luna applies. Measured 2026-07-28 at 820px wide: start
+     50px -> 114px, which shoves #axp-pins right by 70px, while the pins row
+     itself shrinks 599px -> 497px. CLS 0.1958, almost all of it in one cluster
+     (a.axp-pin / #axp-pins / #axp-tray). It peaks at intermediate widths where
+     the row sits near its wrap threshold: 0.0016 at 1280px, 0.0030 at 1024px,
+     0.0061 at 390px, 0.1958 at 820px. luna.css:440/448/463/489 own the visuals;
+     these are only the properties that decide a box's SIZE. Keep them in sync. */
+  #axp-taskbar { font-family: var(--font-ui, Tahoma, Verdana, Geneva, sans-serif); font-size: 11px; }
+  #axp-start   { display: flex; align-items: center; gap: 6px; padding: 0 16px 2px 9px; }
+  #axp-cone    { flex: 0 0 auto; width: 15px; height: 15px; margin-right: 1px; }
+  #axp-start .axp-kbd { padding: 0 0 0 6px; margin-left: 5px; font-size: 9.5px; letter-spacing: .04em; }
+  .axp-kbd     { display: inline-flex; align-items: center; white-space: nowrap; }
+  .axp-pin     { display: flex; align-items: center; gap: 6px; height: 23px; padding: 0 10px; flex: 0 0 auto; font-size: 11px; }
+  .axp-pin .fav { width: 15px; height: 15px; flex: 0 0 auto; display: flex; line-height: 0; }
+  .axp-pin .fav img { width: 100%; height: 100%; display: block; }
+  .axp-pin .lbl { overflow: hidden; text-overflow: ellipsis; max-width: 92px; }
+  .axp-trayico { display: flex; align-items: center; justify-content: center; width: 22px; height: 22px; margin-right: 8px; }
+  /* the tray icons' IMAGES too. Sizing only the 22px box leaves each <img> at the
+     sprite's intrinsic size, which inflates the tray until luna clamps it: the
+     tray laid out at y=593 and snapped to y=870, a 277px vertical jump worth
+     0.0302 on its own. luna.css:490. */
+  .axp-trayico svg, .axp-trayico img, #axp-sound svg { width: 15px; height: 15px; display: block; }
+  #axp-sound   { display: flex; align-items: center; justify-content: center; width: 22px; height: 22px; margin-right: 7px; padding: 0; border: 0; }
+  #axp-clock   { display: inline-block; min-width: 56px; text-align: right; }
+  /* the ≤560px overrides too, or narrow viewports race the other way (labels
+     visible pre-luna, hidden after). mirrors luna.css:636. */
+  @media (max-width: 560px) { .axp-pin .lbl { display: none; } .axp-pin { padding: 0 7px; } }
 
 </style>
 <!-- luna.css applies non-render-blocking: the visible window above is fully
