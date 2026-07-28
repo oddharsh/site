@@ -612,12 +612,46 @@ npm run deploy
 
 14. **The shell ships dcz (zstd) deltas, not dcb (brotli), and the reason is
     latency rather than bytes.** Cloudflare passes both through identically on all
-    plans, so it is a free engineering choice. zstd decodes about 2x faster
-    (0.046ms vs 0.094ms on a bare 46KB asset; 954 vs 471 MB/s), and on the REAL
-    shipping pair brotli was smaller by exactly one byte (79 vs 80) — the 5-8%
-    brotli edge only appears on much larger source-level deltas. Bytes are the
-    proxy; latency is the goal, and the decode gap widens on slow phones. Owner
-    call, 2026-07-27. `--patch-from` was measured and buys nothing at this scale.
+    plans, so it is a free engineering choice. Owner call, 2026-07-27.
+    `--patch-from` was measured and buys nothing at this scale.
+
+    **Re-measured 2026-07-28 with real dictionaries, and BOTH original inputs were
+    wrong, in opposite directions.** This note used to say brotli won by one byte
+    (79 vs 80) and zstd decoded about 2x faster. Neither holds:
+
+    - *Size now favours dcb by more than a byte.* Across all 12 shipping
+      dictionary/target pairs: dcz 3,589 bytes total against dcb 3,344, so dcb by
+      245 (6.8%), winning 11 of 12. The deltas grew into exactly the regime this
+      note predicted the 5-8% brotli edge would appear in. Widest single gaps:
+      lens.js 816 vs 756, nav.js 729 vs 685.
+    - *Decode favours dcz far harder than 2x.* With an actual dictionary, nav.js
+      reconstruction (47,615 bytes either way) is **0.0165ms dcz against 0.1368ms
+      brotli, or 8.3x**. Dictionary decode is where zstd pulls away: it seeds the
+      window and copies, while brotli still pays a full entropy decode.
+
+    The decisive part is structural: **decode scales with the RECONSTRUCTION, not
+    the delta.** A 685-byte dcb delta still rebuilds 47,615 bytes, so shrinking the
+    delta never shrinks the decode gap. Break-even at 9 Mbps is ~135 bytes saved
+    per asset and dcb saves 44, so dcz wins by about 3x — and the margin WIDENS on
+    slow devices, where decode scales with CPU while 44 bytes stays 44 bytes.
+
+    So the conclusion survives, but it was a coin flip on the old numbers and is
+    not one on these. Do not re-open it on the size table alone: that table now
+    favours dcb, and it is the wrong axis.
+
+    One cost the byte comparison hides: `node:zlib`'s brotli has NO dictionary
+    parameter (MODE, QUALITY, LGWIN, LGBLOCK, DISABLE_LITERAL_CONTEXT_MODELING,
+    SIZE_HINT, LARGE_WINDOW, NPOSTFIX, NDIRECT is the whole list). Those dcb
+    figures came from shelling out to the `brotli` CLI with `-D`. Switching would
+    reintroduce a CLI dependency in the build path, which is precisely what moving
+    the deltas into the build deleted.
+
+    **zstd above level 19 is dead weight here.** Levels 19, 20, 21, 22, 22+long-
+    distance-matching and 22+btultra2 produce BYTE-IDENTICAL output on all 9 shell
+    assets and all 12 deltas. What separates 20-22 is window size and long-range
+    search, and the largest asset is 47KB raw, so level 19's window already spans
+    the whole file and there is no long range to find. build.mjs's pin at 19 is
+    optimal; do not spend an afternoon re-checking it.
 
     dcz's framing is also the tidier of the two: the dictionary hash rides in a
     Zstandard SKIPPABLE frame (magic `0x184D2A5E` LE, then a 4-byte LE length of
