@@ -573,9 +573,10 @@ npm run deploy
     got gzip-of-brotli). Anything touching response encoding on a
     render-blocking path (`/a/*` is nav.js + luna.css) must be verified against
     production behind a canary before it becomes the default, because the
-    failure mode is a white screen rather than a slow page. That is why
-    `SHELL_PRECOMPRESS_DEFAULT_ON` in `lib/assets.js` is `false` with a `?br=1`
-    canary instead of just shipping.
+    failure mode is a white screen rather than a slow page. Shell precompression
+    was shipped that way, behind a `?br=1` canary, and once production confirmed
+    it the canary and its `SHELL_PRECOMPRESS_DEFAULT_ON` flag came out; `/a/*` is
+    q11 brotli unconditionally now. Earn the default the same way next time.
 
     **ROOT CAUSE (2026-07-26), after three wrong suspects.** The double
     compression was OURS, not the platform's. `encodeBody` is **write-only**
@@ -599,8 +600,8 @@ npm run deploy
     client's Accept-Encoding, so it genuinely cannot negotiate compression;
     (2) the edge does NOT down-convert, so an `identity` client handed br gets raw
     brotli, which is why negotiation can't be faked either; (3) the static-assets
-    layer was innocent — `/abr/` exists only because it was built to bypass a
-    suspect that turned out not to matter, and it can go.
+    layer was innocent — `/abr/` had been built only to bypass a suspect that
+    turned out not to matter, so it was deleted.
 
     What this unlocks: q11 precompression (~19% off nav.js + luna.css), and
     `Content-Encoding: dcb` from a worker, since `Available-Dictionary` demonstrably

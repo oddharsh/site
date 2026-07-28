@@ -34,7 +34,6 @@ import { sign, verify } from "../../cal/src/sign.js";
 import { resendSend } from "../../cal/src/email.js";
 import { WEBMENTION_PATHS, WEBMENTION_SECTIONS } from "./lib/site-manifest.js";
 
-export const WEBMENTION_PATH = "/webmention";
 // One bucket, one ceiling, matching the /lens posture. Fails OPEN without KV
 // (dev): this is abuse control, and the SSRF guard is what enforces safety.
 const WM_BUDGET = { key: "wm:rl", max: 10 };

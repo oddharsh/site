@@ -115,12 +115,14 @@ export function renderUnderstanding(understanding, skin) {
   return `<script type="application/json" id="luq-data">\n${payload}\n</script>\n<script src="/quiz.js" defer></script>`;
 }
 
-export const AUTHORING_GUIDE = `
-Every page starts with a reader, a problem, and a thesis. The page then shows
-the mechanism, the evidence that supports it, and the uncertainty that remains.
-Keep the prose active and concrete: name the doer, put the point near the front,
-and let the new idea land at the end of the sentence. Use the page's examples and
-demos to make the model testable. End with three to seven questions that ask the
-reader to reconstruct the model. Give every option feedback, including the
-misconceptions. The check diagnoses a second read; it never blocks the page.
-`;
+// AUTHORING GUIDE — the shape every garage/lwe page owes its reader. Prose, not
+// code: it was an exported string nothing ever imported, so it now lives where an
+// author actually reads it, next to the contract that enforces the rest.
+//
+// Every page starts with a reader, a problem, and a thesis. The page then shows
+// the mechanism, the evidence that supports it, and the uncertainty that remains.
+// Keep the prose active and concrete: name the doer, put the point near the front,
+// and let the new idea land at the end of the sentence. Use the page's examples and
+// demos to make the model testable. End with three to seven questions that ask the
+// reader to reconstruct the model. Give every option feedback, including the
+// misconceptions. The check diagnoses a second read; it never blocks the page.
