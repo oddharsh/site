@@ -434,6 +434,14 @@ const SHELLS = [
 // fail fast on a broken invariant before doing any staging work
 await checkInvariants();
 
+// Generated delta dirs must never exist in the SOURCE tree. They were committed under an
+// earlier design and are pure build output now, but a leftover holding/ad/ gets copied in
+// by the staging step below and ships artifacts current code would never build — which is
+// how an icons.*.dcz survived #119's svg exclusion locally, long after the guard forbidding
+// it was in place. That guard stops GENERATION, not staging of stale files.
+for (const dead of ["holding/ad", "holding/pd"]) {
+  await rm(dead, { recursive: true, force: true });
+}
 await rm(OUT, { recursive: true, force: true });
 await mkdir(OUT, { recursive: true });
 
