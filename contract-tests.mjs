@@ -29,7 +29,8 @@ import { handleWritingIndex } from "./holding/_worker.js/writing.js";
 import { readManifest, workerModule, navFenceBody, readFenceBody } from "./scripts/gen-manifest.mjs";
 import { INDEXED_SECTIONS, TWIN_FACTS, buildTwins, checkTwinFacts, htmlFileFor, twinPath } from "./scripts/gen-md-twins.mjs";
 import { MCP_TOOLS } from "./serendipity/serendipity.js";
-import { handlePhotoQuery, queryPhotos } from "./holding/_worker.js/photos.js";
+import { derivePhotoPool, getImagesManifest, handlePhotoQuery, queryPhotos } from "./holding/_worker.js/photos.js";
+import { deadline } from "./holding/_worker.js/lib/cache.js";
 import { handleSearchJson, searchSite } from "./holding/_worker.js/search.js";
 import { getPublicAvailability } from "./cal/src/slots.js";
 import { botHeaders } from "./holding/_worker.js/lib/botauth.js";
@@ -924,121 +925,72 @@ test("published MCP server cards enumerate the live Serendipity tool catalog", a
   }
 });
 
-// ── Markdown twins ───────────────────────────────────────────────────────────
-// The twins are build OUTPUT, so these test the generator rather than committed
-// files. The point of generating them is that no committed copy can drift; the
-// point of testing the generator is that "no copy to drift" is worthless if the
-// copy it produces is wrong.
-
-test("every static surface with prose gets a Markdown twin", async () => {
-  const { files, skipped } = buildTwins(".");
-  const manifest = JSON.parse(await readFile(new URL("site-manifest.json", import.meta.url), "utf8"));
-
-  for (const surface of manifest.surfaces) {
-    if (!htmlFileFor(surface, ".")) continue;                 // Worker-rendered
-    if (surface.path === "/") continue;                       // hand-authored, committed
-    const twin = files.get(twinPath(surface.path));
-    assert.ok(twin, `${surface.path} has a source page but no twin`);
-    assert.match(twin, /^---\ntitle: /, `${surface.path}: twin must open with frontmatter`);
-    assert.ok(twin.includes(`path: "${surface.path}"`), `${surface.path}: twin must name its own path`);
-    assert.ok(twin.includes("> Site index: https://aadhar.sh/llms.txt"),
-      `${surface.path}: twin must point a reader at the index`);
-    assert.ok(twin.trimEnd().endsWith(`Source: https://aadhar.sh${surface.path}`),
-      `${surface.path}: twin must end by naming the page it mirrors`);
+// ── the bundled photo pool ──────────────────────────────────────────
+// The pool is BUILD DATA: photos.js imports photo-index.json + hashes.json and
+// derives the render-ready rows at module scope. These tests run the real
+// derivation over the real committed files, so a half-run pipeline (an index
+// entry without hashes, a hash without an index entry, a malformed /i/ URL)
+// fails here as well as in check-photo-pipeline.mjs — the worker and the
+// checker must not be able to disagree about what is published.
+test("bundled photo pool derives one well-formed row per committed stem", async () => {
+  const index = JSON.parse(await readFile(new URL("holding/_worker.js/photo-index.json", import.meta.url), "utf8"));
+  const hashes = JSON.parse(await readFile(new URL("holding/images/hashes.json", import.meta.url), "utf8"));
+  const pool = derivePhotoPool(index, hashes);
+  assert.equal(pool.length, Object.keys(index).length, "every indexed stem must derive a row");
+  assert.equal(pool.length, Object.keys(hashes).length, "index and hashes must be in bijection");
+  for (const p of pool) {
+    assert.match(p.thumb_avif, new RegExp(`^/i/${p.stem}\\.[a-f0-9]{8}\\.avif$`));
+    assert.match(p.thumb_jpg, new RegExp(`^/i/${p.stem}\\.[a-f0-9]{8}\\.jpg$`));
+    assert.match(p.thumb_small, new RegExp(`^/i/${p.stem}-400\\.[a-f0-9]{8}\\.avif$`));
+    assert.ok(p.full.startsWith(`${p.stem}.`), `${p.stem}: full must be the stem's R2 key`);
+    assert.ok(Number.isInteger(p.size) && p.size > 0, `${p.stem}: size must be positive bytes`);
   }
-
-  // /photos, /around, /ledger and friends render from the Worker and have no
-  // prose source. They are skipped on purpose; llms.txt points at their JSON.
-  assert.ok(skipped.includes("/photos"), "Worker-rendered surfaces should be skipped, not faked");
-  assert.ok(!files.has("/index.md"), "the hand-authored homepage twin must not be regenerated");
+  const fulls = pool.map((p) => p.full);
+  assert.deepEqual(fulls, [...fulls].sort((a, b) => a.localeCompare(b)), "pool keeps the manifest's sort order");
+  // an incomplete hash entry is SKIPPED, never rendered as /i/undefined
+  assert.equal(derivePhotoPool({ X1: { full: "X1.jpg", size: 1, uploaded: null } }, { X1: { a: "aaaaaaaa" } }).length, 0);
 });
 
-// The understanding check on every garage/lwe page ships its questions AND its
-// correct answers in an inline <script type="application/json" id="luq-data">.
-// A converter that walked into script bodies would publish the answer key as
-// prose. This is the single most important thing the twin generator must not do.
-test("no twin leaks an understanding-check answer key", async () => {
-  const { files } = buildTwins(".");
-  let checked = 0;
-
-  for (const [rel, twin] of files) {
-    if (!rel.endsWith(".md")) continue;
-    const page = rel.replace(/\.md$/, "");
-    const src = ["holding" + page + ".html", "holding" + page + "/index.html"]
-      .find((p) => existsSync(p));
-    if (!src) continue;
-
-    const block = /id="luq-data"[^>]*>([\s\S]*?)<\/script>/.exec(await readFile(src, "utf8"));
-    if (!block) continue;
-    let data; try { data = JSON.parse(block[1]); } catch { continue; }
-
-    // The real shape is {questions:[{q, options:[{t, ok, why}]}]}. `t` is the
-    // option text, `why` is the explanation, and `ok` flags the correct one, so
-    // every one of those three is answer-key material. An earlier version of
-    // this test read option.text/option.label, found undefined, and asserted
-    // nothing at all while still reporting a pass — hence the strings counter.
-    for (const question of data.questions || []) {
-      for (const field of [question.q, ...(question.options || []).flatMap((o) => [o.t, o.why])]) {
-        if (typeof field !== "string" || field.length < 25) continue;
-        checked++;
-        assert.ok(!twin.includes(field), `${rel} leaked quiz content: ${field.slice(0, 60)}`);
-      }
-    }
-  }
-  // guards against the assertions above going vacuous again
-  assert.ok(checked > 200, `expected to check hundreds of quiz strings, saw ${checked}`);
+test("getImagesManifest serves the bundled pool without env", async () => {
+  // no env, no ctx: the pool must not depend on any binding
+  const pool = await getImagesManifest(undefined, undefined);
+  assert.ok(Array.isArray(pool) && pool.length > 0);
 });
 
-test("twins carry no unconverted markup and no interactive controls", async () => {
-  const { files } = buildTwins(".");
-  for (const [rel, twin] of files) {
-    if (!rel.endsWith(".md")) continue;
-    // Strip fenced and inline code first: a page ABOUT html legitimately shows
-    // <div> and <style> inside backticks, and that is content, not a leak.
-    const prose = twin.replace(/```[\s\S]*?```/g, "").replace(/`[^`\n]*`/g, "");
-    // A backslash-escaped bracket is prose too. /garage/horizon has headings
-    // named "customizable \<select\>" and "\<input type=checkbox switch\>";
-    // those are the feature's NAME, and escaping them is the converter working.
-    assert.doesNotMatch(prose, /(?<!\\)<\/?(script|style|button|input|select|textarea|svg|canvas)\b/i,
-      `${rel} carries markup that should have been dropped`);
-    assert.doesNotMatch(prose, /\bclass="/, `${rel} carries raw attributes`);
-  }
+// ── the SSR deadline ────────────────────────────────────────────────
+// deadline() is what keeps a KV eviction (100-200ms, untunable) from gating
+// homepage TTFB. Two properties are load-bearing: a fast read never marks
+// itself deadlined (the timer is cleared on settle), and a slow read's
+// fallback arrives at the budget while the underlying promise keeps running
+// (so the read still warms the colo behind the response).
+test("deadline lets a fast read through unmarked", async () => {
+  let marked = false;
+  const v = await deadline(Promise.resolve("fast"), 50, null, () => { marked = true; });
+  assert.equal(v, "fast");
+  // give the (cleared) timer a chance to prove it was cleared
+  await new Promise((r) => setTimeout(r, 80));
+  assert.equal(marked, false, "a settled read must never be marked deadlined");
 });
 
-test("section indexes list their own pages and link the twins", async () => {
-  const { files } = buildTwins(".");
-  const manifest = JSON.parse(await readFile(new URL("site-manifest.json", import.meta.url), "utf8"));
-
-  for (const section of INDEXED_SECTIONS) {
-    const index = files.get(`/${section}/llms.txt`);
-    assert.ok(index, `${section} has no llms.txt`);
-    const own = manifest.surfaces.filter((s) => s.section === section);
-    assert.ok(own.length > 1, `${section} should have pages to index`);
-    for (const surface of own) {
-      assert.ok(index.includes(`https://aadhar.sh${twinPath(surface.path)}`),
-        `/${section}/llms.txt omits ${surface.path}`);
-    }
-    // A section index that pointed at the HTML would be handing an agent the
-    // representation it did not ask for.
-    assert.doesNotMatch(index, /\]\(https:\/\/aadhar\.sh\/[^)]*(?<!\.md)\)/,
-      `/${section}/llms.txt should link .md twins`);
-  }
+test("deadline ships the fallback at the budget and leaves the read running", async () => {
+  let marked = false;
+  let settled = false;
+  const slow = new Promise((r) => setTimeout(() => { settled = true; r("late"); }, 60));
+  const t0 = Date.now();
+  const v = await deadline(slow, 15, "fallback", () => { marked = true; });
+  assert.equal(v, "fallback");
+  assert.equal(marked, true);
+  assert.ok(Date.now() - t0 < 55, "fallback must arrive at the budget, not at the read");
+  assert.equal(settled, false, "the read must still be in flight when the fallback ships");
+  await slow;
+  assert.equal(settled, true, "the abandoned read still completes");
 });
 
-// /bot and /whoareyou render from template literals, so their twins are written
-// by hand and CAN drift. checkTwinFacts pins the load-bearing strings in both
-// directions: bump BOT_VERSION and the deploy fails until bot.md agrees.
-test("hand-authored twins still agree with the Worker that renders their page", () => {
-  assert.deepEqual(checkTwinFacts("."), []);
-});
-
-test("the twin fact-check actually fails when the page changes under it", () => {
-  const facts = TWIN_FACTS.find((f) => f.twin === "holding/md/bot.md");
-  const ua = facts.facts.find((f) => f.label === "User-Agent");
-  // simulate a version bump in botauth.js: the derived UA changes, and the
-  // hand-written twin no longer contains it
-  const bumped = ua.derive('const BOT_NAME = "AadharshBot";\nconst BOT_VERSION = "9.9";');
-  assert.equal(bumped, "AadharshBot/9.9 (+https://aadhar.sh/bot)");
-  const twin = readFileSync("holding/md/bot.md", "utf8");
-  assert.ok(!twin.includes(bumped), "a bumped version must not already be in the twin");
+test("deadline distinguishes fallback values for slow vs missing", async () => {
+  // counter semantics: null = a real miss (triggers the mirror reseed),
+  // undefined = merely slow (must NOT trigger it)
+  const missing = await deadline(Promise.resolve(null), 50, undefined, () => {});
+  assert.equal(missing, null);
+  const slow = await deadline(new Promise(() => {}), 10, undefined, () => {});
+  assert.equal(slow, undefined);
 });

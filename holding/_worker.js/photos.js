@@ -1,9 +1,24 @@
 // photos.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
-import { cachedRender, swrKV } from "./lib/cache.js";
+import { cachedRender } from "./lib/cache.js";
 import { lunaPage } from "./lib/chrome.js";
 import { ARCHIVE_VERSION } from "./lib/const.js";
 import { errorResp, escAttr, escHtml, jsonResp } from "./lib/http.js";
+// the photo pool, as BUILD INPUTS: photo-index.json (which photos exist — full
+// R2 key, byte size, upload date; written by add-photos.sh at upload time) and
+// hashes.json (the content-hash map the /i/ URLs are minted from). esbuild
+// inlines both into the bundle, so reading the pool is module memory: 0ms, no
+// I/O, no cold-read class. This replaced the KV-cached R2-list manifest
+// (2026-07-28): measured from a worker, R2 list() was 206ms median and the KV
+// copy in front of it went 100-200ms whenever the colo's shared LRU evicted the
+// key, which at this site's traffic was most real visits. The eviction is not
+// tunable; a build input is. The trade is explicit: a photo becomes visible at
+// DEPLOY, which was already true in practice because its /i/ tiles, hashes.json
+// entry, and caption are committed files too.
+// (`with { type: "json" }`: import attributes, understood by both esbuild and
+// node ≥20.10 — contract-tests import this module under plain node.)
+import photoIndex from "./photo-index.json" with { type: "json" };
+import thumbHashes from "../images/hashes.json" with { type: "json" };
 
 // ── /images/full/<key> → R2 ─────────────────────────────────────────
 // proxies an R2 GET through the worker. supports If-None-Match (304s on
@@ -116,31 +131,52 @@ export async function servePhotoFromR2(request, env, ctx) {
 // (the Apache-styled /images listings lived here until 2026-07-03; /photos
 // superseded them and their signature line moved with it.)
 
-// the photo manifest is the single source of truth for which photos
-// exist. derived from R2 keys (each upload preserves its SOOC filename;
-// thumbnails share that filename stem with .avif as the primary modern
-// format and .jpg as the universal fallback). cached in KV for an hour.
+// ── the photo pool ──────────────────────────────────────────────────
+// photo-index.json is the single source of truth for which photos exist:
+// one entry per published stem, written by add-photos.sh when it uploads the
+// original. Deleting a photo = deleting its entry (plus the R2 object and /i/
+// tiles); the old REMOVED_STEMS tombstone set retired with the R2 list() it
+// was compensating for, since a committed index has no eventual consistency
+// to tolerate.
 //
-// dedup: when a stem has multiple R2 objects (e.g. HIF + JPG sibling
-// because we generated a JPG export of a HIF original), pick the one
-// most browser-friendly for click-through. JPG/JPEG > PNG/WebP/GIF >
-// HEIF/HEIC/HIF. HIFs trigger Chrome's download dialog instead of
-// rendering, so we always prefer a JPG counterpart when one exists.
-export const R2_EXT_PRIORITY = {
-  jpg: 5, jpeg: 5,
-  png: 3, webp: 3, gif: 3,
-  heif: 1, heic: 1, hif: 1,
-};
+// derivePhotoPool joins the index with hashes.json into the render-ready rows
+// the SSR slot-builder reads. A stem with an incomplete hash entry is a
+// half-run pipeline: SKIP it rather than bake a broken /i/undefined tile
+// (check-photo-pipeline.mjs fails CI on the same condition, so this guard is
+// belt on top of braces). Exported for contract-tests, which run it over the
+// real committed files.
+//
+// dual-source: thumb_avif is the <picture> primary; thumb_jpg is
+// the universal <img src> fallback (thumb_small is the 400px mobile AVIF).
+// NB: <picture> type-fallback only catches "format not supported" — it
+// does NOT catch DECODE failures. AVIF decode failures historically caused
+// broken images here; if they recur, the fix is to demote AVIF entirely.
+// slim hot-path rows: ONLY the fields the SSR slot-builder reads
+// (EXIF rides /images/meta/<stem>.json, fetched per photo on hover).
+export function derivePhotoPool(index, hashes) {
+  return Object.entries(index || {}).flatMap(([stem, p]) => {
+    const h = hashes?.[stem];
+    if (!h || !h.a || !h.j || !h.s) {
+      console.log(`photo pool: skipping ${stem} (no content-hash in hashes.json)`);
+      return [];
+    }
+    return [{
+      full:        p.full,                  // R2 key, e.g. "XT507333.JPG"
+      thumb_avif:  `/i/${stem}.${h.a}.avif`,
+      thumb_jpg:   `/i/${stem}.${h.j}.jpg`,
+      thumb_small: `/i/${stem}-400.${h.s}.avif`,
+      stem,
+      size:       p.size,                   // R2 object size in bytes
+      uploaded:   p.uploaded || null,
+    }];
+  }).sort((a, b) => a.full.localeCompare(b.full));
+}
 
-// stems removed from the pool — excluded from the rebuilt manifest even if their
-// original still lingers in R2's eventually-consistent list(). prune once R2
-// list() drops them (and the entry here is harmless to keep as a record).
-export const REMOVED_STEMS = new Set(["XT509360"]);
+const PHOTO_POOL = derivePhotoPool(photoIndex, thumbHashes);
 
-// normalize a manifest thumb URL: new manifests bake absolute /i/ URLs, but a
-// stale KV manifest (pre-cutover) still carries the relative legacy shape.
-// Tolerating both makes the deploy/bust order irrelevant during the hash
-// migration; the legacy /images/ URLs it produces 301 into /i/ at the worker.
+// normalize a pool thumb URL. The pool always bakes absolute /i/ URLs now, so
+// this is a passthrough kept for shape-compat with its callers (home.js SSR);
+// the legacy-relative arm survives only as paranoia, not a live path.
 export const absThumb = (u) => (u && u.startsWith("/") ? u : `/images/${u}`);
 
 // AI alt text (cf-garage Workers AI, ?mode=alt) generated offline into the static
@@ -160,9 +196,15 @@ export async function getAltMap(env) {
 }
 
 // content-hash map {stem: {a,j,s}} written by scripts/hash-thumbnails.sh at
-// photo-add time. The manifest bakes these into /i/ URLs, so a thumbnail URL
+// photo-add time. The pool bakes these into /i/ URLs, so a thumbnail URL
 // is born with its bytes: no global ?v= bump, and a cached 404 can never
 // shadow real bytes (a new encode IS a new URL). Module-cached like _altMap.
+//
+// Deliberately still an ASSETS read even though the same file is imported
+// above for the pool: the pool is the render-critical path and wants module
+// memory; these callers (the legacy /images/<thumb> 301 mapper, queryPhotos)
+// are not hot, and keeping them on ASSETS keeps them stubbable in
+// contract-tests. Both readers see the same committed file per deploy.
 export let _thumbHashes;
 
 export async function getThumbHashes(env) {
@@ -217,9 +259,7 @@ export async function queryPhotos(env, options = {}, ctx = null) {
     getThumbHashes(env),
   ]);
   let manifest = [];
-  if (env.PHOTOS_R2) {
-    try { manifest = await getImagesManifest(env, ctx); } catch { manifest = []; }
-  }
+  try { manifest = await getImagesManifest(env, ctx); } catch { manifest = []; }
   const manifestByStem = new Map((manifest || []).map((photo) => [photo.stem, photo]));
   const rows = Object.entries(metadata || {}).filter(([stem, record]) => {
     const haystack = [stem, altMap?.[stem], record.camera, record.lens, record.film].filter(Boolean).join(" ").toLowerCase();
@@ -273,77 +313,12 @@ export async function handlePhotoQuery(request, env, ctx) {
   return response;
 }
 
-export async function getImagesManifest(env, ctx) {
-  // two-key stale-while-revalidate via lib/cache.js: the manifest is the
-  // persistent value, and `manifest:images:fresh` carries the 1h freshness TTL.
-  // stale serves instantly; only a true first run / manual bust rebuilds inline.
-  // cacheTtl 300, deliberately shorter than the tracks payload's 1800: adding
-  // photos ends by deleting manifest:images + its sentinel (MAINTENANCE.md), and
-  // that documented bust has to land in minutes rather than half an hour. Five
-  // minutes still converts most cold reads at this site's traffic.
-  const manifest = await swrKV(env, ctx, "manifest:images", 3600, () => buildImagesManifest(env), {
-    cacheTtl: 300,
-    isValid: Array.isArray,
-    shouldStore: (m) => Array.isArray(m) && m.length > 0,
-  });
-  return Array.isArray(manifest) ? manifest : [];
-}
-
-export async function buildImagesManifest(env) {
-  {
-    if (!env.PHOTOS_R2) return null;
-    const list = await env.PHOTOS_R2.list({ limit: 1000 });
-
-    // collapse R2 objects to one-per-stem, prefer browser-renderable extensions
-    const byStem = new Map();
-    for (const o of list.objects || []) {
-      const stem = o.key.replace(/\.[^.]+$/, "");
-      if (REMOVED_STEMS.has(stem)) continue;  // tombstoned (R2 list() is eventually
-                                              // consistent, so a deleted original can
-                                              // linger in list() for a while)
-      const ext  = (o.key.split(".").pop() || "").toLowerCase();
-      const prio = R2_EXT_PRIORITY[ext] || 0;
-      const existing = byStem.get(stem);
-      if (!existing || prio > existing._prio) {
-        byStem.set(stem, { ...o, _prio: prio });
-      }
-    }
-
-    // thumb URLs are ABSOLUTE and content-addressed (/i/<stem>.<hash8>.<ext>,
-    // from hashes.json via getThumbHashes): a URL names exact bytes, served
-    // immutable for a year, so there is no global version to bump and no way
-    // for a cached 404 to shadow a real file. hashes.json is complete for every
-    // live photo (add-photos.sh runs hash-thumbnails.sh), so a stem with no hash
-    // is a half-run pipeline: SKIP it rather than bake a broken /i/undefined
-    // tile, and log so the gap surfaces. (The old ?v= legacy fallback retired
-    // once hashes.json went 100% complete; the /images/<thumb> 301 layer still
-    // catches old external links independently of this builder.)
-    //
-    // dual-source: thumb_avif is the <picture> primary; thumb_jpg is
-    // the universal <img src> fallback (thumb_small is the 400px mobile AVIF).
-    // NB: <picture> type-fallback only catches "format not supported" — it
-    // does NOT catch DECODE failures. AVIF decode failures historically caused
-    // broken images here; if they recur, the fix is to demote AVIF entirely.
-    // slim hot-path manifest: ONLY the fields the SSR slot-builder reads
-    // (EXIF rides /images/meta/<stem>.json, fetched per photo on hover).
-    const hashes = await getThumbHashes(env);
-    return [...byStem.entries()].flatMap(([stem, o]) => {
-      const h = hashes[stem];
-      if (!h || !h.a || !h.j || !h.s) {
-        console.log(`manifest: skipping ${stem} (no content-hash in hashes.json)`);
-        return [];
-      }
-      return [{
-        full:        o.key,                   // R2 key, e.g. "XT507333.JPG"
-        thumb_avif:  `/i/${stem}.${h.a}.avif`,
-        thumb_jpg:   `/i/${stem}.${h.j}.jpg`,
-        thumb_small: `/i/${stem}-400.${h.s}.avif`,
-        stem,
-        size:       o.size,                   // R2 object size in bytes
-        uploaded:   o.uploaded ? new Date(o.uploaded).toISOString() : null,
-      }];
-    }).sort((a, b) => a.full.localeCompare(b.full));
-  }
+export async function getImagesManifest(_env, _ctx) {
+  // the pool is module memory (see derivePhotoPool above). The async (env, ctx)
+  // signature survives from the KV/SWR era so the callers (home.js SSR, run.js
+  // palette, /photos, queryPhotos) didn't have to move; the awaits they do on
+  // this resolve on the microtask queue, no I/O behind them.
+  return PHOTO_POOL;
 }
 
 export async function handleImagesManifest(request, env, ctx) {

@@ -1168,9 +1168,32 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
       <noscript><p class="np-nojs">The playlist is server-rendered when available. <a href="/rn">Open it on Spotify &#x2197;&#xFE0E;</a></p></noscript>
     </section>
 
-    <!-- The Worker fills the playlist in the first HTML response.
-         /rn remains the honest standalone destination if the edge has no
-         current snapshot. -->
+    <!-- The Worker fills the playlist in the first HTML response — but only if
+         its KV read answers inside a ~25ms budget (home.js SSR_DEADLINE_MS).
+         When that deadline fires, the section arrives with data-ssr="0" and
+         this script refetches the SAME fragment the worker would have injected
+         (/rn/tracks.html, rendered by the same renderTrackListHtml; the fetch
+         itself usually lands warm because the timed-out worker read completed
+         behind the response and warmed the colo). The x-rn-fragment check is
+         load-bearing: a 5xx interstitial is also text/html and also resolves
+         fine, so only a response that proves it is our fragment may replace
+         the honest empty state. The fragment renders its own honest states for
+         "no playlist" / "scrape broke", so swapping it in is safe in every
+         case, and /rn stays the no-JS destination (noscript above). -->
+    <script>
+    (() => {
+      const list = document.getElementById("np-list");
+      if (!list || list.getAttribute("data-ssr") !== "0") return;
+      fetch("/rn/tracks.html")
+        .then((r) => (r.ok && r.headers.get("x-rn-fragment") === "1" ? r.text() : null))
+        .then((html) => {
+          if (!html || list.getAttribute("data-ssr") !== "0") return;
+          list.innerHTML = html;
+          list.setAttribute("data-ssr", "client");
+        })
+        .catch(() => {});
+    })();
+    </script>
 
     <!--
       delegated click + keyboard handler for .np-artist-link spans. these

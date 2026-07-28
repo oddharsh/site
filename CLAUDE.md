@@ -25,7 +25,8 @@ colors that read modern in source but render period-correct.
 npm run deploy
 
 # add new photos (resize, EXIF-rotate, encode to AVIF+JPG, upload to R2,
-# bake histograms, validate artifacts, and bust the manifest cache)
+# write the photo-index entry, bake histograms, validate artifacts; the
+# photo goes live at the next deploy — no cache bust exists or is needed)
 npm run photos -- "/path/to/photo.HIF" "/path/to/folder/"
 
 # validate the committed photo artifact graph without uploading anything
@@ -52,11 +53,12 @@ python3 -m pip install -r holding/scripts/requirements.txt
 cargo build --release --manifest-path holding/scripts/zenc/Cargo.toml
 
 # bust caches via wrangler (RN_KV namespace ID hardcoded in scripts).
-# manifest busts need BOTH keys (value + freshness sentinel)
+# NB: the photo manifest is NOT a cache anymore — the worker bundles
+# photo-index.json + hashes.json, so a deploy replaces the pool atomically
+# and there are no manifest:* keys. Tracks remain KV (two-key SWR):
 NS="3cb8a107c58e47dc9244e75b33401f36"
-wrangler kv key delete --namespace-id="$NS" "manifest:images" --remote
-wrangler kv key delete --namespace-id="$NS" "manifest:images:fresh" --remote
 wrangler kv key delete --namespace-id="$NS" "tracks:4IRq9W1N2tOWHhH0O3vXiF" --remote
+wrangler kv key delete --namespace-id="$NS" "tracks:4IRq9W1N2tOWHhH0O3vXiF:fresh" --remote
 ```
 
 ## Collaboration and release discipline
@@ -338,8 +340,10 @@ generic hex back.
 ### Cloudflare bindings
 
 - **RN_KV** (KV namespace ID `3cb8a107c58e47dc9244e75b33401f36`) — caches the
-  playlist tracks, photo manifest, artist profile pics, and a few crawler
-  results. ~10K writes/day budget; we use a handful.
+  playlist tracks, artist profile pics, the visit-count mirror, and a few
+  crawler results. ~10K writes/day budget; we use a handful. (The photo
+  manifest left KV 2026-07-28: the worker bundles `photo-index.json` +
+  `hashes.json`, so the pool is module memory and a deploy is its bust.)
 - **PHOTOS_R2** — R2 bucket `aadhar-photos`, holds the SOOC originals
   (~3 GB / 158 photos at FUJIFILM X-T5 + Leica resolution).
 - **ASSETS** — the Workers static-assets binding (wrangler.jsonc `assets`), serves files from holding/.
