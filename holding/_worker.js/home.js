@@ -1,5 +1,6 @@
 // home.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
+import { COUNT_KEY, seedCountMirror } from "./counter.js";
 import { escAttr, wantsMarkdown } from "./lib/http.js";
 import { HOMEPAGE_DISCOVERY_LINK, withHomepageDiscoveryHeaders } from "./lib/security.js";
 import { absThumb, getAltMap, getImagesManifest } from "./photos.js";
@@ -89,18 +90,27 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
     arr => (Array.isArray(arr) && arr.length ? arr : null),
     () => null
   );
-  // the visit count is displayed as SSR'd text via a READ-ONLY DO peek:
-  // rendering never mutates, so homepage GETs stay pure and prerender-safe.
-  // The actual tick is the /hit beacon (plus a <noscript> pixel) in
-  // index.html. Fired now, awaited inside the footer .counter rewriter,
-  // so the read overlaps the whole page stream and never gates first byte.
-  const counterPeek = env.COUNTER
-    ? env.COUNTER.get(env.COUNTER.idFromName("homepage-visits"))
-        .fetch("https://do/?peek=1")
-        .then((r) => r.json())
-        .catch(() => null)
+  // the visit count is displayed as SSR'd text, read from the KV mirror rather
+  // than from the Durable Object: rendering never mutates, so homepage GETs stay
+  // pure and prerender-safe. The actual tick is the /hit beacon (plus a <noscript>
+  // pixel) in index.html, and that tick is what refreshes the mirror.
+  //
+  // This USED TO peek the DO directly and await it inside the footer `.counter`
+  // rewriter, on the theory that a read started here would overlap the page
+  // stream. It doesn't. The stream reaches the footer in ~130ms while the DO peek
+  // takes 185-308ms from SJC, so the rewriter sat on a half-sent document: a
+  // devtools trace on 2026-07-27 caught the parser idle from 635ms to 901ms, a
+  // 399ms tail on a 13KB body the worker assembles in 8-13ms. First byte and FCP
+  // were fine (FCP landed at 635ms, mid-stream); everything downstream of DCL was
+  // not, because nav.js and the entire desktop shell queue behind the last chunk.
+  // A KV read is colo-local at 5-8ms and rides the Promise.all below, so the count
+  // now costs the render nothing and the stream never suspends.
+  const counterP = env.RN_KV
+    ? env.RN_KV.get(COUNT_KEY).then(
+        (v) => { const n = parseInt(v, 10); return Number.isFinite(n) ? n : null; },
+        () => null,
+      )
     : Promise.resolve(null);
-  ctx.waitUntil(counterPeek.catch(() => {}));
 
   // fetch the static shell WITHOUT the visitor's conditional headers. index.html
   // carries a stable content ETag, but the page we build from it is different
@@ -120,12 +130,19 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
     })(),
   });
 
-  const [res, tracksPayload, photos, altMap] = await Promise.all([
+  const [res, tracksPayload, photos, altMap, visitCount] = await Promise.all([
     timed("assets", env.ASSETS.fetch(assetRequest)),
     timed("tracks", tracksChain),
     timed("manifest", manifestP),
     timed("alt", getAltMap(env)),   // AI alt text; module-cached, so this is free on warm isolates
+    timed("counter", counterP),
   ]);
+
+  // a cold mirror (first render after this shipped, or a KV eviction) shows the
+  // static placeholder and reseeds itself out-of-band, so the next visitor gets a
+  // real number. never awaited: a missing mirror must not put the DO back on the
+  // render path, which is the entire point of the mirror.
+  if (visitCount == null && env.COUNTER && env.RN_KV) ctx.waitUntil(seedCountMirror(env));
 
   // footer "Last modified" → the most recently added photo (a real, datable
   // content change; the pool grows often). Static assets are content-addressed
@@ -146,7 +163,7 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
   // bail if no dynamic data is available — the static HTML's inline
   // JS will pick up the slack on the client (and the hardcoded "000042"
   // stays in the footer as a graceful fallback).
-  if (!tracksPayload?.tracks?.length && !photos && !env.COUNTER && !lastModStr) {
+  if (!tracksPayload?.tracks?.length && !photos && visitCount == null && !lastModStr) {
     return finish(withHomepageDiscoveryHeaders(res));
   }
 
@@ -244,18 +261,15 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
     });
   }
 
-  // ── visitor count → footer .counter (read-only peek; the beacon ticks) ──
-  // the rewriter reaches .counter at the very end of <body>, so awaiting the
-  // peek here rides the full page stream. on a null read the static
-  // placeholder stays put, never a misleading number.
-  if (env.COUNTER) {
+  // ── visitor count → footer .counter (KV mirror; the /hit beacon ticks) ──
+  // the value is already resolved by the fan-out above, so this handler is
+  // SYNCHRONOUS and cannot suspend the output stream. Keep it that way: an
+  // `async element()` here blocks the HTML tail, and the footer is the worst
+  // place on the page to do that (see the counterP comment above). on a null
+  // read the static placeholder stays put, never a misleading number.
+  if (visitCount != null) {
     rewriter.on(".counter", {
-      async element(el) {
-        const data = await counterPeek;
-        if (data && typeof data.n === "number") {
-          el.setInnerContent(String(data.n).padStart(6, "0"));
-        }
-      },
+      element(el) { el.setInnerContent(String(visitCount).padStart(6, "0")); },
     });
   }
 

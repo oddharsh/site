@@ -43,6 +43,45 @@ export class Counter {
 // UAs that read the count without advancing it (mirrors the old home.js gate).
 const PEEK_UA = /bot|crawl|spider|slurp|crawler|bingpreview|facebookexternalhit|embedly|slackbot|whatsapp|telegrambot|discordbot|redditbot|petalbot|gptbot|claudebot|ccbot|perplexity|bytespider|google-extended/i;
 
+// ── the KV mirror the homepage render reads ──────────────────────────
+// COUNT_KEY holds the value and never expires, so the render always finds a
+// number even after a quiet night. FRESH_KEY is a TTL sentinel that throttles
+// the writes, the same value + freshness pair the images manifest uses.
+//
+// The throttle is what keeps this inside the ~10K writes/day KV budget: an
+// unthrottled mirror would be one write per visit AND would fight Cloudflare's
+// 1-write-per-second-per-key limit under any burst. Behind the sentinel the worst
+// case is 2 writes per MIRROR_TTL even under continuous traffic, ~2.9K/day, and a
+// visit odometer trailing real time by a minute is not a number anyone audits.
+export const COUNT_KEY = "counter:n";
+const FRESH_KEY = "counter:n:fresh";
+const MIRROR_TTL = 60;   // seconds; KV's floor for expirationTtl is 60
+
+async function mirrorCount(env, n, force = false) {
+  try {
+    if (!force && await env.RN_KV.get(FRESH_KEY)) return;   // a recent tick already mirrored
+    await Promise.all([
+      env.RN_KV.put(COUNT_KEY, String(n)),
+      env.RN_KV.put(FRESH_KEY, "1", { expirationTtl: MIRROR_TTL }),
+    ]);
+  } catch {}   // a missed mirror costs staleness, never the response
+}
+
+// Rebuild the mirror from the DO when the render finds COUNT_KEY missing: the
+// first load after this shipped, or after a manual delete. The render calls this
+// from ctx.waitUntil and never awaits it, so a cold mirror costs one visitor the
+// placeholder instead of putting the DO back on the critical path. `force` skips
+// the freshness sentinel, which can outlive the value it was throttling if the
+// value alone was deleted. The peek is read-only, so a speculative prerender that
+// triggers a heal still doesn't advance the count.
+export async function seedCountMirror(env) {
+  try {
+    const stub = env.COUNTER.get(env.COUNTER.idFromName("homepage-visits"));
+    const { n } = await (await stub.fetch("https://do/?peek=1")).json();
+    if (typeof n === "number") await mirrorCount(env, n, true);
+  } catch {}
+}
+
 // ── GET /hit — the counter's tick endpoint, and an odometer if you ask for one ──
 // The homepage DISPLAYS the count as SSR'd text from a read-only peek (home.js),
 // so rendering never mutates. Advancing it happens here, and callers arrive
@@ -60,7 +99,7 @@ const PEEK_UA = /bot|crawl|spider|slurp|crawler|bingpreview|facebookexternalhit|
 // against a bare route. It was /hit.svg while the footer count ITSELF was the
 // image (v133–v138); the count came back to the document as text in v138 and the
 // name outlived the reason.
-export async function handleHit(request, env) {
+export async function handleHit(request, env, ctx) {
   const url = new URL(request.url);
   const ua = request.headers.get("user-agent") || "";
   const peek = request.method === "HEAD"
@@ -76,6 +115,18 @@ export async function handleHit(request, env) {
       n = (await (await stub.fetch(`https://do/${peek ? "?peek=1" : ""}`)).json()).n;
     } catch {}
   }
+
+  // Mirror the fresh count into KV so the homepage render never has to ask the DO.
+  // A DO is a single global instance, so a read from it costs a round trip to
+  // wherever it lives: measured 185-308ms from SJC against 112-176ms for a
+  // colo-local asset. home.js used to await that read inside its `.counter`
+  // HTMLRewriter handler, which suspended the HTML output stream at the footer —
+  // a devtools trace on 2026-07-27 caught the parser idle from 635ms to 901ms,
+  // and that tail gates DCL, nav.js, and the whole desktop shell behind it.
+  // Reading KV instead folds the count into the render's existing parallel
+  // fan-out at 5-8ms. The number can lag by up to MIRROR_TTL, which is invisible
+  // on an odometer and cheaper than stalling every visitor's shell.
+  if (env.RN_KV && typeof n === "number") ctx?.waitUntil(mirrorCount(env, n));
 
   // the activation beacon wants the tick, never the pixels. it already landed
   // above, so hand back nothing rather than bytes the beacon would discard.
