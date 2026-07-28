@@ -481,6 +481,19 @@ content-type (+ markers). All-green ("0 hard failure(s)") is the gate before and
 after any deploy. The skeuomorphic `_worker.js/` module tree was extracted with
 this as the regression tripwire; keep it green on every future change.
 
+The same table runs **before** a merge through `npm run routes:check`, which
+boots the Worker in-process with Wrangler's `createTestHarness()` and points the
+oracle at it (about 5s end to end, build.mjs included, since the harness honours
+`wrangler.jsonc`'s `build.command` and therefore serves the minified tree). CI
+runs it on every PR. Five rows carry `remote: true` and sit out the local pass,
+because a local Worker structurally cannot have what they assert: production R2
+objects (`/images/full/…`, `/photos`), the cron's KV snapshot (`/around/json`),
+or the AadharshBot signing secret (`/lens/fetch`, `/lens/shot`). Everything else
+is asserted identically. Note the local run proves the HANDLER, not the DATA:
+empty local KV/R2/D1 means a passing `/images/manifest.json` says the manifest
+builder works, not that the photos are there. The production sweep is still the
+one that sees real content.
+
 ---
 
 ## Remote image pipeline

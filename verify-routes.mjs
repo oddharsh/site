@@ -13,15 +13,30 @@
 // gate a deploy. Writes the observed results to verify-baseline.<host>.json.
 //
 // Cache-busted per request so we measure the deployment, not the edge cache.
+//
+// scripts/check-routes-harness.mjs points this same file at a Worker booted
+// in-process by wrangler's test harness, which is how the oracle runs BEFORE a
+// merge instead of only after a deploy. A local base drops the rows tagged
+// `remote` (see below); everything else is asserted identically.
 
 import { readFileSync, writeFileSync } from "node:fs";
 
 const base = (process.argv[2] || "https://aadhar.sh").replace(/\/$/, "");
 
+// No request may hang the sweep. probe() has always been unbounded, which is
+// survivable against the edge but not against a local Worker holding a socket
+// open on a binding it cannot reach (the BROWSER one does exactly that).
+const TIMEOUT_MS = Number(process.env.VERIFY_TIMEOUT_MS || 20000);
+
 // Build-output assertions (minified shells + luna.css + the .src twins) only hold
 // against a real deploy. Local `wrangler dev` serves the readable holding/ tree
 // (unminified, no .src twins), so those checks are gated to non-localhost bases.
-const isProd = !/^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])/.test(base);
+// VERIFY_BUILT=1 forces them back on for a local base pointed at .build/holding,
+// which is what check-routes-harness.mjs does: there the built tree IS the tree
+// under test, so the "deploy bypassed build.mjs" tripwire can fire pre-merge.
+const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])/.test(base);
+const isProd = !isLocal;
+const builtOutput = isProd || process.env.VERIFY_BUILT === "1";
 
 // Real identifiers that exist in the repo today (see writing/posts.json + images/).
 const SLUG = "in-flux";
@@ -43,6 +58,11 @@ try {
 //     Workers-assets says text/javascript for the same .js file — both are valid).
 // marker: a substring that must appear in the body (text routes only).
 // flaky: true = record the result but never fail the run (external/rate-limited).
+// remote: true = skipped entirely against a local base. Reserve this for rows
+//     whose assertion depends on something a local Worker structurally cannot
+//     have: production R2/KV/D1 CONTENT, a secret, or a third-party host. A row
+//     that merely serves a fallback locally is NOT remote — that fallback is
+//     worth asserting, and losing the row would be losing coverage.
 const ROUTES = [
   { path: "/", status: 200, ct: "text/html", marker: "Aadharsh" },
   { path: "/index.html", status: 301 },
@@ -65,13 +85,13 @@ const ROUTES = [
   { path: "/lens/", status: 301 },   // slashless canonical: routeDropSlash 301s to /lens
   { path: "/lens.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "replaceState" },
   { path: "/lens-browser.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "LensBrowser" },
-  { path: "/luna.css", status: 200, ct: "text/css", marker: "axp-desktop", maxBytes: isProd ? 45000 : undefined },
+  { path: "/luna.css", status: 200, ct: "text/css", marker: "axp-desktop", maxBytes: builtOutput ? 45000 : undefined },
   // the retired SW's unregister stub: must keep serving 200 for a year+
   { path: "/sw.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "unregister" },
   // build-output oracle (prod only — dev serves the readable holding/ tree): a
   // deploy that skipped build.mjs ships the 78KB readable nav.js with no banner
   // and 404s every .src twin. These are the tripwire for that exact bypass.
-  ...(isProd ? [
+  ...(builtOutput ? [
     { path: "/nav.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", maxBytes: 50000 },
     { path: "/nav.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "axp-histnav" },
     { path: "/notepad.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "np-window" },
@@ -83,8 +103,11 @@ const ROUTES = [
   ] : []),
   // Representation contracts: the machine paths stay fixed even if a caller
   // sends a browser Accept header; the HTML paths are explicit fragments.
-  { path: "/lens/fetch?url=https://example.com", status: 200, ct: "application/json", headers: { accept: "text/html" } },
-  { path: "/lens/shot?url=https://example.com", status: [200, 503], flaky: true },
+  // both reach a third party as AadharshBot, so both need RN_SIGNING_KEY_JWK.
+  // Locally that secret is absent and /lens/fetch answers its own 502 with
+  // "AadharshBot signing key is unavailable" — honest, but not this assertion.
+  { path: "/lens/fetch?url=https://example.com", status: 200, ct: "application/json", headers: { accept: "text/html" }, remote: true },
+  { path: "/lens/shot?url=https://example.com", status: [200, 503], flaky: true, remote: true },
   { path: "/lens/browser?url=javascript%3Aalert(1)", status: 400, ct: "application/json", headers: { accept: "text/html" } },
   { path: "/lens/compare.json?left=javascript%3Aalert(1)&right=https%3A%2F%2Fexample.com", status: 400, ct: "application/json" },
   { path: "/mcp", status: 405, ct: "application/json" },
@@ -105,7 +128,9 @@ const ROUTES = [
   { path: "/rn/admin", status: 403 },
   { path: "/bot", status: 200, ct: "text/html" },
   { path: "/around", status: 200, ct: "text/html" },
-  { path: "/around/json", status: 200, ct: "application/json" },
+  // serves the KV snapshot the */30 cron writes; a local KV has none, and the
+  // route says so ("no snapshot yet; the cron crawl hasn't run") with a 503.
+  { path: "/around/json", status: 200, ct: "application/json", remote: true },
   { path: "/around/changes.json", status: 200, ct: "application/json" },
   { path: "/photos/query.json?q=XT", status: 200, ct: "application/json" },
   { path: "/coffee/availability.json", status: [200, 503], ct: "application/json", flaky: true },
@@ -114,7 +139,10 @@ const ROUTES = [
   { path: "/images/", status: 301 },
   { path: "/images/full", status: 301 },
   { path: "/images/full/", status: 301 },
-  { path: "/photos", status: 200, ct: "text/html", marker: "handwritten worker" },
+  // the archive page builds its manifest by LISTING the R2 bucket, so an empty
+  // local bucket is a 503 ("photo manifest unavailable"). /images/manifest.json
+  // stays local-checkable because it can fall back to the committed hashes.json.
+  { path: "/photos", status: 200, ct: "text/html", marker: "handwritten worker", remote: true },
   { path: "/photos/", status: 301 },
   { path: "/run", status: 200, ct: "text/html", marker: "datalist" },
   { path: "/run?cmd=garage", status: 302 },
@@ -122,7 +150,8 @@ const ROUTES = [
   { path: "/images/manifest.json", status: 200, ct: "application/json" },
   { path: "/images/metadata.json", status: 200, ct: "application/json" },
   { path: `/images/meta/${META}.json`, status: 200, ct: "application/json" },
-  { path: `/images/full/${FULL}`, status: 200, ct: "image/jpeg" },
+  // the SOOC original: ~3GB of R2 that is deliberately not in the repo.
+  { path: `/images/full/${FULL}`, status: 200, ct: "image/jpeg", remote: true },
   // legacy thumb URL 301s into /i/; the hashed twin serves immutable bytes
   { path: `/images/${THUMB}`, status: 301 },
   ...(HASHED ? [{ path: HASHED, status: 200, ct: "image/avif" }] : []),
@@ -152,7 +181,11 @@ function statusOk(want, got) {
 async function probe(r) {
   const url = cacheBust(r.path);
   try {
-    const res = await fetch(url, { redirect: "manual", headers: { accept: "*/*", ...(r.headers || {}) } });
+    const res = await fetch(url, {
+      redirect: "manual",
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+      headers: { accept: "*/*", ...(r.headers || {}) },
+    });
     const ct = res.headers.get("content-type") || "";
     let body = "", bytes = null;
     // read the body when we need a marker or a size assertion on a text response
@@ -184,10 +217,12 @@ async function probe(r) {
 }
 
 async function main() {
-  console.log(`\nRoute oracle vs ${base}\n` + "=".repeat(60));
+  const routes = ROUTES.filter(r => !(isLocal && r.remote));
+  const skipped = ROUTES.length - routes.length;
+  console.log(`\nRoute oracle vs ${base}` + (skipped ? `  (${skipped} remote-only route(s) skipped)` : "") + "\n" + "=".repeat(60));
   const results = [];
   // small concurrency to be quick without hammering the edge
-  const queue = [...ROUTES];
+  const queue = [...routes];
   const workers = Array.from({ length: 6 }, async () => {
     while (queue.length) {
       const r = queue.shift();
@@ -195,7 +230,7 @@ async function main() {
     }
   });
   await Promise.all(workers);
-  results.sort((a, b) => ROUTES.findIndex(x => x.path === a.path) - ROUTES.findIndex(x => x.path === b.path));
+  results.sort((a, b) => routes.findIndex(x => x.path === a.path) - routes.findIndex(x => x.path === b.path));
 
   let hardFails = 0;
   for (const r of results) {
@@ -213,12 +248,18 @@ async function main() {
     console.log(`${tag.padEnd(5)} ${String(r.status).padEnd(4)} ${r.path}${why ? "   <- " + why : ""}`);
   }
 
-  const host = base.replace(/^https?:\/\//, "").replace(/[^a-z0-9.-]/gi, "_");
-  const outFile = `verify-baseline.${host}.json`;
-  writeFileSync(outFile, JSON.stringify({ base, routes: results.map(({ path, status, ct }) => ({ path, status, ct })) }, null, 2) + "\n");
+  // The baseline is a record of a DEPLOYMENT's shape, so only a real deploy
+  // produces one. A local harness run would otherwise drop an ephemeral
+  // verify-baseline.127.0.0.1.json (a different port every boot) into the repo.
+  let outFile = null;
+  if (isProd) {
+    const host = base.replace(/^https?:\/\//, "").replace(/[^a-z0-9.-]/gi, "_");
+    outFile = `verify-baseline.${host}.json`;
+    writeFileSync(outFile, JSON.stringify({ base, routes: results.map(({ path, status, ct }) => ({ path, status, ct })) }, null, 2) + "\n");
+  }
 
   console.log("=".repeat(60));
-  console.log(`${results.length} routes, ${hardFails} hard failure(s). Baseline -> ${outFile}`);
+  console.log(`${results.length} routes, ${hardFails} hard failure(s).` + (outFile ? ` Baseline -> ${outFile}` : ""));
   process.exit(hardFails ? 1 : 0);
 }
 

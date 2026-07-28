@@ -61,6 +61,15 @@ jobs:
       - name: Test homepage representation contracts
         run: npm test
 
+      # The route oracle, pre-merge. createTestHarness() boots the site Worker
+      # in-process (honouring wrangler.jsonc's build.command, so it serves the
+      # minified .build/holding tree) and verify-routes.mjs sweeps it. This is
+      # status + content-type + markers for real; it is NOT a data check, since
+      # local KV/R2/D1 come up empty. See MAINTENANCE.md "Verify the whole route
+      # surface" for what the `remote: true` rows sit out and why.
+      - name: Verify route surface against a local Worker
+        run: npm run routes:check
+
       - name: Validate LWE and Garage page contracts
         run: npm run pages:check
 
