@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // publish.mjs — Phase 3 of lwe-publish. One command: spec -> page -> corpus -> wire.
 //
-//   node lwe-pipeline/publish.mjs <concept> [--deploy]
+//   node lwe-pipeline/publish.mjs <concept>
 //
 // Steps (all local, safe to re-run):
 //   1. generate the page from specs/<concept>.json
@@ -9,9 +9,11 @@
 //      built-in "ask" box is grounded in it, sandboxed to this concept)
 //   3. wire the registry-driven regions (sitemap, buddy list, nav Run entries)
 //
-// The worker deploy + Vectorize reindex + service-worker bump are PRINTED, not run
-// (they touch the live account and need the secrets). --deploy runs only the Pages
-// deploy; the worker/reindex stay manual on purpose.
+// Everything here is local and writes only into the source tree. Shipping is
+// PRINTED, never run: the site publishes through merge -> CI -> production ->
+// Workers Builds, so a local script has no business touching production. The
+// lwe-ask corpus is a separate auxiliary Worker and stays a manual deploy
+// because it needs the reindex secret.
 
 import { execSync } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -21,10 +23,9 @@ import { dirname, join } from "node:path";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..");
 const concept = process.argv[2];
-const deploy = process.argv.includes("--deploy");
 
 if (!concept || concept.startsWith("--")) {
-  console.log("usage: node lwe-pipeline/publish.mjs <concept> [--deploy]");
+  console.log("usage: node lwe-pipeline/publish.mjs <concept>");
   process.exit(1);
 }
 
@@ -55,14 +56,10 @@ if (existsSync(corpusFile)) {
 run(`node lwe-pipeline/generate.mjs wire`);
 
 console.log(`\n=== built locally. to ship: ===`);
-console.log(`  1) bump holding/sw.js CACHE_VERSION (nav.js/ask.js changes need it)`);
-console.log(`  2) wrangler pages deploy holding --project-name aadhar-sh --branch holding --commit-dirty=true`);
+console.log(`  1) commit the generated page + wired regions on a branch, open a PR`);
+console.log(`  2) merge it — CI promotes the tested commit to production and Workers`);
+console.log(`     Builds deploys the site Worker. Nothing to bump by hand.`);
 if (existsSync(corpusFile)) {
-  console.log(`  3) cd lwe-ask && npx wrangler deploy        # ship the updated corpus`);
+  console.log(`  3) cd lwe-ask && npx wrangler deploy        # the auxiliary ask Worker`);
   console.log(`  4) curl -X POST https://aadhar.sh/lwe/ask/reindex -H "x-reindex-secret: $REINDEX_SECRET"  # embed it`);
-}
-
-if (deploy) {
-  console.log(`\n--deploy: running the Pages deploy (worker + reindex left manual for safety)`);
-  run(`wrangler pages deploy holding --project-name aadhar-sh --branch holding --commit-dirty=true`);
 }

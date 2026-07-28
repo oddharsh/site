@@ -553,5 +553,3 @@ function findContent(root) {
   visit(root);
   return contentDiv || main || body || root;
 }
-
-export const __test = { parse, tokenize, renderBlocks, renderTable };
