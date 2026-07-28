@@ -703,6 +703,25 @@ curl -sD- -o /dev/null "https://aadhar.sh/images/<stem>.avif?v=<N>"  # a thumb: 
 curl -s "https://aadhar.sh/images/manifest.json" | jq length          # photo count
 ```
 
+### Markdown twins
+
+Nothing to run by hand: `build.mjs` generates them, and the deploy fails if fewer
+than 30 appear. To check the live surface:
+
+```bash
+curl -s -o /dev/null -w "%{http_code} %{content_type}\n" https://aadhar.sh/garage/encoding.md
+curl -s -o /dev/null -w "%{http_code} %{content_type}\n" -H "Accept: text/markdown" https://aadhar.sh/garage/encoding
+curl -s https://aadhar.sh/garage/llms.txt | head
+```
+
+The first two must both answer `text/markdown`; a browser `Accept` header and a
+bare `*/*` must both still get `text/html`. `/bot` and `/whoareyou` are the two
+twins written BY HAND (in `holding/md/`), because those pages render from Worker
+template literals no build step can read. Edit either page and the deploy fails
+until its twin agrees: `checkTwinFacts()` recomposes the User-Agent from
+`botauth.js`'s own constants and requires it verbatim in `bot.md`, so a
+`BOT_VERSION` bump is caught instead of quietly leaving the twin a version behind.
+
 ---
 
 ## The scripts (`holding/scripts/`)

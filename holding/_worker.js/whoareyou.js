@@ -1,8 +1,9 @@
 // whoareyou.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
+import { serveMarkdownTwin } from "./lib/assets.js";
 import { BOT_UA } from "./lib/botauth.js";
 import { lunaPage } from "./lib/chrome.js";
-import { esc } from "./lib/http.js";
+import { esc, wantsMarkdown } from "./lib/http.js";
 
 // ── /whoareyou handler ───────────────────────────────────────────────
 // shows the visitor what their HTTP request revealed. no logging, no
@@ -223,7 +224,17 @@ export async function handleWhoareyouJson(request) {
   });
 }
 
-export async function handleWhoareyou(request) {
+export async function handleWhoareyou(request, env) {
+  // The twin DESCRIBES this page rather than mirroring it: every value here is
+  // per-request, so there is nothing fixed to publish. An agent that wants the
+  // actual values for its own request should GET /whoareyou.json, which the twin
+  // points at. Markdown negotiation is still worth answering, because "what does
+  // this page tell you about yourself" is a question worth reading in prose.
+  if (wantsMarkdown(request)) {
+    const md = await serveMarkdownTwin(request, env, "/whoareyou.md");
+    if (md) return md;
+  }
+
   const { data, ua, rdap } = await gatherWhoareyou(request);
 
   return lunaPage({
