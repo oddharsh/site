@@ -437,6 +437,70 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
       </tbody>
     </table>
 
+    <h2>Progressive is a rendering choice, not just a byte one</h2>
+    <p class="note">Everything above treats <code>progressive</code> as a compression knob: it
+      optimizes Huffman coding, and <code>ProgressiveSearch</code> over 64 scan candidates took the
+      BD-rate from ~1.6% to ~4%. That is only half of what the setting does. Scan order also decides
+      <em>what the viewer sees while the file is still arriving</em>, and on a big enough image that
+      is the entire loading experience rather than a footnote to it. Kornel Lesi&nacute;ski
+      <a href="https://www.youtube.com/watch?v=jTXhYj2aCDU" rel="external">made the case at
+      perf.now() 2018</a>: the same bytes, reordered, show a recognisable picture at a quarter of the
+      file, and it costs nothing because it is not an extra request or a placeholder tier.</p>
+
+    <p class="note">Every JPG this site ships is already progressive, thumbnails included: 158 of 158
+      parse as <code>SOF2</code>, and the scan search picks a good script. On a representative
+      31.3&nbsp;KB thumbnail the seven scans land at these points in the file, so the first three,
+      which is where an image becomes recognisable, are inside the first third:</p>
+    <table class="enc-table">
+      <thead><tr><th>scan</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th></tr></thead>
+      <tbody>
+        <tr><td>byte offset</td><td class="num">0%</td><td class="num">15%</td><td class="num">34%</td>
+            <td class="num">85%</td><td class="num">87%</td><td class="num">90%</td><td class="num">94%</td></tr>
+      </tbody>
+    </table>
+
+    <p class="note"><b>And you will never see it work on a thumbnail.</b> At a 32&nbsp;KB median, a
+      typical 10-packet initial congestion window (~14&nbsp;KB) already carries 45% of the file, so
+      those first three scans arrive in the opening flight and the tile paints once. The scan search
+      still earns its place at this size, purely for the bytes it saves. The rendering half of the
+      feature is dormant.</p>
+
+    <p class="note">It wakes up at <a href="/photos">the full-size archive</a>. <code>/images/full/</code>
+      is the one image surface here with no AVIF tier and no <code>&lt;picture&gt;</code> around it:
+      the worker streams ~10&nbsp;MB from R2 as bare <code>image/jpeg</code>, and that single file is
+      the whole payload. That is also the awkward part of the format story, because <b>AVIF
+      structurally cannot do this</b>. Its layered mode caps at four stages, is effectively
+      Chromium-only, and is staged rather than incremental the way a JPEG scan script is; nothing
+      here emits layered AVIF anyway. So the format that wins every byte comparison on this page
+      loses the one property that matters when a single large image <em>is</em> the page. Both are
+      true at once, which is why the grid is AVIF and the archive is JPEG.</p>
+
+    <h3>What the archive tier actually costs</h3>
+    <p class="note">The archive is a second encode: a HIF is decoded to lossless PNG, then re-encoded
+      at <code>q100 4:2:2</code>. Scored against that decode with SSIMULACRA2, one 7728&times;5152
+      frame reads ~88, which looks alarming for <em>q100</em> until you sweep it. It is simply where
+      JPEG tops out on 40&nbsp;MP of sensor grain, and the metric is harsh on exactly the
+      high-frequency noise JPEG discards first.</p>
+    <table class="enc-table">
+      <thead><tr><th>quality</th><th>SSIMULACRA2</th><th>bytes</th><th>b/px</th></tr></thead>
+      <tbody>
+        <tr><td><code>q100</code> (shipped)</td><td class="num">88.15</td><td class="num">26.1 MB</td><td class="num">5.24</td></tr>
+        <tr><td><code>q95</code></td><td class="num">85.13</td><td class="num">16.3 MB</td><td class="num">3.28</td></tr>
+        <tr><td><code>q90</code></td><td class="num">80.74</td><td class="num">11.5 MB</td><td class="num">2.31</td></tr>
+        <tr><td><code>q84</code></td><td class="num">74.26</td><td class="num">7.8 MB</td><td class="num">1.57</td></tr>
+      </tbody>
+    </table>
+    <p class="note">Two things that ceiling is <em>not</em>, both checked rather than assumed.
+      Re-encoding at 4:4:4 instead of 4:2:2 scores 88.28 against 88.15, so the chroma round-trip is
+      not the limit and 4:2:2 keeps its ~13% byte saving for free. Flattening the reference to 8-bit
+      first scores 88.08 against 88.15, so the 10-bit&rarr;8-bit step is not the limit either: JPEG is
+      8-bit, and a HIF&apos;s extra depth is spent in the edit, never at the archive.</p>
+    <p class="note">That generation also costs far less than it looks once an image is resized for
+      anywhere else. Comparing a direct downscale of the HIF against a downscale of the archive JPEG,
+      the same pair that reads 88.15 at full resolution reads <b>94.62 at 1080px</b>: averaging ~50
+      source pixels into one washes most encoding artifacts out. Delivery scale forgives the second
+      encode. A 10&nbsp;MB download does not, which is the whole reason the archive is progressive.</p>
+
     <h2>What aadhar.sh actually ships</h2>
     <ul class="enc-ships">
       <li><b>AVIF primary</b> (<code>q63</code>, <code>4:2:0</code> color / <code>4:0:0</code> gray) +
@@ -445,8 +509,11 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
         pixels, so no off-square or EXIF bytes ride along.</li>
       <li><b>4:2:0 over 4:4:4</b> for color: storing the full chroma at 4:4:4 costs ~8% more
         bytes (the two AVIF q63 cards above) and buys no visible gain at thumbnail size, so 4:2:0 hands you free quality.</li>
-      <li><b>Full-res share copies in R2 at JPEG q95</b>: visually lossless, half the bytes
-        of q100; the true HEIF originals stay on local disk.</li>
+      <li><b>Full-res share copies in R2 at JPEG <code>q100 4:2:2</code></b>, progressive: 4:2:2 matches
+        the HIF&apos;s native sensor chroma, and the scan order is the point at 10&nbsp;MB. The true HEIF
+        originals stay on local disk. A JPG-source original is uploaded byte-for-byte from the camera,
+        rearranged to progressive by <code>jpegtran</code> on the way up: a lossless coefficient
+        reorder, never a re-encode.</li>
     </ul>
 
     <footer>
@@ -658,6 +725,28 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
         {
           "t": "Because its closed-loop target makes every photo a consistent SSIMULACRA2, ending the fixed-q scatter.",
           "why": "That knob (ApproxSsim2) is open-loop in 0.8.4 and did not hold the target on the corpus. It was not the reason to ship; the byte win plus the site's craft doctrine were."
+        }
+      ]
+    },
+    {
+      "q": "AVIF beats JPEG by ~34-36% at every resolution on this page, and the grid is AVIF-primary because of it. So why is the full-size archive at /images/full/ a JPEG?",
+      "options": [
+        {
+          "t": "A ~10 MB file is served as bare image/jpeg with no <picture> around it, so scan order IS the loading experience, and AVIF cannot render incrementally the way a progressive JPEG can.",
+          "ok": true,
+          "why": "Both facts hold at once. AVIF wins every byte comparison here, and it still loses the one property that matters when a single large image is the whole payload: its layered mode caps at four stages, is effectively Chromium-only, and is staged rather than incremental. The grid is AVIF because bytes dominate at 32 KB; the archive is JPEG because rendering order dominates at 10 MB."
+        },
+        {
+          "t": "AVIF loses its byte advantage at full resolution, so JPEG is simply smaller there.",
+          "why": "The resolution table shows the opposite: AVIF holds a steady ~34-36% lead at every size tested. The archive is JPEG despite AVIF being smaller, not because it is bigger."
+        },
+        {
+          "t": "Browsers cannot decode AVIF above a certain resolution, so a fallback is required.",
+          "why": "No such limit is why. Every engine that decodes AVIF decodes it at full resolution; the constraint is progressive rendering, not a size ceiling."
+        },
+        {
+          "t": "The archive keeps the camera original untouched, and cameras cannot write AVIF.",
+          "why": "Half true and still not the reason. A JPG-source original does go up byte-for-byte, but 112 of the archive files are re-encoded from HIF and could have been AVIF. They are JPEG so a 10 MB download paints progressively."
         }
       ]
     }
