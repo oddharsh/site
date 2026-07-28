@@ -19,8 +19,8 @@
 // docs sites) advertise no endpoint, so the send is a silent no-op. That means
 // there is no allowlist to maintain: send to every real citation, and only the
 // webmention-aware ones light up.
-import { lensHostBlocked, validateLensTarget } from "./lens.js";
-import { readResponseCapped } from "./lib/crawl.js";
+import { validateLensTarget } from "./lens.js";
+import { privateHostBlocked, readResponseCapped } from "./lib/crawl.js";
 import { WEBMENTION_PATHS, WEBMENTION_SECTIONS } from "./lib/site-manifest.js";
 
 const SEND_TIMEOUT_MS = 8000;
@@ -182,7 +182,7 @@ export function citationsIn(html, origin) {
     if (u.origin === origin) continue;                     // my own pages
     const bare = (u.host + u.pathname).replace(/^www\./, "").replace(/\/$/, "");
     if (SELF_LINK_HOSTS.some((self) => bare === self || bare.startsWith(self + "/"))) continue;
-    if (lensHostBlocked(u.hostname.toLowerCase())) continue;
+    if (privateHostBlocked(u.hostname.toLowerCase())) continue;
     const checked = validateLensTarget(u.toString());
     if (!checked.ok) continue;
     u.hash = "";                                           // #anchor is the same document
@@ -244,7 +244,7 @@ export async function discoverEndpoint(target) {
       signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
     });
     const finalUrl = res.url || target;
-    if (lensHostBlocked(new URL(finalUrl).hostname.toLowerCase())) return null;
+    if (privateHostBlocked(new URL(finalUrl).hostname.toLowerCase())) return null;
     const linkHeader = res.headers.get("link");
     // A HEAD-equivalent shortcut: if the Link header already names an endpoint,
     // don't read the body at all.
@@ -259,7 +259,7 @@ export async function discoverEndpoint(target) {
     // The endpoint itself is an attacker-supplied URL (it comes from a page I
     // don't control), so it gets the same guard as everything else.
     const checked = validateLensTarget(endpoint);
-    return checked.ok && !lensHostBlocked(new URL(checked.url).hostname.toLowerCase()) ? checked.url : null;
+    return checked.ok && !privateHostBlocked(new URL(checked.url).hostname.toLowerCase()) ? checked.url : null;
   } catch { return null; }
 }
 

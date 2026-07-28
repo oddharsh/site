@@ -24,6 +24,7 @@ import { execFileSync } from "node:child_process";
 import { readFile, stat } from "node:fs/promises";
 import { brotliCompressSync, constants as zlibConstants, gzipSync } from "node:zlib";
 import { transform as transformCss } from "lightningcss";
+import { HTML_MARKERS } from "./scripts/lib/html-markers.mjs";
 
 // Wire-size envelopes, not raw-source ceilings. These start from the current
 // built output with enough room for ordinary feature work; they are deliberately
@@ -58,13 +59,6 @@ const HTML_ENVELOPE = {
   gzipKiB: 22,
   brotliKiB: 20,
 };
-const HTML_MARKERS = [
-  ["JSON-LD", /<script\b[^>]*\btype=(?:"application\/ld\+json"|application\/ld\+json)(?:\s|>)/i],
-  ["photos", /<section\b[^>]*\bclass=(?:"[^"]*\bphotos\b"|'[^']*\bphotos\b'|photos)(?:\s|>)/i],
-  ["playlist", /<(?:ol|ul)\b[^>]*\bid=(?:"np-list"|np-list)(?:\s|>)/i],
-  ["speculation rules", /<script\b[^>]*\btype=(?:"speculationrules"|speculationrules)(?:\s|>)/i],
-  ["footer", /<footer\b/i],
-];
 
 const fails = [];
 const warnings = [];
