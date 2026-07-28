@@ -232,10 +232,22 @@ brotli q11 page twins already arrive carrying a `content-encoding`, and the edge
 does not recompress those — so the rule is a no-op on every path the build
 already optimized.
 
-Dashboard: **Rules → Overview → Create rule → Compression Rule**, match the
-default content types, then set the algorithms in this order. Or by API, where
-the array order *is* the preference (`auto` has to come last, and is the safety
-net that keeps an unusual client from getting no compression at all):
+**Dashboard: Rules → Overview → Create rule → Compression Rule.** Two choices,
+and both defaults in that form are the wrong ones for this site:
+
+| field | pick | not |
+|---|---|---|
+| If incoming requests match | **Default Content Types** | *All incoming requests* — it would hand the rule responses Cloudflare would otherwise leave alone, including already-compressed binaries. The goal is to change which encoding it picks where it already compresses, not to widen what gets compressed. |
+| Compression options | **Enable Brotli and Gzip Compression** | *Custom* — the preset already reads "Brotli is the preferred compression algorithm. It will automatically fall back to Gzip," which is exactly the intent. A hand-ordered list is one more thing to get wrong later for no gain. |
+
+The preset drops zstd from the list entirely rather than ranking it below brotli.
+That is fine and deliberate: every browser that speaks zstd also speaks gzip, so
+nothing loses compression, and it re-reads as an explicit decision rather than a
+subtle ordering. If Cloudflare's zstd ever overtakes their brotli here, this is
+the switch to flip back.
+
+By API, the same rule. Note `expression` is what makes it Default Content Types
+rather than everything, so it is not `"true"`:
 
 ```bash
 curl "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/rulesets/phases/http_response_compression/entrypoint" \
@@ -244,20 +256,23 @@ curl "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/rulesets/phases/http_r
   --json '{
     "rules": [
       {
-        "expression": "true",
+        "expression": "starts_with(http.response.content_type.media_type, \"text/\") or http.response.content_type.media_type in {\"application/json\" \"application/javascript\" \"image/svg+xml\" \"application/xml\"}",
         "action": "compress_response",
         "description": "brotli ahead of zstd: CF on-the-fly zstd measured +3.1% here (see infra.json)",
         "action_parameters": {
           "algorithms": [
             { "name": "brotli" },
-            { "name": "gzip" },
-            { "name": "auto" }
+            { "name": "gzip" }
           ]
         }
       }
     ]
   }'
 ```
+
+The dashboard is the better path here: it fills in Cloudflare's own current
+default-content-type list, which the expression above only approximates and which
+can drift as they add types.
 
 Verify in this order. The first is the point of the change; the other two are the
 regression check, because a compression change on a render-blocking path fails as
