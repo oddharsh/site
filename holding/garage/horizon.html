@@ -3661,14 +3661,15 @@ myButton.onclick = async () =&gt; {
         compliance. Header-level, so there&apos;s no chip above.
       </p>
       <p class="replaces">
-        On the site: I already hand-roll exactly this pattern in KV. The photo manifest carries a
-        <code>manifest:images:fresh</code> freshness sentinel next to its value, and
+        On the site: I already hand-roll exactly this pattern in KV. The now-playing tracks carry a
+        <code>tracks:&lt;id&gt;:fresh</code> freshness sentinel next to their value (the photo manifest
+        used to be the second example, until it left KV for the worker bundle entirely), and
         <code>cal/</code>&apos;s <code>fetchBusySWR</code> keeps a last-good calendar snapshot so a slow
-        ICS feed never gates the booking page. The now-playing tracks are the cleanest candidate to
+        ICS feed never gates the booking page. Those tracks are the cleanest candidate to
         hand back to the platform: set <code>stale-while-revalidate</code> on that cached JSON and the
         edge serves the last-good playlist instantly while it re-scrapes Spotify in the background,
         retiring the sentinel bookkeeping. The homepage stays <code>no-store</code> (it opts out by
-        design), so this lives entirely in the manifest/JSON layer underneath it.
+        design), so this lives entirely in the JSON layer underneath it.
       </p>
     </section>
 

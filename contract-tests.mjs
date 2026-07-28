@@ -27,7 +27,8 @@ import { AGENT_SURFACES, WEBMENTION_PATHS } from "./holding/_worker.js/lib/site-
 import { handleWritingIndex } from "./holding/_worker.js/writing.js";
 import { readManifest, workerModule, navFenceBody, readFenceBody } from "./scripts/gen-manifest.mjs";
 import { MCP_TOOLS } from "./serendipity/serendipity.js";
-import { handlePhotoQuery, queryPhotos } from "./holding/_worker.js/photos.js";
+import { derivePhotoPool, getImagesManifest, handlePhotoQuery, queryPhotos } from "./holding/_worker.js/photos.js";
+import { deadline } from "./holding/_worker.js/lib/cache.js";
 import { handleSearchJson, searchSite } from "./holding/_worker.js/search.js";
 import { getPublicAvailability } from "./cal/src/slots.js";
 import { botHeaders } from "./holding/_worker.js/lib/botauth.js";
@@ -920,4 +921,74 @@ test("published MCP server cards enumerate the live Serendipity tool catalog", a
       assert.ok((tool.description || "").trim(), `${file}: ${tool.name} needs a description`);
     }
   }
+});
+
+// ── the bundled photo pool ──────────────────────────────────────────
+// The pool is BUILD DATA: photos.js imports photo-index.json + hashes.json and
+// derives the render-ready rows at module scope. These tests run the real
+// derivation over the real committed files, so a half-run pipeline (an index
+// entry without hashes, a hash without an index entry, a malformed /i/ URL)
+// fails here as well as in check-photo-pipeline.mjs — the worker and the
+// checker must not be able to disagree about what is published.
+test("bundled photo pool derives one well-formed row per committed stem", async () => {
+  const index = JSON.parse(await readFile(new URL("holding/_worker.js/photo-index.json", import.meta.url), "utf8"));
+  const hashes = JSON.parse(await readFile(new URL("holding/images/hashes.json", import.meta.url), "utf8"));
+  const pool = derivePhotoPool(index, hashes);
+  assert.equal(pool.length, Object.keys(index).length, "every indexed stem must derive a row");
+  assert.equal(pool.length, Object.keys(hashes).length, "index and hashes must be in bijection");
+  for (const p of pool) {
+    assert.match(p.thumb_avif, new RegExp(`^/i/${p.stem}\\.[a-f0-9]{8}\\.avif$`));
+    assert.match(p.thumb_jpg, new RegExp(`^/i/${p.stem}\\.[a-f0-9]{8}\\.jpg$`));
+    assert.match(p.thumb_small, new RegExp(`^/i/${p.stem}-400\\.[a-f0-9]{8}\\.avif$`));
+    assert.ok(p.full.startsWith(`${p.stem}.`), `${p.stem}: full must be the stem's R2 key`);
+    assert.ok(Number.isInteger(p.size) && p.size > 0, `${p.stem}: size must be positive bytes`);
+  }
+  const fulls = pool.map((p) => p.full);
+  assert.deepEqual(fulls, [...fulls].sort((a, b) => a.localeCompare(b)), "pool keeps the manifest's sort order");
+  // an incomplete hash entry is SKIPPED, never rendered as /i/undefined
+  assert.equal(derivePhotoPool({ X1: { full: "X1.jpg", size: 1, uploaded: null } }, { X1: { a: "aaaaaaaa" } }).length, 0);
+});
+
+test("getImagesManifest serves the bundled pool without env", async () => {
+  // no env, no ctx: the pool must not depend on any binding
+  const pool = await getImagesManifest(undefined, undefined);
+  assert.ok(Array.isArray(pool) && pool.length > 0);
+});
+
+// ── the SSR deadline ────────────────────────────────────────────────
+// deadline() is what keeps a KV eviction (100-200ms, untunable) from gating
+// homepage TTFB. Two properties are load-bearing: a fast read never marks
+// itself deadlined (the timer is cleared on settle), and a slow read's
+// fallback arrives at the budget while the underlying promise keeps running
+// (so the read still warms the colo behind the response).
+test("deadline lets a fast read through unmarked", async () => {
+  let marked = false;
+  const v = await deadline(Promise.resolve("fast"), 50, null, () => { marked = true; });
+  assert.equal(v, "fast");
+  // give the (cleared) timer a chance to prove it was cleared
+  await new Promise((r) => setTimeout(r, 80));
+  assert.equal(marked, false, "a settled read must never be marked deadlined");
+});
+
+test("deadline ships the fallback at the budget and leaves the read running", async () => {
+  let marked = false;
+  let settled = false;
+  const slow = new Promise((r) => setTimeout(() => { settled = true; r("late"); }, 60));
+  const t0 = Date.now();
+  const v = await deadline(slow, 15, "fallback", () => { marked = true; });
+  assert.equal(v, "fallback");
+  assert.equal(marked, true);
+  assert.ok(Date.now() - t0 < 55, "fallback must arrive at the budget, not at the read");
+  assert.equal(settled, false, "the read must still be in flight when the fallback ships");
+  await slow;
+  assert.equal(settled, true, "the abandoned read still completes");
+});
+
+test("deadline distinguishes fallback values for slow vs missing", async () => {
+  // counter semantics: null = a real miss (triggers the mirror reseed),
+  // undefined = merely slow (must NOT trigger it)
+  const missing = await deadline(Promise.resolve(null), 50, undefined, () => {});
+  assert.equal(missing, null);
+  const slow = await deadline(new Promise(() => {}), 10, undefined, () => {});
+  assert.equal(slow, undefined);
 });

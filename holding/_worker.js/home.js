@@ -1,6 +1,7 @@
 // home.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
 import { COUNT_KEY, seedCountMirror } from "./counter.js";
+import { deadline } from "./lib/cache.js";
 import { escAttr, wantsMarkdown } from "./lib/http.js";
 import { HOMEPAGE_DISCOVERY_LINK, withHomepageDiscoveryHeaders } from "./lib/security.js";
 import { absThumb, getAltMap, getImagesManifest } from "./photos.js";
@@ -29,14 +30,22 @@ export function homepageHeadResponse(request) {
 }
 
 // ── homepage pre-render ─────────────────────────────────────────────
-// reads cached data from KV/manifest and uses Cloudflare's HTMLRewriter
-// to inject it into the static HTML before it leaves the worker. result:
-// the music section *and* the photo grid arrive populated on the first
-// HTML response — no client-side fetch round-trip, no loading flicker,
-// no layout shift when JS fills the slots. if any pre-render step fails,
-// we fall through to the static HTML and let the existing inline JS take
-// over (the client-side scripts detect pre-rendered state via "already
-// has href?" / "already populated?" checks and bail early).
+// uses Cloudflare's HTMLRewriter to inject dynamic data into the static HTML
+// before it leaves the worker. result: the music section *and* the photo grid
+// arrive populated on the first HTML response — no client-side fetch
+// round-trip, no loading flicker, no layout shift when JS fills the slots.
+//
+// what feeds it, and what each source may cost the response:
+//   - the photo pool: module memory (photos.js bundles photo-index.json +
+//     hashes.json at build). 0ms, cannot fail, cannot gate anything.
+//   - tracks + visit count: KV, behind a hard SSR_DEADLINE_MS budget. KV's
+//     per-colo cache is a shared LRU, so a key can read 100-200ms cold at any
+//     moment regardless of cacheTtl (eviction, not expiry — observed 2026-07-27/28).
+//     When the budget lapses the page ships without that section: tracks keeps
+//     its static markup (data-ssr="0") and a small inline script in index.html
+//     refills it from /rn/tracks.html, the same fragment this SSR would have
+//     injected; the counter keeps its static placeholder. The timed-out read
+//     itself keeps running and warms the colo for the next visitor.
 export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
   // Server-Timing: measure the TTFB-gating reads so the KV-shape experiments the
   // perf plan calls for run on real numbers, not guesses. Date.now() in Workers
@@ -52,9 +61,15 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
       (e) => { timings[name] = Date.now() - s; throw e; },
     );
   };
+  // deadlined spans carry `;desc=deadline` so a curl can tell "read was fast"
+  // from "read blew its budget and the page shipped without it" — the
+  // distinction this file's whole diagnosis history has hinged on.
+  const deadlined = new Set();
   const serverTiming = () => {
     timings.total = Date.now() - t0;
-    return Object.entries(timings).map(([k, v]) => `${k};dur=${v}`).join(", ");
+    return Object.entries(timings)
+      .map(([k, v]) => `${k};dur=${v}${deadlined.has(k) ? ";desc=deadline" : ""}`)
+      .join(", ");
   };
   // finalize a homepage response: drop the static index.html's ETag/Last-Modified
   // (the body is dynamic — a fresh random grid + live tracks — so a stable
@@ -67,15 +82,14 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
     return out;
   };
   // the page is private,no-cache, so the worker runs on every visit. these reads
-  // are mutually independent (the static asset, the tracks payload, the
-  // photo manifest, the alt map), so fire them concurrently instead
-  // of awaiting each in turn — collapses ~3 serial KV round-trips + the
-  // ASSETS fetch into roughly one wall-clock read. The tracks lookup needs
-  // tracks:<pid> keyed off playlist-id, read FRESH each render: it used to be
-  // cached in a module var, which meant /rn/set could swap the playlist while
-  // warm isolates kept SSRing the old id's tracks indefinitely (a module var
-  // can't be busted cross-isolate). The id read is a tiny KV get and it rides in
-  // this same Promise.all, so freshness costs nothing measurable.
+  // are mutually independent (the static asset, the tracks payload, the alt
+  // map, the visit count), so fire them concurrently instead of awaiting each
+  // in turn. The tracks lookup needs tracks:<pid> keyed off playlist-id, read
+  // FRESH each render: it used to be cached in a module var, which meant
+  // /rn/set could swap the playlist while warm isolates kept SSRing the old
+  // id's tracks indefinitely (a module var can't be busted cross-isolate). The
+  // id read is a tiny KV get and it rides in this same Promise.all, so
+  // freshness costs nothing measurable.
   const tracksChain = (async () => {
     if (!env.RN_KV) return null;
     try {
@@ -91,6 +105,9 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
     } catch {}
     return null;
   })();
+  // the photo pool: bundled module data behind a kept-async signature, so this
+  // "read" resolves on the microtask queue. No span for it in Server-Timing —
+  // Date.now() only advances across I/O, and there is none here to see.
   const manifestP = getImagesManifest(env, ctx).then(
     arr => (Array.isArray(arr) && arr.length ? arr : null),
     () => null
@@ -141,19 +158,34 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
     })(),
   });
 
+  // SSR_DEADLINE_MS is the budget a KV-backed section gets before the page
+  // ships without it. Warm reads land in 3-10ms so the race is normally a
+  // spectator; it exists for the eviction tail, where a read that would have
+  // taken 200ms instead costs the response at most this. 25ms sits above every
+  // warm reading observed in production (max 22ms, a cold-isolate alt fetch)
+  // and far below the tail it's fencing off.
+  //
+  // Distinct fallbacks on purpose: tracks → null (indistinguishable from "no
+  // playlist", both leave data-ssr="0" for the client refill); counter →
+  // undefined, because null means MISSING and triggers the out-of-band mirror
+  // reseed below — a slow read must not be mistaken for a lost mirror, or every
+  // deadline would fire a pointless DO peek.
+  const SSR_DEADLINE_MS = 25;
   const [res, tracksPayload, photos, altMap, visitCount] = await Promise.all([
     timed("assets", env.ASSETS.fetch(assetRequest)),
-    timed("tracks", tracksChain),
-    timed("manifest", manifestP),
+    timed("tracks", deadline(tracksChain, SSR_DEADLINE_MS, null, () => deadlined.add("tracks"))),
+    manifestP,
     timed("alt", getAltMap(env)),   // AI alt text; module-cached, so this is free on warm isolates
-    timed("counter", counterP),
+    timed("counter", deadline(counterP, SSR_DEADLINE_MS, undefined, () => deadlined.add("counter"))),
   ]);
 
   // a cold mirror (first render after this shipped, or a KV eviction) shows the
   // static placeholder and reseeds itself out-of-band, so the next visitor gets a
   // real number. never awaited: a missing mirror must not put the DO back on the
-  // render path, which is the entire point of the mirror.
-  if (visitCount == null && env.COUNTER && env.RN_KV) ctx.waitUntil(seedCountMirror(env));
+  // render path, which is the entire point of the mirror. `=== null` and not
+  // `== null`: undefined is the deadline sentinel (mirror probably fine, just
+  // slow), and reseeding on it would peek the DO for nothing.
+  if (visitCount === null && env.COUNTER && env.RN_KV) ctx.waitUntil(seedCountMirror(env));
 
   // footer "Last modified" → the most recently added photo (a real, datable
   // content change; the pool grows often). Static assets are content-addressed
@@ -171,9 +203,11 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
     }
   }
 
-  // bail if no dynamic data is available — the static HTML's inline
-  // JS will pick up the slack on the client (and the hardcoded "000042"
-  // stays in the footer as a graceful fallback).
+  // bail if no dynamic data is available — the static markup keeps its honest
+  // empty states (the tracks refill script may still fill that one section
+  // client-side, and the hardcoded "000042" stays in the footer). With the pool
+  // bundled, `photos` is null only if the committed index is empty, so this
+  // path is one bad build away from dead rather than one slow read away.
   if (!tracksPayload?.tracks?.length && !photos && visitCount == null && !lastModStr) {
     return finish(withHomepageDiscoveryHeaders(res));
   }
@@ -199,9 +233,8 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
   // CF/browser/intermediaries don't pin this selection across refreshes.
   // <picture> uses AVIF primary + JPG fallback; data-* attrs feed the
   // hover tooltip; target=_blank + rel=noopener on the anchor.
-  // 400px-tier URL, straight from the manifest (absThumb tolerates a stale
-  // pre-hash KV manifest; unhashed stems never reach here, they're skipped
-  // at manifest-build time)
+  // 400px-tier URL, straight from the pool (unhashed stems never reach here;
+  // derivePhotoPool skips them and check-photo-pipeline.mjs fails CI on them)
   const smallOf = (p) => (p.thumb_small ? absThumb(p.thumb_small) : null);
 
   if (photos) {
@@ -240,8 +273,7 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
       // spec wants descriptor use to be uniform across a picture's sources,
       // and Nu flags the mixed form. small missing → single 600px source.
       // ordered first: <picture> uses the first source whose media matches.
-      // URLs come from the manifest verbatim (absThumb tolerates a stale
-      // pre-hash manifest during the cutover window).
+      // URLs come from the pool verbatim (always absolute /i/ form).
       const small = smallOf(p);
       const large = p.thumb_avif ? absThumb(p.thumb_avif) : null;
       const desktopSrc = large
