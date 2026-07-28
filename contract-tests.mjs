@@ -7,6 +7,7 @@
 // the same assertions against a deployed or local HTTP surface.
 
 import assert from "node:assert/strict";
+import { existsSync, readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
@@ -26,6 +27,7 @@ import { sign } from "./cal/src/sign.js";
 import { AGENT_SURFACES, WEBMENTION_PATHS } from "./holding/_worker.js/lib/site-manifest.js";
 import { handleWritingIndex } from "./holding/_worker.js/writing.js";
 import { readManifest, workerModule, navFenceBody, readFenceBody } from "./scripts/gen-manifest.mjs";
+import { INDEXED_SECTIONS, TWIN_FACTS, buildTwins, checkTwinFacts, htmlFileFor, twinPath } from "./scripts/gen-md-twins.mjs";
 import { MCP_TOOLS } from "./serendipity/serendipity.js";
 import { handlePhotoQuery, queryPhotos } from "./holding/_worker.js/photos.js";
 import { handleSearchJson, searchSite } from "./holding/_worker.js/search.js";
@@ -920,4 +922,123 @@ test("published MCP server cards enumerate the live Serendipity tool catalog", a
       assert.ok((tool.description || "").trim(), `${file}: ${tool.name} needs a description`);
     }
   }
+});
+
+// ── Markdown twins ───────────────────────────────────────────────────────────
+// The twins are build OUTPUT, so these test the generator rather than committed
+// files. The point of generating them is that no committed copy can drift; the
+// point of testing the generator is that "no copy to drift" is worthless if the
+// copy it produces is wrong.
+
+test("every static surface with prose gets a Markdown twin", async () => {
+  const { files, skipped } = buildTwins(".");
+  const manifest = JSON.parse(await readFile(new URL("site-manifest.json", import.meta.url), "utf8"));
+
+  for (const surface of manifest.surfaces) {
+    if (!htmlFileFor(surface, ".")) continue;                 // Worker-rendered
+    if (surface.path === "/") continue;                       // hand-authored, committed
+    const twin = files.get(twinPath(surface.path));
+    assert.ok(twin, `${surface.path} has a source page but no twin`);
+    assert.match(twin, /^---\ntitle: /, `${surface.path}: twin must open with frontmatter`);
+    assert.ok(twin.includes(`path: "${surface.path}"`), `${surface.path}: twin must name its own path`);
+    assert.ok(twin.includes("> Site index: https://aadhar.sh/llms.txt"),
+      `${surface.path}: twin must point a reader at the index`);
+    assert.ok(twin.trimEnd().endsWith(`Source: https://aadhar.sh${surface.path}`),
+      `${surface.path}: twin must end by naming the page it mirrors`);
+  }
+
+  // /photos, /around, /ledger and friends render from the Worker and have no
+  // prose source. They are skipped on purpose; llms.txt points at their JSON.
+  assert.ok(skipped.includes("/photos"), "Worker-rendered surfaces should be skipped, not faked");
+  assert.ok(!files.has("/index.md"), "the hand-authored homepage twin must not be regenerated");
+});
+
+// The understanding check on every garage/lwe page ships its questions AND its
+// correct answers in an inline <script type="application/json" id="luq-data">.
+// A converter that walked into script bodies would publish the answer key as
+// prose. This is the single most important thing the twin generator must not do.
+test("no twin leaks an understanding-check answer key", async () => {
+  const { files } = buildTwins(".");
+  let checked = 0;
+
+  for (const [rel, twin] of files) {
+    if (!rel.endsWith(".md")) continue;
+    const page = rel.replace(/\.md$/, "");
+    const src = ["holding" + page + ".html", "holding" + page + "/index.html"]
+      .find((p) => existsSync(p));
+    if (!src) continue;
+
+    const block = /id="luq-data"[^>]*>([\s\S]*?)<\/script>/.exec(await readFile(src, "utf8"));
+    if (!block) continue;
+    let data; try { data = JSON.parse(block[1]); } catch { continue; }
+
+    // The real shape is {questions:[{q, options:[{t, ok, why}]}]}. `t` is the
+    // option text, `why` is the explanation, and `ok` flags the correct one, so
+    // every one of those three is answer-key material. An earlier version of
+    // this test read option.text/option.label, found undefined, and asserted
+    // nothing at all while still reporting a pass — hence the strings counter.
+    for (const question of data.questions || []) {
+      for (const field of [question.q, ...(question.options || []).flatMap((o) => [o.t, o.why])]) {
+        if (typeof field !== "string" || field.length < 25) continue;
+        checked++;
+        assert.ok(!twin.includes(field), `${rel} leaked quiz content: ${field.slice(0, 60)}`);
+      }
+    }
+  }
+  // guards against the assertions above going vacuous again
+  assert.ok(checked > 200, `expected to check hundreds of quiz strings, saw ${checked}`);
+});
+
+test("twins carry no unconverted markup and no interactive controls", async () => {
+  const { files } = buildTwins(".");
+  for (const [rel, twin] of files) {
+    if (!rel.endsWith(".md")) continue;
+    // Strip fenced and inline code first: a page ABOUT html legitimately shows
+    // <div> and <style> inside backticks, and that is content, not a leak.
+    const prose = twin.replace(/```[\s\S]*?```/g, "").replace(/`[^`\n]*`/g, "");
+    // A backslash-escaped bracket is prose too. /garage/horizon has headings
+    // named "customizable \<select\>" and "\<input type=checkbox switch\>";
+    // those are the feature's NAME, and escaping them is the converter working.
+    assert.doesNotMatch(prose, /(?<!\\)<\/?(script|style|button|input|select|textarea|svg|canvas)\b/i,
+      `${rel} carries markup that should have been dropped`);
+    assert.doesNotMatch(prose, /\bclass="/, `${rel} carries raw attributes`);
+  }
+});
+
+test("section indexes list their own pages and link the twins", async () => {
+  const { files } = buildTwins(".");
+  const manifest = JSON.parse(await readFile(new URL("site-manifest.json", import.meta.url), "utf8"));
+
+  for (const section of INDEXED_SECTIONS) {
+    const index = files.get(`/${section}/llms.txt`);
+    assert.ok(index, `${section} has no llms.txt`);
+    const own = manifest.surfaces.filter((s) => s.section === section);
+    assert.ok(own.length > 1, `${section} should have pages to index`);
+    for (const surface of own) {
+      assert.ok(index.includes(`https://aadhar.sh${twinPath(surface.path)}`),
+        `/${section}/llms.txt omits ${surface.path}`);
+    }
+    // A section index that pointed at the HTML would be handing an agent the
+    // representation it did not ask for.
+    assert.doesNotMatch(index, /\]\(https:\/\/aadhar\.sh\/[^)]*(?<!\.md)\)/,
+      `/${section}/llms.txt should link .md twins`);
+  }
+});
+
+// /bot and /whoareyou render from template literals, so their twins are written
+// by hand and CAN drift. checkTwinFacts pins the load-bearing strings in both
+// directions: bump BOT_VERSION and the deploy fails until bot.md agrees.
+test("hand-authored twins still agree with the Worker that renders their page", () => {
+  assert.deepEqual(checkTwinFacts("."), []);
+});
+
+test("the twin fact-check actually fails when the page changes under it", () => {
+  const facts = TWIN_FACTS.find((f) => f.twin === "holding/md/bot.md");
+  const ua = facts.facts.find((f) => f.label === "User-Agent");
+  // simulate a version bump in botauth.js: the derived UA changes, and the
+  // hand-written twin no longer contains it
+  const bumped = ua.derive('const BOT_NAME = "AadharshBot";\nconst BOT_VERSION = "9.9";');
+  assert.equal(bumped, "AadharshBot/9.9 (+https://aadhar.sh/bot)");
+  const twin = readFileSync("holding/md/bot.md", "utf8");
+  assert.ok(!twin.includes(bumped), "a bumped version must not already be in the twin");
 });

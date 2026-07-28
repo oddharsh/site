@@ -482,6 +482,33 @@ await cp("serendipity/serendipity.js", `${OUT}/serendipity/serendipity.js`);
   console.log(`client edge: mirrored into ${mirrored} staged pages from luna.css (${skipped} files carry no window geometry)`);
 }
 
+// 1c) the Markdown twins + per-section llms.txt indexes. Generated from the
+// READABLE source in holding/, never from the staged copy: the staged pages are
+// about to be rewritten (client edge, hashed asset refs) and index.html is about
+// to be minified, none of which belongs in a twin. Because a twin is a pure
+// function of source bytes, generating it here makes drift structurally
+// impossible — no committed copy to fall behind, no step to forget. Same
+// argument the dcz deltas won.
+{
+  const { buildTwins, checkTwinFacts } = await import("./scripts/gen-md-twins.mjs");
+  const drift = checkTwinFacts(".");
+  if (drift.length) {
+    throw new Error("md twins: a hand-authored twin disagrees with the Worker that renders its page:\n  - " + drift.join("\n  - "));
+  }
+  const { files, skipped } = buildTwins(".");
+  for (const [rel, body] of files) {
+    const dest = `${OUT}/holding${rel}`;
+    await mkdir(dest.slice(0, dest.lastIndexOf("/")), { recursive: true });
+    await writeFile(dest, body);
+  }
+  const twins = [...files.keys()].filter((k) => k.endsWith(".md")).length;
+  const indexes = [...files.keys()].filter((k) => k.endsWith("llms.txt")).length;
+  // Losing the twins would otherwise be silent: pages keep serving HTML and only
+  // `Accept: text/markdown` degrades, which nothing else in the build watches.
+  if (twins < 30) throw new Error(`md twins: generated only ${twins} twins (expected 30+) — did site-manifest.json or the page shape change?`);
+  console.log(`md twins: ${twins} pages + ${indexes} section indexes staged (${skipped.length} Worker-rendered surfaces carry no prose source)`);
+}
+
 const minifyJavaScript = (filename, sourceText) => {
   const result = minifySync(filename, sourceText, {
     module: false,

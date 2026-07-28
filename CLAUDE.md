@@ -141,7 +141,8 @@ Single-page personal site at `aadhar.sh`. A Cloudflare Worker with static assets
 | `holding/_headers` | Static-asset cache + security headers (CSP, Permissions-Policy, etc.). Applied to direct static-asset requests; the worker overrides cache-control for select paths. |
 | `holding/sw.js` | RETIRED (v136, 2026-07-03): now a ~15-line unregister stub (skipWaiting, delete caches, claim, unregister) that must keep serving 200 for a year+ so installed copies clean themselves up. No CACHE_VERSION anymore; the deploy-log vnum lives in D1 alone (bump-version.sh derives the next from MAX(vnum)). Repeat-visit speed comes from immutable assets + bfcache + speculation prerender. |
 | `holding/llms.txt` | The llms.txt format — concise site summary for LLMs. Linked from `<link rel="alternate">`. |
-| `holding/index.md` | Markdown source of homepage copy (used by `/llms.txt` and as a fallback). |
+| `holding/index.md` | Markdown source of homepage copy (used by `/llms.txt` and as a fallback). The one COMMITTED Markdown twin: `gen-md-twins.mjs` skips any path that already has one, so this hand-written prose is never regenerated over. |
+| `holding/md/` | Hand-authored Markdown twins for the two Worker-rendered prose pages, `/bot` and `/whoareyou`, whose text lives in template literals no build step can read. `.assetsignore`d (build input, not a public URL): the generator publishes them at `/bot.md` and `/whoareyou.md`. `checkTwinFacts()` pins the load-bearing strings against the Worker in BOTH directions, so bumping `BOT_VERSION` fails the deploy until `bot.md` agrees. |
 | `holding/sitemap.xml`, `robots.txt` | Standard SEO files. robots.txt explicitly allows AadharshBot. |
 | `holding/.well-known/http-message-signatures-directory` | JWKS for AadharshBot's Ed25519 public key (Web Bot Auth IETF draft). |
 | `holding/images/` + `holding/i/` | `images/` holds the photo DATA surfaces: `metadata.json` (the EXIF RECORD, long field names + the Fuji recipe card), `exif.json` (the tooltip's TEXT tier: every photo's short-key EXIF in one 2.6KB-brotli file, warmed once on idle because the homepage draws a fresh random 12 of 158 per request and a per-slot warm-up was cold nearly every visit), `meta/<stem>.json` (per-photo EXIF plus the four 64-bin histogram channels — the BARS tier, fetched only on the hover that needs them, and the self-healing fallback for a stem missing from a cached `exif.json`), `alt.json` (AI captions), `hashes.json` (stem to hash8 map). The pixel tiers (600px AVIF+JPG squares + 400px mobile AVIF) live in `i/` under content-hashed names, 474 files for 158 photos. |
@@ -252,6 +253,52 @@ and uses `HTMLRewriter` to inject them into the static HTML:
 If either chunk fails (KV empty, R2 missing, etc.), the rewriter silently
 skips and the inline JS in `index.html` takes over with a client-side
 fetch.
+
+### Markdown twins (`scripts/gen-md-twins.mjs`)
+
+Every page with prose ships a Markdown twin at `<path>.md`, and the two big
+sections carry their own `llms.txt`. `/garage/encoding` and
+`/garage/encoding.md` are the same content; `/garage/llms.txt` indexes the 17
+garage pages so an agent does not have to pull the whole root index to find one.
+
+**Twins are BUILD OUTPUT, never committed.** `build.mjs` step 1c generates them
+from the readable source in `holding/` into `.build/holding/`. A twin is a pure
+function of the page's bytes, so there is no committed copy that can fall behind
+and no step anyone can forget. Same argument the dcz deltas won. It reads the
+SOURCE tree deliberately: the staged copy is about to be rewritten (client edge,
+hashed asset refs) and `index.html` minified, none of which belongs in a twin.
+
+Two rules the converter (`scripts/lib/html-to-md.mjs`) exists to enforce:
+
+1. **`<script>` bodies never reach the tree.** Every garage/lwe page carries a
+   `<script type="application/json" id="luq-data">` holding the understanding
+   check's questions, its per-option explanations, AND its `ok` answer flags. A
+   converter that walked into script bodies would publish the answer key as
+   prose. A contract test asserts this over all 1100+ quiz strings; an earlier
+   version of that test read the wrong field names, asserted nothing, and still
+   reported a pass, so it now counts what it checked and fails if the count
+   collapses.
+2. **Interactive controls render nothing.** A `<button>` in a live demo is not
+   content, and its label without its behavior is a claim an agent would read as
+   fact. The prose around the demo still converts.
+
+The converter reads each page's OWN inline `<style>` to find classes the CSS
+takes out of the inline flow (`display:block`, `float`), because otherwise a
+figcaption whose separation lives entirely in CSS renders as
+`**PNG** lossless178.7 KB1.72 b/px`. No CSS engine, just the rule blocks already
+in hand.
+
+Negotiation is a bonus on top, not the mechanism: `Accept: text/markdown` at the
+page's own URL works wherever the Worker already sees the request
+(`/garage/*`, `/lwe/*`, `/`, `/bot`, `/whoareyou` — the first two are worker-first
+already, for dcz deltas, so this costs no new invocations). Edge-direct pages
+like `/pixel-peeper` answer at their `.md` URL only. The negotiated response is
+`no-store` because the edge caches per URL, not per Accept; the `.md` URL is the
+cacheable representation.
+
+Adding a page needs no work here: register it in `site-manifest.json` as usual
+and the twin appears. `build.mjs` fails the deploy if fewer than 30 generate,
+since losing them would otherwise be silent (pages keep serving HTML).
 
 ### AadharshBot — the branded crawler
 
