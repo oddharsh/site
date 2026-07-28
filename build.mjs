@@ -22,7 +22,7 @@
 
 import { createHash } from "node:crypto";
 import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
-import { brotliCompressSync, constants as zlibConstants, zstdCompressSync } from "node:zlib";
+import { brotliCompressSync, brotliDecompressSync, constants as zlibConstants, zstdCompressSync } from "node:zlib";
 import minifyHtml from "@minify-html/node";
 import { transform as transformCss } from "lightningcss";
 import { minifySync } from "oxc-minify";
@@ -324,9 +324,52 @@ async function checkInvariants() {
     }
   } catch (e) { warn.push(`taste tripwire could not run: ${e.message}`); }
 
+  // 10 (hard) — no git conflict markers in anything the site serves. A rebase on
+  // 2026-07-27 left an empty-vs-empty conflict in holding/garage/compression.html;
+  // `git add -A` swallowed the three residue lines, and the build, the perf
+  // budget, and all 24 contract tests passed. A human caught them by eye, in a
+  // screenshot, rendering as visible text above the taskbar. Nothing in the
+  // toolchain would have stopped them. A marker in a served file is never
+  // intentional, so this blocks rather than warns.
+  //
+  // Anchored at line start ONLY, and `=======` must be the WHOLE line. The garage
+  // pages legitimately discuss diffs, heredocs, and shell redirection in prose and
+  // in code samples, so an unanchored match would false-fire on real content —
+  // which is exactly how a guard on the one deploy path ends up commented out.
+  let conflictScanned = 0;
+  try {
+    const collect = async (dir, match, skip = /^$/, out = []) => {
+      for (const e of await readdir(dir, { withFileTypes: true })) {
+        const p = `${dir}/${e.name}`;
+        if (e.isDirectory()) { if (!skip.test(e.name)) await collect(p, match, skip, out); }
+        else if (match.test(e.name)) out.push(p);
+      }
+      return out;
+    };
+    const flat = async (dir, match) =>
+      (await readdir(dir, { withFileTypes: true })).filter((e) => e.isFile() && match.test(e.name)).map((e) => `${dir}/${e.name}`);
+    const files = [
+      ...await collect("holding", /\.html$/, /^(i|images|og|cars|node_modules)$/),
+      ...await flat("holding", /\.(js|css)$/),
+      ...await collect("holding/_worker.js", /\.js$/),
+      ...await flat("cal/src", /\.js$/),
+      ...await flat("serendipity", /\.js$/),
+    ];
+    const MARKER = /^(<{7} |={7}$|>{7} )/;
+    for (const f of files) {
+      let src; try { src = await read(f); } catch { continue; }
+      conflictScanned++;
+      const lines = src.split("\n");
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].replace(/\r$/, "");
+        if (MARKER.test(line)) hard.push(`${f}:${i + 1}: git conflict marker in a served file — ${line.slice(0, 60)}`);
+      }
+    }
+  } catch (e) { hard.push(`conflict-marker check could not run: ${e.message}`); }
+
   if (warn.length) console.warn("build: invariant WARNINGS (deploy continues):\n  - " + warn.join("\n  - "));
   if (hard.length) throw new Error("build: invariant tripwires FAILED, deploy blocked:\n  - " + hard.join("\n  - "));
-  console.log(`invariants ok: ${routeKeys.length + prefixProbes.length} routes mirrored (${prefixProbes.length} prefix), CSP style-src, blink-fix, generator, geometry, ${skillsChecked} skill digest${skillsChecked === 1 ? "" : "s"}, ${manifestChecked} surfaces registered, ${tasteScanned} files taste-scanned${tasteOk.length ? ` (${tasteOk.length} taste-ok: ${tasteOk.join("; ")})` : ""}${warn.length ? " (with warnings above)" : ""}`);
+  console.log(`invariants ok: ${routeKeys.length + prefixProbes.length} routes mirrored (${prefixProbes.length} prefix), CSP style-src, blink-fix, generator, geometry, ${skillsChecked} skill digest${skillsChecked === 1 ? "" : "s"}, ${manifestChecked} surfaces registered, ${tasteScanned} files taste-scanned${tasteOk.length ? ` (${tasteOk.length} taste-ok: ${tasteOk.join("; ")})` : ""}, ${conflictScanned} files conflict-free${warn.length ? " (with warnings above)" : ""}`);
 }
 
 // ── the client edge, authored once and mirrored at deploy ────────────────────
@@ -391,6 +434,14 @@ const SHELLS = [
 // fail fast on a broken invariant before doing any staging work
 await checkInvariants();
 
+// Generated delta dirs must never exist in the SOURCE tree. They used to be committed;
+// now build.mjs emits them into .build/ only. A leftover holding/ad/ or holding/pd/ gets
+// copied in by the staging step below and ships artifacts current code would never build
+// — which is exactly how an icons.*.dcz survived #119's svg exclusion locally, long after
+// the guard that forbids it was in place. Delete rather than warn: they are pure output.
+for (const dead of ["holding/ad", "holding/pd"]) {
+  await rm(dead, { recursive: true, force: true });
+}
 await rm(OUT, { recursive: true, force: true });
 await mkdir(OUT, { recursive: true });
 
@@ -719,8 +770,97 @@ for (const [file, srcPath, marker] of SHELLS) {
     // src= rather than href= because the refs are <img> against <view>s, not
     // <svg><use> against <symbol>s — see the WebKit note in gen-desktop-partial.mjs.
     { attr: "src", from: "/icons.svg", base: "icons", ext: "svg", frag: true, witness: "_worker.js/lib/desktop.js" },
+    // quiz.js + notepad.js joined 2026-07-27. Both were served unhashed at max-age=300,
+    // so hashing them buys a year + immutable outright, and enrolling them in /a/ means
+    // they inherit the brotli q11 twin and the dcz delta path for free.
+    //
+    // These two and no others of the five deferred islands. tooltip.js and hoist.js load
+    // via `import("/tooltip.js")`, and lens-browser.js via `script.src = "..."`: all three
+    // are JS STRING literals, not attributes. The repointer below is attribute-scoped on
+    // purpose, so that it cannot rewrite the garage pages' documentary /nav.js mentions.
+    // It would silently miss those three and the witness tripwire would fail the deploy.
+    // Moving them needs a different mechanism, not another line here.
+    { attr: "src", from: "/quiz.js",    base: "quiz",    ext: "js", witness: "garage/encoding.html" },
+    { attr: "src", from: "/notepad.js", base: "notepad", ext: "js", witness: "_worker.js/writing.js" },
   ];
-  const reps = [], hashedFor = {};
+  const hashedFor = {};
+  // ── phase 0: the three JS-STRING-loaded islands (tooltip, hoist, lens-browser) ──
+  // These load via `import("/hoist.js")` / `script.src = "/lens-browser.js?v=1"`, which
+  // the attribute-scoped repointer below cannot touch. They are hashed FIRST, and their
+  // loader strings rewritten across the staged tree BEFORE nav.js / lens.js are hashed,
+  // so a dependent's hash covers its final bytes (nav.js imports hoist; lens.js loads
+  // lens-browser). The patterns are exact call-syntax matches — `import((["'`])/x.js\1)`
+  // — so the garage pages' documentary "/hoist.js" prose mentions cannot be caught, which
+  // is the precision the attribute rule existed to protect. The ?v=1 ritual on
+  // lens-browser retires here: the hash IS the version.
+  //
+  // hoist has TWO loader shapes, and missing the second one cost a real serialized
+  // fetch in production: nav.js + index.html reach it through `import("/hoist.js")`,
+  // but tooltip.js reaches it through a STATIC `import {...} from "/hoist.js"`. With
+  // only the call-syntax pattern, tooltip.js kept the unhashed specifier, so every
+  // homepage load fetched hoist twice — once hashed (the inline warm-up, parallel with
+  // tooltip.js) and once unhashed, discovered only after tooltip.js had parsed. Measured
+  // on production 2026-07-27: tooltip.js finished at 1112ms and /hoist.js only STARTED at
+  // 1114ms, the one serialized fetch left on the page, and the duplicate came back
+  // max-age=300 while its immutable twin sat in cache unused.
+  //
+  // ORDER IS LOAD-BEARING and the list is sorted leaves-first. Each asset's rewrites are
+  // applied to the staged tree immediately after it is hashed, so a dependent hashed
+  // later reads bytes that already carry its dependency's hashed URL. tooltip depends on
+  // hoist, so hoist must be hashed and rewritten first — otherwise tooltip's `/a/` copy
+  // ships the unhashed specifier forever, since the rewrite pass deliberately skips `a/`.
+  const STRING_ASSETS = [
+    { file: "/hoist.js",        base: "hoist",        mk: (to) => [
+      [/import\((["'`])\/hoist\.js\1\)/g, `import($1${to}$1)`],
+      [/(\bfrom\s*)(["'`])\/hoist\.js\2/g, `$1$2${to}$2`] ] },
+    { file: "/lens-browser.js", base: "lens-browser", mk: (to) => [
+      [/(["'`])\/lens-browser\.js\?v=1\1/g, `$1${to}$1`] ] },
+    { file: "/tooltip.js",      base: "tooltip",      mk: (to) => [
+      [/import\((["'`])\/tooltip\.js\1\)/g, `import($1${to}$1)`] ] },
+  ];
+  {
+    // Every staged surface that can carry a loader: HTML pages, the top-level shell
+    // scripts themselves (nav.js imports hoist), worker modules, serendipity. NOT the
+    // .src twins, and NOT `a/` — the hashed copies are already-final bytes, which is
+    // precisely why each asset must be rewritten before the next one is hashed.
+    const stringTargets = [`${OUT}/serendipity/serendipity.js`];
+    for (const rel of await readdir(`${OUT}/holding`, { recursive: true })) {
+      if (rel.includes(".src.")) continue;
+      if (rel.endsWith(".html") || (rel.endsWith(".js") && !rel.startsWith("a/"))) {
+        stringTargets.push(`${OUT}/holding/${rel}`);
+      }
+    }
+    let hits = 0;
+    for (const a of STRING_ASSETS) {
+      const bytes = await readFile(`${OUT}/holding${a.file}`);
+      const to = `/a/${a.base}.${createHash("sha256").update(bytes).digest("hex").slice(0, 8)}.js`;
+      await writeFile(`${OUT}/holding${to}`, bytes);
+      hashedFor[a.base] = to;
+      const reps = a.mk(to);
+      for (const path of stringTargets) {
+        let t; try { t = await readFile(path, "utf8"); } catch { continue; }
+        let out = t;
+        for (const [re, sub] of reps) out = out.replace(re, sub);
+        if (out !== t) { await writeFile(path, out); hits++; }
+      }
+      console.log(`hashed asset (string-loaded): ${a.file} -> ${to} (${bytes.length} bytes)`);
+    }
+    // Witnesses: each island's loader must now carry the hashed URL, or the enrolment
+    // silently did nothing and the deploy must not proceed.
+    const idx = await readFile(`${OUT}/holding/index.html`, "utf8");
+    const nav = await readFile(`${OUT}/holding/nav.js`, "utf8");
+    const lens = await readFile(`${OUT}/holding/lens.js`, "utf8");
+    const tip = await readFile(`${OUT}/holding${hashedFor.tooltip}`, "utf8");
+    if (!idx.includes(hashedFor.tooltip)) throw new Error("index.html was not repointed to hashed tooltip.js");
+    if (!idx.includes(hashedFor.hoist) || !nav.includes(hashedFor.hoist)) throw new Error("a hoist.js loader was not repointed (index.html or nav.js)");
+    if (!lens.includes(hashedFor["lens-browser"])) throw new Error("lens.js was not repointed to hashed lens-browser.js");
+    // the SERVED tooltip bytes, not the staged source: this is the copy the browser gets,
+    // and the one the old ordering left pointing at the unhashed duplicate.
+    if (!tip.includes(hashedFor.hoist)) throw new Error(`${hashedFor.tooltip} still imports an unhashed /hoist.js — STRING_ASSETS ordering broke (hoist must be hashed before tooltip)`);
+    console.log(`string-loaded islands: rewritten across ${hits} staged files`);
+  }
+
+  const reps = [];
   for (const a of ASSETS) {
     const bytes = await readFile(`${OUT}/holding${a.from}`);   // exact served bytes (banner incl.)
     const to = `/a/${a.base}.${hash8(bytes)}.${a.ext}`;
@@ -740,7 +880,14 @@ for (const [file, srcPath, marker] of SHELLS) {
   // luna.css, and NOT the readable *.src.html twin (it must stay byte-identical
   // to holding/index.html for the perf-budget twin check — View Source is the
   // authoring source, which keeps the plain /nav.js the fallback still serves).
+  // cal/src rides along: /coffee's SSR templates load the shell too, and were the
+  // whole reason the unhashed fallbacks existed. Their nav ref is attribute-shaped so
+  // the ordinary reps catch it; the luna refs are ABSOLUTE (cal.aadhar.sh serves the
+  // same templates, where a relative /luna.css would 404) and get their own pass below.
   const targets = [`${OUT}/serendipity/serendipity.js`];
+  for (const rel of await readdir(`${OUT}/cal/src`).catch(() => [])) {
+    if (rel.endsWith(".js")) targets.push(`${OUT}/cal/src/${rel}`);
+  }
   for (const rel of await readdir(`${OUT}/holding`, { recursive: true })) {
     if ((rel.endsWith(".html") && !rel.endsWith(".src.html")) ||
         (rel.startsWith("_worker.js/") && rel.endsWith(".js"))) {
@@ -756,6 +903,22 @@ for (const [file, srcPath, marker] of SHELLS) {
       if (m) { hits += m.length; out = out.replace(re, sub); }
     }
     if (hits) { await writeFile(path, out); refCount += hits; filesTouched++; }
+  }
+
+  // /coffee's absolute shell refs (https://aadhar.sh/luna.css) — the attr reps above
+  // only match leading-slash paths, so the absolute form is rewritten here, scoped to
+  // the staged cal modules alone.
+  {
+    const p = `${OUT}/cal/src/templates.js`;
+    let t; try { t = await readFile(p, "utf8"); } catch { t = null; }
+    if (t !== null) {
+      const out = t.split("https://aadhar.sh/luna.css").join(`https://aadhar.sh${hashedFor.luna}`);
+      if (out !== t) await writeFile(p, out);
+      const now = await readFile(p, "utf8");
+      if (!now.includes(hashedFor.luna)) throw new Error("cal/src/templates.js was not repointed to hashed luna.css");
+      if (!now.includes(hashedFor.nav)) throw new Error("cal/src/templates.js was not repointed to hashed nav.js");
+      console.log(`cal: /coffee templates repointed to ${hashedFor.luna} + ${hashedFor.nav}`);
+    }
   }
 
   // point the worker's Early-Hints `Link: rel=preload` header at the SAME hashed
@@ -904,6 +1067,10 @@ for (const [file, srcPath, marker] of SHELLS) {
     if (cands.length) await mkdir(`${OUT}/holding/ad`, { recursive: true });
     let n = 0, deltaBytes = 0;
     for (const asset of shell) {
+      // Images sit out the dictionary path — see DICTIONARY_TYPES in lib/assets.js. The
+      // worker will never answer an svg with a dcz, so building one here would ship a
+      // delta nothing can ask for.
+      if (asset.ext === "svg") continue;
       const targetBytes = await readFile(`${dir}/${asset.name}`);
       for (const d of cands) {
         if (d.base !== asset.base || d.ext !== asset.ext) continue;
@@ -945,6 +1112,84 @@ for (const [file, srcPath, marker] of SHELLS) {
     else console.log("delta: none needed (every dictionary candidate matches the shipping shell)");
   }
 
+}
+
+// 8) the static garage/lwe pages: brotli q11 twins + dcz deltas.
+//
+// These are the biggest text payloads on the site (10-17KB on the wire each, 30 of them)
+// and they fit dictionary transport BETTER than the hashed shell does. The shell is
+// content-addressed, so a changed asset is a new URL. A garage page is mutable at a
+// STABLE url under `max-age=0, must-revalidate`, which is the canonical case the RFC was
+// written for: the browser revalidates, the bytes moved, and the server answers with the
+// diff instead of the document.
+//
+// Naming differs from /a/ for that same reason. A shell delta can key off the hash in the
+// request path; a page cannot, because the path never changes. So a page delta is keyed by
+// SLUG plus the dictionary tag alone: /pd/<slug>.<dicttag>.dcz. Only one version of a page
+// is current at a time, so slug+dictionary already identifies it uniquely.
+{
+  const pages = [];
+  for (const dir of ["garage", "lwe"]) {
+    for (const rel of await readdir(`${OUT}/holding/${dir}`, { recursive: true }).catch(() => [])) {
+      if (!rel.endsWith(".html") || rel.endsWith(".src.html")) continue;
+      pages.push(`${dir}/${rel}`);
+    }
+  }
+  // slug: the request path with separators folded, so it survives as one filename segment.
+  const slugOf = (assetPath) => assetPath.replace(/\.html$/, "").replace(/\//g, "__");
+
+  const dictDir = "holding/p-dict";
+  const dicts = await readdir(dictDir).catch(() => []);
+  // <slug>.<hash16>.html — the previous shipped bytes for that exact page.
+  // Snapshots are stored BROTLI'd. They are only ever build input, never served, and
+  // brotli round-trips exactly, so compressing them cuts the committed weight ~75%
+  // (1.4MB -> 352KB across 30 pages) with no effect on the dictionary bytes themselves.
+  const parseDict = (n) => { const m = n.match(/^(.+)\.([0-9a-f]{16})\.html\.br$/); return m ? { slug: m[1], tag: m[2], name: n } : null; };
+  const cands = dicts.map(parseDict).filter(Boolean);
+  if (cands.length) await mkdir(`${OUT}/holding/pd`, { recursive: true });
+
+  let brCount = 0, brRaw = 0, brEnc = 0, dCount = 0, dBytes = 0, dPlain = 0;
+  for (const page of pages) {
+    const bytes = await readFile(`${OUT}/holding/${page}`);
+    const br = brotliCompressSync(bytes, {
+      params: {
+        [zlibConstants.BROTLI_PARAM_QUALITY]: 11,
+        [zlibConstants.BROTLI_PARAM_LGWIN]: 24,
+        [zlibConstants.BROTLI_PARAM_SIZE_HINT]: bytes.length,
+      },
+    });
+    if (br.length < bytes.length) {
+      await writeFile(`${OUT}/holding/${page}.br`, br);
+      brCount++; brRaw += bytes.length; brEnc += br.length;
+    }
+
+    const slug = slugOf(page);
+    for (const d of cands) {
+      if (d.slug !== slug) continue;
+      // Snapshots are stored brotli'd (build input only, never served, and brotli
+      // round-trips exactly), which cuts the committed weight from 1.4MB to 412KB.
+      const dictBytes = brotliDecompressSync(await readFile(`${dictDir}/${d.name}`));
+      if (dictBytes.equals(bytes)) continue;            // unchanged: nothing to diff
+      const frame = zstdCompressSync(bytes, {
+        dictionary: dictBytes,
+        params: { [zlibConstants.ZSTD_c_compressionLevel]: 19 },
+      });
+      const digest = createHash("sha256").update(dictBytes).digest();
+      const len = Buffer.alloc(4); len.writeUInt32LE(digest.length, 0);
+      const out = Buffer.concat([Buffer.from([0x5e, 0x2a, 0x4d, 0x18]), len, digest, frame]);
+      // A delta that lost to the plain twin would cost bytes AND a dictionary lookup.
+      if (out.length >= br.length) {
+        console.log(`page-delta: SKIPPED ${slug} vs ${d.tag.slice(0, 8)} (dcz ${out.length} >= br ${br.length})`);
+        continue;
+      }
+      await writeFile(`${OUT}/holding/pd/${slug}.${digest.toString("hex").slice(0, 16)}.dcz`, out);
+      dCount++; dBytes += out.length; dPlain += br.length;
+    }
+  }
+  console.log(`pages: ${brCount} brotli q11 twins, ${(brRaw / 1024).toFixed(1)}KB -> ${(brEnc / 1024).toFixed(1)}KB`);
+  console.log(dCount
+    ? `page-delta: ${dCount} dcz delta(s), ${dBytes} bytes against ${dPlain} plain brotli`
+    : `page-delta: none (no page changed since its dictionary snapshot)`);
 }
 
 console.log(`staged ${OUT}/ - deploy with: wrangler deploy (self-builds via build.command) or npm run deploy`);

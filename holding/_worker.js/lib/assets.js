@@ -62,13 +62,62 @@ const SHELL_TYPES = {
   svg: "image/svg+xml; charset=utf-8",
 };
 
+// Which of those may travel the SHARED-DICTIONARY path (the `use-as-dictionary` offer
+// and the dcz delta). Deliberately NOT svg.
+//
+// The icon sprite went onto /a/ as a <use> target, where a browser fetches it as a
+// document. #114 turned it into an <img>, and the very next deploy the 12 taskbar and
+// tray icons vanished in Chromium for anyone who had visited before it — a warm
+// Chromium, the only engine that implements shared dictionaries, and the only client
+// that gets the dcz instead of the plain brotli. A hard reload dropped
+// Available-Dictionary and everything came back, which is the whole diagnosis: on a
+// brand-new content-hashed URL nothing else about the client can differ.
+//
+// The delta itself is fine. It round-trips byte-exact under `zstd -d -D`, and
+// luna.css shipped its own dcz in the same deploy and rendered normally. What broke is
+// a dcz response consumed by the IMAGE loader rather than by the CSS or script loader,
+// and that is not something any local test here can reproduce — reproducing it needs a
+// Chromium that already holds the previous deploy's bytes.
+//
+// So the sprite keeps the q11 brotli twin (verified decoding in both engines from
+// production) and steps off the dictionary path entirely. The cost is the ~2.1KB the
+// delta saved, once per deploy, on a file cached for a year. Cheap next to blanking the
+// site's most visible chrome for returning visitors. Re-extending this to images is
+// fine later, behind the ?br= canary the rest of this file was built with, which is how
+// this path is supposed to earn a default in the first place (gotcha 13).
+const DICTIONARY_TYPES = { js: 1, css: 1 };
+
 // Offer the shell's own bytes as a compression dictionary for future /a/ requests
 // (RFC 9842). This is what makes a Chromium client send `Available-Dictionary` back, which
 // is the whole basis of the delta path. Purely additive: a client may ignore the offer, and
 // a server may ignore the resulting header. match="/a/*" scopes it to the content-hashed
 // shell, so the next deploy's /a/nav.<newhash>.js is exactly the request that arrives
 // carrying the OLD bytes' hash.
-const DICTIONARY_OFFER = { "use-as-dictionary": 'match="/a/*"' };
+// match-dest scopes the offer to the fetch destinations we will actually answer with a
+// delta. RFC 9842 makes it optional and DEFAULTS IT TO EVERY DESTINATION, so the earlier
+// bare `match="/a/*"` told Chromium these bytes were a dictionary for any /a/ request —
+// including the icon sprite, fetched as an `image`. Nothing broke, because DICTIONARY_TYPES
+// stops the worker answering an svg with a dcz, but the offer promised more than the server
+// honours: the client stored state and sent Available-Dictionary on requests we ignore.
+//
+// This is #119's lesson moved into the protocol instead of living only in a JS gate. The
+// sprite stays out on purpose — see DICTIONARY_TYPES — and naming destinations is how the
+// wire says so.
+// PER-BASE, not a shared /a/* glob. Chrome reported "Found a matching dictionary, but the
+// dictionary is not used for the response" on tooltip.js and hoist.js, and the pooled
+// pattern is why: every js/css asset offered the SAME match, so Chromium keyed them all to
+// one scope and, on a request for tooltip.js, could send the hash of nav.js. Delta
+// filenames are per-base (/ad/<base>.<hash8>.<dicttag>.dcz), so a cross-base hash can never
+// resolve — the client did its half correctly and we answered plain brotli.
+//
+// Scoping match to the asset family makes the dictionary Chromium sends the one we can
+// actually diff against. match-dest narrows per type too, since a stylesheet is never
+// fetched as a script.
+const SHELL_DESTS = { js: '("script")', css: '("style")' };
+const shellOffer = (pathname, ext) => {
+  const base = pathname.slice("/a/".length).replace(/\.[0-9a-f]{8}\.(js|css|svg)$/, "");
+  return `match="/a/${base}.*", match-dest=${SHELL_DESTS[ext] || '("script" "style")'}`;
+};
 
 // A WORKER CANNOT NEGOTIATE COMPRESSION. Measured in wrangler dev 2026-07-26: the
 // runtime rewrites the request's Accept-Encoding to a constant before the worker sees
@@ -146,7 +195,7 @@ async function serveDictionaryDelta(url, ext, request, env) {
   headers.set("vary", "accept-encoding, available-dictionary");
   // Keep offering the shell as a dictionary, so a client that just delta-updated adopts
   // the new bytes and the chain continues on the next deploy.
-  headers.set("use-as-dictionary", 'match="/a/*"');
+  headers.set("use-as-dictionary", shellOffer(url.pathname, ext));
   headers.delete("etag");   // described the .dcz file, not this resource
   return new Response(res.body, { status: 200, headers, encodeBody: "manual" });
 }
@@ -196,8 +245,11 @@ export async function servePrecompressedShell(request, env) {
   // Any miss falls through to the br path below and then to identity, so a client whose
   // dictionary we have no delta for (skipped several deploys, or a hand-crafted header)
   // just gets the ordinary asset.
-  const delta = await serveDictionaryDelta(url, ext, request, env);
-  if (delta) return delta;
+  // DICTIONARY_TYPES gates this: images sit it out, for the reason recorded there.
+  if (DICTIONARY_TYPES[ext]) {
+    const delta = await serveDictionaryDelta(url, ext, request, env);
+    if (delta) return delta;
+  }
 
   // No Available-Dictionary, or no delta for the dictionary this client holds: fall through
   // to the brotli q11 twin below, which carries the dictionary offer itself.
@@ -226,7 +278,11 @@ export async function servePrecompressedShell(request, env) {
   const headers = new Headers(br.headers);
   headers.set("content-type", SHELL_TYPES[ext]);
   headers.set("content-encoding", "br");
-  headers.set("use-as-dictionary", DICTIONARY_OFFER["use-as-dictionary"]);
+  // Only offer a type we are willing to answer with a delta. Offering the sprite would
+  // teach Chromium to send Available-Dictionary for it and then get plain br anyway:
+  // wasted storage on the client and a header we deliberately ignore.
+  if (DICTIONARY_TYPES[ext]) headers.set("use-as-dictionary", shellOffer(url.pathname, ext));
+  else headers.delete("use-as-dictionary");
   // The URL is content-addressed, so these bytes never change identity. Vary still
   // has to name accept-encoding: the same URL answers with br or identity depending
   // on the request, and a shared cache must not serve one to a client that asked for
@@ -242,4 +298,75 @@ export async function servePrecompressedShell(request, env) {
     headers,
     encodeBody: "manual",
   });
+}
+
+
+// serveStaticPage: the 30 static garage/lwe pages, with the same two-tier treatment the
+// hashed shell gets — a dcz delta when the client holds a version we diffed against,
+// otherwise the brotli q11 twin, otherwise the plain asset.
+//
+// These fit dictionary transport BETTER than the shell does. The shell is
+// content-addressed, so a change mints a new URL and the old bytes are never requested
+// again. A garage page is mutable at a STABLE url under `max-age=0, must-revalidate`,
+// which is the case the RFC was written for: the browser revalidates, the bytes moved,
+// and the server answers with the diff instead of the whole document.
+//
+// The delta is keyed by SLUG plus dictionary tag rather than by a content hash, because
+// the request path carries no hash to key off. Only one version of a page is current at a
+// time, so slug + dictionary is already unambiguous.
+export async function serveStaticPage(request, env) {
+  const url = new URL(request.url);
+  if (request.method !== "GET") return serveAssetWith404Clamp(request, env);
+
+  // /garage/compression -> asset garage/compression.html, slug garage__compression.
+  // html_handling drops the trailing slash, so the path never carries the extension.
+  const rel = url.pathname.replace(/^\/+/, "").replace(/\/+$/, "");
+  if (!rel || rel.includes("..") || /\.[a-z0-9]+$/i.test(rel)) {
+    // Sub-resources under these prefixes (the garage's images, ask.js) are not pages and
+    // have no twin; hand them straight to the asset layer untouched.
+    return serveAssetWith404Clamp(request, env);
+  }
+  const slug = rel.replace(/\//g, "__");
+  // A page is only ever fetched as a document (a navigation). Scoping it says so, and
+  // keeps a prefetch/subresource fetch of the same URL from banking a dictionary the
+  // worker would not answer with a delta.
+  const offer = { "use-as-dictionary": `match="/${rel}", match-dest=("document")` };
+
+  const tag = dictionaryTag(request);
+  if (tag) {
+    try {
+      const d = await env.ASSETS.fetch(new Request(`${url.origin}/pd/${slug}.${tag}.dcz`, {
+        headers: { "accept-encoding": "identity" },
+      }));
+      if (d.ok) {
+        const h = new Headers(d.headers);
+        h.set("content-type", "text/html; charset=utf-8");
+        h.set("content-encoding", "dcz");
+        h.set("vary", "accept-encoding, available-dictionary");
+        h.set("use-as-dictionary", offer["use-as-dictionary"]);
+        h.delete("etag");                       // described the .dcz file, not this page
+        return new Response(d.body, { status: 200, headers: h, encodeBody: "manual" });
+      }
+      try { await d.body?.cancel(); } catch {}
+    } catch { /* fall through to the twin */ }
+  }
+
+  try {
+    const br = await env.ASSETS.fetch(new Request(`${url.origin}/${rel}.html.br`, {
+      headers: { "accept-encoding": "identity" },
+    }));
+    if (br.ok && !br.headers.get("content-encoding")) {
+      const h = new Headers(br.headers);
+      h.set("content-type", "text/html; charset=utf-8");
+      h.set("content-encoding", "br");
+      h.append("vary", "accept-encoding");
+      h.set("use-as-dictionary", offer["use-as-dictionary"]);
+      const etag = h.get("etag");
+      if (etag) h.set("etag", `W/${etag.replace(/^W\//, "").replace(/"$/, "-br\"")}`);
+      return new Response(br.body, { status: 200, headers: h, encodeBody: "manual" });
+    }
+    try { await br.body?.cancel(); } catch {}
+  } catch { /* fall through to the plain asset */ }
+
+  return serveAssetWith404Clamp(request, env, { headers: offer });
 }
