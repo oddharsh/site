@@ -65,8 +65,12 @@
       "/", "/index.html", "/favicon.ico", "/hit",
       // the content-hashed shell: worker-first so it can hand out the q11 .br twin
       "/a/*",
-      // static pages: worker-first for the dcz delta + brotli q11 twin
-      "/garage/*", "/lwe/*",
+      // static pages: worker-first for the dcz delta + brotli q11 twin.
+      // The bare section paths are listed SEPARATELY because "/garage/*" does not
+      // match "/garage" — without them the two section indexes never reached the
+      // worker at all, so their twins were built, uploaded, and never served
+      // (2026-07-28). Same shape as "/lens", "/lens/" and "/photos", "/photos/".
+      "/garage", "/garage/*", "/lwe", "/lwe/*",
       "/auth.md", "/.well-known/api-catalog", "/.well-known/agent-card.json",
       "/.well-known/oauth-protected-resource",
       "/.well-known/oauth-authorization-server",

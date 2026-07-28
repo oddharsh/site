@@ -360,6 +360,14 @@ export async function serveStaticPage(request, env) {
 
   // /garage/compression -> asset garage/compression.html, slug garage__compression.
   // html_handling drops the trailing slash, so the path never carries the extension.
+  // A trailing slash is not canonical here — `html_handling: "drop-trailing-slash"`
+  // makes /garage the one true spelling — so /garage/ must 301 rather than be
+  // answered. Hand it to the asset layer, which issues that redirect. This has to
+  // come BEFORE the /index fallback below: that fallback resolves /garage/ to the
+  // same twin as /garage and would serve it a cheerful 200, leaving the page with
+  // two live URLs. The route oracle caught exactly that.
+  if (url.pathname.endsWith("/")) return serveAssetWith404Clamp(request, env);
+
   const rel = url.pathname.replace(/^\/+/, "").replace(/\/+$/, "");
   if (!rel || rel.includes("..") || /\.[a-z0-9]+$/i.test(rel)) {
     // Sub-resources under these prefixes (the garage's images, ask.js) are not pages and
@@ -374,47 +382,67 @@ export async function serveStaticPage(request, env) {
     if (md) return md;
   }
 
-  const slug = rel.replace(/\//g, "__");
   // A page is only ever fetched as a document (a navigation). Scoping it says so, and
   // keeps a prefetch/subresource fetch of the same URL from banking a dictionary the
-  // worker would not answer with a delta.
+  // worker would not answer with a delta. Keyed on the REQUEST path, which is what the
+  // browser matches, regardless of which asset ends up answering.
   const offer = { "use-as-dictionary": `match="/${rel}", match-dest=("document")` };
+
+  // build.mjs names both artifacts after the ASSET path; this function knows only the
+  // REQUEST path, and `html_handling: "drop-trailing-slash"` makes those differ for
+  // exactly one shape — a section index, where /garage is served by garage/index.html.
+  // So /garage asked for garage.html.br and /pd/garage.<tag>.dcz while the build had
+  // written garage/index.html.br and /pd/garage__index.<tag>.dcz. Both missed, both
+  // silently, and the page fell through to on-the-fly edge compression.
+  //
+  // Measured 2026-07-28: /garage shipped 13,264 bytes against an 11,131-byte twin (16%
+  // wasted), /lwe 6,197 against 5,171 (17%). Every sub-page was byte-exact for its own
+  // twin, which is why this hid — the shape that broke is the only one with no sibling
+  // to diff against, and a missing twin degrades to a correct, slightly larger page.
+  //
+  // Direct name first, so a sub-page still costs one lookup and only an index pays for
+  // the second. An ASSETS miss is colo-local and cheap; an unserved twin is not.
+  const bases = [rel, `${rel}/index`];
 
   const tag = dictionaryTag(request);
   if (tag) {
-    try {
-      const d = await env.ASSETS.fetch(new Request(`${url.origin}/pd/${slug}.${tag}.dcz`, {
-        headers: { "accept-encoding": "identity" },
-      }));
-      if (d.ok) {
-        const h = new Headers(d.headers);
-        h.set("content-type", "text/html; charset=utf-8");
-        h.set("content-encoding", "dcz");
-        h.set("vary", "accept-encoding, available-dictionary");
-        h.set("use-as-dictionary", offer["use-as-dictionary"]);
-        h.delete("etag");                       // described the .dcz file, not this page
-        return new Response(d.body, { status: 200, headers: h, encodeBody: "manual" });
-      }
-      try { await d.body?.cancel(); } catch {}
-    } catch { /* fall through to the twin */ }
+    for (const base of bases) {
+      try {
+        const d = await env.ASSETS.fetch(new Request(`${url.origin}/pd/${base.replace(/\//g, "__")}.${tag}.dcz`, {
+          headers: { "accept-encoding": "identity" },
+        }));
+        if (d.ok) {
+          const h = new Headers(d.headers);
+          h.set("content-type", "text/html; charset=utf-8");
+          h.set("content-encoding", "dcz");
+          h.set("vary", "accept-encoding, available-dictionary");
+          h.set("use-as-dictionary", offer["use-as-dictionary"]);
+          h.delete("etag");                       // described the .dcz file, not this page
+          return new Response(d.body, { status: 200, headers: h, encodeBody: "manual" });
+        }
+        try { await d.body?.cancel(); } catch {}
+      } catch { /* fall through to the twin */ }
+    }
   }
 
-  try {
-    const br = await env.ASSETS.fetch(new Request(`${url.origin}/${rel}.html.br`, {
-      headers: { "accept-encoding": "identity" },
-    }));
-    if (br.ok && !br.headers.get("content-encoding")) {
-      const h = new Headers(br.headers);
-      h.set("content-type", "text/html; charset=utf-8");
-      h.set("content-encoding", "br");
-      h.append("vary", "accept-encoding");
-      h.set("use-as-dictionary", offer["use-as-dictionary"]);
-      const etag = h.get("etag");
-      if (etag) h.set("etag", `W/${etag.replace(/^W\//, "").replace(/"$/, "-br\"")}`);
-      return new Response(br.body, { status: 200, headers: h, encodeBody: "manual" });
-    }
-    try { await br.body?.cancel(); } catch {}
-  } catch { /* fall through to the plain asset */ }
+  for (const base of bases) {
+    try {
+      const br = await env.ASSETS.fetch(new Request(`${url.origin}/${base}.html.br`, {
+        headers: { "accept-encoding": "identity" },
+      }));
+      if (br.ok && !br.headers.get("content-encoding")) {
+        const h = new Headers(br.headers);
+        h.set("content-type", "text/html; charset=utf-8");
+        h.set("content-encoding", "br");
+        h.append("vary", "accept-encoding");
+        h.set("use-as-dictionary", offer["use-as-dictionary"]);
+        const etag = h.get("etag");
+        if (etag) h.set("etag", `W/${etag.replace(/^W\//, "").replace(/"$/, "-br\"")}`);
+        return new Response(br.body, { status: 200, headers: h, encodeBody: "manual" });
+      }
+      try { await br.body?.cancel(); } catch {}
+    } catch { /* fall through to the plain asset */ }
+  }
 
   return serveAssetWith404Clamp(request, env, { headers: offer });
 }
