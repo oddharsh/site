@@ -21,6 +21,7 @@ const PREFIX = "/serendipity";
 // at all, and everyone else got a shell pop. Now the markup is in the document
 // and nav.js only wires behavior, same as every other page.
 import { DESKTOP_CHROME, DESKTOP_TOP } from "../holding/_worker.js/lib/desktop.js";
+import { privateHostBlocked } from "../holding/_worker.js/lib/crawl.js";
 
 // ── tiny helpers ────────────────────────────────────────────────────────────
 const esc = (v) =>
@@ -1344,27 +1345,6 @@ async function coverProxyUrl(rawUrl, env) {
   return secret ? `${base}&s=${await signCoverUrl(rawUrl, secret)}` : base;
 }
 
-// reject non-public hosts so /cover can't be turned into an SSRF probe of the
-// internal network / cloud-metadata endpoint. mirrors the /lens host filter, and
-// runs regardless of signature — the cover fetch degrades to an unsigned plain
-// fetch when Transformations are off, so a signature check alone isn't the gate.
-function coverHostBlocked(host) {
-  const h = host.replace(/^\[|\]$/g, "");
-  if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".local") || h.endsWith(".internal") || h.endsWith(".onion")) return true;
-  if (h === "::1" || h.startsWith("fc") || h.startsWith("fd") || h.startsWith("fe80:")) return true;
-  const m = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
-  if (m) {
-    const a = +m[1], b = +m[2];
-    if (a === 0 || a === 10 || a === 127) return true;
-    if (a === 169 && b === 254) return true;        // link-local incl. 169.254.169.254 metadata
-    if (a === 192 && b === 168) return true;
-    if (a === 172 && b >= 16 && b <= 31) return true;
-    if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT
-    if (a >= 224) return true;                        // multicast / reserved
-  }
-  return false;
-}
-
 // ── router ────────────────────────────────────────────────────────────────────
 // GET /serendipity/cover?u=<encoded image url>[&s=<hmac>] — same-origin cover proxy.
 // Resizes via Cloudflare Image Transformations (cf.image) so the hover tooltip
@@ -1385,7 +1365,9 @@ async function handleCover(request, env, ctx) {
   if (target.protocol !== "https:") return new Response("https only", { status: 400 });
   if (target.port && target.port !== "443") return new Response("https only", { status: 400 });
   // SSRF guard, before any fetch and independent of the signature below.
-  if (coverHostBlocked(target.hostname.toLowerCase())) return new Response("blocked host", { status: 400 });
+  // the cover fetch degrades to an unsigned plain fetch when Transformations are
+  // off, so a signature check alone is not the gate; the host floor runs regardless.
+  if (privateHostBlocked(target.hostname.toLowerCase())) return new Response("blocked host", { status: 400 });
   const secret = coverSecret(env);
   if (secret && !(await verifyCoverUrl(raw, url.searchParams.get("s"), secret))) {
     return new Response("bad or missing signature", { status: 403 });

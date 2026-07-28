@@ -3,7 +3,7 @@
 import { BOT_UA, botHeaders } from "./lib/botauth.js";
 import { cachedRender } from "./lib/cache.js";
 import { CANONICAL_HOST } from "./lib/const.js";
-import { readResponseCapped } from "./lib/crawl.js";
+import { privateHostBlocked, readResponseCapped } from "./lib/crawl.js";
 import { lensParseRobots, lensPathMatch, lensRobotsVerdict } from "./lib/robots.js";
 import { lunaPage } from "./lib/chrome.js";
 import { escAttr, escHtml, jsonResponse } from "./lib/http.js";
@@ -1033,25 +1033,8 @@ export function validateLensTarget(raw) {
   try { url = new URL(s); } catch { return { ok: false, error: "That doesn't parse as a URL." }; }
   if (url.protocol !== "http:" && url.protocol !== "https:") return { ok: false, error: "Only http and https URLs." };
   if (url.port && url.port !== "80" && url.port !== "443") return { ok: false, error: "Only ports 80 and 443 are allowed." };
-  if (lensHostBlocked(url.hostname.toLowerCase())) return { ok: false, error: "That host is on the no-fetch list (localhost / private / link-local)." };
+  if (privateHostBlocked(url.hostname.toLowerCase())) return { ok: false, error: "That host is on the no-fetch list (localhost / private / link-local)." };
   return { ok: true, url: url.toString() };
-}
-
-export function lensHostBlocked(host) {
-  const h = host.replace(/^\[|\]$/g, "");
-  if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".local") || h.endsWith(".internal") || h.endsWith(".onion")) return true;
-  if (h === "::1" || h.startsWith("fc") || h.startsWith("fd") || h.startsWith("fe80:")) return true;
-  const m = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
-  if (m) {
-    const a = +m[1], b = +m[2];
-    if (a === 0 || a === 10 || a === 127) return true;
-    if (a === 169 && b === 254) return true;        // link-local incl. 169.254.169.254 metadata
-    if (a === 192 && b === 168) return true;
-    if (a === 172 && b >= 16 && b <= 31) return true;
-    if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT
-    if (a >= 224) return true;                        // multicast / reserved
-  }
-  return false;
 }
 
 function lensDoorCount(agent) {
@@ -1211,7 +1194,7 @@ export async function lensInspect(targetUrl, env, opts) {
   // vetted the url the user typed, but redirect:"follow" could have landed us on a
   // private/link-local host. a blocked final host skips discovery entirely.
   const origin = (() => {
-    try { const u = new URL(finalUrl); return lensHostBlocked(u.hostname.toLowerCase()) ? null : u.origin; }
+    try { const u = new URL(finalUrl); return privateHostBlocked(u.hostname.toLowerCase()) ? null : u.origin; }
     catch { return null; }
   })();
   if (origin) {
