@@ -206,6 +206,73 @@ degrades only that section and the advisory names the scope to add. Cloudflare
 returns error 10000 for both "bad token" and "token lacks this scope", so the
 message says which permission the failing section wanted.
 
+### The compression rule (brotli ahead of zstd)
+
+**Owner-run, once, by hand.** `infra:apply` is scoped to DNS and cannot create a
+Rules entry, and nothing in this repo may hold an `Edit` scope. So this is a
+dashboard or personal-token action; `infra.json`'s `compression-prefers-brotli`
+check is what keeps it honest afterwards.
+
+**Why it exists.** Cloudflare's default preference is zstd, and Chrome and Edge
+both advertise zstd, so most visitors get it. Its on-the-fly zstd is *worse* than
+its own on-the-fly brotli on this site's content. Measured 2026-07-28 against
+`/images/manifest.json`, whose 35,162-byte body is identical on every request
+(the homepage's is not — a random 12-photo grid swings the size ~1.4KB per
+render, wider than the effect being measured):
+
+| encoding | bytes | vs brotli |
+|---|---|---|
+| br | 6,642 | — |
+| zstd | 6,847 | +205 (+3.1%) |
+| gzip | 7,159 | +517 |
+
+This only touches responses **Cloudflare** compresses: the SSR'd homepage and the
+worker's JSON endpoints. The precompressed shell (`/a/*`), the dcz deltas, and the
+brotli q11 page twins already arrive carrying a `content-encoding`, and the edge
+does not recompress those — so the rule is a no-op on every path the build
+already optimized.
+
+Dashboard: **Rules → Overview → Create rule → Compression Rule**, match the
+default content types, then set the algorithms in this order. Or by API, where
+the array order *is* the preference (`auto` has to come last, and is the safety
+net that keeps an unusual client from getting no compression at all):
+
+```bash
+curl "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/rulesets/phases/http_response_compression/entrypoint" \
+  --request PUT \
+  --header "Authorization: Bearer $CF_RULES_TOKEN" \
+  --json '{
+    "rules": [
+      {
+        "expression": "true",
+        "action": "compress_response",
+        "description": "brotli ahead of zstd: CF on-the-fly zstd measured +3.1% here (see infra.json)",
+        "action_parameters": {
+          "algorithms": [
+            { "name": "brotli" },
+            { "name": "gzip" },
+            { "name": "auto" }
+          ]
+        }
+      }
+    ]
+  }'
+```
+
+Verify in this order. The first is the point of the change; the other two are the
+regression check, because a compression change on a render-blocking path fails as
+a white screen rather than as a slow page (gotcha 13 in CLAUDE.md):
+
+```bash
+npm run infra:check     # compression-prefers-brotli must pass
+npm run dcz:check       # deltas must still come back dcz, not recompressed
+curl -sS -o /dev/null -D - -H 'accept-encoding: gzip, deflate, br, zstd' https://aadhar.sh/a/luna.0f8b829a.css | grep -i content-encoding
+```
+
+`infra:check` fails until the rule exists, by design: `infra.json` declares intent
+and the checker reports reality, so a declared-but-absent rule is drift like any
+other. Expect CI red on the PR that adds the declaration until the rule is live.
+
 ### Rebuilding the zone
 
 `npm run infra:apply` is the write path, and the only thing in this repo that
