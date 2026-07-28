@@ -1188,15 +1188,34 @@
   // Instant "close": the close glyph means "up to aadhar.sh". When the window
   // was opened directly FROM the homepage, going back restores it from bfcache —
   // instant, zero network, no worker hit, no loading bar — instead of a fresh
-  // no-store fetch of "/". Gated on the referrer actually BEING home so the
-  // "close = home" semantics hold; every other case falls through to the href
-  // (a normal navigation to "/"). McMaster-Carr feel without prerendering the
-  // heaviest page on every hover.
+  // no-store fetch of "/". Every other case falls through to the href (a normal
+  // navigation to "/"). McMaster-Carr feel without prerendering the heaviest
+  // page on every hover.
+  //
+  // The gate has to be "the entry BEHIND this one is home", not "the referrer is
+  // home". A page that writes its own history — /lens pushes an entry per view
+  // and lens tab — grows the stack without ever touching document.referrer, so
+  // the referrer test kept passing while Back had turned into "undo my last tab
+  // click". Close is a window control, not a Back button: it either lands on the
+  // homepage or it doesn't fire. The Navigation API answers the real question
+  // directly; where it's missing, require a stack that hasn't grown since load
+  // (any in-page push disqualifies the shortcut) and let the plain href carry it.
   function initCloseBack() {
+    var homeUrl = location.origin + "/";
+    var lenAtLoad = history.length;
+    function prevIsHome() {
+      if (window.navigation && navigation.entries && navigation.currentEntry) {
+        var i = navigation.currentEntry.index;
+        if (i < 1) return false;
+        var prev = navigation.entries()[i - 1];
+        return !!prev && prev.url === homeUrl;
+      }
+      return D.referrer === homeUrl && history.length === lenAtLoad;
+    }
     D.addEventListener("click", function (e) {
       if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
       var a = e.target.closest && e.target.closest("a.close");
-      if (!a || history.length <= 1 || D.referrer !== location.origin + "/") return;
+      if (!a || history.length <= 1 || !prevIsHome()) return;
       e.preventDefault();
       history.back();
     });

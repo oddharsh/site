@@ -161,11 +161,13 @@
     } catch (e) {}
   }
 
-  // The "state of the machine web" exhibit is the cold-start argument. It lives in
-  // an XP dialog now instead of inline, so it sits over the tool on nav-in rather
-  // than pushing the panes below the fold. showModal() gives the native focus trap,
-  // Esc, and inert-page for free. openStateWeb() is called once a session on the
-  // idle shell and by the footer link; it's a no-op if the dialog isn't present.
+  // The "state of the machine web" exhibit is the cold-start argument. The four
+  // headline numbers ride in the rail under the lede, always visible and costing
+  // nothing to ignore; the sourced cards stay in an XP dialog so they don't push
+  // the panes below the fold. showModal() gives the native focus trap, Esc, and
+  // inert-page for free, and returning focus to whichever "?" opened it. Opened
+  // only on a click now: the panel used to pop itself open once a session, which
+  // meant the tool greeted you with something to dismiss. No-op with no dialog.
   function openStateWeb() {
     var d = document.getElementById("lx-sow-dialog");
     if (d && !d.open && d.showModal) { try { d.showModal(); } catch (e) {} }
@@ -1300,15 +1302,17 @@
   });
 
   // "state of the machine web" dialog: close button, backdrop light-dismiss, and
-  // the footer link that reopens it after dismissal.
+  // every [data-sow-open] trigger (the rail's "?" and the footer link). The
+  // backdrop listener is the fallback for browsers without dialog closedby="any".
   var sowDialog = document.getElementById("lx-sow-dialog");
   if (sowDialog) {
     var sowClose = document.getElementById("lx-sow-close");
     if (sowClose) sowClose.addEventListener("click", function () { sowDialog.close(); });
     sowDialog.addEventListener("click", function (e) { if (e.target === sowDialog) sowDialog.close(); });
   }
-  var sowOpen = document.getElementById("lx-sow-open");
-  if (sowOpen) sowOpen.addEventListener("click", openStateWeb);
+  [].forEach.call(document.querySelectorAll("[data-sow-open]"), function (b) {
+    b.addEventListener("click", openStateWeb);
+  });
 
   var urlState = readUrlState();
   try {
@@ -1364,19 +1368,8 @@
       } else {
         run(qp);
       }
-    } else {
-      // idle shell: pop the "state of the machine web" once a session, so a fresh
-      // visit meets the cold-start argument but a reload doesn't nag. Held until the
-      // visit is real, same as the autorun above (no modal over a prerender).
-      var popSow = function () {
-        try {
-          if (sessionStorage.getItem("lx-sow-seen")) return;
-          sessionStorage.setItem("lx-sow-seen", "1");
-        } catch (e) {}
-        openStateWeb();
-      };
-      if (document.prerendering) document.addEventListener("prerenderingchange", popSow, { once: true });
-      else popSow();
     }
+    // The idle shell used to pop the "state of the machine web" dialog here, once
+    // a session. The rail carries that argument now without asking to be closed.
   } catch (e) {}
 })();

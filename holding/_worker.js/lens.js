@@ -216,49 +216,81 @@ async function inspectLensRequest(request, env, ctx) {
 // A dated, source-linked exhibit of where the machine web actually stands, so a
 // cold visitor reads every per-URL verdict as a claim about the web, not one
 // site's laziness. Hand-maintained; each fact carries a "checked" date and a
-// source. Rendered as an XP dialog the client pops open on nav-in (once a
-// session) and that the footer link reopens — it sits over the tool instead of
-// pushing it below the fold. Update the dates when you refresh the numbers.
+// source. Update the dates when you refresh the numbers.
+//
+// One array, two surfaces. `rail` is the always-visible one-liner under the lede
+// (lensStateOfWebRail); the full sourced cards live in the dialog behind its "?"
+// (lensStateOfWebPanel). Facts without a `rail` key appear in the dialog only, so
+// the rail stays one line. Deriving both from the same array is the point: the
+// headline number and the sourced claim cannot drift apart.
+const LENS_SOW_MONTH = "2026-07";
+const LENS_SOW_CHECKED = "checked " + LENS_SOW_MONTH;
+const LENS_SOW_FACTS = [
+  {
+    stat: "57.5%",
+    rail: "of the web's HTML requests are bots",
+    claim: "Bots now make more of the web's requests than people do. Automated clients sent 57.5% of HTML requests on Cloudflare's network — the first time bots crossed half.",
+    src: "Cloudflare Radar", href: "https://radar.cloudflare.com/",
+  },
+  {
+    stat: "5.6% / ~0",
+    railStat: "5.6%",
+    rail: "of top sites publish llms.txt",
+    claim: "Publishers signal, models mostly don't read. llms.txt is now published by 5.6% of the top 10k sites (up ~5× in a year), but one server-log study found 408 llms.txt hits across ~500M AI-bot visits, and Google says it ignores the file.",
+    src: "HTTP Archive", href: "https://httparchive.org/",
+  },
+  {
+    stat: "~10k servers",
+    railStat: "~10k",
+    rail: "public MCP servers",
+    claim: "One protocol won the tool layer. MCP sits under the Linux Foundation with OpenAI, Google, Microsoft, and Amazon all shipping support, and roughly 10k public servers.",
+    src: "Linux Foundation", href: "https://www.linuxfoundation.org/",
+  },
+  {
+    stat: "the CLI is the new API",
+    claim: "The action layer moved to the terminal. A Q1 2026 wave of agent-native CLIs (Stripe, Ramp, Google Workspace, Vercel) each crossed 20k GitHub stars in weeks — structured commands an agent runs, not HTTP well-knowns it discovers.",
+    src: "OSS Insight", href: "https://ossinsight.io/",
+  },
+  {
+    stat: "2 partners",
+    claim: "Paying to crawl is still an experiment. A year after Cloudflare's pay-per-crawl launched, it has two named AI-side partners; unsigned crawlers get blocked, and default-blocking arrives for new domains on Sept 15, 2026.",
+    src: "Cloudflare", href: "https://blog.cloudflare.com/introducing-pay-per-crawl/",
+  },
+  {
+    stat: "$24M / 75M txns",
+    railStat: "$24M",
+    rail: "moved over x402 in 30 days",
+    claim: "Agent payments are many and tiny. x402 moved about $24M across ~75M transactions in the last 30 days — roughly $0.32 each, mostly sub-dollar micropayments.",
+    src: "CoinDesk", href: "https://www.coindesk.com/",
+  },
+];
+
+// The compact form: a status strip of the four headline numbers, always on the
+// page, with one Luna "?" button opening the sourced panel. This is what the
+// dialog used to do by popping itself open on arrival, minus the interruption.
+function lensStateOfWebRail() {
+  // Past the first two, facts drop out under 560px rather than turning the strip
+  // into a five-line block above the address bar. The "?" holds all six anyway.
+  const items = LENS_SOW_FACTS.filter((f) => f.rail).map((f, i) =>
+    '<span class="lx-sow-i' + (i > 1 ? " lx-sow-i-x" : "") + '"><b>' + escHtml(f.railStat || f.stat) + "</b> " + escHtml(f.rail) + "</span>"
+  ).join("");
+  return '<div class="lx-sow-rail">' +
+    '<span class="lx-sow-facts">' +
+    '<span class="lx-sow-rail-k">The machine web, ' + LENS_SOW_MONTH + ":</span>" +
+    items + "</span>" +
+    '<button class="xp-button lx-sow-q" type="button" data-sow-open title="The state of the machine web" aria-label="The state of the machine web: six sourced facts">?</button>' +
+    "</div>";
+}
+
 function lensStateOfWebPanel() {
-  const facts = [
-    {
-      stat: "57.5%",
-      claim: "Bots now make more of the web's requests than people do. Automated clients sent 57.5% of HTML requests on Cloudflare's network — the first time bots crossed half.",
-      src: "Cloudflare Radar", href: "https://radar.cloudflare.com/",
-    },
-    {
-      stat: "5.6% / ~0",
-      claim: "Publishers signal, models mostly don't read. llms.txt is now published by 5.6% of the top 10k sites (up ~5× in a year), but one server-log study found 408 llms.txt hits across ~500M AI-bot visits, and Google says it ignores the file.",
-      src: "HTTP Archive", href: "https://httparchive.org/",
-    },
-    {
-      stat: "~10k servers",
-      claim: "One protocol won the tool layer. MCP sits under the Linux Foundation with OpenAI, Google, Microsoft, and Amazon all shipping support, and roughly 10k public servers.",
-      src: "Linux Foundation", href: "https://www.linuxfoundation.org/",
-    },
-    {
-      stat: "the CLI is the new API",
-      claim: "The action layer moved to the terminal. A Q1 2026 wave of agent-native CLIs (Stripe, Ramp, Google Workspace, Vercel) each crossed 20k GitHub stars in weeks — structured commands an agent runs, not HTTP well-knowns it discovers.",
-      src: "OSS Insight", href: "https://ossinsight.io/",
-    },
-    {
-      stat: "2 partners",
-      claim: "Paying to crawl is still an experiment. A year after Cloudflare's pay-per-crawl launched, it has two named AI-side partners; unsigned crawlers get blocked, and default-blocking arrives for new domains on Sept 15, 2026.",
-      src: "Cloudflare", href: "https://blog.cloudflare.com/introducing-pay-per-crawl/",
-    },
-    {
-      stat: "$24M / 75M txns",
-      claim: "Agent payments are many and tiny. x402 moved about $24M across ~75M transactions in the last 30 days — roughly $0.32 each, mostly sub-dollar micropayments.",
-      src: "CoinDesk", href: "https://www.coindesk.com/",
-    },
-  ];
-  const checked = "checked 2026-07";
-  const cards = facts.map((f) =>
+  const cards = LENS_SOW_FACTS.map((f) =>
     '<div class="lx-sow-card"><div class="lx-sow-stat">' + escHtml(f.stat) + "</div>" +
     '<div class="lx-sow-claim">' + escHtml(f.claim) + "</div>" +
-    '<div class="lx-sow-src"><a href="' + escAttr(f.href) + '" target="_blank" rel="noopener">' + escHtml(f.src) + "</a> &middot; " + checked + "</div></div>"
+    '<div class="lx-sow-src"><a href="' + escAttr(f.href) + '" target="_blank" rel="noopener">' + escHtml(f.src) + "</a> &middot; " + LENS_SOW_CHECKED + "</div></div>"
   ).join("");
-  return '<dialog class="lx-sow-dialog" id="lx-sow-dialog" aria-labelledby="lx-sow-title">' +
+  // closedby="any" is the native light-dismiss (click-outside plus Esc) where it
+  // exists; lens.js keeps a backdrop-click listener for browsers that lack it.
+  return '<dialog class="lx-sow-dialog" id="lx-sow-dialog" closedby="any" aria-labelledby="lx-sow-title">' +
     '<div class="lx-sow-tb"><span class="lx-sow-kicker" id="lx-sow-title">The state of the machine web</span>' +
     '<button class="lx-sow-x" type="button" id="lx-sow-close" title="Close" aria-label="Close"></button></div>' +
     '<div class="lx-sow-inner">' +
@@ -498,13 +530,38 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 .lx-proof b { color:oklch(38% 0.06 255); }
 @media (max-width:560px){ .lx-cf-grid{ grid-template-columns:1fr; } .lx-stage{ grid-template-columns:74px 1fr; } .lx-readiness-cats{ grid-template-columns:1fr; } .lx-readiness-hero{ align-items:flex-start; } .lx-next-actions div{ grid-template-columns:1fr; gap:2px; } .lx-bot-matrix{ min-width:620px; } }
 
-/* state of the machine web — an XP dialog shown on nav-in, reopenable from the footer */
+/* state of the machine web — a compact rail on the page, full sourced cards in
+   a dialog the rail's "?" opens (it used to open itself on arrival) */
+/* the rail is one line of headline numbers between the lede and the address bar,
+   sunken like an XP status strip so it reads as instrumentation, not another
+   paragraph. The "?" is pinned to the strip's top-right, so it stays put when
+   the facts stack under 560px. */
+.lx-sow-rail { display:flex; align-items:flex-start; gap:8px; margin:0 0 9px; padding:4px 6px 4px 8px; font-size:8.5pt; color:oklch(45% 0.02 255); background:oklch(97.5% 0.006 250); border:1px solid; border-color:oklch(80% 0.02 250) oklch(97% 0 0) oklch(97% 0 0) oklch(80% 0.02 250); border-radius:2px; }
+.lx-sow-facts { display:flex; align-items:center; flex-wrap:wrap; gap:2px 10px; flex:1 1 auto; min-width:0; }
+.lx-sow-rail-k { color:oklch(52% 0 0); }
+.lx-sow-i { white-space:nowrap; }
+.lx-sow-i b { font-family:"Courier New",monospace; font-size:9pt; color:oklch(40% 0.14 255); }
+.lx-sow-q { flex:0 0 auto; min-width:0; width:19px; height:19px; padding:0; font-weight:bold; font-size:9pt; line-height:17px; color:oklch(35% 0.10 258); }
+.lx-sow-q:active { padding:0 0 0 1px; }
+@media (max-width:560px){ .lx-sow-i-x { display:none; } }
 /* the shadow is luna.css's modal idiom verbatim (#axp-run): a hard 4px offset
    with NO blur, plus one tight ambient. XP dialogs really did drop a shadow,
    but it was cast, not diffused — the single 0 10px 40px this replaced read as
    a 2015 elevation surface. */
 .lx-sow-dialog { padding:0; margin:auto; width:min(660px,calc(100vw - 26px)); max-height:min(88vh,700px); color:oklch(28% 0.02 255); background:oklch(96% 0.014 250); border:1px solid oklch(44% 0.09 258); border-radius:6px 6px 3px 3px; box-shadow:4px 4px 0 rgba(0,30,160,.35),2px 3px 12px -2px oklch(30% 0.12 263 / .55); overflow:hidden; display:flex; flex-direction:column; }
 .lx-sow-dialog::backdrop { background:oklch(22% 0.04 258 / .38); }
+/* open and close on a short scale-from-the-button, so the panel arrives and
+   leaves instead of blinking. display + overlay have to ride along as discrete
+   transitions or the exit frame never paints; @starting-style supplies the
+   entry frame. Reduced motion gets the instant swap it asks for. */
+@media (prefers-reduced-motion:no-preference){
+  .lx-sow-dialog { opacity:0; transform:scale(.96); transition:opacity 120ms ease-out, transform 120ms ease-out, overlay 120ms allow-discrete, display 120ms allow-discrete; }
+  .lx-sow-dialog[open] { opacity:1; transform:scale(1); }
+  @starting-style { .lx-sow-dialog[open] { opacity:0; transform:scale(.96); } }
+  .lx-sow-dialog::backdrop { opacity:0; transition:opacity 120ms ease-out, overlay 120ms allow-discrete, display 120ms allow-discrete; }
+  .lx-sow-dialog[open]::backdrop { opacity:1; }
+  @starting-style { .lx-sow-dialog[open]::backdrop { opacity:0; } }
+}
 .lx-sow-tb { display:flex; align-items:center; gap:8px; flex:0 0 auto; padding:4px 5px 5px 10px; background:linear-gradient(180deg, oklch(62% 0.16 256), oklch(45% 0.19 260)); }
 .lx-sow-kicker { font:bold 10.5pt "Trebuchet MS",Verdana,sans-serif; color:#fff; text-shadow:0 1px 1px oklch(24% 0.1 260 / .6); }
 .lx-sow-x { margin-left:auto; width:20px; height:20px; padding:0; overflow:hidden; font-size:0; cursor:pointer; position:relative; border:1px solid #d8401c; border-radius:3px; background-color:#e45f3e; background-image:linear-gradient(180deg,#e8795f,#e45d3d 55%,#ae3110); }
@@ -534,6 +591,11 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
     body: `
     <h1>The Other Web</h1>
     <p class="lx-lede">Every page has a second life as data. Paste a URL to see what a person receives, what representative bots can retrieve, and which missing web surfaces limit them. The score is a map, not a verdict: every point stays tied to evidence. Scan a few sites and you start predicting the briefing before it loads; that mental model is the point, since you build differently once you carry it. Fetched server-side, honestly, as <a href="/bot">AadharshBot</a>.</p>
+    ${lensStateOfWebRail()}
+    <!-- both "?" triggers open a <dialog> through script, so with JS off they are
+         buttons that do nothing. The rail's numbers are plain SSR'd text and stay.
+         Same honesty rule as the homepage's no-JS photo and playlist notes. -->
+    <noscript><style>.lx-sow-q,.lx-sow-open{display:none}</style></noscript>
 
     <form class="lx-addr" id="lx-form" action="/lens" method="get">
       <span class="lx-globe" aria-hidden="true"></span>
@@ -587,7 +649,7 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
     </div>
 
     <div class="lx-status" id="lx-status">${seeded || (initial && !initial.ok) ? lensStatusFragment(initial, state) : '<span>Idle. Nothing is fetched until you ask, and then just once, server-side, with no logging.</span>'}</div>
-    <footer>&larr; <a href="/">aadhar.sh</a> &middot; a research toy about how machines read the web &middot; <button type="button" class="lx-sow-open" id="lx-sow-open">the state of the machine web</button> &middot; fetched by <a href="/bot">AadharshBot</a></footer>
+    <footer>&larr; <a href="/">aadhar.sh</a> &middot; a research toy about how machines read the web &middot; <button type="button" class="lx-sow-open" data-sow-open>the state of the machine web</button> &middot; fetched by <a href="/bot">AadharshBot</a></footer>
     ${lensStateOfWebPanel()}
     ${initialScript}
 `,
