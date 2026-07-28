@@ -603,6 +603,39 @@ npm run deploy
     post-deploy), never from a feature branch: the dictionary must be bytes
     browsers actually hold, and a branch build is not that.
 
+15. **Attaching CDP's `Network` domain suppresses Chrome's Early-Hints preload,
+    so a devtools-driven trace reports a FALSE "the browser ignores our 103."**
+    Chrome still fires `Network.responseReceivedEarlyHints` carrying the correct
+    `link` header, then fetches the hinted assets ~5ms AFTER the 200's headers.
+    That reads exactly like the 103 buying nothing, and it cost a whole
+    investigation on 2026-07-27 before the control run gave it away: the same
+    Playwright harness pointed at `https://www.cloudflare.com/`, a known-good 103
+    origin, failed identically. Two unrelated origins failing the same way is the
+    tell that the instrument is lying, not the site.
+
+    **Measure it with a plain `page.goto` + `performance.getEntriesByType(
+    "resource")`, no CDP session, fresh profile for a cold cache.** Two signals,
+    and you need both. `initiatorType === "early-hints"` says the feature is
+    active. A fetch duration far too small for the byte count says the preload
+    actually completed inside the 103 window: 7632 bytes of `luna.css` in 0.8ms
+    is not a network fetch, it is a preload-cache hit. Do NOT judge by
+    `startTime`, which is stamped when the DOCUMENT consumes the resource and so
+    always looks like it lands just after the 200, whether or not the hint worked.
+
+    The payoff scales with the 103-to-200 window, which is worker think-time, so
+    it only shows on a cold isolate or a slow KV read. Measured: a ~280ms window
+    preloaded fully (0.8ms recorded fetch); windows under ~100ms did not (26-35ms
+    real fetches). That is `shell-assets.js` working as its own comment describes,
+    not a defect. Ruled out along the way and worth not re-testing:
+    `Network.setCacheDisabled`, `Emulation.setCPUThrottlingRate`, headless vs
+    headful, and an explicit `--enable-features=EarlyHintsPreloadForNavigation`.
+    Playwright's default `--disable-features` list never mentions Early Hints.
+
+    The same caution applies to paint metrics from an embedded/automated browser
+    pane: a tab that is not actually visible defers paint, which made FCP look
+    like it trailed DCL by 235ms when a real trace showed FCP landing 291ms
+    BEFORE DCL, mid-stream. Confirm any paint claim against a real window.
+
 ---
 
 ## Source folder for new photos
