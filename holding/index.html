@@ -1340,7 +1340,9 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
      bfcache restores re-run nothing, so back/forward stays tick-free. the
      display above is a read-only peek; script-off visitors tick via the
      <noscript> pixel instead. ?tick=1 says "side effect only" and gets a 204
-     back, so this costs the round trip and no body. -->
+     back with no body AND no wait: the worker finishes the Durable Object trip
+     under waitUntil, so this costs edge RTT rather than the ~630ms the DO round
+     trip took on a cold contended load. -->
 <script>(function(){var t=function(){fetch("/hit?tick=1",{keepalive:true}).catch(function(){})};document.prerendering?addEventListener("prerenderingchange",t,{once:true}):t()})();</script>
 
     <!--
