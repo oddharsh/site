@@ -103,8 +103,21 @@ const DICTIONARY_TYPES = { js: 1, css: 1 };
 // This is #119's lesson moved into the protocol instead of living only in a JS gate. The
 // sprite stays out on purpose — see DICTIONARY_TYPES — and naming destinations is how the
 // wire says so.
-const SHELL_DESTS = '("script" "style")';   // js + css; deliberately not "image"
-const DICTIONARY_OFFER = { "use-as-dictionary": `match="/a/*", match-dest=${SHELL_DESTS}` };
+// PER-BASE, not a shared /a/* glob. Chrome DevTools reported "Found a matching dictionary,
+// but the dictionary is not used for the response" on tooltip.js and hoist.js, and the
+// pooled pattern is why: every js/css asset offered the SAME match, so Chromium keyed them
+// all to one scope and, on a request for tooltip.js, could send the hash of nav.js. Delta
+// filenames are per-base (/ad/<base>.<hash8>.<dicttag>.dcz), so a cross-base hash can never
+// resolve — the client did its half correctly and we answered plain brotli.
+//
+// Scoping match to the asset family makes the dictionary Chromium sends the one we can
+// actually diff against. match-dest narrows per type as well: a stylesheet is never fetched
+// as a script, and neither is ever fetched as an image (the #119 rule, in the protocol).
+const SHELL_DESTS = { js: '("script")', css: '("style")' };
+const shellOffer = (pathname, ext) => {
+  const base = pathname.slice("/a/".length).replace(/\.[0-9a-f]{8}\.(js|css|svg)$/, "");
+  return `match="/a/${base}.*", match-dest=${SHELL_DESTS[ext] || '("script" "style")'}`;
+};
 
 // A WORKER CANNOT NEGOTIATE COMPRESSION. Measured in wrangler dev 2026-07-26: the
 // runtime rewrites the request's Accept-Encoding to a constant before the worker sees
@@ -182,7 +195,7 @@ async function serveDictionaryDelta(url, ext, request, env) {
   headers.set("vary", "accept-encoding, available-dictionary");
   // Keep offering the shell as a dictionary, so a client that just delta-updated adopts
   // the new bytes and the chain continues on the next deploy.
-  headers.set("use-as-dictionary", DICTIONARY_OFFER["use-as-dictionary"]);
+  headers.set("use-as-dictionary", shellOffer(url.pathname, ext));
   headers.delete("etag");   // described the .dcz file, not this resource
   return new Response(res.body, { status: 200, headers, encodeBody: "manual" });
 }
@@ -268,7 +281,7 @@ export async function servePrecompressedShell(request, env) {
   // Only offer a type we are willing to answer with a delta. Offering the sprite would
   // teach Chromium to send Available-Dictionary for it and then get plain br anyway:
   // wasted storage on the client and a header we deliberately ignore.
-  if (DICTIONARY_TYPES[ext]) headers.set("use-as-dictionary", DICTIONARY_OFFER["use-as-dictionary"]);
+  if (DICTIONARY_TYPES[ext]) headers.set("use-as-dictionary", shellOffer(url.pathname, ext));
   else headers.delete("use-as-dictionary");
   // The URL is content-addressed, so these bytes never change identity. Vary still
   // has to name accept-encoding: the same URL answers with br or identity depending
