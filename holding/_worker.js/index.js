@@ -289,14 +289,20 @@ const PREFIX = [
   // the 30 static garage/lwe pages. Worker-first so they can be answered with a dcz delta
   // or the brotli q11 twin; a sub-resource under either prefix (images, ask.js) is matched
   // out by the extension test inside the handler and passes straight through.
+  // The bare section path is matched alongside the prefix, because "/garage/" does
+  // NOT match "/garage". Without it the two section indexes fell straight through
+  // to the asset layer and their brotli q11 twins were built, uploaded, and never
+  // served: /garage shipped 13,264 bytes against an 11,131-byte twin, /lwe 6,197
+  // against 5,171 (2026-07-28). It hid because an unserved twin still returns a
+  // correct page, only a larger one, and all 29 sub-pages were byte-exact.
   {
     label: "/garage/<page>",
-    match: (pathname) => pathname.startsWith("/garage/"),
+    match: (pathname) => pathname === "/garage" || pathname.startsWith("/garage/"),
     handle: routeStaticPage,
   },
   {
     label: "/lwe/<page>",
-    match: (pathname) => pathname.startsWith("/lwe/"),
+    match: (pathname) => pathname === "/lwe" || pathname.startsWith("/lwe/"),
     handle: routeStaticPage,
   },
   {
