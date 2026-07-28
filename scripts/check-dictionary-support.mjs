@@ -57,12 +57,31 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
 // destination, so a bare `match=` promises deltas for image/fetch/etc too. Assert the
 // scope AND that a delta still comes back — a malformed inner list would make Chromium
 // drop the offer and every delta would vanish silently into plain brotli.
+//
+// Each asset carries its OWN scope, matching its own destination: nav.js is
+// ("script"), luna.css is ("style"). This assertion used to require both names on
+// every offer, which was right while one `/a/*` glob covered the pair, and became
+// wrong the moment #138 split the offers per asset. It then failed for eleven days
+// against correct behaviour — and because dcz:check is a manual check rather than a
+// CI gate, a red line here is exactly the kind that gets read as background noise.
+// So: assert each asset's own destination, and assert they DIFFER, which is the
+// property that a regression back to a shared glob would actually break.
 {
   const home = await (await fetch("https://aadhar.sh/", { headers: { "accept-encoding": "identity" } })).text();
-  const live = home.match(/\/a\/nav\.([0-9a-f]{8})\.js/)?.[1];
-  const r = await get(`https://aadhar.sh/a/nav.${live}.js`);
-  const uad = r.headers.get("use-as-dictionary") || "";
-  report("shell offer scoped", /match-dest=\("script" "style"\)/.test(uad), `uad=${uad || "(absent)"}`);
+  const navHash = home.match(/\/a\/nav\.([0-9a-f]{8})\.js/)?.[1];
+  const cssHash = home.match(/\/a\/luna\.([0-9a-f]{8})\.css/)?.[1];
+
+  const nav = (await get(`https://aadhar.sh/a/nav.${navHash}.js`)).headers.get("use-as-dictionary") || "";
+  report("shell js offer scoped", /match="\/a\/nav\.\*"/.test(nav) && /match-dest=\("script"\)/.test(nav),
+         `uad=${nav || "(absent)"}`);
+
+  const css = cssHash ? (await get(`https://aadhar.sh/a/luna.${cssHash}.css`)).headers.get("use-as-dictionary") || "" : "";
+  report("shell css offer scoped", /match="\/a\/luna\.\*"/.test(css) && /match-dest=\("style"\)/.test(css),
+         `uad=${css || "(absent)"}`);
+
+  report("shell offers are per-asset", nav !== "" && css !== "" && nav !== css,
+         `nav and css must not share one offer (nav=${nav || "(absent)"} css=${css || "(absent)"})`);
+
   const p = await get("https://aadhar.sh/garage/pretext");
   const puad = p.headers.get("use-as-dictionary") || "";
   report("page offer scoped", /match-dest=\("document"\)/.test(puad), `uad=${puad || "(absent)"}`);

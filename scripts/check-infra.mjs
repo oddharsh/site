@@ -380,6 +380,22 @@ async function checkEdge(infra) {
         continue;
       }
 
+      // "can the edge do X" and "which X does it PICK" are different questions,
+      // and only the second one describes what a visitor receives. Every real
+      // browser offers several encodings at once, so the choice among them is
+      // the whole behaviour — and it is invisible to the check above, which
+      // offers exactly one at a time and so can never observe a preference.
+      // Offer the full set a browser sends and require a specific winner.
+      if (want.compressionPrefers) {
+        const { offer, expect } = want.compressionPrefers;
+        const res = await fetchEdge(url, { "accept-encoding": offer });
+        const got = (res.headers.get("content-encoding") || "").trim().toLowerCase();
+        got !== expect
+          ? drift(`${check.id}: offered "${offer}" and the edge chose ${got || "none"}, declared ${expect} — ${check.why.split(".")[0]}`)
+          : pass(`edge ${check.id}: chose ${expect} from "${offer}"`);
+        continue;
+      }
+
       const res = await fetchEdge(url);
       const problems = [];
 
