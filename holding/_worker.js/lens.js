@@ -543,7 +543,12 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 .lx-pane-human .lx-pane-h { background:linear-gradient(180deg, oklch(58% 0.06 150), oklch(46% 0.09 155)); }
 .lx-pane-browser .lx-pane-h { background:linear-gradient(180deg, oklch(58% 0.10 205), oklch(45% 0.14 220)); }
 .lx-body { flex:1 1 auto; overflow:auto; padding:10px 11px; }
-.lx-empty { color:oklch(55% 0 0); font-size:9.5pt; padding:18px 6px; text-align:center; }
+/* Empty states name what this place is and what fills it, rather than only
+   naming the action. "Paste a URL to compare the three surfaces" told a stranger
+   the mechanic and none of the reason. First line is the instruction, the <span>
+   is the payoff, deliberately quieter. */
+.lx-empty { color:oklch(45% 0 0); font-size:10pt; padding:18px 14px; text-align:center; text-wrap:pretty; }
+.lx-empty span { display:block; max-width:34ch; margin:5px auto 0; font-size:9pt; line-height:1.5; color:oklch(58% 0 0); }
 .lx-spin { color:oklch(42.61% 0.2353 263.74); font-size:9.5pt; padding:18px 6px; text-align:center; }
 .lx-idle-lens { max-width:620px; margin:22px auto; padding:16px 18px; border:1px solid oklch(78% 0.04 250); border-radius:4px; background:linear-gradient(180deg,#fff,oklch(97% 0.008 250)); color:oklch(31% 0.02 255); }
 .lx-idle-kicker { color:oklch(46% 0.13 252); font:9pt Tahoma,Verdana,sans-serif; text-transform:uppercase; letter-spacing:.06em; }
@@ -647,9 +652,14 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 .lx-mult { font-family:"Courier New",monospace; font-size:7.8pt; color:oklch(38% 0.09 150); background:oklch(94% 0.04 150); border:1px solid oklch(80% 0.06 150); border-radius:8px; padding:1px 7px; white-space:nowrap; }
 .lx-bots th.num, .lx-bots td.num { text-align:right; font-family:"Courier New",monospace; white-space:nowrap; padding-right:10px; }
 
-/* the dollar-thesis verdict strip, above every scanned lens */
-.lx-verdict { margin:0 0 11px; padding:8px 11px; border:1px solid oklch(74% 0.09 150); border-left:4px solid oklch(52% 0.14 150); border-radius:3px; background:linear-gradient(180deg,oklch(98% 0.02 150),oklch(96% 0.03 150)); color:oklch(30% 0.03 255); font-size:9.4pt; line-height:1.5; }
-.lx-verdict b { color:oklch(34% 0.13 150); font-family:"Courier New",monospace; }
+/* the dollar-thesis verdict strip, above every scanned lens. This is the one
+   claim on the page a non-technical reader repeats afterward, so it is the one
+   block sized to be read across a room rather than over a shoulder: 10.6pt
+   against the 9.4pt it replaces, which is the largest body text in the pane
+   without competing with the readiness score's 29pt hero below it. Deliberately
+   NOT a second hero number — two 30pt figures stacked would make neither read. */
+.lx-verdict { margin:0 0 11px; padding:9px 12px; border:1px solid oklch(74% 0.09 150); border-left:4px solid oklch(52% 0.14 150); border-radius:3px; background:linear-gradient(180deg,oklch(98% 0.02 150),oklch(96% 0.03 150)); color:oklch(30% 0.03 255); font-size:10.6pt; line-height:1.5; text-wrap:pretty; }
+.lx-verdict b { color:oklch(34% 0.13 150); font-family:"Courier New",monospace; font-size:10.2pt; }
 
 /* agent trace: an XP console of what an agent would do */
 .lx-trace { font-family:"Courier New",Courier,monospace; font-size:8.7pt; line-height:1.5; background:oklch(22% 0.02 255); border-radius:3px; padding:9px 10px; color:oklch(90% 0.02 150); }
@@ -811,11 +821,11 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
     <div class="lx-panes is-${state.view}" id="lx-panes">
       <section class="lx-pane lx-pane-human" id="lx-human">
         <div class="lx-pane-h" id="lx-human-h">${humanHeader}</div>
-        <div class="lx-body" id="lx-human-body">${seeded ? lensHumanFragment(initial) : '<div class="lx-empty">Paste a URL above to compare the three surfaces.</div>'}</div>
+        <div class="lx-body" id="lx-human-body">${seeded ? lensHumanFragment(initial) : '<div class="lx-empty">Paste any URL above.<span>You get the page a person sees, the raw file a machine gets instead, and what that difference costs.</span></div>'}</div>
       </section>
       <section class="lx-pane lx-pane-machine" id="lx-machine">
         <div class="lx-pane-h" id="lx-machine-h">${machineHeader}</div>
-        <div class="lx-body" id="lx-machine-body">${seeded ? lensMachineFragment(initial, state) : '<div class="lx-empty">The markup, metadata, and machine directives land here.</div>'}</div>
+        <div class="lx-body" id="lx-machine-body">${seeded ? lensMachineFragment(initial, state) : '<div class="lx-empty">What the machine actually receives.<span>The raw file, the rules it is handed, and the bill for reading them.</span></div>'}</div>
       </section>
       <section class="lx-pane lx-pane-browser" id="lx-browser">
         <div class="lx-pane-h" id="lx-browser-h">${browserHeader}</div>
