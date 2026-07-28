@@ -785,27 +785,36 @@ for (const [file, srcPath, marker] of SHELLS) {
   // — so the garage pages' documentary "/hoist.js" prose mentions cannot be caught, which
   // is the precision the attribute rule existed to protect. The ?v=1 ritual on
   // lens-browser retires here: the hash IS the version.
+  //
+  // hoist has TWO loader shapes, and missing the second one cost a real serialized
+  // fetch in production: nav.js + index.html reach it through `import("/hoist.js")`,
+  // but tooltip.js reaches it through a STATIC `import {...} from "/hoist.js"`. With
+  // only the call-syntax pattern, tooltip.js kept the unhashed specifier, so every
+  // homepage load fetched hoist twice — once hashed (the inline warm-up, parallel with
+  // tooltip.js) and once unhashed, discovered only after tooltip.js had parsed. Measured
+  // on production 2026-07-27: tooltip.js finished at 1112ms and /hoist.js only STARTED at
+  // 1114ms, the one serialized fetch left on the page, and the duplicate came back
+  // max-age=300 while its immutable twin sat in cache unused.
+  //
+  // ORDER IS LOAD-BEARING and the list is sorted leaves-first. Each asset's rewrites are
+  // applied to the staged tree immediately after it is hashed, so a dependent hashed
+  // later reads bytes that already carry its dependency's hashed URL. tooltip depends on
+  // hoist, so hoist must be hashed and rewritten first — otherwise tooltip's `/a/` copy
+  // ships the unhashed specifier forever, since the rewrite pass deliberately skips `a/`.
   const STRING_ASSETS = [
     { file: "/hoist.js",        base: "hoist",        mk: (to) => [
-      [/import\((["'`])\/hoist\.js\1\)/g, `import($1${to}$1)`] ] },
+      [/import\((["'`])\/hoist\.js\1\)/g, `import($1${to}$1)`],
+      [/(\bfrom\s*)(["'`])\/hoist\.js\2/g, `$1$2${to}$2`] ] },
     { file: "/lens-browser.js", base: "lens-browser", mk: (to) => [
       [/(["'`])\/lens-browser\.js\?v=1\1/g, `$1${to}$1`] ] },
     { file: "/tooltip.js",      base: "tooltip",      mk: (to) => [
       [/import\((["'`])\/tooltip\.js\1\)/g, `import($1${to}$1)`] ] },
   ];
   {
-    const stringReps = [];
-    for (const a of STRING_ASSETS) {
-      const bytes = await readFile(`${OUT}/holding${a.file}`);
-      const to = `/a/${a.base}.${createHash("sha256").update(bytes).digest("hex").slice(0, 8)}.js`;
-      await writeFile(`${OUT}/holding${to}`, bytes);
-      hashedFor[a.base] = to;
-      for (const [re, sub] of a.mk(to)) stringReps.push({ re, sub });
-      console.log(`hashed asset (string-loaded): ${a.file} -> ${to} (${bytes.length} bytes)`);
-    }
-    // Rewrite across every staged surface that can carry a loader: HTML pages, the
-    // top-level shell scripts themselves (nav.js imports hoist — hashed AFTER this, so
-    // ordering keeps its hash honest), worker modules, serendipity. NOT the .src twins.
+    // Every staged surface that can carry a loader: HTML pages, the top-level shell
+    // scripts themselves (nav.js imports hoist), worker modules, serendipity. NOT the
+    // .src twins, and NOT `a/` — the hashed copies are already-final bytes, which is
+    // precisely why each asset must be rewritten before the next one is hashed.
     const stringTargets = [`${OUT}/serendipity/serendipity.js`];
     for (const rel of await readdir(`${OUT}/holding`, { recursive: true })) {
       if (rel.includes(".src.")) continue;
@@ -814,20 +823,32 @@ for (const [file, srcPath, marker] of SHELLS) {
       }
     }
     let hits = 0;
-    for (const path of stringTargets) {
-      let t; try { t = await readFile(path, "utf8"); } catch { continue; }
-      let out = t;
-      for (const { re, sub } of stringReps) out = out.replace(re, sub);
-      if (out !== t) { await writeFile(path, out); hits++; }
+    for (const a of STRING_ASSETS) {
+      const bytes = await readFile(`${OUT}/holding${a.file}`);
+      const to = `/a/${a.base}.${createHash("sha256").update(bytes).digest("hex").slice(0, 8)}.js`;
+      await writeFile(`${OUT}/holding${to}`, bytes);
+      hashedFor[a.base] = to;
+      const reps = a.mk(to);
+      for (const path of stringTargets) {
+        let t; try { t = await readFile(path, "utf8"); } catch { continue; }
+        let out = t;
+        for (const [re, sub] of reps) out = out.replace(re, sub);
+        if (out !== t) { await writeFile(path, out); hits++; }
+      }
+      console.log(`hashed asset (string-loaded): ${a.file} -> ${to} (${bytes.length} bytes)`);
     }
     // Witnesses: each island's loader must now carry the hashed URL, or the enrolment
     // silently did nothing and the deploy must not proceed.
     const idx = await readFile(`${OUT}/holding/index.html`, "utf8");
     const nav = await readFile(`${OUT}/holding/nav.js`, "utf8");
     const lens = await readFile(`${OUT}/holding/lens.js`, "utf8");
+    const tip = await readFile(`${OUT}/holding${hashedFor.tooltip}`, "utf8");
     if (!idx.includes(hashedFor.tooltip)) throw new Error("index.html was not repointed to hashed tooltip.js");
     if (!idx.includes(hashedFor.hoist) || !nav.includes(hashedFor.hoist)) throw new Error("a hoist.js loader was not repointed (index.html or nav.js)");
     if (!lens.includes(hashedFor["lens-browser"])) throw new Error("lens.js was not repointed to hashed lens-browser.js");
+    // the SERVED tooltip bytes, not the staged source: this is the copy the browser gets,
+    // and the one the old ordering left pointing at the unhashed duplicate.
+    if (!tip.includes(hashedFor.hoist)) throw new Error(`${hashedFor.tooltip} still imports an unhashed /hoist.js — STRING_ASSETS ordering broke (hoist must be hashed before tooltip)`);
     console.log(`string-loaded islands: rewritten across ${hits} staged files`);
   }
 
