@@ -27,7 +27,8 @@
     "pages:check": "node scripts/check-page-contracts.mjs",
     "test": "node --test contract-tests.mjs",
     "shell:roll": "node scripts/roll-shell-dictionary.mjs",
-    "dcz:check": "node scripts/check-dictionary-support.mjs"
+    "dcz:check": "node scripts/check-dictionary-support.mjs",
+    "inp": "node scripts/inp-lab.mjs"
   },
   "devDependencies": {
     "@minify-html/node": "0.18.1",
