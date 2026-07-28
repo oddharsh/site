@@ -200,7 +200,14 @@ function fmtDuration(ms) {
 // on ctx.waitUntil. used by both /rn/tracks and the homepage prerender, so
 // whichever gets hit keeps the payload warm.
 export async function getTracksSWR(env, ctx, pid, opts = {}) {
+  // cacheTtl 1800: this is the homepage's slowest TTFB-gating read (204ms cold on
+  // 2026-07-27), and the key is write-rarely by construction. A playlist swap
+  // mints a whole new `tracks:<pid>` key, so a rollover never waits on this one
+  // going stale. The half hour is only spendable because the one manual bust
+  // (/rn/tracks?bust=) is a convenience: it clears the colo that served it right
+  // away, and every other colo catches up as its own cacheTtl lapses.
   return swrKV(env, ctx, `tracks:${pid}`, RN_TRACKS_TTL, () => scrapePlaylistTracks(pid, env, ctx), {
+    cacheTtl: 1800,
     buildOnMiss: opts.buildOnMiss === true,
     isValid: (p) => p && Array.isArray(p.tracks),
     shouldStore: (p) => p && Array.isArray(p.tracks) && p.tracks.length > 0,
