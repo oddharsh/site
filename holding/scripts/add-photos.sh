@@ -30,16 +30,20 @@
 #      (EXIF for the tooltip) and bakes the 64-bin RGB+luma histograms into
 #      meta.hist via photo-histograms.py — the tooltip renders the bars from
 #      that field, and the metadata regen drops it, so the bake runs right after
-#   5. captions anything still missing alt text (gen-alt-text.py), then validates
-#      the whole artifact graph — pixels, EXIF, histograms, captions — via
-#      check-photo-pipeline.mjs, which fails the run rather than let an
+#   5. writes the stem's entry into holding/_worker.js/photo-index.json — the
+#      committed photo index the worker BUNDLES (which photos exist: R2 key,
+#      size, upload date). This is what makes a photo appear in the grid, and
+#      it ships at deploy like every other committed artifact. (It replaced the
+#      manifest:images KV cache over a runtime R2 list(); there is no cache to
+#      bust anymore.)
+#   6. captions anything still missing alt text (gen-alt-text.py), then validates
+#      the whole artifact graph — pixels, EXIF, histograms, captions, the index —
+#      via check-photo-pipeline.mjs, which fails the run rather than let an
 #      unlabelled image reach a deploy
-#   6. busts the manifest:images KV key so the worker re-derives from R2
 #
-# REMOTE_RENDER_ONLY=1 skips R2 uploads and KV writes. The GitHub Actions
-# pipeline uses it because the source object is already in R2 and the generated
-# public tiers are returned as a normal PR; cache busting happens separately
-# after the production deploy.
+# REMOTE_RENDER_ONLY=1 skips R2 uploads. The GitHub Actions pipeline uses it
+# because the source object is already in R2 and every generated artifact —
+# tiers, metadata, the index entry — comes back as a normal PR.
 #
 # safe to re-run. skips thumbnail generation when all three thumb files are
 # already newer than the source. always uploads to R2 (wrangler r2 put is
@@ -62,7 +66,6 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_DIR="$( cd "$SCRIPT_DIR/../.." && pwd )"
 DEST="$PROJECT_DIR/holding/images"
 TMP="/tmp/aadhar-add-photos-$$"
-NS="3cb8a107c58e47dc9244e75b33401f36"  # RN_KV namespace
 
 # square thumbnail edges (px). the file IS the displayed pixels (center square),
 # so no off-square bytes ship. MUST match reencode-thumbnails.sh + THUMB_SMALL_PX
@@ -328,11 +331,52 @@ fi
 fi
 echo ""
 
-# ── phase 4: content-hash the new tiers + metadata + cache bust ──────
-echo "phase 4 — hash tiers + metadata regen + cache bust"
+# ── phase 4: content-hash the new tiers + photo index + metadata ─────
+echo "phase 4 — hash tiers + photo index + metadata regen"
 # content-address every tier into holding/i/ + refresh hashes.json (the
-# manifest bakes /i/ URLs from that map; idempotent, only new bytes copy)
+# worker bakes /i/ URLs from that map; idempotent, only new bytes copy)
 "$SCRIPT_DIR/hash-thumbnails.sh" 2>&1 | tail -1
+
+# ── the committed photo index (holding/_worker.js/photo-index.json) ──
+# One entry per published stem: the R2 key, its byte size, and when it was
+# uploaded. The worker BUNDLES this file (photos.js imports it), so the pool
+# read costs module memory instead of a KV round trip — and this write step is
+# what replaced the retired manifest:images KV bust: a photo goes live at
+# deploy, which was already the real gate because its /i/ tiles, hashes.json
+# entry, and caption are committed files too.
+#
+# size = the staged bytes that went (or will go) to R2: the progressive
+# rearrangement for a JPG source (falling back to the source file where
+# jpegtran fell back, and in REMOTE_RENDER_ONLY mode, where the local file IS
+# the R2 object), the q100 export for a HIF source. `uploaded` is preserved
+# for a stem that already has an entry, so re-renders don't masquerade as new
+# photos in the footer's "Last modified".
+INDEX_FILE="$PROJECT_DIR/holding/_worker.js/photo-index.json"
+NOW_ISO="$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
+NEW_ENTRIES="$TMP/index-entries.json"
+echo '{}' > "$NEW_ENTRIES"
+[ -f "$INDEX_FILE" ] || echo '{}' > "$INDEX_FILE"
+while IFS= read -r f; do
+  base=$(basename "$f"); stem="${base%.*}"
+  ext_lc=$(echo "${base##*.}" | tr '[:upper:]' '[:lower:]')
+  case "$ext_lc" in
+    heic|heif|hif) key="${stem}.jpg"; obj="$EXPORTS/$stem.jpg" ;;
+    *)             key="${stem}.${ext_lc}"; obj="${PROGDIR:-/nonexistent}/$stem.$ext_lc"; [ -f "$obj" ] || obj="$f" ;;
+  esac
+  if [ ! -f "$obj" ]; then
+    echo "  index: no staged bytes for $stem — entry skipped (photos:check will flag it)" >&2
+    continue
+  fi
+  size=$(wc -c < "$obj" | tr -d '[:space:]')
+  jq --arg s "$stem" --arg k "$key" --argjson z "$size" \
+     '. + {($s): {full: $k, size: $z}}' "$NEW_ENTRIES" > "$NEW_ENTRIES.tmp" && mv "$NEW_ENTRIES.tmp" "$NEW_ENTRIES"
+done < "$SOURCES"
+jq -S --arg now "$NOW_ISO" --slurpfile new "$NEW_ENTRIES" '
+  . as $idx
+  | ($new[0] | with_entries(.value += {uploaded: ($idx[.key].uploaded // $now)}))
+  | $idx + .
+' "$INDEX_FILE" > "$INDEX_FILE.tmp" && mv "$INDEX_FILE.tmp" "$INDEX_FILE"
+echo "  photo index: $(jq 'length' "$INDEX_FILE") entries"
 # regenerate from the FIRST input dir if it was a directory; else from the
 # parent dir of the first file (metadata script walks one canonical dir).
 META_SRC=""
@@ -377,14 +421,6 @@ else
 fi
 
 node "$PROJECT_DIR/holding/scripts/check-photo-pipeline.mjs"
-
-if [ "${REMOTE_RENDER_ONLY:-0}" = "1" ]; then
-  echo "  manifest cache bust deferred to the remote post-deploy workflow"
-else
-  wrangler kv key delete --namespace-id="$NS" "manifest:images"        --remote >/dev/null 2>&1 || true
-  wrangler kv key delete --namespace-id="$NS" "manifest:images:fresh"  --remote >/dev/null 2>&1 || true
-  echo "  manifest cache busted (value + fresh sentinel)"
-fi
 echo ""
 
 echo "✓ done. deploy with:"

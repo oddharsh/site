@@ -81,6 +81,32 @@ export async function swrKV(env, ctx, key, ttl, buildFn, opts = {}) {
   return value;
 }
 
+// deadline: give a read a fixed budget on the render path, then ship without
+// it. KV's per-colo cache is a shared LRU, so at this site's traffic a key can
+// come back 100-200ms cold at ANY time (observed on the homepage 2026-07-27/28,
+// including seconds after a warm read) — no cacheTtl makes that tail go away,
+// because eviction isn't expiry. Racing the read caps what it can cost the
+// response; the underlying promise is NOT cancelled, so a timed-out KV get
+// still completes, still fires its SWR refresh, and still warms the colo for
+// the next visitor. The work isn't wasted, only un-waited-for.
+//
+// onTimeout fires only if the budget lapses first (the timer is cleared when
+// the read settles, so a 5ms read can never mark itself deadlined at 25ms).
+// Callers pass a fallback distinguishable from the read's own miss value when
+// they need "slow" and "absent" to behave differently downstream.
+export function deadline(promise, ms, fallback, onTimeout) {
+  let timer;
+  return Promise.race([
+    Promise.resolve(promise).finally(() => clearTimeout(timer)),
+    new Promise((resolve) => {
+      timer = setTimeout(() => {
+        if (onTimeout) onTimeout();
+        resolve(fallback);
+      }, ms);
+    }),
+  ]);
+}
+
 export async function deleteSWRKV(env, key, opts = {}) {
   if (!env || !env.RN_KV) return;
   const freshKey = opts.freshKey || `${key}:fresh`;

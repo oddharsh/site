@@ -512,15 +512,13 @@ The normal photo path is entirely remote:
 2. Run [Remote photo pipeline](https://github.com/oddharsh/site/actions/workflows/photo-pipeline.yml).
 3. Enter the exact R2 object key(s), or all for a complete thumbnail re-encode.
 4. Review and merge the generated artifact PR through the normal CI and
-   production-promotion path.
-5. After Workers Builds has deployed the merge, run
-   [Bust remote photo manifest](https://github.com/oddharsh/site/actions/workflows/bust-photo-manifest.yml).
+   production-promotion path. The deploy IS the go-live: the worker bundles
+   `photo-index.json` + `hashes.json`, so there is no cache to bust and no
+   post-deploy step. (The old "Bust remote photo manifest" workflow retired
+   with the `manifest:images` KV cache, 2026-07-28.)
 
 The photo-processing workflow needs no Cloudflare secret: it reads source
-objects through the public /images/full/<key> route and skips R2/KV writes.
-The cache-bust workflow needs repository secrets
-PHOTOS_CLOUDFLARE_API_TOKEN (Workers KV edit only) and
-CLOUDFLARE_ACCOUNT_ID.
+objects through the public /images/full/<key> route and skips R2 writes.
 
 The GitHub-hosted macOS runner installs the Homebrew tools, builds the `zenc`
 encoder with cargo, runs the selected routine, and discards the source files when
@@ -560,12 +558,17 @@ npm run deploy   # local fallback only; normal production is merge + CI promotio
   remain archive objects and also produce a full-resolution maximum-quality
   q100 JPG export as the `/images/full/<stem>.jpg` click target.
 - Emits the 600px JPG fallback, 600px AVIF, and 400px mobile AVIF tiers;
+  writes the stem's entry into `holding/_worker.js/photo-index.json` (the
+  committed pool the worker bundles — R2 key, byte size, upload date);
   regenerates EXIF metadata; bakes the four 64-bin RGB/luminance histograms;
-  and runs `npm run photos:check` before busting the manifest cache.
-- The remote render-only path defers the `manifest:images` bust until the
-  separate post-deploy workflow; the local fallback performs its normal KV
-  writes.
-- A thumbnail can't go stale anymore: its URL is its bytes (`/i/<stem>.<hash8>`). If one looks wrong, re-run `hash-thumbnails.sh` and bust the manifest (value + `:fresh`); a changed file gets a new URL automatically.
+  and runs `npm run photos:check` as the final gate.
+- A photo appears in the grid at DEPLOY, when its index entry ships with the
+  worker. There is no KV manifest and nothing to bust.
+- A thumbnail can't go stale anymore: its URL is its bytes (`/i/<stem>.<hash8>`). If one looks wrong, re-run `hash-thumbnails.sh`, commit, deploy; a changed file gets a new URL automatically.
+- To REMOVE a photo: delete its `photo-index.json` entry, its `hashes.json`
+  entry, its `/i/` tiers, metadata, and caption, then deploy (photos:check
+  enforces the bijection). Delete the R2 object separately if the original
+  should go too.
 
 ### Regenerate just the EXIF metadata (photos already uploaded)
 ```bash
@@ -580,7 +583,7 @@ the tooltip skips nulls rather than guess.
 ```bash
 ./holding/scripts/reencode-thumbnails.sh           # re-encodes every grid thumb as pre-cropped center squares
 ./holding/scripts/hash-thumbnails.sh               # re-hash the tiers into /i/ + rewrite hashes.json
-# bust manifest:images + manifest:images:fresh in KV, then deploy (new bytes = new URLs, nothing else to bump)
+# commit + deploy (new bytes = new URLs; the worker bundles the index + hashes, so the deploy is the bust)
 ```
 `SQ_SM` (mobile tier) must match `THUMB_SMALL_PX` in `_worker.js` (the `-<N>.avif` suffix). add-photos.sh mirrors this script's two encode paths; keep them in sync.
 
@@ -673,8 +676,8 @@ wrangler deploy   # from the repo root; deploys the aadhar-sh Worker (holding/ a
 
 ```bash
 NS="3cb8a107c58e47dc9244e75b33401f36"
-# photo manifest (forces re-derive from R2; the value is two-key SWR, deleting the value is enough):
-wrangler kv key delete --namespace-id="$NS" "manifest:images" --remote
+# (the photo manifest is no longer a cache: the worker bundles photo-index.json,
+#  so a deploy replaces it atomically and there are no manifest:* keys to touch)
 # directory-listing indexes:
 wrangler kv key delete --namespace-id="$NS" "idx:images" --remote
 wrangler kv key delete --namespace-id="$NS" "idx:imagesfull" --remote
@@ -684,7 +687,7 @@ wrangler kv key delete --namespace-id="$NS" "tracks:<id>:fresh" --remote
 ```
 
 ### Bump THUMB_VERSION (retired — nothing to bump)
-Fully retired (hash cutover 2026-07-03): thumbnails are content-addressed at `/i/<stem>.<hash8>.<ext>`, so a re-encode mints new URLs by itself — run `./holding/scripts/hash-thumbnails.sh` after re-encoding, bust `manifest:images` + `manifest:images:fresh`, deploy. The constant no longer exists in `lib/const.js`; legacy `/images/<stem>.<ext>[?v=N]` URLs just 301 into `/i/` regardless of their `?v`. The worker route still clamps unknown-thumb 404s to `max-age=0` so misses do not inherit immutable caching.
+Fully retired (hash cutover 2026-07-03): thumbnails are content-addressed at `/i/<stem>.<hash8>.<ext>`, so a re-encode mints new URLs by itself — run `./holding/scripts/hash-thumbnails.sh` after re-encoding, commit, deploy (the bundled index/hashes make the deploy the bust). The constant no longer exists in `lib/const.js`; legacy `/images/<stem>.<ext>[?v=N]` URLs just 301 into `/i/` regardless of their `?v`. The worker route still clamps unknown-thumb 404s to `max-age=0` so misses do not inherit immutable caching.
 
 ### Log a deploy (bump-version.sh)
 `./holding/scripts/bump-version.sh <slug> "<title>"`, then deploy. Inserts the next checkpoint into D1 (vnum from `SELECT MAX(vnum)`), which is what `/updates` and `/restore` render. Nothing edits sw.js anymore: the service worker retired in v136, `nav.js`/`notepad.js` updates land via their short `_headers` max-age plus the per-deploy edge purge, and the stub at `/sw.js` cleans up old installs.
@@ -706,12 +709,12 @@ curl -s "https://aadhar.sh/images/manifest.json" | jq length          # photo co
 
 | script | what it does |
 |---|---|
-| `add-photos.sh` | Full pipeline for new photos: resize, EXIF-rotate, encode AVIF+JPG center-square thumbs, upload the full-resolution browser copy to R2, regenerate metadata, bake histograms, validate the artifact graph, and bust the manifest KV keys. |
+| `add-photos.sh` | Full pipeline for new photos: resize, EXIF-rotate, encode AVIF+JPG center-square thumbs, upload the full-resolution browser copy to R2, write the stem's `photo-index.json` entry, regenerate metadata, bake histograms, and validate the artifact graph. |
 | `check-photo-pipeline.mjs` | CI-safe invariant check: every metadata stem has all three hashed tiers, per-photo metadata, and four 64-bin histogram channels, with no orphaned pixel files. Also walks the authored HTML/JS for hardcoded `/i/<stem>.<hash>` URLs (the `/garage/tooltips` demo slots have three) and fails if a re-encode has pruned the bytes one of them names. |
 | `extract-photo-metadata.sh` | Read EXIF from the SOOC folder, emit `images/metadata.json` + per-photo `images/meta/<stem>.json`. Pulls the Fuji recipe fields too. Requires exiftool + jq. **Two schemas, on purpose:** `metadata.json` is the RECORD (long, self-documenting field names, plus the derived `recipe` card) and the per-photo files are the tooltip's RENDER CACHE (short keys, tooltip-only fields, nulls dropped, ~28% smaller compressed because one is fetched per hover). Bump `META_V` in `tooltip.js` when the per-photo shape changes. |
 | `build-exif-index.mjs` | Roll every per-photo `images/meta/<stem>.json` MINUS its histogram into one `images/exif.json` (158 photos, 2.6KB brotli). Called by `extract-photo-metadata.sh`, so `npm run photos` keeps it current, and `check-photo-pipeline.mjs` rebuilds it to fail on drift. **Why it exists:** the homepage draws a random 12 of 158 per request, so warming metadata per visible slot was 12 cold requests on nearly every visit (a given slot repeats ~7.6% of the time). One immutable index is smaller than that on the first visit and free after. Histograms stay per-photo because they are 623 of a meta file's ~977 bytes, so folding them in would take the index from 2.6KB to 24KB for bars most visitors never see. |
 | `build-recipes.py` | Derive the self-documenting Fuji film-recipe card (`recipe`) for each photo in `images/metadata.json`, in the idiom fujixweekly.com publishes recipes in (`Dynamic Range: DR400`, `White Balance: Kelvin (5900K), -1 Red & +4 Blue`, `Clarity: -2`). Called by `extract-photo-metadata.sh`. Values are transformed from the NUMERIC EXIF tags (`FujiFilm:Sharpness`, `Clarity`, `DevelopmentDynamicRange`), never guessed back from friendly words; a non-Fuji frame gets no recipe block. Query it with `/photos/query.json?recipe=DR400`. |
-| `reencode-thumbnails.sh` | Re-encode every published grid thumb from the source folder at a new resolution (pre-cropped squares, two tiers). Follow with `hash-thumbnails.sh` + a manifest bust. |
+| `reencode-thumbnails.sh` | Re-encode every published grid thumb from the source folder at a new resolution (pre-cropped squares, two tiers). Follow with `hash-thumbnails.sh`, then commit + deploy. |
 | `add-car-photo.sh` | One resto-mod reference photo -> `cars/<stem>.{avif,jpg}` for the homepage car tooltips. No EXIF, no R2. |
 | `zenc/` | The JPEG thumbnail encoder: a Rust crate wrapping zenjpeg (hybrid trellis + progressive scan search). `cargo build --release` (auto-built on first pipeline run). `zenc <in> <out> -q 84`. dependabot tracks the zenjpeg pin; replaced the from-source jpegli build in 2026-07. |
 | `download-remote-photos.sh` | Download selected R2 object keys into disposable runner storage for the GitHub Actions photo workflow; accepts `all` for the public manifest. |
