@@ -76,7 +76,9 @@ worktrees may edit freely, but a worktree is not a release surface.
   not deploy from a dirty worktree or push agent work directly to `main`.
 - PR CI builds the site, enforces the performance budget, dry-runs the single
   site Worker plus the auxiliary Garage/LWE configs (`cf-garage/`, `lwe-ask/`),
-  and runs the coffee tests.
+  runs the coffee tests, and sweeps the route oracle against a Worker booted
+  in-process (`npm run routes:check`, wrangler's `createTestHarness()`), so a
+  broken route fails the PR instead of the deploy.
 - Only a successful CI run for `main` associated with a merged PR can promote
   the exact tested commit to the machine-owned `production` branch. GitHub's
   current free private-repo plan cannot enforce branch protection, so the

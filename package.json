@@ -21,6 +21,7 @@
     "captions": "python3 holding/scripts/gen-alt-text.py",
     "perf-budget": "node perf-budget.mjs",
     "check-wrangler": "node scripts/check-wrangler.mjs",
+    "routes:check": "node scripts/check-routes-harness.mjs",
     "infra:check": "node scripts/check-infra.mjs",
     "infra:apply": "node scripts/apply-infra.mjs",
     "pages:check": "node scripts/check-page-contracts.mjs",
