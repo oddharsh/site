@@ -351,6 +351,11 @@ async function checkEdge(infra) {
   const targetUrl = async (target) => {
     if (target === "homepage") return `${origin}/`;
     if (target === "sample-image") return (sample ??= await sampleImageUrl(origin));
+    // The Markdown twins are their own target because they are their own content
+    // type, and content type is what compression is keyed on. /index.md is the
+    // stable one: it is served from a committed file rather than generated, so it
+    // exists on every deploy and cannot go missing the way a per-page twin could.
+    if (target === "markdown-twin") return `${origin}/index.md`;
     throw new Error(`unknown edge target ${JSON.stringify(target)}`);
   };
 

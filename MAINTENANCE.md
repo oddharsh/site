@@ -213,9 +213,11 @@ Rules entry, and nothing in this repo may hold an `Edit` scope. So this is a
 dashboard or personal-token action; `infra.json`'s `compression-prefers-brotli`
 check is what keeps it honest afterwards.
 
-**Why it exists.** Cloudflare's default preference is zstd, and Chrome and Edge
-both advertise zstd, so most visitors get it. Its on-the-fly zstd is *worse* than
-its own on-the-fly brotli on this site's content. Measured 2026-07-28 against
+**It fixes two things.** One is a preference, the other is a hole.
+
+*Preference.* Cloudflare's default is zstd, and Chrome and Edge both advertise
+zstd, so most visitors get it. Its on-the-fly zstd is *worse* than its own
+on-the-fly brotli on this content. Measured 2026-07-28 against
 `/images/manifest.json`, whose 35,162-byte body is identical on every request
 (the homepage's is not — a random 12-photo grid swings the size ~1.4KB per
 render, wider than the effect being measured):
@@ -226,28 +228,79 @@ render, wider than the effect being measured):
 | zstd | 6,847 | +205 (+3.1%) |
 | gzip | 7,159 | +517 |
 
-This only touches responses **Cloudflare** compresses: the SSR'd homepage and the
-worker's JSON endpoints. The precompressed shell (`/a/*`), the dcz deltas, and the
-brotli q11 page twins already arrive carrying a `content-encoding`, and the edge
-does not recompress those — so the rule is a no-op on every path the build
-already optimized.
+*Hole.* Cloudflare's default content-type list carries `text/x-markdown`, the
+pre-RFC name, and **not** `text/markdown`, the RFC 7763 type this site correctly
+serves. So every Markdown surface shipped uncompressed — `/index.md`, `/auth.md`,
+`/whoareyou.md`, `/bot.md`, and the `holding/md/` twins. 12,302 bytes that brotli
+takes to 5,943, a 52% loss on exactly the surfaces built for agents and LLM
+crawlers, which prefer the `.md` representation. Serving `text/x-markdown` to win
+compression is the wrong fix: that is a deprecated type, and agents expect the
+registered one.
 
-**Dashboard: Rules → Overview → Create rule → Compression Rule.** Two choices,
-and both defaults in that form are the wrong ones for this site:
+**The rule is scoped by PREFIX, not by an enumerated list**, because the markdown
+hole is what an enumerated list costs. `text/*` covers html, plain, css, xml,
+markdown, and anything text-shaped added later; `application/*` covers json,
+javascript, wasm, ld+json, manifest+json; `image/svg+xml` is the one image type
+worth compressing. Everything binary is excluded by construction rather than by
+omission:
 
-| field | pick | not |
-|---|---|---|
-| If incoming requests match | **Default Content Types** | *All incoming requests* — it would hand the rule responses Cloudflare would otherwise leave alone, including already-compressed binaries. The goal is to change which encoding it picks where it already compresses, not to widen what gets compressed. |
-| Compression options | **Enable Brotli and Gzip Compression** | *Custom* — the preset already reads "Brotli is the preferred compression algorithm. It will automatically fall back to Gzip," which is exactly the intent. A hand-ordered list is one more thing to get wrong later for no gain. |
+```
+starts_with(http.response.content_type.media_type, "text/")
+or starts_with(http.response.content_type.media_type, "application/")
+or http.response.content_type.media_type == "image/svg+xml"
+```
 
-The preset drops zstd from the list entirely rather than ranking it below brotli.
-That is fine and deliberate: every browser that speaks zstd also speaks gzip, so
-nothing loses compression, and it re-reads as an explicit decision rather than a
-subtle ordering. If Cloudflare's zstd ever overtakes their brotli here, this is
-the switch to flip back.
+**What this does to the dcz deltas: nothing, but verify it rather than assume it.**
+`dcz` is not `zstd` — they are different `Content-Encoding` values, and the rule's
+algorithm list governs only what the EDGE compresses. Delta responses arrive from
+the Worker already encoded (`encodeBody: "manual"`), and shared-dictionaries
+passthrough is explicit that Cloudflare "treats `dcb` and `dcz` as valid
+Content-Encoding values end to end, without recompressing them." Dropping zstd
+from the candidate list does not drop dcz.
 
-By API, the same rule. Note `expression` is what makes it Default Content Types
-rather than everything, so it is not `"true"`:
+The residual risk is that the expression above *does* match those paths by content
+type: `/a/nav.<hash>.js` is `text/javascript` and `/a/luna.<hash>.css` is
+`text/css`, both already carrying `content-encoding: br` or `dcz` from the Worker.
+Cloudflare's compression-rules docs do not state what a rule does to a response
+that is already encoded. Standard CDN behaviour is to pass it through, and the
+passthrough guarantee above covers the dangerous half — but double compression is
+precisely the bug gotcha 13 records, it survived three wrong suspects, and on the
+render-blocking shell it fails as a white screen rather than a slow page. So
+`npm run dcz:check` after deploying the rule is a gate, not a formality.
+
+A path exclusion (`and not starts_with(http.request.uri.path, "/a/")`) is
+available as belt-and-braces and costs nothing, since those bytes are already
+brotli q11 and CF could only make them worse. It does NOT generalize to the static
+pages: `/garage/*` and `/lwe/*` serve dcz when a dictionary is offered and are
+compressed by Cloudflare when one is not, so no path predicate separates the two
+cases. Verification is what covers those either way.
+
+**Do not use "All incoming requests"**, tempting as it is for the same
+list-rot reason. This site is unusually binary-heavy: ~3GB of R2 originals served
+from `/images/full/*` at ~26MB each **with Range support** (206, `content-range`,
+`accept-ranges: bytes`), plus 474 already-compressed thumbnail files under `/i/`.
+Ranges and compression are in tension — a byte range into a compressed body does
+not map to a range in the original — so an edge told to compress those has to
+either drop `Accept-Ranges` or skip the work, and Cloudflare's documentation
+states neither. Compressing JPEG/AVIF/PNG also buys nothing; they are already
+entropy-coded. The prefix expression sidesteps all of it.
+
+**Dashboard: Rules → Overview → Create rule → Compression Rule.**
+
+| field | pick |
+|---|---|
+| If incoming requests match | **Custom filter expression**, pasting the expression above |
+| Compression options | **Enable Brotli and Gzip Compression** |
+
+That preset reads "Brotli is the preferred compression algorithm. It will
+automatically fall back to Gzip," which is the intent exactly, so Custom ordering
+would be a hand-rolled copy of a built-in. It drops zstd from the candidate list
+rather than ranking it below brotli, which is deliberate: every browser that
+speaks zstd also speaks gzip, so nothing loses compression, and an omission
+re-reads later as a decision where a subtle ordering would not. If Cloudflare's
+zstd ever overtakes their brotli here, this is the switch to flip back.
+
+By API:
 
 ```bash
 curl "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/rulesets/phases/http_response_compression/entrypoint" \
@@ -256,9 +309,9 @@ curl "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/rulesets/phases/http_r
   --json '{
     "rules": [
       {
-        "expression": "starts_with(http.response.content_type.media_type, \"text/\") or http.response.content_type.media_type in {\"application/json\" \"application/javascript\" \"image/svg+xml\" \"application/xml\"}",
+        "expression": "starts_with(http.response.content_type.media_type, \"text/\") or starts_with(http.response.content_type.media_type, \"application/\") or http.response.content_type.media_type == \"image/svg+xml\"",
         "action": "compress_response",
-        "description": "brotli ahead of zstd: CF on-the-fly zstd measured +3.1% here (see infra.json)",
+        "description": "brotli over zstd (+3.1% here) and text/markdown, which CF default types miss — see infra.json",
         "action_parameters": {
           "algorithms": [
             { "name": "brotli" },
@@ -270,18 +323,16 @@ curl "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/rulesets/phases/http_r
   }'
 ```
 
-The dashboard is the better path here: it fills in Cloudflare's own current
-default-content-type list, which the expression above only approximates and which
-can drift as they add types.
-
-Verify in this order. The first is the point of the change; the other two are the
+Verify in this order. The first two are the point of the change; the rest are the
 regression check, because a compression change on a render-blocking path fails as
 a white screen rather than as a slow page (gotcha 13 in CLAUDE.md):
 
 ```bash
-npm run infra:check     # compression-prefers-brotli must pass
+npm run infra:check     # compression-prefers-brotli AND markdown-compressed must pass
 npm run dcz:check       # deltas must still come back dcz, not recompressed
+# the precompressed shell must be untouched, and the range-served originals must keep their ranges:
 curl -sS -o /dev/null -D - -H 'accept-encoding: gzip, deflate, br, zstd' https://aadhar.sh/a/luna.0f8b829a.css | grep -i content-encoding
+curl -sS -o /dev/null -D - -H 'range: bytes=0-99' https://aadhar.sh/images/full/XT509488.jpg | grep -iE "^HTTP|content-range|accept-ranges"
 ```
 
 `infra:check` fails until the rule exists, by design: `infra.json` declares intent
