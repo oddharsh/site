@@ -164,8 +164,18 @@ export function contentOf(html) {
 // and anything the SSRF guard won't touch.
 export function citationsIn(html, origin) {
   const out = new Set();
-  for (const m of contentOf(html).matchAll(/<a\b[^>]*\bhref\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi)) {
-    const raw = m[1].replace(/^["']|["']$/g, "").trim();
+  for (const m of contentOf(html).matchAll(/<a\b[^>]*>/gi)) {
+    const tag = m[0];
+    // An anchor whose job is to open a hover card is chrome, not a citation:
+    // same reasoning as stripping the desktop shell, one level down. The car
+    // references are the whole population here — `interestfor` (Interest
+    // Invoker) on the garage pages, `class="car-link"` on the homepage — and
+    // they point at Google SEARCH URLs, so telling google.com/search?q=Singer
+    // it had been cited would be nonsense rather than good citizenship.
+    if (/\binterestfor\s*=/i.test(tag) || /\bclass\s*=\s*("[^"]*\bcar-link\b|'[^']*\bcar-link\b)/i.test(tag)) continue;
+    const href = (tag.match(/\bhref\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/i) || [])[1];
+    if (!href) continue;
+    const raw = href.replace(/^["']|["']$/g, "").trim();
     if (!/^https?:\/\//i.test(raw)) continue;             // relative + mailto + raycast:// etc
     let u;
     try { u = new URL(raw); } catch { continue; }
@@ -182,25 +192,51 @@ export function citationsIn(html, origin) {
 }
 
 // ── discovery ──────────────────────────────────────────────────────────────
-// Per spec: the Link header wins, then <link rel=webmention>, then <a
-// rel=webmention>. Relative endpoints resolve against the fetched URL.
+// Per spec: the Link header wins, then the first <link> or <a> carrying
+// rel=webmention IN DOCUMENT ORDER (not all <link>s and then all <a>s — that
+// ordering is what discovery tests 16 and 17 pull apart). Relative endpoints
+// resolve against the fetched URL.
+
+// rel is a space-separated token list, so "webmention" has to BE one of the
+// tokens. A `\bwebmention\b` regex is not enough: "-" counts as a word
+// boundary, so it happily matches rel="not-webmention", which is precisely the
+// decoy discovery test 12 plants.
+function relHasWebmention(rel) {
+  return String(rel).trim().split(/\s+/).some((t) => t.toLowerCase() === "webmention");
+}
+
+function attr(tag, name) {
+  const m = tag.match(new RegExp(`\\b${name}\\s*=\\s*("[^"]*"|'[^']*'|[^\\s>]+)`, "i"));
+  return m ? m[1].replace(/^["']|["']$/g, "") : undefined;
+}
+
 export function findEndpointIn(html, linkHeader, baseUrl) {
   if (linkHeader) {
     for (const part of String(linkHeader).split(/,(?![^<]*>)/)) {
       const href = (part.match(/<([^>]*)>/) || [])[1];
-      if (href && /rel\s*=\s*"?[^"]*\bwebmention\b/i.test(part)) return abs(href, baseUrl);
+      const rel = (part.match(/rel\s*=\s*(?:"([^"]*)"|'([^']*)'|([^;,\s]+))/i) || []).slice(1).find((v) => v != null);
+      if (href !== undefined && rel && relHasWebmention(rel)) return abs(href, baseUrl);
     }
   }
-  const tag =
-    (String(html).match(/<(?:link|a)\b[^>]*\brel\s*=\s*["'][^"']*\bwebmention\b[^"']*["'][^>]*>/i) || [])[0];
-  if (tag) {
-    const href = (tag.match(/\bhref\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/i) || [])[1];
-    if (href) return abs(href.replace(/^["']|["']$/g, ""), baseUrl);
+  // Comments are not markup: a rel=webmention inside <!-- --> must not count
+  // (discovery test 13). Escaped HTML (test 14) never matches anyway, since
+  // these patterns want a literal "<".
+  const body = String(html).replace(/<!--[\s\S]*?-->/g, " ");
+  for (const m of body.matchAll(/<(?:link|a)\b[^>]*>/gi)) {
+    const rel = attr(m[0], "rel");
+    if (!rel || !relHasWebmention(rel)) continue;
+    // A candidate with no href at all is not an endpoint. Keep scanning rather
+    // than giving up, or a bare <link rel="webmention"> shadows the real one
+    // further down the page (discovery test 20). An href of "" is different:
+    // it is a legitimate self-reference and resolves to the page (test 15).
+    const href = attr(m[0], "href");
+    if (href === undefined) continue;
+    return abs(href, baseUrl);
   }
   return null;
 }
 
-async function discoverEndpoint(target) {
+export async function discoverEndpoint(target) {
   try {
     const res = await fetch(target, {
       headers: { "user-agent": "AadharshBot/1.0 (+https://aadhar.sh/bot)", accept: "text/html" },

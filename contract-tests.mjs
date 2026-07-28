@@ -689,6 +689,9 @@ test("outbound citations exclude the shell, self-links, and non-public URLs", ()
          <a href="/garage/encoding">my own page</a> and <a href="mailto:a@b.c">mail</a>.</p>
       <p>Dupe: <a href="https://github.com/officialunofficial/mkit">same repo again</a></p>
       <p>Blocked: <a href="http://127.0.0.1/x">local</a> <a href="http://169.254.169.254/meta">metadata</a></p>
+      <p>Hover cards, not citations:
+         <a interestfor="pop-singer" href="https://www.google.com/search?q=Singer+Porsche+911" rel="external">Singer</a>
+         <a class="car-link" href="https://www.google.com/search?q=Tuthill+911K" rel="external">Tuthill</a></p>
       <!-- axp:shell -->
         <a href="https://github.com/oddharsh">GitHub</a>
         <a href="https://open.spotify.com/user/aadharsh2010">Music</a>
@@ -702,7 +705,11 @@ test("outbound citations exclude the shell, self-links, and non-public URLs", ()
   assert.ok(found.some((u) => u.startsWith("https://docs.makechain.net/")), "anchors are normalized, not dropped");
   assert.equal(found.filter((u) => u.includes("officialunofficial")).length, 1, "deduped");
 
-  for (const bad of ["oddharsh", "spotify", "instagram", "aadhar.sh/garage", "127.0.0.1", "169.254", "mailto", "head-link"]) {
+  for (const bad of ["oddharsh", "spotify", "instagram", "aadhar.sh/garage", "127.0.0.1", "169.254", "mailto", "head-link",
+                     // an anchor that exists to open a hover card is chrome. These
+                     // point at Google SEARCH pages, so a webmention to them would
+                     // be noise rather than credit.
+                     "google.com/search"]) {
     assert.ok(!found.some((u) => u.includes(bad)), `must not send to ${bad}`);
   }
 });
@@ -736,6 +743,99 @@ test("outbound endpoint discovery follows the spec's precedence", () => {
   assert.equal(findEndpointIn('<a rel="me webmention" href="https://wm.example/e">x</a>', null, base), "https://wm.example/e");
   // no endpoint is the common case, and is not an error
   assert.equal(findEndpointIn("<p>nothing here</p>", null, base), null);
+});
+
+test("the excerpt survives a page full of inline SVG chrome", async () => {
+  // A real mention from a GitHub gist arrived with 280 characters of SVG path
+  // geometry as its excerpt, which is what made a legitimate mention read as
+  // spam. Two causes: <svg> was not stripped alongside <script>/<style>, and the
+  // fixed-width window around the link opens mid-attribute (the target lives in
+  // an href), leaving a partial tag that the complete-tag stripper cannot touch.
+  const db = fakeD1();
+  const target = "https://aadhar.sh/writing/in-flux";
+  // The path has to be long enough that the 400-character window opening before
+  // the link lands INSIDE the d="..." attribute, because that is the only way
+  // the geometry escapes: the tag stripper removes complete tags, attributes and
+  // all, so a short icon is harmless. On the real gist the icon sat directly
+  // before the link with roughly this much path data, which is why it leaked.
+  const path = "M9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018Z".repeat(12);
+  const page = `<html><body>
+    <svg aria-hidden="true"><path d="${path}"></path></svg>
+    <p>The teardown at <a href="${target}" class="Link--primary">this note</a> is the useful part.</p>
+    </body></html>`;
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(page, { headers: { "content-type": "text/html" } });
+  try {
+    const ctx = deferredContext();
+    await handleWebmention(wmPost("https://gist.example/x", target), wmEnv(db), ctx);
+    await ctx.settle();
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+  const row = db.rows[0];
+  assert.ok(row, "the mention verified and stored");
+  assert.doesNotMatch(row.excerpt, /\d\.\d{3}\s|[Ma]\d+\.\d+[a-z]/, `SVG path data leaked into the excerpt: ${row.excerpt}`);
+  assert.doesNotMatch(row.excerpt, /^["'>]/, "excerpt starts with the tail of a chopped attribute");
+  assert.match(row.excerpt, /is the useful part/, "the sentence around the link survived");
+});
+
+test("an accepted webmention answers 202 without a Location header", async () => {
+  // The spec ties Location to 201, where it must name a status URL the sender
+  // can poll. On a 202 it has no defined meaning, and webmention.rocks receiver
+  // test #1 fails an endpoint that sends one anyway. Easy to reintroduce by
+  // "helpfully" pointing at /inbox, so pin it.
+  const db = fakeD1();
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    new Response('<a href="https://aadhar.sh/writing/in-flux">x</a>', { headers: { "content-type": "text/html" } });
+  try {
+    const res = await handleWebmention(
+      wmPost("https://mari.example/post", "https://aadhar.sh/writing/in-flux"),
+      wmEnv(db),
+      deferredContext()
+    );
+    assert.equal(res.status, 202);
+    assert.equal(res.headers.get("location"), null, "202 must not carry a Location header");
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test("endpoint discovery survives the webmention.rocks decoys", () => {
+  // Fixtures lifted from the live pages at webmention.rocks/test/N, the
+  // IndieWeb conformance suite. Kept as fixtures rather than live fetches
+  // because this file is deliberately network-free; the real 23 were run
+  // against the deployed implementation and all pass. Numbers name the test.
+  const at = (n) => `https://webmention.rocks/test/${n}`;
+  const cases = [
+    // #1 relative Link header, unquoted rel. #2 absolute. #7 odd casing.
+    [1, "", "</test/1/webmention>; rel=webmention", at(1) + "/webmention"],
+    [8, "", '<https://webmention.rocks/test/8/webmention>; rel="webmention"', at(8) + "/webmention"],
+    // #10 the rel is a token LIST; webmention is one of several.
+    [10, "", '<https://webmention.rocks/test/10/webmention>; rel="webmention somethingelse"', at(10) + "/webmention"],
+    // #19 one header, several values: the non-webmention one must not win.
+    [19, "", '<https://webmention.rocks/test/19/webmention/error>; rel="other", <https://webmention.rocks/test/19/webmention>; rel="webmention"', at(19) + "/webmention"],
+    // #12 rel="not-webmention" is a DIFFERENT rel. A \bwebmention\b regex
+    // matches it anyway, because "-" is a word boundary.
+    [12, '<link rel="not-webmention" href="/test/12/webmention/error"><a href="/test/12/webmention" rel="webmention">ok</a>', null, at(12) + "/webmention"],
+    // #13 a decoy inside an HTML comment is not markup.
+    [13, 'comment <!-- <a href="/test/13/webmention/error" rel="webmention"></a> --> then <a href="/test/13/webmention" rel="webmention">correct</a>', null, at(13) + "/webmention"],
+    // #14 the same decoy, escaped. Never matched a "<"-anchored pattern.
+    [14, '<code>&lt;a href="/test/14/webmention/error" rel="webmention"&gt;&lt;/a&gt;</code><a href="/test/14/webmention" rel="webmention">x</a>', null, at(14) + "/webmention"],
+    // #15 href="" is a legitimate self-reference, not a missing href.
+    [15, '<link rel="webmention" href="">', null, at(15)],
+    // #16 <a> first, <link> later: DOCUMENT ORDER decides, not tag name. An
+    // implementation that scans every <link> before any <a> takes the decoy.
+    [16, '<a href="/test/16/webmention" rel="webmention">a</a><link rel="webmention" href="/test/16/webmention/error">', null, at(16) + "/webmention"],
+    // #17 the same page with the tags swapped, to catch the opposite bias.
+    [17, '<link rel="webmention" href="/test/17/webmention"><a href="/test/17/webmention/error" rel="webmention">a</a>', null, at(17) + "/webmention"],
+    // #20 a candidate with NO href is not an endpoint. Skip it and keep
+    // looking, rather than letting it shadow the real one below.
+    [20, '<link rel="webmention"><a href="/test/20/webmention" rel="webmention">x</a>', null, at(20) + "/webmention"],
+  ];
+  for (const [n, html, header, expected] of cases) {
+    assert.equal(findEndpointIn(html, header, at(n)), expected, `webmention.rocks discovery test #${n}`);
+  }
 });
 
 test("site-manifest.json is a well-formed registry with unique paths", async () => {
