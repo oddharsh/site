@@ -984,6 +984,8 @@ test("homepage selects 12 photos and hydrates only the current scrollport", asyn
   assert.match(page, /\.catch\(\(\) => \{\}\)\s*\.then\(boot\)/, "a failed grid fetch must still hydrate the baked tiles");
   assert.match(page, /IntersectionObserver/);
   assert.match(page, /threshold:\s*0\.05/, "a sliver of the next tile must not trigger a transfer");
+  assert.match(page, /rootMargin:\s*"190px 0px"/,
+    "tiles must pre-warm one row (190px pitch) ahead of the scrollport; with no rootMargin a tile starts its fetch only after it is already on screen, so the row below the fold arrives as a white square");
   assert.match(page, /overlap >= rect\.height \* 0\.05/, "desktop must synchronously hydrate its visible photo rows");
   assert.match(page, /else requestAnimationFrame\(\(\) => requestAnimationFrame\(start\)\)/, "mobile hydration must yield through the text paint");
   assert.doesNotMatch(page, /requestIdleCallback\(load/, "the tooltip island must not transfer before hover intent");

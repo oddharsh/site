@@ -698,7 +698,18 @@ footer .signature small { color: oklch(56.93% 0 0); }
          when only a couple of pixels touch the bottom edge. Browsers without
          IntersectionObserver load the full selected set; the <noscript>
          pictures emitted beside each deferred slot preserve the script-off
-         path. -->
+         path.
+
+         The observer ran with NO rootMargin until 2026-07-29, which made a tile
+         start its fetch only once it had already crossed into view: at 1280x720
+         the two rows below the fold sat 163px and 353px out, so the smallest
+         scroll landed on white squares and watched them fill. Pre-warming by one
+         row (tiles are 174px on a 190px pitch at every breakpoint here) fixes
+         that at the near edge while staying far short of what native lazy was
+         rejected for. Measured on this page: 6 of 12 tiles fetched at 1280x720
+         before, 9 after; on a 390px phone 1 before, 2 after, against the 8 that
+         got this replaced. -->
+
     <script>
     (() => {
       const start = () => {
@@ -729,7 +740,7 @@ footer .signature small { color: oklch(56.93% 0 0); }
             observer.unobserve(entry.target);
             load(entry.target);
           }
-        }, { root, threshold: 0.05 });
+        }, { root, rootMargin: "190px 0px", threshold: 0.05 });
         for (const picture of pictures) {
           if (desktop) {
             const rect = picture.getBoundingClientRect();
