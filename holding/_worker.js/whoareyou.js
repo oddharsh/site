@@ -498,9 +498,21 @@ footer .signature small { color: oklch(56.93% 0 0); }
       caches for 24h so visitors from the same block don't re-hit ARIN, and the
       Edge Trace section's fetch of <code>/cdn-cgi/trace</code>, which your own
       browser makes to this same origin because those seven fields are the ones
-      the worker is never told. No analytics. The data above lives for as long as
+      the worker is never told. The data above lives for as long as
       it takes to render, then nothing writes it to storage. View-source if you
       want, since it's a single JavaScript file you can read end-to-end.
+      <br><br>
+      <strong>Analytics, precisely:</strong> not on this page, and it matters that
+      the distinction is stated rather than implied. The homepage &mdash; and only the
+      homepage &mdash; loads Cloudflare Web Analytics, so it is the one page where your
+      browser does fetch a script from a third party
+      (<code>static.cloudflareinsights.com</code>) and report timings back to
+      <code>cloudflareinsights.com</code>. It is cookieless and samples page-load
+      timing, not people. Every other page on this site, this one included, still
+      speaks only to this origin. That beacon buys one thing: the site's performance
+      budget is written in compressed bytes, and bytes are a proxy for what a real
+      phone on a real network actually waits for. Guessing at that was the older,
+      quieter dishonesty.
     </div>
 
     <footer>

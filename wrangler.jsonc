@@ -177,9 +177,43 @@
     "HOST_PUBLIC_URL": "https://aadhar.sh",
     "EVENT_TITLE": "coffee with aadharsh",
     "PENDING_TTL_DAYS": "7"
+  },
+  // Secret VALUES are not here (set on the Worker with `wrangler secret put`), but the
+  // NAMES are, because a comment cannot fail a deploy. `wrangler deploy` and
+  // `wrangler versions upload` now refuse to publish unless every name below is
+  // configured on the Worker, so "the secret was never set on the new Worker" stops
+  // being something you learn from a 500 on a route nobody hits for a week.
+  //
+  // The comment this replaced had drifted in BOTH directions, which is the argument
+  // for the block. It listed EXA_API_KEY and PARALLEL_API_KEY, which are set nowhere
+  // and read nowhere, and it omitted CENSUS_KEY and RN_SIGNING_KEY_MLDSA_JWK, which
+  // the worker genuinely reads.
+  //
+  // The bar for this list is "read by code AND set on the Worker", because a name
+  // here is a deploy gate. Three live-or-referenced secrets are deliberately OUT:
+  //   BROWSER_RENDER_TOKEN  set on the Worker, read by nothing — the /lens REST-API
+  //                         path it belonged to is retired in favour of the BROWSER
+  //                         binding. It should be deleted, not declared.
+  //   COVER_SECRET          read by code, never set. The path degrades without it, so
+  //                         declaring it would fail the deploy over a working site.
+  //   ANALYTICS_READ_TOKEN  same shape: /ledger's SQL reads degrade without it.
+  // Promote either of the last two the day it becomes load-bearing.
+  //
+  // Deliberately NOT mirrored into wrangler.dev.jsonc. There is no .dev.vars in this
+  // repo, so the dev twin would log ten "missing secret" warnings on every reload of
+  // the config whose entire purpose is a fast reload. The value here is deploy-time.
+  "secrets": {
+    "required": [
+      "CENSUS_KEY",
+      "ICAL_URL",
+      "RESEND_API_KEY",
+      "RN_BUST_SECRET",
+      "RN_SIGNING_KEY_JWK",
+      "RN_SIGNING_KEY_MLDSA_JWK",
+      "SIGNING_SECRET",
+      "SYNC_SECRET",
+      "WORK_CALENDAR_SLUG",
+      "WORK_CALENDAR_URL"
+    ]
   }
-  // Secrets are NOT here (set on the Worker with `wrangler secret put`):
-  //   RN_SIGNING_KEY_JWK, RN_SIGNING_KEY_MLDSA_JWK, RN_BUST_SECRET
-  //   ICAL_URL, RESEND_API_KEY, SIGNING_SECRET, SYNC_SECRET, EXA_API_KEY,
-  //   PARALLEL_API_KEY, COVER_SECRET, WORK_CALENDAR_SLUG, WORK_CALENDAR_URL
 }

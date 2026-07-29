@@ -51,5 +51,11 @@ The Cloudflare edge renders it, and your browser never speaks to a third party.
 There are exactly two outbound calls: one server-side RDAP lookup to your IP's
 registry, which the edge caches for 24h so visitors from the same block do not
 re-hit ARIN, and the Edge Trace section's fetch of `/cdn-cgi/trace`, which your
-own browser makes to this same origin. No analytics. The data lives for as long
+own browser makes to this same origin. The data lives for as long
 as it takes to render, then nothing writes it to storage.
+
+Analytics, precisely: not on this page. The homepage, and only the homepage, loads
+Cloudflare Web Analytics, so it is the one page where your browser fetches a script
+from a third party (`static.cloudflareinsights.com`) and reports timings back to
+`cloudflareinsights.com`. It is cookieless and samples page-load timing, not people.
+Every other page on this site, this one included, speaks only to this origin.

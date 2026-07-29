@@ -1082,6 +1082,32 @@ footer .signature small { color: oklch(56.93% 0 0); }
 })();</script>
 
     <!--
+      Cloudflare Web Analytics (RUM). The ONE third-party script on this site, and
+      the reason it earns its place: MAINTENANCE.md has named RUM the outcome source
+      for LCP/INP/CLS since the perf budget was written, and until it reports, the
+      budget's byte ceilings are guesses standing in for field data. The 2026-04-30
+      changelog added Navigation Type reporting, which is the specific thing worth
+      having here: it separates "Back-forward" from "Back-forward Cache" and
+      "Navigate" from "Prerender", so the bfcache-preserving `no-cache` choice and the
+      hand-tuned speculation rules become measurable instead of asserted.
+
+      Placed in source rather than injected by the zone toggle, because the worker
+      serves this page as a precompressed br/dcz body with `encodeBody: "manual"` and
+      the edge cannot rewrite HTML it did not compress. In source it also stays
+      visible in View Source, which is the deal this page makes with its reader.
+
+      Homepage only, deliberately. Site-wide would mean moving it into nav.js, which
+      every page loads — a third-party request on the shell's critical path is a
+      bigger bill than one page's field data is worth. Revisit only with a measurement.
+
+      `defer` + the beacon's own `data-cf-beacon` config; no inline handler, so the
+      CSP needs only the script origin (script-src) and the report origin
+      (connect-src), both added in _headers and _worker.js/lib/security.js.
+    -->
+    <script defer src="https://static.cloudflareinsights.com/beacon.min.js"
+            data-cf-beacon='{"token":"CF_RUM_TOKEN_PLACEHOLDER"}'></script>
+
+    <!--
       Rich XP tooltips are an interaction island. The tiny loader below stays
       inline so it can capture the very first hover and replay it once the
       cacheable implementation arrives. It does not prefetch on idle: visitors
