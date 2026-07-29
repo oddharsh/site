@@ -35,16 +35,37 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
     report("shell js (nav)", ce === "dcz", `ce=${ce} vs candidate ${cand}`);
   }
 }
-// 2. page html — same shape against p-dict
+// 2. page html — the one immutable site-page dictionary, taken from PRODUCTION.
+//
+// Pages used to be diffed against committed snapshots of their own previous bytes
+// (holding/p-dict), which made this probe a search over local candidates. That
+// mechanism is gone: build.mjs derives ONE raw 64KB corpus from the staged pages
+// and every page delta is keyed by that dictionary's tag alone. So the honest probe
+// is the round trip a real browser makes — read the dictionary URL out of the page's
+// own Link header, fetch those exact bytes, and ask for a delta against them.
+// Nothing local is involved, which also means the probe cannot rot against a
+// snapshot set nobody maintains anymore.
 {
-  const cands = (await readdir("holding/p-dict")).filter((n) => n.startsWith("garage__pretext."));
-  let hit = null;
-  for (const c of cands) {
-    const raw = brotliDecompressSync(await readFile(`holding/p-dict/${c}`));
+  const page = await fetch("https://aadhar.sh/garage/pretext", { headers: { "accept-encoding": "identity" } });
+  const offered = page.headers.get("link")?.match(/<([^>]+)>;\s*rel="compression-dictionary"/)?.[1];
+  try { await page.body?.cancel(); } catch {}
+  if (!offered) {
+    report("page html (pretext)", false, "no rel=compression-dictionary Link on the page — is PAGE_DICTIONARY populated?");
+  } else {
+    // The dictionary is served as a q11 .br twin; a worker cannot negotiate that away
+    // (gotcha 13). Chrome hashes the DECODED resource, so decode before hashing —
+    // whether undici already did it for us or left the header on.
+    const res = await fetch(`https://aadhar.sh${offered}`, { headers: { "accept-encoding": "br" } });
+    const body = Buffer.from(await res.arrayBuffer());
+    const raw = res.headers.get("content-encoding") === "br" ? brotliDecompressSync(body) : body;
+    const uad = res.headers.get("use-as-dictionary") || "";
+    report("page dictionary offered", /match="\/\*"/.test(uad) && /match-dest=\("document"\)/.test(uad),
+           `${offered} ${raw.length} B, uad=${uad || "(absent)"}`);
     const r = await get("https://aadhar.sh/garage/pretext", b64(raw));
-    if (r.headers.get("content-encoding") === "dcz") { hit = c; break; }
+    const ce = r.headers.get("content-encoding");
+    report("page html (pretext)", ce === "dcz",
+           ce === "dcz" ? `ce=dcz vs ${offered}` : `ce=${ce} — the deployed /pd/ deltas may predate this dictionary`);
   }
-  report("page html (pretext)", !!hit, hit ? `ce=dcz vs ${hit}` : `no candidate produced dcz (${cands.length} tried) — roll may be pending a deploy`);
 }
 // 3. svg — must NOT offer a dictionary (the #119 rule)
 {
@@ -82,9 +103,15 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
   report("shell offers are per-asset", nav !== "" && css !== "" && nav !== css,
          `nav and css must not share one offer (nav=${nav || "(absent)"} css=${css || "(absent)"})`);
 
+  // A page must NOT offer ITSELF as a dictionary. Pages ship `max-age=0`, and Chrome
+  // correctly refuses an immediately-stale response as a dictionary — so the offer
+  // would only teach browsers to send Available-Dictionary for bytes we never diff
+  // against. Since #156 the single document-scoped offer lives on the immutable
+  // /a/page-family.<hash8>.dict asset, asserted in probe 2 above.
   const p = await get("https://aadhar.sh/garage/pretext");
-  const puad = p.headers.get("use-as-dictionary") || "";
-  report("page offer scoped", /match-dest=\("document"\)/.test(puad), `uad=${puad || "(absent)"}`);
+  const puad = p.headers.get("use-as-dictionary");
+  try { await p.body?.cancel(); } catch {}
+  report("page does not offer itself", !puad, `uad=${puad || "(absent)"}`);
 }
 console.log("  BLOCKED (by platform, not by us): SSR'd pages — workerd zstd ignores `dictionary`; re-run the scratchpad spike or watch for CF shared-dictionaries Phase 2.");
 process.exit(fail ? 1 : 0);

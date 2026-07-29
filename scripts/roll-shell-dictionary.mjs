@@ -16,7 +16,6 @@
 // useful cadence is "occasionally", not "every deploy".
 
 import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
-import { brotliCompressSync, brotliDecompressSync, constants as zc } from "node:zlib";
 import { existsSync } from "node:fs";
 
 const BUILT = ".build/holding/a";
@@ -72,62 +71,10 @@ for (const [, group] of byBase) {
 console.log(`shell:roll — adopted ${adopted}, pruned ${pruned}, keeping ${KEEP} per asset.`);
 console.log("  Commit holding/a-dict/. build.mjs regenerates the deltas on its own from here.");
 
-// ── PAGE DICTIONARIES (holding/p-dict) ──────────────────────────────────────────
-// The same roll, for the 30 static garage/lwe pages. Without this the page dictionary
-// set decays exactly the way a-dict did before #117: seeded once, covering only the
-// version nobody holds anymore. Snapshots are stored BROTLI'd (build input, never
-// served, round-trips exactly), which keeps the committed weight ~75% down.
-//
-// KEEP is 2 here, not 3. A page delta serves whoever holds the CURRENT or PREVIOUS
-// version of that page; pages change one at a time (unlike the shell, which ripples
-// through every page on any hash change), so the third candidate would mostly cover
-// visitors of a version two edits back — while doubling the committed weight of the
-// biggest directory in the repo.
-{
-  const BUILT_PAGES = ".build/holding";
-  const PDICTS = "holding/p-dict";
-  const KEEP_PAGES = 2;
-  const parse = (n) => {
-    const m = n.match(/^(.+)\.([0-9a-f]{16})\.html\.br$/);
-    return m ? { slug: m[1], tag: m[2], name: n } : null;
-  };
-  await mkdir(PDICTS, { recursive: true });
-  const staged = [];
-  for (const dir of ["garage", "lwe"]) {
-    for (const rel of await readdir(`${BUILT_PAGES}/${dir}`, { recursive: true }).catch(() => [])) {
-      if (rel.endsWith(".html") && !rel.endsWith(".src.html")) staged.push(`${dir}/${rel}`);
-    }
-  }
-  const liveSlugs = new Set();
-  let adopted = 0, pruned = 0;
-  const { createHash } = await import("node:crypto");
-  for (const rel of staged) {
-    const slug = rel.replace(/\.html$/, "").replace(/\//g, "__");
-    liveSlugs.add(slug);
-    const bytes = await readFile(`${BUILT_PAGES}/${rel}`);
-    const tag = createHash("sha256").update(bytes).digest("hex").slice(0, 16);
-    const dest = `${PDICTS}/${slug}.${tag}.html.br`;
-    if (existsSync(dest)) continue;
-    await writeFile(dest, brotliCompressSync(bytes, { params: { [zc.BROTLI_PARAM_QUALITY]: 11, [zc.BROTLI_PARAM_LGWIN]: 24 } }));
-    adopted++;
-    console.log(`adopted page ${slug}.${tag}`);
-  }
-  const byent = new Map();
-  for (const d of (await readdir(PDICTS)).map(parse).filter(Boolean)) {
-    // A slug that no longer exists on the site keeps no candidates at all: its deltas
-    // could never be requested, and the dead snapshots would sit in git forever.
-    if (!liveSlugs.has(d.slug)) { await rm(`${PDICTS}/${d.name}`, { force: true }); pruned++; continue; }
-    if (!byent.has(d.slug)) byent.set(d.slug, []);
-    byent.get(d.slug).push(d);
-  }
-  for (const [, group] of byent) {
-    if (group.length <= KEEP_PAGES) continue;
-    const withTime = await Promise.all(group.map(async (g) => ({ g, t: (await stat(`${PDICTS}/${g.name}`)).mtimeMs })));
-    withTime.sort((a, b) => a.t - b.t);
-    for (const { g } of withTime.slice(0, withTime.length - KEEP_PAGES)) {
-      await rm(`${PDICTS}/${g.name}`, { force: true });
-      pruned++;
-    }
-  }
-  console.log(`pages:roll — adopted ${adopted}, pruned ${pruned}, keeping ${KEEP_PAGES} per page.`);
-}
+// The PAGE dictionary set (holding/p-dict) is retired. Pages are no longer diffed
+// against snapshots of their own previous bytes; build.mjs derives ONE immutable
+// site-page corpus from the staged documents and keys every /pd/ delta by that
+// dictionary's tag. That corpus is a pure function of bytes the build just produced,
+// so there is nothing here left to roll and nothing to commit for it. The shell is
+// still different, and still needs the roll above: an /a/ asset is content-addressed,
+// so its dictionary must be bytes browsers already hold, which no build can derive.
