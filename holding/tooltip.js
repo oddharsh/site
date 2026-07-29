@@ -1,6 +1,6 @@
 // tooltip.js — the rich hover island for photos, tracks, artists, and car links.
-// Loaded after first paint and prefetched during idle so the first intentional
-// tooltip gets the same interaction path as every later one.
+// Loaded on the first hover/focus and replayed against that initial target, so
+// visitors who never ask for a tooltip transfer none of this interaction island.
 //
 // The hover ENGINE moved to hoist.js, shared with serendipity's event covers
 // and nav.js's Run preview. What stays here is the part that is actually about
@@ -277,7 +277,7 @@ export function start(initial) {
           `<div class="car-pop">` +
             `<picture>` +
               (avif ? `<source type="image/avif" srcset="${esc(avif)}">` : ``) +
-              `<img src="${esc(jpg || avif)}" alt="" loading="lazy" decoding="async" width="240" height="160">` +
+              `<img src="${esc(jpg || avif)}" alt="" decoding="async" width="240" height="160">` +
             `</picture>` +
             (cap || credit
               ? `<div class="car-cap">` +
@@ -366,9 +366,16 @@ export function start(initial) {
       function buildArtistContent(span) {
         const image = span.dataset.artistImage || "";
         if (!image) return "";
+        // No loading="lazy" on any hover surface. The attribute defers a fetch
+        // until the image nears the viewport, and this node is built at the
+        // moment it is shown, in the top layer, under the cursor — it is never
+        // far from the viewport, so lazy has nothing to defer and can only add a
+        // visibility check before the one fetch that was always going to happen.
+        // The same holds for the car popover, the Run preview, and serendipity's
+        // event covers: an image that exists only while visible is not lazy work.
         return (
           `<div class="album-pop">` +
-            `<img class="cover album" src="${esc(image)}" alt="" loading="lazy" decoding="async" width="120" height="120">` +
+            `<img class="cover album" src="${esc(image)}" alt="" decoding="async" width="120" height="120">` +
           `</div>`
         );
       }
@@ -385,7 +392,7 @@ export function start(initial) {
         if (image) {
           return (
             `<div class="album-pop">` +
-              `<img class="cover album" src="${esc(image)}" alt="" loading="lazy" decoding="async" width="120" height="120">` +
+              `<img class="cover album" src="${esc(image)}" alt="" decoding="async" width="120" height="120">` +
             `</div>`
           );
         }

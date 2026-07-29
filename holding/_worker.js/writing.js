@@ -149,7 +149,7 @@ export function handleWritingPost(request, slug, env, ctx) {
   return cachedRender(request, ctx, () => renderWritingPost(slug, env), undefined, env);
 }
 
-async function renderWritingPost(slug, env) {
+export async function renderWritingPost(slug, env) {
   const safe = String(slug).replace(/[^a-z0-9-]/gi, "");
   const posts = await readPosts(env);
   const post = posts.find(function (p) { return p.slug === safe; });
@@ -178,7 +178,7 @@ export function handleWritingIndex(request, env, ctx) {
   return cachedRender(request, ctx, () => renderWritingIndex(env), "/writing", env);
 }
 
-async function renderWritingIndex(env) {
+export async function renderWritingIndex(env) {
   const posts = await readPosts(env);
   // fetch each note's .txt once: the same text feeds the char count shown in
   // the folder listing (so you see a file's size before you open it) AND the

@@ -11,7 +11,7 @@ import { handleBotPage } from "./bot.js";
 import { cronCensus, handleCensus, handleCensusJson } from "./census.js";
 import { handleCoffeeAvailability } from "./coffee.js";
 import { handleHit } from "./counter.js";
-import { homepageHeadResponse, serveHomepageWithPrerenderedTracks, serveMarkdown } from "./home.js";
+import { handlePhotoGrid, homepageHeadResponse, serveMarkdown } from "./home.js";
 import { handleInbox } from "./inbox.js";
 import { handleWebmention, handleWebmentionDecision } from "./webmention.js";
 import { cronSendWebmentions } from "./webmention-send.js";
@@ -20,9 +20,11 @@ import { handleLens, handleLensBrowser, handleLensCompare, handleLensFetch, hand
 import { serveAssetWith404Clamp, serveFreshAsset, servePrecompressedShell, serveStaticPage } from "./lib/assets.js";
 import { BOT_UA } from "./lib/botauth.js";
 import { CANONICAL_HOST } from "./lib/const.js";
+import { HOMEPAGE_DISCOVERY_LINK } from "./lib/security.js";
 import { wantsMarkdown } from "./lib/http.js";
 import { handleSiteMcp } from "./mcp.js";
 import { withSecurityHeaders } from "./lib/security.js";
+import { SHELL_PRELOAD_LINK } from "./lib/shell-assets.js";
 import { getThumbHashes, handleImagesManifest, handlePhotoQuery, handlePhotos, servePhotoFromR2 } from "./photos.js";
 import { handleReading } from "./reading.js";
 import { handleRun } from "./run.js";
@@ -135,7 +137,7 @@ export default {
   // prerender. The weekly schedule sweeps the /lens/census roster into D1.
   async scheduled(event, env, ctx) {
     if (event.cron === "7,37 * * * *") {
-      ctx.waitUntil(cronHomeProbe(env, ctx));   // :07/:37 — homepage Server-Timing -> Analytics Engine
+      ctx.waitUntil(cronHomeProbe(env, ctx));   // :07/:37 — the two homepage fragments' KV latency -> Analytics Engine
     } else if (event.cron === "17 8 * * 1") {
       ctx.waitUntil(cronCensus(env));   // Mondays 08:17 UTC — the longitudinal census
     } else if (event.cron === "41 5 * * *") {
@@ -178,7 +180,7 @@ const ROUTES = new Map([
   ["/updates.json", handleUpdatesJson],
   ["/restore", handleSystemRestore],
 
-  ["/lens", handleLens],
+  ["/lens", routeLens],
   ["/lens/", routeDropSlash],
   ["/lens/fetch", handleLensFetch],
   ["/lens/shot", handleLensShot],
@@ -201,7 +203,7 @@ const ROUTES = new Map([
   ["/ledger", handleLedger],
   ["/ledger.json", handleLedgerJson],
 
-  ["/writing", handleWritingIndex],
+  ["/writing", routeWritingIndex],
   ["/writing/", routeDropSlash],
 
   // webmention: the open web's way to say "I linked to you." The endpoint takes
@@ -226,6 +228,8 @@ const ROUTES = new Map([
   ["/photos", handlePhotos],
   ["/photos/", routePhotosRedirect],
   ["/photos/query.json", handlePhotoQuery],
+  // the homepage grid's random twelve, fetched by the inline hydrator
+  ["/photos/grid.html", handlePhotoGrid],
   ["/coffee/availability.json", handleCoffeeAvailability],
   ["/run", handleRun],
 
@@ -306,8 +310,13 @@ const PREFIX = [
     handle: routeStaticPage,
   },
   {
+    label: "/pixel-peeper/<page>",
+    match: (pathname) => pathname === "/pixel-peeper" || pathname.startsWith("/pixel-peeper/"),
+    handle: routeStaticPage,
+  },
+  {
     label: "/a/<asset>",
-    match: (pathname) => /^\/a\/[^/]+\.[0-9a-f]{8}\.(js|css|svg)$/.test(pathname),
+    match: (pathname) => /^\/a\/[^/]+\.[0-9a-f]{8}\.(js|css|svg|dict)$/.test(pathname),
     handle: routeShellAsset,
   },
 ];
@@ -497,9 +506,41 @@ function routeDropSlash(_request, _env, _ctx, url) {
   return Response.redirect(url.origin + url.pathname.replace(/\/+$/, "") + url.search, 301);
 }
 
-function routeWritingPost(request, env, ctx, url) {
+async function routeWritingPost(request, env, ctx, url) {
   const slug = url.pathname.slice("/writing/".length);
+  const response = await serveGeneratedWriting(request, env);
+  if (response.status !== 404) return response;
+  try { await response.body?.cancel(); } catch {}
   return handleWritingPost(request, slug, env, ctx);
+}
+
+const GENERATED_PAGE_HEADERS = {
+  "cache-control": "public, max-age=0, must-revalidate, s-maxage=86400",
+  "link": SHELL_PRELOAD_LINK,
+};
+
+function routeLens(request, env, ctx, url) {
+  // A target-bearing Lens response spends crawler/browser budget and contains
+  // third-party data, so it remains the live no-store Worker path. The bare,
+  // deterministic shell is now a built q11/DCZ/304 static page.
+  if (url.searchParams.get("url")) return handleLens(request, env, ctx);
+  return serveStaticPage(request, env, { headers: GENERATED_PAGE_HEADERS });
+}
+
+async function routeWritingIndex(request, env, ctx) {
+  const response = await serveGeneratedWriting(request, env);
+  if (response.status !== 404) return response;
+  try { await response.body?.cancel(); } catch {}
+  return handleWritingIndex(request, env, ctx);
+}
+
+function serveGeneratedWriting(request, env) {
+  return serveStaticPage(request, env, {
+    headers: {
+      ...GENERATED_PAGE_HEADERS,
+      "link": `${SHELL_PRELOAD_LINK}, </webmention>; rel="webmention"`,
+    },
+  });
 }
 
 function routeImagesMetadata(request, env) {
@@ -555,8 +596,23 @@ function routeIndexHtml(_request, _env, _ctx, url) {
   return Response.redirect(url.toString(), 301);
 }
 
+// `/` is a static document again. Everything that varied per request left it
+// (see home.js's handlePhotoGrid header for where each piece went), so it takes
+// the same path as /garage and /lwe: a q11 twin, a dcz delta against the page
+// dictionary, and a real validator that answers 304.
+//
+// The cache policy stays PRIVATE and no-cache rather than picking up the static
+// pages' s-maxage. The document is identical for everyone, but it is still the
+// front door and the one page whose visit the /hit beacon counts; keeping it
+// out of shared caches costs nothing now that the body revalidates to an empty
+// 304 instead of retransmitting.
+const HOMEPAGE_HEADERS = {
+  "cache-control": "private, no-cache, must-revalidate",
+  "link": HOMEPAGE_DISCOVERY_LINK,
+};
+
 function routeHomepage(request, env, ctx) {
   if (request.method === "HEAD") return homepageHeadResponse(request);
   if (wantsMarkdown(request)) return serveMarkdown(request, env);
-  return serveHomepageWithPrerenderedTracks(request, env, ctx);
+  return serveStaticPage(request, env, { headers: HOMEPAGE_HEADERS });
 }

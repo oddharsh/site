@@ -98,6 +98,25 @@ export function createHoist(o) {
     node.style.willChange = "auto";
   };
 
+  // innerHTML is a teardown: it destroys every child and builds new ones, and for
+  // these surfaces that always includes an <img>. Re-entering the SAME target is
+  // already cheap (pointerover returns early on target === activeTarget), but
+  // LEAVING and coming back is not, because hide() clears activeTarget — and
+  // sweeping the cursor down a list and back up is exactly that, once per row.
+  //
+  // The rebuilt <img> does not re-hit the network (measured 2026-07-29: ten
+  // rebuilds of one Spotify cover produced one fetch and nine memory-cache hits
+  // that never even created a resource-timing entry). What it does cost is real
+  // DOM work on a pointer-driven path, so skip it when the surface already holds
+  // exactly these bytes. Nothing else writes into the node, which is what makes
+  // the comparison sound.
+  let mounted = null;
+  const render = (html) => {
+    if (html === mounted) return;
+    node.innerHTML = html;
+    mounted = html;
+  };
+
   const dropAnchor = () => {
     if (anchoredEl) { anchoredEl.style.removeProperty("anchor-name"); anchoredEl = null; }
     node.classList.remove("anchored");
@@ -124,7 +143,7 @@ export function createHoist(o) {
     activeTarget = target;
     const html = contentFor(target);
     if (!html) { hide(); return; }
-    node.innerHTML = html;
+    render(html);
     if (e) place(e);            // position before showing, so there is no glide-in
     openNode();
   };
@@ -138,7 +157,7 @@ export function createHoist(o) {
     if (!html) { hide(); return; }
     dropAnchor();
     activeTarget = target;
-    node.innerHTML = html;
+    render(html);
     if (ANCHOR_OK) {
       target.style.setProperty("anchor-name", anchorName);
       anchoredEl = target;

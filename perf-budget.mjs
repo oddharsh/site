@@ -21,7 +21,7 @@
 // outcome source; a controlled 4G lab run is the repeatable pre-merge signal.
 
 import { execFileSync } from "node:child_process";
-import { readFile, stat } from "node:fs/promises";
+import { readFile, readdir, stat } from "node:fs/promises";
 import { brotliCompressSync, constants as zlibConstants, gzipSync } from "node:zlib";
 import { transform as transformCss } from "lightningcss";
 import { HTML_MARKERS } from "./scripts/lib/html-markers.mjs";
@@ -38,6 +38,7 @@ const ASSET_ENVELOPES = {
   "tooltip.js":     { role: "optional hover island",       gzipKiB: 6,  brotliKiB: 5 },
   "hoist.js":       { role: "shared hover engine",         gzipKiB: 2,  brotliKiB: 1.5 },
   "luna.css":       { role: "shared render-blocking CSS",  gzipKiB: 12, brotliKiB: 10 },
+  "lwe-base.css":   { role: "LWE render-blocking CSS",     gzipKiB: 2,  brotliKiB: 2 },
 };
 
 // This is an observability alert, not a platform limit. It is intentionally
@@ -52,6 +53,7 @@ const WORKER_ALERT_GROWTH = 0.25;
 const TWINS = [
   "nav.src.js", "notepad.src.js", "lens.src.js", "lens-browser.src.js",
   "quiz.src.js", "tooltip.src.js", "hoist.src.js", "luna.src.css",
+  "lwe-base.src.css",
 ];
 const HTML_TWIN = "index.src.html";
 const HTML_ENVELOPE = {
@@ -145,6 +147,62 @@ for (const [file, envelope] of Object.entries(ASSET_ENVELOPES)) {
 for (const t of TWINS) {
   try { await stat(`.build/holding/${t}`); ok(`twin ${t} present`); }
   catch { bad(`twin ${t} missing from build output`); }
+}
+
+// 4b) dictionary + generated-page pipeline ----------------------------------
+try {
+  const name = (await readdir(".build/holding/a"))
+    .find((f) => /^page-family\.[0-9a-f]{8}\.dict$/.test(f));
+  if (!name) bad("page-family.dict: content-hashed build asset missing");
+  else {
+    const [dict, br] = await Promise.all([
+      readFile(`.build/holding/a/${name}`),
+      readFile(`.build/holding/a/${name}.br`),
+    ]);
+    if (dict.length !== 65_536 || dict.readUInt32LE(0) === 0xec30a437) {
+      bad("page-family.dict: expected an exact 64KB raw-content dictionary, not a trained zstd dictionary");
+    } else if (br.length >= dict.length) {
+      bad("page-family.dict: q11 twin is not smaller than the dictionary");
+    } else {
+      ok(`page-family.dict: ${dict.length} B raw source -> ${br.length} B q11 immutable asset`);
+    }
+  }
+} catch (e) {
+  bad(`page-family.dict: missing or unreadable (${e.message})`);
+}
+
+try {
+  const pages = (await readdir(".build/holding", { recursive: true }))
+    .filter((path) => path.endsWith(".html") && !path.endsWith(".src.html"));
+  const deltas = await readdir(".build/holding/pd");
+  const missing = pages
+    .map((path) => path.replace(/\.html$/, "").replace(/\//g, "__"))
+    .filter((slug) => !deltas.some((name) => name.startsWith(`${slug}.`) && name.endsWith(".dcz")));
+  if (missing.length) bad(`site-page dictionary: missing useful DCZ variants for ${missing.join(", ")}`);
+  else ok(`site-page dictionary: all ${pages.length} static/deterministic pages have DCZ variants`);
+} catch (e) {
+  bad(`site-page dictionary: generated DCZ set unreadable (${e.message})`);
+}
+
+for (const path of [
+  "lens.html",
+  "writing/index.html",
+  "writing/big-screens-and-small-screens.html",
+  "writing/education-in-tech.html",
+  "writing/in-flux.html",
+  "writing/colophon.html",
+  "pixel-peeper/index.html",
+]) {
+  try {
+    const [raw, br] = await Promise.all([
+      readFile(`.build/holding/${path}`),
+      readFile(`.build/holding/${path}.br`),
+    ]);
+    if (br.length >= raw.length) bad(`${path}: q11 twin is not smaller than the generated page`);
+    else ok(`${path}: deterministic renderer staged ${raw.length} B -> ${br.length} B q11`);
+  } catch {
+    bad(`${path}: deterministic render or q11 twin missing from build output`);
+  }
 }
 
 // 5) homepage HTML: minification banner, readable twin, and semantic anchors

@@ -26,11 +26,13 @@ import { citationsIn, findEndpointIn, SELF_LINK_HOSTS } from "./holding/_worker.
 import { sign } from "./cal/src/sign.js";
 import { AGENT_SURFACES, WEBMENTION_PATHS } from "./holding/_worker.js/lib/site-manifest.js";
 import { handleWritingIndex } from "./holding/_worker.js/writing.js";
+import { serveStaticPage } from "./holding/_worker.js/lib/assets.js";
 import { readManifest, workerModule, navFenceBody, readFenceBody } from "./scripts/gen-manifest.mjs";
 import { INDEXED_SECTIONS, TWIN_FACTS, buildTwins, checkTwinFacts, htmlFileFor, twinPath } from "./scripts/gen-md-twins.mjs";
 import { MCP_TOOLS } from "./serendipity/serendipity.js";
 import { derivePhotoPool, getImagesManifest, handlePhotoQuery, queryPhotos } from "./holding/_worker.js/photos.js";
-import { deadline } from "./holding/_worker.js/lib/cache.js";
+import { cachedRender, deadline } from "./holding/_worker.js/lib/cache.js";
+import { ifNoneMatchMatches, notModifiedIfFresh, withWeakEtag } from "./holding/_worker.js/lib/cache.js";
 import { privateHostBlocked } from "./holding/_worker.js/lib/crawl.js";
 import { handleHit } from "./holding/_worker.js/counter.js";
 import { cronHomeProbe, parseServerTiming } from "./holding/_worker.js/perf-probe.js";
@@ -960,6 +962,161 @@ test("getImagesManifest serves the bundled pool without env", async () => {
   assert.ok(Array.isArray(pool) && pool.length > 0);
 });
 
+test("homepage selects 12 photos and hydrates only the current scrollport", async () => {
+  const worker = await readFile(new URL("holding/_worker.js/home.js", import.meta.url), "utf8");
+  const page = await readFile(new URL("holding/index.html", import.meta.url), "utf8");
+  const luna = await readFile(new URL("holding/luna.css", import.meta.url), "utf8");
+  const nav = await readFile(new URL("holding/nav.js", import.meta.url), "utf8");
+
+  const grid = await readFile(new URL("holding/_worker.js/lib/photo-grid.js", import.meta.url), "utf8");
+  const build = await readFile(new URL("build.mjs", import.meta.url), "utf8");
+  assert.match(worker, /pickRandom\(pool,\s*12\)/, "the per-request random draw must remain 12");
+  assert.match(build, /deterministicTwelve/, "the document must carry a baked fallback grid, or `/` stops being crawlable without JS");
+  assert.match(grid, /data-photo-deferred/, "photo URLs must stay in data-* for viewport-aware hydration");
+  assert.match(grid, /<noscript><picture>/, "every baked tile needs its script-off twin");
+  // A real src may appear ONLY inside the <noscript> twin. In the live tile it
+  // would fetch a baked thumbnail that hydration discards milliseconds later.
+  const liveTile = grid.slice(0, grid.indexOf("const noScript"));
+  assert.doesNotMatch(liveTile, /\ssrc="/, "the live tile must defer every URL; a real src is a discarded download");
+  assert.match(grid, /data-src="\$\{escAttr\(jpg\)\}"/, "the live tile carries its jpg in data-src");
+  assert.doesNotMatch(worker, /rel="preload" as="image"/, "a non-LCP random photo must not consume the preload lane");
+  assert.match(page, /fetch\("\/photos\/grid\.html"\)/, "the homepage must hydrate its random twelve");
+  assert.match(page, /\.catch\(\(\) => \{\}\)\s*\.then\(boot\)/, "a failed grid fetch must still hydrate the baked tiles");
+  assert.match(page, /IntersectionObserver/);
+  assert.match(page, /threshold:\s*0\.05/, "a sliver of the next tile must not trigger a transfer");
+  assert.match(page, /overlap >= rect\.height \* 0\.05/, "desktop must synchronously hydrate its visible photo rows");
+  assert.match(page, /else requestAnimationFrame\(\(\) => requestAnimationFrame\(start\)\)/, "mobile hydration must yield through the text paint");
+  assert.doesNotMatch(page, /requestIdleCallback\(load/, "the tooltip island must not transfer before hover intent");
+  assert.match(nav, /getElementById\("axp-desktop"\).*getElementById\("axp-taskbar"\)/, "every server-rendered shell must opt into post-paint enhancement");
+  assert.match(nav, /D\.prerendering\) return boot\(\)/, "prerendered static shells must enhance before activation");
+  assert.match(nav, /requestAnimationFrame\(\(\) => requestAnimationFrame\(boot\)\)/, "ordinary static shell enhancement must follow the first useful paint");
+  assert.ok(
+    page.indexOf('type="application/ld+json"') > page.indexOf('<section class="now-playing"'),
+    "non-rendering JSON-LD belongs after the visible homepage content",
+  );
+  assert.match(luna, /homepage music island \(below the fold\)/);
+  assert.match(luna, /homepage hover island \(non-critical\)/);
+});
+
+test("weak validators turn unchanged rendered HTML into an empty 304", async () => {
+  const tagged = await withWeakEtag(new Response("<!doctype html><p>same</p>", {
+    headers: { "content-type": "text/html", "cache-control": "public, max-age=0", "content-encoding": "br" },
+  }));
+  const etag = tagged.headers.get("etag");
+  assert.match(etag, /^W\/"sha256-[0-9a-f]{64}"$/);
+  assert.equal(ifNoneMatchMatches(new Request("https://aadhar.sh/x", { headers: { "if-none-match": etag } }), etag), true);
+  assert.equal(ifNoneMatchMatches(new Request("https://aadhar.sh/x", { headers: { "if-none-match": etag.replace(/^W\//, "") } }), etag), true);
+  const notModified = notModifiedIfFresh(new Request("https://aadhar.sh/x", {
+    headers: { "if-none-match": `"old", ${etag}` },
+  }), tagged);
+  assert.equal(notModified.status, 304);
+  assert.equal(notModified.headers.get("etag"), etag);
+  assert.equal(notModified.headers.get("content-encoding"), null);
+  assert.equal(await notModified.text(), "");
+});
+
+test("cached renders stream the first miss while tagging the background copy", async () => {
+  const priorCaches = globalThis.caches;
+  const stored = [];
+  globalThis.caches = {
+    default: {
+      match: async () => undefined,
+      put: async (_key, response) => {
+        stored.push({ response, body: await response.text() });
+      },
+    },
+  };
+  const pending = [];
+  try {
+    const first = await cachedRender(
+      new Request("https://aadhar.sh/whoareyou"),
+      { waitUntil: (promise) => pending.push(promise) },
+      async () => new Response("rendered", { headers: { "content-type": "text/html" } }),
+      "/whoareyou",
+      { CF_VERSION_METADATA: { id: "test" } },
+    );
+    assert.equal(first.headers.get("etag"), null, "the miss does not buffer before sending");
+    assert.equal(await first.text(), "rendered");
+    assert.equal(pending.length, 1);
+    await Promise.all(pending);
+    assert.match(stored[0].response.headers.get("etag"), /^W\//);
+    assert.equal(stored[0].body, "rendered");
+  } finally {
+    if (priorCaches === undefined) delete globalThis.caches;
+    else globalThis.caches = priorCaches;
+  }
+});
+
+test("static page negotiation prefers 304, then DCZ with the current validator", async () => {
+  const digest = Buffer.alloc(32, 1);
+  const tag = digest.toString("hex").slice(0, 16);
+  const available = `:${digest.toString("base64")}:`;
+  const env = {
+    ASSETS: {
+      async fetch(input) {
+        const path = new URL(typeof input === "string" ? input : input.url).pathname;
+        if (path === "/lwe/drivers.html.br") {
+          return new Response("brotli bytes", {
+            headers: {
+              "etag": '"page"',
+              "cache-control": "public, max-age=0, s-maxage=86400",
+              "link": "</shell.css>; rel=preload; as=style",
+            },
+          });
+        }
+        if (path === `/pd/lwe__drivers.${tag}.dcz`) {
+          return new Response("delta bytes", { headers: { "cache-control": "public, max-age=0" } });
+        }
+        return new Response("not found", { status: 404 });
+      },
+    },
+  };
+  const currentBr = 'W/"page-br"';
+  const currentDcz = 'W/"page-dcz"';
+  const unchanged = await serveStaticPage(new Request("https://aadhar.sh/lwe/drivers", {
+    headers: { "if-none-match": currentBr, "available-dictionary": available },
+  }), env);
+  assert.equal(unchanged.status, 304);
+  assert.equal(unchanged.headers.get("etag"), currentBr);
+
+  const changed = await serveStaticPage(new Request("https://aadhar.sh/lwe/drivers", {
+    headers: { "if-none-match": '"old"', "available-dictionary": available },
+  }), env);
+  assert.equal(changed.status, 200);
+  assert.equal(changed.headers.get("content-encoding"), "dcz");
+  assert.equal(changed.headers.get("etag"), currentDcz);
+  assert.equal(changed.headers.get("cache-control"), "public, max-age=0, s-maxage=86400");
+  assert.equal(changed.headers.get("link"), "</shell.css>; rel=preload; as=style");
+  assert.equal(changed.headers.get("vary"), "accept-encoding, available-dictionary");
+  assert.equal(changed.headers.get("use-as-dictionary"), 'match="/lwe/drivers", match-dest=("document")');
+
+  const dczUnchanged = await serveStaticPage(new Request("https://aadhar.sh/lwe/drivers", {
+    headers: { "if-none-match": currentDcz, "available-dictionary": available },
+  }), env);
+  assert.equal(dczUnchanged.status, 304);
+  assert.equal(dczUnchanged.headers.get("etag"), currentDcz);
+});
+
+test("LWE pages share one base stylesheet and the build derives one site-page dictionary", async () => {
+  const base = await readFile(new URL("holding/lwe-base.css", import.meta.url), "utf8");
+  assert.match(base, /\.controls \{ display: inline-flex/);
+  const build = await readFile(new URL("build.mjs", import.meta.url), "utf8");
+  assert.match(build, /site-page corpus/);
+  assert.match(build, /page-family\.\$\{hash8\(dictionary\)\}\.dict/);
+  assert.match(build, /holding\/p-dict/);
+  assert.match(build, /site-page dictionary/);
+  const assetIgnore = await readFile(new URL("holding/.assetsignore", import.meta.url), "utf8");
+  assert.match(assetIgnore, /^p-dict$/m, "page dictionary snapshots stay build input, not public assets");
+  const security = await readFile(new URL("holding/_worker.js/lib/security.js", import.meta.url), "utf8");
+  assert.match(security, /rel="compression-dictionary"/);
+  for (const name of ["index", "dac", "drivers", "encoding", "fhe", "knots", "mpc", "pcrypto", "tee", "utf8", "vigenere"]) {
+    const html = await readFile(new URL(`holding/lwe/${name}.html`, import.meta.url), "utf8");
+    assert.match(html, /<link rel="stylesheet" href="\/lwe-base\.css">/);
+    assert.doesNotMatch(html, /compression-dictionary/);
+    assert.doesNotMatch(html.match(/<style>([\s\S]*?)<\/style>/)?.[1] || "", /\.controls \{ display: inline-flex/);
+  }
+});
+
 // ── the SSR deadline ────────────────────────────────────────────────
 // deadline() is what keeps a KV eviction (100-200ms, untunable) from gating
 // homepage TTFB. Two properties are load-bearing: a fast read never marks
@@ -1100,17 +1257,26 @@ test("the probe writes one positionally-stable datapoint and never throws", asyn
   // cannot crash the scheduled() handler
   await cronHomeProbe({}, { waitUntil() {} });
 
-  // the render path itself needs HTMLRewriter (Workers-only), so exercise the
-  // probe's contract with the render stubbed via a throwing env: a broken
-  // render must write NOTHING (a gap is the alert) and must not throw.
+  // The probe used to dispatch the homepage SSR, which needed ASSETS +
+  // HTMLRewriter, so a bindingless env was itself the "broken render" case and
+  // this asserted the resulting gap. `/` is a static document now and the probe
+  // follows the two fragments instead; the photo grid answers from the BUNDLED
+  // pool, so it succeeds with no bindings at all and there is no longer an env
+  // that fails both arms by omission. The write-nothing rule still holds in the
+  // code (both arms null -> early return), it just cannot be provoked this way.
+  //
+  // So assert what this env can actually prove: exactly one datapoint, with the
+  // positional arity Analytics Engine reads by index. A column silently
+  // appearing or vanishing is the failure that corrupts a whole dataset.
   const written = [];
-  const env = {
-    PERF_PROBE: { writeDataPoint: (d) => written.push(d) },
-    // serveHomepageWithPrerenderedTracks will throw on this env inside the
-    // probe's try/catch (no ASSETS binding)
-  };
+  const env = { PERF_PROBE: { writeDataPoint: (d) => written.push(d) } };
   await cronHomeProbe(env, { waitUntil() {} });
-  assert.equal(written.length, 0, "a failed render must not write a fabricated datapoint");
+  assert.equal(written.length, 1, "a working probe writes exactly one datapoint");
+  const [dp] = written;
+  assert.equal(dp.doubles.length, 5, "doubles are positional: [assets, tracks, alt, counter, total]");
+  assert.ok(dp.doubles.every((v) => typeof v === "number"), "every double must be a real number");
+  assert.equal(dp.blobs.length, 2, "blobs are positional: [deadlined CSV, version id]");
+  assert.deepEqual(dp.indexes, ["home"]);
 });
 
 // The SSRF host floor is shared by /lens, webmention verification, and

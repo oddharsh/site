@@ -21,7 +21,13 @@
 // root wrangler.jsonc is copied verbatim into .build/ and just works against the copy.
 
 import { createHash } from "node:crypto";
+
+// One nonce per build for the dynamic imports below: the staged worker modules
+// are rewritten in place by later steps, so each import site needs a fresh URL.
+const BUILD_NONCE = process.hrtime.bigint().toString(36);
 import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { brotliCompressSync, brotliDecompressSync, constants as zlibConstants, zstdCompressSync } from "node:zlib";
 import minifyHtml from "@minify-html/node";
 import { transform as transformCss } from "lightningcss";
@@ -463,7 +469,7 @@ await checkInvariants();
 // by the staging step below and ships artifacts current code would never build — which is
 // how an icons.*.dcz survived #119's svg exclusion locally, long after the guard forbidding
 // it was in place. That guard stops GENERATION, not staging of stale files.
-for (const dead of ["holding/ad", "holding/pd"]) {
+for (const dead of ["holding/ad"]) {
   await rm(dead, { recursive: true, force: true });
 }
 await rm(OUT, { recursive: true, force: true });
@@ -676,6 +682,53 @@ if (inlineProbe.includes("/* probe */") ||
 }
 
 
+// 1d) the homepage's baked fallback grid + last-modified date.
+//
+// `/` used to be four HTMLRewriter injections over a skeleton (tracks, photo
+// grid, visit counter, last-modified). That made its bytes different on every
+// request, which is the one thing a precomputed dcz delta and a 304 cannot
+// survive. Three of the four moved to the client; this bakes the fourth and
+// gives the grid a real, deterministic fallback so the page still says
+// something to a crawler or a visitor without JavaScript.
+//
+// Determinism is the contract. The twelve are chosen by stem sort and the date
+// comes from the committed pool, so this output changes only when the pool
+// does — which is also the only time the page's meaning changes.
+{
+  const nonce = `?build=${BUILD_NONCE}`;
+  const grid = await import(pathToFileURL(resolve(OUT, "holding/_worker.js/lib/photo-grid.js")).href + nonce);
+  const photos = await import(pathToFileURL(resolve(OUT, "holding/_worker.js/photos.js")).href + nonce);
+  const pool = photos.derivePhotoPool(
+    JSON.parse(await readFile(`${OUT}/holding/_worker.js/photo-index.json`, "utf8")),
+    JSON.parse(await readFile(`${OUT}/holding/images/hashes.json`, "utf8")),
+  );
+  if (!pool.length) throw new Error("homepage bake: the photo pool is empty — the grid fallback would ship as bare frames");
+  const altMap = JSON.parse(await readFile(`${OUT}/holding/images/alt.json`, "utf8").catch(() => "{}"));
+  const twelve = grid.deterministicTwelve(pool);
+  if (twelve.length !== 12) throw new Error(`homepage bake: expected 12 fallback tiles, pool yielded ${twelve.length}`);
+  const slots = grid.renderPhotoSlots(twelve, altMap);
+
+  let html = await readFile(`${OUT}/holding/index.html`, "utf8");
+  const section = /(<section class="photos"[^>]*>)([\s\S]*?)(<\/section>)/;
+  if (!section.test(html)) throw new Error("homepage bake: no <section class=\"photos\"> to fill — did the grid markup move?");
+  html = html.replace(section, (_m, open, _inner, close) =>
+    open.replace(/\sdata-ssr="[^"]*"/, "") + slots + close);
+
+  // Newest photo wins, floored by the hand-written date already in the file, so
+  // a copy-only edit can still bump it by hand.
+  let newest = 0;
+  for (const p of pool) { const t = p.uploaded ? Date.parse(p.uploaded) : NaN; if (!isNaN(t) && t > newest) newest = t; }
+  if (newest > 0) {
+    const d = new Date(newest);
+    const iso = d.toISOString().slice(0, 10);
+    const shown = d.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" });
+    html = html.replace(/<time datetime="([^"]*)"[^>]*>([^<]*)<\/time>/, (m, floor) =>
+      iso >= floor ? `<time datetime="${iso}">${shown}</time>` : m);
+  }
+  await writeFile(`${OUT}/holding/index.html`, html);
+  console.log(`homepage bake: 12 deterministic fallback tiles + last-modified ${new Date(newest).toISOString().slice(0, 10)}`);
+}
+
 // 2) homepage HTML: deploy the readable original as /index.src.html and
 // minify only the served copy. The worker rewrites this response as a stream,
 // so doing this before ASSETS.fetch keeps the rewriter path allocation-free.
@@ -742,6 +795,18 @@ for (const [file, srcPath, marker] of SHELLS) {
   console.log(`luna.css: ${src.length} -> ${out.length} bytes (+ /luna.src.css)`);
 }
 
+// 4b) the LWE conversation pages share their byte-identical structural CSS
+// instead of embedding it eleven times. Keep the same readable-twin contract as
+// luna.css: author the source directly, ship a small minified render-blocker.
+{
+  const src = await readFile("holding/lwe-base.css", "utf8");
+  await writeFile(`${OUT}/holding/lwe-base.src.css`, src);
+  const code = minifyCss("holding/lwe-base.css", src);
+  const out = `/*! minified at deploy - readable source: /lwe-base.src.css */\n` + code;
+  await writeFile(`${OUT}/holding/lwe-base.css`, out);
+  console.log(`lwe-base.css: ${src.length} -> ${out.length} bytes (+ /lwe-base.src.css)`);
+}
+
 // 5) worker-module CSS: minify static CSS template literals marked with a
 // leading /*min*/ sentinel. Dynamic page CSS stays unmarked; readable source
 // remains in holding/ while only the staged worker bytes shrink on the wire.
@@ -779,6 +844,49 @@ for (const [file, srcPath, marker] of SHELLS) {
     fileCount++;
   }
   console.log(`worker CSS: minified ${litCount} /*min*/ literals across ${fileCount} modules, ~${(saved / 1024).toFixed(1)}KB raw saved`);
+}
+
+// 5b) render deterministic Worker pages into the staged static tree. They keep
+// their canonical renderers as the sole HTML source; the build invokes those
+// renderers after CSS-literal minification, then the ordinary hashing and page
+// precompression passes treat the results exactly like garage/LWE documents.
+{
+  const root = resolve(OUT, "holding");
+  const assets = {
+    async fetch(input) {
+      const url = new URL(typeof input === "string" ? input : input.url);
+      const rel = decodeURIComponent(url.pathname).replace(/^\/+/, "");
+      if (!rel || rel.includes("..")) return new Response("not found", { status: 404 });
+      try {
+        const bytes = await readFile(resolve(root, rel));
+        const type = rel.endsWith(".json") ? "application/json" : rel.endsWith(".txt") ? "text/plain; charset=utf-8" : "application/octet-stream";
+        return new Response(bytes, { headers: { "content-type": type } });
+      } catch {
+        return new Response("not found", { status: 404 });
+      }
+    },
+  };
+  const nonce = `?build=${BUILD_NONCE}`;
+  const lens = await import(pathToFileURL(resolve(OUT, "holding/_worker.js/lens.js")).href + nonce);
+  const writing = await import(pathToFileURL(resolve(OUT, "holding/_worker.js/writing.js")).href + nonce);
+
+  const lensResponse = lens.renderLensShell();
+  if (lensResponse.status !== 200) throw new Error(`static /lens renderer returned ${lensResponse.status}`);
+  await writeFile(`${OUT}/holding/lens.html`, await lensResponse.text());
+
+  const env = { ASSETS: assets };
+  const indexResponse = await writing.renderWritingIndex(env);
+  if (indexResponse.status !== 200) throw new Error(`static /writing renderer returned ${indexResponse.status}`);
+  await mkdir(`${OUT}/holding/writing`, { recursive: true });
+  await writeFile(`${OUT}/holding/writing/index.html`, await indexResponse.text());
+
+  const posts = JSON.parse(await readFile(`${OUT}/holding/writing/posts.json`, "utf8"));
+  for (const post of posts) {
+    const response = await writing.renderWritingPost(post.slug, env);
+    if (response.status !== 200) throw new Error(`static /writing/${post.slug} renderer returned ${response.status}`);
+    await writeFile(`${OUT}/holding/writing/${post.slug}.html`, await response.text());
+  }
+  console.log(`static renders: /lens + /writing index + ${posts.length} notes staged from canonical Worker renderers`);
 }
 
 // 6) content-hash the critical-path shell assets (nav.js + luna.css + lens.js) into
@@ -826,6 +934,8 @@ for (const [file, srcPath, marker] of SHELLS) {
     // Moving them needs a different mechanism, not another line here.
     { attr: "src", from: "/quiz.js",    base: "quiz",    ext: "js", witness: "garage/encoding.html" },
     { attr: "src", from: "/notepad.js", base: "notepad", ext: "js", witness: "_worker.js/writing.js" },
+    // Shared LWE structure is a separate warm-cache object.
+    { attr: "href", from: "/lwe-base.css", base: "lwe-base", ext: "css", witness: "lwe/vigenere.html" },
   ];
   const hashedFor = {};
   // ── phase 0: the three JS-STRING-loaded islands (tooltip, hoist, lens-browser) ──
@@ -965,18 +1075,65 @@ for (const [file, srcPath, marker] of SHELLS) {
     }
   }
 
-  // point the worker's Early-Hints `Link: rel=preload` header at the SAME hashed
-  // URLs. shell-assets.js ships a readable-dev fallback (unhashed /nav.js +
-  // /luna.css); here we overwrite just its marked SHELL_ASSETS line so the served
-  // 103 preloads the exact bytes the rewritten HTML requests.
+  // RFC 9842 requires dcz to treat the supplied bytes as a RAW dictionary. A zstd
+  // --train artifact is self-describing, so a server library recognizes its tables
+  // while Chrome treats those same response bytes as raw content; the decoders
+  // disagree and the navigation fails. Build one site-wide corpus from the final,
+  // repointed bytes of two complementary pages instead: the compact LWE shell plus
+  // the Garage compression explainer. The 64KB corpus costs 15.6KB as q11 once
+  // and measured best across every static/deterministic page in this tree.
+  //
+  // The corpus is a LIST rather than a fixed pair, and it is read in order until the
+  // 64KB is filled. Two pages happened to cover it with 1,656 bytes to spare, which
+  // meant an ordinary edit trimming either page by ~2% would have hard-failed the
+  // deploy under a message naming the wrong cause. The trailing entries are slack:
+  // they contribute nothing while the leading pages are long enough, and they keep a
+  // content edit from becoming a release incident.
+  {
+    const CORPUS = [
+      "lwe/drivers.html",           // the compact LWE conversation shell
+      "garage/compression.html",    // the Garage explainer, the other structural family
+      "lwe/vigenere.html",          // slack, in corpus order
+      "garage/chunks.html",
+    ];
+    const SIZE = 65_536;
+    const parts = [];
+    let total = 0;
+    for (const rel of CORPUS) {
+      const bytes = await readFile(`${OUT}/holding/${rel}`);
+      parts.push(bytes);
+      total += bytes.length;
+      if (total >= SIZE) break;
+    }
+    if (total < SIZE) {
+      throw new Error(
+        `page-family dictionary: the corpus pages total ${total} B, ${SIZE - total} B short of the ${SIZE} B dictionary. ` +
+        `Add another staged page to CORPUS in build.mjs (order is load-bearing; append, do not reorder).`,
+      );
+    }
+    const dictionary = Buffer.concat(parts).subarray(0, SIZE);
+    if (dictionary.readUInt32LE(0) === 0xec30a437) {
+      throw new Error("page-family dictionary starts with the zstd --train magic — dcz needs RAW bytes, not a trained dictionary");
+    }
+    const to = `/a/page-family.${hash8(dictionary)}.dict`;
+    await writeFile(`${OUT}/holding${to}`, dictionary);
+    hashedFor["page-family"] = to;
+    console.log(`hashed asset: site-page corpus -> ${to} (${dictionary.length} raw bytes)`);
+  }
+
+  // Point the worker's Early-Hints header and its HTML dictionary Link header at
+  // the exact same content-addressed assets as the staged documents.
   {
     const p = `${OUT}/holding/_worker.js/lib/shell-assets.js`;
     const src = await readFile(p, "utf8");
     const line = `export const SHELL_ASSETS = { luna: ${JSON.stringify(hashedFor.luna)}, nav: ${JSON.stringify(hashedFor.nav)} }; // build:shell-assets`;
-    const out = src.replace(/^export const SHELL_ASSETS = .*\/\/ build:shell-assets$/m, line);
-    if (out === src) throw new Error("shell-assets.js: the `// build:shell-assets` marker line was not found — did the export shape change?");
+    const dictionaryLine = `export const PAGE_DICTIONARY = ${JSON.stringify(hashedFor["page-family"])}; // build:page-dictionary`;
+    const shellPatched = src.replace(/^export const SHELL_ASSETS = .*\/\/ build:shell-assets$/m, line);
+    const out = shellPatched.replace(/^export const PAGE_DICTIONARY = .*\/\/ build:page-dictionary$/m, dictionaryLine);
+    if (shellPatched === src) throw new Error("shell-assets.js: the `// build:shell-assets` marker line was not found — did the export shape change?");
+    if (out === shellPatched) throw new Error("shell-assets.js: the `// build:page-dictionary` marker line was not found");
     await writeFile(p, out);
-    console.log(`shell-assets: Early-Hints Link -> ${hashedFor.luna} + ${hashedFor.nav}`);
+    console.log(`shell-assets: Early-Hints -> ${hashedFor.luna} + ${hashedFor.nav}; page dictionary -> ${hashedFor["page-family"]}`);
   }
 
   // same Early-Hints preload for the STATIC garage/lwe pages: rewrite the
@@ -989,8 +1146,9 @@ for (const [file, srcPath, marker] of SHELLS) {
     const src = await readFile(p, "utf8");
     const out = src
       .split("</luna.css>").join(`<${hashedFor.luna}>`)
-      .split("</nav.js>").join(`<${hashedFor.nav}>`);
-    if (out === src) throw new Error("_headers: no `</luna.css>`/`</nav.js>` Link target found to hash — did the Early-Hints rule move?");
+      .split("</nav.js>").join(`<${hashedFor.nav}>`)
+      .split("</lwe-base.css>").join(`<${hashedFor["lwe-base"]}>`);
+    if (out === src) throw new Error("_headers: no shell Link target found to hash — did the Early-Hints rule move?");
     await writeFile(p, out);
     console.log(`_headers: Early-Hints Link rewritten to hashed shell URLs`);
   }
@@ -1031,7 +1189,7 @@ for (const [file, srcPath, marker] of SHELLS) {
 // A skipped build step, or a client without brotli, gets the identity bytes.
 {
   const dir = `${OUT}/holding/a`;
-  const files = (await readdir(dir)).filter((f) => /\.(js|css|svg)$/.test(f));
+  const files = (await readdir(dir)).filter((f) => /\.(js|css|svg|dict)$/.test(f));
   if (!files.length) throw new Error("precompression found no /a/ shell assets — did step 6 stop emitting them?");
   let raw = 0, enc = 0;
   for (const f of files) {
@@ -1149,41 +1307,48 @@ for (const [file, srcPath, marker] of SHELLS) {
 
 }
 
-// 8) the static garage/lwe pages: brotli q11 twins + dcz deltas.
+// 8) static and deterministically rendered pages: brotli q11 twins + dcz deltas.
 //
-// These are the biggest text payloads on the site (10-17KB on the wire each, 30 of them)
-// and they fit dictionary transport BETTER than the hashed shell does. The shell is
+// These are the biggest repeated text payloads on the site, and they fit
+// dictionary transport better than the hashed shell does. The shell is
 // content-addressed, so a changed asset is a new URL. A garage page is mutable at a
 // STABLE url under `max-age=0, must-revalidate`, which is the canonical case the RFC was
 // written for: the browser revalidates, the bytes moved, and the server answers with the
 // diff instead of the document.
 //
-// Naming differs from /a/ for that same reason. A shell delta can key off the hash in the
-// request path; a page cannot, because the path never changes. So a page delta is keyed by
-// SLUG plus the dictionary tag alone: /pd/<slug>.<dicttag>.dcz. Only one version of a page
-// is current at a time, so slug+dictionary already identifies it uniquely.
+// A page delta is keyed by SLUG plus the dictionary tag:
+// /pd/<slug>.<dicttag>.dcz. The family corpus is the broad fallback for anyone who
+// has visited any page. The committed per-page snapshots are the high-ratio path for
+// a returning visitor who still holds that page's previous bytes; both candidates
+// are emitted when they beat the ordinary q11 twin. The browser tells the worker
+// which one it has via Available-Dictionary, so no unsafe guess is made server-side.
 {
-  const pages = [];
-  for (const dir of ["garage", "lwe"]) {
-    for (const rel of await readdir(`${OUT}/holding/${dir}`, { recursive: true }).catch(() => [])) {
-      if (!rel.endsWith(".html") || rel.endsWith(".src.html")) continue;
-      pages.push(`${dir}/${rel}`);
-    }
-  }
+  // EVERY deploy-time HTML document, the homepage included. `/` used to be the
+  // one exception, because four HTMLRewriter injections made its bytes differ
+  // per request and no precomputed response could equal them. Step 1d bakes
+  // those out, so it is now an ordinary deterministic document and earns the
+  // same twin, delta, and validator as the rest.
+  const pages = (await readdir(`${OUT}/holding`, { recursive: true }))
+    .filter((rel) => rel.endsWith(".html") && !rel.endsWith(".src.html"));
   // slug: the request path with separators folded, so it survives as one filename segment.
   const slugOf = (assetPath) => assetPath.replace(/\.html$/, "").replace(/\//g, "__");
 
   const dictDir = "holding/p-dict";
-  const dicts = await readdir(dictDir).catch(() => []);
-  // <slug>.<hash16>.html — the previous shipped bytes for that exact page.
-  // Snapshots are stored BROTLI'd. They are only ever build input, never served, and
-  // brotli round-trips exactly, so compressing them cuts the committed weight ~75%
-  // (1.4MB -> 352KB across 30 pages) with no effect on the dictionary bytes themselves.
-  const parseDict = (n) => { const m = n.match(/^(.+)\.([0-9a-f]{16})\.html\.br$/); return m ? { slug: m[1], tag: m[2], name: n } : null; };
-  const cands = dicts.map(parseDict).filter(Boolean);
-  if (cands.length) await mkdir(`${OUT}/holding/pd`, { recursive: true });
+  const dicts = (await readdir(dictDir).catch(() => []));
+  const parseDict = (n) => {
+    const m = n.match(/^(.+)\.([0-9a-f]{16})\.html\.br$/);
+    return m ? { slug: m[1], tag: m[2], name: n } : null;
+  };
+  const pageDicts = dicts.map(parseDict).filter(Boolean);
+  const familyName = (await readdir(`${OUT}/holding/a`)).find((n) => /^page-family\.[0-9a-f]{8}\.dict$/.test(n));
+  const familyBytes = familyName ? await readFile(`${OUT}/holding/a/${familyName}`) : null;
+  const familyTag = familyBytes ? createHash("sha256").update(familyBytes).digest("hex").slice(0, 16) : null;
+  if (familyBytes) {
+    console.log(`page-delta: site-page dictionary ${familyName} (${familyBytes.length} bytes, tag ${familyTag})`);
+  }
+  if (familyBytes || pageDicts.length) await mkdir(`${OUT}/holding/pd`, { recursive: true });
 
-  let brCount = 0, brRaw = 0, brEnc = 0, dCount = 0, dBytes = 0, dPlain = 0;
+  let brCount = 0, brRaw = 0, brEnc = 0, dCount = 0, dBytes = 0, dPlain = 0, pageCount = 0, pageBytes = 0, familyCount = 0, familyBytesOut = 0;
   for (const page of pages) {
     const bytes = await readFile(`${OUT}/holding/${page}`);
     const br = brotliCompressSync(bytes, {
@@ -1199,26 +1364,31 @@ for (const [file, srcPath, marker] of SHELLS) {
     }
 
     const slug = slugOf(page);
-    for (const d of cands) {
-      if (d.slug !== slug) continue;
-      // Snapshots are stored brotli'd (build input only, never served, and brotli
-      // round-trips exactly), which cuts the committed weight from 1.4MB to 412KB.
-      const dictBytes = brotliDecompressSync(await readFile(`${dictDir}/${d.name}`));
-      if (dictBytes.equals(bytes)) continue;            // unchanged: nothing to diff
+    for (const candidate of pageDicts.filter((d) => d.slug === slug)) {
+      const dictBytes = brotliDecompressSync(await readFile(`${dictDir}/${candidate.name}`));
+      if (dictBytes.equals(bytes)) continue;
       const { out, digest } = dczEncode(bytes, dictBytes);
-      // A delta that lost to the plain twin would cost bytes AND a dictionary lookup.
       if (out.length >= br.length) {
-        console.log(`page-delta: SKIPPED ${slug} vs ${d.tag.slice(0, 8)} (dcz ${out.length} >= br ${br.length})`);
+        console.log(`page-delta: SKIPPED ${slug} vs per-page ${candidate.tag.slice(0, 8)} (dcz ${out.length} >= br ${br.length})`);
         continue;
       }
       await writeFile(`${OUT}/holding/pd/${slug}.${digest.toString("hex").slice(0, 16)}.dcz`, out);
-      dCount++; dBytes += out.length; dPlain += br.length;
+      dCount++; dBytes += out.length; dPlain += br.length; pageCount++; pageBytes += out.length;
+    }
+    if (familyBytes) {
+      const { out, digest } = dczEncode(bytes, familyBytes);
+      if (out.length >= br.length) {
+        console.log(`page-delta: SKIPPED ${slug} vs site-page (dcz ${out.length} >= br ${br.length})`);
+      } else {
+        await writeFile(`${OUT}/holding/pd/${slug}.${digest.toString("hex").slice(0, 16)}.dcz`, out);
+        dCount++; dBytes += out.length; dPlain += br.length; familyCount++; familyBytesOut += out.length;
+      }
     }
   }
   console.log(`pages: ${brCount} brotli q11 twins, ${(brRaw / 1024).toFixed(1)}KB -> ${(brEnc / 1024).toFixed(1)}KB`);
   console.log(dCount
-    ? `page-delta: ${dCount} dcz delta(s), ${dBytes} bytes against ${dPlain} plain brotli`
-    : `page-delta: none (no page changed since its dictionary snapshot)`);
+    ? `page-delta: ${dCount} dcz delta(s), ${dBytes} bytes against ${dPlain} plain brotli (${pageCount} per-page/${pageBytes} B, ${familyCount} family/${familyBytesOut} B)`
+    : `page-delta: none (no dictionary candidate beat plain brotli)`);
 }
 
 console.log(`staged ${OUT}/ - deploy with: wrangler deploy (self-builds via build.command) or npm run deploy`);

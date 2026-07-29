@@ -479,8 +479,8 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 /* the definition surface. XP's info tip: pale yellow, hairline black border, one
    hard offset shadow. Cursor-following, so it hard-snaps (no transition on the
    transform) and clamps against its own size against the viewport, exactly like
-   the homepage's .xp-tooltip — that CSS is inline on the homepage, so /lens
-   carries its own copy rather than promoting it into render-blocking luna.css. */
+   the homepage's .xp-tooltip. /lens keeps its route-specific .lx-tip rules here;
+   luna.css carries the shared homepage island under its own class. */
 .lx-tip { position:fixed; inset:auto; top:0; left:0; margin:0; padding:6px 9px; max-width:290px; z-index:10000; pointer-events:none; display:none;
   transform:translate(clamp(4px, calc(var(--x) + 16px), calc(100vw - 100% - 8px)), clamp(4px, calc(var(--y) + 16px), calc(100vh - 100% - 8px)));
   font:11px/1.5 Tahoma,Verdana,Geneva,sans-serif; color:oklch(20% 0 0); background:oklch(98.92% 0.0398 96.79); border:1px solid oklch(15% 0 0); box-shadow:2px 2px 0 oklch(15% 0 0 / .15); }

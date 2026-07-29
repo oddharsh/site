@@ -1320,6 +1320,22 @@
   }
 
   function boot() { ensureLunaCss(); buildDesktop(); buildIcons(); buildTaskbar(); initDrag(); initRaise(); initIconDrag(); initScrollbars(); initResize(); setFavicon(); injectSpeculation(); initCloseBack(); initWindowControls(); }
-  if (D.readyState === "loading") D.addEventListener("DOMContentLoaded", boot);
-  else boot();
+  function bootAfterStaticPaint() {
+    // Generated/static pages and Worker-rendered shells already carry the desktop
+    // and taskbar markup plus race-proof geometry in HTML. nav.js only ENHANCES
+    // that shell (dragging, Run, clock, controls), so let its useful content paint
+    // before doing the DOM wiring. Two frames guarantee one complete static paint;
+    // pages without the server shell still build it synchronously as their fallback.
+    // A prerendered document does not run animation frames while hidden. Enhance its
+    // already-SSR'd shell now, so activation inherits a fully wired desktop instead
+    // of paying both frames on the click that activates the prerender.
+    const hasStaticShell = D.getElementById("axp-desktop") && D.getElementById("axp-taskbar");
+    if (hasStaticShell) {
+      if (D.prerendering) return boot();
+      requestAnimationFrame(() => requestAnimationFrame(boot));
+    }
+    else boot();
+  }
+  if (D.readyState === "loading") D.addEventListener("DOMContentLoaded", bootAfterStaticPaint);
+  else bootAfterStaticPaint();
 })();
