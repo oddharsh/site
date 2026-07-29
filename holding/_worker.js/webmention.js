@@ -27,14 +27,13 @@
 // Re-sending is the spec's own edit/delete signal, so a repeat send re-verifies
 // and, when the source no longer links here (or is gone), retracts the mention.
 // A displayed mention should still be TRUE, the same reason /around re-crawls.
-import { lensHostBlocked, validateLensTarget } from "./lens.js";
-import { readResponseCapped } from "./lib/crawl.js";
+import { validateLensTarget } from "./lens.js";
+import { privateHostBlocked, readResponseCapped } from "./lib/crawl.js";
 import { esc, extractMeta, extractTitle } from "./lib/http.js";
 import { sign, verify } from "../../cal/src/sign.js";
 import { resendSend } from "../../cal/src/email.js";
 import { WEBMENTION_PATHS, WEBMENTION_SECTIONS } from "./lib/site-manifest.js";
 
-export const WEBMENTION_PATH = "/webmention";
 // One bucket, one ceiling, matching the /lens posture. Fails OPEN without KV
 // (dev): this is abuse control, and the SSRF guard is what enforces safety.
 const WM_BUDGET = { key: "wm:rl", max: 10 };
@@ -192,7 +191,7 @@ async function fetchSource(url) {
       signal: AbortSignal.timeout(SOURCE_TIMEOUT_MS),
     });
     const finalUrl = res.url || url;
-    if (lensHostBlocked(new URL(finalUrl).hostname.toLowerCase())) return { ok: false, status: 0, html: "", url: finalUrl };
+    if (privateHostBlocked(new URL(finalUrl).hostname.toLowerCase())) return { ok: false, status: 0, html: "", url: finalUrl };
     if (!res.ok) return { ok: false, status: res.status, html: "", url: finalUrl };
     const body = await readResponseCapped(res, SOURCE_BYTE_CAP);
     return { ok: true, status: res.status, html: body?.text || body || "", url: finalUrl };

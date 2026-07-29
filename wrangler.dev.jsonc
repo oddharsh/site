@@ -97,7 +97,6 @@
   // Quick Actions need remote mode during local Wrangler development.
   "browser": { "binding": "BROWSER", "remote": true },
   "vars": {
-    "COUNTER_SEED": "2375",
     "HOST_TIMEZONE": "America/New_York",
     "WORKING_HOURS_START": "9",
     "WORKING_HOURS_END": "18",

@@ -31,6 +31,7 @@ import { INDEXED_SECTIONS, TWIN_FACTS, buildTwins, checkTwinFacts, htmlFileFor, 
 import { MCP_TOOLS } from "./serendipity/serendipity.js";
 import { derivePhotoPool, getImagesManifest, handlePhotoQuery, queryPhotos } from "./holding/_worker.js/photos.js";
 import { deadline } from "./holding/_worker.js/lib/cache.js";
+import { privateHostBlocked } from "./holding/_worker.js/lib/crawl.js";
 import { handleHit } from "./holding/_worker.js/counter.js";
 import { cronHomeProbe, parseServerTiming } from "./holding/_worker.js/perf-probe.js";
 import { handleSearchJson, searchSite } from "./holding/_worker.js/search.js";
@@ -1110,4 +1111,30 @@ test("the probe writes one positionally-stable datapoint and never throws", asyn
   };
   await cronHomeProbe(env, { waitUntil() {} });
   assert.equal(written.length, 0, "a failed render must not write a fabricated datapoint");
+});
+
+// The SSRF host floor is shared by /lens, webmention verification, and
+// serendipity's cover proxy. It used to be two byte-identical copies
+// (lensHostBlocked + coverHostBlocked); this pins the set so the one that is
+// left cannot quietly narrow, which is the failure the duplication invited.
+test("the shared SSRF host floor blocks every non-public shape", () => {
+  const blocked = [
+    "localhost", "app.localhost", "printer.local", "db.internal", "x.onion",
+    "::1", "[::1]", "fc00::1", "fd12::9", "fe80::1",
+    "0.0.0.0", "10.1.2.3", "127.0.0.1", "192.168.1.1",
+    "169.254.169.254",                    // cloud metadata, the one that matters most
+    "172.16.0.1", "172.31.255.254",       // RFC1918 lower + upper edge
+    "100.64.0.1", "100.127.255.255",      // CGNAT lower + upper edge
+    "224.0.0.1", "255.255.255.255",       // multicast / reserved
+  ];
+  for (const h of blocked) assert.equal(privateHostBlocked(h), true, `should block ${h}`);
+
+  const allowed = [
+    "aadhar.sh", "example.com", "8.8.8.8", "1.1.1.1",
+    "172.15.0.1", "172.32.0.1",           // just OUTSIDE RFC1918's 172.16-31
+    "100.63.0.1", "100.128.0.1",          // just OUTSIDE CGNAT's 100.64-127
+    "223.255.255.255",                    // just below the multicast floor
+    "localhost.example.com",              // ends in a real TLD, not a bare localhost
+  ];
+  for (const h of allowed) assert.equal(privateHostBlocked(h), false, `should allow ${h}`);
 });

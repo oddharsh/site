@@ -6,27 +6,17 @@
 // returns {n}; ?peek=1 reads without bumping (bots/prerender). Storage is the
 // per-DO SQLite-backed KV (state.storage), one instance named "homepage-visits".
 //
-// Continuity: an in-house DO is a fresh namespace, so it would start at 0. On the
-// first wake it self-seeds once from env.COUNTER_SEED (the count carried over from
-// the old cf-garage DO) so the number doesn't reset. Idempotent + guarded in memory
-// so it costs at most one storage read per DO lifetime, never per request.
+// Continuity: an in-house DO is a fresh namespace, so it started at 0. A one-time
+// self-seed from env.COUNTER_SEED carried the count over from the old cf-garage DO
+// (~2375 at migration). That ran, the `seeded` storage flag is set, and the counter
+// is well past the seed, so the seed path and its once-per-instance storage read
+// came out on 2026-07-28. The `seeded` key stays in storage, harmless and unread.
 export class Counter {
-  constructor(state, env) {
+  constructor(state) {
     this.state = state;
-    this.env = env;
-    this._checked = false;   // in-memory: seed-check runs once per DO instance, not per request
   }
 
   async fetch(request) {
-    if (!this._checked) {
-      this._checked = true;
-      const seeded = await this.state.storage.get("seeded");
-      if (!seeded && this.env && this.env.COUNTER_SEED != null) {
-        await this.state.storage.put("n", parseInt(this.env.COUNTER_SEED, 10) || 0);
-        await this.state.storage.put("seeded", true);
-      }
-    }
-
     const url = new URL(request.url);
     let n = (await this.state.storage.get("n")) || 0;
 

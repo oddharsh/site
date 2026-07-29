@@ -206,7 +206,6 @@ degrades only that section and the advisory names the scope to add. Cloudflare
 returns error 10000 for both "bad token" and "token lacks this scope", so the
 message says which permission the failing section wanted.
 
-### The compression rule (zstd first, and text/markdown covered at all)
 
 **Owner-run, once, by hand.** `infra:apply` is scoped to DNS and cannot create a
 Rules entry, and nothing in this repo may hold an `Edit` scope. So this is a
@@ -290,27 +289,6 @@ entropy-coded. The prefix expression sidesteps all of it.
 | field | pick |
 |---|---|
 | If incoming requests match | **Custom filter expression**, pasting the expression above |
-| Compression options | **Enable Zstandard (Zstd) Compression** |
-
-That preset reads "Zstandard is the preferred compression algorithm. If it's not
-supported, it will automatically fall back to Brotli, Gzip, or uncompressed data,"
-which is exactly `[zstd, brotli, gzip]` — zstd where a browser speaks it, brotli
-(not nothing) everywhere else.
-
-**The algorithm order is the small half of this rule. The expression is the big
-half.** Measured 2026-07-28, brotli q4 is actually SMALLER than zstd-3 on this
-content — 6,568 vs 6,788 bytes on /images/manifest.json and 11,355 vs 12,075 on
-the SSR homepage, so 3.3% and 6.0% — but costs ~3.6x the encode and ~1.7x the
-decode, about 0.2-0.3ms in total. Break-even is 8.7 Mbps on the JSON and 19.8 on
-the homepage. Owner call to spend the bytes and keep the CPU, matching the same
-latency-over-bytes reasoning the dcz delta path already runs on.
-
-Since zstd is also Cloudflare's own default preference, the algorithm list is
-close to a no-op. What the rule is actually FOR is the expression: `text/markdown`
-is absent from Cloudflare's default content-type list, so without it every
-Markdown surface on the site ships uncompressed. That is a 52% regression against
-the 3-6% the algorithm choice is worth — an order of magnitude larger, and the
-reason "just use Default Content Types" is wrong here.
 
 By API:
 
@@ -323,10 +301,9 @@ curl "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/rulesets/phases/http_r
       {
         "expression": "starts_with(http.response.content_type.media_type, \"text/\") or starts_with(http.response.content_type.media_type, \"application/\") or http.response.content_type.media_type == \"image/svg+xml\"",
         "action": "compress_response",
-        "description": "zstd first for CPU; the EXPRESSION is the point — text/markdown is absent from CF default types — see infra.json",
+        "description": "brotli over zstd (+3.1% here) and text/markdown, which CF default types miss — see infra.json",
         "action_parameters": {
           "algorithms": [
-            { "name": "zstd" },
             { "name": "brotli" },
             { "name": "gzip" }
           ]

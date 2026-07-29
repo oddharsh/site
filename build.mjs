@@ -27,8 +27,32 @@ import minifyHtml from "@minify-html/node";
 import { transform as transformCss } from "lightningcss";
 import { minifySync } from "oxc-minify";
 import { readManifest, workerModule, navFenceBody, readFenceBody } from "./scripts/gen-manifest.mjs";
+import { HTML_MARKERS } from "./scripts/lib/html-markers.mjs";
 
 const OUT = ".build";
+
+// dcz framing (RFC 9842), the one construction both delta passes share: compress
+// against the dictionary, then prepend the dictionary's SHA-256 in a Zstandard
+// SKIPPABLE frame — magic 0x184D2A5E little-endian, a 4-byte LE length of 32, then
+// the raw digest. Being valid zstd, that prefix is skipped by any conforming
+// decoder, which is what lets `zstd -d -D dict` round-trip the whole file.
+//
+// One function because the shell pass and the page pass each built this by hand and
+// the browser is the decoder: a byte wrong in either copy is a delta no client can
+// apply, and only on the surface whose copy drifted. Consolidated 2026-07-28.
+function dczEncode(bytes, dictBytes) {
+  const frame = zstdCompressSync(bytes, {
+    dictionary: dictBytes,
+    params: { [zlibConstants.ZSTD_c_compressionLevel]: 19 },
+  });
+  const digest = createHash("sha256").update(dictBytes).digest();
+  const len = Buffer.alloc(4);
+  len.writeUInt32LE(digest.length, 0);
+  return {
+    out: Buffer.concat([Buffer.from([0x5e, 0x2a, 0x4d, 0x18]), len, digest, frame]),
+    digest,
+  };
+}
 
 // ── deploy-time invariant tripwires (explore-unknowns, phase A) ──────────────
 // Silent-failure classes this codebase has hit or is one careless edit from
@@ -651,13 +675,6 @@ if (inlineProbe.includes("/* probe */") ||
   throw new Error("inline CSS/JS transform self-test failed");
 }
 
-const HTML_MARKERS = [
-  ["JSON-LD", /<script\b[^>]*\btype=(?:"application\/ld\+json"|application\/ld\+json)(?:\s|>)/i],
-  ["photos", /<section\b[^>]*\bclass=(?:"[^"]*\bphotos\b"|'[^']*\bphotos\b'|photos)(?:\s|>)/i],
-  ["playlist", /<(?:ol|ul)\b[^>]*\bid=(?:"np-list"|np-list)(?:\s|>)/i],
-  ["speculation rules", /<script\b[^>]*\btype=(?:"speculationrules"|speculationrules)(?:\s|>)/i],
-  ["footer", /<footer\b/i],
-];
 
 // 2) homepage HTML: deploy the readable original as /index.src.html and
 // minify only the served copy. The worker rewrites this response as a stream,
@@ -1106,16 +1123,7 @@ for (const [file, srcPath, marker] of SHELLS) {
         // ever request a new URL for them — a delta here could not be asked for.
         if (dictBytes.equals(targetBytes)) continue;
 
-        const frame = zstdCompressSync(targetBytes, {
-          dictionary: dictBytes,
-          params: { [zlibConstants.ZSTD_c_compressionLevel]: 19 },
-        });
-        // dcz framing (RFC 9842): the dictionary hash rides in a Zstandard SKIPPABLE frame,
-        // magic 0x184D2A5E little-endian then a 4-byte LE length of 32 then the raw digest.
-        // Being valid zstd, that prefix is skipped by any conforming decoder.
-        const digest = createHash("sha256").update(dictBytes).digest();
-        const len = Buffer.alloc(4); len.writeUInt32LE(digest.length, 0);
-        const out = Buffer.concat([Buffer.from([0x5e, 0x2a, 0x4d, 0x18]), len, digest, frame]);
+        const { out, digest } = dczEncode(targetBytes, dictBytes);
 
         // A delta that lost to the plain q11 twin is worse than no delta: the worker would
         // serve more bytes AND cost the client a dictionary lookup.
@@ -1197,13 +1205,7 @@ for (const [file, srcPath, marker] of SHELLS) {
       // round-trips exactly), which cuts the committed weight from 1.4MB to 412KB.
       const dictBytes = brotliDecompressSync(await readFile(`${dictDir}/${d.name}`));
       if (dictBytes.equals(bytes)) continue;            // unchanged: nothing to diff
-      const frame = zstdCompressSync(bytes, {
-        dictionary: dictBytes,
-        params: { [zlibConstants.ZSTD_c_compressionLevel]: 19 },
-      });
-      const digest = createHash("sha256").update(dictBytes).digest();
-      const len = Buffer.alloc(4); len.writeUInt32LE(digest.length, 0);
-      const out = Buffer.concat([Buffer.from([0x5e, 0x2a, 0x4d, 0x18]), len, digest, frame]);
+      const { out, digest } = dczEncode(bytes, dictBytes);
       // A delta that lost to the plain twin would cost bytes AND a dictionary lookup.
       if (out.length >= br.length) {
         console.log(`page-delta: SKIPPED ${slug} vs ${d.tag.slice(0, 8)} (dcz ${out.length} >= br ${br.length})`);

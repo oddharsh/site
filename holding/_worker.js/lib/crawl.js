@@ -6,6 +6,34 @@ import { extractMeta, extractTitle } from "./http.js";
 
 export const DEFAULT_CRAWL_BODY_CAP = 200 * 1024;
 
+// The SSRF floor for every outbound fetch a visitor can aim: reject hosts that
+// resolve inside the network rather than out on the public web, cloud-metadata
+// endpoint included. It lives here, with the other bounded-fetch helpers, because
+// three callers need the SAME answer — /lens, webmention source verification, and
+// serendipity's cover proxy. It was written out twice (lensHostBlocked and
+// coverHostBlocked, byte-identical), which is one edit away from a hole that only
+// opens on one surface; consolidated 2026-07-28.
+//
+// Host-shaped only, deliberately. A name that resolves to a private address still
+// passes here, so this is a floor and not the whole control: callers pair it with
+// the scheme/port allowlist and a redirect re-check.
+export function privateHostBlocked(host) {
+  const h = host.replace(/^\[|\]$/g, "");
+  if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".local") || h.endsWith(".internal") || h.endsWith(".onion")) return true;
+  if (h === "::1" || h.startsWith("fc") || h.startsWith("fd") || h.startsWith("fe80:")) return true;
+  const m = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (m) {
+    const a = +m[1], b = +m[2];
+    if (a === 0 || a === 10 || a === 127) return true;
+    if (a === 169 && b === 254) return true;        // link-local incl. 169.254.169.254 metadata
+    if (a === 192 && b === 168) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT
+    if (a >= 224) return true;                        // multicast / reserved
+  }
+  return false;
+}
+
 // Keep scheduled fan-out polite and predictable. Results retain input order,
 // while at most `limit` target requests are active at once.
 export async function mapWithConcurrency(items, limit, fn) {

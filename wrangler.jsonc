@@ -161,10 +161,6 @@
   // Lens no longer needs a Browser Rendering API token for snapshots.
   "browser": { "binding": "BROWSER" },
   "vars": {
-    // one-time continuity: the new in-house Counter DO self-seeds to this on first
-    // wake (carried over from cf-garage's counter, ~2375 at migration). idempotent;
-    // safe to remove once the DO is seeded.
-    "COUNTER_SEED": "2375",
     "HOST_TIMEZONE": "America/New_York",
     "WORKING_HOURS_START": "9",
     "WORKING_HOURS_END": "18",
