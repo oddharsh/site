@@ -514,8 +514,13 @@ async function routeWritingPost(request, env, ctx, url) {
   return handleWritingPost(request, slug, env, ctx);
 }
 
+// stale-while-revalidate rather than must-revalidate, matching the `/garage/*` and
+// `/lwe/*` rules in _headers and for the same reason: it is the difference between a
+// page that can be its own compression dictionary and one whose offer every browser
+// throws away. The window is also the dictionary's lifetime. See the long note there,
+// and the measured policy table in lib/assets.js.
 const GENERATED_PAGE_HEADERS = {
-  "cache-control": "public, max-age=0, must-revalidate, s-maxage=86400",
+  "cache-control": "public, max-age=0, s-maxage=86400, stale-while-revalidate=604800",
   "link": SHELL_PRELOAD_LINK,
 };
 
@@ -606,6 +611,17 @@ function routeIndexHtml(_request, _env, _ctx, url) {
 // front door and the one page whose visit the /hit beacon counts; keeping it
 // out of shared caches costs nothing now that the body revalidates to an empty
 // 304 instead of retransmitting.
+//
+// That also makes `/` the ONE page outside the per-page dictionary tier, and
+// deliberately so rather than by oversight. `no-cache` bars reuse without
+// revalidation, which is exactly the permission RFC 9842 requires, so Chromium will
+// not keep a dictionary offered here no matter what else the header says — adding
+// stale-while-revalidate alongside it changed nothing when measured. Buying `/` into
+// the tier means dropping no-cache, and the front door's revalidate-every-time
+// posture is worth more than one page's delta. serveStaticPage drops the offer on
+// its own (canRegisterAsDictionary), so nothing here advertises what it cannot keep,
+// and `/` still gets the family dictionary through the Link header like every other
+// HTML surface.
 const HOMEPAGE_HEADERS = {
   "cache-control": "private, no-cache, must-revalidate",
   "link": HOMEPAGE_DISCOVERY_LINK,
