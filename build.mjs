@@ -1031,14 +1031,38 @@ for (const [file, srcPath, marker] of SHELLS) {
   // repointed bytes of two complementary pages instead: the compact LWE shell plus
   // the Garage compression explainer. The 64KB corpus costs 15.6KB as q11 once
   // and measured best across every static/deterministic page in this tree.
+  //
+  // The corpus is a LIST rather than a fixed pair, and it is read in order until the
+  // 64KB is filled. Two pages happened to cover it with 1,656 bytes to spare, which
+  // meant an ordinary edit trimming either page by ~2% would have hard-failed the
+  // deploy under a message naming the wrong cause. The trailing entries are slack:
+  // they contribute nothing while the leading pages are long enough, and they keep a
+  // content edit from becoming a release incident.
   {
-    const [lwe, garage] = await Promise.all([
-      readFile(`${OUT}/holding/lwe/drivers.html`),
-      readFile(`${OUT}/holding/garage/compression.html`),
-    ]);
-    const dictionary = Buffer.concat([lwe, garage]).subarray(0, 65_536);
-    if (dictionary.length !== 65_536 || dictionary.readUInt32LE(0) === 0xec30a437) {
-      throw new Error("page-family dictionary is not the expected 64KB raw HTML corpus");
+    const CORPUS = [
+      "lwe/drivers.html",           // the compact LWE conversation shell
+      "garage/compression.html",    // the Garage explainer, the other structural family
+      "lwe/vigenere.html",          // slack, in corpus order
+      "garage/chunks.html",
+    ];
+    const SIZE = 65_536;
+    const parts = [];
+    let total = 0;
+    for (const rel of CORPUS) {
+      const bytes = await readFile(`${OUT}/holding/${rel}`);
+      parts.push(bytes);
+      total += bytes.length;
+      if (total >= SIZE) break;
+    }
+    if (total < SIZE) {
+      throw new Error(
+        `page-family dictionary: the corpus pages total ${total} B, ${SIZE - total} B short of the ${SIZE} B dictionary. ` +
+        `Add another staged page to CORPUS in build.mjs (order is load-bearing; append, do not reorder).`,
+      );
+    }
+    const dictionary = Buffer.concat(parts).subarray(0, SIZE);
+    if (dictionary.readUInt32LE(0) === 0xec30a437) {
+      throw new Error("page-family dictionary starts with the zstd --train magic — dcz needs RAW bytes, not a trained dictionary");
     }
     const to = `/a/page-family.${hash8(dictionary)}.dict`;
     await writeFile(`${OUT}/holding${to}`, dictionary);

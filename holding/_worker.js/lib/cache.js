@@ -151,6 +151,11 @@ export function notModifiedIfFresh(request, response) {
   headers.delete("content-length");
   headers.delete("content-encoding");
   headers.delete("transfer-encoding");
+  // The 200 we are replacing usually wraps a live ASSETS/cache stream. Dropping the
+  // Response without draining it leaves that stream unconsumed for the rest of the
+  // invocation, so cancel it explicitly — same discipline as every other body we
+  // decide not to serve in assets.js.
+  try { response.body?.cancel(); } catch {}
   return new Response(null, { status: 304, headers });
 }
 
