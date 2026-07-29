@@ -968,10 +968,20 @@ test("homepage selects 12 photos and hydrates only the current scrollport", asyn
   const luna = await readFile(new URL("holding/luna.css", import.meta.url), "utf8");
   const nav = await readFile(new URL("holding/nav.js", import.meta.url), "utf8");
 
-  assert.match(worker, /pickRandom\(photos,\s*12\)/, "the server-side random draw must remain 12");
-  assert.match(worker, /const deferred = i > 0;/, "only the first mobile thumbnail may be directly discoverable");
-  assert.match(worker, /data-photo-deferred/, "later photo URLs must remain available for viewport-aware hydration");
+  const grid = await readFile(new URL("holding/_worker.js/lib/photo-grid.js", import.meta.url), "utf8");
+  const build = await readFile(new URL("build.mjs", import.meta.url), "utf8");
+  assert.match(worker, /pickRandom\(pool,\s*12\)/, "the per-request random draw must remain 12");
+  assert.match(build, /deterministicTwelve/, "the document must carry a baked fallback grid, or `/` stops being crawlable without JS");
+  assert.match(grid, /data-photo-deferred/, "photo URLs must stay in data-* for viewport-aware hydration");
+  assert.match(grid, /<noscript><picture>/, "every baked tile needs its script-off twin");
+  // A real src may appear ONLY inside the <noscript> twin. In the live tile it
+  // would fetch a baked thumbnail that hydration discards milliseconds later.
+  const liveTile = grid.slice(0, grid.indexOf("const noScript"));
+  assert.doesNotMatch(liveTile, /\ssrc="/, "the live tile must defer every URL; a real src is a discarded download");
+  assert.match(grid, /data-src="\$\{escAttr\(jpg\)\}"/, "the live tile carries its jpg in data-src");
   assert.doesNotMatch(worker, /rel="preload" as="image"/, "a non-LCP random photo must not consume the preload lane");
+  assert.match(page, /fetch\("\/photos\/grid\.html"\)/, "the homepage must hydrate its random twelve");
+  assert.match(page, /\.catch\(\(\) => \{\}\)\s*\.then\(boot\)/, "a failed grid fetch must still hydrate the baked tiles");
   assert.match(page, /IntersectionObserver/);
   assert.match(page, /threshold:\s*0\.05/, "a sliver of the next tile must not trigger a transfer");
   assert.match(page, /overlap >= rect\.height \* 0\.05/, "desktop must synchronously hydrate its visible photo rows");
@@ -1247,17 +1257,26 @@ test("the probe writes one positionally-stable datapoint and never throws", asyn
   // cannot crash the scheduled() handler
   await cronHomeProbe({}, { waitUntil() {} });
 
-  // the render path itself needs HTMLRewriter (Workers-only), so exercise the
-  // probe's contract with the render stubbed via a throwing env: a broken
-  // render must write NOTHING (a gap is the alert) and must not throw.
+  // The probe used to dispatch the homepage SSR, which needed ASSETS +
+  // HTMLRewriter, so a bindingless env was itself the "broken render" case and
+  // this asserted the resulting gap. `/` is a static document now and the probe
+  // follows the two fragments instead; the photo grid answers from the BUNDLED
+  // pool, so it succeeds with no bindings at all and there is no longer an env
+  // that fails both arms by omission. The write-nothing rule still holds in the
+  // code (both arms null -> early return), it just cannot be provoked this way.
+  //
+  // So assert what this env can actually prove: exactly one datapoint, with the
+  // positional arity Analytics Engine reads by index. A column silently
+  // appearing or vanishing is the failure that corrupts a whole dataset.
   const written = [];
-  const env = {
-    PERF_PROBE: { writeDataPoint: (d) => written.push(d) },
-    // serveHomepageWithPrerenderedTracks will throw on this env inside the
-    // probe's try/catch (no ASSETS binding)
-  };
+  const env = { PERF_PROBE: { writeDataPoint: (d) => written.push(d) } };
   await cronHomeProbe(env, { waitUntil() {} });
-  assert.equal(written.length, 0, "a failed render must not write a fabricated datapoint");
+  assert.equal(written.length, 1, "a working probe writes exactly one datapoint");
+  const [dp] = written;
+  assert.equal(dp.doubles.length, 5, "doubles are positional: [assets, tracks, alt, counter, total]");
+  assert.ok(dp.doubles.every((v) => typeof v === "number"), "every double must be a real number");
+  assert.equal(dp.blobs.length, 2, "blobs are positional: [deadlined CSV, version id]");
+  assert.deepEqual(dp.indexes, ["home"]);
 });
 
 // The SSRF host floor is shared by /lens, webmention verification, and

@@ -133,6 +133,23 @@ export async function handleHit(request, env, ctx) {
     return new Response(null, { status: 204, headers: { "cache-control": "no-store" } });
   }
 
+  // `?n=1`: the number as JSON, for the footer odometer.
+  //
+  // The homepage used to SSR this digit string from the KV mirror. `/` is a
+  // deterministic document now, and a per-visitor count is the definition of
+  // non-deterministic, so it hydrates instead. It reads the MIRROR rather than
+  // the DO — same source the old render used, 5-8ms instead of the 185-630ms
+  // global round trip — and it is fetched on idle, because a footer odometer is
+  // the last thing on the page that matters. A miss leaves the static
+  // placeholder alone rather than inventing a number.
+  if (url.searchParams.has("n")) {
+    let n = null;
+    try { const v = env.RN_KV && await env.RN_KV.get(COUNT_KEY); if (v != null) n = Number(v); } catch {}
+    return Response.json({ n: Number.isFinite(n) ? n : null }, {
+      headers: { "cache-control": "no-store", "x-robots-tag": "noindex" },
+    });
+  }
+
   // everyone else asked for an image, which means they asked for the NUMBER, so
   // this path still waits for the DO. The mirror stays off it. bare transparent
   // digits in the footer pill's own ink, so the standalone render reads as the

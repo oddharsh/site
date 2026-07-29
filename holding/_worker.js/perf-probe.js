@@ -20,7 +20,8 @@
 // cacheTtl on the render path (max 300s), so each sample finds the colo's KV
 // cache in whatever state eviction left it rather than in a probe-warmed one.
 // (The render's own SWR refreshes fire as on any visit; the probe IS a visit.)
-import { serveHomepageWithPrerenderedTracks } from "./home.js";
+import { handlePhotoGrid } from "./home.js";
+import { handleRnTracksHtml } from "./rn.js";
 import { CANONICAL_HOST } from "./lib/const.js";
 
 // "assets;dur=5, tracks;dur=25;desc=deadline" -> { spans: {assets: 5, ...},
@@ -55,11 +56,33 @@ export async function cronHomeProbe(env, ctx) {
     const request = new Request(`https://${CANONICAL_HOST}/`, {
       headers: { "user-agent": "AadharshBot/1.0 (+https://aadhar.sh/bot) perf-probe" },
     });
-    const res = await serveHomepageWithPrerenderedTracks(request, env, ctx);
-    const { spans, deadlined } = parseServerTiming(res.headers.get("server-timing"));
-    // headers are complete before the body streams (finish() stamps them at
-    // return); cancel the rewriter stream rather than pull 13KB for nothing.
-    try { await res.body?.cancel(); } catch {}
+    // `/` no longer has a KV fan-out to measure: it is a deterministic static
+    // document now, and the reads that used to gate its first byte moved to the
+    // two fragments the page hydrates from. So the probe follows the work rather
+    // than reporting a flat zero for a path that stopped doing anything.
+    //
+    // Neither fragment emits Server-Timing, so time them here. Date.now() in
+    // Workers advances only across I/O, which is exactly what these are.
+    // null on throw, NOT a duration. A handler that blew up produced no
+    // measurement, and writing 0ms for it would read downstream as "fast" —
+    // the fabricated datapoint this probe's contract test exists to forbid.
+    const time = async (fn) => {
+      const s = Date.now();
+      let r;
+      try { r = await fn(); } catch { return null; }
+      try { await r.body?.cancel(); } catch {}
+      return Date.now() - s;
+    };
+    const tracksMs = await time(() => handleRnTracksHtml(request, env, ctx));
+    const gridMs = await time(() => handlePhotoGrid(request, env, ctx));
+    // Both arms failing means the probe learned nothing. Say nothing.
+    if (tracksMs == null && gridMs == null) return;
+    const spans = {
+      assets: -1, alt: -1, counter: -1,
+      tracks: tracksMs ?? -1,
+      total: (tracksMs ?? 0) + (gridMs ?? 0),
+    };
+    const deadlined = [];
     env.PERF_PROBE.writeDataPoint({
       blobs: [
         deadlined.join(","),
