@@ -115,32 +115,55 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
   report("shell offers are per-asset", nav !== "" && css !== "" && nav !== css,
          `nav and css must not share one offer (nav=${nav || "(absent)"} css=${css || "(absent)"})`);
 
-  // A page must NOT offer ITSELF as a dictionary. Pages ship `max-age=0`, and Chrome
-  // correctly refuses an immediately-stale response as a dictionary — so the offer
-  // would only teach browsers to send Available-Dictionary for bytes we never diff
-  // against. Since #156 the single document-scoped offer lives on the immutable
-  // /a/page-family.<hash8>.dict asset, asserted in probe 2 above.
   // A page that offers ITSELF as a dictionary has to survive to the moment of use.
   // RFC 9842: "To be considered as a match, the dictionary resource MUST be either
-  // fresh or allowed to be served stale." A response that is `max-age=0` AND
-  // `must-revalidate` is stale on arrival and explicitly barred from stale reuse, so
-  // it can never match, and the whole per-page tier (its /pd/ deltas, its committed
-  // p-dict snapshots, its build time) buys nothing on the client.
+  // fresh or allowed to be served stale." Chromium implements that literally, sizing a
+  // registered dictionary's lifetime from the response's own freshness — so an offer on
+  // a stale-on-arrival response is stored already-expired and dropped, and the whole
+  // per-page tier (its /pd/ deltas, its committed p-dict snapshots, its build time)
+  // buys nothing on the client while costing a DevTools error per navigation.
   //
-  // Measured 2026-07-29 in Chrome against production: /garage received 7,842 bytes,
-  // exactly the FAMILY delta, even though `match="/garage"` is the longer pattern and
-  // would have won had the per-page dictionary been usable. The server side is fine —
-  // the tier above proves the worker answers a per-page candidate with dcz — so this
-  // is purely about whether a browser can ever send one.
+  // Measured in Chrome 2026-07-29, one navigation per policy, watching for the
+  // Available-Dictionary a browser sends back only when it actually kept the offer:
+  //
+  //   max-age=3600                                                REGISTERED (control)
+  //   max-age=0, stale-while-revalidate=604800                     REGISTERED
+  //   public, max-age=0, s-maxage=86400, stale-while-revalidate=604800   REGISTERED
+  //   public, max-age=0, s-maxage=86400, stale-while-revalidate=5        no (the swr
+  //                                                        window IS the lifetime)
+  //   max-age=0, must-revalidate                                         no
+  //   max-age=0, must-revalidate, stale-while-revalidate=604800          no
+  //   private, no-cache, must-revalidate                                 no
+  //   private, no-cache, stale-while-revalidate=604800                   no
+  //
+  // So must-revalidate and no-cache each veto it outright, s-maxage is invisible (a
+  // browser is a private cache), and the swr window doubles as the dictionary's
+  // lifetime. This mirrors canRegisterAsDictionary in _worker.js/lib/assets.js; the
+  // point of checking it HERE is that production's cache-control for these pages comes
+  // from _headers, which that function never sees.
+  const canRegister = (cc) => {
+    const v = (cc || "").toLowerCase();
+    if (/\b(?:no-store|no-cache|must-revalidate)\b/.test(v)) return false;
+    const secs = (n) => Number(v.match(new RegExp(`\\b${n}=(\\d+)`))?.[1] || 0);
+    return secs("max-age") > 0 || secs("stale-while-revalidate") > 0;
+  };
   const p = await get("https://aadhar.sh/garage/pretext");
   const puad = p.headers.get("use-as-dictionary");
   const pcc = p.headers.get("cache-control") || "";
   try { await p.body?.cancel(); } catch {}
-  const staleOnArrival = /max-age=0/.test(pcc) && /must-revalidate/.test(pcc);
-  report("page self-offer is usable", !puad || !staleOnArrival,
+  // The offer and the policy have to agree in BOTH directions. Advertising a dictionary
+  // no browser will keep is the bug this check was written for; silently dropping the
+  // offer on a page whose policy WOULD have kept it is the per-page tier going dark
+  // with nothing on the wire to say so.
+  report("page self-offer matches what the policy can keep", !!puad === canRegister(pcc),
          puad
-           ? `offers itself (${puad}) under "${pcc}" — stale on arrival, so no browser can match it`
-           : "(no self-offer; the family dictionary carries the page tier)");
+           ? `offers itself (${puad}) under "${pcc}"${canRegister(pcc) ? "" : " — stale on arrival, so no browser can keep it"}`
+           : `no self-offer under "${pcc}"${canRegister(pcc) ? " — but this policy WOULD register; the tier is dark for nothing" : " (correct; the family dictionary carries the page tier)"}`);
+  // A short swr window registers a short-lived dictionary, which fails as a slow leak
+  // rather than a hard error: the offer still looks right and simply stops matching.
+  const swr = Number(pcc.match(/\bstale-while-revalidate=(\d+)/)?.[1] || 0);
+  report("page dictionary lifetime is useful", !puad || swr === 0 || swr >= 86400,
+         swr ? `stale-while-revalidate=${swr}s of dictionary lifetime` : "(freshness, not swr, carries the lifetime)");
 }
 console.log("  BLOCKED (by platform, not by us): SSR'd pages — workerd zstd ignores `dictionary`; re-run the scratchpad spike or watch for CF shared-dictionaries Phase 2.");
 process.exit(fail ? 1 : 0);

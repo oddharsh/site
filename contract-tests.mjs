@@ -1051,7 +1051,7 @@ test("static page negotiation prefers 304, then DCZ with the current validator",
   const digest = Buffer.alloc(32, 1);
   const tag = digest.toString("hex").slice(0, 16);
   const available = `:${digest.toString("base64")}:`;
-  const env = {
+  const makeEnv = (cacheControl) => ({
     ASSETS: {
       async fetch(input) {
         const path = new URL(typeof input === "string" ? input : input.url).pathname;
@@ -1059,7 +1059,7 @@ test("static page negotiation prefers 304, then DCZ with the current validator",
           return new Response("brotli bytes", {
             headers: {
               "etag": '"page"',
-              "cache-control": "public, max-age=0, s-maxage=86400",
+              "cache-control": cacheControl,
               "link": "</shell.css>; rel=preload; as=style",
             },
           });
@@ -1070,7 +1070,8 @@ test("static page negotiation prefers 304, then DCZ with the current validator",
         return new Response("not found", { status: 404 });
       },
     },
-  };
+  });
+  const env = makeEnv("public, max-age=0, s-maxage=86400");
   const currentBr = 'W/"page-br"';
   const currentDcz = 'W/"page-dcz"';
   const unchanged = await serveStaticPage(new Request("https://aadhar.sh/lwe/drivers", {
@@ -1088,13 +1089,40 @@ test("static page negotiation prefers 304, then DCZ with the current validator",
   assert.equal(changed.headers.get("cache-control"), "public, max-age=0, s-maxage=86400");
   assert.equal(changed.headers.get("link"), "</shell.css>; rel=preload; as=style");
   assert.equal(changed.headers.get("vary"), "accept-encoding, available-dictionary");
-  assert.equal(changed.headers.get("use-as-dictionary"), 'match="/lwe/drivers", match-dest=("document")');
 
   const dczUnchanged = await serveStaticPage(new Request("https://aadhar.sh/lwe/drivers", {
     headers: { "if-none-match": currentDcz, "available-dictionary": available },
   }), env);
   assert.equal(dczUnchanged.status, 304);
   assert.equal(dczUnchanged.headers.get("etag"), currentDcz);
+
+  // A page offers ITSELF as a dictionary only when its cache-control lets the browser
+  // keep the offer. Chromium sizes a registered dictionary's lifetime from the response's
+  // own freshness, so an offer on a stale-on-arrival response is stored already-expired
+  // and dropped, costing a DevTools error per navigation and buying nothing. Measured in
+  // Chrome 2026-07-29 across seven policies; the table is in lib/assets.js.
+  for (const cc of [
+    "public, max-age=0, s-maxage=86400",                       // today's page policy
+    "public, max-age=0, must-revalidate, s-maxage=86400",
+    "max-age=0, must-revalidate, stale-while-revalidate=604800", // must-revalidate wins
+    "private, no-cache, must-revalidate",                      // the homepage
+    "no-store",
+  ]) {
+    const res = await serveStaticPage(new Request("https://aadhar.sh/lwe/drivers", {
+      headers: { "available-dictionary": available },
+    }), makeEnv(cc));
+    assert.equal(res.headers.get("use-as-dictionary"), null, `must not self-offer under "${cc}"`);
+  }
+  // ...and it comes back on its own if a page is ever given a policy that survives to the
+  // moment of use. stale-while-revalidate is RFC 5861's permission to serve stale, which
+  // is the second arm of RFC 9842's "fresh or allowed to be served stale".
+  for (const cc of ["public, max-age=600", "public, max-age=0, stale-while-revalidate=604800"]) {
+    const res = await serveStaticPage(new Request("https://aadhar.sh/lwe/drivers", {
+      headers: { "available-dictionary": available },
+    }), makeEnv(cc));
+    assert.equal(res.headers.get("use-as-dictionary"),
+                 'match="/lwe/drivers", match-dest=("document")', `must self-offer under "${cc}"`);
+  }
 });
 
 test("LWE pages share one base stylesheet and the build derives one site-page dictionary", async () => {
