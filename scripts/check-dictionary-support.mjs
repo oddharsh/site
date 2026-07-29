@@ -47,11 +47,18 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
     report("page html (pretext)", false, "no rel=compression-dictionary Link on the page — is PAGE_DICTIONARY populated?");
   } else {
     // The dictionary is served as a q11 .br twin; a worker cannot negotiate that away
-    // (gotcha 13). Chrome hashes the DECODED resource, so decode before hashing —
-    // whether undici already did it for us or left the header on.
+    // (gotcha 13). Chrome hashes the DECODED resource, so decode before hashing.
+    //
+    // Do NOT branch on the content-encoding header to decide whether to decode.
+    // undici decompresses br on its own and leaves the header in place, so that
+    // test says "br" over a body that is already plain, and brotliDecompressSync
+    // then throws ERR__ERROR_FORMAT_RESERVED and takes the whole check down. Try
+    // the decode and keep the bytes that survive: the header is not evidence about
+    // the body once a fetch stack has been in the middle.
     const res = await fetch(`https://aadhar.sh${offered}`, { headers: { "accept-encoding": "br" } });
     const body = Buffer.from(await res.arrayBuffer());
-    const raw = res.headers.get("content-encoding") === "br" ? brotliDecompressSync(body) : body;
+    let raw = body;
+    try { raw = brotliDecompressSync(body); } catch { /* already decoded upstream */ }
     const uad = res.headers.get("use-as-dictionary") || "";
     report("page dictionary offered", /match="\/\*"/.test(uad) && /match-dest=\("document"\)/.test(uad),
            `${offered} ${raw.length} B, uad=${uad || "(absent)"}`);
@@ -113,10 +120,27 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
   // would only teach browsers to send Available-Dictionary for bytes we never diff
   // against. Since #156 the single document-scoped offer lives on the immutable
   // /a/page-family.<hash8>.dict asset, asserted in probe 2 above.
+  // A page that offers ITSELF as a dictionary has to survive to the moment of use.
+  // RFC 9842: "To be considered as a match, the dictionary resource MUST be either
+  // fresh or allowed to be served stale." A response that is `max-age=0` AND
+  // `must-revalidate` is stale on arrival and explicitly barred from stale reuse, so
+  // it can never match, and the whole per-page tier (its /pd/ deltas, its committed
+  // p-dict snapshots, its build time) buys nothing on the client.
+  //
+  // Measured 2026-07-29 in Chrome against production: /garage received 7,842 bytes,
+  // exactly the FAMILY delta, even though `match="/garage"` is the longer pattern and
+  // would have won had the per-page dictionary been usable. The server side is fine —
+  // the tier above proves the worker answers a per-page candidate with dcz — so this
+  // is purely about whether a browser can ever send one.
   const p = await get("https://aadhar.sh/garage/pretext");
   const puad = p.headers.get("use-as-dictionary");
+  const pcc = p.headers.get("cache-control") || "";
   try { await p.body?.cancel(); } catch {}
-  report("page does not offer itself", !puad, `uad=${puad || "(absent)"}`);
+  const staleOnArrival = /max-age=0/.test(pcc) && /must-revalidate/.test(pcc);
+  report("page self-offer is usable", !puad || !staleOnArrival,
+         puad
+           ? `offers itself (${puad}) under "${pcc}" — stale on arrival, so no browser can match it`
+           : "(no self-offer; the family dictionary carries the page tier)");
 }
 console.log("  BLOCKED (by platform, not by us): SSR'd pages — workerd zstd ignores `dictionary`; re-run the scratchpad spike or watch for CF shared-dictionaries Phase 2.");
 process.exit(fail ? 1 : 0);
