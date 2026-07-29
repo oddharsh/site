@@ -213,7 +213,6 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
   }
 
   const rewriter = new HTMLRewriter();
-  let lcpAvif = null, lcpSmall = null;  // first photo tile → responsive preload links
 
   // ── /rn/tracks → np-list ────────────────────────────────────────
   if (tracksPayload?.tracks?.length) {
@@ -228,9 +227,8 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
 
   // ── photo grid → section.photos ─────────────────────────────────
   // pick 12 random photos via fisher-yates so the grid feels fresh each
-  // visit. response carries Cache-Control: no-store via _headers (see
-  // comment on / in _headers explaining the strong no-cache choice), so
-  // CF/browser/intermediaries don't pin this selection across refreshes.
+  // visit. response carries private,no-cache (see finish() above), so every
+  // reload reaches the worker for a new selection while remaining bfcache-safe.
   // <picture> uses AVIF primary + JPG fallback; data-* attrs feed the
   // hover tooltip; target=_blank + rel=noopener on the anchor.
   // 400px-tier URL, straight from the pool (unhashed stems never reach here;
@@ -239,29 +237,26 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
 
   if (photos) {
     const pick = pickRandom(photos, 12);   // ~12 fills the justified rows into a fuller rectangle
-    lcpAvif = pick[0] && pick[0].thumb_avif ? absThumb(pick[0].thumb_avif) : null;
-    lcpSmall = pick[0] ? smallOf(pick[0]) : null;
     const slotsHtml = pick.map((p, i) => {
       const full     = p.full;
-      // first tile: eager + high fetch priority. it's the topmost photo
-      // and a candidate LCP element (the grid sits below the lede, so
-      // it's a coin-flip with the text — but when the photo is LCP this
-      // removes the lazy-load delay + bumps it from Low to High priority).
-      // fetchpriority: Chrome 102+/Safari 17.2+, ignored harmlessly elsewhere.
+      // The introductory prose is the LCP element at every representative
+      // viewport (390px mobile and 1280px desktop in the 2026-07-28 traces):
+      // its rendered block is larger than one fixed 184px photo tile. The old
+      // "hero" preload therefore spent the critical connection on a non-LCP
+      // image. Worse, HTMLRewriter prepended it before the viewport meta tag;
+      // mobile first matched the 600px desktop preload at its default 980px
+      // layout width, then fetched the 400px source after parsing the viewport
+      // meta — a measured 14.7KB duplicate on one Slow-4G load.
       //
-      // the other 11 are lazy AND explicitly low priority. lazy alone only
-      // defers images outside the viewport; the tiles that land IN the first
-      // viewport re-enter the queue at Chrome's default image priority and race
-      // the shell for a cold connection's bandwidth. A cold-incognito trace
-      // (2026-07-28) caught exactly that: icons.svg — 2.7KB of taskbar chrome —
-      // spent 280ms in "content download" while grid tiles streamed beside it.
-      // fetchpriority=low keeps every non-hero tile behind the shell (nav.js,
-      // luna.css, icons.svg) without delaying anything the visitor is waiting
-      // on: the hero tile keeps its high lane, and photos below the fold were
-      // never urgent.
-      const imgLoad = i === 0
-        ? `loading="eager" fetchpriority="high"`
-        : `loading="lazy" fetchpriority="low"`;
+      // Slot 0 stays directly discoverable because it is visible at load. The
+      // other eleven keep their URLs in data-* until the tiny observer beside
+      // the static grid sees them in (or just ahead of) the .content scroller.
+      // Native loading=lazy fetched eight of twelve at 390px because Chrome's
+      // distance threshold extends far past this internal scrollport. Explicit
+      // observation keeps the random twelve in the document while transferring
+      // only thumbnails the visitor is close to seeing. Every photo is low
+      // priority: none is LCP, and the shell/text must win a cold connection.
+      const deferred = i > 0;
       const sizeAttr = (typeof p.size === "number" && p.size > 0)
         ? ` data-size="${p.size}"` : "";
       const upAttr   = p.uploaded
@@ -286,24 +281,47 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
       // URLs come from the pool verbatim (always absolute /i/ form).
       const small = smallOf(p);
       const large = p.thumb_avif ? absThumb(p.thumb_avif) : null;
+      const sourceAttr = deferred ? "data-srcset" : "srcset";
       const desktopSrc = large
         ? (small
-            ? `<source type="image/avif" srcset="${escAttr(small)} 400w, ${escAttr(large)} 600w" sizes="174px">`
-            : `<source type="image/avif" srcset="${escAttr(large)}">`)
+            ? `<source type="image/avif" ${sourceAttr}="${escAttr(small)} 400w, ${escAttr(large)} 600w" sizes="174px">`
+            : `<source type="image/avif" ${sourceAttr}="${escAttr(large)}">`)
+        : "";
+      const alt = escAttr(altMap[p.stem] || p.stem);
+      const mobileSrc = small
+        ? `<source type="image/avif" media="(max-width: 560px)" ${sourceAttr}="${escAttr(small)} 400w" sizes="174px">`
+        : "";
+      const img = deferred
+        ? `<img alt="${alt}" width="600" height="600" data-src="${escAttr(absThumb(p.thumb_jpg))}" loading="eager" fetchpriority="low" decoding="async">`
+        : `<img alt="${alt}" width="600" height="600" src="${escAttr(absThumb(p.thumb_jpg))}" loading="eager" fetchpriority="low" decoding="async">`;
+      // Script-off visitors keep the previous native-lazy behavior. In a
+      // scripting browser <noscript> is inert text, so these fallback URLs do
+      // not enter the preload scanner and do not undo the transfer saving.
+      const noScript = deferred
+        ? `<noscript><picture>` +
+            (small ? `<source type="image/avif" media="(max-width: 560px)" srcset="${escAttr(small)} 400w" sizes="174px">` : "") +
+            (large
+              ? (small
+                  ? `<source type="image/avif" srcset="${escAttr(small)} 400w, ${escAttr(large)} 600w" sizes="174px">`
+                  : `<source type="image/avif" srcset="${escAttr(large)}">`)
+              : "") +
+            `<img alt="${alt}" width="600" height="600" src="${escAttr(absThumb(p.thumb_jpg))}" loading="lazy" fetchpriority="low" decoding="async">` +
+          `</picture></noscript>`
         : "";
       return `<a href="/images/full/${encodeURI(full)}"` +
              ` target="_blank" rel="noopener"` +
              ` data-full="${escAttr(full)}"${sizeAttr}${upAttr}>` +
-        `<picture>` +
-          (small ? `<source type="image/avif" media="(max-width: 560px)" srcset="${escAttr(small)} 400w" sizes="174px">` : "") +
+        `<picture${deferred ? ` data-photo-deferred` : ""}>` +
+          mobileSrc +
           desktopSrc +
           // fall back to the stem (matching photos.js) rather than alt="": the
           // grid tile IS the link, so an empty alt makes the <a> nameless for
           // screen readers and agents. 12 of 158 stems have no alt.json caption
           // yet, and the homepage draws 12 at random, so a nameless link showed
           // up intermittently (Lighthouse link-name + agent-accessibility-tree).
-          `<img alt="${escAttr(altMap[p.stem] || p.stem)}" width="600" height="600" ${imgLoad} decoding="async" src="${escAttr(absThumb(p.thumb_jpg))}">` +
+          img +
         `</picture>` +
+        noScript +
       `</a>`;
     }).join("");
     rewriter.on("section.photos", {
@@ -336,30 +354,6 @@ export async function serveHomepageWithPrerenderedTracks(request, env, ctx) {
     });
   }
 
-  // preload the LCP photo tile (slot 0) as an in-document <link rel=preload> in
-  // <head> — deliberately NOT an HTTP `Link:` header. The grid is random + the
-  // response is no-store, so a Link header gets harvested by Cloudflare Early
-  // Hints and replayed as a stale 103 on the NEXT visitor — always one pick
-  // behind, so it preloads a photo that isn't on the page (~26-52KB wasted every
-  // visit) while the real hero goes un-preloaded. CF Early Hints only collects
-  // HTTP Link headers, never HTML <link> elements, so an injected head preload is
-  // correct per-response AND immune to the cross-request staleness. The preload
-  // scanner finds it at parse start, ~as early as the old 200 Link header would
-  // arrive. Responsive: desktop the 800 tile, mobile the 400 (media-gated); the
-  // type=image/avif hint makes non-AVIF browsers skip it (they use the JPG).
-  if (lcpAvif) {
-    // desktop preload must match the tile's responsive selection or it fetches
-    // the wrong tier and the hero double-downloads: imagesrcset+imagesizes
-    // mirror the <source> srcset/sizes (400px on DPR1/2, 600px on DPR3), with
-    // href=600px as the legacy fallback (ignored where imagesrcset is honored).
-    const desktopPreload = lcpSmall
-      ? `<link rel="preload" as="image" type="image/avif" fetchpriority="high" media="(min-width: 561px)" imagesrcset="${escAttr(lcpSmall)} 400w, ${escAttr(lcpAvif)} 600w" imagesizes="174px" href="${escAttr(lcpAvif)}">`
-      : `<link rel="preload" as="image" type="image/avif" fetchpriority="high" media="(min-width: 561px)" href="${escAttr(lcpAvif)}">`;
-    const links =
-      desktopPreload +
-      (lcpSmall ? `<link rel="preload" as="image" type="image/avif" fetchpriority="high" media="(max-width: 560px)" href="${escAttr(lcpSmall)}">` : "");
-    rewriter.on("head", { element(el) { el.prepend(links, { html: true }); } });
-  }
   return finish(withHomepageDiscoveryHeaders(rewriter.transform(res)));
 }
 
