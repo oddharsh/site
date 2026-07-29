@@ -378,6 +378,50 @@ generic hex back.
   as AadharshBot. Framability is read from the target's `X-Frame-Options` /
   `Content-Security-Policy: frame-ancestors` in the `/lens/fetch` pass, so no extra probe.
 
+### Observability: Workers Traces + the span vocabulary
+
+Three layers, deliberately not redundant:
+
+1. **Workers Logs** (`observability.enabled`) — one structured line per
+   worker-owned request from `serveWorkerRequest`: path, method, status, ms,
+   country, bot. Cheap, always on, and the right tool for "what happened".
+2. **Analytics Engine** — `BOT_LEDGER` (identified crawler hits, priced by
+   `/ledger`) and `PERF_PROBE` (`perf-probe.js`, the :07/:37 homepage-fragment
+   latency series). Both are long-retention, low-cardinality COUNTERS.
+3. **Workers Traces** (`observability.traces`, added 2026-07-29) — the span
+   tree. Auto-instruments every outbound fetch, binding call, and handler
+   invocation; `lib/trace.js` hangs named spans off that so the children have a
+   parent worth grouping by. This is the layer for "why was it slow" and, more
+   often here, "which quiet thing has been failing".
+
+Spans go through `lib/trace.js` (`span(name, fn, attrs)`), never
+`tracing.enterSpan` directly. Names are `<surface>.<phase>`, lowercase and
+dot-separated; the dispatcher is the one exception, naming its spans
+`route <template>` off the ROUTES/PREFIX tables so a tree reads as a route
+rather than a slug. Attributes follow the photo pipeline's rule: an undefined
+value is SKIPPED, never coerced to 0 or "unknown".
+
+Sampling is **100%**, which is a choice and not a default-by-omission: the rate
+is per-Worker rather than per-route, so thinning it would thin exactly the rare
+events this was turned on for. At this traffic 100% is far under the 10M
+events/month the Paid plan includes.
+
+Where the spans are, and what each one is FOR — every one of these is a place
+the existing layers structurally could not reach:
+
+| span | the question it answers |
+|---|---|
+| `route <template>` | which route owns this fetch/KV child; `route.self_fetch` marks a `/lens` self-scan's inner dispatch |
+| `home.grid.*`, `rn.tracks.*` | the two hydration fragments. Splits manifest-vs-alt and the pure-compute render that `perf-probe.js`'s `Date.now()` helper necessarily reports as 0 |
+| `rn.scrape.{playlist,tracks,artists}` | the 3-tier Spotify scrape, cold-miss only. `rn.artists_cached` vs `_scraped` says whether the artist KV cache is actually saving the network |
+| `lens.inspect.{fetch,parse}`, `lens.discovery` | `out.elapsedMs` is fixed BEFORE the 28-probe fan-out (botViews is 6 of its own), so a scan's discovery phase was entirely unmeasured. `lens.inspect.parse` is the pure-compute HTML pass |
+| `lens.shot`, `lens.browser` | Browser Rendering. Same span name on hit and miss (differing on `lens.cache`) so hit rate is a group-by, not a join; the four distinct 502 shapes are separated by `lens.outcome` |
+| `cron.*` | a cron has no response, no status, and no visitor to complain |
+| `around.neighbor` | every degradation here is designed to be quiet (a disallowing robots.txt is a legitimate skip). The rollup makes "3 of 20 neighbors dark for a month" one number |
+| `census.host` | a time series with silently missing rows is worse than none; the per-host catch is correct AND is how a 16-site roster becomes 3 |
+| `webmention.send` | `webmention.capped` flags a run that stopped at MAX_SENDS_PER_RUN, which the summary log cannot express |
+| `cal.busy` | `cal.source` (fresh/live/stale/none) + `cal.fail_closed`. The fail-closed 503 is a real person not getting a coffee slot, and it used to reach you only by them mentioning it |
+
 ### XP visual vocabulary (CSS)
 
 **Design system:** [`design/DESIGN.md`](design/DESIGN.md) is the Luna brief (canonical
@@ -706,6 +750,31 @@ npm run deploy
     pane: a tab that is not actually visible defers paint, which made FCP look
     like it trailed DCL by 235ms when a real trace showed FCP landing 291ms
     BEFORE DCL, mid-stream. Confirm any paint claim against a real window.
+
+16. **Only `_worker.js/index.js` may `import ... from "cloudflare:workers"`.**
+    Everything else in `holding/_worker.js/` and `cal/src/` is ALSO imported by
+    `contract-tests.mjs` under plain node (`node --test`), and node's ESM loader
+    rejects the `cloudflare:` scheme at LINK time with
+    `ERR_UNSUPPORTED_ESM_URL_SCHEME`. That kills the entire 57-test suite at
+    import, before one assertion runs — not a single failing test, a suite that
+    never starts. It is why `counter.js` hand-rolls its Durable Object instead of
+    importing the base class, and it bit the Workers Traces work on 2026-07-29:
+    a static `tracing` import inside `lib/trace.js` took the suite down through
+    six transitive importers.
+
+    The fix is INJECTION, not a dynamic import. `lib/trace.js` and
+    `cal/src/trace.js` both export `installTracing(candidate)` and hold a
+    module-level `null` until `index.js` — the one module only workerd ever loads
+    — calls it at module scope, which completes at isolate init before any handler
+    runs. Under node nothing installs it and every span degrades to a direct call.
+    A top-level `await import("cloudflare:workers")` would also work but is worse:
+    it makes the module graph async on a live worker's critical path to buy
+    nothing the injection doesn't already give.
+
+    Corollary: the two trace helpers are near-duplicates ON PURPOSE. Dependency
+    direction is holding -> cal (`index.js` imports `cal/src/index.js`), and cal's
+    Vitest pool boots from `cal/src/index.js` alone, so a cal -> holding import
+    would make cal untestable without the site tree. Do not consolidate them.
 
 ---
 

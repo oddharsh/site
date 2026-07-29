@@ -7,6 +7,7 @@ import { privateHostBlocked, readResponseCapped } from "./lib/crawl.js";
 import { lensParseRobots, lensPathMatch, lensRobotsVerdict } from "./lib/robots.js";
 import { lunaPage } from "./lib/chrome.js";
 import { escAttr, escHtml, jsonResponse } from "./lib/http.js";
+import { span } from "./lib/trace.js";
 
 // The glossary. This page's whole subject is protocol names, which is fine for
 // the audience that already has them and a wall for the audience that doesn't.
@@ -892,31 +893,58 @@ export async function handleLensShot(request, env, ctx) {
   const cacheKey = "lens:shot:" + (await lensSha256Hex(v.url));
   if (env.RN_KV) {
     const hit = await env.RN_KV.get(cacheKey, "arrayBuffer");
-    if (hit) return new Response(hit, { headers: lensPngHeaders(true) });
+    // a hit emits the same span name as a miss, differing only in lens.cache.
+    // Two span names would make the hit RATE a join instead of a group-by.
+    if (hit) {
+      return span("lens.shot", (s) => {
+        s.setAttribute("lens.target_host", safeHost(v.url));
+        s.setAttribute("lens.cache", "hit");
+        s.setAttribute("lens.png_bytes", hit.byteLength);
+        return new Response(hit, { headers: lensPngHeaders(true) });
+      });
+    }
   }
 
-  const payload = {
-    url: v.url,
-    viewport: { width: 1280, height: 800, deviceScaleFactor: 1 },
-    screenshotOptions: { fullPage: true, type: "png" },
-    gotoOptions: { waitUntil: "networkidle0", timeout: 18000 },
-    userAgent: BOT_UA,
-  };
-  let r;
-  try {
-    r = await env.BROWSER.quickAction("screenshot", payload);
-  } catch (e) {
-    return jsonResponse({ ok: false, error: "Browser Run request failed: " + ((e && e.message) || e) }, 502);
-  }
-  const ctype = r.headers.get("content-type") || "";
-  if (!r.ok || !ctype.startsWith("image/")) {
-    let detail = "";
-    try { detail = (await r.text()).slice(0, 300); } catch (_e) {}
-    return jsonResponse({ ok: false, error: "Browser Run returned " + r.status + ".", detail }, 502);
-  }
-  const buf = await r.arrayBuffer();
-  if (env.RN_KV) ctx.waitUntil(env.RN_KV.put(cacheKey, buf, { expirationTtl: 3600 }));
-  return new Response(buf, { headers: lensPngHeaders(false) });
+  // Headless Chrome is by far the most expensive thing this site can be asked to
+  // do, and it is the only one with a real external dependency that can be slow
+  // without being wrong. The 1h KV cache already reports itself to the client via
+  // `x-lens-cache`; the span records the same fact server-side so the hit rate is
+  // measurable rather than inferable, and so a slow render is separable from a
+  // slow cache read.
+  return span("lens.shot", async (s) => {
+    s.setAttribute("lens.target_host", safeHost(v.url));
+    s.setAttribute("lens.cache", "miss");
+    const payload = {
+      url: v.url,
+      viewport: { width: 1280, height: 800, deviceScaleFactor: 1 },
+      screenshotOptions: { fullPage: true, type: "png" },
+      gotoOptions: { waitUntil: "networkidle0", timeout: 18000 },
+      userAgent: BOT_UA,
+    };
+    let r;
+    try {
+      r = await span("lens.shot.quick_action", () => env.BROWSER.quickAction("screenshot", payload));
+    } catch (e) {
+      // the binding threw rather than answering: a 502 to the visitor, and until
+      // now the reason existed only inside this string.
+      s.setAttribute("lens.outcome", "binding_threw");
+      s.setAttribute("lens.error", (e && e.message) || String(e));
+      return jsonResponse({ ok: false, error: "Browser Run request failed: " + ((e && e.message) || e) }, 502);
+    }
+    const ctype = r.headers.get("content-type") || "";
+    if (!r.ok || !ctype.startsWith("image/")) {
+      let detail = "";
+      try { detail = (await r.text()).slice(0, 300); } catch (_e) {}
+      s.setAttribute("lens.outcome", "not_an_image");
+      s.setAttribute("http.response.status_code", r.status);
+      return jsonResponse({ ok: false, error: "Browser Run returned " + r.status + ".", detail }, 502);
+    }
+    const buf = await r.arrayBuffer();
+    s.setAttribute("lens.outcome", "ok");
+    s.setAttribute("lens.png_bytes", buf.byteLength);
+    if (env.RN_KV) ctx.waitUntil(env.RN_KV.put(cacheKey, buf, { expirationTtl: 3600 }));
+    return new Response(buf, { headers: lensPngHeaders(false) });
+  });
 }
 
 // /lens/browser?url=… → opt-in rendered evidence for the third Lens pane.
@@ -940,10 +968,25 @@ export async function handleLensBrowser(request, env, ctx) {
   if (env.RN_KV) {
     try {
       const hit = await env.RN_KV.get(cacheKey, "json");
-      if (hit && hit.ok) return jsonResponse({ ...hit, cached: true });
+      // same span name as the miss path, so the hit rate is one group-by.
+      if (hit && hit.ok) {
+        return span("lens.browser", (s) => {
+          s.setAttribute("lens.target_host", safeHost(v.url));
+          s.setAttribute("lens.cache", "hit");
+          return jsonResponse({ ...hit, cached: true });
+        });
+      }
     } catch (_e) { /* a corrupt cache entry is a miss, never a user-visible failure */ }
   }
 
+  // Same reasoning as lens.shot, one step heavier: this asks Browser Run for four
+  // formats at once (content, screenshot, markdown, accessibility tree) and has
+  // FOUR distinct 502 shapes below — binding threw, non-ok status, invalid JSON,
+  // and a body that parsed but carried nothing. They are indistinguishable in the
+  // client's error string and now separable on the span.
+  return span("lens.browser", async (s) => {
+  s.setAttribute("lens.target_host", safeHost(v.url));
+  s.setAttribute("lens.cache", "miss");
   const started = Date.now();
   const payload = {
     url: v.url,
@@ -956,19 +999,27 @@ export async function handleLensBrowser(request, env, ctx) {
 
   let response;
   try {
-    response = await env.BROWSER.quickAction("snapshot", payload);
+    response = await span("lens.browser.quick_action", () => env.BROWSER.quickAction("snapshot", payload));
   } catch (e) {
+    s.setAttribute("lens.outcome", "binding_threw");
+    s.setAttribute("lens.error", (e && e.message) || String(e));
     return jsonResponse({ ok: false, error: "Browser Run request failed: " + ((e && e.message) || e) }, 502);
   }
   if (!response.ok) {
     let detail = "";
     try { detail = (await response.text()).slice(0, 500); } catch (_e) {}
+    s.setAttribute("lens.outcome", "upstream_not_ok");
+    s.setAttribute("http.response.status_code", response.status);
     return jsonResponse({ ok: false, error: "Browser Run returned " + response.status + ".", detail }, 502);
   }
 
   let envelope;
   try { envelope = await response.json(); }
-  catch (e) { return jsonResponse({ ok: false, error: "Browser Run returned invalid JSON: " + ((e && e.message) || e) }, 502); }
+  catch (e) {
+    s.setAttribute("lens.outcome", "invalid_json");
+    s.setAttribute("lens.error", (e && e.message) || String(e));
+    return jsonResponse({ ok: false, error: "Browser Run returned invalid JSON: " + ((e && e.message) || e) }, 502);
+  }
   const result = envelope && envelope.result ? envelope.result : envelope || {};
   const meta = envelope && envelope.meta ? envelope.meta : {};
   const rawContent = String(result.content || "");
@@ -990,8 +1041,13 @@ export async function handleLensBrowser(request, env, ctx) {
     fetchedBy: "Cloudflare Browser Run",
     elapsedMs: Date.now() - started,
   };
+  s.setAttribute("lens.outcome", "ok");
+  s.setAttribute("lens.content_bytes", rawContent.length);
+  s.setAttribute("lens.has_screenshot", !!result.screenshot);
+  s.setAttribute("lens.has_a11y_tree", !!result.accessibilityTree);
   if (env.RN_KV) ctx.waitUntil(env.RN_KV.put(cacheKey, JSON.stringify(output), { expirationTtl: 900 }));
   return jsonResponse({ ...output, cached: false });
+  });
 }
 
 export function lensPngHeaders(cached) {
@@ -1125,21 +1181,58 @@ export async function handleLensCompare(request, env, ctx) {
 
 // the orchestrator: fetch the target, parse it, then probe the origin's
 // site-level files in parallel. returns the full lens envelope.
+// TRACING NOTE, because the numbers here disagree on purpose. `out.elapsedMs`
+// below is computed the moment the main fetch and body read finish, and it is a
+// PUBLIC field of /lens/fetch's JSON, so it keeps meaning exactly that. It has
+// never covered the discovery fan-out further down: 28 parallel probes, one of
+// which (`botViews`) is itself 6 fetches. So on an HTML target, `elapsedMs`
+// routinely describes a fraction of the work the scan actually did, and nothing
+// measured the rest.
+//
+// The `lens.*` spans are that missing measurement. `lens.inspect` is the honest
+// total; `lens.inspect.fetch` is what elapsedMs reports; `lens.discovery` is the
+// part that was invisible. Every probe inside it is an auto-instrumented child
+// fetch named by URL, so a straggler identifies itself without any per-probe
+// code here.
 export async function lensInspect(targetUrl, env, opts) {
   opts = opts || {};
+  return span("lens.inspect", (s) => lensInspectInner(targetUrl, env, opts, s), {
+    "lens.target_host": safeHost(targetUrl),
+    "lens.skip_bot_views": opts.skipBotViews === true ? true : undefined,
+  });
+}
+
+// hostname only, never the full URL: a span attribute is the wrong place for a
+// third party's query string, which can carry their tokens and identifiers.
+function safeHost(raw) {
+  try { return new URL(raw).hostname.toLowerCase(); } catch { return undefined; }
+}
+
+async function lensInspectInner(targetUrl, env, opts, sInspect) {
   const started = Date.now();
   const ctrl = new AbortController();
   const to = setTimeout(() => ctrl.abort(), 8000);
   let res, body = "", truncated = false, ct = "", isTextual = false, isHtml = false;
   try {
-    res = await lensFetch(targetUrl, env, ctrl.signal);
-    ct = res.headers.get("content-type") || "";
-    isTextual = ct === "" || /text|html|xml|json|javascript|\+xml|\+json/i.test(ct);
-    isHtml = /html/i.test(ct);
-    // read the body while the abort timer is still armed. clearing it before the
-    // read (as this used to) left a slow-drip response unbounded in wall time.
-    if (isTextual) { const r = await lensReadCapped(res, 2 * 1024 * 1024); body = r.text; truncated = r.truncated; }
+    ({ res, body, truncated, ct, isTextual, isHtml } = await span("lens.inspect.fetch", async (s) => {
+      const r0 = await lensFetch(targetUrl, env, ctrl.signal);
+      const ct0 = r0.headers.get("content-type") || "";
+      const isTextual0 = ct0 === "" || /text|html|xml|json|javascript|\+xml|\+json/i.test(ct0);
+      const isHtml0 = /html/i.test(ct0);
+      let body0 = "", truncated0 = false;
+      // read the body while the abort timer is still armed. clearing it before the
+      // read (as this used to) left a slow-drip response unbounded in wall time.
+      if (isTextual0) { const r = await lensReadCapped(r0, 2 * 1024 * 1024); body0 = r.text; truncated0 = r.truncated; }
+      s.setAttribute("http.response.status_code", r0.status);
+      s.setAttribute("lens.content_type", ct0 || undefined);
+      s.setAttribute("lens.body_bytes", body0.length);
+      s.setAttribute("lens.body_truncated", truncated0);
+      s.setAttribute("lens.redirected", (r0.url || targetUrl) !== targetUrl);
+      return { res: r0, body: body0, truncated: truncated0, ct: ct0, isTextual: isTextual0, isHtml: isHtml0 };
+    }));
   } finally { clearTimeout(to); }
+  sInspect.setAttribute("http.response.status_code", res.status);
+  sInspect.setAttribute("lens.is_html", isHtml);
 
   const finalUrl = res.url || targetUrl;
   const headers = {};
@@ -1157,7 +1250,14 @@ export async function lensInspect(targetUrl, env, opts) {
   out.framable = fr.framable;
   out.frameReason = fr.reason;
 
+  // The parse phase is the one part of a scan that is pure compute: an
+  // HTMLRewriter pass over up to 2MB, a full-text extraction, a markdown
+  // conversion, and a regex title grab. It does no I/O, so `Date.now()` cannot
+  // see it at all and `elapsedMs` never counted it. On a heavy page this is real
+  // CPU, and CPU is the thing a Worker actually gets billed and limited on.
   if (isHtml && body) {
+    await span("lens.inspect.parse", async (s) => {
+    s.setAttribute("lens.body_bytes", body.length);
     const attrs = await lensExtractAttrs(body);
     const jsonld = attrs.jsonld.map(lensParseJsonld);
     const fullText = lensText(body);
@@ -1181,6 +1281,9 @@ export async function lensInspect(targetUrl, env, opts) {
     // context economics: the same page, priced per representation an agent
     // could ingest. Full (unsliced) lengths — the slices above are UI caps.
     out.cost = lensCost({ html: body.length, text: fullText.length, markdown: out.ai.markdown.length, headings: out.anatomy.headings });
+    s.setAttribute("lens.word_count", out.anatomy.wordCount);
+    s.setAttribute("lens.markdown_bytes", out.ai.markdown.length);
+    });
   } else if (isTextual && body) {
     // non-HTML text (xml/json/txt/markdown): show it raw, no parsing.
     out.anatomy = { rawHtml: body.slice(0, 80000), rawBytes: body.length, text: lensText(body).slice(0, 24000), headings: [], imgTotal: 0, imgNoAlt: 0 };
@@ -1210,7 +1313,16 @@ export async function lensInspect(targetUrl, env, opts) {
         return u.hostname.toLowerCase() === CANONICAL_HOST && /^\/lens(\/|$)/.test(u.pathname);
       } catch { return false; }
     })();
-    const [robots, sitemap, llms, llmsFull, aiTxt, secTxt, tdmrep, agentCard, openapi, aiPlugin, apiCatalog, mcp, nlweb, mdNego, webBotAuth, openidConfig, oauthServer, oauthResource, authMd, mcpServerCard, agentSkills, ucp, acp, ap2, agentsMd, dnsAid, ech, botViews] = await Promise.all([
+    // THE fan-out: 28 concurrent probes, and `botViews` is 6 fetches on its own,
+    // so a full scan of an HTML target makes on the order of 33 outbound requests
+    // after the one the visitor asked for. None of it was measured before —
+    // `out.elapsedMs` was already fixed above. Each probe shows up as an
+    // auto-instrumented child fetch under this span, named by its URL, so "which
+    // well-known file is the slow one" answers itself.
+    const [robots, sitemap, llms, llmsFull, aiTxt, secTxt, tdmrep, agentCard, openapi, aiPlugin, apiCatalog, mcp, nlweb, mdNego, webBotAuth, openidConfig, oauthServer, oauthResource, authMd, mcpServerCard, agentSkills, ucp, acp, ap2, agentsMd, dnsAid, ech, botViews] = await span("lens.discovery", (s) => {
+      s.setAttribute("lens.origin_host", safeHost(origin));
+      s.setAttribute("lens.self_lens", selfLens);
+      return Promise.all([
       lensProbe(origin + "/robots.txt", env), lensProbe(origin + "/sitemap.xml", env),
       lensProbe(origin + "/llms.txt", env), lensProbe(origin + "/llms-full.txt", env),
       lensProbe(origin + "/ai.txt", env), lensProbe(origin + "/.well-known/security.txt", env),
@@ -1237,9 +1349,14 @@ export async function lensInspect(targetUrl, env, opts) {
       lensProbeEch(new URL(finalUrl).hostname),
       // bot-view sampling is 6 extra fetches per scan. The census (opts.skipBotViews)
       // only needs tier/score/doors, so it skips them to stay well under the
-      // per-invocation subrequest budget when sweeping the whole roster.
-      (selfLens || opts.skipBotViews) ? Promise.resolve([]) : lensProbeBotViews(finalUrl, env),
-    ]);
+      // per-invocation subrequest budget when sweeping the whole roster. Its own
+      // span because it is the single heaviest entry in this list and the only
+      // one that gets skipped — a scan missing it should look different.
+      (selfLens || opts.skipBotViews)
+        ? Promise.resolve([])
+        : span("lens.discovery.bot_views", () => lensProbeBotViews(finalUrl, env)),
+      ]);
+    });
     const feeds = (out.structured?.relLinks || []).filter((l) =>
       /alternate/.test(l.rel) && /(rss|atom|feed|\+xml|\+json)/i.test((l.type || "") + " " + (l.href || "")));
     out.discovery = {

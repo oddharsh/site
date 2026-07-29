@@ -7,6 +7,7 @@
 import { lunaPage } from "./lib/chrome.js";
 import { escHtml, escAttr, jsonResponse, timingSafeEqual } from "./lib/http.js";
 import { lensInspect } from "./lens.js";
+import { span } from "./lib/trace.js";
 
 // The roster: 16 sites chosen to span the open → agent-native spectrum a
 // crypto-VC audience cares about. Agent-native infra, AI labs, publishers
@@ -70,16 +71,33 @@ function censusMetrics(site, r, ts, ymd) {
 // The weekly job. Scans the whole roster (bot-view sampling skipped to stay under
 // the subrequest budget), in small concurrent batches, and upserts one row each.
 // Best-effort per host: a single site that errors or times out doesn't sink the run.
+// Traced because this is a TIME SERIES, and a time series with quietly missing
+// rows is worse than no time series: the whole claim of /lens/census is that it
+// is citable evidence about where the web is going. The per-host catch below is
+// correct (one dead host must not abort the sweep) and it is also the exact
+// mechanism by which a roster of 16 could quietly become a roster of 3. `written`
+// is returned but the caller is `ctx.waitUntil`, so nothing has ever read it.
+// Now the sweep records roster size against rows written, and each failed host
+// names itself. The lensInspect spans nest underneath, so a host that failed
+// because its own fetch timed out shows exactly that.
 export async function cronCensus(env) {
-  if (!env.RESTORE_DB) return { ok: false, error: "no RESTORE_DB binding" };
-  await ensureCensusTable(env);
+  return span("census.sweep", (s) => cronCensusInner(env, s), { "census.roster": CENSUS_ROSTER.length });
+}
+
+async function cronCensusInner(env, sSweep) {
+  if (!env.RESTORE_DB) {
+    sSweep.setAttribute("census.outcome", "no_binding");
+    return { ok: false, error: "no RESTORE_DB binding" };
+  }
+  await span("census.ensure_table", () => ensureCensusTable(env));
   const ts = Date.now();
   const ymd = new Date(ts).toISOString().slice(0, 10);
-  let written = 0;
+  let written = 0, failed = 0;
   const batchSize = 4;
   for (let i = 0; i < CENSUS_ROSTER.length; i += batchSize) {
     const batch = CENSUS_ROSTER.slice(i, i + batchSize);
-    await Promise.all(batch.map(async (site) => {
+    await Promise.all(batch.map(async (site) => span("census.host", async (s) => {
+      s.setAttribute("census.host", site.label || site.url);
       try {
         const r = await lensInspect(site.url, env, { skipBotViews: true });
         const m = censusMetrics(site, r, ts, ymd);
@@ -88,9 +106,20 @@ export async function cronCensus(env) {
           "ON CONFLICT(host, ymd) DO UPDATE SET ts=excluded.ts, url=excluded.url, tier=excluded.tier, score=excluded.score, level=excluded.level, doors=excluded.doors, verdict=excluded.verdict, surfaces=excluded.surfaces"
         ).bind(m.ts, m.ymd, m.host, m.url, m.tier, m.score, m.level, m.doors, m.verdict, m.surfaces).run();
         written++;
-      } catch (_e) { /* skip a failed host; the census is best-effort */ }
-    }));
+        s.setAttribute("census.outcome", "written");
+        s.setAttribute("census.tier", m.tier);
+        s.setAttribute("census.score", m.score);
+        s.setAttribute("census.doors", m.doors);
+      } catch (e) { /* skip a failed host; the census is best-effort */
+        failed++;
+        s.setAttribute("census.outcome", "failed");
+        s.setAttribute("census.error", (e && e.message) || String(e));
+      }
+    })));
   }
+  sSweep.setAttribute("census.written", written);
+  sSweep.setAttribute("census.failed", failed);
+  sSweep.setAttribute("census.ymd", ymd);
   return { ok: true, written, ymd };
 }
 

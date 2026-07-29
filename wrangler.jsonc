@@ -95,7 +95,27 @@
       "/images/*.heic", "/images/*.heif", "/images/*.hif"
     ]
   },
-  "observability": { "enabled": true },
+  // `enabled` is Workers LOGS (the structured line serveWorkerRequest emits).
+  // `traces` is the separate, newer thing: Workers Traces, which auto-instruments
+  // every outbound fetch, binding call, and handler invocation as a span tree,
+  // and which lib/trace.js hangs named spans off. It is opt-in until Cloudflare
+  // default-enables automatic tracing (that flip will want a newer
+  // compatibility_date; this API works at 2026-06-01, verified 2026-07-29).
+  //
+  // head_sampling_rate is 1 (every request), which is also the default, stated
+  // here because the value is a deliberate choice rather than an omission.
+  // Sampling is per-WORKER, not per-route, so a fractional rate would thin the
+  // rare-but-expensive events this was turned on for in the first place: a
+  // /lens discovery fan-out that stalls, a cron target that has silently been
+  // skipped for weeks, a coffee booking that fails closed on a stale calendar.
+  // At this site's traffic, 100% sits orders of magnitude under the 10M
+  // events/month the Workers Paid plan includes, so there is nothing to buy by
+  // sampling down. Traced-request overhead is the only real cost; if a span ever
+  // shows up ON the critical path, lower this rather than deleting spans.
+  "observability": {
+    "enabled": true,
+    "traces": { "enabled": true, "head_sampling_rate": 1 }
+  },
   // the deployed version id (changes every deploy). lib/cache.js folds it into
   // the caches.default key for rendered shells, so a deploy orphans the old
   // edge entries atomically instead of waiting out their TTL. Not populated in
