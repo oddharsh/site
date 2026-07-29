@@ -1100,12 +1100,26 @@ footer .signature small { color: oklch(56.93% 0 0); }
       every page loads — a third-party request on the shell's critical path is a
       bigger bill than one page's field data is worth. Revisit only with a measurement.
 
-      `defer` + the beacon's own `data-cf-beacon` config; no inline handler, so the
-      CSP needs only the script origin (script-src) and the report origin
-      (connect-src), both added in _headers and _worker.js/lib/security.js.
+      KNOW THE PRICE, measured 2026-07-29: beacon.min.js is 11,364 B gzip / 31,612 B
+      raw, and static.cloudflareinsights.com does NOT serve brotli (an
+      `accept-encoding: br` request comes back uncompressed, so gzip is the best a
+      browser gets). This document is 9,010 B brotli. The beacon is therefore LARGER
+      than the page it measures, which is the most uncomfortable number here and the
+      reason it is written down rather than left to be rediscovered. It is deferred and
+      off the critical path, so the cost is transfer and main-thread parse rather than
+      first paint. If that trade stops being worth it, this block and the two
+      cloudflareinsights.com CSP entries come out together.
+
+      `type="module"` matches Cloudflare's own snippet, and module scripts defer by
+      default, so this is not a classic script missing its `defer`. The beacon body has
+      no import/export today and would parse either way, but a module fetch is always
+      CORS-mode and the origin sends `access-control-allow-origin: *`, so the module
+      form is safe now and stays correct if Cloudflare ships real module syntax later.
+      No inline handler, so the CSP needs only the script origin (script-src) and the
+      report origin (connect-src), both added in _headers and lib/security.js.
     -->
-    <script defer src="https://static.cloudflareinsights.com/beacon.min.js"
-            data-cf-beacon='{"token":"CF_RUM_TOKEN_PLACEHOLDER"}'></script>
+    <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js"
+            data-cf-beacon='{"token": "9e4894ff180741c78a7f493c1fb05e54"}'></script>
 
     <!--
       Rich XP tooltips are an interaction island. The tiny loader below stays
