@@ -960,17 +960,22 @@ test("getImagesManifest serves the bundled pool without env", async () => {
   assert.ok(Array.isArray(pool) && pool.length > 0);
 });
 
-test("homepage selects 12 photos without eagerly transferring the offscreen 11", async () => {
+test("homepage selects 12 photos and hydrates only the current scrollport", async () => {
   const worker = await readFile(new URL("holding/_worker.js/home.js", import.meta.url), "utf8");
   const page = await readFile(new URL("holding/index.html", import.meta.url), "utf8");
   const luna = await readFile(new URL("holding/luna.css", import.meta.url), "utf8");
+  const nav = await readFile(new URL("holding/nav.js", import.meta.url), "utf8");
 
   assert.match(worker, /pickRandom\(photos,\s*12\)/, "the server-side random draw must remain 12");
-  assert.match(worker, /const deferred = i > 0;/, "only the first visible thumbnail may be directly discoverable");
-  assert.match(worker, /data-photo-deferred/, "offscreen photo URLs must stay deferred");
+  assert.match(worker, /const deferred = i > 0;/, "only the first mobile thumbnail may be directly discoverable");
+  assert.match(worker, /data-photo-deferred/, "later photo URLs must remain available for viewport-aware hydration");
   assert.doesNotMatch(worker, /rel="preload" as="image"/, "a non-LCP random photo must not consume the preload lane");
   assert.match(page, /IntersectionObserver/);
   assert.match(page, /threshold:\s*0\.05/, "a sliver of the next tile must not trigger a transfer");
+  assert.match(page, /overlap >= rect\.height \* 0\.05/, "desktop must synchronously hydrate its visible photo rows");
+  assert.match(page, /else requestAnimationFrame\(\(\) => requestAnimationFrame\(start\)\)/, "mobile hydration must yield through the text paint");
+  assert.doesNotMatch(page, /requestIdleCallback\(load/, "the tooltip island must not transfer before hover intent");
+  assert.match(nav, /requestAnimationFrame\(\(\) => requestAnimationFrame\(boot\)\)/, "homepage shell enhancement must follow the static first paint");
   assert.ok(
     page.indexOf('type="application/ld+json"') > page.indexOf('<section class="now-playing"'),
     "non-rendering JSON-LD belongs after the visible homepage content",

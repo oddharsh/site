@@ -1,6 +1,6 @@
 // tooltip.js — the rich hover island for photos, tracks, artists, and car links.
-// Loaded after first paint and prefetched during idle so the first intentional
-// tooltip gets the same interaction path as every later one.
+// Loaded on the first hover/focus and replayed against that initial target, so
+// visitors who never ask for a tooltip transfer none of this interaction island.
 //
 // The hover ENGINE moved to hoist.js, shared with serendipity's event covers
 // and nav.js's Run preview. What stays here is the part that is actually about

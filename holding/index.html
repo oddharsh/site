@@ -690,14 +690,15 @@ footer .signature small { color: oklch(56.93% 0 0); }
     <!-- Native loading=lazy uses a viewport-distance heuristic that reaches far
          past this page's internal .content scroller: a 390px Slow-4G trace
          fetched eight of twelve thumbnails even though only the first tile was
-         visible. The Worker leaves slots 2-12 as data-* URLs. Hydrate them only
-         when they enter, or are one short approach away from, the real
-         scrollport. Two animation frames keep this bookkeeping out of the
-         initial text paint; browsers without IntersectionObserver fall back to
-         loading the full selected set. A 5% threshold avoids transferring the
-         next row when only a couple of pixels touch the bottom edge. The
-         <noscript> pictures emitted beside each deferred slot preserve the
-         script-off path. -->
+         visible. The Worker leaves slots 2-12 as data-* URLs. Desktop visitors
+         normally see two or three photo rows in the initial window, so hydrate
+         every tile that intersects that real scrollport synchronously. Mobile
+         keeps only slot 1 on the initial critical path, then starts observation
+         after the text paint. A 5% threshold avoids transferring the next row
+         when only a couple of pixels touch the bottom edge. Browsers without
+         IntersectionObserver load the full selected set; the <noscript>
+         pictures emitted beside each deferred slot preserve the script-off
+         path. -->
     <script>
     (() => {
       const start = () => {
@@ -720,6 +721,8 @@ footer .signature small { color: oklch(56.93% 0 0); }
           pictures.forEach(load);
           return;
         }
+        const desktop = matchMedia("(min-width: 561px)").matches;
+        const rootRect = desktop ? root.getBoundingClientRect() : null;
         const observer = new IntersectionObserver((entries) => {
           for (const entry of entries) {
             if (!entry.isIntersecting) continue;
@@ -727,9 +730,21 @@ footer .signature small { color: oklch(56.93% 0 0); }
             load(entry.target);
           }
         }, { root, threshold: 0.05 });
-        pictures.forEach((picture) => observer.observe(picture));
+        for (const picture of pictures) {
+          if (desktop) {
+            const rect = picture.getBoundingClientRect();
+            const overlap = Math.min(rect.bottom, rootRect.bottom) -
+              Math.max(rect.top, rootRect.top);
+            if (overlap >= rect.height * 0.05) {
+              load(picture);
+              continue;
+            }
+          }
+          observer.observe(picture);
+        }
       };
-      requestAnimationFrame(() => requestAnimationFrame(start));
+      if (matchMedia("(min-width: 561px)").matches) start();
+      else requestAnimationFrame(() => requestAnimationFrame(start));
     })();
     </script>
 
@@ -1017,8 +1032,9 @@ footer .signature small { color: oklch(56.93% 0 0); }
 
     <!--
       Rich XP tooltips are an interaction island. The tiny loader below stays
-      inline so it can capture the very first hover; the cacheable implementation
-      is prefetched during idle and replayed against that target if necessary.
+      inline so it can capture the very first hover and replay it once the
+      cacheable implementation arrives. It does not prefetch on idle: visitors
+      who never hover transfer no tooltip JavaScript or EXIF index.
       Touch/coarse-pointer visitors never load it.
     -->
     <script>
@@ -1078,15 +1094,6 @@ footer .signature small { color: oklch(56.93% 0 0); }
         load();
       }, { passive: true });
 
-      // Warm after the critical page work. This pays the module transfer for
-      // visitors who linger, but keeps it out of LCP and makes the first
-      // intentional tooltip as fast as the second. Never warm a prerender.
-      const warm = () => {
-        if (window.requestIdleCallback) requestIdleCallback(load, { timeout: 1500 });
-        else setTimeout(load, 1000);
-      };
-      if (document.prerendering) addEventListener("prerenderingchange", warm, { once: true });
-      else warm();
     })();
     </script>
 
