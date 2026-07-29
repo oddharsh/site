@@ -1320,6 +1320,17 @@
   }
 
   function boot() { ensureLunaCss(); buildDesktop(); buildIcons(); buildTaskbar(); initDrag(); initRaise(); initIconDrag(); initScrollbars(); initResize(); setFavicon(); injectSpeculation(); initCloseBack(); initWindowControls(); }
-  if (D.readyState === "loading") D.addEventListener("DOMContentLoaded", boot);
-  else boot();
+  function bootAfterFirstHomePaint() {
+    // The homepage already carries the generated desktop/taskbar markup plus
+    // its race-proof geometry in HTML. Its deferred script only ENHANCES that
+    // static shell (dragging, Run, clock, window controls), so doing the DOM
+    // wiring before the first paint needlessly makes the text LCP wait. Two
+    // frames guarantee one complete static paint; the ~16ms enhancement delay
+    // is imperceptible and does not change any interaction contract.
+    const home = (location.pathname.replace(/\/+$/, "") || "/") === "/";
+    if (home) requestAnimationFrame(() => requestAnimationFrame(boot));
+    else boot();
+  }
+  if (D.readyState === "loading") D.addEventListener("DOMContentLoaded", bootAfterFirstHomePaint);
+  else bootAfterFirstHomePaint();
 })();
