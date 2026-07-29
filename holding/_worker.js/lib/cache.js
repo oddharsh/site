@@ -205,14 +205,22 @@ export async function cachedRender(request, ctx, renderFn, keyPath, env) {
   }
 
   let resp = await renderFn();
-  if (request.method === "GET" && resp.status === 200) {
-    resp = await withWeakEtag(resp);
-  }
   if (request.method === "GET" && resp.status === 200 && ctx) {
-    ctx.waitUntil(cache.put(key, resp.clone()));
+    // Hashing calls arrayBuffer(), which would otherwise consume and fully buffer
+    // the only response body before the first byte reaches the visitor. Tee the
+    // stream once, send the original immediately, and do the cache-only hash in
+    // waitUntil. A cold miss intentionally has no validator; its next request hits
+    // the tagged copy and can take the cheap 304 path.
+    const cacheFill = withWeakEtag(resp.clone())
+      .then((tagged) => cache.put(key, tagged))
+      .catch(() => {});
+    ctx.waitUntil(cacheFill);
     const out = new Response(resp.body, resp);
     out.headers.set("x-edge-cache", "miss");
     return notModifiedIfFresh(request, out);
+  }
+  if (request.method === "GET" && resp.status === 200) {
+    resp = await withWeakEtag(resp);
   }
   return notModifiedIfFresh(request, resp);
 }

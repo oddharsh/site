@@ -1326,8 +1326,14 @@
     // that shell (dragging, Run, clock, controls), so let its useful content paint
     // before doing the DOM wiring. Two frames guarantee one complete static paint;
     // pages without the server shell still build it synchronously as their fallback.
+    // A prerendered document does not run animation frames while hidden. Enhance its
+    // already-SSR'd shell now, so activation inherits a fully wired desktop instead
+    // of paying both frames on the click that activates the prerender.
     const hasStaticShell = D.getElementById("axp-desktop") && D.getElementById("axp-taskbar");
-    if (hasStaticShell) requestAnimationFrame(() => requestAnimationFrame(boot));
+    if (hasStaticShell) {
+      if (D.prerendering) return boot();
+      requestAnimationFrame(() => requestAnimationFrame(boot));
+    }
     else boot();
   }
   if (D.readyState === "loading") D.addEventListener("DOMContentLoaded", bootAfterStaticPaint);

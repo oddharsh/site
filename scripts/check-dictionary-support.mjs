@@ -35,16 +35,10 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
     report("shell js (nav)", ce === "dcz", `ce=${ce} vs candidate ${cand}`);
   }
 }
-// 2. page html — the one immutable site-page dictionary, taken from PRODUCTION.
-//
-// Pages used to be diffed against committed snapshots of their own previous bytes
-// (holding/p-dict), which made this probe a search over local candidates. That
-// mechanism is gone: build.mjs derives ONE raw 64KB corpus from the staged pages
-// and every page delta is keyed by that dictionary's tag alone. So the honest probe
-// is the round trip a real browser makes — read the dictionary URL out of the page's
-// own Link header, fetch those exact bytes, and ask for a delta against them.
-// Nothing local is involved, which also means the probe cannot rot against a
-// snapshot set nobody maintains anymore.
+// 2. page html — exercise both dictionary tiers. The family dictionary is read from
+// the production page's Link header; the per-page candidate is a committed snapshot
+// of the previous release. Both are real Available-Dictionary values a browser can
+// send, and the worker must answer each with dcz when that candidate is present.
 {
   const page = await fetch("https://aadhar.sh/garage/pretext", { headers: { "accept-encoding": "identity" } });
   const offered = page.headers.get("link")?.match(/<([^>]+)>;\s*rel="compression-dictionary"/)?.[1];
@@ -65,6 +59,17 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
     const ce = r.headers.get("content-encoding");
     report("page html (pretext)", ce === "dcz",
            ce === "dcz" ? `ce=dcz vs ${offered}` : `ce=${ce} — the deployed /pd/ deltas may predate this dictionary`);
+  }
+
+  const candidates = (await readdir("holding/p-dict").catch(() => []))
+    .filter((name) => name.startsWith("garage__pretext.") && name.endsWith(".html.br"));
+  if (!candidates.length) {
+    report("page html per-page tier", true, "no committed pretext snapshot — family tier is the only candidate");
+  } else {
+    const raw = brotliDecompressSync(await readFile(`holding/p-dict/${candidates[0]}`));
+    const r = await get("https://aadhar.sh/garage/pretext", b64(raw));
+    const ce = r.headers.get("content-encoding");
+    report("page html per-page tier", ce === "dcz", `ce=${ce} vs ${candidates[0]}`);
   }
 }
 // 3. svg — must NOT offer a dictionary (the #119 rule)

@@ -24,7 +24,7 @@ import { createHash } from "node:crypto";
 import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { brotliCompressSync, constants as zlibConstants, zstdCompressSync } from "node:zlib";
+import { brotliCompressSync, brotliDecompressSync, constants as zlibConstants, zstdCompressSync } from "node:zlib";
 import minifyHtml from "@minify-html/node";
 import { transform as transformCss } from "lightningcss";
 import { minifySync } from "oxc-minify";
@@ -465,7 +465,7 @@ await checkInvariants();
 // by the staging step below and ships artifacts current code would never build — which is
 // how an icons.*.dcz survived #119's svg exclusion locally, long after the guard forbidding
 // it was in place. That guard stops GENERATION, not staging of stale files.
-for (const dead of ["holding/ad", "holding/pd"]) {
+for (const dead of ["holding/ad"]) {
   await rm(dead, { recursive: true, force: true });
 }
 await rm(OUT, { recursive: true, force: true });
@@ -1265,10 +1265,12 @@ for (const [file, srcPath, marker] of SHELLS) {
 // written for: the browser revalidates, the bytes moved, and the server answers with the
 // diff instead of the document.
 //
-// A page delta is keyed by SLUG plus the dedicated dictionary tag:
-// /pd/<slug>.<dicttag>.dcz. Only the immutable site-page dictionary is eligible;
-// max-age=0 HTML is intentionally never offered as a dictionary because Chrome
-// rejects an immediately stale response.
+// A page delta is keyed by SLUG plus the dictionary tag:
+// /pd/<slug>.<dicttag>.dcz. The family corpus is the broad fallback for anyone who
+// has visited any page. The committed per-page snapshots are the high-ratio path for
+// a returning visitor who still holds that page's previous bytes; both candidates
+// are emitted when they beat the ordinary q11 twin. The browser tells the worker
+// which one it has via Available-Dictionary, so no unsafe guess is made server-side.
 {
   // Every deploy-time HTML document except the homepage. `/` is intentionally
   // dynamic (12 fresh random photos + live tracks), so no precomputed response
@@ -1278,15 +1280,22 @@ for (const [file, srcPath, marker] of SHELLS) {
   // slug: the request path with separators folded, so it survives as one filename segment.
   const slugOf = (assetPath) => assetPath.replace(/\.html$/, "").replace(/\//g, "__");
 
+  const dictDir = "holding/p-dict";
+  const dicts = (await readdir(dictDir).catch(() => []));
+  const parseDict = (n) => {
+    const m = n.match(/^(.+)\.([0-9a-f]{16})\.html\.br$/);
+    return m ? { slug: m[1], tag: m[2], name: n } : null;
+  };
+  const pageDicts = dicts.map(parseDict).filter(Boolean);
   const familyName = (await readdir(`${OUT}/holding/a`)).find((n) => /^page-family\.[0-9a-f]{8}\.dict$/.test(n));
   const familyBytes = familyName ? await readFile(`${OUT}/holding/a/${familyName}`) : null;
+  const familyTag = familyBytes ? createHash("sha256").update(familyBytes).digest("hex").slice(0, 16) : null;
   if (familyBytes) {
-    const familyTag = createHash("sha256").update(familyBytes).digest("hex").slice(0, 16);
     console.log(`page-delta: site-page dictionary ${familyName} (${familyBytes.length} bytes, tag ${familyTag})`);
   }
-  if (familyBytes) await mkdir(`${OUT}/holding/pd`, { recursive: true });
+  if (familyBytes || pageDicts.length) await mkdir(`${OUT}/holding/pd`, { recursive: true });
 
-  let brCount = 0, brRaw = 0, brEnc = 0, dCount = 0, dBytes = 0, dPlain = 0;
+  let brCount = 0, brRaw = 0, brEnc = 0, dCount = 0, dBytes = 0, dPlain = 0, pageCount = 0, pageBytes = 0, familyCount = 0, familyBytesOut = 0;
   for (const page of pages) {
     const bytes = await readFile(`${OUT}/holding/${page}`);
     const br = brotliCompressSync(bytes, {
@@ -1302,20 +1311,31 @@ for (const [file, srcPath, marker] of SHELLS) {
     }
 
     const slug = slugOf(page);
+    for (const candidate of pageDicts.filter((d) => d.slug === slug)) {
+      const dictBytes = brotliDecompressSync(await readFile(`${dictDir}/${candidate.name}`));
+      if (dictBytes.equals(bytes)) continue;
+      const { out, digest } = dczEncode(bytes, dictBytes);
+      if (out.length >= br.length) {
+        console.log(`page-delta: SKIPPED ${slug} vs per-page ${candidate.tag.slice(0, 8)} (dcz ${out.length} >= br ${br.length})`);
+        continue;
+      }
+      await writeFile(`${OUT}/holding/pd/${slug}.${digest.toString("hex").slice(0, 16)}.dcz`, out);
+      dCount++; dBytes += out.length; dPlain += br.length; pageCount++; pageBytes += out.length;
+    }
     if (familyBytes) {
       const { out, digest } = dczEncode(bytes, familyBytes);
       if (out.length >= br.length) {
         console.log(`page-delta: SKIPPED ${slug} vs site-page (dcz ${out.length} >= br ${br.length})`);
       } else {
         await writeFile(`${OUT}/holding/pd/${slug}.${digest.toString("hex").slice(0, 16)}.dcz`, out);
-        dCount++; dBytes += out.length; dPlain += br.length;
+        dCount++; dBytes += out.length; dPlain += br.length; familyCount++; familyBytesOut += out.length;
       }
     }
   }
   console.log(`pages: ${brCount} brotli q11 twins, ${(brRaw / 1024).toFixed(1)}KB -> ${(brEnc / 1024).toFixed(1)}KB`);
   console.log(dCount
-    ? `page-delta: ${dCount} dcz delta(s), ${dBytes} bytes against ${dPlain} plain brotli`
-    : `page-delta: none (no page changed since its dictionary snapshot)`);
+    ? `page-delta: ${dCount} dcz delta(s), ${dBytes} bytes against ${dPlain} plain brotli (${pageCount} per-page/${pageBytes} B, ${familyCount} family/${familyBytesOut} B)`
+    : `page-delta: none (no dictionary candidate beat plain brotli)`);
 }
 
 console.log(`staged ${OUT}/ - deploy with: wrangler deploy (self-builds via build.command) or npm run deploy`);
