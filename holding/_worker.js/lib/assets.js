@@ -383,9 +383,16 @@ export async function serveStaticPage(request, env, opts = {}) {
   // come BEFORE the /index fallback below: that fallback resolves /garage/ to the
   // same twin as /garage and would serve it a cheerful 200, leaving the page with
   // two live URLs. The route oracle caught exactly that.
-  if (url.pathname.endsWith("/")) return serveAssetWith404Clamp(request, env);
+  // The ROOT is canonical WITH its slash, so it must be answered rather than
+  // redirected — the opposite of every other trailing slash here. It maps to
+  // index.html, which build.mjs bakes into a deterministic document precisely so
+  // it can take this path. Has to come before the guard below, which would
+  // otherwise hand `/` to the asset layer and skip the twin entirely.
+  const rel = url.pathname === "/"
+    ? "index"
+    : url.pathname.replace(/^\/+/, "").replace(/\/+$/, "");
+  if (rel !== "index" && url.pathname.endsWith("/")) return serveAssetWith404Clamp(request, env);
 
-  const rel = url.pathname.replace(/^\/+/, "").replace(/\/+$/, "");
   if (!rel || rel.includes("..") || /\.[a-z0-9]+$/i.test(rel)) {
     // Sub-resources under these prefixes (the garage's images, ask.js) are not pages and
     // have no twin; hand them straight to the asset layer untouched.
