@@ -11,7 +11,7 @@ import { handleBotPage } from "./bot.js";
 import { cronCensus, handleCensus, handleCensusJson } from "./census.js";
 import { handleCoffeeAvailability } from "./coffee.js";
 import { handleHit } from "./counter.js";
-import { homepageHeadResponse, serveHomepageWithPrerenderedTracks, serveMarkdown } from "./home.js";
+import { handlePhotoGrid, homepageHeadResponse, serveMarkdown } from "./home.js";
 import { handleInbox } from "./inbox.js";
 import { handleWebmention, handleWebmentionDecision } from "./webmention.js";
 import { cronSendWebmentions } from "./webmention-send.js";
@@ -20,6 +20,7 @@ import { handleLens, handleLensBrowser, handleLensCompare, handleLensFetch, hand
 import { serveAssetWith404Clamp, serveFreshAsset, servePrecompressedShell, serveStaticPage } from "./lib/assets.js";
 import { BOT_UA } from "./lib/botauth.js";
 import { CANONICAL_HOST } from "./lib/const.js";
+import { HOMEPAGE_DISCOVERY_LINK } from "./lib/security.js";
 import { wantsMarkdown } from "./lib/http.js";
 import { handleSiteMcp } from "./mcp.js";
 import { withSecurityHeaders } from "./lib/security.js";
@@ -136,7 +137,7 @@ export default {
   // prerender. The weekly schedule sweeps the /lens/census roster into D1.
   async scheduled(event, env, ctx) {
     if (event.cron === "7,37 * * * *") {
-      ctx.waitUntil(cronHomeProbe(env, ctx));   // :07/:37 — homepage Server-Timing -> Analytics Engine
+      ctx.waitUntil(cronHomeProbe(env, ctx));   // :07/:37 — the two homepage fragments' KV latency -> Analytics Engine
     } else if (event.cron === "17 8 * * 1") {
       ctx.waitUntil(cronCensus(env));   // Mondays 08:17 UTC — the longitudinal census
     } else if (event.cron === "41 5 * * *") {
@@ -227,6 +228,8 @@ const ROUTES = new Map([
   ["/photos", handlePhotos],
   ["/photos/", routePhotosRedirect],
   ["/photos/query.json", handlePhotoQuery],
+  // the homepage grid's random twelve, fetched by the inline hydrator
+  ["/photos/grid.html", handlePhotoGrid],
   ["/coffee/availability.json", handleCoffeeAvailability],
   ["/run", handleRun],
 
@@ -593,8 +596,23 @@ function routeIndexHtml(_request, _env, _ctx, url) {
   return Response.redirect(url.toString(), 301);
 }
 
+// `/` is a static document again. Everything that varied per request left it
+// (see home.js's handlePhotoGrid header for where each piece went), so it takes
+// the same path as /garage and /lwe: a q11 twin, a dcz delta against the page
+// dictionary, and a real validator that answers 304.
+//
+// The cache policy stays PRIVATE and no-cache rather than picking up the static
+// pages' s-maxage. The document is identical for everyone, but it is still the
+// front door and the one page whose visit the /hit beacon counts; keeping it
+// out of shared caches costs nothing now that the body revalidates to an empty
+// 304 instead of retransmitting.
+const HOMEPAGE_HEADERS = {
+  "cache-control": "private, no-cache, must-revalidate",
+  "link": HOMEPAGE_DISCOVERY_LINK,
+};
+
 function routeHomepage(request, env, ctx) {
   if (request.method === "HEAD") return homepageHeadResponse(request);
   if (wantsMarkdown(request)) return serveMarkdown(request, env);
-  return serveHomepageWithPrerenderedTracks(request, env, ctx);
+  return serveStaticPage(request, env, { headers: HOMEPAGE_HEADERS });
 }

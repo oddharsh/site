@@ -21,6 +21,10 @@
 // root wrangler.jsonc is copied verbatim into .build/ and just works against the copy.
 
 import { createHash } from "node:crypto";
+
+// One nonce per build for the dynamic imports below: the staged worker modules
+// are rewritten in place by later steps, so each import site needs a fresh URL.
+const BUILD_NONCE = process.hrtime.bigint().toString(36);
 import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -678,6 +682,53 @@ if (inlineProbe.includes("/* probe */") ||
 }
 
 
+// 1d) the homepage's baked fallback grid + last-modified date.
+//
+// `/` used to be four HTMLRewriter injections over a skeleton (tracks, photo
+// grid, visit counter, last-modified). That made its bytes different on every
+// request, which is the one thing a precomputed dcz delta and a 304 cannot
+// survive. Three of the four moved to the client; this bakes the fourth and
+// gives the grid a real, deterministic fallback so the page still says
+// something to a crawler or a visitor without JavaScript.
+//
+// Determinism is the contract. The twelve are chosen by stem sort and the date
+// comes from the committed pool, so this output changes only when the pool
+// does — which is also the only time the page's meaning changes.
+{
+  const nonce = `?build=${BUILD_NONCE}`;
+  const grid = await import(pathToFileURL(resolve(OUT, "holding/_worker.js/lib/photo-grid.js")).href + nonce);
+  const photos = await import(pathToFileURL(resolve(OUT, "holding/_worker.js/photos.js")).href + nonce);
+  const pool = photos.derivePhotoPool(
+    JSON.parse(await readFile(`${OUT}/holding/_worker.js/photo-index.json`, "utf8")),
+    JSON.parse(await readFile(`${OUT}/holding/images/hashes.json`, "utf8")),
+  );
+  if (!pool.length) throw new Error("homepage bake: the photo pool is empty — the grid fallback would ship as bare frames");
+  const altMap = JSON.parse(await readFile(`${OUT}/holding/images/alt.json`, "utf8").catch(() => "{}"));
+  const twelve = grid.deterministicTwelve(pool);
+  if (twelve.length !== 12) throw new Error(`homepage bake: expected 12 fallback tiles, pool yielded ${twelve.length}`);
+  const slots = grid.renderPhotoSlots(twelve, altMap);
+
+  let html = await readFile(`${OUT}/holding/index.html`, "utf8");
+  const section = /(<section class="photos"[^>]*>)([\s\S]*?)(<\/section>)/;
+  if (!section.test(html)) throw new Error("homepage bake: no <section class=\"photos\"> to fill — did the grid markup move?");
+  html = html.replace(section, (_m, open, _inner, close) =>
+    open.replace(/\sdata-ssr="[^"]*"/, "") + slots + close);
+
+  // Newest photo wins, floored by the hand-written date already in the file, so
+  // a copy-only edit can still bump it by hand.
+  let newest = 0;
+  for (const p of pool) { const t = p.uploaded ? Date.parse(p.uploaded) : NaN; if (!isNaN(t) && t > newest) newest = t; }
+  if (newest > 0) {
+    const d = new Date(newest);
+    const iso = d.toISOString().slice(0, 10);
+    const shown = d.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" });
+    html = html.replace(/<time datetime="([^"]*)"[^>]*>([^<]*)<\/time>/, (m, floor) =>
+      iso >= floor ? `<time datetime="${iso}">${shown}</time>` : m);
+  }
+  await writeFile(`${OUT}/holding/index.html`, html);
+  console.log(`homepage bake: 12 deterministic fallback tiles + last-modified ${new Date(newest).toISOString().slice(0, 10)}`);
+}
+
 // 2) homepage HTML: deploy the readable original as /index.src.html and
 // minify only the served copy. The worker rewrites this response as a stream,
 // so doing this before ASSETS.fetch keeps the rewriter path allocation-free.
@@ -815,7 +866,7 @@ for (const [file, srcPath, marker] of SHELLS) {
       }
     },
   };
-  const nonce = `?build=${Date.now()}`;
+  const nonce = `?build=${BUILD_NONCE}`;
   const lens = await import(pathToFileURL(resolve(OUT, "holding/_worker.js/lens.js")).href + nonce);
   const writing = await import(pathToFileURL(resolve(OUT, "holding/_worker.js/writing.js")).href + nonce);
 
@@ -1272,11 +1323,13 @@ for (const [file, srcPath, marker] of SHELLS) {
 // are emitted when they beat the ordinary q11 twin. The browser tells the worker
 // which one it has via Available-Dictionary, so no unsafe guess is made server-side.
 {
-  // Every deploy-time HTML document except the homepage. `/` is intentionally
-  // dynamic (12 fresh random photos + live tracks), so no precomputed response
-  // can equal its bytes; every other staged document belongs on this path.
+  // EVERY deploy-time HTML document, the homepage included. `/` used to be the
+  // one exception, because four HTMLRewriter injections made its bytes differ
+  // per request and no precomputed response could equal them. Step 1d bakes
+  // those out, so it is now an ordinary deterministic document and earns the
+  // same twin, delta, and validator as the rest.
   const pages = (await readdir(`${OUT}/holding`, { recursive: true }))
-    .filter((rel) => rel.endsWith(".html") && !rel.endsWith(".src.html") && rel !== "index.html");
+    .filter((rel) => rel.endsWith(".html") && !rel.endsWith(".src.html"));
   // slug: the request path with separators folded, so it survives as one filename segment.
   const slugOf = (assetPath) => assetPath.replace(/\.html$/, "").replace(/\//g, "__");
 
