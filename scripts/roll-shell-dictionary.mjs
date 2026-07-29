@@ -16,8 +16,8 @@
 // useful cadence is "occasionally", not "every deploy".
 
 import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
-import { brotliCompressSync, brotliDecompressSync, constants as zc } from "node:zlib";
 import { existsSync } from "node:fs";
+import { brotliCompressSync, constants as zc } from "node:zlib";
 
 const BUILT = ".build/holding/a";
 const DICTS = "holding/a-dict";
@@ -73,16 +73,11 @@ console.log(`shell:roll — adopted ${adopted}, pruned ${pruned}, keeping ${KEEP
 console.log("  Commit holding/a-dict/. build.mjs regenerates the deltas on its own from here.");
 
 // ── PAGE DICTIONARIES (holding/p-dict) ──────────────────────────────────────────
-// The same roll, for the 30 static garage/lwe pages. Without this the page dictionary
-// set decays exactly the way a-dict did before #117: seeded once, covering only the
-// version nobody holds anymore. Snapshots are stored BROTLI'd (build input, never
-// served, round-trips exactly), which keeps the committed weight ~75% down.
-//
-// KEEP is 2 here, not 3. A page delta serves whoever holds the CURRENT or PREVIOUS
-// version of that page; pages change one at a time (unlike the shell, which ripples
-// through every page on any hash change), so the third candidate would mostly cover
-// visitors of a version two edits back — while doubling the committed weight of the
-// biggest directory in the repo.
+// Static pages have two useful dictionary populations. The immutable family corpus
+// reaches every visitor who has loaded any page; these committed snapshots recover
+// the 93-97% per-page ratio for visitors returning to a page they already hold.
+// Snapshots are stored Brotli-compressed (build input only, never served), so the
+// committed weight stays bounded while the dictionary bytes round-trip exactly.
 {
   const BUILT_PAGES = ".build/holding";
   const PDICTS = "holding/p-dict";
@@ -92,12 +87,8 @@ console.log("  Commit holding/a-dict/. build.mjs regenerates the deltas on its o
     return m ? { slug: m[1], tag: m[2], name: n } : null;
   };
   await mkdir(PDICTS, { recursive: true });
-  const staged = [];
-  for (const dir of ["garage", "lwe"]) {
-    for (const rel of await readdir(`${BUILT_PAGES}/${dir}`, { recursive: true }).catch(() => [])) {
-      if (rel.endsWith(".html") && !rel.endsWith(".src.html")) staged.push(`${dir}/${rel}`);
-    }
-  }
+  const staged = (await readdir(BUILT_PAGES, { recursive: true }))
+    .filter((rel) => rel.endsWith(".html") && !rel.endsWith(".src.html") && rel !== "index.html");
   const liveSlugs = new Set();
   let adopted = 0, pruned = 0;
   const { createHash } = await import("node:crypto");
@@ -114,8 +105,6 @@ console.log("  Commit holding/a-dict/. build.mjs regenerates the deltas on its o
   }
   const byent = new Map();
   for (const d of (await readdir(PDICTS)).map(parse).filter(Boolean)) {
-    // A slug that no longer exists on the site keeps no candidates at all: its deltas
-    // could never be requested, and the dead snapshots would sit in git forever.
     if (!liveSlugs.has(d.slug)) { await rm(`${PDICTS}/${d.name}`, { force: true }); pruned++; continue; }
     if (!byent.has(d.slug)) byent.set(d.slug, []);
     byent.get(d.slug).push(d);

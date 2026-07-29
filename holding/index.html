@@ -38,99 +38,6 @@
 <meta property="og:description" content="Hey! I research and invest in interesting tech-oriented stuff and the people that make them.">
 <meta property="og:url" content="https://aadhar.sh/">
 
-<!-- canonical entity graph (schema.org / JSON-LD). this is the machine-
-     readable source of truth for "who is Aadharsh Pannirselvam": one
-     Person node, the WebSite it authors, and the ProfilePage about it,
-     with sameAs consolidating every owned profile so knowledge graphs
-     and answer engines reconcile them to this domain as canonical.
-     non-executable data block — not subject to script-src CSP.
-     keep facts here strictly to what the site actually states; sameAs
-     links must be verified-correct (a wrong one pollutes the graph). -->
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@graph": [
-    {
-      "@type": "Person",
-      "@id": "https://aadhar.sh/#person",
-      "name": "Aadharsh Pannirselvam",
-      "url": "https://aadhar.sh/",
-      "jobTitle": "Investor and Researcher",
-      "worksFor": {
-        "@type": "Organization",
-        "@id": "https://www.archetype.fund/#organization",
-        "name": "Archetype",
-        "url": "https://www.archetype.fund/"
-      },
-      "description": "Researcher and investor at Archetype, a crypto-native venture firm.",
-      "email": "coffee@aadhar.sh",
-      "knowsAbout": [
-        "cryptography",
-        "privacy-enhancing technologies",
-        "fully homomorphic encryption",
-        "multi-party computation",
-        "trusted execution environments",
-        "zero-knowledge proofs",
-        "venture capital",
-        "cryptocurrency",
-        "economics",
-        "data science"
-      ],
-      "alumniOf": {
-        "@type": "CollegeOrUniversity",
-        "name": "University of Chicago",
-        "sameAs": "https://www.uchicago.edu/"
-      },
-      "identifier": {
-        "@type": "PropertyValue",
-        "propertyID": "ENS",
-        "value": "aadharsh.eth"
-      },
-      "sameAs": [
-        "https://x.com/oddhash",
-        "https://www.instagram.com/aadharsh.hif",
-        "https://github.com/oddharsh",
-        "https://www.linkedin.com/in/aadharsh-pannirselvam",
-        "https://open.spotify.com/user/aadharsh2010",
-        "https://curius.app/aadharsh-pannirselvam",
-        "https://beliapp.com/users/aadharsh",
-        "https://app.ens.domains/aadharsh.eth"
-      ],
-      "subjectOf": {
-        "@type": "DigitalDocument",
-        "name": "Aadharsh Pannirselvam - Resume",
-        "url": "https://aadhar.sh/resume.pdf",
-        "encodingFormat": "application/pdf",
-        "encoding": [
-          { "@type": "MediaObject", "contentUrl": "https://aadhar.sh/resume.pdf", "encodingFormat": "application/pdf" },
-          { "@type": "MediaObject", "contentUrl": "https://aadhar.sh/resume.md", "encodingFormat": "text/markdown" },
-          { "@type": "MediaObject", "contentUrl": "https://aadhar.sh/resume.json", "encodingFormat": "application/json" }
-        ]
-      }
-    },
-    {
-      "@type": "WebSite",
-      "@id": "https://aadhar.sh/#website",
-      "url": "https://aadhar.sh/",
-      "name": "aadhar.sh",
-      "description": "Aadharsh's resto-modded corner of the internet",
-      "inLanguage": "en",
-      "author": { "@id": "https://aadhar.sh/#person" },
-      "publisher": { "@id": "https://aadhar.sh/#person" }
-    },
-    {
-      "@type": "ProfilePage",
-      "@id": "https://aadhar.sh/#webpage",
-      "url": "https://aadhar.sh/",
-      "name": "Aadharsh Pannirselvam",
-      "isPartOf": { "@id": "https://aadhar.sh/#website" },
-      "about": { "@id": "https://aadhar.sh/#person" },
-      "mainEntity": { "@id": "https://aadhar.sh/#person" }
-    }
-  ]
-}
-</script>
-
 <style>
 /* ── Luna design tokens — canonical set in design/tokens/ (keep in sync).
    inlined (no external sheet) for the one-request perf design; the --hue-luna /
@@ -353,173 +260,6 @@ hr {
   height: 0;
 }
 
-/* now-playing list: a section backed by the Worker's /rn/tracks snapshot that renders each
-   track as a link to song.link (cross-platform redirect). styled like a
-   period-correct Windows-list view — alternating row tint, monospace title
-   column, navy heading, hairline divider. */
-.now-playing {
-  /* 32px top + 32px bottom on the h2 below gives the heading symmetric
-     breathing room — visually centered in the gap between the photo
-     grid above and the tracklist below. went through a few iterations:
-       18/6  → ascenders touched photos above
-       32/6  → top good but rule crowded the tracklist below
-       24/24 → both gaps too tight (24px collapses with photos' 24px)
-       32/32 → roomy and symmetric. landed here.
-     (we used to set `content-visibility: auto` here as a "skip rendering
-     when off-screen" optimization, but the viewability checks ran on
-     every scroll and on variable-refresh displays in Low Power mode
-     they cost more than the savings. with the list ~500px tall on a
-     short page, the savings were marginal anyway.) */
-  margin: 32px 0 4px;
-}
-.now-playing h2 {
-  font-family: var(--font-caption);
-  font-size: 12pt;
-  color: oklch(41.92% 0.0962 250.51);
-  /* balance: evens the two lines this heading wraps to on narrow widths
-     instead of leaving one word on line 2. broadly supported; no-op
-     where unsupported. */
-  text-wrap: balance;
-  /* 32px bottom matches the 32px top margin on .now-playing so the h2
-     (text + ::after rule) sits visually centered between photos and
-     tracklist. */
-  margin: 0 0 32px;
-  font-weight: bold;
-  line-height: 1.3;
-  /* the rule lives on a pseudo-element with an explicit margin-top
-     rather than border-bottom + padding-bottom. Safari's font-metric
-     rounding leaves Trebuchet's "g"/"y" descenders kissing or crossing
-     a border-bottom even at 6-8px padding, because Safari's line-box
-     measurement differs from Chrome/Firefox at 12pt Trebuchet. a
-     block-level pseudo with margin-top sits a fixed distance below
-     the line-box and is immune to that. */
-}
-.now-playing h2::after {
-  content: "";
-  display: block;
-  height: 1px;
-  background: oklch(86.67% 0.0294 259.59);
-  margin-top: 8px;
-}
-.now-playing h2 a {
-  color: inherit;
-  text-decoration: none;
-}
-/* the "open the playlist" cue on the heading: small + muted so the link reads
-   as "this opens the playlist" rather than as a second generic music link. the
-   profile links (footer Spotify, taskbar Music) stay distinct = my profile. */
-.now-playing h2 .np-open {
-  font-family: var(--font-ui);
-  font-size: 9pt;
-  font-weight: normal;
-  color: oklch(52% 0.03 255);
-  white-space: nowrap;
-}
-.now-playing h2 a:hover {
-  color: oklch(62.80% 0.2577 29.23);
-  text-decoration: underline;
-}
-.np-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  /* A real sunken client area, two pixels deep, not the 1px hairline this used
-     to be. The window scroller clips this list wherever the scroll happens to
-     land, so a row is often cut in half at the bottom edge; with only a
-     hairline frame that cut landed visually on the window's blue border and
-     read as a rendering fault rather than as "there is more below". The deeper
-     well is what every XP list control had, and it is what makes a partial row
-     read as a viewport instead of as breakage.
-     Shape is canon's --bevel-sunken-deep (inset dark top-left, inset light
-     bottom-right). Colours are the list's OWN blue-grey pair rather than the
-     token literals, because the beige --darkshadow would clash here and colour
-     tokens are deliberately not inlined into served pages (CLAUDE.md hard rule 2). */
-  border: 1px solid oklch(61.14% 0.0611 253.60);
-  border-top-color: oklch(47.12% 0.0555 253.58);
-  border-left-color: oklch(47.12% 0.0555 253.58);
-  background: oklch(100.00% 0 0);
-  position: relative;
-}
-/* The inner ring of that bevel rides in an ::after overlay rather than in the
-   list's own box-shadow, because an inset shadow paints in the element's OWN
-   background layer and every child background then paints on top of it. Rows
-   start exactly 1px inside the border (measured: list left 334, row left 335),
-   which is precisely the band the shadow occupies, so the striped even rows
-   were painting it out and the left edge alternated 2px dark / 1px dark down
-   the list. The overlay is a positioned box, so it paints ABOVE the row
-   backgrounds and the well reads one uniform weight on every row. */
-.np-list::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  box-shadow: inset 1px 1px 0 oklch(47.12% 0.0555 253.58),
-              inset -1px -1px 0 oklch(100.00% 0 0);
-}
-.np-list li {
-  padding: 5px 8px;
-  border-bottom: 1px solid oklch(92.73% 0.0139 247.98);
-  font-size: 10pt;
-  line-height: 1.35;
-}
-.np-list li:nth-child(even) { background: oklch(97.50% 0.0062 255.47); }
-.np-list li:last-child { border-bottom: none; }
-.np-list .np-empty {
-  color: oklch(62.68% 0 0);
-  font-style: italic;
-  text-align: center;
-  padding: 12px;
-}
-.np-list a {
-  text-decoration: none;
-  color: oklch(21.78% 0 0);
-  display: block;
-}
-.np-list a:hover { background: oklch(97.73% 0.0373 95.44); }
-.np-list a:hover .np-title { color: oklch(62.80% 0.2577 29.23); }
-.np-title {
-  font-weight: bold;
-  color: oklch(41.92% 0.0962 250.51);
-}
-.np-sep {
-  color: oklch(62.68% 0 0);
-  margin: 0 4px;
-}
-.np-artist {
-  color: oklch(38.67% 0 0);
-}
-/* artist names render as spans (not anchors — they live inside the row's
-   outer <a>, where nested anchors are invalid). underline on hover + the
-   row-link color makes their interactivity obvious; cursor: pointer
-   covers the affordance. keyboard focus uses the default outline. */
-.np-artist-link {
-  cursor: pointer;
-}
-.np-artist-link:hover,
-.np-artist-link:focus-visible {
-  color: oklch(42.61% 0.2353 263.74);
-  text-decoration: underline;
-}
-.np-explicit {
-  display: inline-block;
-  font-family: var(--font-mono);
-  font-size: 8pt;
-  font-weight: bold;
-  color: oklch(51.03% 0 0);
-  background: oklch(94.91% 0 0);
-  border: 1px solid oklch(84.52% 0 0);
-  padding: 0 3px;
-  margin-left: 4px;
-  vertical-align: middle;
-}
-.np-duration {
-  font-family: var(--font-mono);
-  font-size: 9pt;
-  color: oklch(62.68% 0 0);
-  float: right;
-  margin-left: 8px;
-}
-
 /* photo grid: each tile in a raised frame, like a contact sheet from
    a 2003 personal site. */
 .photos {
@@ -615,213 +355,6 @@ footer .signature small { color: oklch(56.93% 0 0); }
    visibly behind the hardware pointer. native cursors restore the
    normal hardware-rate movement. window chrome alone carries the
    resto-mod feel without needing to override the pointer.) */
-
-/* cursor position, written to --x/--y by the tooltip JS on pointermove.
-   registered as typed <length> so they're valid in calc(); positioning
-   is done entirely in CSS below (no JS rAF, no getBoundingClientRect). */
-@property --x { syntax: "<length>"; inherits: false; initial-value: 0px; }
-@property --y { syntax: "<length>"; inherits: false; initial-value: 0px; }
-
-/* XP-style tooltip for photo + track + artist hover. shows EXIF (photos),
-   album art (tracks), or profile pic (artists), inlined per-element so
-   there's no fetch on first hover. positioned near the cursor with a hard
-   snap — JS writes --x/--y, CSS does translate(clamp(...)). the clamp
-   keeps it on-screen using the element's own size (100%), so it stays
-   correct even as a cover image sizes the box; no JS measuring, no
-   will-change (nothing animates), no resize listener. */
-.xp-tooltip {
-  position: fixed;
-  /* the element is a popover (top layer). the UA stylesheet gives open
-     popovers inset:0 + margin:auto, which would center it and fight our
-     cursor anchor — neutralize with inset:auto + margin:0, then re-assert
-     the top-left origin the translate() works from. */
-  inset: auto;
-  top: 0;
-  left: 0;
-  margin: 0;
-  transform: translate(
-    clamp(4px, calc(var(--x) + 16px), calc(100vw - 100% - 8px)),
-    clamp(4px, calc(var(--y) + 16px), calc(100vh - 100% - 8px))
-  );
-  background: oklch(98.92% 0.0398 96.79);
-  color: oklch(20.00% 0 0);
-  border: 1px solid oklch(15.00% 0 0);
-  font-family: var(--font-ui);
-  font-size: 11px;
-  padding: 4px 8px;
-  box-shadow: 2px 2px 0 oklch(15.00% 0 0 / 0.15);
-  pointer-events: none;
-  z-index: 10000;
-  display: none;          /* base/fallback hidden state (also the closed state) */
-  max-width: 280px;
-  line-height: 1.45;
-}
-/* keyboard-focus placement: cursor-follow needs a live pointer, so when a
-   target is focused via keyboard the tooltip tethers to it instead via CSS
-   anchor positioning (position-try flips at viewport edges). POINTER hover
-   always cursor-follows — the anchored-hover experiment (2026-07-03) shipped
-   and was rolled back the same day by owner ruling: gliding the album art
-   with the cursor is the site's identity, same as the photo camera-back.
-   Chrome 125+ / Safari 26 / Firefox 147; unsupported engines never get the
-   class, so keyboard users there are no worse off than before. */
-.xp-tooltip.anchored {
-  position-anchor: --xp-tip;
-  position-area: bottom span-right;
-  top: auto;
-  left: auto;
-  transform: none;
-  margin: 6px 0 0;
-  position-try-fallbacks: flip-block, flip-inline;
-}
-/* popover path: gated on :popover-open support so non-supporting engines
-   fall back cleanly (they keep the plain display:none above; the JS sets
-   inline display:block for them). the tooltip is hover-only (the JS bails on
-   touch), so on desktop it snaps in the instant the cursor lands on a thumb
-   or row — no fade-in delay. position hard-snaps too (transform never
-   transitions). */
-@supports selector(:popover-open) {
-  .xp-tooltip:popover-open { display: block; }
-  /* keyboard-anchored tips fade IN over 120ms; pointer tips (all of them,
-     cursor-following) keep their hard snap — no transition without .anchored. */
-  .xp-tooltip.anchored:popover-open { transition: opacity 120ms ease-out; }
-  @starting-style {
-    .xp-tooltip.anchored:popover-open { opacity: 0; }
-  }
-}
-.xp-tooltip .filename {
-  font-weight: bold;
-  color: oklch(15.00% 0 0);
-  /* reserve space for the flash bolt corner indicator when present */
-  padding-right: 14px;
-}
-.xp-tooltip .row {
-  color: oklch(38.00% 0 0);
-  font-size: 10.5px;
-}
-.xp-tooltip .row + .row { margin-top: 1px; }
-
-/* flash bolt: pinned to the top-right corner of the tooltip when the
-   EXIF Flash field matches "Fired" or "On". amber color reads as "lit",
-   small drop-shadow gives a faint glow against the cream background.
-   the <span> wraps an inline SVG path; sized to ~8×12px so it sits
-   beside the filename without dominating it. */
-.xp-tooltip .flash-bolt {
-  position: absolute;
-  top: 6px;
-  right: 8px;
-  display: inline-flex;
-  align-items: center;
-  color: oklch(58% 0.2 75);
-  filter: drop-shadow(0 0 1.5px oklch(58% 0.2 75 / 0.4));
-}
-.xp-tooltip .flash-bolt svg { display: block; }
-
-/* ── photo tooltip → XP camera-back review readout ─────────────────────
-   header strip (filename + flash), sunken histogram band (lazy-loaded),
-   exposure trio, the full Fuji recipe as rows, date footer. ported from
-   /garage/tooltips. fixed width so the header/frame span edge-to-edge. */
-.xp-tooltip:has(.cam) { width: 250px; max-width: 250px; }
-.xp-tooltip .cam { margin: -4px -8px; }
-.xp-tooltip .cam .header {
-  background: linear-gradient(180deg, oklch(94.66% 0.0114 252.09), oklch(85.04% 0.0283 248.16));
-  border-bottom: 1px solid oklch(61.14% 0.0611 253.60);
-  padding: 3px 8px; font-weight: bold; color: oklch(41.92% 0.0962 250.51);
-  font-family: var(--font-caption); font-size: 10.5px;
-  display: flex; align-items: center; justify-content: space-between; gap: 6px;
-}
-.xp-tooltip .cam .header span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* flash bolt sits inline in the header here, not in the tooltip corner */
-.xp-tooltip .cam .flash-bolt { position: static; top: auto; right: auto; flex-shrink: 0; color: oklch(58% 0.18 75); filter: none; }
-.xp-tooltip .cam .histogram-frame {
-  margin: 6px 8px 0; height: 36px; position: relative; overflow: hidden;
-  border: 1px solid oklch(61.14% 0.0611 253.60);
-  border-top-color: oklch(47.12% 0.0555 253.58); border-left-color: oklch(47.12% 0.0555 253.58);
-  background: oklch(100% 0 0);
-}
-.xp-tooltip .cam .hist-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
-.xp-tooltip .cam .hist-svg .luma { fill: oklch(35% 0 0); opacity: 0.35; }
-.xp-tooltip .cam .hist-svg polyline { fill: none; stroke-width: 1; vector-effect: non-scaling-stroke; mix-blend-mode: multiply; }
-.xp-tooltip .cam .hist-svg .r { stroke: oklch(45% 0.22 25); }
-.xp-tooltip .cam .hist-svg .g { stroke: oklch(50% 0.20 145); }
-.xp-tooltip .cam .hist-svg .b { stroke: oklch(45% 0.22 260); }
-.xp-tooltip .cam .body { padding: 6px 9px 4px; }
-.xp-tooltip .cam .exposure { font-variant-numeric: tabular-nums; font-size: 12.5px; font-weight: bold; color: oklch(15% 0 0); letter-spacing: 0.02em; }
-.xp-tooltip .cam .meta-strip { font-size: 9.5px; color: oklch(48% 0 0); margin: 1px 0 5px; }
-.xp-tooltip .cam .recipe-rows { display: grid; grid-template-columns: auto 1fr; column-gap: 8px; row-gap: 1px; margin: 0; font-size: 10.5px; }
-.xp-tooltip .cam .recipe-rows dt { color: oklch(48% 0 0); white-space: nowrap; }
-.xp-tooltip .cam .recipe-rows dd { margin: 0; color: oklch(18% 0 0); text-align: right; }
-.xp-tooltip .cam .footer {
-  display: flex; justify-content: space-between; padding: 3px 9px 4px;
-  border-top: 1px solid oklch(86.67% 0.0294 259.59); margin-top: 5px;
-  font-size: 9px; color: oklch(52% 0 0); font-family: var(--font-mono);
-}
-
-/* album popover: just the cover image in a contact-sheet-style raised
-   frame. textual metadata stays in the row itself — no point repeating
-   it in the tooltip. the frame matches the .photos a treatment so the
-   site has one consistent "photo in a paper border" idiom. */
-.xp-tooltip .album-pop {
-  padding: 0;
-  margin: -4px -8px;     /* pull to tooltip edges; no inner padding gap */
-}
-.xp-tooltip .cover.album {
-  display: block;
-  width: 120px;
-  height: 120px;
-  object-fit: cover;
-  background: oklch(94% 0.005 240);
-  /* paper-mat border matching the photo tiles */
-  border: 3px solid oklch(100% 0 0);
-  outline: 1px solid oklch(61.14% 0.0611 253.60);
-  outline-offset: -1px;
-}
-
-/* (the earlier two-column .track-card layout was removed when album and
-   artist tooltips both moved to the .album-pop frame-only treatment.) */
-
-/* resto-mod car popover: a landscape photo of the car a text link names,
-   in the same paper-mat frame as the photo tiles, with a small caption
-   strip underneath. reuses the cursor-following tooltip plumbing — the
-   car links are just another findTarget shape. */
-.xp-tooltip .car-pop {
-  padding: 0;
-  margin: -4px -8px;
-}
-.xp-tooltip .car-pop img {
-  display: block;
-  width: 240px;
-  height: 160px;
-  object-fit: cover;
-  background: oklch(94% 0.005 240);
-  border: 3px solid oklch(100% 0 0);
-  outline: 1px solid oklch(61.14% 0.0611 253.60);
-  outline-offset: -1px;
-}
-.xp-tooltip .car-cap {
-  width: 240px;
-  margin: 0 3px 3px;
-  padding: 3px 5px;
-  font-size: 8.5pt;
-  color: oklch(38% 0 0);
-  background: oklch(96% 0.004 240);
-  border: 1px solid oklch(61.14% 0.0611 253.60);
-  border-top: none;
-  box-sizing: border-box;
-}
-/* photographer attribution for the CC BY-SA Commons photos. quiet — it's a
-   credit, not a headline — but present at the point the image is shown. */
-.xp-tooltip .car-credit {
-  display: block;
-  margin-top: 1px;
-  font-size: 7.5pt;
-  color: oklch(58% 0 0);
-}
-/* the car links read as ordinary text links; a dotted underline marks
-   them as "hover for a picture" without shouting. needs to out-specify the
-   `a:link { text-decoration: underline }` rule, whose shorthand resets the
-   style to solid — so match on a.car-link:link/:visited. */
-a.car-link:link,
-a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; }
 
 /* ─── wide-gamut overrides ────────────────────────────────────────────
    on Display P3 displays, push the user-action accents (links, hovers,
@@ -1154,9 +687,70 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
       </a>
     </section>
 
-    <!-- The Worker fills these reserved photo slots in the first HTML response.
-         There is no client fallback: if the edge cannot provide photos, the
-         honest path is the browse link below. -->
+    <!-- Native loading=lazy uses a viewport-distance heuristic that reaches far
+         past this page's internal .content scroller: a 390px Slow-4G trace
+         fetched eight of twelve thumbnails even though only the first tile was
+         visible. The Worker leaves slots 2-12 as data-* URLs. Desktop visitors
+         normally see two or three photo rows in the initial window, so hydrate
+         every tile that intersects that real scrollport synchronously. Mobile
+         keeps only slot 1 on the initial critical path, then starts observation
+         after the text paint. A 5% threshold avoids transferring the next row
+         when only a couple of pixels touch the bottom edge. Browsers without
+         IntersectionObserver load the full selected set; the <noscript>
+         pictures emitted beside each deferred slot preserve the script-off
+         path. -->
+    <script>
+    (() => {
+      const start = () => {
+        const root = document.querySelector(".content");
+        const pictures = [...document.querySelectorAll(".photos picture[data-photo-deferred]")];
+        if (!root || !pictures.length) return;
+        const load = (picture) => {
+          for (const source of picture.querySelectorAll("source[data-srcset]")) {
+            source.srcset = source.dataset.srcset;
+            source.removeAttribute("data-srcset");
+          }
+          const image = picture.querySelector("img[data-src]");
+          if (image) {
+            image.src = image.dataset.src;
+            image.removeAttribute("data-src");
+          }
+          picture.removeAttribute("data-photo-deferred");
+        };
+        if (!("IntersectionObserver" in window)) {
+          pictures.forEach(load);
+          return;
+        }
+        const desktop = matchMedia("(min-width: 561px)").matches;
+        const rootRect = desktop ? root.getBoundingClientRect() : null;
+        const observer = new IntersectionObserver((entries) => {
+          for (const entry of entries) {
+            if (!entry.isIntersecting) continue;
+            observer.unobserve(entry.target);
+            load(entry.target);
+          }
+        }, { root, threshold: 0.05 });
+        for (const picture of pictures) {
+          if (desktop) {
+            const rect = picture.getBoundingClientRect();
+            const overlap = Math.min(rect.bottom, rootRect.bottom) -
+              Math.max(rect.top, rootRect.top);
+            if (overlap >= rect.height * 0.05) {
+              load(picture);
+              continue;
+            }
+          }
+          observer.observe(picture);
+        }
+      };
+      if (matchMedia("(min-width: 561px)").matches) start();
+      else requestAnimationFrame(() => requestAnimationFrame(start));
+    })();
+    </script>
+
+    <!-- The Worker selects all 12 photos in the first HTML response. The
+         observer only controls when their already-selected thumbnail URLs
+         become network requests; it never changes the random draw. -->
     <noscript><p class="photos-nojs">Photos are server-rendered when available. <a href="/photos">Browse all photos</a>.</p></noscript>
 
 
@@ -1266,6 +860,97 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
   </div>
 </div>
 
+<!-- Canonical entity graph (schema.org / JSON-LD). Google supports JSON-LD in
+     either <head> or <body>; keeping this non-rendering data after the visible
+     window lets the browser reach the text LCP earlier without weakening the
+     machine-readable identity contract. This remains the source of truth for
+     "who is Aadharsh Pannirselvam": one Person node, the WebSite it authors,
+     and the ProfilePage about it. Keep every fact verified-correct. -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Person",
+      "@id": "https://aadhar.sh/#person",
+      "name": "Aadharsh Pannirselvam",
+      "url": "https://aadhar.sh/",
+      "jobTitle": "Investor and Researcher",
+      "worksFor": {
+        "@type": "Organization",
+        "@id": "https://www.archetype.fund/#organization",
+        "name": "Archetype",
+        "url": "https://www.archetype.fund/"
+      },
+      "description": "Researcher and investor at Archetype, a crypto-native venture firm.",
+      "email": "coffee@aadhar.sh",
+      "knowsAbout": [
+        "cryptography",
+        "privacy-enhancing technologies",
+        "fully homomorphic encryption",
+        "multi-party computation",
+        "trusted execution environments",
+        "zero-knowledge proofs",
+        "venture capital",
+        "cryptocurrency",
+        "economics",
+        "data science"
+      ],
+      "alumniOf": {
+        "@type": "CollegeOrUniversity",
+        "name": "University of Chicago",
+        "sameAs": "https://www.uchicago.edu/"
+      },
+      "identifier": {
+        "@type": "PropertyValue",
+        "propertyID": "ENS",
+        "value": "aadharsh.eth"
+      },
+      "sameAs": [
+        "https://x.com/oddhash",
+        "https://www.instagram.com/aadharsh.hif",
+        "https://github.com/oddharsh",
+        "https://www.linkedin.com/in/aadharsh-pannirselvam",
+        "https://open.spotify.com/user/aadharsh2010",
+        "https://curius.app/aadharsh-pannirselvam",
+        "https://beliapp.com/users/aadharsh",
+        "https://app.ens.domains/aadharsh.eth"
+      ],
+      "subjectOf": {
+        "@type": "DigitalDocument",
+        "name": "Aadharsh Pannirselvam - Resume",
+        "url": "https://aadhar.sh/resume.pdf",
+        "encodingFormat": "application/pdf",
+        "encoding": [
+          { "@type": "MediaObject", "contentUrl": "https://aadhar.sh/resume.pdf", "encodingFormat": "application/pdf" },
+          { "@type": "MediaObject", "contentUrl": "https://aadhar.sh/resume.md", "encodingFormat": "text/markdown" },
+          { "@type": "MediaObject", "contentUrl": "https://aadhar.sh/resume.json", "encodingFormat": "application/json" }
+        ]
+      }
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://aadhar.sh/#website",
+      "url": "https://aadhar.sh/",
+      "name": "aadhar.sh",
+      "description": "Aadharsh's resto-modded corner of the internet",
+      "inLanguage": "en",
+      "author": { "@id": "https://aadhar.sh/#person" },
+      "publisher": { "@id": "https://aadhar.sh/#person" }
+    },
+    {
+      "@type": "ProfilePage",
+      "@id": "https://aadhar.sh/#webpage",
+      "url": "https://aadhar.sh/",
+      "name": "Aadharsh Pannirselvam",
+      "isPartOf": { "@id": "https://aadhar.sh/#website" },
+      "about": { "@id": "https://aadhar.sh/#person" },
+      "mainEntity": { "@id": "https://aadhar.sh/#person" }
+    }
+  ]
+}
+</script>
+
 <!--
   custom right-click context menu lived here. dropped in the lightness
   pass — it was ~5KB of JS that recreated browser-native behavior
@@ -1347,8 +1032,9 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
 
     <!--
       Rich XP tooltips are an interaction island. The tiny loader below stays
-      inline so it can capture the very first hover; the cacheable implementation
-      is prefetched during idle and replayed against that target if necessary.
+      inline so it can capture the very first hover and replay it once the
+      cacheable implementation arrives. It does not prefetch on idle: visitors
+      who never hover transfer no tooltip JavaScript or EXIF index.
       Touch/coarse-pointer visitors never load it.
     -->
     <script>
@@ -1408,15 +1094,6 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
         load();
       }, { passive: true });
 
-      // Warm after the critical page work. This pays the module transfer for
-      // visitors who linger, but keeps it out of LCP and makes the first
-      // intentional tooltip as fast as the second. Never warm a prerender.
-      const warm = () => {
-        if (window.requestIdleCallback) requestIdleCallback(load, { timeout: 1500 });
-        else setTimeout(load, 1000);
-      };
-      if (document.prerendering) addEventListener("prerenderingchange", warm, { once: true });
-      else warm();
     })();
     </script>
 

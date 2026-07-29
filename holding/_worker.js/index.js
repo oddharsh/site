@@ -23,6 +23,7 @@ import { CANONICAL_HOST } from "./lib/const.js";
 import { wantsMarkdown } from "./lib/http.js";
 import { handleSiteMcp } from "./mcp.js";
 import { withSecurityHeaders } from "./lib/security.js";
+import { SHELL_PRELOAD_LINK } from "./lib/shell-assets.js";
 import { getThumbHashes, handleImagesManifest, handlePhotoQuery, handlePhotos, servePhotoFromR2 } from "./photos.js";
 import { handleReading } from "./reading.js";
 import { handleRun } from "./run.js";
@@ -178,7 +179,7 @@ const ROUTES = new Map([
   ["/updates.json", handleUpdatesJson],
   ["/restore", handleSystemRestore],
 
-  ["/lens", handleLens],
+  ["/lens", routeLens],
   ["/lens/", routeDropSlash],
   ["/lens/fetch", handleLensFetch],
   ["/lens/shot", handleLensShot],
@@ -201,7 +202,7 @@ const ROUTES = new Map([
   ["/ledger", handleLedger],
   ["/ledger.json", handleLedgerJson],
 
-  ["/writing", handleWritingIndex],
+  ["/writing", routeWritingIndex],
   ["/writing/", routeDropSlash],
 
   // webmention: the open web's way to say "I linked to you." The endpoint takes
@@ -306,8 +307,13 @@ const PREFIX = [
     handle: routeStaticPage,
   },
   {
+    label: "/pixel-peeper/<page>",
+    match: (pathname) => pathname === "/pixel-peeper" || pathname.startsWith("/pixel-peeper/"),
+    handle: routeStaticPage,
+  },
+  {
     label: "/a/<asset>",
-    match: (pathname) => /^\/a\/[^/]+\.[0-9a-f]{8}\.(js|css|svg)$/.test(pathname),
+    match: (pathname) => /^\/a\/[^/]+\.[0-9a-f]{8}\.(js|css|svg|dict)$/.test(pathname),
     handle: routeShellAsset,
   },
 ];
@@ -497,9 +503,41 @@ function routeDropSlash(_request, _env, _ctx, url) {
   return Response.redirect(url.origin + url.pathname.replace(/\/+$/, "") + url.search, 301);
 }
 
-function routeWritingPost(request, env, ctx, url) {
+async function routeWritingPost(request, env, ctx, url) {
   const slug = url.pathname.slice("/writing/".length);
+  const response = await serveGeneratedWriting(request, env);
+  if (response.status !== 404) return response;
+  try { await response.body?.cancel(); } catch {}
   return handleWritingPost(request, slug, env, ctx);
+}
+
+const GENERATED_PAGE_HEADERS = {
+  "cache-control": "public, max-age=0, must-revalidate, s-maxage=86400",
+  "link": SHELL_PRELOAD_LINK,
+};
+
+function routeLens(request, env, ctx, url) {
+  // A target-bearing Lens response spends crawler/browser budget and contains
+  // third-party data, so it remains the live no-store Worker path. The bare,
+  // deterministic shell is now a built q11/DCZ/304 static page.
+  if (url.searchParams.get("url")) return handleLens(request, env, ctx);
+  return serveStaticPage(request, env, { headers: GENERATED_PAGE_HEADERS });
+}
+
+async function routeWritingIndex(request, env, ctx) {
+  const response = await serveGeneratedWriting(request, env);
+  if (response.status !== 404) return response;
+  try { await response.body?.cancel(); } catch {}
+  return handleWritingIndex(request, env, ctx);
+}
+
+function serveGeneratedWriting(request, env) {
+  return serveStaticPage(request, env, {
+    headers: {
+      ...GENERATED_PAGE_HEADERS,
+      "link": `${SHELL_PRELOAD_LINK}, </webmention>; rel="webmention"`,
+    },
+  });
 }
 
 function routeImagesMetadata(request, env) {

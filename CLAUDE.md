@@ -292,9 +292,9 @@ in hand.
 
 Negotiation is a bonus on top, not the mechanism: `Accept: text/markdown` at the
 page's own URL works wherever the Worker already sees the request
-(`/garage/*`, `/lwe/*`, `/`, `/bot`, `/whoareyou` — the first two are worker-first
-already, for dcz deltas, so this costs no new invocations). Edge-direct pages
-like `/pixel-peeper` answer at their `.md` URL only. The negotiated response is
+(`/garage/*`, `/lwe/*`, `/pixel-peeper*`, `/`, `/bot`, `/whoareyou` — the static
+ones are worker-first already, for dcz deltas, so this costs no new invocations).
+A page that is still edge-direct answers at its `.md` URL only. The negotiated response is
 `no-store` because the edge caches per URL, not per Accept; the `.md` URL is the
 cacheable representation.
 
@@ -671,12 +671,28 @@ npm run deploy
     step to forget, and no staleness tripwire needed, because a delta is a pure
     function of bytes the build just produced.
 
-    What still has to be committed is `holding/a-dict/`, the DICTIONARY set, because
-    a dictionary must be bytes the BROWSER already holds and no build can derive
-    that from source. `npm run shell:roll` adopts the current shell and prunes to 3
-    per asset; it stays a human step because it writes into the source tree, which
+    What still has to be committed is `holding/a-dict/`, the SHELL dictionary set,
+    because an `/a/` asset is content-addressed: a change mints a new URL, so its
+    dictionary must be bytes the BROWSER already holds and no build can derive that
+    from source. `npm run shell:roll` adopts the current shell and prunes to 3 per
+    asset; it stays a human step because it writes into the source tree, which
     build.mjs must never do. Not urgent either — a dictionary 11 days stale still
     gave 87-93%. `a-dict` is `.assetsignore`d (build input, not a public URL).
+
+    **PAGES use two dictionary tiers.** build.mjs derives ONE raw 64KB family corpus
+    from the staged documents, ships it at an immutable `/a/page-family.<hash8>.dict`,
+    and every HTML response advertises it via `Link: rel="compression-dictionary"`
+    (`lib/security.js`). It also diffs the current page against the committed
+    `holding/p-dict` snapshots from the previous release. The worker tries the
+    `Available-Dictionary` tag it receives, so a returning visitor gets the old
+    per-page ratio (93-97% in the measured set) while a visitor who holds only the
+    family corpus gets the broader fallback (~26% off q11: 298,933 B vs 405,909 B
+    across 38 pages). Both candidates are emitted only when they beat plain q11.
+    `npm run shell:roll` rolls both `a-dict` and `p-dict`; page snapshots are Brotli'd
+    in the repo, ignored by the asset upload, and decompressed only at build time.
+    RFC 9842 requires RAW bytes here: a `zstd --train` artifact is self-describing,
+    the server library reads its tables, Chrome reads the same bytes as content, and
+    the navigation dies on `ERR_CONTENT_DECODING_FAILED`.
 
     **Plain (non-delta) responses stay brotli q11, and that is forced, not chosen.**
     A worker cannot see the client's Accept-Encoding (gotcha 13), so plain zstd is
@@ -684,10 +700,13 @@ npm run deploy
     which doubles as proof the client speaks dcz. So "zstd where it wins" IS the
     delta path. Loader classes differ (#119): js/css dcz proven in production, html
     server-side proven (149-byte page delta decodes to the live page), svg OFF by
-    design (Chromium's image loader chokes). `npm run dcz:check` asserts all of
-    this against production. Roll dictionaries FROM THE DEPLOYED BUILD (main,
-    post-deploy), never from a feature branch: the dictionary must be bytes
-    browsers actually hold, and a branch build is not that.
+    design (Chromium's image loader chokes). `npm run dcz:check` asserts both page
+    tiers against production, reading the family dictionary out of the live `Link`
+    header and the per-page candidate from `holding/p-dict`. Roll SHELL
+    dictionaries FROM THE DEPLOYED BUILD (main, post-deploy), never from a feature
+    branch: the dictionary must be bytes browsers actually hold, and a branch build
+    is not that. (`shell:roll` writes into `holding/a-dict/` the moment it runs —
+    if you run it to read the code, `git checkout -- holding/a-dict` after.)
 
 15. **Attaching CDP's `Network` domain suppresses Chrome's Early-Hints preload,
     so a devtools-driven trace reports a FALSE "the browser ignores our 103."**

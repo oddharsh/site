@@ -759,6 +759,280 @@ box-shadow:inset 1px 1px 0 oklch(100% 0 0),inset -1px -1px 0 oklch(84% 0.02 90)}
 }
 :where(.xp-input:focus) { outline: none; border-color: #316ac5; box-shadow: inset 1px 1px 0 rgba(0,0,0,.20), inset -1px -1px 0 #ffffff, 0 0 0 1px #316ac5; }
 
+/* ───────────────── homepage music island (below the fold) ─────────────────
+   Kept in the immutable shared sheet so a dynamic homepage reload does not
+   retransmit these rules. The visible photo grid keeps its geometry inline. */
+.now-playing { margin: 32px 0 4px; }
+.now-playing h2 {
+  font-family: var(--font-caption);
+  font-size: 12pt;
+  color: oklch(41.92% 0.0962 250.51);
+  text-wrap: balance;
+  margin: 0 0 32px;
+  font-weight: bold;
+  line-height: 1.3;
+}
+.now-playing h2::after {
+  content: "";
+  display: block;
+  height: 1px;
+  background: oklch(86.67% 0.0294 259.59);
+  margin-top: 8px;
+}
+.now-playing h2 a {
+  color: inherit;
+  text-decoration: none;
+}
+.now-playing h2 .np-open {
+  font-family: var(--font-ui);
+  font-size: 9pt;
+  font-weight: normal;
+  color: oklch(52% 0.03 255);
+  white-space: nowrap;
+}
+.now-playing h2 a:hover {
+  color: oklch(62.80% 0.2577 29.23);
+  text-decoration: underline;
+}
+.np-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  border: 1px solid oklch(61.14% 0.0611 253.60);
+  border-top-color: oklch(47.12% 0.0555 253.58);
+  border-left-color: oklch(47.12% 0.0555 253.58);
+  background: oklch(100.00% 0 0);
+  position: relative;
+}
+.np-list::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  box-shadow: inset 1px 1px 0 oklch(47.12% 0.0555 253.58),
+              inset -1px -1px 0 oklch(100.00% 0 0);
+}
+.np-list li {
+  padding: 5px 8px;
+  border-bottom: 1px solid oklch(92.73% 0.0139 247.98);
+  font-size: 10pt;
+  line-height: 1.35;
+}
+.np-list li:nth-child(even) { background: oklch(97.50% 0.0062 255.47); }
+.np-list li:last-child { border-bottom: none; }
+.np-list .np-empty {
+  color: oklch(62.68% 0 0);
+  font-style: italic;
+  text-align: center;
+  padding: 12px;
+}
+.np-list a {
+  text-decoration: none;
+  color: oklch(21.78% 0 0);
+  display: block;
+}
+.np-list a:hover { background: oklch(97.73% 0.0373 95.44); }
+.np-list a:hover .np-title { color: oklch(62.80% 0.2577 29.23); }
+.np-title {
+  font-weight: bold;
+  color: oklch(41.92% 0.0962 250.51);
+}
+.np-sep {
+  color: oklch(62.68% 0 0);
+  margin: 0 4px;
+}
+.np-artist { color: oklch(38.67% 0 0); }
+.np-artist-link { cursor: pointer; }
+.np-artist-link:hover,
+.np-artist-link:focus-visible {
+  color: oklch(42.61% 0.2353 263.74);
+  text-decoration: underline;
+}
+.np-explicit {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 8pt;
+  font-weight: bold;
+  color: oklch(51.03% 0 0);
+  background: oklch(94.91% 0 0);
+  border: 1px solid oklch(84.52% 0 0);
+  padding: 0 3px;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+.np-duration {
+  font-family: var(--font-mono);
+  font-size: 9pt;
+  color: oklch(62.68% 0 0);
+  float: right;
+  margin-left: 8px;
+}
+
+/* ───────────────── homepage hover island (non-critical) ─────────────────
+   This UI is first used on hover/focus, so keep it out of the homepage's
+   render-blocking inline CSS. luna.css is immutable and dictionary-compressed. */
+@property --x { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@property --y { syntax: "<length>"; inherits: false; initial-value: 0px; }
+
+.xp-tooltip {
+  position: fixed;
+  inset: auto;
+  top: 0;
+  left: 0;
+  margin: 0;
+  transform: translate(
+    clamp(4px, calc(var(--x) + 16px), calc(100vw - 100% - 8px)),
+    clamp(4px, calc(var(--y) + 16px), calc(100vh - 100% - 8px))
+  );
+  background: oklch(98.92% 0.0398 96.79);
+  color: oklch(20.00% 0 0);
+  border: 1px solid oklch(15.00% 0 0);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  padding: 4px 8px;
+  box-shadow: 2px 2px 0 oklch(15.00% 0 0 / 0.15);
+  pointer-events: none;
+  z-index: 10000;
+  display: none;
+  max-width: 280px;
+  line-height: 1.45;
+}
+.xp-tooltip.anchored {
+  position-anchor: --xp-tip;
+  position-area: bottom span-right;
+  top: auto;
+  left: auto;
+  transform: none;
+  margin: 6px 0 0;
+  position-try-fallbacks: flip-block, flip-inline;
+}
+@supports selector(:popover-open) {
+  .xp-tooltip:popover-open { display: block; }
+  .xp-tooltip.anchored:popover-open { transition: opacity 120ms ease-out; }
+  @starting-style {
+    .xp-tooltip.anchored:popover-open { opacity: 0; }
+  }
+}
+.xp-tooltip .filename {
+  font-weight: bold;
+  color: oklch(15.00% 0 0);
+  padding-right: 14px;
+}
+.xp-tooltip .row {
+  color: oklch(38.00% 0 0);
+  font-size: 10.5px;
+}
+.xp-tooltip .row + .row { margin-top: 1px; }
+
+.xp-tooltip .flash-bolt {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  color: oklch(58% 0.2 75);
+  filter: drop-shadow(0 0 1.5px oklch(58% 0.2 75 / 0.4));
+}
+.xp-tooltip .flash-bolt svg { display: block; }
+
+.xp-tooltip:has(.cam) { width: 250px; max-width: 250px; }
+.xp-tooltip .cam { margin: -4px -8px; }
+.xp-tooltip .cam .header {
+  background: linear-gradient(180deg, oklch(94.66% 0.0114 252.09), oklch(85.04% 0.0283 248.16));
+  border-bottom: 1px solid oklch(61.14% 0.0611 253.60);
+  padding: 3px 8px;
+  font-weight: bold;
+  color: oklch(41.92% 0.0962 250.51);
+  font-family: var(--font-caption);
+  font-size: 10.5px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.xp-tooltip .cam .header span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.xp-tooltip .cam .flash-bolt { position: static; top: auto; right: auto; flex-shrink: 0; color: oklch(58% 0.18 75); filter: none; }
+.xp-tooltip .cam .histogram-frame {
+  margin: 6px 8px 0;
+  height: 36px;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid oklch(61.14% 0.0611 253.60);
+  border-top-color: oklch(47.12% 0.0555 253.58);
+  border-left-color: oklch(47.12% 0.0555 253.58);
+  background: oklch(100% 0 0);
+}
+.xp-tooltip .cam .hist-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.xp-tooltip .cam .hist-svg .luma { fill: oklch(35% 0 0); opacity: 0.35; }
+.xp-tooltip .cam .hist-svg polyline { fill: none; stroke-width: 1; vector-effect: non-scaling-stroke; mix-blend-mode: multiply; }
+.xp-tooltip .cam .hist-svg .r { stroke: oklch(45% 0.22 25); }
+.xp-tooltip .cam .hist-svg .g { stroke: oklch(50% 0.20 145); }
+.xp-tooltip .cam .hist-svg .b { stroke: oklch(45% 0.22 260); }
+.xp-tooltip .cam .body { padding: 6px 9px 4px; }
+.xp-tooltip .cam .exposure { font-variant-numeric: tabular-nums; font-size: 12.5px; font-weight: bold; color: oklch(15% 0 0); letter-spacing: 0.02em; }
+.xp-tooltip .cam .meta-strip { font-size: 9.5px; color: oklch(48% 0 0); margin: 1px 0 5px; }
+.xp-tooltip .cam .recipe-rows { display: grid; grid-template-columns: auto 1fr; column-gap: 8px; row-gap: 1px; margin: 0; font-size: 10.5px; }
+.xp-tooltip .cam .recipe-rows dt { color: oklch(48% 0 0); white-space: nowrap; }
+.xp-tooltip .cam .recipe-rows dd { margin: 0; color: oklch(18% 0 0); text-align: right; }
+.xp-tooltip .cam .footer {
+  display: flex;
+  justify-content: space-between;
+  padding: 3px 9px 4px;
+  border-top: 1px solid oklch(86.67% 0.0294 259.59);
+  margin-top: 5px;
+  font-size: 9px;
+  color: oklch(52% 0 0);
+  font-family: var(--font-mono);
+}
+
+.xp-tooltip .album-pop {
+  padding: 0;
+  margin: -4px -8px;
+}
+.xp-tooltip .cover.album {
+  display: block;
+  width: 120px;
+  height: 120px;
+  object-fit: cover;
+  background: oklch(94% 0.005 240);
+  border: 3px solid oklch(100% 0 0);
+  outline: 1px solid oklch(61.14% 0.0611 253.60);
+  outline-offset: -1px;
+}
+.xp-tooltip .car-pop {
+  padding: 0;
+  margin: -4px -8px;
+}
+.xp-tooltip .car-pop img {
+  display: block;
+  width: 240px;
+  height: 160px;
+  object-fit: cover;
+  background: oklch(94% 0.005 240);
+  border: 3px solid oklch(100% 0 0);
+  outline: 1px solid oklch(61.14% 0.0611 253.60);
+  outline-offset: -1px;
+}
+.xp-tooltip .car-cap {
+  width: 240px;
+  margin: 0 3px 3px;
+  padding: 3px 5px;
+  font-size: 8.5pt;
+  color: oklch(38% 0 0);
+  background: oklch(96% 0.004 240);
+  border: 1px solid oklch(61.14% 0.0611 253.60);
+  border-top: none;
+  box-sizing: border-box;
+}
+.xp-tooltip .car-credit {
+  display: block;
+  margin-top: 1px;
+  font-size: 7.5pt;
+  color: oklch(58% 0 0);
+}
+a.car-link:link,
+a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; }
+
 /* native window resize (phase C follow-up): the platform owns the corner
    drag; nav.js keeps only the dotted-grip decoration and the clamp lift
    (see initResize). Maximized windows and the content-hugging Notepad
