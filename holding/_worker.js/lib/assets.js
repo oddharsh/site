@@ -1,6 +1,7 @@
 // lib/assets.js: the ways this worker hands out a static file when the default
 // asset path would lie.
 import { wantsMarkdown } from "./http.js";
+import { notModifiedIfFresh } from "./cache.js";
 //
 // serveFreshAsset: fetch the asset under a unique query (which busts the
 // read-through asset cache), then re-emit it at the canonical URL with an honest
@@ -100,6 +101,7 @@ const SHELL_TYPES = {
   js:  "text/javascript; charset=utf-8",
   css: "text/css; charset=utf-8",
   svg: "image/svg+xml; charset=utf-8",
+  dict: "application/octet-stream",
 };
 
 // Which of those may travel the SHARED-DICTIONARY path (the `use-as-dictionary` offer
@@ -155,9 +157,13 @@ const DICTIONARY_TYPES = { js: 1, css: 1 };
 // as a script, and neither is ever fetched as an image (the #119 rule, in the protocol).
 const SHELL_DESTS = { js: '("script")', css: '("style")' };
 const shellOffer = (pathname, ext) => {
-  const base = pathname.slice("/a/".length).replace(/\.[0-9a-f]{8}\.(js|css|svg)$/, "");
+  const base = pathname.slice("/a/".length).replace(/\.[0-9a-f]{8}\.(js|css|svg|dict)$/, "");
   return `match="/a/${base}.*", match-dest=${SHELL_DESTS[ext] || '("script" "style")'}`;
 };
+const pageFamilyOffer = (pathname) =>
+  /^\/a\/page-family\.[0-9a-f]{8}\.dict$/.test(pathname)
+    ? `match="/*", match-dest=("document")`
+    : null;
 
 // A WORKER CANNOT NEGOTIATE COMPRESSION. Measured in wrangler dev 2026-07-26: the
 // runtime rewrites the request's Accept-Encoding to a constant before the worker sees
@@ -322,7 +328,11 @@ export async function servePrecompressedShell(request, env) {
   // teach Chromium to send Available-Dictionary for it and then get plain br anyway:
   // wasted storage on the client and a header we deliberately ignore.
   if (DICTIONARY_TYPES[ext]) headers.set("use-as-dictionary", shellOffer(url.pathname, ext));
-  else headers.delete("use-as-dictionary");
+  else {
+    const familyOffer = pageFamilyOffer(url.pathname);
+    if (familyOffer) headers.set("use-as-dictionary", familyOffer);
+    else headers.delete("use-as-dictionary");
+  }
   // The URL is content-addressed, so these bytes never change identity. Vary still
   // has to name accept-encoding: the same URL answers with br or identity depending
   // on the request, and a shared cache must not serve one to a client that asked for
@@ -341,22 +351,21 @@ export async function servePrecompressedShell(request, env) {
 }
 
 
-// serveStaticPage: the 30 static garage/lwe pages, with the same two-tier treatment the
-// hashed shell gets — a dcz delta when the client holds a version we diffed against,
-// otherwise the brotli q11 twin, otherwise the plain asset.
+// serveStaticPage: static and build-rendered HTML, with a dcz delta when the
+// client holds a dedicated immutable family dictionary, otherwise the brotli
+// q11 twin, otherwise the plain asset.
 //
-// These fit dictionary transport BETTER than the shell does. The shell is
-// content-addressed, so a change mints a new URL and the old bytes are never requested
-// again. A garage page is mutable at a STABLE url under `max-age=0, must-revalidate`,
-// which is the case the RFC was written for: the browser revalidates, the bytes moved,
-// and the server answers with the diff instead of the whole document.
-//
-// The delta is keyed by SLUG plus dictionary tag rather than by a content hash, because
-// the request path carries no hash to key off. Only one version of a page is current at a
-// time, so slug + dictionary is already unambiguous.
-export async function serveStaticPage(request, env) {
+// Do NOT offer the page itself as a dictionary. These documents intentionally
+// carry max-age=0, and Chrome correctly rejects an immediately stale response as
+// a dictionary. The one site-page dictionary lives at an immutable /a/ URL with
+// a one-year lifetime and is advertised by every HTML response.
+export async function serveStaticPage(request, env, opts = {}) {
   const url = new URL(request.url);
-  if (request.method !== "GET") return serveAssetWith404Clamp(request, env);
+  if (request.method !== "GET") return serveAssetWith404Clamp(request, env, opts);
+  const applyExtraHeaders = (headers) => {
+    for (const [name, value] of Object.entries(opts.headers || {})) headers.set(name, value);
+    return headers;
+  };
 
   // /garage/compression -> asset garage/compression.html, slug garage__compression.
   // html_handling drops the trailing slash, so the path never carries the extension.
@@ -382,12 +391,6 @@ export async function serveStaticPage(request, env) {
     if (md) return md;
   }
 
-  // A page is only ever fetched as a document (a navigation). Scoping it says so, and
-  // keeps a prefetch/subresource fetch of the same URL from banking a dictionary the
-  // worker would not answer with a delta. Keyed on the REQUEST path, which is what the
-  // browser matches, regardless of which asset ends up answering.
-  const offer = { "use-as-dictionary": `match="/${rel}", match-dest=("document")` };
-
   // build.mjs names both artifacts after the ASSET path; this function knows only the
   // REQUEST path, and `html_handling: "drop-trailing-slash"` makes those differ for
   // exactly one shape — a section index, where /garage is served by garage/index.html.
@@ -404,8 +407,9 @@ export async function serveStaticPage(request, env) {
   // the second. An ASSETS miss is colo-local and cheap; an unserved twin is not.
   const bases = [rel, `${rel}/index`];
 
-  const tag = dictionaryTag(request);
-  if (tag) {
+  const findDelta = async () => {
+    const tag = dictionaryTag(request);
+    if (!tag) return null;
     for (const base of bases) {
       try {
         const d = await env.ASSETS.fetch(new Request(`${url.origin}/pd/${base.replace(/\//g, "__")}.${tag}.dcz`, {
@@ -416,33 +420,73 @@ export async function serveStaticPage(request, env) {
           h.set("content-type", "text/html; charset=utf-8");
           h.set("content-encoding", "dcz");
           h.set("vary", "accept-encoding, available-dictionary");
-          h.set("use-as-dictionary", offer["use-as-dictionary"]);
+          h.delete("use-as-dictionary");
           h.delete("etag");                       // described the .dcz file, not this page
+          applyExtraHeaders(h);
           return new Response(d.body, { status: 200, headers: h, encodeBody: "manual" });
         }
         try { await d.body?.cancel(); } catch {}
       } catch { /* fall through to the twin */ }
     }
-  }
+    return null;
+  };
 
-  for (const base of bases) {
-    try {
-      const br = await env.ASSETS.fetch(new Request(`${url.origin}/${base}.html.br`, {
-        headers: { "accept-encoding": "identity" },
-      }));
-      if (br.ok && !br.headers.get("content-encoding")) {
-        const h = new Headers(br.headers);
-        h.set("content-type", "text/html; charset=utf-8");
-        h.set("content-encoding", "br");
-        h.append("vary", "accept-encoding");
-        h.set("use-as-dictionary", offer["use-as-dictionary"]);
-        const etag = h.get("etag");
-        if (etag) h.set("etag", `W/${etag.replace(/^W\//, "").replace(/"$/, "-br\"")}`);
-        return new Response(br.body, { status: 200, headers: h, encodeBody: "manual" });
+  const findBrotli = async () => {
+    for (const base of bases) {
+      try {
+        const br = await env.ASSETS.fetch(new Request(`${url.origin}/${base}.html.br`, {
+          headers: { "accept-encoding": "identity" },
+        }));
+        if (br.ok && !br.headers.get("content-encoding")) {
+          const h = new Headers(br.headers);
+          h.set("content-type", "text/html; charset=utf-8");
+          h.set("content-encoding", "br");
+          h.set("vary", "accept-encoding, available-dictionary");
+          h.delete("use-as-dictionary");
+          const etag = h.get("etag");
+          if (etag) h.set("etag", `W/${etag.replace(/^W\//, "").replace(/"$/, "-br\"")}`);
+          applyExtraHeaders(h);
+          return new Response(br.body, { status: 200, headers: h, encodeBody: "manual" });
+        }
+        try { await br.body?.cancel(); } catch {}
+      } catch { /* fall through to the plain asset */ }
+    }
+    return null;
+  };
+
+  // The current twin and the optional dictionary delta are independent colo-local
+  // lookups, so do them in parallel. The twin supplies the validator even when the
+  // response body is the delta: after applying it, the browser owns the CURRENT
+  // page and can revalidate that representation with a 304 on its next visit.
+  const [br, delta] = await Promise.all([findBrotli(), findDelta()]);
+  if (br) {
+    const fresh = notModifiedIfFresh(request, br);
+    if (fresh.status === 304) {
+      try { await delta?.body?.cancel(); } catch {}
+      return fresh;
+    }
+  }
+  if (delta) {
+    if (br) {
+      // The delta file physically lives under /pd/, but semantically represents
+      // the requested page. Preserve the page URL's cache and discovery contract
+      // from its current q11 twin; only the body encoding differs.
+      for (const name of ["etag", "cache-control", "link", "last-modified"]) {
+        const value = br.headers.get(name);
+        if (value) delta.headers.set(name, value);
       }
       try { await br.body?.cancel(); } catch {}
-    } catch { /* fall through to the plain asset */ }
+    }
+    return delta;
   }
+  if (br) return br;
 
-  return serveAssetWith404Clamp(request, env, { headers: offer });
+  const plain = await serveAssetWith404Clamp(request, env, {
+    headers: {
+      "vary": "accept-encoding, available-dictionary",
+      ...(opts.headers || {}),
+    },
+  });
+  plain.headers.delete("use-as-dictionary");
+  return notModifiedIfFresh(request, plain);
 }

@@ -167,6 +167,8 @@ const ROUTES = [
   { path: "/lwe", status: 200, ct: "text/html" },
   { path: "/lwe/", status: [301, 307, 308] },   // drop-trailing-slash
   { path: "/lwe/utf8", status: 200, ct: "text/html" },
+  { path: "/pixel-peeper", status: 200, ct: "text/html", marker: "compression eye exam" },
+  { path: "/pixel-peeper/manifest.json", status: 200, ct: "application/json" },
 ];
 
 function cacheBust(path) {

@@ -16,15 +16,8 @@
 <meta property="og:description" content="here are some explainers and interactive demos on stuff i've been learning about lately, stylized as interactive msn conversations">
 <meta property="og:url" content="https://aadhar.sh/lwe">
 
+<link rel="stylesheet" href="/lwe-base.css">
 <style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}
-* { box-sizing: border-box; }
-@media (prefers-reduced-motion:no-preference){@view-transition{navigation:auto}::view-transition-old(root),::view-transition-new(root){animation-duration:140ms}}
-html, body { margin: 0; padding: 0; } html{background:linear-gradient(180deg,oklch(56% 0.13 250) 0%,oklch(73% 0.10 236) 50%,oklch(88% 0.05 232) 60%,oklch(60% 0.16 140) 100%)}
-body {
-  background: linear-gradient(180deg, oklch(56% 0.13 250) 0%, oklch(73% 0.10 236) 50%, oklch(88% 0.05 232) 60%, oklch(60% 0.16 140) 100%);
-  font-family: var(--font-ui); font-size: 10.5pt; line-height: 1.5; color: oklch(21.78% 0 0);
-  padding: 24px 12px 60px; min-height: 100vh;
-}
 .window {
   max-width: 560px; margin: 0 auto; background: oklch(100% 0 0);
   border: 2px solid #0831d9; border-right-color: #001ea0; border-bottom-color: #001ea0;
@@ -36,28 +29,9 @@ body {
   color: #fff; font-family: var(--font-caption); font-weight: bold; font-size: 10pt;
   padding: 4px 5px 4px 8px; display: flex; align-items: center; gap: 6px; text-shadow: 1px 1px #0f1089; user-select: none;
 }
-.title-bar .title-text { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .title-bar .icon { width: 14px; height: 14px; flex: 0 0 14px; background: #fff; border: 1px solid #2a4bbf; position: relative; }
 .title-bar .icon::before { content: "≈"; position: absolute; inset: 0; display: grid; place-items: center; font-size: 10px; color: #4b53c9; font-weight: bold; text-shadow: none; }
-.controls { display: inline-flex; align-items: center; gap: 2px; }
-.controls .min, .controls .max, .controls .close {
-  position: relative; box-sizing: border-box; width: 21px; height: 21px; display: inline-block; overflow: hidden;
-  font-size: 0; color: transparent; border: 1px solid #6696eb; border-radius: 3px; text-decoration: none; cursor: pointer;
-  background-image: linear-gradient(180deg, #5f8cf7 0%, #3a71f5 22%, #3e73f5 55%, #2a70f2 82%, #1045be 100%);
-}
-.controls .close { border-color: #d8401c; background-image: linear-gradient(180deg, #e8795f 0%, #e45f40 30%, #e45d3d 52%, #e2552a 80%, #ae3110 100%); }
-.controls .min::before { content: ""; position: absolute; left: 5px; right: 5px; bottom: 5px; height: 2px; background: #fff; }
-.controls .max::before { content: ""; position: absolute; left: 5px; top: 5px; width: 11px; height: 9px; box-sizing: border-box; border: 1px solid #fff; border-top-width: 2px; }
-.controls .close::before, .controls .close::after { content: ""; position: absolute; left: 50%; top: 50%; width: 13px; height: 2px; margin: -1px 0 0 -6.5px; background: #fff; }
-.controls .close::before { transform: rotate(45deg); } .controls .close::after { transform: rotate(-45deg); }
-.content { background: oklch(99% 0.005 95); border-top: 1px solid oklch(46% 0.02 260); border-left: 1px solid oklch(46% 0.02 260); padding: 0; }
-
-html { height: 100dvh; overflow: hidden; }
-body { min-height: 0; height: calc(100vh - 30px); height: calc(100dvh - 30px); overflow: hidden; display: flex; flex-direction: column; align-items: center; padding: 8px; }
-.window { flex: 0 1 auto; min-height: 0; max-height: 100%; display: flex; flex-direction: column; }
-.window > .title-bar { flex: 0 0 auto; }
 .window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 12px; }
-body::after { content: ""; position: fixed; left: 0; right: 0; bottom: 0; height: 30px; z-index: 1; background: linear-gradient(180deg, oklch(67% 0.15 256) 0%, oklch(58% 0.19 257) 4%, oklch(51% 0.20 258) 9%, oklch(49% 0.20 258) 50%, oklch(46% 0.20 259) 92%, oklch(40% 0.18 260) 100%); }
 
 /* ── "my account" header (MSN-style) ──────────────────────────────────── */
 .me { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: linear-gradient(180deg,#fbfdff,#e8f0fb); border-bottom: 1px solid #b9cbe6; }

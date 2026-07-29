@@ -127,6 +127,53 @@ export function edgeKey(origin, keyPath, env) {
   return new Request(`${origin}/__ec/${encodeURIComponent(ver)}${keyPath}`, { method: "GET" });
 }
 
+// If-None-Match uses WEAK comparison for GET/HEAD. Every validator this site
+// emits has a deliberately simple opaque tag, but the request may contain a
+// comma-separated list or `*`, so normalize the weak prefix on both sides and
+// compare each candidate. A malformed candidate is simply not a match.
+export function ifNoneMatchMatches(request, etag) {
+  if (!etag || (request.method !== "GET" && request.method !== "HEAD")) return false;
+  const raw = request.headers.get("if-none-match");
+  if (!raw) return false;
+  if (raw.trim() === "*") return true;
+  const weak = (s) => s.trim().replace(/^W\//i, "");
+  const current = weak(etag);
+  return raw.split(",").some((candidate) => weak(candidate) === current);
+}
+
+// A 304 carries the metadata needed to update the cached representation, but no
+// encoded body. Keep validators, cache policy, Vary, Link, dictionary offers,
+// and diagnostics; remove only headers that describe payload bytes.
+export function notModifiedIfFresh(request, response) {
+  const etag = response.headers.get("etag");
+  if (!ifNoneMatchMatches(request, etag)) return response;
+  const headers = new Headers(response.headers);
+  headers.delete("content-length");
+  headers.delete("content-encoding");
+  headers.delete("transfer-encoding");
+  return new Response(null, { status: 304, headers });
+}
+
+// Worker-rendered shells have deterministic bytes but historically had no
+// validator, so max-age=0 forced their complete body over the wire. Hash once
+// on the cache miss, store the tagged response, and every warm revalidation can
+// use the same cheap 304 path as a static asset.
+export async function withWeakEtag(response) {
+  if (response.status !== 200 || response.headers.has("etag")) return response;
+  const bytes = await response.arrayBuffer();
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+  let hex = "";
+  for (const byte of digest) hex += byte.toString(16).padStart(2, "0");
+  const headers = new Headers(response.headers);
+  headers.set("etag", `W/"sha256-${hex}"`);
+  headers.set("content-length", String(bytes.byteLength));
+  return new Response(bytes, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
 // Contract, in the order it saves you:
 //   - the edge TTL is the response's own cache-control (caches.default honors
 //     s-maxage, else max-age); nothing rewrites headers, so browsers see exactly
@@ -148,16 +195,19 @@ export async function cachedRender(request, ctx, renderFn, keyPath, env) {
     if (hit) {
       const r = new Response(hit.body, hit);
       r.headers.set("x-edge-cache", "hit");
-      return r;
+      return notModifiedIfFresh(request, r);
     }
   }
 
-  const resp = await renderFn();
+  let resp = await renderFn();
+  if (request.method === "GET" && resp.status === 200) {
+    resp = await withWeakEtag(resp);
+  }
   if (request.method === "GET" && resp.status === 200 && ctx) {
     ctx.waitUntil(cache.put(key, resp.clone()));
     const out = new Response(resp.body, resp);
     out.headers.set("x-edge-cache", "miss");
-    return out;
+    return notModifiedIfFresh(request, out);
   }
-  return resp;
+  return notModifiedIfFresh(request, resp);
 }

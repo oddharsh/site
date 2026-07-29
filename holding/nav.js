@@ -1320,17 +1320,16 @@
   }
 
   function boot() { ensureLunaCss(); buildDesktop(); buildIcons(); buildTaskbar(); initDrag(); initRaise(); initIconDrag(); initScrollbars(); initResize(); setFavicon(); injectSpeculation(); initCloseBack(); initWindowControls(); }
-  function bootAfterFirstHomePaint() {
-    // The homepage already carries the generated desktop/taskbar markup plus
-    // its race-proof geometry in HTML. Its deferred script only ENHANCES that
-    // static shell (dragging, Run, clock, window controls), so doing the DOM
-    // wiring before the first paint needlessly makes the text LCP wait. Two
-    // frames guarantee one complete static paint; the ~16ms enhancement delay
-    // is imperceptible and does not change any interaction contract.
-    const home = (location.pathname.replace(/\/+$/, "") || "/") === "/";
-    if (home) requestAnimationFrame(() => requestAnimationFrame(boot));
+  function bootAfterStaticPaint() {
+    // Generated/static pages and Worker-rendered shells already carry the desktop
+    // and taskbar markup plus race-proof geometry in HTML. nav.js only ENHANCES
+    // that shell (dragging, Run, clock, controls), so let its useful content paint
+    // before doing the DOM wiring. Two frames guarantee one complete static paint;
+    // pages without the server shell still build it synchronously as their fallback.
+    const hasStaticShell = D.getElementById("axp-desktop") && D.getElementById("axp-taskbar");
+    if (hasStaticShell) requestAnimationFrame(() => requestAnimationFrame(boot));
     else boot();
   }
-  if (D.readyState === "loading") D.addEventListener("DOMContentLoaded", bootAfterFirstHomePaint);
-  else bootAfterFirstHomePaint();
+  if (D.readyState === "loading") D.addEventListener("DOMContentLoaded", bootAfterStaticPaint);
+  else bootAfterStaticPaint();
 })();
