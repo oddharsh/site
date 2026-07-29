@@ -15,6 +15,10 @@
 // serves the unhashed files, so `npm run dev` preloads exactly the URLs its
 // (un-rewritten) HTML references. Keep the `// build:shell-assets` marker.
 export const SHELL_ASSETS = { luna: "/luna.css", nav: "/nav.js" }; // build:shell-assets
+// Empty in readable local development: the page dictionary is derived from the
+// final staged HTML, so it does not exist until build.mjs runs. The build
+// replaces this marker with its immutable content-addressed URL.
+export const PAGE_DICTIONARY = ""; // build:page-dictionary
 
 // luna.css first: it is render-blocking style, so it outranks the deferred
 // nav.js script. Browsers dedupe a preload against the in-document <link

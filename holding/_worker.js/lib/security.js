@@ -4,7 +4,7 @@
 // what's set on static assets via _headers — without this wrapper, the
 // worker-rendered pages (/whoareyou, /around, /bot, /rn/admin, etc.)
 // would skip _headers entirely and ship without CSP / Permissions-Policy.
-import { SHELL_PRELOAD_LINK } from "./shell-assets.js";
+import { PAGE_DICTIONARY, SHELL_PRELOAD_LINK } from "./shell-assets.js";
 
 export const SECURITY_HEADERS = {
   "content-security-policy":
@@ -49,6 +49,17 @@ export function withSecurityHeaders(response) {
   const headers = new Headers(response.headers);
   for (const [k, v] of Object.entries(SECURITY_HEADERS)) {
     if (!headers.has(k)) headers.set(k, v);
+  }
+  // Every HTML surface—static, deterministically rendered, or live—teaches the
+  // browser the same immutable page dictionary. Static/deterministic routes can
+  // use it immediately on the next navigation; live pages still seed it for
+  // their links without paying a blocking fetch (the relation is idle-loaded).
+  if (PAGE_DICTIONARY && ct.startsWith("text/html")) {
+    const dictionaryLink = `<${PAGE_DICTIONARY}>; rel="compression-dictionary"`;
+    const current = headers.get("link");
+    if (!current?.includes('rel="compression-dictionary"')) {
+      headers.set("link", current ? `${current}, ${dictionaryLink}` : dictionaryLink);
+    }
   }
   return new Response(response.body, {
     status:     response.status,

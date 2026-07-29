@@ -37,7 +37,8 @@
       // the content-hashed shell: worker-first so it can hand out the q11 .br twin
       "/a/*",
       // static pages: worker-first for the dcz delta + brotli q11 twin
-      "/garage/*", "/lwe/*",
+      "/garage", "/garage/*", "/lwe", "/lwe/*",
+      "/pixel-peeper", "/pixel-peeper/*",
       "/auth.md", "/.well-known/api-catalog", "/.well-known/agent-card.json",
       "/.well-known/oauth-protected-resource",
       "/.well-known/oauth-authorization-server",

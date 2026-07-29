@@ -121,7 +121,7 @@
 # against the origin on every back-nav and repeat visit.
 /lwe/*
   Cache-Control: public, max-age=0, must-revalidate, s-maxage=86400
-  Link: </luna.css>; rel=preload; as=style, </nav.js>; rel=preload; as=script
+  Link: </luna.css>; rel=preload; as=style, </lwe-base.css>; rel=preload; as=style, </nav.js>; rel=preload; as=script
   Link: </webmention>; rel="webmention"
 
 # pixel-peeper — the compression eye exam (/pixel-peeper). a static XP-window
@@ -241,6 +241,9 @@
 # luna.css — the OS as one stylesheet (shell-rewrite phase A). same staleness
 # model as the shell scripts: short browser cache + SWR, edge purged per deploy.
 /luna.css
+  Cache-Control: public, max-age=300, stale-while-revalidate=86400, s-maxage=86400
+
+/lwe-base.css
   Cache-Control: public, max-age=300, stale-while-revalidate=86400, s-maxage=86400
 
 /notepad.js

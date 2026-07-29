@@ -26,11 +26,13 @@ import { citationsIn, findEndpointIn, SELF_LINK_HOSTS } from "./holding/_worker.
 import { sign } from "./cal/src/sign.js";
 import { AGENT_SURFACES, WEBMENTION_PATHS } from "./holding/_worker.js/lib/site-manifest.js";
 import { handleWritingIndex } from "./holding/_worker.js/writing.js";
+import { serveStaticPage } from "./holding/_worker.js/lib/assets.js";
 import { readManifest, workerModule, navFenceBody, readFenceBody } from "./scripts/gen-manifest.mjs";
 import { INDEXED_SECTIONS, TWIN_FACTS, buildTwins, checkTwinFacts, htmlFileFor, twinPath } from "./scripts/gen-md-twins.mjs";
 import { MCP_TOOLS } from "./serendipity/serendipity.js";
 import { derivePhotoPool, getImagesManifest, handlePhotoQuery, queryPhotos } from "./holding/_worker.js/photos.js";
 import { deadline } from "./holding/_worker.js/lib/cache.js";
+import { ifNoneMatchMatches, notModifiedIfFresh, withWeakEtag } from "./holding/_worker.js/lib/cache.js";
 import { privateHostBlocked } from "./holding/_worker.js/lib/crawl.js";
 import { handleHit } from "./holding/_worker.js/counter.js";
 import { cronHomeProbe, parseServerTiming } from "./holding/_worker.js/perf-probe.js";
@@ -975,13 +977,90 @@ test("homepage selects 12 photos and hydrates only the current scrollport", asyn
   assert.match(page, /overlap >= rect\.height \* 0\.05/, "desktop must synchronously hydrate its visible photo rows");
   assert.match(page, /else requestAnimationFrame\(\(\) => requestAnimationFrame\(start\)\)/, "mobile hydration must yield through the text paint");
   assert.doesNotMatch(page, /requestIdleCallback\(load/, "the tooltip island must not transfer before hover intent");
-  assert.match(nav, /requestAnimationFrame\(\(\) => requestAnimationFrame\(boot\)\)/, "homepage shell enhancement must follow the static first paint");
+  assert.match(nav, /getElementById\("axp-desktop"\).*getElementById\("axp-taskbar"\)/, "every server-rendered shell must opt into post-paint enhancement");
+  assert.match(nav, /requestAnimationFrame\(\(\) => requestAnimationFrame\(boot\)\)/, "static shell enhancement must follow the first useful paint");
   assert.ok(
     page.indexOf('type="application/ld+json"') > page.indexOf('<section class="now-playing"'),
     "non-rendering JSON-LD belongs after the visible homepage content",
   );
   assert.match(luna, /homepage music island \(below the fold\)/);
   assert.match(luna, /homepage hover island \(non-critical\)/);
+});
+
+test("weak validators turn unchanged rendered HTML into an empty 304", async () => {
+  const tagged = await withWeakEtag(new Response("<!doctype html><p>same</p>", {
+    headers: { "content-type": "text/html", "cache-control": "public, max-age=0", "content-encoding": "br" },
+  }));
+  const etag = tagged.headers.get("etag");
+  assert.match(etag, /^W\/"sha256-[0-9a-f]{64}"$/);
+  assert.equal(ifNoneMatchMatches(new Request("https://aadhar.sh/x", { headers: { "if-none-match": etag } }), etag), true);
+  assert.equal(ifNoneMatchMatches(new Request("https://aadhar.sh/x", { headers: { "if-none-match": etag.replace(/^W\//, "") } }), etag), true);
+  const notModified = notModifiedIfFresh(new Request("https://aadhar.sh/x", {
+    headers: { "if-none-match": `"old", ${etag}` },
+  }), tagged);
+  assert.equal(notModified.status, 304);
+  assert.equal(notModified.headers.get("etag"), etag);
+  assert.equal(notModified.headers.get("content-encoding"), null);
+  assert.equal(await notModified.text(), "");
+});
+
+test("static page negotiation prefers 304, then DCZ with the current validator", async () => {
+  const digest = Buffer.alloc(32, 1);
+  const tag = digest.toString("hex").slice(0, 16);
+  const available = `:${digest.toString("base64")}:`;
+  const env = {
+    ASSETS: {
+      async fetch(input) {
+        const path = new URL(typeof input === "string" ? input : input.url).pathname;
+        if (path === "/lwe/drivers.html.br") {
+          return new Response("brotli bytes", {
+            headers: {
+              "etag": '"page"',
+              "cache-control": "public, max-age=0, s-maxage=86400",
+              "link": "</shell.css>; rel=preload; as=style",
+            },
+          });
+        }
+        if (path === `/pd/lwe__drivers.${tag}.dcz`) {
+          return new Response("delta bytes", { headers: { "cache-control": "public, max-age=0" } });
+        }
+        return new Response("not found", { status: 404 });
+      },
+    },
+  };
+  const current = 'W/"page-br"';
+  const unchanged = await serveStaticPage(new Request("https://aadhar.sh/lwe/drivers", {
+    headers: { "if-none-match": current, "available-dictionary": available },
+  }), env);
+  assert.equal(unchanged.status, 304);
+  assert.equal(unchanged.headers.get("etag"), current);
+
+  const changed = await serveStaticPage(new Request("https://aadhar.sh/lwe/drivers", {
+    headers: { "if-none-match": '"old"', "available-dictionary": available },
+  }), env);
+  assert.equal(changed.status, 200);
+  assert.equal(changed.headers.get("content-encoding"), "dcz");
+  assert.equal(changed.headers.get("etag"), current);
+  assert.equal(changed.headers.get("cache-control"), "public, max-age=0, s-maxage=86400");
+  assert.equal(changed.headers.get("link"), "</shell.css>; rel=preload; as=style");
+  assert.equal(changed.headers.get("vary"), "accept-encoding, available-dictionary");
+});
+
+test("LWE pages share one base stylesheet and the build derives one site-page dictionary", async () => {
+  const base = await readFile(new URL("holding/lwe-base.css", import.meta.url), "utf8");
+  assert.match(base, /\.controls \{ display: inline-flex/);
+  const build = await readFile(new URL("build.mjs", import.meta.url), "utf8");
+  assert.match(build, /site-page corpus/);
+  assert.match(build, /page-family\.\$\{hash8\(dictionary\)\}\.dict/);
+  assert.doesNotMatch(build, /train-lwe-dictionary/);
+  const security = await readFile(new URL("holding/_worker.js/lib/security.js", import.meta.url), "utf8");
+  assert.match(security, /rel="compression-dictionary"/);
+  for (const name of ["index", "dac", "drivers", "encoding", "fhe", "knots", "mpc", "pcrypto", "tee", "utf8", "vigenere"]) {
+    const html = await readFile(new URL(`holding/lwe/${name}.html`, import.meta.url), "utf8");
+    assert.match(html, /<link rel="stylesheet" href="\/lwe-base\.css">/);
+    assert.doesNotMatch(html, /compression-dictionary/);
+    assert.doesNotMatch(html.match(/<style>([\s\S]*?)<\/style>/)?.[1] || "", /\.controls \{ display: inline-flex/);
+  }
 });
 
 // ── the SSR deadline ────────────────────────────────────────────────
