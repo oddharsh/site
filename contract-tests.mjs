@@ -31,7 +31,7 @@ import { readManifest, workerModule, navFenceBody, readFenceBody } from "./scrip
 import { INDEXED_SECTIONS, TWIN_FACTS, buildTwins, checkTwinFacts, htmlFileFor, twinPath } from "./scripts/gen-md-twins.mjs";
 import { MCP_TOOLS } from "./serendipity/serendipity.js";
 import { derivePhotoPool, getImagesManifest, handlePhotoQuery, queryPhotos } from "./holding/_worker.js/photos.js";
-import { deadline } from "./holding/_worker.js/lib/cache.js";
+import { cachedRender, deadline } from "./holding/_worker.js/lib/cache.js";
 import { ifNoneMatchMatches, notModifiedIfFresh, withWeakEtag } from "./holding/_worker.js/lib/cache.js";
 import { privateHostBlocked } from "./holding/_worker.js/lib/crawl.js";
 import { handleHit } from "./holding/_worker.js/counter.js";
@@ -978,7 +978,8 @@ test("homepage selects 12 photos and hydrates only the current scrollport", asyn
   assert.match(page, /else requestAnimationFrame\(\(\) => requestAnimationFrame\(start\)\)/, "mobile hydration must yield through the text paint");
   assert.doesNotMatch(page, /requestIdleCallback\(load/, "the tooltip island must not transfer before hover intent");
   assert.match(nav, /getElementById\("axp-desktop"\).*getElementById\("axp-taskbar"\)/, "every server-rendered shell must opt into post-paint enhancement");
-  assert.match(nav, /requestAnimationFrame\(\(\) => requestAnimationFrame\(boot\)\)/, "static shell enhancement must follow the first useful paint");
+  assert.match(nav, /D\.prerendering\) return boot\(\)/, "prerendered static shells must enhance before activation");
+  assert.match(nav, /requestAnimationFrame\(\(\) => requestAnimationFrame\(boot\)\)/, "ordinary static shell enhancement must follow the first useful paint");
   assert.ok(
     page.indexOf('type="application/ld+json"') > page.indexOf('<section class="now-playing"'),
     "non-rendering JSON-LD belongs after the visible homepage content",
@@ -1002,6 +1003,38 @@ test("weak validators turn unchanged rendered HTML into an empty 304", async () 
   assert.equal(notModified.headers.get("etag"), etag);
   assert.equal(notModified.headers.get("content-encoding"), null);
   assert.equal(await notModified.text(), "");
+});
+
+test("cached renders stream the first miss while tagging the background copy", async () => {
+  const priorCaches = globalThis.caches;
+  const stored = [];
+  globalThis.caches = {
+    default: {
+      match: async () => undefined,
+      put: async (_key, response) => {
+        stored.push({ response, body: await response.text() });
+      },
+    },
+  };
+  const pending = [];
+  try {
+    const first = await cachedRender(
+      new Request("https://aadhar.sh/whoareyou"),
+      { waitUntil: (promise) => pending.push(promise) },
+      async () => new Response("rendered", { headers: { "content-type": "text/html" } }),
+      "/whoareyou",
+      { CF_VERSION_METADATA: { id: "test" } },
+    );
+    assert.equal(first.headers.get("etag"), null, "the miss does not buffer before sending");
+    assert.equal(await first.text(), "rendered");
+    assert.equal(pending.length, 1);
+    await Promise.all(pending);
+    assert.match(stored[0].response.headers.get("etag"), /^W\//);
+    assert.equal(stored[0].body, "rendered");
+  } finally {
+    if (priorCaches === undefined) delete globalThis.caches;
+    else globalThis.caches = priorCaches;
+  }
 });
 
 test("static page negotiation prefers 304, then DCZ with the current validator", async () => {
@@ -1028,22 +1061,30 @@ test("static page negotiation prefers 304, then DCZ with the current validator",
       },
     },
   };
-  const current = 'W/"page-br"';
+  const currentBr = 'W/"page-br"';
+  const currentDcz = 'W/"page-dcz"';
   const unchanged = await serveStaticPage(new Request("https://aadhar.sh/lwe/drivers", {
-    headers: { "if-none-match": current, "available-dictionary": available },
+    headers: { "if-none-match": currentBr, "available-dictionary": available },
   }), env);
   assert.equal(unchanged.status, 304);
-  assert.equal(unchanged.headers.get("etag"), current);
+  assert.equal(unchanged.headers.get("etag"), currentBr);
 
   const changed = await serveStaticPage(new Request("https://aadhar.sh/lwe/drivers", {
     headers: { "if-none-match": '"old"', "available-dictionary": available },
   }), env);
   assert.equal(changed.status, 200);
   assert.equal(changed.headers.get("content-encoding"), "dcz");
-  assert.equal(changed.headers.get("etag"), current);
+  assert.equal(changed.headers.get("etag"), currentDcz);
   assert.equal(changed.headers.get("cache-control"), "public, max-age=0, s-maxage=86400");
   assert.equal(changed.headers.get("link"), "</shell.css>; rel=preload; as=style");
   assert.equal(changed.headers.get("vary"), "accept-encoding, available-dictionary");
+  assert.equal(changed.headers.get("use-as-dictionary"), 'match="/lwe/drivers", match-dest=("document")');
+
+  const dczUnchanged = await serveStaticPage(new Request("https://aadhar.sh/lwe/drivers", {
+    headers: { "if-none-match": currentDcz, "available-dictionary": available },
+  }), env);
+  assert.equal(dczUnchanged.status, 304);
+  assert.equal(dczUnchanged.headers.get("etag"), currentDcz);
 });
 
 test("LWE pages share one base stylesheet and the build derives one site-page dictionary", async () => {
@@ -1052,7 +1093,10 @@ test("LWE pages share one base stylesheet and the build derives one site-page di
   const build = await readFile(new URL("build.mjs", import.meta.url), "utf8");
   assert.match(build, /site-page corpus/);
   assert.match(build, /page-family\.\$\{hash8\(dictionary\)\}\.dict/);
-  assert.doesNotMatch(build, /train-lwe-dictionary/);
+  assert.match(build, /holding\/p-dict/);
+  assert.match(build, /site-page dictionary/);
+  const assetIgnore = await readFile(new URL("holding/.assetsignore", import.meta.url), "utf8");
+  assert.match(assetIgnore, /^p-dict$/m, "page dictionary snapshots stay build input, not public assets");
   const security = await readFile(new URL("holding/_worker.js/lib/security.js", import.meta.url), "utf8");
   assert.match(security, /rel="compression-dictionary"/);
   for (const name of ["index", "dac", "drivers", "encoding", "fhe", "knots", "mpc", "pcrypto", "tee", "utf8", "vigenere"]) {

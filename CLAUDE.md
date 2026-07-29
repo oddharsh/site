@@ -645,20 +645,20 @@ npm run deploy
     build.mjs must never do. Not urgent either — a dictionary 11 days stale still
     gave 87-93%. `a-dict` is `.assetsignore`d (build input, not a public URL).
 
-    **PAGES work the other way, since #156.** They used to be diffed against
-    committed snapshots of their own previous bytes (`holding/p-dict`, rolled by the
-    same script). That set is retired. build.mjs now derives ONE raw 64KB corpus
+    **PAGES use two dictionary tiers.** build.mjs derives ONE raw 64KB family corpus
     from the staged documents, ships it at an immutable `/a/page-family.<hash8>.dict`,
     and every HTML response advertises it via `Link: rel="compression-dictionary"`
-    (`lib/security.js`). Each `/pd/<slug>.<tag>.dcz` is keyed by that single tag.
-    The trade is deliberate and worth knowing: a per-page delta was 93-97% but only
-    reached a visitor holding that exact page's previous version, where the family
-    dictionary is ~26% off the q11 twin (298,933 B vs 405,909 B across 38 pages) and
-    reaches anyone who has loaded ANY page. Nothing is committed for it — the corpus
-    is a pure function of bytes the build just produced — so there is no page roll
-    step anymore. RFC 9842 requires RAW bytes here: a `zstd --train` artifact is
-    self-describing, the server library reads its tables, Chrome reads the same bytes
-    as content, and the navigation dies on `ERR_CONTENT_DECODING_FAILED`.
+    (`lib/security.js`). It also diffs the current page against the committed
+    `holding/p-dict` snapshots from the previous release. The worker tries the
+    `Available-Dictionary` tag it receives, so a returning visitor gets the old
+    per-page ratio (93-97% in the measured set) while a visitor who holds only the
+    family corpus gets the broader fallback (~26% off q11: 298,933 B vs 405,909 B
+    across 38 pages). Both candidates are emitted only when they beat plain q11.
+    `npm run shell:roll` rolls both `a-dict` and `p-dict`; page snapshots are Brotli'd
+    in the repo, ignored by the asset upload, and decompressed only at build time.
+    RFC 9842 requires RAW bytes here: a `zstd --train` artifact is self-describing,
+    the server library reads its tables, Chrome reads the same bytes as content, and
+    the navigation dies on `ERR_CONTENT_DECODING_FAILED`.
 
     **Plain (non-delta) responses stay brotli q11, and that is forced, not chosen.**
     A worker cannot see the client's Accept-Encoding (gotcha 13), so plain zstd is
@@ -666,9 +666,9 @@ npm run deploy
     which doubles as proof the client speaks dcz. So "zstd where it wins" IS the
     delta path. Loader classes differ (#119): js/css dcz proven in production, html
     server-side proven (149-byte page delta decodes to the live page), svg OFF by
-    design (Chromium's image loader chokes). `npm run dcz:check` asserts all of
-    this against production, reading the page dictionary out of the live `Link`
-    header rather than off disk, so it cannot rot against a local set. Roll SHELL
+    design (Chromium's image loader chokes). `npm run dcz:check` asserts both page
+    tiers against production, reading the family dictionary out of the live `Link`
+    header and the per-page candidate from `holding/p-dict`. Roll SHELL
     dictionaries FROM THE DEPLOYED BUILD (main, post-deploy), never from a feature
     branch: the dictionary must be bytes browsers actually hold, and a branch build
     is not that. (`shell:roll` writes into `holding/a-dict/` the moment it runs —

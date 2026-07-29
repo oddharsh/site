@@ -164,6 +164,13 @@ const pageFamilyOffer = (pathname) =>
   /^\/a\/page-family\.[0-9a-f]{8}\.dict$/.test(pathname)
     ? `match="/*", match-dest=("document")`
     : null;
+const pageOffer = (pathname) => `match="${pathname}", match-dest=("document")`;
+const variantEtag = (etag, suffix) => {
+  if (!etag) return null;
+  const opaque = etag.replace(/^W\//, "").replace(/^"|"$/g, "");
+  const base = opaque.replace(/-(?:br|dcz)$/, "");
+  return `W/"${base}-${suffix}"`;
+};
 
 // A WORKER CANNOT NEGOTIATE COMPRESSION. Measured in wrangler dev 2026-07-26: the
 // runtime rewrites the request's Accept-Encoding to a constant before the worker sees
@@ -352,13 +359,14 @@ export async function servePrecompressedShell(request, env) {
 
 
 // serveStaticPage: static and build-rendered HTML, with a dcz delta when the
-// client holds a dedicated immutable family dictionary, otherwise the brotli
-// q11 twin, otherwise the plain asset.
+// client holds either a committed per-page snapshot or the immutable family
+// dictionary, otherwise the brotli q11 twin, otherwise the plain asset.
 //
-// Do NOT offer the page itself as a dictionary. These documents intentionally
-// carry max-age=0, and Chrome correctly rejects an immediately stale response as
-// a dictionary. The one site-page dictionary lives at an immutable /a/ URL with
-// a one-year lifetime and is advertised by every HTML response.
+// The family dictionary lives at an immutable /a/ URL with a one-year lifetime and
+// is advertised by every HTML response. Static page responses also offer the page
+// itself as a scoped document dictionary; committed snapshots let the next release
+// answer that tag with the high-ratio per-page delta. Dynamic Worker pages keep the
+// family Link but never enter this precomputed route.
 export async function serveStaticPage(request, env, opts = {}) {
   const url = new URL(request.url);
   if (request.method !== "GET") return serveAssetWith404Clamp(request, env, opts);
@@ -420,7 +428,11 @@ export async function serveStaticPage(request, env, opts = {}) {
           h.set("content-type", "text/html; charset=utf-8");
           h.set("content-encoding", "dcz");
           h.set("vary", "accept-encoding, available-dictionary");
-          h.delete("use-as-dictionary");
+          // Keep the page's own previous bytes eligible as a high-ratio dictionary.
+          // The immutable family dictionary is still advertised separately by the
+          // HTML Link header, so a browser may use either candidate and the build
+          // has a matching /pd/<slug>.<tag>.dcz for both.
+          h.set("use-as-dictionary", pageOffer(url.pathname));
           h.delete("etag");                       // described the .dcz file, not this page
           applyExtraHeaders(h);
           return new Response(d.body, { status: 200, headers: h, encodeBody: "manual" });
@@ -442,9 +454,10 @@ export async function serveStaticPage(request, env, opts = {}) {
           h.set("content-type", "text/html; charset=utf-8");
           h.set("content-encoding", "br");
           h.set("vary", "accept-encoding, available-dictionary");
-          h.delete("use-as-dictionary");
+          h.set("use-as-dictionary", pageOffer(url.pathname));
           const etag = h.get("etag");
-          if (etag) h.set("etag", `W/${etag.replace(/^W\//, "").replace(/"$/, "-br\"")}`);
+          const encoded = variantEtag(etag, "br");
+          if (encoded) h.set("etag", encoded);
           applyExtraHeaders(h);
           return new Response(br.body, { status: 200, headers: h, encodeBody: "manual" });
         }
@@ -475,8 +488,14 @@ export async function serveStaticPage(request, env, opts = {}) {
         const value = br.headers.get(name);
         if (value) delta.headers.set(name, value);
       }
+      // The validator belongs to the representation on the wire. Reusing the
+      // Brotli tag on a dcz body lets a cache/client validate the wrong encoding.
+      const encoded = variantEtag(br.headers.get("etag"), "dcz");
+      if (encoded) delta.headers.set("etag", encoded);
       try { await br.body?.cancel(); } catch {}
     }
+    const fresh = notModifiedIfFresh(request, delta);
+    if (fresh.status === 304) return fresh;
     return delta;
   }
   if (br) return br;
