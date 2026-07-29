@@ -3,7 +3,7 @@
 // and PREFIX tables below mirror wrangler.jsonc's allowlist one-to-one; keep
 // them in sync or a route silently goes static. Map in MAINTENANCE.md.
 
-import { WorkerEntrypoint } from "cloudflare:workers";
+import { WorkerEntrypoint, tracing } from "cloudflare:workers";
 import calWorker from "../../cal/src/index.js";
 import { handleAgentAuthClaim, handleAgentAuthRegister, handleAgentAuthRevoke, handleAgentAuthToken } from "./agent.js";
 import { cronAround, handleAround, handleAroundChangesJson, handleAroundJson } from "./around.js";
@@ -25,6 +25,8 @@ import { wantsMarkdown } from "./lib/http.js";
 import { handleSiteMcp } from "./mcp.js";
 import { withSecurityHeaders } from "./lib/security.js";
 import { SHELL_PRELOAD_LINK } from "./lib/shell-assets.js";
+import { installTracing, span } from "./lib/trace.js";
+import { installTracing as installCalTracing } from "../../cal/src/trace.js";
 import { getThumbHashes, handleImagesManifest, handlePhotoQuery, handlePhotos, servePhotoFromR2 } from "./photos.js";
 import { handleReading } from "./reading.js";
 import { handleRun } from "./run.js";
@@ -37,6 +39,15 @@ import { handleWhoareyou, handleWhoareyouJson } from "./whoareyou.js";
 import { handleWritingIndex, handleWritingPost } from "./writing.js";
 import { handleLlmsFull } from "./x402.js";
 import { handleSerendipity, withSerendipitySecurityHeaders } from "../../serendipity/serendipity.js";
+
+// Hand the runtime's tracer to both span helpers. THIS is the only module that
+// may import it: the rest of the worker is also imported by contract-tests.mjs
+// under plain node, which cannot resolve the `cloudflare:` scheme (see
+// lib/trace.js's header). Module-scope, so it completes at isolate init before
+// any handler runs; without it every span is a harmless direct call, which is
+// exactly the behavior the tests and `wrangler dev` get.
+installTracing(tracing);
+installCalTracing(tracing);
 
 // the homepage visit-counter Durable Object, hosted in-house (see counter.js).
 // must be a named export of the entry so the COUNTER binding can resolve it.
@@ -136,17 +147,27 @@ export default {
   // schedule so the request path stays a pure KV read and the page is safe to
   // prerender. The weekly schedule sweeps the /lens/census roster into D1.
   async scheduled(event, env, ctx) {
+    // Each arm runs inside a named span. This is the single highest-value place
+    // to trace in the whole worker, because a cron has NO response: there is no
+    // Server-Timing header to read, no status code, no visitor to complain. Every
+    // one of these jobs is also written to swallow its own failures on purpose
+    // (a crawl that cannot reach a neighbor skips it and retries next tick), so
+    // until now a job that had been silently degrading for weeks looked exactly
+    // like a job that was fine. The span is the difference.
+    //
+    // waitUntil still receives the promise, so failure semantics are unchanged.
+    const cron = (name, work) => ctx.waitUntil(span(name, work, { "cron.schedule": event.cron }));
     if (event.cron === "7,37 * * * *") {
-      ctx.waitUntil(cronHomeProbe(env, ctx));   // :07/:37 — the two homepage fragments' KV latency -> Analytics Engine
+      cron("cron.home_probe", () => cronHomeProbe(env, ctx));   // :07/:37 — the two homepage fragments' KV latency -> Analytics Engine
     } else if (event.cron === "17 8 * * 1") {
-      ctx.waitUntil(cronCensus(env));   // Mondays 08:17 UTC — the longitudinal census
+      cron("cron.census", () => cronCensus(env));   // Mondays 08:17 UTC — the longitudinal census
     } else if (event.cron === "41 5 * * *") {
       // 05:41 UTC daily — tell the sources these pages cite that they were
       // cited. Its own schedule (not the */30 tick) because it reads my own
       // pages and then probes third-party hosts: a slow, polite, once-a-day job.
-      ctx.waitUntil(cronSendWebmentions(env));
+      cron("cron.webmention_send", () => cronSendWebmentions(env));
     } else {
-      ctx.waitUntil(cronAround(env));   // */30 — the neighborhood crawl
+      cron("cron.around", () => cronAround(env));   // */30 — the neighborhood crawl
     }
     // NOTE: the weekly coffee-booking sweep (0 4 * * 7) is gone — each pending
     // booking now carries its own BookingWorkflow expiry timer (cal/src/workflow.js).
@@ -329,16 +350,56 @@ async function route(request, env, ctx) {
   // The slug and destination stay in Worker secrets so rotating either one
   // does not require a code change or a discoverable URL in the repository.
   if (url.hostname === "cal.aadhar.sh") return routeCalHost(request, env, ctx, url);
+
+  // Every dispatch below runs inside one span named for the route TEMPLATE, not
+  // the raw path: `/writing/<slug>` rather than `/writing/the-thing-i-wrote`.
+  // Templates are what make a trace groupable — raw paths would mint a new span
+  // name per photo stem and per post, and the interesting question is always
+  // "how does this ROUTE behave", never "how did this one URL behave once".
+  // Exact routes are already templates (a fixed ~60-entry table), so they use
+  // their pathname as-is.
+  //
+  // This also gives every auto-instrumented child (KV get, R2 get, outbound
+  // fetch) a named parent, which is the whole reason the span exists: the
+  // platform already times the handler, but it cannot know that a given fetch
+  // was part of serving /lens versus part of serving /around.
+  //
+  // route() re-enters itself through SELF_FETCH (lens reading this own host), so
+  // these spans legitimately nest one level. That nesting is the point — it
+  // shows a self-scan's inner work as inner work.
   const exact = ROUTES.get(url.pathname);
-  if (exact) return exact(request, env, ctx, url);
+  if (exact) return dispatchTraced(url.pathname, "exact", exact, request, env, ctx, url);
 
   for (const r of PREFIX) {
-    if (r.match(url.pathname)) return r.handle(request, env, ctx, url);
+    if (r.match(url.pathname)) return dispatchTraced(r.label, "prefix", r.handle, request, env, ctx, url);
   }
 
   // Static is the default: garage/lwe/cars/shell JS/discovery files fall through
-  // to Workers static assets without a bespoke dispatcher branch.
+  // to Workers static assets without a bespoke dispatcher branch. Deliberately
+  // NOT wrapped: this arm is one auto-instrumented ASSETS call and a span around
+  // it would only restate the child.
   return env.ASSETS.fetch(request);
+}
+
+function dispatchTraced(template, kind, handle, request, env, ctx, url) {
+  return span(
+    `route ${template}`,
+    async (s) => {
+      const response = await handle(request, env, ctx, url);
+      // status lands on the span rather than only in the log line, so a trace
+      // can be read end to end without cross-referencing Workers Logs.
+      s.setAttribute("http.response.status_code", response.status);
+      return response;
+    },
+    {
+      "http.request.method": request.method,
+      "route.template": template,
+      "route.kind": kind,
+      // the self-fetch marker: null SELF_FETCH means this dispatch IS the inner
+      // one (route() nulls it one level down), so a nested span says which.
+      "route.self_fetch": env.SELF_FETCH ? undefined : true,
+    },
+  );
 }
 
 // These two applications remain separate source modules, but the public route

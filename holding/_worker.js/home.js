@@ -3,6 +3,7 @@
 import { wantsMarkdown } from "./lib/http.js";
 import { HOMEPAGE_DISCOVERY_LINK } from "./lib/security.js";
 import { renderPhotoSlots } from "./lib/photo-grid.js";
+import { span } from "./lib/trace.js";
 import { getAltMap, getImagesManifest } from "./photos.js";
 
 export function homepageHeadResponse(request) {
@@ -46,19 +47,46 @@ export function homepageHeadResponse(request) {
 // no-store, because the whole point of this response is that it differs every
 // time. It is small (twelve <a> blocks, ~4KB br) and it is fetched after the
 // document has already painted its text.
+// Traced in two phases, because perf-probe.js can only see one of them. Its
+// `time()` helper wraps this whole handler in Date.now(), which in Workers
+// advances only across I/O — true for the reads, and the reason the probe's own
+// comment calls them "exactly what these are". The shuffle-and-render below is
+// pure compute, so the probe necessarily reports it as zero. Spans are recorded
+// by the runtime rather than by our clock reads, so `home.grid.render` is the
+// first measurement of it that exists.
+//
+// The two reads are also worth splitting: they run concurrently but they are
+// different animals. `manifest` is a two-key SWR over KV that can pay an R2 list
+// on a cold miss; `alt` is module-cached and free on a warm isolate. Fused into
+// one number (as the probe's positional `doubles` fuses them) a slow cold
+// manifest and a slow cold alt map are indistinguishable.
 export async function handlePhotoGrid(request, env, ctx) {
   const [pool, altMap] = await Promise.all([
-    getImagesManifest(env, ctx).then((a) => (Array.isArray(a) && a.length ? a : null), () => null),
-    getAltMap(env).catch(() => ({})),
+    span("home.grid.manifest", () =>
+      getImagesManifest(env, ctx).then((a) => (Array.isArray(a) && a.length ? a : null), () => null)),
+    span("home.grid.alt", () => getAltMap(env).catch(() => ({}))),
   ]);
-  if (!pool) return new Response("", { status: 503, headers: { "cache-control": "no-store" } });
-  return new Response(renderPhotoSlots(pickRandom(pool, 12), altMap || {}), {
-    status: 200,
-    headers: {
-      "content-type": "text/html; charset=utf-8",
-      "cache-control": "no-store, must-revalidate",
-      "x-content-type-options": "nosniff",
-    },
+  // 503 is the honest answer when the manifest is unreachable: the fragment has
+  // nothing to say and the page keeps its baked twelve. Recorded as an attribute
+  // so "how often does the grid fall back" is a query, not a guess.
+  if (!pool) {
+    return span("home.grid.render", (s) => {
+      s.setAttribute("home.grid.served", false);
+      return new Response("", { status: 503, headers: { "cache-control": "no-store" } });
+    });
+  }
+  return span("home.grid.render", (s) => {
+    s.setAttribute("home.grid.served", true);
+    s.setAttribute("home.grid.pool_size", pool.length);
+    s.setAttribute("home.grid.alt_known", Object.keys(altMap || {}).length);
+    return new Response(renderPhotoSlots(pickRandom(pool, 12), altMap || {}), {
+      status: 200,
+      headers: {
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": "no-store, must-revalidate",
+        "x-content-type-options": "nosniff",
+      },
+    });
   });
 }
 

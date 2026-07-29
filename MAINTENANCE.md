@@ -840,6 +840,32 @@ curl -s "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/analytics_
 A gap in the series means the probe itself failed — it writes nothing rather
 than fabricate a datapoint.
 
+### Read a trace (Workers Traces)
+Enabled in `wrangler.jsonc` under `observability.traces`, 100% sampled. Read them
+in the dashboard: **Workers & Pages -> aadhar-sh -> Observability -> Traces**.
+Every outbound fetch, binding call, and handler invocation is auto-instrumented;
+the named spans on top come from `lib/trace.js` (vocabulary table in CLAUDE.md).
+
+The queries worth knowing, because each one used to be unanswerable:
+- **"why was that /lens scan slow"** — open a `route /lens/fetch` trace and read
+  `lens.discovery`. Its ~28 child fetches are named by URL, so the straggling
+  well-known file identifies itself. Note `lens.inspect.fetch` is what the JSON's
+  public `elapsedMs` reports; the parent `lens.inspect` is the honest total.
+- **"is a neighbor silently not being crawled"** — `cron.around` -> read
+  `around.crawled` / `around.skipped` / `around.errored`, then the
+  `around.neighbor` children where `around.outcome != "crawled"`.
+- **"is the census still writing 16 rows"** — `census.sweep`, attributes
+  `census.written` vs `census.roster`.
+- **"did anyone fail to book a coffee"** — `cal.busy` where
+  `cal.fail_closed = true` (or `cal.source = "none"`). That is a 503 on `/book`.
+- **"did the webmention run finish"** — `webmention.send`, attribute
+  `webmention.capped`.
+
+Local `wrangler dev` reports `span.isTraced === false` and records nothing; the
+spans still open and cost nothing, so dev behaves identically to prod. Only
+`_worker.js/index.js` may import `cloudflare:workers` (CLAUDE.md gotcha 16) —
+the tracer is injected into `lib/trace.js` and `cal/src/trace.js` from there.
+
 ### Log a deploy (bump-version.sh)
 `./holding/scripts/bump-version.sh <slug> "<title>"`, then deploy. Inserts the next checkpoint into D1 (vnum from `SELECT MAX(vnum)`), which is what `/updates` and `/restore` render. Nothing edits sw.js anymore: the service worker retired in v136, `nav.js`/`notepad.js` updates land via their short `_headers` max-age plus the per-deploy edge purge, and the stub at `/sw.js` cleans up old installs.
 

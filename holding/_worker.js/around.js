@@ -6,6 +6,7 @@ import { crawlDocument, mapWithConcurrency, readResponseCapped } from "./lib/cra
 import { lunaPage } from "./lib/chrome.js";
 import { esc, extractMeta, jsonResponse } from "./lib/http.js";
 import { lensParseRobots, lensRobotsVerdict } from "./lib/robots.js";
+import { span } from "./lib/trace.js";
 
 // Obey robots.txt before crawling a neighbor. /bot promises AadharshBot reads and
 // obeys robots.txt, and this cron is the one path that fetches third-party sites
@@ -294,10 +295,17 @@ export async function handleAroundChangesJson(request, env) {
 // error — so the old length>0 guard never fired; check for a non-error row.)
 export async function cronAround(env) {
   const report = await runAround(env);
-  if (report && Array.isArray(report.results) && report.results.some(r => !r.error) && env.RN_KV) {
-    await env.RN_KV.put(AROUND_KEY, JSON.stringify(report));
+  // the snapshot write is conditional: an all-error crawl deliberately does NOT
+  // overwrite the last-good snapshot. Worth recording, because "the page still
+  // shows last week" is then a fact about this branch rather than a mystery.
+  const publishable = !!(report && Array.isArray(report.results) && report.results.some(r => !r.error) && env.RN_KV);
+  if (publishable) {
+    await span("around.publish", () => env.RN_KV.put(AROUND_KEY, JSON.stringify(report)));
   }
-  await persistAroundHistory(env, report);
+  await span("around.persist_history", (s) => {
+    s.setAttribute("around.snapshot_published", publishable);
+    return persistAroundHistory(env, report);
+  });
 }
 
 async function readAroundReport(request, env) {
@@ -318,20 +326,51 @@ async function readAroundReport(request, env) {
   } catch { return null; }
 }
 
+// Traced per neighbor, with a rollup on the parent. This is the job where
+// tracing earns the most, because every degradation mode here is DESIGNED to be
+// quiet: a disallowing robots.txt is a legitimate skipped row, and an
+// unreachable one is deliberately recorded as an error precisely so it does NOT
+// overwrite the last-good snapshot. Both are correct, and both mean a neighbor
+// that has silently stopped being crawled looks identical to one that is fine
+// until somebody reads the JSON row by row. The rollup (`around.crawled` /
+// `.skipped` / `.errored`) makes "twenty neighbors, three of them dark for a
+// month" a number on one span.
 export async function runAround(env) {
+  return span("around.crawl", (s) => runAroundInner(env, s), { "around.neighbors": NEIGHBORS.length });
+}
+
+async function runAroundInner(env, sCrawl) {
   // Four concurrent origins matches the census worker's bounded fan-out and
   // avoids turning one cron tick into a burst against twenty sites.
-  const results = await mapWithConcurrency(NEIGHBORS, 4, async ({ name, url }) => {
+  const results = await mapWithConcurrency(NEIGHBORS, 4, async ({ name, url }) => span(
+    "around.neighbor",
+    async (s) => {
+    s.setAttribute("around.name", name);
+    s.setAttribute("around.host", (() => { try { return new URL(url).hostname; } catch { return undefined; } })());
     const t0 = Date.now();
     // honor robots.txt first. A disallow is a legitimate result (skipped row, no
     // error); an undetermined robots.txt is recorded as an error so a network-wide
     // outage can't overwrite the last-good snapshot with an all-skipped one.
-    const gate = await robotsGate(env, url);
-    if (gate.kind === "disallow") return { name, url, skipped: "robots", robots: "disallow", robotsRule: gate.rule, elapsedMs: Date.now() - t0 };
-    if (gate.kind === "undetermined") return { name, url, robots: "undetermined", error: gate.reason + ", not crawled", elapsedMs: Date.now() - t0 };
+    const gate = await span("around.robots_gate", () => robotsGate(env, url));
+    if (gate.kind === "disallow") {
+      s.setAttribute("around.outcome", "robots_disallow");
+      s.setAttribute("around.robots_rule", gate.rule);
+      return { name, url, skipped: "robots", robots: "disallow", robotsRule: gate.rule, elapsedMs: Date.now() - t0 };
+    }
+    if (gate.kind === "undetermined") {
+      // the reason string ("robots.txt 503", "robots.txt unreachable") is the
+      // whole diagnosis and it has been going into a JSON field nobody reads.
+      s.setAttribute("around.outcome", "robots_undetermined");
+      s.setAttribute("around.reason", gate.reason);
+      return { name, url, robots: "undetermined", error: gate.reason + ", not crawled", elapsedMs: Date.now() - t0 };
+    }
     try {
       // The kernel owns the deadline, stream cap, digest, and normalized signals.
       const crawl = await crawlDocument(url, env, { timeoutMs: 4000, maxBytes: 200 * 1024 });
+      s.setAttribute("around.outcome", "crawled");
+      s.setAttribute("http.response.status_code", crawl.status);
+      s.setAttribute("around.bytes_read", crawl.bytesRead);
+      s.setAttribute("around.truncated", crawl.truncated);
       return {
         name, url,
         finalUrl:      crawl.finalUrl,
@@ -349,9 +388,12 @@ export async function runAround(env) {
         elapsedMs:     crawl.elapsedMs,
       };
     } catch (e) {
+      s.setAttribute("around.outcome", "error");
+      s.setAttribute("around.error", String(e?.message || e));
       return { name, url, robots: "allow", error: String(e?.message || e), elapsedMs: Date.now() - t0 };
     }
-  });
+    },
+  ));
   // sort fastest → slowest; errors (no latency or huge values) fall to the
   // bottom so the table reads as a leaderboard.
   results.sort((a, b) => {
@@ -359,6 +401,10 @@ export async function runAround(env) {
     const bn = (b.error || b.skipped) ? Infinity : (b.elapsedMs ?? Infinity);
     return an - bn;
   });
+  // the rollup: the one line that turns twenty quiet rows into a health signal.
+  sCrawl.setAttribute("around.crawled", results.filter((r) => !r.error && !r.skipped).length);
+  sCrawl.setAttribute("around.skipped", results.filter((r) => r.skipped).length);
+  sCrawl.setAttribute("around.errored", results.filter((r) => r.error).length);
   return {
     crawledBy: BOT_UA,
     crawledAt: new Date().toISOString(),

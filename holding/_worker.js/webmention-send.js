@@ -22,6 +22,7 @@
 import { validateLensTarget } from "./lens.js";
 import { privateHostBlocked, readResponseCapped } from "./lib/crawl.js";
 import { WEBMENTION_PATHS, WEBMENTION_SECTIONS } from "./lib/site-manifest.js";
+import { span } from "./lib/trace.js";
 
 const SEND_TIMEOUT_MS = 8000;
 const PAGE_BYTE_CAP = 512 * 1024;
@@ -62,18 +63,37 @@ async function ensureTable(db) {
 }
 
 // ── the cron entry point ───────────────────────────────────────────────────
+// Traced with the CAP as a first-class attribute. This loop stops at
+// MAX_SENDS_PER_RUN, which is a deliberate politeness bound and also a silent
+// truncation: a run that hit the cap left citations unsent and looks, in the
+// summary log, exactly like a run that finished the work. `webmention.capped`
+// is the difference. The per-target spans additionally separate the three
+// outcomes the summary line fuses — no endpoint (the common, fine case), an
+// endpoint that took the POST, and an endpoint that rejected it.
 export async function cronSendWebmentions(env, origin = "https://aadhar.sh") {
+  return span("webmention.send", (s) => cronSendWebmentionsInner(env, origin, s));
+}
+
+async function cronSendWebmentionsInner(env, origin, sSend) {
   const db = env.SOCIAL_DB;
-  if (!db) { console.warn("webmention-send: SOCIAL_DB unbound; skipping"); return { sent: 0, skipped: "unbound" }; }
+  if (!db) {
+    sSend.setAttribute("webmention.outcome", "db_unbound");
+    console.warn("webmention-send: SOCIAL_DB unbound; skipping");
+    return { sent: 0, skipped: "unbound" };
+  }
   await ensureTable(db);
 
-  const pages = await mentionablePages(env, origin);
+  const pages = await span("webmention.own_pages", () => mentionablePages(env, origin));
+  sSend.setAttribute("webmention.pages", Array.isArray(pages) ? pages.length : 0);
   const now = Date.now();
   let sent = 0, discovered = 0, considered = 0;
 
   for (const pageUrl of pages) {
     if (sent >= MAX_SENDS_PER_RUN) break;
-    const html = await fetchOwnPage(pageUrl);
+    const html = await span("webmention.fetch_own_page", (s) => {
+      s.setAttribute("webmention.source", pageUrl);
+      return fetchOwnPage(pageUrl);
+    });
     if (!html) continue;
 
     for (const target of citationsIn(html, origin)) {
@@ -87,7 +107,10 @@ export async function cronSendWebmentions(env, origin = "https://aadhar.sh") {
       ).bind(pageUrl, target).first();
       if (prior && now - prior.last_sent_at < RESEND_AFTER_MS) continue;
 
-      const endpoint = await discoverEndpoint(target);
+      const endpoint = await span("webmention.discover", (s) => {
+        s.setAttribute("webmention.target_host", (() => { try { return new URL(target).hostname; } catch { return undefined; } })());
+        return discoverEndpoint(target);
+      });
       if (!endpoint) {
         // No endpoint is the common case and not a failure. Record it so the
         // next run doesn't re-probe the same URL for a week.
@@ -99,7 +122,14 @@ export async function cronSendWebmentions(env, origin = "https://aadhar.sh") {
       }
       discovered++;
 
-      const status = await postMention(endpoint, pageUrl, target);
+      const status = await span("webmention.post", async (s) => {
+        s.setAttribute("webmention.target_host", (() => { try { return new URL(target).hostname; } catch { return undefined; } })());
+        const st = await postMention(endpoint, pageUrl, target);
+        // the receiving endpoint's verdict. Stored in D1 per pair, but a run-level
+        // view of "who is rejecting my mentions" needed a query nobody writes.
+        s.setAttribute("http.response.status_code", st);
+        return st;
+      });
       await db.prepare(
         `INSERT INTO ${TABLE} (source, target, endpoint, status, last_sent_at) VALUES (?, ?, ?, ?, ?)
          ON CONFLICT(source, target) DO UPDATE SET endpoint = excluded.endpoint, status = excluded.status, last_sent_at = excluded.last_sent_at`
@@ -108,6 +138,12 @@ export async function cronSendWebmentions(env, origin = "https://aadhar.sh") {
     }
   }
 
+  sSend.setAttribute("webmention.considered", considered);
+  sSend.setAttribute("webmention.discovered", discovered);
+  sSend.setAttribute("webmention.sent", sent);
+  // the honest cap flag: true means this run stopped early and there is more to
+  // send, which the summary line below cannot express.
+  sSend.setAttribute("webmention.capped", sent >= MAX_SENDS_PER_RUN);
   console.log(`webmention-send: ${considered} citations considered, ${discovered} endpoints found, ${sent} sent`);
   return { sent, discovered, considered };
 }
