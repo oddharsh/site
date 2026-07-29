@@ -47,13 +47,20 @@ export function homepageHeadResponse(request) {
 // no-store, because the whole point of this response is that it differs every
 // time. It is small (twelve <a> blocks, ~4KB br) and it is fetched after the
 // document has already painted its text.
-// Traced in two phases, because perf-probe.js can only see one of them. Its
-// `time()` helper wraps this whole handler in Date.now(), which in Workers
-// advances only across I/O — true for the reads, and the reason the probe's own
-// comment calls them "exactly what these are". The shuffle-and-render below is
-// pure compute, so the probe necessarily reports it as zero. Spans are recorded
-// by the runtime rather than by our clock reads, so `home.grid.render` is the
-// first measurement of it that exists.
+// Traced in two phases. What the spans buy is the SPLIT and the attributes, NOT
+// visibility into compute — see the correction below.
+//
+// MEASURED 2026-07-29, in production, and it killed the original idea here: a
+// span does NOT see pure compute. Workers spans inherit exactly the frozen-clock
+// semantics of `Date.now()` (the clock advances across I/O, not during
+// synchronous execution), so `home.grid.render` reports ~0 for the same reason
+// perf-probe.js's `time()` helper does. Proven on `/lens/fetch` against a 752KB
+// Wikipedia page: `lens.inspect` 685ms = `lens.discovery` 656ms +
+// `lens.inspect.fetch` 29ms + `lens.inspect.parse` 0ms, where that parse had just
+// run an HTMLRewriter pass over 752KB and emitted 81KB of markdown. For CPU, read
+// `cpuTime` off the tail/log event (193ms on that request); spans are for I/O
+// structure and attributes. `home.grid.render` is kept anyway, because its
+// ATTRIBUTES (served, pool_size, alt_known) are the point.
 //
 // The two reads are also worth splitting: they run concurrently but they are
 // different animals. `manifest` is a two-key SWR over KV that can pay an R2 list

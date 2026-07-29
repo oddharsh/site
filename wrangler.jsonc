@@ -108,10 +108,16 @@
   // rare-but-expensive events this was turned on for in the first place: a
   // /lens discovery fan-out that stalls, a cron target that has silently been
   // skipped for weeks, a coffee booking that fails closed on a stale calendar.
-  // At this site's traffic, 100% sits orders of magnitude under the 10M
-  // events/month the Workers Paid plan includes, so there is nothing to buy by
-  // sampling down. Traced-request overhead is the only real cost; if a span ever
-  // shows up ON the critical path, lower this rather than deleting spans.
+  //
+  // The allowance is 200K events/DAY (the dashboard's own banner: observability
+  // is on the free tier here, whatever the Workers plan is — an earlier version
+  // of this comment claimed the Paid plan's 10M/month, which was wrong). Above
+  // that, Cloudflare samples for you. 200K/day is ~2.3/sec sustained, and this
+  // site's real traffic is a rounding error against it, but note that a /lens
+  // scan is ~33-46 spans in ONE request: an event here is a SPAN, not a visit,
+  // so a burst of scans consumes the budget far faster than the page views do.
+  // If the banner ever says events are being sampled, lower this rather than
+  // deleting spans. Same if a span ever shows up ON the critical path.
   "observability": {
     "enabled": true,
     "traces": { "enabled": true, "head_sampling_rate": 1 }

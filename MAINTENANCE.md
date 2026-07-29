@@ -861,6 +861,15 @@ The queries worth knowing, because each one used to be unanswerable:
 - **"did the webmention run finish"** — `webmention.send`, attribute
   `webmention.capped`.
 
+**Do not chase a 0ms span.** `home.grid.render` and `lens.inspect.parse` read 0
+and always will: Workers spans advance their clock across I/O only, never during
+synchronous execution, so they cannot measure CPU. Verified in production on a
+752KB page where the parse span read 0 right after emitting 81KB of markdown.
+Those two spans are kept for their attributes. When you actually want CPU:
+```bash
+npx wrangler tail aadhar-sh --format json | grep -o '"cpuTime":[0-9]*'
+```
+
 Local `wrangler dev` reports `span.isTraced === false` and records nothing; the
 spans still open and cost nothing, so dev behaves identically to prod. Only
 `_worker.js/index.js` may import `cloudflare:workers` (CLAUDE.md gotcha 16) —
