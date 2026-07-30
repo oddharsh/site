@@ -76,6 +76,42 @@ const HERO = {
 // Selectors tried when a page has no HERO entry, or its listed heroes all miss.
 const FALLBACK = [".demo", ".workbench", "canvas", ".map", ".content > figure"];
 
+// Worker-rendered pages have no holding/<section>/*.html file for listPages()
+// to find, so they're listed by hand. `path` is the exact route to capture —
+// including query state, so a card can show the page mid-task rather than
+// empty. `span` crops from the top of the first selector to the bottom of the
+// second (both must resolve; falls back to HERO/FALLBACK sweeps otherwise).
+// `settle` adds ms after networkidle for client hydration that repaints panes.
+//
+// The /lens card captures a live scan of stripe.com: the address bar, the
+// seeded example chips, and the three panes with the dollar verdict + the
+// readiness score rendered. Prewarm the screenshot cache first or networkidle
+// waits out the cold Browser-Rendering call:
+//   curl -s "https://aadhar.sh/lens/shot?url=https%3A%2F%2Fstripe.com%2F" -o /dev/null
+// `spanMaxH` top-anchors the span and slices its bottom, the same bargain the
+// single-hero cap strikes: a crop near the card's own 2.2:1 aspect renders the
+// content ~30% larger than a full-height 1.4:1 crop that floats in margins.
+// `presetWait` covers presets that trigger a network render, not just a repaint.
+const WORKER_PAGES = [
+  {
+    id: "lens",
+    path: "/lens?url=https%3A%2F%2Fstripe.com%2F",
+    span: [".lx-addr", ".lx-panes"],
+    spanMaxH: 500,
+    settle: 4000,
+    // fill the third pane: run the (prewarmed) Browser Run snapshot so the card
+    // shows all three readers reading, not two panes and an empty intro box.
+    preset: "#lx-browser-run",
+    presetWait: 6000,
+  },
+];
+
+// Regenerate a subset without dirtying every committed card: the capture is a
+// screenshot of the LIVE site, so re-running untouched pages rewrites their
+// PNGs with fresh-but-equal pixels and git sees 25 modified files for a
+// one-card change. OG_ONLY=lens (comma-separated ids) scopes the run.
+const ONLY = process.env.OG_ONLY ? new Set(process.env.OG_ONLY.split(",").map((s) => s.trim())) : null;
+
 async function blissBackground() {
   // Reuse the exact wallpaper the live desktop paints, straight out of luna.css,
   // so the card background is pixel-identical to the real site (no second asset).
@@ -127,7 +163,11 @@ async function listPages() {
       out.push({ id, section, name, url });
     }
   }
-  return out;
+  for (const p of WORKER_PAGES) {
+    if (LOCAL) { console.log(`  - ${p.id}  skipped: worker route, and ${BASE} is the static server`); continue; }
+    out.push({ id: p.id, url: BASE + p.path });
+  }
+  return ONLY ? out.filter((p) => ONLY.has(p.id)) : out;
 }
 
 async function capture(page, cardPage, p, bliss) {
@@ -135,21 +175,37 @@ async function capture(page, cardPage, p, bliss) {
   await page.goto(p.url, { waitUntil: "networkidle", timeout: 25000 });
   await page.waitForTimeout(900); // let demo JS + canvases settle
 
-  const cfg = HERO[p.id] || {};
+  const cfg = HERO[p.id] || WORKER_PAGES.find((w) => w.id === p.id) || {};
+  if (cfg.settle) await page.waitForTimeout(cfg.settle);
   if (cfg.preset) {
     const btn = page.locator(cfg.preset).first();
-    if (await btn.count()) { await btn.click().catch(() => {}); await page.waitForTimeout(1600); }
+    if (await btn.count()) { await btn.click().catch(() => {}); await page.waitForTimeout(cfg.presetWait || 1600); }
   }
 
   // route label: reuse the page's own title-bar text (already "aadhar.sh/…").
   const route = (await page.locator(".window .title-bar .title-text").first().textContent().catch(() => null))
-    ?.replace(/\s+/g, " ").trim() || `aadhar.sh/${p.section}/${p.name}`;
+    ?.replace(/\s+/g, " ").trim() || (p.section ? `aadhar.sh/${p.section}/${p.name}` : `aadhar.sh${p.url.replace(BASE, "")}`);
   const favicon = await page.getAttribute('link[rel="icon"]', "href").catch(() => null);
 
-  // pick the hero element
-  const candidates = [...(cfg.hero || []), ...FALLBACK];
+  // pick the crop: a span (top of A to bottom of B) beats single-hero sweeps,
+  // because pages like /lens tell their story across stacked rows — address
+  // bar, example chips, then the three panes — that no one element contains.
   let box = null;
+  if (cfg.span && cfg.span.length === 2) {
+    const a = await page.locator(cfg.span[0]).first().boundingBox().catch(() => null);
+    const b = await page.locator(cfg.span[1]).first().boundingBox().catch(() => null);
+    if (a && b) {
+      const x = Math.min(a.x, b.x);
+      // exact: a span is a deliberate composition, so the proportional height
+      // cap below (meant for runaway single-element demos) does not apply —
+      // only the span's own optional spanMaxH does.
+      const spanH = b.y + b.height - a.y;
+      box = { x, y: a.y, width: Math.max(a.x + a.width, b.x + b.width) - x, height: cfg.spanMaxH ? Math.min(spanH, cfg.spanMaxH) : spanH, exact: true };
+    }
+  }
+  const candidates = [...(cfg.hero || []), ...FALLBACK];
   for (const sel of candidates) {
+    if (box) break;
     const el = page.locator(sel).first();
     if (!(await el.count())) continue;
     await el.scrollIntoViewIfNeeded().catch(() => {});
@@ -161,7 +217,7 @@ async function capture(page, cardPage, p, bliss) {
   let clip;
   if (box) {
     // cap the height so a very tall demo doesn't shrink to a stamp
-    const h = Math.min(box.height, Math.max(box.width * 0.72, 340), 900);
+    const h = box.exact ? Math.min(box.height, 900) : Math.min(box.height, Math.max(box.width * 0.72, 340), 900);
     clip = { x: box.x, y: Math.max(box.y, 0), width: box.width, height: h };
   } else {
     // last resort: the top of the page window (title bar + first screenful)

@@ -453,11 +453,29 @@ export function renderLensShell(initial, state, inputValue) {
         ? "Delta toggles hypothetical infrastructure. Predict, flip, check."
         : "Compare puts Human, HTTP Machine, and Browser Run side by side. Predict the machine pane; the miss is the lesson.";
   const initialScript = initial ? '<script type="application/json" id="lx-initial-data">' + lensScriptJson(initial) + "</script>" : "";
+  const lensDescription = "Paste any URL and see the human page, a transparent agent-readiness score, bot-specific access samples, raw HTML, structured data, machine terms, and the site's discovery surfaces side by side.";
   return lunaPage({
     title: "The Other Web · aadhar.sh",
     path: "The Other Web",
     width: 980,
-    description: "Paste any URL and see the human page, a transparent agent-readiness score, bot-specific access samples, raw HTML, structured data, machine terms, and the site's discovery surfaces side by side.",
+    description: lensDescription,
+    // Link unfurls. The card is pre-baked by gen-og-cards.mjs (OG_ONLY=lens):
+    // a live scan of stripe.com with the dollar verdict and the 29pt readiness
+    // score visible, floated on Bliss like every other card on the site. The
+    // scanned ?url= variants share the shell card — a per-scan card would need
+    // an on-the-fly render, and X's fetcher hits once, caches, and won't wait.
+    // Absolute URLs because card fetchers don't resolve relative ones.
+    head: `<meta property="og:type" content="website">
+<meta property="og:site_name" content="aadhar.sh">
+<meta property="og:title" content="The Other Web: how machines read a URL">
+<meta property="og:description" content="${escAttr(lensDescription)}">
+<meta property="og:url" content="https://${CANONICAL_HOST}/lens">
+<meta property="og:image" content="https://${CANONICAL_HOST}/og/lens.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="A Windows XP browser window showing one URL three ways at once: the page a person sees, the evidence a machine can recover, and a rendered snapshot.">
+<meta name="twitter:card" content="summary_large_image">
+`,
     // The bare shell is the site's flagship machine-web page and should be
     // indexable — an agent reading llms.txt now finds /lens listed there. Only a
     // targeted ?url= scan gets x-robots-tag: noindex (handleLens sets it), since
