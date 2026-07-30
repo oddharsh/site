@@ -1252,9 +1252,17 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
 
   // The parse phase is the one part of a scan that is pure compute: an
   // HTMLRewriter pass over up to 2MB, a full-text extraction, a markdown
-  // conversion, and a regex title grab. It does no I/O, so `Date.now()` cannot
-  // see it at all and `elapsedMs` never counted it. On a heavy page this is real
-  // CPU, and CPU is the thing a Worker actually gets billed and limited on.
+  // conversion, and a regex title grab.
+  //
+  // THIS SPAN READS 0ms AND THAT IS NOT A BUG — do not go looking for the
+  // missing time. Measured in production 2026-07-29 against a 752KB Wikipedia
+  // page (81KB of markdown out): `lens.inspect` 685ms decomposed as
+  // `lens.discovery` 656 + `lens.inspect.fetch` 29 + this span 0. Workers spans
+  // inherit the frozen-clock semantics of `Date.now()`: the clock advances across
+  // I/O, not during synchronous execution. So a span cannot measure CPU, and the
+  // hope that it would was wrong. The span is kept for its `lens.body_bytes` /
+  // `lens.word_count` / `lens.markdown_bytes` attributes, which do say how much
+  // work this phase was handed. For actual CPU, read `cpuTime` off the tail event.
   if (isHtml && body) {
     await span("lens.inspect.parse", async (s) => {
     s.setAttribute("lens.body_bytes", body.length);

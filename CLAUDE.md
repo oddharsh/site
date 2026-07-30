@@ -403,8 +403,21 @@ value is SKIPPED, never coerced to 0 or "unknown".
 
 Sampling is **100%**, which is a choice and not a default-by-omission: the rate
 is per-Worker rather than per-route, so thinning it would thin exactly the rare
-events this was turned on for. At this traffic 100% is far under the 10M
-events/month the Paid plan includes.
+events this was turned on for. The allowance is **200K events/day** (observability
+sits on the free tier here regardless of the Workers plan). Budget in SPANS, not
+visits: one `/lens/fetch` scan is 33-46 spans, so scan bursts spend it far faster
+than page views do.
+
+**A span cannot measure CPU.** Workers spans inherit the frozen-clock semantics of
+`Date.now()` — the clock advances across I/O, never during synchronous execution.
+Measured in production 2026-07-29 on a 752KB page: `lens.inspect` 685ms decomposed
+as `lens.discovery` 656 + `lens.inspect.fetch` 29 + `lens.inspect.parse` **0**,
+where that parse had just run HTMLRewriter over 752KB and emitted 81KB of
+markdown. So `home.grid.render` and `lens.inspect.parse` read 0 by design; they
+are kept for their attributes, which record how much work the phase was handed.
+Read `cpuTime` off the tail/log event for actual CPU (193ms on that same request).
+This corrects the original premise of this work, which assumed spans would see
+what `perf-probe.js` cannot.
 
 Where the spans are, and what each one is FOR — every one of these is a place
 the existing layers structurally could not reach:
@@ -412,9 +425,9 @@ the existing layers structurally could not reach:
 | span | the question it answers |
 |---|---|
 | `route <template>` | which route owns this fetch/KV child; `route.self_fetch` marks a `/lens` self-scan's inner dispatch |
-| `home.grid.*`, `rn.tracks.*` | the two hydration fragments. Splits manifest-vs-alt and the pure-compute render that `perf-probe.js`'s `Date.now()` helper necessarily reports as 0 |
+| `home.grid.*`, `rn.tracks.*` | the two hydration fragments. Splits manifest-vs-alt, which `perf-probe.js` fuses into one positional AE double. `home.grid.render` reads 0ms (see the CPU note above) and earns its place on attributes alone |
 | `rn.scrape.{playlist,tracks,artists}` | the 3-tier Spotify scrape, cold-miss only. `rn.artists_cached` vs `_scraped` says whether the artist KV cache is actually saving the network |
-| `lens.inspect.{fetch,parse}`, `lens.discovery` | `out.elapsedMs` is fixed BEFORE the 28-probe fan-out (botViews is 6 of its own), so a scan's discovery phase was entirely unmeasured. `lens.inspect.parse` is the pure-compute HTML pass |
+| `lens.inspect.{fetch,parse}`, `lens.discovery` | `out.elapsedMs` is fixed BEFORE the 28-probe fan-out (botViews is 6 of its own), so a scan's discovery phase was entirely unmeasured. Production, 752KB page: 782ms total, `elapsedMs` reported 29. `lens.inspect.parse` reads 0ms (CPU note above) and is kept for its byte/word attributes |
 | `lens.shot`, `lens.browser` | Browser Rendering. Same span name on hit and miss (differing on `lens.cache`) so hit rate is a group-by, not a join; the four distinct 502 shapes are separated by `lens.outcome` |
 | `cron.*` | a cron has no response, no status, and no visitor to complain |
 | `around.neighbor` | every degradation here is designed to be quiet (a disallowing robots.txt is a legitimate skip). The rollup makes "3 of 20 neighbors dark for a month" one number |
