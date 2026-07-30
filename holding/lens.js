@@ -423,12 +423,17 @@
       '<div class="lx-vs-grid">' + vsColumn(L || {}) + vsColumn(R || {}) + "</div>" + headline;
   }
 
+  // vsMode flips OUTSIDE the transition: withViewTransition defers its callback
+  // a frame, and syncUrl reads vsMode synchronously right after — deferring the
+  // flag meant the shareable ?vs= was written from the OLD mode every time.
   function setVsChrome(on) {
     vsMode = !!on;
-    [toolbar, modeNote, panes].forEach(function (el) { if (el) el.classList.toggle("lx-off", vsMode); });
-    if (vsSection) vsSection.classList.toggle("lx-off", !vsMode);
-    if (vsRow) vsRow.classList.toggle("lx-off", !vsMode && !(vsInput && vsInput.value.trim()));
-    if (vsToggle) vsToggle.setAttribute("aria-expanded", vsRow && !vsRow.classList.contains("lx-off") ? "true" : "false");
+    withViewTransition(function () {
+      [toolbar, modeNote, panes].forEach(function (el) { if (el) el.classList.toggle("lx-off", vsMode); });
+      if (vsSection) vsSection.classList.toggle("lx-off", !vsMode);
+      if (vsRow) vsRow.classList.toggle("lx-off", !vsMode && !(vsInput && vsInput.value.trim()));
+      if (vsToggle) vsToggle.setAttribute("aria-expanded", vsRow && !vsRow.classList.contains("lx-off") ? "true" : "false");
+    }, true, ["axp-dialog"]);
   }
 
   function runVs(left, right, push) {
@@ -439,11 +444,11 @@
     urlInput.value = left;
     if (vsInput) vsInput.value = right;
     if (vsRow) vsRow.classList.remove("lx-off");
-    withViewTransition(function () { setVsChrome(true); }, true, ["axp-dialog"]);
+    setVsChrome(true);
     syncUrl(push !== false);
     vsSection.innerHTML = '<div class="lx-spin">Scanning both sites as AadharshBot&hellip;</div>';
     statusBar.innerHTML = "<span>Comparing <b>" + esc(vsHost(left)) + "</b> and <b>" + esc(vsHost(right)) + "</b> server-side&hellip;</span>";
-    fetch("/lens/compare?left=" + encodeURIComponent(left) + "&right=" + encodeURIComponent(right))
+    fetch("/lens/compare.json?left=" + encodeURIComponent(left) + "&right=" + encodeURIComponent(right))
       .then(function (r) { return r.json(); })
       .then(function (j) {
         vsBusy = false;
@@ -461,10 +466,7 @@
 
   function exitVs(writeHistory) {
     if (vsInput) vsInput.value = "";
-    withViewTransition(function () {
-      setVsChrome(false);
-      if (vsRow) vsRow.classList.add("lx-off");
-    }, true, ["axp-dialog"]);
+    setVsChrome(false);
     if (writeHistory !== false) syncUrl(true);
     if (data) renderStatus();
     else statusBar.innerHTML = '<span>Idle. Nothing is fetched until you ask, and then just once, server-side, with no logging.</span>';
