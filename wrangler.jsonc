@@ -95,7 +95,33 @@
       "/images/*.heic", "/images/*.heif", "/images/*.hif"
     ]
   },
-  "observability": { "enabled": true },
+  // `enabled` is Workers LOGS (the structured line serveWorkerRequest emits).
+  // `traces` is the separate, newer thing: Workers Traces, which auto-instruments
+  // every outbound fetch, binding call, and handler invocation as a span tree,
+  // and which lib/trace.js hangs named spans off. It is opt-in until Cloudflare
+  // default-enables automatic tracing (that flip will want a newer
+  // compatibility_date; this API works at 2026-06-01, verified 2026-07-29).
+  //
+  // head_sampling_rate is 1 (every request), which is also the default, stated
+  // here because the value is a deliberate choice rather than an omission.
+  // Sampling is per-WORKER, not per-route, so a fractional rate would thin the
+  // rare-but-expensive events this was turned on for in the first place: a
+  // /lens discovery fan-out that stalls, a cron target that has silently been
+  // skipped for weeks, a coffee booking that fails closed on a stale calendar.
+  //
+  // The allowance is 200K events/DAY (the dashboard's own banner: observability
+  // is on the free tier here, whatever the Workers plan is — an earlier version
+  // of this comment claimed the Paid plan's 10M/month, which was wrong). Above
+  // that, Cloudflare samples for you. 200K/day is ~2.3/sec sustained, and this
+  // site's real traffic is a rounding error against it, but note that a /lens
+  // scan is ~33-46 spans in ONE request: an event here is a SPAN, not a visit,
+  // so a burst of scans consumes the budget far faster than the page views do.
+  // If the banner ever says events are being sampled, lower this rather than
+  // deleting spans. Same if a span ever shows up ON the critical path.
+  "observability": {
+    "enabled": true,
+    "traces": { "enabled": true, "head_sampling_rate": 1 }
+  },
   // the deployed version id (changes every deploy). lib/cache.js folds it into
   // the caches.default key for rendered shells, so a deploy orphans the old
   // edge entries atomically instead of waiting out their TTL. Not populated in

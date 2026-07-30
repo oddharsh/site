@@ -3,6 +3,7 @@
 import { wantsMarkdown } from "./lib/http.js";
 import { HOMEPAGE_DISCOVERY_LINK } from "./lib/security.js";
 import { renderPhotoSlots } from "./lib/photo-grid.js";
+import { span } from "./lib/trace.js";
 import { getAltMap, getImagesManifest } from "./photos.js";
 
 export function homepageHeadResponse(request) {
@@ -46,19 +47,53 @@ export function homepageHeadResponse(request) {
 // no-store, because the whole point of this response is that it differs every
 // time. It is small (twelve <a> blocks, ~4KB br) and it is fetched after the
 // document has already painted its text.
+// Traced in two phases. What the spans buy is the SPLIT and the attributes, NOT
+// visibility into compute — see the correction below.
+//
+// MEASURED 2026-07-29, in production, and it killed the original idea here: a
+// span does NOT see pure compute. Workers spans inherit exactly the frozen-clock
+// semantics of `Date.now()` (the clock advances across I/O, not during
+// synchronous execution), so `home.grid.render` reports ~0 for the same reason
+// perf-probe.js's `time()` helper does. Proven on `/lens/fetch` against a 752KB
+// Wikipedia page: `lens.inspect` 685ms = `lens.discovery` 656ms +
+// `lens.inspect.fetch` 29ms + `lens.inspect.parse` 0ms, where that parse had just
+// run an HTMLRewriter pass over 752KB and emitted 81KB of markdown. For CPU, read
+// `cpuTime` off the tail/log event (193ms on that request); spans are for I/O
+// structure and attributes. `home.grid.render` is kept anyway, because its
+// ATTRIBUTES (served, pool_size, alt_known) are the point.
+//
+// The two reads are also worth splitting: they run concurrently but they are
+// different animals. `manifest` is a two-key SWR over KV that can pay an R2 list
+// on a cold miss; `alt` is module-cached and free on a warm isolate. Fused into
+// one number (as the probe's positional `doubles` fuses them) a slow cold
+// manifest and a slow cold alt map are indistinguishable.
 export async function handlePhotoGrid(request, env, ctx) {
   const [pool, altMap] = await Promise.all([
-    getImagesManifest(env, ctx).then((a) => (Array.isArray(a) && a.length ? a : null), () => null),
-    getAltMap(env).catch(() => ({})),
+    span("home.grid.manifest", () =>
+      getImagesManifest(env, ctx).then((a) => (Array.isArray(a) && a.length ? a : null), () => null)),
+    span("home.grid.alt", () => getAltMap(env).catch(() => ({}))),
   ]);
-  if (!pool) return new Response("", { status: 503, headers: { "cache-control": "no-store" } });
-  return new Response(renderPhotoSlots(pickRandom(pool, 12), altMap || {}), {
-    status: 200,
-    headers: {
-      "content-type": "text/html; charset=utf-8",
-      "cache-control": "no-store, must-revalidate",
-      "x-content-type-options": "nosniff",
-    },
+  // 503 is the honest answer when the manifest is unreachable: the fragment has
+  // nothing to say and the page keeps its baked twelve. Recorded as an attribute
+  // so "how often does the grid fall back" is a query, not a guess.
+  if (!pool) {
+    return span("home.grid.render", (s) => {
+      s.setAttribute("home.grid.served", false);
+      return new Response("", { status: 503, headers: { "cache-control": "no-store" } });
+    });
+  }
+  return span("home.grid.render", (s) => {
+    s.setAttribute("home.grid.served", true);
+    s.setAttribute("home.grid.pool_size", pool.length);
+    s.setAttribute("home.grid.alt_known", Object.keys(altMap || {}).length);
+    return new Response(renderPhotoSlots(pickRandom(pool, 12), altMap || {}), {
+      status: 200,
+      headers: {
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": "no-store, must-revalidate",
+        "x-content-type-options": "nosniff",
+      },
+    });
   });
 }
 

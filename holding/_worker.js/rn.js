@@ -4,6 +4,7 @@ import { signedFetch } from "./lib/botauth.js";
 import { deleteSWRKV, swrKV } from "./lib/cache.js";
 import { lunaPage } from "./lib/chrome.js";
 import { esc, escAttr, escHtml, jsonResp, timingSafeEqual } from "./lib/http.js";
+import { span } from "./lib/trace.js";
 
 // ── /rn redirect target ─────────────────────────────────────────────
 // the link on the site is static (/rn). the redirect target lives in KV
@@ -93,16 +94,29 @@ function trackResponse(payload, status = 200, format = "json") {
   return jsonResp(payload, status);
 }
 
+// Traced as `rn.tracks.load` with the OUTCOME on the span, because this handler
+// has four quite different ways to answer and three of them are 200s carrying an
+// error object. A status code alone cannot tell "played from a warm SWR hit"
+// apart from "no playlist configured" apart from "Spotify refused the scrape",
+// and the second homepage fragment going quiet is exactly the kind of thing that
+// otherwise gets noticed by eye, weeks later.
 async function loadRnTracks(request, env, ctx) {
+  return span("rn.tracks.load", (s) => loadRnTracksInner(request, env, ctx, s));
+}
+
+async function loadRnTracksInner(request, env, ctx, s) {
   const url = new URL(request.url);
 
   if (!env.RN_KV) {
+    s.setAttribute("rn.outcome", "no_kv_binding");
     return { payload: { error: "no kv binding", tracks: [] }, status: 500 };
   }
-  const playlistId = await env.RN_KV.get("playlist-id");
+  const playlistId = await span("rn.tracks.playlist_id", () => env.RN_KV.get("playlist-id"));
   if (!playlistId || !/^[0-9A-Za-z]{22}$/.test(playlistId)) {
+    s.setAttribute("rn.outcome", "no_playlist_set");
     return { payload: { error: "no playlist set", tracks: [] }, status: 200 };
   }
+  s.setAttribute("rn.playlist_id", playlistId);
 
   const cacheKey = `tracks:${playlistId}`;
 
@@ -110,7 +124,8 @@ async function loadRnTracks(request, env, ctx) {
   // constant-time compare, same as the admin/set gate (a plain === leaks the
   // secret's length + prefix through timing).
   if (env.RN_BUST_SECRET && timingSafeEqual(url.searchParams.get("bust") || "", env.RN_BUST_SECRET)) {
-    await deleteSWRKV(env, cacheKey);
+    s.setAttribute("rn.busted", true);
+    await span("rn.tracks.bust", () => deleteSWRKV(env, cacheKey));
   }
 
   // two-key SWR (same shape as the photo manifest): stale serves instantly,
@@ -118,10 +133,16 @@ async function loadRnTracks(request, env, ctx) {
   // (or a bust) pays the 3-tier Spotify scrape inline.
   let payload;
   try {
-    payload = await getTracksSWR(env, ctx, playlistId, { buildOnMiss: true });
+    payload = await span("rn.tracks.swr", () => getTracksSWR(env, ctx, playlistId, { buildOnMiss: true }));
   } catch (e) {
+    // the reason is otherwise swallowed entirely — the 502 body says only
+    // "scrape failed", and this catch is the last place the actual error exists.
+    s.setAttribute("rn.outcome", "scrape_failed");
+    s.setAttribute("rn.error", (e && e.message) || String(e));
     return { payload: { error: "scrape failed", tracks: [] }, status: 502 };
   }
+  s.setAttribute("rn.outcome", "ok");
+  s.setAttribute("rn.track_count", Array.isArray(payload?.tracks) ? payload.tracks.length : 0);
   return { payload, status: 200 };
 }
 
@@ -214,9 +235,19 @@ export async function getTracksSWR(env, ctx, pid, opts = {}) {
   });
 }
 
+// Traced tier by tier. This function is the single most expensive thing the
+// worker can do — one embed fetch for the playlist, then ONE PER TRACK, then one
+// per uncached artist — and it runs only on a cold SWR miss or a manual bust, so
+// it is both rare and the thing you want the receipt for when a homepage
+// fragment takes seconds. Each tier's fetches are auto-instrumented as children;
+// the tier spans are what make 30 sibling fetches legible as three phases.
 export async function scrapePlaylistTracks(playlistId, env, ctx) {
   // tier 1: playlist embed → ordered track list
-  const playlistEntity = await scrapeSpotifyEmbed(`playlist/${playlistId}`, env);
+  const playlistEntity = await span(
+    "rn.scrape.playlist",
+    () => scrapeSpotifyEmbed(`playlist/${playlistId}`, env),
+    { "rn.playlist_id": playlistId },
+  );
   const trackList = Array.isArray(playlistEntity.trackList) ? playlistEntity.trackList : [];
 
   const baseTracks = trackList
@@ -239,28 +270,38 @@ export async function scrapePlaylistTracks(playlistId, env, ctx) {
   // ONE fetch per track replaces the prior playlist-embed + oEmbed pair
   // (oEmbed only returned the cover; the track embed returns cover + the
   // artist URIs we need for the artist-hover feature).
-  const enriched = await Promise.all(baseTracks.map(async t => {
-    try {
-      const e = await scrapeSpotifyEmbed(`track/${t.id}`, env);
-      const image_url = e?.visualIdentity?.image?.[0]?.url || null;
-      const artists = Array.isArray(e?.artists)
-        ? e.artists
-            .filter(a => a && typeof a.uri === "string" && a.uri.startsWith("spotify:artist:"))
-            .map(a => {
-              const id = a.uri.slice("spotify:artist:".length);
-              return {
-                id,
-                name:        a.name || "",
-                spotify_url: `https://open.spotify.com/artist/${id}`,
-                image_url:   null,    // filled in tier 3 below
-              };
-            })
-        : [];
-      return { ...t, image_url, artists };
-    } catch {
-      return { ...t, image_url: null, artists: [] };
-    }
-  }));
+  const enriched = await span("rn.scrape.tracks", async (s) => {
+    s.setAttribute("rn.track_count", baseTracks.length);
+    // a per-track embed that throws degrades that ONE track to no cover and no
+    // artists (the catch below), which is invisible in the rendered list. The
+    // count makes partial degradation a number instead of a shrug.
+    let failed = 0;
+    const out = await Promise.all(baseTracks.map(async t => {
+      try {
+        const e = await scrapeSpotifyEmbed(`track/${t.id}`, env);
+        const image_url = e?.visualIdentity?.image?.[0]?.url || null;
+        const artists = Array.isArray(e?.artists)
+          ? e.artists
+              .filter(a => a && typeof a.uri === "string" && a.uri.startsWith("spotify:artist:"))
+              .map(a => {
+                const id = a.uri.slice("spotify:artist:".length);
+                return {
+                  id,
+                  name:        a.name || "",
+                  spotify_url: `https://open.spotify.com/artist/${id}`,
+                  image_url:   null,    // filled in tier 3 below
+                };
+              })
+          : [];
+        return { ...t, image_url, artists };
+      } catch {
+        failed++;
+        return { ...t, image_url: null, artists: [] };
+      }
+    }));
+    s.setAttribute("rn.track_embeds_failed", failed);
+    return out;
+  });
 
   // tier 3: per-unique-artist embed → profile picture. cached in KV
   // under `artist:<id>` for ARTIST_KV_TTL because artist photos rarely
@@ -271,34 +312,49 @@ export async function scrapePlaylistTracks(playlistId, env, ctx) {
       if (!uniqueArtists.has(a.id)) uniqueArtists.set(a.id, a);
     }
   }
-  await Promise.all([...uniqueArtists.values()].map(async a => {
-    const cacheKey = `artist:${a.id}`;
-    if (env?.RN_KV) {
-      const hit = await env.RN_KV.get(cacheKey, "json");
-      if (hit && typeof hit === "object") {
-        a.image_url = hit.image_url || null;
-        if (hit.name && !a.name) a.name = hit.name;
-        return;
+  // The hit/miss split is the number worth having here: artist photos are
+  // KV-cached for ARTIST_KV_TTL precisely so a cold playlist scrape does not pay
+  // network per artist, and whether that is actually working is invisible from
+  // the outside. A scrape that shows 0 hits and 20 misses says the artist cache
+  // expired under it; the same scrape at 20 hits and 0 misses is cheap.
+  await span("rn.scrape.artists", async (s) => {
+    s.setAttribute("rn.unique_artists", uniqueArtists.size);
+    let cached = 0, scraped = 0, failed = 0;
+    await Promise.all([...uniqueArtists.values()].map(async a => {
+      const cacheKey = `artist:${a.id}`;
+      if (env?.RN_KV) {
+        const hit = await env.RN_KV.get(cacheKey, "json");
+        if (hit && typeof hit === "object") {
+          cached++;
+          a.image_url = hit.image_url || null;
+          if (hit.name && !a.name) a.name = hit.name;
+          return;
+        }
       }
-    }
-    try {
-      const e = await scrapeSpotifyEmbed(`artist/${a.id}`, env);
-      // pick the 320px variant: tooltip renders at 180×180, so 320 source
-      // gives a crisp retina-ready image without paying the 640px hero
-      // weight. fall through to whatever's first if no 320 variant exists.
-      const imgs = Array.isArray(e?.visualIdentity?.image) ? e.visualIdentity.image : [];
-      const pick = imgs.find(i => i.maxWidth === 320) || imgs.find(i => i.maxWidth === 160) || imgs[0] || null;
-      a.image_url = pick?.url || null;
-      if (e?.name && !a.name) a.name = e.name;
-      if (env?.RN_KV && ctx) {
-        ctx.waitUntil(env.RN_KV.put(cacheKey, JSON.stringify({
-          name: a.name, image_url: a.image_url
-        }), { expirationTtl: ARTIST_KV_TTL }));
+      try {
+        const e = await scrapeSpotifyEmbed(`artist/${a.id}`, env);
+        scraped++;
+        // pick the 320px variant: tooltip renders at 180×180, so 320 source
+        // gives a crisp retina-ready image without paying the 640px hero
+        // weight. fall through to whatever's first if no 320 variant exists.
+        const imgs = Array.isArray(e?.visualIdentity?.image) ? e.visualIdentity.image : [];
+        const pick = imgs.find(i => i.maxWidth === 320) || imgs.find(i => i.maxWidth === 160) || imgs[0] || null;
+        a.image_url = pick?.url || null;
+        if (e?.name && !a.name) a.name = e.name;
+        if (env?.RN_KV && ctx) {
+          ctx.waitUntil(env.RN_KV.put(cacheKey, JSON.stringify({
+            name: a.name, image_url: a.image_url
+          }), { expirationTtl: ARTIST_KV_TTL }));
+        }
+      } catch {
+        failed++;
+        a.image_url = null;
       }
-    } catch {
-      a.image_url = null;
-    }
-  }));
+    }));
+    s.setAttribute("rn.artists_cached", cached);
+    s.setAttribute("rn.artists_scraped", scraped);
+    s.setAttribute("rn.artists_failed", failed);
+  });
 
   // copy enriched artist data back onto every track (the per-track .artists
   // arrays share Map references but Promise.all parallelism means we need
