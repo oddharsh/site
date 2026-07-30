@@ -20,6 +20,11 @@
   var modeNote = document.getElementById("lx-mode-note");
   var statusBar = document.getElementById("lx-status");
   var toolbar = document.getElementById("lx-toolbar");
+  var vsRow = document.getElementById("lx-addr-vs");
+  var vsInput = document.getElementById("lx-url-vs");
+  var vsToggle = document.getElementById("lx-vs-toggle");
+  var vsCloseBtn = document.getElementById("lx-vs-close");
+  var vsSection = document.getElementById("lx-vs");
 
   var data = null;       // last successful HTTP envelope
   var browserData = null; // last opt-in Browser Run snapshot
@@ -28,6 +33,8 @@
   var counterfactuals = { markdown: false, semantic: false, contract: false, authority: false, receipt: false, dictionary: false, ech: false };
   var busy = false;
   var browserBusy = false;
+  var vsMode = false;    // head-to-head: #lx-vs shown, single-scan chrome .lx-off
+  var vsBusy = false;
   var lastShotUrl = null;   // the live snapshot object URL, revoked before the next mint / on decode
 
   // Must match LENS_TAB_LABELS in holding/_worker.js/lens.js: the tab labels are
@@ -239,6 +246,7 @@
     });
     return {
       url: p.get("url") || "",
+      vs: p.get("vs") || "",
       view: views.indexOf(p.get("view")) >= 0 ? p.get("view") : "both",
       lens: lenses.indexOf(p.get("lens")) >= 0 ? p.get("lens") : "readiness",
       counterfactuals: cf,
@@ -249,13 +257,20 @@
     var u;
     try { u = new URL(location.href); } catch (e) { return; }
     u.pathname = "/lens";
-    ["url", "view", "lens", "cf"].forEach(function (key) { u.searchParams.delete(key); });
+    ["url", "vs", "view", "lens", "cf"].forEach(function (key) { u.searchParams.delete(key); });
     var raw = urlInput.value.trim();
     if (raw) u.searchParams.set("url", raw);
-    if (view !== "both") u.searchParams.set("view", view);
-    if (lens !== "readiness") u.searchParams.set("lens", lens);
-    var cf = Object.keys(counterfactuals).filter(function (key) { return counterfactuals[key]; });
-    if (cf.length) u.searchParams.set("cf", cf.join(","));
+    // head-to-head state is url + vs, nothing else: view/lens/cf describe the
+    // single-scan chrome, which vs mode hides, and a share link that carried
+    // them would restore a state the reader cannot see.
+    if (vsMode && vsInput && vsInput.value.trim()) {
+      u.searchParams.set("vs", vsInput.value.trim());
+    } else {
+      if (view !== "both") u.searchParams.set("view", view);
+      if (lens !== "readiness") u.searchParams.set("lens", lens);
+      var cf = Object.keys(counterfactuals).filter(function (key) { return counterfactuals[key]; });
+      if (cf.length) u.searchParams.set("cf", cf.join(","));
+    }
     var next = u.pathname + (u.search || "") + (u.hash || "");
     var current = location.pathname + location.search + location.hash;
     if (next === current) return;
@@ -291,6 +306,7 @@
     if (busy) return;
     url = (url || "").trim();
     if (!url) { urlInput.focus(); return; }
+    if (vsMode) exitVs(false);   // a single scan replaces the head-to-head
     busy = true;
     browserData = null;
     urlInput.value = url;
@@ -342,6 +358,116 @@
         machineBody.innerHTML = '<div class="lx-empty">Network error: ' + esc(e && e.message || e) + "</div>";
         statusBar.innerHTML = '<span class="err">Network error.</span>';
       });
+  }
+
+  // ---- head-to-head (vs) ------------------------------------------------
+  // Two sites through one rubric, on the engine /lens/compare already runs for
+  // machine callers. Mirrors lensVsFragment in _worker.js/lens.js: the server
+  // copy is the no-JS floor for a shared ?url=&vs= link, this one renders the
+  // vs form without a round-trip through the shell template. The single-scan
+  // chrome (toolbar, mode note, panes) keeps its DOM and takes .lx-off, so
+  // closing the comparison is a class flip back to whatever was there.
+  var VS_SURFACES = [
+    ["llms", "llms.txt"], ["markdown", "markdown negotiation"], ["mcp", "MCP"],
+    ["agentCard", "an agent card"], ["apiCatalog", "an API catalog"],
+  ];
+
+  function vsHost(u) {
+    try { return new URL(u).hostname.replace(/^www\./, ""); } catch (e) { return String(u || ""); }
+  }
+
+  function vsColumn(s) {
+    var host = vsHost(s.finalUrl || s.url);
+    var levelKind = s.level >= 5 ? "ok" : s.level >= 3 ? "" : "warn";
+    var pub = VS_SURFACES.filter(function (x) { return s.surfaces && s.surfaces[x[0]]; })
+      .map(function (x) { return '<span class="lx-tag">' + esc(x[1]) + "</span>"; }).join("");
+    var cost = s.cost
+      ? "~" + fmtTok(s.cost.tokens) + " " + term("token", "tokens") + " &middot; " + fmtUsd(s.cost.usdPerRead) + "/read"
+      : "no cost model (non-HTML)";
+    var rows = [
+      ["response", esc((s.status == null ? "?" : s.status) + " " + httpText(s.status || 0))],
+      ["terms", esc(s.tier || "unknown")],
+      ["agent doors", esc(String(s.doors || 0))],
+      ["one model read", cost],
+      ["payload", esc(bytes(s.bytes))],
+      ["words", esc(String(s.wordCount || 0))],
+    ].map(function (row) { return "<tr><td>" + esc(row[0]) + "</td><td>" + row[1] + "</td></tr>"; }).join("");
+    return '<div class="lx-vs-col"><div class="lx-vs-h"><span>' + esc(host) + '</span><a href="/lens?url=' + esc(encodeURIComponent(s.url || "")) + '">full scan &rarr;</a></div>' +
+      '<div class="lx-vs-body"><div class="lx-vs-score"><b>' + (s.readiness == null ? "?" : esc(s.readiness)) + "<span>/100</span></b>" +
+      badge("Level " + (s.level == null ? "?" : s.level), levelKind) + "<span>" + esc(s.levelName || "") + "</span></div>" +
+      '<table class="lx-kv">' + rows + "</table>" +
+      '<div class="lx-tags" style="margin-top:6px">' + (pub || '<span class="lx-none">no machine surfaces published</span>') + "</div></div></div>";
+  }
+
+  function renderVs(payload) {
+    if (!payload || !payload.ok) {
+      vsSection.innerHTML = '<div class="lx-empty">' + esc((payload && payload.error) || "The comparison did not run.") + "</div>";
+      return;
+    }
+    var L = payload.left, R = payload.right;
+    var headline = "";
+    if (L && R && L.readiness != null && R.readiness != null) {
+      var win = L.readiness >= R.readiness ? L : R;
+      var lose = win === L ? R : L;
+      var extras = VS_SURFACES.filter(function (x) {
+        return win.surfaces && win.surfaces[x[0]] && !(lose.surfaces && lose.surfaces[x[0]]);
+      }).map(function (x) { return x[1]; });
+      var spread = win.readiness === lose.readiness
+        ? "<b>" + esc(win.readiness) + " apiece.</b> Same score, one rubric."
+        : "<b>" + esc(vsHost(win.finalUrl || win.url)) + " " + esc(win.readiness) + ", " + esc(vsHost(lose.finalUrl || lose.url)) + " " + esc(lose.readiness) + ".</b>";
+      headline = '<div class="lx-vs-headline">' + spread +
+        (extras.length ? " The gap is published surfaces: " + esc(extras.join(", ")) + "." : " Both publish the same surfaces; the gap sits in the individual checks.") +
+        "</div>";
+    }
+    vsSection.innerHTML = '<div class="lx-vs-note">Two sites, one rubric, same evidence rules. Every number here links back to a full scan.</div>' +
+      '<div class="lx-vs-grid">' + vsColumn(L || {}) + vsColumn(R || {}) + "</div>" + headline;
+  }
+
+  function setVsChrome(on) {
+    vsMode = !!on;
+    [toolbar, modeNote, panes].forEach(function (el) { if (el) el.classList.toggle("lx-off", vsMode); });
+    if (vsSection) vsSection.classList.toggle("lx-off", !vsMode);
+    if (vsRow) vsRow.classList.toggle("lx-off", !vsMode && !(vsInput && vsInput.value.trim()));
+    if (vsToggle) vsToggle.setAttribute("aria-expanded", vsRow && !vsRow.classList.contains("lx-off") ? "true" : "false");
+  }
+
+  function runVs(left, right, push) {
+    if (vsBusy) return;
+    left = (left || "").trim(); right = (right || "").trim();
+    if (!left || !right) return;
+    vsBusy = true;
+    urlInput.value = left;
+    if (vsInput) vsInput.value = right;
+    if (vsRow) vsRow.classList.remove("lx-off");
+    withViewTransition(function () { setVsChrome(true); }, true, ["axp-dialog"]);
+    syncUrl(push !== false);
+    vsSection.innerHTML = '<div class="lx-spin">Scanning both sites as AadharshBot&hellip;</div>';
+    statusBar.innerHTML = "<span>Comparing <b>" + esc(vsHost(left)) + "</b> and <b>" + esc(vsHost(right)) + "</b> server-side&hellip;</span>";
+    fetch("/lens/compare?left=" + encodeURIComponent(left) + "&right=" + encodeURIComponent(right))
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        vsBusy = false;
+        renderVs(j);
+        statusBar.innerHTML = j && j.ok
+          ? '<span><b>Head-to-head</b></span><span>' + esc(vsHost(left)) + " vs " + esc(vsHost(right)) + '</span><span style="margin-left:auto">both fetched server-side as AadharshBot</span>'
+          : '<span class="err">Comparison failed:</span> <span>' + esc((j && j.error) || "unknown error") + "</span>";
+      })
+      .catch(function (e) {
+        vsBusy = false;
+        vsSection.innerHTML = '<div class="lx-empty">Network error: ' + esc(e && e.message || e) + "</div>";
+        statusBar.innerHTML = '<span class="err">Network error.</span>';
+      });
+  }
+
+  function exitVs(writeHistory) {
+    if (vsInput) vsInput.value = "";
+    withViewTransition(function () {
+      setVsChrome(false);
+      if (vsRow) vsRow.classList.add("lx-off");
+    }, true, ["axp-dialog"]);
+    if (writeHistory !== false) syncUrl(true);
+    if (data) renderStatus();
+    else statusBar.innerHTML = '<span>Idle. Nothing is fetched until you ask, and then just once, server-side, with no logging.</span>';
   }
 
   // ---- human pane: a live browser window --------------------------------
@@ -1392,10 +1518,28 @@
     }, shouldAnimate, ["axp-dialog"]);
   }
 
-  form.addEventListener("submit", function (e) { e.preventDefault(); run(urlInput.value); });
-  [].forEach.call(document.querySelectorAll(".lx-chip"), function (c) {
-    c.addEventListener("click", function () { run(c.getAttribute("data-url")); });
+  form.addEventListener("submit", function (e) {
+    e.preventDefault();
+    // A visible, filled vs row turns Go into a head-to-head; otherwise Go
+    // scans one site, exactly as before the row existed.
+    var second = vsRow && !vsRow.classList.contains("lx-off") && vsInput ? vsInput.value.trim() : "";
+    if (second && urlInput.value.trim()) runVs(urlInput.value, second);
+    else run(urlInput.value);
   });
+  [].forEach.call(document.querySelectorAll(".lx-chip"), function (c) {
+    c.addEventListener("click", function () {
+      var pair = c.getAttribute("data-vs-pair");
+      if (pair && pair.indexOf("|") > 0) { runVs(pair.split("|")[0], pair.split("|")[1]); return; }
+      if (c.getAttribute("data-url")) run(c.getAttribute("data-url"));
+    });
+  });
+  if (vsToggle) vsToggle.addEventListener("click", function () {
+    if (!vsRow) return;
+    var hidden = vsRow.classList.toggle("lx-off");
+    vsToggle.setAttribute("aria-expanded", hidden ? "false" : "true");
+    if (!hidden && vsInput) vsInput.focus();
+  });
+  if (vsCloseBtn) vsCloseBtn.addEventListener("click", function () { exitVs(true); });
   [].forEach.call(document.querySelectorAll(".lx-seg"), function (b) {
     b.addEventListener("click", function () { setView(b.getAttribute("data-view")); });
   });
@@ -1467,6 +1611,13 @@
     view = state.view;
     lens = state.lens;
     counterfactuals = state.counterfactuals;
+    // head-to-head first: a vs URL re-runs the comparison; leaving one restores
+    // the single-scan chrome before the normal view/lens handling below.
+    if (state.url && state.vs) {
+      runVs(state.url, state.vs, false);
+      return;
+    }
+    if (vsMode) exitVs(false);
     if (state.url && state.url !== urlInput.value.trim()) {
       run(state.url);
       return;
@@ -1488,7 +1639,12 @@
   // link hover) must hold fire until the visit is real (prerenderingchange).
   try {
     var qp = new URLSearchParams(location.search).get("url");
-    if (initialData) {
+    if (urlState.vs && urlState.url) {
+      // A shared ?url=&vs= link: the server already ran the comparison and
+      // rendered it (the no-JS floor). Adopt the mode; don't re-spend the
+      // 4/min compare budget re-fetching what is already on screen.
+      setVsChrome(true);
+    } else if (initialData) {
       urlInput.value = qp || initialData.finalUrl || initialData.url || "";
       if (initialData.ok) {
         data = initialData;
