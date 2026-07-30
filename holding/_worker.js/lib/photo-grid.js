@@ -8,30 +8,46 @@
 //   - /photos/grid.html renders a fresh RANDOM twelve per request, which the
 //     inline hydrator swaps in over the baked set.
 //
-// Same function, same attributes, so "what the crawler sees" and "what the
-// visitor sees" differ only in WHICH photos, never in how a tile is built.
-// This module deliberately imports nothing that touches a Worker global, so
-// Node can import it straight out of the staged tree at build time.
+// Same function, same tiles, so "what the crawler sees" and "what the visitor
+// sees" differ only in WHICH photos and in whether the URLs are live yet (the
+// `deferred` option below, which exists for one reason: only the baked set is
+// ever thrown away). This module deliberately imports nothing that touches a
+// Worker global, so Node can import it straight out of the staged tree at
+// build time.
 import { escAttr } from "./http.js";
 
 // Pool URLs are already absolute /i/ form; this is the last-resort shim for a
 // pool entry that predates that (kept identical to photos.js's absThumb).
 const abs = (u) => (u && u.startsWith("/") ? u : `/images/${u}`);
 
-// EVERY tile is deferred, including the first.
+// WHICH tiles carry a real `src` depends on which caller is rendering, and the
+// reason is the same one in both directions: a URL should only be in the markup
+// when it is a URL the visitor is actually going to use.
 //
-// #156 put slots 1-11 behind an IntersectionObserver and left slot 0 directly
-// discoverable, because slot 0 is visible at load. That reasoning assumed the
-// grid arrived in the document. It no longer does: the baked twelve are a
-// fallback that the hydrator is about to replace, so a real `src` on slot 0
-// would fetch a thumbnail that is discarded milliseconds later — the exact
-// double-download #156 removed, reintroduced from the other side.
+//   deferred: true  — the BAKED twelve. These are a fallback the hydrator is
+//     about to replace, so a real `src` here fetches a thumbnail that is
+//     discarded milliseconds later. URLs stay in data-* and the <noscript> twin
+//     carries the script-off path. This is the double-download #156 removed.
 //
-// The cost is one round trip before the first tile can start, and it is
-// affordable for the reason #156 measured: the introductory prose is the LCP
-// element at 390px and 1280px alike, so no photo is on the critical path.
-// Every tile stays fetchpriority=low for the same reason.
-export function renderPhotoSlots(pick, altMap = {}) {
+//   deferred: false — the /photos/grid.html fragment. These tiles ARE the grid.
+//     Nothing is going to replace them, so they carry real URLs and start
+//     immediately on innerHTML. No <noscript> twin: the fragment only ever
+//     arrives via fetch(), which means script is running by definition.
+//
+// The IntersectionObserver that used to gate the fragment came out on
+// 2026-07-29. Measured on production at 1280x720 before removing it: 9 of 12
+// tiles fetched, 102.1 KB total, every one of them complete 48ms after the
+// first started. The three it withheld were row 4 (top 1033px against a 640px
+// .content scroller plus a 190px margin), so the first scroll landed on white
+// squares — the same failure the margin was added to fix, moved down one row.
+// Loading all twelve costs ~34 KB more and removes the white squares, the
+// observer, and the rootMargin tuning that has now been wrong twice.
+//
+// Every tile stays fetchpriority=low. That is unchanged and still load-bearing:
+// #156 measured the introductory prose as the LCP element at 390px and 1280px
+// alike, so no photo is on the critical path and none of them should compete
+// with one.
+export function renderPhotoSlots(pick, altMap = {}, { deferred = true } = {}) {
   return pick.map((p) => {
     const small = p.thumb_small ? abs(p.thumb_small) : null;
     const large = p.thumb_avif ? abs(p.thumb_avif) : null;
@@ -58,17 +74,25 @@ export function renderPhotoSlots(pick, altMap = {}) {
     // In a scripting browser <noscript> is inert text, so these real URLs never
     // enter the preload scanner and cannot undo the deferral above. Without JS
     // they are the entire grid, which is why the baked set has to be real
-    // photos rather than empty frames.
-    const noScript =
-      `<noscript><picture>` + sources("srcset") +
-        `<img alt="${alt}" width="600" height="600" src="${escAttr(jpg)}" loading="lazy" fetchpriority="low" decoding="async">` +
-      `</picture></noscript>`;
+    // photos rather than empty frames. The fragment needs no twin — reaching it
+    // at all required fetch().
+    const noScript = deferred
+      ? `<noscript><picture>` + sources("srcset") +
+          `<img alt="${alt}" width="600" height="600" src="${escAttr(jpg)}" loading="lazy" fetchpriority="low" decoding="async">` +
+        `</picture></noscript>`
+      : "";
+
+    const picture = deferred
+      ? `<picture data-photo-deferred>` + sources("data-srcset") +
+          `<img alt="${alt}" width="600" height="600" data-src="${escAttr(jpg)}" loading="eager" fetchpriority="low" decoding="async">` +
+        `</picture>`
+      : `<picture>` + sources("srcset") +
+          `<img alt="${alt}" width="600" height="600" src="${escAttr(jpg)}" loading="eager" fetchpriority="low" decoding="async">` +
+        `</picture>`;
 
     return `<a href="/images/full/${encodeURI(p.full)}" target="_blank" rel="noopener"` +
            ` data-full="${escAttr(p.full)}"${sizeAttr}${upAttr}>` +
-      `<picture data-photo-deferred>` + sources("data-srcset") +
-        `<img alt="${alt}" width="600" height="600" data-src="${escAttr(jpg)}" loading="eager" fetchpriority="low" decoding="async">` +
-      `</picture>` + noScript +
+      picture + noScript +
     `</a>`;
   }).join("");
 }

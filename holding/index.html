@@ -687,36 +687,50 @@ footer .signature small { color: oklch(56.93% 0 0); }
       </a>
     </section>
 
-    <!-- Native loading=lazy uses a viewport-distance heuristic that reaches far
-         past this page's internal .content scroller: a 390px Slow-4G trace
-         fetched eight of twelve thumbnails even though only the first tile was
-         visible. The Worker leaves slots 2-12 as data-* URLs. Desktop visitors
-         normally see two or three photo rows in the initial window, so hydrate
-         every tile that intersects that real scrollport synchronously. Mobile
-         keeps only slot 1 on the initial critical path, then starts observation
-         after the text paint. A 5% threshold avoids transferring the next row
-         when only a couple of pixels touch the bottom edge. Browsers without
-         IntersectionObserver load the full selected set; the <noscript>
-         pictures emitted beside each deferred slot preserve the script-off
-         path.
+    <!-- The twelve tiles above are BAKED and identical for everyone: that is what
+         lets `/` ship as a deterministic document with a q11 twin, a dcz delta,
+         and a validator that answers 304 instead of resending the page. They are
+         also the whole grid for a crawler or a visitor without JavaScript, via
+         the <noscript> twin inside each tile. Their URLs sit in data-* so the
+         swap below does not pay for thumbnails it is about to discard.
 
-         The observer ran with NO rootMargin until 2026-07-29, which made a tile
-         start its fetch only once it had already crossed into view: at 1280x720
-         the two rows below the fold sat 163px and 353px out, so the smallest
-         scroll landed on white squares and watched them fill. Pre-warming by one
-         row (tiles are 174px on a 190px pitch at every breakpoint here) fixes
-         that at the near edge while staying far short of what native lazy was
-         rejected for. Measured on this page: 6 of 12 tiles fetched at 1280x720
-         before, 9 after; on a 390px phone 1 before, 2 after, against the 8 that
-         got this replaced. -->
+         The swap brings a fresh random twelve, already carrying live URLs, so
+         the grid starts transferring the moment innerHTML lands.
+
+         There is no viewport gating on either path, and the reason is that
+         gating never had enough to protect. Native loading=lazy went first: its
+         viewport-distance heuristic reaches far past this page's internal
+         .content scroller, and a 390px Slow-4G trace fetched eight of twelve
+         with only the first tile visible. The IntersectionObserver that replaced
+         it came out on 2026-07-29. Measured on production at 1280x720: it
+         withheld 3 of 12 tiles, the 9 it allowed totalled 102.1 KB, and all 9
+         finished 48ms after the first one started. The 3 it held back were row 4
+         — 1033px against a 640px scroller plus the 190px margin added earlier
+         that same day — so the first scroll still landed on white squares, which
+         is the exact failure the margin was added to fix. The whole set is
+         ~136 KB at fetchpriority=low, off the LCP path (the prose is the LCP
+         element at 390px and 1280px alike), and it costs ~34 KB more than the
+         observer was saving. Squares that are never white is worth 34 KB.
+
+         KNOWN, and not fixed here: image loading is gated on the document
+         actually rendering, not on how the URL got into the markup. Loaded into
+         a tab that never rendered, the fragment arrived at 85ms and not one of
+         the twelve transferred until a paint was forced 32s later. Whether
+         Chrome's prerenderer behaves like that unrendered tab or like a normal
+         visible load is UNVERIFIED — it renders into a hidden compositor, which
+         suggests it does transfer, but nobody has measured it on this page. If
+         the homepage prerender turns out to deliver the document without the
+         grid, that is a separate bug from this one and none of the above is the
+         fix for it. -->
 
     <script>
     (() => {
-      const start = () => {
-        const root = document.querySelector(".content");
-        const pictures = [...document.querySelectorAll(".photos picture[data-photo-deferred]")];
-        if (!root || !pictures.length) return;
-        const load = (picture) => {
+      // Only ever finds tiles when the fetch failed: on success the fragment
+      // replaced them with live-URL tiles that need no promotion. That is the
+      // fallback path, and it is why boot() runs either way. The grid is never
+      // empty.
+      const boot = () => {
+        for (const picture of document.querySelectorAll(".photos picture[data-photo-deferred]")) {
           for (const source of picture.querySelectorAll("source[data-srcset]")) {
             source.srcset = source.dataset.srcset;
             source.removeAttribute("data-srcset");
@@ -727,49 +741,8 @@ footer .signature small { color: oklch(56.93% 0 0); }
             image.removeAttribute("data-src");
           }
           picture.removeAttribute("data-photo-deferred");
-        };
-        if (!("IntersectionObserver" in window)) {
-          pictures.forEach(load);
-          return;
-        }
-        const desktop = matchMedia("(min-width: 561px)").matches;
-        const rootRect = desktop ? root.getBoundingClientRect() : null;
-        const observer = new IntersectionObserver((entries) => {
-          for (const entry of entries) {
-            if (!entry.isIntersecting) continue;
-            observer.unobserve(entry.target);
-            load(entry.target);
-          }
-        }, { root, rootMargin: "190px 0px", threshold: 0.05 });
-        for (const picture of pictures) {
-          if (desktop) {
-            const rect = picture.getBoundingClientRect();
-            const overlap = Math.min(rect.bottom, rootRect.bottom) -
-              Math.max(rect.top, rootRect.top);
-            if (overlap >= rect.height * 0.05) {
-              load(picture);
-              continue;
-            }
-          }
-          observer.observe(picture);
         }
       };
-      const boot = () => {
-        if (matchMedia("(min-width: 561px)").matches) start();
-        else requestAnimationFrame(() => requestAnimationFrame(start));
-      };
-      // The twelve tiles in this document are BAKED and identical for everyone:
-      // that is what lets `/` ship as a deterministic document with a q11 twin,
-      // a dcz delta, and a validator that answers 304 instead of resending the
-      // page. They are also the whole grid for a crawler or a visitor without
-      // JavaScript, via the <noscript> twin inside each tile.
-      //
-      // Here we swap them for a fresh random twelve. Nothing is wasted doing it:
-      // every tile is deferred, so no baked thumbnail has started loading yet,
-      // and the observer only runs after the swap settles.
-      //
-      // A failed fetch is not a failure state — boot() runs either way, so the
-      // baked twelve hydrate instead. The grid is never empty.
       fetch("/photos/grid.html")
         .then((r) => (r.ok ? r.text() : null))
         .then((html) => {
@@ -781,9 +754,9 @@ footer .signature small { color: oklch(56.93% 0 0); }
     })();
     </script>
 
-    <!-- The Worker selects all 12 photos in the first HTML response. The
-         observer only controls when their already-selected thumbnail URLs
-         become network requests; it never changes the random draw. -->
+    <!-- The Worker selects all 12 photos in one fragment; the swap never changes
+         the random draw, only which twelve are on the page. -->
+
     <noscript><p class="photos-nojs">These twelve are the same on every visit; with JavaScript the grid draws a fresh random twelve. <a href="/photos">Browse all photos</a>.</p></noscript>
 
 
