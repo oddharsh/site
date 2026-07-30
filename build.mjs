@@ -21,6 +21,10 @@
 // root wrangler.jsonc is copied verbatim into .build/ and just works against the copy.
 
 import { createHash } from "node:crypto";
+
+// One nonce per build for the dynamic imports below: the staged worker modules
+// are rewritten in place by later steps, so each import site needs a fresh URL.
+const BUILD_NONCE = process.hrtime.bigint().toString(36);
 import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -190,6 +194,48 @@ async function checkInvariants() {
       skillsChecked++;
     }
   } catch (e) { warn.push(`agent-skills digest check could not run: ${e.message}`); }
+
+  // 7b (hard) — the RUM beacon must carry a real site token. A placeholder token
+  // ships the worst of every trade at once: every visitor pays for a beacon that
+  // reports nowhere, and /whoareyou's disclosure describes traffic that buys no data.
+  // Both costs are invisible in testing, because a bad token fails silently by design.
+  //
+  // Hard rather than warn, for the same reason as the client-edge check above: this is
+  // a fill-in-the-blank left behind, not a taste call. Paste the token from
+  // Cloudflare dashboard > Web Analytics > (site) > Manage site, or delete the beacon
+  // block in index.html together with the /ledger/rum* routes.
+  try {
+    const home = await read("holding/index.html");
+    if (home.includes("CF_RUM_TOKEN_PLACEHOLDER")) {
+      hard.push("index.html: the Web Analytics beacon still carries CF_RUM_TOKEN_PLACEHOLDER — paste the real site token (dashboard > Web Analytics > Manage site), or remove the beacon and its /ledger/rum* routes in _worker.js/index.js");
+    }
+    // Both legs of the beacon are first-party as of 2026-07-29, so the invariant is
+    // no longer "beacon and CSP entry arrive together" — it is that the page and the
+    // routes that serve it arrive together. Either half alone is a quiet bug: a
+    // <script src="/ledger/rum.js"> with no route 404s on every homepage visit, and a
+    // route with no script is a live third-party forwarder nothing calls.
+    const headers = await read("holding/_headers");
+    const worker = await read("holding/_worker.js/index.js");
+    const loadsScript = home.includes('src="/ledger/rum.js"');
+    const sendsTo = home.includes('"to": "/ledger/rum"');
+    const routed = worker.includes('["/ledger/rum.js", handleRumScript]') &&
+                   worker.includes('["/ledger/rum", handleRumCollect]');
+    if (loadsScript !== routed) {
+      hard.push(`RUM beacon and its routes disagree: index.html ${loadsScript ? "loads" : "does not load"} /ledger/rum.js but _worker.js/index.js ${routed ? "routes" : "does not route"} the /ledger/rum* pair — ship both or neither`);
+    }
+    if (loadsScript && !sendsTo) {
+      hard.push('index.html: the beacon is served first-party but its data-cf-beacon has no `"send": {"to": "/ledger/rum"}` — without it the beacon falls back to its hardcoded cloudflareinsights.com endpoint, which the CSP now blocks, so the script would load and every report would fail');
+    }
+    // The CSP must NOT carry the old third-party entries. Leaving one behind would
+    // re-permit an origin nothing on the site calls any more, which is the same
+    // "allowed for no reason" bug the old form of this check guarded against.
+    for (const [name, text] of [["_headers", headers], ["lib/security.js", await read("holding/_worker.js/lib/security.js")]]) {
+      const policy = (text.match(/[Cc]ontent-[Ss]ecurity-[Pp]olicy[^\n]*/g) || []).join("\n");
+      if (policy.includes("cloudflareinsights.com")) {
+        hard.push(`${name}: the CSP still allows cloudflareinsights.com, but both beacon legs are first-party now — drop the script-src and connect-src entries`);
+      }
+    }
+  } catch (e) { warn.push(`RUM beacon check could not run: ${e.message}`); }
 
   // 8 (hard) — the site surface registry (site-manifest.json) is the single truth
   // for which pages exist and where they show. Its two GENERATED projections must
@@ -678,6 +724,89 @@ if (inlineProbe.includes("/* probe */") ||
 }
 
 
+// 1d) the homepage's baked fallback grid + last-modified date.
+//
+// `/` used to be four HTMLRewriter injections over a skeleton (tracks, photo
+// grid, visit counter, last-modified). That made its bytes different on every
+// request, which is the one thing a precomputed dcz delta and a 304 cannot
+// survive. Three of the four moved to the client; this bakes the fourth and
+// gives the grid a real, deterministic fallback so the page still says
+// something to a crawler or a visitor without JavaScript.
+//
+// Determinism is the contract. The twelve are chosen by stem sort and the date
+// comes from the committed pool, so this output changes only when the pool
+// does — which is also the only time the page's meaning changes.
+{
+  const nonce = `?build=${BUILD_NONCE}`;
+  const grid = await import(pathToFileURL(resolve(OUT, "holding/_worker.js/lib/photo-grid.js")).href + nonce);
+  const photos = await import(pathToFileURL(resolve(OUT, "holding/_worker.js/photos.js")).href + nonce);
+  const pool = photos.derivePhotoPool(
+    JSON.parse(await readFile(`${OUT}/holding/_worker.js/photo-index.json`, "utf8")),
+    JSON.parse(await readFile(`${OUT}/holding/images/hashes.json`, "utf8")),
+  );
+  if (!pool.length) throw new Error("homepage bake: the photo pool is empty — the grid fallback would ship as bare frames");
+  const altMap = JSON.parse(await readFile(`${OUT}/holding/images/alt.json`, "utf8").catch(() => "{}"));
+  const twelve = grid.deterministicTwelve(pool);
+  if (twelve.length !== 12) throw new Error(`homepage bake: expected 12 fallback tiles, pool yielded ${twelve.length}`);
+  const slots = grid.renderPhotoSlots(twelve, altMap);
+
+  let html = await readFile(`${OUT}/holding/index.html`, "utf8");
+  const section = /(<section class="photos"[^>]*>)([\s\S]*?)(<\/section>)/;
+  if (!section.test(html)) throw new Error("homepage bake: no <section class=\"photos\"> to fill — did the grid markup move?");
+  html = html.replace(section, (_m, open, _inner, close) =>
+    open.replace(/\sdata-ssr="[^"]*"/, "") + slots + close);
+
+  // Newest photo wins, floored by the hand-written date already in the file, so
+  // a copy-only edit can still bump it by hand.
+  let newest = 0;
+  for (const p of pool) { const t = p.uploaded ? Date.parse(p.uploaded) : NaN; if (!isNaN(t) && t > newest) newest = t; }
+  if (newest > 0) {
+    const d = new Date(newest);
+    const iso = d.toISOString().slice(0, 10);
+    const shown = d.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" });
+    html = html.replace(/<time datetime="([^"]*)"[^>]*>([^<]*)<\/time>/, (m, floor) =>
+      iso >= floor ? `<time datetime="${iso}">${shown}</time>` : m);
+  }
+  await writeFile(`${OUT}/holding/index.html`, html);
+  console.log(`homepage bake: 12 deterministic fallback tiles + last-modified ${new Date(newest).toISOString().slice(0, 10)}`);
+}
+
+// 1e) /photos and /bot as deploy-time documents.
+//
+// Both render from build-time inputs only, so their bytes are knowable here, and
+// emitting them as HTML buys the q11 twin plus both dcz delta tiers that step 8
+// already gives every other page. /photos was the largest page on the site (60KB)
+// and the largest still taking Cloudflare's on-the-fly zstd-3 with no twin at all.
+//
+// Same import-from-the-built-tree shape as step 1d: the Worker's own renderer runs
+// in Node against the committed artifacts, so there is ONE renderer rather than a
+// Node copy that can drift from the served one. The route keeps the dynamic handler
+// as a 404 fallback, so a failure here degrades to today's behaviour instead of a
+// missing page — but these throws exist because a SILENTLY empty contact sheet is
+// worse than a failed deploy.
+{
+  const nonce = `?build=${BUILD_NONCE}`;
+  const photos = await import(pathToFileURL(resolve(OUT, "holding/_worker.js/photos.js")).href + nonce);
+  const bot = await import(pathToFileURL(resolve(OUT, "holding/_worker.js/bot.js")).href + nonce);
+
+  const pool = photos.derivePhotoPool(
+    JSON.parse(await readFile(`${OUT}/holding/_worker.js/photo-index.json`, "utf8")),
+    JSON.parse(await readFile(`${OUT}/holding/images/hashes.json`, "utf8")),
+  );
+  if (!pool.length) throw new Error("photos page: the pool is empty — the contact sheet would ship with no tiles");
+  const altMap = JSON.parse(await readFile(`${OUT}/holding/images/alt.json`, "utf8").catch(() => "{}"));
+
+  const photosHtml = await photos.renderPhotosPage(pool, altMap).text();
+  if (!photosHtml.includes("class=\"ph\"")) throw new Error("photos page: rendered document has no tiles — did the markup move?");
+  await writeFile(`${OUT}/holding/photos.html`, photosHtml);
+
+  const botHtml = await bot.renderBotPage().text();
+  if (!botHtml.includes("AadharshBot")) throw new Error("bot page: rendered document does not name the crawler — did the copy move?");
+  await writeFile(`${OUT}/holding/bot.html`, botHtml);
+
+  console.log(`pages(gen): photos.html ${photosHtml.length}B (${pool.length} tiles), bot.html ${botHtml.length}B`);
+}
+
 // 2) homepage HTML: deploy the readable original as /index.src.html and
 // minify only the served copy. The worker rewrites this response as a stream,
 // so doing this before ASSETS.fetch keeps the rewriter path allocation-free.
@@ -815,7 +944,7 @@ for (const [file, srcPath, marker] of SHELLS) {
       }
     },
   };
-  const nonce = `?build=${Date.now()}`;
+  const nonce = `?build=${BUILD_NONCE}`;
   const lens = await import(pathToFileURL(resolve(OUT, "holding/_worker.js/lens.js")).href + nonce);
   const writing = await import(pathToFileURL(resolve(OUT, "holding/_worker.js/writing.js")).href + nonce);
 
@@ -1272,11 +1401,13 @@ for (const [file, srcPath, marker] of SHELLS) {
 // are emitted when they beat the ordinary q11 twin. The browser tells the worker
 // which one it has via Available-Dictionary, so no unsafe guess is made server-side.
 {
-  // Every deploy-time HTML document except the homepage. `/` is intentionally
-  // dynamic (12 fresh random photos + live tracks), so no precomputed response
-  // can equal its bytes; every other staged document belongs on this path.
+  // EVERY deploy-time HTML document, the homepage included. `/` used to be the
+  // one exception, because four HTMLRewriter injections made its bytes differ
+  // per request and no precomputed response could equal them. Step 1d bakes
+  // those out, so it is now an ordinary deterministic document and earns the
+  // same twin, delta, and validator as the rest.
   const pages = (await readdir(`${OUT}/holding`, { recursive: true }))
-    .filter((rel) => rel.endsWith(".html") && !rel.endsWith(".src.html") && rel !== "index.html");
+    .filter((rel) => rel.endsWith(".html") && !rel.endsWith(".src.html"));
   // slug: the request path with separators folded, so it survives as one filename segment.
   const slugOf = (assetPath) => assetPath.replace(/\.html$/, "").replace(/\//g, "__");
 

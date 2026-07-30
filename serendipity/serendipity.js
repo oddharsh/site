@@ -427,7 +427,7 @@ const DASHBOARD_JS = `
         findTarget: function(el){ return (el&&el.closest&&el.closest('.ev[data-cover]'))||null; },
         contentFor: function(a){
           var u=a.getAttribute('data-cover');
-          return u ? '<img loading="lazy" decoding="async" alt="" src="'+u.replace(/"/g,'&quot;')+'">' : '';
+          return u ? '<img decoding="async" alt="" src="'+u.replace(/"/g,'&quot;')+'">' : '';
         }
       });
     }).catch(function(){});   // no covers is a fine outcome; the list still works

@@ -48,7 +48,7 @@ dl.sc-grid dd{margin:0;color:#15243f;font-family:var(--font-mono);font-size:8.5p
 
     <h2>Header &amp; transport details</h2>
     <dl class="sc-grid">
-      <dt>Content-Security-Policy</dt><dd>default-src 'self'; object-src 'none'; frame-ancestors 'none'; upgrade-insecure-requests</dd>
+      <dt>Content-Security-Policy</dt><dd>default-src 'self'; object-src 'none'; frame-ancestors 'none'; upgrade-insecure-requests &mdash; no external script or connect origin at all since 2026-07-29, when the homepage's Web Analytics beacon moved behind this origin. That means your browser talks only to this host; it does not mean nothing is forwarded from here (see <a href="/whoareyou">/whoareyou</a>)</dd>
       <dt>Permissions-Policy</dt><dd>camera, microphone, geolocation, USB, Topics + 10 more: all denied</dd>
       <dt>X-Frame-Options</dt><dd>DENY</dd>
       <dt>X-Content-Type-Options</dt><dd>nosniff</dd>

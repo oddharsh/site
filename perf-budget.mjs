@@ -173,7 +173,7 @@ try {
 
 try {
   const pages = (await readdir(".build/holding", { recursive: true }))
-    .filter((path) => path.endsWith(".html") && !path.endsWith(".src.html") && path !== "index.html");
+    .filter((path) => path.endsWith(".html") && !path.endsWith(".src.html"));
   const deltas = await readdir(".build/holding/pd");
   const missing = pages
     .map((path) => path.replace(/\.html$/, "").replace(/\//g, "__"))

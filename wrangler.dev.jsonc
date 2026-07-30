@@ -50,10 +50,11 @@
       "/coffee", "/coffee/*", "/serendipity", "/serendipity/*",
       "/slots", "/book", "/approve", "/decline",
       "/llms-full.txt", "/ledger", "/ledger.json",
+      "/ledger/rum.js", "/ledger/rum",
       "/writing", "/writing/*",
       "/rn", "/rn/tracks", "/rn/tracks.html", "/rn/admin", "/rn/set",
       "/bot", "/around", "/around/json", "/around/changes.json",
-      "/photos", "/photos/", "/photos/query.json", "/run",
+      "/photos", "/photos/", "/photos/query.json", "/photos/grid.html", "/run",
       "/images", "/images/", "/images/full", "/images/full/*",
       "/images/manifest.json", "/images/metadata.json", "/images/meta/*",
       "/images/*.avif", "/images/*.jpg", "/images/*.jpeg",
@@ -61,7 +62,14 @@
       "/images/*.heic", "/images/*.heif", "/images/*.hif"
     ]
   },
-  "observability": { "enabled": true },
+  // matches wrangler.jsonc. Locally the spans open and record nothing
+  // (span.isTraced is false under `wrangler dev` — there is no trace backend to
+  // ship them to), which is exactly the property lib/trace.js is built around:
+  // instrumentation must never be the reason dev behaves differently from prod.
+  "observability": {
+    "enabled": true,
+    "traces": { "enabled": true, "head_sampling_rate": 1 }
+  },
   "version_metadata": { "binding": "CF_VERSION_METADATA" },
   "triggers": { "crons": ["*/30 * * * *", "17 8 * * 1", "7,37 * * * *"] },
   "kv_namespaces": [

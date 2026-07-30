@@ -10,13 +10,24 @@
 /*
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
-  # CSP: every resource the site needs is same-origin. inline <style> and
+  # CSP: nearly every resource the site needs is same-origin. inline <style> and
   # <script> blocks are part of the perf design (one HTTP request gets you
   # everything — see /bot for the McMaster-Carr-school philosophy), so
-  # 'unsafe-inline' is necessary. external scripts/stylesheets remain
-  # blocked, which kills the most common XSS vector. data: URLs allowed
-  # for the inlined-favicon SVG. frame-ancestors 'none' prevents
-  # clickjacking. upgrade-insecure-requests rewrites any http:// to https://.
+  # 'unsafe-inline' is necessary. data: URLs allowed for the inlined-favicon SVG.
+  # frame-ancestors 'none' prevents clickjacking. upgrade-insecure-requests
+  # rewrites any http:// to https://.
+  #
+  # There are NO external script or connect origins. The Cloudflare Web Analytics
+  # (RUM) beacon used to need two cloudflareinsights.com entries; both legs moved
+  # behind the worker on 2026-07-29 (/ledger/rum.js + /ledger/rum, see rum.js), so
+  # the browser speaks only to this origin. The REPORTING did not stop, it moved
+  # server-side — /whoareyou and /security state that plainly, and this comment is
+  # not the place to let that get rounded up into a privacy claim.
+  #
+  # THIS LINE MUST MATCH SECURITY_HEADERS in _worker.js/lib/security.js. Static
+  # assets get this copy; worker-rendered responses get that one. infra.json's
+  # app-owns-security-headers check reads the wire, so a drift between the two shows
+  # up as one route disagreeing with another rather than as a failing build.
   Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://i.scdn.co https://*.spotifycdn.com; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; worker-src 'self'; manifest-src 'self'; upgrade-insecure-requests
   # Permissions-Policy: explicitly opt out of every browser API we don't
   # use. shrinks fingerprinting surface and prevents stray code from popping
@@ -98,10 +109,27 @@
   Cache-Control: public, max-age=0, must-revalidate, s-maxage=86400
 
 # garage experiment pages — active development mules, edited constantly. the
-# browser must REVALIDATE every time (max-age=0) so fresh edits always show; the
+# browser revalidates on every navigation (max-age=0) so fresh edits show; the
 # revalidation is a cheap 304 against the edge (s-maxage=86400), not the origin,
-# and each deploy purges the edge so new bytes land immediately — no layer
-# holds a stale garage page.
+# and each deploy purges the edge so new bytes land immediately.
+#
+# stale-while-revalidate is what makes these pages eligible to be their OWN
+# compression dictionary, and it replaced a `must-revalidate` that used to sit
+# here. Chromium sizes a registered dictionary's lifetime from the response's own
+# freshness, and must-revalidate is the explicit withdrawal of permission to serve
+# stale, so the old value was stale on arrival and no browser ever kept the offer
+# (measured in Chrome 2026-07-29 across seven policies; the table is in
+# _worker.js/lib/assets.js). The window doubles AS the dictionary's lifetime —
+# `stale-while-revalidate=5` registered nothing — so a week is about the smallest
+# value that still serves a visitor returning days later, which is the entire
+# population this tier exists for.
+#
+# What it costs: the browser may paint its cached copy once while revalidating
+# behind it, so the first navigation after a deploy can show the previous bytes.
+# That is ONE stale paint per change, not a week of staleness, because every
+# navigation kicks off the background revalidate that corrects it. Put
+# must-revalidate back (and lose the per-page delta) if a mule ever needs the old
+# no-layer-holds-it-stale guarantee.
 #
 # the Link line preloads the two shared shell assets (luna.css + nav.js) so
 # Cloudflare Early Hints replays them as a 103 ahead of the HTML — safe to share
@@ -112,7 +140,7 @@
 # subresources that also match this glob. The worker sets the same header on the
 # pages it renders (lib/security.js homepage, lib/chrome.js luna pages).
 /garage/*
-  Cache-Control: public, max-age=0, must-revalidate, s-maxage=86400
+  Cache-Control: public, max-age=0, s-maxage=86400, stale-while-revalidate=604800
   Link: </luna.css>; rel=preload; as=style, </nav.js>; rel=preload; as=script
   Link: </webmention>; rel="webmention"
 
@@ -120,7 +148,7 @@
 # rarely, so let the edge serve a cheap 304 (s-maxage) instead of revalidating
 # against the origin on every back-nav and repeat visit.
 /lwe/*
-  Cache-Control: public, max-age=0, must-revalidate, s-maxage=86400
+  Cache-Control: public, max-age=0, s-maxage=86400, stale-while-revalidate=604800
   Link: </luna.css>; rel=preload; as=style, </lwe-base.css>; rel=preload; as=style, </nav.js>; rel=preload; as=script
   Link: </webmention>; rel="webmention"
 
@@ -131,7 +159,7 @@
 # new filename and can never shadow old bytes. It is a first-level taskbar app
 # now, so it also preloads the shared shell the way /lwe/* and /garage/* do.
 /pixel-peeper
-  Cache-Control: public, max-age=0, must-revalidate, s-maxage=86400
+  Cache-Control: public, max-age=0, s-maxage=86400, stale-while-revalidate=604800
   Link: </luna.css>; rel=preload; as=style, </nav.js>; rel=preload; as=script
 /pixel-peeper/manifest.json
   Cache-Control: public, max-age=0, must-revalidate, s-maxage=86400

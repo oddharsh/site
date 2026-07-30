@@ -51,5 +51,20 @@ The Cloudflare edge renders it, and your browser never speaks to a third party.
 There are exactly two outbound calls: one server-side RDAP lookup to your IP's
 registry, which the edge caches for 24h so visitors from the same block do not
 re-hit ARIN, and the Edge Trace section's fetch of `/cdn-cgi/trace`, which your
-own browser makes to this same origin. No analytics. The data lives for as long
+own browser makes to this same origin. The data lives for as long
 as it takes to render, then nothing writes it to storage.
+
+Analytics, precisely: not on this page. The homepage, and only the homepage, loads
+Cloudflare Web Analytics. Since 2026-07-29 your browser fetches that script from this
+origin (`/ledger/rum.js`) and posts its timings to this origin (`/ledger/rum`), so no
+page on this site makes your browser talk to anybody else.
+
+Do not read that as "the data stays here," because it does not. This server forwards
+those timings to Cloudflare exactly as before. What changed is that the request is
+made by this machine instead of by yours, which also means that if you run a content
+blocker, the report it used to stop now gets through. That is the honest cost of the
+change. The reason was self-interested rather than principled: the old third-party
+host is on the standard blocklists, so blocker-running visitors vanished from the
+sample entirely, and those are disproportionately the people on the browsers whose
+back-forward and prerender behaviour the measurement exists to see. The beacon is
+cookieless and samples page-load timing, not people.

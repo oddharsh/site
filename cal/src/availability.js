@@ -15,6 +15,8 @@
 // shape we cannot parse keeps just the base occurrence rather than dropping the
 // event; VTIMEZONE blocks are not expanded (TZID resolves through Intl instead).
 
+import { span } from "./trace.js";
+
 // ── calendar snapshot (stale-while-revalidate) ──────────────────────────────
 // The ICS upstream can be slow or briefly down, and the old fetchBusy() gated
 // the whole page on it AND returned [] on failure — which silently made EVERY
@@ -32,34 +34,73 @@ export const BOOK_MAX_STALE_MS = 15 * 60_000;  // booking refuses a calendar old
 // returns { busy, ageMs, ok, source }. ok:false only when there is neither a live
 // fetch nor any stored snapshot — that is the signal for the booking path to
 // refuse. source is one of fresh | live | stale | none (surfaced in Server-Timing).
+// Traced on `source`, which is the single most diagnostic value in this module
+// and until now existed only in a Server-Timing header on whichever request
+// happened to produce it — so there was no history of it at all.
+//
+// The case that matters is source:"none" with ok:false. That is the fail-closed
+// branch: no fresh calendar, no live fetch, and no stored snapshot, so /book 503s
+// rather than risk booking over a meeting it cannot see. Correct behavior, and
+// completely silent — the way you learned it happened was a person telling you
+// they couldn't book a coffee. It is now a span attribute, which makes "how often
+// did booking refuse last week" a query.
+//
+// Both catch blocks below swallow their reason by design (a KV blip and a dead
+// ICS feed both just mean "fall back"). The reason is now recorded before it is
+// discarded, so a week of source:"stale" can be traced to which of the two.
 export async function fetchBusySWR(env, ctx, { allowStale = false } = {}) {
+  return span("cal.busy", (s) => fetchBusySWRInner(env, ctx, allowStale, s), {
+    "cal.allow_stale": allowStale,
+  });
+}
+
+async function fetchBusySWRInner(env, ctx, allowStale, s) {
   const kv = env.BOOKINGS;
   const now = Date.now();
   let snap = null;
-  try { snap = kv ? await kv.get(BUSY_KEY, "json") : null; } catch {}
+  try { snap = kv ? await kv.get(BUSY_KEY, "json") : null; } catch (e) {
+    s.setAttribute("cal.snapshot_read_error", (e && e.message) || String(e));
+  }
   const age = snap && Number.isFinite(snap.ts) ? now - snap.ts : Infinity;
+  // Infinity is not a valid attribute value and "no snapshot" is not an age.
+  // Omitted rather than coerced, same discipline as the photo metadata.
+  if (Number.isFinite(age)) s.setAttribute("cal.snapshot_age_ms", age);
+
+  const done = (result) => {
+    s.setAttribute("cal.source", result.source);
+    s.setAttribute("cal.ok", result.ok);
+    s.setAttribute("cal.busy_intervals", result.busy.length);
+    // the booking path's own bar (BOOK_MAX_STALE_MS). A calendar that is servable
+    // to the GET page but too old to book against is the interesting middle state.
+    s.setAttribute("cal.bookable", result.ok && result.ageMs <= BOOK_MAX_STALE_MS);
+    return result;
+  };
 
   // fresh snapshot → serve it, skip the upstream entirely (no per-request writes)
-  if (snap && age < CAL_FRESH_MS) return { busy: snap.busy || [], ageMs: age, ok: true, source: "fresh" };
+  if (snap && age < CAL_FRESH_MS) return done({ busy: snap.busy || [], ageMs: age, ok: true, source: "fresh" });
 
   // The initial GET page may render from a last-good snapshot while the refresh
   // continues after the response. Booking and /slots callers leave this false:
   // they must still wait for a live calendar or fail closed.
   if (snap && allowStale) {
     if (ctx && typeof ctx.waitUntil === "function") {
-      ctx.waitUntil(refreshBusy(env).catch(() => {}));
+      ctx.waitUntil(span("cal.refresh_background", () => refreshBusy(env)).catch(() => {}));
     }
-    return { busy: snap.busy || [], ageMs: age, ok: true, source: "stale" };
+    return done({ busy: snap.busy || [], ageMs: age, ok: true, source: "stale" });
   }
 
   // stale or missing → refresh under a deadline
   try {
-    const fresh = await refreshBusy(env);
-    return { busy: fresh.busy, ageMs: 0, ok: true, source: "live" };
-  } catch {
+    const fresh = await span("cal.refresh", () => refreshBusy(env));
+    return done({ busy: fresh.busy, ageMs: 0, ok: true, source: "live" });
+  } catch (e) {
     // upstream slow/down → serve the last-good snapshot if we have one
-    if (snap) return { busy: snap.busy || [], ageMs: age, ok: true, source: "stale" };
-    return { busy: [], ageMs: Infinity, ok: false, source: "none" };
+    s.setAttribute("cal.refresh_error", (e && e.message) || String(e));
+    if (snap) return done({ busy: snap.busy || [], ageMs: age, ok: true, source: "stale" });
+    // THE fail-closed branch. ageMs stays Infinity in the returned object (its
+    // callers compare against it), but the span records the state by name.
+    s.setAttribute("cal.fail_closed", true);
+    return done({ busy: [], ageMs: Infinity, ok: false, source: "none" });
   }
 }
 

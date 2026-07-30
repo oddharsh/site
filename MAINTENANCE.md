@@ -442,6 +442,32 @@ asset warning into a CI failure. Use a controlled mobile/4G browser run for
 repeatable pre-merge checks; once field data is sufficient, replace guessed
 byte ceilings with route/cohort SLOs and keep bytes as regression signals.
 
+**Turning RUM on (the beacon side is already wired; two steps remain).** The
+homepage carries the beacon and the CSP allows it, but the site token is dashboard
+state that no config in this repo can derive, so `build.mjs` tripwire #7b HARD-FAILS
+the deploy while `holding/index.html` still says `CF_RUM_TOKEN_PLACEHOLDER`. That
+block is deliberate: a placeholder token costs every visitor a third-party request
+for a beacon that reports nowhere, and it fails silently by design, so nothing else
+would have caught it.
+
+1. Cloudflare dashboard > Web Analytics > Add a site > `aadhar.sh`. Choose the
+   MANUAL/JS-snippet option, not automatic injection — automatic cannot work here
+   (the worker serves precompressed br/dcz bodies with `encodeBody: "manual"`, and
+   the edge cannot rewrite HTML it did not compress).
+2. Copy the site token out of the generated snippet and replace
+   `CF_RUM_TOKEN_PLACEHOLDER` in `holding/index.html`. That is the only edit; the
+   CSP entries, the `/whoareyou` disclosure plus its markdown twin, and the
+   `/security` summary all already describe a live beacon.
+
+Then read Navigation Type (Web Analytics > Page views, bottom of the sidebar): the
+2026-04-30 release splits "Back-forward" from "Back-forward Cache" and "Navigate"
+from "Prerender", which is what makes the bfcache-preserving `no-cache` policy and
+the speculation rules measurable rather than asserted.
+
+While the placeholder is in place, `npm run perf-budget` cannot read the bundle gzip
+size (its wrangler dry-run needs a build that succeeds), so that one check reports
+`warn` instead of a number. Pasting the token restores it.
+
 The Workers Build project should expose its build/deploy status on the release
 commit. After enabling it, verify the live homepage route surface plus
 `/coffee`, `/coffee/slots`, and `/serendipity`. This repository's current free
@@ -829,6 +855,41 @@ curl -s "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/analytics_
 ```
 A gap in the series means the probe itself failed — it writes nothing rather
 than fabricate a datapoint.
+
+### Read a trace (Workers Traces)
+Enabled in `wrangler.jsonc` under `observability.traces`, 100% sampled. Read them
+in the dashboard: **Workers & Pages -> aadhar-sh -> Observability -> Traces**.
+Every outbound fetch, binding call, and handler invocation is auto-instrumented;
+the named spans on top come from `lib/trace.js` (vocabulary table in CLAUDE.md).
+
+The queries worth knowing, because each one used to be unanswerable:
+- **"why was that /lens scan slow"** — open a `route /lens/fetch` trace and read
+  `lens.discovery`. Its ~28 child fetches are named by URL, so the straggling
+  well-known file identifies itself. Note `lens.inspect.fetch` is what the JSON's
+  public `elapsedMs` reports; the parent `lens.inspect` is the honest total.
+- **"is a neighbor silently not being crawled"** — `cron.around` -> read
+  `around.crawled` / `around.skipped` / `around.errored`, then the
+  `around.neighbor` children where `around.outcome != "crawled"`.
+- **"is the census still writing 16 rows"** — `census.sweep`, attributes
+  `census.written` vs `census.roster`.
+- **"did anyone fail to book a coffee"** — `cal.busy` where
+  `cal.fail_closed = true` (or `cal.source = "none"`). That is a 503 on `/book`.
+- **"did the webmention run finish"** — `webmention.send`, attribute
+  `webmention.capped`.
+
+**Do not chase a 0ms span.** `home.grid.render` and `lens.inspect.parse` read 0
+and always will: Workers spans advance their clock across I/O only, never during
+synchronous execution, so they cannot measure CPU. Verified in production on a
+752KB page where the parse span read 0 right after emitting 81KB of markdown.
+Those two spans are kept for their attributes. When you actually want CPU:
+```bash
+npx wrangler tail aadhar-sh --format json | grep -o '"cpuTime":[0-9]*'
+```
+
+Local `wrangler dev` reports `span.isTraced === false` and records nothing; the
+spans still open and cost nothing, so dev behaves identically to prod. Only
+`_worker.js/index.js` may import `cloudflare:workers` (CLAUDE.md gotcha 16) —
+the tracer is injected into `lib/trace.js` and `cal/src/trace.js` from there.
 
 ### Log a deploy (bump-version.sh)
 `./holding/scripts/bump-version.sh <slug> "<title>"`, then deploy. Inserts the next checkpoint into D1 (vnum from `SELECT MAX(vnum)`), which is what `/updates` and `/restore` render. Nothing edits sw.js anymore: the service worker retired in v136, `nav.js`/`notepad.js` updates land via their short `_headers` max-age plus the per-deploy edge purge, and the stub at `/sw.js` cleans up old installs.

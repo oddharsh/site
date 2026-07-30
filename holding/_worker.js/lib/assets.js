@@ -165,6 +165,45 @@ const pageFamilyOffer = (pathname) =>
     ? `match="/*", match-dest=("document")`
     : null;
 const pageOffer = (pathname) => `match="${pathname}", match-dest=("document")`;
+
+// Can the BROWSER keep an offer made on a response with this cache-control?
+//
+// Chromium derives a registered dictionary's lifetime from the response's own freshness,
+// so a response that is stale the moment it lands registers a dictionary that has already
+// expired, and drops it. DevTools says so out loud: "The response can't be used as a
+// dictionary because its freshness is expired." Until 2026-07-29 every page here offered
+// itself anyway, which taught Chromium to store nothing and cost a console error per
+// navigation.
+//
+// Measured in Chrome that day, one navigation per policy, watching for the
+// Available-Dictionary the browser sends back only when it actually stored the offer:
+//
+//   max-age=3600                                                  REGISTERED (control)
+//   max-age=0, stale-while-revalidate=604800                      REGISTERED
+//   max-age=0, must-revalidate                                    no
+//   max-age=0, must-revalidate, stale-while-revalidate=604800     no
+//   private, no-cache, must-revalidate                 (this site's /)          no
+//   private, no-cache, stale-while-revalidate=604800                            no
+//   public, max-age=0, must-revalidate, s-maxage=86400 (this site's pages)      no
+//
+// That is RFC 9842 section 2.2.1 exactly — a dictionary "MUST be either fresh or allowed
+// to be served stale". stale-while-revalidate is the RFC 5861 permission to serve stale;
+// must-revalidate is the explicit withdrawal of it, and it wins wherever both appear.
+// no-cache never qualifies, because it bars reuse without revalidation. s-maxage is
+// invisible to this decision: a browser is a private cache.
+//
+// Gating the offer on the header, rather than deleting it, keeps the coupling honest in
+// both directions. Every page here fails the test today, which is why the per-page tier
+// is dark and the immutable /a/page-family.<hash>.dict carries the whole page tier. Give a
+// page `stale-while-revalidate` without `must-revalidate` and its own tier lights back up
+// with no change to this file — that, and not a code edit, is the decision to make.
+const canRegisterAsDictionary = (cacheControl) => {
+  const cc = (cacheControl || "").toLowerCase();
+  if (/\b(?:no-store|no-cache|must-revalidate)\b/.test(cc)) return false;
+  const seconds = (name) => Number(cc.match(new RegExp(`\\b${name}=(\\d+)`))?.[1] || 0);
+  return seconds("max-age") > 0 || seconds("stale-while-revalidate") > 0;
+};
+
 const variantEtag = (etag, suffix) => {
   if (!etag) return null;
   const opaque = etag.replace(/^W\//, "").replace(/^"|"$/g, "");
@@ -374,6 +413,17 @@ export async function serveStaticPage(request, env, opts = {}) {
     for (const [name, value] of Object.entries(opts.headers || {})) headers.set(name, value);
     return headers;
   };
+  // Offer the page as its own dictionary only when the cache-control it actually ships
+  // lets a browser keep the offer (see canRegisterAsDictionary). Runs after the caller's
+  // headers land, because the caller is what sets cache-control.
+  const offerIfStorable = (headers) => {
+    if (canRegisterAsDictionary(headers.get("cache-control"))) {
+      headers.set("use-as-dictionary", pageOffer(url.pathname));
+    } else {
+      headers.delete("use-as-dictionary");
+    }
+    return headers;
+  };
 
   // /garage/compression -> asset garage/compression.html, slug garage__compression.
   // html_handling drops the trailing slash, so the path never carries the extension.
@@ -383,9 +433,16 @@ export async function serveStaticPage(request, env, opts = {}) {
   // come BEFORE the /index fallback below: that fallback resolves /garage/ to the
   // same twin as /garage and would serve it a cheerful 200, leaving the page with
   // two live URLs. The route oracle caught exactly that.
-  if (url.pathname.endsWith("/")) return serveAssetWith404Clamp(request, env);
+  // The ROOT is canonical WITH its slash, so it must be answered rather than
+  // redirected — the opposite of every other trailing slash here. It maps to
+  // index.html, which build.mjs bakes into a deterministic document precisely so
+  // it can take this path. Has to come before the guard below, which would
+  // otherwise hand `/` to the asset layer and skip the twin entirely.
+  const rel = url.pathname === "/"
+    ? "index"
+    : url.pathname.replace(/^\/+/, "").replace(/\/+$/, "");
+  if (rel !== "index" && url.pathname.endsWith("/")) return serveAssetWith404Clamp(request, env);
 
-  const rel = url.pathname.replace(/^\/+/, "").replace(/\/+$/, "");
   if (!rel || rel.includes("..") || /\.[a-z0-9]+$/i.test(rel)) {
     // Sub-resources under these prefixes (the garage's images, ask.js) are not pages and
     // have no twin; hand them straight to the asset layer untouched.
@@ -428,13 +485,11 @@ export async function serveStaticPage(request, env, opts = {}) {
           h.set("content-type", "text/html; charset=utf-8");
           h.set("content-encoding", "dcz");
           h.set("vary", "accept-encoding, available-dictionary");
-          // Keep the page's own previous bytes eligible as a high-ratio dictionary.
-          // The immutable family dictionary is still advertised separately by the
-          // HTML Link header, so a browser may use either candidate and the build
-          // has a matching /pd/<slug>.<tag>.dcz for both.
-          h.set("use-as-dictionary", pageOffer(url.pathname));
           h.delete("etag");                       // described the .dcz file, not this page
           applyExtraHeaders(h);
+          // The self-offer is reconciled once more below, after this response borrows the
+          // twin's cache-control; deciding it here would read a header about to change.
+          offerIfStorable(h);
           return new Response(d.body, { status: 200, headers: h, encodeBody: "manual" });
         }
         try { await d.body?.cancel(); } catch {}
@@ -454,11 +509,11 @@ export async function serveStaticPage(request, env, opts = {}) {
           h.set("content-type", "text/html; charset=utf-8");
           h.set("content-encoding", "br");
           h.set("vary", "accept-encoding, available-dictionary");
-          h.set("use-as-dictionary", pageOffer(url.pathname));
           const etag = h.get("etag");
           const encoded = variantEtag(etag, "br");
           if (encoded) h.set("etag", encoded);
           applyExtraHeaders(h);
+          offerIfStorable(h);
           return new Response(br.body, { status: 200, headers: h, encodeBody: "manual" });
         }
         try { await br.body?.cancel(); } catch {}
@@ -494,6 +549,8 @@ export async function serveStaticPage(request, env, opts = {}) {
       if (encoded) delta.headers.set("etag", encoded);
       try { await br.body?.cancel(); } catch {}
     }
+    // cache-control just moved; the self-offer has to agree with the one that shipped.
+    offerIfStorable(delta.headers);
     const fresh = notModifiedIfFresh(request, delta);
     if (fresh.status === 304) return fresh;
     return delta;

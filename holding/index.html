@@ -687,25 +687,50 @@ footer .signature small { color: oklch(56.93% 0 0); }
       </a>
     </section>
 
-    <!-- Native loading=lazy uses a viewport-distance heuristic that reaches far
-         past this page's internal .content scroller: a 390px Slow-4G trace
-         fetched eight of twelve thumbnails even though only the first tile was
-         visible. The Worker leaves slots 2-12 as data-* URLs. Desktop visitors
-         normally see two or three photo rows in the initial window, so hydrate
-         every tile that intersects that real scrollport synchronously. Mobile
-         keeps only slot 1 on the initial critical path, then starts observation
-         after the text paint. A 5% threshold avoids transferring the next row
-         when only a couple of pixels touch the bottom edge. Browsers without
-         IntersectionObserver load the full selected set; the <noscript>
-         pictures emitted beside each deferred slot preserve the script-off
-         path. -->
+    <!-- The twelve tiles above are BAKED and identical for everyone: that is what
+         lets `/` ship as a deterministic document with a q11 twin, a dcz delta,
+         and a validator that answers 304 instead of resending the page. They are
+         also the whole grid for a crawler or a visitor without JavaScript, via
+         the <noscript> twin inside each tile. Their URLs sit in data-* so the
+         swap below does not pay for thumbnails it is about to discard.
+
+         The swap brings a fresh random twelve, already carrying live URLs, so
+         the grid starts transferring the moment innerHTML lands.
+
+         There is no viewport gating on either path, and the reason is that
+         gating never had enough to protect. Native loading=lazy went first: its
+         viewport-distance heuristic reaches far past this page's internal
+         .content scroller, and a 390px Slow-4G trace fetched eight of twelve
+         with only the first tile visible. The IntersectionObserver that replaced
+         it came out on 2026-07-29. Measured on production at 1280x720: it
+         withheld 3 of 12 tiles, the 9 it allowed totalled 102.1 KB, and all 9
+         finished 48ms after the first one started. The 3 it held back were row 4
+         — 1033px against a 640px scroller plus the 190px margin added earlier
+         that same day — so the first scroll still landed on white squares, which
+         is the exact failure the margin was added to fix. The whole set is
+         ~136 KB at fetchpriority=low, off the LCP path (the prose is the LCP
+         element at 390px and 1280px alike), and it costs ~34 KB more than the
+         observer was saving. Squares that are never white is worth 34 KB.
+
+         KNOWN, and not fixed here: image loading is gated on the document
+         actually rendering, not on how the URL got into the markup. Loaded into
+         a tab that never rendered, the fragment arrived at 85ms and not one of
+         the twelve transferred until a paint was forced 32s later. Whether
+         Chrome's prerenderer behaves like that unrendered tab or like a normal
+         visible load is UNVERIFIED — it renders into a hidden compositor, which
+         suggests it does transfer, but nobody has measured it on this page. If
+         the homepage prerender turns out to deliver the document without the
+         grid, that is a separate bug from this one and none of the above is the
+         fix for it. -->
+
     <script>
     (() => {
-      const start = () => {
-        const root = document.querySelector(".content");
-        const pictures = [...document.querySelectorAll(".photos picture[data-photo-deferred]")];
-        if (!root || !pictures.length) return;
-        const load = (picture) => {
+      // Only ever finds tiles when the fetch failed: on success the fragment
+      // replaced them with live-URL tiles that need no promotion. That is the
+      // fallback path, and it is why boot() runs either way. The grid is never
+      // empty.
+      const boot = () => {
+        for (const picture of document.querySelectorAll(".photos picture[data-photo-deferred]")) {
           for (const source of picture.querySelectorAll("source[data-srcset]")) {
             source.srcset = source.dataset.srcset;
             source.removeAttribute("data-srcset");
@@ -716,42 +741,23 @@ footer .signature small { color: oklch(56.93% 0 0); }
             image.removeAttribute("data-src");
           }
           picture.removeAttribute("data-photo-deferred");
-        };
-        if (!("IntersectionObserver" in window)) {
-          pictures.forEach(load);
-          return;
-        }
-        const desktop = matchMedia("(min-width: 561px)").matches;
-        const rootRect = desktop ? root.getBoundingClientRect() : null;
-        const observer = new IntersectionObserver((entries) => {
-          for (const entry of entries) {
-            if (!entry.isIntersecting) continue;
-            observer.unobserve(entry.target);
-            load(entry.target);
-          }
-        }, { root, threshold: 0.05 });
-        for (const picture of pictures) {
-          if (desktop) {
-            const rect = picture.getBoundingClientRect();
-            const overlap = Math.min(rect.bottom, rootRect.bottom) -
-              Math.max(rect.top, rootRect.top);
-            if (overlap >= rect.height * 0.05) {
-              load(picture);
-              continue;
-            }
-          }
-          observer.observe(picture);
         }
       };
-      if (matchMedia("(min-width: 561px)").matches) start();
-      else requestAnimationFrame(() => requestAnimationFrame(start));
+      fetch("/photos/grid.html")
+        .then((r) => (r.ok ? r.text() : null))
+        .then((html) => {
+          const section = document.querySelector(".photos");
+          if (html && section) section.innerHTML = html;
+        })
+        .catch(() => {})
+        .then(boot);
     })();
     </script>
 
-    <!-- The Worker selects all 12 photos in the first HTML response. The
-         observer only controls when their already-selected thumbnail URLs
-         become network requests; it never changes the random draw. -->
-    <noscript><p class="photos-nojs">Photos are server-rendered when available. <a href="/photos">Browse all photos</a>.</p></noscript>
+    <!-- The Worker selects all 12 photos in one fragment; the swap never changes
+         the random draw, only which twelve are on the page. -->
+
+    <noscript><p class="photos-nojs">These twelve are the same on every visit; with JavaScript the grid draws a fresh random twelve. <a href="/photos">Browse all photos</a>.</p></noscript>
 
 
     <section class="now-playing" aria-label="music">
@@ -1028,7 +1034,77 @@ footer .signature small { color: oklch(56.93% 0 0); }
      back with no body AND no wait: the worker finishes the Durable Object trip
      under waitUntil, so this costs edge RTT rather than the ~630ms the DO round
      trip took on a cold contended load. -->
-<script>(function(){var t=function(){fetch("/hit?tick=1",{keepalive:true}).catch(function(){})};document.prerendering?addEventListener("prerenderingchange",t,{once:true}):t()})();</script>
+<script>(function(){
+  // Two separate things, deliberately. The TICK is the visit beacon: fire and
+  // forget, 204, never prerendered (a speculative load is not a visit). The
+  // COUNT is the footer odometer, hydrated on idle because `/` is a
+  // deterministic document now and a per-visitor number cannot live in it. A
+  // failed read leaves the static placeholder where it is rather than showing a
+  // number nobody counted.
+  var t=function(){
+    fetch("/hit?tick=1",{keepalive:true}).catch(function(){});
+    var fill=function(){
+      fetch("/hit?n=1").then(function(r){return r.ok?r.json():null}).then(function(j){
+        var el=document.querySelector(".counter");
+        if(el&&j&&typeof j.n==="number")el.textContent=String(j.n).padStart(6,"0");
+      }).catch(function(){});
+    };
+    "requestIdleCallback"in window?requestIdleCallback(fill,{timeout:3000}):setTimeout(fill,1200);
+  };
+  document.prerendering?addEventListener("prerenderingchange",t,{once:true}):t()
+})();</script>
+
+    <!--
+      Cloudflare Web Analytics (RUM), served from this origin. The reason it earns
+      its place: MAINTENANCE.md has named RUM the outcome source for LCP/INP/CLS
+      since the perf budget was written, and until it reports, the budget's byte
+      ceilings are guesses standing in for field data. The 2026-04-30 changelog added
+      Navigation Type reporting, which is the specific thing worth having here: it
+      separates "Back-forward" from "Back-forward Cache" and "Navigate" from
+      "Prerender", so the bfcache-preserving `no-cache` choice and the hand-tuned
+      speculation rules become measurable instead of asserted.
+
+      BOTH LEGS ARE FIRST-PARTY as of 2026-07-29, and the honest description is that
+      the browser no longer talks to Cloudflare, while this server still does on the
+      visitor's behalf. /whoareyou and /security say exactly that; do not let this
+      block and those two pages drift. The reporting destination is unchanged.
+
+      Why it moved: static.cloudflareinsights.com is on EasyPrivacy, so every visitor
+      running a content blocker dropped out of the sample entirely. That is worse than
+      a smaller N. The one thing this beacon uniquely buys is Navigation Type, and the
+      visitors most likely to block are also the ones most likely to be on engines
+      where bfcache and prerender behave differently — so the sample was thinned
+      exactly where the measurement lives. Second, smaller win: that host does NOT
+      serve brotli (an `accept-encoding: br` request comes back gzip, 11,364 B of a
+      31,612 B file), and the proxy hands the edge identity bytes to compress properly.
+      The paths are named honestly rather than disguised; see rum.js for what this does
+      and does not defeat, and for the geo caveat that needs checking after deploy.
+
+      Placed in source rather than injected by the zone toggle, because the worker
+      serves this page as a precompressed br/dcz body with `encodeBody: "manual"` and
+      the edge cannot rewrite HTML it did not compress. In source it also stays
+      visible in View Source, which is the deal this page makes with its reader.
+
+      Homepage only, deliberately. Site-wide would mean moving it into nav.js, which
+      every page loads — an extra request on the shell's critical path is a bigger bill
+      than one page's field data is worth. Revisit only with a measurement.
+
+      KNOW THE PRICE, measured 2026-07-29: the beacon is 31,612 B raw against a
+      9,010 B brotli document, so it is LARGER than the page it measures however it is
+      compressed. That is the most uncomfortable number here and the reason it is
+      written down rather than left to be rediscovered. It is deferred and off the
+      critical path, so the cost is transfer and main-thread parse rather than first
+      paint. If that trade stops being worth it, this block and the /ledger/rum* routes
+      come out together.
+
+      `type="module"` matches Cloudflare's own snippet, and module scripts defer by
+      default, so this is not a classic script missing its `defer`. `send.to` is read
+      straight out of this config by the beacon (it is otherwise hardcoded to
+      cloudflareinsights.com), verified in a live browser on both routes it posts by.
+      Now that nothing here is cross-origin, the CSP needs no external entries at all.
+    -->
+    <script type="module" src="/ledger/rum.js"
+            data-cf-beacon='{"token": "9e4894ff180741c78a7f493c1fb05e54", "send": {"to": "/ledger/rum"}}'></script>
 
     <!--
       Rich XP tooltips are an interaction island. The tiny loader below stays

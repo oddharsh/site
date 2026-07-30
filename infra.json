@@ -273,6 +273,16 @@
         "target": "homepage",
         "assert": { "headerAbsent": ["speculation-rules"] },
         "why": "index.html ships hand-tuned speculation rules with a deliberate exclusion list (/whoareyou keeps a per-request fingerprint honest, /rn* and /images* are endpoints and multi-megabyte R2 originals rather than pages). Speed Brain injected a second rule set over the top via this header: a blanket href_matches /* prefetch with no exclusions at all. Same failure shape as Polish above, where a helpful-sounding toggle silently overrides a deliberate choice the repo cannot see being overridden."
+      },
+      {
+        "id": "markdown-for-agents-off",
+        "target": "homepage",
+        "request": { "accept": "text/markdown" },
+        "assert": {
+          "headerPresent": ["x-markdown-tokens"],
+          "headerAbsent": ["content-signal"]
+        },
+        "why": "This site already answers `Accept: text/markdown` ITSELF, in the worker: wantsMarkdown() in _worker.js/lib/http.js does real q-value negotiation (markdown has to outrank html, which Cloudflare's zone feature does not check), and home.js plus serveMarkdownTwin serve committed or build-generated .md twins. Cloudflare's Markdown for Agents would convert HTML at the edge over the top of that, on every route, including the ones deliberately left without a twin. Same must-stay-off shape as Polish and Speed Brain above: a helpful-sounding toggle silently overriding a deliberate choice. The two assertions are the discriminator rather than decoration. x-markdown-tokens proves SOMETHING answered in markdown, so this fails loudly if the worker's own negotiation breaks instead of quietly passing on an HTML response. content-signal proves it was not Cloudflare: per the 2026-07-13 Markdown for Agents release the edge injects a default `content-signal: ai-train=yes, search=yes, ai-input=yes` whenever the origin sends none, and this origin sends none, because the policy lives in robots.txt. So that header appearing at all means the zone feature got switched on."
       }
     ]
   },

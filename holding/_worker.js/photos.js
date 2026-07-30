@@ -335,6 +335,92 @@ export async function handleImagesManifest(request, env, ctx) {
 // original. Tiles use the 400px AVIF tier (plenty at ~160-250px rendered,
 // even 2x) with the 600px JPG as the universal fallback. First 12 eager
 // (above the fold), the rest lazy; content-visibility skips below-fold work.
+// The /photos contact sheet, as a PURE renderer over the committed pool.
+//
+// Extracted from the closure inside handlePhotos so build.mjs can call it in Node
+// and emit photos.html at deploy time (step 1e), which buys the page the same q11
+// twin + dcz delta tier the 40 authored pages get. It is the largest page on the
+// site (60KB), and it was the largest one still taking Cloudflare's on-the-fly
+// zstd-3 with no twin and no delta.
+//
+// Pure by construction: every input is a build-time artifact. `photos` is the
+// bundled pool (derivePhotoPool over photo-index.json + hashes.json) and `altMap`
+// is the committed alt.json, so the same inputs give the same bytes in Node and in
+// the Worker. That equality is the whole precondition for a precomputed twin, and
+// contract-tests asserts it rather than trusting it.
+export function renderPhotosPage(photos, altMap) {
+  if (!photos.length) {
+    return new Response("photo manifest unavailable", {
+      status: 503,
+      headers: { "content-type": "text/plain; charset=utf-8", "retry-after": "60" },
+    });
+  }
+
+  const tiles = photos.map((p, i) => {
+    const eager = i < 12;
+    const alt = escAttr((altMap && altMap[p.stem]) || p.stem);
+    const small = absThumb(p.thumb_small);   // manifest guarantees thumb_small (unhashed stems are skipped)
+    return `<a class="ph" href="/images/full/${escAttr(encodeURIComponent(p.full).replace(/%2F/g, "/"))}">
+<picture>
+<source type="image/avif" srcset="${escAttr(small)}">
+<img src="${escAttr(absThumb(p.thumb_jpg))}" alt="${alt}" width="400" height="400"${eager ? "" : ` loading="lazy"`} decoding="async">
+</picture>
+<span class="ph-name">${escHtml(p.stem)}</span>
+</a>`;
+  }).join("\n");
+
+  return lunaPage({
+    title: "aadhar.sh/photos",
+    path: "aadhar.sh/photos",
+    width: 980,
+    description: `All ${photos.length} photos, straight out of camera. FUJIFILM X-T5 + Leica M.`,
+    css: `
+  h1 { font-family: var(--font-caption); color: oklch(41.92% 0.0962 250.51); font-size: 18pt; margin: 0 0 4px; font-weight: bold; }
+  .lede { margin: 0 0 14px; color: oklch(38.67% 0 0); font-size: 10.5pt; }
+  .sheet {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px; margin: 8px 0 16px;
+  }
+  .ph {
+  display: block; text-decoration: none; text-align: center;
+  content-visibility: auto; contain-intrinsic-size: auto 190px;
+  }
+  .ph picture, .ph img {
+  display: block; width: 100%; height: auto; aspect-ratio: 1;
+  border: 1px solid oklch(80% 0.02 250); background: oklch(96.72% 0 0);
+  box-sizing: border-box;
+  }
+  .ph:hover img { border-color: oklch(41.92% 0.13 250.51); }
+  .ph-name {
+  display: block; margin-top: 3px; font-size: 7.5pt; color: oklch(44.95% 0 0);
+  font-family: var(--font-ui); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .ph:hover .ph-name { color: oklch(42.61% 0.2353 263.74); }
+  footer { text-align: center; font-size: 9pt; color: oklch(44.95% 0 0); margin-top: 14px; padding-top: 10px; border-top: 1px solid oklch(86.67% 0.0294 259.59); }
+  footer address { font-style: italic; margin-top: 4px; }
+  a { color: oklch(42.61% 0.2353 263.74); }
+`,
+    body: `
+  <h1>Photos</h1>
+  <p class="lede">
+    All ${photos.length}, straight out of camera (FUJIFILM X-T5, Leica M).
+    Click any tile for the full-resolution original. Machine-readable index:
+    <a href="/images/manifest.json">manifest.json</a> &middot;
+    <a href="/images/alt.json">alt.json</a> &middot;
+    <a href="/images/metadata.json">metadata.json</a>.
+  </p>
+  <div class="sheet">
+${tiles}
+  </div>
+  <footer>
+    &larr; <a href="/">aadhar.sh</a> &middot; press <b>&#8984;K</b> anywhere to search these by name
+    <address>handwritten worker at aadhar.sh</address>
+  </footer>
+`,
+    cache: "public, max-age=300",
+  });
+}
+
 export async function handlePhotos(request, env, ctx) {
   const render = async () => {
     const [photos, altMap] = await Promise.all([
@@ -347,70 +433,7 @@ export async function handlePhotos(request, env, ctx) {
         headers: { "content-type": "text/plain; charset=utf-8", "retry-after": "60" },
       });
     }
-
-    const tiles = photos.map((p, i) => {
-      const eager = i < 12;
-      const alt = escAttr((altMap && altMap[p.stem]) || p.stem);
-      const small = absThumb(p.thumb_small);   // manifest guarantees thumb_small (unhashed stems are skipped)
-      return `<a class="ph" href="/images/full/${escAttr(encodeURIComponent(p.full).replace(/%2F/g, "/"))}">
-<picture>
-<source type="image/avif" srcset="${escAttr(small)}">
-<img src="${escAttr(absThumb(p.thumb_jpg))}" alt="${alt}" width="400" height="400"${eager ? "" : ` loading="lazy"`} decoding="async">
-</picture>
-<span class="ph-name">${escHtml(p.stem)}</span>
-</a>`;
-    }).join("\n");
-
-    return lunaPage({
-      title: "aadhar.sh/photos",
-      path: "aadhar.sh/photos",
-      width: 980,
-      description: `All ${photos.length} photos, straight out of camera. FUJIFILM X-T5 + Leica M.`,
-      css: `
-  h1 { font-family: var(--font-caption); color: oklch(41.92% 0.0962 250.51); font-size: 18pt; margin: 0 0 4px; font-weight: bold; }
-  .lede { margin: 0 0 14px; color: oklch(38.67% 0 0); font-size: 10.5pt; }
-  .sheet {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-    gap: 12px; margin: 8px 0 16px;
-  }
-  .ph {
-    display: block; text-decoration: none; text-align: center;
-    content-visibility: auto; contain-intrinsic-size: auto 190px;
-  }
-  .ph picture, .ph img {
-    display: block; width: 100%; height: auto; aspect-ratio: 1;
-    border: 1px solid oklch(80% 0.02 250); background: oklch(96.72% 0 0);
-    box-sizing: border-box;
-  }
-  .ph:hover img { border-color: oklch(41.92% 0.13 250.51); }
-  .ph-name {
-    display: block; margin-top: 3px; font-size: 7.5pt; color: oklch(44.95% 0 0);
-    font-family: var(--font-ui); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-  .ph:hover .ph-name { color: oklch(42.61% 0.2353 263.74); }
-  footer { text-align: center; font-size: 9pt; color: oklch(44.95% 0 0); margin-top: 14px; padding-top: 10px; border-top: 1px solid oklch(86.67% 0.0294 259.59); }
-  footer address { font-style: italic; margin-top: 4px; }
-  a { color: oklch(42.61% 0.2353 263.74); }
-`,
-      body: `
-    <h1>Photos</h1>
-    <p class="lede">
-      All ${photos.length}, straight out of camera (FUJIFILM X-T5, Leica M).
-      Click any tile for the full-resolution original. Machine-readable index:
-      <a href="/images/manifest.json">manifest.json</a> &middot;
-      <a href="/images/alt.json">alt.json</a> &middot;
-      <a href="/images/metadata.json">metadata.json</a>.
-    </p>
-    <div class="sheet">
-${tiles}
-    </div>
-    <footer>
-      &larr; <a href="/">aadhar.sh</a> &middot; press <b>&#8984;K</b> anywhere to search these by name
-      <address>handwritten worker at aadhar.sh</address>
-    </footer>
-`,
-      cache: "public, max-age=300",
-    });
+    return renderPhotosPage(photos, altMap);
   };
 
   return cachedRender(request, ctx, render, "/photos", env);

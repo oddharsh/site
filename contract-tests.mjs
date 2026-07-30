@@ -30,7 +30,8 @@ import { serveStaticPage } from "./holding/_worker.js/lib/assets.js";
 import { readManifest, workerModule, navFenceBody, readFenceBody } from "./scripts/gen-manifest.mjs";
 import { INDEXED_SECTIONS, TWIN_FACTS, buildTwins, checkTwinFacts, htmlFileFor, twinPath } from "./scripts/gen-md-twins.mjs";
 import { MCP_TOOLS } from "./serendipity/serendipity.js";
-import { derivePhotoPool, getImagesManifest, handlePhotoQuery, queryPhotos } from "./holding/_worker.js/photos.js";
+import { derivePhotoPool, renderPhotosPage, getImagesManifest, handlePhotoQuery, queryPhotos } from "./holding/_worker.js/photos.js";
+import { renderPhotoSlots } from "./holding/_worker.js/lib/photo-grid.js";
 import { cachedRender, deadline } from "./holding/_worker.js/lib/cache.js";
 import { ifNoneMatchMatches, notModifiedIfFresh, withWeakEtag } from "./holding/_worker.js/lib/cache.js";
 import { privateHostBlocked } from "./holding/_worker.js/lib/crawl.js";
@@ -962,20 +963,49 @@ test("getImagesManifest serves the bundled pool without env", async () => {
   assert.ok(Array.isArray(pool) && pool.length > 0);
 });
 
-test("homepage selects 12 photos and hydrates only the current scrollport", async () => {
+test("homepage selects 12 photos and transfers all of them", async () => {
   const worker = await readFile(new URL("holding/_worker.js/home.js", import.meta.url), "utf8");
   const page = await readFile(new URL("holding/index.html", import.meta.url), "utf8");
   const luna = await readFile(new URL("holding/luna.css", import.meta.url), "utf8");
   const nav = await readFile(new URL("holding/nav.js", import.meta.url), "utf8");
 
-  assert.match(worker, /pickRandom\(photos,\s*12\)/, "the server-side random draw must remain 12");
-  assert.match(worker, /const deferred = i > 0;/, "only the first mobile thumbnail may be directly discoverable");
-  assert.match(worker, /data-photo-deferred/, "later photo URLs must remain available for viewport-aware hydration");
+  const build = await readFile(new URL("build.mjs", import.meta.url), "utf8");
+  assert.match(worker, /pickRandom\(pool,\s*12\)/, "the per-request random draw must remain 12");
+  assert.match(build, /deterministicTwelve/, "the document must carry a baked fallback grid, or `/` stops being crawlable without JS");
+  // The two renderings differ in exactly one way, so assert on the OUTPUT
+  // rather than on the source that produces it.
+  const photo = [{ stem: "X1", full: "X1.jpg", thumb_jpg: "/i/X1.aaaaaaaa.jpg", thumb_avif: "/i/X1.aaaaaaaa.avif", thumb_small: "/i/X1-400.aaaaaaaa.avif", size: 1, uploaded: "2026-01-01" }];
+  const baked = renderPhotoSlots(photo, {});
+  const fragment = renderPhotoSlots(photo, {}, { deferred: false });
+
+  // Baked: a fallback the hydrator replaces, so a real src outside the
+  // <noscript> twin is a thumbnail fetched and discarded milliseconds later.
+  assert.match(baked, /data-photo-deferred/, "baked tiles must keep their URLs in data-* until hydration decides");
+  assert.match(baked, /data-src="\/i\/X1\.aaaaaaaa\.jpg"/, "the baked tile carries its jpg in data-src");
+  assert.match(baked, /<noscript><picture>/, "every baked tile needs its script-off twin");
+  assert.doesNotMatch(baked.slice(0, baked.indexOf("<noscript>")), /\ssrc="/,
+    "a real src outside the noscript twin is a discarded download");
+
+  // Fragment: these tiles ARE the grid. Nothing replaces them, so they carry
+  // live URLs and start on innerHTML.
+  assert.match(fragment, /\ssrc="\/i\/X1\.aaaaaaaa\.jpg"/, "the fragment tile must carry a live src");
+  assert.match(fragment, /<source type="image\/avif"[^>]*\ssrcset=/, "the fragment tile must carry live srcset, not data-srcset");
+  assert.doesNotMatch(fragment, /data-photo-deferred|data-src=|data-srcset=/,
+    "a fragment tile has nothing to defer for; leaving it deferred is how the grid went blank in an unrendered tab");
+  assert.doesNotMatch(fragment, /<noscript>/, "the fragment only ever arrives via fetch(), so a script-off twin is dead bytes");
+  assert.match(fragment, /fetchpriority="low"/, "photos must never compete with the prose that is actually the LCP element");
+  assert.match(worker, /\{ deferred: false \}/, "/photos/grid.html must render the live-URL form");
+
   assert.doesNotMatch(worker, /rel="preload" as="image"/, "a non-LCP random photo must not consume the preload lane");
-  assert.match(page, /IntersectionObserver/);
-  assert.match(page, /threshold:\s*0\.05/, "a sliver of the next tile must not trigger a transfer");
-  assert.match(page, /overlap >= rect\.height \* 0\.05/, "desktop must synchronously hydrate its visible photo rows");
-  assert.match(page, /else requestAnimationFrame\(\(\) => requestAnimationFrame\(start\)\)/, "mobile hydration must yield through the text paint");
+  assert.match(page, /fetch\("\/photos\/grid\.html"\)/, "the homepage must hydrate its random twelve");
+  assert.match(page, /\.catch\(\(\) => \{\}\)\s*\.then\(boot\)/, "a failed grid fetch must still hydrate the baked tiles");
+  // Removed 2026-07-29. It withheld 3 of 12 tiles to save ~34 KB out of ~136 KB,
+  // and the 9 it allowed finished 48ms apart, so the row it held back showed up
+  // as white squares on the first scroll for no measurable gain.
+  // Matches the construction, not the word, so the comment explaining why the
+  // observer is gone does not trip its own tripwire.
+  assert.doesNotMatch(page, /new IntersectionObserver|rootMargin:/,
+    "the photo grid must not reintroduce viewport gating; the whole set is ~136 KB at fetchpriority=low, off the LCP path");
   assert.doesNotMatch(page, /requestIdleCallback\(load/, "the tooltip island must not transfer before hover intent");
   assert.match(nav, /getElementById\("axp-desktop"\).*getElementById\("axp-taskbar"\)/, "every server-rendered shell must opt into post-paint enhancement");
   assert.match(nav, /D\.prerendering\) return boot\(\)/, "prerendered static shells must enhance before activation");
@@ -986,6 +1016,44 @@ test("homepage selects 12 photos and hydrates only the current scrollport", asyn
   );
   assert.match(luna, /homepage music island \(below the fold\)/);
   assert.match(luna, /homepage hover island \(non-critical\)/);
+});
+
+test("the RUM beacon is first-party on both legs, and every page that says so agrees", async () => {
+  const page = await readFile(new URL("holding/index.html", import.meta.url), "utf8");
+  const headers = await readFile(new URL("holding/_headers", import.meta.url), "utf8");
+  const security = await readFile(new URL("holding/_worker.js/lib/security.js", import.meta.url), "utf8");
+  const whoareyou = await readFile(new URL("holding/_worker.js/whoareyou.js", import.meta.url), "utf8");
+  const securityPage = await readFile(new URL("holding/_worker.js/security.js", import.meta.url), "utf8");
+
+  // Both legs. The script alone is not enough: without send.to the beacon falls
+  // back to its hardcoded cloudflareinsights.com endpoint, which the CSP below now
+  // blocks — so the script would load and every report would silently fail.
+  assert.match(page, /<script type="module" src="\/ledger\/rum\.js"/, "the beacon script must be served from this origin");
+  assert.match(page, /"send": \{"to": "\/ledger\/rum"\}/, "the beacon must be told to report to this origin too");
+  assert.doesNotMatch(page, /src="https:\/\/static\.cloudflareinsights\.com/, "no cross-origin beacon script");
+
+  // The CSP must not keep permitting an origin nothing calls any more. Matched on
+  // the policy VALUE, since _headers puts it on the header line while security.js
+  // puts it on the line after the key.
+  for (const [name, text] of [["_headers", headers], ["lib/security.js", security]]) {
+    const policy = (text.match(/default-src 'self';[^"\n]*upgrade-insecure-requests/) || [])[0];
+    assert.ok(policy, `${name} must still declare a CSP`);
+    assert.doesNotMatch(policy, /cloudflareinsights\.com/, `${name}: drop the beacon's old third-party CSP entries`);
+    assert.match(policy, /connect-src 'self';/, `${name}: connect-src should be back to pure 'self'`);
+    assert.match(policy, /script-src 'self' 'unsafe-inline';/, `${name}: script-src should carry no external origin`);
+  }
+
+  // The honesty surfaces. A CSP that quietly disagrees with the page describing it
+  // is the failure this repo keeps designing against, and "first-party" is the
+  // easiest claim on this site to round up into a privacy win it is not. Both pages
+  // must keep saying that the forwarding still happens.
+  assert.match(whoareyou, /\/ledger\/rum\.js/, "/whoareyou must name the first-party beacon paths");
+  assert.match(whoareyou, /forwards those timings to Cloudflare/,
+    "/whoareyou must keep stating that the reporting did not stop, it moved server-side");
+  assert.match(whoareyou, /content blocker, the report it used to stop now gets through/,
+    "/whoareyou must keep disclosing what proxying costs a blocker-running visitor");
+  assert.match(securityPage, /it does not mean nothing is forwarded from here/,
+    "/security must not let 'no external origin' imply nothing leaves this server");
 });
 
 test("weak validators turn unchanged rendered HTML into an empty 304", async () => {
@@ -1041,7 +1109,7 @@ test("static page negotiation prefers 304, then DCZ with the current validator",
   const digest = Buffer.alloc(32, 1);
   const tag = digest.toString("hex").slice(0, 16);
   const available = `:${digest.toString("base64")}:`;
-  const env = {
+  const makeEnv = (cacheControl) => ({
     ASSETS: {
       async fetch(input) {
         const path = new URL(typeof input === "string" ? input : input.url).pathname;
@@ -1049,7 +1117,7 @@ test("static page negotiation prefers 304, then DCZ with the current validator",
           return new Response("brotli bytes", {
             headers: {
               "etag": '"page"',
-              "cache-control": "public, max-age=0, s-maxage=86400",
+              "cache-control": cacheControl,
               "link": "</shell.css>; rel=preload; as=style",
             },
           });
@@ -1060,7 +1128,8 @@ test("static page negotiation prefers 304, then DCZ with the current validator",
         return new Response("not found", { status: 404 });
       },
     },
-  };
+  });
+  const env = makeEnv("public, max-age=0, s-maxage=86400");
   const currentBr = 'W/"page-br"';
   const currentDcz = 'W/"page-dcz"';
   const unchanged = await serveStaticPage(new Request("https://aadhar.sh/lwe/drivers", {
@@ -1078,13 +1147,40 @@ test("static page negotiation prefers 304, then DCZ with the current validator",
   assert.equal(changed.headers.get("cache-control"), "public, max-age=0, s-maxage=86400");
   assert.equal(changed.headers.get("link"), "</shell.css>; rel=preload; as=style");
   assert.equal(changed.headers.get("vary"), "accept-encoding, available-dictionary");
-  assert.equal(changed.headers.get("use-as-dictionary"), 'match="/lwe/drivers", match-dest=("document")');
 
   const dczUnchanged = await serveStaticPage(new Request("https://aadhar.sh/lwe/drivers", {
     headers: { "if-none-match": currentDcz, "available-dictionary": available },
   }), env);
   assert.equal(dczUnchanged.status, 304);
   assert.equal(dczUnchanged.headers.get("etag"), currentDcz);
+
+  // A page offers ITSELF as a dictionary only when its cache-control lets the browser
+  // keep the offer. Chromium sizes a registered dictionary's lifetime from the response's
+  // own freshness, so an offer on a stale-on-arrival response is stored already-expired
+  // and dropped, costing a DevTools error per navigation and buying nothing. Measured in
+  // Chrome 2026-07-29 across seven policies; the table is in lib/assets.js.
+  for (const cc of [
+    "public, max-age=0, s-maxage=86400",                       // today's page policy
+    "public, max-age=0, must-revalidate, s-maxage=86400",
+    "max-age=0, must-revalidate, stale-while-revalidate=604800", // must-revalidate wins
+    "private, no-cache, must-revalidate",                      // the homepage
+    "no-store",
+  ]) {
+    const res = await serveStaticPage(new Request("https://aadhar.sh/lwe/drivers", {
+      headers: { "available-dictionary": available },
+    }), makeEnv(cc));
+    assert.equal(res.headers.get("use-as-dictionary"), null, `must not self-offer under "${cc}"`);
+  }
+  // ...and it comes back on its own if a page is ever given a policy that survives to the
+  // moment of use. stale-while-revalidate is RFC 5861's permission to serve stale, which
+  // is the second arm of RFC 9842's "fresh or allowed to be served stale".
+  for (const cc of ["public, max-age=600", "public, max-age=0, stale-while-revalidate=604800"]) {
+    const res = await serveStaticPage(new Request("https://aadhar.sh/lwe/drivers", {
+      headers: { "available-dictionary": available },
+    }), makeEnv(cc));
+    assert.equal(res.headers.get("use-as-dictionary"),
+                 'match="/lwe/drivers", match-dest=("document")', `must self-offer under "${cc}"`);
+  }
 });
 
 test("LWE pages share one base stylesheet and the build derives one site-page dictionary", async () => {
@@ -1247,17 +1343,26 @@ test("the probe writes one positionally-stable datapoint and never throws", asyn
   // cannot crash the scheduled() handler
   await cronHomeProbe({}, { waitUntil() {} });
 
-  // the render path itself needs HTMLRewriter (Workers-only), so exercise the
-  // probe's contract with the render stubbed via a throwing env: a broken
-  // render must write NOTHING (a gap is the alert) and must not throw.
+  // The probe used to dispatch the homepage SSR, which needed ASSETS +
+  // HTMLRewriter, so a bindingless env was itself the "broken render" case and
+  // this asserted the resulting gap. `/` is a static document now and the probe
+  // follows the two fragments instead; the photo grid answers from the BUNDLED
+  // pool, so it succeeds with no bindings at all and there is no longer an env
+  // that fails both arms by omission. The write-nothing rule still holds in the
+  // code (both arms null -> early return), it just cannot be provoked this way.
+  //
+  // So assert what this env can actually prove: exactly one datapoint, with the
+  // positional arity Analytics Engine reads by index. A column silently
+  // appearing or vanishing is the failure that corrupts a whole dataset.
   const written = [];
-  const env = {
-    PERF_PROBE: { writeDataPoint: (d) => written.push(d) },
-    // serveHomepageWithPrerenderedTracks will throw on this env inside the
-    // probe's try/catch (no ASSETS binding)
-  };
+  const env = { PERF_PROBE: { writeDataPoint: (d) => written.push(d) } };
   await cronHomeProbe(env, { waitUntil() {} });
-  assert.equal(written.length, 0, "a failed render must not write a fabricated datapoint");
+  assert.equal(written.length, 1, "a working probe writes exactly one datapoint");
+  const [dp] = written;
+  assert.equal(dp.doubles.length, 5, "doubles are positional: [assets, tracks, alt, counter, total]");
+  assert.ok(dp.doubles.every((v) => typeof v === "number"), "every double must be a real number");
+  assert.equal(dp.blobs.length, 2, "blobs are positional: [deadlined CSV, version id]");
+  assert.deepEqual(dp.indexes, ["home"]);
 });
 
 // The SSRF host floor is shared by /lens, webmention verification, and
@@ -1284,4 +1389,38 @@ test("the shared SSRF host floor blocks every non-public shape", () => {
     "localhost.example.com",              // ends in a real TLD, not a bare localhost
   ];
   for (const h of allowed) assert.equal(privateHostBlocked(h), false, `should allow ${h}`);
+});
+
+// ── the deploy-time page renderers ──────────────────────────────────
+// build.mjs step 1e runs these in Node and writes photos.html / bot.html, which
+// step 8 then turns into the q11 twin and the dcz deltas. The whole scheme rests on
+// one property: the renderer is PURE over build-time artifacts, so Node and the
+// Worker produce identical bytes. If it ever reaches for runtime state the twin
+// stops matching what a visitor gets, and nothing else in the tree would notice —
+// the page would just quietly serve stale-but-plausible HTML.
+test("renderPhotosPage is pure over the committed pool", async () => {
+  const index = JSON.parse(await readFile(new URL("holding/_worker.js/photo-index.json", import.meta.url), "utf8"));
+  const hashes = JSON.parse(await readFile(new URL("holding/images/hashes.json", import.meta.url), "utf8"));
+  const alt = JSON.parse(await readFile(new URL("holding/images/alt.json", import.meta.url), "utf8"));
+  const pool = derivePhotoPool(index, hashes);
+
+  // no env, no ctx, no bindings: the signature cannot smuggle in runtime state
+  const a = await renderPhotosPage(pool, alt).text();
+  const b = await renderPhotosPage(pool, alt).text();
+  assert.equal(a, b, "same inputs must give byte-identical output");
+  assert.equal(a.split('class="ph"').length - 1, pool.length, "one tile per pooled photo");
+  assert.ok(a.includes("<!DOCTYPE html>") || a.includes("<!doctype html>"), "must be a whole document");
+
+  // an empty pool is a failed build, not a blank contact sheet
+  const empty = renderPhotosPage([], alt);
+  assert.equal(empty.status, 503, "an empty pool must refuse rather than ship bare frames");
+});
+
+test("renderBotPage takes no arguments and is deterministic", async () => {
+  const { renderBotPage } = await import("./holding/_worker.js/bot.js");
+  assert.equal(renderBotPage.length, 0, "any parameter is a door for runtime state");
+  const a = await renderBotPage().text();
+  const b = await renderBotPage().text();
+  assert.equal(a, b);
+  assert.ok(a.includes("AadharshBot"), "must name the crawler the page exists to explain");
 });

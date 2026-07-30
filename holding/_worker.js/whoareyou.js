@@ -498,9 +498,30 @@ footer .signature small { color: oklch(56.93% 0 0); }
       caches for 24h so visitors from the same block don't re-hit ARIN, and the
       Edge Trace section's fetch of <code>/cdn-cgi/trace</code>, which your own
       browser makes to this same origin because those seven fields are the ones
-      the worker is never told. No analytics. The data above lives for as long as
+      the worker is never told. The data above lives for as long as
       it takes to render, then nothing writes it to storage. View-source if you
       want, since it's a single JavaScript file you can read end-to-end.
+      <br><br>
+      <strong>Analytics, precisely:</strong> not on this page, and it matters that
+      the distinction is stated rather than implied. The homepage &mdash; and only the
+      homepage &mdash; loads Cloudflare Web Analytics. Since 2026-07-29 your browser
+      fetches that script from <em>this</em> origin (<code>/ledger/rum.js</code>) and
+      posts its timings to <em>this</em> origin (<code>/ledger/rum</code>), so no page
+      on this site makes your browser talk to anybody else.
+      <br><br>
+      Do not read that as "the data stays here," because it doesn't. This server
+      forwards those timings to Cloudflare exactly as before. What changed is that the
+      request is made by this machine instead of by yours &mdash; which also means that
+      if you run a content blocker, the report it used to stop now gets through. That
+      is the honest cost of the change and you are owed it plainly. The reason was
+      self-interested rather than principled: the old third-party host is on the
+      standard blocklists, so blocker-running visitors vanished from the sample
+      entirely, and those are disproportionately the people on the browsers whose
+      back-forward and prerender behaviour the measurement exists to see. The beacon is
+      cookieless and samples page-load timing, not people. It buys one thing: this
+      site's performance budget is written in compressed bytes, and bytes are only a
+      proxy for what a real phone on a real network actually waits for. Guessing at
+      that was the older, quieter dishonesty.
     </div>
 
     <footer>
