@@ -195,6 +195,31 @@ async function checkInvariants() {
     }
   } catch (e) { warn.push(`agent-skills digest check could not run: ${e.message}`); }
 
+  // 7b (hard) — the RUM beacon must carry a real site token. A placeholder token
+  // ships the worst of every trade at once: every visitor pays a third-party request
+  // for a beacon that reports nowhere, the CSP is widened for nothing, and
+  // /whoareyou's third-party disclosure describes traffic that buys no data. All three
+  // costs are invisible in testing, because a bad token fails silently by design.
+  //
+  // Hard rather than warn, for the same reason as the client-edge check above: this is
+  // a fill-in-the-blank left behind, not a taste call. Paste the token from
+  // Cloudflare dashboard > Web Analytics > (site) > Manage site, or delete the beacon
+  // block in index.html together with the two cloudflareinsights.com CSP entries.
+  try {
+    const home = await read("holding/index.html");
+    if (home.includes("CF_RUM_TOKEN_PLACEHOLDER")) {
+      hard.push("index.html: the Web Analytics beacon still carries CF_RUM_TOKEN_PLACEHOLDER — paste the real site token (dashboard > Web Analytics > Manage site), or remove the beacon and its two cloudflareinsights.com CSP entries in _headers + _worker.js/lib/security.js");
+    }
+    // The beacon and the CSP that permits it have to arrive together. Either half
+    // alone is a quiet bug: a beacon with no CSP entry is blocked at runtime, and a
+    // CSP entry with no beacon is a third-party origin allowed for no reason.
+    const beacon = home.includes("static.cloudflareinsights.com");
+    const csp = (await read("holding/_headers")).includes("static.cloudflareinsights.com");
+    if (beacon !== csp) {
+      hard.push(`RUM beacon and CSP disagree: index.html ${beacon ? "loads" : "does not load"} the beacon but _headers ${csp ? "allows" : "does not allow"} static.cloudflareinsights.com — ship both or neither`);
+    }
+  } catch (e) { warn.push(`RUM beacon check could not run: ${e.message}`); }
+
   // 8 (hard) — the site surface registry (site-manifest.json) is the single truth
   // for which pages exist and where they show. Its two GENERATED projections must
   // match a fresh regen, and its three HAND-authored consumers (nav's Run palette,

@@ -6,9 +6,24 @@
 // would skip _headers entirely and ship without CSP / Permissions-Policy.
 import { PAGE_DICTIONARY, SHELL_PRELOAD_LINK } from "./shell-assets.js";
 
+// The two cloudflareinsights.com origins are the Web Analytics (RUM) beacon: the
+// script comes from static.cloudflareinsights.com and reports to
+// cloudflareinsights.com/cdn-cgi/rum. They are the ONLY third-party script origin on
+// the site, and they are here deliberately — MAINTENANCE.md already names RUM as the
+// outcome source for LCP/INP/CLS, and the perf budget has been spending guessed byte
+// ceilings in place of field data. Two consequences worth writing down rather than
+// rediscovering: /whoareyou's "never speaks to a third party" claim had to be amended
+// (it is now specific about this one), and /security's summary had to stop implying
+// default-src 'self' means nothing external. A CSP that quietly disagrees with the
+// page describing it is the failure this repo keeps designing against.
+//
+// Automatic (zone-side) beacon injection is NOT usable here, and this is the reason:
+// the worker serves the homepage and the static pages as precompressed br/dcz bodies
+// with `encodeBody: "manual"`, and the edge cannot rewrite HTML it did not compress.
+// So the beacon is placed in source, which also keeps it visible in View Source.
 export const SECURITY_HEADERS = {
   "content-security-policy":
-    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://i.scdn.co https://*.spotifycdn.com; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; worker-src 'self'; manifest-src 'self'; upgrade-insecure-requests",
+    "default-src 'self'; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://i.scdn.co https://*.spotifycdn.com; connect-src 'self' https://cloudflareinsights.com; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; worker-src 'self'; manifest-src 'self'; upgrade-insecure-requests",
   // keep every token one a shipping browser still knows — an unrecognized
   // feature is inert and logs a console error. `browsing-topics` was dropped
   // 2026-07 for that reason (Topics API deprecated in Chrome 144, feature

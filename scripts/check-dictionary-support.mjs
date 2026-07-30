@@ -165,5 +165,60 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
   report("page dictionary lifetime is useful", !puad || swr === 0 || swr >= 86400,
          swr ? `stale-while-revalidate=${swr}s of dictionary lifetime` : "(freshness, not swr, carries the lifetime)");
 }
+// 5. the cache key actually SEPARATES dictionaries. Everything above reads
+// `content-encoding` and stops there, which cannot see the one failure that would
+// actually break visitors: a shared cache that stored one client's delta and hands it
+// to a client holding a DIFFERENT dictionary. That response is labelled dcz, arrives
+// with a 200, and is undecodable — and every check above it still says PASS, because
+// the header is right and only the bytes are wrong.
+//
+// The separation is not ours to implement. Cloudflare's shared-dictionaries support
+// (RFC 9842, open beta 2026-04-30) is what extends the edge cache key to
+// `Available-Dictionary` + `Accept-Encoding`; assets.js:182 sets the Vary that asks
+// for it. A zone-side regression, or that setting being flipped, would land here as
+// two dictionaries collapsing onto one cached body. Verified separating 2026-07-29
+// (1072 B / 651 B / 13490 B, all three cf-cache-status: HIT), so this asserts a
+// property production HAS rather than one we hope for.
+//
+// Needs two distinct dictionaries that BOTH earn a delta against the live nav hash,
+// so it discovers them instead of hardcoding: a dictionary roll changes which
+// committed snapshots still have deltas deployed.
+{
+  const home = await (await fetch("https://aadhar.sh/", { headers: { "accept-encoding": "identity" } })).text();
+  const live = home.match(/\/a\/nav\.([0-9a-f]{8})\.js/)?.[1];
+  const url = `https://aadhar.sh/a/nav.${live}.js`;
+
+  const deltas = [];
+  for (const name of (await readdir("holding/a-dict")).filter((n) => n.startsWith("nav.") && !n.includes(live))) {
+    const r = await get(url, b64(await readFile(`holding/a-dict/${name}`)));
+    const body = Buffer.from(await r.arrayBuffer());
+    // dcz is not an encoding undici knows, so these bytes arrive raw — which is the
+    // whole point here. Hash rather than compare lengths: two different deltas could
+    // coincide in size, and a collapsed cache key would be an EXACT byte match.
+    if (r.headers.get("content-encoding") === "dcz") {
+      deltas.push({ name, sha: createHash("sha256").update(body).digest("hex").slice(0, 12), bytes: body.length });
+    }
+  }
+
+  if (deltas.length < 2) {
+    report("dcz cache key separates dictionaries", true,
+           `inconclusive: ${deltas.length} of the committed nav snapshots still have a deployed delta (needs 2). Not a failure — roll the dictionaries or deploy, then re-run.`);
+  } else {
+    const [a, b] = deltas;
+    report("dcz cache key separates dictionaries", a.sha !== b.sha,
+           a.sha === b.sha
+             ? `COLLAPSED: ${a.name} and ${b.name} both returned ${a.bytes} B / sha ${a.sha}. One of these clients cannot decode what it was handed.`
+             : `${a.name}=${a.bytes} B (${a.sha}) vs ${b.name}=${b.bytes} B (${b.sha})`);
+  }
+
+  // The other half of the same key: a client that sends NO dictionary must never be
+  // handed a delta. This is the direction that breaks a first-time visitor rather than
+  // a returning one, so it is the more expensive of the two to get wrong.
+  const plain = await get(url);
+  const pce = plain.headers.get("content-encoding");
+  try { await plain.body?.cancel(); } catch {}
+  report("no dictionary gets no delta", pce !== "dcz",
+         pce === "dcz" ? "a request with no Available-Dictionary was served dcz — undecodable" : `ce=${pce}`);
+}
 console.log("  BLOCKED (by platform, not by us): SSR'd pages — workerd zstd ignores `dictionary`; re-run the scratchpad spike or watch for CF shared-dictionaries Phase 2.");
 process.exit(fail ? 1 : 0);

@@ -48,7 +48,7 @@ dl.sc-grid dd{margin:0;color:#15243f;font-family:var(--font-mono);font-size:8.5p
 
     <h2>Header &amp; transport details</h2>
     <dl class="sc-grid">
-      <dt>Content-Security-Policy</dt><dd>default-src 'self'; object-src 'none'; frame-ancestors 'none'; upgrade-insecure-requests</dd>
+      <dt>Content-Security-Policy</dt><dd>default-src 'self'; object-src 'none'; frame-ancestors 'none'; upgrade-insecure-requests &mdash; plus one allowed external script origin, <code>static.cloudflareinsights.com</code>, the homepage's Web Analytics beacon (see <a href="/whoareyou">/whoareyou</a>)</dd>
       <dt>Permissions-Policy</dt><dd>camera, microphone, geolocation, USB, Topics + 10 more: all denied</dd>
       <dt>X-Frame-Options</dt><dd>DENY</dd>
       <dt>X-Content-Type-Options</dt><dd>nosniff</dd>

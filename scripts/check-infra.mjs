@@ -401,12 +401,24 @@ async function checkEdge(infra) {
         continue;
       }
 
-      const res = await fetchEdge(url);
+      // A check may need to ASK for something before it can assert what comes back.
+      // Content negotiation is the case that forced this: "the zone is not converting
+      // our HTML" is only observable on a request that says `Accept: text/markdown`,
+      // and a check that cannot set a request header cannot see it at all.
+      const res = await fetchEdge(url, check.request || {});
       const problems = [];
 
       for (const name of want.headerAbsent || []) {
         const got = res.headers.get(name);
         if (got !== null) problems.push(`${name} is present (${got})`);
+      }
+      // headerPresent exists because headerContains cannot express it: every string
+      // contains "", so `headerContains: {x: ""}` passes on an ABSENT header and
+      // asserts nothing at all. That mistake shipped in the first draft of
+      // markdown-for-agents-off below and was caught only by deleting the check's
+      // request header and watching it still pass.
+      for (const name of want.headerPresent || []) {
+        if (res.headers.get(name) === null) problems.push(`${name} is absent`);
       }
       for (const [name, expected] of Object.entries(want.headerEquals || {})) {
         const got = (res.headers.get(name) || "").trim();
@@ -526,6 +538,46 @@ async function checkApi(infra, wrangler, token) {
   });
 }
 
+// ------------------------------------------- tier: agent markdown surface ----
+
+// Which pages answer an agent in Markdown, measured on the wire rather than inferred
+// from filenames. The twins arrive by three different conventions — /index.md for the
+// homepage, holding/md/<name>.md for /whoareyou and /bot, build-generated twins for
+// /garage/* and /lwe/* — so a local file check would have to know all three and would
+// still be guessing about production. One request per page settles it.
+//
+// site-manifest.json's `flags.agents` already declares which surfaces are part of the
+// agent-facing catalog, so it is the right denominator: an agents:true page that hands
+// back HTML is a page the registry advertises to agents and then serves for humans.
+//
+// WARN, not fail. Which pages deserve a twin is a content judgement (a Markdown
+// rendering of /rn's live playlist is obviously useful; one of /lens, an interactive
+// tool, mostly is not), and this check has no business turning a taste call into a red
+// build. The value is that the gap stops being invisible.
+async function checkAgentMarkdown() {
+  let surfaces;
+  try {
+    ({ surfaces } = JSON.parse(await readFile(join(ROOT, "site-manifest.json"), "utf8")));
+  } catch (e) {
+    warn(`agent markdown coverage could not run: ${e.message}`);
+    return;
+  }
+  const pages = surfaces.filter((s) => s.kind === "page" && s.flags?.agents);
+  const gaps = [];
+  for (const p of pages) {
+    try {
+      const res = await fetchEdge(`${infra.edge.origin}${p.path}`, { accept: "text/markdown" });
+      const ct = (res.headers.get("content-type") || "").split(";")[0].trim();
+      if (ct !== "text/markdown") gaps.push(`${p.path} (${ct || "no content-type"})`);
+    } catch (e) {
+      warn(`agent markdown probe failed for ${p.path}: ${e.message}`);
+    }
+  }
+  gaps.length
+    ? warn(`agent markdown coverage: ${pages.length - gaps.length}/${pages.length} agents:true pages answer Accept: text/markdown. No twin: ${gaps.join(", ")} — give each one a twin or drop flags.agents so the registry stops advertising it`)
+    : pass(`agent markdown coverage: all ${pages.length} agents:true pages answer in Markdown`);
+}
+
 // ----------------------------------------------------------------- main ----
 
 const infra = JSON.parse(await readFile(join(ROOT, "infra.json"), "utf8"));
@@ -539,6 +591,7 @@ if (OFFLINE) {
 } else {
   await checkDns(infra);
   await checkEdge(infra);
+  await checkAgentMarkdown();
 
   const token = process.env.CLOUDFLARE_API_TOKEN;
   if (!token) {
