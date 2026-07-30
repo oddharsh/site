@@ -771,6 +771,42 @@ if (inlineProbe.includes("/* probe */") ||
   console.log(`homepage bake: 12 deterministic fallback tiles + last-modified ${new Date(newest).toISOString().slice(0, 10)}`);
 }
 
+// 1e) /photos and /bot as deploy-time documents.
+//
+// Both render from build-time inputs only, so their bytes are knowable here, and
+// emitting them as HTML buys the q11 twin plus both dcz delta tiers that step 8
+// already gives every other page. /photos was the largest page on the site (60KB)
+// and the largest still taking Cloudflare's on-the-fly zstd-3 with no twin at all.
+//
+// Same import-from-the-built-tree shape as step 1d: the Worker's own renderer runs
+// in Node against the committed artifacts, so there is ONE renderer rather than a
+// Node copy that can drift from the served one. The route keeps the dynamic handler
+// as a 404 fallback, so a failure here degrades to today's behaviour instead of a
+// missing page — but these throws exist because a SILENTLY empty contact sheet is
+// worse than a failed deploy.
+{
+  const nonce = `?build=${BUILD_NONCE}`;
+  const photos = await import(pathToFileURL(resolve(OUT, "holding/_worker.js/photos.js")).href + nonce);
+  const bot = await import(pathToFileURL(resolve(OUT, "holding/_worker.js/bot.js")).href + nonce);
+
+  const pool = photos.derivePhotoPool(
+    JSON.parse(await readFile(`${OUT}/holding/_worker.js/photo-index.json`, "utf8")),
+    JSON.parse(await readFile(`${OUT}/holding/images/hashes.json`, "utf8")),
+  );
+  if (!pool.length) throw new Error("photos page: the pool is empty — the contact sheet would ship with no tiles");
+  const altMap = JSON.parse(await readFile(`${OUT}/holding/images/alt.json`, "utf8").catch(() => "{}"));
+
+  const photosHtml = await photos.renderPhotosPage(pool, altMap).text();
+  if (!photosHtml.includes("class=\"ph\"")) throw new Error("photos page: rendered document has no tiles — did the markup move?");
+  await writeFile(`${OUT}/holding/photos.html`, photosHtml);
+
+  const botHtml = await bot.renderBotPage().text();
+  if (!botHtml.includes("AadharshBot")) throw new Error("bot page: rendered document does not name the crawler — did the copy move?");
+  await writeFile(`${OUT}/holding/bot.html`, botHtml);
+
+  console.log(`pages(gen): photos.html ${photosHtml.length}B (${pool.length} tiles), bot.html ${botHtml.length}B`);
+}
+
 // 2) homepage HTML: deploy the readable original as /index.src.html and
 // minify only the served copy. The worker rewrites this response as a stream,
 // so doing this before ASSETS.fetch keeps the rewriter path allocation-free.

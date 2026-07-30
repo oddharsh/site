@@ -30,7 +30,7 @@ import { serveStaticPage } from "./holding/_worker.js/lib/assets.js";
 import { readManifest, workerModule, navFenceBody, readFenceBody } from "./scripts/gen-manifest.mjs";
 import { INDEXED_SECTIONS, TWIN_FACTS, buildTwins, checkTwinFacts, htmlFileFor, twinPath } from "./scripts/gen-md-twins.mjs";
 import { MCP_TOOLS } from "./serendipity/serendipity.js";
-import { derivePhotoPool, getImagesManifest, handlePhotoQuery, queryPhotos } from "./holding/_worker.js/photos.js";
+import { derivePhotoPool, renderPhotosPage, getImagesManifest, handlePhotoQuery, queryPhotos } from "./holding/_worker.js/photos.js";
 import { renderPhotoSlots } from "./holding/_worker.js/lib/photo-grid.js";
 import { cachedRender, deadline } from "./holding/_worker.js/lib/cache.js";
 import { ifNoneMatchMatches, notModifiedIfFresh, withWeakEtag } from "./holding/_worker.js/lib/cache.js";
@@ -1389,4 +1389,38 @@ test("the shared SSRF host floor blocks every non-public shape", () => {
     "localhost.example.com",              // ends in a real TLD, not a bare localhost
   ];
   for (const h of allowed) assert.equal(privateHostBlocked(h), false, `should allow ${h}`);
+});
+
+// ── the deploy-time page renderers ──────────────────────────────────
+// build.mjs step 1e runs these in Node and writes photos.html / bot.html, which
+// step 8 then turns into the q11 twin and the dcz deltas. The whole scheme rests on
+// one property: the renderer is PURE over build-time artifacts, so Node and the
+// Worker produce identical bytes. If it ever reaches for runtime state the twin
+// stops matching what a visitor gets, and nothing else in the tree would notice —
+// the page would just quietly serve stale-but-plausible HTML.
+test("renderPhotosPage is pure over the committed pool", async () => {
+  const index = JSON.parse(await readFile(new URL("holding/_worker.js/photo-index.json", import.meta.url), "utf8"));
+  const hashes = JSON.parse(await readFile(new URL("holding/images/hashes.json", import.meta.url), "utf8"));
+  const alt = JSON.parse(await readFile(new URL("holding/images/alt.json", import.meta.url), "utf8"));
+  const pool = derivePhotoPool(index, hashes);
+
+  // no env, no ctx, no bindings: the signature cannot smuggle in runtime state
+  const a = await renderPhotosPage(pool, alt).text();
+  const b = await renderPhotosPage(pool, alt).text();
+  assert.equal(a, b, "same inputs must give byte-identical output");
+  assert.equal(a.split('class="ph"').length - 1, pool.length, "one tile per pooled photo");
+  assert.ok(a.includes("<!DOCTYPE html>") || a.includes("<!doctype html>"), "must be a whole document");
+
+  // an empty pool is a failed build, not a blank contact sheet
+  const empty = renderPhotosPage([], alt);
+  assert.equal(empty.status, 503, "an empty pool must refuse rather than ship bare frames");
+});
+
+test("renderBotPage takes no arguments and is deterministic", async () => {
+  const { renderBotPage } = await import("./holding/_worker.js/bot.js");
+  assert.equal(renderBotPage.length, 0, "any parameter is a door for runtime state");
+  const a = await renderBotPage().text();
+  const b = await renderBotPage().text();
+  assert.equal(a, b);
+  assert.ok(a.includes("AadharshBot"), "must name the crawler the page exists to explain");
 });

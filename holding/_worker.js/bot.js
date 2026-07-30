@@ -22,7 +22,7 @@ export async function handleBotPage(request, env, ctx) {
   return cachedRender(request, ctx, () => Promise.resolve(renderBotPage()), "/bot", env);
 }
 
-function renderBotPage() {
+export function renderBotPage() {
   const css = `/*min*/
   h1 { font-family: "Trebuchet MS", Verdana, Geneva, sans-serif; font-size: 14pt; color: oklch(41.92% 0.0962 250.51); margin: 0 0 4px; font-weight: bold; }
   h2 { font-family: "Trebuchet MS", Verdana, Geneva, sans-serif; font-size: 12pt; color: oklch(41.92% 0.0962 250.51); margin: 16px 0 6px; font-weight: bold; line-height: 1.3; }
