@@ -429,6 +429,60 @@ function lensStateOfWebPanel() {
     "</div></dialog>";
 }
 
+// The About dialog: the page's argument, stated once, in order. Everything on
+// /lens is evidence for a three-act story about machine access to the web (the
+// semantic web asked publishers first; models now brute-force the human page
+// and pay the difference; the open question is acting, not reading), but the
+// acts were scattered across lens captions where only a completionist would
+// assemble them. This panel is the assembly, with a jump into the lens that
+// proves each act live. Same dialog chrome as the machine-web panel; opened
+// from the footer's own self-description.
+const LENS_ERAS = [
+  {
+    era: "Past", years: "1995-2011", label: "The semantic web asked first.",
+    claim: "Publishers were asked to mark meaning up front: meta tags (1995), microformats (2005), RDFa (2008), microdata (2009), Open Graph (2010), JSON-LD (2011). Each layer promised that machines could read facts instead of scraping prose. Adoption followed traffic, so the preview layers thrived while the rest fossilized in place.",
+    jumps: [{ lens: "structured" }, { lens: "anatomy" }],
+  },
+  {
+    era: "Present", years: "2022-now", label: "Models pay the difference.",
+    claim: "LLMs flipped the bargain: rather than wait for structure, they brute-force the page built for people and pay per read, in tokens. The same words cost a person nothing, cost a model real money, and earn the publisher none of it. Sites answered with rules and walls: named AI crawlers in robots.txt, Content Signals, bot challenges, pay-per-crawl.",
+    jumps: [{ lens: "ai" }, { lens: "terms" }],
+  },
+  {
+    era: "Future", years: "2024-on", label: "From reading to acting.",
+    claim: "The open question is whether a site publishes contracts an agent can act on: tools (MCP, WebMCP), identity (Web Bot Auth, OAuth), payment (x402, pay-per-crawl), instructions (llms.txt, AGENTS.md). Lens probes twenty-odd such surfaces live, scores them, and lets you flip the missing ones on to see what each would change.",
+    jumps: [{ lens: "discovery" }, { lens: "readiness" }, { view: "delta", label: "Delta" }],
+  },
+];
+
+function lensAboutPanel() {
+  const eras = LENS_ERAS.map((e) => {
+    const jumps = e.jumps.map((j) => j.view
+      ? '<button class="lx-chip lx-goto" type="button" data-goto-view="' + escAttr(j.view) + '">' + escHtml(j.label || j.view) + "</button>"
+      : '<button class="lx-chip lx-goto" type="button" data-goto-lens="' + escAttr(j.lens) + '">' + escHtml(LENS_TAB_LABELS[j.lens] || j.lens) + "</button>"
+    ).join(" ");
+    return '<div class="lx-abt-era"><div class="lx-abt-when"><b>' + escHtml(e.era) + "</b><span>" + escHtml(e.years) + "</span></div>" +
+      '<div><div class="lx-abt-label">' + escHtml(e.label) + "</div>" +
+      '<div class="lx-abt-claim">' + glossify(escHtml(e.claim)) + "</div>" +
+      '<div class="lx-abt-jumps"><span>See it live:</span> ' + jumps + "</div></div></div>";
+  }).join("");
+  return '<dialog class="lx-sow-dialog" id="lx-abt-dialog" closedby="any" aria-labelledby="lx-abt-title">' +
+    '<div class="lx-sow-tb"><span class="lx-sow-kicker" id="lx-abt-title">About The Other Web</span>' +
+    '<button class="lx-sow-x" type="button" id="lx-abt-close" title="Close" aria-label="Close"></button></div>' +
+    '<div class="lx-sow-inner">' +
+    '<div class="lx-abt-thesis">Every page now has two audiences: people, and the machines reading over their shoulders. This instrument watches the second one. The story it keeps showing you runs in three acts.</div>' +
+    eras +
+    '<div class="lx-abt-rules"><b>How this instrument behaves</b><ul class="lx-why">' +
+    "<li>Every fetch is identified and cryptographically signed as AadharshBot. Lens never wears another bot's user-agent to get past a wall.</li>" +
+    "<li>Every verdict stays pinned to evidence you can open. A probe that never answered reads as unknown, never as a fail.</li>" +
+    "<li>Absent metadata renders as absent. Nothing is guessed or backfilled.</li>" +
+    "<li>Delta's simulations stay amber. Green is reserved for signals actually observed.</li>" +
+    "<li>One fetch per ask, server-side, with no logging.</li>" +
+    "</ul></div>" +
+    '<div class="lx-cf-credit">Rubric after IsItAgentReady. Pedagogy after Seymour Papert\'s micro-worlds and <a href="https://www.geoffreylitt.com/2026/07/02/understanding-is-the-new-bottleneck" target="_blank" rel="noopener">Geoffrey Litt</a>. Window chrome after Redmond, 2001.</div>' +
+    "</div></dialog>";
+}
+
 export function renderLensShell(initial, state, inputValue) {
   // defaults must match the client (lens.js) and lensState(), or a plain /lens
   // SSRs one tab and the deferred script silently flips to another on hydrate.
@@ -784,6 +838,20 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 .lx-sow-open { font:inherit; color:oklch(42.61% 0.2353 263.74); background:none; border:none; padding:0; cursor:pointer; text-decoration:underline; }
 @media (max-width:520px){ .lx-sow-grid{ grid-template-columns:1fr; } }
 
+/* the About dialog: three eras + the instrument's rules. Shares the sow dialog
+   chrome; only the inner layout is its own. */
+.lx-abt-thesis { margin:0 0 11px; font-size:9.6pt; line-height:1.5; color:oklch(28% 0.02 255); }
+.lx-abt-era { display:grid; grid-template-columns:82px 1fr; gap:10px; padding:9px 0; border-top:1px solid oklch(88% 0.02 250); }
+.lx-abt-when b { display:block; font-family:"Trebuchet MS",Verdana,sans-serif; font-size:10pt; color:oklch(33% 0.10 263); }
+.lx-abt-when span { font-family:"Courier New",monospace; font-size:7.8pt; color:oklch(55% 0 0); }
+.lx-abt-label { font-weight:bold; font-size:9.2pt; color:oklch(30% 0.05 255); margin:0 0 2px; }
+.lx-abt-claim { font-size:8.8pt; line-height:1.45; color:oklch(33% 0.01 255); }
+.lx-abt-jumps { margin-top:6px; display:flex; align-items:center; flex-wrap:wrap; gap:5px; }
+.lx-abt-jumps > span { font-size:8pt; color:oklch(52% 0 0); }
+.lx-abt-rules { margin-top:4px; padding:8px 10px; border:1px solid oklch(86% 0.02 250); border-radius:3px; background:#fff; }
+.lx-abt-rules > b { display:block; font-family:"Trebuchet MS",Verdana,sans-serif; font-size:9.2pt; color:oklch(33% 0.10 263); margin:0 0 4px; }
+@media (max-width:520px){ .lx-abt-era { grid-template-columns:1fr; gap:3px; } }
+
 /* status bar */
 .lx-status { margin-top:9px; border-top:1px solid oklch(86% 0.03 260); padding-top:6px; display:flex; flex-wrap:wrap; gap:5px 14px; font-size:8.6pt; color:oklch(45% 0 0); }
 .lx-status b { color:oklch(30% 0.04 255); font-weight:bold; }
@@ -853,8 +921,9 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
     </div>
 
     <div class="lx-status" id="lx-status">${seeded || (initial && !initial.ok) ? lensStatusFragment(initial, state) : '<span>Idle. Nothing is fetched until you ask, and then just once, server-side, with no logging.</span>'}</div>
-    <footer>&larr; <a href="/">aadhar.sh</a> &middot; a research toy about how machines read the web &middot; <button type="button" class="lx-sow-open" data-sow-open>the state of the machine web</button> &middot; fetched by <a href="/bot">AadharshBot</a></footer>
+    <footer>&larr; <a href="/">aadhar.sh</a> &middot; <button type="button" class="lx-sow-open" data-abt-open>a research toy about how machines read the web</button> &middot; <button type="button" class="lx-sow-open" data-sow-open>the state of the machine web</button> &middot; fetched by <a href="/bot">AadharshBot</a></footer>
     ${lensStateOfWebPanel()}
+    ${lensAboutPanel()}
     <div class="lx-tip" id="lx-tip" popover="manual" role="tooltip"></div>
     <script type="application/json" id="lx-glossary">${lensScriptJson(LENS_GLOSSARY)}</script>
     ${initialScript}

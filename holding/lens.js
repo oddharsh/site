@@ -1422,6 +1422,35 @@
     b.addEventListener("click", openStateWeb);
   });
 
+  // The About dialog: same chrome and dismissal model as the machine-web panel.
+  // Its era cards carry .lx-goto jump buttons, which close the dialog and land
+  // on the lens that proves the era live — via Compare when the current view
+  // hides the lens tabs, mirroring what clicking a tab from Delta does.
+  var abtDialog = document.getElementById("lx-abt-dialog");
+  if (abtDialog) {
+    var abtClose = document.getElementById("lx-abt-close");
+    if (abtClose) abtClose.addEventListener("click", function () { abtDialog.close(); });
+    abtDialog.addEventListener("click", function (e) { if (e.target === abtDialog) abtDialog.close(); });
+  }
+  [].forEach.call(document.querySelectorAll("[data-abt-open]"), function (b) {
+    b.addEventListener("click", function () {
+      if (abtDialog && !abtDialog.open && abtDialog.showModal) { try { abtDialog.showModal(); } catch (e) {} }
+    });
+  });
+  [].forEach.call(document.querySelectorAll(".lx-goto"), function (b) {
+    b.addEventListener("click", function () {
+      if (abtDialog && abtDialog.open) abtDialog.close();
+      var toLens = b.getAttribute("data-goto-lens");
+      var toView = b.getAttribute("data-goto-view");
+      if (toLens) {
+        if (view !== "both" && view !== "machine") setView("both");
+        setLens(toLens);
+      } else if (toView) {
+        setView(toView);
+      }
+    });
+  });
+
   var urlState = readUrlState();
   try {
     var savedView = localStorage.getItem("lx-mode");
