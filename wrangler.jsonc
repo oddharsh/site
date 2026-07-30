@@ -142,7 +142,13 @@
   // 7,37 * * * * — the homepage perf probe (perf-probe.js): render `/` in-process,
   // parse its own Server-Timing, write the spans to Analytics Engine. Offset
   // from the */30 around-crawl so the two never share a tick. 48 samples/day.
-  "triggers": { "crons": ["*/30 * * * *", "17 8 * * 1", "41 5 * * *", "7,37 * * * *"] },
+  // 23 */6 * * * — the serendipity Luma re-sync (serendipity.js cronSerendipity):
+  // events per enabled contributor, then the next guest lists, then a
+  // description backfill. Four times daily keeps the pool honest AND the
+  // stored Luma session warm (Luma sessions idle-expire in weeks, and before
+  // this tick nothing exercised the stored cookie between pastes); rotations
+  // Luma issues mid-run are persisted back to D1 by the cookie jar.
+  "triggers": { "crons": ["*/30 * * * *", "17 8 * * 1", "41 5 * * *", "7,37 * * * *", "23 */6 * * *"] },
   "kv_namespaces": [
     { "binding": "RN_KV", "id": "3cb8a107c58e47dc9244e75b33401f36" },
     { "binding": "BOOKINGS", "id": "37acb65118fe485583a90a94cb89365e" }

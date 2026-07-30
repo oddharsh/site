@@ -898,6 +898,13 @@ The queries worth knowing, because each one used to be unanswerable:
   `cal.fail_closed = true` (or `cal.source = "none"`). That is a 503 on `/book`.
 - **"did the webmention run finish"** — `webmention.send`, attribute
   `webmention.capped`.
+- **"is the serendipity pool still syncing"** — `cron.serendipity` (fires
+  00/06/12/18:23 UTC), then the run's summary log line: per-contributor
+  `{synced}` or `{error}`. A `Luma 401` there means the stored session finally
+  died and the fix is a cookie re-paste at `/serendipity/contribute`; the cron
+  plus the Set-Cookie capture in `serendipity.js` (`cookieJar`) exist to make
+  that rare, since every sync both keeps the session warm and persists any
+  rotated cookie Luma issues back to D1.
 
 **Do not chase a 0ms span.** `home.grid.render` and `lens.inspect.parse` read 0
 and always will: Workers spans advance their clock across I/O only, never during

@@ -553,7 +553,8 @@ async function renderContribute(d, path, uid, msg) {
 
 // parse a Cookie-Editor JSON export (or a "name=value; ..." header) into our
 // stored shape. Throws with a human message if no luma.auth-session-key.
-function parseCookies(raw) {
+// Exported for contract-tests.mjs, like MCP_TOOLS.
+export function parseCookies(raw) {
   const t = (raw || "").trim();
   let cookies;
   if (t.startsWith("[")) {
@@ -568,6 +569,13 @@ function parseCookies(raw) {
     if (!pairs.length) throw new Error("No cookies found in input");
     cookies = pairs.map((p) => { const eq = p.indexOf("="); return { name: eq === -1 ? p : p.slice(0, eq), value: eq === -1 ? "" : p.slice(eq + 1), domain: ".lu.ma", path: "/", expires: -1, httpOnly: false, secure: true, sameSite: "Lax" }; });
   }
+  // Keep only Luma's own cookies. A whole-domain export drags in Cloudflare
+  // edge cookies (__cf_bm is a 30-minute, IP-bound bot-management token, and
+  // replaying a stale one from Worker egress IPs reads as a scraper) plus
+  // Stripe/analytics noise. None of it authenticates anything, so it never
+  // enters the jar. cookieJar() applies the same filter on load, which heals
+  // rows pasted before this existed.
+  cookies = cookies.filter((c) => c.name.startsWith("luma."));
   const auth = cookies.find((c) => c.name === "luma.auth-session-key");
   if (!auth) throw new Error("Missing luma.auth-session-key — sign in to lu.ma, then export your cookies again");
   const dot = auth.value.indexOf(".");
@@ -624,17 +632,13 @@ function renderMcpInfo(path) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// Luma client + sync — ported 1:1 from the Next app's lib/{luma,luma-auth,sync}.
-// Server-side fetch to Luma's internal API using a contributor's stored cookies.
+// Luma client + sync — ported from the Next app's lib/{luma,luma-auth,sync},
+// then hardened for the one condition the local app never met: running
+// unattended for weeks on a stored session. Server-side fetch to Luma's
+// internal API using a contributor's stored cookies.
 // ════════════════════════════════════════════════════════════════════════════
 const LUMA_API = "https://api2.luma.com";
 
-function cookieHeaderFrom(cookiesJson) {
-  try {
-    const data = JSON.parse(cookiesJson);
-    return (data.cookies || []).map((c) => `${c.name}=${c.value}`).join("; ");
-  } catch { return null; }
-}
 function selfIdFrom(cookiesJson) {
   try {
     const auth = (JSON.parse(cookiesJson).cookies || []).find((c) => c.name === "luma.auth-session-key");
@@ -644,18 +648,90 @@ function selfIdFrom(cookiesJson) {
     return uid.startsWith("usr-") ? uid : null;
   } catch { return null; }
 }
-async function lumaFetch(url, cookieHeader) {
-  const res = await fetch(url, { headers: { "Content-Type": "application/json", Cookie: cookieHeader, "x-luma-web-url": "https://lu.ma" } });
+
+// The stored jar is a snapshot of the contributor's browser session, and Luma
+// treats sessions as LIVE: api2 responses re-issue luma.* cookies as they
+// rotate or extend, so a client that keeps replaying the frozen snapshot
+// eventually presents a key Luma no longer honours. That is how the deployed
+// sync died where local dev (cookies pasted minutes earlier) never did.
+// cookieJar() is one sync pass's live view of the session: header() renders
+// the request Cookie, absorb() folds any rotated luma.* values back in and
+// marks the jar dirty so the caller persists what Luma last issued.
+//
+// Only luma.* cookies are kept, on load and on absorb. A whole-domain browser
+// export drags in Cloudflare edge cookies — __cf_bm is a 30-minute, IP-bound
+// bot-management token, and replaying a stale one from datacenter egress IPs
+// reads as a scraper — plus Stripe/analytics noise. None of it authenticates
+// anything, so load strips it and marks the jar dirty, healing pre-existing
+// rows the first time they sync.
+export function cookieJar(cookiesJson) {  // exported for contract-tests.mjs
+  let cookies;
+  try { cookies = JSON.parse(cookiesJson).cookies || []; } catch { return null; }
+  let dirty = cookies.some((c) => !c.name.startsWith("luma."));
+  cookies = cookies.filter((c) => c.name.startsWith("luma."));
+  return {
+    header: () => cookies.map((c) => `${c.name}=${c.value}`).join("; "),
+    absorb(res) {
+      for (const line of (res.headers.getSetCookie?.() || [])) {
+        const semi = line.indexOf(";");
+        const pair = (semi === -1 ? line : line.slice(0, semi)).trim();
+        const eq = pair.indexOf("=");
+        if (eq < 1) continue;
+        const name = pair.slice(0, eq), value = pair.slice(eq + 1);
+        if (!name.startsWith("luma.")) continue;  // api2 re-issues __cf_bm on every response; it must not enter the jar
+        const attrs = semi === -1 ? "" : line.slice(semi + 1).toLowerCase();
+        const at = cookies.findIndex((c) => c.name === name);
+        if (!value || /max-age=(?:0|-\d+)(?:;|$)/.test(attrs)) {  // an explicit deletion: record reality
+          if (at !== -1) { cookies.splice(at, 1); dirty = true; }
+          continue;
+        }
+        // expires metadata is inert (header() never enforces it) but keeping it
+        // current is free here and is what a health surface would want to read.
+        let expires = -1;
+        const ma = attrs.match(/max-age=(\d+)/);
+        if (ma) expires = Math.floor(Date.now() / 1000) + Number(ma[1]);
+        else {
+          const ex = line.match(/expires=([^;]+)/i);
+          const t = ex ? Date.parse(ex[1]) : NaN;
+          if (!Number.isNaN(t)) expires = Math.floor(t / 1000);
+        }
+        if (at === -1) {
+          cookies.push({ name, value, domain: ".luma.com", path: "/", expires,
+            httpOnly: attrs.includes("httponly"), secure: attrs.includes("secure"), sameSite: "Lax" });
+          dirty = true;
+        } else if (cookies[at].value !== value) {
+          cookies[at] = { ...cookies[at], value, expires };
+          dirty = true;
+        }
+      }
+    },
+    get dirty() { return dirty; },
+    json: () => JSON.stringify({ cookies, capturedAt: new Date().toISOString() }),
+  };
+}
+
+// Write a rotated jar back so the NEXT sync sends what Luma last issued.
+// Called on failure paths too: a rotation absorbed before the failure is
+// still the freshest key we hold.
+async function persistJar(d, userKey, jar) {
+  if (!jar || !jar.dirty) return;
+  await d.prepare(`UPDATE user_cookies SET cookies_json = ?, updated_at = datetime('now') WHERE user_key = ?`).run(jar.json(), userKey);
+}
+
+// auth is a cookieJar on the authenticated sync paths, or a plain Cookie
+// header string ("" on the public, cookie-less endpoints). Jar responses are
+// absorbed BEFORE the ok-check: a 4xx can still carry a rotation, and losing
+// it because the call failed would strand the session one key behind.
+async function lumaFetch(url, auth) {
+  const jar = typeof auth === "string" ? null : auth;
+  const res = await fetch(url, { headers: { "Content-Type": "application/json", Cookie: jar ? jar.header() : auth, "x-luma-web-url": "https://lu.ma" } });
+  if (jar) jar.absorb(res);
   if (!res.ok) { const b = await res.text().catch(() => ""); throw new Error(`Luma ${res.status}: ${b.slice(0, 200)}`); }
   return res;
 }
-async function fetchMe(cookieHeader) {
-  try {
-    const data = await (await lumaFetch(`${LUMA_API}/user/get-self`, cookieHeader)).json();
-    const u = data.user ?? data;
-    return u.api_id ? { api_id: u.api_id, name: u.name ?? "" } : null;
-  } catch { return null; }
-}
+// fetchMe is gone: Luma removed /user/get-self (404 for every caller as of
+// 2026-07-30, with multi-second stalls in the tail), and the auth cookie
+// itself carries the usr- id — selfIdFrom() covers every use it had.
 const toLumaUrl = (raw, id) => (!raw ? `https://lu.ma/${id}` : raw.startsWith("http") ? raw : `https://lu.ma/${raw}`);
 function parseGuest(entryApiId, user) {
   return {
@@ -705,7 +781,7 @@ function parseEvents(data, selfId) {
     };
   });
 }
-async function fetchMyEvents(cookieHeader, selfId) {
+async function fetchMyEvents(auth, selfId) {
   const all = [];
   for (const period of ["future", "past"]) {
     // page caps kept low: Cloudflare limits subrequests (fetch calls) per Worker
@@ -716,7 +792,7 @@ async function fetchMyEvents(cookieHeader, selfId) {
       page++;
       const p = new URLSearchParams({ pagination_limit: "50", period });
       if (cursor) p.set("pagination_cursor", cursor);
-      const data = await (await lumaFetch(`${LUMA_API}/home/get-events?${p}`, cookieHeader)).json();
+      const data = await (await lumaFetch(`${LUMA_API}/home/get-events?${p}`, auth)).json();
       all.push(...parseEvents(data, selfId));
       if (!data.has_more || !data.next_cursor) break;
       cursor = data.next_cursor;
@@ -724,7 +800,7 @@ async function fetchMyEvents(cookieHeader, selfId) {
   }
   return all;
 }
-async function fetchEventGuests(eventId, ticketKey, cookieHeader) {
+async function fetchEventGuests(eventId, ticketKey, auth) {
   const all = []; let cursor = null;
   while (true) {
     // ticket_key ONLY when we have a real one. Sending ticket_key=null (the
@@ -736,7 +812,7 @@ async function fetchEventGuests(eventId, ticketKey, cookieHeader) {
     const p = new URLSearchParams({ event_api_id: eventId, pagination_limit: "100" });
     if (ticketKey) p.set("ticket_key", ticketKey);
     if (cursor) p.set("pagination_cursor", cursor);
-    const data = await (await lumaFetch(`${LUMA_API}/event/get-guest-list?${p}`, cookieHeader)).json();
+    const data = await (await lumaFetch(`${LUMA_API}/event/get-guest-list?${p}`, auth)).json();
     for (const e of (data.entries || [])) all.push(parseGuest(e.api_id, e.user || {}));
     if (!data.has_more || !data.next_cursor) break;
     cursor = data.next_cursor;
@@ -758,11 +834,11 @@ function pmToText(node) {
 
 // fetch ONE event's full detail for its description (the list endpoint omits it).
 // returns plain-text description, or null. one subrequest per call.
-async function fetchEventDescription(eventId, cookieHeader) {
+async function fetchEventDescription(eventId, auth) {
   const p = new URLSearchParams({ event_api_id: eventId });
   let res;
   // deleted/private events 400/404 — lumaFetch throws; treat as "no description".
-  try { res = await lumaFetch(`${LUMA_API}/event/get?${p}`, cookieHeader); }
+  try { res = await lumaFetch(`${LUMA_API}/event/get?${p}`, auth); }
   catch { return null; }
   const data = await res.json();
   const e = data.event || {};
@@ -946,12 +1022,11 @@ const UPSERT_EVENT = `INSERT INTO events (id,name,description,start_at,end_at,lo
 // run via d.batch() (one subrequest per 50 statements) to stay under the
 // Cloudflare per-invocation subrequest cap. Returns {synced} or {error}.
 async function syncEvents(d, userKey, cookiesJson) {
-  const cookieHeader = cookieHeaderFrom(cookiesJson);
-  if (!cookieHeader) return { error: "bad cookie json" };
+  const jar = cookieJar(cookiesJson);
+  if (!jar || !jar.header()) return { error: "bad cookie json" };
   try {
-    const selfId0 = selfIdFrom(cookiesJson);
-    const [events, me] = await Promise.all([fetchMyEvents(cookieHeader, selfId0), fetchMe(cookieHeader)]);
-    const selfId = me?.api_id ?? selfId0;
+    const selfId = selfIdFrom(cookiesJson);
+    const events = await fetchMyEvents(jar, selfId);
     const S = [];
     if (selfId) {
       S.push(d.stmt(`INSERT INTO settings (key,value,updated_at) VALUES (?,?,datetime('now')) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=datetime('now')`, `luma_user_id_${userKey}`, selfId));
@@ -964,8 +1039,12 @@ async function syncEvents(d, userKey, cookiesJson) {
       for (const g of e.preview_guests) { if (!g.id || g.id === selfId) continue; S.push(attendeeStmt(d, g)); S.push(d.stmt(`INSERT INTO event_attendees (event_id,attendee_id) VALUES (?,?) ON CONFLICT(event_id,attendee_id) DO NOTHING`, e.id, g.id)); }
     }
     await d.batch(S);
+    await persistJar(d, userKey, jar);
     return { synced: events.length, statements: S.length };
-  } catch (err) { return { error: err instanceof Error ? err.message : String(err) }; }
+  } catch (err) {
+    await persistJar(d, userKey, jar).catch(() => {});
+    return { error: err instanceof Error ? err.message : String(err) };
+  }
 }
 
 // add events to the pool from pasted Luma links (no cookies needed). Each URL is
@@ -1035,9 +1114,9 @@ async function handleAddEvent(request, env, d, uid) {
 }
 
 // sync one event's full guest list (batched writes). Returns {synced} or {error}.
-async function syncGuests(d, eventId, cookiesJson) {
-  const cookieHeader = cookieHeaderFrom(cookiesJson);
-  if (!cookieHeader) return { error: "bad cookie json" };
+async function syncGuests(d, eventId, userKey, cookiesJson) {
+  const jar = cookieJar(cookiesJson);
+  if (!jar || !jar.header()) return { error: "bad cookie json" };
   const ev = await d.prepare("SELECT ticket_key, user_status FROM events WHERE id = ?").get(eventId);
   if (!ev) return { error: "event not found" };
   if (ev.user_status !== "going") return { error: `status is ${ev.user_status}, not going` };
@@ -1046,7 +1125,7 @@ async function syncGuests(d, eventId, cookiesJson) {
   // fetchEventGuests omits a missing key rather than sending null (which 403s).
   const selfId = selfIdFrom(cookiesJson);
   try {
-    const guests = await fetchEventGuests(eventId, ev.ticket_key, cookieHeader);
+    const guests = await fetchEventGuests(eventId, ev.ticket_key, jar);
     const S = [];
     for (const g of guests) {
       if (!g.id || g.id === selfId) continue;
@@ -1054,17 +1133,22 @@ async function syncGuests(d, eventId, cookiesJson) {
       S.push(d.stmt(`INSERT INTO event_attendees (event_id,attendee_id) VALUES (?,?) ON CONFLICT(event_id,attendee_id) DO NOTHING`, eventId, g.id));
     }
     await d.batch(S);
+    await persistJar(d, userKey, jar);
     return { synced: guests.length };
-  } catch (err) { const m = err instanceof Error ? err.message : String(err); return { error: m.includes("403") ? "GUEST_LIST_RESTRICTED" : m }; }
+  } catch (err) {
+    await persistJar(d, userKey, jar).catch(() => {});
+    const m = err instanceof Error ? err.message : String(err);
+    return { error: m.includes("403") ? "GUEST_LIST_RESTRICTED" : m };
+  }
 }
 
 // throttled description backfill. the list-sync omits descriptions, and fetching
 // detail for every event in one go would blow the per-invocation subrequest cap,
 // so each call fills up to `limit` events (one Luma fetch each) and reports how
 // many remain — re-run until remaining hits 0. Returns {scanned,filled,remaining}.
-async function syncDescriptions(d, cookiesJson, limit) {
-  const cookieHeader = cookieHeaderFrom(cookiesJson);
-  if (!cookieHeader) return { error: "bad cookie json" };
+async function syncDescriptions(d, userKey, cookiesJson, limit) {
+  const jar = cookieJar(cookiesJson);
+  if (!jar || !jar.header()) return { error: "bad cookie json" };
   try {
     // only events we haven't attempted yet (desc_synced_at marks the attempt, so
     // events with no description / deleted events don't get re-scanned forever).
@@ -1076,15 +1160,19 @@ async function syncDescriptions(d, cookiesJson, limit) {
     const S = [];
     for (const row of todo) {
       let desc = null;
-      try { desc = await fetchEventDescription(row.id, cookieHeader); } catch { desc = null; }  // never let one event abort the batch
+      try { desc = await fetchEventDescription(row.id, jar); } catch { desc = null; }  // never let one event abort the batch
       // always stamp the attempt; set description only when we got text.
       S.push(d.stmt(`UPDATE events SET description = COALESCE(?, description), desc_synced_at = datetime('now') WHERE id = ?`, desc, row.id));
       if (desc) filled++;
     }
     if (S.length) await d.batch(S);
+    await persistJar(d, userKey, jar);
     const rem = await d.prepare(`SELECT COUNT(*) AS n FROM events WHERE description IS NULL AND desc_synced_at IS NULL`).get();
     return { scanned: todo.length, filled, remaining: rem?.n || 0 };
-  } catch (err) { return { error: err instanceof Error ? err.message : String(err) }; }
+  } catch (err) {
+    await persistJar(d, userKey, jar).catch(() => {});
+    return { error: err instanceof Error ? err.message : String(err) };
+  }
 }
 
 // secret-gated: POST /serendipity/sync-descriptions?key=SECRET[&n=30]
@@ -1096,9 +1184,9 @@ async function handleSyncDescriptions(request, env, d) {
   }
   const limit = Math.min(45, Math.max(1, parseInt(url.searchParams.get("n") || "30", 10) || 30));
   // any enabled cookie can read public event detail; use the first available.
-  const set = await d.prepare("SELECT cookies_json, label FROM user_cookies WHERE enabled = 1 LIMIT 1").get();
+  const set = await d.prepare("SELECT user_key, cookies_json, label FROM user_cookies WHERE enabled = 1 LIMIT 1").get();
   if (!set) return new Response(JSON.stringify({ ok: false, error: "no enabled cookies" }), { status: 400, headers: { "content-type": "application/json" } });
-  const r = await syncDescriptions(d, set.cookies_json, limit);
+  const r = await syncDescriptions(d, set.user_key, set.cookies_json, limit);
   return new Response(JSON.stringify({ ok: !r.error, via: set.label, ...r }, null, 2), { headers: { "content-type": "application/json" } });
 }
 
@@ -1112,10 +1200,58 @@ async function handleSync(request, env, d) {
   const eventId = url.searchParams.get("event");
   const out = [];
   for (const s of sets) {
-    if (eventId) out.push({ label: s.label, event: eventId, ...(await syncGuests(d, eventId, s.cookies_json)) });
+    if (eventId) out.push({ label: s.label, event: eventId, ...(await syncGuests(d, eventId, s.user_key, s.cookies_json)) });
     else out.push({ label: s.label, ...(await syncEvents(d, s.user_key, s.cookies_json)) });
   }
   return new Response(JSON.stringify({ ok: true, results: out }, null, 2), { headers: { "content-type": "application/json" } });
+}
+
+// ── cron: the recurring tick that keeps the pool honest ─────────────────────
+// Deployed serendipity had NO recurring sync. The pool refreshed only when
+// someone re-pasted cookies, so production data froze at the last paste
+// (measured 2026-07-30: last sync 07-11, 8 future events left, 0 "going")
+// while the stored session idled toward Luma's few-weeks expiry. Local dev
+// never showed this because a fresh paste was always minutes old. This tick
+// (23 */6 * * *, wired in index.js scheduled()) does what an active local
+// user did by hand: re-sync every enabled feed, refill guest lists for the
+// next upcoming events, backfill a few descriptions. It is also what keeps
+// the stored session warm, and every request routes through cookieJar, so a
+// rotation Luma issues mid-run lands back in D1 instead of on the floor.
+//
+// Budgeted in SUBREQUESTS (Luma fetches and D1 calls both count): the feed
+// pass is ≤8 fetches + ~10 D1 per contributor, the guest sweep ≤4 events at
+// ~4-5 each, descriptions ≤10 fetches + 4 D1 — about 55 for today's single
+// contributor, far under the invocation cap. The caps are what keep growth
+// per added contributor linear and bounded; raise them only with that
+// arithmetic in hand. Failures stay per-arm: one dead guest list logs and
+// the run continues, same policy as every other cron here.
+const CRON_GUEST_EVENTS = 4;
+const CRON_DESC_LIMIT = 10;
+export async function cronSerendipity(env) {
+  const d = db(env);
+  const sets = await d.prepare("SELECT user_key, cookies_json, label FROM user_cookies WHERE enabled = 1").all();
+  if (!sets.length) { console.log(JSON.stringify({ cron: "serendipity", skipped: "no enabled cookie sets" })); return; }
+  const out = { events: [], guests: [], descriptions: null };
+  for (const s of sets) out.events.push({ label: s.label, ...(await syncEvents(d, s.user_key, s.cookies_json)) });
+  // Re-read the sets before the guest pass: if syncEvents absorbed a rotation,
+  // the pass after it must send what Luma just issued, never the old snapshot.
+  const fresh = await d.prepare("SELECT user_key, cookies_json, label FROM user_cookies WHERE enabled = 1").all();
+  if (!fresh.length) return;
+  // datetime() normalizes the mixed start_at formats in this table (ISO-with-T
+  // from Luma, space-separated from SQLite) — a bare string compare would sort
+  // "…T16:00" after "… 21:00" and let same-day past events shadow real ones.
+  const soon = await d.prepare(
+    `SELECT id FROM events WHERE user_status = 'going' AND start_at IS NOT NULL AND datetime(start_at) >= datetime('now') ORDER BY datetime(start_at) ASC LIMIT ?`
+  ).all(CRON_GUEST_EVENTS);
+  for (const ev of soon) {
+    // first set that can read this list wins; with one contributor that is one
+    // try, and a restricted list falls through to the next set rather than dying.
+    let r = { error: "no readable cookie set" };
+    for (const s of fresh) { r = await syncGuests(d, ev.id, s.user_key, s.cookies_json); if (!r.error) break; }
+    out.guests.push({ event: ev.id, ...r });
+  }
+  out.descriptions = await syncDescriptions(d, fresh[0].user_key, fresh[0].cookies_json, CRON_DESC_LIMIT);
+  console.log(JSON.stringify({ cron: "serendipity", ...out }));
 }
 
 // ════════════════════════════════════════════════════════════════════════════
