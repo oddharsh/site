@@ -29,7 +29,7 @@
   var data = null;       // last successful HTTP envelope
   var browserData = null; // last opt-in Browser Run snapshot
   var view = "both";     // both | human | machine | browser | delta
-  var lens = "readiness"; // readiness | anatomy | structured | ai | terms | discovery
+  var lens = "anatomy";  // default = the raw observation; must match lensState() in _worker.js/lens.js
   var counterfactuals = { markdown: false, semantic: false, contract: false, authority: false, receipt: false, dictionary: false, ech: false };
   var busy = false;
   var browserBusy = false;
@@ -166,9 +166,21 @@
   // the cost gap is visceral without hunting for the AI-view tab. Built entirely
   // from data.cost (already computed server-side). Null when there's no cost model
   // (non-HTML) so we don't fake a number.
+  //
+  // The readiness score rides here too, since the Compare pane below now defaults
+  // to the raw observation: analysis on the strip, observation in the pane. One
+  // anchor number; the full rubric stays one tab away under Agent-ready?.
   function verdictStrip() {
     var c = data && data.cost;
-    if (!c || !c.tiers || c.tiers.length < 2) return "";
+    var r = data && data.readiness;
+    var score = r && r.overall != null
+      ? '<span class="lx-verdict-score" title="' + esc(r.levelName ? "Level " + r.level + ": " + r.levelName : "agent readiness") + '">' + esc(r.overall) + "<span>/100</span></span>"
+      : "";
+    if (!c || !c.tiers || c.tiers.length < 2) {
+      return score
+        ? '<div class="lx-verdict">' + score + "This origin scores <b>" + esc(r.overall) + "/100</b> agent-ready" + (r.levelName ? " (" + esc(r.levelName) + ")" : "") + ". Every check behind the number sits under <b>Agent-ready?</b>.</div>"
+        : "";
+    }
     var rate = (c.rates && c.rates[0]) || { usdPerMtok: 3 };
     var base = c.tiers[0];
     // Compare against a realistic clean representation (the markdown rendering),
@@ -191,7 +203,7 @@
       " " + term("token", "tokens") + " of raw HTML" +
       (mult > 1 ? ". As clean text it would cost <b>&times;" + mult + "</b> less" : "") +
       ". At 1,000 reads that is <b>" + fmtUsd(per1k) + "</b> of inference, and the publisher collects <b>$0.00</b>.";
-    return '<div class="lx-verdict">' + line + "</div>";
+    return '<div class="lx-verdict">' + score + line + "</div>";
   }
 
   // "Who actually reads this" — the mid-2026 consumption reality behind each
@@ -248,7 +260,7 @@
       url: p.get("url") || "",
       vs: p.get("vs") || "",
       view: views.indexOf(p.get("view")) >= 0 ? p.get("view") : "both",
-      lens: lenses.indexOf(p.get("lens")) >= 0 ? p.get("lens") : "readiness",
+      lens: lenses.indexOf(p.get("lens")) >= 0 ? p.get("lens") : "anatomy",
       counterfactuals: cf,
     };
   }
@@ -267,7 +279,7 @@
       u.searchParams.set("vs", vsInput.value.trim());
     } else {
       if (view !== "both") u.searchParams.set("view", view);
-      if (lens !== "readiness") u.searchParams.set("lens", lens);
+      if (lens !== "anatomy") u.searchParams.set("lens", lens);
       var cf = Object.keys(counterfactuals).filter(function (key) { return counterfactuals[key]; });
       if (cf.length) u.searchParams.set("cf", cf.join(","));
     }
@@ -352,6 +364,7 @@
         renderMachine();
         renderBrowser();
         renderStatus();
+        maybeAutoRunBrowser();
       })
       .catch(function (e) {
         busy = false;
@@ -496,7 +509,8 @@
 
   function renderShot() {
     bleed(true);
-    setHumanH("Snapshot", "this site blocks live embedding, so this is a server-side render");
+    // The refusal is evidence, and we hold the refusing header: cite it.
+    setHumanH("Refused", (data.frameReason ? "framing refused (" + data.frameReason + ")" : "this site refuses to be framed") + "; a machine's render stands in");
     humanBody.innerHTML = '<div class="lx-spin">Rendering a snapshot with headless Chrome&hellip;</div>';
     var shotUrl = data.finalUrl;
     fetch("/lens/shot?url=" + encodeURIComponent(shotUrl))
@@ -546,6 +560,20 @@
       return;
     }
     window.LensBrowser.mount(browserBody, data, browserData, runBrowser);
+  }
+
+  // Browser Run fires itself once a scan lands: the third pane filling on its
+  // own is what makes Compare a triptych instead of two panes and a button.
+  // Coarse pointers keep the opt-in button (a phone should not spend the 4/min
+  // Browser Rendering budget by default), and a 429 lands in lens-browser.js's
+  // Try-again state, so the fallback is the old behavior exactly.
+  function maybeAutoRunBrowser() {
+    if (browserData || browserBusy || !data) return;
+    if (view !== "both" && view !== "browser") return;
+    try {
+      if (matchMedia("(hover: none)").matches || matchMedia("(pointer: coarse)").matches) return;
+    } catch (e) {}
+    runBrowser();
   }
 
   function runBrowser() {
@@ -1054,7 +1082,7 @@
     var title = view === "machine" ? "Machine view &middot; " + LENS_LABEL[lens] : view === "delta" ? "Delta view &middot; What changes" : "Machine view &middot; " + LENS_LABEL[lens];
     machineH.innerHTML = title;
     if (!data) { return; }
-    var fn = { readiness: lensReadiness, anatomy: lensAnatomy, structured: lensStructured, ai: lensAI, terms: lensTerms, discovery: lensDiscovery }[lens] || lensReadiness;
+    var fn = { readiness: lensReadiness, anatomy: lensAnatomy, structured: lensStructured, ai: lensAI, terms: lensTerms, discovery: lensDiscovery }[lens] || lensAnatomy;
     var body = view === "machine" ? machineBrief() + '<div class="lx-machine-block">' + section("Selected evidence lens", { text: LENS_LABEL[lens] }, "The original inspector remains available below the briefing.", fn()) + "</div>"
       : view === "delta" ? deltaView() : fn();
     // the dollar thesis rides above every scanned lens except Delta (which runs its
@@ -1075,6 +1103,29 @@
       words: a ? a.wordCount : 0,
       "img alt coverage": a ? (a.imgTotal ? (a.imgTotal - a.imgNoAlt) + " / " + a.imgTotal + " have alt text" : "no images") : "?",
     };
+    // Compare's machine pane is ~310px wide, and this lens is now its DEFAULT:
+    // render the observation compactly (the response, the price, the scraper's
+    // first slice) and leave the full headers + 80KB source to the full-width
+    // Machine segment, same tab.
+    if (view === "both") {
+      var c = data.cost && data.cost.tiers && data.cost.tiers[0];
+      var rate = (data.cost && data.cost.rates && data.cost.rates[0]) || { usdPerMtok: 3 };
+      if (c) summary["model read"] = "~" + fmtTok(c.tokens) + " tok · " + fmtUsd(c.tokens / 1e6 * rate.usdPerMtok);
+      out += section("What the bot received", { text: data.status + " " + httpText(data.status), kind: data.status >= 200 && data.status < 400 ? "ok" : "warn" },
+        "The response before any browser touched it.", kvTable(summary));
+      var md = (data.ai && data.ai.markdown) || "";
+      if (md) {
+        out += section("The scraper's diet", { text: bytes(md.length) },
+          "The first slice of the markdown a basic LLM scraper ingests.",
+          pre(md.slice(0, 1400) + (md.length > 1400 ? "\n\n[… " + bytes(md.length) + " total]" : ""), true));
+      } else if (a && a.rawHtml) {
+        out += section("Raw body, first slice", { text: bytes(a.rawBytes) },
+          "Served as-is; already machine-shaped.",
+          pre(a.rawHtml.slice(0, 1400) + (a.rawBytes > 1400 ? "\n\n[… " + bytes(a.rawBytes) + " total]" : ""), true));
+      }
+      out += '<div class="lx-cap">Headers and the full raw source: the Machine segment, same tab, full width.</div>';
+      return out;
+    }
     out += section("Response", null, "What the server actually sent back, before a browser touched it.",
       kvTable(summary));
     out += section("HTTP headers", { text: Object.keys(data.headers || {}).length + " headers" },
@@ -1603,7 +1654,7 @@
     if (["both", "human", "machine", "browser", "delta"].indexOf(savedView) >= 0) view = savedView;
   } catch (e) {}
   if (urlState.view !== "both") view = urlState.view;
-    if (urlState.lens !== "readiness") lens = urlState.lens;
+    if (urlState.lens !== "anatomy") lens = urlState.lens;
   counterfactuals = urlState.counterfactuals;
   setView(view, false, false);
   setLens(lens, false, false);
@@ -1654,6 +1705,7 @@
         renderMachine();
         renderBrowser();
         renderStatus();
+        maybeAutoRunBrowser();
       } else {
         showError(initialData);
       }

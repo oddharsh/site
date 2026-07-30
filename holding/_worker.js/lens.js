@@ -228,7 +228,11 @@ function lensState(url) {
   const validViews = ["both", "human", "machine", "browser", "delta"];
   const validLenses = ["readiness", "anatomy", "structured", "ai", "terms", "discovery"];
   const view = validViews.includes(url.searchParams.get("view")) ? url.searchParams.get("view") : "both";
-  const lens = validLenses.includes(url.searchParams.get("lens")) ? url.searchParams.get("lens") : "readiness";
+  // Default lens is the raw observation, not the readiness report. Compare's
+  // premise is "one URL, three readers", and the middle pane defaulting to a
+  // report card made it page | analysis | render. The score still leads: it
+  // rides the verdict strip above the pane. Must match lens.js.
+  const lens = validLenses.includes(url.searchParams.get("lens")) ? url.searchParams.get("lens") : "anatomy";
   const counterfactuals = {};
   for (const key of (url.searchParams.get("cf") || "").split(",")) {
     if (["markdown", "semantic", "contract", "authority", "receipt", "dictionary", "ech"].includes(key)) counterfactuals[key] = true;
@@ -277,7 +281,7 @@ function lensHumanFragment(data) {
       '" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals"' +
       ' referrerpolicy="no-referrer-when-downgrade" loading="lazy"></iframe>';
   }
-  return lensReaderFragment(data, "Embedding is blocked; JavaScript can request a server-side snapshot, so this is the readable fallback.");
+  return lensReaderFragment(data, (data.frameReason ? "Framing refused (" + data.frameReason + ")." : "Embedding is blocked.") + " JavaScript can request a machine's render to stand in; this is the readable fallback.");
 }
 
 function lensMachineFragment(data, state) {
@@ -566,7 +570,7 @@ function lensAboutPanel() {
 export function renderLensShell(initial, state, inputValue, compare) {
   // defaults must match the client (lens.js) and lensState(), or a plain /lens
   // SSRs one tab and the deferred script silently flips to another on hydrate.
-  state = state || { view: "both", lens: "readiness", counterfactuals: { markdown: false, semantic: false, contract: false, authority: false, receipt: false, dictionary: false, ech: false } };
+  state = state || { view: "both", lens: "anatomy", counterfactuals: { markdown: false, semantic: false, contract: false, authority: false, receipt: false, dictionary: false, ech: false } };
   const seeded = initial && initial.ok;
   // vs mode: the single-scan toolbar and panes stay in the DOM but hidden
   // (.lx-off), so the client can drop back to a normal scan without rebuilding
@@ -818,6 +822,16 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
    NOT a second hero number — two 30pt figures stacked would make neither read. */
 .lx-verdict { margin:0 0 11px; padding:9px 12px; border:1px solid oklch(74% 0.09 150); border-left:4px solid oklch(52% 0.14 150); border-radius:3px; background:linear-gradient(180deg,oklch(98% 0.02 150),oklch(96% 0.03 150)); color:oklch(30% 0.03 255); font-size:10.6pt; line-height:1.5; text-wrap:pretty; }
 .lx-verdict b { color:oklch(34% 0.13 150); font-family:"Courier New",monospace; font-size:10.2pt; }
+/* the readiness score, relocated from the pane body onto the strip: the pane
+   below now shows the raw observation, and analysis rides up here with the
+   dollars. One anchor number, not a second hero. */
+.lx-verdict-score { float:left; margin:1px 11px 2px 0; font:bold 21pt "Trebuchet MS",Verdana,sans-serif; line-height:1; color:oklch(38% 0.14 255); white-space:nowrap; }
+.lx-verdict-score span { font:normal 9pt Tahoma,Verdana,sans-serif; color:oklch(53% 0 0); }
+.lx-verdict::after { content:""; display:block; clear:both; }
+
+/* the computed HTTP-vs-rendered disagreement, atop the Browser Run pane */
+.lx-browser-delta { margin:0 0 10px; padding:8px 11px; border:1px solid oklch(74% 0.08 210); border-left:4px solid oklch(50% 0.12 215); border-radius:3px; background:linear-gradient(180deg,oklch(98% 0.015 210),oklch(95% 0.025 210)); color:oklch(29% 0.04 220); font-size:9.6pt; line-height:1.5; text-wrap:pretty; }
+.lx-browser-delta b { color:oklch(32% 0.11 220); font-family:"Courier New",monospace; }
 
 /* agent trace: an XP console of what an agent would do */
 .lx-trace { font-family:"Courier New",Courier,monospace; font-size:8.7pt; line-height:1.5; background:oklch(22% 0.02 255); border-radius:3px; padding:9px 10px; color:oklch(90% 0.02 150); }
