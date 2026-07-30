@@ -28,6 +28,8 @@
     "test": "node --test contract-tests.mjs",
     "shell:roll": "node scripts/roll-shell-dictionary.mjs",
     "dcz:check": "node scripts/check-dictionary-support.mjs",
+    "checkpoints:check": "node scripts/check-checkpoints.mjs",
+    "checkpoints:sync": "node scripts/check-checkpoints.mjs --sync",
     "inp": "node scripts/inp-lab.mjs"
   },
   "devDependencies": {

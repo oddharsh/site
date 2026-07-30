@@ -1,0 +1,100 @@
+#!/usr/bin/env node
+
+// check-checkpoints.mjs — does the committed projection still match D1?
+//
+// D1 is the source of truth for the deploy log; holding/_worker.js/checkpoints.json
+// is a derived read of it that build.mjs renders /updates and /restore from.
+// bump-version.sh rewrites the file after every insert, so the normal path keeps
+// them in step. This catches the paths it cannot: a row inserted by hand or by
+// another machine, a projection edited directly, or a bump whose D1 re-read failed
+// and printed the warning nobody read.
+//
+// Drift is not cosmetic. The pages are precomputed at build time, so a stale
+// projection means /updates and /restore silently ship the PREVIOUS log — the
+// failure mode is a changelog that looks fine and is wrong, which is exactly the
+// class of bug the whole site's check discipline exists for.
+//
+//   npm run checkpoints:check         compare the committed file against D1
+//   npm run checkpoints:sync          rewrite the file from D1 (then commit it)
+//
+// Needs a D1 read. Locally that is your normal wrangler login. In CI it would need
+// a D1:Read token, which is why this is NOT wired into the PR job by default — see
+// the note at the bottom.
+
+import { execFile } from "node:child_process";
+import { readFile, writeFile } from "node:fs/promises";
+import { promisify } from "node:util";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const run = promisify(execFile);
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const FILE = path.join(ROOT, "holding/_worker.js/checkpoints.json");
+const SYNC = process.argv.includes("--sync");
+
+const fail = (msg) => { console.error(`checkpoints: ${msg}`); process.exit(1); };
+
+// The exact query bump-version.sh writes from, so a column or order change here
+// fails loudly instead of producing a diff nobody can read.
+const QUERY = "SELECT vnum, ymd, version, slug, title FROM checkpoints ORDER BY vnum;";
+
+let live;
+try {
+  const { stdout } = await run("npx", [
+    "wrangler", "d1", "execute", "aadhar-restore", "--remote", "--json", "--command", QUERY,
+  ], { cwd: ROOT, maxBuffer: 32 * 1024 * 1024 });
+  live = JSON.parse(stdout)[0].results;
+} catch (e) {
+  // An unreachable D1 is an availability problem, not drift. Say so and do not
+  // fail a PR over someone else's outage or a missing local login.
+  console.error(`checkpoints: could not read D1 (${String(e.message || e).slice(0, 120)})`);
+  console.error("  this is an availability problem, not drift — not failing");
+  process.exit(0);
+}
+
+const canon = (rows) => JSON.stringify(rows, Object.keys(rows[0] || {}).sort(), 2);
+const liveJson = JSON.stringify(live, null, 2) + "\n";
+
+if (SYNC) {
+  await writeFile(FILE, JSON.stringify(live, null, 2).replace(/\n$/, "") + "\n");
+  console.log(`checkpoints: synced ${live.length} rows from D1 -> holding/_worker.js/checkpoints.json`);
+  console.log("  commit it, then deploy — /updates and /restore render from this file");
+  process.exit(0);
+}
+
+let committed;
+try { committed = JSON.parse(await readFile(FILE, "utf8")); }
+catch { fail("holding/_worker.js/checkpoints.json is missing or unparseable — run: npm run checkpoints:sync"); }
+
+if (committed.length !== live.length) {
+  const newest = live[live.length - 1];
+  fail(
+    `projection has ${committed.length} rows, D1 has ${live.length}\n` +
+    `  newest in D1: v${newest.vnum} ${newest.version}\n` +
+    `  /updates and /restore are precomputed, so they are shipping the older log\n` +
+    `  fix with: npm run checkpoints:sync && git add holding/_worker.js/checkpoints.json`,
+  );
+}
+
+const byVnum = (rows) => new Map(rows.map((r) => [r.vnum, r]));
+const c = byVnum(committed), l = byVnum(live);
+const diffs = [];
+for (const [vnum, row] of l) {
+  const mine = c.get(vnum);
+  if (!mine) { diffs.push(`v${vnum} present in D1, absent from the projection`); continue; }
+  for (const k of ["ymd", "version", "slug", "title"]) {
+    if (mine[k] !== row[k]) diffs.push(`v${vnum} ${k}: projection ${JSON.stringify(mine[k])} vs D1 ${JSON.stringify(row[k])}`);
+  }
+}
+for (const vnum of c.keys()) if (!l.has(vnum)) diffs.push(`v${vnum} present in the projection, absent from D1`);
+
+if (diffs.length) {
+  fail(
+    `${diffs.length} row(s) differ from D1:\n` +
+    diffs.slice(0, 8).map((d) => `  - ${d}`).join("\n") +
+    (diffs.length > 8 ? `\n  … and ${diffs.length - 8} more` : "") +
+    `\n  fix with: npm run checkpoints:sync && git add holding/_worker.js/checkpoints.json`,
+  );
+}
+
+console.log(`checkpoints: projection matches D1 (${live.length} rows, newest v${live[live.length - 1].vnum} ${live[live.length - 1].version})`);
