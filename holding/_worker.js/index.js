@@ -198,9 +198,9 @@ const ROUTES = new Map([
   ["/whoareyou.json", handleWhoareyouJson],
   ["/security", handleSecurityCenter],
   ["/reading", handleReading],
-  ["/updates", handleWindowsUpdate],
+  ["/updates", routeUpdates],
   ["/updates.json", handleUpdatesJson],
-  ["/restore", handleSystemRestore],
+  ["/restore", routeRestore],
 
   ["/lens", routeLens],
   ["/lens/", routeDropSlash],
@@ -626,6 +626,24 @@ const PHOTOS_PAGE_HEADERS = {
   ...GENERATED_PAGE_HEADERS,
   "cache-control": "public, max-age=0, s-maxage=86400, stale-while-revalidate=86400",
 };
+
+// /updates and /restore: generated at deploy, dynamic handler as the 404 fallback.
+// Same shape as /photos and /writing. They take the standard generated policy — no
+// shortened window like /photos needs, because their data cannot change between
+// deploys, so a stale copy inside the 7 days is a copy of the same log.
+async function routeUpdates(request, env, ctx) {
+  const response = await serveStaticPage(request, env, { headers: GENERATED_PAGE_HEADERS });
+  if (response.status !== 404) return response;
+  try { await response.body?.cancel(); } catch {}
+  return handleWindowsUpdate(request, env, ctx);
+}
+
+async function routeRestore(request, env, ctx) {
+  const response = await serveStaticPage(request, env, { headers: GENERATED_PAGE_HEADERS });
+  if (response.status !== 404) return response;
+  try { await response.body?.cancel(); } catch {}
+  return handleSystemRestore(request, env, ctx);
+}
 
 async function routePhotos(request, env, ctx) {
   const response = await serveStaticPage(request, env, { headers: PHOTOS_PAGE_HEADERS });

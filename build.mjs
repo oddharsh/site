@@ -807,6 +807,35 @@ if (inlineProbe.includes("/* probe */") ||
   console.log(`pages(gen): photos.html ${photosHtml.length}B (${pool.length} tiles), bot.html ${botHtml.length}B`);
 }
 
+// 1f) /updates and /restore as deploy-time documents.
+//
+// The only two dynamic pages whose data changes solely AT DEPLOY: bump-version.sh
+// inserts the checkpoint row moments before `npm run deploy`, and nothing else
+// writes that table. So baking them costs no freshness at all — unlike /reading
+// (6h Curius refresh) or /around (30m crawl), whose feeds move on their own and
+// which are deliberately left dynamic for exactly that reason.
+//
+// D1 remains the source of truth. checkpoints.json is its committed projection,
+// written by bump-version.sh right after a successful insert, and
+// `npm run checkpoints:check` re-reads D1 and fails on drift.
+{
+  const nonce = `?build=${BUILD_NONCE}`;
+  const updates = await import(pathToFileURL(resolve(OUT, "holding/_worker.js/updates.js")).href + nonce);
+  const points = JSON.parse(await readFile(`${OUT}/holding/_worker.js/checkpoints.json`, "utf8"));
+  if (!points.length) throw new Error("updates/restore: the checkpoint projection is empty — both pages would ship with no log");
+  const cp = { points, state: "ok" };
+
+  const updatesHtml = await (await updates.renderWindowsUpdate(cp)).text();
+  if (!updatesHtml.includes("wu-tag")) throw new Error("updates page: no changelog rows rendered — did the markup move?");
+  await writeFile(`${OUT}/holding/updates.html`, updatesHtml);
+
+  const restoreHtml = await (await updates.renderSystemRestore(cp)).text();
+  if (!restoreHtml.includes("srList")) throw new Error("restore page: no restore-point stage rendered — did the markup move?");
+  await writeFile(`${OUT}/holding/restore.html`, restoreHtml);
+
+  console.log(`pages(gen): updates.html ${updatesHtml.length}B, restore.html ${restoreHtml.length}B (${points.length} checkpoints, newest ${points[points.length - 1].version})`);
+}
+
 // 2) homepage HTML: deploy the readable original as /index.src.html and
 // minify only the served copy. The worker rewrites this response as a stream,
 // so doing this before ASSETS.fetch keeps the rewriter path allocation-free.
