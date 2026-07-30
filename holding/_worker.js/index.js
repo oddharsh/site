@@ -247,12 +247,12 @@ const ROUTES = new Map([
   ["/rn/admin", handleRnAdmin],
   ["/rn/set", handleRnSet],
 
-  ["/bot", handleBotPage],
+  ["/bot", routeBot],
   ["/around", handleAround],
   ["/around/json", handleAroundJson],
   ["/around/changes.json", handleAroundChangesJson],
 
-  ["/photos", handlePhotos],
+  ["/photos", routePhotos],
   ["/photos/", routePhotosRedirect],
   ["/photos/query.json", handlePhotoQuery],
   // the homepage grid's random twelve, fetched by the inline hydrator
@@ -604,6 +604,41 @@ async function routeWritingIndex(request, env, ctx) {
   if (response.status !== 404) return response;
   try { await response.body?.cancel(); } catch {}
   return handleWritingIndex(request, env, ctx);
+}
+
+// /photos and /bot join the generated-page tier, same shape as /writing above: the
+// build emits their HTML (build.mjs step 1e), so they earn the q11 twin and the dcz
+// delta tiers that 40 authored pages already had, and the dynamic handler stays as
+// the fallback for a build that somehow shipped without them.
+//
+// Both were build-renderable all along and nothing had noticed: /photos renders from
+// the bundled pool (module memory since the pool moved into the Worker) plus the
+// committed alt.json, and /bot's renderBotPage() takes no arguments at all. At 60KB
+// /photos was the largest page on the site and the largest one still taking
+// Cloudflare's on-the-fly zstd-3 with no twin and no delta.
+//
+// /photos gets a SHORTER stale window than the rest. The generated policy's 7 days is
+// free for a garage page, which changes when something is written; /photos changes
+// every time a photo is added, and a returning browser inside the window lists the
+// older set. A day bounds that while still leaving a dictionary lifetime long enough
+// to matter for the repeat visit dictionaries exist for. Owner call, 2026-07-29.
+const PHOTOS_PAGE_HEADERS = {
+  ...GENERATED_PAGE_HEADERS,
+  "cache-control": "public, max-age=0, s-maxage=86400, stale-while-revalidate=86400",
+};
+
+async function routePhotos(request, env, ctx) {
+  const response = await serveStaticPage(request, env, { headers: PHOTOS_PAGE_HEADERS });
+  if (response.status !== 404) return response;
+  try { await response.body?.cancel(); } catch {}
+  return handlePhotos(request, env, ctx);
+}
+
+async function routeBot(request, env, ctx) {
+  const response = await serveStaticPage(request, env, { headers: GENERATED_PAGE_HEADERS });
+  if (response.status !== 404) return response;
+  try { await response.body?.cancel(); } catch {}
+  return handleBotPage(request, env, ctx);
 }
 
 function serveGeneratedWriting(request, env) {
