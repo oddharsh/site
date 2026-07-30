@@ -1018,6 +1018,44 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   assert.match(luna, /homepage hover island \(non-critical\)/);
 });
 
+test("the RUM beacon is first-party on both legs, and every page that says so agrees", async () => {
+  const page = await readFile(new URL("holding/index.html", import.meta.url), "utf8");
+  const headers = await readFile(new URL("holding/_headers", import.meta.url), "utf8");
+  const security = await readFile(new URL("holding/_worker.js/lib/security.js", import.meta.url), "utf8");
+  const whoareyou = await readFile(new URL("holding/_worker.js/whoareyou.js", import.meta.url), "utf8");
+  const securityPage = await readFile(new URL("holding/_worker.js/security.js", import.meta.url), "utf8");
+
+  // Both legs. The script alone is not enough: without send.to the beacon falls
+  // back to its hardcoded cloudflareinsights.com endpoint, which the CSP below now
+  // blocks — so the script would load and every report would silently fail.
+  assert.match(page, /<script type="module" src="\/ledger\/rum\.js"/, "the beacon script must be served from this origin");
+  assert.match(page, /"send": \{"to": "\/ledger\/rum"\}/, "the beacon must be told to report to this origin too");
+  assert.doesNotMatch(page, /src="https:\/\/static\.cloudflareinsights\.com/, "no cross-origin beacon script");
+
+  // The CSP must not keep permitting an origin nothing calls any more. Matched on
+  // the policy VALUE, since _headers puts it on the header line while security.js
+  // puts it on the line after the key.
+  for (const [name, text] of [["_headers", headers], ["lib/security.js", security]]) {
+    const policy = (text.match(/default-src 'self';[^"\n]*upgrade-insecure-requests/) || [])[0];
+    assert.ok(policy, `${name} must still declare a CSP`);
+    assert.doesNotMatch(policy, /cloudflareinsights\.com/, `${name}: drop the beacon's old third-party CSP entries`);
+    assert.match(policy, /connect-src 'self';/, `${name}: connect-src should be back to pure 'self'`);
+    assert.match(policy, /script-src 'self' 'unsafe-inline';/, `${name}: script-src should carry no external origin`);
+  }
+
+  // The honesty surfaces. A CSP that quietly disagrees with the page describing it
+  // is the failure this repo keeps designing against, and "first-party" is the
+  // easiest claim on this site to round up into a privacy win it is not. Both pages
+  // must keep saying that the forwarding still happens.
+  assert.match(whoareyou, /\/ledger\/rum\.js/, "/whoareyou must name the first-party beacon paths");
+  assert.match(whoareyou, /forwards those timings to Cloudflare/,
+    "/whoareyou must keep stating that the reporting did not stop, it moved server-side");
+  assert.match(whoareyou, /content blocker, the report it used to stop now gets through/,
+    "/whoareyou must keep disclosing what proxying costs a blocker-running visitor");
+  assert.match(securityPage, /it does not mean nothing is forwarded from here/,
+    "/security must not let 'no external origin' imply nothing leaves this server");
+});
+
 test("weak validators turn unchanged rendered HTML into an empty 304", async () => {
   const tagged = await withWeakEtag(new Response("<!doctype html><p>same</p>", {
     headers: { "content-type": "text/html", "cache-control": "public, max-age=0", "content-encoding": "br" },

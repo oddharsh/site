@@ -50,6 +50,7 @@
       "/coffee", "/coffee/*", "/serendipity", "/serendipity/*",
       "/slots", "/book", "/approve", "/decline",
       "/llms-full.txt", "/ledger", "/ledger.json",
+      "/ledger/rum.js", "/ledger/rum",
       "/writing", "/writing/*",
       "/rn", "/rn/tracks", "/rn/tracks.html", "/rn/admin", "/rn/set",
       "/bot", "/around", "/around/json", "/around/changes.json",

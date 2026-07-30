@@ -55,7 +55,16 @@ own browser makes to this same origin. The data lives for as long
 as it takes to render, then nothing writes it to storage.
 
 Analytics, precisely: not on this page. The homepage, and only the homepage, loads
-Cloudflare Web Analytics, so it is the one page where your browser fetches a script
-from a third party (`static.cloudflareinsights.com`) and reports timings back to
-`cloudflareinsights.com`. It is cookieless and samples page-load timing, not people.
-Every other page on this site, this one included, speaks only to this origin.
+Cloudflare Web Analytics. Since 2026-07-29 your browser fetches that script from this
+origin (`/ledger/rum.js`) and posts its timings to this origin (`/ledger/rum`), so no
+page on this site makes your browser talk to anybody else.
+
+Do not read that as "the data stays here," because it does not. This server forwards
+those timings to Cloudflare exactly as before. What changed is that the request is
+made by this machine instead of by yours, which also means that if you run a content
+blocker, the report it used to stop now gets through. That is the honest cost of the
+change. The reason was self-interested rather than principled: the old third-party
+host is on the standard blocklists, so blocker-running visitors vanished from the
+sample entirely, and those are disproportionately the people on the browsers whose
+back-forward and prerender behaviour the measurement exists to see. The beacon is
+cookieless and samples page-load timing, not people.
