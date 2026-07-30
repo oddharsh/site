@@ -39,7 +39,7 @@ import { handleSystemRestore, handleUpdatesJson, handleWindowsUpdate } from "./u
 import { handleWhoareyou, handleWhoareyouJson } from "./whoareyou.js";
 import { handleWritingIndex, handleWritingPost } from "./writing.js";
 import { handleLlmsFull } from "./x402.js";
-import { handleSerendipity, withSerendipitySecurityHeaders } from "../../serendipity/serendipity.js";
+import { cronSerendipity, handleSerendipity, withSerendipitySecurityHeaders } from "../../serendipity/serendipity.js";
 
 // Hand the runtime's tracer to both span helpers. THIS is the only module that
 // may import it: the rest of the worker is also imported by contract-tests.mjs
@@ -167,6 +167,14 @@ export default {
       // cited. Its own schedule (not the */30 tick) because it reads my own
       // pages and then probes third-party hosts: a slow, polite, once-a-day job.
       cron("cron.webmention_send", () => cronSendWebmentions(env));
+    } else if (event.cron === "23 */6 * * *") {
+      // 00/06/12/18:23 UTC — re-sync every enabled Luma feed into the
+      // serendipity pool (serendipity.js cronSerendipity): events, then the
+      // next few guest lists, then a description backfill. Four times daily
+      // keeps the pool honest AND the stored Luma session warm; without this
+      // tick the pool only refreshed on a cookie re-paste. Odd minute, same
+      // collision-avoidance as the others.
+      cron("cron.serendipity", () => cronSerendipity(env));
     } else {
       cron("cron.around", () => cronAround(env));   // */30 — the neighborhood crawl
     }
