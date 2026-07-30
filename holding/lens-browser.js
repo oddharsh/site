@@ -57,6 +57,32 @@
     }
     return section("Runtime WebMCP", status, "What a browser session can discover after the page runs.", inner);
   }
+  // The pane's whole promise is disagreement ("reveals a JS dependency"), so
+  // compute it instead of leaving two numbers in two panes for the reader to
+  // subtract. Words are the honest axis: bytes swing wildly with inlined
+  // framework code, but a page that reads 30 words over HTTP and 2,000 after
+  // JavaScript has been measured, not characterized.
+  function deltaStrip(snapshot, data) {
+    var a = data && data.anatomy;
+    if (!a || a.rawBytes == null) return "";
+    var rawWords = a.wordCount || 0;
+    var renWords = (snapshot.content || "")
+      .replace(/<(script|style|noscript|template|svg)[\s\S]*?<\/\1>/gi, " ")
+      .replace(/<[^>]+>/g, " ").split(/\s+/).filter(Boolean).length;
+    var renBytes = (snapshot.content || "").length;
+    var verdict;
+    if (Math.abs(renWords - rawWords) <= Math.max(10, rawWords * 0.15)) {
+      verdict = "The HTTP fetch already carries this page; JavaScript changes little a reader needs.";
+    } else if (renWords > Math.max(rawWords * 3, rawWords + 150)) {
+      verdict = "This page is thin until JavaScript runs: a plain fetch gets " + rawWords + " of the " + renWords + " words a browser ends up with.";
+    } else {
+      verdict = "JavaScript reshapes this page: the rendered copy disagrees with the HTTP fetch.";
+    }
+    return '<div class="lx-browser-delta"><b>HTTP vs rendered:</b> ' +
+      esc(bytes(a.rawBytes)) + " &rarr; " + esc(bytes(renBytes)) + (snapshot.contentTruncated ? "+" : "") +
+      " &middot; " + rawWords + " &rarr; " + renWords + " words. " + esc(verdict) + "</div>";
+  }
+
   function summary(snapshot, data) {
     var tree = snapshot.accessibilityTree;
     var facts = {
@@ -69,7 +95,8 @@
       observation: snapshot.cached ? "KV cache" : "fresh Browser Run",
       elapsed: (snapshot.elapsedMs || 0) + " ms",
     };
-    var out = section("Browser facts", { text: snapshot.status == null ? "rendered" : String(snapshot.status), kind: "ok" },
+    var out = deltaStrip(snapshot, data);
+    out += section("Browser facts", { text: snapshot.status == null ? "rendered" : String(snapshot.status), kind: "ok" },
       "A rendered observation after page JavaScript. It is not folded into the AadharshBot HTTP readiness score.", kvTable(facts));
     if (snapshot.screenshot) out += section("Rendered screenshot", { text: "PNG", kind: "ok" }, "The viewport after the Browser Run page load.", '<img class="lx-browser-shot" src="' + esc(snapshot.screenshot) + '" alt="Browser Run screenshot of ' + esc(snapshot.finalUrl || snapshot.url) + '">');
     out += webmcp(snapshot.webmcp, data);
