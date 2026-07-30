@@ -39,6 +39,15 @@ async function robotsGate(env, url) {
 // the neighborhood — crypto-VC homepages worth checking in on. just funds
 // whose work i follow; the dashboard is mostly an excuse to point a branded
 // crawler at something interesting.
+//
+// each url is the POST-REDIRECT one: whatever `curl -L` settles on, apex or
+// www, is what goes here. a redirecting entry costs the cron an extra round
+// trip every crawl and an extra robots.txt origin to resolve, for a response
+// we already know is a 301. verify with:
+//   curl -sIL -o /dev/null -w '%{num_redirects} %{url_effective}\n' <url>
+// last swept 2026-07-30 (standardcrypto.vc -> www.standardvc.com, the
+// "Standard Crypto" -> "Standard" rebrand; 1confirmation/thrivecap/ribbitcap
+// apex -> www; sequoiacap www -> apex).
 export const NEIGHBORS = [
   { name: "Paradigm",                url: "https://www.paradigm.xyz/" },
   { name: "a16z crypto",             url: "https://a16zcrypto.com/" },
@@ -47,18 +56,18 @@ export const NEIGHBORS = [
   { name: "Variant Fund",            url: "https://variant.fund/" },
   { name: "Dragonfly",               url: "https://www.dragonfly.xyz/" },
   { name: "Electric Capital",        url: "https://www.electriccapital.com/" },
-  { name: "1confirmation",           url: "https://1confirmation.com/" },
-  { name: "Standard Crypto",         url: "https://standardcrypto.vc/" },
+  { name: "1confirmation",           url: "https://www.1confirmation.com/" },
+  { name: "Standard",                url: "https://www.standardvc.com/" },
   { name: "Union Square Ventures",   url: "https://www.usv.com/" },
   { name: "Archetype",               url: "https://www.archetype.fund/" },
   { name: "Pace Capital",            url: "https://pacecapital.com/" },
-  { name: "Thrive Capital",          url: "https://thrivecap.com/" },
-  { name: "Sequoia Capital",         url: "https://www.sequoiacap.com/" },
+  { name: "Thrive Capital",          url: "https://www.thrivecap.com/" },
+  { name: "Sequoia Capital",         url: "https://sequoiacap.com/" },
   { name: "Founders Fund",           url: "https://foundersfund.com/" },
   { name: "Hummingbird",             url: "https://www.hummingbird.vc/" },
   { name: "Benchmark",               url: "https://www.benchmark.com/" },
   { name: "Index Ventures",          url: "https://www.indexventures.com/" },
-  { name: "Ribbit Capital",          url: "https://ribbitcap.com/" },
+  { name: "Ribbit Capital",          url: "https://www.ribbitcap.com/" },
   { name: "Topology",                url: "https://www.topology.vc/" },
 ];
 
