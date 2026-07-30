@@ -806,6 +806,18 @@ node holding/scripts/inject-og-meta.mjs   # add the meta to any page missing it 
 - The LWE + Garage generators emit the same `og:image` block, so a future
   pipeline-authored page gets a card automatically (its PNG still needs one
   `npm run og-cards` run before the URL resolves).
+- Worker-rendered routes (no static HTML for the generator to walk) live in
+  `WORKER_PAGES{}` beside `HERO{}`, with their meta emitted from the page's own
+  renderer instead of `inject-og-meta.mjs`. `/lens` is one: its card captures a
+  live scan of stripe.com, so prewarm the two Browser-Rendering caches first or
+  `networkidle` waits them out, and scope the run so the other 25 committed
+  PNGs don't get rewritten with fresh-but-equal pixels:
+
+  ```bash
+  curl -s "https://aadhar.sh/lens/shot?url=https%3A%2F%2Fstripe.com%2F" -o /dev/null
+  curl -s "https://aadhar.sh/lens/browser?url=https%3A%2F%2Fstripe.com%2F" -o /dev/null
+  OG_ONLY=lens npm run og-cards
+  ```
 
 ---
 
