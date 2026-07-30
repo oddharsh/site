@@ -232,6 +232,14 @@
         "why": "The DNS-AID SVCB record advertises alpn=h2,h3. Turn HTTP/3 off at the zone and that record promises a protocol the edge does not speak, while the DNS check above stays green because the record itself never changed. Same cross-boundary shape as bimi.svg: two surfaces that only make sense together, and neither one alone can tell."
       },
       {
+        "id": "tls-0rtt-on",
+        "target": "homepage",
+        "assert": { "earlyData": true },
+        "why": "TLS 1.3 0-RTT session resumption: a returning visitor's request rides the resumption handshake itself, saving a full network round trip before the first response byte moves. With every payload on this site already at its compression floor, that round trip (tens of ms on a phone) is the largest per-visit latency lever left, and it is a dashboard toggle with no other representation in this tree — flipped off, nothing would notice while every repeat visit quietly got slower. Verified on 2026-07-30 by openssl probe: session tickets advertise max_early_data=14336 and a resumed connection's request sent as early data was accepted. Replay caveat, accepted deliberately: Cloudflare applies 0-RTT only to GET requests without query strings, and the one state-changing bare GET here is /hit, the noscript counter pixel — a replayed /hit inflates a vanity odometer and nothing else. The ?tick=1 beacon carries a query string and is excluded by construction, as are cal's signed approve/decline links.",
+        "gotcha": "The probe MUST hold the first connection open briefly after the request: TLS 1.3 delivers the session ticket AFTER the handshake, so a connect-and-hangup saves no ticket and the resumption test reads as a false rejection. Also, macOS system openssl is LibreSSL, whose s_client has no -early_data; the checker looks for a capable binary (homebrew openssl@3, or OPENSSL_BIN) and downgrades to a warning rather than reporting drift it cannot measure.",
+        "pairs_with": "http3-on above: h3 cuts the transport handshake for new connections, 0-RTT cuts it for resumed ones. Different visitors, same round trip."
+      },
+      {
         "id": "compression-on",
         "target": "homepage",
         "assert": { "compression": ["zstd", "br", "gzip"] },
