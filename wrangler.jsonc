@@ -83,6 +83,8 @@
       "/coffee", "/coffee/*", "/serendipity", "/serendipity/*",
       "/slots", "/book", "/approve", "/decline",
       "/llms-full.txt", "/ledger", "/ledger.json",
+      // the Web Analytics beacon, both legs first-party (see _worker.js/rum.js)
+      "/ledger/rum.js", "/ledger/rum",
       "/writing", "/writing/*",
       "/webmention", "/webmention/*", "/inbox",
       "/rn", "/rn/tracks", "/rn/tracks.html", "/rn/admin", "/rn/set",

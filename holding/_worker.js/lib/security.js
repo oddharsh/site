@@ -6,16 +6,21 @@
 // would skip _headers entirely and ship without CSP / Permissions-Policy.
 import { PAGE_DICTIONARY, SHELL_PRELOAD_LINK } from "./shell-assets.js";
 
-// The two cloudflareinsights.com origins are the Web Analytics (RUM) beacon: the
-// script comes from static.cloudflareinsights.com and reports to
-// cloudflareinsights.com/cdn-cgi/rum. They are the ONLY third-party script origin on
-// the site, and they are here deliberately — MAINTENANCE.md already names RUM as the
-// outcome source for LCP/INP/CLS, and the perf budget has been spending guessed byte
-// ceilings in place of field data. Two consequences worth writing down rather than
-// rediscovering: /whoareyou's "never speaks to a third party" claim had to be amended
-// (it is now specific about this one), and /security's summary had to stop implying
-// default-src 'self' means nothing external. A CSP that quietly disagrees with the
-// page describing it is the failure this repo keeps designing against.
+// There are NO external script or connect origins here, and that is a stronger
+// claim than it was. Until 2026-07-29 this policy carried two cloudflareinsights.com
+// entries for the Web Analytics (RUM) beacon. Both legs now run through the worker
+// (/ledger/rum.js and /ledger/rum, see rum.js), so the browser speaks only to this
+// origin and the policy went back to pure 'self'.
+//
+// Read that carefully before treating it as a privacy win: the REPORTING did not
+// stop, it moved server-side. This server makes the Cloudflare call on the visitor's
+// behalf. /whoareyou and /security both say so in those words, and a CSP that
+// quietly disagrees with the page describing it is the failure this repo keeps
+// designing against — so if the beacon ever goes cross-origin again, those two pages
+// change in the same commit.
+//
+// The remaining allowances are img-src for Spotify album/artist art and the two
+// 'unsafe-inline' tokens the buildless inline CSS/JS design requires.
 //
 // Automatic (zone-side) beacon injection is NOT usable here, and this is the reason:
 // the worker serves the homepage and the static pages as precompressed br/dcz bodies
@@ -23,7 +28,7 @@ import { PAGE_DICTIONARY, SHELL_PRELOAD_LINK } from "./shell-assets.js";
 // So the beacon is placed in source, which also keeps it visible in View Source.
 export const SECURITY_HEADERS = {
   "content-security-policy":
-    "default-src 'self'; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://i.scdn.co https://*.spotifycdn.com; connect-src 'self' https://cloudflareinsights.com; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; worker-src 'self'; manifest-src 'self'; upgrade-insecure-requests",
+    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://i.scdn.co https://*.spotifycdn.com; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; worker-src 'self'; manifest-src 'self'; upgrade-insecure-requests",
   // keep every token one a shipping browser still knows — an unrecognized
   // feature is inert and logs a console error. `browsing-topics` was dropped
   // 2026-07 for that reason (Topics API deprecated in Chrome 144, feature

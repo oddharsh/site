@@ -86,7 +86,9 @@ export async function handlePhotoGrid(request, env, ctx) {
     s.setAttribute("home.grid.served", true);
     s.setAttribute("home.grid.pool_size", pool.length);
     s.setAttribute("home.grid.alt_known", Object.keys(altMap || {}).length);
-    return new Response(renderPhotoSlots(pickRandom(pool, 12), altMap || {}), {
+    // deferred:false — these twelve are the real grid, not a placeholder, so
+    // they carry live URLs and start the moment innerHTML lands.
+    return new Response(renderPhotoSlots(pickRandom(pool, 12), altMap || {}, { deferred: false }), {
       status: 200,
       headers: {
         "content-type": "text/html; charset=utf-8",

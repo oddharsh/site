@@ -16,6 +16,7 @@ import { handleInbox } from "./inbox.js";
 import { handleWebmention, handleWebmentionDecision } from "./webmention.js";
 import { cronSendWebmentions } from "./webmention-send.js";
 import { countCrawlerHit, handleLedger, handleLedgerJson } from "./ledger.js";
+import { handleRumCollect, handleRumScript } from "./rum.js";
 import { handleLens, handleLensBrowser, handleLensCompare, handleLensFetch, handleLensShot } from "./lens.js";
 import { serveAssetWith404Clamp, serveFreshAsset, servePrecompressedShell, serveStaticPage } from "./lib/assets.js";
 import { BOT_UA } from "./lib/botauth.js";
@@ -223,6 +224,11 @@ const ROUTES = new Map([
   // monthly, collected never.
   ["/ledger", handleLedger],
   ["/ledger.json", handleLedgerJson],
+
+  // Cloudflare Web Analytics, both legs served from this origin. Not under
+  // /cdn-cgi/: that prefix is handled at the edge before a Worker sees it.
+  ["/ledger/rum.js", handleRumScript],
+  ["/ledger/rum", handleRumCollect],
 
   ["/writing", routeWritingIndex],
   ["/writing/", routeDropSlash],

@@ -31,6 +31,7 @@ import { readManifest, workerModule, navFenceBody, readFenceBody } from "./scrip
 import { INDEXED_SECTIONS, TWIN_FACTS, buildTwins, checkTwinFacts, htmlFileFor, twinPath } from "./scripts/gen-md-twins.mjs";
 import { MCP_TOOLS } from "./serendipity/serendipity.js";
 import { derivePhotoPool, getImagesManifest, handlePhotoQuery, queryPhotos } from "./holding/_worker.js/photos.js";
+import { renderPhotoSlots } from "./holding/_worker.js/lib/photo-grid.js";
 import { cachedRender, deadline } from "./holding/_worker.js/lib/cache.js";
 import { ifNoneMatchMatches, notModifiedIfFresh, withWeakEtag } from "./holding/_worker.js/lib/cache.js";
 import { privateHostBlocked } from "./holding/_worker.js/lib/crawl.js";
@@ -962,32 +963,49 @@ test("getImagesManifest serves the bundled pool without env", async () => {
   assert.ok(Array.isArray(pool) && pool.length > 0);
 });
 
-test("homepage selects 12 photos and hydrates only the current scrollport", async () => {
+test("homepage selects 12 photos and transfers all of them", async () => {
   const worker = await readFile(new URL("holding/_worker.js/home.js", import.meta.url), "utf8");
   const page = await readFile(new URL("holding/index.html", import.meta.url), "utf8");
   const luna = await readFile(new URL("holding/luna.css", import.meta.url), "utf8");
   const nav = await readFile(new URL("holding/nav.js", import.meta.url), "utf8");
 
-  const grid = await readFile(new URL("holding/_worker.js/lib/photo-grid.js", import.meta.url), "utf8");
   const build = await readFile(new URL("build.mjs", import.meta.url), "utf8");
   assert.match(worker, /pickRandom\(pool,\s*12\)/, "the per-request random draw must remain 12");
   assert.match(build, /deterministicTwelve/, "the document must carry a baked fallback grid, or `/` stops being crawlable without JS");
-  assert.match(grid, /data-photo-deferred/, "photo URLs must stay in data-* for viewport-aware hydration");
-  assert.match(grid, /<noscript><picture>/, "every baked tile needs its script-off twin");
-  // A real src may appear ONLY inside the <noscript> twin. In the live tile it
-  // would fetch a baked thumbnail that hydration discards milliseconds later.
-  const liveTile = grid.slice(0, grid.indexOf("const noScript"));
-  assert.doesNotMatch(liveTile, /\ssrc="/, "the live tile must defer every URL; a real src is a discarded download");
-  assert.match(grid, /data-src="\$\{escAttr\(jpg\)\}"/, "the live tile carries its jpg in data-src");
+  // The two renderings differ in exactly one way, so assert on the OUTPUT
+  // rather than on the source that produces it.
+  const photo = [{ stem: "X1", full: "X1.jpg", thumb_jpg: "/i/X1.aaaaaaaa.jpg", thumb_avif: "/i/X1.aaaaaaaa.avif", thumb_small: "/i/X1-400.aaaaaaaa.avif", size: 1, uploaded: "2026-01-01" }];
+  const baked = renderPhotoSlots(photo, {});
+  const fragment = renderPhotoSlots(photo, {}, { deferred: false });
+
+  // Baked: a fallback the hydrator replaces, so a real src outside the
+  // <noscript> twin is a thumbnail fetched and discarded milliseconds later.
+  assert.match(baked, /data-photo-deferred/, "baked tiles must keep their URLs in data-* until hydration decides");
+  assert.match(baked, /data-src="\/i\/X1\.aaaaaaaa\.jpg"/, "the baked tile carries its jpg in data-src");
+  assert.match(baked, /<noscript><picture>/, "every baked tile needs its script-off twin");
+  assert.doesNotMatch(baked.slice(0, baked.indexOf("<noscript>")), /\ssrc="/,
+    "a real src outside the noscript twin is a discarded download");
+
+  // Fragment: these tiles ARE the grid. Nothing replaces them, so they carry
+  // live URLs and start on innerHTML.
+  assert.match(fragment, /\ssrc="\/i\/X1\.aaaaaaaa\.jpg"/, "the fragment tile must carry a live src");
+  assert.match(fragment, /<source type="image\/avif"[^>]*\ssrcset=/, "the fragment tile must carry live srcset, not data-srcset");
+  assert.doesNotMatch(fragment, /data-photo-deferred|data-src=|data-srcset=/,
+    "a fragment tile has nothing to defer for; leaving it deferred is how the grid went blank in an unrendered tab");
+  assert.doesNotMatch(fragment, /<noscript>/, "the fragment only ever arrives via fetch(), so a script-off twin is dead bytes");
+  assert.match(fragment, /fetchpriority="low"/, "photos must never compete with the prose that is actually the LCP element");
+  assert.match(worker, /\{ deferred: false \}/, "/photos/grid.html must render the live-URL form");
+
   assert.doesNotMatch(worker, /rel="preload" as="image"/, "a non-LCP random photo must not consume the preload lane");
   assert.match(page, /fetch\("\/photos\/grid\.html"\)/, "the homepage must hydrate its random twelve");
   assert.match(page, /\.catch\(\(\) => \{\}\)\s*\.then\(boot\)/, "a failed grid fetch must still hydrate the baked tiles");
-  assert.match(page, /IntersectionObserver/);
-  assert.match(page, /threshold:\s*0\.05/, "a sliver of the next tile must not trigger a transfer");
-  assert.match(page, /rootMargin:\s*"190px 0px"/,
-    "tiles must pre-warm one row (190px pitch) ahead of the scrollport; with no rootMargin a tile starts its fetch only after it is already on screen, so the row below the fold arrives as a white square");
-  assert.match(page, /overlap >= rect\.height \* 0\.05/, "desktop must synchronously hydrate its visible photo rows");
-  assert.match(page, /else requestAnimationFrame\(\(\) => requestAnimationFrame\(start\)\)/, "mobile hydration must yield through the text paint");
+  // Removed 2026-07-29. It withheld 3 of 12 tiles to save ~34 KB out of ~136 KB,
+  // and the 9 it allowed finished 48ms apart, so the row it held back showed up
+  // as white squares on the first scroll for no measurable gain.
+  // Matches the construction, not the word, so the comment explaining why the
+  // observer is gone does not trip its own tripwire.
+  assert.doesNotMatch(page, /new IntersectionObserver|rootMargin:/,
+    "the photo grid must not reintroduce viewport gating; the whole set is ~136 KB at fetchpriority=low, off the LCP path");
   assert.doesNotMatch(page, /requestIdleCallback\(load/, "the tooltip island must not transfer before hover intent");
   assert.match(nav, /getElementById\("axp-desktop"\).*getElementById\("axp-taskbar"\)/, "every server-rendered shell must opt into post-paint enhancement");
   assert.match(nav, /D\.prerendering\) return boot\(\)/, "prerendered static shells must enhance before activation");
@@ -998,6 +1016,44 @@ test("homepage selects 12 photos and hydrates only the current scrollport", asyn
   );
   assert.match(luna, /homepage music island \(below the fold\)/);
   assert.match(luna, /homepage hover island \(non-critical\)/);
+});
+
+test("the RUM beacon is first-party on both legs, and every page that says so agrees", async () => {
+  const page = await readFile(new URL("holding/index.html", import.meta.url), "utf8");
+  const headers = await readFile(new URL("holding/_headers", import.meta.url), "utf8");
+  const security = await readFile(new URL("holding/_worker.js/lib/security.js", import.meta.url), "utf8");
+  const whoareyou = await readFile(new URL("holding/_worker.js/whoareyou.js", import.meta.url), "utf8");
+  const securityPage = await readFile(new URL("holding/_worker.js/security.js", import.meta.url), "utf8");
+
+  // Both legs. The script alone is not enough: without send.to the beacon falls
+  // back to its hardcoded cloudflareinsights.com endpoint, which the CSP below now
+  // blocks — so the script would load and every report would silently fail.
+  assert.match(page, /<script type="module" src="\/ledger\/rum\.js"/, "the beacon script must be served from this origin");
+  assert.match(page, /"send": \{"to": "\/ledger\/rum"\}/, "the beacon must be told to report to this origin too");
+  assert.doesNotMatch(page, /src="https:\/\/static\.cloudflareinsights\.com/, "no cross-origin beacon script");
+
+  // The CSP must not keep permitting an origin nothing calls any more. Matched on
+  // the policy VALUE, since _headers puts it on the header line while security.js
+  // puts it on the line after the key.
+  for (const [name, text] of [["_headers", headers], ["lib/security.js", security]]) {
+    const policy = (text.match(/default-src 'self';[^"\n]*upgrade-insecure-requests/) || [])[0];
+    assert.ok(policy, `${name} must still declare a CSP`);
+    assert.doesNotMatch(policy, /cloudflareinsights\.com/, `${name}: drop the beacon's old third-party CSP entries`);
+    assert.match(policy, /connect-src 'self';/, `${name}: connect-src should be back to pure 'self'`);
+    assert.match(policy, /script-src 'self' 'unsafe-inline';/, `${name}: script-src should carry no external origin`);
+  }
+
+  // The honesty surfaces. A CSP that quietly disagrees with the page describing it
+  // is the failure this repo keeps designing against, and "first-party" is the
+  // easiest claim on this site to round up into a privacy win it is not. Both pages
+  // must keep saying that the forwarding still happens.
+  assert.match(whoareyou, /\/ledger\/rum\.js/, "/whoareyou must name the first-party beacon paths");
+  assert.match(whoareyou, /forwards those timings to Cloudflare/,
+    "/whoareyou must keep stating that the reporting did not stop, it moved server-side");
+  assert.match(whoareyou, /content blocker, the report it used to stop now gets through/,
+    "/whoareyou must keep disclosing what proxying costs a blocker-running visitor");
+  assert.match(securityPage, /it does not mean nothing is forwarded from here/,
+    "/security must not let 'no external origin' imply nothing leaves this server");
 });
 
 test("weak validators turn unchanged rendered HTML into an empty 304", async () => {

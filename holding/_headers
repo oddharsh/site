@@ -17,16 +17,18 @@
   # frame-ancestors 'none' prevents clickjacking. upgrade-insecure-requests
   # rewrites any http:// to https://.
   #
-  # The one external script origin is static.cloudflareinsights.com, the Cloudflare
-  # Web Analytics (RUM) beacon, which reports to cloudflareinsights.com/cdn-cgi/rum
-  # (hence the connect-src entry). Every other external script stays blocked, which
-  # is still the most valuable line here.
+  # There are NO external script or connect origins. The Cloudflare Web Analytics
+  # (RUM) beacon used to need two cloudflareinsights.com entries; both legs moved
+  # behind the worker on 2026-07-29 (/ledger/rum.js + /ledger/rum, see rum.js), so
+  # the browser speaks only to this origin. The REPORTING did not stop, it moved
+  # server-side — /whoareyou and /security state that plainly, and this comment is
+  # not the place to let that get rounded up into a privacy claim.
   #
   # THIS LINE MUST MATCH SECURITY_HEADERS in _worker.js/lib/security.js. Static
   # assets get this copy; worker-rendered responses get that one. infra.json's
   # app-owns-security-headers check reads the wire, so a drift between the two shows
   # up as one route disagreeing with another rather than as a failing build.
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://i.scdn.co https://*.spotifycdn.com; connect-src 'self' https://cloudflareinsights.com; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; worker-src 'self'; manifest-src 'self'; upgrade-insecure-requests
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://i.scdn.co https://*.spotifycdn.com; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; worker-src 'self'; manifest-src 'self'; upgrade-insecure-requests
   # Permissions-Policy: explicitly opt out of every browser API we don't
   # use. shrinks fingerprinting surface and prevents stray code from popping
   # permission prompts. every token here must be one a shipping browser still

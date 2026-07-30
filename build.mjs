@@ -196,27 +196,44 @@ async function checkInvariants() {
   } catch (e) { warn.push(`agent-skills digest check could not run: ${e.message}`); }
 
   // 7b (hard) — the RUM beacon must carry a real site token. A placeholder token
-  // ships the worst of every trade at once: every visitor pays a third-party request
-  // for a beacon that reports nowhere, the CSP is widened for nothing, and
-  // /whoareyou's third-party disclosure describes traffic that buys no data. All three
-  // costs are invisible in testing, because a bad token fails silently by design.
+  // ships the worst of every trade at once: every visitor pays for a beacon that
+  // reports nowhere, and /whoareyou's disclosure describes traffic that buys no data.
+  // Both costs are invisible in testing, because a bad token fails silently by design.
   //
   // Hard rather than warn, for the same reason as the client-edge check above: this is
   // a fill-in-the-blank left behind, not a taste call. Paste the token from
   // Cloudflare dashboard > Web Analytics > (site) > Manage site, or delete the beacon
-  // block in index.html together with the two cloudflareinsights.com CSP entries.
+  // block in index.html together with the /ledger/rum* routes.
   try {
     const home = await read("holding/index.html");
     if (home.includes("CF_RUM_TOKEN_PLACEHOLDER")) {
-      hard.push("index.html: the Web Analytics beacon still carries CF_RUM_TOKEN_PLACEHOLDER — paste the real site token (dashboard > Web Analytics > Manage site), or remove the beacon and its two cloudflareinsights.com CSP entries in _headers + _worker.js/lib/security.js");
+      hard.push("index.html: the Web Analytics beacon still carries CF_RUM_TOKEN_PLACEHOLDER — paste the real site token (dashboard > Web Analytics > Manage site), or remove the beacon and its /ledger/rum* routes in _worker.js/index.js");
     }
-    // The beacon and the CSP that permits it have to arrive together. Either half
-    // alone is a quiet bug: a beacon with no CSP entry is blocked at runtime, and a
-    // CSP entry with no beacon is a third-party origin allowed for no reason.
-    const beacon = home.includes("static.cloudflareinsights.com");
-    const csp = (await read("holding/_headers")).includes("static.cloudflareinsights.com");
-    if (beacon !== csp) {
-      hard.push(`RUM beacon and CSP disagree: index.html ${beacon ? "loads" : "does not load"} the beacon but _headers ${csp ? "allows" : "does not allow"} static.cloudflareinsights.com — ship both or neither`);
+    // Both legs of the beacon are first-party as of 2026-07-29, so the invariant is
+    // no longer "beacon and CSP entry arrive together" — it is that the page and the
+    // routes that serve it arrive together. Either half alone is a quiet bug: a
+    // <script src="/ledger/rum.js"> with no route 404s on every homepage visit, and a
+    // route with no script is a live third-party forwarder nothing calls.
+    const headers = await read("holding/_headers");
+    const worker = await read("holding/_worker.js/index.js");
+    const loadsScript = home.includes('src="/ledger/rum.js"');
+    const sendsTo = home.includes('"to": "/ledger/rum"');
+    const routed = worker.includes('["/ledger/rum.js", handleRumScript]') &&
+                   worker.includes('["/ledger/rum", handleRumCollect]');
+    if (loadsScript !== routed) {
+      hard.push(`RUM beacon and its routes disagree: index.html ${loadsScript ? "loads" : "does not load"} /ledger/rum.js but _worker.js/index.js ${routed ? "routes" : "does not route"} the /ledger/rum* pair — ship both or neither`);
+    }
+    if (loadsScript && !sendsTo) {
+      hard.push('index.html: the beacon is served first-party but its data-cf-beacon has no `"send": {"to": "/ledger/rum"}` — without it the beacon falls back to its hardcoded cloudflareinsights.com endpoint, which the CSP now blocks, so the script would load and every report would fail');
+    }
+    // The CSP must NOT carry the old third-party entries. Leaving one behind would
+    // re-permit an origin nothing on the site calls any more, which is the same
+    // "allowed for no reason" bug the old form of this check guarded against.
+    for (const [name, text] of [["_headers", headers], ["lib/security.js", await read("holding/_worker.js/lib/security.js")]]) {
+      const policy = (text.match(/[Cc]ontent-[Ss]ecurity-[Pp]olicy[^\n]*/g) || []).join("\n");
+      if (policy.includes("cloudflareinsights.com")) {
+        hard.push(`${name}: the CSP still allows cloudflareinsights.com, but both beacon legs are first-party now — drop the script-src and connect-src entries`);
+      }
     }
   } catch (e) { warn.push(`RUM beacon check could not run: ${e.message}`); }
 
