@@ -65,11 +65,20 @@
   function deltaStrip(snapshot, data) {
     var a = data && data.anatomy;
     if (!a || a.rawBytes == null) return "";
+    var renBytes = (snapshot.content || "").length;
+    // A capped render can't vote on words: comparing a full HTTP body against a
+    // truncated DOM produced confident nonsense (stripe: "1874 -> 139 words" off
+    // a 120KB slice). Same honesty rule as the rest of the instrument — what
+    // wasn't measured stays uncounted.
+    if (snapshot.contentTruncated) {
+      return '<div class="lx-browser-delta"><b>HTTP vs rendered:</b> ' +
+        esc(bytes(a.rawBytes)) + " &rarr; &ge;" + esc(bytes(renBytes)) +
+        " (the rendered body hit the capture cap). A word-level comparison needs the full body, so Lens leaves it uncounted.</div>";
+    }
     var rawWords = a.wordCount || 0;
     var renWords = (snapshot.content || "")
       .replace(/<(script|style|noscript|template|svg)[\s\S]*?<\/\1>/gi, " ")
       .replace(/<[^>]+>/g, " ").split(/\s+/).filter(Boolean).length;
-    var renBytes = (snapshot.content || "").length;
     var verdict;
     if (Math.abs(renWords - rawWords) <= Math.max(10, rawWords * 0.15)) {
       verdict = "The HTTP fetch already carries this page; JavaScript changes little a reader needs.";
