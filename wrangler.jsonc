@@ -7,8 +7,10 @@
   // can serve build.mjs's brotli q11 twin. The edge fly-compresses at about q4 and
   // prefers zstd when a browser offers everything, which measured LARGER than its
   // own brotli here (homepage: 13,264 zstd vs 12,457 br vs 10,524 br q11, 2026-07-26).
-  // Everything else still takes the platform default; the SSR'd homepage cannot be
-  // precompressed at all, because its bytes differ per request.
+  // Everything else still takes the platform default. (The homepage used to be the
+  // stated exception, "cannot be precompressed at all, because its bytes differ per
+  // request". It is a deterministic document now and carries the same q11 twin, dcz
+  // delta, and ETag as every other page.)
   //
   // UNBYPASSABLE BUILD: main + assets point at .build/holding (the minified
   // tree), and the "build" block below runs build.mjs FIRST on every deploy.

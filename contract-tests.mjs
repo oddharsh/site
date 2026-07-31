@@ -1363,7 +1363,7 @@ test("static page negotiation prefers 304, then DCZ with the current validator",
     "public, max-age=0, s-maxage=86400",                       // today's page policy
     "public, max-age=0, must-revalidate, s-maxage=86400",
     "max-age=0, must-revalidate, stale-while-revalidate=604800", // must-revalidate wins
-    "private, no-cache, must-revalidate",                      // the homepage
+    "private, no-cache, must-revalidate",                      // `/` until 2026-07-31
     "no-store",
   ]) {
     const res = await serveStaticPage(new Request("https://aadhar.sh/lwe/drivers", {
@@ -1381,6 +1381,23 @@ test("static page negotiation prefers 304, then DCZ with the current validator",
     assert.equal(res.headers.get("use-as-dictionary"),
                  'match="/lwe/drivers", match-dest=("document")', `must self-offer under "${cc}"`);
   }
+
+  // The policy every deploy-time document actually ships has to be one of those, or the
+  // whole per-page tier (its /pd/ deltas, its committed p-dict snapshots, its build time)
+  // is spent on offers no browser keeps. Pinned against the live constant rather than a
+  // copy, so editing the policy runs this check instead of quietly bypassing it.
+  const { PAGE_CACHE_CONTROL } = await import("./holding/_worker.js/lib/const.js");
+  const shipped = await serveStaticPage(new Request("https://aadhar.sh/lwe/drivers", {
+    headers: { "available-dictionary": available },
+  }), makeEnv(PAGE_CACHE_CONTROL));
+  assert.equal(shipped.headers.get("use-as-dictionary"),
+               'match="/lwe/drivers", match-dest=("document")',
+               `PAGE_CACHE_CONTROL must register as a dictionary, got "${PAGE_CACHE_CONTROL}"`);
+  // swr is the clause doing that work AND the registered dictionary's lifetime, so a
+  // future trim below a day would keep every assertion above green while shortening how
+  // long the tier keeps working. Measured 2026-07-29: swr=5 registered nothing.
+  const swr = Number(PAGE_CACHE_CONTROL.match(/stale-while-revalidate=(\d+)/)?.[1] || 0);
+  assert.ok(swr >= 86400, `PAGE_CACHE_CONTROL needs a useful dictionary lifetime, got swr=${swr}`);
 });
 
 test("LWE pages share one base stylesheet and the build derives one site-page dictionary", async () => {
@@ -1782,6 +1799,37 @@ test("the homepage's Link header carries the shell preloads, or it gets no Early
     "lib/security.js should not keep a second, uncalled definition of the homepage Link header");
   assert.doesNotMatch(security, /^\s*(export )?const HOMEPAGE_LINK\s*=/m,
     "the homepage Link header should be composed at the route, not in a constant nothing imports");
+
+  // `/` shipped `private, no-cache, must-revalidate` from its SSR era, which cost it
+  // two things at once: no shared cache could hold it (so every front-door hit ran the
+  // worker) and no browser would keep a dictionary offered under it (so it was the one
+  // page outside the per-page dcz tier). It takes PAGE_CACHE_CONTROL now. Four surfaces
+  // have to agree on that string or the fix is partial in a way nothing else reports.
+  assert.match(block[0], /\.\.\.GENERATED_PAGE_HEADERS/,
+    "the homepage must take the shared generated-page policy, not a hand-written one");
+  assert.doesNotMatch(block[0], /no-cache|must-revalidate|private/,
+    "no-cache/must-revalidate/private each veto dictionary registration; `/` cannot carry them");
+  assert.match(index, /WORKERS_CACHEABLE_PATHS = new Set\("\/ /,
+    "`/` must be in WORKERS_CACHEABLE_PATHS, or a cacheable homepage still invokes the worker every hit");
+
+  // The HEAD path writes its own headers, so it can drift from the GET it stands in for.
+  // A HEAD advertising a different freshness contract is a lie a cache may act on.
+  const home = await readFile(new URL("holding/_worker.js/home.js", import.meta.url), "utf8");
+  assert.match(home, /:\s*PAGE_CACHE_CONTROL,/,
+    "homepageHeadResponse must reuse the shared constant rather than restating the policy");
+
+  // _headers is the static-asset fallback for the same URL, and check-dictionary-support
+  // exists precisely because production policy for some pages comes from this file, which
+  // canRegisterAsDictionary never sees.
+  const { PAGE_CACHE_CONTROL } = await import("./holding/_worker.js/lib/const.js");
+  const headers = await readFile(new URL("holding/_headers", import.meta.url), "utf8");
+  const rootRule = headers.match(/^\/\n((?:  .*\n)+)/m);
+  assert.ok(rootRule, "_headers must still carry a rule for /");
+  assert.match(rootRule[1], new RegExp(`Cache-Control: ${PAGE_CACHE_CONTROL.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "m"),
+    "_headers `/` must state the same policy the worker route does");
+
+  // The predicate itself is exercised where serveStaticPage is already under test, in
+  // "static page negotiation prefers 304, then DCZ with the current validator".
 });
 
 test("the CSP falls back to 'unsafe-inline' only where the build cannot speak", async () => {

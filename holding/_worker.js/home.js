@@ -1,6 +1,7 @@
 // home.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
 import { wantsMarkdown } from "./lib/http.js";
+import { PAGE_CACHE_CONTROL } from "./lib/const.js";
 import { HOMEPAGE_DISCOVERY_LINK } from "./lib/security.js";
 import { renderPhotoSlots } from "./lib/photo-grid.js";
 import { span } from "./lib/trace.js";
@@ -14,13 +15,16 @@ export function homepageHeadResponse(request) {
       "content-type": markdown
         ? "text/markdown; charset=utf-8"
         : "text/html; charset=utf-8",
-      // HTML mirrors the GET path's bfcache-friendly policy (see _headers "/"):
-      // private + no-cache keeps every real fetch fresh while leaving the page
-      // eligible for the browser's back/forward cache. markdown rep stays no-store
-      // (it is a content-negotiated representation, never a back/forward target).
+      // HTML mirrors the GET path's policy (index.js HOMEPAGE_HEADERS, and
+      // _headers "/"). A HEAD that advertised a different freshness contract than
+      // the GET it stands in for is a lie a cache is entitled to act on, so these
+      // move together. max-age=0 keeps every real fetch revalidating, and bfcache
+      // is unaffected either way (only no-store kills it). markdown rep stays
+      // no-store: it is a content-negotiated representation, never a back/forward
+      // target, and it has no dictionary tier to keep alive.
       "cache-control": markdown
         ? "no-store, must-revalidate"
-        : "private, no-cache, must-revalidate",
+        : PAGE_CACHE_CONTROL,
       "vary": "accept",
       "link": HOMEPAGE_DISCOVERY_LINK,
       "x-content-type-options": "nosniff",
