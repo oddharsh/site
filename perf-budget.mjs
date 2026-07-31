@@ -227,6 +227,45 @@ if (homepage) {
   } catch {
     bad("index.src.html: readable homepage twin missing");
   }
+  // Every OTHER served page has carried the same contract since 2026-07-31. This is
+  // the shipped-artifact half of the gate build.mjs step 7b enforces at write time,
+  // the same two-moment arrangement HTML_MARKERS already uses.
+  //
+  // The twin is checked for EXISTENCE and readability rather than byte-equality with
+  // a source file, because ten of these pages are generated into the staged tree and
+  // have no authored file to compare against. Readability is the claim that matters:
+  // a twin that came back minified would make View Source a dead link.
+  try {
+    const { readdir } = await import("node:fs/promises");
+    const served = (await readdir(".build/holding", { recursive: true }))
+      .filter((rel) => rel.endsWith(".html") && !rel.endsWith(".src.html") && rel !== "index.html")
+      .sort();
+    let missing = 0, unbannered = 0, unreadable = 0;
+    for (const rel of served) {
+      const page = (await readFile(`.build/holding/${rel}`)).toString("utf8");
+      const twinRel = rel.replace(/\.html$/, ".src.html");
+      if (!page.startsWith(`<!-- minified at deploy; readable source: /${twinRel} -->`)) unbannered++;
+      let twin;
+      try { twin = (await readFile(`.build/holding/${twinRel}`)).toString("utf8"); }
+      catch { missing++; continue; }
+      // The claim is that the twin is the PRE-minification document, so the exact
+      // test is that it does not itself carry the banner the minifier stamps on.
+      //
+      // A line-count comparison was the obvious heuristic and it was wrong: the five
+      // /writing Notepad pages hold their text inside a <textarea>, whose newlines
+      // the minifier must preserve, so twin and page have the same line count and the
+      // banner tipped it the wrong way. Minification is non-expanding, so the size
+      // floor below is the honest sanity bound.
+      if (twin.startsWith("<!-- minified at deploy;")) unreadable++;
+      else if (twin.length < page.length - 120) unreadable++;
+    }
+    if (missing) bad(`${missing} of ${served.length} served pages are missing their .src.html twin`);
+    else if (unbannered) bad(`${unbannered} of ${served.length} served pages lack the minification banner`);
+    else if (unreadable) bad(`${unreadable} of ${served.length} .src.html twins are not more readable than the page they twin`);
+    else ok(`${served.length} served pages minified, each with a readable .src.html twin`);
+  } catch (error) {
+    bad(`page twins: could not verify (${error.message})`);
+  }
   const sizes = compressedSizes(homepage);
   const overGzip = sizes.gzip > HTML_ENVELOPE.gzipKiB;
   const overBrotli = sizes.brotli > HTML_ENVELOPE.brotliKiB;
