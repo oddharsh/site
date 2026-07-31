@@ -166,23 +166,23 @@
 /pixel-peeper/tiles/*
   Cache-Control: public, max-age=31536000, immutable
 
-# homepage: the worker pre-renders a fresh 12-photo random pick on every
-# request, and the visitor counter increments per human pageview. both
-# need the worker to run each visit, so no SHARED cache (CF edge, proxy)
-# may store the response and pin the same 12 photos / freeze the counter
-# for other users. `private` forbids shared storage; `no-cache` forces a
-# revalidation before any reuse, so every real navigation re-runs the
-# worker and is fresh. cost: ~3 KV reads + 1 KV write per visit, well
-# under free-tier at personal traffic.
-# deliberately NOT `no-store`: that is the one directive that disqualifies
-# a page from the browser's back/forward cache (bfcache). dropping it lets
-# Back/Forward restore the homepage instantly from the browser's in-memory
-# snapshot (correct behavior: going back should not reshuffle the photos or
-# re-count the visit), matching every other page, which already rides bfcache.
+# homepage: the same generated-page policy every other document here ships.
+# The `private, no-cache, must-revalidate` this replaced was written when the
+# worker pre-rendered a fresh 12-photo pick and bumped the counter INSIDE the
+# document, so a shared cache would have pinned one visitor's twelve photos and
+# frozen the count for everyone. None of that is true anymore: the random grid
+# is a separate no-store fragment, the counter is a separate /hit beacon, and
+# the document build-bakes a fixed twelve. The premise expired; the directives
+# outlived it and cost the page both its dictionary tier and its ability to be
+# cached at all. See lib/const.js PAGE_CACHE_CONTROL for what each clause buys.
+# deliberately still NOT `no-store`: that is the one directive that disqualifies
+# a page from the browser's back/forward cache (bfcache). `max-age=0` revalidates
+# without forfeiting that, so Back/Forward still restores the homepage instantly
+# from the browser's in-memory snapshot, matching every other page here.
 # Also: advertise machine-readable resources for agents per RFC 8288 +
 # RFC 9727 §3. multiple Link headers are valid; one per resource for readability.
 /
-  Cache-Control: private, no-cache, must-revalidate
+  Cache-Control: public, max-age=0, s-maxage=86400, stale-while-revalidate=604800
   Link: </sitemap.xml>; rel="sitemap"; type="application/xml"
   Link: </llms.txt>; rel="alternate"; type="text/plain"; title="llms.txt summary"
   Link: </auth.md>; rel="service-doc"; type="text/markdown"; title="Auth.md agent registration"

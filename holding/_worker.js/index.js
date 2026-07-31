@@ -21,7 +21,7 @@ import { handleRumCollect, handleRumScript } from "./rum.js";
 import { handleLens, handleLensBrowser, handleLensCompare, handleLensFetch, handleLensShot } from "./lens.js";
 import { serveAssetWith404Clamp, serveFreshAsset, servePrecompressedShell, serveStaticPage } from "./lib/assets.js";
 import { BOT_UA } from "./lib/botauth.js";
-import { CANONICAL_HOST } from "./lib/const.js";
+import { CANONICAL_HOST, PAGE_CACHE_CONTROL } from "./lib/const.js";
 import { HOMEPAGE_DISCOVERY_LINK } from "./lib/security.js";
 import { wantsMarkdown } from "./lib/http.js";
 import { handleSiteMcp } from "./mcp.js";
@@ -62,11 +62,30 @@ export { Counter } from "./counter.js";
 export { BookingWorkflow } from "../../cal/src/workflow.js";
 
 // Workers Cache only fronts responses whose route contract is already public
-// and reusable. Keep the default export as an uncached gateway: it handles the
-// homepage, mutations, per-visitor views, and arbitrary inspection targets.
+// and reusable. Keep the default export as an uncached gateway: it handles
+// mutations, per-visitor views, and arbitrary inspection targets.
 // Query strings are excluded deliberately so owner bust tokens and future
 // query-bearing features cannot accidentally become shared cache keys.
-const WORKERS_CACHEABLE_PATHS = new Set("/favicon.ico /auth.md /.well-known/api-catalog /.well-known/agent-card.json /.well-known/oauth-protected-resource /.well-known/oauth-authorization-server /reading /updates /updates.json /restore /lens /ledger /writing /bot /around /around/json /around/changes.json /photos /rn/tracks /rn/tracks.html /images/manifest.json /images/metadata.json /coffee /coffee/availability.json /search /photos/query.json".split(" "));
+//
+// `/` joined the set on 2026-07-31, when it stopped being a per-request document
+// and picked up PAGE_CACHE_CONTROL. It is the highest-traffic entry here and the
+// one route where skipping the worker matters most, because the cold external
+// arrival is the single navigation no speculation rule can prerender.
+//
+// The hazard worth naming, since a wrong answer here is a white screen rather
+// than a slow page: these routes can answer `content-encoding: dcz`, and handing
+// a delta to a client that lacks the dictionary is ERR_CONTENT_DECODING_FAILED.
+// Safety rests on the cache honouring `vary: accept-encoding, available-dictionary`.
+// VERIFIED against production 2026-07-31 on /lens, which was already in this set:
+// priming with the family dictionary cached a 13,983 B dcz, a no-dictionary client
+// then MISSed and cached its own 15,047 B brotli, and the dictionary client came
+// back to a HIT of its own variant. Two entries, no crossover. Re-run that probe
+// before adding any dcz-capable route here.
+//
+// Note the if-none-match bail in shouldUseWorkersCache below: a returning visitor
+// revalidates and therefore always reaches the worker. That is correct (a 304 needs
+// the validator compared) and it bounds what this buys to first-contact requests.
+const WORKERS_CACHEABLE_PATHS = new Set("/ /favicon.ico /auth.md /.well-known/api-catalog /.well-known/agent-card.json /.well-known/oauth-protected-resource /.well-known/oauth-authorization-server /reading /updates /updates.json /restore /lens /ledger /writing /bot /around /around/json /around/changes.json /photos /rn/tracks /rn/tracks.html /images/manifest.json /images/metadata.json /coffee /coffee/availability.json /search /photos/query.json".split(" "));
 
 function shouldUseWorkersCache(request) {
   if (request.method !== "GET" && request.method !== "HEAD") return false;
@@ -625,7 +644,7 @@ async function routeWritingPost(request, env, ctx, url) {
 // throws away. The window is also the dictionary's lifetime. See the long note there,
 // and the measured policy table in lib/assets.js.
 const GENERATED_PAGE_HEADERS = {
-  "cache-control": "public, max-age=0, s-maxage=86400, stale-while-revalidate=604800",
+  "cache-control": PAGE_CACHE_CONTROL,
   "link": SHELL_PRELOAD_LINK,
 };
 
@@ -764,22 +783,38 @@ function routeIndexHtml(_request, _env, _ctx, url) {
 // the same path as /garage and /lwe: a q11 twin, a dcz delta against the page
 // dictionary, and a real validator that answers 304.
 //
-// The cache policy stays PRIVATE and no-cache rather than picking up the static
-// pages' s-maxage. The document is identical for everyone, but it is still the
-// front door and the one page whose visit the /hit beacon counts; keeping it
-// out of shared caches costs nothing now that the body revalidates to an empty
-// 304 instead of retransmitting.
+// The policy is now the ordinary generated-page one, and the whole point is that
+// `/` stops being special. It held `private, no-cache, must-revalidate` from the
+// era when the document was SSR'd per request; step 1d bakes that variance out, so
+// the reason the exception existed is gone while the exception's two costs stayed.
 //
-// That also makes `/` the ONE page outside the per-page dictionary tier, and
-// deliberately so rather than by oversight. `no-cache` bars reuse without
-// revalidation, which is exactly the permission RFC 9842 requires, so Chromium will
-// not keep a dictionary offered here no matter what else the header says — adding
-// stale-while-revalidate alongside it changed nothing when measured. Buying `/` into
-// the tier means dropping no-cache, and the front door's revalidate-every-time
-// posture is worth more than one page's delta. serveStaticPage drops the offer on
-// its own (canRegisterAsDictionary), so nothing here advertises what it cannot keep,
-// and `/` still gets the family dictionary through the Link header like every other
-// HTML surface.
+// COST ONE: no-cache bars reuse without revalidation, which is exactly the
+// permission RFC 9842 requires, so Chromium refuses to keep a dictionary offered
+// under it (measured across eight policies — the table lives in lib/assets.js and
+// scripts/check-dictionary-support.mjs). That left `/` as the ONE page outside the
+// per-page dictionary tier, taking the family corpus's 6.3% where every other page
+// gets 93-97%. Measured against production 2026-07-31: 8,780 B plain q11 versus
+// 8,225 B against the family dictionary.
+//
+// COST TWO: no shared cache may hold it, so every single front-door hit runs the
+// worker. Measured the same day from SJC, the 103-to-200 window (which IS the
+// worker's think time) was 8.5-18.8 ms warm, with cold-isolate samples near 130 ms.
+// Small, but paid on every visit including the cold external arrival that is the
+// one navigation nothing can prerender.
+//
+// What the exception was buying, per the note it replaces, was a front door that
+// revalidates every time. `max-age=0` keeps that for the BROWSER: it still
+// revalidates on every navigation and still answers 304 off the ETag. What changes
+// is that a shared cache may now serve the document, and may serve it stale inside
+// the swr window. Priced deliberately: the document is identical for everyone, the
+// per-visit parts (tracks, the random twelve, the visit count) are separate no-store
+// fragments, and a deploy purges the edge, so the stale window in practice is
+// bounded by the next deploy rather than by the header. swr is 604800 because
+// Chromium sizes a registered dictionary's LIFETIME from that window, so shortening
+// it would quietly re-break cost one.
+//
+// The /hit beacon is unaffected — it was already a separate request, and counter.js
+// already declines to count a speculative load.
 // SHELL_PRELOAD_LINK first, then discovery. Cloudflare Early Hints harvests only
 // the rel=preload entries out of this header and replays them as a 103, and
 // without them here `/` was the ONE page on the site not getting that 103.
@@ -788,11 +823,16 @@ function routeIndexHtml(_request, _env, _ctx, url) {
 //   link: </a/luna.*.css>; as=style; rel=preload, </a/nav.*.js>; as=script; rel=preload
 // and `/` answered with the ten discovery links and no preload at all.
 //
-// That is backwards from shell-assets.js's own reasoning. The homepage is
-// no-cache and revalidates on every visit, so it always pays worker think-time
-// before its 200 — which is exactly the window a 103 exists to spend, and why
-// that file singles the homepage out as where a 103 buys the most. Every page
-// that needed it least was getting it.
+// That is backwards from shell-assets.js's own reasoning, though that reasoning
+// has since expired and the header stays for a different one. The file argues the
+// homepage is where a 103 buys the most, because it "does KV reads before the 200."
+// It no longer does; step 1d moved every one of them off the document. Measured
+// against production 2026-07-31, the 103-to-200 window on `/` is 8.5-18.8 ms, and
+// an earlier measurement (see the CDP note in CLAUDE.md) found windows under ~100 ms
+// do not complete the preload. So the 103 is close to inert HERE and the honest
+// reason to keep emitting the pair is the cold-isolate tail plus the fact that
+// Cloudflare harvests these preloads for the 103 it replays on the routes that DO
+// think. Do not re-derive a homepage win from it.
 //
 // Lost to a refactor rather than to a decision: lib/security.js still exported
 // withHomepageDiscoveryHeaders, which sets precisely this pair, and nothing had
@@ -801,7 +841,7 @@ function routeIndexHtml(_request, _env, _ctx, url) {
 // read as broken. That function is deleted in this commit rather than left as a
 // second place to describe the same header.
 const HOMEPAGE_HEADERS = {
-  "cache-control": "private, no-cache, must-revalidate",
+  ...GENERATED_PAGE_HEADERS,
   "link": `${SHELL_PRELOAD_LINK}, ${HOMEPAGE_DISCOVERY_LINK}`,
 };
 
