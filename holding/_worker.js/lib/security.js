@@ -20,8 +20,19 @@ import { prefetchActivationHeader } from "../speculation.js";
 // designing against — so if the beacon ever goes cross-origin again, those two pages
 // change in the same commit.
 //
-// The remaining allowances are img-src for Spotify album/artist art and the two
-// 'unsafe-inline' tokens the buildless inline CSS/JS design requires.
+// img-src is 'self' data: as of this commit, and that is now the whole story:
+// every image on every page comes from this origin. Spotify's two hosts sat here
+// for as long as album art was hotlinked from a hover; #182 re-hosted it behind
+// /rn/art/, and a cold incognito capture on 2026-07-30 measured 133 requests to
+// exactly one host. An allowance nothing uses is a standing permission to
+// hotlink again by accident, so it leaves with the last request that needed it.
+//
+// This is enforced, not just asserted: rn.js emits NO image attribute for art it
+// cannot re-host, precisely so a cover this policy would block renders as the
+// tooltip's text card instead of a broken frame. The two changes are one change.
+//
+// The remaining allowance is the two 'unsafe-inline' tokens the buildless inline
+// CSS/JS design requires.
 //
 // Automatic (zone-side) beacon injection is NOT usable here, and this is the reason:
 // the worker serves the homepage and the static pages as precompressed br/dcz bodies
@@ -29,7 +40,7 @@ import { prefetchActivationHeader } from "../speculation.js";
 // So the beacon is placed in source, which also keeps it visible in View Source.
 export const SECURITY_HEADERS = {
   "content-security-policy":
-    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://i.scdn.co https://*.spotifycdn.com; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; worker-src 'self'; manifest-src 'self'; upgrade-insecure-requests",
+    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; worker-src 'self'; manifest-src 'self'; upgrade-insecure-requests",
   // keep every token one a shipping browser still knows — an unrecognized
   // feature is inert and logs a console error. `browsing-topics` was dropped
   // 2026-07 for that reason (Topics API deprecated in Chrome 144, feature

@@ -362,16 +362,24 @@ test("rendered track rows re-host recognized art and pass everything else throug
   // the whole point: a hover no longer reaches Spotify at all
   assert.doesNotMatch(html, /scdn\.co|spotifycdn\.com/);
 
-  // an art URL with no parseable hash keeps its original URL and gains NO
-  // imageset, which is the same shape tooltip.js sees from a pre-deploy cached
-  // fragment — one code path, not a migration.
+  // art with no parseable hash emits NO image attribute at all. It used to fall
+  // back to the Spotify URL, which was right while img-src still allowed those
+  // hosts; now that it does not, that URL would render as a frame the browser
+  // refuses to load. The row falls through to the text card instead.
   const odd = renderTrackListHtml({
     tracks: [{ title: "t", song_link_url: "https://song.link/x",
                image_url: "https://mosaic.scdn.co/640/abc", artists: [] }],
   });
-  assert.match(odd, /data-track-image="https:\/\/mosaic\.scdn\.co\/640\/abc"/);
+  assert.doesNotMatch(odd, /data-track-image/);
   assert.doesNotMatch(odd, /data-track-imageset/);
+  assert.doesNotMatch(odd, /scdn\.co|spotifycdn\.com/);
+  // the text card's inputs still have to survive, or "falls through to the text
+  // card" is a claim about a card with nothing on it
+  assert.match(odd, /data-track-title="t"/);
 });
+
+// (the CSP's img-src end of this bargain is asserted alongside the other
+// directives in the RUM first-party test near the bottom of this file)
 
 test("the art route 404s every shape that is not one it minted", async () => {
   // This grammar is the only thing between the route and an open image proxy,
@@ -1222,6 +1230,12 @@ test("the RUM beacon is first-party on both legs, and every page that says so ag
     assert.doesNotMatch(policy, /cloudflareinsights\.com/, `${name}: drop the beacon's old third-party CSP entries`);
     assert.match(policy, /connect-src 'self';/, `${name}: connect-src should be back to pure 'self'`);
     assert.match(policy, /script-src 'self' 'unsafe-inline';/, `${name}: script-src should carry no external origin`);
+    // Same rule, one directive over: album art is re-hosted behind /rn/art/, so
+    // the two Spotify hosts that used to sit in img-src have nothing left to
+    // serve. rn.js's artAttrs is what makes this safe (it emits no attribute for
+    // art it cannot re-host) and the rn test asserts that end.
+    assert.match(policy, /img-src 'self' data:;/, `${name}: img-src should be this origin only`);
+    assert.doesNotMatch(policy, /scdn\.co|spotifycdn\.com/, `${name}: album art is first-party now`);
   }
 
   // The honesty surfaces. A CSP that quietly disagrees with the page describing it
