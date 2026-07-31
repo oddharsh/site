@@ -79,6 +79,15 @@ const ROUTES = [
   { path: "/security", status: 200, ct: "text/html" },
   { path: "/reading", status: 200, ct: "text/html" },
   { path: "/updates", status: 200, ct: "text/html" },
+  // The twins the generated tier earned. Both halves are asserted because they
+  // fail independently: the .md URL proves the build staged a twin at all, and the
+  // negotiated form proves serveStaticPage found it at the page's own URL. These
+  // pages carried `flags.agents: true` while answering HTML to both.
+  { path: "/updates.md", status: 200, ct: "text/markdown", marker: "Recently installed" },
+  { path: "/restore.md", status: 200, ct: "text/markdown", marker: "Restore point" },
+  { path: "/photos.md", status: 200, ct: "text/markdown" },
+  { path: "/updates", status: 200, ct: "text/markdown", headers: { accept: "text/markdown" } },
+  { path: "/restore", status: 200, ct: "text/markdown", headers: { accept: "text/markdown" } },
   { path: "/updates.json", status: 200, ct: "application/json" },
   { path: "/restore", status: 200, ct: "text/html" },
   { path: "/lens", status: 200, ct: "text/html", marker: "The Other Web", fullPage: true },

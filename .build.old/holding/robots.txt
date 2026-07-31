@@ -1,0 +1,60 @@
+# robots.txt for aadhar.sh
+#
+# policy follows the Content Signals spec (https://contentsignals.org).
+# the site is meant to be the canonical, machine-readable source of truth
+# about Aadharsh Pannirselvam, so all three signals are open: traditional
+# search, AI input (agents/answer-engines reading at query time to ground
+# a response), and AI training.
+#
+# IMPORTANT — Cloudflare dependency: if the zone's managed "Block AI Bots"
+# feature is enabled, Cloudflare prepends a Disallow block for known AI
+# user-agents that OVERRIDES the ai-input/ai-train signals below. for
+# "allow everything" to actually take effect, that feature must be turned
+# OFF in the Cloudflare dashboard (Security -> Bots / AI Crawl Control).
+# this file alone cannot undo a managed block.
+#
+# admin / action / per-request transparency endpoints stay out of indexing.
+#
+# sitemap reference at the bottom per
+#   https://www.sitemaps.org/protocol.html
+
+User-agent: *
+Content-Signal: search=yes,ai-input=yes,ai-train=yes
+Allow: /
+Disallow: /rn/admin
+Disallow: /rn/set
+Disallow: /rn/tracks
+Disallow: /whoareyou
+Disallow: /around
+Disallow: /around/json
+Disallow: /lwe/ask
+
+# The named group is intentional: these crawlers otherwise stop inheriting the
+# wildcard group's rules under RFC 9309. Keep the same open Content-Signal and
+# private/action endpoint exclusions for every explicitly named AI agent.
+User-agent: GPTBot
+User-agent: ClaudeBot
+User-agent: Google-Extended
+User-agent: Applebot-Extended
+User-agent: Meta-ExternalAgent
+User-agent: CCBot
+User-agent: Bytespider
+User-agent: Amazonbot
+User-agent: OAI-SearchBot
+User-agent: ChatGPT-User
+User-agent: Claude-User
+User-agent: PerplexityBot
+User-agent: AadharshBot
+Content-Signal: search=yes,ai-input=yes,ai-train=yes
+Allow: /
+Disallow: /rn/admin
+Disallow: /rn/set
+Disallow: /rn/tracks
+Disallow: /whoareyou
+Disallow: /around
+Disallow: /around/json
+Disallow: /lwe/ask
+
+Sitemap: https://aadhar.sh/sitemap.xml
+
+# love, aadharsh

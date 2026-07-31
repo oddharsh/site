@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#2D78BD">
+<link rel="preload" as="style" href="/a/luna.12fe1428.css">
+<title>aadhar.sh/garage/pretext: DOM-free text measurement</title>
+<meta name="description" content="chenglou/pretext measures and lays out multiline text with canvas as ground truth instead of the DOM, sidestepping reflow. A live demo, where it'd help aadhar.sh, and the tradeoffs.">
+<link rel="canonical" href="https://aadhar.sh/garage/pretext">
+<meta property="og:type" content="website">
+<meta property="og:title" content="aadhar.sh/garage/pretext: DOM-free text measurement">
+<meta property="og:description" content="chenglou/pretext measures and lays out multiline text with canvas as ground truth instead of the DOM, sidestepping reflow. A live demo, where it'd help aadhar.sh, and the tradeoffs.">
+<meta property="og:url" content="https://aadhar.sh/garage/pretext">
+<meta name="twitter:card" content="summary_large_image">
+<meta property="og:image" content="https://aadhar.sh/og/garage-pretext.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="aadhar.sh/garage/pretext: DOM-free text measurement, live demo screenshotted">
+<meta name="twitter:image" content="https://aadhar.sh/og/garage-pretext.png">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20x='9'%20y='6'%20width='17'%20height='2.6'%20rx='1'%20fill='%230855dd'/%3E%3Crect%20x='9'%20y='11.5'%20width='17'%20height='2.6'%20rx='1'%20fill='%23166aee'/%3E%3Crect%20x='9'%20y='17'%20width='17'%20height='2.6'%20rx='1'%20fill='%23166aee'/%3E%3Crect%20x='9'%20y='22.5'%20width='10'%20height='2.6'%20rx='1'%20fill='%23166aee'/%3E%3Cpath%20d='M5%206.3%20L5%2024.8'%20stroke='%23ff9500'%20stroke-width='1.6'%20stroke-linecap='round'/%3E%3Cpath%20d='M3.2%206.3%20L6.8%206.3%20M3.2%2024.8%20L6.8%2024.8'%20stroke='%23ff9500'%20stroke-width='1.6'%20stroke-linecap='round'/%3E%3C/svg%3E">
+<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; } html{background:linear-gradient(180deg,oklch(56% 0.13 250) 0%,oklch(73% 0.10 236) 50%,oklch(88% 0.05 232) 60%,oklch(60% 0.16 140) 100%)}
+html { scrollbar-color: oklch(62% 0.14 255) oklch(91% 0.02 248); }
+body {
+  background: linear-gradient(180deg, oklch(56% 0.13 250) 0%, oklch(73% 0.10 236) 50%, oklch(88% 0.05 232) 60%, oklch(60% 0.16 140) 100%);
+  font-family: var(--font-ui);
+  font-size: 10.5pt; line-height: 1.5; color: oklch(21.78% 0 0);
+  padding: 24px 12px 60px; min-height: 100vh;
+}
+.window {
+  max-width: 720px; margin: 0 auto; background: oklch(100% 0 0);
+  border: 2px solid #0831d9; border-right-color: #001ea0; border-bottom-color: #001ea0;
+  border-top-left-radius: 8px; border-top-right-radius: 8px; overflow: hidden;
+  box-shadow: inset 1px 1px 0 #166aee, inset 2px 2px 0 #0855dd,
+              inset -1px -1px 0 #00138c, inset -2px -2px 0 #003bda, 4px 4px 0 rgba(0,30,160,.35);
+}
+.title-bar {
+  background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
+  color: oklch(100.00% 0 0);
+  font-family: var(--font-caption);
+  font-size: 10pt; font-weight: bold;
+  padding: 4px 8px;
+  border-bottom: 1px solid oklch(41.92% 0.0962 250.51);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.title-bar .icon {
+  display: inline-block; width: 16px; height: 16px; margin-right: 6px;
+  vertical-align: middle; background: oklch(87.82% 0.0877 66.27);
+  position: relative; flex-shrink: 0;
+}
+.title-bar .icon::before {
+  content: ""; position: absolute; inset: 3px;
+  background: oklch(69.58% 0.2043 43.49);
+  clip-path: polygon(20% 0, 100% 50%, 20% 100%, 0 50%);
+}
+.title-bar .title-text { flex: 1; padding-left: 4px; }
+.title-bar .controls { display: flex; align-items: center; gap: 2px; letter-spacing: 0; }
+/* authentic Luna caption buttons: 21x21 glossy "gel" lozenges with a top specular
+   highlight + CSS-drawn white glyphs (no text, no images). min/max are blue, CLOSE
+   is RED at rest. CLASS-BASED (.min/.max/.close) so decorative demo windows that use
+   <span class="close"> get the identical skin as a real <a class="close">. sRGB hex
+   traced from the Luna .msstyles bitmap, kept as hex on purpose. */
+.title-bar .controls .min,
+.title-bar .controls .max,
+.title-bar .controls .close {
+  position: relative; box-sizing: border-box;
+  width: 21px; height: 21px; padding: 0; margin: 0;
+  display: inline-block; overflow: hidden; font-size: 0; color: transparent;
+  border: 1px solid #6696eb; border-radius: 3px;
+  text-decoration: none; cursor: pointer;
+  background-color: #3e73f5;
+  background-image: linear-gradient(180deg, #5f8cf7 0%, #3a71f5 22%, #3e73f5 55%, #2a70f2 82%, #1045be 100%);
+  transition: filter 60ms ease-out;
+}
+/* "wet plastic" gloss band over the top ~45% (close uses ::after for its X stroke) */
+.title-bar .controls .min::after,
+.title-bar .controls .max::after {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 45%;
+  background: linear-gradient(180deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.12) 70%, rgba(255,255,255,0) 100%);
+  pointer-events: none; border-radius: 2px 2px 5px 5px;
+}
+.title-bar .controls .min:hover, .title-bar .controls .min:focus-visible,
+.title-bar .controls .max:hover, .title-bar .controls .max:focus-visible {
+  border-color: #8fb4ff; background-color: #4fa4ff;
+  background-image: linear-gradient(180deg, #689bff 0%, #468aff 22%, #4fa4ff 55%, #3990fc 82%, #1858c8 100%);
+  outline: none;
+}
+/* CLOSE = red at rest */
+.title-bar .controls .close {
+  border-color: #d8401c; background-color: #e45f3e;
+  background-image: linear-gradient(180deg, #e8795f 0%, #e45f40 30%, #e45d3d 52%, #e2552a 80%, #ae3110 100%);
+}
+.title-bar .controls .close:hover, .title-bar .controls .close:focus-visible {
+  border-color: #ff7a66; background-color: #ff957c;
+  background-image: linear-gradient(180deg, #ff8b7d 0%, #ff7463 26%, #ff957c 55%, #fd7e64 82%, #d34936 100%);
+  box-shadow: 0 0 4px rgba(255,120,96,.7); outline: none;
+}
+.title-bar .controls .min:active,
+.title-bar .controls .max:active,
+.title-bar .controls .close:active { filter: brightness(.9); }
+/* white glyphs drawn with pseudo-elements */
+.title-bar .controls .min::before {
+  content: ""; position: absolute; left: 5px; right: 5px; bottom: 5px; height: 2px;
+  background: #fff; box-shadow: 0 1px 0 rgba(0,0,0,.35);
+}
+.title-bar .controls .max::before {
+  content: ""; position: absolute; left: 5px; top: 5px; width: 11px; height: 9px;
+  box-sizing: border-box; border: 1px solid #fff; border-top-width: 2px;
+  filter: drop-shadow(0 1px 0 rgba(0,0,0,.35));
+}
+.title-bar .controls .close::before,
+.title-bar .controls .close::after {
+  content: ""; position: absolute; left: 50%; top: 50%;
+  width: 13px; height: 2px; margin: -1px 0 0 -6.5px; background: #fff;
+  box-shadow: 0 1px 0 rgba(0,0,0,.35);
+}
+.title-bar .controls .close::before { transform: rotate(45deg); }
+.title-bar .controls .close::after  { transform: rotate(-45deg); }
+/* --- Luna polish: caption text shadow (matches horizon/scroll) --- */
+.title-bar { text-shadow: 1px 1px #0f1089; }
+.content { padding: 12px 16px 18px; }
+h1 { font-family: var(--font-caption); font-size: 14pt; color: oklch(41.92% 0.0962 250.51); margin: 0 0 6px; }
+.lede { color: oklch(38.67% 0 0); font-size: 10.5pt; margin: 0 0 4px; }
+h2 { font-family: var(--font-caption); font-size: 13pt; color: oklch(41.92% 0.0962 250.51); margin: 28px 0 4px; }
+.note { color: oklch(44.95% 0 0); font-size: 10pt; margin: 0 0 14px; }
+.note code, p code, li code { background: oklch(96.72% 0 0); border: 1px solid oklch(88.22% 0 0); padding: 0 4px; font-family: var(--font-mono); font-size: 9.5pt; }
+hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px 0; }
+a { color: oklch(41.92% 0.0962 250.51); }
+ul { margin: 0 0 14px; padding-left: 20px; font-size: 10pt; color: oklch(40% 0 0); }
+li { margin: 3px 0; }
+.status { display: inline-block; font-family: var(--font-mono); font-size: 8.5pt; font-weight: bold; letter-spacing: 0.05em; padding: 1px 6px; border: 1px solid; border-radius: 2px; text-transform: uppercase; vertical-align: middle; }
+.status.idle { color: oklch(45% 0.05 250); border-color: oklch(62% 0.06 250); background: oklch(96% 0.01 250); }
+
+/* demo */
+.dm-controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 10px 0; font-size: 9.5pt; color: oklch(42% 0 0); }
+.dm-controls input[type=range] { flex: 1; min-width: 160px; accent-color: #0855dd; }
+.xp-btn { font-family: var(--font-ui); font-size: 9.5pt; padding: 3px 12px; background: linear-gradient(#fff, #ece9d8); border: 1px solid #707070; border-radius: 3px; box-shadow: inset 1px 1px 0 #fff; cursor: pointer; }
+.xp-btn:active { box-shadow: inset 1px 1px 2px rgba(0,0,0,.3); }
+.measure-wrap { position: relative; border: 1px solid oklch(80% 0.02 250); border-radius: 4px; background: oklch(98% 0.005 250); padding: 0; overflow: hidden; }
+/* the SAME text rendered two ways at the chosen width, for visual A/B + validation */
+.col { padding: 10px 12px; }
+.col h3 { margin: 0 0 6px; font-size: 9.5pt; font-family: var(--font-caption); color: oklch(42% 0.06 250); display: flex; justify-content: space-between; gap: 8px; }
+.col h3 .n { font-family: var(--font-mono); color: oklch(35% 0 0); font-weight: normal; }
+.flow { font-family: var(--font-ui); font-size: 15px; line-height: 22px; color: oklch(22% 0 0); }
+#dom-flow { white-space: normal; overflow-wrap: break-word; }
+#cv-lines div { white-space: pre; overflow: hidden; }
+.ruler { height: 6px; background: repeating-linear-gradient(90deg, oklch(70% 0.04 250) 0 1px, transparent 1px 20px); border-bottom: 1px solid oklch(80% 0.02 250); }
+.race-out { font-family: var(--font-mono); font-size: 9.5pt; background: oklch(96% 0.01 250); border: 1px solid oklch(80% 0.02 250); border-radius: 4px; padding: 10px 12px; margin-top: 8px; color: oklch(25% 0 0); min-height: 1.5em; }
+.race-out b { color: oklch(40% 0.16 150); }
+.callout { font-size: 10pt; background: oklch(97% 0.025 255); border-left: 3px solid oklch(51% 0.225 263); padding: 8px 12px; margin: 14px 0; color: oklch(28% 0.04 255); }
+.verdict { font-size: 10pt; background: oklch(98% 0.02 95); border-left: 3px solid oklch(60% 0.13 75); padding: 8px 12px; margin: 14px 0; color: oklch(32% 0.05 75); }
+.replaces { font-size: 9.5pt; color: oklch(33% 0 0); margin: 8px 0 0; border-left: 3px solid oklch(86% 0.03 250); padding-left: 8px; }
+footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67% 0.0294 259.59); font-size: 9.5pt; color: oklch(45% 0 0); }
+@media (max-width: 560px) { .grid2 { grid-template-columns: 1fr !important; } }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; }
+.grid2 > .col + .col { border-left: 1px solid oklch(85% 0.02 250); }
+/* dynamic-wrap-around-float demo */
+.float-stage { position: relative; border: 1px solid oklch(80% 0.02 250); border-radius: 4px; background: oklch(98% 0.005 250); margin-top: 8px; overflow: hidden; padding: 0; }
+.float-box { position: absolute; top: 8px; left: 8px; z-index: 1; border-radius: 3px; color: #fff; font-size: 9px; line-height: 1.15; font-weight: bold; text-align: center; display: flex; align-items: center; justify-content: center; text-shadow: 0 1px 1px rgba(0,0,0,.4); background: repeating-linear-gradient(45deg, oklch(70% 0.13 255) 0 8px, oklch(60% 0.15 258) 8px 16px); }
+.float-stage canvas { display: block; width: 100%; }
+/* i18n demo line rows */
+.i18n-out .ln { white-space: nowrap; overflow: hidden; font-size: 15px; line-height: 22px; }
+.i18n-out.naive .ln.over { background: oklch(93% 0.07 30); color: oklch(46% 0.19 29); border-radius: 2px; }
+
+  /* OS-window geometry inlined so FIRST PAINT matches nav.js (no shell "pop"
+     when the deferred desktop arrives). keep in sync with nav.js (search
+     "app-shell"); degrades with JS off (.content scrolls natively). */
+  html { height: 100dvh; overflow: hidden; }
+  body { min-height: 0; height: calc(100vh - 30px); height: calc(100dvh - 30px);
+    overflow: hidden; box-sizing: border-box; display: flex; flex-direction: column;
+    align-items: center; padding: 8px; }
+  .window { flex: 0 1 auto; min-height: 0; max-height: 100%; width: 100%;
+    display: flex; flex-direction: column; }
+  .window > .title-bar { flex: 0 0 auto; }
+  .window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 12px !important; }
+  /* client edge — generated by build.mjs from luna.css */
+  .window > .content { border: 6px solid #ece9d8; background-clip: padding-box; outline: 1px solid #7f9db9; outline-offset: -6px; }
+  body::after { content: ""; position: fixed; left: 0; right: 0; bottom: 0; height: 30px;
+    z-index: 1; background: linear-gradient(180deg, oklch(67% 0.15 256) 0%, oklch(58% 0.19 257) 4%,
+    oklch(51% 0.20 258) 9%, oklch(49% 0.20 258) 50%, oklch(46% 0.20 259) 92%, oklch(40% 0.18 260) 100%); }
+
+body { text-wrap: pretty; } /* progressive; older engines ignore it */
+</style>
+<link rel="stylesheet" href="/a/luna.12fe1428.css">
+</head>
+<body>
+<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<div class="window">
+  <div class="title-bar" aria-hidden="true"><span class="title-text"><span class="icon"></span>aadhar.sh/garage/pretext: DOM-free text measurement</span><span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span></div>
+  <div class="content">
+    <h1>pretext: text measurement off the DOM <span class="status idle">watching</span></h1>
+    <p class="lede">
+      <a href="https://github.com/chenglou/pretext" rel="external">chenglou/pretext</a>
+      measures &amp; lays out multiline text using the <strong>canvas</strong> as
+      ground truth instead of the DOM, so you never trigger a reflow just to
+      ask &quot;how tall is this paragraph at 320px?&quot;
+    </p>
+
+    <hr>
+
+    <h2>1 · Why the DOM is the slow path</h2>
+    <p class="note">
+      To measure text the browser-native way, you put it in an element and read
+      <code>offsetHeight</code> / <code>getBoundingClientRect()</code>. But those
+      reads <em>force a synchronous reflow</em>: the browser must lay out
+      the page right then to answer. Do it once and it&apos;s fine; do it in a
+      loop (virtualized lists, measuring hundreds of items, re-measuring on every
+      resize frame) and a reflow becomes one of the costliest things on the main
+      thread. pretext splits the work in two:
+    </p>
+    <ul>
+      <li><strong><code>prepare(text, font)</code></strong>: the one-time
+        cost: normalize whitespace, segment (graphemes, not just chars, since it
+        handles CJK, Arabic, emoji, ZWJ), then measure each segment with canvas
+        <code>measureText</code>. Cache it. Never re-run for the same text+font.</li>
+      <li><strong><code>layout(prepared, width, lineHeight)</code></strong>:
+        the cheap part: <em>pure arithmetic</em> over the cached widths. Re-run
+        it free on every resize tick. No DOM, no reflow.</li>
+    </ul>
+
+    <h2>2 · The technique, live</h2>
+    <p class="note">
+      This runs <strong>the real <a href="https://github.com/chenglou/pretext" rel="external">pretext</a></strong>
+      (v0.0.7, vendored locally; see the closing note on keeping its bytes
+      off every other page). Left: the browser laying the text out and reporting
+      <code>offsetHeight</code> (a reflow). Right: pretext&apos;s <code>layout()</code>
+      over a one-time <code>prepare()</code>, same line count, zero DOM. Drag
+      the width:
+    </p>
+
+    <div class="dm-controls">
+      <label for="width">width <b id="wlabel">320</b>px</label>
+      <input type="range" id="width" min="180" max="620" value="320">
+    </div>
+    <div class="measure-wrap">
+      <div class="ruler"></div>
+      <div class="grid2">
+        <div class="col">
+          <h3><span>DOM: offsetHeight (reflow)</span><span class="n" id="dom-n">–</span></h3>
+          <div class="flow" id="dom-flow"></div>
+        </div>
+        <div class="col">
+          <h3><span>pretext: layout()</span><span class="n" id="cv-n">–</span></h3>
+          <div class="flow" id="cv-lines"></div>
+        </div>
+      </div>
+    </div>
+    <p class="note" style="margin-top:8px" id="agree"></p>
+
+    <h2>3 · Dynamic wrapping: flow around a float</h2>
+    <p class="note">
+      The thing a width-only measure can&apos;t do: text whose available width
+      <em>changes per line</em>. pretext&apos;s <code>layoutNextLine(prepared,
+      cursor, width)</code> lays out one line at a time, so you feed it a narrow
+      width while the line sits beside the floated box and the full width once the
+      text clears it. The result is real shaped wrapping, drawn to a canvas, no DOM. Drag
+      the box bigger and watch the text reflow around it:
+    </p>
+    <div class="dm-controls">
+      <label for="fwidth">float <b id="fwlabel">96</b>px</label>
+      <input type="range" id="fwidth" min="48" max="190" value="96">
+    </div>
+    <div class="float-stage">
+      <div class="float-box" id="float-box">floated<br>object</div>
+      <canvas id="float-canvas"></canvas>
+    </div>
+
+    <h2>4 · International text: why a toy isn&apos;t enough</h2>
+    <p class="note">
+      Here&apos;s the gap a 30-line re-creation falls into. A naïve
+      <code>split(/\s+/)</code> assumes spaces separate words, so CJK (which
+      has none) becomes one giant token that overflows, and scripts it can&apos;t
+      segment get mangled. pretext segments by grapheme via
+      <code>Intl.Segmenter</code> and breaks the same string correctly:
+    </p>
+    <div class="grid2" style="border:1px solid oklch(80% 0.02 250);border-radius:4px;overflow:hidden">
+      <div class="col"><h3>naïve <code>split(/\\s+/)</code></h3><div class="flow i18n-out naive" id="i18n-naive"></div></div>
+      <div class="col"><h3>pretext</h3><div class="flow i18n-out" id="i18n-pretext"></div></div>
+    </div>
+
+    <h2>5 · The payoff: re-layout cost</h2>
+    <p class="note">
+      Same paragraph, re-laid-out at many widths (the resize / virtualization
+      pattern). The DOM path forces a reflow each time; the canvas path just
+      crunches arithmetic over the prepared widths (prepared <em>once</em>, outside the
+      loop). Run it:
+    </p>
+    <p><button class="xp-btn" id="race">Race 2,000 re-layouts</button></p>
+    <div class="race-out" id="race-out">press the button</div>
+
+    <h2>6 · Where it&apos;d actually help aadhar.sh</h2>
+    <ul>
+      <li><strong>Honestly: not much yet.</strong> The site&apos;s text is tiny:
+        a dozen track rows, a 3&times;4 photo grid, one tooltip at a time.
+        A handful of one-off measurements is exactly the case where the DOM is
+        fine. pretext earns its keep at <em>volume</em>, which this homepage
+        doesn&apos;t have.</li>
+      <li><strong>The real candidate is serendipity.</strong> If the event /
+        attendee lists ever get <em>virtualized</em> (only render what&apos;s
+        on-screen), you need accurate row heights without mounting every row.
+        That&apos;s pretext&apos;s home turf.</li>
+      <li><strong>CLS / scroll anchoring:</strong> measure incoming text
+        before it paints to reserve the exact box, instead of <code>aspect-ratio</code>
+        guesses. Niche here, but real.</li>
+      <li><strong>The Fuji-LCD tooltip</strong> could pre-size itself to its
+        recipe text without a measure-then-reposition reflow on hover: a
+        micro-win, probably below the noise floor.</li>
+    </ul>
+
+    <h2>7 · Tradeoffs (why it stays &quot;watching&quot;)</h2>
+    <ul>
+      <li><strong>Fonts must be loaded first.</strong> Measure before the webfont
+        swaps and every number is wrong. (aadhar.sh dodges this: it uses
+        system Tahoma/Verdana, no webfont, which is also why the demo above
+        agrees so closely.)</li>
+      <li><strong>Canvas widths ≠ glyph-exact.</strong> Good enough for line
+        breaking; not a font-rendering engine. <code>system-ui</code> is
+        explicitly unsafe for accuracy on macOS.</li>
+      <li><strong>CSS subset.</strong> Only <code>white-space: normal/pre-wrap</code>,
+        a few break modes, pixel <code>letter-spacing</code>; no
+        <code>font-feature-settings</code> / optical sizing.</li>
+      <li><strong>It&apos;s a JS layout path</strong> that must mirror the
+        browser&apos;s CSS line-breaker. That cuts against this site&apos;s whole
+        &quot;let CSS do layout&quot; ethos: you&apos;re taking on a model
+        that can drift from the real engine.</li>
+      <li><strong>Deps:</strong> <code>Intl.Segmenter</code> + Canvas 2D (both
+        broadly shipped now, incl. Safari).</li>
+    </ul>
+
+    <div class="verdict">
+      <strong>Verdict:</strong> a genuinely clever inversion. Treat the
+      canvas as the measurement oracle and keep re-layout in pure arithmetic. But
+      its win scales with how often you measure, and aadhar.sh measures almost
+      nothing. Filed under <em>watching</em>: the moment a virtualized list shows
+      up (most likely in serendipity), this is the tool to reach for.
+    </div>
+
+    <p class="replaces">
+      <strong>On the dependency:</strong> this page runs the real
+      <a href="https://github.com/chenglou/pretext" rel="external">github.com/chenglou/pretext</a>,
+      bundled to a single 12&nbsp;KB-brotli ES module and <em>vendored same-origin</em>
+      at <code>/garage/pretext.lib.js</code>. Because it&apos;s served from
+      <code>'self'</code>, the existing CSP needs <em>no change</em>, so
+      pretext&apos;s bytes load only when you open this page and never touch the
+      homepage or any other page. The only other demo here that&apos;s mine is the
+      naïve <code>split(/\\s+/)</code> wrapper in section 4, kept deliberately bad
+      to show the gap.
+    </p>
+
+    <footer>
+      <p>&larr; back to the <a href="/garage">garage</a> &middot; <a href="/">aadhar.sh</a></p>
+      <p><small>real @chenglou/pretext, vendored same-origin (this page only) · the naïve split() comparison is mine</small></p>
+    </footer>
+    <hr>
+    <section id="luq" aria-label="understanding check"></section>
+  </div>
+</div>
+
+<script type="module">
+// The real @chenglou/pretext (v0.0.7), vendored same-origin at ./pretext.lib.js
+// (dynamic import in a try/catch so a load failure degrades gracefully, and so
+// its bytes never touch any other page). Needs Intl.Segmenter + Canvas 2D.
+(async () => {
+  const FONT = '15px Tahoma, Verdana, Geneva, sans-serif';
+  const LINE_H = 22;
+  const setNote = (id, msg) => { const e = document.getElementById(id); if (e) e.textContent = msg; };
+  const esc = (s) => s.replace(/[&<]/g, c => c === "&" ? "&amp;" : "&lt;");
+
+  if (!("Segmenter" in Intl)) { setNote("agree", "Intl.Segmenter isn't available in this browser, so pretext can't run here."); return; }
+  let PT;
+  try { PT = await import("./pretext.lib.js"); }
+  catch (e) { setNote("agree", "pretext failed to load (" + e + ")."); return; }
+  try { await document.fonts.ready; } catch {}
+  const { prepare, prepareWithSegments, layout, layoutWithLines, layoutNextLine } = PT;
+
+  // ── demo 1: height / line-count vs the DOM ──
+  const SAMPLE = "A resto-mod keeps the soul and swaps the guts. The browser lays this paragraph out and reports offsetHeight (a reflow); pretext measures it on a canvas and the line breaks fall out of arithmetic, with no DOM and no layout flushed.";
+  const slider = document.getElementById("width"), wlabel = document.getElementById("wlabel");
+  const domFlow = document.getElementById("dom-flow"), cvLines = document.getElementById("cv-lines");
+  const domN = document.getElementById("dom-n"), cvN = document.getElementById("cv-n"), agree = document.getElementById("agree");
+  domFlow.textContent = SAMPLE;
+  const prep = prepare(SAMPLE, FONT), prepSeg = prepareWithSegments(SAMPLE, FONT);
+
+  function render1() {
+    const width = +slider.value; wlabel.textContent = width;
+    domFlow.style.width = width + "px";
+    const domH = domFlow.offsetHeight, domLines = Math.round(domH / LINE_H);
+    domN.textContent = domLines + " lines · " + domH + "px";
+    const r = layout(prep, width, LINE_H);              // {lineCount, height}, no DOM
+    cvN.textContent = r.lineCount + " lines · " + r.height + "px";
+    const lr = layoutWithLines(prepSeg, width, LINE_H);
+    cvLines.style.width = width + "px"; cvLines.innerHTML = "";
+    lr.lines.forEach(l => { const d = document.createElement("div"); d.style.height = LINE_H + "px"; d.textContent = l.text; cvLines.appendChild(d); });
+    const dl = Math.abs(domLines - r.lineCount);
+    agree.innerHTML = dl === 0
+      ? "&#10003; pretext and the browser agree: <b>" + r.lineCount + " lines</b>, measured with zero reflow."
+      : "&approx; off by " + dl + " line(s) here (sub-pixel canvas rounding, the honest caveat).";
+    agree.style.color = dl === 0 ? "oklch(40% 0.14 150)" : "oklch(50% 0.14 60)";
+  }
+  slider.addEventListener("input", render1); render1();
+
+  // ── demo 2: race, re-layout many times (resize / virtualization pattern) ──
+  document.getElementById("race").addEventListener("click", () => {
+    const out = document.getElementById("race-out"), N = 2000; let i, sink = 0;
+    let t0 = performance.now();
+    for (i = 0; i < N; i++) { domFlow.style.width = (220 + (i * 7) % 360) + "px"; sink += domFlow.offsetHeight; }
+    const domMs = performance.now() - t0;
+    let t1 = performance.now();
+    for (i = 0; i < N; i++) { sink += layout(prep, 220 + (i * 7) % 360, LINE_H).lineCount; }
+    const ptMs = performance.now() - t1;
+    render1();
+    out.innerHTML = "DOM reflow: " + domMs.toFixed(1) + " ms &nbsp;·&nbsp; pretext layout(): " + ptMs.toFixed(1) +
+      " ms &nbsp;·&nbsp; <b>" + (ptMs > 0 ? (domMs / ptMs).toFixed(0) : "∞") + "× faster</b> &nbsp;(" + N + " re-layouts)";
+  });
+
+  // ── demo 3: dynamic wrap, flow around a floated box (variable width per line) ──
+  const FSAMPLE = "Pretext lays out one line at a time via layoutNextLine, so the available width can change per line. The first lines wrap beside the floated box at a narrower width; once the text clears it, they reclaim the full width below: shaped wrapping with no DOM, recomputed live as you resize the float.";
+  const fcanvas = document.getElementById("float-canvas"), fbox = document.getElementById("float-box");
+  const fslider = document.getElementById("fwidth"), fwlabel = document.getElementById("fwlabel");
+  const fctx = fcanvas.getContext("2d"), fprep = prepareWithSegments(FSAMPLE, FONT);
+  const STAGE_H = 156, GAP = 10, FLH = 20, PAD = 8;
+  function renderFloat() {
+    const imgPx = +fslider.value; fwlabel.textContent = imgPx;
+    const stageW = fcanvas.parentElement.clientWidth;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    fcanvas.style.height = STAGE_H + "px"; fcanvas.width = Math.round(stageW * dpr); fcanvas.height = Math.round(STAGE_H * dpr);
+    fctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    fctx.clearRect(0, 0, stageW, STAGE_H);
+    fctx.font = FONT; fctx.fillStyle = "#1a1a1a"; fctx.textBaseline = "alphabetic";
+    fbox.style.width = imgPx + "px"; fbox.style.height = imgPx + "px";
+    const floatBottom = PAD + imgPx, innerW = stageW - PAD * 2;
+    let cursor = { segmentIndex: 0, graphemeIndex: 0 }, y = PAD, guard = 0;
+    while (y < STAGE_H - 4 && guard++ < 100) {
+      const beside = y < floatBottom;
+      const x = beside ? PAD + imgPx + GAP : PAD;
+      const w = beside ? innerW - imgPx - GAP : innerW;
+      if (w < 24) { y += FLH; continue; }
+      const line = layoutNextLine(fprep, cursor, w);
+      if (!line) break;
+      fctx.fillText(line.text, x, y + 15);
+      cursor = line.end; y += FLH;
+    }
+  }
+  fslider.addEventListener("input", renderFloat); renderFloat();
+  window.addEventListener("resize", renderFloat);
+
+  // ── demo 4: international text, naïve split(/\s+/) vs pretext segmentation ──
+  const I18N = "AGI 春天到了，万物复苏，处处生机盎然。بدأت الرحلة 🚀 done.";
+  const W18 = 220;
+  const mcx = document.createElement("canvas").getContext("2d"); mcx.font = FONT;
+  function naiveLines(text, maxW) {                       // the 30-line toy: assumes spaces split words
+    const words = text.split(/\s+/).filter(Boolean), lines = []; const sp = mcx.measureText(" ").width;
+    let cur = "", curW = 0;
+    for (const wd of words) {
+      const ww = mcx.measureText(wd).width;
+      if (cur && curW + sp + ww > maxW) { lines.push(cur); cur = wd; curW = ww; }
+      else if (cur) { cur += " " + wd; curW += sp + ww; } else { cur = wd; curW = ww; }
+    }
+    if (cur) lines.push(cur);
+    return lines.map(t => ({ text: t, over: mcx.measureText(t).width > maxW }));
+  }
+  const naiveEl = document.getElementById("i18n-naive"), ptEl = document.getElementById("i18n-pretext");
+  if (naiveEl && ptEl) {
+    naiveEl.innerHTML = naiveLines(I18N, W18).map(l => `<div class="ln${l.over ? " over" : ""}">${esc(l.text)}</div>`).join("");
+    const lr = layoutWithLines(prepareWithSegments(I18N, FONT), W18, LINE_H);
+    ptEl.innerHTML = lr.lines.map(l => `<div class="ln">${esc(l.text)}</div>`).join("");
+  }
+})();
+</script>
+
+<script type="speculationrules">
+{
+  "prerender": [
+    { "where": { "and": [ { "href_matches": "/*" }, { "not": { "href_matches": "/whoareyou*" } } ] }, "eagerness": "moderate" }
+  ]
+}
+</script>
+<script type="application/json" id="luq-data">
+{
+  "skin": "garage",
+  "questions": [
+    {
+      "q": "Why does reading offsetHeight inside a loop get expensive?",
+      "options": [
+        {
+          "t": "Each read forces a synchronous reflow: the browser has to lay the page out right then to answer",
+          "ok": true,
+          "why": "That's the whole motivation in section 1. One read is fine; hundreds per resize frame put full layout passes on the main thread."
+        },
+        {
+          "t": "Crossing from JS into the browser's native code is slow, and each property read pays that toll",
+          "why": "The JS-to-native hop is cheap. The cost is the layout work the browser must flush before it can answer; section 1 names the read as the trigger."
+        },
+        {
+          "t": "offsetHeight returns a stale cached value, so you also have to force a repaint to refresh it",
+          "why": "The browser guarantees a fresh value, and that guarantee is exactly the cost: it flushes layout synchronously so the number is current."
+        },
+        {
+          "t": "The browser reflows only when the text content itself changed, so loops over static text are safe",
+          "why": "Any layout invalidation counts: the race in section 5 only changes width, then reads, and still pays a reflow all 2,000 times."
+        }
+      ]
+    },
+    {
+      "q": "pretext splits the work into prepare() and layout(). What does that split buy?",
+      "options": [
+        {
+          "t": "prepare() measures once per text and font; layout() is pure arithmetic over cached widths, so a new width is nearly free",
+          "ok": true,
+          "why": "Right: that's why dragging the width slider re-runs layout() every tick without touching the DOM or measureText again."
+        },
+        {
+          "t": "prepare() draws the text to an offscreen bitmap, and layout() just crops that bitmap to the target width",
+          "why": "Nothing gets drawn during measurement. The canvas is a measuring oracle via measureText; the numbers it returns feed layout()'s arithmetic."
+        },
+        {
+          "t": "layout() still calls measureText each run, but a hidden canvas measures faster than a DOM element does",
+          "why": "layout() measures nothing, which is the point of section 1's split: every measureText call happens in prepare(), once, outside the loop."
+        },
+        {
+          "t": "prepare() re-runs whenever the target width changes, but it caches per width so repeats stay cheap",
+          "why": "Width is an argument to layout(); prepare() depends only on text and font. The demo prepares once and re-lays-out at every slider position."
+        }
+      ]
+    },
+    {
+      "q": "In the float demo, what does layoutNextLine() enable that a plain layout(prepared, width) call can't?",
+      "options": [
+        {
+          "t": "Laying out one line at a time, so the available width can change per line: narrow beside the float, full width below it",
+          "ok": true,
+          "why": "Exactly what section 3 shows: you feed each line its own width, and shaped wrapping around the box falls out of the loop."
+        },
+        {
+          "t": "It skips laying out the lines that fall off-screen, which is what keeps the demo fast while you drag",
+          "why": "Skipping off-screen rows is virtualization, a different trick. Section 3's point is text whose available width changes per line."
+        },
+        {
+          "t": "It lets the browser's CSS float logic do the wrapping while pretext just paints the finished result",
+          "why": "The demo draws to a canvas with no DOM text at all. The wrap comes from handing layoutNextLine a narrower width while a line sits beside the box."
+        },
+        {
+          "t": "It measures the floated box itself, so the text knows how much room the box is taking up",
+          "why": "The box size is an input (the slider sets it). layoutNextLine only consumes the per-line width you compute from that, line by line."
+        }
+      ]
+    },
+    {
+      "q": "Section 4 wraps the same mixed CJK, Arabic, and emoji string two ways. Why does the naive split(/\\s+/) version break?",
+      "options": [
+        {
+          "t": "It assumes spaces separate words, so CJK text with no spaces becomes one giant token that overflows the line",
+          "ok": true,
+          "why": "That's the gap a 30-line toy falls into. pretext segments graphemes with Intl.Segmenter, so it finds break points the regex never sees."
+        },
+        {
+          "t": "Canvas measureText can't return widths for CJK glyphs, so the naive version has nothing to work with",
+          "why": "measureText measures any string fine; both columns use it. The toy fails at finding places to break, which is a segmentation problem."
+        },
+        {
+          "t": "CJK glyphs are taller, so the naive version only gets the line height wrong while the break positions match",
+          "why": "Scroll back to the demo: the naive column's overflowing line is highlighted red. The break positions are the failure, at the same line height."
+        },
+        {
+          "t": "pretext handles it by breaking non-Latin text after every character, a fallback the naive version skips",
+          "why": "It segments by grapheme via Intl.Segmenter, which also keeps emoji and ZWJ clusters intact. A blind per-character break would mangle those."
+        }
+      ]
+    },
+    {
+      "q": "Why is pretext filed under \"watching\" for this site instead of being put to work today?",
+      "options": [
+        {
+          "t": "Its win scales with measurement volume, and this site measures almost nothing; a virtualized list is when it earns its keep",
+          "ok": true,
+          "why": "That's the verdict: a handful of one-off measurements is exactly the case where the DOM is fine. Volume changes the math, and serendipity is the likely trigger."
+        },
+        {
+          "t": "The CSP would need loosening before the vendored library could be allowed to load on this page",
+          "why": "The closing note covers this: it's vendored same-origin at /garage/pretext.lib.js, so the existing 'self' policy already allows it."
+        },
+        {
+          "t": "The site's system font stack makes canvas-based measurement too unreliable to trust here",
+          "why": "Backwards: system Tahoma/Verdana means no webfont swap to mis-measure against, which section 7 credits for how closely the demo agrees."
+        },
+        {
+          "t": "Canvas widths are too imprecise for line breaking to ever agree with the browser's layout",
+          "why": "Section 7 calls them good enough for line breaking. The real hesitations are the CSS subset, drift risk from mirroring the browser's line-breaker in JS, and the tiny measurement volume."
+        }
+      ]
+    }
+  ]
+}
+</script>
+<script src="/a/quiz.1d162bed.js" defer></script>
+  <script src="/a/nav.f1317f11.js" defer></script>
+<!-- axp:shell --><nav id="axp-icons" aria-label="desktop shortcuts"><a class="axp-ico" title="writing, in flux" href="/writing" data-key="Notepad" style="left:9px;top:9px"><span class="ic note" aria-hidden="true"></span><span class="t">Notepad</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="GitHub (opens in a new tab)" href="https://github.com/oddharsh" data-key="GitHub" style="left:9px;top:95px"><span class="ic " style="background:linear-gradient(180deg,oklch(72% 0.05 255),oklch(60% 0.07 257))" aria-hidden="true">G</span><span class="t">GitHub</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Twitter (opens in a new tab)" href="https://x.com/oddhash" data-key="Twitter" style="left:9px;top:181px"><span class="ic " style="background:linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))" aria-hidden="true">@</span><span class="t">Twitter</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Instagram (opens in a new tab)" href="https://www.instagram.com/aadharsh.hif" data-key="Photos" style="left:9px;top:267px"><span class="ic " style="background:linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))" aria-hidden="true"><i class="cam" aria-hidden="true"></i></span><span class="t">Photos</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Curius (opens in a new tab)" href="https://curius.app/aadharsh-pannirselvam" data-key="Curius" style="left:9px;top:353px"><span class="ic " style="background:linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))" aria-hidden="true">C</span><span class="t">Curius</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Beli (opens in a new tab)" href="https://beliapp.com/users/aadharsh" data-key="Beli" style="left:9px;top:439px"><span class="ic " style="background:linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))" aria-hidden="true">B</span><span class="t">Beli</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Spotify (opens in a new tab)" href="https://open.spotify.com/user/aadharsh2010" data-key="Music" style="left:9px;top:525px"><span class="ic " style="background:linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))" aria-hidden="true">♪</span><span class="t">Music</span></a></nav><div id="axp-taskbar" role="navigation" aria-label="taskbar"><a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a><div id="axp-pins"><a class="axp-pin" title="prototypes + experiments" href="/garage"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-garage" alt=""></span><span class="lbl">garage</span></a><a class="axp-pin" title="chat-style explainers + live demos" href="/lwe"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-lwe" alt=""></span><span class="lbl">lwe</span></a><a class="axp-pin" title="notes, in flux: an editable notepad" href="/writing"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-writing" alt=""></span><span class="lbl">writing</span></a><a class="axp-pin" title="what I've been reading, from Curius" href="/reading"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-reading" alt=""></span><span class="lbl">reading</span></a><a class="axp-pin" title="events worth going to" href="/serendipity"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-serendipity" alt=""></span><span class="lbl">serendipity</span></a><a class="axp-pin" title="the crypto-VC neighborhood" href="/around"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-around" alt=""></span><span class="lbl">around</span></a><a class="axp-pin" title="the other web: how machines read a URL" href="/lens"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-lens" alt=""></span><span class="lbl">lens</span></a><a class="axp-pin" title="a compression vision test — whose eye do you have?" href="/pixel-peeper"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-pixel-peeper" alt=""></span><span class="lbl">pixel peeper</span></a><a class="axp-pin" title="what I'm listening to right now" href="/rn"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-music" alt=""></span><span class="lbl">music</span></a><a class="axp-pin" title="book a coffee / bagel" href="/coffee"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-coffee" alt=""></span><span class="lbl">coffee</span></a></div><div id="axp-spacer"></div><div id="axp-tray"><button id="axp-sound" type="button" hidden></button><a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><img src="/a/icons.74f459d9.svg#tray-sysprop" alt=""></a><a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><img src="/a/icons.74f459d9.svg#tray-security" alt=""></a><a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><img src="/a/icons.74f459d9.svg#tray-updates" alt=""></a><span id="axp-clock" aria-hidden="true"></span></div></div><!-- /axp:shell -->
+</body>
+</html>

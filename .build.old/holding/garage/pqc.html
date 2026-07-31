@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#2D78BD">
+<link rel="preload" as="style" href="/a/luna.12fe1428.css">
+<title>aadhar.sh/garage/pqc: Post-quantum signatures, priced</title>
+<meta name="description" content="This site&#39;s TLS key agreement is already post-quantum and its signatures are not. Measuring what ML-DSA-44 and the hash-based alternatives actually cost on the one signature a personal site controls: its own crawler&#39;s RFC 9421 request signing.">
+<link rel="canonical" href="https://aadhar.sh/garage/pqc">
+<meta property="og:type" content="article">
+<meta property="og:title" content="aadhar.sh/garage/pqc: Post-quantum signatures, priced">
+<meta property="og:description" content="This site&#39;s TLS key agreement is already post-quantum and its signatures are not. Measuring what ML-DSA-44 and the hash-based alternatives actually cost on the one signature a personal site controls: its own crawler&#39;s RFC 9421 request signing.">
+<meta property="og:url" content="https://aadhar.sh/garage/pqc">
+<meta name="twitter:card" content="summary_large_image">
+<meta property="og:image" content="https://aadhar.sh/og/garage-pqc.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The aadhar.sh/garage/pqc interactive demo, screenshotted">
+<meta name="twitter:image" content="https://aadhar.sh/og/garage-pqc.png">
+<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}html{background:linear-gradient(180deg,oklch(56% .13 250),oklch(73% .10 236) 50%,oklch(88% .05 232) 60%,oklch(60% .16 140))}
+body{background:transparent;font-family:var(--font-ui);font-size:10.5pt;line-height:1.5;color:#181818;padding:24px 12px 60px;min-height:100vh}
+.window{max-width:820px;margin:0 auto;background:#fff;border:2px solid #0831d9;border-right-color:#001ea0;border-bottom-color:#001ea0;border-radius:8px 8px 0 0;overflow:hidden;box-shadow:inset 1px 1px 0 #166aee,inset -1px -1px 0 #00138c,4px 4px 0 rgba(0,30,160,.35)}
+.title-bar{background:linear-gradient(180deg,oklch(70% .15 258),oklch(60% .20 261) 8%,oklch(51% .225 263) 18%,oklch(50% .225 263) 86%,oklch(58% .18 260));color:#fff;font-family:var(--font-caption);font-weight:bold;font-size:11pt;padding:4px 5px 4px 8px;display:flex;align-items:center;gap:6px;text-shadow:1px 1px #0f1089;user-select:none}
+.title-bar .title-text{flex:1;min-width:0;display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.title-bar .icon{width:14px;height:14px;flex:0 0 14px;background:#fff;border:1px solid #8f4d06;position:relative}.title-bar .icon:before{content:"✦";position:absolute;inset:0;display:grid;place-items:center;font-size:10px;color:#ef8f24;text-shadow:none}
+.controls{display:inline-flex;align-items:center;gap:2px}.controls span,.controls a{position:relative;box-sizing:border-box;width:21px;height:21px;display:inline-block;overflow:hidden;font-size:0;color:transparent;border:1px solid #6696eb;border-radius:3px;text-decoration:none;cursor:pointer;background:linear-gradient(180deg,#5f8cf7,#3a71f5 22%,#3e73f5 55%,#2a70f2 82%,#1045be)}.controls .close{border-color:#d8401c;background:linear-gradient(180deg,#e8795f,#e45f40 30%,#e45d3d 52%,#e2552a 80%,#ae3110)}.controls .min:before{content:"";position:absolute;left:5px;right:5px;bottom:5px;height:2px;background:#fff}.controls .max:before{content:"";position:absolute;left:5px;top:5px;width:11px;height:9px;border:1px solid #fff;border-top-width:2px}.controls .close:before,.controls .close:after{content:"";position:absolute;left:50%;top:50%;width:13px;height:2px;margin:-1px 0 0 -6.5px;background:#fff}.controls .close:before{transform:rotate(45deg)}.controls .close:after{transform:rotate(-45deg)}
+.content{padding:18px 20px 8px;background:#fffdf6;border-top:1px solid #8d9bb0}.content h1,.content h2,.content h3{font-family:var(--font-caption);color:#0831d9;line-height:1.25}.content h1{font-size:18pt;margin:0 0 7px}.content h2{font-size:13pt;margin:18px 0 5px}.content h3{font-size:11pt;margin:13px 0 4px}.content p{margin:0 0 12px}.content a{color:#153eab}.content code,.content pre{font-family:var(--font-mono)}
+.garage-intro{font-size:11pt;color:#444;max-width:70ch}.garage-meta{font-size:8.5pt;color:#69758a;border-top:1px solid #d8dfeb;margin-top:18px;padding-top:6px}.status{border-top:1px solid #d1d9e4;background:#f1f4f8;padding:4px 10px;display:flex;gap:8px;flex-wrap:wrap;font-size:8.5pt;color:#586579}.status span:after{content:"·";margin-left:8px;color:#9ca8b8}.status span:last-child:after{content:""}
+@media(max-width:620px){body{padding:8px 5px 42px}.content{padding:14px 12px 6px}.window{border-radius:5px 5px 0 0}}
+
+.pqc-tiers{border-collapse:collapse;width:100%;margin:0 0 14px;font-size:9.5pt}
+.pqc-tiers th{text-align:left;background:#eaf0f9;border:1px solid #c3ceE0;padding:4px 7px;font-family:var(--font-caption)}
+.pqc-tiers td{border:1px solid #d8dfeb;padding:4px 7px;vertical-align:top}
+.pqc-tiers tr.mine td{background:#fffbe8}
+.pqc-demo,.pqc-live{border:1px solid #99a8bd;background:#f3f6fa;box-shadow:inset 1px 1px 0 #fff;margin:0 0 14px}
+.pqc-demo-head,.pqc-live-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;background:linear-gradient(180deg,#eaf0f9,#dbe4f1);border-bottom:1px solid #b6c2d4;padding:5px 9px;font-family:var(--font-caption);font-weight:bold;font-size:9.5pt;color:#20406e}
+.pqc-toggle button{font:inherit;font-size:8.5pt;font-weight:normal;font-family:var(--font-ui);padding:2px 8px;cursor:pointer;background:linear-gradient(180deg,#fff,#e4e9f2);border:1px solid #8c9ab0;border-radius:3px;color:#243}
+.pqc-toggle button.on{background:linear-gradient(180deg,#cddcf2,#aec4e6);border-color:#5a7398;box-shadow:inset 1px 1px 2px rgba(0,0,0,.18)}
+.pqc-bars{list-style:none;margin:0;padding:10px 12px 4px}
+.pqc-bars li{display:grid;grid-template-columns:8.5em 1fr auto;align-items:center;gap:8px;margin:0 0 7px;font-size:9pt}
+.pqc-bars .n{font-family:var(--font-mono);color:#33455f;white-space:nowrap}
+.pqc-bars .t{height:15px;background:linear-gradient(180deg,#7fb0e8,#3f7fd0);border:1px solid #2f5f9e;min-width:2px;transition:width .28s ease}
+.pqc-bars li.now .t{background:linear-gradient(180deg,#8fd98f,#3ea23e);border-color:#2c7a2c}
+.pqc-bars li.native .t{background:linear-gradient(180deg,#e6b45c,#c8880f);border-color:#9a6a08}
+.pqc-native{border-top:1px solid #ccd6e4;padding:8px 12px;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.pqc-native-note{font-size:8.5pt;color:#5b6879;flex:1;min-width:14em}
+.pqc-run{font:inherit;font-size:8.5pt;font-family:var(--font-ui);padding:3px 11px;cursor:pointer;background:linear-gradient(180deg,#fff,#e4e9f2);border:1px solid #8c9ab0;border-radius:3px}
+.pqc-run:disabled{color:#8b96a6;cursor:default}
+.pqc-bars .v{font-family:var(--font-mono);font-size:8.5pt;color:#4a5870;white-space:nowrap}
+.pqc-read{margin:0;padding:2px 12px 10px;font-size:8.5pt;color:#5b6879}
+.pqc-live-body{padding:8px 10px;font-family:var(--font-mono);font-size:8.5pt;color:#33455f;word-break:break-all;line-height:1.6}
+.pqc-live-body b{font-family:var(--font-ui)}
+.pqc-falsify{border-left:3px solid #c9a227;background:#fffbe8;padding:8px 10px;margin:14px 0 0}
+@media(max-width:620px){.pqc-bars li{grid-template-columns:7em 1fr;row-gap:2px}.pqc-bars .v{grid-column:2}}
+</style>
+<link rel="stylesheet" href="/a/luna.12fe1428.css">
+</head>
+<body>
+<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<div class="window">
+  <div class="title-bar" aria-hidden="true">
+    <span class="title-text"><span class="icon"></span>aadhar.sh/garage/pqc</span>
+    <span class="controls"><span class="min"></span><span class="max"></span><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
+  </div>
+  <div class="content">
+<h1>Post-quantum signatures, priced</h1>
+<p class="garage-intro">Half of this site's TLS handshake is already post-quantum and I did nothing to make that happen. The other half, authentication, moves on a completely different schedule, because signatures live in certificates and registries that a personal site does not control. So I went looking for the signature I <em>do</em> control, and measured what it would cost to migrate it.</p>
+
+<h2>What is already done, and what it covers</h2>
+<p>Ask the live site what it negotiated:</p>
+<pre><code>$ openssl s_client -connect aadhar.sh:443 -groups X25519MLKEM768 -tls1_3
+
+Negotiated TLS1.3 group: X25519MLKEM768
+Peer signature type:     ecdsa_secp256r1_sha256
+Certificate:             ecdsa-with-SHA256, P-256</code></pre>
+<p>The key agreement is post-quantum. The certificate and the handshake signature are classical, and they will stay that way for a while: no public CA issues ML-DSA certificates into the WebPKI, and Cloudflare's own position is that ML-DSA chains add roughly 14KB per handshake, which is why they are pushing <a href="https://blog.cloudflare.com/ml-dsa-will-have-to-do/" target="_blank" rel="noopener">Merkle Tree Certificates</a> instead.</p>
+<p>That split matters more than it looks. Key agreement is where <strong>harvest now, decrypt later</strong> bites: an attacker recording today's ciphertext can decrypt it whenever a quantum computer arrives, so the migration had to happen years early. A signature has no such property. Forging a 2026 signature in 2035 proves nothing about 2026, because by then the request is long over and nobody is still trusting it. The urgency argument for key agreement simply does not transfer.</p>
+
+<h2>Three tiers of signature, and only one is mine</h2>
+<table class="pqc-tiers">
+  <tr><th>Surface</th><th>Algorithm</th><th>Whose problem</th></tr>
+  <tr><td>TLS to visitors</td><td>ECDSA P-256</td><td>The CA and browser ecosystem</td></tr>
+  <tr><td>DNSSEC on the zone</td><td>ECDSA P-256 SHA-256</td><td>The registry, plus DNS response sizes</td></tr>
+  <tr><td>Booking links, cover URLs</td><td>HMAC-SHA256</td><td>Already fine. Symmetric, so Grover halves it to 128-bit</td></tr>
+  <tr class="mine"><td>AadharshBot request signing</td><td>Ed25519</td><td><strong>Mine.</strong> About 30 lines in one file</td></tr>
+</table>
+<p><a href="/bot">AadharshBot</a> signs every outbound request per <a href="https://www.rfc-editor.org/rfc/rfc9421" target="_blank" rel="noopener">RFC 9421</a> using the Web Bot Auth profile, so receiving sites can check that a request really came from here. That signature is the only asymmetric one this site owns end to end. The whole post-quantum question collapses to it.</p>
+
+<h2>What the candidates actually cost</h2>
+<p>Cloudflare's runtime has no post-quantum algorithm in WebCrypto. I checked the shipping binary rather than the docs: <code>workerd</code> 1.20260722 contains the strings <code>Ed25519</code>, <code>X25519</code>, and <code>ECDSA</code>, and no <code>ML-DSA</code> at any parameter size. So this is pure JavaScript, via <a href="https://github.com/paulmillr/noble-post-quantum" target="_blank" rel="noopener">@noble/post-quantum</a>, signing the site's real signature base on an M3 Max under Node 26.</p>
+<div class="pqc-demo" id="pqc-demo">
+  <div class="pqc-demo-head">
+    <span class="pqc-demo-title">Cost of one signature</span>
+    <span class="pqc-toggle" role="group" aria-label="which cost to show">
+      <button type="button" data-metric="bytes" class="on">header bytes</button>
+      <button type="button" data-metric="sign">time to sign</button>
+    </span>
+  </div>
+  <ol class="pqc-bars"></ol>
+  <p class="pqc-read"></p>
+  <div class="pqc-native" hidden></div>
+</div>
+<p>Flip the toggle before you read on and predict where each bar lands. The point of the exercise is that the ordering <em>changes</em>. SLH-DSA-128s has the smallest public key of anything here at 32 bytes, and it takes two and a half seconds to produce one signature. Its sibling 128f signs in 132ms and spends 22KB of header doing it. There is no row that is small on both axes, which is the actual state of post-quantum signatures rather than a quirk of this library.</p>
+
+<h3>How much of that 8.58ms is the algorithm?</h3>
+<p>Less than it looks, and the panel above will prove it on your own hardware if it can. Chrome ships ML-DSA in WebCrypto behind <code>chrome://flags/#webcrypto-pqc</code>, implementing the same <a href="https://wicg.github.io/webcrypto-modern-algos/" target="_blank" rel="noopener">WICG proposal</a> whose JWK shape this site already publishes. If that flag is on, the panel offers a button that generates an ML-DSA-44 key in your browser, signs this page's signature base 200 times natively, and drops the result in as a fifth bar next to the JavaScript number.</p>
+<p>This matters for how you read the whole table. The 8.58ms is a <em>ceiling</em> set by running a lattice scheme in a JIT, and the byte counts underneath it are properties of FIPS 204 that no implementation will improve. Sizes are the permanent cost. Speed is the temporary one, and it goes away on its own when the runtimes catch up.</p>
+
+<h2>Why the hash-based options lost</h2>
+<p>I wanted SLH-DSA to work. It rests on hash functions alone, so it survives even if lattices turn out to be broken, and its 32-byte public key is charming. It fails here twice over.</p>
+<p>The header is the harder failure. A 128f signature is 22,784 bytes once base64'd into a structured-fields value, and most servers cap total request headers around 8KB, so the crawl would start collecting 431s instead of pages. The latency is the other one: 2.5 seconds of single-threaded work per signature is not something to put in front of an HTTP request, and a Worker bills CPU time.</p>
+<p>Stateful hash-based signatures (LMS, XMSS) fix the size problem and introduce a worse one. Reusing a one-time index is total key compromise, and a Worker isolate is close to the worst place to keep a monotonic counter. I would need a Durable Object doing nothing but handing out indices, and a single replay would end the key. ML-DSA-44 is the only candidate that survives contact with the constraints.</p>
+
+<h2>Shipping it without a codepoint</h2>
+<p>Here is the part that made this cheap. The <a href="https://www.iana.org/assignments/http-message-signature/http-message-signature.xhtml" target="_blank" rel="noopener">IANA HTTP Signature Algorithms registry</a> has exactly six entries, and every one of them is classical. Cloudflare's Web Bot Auth verifier accepts Ed25519 only and ignores other key types in your directory. An ML-DSA-only signature would be a header nobody on the internet checks.</p>
+<p>But <code>Signature-Input</code> and <code>Signature</code> are structured-fields <em>Dictionaries</em>. A second label appends rather than replaces, so both signatures ride the same request over the same covered components:</p>
+<pre><code>Signature-Input: sig1=("@authority" "signature-agent");created=1785186311;
+                   keyid="rn-2026-06-30";alg="ed25519";tag="web-bot-auth",
+                 sig2=("@authority" "signature-agent");created=1785186311;
+                   keyid="rn-mldsa-2026-07-27";alg="ml-dsa-44";tag="web-bot-auth"</code></pre>
+<p>A verifier that only knows Ed25519 reads <code>sig1</code> and skips the label it does not recognise. Nothing breaks, and the cost of ignoring <code>sig2</code> is zero. That property is what makes it defensible to ship an algorithm the registry has not blessed. The token <code>ml-dsa-44</code> is this site's spelling, chosen to match the registry's existing convention so it slots in if a real registration lands, and <a href="/bot">/bot</a> says plainly that you should verify <code>sig1</code> and ignore <code>sig2</code>.</p>
+<p>The public key is published under the same JWKS as an <code>AKP</code> key per <a href="https://www.rfc-editor.org/rfc/rfc9964.html" target="_blank" rel="noopener">RFC 9964</a>, which standardised ML-DSA for JOSE and COSE in May 2026. So the key format is a real standard even though the wire token is not:</p>
+<div class="pqc-live" id="pqc-live">
+  <div class="pqc-live-head">Live, from this site's key directory</div>
+  <div class="pqc-live-body">reading /.well-known/http-message-signatures-directory&hellip;</div>
+</div>
+
+<h2>What it costs in production</h2>
+<p>About 8.6ms of CPU and 3,228 bytes of request header per signed fetch, plus 11.96KB gzip of lattice code in the Worker bundle, which is the price of carrying an implementation the runtime should be providing. Zero bytes reach a browser, because this is a server-to-server signature and no page loads it. The <a href="/around">/around</a> crawl signs roughly 21 origins per refresh, so a full cycle gains around 180ms of CPU on a cached background path.</p>
+<p>Two of those three costs are temporary. When <code>workerd</code> gains native ML-DSA, the bundle cost goes to zero and the signing cost drops to whatever the native bar in the panel above showed you. The 3,228 bytes of header stay forever. That asymmetry is the argument for migrating on the size budget now and letting the speed sort itself out.</p>
+<p>One implementation detail worth stealing: ML-DSA-44 keygen expands a 32-byte seed into a 2,560-byte secret key and costs about 1.4ms. Worker isolates outlive a request, so the expanded key is derived once and cached in module scope, keyed by the raw secret so a rotation inside a live isolate re-derives instead of signing with a retired key.</p>
+
+<h2>The objection I think is right</h2>
+<p>The strongest reading of this page is that it is theatre. Nothing verifies <code>sig2</code>. Signatures have no harvest-now-decrypt-later exposure, so there is no clock forcing the migration. By that argument the honest move was to write the analysis and ship nothing.</p>
+<p>I mostly agree, and it is why <code>sig2</code> is second rather than first, why a missing key degrades to Ed25519 alone instead of failing the request, and why <a href="/bot">/bot</a> tells verifiers to ignore it. What I get in exchange is a migration already paid for and measured, on a surface where being wrong costs a crawl rather than a login. When the registry does land a codepoint, the remaining work is renaming a string.</p>
+<p class="pqc-falsify">What would change my mind: a receiving server rejecting requests because the extra 3.2KB pushes headers past its limit, or a verifier that chokes on a dictionary label it does not know. Either result would mean a second label is not free after all, and <code>sig2</code> would come straight back out. The crawl logs are where that would show up first.</p>
+    <section id="luq" aria-label="understanding check"></section>
+    <p class="garage-meta">shipped · the understanding check is part of the page, not a gate</p>
+  </div>
+  <div class="status"><span>garage</span><span>shipped</span><span>2026-07-27</span></div>
+</div>
+
+<script>
+(function(){
+  // Measured with @noble/post-quantum 0.6.1 on an M3 Max under Node 26.
+  // sign is the median of 5 runs of 300 signatures over this site's real
+  // signature base; ML-DSA is rejection-sampled, so it varies by design.
+  var ROWS = [
+    { n: "Ed25519",      bytes: 88,    sign: 0.05,    now: true },
+    { n: "ML-DSA-44",    bytes: 3228,  sign: 8.58 },
+    { n: "SLH-DSA-128s", bytes: 10476, sign: 2650 },
+    { n: "SLH-DSA-128f", bytes: 22784, sign: 132.34 }
+  ];
+  var NOTE = {
+    bytes: "Base64'd signature as it sits in the Signature header. Most servers cap total request headers near 8KB, which rules out both hash-based rows.",
+    sign: "Single-threaded JavaScript, log scale. Ed25519 is roughly 170x faster than ML-DSA-44 and still leaves headroom on a background crawl."
+  };
+  var host = document.getElementById("pqc-demo");
+  if (!host) return;
+  var list = host.querySelector(".pqc-bars"), read = host.querySelector(".pqc-read");
+  var metric = "bytes";
+
+  function fmt(v) {
+    if (metric === "bytes") return v.toLocaleString("en-US") + " B";
+    // a native ML-DSA result can land well under 0.01ms, where two decimals
+    // would round a real measurement down to "0.00".
+    var s = v < 0.1 ? v.toPrecision(2) : v < 100 ? v.toFixed(1) : Math.round(v).toLocaleString("en-US");
+    return s + " ms";
+  }
+  // bytes read honestly on a linear scale; sign times span microseconds to
+  // seconds, where linear would collapse every fast row into nothing.
+  function width(v, max) {
+    if (metric === "bytes") return (v / max) * 100;
+    // floor at 1us so a sub-microsecond result cannot produce a negative width
+    var lo = Math.log10(Math.max(v, 0.001) * 1000);
+    return Math.max(2, (lo / Math.log10(max * 1000)) * 100);
+  }
+  function render() {
+    var max = ROWS.reduce(function (m, r) { return Math.max(m, r[metric]); }, 0);
+    list.innerHTML = ROWS.map(function (r) {
+      return '<li class="' + (r.now ? "now" : r.native ? "native" : "") + '"><span class="n">' + r.n +
+        '</span><span class="t" style="width:' + width(r[metric], max).toFixed(1) +
+        '%"></span><span class="v">' + fmt(r[metric]) + "</span></li>";
+    }).join("");
+    read.textContent = NOTE[metric];
+  }
+  [].forEach.call(host.querySelectorAll(".pqc-toggle button"), function (b) {
+    b.addEventListener("click", function () {
+      metric = b.getAttribute("data-metric");
+      [].forEach.call(host.querySelectorAll(".pqc-toggle button"), function (o) {
+        o.classList.toggle("on", o === b);
+      });
+      render();
+    });
+  });
+  render();
+
+  // Chrome puts ML-DSA in WebCrypto behind chrome://flags/#webcrypto-pqc. If the
+  // reader has it on, let their hardware answer "how much of 8.58ms was the JIT?"
+  // rather than asserting a speedup this page never measured.
+  var nativeBox = host.querySelector(".pqc-native");
+  var BASE = new TextEncoder().encode(
+    '"@authority": example.com\n"signature-agent": "https://aadhar.sh/"\n' +
+    '"@signature-params": ("@authority" "signature-agent");created=1785186311;' +
+    'keyid="rn-mldsa-2026-07-27";alg="ml-dsa-44";tag="web-bot-auth"');
+
+  function show(msg) { nativeBox.hidden = false; nativeBox.innerHTML = msg; }
+
+  crypto.subtle.generateKey({ name: "ML-DSA-44" }, true, ["sign", "verify"]).then(function (key) {
+    show('<button type="button" class="pqc-run">Run ML-DSA-44 natively, here</button>' +
+         '<span class="pqc-native-note">Your browser has native ML-DSA. 200 signatures, on your hardware.</span>');
+    nativeBox.querySelector(".pqc-run").addEventListener("click", function (e) {
+      e.target.disabled = true;
+      e.target.textContent = "signing\u2026";
+      // yield first so the button repaints before the main thread is busy
+      setTimeout(function () {
+        var alg = { name: "ML-DSA-44" }, warm = [];
+        for (var i = 0; i < 20; i++) warm.push(crypto.subtle.sign(alg, key.privateKey, BASE));
+        Promise.all(warm).then(function () {
+          var t0 = performance.now(), runs = [];
+          for (var j = 0; j < 200; j++) runs.push(crypto.subtle.sign(alg, key.privateKey, BASE));
+          return Promise.all(runs).then(function (sigs) {
+            var ms = (performance.now() - t0) / 200;
+            ROWS.push({
+              n: "ML-DSA-44 (native)",
+              bytes: Math.ceil(sigs[0].byteLength / 3) * 4,
+              sign: ms, native: true,
+            });
+            metric = "sign";
+            [].forEach.call(host.querySelectorAll(".pqc-toggle button"), function (o) {
+              o.classList.toggle("on", o.getAttribute("data-metric") === "sign");
+            });
+            render();
+            show('<span class="pqc-native-note"><b>' + (ms < 0.1 ? ms.toPrecision(2) : ms.toFixed(2)) +
+                 "ms</b> per signature natively, versus 8.58ms in JavaScript: about <b>" +
+                 Math.round(8.58 / ms) + "x</b>. Same " + sigs[0].byteLength.toLocaleString("en-US") +
+                 " bytes on the wire, because that part is FIPS 204 and no implementation gets to improve it.</span>");
+          });
+        }).catch(function () { show('<span class="pqc-native-note">The native run failed partway.</span>'); });
+      }, 30);
+    });
+  }).catch(function () {
+    show('<span class="pqc-native-note">Your browser has no native ML-DSA. Chrome hides it behind ' +
+         '<code>chrome://flags/#webcrypto-pqc</code>; turn it on and reload to benchmark the native ' +
+         'implementation against the JavaScript number above.</span>');
+  });
+
+  // Read the site's own key directory so the page cannot drift from the key
+  // the bot actually signs with.
+  var live = document.querySelector("#pqc-live .pqc-live-body");
+  if (!live) return;
+  fetch("/.well-known/http-message-signatures-directory").then(function (r) {
+    return r.json();
+  }).then(function (dir) {
+    var akp = (dir.keys || []).filter(function (k) { return k.kty === "AKP"; })[0];
+    var ed = (dir.keys || []).filter(function (k) { return k.crv === "Ed25519"; })[0];
+    if (!akp) { live.textContent = "No AKP key published right now."; return; }
+    var raw = atob(akp.pub.replace(/-/g, "+").replace(/_/g, "/"));
+    live.innerHTML =
+      "<b>" + akp.kid + "</b> &middot; kty " + akp.kty + " &middot; alg " + akp.alg +
+      " &middot; <b>" + raw.length.toLocaleString("en-US") + " bytes</b> of public key" +
+      (ed ? "<br><b>" + ed.kid + "</b> &middot; kty " + ed.crv + " &middot; <b>32 bytes</b>, and the one your verifier should use" : "") +
+      "<br>" + akp.pub.slice(0, 96) + "&hellip; <span style='font-family:var(--font-ui)'>(" +
+      akp.pub.length.toLocaleString("en-US") + " base64url chars)</span>";
+  }).catch(function () {
+    live.textContent = "Could not read the key directory from here.";
+  });
+})();
+</script>
+<script type="application/json" id="luq-data">
+{
+  "skin": "garage",
+  "intro": "Before you close the hood: four questions about why this shipped and what it does not buy.",
+  "questions": [
+    {
+      "q": "Why can this site send an ML-DSA signature years before IANA registers a post-quantum algorithm?",
+      "options": [
+        {
+          "t": "Signature-Input and Signature are structured-fields Dictionaries, so a second label appends and an old verifier reads the label it knows.",
+          "ok": true,
+          "why": "Right. Additive labels are what make an unregistered algorithm safe to send: ignoring it costs a verifier nothing."
+        },
+        {
+          "t": "RFC 9421 lets a sender pick any algorithm as long as the key is published in a JWKS.",
+          "why": "Publishing a key does not make an algorithm interoperable. The registry is what tells a verifier which token means which algorithm."
+        },
+        {
+          "t": "Cloudflare verifies ML-DSA signatures already, so the registry no longer matters.",
+          "why": "Cloudflare's Web Bot Auth verifier accepts Ed25519 only and ignores other key types in the directory."
+        }
+      ]
+    },
+    {
+      "q": "Both SLH-DSA parameter sets were rejected. What does comparing them tell you about hash-based signatures here?",
+      "options": [
+        {
+          "t": "They trade signing time against signature size, so one blows the header limit and the other blows the latency budget.",
+          "ok": true,
+          "why": "Right. 128f signs in 132ms but needs 22,784 bytes of header; 128s is compact by comparison and takes 2.5 seconds. Neither is small on both axes."
+        },
+        {
+          "t": "Hash-based signatures have large public keys, which is what makes them impractical for HTTP.",
+          "why": "Their public keys are the smallest on the page at 32 bytes. The signatures are what fail."
+        },
+        {
+          "t": "Both are slower to verify than ML-DSA, so receiving sites would reject them.",
+          "why": "Verification is in the same few-millisecond range for all of them. The binding constraints are signing time and signature size."
+        }
+      ]
+    },
+    {
+      "q": "This site's TLS already negotiates X25519MLKEM768. What does that protect, and what does it leave open?",
+      "options": [
+        {
+          "t": "It protects confidentiality against an attacker recording traffic today, and leaves authentication on a classical P-256 certificate.",
+          "ok": true,
+          "why": "Right. Key agreement had to migrate early because recorded ciphertext can be decrypted later. The certificate chain is a separate, slower migration."
+        },
+        {
+          "t": "It makes the whole handshake post-quantum, including the certificate.",
+          "why": "The handshake still reports ecdsa_secp256r1_sha256 and a P-256 certificate. Only the key agreement moved."
+        },
+        {
+          "t": "It protects the crawler's outbound request signatures.",
+          "why": "Those are application-layer RFC 9421 signatures. TLS key agreement has no bearing on them."
+        }
+      ]
+    },
+    {
+      "q": "Why is there less urgency to migrate a request signature than to migrate key agreement?",
+      "options": [
+        {
+          "t": "A recorded request cannot be retroactively forged into something anyone still trusts, while recorded ciphertext can be decrypted whenever the hardware arrives.",
+          "ok": true,
+          "why": "Right. Harvest now, decrypt later applies to confidentiality. An ephemeral signature stops mattering once the request is served."
+        },
+        {
+          "t": "Request signatures use stronger keys than TLS key agreement does.",
+          "why": "Ed25519 and X25519 sit at comparable classical strength. The difference is what an attacker gains by breaking each one later."
+        },
+        {
+          "t": "Signatures are verified locally, so a quantum attacker could never reach them.",
+          "why": "A forger with the private key could sign anything. The reason the clock is slower is that a stale forgery buys nothing."
+        }
+      ]
+    },
+    {
+      "q": "The page reports 8.58ms to sign and 2,420 bytes of signature. Which of those two numbers should you expect to improve, and why?",
+      "options": [
+        {
+          "t": "The time, because it measures a lattice scheme running in JavaScript, while the size is fixed by FIPS 204.",
+          "ok": true,
+          "why": "Right. A native implementation changes the timing and cannot change the byte count, which is why the migration decision should rest on the size budget."
+        },
+        {
+          "t": "The size, because compression will shrink the signature once it travels as a header.",
+          "why": "Signature bytes are effectively random, so they do not compress. The base64 expansion makes the header larger rather than smaller."
+        },
+        {
+          "t": "Neither, because both are properties of ML-DSA-44 as standardised.",
+          "why": "Only the sizes are standardised. The 8.58ms belongs to this implementation on this hardware, which is what the in-browser native run demonstrates."
+        }
+      ]
+    },
+    {
+      "q": "Which result would falsify this page's claim that the second signature is free to ignore?",
+      "options": [
+        {
+          "t": "A receiving server rejecting the crawl because the extra 3.2KB pushes the request past its header limit.",
+          "ok": true,
+          "why": "Right. That would show the additive label imposes a cost on parties who never asked for it, and sig2 would come back out."
+        },
+        {
+          "t": "A verifier reading sig1 and ignoring sig2 entirely.",
+          "why": "That is the predicted behaviour, so it supports the model rather than challenging it."
+        },
+        {
+          "t": "IANA registering a different token for ML-DSA in the signature algorithms registry.",
+          "why": "That would mean renaming a string. The page already treats its own token as provisional."
+        }
+      ]
+    }
+  ]
+}
+</script>
+<script src="/a/quiz.1d162bed.js" defer></script>
+<script src="/a/nav.f1317f11.js" defer></script>
+<!-- axp:shell --><nav id="axp-icons" aria-label="desktop shortcuts"><a class="axp-ico" title="writing, in flux" href="/writing" data-key="Notepad" style="left:9px;top:9px"><span class="ic note" aria-hidden="true"></span><span class="t">Notepad</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="GitHub (opens in a new tab)" href="https://github.com/oddharsh" data-key="GitHub" style="left:9px;top:95px"><span class="ic " style="background:linear-gradient(180deg,oklch(72% 0.05 255),oklch(60% 0.07 257))" aria-hidden="true">G</span><span class="t">GitHub</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Twitter (opens in a new tab)" href="https://x.com/oddhash" data-key="Twitter" style="left:9px;top:181px"><span class="ic " style="background:linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))" aria-hidden="true">@</span><span class="t">Twitter</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Instagram (opens in a new tab)" href="https://www.instagram.com/aadharsh.hif" data-key="Photos" style="left:9px;top:267px"><span class="ic " style="background:linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))" aria-hidden="true"><i class="cam" aria-hidden="true"></i></span><span class="t">Photos</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Curius (opens in a new tab)" href="https://curius.app/aadharsh-pannirselvam" data-key="Curius" style="left:9px;top:353px"><span class="ic " style="background:linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))" aria-hidden="true">C</span><span class="t">Curius</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Beli (opens in a new tab)" href="https://beliapp.com/users/aadharsh" data-key="Beli" style="left:9px;top:439px"><span class="ic " style="background:linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))" aria-hidden="true">B</span><span class="t">Beli</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Spotify (opens in a new tab)" href="https://open.spotify.com/user/aadharsh2010" data-key="Music" style="left:9px;top:525px"><span class="ic " style="background:linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))" aria-hidden="true">♪</span><span class="t">Music</span></a></nav><div id="axp-taskbar" role="navigation" aria-label="taskbar"><a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a><div id="axp-pins"><a class="axp-pin" title="prototypes + experiments" href="/garage"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-garage" alt=""></span><span class="lbl">garage</span></a><a class="axp-pin" title="chat-style explainers + live demos" href="/lwe"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-lwe" alt=""></span><span class="lbl">lwe</span></a><a class="axp-pin" title="notes, in flux: an editable notepad" href="/writing"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-writing" alt=""></span><span class="lbl">writing</span></a><a class="axp-pin" title="what I've been reading, from Curius" href="/reading"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-reading" alt=""></span><span class="lbl">reading</span></a><a class="axp-pin" title="events worth going to" href="/serendipity"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-serendipity" alt=""></span><span class="lbl">serendipity</span></a><a class="axp-pin" title="the crypto-VC neighborhood" href="/around"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-around" alt=""></span><span class="lbl">around</span></a><a class="axp-pin" title="the other web: how machines read a URL" href="/lens"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-lens" alt=""></span><span class="lbl">lens</span></a><a class="axp-pin" title="a compression vision test — whose eye do you have?" href="/pixel-peeper"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-pixel-peeper" alt=""></span><span class="lbl">pixel peeper</span></a><a class="axp-pin" title="what I'm listening to right now" href="/rn"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-music" alt=""></span><span class="lbl">music</span></a><a class="axp-pin" title="book a coffee / bagel" href="/coffee"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-coffee" alt=""></span><span class="lbl">coffee</span></a></div><div id="axp-spacer"></div><div id="axp-tray"><button id="axp-sound" type="button" hidden></button><a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><img src="/a/icons.74f459d9.svg#tray-sysprop" alt=""></a><a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><img src="/a/icons.74f459d9.svg#tray-security" alt=""></a><a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><img src="/a/icons.74f459d9.svg#tray-updates" alt=""></a><span id="axp-clock" aria-hidden="true"></span></div></div><!-- /axp:shell -->
+</body>
+</html>

@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#2D78BD">
+<link rel="preload" as="style" href="/a/luna.12fe1428.css">
+<title>Pixel Peeper · compression eye exam</title>
+<meta name="description" content="A vision test for image compression. Pick the best-looking of three encodes, over and over, and it profiles what your eye is quietly tuned to. Real encodes (zenc, jpegli, mozjpeg, sips; 4:2:2 vs 4:2:0) scored by ssimulacra2 and butteraugli, so the twist is which rival metric your eye actually agrees with.">
+<link rel="canonical" href="https://aadhar.sh/pixel-peeper">
+<meta property="og:type" content="website">
+<meta property="og:title" content="aadhar.sh/pixel-peeper">
+<meta property="og:description" content="A blind vision test for image compression. Pick the best encode, over and over; it profiles your eye and reveals which of two rival metrics (ssimulacra2, butteraugli) you think like.">
+<meta property="og:url" content="https://aadhar.sh/pixel-peeper">
+<style>
+:root{
+  --font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;
+  --font-ui:Tahoma,Verdana,Geneva,sans-serif;
+  --font-mono:"Courier New",Courier,monospace;
+  --face:#ECE9D8; --face-light:#F1EFE2;
+  --hi:#FFFFFF; --sh:#ACA899; --dsh:#716F64;
+  --frame:#7f9bd6; --navy:#0a246a; --navy2:#3a6ea5;
+  --win:#FFFFFF; --paper:#fbfbf7;
+  --ink:#1a1a1a; --ink-soft:#454545; --ink-dim:#636363;
+  --link:#0b3fae; --danger:#c8402f; --go:#3a7d2c; --gold:#e8c14a;
+  --s2:#0b57c9; --bt:#c8811c;   /* the two metric identities: ssimulacra2 blue, butteraugli amber */
+  /* --bt is the chart/border identity; as TEXT the amber only hits 3.06:1 on the
+     panel, so text uses this darker sibling (4.8:1) and the graphics keep --bt. */
+  --bt-ink:#9c640d;
+  --blue95:#4aa3ff; --blue80:#2f7bf0; --blue65:#0054E3; --blue60:#0048c4; --blue55:#2f6fe0;
+  --bevel-raised:inset 1px 1px 0 var(--hi),inset -1px -1px 0 var(--sh);
+  --bevel-sunken:inset 1px 1px 0 var(--sh),inset -1px -1px 0 var(--hi);
+  --grad-button:linear-gradient(180deg,#ffffff 0%,#ece9d8 100%);
+  --grad-btn-hover:linear-gradient(180deg,#ffffff 0%,#f3f4ff 100%);
+}
+*{box-sizing:border-box}
+/* The window frame, title bar, gel caption buttons and sunken .content field all
+   come from luna.css's zero-specificity Luna kit — this page used to carry its
+   own private copy of that chrome, which is exactly the drift the shared shell
+   exists to prevent. What stays here is only what's unique to the eye exam. */
+.window{max-width:720px;font-family:var(--font-ui);font-size:10.5pt;color:var(--ink)}
+h1{font-family:var(--font-caption);font-size:17pt;font-weight:700;color:var(--navy);margin:0 0 2px;letter-spacing:-.01em;text-wrap:balance}
+h2{font-family:var(--font-caption);font-size:12pt;font-weight:700;color:var(--navy2);margin:0}
+p{margin:0 0 10px;line-height:1.5;color:var(--ink-soft)}
+.lede{color:var(--ink);font-size:11pt}
+small,.meta{font-size:9pt;color:var(--ink-dim);font-family:var(--font-mono)}
+b{color:var(--ink)}
+.gb{position:relative;border:1px solid var(--sh);box-shadow:var(--bevel-sunken);background:var(--paper);border-radius:2px;padding:16px 14px 14px;margin:12px 0}
+.gb-legend{position:absolute;top:-9px;left:9px;background:var(--face);padding:0 5px;font-size:9pt;color:var(--ink-dim);font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+.btn{font-family:var(--font-ui);font-size:10pt;color:var(--ink);background:var(--grad-button);border:1px solid var(--dsh);box-shadow:var(--bevel-raised);padding:5px 16px;cursor:pointer;transition:60ms ease-out;min-width:78px}
+.btn:hover{background:var(--grad-btn-hover);border-color:var(--navy2)}
+.btn:active{box-shadow:var(--bevel-sunken);filter:brightness(.94)}
+.btn:focus-visible{outline:1px dotted var(--navy);outline-offset:2px}
+.btn.primary{font-weight:700}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.spread{justify-content:space-between}
+.tiles{display:flex;gap:10px;justify-content:center;margin:6px 0 2px}
+.opt{flex:1 1 0;max-width:205px;display:flex;flex-direction:column;gap:4px}
+.tile{position:relative;background:#000;border:2px solid var(--sh);box-shadow:var(--bevel-sunken);padding:4px;cursor:pointer;transition:60ms ease-out;border-radius:2px}
+.tile img{display:block;width:100%;height:auto}
+.tile .tag{position:absolute;left:6px;top:6px;font-family:var(--font-mono);font-size:8pt;background:rgba(0,0,0,.55);color:#fff;padding:1px 5px;border-radius:2px}
+.tile:hover{border-color:var(--navy2)}
+.tile.pick{border-color:var(--navy)}
+.tile.s2win{border-color:var(--s2);box-shadow:0 0 0 2px var(--s2),var(--bevel-sunken)}
+.tile.btwin{border-color:var(--bt);box-shadow:0 0 0 2px var(--bt),var(--bevel-sunken)}
+.tile.bothwin{border-color:var(--go);box-shadow:0 0 0 2px var(--go),var(--bevel-sunken)}
+.tile.dim{opacity:.5}
+.cap{font-family:var(--font-mono);font-size:8pt;line-height:1.4;color:var(--ink-dim);text-align:center;min-height:1px}
+.cap .lab{color:var(--ink);font-weight:700;display:block}
+.cap .m{display:inline-block;margin:0 3px}
+.cap .m.s2{color:var(--s2)} .cap .m.bt{color:var(--bt-ink)}
+.cap .yours{display:block;color:var(--navy);font-size:7.5pt}
+/* below the taskbar (99999) on purpose: the loupe is page furniture, and the
+   shell chrome must never be occluded by it. */
+#loupe{position:fixed;z-index:50;width:150px;height:150px;border:2px solid var(--navy);box-shadow:2px 2px 0 rgba(0,0,0,.35);display:none;pointer-events:none;background:#000;image-rendering:pixelated;border-radius:2px}
+.banner{display:flex;gap:8px;align-items:flex-start;padding:8px 10px;border:1px solid;border-radius:2px;font-size:10pt;margin:10px 0;line-height:1.45}
+.banner .g{font-weight:700;flex:0 0 auto}
+.banner.ok{background:#eaf5e6;border-color:#a9cf9c;color:#2c5720}
+.banner.no{background:#faeae7;border-color:#e0a89e;color:#8f2a1c}
+.banner.split{background:#fbf3e3;border-color:#e6cf9a;color:#7a5a1c}
+.banner.info{background:#eef3fb;border-color:#a9c1e6;color:#294a7a}
+.chapters{display:flex;gap:5px;align-items:center;font-size:9pt;color:var(--ink-dim);font-family:var(--font-mono)}
+.dot{width:9px;height:9px;border-radius:50%;border:1px solid var(--sh);background:var(--win);box-shadow:var(--bevel-sunken)}
+.dot.on{background:var(--blue65);border-color:var(--navy)} .dot.done{background:var(--go);border-color:#245018}
+.bar{margin:10px 0}
+.bar .lab{display:flex;justify-content:space-between;font-size:9.5pt;margin-bottom:3px}
+.bar .lab b{font-family:var(--font-caption);color:var(--navy2)} .bar .lab .n{font-family:var(--font-mono);color:var(--ink)}
+.bar .track{height:15px;background:var(--win);border:1px solid var(--sh);box-shadow:var(--bevel-sunken);padding:2px}
+.bar .fill{height:100%;background:linear-gradient(180deg,#6fb0ff,#0054E3);box-shadow:inset 0 1px 0 rgba(255,255,255,.5);width:0;transition:width .8s ease-out}
+.bar .fill.gold{background:linear-gradient(180deg,#ffe9a0,#e0a91c)}
+.score-hero{text-align:center;padding:6px 0 2px}
+.score-hero .pct{font-family:var(--font-mono);font-size:30pt;font-weight:700;color:var(--navy);line-height:1;letter-spacing:-.02em}
+.score-hero .grade{font-family:var(--font-caption);font-size:12.5pt;font-weight:700;color:var(--go);margin-top:2px}
+.hint{font-size:9pt;color:var(--ink-dim);text-align:center;margin:4px 0 0;font-family:var(--font-mono)}
+kbd{font-family:var(--font-mono);font-size:8.5pt;background:var(--face);border:1px solid var(--sh);box-shadow:var(--bevel-raised);padding:0 4px;border-radius:2px}
+.statusbar{display:flex;gap:10px;align-items:center;justify-content:space-between;margin:3px;padding:3px 8px;border:1px solid var(--sh);box-shadow:var(--bevel-sunken);background:var(--face);font-size:8.5pt;color:var(--ink-dim);font-family:var(--font-mono)}
+.statusbar span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+a{color:var(--link)}
+/* understanding check (predict-then-check quiz, per the /garage convention) */
+.uq{margin:9px 0 2px}
+.uq .uq-q{font-size:10pt;color:var(--ink);font-weight:700;margin:0 0 6px}
+.uq-opt{display:block;width:100%;text-align:left;font-family:var(--font-ui);font-size:9.5pt;color:var(--ink);background:var(--grad-button);border:1px solid var(--dsh);box-shadow:var(--bevel-raised);padding:5px 10px;margin:0 0 4px;cursor:pointer;border-radius:2px;transition:60ms ease-out}
+.uq-opt:hover:not([disabled]){background:var(--grad-btn-hover);border-color:var(--navy2)}
+.uq-opt[disabled]{cursor:default}
+.uq-opt.correct{border-color:var(--go);box-shadow:0 0 0 1px var(--go),var(--bevel-raised);background:#eef7ea;font-weight:700}
+.uq-opt.wrong{border-color:var(--danger);box-shadow:0 0 0 1px var(--danger),var(--bevel-raised);background:#fbeeeb}
+.uq-why{display:none;font-size:8.5pt;color:var(--ink-soft);font-family:var(--font-mono);margin:0 0 9px 6px;line-height:1.45}
+.uq-why.show{display:block}
+.uq-why b{color:var(--go)}
+/* metric-alignment axis (the hero) */
+.axiswrap{margin:4px 2px 2px}
+.axislabels{display:flex;justify-content:space-between;font-family:var(--font-caption);font-weight:700;font-size:10pt}
+.axislabels .l{color:var(--s2)} .axislabels .r{color:var(--bt-ink)}
+.axislabels small{display:block;font-family:var(--font-mono);font-weight:400;font-size:8pt;color:var(--ink-dim)}
+.axis{position:relative;height:54px;margin-top:4px}
+.axis svg{display:block;width:100%;height:54px}
+.axiscap{font-size:9.5pt;color:var(--ink-soft);margin-top:6px;line-height:1.5}
+@media (max-width:520px){h1{font-size:15pt}.tiles{gap:6px}.score-hero .pct{font-size:26pt}.cap{font-size:7.5pt}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+  /* OS-window geometry inlined so FIRST PAINT matches nav.js (no shell "pop"
+     when the deferred desktop arrives). keep in sync with nav.js (search
+     "app-shell"); degrades with JS off (.content scrolls natively). */
+  html { height: 100dvh; overflow: hidden; }
+  body { min-height: 0; height: calc(100vh - 30px); height: calc(100dvh - 30px);
+    overflow: hidden; box-sizing: border-box; display: flex; flex-direction: column;
+    align-items: center; padding: 8px; margin: 0; }
+  .window { flex: 0 1 auto; min-height: 0; max-height: 100%; width: 100%;
+    display: flex; flex-direction: column; }
+  .window > .title-bar { flex: 0 0 auto; }
+  .window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 12px !important; }
+  /* client edge — generated by build.mjs from luna.css */
+  .window > .content { border: 6px solid #ece9d8; background-clip: padding-box; outline: 1px solid #7f9db9; outline-offset: -6px; }
+  .window > .statusbar { flex: 0 0 auto; }
+  body::after { content: ""; position: fixed; left: 0; right: 0; bottom: 0; height: 30px;
+    z-index: 1; background: linear-gradient(180deg, oklch(67% 0.15 256) 0%, oklch(58% 0.19 257) 4%,
+    oklch(51% 0.20 258) 9%, oklch(49% 0.20 258) 50%, oklch(46% 0.20 259) 92%, oklch(40% 0.18 260) 100%); }
+
+body { text-wrap: pretty; } /* progressive; older engines ignore it */
+</style>
+<link rel="stylesheet" href="/a/luna.12fe1428.css">
+</head>
+<body>
+<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<div class="window" role="application" aria-label="Compression eye exam">
+  <div class="title-bar"><span class="title-text"><span class="icon"></span>Pixel Peeper &middot; compression eye exam</span><span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/" title="back to aadhar.sh" aria-label="back to aadhar.sh"></a></span></div>
+  <div class="content" id="stage"></div>
+  <div class="statusbar"><span id="sb-left">← aadhar.sh · prototype</span><span id="sb-right">real encoders · two metrics</span></div>
+</div>
+<canvas id="loupe"></canvas>
+
+<script>
+// ---- data + config ----
+const AXES={
+  quality: {teach:`that gap was plain JPEG quality. the encoder drops fine detail as quality falls, and below some point your eye stops noticing. that point is your ceiling: export any higher and you're spending bytes on detail you can't see.`},
+  chroma:  {teach:`that was chroma subsampling. your eye resolves brightness far finer than color, so JPEG stores color at lower resolution to save bytes, and 4:2:0 halves what these 4:2:2 files began with. neutral shots pay nothing; a neon sign or a saturated edge bleeds. butteraugli (a color model) punishes that bleed far harder than ssimulacra2.`},
+  encoder: {teach:`same byte budget, different encoders. newer math (zenc, jpegli) packs more quality into the same bytes than mozjpeg or sips, so the encoder you pick buys free quality at no extra size. the catch: the top two sit so close that neither your eye nor the two metrics agree who won.`},
+  tradeoff:{teach:`same bytes, a forced trade. 4:2:0 spends them on sharp detail; 4:2:2 spends them on the source's full color. you can't buy both, because color bits come straight out of the detail budget. which one you reached for is what your eye quietly weights, and it's where ssimulacra2 (structure) and butteraugli (color) split.`},
+};
+const RUN_SIZE=12, FLOOR=2;   // sample this many per play, at least FLOOR per axis
+
+// end-of-exam understanding check: you judged with your eyes, now test the WHY.
+// misconception distractors, one right answer, every option carries its reason.
+const UQ=[
+ {q:"You're exporting a neon-sign shot for the web. Which setting risks the most visible color damage?",
+  opts:[{t:"4:2:0 chroma",ok:1,why:"right: 4:2:0 halves color resolution, and saturated edges like neon are exactly where that shows."},
+        {t:"4:2:2 chroma",why:"4:2:2 keeps the source's full color, so it's the safe choice for saturated work."},
+        {t:"a lower quality slider",why:"quality eats fine detail first, not saturated color; the neon's hue survives a quality drop better than a chroma drop."}]},
+ {q:"Your export already looks identical to the original at phone size. Nudging quality higher mostly...",
+  opts:[{t:"adds file size for detail you can't see",ok:1,why:"right: past your ceiling, higher quality just spends bytes on detail your eye can't resolve."},
+        {t:"makes it visibly sharper",why:"not once you're past the point where you can tell; the extra detail is real but invisible at that size."},
+        {t:"restores color resolution",why:"quality and chroma are separate knobs; raising quality doesn't undo subsampling."}]},
+ {q:"ssimulacra2 and butteraugli disagree on the best tile. The honest read is...",
+  opts:[{t:"they're close enough that it's near a coin flip",ok:1,why:"right: the metrics only split at the margins, where the difference is near invisible to anyone."},
+        {t:"butteraugli is the correct one",why:"neither is ground truth; they're rival models that each miss different things."},
+        {t:"your pick was wrong",why:"there's no wrong pick on a split; it only shows which model your eye matches."}]},
+];
+function quizHTML(){
+  return `<div class="gb"><span class="gb-legend">check your understanding</span>
+    <p style="margin:0 0 8px;color:var(--ink-dim);font-size:9pt">you judged with your eyes. now the why. <span id="uqscore"></span></p>
+    <div id="uqbody">${UQ.map((u,qi)=>{
+      const order=rnd(u.opts.map((_,i)=>i));
+      return `<div class="uq" data-q="${qi}"><div class="uq-q">${qi+1}. ${u.q}</div>`+
+        order.map(oi=>`<button class="uq-opt" data-q="${qi}" data-o="${oi}">${u.opts[oi].t}</button><div class="uq-why" id="why${qi}_${oi}">${u.opts[oi].ok?"✓ ":""}${u.opts[oi].why}</div>`).join("")+
+      `</div>`;}).join("")}</div></div>`;
+}
+function wireQuiz(){
+  let answered=0,right=0;
+  document.querySelectorAll(".uq-opt").forEach(btn=>{
+    btn.onclick=()=>{
+      const qi=+btn.dataset.q,oi=+btn.dataset.o,q=document.querySelector(`.uq[data-q="${qi}"]`);
+      if(q.dataset.done)return; q.dataset.done="1";
+      answered++; if(UQ[qi].opts[oi].ok)right++;
+      document.querySelectorAll(`.uq-opt[data-q="${qi}"]`).forEach(b=>{const bo=+b.dataset.o;b.setAttribute("disabled","");
+        if(UQ[qi].opts[bo].ok)b.classList.add("correct"); else if(bo===oi)b.classList.add("wrong");
+        document.getElementById(`why${qi}_${bo}`).classList.add("show");});
+      document.getElementById("uqscore").textContent=`(${right} of ${answered} right)`;
+    };
+  });
+}
+
+const state={i:0,trials:[],log:[]};
+const stage=document.getElementById("stage"), sbLeft=document.getElementById("sb-left"), sbRight=document.getElementById("sb-right");
+const loupe=document.getElementById("loupe"), lctx=loupe.getContext("2d"); loupe.width=150;loupe.height=150;const ZOOM=3;
+const kb=n=>(n/1024).toFixed(1)+"KB";
+const tileSrc=o=>o.src||o.uri;                 // split build: o.src (tile file). fat build: o.uri (data-URI)
+const rnd=a=>{for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;};
+
+// The page now shares a desktop with nav.js's Run palette, so the 1/2/3 tile
+// shortcuts must not fire while the visitor is typing into it (or any field).
+const typing=e=>{const t=e.target;return (t&&/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))||!!document.querySelector("#axp-run[open]");};
+
+// build one play: sample + interleave across axes so the player never knows what to look for
+function buildRun(){
+  const byAxis={}; DATA.trials.forEach(t=>{(byAxis[t.axis]=byAxis[t.axis]||[]).push(t);});
+  const chosen=[], used=new Set();
+  const take=t=>{chosen.push(t); used.add(t.crop);};
+  // per-axis floor, no repeated crop within a play
+  Object.values(byAxis).forEach(list=>{rnd(list); let n=0; for(const t of list){if(n>=FLOOR)break; if(!used.has(t.crop)){take(t);n++;}}});
+  const rest=rnd(DATA.trials.filter(t=>!chosen.includes(t)));
+  for(const t of rest){if(chosen.length>=RUN_SIZE)break; if(!used.has(t.crop))take(t);}          // fill, still crop-unique
+  for(const t of rest){if(chosen.length>=RUN_SIZE)break; if(!chosen.includes(t))take(t);}          // fallback if short
+  state.trials=rnd(chosen); state.i=0; state.log=[];
+}
+
+function screenIntro(){
+  sbLeft.textContent="← aadhar.sh · prototype"; sbRight.textContent="real encoders · two metrics";
+  stage.innerHTML=`
+   <h1>whose eye do you have?</h1>
+   <p class="lede">a vision test for image compression. each call shows the same photo squeezed two or three ways, and you <b>pick the one that looks best.</b> we won't say what changed, on purpose: if we told you to watch the color, you'd watch the color. so answer on instinct.</p>
+   <div class="gb"><span class="gb-legend">${RUN_SIZE} quick calls</span>
+     <p style="margin:0 0 6px">behind the scenes, every set is judged by two machine metrics too, <b style="color:var(--s2)">ssimulacra2</b> and <b style="color:var(--bt-ink)">butteraugli</b>. they're rival models of human vision, not ground truth, and they <b>disagree</b>. at the end you'll see what your eye is quietly tuned to, and which metric it thinks like.</p>
+   </div>
+   <div class="row spread" style="margin-top:12px">
+     <small>hover any tile to pixel-peep · <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> or click</small>
+     <button class="btn primary" id="go">Start the exam ▸</button></div>`;
+  document.getElementById("go").onclick=()=>{buildRun();screenTrial();};
+}
+const pips=()=>state.trials.map((_,i)=>`<span class="dot ${i<state.i?'done':i===state.i?'on':''}"></span>`).join("");
+
+function screenTrial(){
+  loupe.style.display="none";
+  const trial=state.trials[state.i];
+  const order=rnd(trial.options.map((_,i)=>i));   // random tile positions every call
+  state.picking=true;
+  sbLeft.textContent=`call ${state.i+1} of ${state.trials.length}`; sbRight.textContent=`pick the best`;
+  stage.innerHTML=`
+    <div class="row spread" style="margin-bottom:6px"><h2>which looks best?</h2>
+      <span class="chapters">${pips()}</span></div>
+    <div class="gb" style="padding-top:16px"><span class="gb-legend">same photo · ${trial.options.length===2?"two":"three"} ways</span>
+      <div class="tiles">${order.map((_,pos)=>`<div class="opt"><div class="tile" data-pos="${pos}"><span class="tag">${pos+1}</span></div><div class="cap" id="cap${pos}"></div></div>`).join("")}</div>
+      <p class="hint" id="hint">hover to pixel-peep · trust your gut, don't overthink it</p>
+    </div><div id="fb"></div>`;
+  const tiles=[...document.querySelectorAll(".tile")];
+  tiles.forEach((tile,pos)=>{
+    const o=trial.options[order[pos]];
+    const img=new Image(); img.src=tileSrc(o); tile.appendChild(img);
+    const cv=document.createElement("canvas");
+    img.onload=()=>{cv.width=img.naturalWidth;cv.height=img.naturalHeight;cv.getContext("2d").drawImage(img,0,0);};
+    tile.onclick=()=>onPick(pos,order,trial);
+    attachLoupe(tile,cv,img);
+  });
+  const nx=state.trials[state.i+1]; if(nx) nx.options.forEach(o=>{const p=new Image();p.src=tileSrc(o);}); // warm next call
+  document.onkeydown=e=>{if(!state.picking||typing(e))return;const n=parseInt(e.key);if(n>=1&&n<=3&&tiles[n-1])tiles[n-1].click();};
+}
+
+function onPick(pos,order,trial){
+  if(!state.picking)return;state.picking=false;
+  const tiles=[...document.querySelectorAll(".tile")];
+  const s2Pos=order.findIndex(i=>trial.options[i].s2best), btPos=order.findIndex(i=>trial.options[i].butterbest);
+  const chosen=trial.options[order[pos]];
+  const sided = chosen.s2best&&chosen.butterbest?"both":chosen.s2best?"s2":chosen.butterbest?"butter":"neither";
+  document.getElementById("hint").style.visibility="hidden";
+  tiles.forEach((tile,p)=>{tile.onclick=null;
+    const o=trial.options[order[p]];
+    if(p===s2Pos&&p===btPos)tile.classList.add("bothwin");
+    else if(p===s2Pos)tile.classList.add("s2win");
+    else if(p===btPos)tile.classList.add("btwin");
+    else tile.classList.add("dim");
+    if(p===pos)tile.classList.add("pick");
+    const cap=document.getElementById("cap"+p);
+    cap.innerHTML=`<span class="lab">${o.label.split(" · ")[0]}</span>${kb(o.bytes)}<br>`+
+      `<span class="m s2">s2 ${o.s2}${o.s2best?" ✓":""}</span><span class="m bt">bu ${o.butter}${o.butterbest?" ✓":""}</span>`+
+      (p===pos?`<span class="yours">▲ your pick</span>`:``);
+  });
+  state.log.push({axis:trial.axis,disagree:trial.disagree,sided,correct:trial.disagree?null:(chosen.s2best&&chosen.butterbest)});
+  const fb=document.getElementById("fb");
+  let cls,head,extra;
+  if(trial.disagree){cls="split";head="⚖ the metrics split here";
+    extra = sided==="s2"?` your eye sided with <b style="color:var(--s2)">ssimulacra2</b> (the sharper one).`
+          : sided==="butter"?` your eye sided with <b style="color:var(--bt-ink)">butteraugli</b> (the truer color).`
+          : ` you picked the one <b>neither</b> metric ranked first. rebel.`;
+  } else {const right=chosen.s2best&&chosen.butterbest;
+    cls=right?"ok":"no";head=right?"✓ both metrics agree, and so did you":"✕ both metrics picked another one";extra="";}
+  fb.innerHTML=`<div class="banner ${cls}"><span class="g">${head}</span><span>${extra} ${AXES[trial.axis].teach}</span></div>
+    <div class="row" style="justify-content:flex-end"><button class="btn primary" id="next">${state.i===state.trials.length-1?"See my profile ▸":"Next ▸"}</button></div>`;
+  const next=document.getElementById("next");next.focus();next.onclick=advance;
+  document.onkeydown=e=>{if(typing(e))return;if(e.key==="Enter"||e.key===" ")advance();};
+}
+function advance(){document.onkeydown=null;state.i++;
+  if(state.i>=state.trials.length){screenResult();return;} screenTrial();}
+
+function acc(axis){const rows=state.log.filter(l=>l.axis===axis&&l.correct!==null);
+  return rows.length?Math.round(100*rows.filter(l=>l.correct).length/rows.length):null;}
+
+function screenResult(){
+  const agreeRows=state.log.filter(l=>l.correct!==null);
+  const overall=agreeRows.length?Math.round(100*agreeRows.filter(l=>l.correct).length/agreeRows.length):0;
+  const sharp=acc("quality"), color=acc("chroma"), enc=acc("encoder");
+  const dis=state.log.filter(l=>l.disagree);
+  const s2n=dis.filter(l=>l.sided==="s2").length, btn=dis.filter(l=>l.sided==="butter").length;
+  const own=dis.filter(l=>l.sided==="neither").length, decisive=s2n+btn;
+  const lean=decisive?btn/decisive:0.5;
+  const leaner=decisive?(btn>s2n?"butteraugli":s2n>btn?"ssimulacra2":"neither"):"neither";
+  const grade=overall>=85?"Golden eye":overall>=68?"Sharp eye":overall>=50?"Average human":"Forgiving eye";
+  let alignCap;
+  if(!dis.length) alignCap=`this run didn't hit any of the calls where the two metrics disagree. play again for a different mix.`;
+  else if(!decisive) alignCap=`on the ${dis.length} calls where the metrics split, you never picked either metric's favorite. your eye does its own thing, which is the honest truth about these razor-edge cases.`;
+  else if(leaner==="neither") alignCap=`you split evenly (${s2n} vs ${btn}) on the calls where the metrics disagreed. no lean either way, itself a fair verdict: at these margins it's close to a coin flip.`;
+  else alignCap=`on the ${dis.length} calls where <b style="color:var(--s2)">ssimulacra2</b> and <b style="color:var(--bt-ink)">butteraugli</b> disagreed, your eye sided with <b>${leaner}</b> ${leaner==="butteraugli"?btn:s2n} of ${decisive} times${own?` (and went rogue on ${own})`:``}. you weight <b>${leaner==="butteraugli"?"color":"structure"}</b> the way ${leaner} does. fair warning: these are the closest calls in the test, so take it with salt.`;
+  let colorAha = color===null?"" : color<=45
+    ? ` you mostly couldn't see color being thrown away, like most people: human eyes resolve almost no color detail, which is why 4:2:0 is free most of the time.`
+    : color>=70 ? ` and you caught chroma subsampling most people miss, so keep 4:2:2 on saturated work.` : ``;
+  sbLeft.textContent="← aadhar.sh · prototype"; sbRight.textContent=decisive?`your eye leans ${leaner}`:`profile`;
+  stage.innerHTML=`
+    <h1>your visual system, profiled</h1>
+    <div class="score-hero"><div class="pct">${overall}<span style="font-size:15pt">%</span></div>
+      <div class="grade">${grade} · you called the clear ones right ${overall}% of the time</div></div>
+    <div class="gb" style="margin-top:14px"><span class="gb-legend">whose eye do you have?</span>
+      <div class="axiswrap">
+        <div class="axislabels"><span class="l">ssimulacra2<small>structure / detail</small></span><span class="r" style="text-align:right">butteraugli<small>color / masking</small></span></div>
+        <div class="axis">${axisSVG(lean,decisive)}</div>
+        <p class="axiscap">${alignCap}</p></div></div>
+    <div class="gb"><span class="gb-legend">where your eye is sharp</span>
+      ${bar("Sharpness",sharp,"spotting the higher-quality JPEG")}
+      ${bar("Color",color,"catching chroma subsampling",true)}
+      ${bar("Encoders",enc,"separating real encoders at equal bytes")}</div>
+    <div class="banner info"><span class="g">the takeaway</span><span>the metrics agree on the obvious calls and only split at the margins, where the differences are near invisible.${colorAha} that margin is exactly where an export preset should live: the setting no human, and barely a metric, can flag.</span></div>
+    <div class="gb"><span class="gb-legend">what's real, what's next</span>
+      <p style="margin:0">every tile was a genuine encode (zenc · jpegli · mozjpeg · sips; real 4:2:2 / 4:2:0 on 4:2:2-native files), scored by <b style="color:var(--s2)">ssimulacra2</b> and <b style="color:var(--bt-ink)">butteraugli</b> against the original. next: <b>sharpYUV</b>, a bigger photo set, everyone's picks pooled, and the crowd threshold read into an <b>instagram export preset</b>.</p></div>
+    ${quizHTML()}
+    <div class="row spread" style="margin-top:14px">
+      <button class="btn" id="share">Copy my result</button><button class="btn primary" id="again">Play again ▸</button></div>`;
+  requestAnimationFrame(()=>document.querySelectorAll(".fill").forEach(f=>f.style.width=(f.dataset.w||0)+"%"));
+  wireQuiz();
+  document.getElementById("again").onclick=()=>{buildRun();screenTrial();};
+  document.getElementById("share").onclick=ev=>{
+    const txt=`my eye leans ${leaner} on the aadhar.sh compression eye exam (${grade}, ${overall}% on the clear calls). ssimulacra2 vs butteraugli: whose eye do you have?`;
+    navigator.clipboard&&navigator.clipboard.writeText(txt);
+    ev.target.textContent="Copied ✓";setTimeout(()=>ev.target.textContent="Copy my result",1400);};
+}
+function bar(label,val,sub,gold){
+  const w=val===null?0:val, n=val===null?"n/a":val+"%";
+  return `<div class="bar"><div class="lab"><b>${label}</b> <span class="n">${n}</span></div>
+    <div class="track"><div class="fill ${gold?'gold':''}" data-w="${w}"></div></div><small style="color:var(--ink-dim)">${sub}</small></div>`;}
+
+function axisSVG(lean,decisive){
+  const W=680,H=54,pad=10,x=pad+lean*(W-2*pad);
+  let d=`M ${pad} 40`;
+  for(let i=0;i<=60;i++){const t=i/60,px=pad+t*(W-2*pad),g=Math.exp(-Math.pow((t-0.5)/0.22,2)/2);d+=` L ${px.toFixed(1)} ${(40-g*22).toFixed(1)}`;}
+  d+=` L ${W-pad} 40 Z`;
+  const needle=decisive?`
+    <line x1="${x}" y1="6" x2="${x}" y2="44" stroke="#0a246a" stroke-width="2"/>
+    <polygon points="${x-5},6 ${x+5},6 ${x},14" fill="#0a246a"/>
+    <circle cx="${x}" cy="40" r="4.5" fill="#fff" stroke="#0a246a" stroke-width="2"/>`
+    :`<text x="${W/2}" y="26" text-anchor="middle" font-family="Courier New,monospace" font-size="10" fill="#636363">no decisive lean</text>`;
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="metric alignment">
+    <defs><linearGradient id="mg" x1="0" x2="1"><stop offset="0" stop-color="#0b57c9"/><stop offset="1" stop-color="#c8811c"/></linearGradient></defs>
+    <path d="${d}" fill="#0a246a" opacity="0.10"/>
+    <text x="${pad}" y="52" font-family="Courier New,monospace" font-size="7.5" fill="#9a9684">other players</text>
+    <rect x="${pad}" y="40" width="${W-2*pad}" height="6" fill="url(#mg)"/>
+    <rect x="${pad}" y="40" width="${W-2*pad}" height="6" fill="none" stroke="#8a866f" stroke-width="0.5"/>
+    ${needle}</svg>`;
+}
+function attachLoupe(tile,cv,img){
+  tile.addEventListener("mousemove",e=>{
+    if(!cv.width){loupe.style.display="none";return;}
+    const r=img.getBoundingClientRect(),rx=(e.clientX-r.left)/r.width,ry=(e.clientY-r.top)/r.height;
+    if(rx<0||rx>1||ry<0||ry>1){loupe.style.display="none";return;}
+    const sx=rx*cv.width,sy=ry*cv.height,span=loupe.width/ZOOM;
+    lctx.imageSmoothingEnabled=false;lctx.clearRect(0,0,loupe.width,loupe.height);
+    lctx.drawImage(cv,sx-span/2,sy-span/2,span,span,0,0,loupe.width,loupe.height);
+    loupe.style.display="block";loupe.style.left=(e.clientX-loupe.width/2)+"px";loupe.style.top=(e.clientY-loupe.height/2)+"px";});
+  tile.addEventListener("mouseleave",()=>loupe.style.display="none");
+}
+
+let DATA=null;
+stage.innerHTML='<h1>loading…</h1>';
+fetch('/pixel-peeper/manifest.json').then(r=>r.json()).then(d=>{DATA=d;boot();}).catch(e=>{stage.innerHTML='<h1>could not load</h1><p>'+e+'</p>';});
+function boot(){ screenIntro(); }
+
+</script>
+<script src="/a/nav.f1317f11.js" defer></script>
+<!-- axp:shell --><nav id="axp-icons" aria-label="desktop shortcuts"><a class="axp-ico" title="writing, in flux" href="/writing" data-key="Notepad" style="left:9px;top:9px"><span class="ic note" aria-hidden="true"></span><span class="t">Notepad</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="GitHub (opens in a new tab)" href="https://github.com/oddharsh" data-key="GitHub" style="left:9px;top:95px"><span class="ic " style="background:linear-gradient(180deg,oklch(72% 0.05 255),oklch(60% 0.07 257))" aria-hidden="true">G</span><span class="t">GitHub</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Twitter (opens in a new tab)" href="https://x.com/oddhash" data-key="Twitter" style="left:9px;top:181px"><span class="ic " style="background:linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))" aria-hidden="true">@</span><span class="t">Twitter</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Instagram (opens in a new tab)" href="https://www.instagram.com/aadharsh.hif" data-key="Photos" style="left:9px;top:267px"><span class="ic " style="background:linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))" aria-hidden="true"><i class="cam" aria-hidden="true"></i></span><span class="t">Photos</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Curius (opens in a new tab)" href="https://curius.app/aadharsh-pannirselvam" data-key="Curius" style="left:9px;top:353px"><span class="ic " style="background:linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))" aria-hidden="true">C</span><span class="t">Curius</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Beli (opens in a new tab)" href="https://beliapp.com/users/aadharsh" data-key="Beli" style="left:9px;top:439px"><span class="ic " style="background:linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))" aria-hidden="true">B</span><span class="t">Beli</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Spotify (opens in a new tab)" href="https://open.spotify.com/user/aadharsh2010" data-key="Music" style="left:9px;top:525px"><span class="ic " style="background:linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))" aria-hidden="true">♪</span><span class="t">Music</span></a></nav><div id="axp-taskbar" role="navigation" aria-label="taskbar"><a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a><div id="axp-pins"><a class="axp-pin" title="prototypes + experiments" href="/garage"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-garage" alt=""></span><span class="lbl">garage</span></a><a class="axp-pin" title="chat-style explainers + live demos" href="/lwe"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-lwe" alt=""></span><span class="lbl">lwe</span></a><a class="axp-pin" title="notes, in flux: an editable notepad" href="/writing"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-writing" alt=""></span><span class="lbl">writing</span></a><a class="axp-pin" title="what I've been reading, from Curius" href="/reading"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-reading" alt=""></span><span class="lbl">reading</span></a><a class="axp-pin" title="events worth going to" href="/serendipity"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-serendipity" alt=""></span><span class="lbl">serendipity</span></a><a class="axp-pin" title="the crypto-VC neighborhood" href="/around"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-around" alt=""></span><span class="lbl">around</span></a><a class="axp-pin" title="the other web: how machines read a URL" href="/lens"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-lens" alt=""></span><span class="lbl">lens</span></a><a class="axp-pin" title="a compression vision test — whose eye do you have?" href="/pixel-peeper"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-pixel-peeper" alt=""></span><span class="lbl">pixel peeper</span></a><a class="axp-pin" title="what I'm listening to right now" href="/rn"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-music" alt=""></span><span class="lbl">music</span></a><a class="axp-pin" title="book a coffee / bagel" href="/coffee"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-coffee" alt=""></span><span class="lbl">coffee</span></a></div><div id="axp-spacer"></div><div id="axp-tray"><button id="axp-sound" type="button" hidden></button><a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><img src="/a/icons.74f459d9.svg#tray-sysprop" alt=""></a><a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><img src="/a/icons.74f459d9.svg#tray-security" alt=""></a><a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><img src="/a/icons.74f459d9.svg#tray-updates" alt=""></a><span id="axp-clock" aria-hidden="true"></span></div></div><!-- /axp:shell -->
+</body>
+</html>

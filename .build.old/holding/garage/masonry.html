@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#2D78BD">
+<link rel="preload" as="style" href="/a/luna.12fe1428.css">
+<title>aadhar.sh/garage/masonry</title>
+<meta name="description" content="Prototype: a ragged-height contact-sheet photo grid with CSS Grid Lanes (display: grid-lanes), falling back to the fixed-square grid the homepage ships today.">
+<link rel="canonical" href="https://aadhar.sh/garage/masonry">
+
+<!-- masonry-bricks favicon -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='3'%20fill='%23ffffff'%20stroke='%230831d9'%20stroke-width='2'/%3E%3Crect%20x='5'%20y='5'%20width='9'%20height='12'%20fill='%23166aee'/%3E%3Crect%20x='17'%20y='5'%20width='10'%20height='7'%20fill='%23ff9500'/%3E%3Crect%20x='17'%20y='15'%20width='10'%20height='12'%20fill='%23166aee'/%3E%3Crect%20x='5'%20y='20'%20width='9'%20height='7'%20fill='%23ff9500'/%3E%3C/svg%3E">
+
+<meta property="og:type" content="website">
+<meta property="og:title" content="aadhar.sh/garage/masonry">
+<meta property="og:description" content="A Grid Lanes (display: grid-lanes) contact sheet, with a fixed-square fallback.">
+<meta property="og:url" content="https://aadhar.sh/garage/masonry">
+<meta name="twitter:card" content="summary_large_image">
+<meta property="og:image" content="https://aadhar.sh/og/garage-masonry.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="aadhar.sh/garage/masonry, live demo screenshotted">
+<meta name="twitter:image" content="https://aadhar.sh/og/garage-masonry.png">
+
+<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; } html{background:linear-gradient(180deg,oklch(56% 0.13 250) 0%,oklch(73% 0.10 236) 50%,oklch(88% 0.05 232) 60%,oklch(60% 0.16 140) 100%)}
+body {
+  background: oklch(91.74% 0.0203 238.68);
+  background: linear-gradient(180deg, oklch(56% 0.13 250) 0%, oklch(73% 0.10 236) 50%, oklch(88% 0.05 232) 60%, oklch(60% 0.16 140) 100%);
+  font-family: var(--font-ui); font-size: 10.5pt; line-height: 1.5;
+  color: oklch(21.78% 0 0); padding: 24px 12px 60px; min-height: 100vh;
+}
+.window { max-width: 720px; margin: 0 auto; background: oklch(100% 0 0);
+  border: 2px solid #0831d9; border-right-color: #001ea0; border-bottom-color: #001ea0;
+  border-top-left-radius: 8px; border-top-right-radius: 8px; overflow: hidden;
+  box-shadow: inset 1px 1px 0 #166aee, inset 2px 2px 0 #0855dd, inset -1px -1px 0 #00138c, inset -2px -2px 0 #003bda, 4px 4px 0 rgba(0,30,160,.35); }
+.title-bar {
+  background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
+  color: oklch(100% 0 0); font-family: var(--font-caption); font-size: 10pt; font-weight: bold;
+  padding: 4px 8px; border-bottom: 1px solid oklch(41.92% 0.0962 250.51);
+  display: flex; align-items: center; justify-content: space-between;
+  text-shadow: 1px 1px #0f1089; border-top-left-radius: 8px; border-top-right-radius: 8px; }
+.title-bar .icon { display:inline-block; width:14px; height:14px; margin-right:6px; vertical-align:middle; flex-shrink:0;
+  background: linear-gradient(135deg, #166aee 0 50%, #ff9500 50% 100%); border:1px solid #001ea0; }
+.title-bar .title-text { flex: 1; padding-left: 4px; }
+.title-bar .controls { display: flex; align-items: center; gap: 2px; }
+.title-bar .controls .min, .title-bar .controls .max, .title-bar .controls .close {
+  position: relative; box-sizing: border-box; width: 21px; height: 21px; display: inline-block; overflow: hidden;
+  font-size: 0; color: transparent; border: 1px solid #6696eb; border-radius: 3px; text-decoration: none; cursor: pointer;
+  background-color: #3e73f5; background-image: linear-gradient(180deg, #5f8cf7 0%, #3a71f5 22%, #3e73f5 55%, #2a70f2 82%, #1045be 100%); transition: filter 60ms ease-out; }
+.title-bar .controls .min::after, .title-bar .controls .max::after { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 45%;
+  background: linear-gradient(180deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.12) 70%, rgba(255,255,255,0) 100%); pointer-events: none; border-radius: 2px 2px 5px 5px; }
+.title-bar .controls .close { border-color: #d8401c; background-color: #e45f3e; background-image: linear-gradient(180deg, #e8795f 0%, #e45f40 30%, #e45d3d 52%, #e2552a 80%, #ae3110 100%); }
+.title-bar .controls .close:hover { border-color: #ff7a66; background-image: linear-gradient(180deg, #ff8b7d 0%, #ff7463 26%, #ff957c 55%, #fd7e64 82%, #d34936 100%); box-shadow: 0 0 4px rgba(255,120,96,.7); }
+.title-bar .controls .min::before { content: ""; position: absolute; left: 5px; right: 5px; bottom: 5px; height: 2px; background: #fff; box-shadow: 0 1px 0 rgba(0,0,0,.35); }
+.title-bar .controls .max::before { content: ""; position: absolute; left: 5px; top: 5px; width: 11px; height: 9px; box-sizing: border-box; border: 1px solid #fff; border-top-width: 2px; filter: drop-shadow(0 1px 0 rgba(0,0,0,.35)); }
+.title-bar .controls .close::before, .title-bar .controls .close::after { content: ""; position: absolute; left: 50%; top: 50%; width: 13px; height: 2px; margin: -1px 0 0 -6.5px; background: #fff; box-shadow: 0 1px 0 rgba(0,0,0,.35); }
+.title-bar .controls .close::before { transform: rotate(45deg); } .title-bar .controls .close::after { transform: rotate(-45deg); }
+
+.content { padding: 12px 16px 16px; }
+h1 { font-family: var(--font-caption); font-size: 14pt; color: oklch(41.92% 0.0962 250.51); margin: 0 0 4px; font-weight: bold; letter-spacing: -0.01em; }
+.lede { margin: 0 0 12px; color: oklch(38.67% 0 0); font-size: 10.5pt; }
+p { margin: 0 0 12px; }
+a:link { color: oklch(42.61% 0.2353 263.74); text-decoration: underline; } a:visited { color: oklch(42.09% 0.1935 328.36); } a:hover { color: oklch(62.80% 0.2577 29.23); }
+code, .mono { font-family: var(--font-mono); font-size: 9.5pt; }
+hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px 0; height: 0; }
+
+/* ── controls row: chip + a segmented toggle ─────────────────────────── */
+.bar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 0 0 14px; }
+.chip { font-family: var(--font-mono); font-size: 8.5pt; font-weight: bold; padding: 2px 7px; border: 1px solid; border-radius: 2px; white-space: nowrap;
+  color: oklch(51% 0 0); border-color: oklch(72% 0 0); background: oklch(97% 0 0); }
+.chip.yes { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(97% 0.04 142); }
+.chip.yes::before { content: "\2713 "; } .chip.no::before { content: "\2717 "; }
+.seg { display: inline-flex; border: 1px solid oklch(50% 0.04 263); border-radius: 3px; overflow: hidden; }
+.seg button { font: inherit; font-size: 9.5pt; padding: 3px 12px; border: 0; cursor: pointer; color: oklch(20% 0 0);
+  background: linear-gradient(180deg, oklch(99% 0 0), oklch(92% 0.005 263)); }
+.seg button + button { border-left: 1px solid oklch(70% 0.03 263); }
+.seg button[aria-pressed="true"] { color: oklch(100% 0 0);
+  background: linear-gradient(180deg, oklch(60% 0.20 261), oklch(50% 0.225 263)); box-shadow: inset 1px 1px 2px oklch(36% 0.16 263); }
+.seg button:disabled { color: oklch(62% 0 0); cursor: not-allowed; }
+/* reserve the note's height (JS fills it a tick after load, and the longer
+   "no Grid Lanes" message runs ~3 lines) so the sheet below doesn't get shoved
+   down. kills a ~0.02 CLS. */
+.note { font-size: 9pt; color: oklch(45% 0 0); margin: -6px 0 14px; min-height: 3.4em; }
+
+/* ── the contact sheet ───────────────────────────────────────────────── */
+/* FALLBACK (everywhere): fixed-area squares, object-fit:cover — what the
+   homepage ships today. one row-height, every photo cropped to 1:1. */
+/* reserve the sheet's height while the pool loads (it ships empty with just a
+   "Loading…" line, then fetches up to 40 tiles). Without this the collapsed
+   sheet keeps #luq high in the viewport, so the quiz mount + tile load shove
+   on-screen content — a ~0.25 CLS. Holding ~a viewport keeps #luq below the
+   fold from the first paint; a 40-tile sheet is taller than this, so no gap. */
+.sheet { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; min-height: 100vh; }
+.tile { display: block; background: oklch(100% 0 0); padding: 4px; line-height: 0; overflow: hidden;
+  border: 1px solid oklch(61.14% 0.0611 253.60); box-shadow: 1px 1px 0 oklch(61.14% 0.0611 253.60 / 0.3); aspect-ratio: 1; }
+.tile:hover { border-color: oklch(41.92% 0.13 250.51); }
+.tile picture { display: block; width: 100%; height: 100%; }
+.tile img { display: block; width: 100%; height: 100%; object-fit: cover; background: oklch(94% 0.01 255); }
+
+/* MASONRY (where the engine has it): real Grid Lanes. columns stay fixed,
+   the masonry algorithm stacks the rows. each tile takes its photo's true
+   aspect ratio (EXIF pins it up front, so nothing reflows) → a ragged
+   contact sheet, no crop. flip the toggle to A/B it against the squares above. */
+@supports (display: grid-lanes) {
+  .sheet.masonry { display: grid-lanes; flow-tolerance: 1em; }
+  .sheet.masonry .tile { aspect-ratio: var(--ar, 1); }
+  /* a correctly-proportioned box means object-fit:cover shows the WHOLE frame */
+}
+
+.empty { color: oklch(50% 0 0); font-style: italic; padding: 18px 0; }
+.status { font-family: var(--font-ui); font-size: 8.5pt; color: oklch(45% 0 0); border-top: 1px solid oklch(86% 0.02 259); background: oklch(96.5% 0.006 255);
+  padding: 4px 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+.status span::after { content: "·"; margin-left: 8px; color: oklch(72% 0 0); } .status span:last-child::after { content: ""; }
+
+  /* OS-window geometry inlined so FIRST PAINT matches nav.js (no shell "pop"
+     when the deferred desktop arrives). keep in sync with nav.js (search
+     "app-shell"); degrades with JS off (.content scrolls natively). */
+  html { height: 100dvh; overflow: hidden; }
+  body { min-height: 0; height: calc(100vh - 30px); height: calc(100dvh - 30px);
+    overflow: hidden; box-sizing: border-box; display: flex; flex-direction: column;
+    align-items: center; padding: 8px; }
+  .window { flex: 0 1 auto; min-height: 0; max-height: 100%; width: 100%;
+    display: flex; flex-direction: column; }
+  .window > .title-bar { flex: 0 0 auto; }
+  .window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 12px !important; }
+  /* client edge — generated by build.mjs from luna.css */
+  .window > .content { border: 6px solid #ece9d8; background-clip: padding-box; outline: 1px solid #7f9db9; outline-offset: -6px; }
+  body::after { content: ""; position: fixed; left: 0; right: 0; bottom: 0; height: 30px;
+    z-index: 1; background: linear-gradient(180deg, oklch(67% 0.15 256) 0%, oklch(58% 0.19 257) 4%,
+    oklch(51% 0.20 258) 9%, oklch(49% 0.20 258) 50%, oklch(46% 0.20 259) 92%, oklch(40% 0.18 260) 100%); }
+
+body { text-wrap: pretty; } /* progressive; older engines ignore it */
+</style>
+<link rel="stylesheet" href="/a/luna.12fe1428.css">
+</head>
+<body>
+<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<div class="window">
+  <div class="title-bar" aria-hidden="true">
+    <span class="title-text"><span class="icon"></span>aadhar.sh/garage/masonry</span>
+    <span class="controls"><span class="min"></span><span class="max"></span><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
+  </div>
+  <div class="content">
+    <h1>A masonry contact sheet</h1>
+    <p class="lede">The homepage grid crops every photo to a 1:1 square: <code>object-fit: cover</code> drops each one into the same cell. <strong>CSS Grid Lanes</strong> (<code>display: grid-lanes</code>, shipped in Safari&nbsp;27; see <a href="/garage/safari27">the Safari 27 notes</a>) lays the columns on a grid but stacks the rows masonry-style, so a portrait and a landscape sit side by side at their true heights. No JavaScript lays anything out, no media queries fire.</p>
+
+    <div class="bar">
+      <span class="chip" id="cap">checking <code>display: grid-lanes</code>…</span>
+      <span class="seg" role="group" aria-label="layout">
+        <button type="button" id="bMasonry" aria-pressed="true">Masonry</button>
+        <button type="button" id="bSquares" aria-pressed="false">Fixed squares</button>
+      </span>
+    </div>
+    <p class="note" id="note"></p>
+
+    <div class="sheet masonry" id="sheet" aria-label="photo contact sheet"><p class="empty">Loading the pool…</p></div>
+
+    <hr>
+    <p style="font-size:9pt;color:oklch(45% 0 0)">Same markup both ways. One line differs: <code>display: grid-lanes</code> behind an <code>@supports</code> guard, with EXIF pinning each photo's <code>aspect-ratio</code> so nothing reflows as the images load. Browsers without Grid Lanes fall back to the squares. Still a prototype: the live homepage ships the squares.</p>
+    <hr>
+    <section id="luq" aria-label="understanding check"></section>
+  </div>
+  <div class="status" aria-hidden="true">
+    <span>display: grid-lanes</span>
+    <span>fallback: 1:1 grid</span>
+    <span>octane + fallback</span>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var sheet = document.getElementById("sheet");
+  var cap = document.getElementById("cap"), note = document.getElementById("note");
+  var bM = document.getElementById("bMasonry"), bS = document.getElementById("bSquares");
+
+  var supported = false;
+  try { supported = CSS.supports("display: grid-lanes"); } catch (e) {}
+  cap.className = "chip " + (supported ? "yes" : "no");
+  cap.innerHTML = "<code>display: grid-lanes</code> " + (supported ? "in your browser" : "not in your browser");
+  if (!supported) {
+    note.textContent = "Your browser doesn't have Grid Lanes yet, so both buttons show the fixed-square fallback, same as the homepage. Open it in Safari 27 (or Chrome/Firefox with the flag) to see the ragged version.";
+    bM.disabled = true; // the toggle can't do anything without support
+  } else {
+    note.textContent = "Toggle to A/B the ragged masonry against the cropped squares the homepage ships.";
+  }
+
+  function setMode(masonry) {
+    sheet.classList.toggle("masonry", masonry);
+    bM.setAttribute("aria-pressed", String(masonry));
+    bS.setAttribute("aria-pressed", String(!masonry));
+  }
+  bM.addEventListener("click", function () { if (!bM.disabled) setMode(true); });
+  bS.addEventListener("click", function () { setMode(false); });
+
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+
+  Promise.all([
+    fetch("/images/manifest.json").then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }),
+    fetch("/images/metadata.json").then(function (r) { return r.ok ? r.json() : {}; }).catch(function () { return {}; })
+  ]).then(function (res) {
+    var man = res[0], meta = res[1] || {};
+    var photos = (man && man.photos) || [];
+    if (!photos.length) { sheet.innerHTML = '<p class="empty">No photos in the manifest right now.</p>'; return; }
+    // shuffle, take up to 40 for a full-but-light sheet
+    for (var i = photos.length - 1; i > 0; i--) { var j = (Math.random() * (i + 1)) | 0; var t = photos[i]; photos[i] = photos[j]; photos[j] = t; }
+    photos = photos.slice(0, 40);
+
+    var html = photos.map(function (p) {
+      var m = meta[p.stem] || {};
+      var ar = (m.width && m.height) ? (m.width + " / " + m.height) : "1";
+      var abs = function (u) { return u && u.charAt(0) === "/" ? u : "/images/" + u; };
+      var avif = abs(p.thumb_avif || (p.stem + ".avif"));
+      var jpg = abs(p.thumb_jpg || (p.stem + ".jpg"));
+      var full = "/images/full/" + encodeURI(p.full || (p.stem + ".jpg"));
+      return '<a class="tile" href="' + esc(full) + '" style="--ar:' + esc(ar) + '" title="' + esc(p.stem) + '">' +
+        '<picture><source type="image/avif" srcset="' + esc(avif) + '">' +
+        '<img src="' + esc(jpg) + '" alt="' + esc(p.stem) + '" loading="lazy" decoding="async"></picture></a>';
+    }).join("");
+    sheet.innerHTML = html;
+  });
+})();
+</script>
+<script type="application/json" id="luq-data">
+{
+  "skin": "garage",
+  "intro": "Four questions before you close the tab. If the toggle made sense, so will these.",
+  "questions": [
+    {
+      "q": "The masonry sheet and the homepage grid share the same markup. What does display: grid-lanes actually change about the layout?",
+      "options": [
+        {
+          "t": "It keeps the columns on their fixed grid tracks and stacks the rows masonry-style, so each tile keeps its photo's true aspect ratio.",
+          "ok": true,
+          "why": "Right. Grid Lanes leaves grid-template-columns in charge of the lanes and lets the masonry algorithm pack the rows, which is why a portrait and a landscape sit side by side uncropped."
+        },
+        {
+          "t": "It flows the tiles down each column in reading order, the way CSS multi-column layout does.",
+          "why": "That's the old columns-property masonry hack, and it scrambles left-to-right reading order. The lede says the opposite: columns stay on a grid, the rows are what stack masonry-style."
+        },
+        {
+          "t": "It measures every image with JavaScript and absolutely positions each tile in the sheet.",
+          "why": "That's the Masonry.js approach this prototype exists to retire. The lede is explicit: no JavaScript lays anything out and no media queries fire, the browser does the packing."
+        },
+        {
+          "t": "It stretches every photo in a row to match the height of the tallest one beside it.",
+          "why": "That would still distort or crop the frames. The whole point of the ragged sheet is that heights differ within a row because each tile takes its photo's true proportions."
+        }
+      ]
+    },
+    {
+      "q": "The photos load lazily into the sheet, yet nothing shifts around as they arrive. What prevents the reflow?",
+      "options": [
+        {
+          "t": "Each tile's aspect-ratio is pinned up front from the EXIF width and height in the photo metadata, so the box has its final shape before any pixels arrive.",
+          "ok": true,
+          "why": "Right. The script sets --ar from metadata.json before a single image decodes, so layout settles at parse time and the images just fill boxes that already exist."
+        },
+        {
+          "t": "The browser holds off on laying out the sheet until every image has finished downloading.",
+          "why": "Browsers lay out immediately and reflow as intrinsic sizes trickle in; that jank is exactly what this page avoids. The footer note names the real fix: EXIF pinning each photo's aspect-ratio."
+        },
+        {
+          "t": "The loading=lazy attribute defers the images until the layout has already finished.",
+          "why": "Lazy loading changes when bytes get fetched, never whether an unsized image reflows the page once it decodes. Without a pinned ratio, every late arrival would still shove the sheet around."
+        },
+        {
+          "t": "Grid Lanes reserves the right amount of space on its own once it reads the image headers.",
+          "why": "Grid Lanes only packs boxes; it has no idea how tall a photo is until something declares it. The declared aspect-ratio from EXIF is what hands it real heights to pack."
+        }
+      ]
+    },
+    {
+      "q": "Both modes keep object-fit: cover on the img. Why does the masonry view still show each photo's whole frame?",
+      "options": [
+        {
+          "t": "The tile box takes the photo's true aspect ratio, so cover has nothing left to crop.",
+          "ok": true,
+          "why": "Right. cover only crops when the box and the image disagree about shape. A 1:1 box disagrees with almost every photo; a correctly-proportioned box makes cover a no-op, as the comment in the masonry CSS says."
+        },
+        {
+          "t": "The masonry mode quietly swaps the img over to object-fit: contain instead.",
+          "why": "No swap happens; the img rule is identical in both modes. What changes is the box: square mode forces aspect-ratio 1, and that 1:1 shape is where the cropping actually comes from."
+        },
+        {
+          "t": "The masonry mode requests different, uncropped image files from the server.",
+          "why": "Same thumbnails both ways; the toggle never touches the network. The crop is purely a CSS framing decision, so the identical pixels look ragged or square depending on the box shape."
+        },
+        {
+          "t": "cover scales each image down until the whole frame fits inside the tile.",
+          "why": "That behavior is contain, and it would letterbox. cover fills the box and crops the overflow; it only shows the whole frame when the box already matches the photo's shape."
+        }
+      ]
+    },
+    {
+      "q": "You open this page in a browser without Grid Lanes. What does the demo do?",
+      "options": [
+        {
+          "t": "The chip reports no support, the Masonry button is disabled, and both layouts render the fixed-square grid the homepage ships.",
+          "ok": true,
+          "why": "Right. The masonry rule sits behind @supports (display: grid-lanes), so an unsupported engine never applies it, and the toggle would change nothing, which is why the script disables the button."
+        },
+        {
+          "t": "A JavaScript polyfill steps in and lays out the ragged sheet anyway.",
+          "why": "There's no polyfill on purpose; the bet is one CSS line behind @supports. Unsupported browsers get the square fallback, exactly what the note under the toggle tells you."
+        },
+        {
+          "t": "The Masonry button still works but shows the photos stretched to fill their tiles.",
+          "why": "An engine without Grid Lanes ignores display: grid-lanes entirely and keeps the regular 1:1 grid, so there's nothing ragged or stretched for that button to show. It gets disabled instead."
+        },
+        {
+          "t": "The server detects the browser and sends the square markup in place of the masonry one.",
+          "why": "The same markup ships to everyone; the capability check runs in your browser via CSS.supports and only updates the chip and buttons. The fallback lives in the CSS cascade, the server never branches."
+        }
+      ]
+    }
+  ]
+}
+</script>
+<script src="/a/quiz.1d162bed.js" defer></script>
+<script src="/a/nav.f1317f11.js" defer></script>
+<!-- axp:shell --><nav id="axp-icons" aria-label="desktop shortcuts"><a class="axp-ico" title="writing, in flux" href="/writing" data-key="Notepad" style="left:9px;top:9px"><span class="ic note" aria-hidden="true"></span><span class="t">Notepad</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="GitHub (opens in a new tab)" href="https://github.com/oddharsh" data-key="GitHub" style="left:9px;top:95px"><span class="ic " style="background:linear-gradient(180deg,oklch(72% 0.05 255),oklch(60% 0.07 257))" aria-hidden="true">G</span><span class="t">GitHub</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Twitter (opens in a new tab)" href="https://x.com/oddhash" data-key="Twitter" style="left:9px;top:181px"><span class="ic " style="background:linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))" aria-hidden="true">@</span><span class="t">Twitter</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Instagram (opens in a new tab)" href="https://www.instagram.com/aadharsh.hif" data-key="Photos" style="left:9px;top:267px"><span class="ic " style="background:linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))" aria-hidden="true"><i class="cam" aria-hidden="true"></i></span><span class="t">Photos</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Curius (opens in a new tab)" href="https://curius.app/aadharsh-pannirselvam" data-key="Curius" style="left:9px;top:353px"><span class="ic " style="background:linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))" aria-hidden="true">C</span><span class="t">Curius</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Beli (opens in a new tab)" href="https://beliapp.com/users/aadharsh" data-key="Beli" style="left:9px;top:439px"><span class="ic " style="background:linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))" aria-hidden="true">B</span><span class="t">Beli</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Spotify (opens in a new tab)" href="https://open.spotify.com/user/aadharsh2010" data-key="Music" style="left:9px;top:525px"><span class="ic " style="background:linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))" aria-hidden="true">♪</span><span class="t">Music</span></a></nav><div id="axp-taskbar" role="navigation" aria-label="taskbar"><a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a><div id="axp-pins"><a class="axp-pin" title="prototypes + experiments" href="/garage"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-garage" alt=""></span><span class="lbl">garage</span></a><a class="axp-pin" title="chat-style explainers + live demos" href="/lwe"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-lwe" alt=""></span><span class="lbl">lwe</span></a><a class="axp-pin" title="notes, in flux: an editable notepad" href="/writing"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-writing" alt=""></span><span class="lbl">writing</span></a><a class="axp-pin" title="what I've been reading, from Curius" href="/reading"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-reading" alt=""></span><span class="lbl">reading</span></a><a class="axp-pin" title="events worth going to" href="/serendipity"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-serendipity" alt=""></span><span class="lbl">serendipity</span></a><a class="axp-pin" title="the crypto-VC neighborhood" href="/around"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-around" alt=""></span><span class="lbl">around</span></a><a class="axp-pin" title="the other web: how machines read a URL" href="/lens"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-lens" alt=""></span><span class="lbl">lens</span></a><a class="axp-pin" title="a compression vision test — whose eye do you have?" href="/pixel-peeper"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-pixel-peeper" alt=""></span><span class="lbl">pixel peeper</span></a><a class="axp-pin" title="what I'm listening to right now" href="/rn"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-music" alt=""></span><span class="lbl">music</span></a><a class="axp-pin" title="book a coffee / bagel" href="/coffee"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-coffee" alt=""></span><span class="lbl">coffee</span></a></div><div id="axp-spacer"></div><div id="axp-tray"><button id="axp-sound" type="button" hidden></button><a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><img src="/a/icons.74f459d9.svg#tray-sysprop" alt=""></a><a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><img src="/a/icons.74f459d9.svg#tray-security" alt=""></a><a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><img src="/a/icons.74f459d9.svg#tray-updates" alt=""></a><span id="axp-clock" aria-hidden="true"></span></div></div><!-- /axp:shell -->
+</body>
+</html>

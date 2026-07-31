@@ -1,0 +1,27 @@
+# Garage
+
+> Prototypes and experiments: the site's workshop.
+
+Every page below is also served as HTML at the same path without the `.md`.
+The whole-site index is https://aadhar.sh/llms.txt.
+
+## Pages
+
+- [Garage](https://aadhar.sh/garage.md): Prototypes and experiments: the site's workshop.
+- [Blueprint](https://aadhar.sh/garage/blueprint.md): The teardown's sequel: Fable 5 read every file in the repo and drew the blueprint it would rebuild from. What the code already knows (the boutique tricks worth keeping), the architecture as built, the Pages-era scar tissue a Workers-native rewrite would remove, and the sketch itself, before and after, side by side.
+- [Content-addressed chunking](https://aadhar.sh/garage/chunks.md): Live FastCDC content-defined chunking + content-addressing in the browser: pure JS + crypto.subtle. Why a one-byte edit re-sends the whole file under fixed chunks but almost nothing under content-defined ones.
+- [Four free Cloudflare features](https://aadhar.sh/garage/cloudflare.md): Live demos of four free Cloudflare Workers platform features (Durable Objects atomic counter, Workers AI photo captioning, Workers Logs structured observability, and custom trace spans) behind a tiny worker. A fifth, Browser Rendering, is wired but parked on the free tier's daily cap.
+- [Thumbnail encoding study](https://aadhar.sh/garage/encoding.md): The same photo run through AVIF, WebP, and JPEG (zenjpeg/zenc, the shipped encoder that replaced jpegli), with real byte counts, quality measurements, encoder knobs, and the tradeoffs the site actually makes.
+- [Compression teardown](https://aadhar.sh/garage/compression.md): Shipping brotli q11 and zstd shared-dictionary deltas on this site: what the edge actually does with Accept-Encoding, the three platform limits that turned out innocent, the one-line bug that impersonated all of them, and why the deltas ship as dcz instead of dcb.
+- [5.6 Sol](https://aadhar.sh/garage/gpt56.md): The performance pass outlined with 5.6 Sol: the bytes, cache boundaries, first-paint decisions, and Chrome trace checks that make aadhar.sh feel instant without sanding off its XP soul.
+- [Web-platform horizon](https://aadhar.sh/garage/horizon.md): Test-driving upcoming web-platform features (text-box-trim, contrast-color, interestfor, anchor positioning) before any of them touch the live aadhar.sh homepage.
+- [iroh](https://aadhar.sh/garage/iroh.md): iroh hit 1.0: dial a machine by its public key, not its IP. A garage look at the P2P library, a native in-browser NodeId generator you can run, and an honest verdict on why a megabyte of wasm does not ride a lean static site.
+- [Masonry](https://aadhar.sh/garage/masonry.md): Prototype: a ragged-height contact-sheet photo grid with CSS Grid Lanes (display: grid-lanes), falling back to the fixed-square grid the homepage ships today.
+- [DOM-free text measurement](https://aadhar.sh/garage/pretext.md): chenglou/pretext measures and lays out multiline text with canvas as ground truth instead of the DOM, sidestepping reflow. A live demo, where it'd help aadhar.sh, and the tradeoffs.
+- [Post-quantum signatures, priced](https://aadhar.sh/garage/pqc.md): This site's TLS key agreement is already post-quantum and its signatures are not. Measuring what ML-DSA-44 and the hash-based alternatives actually cost on the one signature a personal site controls: its own crawler's RFC 9421 request signing.
+- [Safari 27](https://aadhar.sh/garage/safari27.md): What WWDC26's Safari 27 (macOS 27 Golden Gate) ships that this site already leans on: base-select going stable, anchor-positioning upgrades, scroll anchoring, plus live 'does your browser have it' checks.
+- [XP scroll chrome](https://aadhar.sh/garage/scroll.md): Scroll-driven animations done in a period-correct Windows XP idiom: the Luna file-copy progress bar, window maximize-on-enter, and the blue gradient scrollbar. animation-timeline, no scroll listeners.
+- [Teardown](https://aadhar.sh/garage/teardown.md): What Fable 5's multi-agent audit found and fixed across aadhar.sh: a live cache-poisoning hole, a frontier feature whose fallback broke old browsers, and a stack of make-it-feel-instant changes. Before and after, side by side.
+- [Tooltip experiments](https://aadhar.sh/garage/tooltips.md): Cursor-following tooltip styles for the photo grid and tracklist. Hover the slots and rows to compare.
+- [Bytes on the wire](https://aadhar.sh/garage/wire.md): The site's first build step, and the brotli rabbit hole that led there: where Cloudflare actually compresses (edge quality vs q11), the four paths to q11 that all lost, deploy-time Oxc and Lightning CSS minification with readable-source twins, the knobs that stay conservative, and the Cache API layer that finally made s-maxage true. Real numbers, live probes.
+- [Off Pages, onto Workers](https://aadhar.sh/garage/workers.md): Why this site moved from Cloudflare Pages advanced mode to Cloudflare Workers with static assets: the same bytes, an atomic deploy, and the whole configuration (bindings, routing, the Durable Object) as one checked-in wrangler.jsonc instead of dashboard clicks. Plus a live routing prober.

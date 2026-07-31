@@ -1,0 +1,23 @@
+# Files in holding/ that must NOT be uploaded as public static assets.
+# Cloudflare warns that uploading the worker as an asset exposes server-side
+# source. The _worker.js directory is the worker bundle entry, not an asset.
+_worker.js
+
+# The photo-pipeline + asset build scripts are dev tooling, not site content.
+# Left uploaded they served as public 200s (exposing deploy mechanics + the
+# hardcoded RN_KV namespace id + the /garage/cf/caption endpoint). Nothing
+# secret, but there's no reason to ship them.
+scripts
+
+# Previous shipped versions of the content-hashed shell, kept ONLY as dictionary inputs
+# for scripts/gen-shell-deltas.mjs. Uploading them would serve stale nav.js/luna.css at
+# public URLs for no reason. holding/ad/ (the .dcb deltas) is deliberately NOT ignored:
+# the worker fetches those through ASSETS to answer an Available-Dictionary request.
+a-dict
+p-dict
+
+# Hand-authored Markdown twins for the two Worker-rendered prose pages, /bot and
+# /whoareyou, whose text lives in template literals no build step can read.
+# scripts/gen-md-twins.mjs publishes each one AT ITS PAGE'S PATH (/bot.md), so
+# shipping this directory as well would serve the same twin at a second URL.
+md

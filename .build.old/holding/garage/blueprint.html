@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#2D78BD">
+<link rel="preload" as="style" href="/a/luna.12fe1428.css">
+<title>aadhar.sh/garage/blueprint</title>
+<meta name="description" content="The teardown's sequel: Fable 5 read every file in the repo and drew the blueprint it would rebuild from. What the code already knows (the boutique tricks worth keeping), the architecture as built, the Pages-era scar tissue a Workers-native rewrite would remove, and the sketch itself, before and after, side by side.">
+<link rel="canonical" href="https://aadhar.sh/garage/blueprint">
+<meta property="og:type" content="website">
+<meta property="og:title" content="aadhar.sh/garage/blueprint">
+<meta property="og:description" content="Fable 5 read every file and drew the blueprint it would rebuild from: the tricks worth keeping, the Pages-era scar tissue, and the Workers-native rewrite sketch, before and after.">
+<meta property="og:url" content="https://aadhar.sh/garage/blueprint">
+<meta name="twitter:card" content="summary_large_image">
+<meta property="og:image" content="https://aadhar.sh/og/garage-blueprint.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="aadhar.sh/garage/blueprint, live demo screenshotted">
+<meta name="twitter:image" content="https://aadhar.sh/og/garage-blueprint.png">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20x='3'%20y='5'%20width='26'%20height='22'%20rx='1.5'%20fill='%231e50b0'/%3E%3Cpath%20d='M7%2010h12M7%2014h18M7%2018h10M7%2022h15'%20stroke='%23cfe0fb'%20stroke-width='1.6'%20stroke-linecap='round'/%3E%3Ccircle%20cx='24'%20cy='10'%20r='2.6'%20fill='none'%20stroke='%23cfe0fb'%20stroke-width='1.4'/%3E%3C/svg%3E">
+<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; } html{background:linear-gradient(180deg,oklch(56% 0.13 250) 0%,oklch(73% 0.10 236) 50%,oklch(88% 0.05 232) 60%,oklch(60% 0.16 140) 100%)}
+html { scrollbar-color: oklch(62% 0.14 255) oklch(91% 0.02 248); }
+body {
+  background: linear-gradient(180deg, oklch(56% 0.13 250) 0%, oklch(73% 0.10 236) 50%, oklch(88% 0.05 232) 60%, oklch(60% 0.16 140) 100%);
+  font-family: var(--font-ui); font-size: 10.5pt; line-height: 1.5; color: oklch(21.78% 0 0);
+  padding: 24px 12px 60px; min-height: 100vh;
+}
+.window {
+  max-width: 720px; margin: 0 auto; background: oklch(100% 0 0);
+  border: 2px solid #0831d9; border-right-color: #001ea0; border-bottom-color: #001ea0;
+  border-top-left-radius: 8px; border-top-right-radius: 8px; overflow: hidden;
+  box-shadow: inset 1px 1px 0 #166aee, inset 2px 2px 0 #0855dd, inset -1px -1px 0 #00138c, inset -2px -2px 0 #003bda, 4px 4px 0 rgba(0,30,160,.35);
+}
+.title-bar {
+  background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
+  color: oklch(100% 0 0); font-family: var(--font-caption); font-size: 10pt; font-weight: bold;
+  padding: 4px 8px; border-bottom: 1px solid oklch(41.92% 0.0962 250.51);
+  display: flex; align-items: center; justify-content: space-between; text-shadow: 1px 1px #0f1089;
+}
+.title-bar .icon { display: inline-block; width: 16px; height: 16px; margin-right: 6px; vertical-align: middle; background: oklch(87.82% 0.0877 66.27); position: relative; flex-shrink: 0; }
+.title-bar .icon::before { content: ""; position: absolute; inset: 3px; background: oklch(69.58% 0.2043 43.49); clip-path: polygon(20% 0, 100% 50%, 20% 100%, 0 50%); }
+.title-bar .title-text { flex: 1; padding-left: 4px; }
+.title-bar .controls { display: flex; align-items: center; gap: 2px; letter-spacing: 0; }
+.title-bar .controls .min, .title-bar .controls .max, .title-bar .controls .close {
+  position: relative; box-sizing: border-box; width: 21px; height: 21px; padding: 0; margin: 0;
+  display: inline-block; overflow: hidden; font-size: 0; color: transparent;
+  border: 1px solid #6696eb; border-radius: 3px; text-decoration: none; cursor: pointer;
+  background-color: #3e73f5;
+  background-image: linear-gradient(180deg, #5f8cf7 0%, #3a71f5 22%, #3e73f5 55%, #2a70f2 82%, #1045be 100%);
+  transition: filter 60ms ease-out;
+}
+.title-bar .controls .min::after, .title-bar .controls .max::after {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 45%;
+  background: linear-gradient(180deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.12) 70%, rgba(255,255,255,0) 100%);
+  pointer-events: none; border-radius: 2px 2px 5px 5px;
+}
+.title-bar .controls .min:hover, .title-bar .controls .max:hover { border-color: #8fb4ff; background-color: #4fa4ff; background-image: linear-gradient(180deg, #689bff 0%, #468aff 22%, #4fa4ff 55%, #3990fc 82%, #1858c8 100%); outline: none; }
+.title-bar .controls .close { border-color: #d8401c; background-color: #e45f3e; background-image: linear-gradient(180deg, #e8795f 0%, #e45f40 30%, #e45d3d 52%, #e2552a 80%, #ae3110 100%); }
+.title-bar .controls .close:hover { border-color: #ff7a66; background-color: #ff957c; background-image: linear-gradient(180deg, #ff8b7d 0%, #ff7463 26%, #ff957c 55%, #fd7e64 82%, #d34936 100%); box-shadow: 0 0 4px rgba(255,120,96,.7); outline: none; }
+.title-bar .controls .min:active, .title-bar .controls .max:active, .title-bar .controls .close:active { filter: brightness(.9); }
+.title-bar .controls .min::before { content: ""; position: absolute; left: 5px; right: 5px; bottom: 5px; height: 2px; background: #fff; box-shadow: 0 1px 0 rgba(0,0,0,.35); }
+.title-bar .controls .max::before { content: ""; position: absolute; left: 5px; top: 5px; width: 11px; height: 9px; box-sizing: border-box; border: 1px solid #fff; border-top-width: 2px; filter: drop-shadow(0 1px 0 rgba(0,0,0,.35)); }
+.title-bar .controls .close::before, .title-bar .controls .close::after { content: ""; position: absolute; left: 50%; top: 50%; width: 13px; height: 2px; margin: -1px 0 0 -6.5px; background: #fff; box-shadow: 0 1px 0 rgba(0,0,0,.35); }
+.title-bar .controls .close::before { transform: rotate(45deg); }
+.title-bar .controls .close::after { transform: rotate(-45deg); }
+.content { padding: 12px 16px 18px; }
+h1 { font-family: var(--font-caption); font-size: 14pt; color: oklch(41.92% 0.0962 250.51); margin: 0 0 6px; }
+.lede { color: oklch(38.67% 0 0); font-size: 10.5pt; margin: 0 0 4px; }
+.note { color: oklch(44.95% 0 0); font-size: 10pt; margin: 0 0 14px; }
+.note code, p code, li code, td code { background: oklch(96.72% 0 0); border: 1px solid oklch(88.22% 0 0); padding: 0 4px; font-family: var(--font-mono); font-size: 9.5pt; }
+hr { border: 0; border-top: 1px solid oklch(86% 0.02 255); margin: 18px 0; }
+a { color: oklch(41.92% 0.0962 250.51); }
+p { margin: 8px 0; }
+ul.tight { margin: 8px 0; padding-left: 22px; }
+ul.tight li { margin: 5px 0; }
+code.m, .m { font-family: var(--font-mono); font-size: 9.2pt; }
+.callout { font-size: 10pt; background: oklch(97% 0.025 255); border-left: 3px solid oklch(51% 0.225 263); padding: 8px 12px; margin: 14px 0; color: oklch(28% 0.04 255); }
+
+/* the teardown vocabulary, inherited */
+.content h2 { font-family: var(--font-caption); font-size: 13pt; color: oklch(41.92% 0.0962 250.51); margin: 24px 0 4px; font-weight: bold; }
+.sev { font: bold 7.5pt var(--font-mono); text-transform: uppercase; letter-spacing: .04em; padding: 1px 6px; border-radius: 2px; vertical-align: 2px; margin-left: 8px; }
+.sev.ghost { color: oklch(46% 0.19 25); background: oklch(95.5% 0.035 25); border: 1px solid oklch(72% 0.15 25); }
+.sev.sketch { color: oklch(38% 0.13 250); background: oklch(96% 0.03 250); border: 1px solid oklch(66% 0.12 250); }
+.sev.keep { color: oklch(36% 0.14 150); background: oklch(94% 0.05 150); border: 1px solid oklch(66% 0.13 150); }
+.tg { margin: 0 0 22px; }
+.tg h3 { font-family: var(--font-ui); font-size: 11pt; font-weight: bold; color: oklch(22% 0 0); margin: 14px 0 2px; }
+.diff { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0 0; }
+@media (max-width: 540px) { .diff { grid-template-columns: 1fr; } }
+.diff > figure { margin: 0; min-width: 0; }
+.diff figcaption { font: bold 8pt var(--font-mono); text-transform: uppercase; letter-spacing: .05em; padding: 3px 9px; border-radius: 3px 3px 0 0; }
+.diff .before figcaption { color: oklch(40% 0.15 25); background: oklch(93.5% 0.045 25); }
+.diff .after figcaption { color: oklch(36% 0.14 150); background: oklch(93.5% 0.05 150); }
+.diff pre { margin: 0; font-family: var(--font-mono); font-size: 8.5pt; line-height: 1.5; padding: 8px 10px; overflow-x: auto; white-space: pre; border: 1px solid; border-top: 0; }
+.diff .before pre { background: oklch(99% 0.01 25); border-color: oklch(88% 0.04 25); }
+.diff .after pre { background: oklch(99% 0.012 150); border-color: oklch(88% 0.04 150); }
+.diff pre .c { color: oklch(52% 0.03 145); }
+.what { font-size: 9.5pt; color: oklch(30% 0 0); margin: 7px 0 0; }
+.what b { color: oklch(41.92% 0.0962 250.51); }
+.rest { width: 100%; border-collapse: collapse; font-size: 9pt; margin: 6px 0 0; }
+.rest th, .rest td { text-align: left; padding: 5px 8px; border-bottom: 1px solid oklch(89% 0.02 255); vertical-align: top; }
+.rest th { font: bold 8pt var(--font-mono); text-transform: uppercase; letter-spacing: .04em; color: oklch(40% 0.05 255); }
+.rest td:first-child { white-space: nowrap; font-family: var(--font-mono); font-size: 8.5pt; color: oklch(35% 0.06 255); }
+.map { font-family: var(--font-mono); font-size: 8.5pt; line-height: 1.55; background: oklch(97.5% 0.006 250); border: 1px solid oklch(85% 0.02 250); padding: 10px 12px; overflow-x: auto; white-space: pre; margin: 8px 0; color: oklch(28% 0.02 250); }
+footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67% 0.0294 259.59); font-size: 9.5pt; color: oklch(45% 0 0); }
+
+  /* OS-window geometry inlined so FIRST PAINT matches nav.js (no shell "pop"
+     when the deferred desktop arrives). keep in sync with nav.js (search
+     "app-shell"); degrades with JS off (.content scrolls natively). */
+  html { height: 100dvh; overflow: hidden; }
+  body { min-height: 0; height: calc(100vh - 30px); height: calc(100dvh - 30px);
+    overflow: hidden; box-sizing: border-box; display: flex; flex-direction: column;
+    align-items: center; padding: 8px; }
+  .window { flex: 0 1 auto; min-height: 0; max-height: 100%; width: 100%;
+    display: flex; flex-direction: column; }
+  .window > .title-bar { flex: 0 0 auto; }
+  .window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 12px !important; }
+  /* client edge — generated by build.mjs from luna.css */
+  .window > .content { border: 6px solid #ece9d8; background-clip: padding-box; outline: 1px solid #7f9db9; outline-offset: -6px; }
+  body::after { content: ""; position: fixed; left: 0; right: 0; bottom: 0; height: 30px;
+    z-index: 1; background: linear-gradient(180deg, oklch(67% 0.15 256) 0%, oklch(58% 0.19 257) 4%,
+    oklch(51% 0.20 258) 9%, oklch(49% 0.20 258) 50%, oklch(46% 0.20 259) 92%, oklch(40% 0.18 260) 100%); }
+body { text-wrap: pretty; } /* progressive; older engines ignore it */
+</style>
+<link rel="stylesheet" href="/a/luna.12fe1428.css">
+</head>
+<body>
+<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<div class="window">
+  <div class="title-bar" aria-hidden="true"><span class="title-text"><span class="icon"></span>aadhar.sh/garage/blueprint</span><span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span></div>
+  <div class="content">
+    <h1>Blueprint</h1>
+    <p class="lede">
+      The <a href="/garage/teardown">teardown</a> put this site on a lift and found what
+      was broken. This is the other document a good shop produces: the drawing you would
+      rebuild from, knowing everything the current build taught you. For this one,
+      Fable 5 read every file in the repo, all ~40 pages, all 20 worker modules, the
+      pipeline scripts, the design brief, the service worker, and asked one question:
+      the site was designed for Cloudflare Pages and now lives on Workers with static
+      assets, so which parts of its cleverness are load-bearing, and which parts are
+      scar tissue from a platform it no longer runs on?
+    </p>
+    <p class="note">
+      "The smarter model would rewrite it" is cheap to claim, so the sketch below is held
+      to the same rule as everything else in this garage: specific diffs, honest verdicts,
+      and a list of what I would NOT touch that is longer than the list of what I would.
+    </p>
+
+    <hr>
+
+    <h2>What the code already knows<span class="sev keep">keep</span></h2>
+    <p class="note">Before any rewrite talk: the repo is full of decisions that took real
+      bruises to learn, most of them written down next to the code they saved. A rebuild
+      keeps every one of these. A sampler:</p>
+    <table class="rest">
+      <thead><tr><th>where</th><th>the trick, and why it is right</th></tr></thead>
+      <tbody>
+        <tr><td>home.js</td><td>The visit counter is read concurrently but awaited INSIDE the footer's HTMLRewriter handler, so a cross-region Durable Object round trip overlaps the whole streaming page and never gates first byte.</td></tr>
+        <tr><td>photos.js, rn.js, reading.js, around.js</td><td>Two-key stale-while-revalidate in KV: the value persists forever, a tiny <code>:fresh</code> sentinel carries the TTL. When it lapses, the visitor gets the stale copy instantly and the rebuild rides <code>ctx.waitUntil</code>. Nobody waits but the true first run.</td></tr>
+        <tr><td>index.html tooltip</td><td>EXIF capture times are wall clock with no timezone; <code>new Date()</code> would shift them per viewer. <code>Temporal.PlainDateTime</code> shows them exactly as the camera wrote them, everywhere. Upload times are instants and get the viewer's zone. Two kinds of time, two APIs.</td></tr>
+        <tr><td>index.html tooltip</td><td><code>will-change: transform</code> is an earn-it hint: promoted while the tooltip is open, released the instant it closes. Left on a hidden element it pins a compositor layer for nothing.</td></tr>
+        <tr><td>index.html playlist</td><td>Long lists render in ~8-row chunks yielding via <code>scheduler.yield()</code>, which resumes at the FRONT of the task queue, with a <code>setTimeout(0)</code> shim elsewhere.</td></tr>
+        <tr><td>index.html grid</td><td>Suppress tooltips mid-scroll, then on settle re-target via <code>elementFromPoint</code>: a fixed tooltip plus wheel scroll means the cursor never moves, so no pointerover fires when a new photo slides under it.</td></tr>
+        <tr><td>index.html + nav.js</td><td>The OS-window geometry is inlined in every page at higher specificity than the deferred shell's copy, so first paint is already the windowed layout and nav.js changes nothing when it lands. The teardown found the two-stage pop; this killed it.</td></tr>
+        <tr><td>design/, every page</td><td>Zero font bytes (local stacks only), OKLCH-encoded Luna with P3 upgrades for accents while the chrome stays period-sRGB, and gel caption buttons drawn entirely from pseudo-elements with hex traced off the .msstyles bitmap.</td></tr>
+        <tr><td>sw.js</td><td>Cache-first with NO background revalidate for content-addressed thumbnails (a refetch can never observe new bytes), SWR for the shells, network-only for everything rendered. Full-res R2 originals deliberately excluded: the browser HTTP cache already holds them immutable, and a second copy is pure disk cost.</td></tr>
+        <tr><td>index.html</td><td>Speculation rules prerender on intent, with exclusions chosen for side effects, not size: prerendering <code>/around</code> would fire a real crawl, <code>/whoareyou</code> would fingerprint a request nobody made, <code>/</code> would burn a counter tick.</td></tr>
+        <tr><td>whoareyou.js, botauth.js</td><td>The machine surface is honest in both directions: inbound gets system-properties transparency with nothing logged, outbound crawls sign themselves per RFC 9421 with a published JWKS. Plus llms.txt, JSON-LD, markdown content negotiation on <code>/</code>, and MCP cards. A 2003 body with 2026 paperwork.</td></tr>
+        <tr><td>verify-routes.mjs, bump-version.sh</td><td>The operational spine: a 42-route oracle gates every deploy, and one script bumps the SW version AND logs a D1 checkpoint that both <a href="/updates">/updates</a> and <a href="/restore">/restore</a> read, so the changelog cannot drift from reality.</td></tr>
+      </tbody>
+    </table>
+
+    <h2>The architecture, as built</h2>
+<pre class="map">request
+  |-- edge-direct (0 worker invocations) ......... nav.js sw.js lens.js notepad.js
+  |     _headers rules; SWR + immutable          /garage/* /lwe/* /cars/* *.avif
+  |                                              .well-known cards, SEO files
+  |-- worker-first
+        route() if-chain, ~25 routes
+        |-- streamed SSR ......................... /        HTMLRewriter over index.html
+        |-- rendered + edge-cached ................ /lens /writing /reading  caches.default
+        |-- rendered, deliberately fresh .......... /whoareyou /updates /restore
+        |-- data planes ........................... KV (4x SWR caches)  D1 (checkpoints)
+        |                                          R2 (originals, edge-cached)  DO (counter)
+        |-- ghosts of Pages past .................. SPA-fallback sniffs, ?v= bust scheme,
+                                                    per-request asset re-bust, .pages.dev 301</pre>
+    <p class="note">Four cache layers, each owning what it is best at: browser (immutable +
+      bfcache), service worker (shells + thumbs), edge (rendered routes + R2), KV (data).
+      That part is already the Workers-native shape. The ghosts are the bottom line.</p>
+
+    <h2>The Pages ghosts<span class="sev ghost">scar tissue</span></h2>
+
+    <div class="tg">
+      <h3>Routing is a denylist because Pages saw everything</h3>
+      <p class="what"><b>Why it is a ghost.</b> On Pages advanced mode the worker intercepted
+        every request by definition, so the migration naturally inverted that into "everything,
+        minus exceptions." But the exceptions are now the majority: most of this site is static
+        files. An allowlist makes the config read as intent (here is exactly where compute
+        happens), and a new static file can never accidentally cost a worker invocation because
+        someone forgot a negation. Same engine, opposite default.</p>
+      <div class="diff">
+        <figure class="before"><figcaption>as built</figcaption><pre>"run_worker_first": [
+  "/*",                 <span class="c">// worker sees EVERYTHING...</span>
+  "!/nav.js", "!/sw.js",
+  "!/garage/*", "!/lwe/*",
+  "!/images/*.avif", ...  <span class="c">// ...minus 14 carve-outs</span>
+]</pre></figure>
+        <figure class="after"><figcaption>blueprint</figcaption><pre>"run_worker_first": [
+  "/", "/whoareyou", "/around", "/lens*",
+  "/writing*", "/rn*", "/reading", "/updates*",
+  "/restore", "/security", "/bot", "/agent/*",
+  "/oauth2/*", "/images/full/*", ...
+]  <span class="c">// the worker EARNS each route; static is the default</span></pre></figure>
+      </div>
+    </div>
+
+    <div class="tg">
+      <h3>Three guards still sniff for an attacker that left</h3>
+      <p class="what"><b>Why it is a ghost, mostly.</b> The teardown's biggest find was Pages
+        serving homepage HTML at missing thumbnail URLs with a year-long cache header, and these
+        content-type gates were the fix. Workers static assets answers a missing file with an
+        honest 404, so the masquerade check now tests for a platform behavior that cannot occur.
+        What remains load-bearing is narrower: an edge-cached 404 under <code>/images/*</code>
+        would still inherit the 1-year immutable rule, so the cache-control clamp stays. One
+        small guard instead of three sniffing ones. Same logic eventually retired <code>THUMB_VERSION</code>
+        outright: atomic deploys plus content-hashed <code>/i/</code> URLs removed the race it was built for.</p>
+      <div class="diff">
+        <figure class="before"><figcaption>as built</figcaption><pre><span class="c">// x3: metadata.json, meta/*.json, thumbnails</span>
+const res = await env.ASSETS.fetch(request);
+const ct = res.headers.get("content-type");
+if (res.ok &amp;&amp; ct.startsWith("image/")) return res;
+<span class="c">// defends against Pages' SPA fallback:
+// a missing asset came back 200 text/html</span>
+return errorResp("not found", 404);</pre></figure>
+        <figure class="after"><figcaption>blueprint</figcaption><pre><span class="c">// Workers returns real 404s; the masquerade
+// is extinct. keep ONLY the half that still
+// earns its keep: clamp 404 cache-control so
+// a miss can't inherit /images/* immutable.</span>
+const res = await env.ASSETS.fetch(request);
+if (res.status === 404) return uncacheable404();
+return res;</pre></figure>
+      </div>
+    </div>
+
+    <div class="tg">
+      <h3>Smaller ghosts, listed for the record</h3>
+      <ul class="tight">
+        <li><code>serveFreshAsset</code> re-busts the asset cache on every request for the
+          extensionless discovery files, a fix for a Pages read-through-cache poisoning. Worth
+          re-testing on Workers; if the canonical-URL staleness no longer reproduces, it is a
+          delete.</li>
+        <li>The <code>.pages.dev</code> 301 stays exactly as long as the parked Pages project
+          does, and leaves with it.</li>
+        <li>The docs still narrate some Pages lore as present-tense gotchas. True history,
+          wrong tense.</li>
+      </ul>
+    </div>
+
+    <h2>The rewrite sketch<span class="sev sketch">blueprint</span></h2>
+    <p class="note">The honest headline: this is not a rewrite of what the site does, it is a
+      consolidation of how many times the code says it. Same behavior, fewer hand-rolled copies
+      of the same idea.</p>
+
+    <div class="tg">
+      <h3>Four hand-rolled SWR caches become one primitive</h3>
+      <p class="what"><b>What it buys.</b> The pattern is identical everywhere: persistent
+        value, <code>:fresh</code> sentinel, stale-instant serve, background rebuild, first-run
+        inline. Four implementations means four places a subtle rule can drift (one of them
+        protects empty rebuilds from clobbering good stale data; the others learned that
+        separately). One primitive with the empty-guard built in makes the next cache a
+        one-liner. Two thirds of this kit already exists: <code>cachedRender</code> and the R2
+        edge layer landed this week. This finishes the set.</p>
+      <div class="diff">
+        <figure class="before"><figcaption>as built</figcaption><pre><span class="c">// photos.js ~30 lines: manifest + sentinel</span>
+<span class="c">// rn.js     ~25 lines: tracks + sentinel</span>
+<span class="c">// reading.js ~25 lines: curius + sentinel</span>
+<span class="c">// around.js  ~30 lines: report + sentinel</span>
+<span class="c">// same shape, four dialects, drift risk</span></pre></figure>
+        <figure class="after"><figcaption>blueprint</figcaption><pre><span class="c">// lib/cache.js — the whole caching kit:</span>
+swrKV(env, ctx, key, ttl, build)
+cachedRender(request, ctx, render)  <span class="c">// exists</span>
+cachedR2(request, env, ctx, key)    <span class="c">// exists</span>
+
+<span class="c">// callers become one-liners:</span>
+const tracks = await swrKV(env, ctx,
+  `tracks:${pid}`, 3600, () =&gt; scrape(pid));</pre></figure>
+      </div>
+    </div>
+
+    <div class="tg">
+      <h3>Nine handlers stop hand-assembling the same window</h3>
+      <p class="what"><b>What it buys.</b> Not wire bytes (brotli already crushes the repeated
+        CSS per response) but change-amplification: when the window chrome changed this week
+        (the back/forward buttons), one function would have updated nine pages. Correction,
+        post-audit: an earlier sweep claimed /updates shipped the chrome CSS twice; the
+        migration audit refuted it (the two <code>xpChromeCss</code> call sites are two routes,
+        /updates and /restore, one copy each). The honest case for the layout kit is
+        maintenance, and it is sufficient. The XP shell is the site's strongest abstraction;
+        the server should treat it as one.</p>
+      <div class="diff">
+        <figure class="before"><figcaption>as built</figcaption><pre><span class="c">// whoareyou.js, around.js, reading.js, bot.js,
+// security.js, updates.js (x2!), rn.js, lens.js
+// each: return new Response(`&lt;!DOCTYPE html&gt;
+// &lt;html&gt;...${xpChromeCss(W)}...` + headers)</span></pre></figure>
+        <figure class="after"><figcaption>blueprint</figcaption><pre>lunaPage({ title, path, width,
+           css, body, cache })
+<span class="c">// one function owns DOCTYPE, chrome, geometry,
+// nav.js include, security posture. handlers
+// return { title, css, body } — content only.</span></pre></figure>
+      </div>
+    </div>
+
+    <div class="tg">
+      <h3>The if-chain becomes a table, and comments become the contract</h3>
+      <p class="what"><b>And the comments.</b> The essay-grade comments are the best
+        documentation this repo has; a rewrite keeps authoring them exactly as-is and lets the
+        build own the split: readable in git and in every <code>.src.js</code> twin, minified on
+        the wire. That bargain already shipped for the four shells. The worker modules get it
+        for free (wrangler strips nothing, but they are never served). <code>index.html</code>
+        keeps its comments on the wire forever, because the homepage's View Source is the
+        exhibit itself.</p>
+      <div class="diff">
+        <figure class="before"><figcaption>as built</figcaption><pre><span class="c">// index.js: 240 lines of
+// if (url.pathname === "/x") return handleX(...)
+// order-dependent, prefix rules interleaved</span></pre></figure>
+        <figure class="after"><figcaption>blueprint</figcaption><pre>const ROUTES = new Map([...]);   <span class="c">// exact</span>
+const PREFIX = [...];            <span class="c">// ordered</span>
+<span class="c">// dispatch is 10 lines; the table IS the
+// sitemap, and mirrors run_worker_first
+// one-to-one — config and code agree.</span></pre></figure>
+      </div>
+    </div>
+
+    <h2>What I would not touch<span class="sev keep">the soul</span></h2>
+    <ul class="tight">
+      <li><strong>Inline everything, one request per page.</strong> The McMaster-Carr school.
+        External stylesheets and bundle graphs buy nothing here and cost a round trip.</li>
+      <li><strong>No framework, no hydration, no client router.</strong> The HTML is the state.
+        The site's interactivity budget goes to one deferred shell script, and that is enough
+        to drag windows around a desktop.</li>
+      <li><strong>Streaming SSR with client fallbacks.</strong> HTMLRewriter starts the response
+        before the data finishes, and every SSR surface has a ~30-line client mirror that
+        detects "already populated" and stands down. Defense in depth that has already paid out.</li>
+      <li><strong>The homepage stays uncacheable.</strong> Random twelve photos and a real
+        counter tick per visit is the site's pulse. ~31KB per visit is what that costs, and it
+        is the best byte-spend on the domain.</li>
+      <li><strong>The honesty rules.</strong> Fallbacks that say so, no fabricated UI, nothing
+        graduates to the homepage until two engines ship it, failures stay parked in the garage
+        next to the wins. This page follows the same rules about itself.</li>
+      <li><strong>Buildless authoring.</strong> The build stays a deploy-time transform of four
+        files with tripwires, and grows only when something else earns it the way the shells
+        did.</li>
+    </ul>
+
+    <div class="callout">
+      <strong>The verdict, honestly.</strong> Half of this blueprint is already the changelog:
+      the Workers migration, the in-house counter DO, granular routing, the build step, the
+      edge-cache kit all landed incrementally, each gated by a 42-route oracle, and the site
+      never went down for any of it. That is the actual argument against a big-bang rewrite:
+      the repo already knows how to become its next self one verified deploy at a time. What
+      remains above is a to-do list, not a demolition order. And the one thing a rewrite must
+      never do is the thing every rewrite wants to do first: modernize the soul. The bevels,
+      the counter, the comments, the Bliss gradient. That is not debt. That is the car.
+    </div>
+
+    <footer>
+      <p>&larr; back to the <a href="/garage">garage</a> &middot; <a href="/">aadhar.sh</a> &middot; the prequel: <a href="/garage/teardown">teardown</a> &middot; kin: <a href="/garage/workers">off Pages, onto Workers</a>, <a href="/garage/wire">bytes on the wire</a></p>
+      <p><small>read by Fable 5, 2026-07-01: every page, module, script, and design doc in the repo. the diffs are sketches; the keep-list is a promise.</small></p>
+    </footer>
+    <hr>
+    <section id="luq" aria-label="understanding check"></section>
+  </div>
+</div>
+
+<script type="speculationrules">
+{
+  "prerender": [
+    {
+      "where": {
+        "and": [
+          { "href_matches": "/*" },
+          { "not": { "href_matches": "/whoareyou*" } }
+        ]
+      },
+      "eagerness": "moderate"
+    }
+  ]
+}
+</script>
+
+<script type="application/json" id="luq-data">
+{
+  "skin": "garage",
+  "intro": "A blueprint you can't redraw from memory is decoration. Five questions before you close the window.",
+  "questions": [
+    {
+      "q": "The KV caches store two keys per surface: the value itself plus a tiny :fresh sentinel. Why split them instead of just giving the value a TTL?",
+      "options": [
+        {
+          "t": "The value never expires and only the sentinel carries the TTL, so a lapse serves the stale copy instantly while the rebuild runs in the background.",
+          "ok": true,
+          "why": "Right: nobody waits but the true first run. Expiry lives on the sentinel precisely so a lapse downgrades to a stale serve instead of a cold, blocking rebuild."
+        },
+        {
+          "t": "KV can't attach a TTL to a value that large, so the expiry has to live on a small companion key instead.",
+          "why": "KV will happily attach a TTL to any value. The split is a serving decision: the keep table's SWR row says the value persists forever exactly so a lapse can serve stale instantly."
+        },
+        {
+          "t": "The sentinel works as a lock, keeping two isolates from rebuilding the same value at the same time.",
+          "why": "The sentinel carries freshness, and only freshness. Two isolates rebuilding concurrently just write the same data twice; the keep table describes the sentinel as the TTL carrier, never a lock."
+        },
+        {
+          "t": "Checking the tiny sentinel first lets most requests skip the expensive read of the full value.",
+          "why": "The value gets read on every request, fresh or stale. The two keys separate expiry from storage so the data can outlive its own TTL, per the SWR row in the keep table."
+        }
+      ]
+    },
+    {
+      "q": "The blueprint flips run_worker_first from a denylist (everything, minus 14 carve-outs) to an allowlist. What is the actual reason?",
+      "options": [
+        {
+          "t": "It inverts an inherited Pages default: the worker saw everything there, but most of this site is static, so static becomes the default and the worker earns each route.",
+          "ok": true,
+          "why": "Right: same engine, opposite default. The config then reads as intent, and a forgotten negation can never send a new static file through the worker by accident."
+        },
+        {
+          "t": "Allowlist matching is cheaper for the routing engine, so every request saves latency at the edge.",
+          "why": "The routing ghost calls it the same engine with the opposite default, so per-request speed is a wash. The win is legibility and safety: compute happens exactly where the config says it does."
+        },
+        {
+          "t": "Denylist configs stopped working after the move off Pages, so the shape had to change to keep routing correct.",
+          "why": "The denylist runs fine on Workers today, which is exactly how it survived the migration. It is a ghost because it encodes the old platform's default, per the routing section."
+        },
+        {
+          "t": "An allowlist sends more routes through the worker, so more of the site can be server-rendered.",
+          "why": "It points the opposite way: fewer requests invoke the worker. Under the as-built denylist the worker already saw everything except 14 carve-outs; the allowlist shrinks that to routes that need compute."
+        }
+      ]
+    },
+    {
+      "q": "Three handlers sniff the content-type of asset responses before returning them. What does the blueprint do with those guards?",
+      "options": [
+        {
+          "t": "Keep only the cache-control clamp on 404s: the SPA masquerade is extinct on Workers, but a miss under /images/* could still inherit the 1-year immutable rule.",
+          "ok": true,
+          "why": "Right: one small guard instead of three sniffing ones. The masquerade test targets a Pages behavior that cannot occur on Workers, while the clamp still keeps a cached 404 from going immutable for a year."
+        },
+        {
+          "t": "Delete all three outright, because Workers static assets answer a missing file with an honest 404.",
+          "why": "That is the skim read, and the ghost section rejects it: an edge-cached 404 under /images/* would still inherit the 1-year immutable rule, so the narrow cache-control clamp stays."
+        },
+        {
+          "t": "Keep all three, because a corrupt AVIF can still come back as HTML at an image URL.",
+          "why": "That conflates a different gotcha: picture-element decode failures, which happen in the browser after the bytes arrive. On Workers a missing asset returns an honest 404, so HTML at an image URL is extinct."
+        },
+        {
+          "t": "Move the checks into _headers so the static layer enforces content-type without invoking the worker.",
+          "why": "_headers attaches headers to asset responses; it cannot inspect a status or body and branch. The after pane of that diff shows the answer: a two-line status check in the worker."
+        }
+      ]
+    },
+    {
+      "q": "The lunaPage() sketch has nine handlers stop hand-assembling the same XP window. What does the page say it actually buys?",
+      "options": [
+        {
+          "t": "Change-amplification: a chrome tweak updates nine pages through one function, while the duplicated CSS was already near free on the wire under brotli.",
+          "ok": true,
+          "why": "Right: when the back/forward buttons changed this week, one function would have updated nine pages. The page calls the maintenance case sufficient on its own."
+        },
+        {
+          "t": "Wire bytes: nine hand-assembled shells ship nine copies of the chrome CSS, and one function collapses them.",
+          "why": "The page rules this out up front: brotli already crushes the repeated CSS per response, so duplication costs almost nothing on the wire. The honest case is change-amplification."
+        },
+        {
+          "t": "It fixes /updates shipping the chrome CSS twice in a single response, a bug an earlier sweep flagged.",
+          "why": "The page retracts that claim itself: the migration audit found the two xpChromeCss call sites are two routes, /updates and /restore, one copy each. The double-ship never existed."
+        },
+        {
+          "t": "Identical shells make the rendered pages byte-identical at the edge, so cache hit rates climb.",
+          "why": "Edge caching keys on the URL and each route still renders different content, so shared chrome changes no hit rate. The what-it-buys paragraph puts the whole case on maintenance."
+        }
+      ]
+    },
+    {
+      "q": "The closing verdict argues against a big-bang rewrite. On what grounds?",
+      "options": [
+        {
+          "t": "Half the blueprint already shipped incrementally, each deploy gated by the 42-route oracle with no downtime; the repo already knows how to become its next self one verified deploy at a time.",
+          "ok": true,
+          "why": "Right: the changelog is the argument. The verdict calls what remains a to-do list, since the Workers migration, the counter DO, and the build step all landed the same stepwise way."
+        },
+        {
+          "t": "A rewrite of this size could never pay back the effort on a personal site, so everything stays as-is.",
+          "why": "The verdict measures track record, and the page lays out real changes it wants made. The argument covers how they ship: incrementally, each deploy verified, the way the Workers migration itself landed."
+        },
+        {
+          "t": "Modern code would flatten the XP soul, and the bevels and Bliss gradient could never survive a rebuild.",
+          "why": "The soul rule constrains any rewrite (keep the bevels, the counter, the comments, the Bliss gradient) and the callout states it separately. The case against the big bang is the record of incremental, oracle-gated deploys."
+        },
+        {
+          "t": "The 42-route oracle only checks existing routes, so a wholesale rewrite could never be verified before deploy.",
+          "why": "The oracle gates every deploy, and that safety is what makes stepwise shipping work. The verdict leans on it as the reason the site never went down while half the blueprint landed."
+        }
+      ]
+    }
+  ]
+}
+</script>
+<script src="/a/quiz.1d162bed.js" defer></script>
+  <script src="/a/nav.f1317f11.js" defer></script>
+<!-- axp:shell --><nav id="axp-icons" aria-label="desktop shortcuts"><a class="axp-ico" title="writing, in flux" href="/writing" data-key="Notepad" style="left:9px;top:9px"><span class="ic note" aria-hidden="true"></span><span class="t">Notepad</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="GitHub (opens in a new tab)" href="https://github.com/oddharsh" data-key="GitHub" style="left:9px;top:95px"><span class="ic " style="background:linear-gradient(180deg,oklch(72% 0.05 255),oklch(60% 0.07 257))" aria-hidden="true">G</span><span class="t">GitHub</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Twitter (opens in a new tab)" href="https://x.com/oddhash" data-key="Twitter" style="left:9px;top:181px"><span class="ic " style="background:linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))" aria-hidden="true">@</span><span class="t">Twitter</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Instagram (opens in a new tab)" href="https://www.instagram.com/aadharsh.hif" data-key="Photos" style="left:9px;top:267px"><span class="ic " style="background:linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))" aria-hidden="true"><i class="cam" aria-hidden="true"></i></span><span class="t">Photos</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Curius (opens in a new tab)" href="https://curius.app/aadharsh-pannirselvam" data-key="Curius" style="left:9px;top:353px"><span class="ic " style="background:linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))" aria-hidden="true">C</span><span class="t">Curius</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Beli (opens in a new tab)" href="https://beliapp.com/users/aadharsh" data-key="Beli" style="left:9px;top:439px"><span class="ic " style="background:linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))" aria-hidden="true">B</span><span class="t">Beli</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Spotify (opens in a new tab)" href="https://open.spotify.com/user/aadharsh2010" data-key="Music" style="left:9px;top:525px"><span class="ic " style="background:linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))" aria-hidden="true">♪</span><span class="t">Music</span></a></nav><div id="axp-taskbar" role="navigation" aria-label="taskbar"><a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a><div id="axp-pins"><a class="axp-pin" title="prototypes + experiments" href="/garage"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-garage" alt=""></span><span class="lbl">garage</span></a><a class="axp-pin" title="chat-style explainers + live demos" href="/lwe"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-lwe" alt=""></span><span class="lbl">lwe</span></a><a class="axp-pin" title="notes, in flux: an editable notepad" href="/writing"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-writing" alt=""></span><span class="lbl">writing</span></a><a class="axp-pin" title="what I've been reading, from Curius" href="/reading"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-reading" alt=""></span><span class="lbl">reading</span></a><a class="axp-pin" title="events worth going to" href="/serendipity"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-serendipity" alt=""></span><span class="lbl">serendipity</span></a><a class="axp-pin" title="the crypto-VC neighborhood" href="/around"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-around" alt=""></span><span class="lbl">around</span></a><a class="axp-pin" title="the other web: how machines read a URL" href="/lens"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-lens" alt=""></span><span class="lbl">lens</span></a><a class="axp-pin" title="a compression vision test — whose eye do you have?" href="/pixel-peeper"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-pixel-peeper" alt=""></span><span class="lbl">pixel peeper</span></a><a class="axp-pin" title="what I'm listening to right now" href="/rn"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-music" alt=""></span><span class="lbl">music</span></a><a class="axp-pin" title="book a coffee / bagel" href="/coffee"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-coffee" alt=""></span><span class="lbl">coffee</span></a></div><div id="axp-spacer"></div><div id="axp-tray"><button id="axp-sound" type="button" hidden></button><a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><img src="/a/icons.74f459d9.svg#tray-sysprop" alt=""></a><a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><img src="/a/icons.74f459d9.svg#tray-security" alt=""></a><a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><img src="/a/icons.74f459d9.svg#tray-updates" alt=""></a><span id="axp-clock" aria-hidden="true"></span></div></div><!-- /axp:shell -->
+</body>
+</html>

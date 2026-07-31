@@ -1,0 +1,116 @@
+{
+  "$schema": "https://raw.githubusercontent.com/jsonresume/resume-schema/v1.0.0/schema.json",
+  "meta": {
+    "canonical": "https://aadhar.sh/resume.pdf",
+    "version": "1.0.0",
+    "note": "Machine-readable mirror of resume.pdf. The PDF is canonical; a plain-text copy is at https://aadhar.sh/resume.md."
+  },
+  "basics": {
+    "name": "Aadharsh Pannirselvam",
+    "email": "resume@aadhar.sh",
+    "url": "https://aadhar.sh",
+    "profiles": [
+      { "network": "X", "username": "oddhash", "url": "https://x.com/oddhash" },
+      { "network": "ENS", "username": "aadharsh.eth" }
+    ]
+  },
+  "work": [
+    {
+      "name": "Archetype",
+      "position": "Research Analyst to Analyst to Associate to Principal",
+      "location": "New York, NY",
+      "startDate": "2023-10",
+      "summary": "Investments: TACEO, Turnkey. Portfolio companies worked closely with: Ritual, Opacity, Odyn.",
+      "highlights": [
+        "Conduct sourcing, diligence, and decision for investments in Archetype's Fund II and III, most focused on applied cryptography.",
+        "Wrote the 3-part \"Privacy 2.0\" series on PETs (TEEs, MPC, FHE) and co-authored investment theses on archetype.fund.",
+        "Built, deployed, and maintain a firm-wide Slack AI agent on DigitalOcean Kubernetes, plus its 20-skill local sidekick toolkit.",
+        "Work with Archetype's portfolio companies across funds to direct strategy on product, marketing, and engineering.",
+        "Forecasted the results of the USBTC-Hut8 merger in the context of BTC, HPC/AI, and power-grid pricing dynamics."
+      ]
+    },
+    {
+      "name": "Galaxy",
+      "position": "Analyst, Ventures Team",
+      "location": "New York, NY",
+      "startDate": "2022-06",
+      "endDate": "2023-08",
+      "summary": "Two summers: June to August 2022 and June to August 2023.",
+      "highlights": [
+        "Conducted market sourcing, diligence, and decision for technical investments in Galaxy's Principal Investments Fund.",
+        "Researched a taxonomy of Move-based chains as part of diligence into Mysten's Series A round in 2022.",
+        "Analyzed cross-chain stablecoin bridging and modeled impermanent loss between staking and providing AMM liquidity.",
+        "Wrote future-facing theses on mechanism design for Proposer-Builder-separated fee markets and protocols in response to MEV."
+      ]
+    },
+    {
+      "name": "Benzinga Crypto",
+      "position": "Blockchain Analyst",
+      "location": "Detroit, MI (Remote)",
+      "startDate": "2022-01",
+      "endDate": "2022-06",
+      "highlights": [
+        "Wrote educational content on blockchain, DeFi, and Web3 spanning technical topics such as IPFS and ZK proofs.",
+        "Researched trends in the blockchain space to produce comparative content, focused on investment opportunities.",
+        "Used Glassnode's on-chain data analytics to generate graphics and keywords to maximize article traffic."
+      ]
+    },
+    {
+      "name": "Flipside Crypto",
+      "position": "Data Science",
+      "location": "Boston, MA",
+      "startDate": "2021-05",
+      "endDate": "2021-09",
+      "highlights": [
+        "Analyzed cross-chain Ethereum bridges and price data, published in OurNetwork Issue #91.",
+        "Developed bounties and evaluated submissions for 3,100+ community researchers on Compound, Uniswap, and Yearn.",
+        "Learned SQL and web scraping to validate and update tokenomic data on Snowflake across multiple chains and protocols."
+      ]
+    }
+  ],
+  "education": [
+    {
+      "institution": "University of Chicago",
+      "location": "Chicago, IL",
+      "area": "Economics (minor in Data Science)",
+      "studyType": "A.B.",
+      "score": "3.81 GPA",
+      "endDate": "2024-06"
+    }
+  ],
+  "volunteer": [
+    {
+      "organization": "ChicagoDAO",
+      "position": "External Governance Team, Maker Lead",
+      "location": "Chicago, IL",
+      "startDate": "2022-03",
+      "endDate": "2024-06",
+      "highlights": [
+        "Managed the DAO's Uniswap, Compound, and MakerDAO token delegations, evaluating and designing governance proposals.",
+        "Worked with Prof. Anthony Lee Zhang to build and maintain relations with alumni in crypto and decentralized systems."
+      ]
+    },
+    {
+      "organization": "Blockchain Chicago",
+      "position": "Co-Founder, Instructor",
+      "location": "Chicago, IL",
+      "startDate": "2021-08",
+      "endDate": "2024-06",
+      "highlights": [
+        "Built development and business curriculum with other universities' clubs to support members' DeFi literacy.",
+        "Outlined a DAO for post-education ventures and collaborations with blockchain clubs at Booth and UChicago Law."
+      ]
+    },
+    {
+      "organization": "Oeconomica",
+      "position": "Researcher, Labor and Consumption Cohort",
+      "location": "Chicago, IL",
+      "startDate": "2021-10",
+      "endDate": "2022-02",
+      "highlights": [
+        "Designed and co-authored an original research paper on labor and consumption impacts downstream of COVID.",
+        "Honed econometric and data-analysis skills (in R) to evaluate economic literature and validate research methods."
+      ]
+    }
+  ]
+}

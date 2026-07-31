@@ -1,0 +1,1 @@
+/Users/aadharsh/noodling/site/.claude/worktrees/text-file-minification-bfee0f/holding/scripts/zenc/target/release/zenc: /Users/aadharsh/noodling/site/.claude/worktrees/text-file-minification-bfee0f/holding/scripts/zenc/src/main.rs

@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#2D78BD">
+<link rel="preload" as="style" href="/a/luna.12fe1428.css">
+<title>aadhar.sh/garage</title>
+<meta name="description" content="Prototypes, experiments, and work-in-progress for aadhar.sh. Stuff that hasn't made it to the homepage yet, or won't.">
+<link rel="canonical" href="https://aadhar.sh/garage">
+
+<!-- traffic-cone favicon, same as homepage -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20x='4'%20y='5'%20width='24'%20height='23'%20rx='1.5'%20fill='%230855dd'/%3E%3Crect%20x='6.5'%20y='8.5'%20width='19'%20height='3'%20rx='0.6'%20fill='%23cfe0fb'/%3E%3Crect%20x='6.5'%20y='13'%20width='19'%20height='3'%20rx='0.6'%20fill='%23cfe0fb'/%3E%3Crect%20x='6.5'%20y='17.5'%20width='19'%20height='3'%20rx='0.6'%20fill='%23cfe0fb'/%3E%3Crect%20x='6.5'%20y='22'%20width='19'%20height='3'%20rx='0.6'%20fill='%23cfe0fb'/%3E%3C/svg%3E">
+
+<meta property="og:type" content="website">
+<meta property="og:title" content="aadhar.sh/garage">
+<meta property="og:description" content="Prototypes, experiments, and work-in-progress.">
+<meta property="og:url" content="https://aadhar.sh/garage">
+
+<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; } html{background:linear-gradient(180deg,oklch(56% 0.13 250) 0%,oklch(73% 0.10 236) 50%,oklch(88% 0.05 232) 60%,oklch(60% 0.16 140) 100%)}
+body {
+  background: oklch(91.74% 0.0203 238.68);
+  background: linear-gradient(180deg, oklch(56% 0.13 250) 0%, oklch(73% 0.10 236) 50%, oklch(88% 0.05 232) 60%, oklch(60% 0.16 140) 100%);
+  font-family: var(--font-ui);
+  font-size: 10.5pt;
+  line-height: 1.5;
+  color: oklch(21.78% 0 0);
+  padding: 24px 12px 60px;
+  min-height: 100vh;
+}
+
+.window {
+  max-width: 660px;
+  margin: 0 auto;
+  background: oklch(100.00% 0 0);
+  border: 1px solid oklch(61.14% 0.0611 253.60);
+  box-shadow: 4px 4px 0 oklch(61.14% 0.0611 253.60 / 0.35);
+}
+
+.title-bar {
+  background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
+  color: oklch(100.00% 0 0);
+  font-family: var(--font-caption);
+  font-size: 10pt;
+  font-weight: bold;
+  padding: 4px 8px;
+  border-bottom: 1px solid oklch(41.92% 0.0962 250.51);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.title-bar .icon {
+  display: inline-block;
+  width: 16px; height: 16px;
+  margin-right: 6px;
+  vertical-align: middle;
+  /* wrench / spanner, built from CSS instead of an SVG so the title
+     bar stays one HTTP request. silhouette matches a hex-key wrench
+     viewed end-on; reads as one at 16px even though it isn't literally a wrench. */
+  background: oklch(87.82% 0.0877 66.27);
+  position: relative;
+  flex-shrink: 0;
+}
+.title-bar .icon::before {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  background: oklch(69.58% 0.2043 43.49);
+  clip-path: polygon(20% 0, 100% 50%, 20% 100%, 0 50%);
+}
+.title-bar .title-text { flex: 1; padding-left: 4px; }
+.title-bar .controls { display: flex; align-items: center; gap: 2px; letter-spacing: 0; }
+/* authentic Luna caption buttons: 21x21 glossy "gel" lozenges with a top specular
+   highlight + CSS-drawn white glyphs (no text, no images). min/max are blue, CLOSE
+   is RED at rest. CLASS-BASED (.min/.max/.close) so decorative demo windows that use
+   <span class="close"> get the identical skin as a real <a class="close">. sRGB hex
+   traced from the Luna .msstyles bitmap, kept as hex on purpose. */
+.title-bar .controls .min,
+.title-bar .controls .max,
+.title-bar .controls .close {
+  position: relative; box-sizing: border-box;
+  width: 21px; height: 21px; padding: 0; margin: 0;
+  display: inline-block; overflow: hidden; font-size: 0; color: transparent;
+  border: 1px solid #6696eb; border-radius: 3px;
+  text-decoration: none; cursor: pointer;
+  background-color: #3e73f5;
+  background-image: linear-gradient(180deg, #5f8cf7 0%, #3a71f5 22%, #3e73f5 55%, #2a70f2 82%, #1045be 100%);
+  transition: filter 60ms ease-out;
+}
+/* "wet plastic" gloss band over the top ~45% (close uses ::after for its X stroke) */
+.title-bar .controls .min::after,
+.title-bar .controls .max::after {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 45%;
+  background: linear-gradient(180deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.12) 70%, rgba(255,255,255,0) 100%);
+  pointer-events: none; border-radius: 2px 2px 5px 5px;
+}
+.title-bar .controls .min:hover, .title-bar .controls .min:focus-visible,
+.title-bar .controls .max:hover, .title-bar .controls .max:focus-visible {
+  border-color: #8fb4ff; background-color: #4fa4ff;
+  background-image: linear-gradient(180deg, #689bff 0%, #468aff 22%, #4fa4ff 55%, #3990fc 82%, #1858c8 100%);
+  outline: none;
+}
+/* CLOSE = red at rest */
+.title-bar .controls .close {
+  border-color: #d8401c; background-color: #e45f3e;
+  background-image: linear-gradient(180deg, #e8795f 0%, #e45f40 30%, #e45d3d 52%, #e2552a 80%, #ae3110 100%);
+}
+.title-bar .controls .close:hover, .title-bar .controls .close:focus-visible {
+  border-color: #ff7a66; background-color: #ff957c;
+  background-image: linear-gradient(180deg, #ff8b7d 0%, #ff7463 26%, #ff957c 55%, #fd7e64 82%, #d34936 100%);
+  box-shadow: 0 0 4px rgba(255,120,96,.7); outline: none;
+}
+.title-bar .controls .min:active,
+.title-bar .controls .max:active,
+.title-bar .controls .close:active { filter: brightness(.9); }
+/* white glyphs drawn with pseudo-elements */
+.title-bar .controls .min::before {
+  content: ""; position: absolute; left: 5px; right: 5px; bottom: 5px; height: 2px;
+  background: #fff; box-shadow: 0 1px 0 rgba(0,0,0,.35);
+}
+.title-bar .controls .max::before {
+  content: ""; position: absolute; left: 5px; top: 5px; width: 11px; height: 9px;
+  box-sizing: border-box; border: 1px solid #fff; border-top-width: 2px;
+  filter: drop-shadow(0 1px 0 rgba(0,0,0,.35));
+}
+.title-bar .controls .close::before,
+.title-bar .controls .close::after {
+  content: ""; position: absolute; left: 50%; top: 50%;
+  width: 13px; height: 2px; margin: -1px 0 0 -6.5px; background: #fff;
+  box-shadow: 0 1px 0 rgba(0,0,0,.35);
+}
+.title-bar .controls .close::before { transform: rotate(45deg); }
+.title-bar .controls .close::after  { transform: rotate(-45deg); }
+/* --- Luna polish: caption text shadow + rounded top corners + 3px window frame --- */
+.title-bar { text-shadow: 1px 1px #0f1089; border-top-left-radius: 8px; border-top-right-radius: 8px; }
+.window {
+  border: 2px solid #0831d9; border-right-color: #001ea0; border-bottom-color: #001ea0;
+  border-top-left-radius: 8px; border-top-right-radius: 8px; overflow: hidden;
+  box-shadow: inset 1px 1px 0 #166aee, inset 2px 2px 0 #0855dd,
+              inset -1px -1px 0 #00138c, inset -2px -2px 0 #003bda,
+              4px 4px 0 rgba(0,30,160,.35);
+}
+
+.content { padding: 12px 16px 16px; }
+
+h1 {
+  font-family: var(--font-caption);
+  font-size: 14pt;
+  color: oklch(41.92% 0.0962 250.51);
+  margin: 0 0 4px;
+  font-weight: bold;
+  letter-spacing: -0.01em;
+}
+
+.lede {
+  margin: 0 0 14px;
+  color: oklch(38.67% 0 0);
+  font-size: 10.5pt;
+}
+
+p { margin: 0 0 12px; }
+
+a:link    { color: oklch(42.61% 0.2353 263.74); text-decoration: underline; }
+a:visited { color: oklch(42.09% 0.1935 328.36); }
+a:hover   { color: oklch(62.80% 0.2577 29.23); }
+
+hr {
+  border: 0;
+  border-top: 2px groove oklch(86.67% 0.0294 259.59);
+  margin: 16px 0;
+  height: 0;
+}
+
+/* ─── shelf of prototypes ──────────────────────────────────────────── */
+.shelf {
+  list-style: none;
+  padding: 0;
+  margin: 16px 0 6px;
+  border: 1px solid oklch(61.14% 0.0611 253.60);
+  border-top-color: oklch(47.12% 0.0555 253.58);
+  border-left-color: oklch(47.12% 0.0555 253.58);
+  background: oklch(100% 0 0);
+}
+.shelf li {
+  padding: 10px 12px 12px;
+  border-bottom: 1px solid oklch(92.73% 0.0139 247.98);
+}
+.shelf li:last-child { border-bottom: none; }
+.shelf li:nth-child(even) { background: oklch(97.50% 0.0062 255.47); }
+.shelf .title-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+.shelf .name {
+  font-family: var(--font-caption);
+  font-weight: bold;
+  font-size: 12pt;
+  color: oklch(41.92% 0.0962 250.51);
+}
+.shelf .name a { text-decoration: none; }
+.shelf .name a:hover { text-decoration: underline; }
+.shelf .status {
+  font-family: var(--font-mono);
+  font-size: 8.5pt;
+  font-weight: bold;
+  letter-spacing: 0.05em;
+  padding: 1px 6px;
+  border: 1px solid;
+  border-radius: 2px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.shelf .status.review  { color: oklch(54.44% 0.1504 47.10); border-color: oklch(54.44% 0.1504 47.10); background: oklch(98% 0.03 95); }
+.shelf .status.shipped { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(98% 0.04 142); }
+.shelf .status.idle    { color: oklch(51.03% 0 0); border-color: oklch(70% 0 0); background: oklch(96% 0 0); }
+.shelf .status.dead    { color: oklch(46.34% 0.1902 29.23); border-color: oklch(46.34% 0.1902 29.23); background: oklch(98% 0.03 30); }
+.shelf .desc {
+  font-size: 10.5pt;
+  color: oklch(28% 0 0);
+}
+.shelf .meta {
+  margin-top: 4px;
+  font-size: 9.5pt;
+  color: oklch(51.03% 0 0);
+  font-style: italic;
+}
+
+footer {
+  text-align: center;
+  font-family: var(--font-ui);
+  font-size: 9pt;
+  color: oklch(44.95% 0 0);
+  margin: 18px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid oklch(86.67% 0.0294 259.59);
+}
+  /* standard scrollbar tint (Chrome + Safari 26 + Firefox): Luna-blue thumb,
+     pale track. the garage/scroll demo styles its own element separately. */
+  html { scrollbar-color: oklch(62% 0.14 255) oklch(91% 0.02 248); }
+  /* mule lore gallery: contact-sheet framing like the photo grid */
+  .mule-gallery { display: flex; gap: 12px; flex-wrap: wrap; margin: 14px 0 0; }
+  .mule-fig { margin: 0; flex: 1 1 280px; max-width: 360px; }
+  .mule-fig img { display: block; width: 100%; height: auto; border: 1px solid oklch(61% 0.0611 253.60); padding: 4px; background: #fff; box-shadow: 1px 1px 0 oklch(61% 0.0611 253.60 / 0.3); }
+  .mule-fig figcaption { font-size: 8.5pt; color: oklch(50% 0 0); margin-top: 5px; line-height: 1.45; }
+  .mule-hof { margin: 16px 0 0; font-size: 9.5pt; }
+  .mule-hof summary { cursor: pointer; font-weight: bold; color: oklch(41.92% 0.0962 250.51); font-family: var(--font-caption); }
+  .mule-hof ol { margin: 8px 0 0; padding-left: 22px; color: oklch(38% 0 0); }
+  .mule-hof li { margin: 5px 0; line-height: 1.5; }
+  .mule-hof .src { font-size: 8.5pt; color: oklch(52% 0 0); font-style: italic; margin: 8px 0 0; }
+
+  /* OS-window geometry inlined so FIRST PAINT matches nav.js (no shell "pop"
+     when the deferred desktop arrives). keep in sync with nav.js (search
+     "app-shell"); degrades with JS off (.content scrolls natively). */
+  html { height: 100dvh; overflow: hidden; }
+  body { min-height: 0; height: calc(100vh - 30px); height: calc(100dvh - 30px);
+    overflow: hidden; box-sizing: border-box; display: flex; flex-direction: column;
+    align-items: center; padding: 8px; }
+  .window { flex: 0 1 auto; min-height: 0; max-height: 100%; width: 100%;
+    display: flex; flex-direction: column; }
+  .window > .title-bar { flex: 0 0 auto; }
+  .window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 12px !important; }
+  /* client edge — generated by build.mjs from luna.css */
+  .window > .content { border: 6px solid #ece9d8; background-clip: padding-box; outline: 1px solid #7f9db9; outline-offset: -6px; }
+  body::after { content: ""; position: fixed; left: 0; right: 0; bottom: 0; height: 30px;
+    z-index: 1; background: linear-gradient(180deg, oklch(67% 0.15 256) 0%, oklch(58% 0.19 257) 4%,
+    oklch(51% 0.20 258) 9%, oklch(49% 0.20 258) 50%, oklch(46% 0.20 259) 92%, oklch(40% 0.18 260) 100%); }
+
+body { text-wrap: pretty; } /* progressive; older engines ignore it */
+</style>
+<link rel="stylesheet" href="/a/luna.12fe1428.css">
+</head>
+<body>
+<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+
+<div class="window">
+
+  <div class="title-bar" aria-hidden="true">
+    <span class="title-text"><span class="icon"></span>aadhar.sh/garage</span>
+    <span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/" title="back to aadhar.sh" aria-label="back to aadhar.sh"></a></span>
+  </div>
+
+  <div class="content">
+
+    <h1>Garage</h1>
+    <p class="lede">
+      Development mules for <a href="/">aadhar.sh</a>: deliberately rough
+      rigs where I run a tool or an idea under real load before any of it
+      touches the production car. Some graduate to the homepage, some get scrapped
+      (and stay parked here as data points), some still sit on the dyno. Most run
+      live, so poke around. And as of July 2026 every mule ends with an
+      <b>understanding check</b>: a few questions before you close the hood,
+      because a demo you poked is easy to mistake for a mechanism you understood.
+      The idea is <a href="https://www.geoffreylitt.com/2026/07/02/understanding-is-the-new-bottleneck" rel="external">Geoffrey Litt&rsquo;s</a>.
+    </p>
+    <p class="lede" style="font-size: 9.5pt; color: oklch(46% 0.02 250);">
+      Carmakers learn the good cars on mules first: McLaren developed the
+      <a href="https://en.wikipedia.org/wiki/McLaren_F1" rel="external">F1</a> in
+      two Ultima kit cars nicknamed <em>Albert</em> and <em>Edward</em>; the
+      mid-engine Corvette hid its chassis under the bones of a Holden HSV ute (and
+      came out better-looking than the real C8). A few more in the hall of fame
+      below. Same spirit here, fewer cones.
+    </p>
+
+    <div class="mule-gallery">
+      <figure class="mule-fig">
+        <picture>
+          <source type="image/avif" srcset="/cars/t50-mule.avif?v=1">
+          <img src="/cars/t50-mule.jpg?v=1" width="600" height="338" alt="Gordon Murray Automotive T.50 development mule, an Ultima GTR nicknamed George" loading="eager" fetchpriority="high" decoding="async">
+        </picture>
+        <figcaption>
+          GMA developed the T.50, the F1&apos;s spiritual heir, in Ultima GTR mules,
+          this one nicknamed <em>George</em>. (Murray ran the same play on the F1:
+          <em>Albert</em> &amp; <em>Edward</em>.) Photo
+          <a href="https://commons.wikimedia.org/wiki/File:Ultima_GTR_T50_Test_Mule_George.jpg" rel="external">Calreyn88</a>,
+          <a href="https://creativecommons.org/licenses/by-sa/4.0/" rel="external">CC BY-SA 4.0</a>.
+        </figcaption>
+      </figure>
+      <figure class="mule-fig">
+        <picture>
+          <source type="image/avif" srcset="/cars/saab-paddan.avif?v=1">
+          <img src="/cars/saab-paddan.jpg?v=1" width="600" height="402" alt="Saab 99 test mule the Paddan, beside a regular Saab 96" loading="lazy" decoding="async">
+        </picture>
+        <figcaption>
+          Saab&apos;s 99 mule, the <em>Paddan</em> (&quot;toad&quot;): Saab grafted the new car&apos;s
+          body onto a 96 (right) so it could test on public roads without tipping the
+          design. Photo
+          <a href="https://commons.wikimedia.org/wiki/File:Saab_Paddan_and_regular_Saab_96.jpg" rel="external">Jelger Groeneveld</a>,
+          <a href="https://creativecommons.org/licenses/by/2.0/" rel="external">CC BY 2.0</a>.
+        </figcaption>
+      </figure>
+    </div>
+
+    <details class="mule-hof">
+      <summary>The mule hall of fame: nine that hid in plain sight</summary>
+      <ol>
+        <li><strong>HSV &apos;Corvette&apos;</strong>: the mid-engine C8&apos;s chassis wrapped in the bones of a Holden HSV ute. Accidentally better-looking than the real C8.</li>
+        <li><strong>McLaren F1, &apos;Albert&apos; &amp; &apos;Edward&apos;</strong>: two Ultima kit cars. Albert ran a Chevy V8 to mimic the BMW V12&apos;s torque, Edward bedded in the real V12. Both crushed afterward. Murray rebooted the trick for the T.50, an Ultima called <em>George</em>.</li>
+        <li><strong>Lotus Esprit &apos;458&apos;</strong>: Lotus reportedly bolted its homegrown V8 into a salvaged Ferrari 458 and prowled Norfolk in it, until the company canned the project.</li>
+        <li><strong>Ferrari 348 &apos;Enzo&apos;</strong>: a 348 stretched 250mm to swallow the Enzo&apos;s 6.5-litre V12. A proper Franken-rarri.</li>
+        <li><strong>Rolls-Royce Phantom &apos;high-rider&apos;</strong>: Rolls honed the Cullinan SUV inside a jacked-up, shortened Phantom, a rear wing loading the suspension to dial in spring and damper rates.</li>
+        <li><strong>MG Maestro Freelander</strong>: Land Rover hid the Freelander under a tall MG Maestro van. One survives at the Dunsfold Collection.</li>
+        <li><strong>Porsche 918 Spyder</strong>: a naked 918 powertrain mule wearing 991-era 911 panels; Porsche let journalists ride it at Nardo. (918 units, production from 9/18.)</li>
+        <li><strong>Jaguar XJ220 &apos;van&apos;</strong>: Jaguar plumbed 542bhp into a Ford Transit&apos;s load bay. Nobody suspects a white van.</li>
+        <li><strong>Lamborghini Countach Evoluzione</strong>: a carbon/Kevlar Countach that Lamborghini crashed once the autoclave got too dear. Its young engineer left to start his own marque: Horacio Pagani.</li>
+      </ol>
+      <p class="src">Lore via Top Gear, <a href="https://www.topgear.com/car-news/top-gears-top-9/nine-weird-secret-test-mules-youve-never-heard" rel="external">&quot;Nine weird secret test mules&quot;</a> (Ollie Kew). The two photos above are the only ones in the set that exist under a free license; the rest are best enjoyed at the source.</p>
+    </details>
+
+    <hr>
+
+    <ul class="shelf">
+
+      <li>
+        <div class="title-row">
+          <span class="name"><a href="/pixel-peeper">Pixel Peeper: whose eye do you have?</a></span>
+          <span class="status review">prototype</span>
+        </div>
+        <div class="desc">
+          A vision test for image compression, in the ismy.blue spirit. Each call shows the
+          same photo squeezed two or three ways; you pick the best on instinct, over and over,
+          and it profiles what your eye is quietly tuned to. Every tile is a real encode
+          (zenc, jpegli, mozjpeg, sips; honest 4:2:2 vs 4:2:0 on the 4:2:2-native Fuji files),
+          scored offline by <code style="font-family: var(--font-mono);font-size:9pt">ssimulacra2</code>
+          and <code style="font-family: var(--font-mono);font-size:9pt">butteraugli</code>. The twist:
+          the two metrics are rival models of human vision that disagree, so the end reads which
+          one your eye sides with. Closes with an understanding check.
+        </div>
+        <div class="meta">
+          shape: blind A/B/C compression test + metric-alignment read &middot; added 2026-07-21
+        </div>
+      </li>
+
+      <li>
+        <div class="title-row">
+          <span class="name"><a href="/garage/compression">Compression teardown</a></span>
+          <span class="status shipped">shipped</span>
+        </div>
+        <div class="desc">
+          The edge was handing browsers <em>more</em> bytes than its own second choice, and
+          compressing at about a third of the effort brotli can reach offline. Fixing it took
+          four rounds, three of them spent blaming the platform for a one-line bug in my own
+          code (<code style="font-family: var(--font-mono);font-size:9pt">encodeBody</code> is
+          write-only Response init, so rebuilding a response drops it silently). Ends at
+          ~19% off the shell for every browser and 116 bytes for a returning Chromium visitor,
+          via zstd shared-dictionary deltas. Keeps the wrong turns, since those transfer.
+        </div>
+        <div class="meta">
+          shape: measured teardown + shipped fix &middot; added 2026-07-27
+        </div>
+      </li>
+
+      <li>
+        <div class="title-row">
+          <span class="name"><a href="/garage/gpt56">5.6 Sol&apos;s performance pass</a></span>
+          <span class="status review">field note</span>
+        </div>
+        <div class="desc">
+          The performance pass outlined with 5.6 Sol this morning, translated into the
+          work that actually made it onto the lift: first-paint geometry, immutable photo
+          bytes, a shared Luna sheet, explicit Worker boundaries, and deploy-time proof.
+          The local workbench toggles between the three checks; the trace readout is honest
+          about what is local and what still needs field data.
+        </div>
+        <div class="meta">
+          shape: performance field note + local workbench &middot; added 2026-07-10
+        </div>
+      </li>
+
+      <li>
+        <div class="title-row">
+          <span class="name"><a href="/garage/blueprint">Blueprint: how Fable 5 would rebuild it</a></span>
+          <span class="status idle">sketch</span>
+        </div>
+        <div class="desc">
+          The <a href="/garage/teardown">teardown</a>'s sequel. Fable 5 read every file in
+          the repo and drew the rebuild drawing: the boutique tricks worth keeping (the
+          two-key SWR quartet, the Temporal wall-clock discipline, the earn-it
+          <code style="font-family: var(--font-mono);font-size:9pt">will-change</code>),
+          the Pages-era scar tissue a Workers-native design would remove (denylist routing,
+          SPA-fallback sniffs), and the consolidation sketch, before and after. Ends with
+          the longer list: what a rewrite must never touch.
+        </div>
+        <div class="meta">
+          shape: architecture review + rebuild sketch &middot; added 2026-07-01
+        </div>
+      </li>
+
+      <li>
+        <div class="title-row">
+          <span class="name"><a href="/garage/wire">Bytes on the wire</a></span>
+          <span class="status shipped">shipped</span>
+        </div>
+        <div class="desc">
+          The site's first build step, and the brotli rabbit hole that led there. Where
+          Cloudflare actually compresses (edge quality vs q11, with the four roads to q11
+          that all closed), deploy-time minification with readable
+          <code style="font-family: var(--font-mono);font-size:9pt">/&lt;name&gt;.src.js</code>
+          twins (nav.js went ~33KB to 20.4KB on the wire; sw.js turned out to be 64%
+          comments), whether the CSS deserves the same treatment (measured: brotli voted
+          no), an esbuild vs Oxc head-to-head, and the Cache API layer that finally made
+          <code style="font-family: var(--font-mono);font-size:9pt">s-maxage</code> true.
+          With a live edge-cache prober.
+        </div>
+        <div class="meta">
+          shape: measurements + the build's reasoning &middot; added 2026-07-01
+        </div>
+      </li>
+
+      <li>
+        <div class="title-row">
+          <span class="name"><a href="/garage/pqc">Post-quantum signatures, priced</a></span>
+          <span class="status shipped">shipped</span>
+        </div>
+        <div class="desc">
+          This site's TLS key agreement went post-quantum on its own; its signatures did not.
+          What ML-DSA-44 and both SLH-DSA parameter sets actually cost on the one signature a
+          personal site controls, measured on the real signature base: header bytes, signing
+          time, and why hash-based lost twice (22,784 bytes of header one way, 2.5 seconds per
+          signature the other). Ends with the migration shipped, since
+          <code style="font-family: var(--font-mono);font-size:9pt">Signature-Input</code> is a
+          dictionary and a second label costs a verifier nothing to ignore.
+        </div>
+        <div class="meta">
+          shape: measurements + a shipped migration &middot; added 2026-07-27
+        </div>
+      </li>
+
+      <li>
+        <div class="title-row">
+          <span class="name"><a href="/garage/workers">Off Pages, onto Workers</a></span>
+          <span class="status shipped">shipped</span>
+        </div>
+        <div class="desc">
+          Why this site left Cloudflare Pages for Workers with static assets: same bytes,
+          but an <em>atomic</em> deploy and the whole config (bindings, routing, the Durable
+          Object) as one checked-in <code style="font-family: var(--font-mono);font-size:9pt">wrangler.jsonc</code>
+          instead of dashboard clicks. What that opened up (edge-direct avif thumbnails, an
+          in-house counter DO, cron in reach) with a live routing prober that reads production
+          headers in your browser.
+        </div>
+        <div class="meta">
+          shape: platform migration + live prober &middot; added 2026-07-01
+        </div>
+      </li>
+
+      <li>
+        <div class="title-row">
+          <span class="name"><a href="/garage/iroh">iroh, and why it stays across the room</a></span>
+          <span class="status idle">watching</span>
+        </div>
+        <div class="desc">
+          iroh hit 1.0 (dial a machine by its public key, not its IP). I went looking
+          for a way to use it here. The page has a native in-browser NodeId generator you
+          can run, no library and no wasm, plus the honest reason a megabyte-class wasm
+          blob, a Rust build step, and a relay do not belong on a lean static site. The
+          garage rule: an experiment that would make every other page heavier does not ship.
+        </div>
+        <div class="meta">
+          shape: evaluation + native demo &middot; added 2026-06-15
+        </div>
+      </li>
+
+      <li>
+        <div class="title-row">
+          <span class="name"><a href="/garage/teardown">Teardown: what Fable 5 found</a></span>
+          <span class="status shipped">shipped</span>
+        </div>
+        <div class="desc">
+          A multi-agent audit, eight finders sweeping in parallel with one adversarial
+          verifier per finding, went over the whole site. Two things were actually broken:
+          a live cache-poisoning hole serving homepage HTML at thumbnail URLs, and a
+          popover fallback that stacked the <a href="/writing">/writing</a> notes in any
+          browser without the Popover API. The rest made it feel faster. Every finding,
+          with the code before and after, side by side.
+        </div>
+        <div class="meta">
+          shape: audit writeup · added 2026-06-11
+        </div>
+      </li>
+
+      <li>
+        <div class="title-row">
+          <span class="name"><a href="/garage/masonry">A masonry contact sheet</a></span>
+          <span class="status idle">prototype</span>
+        </div>
+        <div class="desc">
+          The homepage grid crops every photo to a 1:1 square. This page tries
+          <code style="font-family: var(--font-mono);font-size:9pt">display: grid-lanes</code> (CSS Grid Lanes, shipped in
+          Safari&nbsp;27) for a ragged-height contact sheet where portrait and
+          landscape sit at their true heights, no JS. EXIF pins each photo&apos;s aspect
+          ratio up front, so nothing reflows; a toggle A/Bs it against the squares, and
+          browsers without Grid Lanes fall back to the squares.
+        </div>
+        <div class="meta">
+          shape: layout prototype · added 2026-06-09
+        </div>
+      </li>
+
+      <li>
+        <div class="title-row">
+          <span class="name"><a href="/garage/safari27">Safari 27, through this site&apos;s lens</a></span>
+          <span class="status idle">watching</span>
+        </div>
+        <div class="desc">
+          WWDC26&apos;s Safari&nbsp;27 (macOS&nbsp;27 Golden Gate) shipped ~58 web features.
+          I pulled the &quot;platform caught up&quot; cut: <code style="font-family: var(--font-mono);font-size:9pt">appearance: base-select</code>
+          going stable, transform-aware anchor positioning, scroll anchoring, the
+          <code style="font-family: var(--font-mono);font-size:9pt">:heading</code> pseudo-class, and mapped each one to what this
+          site already ships, with live per-browser support chips.
+        </div>
+        <div class="meta">
+          shape: platform tracker · added 2026-06-09
+        </div>
+      </li>
+
+      <li>
+        <div class="title-row">
+          <span class="name"><a href="/garage/cloudflare">Three free Cloudflare features, live</a></span>
+          <span class="status shipped">shipped</span>
+        </div>
+        <div class="desc">
+          Durable Objects (an atomic counter), Workers AI (it captions a real grid
+          photo), and Workers Logs (structured observability): one <em>live</em> demo
+          each, behind a tiny worker at
+          <code style="font-family: var(--font-mono);font-size:9pt">/garage/cf/*</code>. The
+          free Workers plan quietly bundles them; all three work the moment you click. A fourth,
+          Browser Rendering, is wired but parked on the free tier&apos;s 10-min/day cap.
+        </div>
+        <div class="meta">
+          shape: platform-feature demos · added 2026-06-06
+        </div>
+      </li>
+
+      <li>
+        <div class="title-row">
+          <span class="name"><a href="/garage/encoding">Thumbnail encoding study</a></span>
+          <span class="status shipped">shipped</span>
+        </div>
+        <div class="desc">
+          One photo run through every thumbnail choice (AVIF / WebP / JPEG,
+          jpegli vs the system encoder, chroma subsampling, quality, resolution),
+          with real byte counts. Why the pipeline builds <code style="font-family: var(--font-mono);font-size:9pt">cjpegli</code>
+          from source (~47% smaller JPEGs at the same quality), how zenjpeg's hybrid
+          trellis candidate compares at matched size, why grayscale drops to 4:0:0,
+          and what the grid actually ships.
+        </div>
+        <div class="meta">
+          shape: encoder benchmark + the pipeline&apos;s reasoning &middot; added 2026-06-06
+        </div>
+      </li>
+
+      <li>
+        <div class="title-row">
+          <span class="name"><a href="/garage/pretext">pretext: text measurement off the DOM</a></span>
+          <span class="status idle">watching</span>
+        </div>
+        <div class="desc">
+          <a href="https://github.com/chenglou/pretext" rel="external">chenglou/pretext</a>
+          measures multiline text with the canvas as ground truth instead of the
+          DOM, so asking &quot;how tall at 320px?&quot; never forces a reflow. A
+          from-scratch re-creation of the technique (drag-to-rewrap, plus a
+          2,000-re-layout race vs <code style="font-family: var(--font-mono);font-size:9pt">offsetHeight</code>),
+          where it&apos;d help the site, and why it&apos;s &quot;watching&quot;
+          not &quot;shipped.&quot;
+        </div>
+        <div class="meta">
+          shape: technique study + benchmark · added 2026-06-01
+        </div>
+      </li>
+
+      <li>
+        <div class="title-row">
+          <span class="name"><a href="/garage/chunks">Content-addressed chunking</a></span>
+          <span class="status review">in review</span>
+        </div>
+        <div class="desc">
+          The quiet engine under the photo grid, made visible: FastCDC
+          content-defined chunking + content-addressing, live in the browser
+          (pure JS + <code style="font-family: var(--font-mono);font-size:9pt">crypto.subtle</code>).
+          Snapshot a file, edit a byte, and watch fixed-size chunks re-send the
+          whole thing while content-defined chunks barely flinch, plus a
+          drop-a-file dedup demo. Concepts credit
+          <a href="https://github.com/officialunofficial/mkit" rel="external">mkit</a>.
+        </div>
+        <div class="meta">
+          shape: interactive systems demo · added 2026-06-01
+        </div>
+      </li>
+
+      <li>
+        <div class="title-row">
+          <span class="name"><a href="/garage/scroll">Scroll, the XP way</a></span>
+          <span class="status review">in review</span>
+        </div>
+        <div class="desc">
+          Scroll-driven animation in a period-correct Luna idiom: the green
+          file-copy progress bar that fills as you scroll, windows that
+          maximize-open as they enter the viewport, and the blue gradient
+          scrollbar. All <code style="font-family: var(--font-mono);font-size:9pt">animation-timeline</code>,
+          no scroll listeners, reduced-motion respected.
+        </div>
+        <div class="meta">
+          shape: visual + interaction · added 2026-05-29
+        </div>
+      </li>
+
+      <li>
+        <div class="title-row">
+          <span class="name"><a href="/garage/horizon">Horizon: upcoming web platform</a></span>
+          <span class="status idle">watching</span>
+        </div>
+        <div class="desc">
+          Test-driving features before they touch the homepage: <code style="font-family: var(--font-mono);font-size:9pt">text-box-trim</code>
+          for optical centering, <code style="font-family: var(--font-mono);font-size:9pt">contrast-color()</code>
+          for the OKLCH palette, and <code style="font-family: var(--font-mono);font-size:9pt">interestfor</code>
+          + anchor positioning as the someday-native tooltip. Live support
+          chips per browser, honest cross-engine status, what each would
+          replace. Nothing ships until it&apos;s in more than one engine.
+        </div>
+        <div class="meta">
+          shape: capability dashboard · added 2026-05-29
+        </div>
+      </li>
+
+      <li>
+        <div class="title-row">
+          <span class="name"><a href="/garage/tooltips">Tooltip experiments</a></span>
+          <span class="status shipped">shipped</span>
+        </div>
+        <div class="desc">
+          Cursor-following tooltips for the photo grid and tracklist. The
+          XP-skinned camera readout shipped on photo hover and the album cover-at-cursor
+          on track hover; CSS anchor-positioning shipped too, as the keyboard-focus path.
+          Also here: the Fuji LCD variant it beat, a polaroid flip that didn&apos;t survive
+          review, and a Luna balloon still in the wings. Built on
+          <code style="font-family: var(--font-mono);font-size:9pt">popover</code>,
+          <code style="font-family: var(--font-mono);font-size:9pt">@starting-style</code>,
+          and a small rAF translate3d loop.
+        </div>
+        <div class="meta">
+          shape: visual + interaction · added 2026-05-22
+        </div>
+      </li>
+
+    </ul>
+
+    <p style="margin-top: 18px; font-size: 9.5pt; color: oklch(51.03% 0 0); font-style: italic;">
+      More to come. Mules that graduate get the <span class="status shipped" style="display: inline-block; font-style: normal;">shipped</span> tag; the ones that don&apos;t stay parked here tagged <span class="status dead" style="display: inline-block; font-style: normal;">rejected</span>. Scrapping a rig still leaves a data point; I never delete one. This is a motor pool, so the failures stay parked next to the wins.
+    </p>
+
+    <footer>
+      <p>
+        &larr; back to <a href="/">aadhar.sh</a>
+      </p>
+      <p>
+        <small>&copy; 2026 Aadharsh Pannirselvam &middot; built in the open</small>
+      </p>
+    </footer>
+
+  </div>
+</div>
+
+<!-- prerender every internal page eagerly (McMaster-style); same exclusions
+     as the homepage. Chromium-only, ignored elsewhere. -->
+<script type="speculationrules">
+{
+  "prerender": [
+    {
+      "where": {
+        "and": [
+          { "href_matches": "/*" },
+          { "not": { "href_matches": "/whoareyou*" } }
+        ]
+      },
+      "eagerness": "moderate"
+    }
+  ]
+}
+</script>
+
+<!-- the shared XP desktop shell (taskbar, icons, Run). deferred; short-cached
+     with SWR, so deep-link visitors pay one small fetch and reuse it after. -->
+  <script src="/a/nav.f1317f11.js" defer></script>
+<!-- axp:shell --><nav id="axp-icons" aria-label="desktop shortcuts"><a class="axp-ico" title="writing, in flux" href="/writing" data-key="Notepad" style="left:9px;top:9px"><span class="ic note" aria-hidden="true"></span><span class="t">Notepad</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="GitHub (opens in a new tab)" href="https://github.com/oddharsh" data-key="GitHub" style="left:9px;top:95px"><span class="ic " style="background:linear-gradient(180deg,oklch(72% 0.05 255),oklch(60% 0.07 257))" aria-hidden="true">G</span><span class="t">GitHub</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Twitter (opens in a new tab)" href="https://x.com/oddhash" data-key="Twitter" style="left:9px;top:181px"><span class="ic " style="background:linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))" aria-hidden="true">@</span><span class="t">Twitter</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Instagram (opens in a new tab)" href="https://www.instagram.com/aadharsh.hif" data-key="Photos" style="left:9px;top:267px"><span class="ic " style="background:linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))" aria-hidden="true"><i class="cam" aria-hidden="true"></i></span><span class="t">Photos</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Curius (opens in a new tab)" href="https://curius.app/aadharsh-pannirselvam" data-key="Curius" style="left:9px;top:353px"><span class="ic " style="background:linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))" aria-hidden="true">C</span><span class="t">Curius</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Beli (opens in a new tab)" href="https://beliapp.com/users/aadharsh" data-key="Beli" style="left:9px;top:439px"><span class="ic " style="background:linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))" aria-hidden="true">B</span><span class="t">Beli</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Spotify (opens in a new tab)" href="https://open.spotify.com/user/aadharsh2010" data-key="Music" style="left:9px;top:525px"><span class="ic " style="background:linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))" aria-hidden="true">♪</span><span class="t">Music</span></a></nav><div id="axp-taskbar" role="navigation" aria-label="taskbar"><a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a><div id="axp-pins"><a class="axp-pin" title="prototypes + experiments" href="/garage"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-garage" alt=""></span><span class="lbl">garage</span></a><a class="axp-pin" title="chat-style explainers + live demos" href="/lwe"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-lwe" alt=""></span><span class="lbl">lwe</span></a><a class="axp-pin" title="notes, in flux: an editable notepad" href="/writing"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-writing" alt=""></span><span class="lbl">writing</span></a><a class="axp-pin" title="what I've been reading, from Curius" href="/reading"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-reading" alt=""></span><span class="lbl">reading</span></a><a class="axp-pin" title="events worth going to" href="/serendipity"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-serendipity" alt=""></span><span class="lbl">serendipity</span></a><a class="axp-pin" title="the crypto-VC neighborhood" href="/around"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-around" alt=""></span><span class="lbl">around</span></a><a class="axp-pin" title="the other web: how machines read a URL" href="/lens"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-lens" alt=""></span><span class="lbl">lens</span></a><a class="axp-pin" title="a compression vision test — whose eye do you have?" href="/pixel-peeper"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-pixel-peeper" alt=""></span><span class="lbl">pixel peeper</span></a><a class="axp-pin" title="what I'm listening to right now" href="/rn"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-music" alt=""></span><span class="lbl">music</span></a><a class="axp-pin" title="book a coffee / bagel" href="/coffee"><span class="fav" aria-hidden="true"><img src="/a/icons.74f459d9.svg#pin-coffee" alt=""></span><span class="lbl">coffee</span></a></div><div id="axp-spacer"></div><div id="axp-tray"><button id="axp-sound" type="button" hidden></button><a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><img src="/a/icons.74f459d9.svg#tray-sysprop" alt=""></a><a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><img src="/a/icons.74f459d9.svg#tray-security" alt=""></a><a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><img src="/a/icons.74f459d9.svg#tray-updates" alt=""></a><span id="axp-clock" aria-hidden="true"></span></div></div><!-- /axp:shell -->
+</body>
+</html>

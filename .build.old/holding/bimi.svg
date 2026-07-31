@@ -1,0 +1,25 @@
+<svg version="1.2" baseProfile="tiny-ps" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 480">
+  <title>aadhar.sh</title>
+  <!-- the site's traffic cone — same mark as /favicon.ico, drawn as a conformant
+       SVG Tiny-PS BIMI logo: square, full-bleed (inboxes circle-crop), no scripts
+       or external refs. orange body, two white bands, dark base, Luna-blue field. -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4a93e4"/>
+      <stop offset="1" stop-color="#1f51b5"/>
+    </linearGradient>
+  </defs>
+
+  <!-- full-bleed background (no transparency) -->
+  <rect x="0" y="0" width="480" height="480" fill="url(#sky)"/>
+
+  <!-- base bar -->
+  <rect x="132" y="356" width="216" height="20" rx="5" ry="5" fill="#1a1a1a"/>
+
+  <!-- cone body -->
+  <path d="M 240 96 L 150 356 L 330 356 Z" fill="#ff6600"/>
+
+  <!-- two reflective white bands -->
+  <path d="M 182 272 L 298 272 L 309 302 L 171 302 Z" fill="#ffffff"/>
+  <path d="M 214 168 L 266 168 L 274 192 L 206 192 Z" fill="#ffffff"/>
+</svg>
