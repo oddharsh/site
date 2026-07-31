@@ -26,6 +26,7 @@ import { citationsIn, findEndpointIn, SELF_LINK_HOSTS } from "./holding/_worker.
 import { sign } from "./cal/src/sign.js";
 import { AGENT_SURFACES, WEBMENTION_PATHS } from "./holding/_worker.js/lib/site-manifest.js";
 import { handleWritingIndex } from "./holding/_worker.js/writing.js";
+import { cronJob } from "./holding/_worker.js/lib/cron.js";
 import { serveStaticPage } from "./holding/_worker.js/lib/assets.js";
 import { readManifest, workerModule, navFenceBody, readFenceBody } from "./scripts/gen-manifest.mjs";
 import { INDEXED_SECTIONS, TWIN_FACTS, buildTwins, checkTwinFacts, htmlFileFor, twinPath } from "./scripts/gen-md-twins.mjs";
@@ -1442,6 +1443,27 @@ test("the probe writes one positionally-stable datapoint and never throws", asyn
   assert.ok(dp.doubles.every((v) => typeof v === "number"), "every double must be a real number");
   assert.equal(dp.blobs.length, 2, "blobs are positional: [deadlined CSV, version id]");
   assert.deepEqual(dp.indexes, ["home"]);
+});
+
+test("cron dispatch survives Cloudflare's expression normalization", () => {
+  // The dispatcher used to exact-match event.cron against the strings in
+  // wrangler.jsonc, but Cloudflare normalizes expressions between declaration
+  // and delivery (day-of-week tokens especially), and the census schedule is
+  // the only one carrying a day-of-week token: three straight Monday sweeps
+  // fell into the else-branch and ran the /around crawl with nothing logged.
+  // The rule now matches minute+hour signatures, which normalization leaves
+  // alone. Both spellings of Monday must land on the census.
+  assert.equal(cronJob("17 8 * * 1"), "census");
+  assert.equal(cronJob("17 8 * * MON"), "census");
+  assert.equal(cronJob("7,37 * * * *"), "home_probe");
+  assert.equal(cronJob("41 5 * * *"), "webmention_send");
+  assert.equal(cronJob("23 */6 * * *"), "serendipity");
+  assert.equal(cronJob("*/30 * * * *"), "around");
+  // Unknown expressions surface as null (a traced cron.unmatched event), never
+  // as somebody else's job — that silent fallback is the bug class this fixes.
+  assert.equal(cronJob("0 0 * * *"), null);
+  assert.equal(cronJob(""), null);
+  assert.equal(cronJob(null), null);
 });
 
 // The SSRF host floor is shared by /lens, webmention verification, and
