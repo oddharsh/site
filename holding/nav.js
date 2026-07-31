@@ -80,6 +80,7 @@
     { label: "garage · horizon", path: "/garage/horizon", hint: "web-platform horizon" },
     { label: "garage · iroh", path: "/garage/iroh", hint: "dial a machine by its public key" },
     { label: "garage · masonry", path: "/garage/masonry", hint: "Grid Lanes masonry photo grid (with fixed-square fallback)" },
+    { label: "garage · octane", path: "/garage/octane", hint: "what a framework's floor costs against no framework" },
     { label: "garage · pretext", path: "/garage/pretext", hint: "DOM-free text measurement" },
     { label: "garage · pqc", path: "/garage/pqc", hint: "what a PQ signature costs in bytes and milliseconds" },
     { label: "garage · safari 27", path: "/garage/safari27", hint: "WWDC26 Safari 27 features, through this site's lens" },
