@@ -354,10 +354,13 @@ export function start(initial) {
       // fallback. Same arrangement as the photo grid, and for the same reason —
       // the BROWSER picks, so one URL never has to mean two different bodies.
       //
-      // Without one, the src is Spotify's own URL. That is the honest fallback
-      // for an art URL we could not parse a hash out of, AND it is what every
-      // fragment cached before this shipped still looks like, so the two paths
-      // are the same code rather than a migration.
+      // Without one, the src is still a /rn/art/ URL and the srcset branch is
+      // simply skipped. The only shape that reaches it is a fragment cached
+      // before #182 shipped, which carries a plain Spotify src and is why this
+      // branch stays: it renders whatever it is handed rather than assuming.
+      // Art whose hash will not parse never gets here at all — rn.js emits no
+      // image attribute for it, because img-src is 'self' data: and a URL the
+      // policy blocks would be a broken frame where the text card belongs.
       //
       // No loading="lazy" on any hover surface. The attribute defers a fetch
       // until the image nears the viewport, and this node is built at the

@@ -28,7 +28,7 @@
   # assets get this copy; worker-rendered responses get that one. infra.json's
   # app-owns-security-headers check reads the wire, so a drift between the two shows
   # up as one route disagreeing with another rather than as a failing build.
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://i.scdn.co https://*.spotifycdn.com; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; worker-src 'self'; manifest-src 'self'; upgrade-insecure-requests
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; worker-src 'self'; manifest-src 'self'; upgrade-insecure-requests
   # Permissions-Policy: explicitly opt out of every browser API we don't
   # use. shrinks fingerprinting surface and prevents stray code from popping
   # permission prompts. every token here must be one a shipping browser still
