@@ -1832,6 +1832,64 @@ test("the homepage's Link header carries the shell preloads, or it gets no Early
   // "static page negotiation prefers 304, then DCZ with the current validator".
 });
 
+// Every `_headers` rule for a page has to be written against the TWIN, because that is
+// the asset serveStaticPage actually fetches: findBrotli reads `<base>.html.br` and
+// copies ITS cache-control and link onto the page response. So a rule spelled as the
+// request path (`/pixel-peeper`) matches nothing, and the page silently falls back to
+// the Workers-assets default `public, max-age=0, must-revalidate`.
+//
+// That failed quietly in production for as long as /pixel-peeper had been a page. Two
+// costs, and the second is the one nothing reports: no s-maxage means no shared cache
+// entry, and must-revalidate VETOES dictionary registration (canRegisterAsDictionary in
+// lib/assets.js), so the page drops out of the per-page dcz tier while still
+// advertising `vary: available-dictionary`. /garage/* and /lwe/* were always fine
+// because a glob covers the twin, the plain .html, and a section index's
+// `<base>/index.html.br` alike, which is exactly why one hand-written exact rule could
+// sit wrong next to them without ever looking wrong.
+test("_headers page rules match the twin the worker fetches, not the request path", async () => {
+  const { PAGE_CACHE_CONTROL } = await import("./holding/_worker.js/lib/const.js");
+  const { readdir } = await import("node:fs/promises");
+  const raw = await readFile(new URL("holding/_headers", import.meta.url), "utf8");
+
+  // `_headers` blocks: a line starting with `/`, then its indented header lines.
+  const rules = [...raw.matchAll(/^(\/\S*)\n((?:[ \t]+\S.*\n)+)/gm)].map(([, pattern, body]) => ({
+    pattern,
+    cacheControl: (body.match(/^[ \t]+Cache-Control:[ \t]*(.+?)\s*$/mi) || [])[1] || null,
+    // Matching rules ACCUMULATE and duplicate headers are comma-joined with no
+    // most-specific-wins, so `*` has to be modelled as a real glob, not a prefix test.
+    matches: (path) => new RegExp(`^${pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\\\*/g, ".*")}$`).test(path),
+  }));
+
+  // The families whose pages take their policy from this file. Pages routed with
+  // GENERATED_PAGE_HEADERS get theirs from the worker instead and are pinned above.
+  const families = ["garage", "lwe", "pixel-peeper"];
+  let checked = 0;
+  for (const family of families) {
+    for (const file of (await readdir(new URL(`holding/${family}`, import.meta.url))).sort()) {
+      if (!file.endsWith(".html")) continue;
+      const twin = `/${family}/${file}.br`;
+      const hit = rules.filter((rule) => rule.matches(twin) && rule.cacheControl);
+      assert.ok(hit.length > 0,
+        `${twin}: no _headers rule matches the twin, so this page ships the Workers-assets default`);
+      for (const rule of hit) {
+        assert.equal(rule.cacheControl, PAGE_CACHE_CONTROL,
+          `${rule.pattern} matches ${twin} but states a different policy than every other page`);
+      }
+      checked++;
+    }
+  }
+  // A collapsed loop would pass vacuously, which is the failure mode this whole file
+  // keeps re-learning (the markdown-twin contract test asserted nothing for a while).
+  assert.ok(checked >= 30, `expected to check 30+ page twins, checked ${checked}`);
+
+  // The other half of the same edit: a page rule must not widen into a sibling that
+  // sets its own policy, because the comma-join would prepend max-age=0 to it.
+  const tile = "/pixel-peeper/tiles/05c532a8be2a.jpg";
+  const tileRules = rules.filter((rule) => rule.matches(tile) && rule.cacheControl);
+  assert.deepEqual(tileRules.map((rule) => rule.cacheControl), ["public, max-age=31536000, immutable"],
+    "exactly one rule may set Cache-Control on a pixel-peeper tile, or its immutable year gets clamped");
+});
+
 test("the CSP falls back to 'unsafe-inline' only where the build cannot speak", async () => {
   const { canonicalPath, scriptHashesFor } = await import("./holding/_worker.js/lib/csp-hashes.js");
 
@@ -1917,6 +1975,59 @@ test("every inline script in the STAGED tree is covered by the emitted hash map"
   assert.ok(pages.length >= 40, `expected the full staged document set, saw ${pages.length}`);
 
   const EXECUTABLE = /^(|text\/javascript|application\/javascript|text\/ecmascript|application\/ecmascript|module|speculationrules)$/;
+
+  // This scanner has to WALK tags, not string-search for "<script". /garage/horizon
+  // holds two scripts inside other tags' attribute values:
+  //
+  //   <input value="&lt;img src=x onerror=alert(1)&gt;&lt;script&gt;bad()&lt;/script&gt;">
+  //   <iframe srcdoc="...&lt;script&gt;let n=0;setInterval(...)&lt;/script&gt;...">
+  //
+  // Both are entity-escaped in the source. HTML5 lets a QUOTED attribute value carry
+  // raw < and >, so minify-html decodes them (no option turns that off, and the DOM
+  // value is identical either way), and from 2026-07-31 every page goes through the
+  // minifier. A searcher then finds `<script>bad()</script>` in the middle of an
+  // attribute and demands a CSP hash for something no browser will ever execute as
+  // part of this document.
+  //
+  // Independence from build.mjs's collector is the point of this test, so this is a
+  // separate implementation. Being different is not the goal though, and the earlier
+  // regex here was different by being wrong. A correct walk is the only correct
+  // answer: consume each tag whole so attribute text is never read as content, and
+  // treat <script> as a script only when it opens in content position.
+  const inlineScripts = function* (source) {
+    const low = source.toLowerCase();
+    let i = 0;
+    while (i < source.length) {
+      const lt = source.indexOf("<", i);
+      if (lt === -1) return;
+      if (low.startsWith("<!--", lt)) {
+        const end = source.indexOf("-->", lt + 4);
+        if (end === -1) return;
+        i = end + 3;
+        continue;
+      }
+      // find this tag's `>`, stepping over quoted attribute values
+      let j = lt + 1, quote = "";
+      while (j < source.length) {
+        const ch = source[j];
+        if (quote) { if (ch === quote) quote = ""; }
+        else if (ch === '"' || ch === "'") quote = ch;
+        else if (ch === ">") break;
+        j++;
+      }
+      if (j >= source.length) return;
+      const name = (low.slice(lt + 1, j).match(/^\/?\s*([a-z][^\s/>]*)/) || [])[1];
+      if (name === "script") {
+        const close = low.indexOf("</script", j + 1);
+        if (close === -1) return;
+        yield { attrs: source.slice(lt + 7, j), body: source.slice(j + 1, close) };
+        i = close + 8;
+        continue;
+      }
+      i = j + 1;   // consumed the whole tag, attributes included
+    }
+  };
+
   let checked = 0;
   for (const page of pages) {
     const html = readFileSync(`./.build/holding/${page}`, "utf8");
@@ -1924,8 +2035,8 @@ test("every inline script in the STAGED tree is covered by the emitted hash map"
     const path = key.length > 1 && key.endsWith("/") ? key.slice(0, -1) : key;
     assert.ok(map[path], `${page}: no entry at ${path} — it would silently fall back to 'unsafe-inline'`);
 
-    for (const m of html.matchAll(/<script([^>]*)>([\s\S]*?)<\/script>/g)) {
-      const attrs = m[1];
+    for (const m of inlineScripts(html)) {
+      const attrs = m.attrs;
       if (/\ssrc\s*=/i.test(attrs)) continue;
       // minify-html UNQUOTES attribute values wherever it legally can, so the
       // staged homepage carries `type=application/ld+json` bare. A quoted-only
@@ -1935,7 +2046,7 @@ test("every inline script in the STAGED tree is covered by the emitted hash map"
       const t = attrs.match(/\btype\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>]+))/i);
       const type = (t ? (t[1] ?? t[2] ?? t[3] ?? "") : "").toLowerCase();
       if (!EXECUTABLE.test(type)) continue;
-      const digest = createHash("sha256").update(m[2], "utf8").digest("base64");
+      const digest = createHash("sha256").update(m.body, "utf8").digest("base64");
       assert.ok(map[path].includes(digest),
         `${page}: an inline <script${type ? ` type="${type}"` : ""}> is not in the hash map — it would be BLOCKED once the flag flips`);
       checked++;
