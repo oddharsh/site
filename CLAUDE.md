@@ -789,6 +789,51 @@ npm run deploy
     Vitest pool boots from `cal/src/index.js` alone, so a cal -> holding import
     would make cal untestable without the site tree. Do not consolidate them.
 
+17. **`script-src` is per-document sha256 hashes, and the committed map is EMPTY
+    on purpose.** `lib/csp-hashes.js` ships `PAGE_SCRIPT_HASHES = {}` with a
+    `// build:csp-hashes` marker; build step 7c rewrites that line in the staged
+    copy from the FINAL bytes (after minification and the `/a/` ref rewrite, before
+    step 8 compresses). Same generated-module convention as `shell-assets.js`.
+
+    Empty is correct for `npm run dev`, which serves the readable unminified tree
+    whose blocks hash differently. A path with NO entry falls back to
+    `'unsafe-inline'`, which is why the build hard-fails below 40 covered documents:
+    a collapsed map is otherwise silent, since every page just quietly goes loose.
+    An entry with an EMPTY list is the opposite and the best case, a document with
+    no inline script earning a bare `script-src 'self'`.
+
+    Hashes rather than a nonce because the staged documents are PRECOMPRESSED
+    (gotcha 14): nothing can be injected per request into bytes brotli'd at build
+    time, and the runtime has no brotli encoder to redo them. The live
+    worker-rendered pages (`/whoareyou`, `/around`, `/coffee`, `/search`, `/ledger`,
+    `/rn/admin`, `/serendipity`) are NOT precompressed, so a per-response nonce is
+    the right mechanism there and is the open follow-up. They keep the loose policy
+    until then, which is no worse than before.
+
+    Three things verified in a real browser rather than assumed, all on 2026-07-30:
+    a HASHED `<script type="speculationrules">` is allowed and an unhashed one
+    raises a `script-src-elem` violation, so the 25 speculation-rules blocks need
+    ordinary hashes and NOT the `'inline-speculation-rules'` keyword; Node's
+    `createHash("sha256").update(body, "utf8")` matches the browser's digest
+    byte-for-byte on a real staged block containing non-ASCII (26 of the 73 do);
+    and a one-space edit to that block is blocked, so the check has teeth.
+
+    Event-handler ATTRIBUTES cannot be hashed. Step 7c hard-fails and names them
+    rather than reaching for `'unsafe-hashes'`, which would re-permit attribute
+    execution generally and hand most of the win back. Its attribute scanner is
+    quote-aware for a reason: `garage/horizon.html` carries
+    `value="&lt;img src=x onerror=alert(1)&gt;"` as demo TEXT, and a naive
+    `/ on\w+=/` over the raw tag calls that an event handler.
+
+    **The rollout is not finished.** `ENFORCE_PAGE_HASHES` in `lib/security.js` is
+    FALSE, so the hashed policy ships as `Content-Security-Policy-Report-Only`
+    beside the loose enforcing one. Flip it only after a production deploy has run
+    report-only and come back clean, the way `SHELL_PRECOMPRESS_DEFAULT_ON` earned
+    its default. You cannot hedge inside one header: a browser that understands
+    hashes IGNORES `'unsafe-inline'` in the same directive, so the two policies have
+    to be two headers. The failure mode is silent, a blocked inline script leaves
+    the page rendering and merely dead.
+
 ---
 
 ## Source folder for new photos

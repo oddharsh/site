@@ -1221,10 +1221,15 @@ test("the RUM beacon is first-party on both legs, and every page that says so ag
   assert.match(page, /"send": \{"to": "\/ledger\/rum"\}/, "the beacon must be told to report to this origin too");
   assert.doesNotMatch(page, /src="https:\/\/static\.cloudflareinsights\.com/, "no cross-origin beacon script");
 
-  // The CSP must not keep permitting an origin nothing calls any more. Matched on
-  // the policy VALUE, since _headers puts it on the header line while security.js
-  // puts it on the line after the key.
-  for (const [name, text] of [["_headers", headers], ["lib/security.js", security]]) {
+  // The CSP must not keep permitting an origin nothing calls any more. _headers is
+  // matched as TEXT (it is a literal header line). security.js is matched on the
+  // policy it ASSEMBLES, because the per-document script-src work split the string
+  // into pieces and a source scrape would now be checking punctuation instead of
+  // the thing that reaches the browser. `/unmapped` deliberately misses the hash
+  // map, so this is the fallback policy every live worker page still gets.
+  const { cspHeadersFor } = await import("./holding/_worker.js/lib/security.js");
+  const assembled = cspHeadersFor("/unmapped-probe")["content-security-policy"];
+  for (const [name, text] of [["_headers", headers], ["lib/security.js", assembled]]) {
     const policy = (text.match(/default-src 'self';[^"\n]*upgrade-insecure-requests/) || [])[0];
     assert.ok(policy, `${name} must still declare a CSP`);
     assert.doesNotMatch(policy, /cloudflareinsights\.com/, `${name}: drop the beacon's old third-party CSP entries`);
@@ -1777,4 +1782,118 @@ test("the homepage's Link header carries the shell preloads, or it gets no Early
     "lib/security.js should not keep a second, uncalled definition of the homepage Link header");
   assert.doesNotMatch(security, /^\s*(export )?const HOMEPAGE_LINK\s*=/m,
     "the homepage Link header should be composed at the route, not in a constant nothing imports");
+});
+
+test("the CSP falls back to 'unsafe-inline' only where the build cannot speak", async () => {
+  const { canonicalPath, scriptHashesFor } = await import("./holding/_worker.js/lib/csp-hashes.js");
+
+  // canonicalPath folds the spellings a request can arrive in onto the one the
+  // build emits. If these two ever disagree the map misses SILENTLY and the page
+  // just stays loose, so pin the folding rather than trusting it.
+  assert.equal(canonicalPath("/"), "/");
+  assert.equal(canonicalPath("/index.html"), "/");
+  assert.equal(canonicalPath("/garage/"), "/garage");
+  assert.equal(canonicalPath("/garage/index.html"), "/garage");
+  assert.equal(canonicalPath("/garage/scroll.html"), "/garage/scroll");
+  assert.equal(canonicalPath("/writing/colophon"), "/writing/colophon");
+
+  // The committed map is empty on purpose (readable dev serves unminified bytes
+  // whose hashes differ), so every lookup here misses and takes the loose policy.
+  assert.equal(scriptHashesFor("/garage/scroll"), null);
+  // and a response with no pathname must never inherit the homepage's entry
+  assert.equal(scriptHashesFor(undefined), null);
+  assert.equal(scriptHashesFor(""), null);
+});
+
+test("the hashed policy is well-formed and keeps 'self' for the external scripts", async () => {
+  const { cspHeadersFor, ENFORCE_PAGE_HASHES } = await import("./holding/_worker.js/lib/security.js");
+  const csp = cspHeadersFor("/anything-unmapped")["content-security-policy"];
+
+  // the fallback is exactly today's policy, so an unmapped page is never a regression
+  assert.match(csp, /script-src 'self' 'unsafe-inline';/);
+  assert.match(csp, /default-src 'self';/);
+  assert.match(csp, /object-src 'none';/);
+  // no report-only twin when there is nothing stricter to report against
+  assert.equal(cspHeadersFor("/anything-unmapped")["content-security-policy-report-only"], undefined);
+
+  // Rebuild the hashed arm against a stub map, so this asserts the SHAPE the
+  // build's output will take rather than waiting on a staged tree.
+  const mod = await import("./holding/_worker.js/lib/csp-hashes.js");
+  const original = { ...mod.PAGE_SCRIPT_HASHES };
+  try {
+    mod.PAGE_SCRIPT_HASHES["/probe"] = ["AAAA", "BBBB"];
+    const pair = cspHeadersFor("/probe");
+    const hashed = pair[ENFORCE_PAGE_HASHES ? "content-security-policy" : "content-security-policy-report-only"];
+    assert.match(hashed, /script-src 'self' 'sha256-AAAA' 'sha256-BBBB';/);
+    // 'strict-dynamic' would make 'self' inert for scripts and break /a/nav.js,
+    // /tooltip.js, /hoist.js and the homepage's dynamic import()s.
+    assert.ok(!hashed.includes("strict-dynamic"));
+    // 'unsafe-hashes' would re-permit event-handler attributes, which is the
+    // thing the two refactors in this change exist to avoid.
+    assert.ok(!hashed.includes("unsafe-hashes"));
+    assert.ok(!/script-src[^;]*'unsafe-inline'/.test(hashed));
+
+    // a document with no inline script at all earns the strictest form
+    mod.PAGE_SCRIPT_HASHES["/empty"] = [];
+    const bare = cspHeadersFor("/empty");
+    const bareCsp = bare[ENFORCE_PAGE_HASHES ? "content-security-policy" : "content-security-policy-report-only"];
+    assert.match(bareCsp, /script-src 'self';/);
+
+    // while the flag is off, the ENFORCING header must still be the loose one:
+    // that is the whole point of the report-only phase.
+    if (!ENFORCE_PAGE_HASHES) {
+      assert.match(pair["content-security-policy"], /script-src 'self' 'unsafe-inline';/);
+    }
+  } finally {
+    for (const k of Object.keys(mod.PAGE_SCRIPT_HASHES)) delete mod.PAGE_SCRIPT_HASHES[k];
+    Object.assign(mod.PAGE_SCRIPT_HASHES, original);
+  }
+});
+
+test("every inline script in the STAGED tree is covered by the emitted hash map", async () => {
+  // The build derives the map from the staged bytes; this re-derives it with a
+  // deliberately different parser and compares. Same-code-twice would prove
+  // nothing, and the failure this guards against (a blocked script leaves the
+  // page rendering and merely dead) is invisible without it.
+  if (!existsSync("./.build/holding/_worker.js/lib/csp-hashes.js")) return; // no staged tree; `npm run build` first
+  const { createHash } = await import("node:crypto");
+  const { readdir } = await import("node:fs/promises");
+
+  const emitted = readFileSync("./.build/holding/_worker.js/lib/csp-hashes.js", "utf8")
+    .match(/^export const PAGE_SCRIPT_HASHES = (.*); \/\/ build:csp-hashes$/m);
+  assert.ok(emitted, "the build did not rewrite the build:csp-hashes marker");
+  const map = JSON.parse(emitted[1]);
+
+  const pages = (await readdir("./.build/holding", { recursive: true }))
+    .filter((p) => p.endsWith(".html") && !p.endsWith(".src.html"));
+  assert.ok(pages.length >= 40, `expected the full staged document set, saw ${pages.length}`);
+
+  const EXECUTABLE = /^(|text\/javascript|application\/javascript|text\/ecmascript|application\/ecmascript|module|speculationrules)$/;
+  let checked = 0;
+  for (const page of pages) {
+    const html = readFileSync(`./.build/holding/${page}`, "utf8");
+    const key = "/" + page.replace(/\.html$/, "").replace(/(^|\/)index$/, "") || "/";
+    const path = key.length > 1 && key.endsWith("/") ? key.slice(0, -1) : key;
+    assert.ok(map[path], `${page}: no entry at ${path} — it would silently fall back to 'unsafe-inline'`);
+
+    for (const m of html.matchAll(/<script([^>]*)>([\s\S]*?)<\/script>/g)) {
+      const attrs = m[1];
+      if (/\ssrc\s*=/i.test(attrs)) continue;
+      // minify-html UNQUOTES attribute values wherever it legally can, so the
+      // staged homepage carries `type=application/ld+json` bare. A quoted-only
+      // match reads that as type="" and calls a JSON-LD data block executable,
+      // then fails demanding a hash for something no browser ever runs. Same
+      // don't-trust-the-quoting trap the inline favicon data-URIs hit.
+      const t = attrs.match(/\btype\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>]+))/i);
+      const type = (t ? (t[1] ?? t[2] ?? t[3] ?? "") : "").toLowerCase();
+      if (!EXECUTABLE.test(type)) continue;
+      const digest = createHash("sha256").update(m[2], "utf8").digest("base64");
+      assert.ok(map[path].includes(digest),
+        `${page}: an inline <script${type ? ` type="${type}"` : ""}> is not in the hash map — it would be BLOCKED once the flag flips`);
+      checked++;
+    }
+  }
+  // guard against the assertion loop quietly matching nothing, the failure mode
+  // the md-twin quiz test shipped with and reported as a pass for weeks
+  assert.ok(checked >= 60, `only ${checked} inline blocks verified; the extractor probably stopped matching`);
 });
