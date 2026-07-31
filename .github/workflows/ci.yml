@@ -35,17 +35,6 @@ jobs:
       - name: Check Wrangler versions and lockfiles
         run: npm run check-wrangler
 
-      # infra.json against reality. The tree and DNS tiers need no credential;
-      # the account tier runs only when the read-only token secret exists and
-      # skips cleanly otherwise. Everything this cannot reach (an unreachable
-      # resolver, a missing token) is an advisory, never a failure, so a network
-      # blip cannot redden a PR that only touched CSS.
-      - name: Check infrastructure declaration
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-        run: npm run infra:check
-
       - name: Build homepage
         run: npm run build
 
@@ -83,3 +72,34 @@ jobs:
       - name: Validate LWE ask Worker config
         working-directory: lwe-ask
         run: npx wrangler deploy --dry-run -c wrangler.toml
+
+      # infra.json against reality. The tree and DNS tiers need no credential;
+      # the account tier runs only when the read-only token secret exists and
+      # skips cleanly otherwise. Everything this cannot reach (an unreachable
+      # resolver, a missing token) is an advisory, never a failure, so a network
+      # blip cannot redden a PR that only touched CSS.
+      #
+      # LAST on purpose, and it used to be near the front. This is the only step
+      # that asserts against LIVE PRODUCTION rather than the tree, so its result
+      # depends on the deployed world instead of on the diff. Sequential steps stop
+      # at the first failure, so sitting early it did not just redden a PR, it
+      # SKIPPED the ten code gates behind it and reported nothing about the change.
+      #
+      # Measured on 2026-07-31, when a Workers Cache regression on `/` put the
+      # production edge out of sync with infra.json: four PRs went red with
+      # `Build homepage` through `Validate LWE ask Worker config` all skipped, none
+      # of them related to the drift, and one of them (#193) belonged to someone who
+      # had no way to know why. Moving it here means a production incident can still
+      # redden a PR, which is correct, but every gate that describes the DIFF has
+      # already run and reported by then.
+      #
+      # Still fatal, so drift cannot merge unnoticed. One consequence to know about:
+      # a PR whose whole purpose is to FIX production drift cannot turn its own check
+      # green before it deploys, because the thing it asserts against is the thing it
+      # repairs. That happened the same day (#195) and the documented way out is the
+      # local fallback, `npm run deploy`, followed by a re-run.
+      - name: Check infrastructure declaration
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: npm run infra:check
