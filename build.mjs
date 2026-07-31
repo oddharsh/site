@@ -1437,6 +1437,151 @@ for (const [file, srcPath, marker] of SHELLS) {
 
 }
 
+// 7c) CSP: hash every inline <script> in the staged documents, so script-src can
+// drop 'unsafe-inline'. Runs LAST of the HTML passes and before the compression in
+// step 8, because a hash is only true of the FINAL bytes: step 2 minifies the
+// homepage's inline blocks, step 6 rewrites shell refs into /a/ URLs, and either
+// would invalidate a hash taken earlier.
+//
+// Why hashes and not a nonce: see the long note in _worker.js/lib/security.js. The
+// short version is that these documents are precompressed, so nothing can be
+// injected into them per request.
+{
+  const pages = (await readdir(`${OUT}/holding`, { recursive: true }))
+    .filter((rel) => rel.endsWith(".html") && !rel.endsWith(".src.html"))
+    .sort();
+
+  // Canonical request path for a staged asset path. Mirrors the html_handling
+  // rules in wrangler.jsonc (drop-trailing-slash, .html elided) and the
+  // canonicalPath() the worker applies to the incoming pathname. If these two
+  // ever disagree the map silently misses and the page quietly stays loose, which
+  // is why the coverage floor below is a HARD failure.
+  const pathOf = (asset) => {
+    const p = "/" + asset.replace(/\.html$/, "");
+    return p === "/index" ? "/" : p.endsWith("/index") ? p.slice(0, -6) : p;
+  };
+
+  // Walk a document's tags with the same quote-aware scanner the inline minifier
+  // uses, collecting (a) executable inline script bodies to hash and (b) inline
+  // event-handler attributes, which a hash CANNOT cover and which therefore have
+  // to be refactored rather than allowlisted.
+  //
+  // Attributes are parsed properly instead of regexed off the raw tag, because
+  // garage/horizon.html carries `value="&lt;img src=x onerror=alert(1)&gt;"` as
+  // demo TEXT. A naive / on\w+=/ over the tag token calls that an event handler
+  // and sends you refactoring a string literal.
+  const HANDLER_ATTR = /^on[a-z]+$/;
+  const scanAttrs = (tagToken) => {
+    const found = [];
+    let i = 1;
+    while (i < tagToken.length && !/\s/.test(tagToken[i])) i++;  // skip tag name
+    while (i < tagToken.length) {
+      while (i < tagToken.length && /[\s/>]/.test(tagToken[i])) i++;
+      let name = "";
+      while (i < tagToken.length && !/[\s=/>]/.test(tagToken[i])) name += tagToken[i++];
+      if (!name) break;
+      while (i < tagToken.length && /\s/.test(tagToken[i])) i++;
+      if (tagToken[i] === "=") {
+        i++;
+        while (i < tagToken.length && /\s/.test(tagToken[i])) i++;
+        const q = tagToken[i];
+        if (q === '"' || q === "'") { i++; while (i < tagToken.length && tagToken[i] !== q) i++; i++; }
+        else while (i < tagToken.length && !/[\s>]/.test(tagToken[i])) i++;
+      }
+      if (HANDLER_ATTR.test(name.toLowerCase())) found.push(name.toLowerCase());
+    }
+    return found;
+  };
+
+  // A `<script>` is CSP-checked when the browser would EXECUTE it. That covers the
+  // JavaScript types and, verified in a real browser, `speculationrules`. It does
+  // not cover data blocks (application/json for the quiz payloads, ld+json), which
+  // are parsed as data and never reach script-src.
+  const EXECUTABLE_EXTRA = new Set(["speculationrules"]);
+  const collect = (source, label) => {
+    const hashes = [], handlers = [];
+    let cursor = 0;
+    while (cursor < source.length) {
+      const lt = source.indexOf("<", cursor);
+      if (lt === -1) break;
+      if (source.startsWith("<!--", lt)) {
+        const end = source.indexOf("-->", lt + 4);
+        if (end === -1) throw new Error(`csp-hash: unterminated comment in ${label}`);
+        cursor = end + 3;
+        continue;
+      }
+      const gt = findHtmlTagEnd(source, lt);
+      const token = source.slice(lt, gt + 1);
+      cursor = gt + 1;
+      const match = token.match(/^<\s*(\/?)\s*([A-Za-z][^\s/>]*)/);
+      if (!match || match[1]) continue;
+      const tag = match[2].toLowerCase();
+
+      for (const attr of scanAttrs(token)) handlers.push(`${label}: <${tag} ${attr}=…>`);
+      if (!RAW_HTML_TAGS.has(tag)) continue;
+
+      const close = new RegExp("<\\/\\s*" + tag + "\\s*>", "i").exec(source.slice(cursor));
+      if (!close) throw new Error(`csp-hash: unterminated <${tag}> in ${label}`);
+      const body = source.slice(cursor, cursor + close.index);
+      cursor += close.index + close[0].length;
+
+      if (tag !== "script") continue;
+      if (/\ssrc\s*=/i.test(token)) continue;               // external: covered by 'self'
+      if (!isJavaScriptScript(token) && !EXECUTABLE_EXTRA.has(scriptType(token))) continue;
+      hashes.push(createHash("sha256").update(body, "utf8").digest("base64"));
+    }
+    return { hashes, handlers };
+  };
+
+  const map = {};
+  const handlers = [];
+  let blocks = 0;
+  for (const page of pages) {
+    const source = await readFile(`${OUT}/holding/${page}`, "utf8");
+    const found = collect(source, page);
+    handlers.push(...found.handlers);
+    // Record EVERY staged document, including the ones with no inline script at
+    // all. An empty list is a real and stronger answer than an absent key: absent
+    // falls back to 'unsafe-inline', while empty means this document is known to
+    // need no inline execution and gets a bare `script-src 'self'`. 10 of the 43
+    // are in that happy state, and they should be allowed to say so.
+    map[pathOf(page)] = [...new Set(found.hashes)];
+    blocks += found.hashes.length;
+  }
+
+  // Inline event handlers are the one thing a hash policy cannot express. Leaving
+  // them would mean adding 'unsafe-hashes', which re-permits attribute execution
+  // generally and gives back most of what dropping 'unsafe-inline' just bought. So
+  // this is a hard stop with the exact sites named, not a warning.
+  if (handlers.length) {
+    console.error("csp-hash: inline event-handler attributes cannot be hashed. Refactor to addEventListener:");
+    for (const h of handlers) console.error(`  ${h}`);
+    throw new Error(`csp-hash: ${handlers.length} inline event-handler attribute(s) block the hashed policy`);
+  }
+
+  // Coverage floor, same shape as the md-twin and precompression guards. An empty
+  // or collapsed map is SILENT in production: every page just falls back to the
+  // loose policy and looks fine. 40 is a floor under the 43 documents that exist,
+  // loose enough to survive deleting a page and tight enough to catch a pass that
+  // stopped emitting.
+  const covered = Object.keys(map).length;
+  if (covered < 40) {
+    throw new Error(`csp-hash: only ${covered} of ${pages.length} documents got hashes (floor is 40) — did an earlier HTML pass change shape?`);
+  }
+
+  const target = `${OUT}/holding/_worker.js/lib/csp-hashes.js`;
+  const source = await readFile(target, "utf8");
+  const marker = /^export const PAGE_SCRIPT_HASHES = .*; \/\/ build:csp-hashes$/m;
+  if (!marker.test(source)) throw new Error("csp-hash: build:csp-hashes marker missing from lib/csp-hashes.js");
+  await writeFile(target, source.replace(
+    marker,
+    `export const PAGE_SCRIPT_HASHES = ${JSON.stringify(map)}; // build:csp-hashes`,
+  ));
+
+  const bytes = Object.values(map).reduce((n, h) => n + h.length * 72, 0);
+  console.log(`csp-hash: ${blocks} inline blocks across ${covered} documents, ${Object.values(map).flat().length} hashes (~${Math.round(bytes / covered)} B/page of header)`);
+}
+
 // 8) static and deterministically rendered pages: brotli q11 twins + dcz deltas.
 //
 // These are the biggest repeated text payloads on the site, and they fit

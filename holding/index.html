@@ -532,8 +532,16 @@ footer .signature small { color: oklch(56.93% 0 0); }
      it to all. The link stays HERE (not the head-top preload) so its cascade
      slot is unchanged: luna still applies after the inline block. Preloaded up
      top at high priority, so the flip resolves from cache. noscript keeps it
-     render-blocking when JS is off (nothing flips media there). -->
-<link rel="stylesheet" href="/luna.css" media="print" onload="this.media='all';this.onload=null">
+     render-blocking when JS is off (nothing flips media there).
+
+     The flip is a script rather than an onload= attribute because a CSP hash
+     cannot cover an event-handler attribute, and allowing those back in with
+     'unsafe-hashes' would hand most of script-src's value straight back. The
+     script sits immediately after the link so it runs mid-parse, long before a
+     network fetch could finish; the .sheet check covers the case where it does
+     not (a cache hit that resolved before this line was reached). -->
+<link rel="stylesheet" href="/luna.css" media="print" id="luna-css">
+<script>(function(){var l=document.getElementById("luna-css");function f(){l.media="all"}l.sheet?f():l.addEventListener("load",f,{once:true})})();</script>
 <noscript><link rel="stylesheet" href="/luna.css"></noscript>
 </head>
 <body>
