@@ -144,6 +144,23 @@ configs, and runs `cal/npm test`. Cal and Serendipity are bundled into the site
 Worker; their source modules and Cal behavioral suite remain inside the
 pull-request gate.
 
+**`npm run infra:check` runs LAST in that job, and the order is deliberate.** It is
+the only step asserting against live production rather than against the tree, so
+its result depends on the deployed world instead of on the diff. Steps run
+sequentially and stop at the first failure, so while it sat near the front a
+production drift did not merely redden a PR, it SKIPPED all ten code gates behind
+it and reported nothing about the change. That happened on 2026-07-31: a Workers
+Cache regression on `/` put the edge out of sync with `infra.json`, and four
+unrelated PRs went red with `Build homepage` through `Validate LWE ask Worker
+config` all skipped, one of them belonging to someone with no way to know why.
+Keep it last. A production incident should still be able to redden a PR; it should
+not be able to hide whether the PR's own code is sound.
+
+It stays FATAL, so drift cannot merge unnoticed. The consequence worth knowing: a
+change whose purpose is to FIX production drift cannot turn its own check green
+before it deploys, because the thing it asserts against is the thing it repairs.
+Deploy that one with the local fallback (`npm run deploy`), then re-run CI.
+
 Dependabot (`.github/dependabot.yml`) keeps the Wrangler pin current: the npm
 ecosystem entry at the repository root bumps the single exact root pin (and the
 shared lockfile) via PR, alongside the cargo, pip, and github-actions

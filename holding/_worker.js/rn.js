@@ -200,17 +200,26 @@ export function artUrls(raw) {
   return { src: at(240, "jpg"), srcset: `${at(120, "avif")} 120w, ${at(240, "avif")} 240w` };
 }
 
-// The hover attributes for one art URL, in the two shapes a row can carry.
+// The hover attributes for one art URL — and NOTHING when the art cannot be
+// re-hosted, which is the half that lets the CSP be honest.
 //
-// A recognized Spotify image becomes first-party `/rn/art/…` and gains a
-// `-imageset`. Anything else keeps the canonicalized ORIGINAL URL and no
-// imageset, which is also what a fragment cached before this shipped looks like
-// — tooltip.js treats a missing imageset as "plain <img>", so both shapes render
-// and the RN_TRACKS_TTL window after a deploy needs no coordination.
+// Until #182 this fell back to the original Spotify URL, which was right while
+// img-src still allowed those hosts. It no longer does: img-src is 'self' data:,
+// so emitting a spotifycdn URL here would produce a frame the browser refuses to
+// load, and a broken image is a worse answer than no image. Dropping the
+// attribute lands the row on paths that already exist and already read well —
+// a track falls through to buildTrackContent's text card (title, artists,
+// duration), an artist to no tooltip at all, which is exactly what a cover-less
+// track has always done.
+//
+// So the shapes that reach here are the shapes that were always possible:
+// mosaic.scdn.co collage covers, and anything Spotify ships that this file has
+// not learned yet. Loud enough to find in the logs, quiet enough not to break a
+// page over.
 function artAttrs(kind, rawUrl) {
   if (!rawUrl) return "";
   const art = artUrls(rawUrl);
-  if (!art) return ` data-${kind}-image="${escAttr(canonicalArtUrl(rawUrl))}"`;
+  if (!art) return "";
   return ` data-${kind}-image="${escAttr(art.src)}"` +
          ` data-${kind}-imageset="${escAttr(art.srcset)}"`;
 }

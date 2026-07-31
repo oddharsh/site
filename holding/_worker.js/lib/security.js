@@ -4,7 +4,8 @@
 // what's set on static assets via _headers — without this wrapper, the
 // worker-rendered pages (/whoareyou, /around, /bot, /rn/admin, etc.)
 // would skip _headers entirely and ship without CSP / Permissions-Policy.
-import { PAGE_DICTIONARY, SHELL_PRELOAD_LINK } from "./shell-assets.js";
+import { PAGE_DICTIONARY } from "./shell-assets.js";
+import { scriptHashesFor } from "./csp-hashes.js";
 import { prefetchActivationHeader } from "../speculation.js";
 
 // There are NO external script or connect origins here, and that is a stronger
@@ -20,16 +21,92 @@ import { prefetchActivationHeader } from "../speculation.js";
 // designing against — so if the beacon ever goes cross-origin again, those two pages
 // change in the same commit.
 //
-// The remaining allowances are img-src for Spotify album/artist art and the two
-// 'unsafe-inline' tokens the buildless inline CSS/JS design requires.
+// img-src is 'self' data: as of #186, and that is now the whole story:
+// every image on every page comes from this origin. Spotify's two hosts sat here
+// for as long as album art was hotlinked from a hover; #182 re-hosted it behind
+// /rn/art/, and a cold incognito capture on 2026-07-30 measured 133 requests to
+// exactly one host. An allowance nothing uses is a standing permission to
+// hotlink again by accident, so it leaves with the last request that needed it.
+//
+// This is enforced, not just asserted: rn.js emits NO image attribute for art it
+// cannot re-host, precisely so a cover this policy would block renders as the
+// tooltip's text card instead of a broken frame. The two changes are one change.
+//
+// The remaining allowance is the two 'unsafe-inline' tokens the buildless inline
+// CSS/JS design requires, and script-src is working its way off its one (see the
+// hash note below). The STYLE directive keeps its token and will: inline CSS is a
+// hard rule here and the style-attribute surface is far larger, so this closes
+// script injection and leaves style injection open. Describe it that way on
+// /security rather than claiming a strict CSP.
 //
 // Automatic (zone-side) beacon injection is NOT usable here, and this is the reason:
 // the worker serves the homepage and the static pages as precompressed br/dcz bodies
 // with `encodeBody: "manual"`, and the edge cannot rewrite HTML it did not compress.
 // So the beacon is placed in source, which also keeps it visible in View Source.
+
+// ── script-src, and why it is hashes rather than a nonce ─────────────────────
+// A nonce has to be unique per response and it lives in the BODY. Build step 8
+// precompresses every staged document into brotli q11 twins plus dcz deltas, served
+// `encodeBody: "manual"`, and the runtime ships no brotli encoder to recompress with
+// (CLAUDE.md gotcha 14). You cannot write a per-request nonce into bytes you already
+// compressed at build time, so for these 43 documents a nonce would mean giving up
+// precompression on the render-blocking path to buy a marginally tidier policy.
+// Hashes are computed from those same final bytes and cost nothing at request time.
+//
+// Verified 2026-07-30 in a real browser, because it is the one thing here worth not
+// guessing at: under `script-src 'sha256-…'` with no 'unsafe-inline', a HASHED
+// `<script type="speculationrules">` is allowed and an unhashed one raises exactly
+// one script-src-elem violation. So the 25 speculation-rules blocks need no
+// 'inline-speculation-rules' keyword, just an ordinary hash. `application/json`
+// (the quiz data blocks) and `application/ld+json` are data blocks: never executed,
+// never CSP-checked, never hashed.
+const CSP_SCRIPT_SRC_LOOSE = "'self' 'unsafe-inline'";
+
+// The rollout flag. FALSE ships the hashed policy as report-only alongside the
+// loose enforcing one, so a miss shows up in DevTools instead of blanking a page;
+// TRUE promotes it to the enforcing policy and drops the report-only twin.
+// Flip it only after a deploy has run report-only in production and come back
+// clean, the same way `SHELL_PRECOMPRESS_DEFAULT_ON` earned its default. The
+// failure mode this guards against is silent: a blocked inline script leaves the
+// page rendering and merely dead.
+export const ENFORCE_PAGE_HASHES = false;
+
+// Everything after script-src, held once so the loose and hashed policies cannot
+// drift apart. img-src is 'self' data: per #186 — do NOT let a rebase quietly
+// restore the two spotifycdn hosts that landed here before it.
+const CSP_TAIL =
+  "style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; worker-src 'self'; manifest-src 'self'; upgrade-insecure-requests";
+
+const cspWith = (scriptSrc) => `default-src 'self'; script-src ${scriptSrc}; ${CSP_TAIL}`;
+
+const CSP_LOOSE = cspWith(CSP_SCRIPT_SRC_LOOSE);
+
+// 'self' stays alongside the hashes: it covers the EXTERNAL scripts (/a/nav.js,
+// /tooltip.js, /hoist.js, /ledger/rum.js) and the dynamic import()s the homepage
+// makes. Deliberately no 'strict-dynamic', which would make 'self' inert for
+// scripts and break exactly those loads.
+// An EMPTY hash list is meaningful and is the best case: a document with no inline
+// script at all gets a bare `script-src 'self'`, which is the strictest this policy
+// can be. Do not confuse it with "no entry", which means the build could not speak
+// for this document and falls back to the loose policy.
+const cspHashed = (hashes) =>
+  cspWith(["'self'", ...hashes.map((h) => `'sha256-${h}'`)].join(" "));
+
+// Returns the CSP header pair for a document. A path with no hash entry (every
+// live worker-rendered page, and everything in readable local dev) gets the loose
+// policy with no report-only twin, which is exactly today's behaviour.
+export function cspHeadersFor(pathname) {
+  const hashes = scriptHashesFor(pathname);
+  if (!hashes) return { "content-security-policy": CSP_LOOSE };
+  if (ENFORCE_PAGE_HASHES) return { "content-security-policy": cspHashed(hashes) };
+  return {
+    "content-security-policy": CSP_LOOSE,
+    "content-security-policy-report-only": cspHashed(hashes),
+  };
+}
+
 export const SECURITY_HEADERS = {
-  "content-security-policy":
-    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://i.scdn.co https://*.spotifycdn.com; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; worker-src 'self'; manifest-src 'self'; upgrade-insecure-requests",
+  "content-security-policy": CSP_LOOSE,
   // keep every token one a shipping browser still knows — an unrecognized
   // feature is inert and logs a console error. `browsing-topics` was dropped
   // 2026-07 for that reason (Topics API deprecated in Chrome 144, feature
@@ -56,9 +133,12 @@ const HOMEPAGE_DISCOVERY_LINKS = [
 
 export const HOMEPAGE_DISCOVERY_LINK = HOMEPAGE_DISCOVERY_LINKS.join(", ");
 
-// preload the two shell assets ahead of the discovery links, so Cloudflare
-// Early Hints (which harvests only the rel=preload entries) sends them in a 103.
-const HOMEPAGE_LINK = `${SHELL_PRELOAD_LINK}, ${HOMEPAGE_DISCOVERY_LINK}`;
+// (HOMEPAGE_LINK and withHomepageDiscoveryHeaders lived here and composed
+// SHELL_PRELOAD_LINK ahead of the discovery links. Nothing imported them once
+// `/` moved to serveStaticPage + HOMEPAGE_HEADERS, and the homepage quietly
+// stopped emitting any rel=preload — so it stopped getting an Early Hints 103,
+// on the one page shell-assets.js says a 103 buys the most. index.js composes
+// that header at the route now, where the route can be seen using it.)
 
 // `pathname` is optional and only used to name this document in the prefetch
 // activation beacon. Callers that don't have one (the /lens self-fetch, which is
@@ -74,6 +154,16 @@ export function withSecurityHeaders(response, pathname) {
   const headers = new Headers(response.headers);
   for (const [k, v] of Object.entries(SECURITY_HEADERS)) {
     if (!headers.has(k)) headers.set(k, v);
+  }
+  // Per-document script-src, for the staged documents the build could hash. Only
+  // HTML gets it: a CSP on a JSON or text response is inert, and spending header
+  // bytes there would be pure waste on a site that counts them. Anything already
+  // carrying its own policy (lens.js sets one for the framed view) is left alone.
+  if (ct.startsWith("text/html")) {
+    for (const [k, v] of Object.entries(cspHeadersFor(pathname))) {
+      if (k === "content-security-policy" && response.headers.has(k)) continue;
+      headers.set(k, v);
+    }
   }
   // Tell the browser where to report that a speculated copy of THIS document
   // was actually used for a navigation. See speculation.js for why the server
@@ -113,25 +203,4 @@ export function withSecurityHeaders(response, pathname) {
   });
 }
 
-export function withHomepageDiscoveryHeaders(response) {
-  const headers = new Headers(response.headers);
-  headers.set("link", HOMEPAGE_LINK);
-  appendVary(headers, "accept");
-  return new Response(response.body, {
-    status:     response.status,
-    statusText: response.statusText,
-    headers,
-  });
-}
 
-function appendVary(headers, token) {
-  const current = headers.get("vary");
-  if (!current) {
-    headers.set("vary", token);
-    return;
-  }
-  const tokens = current.split(",").map(s => s.trim().toLowerCase());
-  if (!tokens.includes(token.toLowerCase())) {
-    headers.set("vary", `${current}, ${token}`);
-  }
-}

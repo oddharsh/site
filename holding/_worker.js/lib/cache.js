@@ -1,3 +1,5 @@
+import { wantsMarkdown } from "./http.js";
+
 // lib/cache.js: the worker's caching kit, one primitive surface where four
 // hand-rolled dialects used to drift apart.
 //
@@ -223,4 +225,41 @@ export async function cachedRender(request, ctx, renderFn, keyPath, env) {
     resp = await withWeakEtag(resp);
   }
   return notModifiedIfFresh(request, resp);
+}
+
+// ── the Workers Cache admission test ────────────────────────────────────────────
+// Which requests the default export may hand to the CachedPages entrypoint, where
+// a hit answers WITHOUT running the dispatcher at all.
+//
+// It lives here, and is exported, because it shipped a production bug on
+// 2026-07-31 that no test could have caught while it was a private function in
+// index.js: `/` joined the set, and `Accept: text/markdown` on the homepage
+// started coming back as HTML. Route logic was never involved. Workers Cache
+// keyed the URL, the HTML response carries `vary: accept-encoding,
+// available-dictionary` and says nothing about `accept`, so the stored HTML
+// answered a request that negotiates a different representation.
+//
+// The one axis a cache key here cannot see is the one this predicate has to
+// close: a route may answer more than one media type at one URL. Bailing is the
+// right shape rather than adding `accept` to Vary, because browser Accept strings
+// are high-cardinality and varying on them would shard the cache into near-unique
+// entries and cost the hit rate the cache exists for. Markdown requests come from
+// agents, they are rare, and sending them straight to the dispatcher is free.
+//
+// Verified on production before the fix: `/` returned text/html on a cache HIT and
+// text/markdown with `?cb=` appended, which is the same route bypassing this
+// predicate through the query-string bail below.
+export function shouldUseWorkersCache(request, cacheablePaths) {
+  if (request.method !== "GET" && request.method !== "HEAD") return false;
+  if (request.headers.has("range") || request.headers.has("if-none-match")) return false;
+  // Content negotiation: any request that asks for a representation other than the
+  // cached one has to reach the dispatcher. Kept as a media-type test rather than
+  // "has an accept header", since every browser sends one.
+  if (wantsMarkdown(request)) return false;
+  const url = new URL(request.url);
+  if (url.search) return false;
+  if (cacheablePaths.has(url.pathname)) return true;
+  return url.pathname.startsWith("/writing/")
+    || url.pathname.startsWith("/images/full/")
+    || url.pathname.startsWith("/images/meta/");
 }

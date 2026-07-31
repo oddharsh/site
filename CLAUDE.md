@@ -88,6 +88,19 @@ worktrees may edit freely, but a worktree is not a release surface.
   `production` and is the only production publisher for the site Worker, which
   bundles `holding/`, `cal/`, and `serendipity/`. The Garage and LWE demos remain
   auxiliary Worker projects.
+- **A fix for a bug that `infra:check`'s edge tier can see will DEADLOCK that
+  promotion, and the merge is where it bites.** Those checks read production over
+  the wire, which is the whole point of them (see the `app-owns-security-headers`
+  note in `infra.json`), but it means CI on `main` keeps failing on the old
+  production behaviour after the fix has merged — and promotion is gated on CI, so
+  production never gets the fix that would turn the check green. Observed
+  2026-07-31 with `markdown-for-agents-off` (#195 merged, run 30666351446 red,
+  every `Promote production` run after it skipped). It stays red on every branch
+  until someone breaks the cycle from outside, by publishing the merged commit:
+  push `main` to `production` so Workers Builds picks it up, or run the local
+  `npm run deploy` fallback. Neither is automatic and neither should be — a
+  deploy is the owner's call. Just know that merging is not the last step for
+  this class of fix, and CI will not tell you so.
 - Configure one Workers Build project for the site Worker with `production` as
   its production branch and repository root `.`. Keep the dashboard Build
   command blank; use the repo's Wrangler-owned build during the Deploy command.
@@ -133,7 +146,7 @@ Single-page personal site at `aadhar.sh`. A Cloudflare Worker with static assets
 
 | file | role |
 |---|---|
-| `holding/index.html` | The whole page in one file. Inline CSS + JS. ~58KB uncompressed, ~15.4KB zstd (measured 2026-07-21 via live nav-timing; CF serves zstd, not brotli). Served `private, no-cache, must-revalidate` + ETag (NOT `no-store`): the worker SSRs fresh tracks/photos every visit, but `no-cache` keeps the page bfcache-eligible where `no-store` would kill it (see `home.js` cache-control comment). Comments deliberately kept readable for View Source. |
+| `holding/index.html` | The whole page in one file. Inline CSS + JS. ~58KB uncompressed, ~15.4KB zstd (measured 2026-07-21 via live nav-timing; CF serves zstd, not brotli). Served on the shared `PAGE_CACHE_CONTROL` (`lib/const.js`) like every other document, + ETag, and still never `no-store` (the one directive that would cost the page bfcache). It held `private, no-cache, must-revalidate` through its SSR era and kept it after the SSR left; that cost two things at once, since no shared cache could store it (every front-door hit ran the worker) and Chromium refuses to keep a dictionary offered under `no-cache` (so `/` was the ONE page outside the per-page dcz tier). Changed 2026-07-31. Comments deliberately kept readable for View Source. |
 | `holding/writing/` | Written content as plain `.txt` files + `posts.json` registry `[{slug,title,date}]`. The worker renders each as an XP **Notepad** window at `/writing/<slug>` (a server-rendered `<textarea>` seeded with the canonical text — editable by nature, ephemeral by nature: no save → reload restores canonical, "writing in flux"), plus a "My Writing" folder index at `/writing`. Raw `.txt` stays fetchable at `/writing/<slug>.txt`. Author a post = drop a `.txt` + a `posts.json` entry. Render code (`handleWritingIndex`/`handleWritingPost`/`NOTEPAD_CSS`) lives in `_worker.js`. |
 | `holding/notepad.js` | Behavior for the `/writing` Notepad view (deferred, SW-cached): per-window `enhance()` wiring File/Edit/Format/View/Help menus, live Ln/Col + word-count status bar, Word-Wrap toggle, the classic **F5 time/date** stamp (Temporal w/ Date fallback), Select All, Print, About. Also opens folder notes as **popovers** that composite over the folder index, deliberately without touching the address bar (notes are `popover="manual"`, so several stay open at once and one URL couldn't honestly name three windows; Esc closes the topmost). The permalink stays real: each row is an `<a href="/writing/<slug>">` the worker serves standalone, and a modified click passes through to it. Chrome itself is SSR'd by `_worker.js`. No-op without a `.np-window`. |
 | `holding/tooltip.js` | Rich XP hover island for photos, tracks, artists, and car references. The homepage keeps only a tiny inline loader that idle-prefetches this module and replays a cold first hover; coarse-pointer visitors never load it. |
@@ -298,6 +311,24 @@ A page that is still edge-direct answers at its `.md` URL only. The negotiated r
 `no-store` because the edge caches per URL, not per Accept; the `.md` URL is the
 cacheable representation.
 
+**"wherever the Worker already sees the request" is a condition, not a given: a cache
+in front of the Worker revokes it silently.** `/` joined `WORKERS_CACHEABLE_PATHS` in
+#189 and production then answered a markdown ask with `text/html` on a `cf-cache-status:
+HIT`, because Workers Cache keys the URL and the HTML response's Vary names only
+`accept-encoding, available-dictionary`. `shouldUseWorkersCache` (`lib/cache.js`, #195)
+bails on `wantsMarkdown` for that reason, and the long argument for bailing over
+`Vary: accept` lives with it. What generalizes past markdown: a route that answers more
+than one representation at one URL cannot sit behind a URL-keyed cache without a bail,
+and if a route ever negotiates on some header other than Accept it needs its own.
+Expect this class of bug to read as INTERMITTENT while you are diagnosing it, because a
+route breaks only once its entry has filled: on 2026-07-31, `/bot` answered
+`text/markdown` on a BYPASS at 21:18 UTC and `text/html` on a HIT twenty-five minutes
+later, off the same worker build. Survey a cache-fronted route twice before concluding
+it is unaffected. Note
+also that `serveStaticPage` bails to the asset layer on `method !== "GET"`, so a HEAD
+never negotiates at all — `curl -I` will report HTML on a page whose GET returns
+Markdown, which reads exactly like this bug and is not it.
+
 Adding a page needs no work here: register it in `site-manifest.json` as usual
 and the twin appears. `build.mjs` fails the deploy if fewer than 30 generate,
 since losing them would otherwise be silent (pages keep serving HTML).
@@ -447,7 +478,9 @@ design passes the site did not converge on, and their byte budgets and file:line
 citations are stale. [`design/README.md`](design/README.md) draws that line; read
 it before treating anything in there as a target.
 
-**HARD RULES (strong owner preference):** (1) **internal/native fonts ONLY** — never ship `@font-face` with `url()`, web fonts, `@import`, or font preloads; the served pages carry ZERO font bytes (the design system's `@font-face local()` rules are reference-only, never inlined into a served page). (2) **keep perf lean** — fold design tokens in WITHOUT regressing the byte budget: on a brotli'd inline page, tokenizing repeated literals is a wash (brotli already dedupes) while token *definitions* are net-new bytes, so only the FONT tokens (`--font-*`) are inlined site-wide; color/gradient tokens are NOT inlined (they cost bytes for no brotli gain). no external stylesheet, no JS for styling. **The served pages load NO cross-origin assets, and the Cloudflare Web Analytics beacon is why that sentence needs a footnote (owner-approved 2026-07-29).** The homepage, and only the homepage, runs RUM, and BOTH of its legs are first-party: `/ledger/rum.js` proxies the beacon script, `/ledger/rum` forwards the reports, both in `_worker.js/rum.js`. Describe it precisely — the browser speaks only to this origin, while this server still calls Cloudflare on the visitor's behalf. "First-party" is the easiest claim on this site to round up into a privacy win it is not. Why RUM at all: MAINTENANCE.md has named it the outcome source for LCP/INP/CLS since the perf budget was written, and until it reports, the byte ceilings here are guesses standing in for field data; the 2026-04-30 Navigation Type release is what makes the bfcache `no-cache` choice and the hand-tuned speculation rules measurable rather than asserted. Why proxied: `static.cloudflareinsights.com` is on EasyPrivacy, so blocker-running visitors dropped out of the sample entirely, and they skew toward the engines whose bfcache/prerender behaviour is the whole point of the measurement. This is NOT an oversight to clean up. Six surfaces move together or not at all, enforced by a `build.mjs` tripwire (#7b) plus a contract test: the `<script src="/ledger/rum.js">` in `index.html` AND its `send.to` config (without `send.to` the beacon silently falls back to its hardcoded cloudflareinsights.com endpoint, which the CSP now blocks, so every report fails while the script looks fine), the `/ledger/rum*` pair in `_worker.js/index.js`, the same pair in `run_worker_first` in BOTH wrangler configs, CSPs free of `cloudflareinsights.com` in BOTH `_headers` and `_worker.js/lib/security.js`, the disclosure on `/whoareyou` AND its markdown twin `holding/md/whoareyou.md`, and the `/security` CSP summary. **UNVERIFIED, check after the next deploy:** the collector sees the worker's subrequest rather than the visitor's, so geo attribution may collapse; `cf-connecting-ip` is forwarded but whether the collector honours it from a worker is unknown. If the dashboard's country breakdown goes flat, that is this — amend the disclosure, don't quietly keep it. Zone-side automatic injection is NOT an option here: the worker serves these pages as precompressed br/dcz bodies with `encodeBody: "manual"`, and the edge cannot rewrite HTML it did not compress. Site-wide would mean putting it in `nav.js`, which every page loads — an extra request on the shell's critical path, so don't, absent a measurement. (3) **authoring stays buildless; serving is minified** — the ONLY build is `build.mjs` (deploy-time transform: minifies `index.html` (structure + inline CSS/JS, readable `/index.src.html` twin, marker tripwires), the six client scripts + `luna.css`, and the worker modules' `/*min*/` CSS literals into a staged `.build/` copy, ships readable `/<name>.src.js` / `/luna.src.css` twins alongside; hard-fails the deploy if `luna.css` doesn't parse; and content-hashes `nav.js` + `luna.css` into immutable `/a/<name>.<hash8>.<ext>` URLs, repointing every `src=`/`href=` ref to them so the shell earns a 1-year immutable cache — the unhashed `/nav.js` + `/luna.css` stay as short-cached fallbacks for cal/coffee's absolute refs + any stale HTML). `wrangler.jsonc` self-builds via its `build.command` and points `main`+`assets` at `.build/holding`, so NO deploy path (bare `wrangler deploy`, `npm run deploy`, Workers Builds) can ship the readable originals; local dev uses `wrangler.dev.jsonc` (readable `holding/`, fast reload). Never minify the garage/lwe HTML (View Source is part of the design; the homepage serves minified with the readable `/index.src.html` twin one banner-click away), never bundle, never extend the build to more CSS or HTML without the owner's say-so (`luna.css` was owner-approved 2026-07 for an ~8.7KB brotli win on a render-blocking sheet; the `/a/` content-hashing of `nav.js` + `luna.css` was owner-approved 2026-07-21 to clear PSI's "efficient cache lifetimes" audit).
+**HARD RULES (strong owner preference):** (1) **internal/native fonts ONLY** — never ship `@font-face` with `url()`, web fonts, `@import`, or font preloads; the served pages carry ZERO font bytes (the design system's `@font-face local()` rules are reference-only, never inlined into a served page). (2) **keep perf lean** — fold design tokens in WITHOUT regressing the byte budget: on a brotli'd inline page, tokenizing repeated literals is a wash (brotli already dedupes) while token *definitions* are net-new bytes, so only the FONT tokens (`--font-*`) are inlined site-wide; color/gradient tokens are NOT inlined (they cost bytes for no brotli gain). no external stylesheet, no JS for styling. **The served pages load NO cross-origin assets, and the Cloudflare Web Analytics beacon is why that sentence needs a footnote (owner-approved 2026-07-29).** The homepage, and only the homepage, runs RUM, and BOTH of its legs are first-party: `/ledger/rum.js` proxies the beacon script, `/ledger/rum` forwards the reports, both in `_worker.js/rum.js`. Describe it precisely — the browser speaks only to this origin, while this server still calls Cloudflare on the visitor's behalf. "First-party" is the easiest claim on this site to round up into a privacy win it is not. Why RUM at all: MAINTENANCE.md has named it the outcome source for LCP/INP/CLS since the perf budget was written, and until it reports, the byte ceilings here are guesses standing in for field data; the 2026-04-30 Navigation Type release is what makes the bfcache `no-cache` choice and the hand-tuned speculation rules measurable rather than asserted. Why proxied: `static.cloudflareinsights.com` is on EasyPrivacy, so blocker-running visitors dropped out of the sample entirely, and they skew toward the engines whose bfcache/prerender behaviour is the whole point of the measurement. This is NOT an oversight to clean up. Six surfaces move together or not at all, enforced by a `build.mjs` tripwire (#7b) plus a contract test: the `<script src="/ledger/rum.js">` in `index.html` AND its `send.to` config (without `send.to` the beacon silently falls back to its hardcoded cloudflareinsights.com endpoint, which the CSP now blocks, so every report fails while the script looks fine), the `/ledger/rum*` pair in `_worker.js/index.js`, the same pair in `run_worker_first` in BOTH wrangler configs, CSPs free of `cloudflareinsights.com` in BOTH `_headers` and `_worker.js/lib/security.js`, the disclosure on `/whoareyou` AND its markdown twin `holding/md/whoareyou.md`, and the `/security` CSP summary. **UNVERIFIED, check after the next deploy:** the collector sees the worker's subrequest rather than the visitor's, so geo attribution may collapse; `cf-connecting-ip` is forwarded but whether the collector honours it from a worker is unknown. If the dashboard's country breakdown goes flat, that is this — amend the disclosure, don't quietly keep it. Zone-side automatic injection is NOT an option here: the worker serves these pages as precompressed br/dcz bodies with `encodeBody: "manual"`, and the edge cannot rewrite HTML it did not compress. Site-wide would mean putting it in `nav.js`, which every page loads — an extra request on the shell's critical path, so don't, absent a measurement. (3) **authoring stays buildless; serving is minified, on every page** — the ONLY build is `build.mjs` (deploy-time transform: minifies EVERY served HTML document (structure + inline CSS/JS), the six client scripts, `luna.css` + `lwe-base.css`, and the worker modules' `/*min*/` CSS literals into a staged `.build/` copy, shipping a readable twin beside each one — `/<name>.src.js`, `/luna.src.css`, and a `.src.html` per page, named by a banner comment on line 1; hard-fails the deploy if `luna.css` doesn't parse; and content-hashes `nav.js` + `luna.css` into immutable `/a/<name>.<hash8>.<ext>` URLs, repointing every `src=`/`href=` ref to them so the shell earns a 1-year immutable cache — the unhashed `/nav.js` + `/luna.css` stay as short-cached fallbacks for cal/coffee's absolute refs + any stale HTML). `wrangler.jsonc` self-builds via its `build.command` and points `main`+`assets` at `.build/holding`, so NO deploy path (bare `wrangler deploy`, `npm run deploy`, Workers Builds) can ship the readable originals; local dev uses `wrangler.dev.jsonc` (readable `holding/`, fast reload). Never bundle, and never extend the build past this without the owner's say-so (`luna.css` was owner-approved 2026-07 for an ~8.7KB brotli win on a render-blocking sheet; the `/a/` content-hashing of `nav.js` + `luna.css` was owner-approved 2026-07-21 to clear PSI's "efficient cache lifetimes" audit; whole-site HTML minification was owner-approved 2026-07-31, retiring the older "never minify the garage/lwe HTML" rule — the argument being that a readable twin one banner-click away keeps View Source honest, because the twin is the SAME program, which is exactly the property that separates minifying from compiling).
+
+> **Two traps the whole-site HTML pass hit, both on `/garage/horizon`, both worth knowing before touching served HTML.** (a) **minify-html decodes HTML entities inside quoted attribute values**, and no option turns it off: `value="&lt;script&gt;bad()&lt;/script&gt;"` ships as `value="<script>bad()</script>"`. That is spec-legal (a quoted attribute may hold raw `<`) and DOM-identical — verified in a browser, where the input's `.value` is byte-for-byte the intended payload and nothing renders from it. The consequence is that **any scanner over served HTML must WALK tags rather than search for `<script`**: the naive regex in `contract-tests.mjs` read horizon's XSS demo payload and its `<iframe srcdoc>` as two real inline scripts and failed the deploy demanding CSP hashes for them. This is the third naive scanner that page's demo content has caught. (b) **Lightning CSS 1.33 does not know the CSS Overflow 5 carousel selectors** (`::scroll-marker`, `::scroll-marker-group`, `::scroll-button()`, `:target-current`) that horizon demos on purpose; it warns and then emits them verbatim, so `minifyCss` tolerates exactly that warning family and re-proves the pass-through on every build instead of trusting the one probe that established it.
 
 Reusable classes that show up across the site (homepage + future `/coffee`):
 
@@ -822,6 +855,51 @@ npm run deploy
     direction is holding -> cal (`index.js` imports `cal/src/index.js`), and cal's
     Vitest pool boots from `cal/src/index.js` alone, so a cal -> holding import
     would make cal untestable without the site tree. Do not consolidate them.
+
+17. **`script-src` is per-document sha256 hashes, and the committed map is EMPTY
+    on purpose.** `lib/csp-hashes.js` ships `PAGE_SCRIPT_HASHES = {}` with a
+    `// build:csp-hashes` marker; build step 7c rewrites that line in the staged
+    copy from the FINAL bytes (after minification and the `/a/` ref rewrite, before
+    step 8 compresses). Same generated-module convention as `shell-assets.js`.
+
+    Empty is correct for `npm run dev`, which serves the readable unminified tree
+    whose blocks hash differently. A path with NO entry falls back to
+    `'unsafe-inline'`, which is why the build hard-fails below 40 covered documents:
+    a collapsed map is otherwise silent, since every page just quietly goes loose.
+    An entry with an EMPTY list is the opposite and the best case, a document with
+    no inline script earning a bare `script-src 'self'`.
+
+    Hashes rather than a nonce because the staged documents are PRECOMPRESSED
+    (gotcha 14): nothing can be injected per request into bytes brotli'd at build
+    time, and the runtime has no brotli encoder to redo them. The live
+    worker-rendered pages (`/whoareyou`, `/around`, `/coffee`, `/search`, `/ledger`,
+    `/rn/admin`, `/serendipity`) are NOT precompressed, so a per-response nonce is
+    the right mechanism there and is the open follow-up. They keep the loose policy
+    until then, which is no worse than before.
+
+    Three things verified in a real browser rather than assumed, all on 2026-07-30:
+    a HASHED `<script type="speculationrules">` is allowed and an unhashed one
+    raises a `script-src-elem` violation, so the 25 speculation-rules blocks need
+    ordinary hashes and NOT the `'inline-speculation-rules'` keyword; Node's
+    `createHash("sha256").update(body, "utf8")` matches the browser's digest
+    byte-for-byte on a real staged block containing non-ASCII (26 of the 73 do);
+    and a one-space edit to that block is blocked, so the check has teeth.
+
+    Event-handler ATTRIBUTES cannot be hashed. Step 7c hard-fails and names them
+    rather than reaching for `'unsafe-hashes'`, which would re-permit attribute
+    execution generally and hand most of the win back. Its attribute scanner is
+    quote-aware for a reason: `garage/horizon.html` carries
+    `value="&lt;img src=x onerror=alert(1)&gt;"` as demo TEXT, and a naive
+    `/ on\w+=/` over the raw tag calls that an event handler.
+
+    **The rollout is not finished.** `ENFORCE_PAGE_HASHES` in `lib/security.js` is
+    FALSE, so the hashed policy ships as `Content-Security-Policy-Report-Only`
+    beside the loose enforcing one. Flip it only after a production deploy has run
+    report-only and come back clean, the way `SHELL_PRECOMPRESS_DEFAULT_ON` earned
+    its default. You cannot hedge inside one header: a browser that understands
+    hashes IGNORES `'unsafe-inline'` in the same directive, so the two policies have
+    to be two headers. The failure mode is silent, a blocked inline script leaves
+    the page rendering and merely dead.
 
 ---
 

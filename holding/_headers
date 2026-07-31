@@ -28,7 +28,7 @@
   # assets get this copy; worker-rendered responses get that one. infra.json's
   # app-owns-security-headers check reads the wire, so a drift between the two shows
   # up as one route disagreeing with another rather than as a failing build.
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://i.scdn.co https://*.spotifycdn.com; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; worker-src 'self'; manifest-src 'self'; upgrade-insecure-requests
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; worker-src 'self'; manifest-src 'self'; upgrade-insecure-requests
   # Permissions-Policy: explicitly opt out of every browser API we don't
   # use. shrinks fingerprinting surface and prevents stray code from popping
   # permission prompts. every token here must be one a shipping browser still
@@ -158,7 +158,27 @@
 # content-hashed names, so they're immutable-1y like /i/ — a re-encode mints a
 # new filename and can never shadow old bytes. It is a first-level taskbar app
 # now, so it also preloads the shared shell the way /lwe/* and /garage/* do.
-/pixel-peeper
+#
+# Keyed on the TWIN, not the page path. serveStaticPage answers a page from its
+# precompressed `<base>.html.br` and copies that asset's cache-control/link onto the
+# response (see lib/assets.js findBrotli), so these rules are matched against
+# `/pixel-peeper/index.html.br` — never against `/pixel-peeper`. The bare
+# `/pixel-peeper` this used to say matched nothing at all, and the page silently took
+# the Workers-assets default (`public, max-age=0, must-revalidate`) with no preload.
+# /garage/* and /lwe/* never showed the bug because a glob covers the twin, the plain
+# .html, and the section index's `<base>/index.html.br` alike.
+#
+# Two costs, and the second is the quiet one: no s-maxage meant no shared caching, and
+# must-revalidate VETOES dictionary registration (canRegisterAsDictionary, same file),
+# so the page sat outside the per-page dcz tier while still advertising
+# `vary: available-dictionary`. That is the same defect `/` carried until 2026-07-31.
+#
+# Scoped to `index.html*` rather than a `/pixel-peeper/*` glob on purpose: matching
+# rules ACCUMULATE and duplicate headers are comma-joined with no most-specific-wins,
+# so a glob here would prepend max-age=0 to the immutable tiles rule below and clamp a
+# year down to nothing. This spelling covers index.html and index.html.br, and reaches
+# neither tiles/ nor manifest.json.
+/pixel-peeper/index.html*
   Cache-Control: public, max-age=0, s-maxage=86400, stale-while-revalidate=604800
   Link: </luna.css>; rel=preload; as=style, </nav.js>; rel=preload; as=script
 /pixel-peeper/manifest.json
@@ -166,23 +186,23 @@
 /pixel-peeper/tiles/*
   Cache-Control: public, max-age=31536000, immutable
 
-# homepage: the worker pre-renders a fresh 12-photo random pick on every
-# request, and the visitor counter increments per human pageview. both
-# need the worker to run each visit, so no SHARED cache (CF edge, proxy)
-# may store the response and pin the same 12 photos / freeze the counter
-# for other users. `private` forbids shared storage; `no-cache` forces a
-# revalidation before any reuse, so every real navigation re-runs the
-# worker and is fresh. cost: ~3 KV reads + 1 KV write per visit, well
-# under free-tier at personal traffic.
-# deliberately NOT `no-store`: that is the one directive that disqualifies
-# a page from the browser's back/forward cache (bfcache). dropping it lets
-# Back/Forward restore the homepage instantly from the browser's in-memory
-# snapshot (correct behavior: going back should not reshuffle the photos or
-# re-count the visit), matching every other page, which already rides bfcache.
+# homepage: the same generated-page policy every other document here ships.
+# The `private, no-cache, must-revalidate` this replaced was written when the
+# worker pre-rendered a fresh 12-photo pick and bumped the counter INSIDE the
+# document, so a shared cache would have pinned one visitor's twelve photos and
+# frozen the count for everyone. None of that is true anymore: the random grid
+# is a separate no-store fragment, the counter is a separate /hit beacon, and
+# the document build-bakes a fixed twelve. The premise expired; the directives
+# outlived it and cost the page both its dictionary tier and its ability to be
+# cached at all. See lib/const.js PAGE_CACHE_CONTROL for what each clause buys.
+# deliberately still NOT `no-store`: that is the one directive that disqualifies
+# a page from the browser's back/forward cache (bfcache). `max-age=0` revalidates
+# without forfeiting that, so Back/Forward still restores the homepage instantly
+# from the browser's in-memory snapshot, matching every other page here.
 # Also: advertise machine-readable resources for agents per RFC 8288 +
 # RFC 9727 §3. multiple Link headers are valid; one per resource for readability.
 /
-  Cache-Control: private, no-cache, must-revalidate
+  Cache-Control: public, max-age=0, s-maxage=86400, stale-while-revalidate=604800
   Link: </sitemap.xml>; rel="sitemap"; type="application/xml"
   Link: </llms.txt>; rel="alternate"; type="text/plain"; title="llms.txt summary"
   Link: </auth.md>; rel="service-doc"; type="text/markdown"; title="Auth.md agent registration"

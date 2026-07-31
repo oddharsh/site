@@ -182,9 +182,10 @@ const pageOffer = (pathname) => `match="${pathname}", match-dest=("document")`;
 //   max-age=0, stale-while-revalidate=604800                      REGISTERED
 //   max-age=0, must-revalidate                                    no
 //   max-age=0, must-revalidate, stale-while-revalidate=604800     no
-//   private, no-cache, must-revalidate                 (this site's /)          no
+//   private, no-cache, must-revalidate                 (this site's old /)      no
 //   private, no-cache, stale-while-revalidate=604800                            no
-//   public, max-age=0, must-revalidate, s-maxage=86400 (this site's pages)      no
+//   public, max-age=0, must-revalidate, s-maxage=86400 (this site's old pages)  no
+//   public, max-age=0, s-maxage=86400, swr=604800      (PAGE_CACHE_CONTROL)     REGISTERED
 //
 // That is RFC 9842 section 2.2.1 exactly — a dictionary "MUST be either fresh or allowed
 // to be served stale". stale-while-revalidate is the RFC 5861 permission to serve stale;
@@ -193,10 +194,13 @@ const pageOffer = (pathname) => `match="${pathname}", match-dest=("document")`;
 // invisible to this decision: a browser is a private cache.
 //
 // Gating the offer on the header, rather than deleting it, keeps the coupling honest in
-// both directions. Every page here fails the test today, which is why the per-page tier
-// is dark and the immutable /a/page-family.<hash>.dict carries the whole page tier. Give a
-// page `stale-while-revalidate` without `must-revalidate` and its own tier lights back up
-// with no change to this file — that, and not a code edit, is the decision to make.
+// both directions, which is what makes the tier a POLICY decision rather than a code one.
+// Both moves since were exactly that, neither touching this function: the pages took
+// `stale-while-revalidate` without `must-revalidate` and lit their tier back up, and `/`
+// dropped no-cache for PAGE_CACHE_CONTROL on 2026-07-31 and joined them. The immutable
+// /a/page-family.<hash>.dict still carries whoever the per-page tier cannot reach (a first
+// visit, a snapshot aged out of the KEEP window), so the two tiers stack rather than
+// compete.
 const canRegisterAsDictionary = (cacheControl) => {
   const cc = (cacheControl || "").toLowerCase();
   if (/\b(?:no-store|no-cache|must-revalidate)\b/.test(cc)) return false;

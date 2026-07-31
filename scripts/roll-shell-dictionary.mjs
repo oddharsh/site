@@ -78,6 +78,13 @@ console.log("  Commit holding/a-dict/. build.mjs regenerates the deltas on its o
 // the 93-97% per-page ratio for visitors returning to a page they already hold.
 // Snapshots are stored Brotli-compressed (build input only, never served), so the
 // committed weight stays bounded while the dictionary bytes round-trip exactly.
+//
+// index.html used to be filtered out here, because `/` shipped no-cache and no
+// browser would keep a dictionary offered under it, so a snapshot could only ever
+// produce a delta nothing could ask for. `/` now takes PAGE_CACHE_CONTROL like every
+// other document, so the exclusion is gone and the homepage earns the per-page tier.
+// Adoption reads the DEPLOYED build, so `/`'s first snapshot appears on the roll
+// AFTER the policy change ships; until then it rides the family dictionary alone.
 {
   const BUILT_PAGES = ".build/holding";
   const PDICTS = "holding/p-dict";
@@ -88,7 +95,7 @@ console.log("  Commit holding/a-dict/. build.mjs regenerates the deltas on its o
   };
   await mkdir(PDICTS, { recursive: true });
   const staged = (await readdir(BUILT_PAGES, { recursive: true }))
-    .filter((rel) => rel.endsWith(".html") && !rel.endsWith(".src.html") && rel !== "index.html");
+    .filter((rel) => rel.endsWith(".html") && !rel.endsWith(".src.html"));
   const liveSlugs = new Set();
   let adopted = 0, pruned = 0;
   const { createHash } = await import("node:crypto");

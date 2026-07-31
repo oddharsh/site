@@ -38,7 +38,7 @@
     "lightningcss": "1.33.0",
     "oxc-minify": "0.142.0",
     "playwright-core": "^1.62.0",
-    "wrangler": "4.114.0"
+    "wrangler": "4.118.0"
   },
   "engines": {
     "node": ">=24.0.0"

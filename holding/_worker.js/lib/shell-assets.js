@@ -1,8 +1,16 @@
 // shell-assets.js — the URLs of the two critical shell assets (luna.css,
 // nav.js), emitted as an HTTP `Link: rel=preload` header so Cloudflare Early
-// Hints can replay them as a 103 ahead of the HTML body. The homepage is
-// no-cache + worker-generated (it does KV reads before the 200), which is
-// exactly where a 103 during that think-time buys the most.
+// Hints can replay them as a 103 ahead of the HTML body. A 103 is worth exactly
+// the width of the think-time window it lands in, so it pays on the routes that
+// still compute before their 200 (/lens, the fragment endpoints, any cold isolate).
+//
+// This used to name the HOMEPAGE as where a 103 buys the most, "because it does KV
+// reads before the 200". That stopped being true when build.mjs step 1d baked the
+// homepage into a deterministic document and moved every one of those reads onto
+// separate fragments. Measured against production 2026-07-31, `/`'s 103-to-200
+// window is 8.5-18.8 ms, and windows under ~100 ms were already measured not to
+// complete the preload (the CDP note in CLAUDE.md). So the header stays and the
+// homepage-specific claim does not.
 //
 // Safe as a cross-request Early Hint, unlike the random homepage photo (which
 // home.js deliberately keeps OFF the Link header): these URLs are identical

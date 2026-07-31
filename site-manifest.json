@@ -132,6 +132,11 @@
       "hint": "knots: granny vs square, the Ian knot, why laces come undone",
       "flags": { "run": true, "taskbar": false, "sitemap": true, "gallery": false, "agents": true, "searchIndex": false, "webmention": true } },
 
+    { "path": "/lwe/lean", "title": "Lean", "section": "lwe", "kind": "content",
+      "description": "Lean and formal verification: why a proof is not an inspection, how a vacuous spec passes, and a toy verified compiler you can break.",
+      "hint": "lean, formal verification, specs, verified compilers, kernel soundness",
+      "flags": { "run": true, "taskbar": false, "sitemap": true, "gallery": false, "agents": true, "searchIndex": false, "webmention": true } },
+
     { "path": "/garage/blueprint", "title": "Blueprint", "section": "garage", "kind": "content",
       "description": "The teardown's sequel: Fable 5 read every file in the repo and drew the blueprint it would rebuild from.",
       "hint": "the repo, blueprinted by Fable 5",
@@ -175,6 +180,11 @@
     { "path": "/garage/masonry", "title": "Masonry", "section": "garage", "kind": "content",
       "description": "A ragged-height contact-sheet photo grid with CSS Grid Lanes, falling back to the fixed-square grid.",
       "hint": "Grid Lanes masonry photo grid (with fixed-square fallback)",
+      "flags": { "run": true, "taskbar": false, "sitemap": true, "gallery": true, "agents": true, "searchIndex": false, "webmention": true } },
+
+    { "path": "/garage/octane", "title": "Octane, priced against no framework", "section": "garage", "kind": "content", "short": "octane",
+      "description": "Nextane's 60.9% win over Next.js, re-measured on the live demo, then given the row every framework benchmark leaves out: a site that ships no framework at all.",
+      "hint": "what a framework's floor costs against no framework",
       "flags": { "run": true, "taskbar": false, "sitemap": true, "gallery": true, "agents": true, "searchIndex": false, "webmention": true } },
 
     { "path": "/garage/pretext", "title": "DOM-free text measurement", "section": "garage", "kind": "content",
