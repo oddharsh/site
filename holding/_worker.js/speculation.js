@@ -17,18 +17,38 @@
 //     it to avoid counting a speculative load as a visit, and it arrives at this
 //     worker on every worker-first route. This half works TODAY.
 //
-//   NUMERATOR — the activation. A speculated document that is never used has no
-//     visitor and runs no script, so no client-side beacon can report it; the
-//     SERVER is the only party positioned to count. The `on-prefetch-activation`
-//     response header names an endpoint the browser HEADs when a speculated
-//     document is actually used for a navigation.
+//   NUMERATOR — the activation. The `on-prefetch-activation` response header
+//     names an endpoint the browser HEADs when a speculated document is
+//     actually used for a navigation.
 //
-// STATUS, checked 2026-07-30, and the reason this ships half-dark on purpose:
-// chromestatus lists the beacon as *Proposed* with NO stable milestone, behind
-// an origin trial named `PrefetchAndPrerenderActivationBeacon` (desktop_first
-// 151). So until this origin registers for that trial, or the feature reaches
-// stable, NO browser will call the endpoint and the numerator stays at zero.
-// The denominator starts recording the moment this deploys.
+// WHY THE NUMERATOR CANNOT JUST BE COUNTED SERVER-SIDE, measured rather than
+// argued (Canary 153, local worker, 2026-07-30). Inject a URL-list prefetch of
+// /garage/horizon, then navigate to it. The browser makes two requests:
+//
+//     GET /garage/horizon  [sec-purpose: prefetch]     <- speculation
+//     GET /garage/horizon  [normal navigation]         <- activation
+//
+// but the WORKER LOG for that run holds exactly one line, the prefetch. The
+// activation was served out of the prefetch cache and never crossed the
+// network. So the server sees every speculation and is structurally blind to
+// every payoff, which is the whole reason the numerator has to come back as a
+// beacon instead of a log line.
+//
+// STATUS, and the reason this ships half-dark on purpose. chromestatus lists
+// the beacon as *Proposed* with NO stable milestone, behind an origin trial
+// named `PrefetchAndPrerenderActivationBeacon` (desktop_first 151, and
+// `origintrial: false` on the record, so the trial may not even be open yet).
+// VERIFIED ABSENT in Chrome Canary 153.0.7978.0 on 2026-07-30: a prefetch that
+// demonstrably fired and was demonstrably used sent no beacon under any of
+// three flag spellings (`--enable-features=PrefetchAndPrerenderActivationBeacon`,
+// `--enable-blink-features=` with the same name, and
+// `--enable-experimental-web-platform-features` alone). So 151 is a plan rather
+// than a shipped state, and the numerator stays at zero until this origin joins
+// the trial or the feature reaches stable. The denominator starts recording the
+// moment this deploys.
+//
+// Re-test cheaply: prefetch a URL, navigate to it, and watch for a HEAD to
+// /ledger/prefetch. The absence of that HEAD is the whole signal.
 //
 // That asymmetry is deliberate rather than an oversight. Shipping the receiver
 // now means the only remaining step is a trial registration, which is a form
