@@ -50,7 +50,7 @@
       "/coffee", "/coffee/*", "/serendipity", "/serendipity/*",
       "/slots", "/book", "/approve", "/decline",
       "/llms-full.txt", "/ledger", "/ledger.json",
-      "/ledger/rum.js", "/ledger/rum",
+      "/ledger/rum.js", "/ledger/rum", "/ledger/prefetch",
       "/writing", "/writing/*",
       "/rn", "/rn/tracks", "/rn/tracks.html", "/rn/admin", "/rn/set", "/rn/art/*",
       "/bot", "/around", "/around/json", "/around/changes.json",
@@ -78,6 +78,9 @@
   ],
   "analytics_engine_datasets": [
     { "binding": "BOT_LEDGER", "dataset": "aadhar_bot_ledger" },
+    // the speculation ledger: Sec-Purpose prefetch/prerender requests, plus the
+    // activation beacons that say which of them paid off (speculation.js).
+    { "binding": "SPECULATION", "dataset": "aadhar_speculation" },
     { "binding": "PERF_PROBE", "dataset": "aadhar_perf_probe" }
   ],
   "r2_buckets": [

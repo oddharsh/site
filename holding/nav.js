@@ -338,7 +338,9 @@
       [].forEach.call(start.querySelectorAll(".axp-kbd"), function (k) { k.textContent = KBD; });
       start.addEventListener("click", function (e) {
         e.preventDefault();   // the href is the JS-off floor; JS gets the palette
-        (run && run.open) ? closeRun() : openRun();
+        // detail === 0 means the click came from the keyboard (Enter/Space on the
+        // focused orb) rather than a pointer, so the ring is still wanted here.
+        (run && run.open) ? closeRun() : openRun(e.detail === 0);
       });
     }
     // XP taskbar truth: the app that's in front sits DEPRESSED. Match the
@@ -844,7 +846,15 @@
   }
 
   // ── open / close ──────────────────────────────────────────────────────────────
-  function openRun() {
+  // `viaKeyboard` decides whether the focused input shows its ring. The browser
+  // otherwise guesses from how focus seemed to arrive, and a scripted focus() is
+  // exactly the case its heuristic can't read: the SAME line serves ⌘K (mid
+  // keyboard flow, the ring is the only thing saying where you landed) and a
+  // click on Start (the pointer already said it, so the ring is noise).
+  // focus({focusVisible}) is the option that lets the caller answer instead.
+  // An engine without it ignores the member and keeps today's guess, so this
+  // costs nothing where it isn't supported (Chrome 145, Safari 18.4, FF 104).
+  function openRun(viaKeyboard) {
     if (!run) buildRun();
     if (run.open) return;
     if (!PHOTOS) loadPhotos().then(function () { if (run.open) render(); });
@@ -855,7 +865,7 @@
     run.showModal(); AXP_SND.play("open");
     var s = D.getElementById("axp-start"); if (s) s.setAttribute("aria-expanded", "true");
     input.value = ""; render();
-    input.focus();
+    input.focus({ focusVisible: !!viaKeyboard });
   }
   function closeRun() {
     // The card is in the TOP LAYER, so if it outlives the dialog it floats over
@@ -980,7 +990,7 @@
   D.addEventListener("keydown", function (e) {
     if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) {
       e.preventDefault();
-      run && run.open ? closeRun() : openRun();
+      run && run.open ? closeRun() : openRun(true);
     }
   });
 

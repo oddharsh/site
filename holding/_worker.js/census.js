@@ -164,8 +164,7 @@ export async function fetchCensusGrouped(env) {
     days.add(row.ymd);
     if (!firstYmd || row.ymd < firstYmd) firstYmd = row.ymd;
     if (!lastYmd || row.ymd > lastYmd) lastYmd = row.ymd;
-    if (!byHost.has(row.host)) byHost.set(row.host, []);
-    byHost.get(row.host).push(row);
+    byHost.getOrInsertComputed(row.host, () => []).push(row);
   }
   const order = CENSUS_ROSTER.map((s) => s.label);
   const hosts = [...byHost.entries()].map(([host, series]) => {

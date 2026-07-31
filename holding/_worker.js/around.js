@@ -249,8 +249,7 @@ export async function readAroundChanges(env, requestedLimit = 50) {
 
   const byTarget = new Map();
   for (const row of rows) {
-    if (!byTarget.has(row.target)) byTarget.set(row.target, []);
-    const list = byTarget.get(row.target);
+    const list = byTarget.getOrInsertComputed(row.target, () => []);
     if (list.length < 2) list.push(row);
   }
   const changes = [];

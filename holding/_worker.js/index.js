@@ -16,6 +16,7 @@ import { handleInbox } from "./inbox.js";
 import { handleWebmention, handleWebmentionDecision } from "./webmention.js";
 import { cronSendWebmentions } from "./webmention-send.js";
 import { countCrawlerHit, handleLedger, handleLedgerJson } from "./ledger.js";
+import { countSpeculativeLoad, handlePrefetchActivation } from "./speculation.js";
 import { handleRumCollect, handleRumScript } from "./rum.js";
 import { handleLens, handleLensBrowser, handleLensCompare, handleLensFetch, handleLensShot } from "./lens.js";
 import { serveAssetWith404Clamp, serveFreshAsset, servePrecompressedShell, serveStaticPage } from "./lib/assets.js";
@@ -115,6 +116,9 @@ async function serveWorkerRequest(request, env, ctx) {
   // the bot ledger: identified AI-crawler hits tick into Analytics Engine
   // (worker-owned routes only); /ledger prices them. Best-effort, non-blocking.
   countCrawlerHit(env, request, response, url.pathname);
+  // the speculation ledger's denominator: every Sec-Purpose prefetch/prerender
+  // request. Its numerator (the activation beacon) arrives at /ledger/prefetch.
+  countSpeculativeLoad(env, request, response, url.pathname);
   try {
     console.log(JSON.stringify({
       p: url.pathname,
@@ -125,7 +129,7 @@ async function serveWorkerRequest(request, env, ctx) {
       bot: request.cf?.botManagement?.verifiedBot || undefined,
     }));
   } catch {}
-  return withSecurityHeaders(response);
+  return withSecurityHeaders(response, url.pathname);
 }
 
 // The named entrypoint is the only one configured to consult Workers Cache in
@@ -251,6 +255,10 @@ const ROUTES = new Map([
   // /cdn-cgi/: that prefix is handled at the edge before a Worker sees it.
   ["/ledger/rum.js", handleRumScript],
   ["/ledger/rum", handleRumCollect],
+
+  // the prefetch activation beacon's receiver (speculation.js). A credentialless
+  // HEAD from the browser when a speculated document is actually navigated to.
+  ["/ledger/prefetch", handlePrefetchActivation],
 
   ["/writing", routeWritingIndex],
   ["/writing/", routeDropSlash],

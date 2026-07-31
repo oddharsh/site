@@ -84,7 +84,7 @@
       "/slots", "/book", "/approve", "/decline",
       "/llms-full.txt", "/ledger", "/ledger.json",
       // the Web Analytics beacon, both legs first-party (see _worker.js/rum.js)
-      "/ledger/rum.js", "/ledger/rum",
+      "/ledger/rum.js", "/ledger/rum", "/ledger/prefetch",
       "/writing", "/writing/*",
       "/webmention", "/webmention/*", "/inbox",
       "/rn", "/rn/tracks", "/rn/tracks.html", "/rn/admin", "/rn/set", "/rn/art/*",
@@ -157,6 +157,9 @@
   // /ledger reads them back via the SQL API (needs ANALYTICS_READ_TOKEN).
   "analytics_engine_datasets": [
     { "binding": "BOT_LEDGER", "dataset": "aadhar_bot_ledger" },
+    // the speculation ledger: Sec-Purpose prefetch/prerender requests, plus the
+    // activation beacons that say which of them paid off (speculation.js).
+    { "binding": "SPECULATION", "dataset": "aadhar_speculation" },
     // the homepage perf probe's spans (perf-probe.js); read back with the same
     // SQL API + ANALYTICS_READ_TOKEN as the ledger. AE datasets materialize on
     // first write — no id, nothing for infra:apply to provision.
