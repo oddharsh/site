@@ -1945,3 +1945,49 @@ test("every inline script in the STAGED tree is covered by the emitted hash map"
   // the md-twin quiz test shipped with and reported as a pass for weeks
   assert.ok(checked >= 60, `only ${checked} inline blocks verified; the extractor probably stopped matching`);
 });
+
+test("Workers Cache never answers a content-negotiated request from the stored representation", async () => {
+  // The regression this exists for, live in production on 2026-07-31: `/` joined
+  // WORKERS_CACHEABLE_PATHS and `Accept: text/markdown` on the homepage started
+  // returning HTML. Nothing in the route was wrong. Workers Cache keys the URL, the
+  // stored HTML carries `vary: accept-encoding, available-dictionary` and says
+  // nothing about `accept`, so a cache HIT answered a request asking for a different
+  // media type at the same URL.
+  //
+  // It shipped through a green CI because the predicate was a private function in
+  // _worker.js/index.js, and that module imports `cloudflare:workers`, so no test
+  // under plain node could reach it (gotcha 16). Moving it to lib/cache.js is what
+  // makes this test possible, and the test is the point of the move.
+  const { shouldUseWorkersCache } = await import("./holding/_worker.js/lib/cache.js");
+  const PATHS = new Set(["/", "/bot", "/lens", "/reading"]);
+  const req = (url, headers = {}) => new Request(url, { headers });
+
+  // the whole reason `/` is in the set: a plain navigation should still be cacheable
+  assert.equal(shouldUseWorkersCache(req("https://aadhar.sh/", {
+    accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,*/*;q=0.8",
+  }), PATHS), true, "an ordinary browser navigation must still reach Workers Cache");
+
+  // ...and the bug: markdown at the same URL must bypass it
+  for (const accept of ["text/markdown", "text/markdown, text/html;q=0.5", "text/markdown;q=1.0, text/html;q=0.9"]) {
+    for (const path of ["/", "/bot", "/lens", "/reading"]) {
+      assert.equal(shouldUseWorkersCache(req(`https://aadhar.sh${path}`, { accept }), PATHS), false,
+        `${path} with "${accept}" must bypass Workers Cache or the stored HTML answers it`);
+    }
+  }
+
+  // A lower-ranked markdown offer is NOT a negotiated request: wantsMarkdown does
+  // real q-value comparison, so html-outranks-markdown stays cacheable. Pinning it
+  // keeps a future over-broad "has an accept header" bail from silently disabling
+  // the cache for every browser on the site.
+  assert.equal(shouldUseWorkersCache(req("https://aadhar.sh/", {
+    accept: "text/html, text/markdown;q=0.1",
+  }), PATHS), true, "html outranking markdown is an ordinary request and must stay cacheable");
+
+  // the bails that were already there, so a rewrite cannot quietly drop one
+  assert.equal(shouldUseWorkersCache(req("https://aadhar.sh/?cb=1"), PATHS), false, "query strings bypass");
+  assert.equal(shouldUseWorkersCache(req("https://aadhar.sh/", { "if-none-match": 'W/"x"' }), PATHS), false, "revalidation bypasses");
+  assert.equal(shouldUseWorkersCache(req("https://aadhar.sh/", { range: "bytes=0-9" }), PATHS), false, "range bypasses");
+  assert.equal(shouldUseWorkersCache(new Request("https://aadhar.sh/", { method: "POST" }), PATHS), false, "POST bypasses");
+  assert.equal(shouldUseWorkersCache(req("https://aadhar.sh/nope"), PATHS), false, "an unlisted path bypasses");
+  assert.equal(shouldUseWorkersCache(req("https://aadhar.sh/writing/colophon"), PATHS), true, "the /writing/ prefix is cacheable");
+});

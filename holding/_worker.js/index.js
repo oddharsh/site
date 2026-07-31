@@ -9,6 +9,7 @@ import { handleAgentAuthClaim, handleAgentAuthRegister, handleAgentAuthRevoke, h
 import { cronAround, handleAround, handleAroundChangesJson, handleAroundJson } from "./around.js";
 import { handleBotPage } from "./bot.js";
 import { cronCensus, handleCensus, handleCensusJson } from "./census.js";
+import { shouldUseWorkersCache } from "./lib/cache.js";
 import { handleCoffeeAvailability } from "./coffee.js";
 import { handleHit } from "./counter.js";
 import { handlePhotoGrid, homepageHeadResponse, serveMarkdown } from "./home.js";
@@ -82,21 +83,22 @@ export { BookingWorkflow } from "../../cal/src/workflow.js";
 // back to a HIT of its own variant. Two entries, no crossover. Re-run that probe
 // before adding any dcz-capable route here.
 //
-// Note the if-none-match bail in shouldUseWorkersCache below: a returning visitor
+// Note the if-none-match bail in shouldUseWorkersCache: a returning visitor
 // revalidates and therefore always reaches the worker. That is correct (a 304 needs
 // the validator compared) and it bounds what this buys to first-contact requests.
+//
+// A SECOND axis the cache key cannot see, learned in production the same day `/`
+// joined this set: a route here may answer more than one media type at one URL.
+// `Accept: text/markdown` on `/` came back as HTML off a cache HIT, because the
+// stored HTML says `vary: accept-encoding, available-dictionary` and nothing about
+// `accept`. The predicate now bails on a negotiated request; the reasoning and the
+// production evidence are in lib/cache.js, next to the code.
+//
+// The predicate itself moved to lib/cache.js so it can be unit-tested. That is the
+// actual lesson here: it was a private function in this module, this module cannot
+// be imported under plain node (see gotcha 16), and so nothing in the 78-test suite
+// could reach it. The bug shipped through a green CI.
 const WORKERS_CACHEABLE_PATHS = new Set("/ /favicon.ico /auth.md /.well-known/api-catalog /.well-known/agent-card.json /.well-known/oauth-protected-resource /.well-known/oauth-authorization-server /reading /updates /updates.json /restore /lens /ledger /writing /bot /around /around/json /around/changes.json /photos /rn/tracks /rn/tracks.html /images/manifest.json /images/metadata.json /coffee /coffee/availability.json /search /photos/query.json".split(" "));
-
-function shouldUseWorkersCache(request) {
-  if (request.method !== "GET" && request.method !== "HEAD") return false;
-  if (request.headers.has("range") || request.headers.has("if-none-match")) return false;
-  const url = new URL(request.url);
-  if (url.search) return false;
-  if (WORKERS_CACHEABLE_PATHS.has(url.pathname)) return true;
-  return url.pathname.startsWith("/writing/")
-    || url.pathname.startsWith("/images/full/")
-    || url.pathname.startsWith("/images/meta/");
-}
 
 async function serveWorkerRequest(request, env, ctx) {
   const url = new URL(request.url);
@@ -162,7 +164,7 @@ export class CachedPages extends WorkerEntrypoint {
 
 export default {
   async fetch(request, env, ctx) {
-    if (shouldUseWorkersCache(request) && ctx.exports?.CachedPages) {
+    if (shouldUseWorkersCache(request, WORKERS_CACHEABLE_PATHS) && ctx.exports?.CachedPages) {
       return ctx.exports.CachedPages.fetch(request);
     }
     return serveWorkerRequest(request, env, ctx);
