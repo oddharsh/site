@@ -39,13 +39,45 @@ curnum="$(wrangler d1 execute "$DB" --remote --json --command \
 ymd="$(date -u +%Y-%m-%d)"
 ts="$(date -u +%s)"
 
+ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/../.." && pwd )"
+
+# The committed projection of the checkpoints table.
+#
+# D1 stays the SOURCE OF TRUTH; this file is a derived read of it, and build.mjs
+# renders /updates and /restore from the file so both earn the q11 twin and the dcz
+# delta tiers every authored page already has. Those two are the only dynamic pages
+# whose data changes solely at deploy — this insert happens moments before one — so
+# baking them costs no freshness, unlike /reading or /around whose feeds move on
+# their own schedule.
+#
+# Written AFTER a successful insert, so it always reflects a row that really landed.
+# `npm run checkpoints:check` re-reads D1 and fails on drift, which is the guard for
+# the case this cannot cover: a row inserted by any other means.
+write_projection() {
+  local out="$ROOT/holding/_worker.js/checkpoints.json"
+  local rows
+  if ! rows="$(wrangler d1 execute "$DB" --remote --json --command \
+    "SELECT vnum, ymd, version, slug, title FROM checkpoints ORDER BY vnum;")"; then
+    echo "warn:   could not re-read D1 for the projection — /updates and /restore will" >&2
+    echo "warn:   ship the PREVIOUS log until you re-run this or fix the read" >&2
+    return 0
+  fi
+  printf '%s' "$rows" | python3 -c '
+import json, sys
+rows = json.load(sys.stdin)[0]["results"]
+sys.stdout.write(json.dumps(rows, indent=2, sort_keys=True) + "\n")
+' > "$out"
+  echo "proj:   $(python3 -c "import json,sys; print(len(json.load(open(sys.argv[1]))))" "$out") checkpoints -> holding/_worker.js/checkpoints.json"
+}
+
 next=$((curnum + 1))
 for attempt in 1 2 3 4; do
   ver="aadhar-v${next}-${slug}"
   if wrangler d1 execute "$DB" --remote --command \
     "INSERT INTO checkpoints (vnum, ts, ymd, version, slug, title) VALUES (${next}, ${ts}, '${ymd}', '${ver}', '${slug}', '${title}');" >/dev/null 2>&1; then
     echo "d1:     logged checkpoint v${next} (${ymd}) as ${ver}  ->  /updates + /restore"
-    echo "next:   npm run deploy"
+    write_projection
+    echo "next:   commit holding/_worker.js/checkpoints.json, then npm run deploy"
     exit 0
   fi
   echo "d1:     vnum ${next} taken (stale replica read?) — retrying with $((next + 1))" >&2

@@ -106,14 +106,37 @@ async function checkInvariants() {
     }
   }
 
-  // 3 (hard) — luna.css keeps all three white-blink rules (phase C's tripwire).
-  // Dropping any one reintroduces the additive-blend flash on every nav.
+  // 3 (hard) — nothing re-opts this site into View Transitions by accident.
+  // The three white-blink rules this tripwire used to pin are gone with the
+  // transition itself (2026-07-30); the inverse check is what protects the
+  // choice now. The failure mode it guards is a page-level `@view-transition`
+  // creeping back in, since the opt-in is per-document: one page carrying it
+  // does nothing on its own, but two adjacent ones silently restore the
+  // cross-document transition on the navigations between them, with none of
+  // the choreography (or the white-blink fixes) that used to make it safe.
+  // /garage/vt-check + /garage/vt-b are the deliberate exception: a self-
+  // contained diagnostic pair that probes the PLATFORM, wired to no shell.
+  const VT_DIAGNOSTIC = /^garage\/vt-(check|b)\.html$/;
+  const vtSources = [
+    ...(await readdir("holding", { recursive: true }))
+      .filter((r) => /\.(html|css|js)$/.test(r) && !VT_DIAGNOSTIC.test(r) && !r.startsWith("a-dict/"))
+      .map((r) => `holding/${r}`),
+    "cal/src/templates.js", "serendipity/serendipity.js", "lwe-pipeline/generate.mjs",
+  ];
+  for (const f of vtSources) {
+    let s; try { s = await read(f); } catch { continue; }
+    // Look at CSS only. /garage/horizon documents this decision at length and
+    // quotes the at-rule inside <code>, so a whole-file grep flags the page
+    // explaining why the rule is gone — a guard that fires on its own
+    // documentation gets muted, the same reasoning as the font-law scan below.
+    // For HTML that means <style> bodies; elsewhere the file minus its comments
+    // (chrome.js / templates.js / generate.mjs carry CSS in template literals).
+    const css = f.endsWith(".html")
+      ? [...s.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)].map((m) => m[1]).join("\n")
+      : s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    if (/@view-transition\s*\{/.test(css)) hard.push(`${f}: re-opts into View Transitions (@view-transition), removed site-wide 2026-07-30`);
+  }
   const luna = await read("holding/luna.css");
-  for (const rule of [
-    "::view-transition-image-pair(axp-window){isolation:auto}",
-    "::view-transition-old(axp-window),::view-transition-new(axp-window){mix-blend-mode:normal}",
-    "animation:none !important;mix-blend-mode:normal}",
-  ]) if (!luna.includes(rule)) hard.push(`luna.css lost a white-blink rule: ${rule}`);
 
   // 3b (hard) — luna.css parses as valid CSS. A botched find-replace in v143
   // wrapped several .window/.xp-button declarations in :where(...) and left
@@ -805,6 +828,35 @@ if (inlineProbe.includes("/* probe */") ||
   await writeFile(`${OUT}/holding/bot.html`, botHtml);
 
   console.log(`pages(gen): photos.html ${photosHtml.length}B (${pool.length} tiles), bot.html ${botHtml.length}B`);
+}
+
+// 1f) /updates and /restore as deploy-time documents.
+//
+// The only two dynamic pages whose data changes solely AT DEPLOY: bump-version.sh
+// inserts the checkpoint row moments before `npm run deploy`, and nothing else
+// writes that table. So baking them costs no freshness at all — unlike /reading
+// (6h Curius refresh) or /around (30m crawl), whose feeds move on their own and
+// which are deliberately left dynamic for exactly that reason.
+//
+// D1 remains the source of truth. checkpoints.json is its committed projection,
+// written by bump-version.sh right after a successful insert, and
+// `npm run checkpoints:check` re-reads D1 and fails on drift.
+{
+  const nonce = `?build=${BUILD_NONCE}`;
+  const updates = await import(pathToFileURL(resolve(OUT, "holding/_worker.js/updates.js")).href + nonce);
+  const points = JSON.parse(await readFile(`${OUT}/holding/_worker.js/checkpoints.json`, "utf8"));
+  if (!points.length) throw new Error("updates/restore: the checkpoint projection is empty — both pages would ship with no log");
+  const cp = { points, state: "ok" };
+
+  const updatesHtml = await (await updates.renderWindowsUpdate(cp)).text();
+  if (!updatesHtml.includes("wu-tag")) throw new Error("updates page: no changelog rows rendered — did the markup move?");
+  await writeFile(`${OUT}/holding/updates.html`, updatesHtml);
+
+  const restoreHtml = await (await updates.renderSystemRestore(cp)).text();
+  if (!restoreHtml.includes("srList")) throw new Error("restore page: no restore-point stage rendered — did the markup move?");
+  await writeFile(`${OUT}/holding/restore.html`, restoreHtml);
+
+  console.log(`pages(gen): updates.html ${updatesHtml.length}B, restore.html ${restoreHtml.length}B (${points.length} checkpoints, newest ${points[points.length - 1].version})`);
 }
 
 // 2) homepage HTML: deploy the readable original as /index.src.html and

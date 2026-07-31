@@ -103,8 +103,10 @@ Then, on 2026-07-26, the rest of the open list was worked through:
 
 - **Tooltips anchor at the control**: tried live 2026-07-03, rolled back within
   hours. All pointer tips cursor-follow; anchoring survives on keyboard focus.
-- **View Transitions restricted to window verbs**: retracted under OEM++.
-  Window morphs play on ordinary navigations, which is what the site did anyway.
+- **View Transitions restricted to window verbs**: retracted under OEM++, then
+  moot. Window morphs played on ordinary navigations until 2026-07-30, when the
+  whole View Transition layer came out: hover-prerender had already made those
+  navigations instant, so the morph only delayed a page that had already arrived.
 - **Icon position persistence** (0.8KB in the shell ledger): dropped on purpose.
   Stored layouts got read back in states that couldn't honour them.
 - **The `@layer` cascade spine**: declined. luna.css says so at line 14.

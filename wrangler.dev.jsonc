@@ -50,9 +50,9 @@
       "/coffee", "/coffee/*", "/serendipity", "/serendipity/*",
       "/slots", "/book", "/approve", "/decline",
       "/llms-full.txt", "/ledger", "/ledger.json",
-      "/ledger/rum.js", "/ledger/rum",
+      "/ledger/rum.js", "/ledger/rum", "/ledger/prefetch",
       "/writing", "/writing/*",
-      "/rn", "/rn/tracks", "/rn/tracks.html", "/rn/admin", "/rn/set",
+      "/rn", "/rn/tracks", "/rn/tracks.html", "/rn/admin", "/rn/set", "/rn/art/*",
       "/bot", "/around", "/around/json", "/around/changes.json",
       "/photos", "/photos/", "/photos/query.json", "/photos/grid.html", "/run",
       "/images", "/images/", "/images/full", "/images/full/*",
@@ -71,13 +71,16 @@
     "traces": { "enabled": true, "head_sampling_rate": 1 }
   },
   "version_metadata": { "binding": "CF_VERSION_METADATA" },
-  "triggers": { "crons": ["*/30 * * * *", "17 8 * * 1", "7,37 * * * *"] },
+  "triggers": { "crons": ["*/30 * * * *", "17 8 * * 1", "7,37 * * * *", "23 */6 * * *"] },
   "kv_namespaces": [
     { "binding": "RN_KV", "id": "3cb8a107c58e47dc9244e75b33401f36" },
     { "binding": "BOOKINGS", "id": "37acb65118fe485583a90a94cb89365e" }
   ],
   "analytics_engine_datasets": [
     { "binding": "BOT_LEDGER", "dataset": "aadhar_bot_ledger" },
+    // the speculation ledger: Sec-Purpose prefetch/prerender requests, plus the
+    // activation beacons that say which of them paid off (speculation.js).
+    { "binding": "SPECULATION", "dataset": "aadhar_speculation" },
     { "binding": "PERF_PROBE", "dataset": "aadhar_perf_probe" }
   ],
   "r2_buckets": [

@@ -54,18 +54,23 @@ const HEADED   = process.argv.includes("--headed");
 // ── the interaction catalogue ─────────────────────────────────────────────────
 // Deliberately only interactions that do NOT navigate: a navigation ends the
 // measurement context and the entry is lost. That still covers the whole Run
-// palette lifecycle, which is the site's main same-document interaction surface
-// and the only place a View Transition sits on an INP-counted event.
+// palette lifecycle, which is the site's main same-document interaction surface.
+//
+// This used to run twice, once with prefers-reduced-motion, to price the View
+// Transition each of these handlers was wrapped in. The transitions came out on
+// 2026-07-30 and the A/B went with them: both arms would now measure the same
+// code. What is left is the thing worth keeping — per-interaction attribution,
+// so a regression points at a handler instead of at the site.
 const INTERACTIONS = [
   {
     name: "Start orb → open Run",
-    note: "click; wrapped in startViewTransition",
+    note: "click; showModal + first render of the pool",
     run: async (page) => { await page.click("#axp-start"); await page.waitForTimeout(220); },
     reset: async (page) => { await page.keyboard.press("Escape"); await page.waitForTimeout(220); },
   },
   {
     name: "⌘K → open Run",
-    note: "keydown; wrapped in startViewTransition",
+    note: "keydown; same path as the orb, different entry point",
     run: async (page) => {
       await page.keyboard.press(process.platform === "darwin" ? "Meta+k" : "Control+k");
       await page.waitForTimeout(220);
@@ -89,7 +94,7 @@ const INTERACTIONS = [
   },
   {
     name: "Esc → close Run",
-    note: "keydown; wrapped in startViewTransition",
+    note: "keydown; dialog close + top-layer teardown",
     setup: async (page) => { await page.click("#axp-start"); await page.waitForTimeout(260); },
     run: async (page) => { await page.keyboard.press("Escape"); await page.waitForTimeout(240); },
     reset: async (page) => { await page.click("#axp-start"); await page.waitForTimeout(260); },
@@ -158,7 +163,7 @@ async function measure(browser, { reducedMotion, label }) {
   // WARMUP — not optional, and not cosmetic. The first Run open pays one-time
   // costs the later ones never see: the dynamic import of /hoist.js (deliberately
   // deferred to first open so a visitor who never opens the palette never fetches
-  // it), the first View Transition, and the first showModal. Without this, whichever
+  // it) and the first showModal. Without this, whichever
   // interaction happens to be measured FIRST absorbs all of it and reads ~8x slower
   // than the identical interaction measured second — an ordering artifact that looks
   // exactly like a real finding.
@@ -216,55 +221,35 @@ const browser = await chromium.launch({ channel: "chrome", headless: !HEADED });
 try {
   console.log(`\nINP lab — ${URL_BASE}   CPU ${THROTTLE}x   ${RUNS} runs/interaction\n`);
 
-  const withVT = await measure(browser, { reducedMotion: false, label: "default (View Transitions on)" });
-  const noVT   = await measure(browser, { reducedMotion: true,  label: "prefers-reduced-motion (VT bypassed)" });
+  const { results } = await measure(browser, { reducedMotion: false, label: "default" });
 
-  const head = "interaction".padEnd(24) + "median".padStart(8) + "max".padStart(8) +
-               "  |" + "median".padStart(8) + "max".padStart(8) + "   delta";
-  console.log("".padEnd(24) + "   VT on".padStart(16) + "  |" + "  VT off".padStart(16));
+  const head = "interaction".padEnd(24) + "median".padStart(9) + "max".padStart(9) + "   samples";
   console.log(head);
   console.log("-".repeat(head.length));
-
-  const deltas = [];
-  for (let i = 0; i < withVT.results.length; i++) {
-    const a = withVT.results[i], b = noVT.results[i];
-    const delta = a.max !== null && b.max !== null ? a.max - b.max : null;
-    if (delta !== null) deltas.push(delta);
-    console.log(
-      a.name.padEnd(24) + fmt(a.med) + fmt(a.max) + "  |" + fmt(b.med) + fmt(b.max) +
-      (delta === null ? "        -" : `   ${delta >= 0 ? "+" : ""}${delta.toFixed(1)}ms`)
-    );
+  for (const r of results) {
+    console.log(r.name.padEnd(24) + fmt(r.med) + fmt(r.max) + `   ${r.counted}/${r.total}`);
   }
 
-  // NOISE FLOOR, derived rather than assumed. Event Timing coarsens durations to
-  // 8ms for privacy, so 8ms is the resolution floor before run-to-run variance is
-  // even considered. Removing a View Transition cannot make an interaction slower,
-  // so any NEGATIVE delta is pure noise and its magnitude is a live lower bound on
-  // the noise in this run. A delta is only worth reporting if it clears that.
-  const worstNegative = Math.min(0, ...deltas);
-  const floor = Math.max(8, Math.abs(worstNegative));
-  const flagged = deltas.some((d) => d > floor);
-
   console.log();
-  for (const r of withVT.results) {
+  for (const r of results) {
     if (r.counted < r.total) {
       console.log(`  note: "${r.name}" produced an entry in ${r.counted}/${r.total} runs — ` +
                   `the rest landed under Event Timing's 16ms floor (that is a good sign).`);
     }
   }
-  for (const r of withVT.results) console.log(`  ${r.name}: ${r.note}`);
+  for (const r of results) console.log(`  ${r.name}: ${r.note}`);
 
-  console.log(`\n  noise floor this run: ±${floor.toFixed(0)}ms ` +
-    `(8ms Event Timing quantisation` +
-    (worstNegative < 0 ? `; worst negative delta was ${worstNegative.toFixed(0)}ms, which can only be noise` : "") + `)`);
-
+  // Event Timing coarsens durations to 8ms for privacy, so nothing under 8ms is a
+  // real difference and a single run cannot resolve better than that. Compare
+  // against a previous run's numbers rather than reading one column as truth.
+  const worst = results.reduce((m, r) => (r.max !== null && r.max > m ? r.max : m), 0);
+  console.log(`\n  Event Timing quantises to 8ms, so treat anything under that as equal.`);
   console.log(
-    flagged
-      ? `\nA View Transition costs more than the noise floor on at least one INP-counted\n` +
-        `interaction. That is a taste call, not a bug: the transition IS the aesthetic.\n` +
-        `But it is now a number rather than an argument.\n`
-      : `\nNo View Transition penalty clears the noise floor. Whatever INP is being spent,\n` +
-        `it is not being spent here — look elsewhere before changing these handlers.\n`
+    worst >= 200
+      ? `\n  Worst INP-counted interaction is ${worst.toFixed(0)}ms — past the 200ms "good"\n` +
+        `  threshold. That is a real regression; the row above names the handler.\n`
+      : `\n  Worst INP-counted interaction is ${worst.toFixed(0)}ms, inside the 200ms "good"\n` +
+        `  threshold. Whatever INP is being spent, it is not being spent here.\n`
   );
 } finally {
   await browser.close();

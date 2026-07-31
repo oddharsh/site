@@ -5,6 +5,7 @@
 // worker-rendered pages (/whoareyou, /around, /bot, /rn/admin, etc.)
 // would skip _headers entirely and ship without CSP / Permissions-Policy.
 import { PAGE_DICTIONARY, SHELL_PRELOAD_LINK } from "./shell-assets.js";
+import { prefetchActivationHeader } from "../speculation.js";
 
 // There are NO external script or connect origins here, and that is a stronger
 // claim than it was. Until 2026-07-29 this policy carried two cloudflareinsights.com
@@ -59,7 +60,11 @@ export const HOMEPAGE_DISCOVERY_LINK = HOMEPAGE_DISCOVERY_LINKS.join(", ");
 // Early Hints (which harvests only the rel=preload entries) sends them in a 103.
 const HOMEPAGE_LINK = `${SHELL_PRELOAD_LINK}, ${HOMEPAGE_DISCOVERY_LINK}`;
 
-export function withSecurityHeaders(response) {
+// `pathname` is optional and only used to name this document in the prefetch
+// activation beacon. Callers that don't have one (the /lens self-fetch, which is
+// an internal scan and not a navigable document) simply omit it and get no
+// beacon header, which is the correct answer for a response no browser navigates to.
+export function withSecurityHeaders(response, pathname) {
   // redirects don't need (and shouldn't carry) document-level headers
   if (response.status >= 300 && response.status < 400) return response;
   // R2 photo serves don't either — they're images, the policy doesn't apply
@@ -69,6 +74,14 @@ export function withSecurityHeaders(response) {
   const headers = new Headers(response.headers);
   for (const [k, v] of Object.entries(SECURITY_HEADERS)) {
     if (!headers.has(k)) headers.set(k, v);
+  }
+  // Tell the browser where to report that a speculated copy of THIS document
+  // was actually used for a navigation. See speculation.js for why the server
+  // has to be the one counting, and for the origin-trial caveat that keeps this
+  // header inert (and harmless: an unknown response header is ignored) until
+  // Chrome enables the feature for this origin.
+  if (pathname && ct.startsWith("text/html") && !headers.has("on-prefetch-activation")) {
+    headers.set("on-prefetch-activation", prefetchActivationHeader(pathname));
   }
   // Every HTML surface—static, deterministically rendered, or live—teaches the
   // browser the same immutable page dictionary. Static/deterministic routes can

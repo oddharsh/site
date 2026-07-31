@@ -28,7 +28,14 @@ a { color: #fff; }
 Click through; page B reports whether the browser actually ran the transition.</p>
 
 <div class="card" id="support">checking…</div>
-<div class="card" id="shell">checking the shell breadcrumb…</div>
+<div class="card">
+  <b>The site itself no longer opts in.</b> aadhar.sh removed
+  <code>@view-transition</code> site-wide on 2026-07-30: every internal page is
+  prerendered on hover, so the document is already rendered at click time and the
+  transition only added ~200ms over a navigation with nothing left to wait for.
+  This diagnostic pair keeps its own opt-in because it tests the <em>browser</em>,
+  not the site — that is the whole point of a mule.
+</div>
 
 <a class="go" id="go" href="/garage/vt-b">Navigate to page B →</a>
 
@@ -47,16 +54,6 @@ el.innerHTML =
   "prefers-reduced-motion: " + (matchMedia("(prefers-reduced-motion: reduce)").matches ? '<span class="n v">reduce (transitions off!)</span>' : '<span class="y v">no-preference</span>') + "<br>" +
   "engine: <span class=v>" + (navigator.userAgent.match(/(Chrome|Version)\/[\d.]+/g) || []).join(" · ") + "</span>";
 
-// the shell breadcrumb: nav.js records whether the LAST real-site navigation
-// (taskbar click etc.) had a ViewTransition attached at swap time
-const sh = document.getElementById("shell");
-try {
-  const b = sessionStorage.getItem("axp-vt-swap");
-  sh.innerHTML = "last SHELL navigation transitioned: " +
-    (b === "1" ? '<span class="y v">yes</span>'
-     : b === "0" ? '<span class="n v">NO — the swap had no ViewTransition</span>'
-     : '<span class=v>unknown (click a taskbar link somewhere on the site first, then come back)</span>');
-} catch (_) { sh.textContent = "sessionStorage unavailable"; }
 </script>
 </body>
 </html>

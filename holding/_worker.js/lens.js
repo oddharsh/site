@@ -184,6 +184,19 @@ export async function overLensBudget(budget, request, env, ctx) {
 export async function handleLens(request, env, ctx) {
   const url = new URL(request.url);
   const target = url.searchParams.get("url");
+  const vs = url.searchParams.get("vs");
+  if (target && vs) {
+    // Head-to-head: ?url=A&vs=B renders both sites through one rubric, SSR'd
+    // for the same reason single scans are — a shared compare link should show
+    // its result without JavaScript. Same budget as /lens/compare (they are
+    // the same two full inspections).
+    const result = await compareLensRequest(request, env, ctx, target, vs);
+    const response = renderLensShell(null, lensState(url), target, { vsValue: vs, payload: result.payload });
+    response.headers.set("cache-control", "no-store, must-revalidate");
+    response.headers.set("x-content-type-options", "nosniff");
+    response.headers.set("x-robots-tag", "noindex");
+    return response;
+  }
   if (target) {
     const result = await inspectLensRequest(request, env, ctx);
     const response = renderLensShell(result.payload, lensState(url), target);
@@ -215,7 +228,11 @@ function lensState(url) {
   const validViews = ["both", "human", "machine", "browser", "delta"];
   const validLenses = ["readiness", "anatomy", "structured", "ai", "terms", "discovery"];
   const view = validViews.includes(url.searchParams.get("view")) ? url.searchParams.get("view") : "both";
-  const lens = validLenses.includes(url.searchParams.get("lens")) ? url.searchParams.get("lens") : "readiness";
+  // Default lens is the raw observation, not the readiness report. Compare's
+  // premise is "one URL, three readers", and the middle pane defaulting to a
+  // report card made it page | analysis | render. The score still leads: it
+  // rides the verdict strip above the pane. Must match lens.js.
+  const lens = validLenses.includes(url.searchParams.get("lens")) ? url.searchParams.get("lens") : "anatomy";
   const counterfactuals = {};
   for (const key of (url.searchParams.get("cf") || "").split(",")) {
     if (["markdown", "semantic", "contract", "authority", "receipt", "dictionary", "ech"].includes(key)) counterfactuals[key] = true;
@@ -264,7 +281,7 @@ function lensHumanFragment(data) {
       '" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals"' +
       ' referrerpolicy="no-referrer-when-downgrade" loading="lazy"></iframe>';
   }
-  return lensReaderFragment(data, "Embedding is blocked; JavaScript can request a server-side snapshot, so this is the readable fallback.");
+  return lensReaderFragment(data, (data.frameReason ? "Framing refused (" + data.frameReason + ")." : "Embedding is blocked.") + " JavaScript can request a machine's render to stand in; this is the readable fallback.");
 }
 
 function lensMachineFragment(data, state) {
@@ -319,6 +336,73 @@ function lensStatusFragment(data, state) {
     '<span>' + escHtml(String(data.elapsedMs || 0)) + " ms</span>" +
     (data.redirected ? '<span>&rarr; ' + escHtml(data.finalUrl) + "</span>" : "") +
     '<span style="margin-left:auto">fetched as ' + escHtml(data.fetchedBy || "identified bot") + "</span>";
+}
+
+// ── the head-to-head fragment ------------------------------------------------
+// Two sites through one rubric, rendered from the same summaries /lens/compare
+// serves. This is the page's strongest single exhibit (a 13 next to a 93 does
+// more explaining than either scan alone), so it gets a real UI instead of
+// living as JSON only. Mirrored by renderVs() in holding/lens.js — the SSR copy
+// is the no-JS floor for a shared ?url=&vs= link, the client copy is what the
+// vs form renders without a round-trip through this template.
+const LENS_VS_SURFACES = [
+  ["llms", "llms.txt"], ["markdown", "markdown negotiation"], ["mcp", "MCP"],
+  ["agentCard", "an agent card"], ["apiCatalog", "an API catalog"],
+];
+
+function lensVsHost(u) {
+  try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return String(u || ""); }
+}
+
+function lensVsBytes(n) {
+  if (n == null) return "?";
+  if (n < 1024) return n + " B";
+  if (n < 1048576) return (n / 1024).toFixed(1) + " KB";
+  return (n / 1048576).toFixed(2) + " MB";
+}
+
+function lensVsColumn(s) {
+  const host = lensVsHost(s.finalUrl || s.url);
+  const levelKind = s.level >= 5 ? "ok" : s.level >= 3 ? "" : "warn";
+  const pub = LENS_VS_SURFACES.filter(([key]) => s.surfaces && s.surfaces[key])
+    .map(([, label]) => '<span class="lx-tag">' + escHtml(label) + "</span>").join("");
+  const cost = s.cost
+    ? "~" + (s.cost.tokens >= 1000 ? (s.cost.tokens / 1000).toFixed(1) + "k" : s.cost.tokens) + " tokens &middot; $" + s.cost.usdPerRead.toFixed(s.cost.usdPerRead >= 0.1 ? 2 : 4) + "/read"
+    : "no cost model (non-HTML)";
+  const rows = [
+    ["response", (s.status == null ? "?" : s.status) + " " + lensHttpText(s.status || 0)],
+    ["terms", s.tier || "unknown"],
+    ["agent doors", String(s.doors || 0)],
+    ["one model read", null],   // placeholder; cost carries markup, rendered below
+    ["payload", lensVsBytes(s.bytes)],
+    ["words", String(s.wordCount || 0)],
+  ].map((row) => "<tr><td>" + escHtml(row[0]) + "</td><td>" + (row[1] == null ? cost : escHtml(row[1])) + "</td></tr>").join("");
+  return '<div class="lx-vs-col"><div class="lx-vs-h"><span>' + escHtml(host) + '</span><a href="/lens?url=' + escAttr(encodeURIComponent(s.url)) + '">full scan &rarr;</a></div>' +
+    '<div class="lx-vs-body"><div class="lx-vs-score"><b>' + (s.readiness == null ? "?" : escHtml(s.readiness)) + "<span>/100</span></b>" +
+    '<span class="lx-badge ' + levelKind + '">Level ' + (s.level == null ? "?" : escHtml(s.level)) + "</span> <span>" + escHtml(s.levelName || "") + "</span></div>" +
+    '<table class="lx-kv">' + rows + "</table>" +
+    '<div class="lx-tags" style="margin-top:6px">' + (pub || '<span class="lx-none">no machine surfaces published</span>') + "</div></div></div>";
+}
+
+export function lensVsFragment(payload) {
+  if (!payload || !payload.ok) {
+    return '<div class="lx-empty">' + escHtml((payload && payload.error) || "The comparison did not run.") + "</div>";
+  }
+  const L = payload.left, R = payload.right;
+  let headline = "";
+  if (L && R && L.readiness != null && R.readiness != null) {
+    const win = L.readiness >= R.readiness ? L : R;
+    const lose = win === L ? R : L;
+    const extras = LENS_VS_SURFACES.filter(([key]) => win.surfaces && win.surfaces[key] && !(lose.surfaces && lose.surfaces[key])).map(([, label]) => label);
+    const spread = win.readiness === lose.readiness
+      ? "<b>" + escHtml(win.readiness) + " apiece.</b> Same score, one rubric."
+      : "<b>" + escHtml(lensVsHost(win.finalUrl || win.url)) + " " + escHtml(win.readiness) + ", " + escHtml(lensVsHost(lose.finalUrl || lose.url)) + " " + escHtml(lose.readiness) + ".</b>";
+    headline = '<div class="lx-vs-headline">' + spread +
+      (extras.length ? " The gap is published surfaces: " + escHtml(extras.join(", ")) + "." : " Both publish the same surfaces; the gap sits in the individual checks.") +
+      "</div>";
+  }
+  return '<div class="lx-vs-note">Two sites, one rubric, same evidence rules. Every number here links back to a full scan.</div>' +
+    '<div class="lx-vs-grid">' + lensVsColumn(L || {}) + lensVsColumn(R || {}) + "</div>" + headline;
 }
 
 
@@ -429,11 +513,70 @@ function lensStateOfWebPanel() {
     "</div></dialog>";
 }
 
-export function renderLensShell(initial, state, inputValue) {
+// The About dialog: the page's argument, stated once, in order. Everything on
+// /lens is evidence for a three-act story about machine access to the web (the
+// semantic web asked publishers first; models now brute-force the human page
+// and pay the difference; the open question is acting, not reading), but the
+// acts were scattered across lens captions where only a completionist would
+// assemble them. This panel is the assembly, with a jump into the lens that
+// proves each act live. Same dialog chrome as the machine-web panel; opened
+// from the footer's own self-description.
+const LENS_ERAS = [
+  {
+    era: "Past", years: "1995-2011", label: "The semantic web asked first.",
+    claim: "Publishers were asked to mark meaning up front: meta tags (1995), microformats (2005), RDFa (2008), microdata (2009), Open Graph (2010), JSON-LD (2011). Each layer promised that machines could read facts instead of scraping prose. Adoption followed traffic, so the preview layers thrived while the rest fossilized in place.",
+    jumps: [{ lens: "structured" }, { lens: "anatomy" }],
+  },
+  {
+    era: "Present", years: "2022-now", label: "Models pay the difference.",
+    claim: "LLMs flipped the bargain: rather than wait for structure, they brute-force the page built for people and pay per read, in tokens. The same words cost a person nothing, cost a model real money, and earn the publisher none of it. Sites answered with rules and walls: named AI crawlers in robots.txt, Content Signals, bot challenges, pay-per-crawl.",
+    jumps: [{ lens: "ai" }, { lens: "terms" }],
+  },
+  {
+    era: "Future", years: "2024-on", label: "From reading to acting.",
+    claim: "The open question is whether a site publishes contracts an agent can act on: tools (MCP, WebMCP), identity (Web Bot Auth, OAuth), payment (x402, pay-per-crawl), instructions (llms.txt, AGENTS.md). Lens probes twenty-odd such surfaces live, scores them, and lets you flip the missing ones on to see what each would change.",
+    jumps: [{ lens: "discovery" }, { lens: "readiness" }, { view: "delta", label: "Delta" }],
+  },
+];
+
+function lensAboutPanel() {
+  const eras = LENS_ERAS.map((e) => {
+    const jumps = e.jumps.map((j) => j.view
+      ? '<button class="lx-chip lx-goto" type="button" data-goto-view="' + escAttr(j.view) + '">' + escHtml(j.label || j.view) + "</button>"
+      : '<button class="lx-chip lx-goto" type="button" data-goto-lens="' + escAttr(j.lens) + '">' + escHtml(LENS_TAB_LABELS[j.lens] || j.lens) + "</button>"
+    ).join(" ");
+    return '<div class="lx-abt-era"><div class="lx-abt-when"><b>' + escHtml(e.era) + "</b><span>" + escHtml(e.years) + "</span></div>" +
+      '<div><div class="lx-abt-label">' + escHtml(e.label) + "</div>" +
+      '<div class="lx-abt-claim">' + glossify(escHtml(e.claim)) + "</div>" +
+      '<div class="lx-abt-jumps"><span>See it live:</span> ' + jumps + "</div></div></div>";
+  }).join("");
+  return '<dialog class="lx-sow-dialog" id="lx-abt-dialog" closedby="any" aria-labelledby="lx-abt-title">' +
+    '<div class="lx-sow-tb"><span class="lx-sow-kicker" id="lx-abt-title">About The Other Web</span>' +
+    '<button class="lx-sow-x" type="button" id="lx-abt-close" title="Close" aria-label="Close"></button></div>' +
+    '<div class="lx-sow-inner">' +
+    '<div class="lx-abt-thesis">Every page now has two audiences: people, and the machines reading over their shoulders. This instrument watches the second one. The story it keeps showing you runs in three acts.</div>' +
+    eras +
+    '<div class="lx-abt-rules"><b>How this instrument behaves</b><ul class="lx-why">' +
+    "<li>Every fetch is identified and cryptographically signed as AadharshBot. Lens never wears another bot's user-agent to get past a wall.</li>" +
+    "<li>Every verdict stays pinned to evidence you can open. A probe that never answered reads as unknown, never as a fail.</li>" +
+    "<li>Absent metadata renders as absent. Nothing is guessed or backfilled.</li>" +
+    "<li>Delta's simulations stay amber. Green is reserved for signals actually observed.</li>" +
+    "<li>One fetch per ask, server-side, with no logging.</li>" +
+    "</ul></div>" +
+    '<div class="lx-cf-credit">Rubric after IsItAgentReady. Pedagogy after Seymour Papert\'s micro-worlds and <a href="https://www.geoffreylitt.com/2026/07/02/understanding-is-the-new-bottleneck" target="_blank" rel="noopener">Geoffrey Litt</a>. Window chrome after Redmond, 2001.</div>' +
+    "</div></dialog>";
+}
+
+export function renderLensShell(initial, state, inputValue, compare) {
   // defaults must match the client (lens.js) and lensState(), or a plain /lens
   // SSRs one tab and the deferred script silently flips to another on hydrate.
-  state = state || { view: "both", lens: "readiness", counterfactuals: { markdown: false, semantic: false, contract: false, authority: false, receipt: false, dictionary: false, ech: false } };
+  state = state || { view: "both", lens: "anatomy", counterfactuals: { markdown: false, semantic: false, contract: false, authority: false, receipt: false, dictionary: false, ech: false } };
   const seeded = initial && initial.ok;
+  // vs mode: the single-scan toolbar and panes stay in the DOM but hidden
+  // (.lx-off), so the client can drop back to a normal scan without rebuilding
+  // them; #lx-vs holds the head-to-head fragment in their place.
+  const vsActive = !!(compare && compare.vsValue);
+  const vsValue = (compare && compare.vsValue) || "";
   const value = inputValue || (seeded ? initial.finalUrl || initial.url : "");
   const humanHeader = seeded && !initial.framable
     ? 'Human view <span class="lx-mode">Reader</span> <span class="lx-mode-sub">server-rendered readable fallback</span>'
@@ -453,11 +596,29 @@ export function renderLensShell(initial, state, inputValue) {
         ? "Delta toggles hypothetical infrastructure. Predict, flip, check."
         : "Compare puts Human, HTTP Machine, and Browser Run side by side. Predict the machine pane; the miss is the lesson.";
   const initialScript = initial ? '<script type="application/json" id="lx-initial-data">' + lensScriptJson(initial) + "</script>" : "";
+  const lensDescription = "Paste any URL and see the human page, a transparent agent-readiness score, bot-specific access samples, raw HTML, structured data, machine terms, and the site's discovery surfaces side by side.";
   return lunaPage({
     title: "The Other Web · aadhar.sh",
     path: "The Other Web",
     width: 980,
-    description: "Paste any URL and see the human page, a transparent agent-readiness score, bot-specific access samples, raw HTML, structured data, machine terms, and the site's discovery surfaces side by side.",
+    description: lensDescription,
+    // Link unfurls. The card is pre-baked by gen-og-cards.mjs (OG_ONLY=lens):
+    // a live scan of stripe.com with the dollar verdict and the 29pt readiness
+    // score visible, floated on Bliss like every other card on the site. The
+    // scanned ?url= variants share the shell card — a per-scan card would need
+    // an on-the-fly render, and X's fetcher hits once, caches, and won't wait.
+    // Absolute URLs because card fetchers don't resolve relative ones.
+    head: `<meta property="og:type" content="website">
+<meta property="og:site_name" content="aadhar.sh">
+<meta property="og:title" content="The Other Web: how machines read a URL">
+<meta property="og:description" content="${escAttr(lensDescription)}">
+<meta property="og:url" content="https://${CANONICAL_HOST}/lens">
+<meta property="og:image" content="https://${CANONICAL_HOST}/og/lens.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="A Windows XP browser window showing one URL three ways at once: the page a person sees, the evidence a machine can recover, and a rendered snapshot.">
+<meta name="twitter:card" content="summary_large_image">
+`,
     // The bare shell is the site's flagship machine-web page and should be
     // indexable — an agent reading llms.txt now finds /lens listed there. Only a
     // targeted ?url= scan gets x-robots-tag: noindex (handleLens sets it), since
@@ -661,6 +822,16 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
    NOT a second hero number — two 30pt figures stacked would make neither read. */
 .lx-verdict { margin:0 0 11px; padding:9px 12px; border:1px solid oklch(74% 0.09 150); border-left:4px solid oklch(52% 0.14 150); border-radius:3px; background:linear-gradient(180deg,oklch(98% 0.02 150),oklch(96% 0.03 150)); color:oklch(30% 0.03 255); font-size:10.6pt; line-height:1.5; text-wrap:pretty; }
 .lx-verdict b { color:oklch(34% 0.13 150); font-family:"Courier New",monospace; font-size:10.2pt; }
+/* the readiness score, relocated from the pane body onto the strip: the pane
+   below now shows the raw observation, and analysis rides up here with the
+   dollars. One anchor number, not a second hero. */
+.lx-verdict-score { float:left; margin:1px 11px 2px 0; font:bold 21pt "Trebuchet MS",Verdana,sans-serif; line-height:1; color:oklch(38% 0.14 255); white-space:nowrap; }
+.lx-verdict-score span { font:normal 9pt Tahoma,Verdana,sans-serif; color:oklch(53% 0 0); }
+.lx-verdict::after { content:""; display:block; clear:both; }
+
+/* the computed HTTP-vs-rendered disagreement, atop the Browser Run pane */
+.lx-browser-delta { margin:0 0 10px; padding:8px 11px; border:1px solid oklch(74% 0.08 210); border-left:4px solid oklch(50% 0.12 215); border-radius:3px; background:linear-gradient(180deg,oklch(98% 0.015 210),oklch(95% 0.025 210)); color:oklch(29% 0.04 220); font-size:9.6pt; line-height:1.5; text-wrap:pretty; }
+.lx-browser-delta b { color:oklch(32% 0.11 220); font-family:"Courier New",monospace; }
 
 /* agent trace: an XP console of what an agent would do */
 .lx-trace { font-family:"Courier New",Courier,monospace; font-size:8.7pt; line-height:1.5; background:oklch(22% 0.02 255); border-radius:3px; padding:9px 10px; color:oklch(90% 0.02 150); }
@@ -766,6 +937,42 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 .lx-sow-open { font:inherit; color:oklch(42.61% 0.2353 263.74); background:none; border:none; padding:0; cursor:pointer; text-decoration:underline; }
 @media (max-width:520px){ .lx-sow-grid{ grid-template-columns:1fr; } }
 
+/* the About dialog: three eras + the instrument's rules. Shares the sow dialog
+   chrome; only the inner layout is its own. */
+.lx-abt-thesis { margin:0 0 11px; font-size:9.6pt; line-height:1.5; color:oklch(28% 0.02 255); }
+.lx-abt-era { display:grid; grid-template-columns:82px 1fr; gap:10px; padding:9px 0; border-top:1px solid oklch(88% 0.02 250); }
+.lx-abt-when b { display:block; font-family:"Trebuchet MS",Verdana,sans-serif; font-size:10pt; color:oklch(33% 0.10 263); }
+.lx-abt-when span { font-family:"Courier New",monospace; font-size:7.8pt; color:oklch(55% 0 0); }
+.lx-abt-label { font-weight:bold; font-size:9.2pt; color:oklch(30% 0.05 255); margin:0 0 2px; }
+.lx-abt-claim { font-size:8.8pt; line-height:1.45; color:oklch(33% 0.01 255); }
+.lx-abt-jumps { margin-top:6px; display:flex; align-items:center; flex-wrap:wrap; gap:5px; }
+.lx-abt-jumps > span { font-size:8pt; color:oklch(52% 0 0); }
+.lx-abt-rules { margin-top:4px; padding:8px 10px; border:1px solid oklch(86% 0.02 250); border-radius:3px; background:#fff; }
+.lx-abt-rules > b { display:block; font-family:"Trebuchet MS",Verdana,sans-serif; font-size:9.2pt; color:oklch(33% 0.10 263); margin:0 0 4px; }
+@media (max-width:520px){ .lx-abt-era { grid-template-columns:1fr; gap:3px; } }
+
+/* head-to-head (?url=A&vs=B): two sites, one rubric. .lx-off hides the
+   single-scan chrome while the DOM stays intact, so leaving vs mode is a class
+   flip rather than a rebuild. !important because the toolbar/panes carry their
+   own display values that would otherwise beat the [class] toggle. */
+.lx-off { display:none !important; }
+.lx-addr-vs { margin-top:4px; }
+.lx-vs-toggle { font-weight:normal; padding:3px 10px; }
+.lx-vs-note { margin:7px 0 0; padding:5px 8px; border-left:3px solid oklch(55% 0.14 250); background:oklch(97% 0.012 250); color:oklch(42% 0.03 255); font-size:8.7pt; }
+.lx-vs-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-top:8px; }
+.lx-vs-col { border:1px solid oklch(70% 0.03 250); border-radius:3px; background:#fff; padding:0 0 9px; }
+.lx-vs-h { font-family:"Trebuchet MS",Verdana,sans-serif; font-size:8.5pt; font-weight:bold; text-transform:uppercase; letter-spacing:.05em; color:#fff; background:linear-gradient(180deg, oklch(56% 0.12 252), oklch(45% 0.15 255)); padding:4px 8px; border-radius:2px 2px 0 0; display:flex; justify-content:space-between; align-items:center; gap:8px; }
+.lx-vs-h span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.lx-vs-h a { color:#fff; font-weight:normal; text-transform:none; letter-spacing:0; font-size:8pt; white-space:nowrap; }
+.lx-vs-body { padding:8px 10px 0; }
+.lx-vs-score { display:flex; align-items:center; gap:8px; margin:2px 0 9px; }
+.lx-vs-score b { font:bold 26pt "Trebuchet MS",Verdana,sans-serif; line-height:1; color:oklch(38% 0.14 255); white-space:nowrap; }
+.lx-vs-score b span { font:normal 9.5pt Tahoma,Verdana,sans-serif; color:oklch(53% 0 0); }
+.lx-vs-score > span:last-child { font-size:9pt; color:oklch(30% 0.04 255); }
+.lx-vs-headline { margin-top:8px; padding:9px 12px; border:1px solid oklch(74% 0.09 150); border-left:4px solid oklch(52% 0.14 150); border-radius:3px; background:linear-gradient(180deg,oklch(98% 0.02 150),oklch(96% 0.03 150)); color:oklch(30% 0.03 255); font-size:10.6pt; line-height:1.5; text-wrap:pretty; }
+.lx-vs-headline b { color:oklch(34% 0.13 150); font-family:"Courier New",monospace; font-size:10.2pt; }
+@media (max-width:640px){ .lx-vs-grid{ grid-template-columns:1fr; } }
+
 /* status bar */
 .lx-status { margin-top:9px; border-top:1px solid oklch(86% 0.03 260); padding-top:6px; display:flex; flex-wrap:wrap; gap:5px 14px; font-size:8.6pt; color:oklch(45% 0 0); }
 .lx-status b { color:oklch(30% 0.04 255); font-weight:bold; }
@@ -788,7 +995,18 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
       <label class="lx-addr-label" for="lx-url">Address</label>
       <input id="lx-url" class="lx-url" type="text" name="url" value="${escAttr(value)}" inputmode="url" placeholder="https://example.com  —  paste any URL" autocomplete="off" spellcheck="false">
       <button class="lx-go" type="submit">Go</button>
+      <button class="lx-go lx-vs-toggle" type="button" id="lx-vs-toggle" title="Compare two sites through one rubric" aria-expanded="${vsActive ? "true" : "false"}" aria-controls="lx-addr-vs">vs&hellip;</button>
     </form>
+    <!-- the second address row. Its input belongs to the form above
+         (form=/name=), so with JS off a filled row still submits ?url=&vs= and
+         the server renders the comparison — the same no-JS floor single scans
+         get. The toggle button only reveals the row, so it stays JS-gated. -->
+    <div class="lx-addr lx-addr-vs${vsActive ? "" : " lx-off"}" id="lx-addr-vs">
+      <span class="lx-globe" aria-hidden="true"></span>
+      <label class="lx-addr-label" for="lx-url-vs">vs</label>
+      <input id="lx-url-vs" class="lx-url" type="text" form="lx-form" name="vs" value="${escAttr(vsValue)}" inputmode="url" placeholder="https://the-other-site.com  —  head-to-head, one rubric" autocomplete="off" spellcheck="false">
+      <button class="lx-go lx-vs-toggle" type="button" id="lx-vs-close" title="Back to a single scan">&#215;</button>
+    </div>
     <div class="lx-chips">
       <span class="lx-chips-label">Try:</span>
       <button class="lx-chip" data-url="https://aadhar.sh/">aadhar.sh</button>
@@ -798,9 +1016,10 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
       <button class="lx-chip" data-url="https://www.nytimes.com/">a publisher with AI terms</button>
       <button class="lx-chip" data-url="https://aadhar.sh/llms-full.txt">a bot paywall (x402)</button>
       <button class="lx-chip" data-url="https://example.com/">the bare minimum</button>
+      <button class="lx-chip" data-vs-pair="https://stripe.com/|https://aadhar.sh/">stripe.com vs aadhar.sh</button>
     </div>
 
-    <div class="lx-toolbar is-${state.view}" id="lx-toolbar">
+    <div class="lx-toolbar is-${state.view}${vsActive ? " lx-off" : ""}" id="lx-toolbar">
       <div class="lx-view" role="radiogroup" aria-label="page mode">
         <button class="lx-seg${state.view === "both" ? " is-on" : ""}" data-view="both" role="radio" aria-checked="${state.view === "both" ? "true" : "false"}" type="button">Compare</button>
         <button class="lx-seg${state.view === "human" ? " is-on" : ""}" data-view="human" role="radio" aria-checked="${state.view === "human" ? "true" : "false"}" type="button">Human</button>
@@ -817,9 +1036,11 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
         <button class="lx-tab${state.lens === "discovery" ? " is-on" : ""}" data-lens="discovery" role="tab" aria-selected="${state.lens === "discovery" ? "true" : "false"}" aria-controls="lx-machine-body" type="button">${LENS_TAB_LABELS.discovery}</button>
       </div>
     </div>
-    <div class="lx-mode-note" id="lx-mode-note">${modeNote}</div>
+    <div class="lx-mode-note${vsActive ? " lx-off" : ""}" id="lx-mode-note">${modeNote}</div>
 
-    <div class="lx-panes is-${state.view}" id="lx-panes">
+    <div class="lx-vs${vsActive ? "" : " lx-off"}" id="lx-vs">${vsActive ? lensVsFragment(compare.payload) : ""}</div>
+
+    <div class="lx-panes is-${state.view}${vsActive ? " lx-off" : ""}" id="lx-panes">
       <section class="lx-pane lx-pane-human" id="lx-human">
         <div class="lx-pane-h" id="lx-human-h">${humanHeader}</div>
         <div class="lx-body" id="lx-human-body">${seeded ? lensHumanFragment(initial) : '<div class="lx-empty">Paste any URL above.<span>You get the page a person sees, the raw file a machine gets instead, and what that difference costs.</span></div>'}</div>
@@ -834,9 +1055,14 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
       </section>
     </div>
 
-    <div class="lx-status" id="lx-status">${seeded || (initial && !initial.ok) ? lensStatusFragment(initial, state) : '<span>Idle. Nothing is fetched until you ask, and then just once, server-side, with no logging.</span>'}</div>
-    <footer>&larr; <a href="/">aadhar.sh</a> &middot; a research toy about how machines read the web &middot; <button type="button" class="lx-sow-open" data-sow-open>the state of the machine web</button> &middot; fetched by <a href="/bot">AadharshBot</a></footer>
+    <div class="lx-status" id="lx-status">${vsActive
+      ? (compare.payload && compare.payload.ok
+        ? '<span><b>Head-to-head</b></span><span>' + escHtml(lensVsHost(value)) + " vs " + escHtml(lensVsHost(vsValue)) + '</span><span style="margin-left:auto">both fetched server-side as AadharshBot</span>'
+        : '<span class="err">Comparison failed:</span> <span>' + escHtml((compare.payload && compare.payload.error) || "unknown error") + "</span>")
+      : seeded || (initial && !initial.ok) ? lensStatusFragment(initial, state) : '<span>Idle. Nothing is fetched until you ask, and then just once, server-side, with no logging.</span>'}</div>
+    <footer>&larr; <a href="/">aadhar.sh</a> &middot; <button type="button" class="lx-sow-open" data-abt-open>a research toy about how machines read the web</button> &middot; <button type="button" class="lx-sow-open" data-sow-open>the state of the machine web</button> &middot; fetched by <a href="/bot">AadharshBot</a></footer>
     ${lensStateOfWebPanel()}
+    ${lensAboutPanel()}
     <div class="lx-tip" id="lx-tip" popover="manual" role="tooltip"></div>
     <script type="application/json" id="lx-glossary">${lensScriptJson(LENS_GLOSSARY)}</script>
     ${initialScript}
@@ -1122,8 +1348,18 @@ export function lensObservationSummary(result) {
     bytes: anatomy.rawBytes ?? null,
     readiness: readiness.overall ?? null,
     level: readiness.level ?? null,
+    levelName: readiness.levelName ?? null,
     tier: spectrum.tier || "unknown",
     doors: lensDoorCount(result?.agent),
+    // The dollar figure the verdict strip states for a single scan, carried
+    // into the summary so a head-to-head can price both sides. Additive to the
+    // /lens/compare + MCP contract; null for non-HTML bodies, never faked.
+    cost: (() => {
+      const base = result?.cost?.tiers?.[0];
+      const rate = result?.cost?.rates?.[0];
+      if (!base || !rate) return null;
+      return { tokens: base.tokens, usdPerRead: +(base.tokens / 1e6 * rate.usdPerMtok).toFixed(4), model: rate.model };
+    })(),
     surfaces: {
       llms: !!result?.discovery?.llmsTxt?.ok,
       markdown: !!result?.agent?.mdNegotiation?.supported,
@@ -1163,20 +1399,31 @@ export async function compareLensTargets(leftUrl, rightUrl, env, opts = {}) {
   return { left: leftSummary, right: rightSummary, changes: compareLensObservations(leftSummary, rightSummary) };
 }
 
-export async function handleLensCompare(request, env, ctx) {
-  const url = new URL(request.url);
-  const left = validateLensTarget(url.searchParams.get("left") || "");
-  const right = validateLensTarget(url.searchParams.get("right") || "");
-  if (!left.ok || !right.ok) return jsonResponse({ ok: false, error: left.ok ? `right: ${right.error}` : `left: ${left.error}` }, 400);
+// One validate + budget + inspect path for every compare caller: the JSON
+// route below, and the SSR'd ?url=A&vs=B branch of handleLens. Splitting these
+// would eventually split the budget, which is the mistake LENS_BUDGETS exists
+// to prevent.
+export async function compareLensRequest(request, env, ctx, leftRaw, rightRaw) {
+  const left = validateLensTarget(leftRaw || "");
+  const right = validateLensTarget(rightRaw || "");
+  if (!left.ok || !right.ok) {
+    return { status: 400, payload: { ok: false, error: left.ok ? `right: ${right.error}` : `left: ${left.error}` } };
+  }
   // Shared with /mcp's lens_compare tool (same bucket, see LENS_BUDGETS).
   if (await overLensBudget(LENS_BUDGETS.compare, request, env, ctx)) {
-    return jsonResponse({ ok: false, error: "Lens comparisons are rate-limited to 4/min." }, 429);
+    return { status: 429, payload: { ok: false, error: "Lens comparisons are rate-limited to 4/min." } };
   }
   try {
-    return jsonResponse({ ok: true, comparedAt: new Date().toISOString(), ...(await compareLensTargets(left.url, right.url, env)) });
+    return { status: 200, payload: { ok: true, comparedAt: new Date().toISOString(), ...(await compareLensTargets(left.url, right.url, env)) } };
   } catch (error) {
-    return jsonResponse({ ok: false, error: "Lens comparison failed.", detail: String(error?.message || error).slice(0, 240) }, 502);
+    return { status: 502, payload: { ok: false, error: "Lens comparison failed.", detail: String(error?.message || error).slice(0, 240) } };
   }
+}
+
+export async function handleLensCompare(request, env, ctx) {
+  const url = new URL(request.url);
+  const result = await compareLensRequest(request, env, ctx, url.searchParams.get("left"), url.searchParams.get("right"));
+  return jsonResponse(result.payload, result.status);
 }
 
 // the orchestrator: fetch the target, parse it, then probe the origin's

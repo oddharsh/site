@@ -26,10 +26,11 @@ import { citationsIn, findEndpointIn, SELF_LINK_HOSTS } from "./holding/_worker.
 import { sign } from "./cal/src/sign.js";
 import { AGENT_SURFACES, WEBMENTION_PATHS } from "./holding/_worker.js/lib/site-manifest.js";
 import { handleWritingIndex } from "./holding/_worker.js/writing.js";
+import { cronJob } from "./holding/_worker.js/lib/cron.js";
 import { serveStaticPage } from "./holding/_worker.js/lib/assets.js";
 import { readManifest, workerModule, navFenceBody, readFenceBody } from "./scripts/gen-manifest.mjs";
 import { INDEXED_SECTIONS, TWIN_FACTS, buildTwins, checkTwinFacts, htmlFileFor, twinPath } from "./scripts/gen-md-twins.mjs";
-import { MCP_TOOLS } from "./serendipity/serendipity.js";
+import { MCP_TOOLS, cookieJar, parseCookies } from "./serendipity/serendipity.js";
 import { derivePhotoPool, renderPhotosPage, getImagesManifest, handlePhotoQuery, queryPhotos } from "./holding/_worker.js/photos.js";
 import { renderPhotoSlots } from "./holding/_worker.js/lib/photo-grid.js";
 import { cachedRender, deadline } from "./holding/_worker.js/lib/cache.js";
@@ -44,9 +45,14 @@ import { ml_dsa44 } from "@noble/post-quantum/ml-dsa.js";
 import { mapWithConcurrency, readResponseCapped } from "./holding/_worker.js/lib/crawl.js";
 import { diffAroundRows, handleAroundChangesJson, readAroundChanges } from "./holding/_worker.js/around.js";
 import {
+  ART_VERSION,
+  artUrls,
+  canonicalArtUrl,
+  handleRnArt,
   handleRnTracks,
   handleRnTracksHtml,
   renderTrackListHtml,
+  spotifyArtHash,
 } from "./holding/_worker.js/rn.js";
 
 const PLAYLIST_ID = "4IRq9W1N2tOWHhH0O3vXiF";
@@ -290,6 +296,102 @@ test("track HTML renderer emits rows only", () => {
   assert.match(html, /np-title/);
   assert.match(html, /A &lt;song&gt;/);
   assert.doesNotMatch(html, /<(?:!doctype|html|head|body)\b/i);
+});
+
+test("Spotify art collapses onto one host, and only where it is safe to", () => {
+  const hash = "ab67616d00001e026b458d1409d938dad4e3ba2c";
+  // every alias lands on the canonical host, path untouched
+  for (const host of ["image-cdn-fa", "image-cdn-ak", "image-cdn-zz9"]) {
+    assert.equal(
+      canonicalArtUrl(`https://${host}.spotifycdn.com/image/${hash}`),
+      `https://i.scdn.co/image/${hash}`,
+    );
+  }
+  // already canonical is a no-op, so applying it at both scrape and emit is safe
+  assert.equal(canonicalArtUrl(`https://i.scdn.co/image/${hash}`), `https://i.scdn.co/image/${hash}`);
+  // anything the rewrite was not proven safe for passes through UNCHANGED. a
+  // wrong rewrite is a broken image; the untouched value is one that already works.
+  for (const keep of [
+    "https://mosaic.scdn.co/640/abc",                          // different scdn service
+    "https://image-cdn-fa.spotifycdn.com/other/xyz",           // right host, not an /image/ path
+    "https://evil.example.com/image/abc",                      // unrelated host
+    "not-a-url",                                               // unparseable
+    "",
+    null,
+    undefined,
+  ]) assert.equal(canonicalArtUrl(keep), keep);
+});
+
+const ART_HASH_A = "ab67616d00001e026b458d1409d938dad4e3ba2c";
+
+test("art URLs are derived from the hash, whatever alias it arrived under", () => {
+  for (const host of ["i.scdn.co", "image-cdn-fa.spotifycdn.com", "image-cdn-ak.spotifycdn.com"]) {
+    assert.equal(spotifyArtHash(`https://${host}/image/${ART_HASH_A}`), ART_HASH_A);
+  }
+  // null means "emit the original URL untouched", so every unrecognized shape
+  // has to land here rather than produce a /rn/art/ URL that would 404.
+  for (const no of [
+    "https://mosaic.scdn.co/640/abc",
+    `https://evil.example.com/image/${ART_HASH_A}`,
+    "https://i.scdn.co/image/NOTHEX",
+    "https://i.scdn.co/image/ab67616d",            // too short
+    `https://i.scdn.co/image/${ART_HASH_A}extra`,  // too long
+    "not-a-url", "", null, undefined,
+  ]) assert.equal(spotifyArtHash(no), null);
+
+  const u = artUrls(`https://i.scdn.co/image/${ART_HASH_A}`);
+  assert.equal(u.src, `/rn/art/${ART_HASH_A}-240-${ART_VERSION}.jpg`);
+  assert.equal(u.srcset,
+    `/rn/art/${ART_HASH_A}-120-${ART_VERSION}.avif 120w, /rn/art/${ART_HASH_A}-240-${ART_VERSION}.avif 240w`);
+  assert.equal(artUrls("https://mosaic.scdn.co/640/abc"), null);
+});
+
+test("rendered track rows re-host recognized art and pass everything else through", () => {
+  const html = renderTrackListHtml({
+    tracks: [{
+      title: "t", song_link_url: "https://song.link/x", duration_ms: 1000,
+      image_url: `https://image-cdn-ak.spotifycdn.com/image/${ART_HASH_A}`,
+      artists: [{ name: "a", spotify_url: "https://open.spotify.com/artist/1",
+                  image_url: `https://image-cdn-fa.spotifycdn.com/image/${ART_HASH_A}` }],
+    }],
+  });
+  assert.match(html, new RegExp(`data-track-image="/rn/art/${ART_HASH_A}-240-${ART_VERSION}\\.jpg"`));
+  assert.match(html, /data-track-imageset="\/rn\/art\/[0-9a-f]{40}-120-\d+\.avif 120w/);
+  assert.match(html, new RegExp(`data-artist-image="/rn/art/${ART_HASH_A}-240-${ART_VERSION}\\.jpg"`));
+  assert.match(html, /data-artist-imageset=/);
+  // the whole point: a hover no longer reaches Spotify at all
+  assert.doesNotMatch(html, /scdn\.co|spotifycdn\.com/);
+
+  // an art URL with no parseable hash keeps its original URL and gains NO
+  // imageset, which is the same shape tooltip.js sees from a pre-deploy cached
+  // fragment — one code path, not a migration.
+  const odd = renderTrackListHtml({
+    tracks: [{ title: "t", song_link_url: "https://song.link/x",
+               image_url: "https://mosaic.scdn.co/640/abc", artists: [] }],
+  });
+  assert.match(odd, /data-track-image="https:\/\/mosaic\.scdn\.co\/640\/abc"/);
+  assert.doesNotMatch(odd, /data-track-imageset/);
+});
+
+test("the art route 404s every shape that is not one it minted", async () => {
+  // This grammar is the only thing between the route and an open image proxy,
+  // so each rejection below is a way someone could otherwise aim it or burn the
+  // monthly transformation allowance by hand.
+  const bad = [
+    `/rn/art/${ART_HASH_A}-999-${ART_VERSION}.avif`,   // width not in the tier set
+    `/rn/art/${ART_HASH_A}-240-${ART_VERSION}.png`,    // format we do not mint
+    `/rn/art/${ART_HASH_A}-240-${ART_VERSION}`,        // no extension
+    `/rn/art/${ART_HASH_A.toUpperCase()}-240-1.avif`,  // uppercase hex
+    "/rn/art/nothex-240-1.avif",
+    `/rn/art/${ART_HASH_A}.avif`,
+    "/rn/art/",
+    `/rn/art/${ART_HASH_A}-240-1.avif/../../etc`,
+  ];
+  for (const p of bad) {
+    const res = await handleRnArt(new Request(`https://aadhar.sh${p}`), {}, null);
+    assert.equal(res.status, 404, `expected 404 for ${p}`);
+    assert.equal(res.headers.get("cache-control"), "no-store", `a 404 for ${p} must not be cacheable`);
+  }
 });
 
 test("track endpoints keep JSON and HTML contracts independent of Accept", async () => {
@@ -931,6 +1033,85 @@ test("published MCP server cards enumerate the live Serendipity tool catalog", a
   }
 });
 
+// ── the Luma session jar ────────────────────────────────────────────
+// Two failure modes these guard. (1) A whole-domain browser export drags in
+// cookies that must never be stored or replayed: __cf_bm is a 30-minute,
+// IP-bound Cloudflare bot-management token, and replaying a stale one from
+// Worker egress IPs reads as a scraper. (2) Luma rotates luma.* cookies via
+// Set-Cookie on api2 responses; a client that drops those ends up presenting
+// a key Luma no longer honours, which is how the deployed sync went stale
+// where local dev (cookies pasted minutes earlier) never did.
+
+const LUMA_EXPORT = JSON.stringify([
+  { name: "__cf_bm", value: "edge-noise", domain: ".luma.com" },
+  { name: "luma.auth-session-key", value: "usr-abc123.token0", domain: ".luma.com", expirationDate: 1800000000 },
+  { name: "__stripe_mid", value: "stripe-noise", domain: ".luma.com" },
+  { name: "luma.did", value: "device-1", domain: ".luma.com" },
+]);
+
+test("parseCookies keeps only luma.* cookies and reads the user id off the session key", () => {
+  const parsed = parseCookies(LUMA_EXPORT);
+  const names = JSON.parse(parsed.cookiesJson).cookies.map((c) => c.name).sort();
+  assert.deepEqual(names, ["luma.auth-session-key", "luma.did"]);
+  assert.equal(parsed.lumaUserId, "usr-abc123");
+});
+
+test("parseCookies filters the header-string form too; a junk-only paste gets the human message", () => {
+  const parsed = parseCookies("__cf_bm=noise; luma.auth-session-key=usr-x.y");
+  assert.deepEqual(JSON.parse(parsed.cookiesJson).cookies.map((c) => c.name), ["luma.auth-session-key"]);
+  assert.throws(() => parseCookies('[{"name":"__cf_bm","value":"noise"}]'), /Missing luma\.auth-session-key/);
+});
+
+const setCookieRes = (...lines) => {
+  const h = new Headers();
+  for (const l of lines) h.append("set-cookie", l);
+  return { headers: h };
+};
+
+test("cookieJar strips stored junk on load and marks itself dirty so the row heals on the next sync", () => {
+  const jar = cookieJar(JSON.stringify({ cookies: [
+    { name: "__cf_bm", value: "stale" },
+    { name: "luma.auth-session-key", value: "usr-x.token0" },
+  ] }));
+  assert.equal(jar.header(), "luma.auth-session-key=usr-x.token0");
+  assert.equal(jar.dirty, true);
+  const healed = cookieJar(jar.json());
+  assert.equal(healed.dirty, false, "a healed jar must not rewrite itself every sync");
+});
+
+test("cookieJar absorbs a luma.* rotation, ignores edge noise, and turns Max-Age into an absolute expiry", () => {
+  const jar = cookieJar(JSON.stringify({ cookies: [{ name: "luma.auth-session-key", value: "usr-x.token0" }] }));
+  assert.equal(jar.dirty, false);
+  jar.absorb(setCookieRes(
+    "__cf_bm=fresh-noise; Path=/; Expires=Thu, 30 Jul 2026 21:41:05 GMT; HttpOnly; Secure",
+    "luma.auth-session-key=usr-x.token1; Max-Age=31536000; Path=/; HttpOnly; Secure",
+  ));
+  assert.equal(jar.dirty, true);
+  assert.equal(jar.header(), "luma.auth-session-key=usr-x.token1", "the NEXT request must send what Luma just issued");
+  const stored = JSON.parse(jar.json()).cookies;
+  assert.equal(stored.length, 1, "__cf_bm from the response must not enter the jar");
+  assert.ok(stored[0].expires > Date.now() / 1000, "Max-Age lands as absolute epoch seconds");
+});
+
+test("cookieJar treats a same-value re-issue as clean and an explicit deletion as removal", () => {
+  const jar = cookieJar(JSON.stringify({ cookies: [
+    { name: "luma.auth-session-key", value: "usr-x.token0" },
+    { name: "luma.did", value: "device-1" },
+  ] }));
+  jar.absorb(setCookieRes("luma.auth-session-key=usr-x.token0; Path=/"));
+  assert.equal(jar.dirty, false, "a same-value re-issue is not a rotation");
+  jar.absorb(setCookieRes("luma.did=; Max-Age=0; Path=/"));
+  assert.equal(jar.dirty, true);
+  assert.equal(jar.header(), "luma.auth-session-key=usr-x.token0");
+});
+
+test("cookieJar learns a brand-new luma.* cookie from a response", () => {
+  const jar = cookieJar(JSON.stringify({ cookies: [{ name: "luma.auth-session-key", value: "usr-x.t" }] }));
+  jar.absorb(setCookieRes("luma.polyjuice.sign-in-state=abc; Path=/; Secure"));
+  assert.equal(jar.dirty, true);
+  assert.match(jar.header(), /luma\.polyjuice\.sign-in-state=abc/);
+});
+
 // ── the bundled photo pool ──────────────────────────────────────────
 // The pool is BUILD DATA: photos.js imports photo-index.json + hashes.json and
 // derives the render-ready rows at module scope. These tests run the real
@@ -1365,6 +1546,27 @@ test("the probe writes one positionally-stable datapoint and never throws", asyn
   assert.deepEqual(dp.indexes, ["home"]);
 });
 
+test("cron dispatch survives Cloudflare's expression normalization", () => {
+  // The dispatcher used to exact-match event.cron against the strings in
+  // wrangler.jsonc, but Cloudflare normalizes expressions between declaration
+  // and delivery (day-of-week tokens especially), and the census schedule is
+  // the only one carrying a day-of-week token: three straight Monday sweeps
+  // fell into the else-branch and ran the /around crawl with nothing logged.
+  // The rule now matches minute+hour signatures, which normalization leaves
+  // alone. Both spellings of Monday must land on the census.
+  assert.equal(cronJob("17 8 * * 1"), "census");
+  assert.equal(cronJob("17 8 * * MON"), "census");
+  assert.equal(cronJob("7,37 * * * *"), "home_probe");
+  assert.equal(cronJob("41 5 * * *"), "webmention_send");
+  assert.equal(cronJob("23 */6 * * *"), "serendipity");
+  assert.equal(cronJob("*/30 * * * *"), "around");
+  // Unknown expressions surface as null (a traced cron.unmatched event), never
+  // as somebody else's job — that silent fallback is the bug class this fixes.
+  assert.equal(cronJob("0 0 * * *"), null);
+  assert.equal(cronJob(""), null);
+  assert.equal(cronJob(null), null);
+});
+
 // The SSRF host floor is shared by /lens, webmention verification, and
 // serendipity's cover proxy. It used to be two byte-identical copies
 // (lensHostBlocked + coverHostBlocked); this pins the set so the one that is
@@ -1423,4 +1625,109 @@ test("renderBotPage takes no arguments and is deterministic", async () => {
   const b = await renderBotPage().text();
   assert.equal(a, b);
   assert.ok(a.includes("AadharshBot"), "must name the crawler the page exists to explain");
+});
+
+// ── the speculation ledger ────────────────────────────────────────────────────
+// Both halves are best-effort counters wrapped around a live response, so the
+// contract that matters most is the negative one: they must never throw, and
+// they must never count something that isn't a speculation.
+
+function speculationEnv() {
+  const points = [];
+  return { env: { SPECULATION: { writeDataPoint: (p) => points.push(p) } }, points };
+}
+
+test("the speculation denominator counts real speculations and nothing else", async () => {
+  const { countSpeculativeLoad } = await import("./holding/_worker.js/speculation.js");
+  const ok = new Response("", { status: 200 });
+
+  const cases = [
+    ["prefetch", "prefetch", 1],
+    ["prefetch;prerender", "prerender", 1],   // the stronger claim wins
+    ["prerender", "prerender", 1],
+    ["", null, 0],                            // a plain navigation is not a speculation
+    ["fetch", null, 0],                       // Sec-Purpose exists but isn't speculative
+  ];
+  for (const [purpose, kind, expected] of cases) {
+    const { env, points } = speculationEnv();
+    const headers = purpose ? { "sec-purpose": purpose } : {};
+    countSpeculativeLoad(env, new Request("https://aadhar.sh/garage", { headers }), ok, "/garage");
+    assert.equal(points.length, expected, `sec-purpose: "${purpose}" should write ${expected}`);
+    if (expected) {
+      assert.equal(points[0].blobs[0], kind);
+      assert.equal(points[0].blobs[1], "/garage");
+      assert.deepEqual(points[0].indexes, [kind], "one index, so precision is a GROUP BY not a join");
+    }
+  }
+
+  // a speculation that errored is not a speculation worth counting
+  const { env, points } = speculationEnv();
+  countSpeculativeLoad(env, new Request("https://aadhar.sh/nope", { headers: { "sec-purpose": "prefetch" } }),
+    new Response("", { status: 404 }), "/nope");
+  assert.equal(points.length, 0, "a 4xx speculation must not enter the denominator");
+
+  // no binding, and a binding that throws, must both be survivable
+  assert.doesNotThrow(() => countSpeculativeLoad({}, new Request("https://aadhar.sh/", {
+    headers: { "sec-purpose": "prefetch" } }), ok, "/"));
+  assert.doesNotThrow(() => countSpeculativeLoad(
+    { SPECULATION: { writeDataPoint() { throw new Error("AE down"); } } },
+    new Request("https://aadhar.sh/", { headers: { "sec-purpose": "prefetch" } }), ok, "/"));
+});
+
+test("the activation beacon answers 204 and records which page paid off", async () => {
+  const { handlePrefetchActivation, prefetchActivationHeader } =
+    await import("./holding/_worker.js/speculation.js");
+
+  // the header the browser is handed must round-trip a path through the query
+  const value = prefetchActivationHeader("/garage/horizon");
+  assert.equal(value, "/ledger/prefetch?p=%2Fgarage%2Fhorizon");
+  assert.equal(new URL(value, "https://aadhar.sh").searchParams.get("p"), "/garage/horizon");
+
+  // the browser sends HEAD; the response is an acknowledgement, never a document
+  const { env, points } = speculationEnv();
+  const res = handlePrefetchActivation(
+    new Request("https://aadhar.sh" + value, { method: "HEAD" }), env);
+  assert.equal(res.status, 204);
+  assert.equal(res.headers.get("cache-control"), "no-store", "a cached beacon counts once, forever");
+  assert.equal(await res.text(), "", "204 means no body");
+  assert.equal(points.length, 1);
+  assert.equal(points[0].blobs[0], "activated");
+  assert.equal(points[0].blobs[1], "/garage/horizon");
+
+  // anything that isn't a read is refused, and says so properly
+  const bad = handlePrefetchActivation(
+    new Request("https://aadhar.sh/ledger/prefetch", { method: "POST" }), env);
+  assert.equal(bad.status, 405);
+  assert.equal(bad.headers.get("allow"), "GET, HEAD");
+
+  // a beacon with no binding still answers; telemetry never gates the reply
+  assert.equal(handlePrefetchActivation(
+    new Request("https://aadhar.sh/ledger/prefetch", { method: "HEAD" }), {}).status, 204);
+});
+
+test("the activation header lands on navigable HTML only", async () => {
+  const { withSecurityHeaders } = await import("./holding/_worker.js/lib/security.js");
+  const html = () => new Response("<p>hi", { headers: { "content-type": "text/html; charset=utf-8" } });
+  const HDR = "on-prefetch-activation";
+
+  assert.equal(withSecurityHeaders(html(), "/garage/horizon").headers.get(HDR),
+    "/ledger/prefetch?p=%2Fgarage%2Fhorizon");
+
+  // no pathname means no navigable document (the /lens self-fetch), so no beacon
+  assert.equal(withSecurityHeaders(html()).headers.get(HDR), null);
+
+  // a JSON endpoint is not something a browser navigates to and prerenders
+  const json = new Response("{}", { headers: { "content-type": "application/json" } });
+  assert.equal(withSecurityHeaders(json, "/ledger.json").headers.get(HDR), null);
+
+  // redirects return untouched, so they can't carry it either
+  const redirect = new Response(null, { status: 307, headers: { location: "/garage" } });
+  assert.equal(withSecurityHeaders(redirect, "/garage/").headers.get(HDR), null);
+
+  // gotcha 13: rebuilding a response must carry encodeBody, and adding this
+  // header must not be the thing that quietly reintroduces double compression.
+  const encoded = new Response("body", {
+    headers: { "content-type": "text/html", "content-encoding": "br" },
+  });
+  assert.equal(withSecurityHeaders(encoded, "/").headers.get("content-encoding"), "br");
 });

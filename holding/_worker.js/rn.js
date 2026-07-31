@@ -76,6 +76,224 @@ export const RN_TRACKS_TTL  = 3600;
 export const ARTIST_KV_TTL  = 30 * 86400;
 
       // 30d: artist profile (rarely changes)
+
+// Spotify serves the same art under several interchangeable CDN aliases, and
+// this file asks for art in two independent places: the per-track embed (tier 2)
+// and the per-artist embed (tier 3). Nothing makes those two scrapes agree on a
+// hostname, so one album cover can come back as image-cdn-fa under one track and
+// image-cdn-ak under another. Browsers cache by origin, so identical bytes then
+// download twice, over two TLS handshakes to two origins.
+//
+// Measured on a cold incognito load, 2026-07-30: ab67616d…3ba2c arrived from
+// both hosts at 50,045 and 50,043 bytes, decoding to an identical 49,727. That
+// is 48.9 KB and a whole extra connection spent on bytes already in cache, out
+// of 849.9 KB of album art on that page.
+//
+// i.scdn.co is Spotify's canonical image host and is ALREADY in the CSP, so
+// this narrows what the page talks to rather than widening it. Verified the same
+// day that all three hosts return byte-identical objects: sha256 matched across
+// three different image hashes, i.scdn.co included.
+//
+// Applied where the URL is EMITTED rather than only where it is scraped. Artist
+// records live in KV for ARTIST_KV_TTL (30 days) and the tracks payload for
+// RN_TRACKS_TTL, so normalizing at the scrape alone would leave a month-long
+// tail of already-cached aliases. The emit path is the one choke point every
+// source flows through, cache included.
+//
+// Deliberately narrow: only a /image/ path on a recognized alias is rewritten.
+// Anything else (mosaic.scdn.co, a shape Spotify has not shipped yet, a value
+// that will not even parse) passes through exactly as found, because a wrong
+// rewrite here is a broken image and the fallback is a URL that already works.
+const SPOTIFY_ART_ALIAS = /^image-cdn-[a-z0-9]+\.spotifycdn\.com$/i;
+export function canonicalArtUrl(raw) {
+  if (!raw) return raw;
+  try {
+    const u = new URL(raw);
+    if (SPOTIFY_ART_ALIAS.test(u.hostname) && u.pathname.startsWith("/image/")) {
+      u.hostname = "i.scdn.co";
+      return u.toString();
+    }
+  } catch { /* not parseable as a URL: leave it alone rather than guess */ }
+  return raw;
+}
+
+// ── /rn/art/<hash>-<width>-<v> — album + artist art, re-hosted and resized ────
+//
+// WHY this exists. Measured on a cold incognito load, 2026-07-30: 849.9 KB of
+// Spotify art against 148.5 KB of first-party transfer, 18 unique covers at
+// ~47 KB each. The art is hover-gated, so a visitor who never touches the track
+// list pays none of it, but it was still the largest thing on the page by a wide
+// margin AND the last cross-origin asset class the site served. Both problems
+// have the same fix.
+//
+// Spotify's hash IS a content address, which is what makes this cheap to run.
+// A playlist change mints new hashes, which miss the cache and fetch on demand,
+// so the scrape gains NO new responsibility and there is no sync job. Nothing
+// ever needs purging either: an unreferenced hash is simply never requested
+// again and caches.default evicts it on its own. That is the same property that
+// let THUMB_VERSION retire once /i/<stem>.<hash8> shipped, and the reason this
+// needs none of the ARCHIVE_VERSION machinery /images/full does — those URLs get
+// overwritten in place, and a Spotify hash never is.
+//
+// ART_VERSION rides the PUBLIC path rather than a private cache key, because a
+// 1-year immutable response cannot be corrected any other way. Bump it to
+// re-tune width or quality; old URLs keep serving whatever they already cached,
+// which is why the handler does not validate the version beyond its shape.
+export const ART_VERSION = 1;
+
+// Two tiers for one 120px box: luna.css pins .xp-tooltip .cover.album to
+// 120x120, so 1x wants 120 and 2x wants 240, and srcset lets the browser take
+// only the one it needs. Billing is per UNIQUE transformation per calendar
+// month, so two tiers across ~20 covers is ~40 against the Images Free plan's
+// 5,000 — and the Free plan has no overage charge at all, it errors instead.
+const ART_WIDTHS = new Set([120, 240]);
+
+// AVIF primary with a JPEG universal fallback, chosen in the MARKUP by
+// <picture>, exactly like the photo grid. The tempting alternative was
+// format:auto with Vary: accept, and it was rejected: one URL would then answer
+// with different bytes per browser, which puts the whole design at the mercy of
+// how faithfully three cache layers honour Vary — including caches.default,
+// where that behaviour cannot be verified from `wrangler dev`. Getting it wrong
+// serves an AVIF to a client that cannot decode one, and the symptom would be a
+// broken image for a minority of visitors. Pinning the format per URL means one
+// URL names exactly one byte string, needs no Vary, and lets the BROWSER choose,
+// which is the arrangement the site already trusts everywhere else.
+// (Gotcha 7 still applies: <picture> catches "format unsupported", never a
+// decode failure. If broken-image reports appear, demote AVIF here.)
+const ART_EXT = { avif: "image/avif", jpg: "image/jpeg" };
+
+// 40 lowercase hex, which is every Spotify image id observed (16-char kind
+// prefix + 24-char digest). This regex is the ONLY thing standing between this
+// route and an open image proxy anyone could aim at any host, so it is an
+// allowlist of shape, not a sanitizer — nothing is stripped or repaired, a
+// non-match is a 404.
+const ART_HASH = /^[0-9a-f]{40}$/;
+const ART_PATH = /^\/rn\/art\/([0-9a-f]{40})-(\d{2,4})-(\d{1,4})\.(avif|jpg)$/;
+
+// Pull the content address out of any Spotify image URL we recognize. Returns
+// null for everything else (mosaic.scdn.co, a shape Spotify has not shipped
+// yet, a non-URL), and every caller treats null as "emit the original URL
+// untouched" — degrading to the cross-origin fetch that works today beats
+// serving a 404 through our own origin.
+export function spotifyArtHash(raw) {
+  if (!raw) return null;
+  try {
+    const u = new URL(canonicalArtUrl(raw));
+    if (u.hostname !== "i.scdn.co") return null;
+    const id = u.pathname.slice("/image/".length);
+    return u.pathname.startsWith("/image/") && ART_HASH.test(id) ? id : null;
+  } catch { return null; }
+}
+
+// What a hover surface needs to build one <picture>: an AVIF srcset carrying
+// both density tiers, and a single JPEG the <img> can always fall back to. Only
+// three transformations per cover, because the fallback is the rare path and
+// does not need its own 1x tier.
+//
+// Built server-side and handed over as attributes rather than derived in
+// tooltip.js, so the URL scheme and ART_VERSION live in exactly one file and a
+// re-tune never needs the client and the worker to ship together.
+export function artUrls(raw) {
+  const hash = spotifyArtHash(raw);
+  if (!hash) return null;
+  const at = (w, ext) => `/rn/art/${hash}-${w}-${ART_VERSION}.${ext}`;
+  return { src: at(240, "jpg"), srcset: `${at(120, "avif")} 120w, ${at(240, "avif")} 240w` };
+}
+
+// The hover attributes for one art URL, in the two shapes a row can carry.
+//
+// A recognized Spotify image becomes first-party `/rn/art/…` and gains a
+// `-imageset`. Anything else keeps the canonicalized ORIGINAL URL and no
+// imageset, which is also what a fragment cached before this shipped looks like
+// — tooltip.js treats a missing imageset as "plain <img>", so both shapes render
+// and the RN_TRACKS_TTL window after a deploy needs no coordination.
+function artAttrs(kind, rawUrl) {
+  if (!rawUrl) return "";
+  const art = artUrls(rawUrl);
+  if (!art) return ` data-${kind}-image="${escAttr(canonicalArtUrl(rawUrl))}"`;
+  return ` data-${kind}-image="${escAttr(art.src)}"` +
+         ` data-${kind}-imageset="${escAttr(art.srcset)}"`;
+}
+
+export async function handleRnArt(request, env, ctx) {
+  const url = new URL(request.url);
+  const m = ART_PATH.exec(url.pathname);
+  if (!m) return new Response("not found", { status: 404, headers: { "cache-control": "no-store" } });
+  const [, hash, widthRaw, , ext] = m;
+  const width = Number(widthRaw);
+  // An unknown width would otherwise be a free transformation anyone could mint
+  // by hand, 5,000 times, against an allowance that is meant to last the month.
+  if (!ART_WIDTHS.has(width)) {
+    return new Response("not found", { status: 404, headers: { "cache-control": "no-store" } });
+  }
+
+  // The public URL already carries hash + width + version, so it IS the cache
+  // key; none of the ?av= indirection photos.js needs applies to an address that
+  // names its own bytes.
+  const cache = caches.default;
+  const cacheable = request.method === "GET";
+  if (cacheable) {
+    const hit = await cache.match(request);
+    if (hit) {
+      const r = new Response(hit.body, hit);
+      r.headers.set("x-art-cache", "hit");
+      return r;
+    }
+  }
+
+  const upstream = `https://i.scdn.co/image/${hash}`;
+  // fit:scale-down never enlarges, so a source already smaller than the tier is
+  // passed through at its own size instead of being upscaled into a bigger file
+  // than the original. q82 mirrors the neighbourhood the photo pipeline settled
+  // on rather than Cloudflare's default 85, on art that is a 120px hover
+  // affordance rather than something anyone will pixel-peep.
+  let res = null;
+  try {
+    res = await fetch(upstream, {
+      cf: { image: { width, fit: "scale-down", format: ext === "jpg" ? "jpeg" : "avif", quality: 82 } },
+    });
+  } catch { res = null; }
+
+  // Every way the transform can fail lands here, and they are not exotic: the
+  // Images Free plan returns 9422 once 5,000 unique transformations are used up
+  // in a month, and whether cf.image needs a zone toggle at all is UNVERIFIED on
+  // this zone (the docs say any zone hosting a Worker, another page implies a
+  // toggle). Falling back to the untransformed original makes the worst case a
+  // bigger image rather than a broken tooltip, and makes the toggle question
+  // something to confirm from production rather than a launch blocker.
+  let transformed = true;
+  if (!res || !res.ok) {
+    transformed = false;
+    try { res = await fetch(upstream); } catch { res = null; }
+  }
+  if (!res || !res.ok) {
+    return new Response("upstream unavailable", { status: 502, headers: { "cache-control": "no-store" } });
+  }
+
+  const headers = new Headers();
+  // The URL declared a format, so trust it over an upstream content-type only
+  // when the transform actually ran. A fallback body is Spotify's original JPEG
+  // whatever the path claims, and labelling that as AVIF would break the one
+  // path that exists to keep things working.
+  headers.set("content-type", transformed ? ART_EXT[ext] : (res.headers.get("content-type") || "image/jpeg"));
+  // Only a TRANSFORMED response earns a year. An untransformed fallback is the
+  // symptom of a temporary condition (a monthly allowance, a zone toggle), and
+  // pinning it immutable would outlive the cause by eleven months.
+  headers.set("cache-control", transformed
+    ? "public, max-age=31536000, immutable"
+    : "public, max-age=300");
+  headers.set("x-content-type-options", "nosniff");
+  headers.set("x-art-transformed", transformed ? "1" : "0");
+  const out = new Response(res.body, { status: 200, headers });
+  if (cacheable && ctx && transformed) {
+    // store a clean clone, then mark THIS response a miss — same tee as
+    // photos.js, so the cached copy never carries the marker.
+    ctx.waitUntil(cache.put(request, out.clone()));
+    out.headers.set("x-art-cache", "miss");
+  }
+  return out;
+}
+
 function trackResponse(payload, status = 200, format = "json") {
   if (format === "html") {
     return new Response(renderTrackListHtml(payload), {
@@ -178,7 +396,7 @@ export function renderTrackListHtml(payload) {
     const dataAttrs =
       ` data-track-title="${escAttr(t.title)}"` +
       ` data-track-artists="${escAttr(artistsText)}"` +
-      (t.image_url   ? ` data-track-image="${escAttr(t.image_url)}"` : "") +
+      artAttrs("track", t.image_url) +
       (t.duration_ms ? ` data-track-duration="${dur}"`               : "") +
       (t.is_explicit ? ` data-track-explicit="1"`                    : "");
     return `<li${dataAttrs}>
@@ -195,7 +413,7 @@ function linkifyArtists(artists, fallbackText) {
   if (Array.isArray(artists) && artists.length) {
     return artists.map(a => {
       const href = a.spotify_url || `https://open.spotify.com/search/${encodeURIComponent(a.name)}/artists`;
-      const img = a.image_url ? ` data-artist-image="${escAttr(a.image_url)}"` : "";
+      const img = artAttrs("artist", a.image_url);
       return `<span class="np-artist-link" data-href="${escAttr(href)}" data-artist-name="${escAttr(a.name)}"${img} role="link" tabindex="0">${escHtml(a.name)}</span>`;
     }).join(", ");
   }
@@ -279,7 +497,10 @@ export async function scrapePlaylistTracks(playlistId, env, ctx) {
     const out = await Promise.all(baseTracks.map(async t => {
       try {
         const e = await scrapeSpotifyEmbed(`track/${t.id}`, env);
-        const image_url = e?.visualIdentity?.image?.[0]?.url || null;
+        // canonicalized here too, not just at emit: this value is what lands in
+        // the KV payload and what /rn/tracks hands back as JSON, so a consumer
+        // that never touches the HTML still gets one host per image.
+        const image_url = canonicalArtUrl(e?.visualIdentity?.image?.[0]?.url || null);
         const artists = Array.isArray(e?.artists)
           ? e.artists
               .filter(a => a && typeof a.uri === "string" && a.uri.startsWith("spotify:artist:"))
@@ -334,12 +555,17 @@ export async function scrapePlaylistTracks(playlistId, env, ctx) {
       try {
         const e = await scrapeSpotifyEmbed(`artist/${a.id}`, env);
         scraped++;
-        // pick the 320px variant: tooltip renders at 180×180, so 320 source
-        // gives a crisp retina-ready image without paying the 640px hero
-        // weight. fall through to whatever's first if no 320 variant exists.
+        // pick the 320px variant: the tooltip renders at 120×120 (luna.css pins
+        // .xp-tooltip .cover.album to exactly that), so a 2x display wants 240
+        // and 320 is the smallest Spotify tier that clears it without paying the
+        // 640px hero weight. The next tier DOWN is 160, which goes soft on
+        // retina, so there is no cheaper correct answer among Spotify's sizes.
+        // (This comment said 180×180 until 2026-07-30; the conclusion was right
+        // and the number was never checked against the stylesheet.)
+        // fall through to whatever's first if no 320 variant exists.
         const imgs = Array.isArray(e?.visualIdentity?.image) ? e.visualIdentity.image : [];
         const pick = imgs.find(i => i.maxWidth === 320) || imgs.find(i => i.maxWidth === 160) || imgs[0] || null;
-        a.image_url = pick?.url || null;
+        a.image_url = canonicalArtUrl(pick?.url || null);
         if (e?.name && !a.name) a.name = e.name;
         if (env?.RN_KV && ctx) {
           ctx.waitUntil(env.RN_KV.put(cacheKey, JSON.stringify({

@@ -19,27 +19,20 @@ export function start(initial) {
       if (!hoverCapable()) return;
 
 
-      // lazy DNS-prefetch for Spotify's image CDNs. these hosts only
-      // matter when the user hovers a track or artist row (to load the
-      // album cover or profile photo). shipping the hints in every page
-      // load is wasteful for visitors who never hover. inject on demand,
-      // exactly once per session.
-      let spotifyHintsInjected = false;
-      const injectSpotifyHints = () => {
-        if (spotifyHintsInjected) return;
-        spotifyHintsInjected = true;
-        const hosts = [
-          "https://image-cdn-ak.spotifycdn.com",
-          "https://image-cdn-fa.spotifycdn.com",
-          "https://i.scdn.co",
-        ];
-        for (const h of hosts) {
-          const link = document.createElement("link");
-          link.rel  = "dns-prefetch";
-          link.href = h;
-          document.head.appendChild(link);
-        }
-      };
+      // The lazy DNS-prefetch for Spotify's image CDNs is GONE, along with the
+      // reason it existed. rn.js now re-hosts recognized art at /rn/art/…, so a
+      // hover fetches from this origin, which the browser is already connected
+      // to — there is no third-party handshake left to warm.
+      //
+      // Two shapes still resolve to Spotify: an art URL with no parseable hash,
+      // and a fragment cached before this shipped (up to RN_TRACKS_TTL). Both
+      // pay one cold DNS lookup on hover, which is what the hint was saving, and
+      // neither is worth carrying a permanent hint plus its injection machinery
+      // for. Same call the homepage made when it dropped its eight preconnects:
+      // a hint for a host most visitors never reach is paid by everyone.
+      //
+      // If the fallback path ever becomes common rather than residual, the fix
+      // is to find out WHY hashes are not parsing, not to re-add this.
 
       const fmtBytes = (n) => {
         if (!n) return "";
@@ -250,16 +243,10 @@ export function start(initial) {
         el?.closest?.(".np-artist-link, .photos a, .np-list li[data-track-title], .car-link") || null;
 
       function buildContent(t) {
-        if (t.matches(".car-link"))   return buildCarContent(t);
-        if (t.matches(".np-artist-link")) {
-          injectSpotifyHints();
-          return buildArtistContent(t);
-        }
-        if (t.matches(".photos a"))   return buildPhotoContent(t);
-        if (t.matches(".np-list li")) {
-          injectSpotifyHints();
-          return buildTrackContent(t);
-        }
+        if (t.matches(".car-link"))       return buildCarContent(t);
+        if (t.matches(".np-artist-link")) return buildArtistContent(t);
+        if (t.matches(".photos a"))       return buildPhotoContent(t);
+        if (t.matches(".np-list li"))     return buildTrackContent(t);
         return "";
       }
 
@@ -359,6 +346,35 @@ export function start(initial) {
           `</div>`;
       }
 
+      // One cover, in the two shapes a row can carry.
+      //
+      // With an imageset, rn.js recognized the Spotify hash and re-hosted it at
+      // /rn/art/<hash>-<w>-<v>, so this builds a <picture>: AVIF at 120w+240w
+      // for the density the display actually has, JPEG as the universal <img>
+      // fallback. Same arrangement as the photo grid, and for the same reason —
+      // the BROWSER picks, so one URL never has to mean two different bodies.
+      //
+      // Without one, the src is Spotify's own URL. That is the honest fallback
+      // for an art URL we could not parse a hash out of, AND it is what every
+      // fragment cached before this shipped still looks like, so the two paths
+      // are the same code rather than a migration.
+      //
+      // No loading="lazy" on any hover surface. The attribute defers a fetch
+      // until the image nears the viewport, and this node is built at the
+      // moment it is shown, in the top layer, under the cursor — it is never
+      // far from the viewport, so lazy has nothing to defer and can only add a
+      // visibility check before the one fetch that was always going to happen.
+      // The same holds for the car popover, the Run preview, and serendipity's
+      // event covers: an image that exists only while visible is not lazy work.
+      const coverHtml = (src, srcset) => {
+        const img = `<img class="cover album" src="${esc(src)}" alt="" decoding="async" width="120" height="120">`;
+        return `<div class="album-pop">` +
+          (srcset
+            ? `<picture><source type="image/avif" srcset="${esc(srcset)}" sizes="120px">${img}</picture>`
+            : img) +
+          `</div>`;
+      };
+
       // artist tooltip: just the profile photo in an XP-frame border.
       // mirrors the album-popover treatment — the name is already in the
       // row, so the popover is purely visual. graceful: if image_url is
@@ -366,18 +382,7 @@ export function start(initial) {
       function buildArtistContent(span) {
         const image = span.dataset.artistImage || "";
         if (!image) return "";
-        // No loading="lazy" on any hover surface. The attribute defers a fetch
-        // until the image nears the viewport, and this node is built at the
-        // moment it is shown, in the top layer, under the cursor — it is never
-        // far from the viewport, so lazy has nothing to defer and can only add a
-        // visibility check before the one fetch that was always going to happen.
-        // The same holds for the car popover, the Run preview, and serendipity's
-        // event covers: an image that exists only while visible is not lazy work.
-        return (
-          `<div class="album-pop">` +
-            `<img class="cover album" src="${esc(image)}" alt="" decoding="async" width="120" height="120">` +
-          `</div>`
-        );
+        return coverHtml(image, span.dataset.artistImageset || "");
       }
 
       // track tooltip: the album art with an XP-frame border when we have
@@ -389,13 +394,7 @@ export function start(initial) {
       // showing nothing makes the row feel broken next to its siblings.
       function buildTrackContent(li) {
         const image = li.dataset.trackImage || "";
-        if (image) {
-          return (
-            `<div class="album-pop">` +
-              `<img class="cover album" src="${esc(image)}" alt="" decoding="async" width="120" height="120">` +
-            `</div>`
-          );
-        }
+        if (image) return coverHtml(image, li.dataset.trackImageset || "");
         // text fallback. title + artists + duration; flag explicit if it is.
         const title    = li.dataset.trackTitle    || "";
         const artists  = li.dataset.trackArtists  || "";

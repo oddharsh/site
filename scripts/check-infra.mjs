@@ -39,8 +39,56 @@
 //   node scripts/check-infra.mjs --offline    tree only
 //   node scripts/check-infra.mjs --strict     turn advisories into failures
 
-import { readFile, access } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { mkdtemp, readFile, rm, writeFile, access } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { promisify } from "node:util";
+
+const execFileP = promisify(execFile);
+
+// TLS 1.3 0-RTT probe. Node's own tls module cannot send early data, so this
+// shells out to openssl s_client — and macOS's system openssl is LibreSSL,
+// which has no -early_data, so the binary is discovered rather than assumed.
+// Two connections: a full handshake that saves the session ticket, then a
+// resumption that sends the HTTP request AS early data and reports whether the
+// edge accepted it. The first connection is held open ~2s on purpose: TLS 1.3
+// delivers NewSessionTicket AFTER the handshake, so a connect-and-hangup saves
+// no ticket and the test reads as a false "rejected" (cost one debugging round
+// to learn). One retry on rejection, because a ticket can transiently miss.
+async function probeEarlyData(host) {
+  let ossl = null;
+  for (const c of [process.env.OPENSSL_BIN, "/opt/homebrew/opt/openssl@3/bin/openssl",
+                   "/usr/local/opt/openssl@3/bin/openssl", "openssl"].filter(Boolean)) {
+    try {
+      const { stdout, stderr } = await execFileP(c, ["s_client", "-help"], { timeout: 5000 });
+      if (`${stdout}${stderr}`.includes("early_data")) { ossl = c; break; }
+    } catch (e) {
+      // s_client -help exits non-zero on some builds; the help text still tells us
+      if (`${e.stdout || ""}${e.stderr || ""}`.includes("early_data")) { ossl = c; break; }
+    }
+  }
+  if (!ossl) return { skip: "no openssl with -early_data on this machine (LibreSSL lacks it; set OPENSSL_BIN)" };
+
+  const dir = await mkdtemp(join(tmpdir(), "infra-0rtt-"));
+  try {
+    const sess = join(dir, "sess.pem");
+    const req = join(dir, "req.txt");
+    await writeFile(req, `GET /favicon.ico HTTP/1.1\r\nHost: ${host}\r\nConnection: close\r\n\r\n`);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await execFileP("sh", ["-c",
+        `{ cat "${req}"; sleep 2; } | "${ossl}" s_client -connect "${host}:443" -servername "${host}" -sess_out "${sess}" >/dev/null 2>&1`,
+      ], { timeout: 20000 }).catch(() => {});
+      const out = await execFileP("sh", ["-c",
+        `"${ossl}" s_client -connect "${host}:443" -servername "${host}" -sess_in "${sess}" -early_data "${req}" </dev/null 2>&1`,
+      ], { timeout: 20000 }).catch((e) => ({ stdout: `${e.stdout || ""}${e.stderr || ""}` }));
+      if (/early data was accepted/i.test(out.stdout || "")) return { accepted: true };
+    }
+    return { accepted: false };
+  } finally {
+    await rm(dir, { recursive: true, force: true }).catch(() => {});
+  }
+}
 
 const ROOT = new URL("../", import.meta.url).pathname;
 const OFFLINE = process.argv.includes("--offline");
@@ -398,6 +446,18 @@ async function checkEdge(infra) {
         got !== expect
           ? drift(`${check.id}: offered "${offer}" and the edge chose ${got || "none"}, declared ${expect} — ${check.why.split(".")[0]}`)
           : pass(`edge ${check.id}: chose ${expect} from "${offer}"`);
+        continue;
+      }
+
+      // TLS-layer assertion: no HTTP response can carry it, so it gets its own
+      // probe (openssl, see probeEarlyData) instead of a fetchEdge. A machine
+      // that cannot run the probe warns rather than drifts — an unmeasurable
+      // check must not report the zone broken.
+      if (want.earlyData) {
+        const r = await probeEarlyData(new URL(url).hostname);
+        if (r.skip) warn(`edge check ${check.id} skipped: ${r.skip}`);
+        else if (r.accepted) pass(`edge ${check.id}: TLS early data accepted (0-RTT on)`);
+        else drift(`${check.id}: TLS early data rejected on a fresh resumption — ${check.why.split(".")[0]}`);
         continue;
       }
 

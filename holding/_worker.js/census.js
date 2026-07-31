@@ -80,11 +80,22 @@ function censusMetrics(site, r, ts, ymd) {
 // Now the sweep records roster size against rows written, and each failed host
 // names itself. The lensInspect spans nest underneath, so a host that failed
 // because its own fetch timed out shows exactly that.
-export async function cronCensus(env) {
-  return span("census.sweep", (s) => cronCensusInner(env, s), { "census.roster": CENSUS_ROSTER.length });
+// opts.oneBatch: process a single 4-host slice and advance a KV cursor, for
+// callers whose invocation cannot outlive the runtime's post-response grace.
+// The Monday cron is now AWAITED by scheduled() and sweeps the whole roster in
+// one pass; the owner's ?refresh= rides a fetch event's waitUntil, which gets
+// roughly thirty seconds — a full sweep is four batches at up to ~15s each, and
+// three straight weeks of refresh-seeded snapshots wrote exactly batch one. A
+// chunked pass finishes safely inside the grace, and four passes cover the
+// roster. Same-day passes upsert into one (host, ymd) snapshot, so a click-
+// through refresh still yields a single census day.
+const CENSUS_CURSOR_KEY = "lens:census:cursor";
+
+export async function cronCensus(env, opts = {}) {
+  return span("census.sweep", (s) => cronCensusInner(env, s, opts), { "census.roster": CENSUS_ROSTER.length });
 }
 
-async function cronCensusInner(env, sSweep) {
+async function cronCensusInner(env, sSweep, opts = {}) {
   if (!env.RESTORE_DB) {
     sSweep.setAttribute("census.outcome", "no_binding");
     return { ok: false, error: "no RESTORE_DB binding" };
@@ -94,7 +105,13 @@ async function cronCensusInner(env, sSweep) {
   const ymd = new Date(ts).toISOString().slice(0, 10);
   let written = 0, failed = 0;
   const batchSize = 4;
-  for (let i = 0; i < CENSUS_ROSTER.length; i += batchSize) {
+  let start = 0;
+  if (opts.oneBatch && env.RN_KV) {
+    try { start = parseInt((await env.RN_KV.get(CENSUS_CURSOR_KEY)) || "0", 10) || 0; } catch (_e) {}
+    if (start >= CENSUS_ROSTER.length) start = 0;
+  }
+  const stop = opts.oneBatch ? Math.min(start + batchSize, CENSUS_ROSTER.length) : CENSUS_ROSTER.length;
+  for (let i = start; i < stop; i += batchSize) {
     const batch = CENSUS_ROSTER.slice(i, i + batchSize);
     await Promise.all(batch.map(async (site) => span("census.host", async (s) => {
       s.setAttribute("census.host", site.label || site.url);
@@ -117,10 +134,17 @@ async function cronCensusInner(env, sSweep) {
       }
     })));
   }
+  let cursorNext = null;
+  if (opts.oneBatch && env.RN_KV) {
+    cursorNext = stop >= CENSUS_ROSTER.length ? 0 : stop;
+    try { await env.RN_KV.put(CENSUS_CURSOR_KEY, String(cursorNext)); } catch (_e) {}
+    sSweep.setAttribute("census.cursor_next", cursorNext);
+  }
+  sSweep.setAttribute("census.range", start + "-" + stop);
   sSweep.setAttribute("census.written", written);
   sSweep.setAttribute("census.failed", failed);
   sSweep.setAttribute("census.ymd", ymd);
-  return { ok: true, written, ymd };
+  return { ok: true, written, ymd, range: [start, stop], cursorNext };
 }
 
 // Read every stored row, grouped per host into a time series with its first and
@@ -140,8 +164,7 @@ export async function fetchCensusGrouped(env) {
     days.add(row.ymd);
     if (!firstYmd || row.ymd < firstYmd) firstYmd = row.ymd;
     if (!lastYmd || row.ymd > lastYmd) lastYmd = row.ymd;
-    if (!byHost.has(row.host)) byHost.set(row.host, []);
-    byHost.get(row.host).push(row);
+    byHost.getOrInsertComputed(row.host, () => []).push(row);
   }
   const order = CENSUS_ROSTER.map((s) => s.label);
   const hosts = [...byHost.entries()].map(([host, series]) => {
@@ -239,8 +262,12 @@ export async function handleCensus(request, env, ctx) {
   let banner = "";
   if (refresh) {
     if (env.CENSUS_KEY && timingSafeEqual(refresh, env.CENSUS_KEY)) {
-      ctx.waitUntil(cronCensus(env));
-      banner = '<div class="cx-banner ok">Census refresh triggered. It sweeps the roster server-side; reload in a minute to see the new snapshot.</div>';
+      // oneBatch: a fetch invocation's waitUntil gets ~30s past the response,
+      // which a 16-host sweep blows through (that ceiling is why refresh-seeded
+      // snapshots only ever held the first four hosts). Each pass sweeps one
+      // batch and advances a cursor; the Monday cron sweeps everything at once.
+      ctx.waitUntil(cronCensus(env, { oneBatch: true }));
+      banner = '<div class="cx-banner ok">Census refresh triggered: one pass of 4 roster hosts (a browser-triggered pass stays under the runtime\'s post-response budget; the Monday cron sweeps all 16 at once). Reload in a minute, then trigger again to continue where the cursor left off.</div>';
     } else {
       banner = '<div class="cx-banner err">That refresh key did not match. The census only re-scans on the weekly cron or with the owner key.</div>';
     }

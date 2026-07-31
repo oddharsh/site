@@ -796,6 +796,18 @@ node holding/scripts/inject-og-meta.mjs   # add the meta to any page missing it 
 - The LWE + Garage generators emit the same `og:image` block, so a future
   pipeline-authored page gets a card automatically (its PNG still needs one
   `npm run og-cards` run before the URL resolves).
+- Worker-rendered routes (no static HTML for the generator to walk) live in
+  `WORKER_PAGES{}` beside `HERO{}`, with their meta emitted from the page's own
+  renderer instead of `inject-og-meta.mjs`. `/lens` is one: its card captures a
+  live scan of stripe.com, so prewarm the two Browser-Rendering caches first or
+  `networkidle` waits them out, and scope the run so the other 25 committed
+  PNGs don't get rewritten with fresh-but-equal pixels:
+
+  ```bash
+  curl -s "https://aadhar.sh/lens/shot?url=https%3A%2F%2Fstripe.com%2F" -o /dev/null
+  curl -s "https://aadhar.sh/lens/browser?url=https%3A%2F%2Fstripe.com%2F" -o /dev/null
+  OG_ONLY=lens npm run og-cards
+  ```
 
 ---
 
@@ -876,6 +888,13 @@ The queries worth knowing, because each one used to be unanswerable:
   `cal.fail_closed = true` (or `cal.source = "none"`). That is a 503 on `/book`.
 - **"did the webmention run finish"** — `webmention.send`, attribute
   `webmention.capped`.
+- **"is the serendipity pool still syncing"** — `cron.serendipity` (fires
+  00/06/12/18:23 UTC), then the run's summary log line: per-contributor
+  `{synced}` or `{error}`. A `Luma 401` there means the stored session finally
+  died and the fix is a cookie re-paste at `/serendipity/contribute`; the cron
+  plus the Set-Cookie capture in `serendipity.js` (`cookieJar`) exist to make
+  that rare, since every sync both keeps the session warm and persists any
+  rotated cookie Luma issues back to D1.
 
 **Do not chase a 0ms span.** `home.grid.render` and `lens.inspect.parse` read 0
 and always will: Workers spans advance their clock across I/O only, never during

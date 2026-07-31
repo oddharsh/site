@@ -34,8 +34,7 @@ export async function handleInbox(request, env, ctx) {
   const folders = new Map();
   for (const m of mentions) {
     const path = pathOf(m.target, origin);
-    if (!folders.has(path)) folders.set(path, []);
-    folders.get(path).push(m);
+    folders.getOrInsertComputed(path, () => []).push(m);
   }
 
   const folderRows = [...folders.entries()].map(([path, items]) =>

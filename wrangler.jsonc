@@ -84,10 +84,10 @@
       "/slots", "/book", "/approve", "/decline",
       "/llms-full.txt", "/ledger", "/ledger.json",
       // the Web Analytics beacon, both legs first-party (see _worker.js/rum.js)
-      "/ledger/rum.js", "/ledger/rum",
+      "/ledger/rum.js", "/ledger/rum", "/ledger/prefetch",
       "/writing", "/writing/*",
       "/webmention", "/webmention/*", "/inbox",
-      "/rn", "/rn/tracks", "/rn/tracks.html", "/rn/admin", "/rn/set",
+      "/rn", "/rn/tracks", "/rn/tracks.html", "/rn/admin", "/rn/set", "/rn/art/*",
       "/bot", "/around", "/around/json", "/around/changes.json",
       "/photos", "/photos/", "/photos/query.json", "/photos/grid.html", "/run",
       "/images", "/images/", "/images/full", "/images/full/*",
@@ -142,7 +142,13 @@
   // 7,37 * * * * — the homepage perf probe (perf-probe.js): render `/` in-process,
   // parse its own Server-Timing, write the spans to Analytics Engine. Offset
   // from the */30 around-crawl so the two never share a tick. 48 samples/day.
-  "triggers": { "crons": ["*/30 * * * *", "17 8 * * 1", "41 5 * * *", "7,37 * * * *"] },
+  // 23 */6 * * * — the serendipity Luma re-sync (serendipity.js cronSerendipity):
+  // events per enabled contributor, then the next guest lists, then a
+  // description backfill. Four times daily keeps the pool honest AND the
+  // stored Luma session warm (Luma sessions idle-expire in weeks, and before
+  // this tick nothing exercised the stored cookie between pastes); rotations
+  // Luma issues mid-run are persisted back to D1 by the cookie jar.
+  "triggers": { "crons": ["*/30 * * * *", "17 8 * * 1", "41 5 * * *", "7,37 * * * *", "23 */6 * * *"] },
   "kv_namespaces": [
     { "binding": "RN_KV", "id": "3cb8a107c58e47dc9244e75b33401f36" },
     { "binding": "BOOKINGS", "id": "37acb65118fe485583a90a94cb89365e" }
@@ -151,6 +157,9 @@
   // /ledger reads them back via the SQL API (needs ANALYTICS_READ_TOKEN).
   "analytics_engine_datasets": [
     { "binding": "BOT_LEDGER", "dataset": "aadhar_bot_ledger" },
+    // the speculation ledger: Sec-Purpose prefetch/prerender requests, plus the
+    // activation beacons that say which of them paid off (speculation.js).
+    { "binding": "SPECULATION", "dataset": "aadhar_speculation" },
     // the homepage perf probe's spans (perf-probe.js); read back with the same
     // SQL API + ANALYTICS_READ_TOKEN as the ledger. AE datasets materialize on
     // first write — no id, nothing for infra:apply to provision.

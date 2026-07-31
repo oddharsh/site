@@ -3,32 +3,57 @@
 import { cachedRender } from "./lib/cache.js";
 import { lunaPage } from "./lib/chrome.js";
 import { esc } from "./lib/http.js";
+import checkpoints from "./checkpoints.json" with { type: "json" };
 
 // ── /updates handler (Windows Update reskin) ────────────────────────
 export async function handleWindowsUpdate(request, env, ctx) {
   // Version-keyed edge cache (caches.default): the changelog changes only on
   // deploy, and a deploy mints a fresh cache key, so the rendered shell serves
   // for up to s-maxage=300 without re-querying D1 on every visit.
-  return cachedRender(request, ctx, () => renderWindowsUpdate(env), "/updates", env);
+  return cachedRender(request, ctx, () => readCheckpoints(env).then(renderWindowsUpdate), "/updates", env);
 }
 
-async function renderWindowsUpdate(env) {
+// The deploy log, read ONCE and handed to the three renderers that project it.
+//
+// D1 stays the single source of truth. This function is the only thing that talks to
+// it, which is what keeps /updates, /updates.json and /restore from drifting apart —
+// previously each ran its own SELECT with its own LIMIT and its own error handling.
+//
+// It also makes the three renderers PURE, so build.mjs can call them in Node against
+// the committed projection (holding/_worker.js/checkpoints.json, written by
+// bump-version.sh) and emit updates.html + restore.html at deploy time. Those two
+// pages are the only dynamic surfaces whose data changes ONLY at deploy — the
+// checkpoint row is inserted moments before it — so baking them costs no freshness
+// at all, unlike /reading or /around whose feeds move on their own.
+export async function readCheckpoints(env) {
+  // The BUNDLED projection, not a D1 read, and that is the point.
+  //
+  // /updates and /restore are precomputed from this file at build time. If this
+  // function went to D1 at runtime, /updates.json would answer from a different
+  // source than the two HTML pages render from, and the three could disagree the
+  // moment a checkpoint landed without a deploy. CLAUDE.md calls out that /updates
+  // and /restore reading one table "is what stops those two pages drifting apart";
+  // reading one committed file is the same guarantee, made stronger — all three
+  // surfaces now serve literally the same bytes rather than the same query.
+  //
+  // D1 remains the source of truth: bump-version.sh writes it and then derives this
+  // file from it, and `npm run checkpoints:check` fails on any drift between them.
+  // env is kept in the signature because the handlers pass it and a future caller
+  // may want the live table; nothing here needs it today.
+  return { points: checkpoints, state: checkpoints.length ? "ok" : "empty" };
+}
+
+export async function renderWindowsUpdate(cp) {
   // Single source of truth: the same D1 `checkpoints` table that backs /restore.
   // One row per logged deploy (scripts/bump-version.sh, which now derives the
   // next vnum from this table; the retired service worker used to carry it as
   // CACHE_VERSION). The newest row is the running build and the recent rows ARE
   // the changelog, so /updates and /restore cannot drift apart. Degrades
   // gracefully when RESTORE_DB is unbound, mirroring /restore.
-  let build = "aadhar.sh", log = [], state = "ok";
-  try {
-    if (env && env.RESTORE_DB) {
-      const r = await env.RESTORE_DB
-        .prepare("SELECT version, slug, title FROM checkpoints ORDER BY vnum DESC LIMIT 18").all();
-      const pts = (r && r.results) || [];
-      if (pts.length) { build = pts[0].version; log = pts.map(p => [p.slug, p.title]); }
-      else { state = "empty"; }
-    } else { state = "unbound"; }
-  } catch (e) { state = "error"; }
+  const state = cp.state;
+  const pts = cp.points.slice(-18).reverse();          // newest first, same as the old DESC LIMIT 18
+  let build = "aadhar.sh", log = [];
+  if (pts.length) { build = pts[0].version; log = pts.map((p) => [p.slug, p.title]); }
   const rows = log.length
     ? log.map(([tag, desc]) =>
         `<li><span class="wu-tag">${esc(tag)}</span><span class="wu-desc">${esc(desc)}</span></li>`).join("\n      ")
@@ -83,19 +108,13 @@ h1{margin:0 0 4px}
 // brief JSON for the Windows Update tray balloon: running build + recent changelog,
 // read from the same D1 checkpoints log as /updates and /restore.
 export async function handleUpdatesJson(request, env, ctx) {
-  return cachedRender(request, ctx, () => renderUpdatesJson(env), "/updates.json", env);
+  return cachedRender(request, ctx, () => readCheckpoints(env).then(renderUpdatesJson), "/updates.json", env);
 }
 
-async function renderUpdatesJson(env) {
+export async function renderUpdatesJson(cp) {
+  const pts = cp.points.slice(-8).reverse();           // newest first, same as the old DESC LIMIT 8
   let build = "aadhar.sh", items = [];
-  try {
-    if (env && env.RESTORE_DB) {
-      const r = await env.RESTORE_DB
-        .prepare("SELECT version, slug, title FROM checkpoints ORDER BY vnum DESC LIMIT 8").all();
-      const pts = (r && r.results) || [];
-      if (pts.length) { build = pts[0].version; items = pts.map(p => ({ slug: p.slug, title: p.title })); }
-    }
-  } catch (e) {}
+  if (pts.length) { build = pts[0].version; items = pts.map((p) => ({ slug: p.slug, title: p.title })); }
   return new Response(JSON.stringify({ build, items }), {
     headers: {
       "content-type":    "application/json; charset=utf-8",
@@ -114,19 +133,12 @@ async function renderUpdatesJson(env) {
 // (7-day window on the free plan), never exposed to a visitor. env.RESTORE_DB
 // is a dashboard binding; this page degrades gracefully when it is absent.
 export async function handleSystemRestore(request, env, ctx) {
-  return cachedRender(request, ctx, () => renderSystemRestore(env), "/restore", env);
+  return cachedRender(request, ctx, () => readCheckpoints(env).then(renderSystemRestore), "/restore", env);
 }
 
-async function renderSystemRestore(env) {
-  let points = [], state = "ok";
-  try {
-    if (env && env.RESTORE_DB) {
-      const r = await env.RESTORE_DB
-        .prepare("SELECT vnum, ymd, version, title FROM checkpoints ORDER BY vnum").all();
-      points = (r && r.results) || [];
-    } else { state = "unbound"; }
-  } catch (e) { state = "error"; }
-  if (state === "ok" && !points.length) state = "empty";
+export async function renderSystemRestore(cp) {
+  const points = cp.points;
+  const state = cp.state;
   // "You are here" tracks the newest checkpoint in D1, so it can't go stale on deploy
   // the way a hardcoded constant did. Backfill recent deploys into the log to keep it current.
   const newest = points.length ? points[points.length - 1] : null;
