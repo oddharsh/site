@@ -1305,6 +1305,46 @@ test("cached renders stream the first miss while tagging the background copy", a
   }
 });
 
+// RFC 9110 asks a HEAD to send the header fields its GET would send. serveStaticPage
+// bailed on the method before reaching the Markdown branch, so HEAD answered
+// text/html on pages whose GET answers text/markdown. Verified on production
+// 2026-07-31 (GET /garage/encoding -> text/markdown, HEAD -> text/html), which is
+// also a convincing false positive for the #195 cache bug because `curl -I` is the
+// reflex probe.
+test("HEAD advertises the same representation its GET would serve", async () => {
+  const env = {
+    ASSETS: {
+      async fetch(input) {
+        const path = new URL(typeof input === "string" ? input : input.url).pathname;
+        if (path === "/garage/encoding.md") return new Response("# Encoding\n\nbody text here");
+        if (path === "/garage/encoding") return new Response("<h1>Encoding</h1>", { headers: { "content-type": "text/html" } });
+        return new Response("not found", { status: 404 });
+      },
+    },
+  };
+  const md = { accept: "text/markdown" };
+  const get = await serveStaticPage(new Request("https://aadhar.sh/garage/encoding", { headers: md }), env);
+  const head = await serveStaticPage(new Request("https://aadhar.sh/garage/encoding", { method: "HEAD", headers: md }), env);
+
+  assert.equal(get.headers.get("content-type"), "text/markdown; charset=utf-8");
+  assert.equal(head.headers.get("content-type"), "text/markdown; charset=utf-8",
+    "HEAD must not advertise HTML for a URL whose GET negotiates Markdown");
+  assert.equal(head.status, 200);
+  assert.equal(await head.text(), "", "a HEAD carries no body");
+
+  // The whole header set, not just the content-type: a HEAD that agreed on the media
+  // type but disagreed on freshness would be the same class of lie.
+  for (const name of ["cache-control", "vary", "x-markdown-tokens", "x-content-type-options"]) {
+    assert.equal(head.headers.get(name), get.headers.get(name), `HEAD and GET must agree on ${name}`);
+  }
+  assert.equal(head.headers.get("x-markdown-tokens"), get.headers.get("x-markdown-tokens"));
+
+  // A HEAD that is NOT negotiating still takes the asset layer, exactly as before.
+  const plain = await serveStaticPage(new Request("https://aadhar.sh/garage/encoding", { method: "HEAD" }), env);
+  assert.equal(plain.status, 200);
+  assert.match(plain.headers.get("content-type"), /text\/html/);
+});
+
 test("static page negotiation prefers 304, then DCZ with the current validator", async () => {
   const digest = Buffer.alloc(32, 1);
   const tag = digest.toString("hex").slice(0, 16);
