@@ -319,7 +319,12 @@ HIT`, because Workers Cache keys the URL and the HTML response's Vary names only
 bails on `wantsMarkdown` for that reason, and the long argument for bailing over
 `Vary: accept` lives with it. What generalizes past markdown: a route that answers more
 than one representation at one URL cannot sit behind a URL-keyed cache without a bail,
-and if a route ever negotiates on some header other than Accept it needs its own. Note
+and if a route ever negotiates on some header other than Accept it needs its own.
+Expect this class of bug to read as INTERMITTENT while you are diagnosing it, because a
+route breaks only once its entry has filled: on 2026-07-31, `/bot` answered
+`text/markdown` on a BYPASS at 21:18 UTC and `text/html` on a HIT twenty-five minutes
+later, off the same worker build. Survey a cache-fronted route twice before concluding
+it is unaffected. Note
 also that `serveStaticPage` bails to the asset layer on `method !== "GET"`, so a HEAD
 never negotiates at all — `curl -I` will report HTML on a page whose GET returns
 Markdown, which reads exactly like this bug and is not it.
