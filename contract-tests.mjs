@@ -1832,6 +1832,64 @@ test("the homepage's Link header carries the shell preloads, or it gets no Early
   // "static page negotiation prefers 304, then DCZ with the current validator".
 });
 
+// Every `_headers` rule for a page has to be written against the TWIN, because that is
+// the asset serveStaticPage actually fetches: findBrotli reads `<base>.html.br` and
+// copies ITS cache-control and link onto the page response. So a rule spelled as the
+// request path (`/pixel-peeper`) matches nothing, and the page silently falls back to
+// the Workers-assets default `public, max-age=0, must-revalidate`.
+//
+// That failed quietly in production for as long as /pixel-peeper had been a page. Two
+// costs, and the second is the one nothing reports: no s-maxage means no shared cache
+// entry, and must-revalidate VETOES dictionary registration (canRegisterAsDictionary in
+// lib/assets.js), so the page drops out of the per-page dcz tier while still
+// advertising `vary: available-dictionary`. /garage/* and /lwe/* were always fine
+// because a glob covers the twin, the plain .html, and a section index's
+// `<base>/index.html.br` alike, which is exactly why one hand-written exact rule could
+// sit wrong next to them without ever looking wrong.
+test("_headers page rules match the twin the worker fetches, not the request path", async () => {
+  const { PAGE_CACHE_CONTROL } = await import("./holding/_worker.js/lib/const.js");
+  const { readdir } = await import("node:fs/promises");
+  const raw = await readFile(new URL("holding/_headers", import.meta.url), "utf8");
+
+  // `_headers` blocks: a line starting with `/`, then its indented header lines.
+  const rules = [...raw.matchAll(/^(\/\S*)\n((?:[ \t]+\S.*\n)+)/gm)].map(([, pattern, body]) => ({
+    pattern,
+    cacheControl: (body.match(/^[ \t]+Cache-Control:[ \t]*(.+?)\s*$/mi) || [])[1] || null,
+    // Matching rules ACCUMULATE and duplicate headers are comma-joined with no
+    // most-specific-wins, so `*` has to be modelled as a real glob, not a prefix test.
+    matches: (path) => new RegExp(`^${pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\\\*/g, ".*")}$`).test(path),
+  }));
+
+  // The families whose pages take their policy from this file. Pages routed with
+  // GENERATED_PAGE_HEADERS get theirs from the worker instead and are pinned above.
+  const families = ["garage", "lwe", "pixel-peeper"];
+  let checked = 0;
+  for (const family of families) {
+    for (const file of (await readdir(new URL(`holding/${family}`, import.meta.url))).sort()) {
+      if (!file.endsWith(".html")) continue;
+      const twin = `/${family}/${file}.br`;
+      const hit = rules.filter((rule) => rule.matches(twin) && rule.cacheControl);
+      assert.ok(hit.length > 0,
+        `${twin}: no _headers rule matches the twin, so this page ships the Workers-assets default`);
+      for (const rule of hit) {
+        assert.equal(rule.cacheControl, PAGE_CACHE_CONTROL,
+          `${rule.pattern} matches ${twin} but states a different policy than every other page`);
+      }
+      checked++;
+    }
+  }
+  // A collapsed loop would pass vacuously, which is the failure mode this whole file
+  // keeps re-learning (the markdown-twin contract test asserted nothing for a while).
+  assert.ok(checked >= 30, `expected to check 30+ page twins, checked ${checked}`);
+
+  // The other half of the same edit: a page rule must not widen into a sibling that
+  // sets its own policy, because the comma-join would prepend max-age=0 to it.
+  const tile = "/pixel-peeper/tiles/05c532a8be2a.jpg";
+  const tileRules = rules.filter((rule) => rule.matches(tile) && rule.cacheControl);
+  assert.deepEqual(tileRules.map((rule) => rule.cacheControl), ["public, max-age=31536000, immutable"],
+    "exactly one rule may set Cache-Control on a pixel-peeper tile, or its immutable year gets clamped");
+});
+
 test("the CSP falls back to 'unsafe-inline' only where the build cannot speak", async () => {
   const { canonicalPath, scriptHashesFor } = await import("./holding/_worker.js/lib/csp-hashes.js");
 
