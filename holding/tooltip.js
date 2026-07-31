@@ -19,18 +19,23 @@ export function start(initial) {
       if (!hoverCapable()) return;
 
 
-      // lazy DNS-prefetch for Spotify's image CDNs. these hosts only
-      // matter when the user hovers a track or artist row (to load the
-      // album cover or profile photo). shipping the hints in every page
+      // lazy DNS-prefetch for Spotify's image CDN. this host only
+      // matters when the user hovers a track or artist row (to load the
+      // album cover or profile photo). shipping the hint in every page
       // load is wasteful for visitors who never hover. inject on demand,
       // exactly once per session.
+      //
+      // ONE host now. rn.js canonicalizes every art URL to i.scdn.co before it
+      // reaches the markup (canonicalArtUrl), so the two image-cdn-* aliases
+      // this used to warm are hosts nothing requests anymore, and a prefetch for
+      // a host the page never speaks to is a DNS lookup bought for nobody. For
+      // up to RN_TRACKS_TTL after a deploy a cached fragment can still carry an
+      // alias; that costs it a cold lookup and breaks nothing.
       let spotifyHintsInjected = false;
       const injectSpotifyHints = () => {
         if (spotifyHintsInjected) return;
         spotifyHintsInjected = true;
         const hosts = [
-          "https://image-cdn-ak.spotifycdn.com",
-          "https://image-cdn-fa.spotifycdn.com",
           "https://i.scdn.co",
         ];
         for (const h of hosts) {
