@@ -8,6 +8,31 @@
      flight during parse; the applying link lower in head loads it non-blocking
      (media=print swap) and keeps the cascade slot. same href -> one request. -->
 <link rel="preload" as="style" href="/luna.css">
+<!-- the photo grid's fragment, discovered here instead of by the hydrator ~800
+     lines down. measured on a warm repeat visit (HAR, 2026-07-30, 390px): the
+     document answered 304 at 57ms, the shell assets came off disk at 66ms, and
+     /photos/grid.html did not START until 116ms because the only thing that
+     names it is a <script> the parser has to reach first. the twelve tiles then
+     wait on it, so they began at 279ms against a 327ms onLoad. a parser-visible
+     preload moves that discovery to ~10ms.
+
+     safe as a preload where the random PHOTO is not (shell-assets.js keeps that
+     off the Link header on purpose): the URL is identical for every visitor and
+     only the BODY is random, the fragment is `no-store` so nothing can serve a
+     stale one, and the hydrator's fetch is unconditional — every scripting
+     visitor spends this request already, so a preload can never be wasted. it
+     rides in the cached document, which is what makes it work on the 304 path
+     that motivated it.
+
+     `crossorigin` is load-bearing even same-origin. without it the preload is
+     mode "no-cors" and will NOT match the hydrator's fetch(), whose default is
+     "cors" — the two would not dedupe and the page would make the request
+     TWICE. verify in devtools that exactly one /photos/grid.html appears.
+
+     NOT done for /rn/tracks.html: that hydrator is guarded on data-ssr="0", so
+     a response the worker managed to SSR would pay for a fragment nobody
+     fetches. this one has no such guard. -->
+<link rel="preload" as="fetch" href="/photos/grid.html" crossorigin>
 <title>Aadharsh Pannirselvam</title>
 <meta name="description" content="Aadharsh Pannirselvam. I research and invest in interesting tech-oriented stuff and the people that make them.">
 <meta name="author" content="Aadharsh Pannirselvam">
@@ -1042,7 +1067,22 @@ footer .signature small { color: oklch(56.93% 0 0); }
   // failed read leaves the static placeholder where it is rather than showing a
   // number nobody counted.
   var t=function(){
-    fetch("/hit?tick=1",{keepalive:true}).catch(function(){});
+    // priority:"low" because this beacon kept losing the argument counter.js
+    // already had with itself. that handler returns its 204 without waiting on
+    // the DO precisely so the tick "stops holding a socket against the same
+    // pool the photo tiles are queued in" — but the HAR on 2026-07-30 still
+    // caught it at 127ms wall (58ms receive), fired at 116ms alongside
+    // /photos/grid.html and /rn/tracks.html, and classed High by fetch's
+    // default. the server side was fixed; the CLIENT was still spending a
+    // high-priority stream on a visit counter during the window that decides
+    // when photos start. this is the missing half of that change.
+    //
+    // NOT sendBeacon, which looks like the textbook answer here and would break
+    // the counter outright: with no body it POSTs, and index.js rejects every
+    // method that is not GET or HEAD, so the tick would never reach the route.
+    // keepalive stays for the unload case; unsupporting browsers ignore the
+    // priority hint and land exactly where they are today.
+    fetch("/hit?tick=1",{keepalive:true,priority:"low"}).catch(function(){});
     var fill=function(){
       fetch("/hit?n=1").then(function(r){return r.ok?r.json():null}).then(function(j){
         var el=document.querySelector(".counter");
@@ -1102,8 +1142,17 @@ footer .signature small { color: oklch(56.93% 0 0); }
       straight out of this config by the beacon (it is otherwise hardcoded to
       cloudflareinsights.com), verified in a live browser on both routes it posts by.
       Now that nothing here is cross-origin, the CSP needs no external entries at all.
+
+      `fetchpriority="low"` corrects the one thing deferred EXECUTION does not buy.
+      Module scripts still FETCH at High, and the HAR on 2026-07-30 shows what that
+      costs: this beacon was classed High while /a/nav.js — the script that builds
+      the entire desktop shell — was classed Low, so 31,612 B of analytics outranked
+      the UI on the way down. Deferred execution was never in question; the note
+      above about being "off the critical path" was true of the main thread and
+      wrong about the network. Lowering the hint changes when the bytes arrive and
+      nothing about when they run.
     -->
-    <script type="module" src="/ledger/rum.js"
+    <script type="module" src="/ledger/rum.js" fetchpriority="low"
             data-cf-beacon='{"token": "9e4894ff180741c78a7f493c1fb05e54", "send": {"to": "/ledger/rum"}}'></script>
 
     <!--
