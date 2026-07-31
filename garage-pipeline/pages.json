@@ -8,6 +8,15 @@
       "lastmod": "2026-07-27",
       "navLabel": "post-quantum",
       "navHint": "what a PQ signature costs in bytes and milliseconds"
+    },
+    {
+      "id": "octane",
+      "title": "Octane, priced against no framework",
+      "summary": "Nextane's 60.9% win over Next.js, re-measured on the live demo, then given the row every framework benchmark leaves out: a site that ships no framework at all.",
+      "status": "shipped",
+      "lastmod": "2026-07-31",
+      "navLabel": "octane",
+      "navHint": "what a framework's floor costs against no framework"
     }
   ]
 }
