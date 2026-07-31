@@ -1079,6 +1079,59 @@ window.__horizonCaps = (function () {
                 Array.isArray(PerformanceObserver.supportedEntryTypes) &&
                 PerformanceObserver.supportedEntryTypes.indexOf("long-animation-frame") !== -1);
       },
+
+      // ── 2026-07-30 sweep ──
+      "sanitizer": function () { return (typeof Element !== "undefined" && "setHTML" in Element.prototype); },
+      "media-pseudo": function () { return CSS.supports("selector(:playing)"); },
+      // Three separate methods, so the chip reports the weakest link rather
+      // than the best case: a browser with two of the three has not shipped
+      // "the trio", and a green chip there would be a lie of omission.
+      "tc39-trio": function () {
+        return (typeof Math.sumPrecise === "function" &&
+                typeof Map.prototype.getOrInsert === "function" &&
+                typeof Iterator !== "undefined" && typeof Iterator.concat === "function");
+      },
+      "crisp-edges": function () { return CSS.supports("image-rendering", "crisp-edges"); },
+      "skip-ink-all": function () { return CSS.supports("text-decoration-skip-ink", "all"); },
+      // focus() accepts any object without complaining, so the presence of the
+      // OPTION cannot be probed from the call's result. WebIDL converts the
+      // dictionary eagerly, reading every member it KNOWS about, so a getter
+      // that fires is proof the UA has focusVisible in its FocusOptions. An
+      // engine without the member never touches it. Works on a detached
+      // element because conversion happens before any focusability check.
+      "focus-visible-opt": function () {
+        var seen = false;
+        var el = document.createElement("button");
+        try { el.focus({ get focusVisible() { seen = true; return false; } }); } catch (e) { return false; }
+        return seen;
+      },
+      "margin-trim": function () { return CSS.supports("margin-trim", "block"); },
+      "supports-at-rule": function () { return CSS.supports("at-rule(@container)"); },
+      "window-drag": function () { return CSS.supports("window-drag", "move"); },
+      "paint-time": function () {
+        try {
+          var e = performance.getEntriesByType("paint")[0];
+          return !!(e && "paintTime" in e);
+        } catch (err) { return false; }
+      },
+      "content-type-rt": function () {
+        try {
+          var e = performance.getEntriesByType("resource")[0];
+          return !!(e && "contentType" in e);
+        } catch (err) { return false; }
+      },
+      // Origin-trial only, and the entry type is not advertised in
+      // supportedEntryTypes until the trial token is present, so this reads
+      // false for essentially every visitor. That is the honest answer.
+      "soft-nav": function () {
+        return (typeof PerformanceObserver !== "undefined" &&
+                Array.isArray(PerformanceObserver.supportedEntryTypes) &&
+                PerformanceObserver.supportedEntryTypes.indexOf("soft-navigation") !== -1);
+      },
+      // No synchronous probe: the four measurement entries here are a response
+      // header, a proposal, and two fields that only exist once a speculation
+      // has run. Honest-false, same convention as jpeg-xl above.
+      "spec-measure": function () { return (false); },
     };
   var state = {};
   Object.keys(checks).forEach(function (k) { state[k] = sup(checks[k]); });
@@ -1122,14 +1175,28 @@ window.__horizonCaps = (function () {
       so Safari answers &quot;will Safari ever do this&quot; instead of me inferring it.
     </p>
     <p class="note">
-      <strong>Last swept 2026-07-26</strong>, against Chrome&nbsp;149&ndash;152, Safari&nbsp;27
+      <strong>Last swept 2026-07-30</strong>, against Chrome&nbsp;149&ndash;153, Safari&nbsp;27
       beta (WWDC26), and Firefox&nbsp;152&ndash;153. A page like this rots in two directions
       and only one of them is obvious: features arrive, and features I already wrote up
-      quietly change status underneath me. This sweep moved four cards
+      quietly change status underneath me. The 07-26 sweep moved four cards
       (<code>InstallEvent.addRoutes()</code>, compression dictionaries,
       <code>appearance: base-select</code>, Temporal) and demoted one of them off
       &quot;shipped on the site&quot; entirely, which is the more interesting half. Dates
       here are when I checked, never when I guessed.
+    </p>
+    <p class="note">
+      The 07-30 pass found a <em>third</em> rot direction I hadn&apos;t accounted
+      for, and it is the worst of the three: features that finish everywhere
+      without ever showing up as news. Diffing this page against all 377 features
+      chromestatus tags <code>shipping_year:2026</code> turned up six that already
+      ship in two or three engines, which is this page&apos;s own bar for
+      graduating, sitting here uncovered. Reading a frontier from Chrome&apos;s
+      release notes structurally cannot see them. It also caught a wrong claim on
+      the <a href="#patching-card">document-patching card</a>, corrected in
+      place. Version numbers in the new batch come from MDN&apos;s
+      browser-compat-data v8.0.8 rather than chromestatus, whose Safari and
+      Firefox columns are filled in by the Chrome feature author and had drifted
+      on three of them.
     </p>
 
     <div class="cap-strip" id="caps" aria-label="feature support in your browser"></div>
@@ -2935,19 +3002,41 @@ myButton.onclick = async () =&gt; {
     </section>
 
     <!-- ───────────────────── Document patching ───────────────────── -->
-    <section class="demo">
+    <section class="demo" id="patching-card">
       <h2>
         <span>Document patching <span class="mono">/ declarative partial updates</span></span>
-        <span class="stat early">Chrome 148 flag</span>
+        <span class="stat early">Chrome 150&ndash;153 proposed &middot; flag</span>
       </h2>
       <p class="note">
         Out-of-order HTML streaming and in-place DOM patching as a browser primitive
         instead of a framework feature. A <code>&lt;template for&gt;</code> element plus
         <code>&lt;?marker&gt;</code> / <code>&lt;?start&gt;</code> / <code>&lt;?end&gt;</code>
-        processing instructions stream HTML into named targets with no script, and new
-        <code>setHTML()</code> / <code>appendHTML()</code> / <code>streamHTML()</code>
-        methods apply patches imperatively. Announced at I/O&nbsp;2026, testable in
-        Chrome&nbsp;148 behind <code>#enable-experimental-web-platform-features</code>.
+        processing instructions stream HTML into named targets with no script
+        (Chrome&nbsp;150, and the processing-instruction parsing underneath it has
+        positive positions from both Mozilla and WebKit). A separate explainer in the
+        same repo revamps imperative insertion: positional methods that take HTML
+        (<code>before</code> / <code>after</code> / <code>append</code> /
+        <code>prepend</code> / <code>replaceWith</code>, retiring
+        <code>insertAdjacentHTML</code>), streaming methods
+        <code>streamHTML()</code> / <code>streamAppendHTML()</code> that return a
+        <code>WritableStream</code>, and a <code>{ runScripts: true }</code> option
+        that finally gives <code>createContextualFragment</code>&apos;s behaviour a
+        documented name. Chrome&nbsp;153, behind
+        <code>#enable-experimental-web-platform-features</code>.
+      </p>
+      <p class="note">
+        <strong>Correction (2026-07-30):</strong> this card previously credited
+        <code>setHTML()</code> to this proposal, alongside an
+        <code>appendHTML()</code> that isn&apos;t a method in any of these explainers.
+        <code>setHTML()</code> belongs to the <a href="#sanitizer-card">Sanitizer API</a>, a
+        different WICG spec that has already shipped (Chrome&nbsp;146,
+        Firefox&nbsp;148) and has its own card below. The confusion is
+        understandable and worth keeping on the page: both specs write into an
+        element from a string, they deliberately share an options bag, and the
+        streaming work here extends the sanitizer&apos;s vocabulary rather than
+        replacing it. They ship on completely different timelines, though, so
+        treating them as one feature would have you waiting on a flag for
+        something that is already two engines deep.
       </p>
       <p class="replaces">
         On the site: the <code>_worker.js</code> HTMLRewriter injection of the
@@ -3975,6 +4064,632 @@ myButton.onclick = async () =&gt; {
     </script>
 
 
+
+    <style>
+      /* ── 2026-07-30 sweep ── */
+      .out { margin-top: 10px; font-family: var(--font-mono); font-size: 9pt; background: oklch(96% 0.01 250);
+        border: 1px solid oklch(80% 0.02 250); border-radius: 4px; padding: 10px 12px; color: oklch(25% 0 0);
+        white-space: pre-wrap; overflow-x: auto; }
+
+      .san-in { width: 100%; box-sizing: border-box; margin-bottom: 6px; font-family: var(--font-mono); font-size: 8.5pt; }
+      .san-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+      .san-out { font-family: var(--font-mono); font-size: 8.5pt; background: oklch(96% 0.01 250);
+        border: 1px solid oklch(80% 0.02 250); border-radius: 4px; padding: 8px 10px; margin: 0;
+        color: oklch(25% 0 0); white-space: pre-wrap; word-break: break-all; min-height: 3.4em; }
+
+      /* 8x8 source bitmap, scaled 12x. the point of the card is that the two
+         swatches differ ONLY in image-rendering, so everything else matches. */
+      .ce-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+      .ce-swatch { width: 96px; height: 96px; border: 1px solid oklch(75% 0.03 250); border-radius: 3px;
+        background-repeat: no-repeat; background-position: center; background-size: 96px 96px;
+        background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAPUlEQVR42mNggAIbG5v/NjY2/xnQAAtM8vAsLQYGBgYG2zQGFEWMyJLYABMDAcACY7y8dJw8ExixuZwkAACVHg/A1GSmMQAAAABJRU5ErkJggg=="); }
+      .ce-swatch.crisp { image-rendering: crisp-edges; }
+
+      .si-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+      .si-line { font-size: 13pt; text-decoration: underline; text-decoration-thickness: 2px;
+        text-underline-offset: 1px; margin: 0; color: oklch(28% 0 0); }
+      .si-line.si-all { text-decoration-skip-ink: all; }
+
+      .mt-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+      .mt-box { background: oklch(95% 0.02 255); border: 1px solid oklch(75% 0.03 250); border-radius: 4px; padding: 10px; }
+      .mt-box p { margin: 12px 0; font-size: 9.5pt; color: oklch(32% 0 0); background: oklch(88% 0.05 255); padding: 4px 8px; border-radius: 3px; }
+      .mt-box.trim { margin-trim: block; }
+
+      .sar-out p { margin: 10px 0 0; font-size: 9pt; color: oklch(48% 0 0); }
+    </style>
+
+    <!-- ─────────── 2026-07-30 sweep: the cross-engine batch this page had missed ─────────── -->
+    <section class="demo">
+      <h2><span>Sweep note: features that already cleared the bar</span></h2>
+      <p class="note">
+        The cards below came out of diffing this page against all 377 features
+        chromestatus tags <code>shipping_year:2026</code>, on 2026-07-30. The
+        uncomfortable half of the result is the first six: they already ship in
+        two or three engines, which is this page&apos;s own graduation rule, and
+        they were missing here anyway. A page that sorts the frontier by engine
+        count can still miss things that quietly finished, because nothing about
+        a feature landing everywhere generates the kind of news that gets a
+        feature written up. Versions below are from MDN&apos;s
+        browser-compat-data bundle v8.0.8 (2026-07-24), not from chromestatus,
+        because chromestatus&apos;s Safari and Firefox columns are filled in by
+        the Chrome feature author and drifted on three of these.
+      </p>
+    </section>
+
+    <!-- ───────────────────── Sanitizer API ───────────────────── -->
+    <section class="demo" id="sanitizer-card" data-cap="sanitizer">
+      <h2>
+        <span>Sanitizer API <span class="mono">Element.setHTML()</span></span>
+        <span class="stat cross">Chrome 146 &middot; FF 148 &middot; Safari positive</span>
+      </h2>
+      <p class="note">
+        A safe-by-default HTML parser built into the platform.
+        <code>el.setHTML(str)</code> parses untrusted markup and drops anything
+        that can execute, so scripts, event-handler attributes, and
+        <code>javascript:</code> URLs never reach the DOM. The unsafe twin
+        <code>setHTMLUnsafe()</code> has been around since Chrome&nbsp;124 and
+        does no filtering; the sanitizing one is the new part. Type a hostile
+        string and watch both paths:
+      </p>
+      <p>
+        <input class="xp-input san-in" id="san-in" type="text"
+               value="&lt;img src=x onerror=alert(1)&gt;&lt;b&gt;bold&lt;/b&gt;&lt;script&gt;bad()&lt;/script&gt;">
+        <button class="xp-button" id="san-go">Parse both ways</button>
+      </p>
+      <div class="san-grid">
+        <div><p class="tb-cap"><code>setHTMLUnsafe()</code></p><pre class="san-out" id="san-unsafe"></pre></div>
+        <div><p class="tb-cap"><code>setHTML()</code></p><pre class="san-out" id="san-safe"></pre></div>
+      </div>
+      <p class="replaces">
+        On the site: the honest answer is that this site has almost no
+        user-supplied HTML to sanitize, which is a design choice rather than
+        luck. The one place it would matter is <code>/lens</code>, which fetches
+        arbitrary URLs and renders what comes back; that path builds text nodes
+        and escapes on the way out rather than parsing hostile markup, so it
+        sidesteps the question instead of answering it. Where this genuinely
+        changes the calculus is DOMPurify: a ~20KB dependency whose whole job
+        the platform now does, which is the kind of subtraction this site
+        optimises for. Two engines, so by the rule at the top it has graduated.
+      </p>
+      <p class="unsupported">No <code>Element.setHTML</code> here, so the right-hand pane falls back to escaping the string.</p>
+    </section>
+
+    <!-- ───────────────────── media element pseudo-classes ───────────────────── -->
+    <section class="demo" data-cap="media-pseudo">
+      <h2>
+        <span>Media element pseudo-classes <span class="mono">:playing &middot; :paused &middot; :buffering</span></span>
+        <span class="stat cross">Safari 15.4 &middot; FF 150 &middot; Chrome 152</span>
+      </h2>
+      <p class="note">
+        <code>:playing</code>, <code>:paused</code>, <code>:seeking</code>,
+        <code>:buffering</code>, <code>:stalled</code>, <code>:muted</code>, and
+        <code>:volume-locked</code> match <code>&lt;audio&gt;</code> and
+        <code>&lt;video&gt;</code> by their actual state, so a custom transport
+        control can style itself from CSS instead of from a pile of
+        <code>timeupdate</code> and <code>waiting</code> listeners keeping a
+        class in sync. This is one of only two features in the whole 2026 set
+        that names <strong>Interop&nbsp;2026</strong> as a focus area, and it is
+        the older feature on this page by some margin: Safari has had it since
+        March&nbsp;2022.
+      </p>
+      <p class="replaces">
+        On the site: nothing here plays media, so this is a card about the sweep
+        rather than about a plan. It earns its place because it is the clearest
+        example of the failure mode the note above describes. It shipped in
+        WebKit four years ago, shipped in Gecko this year, is an Interop
+        priority, and still never crossed my desk, because features that arrive
+        quietly in the engine I do not develop against are exactly the ones a
+        Chrome-flag-driven reading list cannot surface.
+      </p>
+      <p class="unsupported">This browser doesn&apos;t parse <code>:playing</code>, so the selector never matches.</p>
+    </section>
+
+    <!-- ───────────────────── the TC39 trio ───────────────────── -->
+    <section class="demo" data-cap="tc39-trio">
+      <h2>
+        <span>Three TC39 methods that finished <span class="mono">sumPrecise &middot; getOrInsert &middot; Iterator.concat</span></span>
+        <span class="stat cross">Chrome &middot; Safari &middot; Firefox</span>
+      </h2>
+      <p class="note">
+        Not upcoming at all. All three shipped in all three engines while this
+        page wasn&apos;t looking. <code>Math.sumPrecise</code>
+        (Chrome&nbsp;147, Safari&nbsp;26.2, Firefox&nbsp;137) sums an iterable
+        without accumulating float error.
+        <code>Map.prototype.getOrInsert</code> and its
+        <code>getOrInsertComputed</code> sibling (Chrome&nbsp;145,
+        Safari&nbsp;26.2, Firefox&nbsp;144) collapse the
+        has/get/set dance into one call. <code>Iterator.concat</code>
+        (Chrome&nbsp;146, Safari&nbsp;26.4, Firefox&nbsp;147) chains iterators
+        lazily, without materialising arrays.
+      </p>
+      <p><button class="xp-button" id="tc39-go">Run all three</button></p>
+      <pre class="out" id="tc39-out">press the button</pre>
+      <p class="replaces">
+        On the site: <code>getOrInsert</code> is the one with real call sites.
+        The Spotify scrape builds an artist-id map with the
+        has/get/set pattern in <code>_worker.js</code>, and
+        <code>buildImagesManifest</code> does the same shape when grouping
+        stems. <code>Math.sumPrecise</code> is the sort of thing you reach for
+        once and remember forever: the photo pipeline sums per-tier byte counts,
+        and while naive summation is fine at 474 files, the precise version
+        costs nothing. Worth noting these are three engines deep, so they are
+        past this page&apos;s bar and into &quot;just use them.&quot;
+      </p>
+      <p class="unsupported">One or more of the three is missing here; the output says which.</p>
+    </section>
+
+    <!-- ───────────────────── image-rendering: crisp-edges ───────────────────── -->
+    <section class="demo" data-cap="crisp-edges">
+      <h2>
+        <span>image-rendering: crisp-edges</span>
+        <span class="stat cross">Safari 7 &middot; FF 65 &middot; Chrome 148</span>
+      </h2>
+      <p class="note">
+        Scale an image without smoothing it. The wrinkle is that Chromium
+        supported the <em>neighbouring</em> keyword
+        <code>pixelated</code> since Chrome&nbsp;41 and rejected
+        <code>crisp-edges</code> until 148, while WebKit and Gecko took
+        <code>crisp-edges</code> years earlier. Spec-wise the two differ
+        (<code>pixelated</code> asks for nearest-neighbour specifically,
+        <code>crisp-edges</code> asks only to preserve contrast and edges); in
+        every shipping implementation they do the same thing. Same 8&times;8
+        source bitmap, scaled 12&times;:
+      </p>
+      <div class="ce-grid">
+        <div><p class="tb-cap">default (smoothed)</p><div class="ce-swatch"></div></div>
+        <div><p class="tb-cap"><code>crisp-edges</code></p><div class="ce-swatch crisp"></div></div>
+      </div>
+      <p class="replaces">
+        On the site: this is the most on-brand feature in the whole sweep and
+        the page had no card for it. Every icon here is authored as inline SVG
+        precisely to dodge the scaling question, but the XP source material is
+        bitmap art, and the honest 2003 reproduction of a 16&times;16 toolbar
+        icon at 2&times; is a hard-edged upscale rather than a redrawn vector.
+        The reason to keep writing <code>pixelated</code> rather than switching
+        is Chrome&nbsp;41 versus Chrome&nbsp;148: the older keyword has the
+        wider floor, and the two are indistinguishable in practice.
+      </p>
+      <p class="unsupported">No <code>crisp-edges</code> support, so both swatches render smoothed.</p>
+    </section>
+
+    <!-- ───────────────────── text-decoration-skip-ink: all ───────────────────── -->
+    <section class="demo" data-cap="skip-ink-all">
+      <h2>
+        <span>text-decoration-skip-ink: all</span>
+        <span class="stat cross">Safari 15.4 &middot; FF 75 &middot; Chrome 148</span>
+      </h2>
+      <p class="note">
+        The default <code>auto</code> breaks an underline around descenders that
+        would collide with it. <code>all</code> makes that skipping
+        unconditional, which matters for scripts where the glyphs regularly dip
+        into the underline and the browser&apos;s heuristic under-skips. The
+        property itself is old news (Chrome&nbsp;64); the <code>all</code>
+        keyword is what Chrome&nbsp;148 added, and Safari and Firefox have had
+        it since 15.4 and 75.
+      </p>
+      <div class="si-grid">
+        <div><p class="tb-cap"><code>auto</code></p><p class="si-line">judgment paging quietly</p></div>
+        <div><p class="tb-cap"><code>all</code></p><p class="si-line si-all">judgment paging quietly</p></div>
+      </div>
+      <p class="tb-cap" style="margin-top:8px">
+        These two most likely look identical to you, and that is the honest
+        result rather than a broken demo: on Latin text at this size
+        <code>auto</code> already skips every descender that crosses the rule,
+        so <code>all</code> has nothing left to do. The keyword earns its keep
+        where the heuristic under-skips, which is scripts with deep or frequent
+        descenders rather than Verdana running English.
+      </p>
+      <p class="replaces">
+        On the site: underlines here are Verdana and Tahoma running Latin text,
+        where <code>auto</code> already does the right thing, so this is a
+        no-change. It is on the page because it is a clean example of the
+        pattern the sweep kept turning up: a property that shipped everywhere
+        years ago, with one keyword that Chromium only just caught up on, so the
+        feature reads as &quot;new&quot; from a Chrome-shaped vantage point and
+        as ancient from anywhere else.
+      </p>
+      <p class="unsupported">This browser doesn&apos;t accept the <code>all</code> keyword, so both lines use <code>auto</code>.</p>
+    </section>
+
+    <!-- ───────────────────── focus({ focusVisible }) ───────────────────── -->
+    <section class="demo" data-cap="focus-visible-opt">
+      <h2>
+        <span>focus({ focusVisible })</span>
+        <span class="stat cross">Safari 18.4 &middot; FF 104 &middot; Chrome 145</span>
+      </h2>
+      <p class="note">
+        Programmatic focus has always had a guessing problem: the browser
+        decides whether to draw the focus ring based on a heuristic about how
+        focus arrived, and script that moves focus deliberately has no way to
+        say what it wants. <code>el.focus({ focusVisible: true })</code> forces
+        the ring on and <code>false</code> forces it off, so a script that moves
+        focus for keyboard users can show the indicator without also flashing it
+        at someone who clicked.
+      </p>
+      <p>
+        <button class="xp-button" id="fv-on">Focus target, ring on</button>
+        <button class="xp-button" id="fv-off">Focus target, ring off</button>
+      </p>
+      <p><input class="xp-input" id="fv-target" type="text" value="focus target"></p>
+      <p class="replaces">
+        On the site: <code>nav.js</code> moves focus in two places where this is
+        the exact missing control. Opening the Run palette with
+        &#8984;K focuses the input, which is unambiguously a keyboard action and
+        should show a ring; clicking Start opens the same palette from a mouse,
+        where the ring is noise. Today both paths get whatever the heuristic
+        decides. Same story for the Notepad popovers in
+        <code>notepad.js</code>. Three engines, so this one is usable now.
+      </p>
+      <p class="unsupported">This browser ignores the <code>focusVisible</code> option, so both buttons behave identically.</p>
+    </section>
+
+    <!-- ───────────────────── margin-trim ───────────────────── -->
+    <section class="demo" data-cap="margin-trim">
+      <h2>
+        <span>margin-trim</span>
+        <span class="stat chrome">Safari 16.4 only &middot; Chrome no &middot; FF no</span>
+      </h2>
+      <p class="note">
+        Drops the margin on a container&apos;s first and last children, so a box
+        with uniform padding stops getting extra space at its top and bottom
+        edges from the paragraphs inside it. The usual workaround is a
+        <code>:first-child</code> / <code>:last-child</code> pair per component,
+        which every stylesheet on the web has written at least once.
+        Safari-only since 16.4, which makes it the inverse of most cards here:
+        WebKit shipped it three years ago and nobody followed.
+      </p>
+      <div class="mt-grid">
+        <div><p class="tb-cap">default</p><div class="mt-box"><p>first</p><p>last</p></div></div>
+        <div><p class="tb-cap"><code>margin-trim: block</code></p><div class="mt-box trim"><p>first</p><p>last</p></div></div>
+      </div>
+      <p class="replaces">
+        On the site: the <code>.content</code> workspace inside every XP window
+        carries exactly the hand-written first-child/last-child pair this
+        replaces. It stays hand-written, because one engine is one engine, and
+        the fallback here is not graceful in the way most of this page&apos;s
+        cards are: without support the margins collide and the window padding
+        looks wrong, rather than merely unstyled.
+      </p>
+      <p class="unsupported">No <code>margin-trim</code> here (expected outside Safari), so both boxes look the same.</p>
+    </section>
+
+    <!-- ─────────── the site-relevant half: measurement, probes, chrome ─────────── -->
+
+    <!-- ───────────────────── speculation rules: the measurement half ───────────────────── -->
+    <section class="demo" data-cap="spec-measure">
+      <h2>
+        <span>Speculation Rules, the measurement half <span class="mono">getSpeculations() &middot; on-prefetch-activation</span></span>
+        <span class="stat chrome">Chrome only &middot; several still proposals</span>
+      </h2>
+      <p class="note">
+        The Speculation Rules card above covers firing a prefetch. Four separate
+        2026 entries cover finding out whether it worked, which is the half that
+        has never existed. <code>performance.getSpeculations()</code> exposes
+        preloads, prefetches, and prerenders as measurable entries. The
+        <code>on-prefetch-activation</code> response header names a telemetry
+        endpoint the browser pings when a prefetched document is actually
+        used for a navigation, so the signal reaches the <em>server</em> rather
+        than a script in a page that may never run. A
+        <code>form_submission</code> field lets a prerender be activated by a
+        real form POST or GET. And an external
+        <code>&lt;script type=speculationrules src&gt;</code> lets one rule set
+        be shared across documents instead of inlined into each.
+      </p>
+      <p class="replaces">
+        On the site: this is the most useful thing in the sweep, because the
+        speculation rules here are hand-tuned and <em>unmeasured</em>. The rules
+        in <code>index.html</code> were written from reasoning about which links
+        a visitor is likely to take next, and the only evidence that they help
+        is that the pages feel fast when I click them, which is not evidence.
+        <code>on-prefetch-activation</code> is the one that fits this
+        architecture best: it is a response header, so <code>_worker.js</code>
+        can set it and receive the callback, and the accounting lands next to
+        the existing Analytics Engine counters rather than in a client script
+        the RUM beacon would have to carry. Precision is the number worth
+        knowing, since a prefetch that never activates is bandwidth spent on
+        someone else&apos;s behalf.
+      </p>
+    </section>
+
+    <!-- ───────────────────── @supports at-rule() + named-feature() ───────────────────── -->
+    <section class="demo" data-cap="supports-at-rule">
+      <h2>
+        <span>@supports at-rule() <span class="mono">+ named-feature()</span></span>
+        <span class="stat chrome">Chrome 148 &middot; FF positive on named-feature &middot; Safari no</span>
+      </h2>
+      <p class="note">
+        <code>@supports</code> has always been able to test a property/value
+        pair and a selector, and has never been able to test an <em>at-rule</em>.
+        There is no way to ask &quot;does this engine understand
+        <code>@container</code>&quot; in CSS. <code>at-rule(@container)</code>
+        closes that, and the companion <code>named-feature()</code> covers a
+        small set of capabilities that no syntactic probe can reach at all.
+      </p>
+      <div class="sar-out">
+        <p>Live probe of this browser:</p>
+        <pre class="out" id="sar-out">checking…</pre>
+      </div>
+      <p class="replaces">
+        On the site: this is the fix for a limitation this page documents
+        against itself. The capability chips below every card are
+        <code>CSS.supports()</code> probes, and five of them
+        (<code>jpeg-xl</code>, <code>route-matching</code>,
+        <code>sizes-auto</code>, <code>import-text</code>,
+        <code>pq-webcrypto</code>) are hardcoded to
+        return <code>false</code> under a comment explaining that no synchronous
+        probe exists, on the reasoning that a chip reading &quot;no&quot; is
+        more honest than a probe that pretends to know. <code>at-rule()</code>
+        would convert some of that class of question into a real answer. It is
+        Chrome-only today, so the honest-false convention stays exactly as it
+        is, and this card is a note about what would retire it.
+      </p>
+      <p class="unsupported">No <code>at-rule()</code> in this browser&apos;s <code>@supports</code>, which the probe above reports directly.</p>
+    </section>
+
+    <!-- ───────────────────── window-drag ───────────────────── -->
+    <section class="demo" data-cap="window-drag">
+      <h2>
+        <span>window-drag</span>
+        <span class="stat trial">Chrome preview &middot; FF positive &middot; Safari no</span>
+      </h2>
+      <p class="note">
+        Marks a region of an installed desktop web app as titlebar: dragging
+        there moves the OS window instead of doing anything in the page.
+        <code>window-drag: move</code> opts a region in,
+        <code>window-drag: none</code> carves an exception back out, which is
+        how you keep the close button clickable inside a draggable strip.
+        Chromium has it in preview channels rather than stable;
+        <code>-webkit-app-region</code> has done roughly this for Electron for
+        years, and this is the standards-track version.
+      </p>
+      <p class="replaces">
+        On the site: <code>nav.js</code> implements window dragging by hand.
+        Every <code>.window</code> and <code>.np-window</code> is draggable by
+        its title bar via pointer listeners, with a hard top boundary, and the
+        same file carves out the <code>_ &#9633; &times;</code> controls so a
+        close click doesn&apos;t start a drag. That carve-out is precisely what
+        <code>window-drag: none</code> is for. The catch is that this property
+        only does anything for an <em>installed</em> app moving a real OS
+        window, and the XP windows here are divs moving inside a page, so it
+        would replace none of that JavaScript. It is on the page because the
+        naming collision is a trap worth writing down: the feature that sounds
+        exactly like what this site does is solving a different problem.
+      </p>
+    </section>
+
+    <!-- ───────────────────── paintTime / presentationTime ───────────────────── -->
+    <section class="demo" data-cap="paint-time">
+      <h2>
+        <span>paintTime / presentationTime <span class="mono">on paint, LCP + LoAF entries</span></span>
+        <span class="stat cross">Chrome 145 &middot; FF 140 &middot; Safari no</span>
+      </h2>
+      <p class="note">
+        Paint timing entries have reported one timestamp, and it has been
+        ambiguous which of two very different moments it meant.
+        <code>paintTime</code> is when the browser finished the rendering phase
+        and began painting; <code>presentationTime</code> is when the pixels
+        actually reached the screen. On a slow compositor or a
+        variable-refresh-rate display those diverge by a frame or more.
+        Exposing both, across paint timing, element timing, LCP, and Long
+        Animation Frames, turns a number that needed a footnote into two
+        numbers that don&apos;t.
+      </p>
+      <p><button class="xp-button" id="pt-go">Read this page&apos;s paint entries</button></p>
+      <pre class="out" id="pt-out">press the button</pre>
+      <p class="replaces">
+        On the site: this lands in the middle of a problem already written up in
+        this repo. The Workers Traces work found that a span cannot measure CPU,
+        because the runtime&apos;s clock advances across I/O and never during
+        synchronous execution, so <code>home.grid.render</code> honestly reports
+        0&nbsp;ms after doing real work. That is the server-side version of
+        exactly this ambiguity, and <code>presentationTime</code> is the
+        client-side fix for it: the homepage&apos;s LCP is a photo tile, and
+        &quot;when did the tile paint&quot; and &quot;when did the visitor see
+        the tile&quot; have been the same field. Two engines, so the RUM beacon
+        could start reading it.
+      </p>
+      <p class="unsupported">No <code>paintTime</code> on this browser&apos;s paint entries; the output shows what is there instead.</p>
+    </section>
+
+    <!-- ───────────────────── soft navigations + InteractionContentfulPaint ───────────────────── -->
+    <section class="demo" data-cap="soft-nav">
+      <h2>
+        <span>Soft navigations <span class="mono">+ interaction-contentful-paint</span></span>
+        <span class="stat trial">Origin trial Ch151 &middot; Chrome only</span>
+      </h2>
+      <p class="note">
+        Two new <code>PerformanceEntry</code> types.
+        <code>soft-navigation</code> marks a JS-driven navigation that changed
+        the URL and re-rendered without a document load, which every Core Web
+        Vital currently cannot see: LCP is measured once, at the real
+        navigation, so every route change after it is invisible.
+        <code>interaction-contentful-paint</code> reports the largest paint
+        caused by a specific interaction, which is the LCP idea rebuilt around
+        an interaction instead of a page load.
+      </p>
+      <p class="replaces">
+        On the site: mostly a card about why this site doesn&apos;t need it, and
+        that is the interesting part. Every route here is a real document served
+        by the worker, and the View Transitions are cross-document, so LCP
+        already fires per navigation and soft navigations do not exist in this
+        architecture. The exception is <code>/writing</code>, where the folder
+        notes deliberately open as popovers that composite over the index
+        <em>without</em> touching the address bar. That was the honest call,
+        since one URL cannot name three open windows, and it means the cost of
+        opening a note is unmeasured by anything.
+        <code>interaction-contentful-paint</code> is the entry that would price
+        it, and it prices interactions rather than URLs, which is the right
+        shape for that decision.
+      </p>
+    </section>
+
+    <!-- ───────────────────── resource timing contentType + declarative PO ───────────────────── -->
+    <section class="demo" data-cap="content-type-rt">
+      <h2>
+        <span>contentType in Resource Timing <span class="mono">+ Declarative PerformanceObserver</span></span>
+        <span class="stat cross">Chrome 148 &middot; FF 129 &middot; Safari positive</span>
+      </h2>
+      <p class="note">
+        <code>PerformanceResourceTiming.contentType</code> adds the server&apos;s
+        content type to each resource entry, so a script can group its own
+        loading by kind without re-deriving it from file extensions. Alongside
+        it, the Declarative Performance Observer proposal moves collection into
+        a response header, so metrics still arrive when the renderer is killed
+        by the OS or the request fails, which is the population that RUM
+        currently drops silently.
+      </p>
+      <p><button class="xp-button" id="ct-go">Group this page&apos;s resources</button></p>
+      <pre class="out" id="ct-out">press the button</pre>
+      <p class="replaces">
+        On the site: <code>contentType</code> is the smaller half and still the
+        one with a use here. The serving story on this site is unusually
+        type-dependent, since <code>/a/*</code> assets are q11 brotli, the
+        document tiers ship dcz deltas against two different dictionaries, and
+        the photo tiers are AVIF with a JPG fallback chosen by the browser
+        before any script runs. Which encoding a visitor actually received is
+        currently inferred. The declarative half is the more interesting idea
+        and the further out: a response header is a shape this worker is already
+        built around, and its whole pitch is capturing the sessions that die
+        before a beacon fires, which is exactly the sample RUM is missing and
+        cannot know it is missing.
+      </p>
+      <p class="unsupported">No <code>contentType</code> on resource entries here; the grouping falls back to counting entries.</p>
+    </section>
+
+
+    <script>
+      /* Demos for the 2026-07-30 sweep batch. Every one degrades to a message
+         rather than throwing, so a browser missing the feature reads WHY. */
+      (function () {
+        // ── Sanitizer API ──
+        var sanGo = document.getElementById("san-go");
+        if (sanGo) {
+          var esc = function (s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); };
+          var run = function () {
+            var src = document.getElementById("san-in").value;
+            var a = document.createElement("div");
+            var b = document.createElement("div");
+            try { a.setHTMLUnsafe(src); } catch (e) { a.innerHTML = src; }
+            if (typeof b.setHTML === "function") {
+              b.setHTML(src);
+            } else {
+              b.textContent = src;  // honest fallback: escaped, not sanitized
+            }
+            document.getElementById("san-unsafe").textContent = a.innerHTML || "(empty)";
+            document.getElementById("san-safe").textContent =
+              (typeof b.setHTML === "function")
+                ? (b.innerHTML || "(everything was stripped)")
+                : "no setHTML() here, so this pane just escaped the input:\n" + esc(src);
+          };
+          sanGo.addEventListener("click", run);
+          run();
+        }
+
+        // ── the TC39 trio ──
+        var tcGo = document.getElementById("tc39-go");
+        if (tcGo) {
+          tcGo.addEventListener("click", function () {
+            var lines = [];
+            var naive = [1e20, 0.1, -1e20].reduce(function (a, b) { return a + b; }, 0);
+            if (typeof Math.sumPrecise === "function") {
+              lines.push("Math.sumPrecise([1e20, 0.1, -1e20]) -> " + Math.sumPrecise([1e20, 0.1, -1e20]));
+              lines.push("  naive + reduce gives      -> " + naive + "   (the 0.1 fell off the end)");
+            } else { lines.push("Math.sumPrecise: not in this browser (naive sum gives " + naive + ")"); }
+
+            if (typeof Map.prototype.getOrInsert === "function") {
+              var m = new Map([["photos", 158]]);
+              lines.push("");
+              lines.push("getOrInsert('photos', 0)  -> " + m.getOrInsert("photos", 0) + "   (kept the existing value)");
+              lines.push("getOrInsert('tracks', 0)  -> " + m.getOrInsert("tracks", 0) + "     (inserted the default)");
+            } else { lines.push(""); lines.push("Map.prototype.getOrInsert: not in this browser"); }
+
+            if (typeof Iterator !== "undefined" && typeof Iterator.concat === "function") {
+              lines.push("");
+              lines.push("[...Iterator.concat([1,2], [3,4])] -> [" + Array.from(Iterator.concat([1, 2], [3, 4])).join(", ") + "]");
+            } else { lines.push(""); lines.push("Iterator.concat: not in this browser"); }
+            document.getElementById("tc39-out").textContent = lines.join("\n");
+          });
+        }
+
+        // ── @supports at-rule() ──
+        var sarOut = document.getElementById("sar-out");
+        if (sarOut) {
+          var probes = [
+            ["at-rule(@container)", function () { return CSS.supports("at-rule(@container)"); }],
+            ["at-rule(@scope)", function () { return CSS.supports("at-rule(@scope)"); }],
+            ["at-rule(@function)", function () { return CSS.supports("at-rule(@function)"); }],
+            ["selector(:has(a))  [old style]", function () { return CSS.supports("selector(:has(a))"); }],
+            ["(display: grid)    [old style]", function () { return CSS.supports("display", "grid"); }]
+          ];
+          sarOut.textContent = probes.map(function (p) {
+            var v;
+            try { v = p[1]() ? "yes" : "no"; } catch (e) { v = "threw"; }
+            return p[0] + "  ->  " + v;
+          }).join("\n") + "\n\nThe last two work everywhere; the at-rule() ones\nreturn no in engines that can't parse the function.";
+        }
+
+        // ── focusVisible ──
+        var fvOn = document.getElementById("fv-on");
+        if (fvOn) {
+          var tgt = document.getElementById("fv-target");
+          fvOn.addEventListener("click", function () { tgt.focus({ focusVisible: true }); });
+          document.getElementById("fv-off").addEventListener("click", function () { tgt.focus({ focusVisible: false }); });
+        }
+
+        // ── paintTime / presentationTime ──
+        var ptGo = document.getElementById("pt-go");
+        if (ptGo) {
+          ptGo.addEventListener("click", function () {
+            var out = [];
+            var paints = performance.getEntriesByType("paint");
+            if (!paints.length) {
+              // An empty list has two very different causes, and guessing the
+              // wrong one sends you debugging the engine instead of the tab: a
+              // document that is not visible defers paint entirely, so an
+              // automated or backgrounded browser reports zero entries no
+              // matter how well it implements paint timing. Check visibility
+              // before blaming support.
+              out.push(document.visibilityState !== "visible"
+                ? "No paint entries yet, because this document isn't visible\n" +
+                  "(visibilityState: " + document.visibilityState + "). Browsers defer paint until it is,\n" +
+                  "so this is the tab, not the feature. Foreground it and press again."
+                : "No paint entries, and this document IS visible, so this browser\n" +
+                  "likely doesn't implement paint timing at all.");
+            }
+            paints.forEach(function (e) {
+              var row = e.name + ": startTime=" + e.startTime.toFixed(1) + "ms";
+              if ("paintTime" in e) row += "  paintTime=" + Number(e.paintTime).toFixed(1) + "ms";
+              if ("presentationTime" in e && e.presentationTime != null) row += "  presentationTime=" + Number(e.presentationTime).toFixed(1) + "ms";
+              if (!("paintTime" in e)) row += "   (no paintTime field here)";
+              out.push(row);
+            });
+            document.getElementById("pt-out").textContent = out.join("\n");
+          });
+        }
+
+        // ── resource timing contentType ──
+        var ctGo = document.getElementById("ct-go");
+        if (ctGo) {
+          ctGo.addEventListener("click", function () {
+            var rs = performance.getEntriesByType("resource");
+            if (!rs.length) { document.getElementById("ct-out").textContent = "No resource entries."; return; }
+            var hasCT = "contentType" in rs[0];
+            var groups = {};
+            rs.forEach(function (r) {
+              var k = hasCT ? (r.contentType || "(none reported)") : (r.initiatorType || "(unknown)");
+              groups[k] = (groups[k] || 0) + 1;
+            });
+            var head = hasCT
+              ? "Grouped by contentType (" + rs.length + " resources):"
+              : "No contentType field here, so this falls back to\ninitiatorType (" + rs.length + " resources):";
+            document.getElementById("ct-out").textContent = head + "\n\n" +
+              Object.keys(groups).sort().map(function (k) { return "  " + k + "  ×" + groups[k]; }).join("\n");
+          });
+        }
+      })();
+    </script>
+
+
     <!-- ───────────────────── the long tail ───────────────────── -->
     <section class="demo">
       <h2><span>The long tail: independent engines</span></h2>
@@ -4037,7 +4752,7 @@ myButton.onclick = async () =&gt; {
 
     <footer>
       <p>&larr; back to the <a href="/garage">garage</a> &middot; <a href="/">aadhar.sh</a></p>
-      <p><small>&copy; 2026 Aadharsh Pannirselvam &middot; built in the open &middot; triangulated from chromestatus.com + chrome://flags (Canary) + webkit.org/standards-positions &middot; last swept 2026-07-26</small></p>
+      <p><small>&copy; 2026 Aadharsh Pannirselvam &middot; built in the open &middot; triangulated from chromestatus.com + chrome://flags (Canary) + webkit.org/standards-positions + MDN browser-compat-data &middot; last swept 2026-07-30</small></p>
     </footer>
 
     <hr>
