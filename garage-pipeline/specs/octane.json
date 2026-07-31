@@ -1,0 +1,118 @@
+{
+  "id": "octane",
+  "title": "Octane, priced against no framework",
+  "description": "Nextane ships 60.9% less client JavaScript than Next.js 16. Re-measuring that claim on the live demo, then adding the row every framework benchmark leaves out: a site that ships no framework at all.",
+  "status": "shipped",
+  "added": "2026-07-31",
+  "bodyHtml": "<h1>Octane, priced against no framework</h1>\n<p class=\"garage-intro\">A benchmark told me Nextane ships 60.9% less client JavaScript than Next.js 16. That is a real number, honestly measured, and I checked it against the deployed demo. What the table cannot tell you is where zero sits, because every row in it is a framework. This site makes a useful zero: it ships no framework at all, so putting it on the same axis turns a ranking into a distance.</p>\n\n<h2>The benchmark, and what it leaves out</h2>\n<p><a href=\"https://github.com/southpolesteve/nextane\" target=\"_blank\" rel=\"noopener\">Nextane</a> rebuilds the Next.js Pages Router on <a href=\"https://github.com/octanejs/octane\" target=\"_blank\" rel=\"noopener\">Octane</a>, a compiled React replacement descended from Inferno that drops the virtual DOM and has its compiler infer reactivity instead of asking you for dependency arrays. Its README publishes this, measured on one small hydrated <code>getServerSideProps</code> page:</p>\n<table class=\"oct-table\">\n  <tr><th>Runtime</th><th>Client JavaScript (gzip)</th><th>Against Next.js</th></tr>\n  <tr><td>Next.js 16.2.12</td><td>110.0 KiB</td><td>baseline</td></tr>\n  <tr><td>Vinext 1.0.0-beta.4</td><td>77.8 KiB</td><td>29.2% less</td></tr>\n  <tr><td>Nextane + Octane 0.1.21</td><td>43.0 KiB</td><td>60.9% less</td></tr>\n</table>\n<p>The README is unusually candid about its own standing, calling the project a fun experiment rather than a serious framework and pointing you at Vinext for real work. That candour is why the number is worth trusting, and worth extending.</p>\n<p>Every row here is a framework, so the table ranks. Ranking is a weaker thing than measuring, because a measurement needs an origin and this one has none.</p>\n\n<h2>Re-measuring it on the live demo</h2>\n<p>The demo is deployed, so the claim is checkable without building anything. Here is what it puts on the wire, brotli as served and gzip so it lines up with the README's axis:</p>\n<table class=\"oct-table\">\n  <tr><th>Asset</th><th>Raw</th><th>gzip</th><th>brotli</th></tr>\n  <tr><td>document</td><td>2,652</td><td>1,247</td><td>1,130</td></tr>\n  <tr><td>styles.css</td><td>3,406</td><td>1,364</td><td>1,224</td></tr>\n  <tr><td>index-903Z56aL.js</td><td>8,193</td><td>3,336</td><td>2,974</td></tr>\n  <tr><td>router-bwM-JHXE.js</td><td>125,152</td><td>40,048</td><td>35,159</td></tr>\n  <tr class=\"mine\"><td><strong>JavaScript total</strong></td><td><strong>133,345</strong></td><td><strong>43,384</strong></td><td><strong>38,133</strong></td></tr>\n</table>\n<p>43,384 bytes gzip against a claimed 43.0 KiB. The benchmark holds, which is worth saying plainly, because a page that only re-measures claims it can knock down is not measuring.</p>\n<p>One thing to notice before moving on. The document is 2,652 bytes and the JavaScript is 133,345. The page's actual content is 2% of what the page costs.</p>\n\n<h2>Where the baseline lands</h2>\n<p>Predict before you reveal. The three framework rows are drawn below. This site's homepage and its heaviest page are hidden. Guess where they fall relative to the 43.0 KiB row that won the benchmark.</p>\n<div class=\"oct-demo\" id=\"oct-demo\">\n  <div class=\"oct-demo-head\">\n    <span>Client JavaScript per page load, gzip</span>\n    <button type=\"button\" class=\"oct-reveal\">reveal the baseline</button>\n  </div>\n  <ol class=\"oct-bars\"></ol>\n  <p class=\"oct-read\"></p>\n</div>\n<p>The homepage loads one script, <code>nav.js</code>, at 14.9 KiB gzip. That script builds the wallpaper, the draggable desktop icons, the taskbar, the clock, the Start orb, and the Run palette that filters 158 photos plus every page on the site. The heaviest page here is <a href=\"/lens\">/lens</a> at 36.6 KiB, and it still lands under the framework row that won.</p>\n<p>Now the complication I would rather state than bury. Every script this site serves, summed across all 43 pages, is 49.0 KiB gzip, which is <em>more</em> than Nextane's 43.0. A visitor never downloads that sum, and a Nextane visitor pays 43.0 on their first page, so per page load the gap is real and roughly 3x. As a whole-site total the comparison reverses. Both numbers are true, they answer different questions, and only the per-page one describes what a browser does.</p>\n\n<h2>The chunk is the framework, not the glue</h2>\n<p>The obvious objection is that most of that 125 KB is Next.js compatibility shim, which a plain Octane app would never load. I counted identifiers in the shipped chunk rather than arguing about it:</p>\n<table class=\"oct-table\">\n  <tr><th>Identifier in <code>router-bwM-JHXE.js</code></th><th>Occurrences</th></tr>\n  <tr><td><code>effect</code></td><td>48</td></tr>\n  <tr><td><code>octane</code></td><td>34</td></tr>\n  <tr><td><code>Suspense</code></td><td>9</td></tr>\n  <tr><td><code>prefetch</code></td><td>5</td></tr>\n  <tr class=\"mine\"><td><code>router</code></td><td>1</td></tr>\n</table>\n<p>The chunk is named for the router and contains almost none of one. What fills it is the reactive runtime, Suspense, and the scheduler. So 43.0 KiB sits close to Octane's own floor in this build, and stripping the Next.js surface off the top would not recover much of it.</p>\n<p>That reading rests on one alpha build. Octane calls itself alpha software and has beta in view, so a tuned release may tree-shake considerably further. Treat the number as current rather than settled.</p>\n\n<h2>What the comparison actually measures</h2>\n<p>Here is where I argue against my own table. A framework competes with the version of your application you would otherwise hand-write and then maintain for years, which is a different opponent from a hand-written document. Octane's 43 KiB buys a component model, hydration, Suspense, and a compiler that tracks what your code reads so you stop maintaining dependency arrays. This site buys none of that because it needs none of it. It serves documents, and its interactivity is a desktop shell bolted on top of them.</p>\n<p>So the honest reading is narrower than \"frameworks are heavy.\" A framework's floor is set by its runtime, and this site's floor is set by how much behaviour it actually has. Those are different quantities. A benchmark containing only frameworks quietly makes them look like one quantity, and that is the thing the extra rows are for.</p>\n\n<h2>Where Octane would win here</h2>\n<p><code>nav.js</code> is the one module on this site with enough state to make the question live. It handles window dragging and resizing, taskbar state, a command palette filtering 158 photos alongside every page and six profiles, and icon positions that deliberately reset each visit. All of it is imperative DOM code, and all of it is 14.9 KiB.</p>\n<p>The crossover is a maintenance threshold rather than a byte one. Octane's runtime alone is roughly three times what <code>nav.js</code> weighs today, so a rewrite loses on size until that module grows several times over. If it ever does, the calculation changes.</p>\n<p>The idea underneath is worth taking even while the package is not. Octane compiles the reactivity bookkeeping away so the browser receives direct DOM updates with no virtual DOM in between. Hand-written imperative DOM code <em>is</em> that output. This site already stands where the compiler is trying to arrive, having paid in author effort rather than in runtime bytes, and that is the whole reason the framework has nothing to sell it.</p>\n\n<h2>The objection I think is right</h2>\n<p>The strongest reading of this page is that it stacks the deck. I picked a document site as the zero, then reported that an application framework costs more than zero, which was never in doubt. Nobody building a dashboard can adopt this site's answer, because the answer is \"have less behaviour.\"</p>\n<p>I think that is fair, and it is why the middle sections exist rather than just the chart. What the extra rows buy is a scale rather than a verdict on Octane. A reader who has only ever seen framework-versus-framework tables can rank three options and still have no idea whether the winner is close to the metal or a long way from it. Now there is a distance on the axis, and 43.0 KiB reads as a genuine achievement against React and a large number against nothing at all. Both readings survive, and holding them together is the point.</p>\n<p class=\"oct-falsify\">What would change my mind: a tuned, non-alpha Octane build landing anywhere near <code>nav.js</code>'s 14.9 KiB. That would mean the runtime cost measured here is a property of an early build rather than of the architecture, and the crossover argument above would collapse with it. The beta is where that shows up.</p>",
+  "pageCss": ".oct-table{border-collapse:collapse;width:100%;margin:0 0 14px;font-size:9.5pt}\n.oct-table th{text-align:left;background:#eaf0f9;border:1px solid #c3ced0;padding:4px 7px;font-family:var(--font-caption)}\n.oct-table td{border:1px solid #d8dfeb;padding:4px 7px;vertical-align:top}\n.oct-table td:not(:first-child){text-align:right;font-family:var(--font-mono)}\n.oct-table tr.mine td{background:#fffbe8}\n.oct-demo{border:1px solid #99a8bd;background:#f3f6fa;box-shadow:inset 1px 1px 0 #fff;margin:0 0 14px}\n.oct-demo-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;background:linear-gradient(180deg,#eaf0f9,#dbe4f1);border-bottom:1px solid #b6c2d4;padding:5px 9px;font-family:var(--font-caption);font-weight:bold;font-size:9.5pt;color:#20406e}\n.oct-reveal{font:inherit;font-size:8.5pt;font-weight:normal;font-family:var(--font-ui);padding:3px 11px;cursor:pointer;background:linear-gradient(180deg,#fff,#e4e9f2);border:1px solid #8c9ab0;border-radius:3px;color:#243}\n.oct-reveal:disabled{color:#8b96a6;cursor:default}\n.oct-bars{list-style:none;margin:0;padding:10px 12px 4px}\n.oct-bars li{display:grid;grid-template-columns:11em 1fr auto;align-items:center;gap:8px;margin:0 0 7px;font-size:9pt}\n.oct-bars .n{font-family:var(--font-mono);color:#33455f;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n.oct-bars .t{height:15px;background:linear-gradient(180deg,#7fb0e8,#3f7fd0);border:1px solid #2f5f9e;min-width:2px;transition:width .32s ease}\n.oct-bars li.mine .t{background:linear-gradient(180deg,#8fd98f,#3ea23e);border-color:#2c7a2c}\n.oct-bars li.hidden .t{background:repeating-linear-gradient(135deg,#e4e9f2,#e4e9f2 5px,#cfd8e6 5px,#cfd8e6 10px);border-style:dashed;border-color:#9aa8bd;width:14%}\n.oct-bars .v{font-family:var(--font-mono);font-size:8.5pt;color:#4a5870;white-space:nowrap}\n.oct-read{margin:0;padding:2px 12px 10px;font-size:8.5pt;color:#5b6879}\n.oct-falsify{border-left:3px solid #c9a227;background:#fffbe8;padding:8px 10px;margin:14px 0 0}\n@media(max-width:620px){.oct-bars li{grid-template-columns:8.5em 1fr;row-gap:2px}.oct-bars .v{grid-column:2}}",
+  "pageJs": "(function(){\n  // Framework rows are the Nextane README's published benchmark (one small\n  // hydrated getServerSideProps page, gzip). The two site rows are measured\n  // from this repo's own build output at the same compression, 2026-07-31.\n  var ROWS = [\n    { n: \"Next.js 16.2.12\",  kib: 110.0 },\n    { n: \"Vinext 1.0.0-b4\",  kib: 77.8 },\n    { n: \"Nextane + Octane\", kib: 43.0 },\n    { n: \"aadhar.sh /lens\",  kib: 36.6, mine: true, hide: true },\n    { n: \"aadhar.sh home\",   kib: 14.9, mine: true, hide: true }\n  ];\n  var BEFORE = \"Three frameworks, ranked. The two hidden rows are this site's heaviest page and its homepage. Where do they land?\";\n  var AFTER = \"The homepage is 14.9 KiB against the winning framework's 43.0, so roughly a third. The heaviest page here still sits under that row. Read it as a scale rather than a verdict: 43.0 KiB is a real win against React and a large number against no framework.\";\n\n  var host = document.getElementById(\"oct-demo\");\n  if (!host) return;\n  var list = host.querySelector(\".oct-bars\");\n  var read = host.querySelector(\".oct-read\");\n  var button = host.querySelector(\".oct-reveal\");\n  var max = 0, i;\n  for (i = 0; i < ROWS.length; i++) if (ROWS[i].kib > max) max = ROWS[i].kib;\n  var revealed = false;\n\n  function draw() {\n    list.textContent = \"\";\n    for (var j = 0; j < ROWS.length; j++) {\n      var row = ROWS[j];\n      var covered = row.hide && !revealed;\n      var li = document.createElement(\"li\");\n      li.className = (row.mine ? \"mine\" : \"\") + (covered ? \" hidden\" : \"\");\n      var n = document.createElement(\"span\");\n      n.className = \"n\";\n      n.textContent = row.n;\n      var t = document.createElement(\"span\");\n      t.className = \"t\";\n      if (!covered) t.style.width = (row.kib / max) * 100 + \"%\";\n      var v = document.createElement(\"span\");\n      v.className = \"v\";\n      v.textContent = covered ? \"?\" : row.kib.toFixed(1) + \" KiB\";\n      li.appendChild(n);\n      li.appendChild(t);\n      li.appendChild(v);\n      list.appendChild(li);\n    }\n    read.textContent = revealed ? AFTER : BEFORE;\n  }\n\n  button.addEventListener(\"click\", function(){\n    revealed = true;\n    button.disabled = true;\n    button.textContent = \"revealed\";\n    draw();\n  });\n  draw();\n})();",
+  "editorial": {
+    "reader": "Someone who has seen a framework benchmark claiming a large percentage win and wants to know what the percentage is measured against.",
+    "problem": "The reader can rank Next.js, Vinext, and Nextane from the published table without knowing whether the winner sits close to the metal or a long way from it, because every row in that table is a framework.",
+    "thesis": "A benchmark containing only frameworks establishes a ranking rather than a measurement, and adding a no-framework row turns the same numbers into a distance that both flatters and limits the winner.",
+    "evidence": [
+      "The Nextane README's published benchmark is re-measured against the deployed demo, and 43,384 bytes gzip confirms the claimed 43.0 KiB.",
+      "This site's homepage loads 14.9 KiB gzip of JavaScript and its heaviest page loads 36.6 KiB, both measured from the same build output at the same compression.",
+      "Summed across all 43 pages this site serves 49.0 KiB, which exceeds Nextane's per-page figure, so the per-page and whole-site comparisons disagree and the page reports both.",
+      "Counting identifiers in the shipped 125 KB chunk finds 48 occurrences of effect and 1 of router, which locates the weight in Octane's runtime rather than in Next.js compatibility glue.",
+      "The demo's document is 2,652 bytes against 133,345 bytes of JavaScript, so the content is 2% of the transfer."
+    ],
+    "uncertainty": "Every framework figure comes from one alpha build of Octane on one fixture page. A tuned beta could tree-shake well below what is measured here, and the crossover argument for this site's own nav.js would move with it."
+  },
+  "understanding": {
+    "intro": "Before you close the hood: five questions about what the numbers establish and what they cannot.",
+    "questions": [
+      {
+        "q": "Why can the published benchmark table, on its own, not tell you whether 43.0 KiB is a lot?",
+        "options": [
+          {
+            "t": "Every row in it is a framework, so it fixes an order without fixing an origin to measure distance from.",
+            "ok": true,
+            "why": "Right. Ranking needs two points; measuring needs a zero. The table has no zero in it."
+          },
+          {
+            "t": "It reports gzip rather than brotli, which understates what a browser actually downloads.",
+            "why": "Brotli would shift every row by a similar factor and leave the ordering and the missing baseline exactly as they were."
+          },
+          {
+            "t": "It measures a single page rather than a whole application.",
+            "why": "One page is the right unit here, since it is what a visitor downloads. The absent baseline is what leaves the gap."
+          }
+        ]
+      },
+      {
+        "q": "This site's JavaScript summed across all 43 pages is 49.0 KiB, above Nextane's 43.0 KiB per page. What follows?",
+        "options": [
+          {
+            "t": "The two figures answer different questions, and only the per-page one describes what any browser actually downloads.",
+            "ok": true,
+            "why": "Right. No visitor fetches the site-wide sum. Per page load the homepage is 14.9 KiB against 43.0, which is the comparison that maps onto a real request."
+          },
+          {
+            "t": "The page's argument fails, because the site ships more JavaScript than the framework does.",
+            "why": "That would only follow if a visitor downloaded every script at once. Each page loads the shell plus at most one page-specific module."
+          },
+          {
+            "t": "Gzip is the wrong metric, and brotli would reverse the total.",
+            "why": "Brotli lowers both sides. The totals stay in the same relation, which is why the page reports the reversal rather than compressing it away."
+          }
+        ]
+      },
+      {
+        "q": "What did counting identifiers inside the shipped 125 KB chunk establish?",
+        "options": [
+          {
+            "t": "The weight is Octane's reactive runtime rather than Next.js compatibility glue, so a simpler app would not shed much of it.",
+            "ok": true,
+            "why": "Right. 48 occurrences of effect against 1 of router says the chunk is the framework, despite the filename."
+          },
+          {
+            "t": "The chunk is mostly router code, so an app without routing would drop most of that weight.",
+            "why": "The identifier router appears once in the whole chunk. The filename is the only routing thing about it."
+          },
+          {
+            "t": "The build skipped tree-shaking, so the figure will fall once the bundler is configured properly.",
+            "why": "Counting identifiers describes what the code is. How well the bundler shook it is a separate claim, and the page raises that caveat on its own."
+          }
+        ]
+      },
+      {
+        "q": "On the page's own reasoning, what would make Octane the right call for this site's nav.js?",
+        "options": [
+          {
+            "t": "nav.js growing several times its current weight, so the runtime stops dominating the code it replaces.",
+            "ok": true,
+            "why": "Right. The runtime is roughly 3x nav.js today, so the trade is decided by the ratio rather than by the framework maturing."
+          },
+          {
+            "t": "Octane reaching a stable 1.0 release.",
+            "why": "Stability would remove a risk without changing the arithmetic. A stable runtime that still outweighs the module 3-to-1 loses the same way."
+          },
+          {
+            "t": "The site adding more pages that all load the shell.",
+            "why": "More pages sharing one immutable, long-cached script strengthens the current arrangement rather than weakening it."
+          }
+        ]
+      },
+      {
+        "q": "Which result would falsify the page's model?",
+        "options": [
+          {
+            "t": "A tuned non-alpha Octane build landing near nav.js's 14.9 KiB, which would make the runtime cost a property of an early build.",
+            "ok": true,
+            "why": "Right. That would dissolve the crossover argument, since the runtime would no longer dominate what it replaces."
+          },
+          {
+            "t": "Octane widening its benchmark lead over React in the next release.",
+            "why": "That confirms the framework-versus-framework ranking the page already accepts. It says nothing about the distance to no framework."
+          },
+          {
+            "t": "This site's nav.js continuing to grow with each new feature.",
+            "why": "The page predicts that growth moves the trade toward a reactive model. A prediction coming true supports the model rather than falsifying it."
+          }
+        ]
+      }
+    ]
+  }
+}

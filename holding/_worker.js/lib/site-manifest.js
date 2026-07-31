@@ -217,6 +217,12 @@ export const AGENT_SURFACES = [
     "description": "A ragged-height contact-sheet photo grid with CSS Grid Lanes, falling back to the fixed-square grid."
   },
   {
+    "path": "/garage/octane",
+    "title": "Octane, priced against no framework",
+    "kind": "content",
+    "description": "Nextane's 60.9% win over Next.js, re-measured on the live demo, then given the row every framework benchmark leaves out: a site that ships no framework at all."
+  },
+  {
     "path": "/garage/pretext",
     "title": "DOM-free text measurement",
     "kind": "content",
@@ -319,6 +325,7 @@ export const WEBMENTION_PATHS = [
   "/garage/horizon",
   "/garage/iroh",
   "/garage/masonry",
+  "/garage/octane",
   "/garage/pretext",
   "/garage/pqc",
   "/garage/safari27",
