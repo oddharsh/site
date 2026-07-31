@@ -29,8 +29,12 @@
   "compatibility_date": "2026-06-01",
   // Workers Cache sits in front of the public-response entrypoint below. The
   // default dispatcher stays uncached because it owns mutations, per-visitor
-  // views, the homepage, and request logging; response Cache-Control remains
-  // the route-level freshness contract inside CachedPages.
+  // views, content-negotiated representations, and request logging; response
+  // Cache-Control remains the route-level freshness contract inside CachedPages.
+  // (The homepage was on that list until 2026-07-31, when it became a
+  // deterministic document; shouldUseWorkersCache in lib/cache.js is the
+  // authority on what routes here, and on the bails that send a request back
+  // to the uncached gateway.)
   "cache": { "enabled": true, "cross_version_cache": false },
   "exports": {
     "default": { "type": "worker", "cache": { "enabled": false } },

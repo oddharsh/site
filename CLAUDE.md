@@ -88,6 +88,19 @@ worktrees may edit freely, but a worktree is not a release surface.
   `production` and is the only production publisher for the site Worker, which
   bundles `holding/`, `cal/`, and `serendipity/`. The Garage and LWE demos remain
   auxiliary Worker projects.
+- **A fix for a bug that `infra:check`'s edge tier can see will DEADLOCK that
+  promotion, and the merge is where it bites.** Those checks read production over
+  the wire, which is the whole point of them (see the `app-owns-security-headers`
+  note in `infra.json`), but it means CI on `main` keeps failing on the old
+  production behaviour after the fix has merged — and promotion is gated on CI, so
+  production never gets the fix that would turn the check green. Observed
+  2026-07-31 with `markdown-for-agents-off` (#195 merged, run 30666351446 red,
+  every `Promote production` run after it skipped). It stays red on every branch
+  until someone breaks the cycle from outside, by publishing the merged commit:
+  push `main` to `production` so Workers Builds picks it up, or run the local
+  `npm run deploy` fallback. Neither is automatic and neither should be — a
+  deploy is the owner's call. Just know that merging is not the last step for
+  this class of fix, and CI will not tell you so.
 - Configure one Workers Build project for the site Worker with `production` as
   its production branch and repository root `.`. Keep the dashboard Build
   command blank; use the repo's Wrangler-owned build during the Deploy command.
@@ -297,6 +310,19 @@ ones are worker-first already, for dcz deltas, so this costs no new invocations)
 A page that is still edge-direct answers at its `.md` URL only. The negotiated response is
 `no-store` because the edge caches per URL, not per Accept; the `.md` URL is the
 cacheable representation.
+
+**"wherever the Worker already sees the request" is a condition, not a given: a cache
+in front of the Worker revokes it silently.** `/` joined `WORKERS_CACHEABLE_PATHS` in
+#189 and production then answered a markdown ask with `text/html` on a `cf-cache-status:
+HIT`, because Workers Cache keys the URL and the HTML response's Vary names only
+`accept-encoding, available-dictionary`. `shouldUseWorkersCache` (`lib/cache.js`, #195)
+bails on `wantsMarkdown` for that reason, and the long argument for bailing over
+`Vary: accept` lives with it. What generalizes past markdown: a route that answers more
+than one representation at one URL cannot sit behind a URL-keyed cache without a bail,
+and if a route ever negotiates on some header other than Accept it needs its own. Note
+also that `serveStaticPage` bails to the asset layer on `method !== "GET"`, so a HEAD
+never negotiates at all — `curl -I` will report HTML on a page whose GET returns
+Markdown, which reads exactly like this bug and is not it.
 
 Adding a page needs no work here: register it in `site-manifest.json` as usual
 and the twin appears. `build.mjs` fails the deploy if fewer than 30 generate,
