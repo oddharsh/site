@@ -542,6 +542,13 @@
     input.addEventListener("keydown", onKey);
     list.addEventListener("click", function (e) {
       var o = e.target.closest(".opt"); if (!o) return;
+      // Navigable rows are anchors now. A MODIFIED click (⌘/ctrl/shift/alt, or any
+      // non-primary button) is the user asking the browser for a new tab or window,
+      // so let it reach the anchor untouched instead of collapsing it into a
+      // same-tab go(). A plain click still routes through go(), which stays the one
+      // funnel for accessories, raycast links and profiles alike.
+      if (o.hasAttribute("href") && (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0)) return;
+      e.preventDefault();
       go(results[+o.dataset.i]);
     });
     // XP list controls hot-track: the row under the cursor becomes the selection,
@@ -621,12 +628,27 @@
       if (!groups[k].length) return;
       html += '<div class="grp">' + names[k] + "</div>";
       groups[k].forEach(function (g) {
-        html += '<div class="opt" role="option" data-i="' + g.i + '"' +
+        // A row that navigates to a same-origin path renders as a REAL anchor, and
+        // the href is the whole point: `eagerness: "moderate"` starts a prerender
+        // when the pointer rests on a LINK, so a <div> row could never be
+        // prerendered no matter how long you hovered it. Every ⌘K navigation was
+        // therefore a cold load. go() still owns the plain click (below), so the
+        // href changes nothing about the funnel — it only makes the row visible to
+        // the speculation rules, and gives ⌘/middle-click a real target for free.
+        // Excluded on purpose: accessory rows open in-page and never navigate,
+        // raycast rows are protocol deep links (unprerenderable, and a stray href
+        // would let a modified click hand the OS a raw raycast:// URL), and profile
+        // rows are cross-origin, which "/*" cannot match anyway.
+        var navigable = g.it.path && g.it.path.charAt(0) === "/" &&
+          g.it.kind !== "accessory" && g.it.kind !== "raycast" && g.it.kind !== "profile";
+        html += "<" + (navigable ? "a" : "div") + ' class="opt" role="option" data-i="' + g.i + '"' +
+          (navigable ? ' href="' + esc(g.it.path) + '"' : "") +
           (g.it.thumb ? ' data-thumb="' + esc(g.it.thumb) + '"' : "") +
           ' aria-selected="' + (g.i === sel) + '">' +
           '<span class="nm">' + esc(g.it.label) + "</span>" +
           (g.it.hint ? '<span class="ht">' + esc(g.it.hint) + "</span>" : "") +
-          '<span class="pa">' + esc(g.it.kind === "profile" ? "↗" : g.it.kind === "raycast" ? "↗ raycast" : g.it.kind === "accessory" ? "↗ window" : g.it.path) + "</span></div>";
+          '<span class="pa">' + esc(g.it.kind === "profile" ? "↗" : g.it.kind === "raycast" ? "↗ raycast" : g.it.kind === "accessory" ? "↗ window" : g.it.path) + "</span>" +
+          "</" + (navigable ? "a" : "div") + ">";
       });
     });
     list.innerHTML = html || '<div class="empty">No match. Try a page name, a photo stem, or a profile — or <a href="/photos">browse all photos</a>.</div>';

@@ -76,6 +76,47 @@ export const RN_TRACKS_TTL  = 3600;
 export const ARTIST_KV_TTL  = 30 * 86400;
 
       // 30d: artist profile (rarely changes)
+
+// Spotify serves the same art under several interchangeable CDN aliases, and
+// this file asks for art in two independent places: the per-track embed (tier 2)
+// and the per-artist embed (tier 3). Nothing makes those two scrapes agree on a
+// hostname, so one album cover can come back as image-cdn-fa under one track and
+// image-cdn-ak under another. Browsers cache by origin, so identical bytes then
+// download twice, over two TLS handshakes to two origins.
+//
+// Measured on a cold incognito load, 2026-07-30: ab67616d…3ba2c arrived from
+// both hosts at 50,045 and 50,043 bytes, decoding to an identical 49,727. That
+// is 48.9 KB and a whole extra connection spent on bytes already in cache, out
+// of 849.9 KB of album art on that page.
+//
+// i.scdn.co is Spotify's canonical image host and is ALREADY in the CSP, so
+// this narrows what the page talks to rather than widening it. Verified the same
+// day that all three hosts return byte-identical objects: sha256 matched across
+// three different image hashes, i.scdn.co included.
+//
+// Applied where the URL is EMITTED rather than only where it is scraped. Artist
+// records live in KV for ARTIST_KV_TTL (30 days) and the tracks payload for
+// RN_TRACKS_TTL, so normalizing at the scrape alone would leave a month-long
+// tail of already-cached aliases. The emit path is the one choke point every
+// source flows through, cache included.
+//
+// Deliberately narrow: only a /image/ path on a recognized alias is rewritten.
+// Anything else (mosaic.scdn.co, a shape Spotify has not shipped yet, a value
+// that will not even parse) passes through exactly as found, because a wrong
+// rewrite here is a broken image and the fallback is a URL that already works.
+const SPOTIFY_ART_ALIAS = /^image-cdn-[a-z0-9]+\.spotifycdn\.com$/i;
+export function canonicalArtUrl(raw) {
+  if (!raw) return raw;
+  try {
+    const u = new URL(raw);
+    if (SPOTIFY_ART_ALIAS.test(u.hostname) && u.pathname.startsWith("/image/")) {
+      u.hostname = "i.scdn.co";
+      return u.toString();
+    }
+  } catch { /* not parseable as a URL: leave it alone rather than guess */ }
+  return raw;
+}
+
 function trackResponse(payload, status = 200, format = "json") {
   if (format === "html") {
     return new Response(renderTrackListHtml(payload), {
@@ -178,7 +219,7 @@ export function renderTrackListHtml(payload) {
     const dataAttrs =
       ` data-track-title="${escAttr(t.title)}"` +
       ` data-track-artists="${escAttr(artistsText)}"` +
-      (t.image_url   ? ` data-track-image="${escAttr(t.image_url)}"` : "") +
+      (t.image_url   ? ` data-track-image="${escAttr(canonicalArtUrl(t.image_url))}"` : "") +
       (t.duration_ms ? ` data-track-duration="${dur}"`               : "") +
       (t.is_explicit ? ` data-track-explicit="1"`                    : "");
     return `<li${dataAttrs}>
@@ -195,7 +236,7 @@ function linkifyArtists(artists, fallbackText) {
   if (Array.isArray(artists) && artists.length) {
     return artists.map(a => {
       const href = a.spotify_url || `https://open.spotify.com/search/${encodeURIComponent(a.name)}/artists`;
-      const img = a.image_url ? ` data-artist-image="${escAttr(a.image_url)}"` : "";
+      const img = a.image_url ? ` data-artist-image="${escAttr(canonicalArtUrl(a.image_url))}"` : "";
       return `<span class="np-artist-link" data-href="${escAttr(href)}" data-artist-name="${escAttr(a.name)}"${img} role="link" tabindex="0">${escHtml(a.name)}</span>`;
     }).join(", ");
   }
@@ -279,7 +320,10 @@ export async function scrapePlaylistTracks(playlistId, env, ctx) {
     const out = await Promise.all(baseTracks.map(async t => {
       try {
         const e = await scrapeSpotifyEmbed(`track/${t.id}`, env);
-        const image_url = e?.visualIdentity?.image?.[0]?.url || null;
+        // canonicalized here too, not just at emit: this value is what lands in
+        // the KV payload and what /rn/tracks hands back as JSON, so a consumer
+        // that never touches the HTML still gets one host per image.
+        const image_url = canonicalArtUrl(e?.visualIdentity?.image?.[0]?.url || null);
         const artists = Array.isArray(e?.artists)
           ? e.artists
               .filter(a => a && typeof a.uri === "string" && a.uri.startsWith("spotify:artist:"))
@@ -334,12 +378,17 @@ export async function scrapePlaylistTracks(playlistId, env, ctx) {
       try {
         const e = await scrapeSpotifyEmbed(`artist/${a.id}`, env);
         scraped++;
-        // pick the 320px variant: tooltip renders at 180×180, so 320 source
-        // gives a crisp retina-ready image without paying the 640px hero
-        // weight. fall through to whatever's first if no 320 variant exists.
+        // pick the 320px variant: the tooltip renders at 120×120 (luna.css pins
+        // .xp-tooltip .cover.album to exactly that), so a 2x display wants 240
+        // and 320 is the smallest Spotify tier that clears it without paying the
+        // 640px hero weight. The next tier DOWN is 160, which goes soft on
+        // retina, so there is no cheaper correct answer among Spotify's sizes.
+        // (This comment said 180×180 until 2026-07-30; the conclusion was right
+        // and the number was never checked against the stylesheet.)
+        // fall through to whatever's first if no 320 variant exists.
         const imgs = Array.isArray(e?.visualIdentity?.image) ? e.visualIdentity.image : [];
         const pick = imgs.find(i => i.maxWidth === 320) || imgs.find(i => i.maxWidth === 160) || imgs[0] || null;
-        a.image_url = pick?.url || null;
+        a.image_url = canonicalArtUrl(pick?.url || null);
         if (e?.name && !a.name) a.name = e.name;
         if (env?.RN_KV && ctx) {
           ctx.waitUntil(env.RN_KV.put(cacheKey, JSON.stringify({
