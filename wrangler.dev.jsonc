@@ -52,7 +52,7 @@
       "/llms-full.txt", "/ledger", "/ledger.json",
       "/ledger/rum.js", "/ledger/rum",
       "/writing", "/writing/*",
-      "/rn", "/rn/tracks", "/rn/tracks.html", "/rn/admin", "/rn/set",
+      "/rn", "/rn/tracks", "/rn/tracks.html", "/rn/admin", "/rn/set", "/rn/art/*",
       "/bot", "/around", "/around/json", "/around/changes.json",
       "/photos", "/photos/", "/photos/query.json", "/photos/grid.html", "/run",
       "/images", "/images/", "/images/full", "/images/full/*",

@@ -45,10 +45,14 @@ import { ml_dsa44 } from "@noble/post-quantum/ml-dsa.js";
 import { mapWithConcurrency, readResponseCapped } from "./holding/_worker.js/lib/crawl.js";
 import { diffAroundRows, handleAroundChangesJson, readAroundChanges } from "./holding/_worker.js/around.js";
 import {
+  ART_VERSION,
+  artUrls,
   canonicalArtUrl,
+  handleRnArt,
   handleRnTracks,
   handleRnTracksHtml,
   renderTrackListHtml,
+  spotifyArtHash,
 } from "./holding/_worker.js/rn.js";
 
 const PLAYLIST_ID = "4IRq9W1N2tOWHhH0O3vXiF";
@@ -318,20 +322,76 @@ test("Spotify art collapses onto one host, and only where it is safe to", () => 
   ]) assert.equal(canonicalArtUrl(keep), keep);
 });
 
-test("rendered track rows carry canonical art hosts for tracks and artists", () => {
-  const hash = "ab67616d00001e026b458d1409d938dad4e3ba2c";
+const ART_HASH_A = "ab67616d00001e026b458d1409d938dad4e3ba2c";
+
+test("art URLs are derived from the hash, whatever alias it arrived under", () => {
+  for (const host of ["i.scdn.co", "image-cdn-fa.spotifycdn.com", "image-cdn-ak.spotifycdn.com"]) {
+    assert.equal(spotifyArtHash(`https://${host}/image/${ART_HASH_A}`), ART_HASH_A);
+  }
+  // null means "emit the original URL untouched", so every unrecognized shape
+  // has to land here rather than produce a /rn/art/ URL that would 404.
+  for (const no of [
+    "https://mosaic.scdn.co/640/abc",
+    `https://evil.example.com/image/${ART_HASH_A}`,
+    "https://i.scdn.co/image/NOTHEX",
+    "https://i.scdn.co/image/ab67616d",            // too short
+    `https://i.scdn.co/image/${ART_HASH_A}extra`,  // too long
+    "not-a-url", "", null, undefined,
+  ]) assert.equal(spotifyArtHash(no), null);
+
+  const u = artUrls(`https://i.scdn.co/image/${ART_HASH_A}`);
+  assert.equal(u.src, `/rn/art/${ART_HASH_A}-240-${ART_VERSION}.jpg`);
+  assert.equal(u.srcset,
+    `/rn/art/${ART_HASH_A}-120-${ART_VERSION}.avif 120w, /rn/art/${ART_HASH_A}-240-${ART_VERSION}.avif 240w`);
+  assert.equal(artUrls("https://mosaic.scdn.co/640/abc"), null);
+});
+
+test("rendered track rows re-host recognized art and pass everything else through", () => {
   const html = renderTrackListHtml({
     tracks: [{
       title: "t", song_link_url: "https://song.link/x", duration_ms: 1000,
-      image_url: `https://image-cdn-ak.spotifycdn.com/image/${hash}`,
+      image_url: `https://image-cdn-ak.spotifycdn.com/image/${ART_HASH_A}`,
       artists: [{ name: "a", spotify_url: "https://open.spotify.com/artist/1",
-                  image_url: `https://image-cdn-fa.spotifycdn.com/image/${hash}` }],
+                  image_url: `https://image-cdn-fa.spotifycdn.com/image/${ART_HASH_A}` }],
     }],
   });
-  // the emit path is what fixes URLs already sitting in KV under the old aliases
-  assert.match(html, /data-track-image="https:\/\/i\.scdn\.co\/image\//);
-  assert.match(html, /data-artist-image="https:\/\/i\.scdn\.co\/image\//);
-  assert.doesNotMatch(html, /spotifycdn\.com/);
+  assert.match(html, new RegExp(`data-track-image="/rn/art/${ART_HASH_A}-240-${ART_VERSION}\\.jpg"`));
+  assert.match(html, /data-track-imageset="\/rn\/art\/[0-9a-f]{40}-120-\d+\.avif 120w/);
+  assert.match(html, new RegExp(`data-artist-image="/rn/art/${ART_HASH_A}-240-${ART_VERSION}\\.jpg"`));
+  assert.match(html, /data-artist-imageset=/);
+  // the whole point: a hover no longer reaches Spotify at all
+  assert.doesNotMatch(html, /scdn\.co|spotifycdn\.com/);
+
+  // an art URL with no parseable hash keeps its original URL and gains NO
+  // imageset, which is the same shape tooltip.js sees from a pre-deploy cached
+  // fragment — one code path, not a migration.
+  const odd = renderTrackListHtml({
+    tracks: [{ title: "t", song_link_url: "https://song.link/x",
+               image_url: "https://mosaic.scdn.co/640/abc", artists: [] }],
+  });
+  assert.match(odd, /data-track-image="https:\/\/mosaic\.scdn\.co\/640\/abc"/);
+  assert.doesNotMatch(odd, /data-track-imageset/);
+});
+
+test("the art route 404s every shape that is not one it minted", async () => {
+  // This grammar is the only thing between the route and an open image proxy,
+  // so each rejection below is a way someone could otherwise aim it or burn the
+  // monthly transformation allowance by hand.
+  const bad = [
+    `/rn/art/${ART_HASH_A}-999-${ART_VERSION}.avif`,   // width not in the tier set
+    `/rn/art/${ART_HASH_A}-240-${ART_VERSION}.png`,    // format we do not mint
+    `/rn/art/${ART_HASH_A}-240-${ART_VERSION}`,        // no extension
+    `/rn/art/${ART_HASH_A.toUpperCase()}-240-1.avif`,  // uppercase hex
+    "/rn/art/nothex-240-1.avif",
+    `/rn/art/${ART_HASH_A}.avif`,
+    "/rn/art/",
+    `/rn/art/${ART_HASH_A}-240-1.avif/../../etc`,
+  ];
+  for (const p of bad) {
+    const res = await handleRnArt(new Request(`https://aadhar.sh${p}`), {}, null);
+    assert.equal(res.status, 404, `expected 404 for ${p}`);
+    assert.equal(res.headers.get("cache-control"), "no-store", `a 404 for ${p} must not be cacheable`);
+  }
 });
 
 test("track endpoints keep JSON and HTML contracts independent of Accept", async () => {
