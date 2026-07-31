@@ -32,7 +32,7 @@ import { installTracing as installCalTracing } from "../../cal/src/trace.js";
 import { getThumbHashes, handleImagesManifest, handlePhotoQuery, handlePhotos, servePhotoFromR2 } from "./photos.js";
 import { handleReading } from "./reading.js";
 import { handleRun } from "./run.js";
-import { handleRn, handleRnAdmin, handleRnSet, handleRnTracks, handleRnTracksHtml } from "./rn.js";
+import { handleRn, handleRnAdmin, handleRnArt, handleRnSet, handleRnTracks, handleRnTracksHtml } from "./rn.js";
 import { cronHomeProbe } from "./perf-probe.js";
 import { handleSearch, handleSearchJson } from "./search.js";
 import { handleSecurityCenter } from "./security.js";
@@ -316,6 +316,14 @@ const PREFIX = [
       return !!slug && slug.indexOf("/") === -1 && slug.indexOf(".") === -1;
     },
     handle: routeWritingPost,
+  },
+  {
+    label: "/rn/art/<hash>-<width>-<v>.<ext>",
+    match: (pathname) => pathname.startsWith("/rn/art/"),
+    handle: handleRnArt,
+    // Matches the whole prefix and lets the handler 404 a bad shape, rather than
+    // duplicating its hash/width/format grammar here. One regex, in rn.js, is
+    // what keeps this from becoming an open image proxy.
   },
   {
     label: "/images/meta/<stem>.json",
