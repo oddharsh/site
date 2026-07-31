@@ -65,6 +65,13 @@ try {
 //     worth asserting, and losing the row would be losing coverage.
 const ROUTES = [
   { path: "/", status: 200, ct: "text/html", marker: "Aadharsh" },
+  // The front door answers agents in Markdown at its own URL. Two checks cover that
+  // and they are not redundant: this row exercises the worker's own negotiation,
+  // while infra.json's markdown-for-agents-off reads production and so covers
+  // whether anything ANSWERS IN FRONT of the worker. #195 was entirely the second
+  // kind — the negotiation was correct throughout — and neither check alone can
+  // tell the two apart.
+  { path: "/", status: 200, ct: "text/markdown", headers: { accept: "text/markdown" } },
   { path: "/index.html", status: 301 },
   { path: "/favicon.ico", status: 200, ct: "image/svg+xml" },
   // ?peek=1 so the oracle never advances the visitor count
