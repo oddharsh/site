@@ -196,9 +196,10 @@ function shellCss() {
   /* NO -webkit-font-smoothing: the rest of the site renders at the browser
      default (auto/subpixel) for period-correct heavier text. serendipity was the
      only page forcing antialiased, which thinned the SHARED nav.js taskbar/clock
-     it inherits — a visibly lighter clock here, and a weight-swap flash of the
-     clock + tray sleeve every time a View Transition crossed into/out of this
-     page (the pinned old taskbar snapshot vs the live new one). match the site. */
+     it inherits — a visibly lighter clock here. It also caused a weight-swap
+     flash of the clock + tray sleeve on every nav into/out of this page, back
+     when a View Transition pinned the old taskbar snapshot against the live new
+     one; that transition is gone, the mismatch reason is not. Match the site. */
   body{font-family:var(--font-ui);font-size:12px;line-height:1.5;color:oklch(16% 0 0);font-variant-numeric:tabular-nums;text-wrap:pretty}
   a{color:oklch(42% 0.235 264);text-decoration:underline}
   a:hover{color:oklch(60% 0.25 29)}

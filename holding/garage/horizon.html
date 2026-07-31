@@ -25,11 +25,6 @@
 
 <style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}
 * { box-sizing: border-box; }
-/* cross-document View Transitions: a fast, reduced-motion-safe crossfade on real
-   navigations between same-origin pages. inline (not JS-injected) so the incoming
-   page has opted in by parse time. the persistent shell (wallpaper/taskbar) is
-   identical across pages, so visually only the changing window content fades. */
-@media (prefers-reduced-motion:no-preference){@view-transition{navigation:auto}::view-transition-old(root),::view-transition-new(root){animation-duration:140ms}}
 html, body { margin: 0; padding: 0; } html{background:linear-gradient(180deg,oklch(56% 0.13 250) 0%,oklch(73% 0.10 236) 50%,oklch(88% 0.05 232) 60%,oklch(60% 0.16 140) 100%)}
 body {
   background: oklch(91.74% 0.0203 238.68);
@@ -1475,12 +1470,11 @@ pointerout   -&gt; hidePopover()
       </p>
     </section>
 
-    <section class="demo shipped" data-cap="view-transitions">
+    <section class="demo" data-cap="view-transitions">
       <h2>
         <span>View Transitions <span class="mono">/ document.startViewTransition()</span></span>
         <span class="stat cross">Chrome &middot; Safari &middot; FF 144</span>
       </h2>
-      <p class="ship-tag">✓ shipped on the site</p>
       <p class="note">
         Wrap a DOM mutation in <code>document.startViewTransition(cb)</code> and
         the browser snapshots before + after, then cross-fades (or morphs, for
@@ -1508,22 +1502,18 @@ pointerout   -&gt; hidePopover()
         still toggle instantly (just without the morph).
       </p>
       <p class="replaces">
-        On the site: the photo grid fits most obviously. Reshuffling the
-        random 9, or expanding a thumbnail to its full-res
-        <code>/images/full/</code> view, could morph the clicked frame into
-        place by sharing a <code>view-transition-name</code> instead of a hard
-        cut. <strong>But</strong> the cross-document nav cross-fade was
-        deliberately <em>removed</em> site-wide: the
-        <code>@view-transition&nbsp;{ navigation: auto }</code> opt-in softened
-        the McMaster-Carr-style instant snap that the eager Speculation-Rules
-        prerender exists to deliver. A 200ms fade on top of a
-        zero-latency prerendered page regresses the experience. So the rule
-        here is: same-document morphs on opt-in interactions = yes; automatic
-        navigation cross-fade = no, it fights the prerender. (A leftover
-        <code>@view-transition</code> line still sits in
-        <code>xpChromeCss()</code> in <code>_worker.js</code> with a stale
-        &quot;mirrors the homepage&quot; comment, the homepage no
-        longer opts in, so that block is dead and worth pruning.)
+        On the site: nowhere, as of 2026-07-30. The Run palette, the
+        <code>/writing</code> note popovers, and the <code>/lens</code> view
+        tabs each wrapped their DOM mutation in
+        <code>startViewTransition()</code>; all three now apply it directly.
+        The honest reason is that every one of those elements is already
+        composited and on screen the moment it is asked for, so the transition
+        could only add latency to an interaction that had none. It also cost
+        more than the animation: <code>startViewTransition</code> <em>defers</em>
+        its callback, so every caller had to move focus and measurement inside
+        the callback, and the ones that forgot ran a frame early against a
+        still-hidden element. The API is genuinely good, and the demo below is
+        real; this site just ran out of places where the trade paid.
       </p>
       <p class="unsupported">
         Your browser doesn&apos;t support <code>document.startViewTransition</code>
@@ -3418,23 +3408,31 @@ myButton.onclick = async () =&gt; {
     </section>
 
     <!-- ───────────────────── cross-document view transitions ───────────────────── -->
-    <section class="demo shipped" data-cap="cross-doc-vt">
+    <section class="demo" data-cap="cross-doc-vt">
       <h2>
         <span>Cross-document transitions <span class="mono">@view-transition</span></span>
         <span class="stat cross">Chrome 126 &middot; Safari 18.2 &middot; FF building</span>
       </h2>
-      <p class="ship-tag">✓ shipped on the site</p>
       <p class="note">
-        The multi-page sibling of the View Transitions already used in the window shell. One
-        rule (<code>@view-transition { navigation: auto }</code> on both pages) animates a
+        The multi-page sibling of View Transitions. One rule
+        (<code>@view-transition { navigation: auto }</code> on both pages) animates a
         <em>real</em> navigation between two separate documents, no SPA, no JS.
-        (Can&apos;t demo it inside one page; it fires on the navigation itself.)
+        (Can&apos;t demo it inside one page; it fires on the navigation itself.
+        <a href="/garage/vt-check">/garage/vt-check</a> is a bare two-page pair that
+        does, if you want to see whether your browser runs one at all.)
       </p>
       <p class="replaces">
-        On the site: live now. Every route is its own document, so navigating home &rarr;
-        <code>/writing</code> &rarr; <code>/garage</code> crossfades natively (a fast 140ms,
-        reduced-motion-safe) instead of a hard cut. Opted in via inline
-        <code>@view-transition { navigation: auto }</code> on every page.
+        On the site: <strong>tried, then removed</strong>. It shipped here for most of
+        2026 and every route opted in inline, with a hand-tuned XP minimize/restore
+        instead of a cross-fade. It came out on 2026-07-30 for a reason worth stating
+        plainly, because it is the same reason twice: the Speculation-Rules prerender
+        two cards down already loads the next page on hover-intent, so by click time
+        the document is rendered and activation is free. The transition then spent
+        ~200ms animating over a navigation that had nothing left to hide. Two features
+        that each look like a win can want opposite things, and the prerender won:
+        it makes the page arrive sooner, while the transition could only make it
+        <em>appear</em> later. Firefox never implemented the opt-in and always cut
+        instantly. It turned out to be right.
       </p>
     </section>
 

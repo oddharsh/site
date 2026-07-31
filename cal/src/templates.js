@@ -28,13 +28,6 @@ import { DESKTOP_CHROME, DESKTOP_TOP } from "../../holding/_worker.js/lib/deskto
 const STYLES = `
 * { box-sizing: border-box; }
 
-/* cross-document view transitions — animate the window on nav, matching the
-   homepage + garage. nav.js tags the window 'axp-window'; this opts the page in. */
-@media (prefers-reduced-motion: no-preference) {
-  @view-transition { navigation: auto; }
-  ::view-transition-old(root), ::view-transition-new(root) { animation-duration: 140ms; }
-}
-
 html {
   background: var(--face);
   color: var(--ink);

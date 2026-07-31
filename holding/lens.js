@@ -436,17 +436,12 @@
       '<div class="lx-vs-grid">' + vsColumn(L || {}) + vsColumn(R || {}) + "</div>" + headline;
   }
 
-  // vsMode flips OUTSIDE the transition: withViewTransition defers its callback
-  // a frame, and syncUrl reads vsMode synchronously right after — deferring the
-  // flag meant the shareable ?vs= was written from the OLD mode every time.
   function setVsChrome(on) {
     vsMode = !!on;
-    withViewTransition(function () {
-      [toolbar, modeNote, panes].forEach(function (el) { if (el) el.classList.toggle("lx-off", vsMode); });
-      if (vsSection) vsSection.classList.toggle("lx-off", !vsMode);
-      if (vsRow) vsRow.classList.toggle("lx-off", !vsMode && !(vsInput && vsInput.value.trim()));
-      if (vsToggle) vsToggle.setAttribute("aria-expanded", vsRow && !vsRow.classList.contains("lx-off") ? "true" : "false");
-    }, true, ["axp-dialog"]);
+    [toolbar, modeNote, panes].forEach(function (el) { if (el) el.classList.toggle("lx-off", vsMode); });
+    if (vsSection) vsSection.classList.toggle("lx-off", !vsMode);
+    if (vsRow) vsRow.classList.toggle("lx-off", !vsMode && !(vsInput && vsInput.value.trim()));
+    if (vsToggle) vsToggle.setAttribute("aria-expanded", vsRow && !vsRow.classList.contains("lx-off") ? "true" : "false");
   }
 
   function runVs(left, right, push) {
@@ -934,7 +929,7 @@
         if (!Object.prototype.hasOwnProperty.call(counterfactuals, key)) return;
         counterfactuals[key] = !counterfactuals[key];
         syncUrl(true);
-        withViewTransition(function () { renderMachine(); }, true, ["axp-dialog"]);
+        renderMachine();
       });
     });
   }
@@ -1523,52 +1518,35 @@
     }
   }
 
-  // Lens controls only replace content inside the existing page window. Tag
-  // those same-document transitions as dialogs so luna.css does not apply the
-  // cross-page minimize/restore choreography to the unchanged window shell.
-  function withViewTransition(fn, animate, types) {
-    if (
-      animate !== false &&
-      document.startViewTransition &&
-      !window.matchMedia("(prefers-reduced-motion: reduce)").matches
-    ) {
-      return types ? document.startViewTransition({ update: fn, types: types }) : document.startViewTransition(fn);
-    }
-    return fn();
-  }
-
+  // View and lens switches only replace content inside the existing page window,
+  // and they now apply it directly. They used to route through a same-document
+  // View Transition, which had to be defused case by case: setVsChrome flipped
+  // its flag outside the callback because syncUrl read it synchronously, and
+  // setLens passed animate:false outright. Applying the change directly is what
+  // every caller was already steering toward. `animate` stays in both signatures
+  // because callers pass it positionally; it is inert.
   function setView(v, animate, writeHistory) {
     if (["both", "human", "machine", "browser", "delta"].indexOf(v) < 0) v = "both";
     view = v;
     try { localStorage.setItem("lx-mode", v); } catch (e) {}
     if (writeHistory !== false) syncUrl(true);
-    withViewTransition(function () {
-      panes.className = "lx-panes is-" + v;
-      updateModeUi();
-      if (data) {
-        renderMachine();
-        renderBrowser();
-        renderStatus();
-      } else { renderIdleLens(); renderBrowser(); }
-    }, animate, ["axp-dialog"]);
+    panes.className = "lx-panes is-" + v;
+    updateModeUi();
+    if (data) {
+      renderMachine();
+      renderBrowser();
+      renderStatus();
+    } else { renderIdleLens(); renderBrowser(); }
   }
   function setLens(l, animate, writeHistory) {
     lens = l;
     if (writeHistory !== false) syncUrl(true);
-    // Lens tabs replace evidence inside the existing window. Keep that local
-    // subtab change synchronous; otherwise the site's named axp-window view
-    // transition makes the whole Lens window play its close/open choreography.
-    // An explicit true remains available for a future tab transition that
-    // deliberately opts into motion.
-    var shouldAnimate = animate === true;
-    withViewTransition(function () {
-      [].forEach.call(document.querySelectorAll(".lx-tab"), function (b) {
-        var active = b.getAttribute("data-lens") === l;
-        b.classList.toggle("is-on", active);
-        b.setAttribute("aria-selected", active ? "true" : "false");
-      });
-      if (data) renderMachine(); else { updateModeUi(); renderIdleLens(); }
-    }, shouldAnimate, ["axp-dialog"]);
+    [].forEach.call(document.querySelectorAll(".lx-tab"), function (b) {
+      var active = b.getAttribute("data-lens") === l;
+      b.classList.toggle("is-on", active);
+      b.setAttribute("aria-selected", active ? "true" : "false");
+    });
+    if (data) renderMachine(); else { updateModeUi(); renderIdleLens(); }
   }
 
   form.addEventListener("submit", function (e) {
