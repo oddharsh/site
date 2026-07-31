@@ -182,6 +182,11 @@
       "hint": "Grid Lanes masonry photo grid (with fixed-square fallback)",
       "flags": { "run": true, "taskbar": false, "sitemap": true, "gallery": true, "agents": true, "searchIndex": false, "webmention": true } },
 
+    { "path": "/garage/octane", "title": "Octane, priced against no framework", "section": "garage", "kind": "content", "short": "octane",
+      "description": "Nextane's 60.9% win over Next.js, re-measured on the live demo, then given the row every framework benchmark leaves out: a site that ships no framework at all.",
+      "hint": "what a framework's floor costs against no framework",
+      "flags": { "run": true, "taskbar": false, "sitemap": true, "gallery": true, "agents": true, "searchIndex": false, "webmention": true } },
+
     { "path": "/garage/pretext", "title": "DOM-free text measurement", "section": "garage", "kind": "content",
       "description": "chenglou/pretext measures and lays out multiline text with canvas as ground truth instead of the DOM.",
       "hint": "DOM-free text measurement",

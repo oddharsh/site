@@ -15,7 +15,25 @@
 // sig2 exists because the migration is cheap here and expensive later, and
 // because a live example beats a writeup. Read /garage/pqc for the numbers.
 // It is deliberately NOT load-bearing: see MLDSA_ALG on why it cannot be.
-import { ml_dsa44 } from "@noble/post-quantum/ml-dsa.js";
+// The ML-DSA import is DYNAMIC, and that is a startup fix rather than a style
+// choice. @noble/post-quantum builds its NTT lattice tables (getZettas,
+// reverseBits) in module scope, so a static import made every cold isolate pay
+// for them before serving a byte -- including the overwhelming majority of
+// requests that never sign anything, since sig2 only rides AadharshBot's
+// OUTBOUND crawls (rn's Spotify scrape, /around, census, webmention, /lens).
+// `wrangler check startup` put the package at 45% of active startup; deferring
+// it took the local profile from 3.9ms to 1.4ms median (25 runs each).
+//
+// esbuild keeps the module in this same bundle and wraps it in a lazy __esm
+// initializer, so there is no extra network fetch at runtime and no
+// find_additional_modules config -- the deferral is the wrapper, not a second
+// module load. Verified under workerd, which permits a runtime import() inside
+// a request handler.
+//
+// NB the ordering below: mldsaSigner checks for the KEY before it awaits this,
+// so a deployment with no ML-DSA key configured never builds the tables at all.
+let mlDsaPromise = null;
+const getMlDsa44 = () => (mlDsaPromise ||= import("@noble/post-quantum/ml-dsa.js").then((m) => m.ml_dsa44));
 
 export const BOT_NAME    = "AadharshBot";
 
@@ -98,7 +116,7 @@ function bytesToB64(bytes) {
 // fine and means "ed25519 only", because sig2 promises nothing yet and a crawl
 // that still verifies beats a crawl that 500s. Malformed is NOT fine: the key
 // directory advertises this key, so a broken one has to be loud.
-function mldsaSigner(env) {
+async function mldsaSigner(env) {
   const raw = env && env.RN_SIGNING_KEY_MLDSA_JWK;
   if (!raw) return null;
   if (mldsaCache && mldsaCache.raw === raw) return mldsaCache;
@@ -111,10 +129,14 @@ function mldsaSigner(env) {
   if (seed.length !== 32) {
     throw new Error(`AadharshBot ML-DSA seed is ${seed.length} bytes, expected 32`);
   }
+  // shape checks first, tables second: a malformed key still fails loudly
+  // without building 27KB of lattice constants to reject it.
+  const ml_dsa44 = await getMlDsa44();
   mldsaCache = {
     raw,
     keyId: jwk.kid || "rn-mldsa",
     secretKey: ml_dsa44.keygen(seed).secretKey,
+    sign: (msg, key) => ml_dsa44.sign(msg, key),
   };
   return mldsaCache;
 }
@@ -156,13 +178,13 @@ export async function signRequestForWebBotAuth(targetUrl, env) {
 
   // workerd's WebCrypto has no ML-DSA (it is still a WICG proposal), so this
   // one is pure JS. ~8.5ms and ~3.2KB of header, measured on /garage/pqc.
-  const pq = mldsaSigner(env);
+  const pq = await mldsaSigner(env);
   if (pq) {
     const pqParams = paramsFor(created, pq.keyId, MLDSA_ALG);
     out.push({
       label: "sig2",
       params: pqParams,
-      b64: bytesToB64(ml_dsa44.sign(signatureBase(host, pqParams), pq.secretKey)),
+      b64: bytesToB64(pq.sign(signatureBase(host, pqParams), pq.secretKey)),
     });
   }
 

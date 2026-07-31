@@ -65,6 +65,13 @@ try {
 //     worth asserting, and losing the row would be losing coverage.
 const ROUTES = [
   { path: "/", status: 200, ct: "text/html", marker: "Aadharsh" },
+  // The front door answers agents in Markdown at its own URL. Two checks cover that
+  // and they are not redundant: this row exercises the worker's own negotiation,
+  // while infra.json's markdown-for-agents-off reads production and so covers
+  // whether anything ANSWERS IN FRONT of the worker. #195 was entirely the second
+  // kind — the negotiation was correct throughout — and neither check alone can
+  // tell the two apart.
+  { path: "/", status: 200, ct: "text/markdown", headers: { accept: "text/markdown" } },
   { path: "/index.html", status: 301 },
   { path: "/favicon.ico", status: 200, ct: "image/svg+xml" },
   // ?peek=1 so the oracle never advances the visitor count
@@ -200,8 +207,20 @@ async function probe(r) {
     const okCt = !r.ct || (Array.isArray(r.ct) ? r.ct.some(c => ct.startsWith(c)) : ct.startsWith(r.ct));
     const okMarker = !r.marker || body.includes(r.marker);
     const okBytes = !r.maxBytes || (bytes !== null && bytes <= r.maxBytes);
+    // The doctype leads the document, but build.mjs stamps a one-line banner
+    // pointing at the readable .src.html twin ahead of it. That banner reached
+    // /lens on 2026-07-31, when minification stopped being homepage-only; the
+    // homepage had carried it for a while without tripping this, because only
+    // /lens and /search assert fullPage and /search is rendered per request.
+    //
+    // Allowing a leading comment is safe rather than a loosened contract. Per the
+    // HTML5 "initial" insertion mode a comment before DOCTYPE is legal and does
+    // not force quirks mode, and that is verified rather than assumed: on live
+    // production the homepage reports document.childNodes[0].nodeType === 8,
+    // document.doctype.name === "html", and document.compatMode === "CSS1Compat".
+    // Still anchored, so a document that merely mentions a doctype later fails.
     const okFullPage = !r.fullPage || (
-      /^<!doctype html[\s>]/i.test(body) &&
+      /^(?:<!--[\s\S]*?-->\s*)?<!doctype html[\s>]/i.test(body) &&
       /<html\b/i.test(body) &&
       /<head\b/i.test(body) &&
       /<body\b/i.test(body) &&
