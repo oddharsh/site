@@ -26,6 +26,7 @@ import { wantsMarkdown } from "./lib/http.js";
 import { handleSiteMcp } from "./mcp.js";
 import { withSecurityHeaders } from "./lib/security.js";
 import { SHELL_PRELOAD_LINK } from "./lib/shell-assets.js";
+import { cronJob } from "./lib/cron.js";
 import { installTracing, span } from "./lib/trace.js";
 import { installTracing as installCalTracing } from "../../cal/src/trace.js";
 import { getThumbHashes, handleImagesManifest, handlePhotoQuery, handlePhotos, servePhotoFromR2 } from "./photos.js";
@@ -39,7 +40,7 @@ import { handleSystemRestore, handleUpdatesJson, handleWindowsUpdate } from "./u
 import { handleWhoareyou, handleWhoareyouJson } from "./whoareyou.js";
 import { handleWritingIndex, handleWritingPost } from "./writing.js";
 import { handleLlmsFull } from "./x402.js";
-import { handleSerendipity, withSerendipitySecurityHeaders } from "../../serendipity/serendipity.js";
+import { cronSerendipity, handleSerendipity, withSerendipitySecurityHeaders } from "../../serendipity/serendipity.js";
 
 // Hand the runtime's tracer to both span helpers. THIS is the only module that
 // may import it: the rest of the worker is also imported by contract-tests.mjs
@@ -156,19 +157,40 @@ export default {
     // until now a job that had been silently degrading for weeks looked exactly
     // like a job that was fine. The span is the difference.
     //
-    // waitUntil still receives the promise, so failure semantics are unchanged.
-    const cron = (name, work) => ctx.waitUntil(span(name, work, { "cron.schedule": event.cron }));
-    if (event.cron === "7,37 * * * *") {
-      cron("cron.home_probe", () => cronHomeProbe(env, ctx));   // :07/:37 — the two homepage fragments' KV latency -> Analytics Engine
-    } else if (event.cron === "17 8 * * 1") {
-      cron("cron.census", () => cronCensus(env));   // Mondays 08:17 UTC — the longitudinal census
-    } else if (event.cron === "41 5 * * *") {
+    // The job is AWAITED, not just waitUntil'd: a scheduled event's generous
+    // budget applies to work the handler is still awaiting, while a handler
+    // that returns immediately leaves its waitUntil tail at the runtime's
+    // post-return grace — which is what cut the census sweep off at its first
+    // batch on the owner-refresh path. waitUntil still receives the promise
+    // too, so failure semantics are unchanged.
+    const cron = (name, work) => { const p = span(name, work, { "cron.schedule": event.cron }); ctx.waitUntil(p); return p; };
+    // Dispatch via cronJob() (lib/cron.js): minute+hour signatures, immune to
+    // Cloudflare's cron-expression normalization ("* * 1" can come back
+    // "* * MON", and the old exact match sent three straight Monday censuses
+    // into the else-branch). Unknown expressions get their own traced event
+    // instead of silently running somebody else's job.
+    const job = cronJob(event.cron);
+    if (job === "home_probe") {
+      await cron("cron.home_probe", () => cronHomeProbe(env, ctx));   // :07/:37 — the two homepage fragments' KV latency -> Analytics Engine
+    } else if (job === "census") {
+      await cron("cron.census", () => cronCensus(env));   // Mondays 08:17 UTC — the longitudinal census, full roster in one awaited pass
+    } else if (job === "webmention_send") {
       // 05:41 UTC daily — tell the sources these pages cite that they were
       // cited. Its own schedule (not the */30 tick) because it reads my own
       // pages and then probes third-party hosts: a slow, polite, once-a-day job.
-      cron("cron.webmention_send", () => cronSendWebmentions(env));
+      await cron("cron.webmention_send", () => cronSendWebmentions(env));
+    } else if (job === "serendipity") {
+      // 00/06/12/18:23 UTC — re-sync every enabled Luma feed into the
+      // serendipity pool (serendipity.js cronSerendipity): events, then the
+      // next few guest lists, then a description backfill. Four times daily
+      // keeps the pool honest AND the stored Luma session warm; without this
+      // tick the pool only refreshed on a cookie re-paste. Odd minute, same
+      // collision-avoidance as the others.
+      await cron("cron.serendipity", () => cronSerendipity(env));
+    } else if (job === "around") {
+      await cron("cron.around", () => cronAround(env));   // */30 — the neighborhood crawl
     } else {
-      cron("cron.around", () => cronAround(env));   // */30 — the neighborhood crawl
+      await cron("cron.unmatched", async () => ({ ok: false, cron: event.cron }));
     }
     // NOTE: the weekly coffee-booking sweep (0 4 * * 7) is gone — each pending
     // booking now carries its own BookingWorkflow expiry timer (cal/src/workflow.js).
