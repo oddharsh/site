@@ -71,7 +71,23 @@ const DROP_CLASS_INLINE = new Set(["bay-no"]);
 // page's OWN inline <style> and collect every class whose rule takes it out of
 // the inline flow. Each page carries its whole stylesheet inline, so this needs
 // no CSS engine and no second file — just the rule blocks already in hand.
-const OUT_OF_FLOW = /(?:display\s*:\s*(?:block|flex|grid|list-item|table)|float\s*:\s*(?:left|right))/i;
+// A flex or grid ITEM is its own box while declaring no `display` of its own —
+// the layout comes from its parent, so a rule like `.wu-tag{flex:0 0 92px}` looks
+// inline to a check that only reads the element's own display. /updates found it:
+// `<span class=wu-tag>hit-route</span><span class=wu-desc>counter tick endpoint
+// renamed …</span>` converted to "hit-routecounter tick endpoint renamed …", a
+// slug welded to a title into a string that appears nowhere on the page. Same
+// failure this whole heuristic exists for, one layout mode further on.
+//
+// Matched on the item shorthand and the grid placement properties rather than on
+// a parent lookup, which would need a tree walk this deliberately does without.
+// `flex` needs the leading boundary so it cannot swallow `flex-direction` and
+// `flex-flow`, which are CONTAINER properties and say nothing about this element.
+const OUT_OF_FLOW = /(?:display\s*:\s*(?:block|flex|grid|list-item|table)|float\s*:\s*(?:left|right)|(?:^|[;{\s])flex\s*:|flex-basis\s*:|grid-(?:area|column|row)\s*:)/i;
+
+// Elements renderInline turns into a standalone Markdown token. They are already
+// self-separating in the output, so promoting them to blocks can only lose them.
+const SELF_TOKEN = new Set(["img"]);
 
 export function collectBlockClasses(html) {
   const found = new Set();
@@ -363,7 +379,14 @@ function renderBlocks(nodes, ctx, depth = 0) {
     if (dropped(n)) continue;
     const cls = (n.attrs?.class || "").split(/\s+/).filter(Boolean);
     const promoted = ctx.blockClasses || EMPTY;
-    const isBlock = BLOCK.has(n.name) || cls.some((c) => promoted.has(c));
+    // Class-based promotion exists to break up TEXT that would otherwise run
+    // together, so it must not reach an element that renderInline already emits
+    // as a token of its own. An <img> has no text, so the block switch below has
+    // no case for it and it renders as nothing: /lwe/encoding's sample photo
+    // vanished from its twin the moment `.bpp-img{flex:0 0 auto}` started
+    // counting as out-of-flow. A named tag in BLOCK still wins, as before.
+    const isBlock = BLOCK.has(n.name)
+      || (!SELF_TOKEN.has(n.name) && cls.some((c) => promoted.has(c)));
     if (!isBlock) { run.push(n); continue; }
     flush();
 

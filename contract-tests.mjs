@@ -30,6 +30,7 @@ import { cronJob } from "./holding/_worker.js/lib/cron.js";
 import { serveStaticPage } from "./holding/_worker.js/lib/assets.js";
 import { readManifest, workerModule, navFenceBody, readFenceBody } from "./scripts/gen-manifest.mjs";
 import { INDEXED_SECTIONS, TWIN_FACTS, buildTwins, checkTwinFacts, htmlFileFor, twinPath } from "./scripts/gen-md-twins.mjs";
+import { collectBlockClasses, readDocument } from "./scripts/lib/html-to-md.mjs";
 import { MCP_TOOLS, cookieJar, parseCookies } from "./serendipity/serendipity.js";
 import { derivePhotoPool, renderPhotosPage, getImagesManifest, handlePhotoQuery, queryPhotos } from "./holding/_worker.js/photos.js";
 import { renderPhotoSlots } from "./holding/_worker.js/lib/photo-grid.js";
@@ -1303,6 +1304,47 @@ test("cached renders stream the first miss while tagging the background copy", a
     if (priorCaches === undefined) delete globalThis.caches;
     else globalThis.caches = priorCaches;
   }
+});
+
+// The twin converter reads each page's own inline CSS to find elements the page
+// takes out of the inline flow, because otherwise their text welds together. It
+// looked only at the element's OWN display, which a flex or grid ITEM never
+// declares: its box comes from the parent. /updates converted
+// `<span class=wu-tag>hit-route</span><span class=wu-desc>counter tick …</span>`
+// into "hit-routecounter tick …", a string that appears nowhere on the page.
+//
+// buildTwins and friends were imported here and never called, so this file
+// asserted nothing about any of it. Same shape as the quiz test CLAUDE.md
+// describes, which read the wrong field names and passed while checking nothing.
+test("a flex item is its own box, and promoting one never eats an image", () => {
+  const page = (style, body) =>
+    `<html><head><title>T</title><style>${style}</style></head><body><main>${body}</main></body></html>`;
+
+  // the /updates shape: the item declares `flex`, never `display`
+  const welded = readDocument(
+    page(".tag{flex:0 0 92px}", "<p><span class=tag>hit-route</span><span>counter tick endpoint renamed</span></p>"),
+    { origin: "https://aadhar.sh" });
+  assert.doesNotMatch(welded.body, /hit-routecounter/, "a flex item must not weld onto the text after it");
+  assert.match(welded.body, /hit-route/);
+  assert.match(welded.body, /counter tick endpoint renamed/);
+
+  // the /lwe/encoding regression: an <img> carrying a flex-item class renders as
+  // a token already, and the block path has no case for it, so promoting it drops
+  // the image entirely.
+  const withImage = readDocument(
+    page(".pic{flex:0 0 auto}", '<p>before<img src="/enc/c.jpg" alt="sample photo" class="pic">after</p>'),
+    { origin: "https://aadhar.sh" });
+  assert.match(withImage.body, /!\[sample photo\]\(https:\/\/aadhar\.sh\/enc\/c\.jpg\)/,
+    "an image must survive its class being promoted out of the inline flow");
+
+  // container properties say nothing about THIS element and must not promote it
+  const container = readDocument(
+    page(".row{flex-direction:row;flex-flow:wrap}", "<p><span class=row>alpha</span><span>beta</span></p>"),
+    { origin: "https://aadhar.sh" });
+  assert.match(container.body, /alphabeta|alpha beta/, "flex-direction/flex-flow describe children, not this box");
+
+  // and the original heuristic still holds
+  assert.ok(collectBlockClasses("<style>.x{display:block}.y{float:right}.z{flex:1}</style>").size >= 3);
 });
 
 test("static page negotiation prefers 304, then DCZ with the current validator", async () => {
