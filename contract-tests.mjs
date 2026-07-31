@@ -1917,6 +1917,59 @@ test("every inline script in the STAGED tree is covered by the emitted hash map"
   assert.ok(pages.length >= 40, `expected the full staged document set, saw ${pages.length}`);
 
   const EXECUTABLE = /^(|text\/javascript|application\/javascript|text\/ecmascript|application\/ecmascript|module|speculationrules)$/;
+
+  // This scanner has to WALK tags, not string-search for "<script". /garage/horizon
+  // holds two scripts inside other tags' attribute values:
+  //
+  //   <input value="&lt;img src=x onerror=alert(1)&gt;&lt;script&gt;bad()&lt;/script&gt;">
+  //   <iframe srcdoc="...&lt;script&gt;let n=0;setInterval(...)&lt;/script&gt;...">
+  //
+  // Both are entity-escaped in the source. HTML5 lets a QUOTED attribute value carry
+  // raw < and >, so minify-html decodes them (no option turns that off, and the DOM
+  // value is identical either way), and from 2026-07-31 every page goes through the
+  // minifier. A searcher then finds `<script>bad()</script>` in the middle of an
+  // attribute and demands a CSP hash for something no browser will ever execute as
+  // part of this document.
+  //
+  // Independence from build.mjs's collector is the point of this test, so this is a
+  // separate implementation. Being different is not the goal though, and the earlier
+  // regex here was different by being wrong. A correct walk is the only correct
+  // answer: consume each tag whole so attribute text is never read as content, and
+  // treat <script> as a script only when it opens in content position.
+  const inlineScripts = function* (source) {
+    const low = source.toLowerCase();
+    let i = 0;
+    while (i < source.length) {
+      const lt = source.indexOf("<", i);
+      if (lt === -1) return;
+      if (low.startsWith("<!--", lt)) {
+        const end = source.indexOf("-->", lt + 4);
+        if (end === -1) return;
+        i = end + 3;
+        continue;
+      }
+      // find this tag's `>`, stepping over quoted attribute values
+      let j = lt + 1, quote = "";
+      while (j < source.length) {
+        const ch = source[j];
+        if (quote) { if (ch === quote) quote = ""; }
+        else if (ch === '"' || ch === "'") quote = ch;
+        else if (ch === ">") break;
+        j++;
+      }
+      if (j >= source.length) return;
+      const name = (low.slice(lt + 1, j).match(/^\/?\s*([a-z][^\s/>]*)/) || [])[1];
+      if (name === "script") {
+        const close = low.indexOf("</script", j + 1);
+        if (close === -1) return;
+        yield { attrs: source.slice(lt + 7, j), body: source.slice(j + 1, close) };
+        i = close + 8;
+        continue;
+      }
+      i = j + 1;   // consumed the whole tag, attributes included
+    }
+  };
+
   let checked = 0;
   for (const page of pages) {
     const html = readFileSync(`./.build/holding/${page}`, "utf8");
@@ -1924,8 +1977,8 @@ test("every inline script in the STAGED tree is covered by the emitted hash map"
     const path = key.length > 1 && key.endsWith("/") ? key.slice(0, -1) : key;
     assert.ok(map[path], `${page}: no entry at ${path} — it would silently fall back to 'unsafe-inline'`);
 
-    for (const m of html.matchAll(/<script([^>]*)>([\s\S]*?)<\/script>/g)) {
-      const attrs = m[1];
+    for (const m of inlineScripts(html)) {
+      const attrs = m.attrs;
       if (/\ssrc\s*=/i.test(attrs)) continue;
       // minify-html UNQUOTES attribute values wherever it legally can, so the
       // staged homepage carries `type=application/ld+json` bare. A quoted-only
@@ -1935,7 +1988,7 @@ test("every inline script in the STAGED tree is covered by the emitted hash map"
       const t = attrs.match(/\btype\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>]+))/i);
       const type = (t ? (t[1] ?? t[2] ?? t[3] ?? "") : "").toLowerCase();
       if (!EXECUTABLE.test(type)) continue;
-      const digest = createHash("sha256").update(m[2], "utf8").digest("base64");
+      const digest = createHash("sha256").update(m.body, "utf8").digest("base64");
       assert.ok(map[path].includes(digest),
         `${page}: an inline <script${type ? ` type="${type}"` : ""}> is not in the hash map — it would be BLOCKED once the flag flips`);
       checked++;
