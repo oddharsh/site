@@ -565,7 +565,9 @@ border:2px solid;border-color:oklch(55% 0 0) oklch(86% 0 0) oklch(86% 0 0) oklch
 #axp-run input:focus{outline:1px dotted oklch(45% 0.10 263);outline-offset:1px}
 #axp-run .list{margin:6px 13px 0;border:1px solid oklch(72% 0.02 250);max-height:40vh;overflow:auto;background:oklch(100% 0 0)}
 #axp-run .grp{padding:3px 8px;font-size:10px;font-weight:bold;letter-spacing:.06em;text-transform:uppercase;color:oklch(45% 0.04 255);background:oklch(95% 0.01 250);position:sticky;top:0}
-#axp-run .opt{display:flex;align-items:baseline;gap:8px;padding:3px 9px;cursor:pointer;white-space:nowrap}
+/* navigable rows are real anchors (so hover can start a prerender); strip the UA
+   link paint so an XP list row still reads as a list row, not as blue underline. */
+#axp-run .opt{display:flex;align-items:baseline;gap:8px;padding:3px 9px;cursor:pointer;white-space:nowrap;text-decoration:none;color:inherit}
 #axp-run .opt .nm{font-weight:bold;color:oklch(30% 0.03 255)}
 #axp-run .opt .ht{color:oklch(52% 0 0);font-size:11px;overflow:hidden;text-overflow:ellipsis}
 #axp-run .opt .pa{margin-left:auto;color:oklch(60% 0 0);font-family:var(--font-mono,'Courier New',monospace);font-size:10px}
