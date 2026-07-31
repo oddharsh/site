@@ -4,7 +4,7 @@
 // what's set on static assets via _headers — without this wrapper, the
 // worker-rendered pages (/whoareyou, /around, /bot, /rn/admin, etc.)
 // would skip _headers entirely and ship without CSP / Permissions-Policy.
-import { PAGE_DICTIONARY, SHELL_PRELOAD_LINK } from "./shell-assets.js";
+import { PAGE_DICTIONARY } from "./shell-assets.js";
 import { prefetchActivationHeader } from "../speculation.js";
 
 // There are NO external script or connect origins here, and that is a stronger
@@ -56,9 +56,12 @@ const HOMEPAGE_DISCOVERY_LINKS = [
 
 export const HOMEPAGE_DISCOVERY_LINK = HOMEPAGE_DISCOVERY_LINKS.join(", ");
 
-// preload the two shell assets ahead of the discovery links, so Cloudflare
-// Early Hints (which harvests only the rel=preload entries) sends them in a 103.
-const HOMEPAGE_LINK = `${SHELL_PRELOAD_LINK}, ${HOMEPAGE_DISCOVERY_LINK}`;
+// (HOMEPAGE_LINK and withHomepageDiscoveryHeaders lived here and composed
+// SHELL_PRELOAD_LINK ahead of the discovery links. Nothing imported them once
+// `/` moved to serveStaticPage + HOMEPAGE_HEADERS, and the homepage quietly
+// stopped emitting any rel=preload — so it stopped getting an Early Hints 103,
+// on the one page shell-assets.js says a 103 buys the most. index.js composes
+// that header at the route now, where the route can be seen using it.)
 
 // `pathname` is optional and only used to name this document in the prefetch
 // activation beacon. Callers that don't have one (the /lens self-fetch, which is
@@ -113,25 +116,4 @@ export function withSecurityHeaders(response, pathname) {
   });
 }
 
-export function withHomepageDiscoveryHeaders(response) {
-  const headers = new Headers(response.headers);
-  headers.set("link", HOMEPAGE_LINK);
-  appendVary(headers, "accept");
-  return new Response(response.body, {
-    status:     response.status,
-    statusText: response.statusText,
-    headers,
-  });
-}
 
-function appendVary(headers, token) {
-  const current = headers.get("vary");
-  if (!current) {
-    headers.set("vary", token);
-    return;
-  }
-  const tokens = current.split(",").map(s => s.trim().toLowerCase());
-  if (!tokens.includes(token.toLowerCase())) {
-    headers.set("vary", `${current}, ${token}`);
-  }
-}
