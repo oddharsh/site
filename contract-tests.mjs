@@ -1745,3 +1745,36 @@ test("the activation header lands on navigable HTML only", async () => {
   });
   assert.equal(withSecurityHeaders(encoded, "/").headers.get("content-encoding"), "br");
 });
+
+test("the homepage's Link header carries the shell preloads, or it gets no Early Hints 103", async () => {
+  // Cloudflare Early Hints harvests ONLY the rel=preload entries out of a Link
+  // header. `/` had none between the serveStaticPage refactor and this test, so
+  // it was the single page on the site answering without a 103 — verified
+  // against production on 2026-07-30, where /whoareyou returned one carrying
+  // luna.css + nav.js and `/` returned discovery links alone.
+  //
+  // Nothing failed when that broke. The route kept serving, the discovery links
+  // kept working, and the preloads were still written down in a function no
+  // route imported. This test is the part that was missing: an assertion that
+  // ties the header to the route rather than to a helper that may drift out of
+  // the call graph.
+  const index = await readFile(new URL("holding/_worker.js/index.js", import.meta.url), "utf8");
+  const block = index.match(/const HOMEPAGE_HEADERS = \{[\s\S]*?\};/);
+  assert.ok(block, "HOMEPAGE_HEADERS must still exist");
+  assert.match(block[0], /SHELL_PRELOAD_LINK/,
+    "the homepage Link header must include the shell preloads, or Early Hints has nothing to harvest");
+  assert.match(block[0], /HOMEPAGE_DISCOVERY_LINK/,
+    "the homepage Link header must still carry the discovery links");
+
+  // Dead code is how this hid the first time: the behaviour stayed described in
+  // lib/security.js while nothing called it, so reading that file suggested the
+  // homepage was fine. One home for the header, and it is the route's.
+  // Matched on the DEFINITIONS, not on mentions: the comment left behind in that
+  // file explains what used to live there and why it went, which is worth
+  // keeping. It is a second LIVE definition that must not come back.
+  const security = await readFile(new URL("holding/_worker.js/lib/security.js", import.meta.url), "utf8");
+  assert.doesNotMatch(security, /^\s*(export )?function withHomepageDiscoveryHeaders/m,
+    "lib/security.js should not keep a second, uncalled definition of the homepage Link header");
+  assert.doesNotMatch(security, /^\s*(export )?const HOMEPAGE_LINK\s*=/m,
+    "the homepage Link header should be composed at the route, not in a constant nothing imports");
+});

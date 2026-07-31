@@ -780,9 +780,29 @@ function routeIndexHtml(_request, _env, _ctx, url) {
 // its own (canRegisterAsDictionary), so nothing here advertises what it cannot keep,
 // and `/` still gets the family dictionary through the Link header like every other
 // HTML surface.
+// SHELL_PRELOAD_LINK first, then discovery. Cloudflare Early Hints harvests only
+// the rel=preload entries out of this header and replays them as a 103, and
+// without them here `/` was the ONE page on the site not getting that 103.
+// Measured against production 2026-07-30: /whoareyou answered
+//   HTTP/2 103
+//   link: </a/luna.*.css>; as=style; rel=preload, </a/nav.*.js>; as=script; rel=preload
+// and `/` answered with the ten discovery links and no preload at all.
+//
+// That is backwards from shell-assets.js's own reasoning. The homepage is
+// no-cache and revalidates on every visit, so it always pays worker think-time
+// before its 200 — which is exactly the window a 103 exists to spend, and why
+// that file singles the homepage out as where a 103 buys the most. Every page
+// that needed it least was getting it.
+//
+// Lost to a refactor rather than to a decision: lib/security.js still exported
+// withHomepageDiscoveryHeaders, which sets precisely this pair, and nothing had
+// imported it since `/` moved to serveStaticPage + these headers. The behaviour
+// was still written down, just disconnected from the route, which is why nothing
+// read as broken. That function is deleted in this commit rather than left as a
+// second place to describe the same header.
 const HOMEPAGE_HEADERS = {
   "cache-control": "private, no-cache, must-revalidate",
-  "link": HOMEPAGE_DISCOVERY_LINK,
+  "link": `${SHELL_PRELOAD_LINK}, ${HOMEPAGE_DISCOVERY_LINK}`,
 };
 
 function routeHomepage(request, env, ctx) {
