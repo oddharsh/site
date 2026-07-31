@@ -163,6 +163,12 @@ export const AGENT_SURFACES = [
     "description": "Why shoelaces come undone: granny versus square, the Ian knot, and bunny ears, with a live demo."
   },
   {
+    "path": "/lwe/lean",
+    "title": "Lean",
+    "kind": "content",
+    "description": "Lean and formal verification: why a proof is not an inspection, how a vacuous spec passes, and a toy verified compiler you can break."
+  },
+  {
     "path": "/garage/blueprint",
     "title": "Blueprint",
     "kind": "content",
@@ -316,6 +322,7 @@ export const WEBMENTION_PATHS = [
   "/lwe/dac",
   "/lwe/drivers",
   "/lwe/knots",
+  "/lwe/lean",
   "/garage/blueprint",
   "/garage/chunks",
   "/garage/cloudflare",

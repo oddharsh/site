@@ -67,6 +67,8 @@ a.buddy:hover { background: #e9f1fc; outline: 1px solid #bcd3f3; }
 .buddy.drv .nm b { color: #7c2a50; }
 .buddy.knot .pic { background: linear-gradient(180deg,#5fa372,#3f7d52); border-color:#2c5c3b; } .buddy.knot .pic::before { content: "∞"; color: #fff; font-size: 17px; }
 .buddy.knot .nm b { color: #2c5c3b; }
+.buddy.lean .pic { background: linear-gradient(180deg,#7b76d0,#4b47a8); border-color:#37347e; } .buddy.lean .pic::before { content: "∀"; color: #fff; font-size: 16px; }
+.buddy.lean .nm b { color: #37347e; }
 .buddy .nm { min-width: 0; }
 .buddy .nm b { font-family: var(--font-caption); font-size: 10.5pt; }
 .buddy.fhe .nm b { color: #1d3a8a; }
@@ -156,6 +158,11 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
       <li><a class="buddy knot" href="/lwe/knots">
         <span class="pic" aria-hidden="true"></span>
         <span class="nm"><b>knots</b><span class="pm">granny vs square, the Ian knot, and why your shoelaces slip</span></span>
+        <span class="st on">chat</span>
+      </a></li>
+      <li><a class="buddy lean" href="/lwe/lean">
+        <span class="pic" aria-hidden="true"></span>
+        <span class="nm"><b>Lean</b><span class="pm">formal verification: the spec is the weak point, and the kernel had a hole</span></span>
         <span class="st on">chat</span>
       </a></li>
     </ul>
