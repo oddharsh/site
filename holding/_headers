@@ -158,7 +158,27 @@
 # content-hashed names, so they're immutable-1y like /i/ — a re-encode mints a
 # new filename and can never shadow old bytes. It is a first-level taskbar app
 # now, so it also preloads the shared shell the way /lwe/* and /garage/* do.
-/pixel-peeper
+#
+# Keyed on the TWIN, not the page path. serveStaticPage answers a page from its
+# precompressed `<base>.html.br` and copies that asset's cache-control/link onto the
+# response (see lib/assets.js findBrotli), so these rules are matched against
+# `/pixel-peeper/index.html.br` — never against `/pixel-peeper`. The bare
+# `/pixel-peeper` this used to say matched nothing at all, and the page silently took
+# the Workers-assets default (`public, max-age=0, must-revalidate`) with no preload.
+# /garage/* and /lwe/* never showed the bug because a glob covers the twin, the plain
+# .html, and the section index's `<base>/index.html.br` alike.
+#
+# Two costs, and the second is the quiet one: no s-maxage meant no shared caching, and
+# must-revalidate VETOES dictionary registration (canRegisterAsDictionary, same file),
+# so the page sat outside the per-page dcz tier while still advertising
+# `vary: available-dictionary`. That is the same defect `/` carried until 2026-07-31.
+#
+# Scoped to `index.html*` rather than a `/pixel-peeper/*` glob on purpose: matching
+# rules ACCUMULATE and duplicate headers are comma-joined with no most-specific-wins,
+# so a glob here would prepend max-age=0 to the immutable tiles rule below and clamp a
+# year down to nothing. This spelling covers index.html and index.html.br, and reaches
+# neither tiles/ nor manifest.json.
+/pixel-peeper/index.html*
   Cache-Control: public, max-age=0, s-maxage=86400, stale-while-revalidate=604800
   Link: </luna.css>; rel=preload; as=style, </nav.js>; rel=preload; as=script
 /pixel-peeper/manifest.json

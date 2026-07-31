@@ -163,6 +163,12 @@ export const AGENT_SURFACES = [
     "description": "Why shoelaces come undone: granny versus square, the Ian knot, and bunny ears, with a live demo."
   },
   {
+    "path": "/lwe/lean",
+    "title": "Lean",
+    "kind": "content",
+    "description": "Lean and formal verification: why a proof is not an inspection, how a vacuous spec passes, and a toy verified compiler you can break."
+  },
+  {
     "path": "/garage/blueprint",
     "title": "Blueprint",
     "kind": "content",
@@ -215,6 +221,12 @@ export const AGENT_SURFACES = [
     "title": "Masonry",
     "kind": "content",
     "description": "A ragged-height contact-sheet photo grid with CSS Grid Lanes, falling back to the fixed-square grid."
+  },
+  {
+    "path": "/garage/octane",
+    "title": "Octane, priced against no framework",
+    "kind": "content",
+    "description": "Nextane's 60.9% win over Next.js, re-measured on the live demo, then given the row every framework benchmark leaves out: a site that ships no framework at all."
   },
   {
     "path": "/garage/pretext",
@@ -310,6 +322,7 @@ export const WEBMENTION_PATHS = [
   "/lwe/dac",
   "/lwe/drivers",
   "/lwe/knots",
+  "/lwe/lean",
   "/garage/blueprint",
   "/garage/chunks",
   "/garage/cloudflare",
@@ -319,6 +332,7 @@ export const WEBMENTION_PATHS = [
   "/garage/horizon",
   "/garage/iroh",
   "/garage/masonry",
+  "/garage/octane",
   "/garage/pretext",
   "/garage/pqc",
   "/garage/safari27",

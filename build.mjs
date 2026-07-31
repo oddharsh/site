@@ -577,32 +577,9 @@ await cp("serendipity/serendipity.js", `${OUT}/serendipity/serendipity.js`);
   console.log(`client edge: mirrored into ${mirrored} staged pages from luna.css (${skipped} files carry no window geometry)`);
 }
 
-// 1c) the Markdown twins + per-section llms.txt indexes. Generated from the
-// READABLE source in holding/, never from the staged copy: the staged pages are
-// about to be rewritten (client edge, hashed asset refs) and index.html is about
-// to be minified, none of which belongs in a twin. Because a twin is a pure
-// function of source bytes, generating it here makes drift structurally
-// impossible — no committed copy to fall behind, no step to forget. Same
-// argument the dcz deltas won.
-{
-  const { buildTwins, checkTwinFacts } = await import("./scripts/gen-md-twins.mjs");
-  const drift = checkTwinFacts(".");
-  if (drift.length) {
-    throw new Error("md twins: a hand-authored twin disagrees with the Worker that renders its page:\n  - " + drift.join("\n  - "));
-  }
-  const { files, skipped } = buildTwins(".");
-  for (const [rel, body] of files) {
-    const dest = `${OUT}/holding${rel}`;
-    await mkdir(dest.slice(0, dest.lastIndexOf("/")), { recursive: true });
-    await writeFile(dest, body);
-  }
-  const twins = [...files.keys()].filter((k) => k.endsWith(".md")).length;
-  const indexes = [...files.keys()].filter((k) => k.endsWith("llms.txt")).length;
-  // Losing the twins would otherwise be silent: pages keep serving HTML and only
-  // `Accept: text/markdown` degrades, which nothing else in the build watches.
-  if (twins < 30) throw new Error(`md twins: generated only ${twins} twins (expected 30+) — did site-manifest.json or the page shape change?`);
-  console.log(`md twins: ${twins} pages + ${indexes} section indexes staged (${skipped.length} Worker-rendered surfaces carry no prose source)`);
-}
+// 1c) the Markdown twins used to run HERE, before any page was generated, which
+// is exactly why /updates and /restore never got one. Moved below 1f, after the
+// deploy-time documents exist. See the block there.
 
 const minifyJavaScript = (filename, sourceText) => {
   const result = minifySync(filename, sourceText, {
@@ -634,12 +611,39 @@ const minifyJavaScript = (filename, sourceText) => {
   return result.code;
 };
 
+// Lightning CSS 1.33 does not know the CSS Overflow 5 carousel selectors
+// (::scroll-marker, ::scroll-marker-group, ::scroll-button(), :target-current).
+// /garage/horizon demos them on purpose, because being new is the page's subject,
+// and minifying that page's inline CSS turned 13 advisory warnings into a hard
+// deploy failure the first time step 7b ran over it.
+//
+// Verified against lightningcss 1.33.0: it warns and then emits the selector
+// VERBATIM, so the output is correct and the warning is advice about a parser gap
+// rather than a report of damage. Tolerating the family is therefore safe, and
+// tolerating it blindly is not, so the pass-through is re-proven on every build:
+// each warned selector must still appear in the output. A future Lightning that
+// starts DROPPING what it cannot parse fails here instead of silently shipping a
+// page with its demo stripped out.
+const UNKNOWN_SELECTOR = /'([^']+)' is not recognized as a valid pseudo-(?:element|class)/;
+
 const minifyCss = (filename, sourceText) => {
   const result = transformCss({ filename, code: Buffer.from(sourceText), minify: true });
-  if (result.warnings.length) {
-    throw new Error(`${filename}: Lightning CSS minify emitted warnings: ${result.warnings.map((w) => w.message).join("; ")}`);
+  const out = Buffer.from(result.code).toString();
+  const fatal = [], tolerated = [];
+  for (const w of result.warnings) {
+    const m = UNKNOWN_SELECTOR.exec(w.message);
+    if (m) tolerated.push(m[1]);
+    else fatal.push(w.message);
   }
-  return Buffer.from(result.code).toString();
+  if (fatal.length) {
+    throw new Error(`${filename}: Lightning CSS minify emitted warnings: ${fatal.join("; ")}`);
+  }
+  for (const selector of new Set(tolerated)) {
+    if (!out.includes(selector)) {
+      throw new Error(`${filename}: Lightning CSS dropped the selector it could not parse (${selector}); it must be preserved verbatim`);
+    }
+  }
+  return out;
 };
 
 // Homepage HTML uses minify-html for structure only; inline CSS/JS are passed
@@ -687,7 +691,11 @@ const isJavaScriptScript = (openTag) => {
   return !type || ["text/javascript", "application/javascript", "text/ecmascript", "application/ecmascript", "module"].includes(type);
 };
 
-const transformInlineHtmlBlocks = (source) => {
+// `label` names the document in any error the inline minifiers raise. It used to
+// be hardcoded to holding/index.html, which was true while the homepage was the
+// only caller and became a lie the moment step 7b started feeding 43 pages
+// through here: /garage/horizon's CSS failure reported itself as index.html.
+const transformInlineHtmlBlocks = (source, label = "holding/index.html") => {
   let out = "";
   let cursor = 0;
 
@@ -722,9 +730,9 @@ const transformInlineHtmlBlocks = (source) => {
     const body = source.slice(cursor, closeAt);
 
     if (tag === "style") {
-      out += minifyCss("holding/index.html inline <style>", body);
+      out += minifyCss(`${label} inline <style>`, body);
     } else if (tag === "script" && isJavaScriptScript(token)) {
-      out += minifyJavaScript("holding/index.html inline <script>", body);
+      out += minifyJavaScript(`${label} inline <script>`, body);
     } else {
       out += body;
     }
@@ -859,6 +867,51 @@ if (inlineProbe.includes("/* probe */") ||
   console.log(`pages(gen): updates.html ${updatesHtml.length}B, restore.html ${restoreHtml.length}B (${points.length} checkpoints, newest ${points[points.length - 1].version})`);
 }
 
+// 1g) the Markdown twins + per-section llms.txt indexes. Generated from the
+// READABLE source in holding/ wherever a page has one, never from the staged
+// copy: the staged pages are about to be rewritten (client edge, hashed asset
+// refs) and index.html is about to be minified, none of which belongs in a twin.
+// Because a twin is a pure function of source bytes, generating it here makes
+// drift structurally impossible — no committed copy to fall behind, no step to
+// forget. Same argument the dcz deltas won.
+//
+// It runs HERE, after 1d-1f, rather than up at 1c where it used to. A page with
+// no prose source got skipped, which was right when every such page was rendered
+// live by the Worker and wrong the moment the build started baking some of them
+// into HTML. /updates and /restore fell into that gap: baked at 1f, twinned
+// never, still advertising `flags.agents: true` and still answering an agent's
+// `Accept: text/markdown` with HTML. Ordering was the whole bug.
+//
+// generatedRoot is therefore the staged tree, read in the one window where it is
+// still honest: after the canonical renderers have written these documents and
+// before the hashing, ref-rewriting, and minification passes touch them. Source
+// first, hand-authored second (so /bot keeps the twin checkTwinFacts pins),
+// generated only as the last resort.
+{
+  const { buildTwins, checkTwinFacts } = await import("./scripts/gen-md-twins.mjs");
+  const drift = checkTwinFacts(".");
+  if (drift.length) {
+    throw new Error("md twins: a hand-authored twin disagrees with the Worker that renders its page:\n  - " + drift.join("\n  - "));
+  }
+  const { files, skipped, generated } = buildTwins(".", { generatedRoot: OUT });
+  for (const [rel, body] of files) {
+    const dest = `${OUT}/holding${rel}`;
+    await mkdir(dest.slice(0, dest.lastIndexOf("/")), { recursive: true });
+    await writeFile(dest, body);
+  }
+  const twins = [...files.keys()].filter((k) => k.endsWith(".md")).length;
+  const indexes = [...files.keys()].filter((k) => k.endsWith("llms.txt")).length;
+  // Losing the twins would otherwise be silent: pages keep serving HTML and only
+  // `Accept: text/markdown` degrades, which nothing else in the build watches.
+  if (twins < 30) throw new Error(`md twins: generated only ${twins} twins (expected 30+) — did site-manifest.json or the page shape change?`);
+  // The generated tier gets its own tripwire, because the failure that produced it
+  // was silent in exactly this way: the reordering above is what feeds it, so a
+  // future step that moves back ahead of 1f would empty it without failing anything.
+  if (!generated.length) throw new Error("md twins: no twin came from the generated tier — did the twin step move back above the deploy-time page renders?");
+  console.log(`md twins: ${twins} pages + ${indexes} section indexes staged (${generated.length} from generated HTML: ${generated.join(", ")}; ${skipped.length} Worker-rendered surfaces carry no prose source)`);
+}
+
+
 // 2) homepage HTML: deploy the readable original as /index.src.html and
 // minify only the served copy. The worker rewrites this response as a stream,
 // so doing this before ASSETS.fetch keeps the rewriter path allocation-free.
@@ -877,7 +930,7 @@ if (inlineProbe.includes("/* probe */") ||
   const staged = await readFile(`${OUT}/holding/index.html`, "utf8");
   const srcPath = "/index.src.html";
   const banner = `<!-- minified at deploy; readable source: ${srcPath} -->\n`;
-  const inlineMinified = transformInlineHtmlBlocks(staged);
+  const inlineMinified = transformInlineHtmlBlocks(staged, "holding/index.html");
   const body = minifyHtml.minify(Buffer.from(inlineMinified), HTML_MINIFY_CFG).toString();
   const min = banner + body;
   for (const [label, marker] of HTML_MARKERS) {
@@ -1435,6 +1488,79 @@ for (const [file, srcPath, marker] of SHELLS) {
     else console.log("delta: none needed (every dictionary candidate matches the shipping shell)");
   }
 
+}
+
+// 7b) every OTHER served HTML page gets what the homepage has had since step 2:
+// a minified served copy plus a readable `.src.html` twin. Owner call, 2026-07-31,
+// replacing the long-standing rule that garage and LWE HTML is never minified.
+//
+// Measured before shipping, over the 32 garage + LWE pages: 376,665 B brotli today
+// against 341,296 minified, so 9.4% and about 1.1KB per page. Small, and smaller
+// still in practice, because a returning visitor is answered with a per-page dcz
+// delta at 93-97% off and never sees these bytes. The readable twin is what makes
+// the trade payable: View Source stops being the served page and becomes one click
+// away, and the twin is the SAME program either way, which is the property that
+// separates minification from compilation.
+//
+// Placed after step 6 (shell refs are rewritten) and before 7c (a CSP hash is only
+// true of final bytes), for exactly the reason 7c's own header gives.
+//
+// The twin is the readable source where one exists, matching step 2's rule that
+// "readable source" means the file a human wrote. Ten of these 43 pages are
+// generated into the staged tree with no authored file behind them (/bot, /lens,
+// /photos, /updates, /restore, and the five /writing documents), so for those the
+// twin is the pre-minification staged copy, which is the most readable thing that
+// ever exists for that URL.
+{
+  const { PAGE_MARKERS } = await import("./scripts/lib/html-markers.mjs");
+  const pages = (await readdir(`${OUT}/holding`, { recursive: true }))
+    .filter((rel) => rel.endsWith(".html") && !rel.endsWith(".src.html") && rel !== "index.html")
+    .sort();
+
+  // The understanding check's answer key rides in an application/json block.
+  // transformInlineHtmlBlocks leaves non-JavaScript scripts alone by design, but
+  // minify-html still walks the whole document, so prove the payload survived
+  // rather than assume it. contract-tests asserts over 1100+ of these strings,
+  // and a silently mangled block would take the answer key with it.
+  const quizPayload = (source) => {
+    const m = source.match(/<script[^>]*\bid=(?:"luq-data"|luq-data)[^>]*>([\s\S]*?)<\/script>/i);
+    return m ? m[1] : null;
+  };
+
+  let before = 0, after = 0, checked = 0, generated = 0;
+  for (const rel of pages) {
+    const staged = await readFile(`${OUT}/holding/${rel}`, "utf8");
+    const twinRel = rel.replace(/\.html$/, ".src.html");
+    const banner = `<!-- minified at deploy; readable source: /${twinRel} -->\n`;
+    const min = banner + minifyHtml.minify(Buffer.from(transformInlineHtmlBlocks(staged, `holding/${rel}`)), HTML_MINIFY_CFG).toString();
+
+    for (const [label, marker] of PAGE_MARKERS) {
+      if (marker.test(staged) && !marker.test(min)) {
+        throw new Error(`${rel}: HTML minifier lost required marker ${label}`);
+      }
+    }
+    const authored = quizPayload(staged);
+    if (authored) {
+      const shipped = quizPayload(min);
+      if (!shipped) throw new Error(`${rel}: HTML minifier dropped the understanding-check payload`);
+      if (JSON.stringify(JSON.parse(authored)) !== JSON.stringify(JSON.parse(shipped))) {
+        throw new Error(`${rel}: HTML minifier altered the understanding-check payload`);
+      }
+      checked++;
+    }
+
+    let twin = staged;
+    try {
+      twin = await readFile(`holding/${rel}`, "utf8");
+    } catch {
+      generated++;
+    }
+    await writeFile(`${OUT}/holding/${twinRel}`, twin);
+    await writeFile(`${OUT}/holding/${rel}`, min);
+    before += staged.length;
+    after += min.length;
+  }
+  console.log(`pages(min): ${pages.length} documents ${before} -> ${after} bytes (${(((before - after) / before) * 100).toFixed(1)}% off raw), ${pages.length} .src.html twins (${generated} from staged, no authored source), ${checked} understanding-check payloads verified byte-equal`);
 }
 
 // 7c) CSP: hash every inline <script> in the staged documents, so script-src can
