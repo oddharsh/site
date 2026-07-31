@@ -45,6 +45,7 @@ import { ml_dsa44 } from "@noble/post-quantum/ml-dsa.js";
 import { mapWithConcurrency, readResponseCapped } from "./holding/_worker.js/lib/crawl.js";
 import { diffAroundRows, handleAroundChangesJson, readAroundChanges } from "./holding/_worker.js/around.js";
 import {
+  canonicalArtUrl,
   handleRnTracks,
   handleRnTracksHtml,
   renderTrackListHtml,
@@ -291,6 +292,46 @@ test("track HTML renderer emits rows only", () => {
   assert.match(html, /np-title/);
   assert.match(html, /A &lt;song&gt;/);
   assert.doesNotMatch(html, /<(?:!doctype|html|head|body)\b/i);
+});
+
+test("Spotify art collapses onto one host, and only where it is safe to", () => {
+  const hash = "ab67616d00001e026b458d1409d938dad4e3ba2c";
+  // every alias lands on the canonical host, path untouched
+  for (const host of ["image-cdn-fa", "image-cdn-ak", "image-cdn-zz9"]) {
+    assert.equal(
+      canonicalArtUrl(`https://${host}.spotifycdn.com/image/${hash}`),
+      `https://i.scdn.co/image/${hash}`,
+    );
+  }
+  // already canonical is a no-op, so applying it at both scrape and emit is safe
+  assert.equal(canonicalArtUrl(`https://i.scdn.co/image/${hash}`), `https://i.scdn.co/image/${hash}`);
+  // anything the rewrite was not proven safe for passes through UNCHANGED. a
+  // wrong rewrite is a broken image; the untouched value is one that already works.
+  for (const keep of [
+    "https://mosaic.scdn.co/640/abc",                          // different scdn service
+    "https://image-cdn-fa.spotifycdn.com/other/xyz",           // right host, not an /image/ path
+    "https://evil.example.com/image/abc",                      // unrelated host
+    "not-a-url",                                               // unparseable
+    "",
+    null,
+    undefined,
+  ]) assert.equal(canonicalArtUrl(keep), keep);
+});
+
+test("rendered track rows carry canonical art hosts for tracks and artists", () => {
+  const hash = "ab67616d00001e026b458d1409d938dad4e3ba2c";
+  const html = renderTrackListHtml({
+    tracks: [{
+      title: "t", song_link_url: "https://song.link/x", duration_ms: 1000,
+      image_url: `https://image-cdn-ak.spotifycdn.com/image/${hash}`,
+      artists: [{ name: "a", spotify_url: "https://open.spotify.com/artist/1",
+                  image_url: `https://image-cdn-fa.spotifycdn.com/image/${hash}` }],
+    }],
+  });
+  // the emit path is what fixes URLs already sitting in KV under the old aliases
+  assert.match(html, /data-track-image="https:\/\/i\.scdn\.co\/image\//);
+  assert.match(html, /data-artist-image="https:\/\/i\.scdn\.co\/image\//);
+  assert.doesNotMatch(html, /spotifycdn\.com/);
 });
 
 test("track endpoints keep JSON and HTML contracts independent of Accept", async () => {
