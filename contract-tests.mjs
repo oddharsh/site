@@ -1525,3 +1525,108 @@ test("renderBotPage takes no arguments and is deterministic", async () => {
   assert.equal(a, b);
   assert.ok(a.includes("AadharshBot"), "must name the crawler the page exists to explain");
 });
+
+// ── the speculation ledger ────────────────────────────────────────────────────
+// Both halves are best-effort counters wrapped around a live response, so the
+// contract that matters most is the negative one: they must never throw, and
+// they must never count something that isn't a speculation.
+
+function speculationEnv() {
+  const points = [];
+  return { env: { SPECULATION: { writeDataPoint: (p) => points.push(p) } }, points };
+}
+
+test("the speculation denominator counts real speculations and nothing else", async () => {
+  const { countSpeculativeLoad } = await import("./holding/_worker.js/speculation.js");
+  const ok = new Response("", { status: 200 });
+
+  const cases = [
+    ["prefetch", "prefetch", 1],
+    ["prefetch;prerender", "prerender", 1],   // the stronger claim wins
+    ["prerender", "prerender", 1],
+    ["", null, 0],                            // a plain navigation is not a speculation
+    ["fetch", null, 0],                       // Sec-Purpose exists but isn't speculative
+  ];
+  for (const [purpose, kind, expected] of cases) {
+    const { env, points } = speculationEnv();
+    const headers = purpose ? { "sec-purpose": purpose } : {};
+    countSpeculativeLoad(env, new Request("https://aadhar.sh/garage", { headers }), ok, "/garage");
+    assert.equal(points.length, expected, `sec-purpose: "${purpose}" should write ${expected}`);
+    if (expected) {
+      assert.equal(points[0].blobs[0], kind);
+      assert.equal(points[0].blobs[1], "/garage");
+      assert.deepEqual(points[0].indexes, [kind], "one index, so precision is a GROUP BY not a join");
+    }
+  }
+
+  // a speculation that errored is not a speculation worth counting
+  const { env, points } = speculationEnv();
+  countSpeculativeLoad(env, new Request("https://aadhar.sh/nope", { headers: { "sec-purpose": "prefetch" } }),
+    new Response("", { status: 404 }), "/nope");
+  assert.equal(points.length, 0, "a 4xx speculation must not enter the denominator");
+
+  // no binding, and a binding that throws, must both be survivable
+  assert.doesNotThrow(() => countSpeculativeLoad({}, new Request("https://aadhar.sh/", {
+    headers: { "sec-purpose": "prefetch" } }), ok, "/"));
+  assert.doesNotThrow(() => countSpeculativeLoad(
+    { SPECULATION: { writeDataPoint() { throw new Error("AE down"); } } },
+    new Request("https://aadhar.sh/", { headers: { "sec-purpose": "prefetch" } }), ok, "/"));
+});
+
+test("the activation beacon answers 204 and records which page paid off", async () => {
+  const { handlePrefetchActivation, prefetchActivationHeader } =
+    await import("./holding/_worker.js/speculation.js");
+
+  // the header the browser is handed must round-trip a path through the query
+  const value = prefetchActivationHeader("/garage/horizon");
+  assert.equal(value, "/ledger/prefetch?p=%2Fgarage%2Fhorizon");
+  assert.equal(new URL(value, "https://aadhar.sh").searchParams.get("p"), "/garage/horizon");
+
+  // the browser sends HEAD; the response is an acknowledgement, never a document
+  const { env, points } = speculationEnv();
+  const res = handlePrefetchActivation(
+    new Request("https://aadhar.sh" + value, { method: "HEAD" }), env);
+  assert.equal(res.status, 204);
+  assert.equal(res.headers.get("cache-control"), "no-store", "a cached beacon counts once, forever");
+  assert.equal(await res.text(), "", "204 means no body");
+  assert.equal(points.length, 1);
+  assert.equal(points[0].blobs[0], "activated");
+  assert.equal(points[0].blobs[1], "/garage/horizon");
+
+  // anything that isn't a read is refused, and says so properly
+  const bad = handlePrefetchActivation(
+    new Request("https://aadhar.sh/ledger/prefetch", { method: "POST" }), env);
+  assert.equal(bad.status, 405);
+  assert.equal(bad.headers.get("allow"), "GET, HEAD");
+
+  // a beacon with no binding still answers; telemetry never gates the reply
+  assert.equal(handlePrefetchActivation(
+    new Request("https://aadhar.sh/ledger/prefetch", { method: "HEAD" }), {}).status, 204);
+});
+
+test("the activation header lands on navigable HTML only", async () => {
+  const { withSecurityHeaders } = await import("./holding/_worker.js/lib/security.js");
+  const html = () => new Response("<p>hi", { headers: { "content-type": "text/html; charset=utf-8" } });
+  const HDR = "on-prefetch-activation";
+
+  assert.equal(withSecurityHeaders(html(), "/garage/horizon").headers.get(HDR),
+    "/ledger/prefetch?p=%2Fgarage%2Fhorizon");
+
+  // no pathname means no navigable document (the /lens self-fetch), so no beacon
+  assert.equal(withSecurityHeaders(html()).headers.get(HDR), null);
+
+  // a JSON endpoint is not something a browser navigates to and prerenders
+  const json = new Response("{}", { headers: { "content-type": "application/json" } });
+  assert.equal(withSecurityHeaders(json, "/ledger.json").headers.get(HDR), null);
+
+  // redirects return untouched, so they can't carry it either
+  const redirect = new Response(null, { status: 307, headers: { location: "/garage" } });
+  assert.equal(withSecurityHeaders(redirect, "/garage/").headers.get(HDR), null);
+
+  // gotcha 13: rebuilding a response must carry encodeBody, and adding this
+  // header must not be the thing that quietly reintroduces double compression.
+  const encoded = new Response("body", {
+    headers: { "content-type": "text/html", "content-encoding": "br" },
+  });
+  assert.equal(withSecurityHeaders(encoded, "/").headers.get("content-encoding"), "br");
+});
