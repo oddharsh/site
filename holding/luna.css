@@ -270,10 +270,14 @@
 /* at no layout cost. the homepage + shared worker chrome also set it inline so the */
 /* flagship surfaces don't wait for this deferred script. */
 html{text-wrap:pretty}
-/* View Transitions: animate window open/close across real navigations while the */
-/* desktop + taskbar stay put (named = persistent). progressive — a no-op where the */
-/* browser doesn't support it (Firefox just navigates instantly). */
-@view-transition{navigation:auto}
+/* View Transitions are OFF, deliberately (2026-07-30). The cross-document opt-in */
+/* used to live here and animate the window minimize/restore across real navigations. */
+/* Every internal page is prerendered on hover (the speculation rules in index.html), */
+/* so the incoming document is already rendered and activation costs nothing — the */
+/* ~200ms of window choreography was pure additive latency on a navigation that had */
+/* nothing left to wait for. Firefox never opted in and always navigated instantly; */
+/* this makes Chromium match it. The shell layers below therefore carry no */
+/* view-transition-name: they had one only so the UA would hold them still. */
 /* the shared Bliss desktop on a fixed layer behind everything; page BODIES forced */
 /* transparent so it shows through. html keeps a sky→hills gradient (the same one */
 /* pages paint at first load) as the backstop — NOT transparent: during a cross-doc */
@@ -359,7 +363,7 @@ body:has(.window),body:has(.np-window),body:has(.wrap){overflow:hidden !importan
 #axp-run .list{scrollbar-color:oklch(62% 0.14 255) oklch(90% 0.02 250)}
 /* resize grip (bottom-right corner of every window) */
 .axp-resize{pointer-events:none;position:absolute;right:1px;bottom:1px;width:14px;height:14px;cursor:nwse-resize;z-index:4;background:linear-gradient(135deg,transparent 0 38%,oklch(72% 0.04 256) 38% 50%,transparent 50% 60%,oklch(72% 0.04 256) 60% 72%,transparent 72% 84%,oklch(72% 0.04 256) 84% 96%,transparent 96%)}
-#axp-desktop{position:fixed;inset:0;z-index:-1;transform:translateZ(0);view-transition-name:axp-desktop;background:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20200%20120%22%20preserveAspectRatio%3D%22xMidYMid%20slice%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22s%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%220%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%233f7fcc%22%2F%3E%3Cstop%20offset%3D%22.42%22%20stop-color%3D%22%236ba3e0%22%2F%3E%3Cstop%20offset%3D%22.62%22%20stop-color%3D%22%23bcdcf4%22%2F%3E%3Cstop%20offset%3D%22.67%22%20stop-color%3D%22%23dfeefb%22%2F%3E%3C%2FlinearGradient%3E%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%220%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%2395c43d%22%2F%3E%3Cstop%20offset%3D%22.35%22%20stop-color%3D%22%2374af2d%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%233c7d1a%22%2F%3E%3C%2FlinearGradient%3E%3CradialGradient%20id%3D%22sn%22%20cx%3D%22.5%22%20cy%3D%22.64%22%20r%3D%22.55%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%23fffbe6%22%20stop-opacity%3D%22.5%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23fffbe6%22%20stop-opacity%3D%220%22%2F%3E%3C%2FradialGradient%3E%3Cfilter%20id%3D%22bl%22%20x%3D%22-30%25%22%20y%3D%22-30%25%22%20width%3D%22160%25%22%20height%3D%22160%25%22%3E%3CfeGaussianBlur%20stdDeviation%3D%221.1%22%2F%3E%3C%2Ffilter%3E%3C%2Fdefs%3E%3Crect%20width%3D%22200%22%20height%3D%22120%22%20fill%3D%22url(%23s)%22%2F%3E%3Crect%20width%3D%22200%22%20height%3D%22120%22%20fill%3D%22url(%23sn)%22%2F%3E%3Cg%20fill%3D%22%23fff%22%20filter%3D%22url(%23bl)%22%3E%3Cg%20opacity%3D%22.92%22%3E%3Cellipse%20cx%3D%2234%22%20cy%3D%2225%22%20rx%3D%2218%22%20ry%3D%224.6%22%2F%3E%3Cellipse%20cx%3D%2241%22%20cy%3D%2220%22%20rx%3D%2211%22%20ry%3D%224.2%22%2F%3E%3Cellipse%20cx%3D%2225%22%20cy%3D%2222%22%20rx%3D%228%22%20ry%3D%223.6%22%2F%3E%3C%2Fg%3E%3Cg%20opacity%3D%22.8%22%3E%3Cellipse%20cx%3D%22151%22%20cy%3D%2218%22%20rx%3D%2214%22%20ry%3D%223.8%22%2F%3E%3Cellipse%20cx%3D%22158%22%20cy%3D%2214%22%20rx%3D%227%22%20ry%3D%223.2%22%2F%3E%3C%2Fg%3E%3Cg%20opacity%3D%22.6%22%3E%3Cellipse%20cx%3D%2298%22%20cy%3D%2231%22%20rx%3D%2222%22%20ry%3D%223%22%2F%3E%3C%2Fg%3E%3Cg%20opacity%3D%22.75%22%3E%3Cellipse%20cx%3D%22123%22%20cy%3D%2242%22%20rx%3D%2211%22%20ry%3D%222.6%22%2F%3E%3C%2Fg%3E%3C%2Fg%3E%3Cpath%20d%3D%22M0%2C79%20C36%2C69%2070%2C85%20104%2C76%20C140%2C67%20172%2C78%20200%2C72%20L200%2C120%20L0%2C120%20Z%22%20fill%3D%22url(%23g)%22%2F%3E%3Cpath%20d%3D%22M0%2C79%20C36%2C69%2070%2C85%20104%2C76%20C140%2C67%20172%2C78%20200%2C72%22%20fill%3D%22none%22%20stroke%3D%22%23bcde66%22%20stroke-width%3D%221.1%22%20opacity%3D%22.5%22%2F%3E%3C%2Fsvg%3E") center center/cover no-repeat}
+#axp-desktop{position:fixed;inset:0;z-index:-1;transform:translateZ(0);background:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20200%20120%22%20preserveAspectRatio%3D%22xMidYMid%20slice%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22s%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%220%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%233f7fcc%22%2F%3E%3Cstop%20offset%3D%22.42%22%20stop-color%3D%22%236ba3e0%22%2F%3E%3Cstop%20offset%3D%22.62%22%20stop-color%3D%22%23bcdcf4%22%2F%3E%3Cstop%20offset%3D%22.67%22%20stop-color%3D%22%23dfeefb%22%2F%3E%3C%2FlinearGradient%3E%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%220%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%2395c43d%22%2F%3E%3Cstop%20offset%3D%22.35%22%20stop-color%3D%22%2374af2d%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%233c7d1a%22%2F%3E%3C%2FlinearGradient%3E%3CradialGradient%20id%3D%22sn%22%20cx%3D%22.5%22%20cy%3D%22.64%22%20r%3D%22.55%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%23fffbe6%22%20stop-opacity%3D%22.5%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23fffbe6%22%20stop-opacity%3D%220%22%2F%3E%3C%2FradialGradient%3E%3Cfilter%20id%3D%22bl%22%20x%3D%22-30%25%22%20y%3D%22-30%25%22%20width%3D%22160%25%22%20height%3D%22160%25%22%3E%3CfeGaussianBlur%20stdDeviation%3D%221.1%22%2F%3E%3C%2Ffilter%3E%3C%2Fdefs%3E%3Crect%20width%3D%22200%22%20height%3D%22120%22%20fill%3D%22url(%23s)%22%2F%3E%3Crect%20width%3D%22200%22%20height%3D%22120%22%20fill%3D%22url(%23sn)%22%2F%3E%3Cg%20fill%3D%22%23fff%22%20filter%3D%22url(%23bl)%22%3E%3Cg%20opacity%3D%22.92%22%3E%3Cellipse%20cx%3D%2234%22%20cy%3D%2225%22%20rx%3D%2218%22%20ry%3D%224.6%22%2F%3E%3Cellipse%20cx%3D%2241%22%20cy%3D%2220%22%20rx%3D%2211%22%20ry%3D%224.2%22%2F%3E%3Cellipse%20cx%3D%2225%22%20cy%3D%2222%22%20rx%3D%228%22%20ry%3D%223.6%22%2F%3E%3C%2Fg%3E%3Cg%20opacity%3D%22.8%22%3E%3Cellipse%20cx%3D%22151%22%20cy%3D%2218%22%20rx%3D%2214%22%20ry%3D%223.8%22%2F%3E%3Cellipse%20cx%3D%22158%22%20cy%3D%2214%22%20rx%3D%227%22%20ry%3D%223.2%22%2F%3E%3C%2Fg%3E%3Cg%20opacity%3D%22.6%22%3E%3Cellipse%20cx%3D%2298%22%20cy%3D%2231%22%20rx%3D%2222%22%20ry%3D%223%22%2F%3E%3C%2Fg%3E%3Cg%20opacity%3D%22.75%22%3E%3Cellipse%20cx%3D%22123%22%20cy%3D%2242%22%20rx%3D%2211%22%20ry%3D%222.6%22%2F%3E%3C%2Fg%3E%3C%2Fg%3E%3Cpath%20d%3D%22M0%2C79%20C36%2C69%2070%2C85%20104%2C76%20C140%2C67%20172%2C78%20200%2C72%20L200%2C120%20L0%2C120%20Z%22%20fill%3D%22url(%23g)%22%2F%3E%3Cpath%20d%3D%22M0%2C79%20C36%2C69%2070%2C85%20104%2C76%20C140%2C67%20172%2C78%20200%2C72%22%20fill%3D%22none%22%20stroke%3D%22%23bcde66%22%20stroke-width%3D%221.1%22%20opacity%3D%22.5%22%2F%3E%3C%2Fsvg%3E") center center/cover no-repeat}
 /* accessory windows — small built-in apps (a Clock for now) that float over the */
 /* desktop, composite, drag, and click-to-front. plain DOM windows, no iframes. */
 .axp-acc{position:fixed;z-index:40;min-width:170px;background:oklch(99% 0.005 95);border:2px solid #0831d9;border-right-color:#001ea0;border-bottom-color:#001ea0;border-top-left-radius:7px;border-top-right-radius:7px;box-shadow:inset 1px 1px 0 #166aee,inset -1px -1px 0 #00138c,3px 4px 9px rgba(0,20,90,.4);display:flex;flex-direction:column;overflow:hidden;touch-action:none}
@@ -371,73 +375,15 @@ body:has(.window),body:has(.np-window),body:has(.wrap){overflow:hidden !importan
 /* windows drag by their title bar */
 .title-bar,.np-titlebar,.titlebar,#axp-run .tb{cursor:move}
 .axp-dragging{user-select:none;will-change:transform}.axp-dragging .title-bar,.axp-dragging .np-titlebar,.axp-dragging .titlebar,#axp-run.axp-dragging .tb,.axp-acc.axp-dragging>.tb{cursor:grabbing}
-/* transition ONLY the window — freeze the desktop, taskbar AND root groups so the */
-/* wallpaper + taskbar never cross-fade (that root cross-fade was the white flash). */
-.window,.np-window{view-transition-name:axp-window}
-::view-transition-group(root),::view-transition-group(axp-desktop),::view-transition-group(axp-taskbar),::view-transition-group(axp-icons){animation:none !important}
-/* HOLD the persistent shell layers through the transition. Freezing only the GROUP */
-/* (above) stops them moving but the UA still cross-fades their old↔new images — and */
-/* the INCOMING page hasn't run nav.js yet, so it has no desktop/taskbar/icons snapshot */
-/* to fade INTO → the Bliss layer fades to nothing for a beat (the white flash). Pinning */
-/* the old/new images to animation:none keeps the old Bliss fully opaque the whole time; */
-/* since the shell is identical across pages, the live new shell takes over seamlessly. */
-::view-transition-old(axp-desktop),::view-transition-new(axp-desktop),::view-transition-old(axp-taskbar),::view-transition-new(axp-taskbar),::view-transition-old(axp-icons),::view-transition-new(axp-icons){animation:none !important;mix-blend-mode:normal}
-/* …but the icons layer is the one shell layer that is mostly TRANSPARENT, so */
-/* holding both of its images opaque stacks two identical copies and the alpha */
-/* compositing doubles every translucent pixel: a 50%-alpha shadow pixel comes */
-/* out at 75%. The desktop and taskbar are opaque rectangles, so their new image */
-/* simply covers the old and nothing doubles — only the icons visibly darken, */
-/* every label halo and tile shadow deepening for the length of the transition */
-/* and snapping back when the pseudo-elements are dropped (the "shadows */
-/* re-render on every subpage switch" bug, 2026-07-23). Drop the OLD image and */
-/* the shadows paint exactly once: the shell partial ships in the HTML of every */
-/* page now (scripts/gen-desktop-partial.mjs), so the incoming icons are already */
-/* there to be captured — the 2026-07-03 nav.js race the rule above was written */
-/* for is gone. Hiding the OLD (not the new) is what keeps the hand-off clean: */
-/* the new image is what the live DOM becomes when the transition ends. */
-::view-transition-old(axp-icons){opacity:0}
-/* map to XP's "animate windows when minimizing/maximizing": the outgoing window */
-/* zooms DOWN toward the taskbar and the incoming one zooms UP out of it — scale */
-/* origin biased below-centre (toward the bar at the bottom), fast + near-linear, */
-/* minimize easing in, restore easing out. no modern in-place cross-zoom. */
-::view-transition-group(axp-window){animation-duration:.2s;animation-timing-function:ease-out}
-/* the WHITE BLINK fix (2026-07-03, confirmed via /garage/vt-check): the UA
-   composites each old/new pair with plus-lighter, whose seamlessness assumes
-   the two opacities sum to exactly 1 at every instant — true for its own
-   default fades, false for our custom minimize/restore curves. Two half-faded
-   WHITE window snapshots then ADD to brighter-than-either and the whole
-   window blinks white mid-morph. Same class the desktop groups were already
-   treated for above; the pair goes back to normal alpha compositing, so the
-   mid-morph dip shows the Bliss wallpaper behind instead of clipping white —
-   which is also simply what a minimizing XP window looked like. */
-::view-transition-image-pair(axp-window){isolation:auto}
-::view-transition-old(axp-window),::view-transition-new(axp-window){mix-blend-mode:normal}
-::view-transition-old(axp-window){transform-origin:50% 130%;animation:axp-min .18s cubic-bezier(.4,0,1,1) both}
-::view-transition-new(axp-window){transform-origin:50% 130%;animation:axp-res .2s cubic-bezier(0,0,.2,1) both}
-@keyframes axp-min{to{opacity:0;transform:scale(.66)}}@keyframes axp-res{from{opacity:0;transform:scale(.66)}}
-/* DIRECTIONAL refinement (Chromium view-transition-types). initVTTypes() tags each */
-/* cross-doc nav "axp-open" (forward/push) or "axp-close" (back). OPEN emphasises the */
-/* NEW window zooming up out of the taskbar while the old just fades; CLOSE emphasises */
-/* the OLD window minimising toward the taskbar while the new fades in. These are more */
-/* specific than the bare rules above, so a typed nav wins; with no type (unsupported, */
-/* or a reload) the symmetric default plays. reduce-motion below still neutralises all. */
-:root:active-view-transition-type(axp-open)::view-transition-old(axp-window){transform-origin:50% 50%;animation:axp-vt-out .12s ease-out both}
-:root:active-view-transition-type(axp-open)::view-transition-new(axp-window){transform-origin:50% 120%;animation:axp-open-in .2s cubic-bezier(0,0,.2,1) both}
-:root:active-view-transition-type(axp-close)::view-transition-old(axp-window){transform-origin:50% 120%;animation:axp-min .18s cubic-bezier(.4,0,1,1) both}
-:root:active-view-transition-type(axp-close)::view-transition-new(axp-window){transform-origin:50% 50%;animation:axp-vt-in .16s ease-out both}
-@keyframes axp-open-in{from{opacity:0;transform:scale(.7)}to{opacity:1;transform:scale(1)}}@keyframes axp-vt-out{to{opacity:0}}@keyframes axp-vt-in{from{opacity:0}to{opacity:1}}
-/* DIALOG opt-out. The bare axp-window rules above are untyped, so they fired on */
-/* SAME-document transitions too — and every .window/.np-window carries that name. */
-/* Opening the Run palette (⌘K) or a note popover left the page's window unchanged */
-/* yet still minimised + restored it: a visible pulse on every open/close. nav.js and */
-/* notepad.js tag those transitions "axp-dialog"; here the window group sits still so */
-/* only the dialog itself animates. Additive on purpose — a browser without */
-/* view-transition-types just keeps the old behaviour rather than losing the rules. */
-:root:active-view-transition-type(axp-dialog)::view-transition-group(axp-window),
-:root:active-view-transition-type(axp-dialog)::view-transition-old(axp-window),
-:root:active-view-transition-type(axp-dialog)::view-transition-new(axp-window){animation:none}
-@media (prefers-reduced-motion:reduce){::view-transition-old(axp-window),::view-transition-new(axp-window),::view-transition-group(axp-window){animation:none !important}}
-#axp-taskbar{position:fixed;left:0;right:0;bottom:0;height:30px;z-index:99999;view-transition-name:axp-taskbar;display:flex;align-items:stretch;
+/* The window minimize/restore choreography lived here until 2026-07-30 — the */
+/* axp-window name, the frozen desktop/taskbar/icons groups, the plus-lighter white- */
+/* blink fix, and the axp-open/axp-close directional pair. All of it existed to make a */
+/* cross-document transition look like XP; with the transition gone (see the note at */
+/* @view-transition above) every one of those rules matched nothing, so they are out */
+/* rather than left as dead weight on a render-blocking sheet. `git log -S axp-window` */
+/* has the full set if the trade ever wants revisiting; /garage/vt-check still probes */
+/* the platform independently of whether this site opts in. */
+#axp-taskbar{position:fixed;left:0;right:0;bottom:0;height:30px;z-index:99999;display:flex;align-items:stretch;
 font-family:var(--font-ui,Tahoma,Verdana,Geneva,sans-serif);font-size:11px;user-select:none;
 background:linear-gradient(180deg,oklch(67% 0.15 256) 0%,oklch(58% 0.19 257) 4%,oklch(51% 0.20 258) 9%,oklch(49% 0.20 258) 50%,oklch(46% 0.20 259) 92%,oklch(40% 0.18 260) 100%);
 box-shadow:inset 0 1px 0 oklch(82% 0.09 250),inset 0 2px 0 oklch(62% 0.16 255)}
@@ -471,7 +417,7 @@ box-shadow:inset 1px 1px 0 oklch(86% 0.13 140),inset -1px -1px 0 oklch(38% 0.13 
 /* full-desktop layer (pointer-events pass through to the window EXCEPT on icons), */
 /* so icons can be dragged anywhere on the wallpaper. positions persist in */
 /* localStorage; default layout is a left column. */
-#axp-icons{position:fixed;inset:0;z-index:1;pointer-events:none;view-transition-name:axp-icons}
+#axp-icons{position:fixed;inset:0;z-index:1;pointer-events:none}
 .axp-ico,.axp-ico:link,.axp-ico:visited,.axp-ico:hover,.axp-ico:active{color:oklch(100% 0 0);text-decoration:none}
 .axp-ico{position:absolute;pointer-events:auto;display:flex;flex-direction:column;align-items:center;gap:4px;width:76px;padding:5px 3px 4px;box-sizing:border-box;border:1px solid transparent;border-radius:2px;cursor:pointer}
 .axp-ico.axp-dragging{opacity:.8;z-index:7;will-change:transform}   /* earn-it: released with the class on drop */

@@ -19,47 +19,25 @@
   "use strict";
   if (window.__axpNav) return; window.__axpNav = true;
   var D = document;
-  // `types` tags a SAME-document transition so it doesn't inherit the
-  // cross-document window choreography. luna.css names every .window/.np-window
-  // `axp-window` and animates that name from UNTYPED ::view-transition-* rules, so
-  // an untyped ⌘K captured the page's unchanged window and minimized/restored it:
-  // the whole window visibly pulsed on every Run open/close. Passing
-  // ["axp-dialog"] lets luna.css cancel that animation for dialog transitions.
-  function withViewTransition(fn, types) {
-    if (D.startViewTransition && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      return types ? D.startViewTransition({ update: fn, types: types }) : D.startViewTransition(fn);
-    }
-    return fn();
-  }
+  // The Run palette used to open and close inside a same-document View Transition.
+  // It applies its DOM change directly now (2026-07-30), for the same reason the
+  // cross-document transition came out of luna.css: the palette is already on
+  // screen the instant it is asked for, so a transition could only delay it.
+  // Wrapping the mutation was also never free of side effects — startViewTransition
+  // defers the callback, so anything that measured or focused right after the call
+  // ran a frame early. #axp-run keeps its own 90ms `axp-pop` CSS animation, which
+  // is a plain keyframe on the dialog and costs the page nothing.
   // platform-aware shortcut label shown on the Start orb + Run dialog. The
   // keydown handler binds BOTH ⌘K and Ctrl-K; this is only what we DISPLAY, so
   // Mac users see ⌘K and everyone else sees Ctrl K.
   var IS_MAC = /Mac|iPhone|iPad|iPod/i.test((navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || navigator.userAgent || "");
   var KBD = IS_MAC ? "⌘K" : "Ctrl K";
 
-  // DIRECTIONAL view transitions — tag each cross-document navigation as an "open"
-  // (forward / push) or a "close" (back), so the window VT animates the right way
-  // (see the :active-view-transition-type rules in injectCSS). Strictly additive:
-  // needs the Navigation API + cross-doc view-transition-types; otherwise the
-  // symmetric default animation plays. Registered NOW (not in boot's DOMContentLoaded
-  // callback) so the pagereveal listener is in place before the incoming page reveals.
-  function axpVTDir(act) {
-    try {
-      if (act && act.navigationType === "traverse" && act.from && act.entry && act.from.index > act.entry.index) return "axp-close";
-    } catch (e) {}
-    return "axp-open";
-  }
-  if (window.navigation && "onpagereveal" in window) {
-    addEventListener("pageswap", function (e) {
-      // diagnostic breadcrumb: /garage/vt-check reads this to report whether
-      // real shell navigations are actually getting cross-document VTs
-      try { sessionStorage.setItem("axp-vt-swap", e.viewTransition ? "1" : "0"); } catch (x) {}
-      if (e.viewTransition && e.activation) { try { e.viewTransition.types.add(axpVTDir(e.activation)); } catch (x) {} }
-    });
-    addEventListener("pagereveal", function (e) {
-      if (e.viewTransition && navigation.activation) { try { e.viewTransition.types.add(axpVTDir(navigation.activation)); } catch (x) {} }
-    });
-  }
+  // The pageswap/pagereveal pair that tagged each navigation "axp-open" or
+  // "axp-close" is gone with the transition it steered. Both listeners ran on
+  // EVERY navigation to hand a type to CSS rules that no longer exist, and the
+  // pageswap one also wrote the sessionStorage breadcrumb /garage/vt-check read;
+  // that page now states plainly that the shell does not opt in.
 
   // ── destinations ──────────────────────────────────────────────────────────
   var PAGES = [
@@ -321,7 +299,7 @@
     // wireTaskbar intercepts the click to open the live palette instead.
     var start = el('<a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true"></span></a>');
     bar.appendChild(start);
-    // app buttons — first-level subpages (internal nav → View-Transition windows).
+    // app buttons — first-level subpages, each opening as its own "window".
     // profiles used to live here as Quick Launch; they're desktop shortcuts now —
     // the taskbar holds only runnable "apps".
     // (qlColor/qlGlyph are kept: the desktop profile icons reuse them.)
@@ -541,7 +519,6 @@
     // after the modal opens, so it stacks above it.
     preview = el('<div id="axp-run-preview" popover="manual" aria-hidden="true"></div>');
     D.body.appendChild(preview);
-    run.style.viewTransitionName = "axp-run";
     // ::backdrop click = light dismiss: a click landing on the dialog element
     // itself (not its children) can only be the backdrop-covered margin area
     run.addEventListener("click", function (e) { if (e.target === run) closeRun(); });
@@ -853,12 +830,10 @@
     // the hover engine is fetched on the FIRST Run open, never on page load:
     // a visitor who never opens the palette never pays for it.
     loadPreview();
-    withViewTransition(function () {
-      run.showModal(); AXP_SND.play("open");
-      var s = D.getElementById("axp-start"); if (s) s.setAttribute("aria-expanded", "true");
-      input.value = ""; render();
-      input.focus();
-    }, ["axp-dialog"]);
+    run.showModal(); AXP_SND.play("open");
+    var s = D.getElementById("axp-start"); if (s) s.setAttribute("aria-expanded", "true");
+    input.value = ""; render();
+    input.focus();
   }
   function closeRun() {
     // The card is in the TOP LAYER, so if it outlives the dialog it floats over
@@ -868,7 +843,7 @@
     // embedded browser builds — measured), and a stranded card is too visible a
     // failure to hang on an event. Cheap and idempotent, so both paths can run.
     if (previewHoist) previewHoist.hide();
-    if (run && run.open) withViewTransition(function () { run.close(); }, ["axp-dialog"]);   // other side effects ride the "close" event
+    if (run && run.open) run.close();   // other side effects ride the "close" event
   }
 
   // ── tray balloons: brief XP notification-bubble popouts for the system-utility
@@ -1144,8 +1119,10 @@
 
   // shell-wide Speculation Rules: prerender the shell's safe destinations on
   // hover-intent (eagerness "moderate"), so opening a "window" (garage, writing,
-  // serendipity, coffee…) is near-instant and the View Transition plays on
-  // already-loaded content. the homepage is prerenderable now (its counter only
+  // serendipity, coffee…) is near-instant. This is the whole reason the View
+  // Transition could come out: with the document already rendered at click time
+  // there is nothing for an animation to cover, only latency to add. The
+  // homepage is prerenderable now (its counter only
   // PEEKS on render; the tick left the document for the /hit beacon) and so is
   // /around (its crawl moved to a cron; a visit is a pure KV read).
   // excluded: /whoareyou (per-request fingerprint),

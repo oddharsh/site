@@ -32,19 +32,11 @@
   // two byte-identical instead: esc() escapes the double quote too, so it stays safe
   // in an attribute even though today's callers only use it in text.
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
-  // Same-document popover transitions are tagged "axp-dialog" so luna.css cancels
-  // the axp-window minimize/restore for them: .np-folder is itself a .np-window, so
-  // an untyped transition pulsed the whole folder every time a note opened.
-  function withViewTransition(fn, types) {
-    if (D.startViewTransition && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      return types ? D.startViewTransition({ update: fn, types: types }) : D.startViewTransition(fn);
-    }
-    return fn();
-  }
-  function nameNoteTransition(pop) {
-    if (!pop.id) return;
-    pop.style.viewTransitionName = "axp-note-" + pop.id.replace(/[^a-z0-9_-]/gi, "-");
-  }
+  // Note popovers used to show and hide inside a same-document View Transition,
+  // each one given its own `axp-note-<id>` transition name. That came out with the
+  // rest of the View Transition machinery (2026-07-30): a popover is a top-layer
+  // element that is already composited, so the transition bought a cross-fade at
+  // the cost of a deferred callback and a frame of latency on every open and close.
 
   // ── per-window enhancement ────────────────────────────────────────────────────
   function enhance(win) {
@@ -57,10 +49,9 @@
     // a popover note's close button hides the popover instead of navigating
     var closeBtn = win.querySelector(".np-controls .close[data-pop]");
     if (closeBtn && win.matches("[popover]")) {
-      nameNoteTransition(win);
       closeBtn.addEventListener("click", function (e) {
         e.preventDefault();
-        if (win.hidePopover) withViewTransition(function () { win.hidePopover(); }, ["axp-dialog"]);
+        if (win.hidePopover) win.hidePopover();
       });
     }
     if (!ta) return;   // folder index has no textarea — nothing more to wire
@@ -108,7 +99,7 @@
     }
     function newDoc() { ta.value = ""; ta.focus(); status(); }   // a fresh scratch (unsaved, like everything here)
     function exit() {
-      if (win.matches("[popover]") && win.hidePopover) withViewTransition(function () { win.hidePopover(); }, ["axp-dialog"]);
+      if (win.matches("[popover]") && win.hidePopover) win.hidePopover();
       else location.assign("/writing");
     }
     function about() {
@@ -220,38 +211,35 @@
       var open = D.querySelectorAll(".np-note:popover-open");
       if (open.length) {
         e.preventDefault();
-        withViewTransition(function () { open[open.length - 1].hidePopover(); }, ["axp-dialog"]);
+        open[open.length - 1].hidePopover();
       }
     }, true);
   }
   function openNote(pop) {
-    nameNoteTransition(pop);
     var ta = pop.querySelector(".np-text");
-    // Anything that needs the note to be VISIBLE must live inside the transition
-    // callback: startViewTransition defers it, so a focus() or a measure out here
-    // runs while the popover is still `display:none` (writing.js's .np-note rule)
-    // and silently does nothing. Only the reduced-motion path, where
-    // withViewTransition calls fn synchronously, ever worked.
+    // Order matters here: everything below focus() or measures the note, and a
+    // popover is still `display:none` (writing.js's .np-note rule) until
+    // showPopover() runs. That used to be a genuine trap — the whole body sat in
+    // a startViewTransition callback precisely because the transition DEFERRED
+    // it, so anything written outside the callback ran a frame early against a
+    // hidden element and silently did nothing. With the transition gone the calls
+    // simply run in order, which is the same guarantee without the indirection.
     if (pop.matches(":popover-open")) {                 // already open → raise + focus
-      withViewTransition(function () {
-        try { pop.hidePopover(); pop.showPopover(); } catch (_) {}
-        if (ta) ta.focus();
-      }, ["axp-dialog"]);
+      try { pop.hidePopover(); pop.showPopover(); } catch (_) {}
+      if (ta) ta.focus();
       return;
     }
     var n = D.querySelectorAll(".np-note:popover-open").length;   // # already open → cascade step
-    withViewTransition(function () {
-      try { pop.showPopover(); } catch (_) { return; }
-      var folder = D.querySelector(".np-folder");
-      var bx = (folder ? folder.getBoundingClientRect().left : 16) + 32;
-      var by = (folder ? folder.getBoundingClientRect().top : 8) + 30;
-      var step = 26;
-      var x = Math.max(8, Math.min(bx + n * step, innerWidth - pop.offsetWidth - 8));
-      var y = Math.max(8, Math.min(by + n * step, innerHeight - 30 - 90));
-      pop.style.margin = "0"; pop.style.right = "auto"; pop.style.left = x + "px"; pop.style.top = y + "px";
-      if (ta) ta.focus();
-      window.dispatchEvent(new Event("resize"));   // nudge the custom scrollbar to (re)measure now it's visible
-    }, ["axp-dialog"]);
+    try { pop.showPopover(); } catch (_) { return; }
+    var folder = D.querySelector(".np-folder");
+    var bx = (folder ? folder.getBoundingClientRect().left : 16) + 32;
+    var by = (folder ? folder.getBoundingClientRect().top : 8) + 30;
+    var step = 26;
+    var x = Math.max(8, Math.min(bx + n * step, innerWidth - pop.offsetWidth - 8));
+    var y = Math.max(8, Math.min(by + n * step, innerHeight - 30 - 90));
+    pop.style.margin = "0"; pop.style.right = "auto"; pop.style.left = x + "px"; pop.style.top = y + "px";
+    if (ta) ta.focus();
+    window.dispatchEvent(new Event("resize"));   // nudge the custom scrollbar to (re)measure now it's visible
   }
 
   [].forEach.call(D.querySelectorAll(".np-window"), enhance);

@@ -18,15 +18,11 @@ export function xpChromeCss() {
   return `/*min*/
   :root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}
   * { box-sizing: border-box; }
-/* cross-document View Transitions: a fast, reduced-motion-safe crossfade on real
-   navigations between same-origin pages. inline (not JS-injected) so the incoming
-   page has opted in by parse time. the persistent shell (wallpaper/taskbar) is
-   identical across pages, so visually only the changing window content fades. */
-@media (prefers-reduced-motion:no-preference){@view-transition{navigation:auto}::view-transition-old(root),::view-transition-new(root){animation-duration:140ms}}
-  /* first-paint background is the Bliss desktop tone on the ROOT (html) too —
-     the cross-document View-Transition freezes the root group, so if html were
-     white you'd get a frame of white flash before nav.js paints the real desktop.
-     matching html+body to the Bliss gradient kills that flash. */
+  /* first-paint background is the Bliss desktop tone on the ROOT (html) too, so
+     a white <html> never flashes in the gap before nav.js paints the real
+     desktop. This mattered under the cross-document View Transition (which
+     froze the root group) and matters MORE without it: a plain navigation has
+     no held snapshot standing in, so html's own background IS the first paint. */
   html, body {
     background: linear-gradient(180deg, oklch(56% 0.13 250) 0%, oklch(73% 0.10 236) 50%, oklch(88% 0.05 232) 60%, oklch(60% 0.16 140) 100%);
   }

@@ -56,28 +56,24 @@
    underlying sRGB hex, but the source reads modern.
    ─────────────────────────────────────────────────────────────────── */
 
-/* cross-document View Transitions: same-origin navigations between the
-   XP-window pages (/, /bot, /around, /whoareyou, /garage) cross-fade
-   instead of hard-cutting — the windows dissolve into each other, which
-   suits the desktop-shell conceit. pure CSS, no JS. both the leaving and
-   arriving page must opt in, so this rule is mirrored into every page's
-   stylesheet (incl. the worker's shared xpChromeCss). unsupported engines
-   (Firefox today) just navigate instantly — graceful. Chrome 126+/Safari
-   18+. respects reduced-motion automatically (UA skips the animation). */
+/* Navigations hard-cut, deliberately. A cross-document View Transition used to
+   dissolve the windows into each other here, mirrored into every page's
+   stylesheet because both the leaving and arriving page must opt in. It came
+   out on 2026-07-30: every internal page is prerendered on hover (the
+   speculation rules further down), so the incoming document is already rendered
+   and the transition was ~200ms of animation on a navigation with nothing left
+   to wait for. Firefox never implemented the opt-in and always cut instantly;
+   Chromium now matches it. See the note at @view-transition in luna.css. */
 
 * { box-sizing: border-box; }
-/* cross-document View Transitions: a fast, reduced-motion-safe crossfade on real
-   navigations between same-origin pages. inline (not JS-injected) so the incoming
-   page has opted in by parse time. the persistent shell (wallpaper/taskbar) is
-   identical across pages, so visually only the changing window content fades. */
-@media (prefers-reduced-motion:no-preference){@view-transition{navigation:auto}::view-transition-old(root),::view-transition-new(root){animation-duration:140ms}}
 
 html, body {
   margin: 0;
   padding: 0;
-  /* Bliss tone on the ROOT too: the cross-document View Transition freezes the
-     root group, so a white <html> flashes for a frame before nav.js paints the
-     desktop. matching html to the desktop gradient removes that flash. */
+  /* Bliss tone on the ROOT too, so a white <html> never flashes for a frame
+     before nav.js paints the desktop. Load-bearing: with the View Transition
+     gone there is no held snapshot covering that gap, so html's own background
+     IS what the visitor sees first. */
   background:
     linear-gradient(180deg,
       oklch(56% 0.13 250) 0%,
