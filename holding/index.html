@@ -1015,6 +1015,19 @@ footer .signature small { color: oklch(56.93% 0 0); }
   /serendipity don't pay the prerender transfer + worker invocations; the
   on-intent cost is tiny (pages are small + static) and adds no click latency.
   allowed under the existing 'unsafe-inline' script-src in the CSP.
+
+  REMOVED 2026-07-30, and worth knowing before anyone re-adds it: an eager
+  `prefetch` rule sat here matching `/garage/*` and `/lwe/*`. It fetched
+  NOTHING, ever. Those patterns need the literal `/garage/` prefix, and this
+  page links to `/garage` and `/lwe` bare — measured after nav.js finishes
+  building the shell, 44 links, zero matches. So the rule cost bytes and
+  bought nothing for however long it shipped.
+  Widening it to `/garage*` would work, and is deliberately NOT done yet: eager
+  means "immediately", so it would put two document fetches on every homepage
+  load, including for the visitors who never click either section, on the same
+  critical path this page is otherwise tuned to the byte. The speculation
+  ledger (holding/_worker.js/speculation.js) now counts what the surviving
+  moderate rule actually converts. Re-add with that number in hand, not before.
 -->
 <script type="speculationrules">
 {
@@ -1031,17 +1044,6 @@ footer .signature small { color: oklch(56.93% 0 0); }
         ]
       },
       "eagerness": "moderate"
-    }
-  ],
-  "prefetch": [
-    {
-      "where": {
-        "and": [
-          { "or": [ { "href_matches": "/garage/*" }, { "href_matches": "/lwe/*" } ] },
-          { "not": { "href_matches": "/lwe/ask*" } }
-        ]
-      },
-      "eagerness": "eager"
     }
   ]
 }
