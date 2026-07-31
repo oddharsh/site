@@ -577,9 +577,32 @@ await cp("serendipity/serendipity.js", `${OUT}/serendipity/serendipity.js`);
   console.log(`client edge: mirrored into ${mirrored} staged pages from luna.css (${skipped} files carry no window geometry)`);
 }
 
-// 1c) the Markdown twins used to run HERE, before any page was generated, which
-// is exactly why /updates and /restore never got one. Moved below 1f, after the
-// deploy-time documents exist. See the block there.
+// 1c) the Markdown twins + per-section llms.txt indexes. Generated from the
+// READABLE source in holding/, never from the staged copy: the staged pages are
+// about to be rewritten (client edge, hashed asset refs) and index.html is about
+// to be minified, none of which belongs in a twin. Because a twin is a pure
+// function of source bytes, generating it here makes drift structurally
+// impossible — no committed copy to fall behind, no step to forget. Same
+// argument the dcz deltas won.
+{
+  const { buildTwins, checkTwinFacts } = await import("./scripts/gen-md-twins.mjs");
+  const drift = checkTwinFacts(".");
+  if (drift.length) {
+    throw new Error("md twins: a hand-authored twin disagrees with the Worker that renders its page:\n  - " + drift.join("\n  - "));
+  }
+  const { files, skipped } = buildTwins(".");
+  for (const [rel, body] of files) {
+    const dest = `${OUT}/holding${rel}`;
+    await mkdir(dest.slice(0, dest.lastIndexOf("/")), { recursive: true });
+    await writeFile(dest, body);
+  }
+  const twins = [...files.keys()].filter((k) => k.endsWith(".md")).length;
+  const indexes = [...files.keys()].filter((k) => k.endsWith("llms.txt")).length;
+  // Losing the twins would otherwise be silent: pages keep serving HTML and only
+  // `Accept: text/markdown` degrades, which nothing else in the build watches.
+  if (twins < 30) throw new Error(`md twins: generated only ${twins} twins (expected 30+) — did site-manifest.json or the page shape change?`);
+  console.log(`md twins: ${twins} pages + ${indexes} section indexes staged (${skipped.length} Worker-rendered surfaces carry no prose source)`);
+}
 
 const minifyJavaScript = (filename, sourceText) => {
   const result = minifySync(filename, sourceText, {
@@ -835,51 +858,6 @@ if (inlineProbe.includes("/* probe */") ||
 
   console.log(`pages(gen): updates.html ${updatesHtml.length}B, restore.html ${restoreHtml.length}B (${points.length} checkpoints, newest ${points[points.length - 1].version})`);
 }
-
-// 1g) the Markdown twins + per-section llms.txt indexes. Generated from the
-// READABLE source in holding/ wherever a page has one, never from the staged
-// copy: the staged pages are about to be rewritten (client edge, hashed asset
-// refs) and index.html is about to be minified, none of which belongs in a twin.
-// Because a twin is a pure function of source bytes, generating it here makes
-// drift structurally impossible — no committed copy to fall behind, no step to
-// forget. Same argument the dcz deltas won.
-//
-// It runs HERE, after 1d-1f, rather than up at 1c where it used to. A page with
-// no prose source got skipped, which was right when every such page was rendered
-// live by the Worker and wrong the moment the build started baking some of them
-// into HTML. /updates and /restore fell into that gap: baked at 1f, twinned
-// never, still advertising `flags.agents: true` and still answering an agent's
-// `Accept: text/markdown` with HTML. Ordering was the whole bug.
-//
-// generatedRoot is therefore the staged tree, read in the one window where it is
-// still honest: after the canonical renderers have written these documents and
-// before the hashing, ref-rewriting, and minification passes touch them. Source
-// first, hand-authored second (so /bot keeps the twin checkTwinFacts pins),
-// generated only as the last resort.
-{
-  const { buildTwins, checkTwinFacts } = await import("./scripts/gen-md-twins.mjs");
-  const drift = checkTwinFacts(".");
-  if (drift.length) {
-    throw new Error("md twins: a hand-authored twin disagrees with the Worker that renders its page:\n  - " + drift.join("\n  - "));
-  }
-  const { files, skipped, generated } = buildTwins(".", { generatedRoot: OUT });
-  for (const [rel, body] of files) {
-    const dest = `${OUT}/holding${rel}`;
-    await mkdir(dest.slice(0, dest.lastIndexOf("/")), { recursive: true });
-    await writeFile(dest, body);
-  }
-  const twins = [...files.keys()].filter((k) => k.endsWith(".md")).length;
-  const indexes = [...files.keys()].filter((k) => k.endsWith("llms.txt")).length;
-  // Losing the twins would otherwise be silent: pages keep serving HTML and only
-  // `Accept: text/markdown` degrades, which nothing else in the build watches.
-  if (twins < 30) throw new Error(`md twins: generated only ${twins} twins (expected 30+) — did site-manifest.json or the page shape change?`);
-  // The generated tier gets its own tripwire, because the failure that produced it
-  // was silent in exactly this way: the reordering above is what feeds it, so a
-  // future step that moves back ahead of 1f would empty it without failing anything.
-  if (!generated.length) throw new Error("md twins: no twin came from the generated tier — did the twin step move back above the deploy-time page renders?");
-  console.log(`md twins: ${twins} pages + ${indexes} section indexes staged (${generated.length} from generated HTML: ${generated.join(", ")}; ${skipped.length} Worker-rendered surfaces carry no prose source)`);
-}
-
 
 // 2) homepage HTML: deploy the readable original as /index.src.html and
 // minify only the served copy. The worker rewrites this response as a stream,
