@@ -1082,7 +1082,16 @@ footer .signature small { color: oklch(56.93% 0 0); }
     // priority hint and land exactly where they are today.
     fetch("/hit?tick=1",{keepalive:true,priority:"low"}).catch(function(){});
     var fill=function(){
-      fetch("/hit?n=1").then(function(r){return r.ok?r.json():null}).then(function(j){
+      // Same demotion as the tick above, and the half that one missed. Being
+      // inside requestIdleCallback sets WHEN this fires, never what it outranks
+      // once it does: measured on a cold incognito load 2026-07-30, idle came at
+      // 153ms on a page whose tiles start at 178ms, so a High-priority odometer
+      // went out ahead of all twelve of them. The tiles are deliberately
+      // fetchpriority=low (#156 put LCP on the prose), which is exactly why
+      // nothing else on this page should be defaulting to High by accident.
+      // counter.js says it plainly: a footer odometer is the last thing on the
+      // page that matters.
+      fetch("/hit?n=1",{priority:"low"}).then(function(r){return r.ok?r.json():null}).then(function(j){
         var el=document.querySelector(".counter");
         if(el&&j&&typeof j.n==="number")el.textContent=String(j.n).padStart(6,"0");
       }).catch(function(){});
