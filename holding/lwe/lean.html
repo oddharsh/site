@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
 <title>aadhar.sh/lwe/lean</title>
-<meta name="description" content="Lean and formal verification at the pace of a 2009 MSN chat: why a proof is not an inspection, how a vacuous spec passes, a toy verified compiler you can break, and the kernel bug that ate a Collatz proof.">
+<meta name="description" content="Lean and formal verification at the pace of a 2009 MSN chat: why a proof is not an inspection, how a vacuous spec passes, a toy verified compiler you can break, the kernel bug that ate a Collatz proof, and the 1,765 lines you would have to read to believe OpenAI's ten proofs.">
 <link rel="canonical" href="https://aadhar.sh/lwe/lean">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='7'%20fill='%234b47a8'/%3E%3Cg%20fill='none'%20stroke='%23fff'%20stroke-width='2.4'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M10%209%20L16%2023%20L22%209'/%3E%3Cpath%20d='M12.6%2017.4%20H19.4'/%3E%3C/g%3E%3C/svg%3E">
 <meta property="og:type" content="article">
@@ -93,11 +93,30 @@
 .thm .goal { font-family: var(--font-mono); font-size: 8pt; color: #b91c1c; background: #fdeaea; border: 1px solid #e8b4b4; border-radius: 3px; padding: 5px 7px; margin-top: 6px; white-space: pre-wrap; }
 .thm .agree { font-size: 8pt; color: #9a6a16; margin-top: 6px; display: block; }
 
+/* demo 3: the audit surface */
+.surf-pick { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 10px; }
+.surf-pick .btn { font-size: 8.5pt; padding: 2px 8px; }
+.surf-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-bottom: 9px; }
+.surf-stats .card { border: 1px solid #c3cbdb; border-radius: 4px; background: #f7f9fc; padding: 7px 9px; }
+.surf-stats .card.mine { border-color: #d9a300; background: #fffbea; }
+.surf-stats h5 { margin: 0 0 3px; font-family: var(--font-caption); font-size: 8.5pt; color: #15243f; }
+.surf-stats .n { font-family: var(--font-mono); font-size: 13pt; font-weight: bold; color: #15243f; display: block; }
+.surf-stats .sub { font-size: 7.5pt; color: #66707d; display: block; margin-top: 3px; }
+.surf-scale { border: 1px solid #c3cbdb; border-radius: 4px; background: #fff; padding: 8px 9px; }
+.surf-row { display: flex; align-items: center; gap: 7px; margin: 5px 0; }
+.surf-row .lab { flex: 0 0 4.9em; font-family: var(--font-mono); font-size: 7.5pt; text-align: right; color: #66707d; }
+.surf-track { flex: 1 1 auto; height: 13px; background: #eef1f6; border: 1px solid #d6dce6; border-radius: 2px; overflow: hidden; }
+.surf-fill { display: block; height: 100%; background: linear-gradient(180deg,#8b86d8,#4b47a8); }
+.surf-fill.mine { background: linear-gradient(180deg,#ffd97a,#d9a300); }
+.surf-row .amt { flex: 0 0 5.4em; font-family: var(--font-mono); font-size: 8pt; color: #15243f; }
+.surf-mag { margin-top: 8px; display: flex; align-items: center; gap: 9px; flex-wrap: wrap; font-size: 7.5pt; color: #66707d; }
+.surf-ratio { margin-top: 9px; font-size: 8.5pt; padding: 7px 9px; border: 1px dashed var(--accent); border-radius: 4px; background: var(--accent-soft); color: #15243f; }
+
 .scrollnote { text-align: center; font-size: 8pt; color:#66707d; padding: 3px 0 9px; }
 .compose { border-top: 1px solid #b9b5dd; background: linear-gradient(180deg,#f7f6fd,#eae8f7); padding: 7px 10px; }
 .compose .ta { flex: 1; min-height: 30px; border: 1px solid #7d8aa3; background: #fff; box-shadow: inset 1px 1px 0 #c3cbdb; padding: 4px 6px; font-family: var(--font-ui); font-size: 9.5pt; color:#66707d; }
 
-@media (max-width: 520px){ body { padding: 8px 4px 32px; } .msgr-head .pets { display:none } .specs, .pipes { grid-template-columns:1fr } }
+@media (max-width: 520px){ body { padding: 8px 4px 32px; } .msgr-head .pets { display:none } .specs, .pipes, .surf-stats { grid-template-columns:1fr } }
 body { text-wrap: pretty; } /* progressive; older engines ignore it */
 </style>
 <link rel="stylesheet" href="/luna.css">
@@ -119,7 +138,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
       </div>
 
       <p class="disclosure"><b>Starter draft.</b> Every Lean snippet, error message, and axiom listing on this page is <b>real captured output</b> from Lean 4.32.2. The two source files are downloadable
-        (<a href="/lwe/lean/Demo.lean">Demo.lean</a>, <a href="/lwe/lean/Compiler.lean">Compiler.lean</a>) and reproduce everything shown here with <span class="mono">lean Demo.lean</span>. The chat framing and the demos are AI-generated. Scroll. &darr;</p>
+        (<a href="/lwe/lean/Demo.lean">Demo.lean</a>, <a href="/lwe/lean/Compiler.lean">Compiler.lean</a>) and reproduce everything shown here with <span class="mono">lean Demo.lean</span>. The exception is the last section, whose Lean and JSON are quoted verbatim from <a href="https://github.com/openai/ten-proofs" rel="external">openai/ten-proofs</a> and linked to the file each came from; its line counts were measured on that repository. The chat framing and the demos are AI-generated. Scroll. &darr;</p>
 
       <div class="log">
 
@@ -322,14 +341,118 @@ ib : ∀ (s : List Nat), run env (compileSwap b) s = eval env b :: s
           <p>Timeline detail nobody put in a headline. The fix merged at <b>13:39 UTC on 28 July 2026</b>; Lean <b>v4.32.2</b> published at <b>16:34 UTC the same day</b>, just under three hours later. That patch release looks cut specifically for the soundness fix.</p>
           <p>Lawrence Paulson published a <a href="https://lawrencecpaulson.github.io/2026/07/30/Collatz.html" rel="external">response on 30 July</a> arguing this is the predictable cost of Lean's design: inductive types, pattern matching, and recursion live <em>inside</em> Lean's kernel, whereas Isabelle's LCF architecture derives all of it from a tiny axiom set so the kernel stays minimal and such bugs have nowhere to live. His word for building those constructs into the kernel is &ldquo;theft.&rdquo; Lean's counter is that the theft is a large part of why Mathlib grew as fast as it did.</p></div></div></div>
 
-        <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>20:35</time></div>
+        <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>20:32</time></div>
+          <div class="bubble"><p>ok but openai just dropped <a href="https://github.com/openai/ten-proofs" rel="external">ten proofs</a> of open problems, every one of them carrying a Lean certificate, zero <span class="mono">sorry</span>. doesn't that settle the argument</p></div></div></div>
+
+        <div class="msg bot"><div class="pic"></div><div><div class="who"><b>Lean</b><time>20:33</time></div>
+          <div class="bubble"><p>It settles one thing cleanly, and leaves the rest of this conversation standing exactly where it was.</p>
+          <p>The thing it settles: no step got hand-waved. Ten modules, <b>548,205 lines</b> of Lean, 16,186 lines that open a theorem or a lemma, and a machine-readable manifest publishing <span class="mono">sorry_count: 0</span> per result. That has been the failure mode of every previous AI proof announcement, and it's dead here.</p>
+          <p>Now look at what a mathematician has to read to know <em>what was proved</em>.</p></div></div></div>
+
+        <!-- DEMO 3: the audit surface -->
+        <div class="msg bot"><div class="pic"></div><div style="min-width:0"><div class="who"><b>Lean</b><time>20:33</time></div>
+          <div class="demo" id="demo-surface">
+            <div class="bar">Lean shared a demo: the part addressed to you</div>
+            <div class="pad">
+              <p class="lead">The ten results, as published 1&nbsp;August 2026. Left is what the kernel reads. Right is the <span class="mono">ComparatorChallenges</span> file, which is the statement alone and the only part written for a human. Pick one:</p>
+              <div class="surf-pick" id="su-pick"></div>
+              <div class="surf-stats">
+                <div class="card"><h5>proof &middot; the kernel's problem</h5><span class="n" id="su-pl"></span><span class="sub" id="su-ps"></span></div>
+                <div class="card mine"><h5>statement &middot; your problem</h5><span class="n" id="su-cl"></span><span class="sub" id="su-cs"></span></div>
+              </div>
+              <div class="surf-scale">
+                <div class="surf-row"><span class="lab">proof</span><span class="surf-track"><span class="surf-fill" id="su-bp"></span></span><span class="amt" id="su-ap"></span></div>
+                <div class="surf-row"><span class="lab">statement</span><span class="surf-track"><span class="surf-fill mine" id="su-bc"></span></span><span class="amt" id="su-ac"></span></div>
+                <div class="surf-mag"><button class="btn" id="su-mag">magnify the statement bar 100&times;</button><span id="su-magnote"></span></div>
+              </div>
+              <div class="surf-ratio" id="su-ratio"></div>
+            </div>
+          </div></div></div>
+
+        <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>20:37</time></div>
+          <div class="bubble"><p>thirty nine lines. the entire non-sofic group result is 39 lines and then 34 thousand lines i am never going to open</p></div></div></div>
+
+        <div class="msg bot"><div class="pic"></div><div><div class="who"><b>Lean</b><time>20:38</time></div>
+          <div class="bubble"><p>You shouldn't open them, and that's the deal working. The 34,440 lines are addressed to me. The 39 are addressed to you.</p>
+          <p>The repo makes that split structural. Twelve <span class="mono">ComparatorChallenges/*.lean</span> files carry the statements and nothing else, every theorem stubbed with <span class="mono">sorry</span>, and a config points <a href="https://github.com/leanprover/comparator" rel="external">Comparator</a> at the module obliged to discharge them:</p>
+          <div class="lean">{
+  <span class="kw">"challenge_module"</span>: "ComparatorChallenges.D_NonSoficGroup",
+  <span class="kw">"solution_module"</span>: "NonSoficGroup",
+  <span class="kw">"theorem_names"</span>: ["SoficGroups.SourceTopLevelCompressionFinal.exists_finitelyPresented_nonsofic_group"],
+  <span class="kw">"permitted_axioms"</span>: ["propext", "Quot.sound", "Classical.choice"],
+  <span class="kw">"enable_nanoda"</span>: <span class="ok">true</span>
+}</div>
+          <p>Three things in there are this whole page. <span class="mono">sorry</span> has flipped sides: half an hour ago it was the cheat <span class="mono">#print axioms</span> catches, and here it's the honest use, a file that states the obligation and pointedly refuses to discharge it. <span class="mono">permitted_axioms</span> is that same command promoted to a release gate, whitelisting the identical three axioms across all twelve configs. And <span class="mono">enable_nanoda</span> is the kernel diversity I was selling you two messages ago, switched on by default.</p>
+          <a class="cite" href="https://github.com/openai/ten-proofs/blob/main/ComparatorChallenges/D_NonSoficGroup.json" rel="external">openai/ten-proofs &middot; D_NonSoficGroup.json</a></div></div></div>
+
+        <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>20:41</time></div>
+          <div class="bubble"><p>fine, so the 39 lines are the theorem and i can check the theorem. that's the good outcome right</p></div></div></div>
+
+        <div class="msg bot"><div class="pic"></div><div><div class="who"><b>Lean</b><time>20:42</time></div>
+          <div class="bubble"><p>Read them first. This is the file, whole:</p>
+          <div class="lean"><span class="kw">import</span> Mathlib
+
+<span class="kw">noncomputable section</span>
+
+<span class="kw">namespace</span> SoficGroups
+
+<span class="kw">def</span> normalizedHamming {Y : Type*} [Fintype Y] [DecidableEq Y]
+    (p q : Equiv.Perm Y) : ℝ :=
+  (hammingDist (<span class="kw">fun</span> y =&gt; p y) (<span class="kw">fun</span> y =&gt; q y) : ℝ) / Fintype.card Y
+
+<span class="kw">structure</span> PermutationModel (G : Type*) [Group G] <span class="kw">where</span>
+  size : ℕ
+  size_pos : 0 &lt; size
+  action : G → Equiv.Perm (Fin size)
+  map_one : action 1 = 1
+
+<span class="kw">structure</span> GoodOn {G : Type*} [Group G]
+    (M : PermutationModel G) (F : Finset G) (ε : ℝ) : Prop <span class="kw">where</span>
+  multiplicative : ∀ g ∈ F, ∀ h ∈ F,
+    normalizedHamming (M.action (g * h)) (M.action g * M.action h) &lt; ε
+  separated : ∀ g ∈ F, g ≠ 1 →
+    1 - ε &lt; normalizedHamming (M.action g) 1
+
+<span class="kw">class</span> Sofic (G : Type*) [Group G] : Prop <span class="kw">where</span>
+  approximation : ∀ (F : Finset G) (ε : ℝ), 0 &lt; ε → ε &lt; 1 →
+    ∃ M : PermutationModel G, GoodOn M F ε
+
+<span class="kw">namespace</span> SourceTopLevelCompressionFinal
+
+<span class="kw">theorem</span> exists_finitelyPresented_nonsofic_group :
+    ∃ (G : Type) (_ : Group G),
+      Group.IsFinitelyPresented G ∧ ¬ SoficGroups.Sofic G := <span class="kw">by</span>
+  <span class="er">sorry</span>
+
+<span class="kw">end</span> SourceTopLevelCompressionFinal
+
+<span class="kw">end</span> SoficGroups
+
+<span class="kw">end</span></div>
+          <p>Four of those lines are the theorem. The other thirty-five decide what <span class="mono">Sofic</span> means, and the challenge file builds that word itself, from <span class="mono">normalizedHamming</span> up. Put the wrong inequality in <span class="mono">GoodOn.separated</span> and you get a green, kernel-checked, axiom-clean theorem about a notion that isn't soficity, and nothing downstream will ever mention it.</p>
+          <p>That's the withdraw function, relocated to the top of mathematics. Across the twelve files it's 38 checked theorems sitting on <b>195 definitions and 25 structures and classes</b>, all of it upstream of anything a kernel can see.</p>
+          <a class="cite" href="https://github.com/openai/ten-proofs/blob/main/ComparatorChallenges/D_NonSoficGroup.lean" rel="external">openai/ten-proofs &middot; D_NonSoficGroup.lean, all 39 lines</a></div></div></div>
+
+        <div class="msg ai-note"><div class="pic" style="background:linear-gradient(180deg,#a78bdc,#6b4ec2);border-color:#523aa0"></div><div><div class="who"><b>sidekick</b><time>20:45</time></div>
+          <div class="bubble"><span class="tagai">AI &middot; context, not from Lean</span>
+          <p>One detail from the repo that the section above has earned. <span class="mono">lean-toolchain</span> pins <b>v4.32.0</b>, released 13 July, and <span class="mono">lakefile.toml</span> pins mathlib and Comparator to the same tag. The kernel soundness fix went out in <b>v4.32.2</b> on 28 July, and its release note says the bug reached the standard kernel <em>even when using the <span class="mono">comparator</span> tool</em>, while separately advising an upgrade of nanoda for a bug of its own. The repo went public on 1 August.</p>
+          <p>Read that as a fact about the pinned checking stack rather than about the ten results. Triggering the bug takes a malicious meta program, none of this is evidence anyone wrote one, and the remedy is a one-line toolchain bump plus a rebuild. It's just that a repo whose entire proposition is independent checkability is currently checkable on the kernel that was patched three days before it shipped. The manifest also records <span class="mono">review: agent-reviewed</span>, and the ten proofs came from an agent run of about a week.</p></div></div></div>
+
+        <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>20:48</time></div>
+          <div class="bubble"><p>so is the whole thing impressive or is it a trap</p></div></div></div>
+
+        <div class="msg bot"><div class="pic"></div><div><div class="who"><b>Lean</b><time>20:49</time></div>
+          <div class="bubble"><p>Impressive, and the shape of the impressiveness is the useful part. Twenty megabytes of proof stopped being anybody's problem, because I read it and I don't get tired. What survives is 1,765 lines, and those are now the most valuable lines in the repository.</p>
+          <p>That ratio is the argument for doing any of this. It's also the reason the reviewing work didn't vanish, it just got concentrated somewhere small enough that a person can finally do it properly.</p></div></div></div>
+
+        <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>20:52</time></div>
           <div class="bubble"><p>so let me say it back. verification doesn't delete the bug, it moves it somewhere smaller</p></div></div></div>
 
-        <div class="msg bot"><div class="pic"></div><div><div class="who"><b>Lean</b><time>20:35</time></div>
+        <div class="msg bot"><div class="pic"></div><div><div class="who"><b>Lean</b><time>20:53</time></div>
           <div class="bubble"><p>That's the sentence. It relocates the bug out of the implementation and into the specification, the semantics, and the checker. That's still an enormous win, because those are smaller, more readable, and reviewed by more people than any implementation. It is not the same thing as correct.</p>
           <p>Which is why Paradigm shipped <a href="https://www.paradigm.xyz/puzzles/verified-compiler" rel="external">both halves as puzzles</a>. One asks you to optimize a compiler while <span class="mono">Solidus.compile_correct</span> keeps proving. The other, <a href="https://www.paradigm.xyz/puzzles/spec-hunt" rel="external">spec-hunt</a>, pays you to find programs where their formal Solidity semantics disagrees with real solc + EVM. Upside and downside, same coin.</p></div></div></div>
 
-        <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>20:38</time></div>
+        <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>20:56</time></div>
           <div class="bubble"><p>got it: the proof is total over the state space and bounded by what I thought to say, and underneath it all I'm still trusting a few thousand lines of C++ that had a hole in it on monday. thanks, Lean.</p>
           <p>&rarr; <a href="/lwe/lean/Demo.lean">Demo.lean</a> &middot; <a href="/lwe/lean/Compiler.lean">Compiler.lean</a> &middot; <a href="/lwe">back to Learning With Errors</a> &middot; <a href="/lwe/pcrypto">programmable cryptography &rarr;</a></p></div></div></div>
 
@@ -505,6 +628,76 @@ ib : ∀ (s : List Nat), run env (compileSwap b) s = eval env b :: s
   }
   draw();
 })();
+
+/* Demo 3 — the audit surface of openai/ten-proofs, measured at commit HEAD on
+   2026-08-01. `proof` is wc -l of the solution module; `stmt` is wc -l of the
+   ComparatorChallenges file(s) for that result; `lem` counts lines opening a
+   theorem or lemma; `thm` is the length of theorem_names in the challenge JSON. */
+(function () {
+  var root = document.getElementById("demo-surface"); if (!root) return;
+  var R = [
+    { k: "sphere packing",      f: "SpherePacking",            proof:  55616, lem: 1759, stmt: 185, thm:  4, c: "A_SpherePacking" },
+    { k: "binary + spherical codes", f: "MetricCodes",         proof: 114406, lem: 3826, stmt: 499, thm: 10, c: "B_BinaryCodes + B_SphericalCodes" },
+    { k: "non-sofic group",     f: "NonSoficGroup",            proof:  34440, lem: 1044, stmt:  39, thm:  1, c: "D_NonSoficGroup" },
+    { k: "Connes rigidity",     f: "ConnesRigidity",           proof:  37374, lem: 1445, stmt: 223, thm:  2, c: "E_ConnesRigidity" },
+    { k: "permanent bounds",    f: "Permanent",                proof:  27563, lem:  875, stmt: 102, thm:  2, c: "C_PermanentFormulaLowerBound" },
+    { k: "quantum repetition",  f: "QuantumParallelRepetition", proof: 70980, lem: 1655, stmt: 139, thm:  2, c: "G_QuantumParallelRepetition" },
+    { k: "closest vector",      f: "GapCVP",                   proof: 130430, lem: 2976, stmt: 313, thm:  4, c: "H_GapCVP" },
+    { k: "Ehrhart volume",      f: "EhrhartVolumeInequality",  proof:  55755, lem: 1859, stmt:  78, thm:  4, c: "F_EhrhartVolumeInequality" },
+    { k: "multicolor Ramsey",   f: "MulticolorTriangleRamsey", proof:   3053, lem:   96, stmt:  50, thm:  4, c: "I_MulticolorTriangleRamsey" },
+    { k: "compactness + degeneracy", f: "CompactnessAndDegeneracy", proof: 18588, lem: 651, stmt: 137, thm: 5, c: "J_CompactnessConjecture + J_TwoDegenerateGraphs" }
+  ];
+  var MAX = 130430, pick = 2, mag = false;
+
+  function n(v) { return v.toLocaleString("en-US"); }
+
+  var pickbar = document.getElementById("su-pick");
+  R.forEach(function (r, i) {
+    var b = document.createElement("button");
+    b.className = "btn"; b.textContent = r.k; b.dataset.i = i;
+    pickbar.appendChild(b);
+  });
+  pickbar.addEventListener("click", function (ev) {
+    var b = ev.target.closest(".btn"); if (!b) return;
+    pick = +b.dataset.i; draw();
+  });
+  document.getElementById("su-mag").addEventListener("click", function () { mag = !mag; draw(); });
+
+  function draw() {
+    Array.prototype.forEach.call(pickbar.children, function (b, i) {
+      b.classList.toggle("on", i === pick);
+    });
+    var r = R[pick], ratio = Math.round(r.proof / r.stmt);
+
+    document.getElementById("su-pl").textContent = n(r.proof) + " lines";
+    document.getElementById("su-ps").textContent =
+      r.f + ".lean · " + n(r.lem) + " lemmas · 0 sorry";
+    document.getElementById("su-cl").textContent = n(r.stmt) + " lines";
+    document.getElementById("su-cs").textContent =
+      r.c + " · " + r.thm + " theorem" + (r.thm === 1 ? "" : "s") + " checked";
+
+    var scale = mag ? 100 : 1;
+    document.getElementById("su-bp").style.width = (100 * r.proof / MAX) + "%";
+    document.getElementById("su-bc").style.width =
+      Math.min(100, 100 * r.stmt * scale / MAX) + "%";
+    document.getElementById("su-ap").textContent = n(r.proof);
+    document.getElementById("su-ac").textContent = n(r.stmt);
+
+    var magbtn = document.getElementById("su-mag");
+    magbtn.classList.toggle("on", mag);
+    magbtn.textContent = mag ? "back to true scale" : "magnify the statement bar 100×";
+    document.getElementById("su-magnote").textContent = mag
+      ? "the yellow bar is now 100 times too long. it still fits inside the purple one on nine of the ten."
+      : "both bars share one scale. the yellow one is not missing.";
+
+    document.getElementById("su-ratio").innerHTML =
+      "<b>" + n(ratio) + " lines of proof for every line of statement.</b> " +
+      "Across all ten it is 548,205 against 1,765, or 311 to 1. " +
+      "The left column is settled by a kernel, unattended. The right column is settled by people, " +
+      "and until they do, a green checkmark means the proof matches the statement and nothing more.";
+  }
+  draw();
+})();
 </script>
 
 <script type="speculationrules">
@@ -513,7 +706,7 @@ ib : ∀ (s : List Nat), run env (compileSwap b) s = eval env b :: s
 <script type="application/json" id="luq-data">
 {
   "skin": "lwe",
-  "intro": "Before you go tell someone a thing is 'formally verified': pop quiz. 4 questions, no stakes. Both demos above count as open book.",
+  "intro": "Before you go tell someone a thing is 'formally verified': pop quiz. 5 questions, no stakes. All three demos above count as open book.",
   "questions": [
     {
       "q": "Start with the opening metaphor. A UV penetrant scan on a part versus a proof about a program. What is the actual difference?",
@@ -600,6 +793,28 @@ ib : ∀ (s : List Nat), run env (compileSwap b) s = eval env b :: s
         {
           "t": "the bug was in the specification, the same failure mode as the vacuous withdraw theorem",
           "why": "Different layer. The vacuous theorem was correctly checked and said nothing useful; here the checker itself accepted an invalid derivation. Those are two separate rows in the trust story, and the page keeps them apart on purpose."
+        }
+      ]
+    },
+    {
+      "q": "openai/ten-proofs ships 548,205 lines of Lean with zero sorry, and 1,765 lines of Comparator challenge statements. Which number should a mathematician spend their week on?",
+      "options": [
+        {
+          "t": "the 1,765, because the proof is the kernel's problem and the statements are the only claim about what got proved",
+          "ok": true,
+          "why": "That is the trade verification makes. The 548,205 lines are settled by a machine that does not get tired, and what is left is a surface small enough to read properly. On the non-sofic result the whole readable surface is 39 lines, and 35 of them define what the word Sofic means."
+        },
+        {
+          "t": "the 548,205, because a proof that large has to be audited before anyone can rely on it",
+          "why": "Auditing it by hand would defeat the point and is not humanly possible at 21 MB. The kernel already checked every step, and #print axioms already confirmed which axioms it leaned on. Re-reading the proof buys you nothing the machine did not already give you."
+        },
+        {
+          "t": "neither, since zero sorry plus a whitelisted axiom set already settles correctness",
+          "why": "Those two facts settle that the proof matches the statement. They say nothing about whether the statement is the theorem anyone cared about, which is the gap the withdraw demo opened three demos ago and this repo inherits at research scale."
+        },
+        {
+          "t": "the 1,765, but only to confirm the theorem statements themselves are correctly transcribed",
+          "why": "Half the job. Across the twelve files those 38 theorems rest on 195 definitions and 25 structures the challenge files declare themselves, so a transcription check that stops at the theorem line skips the part where the meaning actually lives."
         }
       ]
     }

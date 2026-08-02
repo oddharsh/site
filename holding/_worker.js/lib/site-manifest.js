@@ -166,7 +166,7 @@ export const AGENT_SURFACES = [
     "path": "/lwe/lean",
     "title": "Lean",
     "kind": "content",
-    "description": "Lean and formal verification: why a proof is not an inspection, how a vacuous spec passes, and a toy verified compiler you can break."
+    "description": "Lean and formal verification: why a proof is not an inspection, how a vacuous spec passes, a toy verified compiler you can break, and the 1,765 lines of statement holding up OpenAI's ten proofs."
   },
   {
     "path": "/garage/blueprint",
