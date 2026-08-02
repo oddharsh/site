@@ -69,7 +69,7 @@
     { label: "lwe · dac", path: "/lwe/dac", hint: "digital-to-analog: multibit R-2R vs delta-sigma noise shaping" },
     { label: "lwe · drivers", path: "/lwe/drivers", hint: "headphone drivers: planar magnetic vs dynamic, force and breakup" },
     { label: "lwe · knots", path: "/lwe/knots", hint: "knots: granny vs square, the Ian knot, why laces come undone" },
-    { label: "lwe · lean", path: "/lwe/lean", hint: "lean, formal verification, specs, verified compilers, kernel soundness" },
+    { label: "lwe · lean", path: "/lwe/lean", hint: "lean, formal verification, specs, verified compilers, kernel soundness, openai ten-proofs" },
 // generated:lwe-pages:end
     // generated:garage-pages:start
     { label: "garage · blueprint", path: "/garage/blueprint", hint: "the repo, blueprinted by Fable 5" },
