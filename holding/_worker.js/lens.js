@@ -577,11 +577,18 @@ export function renderLensShell(initial, state, inputValue, compare) {
   // them; #lx-vs holds the head-to-head fragment in their place.
   const vsActive = !!(compare && compare.vsValue);
   const vsValue = (compare && compare.vsValue) || "";
+  // Delta is the one stateful view (it holds flipped switches), so its segment
+  // carries an amber count of the switches currently on. The client keeps the
+  // same span current via updateDeltaCount().
+  const cfOn = Object.keys(state.counterfactuals || {}).filter((k) => state.counterfactuals[k]).length;
   const value = inputValue || (seeded ? initial.finalUrl || initial.url : "");
   const humanHeader = seeded && !initial.framable
     ? 'Human view <span class="lx-mode">Reader</span> <span class="lx-mode-sub">server-rendered readable fallback</span>'
     : "Human view &middot; the live page";
-  const machineHeader = state.view === "machine" ? "Machine view &middot; Briefing" : state.view === "delta" ? "Delta view &middot; What changes" : "Machine view &middot; " + (LENS_TAB_LABELS[state.lens] || state.lens);
+  // The header no longer repeats the lens name: the tab strip sits inside the
+  // pane now, so the active tab IS the lens label. Must match renderMachine()
+  // and updateModeUi() in holding/lens.js or the header rewrites on hydrate.
+  const machineHeader = state.view === "delta" ? "Delta view &middot; What changes" : "Machine view";
   const browserHeader = "Browser Run &middot; Rendered";
   // Mode notes coach, they don't caption: each one asks for a prediction the
   // pane will then confirm or correct. Keep the strings byte-identical to
@@ -681,25 +688,37 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 .lx-chip:hover { background:linear-gradient(180deg,#fff,#efefe7); }
 .lx-chip:active { border-color:oklch(45% 0 0) #fff #fff oklch(45% 0 0); }
 
-/* toolbar: view toggle + lens tabs */
-.lx-toolbar { display:flex; align-items:flex-end; justify-content:space-between; gap:10px; flex-wrap:wrap; border-bottom:2px solid oklch(58% 0.10 250); margin-top:2px; }
-.lx-view { display:inline-flex; margin-bottom:5px; }
+/* toolbar: the view switcher stands alone now that the lens tabs live inside
+   the Machine pane. The two controls answer different questions (what am I
+   looking at vs which report), so they no longer share a row to be confused in. */
+.lx-toolbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:4px; }
+.lx-view { display:inline-flex; }
 .lx-seg { font-size:9pt; padding:3px 11px; color:oklch(28% 0 0); background:linear-gradient(180deg,#fbfbfb,#e3e3da); border:1px solid oklch(55% 0 0); border-right-width:0; }
 .lx-seg:first-child { border-radius:3px 0 0 3px; }
 .lx-seg:last-child { border-right-width:1px; border-radius:0 3px 3px 0; }
 .lx-seg.is-on { color:#fff; background:linear-gradient(180deg, oklch(58% 0.15 255), oklch(44% 0.18 257)); }
-.lx-lenses { display:inline-flex; gap:2px; }
-.lx-tab { font-size:9.2pt; padding:5px 12px 6px; color:oklch(35% 0.04 255); background:linear-gradient(180deg, oklch(96% 0.01 250), oklch(88% 0.02 250)); border:1px solid oklch(60% 0.05 250); border-bottom:none; border-radius:5px 5px 0 0; position:relative; top:1px; }
-.lx-tab.is-on { color:oklch(33% 0.10 263); font-weight:bold; background:#fff; top:2px; padding-bottom:7px; }
-/* the lens tabs only steer the machine pane, so they hide in the views that don't render it (human, browser) or ignore it (delta). shown for machine + compare. */
-.lx-toolbar.is-human .lx-lenses, .lx-toolbar.is-browser .lx-lenses, .lx-toolbar.is-delta .lx-lenses { display:none; }
+/* Delta's switch count. Delta is the one stateful view; amber is already its
+   "simulation" color, so the seg wears an amber count while switches are on. */
+.lx-seg-n { display:inline-block; margin-left:5px; padding:0 5px; border-radius:7px; font:bold 7.6pt "Courier New",monospace; color:#fff; background:oklch(60% 0.16 50); vertical-align:1px; }
+.lx-seg-n[hidden] { display:none; }
+
+/* lens tabs, inside the Machine pane between its header and body. In Compare
+   the pane is ~310px wide and six tabs need more, so the strip wraps to two
+   rows — the XP property-sheet compromise, and period-correct because of it.
+   In full Machine view the pane is wide enough for a single row. */
+.lx-lenses { display:flex; flex-wrap:wrap; gap:2px; padding:5px 6px 0; background:oklch(93% 0.015 250); border-bottom:1px solid oklch(70% 0.03 250); }
+.lx-tab { font-size:8.6pt; padding:4px 9px 5px; color:oklch(35% 0.04 255); background:linear-gradient(180deg, oklch(96% 0.01 250), oklch(88% 0.02 250)); border:1px solid oklch(60% 0.05 250); border-bottom:none; border-radius:4px 4px 0 0; position:relative; top:1px; }
+.lx-tab.is-on { color:oklch(33% 0.10 263); font-weight:bold; background:#fff; }
+/* Delta ignores the lens (it runs its own narrative), so the strip hides there.
+   Human and Browser hide the whole Machine pane, taking the tabs with it. */
+.lx-panes.is-delta .lx-lenses { display:none; }
 
 /* panes */
 .lx-panes { display:flex; gap:8px; margin-top:8px; min-height:560px; }
 .lx-panes.is-human .lx-pane-machine, .lx-panes.is-human .lx-pane-browser,
 .lx-panes.is-machine .lx-pane-human, .lx-panes.is-machine .lx-pane-browser,
 .lx-panes.is-browser .lx-pane-human, .lx-panes.is-browser .lx-pane-machine,
-.lx-panes.is-delta .lx-pane-browser { display:none; }
+.lx-panes.is-delta .lx-pane-human, .lx-panes.is-delta .lx-pane-browser { display:none; }
 .lx-pane { flex:1 1 0; min-width:0; display:flex; flex-direction:column; border:1px solid oklch(70% 0.03 250); border-radius:0 3px 3px 3px; background:#fff; }
 .lx-pane-h { font-family:"Trebuchet MS",Verdana,sans-serif; font-size:8.5pt; font-weight:bold; text-transform:uppercase; letter-spacing:.05em; color:#fff; background:linear-gradient(180deg, oklch(56% 0.12 252), oklch(45% 0.15 255)); padding:4px 8px; border-radius:0 2px 0 0; }
 .lx-pane-human .lx-pane-h { background:linear-gradient(180deg, oklch(58% 0.06 150), oklch(46% 0.09 155)); }
@@ -825,8 +844,13 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 /* the readiness score, relocated from the pane body onto the strip: the pane
    below now shows the raw observation, and analysis rides up here with the
    dollars. One anchor number, not a second hero. */
-.lx-verdict-score { float:left; margin:1px 11px 2px 0; font:bold 21pt "Trebuchet MS",Verdana,sans-serif; line-height:1; color:oklch(38% 0.14 255); white-space:nowrap; }
+/* a <button> now: the strip says "every check sits under Agent-ready?", so the
+   number itself jumps there. Button chrome stripped; hover underlines the /100
+   as the affordance. */
+.lx-verdict-score { float:left; margin:1px 11px 2px 0; padding:0; border:0; background:none; cursor:pointer; font:bold 21pt "Trebuchet MS",Verdana,sans-serif; line-height:1; color:oklch(38% 0.14 255); white-space:nowrap; }
 .lx-verdict-score span { font:normal 9pt Tahoma,Verdana,sans-serif; color:oklch(53% 0 0); }
+.lx-verdict-score:hover span { text-decoration:underline; color:oklch(42.61% 0.2353 263.74); }
+.lx-verdict-score:focus-visible { outline:1px dotted oklch(42.61% 0.2353 263.74); outline-offset:2px; }
 .lx-verdict::after { content:""; display:block; clear:both; }
 
 /* the computed HTTP-vs-rendered disagreement, atop the Browser Run pane */
@@ -856,7 +880,10 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 .lx-delta-intro { margin:0 0 10px; padding:7px 9px; border:1px solid oklch(82% 0.08 75); background:oklch(97% 0.035 85); color:oklch(39% 0.05 60); font-size:9pt; line-height:1.45; }
 .lx-cf-credit { margin-top:10px; font-size:8pt; color:oklch(55% 0 0); line-height:1.5; }
 .lx-cf-credit a { color:oklch(42.61% 0.2353 263.74); }
-.lx-cf-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; margin:5px 0 12px; }
+/* auto-fill, not a fixed 2: Delta owns the full 980px window now that the
+   Human pane no longer rides along, so the cards flow 3-up there and still
+   collapse cleanly wherever the grid lands somewhere narrower. */
+.lx-cf-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(270px,1fr)); gap:6px; margin:5px 0 12px; }
 .lx-cf-card { border:1px solid oklch(82% 0.03 250); border-radius:3px; padding:7px 8px; background:oklch(99% 0.003 250); }
 .lx-cf-card.is-on { border-color:oklch(61% 0.13 150); background:oklch(97% 0.025 150); }
 .lx-cf-card h4 { margin:0 0 3px; font-family:"Trebuchet MS",Verdana,sans-serif; font-size:9.1pt; color:oklch(32% 0.07 255); }
@@ -1025,15 +1052,7 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
         <button class="lx-seg${state.view === "human" ? " is-on" : ""}" data-view="human" role="radio" aria-checked="${state.view === "human" ? "true" : "false"}" type="button">Human</button>
         <button class="lx-seg${state.view === "machine" ? " is-on" : ""}" data-view="machine" role="radio" aria-checked="${state.view === "machine" ? "true" : "false"}" type="button">Machine</button>
         <button class="lx-seg${state.view === "browser" ? " is-on" : ""}" data-view="browser" role="radio" aria-checked="${state.view === "browser" ? "true" : "false"}" type="button">Browser</button>
-        <button class="lx-seg${state.view === "delta" ? " is-on" : ""}" data-view="delta" role="radio" aria-checked="${state.view === "delta" ? "true" : "false"}" type="button">Delta</button>
-      </div>
-      <div class="lx-lenses" role="tablist" aria-label="machine lens">
-        <button class="lx-tab${state.lens === "readiness" ? " is-on" : ""}" data-lens="readiness" role="tab" aria-selected="${state.lens === "readiness" ? "true" : "false"}" aria-controls="lx-machine-body" type="button">${LENS_TAB_LABELS.readiness}</button>
-        <button class="lx-tab${state.lens === "anatomy" ? " is-on" : ""}" data-lens="anatomy" role="tab" aria-selected="${state.lens === "anatomy" ? "true" : "false"}" aria-controls="lx-machine-body" type="button">${LENS_TAB_LABELS.anatomy}</button>
-        <button class="lx-tab${state.lens === "structured" ? " is-on" : ""}" data-lens="structured" role="tab" aria-selected="${state.lens === "structured" ? "true" : "false"}" aria-controls="lx-machine-body" type="button">${LENS_TAB_LABELS.structured}</button>
-        <button class="lx-tab${state.lens === "ai" ? " is-on" : ""}" data-lens="ai" role="tab" aria-selected="${state.lens === "ai" ? "true" : "false"}" aria-controls="lx-machine-body" type="button">${LENS_TAB_LABELS.ai}</button>
-        <button class="lx-tab${state.lens === "terms" ? " is-on" : ""}" data-lens="terms" role="tab" aria-selected="${state.lens === "terms" ? "true" : "false"}" aria-controls="lx-machine-body" type="button">${LENS_TAB_LABELS.terms}</button>
-        <button class="lx-tab${state.lens === "discovery" ? " is-on" : ""}" data-lens="discovery" role="tab" aria-selected="${state.lens === "discovery" ? "true" : "false"}" aria-controls="lx-machine-body" type="button">${LENS_TAB_LABELS.discovery}</button>
+        <button class="lx-seg${state.view === "delta" ? " is-on" : ""}" data-view="delta" role="radio" aria-checked="${state.view === "delta" ? "true" : "false"}" type="button">Delta<span class="lx-seg-n" id="lx-delta-n"${cfOn ? "" : " hidden"}>${cfOn || ""}</span></button>
       </div>
     </div>
     <div class="lx-mode-note${vsActive ? " lx-off" : ""}" id="lx-mode-note">${modeNote}</div>
@@ -1047,6 +1066,17 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
       </section>
       <section class="lx-pane lx-pane-machine" id="lx-machine">
         <div class="lx-pane-h" id="lx-machine-h">${machineHeader}</div>
+        <!-- The lens tabs live inside the pane they steer. Order is evidence to
+             verdict: raw observation first (the default lens, so the first tab is
+             the selected one on load), Agent-ready? last as the capstone. -->
+        <div class="lx-lenses" role="tablist" aria-label="machine lens">
+          <button class="lx-tab${state.lens === "anatomy" ? " is-on" : ""}" data-lens="anatomy" role="tab" aria-selected="${state.lens === "anatomy" ? "true" : "false"}" aria-controls="lx-machine-body" type="button">${LENS_TAB_LABELS.anatomy}</button>
+          <button class="lx-tab${state.lens === "structured" ? " is-on" : ""}" data-lens="structured" role="tab" aria-selected="${state.lens === "structured" ? "true" : "false"}" aria-controls="lx-machine-body" type="button">${LENS_TAB_LABELS.structured}</button>
+          <button class="lx-tab${state.lens === "ai" ? " is-on" : ""}" data-lens="ai" role="tab" aria-selected="${state.lens === "ai" ? "true" : "false"}" aria-controls="lx-machine-body" type="button">${LENS_TAB_LABELS.ai}</button>
+          <button class="lx-tab${state.lens === "terms" ? " is-on" : ""}" data-lens="terms" role="tab" aria-selected="${state.lens === "terms" ? "true" : "false"}" aria-controls="lx-machine-body" type="button">${LENS_TAB_LABELS.terms}</button>
+          <button class="lx-tab${state.lens === "discovery" ? " is-on" : ""}" data-lens="discovery" role="tab" aria-selected="${state.lens === "discovery" ? "true" : "false"}" aria-controls="lx-machine-body" type="button">${LENS_TAB_LABELS.discovery}</button>
+          <button class="lx-tab${state.lens === "readiness" ? " is-on" : ""}" data-lens="readiness" role="tab" aria-selected="${state.lens === "readiness" ? "true" : "false"}" aria-controls="lx-machine-body" type="button">${LENS_TAB_LABELS.readiness}</button>
+        </div>
         <div class="lx-body" id="lx-machine-body">${seeded ? lensMachineFragment(initial, state) : '<div class="lx-empty">What the machine actually receives.<span>The raw file, the rules it is handed, and the bill for reading them.</span></div>'}</div>
       </section>
       <section class="lx-pane lx-pane-browser" id="lx-browser">
