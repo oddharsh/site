@@ -1,4 +1,5 @@
-// gen-og-cards.mjs — build grabby Twitter/OG cards for every garage + lwe page.
+// gen-og-cards.mjs — build grabby Twitter/OG cards for every garage + lwe page,
+// plus the top-level page directories registered in og-pages.mjs.
 //
 // Each card is a 1200x630 PNG: the page's live interactive demo screenshotted
 // and floated on the Bliss desktop, with a translucent XP dock naming the route.
@@ -27,6 +28,8 @@ import { existsSync } from "node:fs";
 import { spawn } from "node:child_process";
 import net from "node:net";
 import path from "node:path";
+
+import { OG_PAGE_DIRS } from "./og-pages.mjs";
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
 const HOLDING = path.join(ROOT, "holding");
@@ -71,6 +74,14 @@ const HERO = {
   "lwe-tee":      { hero: ["#demo-tee", ".demo"] },
   "lwe-utf8":     { hero: ["#demo-enc", "#demo-anat", ".demo"] },
   "lwe-vigenere": { hero: ["#demo-crank", ".demo"], preset: ".preset[data-crank='trans']" },
+  // ── page dirs (og-pages.mjs) ────────────────────────────────────────────
+  // The whole MMC console in one element: menu bar, toolbar, the device tree,
+  // the graph, and the status bar with its live per-state counts. That last row
+  // is why this beats cropping to the canvas alone — "39 devices · 15 installed
+  // · 9 yellow bang" is the page's thesis rendered as a status line. ~1272x660
+  // sits close to the card's own 2.2:1, so it fills the frame instead of
+  // floating in margins.
+  "access": { hero: [".mmc"] },
 };
 
 // Selectors tried when a page has no HERO entry, or its listed heroes all miss.
@@ -166,6 +177,13 @@ async function listPages() {
   for (const p of WORKER_PAGES) {
     if (LOCAL) { console.log(`  - ${p.id}  skipped: worker route, and ${BASE} is the static server`); continue; }
     out.push({ id: p.id, url: BASE + p.path });
+  }
+  // Page directories: one index.html at a top-level route, so the section walk
+  // above cannot see them. These are real files, so they capture against the
+  // local static server too — no LOCAL skip, unlike the worker routes. The
+  // static server serves raw paths, the live worker serves the clean route.
+  for (const p of OG_PAGE_DIRS) {
+    out.push({ id: p.id, url: LOCAL ? `${BASE}/${p.dir}/index.html` : `${BASE}/${p.dir}` });
   }
   return ONLY ? out.filter((p) => ONLY.has(p.id)) : out;
 }
