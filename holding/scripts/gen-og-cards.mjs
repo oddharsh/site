@@ -82,6 +82,25 @@ const HERO = {
   // sits close to the card's own 2.2:1, so it fills the frame instead of
   // floating in margins.
   "access": { hero: [".mmc"] },
+  // The exam boots to an intro screen, so without the preset the card would show
+  // a paragraph and a Start button. #go runs one trial; the tile <img>s are built
+  // in JS after that click, which is what presetWait is covering, not a repaint.
+  // The span reaches from the "which looks best?" row down through the GroupBox so
+  // the card carries the question, the "same photo · N ways" legend, the tiles, and
+  // the hint line. `.gb` alone is the fallback if the trial screen ever
+  // restructures — it is self-describing, being the thing with the legend on it.
+  //
+  // NOT deterministic: the trial is drawn at random, so a regeneration changes the
+  // photo and can change two tiles to three. Nothing downstream may assume a count
+  // (see the alt text in og-pages.mjs).
+  //
+  // Capture this one against PRODUCTION, not the local static server. Its favicon
+  // is set at runtime by nav.js's setFavicon, which matches location.pathname
+  // against the taskbar roster EXACTLY — and the static server serves the page at
+  // /pixel-peeper/index.html, which does not equal /pixel-peeper. Locally the
+  // favicon never gets set and the card's brand stamp silently falls back to a
+  // plain blue square. Anything with a nav.js-provided favicon has this problem.
+  "pixel-peeper": { preset: "#go", presetWait: 2600, span: [".row", ".gb"], hero: [".gb", ".tiles"] },
 };
 
 // Selectors tried when a page has no HERO entry, or its listed heroes all miss.
