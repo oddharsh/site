@@ -175,11 +175,36 @@ try {
   const pages = (await readdir(".build/holding", { recursive: true }))
     .filter((path) => path.endsWith(".html") && !path.endsWith(".src.html"));
   const deltas = await readdir(".build/holding/pd");
+  // A page is covered when EITHER tier produced a delta: its own previous-release
+  // snapshot, or the 64KB family corpus. Both are emitted only when they beat
+  // plain q11, so a page can legitimately have neither.
   const missing = pages
     .map((path) => path.replace(/\.html$/, "").replace(/\//g, "__"))
     .filter((slug) => !deltas.some((name) => name.startsWith(`${slug}.`) && name.endsWith(".dcz")));
-  if (missing.length) bad(`site-page dictionary: missing useful DCZ variants for ${missing.join(", ")}`);
-  else ok(`site-page dictionary: all ${pages.length} static/deterministic pages have DCZ variants`);
+
+  // A page with NO committed p-dict snapshot has never been deployed, so the
+  // per-page tier structurally cannot exist for it yet and the family tier is its
+  // only chance. When the family corpus also loses (a distinctive page: a lot of
+  // prose, a vocabulary the rest of the site doesn't share), the page is
+  // uncovered on its FIRST deploy and there is nothing honest to do about it here.
+  // Seeding a snapshot from this branch is the one fix that must not happen: a
+  // dictionary is only useful if it is bytes a browser already holds, and gotcha 14
+  // is explicit that snapshots get rolled from the DEPLOYED build. So a first-deploy
+  // page warns, and every page the site has already served still hard-fails, which
+  // is the regression this check was actually built to catch. Rolling p-dict after
+  // the deploy is what closes it.
+  let snapshots = [];
+  try { snapshots = await readdir("holding/p-dict"); } catch {}
+  const seen = (slug) => snapshots.some((name) => name.startsWith(`${slug}.`));
+  const regressed = missing.filter(seen);
+  const firstDeploy = missing.filter((slug) => !seen(slug));
+
+  if (regressed.length) bad(`site-page dictionary: missing useful DCZ variants for ${regressed.join(", ")}`);
+  if (firstDeploy.length) {
+    warn(`site-page dictionary: ${firstDeploy.join(", ")} beat both dictionary tiers with plain q11 and has no p-dict snapshot yet (never deployed) — run npm run shell:roll after this ships`);
+  }
+  if (!missing.length) ok(`site-page dictionary: all ${pages.length} static/deterministic pages have DCZ variants`);
+  else if (!regressed.length) ok(`site-page dictionary: ${pages.length - missing.length} of ${pages.length} pages have DCZ variants, no regressions`);
 } catch (e) {
   bad(`site-page dictionary: generated DCZ set unreadable (${e.message})`);
 }
