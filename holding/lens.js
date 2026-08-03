@@ -173,8 +173,10 @@
   function verdictStrip() {
     var c = data && data.cost;
     var r = data && data.readiness;
+    // A button, not a span: the strip's own copy points at Agent-ready?, so the
+    // number is the click target that opens it (renderMachine binds it).
     var score = r && r.overall != null
-      ? '<span class="lx-verdict-score" title="' + esc(r.levelName ? "Level " + r.level + ": " + r.levelName : "agent readiness") + '">' + esc(r.overall) + "<span>/100</span></span>"
+      ? '<button class="lx-verdict-score" type="button" title="' + esc((r.levelName ? "Level " + r.level + ": " + r.levelName : "agent readiness") + " — open Agent-ready?") + '">' + esc(r.overall) + "<span>/100</span></button>"
       : "";
     if (!c || !c.tiers || c.tiers.length < 2) {
       return score
@@ -328,6 +330,7 @@
     // /lens?url=X&cf=… deep link still lands with its switches intact on first load.
     if (data && (data.finalUrl || data.url) !== url) {
       counterfactuals = { markdown: false, semantic: false, contract: false, authority: false, receipt: false, dictionary: false, ech: false };
+      updateDeltaCount();
     }
     // reflect the scanned URL in the address bar so every scan is a shareable link.
     // replaceState (not pushState): no reload, and repeated scans don't spam the
@@ -897,7 +900,7 @@
     var wire = [
       { key: "dictionary", label: "Shared compression dictionary", observed: !!wireDict.observed,
         state: wireDict.observed ? { text: "advertised", kind: "ok" } : counterfactuals.dictionary ? { text: "counterfactual", kind: "warn" } : { text: "not offered", kind: "off" },
-        detail: "Advertise a compression dictionary so a returning agent fetches a small delta against the copy it already holds, in place of the whole page." },
+        detail: "Advertise a compression dictionary so a returning agent fetches a small delta against the copy it already holds, in place of the whole page. The trade: Available-Dictionary names the exact copy a client holds, so the origin (or a CDN managing dictionaries for it) learns cache state as the price of the byte win." },
       { key: "ech", label: "Encrypted Client Hello", observed: !!wireEch.observed,
         state: wireEch.observed ? { text: "configured", kind: "ok" } : wireEch.recordPresent && !wireEch.parsed ? { text: "record unread", kind: "warn" } : counterfactuals.ech ? { text: "counterfactual", kind: "warn" } : { text: "not configured", kind: "off" },
         detail: "Encrypt the TLS handshake server name so an on-path observer cannot see which site the fetch is for." },
@@ -1074,8 +1077,10 @@
   }
 
   function renderMachine() {
-    var title = view === "machine" ? "Machine view &middot; " + LENS_LABEL[lens] : view === "delta" ? "Delta view &middot; What changes" : "Machine view &middot; " + LENS_LABEL[lens];
-    machineH.innerHTML = title;
+    // Header no longer repeats the lens name: the tab strip inside the pane
+    // carries it. Must match machineHeader in _worker.js/lens.js renderLensShell.
+    machineH.innerHTML = view === "delta" ? "Delta view &middot; What changes" : "Machine view";
+    updateDeltaCount();
     if (!data) { return; }
     var fn = { readiness: lensReadiness, anatomy: lensAnatomy, structured: lensStructured, ai: lensAI, terms: lensTerms, discovery: lensDiscovery }[lens] || lensAnatomy;
     var body = view === "machine" ? machineBrief() + '<div class="lx-machine-block">' + section("Selected evidence lens", { text: LENS_LABEL[lens] }, "The original inspector remains available below the briefing.", fn()) + "</div>"
@@ -1087,6 +1092,8 @@
     machineBody.scrollTop = 0;
     if (view === "delta") bindCounterfactuals();
     if (lens === "readiness") bindReadinessActions();
+    var scoreBtn = machineBody.querySelector(".lx-verdict-score");
+    if (scoreBtn) scoreBtn.addEventListener("click", function () { setLens("readiness"); });
   }
 
   function lensAnatomy() {
@@ -1500,21 +1507,34 @@
   }
 
   // ---- controls ---------------------------------------------------------
+  // The Delta seg's amber switch count. Delta is the one stateful view, so its
+  // segment shows how many counterfactuals are currently flipped on — the state
+  // survives view switches and would otherwise be invisible from outside Delta.
+  function updateDeltaCount() {
+    var el = document.getElementById("lx-delta-n");
+    if (!el) return;
+    var n = Object.keys(counterfactuals).filter(function (key) { return counterfactuals[key]; }).length;
+    el.textContent = n ? String(n) : "";
+    el.hidden = !n;
+  }
+
   function updateModeUi() {
     if (modeNote) modeNote.textContent = MODE_NOTE[view] || MODE_NOTE.both;
-    // Keep the toolbar's view-class current so CSS can hide the lens tabs in the
-    // views that don't use them (human, browser, delta). Matches the SSR class.
+    // Keep the toolbar's view-class current to match the SSR class. The lens
+    // tabs live inside the Machine pane now, so no CSS hangs off this beyond
+    // the class itself staying truthful.
     if (toolbar) toolbar.className = "lx-toolbar is-" + view;
     [].forEach.call(document.querySelectorAll(".lx-seg"), function (b) {
       var active = b.getAttribute("data-view") === view;
       b.classList.toggle("is-on", active);
       b.setAttribute("aria-checked", active ? "true" : "false");
     });
+    updateDeltaCount();
     if (humanH && !data) {
       humanH.innerHTML = view === "delta" ? "Human view &middot; baseline" : "Human view &middot; the live page";
     }
     if (machineH && !data) {
-      machineH.innerHTML = view === "machine" ? "Machine view &middot; " + LENS_LABEL[lens] : view === "delta" ? "Delta view &middot; What changes" : "Machine view &middot; " + LENS_LABEL[lens];
+      machineH.innerHTML = view === "delta" ? "Delta view &middot; What changes" : "Machine view";
     }
   }
 
