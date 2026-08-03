@@ -6,12 +6,24 @@
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
 <title>Access · Device Manager for language models</title>
-<meta name="description" content="A skill tree for the flavors of access a language model has: what shipped and when, what it depends on, what got switched off, and what nobody has built. Thirty-six nodes across perception, cognition, manipulation, feedback, expression, and authority, dated to the month where the month is knowable, with a dated bet on every one that isn't finished.">
+<meta name="description" content="A skill tree for the flavors of access a language model has: what shipped and when, what it depends on, what got switched off, and what nobody has built. Thirty-nine nodes across perception, cognition, manipulation, feedback, expression, and authority, dated to the month where the month is knowable, with a dated bet on every one that isn't finished.">
 <link rel="canonical" href="https://aadhar.sh/access">
+<!-- Its own page favicon, the same chip the nodes draw. nav.js's setFavicon only
+     fires for paths in the taskbar list and this route is deliberately unlisted, so
+     without this the tab is blank and the OG card's brand stamp falls back to a
+     plain blue square. Encoded with encodeURIComponent, never `;utf8`: a raw
+     `<`, `>`, `#` or space in a data: URI favicon is what breaks these silently. -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2016%2016%22%3E%3Crect%20x%3D%222.5%22%20y%3D%223.5%22%20width%3D%2211%22%20height%3D%229%22%20rx%3D%221%22%20fill%3D%22%23c8ccd6%22%20stroke%3D%22%238b8f99%22%2F%3E%3Crect%20x%3D%225%22%20y%3D%226%22%20width%3D%226%22%20height%3D%224%22%20fill%3D%22%233a6ea5%22%2F%3E%3Cg%20fill%3D%22%238b8f99%22%3E%3Crect%20x%3D%225%22%20y%3D%222%22%20width%3D%221.2%22%20height%3D%221.6%22%2F%3E%3Crect%20x%3D%229.8%22%20y%3D%222%22%20width%3D%221.2%22%20height%3D%221.6%22%2F%3E%3Crect%20x%3D%225%22%20y%3D%2212.4%22%20width%3D%221.2%22%20height%3D%221.6%22%2F%3E%3Crect%20x%3D%229.8%22%20y%3D%2212.4%22%20width%3D%221.2%22%20height%3D%221.6%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E">
 <meta property="og:type" content="website">
 <meta property="og:title" content="aadhar.sh/access">
 <meta property="og:description" content="Device Manager for language models: the flavors of access that shipped, the ones with no driver installed, the ones the ecosystem switched off, and the phantoms nobody has attached. Access to ground truth is what substitutes for the generalization models don't have.">
 <meta property="og:url" content="https://aadhar.sh/access">
+<meta name="twitter:card" content="summary_large_image">
+<meta property="og:image" content="https://aadhar.sh/og/access.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="A Windows XP Device Manager window listing thirty-nine flavors of language-model access as a dependency graph, with yellow-bang and unknown-device icons marking the unfinished ones.">
+<meta name="twitter:image" content="https://aadhar.sh/og/access.png">
 <style>
 :root{
   --font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;
@@ -216,7 +228,7 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
 <!-- ══ /FLAVORTEXT: lede ══════════════════════════════════════════════════ -->
 
 <!-- ══ FLAVORTEXT: how to read it ═════════════════════════════════════════ -->
-<p>Thirty-six nodes. Each one is a <b>flavor of access</b>, not a product, so a node outlives the vendor that currently occupies it. Products hang off the nodes as examples, and every node that isn't finished carries a dated bet.</p>
+<p>Thirty-nine nodes. Each one is a <b>flavor of access</b>, not a product, so a node outlives the vendor that currently occupies it. Products hang off the nodes as examples, and every node that isn't finished carries a dated bet.</p>
 <p>Five states, all of them Device Manager's own. <b>Installed</b> works and something depends on it. A <b>yellow bang</b> works badly enough to matter. An <b>unknown device</b> is present on the bus with no driver, which is where somebody is actively building. <b>Disabled</b> is the one worth reading twice: in Device Manager a red X never meant missing, it meant switched off, which is exactly what an access looks like after the ecosystem passed it over. And a device can be <b>not present</b> at all, describable but attached to nothing, which is where the speculation lives. Those are hidden until you ask for them, under <b>View</b>.</p>
 <p>Dates are month-level where the month is establishable and year-level where it isn't, marked with a <b>~</b>. I would rather show you a coarse date than a confident wrong one.</p>
 <!-- ══ /FLAVORTEXT: how to read it ════════════════════════════════════════ -->
@@ -283,10 +295,17 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
 
 <!-- ══ FLAVORTEXT: gaps + speculation ════════════════════════════════════ -->
 <h3>The gaps are the interesting part</h3>
-<p><span id="tally-gaps">Eight devices carry a yellow bang, six have no driver, three are switched off, and four are not present at all.</span> A few are genuinely hard. Most are unbuilt because the thing they'd need is a standard, an index, or somebody's permission, and no single vendor can ship any of the three alone.</p>
+<p><span id="tally-gaps">Nine devices carry a yellow bang, eight have no driver, three are switched off, and four are not present at all.</span> A few are genuinely hard. Most are unbuilt because the thing they'd need is a standard, an index, or somebody's permission, and no single vendor can ship any of the three alone.</p>
 <p>The two states people skip are the ones I'd look at first. <b>Switched off</b> is where the ecosystem already built the thing and then declined to use it: structured data has been sitting in pages since 2011 and agents read the rendered text anyway. That's a fifteen-year-old answer nobody wanted, and knowing why is worth more than another proposal. <b>Not present</b> is the opposite, an access precise enough to describe and attached to nothing, which is the only honest place to speculate.</p>
 <p>So every unfinished node carries a <b>bet</b>, with a date and a confidence I'm willing to be wrong about in public. High confidence means I'd argue it now. Low means it's a shape I can see and a timeline I can't. The bets are the speculative part of this page and they're labelled everywhere they appear, because a map that quietly mixes forecast into fact is worse than no map.</p>
 <!-- ══ /FLAVORTEXT: gaps + speculation ═══════════════════════════════════ -->
+
+<!-- ══ FLAVORTEXT: the standards layer ═══════════════════════════════════ -->
+<h3>Under most of these nodes there's a standard nobody mentions</h3>
+<p>The product layer gets the announcements and the standards layer decides what's actually possible, usually two years earlier and in a draft with a revision number. Three of the nodes here are standards work rather than products: a <b>vocabulary for crawl preferences</b> at the IETF, <b>in-page tool declaration</b> in a W3C community group, and the <b>accessibility tree</b>, which shipped in 2014 for entirely different reasons and became the thing computer-use agents lean on.</p>
+<p>Reading the drafts is worth it, because the failure mode is legible in them well before it's legible in a product. AIPREF is the clean example: the vocabulary half is moving along the Proposed Standard track, and the half that says how to attach it to a page lapsed under the six-month rule and hasn't been revised. That asymmetry tells you the fight isn't about what to express, it's about who has to honour it. And WebMCP's API moving off <b>navigator</b> onto the document mid-origin-trial is the ordinary sound of a spec still deciding what it is.</p>
+<p>The pattern worth taking from this: <b>the web platform keeps building the machine-readable surface first and the consumer never arrives</b>. Structured data, published discovery surfaces, and AOM all sit in that shape. The accessibility tree is the one that broke the pattern, and it broke it by accident.</p>
+<!-- ══ /FLAVORTEXT: the standards layer ══════════════════════════════════ -->
 
 <!-- ══ FLAVORTEXT: injection panel ═══════════════════════════════════════ -->
 <div class="gb">
@@ -337,7 +356,7 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
   <tr data-id="browser" data-branch="perception" data-tier="2" data-seen="2025" data-status="partial" data-deps="fetch,cursor" data-flags="untrusted,authority" data-confidence="medium">
     <th scope="row">Browser as a first-class surface</th>
     <td class="st st-partial">yellow bang</td><td>changes its own machine</td><td class="seen">~2025</td><td>fetch and scrape, computer use</td>
-    <td>Materially worse than tool access and file-system access right now, and the gap is widening. An agent gets pixels and a DOM when what it needs is a command. <b>In the way:</b> every site is a bespoke API, discovered at runtime and then thrown away, so the same workflow gets rediscovered on every run. <b>Bet:</b> the browser stops being the interface by 2028, because paying to re-derive the same workflow on every visit is a tax nobody wants. webcmd's compile step is the right shape; the open question is whether sites author that surface or agents keep inferring it.</td>
+    <td>Materially worse than tool access and file-system access right now, and the gap is widening. An agent gets pixels and a DOM when what it needs is a command. <b>In the way:</b> every site is a bespoke API, discovered at runtime and then thrown away, so the same workflow gets rediscovered on every run. <b>Bet:</b> the browser stops being the interface by 2028, because paying to re-derive the same workflow on every visit is a tax nobody wants. webcmd's compile step is the right shape from the agent's side, and WebMCP is the same answer from the site's side, so the open question is no longer what the fix looks like but who authors it.</td>
     <td class="ex"><a href="https://webcmd.dev" rel="noopener external">webcmd</a>, which compiles discovered workflows into commands and reports 90% fewer tokens and 8x fewer turns on repeats; Playwright MCP; Browser Rendering</td></tr>
 
   <tr data-id="corpus" data-branch="perception" data-tier="1" data-seen="2026-07" data-status="partial" data-deps="retrieval" data-flags="untrusted" data-confidence="low">
@@ -350,13 +369,25 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
     <th scope="row">Cheaper bytes on the wire</th>
     <td class="st st-frontier">unknown device</td><td>reads the world</td><td class="seen">Apr 2026</td><td>fetch and scrape</td>
     <td>If an agent refetches the same shape of document a thousand times, the second fetch should cost almost nothing. Shared compression dictionaries get a near-identical 272KB bundle down to 2.6KB, and Cloudflare shipped the idea under the title "compression for the agentic web." <b>In the way:</b> phase 3 hands dictionary generation to the network, which means the CDN, not you, learns which of your resources change and how. <b>Bet:</b> default-on at the CDN by 2027 with nobody configuring it, which is phase 3 working as designed. Watch whether that deploy-cadence telemetry quietly becomes a product of its own.</td>
-    <td class="ex"><a href="https://blog.cloudflare.com/shared-dictionaries/" rel="noopener external">Shared dictionaries</a>, beta 30 Apr 2026; this site already ships phase-1 dcz deltas by hand</td></tr>
+    <td class="ex">RFC 9842 Compression Dictionary Transport, experimental in Chrome since 117; <a href="https://blog.cloudflare.com/shared-dictionaries/" rel="noopener external">Cloudflare's shared dictionaries</a>, beta 30 Apr 2026; this site already ships phase-1 dcz deltas by hand</td></tr>
 
   <tr data-id="structured" data-branch="perception" data-tier="1" data-seen="2011-06" data-status="passed" data-deps="ctx" data-flags="untrusted" data-confidence="medium">
     <th scope="row">Structured data in the page</th>
     <td class="st st-passed">disabled</td><td>reads the world</td><td class="seen">Jun 2011</td><td>context window</td>
     <td>The web already ships a machine-readable version of itself. schema.org turned fifteen this year, JSON-LD is on a large share of commercial pages, and agents overwhelmingly read the rendered text instead. <b>Passed over because:</b> the visible text is what humans check, so it's the copy that stays true, and a machine-only channel is a second thing to keep honest for no reward. <b>Bet:</b> it stays passed over. Rendered text keeps winning, and the effort that would have gone into fixing this goes into models that read pages the way people do.</td>
     <td class="ex">schema.org, Jun 2011; JSON-LD; microformats; <a href="/lens">/lens shows you both layers of any URL</a></td></tr>
+
+  <tr data-id="a11y" data-branch="perception" data-tier="1" data-seen="2014-03" data-status="partial" data-deps="ctx" data-flags="untrusted" data-confidence="medium">
+    <th scope="row">The accessibility tree</th>
+    <td class="st st-partial">yellow bang</td><td>reads the world</td><td class="seen">Mar 2014</td><td>context window</td>
+    <td>The best agent interface on the web was built for screen readers and predates the agent era by a decade. Every browser already maintains a semantic tree of roles and labels beside the visual page, and it turned out to be the cheapest way for an agent to know what a control actually is: Playwright returns it as a YAML snapshot, and computer-use agents ground their pixels against it rather than guessing from shape. <b>In the way:</b> its quality is somebody else's accessibility diligence. An unlabelled button is invisible in the tree, so the agent falls back to screenshots and burns seconds and thousands of tokens working out what it is looking at. AOM, the API that would let a page inspect and repair its own tree, has sat as a draft for years. <b>Bet:</b> agent traffic becomes the first commercial reason anyone fixes ARIA, which is a strange and good outcome. Expect accessibility budgets approved on agent-conversion grounds by 2027, and expect nobody to enjoy saying that out loud.</td>
+    <td class="ex">ARIA 1.0 as a W3C Recommendation, Mar 2014, on an MSAA lineage from 1997; Playwright accessibility snapshots; <a href="https://wicg.github.io/aom/explainer.html" rel="noopener external">AOM</a>, still a WICG draft</td></tr>
+
+  <tr data-id="aipref" data-branch="perception" data-tier="1" data-seen="2025" data-status="frontier" data-deps="fetch" data-flags="" data-confidence="low">
+    <th scope="row">Stated crawl preference</th>
+    <td class="st st-frontier">unknown device</td><td>reads the world</td><td class="seen">~2025</td><td>fetch and scrape</td>
+    <td>robots.txt can say who may crawl and cannot say what they may do with what they took, which is the entire fight. The IETF chartered a working group to fix exactly that: a vocabulary for AI usage preferences, plus a way to attach it to content. <b>In the way:</b> the half that matters is the half that stalled. The vocabulary draft is on the Proposed Standard track at revision 06, with train-ai and search categories and plain y/n values, while the attachment draft that defines the Content-Usage header and its robots.txt rule lapsed under the six-month rule after revision 04 in Oct 2025 and has no newer revision, against an Aug 2026 milestone to reach the IESG. A vocabulary nobody can attach is a dictionary, not a standard. <b>Bet:</b> it ships late and gets adopted anyway, because the alternative is every crawler negotiating bilaterally forever. The enforcement will come from the edge rather than from the header, and the header will get cited as though it did the work.</td>
+    <td class="ex"><a href="https://www.ietf.org/blog/aipref-wg/" rel="noopener external">IETF AIPREF</a>; <a href="https://datatracker.ietf.org/doc/html/draft-ietf-aipref-vocab/" rel="noopener external">draft-ietf-aipref-vocab</a>; robots.txt, 1994; X-Robots-Tag</td></tr>
 
   <tr data-id="discovery" data-branch="perception" data-tier="1" data-seen="2024-09" data-status="passed" data-deps="ctx" data-flags="" data-confidence="medium">
     <th scope="row">Published discovery surfaces</th>
@@ -408,17 +439,23 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
     <td>A model can only call what it can find, and what a given tool means shifts from one model to the next, so the same server behaves differently depending on who mounted it. <b>In the way:</b> no single index. Every host ships its own roster and hopes the descriptions carry, and the teams treating tool descriptions as an audience-facing surface the way Resend does are early to something real. <b>Bet:</b> this resolves the way package discovery did, with one registry winning and everyone complaining about it. The official registry is eleven months old and already has competitors, which is the normal early shape rather than a warning sign.</td>
     <td class="ex">MCP Registry preview, 8 Sep 2025; GitHub's MCP Registry, 16 Sep 2025; tool search; Resend's answer-engine work</td></tr>
 
+  <tr data-id="webmcp" data-branch="manipulation" data-tier="3" data-seen="2026-02" data-status="frontier" data-deps="tools,browser" data-flags="authority" data-confidence="medium">
+    <th scope="row">In-page tool declaration</th>
+    <td class="st st-frontier">unknown device</td><td>changes someone else's</td><td class="seen">Feb 2026</td><td>tool calls, browser as a first-class surface</td>
+    <td>The direct answer to the browser node's whole problem. Instead of an agent inferring a site's workflow from pixels on every single visit, the page declares its own typed, callable tools and the agent calls them. The same idea as MCP, hosted by the document rather than by a server. <b>In the way:</b> it is a W3C Community Group draft rather than a standard, only Gemini in Chrome consumes the tools today, and the shape is still moving. The API moved off navigator onto the document because tools belong to a page, and Chrome deprecated navigator.modelContext in 150 while the origin trial still ships it. <b>Bet:</b> the idea survives and this spelling of it might not. A page-declared tool surface is too obviously right to lose, but a capability exactly one agent reads is a proprietary channel wearing a standard's clothes, and it wants a second consumer before anyone should author against it.</td>
+    <td class="ex">WebMCP, announced 10 Feb 2026; Chrome origin trial 149 through 156 from 18 May 2026; W3C Web Machine Learning Community Group</td></tr>
+
   <tr data-id="codeexec" data-branch="manipulation" data-tier="2" data-seen="2023-07" data-status="shipped" data-deps="tools" data-flags="authority">
     <th scope="row">Code execution</th>
     <td class="st st-shipped">installed</td><td>changes its own machine</td><td class="seen">Jul 2023</td><td>tool calls</td>
-    <td>Code mode: write one program instead of chaining forty calls. The largest single jump on this board, because it converts every other access from a menu into a language.</td>
-    <td class="ex">ChatGPT Code Interpreter to Plus, Jul 2023; sandboxed isolates; Worker Loader</td></tr>
+    <td>Code mode: write one program instead of chaining forty calls. The largest single jump on this board, because it converts every other access from a menu into a language. The interesting move in 2026 is abstracting over where that code runs: Cloudflare Computer puts an isolate and a full Linux container behind one interface with a shared filesystem underneath, and targets keeping containers under 10% of the work, which makes the execution environment a dial rather than a decision.</td>
+    <td class="ex">ChatGPT Code Interpreter to Plus, Jul 2023; sandboxed isolates; Worker Loader; <a href="https://blog.cloudflare.com/cloudflare-computer/" rel="noopener external">@cloudflare/computer</a>, 3 Aug 2026, gated, audited and observed by design</td></tr>
 
   <tr data-id="fs" data-branch="manipulation" data-tier="2" data-seen="2025-02" data-status="shipped" data-deps="codeexec" data-flags="authority">
     <th scope="row">File system</th>
     <td class="st st-shipped">installed</td><td>changes its own machine</td><td class="seen">Feb 2025</td><td>code execution</td>
-    <td>Durable state the model can name, list, and revise. Enough of a memory that the context window stops having to be one.</td>
-    <td class="ex">Claude Code research preview, Feb 2025; workspace mounts; artifact directories</td></tr>
+    <td>Durable state the model can name, list, and revise. Enough of a memory that the context window stops having to be one. The shape it is settling into is a virtual filesystem rather than a real one: Cloudflare Computer backs its with SQLite, populates it from object storage or a git clone, and mounts the same tree into an isolate by binding and into a container by FUSE, so the agent's working directory becomes something you can snapshot and hand to a different runtime.</td>
+    <td class="ex">Claude Code research preview, Feb 2025; workspace mounts; artifact directories; <a href="https://blog.cloudflare.com/cloudflare-computer/" rel="noopener external">Cloudflare Computer</a>'s SQLite-backed VFS</td></tr>
 
   <tr data-id="cursor" data-branch="manipulation" data-tier="3" data-seen="2024-10" data-status="partial" data-deps="codeexec" data-flags="authority" data-confidence="low">
     <th scope="row">Computer use</th>
@@ -430,7 +467,7 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
     <th scope="row">CLIs as the agent interface</th>
     <td class="st st-frontier">unknown device</td><td>changes someone else's</td><td class="seen">Jul 2026</td><td>code execution, file system</td>
     <td>The most underrated bet on this board. A CLI is a typed, composable, auditable API that already ships docs, a man page, exit codes, and a dry-run flag, and it costs a company far less than a bespoke agent surface. That DoorDash, which spent years hostile to automation, now ships one is the tell. <b>In the way:</b> distribution and trust, not design. Every CLI is also a local binary somebody has to authorize. <b>Bet:</b> the one I'd actually take. Two years out, shipping an agent CLI is as ordinary as shipping a public API was in 2015, and for the same reason: it's cheap, it's testable, and the alternative is letting somebody else's scraper define your interface for you.</td>
-    <td class="ex"><a href="https://thenewstack.io/doordash-cli-agents-order/" rel="noopener external">dd-cli</a>, beta 16 Jul 2026 with a Claude checkout demo; <a href="https://webcmd.dev" rel="noopener external">webcmd</a>; gh; wrangler</td></tr>
+    <td class="ex"><a href="https://thenewstack.io/doordash-cli-agents-order/" rel="noopener external">dd-cli</a>, beta 16 Jul 2026 with a Claude checkout demo; <a href="https://webcmd.dev" rel="noopener external">webcmd</a>; gh; wrangler; just-bash, which translates shell into JavaScript so a serverless isolate can answer a command line at all</td></tr>
 
   <tr data-id="binaries" data-branch="manipulation" data-tier="2" data-seen="" data-status="phantom" data-deps="codeexec" data-flags="" data-confidence="low">
     <th scope="row">Binaries without source</th>
@@ -511,7 +548,7 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
     <th scope="row">Verifiable identity</th>
     <td class="st st-frontier">unknown device</td><td>changes someone else's</td><td class="seen">May 2025</td><td>fetch and scrape</td>
     <td>A good bot and a bad bot are the same HTTP request until somebody signs it, which is why blocking and enabling are one problem rather than two. The interesting version isn't detection, it's routing: see an agent, hand it the agent path. <b>In the way:</b> the bypass market, and the fact that no site can afford to trust a signature it can't price. <b>Bet:</b> signed agents win, because both sides want it. Sites want to price access and agents want to stop being blocked. September's crawler-separation deadline is the forcing function, and I'd expect signature checking to be unremarkable by 2027.</td>
-    <td class="ex">Web Bot Auth and RFC 9421, May 2025; in Cloudflare's Verified Bots by 1 Jul 2025; <a href="/whoareyou">this site publishes a JWKS</a>; Cloudflare's 15 Sep 2026 crawler-split deadline</td></tr>
+    <td class="ex">Web Bot Auth and RFC 9421 HTTP Message Signatures, May 2025; in Cloudflare's Verified Bots by 1 Jul 2025; <a href="/whoareyou">this site publishes a JWKS</a>; Cloudflare's 15 Sep 2026 crawler-split deadline. The platform is attacking the same problem from the human end: Private State Tokens carry "not a bot" across origins without tracking, and the Digital Credentials API shipped in Chrome 141 on 30 Sep 2025</td></tr>
 
   <tr data-id="money" data-branch="authority" data-tier="4" data-seen="2025-05" data-status="frontier" data-deps="secrets,identity" data-flags="authority" data-confidence="medium">
     <th scope="row">Money</th>
@@ -539,6 +576,9 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
   <li><small><a href="https://thenewstack.io/doordash-cli-agents-order/" rel="noopener external">The New Stack on dd-cli</a> for the 16 Jul 2026 beta and the strategic read.</small></li>
   <li><small><a href="https://infisical.com/blog/secure-secrets-management-for-cursor-cloud-agents" rel="noopener external">Infisical</a> for the credential-injecting proxy design and the 30 Jul 2026 Agent Proxy GA.</small></li>
   <li><small><a href="https://blog.cloudflare.com/web-bot-auth/" rel="noopener external">Forget IPs: using cryptography to verify bot and agent traffic</a> (May 2025) and <a href="https://blog.modelcontextprotocol.io/posts/2025-09-08-mcp-registry-preview/" rel="noopener external">the MCP Registry preview</a> (8 Sep 2025) for the identity and tool-discovery dates.</small></li>
+  <li><small><a href="https://blog.cloudflare.com/cloudflare-computer/" rel="noopener external">Cloudflare Computer</a> (3 Aug 2026) for the isolate-and-container abstraction, the SQLite-backed shared filesystem, and the under-10%-containers target.</small></li>
+  <li><small><a href="https://www.ietf.org/blog/aipref-wg/" rel="noopener external">The IETF AIPREF working group</a> and <a href="https://datatracker.ietf.org/doc/html/draft-ietf-aipref-vocab/" rel="noopener external">draft-ietf-aipref-vocab</a> for the crawl-preference vocabulary, its revision state, and the lapsed attachment draft.</small></li>
+  <li><small><a href="https://wicg.github.io/aom/explainer.html" rel="noopener external">The AOM explainer</a> for what a page still cannot do with its own accessibility tree, and <a href="https://www.rfc-editor.org/info/rfc9842/" rel="noopener external">RFC 9842</a> for compression dictionary transport.</small></li>
   <li><small><a href="https://news.ycombinator.com/item?id=48895409" rel="noopener external">This Hacker News thread</a> for detection pricing, the bypass claim, and the argument for routing agents rather than blocking them.</small></li>
   <li><small><a href="https://www.emergentmind.com/topics/formarl" rel="noopener external">FormaRL</a> and the surrounding autoformalization work for specification hacking.</small></li>
 </ul>
