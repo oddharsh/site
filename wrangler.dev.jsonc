@@ -39,6 +39,7 @@
       // static pages: worker-first for the dcz delta + brotli q11 twin
       "/garage", "/garage/*", "/lwe", "/lwe/*",
       "/pixel-peeper", "/pixel-peeper/*",
+      "/access", "/access/*",
       "/auth.md", "/.well-known/api-catalog", "/.well-known/agent-card.json",
       "/.well-known/oauth-protected-resource",
       "/.well-known/oauth-authorization-server",

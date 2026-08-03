@@ -185,6 +185,12 @@ const ROUTES = [
   { path: "/lwe/utf8", status: 200, ct: "text/html" },
   { path: "/pixel-peeper", status: 200, ct: "text/html", marker: "compression eye exam" },
   { path: "/pixel-peeper/manifest.json", status: 200, ct: "application/json" },
+  // /access is registered with every manifest flag false until its talk has
+  // happened, so nothing else in the gate covers it. This is the only assertion
+  // that the route resolves at all. The marker is the table the graph is a view
+  // over: if that table stops shipping, the page silently becomes a blank canvas.
+  { path: "/access", status: 200, ct: "text/html", marker: "Device list, flat" },
+  { path: "/access.md", status: 200, ct: "text/markdown", marker: "Device list, flat" },
 ];
 
 function cacheBust(path) {

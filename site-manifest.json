@@ -72,6 +72,12 @@
       "hint": "the other web: see any URL the way a machine does — raw HTML, JSON-LD, llms.txt",
       "flags": { "run": true, "taskbar": true, "sitemap": false, "gallery": false, "agents": true, "searchIndex": true, "webmention": false } },
 
+    { "path": "/access", "title": "Access", "section": "access", "kind": "page",
+      "description": "Device Manager for language models: the flavors of access that shipped, what they depend on, and the ones with no driver installed.",
+      "hint": "a skill tree for model access — what shipped, what's blocked, what nobody built",
+      "note": "EVERY FLAG IS FALSE ON PURPOSE, and this is the only surface here in that state. The route is live and canonical, but it stays out of the Run palette, the taskbar, the sitemap, the agent catalog, and the search index until the internal research presentation it was built for has happened (owner call, 2026-08-03). Flipping run/taskbar/sitemap/agents/searchIndex to true is the entire follow-up: nothing else about the page changes, and build.mjs #8b will then demand the matching nav.js and sitemap.xml entries, which is the point of registering it now rather than later.",
+      "flags": { "run": false, "taskbar": false, "sitemap": false, "gallery": false, "agents": false, "searchIndex": false, "webmention": false } },
+
     { "path": "/pixel-peeper", "title": "Pixel Peeper", "section": "pixel-peeper", "kind": "utility",
       "description": "A vision test for image compression, in the ismy.blue spirit: pick the best encode on instinct, repeatedly.",
       "hint": "whose eye do you have? a compression vision test",
