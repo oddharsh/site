@@ -6,11 +6,11 @@
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
 <title>Access · Device Manager for language models</title>
-<meta name="description" content="A skill tree for the flavors of access a language model has: what shipped, what it depends on, and what nobody has built. Thirty-one nodes across perception, cognition, manipulation, feedback, expression, and authority, laid out by blast radius or by year, with the prompt-injection path drawn in.">
+<meta name="description" content="A skill tree for the flavors of access a language model has: what shipped and when, what it depends on, what got switched off, and what nobody has built. Thirty-six nodes across perception, cognition, manipulation, feedback, expression, and authority, dated to the month where the month is knowable, with a dated bet on every one that isn't finished.">
 <link rel="canonical" href="https://aadhar.sh/access">
 <meta property="og:type" content="website">
 <meta property="og:title" content="aadhar.sh/access">
-<meta property="og:description" content="Device Manager for language models: the flavors of access that shipped, what they depend on, and the ones with no driver installed. Access to ground truth is what substitutes for the generalization models don't have.">
+<meta property="og:description" content="Device Manager for language models: the flavors of access that shipped, the ones with no driver installed, the ones the ecosystem switched off, and the phantoms nobody has attached. Access to ground truth is what substitutes for the generalization models don't have.">
 <meta property="og:url" content="https://aadhar.sh/access">
 <style>
 :root{
@@ -28,9 +28,12 @@
   --bevel-sunken:inset 1px 1px 0 var(--sh),inset -1px -1px 0 var(--hi);
   --grad-button:linear-gradient(180deg,#ffffff 0%,#ece9d8 100%);
   --grad-btn-hover:linear-gradient(180deg,#ffffff 0%,#f3f4ff 100%);
-  /* the four device states, borrowed wholesale from Device Manager: installed,
-     yellow bang, unknown device, disabled. The mapping is the argument. */
-  --st-shipped:#3a6ea5; --st-partial:#e8c14a; --st-frontier:#7b6ea5; --st-absent:#c8402f;
+  /* The five device states, borrowed wholesale from Device Manager. The mapping IS
+     the argument, and the red X is the one worth reading twice: in Device Manager a
+     red X never meant "missing", it meant DISABLED, a device that works and got
+     switched off. That is exactly what a passed-over access looks like. */
+  --st-shipped:#3a6ea5; --st-partial:#e8c14a; --st-frontier:#7b6ea5;
+  --st-passed:#c8402f; --st-phantom:#9d9d95;
 }
 *{box-sizing:border-box}
 .window{max-width:1280px;font-family:var(--font-ui);font-size:10.5pt;color:var(--ink)}
@@ -44,10 +47,18 @@ a{color:var(--link)}
 small,.meta{font-size:9pt;color:var(--ink-dim);font-family:var(--font-mono)}
 
 /* ---- the MMC console ------------------------------------------------- */
-.mmc{border:1px solid var(--sh);box-shadow:var(--bevel-sunken);background:var(--face);margin:14px 0 6px}
+.mmc{position:relative;border:1px solid var(--sh);box-shadow:var(--bevel-sunken);background:var(--face);margin:14px 0 6px}
 .mmc-menu{display:flex;gap:2px;padding:2px 3px;border-bottom:1px solid var(--face);background:var(--face-light);font-size:9.5pt}
-.mmc-menu span{padding:2px 8px;border:1px solid transparent;border-radius:2px;color:var(--ink-soft)}
+.mmc-menu span,.mmc-menu button{font:inherit;font-size:9.5pt;padding:2px 8px;border:1px solid transparent;border-radius:2px;color:var(--ink-soft);background:transparent}
 .mmc-menu span:first-child{color:var(--ink)}
+.mmc-menu button{color:var(--ink);cursor:pointer}
+.mmc-menu button:hover,.mmc-menu button[aria-expanded=true]{background:var(--sel);color:#fff;border-color:var(--sel)}
+.mmc-menu button:focus-visible{outline:1px dotted var(--navy);outline-offset:1px}
+/* the one real dropdown. XP menus really did drop a soft shadow. */
+.menu-pop{position:absolute;z-index:30;top:24px;left:96px;min-width:196px;background:var(--face-light);border:1px solid var(--dsh);box-shadow:2px 3px 7px rgba(0,20,90,.28);padding:2px}
+.menu-pop button{font:inherit;font-size:9.5pt;display:flex;align-items:center;gap:7px;width:100%;text-align:left;background:transparent;border:0;padding:4px 10px 4px 6px;cursor:pointer;color:var(--ink)}
+.menu-pop button:hover{background:var(--sel);color:#fff}
+.menu-pop .tick{width:13px;flex:0 0 13px;font-family:var(--font-ui);font-weight:700;font-size:10pt;line-height:1}
 .mmc-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:5px 6px;border-top:1px solid var(--hi);border-bottom:1px solid var(--sh);background:var(--face)}
 .seg{display:flex;box-shadow:var(--bevel-raised);border:1px solid var(--dsh);background:var(--grad-button)}
 .seg button{font:inherit;font-size:9.5pt;color:var(--ink);background:transparent;border:0;padding:4px 11px;cursor:pointer}
@@ -63,11 +74,11 @@ small,.meta{font-size:9pt;color:var(--ink-dim);font-family:var(--font-mono)}
 select{font:inherit;font-size:9.5pt;border:1px solid var(--dsh);box-shadow:var(--bevel-sunken);background:var(--win);padding:3px 4px}
 
 .mmc-split{display:flex;align-items:stretch;min-height:380px}
-.mmc-tree{flex:0 0 210px;border-right:1px solid var(--sh);background:var(--win);overflow:auto;max-height:560px;padding:5px 0}
-.mmc-canvas{flex:1 1 auto;overflow:auto;max-height:560px;background:var(--win);position:relative}
-.mmc-status{display:flex;gap:0;border-top:1px solid var(--hi);background:var(--face);font-size:9pt;color:var(--ink-soft)}
+.mmc-tree{flex:0 0 210px;border-right:1px solid var(--sh);background:var(--win);overflow:auto;max-height:580px;padding:5px 0}
+.mmc-canvas{flex:1 1 auto;overflow:auto;max-height:580px;background:var(--win);position:relative}
+.mmc-status{display:flex;gap:0;border-top:1px solid var(--hi);background:var(--face);font-size:9pt;color:var(--ink-soft);flex-wrap:wrap}
 .mmc-status span{padding:3px 8px;box-shadow:var(--bevel-sunken);flex:0 0 auto}
-.mmc-status span:last-child{flex:1 1 auto;color:var(--ink-dim)}
+.mmc-status span:last-child{flex:1 1 auto;color:var(--ink-dim);min-width:180px}
 
 /* left pane: the tree, as a tree */
 .tree,.tree ul{list-style:none;margin:0;padding:0}
@@ -80,16 +91,25 @@ select{font:inherit;font-size:9.5pt;border:1px solid var(--dsh);box-shadow:var(-
 .tree button[aria-current=true] .tw{color:#dbe6f7}
 .tree .gi{width:13px;height:13px;flex:0 0 13px}
 .tree .bn{font-weight:700;color:var(--navy)}
-.tree .dim{opacity:.42}
+.tree .ph{font-style:italic;color:var(--ink-dim)}
 
 /* the graph */
 svg.graph{display:block}
 svg.graph text{font-family:var(--font-ui);fill:var(--ink)}
 .band rect{fill:#f5f6f9}
 .band.alt rect{fill:#fdfdfd}
-.band text{font-family:var(--font-mono);font-size:8px;fill:#9a9684;letter-spacing:.04em}
+.band text,.lane text{font-family:var(--font-mono);font-size:8px;fill:#9a9684;letter-spacing:.04em}
 .bandline{stroke:#e4e6ec;stroke-width:1}
 .colhead text{font-family:var(--font-caption);font-size:10px;font-weight:700;fill:var(--navy2);letter-spacing:.02em}
+/* time view furniture */
+.axis line{stroke:#c9ccd4;stroke-width:1}
+.axis text{font-family:var(--font-mono);font-size:8px;fill:#8d8a7c}
+.region rect{fill:#f6f5f1}
+.region.spec rect{fill:#faf7ee}
+.region text{font-family:var(--font-mono);font-size:8px;fill:#9a9684}
+.brk{stroke:#b9bfcb;stroke-width:1.2}
+.nowline{stroke:var(--navy2);stroke-width:1;stroke-dasharray:3 3}
+.nowline-lab{font-family:var(--font-mono);font-size:8px;fill:var(--navy2)}
 .edge{fill:none;stroke:#b9bfcb;stroke-width:1.2}
 .edge.lit{stroke:var(--navy);stroke-width:2}
 .flow{fill:none;stroke:var(--danger);stroke-width:1.6;stroke-dasharray:4 3;opacity:0}
@@ -106,26 +126,32 @@ svg.graph text{font-family:var(--font-ui);fill:var(--ink)}
 .dev.junction .box{fill:#fdf3d6;stroke:var(--gold);stroke-width:2}
 .dev:focus-visible .box{stroke:var(--navy);stroke-width:2}
 .dev:focus{outline:none}
+/* a phantom is a device the system can describe and nothing is attached to */
+.dev.st-phantom .box{fill:#f8f8f5;stroke:#b4b4aa;stroke-dasharray:4 3}
+.dev.st-phantom .nm{fill:#5f5f58;font-style:italic}
 .chip{fill:#c8ccd6;stroke:#8b8f99;stroke-width:.8}
 .chip-in{fill:var(--st-shipped)}
 .s-partial .chip-in{fill:#b99a2e}
 .s-frontier .chip-in{fill:var(--st-frontier)}
-.s-absent .chip-in{fill:#9b9b9b}
+.s-passed .chip-in{fill:#a8382a}
+.s-phantom .chip,.s-phantom .chip-in{opacity:.42}
 .gl-warn path{fill:var(--st-partial);stroke:#8a6d10;stroke-width:.7}
 .gl-warn rect{fill:#4a3a00}
 .gl-unk circle{fill:var(--win);stroke:var(--st-frontier);stroke-width:1.1}
 .gl-unk text{font-family:var(--font-caption);font-size:9px;font-weight:700;fill:var(--st-frontier)}
-.gl-off circle{fill:var(--danger)}
-.gl-off rect{fill:#fff}
+.gl-off path{stroke:var(--st-passed);stroke-width:2;stroke-linecap:square}
+.gl-ghost circle{fill:none;stroke:#a9a9a0;stroke-width:1;stroke-dasharray:2 2}
 
 /* tooltip */
-#tip{position:fixed;z-index:60;max-width:330px;display:none;background:#ffffe1;border:1px solid #000;box-shadow:2px 2px 4px rgba(0,0,0,.3);padding:6px 8px;font-size:9.5pt;line-height:1.42;color:#1a1a1a;pointer-events:none}
+#tip{position:fixed;z-index:60;max-width:342px;display:none;background:#ffffe1;border:1px solid #000;box-shadow:2px 2px 4px rgba(0,0,0,.3);padding:6px 8px;font-size:9.5pt;line-height:1.42;color:#1a1a1a;pointer-events:none}
 #tip .t{font-weight:700;color:var(--navy);display:block;margin-bottom:2px}
+#tip .st{display:block;font-family:var(--font-mono);font-size:8.5pt;color:#5a5a52;margin-bottom:4px}
 #tip .x{display:block;margin-top:4px;font-family:var(--font-mono);font-size:8.5pt;color:#4a4a4a}
 #tip .bl{display:block;margin-top:4px;color:#8a2f20}
+#tip .bet{display:block;margin-top:4px;color:#4a3b7a}
 
 /* properties sheet */
-dialog.props{border:2px solid var(--navy);padding:0;background:var(--face);max-width:520px;width:calc(100vw - 32px);box-shadow:3px 4px 12px rgba(0,20,90,.4);color:var(--ink)}
+dialog.props{border:2px solid var(--navy);padding:0;background:var(--face);max-width:530px;width:calc(100vw - 32px);box-shadow:3px 4px 12px rgba(0,20,90,.4);color:var(--ink)}
 dialog.props::backdrop{background:rgba(10,36,106,.28)}
 .props .tb{display:flex;align-items:center;gap:6px;padding:4px 5px 4px 8px;color:#fff;font-family:var(--font-caption);font-weight:700;font-size:11pt;text-shadow:1px 1px #0f1089;background:linear-gradient(180deg,#5a86d8,#2f55b8 60%,#3f66c4)}
 .props .tb .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -134,32 +160,37 @@ dialog.props::backdrop{background:rgba(10,36,106,.28)}
 .props .tabs{display:flex;gap:2px;padding:6px 8px 0;background:var(--face)}
 .props .tabs button{font:inherit;font-size:9.5pt;padding:3px 11px;border:1px solid var(--sh);border-bottom:0;border-radius:3px 3px 0 0;background:linear-gradient(180deg,#e3e0d2,#d7d4c6);color:var(--ink-soft);cursor:pointer;position:relative;top:1px}
 .props .tabs button[aria-selected=true]{background:var(--face);color:var(--ink);font-weight:700;top:0;padding-bottom:5px;z-index:2}
-.props .sheet{border:1px solid var(--sh);box-shadow:var(--bevel-raised);background:var(--face);margin:0 8px 8px;padding:11px 12px;min-height:172px}
+.props .sheet{border:1px solid var(--sh);box-shadow:var(--bevel-raised);background:var(--face);margin:0 8px 8px;padding:11px 12px;min-height:186px}
 .props dl{margin:0;font-size:9.5pt}
 .props dt{font-weight:700;color:var(--navy);margin-top:8px}
 .props dt:first-child{margin-top:0}
 .props dd{margin:2px 0 0;color:var(--ink-soft);line-height:1.48}
+.props dd.spec{color:#4a3b7a}
 .props ul.ex{margin:2px 0 0;padding-left:17px;color:var(--ink-soft);line-height:1.5}
+.props .conf{font-family:var(--font-mono);font-size:8.5pt;color:var(--ink-dim)}
 .props .foot{display:flex;justify-content:flex-end;gap:6px;padding:0 8px 9px}
-.hidden{display:none}
 
 /* the flat table */
 .tw-scroll{overflow-x:auto;border:1px solid var(--sh);box-shadow:var(--bevel-sunken);background:var(--win)}
-table.devs{border-collapse:collapse;font-size:9pt;min-width:960px;width:100%}
+table.devs{border-collapse:collapse;font-size:9pt;min-width:1020px;width:100%}
 table.devs caption{text-align:left;font-size:9pt;color:var(--ink-dim);padding:5px 7px;font-family:var(--font-mono)}
 table.devs th,table.devs td{border:1px solid #e2e0d6;padding:5px 7px;text-align:left;vertical-align:top;line-height:1.45}
 table.devs thead th{background:linear-gradient(180deg,#f4f2e8,#e6e3d5);font-size:8.5pt;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-soft);position:sticky;top:0}
 table.devs tbody th{font-weight:700;color:var(--ink);width:14ch}
 table.devs tbody tr:nth-child(even){background:#fafaf6}
+table.devs tbody tr.ph th{font-style:italic}
 table.devs .st{font-family:var(--font-mono);font-size:8.5pt;white-space:nowrap}
 table.devs .st-shipped{color:var(--go)}
 table.devs .st-partial{color:var(--gold)}
 table.devs .st-frontier{color:#5f5290}
-table.devs .st-absent{color:var(--danger)}
+table.devs .st-passed{color:var(--danger)}
+table.devs .st-phantom{color:#71716a}
+table.devs .seen{font-family:var(--font-mono);font-size:8.5pt;white-space:nowrap}
 table.devs td.ex{font-size:8.5pt}
-.legend{display:flex;gap:14px;flex-wrap:wrap;margin:8px 0 2px;font-size:9pt;color:var(--ink-soft)}
+.legend{display:flex;gap:13px;flex-wrap:wrap;margin:8px 0 2px;font-size:9pt;color:var(--ink-soft)}
 .legend span{display:flex;align-items:center;gap:5px}
 .legend i{width:11px;height:11px;display:inline-block;border:1px solid var(--sh)}
+.legend i.gh{border-style:dashed;background:#f8f8f5}
 .gb{position:relative;border:1px solid var(--sh);box-shadow:var(--bevel-sunken);background:var(--paper);border-radius:2px;padding:16px 14px 13px;margin:14px 0}
 .gb-legend{position:absolute;top:-9px;left:9px;background:var(--face);padding:0 5px;font-size:9pt;color:var(--ink-dim);font-weight:700;text-transform:uppercase;letter-spacing:.05em}
 footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:9pt;color:var(--ink-dim)}
@@ -179,13 +210,24 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
   </div>
   <div class="content">
 
+<!-- ══ FLAVORTEXT: lede ═══════════════════════════════════════════════════ -->
 <h1>Access</h1>
 <p class="lede">Access to inputs has defined AI as we use it. Not the weights, not the benchmark: what the model is allowed to touch. This is that map, drawn as the one Windows app that was already a tree of what a machine can reach.</p>
+<!-- ══ /FLAVORTEXT: lede ══════════════════════════════════════════════════ -->
 
-<p>Thirty-one nodes. Each one is a <b>flavor of access</b>, not a product, so a node outlives the vendor that currently occupies it. Products hang off the nodes as examples. Four states, straight out of Device Manager: <b>installed</b>, <b>yellow bang</b> for a device that half works, <b>unknown device</b> for one that's present with no driver, and <b>disabled</b> for one nobody has shipped at all.</p>
+<!-- ══ FLAVORTEXT: how to read it ═════════════════════════════════════════ -->
+<p>Thirty-six nodes. Each one is a <b>flavor of access</b>, not a product, so a node outlives the vendor that currently occupies it. Products hang off the nodes as examples, and every node that isn't finished carries a dated bet.</p>
+<p>Five states, all of them Device Manager's own. <b>Installed</b> works and something depends on it. A <b>yellow bang</b> works badly enough to matter. An <b>unknown device</b> is present on the bus with no driver, which is where somebody is actively building. <b>Disabled</b> is the one worth reading twice: in Device Manager a red X never meant missing, it meant switched off, which is exactly what an access looks like after the ecosystem passed it over. And a device can be <b>not present</b> at all, describable but attached to nothing, which is where the speculation lives. Those are hidden until you ask for them, under <b>View</b>.</p>
+<p>Dates are month-level where the month is establishable and year-level where it isn't, marked with a <b>~</b>. I would rather show you a coarse date than a confident wrong one.</p>
+<!-- ══ /FLAVORTEXT: how to read it ════════════════════════════════════════ -->
 
 <div class="mmc">
-  <div class="mmc-menu" aria-hidden="true"><span>File</span><span>Action</span><span>View</span><span>Help</span></div>
+  <div class="mmc-menu">
+    <span aria-hidden="true">File</span><span aria-hidden="true">Action</span><button type="button" id="m-view" aria-haspopup="true" aria-expanded="false" aria-controls="view-menu">View</button><span aria-hidden="true">Help</span>
+  </div>
+  <div class="menu-pop" id="view-menu" role="menu" hidden>
+    <button type="button" role="menuitemcheckbox" id="m-hidden" aria-checked="false"><span class="tick" aria-hidden="true"></span>Show hidden devices</button>
+  </div>
   <div class="mmc-bar">
     <!-- The two toolbar captions are decorative: the group and the select already
          carry their own accessible names, so a screen reader would hear each label
@@ -193,17 +235,19 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
          where "View by" and "Show" would otherwise land as two stray paragraphs. -->
     <span class="bar-lab" aria-hidden="true">View by</span>
     <span class="seg" role="group" aria-label="layout">
-      <button type="button" id="v-blast" aria-pressed="true">Blast radius</button><button type="button" id="v-time" aria-pressed="false">Year</button>
+      <button type="button" id="v-blast" aria-pressed="true">Blast radius</button><button type="button" id="v-time" aria-pressed="false">Timeline</button>
     </span>
     <span class="bar-lab" aria-hidden="true">Show</span>
-    <label class="hidden" for="filter">Filter by device state</label>
-    <select id="filter">
+    <!-- aria-label rather than a visually-hidden <label>: a clipped label is still
+         DOM text, and the Markdown twin would publish it as a stray line of prose. -->
+    <select id="filter" aria-label="Filter by device state">
       <option value="all">All devices</option>
       <option value="gaps">Only the gaps</option>
       <option value="shipped">Installed</option>
       <option value="partial">Yellow bang</option>
       <option value="frontier">Unknown device</option>
-      <option value="absent">Disabled</option>
+      <option value="passed">Disabled, passed over</option>
+      <option value="phantom">Not present, speculative</option>
     </select>
     <button class="btn" type="button" id="inject" aria-pressed="false">Trace the injection path</button>
     <button class="btn" type="button" id="reset">Reset</button>
@@ -218,242 +262,292 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
   <div class="mmc-status" id="status" aria-live="polite"><span aria-hidden="true">loading</span><span aria-hidden="true"></span></div>
 </div>
 <div class="legend" aria-hidden="true">
-  <span><i style="background:#3a6ea5"></i>installed, and load-bearing</span>
+  <span><i style="background:#3a6ea5"></i>installed</span>
   <span><i style="background:#e8c14a"></i>works, badly</span>
-  <span><i style="background:#7b6ea5"></i>present, no driver</span>
-  <span><i style="background:#c8402f"></i>nobody has built it</span>
+  <span><i style="background:#7b6ea5"></i>no driver yet</span>
+  <span><i style="background:#c8402f"></i>switched off, passed over</span>
+  <span><i class="gh"></i>not present, speculative</span>
 </div>
-<p><small>Click a device for its properties. The graph is drawn from the table further down this page, so it degrades to that table with scripting off, and an agent reading <a href="/access.md">/access.md</a> gets the whole thing as prose.</small></p>
+<p><small>Click a device for its properties. The graph is drawn from the table further down this page, so it degrades to that table with scripting off, and an agent reading <a href="/access.md">/access.md</a> gets the whole thing as prose, bets included.</small></p>
 
+<!-- ══ FLAVORTEXT: why access ═════════════════════════════════════════════ -->
 <h2>Why access, and not capability</h2>
 <p>Model generalization is worse than it looks from the outside. Pattern matching across that many dimensions builds correlations out of bad priors and coincidence, and correlation still isn't causation. So the reliable way to make a model right about a specific situation isn't a better prior. It's handing it the situation.</p>
 <p>That reframes every node on this board. Access isn't a convenience layer bolted onto intelligence. It's the substitute for the generalization the model doesn't have, which is why one log line beats a day of careful reasoning about what the bug probably is, and why <b>Feedback</b> is the most underbuilt branch here.</p>
+<!-- ══ /FLAVORTEXT: why access ════════════════════════════════════════════ -->
 
+<!-- ══ FLAVORTEXT: trust ═════════════════════════════════════════════════ -->
 <h3>Trust is the gating dependency</h3>
 <p>The vertical axis is blast radius, from reading what it's handed to moving atoms. Every rung up buys capability and spends trust, and that's why the top of the board is thin: the blockers up there aren't engineering, they're authorization. Secrets, identity, and money are one dependency chain, and Cloudflare wiring agentic commerce onto the same Web Bot Auth it uses to sort crawlers is that chain showing up as a roadmap.</p>
+<!-- ══ /FLAVORTEXT: trust ════════════════════════════════════════════════ -->
 
+<!-- ══ FLAVORTEXT: gaps + speculation ════════════════════════════════════ -->
 <h3>The gaps are the interesting part</h3>
-<p><span id="tally-gaps">Eight devices carry a yellow bang, six have no driver at all, and two nobody has built.</span> A few of those are genuinely hard. Most are unbuilt because the thing they'd need is a standard, an index, or somebody's permission, and no single vendor can ship any of the three alone.</p>
+<p><span id="tally-gaps">Eight devices carry a yellow bang, six have no driver, three are switched off, and four are not present at all.</span> A few are genuinely hard. Most are unbuilt because the thing they'd need is a standard, an index, or somebody's permission, and no single vendor can ship any of the three alone.</p>
+<p>The two states people skip are the ones I'd look at first. <b>Switched off</b> is where the ecosystem already built the thing and then declined to use it: structured data has been sitting in pages since 2011 and agents read the rendered text anyway. That's a fifteen-year-old answer nobody wanted, and knowing why is worth more than another proposal. <b>Not present</b> is the opposite, an access precise enough to describe and attached to nothing, which is the only honest place to speculate.</p>
+<p>So every unfinished node carries a <b>bet</b>, with a date and a confidence I'm willing to be wrong about in public. High confidence means I'd argue it now. Low means it's a shape I can see and a timeline I can't. The bets are the speculative part of this page and they're labelled everywhere they appear, because a map that quietly mixes forecast into fact is worse than no map.</p>
+<!-- ══ /FLAVORTEXT: gaps + speculation ═══════════════════════════════════ -->
 
+<!-- ══ FLAVORTEXT: injection panel ═══════════════════════════════════════ -->
 <div class="gb">
   <span class="gb-legend">the one path that isn't a dependency</span>
-  <p style="margin:0">Prompt injection isn't a node on this board, and it isn't an edge either. Turn on <b>Trace the injection path</b> and the flow doesn't route through the graph, it routes through the context window, because that's where untrusted tokens and privileged actions actually meet. Every arrow into that box is a page an agent fetched. Every arrow out is something it can do. Nothing in the dependency structure separates them, which is the whole problem, and it's why <b>Secrets</b> is the node where the good answer turned out to be never letting the agent read the credential at all.</p>
+  <p style="margin:0">Prompt injection isn't a node on this board, and it isn't an edge either. Turn on <b>Trace the injection path</b> and the flow doesn't route through the graph, it routes through the context window, because that's where untrusted tokens and privileged actions actually meet. Every arrow in is a page an agent fetched. Every arrow out is something it can do. Nothing in the dependency structure separates them, which is the whole problem, and it's why <b>Secrets</b> is the node where the good answer turned out to be never letting the agent read the credential at all.</p>
 </div>
+<!-- ══ /FLAVORTEXT: injection panel ══════════════════════════════════════ -->
 
 <h2>Device list, flat</h2>
-<p><small>The same devices, in the order the branches appear above. This table is the source the graph is built from.</small></p>
+<p><small>The same devices, in the order the branches appear above. This table is the source the graph is built from: node prose, dates, dependencies, and bets all live here and nowhere else.</small></p>
 <div class="tw-scroll">
 <table class="devs" id="devs">
-  <caption>Every flavor of access on this board. State, blast radius, first broad availability, dependencies, and what's in the way.</caption>
-  <thead><tr><th scope="col">Device</th><th scope="col">State</th><th scope="col">Blast radius</th><th scope="col">First seen</th><th scope="col">Needs</th><th scope="col">What it buys, what's in the way</th><th scope="col">Examples</th></tr></thead>
+  <caption>Every flavor of access on this board. State, blast radius, first broad availability, dependencies, what's in the way, and the bet.</caption>
+  <thead><tr><th scope="col">Device</th><th scope="col">State</th><th scope="col">Blast radius</th><th scope="col">First seen</th><th scope="col">Needs</th><th scope="col">What it buys, what's in the way, the bet</th><th scope="col">Examples</th></tr></thead>
   <tbody>
 
-  <tr data-id="ctx" data-branch="perception" data-tier="0" data-era="2022-23" data-status="shipped" data-deps="" data-flags="junction">
+  <!-- ── PERCEPTION ─────────────────────────────────────────────────────── -->
+  <tr data-id="ctx" data-branch="perception" data-tier="0" data-seen="2022-11" data-status="shipped" data-deps="" data-flags="junction">
     <th scope="row">Text in the context window</th>
-    <td class="st st-shipped">installed</td><td>reads what it's handed</td><td>2022</td><td>nothing</td>
+    <td class="st st-shipped">installed</td><td>reads what it's handed</td><td class="seen">Nov 2022</td><td>nothing</td>
     <td>The original access, and still the only one that acts directly. Every other node on this board is a way of getting more of the world into this one buffer, which is also why it's the single place trust boundaries collapse.</td>
-    <td class="ex">ChatGPT, Nov 2022; Claude</td></tr>
+    <td class="ex">ChatGPT, 30 Nov 2022; Claude</td></tr>
 
-  <tr data-id="files" data-branch="perception" data-tier="0" data-era="2022-23" data-status="shipped" data-deps="ctx" data-flags="untrusted">
+  <tr data-id="files" data-branch="perception" data-tier="0" data-seen="2023" data-status="shipped" data-deps="ctx" data-flags="untrusted">
     <th scope="row">Uploaded files</th>
-    <td class="st st-shipped">installed</td><td>reads what it's handed</td><td>2023</td><td>context window</td>
+    <td class="st st-shipped">installed</td><td>reads what it's handed</td><td class="seen">~2023</td><td>context window</td>
     <td>The first time a model saw something that wasn't typed at it. Cheap, and it moved the product from conversation to work.</td>
     <td class="ex">PDF and image attachments, spreadsheets, Projects</td></tr>
 
-  <tr data-id="search" data-branch="perception" data-tier="1" data-era="2022-23" data-status="shipped" data-deps="ctx" data-flags="untrusted">
+  <tr data-id="search" data-branch="perception" data-tier="1" data-seen="2023-03" data-status="shipped" data-deps="ctx" data-flags="untrusted">
     <th scope="row">Web search</th>
-    <td class="st st-shipped">installed</td><td>reads the world</td><td>2023</td><td>context window</td>
+    <td class="st st-shipped">installed</td><td>reads the world</td><td class="seen">Mar 2023</td><td>context window</td>
     <td>The node that made searching less stupid, in both directions: the model got current facts, and the query stopped having to be keywords.</td>
-    <td class="ex">Browsing modes, <a href="https://exa.ai" rel="noopener external">Exa</a>, Brave and Tavily APIs</td></tr>
+    <td class="ex">ChatGPT plugins including Browse, 23 Mar 2023; <a href="https://exa.ai" rel="noopener external">Exa</a>; Brave and Tavily APIs</td></tr>
 
-  <tr data-id="retrieval" data-branch="perception" data-tier="1" data-era="2022-23" data-status="shipped" data-deps="files" data-flags="untrusted">
+  <tr data-id="retrieval" data-branch="perception" data-tier="1" data-seen="2023" data-status="shipped" data-deps="files" data-flags="untrusted">
     <th scope="row">Retrieval into context</th>
-    <td class="st st-shipped">installed</td><td>reads the world</td><td>2023</td><td>uploaded files</td>
+    <td class="st st-shipped">installed</td><td>reads the world</td><td class="seen">~2023</td><td>uploaded files</td>
     <td>Getting the right 20 pages of a corpus into the buffer. Whether that's better served by embeddings or by ripgrep is still a live argument, and agents that just grep keep winning more of it than the 2023 consensus expected.</td>
     <td class="ex">Embedding retrieval, grep in an agent loop, Projects</td></tr>
 
-  <tr data-id="fetch" data-branch="perception" data-tier="1" data-era="2024" data-status="partial" data-deps="search" data-flags="untrusted">
+  <tr data-id="fetch" data-branch="perception" data-tier="1" data-seen="2024" data-status="partial" data-deps="search" data-flags="untrusted" data-confidence="medium">
     <th scope="row">Fetch and scrape</th>
-    <td class="st st-partial">yellow bang</td><td>reads the world</td><td>2024</td><td>web search</td>
-    <td>The web was built to be read by a browser a person is watching. Agents read it anyway, so the middle layer became a paid product: somebody else runs the crawler, eats the blocks, and sells you clean text. <b>In the way:</b> no standard for what an agent may take, bot detection priced around $0.05 a check, and a bypass market that claims 95%+ success against challenge pages.</td>
+    <td class="st st-partial">yellow bang</td><td>reads the world</td><td class="seen">~2024</td><td>web search</td>
+    <td>The web was built to be read by a browser a person is watching. Agents read it anyway, so the middle layer became a paid product: somebody else runs the crawler, eats the blocks, and sells you clean text. <b>In the way:</b> no standard for what an agent may take, bot detection priced around $0.05 a check, and a bypass market that claims 95%+ success against challenge pages. <b>Bet:</b> the scrape layer consolidates into three or four paid indexes by the end of 2027, and access terms move from robots.txt to a priced allowlist. The tell will be the first large publisher who blocks everyone and sells one exclusive feed.</td>
     <td class="ex"><a href="https://parallel.ai" rel="noopener external">Parallel</a>, <a href="https://exa.ai" rel="noopener external">Exa</a>, <a href="https://firecrawl.dev" rel="noopener external">Firecrawl</a>, <a href="https://know.fast" rel="noopener external">know.fast</a> at a flat $0.01 a URL</td></tr>
 
-  <tr data-id="browser" data-branch="perception" data-tier="2" data-era="2025" data-status="partial" data-deps="fetch,cursor" data-flags="untrusted,authority">
+  <tr data-id="browser" data-branch="perception" data-tier="2" data-seen="2025" data-status="partial" data-deps="fetch,cursor" data-flags="untrusted,authority" data-confidence="medium">
     <th scope="row">Browser as a first-class surface</th>
-    <td class="st st-partial">yellow bang</td><td>changes its own machine</td><td>2025</td><td>fetch and scrape, computer use</td>
-    <td>Materially worse than tool access and file-system access right now, and the gap is widening. An agent gets pixels and a DOM when what it needs is a command. <b>In the way:</b> every site is a bespoke API, discovered at runtime and then thrown away, so the same workflow gets rediscovered on every run.</td>
+    <td class="st st-partial">yellow bang</td><td>changes its own machine</td><td class="seen">~2025</td><td>fetch and scrape, computer use</td>
+    <td>Materially worse than tool access and file-system access right now, and the gap is widening. An agent gets pixels and a DOM when what it needs is a command. <b>In the way:</b> every site is a bespoke API, discovered at runtime and then thrown away, so the same workflow gets rediscovered on every run. <b>Bet:</b> the browser stops being the interface by 2028, because paying to re-derive the same workflow on every visit is a tax nobody wants. webcmd's compile step is the right shape; the open question is whether sites author that surface or agents keep inferring it.</td>
     <td class="ex"><a href="https://webcmd.dev" rel="noopener external">webcmd</a>, which compiles discovered workflows into commands and reports 90% fewer tokens and 8x fewer turns on repeats; Playwright MCP; Browser Rendering</td></tr>
 
-  <tr data-id="corpus" data-branch="perception" data-tier="1" data-era="2026" data-status="partial" data-deps="retrieval" data-flags="untrusted">
+  <tr data-id="corpus" data-branch="perception" data-tier="1" data-seen="2026-07" data-status="partial" data-deps="retrieval" data-flags="untrusted" data-confidence="low">
     <th scope="row">Bulk corpus access</th>
-    <td class="st st-partial">yellow bang</td><td>reads the world</td><td>2026</td><td>retrieval into context</td>
-    <td>Some corpora are load-bearing for model behavior and nobody priced them that way. cdnjs is 48.3% of the JavaScript CDN market with no API keys and no rate limits, and Cloudflare's own migration note says the plain part out loud: models reach for it because their training data is full of it. <b>In the way:</b> the access is free until the day it isn't, and nothing in the stack makes that dependency visible.</td>
-    <td class="ex"><a href="https://blog.cloudflare.com/cdnjs-dev-platform-migration/" rel="noopener external">cdnjs on Workers</a>, 1.1TB packed, 9B requests a day</td></tr>
+    <td class="st st-partial">yellow bang</td><td>reads the world</td><td class="seen">Jul 2026</td><td>retrieval into context</td>
+    <td>Some corpora are load-bearing for model behavior and nobody priced them that way. cdnjs is 48.3% of the JavaScript CDN market with no API keys and no rate limits, and Cloudflare's own migration note says the plain part out loud: models reach for it because their training data is full of it. <b>In the way:</b> the access is free until the day it isn't, and nothing in the stack makes that dependency visible. <b>Bet:</b> within two years somebody meters a corpus that models depend on, and the bill lands on whoever ships the model rather than whoever fetched the file. cdnjs is the cleanest candidate precisely because it's free.</td>
+    <td class="ex"><a href="https://blog.cloudflare.com/cdnjs-dev-platform-migration/" rel="noopener external">cdnjs on Workers</a>, 30 Jul 2026: 1.1TB packed, 9B requests a day</td></tr>
 
-  <tr data-id="wire" data-branch="perception" data-tier="1" data-era="2026" data-status="frontier" data-deps="fetch" data-flags="">
+  <tr data-id="wire" data-branch="perception" data-tier="1" data-seen="2026-04" data-status="frontier" data-deps="fetch" data-flags="" data-confidence="medium">
     <th scope="row">Cheaper bytes on the wire</th>
-    <td class="st st-frontier">unknown device</td><td>reads the world</td><td>2026</td><td>fetch and scrape</td>
-    <td>If an agent refetches the same shape of document a thousand times, the second fetch should cost almost nothing. Shared compression dictionaries get a near-identical 272KB bundle down to 2.6KB, and Cloudflare shipped the idea under the title "compression for the agentic web." <b>In the way:</b> phase 3 hands dictionary generation to the network, which means the CDN, not you, learns which of your resources change and how. That's the trade, and it's worth saying before you take it.</td>
-    <td class="ex"><a href="https://blog.cloudflare.com/shared-dictionaries/" rel="noopener external">Shared dictionaries</a>; this site already ships phase-1 dcz deltas by hand</td></tr>
+    <td class="st st-frontier">unknown device</td><td>reads the world</td><td class="seen">Apr 2026</td><td>fetch and scrape</td>
+    <td>If an agent refetches the same shape of document a thousand times, the second fetch should cost almost nothing. Shared compression dictionaries get a near-identical 272KB bundle down to 2.6KB, and Cloudflare shipped the idea under the title "compression for the agentic web." <b>In the way:</b> phase 3 hands dictionary generation to the network, which means the CDN, not you, learns which of your resources change and how. <b>Bet:</b> default-on at the CDN by 2027 with nobody configuring it, which is phase 3 working as designed. Watch whether that deploy-cadence telemetry quietly becomes a product of its own.</td>
+    <td class="ex"><a href="https://blog.cloudflare.com/shared-dictionaries/" rel="noopener external">Shared dictionaries</a>, beta 30 Apr 2026; this site already ships phase-1 dcz deltas by hand</td></tr>
 
-  <tr data-id="cot" data-branch="cognition" data-tier="0" data-era="2024" data-status="shipped" data-deps="ctx" data-flags="">
+  <tr data-id="structured" data-branch="perception" data-tier="1" data-seen="2011-06" data-status="passed" data-deps="ctx" data-flags="untrusted" data-confidence="medium">
+    <th scope="row">Structured data in the page</th>
+    <td class="st st-passed">disabled</td><td>reads the world</td><td class="seen">Jun 2011</td><td>context window</td>
+    <td>The web already ships a machine-readable version of itself. schema.org turned fifteen this year, JSON-LD is on a large share of commercial pages, and agents overwhelmingly read the rendered text instead. <b>Passed over because:</b> the visible text is what humans check, so it's the copy that stays true, and a machine-only channel is a second thing to keep honest for no reward. <b>Bet:</b> it stays passed over. Rendered text keeps winning, and the effort that would have gone into fixing this goes into models that read pages the way people do.</td>
+    <td class="ex">schema.org, Jun 2011; JSON-LD; microformats; <a href="/lens">/lens shows you both layers of any URL</a></td></tr>
+
+  <tr data-id="discovery" data-branch="perception" data-tier="1" data-seen="2024-09" data-status="passed" data-deps="ctx" data-flags="" data-confidence="medium">
+    <th scope="row">Published discovery surfaces</th>
+    <td class="st st-passed">disabled</td><td>reads the world</td><td class="seen">Sep 2024</td><td>context window</td>
+    <td>A site can hand an agent a map of itself: llms.txt, /.well-known/ documents, agent cards, an SVCB record in DNS. The publishing side is solved and nearly free. <b>Passed over because:</b> consumption never arrived. This site publishes all four and effectively nothing reads them, which puts it in the same lineage as robots.txt in 1994 and sitemaps in 2005, both of which only mattered once one big consumer committed. <b>Bet:</b> stays a courtesy until a major agent vendor commits to reading it, and none has. If one does, it becomes table stakes in a quarter.</td>
+    <td class="ex">llms.txt, Sep 2024; <a href="/llms.txt">this site's</a>; /.well-known/agent-card.json; DNS-AID SVCB</td></tr>
+
+  <tr data-id="orgmem" data-branch="perception" data-tier="1" data-seen="" data-status="phantom" data-deps="retrieval" data-flags="untrusted" data-confidence="medium">
+    <th scope="row">Organizational memory</th>
+    <td class="st st-phantom">not present</td><td>reads the world</td><td class="seen">not yet</td><td>retrieval into context</td>
+    <td>Every codebase records what was decided and almost none records why. The reasoning lives in a call nobody transcribed, a thread that scrolled, and three people's heads, which is exactly the context that would stop an agent from cheerfully undoing a deliberate choice. <b>Bet:</b> whoever owns the meeting recording owns this, so it arrives inside a suite rather than as a product. It hasn't shipped because the useful version means reading things people said while assuming nobody would keep them, and that's a consent problem before it's an engineering one.</td>
+    <td class="ex">Nothing does this well. Meeting recorders, decision logs, and ADRs are the nearest approximations</td></tr>
+
+  <!-- ── COGNITION ──────────────────────────────────────────────────────── -->
+  <tr data-id="cot" data-branch="cognition" data-tier="0" data-seen="2024-09" data-status="shipped" data-deps="ctx" data-flags="">
     <th scope="row">Reasoning tokens</th>
-    <td class="st st-shipped">installed</td><td>reads what it's handed</td><td>2024</td><td>context window</td>
+    <td class="st st-shipped">installed</td><td>reads what it's handed</td><td class="seen">Sep 2024</td><td>context window</td>
     <td>Access to its own thought space, and the only node here that grants access to something inside the model rather than outside it.</td>
-    <td class="ex">Extended thinking, o-series reasoning</td></tr>
+    <td class="ex">o1-preview, 12 Sep 2024; extended thinking</td></tr>
 
-  <tr data-id="recur" data-branch="cognition" data-tier="0" data-era="2025" data-status="shipped" data-deps="cot" data-flags="">
+  <tr data-id="recur" data-branch="cognition" data-tier="0" data-seen="2025-02" data-status="shipped" data-deps="cot" data-flags="">
     <th scope="row">Recursion and revision</th>
-    <td class="st st-shipped">installed</td><td>reads what it's handed</td><td>2025</td><td>reasoning tokens</td>
+    <td class="st st-shipped">installed</td><td>reads what it's handed</td><td class="seen">Feb 2025</td><td>reasoning tokens</td>
     <td>Thinking about the thinking, then spending more of it where it pays. Turns a single forward pass into a budget you can allocate.</td>
-    <td class="ex">Interleaved thinking, effort controls, self-critique loops</td></tr>
+    <td class="ex">Claude 3.7 Sonnet extended thinking, 24 Feb 2025; effort controls; self-critique loops</td></tr>
 
-  <tr data-id="subagents" data-branch="cognition" data-tier="1" data-era="2025" data-status="shipped" data-deps="recur,tools" data-flags="">
+  <tr data-id="subagents" data-branch="cognition" data-tier="1" data-seen="2025" data-status="shipped" data-deps="recur,tools" data-flags="">
     <th scope="row">Subagents</th>
-    <td class="st st-shipped">installed</td><td>reads the world</td><td>2025</td><td>recursion and revision, tool calls</td>
+    <td class="st st-shipped">installed</td><td>reads the world</td><td class="seen">~2025</td><td>recursion and revision, tool calls</td>
     <td>Access to more context windows than one. Parallelism is the payoff, and isolation is the actual mechanism: a subagent's failure and its 200K of noise both stay in its own buffer.</td>
     <td class="ex">Task fan-out, agent workflows, orchestrator patterns</td></tr>
 
-  <tr data-id="speed" data-branch="cognition" data-tier="0" data-era="2026" data-status="frontier" data-deps="cot" data-flags="">
+  <tr data-id="speed" data-branch="cognition" data-tier="0" data-seen="2026" data-status="frontier" data-deps="cot" data-flags="" data-confidence="high">
     <th scope="row">Inference speed</th>
-    <td class="st st-frontier">unknown device</td><td>reads what it's handed</td><td>2026</td><td>reasoning tokens</td>
-    <td>Speed decides which access is affordable, so it belongs on this board even though it isn't a permission. A 40-turn browser loop is a different product at 20ms a token than at 200, and half the nodes flagged unbuilt here are really nodes that don't pencil yet. <b>In the way:</b> nothing conceptual, it's a cost curve, which is exactly why it moves fastest.</td>
+    <td class="st st-frontier">unknown device</td><td>reads what it's handed</td><td class="seen">~2026</td><td>reasoning tokens</td>
+    <td>Speed decides which access is affordable, so it belongs on this board even though it isn't a permission. A 40-turn browser loop is a different product at 20ms a token than at 200, and half the nodes flagged unbuilt here are really nodes that don't pencil yet. <b>In the way:</b> nothing conceptual, it's a cost curve, which is why it moves fastest. <b>Bet:</b> within 18 months the interesting agent products are the ones that were previously too many turns to afford, not the ones that got smarter. Cheap turns change architecture more than better answers do.</td>
     <td class="ex">Cerebras and Groq inference, batch versus interactive pricing</td></tr>
 
-  <tr data-id="tools" data-branch="manipulation" data-tier="2" data-era="2022-23" data-status="shipped" data-deps="ctx" data-flags="">
+  <!-- ── MANIPULATION ───────────────────────────────────────────────────── -->
+  <tr data-id="tools" data-branch="manipulation" data-tier="2" data-seen="2023-06" data-status="shipped" data-deps="ctx" data-flags="">
     <th scope="row">Tool calls</th>
-    <td class="st st-shipped">installed</td><td>changes its own machine</td><td>2023</td><td>context window</td>
+    <td class="st st-shipped">installed</td><td>changes its own machine</td><td class="seen">Jun 2023</td><td>context window</td>
     <td>Where workflow skeuomorphism came from. We handed models the shape of the software we already had, which got them useful immediately and quietly capped how different their workflows were allowed to look.</td>
-    <td class="ex">Function calling, MCP servers, connectors</td></tr>
+    <td class="ex">OpenAI function calling, 13 Jun 2023; MCP, 25 Nov 2024; connectors</td></tr>
 
-  <tr data-id="toollookup" data-branch="manipulation" data-tier="2" data-era="2026" data-status="partial" data-deps="tools" data-flags="">
+  <tr data-id="toollookup" data-branch="manipulation" data-tier="2" data-seen="2025-09" data-status="partial" data-deps="tools" data-flags="" data-confidence="medium">
     <th scope="row">Tool discovery</th>
-    <td class="st st-partial">yellow bang</td><td>changes its own machine</td><td>2026</td><td>tool calls</td>
-    <td>A model can only call what it can find, and what a given tool means shifts from one model to the next, so the same server behaves differently depending on who mounted it. <b>In the way:</b> no index. Every host ships its own roster and hopes the descriptions carry. The teams treating tool descriptions as an audience-facing surface, the way Resend does, are early to something real.</td>
-    <td class="ex">MCP registries, tool search, deferred tool schemas</td></tr>
+    <td class="st st-partial">yellow bang</td><td>changes its own machine</td><td class="seen">Sep 2025</td><td>tool calls</td>
+    <td>A model can only call what it can find, and what a given tool means shifts from one model to the next, so the same server behaves differently depending on who mounted it. <b>In the way:</b> no single index. Every host ships its own roster and hopes the descriptions carry, and the teams treating tool descriptions as an audience-facing surface the way Resend does are early to something real. <b>Bet:</b> this resolves the way package discovery did, with one registry winning and everyone complaining about it. The official registry is eleven months old and already has competitors, which is the normal early shape rather than a warning sign.</td>
+    <td class="ex">MCP Registry preview, 8 Sep 2025; GitHub's MCP Registry, 16 Sep 2025; tool search; Resend's answer-engine work</td></tr>
 
-  <tr data-id="codeexec" data-branch="manipulation" data-tier="2" data-era="2024" data-status="shipped" data-deps="tools" data-flags="authority">
+  <tr data-id="codeexec" data-branch="manipulation" data-tier="2" data-seen="2023-07" data-status="shipped" data-deps="tools" data-flags="authority">
     <th scope="row">Code execution</th>
-    <td class="st st-shipped">installed</td><td>changes its own machine</td><td>2024</td><td>tool calls</td>
+    <td class="st st-shipped">installed</td><td>changes its own machine</td><td class="seen">Jul 2023</td><td>tool calls</td>
     <td>Code mode: write one program instead of chaining forty calls. The largest single jump on this board, because it converts every other access from a menu into a language.</td>
-    <td class="ex">Code interpreter, sandboxed isolates, Worker Loader</td></tr>
+    <td class="ex">ChatGPT Code Interpreter to Plus, Jul 2023; sandboxed isolates; Worker Loader</td></tr>
 
-  <tr data-id="fs" data-branch="manipulation" data-tier="2" data-era="2025" data-status="shipped" data-deps="codeexec" data-flags="authority">
+  <tr data-id="fs" data-branch="manipulation" data-tier="2" data-seen="2025-02" data-status="shipped" data-deps="codeexec" data-flags="authority">
     <th scope="row">File system</th>
-    <td class="st st-shipped">installed</td><td>changes its own machine</td><td>2025</td><td>code execution</td>
+    <td class="st st-shipped">installed</td><td>changes its own machine</td><td class="seen">Feb 2025</td><td>code execution</td>
     <td>Durable state the model can name, list, and revise. Enough of a memory that the context window stops having to be one.</td>
-    <td class="ex">Coding agents, workspace mounts, artifact directories</td></tr>
+    <td class="ex">Claude Code research preview, Feb 2025; workspace mounts; artifact directories</td></tr>
 
-  <tr data-id="cursor" data-branch="manipulation" data-tier="3" data-era="2024" data-status="partial" data-deps="codeexec" data-flags="authority">
+  <tr data-id="cursor" data-branch="manipulation" data-tier="3" data-seen="2024-10" data-status="partial" data-deps="codeexec" data-flags="authority" data-confidence="low">
     <th scope="row">Computer use</th>
-    <td class="st st-partial">yellow bang</td><td>changes someone else's</td><td>2024</td><td>code execution</td>
-    <td>Access to your cursor, which is the universal adapter: anything a person can do, in any app, with no integration. <b>In the way:</b> it runs at pixel rate, it has no undo, and it can't prove what it did afterward, so the audit trail is a screen recording.</td>
-    <td class="ex">Computer use, desktop automation, RPA that finally works</td></tr>
+    <td class="st st-partial">yellow bang</td><td>changes someone else's</td><td class="seen">Oct 2024</td><td>code execution</td>
+    <td>Access to your cursor, which is the universal adapter: anything a person can do, in any app, with no integration. <b>In the way:</b> it runs at pixel rate, it has no undo, and it can't prove what it did afterward, so the audit trail is a screen recording. <b>Bet:</b> stays the fallback rather than becoming the default, because it cannot produce an audit trail and the places that most want automation are the places that most need one. I hold this one loosely; a cheap reliable audit layer would flip it.</td>
+    <td class="ex">Claude computer use, 22 Oct 2024; desktop automation; RPA that finally works</td></tr>
 
-  <tr data-id="cli" data-branch="manipulation" data-tier="3" data-era="2026" data-status="frontier" data-deps="codeexec,fs" data-flags="authority">
+  <tr data-id="cli" data-branch="manipulation" data-tier="3" data-seen="2026-07" data-status="frontier" data-deps="codeexec,fs" data-flags="authority" data-confidence="high">
     <th scope="row">CLIs as the agent interface</th>
-    <td class="st st-frontier">unknown device</td><td>changes someone else's</td><td>2026</td><td>code execution, file system</td>
-    <td>The most underrated bet on this board. A CLI is a typed, composable, auditable API that already ships docs, a man page, exit codes, and a dry-run flag, and it costs a company far less than a bespoke agent surface. That DoorDash, which spent years hostile to automation, now ships one is the tell. <b>In the way:</b> distribution and trust, not design. Every CLI is also a local binary somebody has to authorize.</td>
-    <td class="ex"><a href="https://thenewstack.io/doordash-cli-agents-order/" rel="noopener external">dd-cli</a>, in beta July 2026 with a Claude checkout demo; <a href="https://webcmd.dev" rel="noopener external">webcmd</a>; gh; wrangler</td></tr>
+    <td class="st st-frontier">unknown device</td><td>changes someone else's</td><td class="seen">Jul 2026</td><td>code execution, file system</td>
+    <td>The most underrated bet on this board. A CLI is a typed, composable, auditable API that already ships docs, a man page, exit codes, and a dry-run flag, and it costs a company far less than a bespoke agent surface. That DoorDash, which spent years hostile to automation, now ships one is the tell. <b>In the way:</b> distribution and trust, not design. Every CLI is also a local binary somebody has to authorize. <b>Bet:</b> the one I'd actually take. Two years out, shipping an agent CLI is as ordinary as shipping a public API was in 2015, and for the same reason: it's cheap, it's testable, and the alternative is letting somebody else's scraper define your interface for you.</td>
+    <td class="ex"><a href="https://thenewstack.io/doordash-cli-agents-order/" rel="noopener external">dd-cli</a>, beta 16 Jul 2026 with a Claude checkout demo; <a href="https://webcmd.dev" rel="noopener external">webcmd</a>; gh; wrangler</td></tr>
 
-  <tr data-id="binaries" data-branch="manipulation" data-tier="2" data-era="not yet" data-status="absent" data-deps="codeexec" data-flags="">
+  <tr data-id="binaries" data-branch="manipulation" data-tier="2" data-seen="" data-status="phantom" data-deps="codeexec" data-flags="" data-confidence="low">
     <th scope="row">Binaries without source</th>
-    <td class="st st-absent">disabled</td><td>changes its own machine</td><td>not yet</td><td>code execution</td>
-    <td>A counterfactual worth taking seriously: without access to code, but with access to binaries, agents would live in decompilers, traces, and differential testing, and the whole toolchain would look different. Parts of that world already exist for anyone working on software they can't read. <b>In the way:</b> no corpus, no training signal, and no reward model for a task whose ground truth is behavior rather than text.</td>
+    <td class="st st-phantom">not present</td><td>changes its own machine</td><td class="seen">not yet</td><td>code execution</td>
+    <td>A counterfactual worth taking seriously: without access to code, but with access to binaries, agents would live in decompilers, traces, and differential testing, and the whole toolchain would look different. Parts of that world already exist for anyone working on software they can't read. <b>Bet:</b> stays unbuilt for general use, but shows up first somewhere with no source available and high stakes, most likely firmware or a compliance audit. If it arrives it arrives as a product rather than a capability, which is why nobody is racing for it.</td>
     <td class="ex">Decompilers in a loop, strace and dtrace as context, fuzzing harnesses</td></tr>
 
-  <tr data-id="tests" data-branch="feedback" data-tier="2" data-era="2025" data-status="shipped" data-deps="codeexec" data-flags="">
+  <!-- ── FEEDBACK ───────────────────────────────────────────────────────── -->
+  <tr data-id="tests" data-branch="feedback" data-tier="2" data-seen="2025" data-status="shipped" data-deps="codeexec" data-flags="">
     <th scope="row">Tests and logs in the loop</th>
-    <td class="st st-shipped">installed, underused</td><td>changes its own machine</td><td>2025</td><td>code execution</td>
+    <td class="st st-shipped">installed, underused</td><td>changes its own machine</td><td class="seen">~2025</td><td>code execution</td>
     <td>Access to cause and effect, which is the cheapest thing on this board and the least deliberately built. Handing an agent the failing test and the log did in minutes what days of reasoning about the probable bug did not, because it replaces a prior with an observation.</td>
     <td class="ex">Test runners in the agent loop, log tailing, CI output as context</td></tr>
 
-  <tr data-id="evals" data-branch="feedback" data-tier="3" data-era="2026" data-status="partial" data-deps="tests" data-flags="">
+  <tr data-id="evals" data-branch="feedback" data-tier="3" data-seen="2026" data-status="partial" data-deps="tests" data-flags="" data-confidence="medium">
     <th scope="row">Eval and RL environments</th>
-    <td class="st st-partial">yellow bang</td><td>changes someone else's</td><td>2026</td><td>tests and logs in the loop</td>
-    <td>First and second-order effects from causes, in practice rather than in theory. This is what training runs on, and it's the sharpest asymmetry on the board: labs have rich environments, and the person with the actual codebase has almost none. <b>In the way:</b> an environment is a product nobody sells you for your own system, so the people with the best ground truth can't feed it back.</td>
+    <td class="st st-partial">yellow bang</td><td>changes someone else's</td><td class="seen">~2026</td><td>tests and logs in the loop</td>
+    <td>First and second-order effects from causes, in practice rather than in theory. This is what training runs on, and it's the sharpest asymmetry on the board: labs have rich environments and the person with the actual codebase has almost none. <b>In the way:</b> an environment is a product nobody sells you for your own system, so the people with the best ground truth can't feed it back. <b>Bet:</b> environments-as-a-service is the gap most worth building into, and the first credible version is bought rather than built, by a lab that wants the ground truth more than the revenue.</td>
     <td class="ex">RLVR, verifier environments, GRPO training loops</td></tr>
 
-  <tr data-id="correctness" data-branch="feedback" data-tier="3" data-era="2026" data-status="frontier" data-deps="codeexec,tests" data-flags="">
+  <tr data-id="correctness" data-branch="feedback" data-tier="3" data-seen="2026" data-status="frontier" data-deps="codeexec,tests" data-flags="" data-confidence="low">
     <th scope="row">Correctness, formally</th>
-    <td class="st st-frontier">unknown device</td><td>changes someone else's</td><td>2026</td><td>code execution, tests and logs</td>
-    <td>The only access on this board that returns a proof instead of a sample, which makes it the honest answer to weak generalization. <b>In the way:</b> specification hacking. A model that writes the spec will write a weak one that compiles, so the verifier certifies a claim nobody wanted. The Lean literature has a name for it because it happens reliably, and the bug relocates from the proof into the statement, where it's much harder to see.</td>
+    <td class="st st-frontier">unknown device</td><td>changes someone else's</td><td class="seen">~2026</td><td>code execution, tests and logs</td>
+    <td>The only access on this board that returns a proof instead of a sample, which makes it the honest answer to weak generalization. <b>In the way:</b> specification hacking. A model that writes the spec will write a weak one that compiles, so the verifier certifies a claim nobody wanted. The Lean literature has a name for it because it happens reliably, and the bug relocates from the proof into the statement, where it's much harder to see. <b>Bet:</b> autoformalization gets good before specification review does, which is the dangerous ordering. Expect a stretch where proofs are cheap and nobody can tell whether the statement says what they meant.</td>
     <td class="ex">Lean 4 and Mathlib, autoformalization, FormaRL's compiler-plus-semantic reward; <a href="/lwe/lean">this site's Lean explainer</a> is about exactly that relocation</td></tr>
 
-  <tr data-id="intermediate" data-branch="feedback" data-tier="2" data-era="2026" data-status="partial" data-deps="tests" data-flags="">
+  <tr data-id="intermediate" data-branch="feedback" data-tier="2" data-seen="2026" data-status="partial" data-deps="tests" data-flags="" data-confidence="medium">
     <th scope="row">Intermediate state</th>
-    <td class="st st-partial">yellow bang</td><td>changes its own machine</td><td>2026</td><td>tests and logs in the loop</td>
-    <td>Not the input and not the answer: the values in between. A debugger's worth of access, where most of the diagnostic signal actually lives. <b>In the way:</b> nothing exposes it in a shape a model can read, so agents reconstruct state by adding print statements like everyone else.</td>
+    <td class="st st-partial">yellow bang</td><td>changes its own machine</td><td class="seen">~2026</td><td>tests and logs in the loop</td>
+    <td>Not the input and not the answer: the values in between. A debugger's worth of access, where most of the diagnostic signal actually lives. <b>In the way:</b> nothing exposes it in a shape a model can read, so agents reconstruct state by adding print statements like everyone else. <b>Bet:</b> the fix is boring and arrives through tracing rather than debuggers. Spans already carry the shape; what's missing is a convention for handing them to a model, and conventions arrive faster than tools.</td>
     <td class="ex">Time-travel debuggers, span attributes, replay logs</td></tr>
 
-  <tr data-id="chatout" data-branch="expression" data-tier="0" data-era="2022-23" data-status="shipped" data-deps="ctx" data-flags="">
+  <tr data-id="replay" data-branch="feedback" data-tier="2" data-seen="2014" data-status="passed" data-deps="codeexec" data-flags="" data-confidence="medium">
+    <th scope="row">Replayable execution</th>
+    <td class="st st-passed">disabled</td><td>changes its own machine</td><td class="seen">~2014</td><td>code execution</td>
+    <td>Record a run once, then replay it as many times as you like, deterministically, and step backwards through it. This has existed and worked for over a decade. <b>Passed over because:</b> recording costs something up front and re-running was always cheap enough, so almost nobody paid. Agents inherited that habit and add print statements instead. <b>Bet:</b> gets rediscovered once agent turns are expensive enough that re-running to reproduce costs more than recording would have. That crossover is close, and this is the passed-over node I'd expect to come back first.</td>
+    <td class="ex">rr, Mozilla, ~2014; Replay.io; deterministic simulation testing</td></tr>
+
+  <tr data-id="discard" data-branch="feedback" data-tier="1" data-seen="" data-status="phantom" data-deps="tests" data-flags="" data-confidence="medium">
+    <th scope="row">The discard pile</th>
+    <td class="st st-phantom">not present</td><td>reads the world</td><td class="seen">not yet</td><td>tests and logs in the loop</td>
+    <td>Every repository is a survivorship-biased record. A model sees the approach that landed and never the four that were tried and thrown away, which is precisely the knowledge that would stop it proposing them again. <b>Bet:</b> the first team that deliberately keeps its failures and feeds them back gets a real edge, and nobody outside will be able to see it. Hard to build because it means choosing to store what everybody currently throws away, and the value only shows up months later.</td>
+    <td class="ex">Nothing ships this. Abandoned branches, closed PRs, and reverted commits are the raw material sitting unused</td></tr>
+
+  <!-- ── EXPRESSION ─────────────────────────────────────────────────────── -->
+  <tr data-id="chatout" data-branch="expression" data-tier="0" data-seen="2022-11" data-status="shipped" data-deps="ctx" data-flags="">
     <th scope="row">Chat output</th>
-    <td class="st st-shipped">installed</td><td>reads what it's handed</td><td>2022</td><td>context window</td>
+    <td class="st st-shipped">installed</td><td>reads what it's handed</td><td class="seen">Nov 2022</td><td>context window</td>
     <td>The output access that mattered most, because it got everyone who doesn't code in the door. Access to inputs decided what models could do; this decided who got to ask.</td>
     <td class="ex">The chat box, and everything downstream of it</td></tr>
 
-  <tr data-id="markup" data-branch="expression" data-tier="0" data-era="2022-23" data-status="shipped" data-deps="chatout" data-flags="">
+  <tr data-id="markup" data-branch="expression" data-tier="0" data-seen="2023" data-status="shipped" data-deps="chatout" data-flags="">
     <th scope="row">Markdown and HTML</th>
-    <td class="st st-shipped">installed</td><td>reads what it's handed</td><td>2023</td><td>chat output</td>
+    <td class="st st-shipped">installed</td><td>reads what it's handed</td><td class="seen">~2023</td><td>chat output</td>
     <td>Output a machine parses and a person reads, in one artifact. Underrated as an access story: it's why an agent can hand its work to another agent without inventing a protocol.</td>
     <td class="ex">Rendered markdown, artifacts, <a href="/access.md">the markdown twin of this page</a></td></tr>
 
-  <tr data-id="images" data-branch="expression" data-tier="0" data-era="2024" data-status="shipped" data-deps="chatout" data-flags="">
+  <tr data-id="images" data-branch="expression" data-tier="0" data-seen="2023-10" data-status="shipped" data-deps="chatout" data-flags="">
     <th scope="row">Image output</th>
-    <td class="st st-shipped">installed</td><td>reads what it's handed</td><td>2024</td><td>chat output</td>
+    <td class="st st-shipped">installed</td><td>reads what it's handed</td><td class="seen">Oct 2023</td><td>chat output</td>
     <td>The social-sentiment unlock. Nothing moved public belief about what these systems can do like pictures did, including things text models had been able to do for a year.</td>
-    <td class="ex">Image generation and editing, diagrams, charts</td></tr>
+    <td class="ex">DALL-E 3 in ChatGPT, Oct 2023; native image generation, Mar 2025</td></tr>
 
-  <tr data-id="typed" data-branch="expression" data-tier="1" data-era="2024" data-status="shipped" data-deps="markup" data-flags="">
+  <tr data-id="typed" data-branch="expression" data-tier="1" data-seen="2024-08" data-status="shipped" data-deps="markup" data-flags="">
     <th scope="row">Structured output</th>
-    <td class="st st-shipped">installed</td><td>reads the world</td><td>2024</td><td>markdown and HTML</td>
+    <td class="st st-shipped">installed</td><td>reads the world</td><td class="seen">Aug 2024</td><td>markdown and HTML</td>
     <td>Output the caller can depend on without parsing prose. The node that turns a model from a thing you read into a thing you can put in a pipeline.</td>
-    <td class="ex">JSON schema output, tool result contracts, forced tool calls</td></tr>
+    <td class="ex">OpenAI Structured Outputs, 6 Aug 2024; tool result contracts; forced tool calls</td></tr>
 
-  <tr data-id="secrets" data-branch="authority" data-tier="4" data-era="2026" data-status="partial" data-deps="fs" data-flags="authority">
+  <!-- ── AUTHORITY ──────────────────────────────────────────────────────── -->
+  <tr data-id="secrets" data-branch="authority" data-tier="4" data-seen="2026-04" data-status="partial" data-deps="fs" data-flags="authority" data-confidence="high">
     <th scope="row">Secrets</th>
-    <td class="st st-partial">yellow bang</td><td>spends</td><td>2026</td><td>file system</td>
-    <td>The agent needs the credential's power without the credential's value, and the good answer turned out to be never handing over the value at all. Infisical's is a TLS-intercepting, credential-injecting proxy, so a compromised agent has no secret to leak because it never held one. <b>In the way:</b> prompt injection sets the bar. If the agent can read the key, so can the page it just fetched.</td>
-    <td class="ex"><a href="https://infisical.com" rel="noopener external">Infisical</a> Agent Vault, April 2026, with Agent Proxy GA on 30 July 2026; <a href="https://ironrun.dev" rel="noopener external">ironrun</a></td></tr>
+    <td class="st st-partial">yellow bang</td><td>spends</td><td class="seen">Apr 2026</td><td>file system</td>
+    <td>The agent needs the credential's power without the credential's value, and the good answer turned out to be never handing over the value at all. Infisical's is a TLS-intercepting, credential-injecting proxy, so a compromised agent has no secret to leak because it never held one. <b>In the way:</b> prompt injection sets the bar. If the agent can read the key, so can the page it just fetched. <b>Bet:</b> never-let-the-agent-read-it becomes the default within two years, and direct credential access in an agent starts reading the way plaintext password storage reads now.</td>
+    <td class="ex"><a href="https://infisical.com" rel="noopener external">Infisical</a> Agent Vault, Apr 2026, with Agent Proxy GA on 30 Jul 2026; <a href="https://ironrun.dev" rel="noopener external">ironrun</a></td></tr>
 
-  <tr data-id="identity" data-branch="authority" data-tier="3" data-era="2026" data-status="frontier" data-deps="fetch" data-flags="">
+  <tr data-id="identity" data-branch="authority" data-tier="3" data-seen="2025-05" data-status="frontier" data-deps="fetch" data-flags="" data-confidence="high">
     <th scope="row">Verifiable identity</th>
-    <td class="st st-frontier">unknown device</td><td>changes someone else's</td><td>2026</td><td>fetch and scrape</td>
-    <td>A good bot and a bad bot are the same HTTP request until somebody signs it, which is why blocking and enabling are one problem rather than two. The interesting version isn't detection, it's routing: see an agent, hand it the agent path. <b>In the way:</b> the bypass market, and the fact that no site can afford to trust a signature it can't price.</td>
-    <td class="ex">Web Bot Auth, which <a href="/whoareyou">this site publishes a JWKS for</a>; Cloudflare's 15 September 2026 deadline to split search crawlers from AI crawlers; detection at roughly $0.05 a check</td></tr>
+    <td class="st st-frontier">unknown device</td><td>changes someone else's</td><td class="seen">May 2025</td><td>fetch and scrape</td>
+    <td>A good bot and a bad bot are the same HTTP request until somebody signs it, which is why blocking and enabling are one problem rather than two. The interesting version isn't detection, it's routing: see an agent, hand it the agent path. <b>In the way:</b> the bypass market, and the fact that no site can afford to trust a signature it can't price. <b>Bet:</b> signed agents win, because both sides want it. Sites want to price access and agents want to stop being blocked. September's crawler-separation deadline is the forcing function, and I'd expect signature checking to be unremarkable by 2027.</td>
+    <td class="ex">Web Bot Auth and RFC 9421, May 2025; in Cloudflare's Verified Bots by 1 Jul 2025; <a href="/whoareyou">this site publishes a JWKS</a>; Cloudflare's 15 Sep 2026 crawler-split deadline</td></tr>
 
-  <tr data-id="money" data-branch="authority" data-tier="4" data-era="2026" data-status="frontier" data-deps="secrets,identity" data-flags="authority">
+  <tr data-id="money" data-branch="authority" data-tier="4" data-seen="2025-05" data-status="frontier" data-deps="secrets,identity" data-flags="authority" data-confidence="medium">
     <th scope="row">Money</th>
-    <td class="st st-frontier">unknown device</td><td>spends</td><td>2026</td><td>secrets, verifiable identity</td>
-    <td>Cloudflare's Act IV is access and commerce, and it rides the same Web Bot Auth as the crawler story. That isn't a coincidence, it's the dependency: an agent can't be trusted to pay until it can be identified, and it can't be identified until somebody signs for it. <b>In the way:</b> liability. Every party wants the agent's transaction and nobody wants its chargeback.</td>
-    <td class="ex">x402, Turnkey, Cloudflare with the major payment networks, dd-cli completing a real checkout</td></tr>
+    <td class="st st-frontier">unknown device</td><td>spends</td><td class="seen">May 2025</td><td>secrets, verifiable identity</td>
+    <td>Cloudflare's Act IV is access and commerce, and it rides the same Web Bot Auth as the crawler story. That isn't a coincidence, it's the dependency: an agent can't be trusted to pay until it can be identified, and it can't be identified until somebody signs for it. <b>In the way:</b> liability. Every party wants the agent's transaction and nobody wants its chargeback. <b>Bet:</b> agent payments arrive through the card networks rather than around them, because liability is the real blocker and only they can absorb it. Crypto rails get the long tail and most of the demos.</td>
+    <td class="ex">x402, May 2025; Turnkey; Cloudflare with the major payment networks, 2026; dd-cli completing a real checkout</td></tr>
 
-  <tr data-id="meat" data-branch="authority" data-tier="5" data-era="not yet" data-status="absent" data-deps="money,cursor" data-flags="authority">
+  <tr data-id="meat" data-branch="authority" data-tier="5" data-seen="" data-status="phantom" data-deps="money,cursor" data-flags="authority" data-confidence="low">
     <th scope="row">Meatspace</th>
-    <td class="st st-absent">disabled</td><td>moves atoms</td><td>not yet</td><td>money, computer use</td>
-    <td>The one branch where a wrong action can't be rolled back, which is why it sits alone at the top and why the gap between it and everything below is the largest on the board. <b>In the way:</b> no undo. Every other node's safety story leans on reversibility, and this is where that runs out.</td>
+    <td class="st st-phantom">not present</td><td>moves atoms</td><td class="seen">not yet</td><td>money, computer use</td>
+    <td>The one branch where a wrong action can't be rolled back, which is why it sits alone at the top and why the gap between it and everything below is the largest on the board. <b>In the way:</b> no undo. Every other node's safety story leans on reversibility, and this is where that runs out. <b>Bet:</b> not this decade at any scale that matters, and the binding constraint stays undo rather than dexterity. The first real deployments will be places where a mistake is cheap and boring.</td>
     <td class="ex">Robotics, physical delivery, anything holding a key to a door</td></tr>
 
   </tbody>
 </table>
 </div>
 
+<!-- ══ FLAVORTEXT: sources ═══════════════════════════════════════════════ -->
 <h2>Sources</h2>
-<p><small>Everything above that carries a number came from one of these. The tweets that seeded this map aren't linked yet, because they need a human to pull the quote.</small></p>
+<p><small>Everything above that carries a number or a date came from one of these. The tweets that seeded this map aren't linked yet, because they need a human to pull the quote.</small></p>
 <ul>
-  <li><small><a href="https://blog.cloudflare.com/cdnjs-dev-platform-migration/" rel="noopener external">cdnjs, migrated to the Cloudflare developer platform</a> for the corpus numbers, and for saying out loud that models reach for cdnjs because their training data is full of it.</small></li>
-  <li><small><a href="https://blog.cloudflare.com/shared-dictionaries/" rel="noopener external">Shared dictionaries: compression for the agentic web</a> for the 272KB to 2.6KB figure and the three phases.</small></li>
+  <li><small><a href="https://blog.cloudflare.com/cdnjs-dev-platform-migration/" rel="noopener external">cdnjs, migrated to the Cloudflare developer platform</a> (30 Jul 2026) for the corpus numbers, and for saying out loud that models reach for cdnjs because their training data is full of it.</small></li>
+  <li><small><a href="https://blog.cloudflare.com/shared-dictionaries/" rel="noopener external">Shared dictionaries: compression for the agentic web</a> (beta 30 Apr 2026) for the 272KB to 2.6KB figure and the three phases.</small></li>
   <li><small><a href="https://webcmd.dev" rel="noopener external">webcmd</a> for the token and turn reductions on repeated browser work; <a href="https://know.fast" rel="noopener external">know.fast</a> for flat per-URL knowledge pricing.</small></li>
-  <li><small><a href="https://thenewstack.io/doordash-cli-agents-order/" rel="noopener external">The New Stack on dd-cli</a> for the beta date and the strategic read.</small></li>
-  <li><small><a href="https://infisical.com/blog/secure-secrets-management-for-cursor-cloud-agents" rel="noopener external">Infisical</a> for the credential-injecting proxy design and the Agent Proxy GA date.</small></li>
+  <li><small><a href="https://thenewstack.io/doordash-cli-agents-order/" rel="noopener external">The New Stack on dd-cli</a> for the 16 Jul 2026 beta and the strategic read.</small></li>
+  <li><small><a href="https://infisical.com/blog/secure-secrets-management-for-cursor-cloud-agents" rel="noopener external">Infisical</a> for the credential-injecting proxy design and the 30 Jul 2026 Agent Proxy GA.</small></li>
+  <li><small><a href="https://blog.cloudflare.com/web-bot-auth/" rel="noopener external">Forget IPs: using cryptography to verify bot and agent traffic</a> (May 2025) and <a href="https://blog.modelcontextprotocol.io/posts/2025-09-08-mcp-registry-preview/" rel="noopener external">the MCP Registry preview</a> (8 Sep 2025) for the identity and tool-discovery dates.</small></li>
   <li><small><a href="https://news.ycombinator.com/item?id=48895409" rel="noopener external">This Hacker News thread</a> for detection pricing, the bypass claim, and the argument for routing agents rather than blocking them.</small></li>
   <li><small><a href="https://www.emergentmind.com/topics/formarl" rel="noopener external">FormaRL</a> and the surrounding autoformalization work for specification hacking.</small></li>
 </ul>
 
 <footer>
-  A working map, not a finished one. Corrections and missing nodes welcome.
+  A working map, not a finished one. The bets are mine and dated on purpose, so they can be wrong out loud.
   <a href="/lens">/lens</a> is the companion piece: this page maps the access, that one shows you a single URL through it.
 </footer>
+<!-- ══ /FLAVORTEXT: sources ══════════════════════════════════════════════ -->
 
   </div>
 </div>
@@ -480,7 +574,8 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
    copy of it. Parsing the DOM rather than shipping a JSON twin means the flat
    table is the only source: it feeds the markdown twin, it survives with
    scripting off, and a node can't drift between the two representations because
-   there is only one. */
+   there is only one. All authored prose lives in that table or in a FLAVORTEXT
+   region above; nothing in this script holds copy that isn't derived. */
 (function(){
   var table = document.getElementById("devs");
   if (!table) return;
@@ -501,85 +596,156 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
     "4 · spends",
     "5 · moves atoms"
   ];
-  var ERAS = ["2022-23", "2024", "2025", "2026", "not yet"];
   var STATE = {
     shipped:  ["installed", "the driver is loaded and something depends on it"],
     partial:  ["yellow bang", "it works, and it works badly enough to matter"],
     frontier: ["unknown device", "present on the bus, no driver installed"],
-    absent:   ["disabled", "nobody has built it"]
+    passed:   ["disabled", "built, and then the ecosystem switched it off"],
+    phantom:  ["not present", "describable, attached to nothing. speculative"]
   };
+  var ORDER = ["shipped", "partial", "frontier", "passed", "phantom"];
+
+  /* The timeline's origin is the month the whole board starts: ChatGPT, Nov 2022.
+     NOW is the right edge. Anything earlier than the origin lands in a separate
+     pre-2022 bucket behind an axis break rather than squashing 15 years of axis
+     into the left margin for the sake of two nodes. */
+  var ORIGIN_Y = 2022, ORIGIN_M = 11, NOW = 45;   /* NOW = Aug 2026 */
+  var MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  function monthIndex(seen){
+    var m = /^(\d{4})(?:-(\d{2}))?$/.exec(seen || "");
+    if (!m) return null;
+    /* A year-only date anchors mid-year. The node says so with a ~ so the
+       position is never read as a claim about the month. */
+    return (+m[1] - ORIGIN_Y) * 12 + ((m[2] ? +m[2] : 7) - ORIGIN_M);
+  }
 
   /* --- read the table ------------------------------------------------- */
   var NODES = [], BY_ID = {};
   Array.prototype.forEach.call(table.tBodies[0].rows, function(tr){
     var cells = tr.cells;
     var flags = (tr.dataset.flags || "").split(",").filter(Boolean);
-    var links = Array.prototype.map.call(cells[6].querySelectorAll("a"), function(a){
-      return { text: a.textContent, href: a.getAttribute("href") };
-    });
     var n = {
       id:      tr.dataset.id,
       name:    cells[0].textContent.trim(),
       branch:  tr.dataset.branch,
       tier:    +tr.dataset.tier,
-      era:     tr.dataset.era,
+      seen:    tr.dataset.seen || "",
+      month:   monthIndex(tr.dataset.seen),
+      approx:  /^\d{4}$/.test(tr.dataset.seen || ""),
       status:  tr.dataset.status,
       state:   cells[1].textContent.trim(),
+      seenLab: cells[3].textContent.trim(),
       deps:    (tr.dataset.deps || "").split(",").filter(Boolean),
       needs:   cells[4].textContent.trim(),
       why:     cells[5].textContent.trim(),
       exText:  cells[6].textContent.trim(),
-      links:   links,
+      conf:    tr.dataset.confidence || "",
+      links:   Array.prototype.map.call(cells[6].querySelectorAll("a"), function(a){
+                 return { text: a.textContent, href: a.getAttribute("href") };
+               }),
       untrusted: flags.indexOf("untrusted") > -1,
       authority: flags.indexOf("authority") > -1,
       junction:  flags.indexOf("junction") > -1,
       row:     tr
     };
-    /* the blocker is authored inline behind a bold "In the way:" so the flat
-       table and the markdown twin read as prose; split it back out for the UI. */
-    var cut = n.why.indexOf("In the way:");
-    if (cut > -1) { n.blocker = n.why.slice(cut + 11).trim(); n.why = n.why.slice(0, cut).trim(); }
+    /* Blocker and bet are authored inline behind bold labels so the flat table
+       and the markdown twin read as prose. Split them back out for the UI, last
+       label first so an earlier one can't swallow a later one. */
+    ["Bet:", "Passed over because:", "In the way:"].forEach(function(label){
+      var cut = n.why.indexOf(label);
+      if (cut < 0) return;
+      var key = label === "Bet:" ? "bet" : "blocker";
+      n[key] = n.why.slice(cut + label.length).trim();
+      if (key === "blocker") n.blockerLabel = label.replace(":", "");
+      n.why = n.why.slice(0, cut).trim();
+    });
+    if (n.status === "phantom") tr.classList.add("ph");
     NODES.push(n); BY_ID[n.id] = n;
   });
 
-  /* --- layout ---------------------------------------------------------- */
-  /* BAND_HEAD is a label strip at the top of each band. The band label used to be
-     drawn at the band's own top-left, where the first column's node boxes are
-     painted directly over it: every tier read as a bare "0" or "1" with its words
-     hidden behind a device. A strip is better than a left gutter here because the
-     label is a heading for the whole row, not an axis tick for one column. */
-  /* Six columns have to clear the canvas pane at a 1280 window without a
-     horizontal scroll, because the sixth is Authority and a clipped Authority
-     column loses the argument the top of the board is making. 6 x 160 + 8 = 968. */
-  var COL_W = 160, NODE_W = 148, NODE_H = 40, ROW_H = 58, HEAD_H = 26, BAND_HEAD = 15, BAND_PAD = 6, LEFT = 4;
+  /* --- state ------------------------------------------------------------ */
+  var mode = "blast", filter = "all", injecting = false, selected = null, showHidden = false;
+  var visible = function(){
+    return NODES.filter(function(n){ return showHidden || n.status !== "phantom"; });
+  };
+  var passesFilter = function(n){
+    if (filter === "all") return true;
+    if (filter === "gaps") return n.status !== "shipped";
+    return n.status === filter;
+  };
 
-  function layout(mode){
-    var keys = mode === "time" ? ERAS : TIERS.map(function(_, i){ return i; });
-    var cellOf = mode === "time" ? function(n){ return n.era; } : function(n){ return n.tier; };
+  /* --- layout ---------------------------------------------------------- */
+  var COL_W = 160, NODE_W = 148, NODE_H = 40, ROW_H = 58, HEAD_H = 26,
+      BAND_HEAD = 15, BAND_PAD = 6, LEFT = 4;
+
+  /* blast radius: branch columns, tier bands. BAND_HEAD is a label strip, because
+     a band label drawn at its own top-left is painted over by the first column's
+     node boxes and every tier reads as a bare number. */
+  function blastLayout(list){
     var bands = [], y = HEAD_H;
-    keys.forEach(function(key, ki){
+    TIERS.forEach(function(label, tier){
       var stacks = BRANCHES.map(function(b){
-        return NODES.filter(function(n){ return cellOf(n) === key && n.branch === b[0]; });
+        return list.filter(function(n){ return n.tier === tier && n.branch === b[0]; });
       });
       var tall = stacks.reduce(function(m, s){ return Math.max(m, s.length); }, 0);
       if (!tall) return;
-      var h = tall * ROW_H + BAND_HEAD + BAND_PAD;
       stacks.forEach(function(stack, bi){
         stack.forEach(function(n, i){
           n.x = LEFT + bi * COL_W + (COL_W - NODE_W) / 2;
           n.y = y + BAND_HEAD + i * ROW_H;
         });
       });
-      bands.push({ label: mode === "time" ? String(key) : TIERS[key], y: y, h: h, alt: ki % 2 === 1 });
-      y += h;
+      bands.push({ label: label, y: y, h: tall * ROW_H + BAND_HEAD + BAND_PAD, alt: tier % 2 === 1 });
+      y += tall * ROW_H + BAND_HEAD + BAND_PAD;
     });
-    return { bands: bands, width: LEFT * 2 + BRANCHES.length * COL_W, height: y + 6 };
+    return { kind: "blast", bands: bands, width: LEFT * 2 + BRANCHES.length * COL_W, height: y + 6 };
   }
 
-  /* --- svg ------------------------------------------------------------- */
+  /* timeline: a real month axis. Three regions left to right — pre-2022 behind an
+     axis break, the dated span Nov 2022 to now, then the speculative region for
+     nodes with no date at all. Lanes are branches; inside a lane boxes greedily
+     pack into rows so a 148px box on a ~16px-per-month axis cannot cover its
+     neighbours. Lane heights vary, which is the honest shape: Perception is
+     genuinely the crowded branch. */
+  /* Both side regions must be at least NODE_W wide. At 116 the pre-2022 bucket
+     centred a 148px box at x=-12 and clipped "Jun 2011" off the left edge of the
+     canvas. LANE_HEAD is the same fix the tier bands needed: a label strip above
+     each lane, because a lane label drawn beside its own row gets painted over by
+     the first node box in it. */
+  var PRE_X = 4, PRE_W = 156, GAP = 16, AXIS_W = 620, SPEC_GAP = 18, SPEC_W = 156, LANE_HEAD = 14;
+  function timeLayout(list){
+    var axisX = PRE_X + PRE_W + GAP;
+    var specX = axisX + AXIS_W + SPEC_GAP;
+    var span = AXIS_W - NODE_W;
+    var lanes = [], y = 36;
+    BRANCHES.forEach(function(b){
+      var mine = list.filter(function(n){ return n.branch === b[0]; });
+      mine.forEach(function(n){
+        if (n.month === null)    n.x = specX + (SPEC_W - NODE_W) / 2;
+        else if (n.month < 0)    n.x = PRE_X + (PRE_W - NODE_W) / 2;
+        else                     n.x = axisX + Math.max(0, Math.min(1, n.month / NOW)) * span;
+      });
+      mine.sort(function(a, c){ return a.x - c.x; });
+      var ends = [];
+      mine.forEach(function(n){
+        var r = 0;
+        while (ends[r] !== undefined && ends[r] > n.x - 6) r++;
+        ends[r] = n.x + NODE_W;
+        n.row = r;
+      });
+      var rows = Math.max(1, ends.length);
+      mine.forEach(function(n){ n.y = y + LANE_HEAD + n.row * ROW_H; });
+      lanes.push({ label: b[1], y: y, h: rows * ROW_H + LANE_HEAD + 6 });
+      y += rows * ROW_H + LANE_HEAD + 6;
+    });
+    return { kind: "time", lanes: lanes, axisX: axisX, specX: specX, span: span,
+             width: specX + SPEC_W + 4, height: y + 6 };
+  }
+
+  /* --- svg pieces ------------------------------------------------------- */
   function esc(s){ return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
-  /* Blockers are authored mid-sentence, after "In the way:" in the table prose, so
-     most of them start lowercase. Wherever one is lifted out and shown under its own
+  /* Blockers and bets are authored mid-sentence, after a bold label in the table
+     prose, so most start lowercase. Wherever one is lifted out under its own
      heading it has to read as a sentence again. */
   function sentence(s){ return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
   var cx = function(n){ return n.x + NODE_W / 2; };
@@ -588,7 +754,8 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
   function glyph(status){
     if (status === "partial")  return '<g class="gl gl-warn"><path d="M6 0 12 10H0Z"/><rect x="5.3" y="3.4" width="1.4" height="3.7"/><rect x="5.3" y="7.7" width="1.4" height="1.4"/></g>';
     if (status === "frontier") return '<g class="gl gl-unk"><circle cx="6" cy="6" r="5.6"/><text x="6" y="9.3" text-anchor="middle">?</text></g>';
-    if (status === "absent")   return '<g class="gl gl-off"><circle cx="6" cy="6" r="5.6"/><rect x="2.6" y="5.2" width="6.8" height="1.7"/></g>';
+    if (status === "passed")   return '<g class="gl gl-off"><path d="M1.6 1.6 10.4 10.4M10.4 1.6 1.6 10.4"/></g>';
+    if (status === "phantom")  return '<g class="gl gl-ghost"><circle cx="6" cy="6" r="5.4"/></g>';
     return "";
   }
   /* a generic chip, so a node reads as hardware rather than as a bullet */
@@ -598,72 +765,10 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
       '<rect class="chip" x="3" y="0" width="1.2" height="1.6"/><rect class="chip" x="8.8" y="0" width="1.2" height="1.6"/>' +
       '<rect class="chip" x="3" y="11.4" width="1.2" height="1.6"/><rect class="chip" x="8.8" y="11.4" width="1.2" height="1.6"/></g>';
   }
-
   function curve(a, b){
     var x1 = cx(a), y1 = cy(a), x2 = cx(b), y2 = cy(b), m = (y1 + y2) / 2;
     return "M" + x1 + " " + y1 + "C" + x1 + " " + m + " " + x2 + " " + m + " " + x2 + " " + y2;
   }
-
-  var canvas = document.getElementById("canvas");
-  var mode = "blast", filter = "all", injecting = false, selected = null;
-
-  function draw(){
-    var box = layout(mode);
-    var s = '<svg class="graph" viewBox="0 0 ' + box.width + ' ' + box.height + '" width="' + box.width +
-            '" height="' + box.height + '" role="img" aria-label="Dependency graph of thirty flavors of model access">';
-
-    box.bands.forEach(function(b){
-      s += '<g class="band' + (b.alt ? " alt" : "") + '"><rect x="0" y="' + b.y + '" width="' + box.width + '" height="' + b.h + '"/>' +
-           '<text x="6" y="' + (b.y + 11) + '">' + esc(b.label) + '</text></g>' +
-           '<line class="bandline" x1="0" y1="' + b.y + '" x2="' + box.width + '" y2="' + b.y + '"/>';
-    });
-    s += '<g class="colhead">';
-    BRANCHES.forEach(function(b, i){
-      s += '<text x="' + (LEFT + i * COL_W + COL_W / 2) + '" y="16" text-anchor="middle">' + esc(b[1]) + '</text>';
-    });
-    s += "</g>";
-
-    /* dependency edges, drawn under the devices */
-    NODES.forEach(function(n){
-      n.deps.forEach(function(d){
-        var p = BY_ID[d];
-        if (!p) return;
-        var lit = selected && (selected === n.id || selected === d);
-        s += '<path class="edge' + (lit ? " lit" : "") + '" d="' + curve(p, n) + '"/>';
-      });
-    });
-
-    /* the injection flow. NOT dependency edges: untrusted tokens and privileged
-       actions never meet through the graph, they meet in the context window, so
-       that is the only honest shape to draw. */
-    var hub = BY_ID.ctx;
-    if (hub) {
-      NODES.forEach(function(n){
-        if (n.untrusted && n !== hub) s += '<path class="flow" d="' + curve(n, hub) + '"/>';
-        if (n.authority) s += '<path class="flow" d="' + curve(hub, n) + '"/>';
-      });
-    }
-
-    NODES.forEach(function(n){
-      var show = filter === "all" || (filter === "gaps" ? n.status !== "shipped" : n.status === filter);
-      var cls = "dev" + (show ? "" : " dim") + (selected === n.id ? " sel" : "") +
-                (injecting && n.junction ? " junction" : "");
-      var label = n.name + ". " + n.state + ". " + (n.blocker ? "Blocked by " + n.blocker : "Installed.");
-      s += '<g class="' + cls + '" data-id="' + esc(n.id) + '" tabindex="0" role="button" aria-label="' + esc(label) + '">' +
-           '<rect class="box" x="' + n.x + '" y="' + n.y + '" width="' + NODE_W + '" height="' + NODE_H + '" rx="2"/>' +
-           '<g transform="translate(' + (n.x + 7) + ',' + (n.y + 7) + ')">' + chip(n.status) + "</g>";
-      if (n.status !== "shipped") s += '<g transform="translate(' + (n.x + NODE_W - 19) + ',' + (n.y + 6) + ')">' + glyph(n.status) + "</g>";
-      s += wrapName(n) +
-           '<text class="sub" x="' + (n.x + 7) + '" y="' + (n.y + NODE_H - 6) + '">' + esc(n.era) + "</text></g>";
-    });
-
-    s += "</svg>";
-    canvas.innerHTML = s;
-    canvas.firstChild.classList.toggle("flowing", injecting);
-    wire();
-    tally();
-  }
-
   /* two lines of name inside the box, split on the last word that fits */
   function wrapName(n){
     var words = n.name.split(" "), lines = [""], limit = 23;
@@ -677,47 +782,140 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
     }).join("");
   }
 
-  /* the prose count, recomputed from the table. Authored inline so it reads
-     correctly with scripting off and in the markdown twin; overwritten here so
-     editing a row can't leave the paragraph asserting a stale number. */
+  var canvas = document.getElementById("canvas");
+
+  function draw(){
+    var list = visible();
+    var box = mode === "time" ? timeLayout(list) : blastLayout(list);
+    var s = '<svg class="graph" viewBox="0 0 ' + box.width + ' ' + box.height + '" width="' + box.width +
+            '" height="' + box.height + '" role="img" aria-label="Dependency graph of ' + list.length +
+            ' flavors of model access, arranged by ' + (mode === "time" ? "date" : "blast radius") + '">';
+
+    if (box.kind === "blast") {
+      box.bands.forEach(function(b){
+        s += '<g class="band' + (b.alt ? " alt" : "") + '"><rect x="0" y="' + b.y + '" width="' + box.width + '" height="' + b.h + '"/>' +
+             '<text x="6" y="' + (b.y + 11) + '">' + esc(b.label) + '</text></g>' +
+             '<line class="bandline" x1="0" y1="' + b.y + '" x2="' + box.width + '" y2="' + b.y + '"/>';
+      });
+      s += '<g class="colhead">';
+      BRANCHES.forEach(function(b, i){
+        s += '<text x="' + (LEFT + i * COL_W + COL_W / 2) + '" y="16" text-anchor="middle">' + esc(b[1]) + '</text>';
+      });
+      s += "</g>";
+    } else {
+      var ax = box.axisX, sp = box.span;
+      s += '<g class="region"><rect x="' + PRE_X + '" y="30" width="' + PRE_W + '" height="' + (box.height - 34) + '"/>' +
+           '<text x="' + (PRE_X + 3) + '" y="26">before 2022</text></g>';
+      s += '<g class="region spec"><rect x="' + box.specX + '" y="30" width="' + SPEC_W + '" height="' + (box.height - 34) + '"/>' +
+           '<text x="' + (box.specX + 3) + '" y="26">not yet · speculative</text></g>';
+      /* the axis break: two slashes, so the left bucket is never misread as 2022 */
+      var bx = PRE_X + PRE_W + GAP / 2;
+      s += '<path class="brk" d="M' + (bx - 3) + ' 34 l6 -9M' + (bx + 1) + ' 34 l6 -9"/>';
+      s += '<g class="axis"><line x1="' + ax + '" y1="30" x2="' + (ax + AXIS_W) + '" y2="30"/>';
+      for (var yr = 2023; yr <= 2026; yr++) {
+        var mi = (yr - ORIGIN_Y) * 12 + (1 - ORIGIN_M);
+        var tx = ax + (mi / NOW) * sp;
+        s += '<line x1="' + tx + '" y1="26" x2="' + tx + '" y2="' + (box.height - 4) + '" stroke="#eceef3"/>' +
+             '<text x="' + (tx + 3) + '" y="26">' + yr + '</text>';
+      }
+      /* The origin sits two months left of the 2023 tick, so its label cannot share
+         a baseline with the year ticks. It gets the row above instead. */
+      s += '<text x="' + ax + '" y="16">Nov 2022</text></g>';
+      var nx = ax + sp;
+      s += '<line class="nowline" x1="' + nx + '" y1="26" x2="' + nx + '" y2="' + (box.height - 4) + '"/>' +
+           '<text class="nowline-lab" x="' + (nx - 20) + '" y="' + (box.height - 6) + '">now</text>';
+      s += '<g class="lane">';
+      box.lanes.forEach(function(l){
+        s += '<line class="bandline" x1="0" y1="' + l.y + '" x2="' + box.width + '" y2="' + l.y + '"/>' +
+             '<text x="6" y="' + (l.y + 10) + '">' + esc(l.label) + "</text>";
+      });
+      s += "</g>";
+    }
+
+    /* dependency edges, drawn under the devices. Both ends must be on screen. */
+    var shown = {};
+    list.forEach(function(n){ shown[n.id] = true; });
+    list.forEach(function(n){
+      n.deps.forEach(function(d){
+        var p = BY_ID[d];
+        if (!p || !shown[d]) return;
+        var lit = selected && (selected === n.id || selected === d);
+        s += '<path class="edge' + (lit ? " lit" : "") + '" d="' + curve(p, n) + '"/>';
+      });
+    });
+
+    /* the injection flow. NOT dependency edges: untrusted tokens and privileged
+       actions never meet through the graph, they meet in the context window, so
+       that is the only honest shape to draw. */
+    var hub = BY_ID.ctx;
+    if (hub && shown.ctx) {
+      list.forEach(function(n){
+        if (n.untrusted && n !== hub) s += '<path class="flow" d="' + curve(n, hub) + '"/>';
+        if (n.authority) s += '<path class="flow" d="' + curve(hub, n) + '"/>';
+      });
+    }
+
+    list.forEach(function(n){
+      var cls = "dev st-" + n.status + (passesFilter(n) ? "" : " dim") +
+                (selected === n.id ? " sel" : "") + (injecting && n.junction ? " junction" : "");
+      var label = n.name + ". " + n.state + ", " + n.seenLab +
+                  (n.blocker ? ". In the way: " + n.blocker : "") + (n.bet ? ". Bet: " + n.bet : "");
+      s += '<g class="' + cls + '" data-id="' + esc(n.id) + '" tabindex="0" role="button" aria-label="' + esc(label) + '">' +
+           '<rect class="box" x="' + n.x + '" y="' + n.y + '" width="' + NODE_W + '" height="' + NODE_H + '" rx="2"/>' +
+           '<g transform="translate(' + (n.x + 7) + ',' + (n.y + 7) + ')">' + chip(n.status) + "</g>";
+      if (n.status !== "shipped") s += '<g transform="translate(' + (n.x + NODE_W - 19) + ',' + (n.y + 6) + ')">' + glyph(n.status) + "</g>";
+      s += wrapName(n) +
+           '<text class="sub" x="' + (n.x + 7) + '" y="' + (n.y + NODE_H - 6) + '">' + esc(n.seenLab) + "</text></g>";
+    });
+
+    s += "</svg>";
+    canvas.innerHTML = s;
+    canvas.firstChild.classList.toggle("flowing", injecting);
+    wire();
+    tally();
+  }
+
+  /* --- the counts, in the status bar and in the prose ------------------- */
   var WORDS = ["nobody", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"];
   function say(n){ return WORDS[n] || String(n); }
+  /* The prose count is authored inline so it reads correctly with scripting off
+     and in the markdown twin, then recomputed here so editing a row cannot leave
+     the paragraph asserting a stale number. */
   function tallyProse(c){
     var el = document.getElementById("tally-gaps");
     if (!el) return;
     var s = say(c.partial) + " device" + (c.partial === 1 ? "" : "s") + " carr" + (c.partial === 1 ? "ies" : "y") +
-            " a yellow bang, " + say(c.frontier) + " ha" + (c.frontier === 1 ? "s" : "ve") + " no driver at all, and " +
-            say(c.absent) + " nobody has built.";
-    el.textContent = s.charAt(0).toUpperCase() + s.slice(1);
+            " a yellow bang, " + say(c.frontier) + " ha" + (c.frontier === 1 ? "s" : "ve") + " no driver, " +
+            say(c.passed) + " " + (c.passed === 1 ? "is" : "are") + " switched off, and " +
+            say(c.phantom) + " " + (c.phantom === 1 ? "is" : "are") + " not present at all.";
+    el.textContent = sentence(s);
   }
-
   function tally(){
-    var c = { shipped: 0, partial: 0, frontier: 0, absent: 0 };
+    var c = { shipped: 0, partial: 0, frontier: 0, passed: 0, phantom: 0 };
     NODES.forEach(function(n){ c[n.status]++; });
     tallyProse(c);
-    var shown = NODES.filter(function(n){
-      return filter === "all" || (filter === "gaps" ? n.status !== "shipped" : n.status === filter);
-    }).length;
-    var st = document.getElementById("status");
-    st.innerHTML =
+    var shownCount = visible().filter(passesFilter).length;
+    var tail = injecting
+      ? "injection flow: every untrusted read meets every privileged action in one buffer"
+      : (selected ? BY_ID[selected].name + " · " + BY_ID[selected].seenLab
+                  : (showHidden ? "select a device for its properties"
+                                : c.phantom + " hidden. View > Show hidden devices"));
+    document.getElementById("status").innerHTML =
       "<span>" + NODES.length + " devices</span>" +
-      "<span>" + c.shipped + " installed</span>" +
-      "<span>" + c.partial + " yellow bang</span>" +
-      "<span>" + c.frontier + " no driver</span>" +
-      "<span>" + c.absent + " disabled</span>" +
-      "<span>" + (filter === "all" ? "" : shown + " shown · ") +
-      (injecting ? "injection flow: every untrusted read meets every privileged action in one buffer" :
-       (selected ? esc(BY_ID[selected].name) : "select a device for its properties")) + "</span>";
+      ORDER.map(function(k){ return "<span>" + c[k] + " " + esc(STATE[k][0]) + "</span>"; }).join("") +
+      "<span>" + (filter === "all" ? "" : shownCount + " shown · ") + esc(tail) + "</span>";
   }
 
   /* --- tooltip. hover-only, so a long-press on a phone can't fire it ---- */
   var tip = document.getElementById("tip");
   var canHover = !(window.matchMedia && window.matchMedia("(hover: none)").matches);
-
   function showTip(n, ev){
     if (!canHover) return;
-    tip.innerHTML = '<span class="t">' + esc(n.name) + "</span>" + esc(n.why) +
-      (n.blocker ? '<span class="bl"><b>In the way:</b> ' + esc(sentence(n.blocker)) + "</span>" : "") +
+    tip.innerHTML = '<span class="t">' + esc(n.name) + "</span>" +
+      '<span class="st">' + esc(n.state) + " · " + esc(n.seenLab) + (n.approx ? " (year only)" : "") + "</span>" +
+      esc(n.why) +
+      (n.blocker ? '<span class="bl"><b>' + esc(n.blockerLabel) + ':</b> ' + esc(sentence(n.blocker)) + "</span>" : "") +
+      (n.bet ? '<span class="bet"><b>Bet' + (n.conf ? " (" + esc(n.conf) + " confidence)" : "") + ':</b> ' + esc(sentence(n.bet)) + "</span>" : "") +
       '<span class="x">' + esc(n.exText) + "</span>";
     tip.style.display = "block";
     place(ev);
@@ -734,7 +932,10 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
   /* --- properties ------------------------------------------------------- */
   var dlg = document.getElementById("props");
   var TABS = [["tab-gen", "pane-gen"], ["tab-dep", "pane-dep"], ["tab-ex", "pane-ex"]];
-
+  function branchName(k){
+    for (var i = 0; i < BRANCHES.length; i++) if (BRANCHES[i][0] === k) return BRANCHES[i][1] + ", " + BRANCHES[i][2];
+    return k;
+  }
   function openProps(n){
     document.getElementById("props-title").textContent = n.name + " Properties";
     var st = STATE[n.status];
@@ -742,9 +943,13 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
       "<dl><dt>Device state</dt><dd><b>" + esc(st[0]) + "</b>. " + esc(st[1]) + "</dd>" +
       "<dt>Branch</dt><dd>" + esc(branchName(n.branch)) + "</dd>" +
       "<dt>Blast radius</dt><dd>" + esc(TIERS[n.tier].replace(/^\d+ · /, "")) + "</dd>" +
-      "<dt>First seen</dt><dd>" + esc(n.era) + "</dd>" +
+      "<dt>First seen</dt><dd>" + esc(n.seenLab) +
+        (n.approx ? ' <span class="conf">(year established, month not)</span>' : "") + "</dd>" +
       "<dt>What it buys</dt><dd>" + esc(n.why) + "</dd>" +
-      (n.blocker ? "<dt>What's in the way</dt><dd>" + esc(sentence(n.blocker)) + "</dd>" : "") + "</dl>";
+      (n.blocker ? "<dt>" + esc(n.blockerLabel === "Passed over because" ? "Why it was passed over" : "What's in the way") +
+        "</dt><dd>" + esc(sentence(n.blocker)) + "</dd>" : "") +
+      (n.bet ? "<dt>Bet" + (n.conf ? ' <span class="conf">' + esc(n.conf) + " confidence</span>" : "") +
+        '</dt><dd class="spec">' + esc(sentence(n.bet)) + "</dd>" : "") + "</dl>";
 
     var dependents = NODES.filter(function(o){ return o.deps.indexOf(n.id) > -1; });
     document.getElementById("pane-dep").innerHTML =
@@ -765,10 +970,6 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
     tab(0);
     if (dlg.showModal) dlg.showModal(); else dlg.setAttribute("open", "");
   }
-  function branchName(k){
-    for (var i = 0; i < BRANCHES.length; i++) if (BRANCHES[i][0] === k) return BRANCHES[i][1] + ", " + BRANCHES[i][2];
-    return k;
-  }
   function tab(i){
     TABS.forEach(function(t, j){
       document.getElementById(t[0]).setAttribute("aria-selected", j === i ? "true" : "false");
@@ -783,32 +984,32 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
   function buildTree(){
     var ul = document.getElementById("tree"), html = "";
     BRANCHES.forEach(function(b){
-      var kids = NODES.filter(function(n){ return n.branch === b[0]; });
+      var kids = visible().filter(function(n){ return n.branch === b[0]; });
       html += '<li><button type="button" data-branch="' + b[0] + '"><span class="tw">-</span>' +
               '<span class="bn">' + esc(b[1]) + "</span></button><ul>";
       kids.forEach(function(n){
         html += '<li><button type="button" data-id="' + esc(n.id) + '"><span class="tw"></span>' +
                 '<svg class="gi" viewBox="0 0 13 13" aria-hidden="true">' + chip(n.status) + "</svg>" +
-                "<span>" + esc(n.name) + "</span></button></li>";
+                '<span' + (n.status === "phantom" ? ' class="ph"' : "") + ">" + esc(n.name) + "</span></button></li>";
       });
       html += "</ul></li>";
     });
     ul.innerHTML = html;
-    ul.addEventListener("click", function(ev){
-      var btn = ev.target.closest("button");
-      if (!btn) return;
-      if (btn.dataset.id) select(btn.dataset.id, true);
-      else if (btn.dataset.branch) {
-        var sub = btn.nextElementSibling, open = sub.style.display !== "none";
-        sub.style.display = open ? "none" : "";
-        btn.querySelector(".tw").textContent = open ? "+" : "-";
-      }
-    });
-    ul.addEventListener("dblclick", function(ev){
-      var btn = ev.target.closest("button[data-id]");
-      if (btn) openProps(BY_ID[btn.dataset.id]);
-    });
   }
+  document.getElementById("tree").addEventListener("click", function(ev){
+    var btn = ev.target.closest("button");
+    if (!btn) return;
+    if (btn.dataset.id) select(btn.dataset.id, true);
+    else if (btn.dataset.branch) {
+      var sub = btn.nextElementSibling, open = sub.style.display !== "none";
+      sub.style.display = open ? "none" : "";
+      btn.querySelector(".tw").textContent = open ? "+" : "-";
+    }
+  });
+  document.getElementById("tree").addEventListener("dblclick", function(ev){
+    var btn = ev.target.closest("button[data-id]");
+    if (btn) openProps(BY_ID[btn.dataset.id]);
+  });
 
   function select(id, scroll){
     selected = id;
@@ -837,24 +1038,53 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
     });
   }
 
-  document.getElementById("v-blast").addEventListener("click", function(){ setMode("blast"); });
-  document.getElementById("v-time").addEventListener("click", function(){ setMode("time"); });
   function setMode(m){
     mode = m;
     document.getElementById("v-blast").setAttribute("aria-pressed", m === "blast" ? "true" : "false");
     document.getElementById("v-time").setAttribute("aria-pressed", m === "time" ? "true" : "false");
     draw();
   }
+  document.getElementById("v-blast").addEventListener("click", function(){ setMode("blast"); });
+  document.getElementById("v-time").addEventListener("click", function(){ setMode("time"); });
   document.getElementById("filter").addEventListener("change", function(ev){ filter = ev.target.value; draw(); });
   document.getElementById("inject").addEventListener("click", function(ev){
     injecting = !injecting;
     ev.currentTarget.setAttribute("aria-pressed", injecting ? "true" : "false");
     draw();
   });
+
+  /* the View menu, the one real dropdown, and the reveal for the speculative tier */
+  var viewBtn = document.getElementById("m-view"), viewMenu = document.getElementById("view-menu"),
+      hiddenItem = document.getElementById("m-hidden");
+  function openMenu(open){
+    viewMenu.hidden = !open;
+    viewBtn.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+  viewBtn.addEventListener("click", function(ev){ ev.stopPropagation(); openMenu(viewMenu.hidden); });
+  hiddenItem.addEventListener("click", function(){
+    setHidden(!showHidden);
+    openMenu(false);
+  });
+  function setHidden(on){
+    showHidden = on;
+    hiddenItem.setAttribute("aria-checked", on ? "true" : "false");
+    hiddenItem.querySelector(".tick").textContent = on ? "✓" : "";
+    buildTree();
+    if (!on && selected && BY_ID[selected].status === "phantom") selected = null;
+    draw();
+  }
+  document.addEventListener("click", function(ev){
+    if (!viewMenu.hidden && !viewMenu.contains(ev.target) && ev.target !== viewBtn) openMenu(false);
+  });
+  document.addEventListener("keydown", function(ev){
+    if (ev.key === "Escape" && !viewMenu.hidden) { openMenu(false); viewBtn.focus(); }
+  });
+
   document.getElementById("reset").addEventListener("click", function(){
     filter = "all"; injecting = false; selected = null;
     document.getElementById("filter").value = "all";
     document.getElementById("inject").setAttribute("aria-pressed", "false");
+    setHidden(false);
     setMode("blast");
   });
   window.addEventListener("scroll", hideTip, { passive: true });
