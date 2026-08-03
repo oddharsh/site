@@ -401,6 +401,11 @@ const PREFIX = [
     handle: routeStaticPage,
   },
   {
+    label: "/access",
+    match: (pathname) => pathname === "/access" || pathname.startsWith("/access/"),
+    handle: routeStaticPage,
+  },
+  {
     label: "/a/<asset>",
     match: (pathname) => /^\/a\/[^/]+\.[0-9a-f]{8}\.(js|css|svg|dict)$/.test(pathname),
     handle: routeShellAsset,

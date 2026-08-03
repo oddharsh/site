@@ -78,6 +78,7 @@
       // (2026-07-28). Same shape as "/lens", "/lens/" and "/photos", "/photos/".
       "/garage", "/garage/*", "/lwe", "/lwe/*",
       "/pixel-peeper", "/pixel-peeper/*",
+      "/access", "/access/*",
       "/auth.md", "/.well-known/api-catalog", "/.well-known/agent-card.json",
       "/.well-known/oauth-protected-resource",
       "/.well-known/oauth-authorization-server",
