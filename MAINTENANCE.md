@@ -1079,10 +1079,59 @@ Those two spans are kept for their attributes. When you actually want CPU:
 npx wrangler tail aadhar-sh --format json | grep -o '"cpuTime":[0-9]*'
 ```
 
-Local `wrangler dev` reports `span.isTraced === false` and records nothing; the
-spans still open and cost nothing, so dev behaves identically to prod. Only
-`_worker.js/index.js` may import `cloudflare:workers` (CLAUDE.md gotcha 16) —
-the tracer is injected into `lib/trace.js` and `cal/src/trace.js` from there.
+Only `_worker.js/index.js` may import `cloudflare:workers` (CLAUDE.md gotcha 16)
+— the tracer is injected into `lib/trace.js` and `cal/src/trace.js` from there.
+That injection runs at module scope, and workerd loads that module locally too,
+which is why the next section works with no setup at all.
+
+### Read a trace LOCALLY (wrangler dev, no deploy)
+
+**This section replaces a claim that was true until 2026-08-04 and is not any
+more.** It used to say local `wrangler dev` reports `span.isTraced === false` and
+records nothing. Cloudflare shipped OpenTelemetry traces in local dev that day;
+Wrangler 4.118.0 already has it, and there is nothing to install, enable, or bump.
+
+```bash
+npm run dev            # or: npx wrangler dev -c wrangler.dev.jsonc --port 8799
+curl -s localhost:8799/photos/grid.html > /dev/null      # make some spans
+
+# the named spans, newest first
+curl -s -X POST localhost:8799/cdn-cgi/local/explorer/api/local/observability/query \
+  -H 'content-type: application/json' \
+  -d '{"sql":"SELECT name, duration_ms, json(attributes) FROM spans WHERE kind = ? ORDER BY start_ms DESC LIMIT 20","params":["span"]}'
+```
+
+The body is `{sql, params}`, one read-only SELECT/WITH, 10000 rows max, `?`
+placeholders rather than interpolation. `attributes` is JSONB, so read it back
+through `json(attributes)`. The schema is `spans(trace_id, span_id, parent_id,
+service, name, kind, start_ms, duration_ms, outcome, error, attributes)` plus a
+`logs` table correlated by `trace_id`; `parent_id IS NULL` marks a root
+invocation span, and `duration_ms` is NULL while a span is still open.
+
+`GET /cdn-cgi/explorer/api` returns the whole OpenAPI schema. Traces are one part
+of it: the Local Explorer also exposes local KV, D1, R2, Durable Object and
+Workflow state, which is a faster way to answer "what is actually in the local
+namespace" than a wrangler subcommand per binding.
+
+Verified output from that exact recipe, 2026-08-04:
+
+```
+route /photos/grid.html | 0 ms | {"route.template":"/photos/grid.html","route.kind":"exact",...}
+home.grid.manifest      | 0 ms | {}
+home.grid.render        | 0 ms | {"home.grid.served":true,"home.grid.pool_size":158,"home.grid.alt_known":158}
+route /photos           | 8 ms | {"route.template":"/photos","route.kind":"exact",...}
+```
+
+**The 0ms rule above holds locally, and that is the one thing worth checking your
+intuition against.** The reasonable guess is that local dev, with no Spectre
+mitigation to worry about, would finally measure the synchronous work. It does
+not: `home.grid.render` reads 0 locally too, having just built a 158-photo pool.
+Local spans buy you the tree and the attributes, not CPU. `route /photos` reads 8
+ms because it spans real I/O.
+
+What this changes day to day: a new span's NAME and ATTRIBUTES can be checked
+before it ships. Previously the cheapest way to find out whether a span was
+usefully named was to deploy it and open the dashboard.
 
 ### Log a deploy (bump-version.sh)
 `./holding/scripts/bump-version.sh <slug> "<title>"`, then deploy. Inserts the next checkpoint into D1 (vnum from `SELECT MAX(vnum)`), which is what `/updates` and `/restore` render. Nothing edits sw.js anymore: the service worker retired in v136, `nav.js`/`notepad.js` updates land via their short `_headers` max-age plus the per-deploy edge purge, and the stub at `/sw.js` cleans up old installs.
