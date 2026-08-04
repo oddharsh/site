@@ -28,6 +28,7 @@ import { AGENT_SURFACES, WEBMENTION_PATHS } from "./holding/_worker.js/lib/site-
 import { handleWritingIndex } from "./holding/_worker.js/writing.js";
 import { cronJob } from "./holding/_worker.js/lib/cron.js";
 import { serveStaticPage } from "./holding/_worker.js/lib/assets.js";
+import { serveMarkdown } from "./holding/_worker.js/home.js";
 import { readManifest, workerModule, navFenceBody, readFenceBody } from "./scripts/gen-manifest.mjs";
 import { INDEXED_SECTIONS, TWIN_FACTS, buildTwins, checkTwinFacts, htmlFileFor, twinPath } from "./scripts/gen-md-twins.mjs";
 import { collectBlockClasses, readDocument } from "./scripts/lib/html-to-md.mjs";
@@ -1353,6 +1354,38 @@ test("a flex item is its own box, and promoting one never eats an image", () => 
 // 2026-07-31 (GET /garage/encoding -> text/markdown, HEAD -> text/html), which is
 // also a convincing false positive for the #195 cache bug because `curl -I` is the
 // reflex probe.
+// The homepage was the last route answering HEAD from a hand-written header set,
+// and the one header it dropped was x-markdown-tokens. It hid because `/` is
+// workers-cacheable: a plain HEAD is satisfied from the stored GET entry and never
+// runs the duplicate, so the only path that DID run it was the markdown one, which
+// bails the cache. The unwatched path is the one that drifted.
+test("the homepage HEAD carries the token count its GET sends", async () => {
+  const env = {
+    ASSETS: {
+      async fetch(input) {
+        const path = new URL(typeof input === "string" ? input : input.url).pathname;
+        if (path === "/index.md") return new Response("# aadhar.sh\n\nsome prose about the site");
+        return new Response("<h1>aadhar.sh</h1>", { headers: { "content-type": "text/html" } });
+      },
+    },
+  };
+  const md = { accept: "text/markdown" };
+  const get = await serveMarkdown(new Request("https://aadhar.sh/", { headers: md }), env);
+  const head = await serveMarkdown(new Request("https://aadhar.sh/", { method: "HEAD", headers: md }), env);
+
+  assert.equal(head.headers.get("x-markdown-tokens"), get.headers.get("x-markdown-tokens"));
+  assert.ok(Number(head.headers.get("x-markdown-tokens")) > 0, "a token count of zero is not a count");
+  assert.equal(await head.text(), "", "a HEAD carries no body");
+  for (const name of ["content-type", "cache-control", "vary", "link", "x-content-type-options"]) {
+    assert.equal(head.headers.get(name), get.headers.get(name), `HEAD and GET must agree on ${name}`);
+  }
+  // the homepage's own discovery links are the one thing this route adds over the
+  // shared negotiated response, so losing them in the delegation would be silent
+  assert.match(get.headers.get("link") || "", /rel="sitemap"/);
+  // and the negotiated representation must stay uncacheable, per the edge's per-URL key
+  assert.match(get.headers.get("cache-control"), /no-store/);
+});
+
 test("HEAD advertises the same representation its GET would serve", async () => {
   const env = {
     ASSETS: {
@@ -1894,11 +1927,17 @@ test("the homepage's Link header carries the shell preloads, or it gets no Early
   assert.match(index, /WORKERS_CACHEABLE_PATHS = new Set\("\/ /,
     "`/` must be in WORKERS_CACHEABLE_PATHS, or a cacheable homepage still invokes the worker every hit");
 
-  // The HEAD path writes its own headers, so it can drift from the GET it stands in for.
-  // A HEAD advertising a different freshness contract is a lie a cache may act on.
+  // The HEAD path used to write its own headers, which is how it drifted: a
+  // hand-maintained duplicate can only be checked by asserting it restates the
+  // right constants, and that check passed while its markdown branch quietly
+  // omitted x-markdown-tokens. The duplicate is gone, so assert it stays gone
+  // rather than that a second copy still agrees. Same move as the
+  // withHomepageDiscoveryHeaders assertions above.
   const home = await readFile(new URL("holding/_worker.js/home.js", import.meta.url), "utf8");
-  assert.match(home, /:\s*PAGE_CACHE_CONTROL,/,
-    "homepageHeadResponse must reuse the shared constant rather than restating the policy");
+  assert.doesNotMatch(home, /^\s*(export )?function homepageHeadResponse/m,
+    "the homepage HEAD must not go back to a hand-written header set; it takes the GET's own path");
+  assert.doesNotMatch(index, /method === "HEAD"\s*\)\s*return homepageHeadResponse/,
+    "routeHomepage must not fork on HEAD again");
 
   // _headers is the static-asset fallback for the same URL, and check-dictionary-support
   // exists precisely because production policy for some pages comes from this file, which

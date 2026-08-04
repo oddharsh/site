@@ -12,7 +12,7 @@ import { cronCensus, handleCensus, handleCensusJson } from "./census.js";
 import { shouldUseWorkersCache } from "./lib/cache.js";
 import { handleCoffeeAvailability } from "./coffee.js";
 import { handleHit } from "./counter.js";
-import { handlePhotoGrid, homepageHeadResponse, serveMarkdown } from "./home.js";
+import { handlePhotoGrid, serveMarkdown } from "./home.js";
 import { handleInbox } from "./inbox.js";
 import { handleWebmention, handleWebmentionDecision } from "./webmention.js";
 import { cronSendWebmentions } from "./webmention-send.js";
@@ -876,8 +876,20 @@ const HOMEPAGE_HEADERS = {
   "link": `${SHELL_PRELOAD_LINK}, ${HOMEPAGE_DISCOVERY_LINK}`,
 };
 
+// HEAD no longer forks here. It used to answer from homepageHeadResponse, a
+// hand-written header set in home.js, and that duplicate had drifted in the way a
+// duplicate only reached by an unwatched path always does: its markdown branch
+// omitted x-markdown-tokens, which the GET has always sent.
+//
+// The drift also hid, and it is worth knowing why. `/` is in
+// WORKERS_CACHEABLE_PATHS and the predicate admits HEAD, so a plain HEAD is
+// satisfied from the stored GET entry, carrying the GET's own headers and ETag
+// (verified against production: both returned W/"c4717f10…-br"). Only the
+// MARKDOWN head reached the duplicate, because wantsMarkdown bails the cache —
+// so the one path that ran it was the one nothing else could check.
+//
+// Both branches now take the GET's own code, which decides the header set once.
 function routeHomepage(request, env, ctx) {
-  if (request.method === "HEAD") return homepageHeadResponse(request);
   if (wantsMarkdown(request)) return serveMarkdown(request, env);
   return serveStaticPage(request, env, { headers: HOMEPAGE_HEADERS });
 }
