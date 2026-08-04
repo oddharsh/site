@@ -684,5 +684,75 @@
     "version": "aadhar-v162-hit-route",
     "vnum": 162,
     "ymd": "2026-07-22"
+  },
+  {
+    "slug": "agents-mcp",
+    "title": "Site MCP server, /search, public coffee availability, and a surface registry the agent views project from",
+    "version": "aadhar-v163-agents-mcp",
+    "vnum": 163,
+    "ymd": "2026-07-24"
+  },
+  {
+    "slug": "infra-declared",
+    "title": "Infrastructure declared in infra.json: a zone and account diff in CI, plus an apply path for rebuilds",
+    "version": "aadhar-v164-infra-declared",
+    "vnum": 164,
+    "ymd": "2026-07-25"
+  },
+  {
+    "slug": "shell-sprite",
+    "title": "One icon sprite, one hover engine, and the desktop partial adopted by cal and serendipity",
+    "version": "aadhar-v165-shell-sprite",
+    "vnum": 165,
+    "ymd": "2026-07-26"
+  },
+  {
+    "slug": "dcz-deltas",
+    "title": "Compression pass: stop double-encoding bodies, brotli q11 on the shell, dcz deltas across shell and pages",
+    "version": "aadhar-v166-dcz-deltas",
+    "vnum": 166,
+    "ymd": "2026-07-26"
+  },
+  {
+    "slug": "webmentions",
+    "title": "Webmentions in and out, an Outlook Express inbox, and ML-DSA-44 on every AadharshBot request",
+    "version": "aadhar-v167-webmentions",
+    "vnum": 167,
+    "ymd": "2026-07-27"
+  },
+  {
+    "slug": "markdown-twins",
+    "title": "A Markdown twin for every page, per-section llms.txt, and the photo pool bundled into the worker",
+    "version": "aadhar-v168-markdown-twins",
+    "vnum": 168,
+    "ymd": "2026-07-28"
+  },
+  {
+    "slug": "deterministic-home",
+    "title": "The front door becomes a deterministic document, Workers Traces spans, and a first-party RUM beacon",
+    "version": "aadhar-v169-deterministic-home",
+    "vnum": 169,
+    "ymd": "2026-07-29"
+  },
+  {
+    "slug": "lens-presentation",
+    "title": "Lens presentation pass, View Transitions dropped for speed, Spotify art re-hosted first-party, and the 2026 platform sweep",
+    "version": "aadhar-v170-lens-presentation",
+    "vnum": 170,
+    "ymd": "2026-07-30"
+  },
+  {
+    "slug": "csp-and-minify",
+    "title": "Per-document script-src hashes, every served page minified beside a readable twin, and the front door earns a cache",
+    "version": "aadhar-v171-csp-and-minify",
+    "vnum": 171,
+    "ymd": "2026-07-31"
+  },
+  {
+    "slug": "access-tech-tree",
+    "title": "Access reads as a tech tree, and the release path becomes upload-then-ramp with guarded preview URLs",
+    "version": "aadhar-v172-access-tech-tree",
+    "vnum": 172,
+    "ymd": "2026-08-04"
   }
 ]
