@@ -44,6 +44,7 @@ import { mkdtemp, readFile, rm, writeFile, access } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import { parseJsonc } from "./lib/jsonc.mjs";
 
 const execFileP = promisify(execFile);
 
@@ -109,41 +110,11 @@ const pass = (m) => ok.push(m);
 
 // ---------------------------------------------------------------- JSONC ----
 
-// wrangler.jsonc carries // comments AND string values like "https://aadhar.sh",
-// so a naive comment strip corrupts the config. Walk it string-aware instead.
-function stripJsonc(text) {
-  let out = "";
-  let inString = false;
-  let inLine = false;
-  let inBlock = false;
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    const next = text[i + 1];
-    if (inLine) {
-      if (c === "\n") { inLine = false; out += c; }
-      continue;
-    }
-    if (inBlock) {
-      if (c === "*" && next === "/") { inBlock = false; i++; }
-      continue;
-    }
-    if (inString) {
-      out += c;
-      if (c === "\\") { out += next ?? ""; i++; continue; }
-      if (c === '"') inString = false;
-      continue;
-    }
-    if (c === '"') { inString = true; out += c; continue; }
-    if (c === "/" && next === "/") { inLine = true; i++; continue; }
-    if (c === "/" && next === "*") { inBlock = true; i++; continue; }
-    out += c;
-  }
-  // trailing commas, now that comments are gone and we are outside strings
-  return out.replace(/,(\s*[}\]])/g, "$1");
-}
-
+// stripJsonc moved to scripts/lib/jsonc.mjs when gen-remote-config.mjs needed
+// the same string-aware walk. One parser, so the two cannot disagree about what
+// wrangler.jsonc says.
 async function readJsonc(rel) {
-  return JSON.parse(stripJsonc(await readFile(join(ROOT, rel), "utf8")));
+  return parseJsonc(await readFile(join(ROOT, rel), "utf8"));
 }
 
 const exists = (rel) => access(join(ROOT, rel)).then(() => true, () => false);
@@ -295,7 +266,31 @@ async function checkTree(infra, wrangler, lwe) {
   if (!wrangler.build?.command) {
     fail(`wrangler.jsonc lost its build.command — the deploy would ship the readable originals`);
   }
-  pass(`release block agrees with wrangler.jsonc (Worker ${wrangler.name}, build owned by Wrangler)`);
+  // The provisioning flags, on whichever subcommand the deploy_command names.
+  // Both default to TRUE and both let a publish create real KV/R2/D1 for any
+  // id-less binding, which is the one thing no deploy path here may do. The
+  // dashboard field itself is unverifiable (no API), so this checks the intent
+  // recorded above — which is still worth checking, because the recorded intent
+  // is what a human copies back into the form.
+  const deployCmd = String(infra.release.deploy_command || "");
+  for (const flag of ["--x-provision=false", "--x-auto-create=false"]) {
+    if (!deployCmd.includes(flag)) {
+      fail(`infra.json's release.deploy_command must pin ${flag} (it defaults to TRUE and would let a publish create resources); got ${JSON.stringify(deployCmd)}`);
+    }
+  }
+  // A publish that moves traffic by itself defeats the ramp. If the deploy
+  // command ever goes back to a bare `wrangler deploy`, deploy:promote is dead
+  // code and nobody would notice, because the site would keep releasing fine.
+  if (!/\bversions upload\b/.test(deployCmd)) {
+    fail(`infra.json's release.deploy_command should be a \`versions upload\` so a merge uploads without moving traffic (scripts/deploy-promote.mjs ramps it); got ${JSON.stringify(deployCmd)}`);
+  }
+  // Preview URLs are what makes an uploaded version worth anything before it
+  // serves. `preview_urls` defaults to `workers_dev`, which is false here, so
+  // dropping the explicit line silently turns every preview back off.
+  if (infra.release.preview_urls !== wrangler.preview_urls) {
+    fail(`infra.json's release.preview_urls (${infra.release.preview_urls}) disagrees with wrangler.jsonc's (${wrangler.preview_urls}) — with workers_dev false, an unset value means OFF`);
+  }
+  pass(`release block agrees with wrangler.jsonc (Worker ${wrangler.name}, build owned by Wrangler, upload-then-ramp, previews ${wrangler.preview_urls ? "on" : "off"})`);
 }
 
 // ------------------------------------------------------------ tier: dns ----
@@ -581,6 +576,79 @@ async function checkApi(infra, wrangler, token) {
     }
   });
 
+  // The Workers Builds release config. This is the ONE setting in the whole
+  // release path that lives outside the repo and can be changed with nothing
+  // noticing: a bare `wrangler deploy` in the dashboard's Deploy command turns
+  // every merge back into an instant 100% release and makes deploy:promote dead
+  // code, and releases keep working, so the failure never surfaces.
+  //
+  // It used to be unverifiable and infra.json said so at length. That is no
+  // longer true (checked 2026-08-04): Workers Builds has a REST API, the
+  // permission is `Workers CI` and it HAS a Read variant, so this fits the
+  // read-only token rule with no exception carved for it.
+  //
+  // NOTHING HERE HARD-FAILS ON A SHAPE SURPRISE, on purpose. The endpoint path
+  // and response envelope were read from Cloudflare's docs rather than from a
+  // live call (this repo holds no token that can reach it), so a wrong guess
+  // must degrade to a note and not redden a PR that only touched CSS. Only a
+  // value that was successfully READ and disagrees with infra.json is fatal.
+  // Delete this paragraph once it has run green against a real token.
+  await section("Workers Builds release config", "Workers CI:Read", async () => {
+    const scripts = await cf(token, `/accounts/${accountId}/workers/scripts`);
+    const script = (scripts || []).find((s) => s.id === infra.release.worker);
+    const tag = script?.tag || script?.external_script_id;
+    if (!tag) {
+      warn(`release config unchecked: no worker tag for ${infra.release.worker} in the script listing`);
+      return;
+    }
+
+    const raw = await cf(token, `/accounts/${accountId}/builds/workers/${tag}/triggers`);
+    // The docs show a bare trigger object; a list endpoint may wrap it. Accept
+    // either rather than guessing which, and say so if it is neither.
+    const triggers = Array.isArray(raw) ? raw : (Array.isArray(raw?.triggers) ? raw.triggers : null);
+    if (!triggers) {
+      warn(`release config unchecked: unexpected triggers response shape (${JSON.stringify(raw).slice(0, 160)})`);
+      return;
+    }
+
+    const branch = infra.release.production_branch;
+    // The dashboard's "Deploy command" and "Non-production branch deploy
+    // command" are two TRIGGERS in the API, told apart by their branch filters.
+    const prod = triggers.find((t) => (t.branch_includes || []).includes(branch));
+    if (!prod) {
+      fail(`Workers Builds has no trigger matching the ${branch} branch — nothing publishes this Worker`);
+      return;
+    }
+
+    const checks = [
+      ["deploy_command",  infra.release.deploy_command],
+      ["build_command",   infra.release.build_command],
+      ["root_directory",  infra.release.root_directory],
+    ];
+    for (const [field, expected] of checks) {
+      const live = prod[field] ?? "";
+      // root_directory is written "." here and may come back "" or "/" upstream;
+      // treat those three as the same statement about a monorepo root.
+      const same = field === "root_directory"
+        ? [".", "", "/"].includes(String(live)) === [".", "", "/"].includes(String(expected))
+        : String(live).trim() === String(expected).trim();
+      same
+        ? pass(`Workers Builds ${field} matches infra.json (${JSON.stringify(live)})`)
+        : fail(`Workers Builds ${field} is ${JSON.stringify(live)} but infra.json declares ${JSON.stringify(expected)} — the dashboard is the live value, so fix it there`);
+    }
+
+    // The non-production trigger. Its default is already `versions upload`, so
+    // this is a low-drama check, but a branch build that DEPLOYS would put a
+    // feature branch straight onto production traffic.
+    const preview = triggers.find((t) => t !== prod);
+    if (preview && infra.release.non_production_deploy_command) {
+      const live = String(preview.deploy_command ?? "").trim();
+      /\bversions upload\b/.test(live)
+        ? pass(`Workers Builds non-production trigger uploads without deploying (${JSON.stringify(live)})`)
+        : fail(`Workers Builds non-production deploy command is ${JSON.stringify(live)} — a branch build must not deploy to production traffic`);
+    }
+  });
+
   // Worker inventory. A retired Worker that is still deployed keeps its routes,
   // which is invisible from inside this repo.
   await section("Worker inventory", "Workers Scripts:Read", async () => {
@@ -666,7 +734,7 @@ if (OFFLINE) {
 }
 
 if (!infra.release.verifiable) {
-  warn(`release config is not API-verifiable (no public Workers Builds endpoint) — review by hand: production branch ${JSON.stringify(infra.release.production_branch)}, root ${JSON.stringify(infra.release.root_directory)}, build command empty, deploy ${JSON.stringify(infra.release.deploy_command)}`);
+  warn(`release config is not API-verifiable — review by hand: production branch ${JSON.stringify(infra.release.production_branch)}, root ${JSON.stringify(infra.release.root_directory)}, build command empty, deploy ${JSON.stringify(infra.release.deploy_command)}`);
 }
 
 for (const line of ok) console.log(`  ok    ${line}`);

@@ -60,6 +60,17 @@
 
 const SPECULATIVE = /prefetch|prerender/i;
 
+// The serving version, as blob3 on both writes. Speculation is the one ledger
+// here that a gradual deployment can genuinely move: prerender depends on the
+// speculation-rules block in the served document, so a ramp that changes those
+// rules changes the activation rate, and a denominator you cannot split by
+// version cannot show it. Appended rather than inserted, so the existing blob1
+// (kind) and blob2 (path) SQL keeps reading the same columns. "dev" locally,
+// where the binding exists but CF_VERSION_METADATA does not.
+function versionBlob(env) {
+  return env.CF_VERSION_METADATA?.id?.slice(0, 8) || "dev";
+}
+
 // The endpoint the browser is told to HEAD. Relative per the explainer, with
 // the speculated path carried in the query because the beacon is credentialless
 // (no cookies, and no Referer worth trusting), so the request itself is the only
@@ -79,7 +90,8 @@ export function countSpeculativeLoad(env, request, response, pathname) {
     // header says both (`prefetch;prerender`) it counts as a prerender.
     const kind = /prerender/i.test(purpose) ? "prerender" : "prefetch";
     env.SPECULATION.writeDataPoint({
-      blobs: [kind, pathname.slice(0, 96)],
+      // blob3 is the serving version (see the note on the activation write).
+      blobs: [kind, pathname.slice(0, 96), versionBlob(env)],
       doubles: [1],
       indexes: [kind],
     });
@@ -97,7 +109,7 @@ export function handlePrefetchActivation(request, env) {
     if (env.SPECULATION) {
       const p = new URL(request.url).searchParams.get("p") || "(unknown)";
       env.SPECULATION.writeDataPoint({
-        blobs: ["activated", p.slice(0, 96)],
+        blobs: ["activated", p.slice(0, 96), versionBlob(env)],
         doubles: [1],
         indexes: ["activated"],
       });

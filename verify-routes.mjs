@@ -38,6 +38,15 @@ const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])/.test(base);
 const isProd = !isLocal;
 const builtOutput = isProd || process.env.VERIFY_BUILT === "1";
 
+// VERIFY_REMOTE=1 keeps the `remote` rows on a LOCAL base. Same shape as
+// VERIFY_BUILT above and for the same reason: the rows are skipped locally
+// because a local Worker has empty KV/R2 and no Browser Run, and remote bindings
+// (scripts/gen-remote-config.mjs) remove exactly that limitation. Set only by
+// `npm run routes:check:remote`, which boots the harness on a generated config
+// whose KV/R2/Browser bindings reach production. Never set in CI, because remote
+// bindings need a token that can write and CI holds a read-only one.
+const remoteRows = isProd || process.env.VERIFY_REMOTE === "1";
+
 // Real identifiers that exist in the repo today (see writing/posts.json + images/).
 const SLUG = "in-flux";
 const THUMB = "L1000069_3-400.avif";   // legacy thumb shape (now a 301 into /i/)
@@ -253,9 +262,12 @@ async function probe(r) {
 }
 
 async function main() {
-  const routes = ROUTES.filter(r => !(isLocal && r.remote));
+  const routes = ROUTES.filter(r => !(r.remote && !remoteRows));
   const skipped = ROUTES.length - routes.length;
-  console.log(`\nRoute oracle vs ${base}` + (skipped ? `  (${skipped} remote-only route(s) skipped)` : "") + "\n" + "=".repeat(60));
+  console.log(`\nRoute oracle vs ${base}` +
+    (skipped ? `  (${skipped} remote-only route(s) skipped)` : "") +
+    (isLocal && remoteRows ? "  (remote bindings: production KV/R2/Browser)" : "") +
+    "\n" + "=".repeat(60));
   const results = [];
   // small concurrency to be quick without hammering the edge
   const queue = [...routes];

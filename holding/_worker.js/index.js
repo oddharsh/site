@@ -25,6 +25,7 @@ import { BOT_UA } from "./lib/botauth.js";
 import { CANONICAL_HOST, PAGE_CACHE_CONTROL } from "./lib/const.js";
 import { HOMEPAGE_DISCOVERY_LINK } from "./lib/security.js";
 import { wantsMarkdown } from "./lib/http.js";
+import { isPreviewHost, previewDenial } from "./lib/preview.js";
 import { handleSiteMcp } from "./mcp.js";
 import { withSecurityHeaders } from "./lib/security.js";
 import { SHELL_PRELOAD_LINK } from "./lib/shell-assets.js";
@@ -103,6 +104,17 @@ const WORKERS_CACHEABLE_PATHS = new Set("/ /favicon.ico /auth.md /.well-known/ap
 async function serveWorkerRequest(request, env, ctx) {
   const url = new URL(request.url);
 
+  // Workers preview URLs (see lib/preview.js). A preview serves the real site
+  // from a *.workers.dev host on PRODUCTION bindings and secrets, so writes are
+  // refused and every response is marked noindex. Reads pass straight through,
+  // which is what the URL is for. Deliberately ABOVE the .pages.dev arm and
+  // everything else: a guard that runs after routing has already lost.
+  const onPreview = isPreviewHost(url.hostname);
+  if (onPreview) {
+    const denied = previewDenial(url.pathname, request.method);
+    if (denied) return denied;
+  }
+
   if (url.hostname.endsWith(".pages.dev")) {
     const target = `https://${CANONICAL_HOST}${url.pathname}${url.search}`;
     return new Response(null, {
@@ -129,9 +141,17 @@ async function serveWorkerRequest(request, env, ctx) {
   };
 
   // Workers Logs: one structured line per worker-owned request (path, method,
-  // status, ms, country, bot), filterable in the dashboard. Edge-direct traffic
-  // never reaches this code, so it never logs. Strippable: delete the wrapper,
-  // keep `return withSecurityHeaders(await route(...))`.
+  // status, ms, version, country, bot), filterable in the dashboard. Edge-direct
+  // traffic never reaches this code, so it never logs. Strippable: delete the
+  // wrapper, keep `return withSecurityHeaders(await route(...))`.
+  //
+  // `v` is the deployed version's id, truncated to the 8-char prefix Cloudflare
+  // itself displays and puts in a preview URL. It exists for GRADUAL DEPLOYMENTS:
+  // during a ramp two versions serve the same routes at once, and status + ms are
+  // only comparable if you can tell which one answered. Without it a canary is a
+  // deploy you cannot read. Eight characters because the full uuid is 36 and this
+  // line is emitted on every worker-owned request; the prefix is unique across any
+  // two versions that will ever be live together.
   const t0 = Date.now();
   const response = await route(request, selfEnv, ctx);
   // the bot ledger: identified AI-crawler hits tick into Analytics Engine
@@ -146,11 +166,12 @@ async function serveWorkerRequest(request, env, ctx) {
       m: request.method,
       s: response.status,
       ms: Date.now() - t0,
+      v: env.CF_VERSION_METADATA?.id?.slice(0, 8),
       co: request.cf?.country,
       bot: request.cf?.botManagement?.verifiedBot || undefined,
     }));
   } catch {}
-  return withSecurityHeaders(response, url.pathname);
+  return withSecurityHeaders(response, url.pathname, { noindex: onPreview });
 }
 
 // The named entrypoint is the only one configured to consult Workers Cache in

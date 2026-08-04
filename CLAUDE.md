@@ -20,9 +20,25 @@ colors that read modern in source but render period-correct.
 > bust caches, version bumps, what every script does): [MAINTENANCE.md](MAINTENANCE.md).
 
 ```bash
-# production: merge to main; CI promotes the tested commit to production and
-# Workers Builds deploys it. Local fallback only:
+# production, the normal path: merge to main; CI promotes the tested commit to
+# production; Workers Builds UPLOADS it as a version and moves no traffic. Then
+# ramp it (10% -> 50% -> 100%, sampling between steps). Workstation-only.
+npm run deploy:promote
+npm run deploy:promote -- --status      # what is serving right now
+npm run deploy:promote -- --rollback    # 100% back to the previous version
+
+# straight to 100%, no ramp. the fallback for the infra:check deadlock below,
+# and for anything where an extra step is the risk rather than the safety net.
 npm run deploy
+
+# local dev against PRODUCTION KV/R2/Browser (D1 stays local unless you pass
+# --d1; read scripts/gen-remote-config.mjs before you do). Workstation-only.
+npm run dev:remote
+
+# the route oracle with those same remote bindings, which un-skips the 5 rows a
+# local Worker cannot assert. 3 of them go green on remote KV/R2 alone; the two
+# /lens rows also want a SECRET, and secrets are not remotable. CI cannot run this.
+npm run routes:check:remote
 
 # add new photos (resize, EXIF-rotate, encode to AVIF+JPG, upload to R2,
 # write the photo-index entry, bake histograms, validate artifacts; the
@@ -88,6 +104,30 @@ worktrees may edit freely, but a worktree is not a release surface.
   `production` and is the only production publisher for the site Worker, which
   bundles `holding/`, `cal/`, and `serendipity/`. The Garage and LWE demos remain
   auxiliary Worker projects.
+- **Reaching `production` no longer moves traffic.** Workers Builds runs
+  `wrangler versions upload`, so a promotion builds the commit, uploads the
+  assets, checks the secrets, and mints a servable preview URL, while production
+  keeps serving the version it was already serving. Traffic moves when a human
+  ramps it:
+
+  ```bash
+  npm run deploy:promote
+  ```
+
+  That walks 10% → 50% → 100%, and between steps it samples `/whoareyou.json`
+  (the one route that reports which VERSION answered — both versions read the
+  same D1 changelog, so `/updates.json` structurally cannot tell them apart) and
+  aborts on a non-200 or on a step that never took. `--to`, `--steps`,
+  `--status`, and `--rollback` are the other modes. It is workstation-only for
+  the same reason `infra:apply` is: moving traffic needs a token that can write.
+
+  What the ramp buys is the ability to read a change before everyone gets it. The
+  script deliberately pauses between steps and tells you to go look at Workers
+  Logs; it checks status codes, and it cannot check whether the page is *right*.
+
+  `npm run deploy` still exists and still goes straight to 100%. Keep it: the
+  `infra:check` deadlock below is exactly the case where a ramp's extra step is
+  a liability rather than a safety net.
 - **A fix for a bug that `infra:check`'s edge tier can see will DEADLOCK that
   promotion, and the merge is where it bites.** Those checks read production over
   the wire, which is the whole point of them (see the `app-owns-security-headers`
@@ -103,16 +143,51 @@ worktrees may edit freely, but a worktree is not a release surface.
   this class of fix, and CI will not tell you so.
 - Configure one Workers Build project for the site Worker with `production` as
   its production branch and repository root `.`. Keep the dashboard Build
-  command blank; use the repo's Wrangler-owned build during the Deploy command.
-  Those settings are recorded in [`infra.json`](infra.json) under `release`,
-  because Cloudflare exposes no public API for Workers Builds configuration and
-  the dashboard form is otherwise the only copy.
+  command blank; use the repo's Wrangler-owned build during the Deploy command,
+  which must be the `versions upload` form recorded in
+  [`infra.json`](infra.json) under `release`. **The dashboard Deploy command is
+  the one place this whole model can be silently undone: a bare `wrangler
+  deploy` there turns every merge back into an instant 100% release and
+  `deploy:promote` into dead code that nobody notices, because releases keep
+  working.**
+
+  **`infra:check` verifies it now, which it could not before 2026-08-04.** The
+  old note in `infra.json` said Cloudflare exposed no public API for Workers
+  Builds configuration and the values could only be recorded as intent. That is
+  stale: the Builds REST API exists, the permission is **`Workers CI`**, and it
+  has a **Read** variant, so this costs a sixth read scope on the CI token and
+  needs no exception to the no-write-token rule. The dashboard's two command
+  fields are two TRIGGERS in the API, separated by their branch filters, and
+  both are declared and checked. Without the scope the section degrades to a
+  note naming what is missing, exactly like the other five.
+- **Preview URLs are on, and the Worker guards them.** `preview_urls: true` in
+  `wrangler.jsonc`, with `workers_dev: false` kept — production still has no
+  workers.dev address; what previews add is a per-VERSION one. The setting is
+  explicit because `preview_urls` DEFAULTS to whatever `workers_dev` is, so
+  deleting the line turns previews off again without a word.
+
+  A preview runs **production bindings and secrets**. Cloudflare offers no
+  per-version override, so the same RN_KV, the same photo bucket, the same three
+  D1s, the same `RESEND_API_KEY`. `holding/_worker.js/lib/preview.js` is what
+  makes a preview URL safe to paste into a PR: every response is `noindex`
+  (a byte-identical duplicate of the site on another host would otherwise compete
+  with the canonical one), and writes are refused by DEFAULT-DENY on unsafe
+  methods plus a short list of GET-shaped writes (`/hit`, `/approve`, `/decline`,
+  the webmention decisions, `/ledger/prefetch`). Default-deny is the load-bearing
+  half: the next POST route anyone adds is guarded on the day it is written.
+  Reads all pass, which is the point of the surface. Do not enable previews with
+  that guard removed.
 - **No deploy path may create Cloudflare resources.** Wrangler's
   `--x-provision` and `--x-auto-create` are hidden flags that both default to
   TRUE, and they provision real KV/R2/D1 for any binding declared without an
-  id. `npm run deploy` and the Workers Builds Deploy command both pin them off,
-  so resource creation stays with `npm run infra:apply` and a missing id fails
-  loudly. `npm run deploy` additionally passes `--strict`, which aborts rather
+  id. `npm run deploy`, `npm run deploy:version`, and the Workers Builds Deploy
+  command all pin them off, so resource creation stays with `npm run
+  infra:apply` and a missing id fails loudly. That the flags survive on
+  `versions upload` was verified rather than assumed (2026-08-04): they are
+  hidden, `--help` lists them for neither subcommand, and the way to tell is the
+  exit code — wrangler exits 1 on `--x-bogus-flag` and 0 on `--x-provision=false`.
+  Run that control before trusting any flag `--help` omits. `infra:check` now
+  fails if the recorded deploy command drops either one. `npm run deploy` additionally passes `--strict`, which aborts rather
   than prompting when the Worker's last deployment came from the dashboard and
   its remote config has drifted from this repo. Workers Builds deliberately
   does NOT pass `--strict`: it is the authoritative publisher, and a release
@@ -120,11 +195,18 @@ worktrees may edit freely, but a worktree is not a release surface.
 - **GitHub must never hold a Cloudflare token that can write.** The point is
   that GitHub cannot publish to production; only Workers Builds can, and only
   from `production`. A READ-ONLY token is a different thing and is fine: CI uses
-  one for `npm run infra:check`. Scope it to exactly these five reads and
+  one for `npm run infra:check`. Scope it to exactly these six reads and
   nothing else: Account Settings:Read, Workers Scripts:Read, Workers KV
-  Storage:Read, Workers R2 Storage:Read, D1:Read. If a token in this repo ever
-  needs an `Edit` scope, the answer is no. A token missing one of these degrades
-  only the section that needed it, and the check names the missing scope.
+  Storage:Read, Workers R2 Storage:Read, D1:Read, **Workers CI:Read**. If a
+  token in this repo ever needs an `Edit` scope, the answer is no. A token
+  missing one of these degrades only the section that needed it, and the check
+  names the missing scope.
+
+  `Workers CI:Read` was the sixth, added 2026-08-04 so `infra:check` can read
+  the live Workers Builds triggers instead of trusting a recorded intent. It is
+  the read half of the permission whose Edit half changes the deploy command, so
+  granting it buys drift detection on the release path and grants nothing that
+  can publish. **Read, never Edit — the rule above is unchanged.**
 - The one write path, `npm run infra:apply`, is **workstation-only** and reads a
   different variable (`CLOUDFLARE_API_TOKEN_WRITE`, scoped to DNS on this zone
   alone). It refuses to run in CI and cannot touch the Worker. GitHub stays
@@ -415,7 +497,12 @@ Three layers, deliberately not redundant:
 
 1. **Workers Logs** (`observability.enabled`) — one structured line per
    worker-owned request from `serveWorkerRequest`: path, method, status, ms,
-   country, bot. Cheap, always on, and the right tool for "what happened".
+   **version**, country, bot. Cheap, always on, and the right tool for "what
+   happened". `v` is the 8-char version prefix and it is the ramp's read-out:
+   during a gradual deployment two versions answer the same routes, so filtering
+   on it is the difference between "the site has errors" and "the new version
+   has errors". `deploy:promote` checks status codes and then tells you to come
+   here, because status codes are all it can check.
 2. **Analytics Engine** — `BOT_LEDGER` (identified crawler hits, priced by
    `/ledger`) and `PERF_PROBE` (`perf-probe.js`, the :07/:37 homepage-fragment
    latency series). Both are long-retention, low-cardinality COUNTERS.

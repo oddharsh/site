@@ -174,9 +174,103 @@ unmerged commits, then advances the machine-owned `production` branch to the
 exact tested SHA. Cloudflare Workers Builds watches that branch and is the only
 production publisher. Configure one Workers Build project for the site Worker
 with `production` as the production branch and monorepo root `.`, leave its
-dashboard Build command blank, and use `npx wrangler deploy` as the Deploy
-command. GitHub never holds a Cloudflare token that can write, so it cannot
-publish to production even if the workflow guard is defeated.
+dashboard Build command blank, and use
+`npx wrangler versions upload --x-provision=false --x-auto-create=false` as the
+Deploy command. GitHub never holds a Cloudflare token that can write, so it
+cannot publish to production even if the workflow guard is defeated.
+
+### Ramp a release (`npm run deploy:promote`)
+
+Reaching `production` uploads a version. It does not move traffic. That is the
+whole change: a merge now produces a fully built, fully uploaded Worker version
+with its own preview URL, serving nobody, and a human decides how much of the
+world sees it.
+
+```bash
+npm run deploy:promote                  # newest version, 10% -> 50% -> 100%
+npm run deploy:promote -- --status      # what is serving right now
+npm run deploy:promote -- --to 25       # one step, park it there
+npm run deploy:promote -- --steps 5,100
+npm run deploy:promote -- --rollback    # 100% back to the previous version
+```
+
+Between steps it samples `/whoareyou.json` 40 times and reads the **Serving
+version** field out of each response. Two failures stop the ramp: any non-200,
+and a step where not one sampled request reached the target (which means the
+deploy did not land, and continuing would ramp something untested). It sleeps 5s
+after each step before believing the sample, and it polls sequentially, because
+connection reuse can pin a burst of parallel requests to one version and make a
+working ramp look dead.
+
+**Read the logs at the hold points.** The script checks status codes and nothing
+else. It cannot tell you the page is wrong, only that it answered. Filter Workers
+Logs on `v` (the 8-char version prefix, in every structured line) and compare the
+new version against the old one on latency and on the routes you touched. That is
+the step the ramp exists to make possible; skipping it makes the ramp a slower
+way to do what `npm run deploy` already did.
+
+`npm run deploy` still goes straight to 100% and is the right tool for the
+`infra:check` deadlock above, where the extra step is the liability.
+
+### Preview URLs
+
+`preview_urls: true` in `wrangler.jsonc`, with `workers_dev: false` kept.
+Production has no workers.dev address; each uploaded VERSION does, at
+`<version-prefix>-aadhar-sh.<subdomain>.workers.dev`. Wrangler prints it on
+upload, and `--preview-alias` gives a version a stable name instead of a prefix.
+
+The setting is explicit because `preview_urls` defaults to whatever
+`workers_dev` is. Deleting the line silently turns every preview back off, which
+is exactly what had been happening: every version this repo ever uploaded was
+unservable and nothing said so.
+
+**A preview runs production bindings and secrets.** There is no per-version
+override in Cloudflare, so it is the same RN_KV, the same `aadhar-photos`
+bucket, the same three D1 databases, the same `RESEND_API_KEY`.
+`holding/_worker.js/lib/preview.js` is what makes the URL safe to paste into a
+PR:
+
+- every response gets `X-Robots-Tag: noindex, nofollow`, including redirects and
+  images, which the security wrapper otherwise skips
+- unsafe methods are refused by default, so a POST route added next month is
+  guarded the day it is written and nobody has to remember
+- the GET-shaped writes are named individually, because the method rule cannot
+  see them: `/hit`, `/approve`, `/decline`, `/webmention/approve`,
+  `/webmention/decline`, `/ledger/prefetch`
+- `/mcp` is the one POST exception (read-only JSON-RPC over an allowlist)
+- reads all pass, `/lens/*` included
+
+Three contract tests cover it. If you ever need previews without the guard, the
+answer is Cloudflare Access on the hostname, not deleting the guard.
+
+### Local dev and the route oracle against production data
+
+```bash
+npm run dev:remote            # wrangler dev, KV/R2/Browser bindings remote
+npm run routes:check:remote   # the oracle, with those bindings
+```
+
+Both derive a config with `scripts/gen-remote-config.mjs` and never commit it
+(`.wrangler.remote.jsonc`, gitignored). Your Worker code still runs locally; the
+binding calls hop to the real resource.
+
+`routes:check:remote` un-skips the six rows `verify-routes.mjs` marks `remote`
+(`/lens/fetch`, `/lens/shot`, `/around/json`, `/photos`, `/images/full/<key>`),
+whose assertions depend on content a local Worker structurally cannot have.
+Plain `npm run routes:check` stays the CI gate and stays honest about what it
+skips.
+
+Three things the generator does on purpose:
+
+- **D1 stays local** unless you pass `--d1`. Nothing in the remote rows needs it,
+  and the D1 bindings are the write-heaviest on the Worker: `SERENDIPITY_DB`
+  takes the Luma sync, `SOCIAL_DB` takes moderated third-party webmentions,
+  `RESTORE_DB` is the append-only deploy log both `/restore` and `/updates` read.
+- **Crons are stripped.** A local tick must not fire the real `/around` crawl or
+  the Luma sync into the production KV it is now holding.
+- **It refuses to run in CI.** Remote bindings stand up a proxy Worker in the
+  account, which needs a token that can write. CI holds a read-only one and
+  keeps holding only that.
 
 ### Infrastructure declaration
 
@@ -210,13 +304,43 @@ files cannot drift into describing different worlds.
 **The token.** CI reads `secrets.CLOUDFLARE_API_TOKEN` and the optional
 `vars.CLOUDFLARE_ACCOUNT_ID`; with neither set the account tier just skips.
 Scope the token to reads only: Account Settings:Read, Workers Scripts:Read,
-Workers KV Storage:Read, Workers R2 Storage:Read, D1:Read. Nothing in this repo
-may hold an `Edit` scope, because Workers Builds being the only publisher is the
-release backstop.
+Workers KV Storage:Read, Workers R2 Storage:Read, D1:Read, **Workers CI:Read**.
+Nothing in this repo may hold an `Edit` scope, because Workers Builds being the
+only publisher is the release backstop.
 
 ```bash
 gh secret set CLOUDFLARE_API_TOKEN --repo oddharsh/site
 ```
+
+`Workers CI:Read` joined the list on 2026-08-04, when the release block stopped
+being a manual review item. It lets `infra:check` read the live Workers Builds
+triggers and fail on drift in the Deploy command, Build command, or root
+directory — the one part of the release path that lives outside this repo and
+could previously be changed with nothing noticing. It is the read half of the
+permission whose Edit half changes those fields, so it detects drift and cannot
+cause it. Until you add it, that section degrades to a note naming the missing
+scope and the values fall back to intent.
+
+#### Roll it out in this order, or you rebuild the deadlock
+
+The `infra:check` promotion deadlock described above is not a one-off; it is what
+happens whenever a check asserts against production state that a merge has not
+reached yet. Turning on this verification is exactly that shape, so the sequence
+matters:
+
+1. **Merge the change** that declares `versions upload` in `infra.json`, with the
+   CI token still on its old scopes. The new section degrades to a note, nothing
+   fails, and the merge deploys normally under the current dashboard command.
+2. **Flip the dashboard**: Workers Builds → the site Worker → Settings → Build →
+   Deploy command → `npx wrangler versions upload --x-provision=false
+   --x-auto-create=false`. Leave Build command blank and the non-production
+   command alone (it already uploads).
+3. **Then** rotate `CLOUDFLARE_API_TOKEN` to add `Workers CI:Read`.
+
+Backwards — scope first, dashboard second — and `infra:check` starts failing on a
+drift that only the dashboard can fix, on every branch, while promotion is gated
+on that same check. The way out would again be the local `npm run deploy`
+fallback, which is a silly thing to need over a settings form.
 
 Each resource class is queried independently, so a token missing one scope
 degrades only that section and the advisory names the scope to add. Cloudflare
@@ -670,6 +794,29 @@ is asserted identically. Note the local run proves the HANDLER, not the DATA:
 empty local KV/R2/D1 means a passing `/images/manifest.json` says the manifest
 builder works, not that the photos are there. The production sweep is still the
 one that sees real content.
+
+`npm run routes:check:remote` closes **part** of that gap on the workstation: it
+boots the same harness on a config whose KV/R2/Browser bindings reach production,
+sets `VERIFY_REMOTE=1`, and runs all 91 rows. It cannot run in CI (remote
+bindings need a write-capable token) so `npm run routes:check` remains the merge
+gate. See "Local dev and the route oracle against production data" above.
+
+**Part, and the boundary matters.** Remote bindings cover KV, R2, D1, and Browser
+Run. They explicitly do NOT cover secrets, vars, Durable Objects, Workflows,
+static assets, version metadata, or Analytics Engine. So of the five rows:
+
+| row | needs | remote bindings fix it? |
+|---|---|---|
+| `/around/json` | the cron's KV snapshot | yes |
+| `/photos` | production R2 + manifest | yes |
+| `/images/full/<key>` | `PHOTOS_R2` | yes |
+| `/lens/shot` | Browser Run **and** the AadharshBot signing secret | partly |
+| `/lens/fetch` | the AadharshBot signing secret | no |
+
+The two `/lens` rows want `RN_SIGNING_KEY_JWK`, and a secret cannot be made
+remote by any flag. Getting those green locally means a `.dev.vars` file, which
+is gitignored and stays that way. The production sweep remains the only pass that
+sees everything.
 
 ---
 

@@ -78,7 +78,9 @@ jobs:
               -f sha="${RELEASE_SHA}" >/dev/null
           fi
           echo "Promoted ${RELEASE_SHA} to ${ref}."
-          echo "Cloudflare Workers Builds now owns the production deploy."
+          echo "Cloudflare Workers Builds will now UPLOAD this commit as a Worker version."
+          echo "It does NOT move traffic: the deploy command is 'wrangler versions upload'."
+          echo "Ramp it from the workstation with: npm run deploy:promote"
 
       - name: Publish promotion record
         if: always()
@@ -90,4 +92,17 @@ jobs:
             echo "- release branch: \`production\`"
             echo "- publisher: Cloudflare Workers Builds"
             echo "- target: the aadhar-sh Worker (homepage, Lens, coffee, Serendipity)"
+            echo "- effect: **uploads a version, moves no traffic**"
+            echo ""
+            echo "This promotion is not the end of the release. Workers Builds runs"
+            echo "\`wrangler versions upload\`, so production keeps serving whatever it"
+            echo "was already serving until someone ramps the new version:"
+            echo ""
+            echo '```bash'
+            echo "npm run deploy:promote"
+            echo '```'
+            echo ""
+            echo "Traffic can only be moved from the workstation — GitHub holds no"
+            echo "Cloudflare token that can write, which is the property this whole"
+            echo "release path is built around."
           } >> "$GITHUB_STEP_SUMMARY"
