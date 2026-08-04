@@ -7,6 +7,7 @@
 import { PAGE_DICTIONARY } from "./shell-assets.js";
 import { scriptHashesFor } from "./csp-hashes.js";
 import { prefetchActivationHeader } from "../speculation.js";
+import { PREVIEW_ROBOTS } from "./preview.js";
 
 // There are NO external script or connect origins here, and that is a stronger
 // claim than it was. Until 2026-07-29 this policy carried two cloudflareinsights.com
@@ -144,7 +145,29 @@ export const HOMEPAGE_DISCOVERY_LINK = HOMEPAGE_DISCOVERY_LINKS.join(", ");
 // activation beacon. Callers that don't have one (the /lens self-fetch, which is
 // an internal scan and not a navigable document) simply omit it and get no
 // beacon header, which is the correct answer for a response no browser navigates to.
-export function withSecurityHeaders(response, pathname) {
+// `opts.noindex` marks the whole response as unindexable. Set by the dispatcher
+// for Workers preview URLs, which serve a byte-identical copy of the site from a
+// *.workers.dev host (lib/preview.js explains why that must never be indexed).
+export function withSecurityHeaders(response, pathname, opts) {
+  const noindex = !!(opts && opts.noindex);
+
+  // The two early returns below skip document headers, which is right for a
+  // redirect and an image but WRONG for noindex: a 301 chain and an R2 photo are
+  // both indexable on their own, so a preview that only marked its HTML would
+  // still leak a duplicate image corpus and a set of redirect targets. Handle it
+  // before the bails, and rebuild carrying encodeBody for the same reason the
+  // main path does (a dropped flag is a double-encoded body).
+  if (noindex && !response.headers.has("x-robots-tag")) {
+    const h = new Headers(response.headers);
+    h.set("x-robots-tag", PREVIEW_ROBOTS);
+    response = new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: h,
+      ...(response.headers.has("content-encoding") ? { encodeBody: "manual" } : {}),
+    });
+  }
+
   // redirects don't need (and shouldn't carry) document-level headers
   if (response.status >= 300 && response.status < 400) return response;
   // R2 photo serves don't either — they're images, the policy doesn't apply

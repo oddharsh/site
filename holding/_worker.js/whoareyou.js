@@ -154,7 +154,7 @@ export async function gatherWhoareyou(request) {
 // strings; extra detail that is itself DATA (continent, allocation type,
 // last-changed date, QUIC) rides inline. pure explanation (what a field means,
 // why it matters) is omitted — the popout shows fields, the page carries prose.
-export function buildWhoareyouGroups(data, ua, rdap) {
+export function buildWhoareyouGroups(data, ua, rdap, version) {
   const net = [
     { k: "IP address", v: data.ip },
     { k: "ISP / ASN", v: `${data.asOrg} (AS${data.asn})` },
@@ -203,17 +203,32 @@ export function buildWhoareyouGroups(data, ua, rdap) {
   // and are not exposed on request.cf, so the worker genuinely cannot know
   // them. The page fills them in the browser; this JSON feed is server-rendered
   // and would have to invent them, so it says nothing instead.
+  // The one field here that describes the SERVER rather than the caller, and it
+  // is here because "what does one request reveal" honestly includes which build
+  // answered it. During a gradual deployment two versions serve this route at
+  // once, so an outside prober polling this feed is how a ramp gets verified from
+  // the outside: `no-store` below means every poll re-runs the worker and reports
+  // the version that actually handled it. That is why the canary sampler in
+  // scripts/deploy-promote.mjs reads THIS route rather than /updates.json, which
+  // reports the D1 changelog both versions share and so cannot tell them apart.
+  //
+  // Omitted entirely when unbound (local dev, the contract tests) rather than
+  // filled with a placeholder, same nullable discipline as the photo pipeline.
+  const server = version ? [{ k: "Serving version", v: version, mono: true }] : [];
+
   return [
     { title: "Network adapter", fields: net.filter(Boolean) },
     { title: "Transport & security", fields: transport.filter(Boolean) },
     { title: "Computer", fields: computer.filter(Boolean) },
     { title: "This session", fields: session.filter(Boolean) },
+    ...(server.length ? [{ title: "Server", fields: server }] : []),
   ];
 }
 
-export async function handleWhoareyouJson(request) {
+export async function handleWhoareyouJson(request, env) {
   const { data, ua, rdap } = await gatherWhoareyou(request);
-  const body = JSON.stringify({ groups: buildWhoareyouGroups(data, ua, rdap) });
+  const version = env?.CF_VERSION_METADATA?.id;
+  const body = JSON.stringify({ groups: buildWhoareyouGroups(data, ua, rdap, version) });
   return new Response(body, {
     headers: {
       "content-type":    "application/json; charset=utf-8",

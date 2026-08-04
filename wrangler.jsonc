@@ -43,6 +43,23 @@
   "dependencies_instrumentation": { "enabled": true },
   // serve only on the custom domain (aadhar.sh); no public *.workers.dev URL.
   "workers_dev": false,
+  // Preview URLs, on PURPOSE and against the default. `preview_urls` defaults to
+  // whatever `workers_dev` is, so the line above was silently turning these off
+  // too, and every version this repo has ever uploaded has been unservable.
+  //
+  // The two settings are independent and mean different things. `workers_dev:
+  // false` still holds: PRODUCTION has no workers.dev address, and the only way
+  // to reach the deployed site remains aadhar.sh. What this adds is a per-VERSION
+  // address, `<version-prefix>-aadhar-sh.<subdomain>.workers.dev`, which is the
+  // one thing CI could not do before: prove a branch serves, at a real URL, on
+  // real bindings, before it is production. `wrangler deploy --dry-run` and the
+  // in-process route harness both stop short of that.
+  //
+  // A preview runs production bindings and secrets — Cloudflare has no per-version
+  // override — so the Worker guards the host: writes refused, everything noindex.
+  // That guard is load-bearing, not decorative. Read lib/preview.js before
+  // touching this line, and do not enable previews with the guard removed.
+  "preview_urls": true,
   // The former coffee and Serendipity Workers are retired by this config. These
   // route declarations move their public paths onto the same deployment; the
   // old Worker routes/custom domain must be removed after the first successful

@@ -44,6 +44,7 @@ import { mkdtemp, readFile, rm, writeFile, access } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import { parseJsonc } from "./lib/jsonc.mjs";
 
 const execFileP = promisify(execFile);
 
@@ -109,41 +110,11 @@ const pass = (m) => ok.push(m);
 
 // ---------------------------------------------------------------- JSONC ----
 
-// wrangler.jsonc carries // comments AND string values like "https://aadhar.sh",
-// so a naive comment strip corrupts the config. Walk it string-aware instead.
-function stripJsonc(text) {
-  let out = "";
-  let inString = false;
-  let inLine = false;
-  let inBlock = false;
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    const next = text[i + 1];
-    if (inLine) {
-      if (c === "\n") { inLine = false; out += c; }
-      continue;
-    }
-    if (inBlock) {
-      if (c === "*" && next === "/") { inBlock = false; i++; }
-      continue;
-    }
-    if (inString) {
-      out += c;
-      if (c === "\\") { out += next ?? ""; i++; continue; }
-      if (c === '"') inString = false;
-      continue;
-    }
-    if (c === '"') { inString = true; out += c; continue; }
-    if (c === "/" && next === "/") { inLine = true; i++; continue; }
-    if (c === "/" && next === "*") { inBlock = true; i++; continue; }
-    out += c;
-  }
-  // trailing commas, now that comments are gone and we are outside strings
-  return out.replace(/,(\s*[}\]])/g, "$1");
-}
-
+// stripJsonc moved to scripts/lib/jsonc.mjs when gen-remote-config.mjs needed
+// the same string-aware walk. One parser, so the two cannot disagree about what
+// wrangler.jsonc says.
 async function readJsonc(rel) {
-  return JSON.parse(stripJsonc(await readFile(join(ROOT, rel), "utf8")));
+  return parseJsonc(await readFile(join(ROOT, rel), "utf8"));
 }
 
 const exists = (rel) => access(join(ROOT, rel)).then(() => true, () => false);
@@ -295,7 +266,31 @@ async function checkTree(infra, wrangler, lwe) {
   if (!wrangler.build?.command) {
     fail(`wrangler.jsonc lost its build.command — the deploy would ship the readable originals`);
   }
-  pass(`release block agrees with wrangler.jsonc (Worker ${wrangler.name}, build owned by Wrangler)`);
+  // The provisioning flags, on whichever subcommand the deploy_command names.
+  // Both default to TRUE and both let a publish create real KV/R2/D1 for any
+  // id-less binding, which is the one thing no deploy path here may do. The
+  // dashboard field itself is unverifiable (no API), so this checks the intent
+  // recorded above — which is still worth checking, because the recorded intent
+  // is what a human copies back into the form.
+  const deployCmd = String(infra.release.deploy_command || "");
+  for (const flag of ["--x-provision=false", "--x-auto-create=false"]) {
+    if (!deployCmd.includes(flag)) {
+      fail(`infra.json's release.deploy_command must pin ${flag} (it defaults to TRUE and would let a publish create resources); got ${JSON.stringify(deployCmd)}`);
+    }
+  }
+  // A publish that moves traffic by itself defeats the ramp. If the deploy
+  // command ever goes back to a bare `wrangler deploy`, deploy:promote is dead
+  // code and nobody would notice, because the site would keep releasing fine.
+  if (!/\bversions upload\b/.test(deployCmd)) {
+    fail(`infra.json's release.deploy_command should be a \`versions upload\` so a merge uploads without moving traffic (scripts/deploy-promote.mjs ramps it); got ${JSON.stringify(deployCmd)}`);
+  }
+  // Preview URLs are what makes an uploaded version worth anything before it
+  // serves. `preview_urls` defaults to `workers_dev`, which is false here, so
+  // dropping the explicit line silently turns every preview back off.
+  if (infra.release.preview_urls !== wrangler.preview_urls) {
+    fail(`infra.json's release.preview_urls (${infra.release.preview_urls}) disagrees with wrangler.jsonc's (${wrangler.preview_urls}) — with workers_dev false, an unset value means OFF`);
+  }
+  pass(`release block agrees with wrangler.jsonc (Worker ${wrangler.name}, build owned by Wrangler, upload-then-ramp, previews ${wrangler.preview_urls ? "on" : "off"})`);
 }
 
 // ------------------------------------------------------------ tier: dns ----

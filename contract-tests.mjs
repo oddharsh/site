@@ -2144,3 +2144,114 @@ test("Workers Cache never answers a content-negotiated request from the stored r
   assert.equal(shouldUseWorkersCache(req("https://aadhar.sh/nope"), PATHS), false, "an unlisted path bypasses");
   assert.equal(shouldUseWorkersCache(req("https://aadhar.sh/writing/colophon"), PATHS), true, "the /writing/ prefix is cacheable");
 });
+
+// ── Workers preview URLs ────────────────────────────────────────────
+// A preview version runs PRODUCTION bindings and secrets (lib/preview.js says
+// why at length), so these tests are the difference between a preview URL and
+// an unaudited write path into the real site. They are cheap; the failure they
+// prevent is a coffee booking emailed to a stranger from a branch.
+
+test("the preview host test matches workers.dev and nothing that merely looks like it", async () => {
+  const { isPreviewHost } = await import("./holding/_worker.js/lib/preview.js");
+
+  for (const host of [
+    "abc12345-aadhar-sh.oddharsh.workers.dev",
+    "AADHAR-SH.ODDHARSH.WORKERS.DEV",          // hostnames are case-insensitive
+    "aadhar-sh.workers.dev",
+  ]) {
+    assert.equal(isPreviewHost(host), true, `${host} is a preview host`);
+  }
+
+  for (const host of [
+    "aadhar.sh",
+    "cal.aadhar.sh",
+    "aadhar-sh.workers.dev.evil.example",      // suffix match, not substring
+    "notworkers.dev",                          // ".workers.dev" must not match "notworkers.dev"
+    "workers.dev",                             // the bare apex is not a subdomain of itself
+    undefined,
+  ]) {
+    assert.equal(isPreviewHost(host), false, `${host} is NOT a preview host`);
+  }
+});
+
+test("previews refuse every unsafe method, and the GET-shaped writes too", async () => {
+  const { previewDenial } = await import("./holding/_worker.js/lib/preview.js");
+
+  // DEFAULT-DENY is the property worth pinning: the guard must not depend on
+  // somebody remembering to list a new POST route. Paths here are deliberately
+  // ones the guard has never heard of.
+  for (const method of ["POST", "PUT", "PATCH", "DELETE", "OPTIONS", "post"]) {
+    for (const path of ["/book", "/webmention", "/ledger/rum", "/serendipity/sync", "/a-route-invented-tomorrow"]) {
+      const denied = previewDenial(path, method);
+      assert.ok(denied, `${method} ${path} must be refused on a preview`);
+      assert.equal(denied.status, 403);
+      assert.equal(denied.headers.get("cache-control"), "no-store", "a refusal must never be cached");
+      assert.equal(denied.headers.get("x-robots-tag"), "noindex, nofollow");
+    }
+  }
+
+  // /mcp is the one POST exception, because it writes no binding and sends
+  // nothing (it reads this origin back through an allowlist). If that ever
+  // stops being true, this line is the one to delete.
+  assert.equal(previewDenial("/mcp", "POST"), null, "read-only JSON-RPC survives the method rule");
+
+  // The other direction: writes that arrive as a plain GET, which the method
+  // rule structurally cannot catch.
+  for (const path of ["/hit", "/approve", "/decline", "/webmention/approve", "/webmention/decline", "/ledger/prefetch"]) {
+    const denied = previewDenial(path, "GET");
+    assert.ok(denied, `GET ${path} mutates production state and must be refused`);
+    assert.equal(denied.status, 403);
+  }
+
+  // ...and reads pass, or the preview is useless. /lens/* is on this list on
+  // purpose: it fetches third parties and costs Browser Rendering, but it reads
+  // only, and a /lens change you cannot exercise is a /lens change you cannot review.
+  for (const path of ["/", "/garage/encoding", "/whoareyou.json", "/photos", "/lens/fetch", "/lens/shot", "/coffee", "/slots"]) {
+    for (const method of ["GET", "HEAD"]) {
+      assert.equal(previewDenial(path, method), null, `${method} ${path} must still serve on a preview`);
+    }
+  }
+});
+
+test("preview noindex reaches the responses the security wrapper otherwise skips", async () => {
+  const { withSecurityHeaders } = await import("./holding/_worker.js/lib/security.js");
+
+  // The wrapper bails early on redirects and images, which is correct for CSP
+  // and wrong for robots: both are independently indexable, so a preview that
+  // marked only its HTML would still publish a duplicate photo corpus.
+  const cases = [
+    ["a redirect",  new Response(null, { status: 301, headers: { location: "https://aadhar.sh/photos" } })],
+    ["an image",    new Response("jpegbytes", { headers: { "content-type": "image/jpeg" } })],
+    ["a document",  new Response("<!doctype html><title>x</title>", { headers: { "content-type": "text/html; charset=utf-8" } })],
+    ["a json feed", new Response("{}", { headers: { "content-type": "application/json" } })],
+  ];
+  for (const [what, response] of cases) {
+    const marked = withSecurityHeaders(response, "/photos", { noindex: true });
+    assert.equal(marked.headers.get("x-robots-tag"), "noindex, nofollow", `${what} must carry noindex on a preview`);
+  }
+
+  // ...and production is untouched. This is the regression that would matter
+  // most: a bug here deindexes the real site.
+  for (const [what, response] of cases) {
+    const plain = withSecurityHeaders(response, "/photos");
+    assert.equal(plain.headers.get("x-robots-tag"), null, `${what} must NOT be noindexed off a preview`);
+  }
+
+  // A route that already set its own x-robots-tag keeps it (/whoareyou.json and
+  // /updates.json both do), so the guard can't weaken an existing directive.
+  const own = new Response("{}", { headers: { "content-type": "application/json", "x-robots-tag": "noindex" } });
+  assert.equal(withSecurityHeaders(own, "/whoareyou.json", { noindex: true }).headers.get("x-robots-tag"), "noindex");
+
+  // Null-body statuses. The noindex path REBUILDS the response, and the Response
+  // constructor throws if a null-body status is handed a body — so a 304 from
+  // notModifiedIfFresh or a 204 from the /hit beacon is exactly the shape that
+  // would turn a preview into a 500 on the revalidation path, where a browser
+  // hits it constantly and a first look would not.
+  for (const status of [204, 304]) {
+    const empty = new Response(null, { status, headers: { etag: 'W/"x"' } });
+    const marked = withSecurityHeaders(empty, "/", { noindex: true });
+    assert.equal(marked.status, status, `${status} must survive the noindex rebuild`);
+    assert.equal(marked.headers.get("x-robots-tag"), "noindex, nofollow");
+    assert.equal(marked.headers.get("etag"), 'W/"x"', "existing headers survive the rebuild");
+  }
+});

@@ -4,6 +4,12 @@
 # deploy-time build staging (build.mjs output; regenerated every build)
 .build/
 
+# the remote-bindings twin (scripts/gen-remote-config.mjs). Derived on demand from
+# wrangler.jsonc / wrangler.dev.jsonc, and it lives at the ROOT rather than under
+# .build/ because wrangler resolves main + assets.directory relative to the config
+# file. Never commit it: its bindings point at PRODUCTION KV/R2/Browser.
+.wrangler.remote.jsonc
+
 # macOS
 .DS_Store
 
