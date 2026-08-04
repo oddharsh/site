@@ -1,36 +1,10 @@
 // home.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
-import { wantsMarkdown } from "./lib/http.js";
-import { PAGE_CACHE_CONTROL } from "./lib/const.js";
+import { serveMarkdownTwin } from "./lib/assets.js";
 import { HOMEPAGE_DISCOVERY_LINK } from "./lib/security.js";
 import { renderPhotoSlots } from "./lib/photo-grid.js";
 import { span } from "./lib/trace.js";
 import { getAltMap, getImagesManifest } from "./photos.js";
-
-export function homepageHeadResponse(request) {
-  const markdown = wantsMarkdown(request);
-  return new Response(null, {
-    status: 200,
-    headers: {
-      "content-type": markdown
-        ? "text/markdown; charset=utf-8"
-        : "text/html; charset=utf-8",
-      // HTML mirrors the GET path's policy (index.js HOMEPAGE_HEADERS, and
-      // _headers "/"). A HEAD that advertised a different freshness contract than
-      // the GET it stands in for is a lie a cache is entitled to act on, so these
-      // move together. max-age=0 keeps every real fetch revalidating, and bfcache
-      // is unaffected either way (only no-store kills it). markdown rep stays
-      // no-store: it is a content-negotiated representation, never a back/forward
-      // target, and it has no dictionary tier to keep alive.
-      "cache-control": markdown
-        ? "no-store, must-revalidate"
-        : PAGE_CACHE_CONTROL,
-      "vary": "accept",
-      "link": HOMEPAGE_DISCOVERY_LINK,
-      "x-content-type-options": "nosniff",
-    },
-  });
-}
 
 // ── the homepage's dynamic half, as a fragment ──────────────────────
 // `/` itself is now a DETERMINISTIC static document: build.mjs bakes a fixed
@@ -122,29 +96,13 @@ export function pickRandom(arr, n) {
 // each span also carries data-artist-name and (when known) data-artist-image
 // so the XP hover-tooltip can show a profile pic + name on hover. when we
 export async function serveMarkdown(request, env) {
-  // ask the static assets layer for /index.md
-  const mdUrl = new URL("/index.md", request.url);
-  const mdRes = await env.ASSETS.fetch(new Request(mdUrl.toString(), request));
-  if (!mdRes.ok) {
-    // markdown not available — fall back to HTML
-    return env.ASSETS.fetch(request);
-  }
-  const body = await mdRes.text();
-  // rough token estimate: ~4 chars per token. honest approximation; agents
-  // that care about exact counts can run their own tokenizer.
-  const tokens = Math.ceil(body.length / 4);
-  return new Response(body, {
-    status: 200,
-    headers: {
-      "content-type":     "text/markdown; charset=utf-8",
-      "x-markdown-tokens": String(tokens),
-      // Cloudflare's edge can serve a cached negotiated root variant to clients
-      // with a different Accept header. /index.md remains the cacheable Markdown
-      // resource; negotiated "/" Markdown must stay uncacheable.
-      "cache-control":    "no-store, must-revalidate",
-      "vary":             "accept",
-      "link":             HOMEPAGE_DISCOVERY_LINK,
-      "x-content-type-options": "nosniff",
-    },
-  });
+  // Delegates rather than restating the header set. This function and
+  // serveMarkdownTwin were building the same response — same content-type, same
+  // token estimate, same no-store, same vary — from two places, which is how the
+  // homepage ended up the one negotiated route whose HEAD behaved differently.
+  // The link header is the only thing genuinely its own.
+  const md = await serveMarkdownTwin(request, env, "/index.md", { link: HOMEPAGE_DISCOVERY_LINK });
+  // No twin means a half-built deploy, and a navigation is worth more than a
+  // representation: fall back to HTML rather than 404 the front door.
+  return md || env.ASSETS.fetch(request);
 }

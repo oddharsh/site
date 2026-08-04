@@ -62,7 +62,7 @@ export async function serveMarkdownTwin(request, env, twinPath, extraHeaders = {
     return null;
   }
   const body = await res.text();
-  return new Response(body, {
+  const negotiated = new Response(body, {
     status: 200,
     headers: {
       "content-type": "text/markdown; charset=utf-8",
@@ -79,6 +79,11 @@ export async function serveMarkdownTwin(request, env, twinPath, extraHeaders = {
       ...extraHeaders,
     },
   });
+  // HEAD is answered HERE rather than by each caller, so every negotiated route
+  // gets the same header set from one place. The body has already been read to
+  // count tokens, so a HEAD carries x-markdown-tokens for the same work a GET
+  // does — which is exactly what the homepage's own HEAD path used to get wrong.
+  return request.method === "HEAD" ? bodiless(negotiated) : negotiated;
 }
 
 // serveAssetWith404Clamp: pass real assets through untouched; clamp only a 404
@@ -475,12 +480,12 @@ export async function serveStaticPage(request, env, opts = {}) {
   // is all about shipping the HTML cheaply. An agent asking for text/markdown is
   // not going to use a delta against an HTML dictionary it does not hold.
   if (wantsMarkdown(request)) {
+    // serveMarkdownTwin drops the body for a HEAD itself, so the header set is
+    // decided in one place for every negotiated route. It costs a HEAD one ASSETS
+    // subrequest it used to skip; HEAD is rare enough here that an honest
+    // content-type is the better side of that trade.
     const md = await serveMarkdownTwin(request, env, `/${rel}.md`);
-    // The twin's body was already read to count tokens, so HEAD gets the full
-    // header set (x-markdown-tokens included) for the same work the GET does. It
-    // costs a HEAD one ASSETS subrequest it used to skip; HEAD is rare enough here
-    // that an honest content-type is the better side of that trade.
-    if (md) return head ? bodiless(md) : md;
+    if (md) return md;
   }
   // Everything below hands back a precompressed BODY (a dcz delta or the q11 twin)
   // and sizes its headers to those bytes, which a HEAD must not claim. From here it
