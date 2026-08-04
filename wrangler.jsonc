@@ -258,7 +258,12 @@
   //   COVER_SECRET          read by code, never set. The path degrades without it, so
   //                         declaring it would fail the deploy over a working site.
   //   ANALYTICS_READ_TOKEN  same shape: /ledger's SQL reads degrade without it.
-  // Promote either of the last two the day it becomes load-bearing.
+  //   BILLING_READ_TOKEN    same shape again: /ledger's account cost line renders a
+  //                         "not readable yet" note without it. Scope it to Billing:Read
+  //                         and NOTHING else, and keep it off the CI token, which is
+  //                         pinned at six reads and lives in GitHub. Account spend is a
+  //                         category above analytics; it belongs on the Worker alone.
+  // Promote any of the last three the day it becomes load-bearing.
   //
   // Deliberately NOT mirrored into wrangler.dev.jsonc. There is no .dev.vars in this
   // repo, so the dev twin would log ten "missing secret" warnings on every reload of
