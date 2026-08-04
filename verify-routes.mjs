@@ -93,6 +93,13 @@ const ROUTES = [
   { path: "/whoareyou", status: 200, ct: "text/html" },
   { path: "/whoareyou.json", status: 200, ct: "application/json" },
   { path: "/security", status: 200, ct: "text/html" },
+  // /security is static prose about the headers, so it earns a hand twin
+  // (holding/md/security.md). Both halves asserted for the same reason the
+  // generated ones below are: the .md URL proves the build staged it, the
+  // negotiated form proves handleSecurityCenter reaches it.
+  { path: "/security.md", status: 200, ct: "text/markdown", marker: "Security Center" },
+  { path: "/security", status: 200, ct: "text/markdown", headers: { accept: "text/markdown" },
+    marker: "http-message-signatures-directory" },
   { path: "/reading", status: 200, ct: "text/html" },
   { path: "/updates", status: 200, ct: "text/html" },
   // The twins the generated tier earned. Both halves are asserted because they
@@ -148,6 +155,14 @@ const ROUTES = [
   { path: `/writing/${SLUG}.txt`, status: 200, ct: "text/plain" },
   { path: "/writing/posts.json", status: 200, ct: "application/json" },
   { path: "/rn", status: 302 },
+  // /rn has no page to twin, so its Markdown is rendered live. The negotiated
+  // form is the one that matters: it is the arm that stops an agent following
+  // `agents: true` off-site into Spotify's HTML. Neither row is `remote`,
+  // because an empty local KV still produces a valid document (the payload's
+  // error state is prose, not a failure).
+  { path: "/rn.md", status: 200, ct: "text/markdown", marker: "https://aadhar.sh/rn/tracks" },
+  { path: "/rn", status: 200, ct: "text/markdown", headers: { accept: "text/markdown" },
+    marker: "https://aadhar.sh/rn/tracks" },
   { path: "/rn/tracks", status: 200, ct: "application/json", headers: { accept: "text/html" } },
   { path: "/rn/tracks.html", status: 200, ct: "text/html", fragment: true },
   { path: "/rn/admin", status: 403 },

@@ -239,7 +239,7 @@ Single-page personal site at `aadhar.sh`. A Cloudflare Worker with static assets
 | `holding/sw.js` | RETIRED (v136, 2026-07-03): now a ~15-line unregister stub (skipWaiting, delete caches, claim, unregister) that must keep serving 200 for a year+ so installed copies clean themselves up. No CACHE_VERSION anymore; the deploy-log vnum lives in D1 alone (bump-version.sh derives the next from MAX(vnum)). Repeat-visit speed comes from immutable assets + bfcache + speculation prerender. |
 | `holding/llms.txt` | The llms.txt format — concise site summary for LLMs. Linked from `<link rel="alternate">`. |
 | `holding/index.md` | Markdown source of homepage copy (used by `/llms.txt` and as a fallback). The one COMMITTED Markdown twin: `gen-md-twins.mjs` skips any path that already has one, so this hand-written prose is never regenerated over. |
-| `holding/md/` | Hand-authored Markdown twins for the two Worker-rendered prose pages, `/bot` and `/whoareyou`, whose text lives in template literals no build step can read. `.assetsignore`d (build input, not a public URL): the generator publishes them at `/bot.md` and `/whoareyou.md`. `checkTwinFacts()` pins the load-bearing strings against the Worker in BOTH directions, so bumping `BOT_VERSION` fails the deploy until `bot.md` agrees. |
+| `holding/md/` | Hand-authored Markdown twins for the three Worker-rendered prose pages, `/bot`, `/whoareyou` and `/security`, whose text lives in template literals no build step can read. `.assetsignore`d (build input, not a public URL): the generator publishes them at `/bot.md`, `/whoareyou.md` and `/security.md`. `checkTwinFacts()` pins the load-bearing strings against the Worker in BOTH directions, so bumping `BOT_VERSION` fails the deploy until `bot.md` agrees. `security.md`'s pins read `lib/security.js` rather than the page, since a page ABOUT headers must agree with the module that SENDS them; one of them is derived from `ENFORCE_PAGE_HASHES`, so finishing the hashed-CSP rollout fails the deploy until the twin stops calling the policy report-only. |
 | `holding/sitemap.xml`, `robots.txt` | Standard SEO files. robots.txt explicitly allows AadharshBot. |
 | `holding/.well-known/http-message-signatures-directory` | JWKS for AadharshBot's Ed25519 public key (Web Bot Auth IETF draft). |
 | `holding/images/` + `holding/i/` | `images/` holds the photo DATA surfaces: `metadata.json` (the EXIF RECORD, long field names + the Fuji recipe card), `exif.json` (the tooltip's TEXT tier: every photo's short-key EXIF in one 2.6KB-brotli file, warmed once on idle because the homepage draws a fresh random 12 of 158 per request and a per-slot warm-up was cold nearly every visit), `meta/<stem>.json` (per-photo EXIF plus the four 64-bin histogram channels — the BARS tier, fetched only on the hover that needs them, and the self-healing fallback for a stem missing from a cached `exif.json`), `alt.json` (AI captions), `hashes.json` (stem to hash8 map). The pixel tiers (600px AVIF+JPG squares + 400px mobile AVIF) live in `i/` under content-hashed names, 474 files for 158 photos. |
@@ -410,6 +410,17 @@ it is unaffected. Note
 also that `serveStaticPage` bails to the asset layer on `method !== "GET"`, so a HEAD
 never negotiates at all — `curl -I` will report HTML on a page whose GET returns
 Markdown, which reads exactly like this bug and is not it.
+
+**A route with no page gets neither tier, and `/rn` is the one.** It is a bare 302
+to Spotify, so there is no HTML for the converter to read and nothing fixed for a
+hand twin to state: the playlist rolls over. Its Markdown is RENDERED live at
+`/rn.md`, and at `/rn` under negotiation, from the same payload `/rn/tracks`
+serves, which is why it needs no drift check. Reach for this third shape only when
+a hand twin would have to describe rather than mirror AND the data already exists
+in another representation; otherwise the honest move is to drop `flags.agents`,
+because the registry should not advertise a surface an agent cannot read. Note the
+`run_worker_first` requirement: a Markdown URL with an extension is a static asset
+by default, and `build.mjs` invariant #8 catches a route that forgets it.
 
 Adding a page needs no work here: register it in `site-manifest.json` as usual
 and the twin appears. `build.mjs` fails the deploy if fewer than 30 generate,
