@@ -224,6 +224,26 @@
   // Browser Run Quick Actions. The binding is authenticated by Workers, so
   // Lens no longer needs a Browser Rendering API token for snapshots.
   "browser": { "binding": "BROWSER" },
+  // Per-IP crawl budgets for /lens and the /mcp tools that share its crawler.
+  // These were KV counters until 2026-08-04: a read plus a WRITE on every
+  // allowed request, for a number that lived 120 seconds. RN_KV's write budget
+  // is ~10K/day and /lens is the busiest writer on the site, so the counters
+  // were the largest consumer of a budget CLAUDE.md still described as "we use
+  // a handful". The binding costs no write and adds no meaningful latency.
+  //
+  // The periods are all 60 because the binding supports 10 or 60 and nothing
+  // else, and every budget here was already per-minute. Limits are mirrored in
+  // LENS_BUDGETS (lens.js) because that is what the 429 message quotes; a
+  // contract test pins the two together so the message cannot drift from the
+  // ceiling. namespace_id is an opaque integer-as-string and only has to be
+  // unique within this Worker — it is not a resource id and infra:apply has
+  // nothing to provision. MUST match wrangler.dev.jsonc.
+  "ratelimits": [
+    { "name": "LENS_RL_INSPECT", "namespace_id": "1001", "simple": { "limit": 30, "period": 60 } },
+    { "name": "LENS_RL_SHOT",    "namespace_id": "1002", "simple": { "limit": 8,  "period": 60 } },
+    { "name": "LENS_RL_COMPARE", "namespace_id": "1003", "simple": { "limit": 4,  "period": 60 } },
+    { "name": "LENS_RL_BROWSER", "namespace_id": "1004", "simple": { "limit": 4,  "period": 60 } }
+  ],
   "vars": {
     "HOST_TIMEZONE": "America/New_York",
     "WORKING_HOURS_START": "9",

@@ -2389,3 +2389,70 @@ test("every /access device previews a cost, and the clause order its parser depe
   assert.ok(withBet >= 40, `expected a Bet on every unfinished device, saw ${withBet}`);
   assert.ok(rivalEnds >= 8, `expected the zero-sum pairs to be declared, saw ${rivalEnds}`);
 });
+
+// ── /lens per-IP crawl budgets ──────────────────────────────────────
+// These moved off KV counters and onto the Rate Limiting binding on 2026-08-04.
+// The route they guard is the one that fetches third parties and spends Browser
+// Run, so "fails open when the binding is missing" and "the 429 quotes the real
+// ceiling" are both worth pinning.
+
+test("LENS_BUDGETS ceilings match the ratelimits declared in both wrangler configs", async () => {
+  const { LENS_BUDGETS } = await import("./holding/_worker.js/lens.js");
+  const { parseJsonc } = await import("./scripts/lib/jsonc.mjs");
+
+  // The number in LENS_BUDGETS is what the 429 message quotes; the number in
+  // wrangler.jsonc is what actually limits. A message that disagrees with the
+  // ceiling is worse than no message, and nothing else would catch the drift.
+  for (const config of ["wrangler.jsonc", "wrangler.dev.jsonc"]) {
+    const declared = parseJsonc(readFileSync(config, "utf8")).ratelimits;
+    assert.ok(Array.isArray(declared) && declared.length, `${config} declares no ratelimits`);
+    const byName = new Map(declared.map((r) => [r.name, r]));
+
+    for (const [budget, { binding, max }] of Object.entries(LENS_BUDGETS)) {
+      const rule = byName.get(binding);
+      assert.ok(rule, `${config} has no ratelimit named ${binding} for LENS_BUDGETS.${budget}`);
+      assert.equal(rule.simple?.limit, max,
+        `${config} limits ${binding} to ${rule.simple?.limit} but the 429 message says ${max}`);
+      // The binding supports 10 or 60 only, and every budget here is per-minute.
+      assert.equal(rule.simple?.period, 60, `${binding} must use the 60s period`);
+    }
+    // No orphans: a declared limiter nothing reads is a limit nobody enforces.
+    const used = new Set(Object.values(LENS_BUDGETS).map((b) => b.binding));
+    for (const name of byName.keys()) {
+      assert.ok(used.has(name), `${config} declares ${name} but no LENS_BUDGETS entry uses it`);
+    }
+  }
+});
+
+test("overLensBudget fails open without a limiter and closes when one says no", async () => {
+  const { LENS_BUDGETS, overLensBudget } = await import("./holding/_worker.js/lens.js");
+  const req = new Request("https://aadhar.sh/lens/fetch?url=https://example.com", {
+    headers: { "cf-connecting-ip": "203.0.113.7" },
+  });
+
+  // Fails OPEN with no binding at all. This is the local-dev and contract-test
+  // shape, and it matches the KV version's behaviour without RN_KV: abuse
+  // control, not authorization. validateLensTarget's SSRF guard has no fallback
+  // and is what actually keeps this route safe.
+  assert.equal(await overLensBudget(LENS_BUDGETS.inspect, req, {}), false);
+  assert.equal(await overLensBudget(LENS_BUDGETS.inspect, req, { LENS_RL_INSPECT: {} }), false,
+    "a binding without .limit() is not a limiter");
+
+  // ...and open when the limiter throws. A limiter blip must cost the rate
+  // limit, never the route: an unhandled throw here renders Cloudflare's HTML
+  // 1101 page, which the caller then tries to JSON.parse.
+  assert.equal(await overLensBudget(LENS_BUDGETS.inspect, req, {
+    LENS_RL_INSPECT: { limit: () => { throw new Error("limiter down"); } },
+  }), false);
+
+  // Closes when the limiter says so, and keys on the caller's IP.
+  let seen = null;
+  const env = { LENS_RL_SHOT: { limit: (arg) => { seen = arg; return { success: false }; } } };
+  assert.equal(await overLensBudget(LENS_BUDGETS.shot, req, env), true);
+  assert.deepEqual(seen, { key: "203.0.113.7" });
+
+  // Each budget reads its OWN binding, which is the property that stopped /mcp
+  // from being a second unmetered door onto the same crawler.
+  const names = Object.values(LENS_BUDGETS).map((b) => b.binding);
+  assert.equal(new Set(names).size, names.length, "two budgets share one binding");
+});

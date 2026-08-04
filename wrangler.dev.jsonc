@@ -109,6 +109,15 @@
   ],
   // Quick Actions need remote mode during local Wrangler development.
   "browser": { "binding": "BROWSER", "remote": true },
+  // /lens per-IP crawl budgets — MUST match wrangler.jsonc (build.mjs warns on
+  // drift). Local counters, deliberately: a dev session exercising /lens should
+  // not spend the production limiter, and overLensBudget fails open anyway.
+  "ratelimits": [
+    { "name": "LENS_RL_INSPECT", "namespace_id": "1001", "simple": { "limit": 30, "period": 60 } },
+    { "name": "LENS_RL_SHOT",    "namespace_id": "1002", "simple": { "limit": 8,  "period": 60 } },
+    { "name": "LENS_RL_COMPARE", "namespace_id": "1003", "simple": { "limit": 4,  "period": 60 } },
+    { "name": "LENS_RL_BROWSER", "namespace_id": "1004", "simple": { "limit": 4,  "period": 60 } }
+  ],
   "vars": {
     "HOST_TIMEZONE": "America/New_York",
     "WORKING_HOURS_START": "9",

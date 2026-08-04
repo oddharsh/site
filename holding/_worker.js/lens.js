@@ -136,29 +136,56 @@ export function glossify(escaped, only) {
 }
 
 // Per-IP crawl budgets, one place. These used to be inlined at each call site,
-// which was fine until /mcp grew tools that call the same crawler: sharing the
-// literal KV bucket is the whole point, because a second unmetered door (30 via
-// /lens/fetch AND unlimited via JSON-RPC) is not a rate limit. Keys and ceilings
-// are unchanged from the inlined versions, so live buckets carry over.
+// which was fine until /mcp grew tools that call the same crawler: sharing one
+// counter is the whole point, because a second unmetered door (30 via
+// /lens/fetch AND unlimited via JSON-RPC) is not a rate limit.
+//
+// `max` is duplicated from wrangler.jsonc's `ratelimits` on purpose: it is the
+// number the 429 message quotes, and a message that disagrees with the ceiling
+// is worse than no message. A contract test pins the two together so they cannot
+// drift, which is the only reason duplicating it is safe.
 export const LENS_BUDGETS = {
-  inspect: { key: "lens:rl",        max: 30 },
-  shot:    { key: "lens:shotrl",    max: 8  },
-  compare: { key: "lens:comparerl", max: 4  },
+  inspect: { binding: "LENS_RL_INSPECT", max: 30 },
+  shot:    { binding: "LENS_RL_SHOT",    max: 8  },
+  compare: { binding: "LENS_RL_COMPARE", max: 4  },
+  browser: { binding: "LENS_RL_BROWSER", max: 4  },
 };
 
-// Best-effort minute bucket. Returns true when the caller is already over.
-// Fails OPEN when RN_KV is missing (dev), same as the code it replaces: this is
-// abuse control, not authorization, and the SSRF guard is what enforces safety.
-export async function overLensBudget(budget, request, env, ctx) {
-  if (!env.RN_KV) return false;
+// Returns true when the caller is already over their per-minute budget.
+//
+// BACKED BY THE RATE LIMITING BINDING since 2026-08-04, where it used to be a
+// KV read plus a KV write per allowed request. The KV version worked, and the
+// reason to move is that it charged the site's most expensive route a durable
+// write for a counter with a 120-second life. CLAUDE.md's "~10K writes/day
+// budget; we use a handful" was written before /lens existed and stopped being
+// true the day it shipped: every scan, snapshot and comparison wrote.
+//
+// The binding's counters are per-colo and eventually consistent, which sounds
+// like a downgrade and is not: the KV buckets were already per-colo and
+// eventually consistent, because a KV write is not visible everywhere
+// immediately either. What actually changes is that the counter no longer costs
+// a write, and no longer sits on the request path waiting for one.
+//
+// FAILS OPEN when the binding is absent, exactly as the KV version failed open
+// without RN_KV. This is abuse control, not authorization; the SSRF guard in
+// validateLensTarget is what enforces safety, and it has no fallback.
+//
+// Keyed on IP, which Cloudflare's own docs advise against because users share
+// them. Kept deliberately: the thing being limited is a server-side crawler
+// being pointed at third parties, there is no account to key on, and the
+// alternative to an imperfect key here is no limit at all.
+export async function overLensBudget(budget, request, env) {
+  const limiter = env && env[budget.binding];
+  if (!limiter || typeof limiter.limit !== "function") return false;
   const ip = request.headers.get("cf-connecting-ip") || "0.0.0.0";
-  const bucket = `${budget.key}:${ip}:${Math.floor(Date.now() / 60000)}`;
-  let n = 0;
-  try { n = parseInt((await env.RN_KV.get(bucket)) || "0", 10) || 0; } catch {}
-  if (n >= budget.max) return true;
-  const write = env.RN_KV.put(bucket, String(n + 1), { expirationTtl: 120 }).catch(() => {});
-  if (ctx?.waitUntil) ctx.waitUntil(write); else await write;
-  return false;
+  try {
+    const { success } = await limiter.limit({ key: ip });
+    return !success;
+  } catch {
+    // A limiter blip should cost the rate limit, never the route — the same
+    // reasoning the /lens/browser call site used to spell out inline.
+    return false;
+  }
 }
 
 // ── /lens — "the other web" -----------------------------------------------
@@ -412,7 +439,7 @@ async function inspectLensRequest(request, env, ctx) {
 
   // best-effort per-IP rate limit so the proxy can't be turned into a firehose.
   // Shared with /mcp's lens_inspect tool (same bucket, see LENS_BUDGETS).
-  if (await overLensBudget(LENS_BUDGETS.inspect, request, env, ctx)) {
+  if (await overLensBudget(LENS_BUDGETS.inspect, request, env)) {
     return { status: 429, payload: { ok: false, error: "Slow down — 30 lookups a minute. Try again shortly." } };
   }
 
@@ -1138,12 +1165,8 @@ export async function handleLensShot(request, env, ctx) {
   if (!env.BROWSER || typeof env.BROWSER.quickAction !== "function") return jsonResponse({ ok: false, error: "Browser Run is not configured on this deployment." }, 503);
 
   // screenshots are the expensive path — tighter per-IP limit + a KV cache.
-  const ip = request.headers.get("cf-connecting-ip") || "0.0.0.0";
-  if (env.RN_KV) {
-    const bucket = `lens:shotrl:${ip}:${Math.floor(Date.now() / 60000)}`;
-    const n = parseInt((await env.RN_KV.get(bucket)) || "0", 10);
-    if (n >= 8) return jsonResponse({ ok: false, error: "Snapshots are rate-limited to 8/min. Hang on a moment." }, 429);
-    ctx.waitUntil(env.RN_KV.put(bucket, String(n + 1), { expirationTtl: 120 }));
+  if (await overLensBudget(LENS_BUDGETS.shot, request, env)) {
+    return jsonResponse({ ok: false, error: `Snapshots are rate-limited to ${LENS_BUDGETS.shot.max}/min. Hang on a moment.` }, 429);
   }
 
   const cacheKey = "lens:shot:" + (await lensSha256Hex(v.url));
@@ -1221,17 +1244,12 @@ export async function handleLensBrowser(request, env, ctx) {
   if (!v.ok) return jsonResponse({ ok: false, error: v.error }, 400);
   if (!env.BROWSER || typeof env.BROWSER.quickAction !== "function") return jsonResponse({ ok: false, error: "Browser Run is not configured on this deployment." }, 503);
 
-  const ip = request.headers.get("cf-connecting-ip") || "0.0.0.0";
-  if (env.RN_KV) {
-    // Guarded because an unhandled throw here does not produce a JSON error —
-    // it produces Cloudflare's HTML 1101 page, which the client then tries to
-    // JSON.parse. A KV blip should cost the rate limit, never the route.
-    try {
-      const bucket = `lens:browserrl:${ip}:${Math.floor(Date.now() / 60000)}`;
-      const n = parseInt((await env.RN_KV.get(bucket)) || "0", 10);
-      if (n >= 4) return jsonResponse({ ok: false, error: "Browser Run snapshots are rate-limited to 4/min. Hang on a moment." }, 429);
-      ctx.waitUntil(env.RN_KV.put(bucket, String(n + 1), { expirationTtl: 120 }));
-    } catch (_e) { /* fail open: the 4/min ceiling is politeness, not security */ }
+  // The throw-guard that used to be spelled out here now lives inside
+  // overLensBudget, and the reason it existed is worth keeping: an unhandled
+  // throw on this path does not produce a JSON error, it produces Cloudflare's
+  // HTML 1101 page, which the client then tries to JSON.parse.
+  if (await overLensBudget(LENS_BUDGETS.browser, request, env)) {
+    return jsonResponse({ ok: false, error: `Browser Run snapshots are rate-limited to ${LENS_BUDGETS.browser.max}/min. Hang on a moment.` }, 429);
   }
 
   const cacheKey = "lens:browser:" + (await lensSha256Hex(v.url));
@@ -1474,7 +1492,7 @@ export async function compareLensRequest(request, env, ctx, leftRaw, rightRaw) {
     return { status: 400, payload: { ok: false, error: left.ok ? `right: ${right.error}` : `left: ${left.error}` } };
   }
   // Shared with /mcp's lens_compare tool (same bucket, see LENS_BUDGETS).
-  if (await overLensBudget(LENS_BUDGETS.compare, request, env, ctx)) {
+  if (await overLensBudget(LENS_BUDGETS.compare, request, env)) {
     return { status: 429, payload: { ok: false, error: "Lens comparisons are rate-limited to 4/min." } };
   }
   try {
