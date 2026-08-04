@@ -80,6 +80,26 @@ const ASSET_ENVELOPES = {
 // interchangeable.
 const WORKER_BASELINE_GZIP_KIB = 204.24;
 const WORKER_ALERT_GROWTH = 0.25;
+
+// `wrangler check startup` advisory ceiling, in ms of ACTIVE startup CPU.
+//
+// The baseline note above measured startup cost BY HAND on 2026-08-04 and
+// concluded bundle bytes are two orders of magnitude away from being a latency
+// problem. This runs that same measurement on every CI run, so the conclusion
+// stops being a point-in-time finding somebody has to remember to re-take.
+//
+// Read it for what it is. That note's caveat holds: `check startup` ranks frames
+// and does not cost them, and this profiles a local machine whose CPU is not
+// Cloudflare's. So this is a REGRESSION TRIPWIRE, not a prediction of production
+// startup, and a breach here means "go re-measure", never "cold start regressed".
+//
+// 50ms is ~6x the observed 6.4-9.6ms and still an order of magnitude under the
+// 400ms platform limit: room for the reading to wander, none for a real
+// regression to hide. It wanders more than you would expect, because the profile
+// window is ~20ms and lands about 5 samples — three consecutive runs here read
+// 9.6, 7.6 and 6.4ms with nothing changed. Advisory, never fatal; a sampled
+// profile at that resolution has no business failing a PR.
+const WORKER_STARTUP_ALERT_MS = 50;
 const TWINS = [
   "nav.src.js", "notepad.src.js", "lens.src.js", "lens-browser.src.js",
   "quiz.src.js", "tooltip.src.js", "hoist.src.js", "luna.src.css",
@@ -121,7 +141,9 @@ try {
 // 2) worker bundle gzip via wrangler dry-run (self-builds .build/holding) -----
 let dryOut = "";
 try {
-  dryOut = execFileSync("npx", ["wrangler", "deploy", "--dry-run", "--outdir", ".build/.perfbudget", "--metafile"], { encoding: "utf8" });
+  // --outfile writes the single prebuilt bundle that `check startup` consumes
+  // below, so the startup profile costs no second build.
+  dryOut = execFileSync("npx", ["wrangler", "deploy", "--dry-run", "--outdir", ".build/.perfbudget", "--outfile", ".build/.perfbudget/worker.bundle", "--metafile"], { encoding: "utf8" });
 } catch (e) {
   dryOut = (e.stdout || "") + "\n" + (e.stderr || "");
 }
@@ -135,6 +157,39 @@ if (gz) {
   else ok(`worker bundle ${kib.toFixed(2)} KiB gzip (advisory alert at ${alertAt.toFixed(2)} KiB)`);
 } else {
   warn("could not read bundle gzip from wrangler dry-run (offline/unauth?); skipping bundle-size check");
+}
+
+// 2a) startup CPU, from `wrangler check startup` ------------------------------
+// The check above measures how BIG the Worker is; this one measures what that
+// size costs at cold start, which is the constraint the size was ever a proxy
+// for. Available since 2026-07-30 and it needs no credential.
+//
+// This settles an open question rather than opening one. The repo's standing
+// conclusion is that cold start here is not eval-bound (measured 2026-07-28,
+// when lazy route imports were tried and bought nothing but +27KB of wrappers).
+// That was reasoned from bundle structure; this measures it directly, and it
+// agrees: ~8ms of active startup CPU against a 400ms platform limit, on a
+// Worker whose bundle grew 57% in the interim.
+//
+// Runs on the prebuilt bundle from the dry-run above, so it adds no build.
+try {
+  const startOut = execFileSync("npx", [
+    "wrangler", "check", "startup",
+    "--workerBundle", ".build/.perfbudget/worker.bundle",
+    "--outfile", ".build/.perfbudget/worker-startup.cpuprofile",
+  ], { encoding: "utf8" });
+  // "│   Active: 9.6 ms (including 0.0 ms garbage collection)"
+  const active = startOut.match(/Active:\s*([\d.]+)\s*ms/);
+  if (active) {
+    const ms = parseFloat(active[1]);
+    ms > WORKER_STARTUP_ALERT_MS
+      ? warn(`worker startup ${ms.toFixed(1)} ms active CPU > ${WORKER_STARTUP_ALERT_MS} ms advisory alert — open .build/.perfbudget/worker-startup.cpuprofile in Chrome DevTools for the flamegraph`)
+      : ok(`worker startup ${ms.toFixed(1)} ms active CPU (advisory alert at ${WORKER_STARTUP_ALERT_MS} ms, platform limit 400 ms)`);
+  } else {
+    warn("could not read active CPU from `wrangler check startup`; skipping the startup check");
+  }
+} catch (e) {
+  warn(`\`wrangler check startup\` did not run (${(e.message || "").split("\n")[0]}); skipping the startup check`);
 }
 
 // 2b) bundle attribution, from esbuild's metafile (--metafile, above) ---------

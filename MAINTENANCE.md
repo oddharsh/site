@@ -588,6 +588,39 @@ they are role-aware and deliberately have room for ordinary feature work. The
 Worker gzip number is a growth alert, not a user-experience ceiling: Worker code
 is server-side, so it must earn a hard limit through measured TTFB or CPU impact.
 
+**That CPU impact is measured on EVERY RUN now, rather than by hand when someone
+remembers.** `wrangler check startup` (available 2026-07-30, no credential
+needed) profiles the Worker's initialization and reports active startup CPU;
+perf-budget runs it on the prebuilt bundle the dry-run already produced, so it
+adds no second build. Reading on 2026-08-04: **~8 ms active against a 400 ms
+platform limit**.
+
+Read it for what it is. The baseline comment in `perf-budget.mjs` already
+established by hand that bundle bytes are two orders of magnitude away from being
+a latency problem, and its caveat still holds: `check startup` ranks frames but
+does not cost them, and it profiles a local machine whose CPU is not
+Cloudflare's. So this is a REGRESSION TRIPWIRE, and a breach means "go
+re-measure", never "cold start regressed".
+
+It stays advisory, and the reason is the instrument. The profile window is about
+20 ms and lands roughly 5 samples, so consecutive runs differ by 2 ms with
+nothing changed (9.6, 7.6, 6.4 across three runs here). A sampled profile at that
+resolution has no business failing a PR, so the ceiling is 50 ms: six times the
+observed value and still an order of magnitude under the limit. When it fires,
+the cpuprofile is at `.build/.perfbudget/worker-startup.cpuprofile` and opens in
+Chrome DevTools as a flamegraph.
+
+This also closes out an older open question. The standing conclusion that cold
+start here is not eval-bound came from a 2026-07-28 experiment where lazy route
+imports bought nothing but +27 KB of wrappers, which was an argument from bundle
+structure. The startup profile measures it directly and agrees.
+
+The bundle baseline itself lives in `perf-budget.mjs` with its full history (86 →
+129.23 → 204.24 KiB gzip) and the argument for each move. Read that comment
+before treating a breach as a regression; two of the three moves were legitimate
+growth, and it also records why the dry-run number and the `check startup` number
+are not interchangeable.
+
 That growth alert now names its cause. The dry-run passes `--metafile`, so
 esbuild writes per-input byte attribution to `.build/.perfbudget/bundle-meta.json`
 and the script reads it back. A green run prints one line (module count plus the
