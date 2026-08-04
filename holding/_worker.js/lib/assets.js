@@ -43,6 +43,15 @@ export async function serveFreshAsset(request, env, contentType) {
 // than 404ing. Negotiation is a courtesy and every one of these paths has a real
 // page to serve; failing a navigation because a twin did not generate would be
 // the worse trade.
+// Strip the body, keep every header. Not `new Response(null, res)`: Response init
+// is read as a plain object there, so status/headers survive but anything carried
+// out-of-band does not — the same write-only-init trap that made encodeBody a
+// silent no-op site-wide (CLAUDE.md gotcha 13). Spelled out so it stays visible.
+function bodiless(res) {
+  try { res.body?.cancel(); } catch {}
+  return new Response(null, { status: res.status, headers: new Headers(res.headers) });
+}
+
 export async function serveMarkdownTwin(request, env, twinPath, extraHeaders = {}) {
   const u = new URL(request.url);
   u.pathname = twinPath;
@@ -412,7 +421,17 @@ export async function servePrecompressedShell(request, env) {
 // family Link but never enter this precomputed route.
 export async function serveStaticPage(request, env, opts = {}) {
   const url = new URL(request.url);
-  if (request.method !== "GET") return serveAssetWith404Clamp(request, env, opts);
+  // HEAD walks the GET path far enough to answer with the SAME headers, then drops
+  // the body. RFC 9110 asks a HEAD to carry the fields its GET would send, and
+  // deciding those fields is this function's whole job, so bailing on the method
+  // before the negotiation below made HEAD advertise text/html on a page whose GET
+  // answers text/markdown. Measured on production 2026-07-31, after the cache fix:
+  // GET /garage/encoding and GET /bot both returned text/markdown while HEAD on the
+  // same URLs returned text/html. That is also a convincing false positive for the
+  // #195 cache bug, since `curl -I` is the reflex probe, which is the second reason
+  // to close it rather than document it.
+  const head = request.method === "HEAD";
+  if (!head && request.method !== "GET") return serveAssetWith404Clamp(request, env, opts);
   const applyExtraHeaders = (headers) => {
     for (const [name, value] of Object.entries(opts.headers || {})) headers.set(name, value);
     return headers;
@@ -457,8 +476,16 @@ export async function serveStaticPage(request, env, opts = {}) {
   // not going to use a delta against an HTML dictionary it does not hold.
   if (wantsMarkdown(request)) {
     const md = await serveMarkdownTwin(request, env, `/${rel}.md`);
-    if (md) return md;
+    // The twin's body was already read to count tokens, so HEAD gets the full
+    // header set (x-markdown-tokens included) for the same work the GET does. It
+    // costs a HEAD one ASSETS subrequest it used to skip; HEAD is rare enough here
+    // that an honest content-type is the better side of that trade.
+    if (md) return head ? bodiless(md) : md;
   }
+  // Everything below hands back a precompressed BODY (a dcz delta or the q11 twin)
+  // and sizes its headers to those bytes, which a HEAD must not claim. From here it
+  // takes the asset layer's own HEAD handling, exactly as it did before this change.
+  if (head) return serveAssetWith404Clamp(request, env, opts);
 
   // build.mjs names both artifacts after the ASSET path; this function knows only the
   // REQUEST path, and `html_handling: "drop-trailing-slash"` makes those differ for
