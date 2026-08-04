@@ -44,11 +44,41 @@ const ASSET_ENVELOPES = {
 // This is an observability alert, not a platform limit. It is intentionally
 // separate from the user-facing LCP budget: Worker code is server-side and can
 // grow without changing a browser's transfer path, provided TTFB/CPU stay well.
-// Intentional one-Worker consolidation baseline. The old homepage/Cal/
-// Serendipity aggregate measured 130.94 KiB gzip; the consolidated Worker is
-// 129.23 KiB gzip, so comparing it to the old homepage-only 86 KiB baseline
-// would report a misleading regression on every CI run.
-const WORKER_BASELINE_GZIP_KIB = 129.23;
+//
+// Baseline history, because a re-baseline that records only its new number is
+// indistinguishable from someone silencing the check:
+//
+//   86 KiB     homepage Worker alone (pre-consolidation)
+//   129.23 KiB the one-Worker consolidation (2026-06). The old homepage/Cal/
+//              Serendipity aggregate measured 130.94 KiB, so keeping the 86 KiB
+//              baseline would have reported a regression on every CI run for a
+//              change that made the total smaller.
+//   204.24 KiB HERE (2026-08-04), and the growth is /lens plus /serendipity.
+//              lens.js is 141 KiB of the bundle and serendipity.js 110 KiB, 35%
+//              between them; both landed after the consolidation baseline was
+//              set. Nothing was imported to cause this: all of node_modules is
+//              39 KiB of the bundle (the three @noble packages), and 94.4% of it
+//              is first-party code.
+//
+// The 129.23 baseline had therefore been BREACHED continuously rather than
+// occasionally, and because this check warns rather than fails, CI printed
+// "hard checks green" over it every run. A permanently-firing advisory carries
+// no information, which is the actual reason to re-baseline: the point is to
+// catch the NEXT unexplained 50 KiB, and it could not.
+//
+// Re-baselining is safe here because the startup cost was measured directly on
+// 2026-08-04 rather than assumed. The 723 KB bundle compiles in 6.25 ms cold,
+// linear at ~8.5 us/KB, against Cloudflare's 400 ms startup-CPU limit; a V8 code
+// cache removes 92% of even that. So bundle bytes are a bookkeeping signal for
+// review, and the thing that would make them a latency problem is two orders of
+// magnitude away. Do NOT read a breach here as a cold-start regression without
+// re-measuring; `wrangler check startup` ranks frames but cannot cost them.
+//
+// Keep this number in DRY-RUN terms. `wrangler check startup` reports a smaller
+// total for the same commit (200.44 vs 204.24 KiB gzip on 2026-07-31), and the
+// value parsed below comes from `wrangler deploy --dry-run`, so the two are not
+// interchangeable.
+const WORKER_BASELINE_GZIP_KIB = 204.24;
 const WORKER_ALERT_GROWTH = 0.25;
 const TWINS = [
   "nav.src.js", "notepad.src.js", "lens.src.js", "lens-browser.src.js",
