@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
 <title>Access · Device Manager for language models</title>
-<meta name="description" content="A skill tree for the flavors of access a language model has: what shipped and when, what it depends on, what got switched off, and what nobody has built. Thirty-nine nodes across perception, cognition, manipulation, feedback, expression, and authority, dated to the month where the month is knowable, with a dated bet on every one that isn't finished.">
+<meta name="description" content="A skill tree for the flavors of access a language model has: what shipped and when, what it depends on, what got switched off, and what nobody has built. Sixty-three nodes across perception, cognition, manipulation, feedback, expression, and authority, dated to the month where the month is knowable, with a dated bet on every one that isn't finished.">
 <link rel="canonical" href="https://aadhar.sh/access">
 <!-- Its own page favicon, the same chip the nodes draw. nav.js's setFavicon only
      fires for paths in the taskbar list and this route is deliberately unlisted, so
@@ -48,7 +48,7 @@
   --st-passed:#c8402f; --st-phantom:#9d9d95;
 }
 *{box-sizing:border-box}
-.window{max-width:1280px;font-family:var(--font-ui);font-size:10.5pt;color:var(--ink)}
+.window{max-width:1440px;font-family:var(--font-ui);font-size:10.5pt;color:var(--ink)}
 h1{font-family:var(--font-caption);font-size:17pt;font-weight:700;color:var(--navy);margin:0 0 2px;letter-spacing:-.01em;text-wrap:balance}
 h2{font-family:var(--font-caption);font-size:12.5pt;font-weight:700;color:var(--navy2);margin:22px 0 6px}
 h3{font-family:var(--font-caption);font-size:10.5pt;font-weight:700;color:var(--navy);margin:14px 0 4px}
@@ -86,7 +86,7 @@ small,.meta{font-size:9pt;color:var(--ink-dim);font-family:var(--font-mono)}
 select{font:inherit;font-size:9.5pt;border:1px solid var(--dsh);box-shadow:var(--bevel-sunken);background:var(--win);padding:3px 4px}
 
 .mmc-split{display:flex;align-items:stretch;min-height:380px}
-.mmc-tree{flex:0 0 210px;border-right:1px solid var(--sh);background:var(--win);overflow:auto;max-height:580px;padding:5px 0}
+.mmc-tree{flex:0 0 186px;border-right:1px solid var(--sh);background:var(--win);overflow:auto;max-height:580px;padding:5px 0}
 .mmc-canvas{flex:1 1 auto;overflow:auto;max-height:580px;background:var(--win);position:relative}
 .mmc-status{display:flex;gap:0;border-top:1px solid var(--hi);background:var(--face);font-size:9pt;color:var(--ink-soft);flex-wrap:wrap}
 .mmc-status span{padding:3px 8px;box-shadow:var(--bevel-sunken);flex:0 0 auto}
@@ -104,6 +104,7 @@ select{font:inherit;font-size:9.5pt;border:1px solid var(--dsh);box-shadow:var(-
 .tree .gi{width:13px;height:13px;flex:0 0 13px}
 .tree .bn{font-weight:700;color:var(--navy)}
 .tree .ph{font-style:italic;color:var(--ink-dim)}
+.tree button.dim{opacity:.38}
 
 /* the graph */
 svg.graph{display:block}
@@ -228,7 +229,7 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
 <!-- ══ /FLAVORTEXT: lede ══════════════════════════════════════════════════ -->
 
 <!-- ══ FLAVORTEXT: how to read it ═════════════════════════════════════════ -->
-<p>Thirty-nine nodes. Each one is a <b>flavor of access</b>, not a product, so a node outlives the vendor that currently occupies it. Products hang off the nodes as examples, and every node that isn't finished carries a dated bet.</p>
+<p>Sixty-three nodes. Each one is a <b>flavor of access</b>, not a product, so a node outlives the vendor that currently occupies it. Products hang off the nodes as examples, and every node that isn't finished carries a dated bet.</p>
 <p>Five states, all of them Device Manager's own. <b>Installed</b> works and something depends on it. A <b>yellow bang</b> works badly enough to matter. An <b>unknown device</b> is present on the bus with no driver, which is where somebody is actively building. <b>Disabled</b> is the one worth reading twice: in Device Manager a red X never meant missing, it meant switched off, which is exactly what an access looks like after the ecosystem passed it over. And a device can be <b>not present</b> at all, describable but attached to nothing, which is where the speculation lives. Those are hidden until you ask for them, under <b>View</b>.</p>
 <p>Dates are month-level where the month is establishable and year-level where it isn't, marked with a <b>~</b>. I would rather show you a coarse date than a confident wrong one.</p>
 <!-- ══ /FLAVORTEXT: how to read it ════════════════════════════════════════ -->
@@ -295,8 +296,19 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
 
 <!-- ══ FLAVORTEXT: gaps + speculation ════════════════════════════════════ -->
 <h3>The gaps are the interesting part</h3>
-<p><span id="tally-gaps">Nine devices carry a yellow bang, eight have no driver, three are switched off, and four are not present at all.</span> A few are genuinely hard. Most are unbuilt because the thing they'd need is a standard, an index, or somebody's permission, and no single vendor can ship any of the three alone.</p>
-<p>The two states people skip are the ones I'd look at first. <b>Switched off</b> is where the ecosystem already built the thing and then declined to use it: structured data has been sitting in pages since 2011 and agents read the rendered text anyway. That's a fifteen-year-old answer nobody wanted, and knowing why is worth more than another proposal. <b>Not present</b> is the opposite, an access precise enough to describe and attached to nothing, which is the only honest place to speculate.</p>
+<p><span id="tally-gaps">Twelve devices carry a yellow bang, ten have no driver, ten are switched off, and thirteen are not present at all.</span> A few are genuinely hard. Most are unbuilt because the thing they'd need is a standard, an index, or somebody's permission, and no single vendor can ship any of the three alone.</p>
+<p>The two states people skip are the ones I'd look at first, and together they are 23 of the 63 devices here. That weighting is deliberate. The installed column is where the conference talks are; the other two are where the information is.</p>
+
+<h3>Switched off: ten answers nobody wanted</h3>
+<p><b>Disabled</b> means the ecosystem built the thing and then declined to use it. Ten nodes are in that state and the dates are the point: 1993, 1999, 2001, 2002, 2004, 2005, 2011, 2011, 2014, 2024. Every current complaint about agent access has a corpse behind it.</p>
+<p>Agents drive desktop apps by looking at screenshots, and those apps published dictionaries of their own verbs in <b>1993</b>. Tool discovery has no index, and WSDL plus UDDI shipped one in <b>2001</b>. Agent-to-agent messaging is being specified now, and XMPP standardised federated addressing and capability discovery in <b>2004</b>. Nobody subscribes to anything, and Atom was an RFC in <b>2005</b>. Sites are asked to declare their AI preferences, and P3P did machine-readable policy in <b>2002</b> and was formally obsoleted.</p>
+<p>The useful move is not to relitigate any of them. It is to notice that every one failed the same way: it needed a consumer with leverage and got a standards document instead. That is a much better predictor of which current proposal survives than how good the proposal is, and it is why the newest nodes on this board carry my least confident bets.</p>
+
+<h3>Not present: where the speculation lives</h3>
+<p><b>Not present</b> is an access precise enough to describe with nothing attached to it, which is the only honest place to guess. Thirteen nodes, hidden until you ask for them under <b>View</b>, and they fail for three different reasons worth telling apart.</p>
+<p>Some are blocked on <b>permission, not capability</b>. Ambient sensing needs no research at all; the hardware and models exist and the people in the room never agreed. Organizational memory means reading things people said while assuming nobody would keep them. These do not get unblocked by engineering, and treating them as engineering problems is how you build something nobody is allowed to ship.</p>
+<p>Some are blocked on <b>nobody being paid to build them</b>. The discard pile needs a team to store its failures; simulation needs consequence-free rehearsal that robotics has funded for a decade and software has not. These are the ones I would actually go build, because the obstacle is attention rather than physics.</p>
+<p>And one is <b>withheld on purpose and should stay that way</b>. Release authority is the gap between a passing test and a running service, and almost every team draws that line deliberately. This site is a worked example: its CI token cannot write, no deploy path may create infrastructure, and only a machine-owned branch can publish, specifically so the automation cannot reach production. That node being empty is not a gap in the map. It is the map recording a decision, and the only reason to have a "not present" state rather than a "missing" one.</p>
 <p>So every unfinished node carries a <b>bet</b>, with a date and a confidence I'm willing to be wrong about in public. High confidence means I'd argue it now. Low means it's a shape I can see and a timeline I can't. The bets are the speculative part of this page and they're labelled everywhere they appear, because a map that quietly mixes forecast into fact is worse than no map.</p>
 <!-- ══ /FLAVORTEXT: gaps + speculation ═══════════════════════════════════ -->
 
@@ -304,7 +316,10 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
 <h3>Under most of these nodes there's a standard nobody mentions</h3>
 <p>The product layer gets the announcements and the standards layer decides what's actually possible, usually two years earlier and in a draft with a revision number. Three of the nodes here are standards work rather than products: a <b>vocabulary for crawl preferences</b> at the IETF, <b>in-page tool declaration</b> in a W3C community group, and the <b>accessibility tree</b>, which shipped in 2014 for entirely different reasons and became the thing computer-use agents lean on.</p>
 <p>Reading the drafts is worth it, because the failure mode is legible in them well before it's legible in a product. AIPREF is the clean example: the vocabulary half is moving along the Proposed Standard track, and the half that says how to attach it to a page lapsed under the six-month rule and hasn't been revised. That asymmetry tells you the fight isn't about what to express, it's about who has to honour it. And WebMCP's API moving off <b>navigator</b> onto the document mid-origin-trial is the ordinary sound of a spec still deciding what it is.</p>
-<p>The pattern worth taking from this: <b>the web platform keeps building the machine-readable surface first and the consumer never arrives</b>. Structured data, published discovery surfaces, and AOM all sit in that shape. The accessibility tree is the one that broke the pattern, and it broke it by accident.</p>
+<p>The pattern worth taking from this: <b>the web platform keeps building the machine-readable surface first and the consumer never arrives</b>. That is why <b>Declared surfaces</b> is its own branch here, and why most of that column is switched off. Seven of its ten nodes are red X, every one of them predates the agent era, and the oldest is from 1999. This is not incompetence. Each was built for a consumer that turned out not to want it, and agents are the first plausible consumer any of them has ever had.</p>
+<p>Two of them are worth reading against their live descendants, because the board puts them side by side on purpose.</p>
+<p><b>Self-describing APIs</b> is the sharpest, because that one got <b>tried</b>. Plugins read OpenAPI directly in 2023 and were retired inside a year, and MCP took the slot by shipping a protocol and a client instead of a description. Service contracts and registries is the same lesson twenty-five years earlier: WSDL plus UDDI is precisely the schema-and-index pair that <b>Tool discovery</b> carries a yellow bang for lacking today. The generalisation is uncomfortable. A machine-readable artifact with no runtime attached loses to a worse artifact that arrives with one, and the registry is never the hard part.</p>
+<p><b>Machine-readable policy</b> is the one that should make you cautious about the newest node on this board. P3P let a site state, in a form a machine could act on, what may be done with what it collects. It became a W3C Recommendation in 2002, one browser implemented it, sites published claims nobody checked, and it was formally obsoleted. Stated crawl preference is now attempting the same thing for AI training, and the difference cannot be expressiveness, because P3P was expressive. It has to be a consumer with leverage, which means a CDN or a court rather than a working group.</p>
 <!-- ══ /FLAVORTEXT: the standards layer ══════════════════════════════════ -->
 
 <!-- ══ FLAVORTEXT: injection panel ═══════════════════════════════════════ -->
@@ -334,6 +349,18 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
     <td class="st st-shipped">installed</td><td>reads what it's handed</td><td class="seen">~2023</td><td>context window</td>
     <td>The first time a model saw something that wasn't typed at it. Cheap, and it moved the product from conversation to work.</td>
     <td class="ex">PDF and image attachments, spreadsheets, Projects</td></tr>
+
+  <tr data-id="vision" data-branch="perception" data-tier="0" data-seen="2023-09" data-status="shipped" data-deps="files" data-flags="untrusted">
+    <th scope="row">Vision input</th>
+    <td class="st st-shipped">installed</td><td>reads what it's handed</td><td class="seen">Sep 2023</td><td>uploaded files</td>
+    <td>Pixels in, which is the access every screen-shaped thing on this board is built on: computer use is this node plus a cursor, and the browser surface is this node plus a network. Audio arrived the same season and belongs here too. Easy to overlook because it reads as a modality rather than a permission, but it is what let a model be pointed at software that was never designed to be read by one.</td>
+    <td class="ex">GPT-4V in ChatGPT, Sep 2023; voice the same season; Claude 3 vision, Mar 2024; a screenshot as context</td></tr>
+
+  <tr data-id="pmem" data-branch="perception" data-tier="0" data-seen="2024" data-status="partial" data-deps="retrieval" data-flags="" data-confidence="medium">
+    <th scope="row">Personal memory</th>
+    <td class="st st-partial">yellow bang</td><td>reads what it's handed</td><td class="seen">~2024</td><td>retrieval into context</td>
+    <td>Access to you, accumulated without being asked for. Distinct from a file system because you do not curate it, and distinct from organizational memory because this one actually shipped. <b>In the way:</b> you cannot read it, port it, or reason about what it inferred. A store that shapes every answer and shows you almost none of itself is a strange thing to have built first. <b>Bet:</b> memory becomes exportable under regulatory pressure rather than competitive pressure, and until it does it is the deepest moat in consumer AI precisely because leaving costs you a history you never had a copy of.</td>
+    <td class="ex">ChatGPT memory, 2024; Claude memory; per-project context</td></tr>
 
   <tr data-id="search" data-branch="perception" data-tier="1" data-seen="2023-03" data-status="shipped" data-deps="ctx" data-flags="untrusted">
     <th scope="row">Web search</th>
@@ -371,29 +398,65 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
     <td>If an agent refetches the same shape of document a thousand times, the second fetch should cost almost nothing. Shared compression dictionaries get a near-identical 272KB bundle down to 2.6KB, and Cloudflare shipped the idea under the title "compression for the agentic web." <b>In the way:</b> phase 3 hands dictionary generation to the network, which means the CDN, not you, learns which of your resources change and how. <b>Bet:</b> default-on at the CDN by 2027 with nobody configuring it, which is phase 3 working as designed. Watch whether that deploy-cadence telemetry quietly becomes a product of its own.</td>
     <td class="ex">RFC 9842 Compression Dictionary Transport, experimental in Chrome since 117; <a href="https://blog.cloudflare.com/shared-dictionaries/" rel="noopener external">Cloudflare's shared dictionaries</a>, beta 30 Apr 2026; this site already ships phase-1 dcz deltas by hand</td></tr>
 
-  <tr data-id="structured" data-branch="perception" data-tier="1" data-seen="2011-06" data-status="passed" data-deps="ctx" data-flags="untrusted" data-confidence="medium">
+  <tr data-id="structured" data-branch="declared" data-tier="1" data-seen="2011-06" data-status="passed" data-deps="ctx" data-flags="untrusted" data-confidence="medium">
     <th scope="row">Structured data in the page</th>
     <td class="st st-passed">disabled</td><td>reads the world</td><td class="seen">Jun 2011</td><td>context window</td>
     <td>The web already ships a machine-readable version of itself. schema.org turned fifteen this year, JSON-LD is on a large share of commercial pages, and agents overwhelmingly read the rendered text instead. <b>Passed over because:</b> the visible text is what humans check, so it's the copy that stays true, and a machine-only channel is a second thing to keep honest for no reward. <b>Bet:</b> it stays passed over. Rendered text keeps winning, and the effort that would have gone into fixing this goes into models that read pages the way people do.</td>
     <td class="ex">schema.org, Jun 2011; JSON-LD; microformats; <a href="/lens">/lens shows you both layers of any URL</a></td></tr>
 
-  <tr data-id="a11y" data-branch="perception" data-tier="1" data-seen="2014-03" data-status="partial" data-deps="ctx" data-flags="untrusted" data-confidence="medium">
+  <tr data-id="a11y" data-branch="declared" data-tier="1" data-seen="2014-03" data-status="partial" data-deps="ctx" data-flags="untrusted" data-confidence="medium">
     <th scope="row">The accessibility tree</th>
     <td class="st st-partial">yellow bang</td><td>reads the world</td><td class="seen">Mar 2014</td><td>context window</td>
     <td>The best agent interface on the web was built for screen readers and predates the agent era by a decade. Every browser already maintains a semantic tree of roles and labels beside the visual page, and it turned out to be the cheapest way for an agent to know what a control actually is: Playwright returns it as a YAML snapshot, and computer-use agents ground their pixels against it rather than guessing from shape. <b>In the way:</b> its quality is somebody else's accessibility diligence. An unlabelled button is invisible in the tree, so the agent falls back to screenshots and burns seconds and thousands of tokens working out what it is looking at. AOM, the API that would let a page inspect and repair its own tree, has sat as a draft for years. <b>Bet:</b> agent traffic becomes the first commercial reason anyone fixes ARIA, which is a strange and good outcome. Expect accessibility budgets approved on agent-conversion grounds by 2027, and expect nobody to enjoy saying that out loud.</td>
     <td class="ex">ARIA 1.0 as a W3C Recommendation, Mar 2014, on an MSAA lineage from 1997; Playwright accessibility snapshots; <a href="https://wicg.github.io/aom/explainer.html" rel="noopener external">AOM</a>, still a WICG draft</td></tr>
 
-  <tr data-id="aipref" data-branch="perception" data-tier="1" data-seen="2025" data-status="frontier" data-deps="fetch" data-flags="" data-confidence="low">
+  <tr data-id="aipref" data-branch="declared" data-tier="1" data-seen="2025" data-status="frontier" data-deps="fetch" data-flags="" data-confidence="low">
     <th scope="row">Stated crawl preference</th>
     <td class="st st-frontier">unknown device</td><td>reads the world</td><td class="seen">~2025</td><td>fetch and scrape</td>
     <td>robots.txt can say who may crawl and cannot say what they may do with what they took, which is the entire fight. The IETF chartered a working group to fix exactly that: a vocabulary for AI usage preferences, plus a way to attach it to content. <b>In the way:</b> the half that matters is the half that stalled. The vocabulary draft is on the Proposed Standard track at revision 06, with train-ai and search categories and plain y/n values, while the attachment draft that defines the Content-Usage header and its robots.txt rule lapsed under the six-month rule after revision 04 in Oct 2025 and has no newer revision, against an Aug 2026 milestone to reach the IESG. A vocabulary nobody can attach is a dictionary, not a standard. <b>Bet:</b> it ships late and gets adopted anyway, because the alternative is every crawler negotiating bilaterally forever. The enforcement will come from the edge rather than from the header, and the header will get cited as though it did the work.</td>
     <td class="ex"><a href="https://www.ietf.org/blog/aipref-wg/" rel="noopener external">IETF AIPREF</a>; <a href="https://datatracker.ietf.org/doc/html/draft-ietf-aipref-vocab/" rel="noopener external">draft-ietf-aipref-vocab</a>; robots.txt, 1994; X-Robots-Tag</td></tr>
 
-  <tr data-id="discovery" data-branch="perception" data-tier="1" data-seen="2024-09" data-status="passed" data-deps="ctx" data-flags="" data-confidence="medium">
+  <tr data-id="semweb" data-branch="declared" data-tier="1" data-seen="1999" data-status="passed" data-deps="ctx" data-flags="untrusted" data-confidence="high">
+    <th scope="row">The Semantic Web</th>
+    <td class="st st-passed">disabled</td><td>reads the world</td><td class="seen">~1999</td><td>context window</td>
+    <td>The original plan, and the most thoroughly not-taken path on this board. A web of typed entities and stated relations, queryable like a database, with reasoning over it. Two decades of standards, real deployments, and genuine intellectual weight. <b>Passed over because:</b> it asked every author to model their domain correctly and agree with everyone else's model, and the payoff arrived only once enough of them had. Ordinary prose asked for nothing and got read anyway. <b>Bet:</b> it stays dead in its own name and wins under another. Language models absorbed the goal (ask the web a question, get an entity back) by abandoning the method entirely, which is the least satisfying possible resolution for everyone who built it. Watch for the shape returning as generated structure rather than authored structure.</td>
+    <td class="ex">RDF, ~1999; OWL, 2004; SPARQL, 2008; linked data. Schema.org is the lightweight survivor, and it is next door on this board wearing the same red X</td></tr>
+
+  <tr data-id="wsdl" data-branch="declared" data-tier="1" data-seen="2001" data-status="passed" data-deps="ctx" data-flags="" data-confidence="medium">
+    <th scope="row">Service contracts and registries</th>
+    <td class="st st-passed">disabled</td><td>reads the world</td><td class="seen">~2001</td><td>context window</td>
+    <td>Formal machine-readable service contracts, plus a registry to look them up in. Read that sentence again next to <b>Tool discovery</b>, which carries a yellow bang on this board for wanting exactly those two things. It was built, standardised, deployed inside large enterprises, and abandoned. <b>Passed over because:</b> the contracts were verbose, the registries were empty in practice, and REST plus a human-readable doc page beat it decisively on the only metric that mattered, which was how long until a developer's first successful call. <b>Bet:</b> the MCP registry rediscovers this ceiling rather than the standard. The hard part was never the schema, it was that nobody maintains a registry entry for a service they can already document in a README.</td>
+    <td class="ex">WSDL, ~2001; UDDI registries; SOAP. Every problem Tool discovery has today, attempted twenty-five years ago</td></tr>
+
+  <tr data-id="p3p" data-branch="declared" data-tier="1" data-seen="2002-04" data-status="passed" data-deps="ctx" data-flags="" data-confidence="high">
+    <th scope="row">Machine-readable policy</th>
+    <td class="st st-passed">disabled</td><td>reads the world</td><td class="seen">Apr 2002</td><td>context window</td>
+    <td>A site stating, in a form a machine can act on, what may be done with what it collects. This is the direct ancestor of <b>Stated crawl preference</b> two rows down, and it is the reason to hold that node's optimism loosely. <b>Passed over because:</b> almost nothing consumed it, one browser implemented it, sites published claims nobody verified, and it was formally retired. The failure was never expressiveness. It was that a machine-readable promise with no enforcement and no auditor is a decoration. <b>Bet:</b> AIPREF only avoids this fate if a consumer with leverage enforces it, which means a CDN or a court rather than a working group. On the current trajectory it is P3P with better XML, and I would rather be wrong about that in public.</td>
+    <td class="ex">P3P, W3C Recommendation Apr 2002, obsoleted 2018. Do Not Track went the same way</td></tr>
+
+  <tr data-id="openapi" data-branch="declared" data-tier="1" data-seen="2011" data-status="passed" data-deps="ctx" data-flags="" data-confidence="medium">
+    <th scope="row">Self-describing APIs</th>
+    <td class="st st-passed">disabled</td><td>reads the world</td><td class="seen">~2011</td><td>context window</td>
+    <td>Most of the web's APIs have carried a machine-readable description of themselves for well over a decade, and the industry maintains those documents anyway, for its own docs and clients. <b>Passed over because:</b> this one got genuinely tried and then dropped. ChatGPT plugins consumed OpenAPI directly in Mar 2023, were deprecated by Apr 2024, and MCP took the slot by shipping a protocol and a client rather than a description. A description without a runtime is a document, and a document is not an integration. <b>Bet:</b> OpenAPI comes back as the thing that GENERATES an MCP server rather than the thing an agent reads, which is already happening quietly and gets almost no credit for it.</td>
+    <td class="ex">Swagger, ~2011; OpenAPI 3.0, Jul 2017; ChatGPT plugins, Mar 2023, deprecated Apr 2024</td></tr>
+
+  <tr data-id="feeds" data-branch="declared" data-tier="1" data-seen="2005-12" data-status="passed" data-deps="fetch" data-flags="untrusted" data-confidence="medium">
+    <th scope="row">Feeds</th>
+    <td class="st st-passed">disabled</td><td>reads the world</td><td class="seen">Dec 2005</td><td>fetch and scrape</td>
+    <td>The oldest node on this board. The web has had a push channel for "something changed here" for two decades, it is still deployed almost everywhere, and agents rebuild it every day out of polling plus scraping plus hope. <b>Passed over because:</b> feeds lost the consumer war to timelines, and agent tooling inherited the habit of treating the web as pages to fetch rather than streams to subscribe to. <b>Bet:</b> this returns the moment standing execution is cheap, because polling a feed is the cheapest possible wake-up and the two halves of "an agent noticed something happened" are both already built and neither is used.</td>
+    <td class="ex">RSS 2.0, 2002; Atom, RFC 4287, Dec 2005; WebSub, W3C Recommendation 2018</td></tr>
+
+  <tr data-id="discovery" data-branch="declared" data-tier="1" data-seen="2024-09" data-status="passed" data-deps="ctx" data-flags="" data-confidence="medium">
     <th scope="row">Published discovery surfaces</th>
     <td class="st st-passed">disabled</td><td>reads the world</td><td class="seen">Sep 2024</td><td>context window</td>
     <td>A site can hand an agent a map of itself: llms.txt, /.well-known/ documents, agent cards, an SVCB record in DNS. The publishing side is solved and nearly free. <b>Passed over because:</b> consumption never arrived. This site publishes all four and effectively nothing reads them, which puts it in the same lineage as robots.txt in 1994 and sitemaps in 2005, both of which only mattered once one big consumer committed. <b>Bet:</b> stays a courtesy until a major agent vendor commits to reading it, and none has. If one does, it becomes table stakes in a quarter.</td>
     <td class="ex">llms.txt, Sep 2024; <a href="/llms.txt">this site's</a>; /.well-known/agent-card.json; DNS-AID SVCB</td></tr>
+
+  <tr data-id="ambient" data-branch="perception" data-tier="1" data-seen="" data-status="phantom" data-deps="vision" data-flags="untrusted" data-confidence="low">
+    <th scope="row">Ambient sensing</th>
+    <td class="st st-phantom">not present</td><td>reads the world</td><td class="seen">not yet</td><td>vision input</td>
+    <td>Vision input is an artifact somebody chose to hand over. This is the unbroken stream nobody curated: a room, a commute, a workday, continuously. The capability gap is nearly zero, since the hardware and the models both exist, which is exactly what makes it a phantom rather than a frontier. What is missing is permission, and no amount of engineering supplies that. <b>Bet:</b> it arrives narrow and consented first, in settings where the recording was already happening and already normal, and the general case stays blocked for a decade on a problem that is social rather than technical. The interesting failure mode is not surveillance, it is that everyone around the wearer never agreed to anything.</td>
+    <td class="ex">Wearables and always-on assistants, meeting recorders as the socially accepted beachhead</td></tr>
 
   <tr data-id="orgmem" data-branch="perception" data-tier="1" data-seen="" data-status="phantom" data-deps="retrieval" data-flags="untrusted" data-confidence="medium">
     <th scope="row">Organizational memory</th>
@@ -420,6 +483,42 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
     <td>Access to more context windows than one. Parallelism is the payoff, and isolation is the actual mechanism: a subagent's failure and its 200K of noise both stay in its own buffer.</td>
     <td class="ex">Task fan-out, agent workflows, orchestrator patterns</td></tr>
 
+  <tr data-id="standing" data-branch="cognition" data-tier="1" data-seen="2025-01" data-status="partial" data-deps="tools" data-flags="" data-confidence="medium">
+    <th scope="row">Standing execution</th>
+    <td class="st st-partial">yellow bang</td><td>reads the world</td><td class="seen">Jan 2025</td><td>tool calls</td>
+    <td>Access to the clock, which is the only node here that grants initiative. Every other access on this board is request-scoped: something happens because a person asked just now. A scheduled agent can act because a Tuesday arrived. <b>In the way:</b> nobody has worked out what an unprompted agent is allowed to do, so the shipped versions are deliberately timid, and the interesting version needs a trigger richer than a clock. <b>Bet:</b> the unlock is not better scheduling, it is cheap event triggers, and the first credible version rides something that already exists: a feed, a webhook, a repo notification. Pair this with the Feeds node and the whole shape is sitting there unused.</td>
+    <td class="ex">ChatGPT Tasks, Jan 2025; scheduled agents and routines; cron triggers; this site runs its own crawl, census, and webmention crons</td></tr>
+
+  <tr data-id="xmpp" data-branch="cognition" data-tier="3" data-seen="2004-10" data-status="passed" data-deps="ctx" data-flags="untrusted" data-confidence="medium">
+    <th scope="row">Federated messaging</th>
+    <td class="st st-passed">disabled</td><td>changes someone else's</td><td class="seen">Oct 2004</td><td>context window</td>
+    <td>Addressable identities on independent servers, exchanging structured messages across organisational boundaries, with presence and capability discovery built in. An IETF standard since 2004. That is the transport layer <b>Peer agents</b> is currently specifying from scratch. <b>Passed over because:</b> federation lost to platforms for the ordinary commercial reason, and the largest deployments that did adopt it eventually closed their federation off once they had the users. <b>Bet:</b> agent-to-agent rediscovers every hard problem this already solved (addressing, presence, capability negotiation, spam from a fluent stranger) and solves them worse, because the constituency for a new protocol is vendors and the constituency for federation was never anyone with a business.</td>
+    <td class="ex">XMPP, RFC 3920, Oct 2004; Jabber; presence and service discovery. Several large platforms adopted it and then defederated</td></tr>
+
+  <tr data-id="peers" data-branch="cognition" data-tier="3" data-seen="2025-04" data-status="frontier" data-deps="subagents" data-flags="authority" data-confidence="medium">
+    <th scope="row">Peer agents</th>
+    <td class="st st-frontier">unknown device</td><td>changes someone else's</td><td class="seen">Apr 2025</td><td>subagents</td>
+    <td>Subagents are your own children, spawned and trusted by construction. This is somebody else's agent, with its own operator, its own instructions, and no reason to share your goals. <b>In the way:</b> adoption is thin, and the reason is structural rather than technical. A peer is a negotiation, and nobody wants to debug a disagreement between two probabilistic systems acting for different principals. It is also the sharpest untrusted-input surface on the board, because the other party is fluent. <b>Bet:</b> this settles into agent-to-SERVICE rather than agent-to-agent. MCP won that shape already, and a protocol for peers gets used mostly as a transport between components one company owns.</td>
+    <td class="ex">A2A, announced Apr 2025 and donated to the Linux Foundation that June. This site publishes an _index agent record and deliberately not _a2a, because a dangling pointer passes a scanner and breaks the agent that believes it</td></tr>
+
+  <tr data-id="introspect" data-branch="cognition" data-tier="0" data-seen="" data-status="phantom" data-deps="cot" data-flags="" data-confidence="low">
+    <th scope="row">Self-introspection</th>
+    <td class="st st-phantom">not present</td><td>reads what it's handed</td><td class="seen">not yet</td><td>reasoning tokens</td>
+    <td>Reasoning tokens gave a model access to its own thinking as text. This would give it access to its own state as a measurement: how confident it actually is, which of two readings it is torn between, whether it is pattern-matching or reasoning. Every other node on this board exists because generalisation is unreliable, and this is the only one that would let a model report on that unreliability from the inside instead of everyone inferring it from outside. <b>Bet:</b> arrives first as a safety instrument for labs and only later, if ever, as something an agent can consult about itself mid-task. The blocker is not interpretability progress, it is that a number an agent can read is a number it can be trained to game.</td>
+    <td class="ex">Interpretability probes, calibration research, uncertainty estimates. Nothing an agent can query about itself at runtime</td></tr>
+
+  <tr data-id="autobio" data-branch="cognition" data-tier="1" data-seen="" data-status="phantom" data-deps="pmem" data-flags="" data-confidence="medium">
+    <th scope="row">Autobiographical continuity</th>
+    <td class="st st-phantom">not present</td><td>reads the world</td><td class="seen">not yet</td><td>personal memory</td>
+    <td>Personal memory is about you. This is the agent's access to its own history: what it tried in March, what it broke, what it already learned about this codebase the hard way. Right now every session starts as a competent stranger, and the cost is invisible because nobody bills you for advice you already paid for once. <b>Bet:</b> the first real version is a side effect of something else, most likely a log everyone kept for auditing that turns out to be worth reading back. It will not be marketed as memory. It will show up as an agent that stops making the same suggestion for the fourth time, and that will be the whole demo.</td>
+    <td class="ex">Session transcripts nobody re-reads, agent logs kept for compliance. Distinct from user memory, which shipped</td></tr>
+
+  <tr data-id="escalate" data-branch="cognition" data-tier="1" data-seen="" data-status="phantom" data-deps="subagents" data-flags="" data-confidence="medium">
+    <th scope="row">Escalation to another model</th>
+    <td class="st st-phantom">not present</td><td>reads the world</td><td class="seen">not yet</td><td>subagents</td>
+    <td>A subagent is another instance of you. A peer is somebody else's agent. This is neither: a model deciding this problem is above its weight and handing it to a stronger or more specialised one, then using the answer. Routing exists, but it is imposed from outside by a dispatcher; this node is the model itself knowing its own ceiling. Which makes it downstream of <b>Self-introspection</b>, and that is why it is still a phantom. <b>Bet:</b> shows up as cost optimisation rather than capability, because the version that saves money (a cheap model escalating rarely) is far easier to sell than the version that admits a limit.</td>
+    <td class="ex">Model routers and cascades, all dispatcher-driven. Nothing where the model elects to escalate on its own read of the problem</td></tr>
+
   <tr data-id="speed" data-branch="cognition" data-tier="0" data-seen="2026" data-status="frontier" data-deps="cot" data-flags="" data-confidence="high">
     <th scope="row">Inference speed</th>
     <td class="st st-frontier">unknown device</td><td>reads what it's handed</td><td class="seen">~2026</td><td>reasoning tokens</td>
@@ -439,7 +538,7 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
     <td>A model can only call what it can find, and what a given tool means shifts from one model to the next, so the same server behaves differently depending on who mounted it. <b>In the way:</b> no single index. Every host ships its own roster and hopes the descriptions carry, and the teams treating tool descriptions as an audience-facing surface the way Resend does are early to something real. <b>Bet:</b> this resolves the way package discovery did, with one registry winning and everyone complaining about it. The official registry is eleven months old and already has competitors, which is the normal early shape rather than a warning sign.</td>
     <td class="ex">MCP Registry preview, 8 Sep 2025; GitHub's MCP Registry, 16 Sep 2025; tool search; Resend's answer-engine work</td></tr>
 
-  <tr data-id="webmcp" data-branch="manipulation" data-tier="3" data-seen="2026-02" data-status="frontier" data-deps="tools,browser" data-flags="authority" data-confidence="medium">
+  <tr data-id="webmcp" data-branch="declared" data-tier="3" data-seen="2026-02" data-status="frontier" data-deps="tools,browser" data-flags="authority" data-confidence="medium">
     <th scope="row">In-page tool declaration</th>
     <td class="st st-frontier">unknown device</td><td>changes someone else's</td><td class="seen">Feb 2026</td><td>tool calls, browser as a first-class surface</td>
     <td>The direct answer to the browser node's whole problem. Instead of an agent inferring a site's workflow from pixels on every single visit, the page declares its own typed, callable tools and the agent calls them. The same idea as MCP, hosted by the document rather than by a server. <b>In the way:</b> it is a W3C Community Group draft rather than a standard, only Gemini in Chrome consumes the tools today, and the shape is still moving. The API moved off navigator onto the document because tools belong to a page, and Chrome deprecated navigator.modelContext in 150 while the origin trial still ships it. <b>Bet:</b> the idea survives and this spelling of it might not. A page-declared tool surface is too obviously right to lose, but a capability exactly one agent reads is a proprietary channel wearing a standard's clothes, and it wants a second consumer before anyone should author against it.</td>
@@ -457,10 +556,16 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
     <td>Durable state the model can name, list, and revise. Enough of a memory that the context window stops having to be one. The shape it is settling into is a virtual filesystem rather than a real one: Cloudflare Computer backs its with SQLite, populates it from object storage or a git clone, and mounts the same tree into an isolate by binding and into a container by FUSE, so the agent's working directory becomes something you can snapshot and hand to a different runtime.</td>
     <td class="ex">Claude Code research preview, Feb 2025; workspace mounts; artifact directories; <a href="https://blog.cloudflare.com/cloudflare-computer/" rel="noopener external">Cloudflare Computer</a>'s SQLite-backed VFS</td></tr>
 
-  <tr data-id="cursor" data-branch="manipulation" data-tier="3" data-seen="2024-10" data-status="partial" data-deps="codeexec" data-flags="authority" data-confidence="low">
+  <tr data-id="scripting" data-branch="manipulation" data-tier="3" data-seen="1993" data-status="passed" data-deps="ctx" data-flags="" data-confidence="high">
+    <th scope="row">App scripting dictionaries</th>
+    <td class="st st-passed">disabled</td><td>changes someone else's</td><td class="seen">~1993</td><td>context window</td>
+    <td>Desktop applications used to publish a dictionary of their own verbs and objects, and a runtime existed to call them. Not a screenshot, not a scrape: a typed vocabulary of what this program can do, shipped inside the program, on both major platforms, thirty years ago. Read that against <b>Computer use</b> directly below it, which drives those same applications by looking at pictures of them. <b>Passed over because:</b> the dictionaries decayed as GUIs got richer, nobody was rewarded for maintaining one, and the web arrived and reset the question. The capability did not lose an argument; it lost attention. <b>Bet:</b> this returns as the thing agents ask for from native apps, and the ask will be framed as a brand-new idea. The XP-era desktop this page is dressed as had a better answer to agent automation than the 2026 desktop does.</td>
+    <td class="ex">AppleScript dictionaries and Apple Events, ~1993; OLE Automation and COM; Windows Script Host. The accessibility APIs that computer use leans on are what survived</td></tr>
+
+  <tr data-id="cursor" data-branch="manipulation" data-tier="3" data-seen="2024-10" data-status="partial" data-deps="codeexec,vision" data-flags="authority" data-confidence="low">
     <th scope="row">Computer use</th>
-    <td class="st st-partial">yellow bang</td><td>changes someone else's</td><td class="seen">Oct 2024</td><td>code execution</td>
-    <td>Access to your cursor, which is the universal adapter: anything a person can do, in any app, with no integration. <b>In the way:</b> it runs at pixel rate, it has no undo, and it can't prove what it did afterward, so the audit trail is a screen recording. <b>Bet:</b> stays the fallback rather than becoming the default, because it cannot produce an audit trail and the places that most want automation are the places that most need one. I hold this one loosely; a cheap reliable audit layer would flip it.</td>
+    <td class="st st-partial">yellow bang</td><td>changes someone else's</td><td class="seen">Oct 2024</td><td>code execution, vision input</td>
+    <td>Access to your cursor, which is the universal adapter: anything a person can do, in any app, with no integration. Strictly this node is vision input plus a pointer, and reading it that way explains its ceiling: it inherits every weakness of looking at a screen instead of querying a system. <b>In the way:</b> it runs at pixel rate, it has no undo, and it can't prove what it did afterward, so the audit trail is a screen recording. <b>Bet:</b> stays the fallback rather than becoming the default, because it cannot produce an audit trail and the places that most want automation are the places that most need one. I hold this one loosely; a cheap reliable audit layer would flip it.</td>
     <td class="ex">Claude computer use, 22 Oct 2024; desktop automation; RPA that finally works</td></tr>
 
   <tr data-id="cli" data-branch="manipulation" data-tier="3" data-seen="2026-07" data-status="frontier" data-deps="codeexec,fs" data-flags="authority" data-confidence="high">
@@ -468,6 +573,12 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
     <td class="st st-frontier">unknown device</td><td>changes someone else's</td><td class="seen">Jul 2026</td><td>code execution, file system</td>
     <td>The most underrated bet on this board. A CLI is a typed, composable, auditable API that already ships docs, a man page, exit codes, and a dry-run flag, and it costs a company far less than a bespoke agent surface. That DoorDash, which spent years hostile to automation, now ships one is the tell. <b>In the way:</b> distribution and trust, not design. Every CLI is also a local binary somebody has to authorize. <b>Bet:</b> the one I'd actually take. Two years out, shipping an agent CLI is as ordinary as shipping a public API was in 2015, and for the same reason: it's cheap, it's testable, and the alternative is letting somebody else's scraper define your interface for you.</td>
     <td class="ex"><a href="https://thenewstack.io/doordash-cli-agents-order/" rel="noopener external">dd-cli</a>, beta 16 Jul 2026 with a Claude checkout demo; <a href="https://webcmd.dev" rel="noopener external">webcmd</a>; gh; wrangler; just-bash, which translates shell into JavaScript so a serverless isolate can answer a command line at all</td></tr>
+
+  <tr data-id="release" data-branch="manipulation" data-tier="3" data-seen="" data-status="phantom" data-deps="fs,tests" data-flags="authority" data-confidence="medium">
+    <th scope="row">Release authority</th>
+    <td class="st st-phantom">not present</td><td>changes someone else's</td><td class="seen">not yet</td><td>file system, tests and logs</td>
+    <td>An agent that can write code and run tests still cannot ship. Between the passing test and the running service sits a boundary almost every team draws deliberately, and it is the sharpest example on this board of an access being withheld rather than unbuilt. This site is a worked example of the withholding: no deploy path may create infrastructure, the CI token is read-only by design, and only one machine-owned branch can publish, specifically so that the automation cannot reach production. <b>Bet:</b> stays withheld, and that is the correct outcome rather than a gap to close. What actually arrives is narrower and more useful: agents that prepare a release completely and hand a human one irreversible button. The interesting engineering is in making that handoff legible, not in removing it.</td>
+    <td class="ex">Agents that open a PR and stop. This site's own release rules, written to keep the automation out of production on purpose</td></tr>
 
   <tr data-id="binaries" data-branch="manipulation" data-tier="2" data-seen="" data-status="phantom" data-deps="codeexec" data-flags="" data-confidence="low">
     <th scope="row">Binaries without source</th>
@@ -481,6 +592,18 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
     <td class="st st-shipped">installed, underused</td><td>changes its own machine</td><td class="seen">~2025</td><td>code execution</td>
     <td>Access to cause and effect, which is the cheapest thing on this board and the least deliberately built. Handing an agent the failing test and the log did in minutes what days of reasoning about the probable bug did not, because it replaces a prior with an observation.</td>
     <td class="ex">Test runners in the agent loop, log tailing, CI output as context</td></tr>
+
+  <tr data-id="oracle" data-branch="feedback" data-tier="0" data-seen="2025-06" data-status="shipped" data-deps="tools" data-flags="">
+    <th scope="row">The human as an oracle</th>
+    <td class="st st-shipped">installed, underused</td><td>reads what it's handed</td><td class="seen">Jun 2025</td><td>tool calls</td>
+    <td>The cheapest ground truth on this board is asking the person sitting there. It is the same substitution as a failing test, one observation in place of a confident prior, and it is available on every single turn for free. Structured elicitation gave it a shape a model can actually reach for rather than a habit it has to be talked into. The reason this reads as underused is that most agents are tuned toward appearing capable, and a question is the one output that admits the model does not know yet.</td>
+    <td class="ex">Clarifying questions; MCP elicitation in the 2025-06-18 revision; approval gates; a question tool the model is actually rewarded for using</td></tr>
+
+  <tr data-id="telemetry" data-branch="feedback" data-tier="1" data-seen="2025" data-status="partial" data-deps="tests" data-flags="" data-confidence="medium">
+    <th scope="row">Production telemetry</th>
+    <td class="st st-partial">yellow bang</td><td>reads the world</td><td class="seen">~2025</td><td>tests and logs in the loop</td>
+    <td>Tests and logs are the development loop, where you control the inputs. This is what real people actually experienced, which is a different flavor of cause and effect and a strictly better one, because production is the only environment that is not a guess about production. <b>In the way:</b> it is simultaneously the highest-signal feedback on the board and the most access-controlled. Prod telemetry carries user data, so the teams best placed to hand it to an agent are the teams least able to. <b>Bet:</b> this arrives sanitised and aggregated rather than raw, and the winning form is a query interface rather than a firehose. Whoever ships "ask your production" as a bounded, auditable read will find it is worth more than another eval harness.</td>
+    <td class="ex">Error trackers, RUM, analytics, distributed traces. This site's own case: its RUM beacon is proxied first-party because the collector sits on a blocklist, and the visitors it was losing skewed toward exactly the browsers whose behaviour it existed to measure</td></tr>
 
   <tr data-id="evals" data-branch="feedback" data-tier="3" data-seen="2026" data-status="partial" data-deps="tests" data-flags="" data-confidence="medium">
     <th scope="row">Eval and RL environments</th>
@@ -505,6 +628,12 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
     <td class="st st-passed">disabled</td><td>changes its own machine</td><td class="seen">~2014</td><td>code execution</td>
     <td>Record a run once, then replay it as many times as you like, deterministically, and step backwards through it. This has existed and worked for over a decade. <b>Passed over because:</b> recording costs something up front and re-running was always cheap enough, so almost nobody paid. Agents inherited that habit and add print statements instead. <b>Bet:</b> gets rediscovered once agent turns are expensive enough that re-running to reproduce costs more than recording would have. That crossover is close, and this is the passed-over node I'd expect to come back first.</td>
     <td class="ex">rr, Mozilla, ~2014; Replay.io; deterministic simulation testing</td></tr>
+
+  <tr data-id="sim" data-branch="feedback" data-tier="2" data-seen="" data-status="phantom" data-deps="evals" data-flags="" data-confidence="medium">
+    <th scope="row">Simulation</th>
+    <td class="st st-phantom">not present</td><td>changes its own machine</td><td class="seen">not yet</td><td>eval and RL environments</td>
+    <td>An eval scores an attempt. A simulation lets one be tried and thrown away. This is the missing rung underneath every node in Authority: consequence-free cause and effect, where an agent can find out what spending the money or sending the email would have done without doing it. The whole board's safety story leans on reversibility, and this is the node that would manufacture reversibility on demand. <b>Bet:</b> the first credible version is not built for agents at all. It gets repointed from robotics and self-driving, where consequence-free rehearsal has been a funded discipline for a decade, and the software people notice late that the tooling already exists.</td>
+    <td class="ex">Nothing ships this for general agents. Robotics and autonomous-vehicle simulators, deterministic replay harnesses, and staging environments are the nearest relatives</td></tr>
 
   <tr data-id="discard" data-branch="feedback" data-tier="1" data-seen="" data-status="phantom" data-deps="tests" data-flags="" data-confidence="medium">
     <th scope="row">The discard pile</th>
@@ -537,6 +666,12 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
     <td>Output the caller can depend on without parsing prose. The node that turns a model from a thing you read into a thing you can put in a pipeline.</td>
     <td class="ex">OpenAI Structured Outputs, 6 Aug 2024; tool result contracts; forced tool calls</td></tr>
 
+  <tr data-id="runnable" data-branch="expression" data-tier="0" data-seen="2024-06" data-status="shipped" data-deps="markup" data-flags="">
+    <th scope="row">Output that runs</th>
+    <td class="st st-shipped">installed</td><td>reads what it's handed</td><td class="seen">Jun 2024</td><td>markdown and HTML</td>
+    <td>Expression's ceiling moved from text a person reads to software a person uses. The same bytes as the markup node, with the difference that a browser executes them, which turns every answer into a potential tool. This is the output access that did for interfaces what image output did for sentiment: it made the capability legible to people who were never going to read a diff.</td>
+    <td class="ex">Claude Artifacts, Jun 2024; generative and assembled UI; a rendered page as an answer</td></tr>
+
   <!-- ── AUTHORITY ──────────────────────────────────────────────────────── -->
   <tr data-id="secrets" data-branch="authority" data-tier="4" data-seen="2026-04" data-status="partial" data-deps="fs" data-flags="authority" data-confidence="high">
     <th scope="row">Secrets</th>
@@ -555,6 +690,30 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
     <td class="st st-frontier">unknown device</td><td>spends</td><td class="seen">May 2025</td><td>secrets, verifiable identity</td>
     <td>Cloudflare's Act IV is access and commerce, and it rides the same Web Bot Auth as the crawler story. That isn't a coincidence, it's the dependency: an agent can't be trusted to pay until it can be identified, and it can't be identified until somebody signs for it. <b>In the way:</b> liability. Every party wants the agent's transaction and nobody wants its chargeback. <b>Bet:</b> agent payments arrive through the card networks rather than around them, because liability is the real blocker and only they can absorb it. Crypto rails get the long tail and most of the demos.</td>
     <td class="ex">x402, May 2025; Turnkey; Cloudflare with the major payment networks, 2026; dd-cli completing a real checkout</td></tr>
+
+  <tr data-id="asyou" data-branch="authority" data-tier="4" data-seen="2025" data-status="frontier" data-deps="secrets,identity" data-flags="authority" data-confidence="medium">
+    <th scope="row">Delegated identity</th>
+    <td class="st st-frontier">unknown device</td><td>spends</td><td class="seen">~2025</td><td>secrets, verifiable identity</td>
+    <td>Not the credential's power and not the ability to pay: your NAME. Send that email as me, reply in that thread as me, post that as me. The blast radius here is reputational, which no other node on this board covers, and reputation is the one thing a rollback cannot restore. <b>In the way:</b> the crude version shipped over a decade ago as OAuth scopes, which delegate to an APP that behaves deterministically, and nothing in that model contemplated a delegate that improvises. There is no way to mark a message as "sent by an agent I authorised" that a recipient can check. <b>Bet:</b> signed provenance on outbound messages arrives before agent-to-human trust does, and it arrives because platforms want to protect their own deliverability rather than because anyone wanted to be honest about it.</td>
+    <td class="ex">OAuth 2.0 scopes, RFC 6749, 2012, as the crude precursor; send-as grants; agents that post, reply, and DM under your account today with nothing marking them</td></tr>
+
+  <tr data-id="contracts" data-branch="authority" data-tier="4" data-seen="" data-status="phantom" data-deps="asyou,money" data-flags="authority" data-confidence="low">
+    <th scope="row">Contracts and agreement</th>
+    <td class="st st-phantom">not present</td><td>spends</td><td class="seen">not yet</td><td>delegated identity, money</td>
+    <td>When an agent clicks accept, who is bound? Nobody has an answer, and everything commerce-shaped on this board quietly assumes one exists. This is to money what verifiable identity is to fetch: the dependency that has to resolve before the interesting node is safe, and the one people skip because it looks like a lawyer's problem rather than an engineering one. <b>Bet:</b> it gets settled in practice by the payment networks' liability rules years before any legal doctrine catches up, exactly the way agent payments will. The operative document will be a card-scheme chargeback policy, not a statute, and almost nobody will notice that is what happened.</td>
+    <td class="ex">Clickwrap and terms acceptance, which assume a human read them; nothing that binds an agent's principal exists</td></tr>
+
+  <tr data-id="stake" data-branch="authority" data-tier="4" data-seen="" data-status="phantom" data-deps="money,identity" data-flags="authority" data-confidence="low">
+    <th scope="row">Stake-weighted agency</th>
+    <td class="st st-phantom">not present</td><td>spends</td><td class="seen">not yet</td><td>money, verifiable identity</td>
+    <td>Verifiable identity says who an agent is. This says what it has to lose. An agent posting a bond it forfeits on misbehaviour can be extended trust without its operator being known or liked, which is a genuinely different trust primitive from a signature: one is attestation, this one is collateral. <b>Bet:</b> it appears in crypto first because the slashing primitive exists there and effectively nowhere else, and it crosses over only once it is re-skinned as a bond or an insurance premium, wearing vocabulary a risk desk already prices. Low confidence on the timeline and higher confidence on the shape.</td>
+    <td class="ex">Staking and slashing, bonded relayers and sequencers, x402 with collateral attached. Nothing agent-specific ships</td></tr>
+
+  <tr data-id="hands" data-branch="authority" data-tier="5" data-seen="" data-status="phantom" data-deps="money" data-flags="authority" data-confidence="medium">
+    <th scope="row">Human hands for hire</th>
+    <td class="st st-phantom">not present</td><td>moves atoms</td><td class="seen">not yet</td><td>money</td>
+    <td>The honest bridge to the physical world, and it needs no robotics at all: the agent pays a person to do the thing. Mechanical Turk ran the other direction for twenty years, humans standing in for a machine, and every gig platform is the inverted version sitting there waiting. This is why Meatspace beside it is the wrong place to look first. Atoms are already reachable by proxy, and the only missing piece is the money node. <b>Bet:</b> this is how physical agency actually arrives, and it arrives with no announcement, because from the outside it looks like a payment rather than a capability. Watch the delivery and errand platforms rather than the robotics ones.</td>
+    <td class="ex">The Mechanical Turk inversion; errand and delivery platforms; dd-cli is already this for one narrow errand</td></tr>
 
   <tr data-id="meat" data-branch="authority" data-tier="5" data-seen="" data-status="phantom" data-deps="money,cursor" data-flags="authority" data-confidence="low">
     <th scope="row">Meatspace</th>
@@ -622,6 +781,7 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
 
   var BRANCHES = [
     ["perception",   "Perception",   "getting the world in"],
+    ["declared",     "Declared surfaces", "what the world says about itself"],
     ["cognition",    "Cognition",    "thinking about it"],
     ["manipulation", "Manipulation", "acting on things"],
     ["feedback",     "Feedback",     "learning what happened"],
@@ -713,9 +873,20 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
     if (filter === "gaps") return n.status !== "shipped";
     return n.status === filter;
   };
+  /* The filter COLLAPSES the graph rather than dimming it. At 39 nodes dimming was
+     fine and kept spatial memory between states; at 53 it means scrolling past
+     thirty greyed boxes to find the eight lit ones, which is the opposite of what
+     a filter is for. The device tree on the left stays unfiltered and dims
+     instead, so it remains a stable full inventory — which is how the real
+     console behaves: the tree is what you have, the pane is what you asked for.
+     Injection mode ignores the filter outright, because the flow routes through
+     the context window and a filter that excludes it would draw nothing at all. */
+  var canvasList = function(){
+    return injecting ? visible() : visible().filter(passesFilter);
+  };
 
   /* --- layout ---------------------------------------------------------- */
-  var COL_W = 160, NODE_W = 148, NODE_H = 40, ROW_H = 58, HEAD_H = 26,
+  var COL_W = 142, NODE_W = 132, NODE_H = 40, ROW_H = 52, HEAD_H = 26,
       BAND_HEAD = 15, BAND_PAD = 6, LEFT = 4;
 
   /* blast radius: branch columns, tier bands. BAND_HEAD is a label strip, because
@@ -752,7 +923,7 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
      canvas. LANE_HEAD is the same fix the tier bands needed: a label strip above
      each lane, because a lane label drawn beside its own row gets painted over by
      the first node box in it. */
-  var PRE_X = 4, PRE_W = 156, GAP = 16, AXIS_W = 620, SPEC_GAP = 18, SPEC_W = 156, LANE_HEAD = 14;
+  var PRE_X = 4, PRE_W = 156, GAP = 16, AXIS_W = 648, SPEC_GAP = 18, SPEC_W = 156, LANE_HEAD = 14;
   function timeLayout(list){
     var axisX = PRE_X + PRE_W + GAP;
     var specX = axisX + AXIS_W + SPEC_GAP;
@@ -811,21 +982,21 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
   }
   /* two lines of name inside the box, split on the last word that fits */
   function wrapName(n){
-    var words = n.name.split(" "), lines = [""], limit = 23;
+    var words = n.name.split(" "), lines = [""], limit = 19;
     words.forEach(function(w){
       var probe = lines[lines.length - 1] ? lines[lines.length - 1] + " " + w : w;
       if (probe.length > limit && lines.length < 2) lines.push(w);
       else lines[lines.length - 1] = probe;
     });
     return lines.map(function(t, i){
-      return '<text class="nm" x="' + (n.x + 24) + '" y="' + (n.y + 15 + i * 11) + '">' + esc(t) + "</text>";
+      return '<text class="nm" x="' + (n.x + 22) + '" y="' + (n.y + 15 + i * 11) + '">' + esc(t) + "</text>";
     }).join("");
   }
 
   var canvas = document.getElementById("canvas");
 
   function draw(){
-    var list = visible();
+    var list = canvasList();
     var box = mode === "time" ? timeLayout(list) : blastLayout(list);
     var s = '<svg class="graph" viewBox="0 0 ' + box.width + ' ' + box.height + '" width="' + box.width +
             '" height="' + box.height + '" role="img" aria-label="Dependency graph of ' + list.length +
@@ -896,7 +1067,7 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
     }
 
     list.forEach(function(n){
-      var cls = "dev st-" + n.status + (passesFilter(n) ? "" : " dim") +
+      var cls = "dev st-" + n.status +
                 (selected === n.id ? " sel" : "") + (injecting && n.junction ? " junction" : "");
       var label = n.name + ". " + n.state + ", " + n.seenLab +
                   (n.blocker ? ". In the way: " + n.blocker : "") + (n.bet ? ". Bet: " + n.bet : "");
@@ -912,11 +1083,22 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
     canvas.innerHTML = s;
     canvas.firstChild.classList.toggle("flowing", injecting);
     wire();
+    paintTree();
     tally();
   }
 
+  /* the tree keeps every device and dims the ones the pane is not showing */
+  function paintTree(){
+    Array.prototype.forEach.call(document.querySelectorAll("#tree button[data-id]"), function(b){
+      var n = BY_ID[b.dataset.id];
+      b.classList.toggle("dim", !!n && !injecting && !passesFilter(n));
+    });
+  }
+
   /* --- the counts, in the status bar and in the prose ------------------- */
-  var WORDS = ["nobody", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"];
+  var WORDS = ["nobody", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+               "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen",
+               "nineteen", "twenty"];
   function say(n){ return WORDS[n] || String(n); }
   /* The prose count is authored inline so it reads correctly with scripting off
      and in the markdown twin, then recomputed here so editing a row cannot leave
@@ -934,7 +1116,7 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
     var c = { shipped: 0, partial: 0, frontier: 0, passed: 0, phantom: 0 };
     NODES.forEach(function(n){ c[n.status]++; });
     tallyProse(c);
-    var shownCount = visible().filter(passesFilter).length;
+    var shownCount = canvasList().length;
     var tail = injecting
       ? "injection flow: every untrusted read meets every privileged action in one buffer"
       : (selected ? BY_ID[selected].name + " · " + BY_ID[selected].seenLab
