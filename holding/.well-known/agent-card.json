@@ -15,8 +15,8 @@
     },
     {
       "url": "https://aadhar.sh/serendipity/mcp",
-      "protocolBinding": "https://modelcontextprotocol.io/specification/2025-06-18",
-      "protocolVersion": "2025-06-18"
+      "protocolBinding": "https://modelcontextprotocol.io/specification/2026-07-28",
+      "protocolVersion": "2026-07-28"
     }
   ],
   "capabilities": {
@@ -146,7 +146,7 @@
           "name": "Serendipity MCP",
           "url": "https://aadhar.sh/serendipity/mcp",
           "transport": "streamable-http",
-          "protocolVersion": "2025-06-18",
+          "protocolVersion": "2026-07-28",
           "authentication": "optional bearer credential; public read-only access works anonymously",
           "documentationUrl": "https://aadhar.sh/serendipity/mcp-info",
           "serverCard": "https://aadhar.sh/.well-known/mcp.json"

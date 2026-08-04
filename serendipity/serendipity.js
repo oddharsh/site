@@ -22,6 +22,7 @@ const PREFIX = "/serendipity";
 // and nav.js only wires behavior, same as every other page.
 import { DESKTOP_CHROME, DESKTOP_TOP } from "../holding/_worker.js/lib/desktop.js";
 import { privateHostBlocked } from "../holding/_worker.js/lib/crawl.js";
+import { CACHE_EMPTY, CACHE_STATIC, mcpGate, mcpServer } from "../holding/_worker.js/lib/mcp-protocol.js";
 
 // ── tiny helpers ────────────────────────────────────────────────────────────
 const esc = (v) =>
@@ -1550,8 +1551,17 @@ async function handleCover(request, env, ctx) {
 // never cross this boundary. No auth, no writes — the same data, for agents.
 // ════════════════════════════════════════════════════════════════════════════
 
-const MCP_PROTOCOL = "2025-06-18";                              // the version we author against
-const MCP_SUPPORTED = ["2025-06-18", "2025-03-26", "2024-11-05"];
+// DUAL-ERA as of 2026-07-28, on the same terms as the site server at /mcp: a
+// request carrying modern `_meta` is served statelessly under the new revision,
+// an `initialize` request selects legacy semantics. The wire rules live in
+// holding/_worker.js/lib/mcp-protocol.js and are SHARED with /mcp, deliberately
+// — two MCP servers on one origin speaking different dialects is a bug waiting
+// to be reported by a client author rather than by us.
+const MCP = mcpServer({
+  serverInfo: { name: "serendipity", title: "Serendipity", version: "2.0.0" },
+  capabilities: { tools: {} },
+  instructions: "Read-only access to the Serendipity event pool: community-curated events and who's going. Start with stats or list_events, drill in with get_event, find people with search_people. Public data only.",
+});
 
 // public-safe projection of an attendee row — mirrors what attendeeRow renders.
 // NO email / phone / raw_json: those columns aren't even SELECT'd by the query
@@ -1991,11 +2001,16 @@ async function mcpCallTool(d, name, args) {
   return { _unknown: true };
 }
 
-async function handleMcp(request, env, d) {
+// exported for contract-tests.mjs: the protocol-level methods (server/discover,
+// initialize, the list surfaces, the version + header gate) touch no database,
+// so they are drivable with a null `d`. Same reason shouldUseWorkersCache was
+// pulled into lib/cache.js — a dispatcher-private function is a function no
+// test can reach, and the bug that taught us that shipped through a green CI.
+export async function handleMcp(request, env, d) {
   const cors = {
     "access-control-allow-origin": "*",
     "access-control-allow-methods": "POST, OPTIONS",
-    "access-control-allow-headers": "content-type, mcp-protocol-version, mcp-session-id, authorization",
+    "access-control-allow-headers": "content-type, mcp-protocol-version, mcp-session-id, mcp-method, mcp-name, authorization",
     "access-control-max-age": "86400",
   };
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
@@ -2019,26 +2034,33 @@ async function handleMcp(request, env, d) {
     }
     const id = msg.id, m = msg.method;
     try {
-      if (m === "initialize") {
-        const reqV = msg.params && msg.params.protocolVersion;
-        return { jsonrpc: "2.0", id, result: {
-          protocolVersion: MCP_SUPPORTED.includes(reqV) ? reqV : MCP_PROTOCOL,
-          capabilities: { tools: {} },
-          serverInfo: { name: "serendipity", title: "Serendipity", version: "1.0.0" },
-          instructions: "Read-only access to the Serendipity event pool: community-curated events and who's going. Start with stats or list_events, drill in with get_event, find people with search_people. Public data only.",
-        } };
-      }
+      // Version first, then the routing headers — the same gate /mcp applies.
+      const refused = mcpGate(msg, request, id, hasId);
+      if (refused !== null) return refused;
+
+      // MUST be implemented as of 2026-07-28.
+      if (m === "server/discover") return MCP.discover(id);
+      // Kept for pre-2026 clients, which have no fall-forward mechanism.
+      if (m === "initialize") return MCP.initialize(id, msg.params && msg.params.protocolVersion);
       if (m === "ping") return { jsonrpc: "2.0", id, result: {} };
-      if (m === "tools/list") return { jsonrpc: "2.0", id, result: { tools: MCP_TOOLS } };
-      if (m === "resources/list") return { jsonrpc: "2.0", id, result: { resources: [] } };
-      if (m === "prompts/list") return { jsonrpc: "2.0", id, result: { prompts: [] } };
+      // MCP_TOOLS is a literal array nothing sorts or filters, so tools/list is
+      // deterministic, which 2026-07-28 asks for so clients can cache it.
+      if (m === "tools/list") return MCP.result(id, { tools: MCP_TOOLS }, CACHE_STATIC);
+      // This server exposes no resources (capabilities says so). The empty
+      // lists are answered anyway rather than 404'd, because a client that asks
+      // deserves "none" instead of an error it has to special-case.
+      if (m === "resources/list") return MCP.result(id, { resources: [] }, CACHE_EMPTY);
+      if (m === "resources/templates/list") return MCP.result(id, { resourceTemplates: [] }, CACHE_EMPTY);
+      if (m === "prompts/list") return MCP.result(id, { prompts: [] }, CACHE_EMPTY);
       if (m.startsWith("notifications/")) return null;  // client notification — ack only
       if (m === "tools/call") {
         const name = msg.params && msg.params.name;
         const out = await mcpCallTool(d, name, (msg.params && msg.params.arguments) || {});
         if (out && out._unknown) return rpcErr(id, -32602, "Unknown tool: " + name);
-        if (out && out._error) return { jsonrpc: "2.0", id, result: { content: [{ type: "text", text: out._error }], isError: true } };
-        return { jsonrpc: "2.0", id, result: { content: [{ type: "text", text: JSON.stringify(out, null, 2) }] } };
+        // A failed tool is a RESULT with isError, never a JSON-RPC error: the
+        // call succeeded and the model is meant to read the text.
+        if (out && out._error) return MCP.result(id, { content: [{ type: "text", text: out._error }], isError: true });
+        return MCP.result(id, { content: [{ type: "text", text: JSON.stringify(out, null, 2) }], structuredContent: out });
       }
       return hasId ? rpcErr(id, -32601, "Method not found: " + m) : null;
     } catch (e) {
