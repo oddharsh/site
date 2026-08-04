@@ -2255,3 +2255,58 @@ test("preview noindex reaches the responses the security wrapper otherwise skips
     assert.equal(marked.headers.get("etag"), 'W/"x"', "existing headers survive the rebuild");
   }
 });
+
+// /access is a graph rendered from a table in its own bytes, and three of its
+// authored invariants were verified once by hand in a browser rather than checked.
+// Each one fails silently: a node with no downside still renders, a mis-ordered
+// label still parses into something, and a dangling rival just draws no edge.
+test("every /access device previews a cost, and the clause order its parser depends on holds", async () => {
+  const html = await readFile(new URL("holding/access/index.html", import.meta.url), "utf8");
+  const rows = [...html.matchAll(/<tr data-id="([^"]+)"([^>]*)>([\s\S]*?)<\/tr>/g)];
+  // A collapsed roster would satisfy every assertion below, so pin the count too.
+  assert.ok(rows.length >= 60, `expected the full device table, saw ${rows.length} rows`);
+
+  const ids = new Set(rows.map(([, id]) => id));
+  let withCost = 0, withBet = 0, rivalEnds = 0;
+
+  for (const [, id, attrs, body] of rows) {
+    const status = (attrs.match(/data-status="([^"]+)"/) || [])[1];
+    // the prose cell is the last bare <td> before the examples cell
+    const beforeEx = body.split('<td class="ex">')[0];
+    const cells = [...beforeEx.matchAll(/<td>([\s\S]*?)<\/td>/g)];
+    const prose = cells.length ? cells[cells.length - 1][1] : "";
+    assert.ok(prose.length > 40, `${id}: no prose cell found`);
+
+    // 1. no device previews as pure upside. A shipped node needs an authored
+    //    Costs clause; an unfinished one falls back to whatever blocks it.
+    const cost = /<b>Costs:<\/b>/.test(prose);
+    const blocker = /<b>(In the way|Passed over because):<\/b>/.test(prose);
+    assert.ok(cost || blocker, `${id}: previews no downside (needs Costs, In the way, or Passed over because)`);
+    if (cost) withCost++;
+
+    // 2. the page claims every unfinished device carries a dated bet
+    if (status !== "shipped") {
+      assert.match(prose, /<b>Bet:<\/b>/, `${id}: ${status} but carries no Bet`);
+      withBet++;
+    }
+
+    // 3. the parser slices labels off in reverse prose order and takes Costs
+    //    FIRST, so Costs must be authored last or `why` keeps a stray clause.
+    if (cost) {
+      const at = prose.indexOf("<b>Costs:</b>");
+      for (const other of ["Bet:", "In the way:", "Passed over because:"]) {
+        const o = prose.indexOf(`<b>${other}</b>`);
+        assert.ok(o === -1 || o < at, `${id}: <b>${other}</b> is authored after Costs, which mis-slices the parse`);
+      }
+    }
+
+    for (const r of ((attrs.match(/data-rivals="([^"]*)"/) || [])[1] || "").split(",").filter(Boolean)) {
+      assert.ok(ids.has(r), `${id}: rivals "${r}", which is not a device id`);
+      rivalEnds++;
+    }
+  }
+
+  assert.ok(withCost >= 18, `expected an authored Costs clause on every installed device, saw ${withCost}`);
+  assert.ok(withBet >= 40, `expected a Bet on every unfinished device, saw ${withBet}`);
+  assert.ok(rivalEnds >= 8, `expected the zero-sum pairs to be declared, saw ${rivalEnds}`);
+});
