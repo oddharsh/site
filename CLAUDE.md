@@ -154,7 +154,7 @@ worktrees may edit freely, but a worktree is not a release surface.
   **`infra:check` verifies it now, which it could not before 2026-08-04.** The
   old note in `infra.json` said Cloudflare exposed no public API for Workers
   Builds configuration and the values could only be recorded as intent. That is
-  stale: the Builds REST API exists, the permission is **`Workers CI`**, and it
+  stale: the Builds REST API exists, the permission is **`Workers Builds Configuration`**, and it
   has a **Read** variant, so this costs a sixth read scope on the CI token and
   needs no exception to the no-write-token rule. The dashboard's two command
   fields are two TRIGGERS in the API, separated by their branch filters, and
@@ -197,12 +197,12 @@ worktrees may edit freely, but a worktree is not a release surface.
   from `production`. A READ-ONLY token is a different thing and is fine: CI uses
   one for `npm run infra:check`. Scope it to exactly these six reads and
   nothing else: Account Settings:Read, Workers Scripts:Read, Workers KV
-  Storage:Read, Workers R2 Storage:Read, D1:Read, **Workers CI:Read**. If a
+  Storage:Read, Workers R2 Storage:Read, D1:Read, **Workers Builds Configuration:Read**. If a
   token in this repo ever needs an `Edit` scope, the answer is no. A token
   missing one of these degrades only the section that needed it, and the check
   names the missing scope.
 
-  `Workers CI:Read` was the sixth, added 2026-08-04 so `infra:check` can read
+  `Workers Builds Configuration:Read` was the sixth, added 2026-08-04 so `infra:check` can read
   the live Workers Builds triggers instead of trusting a recorded intent. It is
   the read half of the permission whose Edit half changes the deploy command, so
   granting it buys drift detection on the release path and grants nothing that
@@ -536,6 +536,36 @@ are kept for their attributes, which record how much work the phase was handed.
 Read `cpuTime` off the tail/log event for actual CPU (193ms on that same request).
 This corrects the original premise of this work, which assumed spans would see
 what `perf-probe.js` cannot.
+
+**The frozen clock holds in LOCAL dev too, which is worth knowing before you go
+looking for CPU there.** Verified 2026-08-04 against `wrangler dev`: exercising
+`/photos/grid.html` produced `home.grid.manifest`, `home.grid.alt` and
+`home.grid.render` all at **0 ms**, with `home.grid.render` carrying
+`pool_size: 158` and `alt_known: 158` — the same shape production reports, on a
+local runtime with no Spectre mitigation to blame. The reasonable guess going in
+was that local dev would escape the frozen clock and finally measure the
+synchronous work; it does not. Local spans are for SHAPE and ATTRIBUTES, exactly
+like production ones. `route /photos` read 8 ms in the same run, because that one
+spans real I/O.
+
+**Spans are readable in `wrangler dev` as of 2026-08-04, with no config, no
+dependency, and no version bump** (Wrangler 4.118.0 already has it). The tracer
+reaches local dev for free because of the injection in `lib/trace.js`:
+`installTracing(tracing)` runs at module scope in `index.js`, which workerd loads
+locally too, so `npm run dev` gets the real tracer and the named spans rather
+than the degraded direct calls the contract tests get under plain node.
+
+The recipe is in MAINTENANCE.md under "Read a trace". Short version: the Local
+Explorer answers at `/cdn-cgi/explorer/api` (an OpenAPI schema covering KV, D1,
+R2, Durable Object and Workflow state as well), and traces are a read-only SQL
+query POSTed to `/cdn-cgi/local/explorer/api/local/observability/query`. Our own
+`route <template>`, `home.grid.*` and the rest come back nested under the
+auto-instrumented `fetch`, `cache_match`, `cache_put` and `GET` spans, with
+`attributes` stored as JSONB (read it via `json(attributes)`).
+
+This closes the last gap on the local side of the span story. Until today the
+vocabulary above could only be read in production, which meant the cheapest way
+to find out whether a new span was named or attributed usefully was to deploy it.
 
 Where the spans are, and what each one is FOR — every one of these is a place
 the existing layers structurally could not reach:

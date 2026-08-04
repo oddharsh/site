@@ -108,6 +108,8 @@
     out += section("Browser facts", { text: snapshot.status == null ? "rendered" : String(snapshot.status), kind: "ok" },
       "A rendered observation after page JavaScript. It is not folded into the AadharshBot HTTP readiness score.", kvTable(facts));
     if (snapshot.screenshot) out += section("Rendered screenshot", { text: "PNG", kind: "ok" }, "The viewport after the Browser Run page load.", '<img class="lx-browser-shot" src="' + esc(snapshot.screenshot) + '" alt="Browser Run screenshot of ' + esc(snapshot.finalUrl || snapshot.url) + '">');
+    else if (snapshot.screenshotDropped) out += section("Rendered screenshot", { text: "too large", kind: "warn" },
+      "Browser Run captured the page, and the full-page PNG came back at " + bytes(snapshot.screenshotDropped) + " — past what this endpoint will return inline, so it was dropped. The rest of the snapshot is unaffected.", "");
     out += webmcp(snapshot.webmcp, data);
     out += section("Rendered HTML", { text: bytes((snapshot.content || "").length) }, "The DOM returned after Browser Run executed the page. This is source evidence, shown escaped.", pre(snapshot.content || "(no content)"));
     out += section("Rendered Markdown", { text: bytes((snapshot.markdown || "").length) }, "The browser's clean text representation, separate from Lens's dependency-free HTTP reconstruction.", pre(snapshot.markdown || "(no Markdown)"));
@@ -133,8 +135,19 @@
     body.innerHTML = '<div class="lx-spin">Cloudflare Browser Run is opening a rendered session&hellip;</div>';
     fetch("/lens/browser?url=" + encodeURIComponent(data.finalUrl || data.url))
       .then(function (response) {
-        return response.json().then(function (json) {
-          if (!response.ok || !json || !json.ok) throw new Error((json && json.error) || ("Browser Run returned " + response.status));
+        // Read as text and parse by hand. /lens/browser answers JSON on every
+        // path it controls, so a non-JSON body means something ANSWERED FOR IT:
+        // a Cloudflare 1101/1102/524 page, which is HTML. Calling .json() on
+        // that surfaces V8's "Unexpected token '<', \"<!DOCTYPE \"..." to the
+        // reader, which names the parser rather than the failure.
+        return response.text().then(function (text) {
+          var json = null;
+          try { json = JSON.parse(text); } catch (_e) {}
+          if (!json) {
+            throw new Error("the server answered with " + (response.headers.get("content-type") || "an unknown body") +
+              " instead of a snapshot (HTTP " + response.status + "). That is the edge or the runtime failing the route, not the target page.");
+          }
+          if (!response.ok || !json.ok) throw new Error(json.error || ("Browser Run returned " + response.status));
           return json;
         });
       })

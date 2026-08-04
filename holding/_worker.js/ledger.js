@@ -13,6 +13,10 @@
 //   READING — Analytics Engine has no read binding, so /ledger queries the
 //   SQL API over HTTPS with ANALYTICS_READ_TOKEN (Account Analytics : Read).
 //   Absent token → the invoice renders with a "meter not readable yet" note.
+//   COSTING — one line under the total, read from Cloudflare's Billable Usage
+//   API with BILLING_READ_TOKEN (Billing : Read). It is the only figure on the
+//   page that was ever actually paid, and it is account-level by necessity;
+//   see queryBillableUsage() for why there is no per-bot cost column.
 import { cachedRender } from "./lib/cache.js";
 import { lunaPage } from "./lib/chrome.js";
 import { esc, jsonResp } from "./lib/http.js";
@@ -102,6 +106,67 @@ async function queryLedger(env) {
   }
 }
 
+// ── the other column: what the account actually paid ────────────────
+// Everything above this line is revenue that will never be collected, priced
+// at a rate the house invented. Cloudflare's Billable Usage API is the one
+// number on this page that changed hands, so the invoice gets a cost line and
+// stops being one-sided.
+//
+// It is ACCOUNT-WIDE and product-wide, which is the whole reason it renders as
+// a single line and not a per-bot column. Granularity is daily, per account /
+// product / zone, so nothing here attributes a cent to a crawler; deriving a
+// per-bot cost would mean modelling it from request counts and presenting a
+// guess in the same table as a measurement. The page says what it has.
+//
+// Coverage is whatever Cloudflare bills through this feed (Workers, R2, D1,
+// Workers AI, Vectorize, Images, Stream as of 2026-08). Analytics Engine,
+// Browser Rendering, and KV are absent from that list, so the cost line is a
+// floor rather than a total — `services` records which families actually
+// answered, so the note can name them instead of implying completeness.
+async function queryBillableUsage(env) {
+  if (!env.BILLING_READ_TOKEN || !env.CF_ACCOUNT_ID) return { ok: false, reason: "unconfigured" };
+  const end = new Date();
+  const start = new Date(end.getTime() - WINDOW_DAYS * 86400000);
+  const ymd = (d) => d.toISOString().slice(0, 10);
+  try {
+    const ctrl = new AbortController();
+    const to = setTimeout(() => ctrl.abort(), 8000);
+    let r;
+    try {
+      r = await fetch(
+        `https://api.cloudflare.com/client/v4/accounts/${env.CF_ACCOUNT_ID}/billable-usage` +
+        `?from=${ymd(start)}&to=${ymd(end)}`,
+        { headers: { authorization: "Bearer " + env.BILLING_READ_TOKEN }, signal: ctrl.signal },
+      );
+    } finally { clearTimeout(to); }
+    if (!r.ok) {
+      const detail = (await r.text().catch(() => "")).slice(0, 200);
+      return { ok: false, reason: "billing API " + r.status + ": " + detail };
+    }
+    const j = await r.json().catch(() => null);
+    if (!j || j.success !== true || !Array.isArray(j.result)) return { ok: false, reason: "unexpected envelope" };
+    // Sum ContractedCost, NEVER CumulatedContractedCost. The latter is a
+    // running total carried on every row, so adding it up bills each charge
+    // period once per row that follows it.
+    let totalUsd = 0;
+    let currency = "USD";
+    const services = new Set();
+    for (const row of j.result) {
+      const cost = Number(row && row.ContractedCost);
+      if (!Number.isFinite(cost)) continue;
+      totalUsd += cost;
+      if (row.BillingCurrency) currency = String(row.BillingCurrency);
+      if (row.ServiceFamilyName) services.add(String(row.ServiceFamilyName));
+    }
+    return {
+      ok: true, totalUsd: +totalUsd.toFixed(2), currency,
+      services: [...services].sort(), from: ymd(start), to: ymd(end),
+    };
+  } catch (e) {
+    return { ok: false, reason: (e && e.message) || String(e) };
+  }
+}
+
 function priced(rows) {
   const items = rows.map((r) => ({ ...r, amountUsd: +(r.hits * RATE_USD).toFixed(2) }));
   const totalHits = items.reduce((n, r) => n + r.hits, 0);
@@ -111,13 +176,21 @@ function priced(rows) {
 
 // ── /ledger.json — the machine twin ─────────────────────────────────
 export async function handleLedgerJson(request, env) {
-  const q = await queryLedger(env);
-  if (!q.ok) return jsonResp({ ok: false, reason: q.reason, window_days: WINDOW_DAYS, rate_usd: RATE_USD }, q.reason === "unconfigured" ? 200 : 502);
+  const [q, cost] = await Promise.all([queryLedger(env), queryBillableUsage(env)]);
+  const costBlock = cost.ok
+    ? {
+        available: true, total_usd: cost.totalUsd, currency: cost.currency,
+        from: cost.from, to: cost.to, service_families: cost.services,
+        note: "account-wide across every product Cloudflare bills through the Billable Usage API; daily granularity, so no part of this is attributable to any crawler",
+      }
+    : { available: false, reason: cost.reason };
+  if (!q.ok) return jsonResp({ ok: false, reason: q.reason, window_days: WINDOW_DAYS, rate_usd: RATE_USD, cost: costBlock }, q.reason === "unconfigured" ? 200 : 502);
   const { items, totalHits, totalUsd } = priced(q.rows);
   return jsonResp({
     ok: true, window_days: WINDOW_DAYS, rate_usd: RATE_USD,
     note: "worker-served requests only; UA-matched (self-reported identity); the rate is this site's posted price, not a market quote",
     line_items: items, total_hits: totalHits, total_usd: totalUsd,
+    cost: costBlock,
   });
 }
 
@@ -129,7 +202,7 @@ export function handleLedger(request, env, ctx) {
 const KIND_LABEL = { search: "search indexing", train: "model training", answers: "AI answers (live retrieval)" };
 
 async function renderLedger(env) {
-  const q = await queryLedger(env);
+  const [q, cost] = await Promise.all([queryLedger(env), queryBillableUsage(env)]);
   const { items, totalHits, totalUsd } = priced(q.ok ? q.rows : []);
 
   let tableRows;
@@ -148,6 +221,20 @@ async function renderLedger(env) {
     tableRows = `<tr><td colspan="5" class="empty">The meter is counting, but this page can't read it back yet (Analytics Engine needs a read token). Line items will appear once the bookkeeper gets API access.</td></tr>`;
   } else {
     tableRows = `<tr><td colspan="5" class="empty">The bookkeeper is unreachable right now (${esc(q.reason)}). The meter keeps counting regardless.</td></tr>`;
+  }
+
+  // The counterweight to the total above: one account-level figure, never a
+  // per-bot column, because the billing feed cannot attribute a cent to a
+  // crawler and a modelled split would read as measured next to the real hits.
+  let costLine;
+  if (cost.ok) {
+    const families = cost.services.length ? cost.services.join(", ") : "no billed products";
+    costLine = `<div class="lg-cost">Cost of actually running this account, same ${WINDOW_DAYS} days: <b>$${cost.totalUsd.toFixed(2)}</b> ${esc(cost.currency)}
+      <span class="lg-cost-sub">Cloudflare's billing feed, account-wide (${esc(families)}) — not the crawlers' share, which nobody can compute.</span></div>`;
+  } else if (cost.reason === "unconfigured") {
+    costLine = `<div class="lg-cost"><span class="lg-cost-sub">The cost side of this invoice is unreadable until the bookkeeper gets a Billing Read token. Only the imaginary column renders today.</span></div>`;
+  } else {
+    costLine = `<div class="lg-cost"><span class="lg-cost-sub">The cost side is unreachable right now (${esc(cost.reason)}).</span></div>`;
   }
 
   const css = `/*min*/
@@ -174,6 +261,10 @@ table.lg .dim { color:oklch(55% 0 0); font-size:8pt; }
 table.lg .empty { color:oklch(50% 0 0); font-size:9pt; padding:14px 4px; text-align:center; }
 .lg-total { display:flex; justify-content:flex-end; gap:24px; font-size:10pt; margin-top:8px; padding-top:6px; border-top:2px solid oklch(30% 0.02 255); }
 .lg-total b { font-family:"Courier New",monospace; font-size:12pt; }
+/* the cost line: the one figure on this invoice that changed hands */
+.lg-cost { text-align:right; font-size:8.8pt; color:oklch(45% 0 0); margin-top:7px; padding-top:6px; border-top:1px dashed oklch(80% 0 0); }
+.lg-cost b { font-family:"Courier New",monospace; font-size:10.5pt; color:oklch(28% 0.04 255); }
+.lg-cost .lg-cost-sub { display:block; color:oklch(55% 0 0); font-size:8pt; margin-top:1px; }
 
 /* the stamp */
 .lg-stamp { position:absolute; top:96px; right:26px; transform:rotate(-12deg); font-family:"Courier New",monospace; font-weight:bold; font-size:19pt; color:oklch(55% 0.21 27 / .8); border:3px double oklch(55% 0.21 27 / .8); border-radius:4px; padding:2px 14px; letter-spacing:.12em; pointer-events:none; }
@@ -203,6 +294,7 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
         ${tableRows}
       </table>
       <div class="lg-total"><span>Total due</span> <b>$${totalUsd.toFixed(2)}</b> <span class="dim" style="font-size:8.6pt; align-self:center;">(${totalHits.toLocaleString("en-US")} pages)</span></div>
+      ${costLine}
     </div>
 
     <div class="lg-terms">
@@ -211,6 +303,7 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
         <li>Only worker-served requests are countable — static files served straight from the edge never wake the worker, so the true crawl count is higher than this.</li>
         <li>Identity is self-reported: a row is a user-agent claim, not a verified signature. A bot that lies about its name bills to nobody.</li>
         <li>The rate is this site's posted price (the /llms-full.txt cent), not a market quote. Robots policy and Content Signals live in <a href="/robots.txt">robots.txt</a>: reading here is welcome — this invoice is the point being made, not a demand letter.</li>
+        <li>The cost line is the only figure here that changed hands, and it is account-wide: every product on this Cloudflare account over the same window, not the crawlers' share. Billing lands daily and carries no per-request identity, so splitting it per bot would mean modelling a number and printing it next to measured ones. Coverage is whatever Cloudflare bills through that feed, which leaves out Analytics Engine, Browser Rendering, and KV — read it as a floor.</li>
         <li>Machine-readable twin at <a href="/ledger.json">/ledger.json</a>.</li>
       </ul>
     </div>
