@@ -29,8 +29,9 @@ export const OG_PAGE_DIRS = [
     dir: "access",
     // Hand-written alt, because the generic "<og:title>, live demo screenshotted"
     // line the injector synthesises would describe this card as a demo. It is a
-    // map, and the alt should say what is actually in the picture.
-    alt: "A Windows XP Device Manager window listing thirty-nine flavors of language-model access "
+    // map, and the alt should say what is actually in the picture. Count-agnostic
+    // on purpose: the board grows, and an alt naming a number goes stale silently.
+    alt: "A Windows XP Device Manager window listing the flavors of language-model access "
        + "as a dependency graph, with yellow-bang and unknown-device icons marking the unfinished ones.",
   },
   {
