@@ -154,7 +154,7 @@ worktrees may edit freely, but a worktree is not a release surface.
   **`infra:check` verifies it now, which it could not before 2026-08-04.** The
   old note in `infra.json` said Cloudflare exposed no public API for Workers
   Builds configuration and the values could only be recorded as intent. That is
-  stale: the Builds REST API exists, the permission is **`Workers CI`**, and it
+  stale: the Builds REST API exists, the permission is **`Workers Builds Configuration`**, and it
   has a **Read** variant, so this costs a sixth read scope on the CI token and
   needs no exception to the no-write-token rule. The dashboard's two command
   fields are two TRIGGERS in the API, separated by their branch filters, and
@@ -197,12 +197,12 @@ worktrees may edit freely, but a worktree is not a release surface.
   from `production`. A READ-ONLY token is a different thing and is fine: CI uses
   one for `npm run infra:check`. Scope it to exactly these six reads and
   nothing else: Account Settings:Read, Workers Scripts:Read, Workers KV
-  Storage:Read, Workers R2 Storage:Read, D1:Read, **Workers CI:Read**. If a
+  Storage:Read, Workers R2 Storage:Read, D1:Read, **Workers Builds Configuration:Read**. If a
   token in this repo ever needs an `Edit` scope, the answer is no. A token
   missing one of these degrades only the section that needed it, and the check
   names the missing scope.
 
-  `Workers CI:Read` was the sixth, added 2026-08-04 so `infra:check` can read
+  `Workers Builds Configuration:Read` was the sixth, added 2026-08-04 so `infra:check` can read
   the live Workers Builds triggers instead of trusting a recorded intent. It is
   the read half of the permission whose Edit half changes the deploy command, so
   granting it buys drift detection on the release path and grants nothing that

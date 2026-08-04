@@ -584,7 +584,7 @@ async function checkApi(infra, wrangler, token) {
   //
   // It used to be unverifiable and infra.json said so at length. That is no
   // longer true (checked 2026-08-04): Workers Builds has a REST API, the
-  // permission is `Workers CI` and it HAS a Read variant, so this fits the
+  // permission is `Workers Builds Configuration` and it HAS a Read variant, so this fits the
   // read-only token rule with no exception carved for it.
   //
   // NOTHING HERE HARD-FAILS ON A SHAPE SURPRISE, on purpose. The endpoint path
@@ -593,7 +593,7 @@ async function checkApi(infra, wrangler, token) {
   // must degrade to a note and not redden a PR that only touched CSS. Only a
   // value that was successfully READ and disagrees with infra.json is fatal.
   // Delete this paragraph once it has run green against a real token.
-  await section("Workers Builds release config", "Workers CI:Read", async () => {
+  await section("Workers Builds release config", "Workers Builds Configuration:Read", async () => {
     const scripts = await cf(token, `/accounts/${accountId}/workers/scripts`);
     const script = (scripts || []).find((s) => s.id === infra.release.worker);
     const tag = script?.tag || script?.external_script_id;

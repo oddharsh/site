@@ -304,7 +304,7 @@ files cannot drift into describing different worlds.
 **The token.** CI reads `secrets.CLOUDFLARE_API_TOKEN` and the optional
 `vars.CLOUDFLARE_ACCOUNT_ID`; with neither set the account tier just skips.
 Scope the token to reads only: Account Settings:Read, Workers Scripts:Read,
-Workers KV Storage:Read, Workers R2 Storage:Read, D1:Read, **Workers CI:Read**.
+Workers KV Storage:Read, Workers R2 Storage:Read, D1:Read, **Workers Builds Configuration:Read**.
 Nothing in this repo may hold an `Edit` scope, because Workers Builds being the
 only publisher is the release backstop.
 
@@ -312,7 +312,15 @@ only publisher is the release backstop.
 gh secret set CLOUDFLARE_API_TOKEN --repo oddharsh/site
 ```
 
-`Workers CI:Read` joined the list on 2026-08-04, when the release block stopped
+**The permission is called `Workers Builds Configuration` in the token form, not
+`Workers CI`.** Cloudflare's own permissions reference lists it as "Workers CI"
+and the Builds API docs call it "Workers Builds Configuration"; the dashboard
+agrees with the API docs, and the dashboard is where you actually click. Typing
+"Workers CI" into the permission search returns Workers Scripts, Workers Agents
+Configuration, and Workers Builds Configuration, and none of them is named what
+you searched for. Verified at the form 2026-08-04.
+
+`Workers Builds Configuration:Read` joined the list on 2026-08-04, when the release block stopped
 being a manual review item. It lets `infra:check` read the live Workers Builds
 triggers and fail on drift in the Deploy command, Build command, or root
 directory — the one part of the release path that lives outside this repo and
@@ -335,7 +343,7 @@ matters:
    Deploy command → `npx wrangler versions upload --x-provision=false
    --x-auto-create=false`. Leave Build command blank and the non-production
    command alone (it already uploads).
-3. **Then** rotate `CLOUDFLARE_API_TOKEN` to add `Workers CI:Read`.
+3. **Then** rotate `CLOUDFLARE_API_TOKEN` to add `Workers Builds Configuration:Read`.
 
 Backwards — scope first, dashboard second — and `infra:check` starts failing on a
 drift that only the dashboard can fix, on every branch, while promotion is gated
