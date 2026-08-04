@@ -576,6 +576,79 @@ async function checkApi(infra, wrangler, token) {
     }
   });
 
+  // The Workers Builds release config. This is the ONE setting in the whole
+  // release path that lives outside the repo and can be changed with nothing
+  // noticing: a bare `wrangler deploy` in the dashboard's Deploy command turns
+  // every merge back into an instant 100% release and makes deploy:promote dead
+  // code, and releases keep working, so the failure never surfaces.
+  //
+  // It used to be unverifiable and infra.json said so at length. That is no
+  // longer true (checked 2026-08-04): Workers Builds has a REST API, the
+  // permission is `Workers CI` and it HAS a Read variant, so this fits the
+  // read-only token rule with no exception carved for it.
+  //
+  // NOTHING HERE HARD-FAILS ON A SHAPE SURPRISE, on purpose. The endpoint path
+  // and response envelope were read from Cloudflare's docs rather than from a
+  // live call (this repo holds no token that can reach it), so a wrong guess
+  // must degrade to a note and not redden a PR that only touched CSS. Only a
+  // value that was successfully READ and disagrees with infra.json is fatal.
+  // Delete this paragraph once it has run green against a real token.
+  await section("Workers Builds release config", "Workers CI:Read", async () => {
+    const scripts = await cf(token, `/accounts/${accountId}/workers/scripts`);
+    const script = (scripts || []).find((s) => s.id === infra.release.worker);
+    const tag = script?.tag || script?.external_script_id;
+    if (!tag) {
+      warn(`release config unchecked: no worker tag for ${infra.release.worker} in the script listing`);
+      return;
+    }
+
+    const raw = await cf(token, `/accounts/${accountId}/builds/workers/${tag}/triggers`);
+    // The docs show a bare trigger object; a list endpoint may wrap it. Accept
+    // either rather than guessing which, and say so if it is neither.
+    const triggers = Array.isArray(raw) ? raw : (Array.isArray(raw?.triggers) ? raw.triggers : null);
+    if (!triggers) {
+      warn(`release config unchecked: unexpected triggers response shape (${JSON.stringify(raw).slice(0, 160)})`);
+      return;
+    }
+
+    const branch = infra.release.production_branch;
+    // The dashboard's "Deploy command" and "Non-production branch deploy
+    // command" are two TRIGGERS in the API, told apart by their branch filters.
+    const prod = triggers.find((t) => (t.branch_includes || []).includes(branch));
+    if (!prod) {
+      fail(`Workers Builds has no trigger matching the ${branch} branch — nothing publishes this Worker`);
+      return;
+    }
+
+    const checks = [
+      ["deploy_command",  infra.release.deploy_command],
+      ["build_command",   infra.release.build_command],
+      ["root_directory",  infra.release.root_directory],
+    ];
+    for (const [field, expected] of checks) {
+      const live = prod[field] ?? "";
+      // root_directory is written "." here and may come back "" or "/" upstream;
+      // treat those three as the same statement about a monorepo root.
+      const same = field === "root_directory"
+        ? [".", "", "/"].includes(String(live)) === [".", "", "/"].includes(String(expected))
+        : String(live).trim() === String(expected).trim();
+      same
+        ? pass(`Workers Builds ${field} matches infra.json (${JSON.stringify(live)})`)
+        : fail(`Workers Builds ${field} is ${JSON.stringify(live)} but infra.json declares ${JSON.stringify(expected)} — the dashboard is the live value, so fix it there`);
+    }
+
+    // The non-production trigger. Its default is already `versions upload`, so
+    // this is a low-drama check, but a branch build that DEPLOYS would put a
+    // feature branch straight onto production traffic.
+    const preview = triggers.find((t) => t !== prod);
+    if (preview && infra.release.non_production_deploy_command) {
+      const live = String(preview.deploy_command ?? "").trim();
+      /\bversions upload\b/.test(live)
+        ? pass(`Workers Builds non-production trigger uploads without deploying (${JSON.stringify(live)})`)
+        : fail(`Workers Builds non-production deploy command is ${JSON.stringify(live)} — a branch build must not deploy to production traffic`);
+    }
+  });
+
   // Worker inventory. A retired Worker that is still deployed keeps its routes,
   // which is invisible from inside this repo.
   await section("Worker inventory", "Workers Scripts:Read", async () => {
@@ -661,7 +734,7 @@ if (OFFLINE) {
 }
 
 if (!infra.release.verifiable) {
-  warn(`release config is not API-verifiable (no public Workers Builds endpoint) — review by hand: production branch ${JSON.stringify(infra.release.production_branch)}, root ${JSON.stringify(infra.release.root_directory)}, build command empty, deploy ${JSON.stringify(infra.release.deploy_command)}`);
+  warn(`release config is not API-verifiable — review by hand: production branch ${JSON.stringify(infra.release.production_branch)}, root ${JSON.stringify(infra.release.root_directory)}, build command empty, deploy ${JSON.stringify(infra.release.deploy_command)}`);
 }
 
 for (const line of ok) console.log(`  ok    ${line}`);

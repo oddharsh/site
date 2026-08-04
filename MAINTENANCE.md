@@ -304,13 +304,43 @@ files cannot drift into describing different worlds.
 **The token.** CI reads `secrets.CLOUDFLARE_API_TOKEN` and the optional
 `vars.CLOUDFLARE_ACCOUNT_ID`; with neither set the account tier just skips.
 Scope the token to reads only: Account Settings:Read, Workers Scripts:Read,
-Workers KV Storage:Read, Workers R2 Storage:Read, D1:Read. Nothing in this repo
-may hold an `Edit` scope, because Workers Builds being the only publisher is the
-release backstop.
+Workers KV Storage:Read, Workers R2 Storage:Read, D1:Read, **Workers CI:Read**.
+Nothing in this repo may hold an `Edit` scope, because Workers Builds being the
+only publisher is the release backstop.
 
 ```bash
 gh secret set CLOUDFLARE_API_TOKEN --repo oddharsh/site
 ```
+
+`Workers CI:Read` joined the list on 2026-08-04, when the release block stopped
+being a manual review item. It lets `infra:check` read the live Workers Builds
+triggers and fail on drift in the Deploy command, Build command, or root
+directory — the one part of the release path that lives outside this repo and
+could previously be changed with nothing noticing. It is the read half of the
+permission whose Edit half changes those fields, so it detects drift and cannot
+cause it. Until you add it, that section degrades to a note naming the missing
+scope and the values fall back to intent.
+
+#### Roll it out in this order, or you rebuild the deadlock
+
+The `infra:check` promotion deadlock described above is not a one-off; it is what
+happens whenever a check asserts against production state that a merge has not
+reached yet. Turning on this verification is exactly that shape, so the sequence
+matters:
+
+1. **Merge the change** that declares `versions upload` in `infra.json`, with the
+   CI token still on its old scopes. The new section degrades to a note, nothing
+   fails, and the merge deploys normally under the current dashboard command.
+2. **Flip the dashboard**: Workers Builds → the site Worker → Settings → Build →
+   Deploy command → `npx wrangler versions upload --x-provision=false
+   --x-auto-create=false`. Leave Build command blank and the non-production
+   command alone (it already uploads).
+3. **Then** rotate `CLOUDFLARE_API_TOKEN` to add `Workers CI:Read`.
+
+Backwards — scope first, dashboard second — and `infra:check` starts failing on a
+drift that only the dashboard can fix, on every branch, while promotion is gated
+on that same check. The way out would again be the local `npm run deploy`
+fallback, which is a silly thing to need over a settings form.
 
 Each resource class is queried independently, so a token missing one scope
 degrades only that section and the advisory names the scope to add. Cloudflare

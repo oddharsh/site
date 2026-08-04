@@ -145,13 +145,21 @@ worktrees may edit freely, but a worktree is not a release surface.
   its production branch and repository root `.`. Keep the dashboard Build
   command blank; use the repo's Wrangler-owned build during the Deploy command,
   which must be the `versions upload` form recorded in
-  [`infra.json`](infra.json) under `release`. Cloudflare exposes no public API
-  for Workers Builds configuration, so `infra:check` can only assert the
-  recorded intent, never the live form — and the recorded intent is what a human
-  copies back into it. **The dashboard Deploy command is the single point where
-  this whole model can be silently undone: a bare `wrangler deploy` there turns
-  every merge back into an instant 100% release and `deploy:promote` into dead
-  code that nobody would notice, because releases would keep working.**
+  [`infra.json`](infra.json) under `release`. **The dashboard Deploy command is
+  the one place this whole model can be silently undone: a bare `wrangler
+  deploy` there turns every merge back into an instant 100% release and
+  `deploy:promote` into dead code that nobody notices, because releases keep
+  working.**
+
+  **`infra:check` verifies it now, which it could not before 2026-08-04.** The
+  old note in `infra.json` said Cloudflare exposed no public API for Workers
+  Builds configuration and the values could only be recorded as intent. That is
+  stale: the Builds REST API exists, the permission is **`Workers CI`**, and it
+  has a **Read** variant, so this costs a sixth read scope on the CI token and
+  needs no exception to the no-write-token rule. The dashboard's two command
+  fields are two TRIGGERS in the API, separated by their branch filters, and
+  both are declared and checked. Without the scope the section degrades to a
+  note naming what is missing, exactly like the other five.
 - **Preview URLs are on, and the Worker guards them.** `preview_urls: true` in
   `wrangler.jsonc`, with `workers_dev: false` kept — production still has no
   workers.dev address; what previews add is a per-VERSION one. The setting is
@@ -187,11 +195,18 @@ worktrees may edit freely, but a worktree is not a release surface.
 - **GitHub must never hold a Cloudflare token that can write.** The point is
   that GitHub cannot publish to production; only Workers Builds can, and only
   from `production`. A READ-ONLY token is a different thing and is fine: CI uses
-  one for `npm run infra:check`. Scope it to exactly these five reads and
+  one for `npm run infra:check`. Scope it to exactly these six reads and
   nothing else: Account Settings:Read, Workers Scripts:Read, Workers KV
-  Storage:Read, Workers R2 Storage:Read, D1:Read. If a token in this repo ever
-  needs an `Edit` scope, the answer is no. A token missing one of these degrades
-  only the section that needed it, and the check names the missing scope.
+  Storage:Read, Workers R2 Storage:Read, D1:Read, **Workers CI:Read**. If a
+  token in this repo ever needs an `Edit` scope, the answer is no. A token
+  missing one of these degrades only the section that needed it, and the check
+  names the missing scope.
+
+  `Workers CI:Read` was the sixth, added 2026-08-04 so `infra:check` can read
+  the live Workers Builds triggers instead of trusting a recorded intent. It is
+  the read half of the permission whose Edit half changes the deploy command, so
+  granting it buys drift detection on the release path and grants nothing that
+  can publish. **Read, never Edit — the rule above is unchanged.**
 - The one write path, `npm run infra:apply`, is **workstation-only** and reads a
   different variable (`CLOUDFLARE_API_TOKEN_WRITE`, scoped to DNS on this zone
   alone). It refuses to run in CI and cannot touch the Worker. GitHub stays
