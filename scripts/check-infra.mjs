@@ -268,10 +268,13 @@ async function checkTree(infra, wrangler, lwe) {
   }
   // The provisioning flags, on whichever subcommand the deploy_command names.
   // Both default to TRUE and both let a publish create real KV/R2/D1 for any
-  // id-less binding, which is the one thing no deploy path here may do. The
-  // dashboard field itself is unverifiable (no API), so this checks the intent
-  // recorded above — which is still worth checking, because the recorded intent
-  // is what a human copies back into the form.
+  // id-less binding, which is the one thing no deploy path here may do.
+  //
+  // This is the TREE tier, so it checks the intent recorded in infra.json and
+  // runs with no credential on every PR. The api tier below now reads the LIVE
+  // dashboard value and compares the two, so a command that carries the flags
+  // here but lost them upstream is caught there. Keep both: this one fails on a
+  // branch that proposes a bad command, before anyone can paste it in.
   const deployCmd = String(infra.release.deploy_command || "");
   for (const flag of ["--x-provision=false", "--x-auto-create=false"]) {
     if (!deployCmd.includes(flag)) {
@@ -584,15 +587,24 @@ async function checkApi(infra, wrangler, token) {
   //
   // It used to be unverifiable and infra.json said so at length. That is no
   // longer true (checked 2026-08-04): Workers Builds has a REST API, the
-  // permission is `Workers Builds Configuration` and it HAS a Read variant, so this fits the
-  // read-only token rule with no exception carved for it.
+  // permission is `Workers Builds Configuration` and it HAS a Read variant, so
+  // this fits the read-only token rule with no exception carved for it.
   //
-  // NOTHING HERE HARD-FAILS ON A SHAPE SURPRISE, on purpose. The endpoint path
-  // and response envelope were read from Cloudflare's docs rather than from a
-  // live call (this repo holds no token that can reach it), so a wrong guess
-  // must degrade to a note and not redden a PR that only touched CSS. Only a
-  // value that was successfully READ and disagrees with infra.json is fatal.
-  // Delete this paragraph once it has run green against a real token.
+  // PROVEN AGAINST THE LIVE API, run 30927021869 on 2026-08-04. Both the
+  // endpoint path and the response envelope below were originally written from
+  // Cloudflare's docs without a live call, and both turned out right first try:
+  //   ok  Workers Builds deploy_command matches infra.json ("npx wrangler versions upload ...")
+  //   ok  Workers Builds build_command matches infra.json ("")
+  //   ok  Workers Builds root_directory matches infra.json (".")
+  //   ok  Workers Builds non-production trigger uploads without deploying
+  //
+  // A SHAPE SURPRISE STILL DEGRADES TO A NOTE rather than failing, and that is
+  // now a doctrine call rather than a hedge. This file's own header draws the
+  // line: hard failures mean "we checked and it is wrong", advisories mean "we
+  // could not check". An endpoint that moves or an envelope that changes is
+  // squarely the second, and a Cloudflare API revision must not redden a PR that
+  // only touched CSS. Only a value successfully READ that disagrees with
+  // infra.json is fatal, which is the case this section exists for.
   await section("Workers Builds release config", "Workers Builds Configuration:Read", async () => {
     const scripts = await cf(token, `/accounts/${accountId}/workers/scripts`);
     const script = (scripts || []).find((s) => s.id === infra.release.worker);
