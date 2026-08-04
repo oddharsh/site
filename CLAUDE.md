@@ -456,7 +456,16 @@ generic hex back.
   playlist tracks, artist profile pics, the visit-count mirror, and a few
   crawler results. ~10K writes/day budget; we use a handful. (The photo
   manifest left KV 2026-07-28: the worker bundles `photo-index.json` +
-  `hashes.json`, so the pool is module memory and a deploy is its bust.)
+  `hashes.json`, so the pool is module memory and a deploy is its bust. The
+  `/lens` rate-limit counters left KV 2026-08-04 for the Rate Limiting binding
+  below — they were a WRITE per allowed request on the busiest route here, which
+  had quietly made "we use a handful" false.)
+- **LENS_RL_\*** (Rate Limiting bindings, `ratelimits` in `wrangler.jsonc`) —
+  the four per-IP crawl budgets `/lens` and the `/mcp` lens tools share:
+  inspect 30/min, shot 8/min, compare 4/min, browser 4/min. Counters are
+  per-colo and cost no write. `LENS_BUDGETS` in `lens.js` mirrors the ceilings
+  because that is what the 429 message quotes, and a contract test pins the two
+  configs and the code together so a message cannot outlive its limit.
 - **PHOTOS_R2** — R2 bucket `aadhar-photos`, holds the SOOC originals
   (~3 GB / 158 photos at FUJIFILM X-T5 + Leica resolution).
 - **ASSETS** — the Workers static-assets binding (wrangler.jsonc `assets`), serves files from holding/.
@@ -485,7 +494,9 @@ generic hex back.
   regardless. (`CF_ACCOUNT_ID` stays a var, but only for `/ledger`'s Analytics
   Engine SQL reads alongside `ANALYTICS_READ_TOKEN`.)
   Screenshots are KV-cached 1h (`lens:shot:<sha256(url)>` in RN_KV) and rate-limited to
-  8/min/IP; `/lens/fetch` (the parsing engine) is rate-limited 30/min/IP. Both `/lens/*`
+  8/min/IP; `/lens/fetch` (the parsing engine) is rate-limited 30/min/IP. Those limits
+  are Rate Limiting bindings as of 2026-08-04, not KV counters; the RESPONSE cache is
+  still KV, and only the counters moved. Both `/lens/*`
   fetch routes guard against SSRF (http(s) only, no localhost / private / link-local /
   `169.254.169.254` hosts, ports 80/443 only, 8s timeout, 2MB cap) and identify honestly
   as AadharshBot. Framability is read from the target's `X-Frame-Options` /

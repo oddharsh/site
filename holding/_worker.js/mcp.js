@@ -130,7 +130,7 @@ async function callTool(name, args, request, env, ctx) {
   if (name === "lens_inspect") {
     const target = validateLensTarget(args.url || "");
     if (!target.ok) return errorResult(target.error);
-    if (await overLensBudget(LENS_BUDGETS.inspect, request, env, ctx)) return errorResult("Lens lookups are rate-limited to 30/min, shared with /lens/fetch.");
+    if (await overLensBudget(LENS_BUDGETS.inspect, request, env)) return errorResult("Lens lookups are rate-limited to 30/min, shared with /lens/fetch.");
     try { return lensObservationSummary(await lensInspect(target.url, env, { skipBotViews: true })); }
     catch { return errorResult("Lens inspection failed."); }
   }
@@ -139,7 +139,7 @@ async function callTool(name, args, request, env, ctx) {
     const right = validateLensTarget(args.right || "");
     if (!left.ok) return errorResult(`left: ${left.error}`);
     if (!right.ok) return errorResult(`right: ${right.error}`);
-    if (await overLensBudget(LENS_BUDGETS.compare, request, env, ctx)) return errorResult("Lens comparisons are rate-limited to 4/min, shared with /lens/compare.");
+    if (await overLensBudget(LENS_BUDGETS.compare, request, env)) return errorResult("Lens comparisons are rate-limited to 4/min, shared with /lens/compare.");
     try { return await compareLensTargets(left.url, right.url, env); }
     catch { return errorResult("Lens comparison failed."); }
   }
