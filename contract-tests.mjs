@@ -33,6 +33,7 @@ import { readManifest, workerModule, navFenceBody, readFenceBody } from "./scrip
 import { INDEXED_SECTIONS, TWIN_FACTS, buildTwins, checkTwinFacts, htmlFileFor, twinPath } from "./scripts/gen-md-twins.mjs";
 import { collectBlockClasses, readDocument } from "./scripts/lib/html-to-md.mjs";
 import { MCP_TOOLS, cookieJar, parseCookies } from "./serendipity/serendipity.js";
+import { MCP_SUPPORTED as MCP_SUPPORTED_VERSIONS } from "./holding/_worker.js/lib/mcp-protocol.js";
 import { derivePhotoPool, renderPhotosPage, getImagesManifest, handlePhotoQuery, queryPhotos } from "./holding/_worker.js/photos.js";
 import { renderPhotoSlots } from "./holding/_worker.js/lib/photo-grid.js";
 import { cachedRender, deadline } from "./holding/_worker.js/lib/cache.js";
@@ -2583,4 +2584,73 @@ test("the routing headers are checked when present and never required", async ()
   const named = { jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "coffee_availability", arguments: {}, ...MODERN_META } };
   const mismatchedName = await (await handleSiteMcp(mcpPost(named, { "mcp-name": "search_site" }), {}, context())).json();
   assert.equal(mismatchedName.error.code, -32020, "Mcp-Name must agree with the tool being called");
+});
+
+// ── both MCP servers speak one protocol ─────────────────────────────
+// This origin publishes TWO MCP servers, /mcp and /serendipity/mcp. They share
+// no data and no tools; they DO share the wire rules, via
+// holding/_worker.js/lib/mcp-protocol.js. Two servers on one origin speaking
+// different dialects is the kind of bug a client author reports to you, so the
+// conformance assertions run against both rather than against the site one.
+
+test("the site and serendipity MCP servers agree on the 2026-07-28 wire rules", async () => {
+  const { handleMcp } = await import("./serendipity/serendipity.js");
+  const post = (body, headers = {}) => new Request("https://aadhar.sh/serendipity/mcp", {
+    method: "POST", body: JSON.stringify(body),
+    headers: { "content-type": "application/json", ...headers },
+  });
+  // The protocol-level methods touch no database, so a null `d` is enough.
+  const call = async (body, headers) => (await handleMcp(post(body, headers), {}, null)).json();
+  const modern = { _meta: { "io.modelcontextprotocol/protocolVersion": "2026-07-28" } };
+
+  // server/discover: MUST exist, and must advertise the same version set as the
+  // site server — a client that trusts one origin's answer should not find the
+  // second server disagreeing about what the origin speaks.
+  const disc = (await call({ jsonrpc: "2.0", id: 1, method: "server/discover", params: { ...modern } })).result;
+  assert.equal(disc.resultType, "complete");
+  assert.equal(disc._meta["io.modelcontextprotocol/serverInfo"].name, "serendipity");
+  assert.deepEqual(disc.supportedVersions, MCP_SUPPORTED_VERSIONS);
+  assert.deepEqual(disc.capabilities, { tools: {} }, "serendipity exposes tools only, no resources");
+
+  // The version gate, byte-identical to the site server's because it is the
+  // same function.
+  const refused = await call({
+    jsonrpc: "2.0", id: 2, method: "tools/list",
+    params: { _meta: { "io.modelcontextprotocol/protocolVersion": "1900-01-01" } },
+  });
+  assert.equal(refused.error.code, -32022);
+  assert.deepEqual(refused.error.data.supported, MCP_SUPPORTED_VERSIONS);
+
+  // Cache hints and resultType on every list surface.
+  for (const method of ["tools/list", "resources/list", "resources/templates/list", "prompts/list"]) {
+    const { result } = await call({ jsonrpc: "2.0", id: method, method, params: { ...modern } });
+    assert.equal(result.resultType, "complete", `${method} must carry resultType`);
+    assert.ok(result.ttlMs > 0, `${method} must carry ttlMs`);
+    assert.equal(result.cacheScope, "public");
+    assert.equal(result._meta["io.modelcontextprotocol/serverInfo"].name, "serendipity");
+  }
+
+  // The legacy door still opens, and still never hands back a modern version.
+  for (const [asked, expected] of [["2025-06-18", "2025-06-18"], ["2026-07-28", "2025-06-18"]]) {
+    const { result } = await call({ jsonrpc: "2.0", id: 3, method: "initialize", params: { protocolVersion: asked } });
+    assert.equal(result.protocolVersion, expected);
+    assert.equal(result.serverInfo.name, "serendipity");
+  }
+
+  // Routing headers: checked when present, never required.
+  assert.ok((await call({ jsonrpc: "2.0", id: 4, method: "tools/list", params: { ...modern } })).result);
+  const mismatch = await call({ jsonrpc: "2.0", id: 5, method: "tools/list", params: { ...modern } }, { "mcp-method": "tools/call" });
+  assert.equal(mismatch.error.code, -32020);
+});
+
+test("neither MCP server keeps a private copy of the protocol constants", async () => {
+  // The whole point of lib/mcp-protocol.js is that there is ONE answer to "what
+  // does this origin speak". A server that re-declares MCP_SUPPORTED locally
+  // would pass every test above on the day it was written and drift later.
+  for (const file of ["holding/_worker.js/mcp.js", "serendipity/serendipity.js"]) {
+    const src = readFileSync(file, "utf8");
+    assert.ok(/from ".*lib\/mcp-protocol\.js"/.test(src), `${file} must import the shared protocol module`);
+    assert.ok(!/^const MCP_SUPPORTED\s*=/m.test(src), `${file} re-declares MCP_SUPPORTED instead of importing it`);
+    assert.ok(!/^const MCP_PROTOCOL\s*=/m.test(src), `${file} re-declares MCP_PROTOCOL instead of importing it`);
+  }
 });

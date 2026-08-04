@@ -9,66 +9,33 @@ import { queryPhotos } from "./photos.js";
 import { RN_FALLBACK, getTracksSWR } from "./rn.js";
 import { searchSite } from "./search.js";
 import { AGENT_SURFACES } from "./lib/site-manifest.js";
+import { CACHE_EMPTY, CACHE_LIVE, CACHE_STATIC, mcpCorsHeaders, mcpGate, mcpServer } from "./lib/mcp-protocol.js";
 
-// DUAL-ERA, which the 2026-07-28 spec explicitly sanctions: "A dual-era server
-// selects its behavior from how the client opens. A request carrying modern
-// per-request `_meta` is served statelessly according to this revision. An
-// `initialize` request selects legacy semantics."
+// DUAL-ERA. The wire rules (versions, `_meta` keys, resultType, cache hints,
+// error codes, the header check) live in lib/mcp-protocol.js because
+// /serendipity/mcp is a second MCP server on this same origin and the two must
+// not drift into different dialects. That file carries the full argument; what
+// matters here is that a request with modern `_meta` is served statelessly
+// under 2026-07-28 and an `initialize` request selects legacy semantics.
 //
-// 2026-07-28 deleted the `initialize`/`notifications/initialized` handshake and
-// made every request carry its own protocol version, client identity, and
-// capabilities in `_meta`. That is a hard break for the three revisions this
-// server already advertised, and legacy clients have NO fall-forward mechanism —
-// a legacy client against a modern-only server just fails. So both eras are
-// served on this one endpoint, and the client's own opening move decides which.
-//
-// This site was unusually well placed for the change. The header above has said
-// "intentionally stateless" since it was written, and statelessness is precisely
-// what the new revision assumes: no sessions, no `Mcp-Session-Id`, list results
-// that do not vary per connection. There was nothing to unwind.
-const MCP_MODERN = "2026-07-28";
-const MCP_LEGACY = ["2025-06-18", "2025-03-26", "2024-11-05"];
-const MCP_SUPPORTED = [MCP_MODERN, ...MCP_LEGACY];
-// What a legacy `initialize` gets when it asks for something we do not know.
-const MCP_PROTOCOL = "2025-06-18";
+// This server was unusually well placed for the change. The header above has
+// said "intentionally stateless" since it was written, and statelessness is
+// precisely what the new revision assumes. There was nothing to unwind.
+const MCP = mcpServer({
+  // Self-reported and explicitly NOT a security signal — the spec says clients
+  // should not change behavior on it. Display, logging, debugging.
+  serverInfo: { name: "aadhar.sh", title: "Aadharsh Site", version: "2.0.0" },
+  capabilities: { tools: {}, resources: {} },
+  instructions: "Read-only public utilities for aadhar.sh: search, music, photos, coffee availability, Change Radar, and Lens. resources/list enumerates the site's public pages; resources/read fetches one. No mutations or private data are exposed.",
+});
 
-// `_meta` keys are namespaced by the spec and the prefix is mandatory.
-const META = "io.modelcontextprotocol/";
-const META_PROTOCOL = `${META}protocolVersion`;
-const META_SERVER_INFO = `${META}serverInfo`;
-
-// Self-reported and explicitly NOT a security signal — the spec says clients
-// should not change behavior on it. Display, logging, debugging.
-const SERVER_INFO = { name: "aadhar.sh", title: "Aadharsh Site", version: "2.0.0" };
-const CAPABILITIES = { tools: {}, resources: {} };
-const INSTRUCTIONS = "Read-only public utilities for aadhar.sh: search, music, photos, coffee availability, Change Radar, and Lens. resources/list enumerates the site's public pages; resources/read fetches one. No mutations or private data are exposed.";
-
-// Error codes. -32022 and its siblings come from the 2026-07-28 allocation
-// policy, which reserved -32020..-32099 for the spec and grandfathered existing
-// SDK use of -32000..-32019. Resource-not-found moved from -32002 to -32602 in
-// the same revision; this file already used -32602, so that one needed no edit.
-const ERR_HEADER_MISMATCH = -32020;
-const ERR_UNSUPPORTED_PROTOCOL = -32022;
-
-// CacheableResult (`ttlMs` + `cacheScope`) is required on list and read results
-// in 2026-07-28. It is a freshness HINT that lets a client cache instead of
-// poll, and it complements listChanged notifications rather than replacing them.
-//
-// The numbers follow what actually changes each surface. Tools are a static
-// array in this file, and resources are projected from site-manifest.json, so
-// both change exactly at deploy: an hour is a fair bet against a site that
-// deploys a few times a week, and a stale entry costs a client one 404 it
-// already has to handle. resources/read fetches a live page, so it gets the
-// shorter window. Prompts are permanently empty, so a day is honest.
-//
-// `public` throughout because every one of these surfaces is public: this
-// server has no auth, no per-caller view, and nothing an intermediary would be
-// wrong to share. That is the same property that lets `resources/read` exist.
-const CACHE_DISCOVER  = { ttlMs: 3_600_000,  cacheScope: "public" };
-const CACHE_TOOLS     = { ttlMs: 3_600_000,  cacheScope: "public" };
-const CACHE_RESOURCES = { ttlMs: 3_600_000,  cacheScope: "public" };
-const CACHE_READ      = { ttlMs:   300_000,  cacheScope: "public" };
-const CACHE_PROMPTS   = { ttlMs: 86_400_000, cacheScope: "public" };
+// Which cache hint each surface earns. Tools are a static array in this file and
+// resources are projected from site-manifest.json, so both change exactly at
+// deploy; resources/read fetches a live page; prompts are permanently empty.
+const CACHE_TOOLS     = CACHE_STATIC;
+const CACHE_RESOURCES = CACHE_STATIC;
+const CACHE_READ      = CACHE_LIVE;
+const CACHE_PROMPTS   = CACHE_EMPTY;
 // Generous for a real client (they batch a handful of calls, not hundreds) and
 // small enough that a batch can't outrun the per-IP crawl budgets. See the note
 // at the batch branch in handleSiteMcp.
@@ -152,64 +119,7 @@ async function readResource(uri, request) {
   finally { clearTimeout(timer); }
 }
 
-function mcpCors() {
-  return {
-    "access-control-allow-origin": "*",
-    "access-control-allow-methods": "POST, OPTIONS",
-    // mcp-session-id is still allowed even though 2026-07-28 removed sessions
-    // and this server never had one: a legacy client may still send it, and
-    // rejecting the preflight over a header we intend to ignore would break it.
-    // mcp-method/mcp-name are the 2026-07-28 routing headers (see headerMismatch).
-    "access-control-allow-headers": "content-type, mcp-protocol-version, mcp-session-id, mcp-method, mcp-name, authorization",
-    "access-control-max-age": "86400",
-  };
-}
-
-// Every modern result carries `resultType` and the server's identity in `_meta`,
-// and list/read results add the cache hint. Emitted UNCONDITIONALLY, including
-// to legacy clients, which is safe in both directions: JSON-RPC clients ignore
-// unknown result fields, and the spec tells modern clients to read a missing
-// `resultType` as "complete" anyway. One code path beats two that must agree.
-function mcpResult(id, payload, cache) {
-  return { jsonrpc: "2.0", id, result: {
-    resultType: "complete",
-    ...payload,
-    ...(cache || {}),
-    _meta: { [META_SERVER_INFO]: SERVER_INFO },
-  } };
-}
-
-// The version this request declares, or null for a legacy caller. `_meta` is
-// the ONLY modern signal: the MCP-Protocol-Version header predates this
-// revision (2025-06-18 introduced it for HTTP), so a header alone would
-// misclassify a legacy client as modern.
-function declaredVersion(msg) {
-  const v = msg?.params?._meta?.[META_PROTOCOL];
-  return typeof v === "string" && v ? v : null;
-}
-
-// 2026-07-28 requires Mcp-Method and Mcp-Name on Streamable HTTP POSTs so
-// intermediaries can route and authorize without parsing a JSON-RPC body.
-//
-// DELIBERATE DEVIATION: they are validated when present and never required.
-// Requiring them would reject every legacy client at the transport layer, which
-// is exactly the "Legacy client, Modern server -> Fails" row of the spec's own
-// compatibility matrix, and this server exists to be reachable. A mismatch is
-// still an error, because a header that disagrees with the body is the case the
-// header exists to prevent — a proxy authorizing `tools/list` while the body
-// calls a tool.
-function headerMismatch(msg, request) {
-  const method = request.headers.get("mcp-method");
-  if (method && msg?.method && method !== msg.method) {
-    return `Mcp-Method header says ${method} but the body calls ${msg.method}`;
-  }
-  const name = request.headers.get("mcp-name");
-  const bodyName = msg?.params?.name || msg?.params?.uri;
-  if (name && bodyName && name !== bodyName) {
-    return `Mcp-Name header says ${name} but the body targets ${bodyName}`;
-  }
-  return null;
-}
+const mcpCors = mcpCorsHeaders;
 
 function errorResult(message) { return { _error: String(message).slice(0, 400) }; }
 
@@ -269,65 +179,38 @@ export async function handleSiteMcp(request, env, ctx) {
     if (!msg || msg.jsonrpc !== "2.0" || typeof msg.method !== "string") return hasId ? rpcError(msg.id, -32600, "Invalid Request") : null;
     const id = msg.id;
     try {
-      // Version gate, before anything else. A modern caller declares its
-      // revision per request; if we cannot speak it, the spec requires -32022
-      // carrying the list we DO speak, so the client can pick one and retry
-      // rather than guess. This is also the probe a dual-era client uses to
-      // recognise a modern server, so the error shape is load-bearing.
-      const declared = declaredVersion(msg);
-      if (declared && !MCP_SUPPORTED.includes(declared)) {
-        return hasId ? { jsonrpc: "2.0", id, error: {
-          code: ERR_UNSUPPORTED_PROTOCOL,
-          message: "Unsupported protocol version",
-          data: { supported: MCP_SUPPORTED, requested: declared },
-        } } : null;
-      }
-      const mismatch = headerMismatch(msg, request);
-      if (mismatch) return hasId ? rpcError(id, ERR_HEADER_MISMATCH, mismatch) : null;
+      // Version first, then the routing headers. Both rules are shared with
+      // /serendipity/mcp (lib/mcp-protocol.js) so the two servers cannot
+      // diverge on which requests they refuse.
+      const refused = mcpGate(msg, request, id, hasId);
+      if (refused !== null) return refused;
 
-      // MUST be implemented as of 2026-07-28. Answers identity, capabilities,
-      // and supported versions in one round trip, so a client can render what
-      // this server is without probing tools/list + resources/list + prompts/list.
-      if (msg.method === "server/discover") {
-        return mcpResult(id, {
-          supportedVersions: MCP_SUPPORTED,
-          capabilities: CAPABILITIES,
-          instructions: INSTRUCTIONS,
-        }, CACHE_DISCOVER);
-      }
+      // MUST be implemented as of 2026-07-28. Identity, capabilities and
+      // supported versions in one round trip, so a client can render what this
+      // server is without probing tools/list + resources/list + prompts/list.
+      if (msg.method === "server/discover") return MCP.discover(id);
 
       // LEGACY ERA. Removed in 2026-07-28 and kept because deleting it strands
-      // every pre-2026 client with no way forward. A legacy client that asks for
-      // a version we do not know is answered in the newest LEGACY revision
-      // rather than in the modern one: it cannot speak modern, so handing it
-      // 2026-07-28 would be a handshake it fails on the next request.
-      if (msg.method === "initialize") {
-        const requested = msg.params?.protocolVersion;
-        return { jsonrpc: "2.0", id, result: {
-          protocolVersion: MCP_LEGACY.includes(requested) ? requested : MCP_PROTOCOL,
-          capabilities: CAPABILITIES,
-          serverInfo: SERVER_INFO,
-          instructions: INSTRUCTIONS,
-        } };
-      }
+      // every pre-2026 client with no way forward.
+      if (msg.method === "initialize") return MCP.initialize(id, msg.params?.protocolVersion);
       // Also removed in 2026-07-28, also kept for legacy callers. Cheap.
       if (msg.method === "ping") return { jsonrpc: "2.0", id, result: {} };
 
       // tools/list order is deterministic because MCP_TOOLS is a literal array
       // and nothing sorts or filters it. 2026-07-28 asks for that so clients can
       // cache the list and so an LLM's prompt cache keeps hitting.
-      if (msg.method === "tools/list") return mcpResult(id, { tools: MCP_TOOLS }, CACHE_TOOLS);
-      if (msg.method === "resources/list") return mcpResult(id, { resources: mcpResources(new URL(request.url).origin) }, CACHE_RESOURCES);
-      if (msg.method === "resources/templates/list") return mcpResult(id, { resourceTemplates: [] }, CACHE_RESOURCES);
+      if (msg.method === "tools/list") return MCP.result(id, { tools: MCP_TOOLS }, CACHE_TOOLS);
+      if (msg.method === "resources/list") return MCP.result(id, { resources: mcpResources(new URL(request.url).origin) }, CACHE_RESOURCES);
+      if (msg.method === "resources/templates/list") return MCP.result(id, { resourceTemplates: [] }, CACHE_RESOURCES);
       if (msg.method === "resources/read") {
         const uri = msg.params?.uri;
         const content = await readResource(uri, request);
         // -32602 rather than -32002: 2026-07-28 aligned resource-not-found with
         // JSON-RPC's Invalid Params, and this file already used the new code.
         if (!content) return rpcError(id, -32602, `Unknown or unreadable resource: ${uri}`);
-        return mcpResult(id, { contents: [content] }, CACHE_READ);
+        return MCP.result(id, { contents: [content] }, CACHE_READ);
       }
-      if (msg.method === "prompts/list") return mcpResult(id, { prompts: [] }, CACHE_PROMPTS);
+      if (msg.method === "prompts/list") return MCP.result(id, { prompts: [] }, CACHE_PROMPTS);
       if (msg.method.startsWith("notifications/")) return null;
       if (msg.method === "tools/call") {
         const name = msg.params?.name;
@@ -335,8 +218,8 @@ export async function handleSiteMcp(request, env, ctx) {
         if (out?._unknown) return rpcError(id, -32602, `Unknown tool: ${name}`);
         // A tool that failed is a RESULT with isError, never a JSON-RPC error:
         // the call itself succeeded, and the model is supposed to read the text.
-        if (out?._error) return mcpResult(id, { content: [{ type: "text", text: out._error }], isError: true });
-        return mcpResult(id, { content: [{ type: "text", text: JSON.stringify(out, null, 2) }], structuredContent: out });
+        if (out?._error) return MCP.result(id, { content: [{ type: "text", text: out._error }], isError: true });
+        return MCP.result(id, { content: [{ type: "text", text: JSON.stringify(out, null, 2) }], structuredContent: out });
       }
       return hasId ? rpcError(id, -32601, `Method not found: ${msg.method}`) : null;
     } catch (error) {

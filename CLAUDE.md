@@ -479,10 +479,30 @@ Two deliberate deviations, both written down at the code:
 2. **`ping` is kept** though 2026-07-28 removed it. Legacy clients send it and
    it costs nothing.
 
-`/serendipity/mcp` is a SEPARATE server (`serendipity/serendipity.js`) and is
-still legacy-only. `.well-known/mcp.json` and `.well-known/mcp/server-card.json`
-are its cards, not this one's; `.well-known/agent-card.json` carries both, and
-only the `/mcp` entries advertise 2026-07-28.
+**BOTH servers on this origin speak it, through one module.** `/serendipity/mcp`
+(`serendipity/serendipity.js`) is a separate server with different tools and no
+shared data, but the wire rules — versions, `_meta` keys, `resultType`, cache
+hints, error codes, the header check, the version gate — live once in
+[`lib/mcp-protocol.js`](holding/_worker.js/lib/mcp-protocol.js) and both import
+it. Two MCP servers on one origin speaking different dialects is a bug a client
+author reports to you rather than one you find yourself.
+
+Sharing is correct here even though `lib/trace.js` and `cal/src/trace.js` are
+near-duplicates ON PURPOSE (gotcha 16). The cal duplication exists because cal's
+Vitest pool boots from `cal/src/index.js` alone, so a cal → holding import would
+make cal untestable without the site tree. Serendipity has no such constraint
+and already imports `lib/desktop.js` and `lib/crawl.js`; that direction is
+established. **Check which of those two situations you are in before copying
+either precedent.**
+
+Two contract tests hold it together: one runs the conformance assertions against
+BOTH servers, and one fails if either file re-declares `MCP_SUPPORTED` or
+`MCP_PROTOCOL` locally instead of importing them — the drift that would pass on
+the day it was written and rot later.
+
+Cards: `.well-known/mcp.json` and `.well-known/mcp/server-card.json` are
+Serendipity's; `.well-known/agent-card.json` carries both interfaces. All of
+them advertise 2026-07-28 now.
 
 ### DNS-AID (agent discovery)
 
