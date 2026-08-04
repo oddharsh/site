@@ -10,8 +10,8 @@
   "supportedInterfaces": [
     {
       "url": "https://aadhar.sh/mcp",
-      "protocolBinding": "https://modelcontextprotocol.io/specification/2025-06-18",
-      "protocolVersion": "2025-06-18"
+      "protocolBinding": "https://modelcontextprotocol.io/specification/2026-07-28",
+      "protocolVersion": "2026-07-28"
     },
     {
       "url": "https://aadhar.sh/serendipity/mcp",
@@ -138,7 +138,7 @@
           "name": "Aadharsh Site MCP",
           "url": "https://aadhar.sh/mcp",
           "transport": "streamable-http",
-          "protocolVersion": "2025-06-18",
+          "protocolVersion": "2026-07-28",
           "authentication": "optional bearer credential; public read-only access works anonymously",
           "documentationUrl": "https://aadhar.sh/llms.txt"
         },

@@ -436,6 +436,54 @@ per RFC 9421 + Web Bot Auth IETF draft. JWKS at
 - The Spotify scraper (`scrapeSpotifyEmbed()`)
 - Any other outbound fetch where being identifiable matters
 
+### `/mcp` — dual-era, and why both eras are served
+
+`holding/_worker.js/mcp.js` speaks **2026-07-28** and the three legacy revisions
+(`2025-06-18`, `2025-03-26`, `2024-11-05`) on one endpoint. The spec sanctions
+this explicitly, and the client's opening move picks the era: a request carrying
+per-request `_meta` is served statelessly under the new revision, an `initialize`
+request selects legacy semantics.
+
+2026-07-28 is a hard break. It deleted the `initialize` handshake, deleted
+protocol-level sessions and `Mcp-Session-Id`, and moved protocol version, client
+identity, and capabilities into `_meta` on every request. **Legacy clients have
+no fall-forward mechanism** — pointed at a modern-only server they simply fail —
+which is the whole reason both eras stay.
+
+The site was well placed for it. `mcp.js` has said "intentionally stateless"
+since it was written, and statelessness is exactly what the new revision assumes.
+There was nothing to unwind.
+
+What the rewrite added:
+
+- **`server/discover`**, which the spec says servers MUST implement. Identity,
+  capabilities, and supported versions in one round trip.
+- **Version gating** per request. An unsupported version gets `-32022` carrying
+  `{supported, requested}` so the client can retry. That error shape is also how
+  a dual-era client RECOGNISES a modern server, so it is load-bearing.
+- **`resultType: "complete"`** and `_meta["io.modelcontextprotocol/serverInfo"]`
+  on every result, emitted unconditionally. Safe both ways: JSON-RPC clients
+  ignore unknown result fields, and the spec tells modern clients to read a
+  missing `resultType` as complete anyway. One code path beats two.
+- **`ttlMs` + `cacheScope`** on the list and read results (CacheableResult), so a
+  client caches instead of polling.
+
+Two deliberate deviations, both written down at the code:
+
+1. **`Mcp-Method` / `Mcp-Name` are validated when present, never required.** The
+   spec requires them on Streamable HTTP POSTs; requiring them would reject every
+   legacy client at the transport layer, which is the "Legacy client, Modern
+   server → Fails" row of the spec's own compatibility matrix. A *mismatch* is
+   still `-32020`, because a header disagreeing with the body is the exact case
+   the header exists to prevent.
+2. **`ping` is kept** though 2026-07-28 removed it. Legacy clients send it and
+   it costs nothing.
+
+`/serendipity/mcp` is a SEPARATE server (`serendipity/serendipity.js`) and is
+still legacy-only. `.well-known/mcp.json` and `.well-known/mcp/server-card.json`
+are its cards, not this one's; `.well-known/agent-card.json` carries both, and
+only the `/mcp` entries advertise 2026-07-28.
+
 ### DNS-AID (agent discovery)
 
 A DNS record, so it lives in Cloudflare DNS rather than in a Worker config.
