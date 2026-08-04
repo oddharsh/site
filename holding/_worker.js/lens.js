@@ -1203,6 +1203,15 @@ export async function handleLensShot(request, env, ctx) {
   });
 }
 
+// Base64 chars, so roughly 4.5 MB of PNG. Chosen to keep the whole snapshot an
+// order of magnitude clear of both the KV value cap and the isolate's memory,
+// and because an image past this size is not being LOOKED at — it is a 40,000px
+// strip of an infinite-scroll page that no pane can usefully render.
+const LENS_BROWSER_SHOT_MAX = 6_000_000;
+// KV's own ceiling is 25 MB; stopping short leaves room for the cap above to be
+// raised without quietly turning every large snapshot into a failed write.
+const LENS_BROWSER_KV_MAX = 20_000_000;
+
 // /lens/browser?url=… → opt-in rendered evidence for the third Lens pane.
 // This deliberately stays separate from /lens/fetch: the normal scan is an
 // identified HTTP observation, while this path executes page JavaScript in a
@@ -1214,10 +1223,15 @@ export async function handleLensBrowser(request, env, ctx) {
 
   const ip = request.headers.get("cf-connecting-ip") || "0.0.0.0";
   if (env.RN_KV) {
-    const bucket = `lens:browserrl:${ip}:${Math.floor(Date.now() / 60000)}`;
-    const n = parseInt((await env.RN_KV.get(bucket)) || "0", 10);
-    if (n >= 4) return jsonResponse({ ok: false, error: "Browser Run snapshots are rate-limited to 4/min. Hang on a moment." }, 429);
-    ctx.waitUntil(env.RN_KV.put(bucket, String(n + 1), { expirationTtl: 120 }));
+    // Guarded because an unhandled throw here does not produce a JSON error —
+    // it produces Cloudflare's HTML 1101 page, which the client then tries to
+    // JSON.parse. A KV blip should cost the rate limit, never the route.
+    try {
+      const bucket = `lens:browserrl:${ip}:${Math.floor(Date.now() / 60000)}`;
+      const n = parseInt((await env.RN_KV.get(bucket)) || "0", 10);
+      if (n >= 4) return jsonResponse({ ok: false, error: "Browser Run snapshots are rate-limited to 4/min. Hang on a moment." }, 429);
+      ctx.waitUntil(env.RN_KV.put(bucket, String(n + 1), { expirationTtl: 120 }));
+    } catch (_e) { /* fail open: the 4/min ceiling is politeness, not security */ }
   }
 
   const cacheKey = "lens:browser:" + (await lensSha256Hex(v.url));
@@ -1279,6 +1293,15 @@ export async function handleLensBrowser(request, env, ctx) {
   const result = envelope && envelope.result ? envelope.result : envelope || {};
   const meta = envelope && envelope.meta ? envelope.meta : {};
   const rawContent = String(result.content || "");
+  // Every other field on this snapshot is capped; the screenshot was not, and a
+  // fullPage PNG has no natural ceiling. Measured 2026-08-04 against production:
+  // en.wikipedia.org/wiki/World_War_II returned 24.3 MB of base64 in one
+  // response, inside a 128 MB isolate that then stringifies the payload twice
+  // (once for the KV write, once for the body) and against a KV value cap of
+  // 25 MB. Nothing here fails cleanly at that size: the isolate dies on limits
+  // and the client receives Cloudflare's HTML error page instead of JSON.
+  const rawShot = String(result.screenshot || "");
+  const shotTooBig = rawShot.length > LENS_BROWSER_SHOT_MAX;
   const output = {
     ok: true,
     url: v.url,
@@ -1289,7 +1312,10 @@ export async function handleLensBrowser(request, env, ctx) {
     contentTruncated: rawContent.length > 120000,
     markdown: String(result.markdown || "").slice(0, 60000),
     accessibilityTree: result.accessibilityTree || null,
-    screenshot: result.screenshot ? "data:image/png;base64," + result.screenshot : null,
+    screenshot: rawShot && !shotTooBig ? "data:image/png;base64," + rawShot : null,
+    // Dropping the image silently would read as "the browser took no shot",
+    // which is a different observation. Say which one happened.
+    screenshotDropped: shotTooBig ? Math.round(rawShot.length * 0.75) : 0,
     // WebMCP discovery is currently a Chrome-beta lab capability, not a
     // production Browser Run binding capability. The local helper performs
     // the real runtime listing; this field keeps that boundary explicit.
@@ -1299,9 +1325,17 @@ export async function handleLensBrowser(request, env, ctx) {
   };
   s.setAttribute("lens.outcome", "ok");
   s.setAttribute("lens.content_bytes", rawContent.length);
-  s.setAttribute("lens.has_screenshot", !!result.screenshot);
+  s.setAttribute("lens.has_screenshot", !!output.screenshot);
+  if (shotTooBig) s.setAttribute("lens.shot_dropped_bytes", output.screenshotDropped);
   s.setAttribute("lens.has_a11y_tree", !!result.accessibilityTree);
-  if (env.RN_KV) ctx.waitUntil(env.RN_KV.put(cacheKey, JSON.stringify(output), { expirationTtl: 900 }));
+  if (env.RN_KV) {
+    // KV rejects a value over 25 MB, and the put lives in waitUntil, so an
+    // oversize snapshot used to throw where nobody was listening — the only
+    // symptom being a page that re-rendered from scratch on every visit.
+    const serialized = JSON.stringify(output);
+    if (serialized.length <= LENS_BROWSER_KV_MAX) ctx.waitUntil(env.RN_KV.put(cacheKey, serialized, { expirationTtl: 900 }));
+    else s.setAttribute("lens.cache_skipped", serialized.length);
+  }
   return jsonResponse({ ...output, cached: false });
   });
 }
