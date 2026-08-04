@@ -35,7 +35,7 @@ import { installTracing as installCalTracing } from "../../cal/src/trace.js";
 import { getThumbHashes, handleImagesManifest, handlePhotoQuery, handlePhotos, servePhotoFromR2 } from "./photos.js";
 import { handleReading } from "./reading.js";
 import { handleRun } from "./run.js";
-import { handleRn, handleRnAdmin, handleRnArt, handleRnSet, handleRnTracks, handleRnTracksHtml } from "./rn.js";
+import { handleRn, handleRnAdmin, handleRnArt, handleRnMarkdown, handleRnSet, handleRnTracks, handleRnTracksHtml } from "./rn.js";
 import { cronHomeProbe } from "./perf-probe.js";
 import { handleSearch, handleSearchJson } from "./search.js";
 import { handleSecurityCenter } from "./security.js";
@@ -314,6 +314,9 @@ const ROUTES = new Map([
   ["/inbox", handleInbox],
 
   ["/rn", handleRn],
+  // /rn has no page of its own to twin, so its Markdown is rendered live from
+  // the same payload /rn/tracks serves. This is the URL form; /rn negotiates.
+  ["/rn.md", handleRnMarkdown],
   ["/rn/tracks", handleRnTracks],
   ["/rn/tracks.html", handleRnTracksHtml],
   ["/rn/admin", handleRnAdmin],

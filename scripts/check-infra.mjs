@@ -365,10 +365,10 @@ async function checkDns(infra) {
 
 // ----------------------------------------------------------- tier: edge ----
 
-async function fetchEdge(url, headers = {}) {
+async function fetchEdge(url, headers = {}, opts = {}) {
   const res = await fetch(url, {
     headers: { "user-agent": `${BOT_UA}`, ...headers },
-    redirect: "follow",
+    redirect: opts.redirect || "follow",
     signal: AbortSignal.timeout(12000),
   });
   return res;
@@ -706,7 +706,17 @@ async function checkAgentMarkdown() {
   const gaps = [];
   for (const p of pages) {
     try {
-      const res = await fetchEdge(`${infra.edge.origin}${p.path}`, { accept: "text/markdown" });
+      // redirect: "manual". Following one made this probe report the DESTINATION's
+      // content-type as the site's, and it named the wrong defect for a full
+      // release: /rn was a bare 302 to Spotify, so the advisory read "/rn
+      // (text/html)" and sent a reader looking for a page that does not exist.
+      // A redirect is its own gap and says so, since an agent that follows one
+      // off-origin has left the surface the registry advertised.
+      const res = await fetchEdge(`${infra.edge.origin}${p.path}`, { accept: "text/markdown" }, { redirect: "manual" });
+      if (res.status >= 300 && res.status < 400) {
+        gaps.push(`${p.path} (${res.status} to ${res.headers.get("location") || "?"})`);
+        continue;
+      }
       const ct = (res.headers.get("content-type") || "").split(";")[0].trim();
       if (ct !== "text/markdown") gaps.push(`${p.path} (${ct || "no content-type"})`);
     } catch (e) {

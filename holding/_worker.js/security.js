@@ -1,10 +1,23 @@
 // security.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
+import { serveMarkdownTwin } from "./lib/assets.js";
 import { lunaPage } from "./lib/chrome.js";
-import { esc } from "./lib/http.js";
+import { esc, wantsMarkdown } from "./lib/http.js";
 
 // ── /security handler (Windows Security Center reskin) ───────────────
-export function handleSecurityCenter(request) {
+export async function handleSecurityCenter(request, env) {
+  // The prose here is static; only the three connection values below are
+  // per-request, and the twin says so and points at /whoareyou.json for them.
+  // Hand-authored (holding/md/security.md) because this page renders from a
+  // template literal, and build.mjs fails the deploy if the twin drifts from
+  // lib/security.js, which is where the header values it quotes actually live.
+  // x-robots-tag rides along because the HTML sets it: a Markdown rendering of a
+  // noindex page should not be the indexable copy of it.
+  if (wantsMarkdown(request)) {
+    const md = await serveMarkdownTwin(request, env, "/security.md", { "x-robots-tag": "noindex" });
+    if (md) return md;
+  }
+
   const cf = request.cf || {};
   const tls = esc(cf.tlsVersion || "—");
   const proto = esc(cf.httpProtocol || "—");

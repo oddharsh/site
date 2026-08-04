@@ -3,7 +3,7 @@
 import { signedFetch } from "./lib/botauth.js";
 import { deleteSWRKV, swrKV } from "./lib/cache.js";
 import { lunaPage } from "./lib/chrome.js";
-import { esc, escAttr, escHtml, jsonResp, timingSafeEqual } from "./lib/http.js";
+import { esc, escAttr, escHtml, jsonResp, timingSafeEqual, wantsMarkdown } from "./lib/http.js";
 import { span } from "./lib/trace.js";
 
 // ── /rn redirect target ─────────────────────────────────────────────
@@ -24,22 +24,42 @@ import { span } from "./lib/trace.js";
 export const RN_FALLBACK = "https://open.spotify.com/playlist/4IRq9W1N2tOWHhH0O3vXiF";
 
 // ── /rn handler ─────────────────────────────────────────────────────
-export async function handleRn(request, env) {
-  let playlistId = null;
-  if (env.RN_KV) {
-    try { playlistId = await env.RN_KV.get("playlist-id"); } catch {}
-  }
-  const target = (playlistId && /^[0-9A-Za-z]{22}$/.test(playlistId))
-    ? `https://open.spotify.com/playlist/${playlistId}`
-    : RN_FALLBACK;
+// This route has NO page of its own: it is a 302 to Spotify, and a browser that
+// follows it lands on a JS application. That is fine for a human and useless to
+// an agent, which is why site-manifest's `agents: true` on /rn was advertising a
+// bounce off-site. It also fooled check-infra, whose probe follows redirects and
+// so reported /rn's content-type as text/html when the text/html was Spotify's.
+//
+// So /rn answers Markdown instead of redirecting, and the answer is RENDERED
+// from the same live payload /rn/tracks serves rather than described in a twin
+// under holding/md/. There is nothing fixed here to hand-author: the playlist
+// changes, and a file claiming otherwise would be wrong within a rollover. This
+// also cannot drift by construction, which is the property the twin machinery
+// buys with checkTwinFacts.
+export async function handleRn(request, env, ctx) {
+  if (wantsMarkdown(request)) return handleRnMarkdown(request, env, ctx);
+
   return new Response(null, {
     status: 302,
     headers: {
-      "location":        target,
+      "location":        await playlistUrl(env),
       "cache-control":   "no-store, must-revalidate",
       "referrer-policy": "no-referrer",
     },
   });
+}
+
+// The playlist the redirect points at, resolved the same way for both
+// representations so the Markdown one cannot cite a different playlist than the
+// one a browser is sent to.
+async function playlistUrl(env) {
+  let playlistId = null;
+  if (env?.RN_KV) {
+    try { playlistId = await env.RN_KV.get("playlist-id"); } catch {}
+  }
+  return (playlistId && /^[0-9A-Za-z]{22}$/.test(playlistId))
+    ? `https://open.spotify.com/playlist/${playlistId}`
+    : RN_FALLBACK;
 }
 
 // ── /rn/tracks handlers ─────────────────────────────────────────────
@@ -416,6 +436,76 @@ export function renderTrackListHtml(payload) {
       }</a>
     </li>`;
   }).join("");
+}
+
+// The Markdown representation, served at /rn.md and at /rn under
+// `Accept: text/markdown`. Same three states renderTrackListHtml keeps apart,
+// for the same reason: a failed scrape and an empty playlist are different
+// stories, and collapsing them tells a reader the playlist is empty when it is
+// the scrape that broke.
+//
+// No artist links. The HTML rows carry one anchor per artist because the tooltip
+// island reads them; in prose that is a wall of Spotify search URLs around the
+// names, which are the actual content.
+export function renderTrackListMarkdown(payload, target) {
+  const tracks = Array.isArray(payload?.tracks) ? payload.tracks : [];
+  const name = payload?.playlist_name;
+  const head = [
+    `# ${name ? `Right now: ${name}` : "Right now"}`,
+    "",
+    "> The playlist aadhar.sh/rn redirects a browser to, scraped live from the",
+    "> Spotify embed. It moves; there is no stable snapshot of it to cite.",
+    "> The same payload as JSON: https://aadhar.sh/rn/tracks",
+    "",
+    `Playlist: <${target}>`,
+    "",
+  ];
+
+  let body;
+  if (payload?.error) {
+    body = [`Could not load the track list right now (\`${payload.error}\`). The playlist itself is still at the URL above.`];
+  } else if (!tracks.length) {
+    body = ["No tracks yet."];
+  } else {
+    body = [`## ${tracks.length} track${tracks.length === 1 ? "" : "s"}`, ""];
+    tracks.forEach((t, i) => {
+      const artists = t.artists_text || (t.artists || []).map(a => a.name).join(", ");
+      const dur = t.duration_ms ? ` (${fmtDuration(t.duration_ms)})` : "";
+      const explicit = t.is_explicit ? " [E]" : "";
+      const link = t.song_link_url || t.spotify_url;
+      const title = link ? `[${mdText(t.title)}](${link})` : mdText(t.title);
+      body.push(`${i + 1}. ${title}${artists ? ` · ${mdText(artists)}` : ""}${dur}${explicit}`);
+    });
+  }
+
+  return [...head, ...body, "", "Source: https://aadhar.sh/rn"].join("\n") + "\n";
+}
+
+// Titles and artist names are arbitrary third-party strings, so the four
+// characters that would otherwise turn one into emphasis, a link, or a heading
+// are escaped. Not esc()/escHtml(): this is not HTML, and entity-encoding here
+// would put `&amp;` in front of a reader.
+const mdText = (s) => String(s ?? "").replace(/([\\`*_[\]])/g, "\\$1");
+
+// `/rn.md` is the URL form, for a client that cannot set an Accept header. It is
+// the cacheable representation of the pair (the negotiated /rn response is
+// no-store, because the edge keys on URL and not on Accept), and it rides the
+// same SWR payload, so answering it costs a KV read.
+export async function handleRnMarkdown(request, env, ctx) {
+  const [result, target] = await Promise.all([loadRnTracks(request, env, ctx), playlistUrl(env)]);
+  const negotiated = wantsMarkdown(request) && !new URL(request.url).pathname.endsWith(".md");
+  return new Response(renderTrackListMarkdown(result.payload, target), {
+    // 200 even on a failed scrape: the response says so in prose, and the useful
+    // half of it (which playlist, where to open it) is still true. /rn/tracks
+    // keeps the 502 for machines reading the status.
+    status: 200,
+    headers: {
+      "content-type":           "text/markdown; charset=utf-8",
+      "cache-control":          negotiated ? "no-store, must-revalidate" : "public, max-age=300, s-maxage=600",
+      ...(negotiated ? { vary: "accept" } : {}),
+      "x-content-type-options": "nosniff",
+    },
+  });
 }
 
 function linkifyArtists(artists, fallbackText) {

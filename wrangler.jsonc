@@ -111,7 +111,9 @@
       "/ledger/rum.js", "/ledger/rum", "/ledger/prefetch",
       "/writing", "/writing/*",
       "/webmention", "/webmention/*", "/inbox",
-      "/rn", "/rn/tracks", "/rn/tracks.html", "/rn/admin", "/rn/set", "/rn/art/*",
+      // "/rn.md" carries an extension, so without it here the asset layer would
+      // answer first and 404 a route the worker renders.
+      "/rn", "/rn.md", "/rn/tracks", "/rn/tracks.html", "/rn/admin", "/rn/set", "/rn/art/*",
       "/bot", "/around", "/around/json", "/around/changes.json",
       "/photos", "/photos/", "/photos/query.json", "/photos/grid.html", "/run",
       "/images", "/images/", "/images/full", "/images/full/*",

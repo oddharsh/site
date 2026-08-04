@@ -16,8 +16,8 @@ scripts
 a-dict
 p-dict
 
-# Hand-authored Markdown twins for the two Worker-rendered prose pages, /bot and
-# /whoareyou, whose text lives in template literals no build step can read.
+# Hand-authored Markdown twins for the Worker-rendered prose pages (/bot,
+# /whoareyou, /security), whose text lives in template literals no build can read.
 # scripts/gen-md-twins.mjs publishes each one AT ITS PAGE'S PATH (/bot.md), so
 # shipping this directory as well would serve the same twin at a second URL.
 md

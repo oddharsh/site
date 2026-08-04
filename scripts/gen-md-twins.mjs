@@ -12,10 +12,10 @@
 // there is no hand-tuned signal here worth preserving.
 //
 // WHAT IS AUTHORED BY HAND
-// /bot and /whoareyou render from the Worker, so their prose lives in template
-// literals rather than a file this script can read. Their twins are authored in
-// holding/md/, and checkTwinFacts() below pins the load-bearing strings so the
-// twin cannot quietly disagree with the page.
+// /bot, /whoareyou and /security render from the Worker, so their prose lives in
+// template literals rather than a file this script can read. Their twins are
+// authored in holding/md/, and checkTwinFacts() below pins the load-bearing
+// strings so the twin cannot quietly disagree with the page.
 //
 // Every exported function is PURE so build.mjs can re-run this in-memory; only
 // main() touches the filesystem.
@@ -257,6 +257,35 @@ export const TWIN_FACTS = [
     facts: [
       { label: "JSON endpoint", source: "holding/_worker.js/whoareyou.js", string: "/whoareyou.json" },
       { label: "no-storage claim", source: "holding/_worker.js/whoareyou.js", string: "none of it is stored" },
+    ],
+  },
+  {
+    // /security is a page ABOUT headers, so pinning it to the page's own copy of
+    // those headers would only prove the twin agrees with prose that is itself
+    // free to rot. Every fact below is read from lib/security.js, the module that
+    // actually sends them, except the JWKS path, which is the page's own claim.
+    twin: "holding/md/security.md",
+    facts: [
+      { label: "frame-ancestors", source: "holding/_worker.js/lib/security.js", string: "frame-ancestors 'none'" },
+      { label: "object-src",      source: "holding/_worker.js/lib/security.js", string: "object-src 'none'" },
+      { label: "Referrer-Policy", source: "holding/_worker.js/lib/security.js", string: "strict-origin-when-cross-origin" },
+      {
+        // The one fact on that page with a scheduled expiry. ENFORCE_PAGE_HASHES
+        // is false today, so the hashed policy ships report-only beside a loose
+        // enforcing one, and the page says so. Flipping the flag makes that
+        // sentence false; this fails the deploy until the twin is rewritten,
+        // which is the only reminder the rollout has.
+        label: "hashed-CSP rollout state",
+        source: "holding/_worker.js/lib/security.js",
+        derive: (src) => {
+          const m = /ENFORCE_PAGE_HASHES\s*=\s*(true|false)/.exec(src);
+          if (!m) return null;
+          return m[1] === "true"
+            ? "the enforced policy names each inline script by hash"
+            : "Content-Security-Policy-Report-Only";
+        },
+      },
+      { label: "JWKS path", source: "holding/_worker.js/security.js", string: "/.well-known/http-message-signatures-directory" },
     ],
   },
 ];
