@@ -72,11 +72,25 @@ if (process.env.CI) {
 // ------------------------------------------------------------- wrangler ----
 
 async function wrangler(args, { json = false } = {}) {
-  const { stdout } = await exec("npx", ["wrangler", ...args], {
-    maxBuffer: 16 * 1024 * 1024,
-    env: process.env,
-  });
-  return json ? JSON.parse(stdout) : stdout;
+  try {
+    const { stdout } = await exec("npx", ["wrangler", ...args], {
+      maxBuffer: 16 * 1024 * 1024,
+      env: process.env,
+    });
+    return json ? JSON.parse(stdout) : stdout;
+  } catch (e) {
+    // Report what wrangler actually said, not a Node spawn dump. The first real
+    // ramp died here and printed thirty lines of ChildProcess internals around
+    // one line of usable error, which is a poor way to learn that traffic did
+    // not move. wrangler puts its diagnostics on stderr.
+    const said = String(e.stderr || e.stdout || e.message || "")
+      // eslint-disable-next-line no-control-regex
+      .replace(/\[[0-9;]*m/g, "")
+      .split("\n").map((l) => l.trim()).filter(Boolean)
+      .filter((l) => !l.startsWith("🪵"))
+      .slice(0, 6).join("\n    ");
+    die(`\`wrangler ${args.slice(0, 2).join(" ")}\` failed:\n    ${said}\n\n  Nothing was changed — wrangler validates before it moves traffic.\n  Check \`npm run deploy:promote -- --status\` to confirm.`);
+  }
 }
 
 async function currentDeployment() {
@@ -210,9 +224,28 @@ if (previous && target.slice(0, 8) === previous.slice(0, 8)) {
 
 for (const pct of steps) {
   console.log(`── ${pct}% ───────────────────────────────────────────`);
+  // BOTH SIDES OF THE SPLIT, ALWAYS. `wrangler versions deploy` requires the
+  // percentages to total exactly 100 and refuses the command otherwise:
+  //
+  //   ✘ The specified traffic percentages add up to 10%, but must total
+  //     exactly 100%.
+  //
+  // The first version of this script passed only `<target>@<pct>`, which reads
+  // naturally ("put 10% on the new one") and is rejected for every step except
+  // 100. Caught on the first real ramp, 2026-08-04. It failed SAFELY — wrangler
+  // validates before it moves anything — but it failed on every intermediate
+  // step, which is to say the ramp could only ever have gone straight to 100%,
+  // which is the one thing this script exists to avoid.
+  //
+  // Below 100 the remainder goes explicitly to the version that is serving now.
+  // Wrangler would also accept a bare `<previous>` and infer the remainder, but
+  // saying the number out loud is what makes the intent reviewable in the log.
+  const specs = pct >= 100 || !previous
+    ? [`${target}@100`]
+    : [`${target}@${pct}`, `${previous}@${100 - pct}`];
   await wrangler([
     "versions", "deploy",
-    `${target}@${pct}`,
+    ...specs,
     "--yes",
     "--message", `deploy:promote ramp to ${pct}%`,
   ]);
