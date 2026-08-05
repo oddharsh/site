@@ -109,6 +109,31 @@ revision at `/mcp`. The terminal applies it one layer up: MCP made a single tool
 *call* stateless, and this makes a whole *session* over those tools stateless
 too.
 
+## The one exception: ask remembers
+
+`ask` is the only program here with a Durable Object, and the rule that decides
+it is about the **shape of the state**, not taste:
+
+> Small and addressable stays in the URL. Growing and opaque gets a DO.
+
+A pane and a cursor fit a query string forever. A transcript does not — the
+practical ceiling is about 2KB, which holds a cursor and never holds a
+three-turn exchange. So `ask` takes a `session` id (server-minted, returned in
+the frame) and follow-ups continue the same conversation. The other three
+programs are untouched and stay fully stateless.
+
+**A transcript that has read a third party never gets tools again.** Once
+`&at=` puts somebody else's text into the history, every later turn in that
+session is downstream of instructions somebody else wrote — including an
+innocent question about this site. Tools stay off for the life of that session,
+and the frame says `TAINTED` rather than quietly answering without them. Start a
+new session to get tools back. The rule is sticky and permanent on purpose: "no
+tools on the next turn" is defeated by asking two harmless questions first.
+
+Transcripts hold 12 messages or 24,000 characters, whichever comes first, and
+expire 30 minutes after the last turn. Without the binding, `ask` is
+single-shot — exactly what it was before conversations existed.
+
 ## Colour, and the other doors
 
 Frames carry ANSI colour over HTTP by default, since the usual caller of a

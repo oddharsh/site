@@ -97,11 +97,18 @@
   ],
   "durable_objects": {
     "bindings": [
-      { "name": "COUNTER", "class_name": "Counter" }
+      { "name": "COUNTER", "class_name": "Counter" },
+      // /terminal/ask's conversation memory, and nothing else on that surface.
+      // The programs keep their state in the URL because a pane and a cursor fit
+      // there; a transcript does not (~2KB practical ceiling), which is the whole
+      // reason this one binding exists. Per-session, so it lands near its caller
+      // rather than being the single global instance COUNTER is.
+      { "name": "ASK_SESSION", "class_name": "AskSession" }
     ]
   },
   "migrations": [
-    { "tag": "v1", "new_sqlite_classes": ["Counter"] }
+    { "tag": "v1", "new_sqlite_classes": ["Counter"] },
+    { "tag": "v2", "new_sqlite_classes": ["AskSession"] }
   ],
   // per-booking coffee expiry timer — MUST match wrangler.jsonc (build.mjs warns on drift).
   "workflows": [

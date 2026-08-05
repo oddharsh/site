@@ -31,6 +31,9 @@
   // last frame — which is the same state the frame itself prints.
   var prog = null;
   var state = "";
+  // The ask conversation this console is holding. Server-minted, carried across
+  // asks so a follow-up continues rather than restarting. Cleared by `exit`.
+  var askSession = "";
   var history = [];
   var histIndex = -1;
 
@@ -145,6 +148,10 @@
     var plain = r.body.replace(/\x1b\[[0-9;]*m/g, "");
     var printed = plain.match(/state \/terminal\/[a-z]+(\?[A-Za-z0-9_%=&.,+\-]*)/);
     state = printed ? printed[1] : "";
+    // The ask frame prints the full session id in its state URL; keep it so the
+    // next question continues the same transcript.
+    var sess = plain.match(/session=([A-Za-z0-9-]{8,})/);
+    if (sess) askSession = sess[1];
     setPrompt();
   }
 
@@ -199,9 +206,9 @@
     cls: function () { out.textContent = ""; },
     clear: function () { out.textContent = ""; },
     exit: function () {
-      prog = null; state = "";
+      prog = null; state = ""; askSession = "";
       write("");
-      write("  Session closed. Nothing was stored — reload to start again, or keep going.");
+      write("  Session closed. The ask transcript is dropped; nothing else was stored.");
       write("");
     },
 
@@ -241,7 +248,11 @@
       }
       var q = rest.join(" ").trim();
       if (!q && !at) { write("usage: ask <question>   ·   ask --at <origin> [question]", "ps-err"); return; }
-      return runProgram("ask", (q ? "q=" + encodeURIComponent(q) : "") + (at ? (q ? "&" : "") + "at=" + encodeURIComponent(at) : ""));
+      var parts = [];
+      if (q) parts.push("q=" + encodeURIComponent(q));
+      if (at) parts.push("at=" + encodeURIComponent(at));
+      if (askSession) parts.push("session=" + encodeURIComponent(askSession));
+      return runProgram("ask", parts.join("&"));
     },
 
     // Read another origin's agent doors and stop. `ask --at X <question>` is the

@@ -35,6 +35,7 @@
 // is bounded on four axes rather than one: query length, tool calls per ask,
 // model rounds, and per-IP rate. A public LLM endpoint with none of those is a
 // bill somebody else gets to write.
+import { mintSessionId, readSession, writeSession } from "./ask-session.js";
 import { DOOR_LIMITS, doorCorpus, readDoors } from "./lib/doors.js";
 import { LENS_BUDGETS, overLensBudget, validateLensTarget } from "./lens.js";
 import { DATA_TOOLS, DATA_TOOL_NAMES, callDataTool, toolError } from "./lib/tools.js";
@@ -214,13 +215,19 @@ async function callModel(env, body) {
 
 const modelAvailable = (env) => !!(env && env.WORKERS_AI_TOKEN && env.CF_ACCOUNT_ID);
 
-async function runModelLoop(query, request, env, ctx, steps) {
-  const messages = [{ role: "system", content: SYSTEM }, { role: "user", content: query }];
+async function runModelLoop(query, request, env, ctx, steps, history = [], allowTools = true) {
+  const messages = [{ role: "system", content: SYSTEM }, ...history, { role: "user", content: query }];
 
   for (let round = 0; round < ASK_LIMITS.rounds; round++) {
-    const reply = await callModel(env, { messages, tools: asFunctions(), max_tokens: 512 });
+    // `tools` is OMITTED, not emptied, when withheld. Same guarantee the foreign
+    // path relies on: a catalog that is absent from the request body cannot be
+    // called, whatever the context has been talked into.
+    const reply = await callModel(env, allowTools
+      ? { messages, tools: asFunctions(), max_tokens: 512 }
+      : { messages, max_tokens: 512 });
+    if (!allowTools) return { answer: String(reply?.response || "").trim(), messages };
     const calls = Array.isArray(reply?.tool_calls) ? reply.tool_calls : [];
-    if (!calls.length) return String(reply?.response || "").trim();
+    if (!calls.length) return { answer: String(reply?.response || "").trim(), messages };
 
     for (const call of calls) {
       if (steps.length >= ASK_LIMITS.calls) break;
@@ -249,7 +256,7 @@ async function runModelLoop(query, request, env, ctx, steps) {
     messages: [...messages, { role: "user", content: "Answer now, from the tool results above only." }],
     max_tokens: 512,
   });
-  return String(final?.response || "").trim();
+  return { answer: String(final?.response || "").trim(), messages };
 }
 
 // ── asking ABOUT SOMEBODY ELSE'S SITE ─────────────────────────────────────
@@ -286,7 +293,7 @@ const FOREIGN_SYSTEM = [
   "Keep the answer under 90 words, plain prose, no markdown.",
 ].join(" ");
 
-export async function runForeignAsk(rawTarget, question, request, env, ctx) {
+export async function runForeignAsk(rawTarget, question, request, env, ctx, session = { messages: [], tainted: false, turns: 0 }, sessionId = "") {
   const target = validateLensTarget(rawTarget);
   if (!target.ok) return { question, mode: "refused", at: rawTarget, steps: [], answer: target.error };
 
@@ -302,7 +309,17 @@ export async function runForeignAsk(rawTarget, question, request, env, ctx) {
   try { doors = await readDoors(target.url, env); }
   catch { return { question, mode: "refused", at: rawTarget, steps: [], answer: "That origin could not be read." }; }
 
-  return foreignTurn(doors, question, env);
+  const result = await foreignTurn(doors, question, env, session.messages);
+  // Every foreign read taints its session, whether or not a model ran. The taint
+  // is about what ENTERED the transcript, not about what was done with it.
+  if (result.mode === "foreign") {
+    await writeSession(env, sessionId, [
+      ...session.messages,
+      { role: "user", content: `[read ${doors.origin}] ${question}` },
+      { role: "assistant", content: result.answer },
+    ], true);
+  }
+  return { ...result, session: sessionId, turns: session.turns + 1, tainted: true };
 }
 
 /**
@@ -311,7 +328,7 @@ export async function runForeignAsk(rawTarget, question, request, env, ctx) {
  * network. Every external probe fails at signing before a stubbed fetch can
  * answer, so a test that went through readDoors could never reach this at all.
  */
-export async function foreignTurn(doors, question, env) {
+export async function foreignTurn(doors, question, env, history = []) {
   const corpus = doorCorpus(doors);
   const base = { question, at: doors.origin, doors, steps: [], corpusChars: corpus.length };
 
@@ -325,6 +342,7 @@ export async function foreignTurn(doors, question, env) {
     const reply = await callModel(env, {
       messages: [
         { role: "system", content: FOREIGN_SYSTEM },
+        ...history,
         { role: "user", content: `Question: ${question}` },
         { role: "user", content: `--- BEGIN UNTRUSTED THIRD-PARTY CONTENT FROM ${doors.origin} ---\n${corpus}\n--- END UNTRUSTED THIRD-PARTY CONTENT ---` },
       ],
@@ -341,12 +359,32 @@ export async function foreignTurn(doors, question, env) {
  * because this route is reached from a console where a stack trace is worse
  * than a sentence.
  */
-export async function runAsk(query, request, env, ctx, at = "") {
+export async function runAsk(query, request, env, ctx, at = "", sessionId = "") {
   const question = String(query || "").trim().slice(0, ASK_LIMITS.query);
+
+  // The session is the ONE piece of state here that does not fit a URL, which is
+  // why it is the one piece that gets a Durable Object. Reading it costs a hop;
+  // that hop is per-session and lands near the caller, and it sits next to a
+  // model call, so it is noise. Without the binding this returns an empty
+  // session and `ask` behaves exactly as it did before conversations existed.
+  const session = await readSession(env, sessionId);
+  const id = sessionId || mintSessionId();
+
   // `at` sends the whole thing down the third-party path, question or not: with
   // no question it reads the doors and stops, which is the useful half on its own.
-  if (at) return runForeignAsk(at, question, request, env, ctx);
-  if (!question) return { question: "", mode: "empty", steps: [], answer: "" };
+  if (at) return runForeignAsk(at, question, request, env, ctx, session, id);
+  if (!question) return { question: "", mode: "empty", steps: [], answer: "", session: id };
+
+  // THE STICKY-TAINT RULE. A transcript that has ever held third-party text
+  // keeps holding it, so every later turn in that transcript is downstream of an
+  // instruction somebody else wrote. Tools stay off for the life of the session,
+  // even for a question about this site — the injected sentence is still sitting
+  // in the history, and handing tools back would be handing them to it.
+  //
+  // Sticky rather than per-turn, and permanent rather than decaying, because the
+  // alternative is a rule with an off-by-one in it: "no tools on the turn after"
+  // is defeated by asking two innocuous questions first.
+  const allowTools = !session.tainted;
 
   if (await overAskBudget(request, env)) {
     return { question, mode: "limited", steps: [], answer: `Asks are rate-limited to ${ASK_BUDGET.max}/min per address. The tools underneath are not — call them directly at /mcp.` };
@@ -355,8 +393,14 @@ export async function runAsk(query, request, env, ctx, at = "") {
   const steps = [];
   if (modelAvailable(env)) {
     try {
-      const answer = await runModelLoop(question, request, env, ctx, steps);
-      if (answer) return { question, mode: "model", steps, answer };
+      const out = await runModelLoop(question, request, env, ctx, steps, session.messages, allowTools);
+      if (out.answer) {
+        await writeSession(env, id, [...out.messages.slice(1), { role: "assistant", content: out.answer }], false);
+        return {
+          question, steps, answer: out.answer, session: id, turns: session.turns + 1,
+          mode: allowTools ? "model" : "model-notools", tainted: session.tainted,
+        };
+      }
       // A model that answered with nothing is a failure, not an empty answer.
       // Fall through to the router rather than print a blank frame.
     } catch {
@@ -373,5 +417,8 @@ export async function runAsk(query, request, env, ctx, at = "") {
     steps,
     answer: "",
     result: out,
+    session: id,
+    turns: session.turns,
+    tainted: session.tainted,
   };
 }

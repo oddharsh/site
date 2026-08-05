@@ -59,6 +59,10 @@ installCalTracing(tracing);
 // must be a named export of the entry so the COUNTER binding can resolve it.
 export { Counter } from "./counter.js";
 
+// /terminal/ask's conversation memory. Same rule as Counter: a DO class must be
+// a named export of the entry for its binding to resolve.
+export { AskSession } from "./ask-session.js";
+
 // the coffee-booking expiry timer (Workflows). One durable instance per pending
 // booking replaces the old weekly cron sweep; its class_name must resolve on
 // this entry so the BOOKING_WORKFLOW binding can find it (see cal/src/workflow.js).

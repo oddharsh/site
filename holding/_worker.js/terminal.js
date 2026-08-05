@@ -8,51 +8,47 @@
 // the next frame — which is how a person learns an unfamiliar program, and it
 // needs no schema shipped ahead of time. The frame IS the documentation.
 //
-// ── the session is query params, not a session ────────────────────────────
-// State lives entirely in the URL: ?pane=writing&cursor=3&open=lattice. There is
-// no Durable Object, no KV entry, no token, no TTL, and nothing to expire.
+// ── where the state lives, and why it is split ────────────────────────────
+// The PROGRAMS keep their state in the URL: ?pane=writing&cursor=3&open=lattice
+// is the whole thing. No Durable Object, no KV entry, no token, no TTL.
+// /terminal/ask is the ONE exception and it has its own DO — see below.
 //
-// That is a deliberate trade against the obvious design (a DO holding a cursor).
-// Three things fall out of it, and each one is worth more here than server-side
-// state would be:
+// Four things fall out of the URL model:
 //
-//   1. No round trip. counter.js measures a DO hop at 185-630ms because a DO is
-//      one global instance; a TUI is a latency-shaped thing where every keypress
-//      pays that. Params cost nothing.
-//   2. Sessions FORK. Two agents can explore from the same frame without
-//      colliding, and a third can resume a transcript from last week, because a
-//      state is a URL rather than a live object someone has to still be holding.
-//   3. It is inspectable. A site whose whole argument is "here is what the
-//      machine sees" should not hand an agent an opaque blob and ask it to send
-//      the blob back. You can read the state, edit it by hand, and bookmark it.
+//   1. Sessions FORK. Two agents explore from the same frame without colliding.
+//   2. A state from last week still resolves, because it was never a live object
+//      anybody had to keep holding. Bookmarkable, replayable, diffable.
+//   3. It is inspectable. A site whose argument is "here is what the machine
+//      sees" should not hand an agent an opaque blob and ask for it back.
+//   4. Any isolate can serve any frame. No affinity, nothing to fail over.
 //
-// The cost is that a frame can't hold anything the URL can't spell. No scroll
-// offsets in pixels, no partial input buffers, no undo stack. Every app here is
-// a reader over public data, so that ceiling has not bound yet. It would bind
-// the moment one of these apps needed to WRITE something, and at that point the
-// answer is a real session rather than a longer query string.
-//
-// ── this is the same argument MCP's 2026-07-28 revision made ──────────────
+// ── this is the argument MCP's 2026-07-28 revision made ───────────────────
 // That revision dropped server-side sessions: no Mcp-Session-Id to mint, no
-// session table to keep, and — the part that actually decides deployments — no
-// need to route the same session back to the same backend machine. This origin
-// already speaks it; lib/mcp-protocol.js is what serves it, and its "DUAL-ERA"
-// note is about exactly that cutover.
+// session table, and — the part that actually decides deployments — no need to
+// route a session back to the same backend. This origin already speaks it;
+// lib/mcp-protocol.js serves it, and its "DUAL-ERA" note is that cutover.
 //
-// /terminal applies the same principle ONE LAYER UP. MCP made a single tool
-// CALL stateless; this makes a whole session over those tools stateless too,
-// which is the harder half, because a session is the thing that looks like it
-// obviously needs a server to hold it. It does not. There is a fourth property
-// beyond the three above and it is the one the revision cares most about: any
-// isolate can serve any frame, so there is no affinity to preserve and nothing
-// to fail over.
+// /terminal applies the principle ONE LAYER UP. MCP made a single tool CALL
+// stateless; this makes a whole session over those tools stateless too, which is
+// the harder half, because a session is the thing that looks like it obviously
+// needs a server to hold it. The npx/uvx analogy is the useful one: fetch, run,
+// discard, reconstruct from the address next time. (Simon Willison on the
+// revision, 2026-07-31: https://simonwillison.net/2026/Jul/31/stateless-mcp/)
 //
-// The framing that made this click, and the analogy is the useful part: npx and
-// uvx against their installed counterparts. Fetch, run, discard, reconstruct
-// from the address next time. A Durable Object session is the installed
-// version — faster in principle, and something you now own, keep warm, and have
-// to evict. (Simon Willison on the revision, 2026-07-31:
-// https://simonwillison.net/2026/Jul/31/stateless-mcp/)
+// ── the exception, and the rule that decides it ───────────────────────────
+// SMALL AND ADDRESSABLE STAYS IN THE URL. GROWING AND OPAQUE GETS A DO.
+//
+// A pane and a cursor fit a query string forever. A transcript does not — the
+// practical ceiling is ~2KB, which holds a cursor and never holds a three-turn
+// exchange. `ask` was single-shot for precisely that reason: there was nowhere
+// for "what about the other one?" to live. So ask-session.js gives that ONE
+// program a Durable Object, and the other three are untouched.
+//
+// One correction worth recording, because it was used to argue the wrong thing:
+// counter.js's measured 185-630ms DO hop is a SINGLE GLOBAL INSTANCE hit from
+// everywhere. A per-session DO lands near whoever opened it — tens of ms, paid
+// once per ask, next to a model call. Latency was never the reason the programs
+// stay on URLs. Forking, bookmarking, and testability were.
 import { ASK_BUDGET, ASK_LIMITS, asAgentCall, runAsk } from "./ask.js";
 import { readAroundChanges } from "./around.js";
 import { readCoffeeAvailability } from "./coffee.js";
@@ -124,6 +120,7 @@ export function readState(url, app) {
     q: str(params.get("q"), 120),
     url: str(params.get("url"), 512),
     at: str(params.get("at"), 300),
+    session: str(params.get("session"), 64),
     left: str(params.get("left"), 512),
     right: str(params.get("right"), 512),
     film: str(params.get("film"), 60),
@@ -150,7 +147,7 @@ export function stateUrl(state, extra = {}) {
   } else if (state.app === "lens") {
     put("url", state.url); put("left", state.left); put("right", state.right);
   } else if (state.app === "ask") {
-    put("q", state.q); put("at", state.at);
+    put("q", state.q); put("at", state.at); put("session", state.session);
   }
   for (const [key, value] of Object.entries(extra)) put(key, value);
   const qs = params.toString();
@@ -708,11 +705,26 @@ function resultRows(tool, out) {
   return [[s("done.", "dim")]];
 }
 
+/**
+ * The session line. Prints the id to send back for a follow-up, and says loudly
+ * when a transcript is TAINTED — because a tainted session silently answering
+ * without tools would look like the model simply choosing not to use them.
+ */
+const sessionLine = (result) => {
+  if (!result.session) return [s("")];
+  const head = [s("session ", "label"), s(result.session.slice(0, 8), "accent"),
+    s(result.turns ? `  turn ${result.turns}` : "", "dim")];
+  return result.tainted
+    ? [...head, s("  TAINTED — third-party text is in this transcript, so tools stay off", "warn")]
+    : head;
+};
+
 const MODE_NOTE = {
   model: "a model chose the tools",
   router: "NO MODEL IS BOUND HERE, so the tool was chosen by keyword",
   "router-fallback": "the model was unavailable, so the tool was chosen by keyword",
   limited: "rate limited",
+  "model-notools": "tools withheld: this session has read a third party",
   empty: "",
 };
 
@@ -743,7 +755,7 @@ export async function askFrame(env, request, state, ctx) {
     };
   }
 
-  const result = await runAsk(state.q, request, env, ctx, state.at);
+  const result = await runAsk(state.q, request, env, ctx, state.at, state.session);
 
   // Reading somebody else's origin: show which doors opened before anything
   // else. A door that is shut is as informative as one that is open, so every
@@ -784,7 +796,8 @@ export async function askFrame(env, request, state, ctx) {
       status: [
         [s("mode ", "label"), s(result.mode, result.mode === "foreign" ? "ok" : result.mode === "refused" ? "bad" : "warn"),
           s(result.mode === "foreign" ? `  ${result.corpusChars} chars read as UNTRUSTED data, no tools offered on that turn` : "", "dim")],
-        stateLine(state),
+        sessionLine(result),
+        stateLine({ ...state, session: result.session || state.session }),
       ],
     };
   }
@@ -824,7 +837,8 @@ export async function askFrame(env, request, state, ctx) {
     status: [
       [s("mode ", "label"), s(result.mode, result.mode === "model" ? "ok" : "warn"),
         s(`  ${MODE_NOTE[result.mode] || ""}`, "dim")],
-      stateLine(state),
+      sessionLine(result),
+      stateLine({ ...state, session: result.session || state.session }),
     ],
   };
 }
