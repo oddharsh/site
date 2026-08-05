@@ -144,6 +144,16 @@ export function glossify(escaped, only) {
 // number the 429 message quotes, and a message that disagrees with the ceiling
 // is worse than no message. A contract test pins the two together so they cannot
 // drift, which is the only reason duplicating it is safe.
+// How many bytes of a document lens will PARSE, as distinct from how many it
+// will fetch (2MB, above). See the measured table at the parse phase: the
+// regex chains run ~32ms/MB, so this constant is the single knob that decides
+// whether a scan fits a CPU ceiling.
+//
+// 256 KB (~8ms) bounds the worst case without touching the median page. Drop it
+// to 64 KB (~3.2ms) to fit the Workers FREE plan's 10ms-per-invocation ceiling,
+// which leaves headroom for everything else in the request.
+export const LENS_PARSE_CAP = 256 * 1024;
+
 export const LENS_BUDGETS = {
   inspect: { binding: "LENS_RL_INSPECT", max: 30 },
   shot:    { binding: "LENS_RL_SHOT",    max: 8  },
@@ -1435,6 +1445,11 @@ export function lensObservationSummary(result) {
     title: String(title).slice(0, 240),
     wordCount: anatomy.wordCount ?? 0,
     bytes: anatomy.rawBytes ?? null,
+    // A prefix parse must be visible. Silently reporting a 2MB page's first
+    // 256KB as its word count and its cost is the same class of error as
+    // calling an unreachable door a shut one.
+    parsedBytes: anatomy.parsedBytes ?? anatomy.rawBytes ?? null,
+    parseTruncated: !!anatomy.parseTruncated,
     readiness: readiness.overall ?? null,
     level: readiness.level ?? null,
     levelName: readiness.levelName ?? null,
@@ -1606,29 +1621,62 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
   if (isHtml && body) {
     await span("lens.inspect.parse", async (s) => {
     s.setAttribute("lens.body_bytes", body.length);
-    const attrs = await lensExtractAttrs(body);
+    // ── the parse budget ─────────────────────────────────────────────────
+    // This is the one genuinely CPU-BOUND thing lens does, and it was bounded
+    // only by the 2MB fetch cap. lensText and lensMarkdown are regex chains —
+    // roughly thirty sequential global replaces, each allocating a new string —
+    // so cost is linear in bytes handed to them.
+    //
+    // MEASURED (node, same V8, synthetic HTML): ~32ms per MB.
+    //    64 KB → 3.2ms    256 KB →  8.0ms    752 KB → 24.2ms    2 MB → 64.2ms
+    // Serialization of the result is noise beside it (0.1–1.1ms).
+    //
+    // 2MB of parse cannot fit anywhere near the Workers FREE ceiling of 10ms
+    // CPU per invocation, and even on Paid it is 64ms spent on a page nobody
+    // reads past the first screen of. Capping the PARSE (not the fetch) bounds
+    // the worst case without changing the common one: the median page is far
+    // under this and is unaffected.
+    // Overridable per deployment, so moving lens onto the free plan is a var
+    // flip rather than a code change: set LENS_PARSE_KB=64 in wrangler.jsonc.
+    const cap = Math.max(8, Number(env?.LENS_PARSE_KB) || 0) * 1024 || LENS_PARSE_CAP;
+    const parseable = body.length > cap ? body.slice(0, cap) : body;
+    const parseTruncated = parseable.length < body.length;
+    s.setAttribute("lens.parsed_bytes", parseable.length);
+    s.setAttribute("lens.parse_truncated", parseTruncated);
+
+    const attrs = await lensExtractAttrs(parseable);
     const jsonld = attrs.jsonld.map(lensParseJsonld);
-    const fullText = lensText(body);
+    const fullText = lensText(parseable);
     out.anatomy = {
-      rawHtml: body.length > 80000 ? body.slice(0, 80000) : body,
+      rawHtml: parseable.length > 80000 ? parseable.slice(0, 80000) : parseable,
+      // rawBytes stays the TRUE length. We know it from the fetch even when we
+      // decline to parse all of it, and reporting the prefix as the page's size
+      // would be a straightforward lie about the thing being measured.
       rawBytes: body.length,
-      headings: lensHeadings(body),
+      parsedBytes: parseable.length,
+      parseTruncated,
+      headings: lensHeadings(parseable),
       text: fullText.slice(0, 24000),
       imgTotal: attrs.imgTotal, imgNoAlt: attrs.imgNoAlt,
     };
     out.anatomy.wordCount = out.anatomy.text ? out.anatomy.text.split(/\s+/).filter(Boolean).length : 0;
     out.structured = {
-      title: (body.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [, ""])[1].replace(/\s+/g, " ").trim(),
+      title: (parseable.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [, ""])[1].replace(/\s+/g, " ").trim(),
       meta: attrs.meta, og: attrs.og, twitter: attrs.twitter, jsonld,
       microdata: { itemtypes: [...attrs.microItemtypes], props: [...attrs.microProps] },
       rdfa: { typeof: [...attrs.rdfaTypeof], properties: [...attrs.rdfaProps] },
       microformats: [...attrs.mf],
       relLinks: attrs.relLinks.map((l) => ({ ...l, href: lensAbs(l.href, finalUrl) })),
     };
-    out.ai = { markdown: lensMarkdown(body, finalUrl) };
+    out.ai = { markdown: lensMarkdown(parseable, finalUrl) };
     // context economics: the same page, priced per representation an agent
     // could ingest. Full (unsliced) lengths — the slices above are UI caps.
-    out.cost = lensCost({ html: body.length, text: fullText.length, markdown: out.ai.markdown.length, headings: out.anatomy.headings });
+    // Priced on what was actually parsed, and flagged when that is a prefix.
+    // Extrapolating to the full byte count would be inventing a number: token
+    // density is not uniform across a document, and the tail of a big page is
+    // usually markup rather than prose.
+    out.cost = lensCost({ html: parseable.length, text: fullText.length, markdown: out.ai.markdown.length, headings: out.anatomy.headings });
+    if (parseTruncated) out.cost.partial = { parsedBytes: parseable.length, rawBytes: body.length };
     s.setAttribute("lens.word_count", out.anatomy.wordCount);
     s.setAttribute("lens.markdown_bytes", out.ai.markdown.length);
     });

@@ -642,6 +642,9 @@ function lensReadout(obs) {
     kv("tier", obs.tier, INNER),
     kv("words", obs.wordCount, INNER),
     kv("bytes", obs.bytes, INNER),
+    obs.parseTruncated
+      ? kv("parsed", [s(`first ${Math.round(obs.parsedBytes / 1024)} KB of ${Math.round(obs.bytes / 1024)} KB — words and cost are for that prefix`, "warn")], INNER)
+      : blank(),
     kv("fetch", obs.elapsedMs == null ? null : `${obs.elapsedMs} ms`, INNER),
     blank(),
     rule(INNER, "agent doors"),
