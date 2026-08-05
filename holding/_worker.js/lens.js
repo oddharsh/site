@@ -1656,44 +1656,40 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
     // `out.elapsedMs` was already fixed above. Each probe shows up as an
     // auto-instrumented child fetch under this span, named by its URL, so "which
     // well-known file is the slow one" answers itself.
-    const [robots, sitemap, llms, llmsFull, aiTxt, secTxt, tdmrep, agentCard, openapi, aiPlugin, apiCatalog, mcp, nlweb, mdNego, webBotAuth, openidConfig, oauthServer, oauthResource, authMd, mcpServerCard, agentSkills, ucp, acp, ap2, agentsMd, dnsAid, ech, botViews] = await span("lens.discovery", (s) => {
+    // ── the fan-out, split on the seam that decides its cost ──────────────
+    // 26 of these 28 probes depend only on the ORIGIN: robots.txt, llms.txt, the
+    // well-known files, the MCP endpoint, DNS-AID. Nothing about them changes
+    // with which page you scanned, and they were being re-fetched on every scan
+    // anyway — 656ms of a measured 685ms, for answers that were already known.
+    //
+    // So they move behind an origin-keyed cache (originDiscovery below) and only
+    // the genuinely per-URL pair stays live: Markdown negotiation, which is a
+    // property of the document rather than the site, and the bot-view sampling,
+    // which refetches THIS url as six crawlers.
+    const disco = await originDiscovery(origin, new URL(finalUrl).hostname, env, { selfLens });
+    const {
+      robots, sitemap, llms, llmsFull, aiTxt, secTxt, tdmrep, agentCard, openapi, aiPlugin,
+      apiCatalog, mcp, nlweb, webBotAuth, openidConfig, oauthServer, oauthResource, authMd,
+      mcpServerCard, agentSkills, ucp, acp, ap2, agentsMd, dnsAid, ech,
+    } = disco;
+
+    const [mdNego, botViews] = await span("lens.discovery.per_url", (s) => {
       s.setAttribute("lens.origin_host", safeHost(origin));
-      s.setAttribute("lens.self_lens", selfLens);
+      s.setAttribute("lens.discovery_cached", !!disco.cached);
       return Promise.all([
-      lensProbe(origin + "/robots.txt", env), lensProbe(origin + "/sitemap.xml", env),
-      lensProbe(origin + "/llms.txt", env), lensProbe(origin + "/llms-full.txt", env),
-      lensProbe(origin + "/ai.txt", env), lensProbe(origin + "/.well-known/security.txt", env),
-      lensProbe(origin + "/.well-known/tdmrep.json", env),
-      lensProbe(origin + "/.well-known/agent-card.json", env),
-      lensProbe(origin + "/openapi.json", env),
-      lensProbe(origin + "/.well-known/ai-plugin.json", env),
-      lensProbe(origin + "/.well-known/api-catalog", env),
-      lensProbeMcp(origin, env),
-      lensProbeNlweb(origin, env),
-      isHtml && !selfLens ? lensProbeMdNego(finalUrl, env) : Promise.resolve(null),
-      lensProbe(origin + "/.well-known/http-message-signatures-directory", env),
-      lensProbe(origin + "/.well-known/openid-configuration", env),
-      lensProbe(origin + "/.well-known/oauth-authorization-server", env),
-      lensProbe(origin + "/.well-known/oauth-protected-resource", env),
-      lensProbe(origin + "/auth.md", env),
-      lensProbe(origin + "/.well-known/mcp/server-card.json", env),
-      lensProbe(origin + "/.well-known/agent-skills/index.json", env),
-      lensProbe(origin + "/.well-known/ucp", env),
-      lensProbe(origin + "/.well-known/acp.json", env),
-      lensProbe(origin + "/.well-known/ap2", env),
-      lensProbeAgentsMd(origin, env),
-      lensProbeDnsAid(new URL(finalUrl).hostname),
-      lensProbeEch(new URL(finalUrl).hostname),
-      // bot-view sampling is 6 extra fetches per scan. The census (opts.skipBotViews)
-      // only needs tier/score/doors, so it skips them to stay well under the
-      // per-invocation subrequest budget when sweeping the whole roster. Its own
-      // span because it is the single heaviest entry in this list and the only
-      // one that gets skipped — a scan missing it should look different.
-      (selfLens || opts.skipBotViews)
-        ? Promise.resolve([])
-        : span("lens.discovery.bot_views", () => lensProbeBotViews(finalUrl, env)),
+        isHtml && !selfLens ? lensProbeMdNego(finalUrl, env) : Promise.resolve(null),
+        // bot-view sampling is 6 extra fetches per scan. The census
+        // (opts.skipBotViews) only needs tier/score/doors, so it skips them to
+        // stay well under the per-invocation subrequest budget when sweeping the
+        // whole roster. Its own span because it is the single heaviest entry
+        // here and the only one that gets skipped — a scan missing it should
+        // look different.
+        (selfLens || opts.skipBotViews)
+          ? Promise.resolve([])
+          : span("lens.discovery.bot_views", () => lensProbeBotViews(finalUrl, env)),
       ]);
     });
+
     const feeds = (out.structured?.relLinks || []).filter((l) =>
       /alternate/.test(l.rel) && /(rss|atom|feed|\+xml|\+json)/i.test((l.type || "") + " " + (l.href || "")));
     out.discovery = {
@@ -1855,6 +1851,100 @@ async function lensProbeEch(hostname) {
 // the scanner recognizes through Cloudflare's DNS-over-HTTPS endpoint and keep
 // the result deliberately small: Lens is showing whether a door exists, not
 // pretending to be a full DNS debugger.
+// ── origin-level discovery, cached ────────────────────────────────────────
+// The 26 probes that depend on the ORIGIN and not on which page you scanned.
+//
+// This is where lens's cost lived. A production trace of a 752KB page measured
+// lens.inspect at 685ms, of which lens.discovery was 656 — and every byte of
+// that 656ms was re-asking one host the same 26 questions it had already
+// answered. Scanning a second page on the same site paid it again in full.
+//
+// Cached in caches.default rather than KV ON PURPOSE: KV carries a ~10K
+// writes/day budget this repo is already careful with, and a scan burst would
+// eat it. The Cache API is per-colo and costs nothing, which is the right trade
+// for data that is cheap to re-derive on a miss.
+//
+// Six hours because these files change on the order of deploys, not requests,
+// and a stale llms.txt is a far smaller error than a lens nobody can afford to
+// run. `fresh` bypasses for a caller that needs the live answer.
+const DISCOVERY_TTL = 21600;
+// Bodies are capped at 256KB each by lensProbe, so a pathological origin could
+// serialize to megabytes. Skip caching rather than truncate: truncating would
+// silently change what /lens DISPLAYS, and a cache miss only costs what the old
+// code paid every time.
+const DISCOVERY_MAX_BYTES = 1_000_000;
+
+const discoveryKey = (origin) => new Request(`https://lens-discovery.invalid/v1/${encodeURIComponent(origin)}`);
+
+export async function originDiscovery(origin, hostname, env, opts = {}) {
+  // `caches` is a Workers global and does not exist under plain node, where the
+  // contract tests import this module. Absent cache means every call is a live
+  // fan-out, which is exactly the previous behaviour.
+  const cache = typeof caches !== "undefined" ? caches.default : null;
+  const key = discoveryKey(origin);
+
+  if (cache && !opts.fresh) {
+    try {
+      const hit = await cache.match(key);
+      if (hit) {
+        const cached = await hit.json();
+        return { ...cached, cached: true };
+      }
+    } catch { /* a cache read must never cost the scan */ }
+  }
+
+  const result = await span("lens.discovery", async (s) => {
+    s.setAttribute("lens.origin_host", safeHost(origin));
+    s.setAttribute("lens.discovery_cached", false);
+    const [
+      robots, sitemap, llms, llmsFull, aiTxt, secTxt, tdmrep, agentCard, openapi, aiPlugin,
+      apiCatalog, mcp, nlweb, webBotAuth, openidConfig, oauthServer, oauthResource, authMd,
+      mcpServerCard, agentSkills, ucp, acp, ap2, agentsMd, dnsAid, ech,
+    ] = await Promise.all([
+      lensProbe(origin + "/robots.txt", env), lensProbe(origin + "/sitemap.xml", env),
+      lensProbe(origin + "/llms.txt", env), lensProbe(origin + "/llms-full.txt", env),
+      lensProbe(origin + "/ai.txt", env), lensProbe(origin + "/.well-known/security.txt", env),
+      lensProbe(origin + "/.well-known/tdmrep.json", env),
+      lensProbe(origin + "/.well-known/agent-card.json", env),
+      lensProbe(origin + "/openapi.json", env),
+      lensProbe(origin + "/.well-known/ai-plugin.json", env),
+      lensProbe(origin + "/.well-known/api-catalog", env),
+      lensProbeMcp(origin, env),
+      lensProbeNlweb(origin, env),
+      lensProbe(origin + "/.well-known/http-message-signatures-directory", env),
+      lensProbe(origin + "/.well-known/openid-configuration", env),
+      lensProbe(origin + "/.well-known/oauth-authorization-server", env),
+      lensProbe(origin + "/.well-known/oauth-protected-resource", env),
+      lensProbe(origin + "/auth.md", env),
+      lensProbe(origin + "/.well-known/mcp/server-card.json", env),
+      lensProbe(origin + "/.well-known/agent-skills/index.json", env),
+      lensProbe(origin + "/.well-known/ucp", env),
+      lensProbe(origin + "/.well-known/acp.json", env),
+      lensProbe(origin + "/.well-known/ap2", env),
+      lensProbeAgentsMd(origin, env),
+      lensProbeDnsAid(hostname),
+      lensProbeEch(hostname),
+    ]);
+    return {
+      robots, sitemap, llms, llmsFull, aiTxt, secTxt, tdmrep, agentCard, openapi, aiPlugin,
+      apiCatalog, mcp, nlweb, webBotAuth, openidConfig, oauthServer, oauthResource, authMd,
+      mcpServerCard, agentSkills, ucp, acp, ap2, agentsMd, dnsAid, ech,
+    };
+  });
+
+  if (cache) {
+    try {
+      const body = JSON.stringify(result);
+      if (body.length <= DISCOVERY_MAX_BYTES) {
+        await cache.put(key, new Response(body, {
+          headers: { "content-type": "application/json", "cache-control": `max-age=${DISCOVERY_TTL}` },
+        }));
+      }
+    } catch { /* a cache write must never cost the scan either */ }
+  }
+  return { ...result, cached: false };
+}
+
 export async function lensProbeDnsAid(hostname) {
   const names = ["_index._agents.", "_a2a._agents.", "_mcp._agents."].map((prefix) => prefix + hostname);
   try {

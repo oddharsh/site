@@ -23,7 +23,7 @@
 // This module adds no new way to reach the network.
 import { botHeaders } from "./botauth.js";
 import { CANONICAL_HOST } from "./const.js";
-import { lensProbe } from "../lens.js";
+import { lensProbe, originDiscovery } from "../lens.js";
 
 // Bounds. A door reader that follows whatever it finds is a crawler; these keep
 // it to one hop and a readable amount of text.
@@ -134,16 +134,26 @@ export function classifyDoor(probe, wanted) {
  */
 export async function readDoors(target, env) {
   const origin = new URL(target).origin;
-  const [markdown, llms, agentCard, apiCatalog, mcp] = await Promise.all([
+  const hostname = new URL(target).hostname;
+  // The origin-level doors come from lens's CACHED discovery rather than being
+  // re-probed here. This module originally fetched llms.txt, the agent card and
+  // the api-catalog itself, which duplicated four of lens's twenty-six probes —
+  // wasteful, and worse, two surfaces on one site could disagree about the same
+  // origin. One probe set, one answer, and a second read of the same host is now
+  // free.
+  //
+  // tools/list stays separate because lens only ever KNOCKS on /mcp (it infers a
+  // verdict from the status code); walking through and reading the catalog is
+  // this module's whole reason to exist.
+  const [markdown, disco, mcp] = await Promise.all([
     // The Markdown twin at the PAGE's own URL, not the origin's: negotiation is
     // per-document, and asking the front door about a deep link answers for the
     // front door. This is the one door whose answer is the page you asked for.
     lensProbe(target, env, "text/markdown"),
-    lensProbe(origin + "/llms.txt", env),
-    lensProbe(origin + "/.well-known/agent-card.json", env),
-    lensProbe(origin + "/.well-known/api-catalog", env),
+    originDiscovery(origin, hostname, env),
     foreignMcpTools(origin, env),
   ]);
+  const { llms, agentCard, apiCatalog } = disco;
 
   // SHUT and UNREADABLE are different answers and the frame must not merge them.
   // A 404 means the door is not there. A transport error means we never got to
