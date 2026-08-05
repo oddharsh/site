@@ -34,6 +34,26 @@ A contract test asserts every tool with a route is reachable over MCP. `dict`
 and `cache` shipped for two commits with HTTP routes and no MCP entry, which
 made them invisible to exactly the caller this site is built for.
 
+## agent-ready — the scorecard, pointed at anyone including us
+
+`/agent-ready` grades how much of an origin a machine can actually use: an
+`llms.txt`, a Markdown twin, an agent card, an API catalog, and a real
+`tools/list` against its MCP server.
+
+**Doors are counted, never scored.** Each is open, shut, or **unread**, and the
+third is the one most graders get wrong — a check that could not run is not a
+failure. Collapsing those into a single number would invent a precision the
+observation cannot support.
+
+Called with no `url` it audits **this** origin and prints what building all of
+it cost, capability by capability, in files and lines. A scorecard that can only
+flatter its author is marketing, so it grades anyone; and the bill is shown only
+for the origin whose source tree it has.
+
+The headline from that table: baseline agent compatibility — an MCP server, an
+`llms.txt`, and the discovery files — is under a thousand lines. That part is a
+weekend. The cost hides in drift-proofing and in the tools themselves.
+
 ## Where the tools live
 
 Each tool is a **top-level utility**, next to `/lens` and `/photos` and

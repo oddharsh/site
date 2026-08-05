@@ -175,6 +175,10 @@ const ROUTES = [
   { path: "/dict?plain=1&url=javascript%3Aalert(1)", status: 200, ct: "text/plain", marker: "refused" },
   { path: "/cache?plain=1", status: 200, ct: "text/plain", marker: "behavioral revalidation" },
   { path: "/cache?plain=1&url=javascript%3Aalert(1)", status: 200, ct: "text/plain", marker: "refused" },
+  // The self-audit is the dogfood: the tool that grades other origins grades
+  // its author by default, and prints the bill.
+  { path: "/agent-ready?plain=1", status: 200, ct: "text/plain", marker: "what this cost to build" },
+  { path: "/agent-ready.txt", status: 200, ct: "text/plain", marker: "doors a machine can walk through" },
   { path: "/nope-not-a-tool", status: 404 },
   // The old namespace redirects rather than 404s: these URLs never shipped, but
   // any link written during development should still land on the tool.

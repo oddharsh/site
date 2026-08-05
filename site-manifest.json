@@ -92,6 +92,11 @@
       "hint": "behavioral revalidation lint",
       "flags": { "run": true, "taskbar": false, "sitemap": false, "gallery": false, "agents": true, "searchIndex": false, "webmention": false } },
 
+    { "path": "/agent-ready", "title": "Agent Ready", "section": "agent-ready", "kind": "utility",
+      "description": "How much of an origin a machine can actually use — the agent doors, counted rather than scored — and, for this origin, what building all of it cost in files and lines.",
+      "hint": "the scorecard, pointed at anyone including us",
+      "flags": { "run": true, "taskbar": false, "sitemap": false, "gallery": false, "agents": true, "searchIndex": false, "webmention": false } },
+
     { "path": "/terminal", "title": "Terminal", "section": "tui", "kind": "utility",
       "description": "Three terminal programs an agent can drive by keypress: finger (who runs this host), photos (the archive), and lens (how a URL reads to a machine).",
       "hint": "terminal utilities — curl them, or drive them by keypress",

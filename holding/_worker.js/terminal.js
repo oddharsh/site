@@ -49,6 +49,7 @@
 // everywhere. A per-session DO lands near whoever opened it — tens of ms, paid
 // once per ask, next to a model call. Latency was never the reason the programs
 // stay on URLs. Forking, bookmarking, and testability were.
+import { agentReadyFrame } from "./agent-ready.js";
 import { probeRevalidation } from "./cache-lint.js";
 import { readDoors } from "./lib/doors.js";
 import { MEASURED, auditUrl } from "./dict.js";
@@ -57,6 +58,7 @@ import { readAroundChanges } from "./around.js";
 import { readCoffeeAvailability } from "./coffee.js";
 import { LENS_BUDGETS, lensInspect, lensObservationSummary, overLensBudget, validateLensTarget } from "./lens.js";
 import { lunaPage } from "./lib/chrome.js";
+import { CANONICAL_HOST } from "./lib/const.js";
 import { escHtml } from "./lib/http.js";
 import { AGENT_SURFACES } from "./lib/site-manifest.js";
 import {
@@ -148,7 +150,7 @@ export function stateUrl(state, extra = {}) {
   } else if (state.app === "photos") {
     put("q", state.q); put("film", state.film); put("camera", state.camera); put("lens", state.lens);
     put("page", state.page, 0); put("cursor", state.cursor, 0); put("open", state.open);
-  } else if (state.app === "lens" || state.app === "dict" || state.app === "cache") {
+  } else if (state.app === "lens" || state.app === "dict" || state.app === "cache" || state.app === "agent-ready") {
     put("url", state.url);
     if (state.doors) put("doors", "1"); put("left", state.left); put("right", state.right);
   }
@@ -893,6 +895,21 @@ export async function cacheFrame(env, request, state, ctx) {
   };
 }
 
+// ── agent-ready: the scorecard, pointed at anyone including us ────────────
+export async function agentReadyRoute(env, request, state, ctx) {
+  // No url means audit THIS origin and show the bill. That default is the
+  // dogfood: the tool that grades other people grades its author first.
+  if (!state.url.trim()) {
+    return agentReadyFrame(`https://${CANONICAL_HOST}/`, env, { self: true });
+  }
+  const target = validateLensTarget(state.url);
+  if (!target.ok) return { title: "agent-ready — refused", body: [[s(target.error, "bad")]], status: [] };
+  if (await overLensBudget(LENS_BUDGETS.inspect, request, env, ctx)) {
+    return { title: "agent-ready — rate limited", body: [[s("Shares Lens's 30/min budget. Try again shortly.", "warn")]], status: [] };
+  }
+  return agentReadyFrame(target.url, env);
+}
+
 // ── the index frame ───────────────────────────────────────────────────────
 function indexFrame() {
   const app = (name, line) => rows(
@@ -911,6 +928,7 @@ function indexFrame() {
       app("photos", "The photo archive, filterable by film simulation, body, lens, and caption. Opening a frame shows its exposure and the in-camera recipe it was shot with."),
       app("lens", "Inspect any public URL the way a machine does: readability, agent doors, and what one scan of it costs to read."),
       app("cache", "Does your ETag ever actually 304? Fetches twice, replays the validator, and reports what the origin DID — the failure header-reading graders cannot see."),
+      app("agent-ready", "How much of an origin can a machine actually use — and, for this one, what that cost to build. Doors are counted, never scored."),
       app("dict", "Will a browser ever actually use the compression dictionary you are serving? The registration rules are undocumented, unguessable, and fail in total silence. This encodes them, measured."),
       app("radar", "An instrument with no antenna: POST signal readings from a machine that has one and it draws them as bands, meters and trends. The sensor is yours; the display is here."),
       rule(INNER, "driving"),
@@ -921,7 +939,7 @@ function indexFrame() {
 }
 
 // ── HTTP ──────────────────────────────────────────────────────────────────
-const TERMINAL_APPS = new Set(["finger", "photos", "lens", "radar", "dict", "cache"]);
+const TERMINAL_APPS = new Set(["finger", "photos", "lens", "radar", "dict", "cache", "agent-ready"]);
 
 async function buildFrame(name, request, env, ctx, url) {
   const tokens = tokenizeKeys(url.searchParams.get("keys") ?? url.searchParams.get("k") ?? "");
@@ -933,6 +951,7 @@ async function buildFrame(name, request, env, ctx, url) {
   if (name === "radar") return radarIdleFrame();
   if (name === "dict") return dictFrame(env, request, state, ctx);
   if (name === "cache") return cacheFrame(env, request, state, ctx);
+  if (name === "agent-ready") return agentReadyRoute(env, request, state, ctx);
   return null;
 }
 

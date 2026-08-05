@@ -302,6 +302,7 @@ const ROUTES = new Map([
   ["/radar", handleTool],  ["/radar.txt", handleTool],
   ["/dict", handleTool],   ["/dict.txt", handleTool],
   ["/cache", handleTool],  ["/cache.txt", handleTool],
+  ["/agent-ready", handleTool], ["/agent-ready.txt", handleTool],
   // /photos and /lens already own their HTML pages, so they gain only the frame
   // representation rather than a second competing route.
   ["/photos.txt", handleTool],

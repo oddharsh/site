@@ -91,6 +91,11 @@ const MCP_TOOLS = [
     }, required: ["samples"] },
   },
   {
+    name: "agent_ready",
+    description: "Grade how much of an origin a machine can actually use: llms.txt, a markdown twin, an agent card, an API catalog, and a real tools/list against its MCP server. Doors are COUNTED, never scored — a check that could not run is reported as unreadable rather than as a failure. Called with no url it audits aadhar.sh itself and prints what building that cost in files and lines.",
+    inputSchema: { type: "object", properties: { url: { type: "string" } } },
+  },
+  {
     name: "dict",
     description: "Will a browser ever actually use the compression dictionary a URL is serving? Compression dictionaries fail in total silence — Chromium declines to register a perfectly good one because of a cache directive, with no warning anywhere. Returns a rendered frame grading every registration rule, plus whether a delta-serving response varies on available-dictionary. Same route as /dict.",
     inputSchema: { type: "object", properties: { url: { type: "string" } } },
@@ -176,6 +181,7 @@ async function callTool(name, args, request, env, ctx) {
   if (name === "finger") return terminalToolFrame("finger", args, request, env, ctx);
   if (name === "photos") return terminalToolFrame("photos", args, request, env, ctx);
   if (name === "lens") return terminalToolFrame("lens", args, request, env, ctx);
+  if (name === "agent_ready") return terminalToolFrame("agent-ready", args, request, env, ctx);
   if (name === "dict") return terminalToolFrame("dict", args, request, env, ctx);
   if (name === "cache") return terminalToolFrame("cache", args, request, env, ctx);
   if (name === "radar") {

@@ -115,6 +115,12 @@ export const AGENT_SURFACES = [
     "description": "Does your ETag ever actually 304? Fetches twice, replays the validator, and reports what the origin DID — the failure header graders cannot see."
   },
   {
+    "path": "/agent-ready",
+    "title": "Agent Ready",
+    "kind": "utility",
+    "description": "How much of an origin a machine can actually use — the agent doors, counted rather than scored — and, for this origin, what building all of it cost in files and lines."
+  },
+  {
     "path": "/terminal",
     "title": "Terminal",
     "kind": "utility",

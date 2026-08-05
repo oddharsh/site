@@ -175,22 +175,3 @@ export async function readDoors(target, env) {
   };
 }
 
-/**
- * The third-party text a model may read, assembled and bounded.
- *
- * Returns a STRING and nothing else on purpose. Whatever comes back here is
- * hostile until proven otherwise, and the caller's job is to put it somewhere it
- * cannot act — see the turn split in ask.js. Keeping it a flat string rather
- * than a structure makes it awkward to accidentally treat any part of it as a
- * field the code trusts.
- */
-export function doorCorpus(doors) {
-  const parts = [];
-  if (doors.llms.ok) parts.push(`--- ${doors.origin}/llms.txt ---\n${doors.llms.text}`);
-  if (doors.markdown.ok) parts.push(`--- ${doors.target} (markdown) ---\n${doors.markdown.text}`);
-  if (doors.mcp.ok && doors.mcp.tools.length) {
-    parts.push(`--- ${doors.origin}/mcp tools/list ---\n`
-      + doors.mcp.tools.map((tool) => `${tool.name}: ${tool.description}`).join("\n"));
-  }
-  return trim(parts.join("\n\n"), DOOR_LIMITS.corpus);
-}
