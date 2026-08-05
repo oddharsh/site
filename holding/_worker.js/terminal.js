@@ -11,7 +11,7 @@
 // ── where the state lives, and why it is split ────────────────────────────
 // The PROGRAMS keep their state in the URL: ?pane=writing&cursor=3&open=lattice
 // is the whole thing. No Durable Object, no KV entry, no token, no TTL.
-// /terminal/ask is the ONE exception and it has its own DO — see below.
+// /ask is the ONE exception and it has its own DO — see below.
 //
 // Four things fall out of the URL model:
 //
@@ -154,7 +154,9 @@ export function stateUrl(state, extra = {}) {
   }
   for (const [key, value] of Object.entries(extra)) put(key, value);
   const qs = params.toString();
-  return `/terminal/${state.app}${qs ? `?${qs}` : ""}`;
+  // The tool's own root path, because that is where it lives. This string is
+  // the resumable state a caller sends back, so it has to be the real URL.
+  return `/${state.app}${qs ? `?${qs}` : ""}`;
 }
 
 /**
@@ -350,7 +352,7 @@ function renderPhotoFacets(data) {
     blank(),
     section("body", facets.camera, 4),
     blank(),
-    [s("browse the frames themselves at /terminal/photos", "dim")],
+    [s("browse the frames themselves at /photos", "dim")],
   );
 }
 
@@ -413,7 +415,7 @@ function renderSearch(data, state) {
     return rows(
       [s("type a query to search this host.", "dim")],
       blank(),
-      [s("  /terminal/finger?pane=search&q=lattice", "accent")],
+      [s("  /finger?pane=search&q=lattice", "accent")],
       blank(),
       ...wrap("Searches the public pages, writing, garage notes, and utility descriptions. The same index /search serves.", INNER).map((row) => [s(row, "dim")]),
     );
@@ -508,11 +510,11 @@ function helpBody() {
     ...FINGER_PANES.map((name, i) => kv(`${i + 1}`, name, INNER, { gutter: 10 })),
     blank(),
     rule(INNER, "examples"),
-    [s("  curl aadhar.sh/terminal/finger", "accent")],
-    [s("  curl 'aadhar.sh/terminal/finger?keys=2jj<cr>'", "accent")],
-    [s("  curl 'aadhar.sh/terminal/finger?pane=search&q=lattice'", "accent")],
-    [s("  curl 'aadhar.sh/terminal/photos?film=acros'", "accent")],
-    [s("  curl 'aadhar.sh/terminal/lens?url=https://example.com'", "accent")],
+    [s("  curl aadhar.sh/finger", "accent")],
+    [s("  curl 'aadhar.sh/finger?keys=2jj<cr>'", "accent")],
+    [s("  curl 'aadhar.sh/finger?pane=search&q=lattice'", "accent")],
+    [s("  curl 'aadhar.sh/photos?film=acros'", "accent")],
+    [s("  curl 'aadhar.sh/lens?url=https://example.com'", "accent")],
   );
 }
 
@@ -521,13 +523,13 @@ function quitBody() {
     blank(),
     [s("  connection closed.", "strong")],
     blank(),
-    ...wrap("Nothing was stored, so there is nothing to resume — start again at /terminal/finger, or jump straight back to wherever you were with the URL that frame printed.", INNER).map((row) => [s("  " + row, "dim")]),
+    ...wrap("Nothing was stored, so there is nothing to resume — start again at /finger, or jump straight back to wherever you were with the URL that frame printed.", INNER).map((row) => [s("  " + row, "dim")]),
     blank(),
   );
 }
 
 export async function fingerFrame(env, ctx, request, state, tokens) {
-  if (state.quit) return { title: "finger — aadharsh@aadhar.sh", body: quitBody(), status: keyHints([["/terminal/finger", "reconnect"]]) };
+  if (state.quit) return { title: "finger — aadharsh@aadhar.sh", body: quitBody(), status: keyHints([["/finger", "reconnect"]]) };
   const data = await driveFinger(env, ctx, request, state, tokens);
   if (state.help) return { title: "finger — help", body: helpBody(), status: keyHints([["any pane key", "leave help"], ["q", "quit"]]) };
   const body = RENDER[state.pane](data, state);
@@ -544,7 +546,7 @@ export async function photosFrame(env, ctx, state, tokens) {
     else if (key === "h" || key === "\x1b") state.open = "";
     else if (key === "q") state.quit = true;
   }
-  if (state.quit) return { title: "photos", body: quitBody(), status: keyHints([["/terminal/photos", "reconnect"]]) };
+  if (state.quit) return { title: "photos", body: quitBody(), status: keyHints([["/photos", "reconnect"]]) };
 
   const result = await queryPhotos(env, {
     q: state.q, film: state.film, camera: state.camera, lens: state.lens,
@@ -617,7 +619,7 @@ export async function photosFrame(env, ctx, state, tokens) {
         })
         : [[s("no frame matches those filters.", "dim")]],
       blank(),
-      [s("filter with &q= &film= &camera= &lens=  ·  facets at /terminal/finger?pane=photos", "dim")],
+      [s("filter with &q= &film= &camera= &lens=  ·  facets at /finger?pane=photos", "dim")],
     ),
     status: [
       keyHints([["j/k", "move"], ["<cr>", "open"], ["n/p", "page"], ["q", "quit"]]),
@@ -665,7 +667,7 @@ export async function lensFrame(env, request, state, ctx) {
       body: rows(
         ...wrap("Inspect any public URL the way a machine does: what it returns, how much of it is readable, and which agent doors it leaves open.", INNER).map((row) => [s(row)]),
         blank(),
-        [s("  curl 'aadhar.sh/terminal/lens?url=https://example.com'", "accent")],
+        [s("  curl 'aadhar.sh/lens?url=https://example.com'", "accent")],
         blank(),
         ...wrap("Private, local, and non-HTTP targets are refused. Lookups are rate-limited to 30/min per address, shared with /lens/fetch — knocking on the cheaper door does not buy a second budget.", INNER).map((row) => [s(row, "dim")]),
       ),
@@ -743,14 +745,14 @@ export async function askFrame(env, request, state, ctx) {
       body: rows(
         ...wrap("Ask this site something in plain language. It picks from the same seven tools an external agent gets at /mcp, calls them, and answers from what came back — and prints every call it made, so you can see the machine work rather than take its word.", INNER).map((row) => [s(row)]),
         blank(),
-        [s("  curl 'aadhar.sh/terminal/ask?q=what+does+he+write+about'", "accent")],
-        [s("  curl 'aadhar.sh/terminal/ask?q=photos+shot+on+classic+chrome'", "accent")],
-        [s("  curl 'aadhar.sh/terminal/ask?q=when+can+i+get+coffee'", "accent")],
+        [s("  curl 'aadhar.sh/ask?q=what+does+he+write+about'", "accent")],
+        [s("  curl 'aadhar.sh/ask?q=photos+shot+on+classic+chrome'", "accent")],
+        [s("  curl 'aadhar.sh/ask?q=when+can+i+get+coffee'", "accent")],
         blank(),
         ...wrap("Point it at somebody else's origin with &at= and it reads THEIR agent doors the same way — llms.txt, a markdown twin, an agent card, a real MCP tools/list. Add a question and a model answers from what it found.", INNER).map((row) => [s(row)]),
         blank(),
-        [s("  curl 'aadhar.sh/terminal/ask?at=https://example.com'", "accent")],
-        [s("  curl 'aadhar.sh/terminal/ask?at=https://example.com&q=what+do+they+offer'", "accent")],
+        [s("  curl 'aadhar.sh/ask?at=https://example.com'", "accent")],
+        [s("  curl 'aadhar.sh/ask?at=https://example.com&q=what+do+they+offer'", "accent")],
         blank(),
         rule(INNER, "the rules it runs under"),
         kv("grounding", "answers only from tool results; says so when the site is silent", INNER, { gutter: 12 }),
@@ -857,7 +859,7 @@ function radarIdleFrame() {
       ...wrap("A server has no antenna and neither does an agent, so this half does not sense anything. POST signal readings and it draws them: concentric bands by strength, a meter and a trend per source.", INNER).map((row) => [s(row)]),
       blank(),
       [s("  node holding/scripts/radar-sample.mjs --at https://aadhar.sh", "accent")],
-      [s("  curl -X POST aadhar.sh/terminal/radar -d '{\"samples\":[{\"name\":\"AP\",\"rssi\":-58}]}'", "accent")],
+      [s("  curl -X POST aadhar.sh/radar -d '{\"samples\":[{\"name\":\"AP\",\"rssi\":-58}]}'", "accent")],
       blank(),
       rule(INNER, "the shape"),
       kv("name", "whatever you want on the label", INNER, { gutter: 10 }),
@@ -885,7 +887,7 @@ export async function dictFrame(env, request, state, ctx) {
       body: rows(
         ...wrap("Compression dictionaries fail silently. Chromium declines to register a perfectly good one because of a cache directive on it, and nothing tells you: no console warning, no header, no failed request. Your site just serves full responses forever while you believe it is serving deltas.", INNER).map((row) => [s(row)]),
         blank(),
-        [s("  curl 'aadhar.sh/terminal/dict?url=https://example.com/app.js'", "accent")],
+        [s("  curl 'aadhar.sh/dict?url=https://example.com/app.js'", "accent")],
         blank(),
         rule(INNER, "what it checks"),
         ...wrap("The rules that decide registration, applied to the response headers of the resource you point it at, plus the other half of the handshake: whether a delta-serving response varies on available-dictionary. A cache that does not is not a slow page, it is ERR_CONTENT_DECODING_FAILED.", INNER).map((row) => [s(row, "dim")]),
@@ -964,7 +966,7 @@ export async function cacheFrame(env, request, state, ctx) {
       body: rows(
         ...wrap("Plenty of origins serve an ETag that can never match: compression or a template nonce varies per response, so every If-None-Match comes back 200 with a full body. The headers look perfect and nothing warns — your cache revalidates forever and never once succeeds.", INNER).map((row) => [s(row)]),
         blank(),
-        [s("  curl 'aadhar.sh/terminal/cache?url=https://example.com/app.css'", "accent")],
+        [s("  curl 'aadhar.sh/cache?url=https://example.com/app.css'", "accent")],
         blank(),
         rule(INNER, "what it does"),
         ...wrap("No header grading. It fetches the target twice to see whether the validator survives two identical requests, then replays it with If-None-Match and reports what the origin actually did. For HTML it also asks for a second representation and checks the Vary header against the answer — the shared-cache trap this site hit in production (#195).", INNER).map((row) => [s(row, "dim")]),
@@ -1040,7 +1042,7 @@ function indexFrame() {
       rule(INNER, "driving"),
       ...wrap("?k=<one key> or ?keys=<up to 32>. Named keys: <cr> <esc> <tab> <sp>. Every frame prints the URL that produced it, so state is a link rather than a session. Add ?plain=1 to drop the ANSI colour.", INNER).map((row) => [s(row, "dim")]),
     ),
-    status: keyHints([["/terminal/finger", "start here"], ["?", "help inside any app"]]),
+    status: keyHints([["/finger", "start here"], ["?", "help inside any app"]]),
   };
 }
 
@@ -1240,22 +1242,40 @@ function frameResponse(frame, path) {
   });
 }
 
-export async function handleTerminal(request, env, ctx) {
-  const url = new URL(request.url);
-  const rest = url.pathname.replace(/^\/terminal\/?/, "").replace(/\/+$/, "");
-  const name = rest.replace(/\.(txt|md)$/, "");
+// ── routing: a tool is a SERVICE, the frame is a REPRESENTATION ───────────
+// Tools live at the ROOT, next to /lens and /photos and /coffee, because that is
+// where this site has always put utilities — site-manifest.json has twelve of
+// them and eleven are top-level, while all twenty-nine content pages nest. They
+// were briefly filed under /terminal/*, which organised them by how they RENDER
+// rather than by what they are, and taught exactly the wrong lesson for a site
+// whose argument is "here is how you expose services to agents".
+//
+// So the frame joins .md as a REPRESENTATION rather than a location, and every
+// tool answers three ways from one URL:
+//
+//   /dict                       Accept: text/html  -> the page
+//   /dict                       anything else      -> the frame (curl, agents)
+//   /dict.txt                                      -> the frame, explicitly
+//
+// Exactly the markdown-twin contract this site already runs on. /terminal keeps
+// its own route because it is not their parent, it is a CONSOLE that drives
+// them — the interaction is the product there, not the namespace.
+export const TOOL_NAMES = TERMINAL_APPS;
 
-  // /terminal/radar is the ONE program here that takes a POST, because it is the
-  // one whose input this server cannot produce: the readings come from a machine
-  // with an antenna. Everything else stays GET-only, so the surface does not
-  // quietly become writable.
+/** Shared by the console and by every tool route. */
+async function serveFrame(name, request, env, ctx, { explicitText = false } = {}) {
+  const url = new URL(request.url);
+
+  // radar is the ONE tool that takes a POST, because it is the one whose input
+  // this server cannot produce: the readings come from a machine with an
+  // antenna. Everything else stays GET-only, so the surface does not quietly
+  // become writable.
   if (request.method === "POST" && name === "radar") {
     let payload = null;
     try { payload = await request.json(); } catch { payload = null; }
     const samples = readSamples(payload);
     const frame = radarFrame(samples, { source: String(payload?.source || "").slice(0, 60) });
-    const color = url.searchParams.get("plain") !== "1";
-    return new Response(frameText(frame, { color }) + "\n", {
+    return new Response(frameText(frame, { color: url.searchParams.get("plain") !== "1" }) + "\n", {
       headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store", "x-robots-tag": "noindex" },
     });
   }
@@ -1265,30 +1285,47 @@ export async function handleTerminal(request, env, ctx) {
       headers: { allow: name === "radar" ? "GET, HEAD, POST" : "GET, HEAD", "content-type": "text/plain; charset=utf-8" },
     });
   }
-  if (name && !TERMINAL_APPS.has(name)) {
-    return new Response(`no such program: ${name}\n\ntry /terminal\n`, { status: 404, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" } });
-  }
 
   const frame = await buildFrame(name, request, env, ctx, url);
-  const wantsHtml = (request.headers.get("accept") || "").includes("text/html") && !url.searchParams.has("plain") && !rest.endsWith(".txt");
+  const wantsHtml = !explicitText
+    && (request.headers.get("accept") || "").includes("text/html")
+    && !url.searchParams.has("plain");
 
   if (wantsHtml) return frameResponse(frame, url.pathname);
-  // ANSI by default over plain HTTP, because the default caller of a text/plain
-  // route from a terminal IS a terminal. ?plain=1 drops it, and MCP never asks
-  // for it at all.
-  const color = url.searchParams.get("plain") !== "1";
-  return new Response(frameText(frame, { color }) + "\n", {
+  // ANSI by default over plain HTTP, because the usual caller of a text/plain
+  // route from a terminal IS a terminal. ?plain=1 drops it; MCP never asks for it.
+  return new Response(frameText(frame, { color: url.searchParams.get("plain") !== "1" }) + "\n", {
     headers: {
       "content-type": "text/plain; charset=utf-8",
       // Frames are per-query and several are live (playlist, calendar, lens), so
-      // no shared cache should hold one. The route is also content-negotiated on
-      // Accept, which a URL-keyed edge cache cannot represent — the same trap
-      // lib/cache.js documents for the markdown twins.
+      // no shared cache should hold one. The route also negotiates on Accept,
+      // which a URL-keyed edge cache cannot represent — the trap lib/cache.js
+      // documents for the markdown twins.
       "cache-control": "no-store",
       "x-robots-tag": "noindex",
       vary: "accept",
     },
   });
+}
+
+/** /finger, /ask, /radar, /dict, /cache — and their .txt representations. */
+export async function handleTool(request, env, ctx) {
+  const url = new URL(request.url);
+  const raw = url.pathname.replace(/^\//, "").replace(/\/+$/, "");
+  const explicitText = raw.endsWith(".txt");
+  const name = raw.replace(/\.txt$/, "");
+  if (!TOOL_NAMES.has(name)) {
+    return new Response(`no such tool: ${name}\n\ntry /terminal\n`, {
+      status: 404, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" },
+    });
+  }
+  return serveFrame(name, request, env, ctx, { explicitText });
+}
+
+/** /terminal — the PowerShell console that drives the tools above. */
+export async function handleTerminal(request, env, ctx) {
+  const url = new URL(request.url);
+  return serveFrame("", request, env, ctx, { explicitText: url.pathname.endsWith(".txt") });
 }
 
 /** The MCP entry point: a frame as plain text, never coloured. */

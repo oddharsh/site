@@ -150,7 +150,7 @@ function errorResult(message) { return { _error: String(message).slice(0, 400) }
 
 async function callTool(name, args, request, env, ctx) {
   args = args && typeof args === "object" ? args : {};
-  // The seven data tools live in lib/tools.js, because /terminal/ask calls the
+  // The seven data tools live in lib/tools.js, because /ask calls the
   // same seven through the same function. Dispatching them here would mean two
   // switch statements that have to agree.
   if (DATA_TOOL_NAMES.has(name)) return callDataTool(name, args, request, env, ctx);

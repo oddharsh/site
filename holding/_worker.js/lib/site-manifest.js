@@ -91,6 +91,36 @@ export const AGENT_SURFACES = [
     "description": "Inspect how a public URL reads to people and machines: raw HTML, JSON-LD, llms.txt."
   },
   {
+    "path": "/finger",
+    "title": "Finger",
+    "kind": "utility",
+    "description": "Look up who runs this host: writing, reading, listening, photographs, neighborhood, availability, deploy log, and a search across all of it."
+  },
+  {
+    "path": "/ask",
+    "title": "Ask",
+    "kind": "utility",
+    "description": "Plain language in, real tool calls out. Picks from the same tools /mcp exposes, calls them, and prints every call it made above the answer."
+  },
+  {
+    "path": "/radar",
+    "title": "Radar",
+    "kind": "utility",
+    "description": "An instrument with no antenna: POST signal readings from a machine that has one and it draws them as bands, meters and trends."
+  },
+  {
+    "path": "/dict",
+    "title": "Dict",
+    "kind": "utility",
+    "description": "Will a browser ever actually use the compression dictionary you are serving? The registration rules fail in total silence; this encodes them, measured."
+  },
+  {
+    "path": "/cache",
+    "title": "Cache",
+    "kind": "utility",
+    "description": "Does your ETag ever actually 304? Fetches twice, replays the validator, and reports what the origin DID — the failure header graders cannot see."
+  },
+  {
     "path": "/terminal",
     "title": "Terminal",
     "kind": "utility",

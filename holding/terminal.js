@@ -130,7 +130,7 @@
   // Run one of the three programs and keep the state its frame prints, so the
   // next keypress continues from where the last frame left off.
   async function runProgram(name, query) {
-    var path = "/terminal/" + name + (query ? (query[0] === "?" ? query : "?" + query) : "");
+    var path = "/" + name + ".txt" + (query ? (query[0] === "?" ? query : "?" + query) : "");
     var r = await ask(path);
     if (r.status !== 200) { write("the program did not answer (" + r.status + ")", "ps-err"); return; }
     write(r.body.replace(/\n+$/, ""));
@@ -146,7 +146,7 @@
     // program from its default state, which still renders a perfectly good frame
     // — just always the first one.
     var plain = r.body.replace(/\x1b\[[0-9;]*m/g, "");
-    var printed = plain.match(/state \/terminal\/[a-z]+(\?[A-Za-z0-9_%=&.,+\-]*)/);
+    var printed = plain.match(/state \/[a-z]+(\?[A-Za-z0-9_%=&.,+\-]*)/);
     state = printed ? printed[1] : "";
     // The ask frame prints the full session id in its state URL; keep it so the
     // next question continues the same transcript.

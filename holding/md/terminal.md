@@ -10,15 +10,33 @@ per-query.** There is no fixed document at `/terminal` to publish here. Fetch a
 frame directly instead: any of the URLs below returns `text/plain` unless you
 ask for `text/html`.
 
+## Where the tools live
+
+Each tool is a **top-level utility**, next to `/lens` and `/photos` and
+`/coffee`, because that is where this site puts utilities and only content
+nests. `/terminal` is not their parent; it is a console that drives them.
+
+Every tool answers three ways from one URL, the same contract as the Markdown
+twins:
+
+| request | you get |
+|---|---|
+| `Accept: text/html` | the page |
+| anything else (curl, agents) | the frame |
+| `<tool>.txt` | the frame, explicitly |
+
+`/photos` and `/lens` already own HTML pages, so they gain only the frame
+representation at `/photos.txt` and `/lens.txt`.
+
 ## The programs
 
-- **`/terminal/finger`** — who runs this host. Nine panes: overview, writing,
+- **`/finger`** — who runs this host. Nine panes: overview, writing,
   reading, listening, photos, around, coffee, deploys, search. The one to start
   with, and the only one that is drivable in a meaningful way.
-- **`/terminal/photos`** — the published photo archive, filterable by caption,
+- **`/photos`** — the published photo archive, filterable by caption,
   film simulation, body, and lens. Opening a frame shows its exposure and the
   in-camera recipe the shot was made with.
-- **`/terminal/ask`** — plain language in, real tool calls out. Takes `?q=`. It
+- **`/ask`** — plain language in, real tool calls out. Takes `?q=`. It
   picks from the same seven tools listed at `/mcp`, calls them, and answers from
   what came back — and prints every call it made above the answer, along with
   the request you'd send to reproduce it without a model. Answers are grounded
@@ -28,7 +46,7 @@ ask for `text/html`.
   limited by that — call `/mcp` directly if you want them without a model in the
   way. With no model configured it still answers, routing by keyword instead,
   and the frame says which mode produced it.
-- **`/terminal/lens`** — inspect one public URL the way a machine does:
+- **`/lens`** — inspect one public URL the way a machine does:
   readability, agent doors, and what a single scan of it costs to read. Takes
   `?url=`. Private, local, and non-HTTP targets are refused, and lookups are
   rate-limited to 30/min per address, shared with `/lens/fetch`.
@@ -41,8 +59,8 @@ the agent card, the API catalog, and a real `tools/list` against their MCP
 server. Add a question and a model answers from what it found.
 
 ```
-curl 'aadhar.sh/terminal/ask?at=https://example.com'
-curl 'aadhar.sh/terminal/ask?at=https://example.com&q=what+do+they+offer'
+curl 'aadhar.sh/ask?at=https://example.com'
+curl 'aadhar.sh/ask?at=https://example.com&q=what+do+they+offer'
 ```
 
 Each door reports one of three states, and the third one matters: **open**,
@@ -72,12 +90,12 @@ no wifi RSSI at all, and Web Bluetooth scanning is flag-gated — which is why
 [findphone](https://github.com/ben-z/findphone), the thing this is modelled on,
 is a native macOS CLI.
 
-So `/terminal/radar` does not sense anything. **You bring the signal; it brings
+So `/radar` does not sense anything. **You bring the signal; it brings
 the display.** POST readings you have already measured and it draws them:
 
 ```
 node holding/scripts/radar-sample.mjs --at https://aadhar.sh --anonymize
-curl -X POST aadhar.sh/terminal/radar -d '{"samples":[{"name":"AP","rssi":-58}]}'
+curl -X POST aadhar.sh/radar -d '{"samples":[{"name":"AP","rssi":-58}]}'
 ```
 
 Each sample needs a `name` and an `rssi` in dBm (negative). `kind` and `history`
@@ -105,7 +123,7 @@ console warning, no header, no failed request. The site just serves full
 responses forever while you believe it is serving deltas.
 
 ```
-curl 'aadhar.sh/terminal/dict?url=https://example.com/app.js'
+curl 'aadhar.sh/dict?url=https://example.com/app.js'
 ```
 
 Vetoes, each measured rather than inferred: **`must-revalidate`** and
@@ -145,11 +163,11 @@ something you can put in a query string.
 | `q` | quit |
 
 ```
-curl aadhar.sh/terminal/finger
-curl 'aadhar.sh/terminal/finger?keys=2jj<cr>'
-curl 'aadhar.sh/terminal/finger?pane=search&q=lattice'
-curl 'aadhar.sh/terminal/photos?film=acros'
-curl 'aadhar.sh/terminal/lens?url=https://example.com'
+curl aadhar.sh/finger
+curl 'aadhar.sh/finger?keys=2jj<cr>'
+curl 'aadhar.sh/finger?pane=search&q=lattice'
+curl 'aadhar.sh/photos?film=acros'
+curl 'aadhar.sh/lens?url=https://example.com'
 ```
 
 ## State is a URL, not a session

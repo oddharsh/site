@@ -158,42 +158,51 @@ const ROUTES = [
   // `plain=1` keeps every assertion off the ANSI escapes.
   { path: "/terminal?plain=1", status: 200, ct: "text/plain", marker: "╚" },
   { path: "/terminal/", status: 301 },   // routeDropSlash 301s to /terminal
-  { path: "/terminal/finger?plain=1", status: 200, ct: "text/plain", marker: "finger — aadharsh@aadhar.sh" },
+  { path: "/finger?plain=1", status: 200, ct: "text/plain", marker: "finger — aadharsh@aadhar.sh" },
   // Driving. Two keys switch to the writing pane and open its first note, and
   // the frame prints the state that produced it. If the key loop silently stops
   // applying, every other row here still passes — the frame renders fine, it
   // just renders the wrong one.
-  { path: "/terminal/finger?plain=1&keys=2%3Ccr%3E", status: 200, ct: "text/plain", marker: "pane=writing" },
-  { path: "/terminal/finger?plain=1&help=1", status: 200, ct: "text/plain", marker: "driving this thing" },
-  { path: "/terminal/photos?plain=1", status: 200, ct: "text/plain", marker: "photos — the archive" },
-  { path: "/terminal/lens?plain=1", status: 200, ct: "text/plain", marker: "the other web" },
+  { path: "/finger?plain=1&keys=2%3Ccr%3E", status: 200, ct: "text/plain", marker: "pane=writing" },
+  { path: "/finger?plain=1&help=1", status: 200, ct: "text/plain", marker: "driving this thing" },
+  { path: "/photos.txt?plain=1", status: 200, ct: "text/plain", marker: "photos — the archive" },
+  { path: "/lens.txt?plain=1", status: 200, ct: "text/plain", marker: "the other web" },
   // A refused target must be refused BEFORE anything is fetched, and must come
   // back as a frame rather than a stack trace.
-  { path: "/terminal/lens?plain=1&url=javascript%3Aalert(1)", status: 200, ct: "text/plain", marker: "refused" },
+  { path: "/lens.txt?plain=1&url=javascript%3Aalert(1)", status: 200, ct: "text/plain", marker: "refused" },
   // ask: the natural-language door. Asserted on the ROUTER path, which is what
   // answers when no model is bound — CI has none, and that is the point of the
   // fallback existing. The bare form must explain itself rather than 503.
-  { path: "/terminal/ask?plain=1", status: 200, ct: "text/plain", marker: "plain language" },
-  { path: "/terminal/ask?plain=1&q=what+does+he+write+about", status: 200, ct: "text/plain", marker: "what the agent did" },
+  { path: "/ask?plain=1", status: 200, ct: "text/plain", marker: "plain language" },
+  { path: "/ask?plain=1&q=what+does+he+write+about", status: 200, ct: "text/plain", marker: "what the agent did" },
   // The mode line is load-bearing: it is how a reader knows whether a model or a
   // keyword picked the tool. A frame that stopped saying so would still look right.
-  { path: "/terminal/ask?plain=1&q=photos+on+acros", status: 200, ct: "text/plain", marker: "mode " },
+  { path: "/ask?plain=1&q=photos+on+acros", status: 200, ct: "text/plain", marker: "mode " },
   // Reading somebody else's origin. `at=` alone reads the doors and stops.
   // Marked remote: every external probe needs the AadharshBot signing key, which
   // a local Worker does not have — so locally each door reports "unread", which
   // is the honest answer and not the one worth asserting.
-  { path: "/terminal/ask?plain=1&at=https%3A%2F%2Fexample.com", status: 200, ct: "text/plain", marker: "doors at", remote: true },
+  { path: "/ask?plain=1&at=https%3A%2F%2Fexample.com", status: 200, ct: "text/plain", marker: "doors at", remote: true },
   // A refused target must be refused BEFORE any fetch, and come back as a frame.
-  { path: "/terminal/ask?plain=1&at=http%3A%2F%2F169.254.169.254%2F&q=what+is+here", status: 200, ct: "text/plain", marker: "mode " },
-  { path: "/terminal/ask?plain=1&at=javascript%3Aalert(1)", status: 200, ct: "text/plain", marker: "mode " },
+  { path: "/ask?plain=1&at=http%3A%2F%2F169.254.169.254%2F&q=what+is+here", status: 200, ct: "text/plain", marker: "mode " },
+  { path: "/ask?plain=1&at=javascript%3Aalert(1)", status: 200, ct: "text/plain", marker: "mode " },
   // The instrument's idle frame. The POST path that actually draws readings is
   // covered by contract tests, since the oracle only issues GETs.
-  { path: "/terminal/radar?plain=1", status: 200, ct: "text/plain", marker: "no antenna" },
-  { path: "/terminal/dict?plain=1", status: 200, ct: "text/plain", marker: "fail silently" },
-  { path: "/terminal/dict?plain=1&url=javascript%3Aalert(1)", status: 200, ct: "text/plain", marker: "refused" },
-  { path: "/terminal/cache?plain=1", status: 200, ct: "text/plain", marker: "behavioral revalidation" },
-  { path: "/terminal/cache?plain=1&url=javascript%3Aalert(1)", status: 200, ct: "text/plain", marker: "refused" },
-  { path: "/terminal/nope", status: 404, ct: "text/plain" },
+  { path: "/radar?plain=1", status: 200, ct: "text/plain", marker: "no antenna" },
+  { path: "/dict?plain=1", status: 200, ct: "text/plain", marker: "fail silently" },
+  { path: "/dict?plain=1&url=javascript%3Aalert(1)", status: 200, ct: "text/plain", marker: "refused" },
+  { path: "/cache?plain=1", status: 200, ct: "text/plain", marker: "behavioral revalidation" },
+  { path: "/cache?plain=1&url=javascript%3Aalert(1)", status: 200, ct: "text/plain", marker: "refused" },
+  { path: "/nope-not-a-tool", status: 404 },
+  // The old namespace redirects rather than 404s: these URLs never shipped, but
+  // any link written during development should still land on the tool.
+  { path: "/terminal/dict", status: 301 },
+  { path: "/terminal/finger", status: 301 },
+  // .txt is the frame's explicit representation, the exact parallel to .md.
+  { path: "/dict.txt", status: 200, ct: "text/plain", marker: "fail silently" },
+  { path: "/finger.txt", status: 200, ct: "text/plain", marker: "aadharsh@aadhar.sh" },
+  { path: "/lens.txt", status: 200, ct: "text/plain", marker: "the other web" },
+  { path: "/photos.txt", status: 200, ct: "text/plain", marker: "the archive" },
   { path: "/terminal.md", status: 200, ct: "text/markdown", marker: "State is a URL, not a session" },
   // The browser arm of the same route. One renderer feeds both, so this asserts
   // the HTML wrapper is there — not that a second layout exists.

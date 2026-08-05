@@ -26,7 +26,7 @@ import { citationsIn, findEndpointIn, SELF_LINK_HOSTS } from "./holding/_worker.
 import { sign } from "./cal/src/sign.js";
 import { AGENT_SURFACES, WEBMENTION_PATHS } from "./holding/_worker.js/lib/site-manifest.js";
 import { handleWritingIndex } from "./holding/_worker.js/writing.js";
-import { handleTerminal, tokenizeKeys } from "./holding/_worker.js/terminal.js";
+import { handleTerminal, handleTool, tokenizeKeys } from "./holding/_worker.js/terminal.js";
 import { ASK_LIMITS, runAsk } from "./holding/_worker.js/ask.js";
 import { DATA_TOOLS } from "./holding/_worker.js/lib/tools.js";
 import { cronJob } from "./holding/_worker.js/lib/cron.js";
@@ -2689,21 +2689,23 @@ const TERMINAL_ASSETS = {
 };
 const terminalEnv = () => ({ ASSETS: staticAssets(TERMINAL_ASSETS) });
 const terminalReq = (path) => new Request(`https://aadhar.sh${path}`);
-const terminalGet = (path) => handleTerminal(terminalReq(path), terminalEnv(), context());
+const terminalGet = (path) => (path === "/terminal" || path.startsWith("/terminal?")
+  ? handleTerminal(terminalReq(path), terminalEnv(), context())
+  : handleTool(terminalReq(path), terminalEnv(), context()));
 
 // Every state worth drawing, so a width regression cannot hide in the one pane
 // nobody exercised. Panes that need network (reading, listening, around,
 // coffee) still render here — their loaders fail closed to an empty list, which
 // is itself the case worth pinning.
 const TERMINAL_STATES = [
-  "/terminal", "/terminal/finger", "/terminal/finger?help=1", "/terminal/finger?keys=q",
+  "/terminal", "/finger", "/finger?help=1", "/finger?keys=q",
   ...["overview", "writing", "reading", "listening", "photos", "around", "coffee", "deploys", "search"]
-    .map((pane) => `/terminal/finger?pane=${pane}`),
-  "/terminal/finger?pane=writing&keys=jj", "/terminal/finger?pane=writing&cursor=1&open=two",
-  "/terminal/finger?pane=search&q=lattice", "/terminal/finger?pane=search&q=lattice&open=0",
-  "/terminal/finger?pane=deploys&keys=G", "/terminal/finger?pane=photos",
-  "/terminal/photos", "/terminal/photos?film=acros", "/terminal/photos?keys=j%3Ccr%3E", "/terminal/photos?open=A_1",
-  "/terminal/photos?q=nothingmatchesthis", "/terminal/lens", "/terminal/lens?url=javascript%3Aalert(1)",
+    .map((pane) => `/finger?pane=${pane}`),
+  "/finger?pane=writing&keys=jj", "/finger?pane=writing&cursor=1&open=two",
+  "/finger?pane=search&q=lattice", "/finger?pane=search&q=lattice&open=0",
+  "/finger?pane=deploys&keys=G", "/finger?pane=photos",
+  "/photos", "/photos?film=acros", "/photos?keys=j%3Ccr%3E", "/photos?open=A_1",
+  "/photos?q=nothingmatchesthis", "/lens", "/lens?url=javascript%3Aalert(1)",
 ];
 
 test("every frame is exactly 80 columns wide, in every state and both colour modes", async () => {
@@ -2733,9 +2735,9 @@ test("plain mode emits no escape bytes, and colour mode actually emits them", as
   // then has to be robust to; a `?plain=1` that was silently the only mode
   // would mean the ANSI path had quietly died and nobody noticed, because a
   // colourless frame still reads fine.
-  const plain = await (await terminalGet("/terminal/finger?plain=1")).text();
+  const plain = await (await terminalGet("/finger?plain=1")).text();
   assert.ok(!plain.includes("\x1b"), "plain=1 leaked an escape sequence");
-  const coloured = await (await terminalGet("/terminal/finger")).text();
+  const coloured = await (await terminalGet("/finger")).text();
   assert.ok(coloured.includes("\x1b["), "the default HTTP frame lost its colour");
   assert.equal(plain, coloured.replace(/\x1b\[[0-9;]*m/g, ""), "colour changed the text, not just its styling");
 });
@@ -2745,9 +2747,9 @@ test("a frame's printed state is a URL that reproduces it", async () => {
   // object, so a frame that prints a URL which does NOT come back to the same
   // frame has broken resume, fork, and every "pass the url back" instruction in
   // the MCP tool descriptions — while still looking completely correct.
-  for (const path of ["/terminal/finger?pane=writing&keys=jj", "/terminal/finger?pane=deploys&keys=G", "/terminal/photos?film=acros&keys=j"]) {
+  for (const path of ["/finger?pane=writing&keys=jj", "/finger?pane=deploys&keys=G", "/photos?film=acros&keys=j"]) {
     const first = await (await terminalGet(`${path}&plain=1`)).text();
-    const printed = first.match(/state (\/terminal\/[a-z]+(?:\?[^\s│║]*)?)/)?.[1];
+    const printed = first.match(/state (\/[a-z]+(?:\?[^\s│║]*)?)/)?.[1];
     assert.ok(printed, `${path} printed no state URL`);
     // Replay the printed state with NO keys: same frame, minus the keystrokes.
     const replayed = await (await terminalGet(printed + (printed.includes("?") ? "&" : "?") + "plain=1")).text();
@@ -2771,7 +2773,7 @@ test("the tui routes refuse to be cached or indexed", async () => {
   // A frame is per-query and several are live (playlist, calendar, lens). The
   // route also negotiates on Accept, which a URL-keyed edge cache cannot
   // represent — the same trap lib/cache.js documents for the markdown twins.
-  for (const path of ["/terminal", "/terminal/finger", "/terminal/photos"]) {
+  for (const path of ["/terminal", "/finger", "/photos"]) {
     const res = await terminalGet(path);
     assert.equal(res.headers.get("cache-control"), "no-store", path);
     assert.equal(res.headers.get("x-robots-tag"), "noindex", path);
@@ -2808,7 +2810,7 @@ test("an unknown program 404s and names the ones that exist", async () => {
   const res = await terminalGet("/terminal/nope");
   assert.equal(res.status, 404);
   assert.match(await res.text(), /\/terminal/);
-  const post = await handleTerminal(new Request("https://aadhar.sh/terminal/finger", { method: "POST" }), terminalEnv(), context());
+  const post = await handleTool(new Request("https://aadhar.sh/finger", { method: "POST" }), terminalEnv(), context());
   assert.equal(post.status, 405);
   assert.equal(post.headers.get("allow"), "GET, HEAD");
 });
@@ -2854,14 +2856,14 @@ test("the tui frame never renders a photo field the public projection withholds"
       },
     },
   }) };
-  const text = await (await handleTerminal(terminalReq("/terminal/photos?open=A_1&plain=1"), env, context())).text();
+  const text = await (await handleTool(terminalReq("/photos?open=A_1&plain=1"), env, context())).text();
   assert.ok(text.includes("Classic Chrome"), "the frame did not render at all");
   for (const secret of ["40.7128", "-74.0060", "SECRET123"]) {
     assert.ok(!text.includes(secret), `the frame leaked a withheld field: ${secret}`);
   }
 });
 
-// ── /terminal/ask — the natural-language door ────────────────────────────
+// ── /ask — the natural-language door ────────────────────────────
 // Every test here runs the ROUTER path (no AI binding), which is the mode CI
 // and local dev get. That is deliberate rather than a limitation: the router is
 // the fallback the whole route rests on when the model is unavailable, and it
@@ -2878,7 +2880,7 @@ test("an ask routes to a plausible tool and never invents an answer", async () =
     ["what changed in the neighborhood", "change_radar"],
   ];
   for (const [question, expected] of cases) {
-    const result = await runAsk(question, terminalReq("/terminal/ask"), env, context());
+    const result = await runAsk(question, terminalReq("/ask"), env, context());
     assert.equal(result.mode, "router", question);
     assert.equal(result.steps[0]?.tool, expected, `"${question}" routed to ${result.steps[0]?.tool}`);
     // With no model there is nothing that COULD write prose, so the route must
@@ -2892,13 +2894,13 @@ test("a film simulation reaches photo_query's film field, not its free-text q", 
   // photo_query matches q as ONE substring, so "photos shot classic chrome"
   // as free text matches nothing. This is the regression that cost 42 frames.
   const env = terminalEnv();
-  const filmed = await runAsk("photos shot on classic chrome", terminalReq("/terminal/ask"), env, context());
+  const filmed = await runAsk("photos shot on classic chrome", terminalReq("/ask"), env, context());
   assert.equal(filmed.steps[0].args.film, "classic chrome");
   assert.ok(!filmed.steps[0].args.q, "a named film must not also go to q");
   assert.ok(filmed.result.total > 0, "the film route returned nothing");
 
   // And an unnamed subject falls back to ONE keyword rather than the phrase.
-  const loose = await runAsk("show me photos of a doorway", terminalReq("/terminal/ask"), env, context());
+  const loose = await runAsk("show me photos of a doorway", terminalReq("/ask"), env, context());
   assert.equal(loose.steps[0].tool, "photo_query");
   assert.ok(!/\s/.test(loose.steps[0].args.q || ""), `q must be a single keyword, got "${loose.steps[0].args.q}"`);
 });
@@ -2906,10 +2908,10 @@ test("a film simulation reaches photo_query's film field, not its free-text q", 
 test("a tool that throws degrades to a message, not a 500 for the whole ask", async () => {
   // coffee_availability throws with no BOOKINGS binding. /mcp survives that at
   // the JSON-RPC envelope; an ask has no envelope, so it catches per call.
-  const result = await runAsk("when can i get coffee", terminalReq("/terminal/ask"), { ASSETS: terminalEnv().ASSETS }, context());
+  const result = await runAsk("when can i get coffee", terminalReq("/ask"), { ASSETS: terminalEnv().ASSETS }, context());
   assert.equal(result.steps[0].tool, "coffee_availability");
   assert.match(result.steps[0].summary, /unavailable/);
-  const res = await terminalGet("/terminal/ask?plain=1&q=when+can+i+get+coffee");
+  const res = await terminalGet("/ask?plain=1&q=when+can+i+get+coffee");
   assert.equal(res.status, 200, "a throwing tool must not take the frame down");
 });
 
@@ -2919,10 +2921,10 @@ test("an ask is bounded on every axis that costs money", async () => {
   // somebody else's bill.
   assert.ok(ASK_LIMITS.query <= 500 && ASK_LIMITS.calls <= 6 && ASK_LIMITS.rounds <= 3);
   const long = "x".repeat(5000);
-  const result = await runAsk(long, terminalReq("/terminal/ask"), terminalEnv(), context());
+  const result = await runAsk(long, terminalReq("/ask"), terminalEnv(), context());
   assert.equal(result.question.length, ASK_LIMITS.query, "the query was not truncated");
   // An empty question does no work at all rather than routing to a search for "".
-  const empty = await runAsk("   ", terminalReq("/terminal/ask"), terminalEnv(), context());
+  const empty = await runAsk("   ", terminalReq("/ask"), terminalEnv(), context());
   assert.equal(empty.mode, "empty");
   assert.equal(empty.steps.length, 0);
 });
@@ -2930,7 +2932,7 @@ test("an ask is bounded on every axis that costs money", async () => {
 test("the ask frame prints the tool call it made, and how to reproduce it", async () => {
   // The trace is the reason this is a console rather than a chat box. A frame
   // that printed only the answer would be the thing this surface exists not to be.
-  const text = await (await terminalGet("/terminal/ask?plain=1&q=what+does+he+think+about+lattices")).text();
+  const text = await (await terminalGet("/ask?plain=1&q=what+does+he+think+about+lattices")).text();
   assert.match(text, /what the agent did/);
   assert.match(text, /search_site/);
   assert.match(text, /reproduce this without a model/);
@@ -2980,7 +2982,7 @@ test("the model loop parses both tool_call shapes Workers AI returns", async () 
           ? { result: { tool_calls: [call] } }
           : { result: { response: "He writes about lattice cryptography." } });
       };
-      const result = await runAsk("what about lattices", terminalReq("/terminal/ask"), env, context());
+      const result = await runAsk("what about lattices", terminalReq("/ask"), env, context());
       assert.equal(result.mode, "model", `shape ${JSON.stringify(call)} did not reach model mode`);
       assert.equal(result.steps[0]?.tool, "search_site");
       assert.deepEqual(result.steps[0]?.args, { q: "lattice" }, "arguments must normalize to an object");
@@ -2990,12 +2992,12 @@ test("the model loop parses both tool_call shapes Workers AI returns", async () 
     // A model that names a tool this site does not have must be refused, not
     // dispatched. The catalog is the allowlist.
     globalThis.fetch = async () => Response.json({ result: { tool_calls: [{ name: "rm_rf", arguments: {} }] } });
-    const refused = await runAsk("delete everything", terminalReq("/terminal/ask"), env, context());
+    const refused = await runAsk("delete everything", terminalReq("/ask"), env, context());
     assert.ok(refused.steps.some((s) => s.refused), "an unknown tool name must be refused");
 
     // And a model that is simply down falls back to the router rather than 500ing.
     globalThis.fetch = async () => new Response("upstream on fire", { status: 503 });
-    const down = await runAsk("what about lattices", terminalReq("/terminal/ask"), env, context());
+    const down = await runAsk("what about lattices", terminalReq("/ask"), env, context());
     assert.equal(down.mode, "router-fallback");
     assert.equal(down.steps[0].tool, "search_site");
   } finally {
@@ -3056,7 +3058,7 @@ test("the model never chooses the foreign target, and a bad one is refused befor
   try {
     globalThis.fetch = async () => { reached += 1; return new Response("", { status: 200 }); };
     for (const bad of ["http://169.254.169.254/latest/meta-data/", "http://localhost:8787/", "javascript:alert(1)", "file:///etc/passwd"]) {
-      const result = await runAsk("what is here", terminalReq("/terminal/ask"), terminalEnv(), context(), bad);
+      const result = await runAsk("what is here", terminalReq("/ask"), terminalEnv(), context(), bad);
       assert.equal(result.mode, "refused", `${bad} was not refused`);
     }
     assert.equal(reached, 0, "a refused target must be refused BEFORE any network call");
@@ -3094,7 +3096,7 @@ test("a door that could not be read is never reported as a door that is shut", a
   assert.equal(open.bytes, 12);
 });
 
-// ── /terminal/ask sessions — the one thing here with a Durable Object ────
+// ── /ask sessions — the one thing here with a Durable Object ────
 
 /** A stand-in for the ASK_SESSION binding: one in-memory transcript. */
 function askSessionStub() {
@@ -3138,7 +3140,7 @@ test("a tainted transcript never gets tools back, on any later turn", async () =
     };
 
     // 1. A clean same-origin ask in a fresh session HAS tools.
-    const first = await runAsk("what does he write about", terminalReq("/terminal/ask"), env, context(), "", "sess-1");
+    const first = await runAsk("what does he write about", terminalReq("/ask"), env, context(), "", "sess-1");
     assert.ok("tools" in bodies.at(-1), "a clean session must get the tool catalog");
     assert.ok(!first.tainted);
 
@@ -3153,14 +3155,14 @@ test("a tainted transcript never gets tools back, on any later turn", async () =
     await (await import("./holding/_worker.js/ask-session.js")).writeSession(env, "sess-1", [], true);
 
     // 3. NOW a perfectly innocent same-origin question gets NO tools, forever.
-    const after = await runAsk("what does he write about", terminalReq("/terminal/ask"), env, context(), "", "sess-1");
+    const after = await runAsk("what does he write about", terminalReq("/ask"), env, context(), "", "sess-1");
     assert.ok(!("tools" in bodies.at(-1)), "a tainted session was handed tools back");
     assert.equal(after.mode, "model-notools");
     assert.equal(after.tainted, true);
 
     // 4. And a DIFFERENT session is unaffected — taint is per-transcript.
     const clean = askSessionStub();
-    const other = await runAsk("what does he write about", terminalReq("/terminal/ask"), { ...env, ASK_SESSION: clean }, context(), "", "sess-2");
+    const other = await runAsk("what does he write about", terminalReq("/ask"), { ...env, ASK_SESSION: clean }, context(), "", "sess-2");
     assert.ok("tools" in bodies.at(-1), "taint leaked across sessions");
     assert.equal(other.mode, "model");
   } finally { globalThis.fetch = realFetch; }
@@ -3175,7 +3177,7 @@ test("ask degrades to single-shot without the session binding", async () => {
   assert.deepEqual(empty, { messages: [], tainted: false, turns: 0, available: false });
   assert.equal(await writeSession({}, "sess", [], false), null);
 
-  const result = await runAsk("what does he write about", terminalReq("/terminal/ask"), terminalEnv(), context(), "", "sess");
+  const result = await runAsk("what does he write about", terminalReq("/ask"), terminalEnv(), context(), "", "sess");
   assert.equal(result.mode, "router");
   assert.ok(result.session, "a session id is still minted so the frame can print one");
 });
@@ -3202,7 +3204,7 @@ test("session ids are server-minted and unguessable", async () => {
   assert.match(a, /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
 });
 
-// ── /terminal/radar — the instrument for somebody else's antenna ─────────
+// ── /radar — the instrument for somebody else's antenna ─────────
 
 test("radar drops readings that are not dBm, and bounds the rest", async () => {
   // The caller is a shell script somebody wrote in five minutes, so a bad sample
@@ -3240,7 +3242,7 @@ test("radar bands match findphone's field calibration", async () => {
 test("the radar frame is 80 columns and says its angles are meaningless", async () => {
   // The honesty line is load-bearing, not decoration: RSSI is a scalar and a
   // plot with angles invites a reader to infer a direction that is not there.
-  const res = await handleTerminal(new Request("https://aadhar.sh/terminal/radar?plain=1", {
+  const res = await handleTool(new Request("https://aadhar.sh/radar?plain=1", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ samples: [{ name: "AP", rssi: -58, kind: "wifi", history: [-70, -62, -58] }, { name: "Buds", rssi: -44 }] }),
@@ -3261,18 +3263,18 @@ test("radar is the only program that accepts a POST", async () => {
   // structurally cannot produce. A new POST-shaped program should have to argue
   // for itself here rather than arrive by accident.
   for (const app of ["finger", "photos", "lens", "ask"]) {
-    const res = await handleTerminal(new Request(`https://aadhar.sh/terminal/${app}`, { method: "POST" }), terminalEnv(), context());
+    const res = await handleTool(new Request(`https://aadhar.sh/${app}`, { method: "POST" }), terminalEnv(), context());
     assert.equal(res.status, 405, `${app} accepted a POST`);
     assert.equal(res.headers.get("allow"), "GET, HEAD");
   }
-  const radar = await handleTerminal(new Request("https://aadhar.sh/terminal/radar", { method: "PUT" }), terminalEnv(), context());
+  const radar = await handleTool(new Request("https://aadhar.sh/radar", { method: "PUT" }), terminalEnv(), context());
   assert.equal(radar.status, 405);
   assert.equal(radar.headers.get("allow"), "GET, HEAD, POST");
 });
 
 test("an empty or malformed radar payload explains itself instead of 500ing", async () => {
   for (const body of ["", "not json", JSON.stringify({ samples: [] })]) {
-    const res = await handleTerminal(new Request("https://aadhar.sh/terminal/radar?plain=1", {
+    const res = await handleTool(new Request("https://aadhar.sh/radar?plain=1", {
       method: "POST", headers: { "content-type": "application/json" }, body,
     }), terminalEnv(), context());
     assert.equal(res.status, 200);
@@ -3280,7 +3282,7 @@ test("an empty or malformed radar payload explains itself instead of 500ing", as
   }
 });
 
-// ── /terminal/dict — the registration lint ───────────────────────────────
+// ── /dict — the registration lint ───────────────────────────────
 // The rules ARE the product, and they are asserted as pure functions because
 // every external fetch in this repo dies at signing in a test environment.
 
@@ -3340,10 +3342,10 @@ test("a delta served without vary: available-dictionary is flagged as a decode f
 });
 
 test("dict refuses a private target before fetching, and explains itself with none", async () => {
-  const idle = await (await terminalGet("/terminal/dict?plain=1")).text();
+  const idle = await (await terminalGet("/dict?plain=1")).text();
   assert.match(idle, /fail silently/);
   assert.match(idle, /SILENTLY IGNORES/);   // the node:zlib finding is on the page, not just in source
-  const refused = await (await terminalGet("/terminal/dict?plain=1&url=http%3A%2F%2F169.254.169.254%2F")).text();
+  const refused = await (await terminalGet("/dict?plain=1&url=http%3A%2F%2F169.254.169.254%2F")).text();
   assert.match(refused, /refused/);
 });
 
@@ -3442,7 +3444,7 @@ test("a page-only scan omits the discovery-derived fields rather than zeroing th
 
 test("the default scan is unchanged — every phase still runs", async () => {
   // The split must be opt-in. Existing callers (/lens/fetch, lens_inspect,
-  // /terminal/lens, the census) pass no phases and must keep the full behaviour.
+  // /lens, the census) pass no phases and must keep the full behaviour.
   const src = readFileSync("holding/_worker.js/lens.js", "utf8");
   assert.match(src, /if \(opts\.phases && !opts\.phases\.includes\("discovery"\)\) return out;/,
     "the early return must require an explicit phases opt-in");
@@ -3486,7 +3488,7 @@ test("the parse cap is a deployment knob, not a code change", async () => {
   assert.match(src, /Math\.max\(8, Number\(env\?\.LENS_PARSE_KB\) \|\| 0\)/, "a floor must guard against a zero or tiny override");
 });
 
-// ── /terminal/cache — the behavioral revalidation lint ───────────────────
+// ── /cache — the behavioral revalidation lint ───────────────────
 // judgeRevalidation is pure: the whole product is the rules, and the network
 // half dies at signing under plain node anyway.
 
@@ -3547,4 +3549,63 @@ test("negotiating on Accept without saying so in Vary is flagged — the #195 tr
     negotiated: { status: 200, headers: { "content-type": "text/markdown" } },
   });
   assert.ok(!honest.vetoes.some((f) => f.id === "vary"), "declared negotiation is fine");
+});
+
+// ── the tools are SERVICES, the frame is a representation ────────────────
+
+test("every tool is a top-level utility, not a subpage of a presentation", async () => {
+  // The site's own manifest encodes the rule: utilities live at the root
+  // (/lens, /photos, /coffee, /reading) and only CONTENT nests. Filing tools
+  // under /terminal/* organised them by how they RENDER, which is the wrong
+  // lesson for a site whose whole argument is how to expose services to agents.
+  const manifest = JSON.parse(readFileSync("site-manifest.json", "utf8"));
+  const utilities = manifest.surfaces.filter((s) => s.kind === "utility");
+
+  // The rule is not "utilities never nest" — /lens/census legitimately belongs
+  // to /lens, the way a dataset belongs to the tool that produces it. What is
+  // forbidden is nesting a utility under a PRESENTATION: /terminal is a console
+  // that drives these tools, not their parent, and filing them under it would
+  // organise the site by rendering rather than by what things are.
+  const underTerminal = utilities.filter((s) => s.path.startsWith("/terminal/"));
+  assert.deepEqual(underTerminal, [], `a tool must not live under the console: ${underTerminal.map((s) => s.path).join(", ")}`);
+
+  // Anything that does nest must nest under a utility that actually exists.
+  const paths = new Set(manifest.surfaces.map((s) => s.path));
+  for (const s of utilities.filter((s) => s.path.split("/").length > 2)) {
+    const parent = s.path.slice(0, s.path.lastIndexOf("/"));
+    assert.ok(paths.has(parent), `${s.path} nests under ${parent}, which is not a registered surface`);
+  }
+
+  for (const path of ["/finger", "/ask", "/radar", "/dict", "/cache"]) {
+    const entry = manifest.surfaces.find((s) => s.path === path);
+    assert.ok(entry, `${path} must be registered as a surface`);
+    assert.equal(entry.kind, "utility");
+    assert.equal(entry.flags.agents, true, `${path} must be in the agent catalog`);
+  }
+});
+
+test("a tool answers HTML to a browser and a frame to everything else", async () => {
+  // The frame joins .md as a REPRESENTATION rather than a location: one URL,
+  // negotiated, with an explicit .txt alongside. Same contract as the twins.
+  const html = await handleTool(new Request("https://aadhar.sh/dict", { headers: { accept: "text/html" } }), terminalEnv(), context());
+  assert.match(html.headers.get("content-type"), /text\/html/);
+
+  const frame = await handleTool(new Request("https://aadhar.sh/dict"), terminalEnv(), context());
+  assert.match(frame.headers.get("content-type"), /text\/plain/);
+
+  // .txt is explicit and beats Accept, so a browser can still ask for the frame.
+  const txt = await handleTool(new Request("https://aadhar.sh/dict.txt", { headers: { accept: "text/html" } }), terminalEnv(), context());
+  assert.match(txt.headers.get("content-type"), /text\/plain/);
+  assert.ok((await txt.text()).includes("╔"), ".txt must return the frame itself");
+});
+
+test("a frame's printed state is a root URL that resolves", async () => {
+  // The state a caller sends back has to be the tool's real address. When the
+  // tools moved, a stale /terminal/<tool> here would have kept working through
+  // the redirect while teaching every agent the wrong URL.
+  const text = await (await terminalGet("/finger?plain=1&pane=writing")).text();
+  const printed = text.match(/state (\/[a-z]+[^\s│║]*)/)?.[1];
+  assert.ok(printed, "no state URL printed");
+  assert.ok(!printed.startsWith("/terminal/"), `state still points at the old namespace: ${printed}`);
+  assert.match(printed, /^\/finger/);
 });

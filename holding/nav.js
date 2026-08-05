@@ -57,6 +57,11 @@
     { label: "reading", path: "/reading", hint: "what I've been reading — saved to Curius, mirrored here" },
     { label: "lens", path: "/lens", hint: "the other web: see any URL the way a machine does — raw HTML, JSON-LD, llms.txt" },
     { label: "terminal", path: "/terminal", hint: "terminal utilities — curl them, or drive them by keypress" },
+    { label: "finger", path: "/finger", hint: "who runs this host — drivable by keypress" },
+    { label: "ask", path: "/ask", hint: "ask this site something in plain language" },
+    { label: "radar", path: "/radar", hint: "signal readings in, a terminal instrument out" },
+    { label: "dict", path: "/dict", hint: "compression dictionary lint — will a browser ever use it?" },
+    { label: "cache", path: "/cache", hint: "behavioral revalidation lint — does your ETag ever 304?" },
     { label: "pixel peeper", path: "/pixel-peeper", hint: "whose eye do you have? a compression vision test — pick the best encode, blind" },
     { label: "learning with errors", path: "/lwe", hint: "chat-style explainers + live demos" },
     // generated:lwe-pages:start

@@ -1,4 +1,4 @@
-// ask-session.js — conversation memory for /terminal/ask, and ONLY for that.
+// ask-session.js — conversation memory for /ask, and ONLY for that.
 //
 // ── why this one thing gets a Durable Object ──────────────────────────────
 // Everything else in /terminal keeps its state in the URL, and should: a pane

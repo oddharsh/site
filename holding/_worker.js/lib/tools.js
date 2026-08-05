@@ -1,9 +1,9 @@
 // lib/tools.js — the site's tool registry: what a caller can ASK this origin to
 // do, and the one function that does it.
 //
-// Extracted from mcp.js when /terminal/ask arrived. There are now TWO doors onto
+// Extracted from mcp.js when /ask arrived. There are now TWO doors onto
 // the same seven tools — JSON-RPC at /mcp, and the natural-language loop at
-// /terminal/ask, which hands these very schemas to a model as its function
+// /ask, which hands these very schemas to a model as its function
 // catalog — and a second copy of the list would have drifted the first time one
 // description was reworded. Same argument as site-manifest.json: one registry,
 // projected outward, never transcribed.
@@ -27,7 +27,7 @@ export function toolError(message) { return { _error: String(message).slice(0, 4
 // stack budgets: 30 inspections via /lens/fetch AND another 8 here, and
 // lens_compare was metered at 8/min through JSON-RPC while /lens/compare allows
 // 4, so the cheaper door was the expensive operation. One bucket, one ceiling,
-// whichever door you knock on — and /terminal/ask, being a third door onto the
+// whichever door you knock on — and /ask, being a third door onto the
 // same functions, inherits that property for free by calling through here.
 export const DATA_TOOLS = [
   {
