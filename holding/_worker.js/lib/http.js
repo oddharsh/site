@@ -98,10 +98,19 @@ export function extractMeta(html, name) {
   return m ? decodeEntities(m[1].trim()).slice(0, 240) : "";
 }
 
+// &amp; is decoded LAST, and the order is the whole correctness of this function.
+// Decoding it first re-feeds its own output to the passes below, so `&amp;lt;` —
+// a page saying the literal text "&lt;" — comes out as a real `<`. That turns
+// inert prose from an arbitrary third party into markup, which is exactly the
+// input this sees: every caller runs it over a crawled page's <title>, meta
+// description, or author (crawl.js, around.js, webmention.js). The sinks escape
+// today, so this was never live XSS; it was a decoder manufacturing tags that
+// only the next un-escaped sink would have to catch.
 function decodeEntities(s) {
   return s
-    .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, " ");
+    .replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&");
 }
 
 // constant-time string compare so we don't leak the secret via timing.

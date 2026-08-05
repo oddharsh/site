@@ -284,12 +284,17 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
         mode = $("wb-mode").value, dec = D.querySelector('input[name="wb-dir"]:checked').value === "dec";
     var r = vig(pt, key, A, dec, mode);
     var out = $("wb-out"), note = $("wb-note");
-    if (r.err) { out.innerHTML = '<span class="lbl">' + r.err + '</span>'; note.textContent = ""; return; }
+    if (r.err) { out.innerHTML = '<span class="lbl">' + esc(r.err) + '</span>'; note.textContent = ""; return; }
     var lab = dec ? { a: "cipher ", b: "plain " } : { a: "plain  ", b: "cipher" };
+    // escaped because the ALPHABET is a text field: clean() keeps whatever
+    // characters the alphabet declares, so an alphabet of "<SCRIPT>" (eight
+    // distinct characters, which is all vig() checks) makes the ciphertext
+    // markup. Self-inflicted, but there is no reason to hand innerHTML the
+    // one string on the page a visitor can steer.
     out.innerHTML =
-      '<span class="lbl">' + lab.a + '</span><span class="pt">' + r.input + '</span>\n' +
-      '<span class="lbl">key    </span><span class="ks">' + r.ks + '</span>\n' +
-      '<span class="lbl">' + lab.b + ' </span><span class="ct">' + r.out + '</span>';
+      '<span class="lbl">' + lab.a + '</span><span class="pt">' + esc(r.input) + '</span>\n' +
+      '<span class="lbl">key    </span><span class="ks">' + esc(r.ks) + '</span>\n' +
+      '<span class="lbl">' + lab.b + ' </span><span class="ct">' + esc(r.out) + '</span>';
     note.textContent = mode === "autokey" ? "autokey: the keystream extends with the message, so no repeat and no period." :
       mode === "running" ? "running key: a long key text, used once (no repeat if it's long enough)." :
       "repeating key: the period (key length) is what Kasiski/Friedman attacks recover.";
@@ -403,13 +408,17 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
   function runCrank() {
     var out = $("cr-out"), note = $("cr-note"), cur = clean($("cr-in").value, AZ);
     if (!cur.length) { out.innerHTML = '<span class="lbl">paste some text above</span>'; note.textContent = ""; return; }
-    var lines = ['<span class="lbl">' + pad("input", 7) + '</span><span class="pt">' + cur + '</span>'];
+    // cur is A-Z on the way in, but a vigenere stage draws its output from that
+    // stage's own alphabet field, so from stage 2 onward it is whatever text the
+    // visitor typed there. Escape every interpolation rather than reason about
+    // which line is still clean.
+    var lines = ['<span class="lbl">' + pad("input", 7) + '</span><span class="pt">' + esc(cur) + '</span>'];
     for (var i = 0; i < stages.length; i++) {
       var st = stages[i], r = runStage(cur, st);
-      if (r.err) { out.innerHTML = lines.join("\n") + '\n<span class="lbl">stage ' + (i + 1) + ": " + r.err + '</span>'; note.textContent = ""; return; }
+      if (r.err) { out.innerHTML = lines.join("\n") + '\n<span class="lbl">stage ' + (i + 1) + ": " + esc(r.err) + '</span>'; note.textContent = ""; return; }
       cur = r.out;
       var tag = st.type + " " + st.dir + (st.type === "vigenere" ? " " + st.mode : "");
-      lines.push('<span class="lbl">' + pad("#" + (i + 1), 7) + '</span><span class="ks">' + cur + '</span>  <span class="lbl">' + tag + '</span>');
+      lines.push('<span class="lbl">' + pad("#" + (i + 1), 7) + '</span><span class="ks">' + esc(cur) + '</span>  <span class="lbl">' + esc(tag) + '</span>');
     }
     lines[lines.length - 1] = lines[lines.length - 1].replace('class="ks"', 'class="ct"');
     out.innerHTML = lines.join("\n");

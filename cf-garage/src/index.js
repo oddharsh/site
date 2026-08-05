@@ -149,8 +149,11 @@ export default {
           ]);
         } catch (e) {
           ctx.waitUntil(launch.then((b) => b.close()).catch(() => {})); // reap a late launch
-          log({ feature: "browser-rendering", step: "launch-timeout", ms: Date.now() - t0 });
-          return json({ ok: false, error: String(e.message || e) }, 502);
+          log({ feature: "browser-rendering", step: "launch-timeout", ms: Date.now() - t0, error: String((e && e.message) || e).slice(0, 200) });
+          // the copy is a LITERAL, not e.message: the timeout we raise ourselves
+          // above says exactly this, and anything else that lands here is a
+          // platform error whose text is not ours to publish.
+          return json({ ok: false, error: "the browser did not provision in time (free tier, 25s)" }, 502);
         }
         log({ feature: "browser-rendering", step: "launched", ms: Date.now() - t0 });
         try {
@@ -216,9 +219,14 @@ export default {
       log({ feature: "none", status: 404 });
       return json({ ok: false, error: "unknown endpoint" }, 404);
     } catch (e) {
-      // graceful per-feature failure (e.g. a binding not yet enabled on the zone)
+      // graceful per-feature failure (e.g. a binding not yet enabled on the zone).
+      // The real message goes to Workers Logs and NOT to the client: this handler
+      // wraps a Durable Object call, env.AI.run with a model id, and a subrequest,
+      // and each of those throws with internal names in the text (the DO class,
+      // the model, the upstream URL). The demo is about the features working, so
+      // the failure line only has to say which one didn't.
       log({ path, error: String(e && e.message || e).slice(0, 200), ms: Date.now() - t0 });
-      return json({ ok: false, error: String(e && e.message || e).slice(0, 200) }, 502);
+      return json({ ok: false, error: "this feature failed — the details are in Workers Logs" }, 502);
     }
   },
 };
