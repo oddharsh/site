@@ -3,7 +3,8 @@
 // functions used by the corresponding HTTP endpoints.
 import { jsonResponse } from "./lib/http.js";
 import { DATA_TOOLS, DATA_TOOL_NAMES, callDataTool } from "./lib/tools.js";
-import { terminalToolFrame } from "./terminal.js";
+import { frameText, terminalToolFrame } from "./terminal.js";
+import { radarFrame, readSamples } from "./radar.js";
 import { AGENT_SURFACES } from "./lib/site-manifest.js";
 import { CACHE_EMPTY, CACHE_LIVE, CACHE_STATIC, mcpCorsHeaders, mcpGate, mcpServer } from "./lib/mcp-protocol.js";
 
@@ -72,6 +73,22 @@ const MCP_TOOLS = [
       cursor: { type: "integer", minimum: 0, maximum: 4999 },
       open: { type: "string", description: "photo stem to open" },
     } },
+  },
+  {
+    // The one tool here whose INPUT this server cannot produce. An agent with a
+    // shell has an antenna; this origin does not. So the agent samples and this
+    // draws — see radar.js on why a hosted radar is otherwise dishonest.
+    name: "terminal_radar",
+    description: "Render signal readings you have already measured (wifi/Bluetooth RSSI) as a terminal instrument: concentric strength bands, a meter and trend per source, and findphone's field calibration (-45 arm's reach, -60 same table, -72 same room). This origin has no antenna and does not sense anything; you supply the samples. Nothing is stored. Angles in the plot are decorative because RSSI carries no bearing.",
+    inputSchema: { type: "object", properties: {
+      samples: { type: "array", maxItems: 40, items: { type: "object", properties: {
+        name: { type: "string" },
+        rssi: { type: "number", description: "dBm, negative; e.g. -58" },
+        kind: { type: "string", description: "optional tag, e.g. wifi or ble" },
+        history: { type: "array", items: { type: "number" }, description: "optional trailing readings for the trend" },
+      }, required: ["name", "rssi"] } },
+      source: { type: "string", description: "optional label for what did the sampling" },
+    }, required: ["samples"] },
   },
   {
     name: "terminal_lens",
@@ -146,6 +163,10 @@ async function callTool(name, args, request, env, ctx) {
   if (name === "terminal_finger") return terminalToolFrame("finger", args, request, env, ctx);
   if (name === "terminal_photos") return terminalToolFrame("photos", args, request, env, ctx);
   if (name === "terminal_lens") return terminalToolFrame("lens", args, request, env, ctx);
+  if (name === "terminal_radar") {
+    const samples = readSamples(args);
+    return { frame: frameText(radarFrame(samples, { source: String(args?.source || "").slice(0, 60) }), { color: false }), sources: samples.length };
+  }
   return { _unknown: true };
 }
 

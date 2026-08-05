@@ -186,6 +186,9 @@ const ROUTES = [
   // A refused target must be refused BEFORE any fetch, and come back as a frame.
   { path: "/terminal/ask?plain=1&at=http%3A%2F%2F169.254.169.254%2F&q=what+is+here", status: 200, ct: "text/plain", marker: "mode " },
   { path: "/terminal/ask?plain=1&at=javascript%3Aalert(1)", status: 200, ct: "text/plain", marker: "mode " },
+  // The instrument's idle frame. The POST path that actually draws readings is
+  // covered by contract tests, since the oracle only issues GETs.
+  { path: "/terminal/radar?plain=1", status: 200, ct: "text/plain", marker: "no antenna" },
   { path: "/terminal/nope", status: 404, ct: "text/plain" },
   { path: "/terminal.md", status: 200, ct: "text/markdown", marker: "State is a URL, not a session" },
   // The browser arm of the same route. One renderer feeds both, so this asserts

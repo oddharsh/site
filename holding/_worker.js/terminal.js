@@ -50,6 +50,7 @@
 // once per ask, next to a model call. Latency was never the reason the programs
 // stay on URLs. Forking, bookmarking, and testability were.
 import { ASK_BUDGET, ASK_LIMITS, asAgentCall, runAsk } from "./ask.js";
+import { RADAR_LIMITS, radarFrame, readSamples } from "./radar.js";
 import { readAroundChanges } from "./around.js";
 import { readCoffeeAvailability } from "./coffee.js";
 import { LENS_BUDGETS, lensInspect, lensObservationSummary, overLensBudget, validateLensTarget } from "./lens.js";
@@ -843,6 +844,31 @@ export async function askFrame(env, request, state, ctx) {
   };
 }
 
+// ── radar: the instrument for a sensor somebody else is holding ───────────
+function radarIdleFrame() {
+  return {
+    title: "radar — post readings, get an instrument",
+    body: rows(
+      ...wrap("A server has no antenna and neither does an agent, so this half does not sense anything. POST signal readings and it draws them: concentric bands by strength, a meter and a trend per source.", INNER).map((row) => [s(row)]),
+      blank(),
+      [s("  node holding/scripts/radar-sample.mjs --at https://aadhar.sh", "accent")],
+      [s("  curl -X POST aadhar.sh/terminal/radar -d '{\"samples\":[{\"name\":\"AP\",\"rssi\":-58}]}'", "accent")],
+      blank(),
+      rule(INNER, "the shape"),
+      kv("name", "whatever you want on the label", INNER, { gutter: 10 }),
+      kv("rssi", "dBm, negative; anything else is dropped rather than fatal", INNER, { gutter: 10 }),
+      kv("kind", "optional tag, e.g. wifi or ble", INNER, { gutter: 10 }),
+      kv("history", "optional trailing readings, for the trend sparkline", INNER, { gutter: 10 }),
+      blank(),
+      rule(INNER, "what it will not pretend to know"),
+      ...wrap("RSSI is a scalar: it carries distance-ish information and no bearing. The rings are real; the angles are a hash of the name, stable so nothing jumps between frames, and meaningless. Bands are findphone's field calibration.", INNER).map((row) => [s(row, "dim")]),
+      blank(),
+      ...wrap("Nothing is stored. Post the whole set each time — which also means device names travel in the request, so use --anonymize when pointing the sampler at a public host.", INNER).map((row) => [s(row, "dim")]),
+    ),
+    status: keyHints([["POST", "readings"], [`${RADAR_LIMITS.samples}`, "max sources"]]),
+  };
+}
+
 // ── the index frame ───────────────────────────────────────────────────────
 function indexFrame() {
   const app = (name, line) => rows(
@@ -860,6 +886,7 @@ function indexFrame() {
       app("finger", "Who runs this host: writing, reading, listening, photographs, neighborhood, availability, deploy log, and a search over all of it. Drivable — send keys, get the next frame."),
       app("photos", "The photo archive, filterable by film simulation, body, lens, and caption. Opening a frame shows its exposure and the in-camera recipe it was shot with."),
       app("lens", "Inspect any public URL the way a machine does: readability, agent doors, and what one scan of it costs to read."),
+      app("radar", "An instrument with no antenna: POST signal readings from a machine that has one and it draws them as bands, meters and trends. The sensor is yours; the display is here."),
       app("ask", "Plain language in, real tool calls out. Picks from the same seven tools /mcp exposes, calls them, answers from what came back, and prints every call it made."),
       rule(INNER, "driving"),
       ...wrap("?k=<one key> or ?keys=<up to 32>. Named keys: <cr> <esc> <tab> <sp>. Every frame prints the URL that produced it, so state is a link rather than a session. Add ?plain=1 to drop the ANSI colour.", INNER).map((row) => [s(row, "dim")]),
@@ -869,7 +896,7 @@ function indexFrame() {
 }
 
 // ── HTTP ──────────────────────────────────────────────────────────────────
-const TERMINAL_APPS = new Set(["finger", "photos", "lens", "ask"]);
+const TERMINAL_APPS = new Set(["finger", "photos", "lens", "ask", "radar"]);
 
 async function buildFrame(name, request, env, ctx, url) {
   const tokens = tokenizeKeys(url.searchParams.get("keys") ?? url.searchParams.get("k") ?? "");
@@ -879,6 +906,7 @@ async function buildFrame(name, request, env, ctx, url) {
   if (name === "photos") return photosFrame(env, ctx, state, tokens);
   if (name === "lens") return lensFrame(env, request, state, ctx);
   if (name === "ask") return askFrame(env, request, state, ctx);
+  if (name === "radar") return radarIdleFrame();
   return null;
 }
 
@@ -1063,11 +1091,29 @@ function frameResponse(frame, path) {
 
 export async function handleTerminal(request, env, ctx) {
   const url = new URL(request.url);
-  if (request.method !== "GET" && request.method !== "HEAD") {
-    return new Response("method not allowed\n", { status: 405, headers: { allow: "GET, HEAD", "content-type": "text/plain; charset=utf-8" } });
-  }
   const rest = url.pathname.replace(/^\/terminal\/?/, "").replace(/\/+$/, "");
   const name = rest.replace(/\.(txt|md)$/, "");
+
+  // /terminal/radar is the ONE program here that takes a POST, because it is the
+  // one whose input this server cannot produce: the readings come from a machine
+  // with an antenna. Everything else stays GET-only, so the surface does not
+  // quietly become writable.
+  if (request.method === "POST" && name === "radar") {
+    let payload = null;
+    try { payload = await request.json(); } catch { payload = null; }
+    const samples = readSamples(payload);
+    const frame = radarFrame(samples, { source: String(payload?.source || "").slice(0, 60) });
+    const color = url.searchParams.get("plain") !== "1";
+    return new Response(frameText(frame, { color }) + "\n", {
+      headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store", "x-robots-tag": "noindex" },
+    });
+  }
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return new Response("method not allowed\n", {
+      status: 405,
+      headers: { allow: name === "radar" ? "GET, HEAD, POST" : "GET, HEAD", "content-type": "text/plain; charset=utf-8" },
+    });
+  }
   if (name && !TERMINAL_APPS.has(name)) {
     return new Response(`no such program: ${name}\n\ntry /terminal\n`, { status: 404, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" } });
   }

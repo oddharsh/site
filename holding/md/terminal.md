@@ -65,6 +65,38 @@ is not hostile to this site.
 Foreign reads share Lens's 30/min per-address budget, and at most 6,000
 characters of third-party text ever reaches a model.
 
+## radar — an instrument with no antenna
+
+A server has no antenna. Neither does an agent talking to one. Browsers expose
+no wifi RSSI at all, and Web Bluetooth scanning is flag-gated — which is why
+[findphone](https://github.com/ben-z/findphone), the thing this is modelled on,
+is a native macOS CLI.
+
+So `/terminal/radar` does not sense anything. **You bring the signal; it brings
+the display.** POST readings you have already measured and it draws them:
+
+```
+node holding/scripts/radar-sample.mjs --at https://aadhar.sh --anonymize
+curl -X POST aadhar.sh/terminal/radar -d '{"samples":[{"name":"AP","rssi":-58}]}'
+```
+
+Each sample needs a `name` and an `rssi` in dBm (negative). `kind` and `history`
+are optional; history draws the trend, which is the half that matters when you
+are walking around looking for something. Bands are findphone's field
+calibration: **-45 arm's reach, -60 same table, -72 same room.**
+
+**The angles mean nothing.** RSSI is a scalar — it carries distance-ish
+information and no bearing. The rings are real; each source's angle is a hash of
+its name, stable so nothing jumps between frames, and decorative. A sweeping
+radar arm would imply a direction the data cannot support.
+
+Nothing is stored, so post the whole set each time. That also means device names
+travel in the request body — `--anonymize` hashes them before anything leaves
+your machine, and you keep the radar, the bands, and the hunt without the labels.
+
+It is also an MCP tool, `terminal_radar`, for an agent that has a shell and
+therefore an antenna.
+
 ## Driving one
 
 Send keys with `?k=` (one key) or `?keys=` (a sequence, up to 32). Named keys
