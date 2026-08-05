@@ -59,9 +59,6 @@ installCalTracing(tracing);
 // must be a named export of the entry so the COUNTER binding can resolve it.
 export { Counter } from "./counter.js";
 
-// /terminal/ask's conversation memory. Same rule as Counter: a DO class must be
-// a named export of the entry for its binding to resolve.
-export { AskSession } from "./ask-session.js";
 
 // the coffee-booking expiry timer (Workflows). One durable instance per pending
 // booking replaces the old weekly cron sweep; its class_name must resolve on
@@ -302,7 +299,6 @@ const ROUTES = new Map([
   ["/terminal/", routeDropSlash],
 
   ["/finger", handleTool], ["/finger.txt", handleTool],
-  ["/ask", handleTool],    ["/ask.txt", handleTool],
   ["/radar", handleTool],  ["/radar.txt", handleTool],
   ["/dict", handleTool],   ["/dict.txt", handleTool],
   ["/cache", handleTool],  ["/cache.txt", handleTool],

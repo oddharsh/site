@@ -97,12 +97,6 @@ export const AGENT_SURFACES = [
     "description": "Look up who runs this host: writing, reading, listening, photographs, neighborhood, availability, deploy log, and a search across all of it."
   },
   {
-    "path": "/ask",
-    "title": "Ask",
-    "kind": "utility",
-    "description": "Plain language in, real tool calls out. Picks from the same tools /mcp exposes, calls them, and prints every call it made above the answer."
-  },
-  {
     "path": "/radar",
     "title": "Radar",
     "kind": "utility",

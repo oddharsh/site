@@ -49,8 +49,8 @@
 // everywhere. A per-session DO lands near whoever opened it — tens of ms, paid
 // once per ask, next to a model call. Latency was never the reason the programs
 // stay on URLs. Forking, bookmarking, and testability were.
-import { ASK_BUDGET, ASK_LIMITS, asAgentCall, runAsk } from "./ask.js";
 import { probeRevalidation } from "./cache-lint.js";
+import { readDoors } from "./lib/doors.js";
 import { MEASURED, auditUrl } from "./dict.js";
 import { RADAR_LIMITS, radarFrame, readSamples } from "./radar.js";
 import { readAroundChanges } from "./around.js";
@@ -122,6 +122,7 @@ export function readState(url, app) {
     open: str(params.get("open"), 160),
     q: str(params.get("q"), 120),
     url: str(params.get("url"), 512),
+    doors: params.get("doors") === "1",
     at: str(params.get("at"), 300),
     session: str(params.get("session"), 64),
     left: str(params.get("left"), 512),
@@ -148,9 +149,8 @@ export function stateUrl(state, extra = {}) {
     put("q", state.q); put("film", state.film); put("camera", state.camera); put("lens", state.lens);
     put("page", state.page, 0); put("cursor", state.cursor, 0); put("open", state.open);
   } else if (state.app === "lens" || state.app === "dict" || state.app === "cache") {
-    put("url", state.url); put("left", state.left); put("right", state.right);
-  } else if (state.app === "ask") {
-    put("q", state.q); put("at", state.at); put("session", state.session);
+    put("url", state.url);
+    if (state.doors) put("doors", "1"); put("left", state.left); put("right", state.right);
   }
   for (const [key, value] of Object.entries(extra)) put(key, value);
   const qs = params.toString();
@@ -687,167 +687,42 @@ export async function lensFrame(env, request, state, ctx) {
   } catch {
     return { title: "lens — failed", body: [[s("the target could not be inspected.", "bad")]], status: [] };
   }
-  return { title: `lens — ${obs.finalUrl || obs.url}`, body: lensReadout(obs), status: [keyHints([["&url=", "another target"]]), stateLine(state)] };
-}
-
-// ── ask: the natural-language door ────────────────────────────────────────
-// The frame leads with WHAT THE AGENT DID, not with the answer. That ordering
-// is the whole point of putting this in a console rather than in a chat box:
-// the interesting artifact is a machine choosing among seven tools and being
-// wrong or right in public, and an answer printed on its own hides exactly that.
-// The reproduce section closes the loop by naming the request an agent would
-// have sent to get the same thing without a model in the way.
-
-/** A compact rendering of one tool result, for the no-model path. */
-function resultRows(tool, out) {
-  if (!out || out._error) return [[s(out?._error || "the tool failed.", "bad")]];
-  const list = (items, line) => (items.length ? items.slice(0, 8).map(line) : [[s("nothing matched.", "dim")]]);
-  if (tool === "search_site") return list(out.results || [], (r) => [...fit([s(r.title || "")], INNER - 30), s(r.url || "", "accent")]);
-  if (tool === "photo_query") return list(out.photos || [], (p) => [...fit([s(p.stem, "strong")], 18), s(p.alt || "", "dim")]);
-  if (tool === "now_playing") return list(out.tracks || [], (t) => [...fit([s(t.name || "")], INNER - 26), s((t.artists || []).map((a) => a.name).join(", "), "dim")]);
-  if (tool === "coffee_availability") return out.available
-    ? list(out.slots || [], (slot) => [s(String(slot.start || ""))])
-    : [[s("no bookable slots published right now.", "warn")]];
-  if (tool === "change_radar") return list(out.changes || [], (c) => [...fit([s(c.host || c.url || "")], 32), s(c.kind || "", "dim")]);
-  if (tool === "lens_inspect") return lensReadout(out);
-  return [[s("done.", "dim")]];
-}
-
-/**
- * The session line. Prints the id to send back for a follow-up, and says loudly
- * when a transcript is TAINTED — because a tainted session silently answering
- * without tools would look like the model simply choosing not to use them.
- */
-const sessionLine = (result) => {
-  if (!result.session) return [s("")];
-  const head = [s("session ", "label"), s(result.session.slice(0, 8), "accent"),
-    s(result.turns ? `  turn ${result.turns}` : "", "dim")];
-  return result.tainted
-    ? [...head, s("  TAINTED — third-party text is in this transcript, so tools stay off", "warn")]
-    : head;
-};
-
-const MODE_NOTE = {
-  model: "a model chose the tools",
-  router: "NO MODEL IS BOUND HERE, so the tool was chosen by keyword",
-  "router-fallback": "the model was unavailable, so the tool was chosen by keyword",
-  limited: "rate limited",
-  "model-notools": "tools withheld: this session has read a third party",
-  empty: "",
-};
-
-export async function askFrame(env, request, state, ctx) {
-  // `at=` alone is a real request — read that origin's doors and stop — so the
-  // usage screen only stands in when there is neither a question nor a target.
-  if (!state.q.trim() && !state.at.trim()) {
-    return {
-      title: "ask — plain language, real tools",
-      body: rows(
-        ...wrap("Ask this site something in plain language. It picks from the same seven tools an external agent gets at /mcp, calls them, and answers from what came back — and prints every call it made, so you can see the machine work rather than take its word.", INNER).map((row) => [s(row)]),
+  // ── walking through the doors lens just knocked on ──────────────────────
+  // lens reports that an origin HAS an llms.txt, a markdown twin, an MCP
+  // endpoint. &doors=1 reads what is actually behind them. This lived in `ask`
+  // until ask was cut; it belongs here, because knocking and walking through are
+  // the same job at two depths.
+  let doorsBody = blank();
+  if (state.doors) {
+    const doors = await readDoors(target.url, env).catch(() => null);
+    if (doors) {
+      const door = (label, probe, detail) => {
+        const mark = probe.ok ? ["  open ", "ok"] : probe.unreadable ? ["unread ", "warn"] : ["  shut ", "dim"];
+        return [...fit([s(mark[0], mark[1]), s(label)], 30), s(detail || "", "dim")];
+      };
+      doorsBody = rows(
         blank(),
-        [s("  curl 'aadhar.sh/ask?q=what+does+he+write+about'", "accent")],
-        [s("  curl 'aadhar.sh/ask?q=photos+shot+on+classic+chrome'", "accent")],
-        [s("  curl 'aadhar.sh/ask?q=when+can+i+get+coffee'", "accent")],
-        blank(),
-        ...wrap("Point it at somebody else's origin with &at= and it reads THEIR agent doors the same way — llms.txt, a markdown twin, an agent card, a real MCP tools/list. Add a question and a model answers from what it found.", INNER).map((row) => [s(row)]),
-        blank(),
-        [s("  curl 'aadhar.sh/ask?at=https://example.com'", "accent")],
-        [s("  curl 'aadhar.sh/ask?at=https://example.com&q=what+do+they+offer'", "accent")],
-        blank(),
-        rule(INNER, "the rules it runs under"),
-        kv("grounding", "answers only from tool results; says so when the site is silent", INNER, { gutter: 12 }),
-        kv("bounds", `${ASK_LIMITS.query} chars in, ${ASK_LIMITS.calls} tool calls, ${ASK_LIMITS.rounds} rounds`, INNER, { gutter: 12 }),
-        kv("rate", `${ASK_BUDGET.max}/min per address — the tools underneath are not limited by this`, INNER, { gutter: 12 }),
-      ),
-      status: keyHints([["&q=", "ask something"]]),
-    };
+        rule(INNER, "what is behind them"),
+        door("llms.txt", doors.llms, doors.llms.ok ? `${doors.llms.bytes} bytes` : doors.llms.why || doors.llms.wrongType),
+        door("markdown twin", doors.markdown, doors.markdown.ok ? `${doors.markdown.bytes} bytes` : doors.markdown.wrongType ? `answered ${doors.markdown.wrongType}` : doors.markdown.why),
+        door("agent card", doors.agentCard, doors.agentCard.ok ? "present" : doors.agentCard.why || doors.agentCard.wrongType),
+        door("api catalog", doors.apiCatalog, doors.apiCatalog.ok ? "present" : doors.apiCatalog.why || doors.apiCatalog.wrongType),
+        door("mcp tools/list", doors.mcp, doors.mcp.ok ? `${doors.mcp.count} tools` : doors.mcp.detail || "no server"),
+        doors.mcp.ok && doors.mcp.tools.length ? rows(
+          blank(),
+          // LISTED, NEVER CALLED. tools/list asks a server to describe itself;
+          // tools/call is execution on somebody else's infrastructure.
+          rule(INNER, "their tools — listed, never called"),
+          ...doors.mcp.tools.slice(0, 8).map((t) => [...fit([s(t.name, "strong")], 24), s(t.description, "dim")]),
+        ) : blank(),
+      );
+    }
   }
-
-  const result = await runAsk(state.q, request, env, ctx, state.at, state.session);
-
-  // Reading somebody else's origin: show which doors opened before anything
-  // else. A door that is shut is as informative as one that is open, so every
-  // one is listed either way rather than only the hits.
-  if (result.doors || result.mode === "refused") {
-    const doors = result.doors;
-    // Three states, not two. "shut" is a finding; "unread" is an absence of one,
-    // and painting the second as the first is how a reader starts lying.
-    const door = (label, probe, detail) => {
-      const mark = probe.ok ? ["  open ", "ok"] : probe.unreadable ? ["unread ", "warn"] : ["  shut ", "dim"];
-      return [...fit([s(mark[0], mark[1]), s(label)], 30), s(detail || "", "dim")];
-    };
-    const body = doors ? rows(
-      rule(INNER, `doors at ${doors.origin}`),
-      door("llms.txt", doors.llms, doors.llms.ok ? `${doors.llms.bytes} bytes` : doors.llms.why || doors.llms.wrongType),
-      door("markdown twin", doors.markdown, doors.markdown.ok ? `${doors.markdown.bytes} bytes` : doors.markdown.wrongType ? `answered ${doors.markdown.wrongType}` : doors.markdown.why),
-      door("agent card", doors.agentCard, doors.agentCard.ok ? "present" : doors.agentCard.why || doors.agentCard.wrongType),
-      door("api catalog", doors.apiCatalog, doors.apiCatalog.ok ? "present" : doors.apiCatalog.why || doors.apiCatalog.wrongType),
-      door("mcp tools/list", doors.mcp, doors.mcp.ok ? `${doors.mcp.count} tools` : doors.mcp.detail || "no server"),
-      blank(),
-      // The foreign catalog is INFORMATION. Nothing here can invoke it, and the
-      // frame says so, because a list of tools next to an answer invites the
-      // assumption that the answer came from calling them.
-      doors.mcp.ok && doors.mcp.tools.length ? rows(
-        rule(INNER, "their tools — listed, never called"),
-        ...doors.mcp.tools.slice(0, 6).map((tool) => [...fit([s(tool.name, "strong")], 24), s(tool.description, "dim")]),
-        blank(),
-      ) : blank(),
-      rule(INNER, "answer"),
-      result.answer
-        ? rows(...wrap(result.answer, INNER).map((row) => [s(row)]))
-        : [[s(result.mode === "doors" && !state.q ? "no question asked — doors only." : "no model available to read this, so the doors above are the answer.", "dim")]],
-    ) : [[s(result.answer || "refused.", "bad")]];
-
-    return {
-      title: `ask — ${doors ? doors.origin : state.at}`,
-      body,
-      status: [
-        [s("mode ", "label"), s(result.mode, result.mode === "foreign" ? "ok" : result.mode === "refused" ? "bad" : "warn"),
-          s(result.mode === "foreign" ? `  ${result.corpusChars} chars read as UNTRUSTED data, no tools offered on that turn` : "", "dim")],
-        sessionLine(result),
-        stateLine({ ...state, session: result.session || state.session }),
-      ],
-    };
-  }
-  const steps = result.steps || [];
-  const trace = steps.length
-    ? steps.map((step, i) => {
-      const args = JSON.stringify(step.args || {});
-      const head = `${String(i + 1).padStart(2)} `;
-      return [
-        s(head, "dim"),
-        ...fit([s(step.tool, step.refused ? "bad" : "strong"), s(" " + (args === "{}" ? "" : args), "dim")], INNER - head.length - 22),
-        ...rightTo([s(step.summary, "label")], 22),
-      ];
-    })
-    : [[s("no tool was called.", "dim")]];
 
   return {
-    title: `ask — ${state.q}`,
-    body: rows(
-      rule(INNER, "what the agent did"),
-      trace,
-      blank(),
-      rule(INNER, "answer"),
-      // Two shapes, and which one appears says which mode ran. With a model the
-      // answer is prose it wrote from the results; without one there is no prose
-      // to write, so the RESULT itself stands in rather than a fabricated
-      // sentence. A router that invented an answer would be the one thing this
-      // whole surface is built not to do.
-      result.answer
-        ? rows(...wrap(result.answer, INNER).map((row) => [s(row)]))
-        : (steps.length && result.result ? resultRows(steps[0].tool, result.result) : [[s("no answer.", "dim")]]),
-      blank(),
-      rule(INNER, "reproduce this without a model"),
-      ...(steps.filter((step) => !step.refused).slice(0, 2).map((step) =>
-        [s(asAgentCall(step.tool, step.args), "accent")])),
-    ),
-    status: [
-      [s("mode ", "label"), s(result.mode, result.mode === "model" ? "ok" : "warn"),
-        s(`  ${MODE_NOTE[result.mode] || ""}`, "dim")],
-      sessionLine(result),
-      stateLine({ ...state, session: result.session || state.session }),
-    ],
+    title: `lens — ${obs.finalUrl || obs.url}`,
+    body: rows(lensReadout(obs), doorsBody),
+    status: [keyHints([["&url=", "another target"], ["&doors=1", "read through them"]]), stateLine(state)],
   };
 }
 
@@ -1038,7 +913,6 @@ function indexFrame() {
       app("cache", "Does your ETag ever actually 304? Fetches twice, replays the validator, and reports what the origin DID — the failure header-reading graders cannot see."),
       app("dict", "Will a browser ever actually use the compression dictionary you are serving? The registration rules are undocumented, unguessable, and fail in total silence. This encodes them, measured."),
       app("radar", "An instrument with no antenna: POST signal readings from a machine that has one and it draws them as bands, meters and trends. The sensor is yours; the display is here."),
-      app("ask", "Plain language in, real tool calls out. Picks from the same seven tools /mcp exposes, calls them, answers from what came back, and prints every call it made."),
       rule(INNER, "driving"),
       ...wrap("?k=<one key> or ?keys=<up to 32>. Named keys: <cr> <esc> <tab> <sp>. Every frame prints the URL that produced it, so state is a link rather than a session. Add ?plain=1 to drop the ANSI colour.", INNER).map((row) => [s(row, "dim")]),
     ),
@@ -1047,7 +921,7 @@ function indexFrame() {
 }
 
 // ── HTTP ──────────────────────────────────────────────────────────────────
-const TERMINAL_APPS = new Set(["finger", "photos", "lens", "ask", "radar", "dict", "cache"]);
+const TERMINAL_APPS = new Set(["finger", "photos", "lens", "radar", "dict", "cache"]);
 
 async function buildFrame(name, request, env, ctx, url) {
   const tokens = tokenizeKeys(url.searchParams.get("keys") ?? url.searchParams.get("k") ?? "");
@@ -1056,7 +930,6 @@ async function buildFrame(name, request, env, ctx, url) {
   if (name === "finger") return fingerFrame(env, ctx, request, state, tokens);
   if (name === "photos") return photosFrame(env, ctx, state, tokens);
   if (name === "lens") return lensFrame(env, request, state, ctx);
-  if (name === "ask") return askFrame(env, request, state, ctx);
   if (name === "radar") return radarIdleFrame();
   if (name === "dict") return dictFrame(env, request, state, ctx);
   if (name === "cache") return cacheFrame(env, request, state, ctx);

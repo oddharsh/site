@@ -170,24 +170,6 @@ const ROUTES = [
   // A refused target must be refused BEFORE anything is fetched, and must come
   // back as a frame rather than a stack trace.
   { path: "/lens.txt?plain=1&url=javascript%3Aalert(1)", status: 200, ct: "text/plain", marker: "refused" },
-  // ask: the natural-language door. Asserted on the ROUTER path, which is what
-  // answers when no model is bound — CI has none, and that is the point of the
-  // fallback existing. The bare form must explain itself rather than 503.
-  { path: "/ask?plain=1", status: 200, ct: "text/plain", marker: "plain language" },
-  { path: "/ask?plain=1&q=what+does+he+write+about", status: 200, ct: "text/plain", marker: "what the agent did" },
-  // The mode line is load-bearing: it is how a reader knows whether a model or a
-  // keyword picked the tool. A frame that stopped saying so would still look right.
-  { path: "/ask?plain=1&q=photos+on+acros", status: 200, ct: "text/plain", marker: "mode " },
-  // Reading somebody else's origin. `at=` alone reads the doors and stops.
-  // Marked remote: every external probe needs the AadharshBot signing key, which
-  // a local Worker does not have — so locally each door reports "unread", which
-  // is the honest answer and not the one worth asserting.
-  { path: "/ask?plain=1&at=https%3A%2F%2Fexample.com", status: 200, ct: "text/plain", marker: "doors at", remote: true },
-  // A refused target must be refused BEFORE any fetch, and come back as a frame.
-  { path: "/ask?plain=1&at=http%3A%2F%2F169.254.169.254%2F&q=what+is+here", status: 200, ct: "text/plain", marker: "mode " },
-  { path: "/ask?plain=1&at=javascript%3Aalert(1)", status: 200, ct: "text/plain", marker: "mode " },
-  // The instrument's idle frame. The POST path that actually draws readings is
-  // covered by contract tests, since the oracle only issues GETs.
   { path: "/radar?plain=1", status: 200, ct: "text/plain", marker: "no antenna" },
   { path: "/dict?plain=1", status: 200, ct: "text/plain", marker: "fail silently" },
   { path: "/dict?plain=1&url=javascript%3Aalert(1)", status: 200, ct: "text/plain", marker: "refused" },

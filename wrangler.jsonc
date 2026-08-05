@@ -108,7 +108,7 @@
       // boot at 101), and twelve exact entries put this config at 102. A site
       // can only claim so many paths from the asset layer, which is a real
       // ceiling on how many surfaces you can add this way.
-      "/finger*", "/ask*", "/radar*", "/dict*", "/cache*",
+      "/finger*", "/radar*", "/dict*", "/cache*",
       "/photos.txt", "/lens.txt",
       "/search", "/search.json",
       "/coffee", "/coffee/*", "/serendipity", "/serendipity/*",
@@ -216,18 +216,11 @@
     "bindings": [
       // in-house now (no script_name) — the Counter class is defined + exported
       // by this worker (counter.js -> index.js). was cross-script to cf-garage.
-      { "name": "COUNTER", "class_name": "Counter" },
-      // /terminal/ask's conversation memory, and nothing else on that surface.
-      // The programs keep their state in the URL because a pane and a cursor fit
-      // there; a transcript does not (~2KB practical ceiling), which is the whole
-      // reason this one binding exists. Per-session, so it lands near its caller
-      // rather than being the single global instance COUNTER is.
-      { "name": "ASK_SESSION", "class_name": "AskSession" }
+      { "name": "COUNTER", "class_name": "Counter" }
     ]
   },
   "migrations": [
-    { "tag": "v1", "new_sqlite_classes": ["Counter"] },
-    { "tag": "v2", "new_sqlite_classes": ["AskSession"] }
+    { "tag": "v1", "new_sqlite_classes": ["Counter"] }
   ],
   // one durable expiry timer per pending coffee booking (cal/src/workflow.js,
   // re-exported from _worker.js/index.js). Replaced the weekly cron sweep. Must
@@ -256,12 +249,7 @@
     { "name": "LENS_RL_INSPECT", "namespace_id": "1001", "simple": { "limit": 30, "period": 60 } },
     { "name": "LENS_RL_SHOT",    "namespace_id": "1002", "simple": { "limit": 8,  "period": 60 } },
     { "name": "LENS_RL_COMPARE", "namespace_id": "1003", "simple": { "limit": 4,  "period": 60 } },
-    { "name": "LENS_RL_BROWSER", "namespace_id": "1004", "simple": { "limit": 4,  "period": 60 } },
-    // /terminal/ask. The ONE public route here that spends money per request,
-    // so it is the one that most needs a ceiling. The seven tools underneath
-    // are NOT limited by this — they keep their own buckets, and an agent that
-    // wants them without a model in the way should call /mcp directly.
-    { "name": "ASK_RL",           "namespace_id": "1005", "simple": { "limit": 10, "period": 60 } }
+    { "name": "LENS_RL_BROWSER", "namespace_id": "1004", "simple": { "limit": 4,  "period": 60 } }
   ],
   "vars": {
     "HOST_TIMEZONE": "America/New_York",
@@ -299,32 +287,7 @@
   //   COVER_SECRET          read by code, never set. The path degrades without it, so
   //                         declaring it would fail the deploy over a working site.
   //   ANALYTICS_READ_TOKEN  same shape: /ledger's SQL reads degrade without it.
-  //   WORKERS_AI_TOKEN      /terminal/ask's model. Same shape again: without it the
-  //                         ask route falls back to its keyword router and says so
-  //                         in the frame. Needs `Workers AI - Read` AND `Workers
-  //                         AI - Edit`, both account-level: inference is a POST
-  //                         and Cloudflare classes running a model as a write, so
-  //                         Read alone 403s. Use the dashboard's "Workers AI"
-  //                         token template, which sets exactly those two.
-  //
-  //                         This is the FIRST Worker secret here with an Edit
-  //                         scope — ANALYTICS_READ_TOKEN and BILLING_READ_TOKEN
-  //                         are both Read. The Edit is confined to Workers AI,
-  //                         which is its own permission: it cannot publish a
-  //                         Worker and cannot reach KV, R2 or D1, each of which
-  //                         has a separate Read/Edit pair. Keep it off the CI
-  //                         token, which stays pinned at six reads in GitHub.
-  //
-  //                         WHY A TOKEN AND NOT THE `ai` BINDING, which is the
-  //                         obvious way to do this and is what lwe-ask uses: the
-  //                         binding has no local emulation, so wrangler opens a
-  //                         REMOTE PROXY SESSION for it at boot. `npm run
-  //                         routes:check` boots this very config, and a remote
-  //                         session needs a write-capable token, which CI does not
-  //                         and must not have. Adding the binding turns the route
-  //                         oracle red on every PR. Measured 2026-08-05: 106 routes
-  //                         green without it, boot failure with it. Do not "clean
-  //                         this up" by swapping in the binding.
+
   //   BILLING_READ_TOKEN    same shape again: /ledger's account cost line renders a
   //                         "not readable yet" note without it. Scope it to Billing:Read
   //                         and NOTHING else, and keep it off the CI token, which is

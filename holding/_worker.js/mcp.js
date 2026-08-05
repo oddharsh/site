@@ -103,7 +103,10 @@ const MCP_TOOLS = [
   {
     name: "lens",
     description: "Inspect one public HTTP(S) URL and render the observation as a terminal frame: readability, agent doors, and what a single scan costs to read. Same rate limit and same refusals as lens_inspect; use lens_inspect instead if you want the fields rather than the frame.",
-    inputSchema: { type: "object", properties: { url: { type: "string" } }, required: ["url"] },
+    inputSchema: { type: "object", properties: {
+      url: { type: "string" },
+      doors: { type: "boolean", description: "also READ what is behind the agent doors: llms.txt, the markdown twin, the agent card, and a real tools/list against their MCP server. Their catalog is listed, never called." },
+    }, required: ["url"] },
   },
 ];
 

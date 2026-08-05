@@ -77,11 +77,6 @@
       "hint": "who runs this host — drivable by keypress",
       "flags": { "run": true, "taskbar": false, "sitemap": false, "gallery": false, "agents": true, "searchIndex": false, "webmention": false } },
 
-    { "path": "/ask", "title": "Ask", "section": "ask", "kind": "utility",
-      "description": "Plain language in, real tool calls out. Picks from the same tools /mcp exposes, calls them, and prints every call it made above the answer.",
-      "hint": "ask this site something in plain language",
-      "flags": { "run": true, "taskbar": false, "sitemap": false, "gallery": false, "agents": true, "searchIndex": false, "webmention": false } },
-
     { "path": "/radar", "title": "Radar", "section": "radar", "kind": "utility",
       "description": "An instrument with no antenna: POST signal readings from a machine that has one and it draws them as bands, meters and trends.",
       "hint": "signal readings in, a terminal instrument out",

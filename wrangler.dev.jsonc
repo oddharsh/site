@@ -52,7 +52,7 @@
       // boot at 101), and twelve exact entries put this config at 102. A site
       // can only claim so many paths from the asset layer, which is a real
       // ceiling on how many surfaces you can add this way.
-      "/finger*", "/ask*", "/radar*", "/dict*", "/cache*",
+      "/finger*", "/radar*", "/dict*", "/cache*",
       "/photos.txt", "/lens.txt",
       "/search", "/search.json",
       "/coffee", "/coffee/*", "/serendipity", "/serendipity/*",
@@ -104,18 +104,11 @@
   ],
   "durable_objects": {
     "bindings": [
-      { "name": "COUNTER", "class_name": "Counter" },
-      // /terminal/ask's conversation memory, and nothing else on that surface.
-      // The programs keep their state in the URL because a pane and a cursor fit
-      // there; a transcript does not (~2KB practical ceiling), which is the whole
-      // reason this one binding exists. Per-session, so it lands near its caller
-      // rather than being the single global instance COUNTER is.
-      { "name": "ASK_SESSION", "class_name": "AskSession" }
+      { "name": "COUNTER", "class_name": "Counter" }
     ]
   },
   "migrations": [
-    { "tag": "v1", "new_sqlite_classes": ["Counter"] },
-    { "tag": "v2", "new_sqlite_classes": ["AskSession"] }
+    { "tag": "v1", "new_sqlite_classes": ["Counter"] }
   ],
   // per-booking coffee expiry timer — MUST match wrangler.jsonc (build.mjs warns on drift).
   "workflows": [
@@ -130,8 +123,7 @@
     { "name": "LENS_RL_INSPECT", "namespace_id": "1001", "simple": { "limit": 30, "period": 60 } },
     { "name": "LENS_RL_SHOT",    "namespace_id": "1002", "simple": { "limit": 8,  "period": 60 } },
     { "name": "LENS_RL_COMPARE", "namespace_id": "1003", "simple": { "limit": 4,  "period": 60 } },
-    { "name": "LENS_RL_BROWSER", "namespace_id": "1004", "simple": { "limit": 4,  "period": 60 } },
-    { "name": "ASK_RL",           "namespace_id": "1005", "simple": { "limit": 10, "period": 60 } }
+    { "name": "LENS_RL_BROWSER", "namespace_id": "1004", "simple": { "limit": 4,  "period": 60 } }
   ],
   "vars": {
     "HOST_TIMEZONE": "America/New_York",

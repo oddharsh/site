@@ -31,9 +31,6 @@
   // last frame — which is the same state the frame itself prints.
   var prog = null;
   var state = "";
-  // The ask conversation this console is holding. Server-minted, carried across
-  // asks so a follow-up continues rather than restarting. Cleared by `exit`.
-  var askSession = "";
   var history = [];
   var histIndex = -1;
 
@@ -193,10 +190,6 @@
     var plain = frameText.replace(/\x1b\[[0-9;]*m/g, "");
     var printed = plain.match(/state \/[a-z]+(\?[A-Za-z0-9_%=&.,+\-]*)/);
     state = printed ? printed[1] : "";
-    // The ask frame prints the full session id in its state URL; keep it so the
-    // next question continues the same transcript.
-    var sess = plain.match(/session=([A-Za-z0-9-]{8,})/);
-    if (sess) askSession = sess[1];
     setPrompt();
   }
 
@@ -221,15 +214,9 @@
     "  Driving a program — arrow keys, or:",
     "    keys <sequence>       e.g. keys 2jj<cr>   (1-9 pane, j/k move, <cr> open, h back)",
     "",
-    "  Just type a question. Anything that is not a command below is an ask:",
-    "    ask <question>        plain language -> real tool calls -> an answer,",
-    "                          with every call it made printed above the answer",
-    "",
     "  Pointing it at somebody else's site — the same doors, from the outside:",
     "    doors <origin>        what is behind their agent doors: llms.txt, a",
     "                          markdown twin, an agent card, a real MCP tools/list",
-    "    ask --at <origin> <q> the same read, with a model answering from it.",
-    "                          Their text is untrusted, so that turn gets NO tools",
     "",
     "  Being the agent — these are the real requests, not a demo.",
     "    get <path>            fetch a page as an agent does (Accept: text/markdown)",
@@ -254,7 +241,7 @@
     cls: function () { out.textContent = ""; },
     clear: function () { out.textContent = ""; },
     exit: function () {
-      prog = null; state = ""; askSession = "";
+      prog = null; state = "";
       write("");
       write("  Session closed. The ask transcript is dropped; nothing else was stored.");
       write("");
@@ -282,42 +269,12 @@
       return runProgram("lens", "url=" + encodeURIComponent(args[0]));
     },
 
-    // Plain language in. This is also what an unrecognised line falls through
-    // to, so the console reads as something you talk to rather than something
-    // you have to know the verbs for.
-    ask: function (args) {
-      // `--at <origin>` points the whole thing at somebody else's site: the same
-      // doors, read the same way, from the outside.
-      var at = "";
-      var rest = [];
-      for (var i = 0; i < args.length; i++) {
-        if ((args[i] === "--at" || args[i] === "-at") && args[i + 1]) { at = args[++i]; continue; }
-        rest.push(args[i]);
-      }
-      var q = rest.join(" ").trim();
-      if (!q && !at) { write("usage: ask <question>   ·   ask --at <origin> [question]", "ps-err"); return; }
-      var parts = [];
-      if (q) parts.push("q=" + encodeURIComponent(q));
-      if (at) parts.push("at=" + encodeURIComponent(at));
-      if (askSession) parts.push("session=" + encodeURIComponent(askSession));
-      return runProgram("ask", parts.join("&"));
-    },
-
-    dict: function (args) {
-      if (!args[0]) { write("usage: dict <url>", "ps-err"); return; }
-      return runProgram("dict", "url=" + encodeURIComponent(args[0]));
-    },
-
-    cache: function (args) {
-      if (!args[0]) { write("usage: cache <url>", "ps-err"); return; }
-      return runProgram("cache", "url=" + encodeURIComponent(args[0]));
-    },
 
     // Read another origin's agent doors and stop. `ask --at X <question>` is the
     // same read with a model on the end of it.
     doors: function (args) {
       if (!args[0]) { write("usage: doors <origin>   e.g. doors https://anthropic.com", "ps-err"); return; }
-      return runProgram("ask", "at=" + encodeURIComponent(args[0]));
+      return runProgram("lens", "url=" + encodeURIComponent(args[0]) + "&doors=1");
     },
 
     keys: function (args) {
@@ -416,13 +373,13 @@
     if (!args.length) return;
     var name = args[0].toLowerCase();
     var command = COMMANDS[name];
-    // An unrecognised line is a QUESTION, not an error. PowerShell would tell
-    // you the term is not recognized, and that is the right behaviour for a
-    // shell whose whole vocabulary is verbs -- but this console's point is that
-    // you can throw plain language at the site, so the fallthrough is `ask`
-    // rather than a scolding. The frame it prints names every tool the ask
-    // touched, so a typo is legible as a typo instead of vanishing.
-    if (!command) return COMMANDS.ask(args);
+    if (!command) {
+      write("");
+      write("  " + args[0] + " : not a tool on this origin.", "ps-err");
+      write("  `help` lists them; `mcp` asks the server itself.", "ps-dim");
+      write("");
+      return;
+    }
     try {
       await command(args.slice(1));
     } catch (e) {
