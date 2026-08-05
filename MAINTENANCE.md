@@ -977,6 +977,31 @@ export CLOUDFLARE_API_TOKEN=...             # Account · Workers AI · Read
 `check-photo-pipeline.mjs` fails on any stem with no caption, the same way it does
 for a missing pixel tier or histogram, so an unlabelled image can't reach a deploy.
 
+### Regenerate the photo search expansion
+`images/semantics.json` is what `photo_query` ranks against beyond the caption and
+the EXIF. Two tiers, and every stem records which it got:
+```bash
+node holding/scripts/gen-photo-semantics.mjs            # derived tier only
+node holding/scripts/gen-photo-semantics.mjs --vision   # + model-written terms
+```
+The **derived** tier needs no network and no credential — it is vocabulary repair,
+mapping what the camera writes to what a person types (`Nostalgic Neg` →
+"nostalgic negative", `LEICA M MONOCHROM` → "monochrome black and white", ISO ≥
+3200 → "low light"). Rerun it after adding photos; it is deterministic, so the
+diff is exactly the new stems.
+
+The **vision** tier asks the caption model for retrieval keywords under a
+different prompt than alt text, and needs `CLOUDFLARE_API_TOKEN`. It is resumable
+and writes after every photo, so a 429 against the daily neuron budget costs
+nothing already paid for.
+
+**The model never runs on the request path, and that is the point.** Embedding a
+query per request would put a Workers AI credential back in the Worker, which is
+what deleting `/ask` removed. Expanding the documents offline keeps the Worker at
+zero credentials and zero subrequests, and it still works on the free plan. Delete
+`semantics.json` and the query keeps working one tier down, reporting
+`ranking.semantic: false`.
+
 ### Regenerate the /garage/encoding study samples
 ```bash
 ./holding/scripts/gen-encoding-samples.sh [STEM] [SRC_DIR]
@@ -1223,6 +1248,7 @@ until its twin agrees: `checkTwinFacts()` recomposes the User-Agent from
 | `zenc/` | The JPEG thumbnail encoder: a Rust crate wrapping zenjpeg (hybrid trellis + progressive scan search). `cargo build --release` (auto-built on first pipeline run). `zenc <in> <out> -q 84`. dependabot tracks the zenjpeg pin; replaced the from-source jpegli build in 2026-07. |
 | `download-remote-photos.sh` | Download selected R2 object keys into disposable runner storage for the GitHub Actions photo workflow; accepts `all` for the public manifest. |
 | `gen-alt-text.py` | AI alt text for grid photos -> `images/alt.json`. Run by `add-photos.sh` phase 4. Posts the committed `i/` thumbnail to Workers AI when `CLOUDFLARE_API_TOKEN` is set (captions pre-deploy), else asks `/garage/cf/caption` by stem (deployed photos only). Resumable. |
+| `gen-photo-semantics.mjs` | Retrieval terms for `photo_query` -> `images/semantics.json`. Derived tier (EXIF vocabulary repair) needs nothing; `--vision` adds model-written keywords and needs `CLOUDFLARE_API_TOKEN`. Deliberately offline so the Worker keeps zero AI credentials. Resumable. |
 | `gen-encoding-samples.sh` | Regenerate the color sample set for `/garage/encoding` through every encoder; defaults to the committed `garage/enc/c-png.png` fixture and prints byte counts. |
 | `photo-histograms.py` | Bakes four 64-bin RGB/luminance histogram channels into each per-photo `images/meta/<stem>.json` from the shipped hashed JPG tier. Requires the pinned Pillow dependency in `holding/scripts/requirements.txt` and is called by both metadata extraction and `add-photos.sh`. |
 | `gen-og-cards.mjs` | Render the 1200x630 OG/Twitter card per garage + lwe page (live demo on the Bliss desktop) into `holding/og/`. `npm run og-cards`. Drives the installed Chrome via `playwright-core`; captures production so data-driven demos render full. Hero selectors + presets in the `HERO{}` map. See "Regenerate the OG / Twitter cards". |

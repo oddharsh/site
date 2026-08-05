@@ -36,7 +36,7 @@ import { INDEXED_SECTIONS, TWIN_FACTS, buildTwins, checkTwinFacts, htmlFileFor, 
 import { collectBlockClasses, readDocument } from "./scripts/lib/html-to-md.mjs";
 import { MCP_TOOLS, cookieJar, parseCookies } from "./serendipity/serendipity.js";
 import { MCP_SUPPORTED as MCP_SUPPORTED_VERSIONS } from "./holding/_worker.js/lib/mcp-protocol.js";
-import { derivePhotoPool, renderPhotosPage, getImagesManifest, handlePhotoQuery, queryPhotos } from "./holding/_worker.js/photos.js";
+import { derivePhotoPool, renderPhotosPage, getImagesManifest, handlePhotoQuery, queryPhotos, _resetPhotoCaches } from "./holding/_worker.js/photos.js";
 import { renderPhotoSlots } from "./holding/_worker.js/lib/photo-grid.js";
 import { cachedRender, deadline } from "./holding/_worker.js/lib/cache.js";
 import { ifNoneMatchMatches, notModifiedIfFresh, withWeakEtag } from "./holding/_worker.js/lib/cache.js";
@@ -553,6 +553,161 @@ test("photo query filters public metadata and never exposes unlisted fields", as
   assert.equal("gps" in result.photos[0].metadata, false);
   const response = await handlePhotoQuery(new Request("https://aadhar.sh/photos/query.json?q=car"), env, context());
   assert.equal(response.status, 200);
+});
+
+// The archive the ranking tests run against. B exists to be a plausible WRONG
+// answer for "classic chrome": it carries both words in its caption without
+// being a Classic Chrome frame, which is exactly the confusion a joined
+// haystack cannot resolve and a field weighting can.
+function rankingEnv() {
+  _resetPhotoCaches();
+  return { ASSETS: staticAssets({
+    "/images/metadata.json": {
+      A: { camera: "X-T50", lens: "XF27mm", film: "Classic Chrome", date: "2026:01:02" },
+      B: { camera: "Leica Q3", lens: "Summilux", film: "Monochrome", date: "2025:01:02" },
+      C: { camera: "X-T5", lens: "XF18mm", film: "Classic Chrome", date: "2024:05:05" },
+    },
+    "/images/alt.json": {
+      A: "a bridge over a river",
+      B: "a chrome bumper on a classic car",
+      C: "a lamp on a desk",
+    },
+    "/images/hashes.json": {},
+  }) };
+}
+
+test("photo query scores each term independently instead of matching one substring", async () => {
+  // The regression this whole path exists for. The old haystack joined five
+  // fields and required `q` to appear inside the result CONTIGUOUSLY, so a
+  // query naming a film simulation and a subject could never match a photo that
+  // had both — the words were present but not adjacent.
+  const result = await queryPhotos(rankingEnv(), { q: "classic chrome bridge" });
+  assert.equal(result.ranking.mode, "all-terms");
+  assert.deepEqual(result.ranking.terms, ["classic", "chrome", "bridge"]);
+  assert.equal(result.total, 1);
+  assert.equal(result.photos[0].stem, "A");
+  // Scored on the film simulation AND the caption, which is the claim.
+  assert.deepEqual(result.photos[0].matched.slice().sort(), ["alt", "film"]);
+});
+
+test("photo ranking prefers the film simulation over the same words in a caption", async () => {
+  const result = await queryPhotos(rankingEnv(), { q: "classic chrome" });
+  assert.equal(result.total, 3, "all three mention both words somewhere");
+  // A and C are genuine Classic Chrome frames and outrank B, whose caption
+  // merely contains the words. A leads C on date, both leading B on score.
+  assert.deepEqual(result.photos.map((photo) => photo.stem), ["A", "C", "B"]);
+  assert.ok(result.photos[0].score > result.photos[2].score);
+  assert.deepEqual(result.photos[2].matched, ["alt"]);
+});
+
+test("photo query reports partial coverage rather than silently widening", async () => {
+  // "sunset" is in no field, so nothing covers both terms. The partial set is
+  // still the best available answer and comes back labelled as partial.
+  const result = await queryPhotos(rankingEnv(), { q: "monochrome sunset" });
+  assert.equal(result.ranking.mode, "partial");
+  assert.equal(result.photos[0].stem, "B");
+  assert.equal(result.photos[0].matched.includes("film"), true);
+  // Nothing matched at all is a different answer from partially matched, and a
+  // caller deciding whether to broaden its query needs the two kept apart.
+  const none = await queryPhotos(rankingEnv(), { q: "aurora borealis" });
+  assert.equal(none.ranking.mode, "no-match");
+  assert.equal(none.total, 0);
+});
+
+test("word boundaries keep chrome out of monochrome", async () => {
+  // A plain substring test passes every other assertion in this file and still
+  // scores every black-and-white frame as a Classic Chrome match, at the FILM
+  // weight — the highest there is — so the false hits outrank the true ones.
+  const result = await queryPhotos(rankingEnv(), { q: "chrome" });
+  assert.deepEqual(result.photos.map((photo) => photo.stem), ["A", "C", "B"]);
+  assert.equal(result.photos.find((photo) => photo.stem === "B").matched.includes("film"), false,
+    "B is a Monochrome frame and must not match on film");
+  // The digit-gated substring escape stays open for part numbers, which live
+  // inside a larger alphanumeric run with no boundary to match on.
+  const lens = await queryPhotos(rankingEnv(), { q: "27mm" });
+  assert.equal(lens.total, 1);
+  assert.equal(lens.photos[0].stem, "A");
+});
+
+test("photo query drops stopwords and says which it dropped", async () => {
+  const result = await queryPhotos(rankingEnv(), { q: "show me photos of a bridge" });
+  assert.deepEqual(result.ranking.terms, ["bridge"]);
+  assert.ok(result.ranking.dropped.includes("photos"));
+  assert.equal(result.total, 1);
+  assert.equal(result.photos[0].stem, "A");
+  // A query that is nothing BUT stopwords must not score every photo on noise.
+  const empty = await queryPhotos(rankingEnv(), { q: "show me some photos" });
+  assert.equal(empty.ranking.mode, "no-terms");
+  assert.equal(empty.total, 0);
+});
+
+test("photo query omits score entirely when nothing was ranked", async () => {
+  // Absent, not zero — the same rule lens follows for a phase it never ran.
+  const result = await queryPhotos(rankingEnv(), { film: "classic" });
+  assert.equal(result.ranking.mode, "filters-only");
+  assert.equal(result.total, 2);
+  assert.equal("score" in result.photos[0], false);
+  assert.equal("matched" in result.photos[0], false);
+  // Filters stay exact even while `q` is ranked, so a filter cannot be widened
+  // into a near miss.
+  assert.deepEqual(result.photos.map((photo) => photo.stem), ["A", "C"]);
+});
+
+test("a term that matches most of the corpus in a field stops counting there", async () => {
+  // The live failure: every Fuji recipe card carries "Exposure Compensation",
+  // so "long exposure" matched "exposure" in 151 of 158 cards and returned the
+  // entire archive ranked by a word that distinguished nothing. Nothing in the
+  // archive is a long exposure, so the only correct total is zero.
+  _resetPhotoCaches();
+  const metadata = {};
+  const alt = {};
+  for (let i = 0; i < 8; i += 1) {
+    metadata[`P${i}`] = {
+      camera: "X-T50", film: i < 4 ? "Classic Chrome" : "Nostalgic Neg",
+      date: `2026:01:0${i + 1}`,
+      recipe: { "Exposure Compensation": "0", "Color Chrome Effect": "Strong" },
+    };
+    alt[`P${i}`] = "a street";
+  }
+  const env = { ASSETS: staticAssets({
+    "/images/metadata.json": metadata, "/images/alt.json": alt, "/images/hashes.json": {},
+  }) };
+  const flood = await queryPhotos(env, { q: "long exposure" });
+  assert.equal(flood.total, 0, "a universal recipe word must not drag in the archive");
+  assert.equal(flood.ranking.mode, "no-match");
+  assert.deepEqual(flood.ranking.common, ["exposure"]);
+
+  // Suppression is per FIELD, not per term. "chrome" is in all 8 recipe cards
+  // AND is the film simulation of 4 of them; killing the term outright would
+  // blind the query to exactly the photos it describes best.
+  _resetPhotoCaches();
+  const film = await queryPhotos(env, { q: "classic chrome" });
+  assert.equal(film.total, 4);
+  assert.deepEqual(film.photos[0].matched, ["film"]);
+  assert.equal("common" in film.ranking, false);
+
+  // A term nothing has is ABSENT, not common, and the two must not be conflated
+  // — one says broaden your query, the other says this word is useless here.
+  _resetPhotoCaches();
+  const missing = await queryPhotos(env, { q: "aurora" });
+  assert.equal(missing.ranking.mode, "no-match");
+  assert.equal("common" in missing.ranking, false);
+});
+
+test("photo query reports whether the offline semantic tier is present", async () => {
+  const bare = await queryPhotos(rankingEnv(), { q: "bridge" });
+  assert.equal(bare.ranking.semantic, false, "no semantics.json shipped");
+  _resetPhotoCaches();
+  const env = { ASSETS: staticAssets({
+    "/images/metadata.json": { A: { camera: "X-T50", film: "Classic Chrome", date: "2026:01:02" } },
+    "/images/alt.json": { A: "a bridge over a river" },
+    "/images/hashes.json": {},
+    "/images/semantics.json": { A: { terms: "span crossing viaduct overpass" } },
+  }) };
+  const expanded = await queryPhotos(env, { q: "viaduct" });
+  assert.equal(expanded.ranking.semantic, true);
+  assert.equal(expanded.total, 1, "matched a word that appears in no caption or EXIF field");
+  assert.deepEqual(expanded.photos[0].matched, ["expansion"]);
 });
 
 function coffeeEnv() {
