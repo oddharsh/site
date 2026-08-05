@@ -443,8 +443,15 @@ async function inspectLensRequest(request, env, ctx) {
     return { status: 429, payload: { ok: false, error: "Slow down — 30 lookups a minute. Try again shortly." } };
   }
 
+  // ?phases=page returns only what derives from the page's own bytes: one
+  // subrequest instead of twenty-eight. The UI asks for this first so readiness
+  // paints at ~29ms rather than behind a 656ms fan-out, then asks for the rest.
+  const phases = new URL(request.url).searchParams.get("phases") === "page"
+    ? ["page"]
+    : undefined;
+
   try {
-    return { status: 200, payload: await lensInspect(v.url, env) };
+    return { status: 200, payload: await lensInspect(v.url, env, phases ? { phases } : {}) };
   } catch (e) {
     const msg = e && e.name === "AbortError" ? "The site took too long to answer (8s timeout)." : (e && e.message) || String(e);
     return { status: 502, payload: { ok: false, error: msg } };
@@ -1442,6 +1449,10 @@ export function lensObservationSummary(result) {
       if (!base || !rate) return null;
       return { tokens: base.tokens, usdPerRead: +(base.tokens / 1e6 * rate.usdPerMtok).toFixed(4), model: rate.model };
     })(),
+    // Carried so a caller can tell a zero from an absence. Without it a
+    // page-only scan reports `doors: 0` and `readiness: null`, which reads as a
+    // verdict rather than as "that phase did not run".
+    phases: result?.phases || { page: true, discovery: true, botViews: true },
     surfaces: {
       llms: !!result?.discovery?.llmsTxt?.ok,
       markdown: !!result?.agent?.mdNegotiation?.supported,
@@ -1628,6 +1639,23 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
     out.cost = lensCost({ raw: body.length });
   }
 
+  // ── the probe/derive seam ─────────────────────────────────────────────
+  // Everything above this line DERIVES from bytes already in hand: anatomy,
+  // structured data, markdown, token cost. Zero further network. Everything
+  // below needs the fan-out.
+  //
+  // A caller that only wants the derived half can stop here and pay one
+  // subrequest instead of twenty-eight, which is what lets a UI paint readiness
+  // immediately and fill the rest in behind it.
+  //
+  // The fields below are then ABSENT rather than empty. That distinction is the
+  // whole reason this is a phase flag and not a filter: a readiness score
+  // computed without discovery is not a partial score, it is a WRONG one, and
+  // `doors: 0` would read as "this site has no agent doors" when it means
+  // "nobody looked". Same rule as lib/doors.js's shut-versus-unread.
+  out.phases = { page: true, discovery: false, botViews: false };
+  if (opts.phases && !opts.phases.includes("discovery")) return out;
+
   // site-level discovery — probe the origin's well-known files + agent doors
   // in parallel.
   // re-validate the FINAL url before probing its origin: the input allowlist only
@@ -1689,6 +1717,10 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
           : span("lens.discovery.bot_views", () => lensProbeBotViews(finalUrl, env)),
       ]);
     });
+
+    out.phases.discovery = true;
+    out.phases.botViews = Array.isArray(botViews) && botViews.length > 0;
+    out.phases.discoveryCached = !!disco.cached;
 
     const feeds = (out.structured?.relLinks || []).filter((l) =>
       /alternate/.test(l.rel) && /(rss|atom|feed|\+xml|\+json)/i.test((l.type || "") + " " + (l.href || "")));
