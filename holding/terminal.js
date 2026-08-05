@@ -166,6 +166,10 @@
     "  Driving a program — arrow keys, or:",
     "    keys <sequence>       e.g. keys 2jj<cr>   (1-9 pane, j/k move, <cr> open, h back)",
     "",
+    "  Just type a question. Anything that is not a command below is an ask:",
+    "    ask <question>        plain language -> real tool calls -> an answer,",
+    "                          with every call it made printed above the answer",
+    "",
     "  Being the agent — these are the real requests, not a demo.",
     "    get <path>            fetch a page as an agent does (Accept: text/markdown)",
     "    mcp                   list the MCP tools this origin serves",
@@ -215,6 +219,15 @@
     lens: function (args) {
       if (!args[0]) { write("usage: lens <url>", "ps-err"); return; }
       return runProgram("lens", "url=" + encodeURIComponent(args[0]));
+    },
+
+    // Plain language in. This is also what an unrecognised line falls through
+    // to, so the console reads as something you talk to rather than something
+    // you have to know the verbs for.
+    ask: function (args) {
+      var q = args.join(" ").trim();
+      if (!q) { write("usage: ask <question>   e.g. ask what does he write about", "ps-err"); return; }
+      return runProgram("ask", "q=" + encodeURIComponent(q));
     },
 
     keys: function (args) {
@@ -306,13 +319,13 @@
     if (!args.length) return;
     var name = args[0].toLowerCase();
     var command = COMMANDS[name];
-    if (!command) {
-      write("");
-      write("  " + args[0] + " : The term '" + args[0] + "' is not recognized as a command.", "ps-err");
-      write("  Try `help`.", "ps-dim");
-      write("");
-      return;
-    }
+    // An unrecognised line is a QUESTION, not an error. PowerShell would tell
+    // you the term is not recognized, and that is the right behaviour for a
+    // shell whose whole vocabulary is verbs -- but this console's point is that
+    // you can throw plain language at the site, so the fallthrough is `ask`
+    // rather than a scolding. The frame it prints names every tool the ask
+    // touched, so a typo is legible as a typo instead of vanishing.
+    if (!command) return COMMANDS.ask(args);
     try {
       await command(args.slice(1));
     } catch (e) {

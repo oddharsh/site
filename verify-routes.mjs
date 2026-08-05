@@ -170,6 +170,14 @@ const ROUTES = [
   // A refused target must be refused BEFORE anything is fetched, and must come
   // back as a frame rather than a stack trace.
   { path: "/terminal/lens?plain=1&url=javascript%3Aalert(1)", status: 200, ct: "text/plain", marker: "refused" },
+  // ask: the natural-language door. Asserted on the ROUTER path, which is what
+  // answers when no model is bound — CI has none, and that is the point of the
+  // fallback existing. The bare form must explain itself rather than 503.
+  { path: "/terminal/ask?plain=1", status: 200, ct: "text/plain", marker: "plain language" },
+  { path: "/terminal/ask?plain=1&q=what+does+he+write+about", status: 200, ct: "text/plain", marker: "what the agent did" },
+  // The mode line is load-bearing: it is how a reader knows whether a model or a
+  // keyword picked the tool. A frame that stopped saying so would still look right.
+  { path: "/terminal/ask?plain=1&q=photos+on+acros", status: 200, ct: "text/plain", marker: "mode " },
   { path: "/terminal/nope", status: 404, ct: "text/plain" },
   { path: "/terminal.md", status: 200, ct: "text/markdown", marker: "State is a URL, not a session" },
   // The browser arm of the same route. One renderer feeds both, so this asserts

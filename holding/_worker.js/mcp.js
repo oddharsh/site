@@ -1,13 +1,8 @@
 // The canonical site-level MCP surface. It is intentionally stateless and
 // read-only: one JSON-RPC request in, one JSON response out, with the same
 // functions used by the corresponding HTTP endpoints.
-import { readAroundChanges } from "./around.js";
-import { readCoffeeAvailability } from "./coffee.js";
-import { LENS_BUDGETS, compareLensTargets, lensInspect, lensObservationSummary, overLensBudget, validateLensTarget } from "./lens.js";
 import { jsonResponse } from "./lib/http.js";
-import { queryPhotos } from "./photos.js";
-import { RN_FALLBACK, getTracksSWR } from "./rn.js";
-import { searchSite } from "./search.js";
+import { DATA_TOOLS, DATA_TOOL_NAMES, callDataTool } from "./lib/tools.js";
 import { terminalToolFrame } from "./terminal.js";
 import { AGENT_SURFACES } from "./lib/site-manifest.js";
 import { CACHE_EMPTY, CACHE_LIVE, CACHE_STATIC, mcpCorsHeaders, mcpGate, mcpServer } from "./lib/mcp-protocol.js";
@@ -43,41 +38,7 @@ const CACHE_PROMPTS   = CACHE_EMPTY;
 const MCP_MAX_BATCH = 16;
 
 const MCP_TOOLS = [
-  {
-    name: "search_site",
-    description: "Search the public pages, writing, garage notes, and utility descriptions on aadhar.sh.",
-    inputSchema: { type: "object", properties: { q: { type: "string", description: "case-insensitive search query" }, limit: { type: "integer", minimum: 1, maximum: 50 } }, required: ["q"] },
-  },
-  {
-    name: "now_playing",
-    description: "Read the cached current rn playlist and its tracks. A cold cache may refresh from the public Spotify embed using AadharshBot.",
-    inputSchema: { type: "object", properties: {} },
-  },
-  {
-    name: "photo_query",
-    description: "Query the published photo archive by caption, camera, lens, film simulation, film-recipe setting, or date range. Each result carries a `recipe` card naming the in-camera settings the shot was made with, so a look can be read back and re-shot. GPS and unlisted EXIF fields are never returned.",
-    inputSchema: { type: "object", properties: { q: { type: "string" }, camera: { type: "string" }, lens: { type: "string" }, film: { type: "string", description: "film simulation name, e.g. \"Classic Chrome\", \"Nostalgic Neg\", \"Acros\"" }, recipe: { type: "string", description: "substring match anywhere in the recipe card, e.g. \"DR400\", \"Clarity: -2\", \"Grain Effect: Strong, Large\", \"+2 Red\"" }, from: { type: "string", description: "inclusive YYYY-MM-DD prefix" }, to: { type: "string", description: "inclusive YYYY-MM-DD prefix" }, limit: { type: "integer", minimum: 1, maximum: 100 }, offset: { type: "integer", minimum: 0, maximum: 10000 } } },
-  },
-  {
-    name: "coffee_availability",
-    description: "Read bookable coffee slots in the host timezone. If the calendar is stale or unavailable, the result is explicitly unavailable and contains no slots.",
-    inputSchema: { type: "object", properties: {} },
-  },
-  {
-    name: "change_radar",
-    description: "Read the bounded historical diff of the latest AadharshBot neighborhood observations. Raw crawled bodies are not stored or returned.",
-    inputSchema: { type: "object", properties: { limit: { type: "integer", minimum: 1, maximum: 100 } } },
-  },
-  {
-    name: "lens_inspect",
-    description: "Inspect one public HTTP(S) URL through Lens and return a compact agent-readiness observation. Private, local, and non-HTTP targets are rejected.",
-    inputSchema: { type: "object", properties: { url: { type: "string" } }, required: ["url"] },
-  },
-  {
-    name: "lens_compare",
-    description: "Inspect two public HTTP(S) URLs and compare status, content, readiness, spectrum, agent doors, and discovery surfaces.",
-    inputSchema: { type: "object", properties: { left: { type: "string" }, right: { type: "string" } }, required: ["left", "right"] },
-  },
+  ...DATA_TOOLS,
   // ── the terminal programs ───────────────────────────────────────────────
   // These return a rendered 80-column FRAME as text, not a record. That is the
   // point rather than a limitation: the frame names its own controls, so a
@@ -172,34 +133,11 @@ function errorResult(message) { return { _error: String(message).slice(0, 400) }
 
 async function callTool(name, args, request, env, ctx) {
   args = args && typeof args === "object" ? args : {};
-  if (name === "search_site") return searchSite(env, args.q, args.limit);
-  if (name === "photo_query") return queryPhotos(env, args, ctx);
-  if (name === "coffee_availability") return readCoffeeAvailability(env, ctx);
-  if (name === "change_radar") return readAroundChanges(env, args.limit);
-  if (name === "now_playing") {
-    const playlistId = env.RN_KV ? await env.RN_KV.get("playlist-id") : null;
-    const pid = /^[0-9A-Za-z]{22}$/.test(playlistId || "") ? playlistId : RN_FALLBACK.split("/").pop();
-    try {
-      const tracks = await getTracksSWR(env, ctx, pid, { buildOnMiss: true });
-      return tracks || { available: false, playlist_id: pid, tracks: [] };
-    } catch { return errorResult("the playlist is temporarily unavailable"); }
-  }
-  if (name === "lens_inspect") {
-    const target = validateLensTarget(args.url || "");
-    if (!target.ok) return errorResult(target.error);
-    if (await overLensBudget(LENS_BUDGETS.inspect, request, env)) return errorResult("Lens lookups are rate-limited to 30/min, shared with /lens/fetch.");
-    try { return lensObservationSummary(await lensInspect(target.url, env, { skipBotViews: true })); }
-    catch { return errorResult("Lens inspection failed."); }
-  }
-  if (name === "lens_compare") {
-    const left = validateLensTarget(args.left || "");
-    const right = validateLensTarget(args.right || "");
-    if (!left.ok) return errorResult(`left: ${left.error}`);
-    if (!right.ok) return errorResult(`right: ${right.error}`);
-    if (await overLensBudget(LENS_BUDGETS.compare, request, env)) return errorResult("Lens comparisons are rate-limited to 4/min, shared with /lens/compare.");
-    try { return await compareLensTargets(left.url, right.url, env); }
-    catch { return errorResult("Lens comparison failed."); }
-  }
+  // The seven data tools live in lib/tools.js, because /terminal/ask calls the
+  // same seven through the same function. Dispatching them here would mean two
+  // switch statements that have to agree.
+  if (DATA_TOOL_NAMES.has(name)) return callDataTool(name, args, request, env, ctx);
+
   // The three frame tools share one implementation, because the HTTP route and
   // the tool are the same program read through different doors. terminal_lens does
   // NOT get its own rate-limit check here: lensFrame calls the same

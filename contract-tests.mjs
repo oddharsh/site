@@ -27,6 +27,8 @@ import { sign } from "./cal/src/sign.js";
 import { AGENT_SURFACES, WEBMENTION_PATHS } from "./holding/_worker.js/lib/site-manifest.js";
 import { handleWritingIndex } from "./holding/_worker.js/writing.js";
 import { handleTerminal, tokenizeKeys } from "./holding/_worker.js/terminal.js";
+import { ASK_LIMITS, runAsk } from "./holding/_worker.js/ask.js";
+import { DATA_TOOLS } from "./holding/_worker.js/lib/tools.js";
 import { cronJob } from "./holding/_worker.js/lib/cron.js";
 import { serveStaticPage } from "./holding/_worker.js/lib/assets.js";
 import { serveMarkdown } from "./holding/_worker.js/home.js";
@@ -2398,9 +2400,18 @@ test("every /access device previews a cost, and the clause order its parser depe
 // Run, so "fails open when the binding is missing" and "the 429 quotes the real
 // ceiling" are both worth pinning.
 
-test("LENS_BUDGETS ceilings match the ratelimits declared in both wrangler configs", async () => {
+test("every rate-limit ceiling matches the ratelimits declared in both wrangler configs", async () => {
   const { LENS_BUDGETS } = await import("./holding/_worker.js/lens.js");
+  const { ASK_BUDGET } = await import("./holding/_worker.js/ask.js");
   const { parseJsonc } = await import("./scripts/lib/jsonc.mjs");
+
+  // EVERY per-IP budget on the site, not just Lens's. The orphan check at the
+  // bottom is the reason this has to be exhaustive: it fails on any declared
+  // limiter no code reads, which is what caught ASK_RL the moment it was
+  // declared and would catch the next one too. A budget that lives in a module
+  // this list forgets reads as an orphan and fails here, which is the correct
+  // and cheap way to find out.
+  const BUDGETS = { ...LENS_BUDGETS, ask: ASK_BUDGET };
 
   // The number in LENS_BUDGETS is what the 429 message quotes; the number in
   // wrangler.jsonc is what actually limits. A message that disagrees with the
@@ -2410,18 +2421,18 @@ test("LENS_BUDGETS ceilings match the ratelimits declared in both wrangler confi
     assert.ok(Array.isArray(declared) && declared.length, `${config} declares no ratelimits`);
     const byName = new Map(declared.map((r) => [r.name, r]));
 
-    for (const [budget, { binding, max }] of Object.entries(LENS_BUDGETS)) {
+    for (const [budget, { binding, max }] of Object.entries(BUDGETS)) {
       const rule = byName.get(binding);
-      assert.ok(rule, `${config} has no ratelimit named ${binding} for LENS_BUDGETS.${budget}`);
+      assert.ok(rule, `${config} has no ratelimit named ${binding} for budget ${budget}`);
       assert.equal(rule.simple?.limit, max,
         `${config} limits ${binding} to ${rule.simple?.limit} but the 429 message says ${max}`);
       // The binding supports 10 or 60 only, and every budget here is per-minute.
       assert.equal(rule.simple?.period, 60, `${binding} must use the 60s period`);
     }
     // No orphans: a declared limiter nothing reads is a limit nobody enforces.
-    const used = new Set(Object.values(LENS_BUDGETS).map((b) => b.binding));
+    const used = new Set(Object.values(BUDGETS).map((b) => b.binding));
     for (const name of byName.keys()) {
-      assert.ok(used.has(name), `${config} declares ${name} but no LENS_BUDGETS entry uses it`);
+      assert.ok(used.has(name), `${config} declares ${name} but no budget in this test uses it`);
     }
   }
 });
@@ -2845,5 +2856,147 @@ test("the tui frame never renders a photo field the public projection withholds"
   assert.ok(text.includes("Classic Chrome"), "the frame did not render at all");
   for (const secret of ["40.7128", "-74.0060", "SECRET123"]) {
     assert.ok(!text.includes(secret), `the frame leaked a withheld field: ${secret}`);
+  }
+});
+
+// ── /terminal/ask — the natural-language door ────────────────────────────
+// Every test here runs the ROUTER path (no AI binding), which is the mode CI
+// and local dev get. That is deliberate rather than a limitation: the router is
+// the fallback the whole route rests on when the model is unavailable, and it
+// is the only half that can be asserted deterministically.
+
+test("an ask routes to a plausible tool and never invents an answer", async () => {
+  const env = terminalEnv();
+  const cases = [
+    ["what does he think about lattices", "search_site"],
+    ["photos shot on classic chrome", "photo_query"],
+    ["when can i get coffee", "coffee_availability"],
+    ["what is he listening to right now", "now_playing"],
+    ["how does https://example.com read to a machine", "lens_inspect"],
+    ["what changed in the neighborhood", "change_radar"],
+  ];
+  for (const [question, expected] of cases) {
+    const result = await runAsk(question, terminalReq("/terminal/ask"), env, context());
+    assert.equal(result.mode, "router", question);
+    assert.equal(result.steps[0]?.tool, expected, `"${question}" routed to ${result.steps[0]?.tool}`);
+    // With no model there is nothing that COULD write prose, so the route must
+    // hand back the tool result and no answer. A non-empty answer here would
+    // mean something fabricated one.
+    assert.equal(result.answer, "", `"${question}" produced prose with no model bound`);
+  }
+});
+
+test("a film simulation reaches photo_query's film field, not its free-text q", async () => {
+  // photo_query matches q as ONE substring, so "photos shot classic chrome"
+  // as free text matches nothing. This is the regression that cost 42 frames.
+  const env = terminalEnv();
+  const filmed = await runAsk("photos shot on classic chrome", terminalReq("/terminal/ask"), env, context());
+  assert.equal(filmed.steps[0].args.film, "classic chrome");
+  assert.ok(!filmed.steps[0].args.q, "a named film must not also go to q");
+  assert.ok(filmed.result.total > 0, "the film route returned nothing");
+
+  // And an unnamed subject falls back to ONE keyword rather than the phrase.
+  const loose = await runAsk("show me photos of a doorway", terminalReq("/terminal/ask"), env, context());
+  assert.equal(loose.steps[0].tool, "photo_query");
+  assert.ok(!/\s/.test(loose.steps[0].args.q || ""), `q must be a single keyword, got "${loose.steps[0].args.q}"`);
+});
+
+test("a tool that throws degrades to a message, not a 500 for the whole ask", async () => {
+  // coffee_availability throws with no BOOKINGS binding. /mcp survives that at
+  // the JSON-RPC envelope; an ask has no envelope, so it catches per call.
+  const result = await runAsk("when can i get coffee", terminalReq("/terminal/ask"), { ASSETS: terminalEnv().ASSETS }, context());
+  assert.equal(result.steps[0].tool, "coffee_availability");
+  assert.match(result.steps[0].summary, /unavailable/);
+  const res = await terminalGet("/terminal/ask?plain=1&q=when+can+i+get+coffee");
+  assert.equal(res.status, 200, "a throwing tool must not take the frame down");
+});
+
+test("an ask is bounded on every axis that costs money", async () => {
+  // The one public route here that spends per request. Each bound is separate
+  // and each one is the only thing standing between a public LLM endpoint and
+  // somebody else's bill.
+  assert.ok(ASK_LIMITS.query <= 500 && ASK_LIMITS.calls <= 6 && ASK_LIMITS.rounds <= 3);
+  const long = "x".repeat(5000);
+  const result = await runAsk(long, terminalReq("/terminal/ask"), terminalEnv(), context());
+  assert.equal(result.question.length, ASK_LIMITS.query, "the query was not truncated");
+  // An empty question does no work at all rather than routing to a search for "".
+  const empty = await runAsk("   ", terminalReq("/terminal/ask"), terminalEnv(), context());
+  assert.equal(empty.mode, "empty");
+  assert.equal(empty.steps.length, 0);
+});
+
+test("the ask frame prints the tool call it made, and how to reproduce it", async () => {
+  // The trace is the reason this is a console rather than a chat box. A frame
+  // that printed only the answer would be the thing this surface exists not to be.
+  const text = await (await terminalGet("/terminal/ask?plain=1&q=what+does+he+think+about+lattices")).text();
+  assert.match(text, /what the agent did/);
+  assert.match(text, /search_site/);
+  assert.match(text, /reproduce this without a model/);
+  assert.match(text, /curl -sX POST aadhar\.sh\/mcp/);
+  // And it must say which mode produced it — model or keyword.
+  assert.match(text, /mode\s+router/);
+});
+
+test("the ask loop and the MCP server call ONE tool registry", async () => {
+  // lib/tools.js exists so a tool description cannot be reworded in one door and
+  // not the other. If either side grows a private list, this fails.
+  const env = terminalEnv();
+  const listed = (await (await handleSiteMcp(mcpPost({ jsonrpc: "2.0", id: 1, method: "tools/list", params: { ...MODERN_META } }), env, context())).json())
+    .result.tools.map((t) => t.name);
+  for (const tool of DATA_TOOLS) {
+    assert.ok(listed.includes(tool.name), `${tool.name} is in the ask catalog but not in tools/list`);
+    assert.ok(tool.description && tool.inputSchema, `${tool.name} must carry a description and a schema for function calling`);
+  }
+  const src = readFileSync("holding/_worker.js/mcp.js", "utf8");
+  assert.match(src, /from "\.\/lib\/tools\.js"/, "mcp.js must import the shared registry");
+  assert.ok(!/name: "search_site"/.test(src), "mcp.js re-declares a data tool instead of importing it");
+});
+
+test("the model loop parses both tool_call shapes Workers AI returns", async () => {
+  // THE riskiest assumption in the ask route, and the one that cannot be checked
+  // without a token: Workers AI has shipped a flat {name, arguments} and
+  // OpenAI's nested {function:{name, arguments}} across model families, with
+  // arguments as an object OR a JSON string. A model swap that changed the shape
+  // would not error — it would silently produce a no-tool answer for every
+  // question, which reads as "the model is being unhelpful" rather than as a
+  // parse bug. So the transport is stubbed and both shapes are pinned here.
+  const realFetch = globalThis.fetch;
+  const env = { ...terminalEnv(), CF_ACCOUNT_ID: "acct", WORKERS_AI_TOKEN: "tok" };
+
+  const shapes = [
+    { name: "search_site", arguments: { q: "lattice" } },                              // flat, object args
+    { function: { name: "search_site", arguments: '{"q":"lattice"}' } },               // nested, string args
+  ];
+  try {
+    for (const call of shapes) {
+      let turn = 0;
+      globalThis.fetch = async (url, init) => {
+        assert.match(String(url), /\/accounts\/acct\/ai\/run\//, "must call the account's AI endpoint");
+        assert.equal(JSON.parse(init.body).tools?.length, DATA_TOOLS.length, "the whole tool catalog must be offered");
+        turn += 1;
+        return Response.json(turn === 1
+          ? { result: { tool_calls: [call] } }
+          : { result: { response: "He writes about lattice cryptography." } });
+      };
+      const result = await runAsk("what about lattices", terminalReq("/terminal/ask"), env, context());
+      assert.equal(result.mode, "model", `shape ${JSON.stringify(call)} did not reach model mode`);
+      assert.equal(result.steps[0]?.tool, "search_site");
+      assert.deepEqual(result.steps[0]?.args, { q: "lattice" }, "arguments must normalize to an object");
+      assert.match(result.answer, /lattice/);
+    }
+
+    // A model that names a tool this site does not have must be refused, not
+    // dispatched. The catalog is the allowlist.
+    globalThis.fetch = async () => Response.json({ result: { tool_calls: [{ name: "rm_rf", arguments: {} }] } });
+    const refused = await runAsk("delete everything", terminalReq("/terminal/ask"), env, context());
+    assert.ok(refused.steps.some((s) => s.refused), "an unknown tool name must be refused");
+
+    // And a model that is simply down falls back to the router rather than 500ing.
+    globalThis.fetch = async () => new Response("upstream on fire", { status: 503 });
+    const down = await runAsk("what about lattices", terminalReq("/terminal/ask"), env, context());
+    assert.equal(down.mode, "router-fallback");
+    assert.equal(down.steps[0].tool, "search_site");
+  } finally {
+    globalThis.fetch = realFetch;
   }
 });

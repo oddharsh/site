@@ -31,6 +31,7 @@
 // a reader over public data, so that ceiling has not bound yet. It would bind
 // the moment one of these apps needed to WRITE something, and at that point the
 // answer is a real session rather than a longer query string.
+import { ASK_BUDGET, ASK_LIMITS, asAgentCall, runAsk } from "./ask.js";
 import { readAroundChanges } from "./around.js";
 import { readCoffeeAvailability } from "./coffee.js";
 import { LENS_BUDGETS, lensInspect, lensObservationSummary, overLensBudget, validateLensTarget } from "./lens.js";
@@ -38,7 +39,7 @@ import { lunaPage } from "./lib/chrome.js";
 import { escHtml } from "./lib/http.js";
 import { AGENT_SURFACES } from "./lib/site-manifest.js";
 import {
-  COLS, blank, emit, fit, keys as keyHints, kv, meter, pane, rows, rule, s, table, windowFrame, wrap,
+  COLS, blank, emit, fit, keys as keyHints, kv, meter, pane, rightTo, rows, rule, s, table, windowFrame, wrap,
 } from "./lib/tui.js";
 import { photoFacets, queryPhotos } from "./photos.js";
 import { RN_FALLBACK, getTracksSWR } from "./rn.js";
@@ -125,6 +126,8 @@ export function stateUrl(state, extra = {}) {
     put("page", state.page, 0); put("cursor", state.cursor, 0); put("open", state.open);
   } else if (state.app === "lens") {
     put("url", state.url); put("left", state.left); put("right", state.right);
+  } else if (state.app === "ask") {
+    put("q", state.q);
   }
   for (const [key, value] of Object.entries(extra)) put(key, value);
   const qs = params.toString();
@@ -659,6 +662,99 @@ export async function lensFrame(env, request, state, ctx) {
   return { title: `lens — ${obs.finalUrl || obs.url}`, body: lensReadout(obs), status: [keyHints([["&url=", "another target"]]), stateLine(state)] };
 }
 
+// ── ask: the natural-language door ────────────────────────────────────────
+// The frame leads with WHAT THE AGENT DID, not with the answer. That ordering
+// is the whole point of putting this in a console rather than in a chat box:
+// the interesting artifact is a machine choosing among seven tools and being
+// wrong or right in public, and an answer printed on its own hides exactly that.
+// The reproduce section closes the loop by naming the request an agent would
+// have sent to get the same thing without a model in the way.
+
+/** A compact rendering of one tool result, for the no-model path. */
+function resultRows(tool, out) {
+  if (!out || out._error) return [[s(out?._error || "the tool failed.", "bad")]];
+  const list = (items, line) => (items.length ? items.slice(0, 8).map(line) : [[s("nothing matched.", "dim")]]);
+  if (tool === "search_site") return list(out.results || [], (r) => [...fit([s(r.title || "")], INNER - 30), s(r.url || "", "accent")]);
+  if (tool === "photo_query") return list(out.photos || [], (p) => [...fit([s(p.stem, "strong")], 18), s(p.alt || "", "dim")]);
+  if (tool === "now_playing") return list(out.tracks || [], (t) => [...fit([s(t.name || "")], INNER - 26), s((t.artists || []).map((a) => a.name).join(", "), "dim")]);
+  if (tool === "coffee_availability") return out.available
+    ? list(out.slots || [], (slot) => [s(String(slot.start || ""))])
+    : [[s("no bookable slots published right now.", "warn")]];
+  if (tool === "change_radar") return list(out.changes || [], (c) => [...fit([s(c.host || c.url || "")], 32), s(c.kind || "", "dim")]);
+  if (tool === "lens_inspect") return lensReadout(out);
+  return [[s("done.", "dim")]];
+}
+
+const MODE_NOTE = {
+  model: "a model chose the tools",
+  router: "NO MODEL IS BOUND HERE, so the tool was chosen by keyword",
+  "router-fallback": "the model was unavailable, so the tool was chosen by keyword",
+  limited: "rate limited",
+  empty: "",
+};
+
+export async function askFrame(env, request, state, ctx) {
+  if (!state.q.trim()) {
+    return {
+      title: "ask — plain language, real tools",
+      body: rows(
+        ...wrap("Ask this site something in plain language. It picks from the same seven tools an external agent gets at /mcp, calls them, and answers from what came back — and prints every call it made, so you can see the machine work rather than take its word.", INNER).map((row) => [s(row)]),
+        blank(),
+        [s("  curl 'aadhar.sh/terminal/ask?q=what+does+he+write+about'", "accent")],
+        [s("  curl 'aadhar.sh/terminal/ask?q=photos+shot+on+classic+chrome'", "accent")],
+        [s("  curl 'aadhar.sh/terminal/ask?q=when+can+i+get+coffee'", "accent")],
+        blank(),
+        rule(INNER, "the rules it runs under"),
+        kv("grounding", "answers only from tool results; says so when the site is silent", INNER, { gutter: 12 }),
+        kv("bounds", `${ASK_LIMITS.query} chars in, ${ASK_LIMITS.calls} tool calls, ${ASK_LIMITS.rounds} rounds`, INNER, { gutter: 12 }),
+        kv("rate", `${ASK_BUDGET.max}/min per address — the tools underneath are not limited by this`, INNER, { gutter: 12 }),
+      ),
+      status: keyHints([["&q=", "ask something"]]),
+    };
+  }
+
+  const result = await runAsk(state.q, request, env, ctx);
+  const steps = result.steps || [];
+  const trace = steps.length
+    ? steps.map((step, i) => {
+      const args = JSON.stringify(step.args || {});
+      const head = `${String(i + 1).padStart(2)} `;
+      return [
+        s(head, "dim"),
+        ...fit([s(step.tool, step.refused ? "bad" : "strong"), s(" " + (args === "{}" ? "" : args), "dim")], INNER - head.length - 22),
+        ...rightTo([s(step.summary, "label")], 22),
+      ];
+    })
+    : [[s("no tool was called.", "dim")]];
+
+  return {
+    title: `ask — ${state.q}`,
+    body: rows(
+      rule(INNER, "what the agent did"),
+      trace,
+      blank(),
+      rule(INNER, "answer"),
+      // Two shapes, and which one appears says which mode ran. With a model the
+      // answer is prose it wrote from the results; without one there is no prose
+      // to write, so the RESULT itself stands in rather than a fabricated
+      // sentence. A router that invented an answer would be the one thing this
+      // whole surface is built not to do.
+      result.answer
+        ? rows(...wrap(result.answer, INNER).map((row) => [s(row)]))
+        : (steps.length && result.result ? resultRows(steps[0].tool, result.result) : [[s("no answer.", "dim")]]),
+      blank(),
+      rule(INNER, "reproduce this without a model"),
+      ...(steps.filter((step) => !step.refused).slice(0, 2).map((step) =>
+        [s(asAgentCall(step.tool, step.args), "accent")])),
+    ),
+    status: [
+      [s("mode ", "label"), s(result.mode, result.mode === "model" ? "ok" : "warn"),
+        s(`  ${MODE_NOTE[result.mode] || ""}`, "dim")],
+      stateLine(state),
+    ],
+  };
+}
+
 // ── the index frame ───────────────────────────────────────────────────────
 function indexFrame() {
   const app = (name, line) => rows(
@@ -676,6 +772,7 @@ function indexFrame() {
       app("finger", "Who runs this host: writing, reading, listening, photographs, neighborhood, availability, deploy log, and a search over all of it. Drivable — send keys, get the next frame."),
       app("photos", "The photo archive, filterable by film simulation, body, lens, and caption. Opening a frame shows its exposure and the in-camera recipe it was shot with."),
       app("lens", "Inspect any public URL the way a machine does: readability, agent doors, and what one scan of it costs to read."),
+      app("ask", "Plain language in, real tool calls out. Picks from the same seven tools /mcp exposes, calls them, answers from what came back, and prints every call it made."),
       rule(INNER, "driving"),
       ...wrap("?k=<one key> or ?keys=<up to 32>. Named keys: <cr> <esc> <tab> <sp>. Every frame prints the URL that produced it, so state is a link rather than a session. Add ?plain=1 to drop the ANSI colour.", INNER).map((row) => [s(row, "dim")]),
     ),
@@ -684,7 +781,7 @@ function indexFrame() {
 }
 
 // ── HTTP ──────────────────────────────────────────────────────────────────
-const TERMINAL_APPS = new Set(["finger", "photos", "lens"]);
+const TERMINAL_APPS = new Set(["finger", "photos", "lens", "ask"]);
 
 async function buildFrame(name, request, env, ctx, url) {
   const tokens = tokenizeKeys(url.searchParams.get("keys") ?? url.searchParams.get("k") ?? "");
@@ -693,6 +790,7 @@ async function buildFrame(name, request, env, ctx, url) {
   if (name === "finger") return fingerFrame(env, ctx, request, state, tokens);
   if (name === "photos") return photosFrame(env, ctx, state, tokens);
   if (name === "lens") return lensFrame(env, request, state, ctx);
+  if (name === "ask") return askFrame(env, request, state, ctx);
   return null;
 }
 

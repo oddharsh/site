@@ -18,6 +18,16 @@ ask for `text/html`.
 - **`/terminal/photos`** — the published photo archive, filterable by caption,
   film simulation, body, and lens. Opening a frame shows its exposure and the
   in-camera recipe the shot was made with.
+- **`/terminal/ask`** — plain language in, real tool calls out. Takes `?q=`. It
+  picks from the same seven tools listed at `/mcp`, calls them, and answers from
+  what came back — and prints every call it made above the answer, along with
+  the request you'd send to reproduce it without a model. Answers are grounded
+  in tool results only; when the tools return nothing, it says the site does not
+  answer that rather than guessing. Bounded at 240 characters in, 4 tool calls,
+  2 model rounds, and 10 asks/min per address. The tools underneath are not
+  limited by that — call `/mcp` directly if you want them without a model in the
+  way. With no model configured it still answers, routing by keyword instead,
+  and the frame says which mode produced it.
 - **`/terminal/lens`** — inspect one public URL the way a machine does:
   readability, agent doors, and what a single scan of it costs to read. Takes
   `?url=`. Private, local, and non-HTTP targets are refused, and lookups are
