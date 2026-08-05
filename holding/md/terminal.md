@@ -10,6 +10,30 @@ per-query.** There is no fixed document at `/terminal` to publish here. Fetch a
 frame directly instead: any of the URLs below returns `text/plain` unless you
 ask for `text/html`.
 
+## The console is an MCP client
+
+Typing `dict https://example.com/app.js` into the console at `/terminal` sends
+**the same JSON-RPC call an agent pointed at this origin would send**. Not a
+parallel API dressed up to look like one — one `POST /mcp`, `tools/call`, the
+tool named by the command. The console prints the request before it makes it, so
+you can copy it into curl.
+
+That is deliberate and it is the whole point of the surface. If the console had
+its own private endpoints, watching it would tell you nothing about what an agent
+gets, and the two could drift without anyone noticing. Sharing one door means a
+regression in the agent path breaks the console in front of you.
+
+**The MCP tool name is the route name.** What you type, what you curl, and what
+an agent calls are the same word:
+
+```
+finger  photos  lens  radar  dict  cache
+```
+
+A contract test asserts every tool with a route is reachable over MCP. `dict`
+and `cache` shipped for two commits with HTTP routes and no MCP entry, which
+made them invisible to exactly the caller this site is built for.
+
 ## Where the tools live
 
 Each tool is a **top-level utility**, next to `/lens` and `/photos` and

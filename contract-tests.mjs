@@ -2815,18 +2815,22 @@ test("an unknown program 404s and names the ones that exist", async () => {
   assert.equal(post.headers.get("allow"), "GET, HEAD");
 });
 
-test("every terminal_* tool the MCP server lists is one the server can actually call", async () => {
+test("every frame tool the MCP server lists is one the server can actually call", async () => {
   // tools/list is a promise. A tool advertised but not dispatched fails only
   // when a client believes the list and calls it — which is exactly the caller
   // this surface exists for.
   const env = terminalEnv();
   const listed = (await (await handleSiteMcp(mcpPost({ jsonrpc: "2.0", id: 1, method: "tools/list", params: { ...MODERN_META } }), env, context())).json())
-    .result.tools.map((tool) => tool.name).filter((name) => name.startsWith("terminal_"));
-  assert.deepEqual(listed, ["terminal_finger", "terminal_photos", "terminal_radar", "terminal_lens"]);
+    .result.tools.map((tool) => tool.name);
+  // The MCP tool name IS the route name. One vocabulary: what you type in the
+  // console, what you curl, and what an agent calls are the same word.
+  const FRAME_TOOLS = ["finger", "photos", "radar", "dict", "cache", "lens"];
+  for (const name of FRAME_TOOLS) assert.ok(listed.includes(name), `${name} has a route but is not an MCP tool`);
+  assert.ok(!listed.some((n) => n.startsWith("terminal_")), "tool names must match their routes, not the console");
 
-  for (const name of listed) {
-    const args = name === "terminal_lens" ? { url: "https://example.com" }
-      : name === "terminal_radar" ? { samples: [{ name: "AP", rssi: -58 }] }
+  for (const name of FRAME_TOOLS) {
+    const args = name === "lens" ? { url: "https://example.com" }
+      : name === "radar" ? { samples: [{ name: "AP", rssi: -58 }] }
       : {};
     const res = await handleSiteMcp(mcpPost({
       jsonrpc: "2.0", id: 2, method: "tools/call", params: { name, arguments: args, ...MODERN_META },
@@ -3608,4 +3612,19 @@ test("a frame's printed state is a root URL that resolves", async () => {
   assert.ok(printed, "no state URL printed");
   assert.ok(!printed.startsWith("/terminal/"), `state still points at the old namespace: ${printed}`);
   assert.match(printed, /^\/finger/);
+});
+
+test("every tool with a route is reachable over MCP, and vice versa", async () => {
+  // THE dogfood invariant. The console, curl, and an agent must all reach the
+  // same set — a tool with an HTTP route but no MCP entry is invisible to the
+  // exact caller this whole surface is built for. dict and cache shipped that
+  // way for two commits before this test existed.
+  const { TOOL_NAMES } = await import("./holding/_worker.js/terminal.js");
+  const listed = (await (await handleSiteMcp(mcpPost({ jsonrpc: "2.0", id: 1, method: "tools/list", params: { ...MODERN_META } }), terminalEnv(), context())).json())
+    .result.tools.map((t) => t.name);
+
+  for (const tool of TOOL_NAMES) {
+    if (tool === "ask") continue;   // ask is the model door; agents have their own
+    assert.ok(listed.includes(tool), `/${tool} has a route but no MCP tool — an agent cannot reach it`);
+  }
 });
