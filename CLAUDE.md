@@ -1168,4 +1168,23 @@ curated this folder; treat it as the canonical photo source.
   production half (running that program in a Worker Loader isolate with the MCP
   bound by RPC) sat in Cloudflare's closed beta, so it never wired into
   anything. Removed 2026-07-23 after a month unreferenced by any page, script,
-  or CI job. `git log --diff-filter=D -- codemode/` finds it if the beta opens.
+  or CI job. `git log --diff-filter=D -- codemode/` finds it.
+
+  **THE BETA OPENED (checked 2026-08-05) and the answer is still no, for a
+  different reason than before.** Code Mode is documented and shipping:
+  `@cloudflare/codemode` swaps individual tool calls for one `code()` tool run in
+  a Dynamic Worker Loader (isolates, <10ms start, no concurrency cap, ~$0.002 per
+  load). The blocker that parked this is gone.
+
+  What replaced it is a fit argument. Code Mode's win scales with CATALOG SIZE —
+  it exists so a model can drive a large API without spending its context on
+  forty schemas. `/terminal/ask` has SEVEN read-only tools, whose whole schema
+  set is smaller than the prompt describing Code Mode, so the direct loop in
+  ask.js is both cheaper and simpler. It also runs MODEL-AUTHORED CODE, which is
+  sandboxed and defensible but is the opposite of the "bounded catalog, not a
+  shell" stance ask.js is built on, and $0.002 a call is real money on a public
+  endpoint that is trying to be near-free.
+
+  Revisit if either premise changes: the catalog grows past ~20 tools, or the ask
+  loop starts needing to CHAIN calls (its 4-call/2-round cap is exactly the
+  symptom Code Mode cures).
