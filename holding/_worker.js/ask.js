@@ -181,7 +181,17 @@ const asFunctions = () => DATA_TOOLS.map((tool) => ({
  *
  * Same shape as /ledger's Analytics Engine reads: CF_ACCOUNT_ID as a var, the
  * token as a secret, and the whole feature degrading rather than erroring when
- * the secret is absent. Scope the token to Workers AI:Read and nothing else.
+ * the secret is absent.
+ *
+ * SCOPES: `Workers AI - Read` AND `Workers AI - Edit`, both account-level.
+ * Inference is a POST and Cloudflare classes running a model as a write, so Read
+ * alone 403s here — the dashboard's "Workers AI" token template sets both and is
+ * the path to use. That makes this the first Worker secret on this site carrying
+ * an Edit scope; ANALYTICS_READ_TOKEN and BILLING_READ_TOKEN are both Read-only.
+ * The Edit is confined to Workers AI, which is its own permission: it cannot
+ * publish a Worker, and it cannot reach KV, R2, or D1, each of which has its own
+ * Read/Edit pair. And it never goes near GitHub — CLAUDE.md's rule is that the
+ * CI token stays six reads, and this one lives on the Worker alone.
  */
 async function callModel(env, body) {
   const res = await fetch(

@@ -287,8 +287,19 @@
   //   ANALYTICS_READ_TOKEN  same shape: /ledger's SQL reads degrade without it.
   //   WORKERS_AI_TOKEN      /terminal/ask's model. Same shape again: without it the
   //                         ask route falls back to its keyword router and says so
-  //                         in the frame. Scope it to Workers AI:Read and nothing
-  //                         else, and keep it off the CI token.
+  //                         in the frame. Needs `Workers AI - Read` AND `Workers
+  //                         AI - Edit`, both account-level: inference is a POST
+  //                         and Cloudflare classes running a model as a write, so
+  //                         Read alone 403s. Use the dashboard's "Workers AI"
+  //                         token template, which sets exactly those two.
+  //
+  //                         This is the FIRST Worker secret here with an Edit
+  //                         scope — ANALYTICS_READ_TOKEN and BILLING_READ_TOKEN
+  //                         are both Read. The Edit is confined to Workers AI,
+  //                         which is its own permission: it cannot publish a
+  //                         Worker and cannot reach KV, R2 or D1, each of which
+  //                         has a separate Read/Edit pair. Keep it off the CI
+  //                         token, which stays pinned at six reads in GitHub.
   //
   //                         WHY A TOKEN AND NOT THE `ai` BINDING, which is the
   //                         obvious way to do this and is what lwe-ask uses: the
