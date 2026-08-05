@@ -131,6 +131,12 @@ const ROUTES = [
     { path: "/lens-browser.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "LensBrowser" },
     { path: "/tooltip.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", maxBytes: 18000 },
     { path: "/tooltip.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "tooltip.js" },
+    // the PowerShell console. It is the only client script whose absence is
+    // INVISIBLE on the page it serves: /terminal server-renders its frame, so a
+    // missing terminal.js leaves a console that looks right and cannot be typed
+    // into. Asserted here because nothing on the page itself would notice.
+    { path: "/terminal.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "ps-console" },
+    { path: "/terminal.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "PowerShell" },
     { path: "/luna.src.css", status: 200, ct: "text/css", marker: "axp-desktop" },
   ] : []),
   // Representation contracts: the machine paths stay fixed even if a caller
@@ -143,6 +149,41 @@ const ROUTES = [
   { path: "/lens/browser?url=javascript%3Aalert(1)", status: 400, ct: "application/json", headers: { accept: "text/html" } },
   { path: "/lens/compare.json?left=javascript%3Aalert(1)&right=https%3A%2F%2Fexample.com", status: 400, ct: "application/json" },
   { path: "/mcp", status: 405, ct: "application/json" },
+
+  // ── the terminal programs ──────────────────────────────────────────────
+  // The first marker is a BOX-DRAWING character rather than prose, and that is
+  // deliberate: the failure these rows exist to catch is width math breaking,
+  // and a bottom-left corner only reaches the body if a complete frame was
+  // drawn. A row asserting a word would pass on a frame with no border at all.
+  // `plain=1` keeps every assertion off the ANSI escapes.
+  { path: "/terminal?plain=1", status: 200, ct: "text/plain", marker: "╚" },
+  { path: "/terminal/", status: 301 },   // routeDropSlash 301s to /terminal
+  { path: "/terminal/finger?plain=1", status: 200, ct: "text/plain", marker: "finger — aadharsh@aadhar.sh" },
+  // Driving. Two keys switch to the writing pane and open its first note, and
+  // the frame prints the state that produced it. If the key loop silently stops
+  // applying, every other row here still passes — the frame renders fine, it
+  // just renders the wrong one.
+  { path: "/terminal/finger?plain=1&keys=2%3Ccr%3E", status: 200, ct: "text/plain", marker: "pane=writing" },
+  { path: "/terminal/finger?plain=1&help=1", status: 200, ct: "text/plain", marker: "driving this thing" },
+  { path: "/terminal/photos?plain=1", status: 200, ct: "text/plain", marker: "photos — the archive" },
+  { path: "/terminal/lens?plain=1", status: 200, ct: "text/plain", marker: "the other web" },
+  // A refused target must be refused BEFORE anything is fetched, and must come
+  // back as a frame rather than a stack trace.
+  { path: "/terminal/lens?plain=1&url=javascript%3Aalert(1)", status: 200, ct: "text/plain", marker: "refused" },
+  // ask: the natural-language door. Asserted on the ROUTER path, which is what
+  // answers when no model is bound — CI has none, and that is the point of the
+  // fallback existing. The bare form must explain itself rather than 503.
+  { path: "/terminal/ask?plain=1", status: 200, ct: "text/plain", marker: "plain language" },
+  { path: "/terminal/ask?plain=1&q=what+does+he+write+about", status: 200, ct: "text/plain", marker: "what the agent did" },
+  // The mode line is load-bearing: it is how a reader knows whether a model or a
+  // keyword picked the tool. A frame that stopped saying so would still look right.
+  { path: "/terminal/ask?plain=1&q=photos+on+acros", status: 200, ct: "text/plain", marker: "mode " },
+  { path: "/terminal/nope", status: 404, ct: "text/plain" },
+  { path: "/terminal.md", status: 200, ct: "text/markdown", marker: "State is a URL, not a session" },
+  // The browser arm of the same route. One renderer feeds both, so this asserts
+  // the HTML wrapper is there — not that a second layout exists.
+  { path: "/terminal", status: 200, ct: "text/html", headers: { accept: "text/html" }, marker: "Courier New", fullPage: true },
+
   { path: "/search", status: 200, ct: "text/html", marker: "Search aadhar.sh", fullPage: true },
   { path: "/search.json?q=photo", status: 200, ct: "application/json" },
   // 200 text/plain when the x402 gate is unconfigured; 402 json once X402_PAY_TO is set

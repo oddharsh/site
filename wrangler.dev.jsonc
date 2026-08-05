@@ -47,7 +47,7 @@
       "/whoareyou", "/whoareyou.json", "/security",
       "/reading", "/updates", "/updates.json", "/restore",
       "/lens", "/lens/", "/lens/fetch", "/lens/shot", "/lens/browser", "/lens/compare.json",
-      "/lens/census", "/lens/census.json", "/mcp", "/search", "/search.json",
+      "/lens/census", "/lens/census.json", "/mcp", "/terminal", "/terminal/*", "/search", "/search.json",
       "/coffee", "/coffee/*", "/serendipity", "/serendipity/*",
       "/slots", "/book", "/approve", "/decline",
       "/llms-full.txt", "/ledger", "/ledger.json",
@@ -116,7 +116,8 @@
     { "name": "LENS_RL_INSPECT", "namespace_id": "1001", "simple": { "limit": 30, "period": 60 } },
     { "name": "LENS_RL_SHOT",    "namespace_id": "1002", "simple": { "limit": 8,  "period": 60 } },
     { "name": "LENS_RL_COMPARE", "namespace_id": "1003", "simple": { "limit": 4,  "period": 60 } },
-    { "name": "LENS_RL_BROWSER", "namespace_id": "1004", "simple": { "limit": 4,  "period": 60 } }
+    { "name": "LENS_RL_BROWSER", "namespace_id": "1004", "simple": { "limit": 4,  "period": 60 } },
+    { "name": "ASK_RL",           "namespace_id": "1005", "simple": { "limit": 10, "period": 60 } }
   ],
   "vars": {
     "HOST_TIMEZONE": "America/New_York",

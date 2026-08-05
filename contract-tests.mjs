@@ -26,6 +26,9 @@ import { citationsIn, findEndpointIn, SELF_LINK_HOSTS } from "./holding/_worker.
 import { sign } from "./cal/src/sign.js";
 import { AGENT_SURFACES, WEBMENTION_PATHS } from "./holding/_worker.js/lib/site-manifest.js";
 import { handleWritingIndex } from "./holding/_worker.js/writing.js";
+import { handleTerminal, tokenizeKeys } from "./holding/_worker.js/terminal.js";
+import { ASK_LIMITS, runAsk } from "./holding/_worker.js/ask.js";
+import { DATA_TOOLS } from "./holding/_worker.js/lib/tools.js";
 import { cronJob } from "./holding/_worker.js/lib/cron.js";
 import { serveStaticPage } from "./holding/_worker.js/lib/assets.js";
 import { serveMarkdown } from "./holding/_worker.js/home.js";
@@ -2397,9 +2400,18 @@ test("every /access device previews a cost, and the clause order its parser depe
 // Run, so "fails open when the binding is missing" and "the 429 quotes the real
 // ceiling" are both worth pinning.
 
-test("LENS_BUDGETS ceilings match the ratelimits declared in both wrangler configs", async () => {
+test("every rate-limit ceiling matches the ratelimits declared in both wrangler configs", async () => {
   const { LENS_BUDGETS } = await import("./holding/_worker.js/lens.js");
+  const { ASK_BUDGET } = await import("./holding/_worker.js/ask.js");
   const { parseJsonc } = await import("./scripts/lib/jsonc.mjs");
+
+  // EVERY per-IP budget on the site, not just Lens's. The orphan check at the
+  // bottom is the reason this has to be exhaustive: it fails on any declared
+  // limiter no code reads, which is what caught ASK_RL the moment it was
+  // declared and would catch the next one too. A budget that lives in a module
+  // this list forgets reads as an orphan and fails here, which is the correct
+  // and cheap way to find out.
+  const BUDGETS = { ...LENS_BUDGETS, ask: ASK_BUDGET };
 
   // The number in LENS_BUDGETS is what the 429 message quotes; the number in
   // wrangler.jsonc is what actually limits. A message that disagrees with the
@@ -2409,18 +2421,18 @@ test("LENS_BUDGETS ceilings match the ratelimits declared in both wrangler confi
     assert.ok(Array.isArray(declared) && declared.length, `${config} declares no ratelimits`);
     const byName = new Map(declared.map((r) => [r.name, r]));
 
-    for (const [budget, { binding, max }] of Object.entries(LENS_BUDGETS)) {
+    for (const [budget, { binding, max }] of Object.entries(BUDGETS)) {
       const rule = byName.get(binding);
-      assert.ok(rule, `${config} has no ratelimit named ${binding} for LENS_BUDGETS.${budget}`);
+      assert.ok(rule, `${config} has no ratelimit named ${binding} for budget ${budget}`);
       assert.equal(rule.simple?.limit, max,
         `${config} limits ${binding} to ${rule.simple?.limit} but the 429 message says ${max}`);
       // The binding supports 10 or 60 only, and every budget here is per-minute.
       assert.equal(rule.simple?.period, 60, `${binding} must use the 60s period`);
     }
     // No orphans: a declared limiter nothing reads is a limit nobody enforces.
-    const used = new Set(Object.values(LENS_BUDGETS).map((b) => b.binding));
+    const used = new Set(Object.values(BUDGETS).map((b) => b.binding));
     for (const name of byName.keys()) {
-      assert.ok(used.has(name), `${config} declares ${name} but no LENS_BUDGETS entry uses it`);
+      assert.ok(used.has(name), `${config} declares ${name} but no budget in this test uses it`);
     }
   }
 });
@@ -2652,5 +2664,339 @@ test("neither MCP server keeps a private copy of the protocol constants", async 
     assert.ok(/from ".*lib\/mcp-protocol\.js"/.test(src), `${file} must import the shared protocol module`);
     assert.ok(!/^const MCP_SUPPORTED\s*=/m.test(src), `${file} re-declares MCP_SUPPORTED instead of importing it`);
     assert.ok(!/^const MCP_PROTOCOL\s*=/m.test(src), `${file} re-declares MCP_PROTOCOL instead of importing it`);
+  }
+});
+
+// ── /terminal — the terminal programs ─────────────────────────────────────────
+// The renderer is pure and the apps are readers, so these run with stub assets
+// and no network. What they pin is the handful of properties a frame stops
+// being a frame without.
+
+const TERMINAL_ASSETS = {
+  "/writing/posts.json": [
+    { slug: "one", title: "The first note", date: "2026-01-02" },
+    { slug: "two", title: "The second note", date: "2026-02-03" },
+    { slug: "three", title: "The third note", date: "2026-03-04" },
+  ],
+  "/images/metadata.json": {
+    A_1: { camera: "FUJIFILM X-T5", lens: "XF27mmF2.8", film: "Classic Chrome", date: "2026:01:02", iso: 640, recipe: { "Film Simulation": "Classic Chrome", "Dynamic Range": "DR400" } },
+    A_2: { camera: "FUJIFILM X-T5", lens: "XF23mmF1.4", film: "Acros", date: "2025:05:06" },
+    A_3: { camera: "LEICA M11", lens: "Summicron 35", film: "", date: "2025:07:08" },
+  },
+  "/images/alt.json": { A_1: "A quiet corner", A_2: "Rain on glass", A_3: "A doorway" },
+  "/images/hashes.json": { A_1: { a: "1a1a1a1a", j: "2b2b2b2b", s: "3c3c3c3c" }, A_2: {}, A_3: {} },
+  "/search-index.json": { records: [{ url: "/writing/one", title: "The first note", description: "d", text: "lattice", kind: "writing" }] },
+};
+const terminalEnv = () => ({ ASSETS: staticAssets(TERMINAL_ASSETS) });
+const terminalReq = (path) => new Request(`https://aadhar.sh${path}`);
+const terminalGet = (path) => handleTerminal(terminalReq(path), terminalEnv(), context());
+
+// Every state worth drawing, so a width regression cannot hide in the one pane
+// nobody exercised. Panes that need network (reading, listening, around,
+// coffee) still render here — their loaders fail closed to an empty list, which
+// is itself the case worth pinning.
+const TERMINAL_STATES = [
+  "/terminal", "/terminal/finger", "/terminal/finger?help=1", "/terminal/finger?keys=q",
+  ...["overview", "writing", "reading", "listening", "photos", "around", "coffee", "deploys", "search"]
+    .map((pane) => `/terminal/finger?pane=${pane}`),
+  "/terminal/finger?pane=writing&keys=jj", "/terminal/finger?pane=writing&cursor=1&open=two",
+  "/terminal/finger?pane=search&q=lattice", "/terminal/finger?pane=search&q=lattice&open=0",
+  "/terminal/finger?pane=deploys&keys=G", "/terminal/finger?pane=photos",
+  "/terminal/photos", "/terminal/photos?film=acros", "/terminal/photos?keys=j%3Ccr%3E", "/terminal/photos?open=A_1",
+  "/terminal/photos?q=nothingmatchesthis", "/terminal/lens", "/terminal/lens?url=javascript%3Aalert(1)",
+];
+
+test("every frame is exactly 80 columns wide, in every state and both colour modes", async () => {
+  // THE structural invariant. A frame whose rows disagree on width is not a
+  // frame — the borders stop lining up and the box stops reading as a box. It
+  // breaks silently: the text is all still there, so nothing throws and no
+  // status code changes. Only counting catches it.
+  for (const path of TERMINAL_STATES) {
+    for (const plain of [true, false]) {
+      const res = await terminalGet(path + (path.includes("?") ? "&" : "?") + (plain ? "plain=1" : "plain=0"));
+      assert.equal(res.status, 200, path);
+      const text = await res.text();
+      // Strip SGR before measuring: an escape occupies bytes and zero columns,
+      // which is the exact confusion the span model exists to avoid.
+      const lines = text.replace(/\x1b\[[0-9;]*m/g, "").split("\n").filter((line) => line.length);
+      assert.ok(lines.length > 3, `${path} produced no frame`);
+      for (const line of lines) {
+        assert.equal([...line].length, 80, `${path} (plain=${plain}) drew a ${[...line].length}-column row: ${line}`);
+      }
+      assert.ok(lines[0].startsWith("╔") && lines.at(-1).startsWith("╚"), `${path} is missing its frame`);
+    }
+  }
+});
+
+test("plain mode emits no escape bytes, and colour mode actually emits them", async () => {
+  // Both halves matter. An escape leaking into an MCP result is noise a model
+  // then has to be robust to; a `?plain=1` that was silently the only mode
+  // would mean the ANSI path had quietly died and nobody noticed, because a
+  // colourless frame still reads fine.
+  const plain = await (await terminalGet("/terminal/finger?plain=1")).text();
+  assert.ok(!plain.includes("\x1b"), "plain=1 leaked an escape sequence");
+  const coloured = await (await terminalGet("/terminal/finger")).text();
+  assert.ok(coloured.includes("\x1b["), "the default HTTP frame lost its colour");
+  assert.equal(plain, coloured.replace(/\x1b\[[0-9;]*m/g, ""), "colour changed the text, not just its styling");
+});
+
+test("a frame's printed state is a URL that reproduces it", async () => {
+  // The whole session model rests on this. State is a link rather than a stored
+  // object, so a frame that prints a URL which does NOT come back to the same
+  // frame has broken resume, fork, and every "pass the url back" instruction in
+  // the MCP tool descriptions — while still looking completely correct.
+  for (const path of ["/terminal/finger?pane=writing&keys=jj", "/terminal/finger?pane=deploys&keys=G", "/terminal/photos?film=acros&keys=j"]) {
+    const first = await (await terminalGet(`${path}&plain=1`)).text();
+    const printed = first.match(/state (\/terminal\/[a-z]+(?:\?[^\s│║]*)?)/)?.[1];
+    assert.ok(printed, `${path} printed no state URL`);
+    // Replay the printed state with NO keys: same frame, minus the keystrokes.
+    const replayed = await (await terminalGet(printed + (printed.includes("?") ? "&" : "?") + "plain=1")).text();
+    assert.equal(replayed, first, `${path} does not reproduce from the URL it printed`);
+  }
+});
+
+test("key sequences are bounded and named keys parse", () => {
+  assert.deepEqual(tokenizeKeys("2jj<cr>"), ["2", "j", "j", "\r"]);
+  assert.deepEqual(tokenizeKeys("<esc><tab><sp>"), ["\x1b", "\t", " "]);
+  // An unknown <name> is not a key — it falls through to its literal characters
+  // rather than being silently dropped, so a typo shows up in the frame.
+  assert.deepEqual(tokenizeKeys("<nope>"), ["<", "n", "o", "p", "e", ">"]);
+  // The bound is what stops one request driving the pane loader indefinitely.
+  assert.equal(tokenizeKeys("j".repeat(500)).length, 32);
+  assert.deepEqual(tokenizeKeys(""), []);
+  assert.deepEqual(tokenizeKeys(null), []);
+});
+
+test("the tui routes refuse to be cached or indexed", async () => {
+  // A frame is per-query and several are live (playlist, calendar, lens). The
+  // route also negotiates on Accept, which a URL-keyed edge cache cannot
+  // represent — the same trap lib/cache.js documents for the markdown twins.
+  for (const path of ["/terminal", "/terminal/finger", "/terminal/photos"]) {
+    const res = await terminalGet(path);
+    assert.equal(res.headers.get("cache-control"), "no-store", path);
+    assert.equal(res.headers.get("x-robots-tag"), "noindex", path);
+    assert.equal(res.headers.get("vary"), "accept", path);
+  }
+});
+
+test("a browser gets the same frame a terminal does, not a second layout", async () => {
+  // The terminal view is only honest if there is one renderer. If the HTML arm
+  // ever grew its own layout, what a person sees and what an agent reads would
+  // start to differ, and the page would be claiming something untrue.
+  //
+  // The document's rows carry per-span <span class="c-*"> for colour, so this
+  // compares TEXT CONTENT rather than raw markup: strip the tags, unescape, and
+  // the browser's console scrollback must be the terminal's frame row for row.
+  // Comparing markup would only prove the two agree on styling, which is not the
+  // claim being made.
+  const html = await (await handleTerminal(new Request("https://aadhar.sh/terminal", { headers: { accept: "text/html" } }), terminalEnv(), context())).text();
+  const text = await (await terminalGet("/terminal?plain=1")).text();
+
+  const rowsInDoc = [...html.matchAll(/<div class="ps-line">([\s\S]*?)<\/div>\s*(?=<div class="ps-line">|<\/div>)/g)]
+    .map((m) => m[1].replace(/<[^>]+>/g, "").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, "&"));
+
+  for (const line of text.split("\n").filter(Boolean)) {
+    assert.ok(rowsInDoc.includes(line), `the HTML view dropped or altered a frame row: ${line}`);
+  }
+  // And the colour actually arrived — a document that rendered every row as bare
+  // text would pass the row comparison above while looking nothing like the
+  // frames the console prints once you type into it.
+  assert.ok(/<span class="c-bar">/.test(html), "the boot frame lost its span colouring");
+});
+
+test("an unknown program 404s and names the ones that exist", async () => {
+  const res = await terminalGet("/terminal/nope");
+  assert.equal(res.status, 404);
+  assert.match(await res.text(), /\/terminal/);
+  const post = await handleTerminal(new Request("https://aadhar.sh/terminal/finger", { method: "POST" }), terminalEnv(), context());
+  assert.equal(post.status, 405);
+  assert.equal(post.headers.get("allow"), "GET, HEAD");
+});
+
+test("every terminal_* tool the MCP server lists is one the server can actually call", async () => {
+  // tools/list is a promise. A tool advertised but not dispatched fails only
+  // when a client believes the list and calls it — which is exactly the caller
+  // this surface exists for.
+  const env = terminalEnv();
+  const listed = (await (await handleSiteMcp(mcpPost({ jsonrpc: "2.0", id: 1, method: "tools/list", params: { ...MODERN_META } }), env, context())).json())
+    .result.tools.map((tool) => tool.name).filter((name) => name.startsWith("terminal_"));
+  assert.deepEqual(listed, ["terminal_finger", "terminal_photos", "terminal_lens"]);
+
+  for (const name of listed) {
+    const args = name === "terminal_lens" ? { url: "https://example.com" } : {};
+    const res = await handleSiteMcp(mcpPost({
+      jsonrpc: "2.0", id: 2, method: "tools/call", params: { name, arguments: args, ...MODERN_META },
+    }), env, context());
+    const { result, error } = await res.json();
+    assert.ok(!error, `${name} is listed but not dispatched: ${JSON.stringify(error)}`);
+    // terminal_lens reaches a real fetch it cannot make here, so it is allowed to
+    // come back as a rendered failure — what it may NOT do is come back unknown.
+    const frame = result.structuredContent?.frame ?? "";
+    assert.ok(frame.includes("╔"), `${name} returned no frame`);
+    assert.ok(!frame.includes("\x1b"), `${name} returned ANSI escapes into a model context`);
+  }
+});
+
+test("the tui frame never renders a photo field the public projection withholds", async () => {
+  // photos.js keeps GPS and unlisted EXIF behind PHOTO_PUBLIC_FIELDS. The frame
+  // renders `photo.metadata`, so it inherits that projection — but it renders
+  // the RECIPE card by iterating keys, and an iteration is exactly the shape
+  // that picks up a field somebody adds later without meaning to publish it.
+  const env = { ASSETS: staticAssets({
+    ...TERMINAL_ASSETS,
+    "/images/metadata.json": {
+      A_1: {
+        camera: "FUJIFILM X-T5", film: "Classic Chrome", date: "2026:01:02",
+        gps: "40.7128,-74.0060", gpsLatitude: 40.7128, serialNumber: "SECRET123",
+        recipe: { "Film Simulation": "Classic Chrome" },
+      },
+    },
+  }) };
+  const text = await (await handleTerminal(terminalReq("/terminal/photos?open=A_1&plain=1"), env, context())).text();
+  assert.ok(text.includes("Classic Chrome"), "the frame did not render at all");
+  for (const secret of ["40.7128", "-74.0060", "SECRET123"]) {
+    assert.ok(!text.includes(secret), `the frame leaked a withheld field: ${secret}`);
+  }
+});
+
+// ── /terminal/ask — the natural-language door ────────────────────────────
+// Every test here runs the ROUTER path (no AI binding), which is the mode CI
+// and local dev get. That is deliberate rather than a limitation: the router is
+// the fallback the whole route rests on when the model is unavailable, and it
+// is the only half that can be asserted deterministically.
+
+test("an ask routes to a plausible tool and never invents an answer", async () => {
+  const env = terminalEnv();
+  const cases = [
+    ["what does he think about lattices", "search_site"],
+    ["photos shot on classic chrome", "photo_query"],
+    ["when can i get coffee", "coffee_availability"],
+    ["what is he listening to right now", "now_playing"],
+    ["how does https://example.com read to a machine", "lens_inspect"],
+    ["what changed in the neighborhood", "change_radar"],
+  ];
+  for (const [question, expected] of cases) {
+    const result = await runAsk(question, terminalReq("/terminal/ask"), env, context());
+    assert.equal(result.mode, "router", question);
+    assert.equal(result.steps[0]?.tool, expected, `"${question}" routed to ${result.steps[0]?.tool}`);
+    // With no model there is nothing that COULD write prose, so the route must
+    // hand back the tool result and no answer. A non-empty answer here would
+    // mean something fabricated one.
+    assert.equal(result.answer, "", `"${question}" produced prose with no model bound`);
+  }
+});
+
+test("a film simulation reaches photo_query's film field, not its free-text q", async () => {
+  // photo_query matches q as ONE substring, so "photos shot classic chrome"
+  // as free text matches nothing. This is the regression that cost 42 frames.
+  const env = terminalEnv();
+  const filmed = await runAsk("photos shot on classic chrome", terminalReq("/terminal/ask"), env, context());
+  assert.equal(filmed.steps[0].args.film, "classic chrome");
+  assert.ok(!filmed.steps[0].args.q, "a named film must not also go to q");
+  assert.ok(filmed.result.total > 0, "the film route returned nothing");
+
+  // And an unnamed subject falls back to ONE keyword rather than the phrase.
+  const loose = await runAsk("show me photos of a doorway", terminalReq("/terminal/ask"), env, context());
+  assert.equal(loose.steps[0].tool, "photo_query");
+  assert.ok(!/\s/.test(loose.steps[0].args.q || ""), `q must be a single keyword, got "${loose.steps[0].args.q}"`);
+});
+
+test("a tool that throws degrades to a message, not a 500 for the whole ask", async () => {
+  // coffee_availability throws with no BOOKINGS binding. /mcp survives that at
+  // the JSON-RPC envelope; an ask has no envelope, so it catches per call.
+  const result = await runAsk("when can i get coffee", terminalReq("/terminal/ask"), { ASSETS: terminalEnv().ASSETS }, context());
+  assert.equal(result.steps[0].tool, "coffee_availability");
+  assert.match(result.steps[0].summary, /unavailable/);
+  const res = await terminalGet("/terminal/ask?plain=1&q=when+can+i+get+coffee");
+  assert.equal(res.status, 200, "a throwing tool must not take the frame down");
+});
+
+test("an ask is bounded on every axis that costs money", async () => {
+  // The one public route here that spends per request. Each bound is separate
+  // and each one is the only thing standing between a public LLM endpoint and
+  // somebody else's bill.
+  assert.ok(ASK_LIMITS.query <= 500 && ASK_LIMITS.calls <= 6 && ASK_LIMITS.rounds <= 3);
+  const long = "x".repeat(5000);
+  const result = await runAsk(long, terminalReq("/terminal/ask"), terminalEnv(), context());
+  assert.equal(result.question.length, ASK_LIMITS.query, "the query was not truncated");
+  // An empty question does no work at all rather than routing to a search for "".
+  const empty = await runAsk("   ", terminalReq("/terminal/ask"), terminalEnv(), context());
+  assert.equal(empty.mode, "empty");
+  assert.equal(empty.steps.length, 0);
+});
+
+test("the ask frame prints the tool call it made, and how to reproduce it", async () => {
+  // The trace is the reason this is a console rather than a chat box. A frame
+  // that printed only the answer would be the thing this surface exists not to be.
+  const text = await (await terminalGet("/terminal/ask?plain=1&q=what+does+he+think+about+lattices")).text();
+  assert.match(text, /what the agent did/);
+  assert.match(text, /search_site/);
+  assert.match(text, /reproduce this without a model/);
+  assert.match(text, /curl -sX POST aadhar\.sh\/mcp/);
+  // And it must say which mode produced it — model or keyword.
+  assert.match(text, /mode\s+router/);
+});
+
+test("the ask loop and the MCP server call ONE tool registry", async () => {
+  // lib/tools.js exists so a tool description cannot be reworded in one door and
+  // not the other. If either side grows a private list, this fails.
+  const env = terminalEnv();
+  const listed = (await (await handleSiteMcp(mcpPost({ jsonrpc: "2.0", id: 1, method: "tools/list", params: { ...MODERN_META } }), env, context())).json())
+    .result.tools.map((t) => t.name);
+  for (const tool of DATA_TOOLS) {
+    assert.ok(listed.includes(tool.name), `${tool.name} is in the ask catalog but not in tools/list`);
+    assert.ok(tool.description && tool.inputSchema, `${tool.name} must carry a description and a schema for function calling`);
+  }
+  const src = readFileSync("holding/_worker.js/mcp.js", "utf8");
+  assert.match(src, /from "\.\/lib\/tools\.js"/, "mcp.js must import the shared registry");
+  assert.ok(!/name: "search_site"/.test(src), "mcp.js re-declares a data tool instead of importing it");
+});
+
+test("the model loop parses both tool_call shapes Workers AI returns", async () => {
+  // THE riskiest assumption in the ask route, and the one that cannot be checked
+  // without a token: Workers AI has shipped a flat {name, arguments} and
+  // OpenAI's nested {function:{name, arguments}} across model families, with
+  // arguments as an object OR a JSON string. A model swap that changed the shape
+  // would not error — it would silently produce a no-tool answer for every
+  // question, which reads as "the model is being unhelpful" rather than as a
+  // parse bug. So the transport is stubbed and both shapes are pinned here.
+  const realFetch = globalThis.fetch;
+  const env = { ...terminalEnv(), CF_ACCOUNT_ID: "acct", WORKERS_AI_TOKEN: "tok" };
+
+  const shapes = [
+    { name: "search_site", arguments: { q: "lattice" } },                              // flat, object args
+    { function: { name: "search_site", arguments: '{"q":"lattice"}' } },               // nested, string args
+  ];
+  try {
+    for (const call of shapes) {
+      let turn = 0;
+      globalThis.fetch = async (url, init) => {
+        assert.match(String(url), /\/accounts\/acct\/ai\/run\//, "must call the account's AI endpoint");
+        assert.equal(JSON.parse(init.body).tools?.length, DATA_TOOLS.length, "the whole tool catalog must be offered");
+        turn += 1;
+        return Response.json(turn === 1
+          ? { result: { tool_calls: [call] } }
+          : { result: { response: "He writes about lattice cryptography." } });
+      };
+      const result = await runAsk("what about lattices", terminalReq("/terminal/ask"), env, context());
+      assert.equal(result.mode, "model", `shape ${JSON.stringify(call)} did not reach model mode`);
+      assert.equal(result.steps[0]?.tool, "search_site");
+      assert.deepEqual(result.steps[0]?.args, { q: "lattice" }, "arguments must normalize to an object");
+      assert.match(result.answer, /lattice/);
+    }
+
+    // A model that names a tool this site does not have must be refused, not
+    // dispatched. The catalog is the allowlist.
+    globalThis.fetch = async () => Response.json({ result: { tool_calls: [{ name: "rm_rf", arguments: {} }] } });
+    const refused = await runAsk("delete everything", terminalReq("/terminal/ask"), env, context());
+    assert.ok(refused.steps.some((s) => s.refused), "an unknown tool name must be refused");
+
+    // And a model that is simply down falls back to the router rather than 500ing.
+    globalThis.fetch = async () => new Response("upstream on fire", { status: 503 });
+    const down = await runAsk("what about lattices", terminalReq("/terminal/ask"), env, context());
+    assert.equal(down.mode, "router-fallback");
+    assert.equal(down.steps[0].tool, "search_site");
+  } finally {
+    globalThis.fetch = realFetch;
   }
 });

@@ -246,6 +246,9 @@ Single-page personal site at `aadhar.sh`. A Cloudflare Worker with static assets
 | `holding/tooltip.js` | Rich XP hover island for photos, tracks, artists, and car references. The homepage keeps only a tiny inline loader that idle-prefetches this module and replays a cold first hover; coarse-pointer visitors never load it. |
 | `holding/nav.js` | Site-wide XP **desktop shell**. The ONE shared external asset (deferred, SW-cached) — every page includes `<script src="/nav.js" defer>`; it injects its own `<style>` + builds, into `<body>`: the **Bliss desktop** wallpaper, **draggable desktop icons** (Notepad + the 5 profiles; icons drag freely within a visit but positions are DELIBERATELY not persisted, since the stored layout was read back in states that couldn't honour it and came back as a stack), the **taskbar** (Start orb → Run, first-level-subpage app buttons each with a per-section SVG icon, clock via Temporal), and the **Run** command palette (⌘K / Start). Also owns the **OS-window model**: body is a clipping flex desktop, each `.window`/`.np-window` is pinned + its content scrolls internally behind a **custom XP scrollbar**, windows are **draggable** (top is a hard boundary) + **resizable**, and Navigations hard-cut: the cross-document View Transition this file used to describe was removed 2026-07-30 (prerender already made navigation instant, so the animation was pure added latency). Sets each first-level route's **tab favicon** to its section icon. Run destinations: pages + profiles inline; 158 photos lazy-loaded from `/images/manifest.json` with `/images/alt.json` captions. Wired into homepage + all garage pages + worker-gen `/around`,`/whoareyou`,`/bot` + serendipity shell. |
 | `holding/quiz.js` | The **understanding-check** widget (deferred, shared, minified at deploy with a `/quiz.src.js` twin). Every garage + LWE content page ends with an active-recall quiz rendered by this one script from an inline `<script type="application/json" id="luq-data">` block: garage pages get an XP GroupBox self-test (`<section id="luq">` mount), LWE pages get the quiz as a continuation of the MSN chat (appended into `.log`, no mount). Misconception-based distractors, deterministic option shuffle, per-page best score in localStorage. The idea is Geoffrey Litt's "Understanding is the new bottleneck" (credited in the widget footer); /lens carries the same pedagogy in copy (predict-then-check mode notes, the Delta counterfactual lab as a Papert micro-world). |
+| `holding/terminal.js` | The **Windows PowerShell** console at `/terminal` (deferred, minified at deploy with a `/terminal.src.js` twin). The page SERVER-RENDERS one frame into the console as boot output, so the route reads with JS off and an agent fetching the HTML gets content rather than a mount point; this script turns that scrollback into a shell. Commands are the real thing, not a demo vocabulary: `finger`/`photos`/`lens` hit the same routes curl does, `get` performs the same Accept negotiation an agent performs, `mcp` speaks JSON-RPC to `/mcp`. Arrow keys drive a running program (they are shell history when none is), Ctrl+P/Ctrl+N are history either way. Builds output with `createTextNode` and never `innerHTML`, because the frames carry photo captions and, through `lens`, an arbitrary third party's `<title>`. |
+| `holding/_worker.js/terminal.js` + `lib/tui.js` | The three terminal programs and the 80-column frame renderer behind `/terminal/*`. **State is query params, not a session** — `?pane=writing&cursor=3&open=lattice` — so there is no DO round trip on a keypress (counter.js measures one at 185-630ms), sessions FORK, and the state is inspectable rather than an opaque token the caller hands back. Each frame prints the URL that produced it, labelled `state`, and a contract test asserts that URL reproduces the frame. `lib/tui.js` is pure (frames in, string out), which is what lets one renderer answer HTTP, MCP, and `node --test`. Its palette is MID-TONES ONLY: a terminal theme belongs to the visitor, so a near-white or near-black foreground is unreadable for half of them. |
+| the `/terminal` window | It is a **console window, not a page**, and the difference is entirely in what was REMOVED. `lunaPage` gained `windowClass`/`contentClass`/`windowAttrs` (all defaulting to empty, so the other nine callers are byte-identical) and the window declares `data-no-histnav`, which `nav.js` honours by skipping the site-wide Back/Forward injection — those are BROWSER controls, and a console carrying them reads as a terminal running inside Internet Explorer. Drag, resize, maximize and close all stay, because those are OS chrome. There is also nothing below the window: the explanatory paragraph that used to sit there was the single strongest tell, since real consoles do not come with a caption. Width is 624px so the console is exactly 80 columns, the size a real one opens at; left at the 760px page default it carried 136px of dead field to the right of every frame. Fonts stay on the design system — `"Lucida Console", var(--font-mono)`, one native Windows font in front of the existing token, no `@font-face`, no bytes. |
 | `holding/_worker.js` | The module worker (bundled by wrangler at deploy). Owns routing, photo serving from R2, manifest building, Spotify playlist scraping, AadharshBot crawler, the `/writing` Notepad pages, cache-control overrides. |
 | `holding/_headers` | Static-asset cache + security headers (CSP, Permissions-Policy, etc.). Applied to direct static-asset requests; the worker overrides cache-control for select paths. |
 | `holding/sw.js` | RETIRED (v136, 2026-07-03): now a ~15-line unregister stub (skipWaiting, delete caches, claim, unregister) that must keep serving 200 for a year+ so installed copies clean themselves up. No CACHE_VERSION anymore; the deploy-log vnum lives in D1 alone (bump-version.sh derives the next from MAX(vnum)). Repeat-visit speed comes from immutable assets + bfcache + speculation prerender. |
@@ -1119,6 +1122,36 @@ npm run deploy
     hashes IGNORES `'unsafe-inline'` in the same directive, so the two policies have
     to be two headers. The failure mode is silent, a blocked inline script leaves
     the page rendering and merely dead.
+
+18. **`scrollbar-color` INHERITS, and it silently disables every
+    `::-webkit-scrollbar` rule underneath it.** Chromium treats the standard
+    scrollbar properties and the `-webkit-` pseudo-elements as mutually
+    exclusive: if an element's used `scrollbar-color` is anything but `auto`,
+    all of its `::-webkit-scrollbar-*` rules are discarded. `xpChromeCss` sets
+    `html { scrollbar-color: … }` for the whole site, so EVERY element inherits
+    a non-auto value it never declared, and any element trying to draw a custom
+    scrollbar gets nothing.
+
+    The failure reads as "my CSS did not load" rather than as a conflict,
+    because the fallback is the platform default — on macOS an overlay bar of
+    **zero width**, so the track is not merely unstyled, it is invisible and
+    takes no space. Measured on `/terminal` 2026-08-05: 0px with the inherited
+    value, 16px after `scrollbar-color: auto`.
+
+    The fix is to reset to `auto` on the element and put the standard property
+    behind `@supports not selector(::-webkit-scrollbar)`, which Firefox (the one
+    engine that needs it) matches and Chromium/Safari do not. Check the
+    INHERITED value first the next time a custom scrollbar does not appear.
+
+19. **A backtick inside a CSS comment inside a `/*min*/` literal ends the JS
+    template literal.** The worker's static CSS lives in backtick literals that
+    `build.mjs` step 8 minifies in place, and prose in a CSS comment is still
+    JavaScript source. Writing ``overflow-y is `scroll`, not `auto` `` in one
+    truncated the literal mid-file and the build failed with a JS parse error
+    pointing at a line that looked fine. Nothing is wrong with the CSS; the
+    string ended early. The build's post-substitution re-parse is what catches
+    it, which is the reason that re-parse exists — keep backticks out of those
+    comments.
 
 ---
 

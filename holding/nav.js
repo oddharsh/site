@@ -56,6 +56,7 @@
     { label: "inbox", path: "/inbox", hint: "who linked here — webmentions from the open web, rendered as Outlook Express mail" },
     { label: "reading", path: "/reading", hint: "what I've been reading — saved to Curius, mirrored here" },
     { label: "lens", path: "/lens", hint: "the other web: see any URL the way a machine does — raw HTML, JSON-LD, llms.txt" },
+    { label: "terminal", path: "/terminal", hint: "terminal utilities — curl them, or drive them by keypress" },
     { label: "pixel peeper", path: "/pixel-peeper", hint: "whose eye do you have? a compression vision test — pick the best encode, blind" },
     { label: "learning with errors", path: "/lwe", hint: "chat-style explainers + live demos" },
     // generated:lwe-pages:start
@@ -127,6 +128,7 @@
     { label: "serendipity", path: "/serendipity", hint: "events worth going to" },
     { label: "around", path: "/around", hint: "the crypto-VC neighborhood" },
     { label: "lens", path: "/lens", hint: "the other web: how machines read a URL" },
+    { label: "terminal", path: "/terminal", hint: "terminal utilities, drivable by keypress" },
     { label: "pixel peeper", path: "/pixel-peeper", hint: "a compression vision test — whose eye do you have?" },
     { label: "music", path: "/rn", hint: "what I'm listening to right now" },
     { label: "coffee", path: "/coffee", hint: "book a coffee / bagel" }
@@ -168,6 +170,14 @@
     coffee:      sectionTile("coffee", ["#b08858","#875c34","#5e3c1e","#472d16"], '<path d="M8 12 h13 v6 a6.5 6.5 0 0 1-13 0 Z" fill="#fff"/><path d="M21 13 h3 a2.6 2.6 0 0 1 0 5.2 h-3" fill="none" stroke="#fff" stroke-width="2.2"/><g stroke="#fff" stroke-width="1.8" stroke-linecap="round"><path d="M11 5.5 v3"/><path d="M14.5 5 v3.5"/></g>'),
     lwe:         sectionTile("lwe", ["#838ae6","#4b53c9","#333aa0","#272d82"], '<path d="M6 9 h20 a2 2 0 0 1 2 2 v9 a2 2 0 0 1-2 2 H14 l-5 4 v-4 H6 a2 2 0 0 1-2-2 v-9 a2 2 0 0 1 2-2 Z" fill="#fff"/><g stroke="#4b53c9" stroke-width="1.7" stroke-linecap="round" fill="none"><path d="M8.5 13.5 q2 -2.4 4 0 t4 0 t4 0"/><path d="M8.5 18 q2 -2.4 4 0 t4 0"/></g>'),
     lens:        sectionTile("lens", ["#79c7e6","#2f9fc4","#1d7895","#145d73"], '<rect x="5.5" y="5" width="15" height="19" rx="2" fill="#fff"/><g fill="#2f9fc4"><rect x="8.5" y="9.5" width="9" height="1.7" rx="0.6"/><rect x="8.5" y="13" width="9" height="1.7" rx="0.6"/><rect x="8.5" y="16.5" width="6" height="1.7" rx="0.6"/></g><circle cx="20.5" cy="20.5" r="6" fill="#2f9fc4" stroke="#fff" stroke-width="2.2"/><circle cx="18.6" cy="18.6" r="1.5" fill="#fff" opacity=".85"/><path d="M24.8 24.8 L28.5 28.5" stroke="#fff" stroke-width="3.2" stroke-linecap="round"/>'),
+    // a console window with a prompt inside it. The navy is PowerShell's own
+    // #012456, lifted two stops at the top of the gradient so the tile still
+    // reads at 15px against the blue taskbar — the true colour is close enough
+    // to the taskbar's that the glyph sank into it. Blue is the crowded hue in
+    // this set (writing, lwe, whoareyou and lens all sit in it), so this one
+    // goes darker than any of them and carries a white window face, which is
+    // what separates it at a glance.
+    terminal:    sectionTile("terminal", ["#4a6ea8","#22497f","#012456","#001633"], '<rect x="4" y="6.5" width="24" height="19" rx="2" fill="#fff"/><rect x="4" y="6.5" width="24" height="4.2" rx="2" fill="#dfe3ee"/><g stroke="#012456" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M9 15 l3.4 2.9 L9 20.8"/></g><rect x="15.2" y="19.2" width="7.6" height="2" rx="1" fill="#012456"/>'),
     // an eye whose pupil is a literal pixel — the whole premise in one glyph. The
     // magenta is the one hue the tile set had left (serendipity owns violet,
     // reading owns dusty rose), so it stays legible at 15px on the taskbar. Key is
@@ -1277,7 +1287,15 @@
 
     // back / forward, injected at the head of the title bar (excluded from title-bar
     // drag because they're <button>, which initDrag already skips).
-    if (!bar.querySelector(".axp-histnav")) {
+    //
+    // A window may opt out with data-no-histnav, and /terminal is the one that
+    // does. Back and Forward are BROWSER controls: on a document window they
+    // read as the window's own chrome, but on a console they read as a terminal
+    // running inside Internet Explorer, which is the opposite of the illusion.
+    // Opting out here rather than by giving that window a different title-bar
+    // class keeps drag, resize, maximize and close-to-home, which a console
+    // window still wants — those are OS chrome, not browser chrome.
+    if (!bar.querySelector(".axp-histnav") && !win.hasAttribute("data-no-histnav")) {
       var hn = el('<span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>');
       bar.insertBefore(hn, bar.firstChild);
       var bBtn = hn.querySelector(".axp-back"), fBtn = hn.querySelector(".axp-fwd");

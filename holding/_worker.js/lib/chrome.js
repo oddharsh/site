@@ -74,6 +74,21 @@ export function lunaPage({
   cache = "public, max-age=300, s-maxage=300",
   headers = {},
   titleClass = "",
+  // Extra classes on the window and its content pane, plus raw attributes on
+  // the window. All three default to empty, so the nine existing callers are
+  // byte-identical. They exist for /terminal, which needs the SAME window
+  // structure (nav.js's drag, resize and maximize all key off `body > .window`
+  // and its `.title-bar`) while looking like a console rather than a document:
+  // no content padding, its own icon, and — via data-no-histnav below — no
+  // back/forward buttons, because a PowerShell window has no browser in it.
+  //
+  // Deliberately parameters here rather than a second document assembler in
+  // terminal.js. The whole argument for this function is that window chrome
+  // changes in one place and every page follows; a private copy of the doctype,
+  // head, and desktop wiring would opt one page out of that on day one.
+  windowClass = "",
+  contentClass = "",
+  windowAttrs = "",
   closeHref = "/",
   closeTitle = "back to aadhar.sh",
   closeLabel = closeTitle,
@@ -108,12 +123,12 @@ ${css || ""}
 </head>
 <body>
 ${DESKTOP_TOP}
-<div class="window">
+<div class="window${windowClass ? " " + escAttr(windowClass) : ""}"${windowAttrs ? " " + windowAttrs : ""}>
   <div class="title-bar">
     <span${classAttr}><span class="icon"></span>${escHtml(windowTitle)}</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="${escAttr(closeHref)}" title="${escAttr(closeTitle)}" aria-label="${escAttr(closeLabel)}"></a></span>
   </div>
-  <div class="content">
+  <div class="content${contentClass ? " " + escAttr(contentClass) : ""}">
 ${body}
   </div>
 </div>
