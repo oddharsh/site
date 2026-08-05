@@ -266,26 +266,46 @@ async function checkTree(infra, wrangler, lwe) {
   if (!wrangler.build?.command) {
     fail(`wrangler.jsonc lost its build.command — the deploy would ship the readable originals`);
   }
-  // The provisioning flags, on whichever subcommand the deploy_command names.
+  // The provisioning flags, on whichever subcommand a deploy command names.
   // Both default to TRUE and both let a publish create real KV/R2/D1 for any
   // id-less binding, which is the one thing no deploy path here may do.
   //
+  // EVERY publishing command, from one list. The non-production command ran
+  // bare until 2026-08-04 and this loop only read the production one, so a
+  // push to any branch published with both flags at their default. The reason
+  // it hid for so long is that the rule enumerated deploy paths in prose and a
+  // branch build was not among the three it named. So iterate rather than name:
+  // the next trigger Cloudflare adds gets checked by being added here, and the
+  // failure names which command is loose instead of saying "the deploy command".
+  //
   // This is the TREE tier, so it checks the intent recorded in infra.json and
   // runs with no credential on every PR. The api tier below now reads the LIVE
-  // dashboard value and compares the two, so a command that carries the flags
+  // dashboard values and compares them, so a command that carries the flags
   // here but lost them upstream is caught there. Keep both: this one fails on a
   // branch that proposes a bad command, before anyone can paste it in.
   const deployCmd = String(infra.release.deploy_command || "");
-  for (const flag of ["--x-provision=false", "--x-auto-create=false"]) {
-    if (!deployCmd.includes(flag)) {
-      fail(`infra.json's release.deploy_command must pin ${flag} (it defaults to TRUE and would let a publish create resources); got ${JSON.stringify(deployCmd)}`);
+  const previewCmd = String(infra.release.non_production_deploy_command || "");
+  const publishCommands = [
+    ["deploy_command", deployCmd],
+    // Optional: a repo that turns non-production branch builds off drops the
+    // field entirely. An EMPTY string is that, and skipping it is right. A
+    // MISSING pin on a present command is the bug this loop exists for.
+    ...(previewCmd ? [["non_production_deploy_command", previewCmd]] : []),
+  ];
+  for (const [field, cmd] of publishCommands) {
+    for (const flag of ["--x-provision=false", "--x-auto-create=false"]) {
+      if (!cmd.includes(flag)) {
+        fail(`infra.json's release.${field} must pin ${flag} (it defaults to TRUE and would let a publish create resources); got ${JSON.stringify(cmd)}`);
+      }
     }
-  }
-  // A publish that moves traffic by itself defeats the ramp. If the deploy
-  // command ever goes back to a bare `wrangler deploy`, deploy:promote is dead
-  // code and nobody would notice, because the site would keep releasing fine.
-  if (!/\bversions upload\b/.test(deployCmd)) {
-    fail(`infra.json's release.deploy_command should be a \`versions upload\` so a merge uploads without moving traffic (scripts/deploy-promote.mjs ramps it); got ${JSON.stringify(deployCmd)}`);
+    // A publish that moves traffic by itself defeats the ramp. If a deploy
+    // command ever goes back to a bare `wrangler deploy`, deploy:promote is dead
+    // code and nobody would notice, because the site would keep releasing fine.
+    // On the non-production command it is worse than dead code: a feature branch
+    // would take production traffic on push.
+    if (!/\bversions upload\b/.test(cmd)) {
+      fail(`infra.json's release.${field} should be a \`versions upload\` so a publish does not move traffic (scripts/deploy-promote.mjs ramps it); got ${JSON.stringify(cmd)}`);
+    }
   }
   // Preview URLs are what makes an uploaded version worth anything before it
   // serves. `preview_urls` defaults to `workers_dev`, which is false here, so
@@ -649,15 +669,37 @@ async function checkApi(infra, wrangler, token) {
         : fail(`Workers Builds ${field} is ${JSON.stringify(live)} but infra.json declares ${JSON.stringify(expected)} — the dashboard is the live value, so fix it there`);
     }
 
-    // The non-production trigger. Its default is already `versions upload`, so
-    // this is a low-drama check, but a branch build that DEPLOYS would put a
-    // feature branch straight onto production traffic.
+    // The non-production trigger, held to the SAME standard as the production
+    // one. This used to test only that the live command said `versions upload`,
+    // which it called a low-drama check because that is already the Cloudflare
+    // default. The drama was in what the test did not read: the two provisioning
+    // flags. A command can pass a `versions upload` match and still publish with
+    // --x-provision and --x-auto-create at their default TRUE, which is exactly
+    // what this trigger did until 2026-08-04. Compare the whole string, so a
+    // dropped flag reads as drift like any other.
     const preview = triggers.find((t) => t !== prod);
-    if (preview && infra.release.non_production_deploy_command) {
+    const expectedPreview = String(infra.release.non_production_deploy_command || "");
+    if (expectedPreview && !preview) {
+      // Declared but absent. Nothing PUBLISHES in this direction, so it is not
+      // dangerous, and a trigger list whose shape we guessed at is the case the
+      // section header says degrades to a note. Say it and move on.
+      warn(`release config partly unchecked: infra.json declares a non-production deploy command but Workers Builds returned no second trigger (branch builds off, or the trigger list is shaped differently than assumed)`);
+    } else if (expectedPreview && preview) {
       const live = String(preview.deploy_command ?? "").trim();
-      /\bversions upload\b/.test(live)
-        ? pass(`Workers Builds non-production trigger uploads without deploying (${JSON.stringify(live)})`)
-        : fail(`Workers Builds non-production deploy command is ${JSON.stringify(live)} — a branch build must not deploy to production traffic`);
+      if (live === expectedPreview.trim()) {
+        pass(`Workers Builds non_production_deploy_command matches infra.json (${JSON.stringify(live)})`);
+      } else {
+        // Name the CONSEQUENCE of this particular difference. "the strings
+        // differ" sends whoever reads it back to diffing two long commands by
+        // eye, and the two differences that matter have very different stakes.
+        const missing = ["--x-provision=false", "--x-auto-create=false"].filter((f) => !live.includes(f));
+        const why = missing.length
+          ? `it is missing ${missing.join(" and ")}, so a push to ANY branch publishes with resource creation ON`
+          : !/\bversions upload\b/.test(live)
+            ? `it is not a \`versions upload\`, so a branch build would take production traffic on push`
+            : `the commands differ in some other way, and the dashboard is what actually runs`;
+        fail(`Workers Builds non_production_deploy_command is ${JSON.stringify(live)} but infra.json declares ${JSON.stringify(expectedPreview)} — ${why}. The dashboard is the live value, so fix it there`);
+      }
     }
   });
 

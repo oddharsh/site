@@ -180,14 +180,26 @@ worktrees may edit freely, but a worktree is not a release surface.
 - **No deploy path may create Cloudflare resources.** Wrangler's
   `--x-provision` and `--x-auto-create` are hidden flags that both default to
   TRUE, and they provision real KV/R2/D1 for any binding declared without an
-  id. `npm run deploy`, `npm run deploy:version`, and the Workers Builds Deploy
-  command all pin them off, so resource creation stays with `npm run
-  infra:apply` and a missing id fails loudly. That the flags survive on
+  id. `npm run deploy`, `npm run deploy:version`, and **both** Workers Builds
+  commands (the Deploy command AND the Non-production branch deploy command)
+  pin them off, so resource creation stays with `npm run
+  infra:apply` and a missing id fails loudly. **That list read "the Workers
+  Builds Deploy command" until 2026-08-04, and the branch build it left out was
+  running bare** — every push to every feature branch published with both flags
+  at their default TRUE, onto a Worker holding production's bindings. Nothing
+  was minted, but nothing stopped it either. Take the general lesson over the
+  specific one: this rule enumerated deploy paths in prose and a fourth path
+  appeared without joining the list, so `check-infra.mjs` now walks the commands
+  from one array and the next trigger Cloudflare adds gets checked by being
+  added there. That the flags survive on
   `versions upload` was verified rather than assumed (2026-08-04): they are
   hidden, `--help` lists them for neither subcommand, and the way to tell is the
   exit code — wrangler exits 1 on `--x-bogus-flag` and 0 on `--x-provision=false`.
   Run that control before trusting any flag `--help` omits. `infra:check` now
-  fails if the recorded deploy command drops either one. `npm run deploy` additionally passes `--strict`, which aborts rather
+  fails if EITHER recorded deploy command drops EITHER flag, in the tree tier
+  (the declared string, no credential, every PR) and again in the API tier
+  (the live dashboard value, when the token carries `Workers Builds
+  Configuration:Read`). `npm run deploy` additionally passes `--strict`, which aborts rather
   than prompting when the Worker's last deployment came from the dashboard and
   its remote config has drifted from this repo. Workers Builds deliberately
   does NOT pass `--strict`: it is the authoritative publisher, and a release
