@@ -91,6 +91,11 @@ const MCP_TOOLS = [
     }, required: ["samples"] },
   },
   {
+    name: "encode",
+    description: "Read a JPEG or AVIF at a URL and report what its encoder actually did: chroma subsampling, baseline vs progressive and the scan count, an estimated quality with the deviation from the IJG Annex K table shown, AVIF bit depth, and whether ICC/EXIF/XMP is riding along. NO PIXELS ARE DECODED — every fact comes from the container — so this works on files a Worker could never decode.",
+    inputSchema: { type: "object", properties: { url: { type: "string" } } },
+  },
+  {
     name: "agent_ready",
     description: "Grade how much of an origin a machine can actually use: llms.txt, a markdown twin, an agent card, an API catalog, and a real tools/list against its MCP server. Doors are COUNTED, never scored — a check that could not run is reported as unreadable rather than as a failure. Called with no url it audits aadhar.sh itself and prints what building that cost in files and lines.",
     inputSchema: { type: "object", properties: { url: { type: "string" } } },
@@ -181,6 +186,7 @@ async function callTool(name, args, request, env, ctx) {
   if (name === "finger") return terminalToolFrame("finger", args, request, env, ctx);
   if (name === "photos") return terminalToolFrame("photos", args, request, env, ctx);
   if (name === "lens") return terminalToolFrame("lens", args, request, env, ctx);
+  if (name === "encode") return terminalToolFrame("encode", args, request, env, ctx);
   if (name === "agent_ready") return terminalToolFrame("agent-ready", args, request, env, ctx);
   if (name === "dict") return terminalToolFrame("dict", args, request, env, ctx);
   if (name === "cache") return terminalToolFrame("cache", args, request, env, ctx);

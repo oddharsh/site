@@ -61,6 +61,7 @@
     { label: "radar", path: "/radar", hint: "signal readings in, a terminal instrument out" },
     { label: "dict", path: "/dict", hint: "compression dictionary lint — will a browser ever use it?" },
     { label: "cache", path: "/cache", hint: "behavioral revalidation lint — does your ETag ever 304?" },
+    { label: "encode", path: "/encode", hint: "what did your encoder actually do?" },
     { label: "agent ready", path: "/agent-ready", hint: "the scorecard, pointed at anyone including us" },
     { label: "pixel peeper", path: "/pixel-peeper", hint: "whose eye do you have? a compression vision test — pick the best encode, blind" },
     { label: "learning with errors", path: "/lwe", hint: "chat-style explainers + live demos" },

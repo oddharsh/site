@@ -92,6 +92,11 @@
       "hint": "behavioral revalidation lint",
       "flags": { "run": true, "taskbar": false, "sitemap": false, "gallery": false, "agents": true, "searchIndex": false, "webmention": false } },
 
+    { "path": "/encode", "title": "Encode", "section": "encode", "kind": "utility",
+      "description": "What did your encoder actually do? Reads a JPEG or AVIF container — quantization tables, scan script, chroma subsampling, bit depth — and says where bytes are being left on the table. No pixels are decoded.",
+      "hint": "what did your encoder actually do?",
+      "flags": { "run": true, "taskbar": false, "sitemap": false, "gallery": false, "agents": true, "searchIndex": false, "webmention": false } },
+
     { "path": "/agent-ready", "title": "Agent Ready", "section": "agent-ready", "kind": "utility",
       "description": "How much of an origin a machine can actually use — the agent doors, counted rather than scored — and, for this origin, what building all of it cost in files and lines.",
       "hint": "the scorecard, pointed at anyone including us",

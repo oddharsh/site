@@ -34,6 +34,26 @@ A contract test asserts every tool with a route is reachable over MCP. `dict`
 and `cache` shipped for two commits with HTTP routes and no MCP entry, which
 made them invisible to exactly the caller this site is built for.
 
+## encode — what did your encoder actually do?
+
+`/encode?url=…` reads a JPEG or AVIF **container** and reports the encode:
+chroma subsampling, baseline versus progressive and the scan count, an estimated
+quality, AVIF bit depth, and whether ICC/EXIF/XMP is riding along on something
+that should be a thumbnail.
+
+**No pixels are decoded**, which is the only reason it can run in a Worker.
+Cloudflare Images cannot take HEIC without Enterprise and cannot take RAW at all,
+and a Worker has no decoder — but none of the interesting questions about an
+encode need pixels. They live in quantization tables, the scan script, the
+component sampling factors, the `av1C` record. The blocker was never "images are
+hard", it was "decoding is hard", and those are different problems.
+
+Quality is an **estimate** and says so: there is no quality number in a JPEG,
+only quantization tables, and every tool that prints one is inferring it. The
+method and its deviation from the IJG Annex K table are both shown, so a custom
+table (mozjpeg, jpegli, zenjpeg) reads as custom rather than as a confident wrong
+number.
+
 ## agent-ready — the scorecard, pointed at anyone including us
 
 `/agent-ready` grades how much of an origin a machine can actually use: an

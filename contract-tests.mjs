@@ -3417,3 +3417,84 @@ test("the scorecard grades other origins, and only bills its own", async () => {
   const refused = await (await terminalGet("/agent-ready?plain=1&url=http%3A%2F%2F169.254.169.254%2F")).text();
   assert.match(refused, /refused/);
 });
+
+// ── /encode — read the container, decode nothing ─────────────────────────
+// These parse the repo's OWN committed encodes, which is the strongest test
+// available: 474 files this site's pipeline produced, with known properties.
+
+test("the JPEG parser agrees with the pipeline that made the files", async () => {
+  const { parseJpeg, sniff, estimateQuality } = await import("./holding/_worker.js/encode.js");
+  const { readdirSync } = await import("node:fs");
+  const files = readdirSync("holding/i").filter((f) => f.endsWith(".jpg")).slice(0, 12);
+  assert.ok(files.length > 4, "expected committed thumbnails to test against");
+
+  for (const f of files) {
+    const bytes = new Uint8Array(readFileSync(`holding/i/${f}`));
+    assert.equal(sniff(bytes), "jpeg", `${f} should sniff as jpeg`);
+    const info = parseJpeg(bytes);
+    // add-photos.sh emits 600px squares through zenc at 4:2:0, progressive.
+    assert.equal(info.width, 600, `${f} width`);
+    assert.equal(info.height, 600, `${f} height`);
+    assert.equal(info.subsampling, "4:2:0", `${f} is the delivery tier, so 4:2:0`);
+    assert.equal(info.progressive, true, `${f} should be progressive — zenc searches scan scripts`);
+    assert.ok(info.scans > 1, `${f} progressive means multiple scans, got ${info.scans}`);
+
+    // zenjpeg ships tuned tables, so they must NOT read as scaled Annex K.
+    // If this ever flips, the encoder changed underneath the pipeline.
+    const luma = info.tables.find((t) => t.id === 0);
+    assert.ok(luma, `${f} must carry a luma quantization table`);
+    assert.equal(estimateQuality(luma.values).standard, false,
+      `${f} should read as a CUSTOM table — zenjpeg does not use scaled Annex K`);
+  }
+});
+
+test("the AVIF parser reads bit depth and subsampling, and monochrome is real", async () => {
+  // 10-bit is this site's documented choice (~6% smaller at equal quality).
+  // The monochrome flag is the one I nearly "fixed" while it was correct: the
+  // first files sampled were the two Leica black-and-white frames, so a broken
+  // parser and a right one looked identical until the sample got bigger.
+  const { parseAvif, sniff } = await import("./holding/_worker.js/encode.js");
+  const { readdirSync } = await import("node:fs");
+  const files = readdirSync("holding/i").filter((f) => f.endsWith(".avif")).slice(0, 30);
+  let mono = 0, colour = 0;
+
+  for (const f of files) {
+    const bytes = new Uint8Array(readFileSync(`holding/i/${f}`));
+    assert.equal(sniff(bytes), "avif", `${f} should sniff as avif`);
+    const info = parseAvif(bytes);
+    assert.ok(info, `${f} should parse`);
+    assert.equal(info.bitDepth, 10, `${f} should be 10-bit — the measured free win`);
+    if (info.monochrome) mono += 1; else colour += 1;
+    assert.ok(["4:2:0", "grayscale"].includes(info.subsampling), `${f} unexpected subsampling ${info.subsampling}`);
+  }
+  // A parser that always answered "monochrome" would still pass every assertion
+  // above on a small enough sample. This is the one that catches it.
+  assert.ok(colour > mono, `most frames are colour; parsed ${colour} colour vs ${mono} mono`);
+});
+
+test("encode sniffs the container from magic bytes, not content-type", async () => {
+  // A mislabelled response is common, and the parse has to match the actual
+  // bytes or it reads garbage confidently.
+  const { sniff } = await import("./holding/_worker.js/encode.js");
+  assert.equal(sniff(new Uint8Array([0xFF, 0xD8, 0xFF, 0xE0, 0, 0])), "jpeg");
+  assert.equal(sniff(new Uint8Array([0x89, 0x50, 0x4E, 0x47, 0, 0, 0, 0, 0])), "png");
+  assert.equal(sniff(new Uint8Array(4)), null);
+});
+
+test("encode judges chroma and depth against this site's own measurements", async () => {
+  // The verdicts are where the site's encoding work stops being prose. 4:4:4 at
+  // delivery size and 8-bit AVIF are the two it should always flag.
+  const { judgeEncode } = await import("./holding/_worker.js/encode.js");
+  const fat = judgeEncode({ format: "jpeg", subsampling: "4:4:4", progressive: false, scans: 1, tables: [], width: 600, height: 600, icc: true }, 90000);
+  const ids = fat.warns.map((w) => w.id);
+  assert.ok(ids.includes("chroma"), "4:4:4 at delivery size must be flagged");
+  assert.ok(ids.includes("scan"), "baseline must be flagged — progressive is free bytes");
+  assert.ok(ids.includes("metadata"), "ICC riding along on a thumbnail must be flagged");
+
+  const lean = judgeEncode({ format: "jpeg", subsampling: "4:2:0", progressive: true, scans: 8, tables: [], width: 600, height: 600 }, 40000);
+  assert.equal(lean.warns.length, 0, "a well-made delivery JPEG should draw no warnings");
+
+  assert.ok(judgeEncode({ format: "avif", bitDepth: 8, subsampling: "4:2:0" }, 30000).warns.some((w) => w.id === "depth"),
+    "8-bit AVIF must be flagged — 10-bit is free");
+  assert.equal(judgeEncode({ format: "avif", bitDepth: 10, subsampling: "4:2:0" }, 30000).warns.length, 0);
+});

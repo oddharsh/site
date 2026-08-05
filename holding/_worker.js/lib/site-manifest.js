@@ -115,6 +115,12 @@ export const AGENT_SURFACES = [
     "description": "Does your ETag ever actually 304? Fetches twice, replays the validator, and reports what the origin DID — the failure header graders cannot see."
   },
   {
+    "path": "/encode",
+    "title": "Encode",
+    "kind": "utility",
+    "description": "What did your encoder actually do? Reads a JPEG or AVIF container — quantization tables, scan script, chroma subsampling, bit depth — and says where bytes are being left on the table. No pixels are decoded."
+  },
+  {
     "path": "/agent-ready",
     "title": "Agent Ready",
     "kind": "utility",

@@ -179,6 +179,8 @@ const ROUTES = [
   // its author by default, and prints the bill.
   { path: "/agent-ready?plain=1", status: 200, ct: "text/plain", marker: "what this cost to build" },
   { path: "/agent-ready.txt", status: 200, ct: "text/plain", marker: "doors a machine can walk through" },
+  { path: "/encode?plain=1", status: 200, ct: "text/plain", marker: "what did your encoder" },
+  { path: "/encode?plain=1&url=javascript%3Aalert(1)", status: 200, ct: "text/plain", marker: "refused" },
   { path: "/nope-not-a-tool", status: 404 },
   // The old namespace redirects rather than 404s: these URLs never shipped, but
   // any link written during development should still land on the tool.

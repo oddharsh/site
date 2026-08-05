@@ -50,13 +50,14 @@
 // once per ask, next to a model call. Latency was never the reason the programs
 // stay on URLs. Forking, bookmarking, and testability were.
 import { agentReadyFrame } from "./agent-ready.js";
+import { ENCODE_CAP, encodeReadout, fetchImageBytes, parseAvif, parseJpeg, sniff } from "./encode.js";
 import { probeRevalidation } from "./cache-lint.js";
 import { readDoors } from "./lib/doors.js";
 import { MEASURED, auditUrl } from "./dict.js";
 import { RADAR_LIMITS, radarFrame, readSamples } from "./radar.js";
 import { readAroundChanges } from "./around.js";
 import { readCoffeeAvailability } from "./coffee.js";
-import { LENS_BUDGETS, lensInspect, lensObservationSummary, overLensBudget, validateLensTarget } from "./lens.js";
+import { LENS_BUDGETS, lensFetch, lensInspect, lensObservationSummary, overLensBudget, validateLensTarget } from "./lens.js";
 import { lunaPage } from "./lib/chrome.js";
 import { CANONICAL_HOST } from "./lib/const.js";
 import { escHtml } from "./lib/http.js";
@@ -150,7 +151,7 @@ export function stateUrl(state, extra = {}) {
   } else if (state.app === "photos") {
     put("q", state.q); put("film", state.film); put("camera", state.camera); put("lens", state.lens);
     put("page", state.page, 0); put("cursor", state.cursor, 0); put("open", state.open);
-  } else if (state.app === "lens" || state.app === "dict" || state.app === "cache" || state.app === "agent-ready") {
+  } else if (state.app === "lens" || state.app === "dict" || state.app === "cache" || state.app === "agent-ready" || state.app === "encode") {
     put("url", state.url);
     if (state.doors) put("doors", "1"); put("left", state.left); put("right", state.right);
   }
@@ -910,6 +911,74 @@ export async function agentReadyRoute(env, request, state, ctx) {
   return agentReadyFrame(target.url, env);
 }
 
+// ── encode: what did your encoder actually do? ────────────────────────────
+export async function encodeFrame(env, request, state, ctx) {
+  if (!state.url.trim()) {
+    return {
+      title: "encode — what did your encoder actually do?",
+      body: rows(
+        ...wrap("Point it at a JPEG or an AVIF and it reads the container: quantization tables, the scan script, component sampling factors, the av1C record. No pixels are decoded, which is the only reason this can run in a Worker at all.", INNER).map((row) => [s(row)]),
+        blank(),
+        [s("  curl 'aadhar.sh/encode?url=https://example.com/photo.jpg'", "accent")],
+        blank(),
+        rule(INNER, "what it will tell you"),
+        kv("chroma", "4:4:4 is a byte tax at delivery sizes; 4:2:0 is usually free", INNER, { gutter: 12 }),
+        kv("scan", "baseline vs progressive, and how many scans", INNER, { gutter: 12 }),
+        kv("quality", "estimated against the IJG Annex K table, with the deviation shown", INNER, { gutter: 12 }),
+        kv("depth", "8-bit vs 10-bit AVIF — the latter measured ~6% smaller here, free", INNER, { gutter: 12 }),
+        kv("metadata", "ICC/EXIF/XMP riding along on a thumbnail", INNER, { gutter: 12 }),
+        blank(),
+        ...wrap("Quality is an ESTIMATE and the frame says so. There is no quality number in a JPEG, only quantization tables, and every tool that prints one is inferring it. The method and its deviation are shown so the number can be argued with.", INNER).map((row) => [s(row, "dim")]),
+      ),
+      status: keyHints([["&url=", "read an image"]]),
+    };
+  }
+
+  const target = validateLensTarget(state.url);
+  if (!target.ok) return { title: "encode — refused", body: [[s(target.error, "bad")]], status: [] };
+  if (await overLensBudget(LENS_BUDGETS.inspect, request, env, ctx)) {
+    return { title: "encode — rate limited", body: [[s("Shares Lens's 30/min budget. Try again shortly.", "warn")]], status: [] };
+  }
+
+  const got = await fetchImageBytes(target.url, env, lensFetch);
+  if (!got.ok) {
+    return {
+      title: "encode — unreadable",
+      body: [[s(got.unreadable ? `could not fetch it: ${got.why}` : got.why, got.unreadable ? "warn" : "bad")]],
+      status: stateLine(state),
+    };
+  }
+
+  // Sniffed from magic bytes, never from content-type: a mislabelled response is
+  // common and the parse has to match the actual container.
+  const kind = sniff(got.bytes);
+  const info = kind === "jpeg" ? parseJpeg(got.bytes) : kind === "avif" ? parseAvif(got.bytes) : null;
+  if (!info) {
+    return {
+      title: `encode — ${kind || "unknown container"}`,
+      body: rows(
+        [s(kind === "heif" ? "HEIF/HEIC container." : kind ? `${kind} container.` : "unrecognised container.", "warn")],
+        blank(),
+        ...wrap(kind === "heif"
+          ? "The EXIF and recipe are reachable in here without decoding, but the encode facts live in boxes this lint does not read yet. JPEG and AVIF are the two it knows."
+          : "This reads JPEG and AVIF. Both are answerable from the container; PNG and WebP would need their own readers.", INNER).map((row) => [s(row, "dim")]),
+      ),
+      status: stateLine(state),
+    };
+  }
+  if (got.truncated) info.truncated = true;
+
+  return {
+    title: `encode — ${target.url}`,
+    body: encodeReadout(info, got.declaredLength),
+    status: [
+      [s("read ", "label"), s(`${Math.min(got.bytes.length, ENCODE_CAP).toLocaleString()} bytes of container`, "dim"),
+        s("  no pixels decoded", "dim")],
+      stateLine(state),
+    ],
+  };
+}
+
 // ── the index frame ───────────────────────────────────────────────────────
 function indexFrame() {
   const app = (name, line) => rows(
@@ -928,6 +997,7 @@ function indexFrame() {
       app("photos", "The photo archive, filterable by film simulation, body, lens, and caption. Opening a frame shows its exposure and the in-camera recipe it was shot with."),
       app("lens", "Inspect any public URL the way a machine does: readability, agent doors, and what one scan of it costs to read."),
       app("cache", "Does your ETag ever actually 304? Fetches twice, replays the validator, and reports what the origin DID — the failure header-reading graders cannot see."),
+      app("encode", "What did your encoder actually do? Reads a JPEG or AVIF container — quantization tables, scan script, subsampling, bit depth — and says where bytes are being left on the table. No pixels decoded."),
       app("agent-ready", "How much of an origin can a machine actually use — and, for this one, what that cost to build. Doors are counted, never scored."),
       app("dict", "Will a browser ever actually use the compression dictionary you are serving? The registration rules are undocumented, unguessable, and fail in total silence. This encodes them, measured."),
       app("radar", "An instrument with no antenna: POST signal readings from a machine that has one and it draws them as bands, meters and trends. The sensor is yours; the display is here."),
@@ -939,7 +1009,7 @@ function indexFrame() {
 }
 
 // ── HTTP ──────────────────────────────────────────────────────────────────
-const TERMINAL_APPS = new Set(["finger", "photos", "lens", "radar", "dict", "cache", "agent-ready"]);
+const TERMINAL_APPS = new Set(["finger", "photos", "lens", "radar", "dict", "cache", "agent-ready", "encode"]);
 
 async function buildFrame(name, request, env, ctx, url) {
   const tokens = tokenizeKeys(url.searchParams.get("keys") ?? url.searchParams.get("k") ?? "");
@@ -952,6 +1022,7 @@ async function buildFrame(name, request, env, ctx, url) {
   if (name === "dict") return dictFrame(env, request, state, ctx);
   if (name === "cache") return cacheFrame(env, request, state, ctx);
   if (name === "agent-ready") return agentReadyRoute(env, request, state, ctx);
+  if (name === "encode") return encodeFrame(env, request, state, ctx);
   return null;
 }
 

@@ -108,7 +108,7 @@
       // boot at 101), and twelve exact entries put this config at 102. A site
       // can only claim so many paths from the asset layer, which is a real
       // ceiling on how many surfaces you can add this way.
-      "/finger*", "/radar*", "/dict*", "/cache*", "/agent-ready*",
+      "/finger*", "/radar*", "/dict*", "/cache*", "/agent-ready*", "/encode*",
       "/photos.txt", "/lens.txt",
       "/search", "/search.json",
       "/coffee", "/coffee/*", "/serendipity", "/serendipity/*",
