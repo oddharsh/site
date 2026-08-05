@@ -8,6 +8,7 @@ import { jsonResponse } from "./lib/http.js";
 import { queryPhotos } from "./photos.js";
 import { RN_FALLBACK, getTracksSWR } from "./rn.js";
 import { searchSite } from "./search.js";
+import { terminalToolFrame } from "./terminal.js";
 import { AGENT_SURFACES } from "./lib/site-manifest.js";
 import { CACHE_EMPTY, CACHE_LIVE, CACHE_STATIC, mcpCorsHeaders, mcpGate, mcpServer } from "./lib/mcp-protocol.js";
 
@@ -76,6 +77,45 @@ const MCP_TOOLS = [
     name: "lens_compare",
     description: "Inspect two public HTTP(S) URLs and compare status, content, readiness, spectrum, agent doors, and discovery surfaces.",
     inputSchema: { type: "object", properties: { left: { type: "string" }, right: { type: "string" } }, required: ["left", "right"] },
+  },
+  // ── the terminal programs ───────────────────────────────────────────────
+  // These return a rendered 80-column FRAME as text, not a record. That is the
+  // point rather than a limitation: the frame names its own controls, so a
+  // caller learns the program by reading one instead of by being handed a
+  // schema. Every frame also returns the `url` that produced it, which is the
+  // whole state — resume, fork, or hand it to somebody else by passing it back.
+  //
+  // The structured twins already exist beside these (search_site, photo_query,
+  // lens_inspect). A caller that wants fields should use those; these are for
+  // the caller that wants to EXPLORE, and for the human reading over its
+  // shoulder. Frames are never coloured here: an ANSI escape in a context
+  // window is noise the model then has to be robust to.
+  {
+    name: "terminal_finger",
+    description: "Look up who runs aadhar.sh, as a drivable terminal program. Panes: overview, writing, reading, listening, photos, around, coffee, deploys, search. Send `keys` to move (1-9 pane, j/k cursor, <cr> open, h back, ? help) and pass the returned `url`'s params back to continue. Returns a rendered 80-column frame.",
+    inputSchema: { type: "object", properties: {
+      keys: { type: "string", description: "a key sequence, up to 32 keys, e.g. \"2jj<cr>\"" },
+      pane: { type: "string", enum: ["overview", "writing", "reading", "listening", "photos", "around", "coffee", "deploys", "search"] },
+      cursor: { type: "integer", minimum: 0, maximum: 4999 },
+      open: { type: "string", description: "id of the row to open (slug, index, or version number)" },
+      q: { type: "string", description: "query for the search pane" },
+    } },
+  },
+  {
+    name: "terminal_photos",
+    description: "Browse the published photo archive as a terminal frame, filterable by caption, film simulation, body, and lens. Opening a frame shows its exposure and the in-camera recipe it was shot with. Send `keys` (j/k cursor, <cr> open, n/p page).",
+    inputSchema: { type: "object", properties: {
+      keys: { type: "string" }, q: { type: "string" }, film: { type: "string" },
+      camera: { type: "string" }, lens: { type: "string" },
+      page: { type: "integer", minimum: 0, maximum: 200 },
+      cursor: { type: "integer", minimum: 0, maximum: 4999 },
+      open: { type: "string", description: "photo stem to open" },
+    } },
+  },
+  {
+    name: "terminal_lens",
+    description: "Inspect one public HTTP(S) URL and render the observation as a terminal frame: readability, agent doors, and what a single scan costs to read. Same rate limit and same refusals as lens_inspect; use lens_inspect instead if you want the fields rather than the frame.",
+    inputSchema: { type: "object", properties: { url: { type: "string" } }, required: ["url"] },
   },
 ];
 
@@ -160,6 +200,14 @@ async function callTool(name, args, request, env, ctx) {
     try { return await compareLensTargets(left.url, right.url, env); }
     catch { return errorResult("Lens comparison failed."); }
   }
+  // The three frame tools share one implementation, because the HTTP route and
+  // the tool are the same program read through different doors. terminal_lens does
+  // NOT get its own rate-limit check here: lensFrame calls the same
+  // overLensBudget bucket lens_inspect does, so the ceiling is shared whichever
+  // door you knock on — the rule the crawl-tool note above already states.
+  if (name === "terminal_finger") return terminalToolFrame("finger", args, request, env, ctx);
+  if (name === "terminal_photos") return terminalToolFrame("photos", args, request, env, ctx);
+  if (name === "terminal_lens") return terminalToolFrame("lens", args, request, env, ctx);
   return { _unknown: true };
 }
 

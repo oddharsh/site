@@ -311,6 +311,32 @@ export async function queryPhotos(env, options = {}, ctx = null) {
   };
 }
 
+// The archive's shape rather than its contents: how many shots per camera, lens,
+// film simulation, and year. /terminal/photos renders these as meters, where the
+// DISTRIBUTION is the answer ("mostly Classic Chrome on the 27mm") and the exact
+// count is a footnote.
+//
+// It reads metadata.json once and folds, rather than paging queryPhotos. That
+// query caps `limit` at 100 against a 158-photo archive, so a facet count built
+// on top of it would need two passes and would silently under-report the day the
+// archive outgrows the second one. Facets are also the one question where the
+// public-field projection doesn't apply: these are counts, not records.
+export async function photoFacets(env) {
+  const metadata = await getStaticPhotoJson(env, "images/metadata.json", {});
+  const tally = { camera: new Map(), lens: new Map(), film: new Map(), year: new Map() };
+  const bump = (map, key) => { if (key) map.set(key, (map.get(key) || 0) + 1); };
+  const records = Object.values(metadata || {});
+  for (const record of records) {
+    bump(tally.camera, record.camera);
+    bump(tally.lens, record.lens);
+    bump(tally.film, record.film);
+    bump(tally.year, String(record.date || "").slice(0, 4) || null);
+  }
+  // Counts descending, then name, so a redraw of the same archive is byte-identical.
+  const rank = (map) => [...map.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([name, count]) => ({ name, count }));
+  return { total: records.length, camera: rank(tally.camera), lens: rank(tally.lens), film: rank(tally.film), year: rank(tally.year) };
+}
+
 export async function handlePhotoQuery(request, env, ctx) {
   const url = new URL(request.url);
   const payload = await queryPhotos(env, {

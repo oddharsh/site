@@ -91,6 +91,12 @@ export const AGENT_SURFACES = [
     "description": "Inspect how a public URL reads to people and machines: raw HTML, JSON-LD, llms.txt."
   },
   {
+    "path": "/terminal",
+    "title": "Terminal",
+    "kind": "utility",
+    "description": "Three terminal programs an agent can drive by keypress: finger (who runs this host), photos (the archive), and lens (how a URL reads to a machine)."
+  },
+  {
     "path": "/pixel-peeper",
     "title": "Pixel Peeper",
     "kind": "utility",

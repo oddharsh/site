@@ -103,7 +103,7 @@
       "/whoareyou", "/whoareyou.json", "/security",
       "/reading", "/updates", "/updates.json", "/restore",
       "/lens", "/lens/", "/lens/fetch", "/lens/shot", "/lens/browser", "/lens/compare.json", "/lens/census", "/lens/census.json",
-      "/mcp", "/search", "/search.json",
+      "/mcp", "/terminal", "/terminal/*", "/search", "/search.json",
       "/coffee", "/coffee/*", "/serendipity", "/serendipity/*",
       "/slots", "/book", "/approve", "/decline",
       "/llms-full.txt", "/ledger", "/ledger.json",

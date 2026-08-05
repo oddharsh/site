@@ -39,6 +39,7 @@ import { handleRn, handleRnAdmin, handleRnArt, handleRnMarkdown, handleRnSet, ha
 import { cronHomeProbe } from "./perf-probe.js";
 import { handleSearch, handleSearchJson } from "./search.js";
 import { handleSecurityCenter } from "./security.js";
+import { handleTerminal } from "./terminal.js";
 import { handleSystemRestore, handleUpdatesJson, handleWindowsUpdate } from "./updates.js";
 import { handleWhoareyou, handleWhoareyouJson } from "./whoareyou.js";
 import { handleWritingIndex, handleWritingPost } from "./writing.js";
@@ -281,6 +282,12 @@ const ROUTES = new Map([
 
   ["/mcp", handleSiteMcp],
 
+  // the terminal utilities. /terminal is the index; the programs live under it and
+  // are matched by the PREFIX entry below, which also owns the 404 for a name
+  // that isn't one of them.
+  ["/terminal", handleTerminal],
+  ["/terminal/", routeDropSlash],
+
   ["/search", handleSearch],
   ["/search.json", handleSearchJson],
 
@@ -369,6 +376,15 @@ const PREFIX = [
       return !!slug && slug.indexOf("/") === -1 && slug.indexOf(".") === -1;
     },
     handle: routeWritingPost,
+  },
+  {
+    // The terminal programs. Matched as a prefix rather than enumerated in
+    // ROUTES so the handler owns its own "no such program" frame — a 404 that
+    // names the three that DO exist is worth more to a caller who guessed than
+    // the asset layer's bare miss.
+    label: "/terminal/<program>",
+    match: (pathname) => pathname.startsWith("/terminal/"),
+    handle: handleTerminal,
   },
   {
     label: "/rn/art/<hash>-<width>-<v>.<ext>",
