@@ -98,12 +98,41 @@ worktrees may edit freely, but a worktree is not a release surface.
   in-process (`npm run routes:check`, wrangler's `createTestHarness()`), so a
   broken route fails the PR instead of the deploy.
 - Only a successful CI run for `main` associated with a merged PR can promote
-  the exact tested commit to the machine-owned `production` branch. GitHub's
-  current free private-repo plan cannot enforce branch protection, so the
-  workflow guard is the release backstop. Cloudflare Workers Builds watches
-  `production` and is the only production publisher for the site Worker, which
-  bundles `holding/`, `cal/`, and `serendipity/`. The Garage and LWE demos remain
-  auxiliary Worker projects.
+  the exact tested commit to the machine-owned `production` branch. Cloudflare
+  Workers Builds watches `production` and is the only production publisher for
+  the site Worker, which bundles `holding/`, `cal/`, and `serendipity/`. The
+  Garage and LWE demos remain auxiliary Worker projects.
+- **Repository rulesets enforce the branch half of that, since 2026-08-05.**
+  This note used to say GitHub's free private-repo plan could not enforce branch
+  protection, which made the promote workflow's own guards the whole backstop.
+  The repo is public now, so rulesets cost nothing, and both branches carry one:
+
+  | ruleset | rules | bypass actors |
+  |---|---|---|
+  | `main` | PR required (0 approvals), required check `validate`, no force-push, no deletion | none |
+  | `production` | no force-push, no deletion | none |
+
+  **Zero bypass actors on `main` is the load-bearing part, and an admin exemption
+  would quietly undo it.** Claude, Codex, and every local worktree push with the
+  OWNER's credentials, so "bypass for repository admins" exempts precisely the
+  actors the rule exists to catch. Approvals sit at 0 because GitHub refuses to
+  let anyone approve their own PR, so a solo repo requiring 1 could never merge.
+  The `validate` check is pinned to `integration_id: 15368` (the GitHub Actions
+  app), so only a real workflow run satisfies it and no caller of the
+  commit-status API can. `strict_required_status_checks_policy` is FALSE on
+  purpose: requiring every PR to be rebased onto the tip first would make each
+  Dependabot PR churn on every unrelated merge.
+
+  `production` deliberately carries no pull-request rule. `promote-production.yml`
+  moves that branch with a `PATCH .../git/refs/heads/production` carrying
+  `force=false`, and a PR rule there would break the release path outright. What
+  the two rules it does carry buy is that the release branch can only ever move
+  FORWARD, so Workers Builds cannot be handed a rewritten history.
+
+  The promote workflow's two guards (the tested commit must still be current
+  `main`, and it must belong to a merged PR into `main`) are belt and braces now
+  rather than the only line. Keep them: a ruleset governs refs, while those guards
+  govern which commit is allowed to become a release.
 - **Reaching `production` no longer moves traffic.** Workers Builds runs
   `wrangler versions upload`, so a promotion builds the commit, uploads the
   assets, checks the secrets, and mints a servable preview URL, while production
@@ -141,6 +170,15 @@ worktrees may edit freely, but a worktree is not a release surface.
   `npm run deploy` fallback. Neither is automatic and neither should be — a
   deploy is the owner's call. Just know that merging is not the last step for
   this class of fix, and CI will not tell you so.
+
+  **Branch protection sharpened this on 2026-08-05.** `validate` is a REQUIRED
+  check now, so a drift fix that used to merge red cannot merge at all: the one
+  check gating it asserts against the very production it exists to repair. The
+  escape is to set the `main` ruleset's enforcement to `disabled` for that single
+  merge (Settings, then Rules), publish, and flip it back once the check goes
+  green on its own. The audit log records both flips. Do NOT reach for a bypass
+  actor instead, because a standing exemption is permanent and silent, while a
+  disabled ruleset is a deliberate act somebody can see.
 - Configure one Workers Build project for the site Worker with `production` as
   its production branch and repository root `.`. Keep the dashboard Build
   command blank; use the repo's Wrangler-owned build during the Deploy command,
