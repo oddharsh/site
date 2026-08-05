@@ -20,7 +20,10 @@
 .idea/
 
 # node (root: build.mjs minifiers + wrangler; workspaces cal/ cf-garage/ lwe-ask/ serendipity/)
-node_modules/
+# NO trailing slash, deliberately: a trailing slash restricts the rule to DIRECTORIES,
+# and a worktree that symlinks node_modules at the main checkout to skip a second install
+# then has an unignored symlink named node_modules. That is how one got committed in #227.
+node_modules
 npm-debug.log
 
 # secrets — wrangler stores these in .dev.vars when running `wrangler dev`
