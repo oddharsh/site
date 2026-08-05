@@ -54,7 +54,12 @@ const exec = promisify(execFile);
 const DEFAULT_STEPS = [10, 50, 100];
 const SAMPLE_URL = "https://aadhar.sh/whoareyou.json";
 const SAMPLES = 40;
-const SETTLE_MS = 5000;
+// Propagation, then re-sampling. 5s was the original settle and it measured the
+// old world: `wrangler versions deploy` returns when the split is RECORDED, not
+// when the edge routes on it. See the retry loop for the ramp this got wrong.
+const SETTLE_MS = 20000;
+const RESAMPLE_MS = 25000;
+const SAMPLE_ATTEMPTS = 3;
 
 // ---------------------------------------------------------------- args ----
 
@@ -250,22 +255,52 @@ for (const pct of steps) {
     "--message", `deploy:promote ramp to ${pct}%`,
   ]);
 
-  // Let the change propagate before believing a sample of it.
-  await sleep(SETTLE_MS);
-  const s = await sample(target, previous);
-  const pctSeen = Math.round((s.onTarget / s.total) * 100);
-  console.log(`   sampled ${s.total}: ${s.onTarget} on target (${pctSeen}%), ${s.onPrevious} on previous, ${s.errors} error(s)`);
+  // Let the change propagate before believing a sample of it, then RETRY rather
+  // than trusting one window.
+  //
+  // The first real ramp failed here on a split that was working fine. It read
+  // 0 of 40 on a live 10% split; a hand sample minutes later read 3 of 60, which
+  // is 5% against a 10% target and entirely ordinary. Two things made a healthy
+  // ramp look dead:
+  //
+  //   1. FIVE SECONDS IS NOT PROPAGATION. `wrangler versions deploy` returns as
+  //      soon as the split is recorded, and the edge takes longer than that to
+  //      route on it. The early samples were measuring the old world.
+  //   2. ZERO IS NOT RARE ENOUGH AT n=40. At a true 10%, 0.9^40 is ~1.5% — small
+  //      until you run it on every intermediate step of every release, at which
+  //      point a false abort is a matter of when. Sampling a 4-in-40 signal and
+  //      failing hard on the low tail was never going to hold.
+  //
+  // So: sample, and if nothing lands on the target, wait and sample again before
+  // calling it. A genuinely dead ramp stays at zero across all three windows; a
+  // live one at 10% clears 0-of-40 three times running about 1 in 300,000.
+  let s = null;
+  for (let attempt = 1; attempt <= SAMPLE_ATTEMPTS; attempt++) {
+    await sleep(attempt === 1 ? SETTLE_MS : RESAMPLE_MS);
+    s = await sample(target, previous);
+    const pctSeen = Math.round((s.onTarget / s.total) * 100);
+    const note = attempt > 1 ? ` (attempt ${attempt}/${SAMPLE_ATTEMPTS})` : "";
+    console.log(`   sampled ${s.total}: ${s.onTarget} on target (${pctSeen}%), ${s.onPrevious} on previous, ${s.errors} error(s)${note}`);
+    // Errors are conclusive on the first sighting: a 500 does not become a 200
+    // by waiting, and that is the failure the whole ramp exists to catch.
+    if (s.errors) break;
+    if (pct >= 100 || s.onTarget > 0) break;
+    if (attempt < SAMPLE_ATTEMPTS) {
+      console.log(`   nothing on target yet — waiting ${RESAMPLE_MS / 1000}s for the split to propagate and re-sampling.`);
+    }
+  }
 
   if (s.errors) {
     console.error(`   FAILED: ${s.errors} non-200 response(s): ${[...new Set(s.errorVersions)].join(", ")}`);
+    console.error(`   traffic is CURRENTLY SPLIT at ${pct}% — this script does not roll back for you.`);
     console.error(`   roll back with: npm run deploy:promote -- --rollback`);
     process.exit(1);
   }
-  // The ramp not taking at all is the failure worth catching. A 10% step that
-  // shows ZERO requests on the target across 40 samples is ~1.5% likely by
-  // chance, and far more likely to mean the deploy did not land.
   if (pct < 100 && s.onTarget === 0) {
-    console.error(`   FAILED: no sampled request reached ${target.slice(0, 8)}. The ramp did not take.`);
+    console.error(`   FAILED: no sampled request reached ${target.slice(0, 8)} across ${SAMPLE_ATTEMPTS} windows. The ramp did not take.`);
+    console.error(`   traffic is CURRENTLY SPLIT at ${pct}% — this script does not roll back for you.`);
+    console.error(`   check it with:  npm run deploy:promote -- --status`);
+    console.error(`   roll back with: npm run deploy:promote -- --rollback`);
     process.exit(1);
   }
   if (pct === 100 && s.onPrevious > 0) {
