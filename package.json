@@ -47,6 +47,10 @@
   "engines": {
     "node": ">=24.0.0"
   },
+  "comment:overrides": "undici arrives only through miniflare, which pins it EXACTLY (7.28.0), so npm cannot move it and dependabot cannot either. 7.29.0 closes five advisories in that pin: cross-user cache disclosure + parse crash on degenerate private cache directives (high), the whitespace-around-equals variant of the same, cookie attribute injection via unsanitized domain, response desync in the retry interceptor, and CRLF injection via a blob-like body type. Same major miniflare was built against, so it is a patch bump rather than a runtime gamble. Drop this the day miniflare pins >= 7.29.0 itself.",
+  "overrides": {
+    "undici": "7.29.0"
+  },
   "dependencies": {
     "@noble/post-quantum": "0.6.1"
   }
