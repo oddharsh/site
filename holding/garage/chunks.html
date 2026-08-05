@@ -474,6 +474,11 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
   var drop = document.getElementById("drop"), fileInput = document.getElementById("file");
   var fileC = document.getElementById("file-chunks"), fileS = document.getElementById("file-stats");
 
+  // a dropped file's name is the one string on this page that comes from outside
+  // it, and the stats line below is built with innerHTML for the <b> and the
+  // dedup badge. Escape the name rather than drop the markup.
+  function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+
   async function handleFile(file) {
     if (!file) return;
     fileS.textContent = "chunking " + file.name + " …";
@@ -495,7 +500,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
     });
     fileC.appendChild(frag);
     var avg = Math.round(buf.length / cd.length);
-    fileS.innerHTML = "<b>" + file.name + "</b> · " + (buf.length / 1024).toFixed(1) + " KB · " +
+    fileS.innerHTML = "<b>" + esc(file.name) + "</b> · " + (buf.length / 1024).toFixed(1) + " KB · " +
       cd.length + " chunks (avg " + avg + " B) · " + unique + " unique" +
       (dupBytes ? " · <span class='delta-good'>dedup saves " + (dupBytes / 1024).toFixed(1) + " KB</span>" : "") +
       (cd.length > 80 ? " · showing first 80" : "");

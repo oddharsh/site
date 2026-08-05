@@ -36,7 +36,14 @@ export default {
       if (req.method === "POST" && url.pathname === "/lwe/ask")           return await ask(req, env);
       return json({ error: "not found" }, 404);
     } catch (e) {
-      return json({ error: "something broke", detail: String((e && e.message) || e) }, 500);
+      // `detail` used to carry e.message straight to the client, uncapped. The
+      // three things that throw under here are env.AI.run (whose message names
+      // the model id held in EMBED_MODEL / GEN_MODEL and the "lwe" gateway),
+      // env.VECTORIZE (which names the index and the metadata filter), and the
+      // HMAC when SIGNING_SECRET is missing — all internal configuration a
+      // caller has no other way to learn. It goes to Workers Logs instead.
+      console.error("lwe-ask unhandled", url.pathname, String((e && e.stack) || e));
+      return json({ error: "something broke" }, 500);
     }
   },
 };

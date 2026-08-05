@@ -1004,7 +1004,10 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
   }
 
   /* --- svg pieces ------------------------------------------------------- */
-  function esc(s){ return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+  // ' is escaped as well as ", because this page writes SINGLE-quoted attributes
+  // (href='…' in the example links). An escaper that only knows double quotes is
+  // a breakout waiting for whoever next puts a value in the other kind of quote.
+  function esc(s){ return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;"); }
   /* Blockers and bets are authored mid-sentence, after a bold label in the table
      prose, so most start lowercase. Wherever one is lifted out under its own
      heading it has to read as a sentence again. */
