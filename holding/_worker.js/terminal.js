@@ -50,6 +50,7 @@
 // once per ask, next to a model call. Latency was never the reason the programs
 // stay on URLs. Forking, bookmarking, and testability were.
 import { ASK_BUDGET, ASK_LIMITS, asAgentCall, runAsk } from "./ask.js";
+import { MEASURED, auditUrl } from "./dict.js";
 import { RADAR_LIMITS, radarFrame, readSamples } from "./radar.js";
 import { readAroundChanges } from "./around.js";
 import { readCoffeeAvailability } from "./coffee.js";
@@ -145,7 +146,7 @@ export function stateUrl(state, extra = {}) {
   } else if (state.app === "photos") {
     put("q", state.q); put("film", state.film); put("camera", state.camera); put("lens", state.lens);
     put("page", state.page, 0); put("cursor", state.cursor, 0); put("open", state.open);
-  } else if (state.app === "lens") {
+  } else if (state.app === "lens" || state.app === "dict") {
     put("url", state.url); put("left", state.left); put("right", state.right);
   } else if (state.app === "ask") {
     put("q", state.q); put("at", state.at); put("session", state.session);
@@ -869,6 +870,85 @@ function radarIdleFrame() {
   };
 }
 
+// ── dict: will a browser ever actually use your dictionary? ───────────────
+const VERDICT_STYLE = { ok: "ok", warn: "warn", veto: "bad" };
+const VERDICT_MARK = { ok: "  ok  ", warn: " warn ", veto: " VETO " };
+
+export async function dictFrame(env, request, state, ctx) {
+  if (!state.url.trim()) {
+    return {
+      title: "dict — compression dictionary lint",
+      body: rows(
+        ...wrap("Compression dictionaries fail silently. Chromium declines to register a perfectly good one because of a cache directive on it, and nothing tells you: no console warning, no header, no failed request. Your site just serves full responses forever while you believe it is serving deltas.", INNER).map((row) => [s(row)]),
+        blank(),
+        [s("  curl 'aadhar.sh/terminal/dict?url=https://example.com/app.js'", "accent")],
+        blank(),
+        rule(INNER, "what it checks"),
+        ...wrap("The rules that decide registration, applied to the response headers of the resource you point it at, plus the other half of the handshake: whether a delta-serving response varies on available-dictionary. A cache that does not is not a slow page, it is ERR_CONTENT_DECODING_FAILED.", INNER).map((row) => [s(row, "dim")]),
+        blank(),
+        rule(INNER, "measured on this origin"),
+        ...MEASURED.map(([label, value]) => kv(label, value, INNER, { gutter: 26 })),
+        blank(),
+        ...wrap("There is deliberately no delta calculator here. workerd's node:zlib has zstdCompressSync and SILENTLY IGNORES its dictionary option — measured 2026-08-05, identical byte counts with the right dictionary, a wrong one, and none. A delta computed here would be plain zstd reporting a saving that does not exist.", INNER).map((row) => [s(row, "dim")]),
+      ),
+      status: keyHints([["&url=", "audit a resource"]]),
+    };
+  }
+
+  const target = validateLensTarget(state.url);
+  if (!target.ok) return { title: "dict — refused", body: [[s(target.error, "bad")]], status: [] };
+  if (await overLensBudget(LENS_BUDGETS.inspect, request, env, ctx)) {
+    return { title: "dict — rate limited", body: [[s("Shares Lens's 30/min budget. Try again shortly.", "warn")]], status: [] };
+  }
+
+  const audit = await auditUrl(target.url, env);
+  if (!audit.ok) {
+    return {
+      title: "dict — unreadable",
+      body: [[s(audit.unreadable ? `could not reach it: ${audit.why}` : audit.why, audit.unreadable ? "warn" : "bad")]],
+      status: stateLine(state),
+    };
+  }
+
+  const { dictionary, consumer } = audit;
+  return {
+    title: `dict — ${target.url}`,
+    body: rows(
+      kv("status", audit.status, INNER, { gutter: 16 }),
+      kv("cache-control", dictionary.cacheControl || "(none)", INNER, { gutter: 16 }),
+      blank(),
+      rule(INNER, "as a dictionary"),
+      // Every rule prints, including the ones that passed. A lint that shows only
+      // failures leaves you unsure whether it looked.
+      ...dictionary.results.map((r) => [
+        s(VERDICT_MARK[r.verdict], VERDICT_STYLE[r.verdict]),
+        ...fit([s(r.title, "strong")], 26),
+        s(r.detail, "dim"),
+      ]),
+      blank(),
+      dictionary.registers
+        ? [s(dictionary.warns.length
+          ? "  Chromium will register this, but read the warnings above."
+          : "  Chromium will register this.", dictionary.warns.length ? "warn" : "ok")]
+        : [s(`  Chromium will NOT register this: ${dictionary.vetoes.map((v) => v.title).join(", ")}.`, "bad")],
+      blank(),
+      rule(INNER, "as a delta-served response"),
+      kv("content-encoding", consumer.encoding || "(none)", INNER, { gutter: 20 }),
+      kv("vary", consumer.vary || "(none)", INNER, { gutter: 20 }),
+      consumer.isDelta && !consumer.variesOnDictionary
+        ? [s("  serving a delta WITHOUT vary: available-dictionary — a shared cache will hand", "bad")]
+        : blank(),
+      consumer.isDelta && !consumer.variesOnDictionary
+        ? [s("  this to a client with no dictionary: ERR_CONTENT_DECODING_FAILED, not a slow page.", "bad")]
+        : blank(),
+    ),
+    status: [
+      [s("verdict ", "label"), s(dictionary.registers ? "registers" : "never registers", dictionary.registers ? "ok" : "bad")],
+      stateLine(state),
+    ],
+  };
+}
+
 // ── the index frame ───────────────────────────────────────────────────────
 function indexFrame() {
   const app = (name, line) => rows(
@@ -886,6 +966,7 @@ function indexFrame() {
       app("finger", "Who runs this host: writing, reading, listening, photographs, neighborhood, availability, deploy log, and a search over all of it. Drivable — send keys, get the next frame."),
       app("photos", "The photo archive, filterable by film simulation, body, lens, and caption. Opening a frame shows its exposure and the in-camera recipe it was shot with."),
       app("lens", "Inspect any public URL the way a machine does: readability, agent doors, and what one scan of it costs to read."),
+      app("dict", "Will a browser ever actually use the compression dictionary you are serving? The registration rules are undocumented, unguessable, and fail in total silence. This encodes them, measured."),
       app("radar", "An instrument with no antenna: POST signal readings from a machine that has one and it draws them as bands, meters and trends. The sensor is yours; the display is here."),
       app("ask", "Plain language in, real tool calls out. Picks from the same seven tools /mcp exposes, calls them, answers from what came back, and prints every call it made."),
       rule(INNER, "driving"),
@@ -896,7 +977,7 @@ function indexFrame() {
 }
 
 // ── HTTP ──────────────────────────────────────────────────────────────────
-const TERMINAL_APPS = new Set(["finger", "photos", "lens", "ask", "radar"]);
+const TERMINAL_APPS = new Set(["finger", "photos", "lens", "ask", "radar", "dict"]);
 
 async function buildFrame(name, request, env, ctx, url) {
   const tokens = tokenizeKeys(url.searchParams.get("keys") ?? url.searchParams.get("k") ?? "");
@@ -907,6 +988,7 @@ async function buildFrame(name, request, env, ctx, url) {
   if (name === "lens") return lensFrame(env, request, state, ctx);
   if (name === "ask") return askFrame(env, request, state, ctx);
   if (name === "radar") return radarIdleFrame();
+  if (name === "dict") return dictFrame(env, request, state, ctx);
   return null;
 }
 

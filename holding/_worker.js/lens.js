@@ -1945,9 +1945,19 @@ export async function lensProbe(url, env, accept) {
     const to = setTimeout(() => ctrl.abort(), 5000);
     let res;
     try { res = await lensFetch(url, env, ctrl.signal, accept); } finally { clearTimeout(to); }
-    if (!res.ok) { try { await res.body?.cancel(); } catch (_e) {} return { ok: false, status: res.status, url }; }
+    if (!res.ok) {
+      try { await res.body?.cancel(); } catch (_e) {}
+      const headers = {};
+      for (const [key, value] of res.headers) headers[key.toLowerCase()] = value;
+      return { ok: false, status: res.status, url, headers };
+    }
     const cap = await lensReadCapped(res, 256 * 1024);
-    return { ok: true, status: res.status, url, contentType: res.headers.get("content-type") || "", body: cap.text, truncated: cap.truncated };
+    // `headers` is additive and exists for dict.js, whose whole subject is the
+    // response headers rather than the body. Flattened to a plain object so the
+    // audit can be a pure function of it and therefore testable without a fetch.
+    const headers = {};
+    for (const [key, value] of res.headers) headers[key.toLowerCase()] = value;
+    return { ok: true, status: res.status, url, contentType: res.headers.get("content-type") || "", headers, body: cap.text, truncated: cap.truncated };
   } catch (e) { return { ok: false, error: (e && e.message) || String(e), url }; }
 }
 

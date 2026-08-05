@@ -97,6 +97,36 @@ your machine, and you keep the radar, the bands, and the hunt without the labels
 It is also an MCP tool, `terminal_radar`, for an agent that has a shell and
 therefore an antenna.
 
+## dict — will a browser ever use your compression dictionary?
+
+Compression dictionaries fail in total silence. Chromium declines to register a
+perfectly good one because of a cache directive on it, and nothing tells you: no
+console warning, no header, no failed request. The site just serves full
+responses forever while you believe it is serving deltas.
+
+```
+curl 'aadhar.sh/terminal/dict?url=https://example.com/app.js'
+```
+
+Vetoes, each measured rather than inferred: **`must-revalidate`** and
+**`no-cache`** each kill registration outright, which surprises people because
+neither means "do not store" anywhere else in HTTP. `no-store` kills it for the
+obvious reason. **The dictionary's usable life is the `stale-while-revalidate`
+window, not `max-age`** — a year of max-age with no SWR is usable for zero
+seconds past freshness, which reads as "it worked yesterday". `s-maxage` is a
+shared-cache directive and buys a browser nothing.
+
+It checks the other half of the handshake too: a response serving
+`content-encoding: dcz` without `vary: available-dictionary` lets a shared cache
+hand that delta to a client with no dictionary. That is not a slow page, it is
+`ERR_CONTENT_DECODING_FAILED`.
+
+**There is deliberately no delta calculator.** workerd's `node:zlib` has
+`zstdCompressSync` and silently ignores its `dictionary` option — measured
+2026-08-05, byte-identical output with the correct dictionary, a deliberately
+wrong one, and none at all. A delta computed there would be plain zstd reporting
+a saving that does not exist, with no error to catch.
+
 ## Driving one
 
 Send keys with `?k=` (one key) or `?keys=` (a sequence, up to 32). Named keys
