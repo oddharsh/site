@@ -384,7 +384,8 @@
   setPrompt();
   form.hidden = false;
   write("");
-  write("  Type `help` for commands. This console makes the same requests an agent does.");
+  write("  Type `help` for commands. Every one of them makes the same request an");
+  write("  agent would — the same frames answer `curl` and the MCP server at /mcp.");
   write("");
   scroll();
 })();

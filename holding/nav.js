@@ -1287,7 +1287,15 @@
 
     // back / forward, injected at the head of the title bar (excluded from title-bar
     // drag because they're <button>, which initDrag already skips).
-    if (!bar.querySelector(".axp-histnav")) {
+    //
+    // A window may opt out with data-no-histnav, and /terminal is the one that
+    // does. Back and Forward are BROWSER controls: on a document window they
+    // read as the window's own chrome, but on a console they read as a terminal
+    // running inside Internet Explorer, which is the opposite of the illusion.
+    // Opting out here rather than by giving that window a different title-bar
+    // class keeps drag, resize, maximize and close-to-home, which a console
+    // window still wants — those are OS chrome, not browser chrome.
+    if (!bar.querySelector(".axp-histnav") && !win.hasAttribute("data-no-histnav")) {
       var hn = el('<span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>');
       bar.insertBefore(hn, bar.firstChild);
       var bBtn = hn.querySelector(".axp-back"), fBtn = hn.querySelector(".axp-fwd");

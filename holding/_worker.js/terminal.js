@@ -696,9 +696,34 @@ async function buildFrame(name, request, env, ctx, url) {
   return null;
 }
 
+const frameLines = (frame) => windowFrame({ title: frame.title, body: frame.body, status: frame.status });
+
 /** The frame as plain text: what curl, MCP, and the contract tests all read. */
 export function frameText(frame, { color = false } = {}) {
-  return emit(windowFrame({ title: frame.title, body: frame.body, status: frame.status }), { color });
+  return emit(frameLines(frame), { color });
+}
+
+/**
+ * The frame as classed HTML, for the boot output the server renders into the
+ * console.
+ *
+ * This exists so the FIRST frame you see is coloured like every frame after it.
+ * The obvious alternatives were both worse: emitting ANSI into the document
+ * would show raw escapes with JavaScript off, and having the client re-fetch the
+ * frame on boot would buy a wasted request and a visible flash.
+ *
+ * It reads the same span model emit() reads, so there is no second palette and
+ * no ANSI parser on this side — a span's style NAME becomes a class, and the CSS
+ * carries the colour. The client keeps its own SGR parser because it receives
+ * frames over the wire as text; the two agree because the class colours below
+ * are the xterm-256 values the escape codes resolve to.
+ */
+function frameMarkup(frame) {
+  return frameLines(frame).map((spans) => {
+    const inner = spans.map(([text, style]) =>
+      (style ? `<span class="c-${style}">${escHtml(text)}</span>` : escHtml(text))).join("");
+    return `<div class="ps-line">${inner}</div>`;
+  }).join("");
 }
 
 // ── the browser view: a Windows PowerShell window ─────────────────────────
@@ -713,47 +738,120 @@ export function frameText(frame, { color = false } = {}) {
 // stretch: PowerShell 1.0 shipped for Windows XP in October 2006, on Luna. The
 // #012456 blue and the copyright banner are the real ones.
 //
-// FONT NOTE, because it is the one place this departs from design/tokens: the
-// console stack leads with Lucida Console, the font PowerShell actually drew in.
-// Every entry is a NATIVE system font, so the zero-font-bytes rule is intact and
-// no @font-face or preload appears anywhere; what bends is the three-stacks rule,
-// for the one element on the site imitating a specific Microsoft application.
+// FONT NOTE, and the answer here is to stay on the design system rather than
+// grow a stack. The console is `"Lucida Console", var(--font-mono)`: one native
+// Windows font (the one PowerShell actually drew in, absent elsewhere and
+// therefore free) in front of the token every other mono surface on this site
+// already uses. No @font-face, no url(), no preload, no bytes.
 //
-// Consolas and Menlo sit between it and Courier New for a structural reason
-// rather than taste. These frames are drawn in CP437 box characters, and a font
-// without those glyphs makes the browser substitute a DIFFERENT font for them —
-// which lands at a different advance width and tears every border in the frame.
-// Menlo (macOS) and DejaVu Sans Mono (Linux) both carry the full box-drawing
-// block at the monospace advance, so the fallback chain degrades in FIDELITY
-// rather than in alignment. Measured on macOS: box glyphs and ASCII both at
-// 7.2px, all 80 columns landing at one width.
+// The thing to know before touching it: these frames are drawn in CP437 box
+// characters, and a font missing those glyphs makes the browser substitute a
+// DIFFERENT font for exactly them. If that substitute is not monospace-matched,
+// every border in the frame tears. Measured on macOS with this stack (where
+// Lucida Console is absent, so it is the token doing the work): box glyphs and
+// ASCII both 7.2px, all 80 columns landing at one width. Re-measure if the
+// stack changes; do not assume.
 const PS_CSS = `/*min*/
-.ps{background:#012456;border:1px solid oklch(35% .02 255);box-shadow:inset 1px 1px 3px #001028;padding:10px 12px;height:34rem;overflow:auto;cursor:text}
-.ps-line{font:12px/1.35 "Lucida Console",Consolas,Menlo,"DejaVu Sans Mono","Courier New",Courier,monospace;color:#eeedf0;white-space:pre;min-height:1.35em}
-.ps-banner{color:#eeedf0;font-weight:bold}
+.ps-window>.content{padding:0!important;overflow:hidden!important;display:flex;background:#012456}
+.ps-window .title-bar .icon{background:#012456;border:1px solid #86a9e4;border-radius:2px;position:relative;overflow:hidden}
+.ps-window .title-bar .icon::before{content:"";position:absolute;left:3px;top:50%;width:0;height:0;border:3px solid transparent;border-left-color:#fff;border-right-width:0;transform:translateY(-50%)}
+.ps-window .title-bar .icon::after{content:"";position:absolute;left:8px;bottom:3px;width:5px;height:1px;background:#fff}
+/* The font lives on .ps, not on .ps-line, so that the ch unit below resolves in
+   the CONSOLE's font rather than the inherited UI one. 80ch in Tahoma is not 80
+   columns of anything. */
+.ps{flex:1 1 auto;min-height:0;overflow-y:scroll;overflow-x:auto;background:#012456;padding:6px 8px;cursor:text;font:12px/1.35 "Lucida Console",var(--font-mono)}
+/* The window is sized to hold exactly 80 columns, the width a real console
+   opens at: 576px of text (80 x 7.2) + 16px padding + 16px scrollbar + 16px of
+   window chrome = 624, set as the lunaPage width. Left at the 760px page
+   default it carried 136px of dead field to the right of every frame, which is
+   the tell that a terminal is really a div.
+   A pixel width and not 80ch, though ch is the honest unit here: max-content on
+   the window collapsed it to 4px, because .content is overflow:hidden and
+   contributes no intrinsic width, and resolving ch on the window itself would
+   read the Tahoma caption font rather than the console's. So the width assumes
+   the mono fallback measures 7.2px at 12px, which it does on the stacks in
+   play. A machine that disagrees gets a few px of slack or a horizontal
+   scrollbar, never a broken frame -- that is what overflow-x:auto above is
+   for. */
+.ps-line{color:#eeedf0;white-space:pre;min-height:1.35em}
+.ps-banner{font-weight:bold}
+/* The span palette, server side. Each colour is the xterm-256 value the matching
+   SGR escape in lib/tui.js resolves to, so a frame rendered here and a frame
+   parsed from the wire by terminal.js land on the same colour. Change one, change
+   both -- and the 80-column contract test will not catch it, because colour is
+   not width. */
+.c-bar,.c-sel{color:#eee;background:#005faf;font-weight:bold}
+.c-barDim{color:#afd7ff;background:#005faf}
+.c-border,.c-label{color:#5f8787}
+.c-key{color:#af8700;font-weight:bold}
+.c-accent{color:#4f9fd8}
+.c-ok{color:#00875f}
+.c-warn{color:#af8700}
+.c-bad{color:#af0000}
+.c-dim{opacity:.65}
+.c-strong{font-weight:bold}
 .ps-dim{opacity:.7}
 .ps-err{color:#ff9a9a}
-.ps-echo{color:#eeedf0}
 .ps-form{display:flex;align-items:baseline;gap:0}
-.ps-prompt{font:12px/1.35 "Lucida Console",Consolas,Menlo,"DejaVu Sans Mono","Courier New",Courier,monospace;color:#eeedf0;white-space:pre}
-.ps-input{flex:1;background:transparent;border:0;outline:0;padding:0;font:12px/1.35 "Lucida Console",Consolas,Menlo,"DejaVu Sans Mono","Courier New",Courier,monospace;color:#eeedf0;caret-color:#eeedf0}
-.ps-note{color:oklch(47% 0 0);font-size:9pt;margin:10px 0 0}
-.ps-note code{font-family:"Courier New",Courier,monospace}`;
+.ps-prompt{color:#eeedf0;white-space:pre}
+.ps-input{flex:1;min-width:0;background:transparent;border:0;outline:0;padding:0;font:inherit;color:#eeedf0;caret-color:#eeedf0}
+/* The classic Luna scrollbar, drawn on the console itself. A console window has
+   its scrollbar INSIDE the frame against the dark field, which is a detail the
+   eye reads before it reads any text; the page-level bar the rest of the site
+   uses would sit outside the illusion. overflow-y is scroll rather than auto,
+   for the same reason the real one is always drawn: a track that appears and
+   disappears as output grows makes the whole window twitch.
+   Two things about scrollbar-color, and BOTH are load-bearing here.
+   Chromium IGNORES every ::-webkit-scrollbar rule on an element whose used
+   scrollbar-color is not auto. The two mechanisms are mutually exclusive, and
+   the failure is silent: you get the platform default, which on macOS is an
+   overlay bar of ZERO width, reading as "my CSS did not load" rather than as a
+   conflict.
+   The trap is that scrollbar-color INHERITS, and xpChromeCss sets it on html
+   for the whole site. So this element inherited a non-auto value it never
+   declared, and every rule below was being discarded. Resetting to auto is what
+   turns them back on -- measured here, 0px to 16px. If a console ever loses its
+   scrollbar again, check the inherited value first.
+   Firefox needs the standard property and does not support
+   selector(::-webkit-scrollbar), so that query hands it the colours instead.
+   NO BACKTICKS in here. This comment lives inside a JS template literal, so one
+   would end the literal early -- which is exactly what happened, and what the
+   build's post-substitution re-parse is there to catch. */
+.ps{scrollbar-color:auto}
+@supports not selector(::-webkit-scrollbar){.ps{scrollbar-color:oklch(62% .14 255) oklch(91% .02 248)}}
+.ps::-webkit-scrollbar{width:16px}
+.ps::-webkit-scrollbar-track{background:oklch(91% .02 248);border-left:1px solid oklch(78% .04 250)}
+.ps::-webkit-scrollbar-thumb{background:linear-gradient(90deg,oklch(76% .10 253) 0%,oklch(66% .14 255) 45%,oklch(58% .16 257) 100%);border:1px solid oklch(45% .13 258);border-radius:2px}
+.ps::-webkit-scrollbar-thumb:hover{background:linear-gradient(90deg,oklch(80% .11 253) 0%,oklch(70% .15 255) 45%,oklch(62% .17 257) 100%)}
+.ps::-webkit-scrollbar-button:vertical{height:16px;background:oklch(91% .02 248) no-repeat center;border:1px solid oklch(78% .04 250)}
+.ps::-webkit-scrollbar-button:vertical:decrement{background-image:url("data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20width=%227%22%20height=%224%22%3E%3Cpath%20d=%22M3.5%200L7%204H0z%22%20fill=%22%23264f8c%22/%3E%3C/svg%3E")}
+.ps::-webkit-scrollbar-button:vertical:increment{background-image:url("data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20width=%227%22%20height=%224%22%3E%3Cpath%20d=%22M3.5%204L0%200h7z%22%20fill=%22%23264f8c%22/%3E%3C/svg%3E")}
+.ps::-webkit-scrollbar-button:vertical:start:increment,.ps::-webkit-scrollbar-button:vertical:end:decrement{display:none}`;
 
 function frameResponse(frame, path) {
-  const text = frameText(frame, { color: false });
-  // The boot output is the frame, one <div> per row, so the client script can
-  // append to the same scrollback rather than replacing a <pre> it has to parse.
-  const scrollback = text.split("\n").map((row) => `<div class="ps-line">${escHtml(row)}</div>`).join("");
+  // One <div> per row, so the client script appends to the same scrollback
+  // rather than replacing a <pre> it would have to parse.
+  const scrollback = frameMarkup(frame);
   return lunaPage({
     title: `aadhar.sh${path}`,
-    path: "Windows PowerShell",
-    width: 760,
+    // The caption is the APPLICATION's, not the site's. Every other window here
+    // is captioned with its path ("aadhar.sh/lens") because every other window
+    // is a document; this one is a program, and a program's title bar says which
+    // program it is. "Administrator:" is the real prefix an elevated console
+    // carries, which is the state you would be in to go poking at a machine.
+    path: "Administrator: Windows PowerShell",
+    width: 624,
     description: "A PowerShell console on aadhar.sh: read this site the way an agent does.",
     robots: "noindex",
     cache: "no-store",
     css: PS_CSS,
     headers: { "x-robots-tag": "noindex" },
+    windowClass: "ps-window",
+    // No Back and Forward on this window — see the opt-out in nav.js. They are
+    // BROWSER controls, and a console carrying them reads as a terminal running
+    // inside Internet Explorer. Drag, resize, maximize and close all stay: those
+    // are OS chrome, which a console window genuinely has.
+    windowAttrs: "data-no-histnav",
     scripts: `<script src="/terminal.js" defer></script>`,
     body: `<div class="ps" data-ps-console tabindex="0">`
       + `<div class="ps-out">`
@@ -768,8 +866,12 @@ function frameResponse(frame, path) {
       + `<span class="ps-prompt">PS aadhar.sh\\&gt; </span>`
       + `<input class="ps-input" name="c" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">`
       + `</form>`
-      + `</div>`
-      + `<p class="ps-note">Every command here makes the same request an agent would. The same frames answer <code>curl aadhar.sh${path}</code> and the MCP server at <code>/mcp</code>.</p>`,
+      + `</div>`,
+    // Nothing sits below the window. There WAS a paragraph here explaining that
+    // the same frames answer curl and /mcp, and it was the single strongest tell
+    // that this was a web page with a terminal pasted into it — real console
+    // windows do not come with a caption underneath. The same sentence lives in
+    // the console's own boot output, where a terminal would actually say it.
   });
 }
 

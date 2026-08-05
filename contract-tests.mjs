@@ -2772,14 +2772,25 @@ test("a browser gets the same frame a terminal does, not a second layout", async
   // The terminal view is only honest if there is one renderer. If the HTML arm
   // ever grew its own layout, what a person sees and what an agent reads would
   // start to differ, and the page would be claiming something untrue.
+  //
+  // The document's rows carry per-span <span class="c-*"> for colour, so this
+  // compares TEXT CONTENT rather than raw markup: strip the tags, unescape, and
+  // the browser's console scrollback must be the terminal's frame row for row.
+  // Comparing markup would only prove the two agree on styling, which is not the
+  // claim being made.
   const html = await (await handleTerminal(new Request("https://aadhar.sh/terminal", { headers: { accept: "text/html" } }), terminalEnv(), context())).text();
   const text = await (await terminalGet("/terminal?plain=1")).text();
-  const framed = text.split("\n").filter(Boolean);
-  for (const line of framed) {
-    // The document escapes the frame, so compare on the escaped form.
-    const escaped = line.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    assert.ok(html.includes(escaped), `the HTML view dropped a frame row: ${line}`);
+
+  const rowsInDoc = [...html.matchAll(/<div class="ps-line">([\s\S]*?)<\/div>\s*(?=<div class="ps-line">|<\/div>)/g)]
+    .map((m) => m[1].replace(/<[^>]+>/g, "").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, "&"));
+
+  for (const line of text.split("\n").filter(Boolean)) {
+    assert.ok(rowsInDoc.includes(line), `the HTML view dropped or altered a frame row: ${line}`);
   }
+  // And the colour actually arrived — a document that rendered every row as bare
+  // text would pass the row comparison above while looking nothing like the
+  // frames the console prints once you type into it.
+  assert.ok(/<span class="c-bar">/.test(html), "the boot frame lost its span colouring");
 });
 
 test("an unknown program 404s and names the ones that exist", async () => {
