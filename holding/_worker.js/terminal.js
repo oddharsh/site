@@ -31,6 +31,28 @@
 // a reader over public data, so that ceiling has not bound yet. It would bind
 // the moment one of these apps needed to WRITE something, and at that point the
 // answer is a real session rather than a longer query string.
+//
+// ── this is the same argument MCP's 2026-07-28 revision made ──────────────
+// That revision dropped server-side sessions: no Mcp-Session-Id to mint, no
+// session table to keep, and — the part that actually decides deployments — no
+// need to route the same session back to the same backend machine. This origin
+// already speaks it; lib/mcp-protocol.js is what serves it, and its "DUAL-ERA"
+// note is about exactly that cutover.
+//
+// /terminal applies the same principle ONE LAYER UP. MCP made a single tool
+// CALL stateless; this makes a whole session over those tools stateless too,
+// which is the harder half, because a session is the thing that looks like it
+// obviously needs a server to hold it. It does not. There is a fourth property
+// beyond the three above and it is the one the revision cares most about: any
+// isolate can serve any frame, so there is no affinity to preserve and nothing
+// to fail over.
+//
+// The framing that made this click, and the analogy is the useful part: npx and
+// uvx against their installed counterparts. Fetch, run, discard, reconstruct
+// from the address next time. A Durable Object session is the installed
+// version — faster in principle, and something you now own, keep warm, and have
+// to evict. (Simon Willison on the revision, 2026-07-31:
+// https://simonwillison.net/2026/Jul/31/stateless-mcp/)
 import { ASK_BUDGET, ASK_LIMITS, asAgentCall, runAsk } from "./ask.js";
 import { readAroundChanges } from "./around.js";
 import { readCoffeeAvailability } from "./coffee.js";

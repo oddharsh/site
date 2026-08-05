@@ -17,6 +17,19 @@
 // nothing was real. Same discipline as the photo pipeline's nullable fields:
 // never fabricate, and show the gap rather than paper over it.
 //
+// ── a bounded catalog, not a shell ────────────────────────────────────────
+// The console this answers into LOOKS like shell access, and it deliberately is
+// not. The model may call seven declared tools and nothing else: a name outside
+// the catalog is refused rather than dispatched, the arguments go through each
+// tool's own JSON Schema, and every call is printed in the frame. That is the
+// case for tool catalogs over command execution — they are auditable, and here
+// the audit is the primary output rather than a log nobody reads.
+//
+// It is also why the catalog is worth reusing rather than reinventing: the same
+// seven schemas are what /mcp advertises, so the blast radius of an ask is
+// exactly the blast radius of the public MCP surface. Widening one widens the
+// other, visibly, in one file.
+//
 // ── bounds ────────────────────────────────────────────────────────────────
 // This is the one public route on the site that spends money per request, so it
 // is bounded on four axes rather than one: query length, tool calls per ask,

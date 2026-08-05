@@ -63,11 +63,19 @@ curl 'aadhar.sh/terminal/lens?url=https://example.com'
 Nothing is stored. Every frame prints, in its status bar, the URL that produced
 it, labelled `state`. Send that URL back to continue from where you were.
 
-Three things follow, and they are the reason it was built this way rather than
+Four things follow, and they are the reason it was built this way rather than
 around a server-side session: there is no round trip to a session store on any
-keypress, two callers can explore from the same frame without colliding, and a
-state from last week still resolves because it was never a live object anybody
-had to keep holding.
+keypress, two callers can explore from the same frame without colliding, a state
+from last week still resolves because it was never a live object anybody had to
+keep holding, and any machine can serve any frame because there is no affinity
+to preserve.
+
+That last one is the same argument MCP's 2026-07-28 revision made when it
+dropped server-side sessions — no session id to mint, no session table, and
+nothing to route back to the same backend. This origin already speaks that
+revision at `/mcp`. The terminal applies it one layer up: MCP made a single tool
+*call* stateless, and this makes a whole *session* over those tools stateless
+too.
 
 ## Colour, and the other doors
 
