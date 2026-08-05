@@ -61,6 +61,15 @@ export const DATA_TOOLS = [
     inputSchema: { type: "object", properties: { url: { type: "string" } }, required: ["url"] },
   },
   {
+    // The cheap tier. One subrequest instead of twenty-eight, for a caller that
+    // wants what the page itself says and not what its origin advertises. The
+    // discovery-derived fields come back ABSENT rather than zero, and `phases`
+    // says so, because "no agent doors" and "nobody looked" are different claims.
+    name: "lens_page",
+    description: "Read one public URL and return only what derives from the page's own bytes: anatomy, structured data, a markdown rendering, and what it costs an agent to ingest. Skips the origin-level fan-out entirely, so it is far cheaper and far faster than lens_inspect. Readiness, agent doors and terms are ABSENT from the result (not zero) because they were not checked; `phases.discovery` is false. Use lens_inspect when you need those.",
+    inputSchema: { type: "object", properties: { url: { type: "string" } }, required: ["url"] },
+  },
+  {
     name: "lens_compare",
     description: "Inspect two public HTTP(S) URLs and compare status, content, readiness, spectrum, agent doors, and discovery surfaces.",
     inputSchema: { type: "object", properties: { left: { type: "string" }, right: { type: "string" } }, required: ["left", "right"] },
@@ -88,6 +97,13 @@ export async function callDataTool(name, args, request, env, ctx) {
     if (!target.ok) return toolError(target.error);
     if (await overLensBudget(LENS_BUDGETS.inspect, request, env)) return toolError("Lens lookups are rate-limited to 30/min, shared with /lens/fetch.");
     try { return lensObservationSummary(await lensInspect(target.url, env, { skipBotViews: true })); }
+    catch { return toolError("Lens inspection failed."); }
+  }
+  if (name === "lens_page") {
+    const target = validateLensTarget(args.url || "");
+    if (!target.ok) return toolError(target.error);
+    if (await overLensBudget(LENS_BUDGETS.inspect, request, env)) return toolError("Lens lookups are rate-limited to 30/min, shared with /lens/fetch.");
+    try { return lensObservationSummary(await lensInspect(target.url, env, { phases: ["page"] })); }
     catch { return toolError("Lens inspection failed."); }
   }
   if (name === "lens_compare") {

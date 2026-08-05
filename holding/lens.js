@@ -350,12 +350,42 @@
     // injected and then overwritten in this same synchronous block, never once painted.
     // The server-side pane renderers it used live on: renderLensShell still SSRs them
     // for the no-JS path at /lens?url=, and this client hydrates from #lx-initial-data.
-    fetch("/lens/fetch?url=" + encodeURIComponent(url))
-      .then(function (r) {
-        var ct = r.headers.get("content-type") || "";
-        if (ct.indexOf("json") < 0) throw new Error("The lens engine returned an unexpected response.");
-        return r.json();
+    // ── two passes, because the two halves cost wildly different amounts ──
+    // A production trace put the scan at 685ms, of which the origin-level
+    // fan-out was 656 and the page fetch was 29. The page's own bytes are all
+    // the Human pane and the status bar ever needed, so they no longer wait
+    // behind twenty-six well-known probes.
+    //
+    // Pass 1 asks for `phases=page` (one subrequest) and paints what it can
+    // honestly fill. Pass 2 asks for the whole scan and repaints everything.
+    // The renderers are re-entrant, so this is two calls rather than a
+    // restructured pipeline.
+    //
+    // renderMachine is deliberately NOT called on pass 1: its panes are agent
+    // doors, terms and readiness, every one of which needs discovery. Drawing
+    // them from a page-only payload would show "no agent doors" for a site that
+    // simply had not been checked yet, which is the exact lie the phases flag
+    // exists to prevent.
+    var scan = function (phases) {
+      return fetch("/lens/fetch?url=" + encodeURIComponent(url) + (phases ? "&phases=" + phases : ""))
+        .then(function (r) {
+          var ct = r.headers.get("content-type") || "";
+          if (ct.indexOf("json") < 0) throw new Error("The lens engine returned an unexpected response.");
+          return r.json();
+        });
+    };
+
+    scan("page")
+      .then(function (j) {
+        if (!j || !j.ok) return;         // pass 2 is authoritative; stay quiet here
+        data = j;
+        renderHuman();
+        renderStatus();
+        machineBody.innerHTML = '<div class="lx-spin">Read the page. Checking agent surfaces&hellip;</div>';
       })
+      // A failed fast pass must not abort the real one, so swallow and continue.
+      .catch(function () {})
+      .then(function () { return scan(); })
       .then(function (j) {
         busy = false;
         if (!j || !j.ok) {
