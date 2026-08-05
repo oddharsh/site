@@ -191,6 +191,8 @@ const ROUTES = [
   { path: "/terminal/radar?plain=1", status: 200, ct: "text/plain", marker: "no antenna" },
   { path: "/terminal/dict?plain=1", status: 200, ct: "text/plain", marker: "fail silently" },
   { path: "/terminal/dict?plain=1&url=javascript%3Aalert(1)", status: 200, ct: "text/plain", marker: "refused" },
+  { path: "/terminal/cache?plain=1", status: 200, ct: "text/plain", marker: "behavioral revalidation" },
+  { path: "/terminal/cache?plain=1&url=javascript%3Aalert(1)", status: 200, ct: "text/plain", marker: "refused" },
   { path: "/terminal/nope", status: 404, ct: "text/plain" },
   { path: "/terminal.md", status: 200, ct: "text/markdown", marker: "State is a URL, not a session" },
   // The browser arm of the same route. One renderer feeds both, so this asserts

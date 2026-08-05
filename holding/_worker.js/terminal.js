@@ -50,6 +50,7 @@
 // once per ask, next to a model call. Latency was never the reason the programs
 // stay on URLs. Forking, bookmarking, and testability were.
 import { ASK_BUDGET, ASK_LIMITS, asAgentCall, runAsk } from "./ask.js";
+import { probeRevalidation } from "./cache-lint.js";
 import { MEASURED, auditUrl } from "./dict.js";
 import { RADAR_LIMITS, radarFrame, readSamples } from "./radar.js";
 import { readAroundChanges } from "./around.js";
@@ -146,7 +147,7 @@ export function stateUrl(state, extra = {}) {
   } else if (state.app === "photos") {
     put("q", state.q); put("film", state.film); put("camera", state.camera); put("lens", state.lens);
     put("page", state.page, 0); put("cursor", state.cursor, 0); put("open", state.open);
-  } else if (state.app === "lens" || state.app === "dict") {
+  } else if (state.app === "lens" || state.app === "dict" || state.app === "cache") {
     put("url", state.url); put("left", state.left); put("right", state.right);
   } else if (state.app === "ask") {
     put("q", state.q); put("at", state.at); put("session", state.session);
@@ -952,6 +953,69 @@ export async function dictFrame(env, request, state, ctx) {
   };
 }
 
+// ── cache: does your validator actually revalidate? ───────────────────────
+const CACHE_MARK = { ok: "  ok  ", warn: " warn ", veto: " VETO ", "bad-but-explained": " 200  " };
+const CACHE_STYLE = { ok: "ok", warn: "warn", veto: "bad", "bad-but-explained": "warn" };
+
+export async function cacheFrame(env, request, state, ctx) {
+  if (!state.url.trim()) {
+    return {
+      title: "cache — a behavioral revalidation lint",
+      body: rows(
+        ...wrap("Plenty of origins serve an ETag that can never match: compression or a template nonce varies per response, so every If-None-Match comes back 200 with a full body. The headers look perfect and nothing warns — your cache revalidates forever and never once succeeds.", INNER).map((row) => [s(row)]),
+        blank(),
+        [s("  curl 'aadhar.sh/terminal/cache?url=https://example.com/app.css'", "accent")],
+        blank(),
+        rule(INNER, "what it does"),
+        ...wrap("No header grading. It fetches the target twice to see whether the validator survives two identical requests, then replays it with If-None-Match and reports what the origin actually did. For HTML it also asks for a second representation and checks the Vary header against the answer — the shared-cache trap this site hit in production (#195).", INNER).map((row) => [s(row, "dim")]),
+        blank(),
+        kv("cost", "3-4 subrequests, headers only; bodies are cancelled unread", INNER, { gutter: 8 }),
+        kv("shares", "Lens's 30/min per-address budget", INNER, { gutter: 8 }),
+      ),
+      status: keyHints([["&url=", "probe a resource"]]),
+    };
+  }
+
+  const target = validateLensTarget(state.url);
+  if (!target.ok) return { title: "cache — refused", body: [[s(target.error, "bad")]], status: [] };
+  if (await overLensBudget(LENS_BUDGETS.inspect, request, env, ctx)) {
+    return { title: "cache — rate limited", body: [[s("Shares Lens's 30/min budget. Try again shortly.", "warn")]], status: [] };
+  }
+
+  const probe = await probeRevalidation(target.url, env);
+  if (!probe.ok) {
+    return {
+      title: "cache — unreadable",
+      body: [[s(probe.unreadable ? `could not reach it: ${probe.why}` : probe.why, probe.unreadable ? "warn" : "bad")]],
+      status: stateLine(state),
+    };
+  }
+
+  const { verdict } = probe;
+  return {
+    title: `cache — ${target.url}`,
+    body: rows(
+      kv("status", probe.status, INNER, { gutter: 16 }),
+      kv("cache-control", probe.observations.first.headers["cache-control"] || "(none)", INNER, { gutter: 16 }),
+      blank(),
+      rule(INNER, "what the origin actually did"),
+      ...verdict.findings.map((f) => [
+        s(CACHE_MARK[f.verdict] || "  ??  ", CACHE_STYLE[f.verdict] || "dim"),
+        ...fit([s(f.id, "strong")], 16),
+        s(f.detail, "dim"),
+      ]),
+      blank(),
+      verdict.healthy
+        ? [s("  Revalidation works: a warm client pays headers, not bodies.", "ok")]
+        : [s(`  Revalidation is broken here: ${verdict.vetoes.map((v) => v.id).join(", ")}.`, "bad")],
+    ),
+    status: [
+      [s("verdict ", "label"), s(verdict.healthy ? "revalidates" : "never revalidates", verdict.healthy ? "ok" : "bad")],
+      stateLine(state),
+    ],
+  };
+}
+
 // ── the index frame ───────────────────────────────────────────────────────
 function indexFrame() {
   const app = (name, line) => rows(
@@ -969,6 +1033,7 @@ function indexFrame() {
       app("finger", "Who runs this host: writing, reading, listening, photographs, neighborhood, availability, deploy log, and a search over all of it. Drivable — send keys, get the next frame."),
       app("photos", "The photo archive, filterable by film simulation, body, lens, and caption. Opening a frame shows its exposure and the in-camera recipe it was shot with."),
       app("lens", "Inspect any public URL the way a machine does: readability, agent doors, and what one scan of it costs to read."),
+      app("cache", "Does your ETag ever actually 304? Fetches twice, replays the validator, and reports what the origin DID — the failure header-reading graders cannot see."),
       app("dict", "Will a browser ever actually use the compression dictionary you are serving? The registration rules are undocumented, unguessable, and fail in total silence. This encodes them, measured."),
       app("radar", "An instrument with no antenna: POST signal readings from a machine that has one and it draws them as bands, meters and trends. The sensor is yours; the display is here."),
       app("ask", "Plain language in, real tool calls out. Picks from the same seven tools /mcp exposes, calls them, answers from what came back, and prints every call it made."),
@@ -980,7 +1045,7 @@ function indexFrame() {
 }
 
 // ── HTTP ──────────────────────────────────────────────────────────────────
-const TERMINAL_APPS = new Set(["finger", "photos", "lens", "ask", "radar", "dict"]);
+const TERMINAL_APPS = new Set(["finger", "photos", "lens", "ask", "radar", "dict", "cache"]);
 
 async function buildFrame(name, request, env, ctx, url) {
   const tokens = tokenizeKeys(url.searchParams.get("keys") ?? url.searchParams.get("k") ?? "");
@@ -992,6 +1057,7 @@ async function buildFrame(name, request, env, ctx, url) {
   if (name === "ask") return askFrame(env, request, state, ctx);
   if (name === "radar") return radarIdleFrame();
   if (name === "dict") return dictFrame(env, request, state, ctx);
+  if (name === "cache") return cacheFrame(env, request, state, ctx);
   return null;
 }
 
