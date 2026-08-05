@@ -170,6 +170,12 @@
     "    ask <question>        plain language -> real tool calls -> an answer,",
     "                          with every call it made printed above the answer",
     "",
+    "  Pointing it at somebody else's site — the same doors, from the outside:",
+    "    doors <origin>        what is behind their agent doors: llms.txt, a",
+    "                          markdown twin, an agent card, a real MCP tools/list",
+    "    ask --at <origin> <q> the same read, with a model answering from it.",
+    "                          Their text is untrusted, so that turn gets NO tools",
+    "",
     "  Being the agent — these are the real requests, not a demo.",
     "    get <path>            fetch a page as an agent does (Accept: text/markdown)",
     "    mcp                   list the MCP tools this origin serves",
@@ -225,9 +231,24 @@
     // to, so the console reads as something you talk to rather than something
     // you have to know the verbs for.
     ask: function (args) {
-      var q = args.join(" ").trim();
-      if (!q) { write("usage: ask <question>   e.g. ask what does he write about", "ps-err"); return; }
-      return runProgram("ask", "q=" + encodeURIComponent(q));
+      // `--at <origin>` points the whole thing at somebody else's site: the same
+      // doors, read the same way, from the outside.
+      var at = "";
+      var rest = [];
+      for (var i = 0; i < args.length; i++) {
+        if ((args[i] === "--at" || args[i] === "-at") && args[i + 1]) { at = args[++i]; continue; }
+        rest.push(args[i]);
+      }
+      var q = rest.join(" ").trim();
+      if (!q && !at) { write("usage: ask <question>   ·   ask --at <origin> [question]", "ps-err"); return; }
+      return runProgram("ask", (q ? "q=" + encodeURIComponent(q) : "") + (at ? (q ? "&" : "") + "at=" + encodeURIComponent(at) : ""));
+    },
+
+    // Read another origin's agent doors and stop. `ask --at X <question>` is the
+    // same read with a model on the end of it.
+    doors: function (args) {
+      if (!args[0]) { write("usage: doors <origin>   e.g. doors https://anthropic.com", "ps-err"); return; }
+      return runProgram("ask", "at=" + encodeURIComponent(args[0]));
     },
 
     keys: function (args) {

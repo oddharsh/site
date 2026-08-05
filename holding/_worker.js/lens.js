@@ -1936,12 +1936,15 @@ export function lensProbeBotViews(targetUrl, env) {
 }
 
 // small, forgiving probe for a single site-level file.
-export async function lensProbe(url, env) {
+// `accept` is optional and forwards to lensFetch, which has always taken one.
+// lib/doors.js needs it to ask a page for its Markdown twin at the page's own
+// URL; every existing caller omits it and gets the previous default.
+export async function lensProbe(url, env, accept) {
   try {
     const ctrl = new AbortController();
     const to = setTimeout(() => ctrl.abort(), 5000);
     let res;
-    try { res = await lensFetch(url, env, ctrl.signal); } finally { clearTimeout(to); }
+    try { res = await lensFetch(url, env, ctrl.signal, accept); } finally { clearTimeout(to); }
     if (!res.ok) { try { await res.body?.cancel(); } catch (_e) {} return { ok: false, status: res.status, url }; }
     const cap = await lensReadCapped(res, 256 * 1024);
     return { ok: true, status: res.status, url, contentType: res.headers.get("content-type") || "", body: cap.text, truncated: cap.truncated };

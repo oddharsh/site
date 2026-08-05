@@ -178,6 +178,14 @@ const ROUTES = [
   // The mode line is load-bearing: it is how a reader knows whether a model or a
   // keyword picked the tool. A frame that stopped saying so would still look right.
   { path: "/terminal/ask?plain=1&q=photos+on+acros", status: 200, ct: "text/plain", marker: "mode " },
+  // Reading somebody else's origin. `at=` alone reads the doors and stops.
+  // Marked remote: every external probe needs the AadharshBot signing key, which
+  // a local Worker does not have — so locally each door reports "unread", which
+  // is the honest answer and not the one worth asserting.
+  { path: "/terminal/ask?plain=1&at=https%3A%2F%2Fexample.com", status: 200, ct: "text/plain", marker: "doors at", remote: true },
+  // A refused target must be refused BEFORE any fetch, and come back as a frame.
+  { path: "/terminal/ask?plain=1&at=http%3A%2F%2F169.254.169.254%2F&q=what+is+here", status: 200, ct: "text/plain", marker: "mode " },
+  { path: "/terminal/ask?plain=1&at=javascript%3Aalert(1)", status: 200, ct: "text/plain", marker: "mode " },
   { path: "/terminal/nope", status: 404, ct: "text/plain" },
   { path: "/terminal.md", status: 200, ct: "text/markdown", marker: "State is a URL, not a session" },
   // The browser arm of the same route. One renderer feeds both, so this asserts

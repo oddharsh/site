@@ -123,6 +123,7 @@ export function readState(url, app) {
     open: str(params.get("open"), 160),
     q: str(params.get("q"), 120),
     url: str(params.get("url"), 512),
+    at: str(params.get("at"), 300),
     left: str(params.get("left"), 512),
     right: str(params.get("right"), 512),
     film: str(params.get("film"), 60),
@@ -149,7 +150,7 @@ export function stateUrl(state, extra = {}) {
   } else if (state.app === "lens") {
     put("url", state.url); put("left", state.left); put("right", state.right);
   } else if (state.app === "ask") {
-    put("q", state.q);
+    put("q", state.q); put("at", state.at);
   }
   for (const [key, value] of Object.entries(extra)) put(key, value);
   const qs = params.toString();
@@ -716,7 +717,9 @@ const MODE_NOTE = {
 };
 
 export async function askFrame(env, request, state, ctx) {
-  if (!state.q.trim()) {
+  // `at=` alone is a real request — read that origin's doors and stop — so the
+  // usage screen only stands in when there is neither a question nor a target.
+  if (!state.q.trim() && !state.at.trim()) {
     return {
       title: "ask — plain language, real tools",
       body: rows(
@@ -725,6 +728,11 @@ export async function askFrame(env, request, state, ctx) {
         [s("  curl 'aadhar.sh/terminal/ask?q=what+does+he+write+about'", "accent")],
         [s("  curl 'aadhar.sh/terminal/ask?q=photos+shot+on+classic+chrome'", "accent")],
         [s("  curl 'aadhar.sh/terminal/ask?q=when+can+i+get+coffee'", "accent")],
+        blank(),
+        ...wrap("Point it at somebody else's origin with &at= and it reads THEIR agent doors the same way — llms.txt, a markdown twin, an agent card, a real MCP tools/list. Add a question and a model answers from what it found.", INNER).map((row) => [s(row)]),
+        blank(),
+        [s("  curl 'aadhar.sh/terminal/ask?at=https://example.com'", "accent")],
+        [s("  curl 'aadhar.sh/terminal/ask?at=https://example.com&q=what+do+they+offer'", "accent")],
         blank(),
         rule(INNER, "the rules it runs under"),
         kv("grounding", "answers only from tool results; says so when the site is silent", INNER, { gutter: 12 }),
@@ -735,7 +743,51 @@ export async function askFrame(env, request, state, ctx) {
     };
   }
 
-  const result = await runAsk(state.q, request, env, ctx);
+  const result = await runAsk(state.q, request, env, ctx, state.at);
+
+  // Reading somebody else's origin: show which doors opened before anything
+  // else. A door that is shut is as informative as one that is open, so every
+  // one is listed either way rather than only the hits.
+  if (result.doors || result.mode === "refused") {
+    const doors = result.doors;
+    // Three states, not two. "shut" is a finding; "unread" is an absence of one,
+    // and painting the second as the first is how a reader starts lying.
+    const door = (label, probe, detail) => {
+      const mark = probe.ok ? ["  open ", "ok"] : probe.unreadable ? ["unread ", "warn"] : ["  shut ", "dim"];
+      return [...fit([s(mark[0], mark[1]), s(label)], 30), s(detail || "", "dim")];
+    };
+    const body = doors ? rows(
+      rule(INNER, `doors at ${doors.origin}`),
+      door("llms.txt", doors.llms, doors.llms.ok ? `${doors.llms.bytes} bytes` : doors.llms.why || doors.llms.wrongType),
+      door("markdown twin", doors.markdown, doors.markdown.ok ? `${doors.markdown.bytes} bytes` : doors.markdown.wrongType ? `answered ${doors.markdown.wrongType}` : doors.markdown.why),
+      door("agent card", doors.agentCard, doors.agentCard.ok ? "present" : doors.agentCard.why || doors.agentCard.wrongType),
+      door("api catalog", doors.apiCatalog, doors.apiCatalog.ok ? "present" : doors.apiCatalog.why || doors.apiCatalog.wrongType),
+      door("mcp tools/list", doors.mcp, doors.mcp.ok ? `${doors.mcp.count} tools` : doors.mcp.detail || "no server"),
+      blank(),
+      // The foreign catalog is INFORMATION. Nothing here can invoke it, and the
+      // frame says so, because a list of tools next to an answer invites the
+      // assumption that the answer came from calling them.
+      doors.mcp.ok && doors.mcp.tools.length ? rows(
+        rule(INNER, "their tools — listed, never called"),
+        ...doors.mcp.tools.slice(0, 6).map((tool) => [...fit([s(tool.name, "strong")], 24), s(tool.description, "dim")]),
+        blank(),
+      ) : blank(),
+      rule(INNER, "answer"),
+      result.answer
+        ? rows(...wrap(result.answer, INNER).map((row) => [s(row)]))
+        : [[s(result.mode === "doors" && !state.q ? "no question asked — doors only." : "no model available to read this, so the doors above are the answer.", "dim")]],
+    ) : [[s(result.answer || "refused.", "bad")]];
+
+    return {
+      title: `ask — ${doors ? doors.origin : state.at}`,
+      body,
+      status: [
+        [s("mode ", "label"), s(result.mode, result.mode === "foreign" ? "ok" : result.mode === "refused" ? "bad" : "warn"),
+          s(result.mode === "foreign" ? `  ${result.corpusChars} chars read as UNTRUSTED data, no tools offered on that turn` : "", "dim")],
+        stateLine(state),
+      ],
+    };
+  }
   const steps = result.steps || [];
   const trace = steps.length
     ? steps.map((step, i) => {

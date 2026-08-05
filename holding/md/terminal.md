@@ -33,6 +33,38 @@ ask for `text/html`.
   `?url=`. Private, local, and non-HTTP targets are refused, and lookups are
   rate-limited to 30/min per address, shared with `/lens/fetch`.
 
+## Reading somebody else's site
+
+Point `ask` at another origin with `&at=` and it reads *their* agent doors the
+same way it reads this one: `llms.txt`, the Markdown twin at the page's own URL,
+the agent card, the API catalog, and a real `tools/list` against their MCP
+server. Add a question and a model answers from what it found.
+
+```
+curl 'aadhar.sh/terminal/ask?at=https://example.com'
+curl 'aadhar.sh/terminal/ask?at=https://example.com&q=what+do+they+offer'
+```
+
+Each door reports one of three states, and the third one matters: **open**,
+**shut**, or **unread**. A 404 is a finding. A request that never completed is
+not — reporting a failed check as a negative result is the one dishonesty a
+reader like this cannot afford.
+
+Their tool catalog is **listed, never called**. `tools/list` asks a server to
+describe itself, which is what the endpoint is for; `tools/call` is execution on
+somebody else's infrastructure, and nothing here can invoke it.
+
+**One rule governs the rest: tool calling and untrusted text never share a
+turn.** Third-party bytes can contain instructions, so the model turn that sees
+them is issued with no tool catalog at all — a tool call is unrepresentable in
+the reply rather than merely discouraged. The target comes from `at=` and is
+validated before anything is fetched, so the model never selects an origin
+either. Same-origin asks keep their tool loop, because this site's own content
+is not hostile to this site.
+
+Foreign reads share Lens's 30/min per-address budget, and at most 6,000
+characters of third-party text ever reaches a model.
+
 ## Driving one
 
 Send keys with `?k=` (one key) or `?keys=` (a sequence, up to 32). Named keys
