@@ -140,7 +140,14 @@ async function visionTerms(stem, hashes) {
   const file = path.join(ROOT, "i", `${stem}.${entry.j}.jpg`);
   const image = Array.from(fs.readFileSync(file));
   const body = JSON.stringify({ image, prompt: VISION_PROMPT, max_tokens: 128 });
-  if (DRY_RUN) return `      would POST ${body.length}B to ${AI_RUN}`;
+  if (DRY_RUN) {
+    // Report the intent WITHOUT the constructed endpoint. That URL embeds the
+    // account id, which comes from the environment, and a dry run is precisely
+    // when its output gets pasted into an issue or a terminal recording. The
+    // byte count and the model are the parts worth seeing.
+    console.log(`      would POST ${body.length}B to Workers AI (${MODEL})`);
+    return null;
+  }
   const response = await fetch(AI_RUN, {
     method: "POST",
     headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" },
@@ -193,7 +200,7 @@ if (WANT_VISION) {
   for (const [index, stem] of todo.entries()) {
     try {
       const terms = await visionTerms(stem, hashes);
-      if (DRY_RUN) { console.log(terms); continue; }
+      if (DRY_RUN) continue;   // visionTerms already reported what it would send
       if (!terms) { console.log(`  [${index + 1}/${todo.length}] ${stem}: EMPTY`); continue; }
       out[stem].vision = terms;
       out[stem].from = ["derived", "vision"];

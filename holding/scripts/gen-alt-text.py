@@ -77,7 +77,9 @@ def caption_local(stem, hashes):
         image = list(fh.read())
     body = json.dumps({"image": image, "prompt": PROMPT, "max_tokens": 64}).encode()
     if DRY_RUN:
-        print(f"      would POST {len(body)}B to {AI_RUN}", flush=True)
+        # Intent without the endpoint: that URL embeds the account id from the
+        # environment, and dry-run output is what gets pasted into issues.
+        print(f"      would POST {len(body)}B to Workers AI ({MODEL})", flush=True)
         return ""
     req = urllib.request.Request(AI_RUN, data=body, headers={
         "Authorization": f"Bearer {TOKEN}",
