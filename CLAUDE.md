@@ -570,13 +570,30 @@ generic hex back.
   machine does). `/lens`'s Human view embeds framable sites in a live cross-origin
   `<iframe>` (loaded by the visitor's own browser) and screenshots the rest
   server-side via the binding's `quickAction("screenshot", …)` (real headless
-  Chrome; the old REST-API path with `BROWSER_RENDER_TOKEN` is retired). Without
+  Chrome). Without
   the binding, `/lens/shot` returns a clean 503 and the Human view falls back to
   the readable-text reader, so the live iframe + all machine lenses keep working
-  regardless. (`CF_ACCOUNT_ID` stays a var, but only for `/ledger`'s Analytics
-  Engine SQL reads alongside `ANALYTICS_READ_TOKEN`.)
-  Screenshots are KV-cached 1h (`lens:shot:<sha256(url)>` in RN_KV) and rate-limited to
-  8/min/IP; `/lens/fetch` (the parsing engine) is rate-limited 30/min/IP. Those limits
+  regardless. (`CF_ACCOUNT_ID` is read by `/ledger`'s Analytics Engine SQL
+  alongside `ANALYTICS_READ_TOKEN`, and now by `/lens/rendered` below.)
+
+  **`/lens/rendered` is the third view, and it un-retires the REST path.** It
+  reports how much of a page a crawler that does not run JavaScript already had,
+  by running the SAME extraction over the raw HTML and over the rendered DOM. The
+  binding can serve it (Chromium), but **Kitesurf cannot be reached from the
+  binding at all**: probed 2026-08-06, passing `browser` to `quickAction` returns
+  `{"code":"unrecognized_keys","keys":["browser"]}`, and an invented engine name
+  returns the byte-identical error — the payload schema is CLOSED, so it is
+  refusing the option rather than failing on an unknown value. Kitesurf is REST
+  only, and REST wants a `Browser Rendering - Edit` token in `BROWSER_RUN_TOKEN`.
+  That is an EDIT scope living as a Worker secret; it is not in GitHub, so the
+  no-write-token-in-CI rule is intact, but do not confuse it for a read scope.
+  `browser=kitesurf` is documented in Cloudflare's launch post and NOT in the
+  Quick Actions reference, so `lens-render.js` TRIES it and falls back once on a
+  400, remembering the result for the isolate, rather than hard-coding a query
+  parameter on the strength of a blog post.
+
+  Screenshots are KV-cached 6h (`lens:shot:<sha256(url)>` in RN_KV) and rate-limited to
+  3/min/IP; `/lens/fetch` (the parsing engine) is rate-limited 30/min/IP. Those limits
   are Rate Limiting bindings as of 2026-08-04, not KV counters; the RESPONSE cache is
   still KV, and only the counters moved. Both `/lens/*`
   fetch routes guard against SSRF (http(s) only, no localhost / private / link-local /

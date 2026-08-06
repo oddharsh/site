@@ -977,6 +977,33 @@ export CLOUDFLARE_API_TOKEN=...             # Account · Workers AI · Read
 `check-photo-pipeline.mjs` fails on any stem with no caption, the same way it does
 for a missing pixel tier or histogram, so an unlabelled image can't reach a deploy.
 
+### Turn on Kitesurf for /lens/rendered
+`/lens/rendered` works out of the box on the Browser Run BINDING (Chromium, no
+credential). Kitesurf, Cloudflare's WASM browser engine for agents, is REST-only
+— the binding's payload schema rejects the `browser` key outright — so it needs
+a token:
+
+```bash
+# Cloudflare dashboard -> API Tokens -> Create Custom Token
+#   Permission: Account · Browser Rendering · Edit
+npx wrangler secret put -c wrangler.jsonc BROWSER_RUN_TOKEN
+```
+
+**That is an EDIT scope.** It lives as a Worker secret, never in GitHub, so the
+repo's no-write-token rule is untouched — but it is not a read token and should
+not be described as one. Without it the route silently uses the binding and
+reports `engine: "chromium-binding"`, so the view degrades rather than breaks.
+
+`browser=kitesurf` is documented only in Cloudflare's launch post, not in the
+Quick Actions reference. The code therefore tries the parameter, falls back once
+on a 400, and remembers the answer for the isolate. If Cloudflare ships it into
+the binding, delete `renderOverRest` and the token with it.
+
+Read which engine actually answered:
+```bash
+curl -s 'https://aadhar.sh/lens/rendered?url=https://react.dev/' | jq '.engine, .crawlerSeesPercent'
+```
+
 ### Regenerate the photo search expansion
 `images/semantics.json` is what `photo_query` ranks against beyond the caption and
 the EXIF. Two tiers, and every stem records which it got:

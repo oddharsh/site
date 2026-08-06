@@ -102,7 +102,7 @@
       "/agent/*", "/oauth2/*",
       "/whoareyou", "/whoareyou.json", "/security",
       "/reading", "/updates", "/updates.json", "/restore",
-      "/lens", "/lens/", "/lens/fetch", "/lens/shot", "/lens/browser", "/lens/compare.json", "/lens/census", "/lens/census.json",
+      "/lens", "/lens/", "/lens/fetch", "/lens/shot", "/lens/browser", "/lens/rendered", "/lens/compare.json", "/lens/census", "/lens/census.json",
       "/mcp", "/terminal", "/terminal/*", // One wildcard per tool covers both the bare route and its .txt twin.
       // NOT cosmetic: run_worker_first caps at 100 RULES (wrangler refuses to
       // boot at 101), and twelve exact entries put this config at 102. A site

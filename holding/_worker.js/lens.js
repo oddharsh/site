@@ -8,6 +8,7 @@ import { lensParseRobots, lensPathMatch, lensRobotsVerdict } from "./lib/robots.
 import { lunaPage } from "./lib/chrome.js";
 import { escAttr, escHtml, jsonResponse } from "./lib/http.js";
 import { span } from "./lib/trace.js";
+import { documentShape, measureGap, renderPage } from "./lens-render.js";
 
 // The glossary. This page's whole subject is protocol names, which is fine for
 // the audience that already has them and a wall for the audience that doesn't.
@@ -1282,6 +1283,79 @@ export async function handleLensShot(request, env, ctx) {
     if (env.RN_KV) ctx.waitUntil(env.RN_KV.put(cacheKey, buf, { expirationTtl: 21600 }));
     return new Response(buf, { headers: lensPngHeaders(false) });
   });
+}
+
+// ── /lens/rendered — the third view -------------------------------------
+// What the page becomes once JavaScript has run, next to what a plain crawler
+// got, in the SAME units. The output that matters is one number: how much of
+// the rendered document the crawler already had.
+//
+// Bills against the browser budgets like every other rendering route, and caches
+// for 6h for the same reason — on the free plan a miss spends a slice of a
+// six-per-minute allowance.
+export async function handleLensRendered(request, env, ctx) {
+  const v = validateLensTarget(new URL(request.url).searchParams.get("url") || "");
+  if (!v.ok) return jsonResponse({ ok: false, error: v.error }, 400);
+
+  if (await overLensBudget(LENS_BUDGETS.browser, request, env)) {
+    return jsonResponse({ ok: false, error: `Renders are rate-limited to ${LENS_BUDGETS.browser.max}/min. Hang on a moment.` }, 429);
+  }
+  if (await overLensBudget(LENS_BUDGETS.browserAll, request, env)) {
+    return jsonResponse({ ok: false, error: "The shared browser budget for this minute is spent. Try again shortly." }, 429);
+  }
+
+  const cacheKey = "lens:rendered:" + (await lensSha256Hex(v.url));
+  if (env.RN_KV) {
+    const hit = await env.RN_KV.get(cacheKey, "json");
+    if (hit) return jsonResponse({ ...hit, cached: true });
+  }
+
+  // The raw side uses the SAME fetch every other lens view uses, so the "before"
+  // is not a second, subtly different crawler.
+  const ctrl = new AbortController();
+  const to = setTimeout(() => ctrl.abort(), 8000);
+  let rawHtml = "";
+  try {
+    const r0 = await lensFetch(v.url, env, ctrl.signal);
+    rawHtml = await r0.text();
+  } catch (error) {
+    clearTimeout(to);
+    // Name the actual cause. lensFetch signs every request as AadharshBot, so
+    // with no signing key it throws before any network happens — which is the
+    // LOCAL shape, and reporting that as "the page could not be fetched" sends
+    // whoever reads it to inspect the target site instead of the deployment.
+    return jsonResponse({ ok: false, reason: "raw_fetch_failed",
+      error: String((error && error.message) || error).slice(0, 200) }, 502);
+  }
+  clearTimeout(to);
+
+  const render = await renderPage(v.url, env);
+  if (!render.ok) {
+    // Each failure is reported as itself, and the RAW side still comes back: the
+    // shape of the crawler's view is a real answer even when the comparison is
+    // unavailable. Absent, never zero.
+    const status = render.reason === "budget_spent" ? 429 : render.reason === "no_engine" ? 503 : 502;
+    return jsonResponse({
+      ok: false,
+      reason: render.reason,
+      error: render.reason === "no_engine"
+        ? "No rendering engine is configured on this deployment."
+        : render.reason === "budget_spent"
+          ? `Browser Run is rate-limited right now (free plan: ${BROWSER_FREE_PLAN.perMinute}/min account-wide).`
+          : "The page could not be rendered.",
+      raw: documentShape(rawHtml),
+    }, status);
+  }
+
+  const payload = {
+    ok: true,
+    url: v.url,
+    engine: render.engine,
+    renderMs: render.ms,
+    ...measureGap(rawHtml, render.html),
+  };
+  if (env.RN_KV) ctx.waitUntil(env.RN_KV.put(cacheKey, JSON.stringify(payload), { expirationTtl: 21600 }));
+  return jsonResponse(payload);
 }
 
 // Base64 chars, so roughly 4.5 MB of PNG. Chosen to keep the whole snapshot an

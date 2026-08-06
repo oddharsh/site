@@ -2623,6 +2623,60 @@ test("overLensBudget fails open without a limiter and closes when one says no", 
   assert.equal(new Set(names).size, names.length, "two budgets share one binding");
 });
 
+test("the rendered gap counts substance, not framework payload", async () => {
+  const { documentShape, measureGap } = await import("./holding/_worker.js/lens-render.js");
+
+  // A client-rendered shell: almost all of its bytes are an inline script, and
+  // none of that is anything a reader gets. Counting BYTES would call this page
+  // mostly-visible to a crawler, which is the opposite of true.
+  const raw = `<html><head><title>Shop</title></head><body><div id="root"></div>
+    <script>${"var padding='x';".repeat(400)}</script></body></html>`;
+  const rendered = `<html><head><title>Shop</title></head><body><div id="root">
+    <h1>Winter jackets</h1><p>Forty two jackets, wool and down, in stock today.</p>
+    <a href="/a">one</a><a href="/b">two</a>
+    <script type="application/ld+json">{"@type":"Product"}</script></div></body></html>`;
+
+  const rawShape = documentShape(raw);
+  // One word, and it is the <title>. That is exactly right: the title IS text a
+  // crawler gets, and the 6KB of inline script around it is not.
+  assert.equal(rawShape.words, 1, "the title counts, the script body does not");
+  assert.ok(rawShape.bytes > 5000, "the raw document is mostly script bytes");
+
+  const gap = measureGap(raw, rendered);
+  assert.ok(gap.crawlerSeesPercent <= 10,
+    `a crawler gets almost none of the readable page, got ${gap.crawlerSeesPercent}%`);
+  assert.ok(gap.deltas.words > 10);
+  assert.equal(gap.deltas.headings, 1);
+  assert.equal(gap.deltas.links, 2);
+  assert.equal(gap.deltas.jsonld, 1, "structured data that only exists after render");
+  assert.equal(gap.rendersSmaller, false);
+});
+
+test("the rendered gap reports an unmeasurable comparison as absent, never as zero", async () => {
+  const { measureGap } = await import("./holding/_worker.js/lens-render.js");
+
+  // Nothing came back from the renderer. "JS added nothing" and "the render
+  // returned an empty document" are different claims and only one is about the
+  // page, so the percentage is OMITTED rather than defaulted.
+  const empty = measureGap("<html><body><p>hello there friend</p></body></html>", "");
+  assert.equal("crawlerSeesPercent" in empty, false);
+  assert.equal(empty.rendered.words, 0);
+
+  // A fully server-rendered page: the crawler already had everything.
+  const ssr = "<html><body><h1>Title</h1><p>All of the words are already here.</p></body></html>";
+  const full = measureGap(ssr, ssr);
+  assert.equal(full.crawlerSeesPercent, 100);
+  assert.equal(full.rendersSmaller, false);
+
+  // Rendering can SHRINK a document (a shell replaced by less markup than it
+  // shipped). The percentage clamps at 100 and would hide that, so it is
+  // reported on its own flag.
+  const shrunk = measureGap("<html><body><p>one two three four five six</p></body></html>",
+    "<html><body><p>one two</p></body></html>");
+  assert.equal(shrunk.crawlerSeesPercent, 100);
+  assert.equal(shrunk.rendersSmaller, true);
+});
+
 test("the shared browser ceiling bills everyone to one bucket, not per caller", async () => {
   const { BROWSER_FREE_PLAN, LENS_BUDGETS, overLensBudget } = await import("./holding/_worker.js/lens.js");
 
