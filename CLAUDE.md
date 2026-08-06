@@ -1255,14 +1255,17 @@ npm run deploy
     or verify the wire equals the build.**
 
 21. **The bridge's `c2pa` pack cannot see this site's photos, and no pipeline
-    change fixes it.** Measured 2026-08-06, worth knowing before anyone scopes
-    Content Credentials again. `collectImageSources()` reads
+    change fixes it.** TURNED OFF in the dashboard 2026-08-06, so the injected tag
+    reads `data-packs="mcp-server-client"` and the note below is the record of why
+    rather than a proposal. Read it before anyone scopes Content Credentials again.
+    `collectImageSources()` reads
     `img.currentSrc || img.src`, and `currentSrc` on a `<picture>` is whatever the
     browser CHOSE — AVIF here. `detectImageFormat()` then sniffs exactly two magic
     numbers, JPEG's SOI and the PNG signature, and returns `unknown` for everything
     else. So the pack fetches the AVIF and reports "Unsupported image format" no
     matter what the JPG tier carries. Signing buys nothing until that parser learns
-    BMFF. Turn the pack off in the dashboard; it is 2 tools of pure fetch cost.
+    BMFF, which is the reason the pack is off: it was 2 tools that walk every
+    `<img>` on the page and fetch each one to learn nothing.
 
     The byte numbers, from `c2patool` 0.27.6 against a real shipped thumbnail
     (`L1000069_3`, 21,505 B JPG / 11,204 B AVIF), since they are the reason this
