@@ -517,6 +517,20 @@ footer .signature small { color: oklch(56.93% 0 0); }
       it takes to render, then nothing writes it to storage. View-source if you
       want, since it's a single JavaScript file you can read end-to-end.
       <br><br>
+      <strong>One script on every page is not mine:</strong> since 2026-08-06 the
+      Cloudflare edge injects
+      <code>&lt;script type="module" src="/.webmcp/bridge.js"&gt;</code> into every
+      HTML document here, after this worker has finished with it. It is 47KB of
+      Cloudflare's code, served from this origin, and it is the reason View Source
+      shows a tag no file in the repository contains. What it does: if your browser
+      implements <code>document.modelContext</code> &mdash; today that means Chrome
+      146 with experimental web platform features on &mdash; it reads this site's own
+      <a href="/mcp">/mcp</a> server and registers those tools into the page, so an
+      agent browsing here can call them instead of scraping. Every other browser,
+      which is nearly all of them, downloads it, finds no such API, writes one
+      warning to the console, and stops. So the honest description is that most
+      visitors pay 47KB for nothing, and the site is betting that changes.
+      <br><br>
       <strong>Analytics, precisely:</strong> not on this page, and it matters that
       the distinction is stated rather than implied. The homepage &mdash; and only the
       homepage &mdash; loads Cloudflare Web Analytics. Since 2026-07-29 your browser

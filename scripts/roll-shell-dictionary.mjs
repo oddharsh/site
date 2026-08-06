@@ -17,7 +17,19 @@
 
 import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { brotliCompressSync, constants as zc } from "node:zlib";
+import { brotliCompressSync, brotliDecompressSync, constants as zc } from "node:zlib";
+
+const ORIGIN = process.env.ROLL_ORIGIN || "https://aadhar.sh";
+
+// The two halves stopped sharing a sourcing rule once page snapshots moved to the
+// wire, so they can now be rolled separately. SHELL adoption reads the local built
+// tree and is therefore only valid from the deployed commit (a branch build mints
+// different `/a/` hashes, so its candidates are bytes no browser will ever hold).
+// PAGE adoption reads production, so it is correct from anywhere and is the repair
+// step whenever an edge feature starts rewriting documents. Default stays both.
+const only = process.argv.includes("--pages") ? "pages"
+           : process.argv.includes("--shell") ? "shell"
+           : "both";
 
 const BUILT = ".build/holding/a";
 const DICTS = "holding/a-dict";
@@ -40,6 +52,8 @@ if (!existsSync(BUILT)) {
   process.exit(1);
 }
 
+if (only === "pages") console.log("shell:roll — --pages given, leaving holding/a-dict/ alone.");
+else {
 await mkdir(DICTS, { recursive: true });
 const shell = (await readdir(BUILT)).map(parse).filter(Boolean);
 let adopted = 0;
@@ -71,6 +85,7 @@ for (const [, group] of byBase) {
 }
 console.log(`shell:roll — adopted ${adopted}, pruned ${pruned}, keeping ${KEEP} per asset.`);
 console.log("  Commit holding/a-dict/. build.mjs regenerates the deltas on its own from here.");
+}
 
 // ── PAGE DICTIONARIES (holding/p-dict) ──────────────────────────────────────────
 // Static pages have two useful dictionary populations. The immutable family corpus
@@ -83,32 +98,93 @@ console.log("  Commit holding/a-dict/. build.mjs regenerates the deltas on its o
 // browser would keep a dictionary offered under it, so a snapshot could only ever
 // produce a delta nothing could ask for. `/` now takes PAGE_CACHE_CONTROL like every
 // other document, so the exclusion is gone and the homepage earns the per-page tier.
-// Adoption reads the DEPLOYED build, so `/`'s first snapshot appears on the roll
-// AFTER the policy change ships; until then it rides the family dictionary alone.
-{
+//
+// **Adoption reads PRODUCTION OVER THE WIRE, not the staged build**, and that is
+// the whole correctness argument for this block. A dictionary is matched by the
+// SHA-256 the browser computes over the body it stored, so the only bytes worth
+// committing are the bytes production actually delivered. Those two used to be
+// identical, which made reading `.build/holding` a harmless shortcut — until
+// WebMCP was enabled on 2026-08-06 and Cloudflare began injecting
+// `<script src="/.webmcp/bridge.js">` into every document with HTMLRewriter, at
+// the edge, after this Worker is done. The staged file has no such tag, so every
+// snapshot rolled from it hashed to something no browser could ever offer and the
+// per-page tier silently fell back to the family dictionary. Measured on
+// /garage/pretext: offering the committed tag answered `dcz`, offering the tag of
+// the live body answered `br`.
+//
+// The general rule is worth more than the WebMCP instance: ANY edge feature that
+// rewrites HTML after the Worker — an injected beacon, an A/B mutation, Email
+// Obfuscation, Rocket Loader — breaks a dictionary derived from source, and breaks
+// it without an error anywhere. Read the wire.
+//
+// Two consequences of reading the wire, both deliberate. Rolling now needs network
+// and has to run against the DEPLOYED commit (which the shell half above already
+// required). And a staged page production does not serve yet is SKIPPED with a
+// named line rather than adopted, because a browser cannot hold bytes that were
+// never sent to it.
+if (only === "shell") console.log("pages:roll — --shell given, leaving holding/p-dict/ alone.");
+else {
   const BUILT_PAGES = ".build/holding";
   const PDICTS = "holding/p-dict";
   const KEEP_PAGES = 2;
+  const FETCH_CONCURRENCY = 6;
   const parse = (n) => {
     const m = n.match(/^(.+)\.([0-9a-f]{16})\.html\.br$/);
     return m ? { slug: m[1], tag: m[2], name: n } : null;
+  };
+  // `.build/holding/garage/pretext.html` is served at `/garage/pretext`, and an
+  // index file is served at its directory: `garage/index.html` -> `/garage`,
+  // `index.html` -> `/`.
+  const routeOf = (rel) => {
+    const path = rel.replace(/\.html$/, "").replace(/(^|\/)index$/, "$1");
+    return `/${path}`.replace(/\/$/, "") || "/";
   };
   await mkdir(PDICTS, { recursive: true });
   const staged = (await readdir(BUILT_PAGES, { recursive: true }))
     .filter((rel) => rel.endsWith(".html") && !rel.endsWith(".src.html"));
   const liveSlugs = new Set();
-  let adopted = 0, pruned = 0;
+  let adopted = 0, pruned = 0, missing = 0;
   const { createHash } = await import("node:crypto");
-  for (const rel of staged) {
-    const slug = rel.replace(/\.html$/, "").replace(/\//g, "__");
-    liveSlugs.add(slug);
-    const bytes = await readFile(`${BUILT_PAGES}/${rel}`);
-    const tag = createHash("sha256").update(bytes).digest("hex").slice(0, 16);
-    const dest = `${PDICTS}/${slug}.${tag}.html.br`;
-    if (existsSync(dest)) continue;
-    await writeFile(dest, brotliCompressSync(bytes, { params: { [zc.BROTLI_PARAM_QUALITY]: 11, [zc.BROTLI_PARAM_LGWIN]: 24 } }));
-    adopted++;
-    console.log(`adopted page ${slug}.${tag}`);
+
+  // Ask for brotli and decode what comes back, rather than asking for `identity`
+  // and trusting it. The Worker precompresses and cannot negotiate (gotcha 13), and
+  // undici transparently decodes br while LEAVING the header in place, so neither
+  // the request header nor the response header is evidence about the bytes in hand.
+  // Try the decode, keep whatever survives — the same defence check-dictionary-support.mjs
+  // documents at its own decode.
+  const deliveredBytes = async (route) => {
+    const res = await fetch(`${ORIGIN}${route}`, { headers: { "accept-encoding": "br" } });
+    if (!res.ok) return { status: res.status, bytes: null };
+    const body = Buffer.from(await res.arrayBuffer());
+    let raw = body;
+    try { raw = brotliDecompressSync(body); } catch { /* already plain */ }
+    return { status: res.status, bytes: raw };
+  };
+
+  const jobs = staged.map((rel) => ({ rel, slug: rel.replace(/\.html$/, "").replace(/\//g, "__"), route: routeOf(rel) }));
+  for (const job of jobs) liveSlugs.add(job.slug);
+  for (let i = 0; i < jobs.length; i += FETCH_CONCURRENCY) {
+    const batch = jobs.slice(i, i + FETCH_CONCURRENCY);
+    const results = await Promise.all(batch.map(async (job) => {
+      try { return { job, ...(await deliveredBytes(job.route)) }; }
+      catch (err) { return { job, status: null, bytes: null, err }; }
+    }));
+    for (const { job, status, bytes, err } of results) {
+      if (!bytes) {
+        // Loud, and not fatal. A page added in this very commit legitimately 404s
+        // until it deploys; a network failure legitimately wants a re-run. Either
+        // way the honest outcome is no snapshot, said out loud.
+        console.log(`skipped page ${job.slug} — ${ORIGIN}${job.route} answered ${err ? err.message : status}`);
+        missing++;
+        continue;
+      }
+      const tag = createHash("sha256").update(bytes).digest("hex").slice(0, 16);
+      const dest = `${PDICTS}/${job.slug}.${tag}.html.br`;
+      if (existsSync(dest)) continue;
+      await writeFile(dest, brotliCompressSync(bytes, { params: { [zc.BROTLI_PARAM_QUALITY]: 11, [zc.BROTLI_PARAM_LGWIN]: 24 } }));
+      adopted++;
+      console.log(`adopted page ${job.slug}.${tag}`);
+    }
   }
   const byent = new Map();
   for (const d of (await readdir(PDICTS)).map(parse).filter(Boolean)) {
@@ -125,5 +201,5 @@ console.log("  Commit holding/a-dict/. build.mjs regenerates the deltas on its o
       pruned++;
     }
   }
-  console.log(`pages:roll — adopted ${adopted}, pruned ${pruned}, keeping ${KEEP_PAGES} per page.`);
+  console.log(`pages:roll — adopted ${adopted}, pruned ${pruned}, skipped ${missing}, keeping ${KEEP_PAGES} per page (source: ${ORIGIN}).`);
 }

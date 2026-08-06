@@ -16,6 +16,7 @@ import {
   handleLensCompare,
   handleLensFetch,
   handleLensShot,
+  lensDetectWebmcp,
   renderLensShell,
 } from "./holding/_worker.js/lens.js";
 import { handleCoffeeAvailability, readCoffeeAvailability } from "./holding/_worker.js/coffee.js";
@@ -444,6 +445,31 @@ test("Lens fetch keeps its JSON contract regardless of Accept", async () => {
   assert.match(json.headers.get("content-type") || "", /^application\/json/);
   assert.equal(json.headers.get("vary"), null);
   assert.equal((await json.json()).ok, false);
+});
+
+test("the WebMCP detector sees a CDN bridge, not just hand-written call sites", () => {
+  // The detector read the document for `navigator.modelContext` and friends, which
+  // finds a site that wrote its own tools and MISSES the far larger population that
+  // flipped WebMCP on at their CDN: the loader tag is all that reaches the HTML, and
+  // every registerTool call lives in the external module. That population grows by
+  // dashboard toggle, so the blind spot widens on its own.
+  const bridge = lensDetectWebmcp('<script type="module" src="/.webmcp/bridge.js" data-packs="c2pa,mcp-server-client"></script>');
+  assert.equal(bridge.found, true, "an injected bridge loader is WebMCP");
+  assert.equal(bridge.kind, "bridge");
+
+  // Both spellings of the page API. Chrome 146 ships `document.modelContext`; the
+  // earlier drafts (and this site's own retired inline block) used `navigator`.
+  for (const marker of ["document.modelContext.registerTool({})", "navigator.modelContext.registerTool({})"]) {
+    const hit = lensDetectWebmcp(`<script>${marker}</script>`);
+    assert.equal(hit.found, true, `${marker} must register as WebMCP`);
+    assert.equal(hit.kind, "inline", "a page that calls the API itself is not a bridge");
+  }
+
+  // The claim has to stay falsifiable: a page merely TALKING about WebMCP is not a
+  // page serving it. /garage and /lwe are full of prose about specs the site does
+  // not implement, and this detector runs over arbitrary third-party HTML.
+  assert.equal(lensDetectWebmcp("<p>WebMCP is a browser standard for model context.</p>").found, false);
+  assert.equal(lensDetectWebmcp("").found, false);
 });
 
 test("Lens Browser Run endpoint validates targets before invoking the binding", async () => {

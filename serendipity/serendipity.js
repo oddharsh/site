@@ -2001,6 +2001,26 @@ async function mcpCallTool(d, name, args) {
   return { _unknown: true };
 }
 
+// The one Serendipity tool the SITE's /mcp also offers, as `find_events`.
+//
+// Two MCP servers on one origin is right for agents that read the agent card and
+// pick a door, and wrong for anything that only ever knocks on one. WebMCP is the
+// second kind: Cloudflare's bridge reads a single endpoint (`/mcp` by default) and
+// registers whatever it finds, so a tool living only at /serendipity/mcp is
+// invisible to every agent browsing the page. This wrapper is how the site server
+// borrows exactly one tool without a second implementation of it — `mcpCallTool`
+// is the same function /serendipity/mcp dispatches into, so the two cannot answer
+// differently, and the schema stays declared once at each door.
+//
+// Deliberately ONE tool rather than a general proxy. get_event and search_people
+// are drill-downs that only make sense once you are inside the pool, and a bridge
+// that hoisted all four would put four near-duplicate names in front of a model
+// that already has seven.
+export async function serendipityFindEvents(env, args) {
+  if (!env?.SERENDIPITY_DB) return { _error: "the event pool is not bound on this deployment" };
+  return mcpCallTool(db(env), "list_events", args || {});
+}
+
 // exported for contract-tests.mjs: the protocol-level methods (server/discover,
 // initialize, the list surfaces, the version + header gate) touch no database,
 // so they are drivable with a null `d`. Same reason shouldUseWorkersCache was

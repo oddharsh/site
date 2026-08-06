@@ -31,6 +31,7 @@
     "pages:check": "node scripts/check-page-contracts.mjs",
     "test": "node --test contract-tests.mjs",
     "shell:roll": "node scripts/roll-shell-dictionary.mjs",
+    "pages:roll": "node scripts/roll-shell-dictionary.mjs --pages",
     "dcz:check": "node scripts/check-dictionary-support.mjs",
     "checkpoints:check": "node scripts/check-checkpoints.mjs",
     "checkpoints:sync": "node scripts/check-checkpoints.mjs --sync",
