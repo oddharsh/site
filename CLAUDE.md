@@ -565,7 +565,7 @@ generic hex back.
   `./holding/scripts/bump-version.sh <slug> "<title>"`, then deploy. It derives
   the next vnum from `SELECT MAX(vnum)` and inserts the checkpoint (no file edit;
   the SW that used to carry the version string retired in v136).
-- **BROWSER (Browser Rendering binding)** — powers `/lens/shot` and
+- **BROWSER (Browser Run binding)** — powers `/lens/shot` and
   `/lens/browser` inside **`/lens`** ("The Other Web", which shows any URL the way a
   machine does). `/lens`'s Human view embeds framable sites in a live cross-origin
   `<iframe>` (loaded by the visitor's own browser) and screenshots the rest
@@ -669,7 +669,7 @@ the existing layers structurally could not reach:
 | `home.grid.*`, `rn.tracks.*` | the two hydration fragments. Splits manifest-vs-alt, which `perf-probe.js` fuses into one positional AE double. `home.grid.render` reads 0ms (see the CPU note above) and earns its place on attributes alone |
 | `rn.scrape.{playlist,tracks,artists}` | the 3-tier Spotify scrape, cold-miss only. `rn.artists_cached` vs `_scraped` says whether the artist KV cache is actually saving the network |
 | `lens.inspect.{fetch,parse}`, `lens.discovery` | `out.elapsedMs` is fixed BEFORE the 28-probe fan-out (botViews is 6 of its own), so a scan's discovery phase was entirely unmeasured. Production, 752KB page: 782ms total, `elapsedMs` reported 29. `lens.inspect.parse` reads 0ms (CPU note above) and is kept for its byte/word attributes |
-| `lens.shot`, `lens.browser` | Browser Rendering. Same span name on hit and miss (differing on `lens.cache`) so hit rate is a group-by, not a join; the four distinct 502 shapes are separated by `lens.outcome` |
+| `lens.shot`, `lens.browser` | Browser Run. Same span name on hit and miss (differing on `lens.cache`) so hit rate is a group-by, not a join; the four distinct 502 shapes are separated by `lens.outcome` |
 | `cron.*` | a cron has no response, no status, and no visitor to complain |
 | `around.neighbor` | every degradation here is designed to be quiet (a disallowing robots.txt is a legitimate skip). The rollup makes "3 of 20 neighbors dark for a month" one number |
 | `census.host` | a time series with silently missing rows is worse than none; the per-host catch is correct AND is how a 16-site roster becomes 3 |

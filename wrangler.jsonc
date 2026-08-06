@@ -229,7 +229,7 @@
     { "name": "cal-booking-expiry", "binding": "BOOKING_WORKFLOW", "class_name": "BookingWorkflow" }
   ],
   // Browser Run Quick Actions. The binding is authenticated by Workers, so
-  // Lens no longer needs a Browser Rendering API token for snapshots.
+  // Lens no longer needs a Browser Run API token for snapshots.
   "browser": { "binding": "BROWSER" },
   // Per-IP crawl budgets for /lens and the /mcp tools that share its crawler.
   // These were KV counters until 2026-08-04: a read plus a WRITE on every
@@ -247,9 +247,15 @@
   // nothing to provision. MUST match wrangler.dev.jsonc.
   "ratelimits": [
     { "name": "LENS_RL_INSPECT", "namespace_id": "1001", "simple": { "limit": 30, "period": 60 } },
-    { "name": "LENS_RL_SHOT",    "namespace_id": "1002", "simple": { "limit": 8,  "period": 60 } },
+    { "name": "LENS_RL_SHOT",    "namespace_id": "1002", "simple": { "limit": 3,  "period": 60 } },
     { "name": "LENS_RL_COMPARE", "namespace_id": "1003", "simple": { "limit": 4,  "period": 60 } },
-    { "name": "LENS_RL_BROWSER", "namespace_id": "1004", "simple": { "limit": 4,  "period": 60 } }
+    { "name": "LENS_RL_BROWSER", "namespace_id": "1004", "simple": { "limit": 3,  "period": 60 } },
+    // Shared across /lens/shot + /lens/browser, keyed on a CONSTANT rather than
+    // the caller: Browser Run's free plan allows 6 Quick Actions a minute for the
+    // whole ACCOUNT, so per-caller ceilings alone cannot keep the pair of them
+    // inside it. Per-colo like every counter on this binding, so it bounds a
+    // burst rather than guaranteeing the account total.
+    { "name": "LENS_RL_BROWSER_ALL", "namespace_id": "1005", "simple": { "limit": 4, "period": 60 } }
   ],
   "vars": {
     "HOST_TIMEZONE": "America/New_York",

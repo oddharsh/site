@@ -2441,7 +2441,7 @@ test("previews refuse every unsafe method, and the GET-shaped writes too", async
   }
 
   // ...and reads pass, or the preview is useless. /lens/* is on this list on
-  // purpose: it fetches third parties and costs Browser Rendering, but it reads
+  // purpose: it fetches third parties and costs Browser Run, but it reads
   // only, and a /lens change you cannot exercise is a /lens change you cannot review.
   for (const path of ["/", "/garage/encoding", "/whoareyou.json", "/photos", "/lens/fetch", "/lens/shot", "/coffee", "/slots"]) {
     for (const method of ["GET", "HEAD"]) {
@@ -2621,6 +2621,32 @@ test("overLensBudget fails open without a limiter and closes when one says no", 
   // from being a second unmetered door onto the same crawler.
   const names = Object.values(LENS_BUDGETS).map((b) => b.binding);
   assert.equal(new Set(names).size, names.length, "two budgets share one binding");
+});
+
+test("the shared browser ceiling bills everyone to one bucket, not per caller", async () => {
+  const { BROWSER_FREE_PLAN, LENS_BUDGETS, overLensBudget } = await import("./holding/_worker.js/lens.js");
+
+  // A budget carrying a fixed key must IGNORE the caller's IP. Two different
+  // visitors have to land in the same bucket, because the allowance they are
+  // spending belongs to the account rather than to either of them.
+  const keys = [];
+  const env = { LENS_RL_BROWSER_ALL: { limit: (arg) => { keys.push(arg.key); return { success: true }; } } };
+  for (const ip of ["203.0.113.7", "198.51.100.4"]) {
+    const req = new Request("https://aadhar.sh/lens/shot?url=https://example.com", { headers: { "cf-connecting-ip": ip } });
+    await overLensBudget(LENS_BUDGETS.browserAll, req, env);
+  }
+  assert.deepEqual(keys, ["browser-run", "browser-run"], "the shared ceiling must not key on the caller");
+
+  // The per-caller ceilings on the browser routes have to stay UNDER the
+  // account's own limit, or one visitor can spend everyone's minute. Measured
+  // 2026-08-06: free plan is 1 Quick Action per 10s account-wide, and `shot`
+  // used to allow 8/min to a single IP.
+  for (const name of ["shot", "browser"]) {
+    assert.ok(LENS_BUDGETS[name].max <= BROWSER_FREE_PLAN.perMinute,
+      `${name} allows ${LENS_BUDGETS[name].max}/min to one caller, over the account's ${BROWSER_FREE_PLAN.perMinute}/min`);
+  }
+  assert.ok(LENS_BUDGETS.browserAll.max <= BROWSER_FREE_PLAN.perMinute,
+    "the shared ceiling must sit under the account allowance it exists to protect");
 });
 
 // ── /mcp: the 2026-07-28 dual-era contract ──────────────────────────────

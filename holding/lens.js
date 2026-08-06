@@ -515,7 +515,7 @@
 
   // ---- human pane: a live browser window --------------------------------
   // Framable site → embed it live (loaded by your browser, your session, like
-  // a real tab). Site that forbids framing → a server-side Browser Rendering
+  // a real tab). Site that forbids framing → a server-side Browser Run
   // screenshot. Neither available → the readable-text reader as a last resort.
   function setHumanH(badge, sub) {
     var el = document.getElementById("lx-human-h");
@@ -593,7 +593,7 @@
   // Browser Run fires itself once a scan lands: the third pane filling on its
   // own is what makes Compare a triptych instead of two panes and a button.
   // Coarse pointers keep the opt-in button (a phone should not spend the 4/min
-  // Browser Rendering budget by default), and a 429 lands in lens-browser.js's
+  // Browser Run budget by default), and a 429 lands in lens-browser.js's
   // Try-again state, so the fallback is the old behavior exactly.
   function maybeAutoRunBrowser() {
     if (browserData || browserBusy || !data) return;

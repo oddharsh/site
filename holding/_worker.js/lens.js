@@ -154,11 +154,29 @@ export function glossify(escaped, only) {
 // which leaves headroom for everything else in the request.
 export const LENS_PARSE_CAP = 256 * 1024;
 
+// Browser Run's FREE plan allows one Quick Action every 10 seconds ACCOUNT-WIDE
+// (6/min), 3 concurrent browsers, and 10 minutes of browser time a day.
+// Measured 2026-08-06: two Quick Actions ~2s apart, and the second came back
+// 429. The per-IP ceilings below were written against no such limit — `shot`
+// alone allowed 8/min to a SINGLE visitor, so one person could spend the whole
+// account's minute and the next visitor got a failure that read like a bug.
+export const BROWSER_FREE_PLAN = { perMinute: 6, perDayMinutes: 10, concurrent: 3 };
+
 export const LENS_BUDGETS = {
   inspect: { binding: "LENS_RL_INSPECT", max: 30 },
-  shot:    { binding: "LENS_RL_SHOT",    max: 8  },
+  shot:    { binding: "LENS_RL_SHOT",    max: 3  },
   compare: { binding: "LENS_RL_COMPARE", max: 4  },
-  browser: { binding: "LENS_RL_BROWSER", max: 4  },
+  browser: { binding: "LENS_RL_BROWSER", max: 3  },
+  // The shared ceiling. Keyed on a CONSTANT rather than the caller's IP, so
+  // every browser-consuming route bills against one bucket and no single
+  // visitor can spend the account's allowance.
+  //
+  // Honest about what this is: the Rate Limiting binding counts per COLO, so a
+  // fixed key buys per-colo-global, not truly account-wide. Traffic spread over
+  // N colos can still total N x max. That is a large improvement over per-IP and
+  // is not a guarantee — the guarantee is the 429 handling below, which treats
+  // an upstream refusal as a normal outcome rather than a fault.
+  browserAll: { binding: "LENS_RL_BROWSER_ALL", max: 4, key: "browser-run" },
 };
 
 // Returns true when the caller is already over their per-minute budget.
@@ -187,7 +205,9 @@ export const LENS_BUDGETS = {
 export async function overLensBudget(budget, request, env) {
   const limiter = env && env[budget.binding];
   if (!limiter || typeof limiter.limit !== "function") return false;
-  const ip = request.headers.get("cf-connecting-ip") || "0.0.0.0";
+  // A budget carrying a fixed `key` is a SHARED ceiling rather than a per-caller
+  // one: everybody bills against the same bucket on purpose.
+  const ip = budget.key || request.headers.get("cf-connecting-ip") || "0.0.0.0";
   try {
     const { success } = await limiter.limit({ key: ip });
     return !success;
@@ -1156,7 +1176,7 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
       // policy than the site default (which has no frame-src → falls back to
       // default-src 'self' and blocks every cross-origin iframe). This relaxes
       // ONLY frame-src (any https origin, for the live iframe) and img-src
-      // (blob: for the Browser Rendering screenshot, https: for OG-card art);
+      // (blob: for the Browser Run screenshot, https: for OG-card art);
       // everything else stays locked down. withSecurityHeaders sees a CSP is
       // already present and leaves it alone. frame-ancestors 'none' keeps OTHER
       // sites from embedding /lens itself.
@@ -1184,6 +1204,11 @@ export async function handleLensShot(request, env, ctx) {
   // screenshots are the expensive path — tighter per-IP limit + a KV cache.
   if (await overLensBudget(LENS_BUDGETS.shot, request, env)) {
     return jsonResponse({ ok: false, error: `Snapshots are rate-limited to ${LENS_BUDGETS.shot.max}/min. Hang on a moment.` }, 429);
+  }
+  // The shared ceiling is checked AFTER the per-caller one, so a single heavy
+  // visitor is turned away by their own budget before they can spend everyone's.
+  if (await overLensBudget(LENS_BUDGETS.browserAll, request, env)) {
+    return jsonResponse({ ok: false, error: "The shared browser budget for this minute is spent. Try again shortly." }, 429);
   }
 
   const cacheKey = "lens:shot:" + (await lensSha256Hex(v.url));
@@ -1228,6 +1253,18 @@ export async function handleLensShot(request, env, ctx) {
       return jsonResponse({ ok: false, error: "Browser Run request failed: " + ((e && e.message) || e) }, 502);
     }
     const ctype = r.headers.get("content-type") || "";
+    // Browser Run refusing us is NOT the target site failing, and the old code
+    // reported both as a 502. On the free plan that is the single most likely
+    // response here — one Quick Action per 10 seconds account-wide — so the
+    // common case was being dressed up as an upstream fault, pointing whoever
+    // debugged it at the scanned site instead of at our own budget.
+    if (r.status === 429) {
+      s.setAttribute("lens.outcome", "browser_budget_spent");
+      return jsonResponse({
+        ok: false,
+        error: `Browser Run is rate-limited right now (free plan: ${BROWSER_FREE_PLAN.perMinute}/min account-wide, ${BROWSER_FREE_PLAN.perDayMinutes} min/day). The live frame and every machine lens still work.`,
+      }, 429);
+    }
     if (!r.ok || !ctype.startsWith("image/")) {
       let detail = "";
       try { detail = (await r.text()).slice(0, 300); } catch (_e) {}
@@ -1238,7 +1275,11 @@ export async function handleLensShot(request, env, ctx) {
     const buf = await r.arrayBuffer();
     s.setAttribute("lens.outcome", "ok");
     s.setAttribute("lens.png_bytes", buf.byteLength);
-    if (env.RN_KV) ctx.waitUntil(env.RN_KV.put(cacheKey, buf, { expirationTtl: 3600 }));
+    // 6h, up from 1h. On the free plan a MISS costs a slice of a 6-per-minute,
+    // 10-minute-a-day allowance, while a stale screenshot costs a slightly old
+    // picture of a page that mostly did not change. The cache is the real budget
+    // control here; the rate limits only stop a burst.
+    if (env.RN_KV) ctx.waitUntil(env.RN_KV.put(cacheKey, buf, { expirationTtl: 21600 }));
     return new Response(buf, { headers: lensPngHeaders(false) });
   });
 }
@@ -1267,6 +1308,12 @@ export async function handleLensBrowser(request, env, ctx) {
   // HTML 1101 page, which the client then tries to JSON.parse.
   if (await overLensBudget(LENS_BUDGETS.browser, request, env)) {
     return jsonResponse({ ok: false, error: `Browser Run snapshots are rate-limited to ${LENS_BUDGETS.browser.max}/min. Hang on a moment.` }, 429);
+  }
+  // Same shared ceiling as /lens/shot. Two routes drawing on one account-wide
+  // allowance have to bill against one bucket, or each stays politely under a
+  // limit that the pair of them blows through together.
+  if (await overLensBudget(LENS_BUDGETS.browserAll, request, env)) {
+    return jsonResponse({ ok: false, error: "The shared browser budget for this minute is spent. Try again shortly." }, 429);
   }
 
   const cacheKey = "lens:browser:" + (await lensSha256Hex(v.url));

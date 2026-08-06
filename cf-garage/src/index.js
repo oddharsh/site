@@ -117,7 +117,7 @@ export default {
         return json({ ok: true, stem, caption });
       }
 
-      // Feature #3 — Browser Rendering: headless-Chromium screenshot. PARKED (see
+      // Feature #3 — Browser Run: headless-Chromium screenshot. PARKED (see
       // /garage/cloudflare). A bare GET no-ops WITHOUT launching, so crawlers,
       // prerenders, and cache-busted probes can't burn the free 10-min/day budget or
       // leak sessions — only ?go=1 drives a real browser. Every path is BOUNDED and
@@ -135,7 +135,7 @@ export default {
         if (url.searchParams.get("go") !== "1") {
           log({ feature: "browser-rendering", step: "parked-noop", ms: Date.now() - t0 });
           return json({ ok: false, parked: true,
-            error: "Browser Rendering is parked — append ?go=1 to actually launch a browser. See /garage/cloudflare." }, 503);
+            error: "Browser Run is parked — append ?go=1 to actually launch a browser. See /garage/cloudflare." }, 503);
         }
         let target = url.searchParams.get("url") || ORIGIN;
         if (!/^https:\/\/(www\.)?aadhar\.sh(\/|$)/.test(target)) target = ORIGIN; // SSRF guard
