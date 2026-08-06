@@ -1369,6 +1369,20 @@ export async function handleLensBrowser(request, env, ctx) {
     s.setAttribute("lens.error", (e && e.message) || String(e));
     return jsonResponse({ ok: false, error: "Browser Run request failed: " + ((e && e.message) || e) }, 502);
   }
+  // Browser Run refusing US is not the scanned site failing. /lens/shot learned
+  // this and /lens/browser did not, which is how production answered a 502
+  // carrying {"code":2001,"message":"Rate limit exceeded"} on 2026-08-06 — a
+  // bad-gateway status pointing whoever read it at react.dev instead of at our
+  // own six-per-minute allowance. On the free plan this is the MOST likely
+  // response here, so it is the one that most needs to be itself.
+  if (response.status === 429) {
+    s.setAttribute("lens.outcome", "browser_budget_spent");
+    return jsonResponse({
+      ok: false,
+      reason: "budget_spent",
+      error: `Browser Run is rate-limited right now (free plan: ${BROWSER_FREE_PLAN.perMinute}/min account-wide, ${BROWSER_FREE_PLAN.perDayMinutes} min/day). Every other lens still works.`,
+    }, 429);
+  }
   if (!response.ok) {
     let detail = "";
     try { detail = (await response.text()).slice(0, 500); } catch (_e) {}
