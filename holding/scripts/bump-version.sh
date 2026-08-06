@@ -1,21 +1,31 @@
 #!/usr/bin/env bash
-# bump-version.sh — log a deploy checkpoint to D1, so /updates (Windows Update)
-# and /restore (System Restore) both advance. Both pages read the same
-# `checkpoints` table, so this single insert keeps them in sync.
+# bump-version.sh — stage a release entry for /updates and /restore.
 #
-# The service worker retired in v136, so there is no CACHE_VERSION to rewrite
-# anymore: the version number now lives in D1 alone, and this script derives
-# the next one from SELECT MAX(vnum). Run this before any deploy you want on
-# the changelog.
+# WRITES ONE FILE AND NOTHING ELSE. No D1, no wrangler, no network, no account
+# selection. Run it inside the PR that is being released; the entry ships with
+# the merge, and `npm run deploy:promote` records it in D1 once traffic actually
+# reaches 100%.
 #
 #   ./holding/scripts/bump-version.sh <slug> "<title>"
 #   e.g. ./holding/scripts/bump-version.sh confetti "Run palette: Raycast confetti easter egg"
 #
 # slug   becomes the version suffix (aadhar-v<N+1>-<slug>) and the changelog tag.
 # title  is the human description shown on /updates and /restore.
+#
+# ── why this stopped writing D1 ───────────────────────────────────────────
+# It used to INSERT first and derive the projection second, which meant the
+# changelog could only be logged AFTER the deploy it describes — and since
+# /updates, /updates.json and /restore all render from the committed projection
+# at BUILD time, publishing that entry then needed a SECOND deploy. Observed
+# 2026-08-06: v173 was logged, the live page kept serving v172, and the only way
+# out was to ride the projection on an unrelated open PR.
+#
+# Now the order matches reality. The repo says what a release CLAIMS to be, in
+# the PR, where the title can be reviewed like any other prose. D1 says what
+# actually SHIPPED, written at 100% by the one thing that knows traffic moved.
+# `npm run checkpoints:check` allows the projection to run ahead by a contiguous
+# tail of unreleased entries and fails on every other kind of divergence.
 set -euo pipefail
-
-DB="aadhar-restore"
 
 slug="${1:-}"; title="${2:-}"
 if [ -z "$slug" ] || [ -z "$title" ]; then
@@ -25,63 +35,35 @@ fi
 if ! printf '%s' "$slug" | grep -qE '^[a-z0-9][a-z0-9-]*$'; then
   echo "slug must be lowercase alnum/dashes, e.g. 'sysprop' or 'instant-nav'" >&2; exit 1
 fi
-# keep the SQL single-quoted and simple: no apostrophes in the title
+# The title still reaches D1 through a single-quoted SQL literal at ramp time.
 case "$title" in *\'*) echo "title cannot contain a single quote (')" >&2; exit 1;; esac
 
-# current version = the D1 log's high-water mark (the SW string used to carry it).
-# REPLICA-LAG HARDENING (this bit three deploys on 2026-07-03): the MAX read can
-# hit a stale D1 replica, and INSERT OR IGNORE then swallowed the collision
-# silently — a checkpoint just vanished. Now the insert is plain (a collision
-# ERRORS), and on conflict we advance vnum and retry a few times.
-curnum="$(wrangler d1 execute "$DB" --remote --json --command \
-  "SELECT MAX(vnum) AS m FROM checkpoints;" \
-  | python3 -c 'import json,sys; print(json.load(sys.stdin)[0]["results"][0]["m"])')"
-ymd="$(date -u +%Y-%m-%d)"
-ts="$(date -u +%s)"
-
 ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/../.." && pwd )"
+OUT="$ROOT/holding/_worker.js/checkpoints.json"
 
-# The committed projection of the checkpoints table.
-#
-# D1 stays the SOURCE OF TRUTH; this file is a derived read of it, and build.mjs
-# renders /updates and /restore from the file so both earn the q11 twin and the dcz
-# delta tiers every authored page already has. Those two are the only dynamic pages
-# whose data changes solely at deploy — this insert happens moments before one — so
-# baking them costs no freshness, unlike /reading or /around whose feeds move on
-# their own schedule.
-#
-# Written AFTER a successful insert, so it always reflects a row that really landed.
-# `npm run checkpoints:check` re-reads D1 and fails on drift, which is the guard for
-# the case this cannot cover: a row inserted by any other means.
-write_projection() {
-  local out="$ROOT/holding/_worker.js/checkpoints.json"
-  local rows
-  if ! rows="$(wrangler d1 execute "$DB" --remote --json --command \
-    "SELECT vnum, ymd, version, slug, title FROM checkpoints ORDER BY vnum;")"; then
-    echo "warn:   could not re-read D1 for the projection — /updates and /restore will" >&2
-    echo "warn:   ship the PREVIOUS log until you re-run this or fix the read" >&2
-    return 0
-  fi
-  printf '%s' "$rows" | python3 -c '
-import json, sys
-rows = json.load(sys.stdin)[0]["results"]
-sys.stdout.write(json.dumps(rows, indent=2, sort_keys=True) + "\n")
-' > "$out"
-  echo "proj:   $(python3 -c "import json,sys; print(len(json.load(open(sys.argv[1]))))" "$out") checkpoints -> holding/_worker.js/checkpoints.json"
-}
+SLUG="$slug" TITLE="$title" YMD="$(date -u +%Y-%m-%d)" python3 - "$OUT" <<'PY'
+import json, os, sys
 
-next=$((curnum + 1))
-for attempt in 1 2 3 4; do
-  ver="aadhar-v${next}-${slug}"
-  if wrangler d1 execute "$DB" --remote --command \
-    "INSERT INTO checkpoints (vnum, ts, ymd, version, slug, title) VALUES (${next}, ${ts}, '${ymd}', '${ver}', '${slug}', '${title}');" >/dev/null 2>&1; then
-    echo "d1:     logged checkpoint v${next} (${ymd}) as ${ver}  ->  /updates + /restore"
-    write_projection
-    echo "next:   commit holding/_worker.js/checkpoints.json, then npm run deploy"
-    exit 0
-  fi
-  echo "d1:     vnum ${next} taken (stale replica read?) — retrying with $((next + 1))" >&2
-  next=$((next + 1))
-done
-echo "error: could not insert a checkpoint after 4 attempts" >&2
-exit 1
+path = sys.argv[1]
+slug, title, ymd = os.environ["SLUG"], os.environ["TITLE"], os.environ["YMD"]
+rows = json.load(open(path))
+
+# The high-water mark comes from the PROJECTION, which is the whole point: this
+# script no longer needs to reach D1 to know what number it is minting, so it
+# runs on a plane, in CI, or on a machine with no Cloudflare credentials at all.
+vnum = max((r["vnum"] for r in rows), default=0) + 1
+version = f"aadhar-v{vnum}-{slug}"
+
+if any(r["slug"] == slug for r in rows):
+    sys.exit(f"error:  slug '{slug}' is already in the log — pick another")
+
+rows.append({"slug": slug, "title": title, "version": version, "vnum": vnum, "ymd": ymd})
+rows.sort(key=lambda r: r["vnum"])
+open(path, "w").write(json.dumps(rows, indent=2, sort_keys=True) + "\n")
+print(f"staged: v{vnum} ({ymd}) as {version}")
+print(f"        {title}")
+PY
+
+echo "next:   commit holding/_worker.js/checkpoints.json with the change it describes."
+echo "        /updates + /restore show it as soon as that version serves;"
+echo "        npm run deploy:promote records it in D1 at 100%."

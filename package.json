@@ -35,7 +35,8 @@
     "dcz:check": "node scripts/check-dictionary-support.mjs",
     "checkpoints:check": "node scripts/check-checkpoints.mjs",
     "checkpoints:sync": "node scripts/check-checkpoints.mjs --sync",
-    "inp": "node scripts/inp-lab.mjs"
+    "inp": "node scripts/inp-lab.mjs",
+    "release": "node scripts/release-status.mjs"
   },
   "devDependencies": {
     "@minify-html/node": "0.18.1",

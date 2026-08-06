@@ -754,5 +754,12 @@
     "version": "aadhar-v172-access-tech-tree",
     "vnum": 172,
     "ymd": "2026-08-04"
+  },
+  {
+    "slug": "hosted-tools",
+    "title": "Tools move to the root and answer console, curl and MCP alike, the photo query learns to rank, and Browser Run gets an engine seam",
+    "version": "aadhar-v173-hosted-tools",
+    "vnum": 173,
+    "ymd": "2026-08-06"
   }
 ]
