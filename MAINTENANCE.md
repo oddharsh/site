@@ -5,7 +5,7 @@ with the exact command and the gotcha that bit me last time. Deep design notes
 and the full conventions list live in [CLAUDE.md](CLAUDE.md); this is the ops sheet.
 
 One site Worker, with three source islands:
-- **holding/** (aadhar.sh): the **Cloudflare Worker with static assets** (migrated off Pages 2026-06-30). Config is `wrangler.jsonc` at the repo root: it points `main` + `assets.directory` at `.build/holding` and runs `build.mjs` via its `build.command`, so `assets.run_worker_first` (an allowlist mirroring the `ROUTES`/`PREFIX` tables in `index.js`; static is the default) applies to the built tree; `workers_dev:false` (custom domain only). **Production deploy: merge to `main`; GitHub CI promotes the exact tested commit to the machine-owned `production` branch, then Cloudflare Workers Builds deploys it.** The config self-builds, so the Workers Build Deploy command ships the minified tree; local dev uses `wrangler.dev.jsonc` (readable `holding/`, fast reload). A local `wrangler deploy` is fallback-only. Verify after every deploy with `node verify-routes.mjs https://aadhar.sh` (now also asserts `/nav.js` minified + `.src` twins resolve). All site bindings live in `wrangler.jsonc`; secrets via `wrangler secret put`.
+- **holding/** (aadhar.sh): the **Cloudflare Worker with static assets** (migrated off Pages 2026-06-30). Config is `wrangler.jsonc` at the repo root: it points `main` + `assets.directory` at `.build/holding` and runs `build.mjs` via its `build.command`, so `assets.run_worker_first` (an allowlist mirroring the `ROUTES`/`PREFIX` tables in `index.js`; static is the default) applies to the built tree; `workers_dev:false` (custom domain only). **Production deploy: merge to `main`; GitHub CI promotes the exact tested commit to the machine-owned `production` branch, then Cloudflare Workers Builds deploys it.** The config self-builds, so the Workers Build Deploy command ships the minified tree; local dev uses `wrangler.dev.jsonc` (readable `holding/`, fast reload). A local `wrangler deploy` is fallback-only. Verify after every deploy with `node verify-routes.mjs https://aadhar.sh` (now also asserts `/nav.js` minified + `.src` twins resolve). All site bindings live in `wrangler.jsonc`; secrets via `wrangler versions secret put`.
 - **cal/** (coffee booking module): **LIVE** at `aadhar.sh/coffee`, dispatched by the same `aadhar-sh` Worker. Availability still serves from an SWR calendar snapshot (KV `cal:busy`, 2s upstream deadline, stale fallback); the GET page edge-caches 30s; booking fails closed if the calendar can't be vouched for. See [cal/README.md](cal/README.md). `cal/wrangler.test.toml` is test-only; it is not a deployment target.
 - **serendipity/** (event dashboard module): **LIVE** at `aadhar.sh/serendipity`, dispatched by the same `aadhar-sh` Worker. Its D1, secrets, route-specific CSP, and dashboard cache policy remain isolated in the module and shared root bindings.
 
@@ -78,7 +78,7 @@ Create a new Google Calendar **secret address in iCal format** (or the
 equivalent read-only iCloud feed), then replace the secret:
 
 ```bash
-npx wrangler secret put -c wrangler.jsonc ICAL_URL
+npx wrangler versions secret put -c wrangler.jsonc ICAL_URL
 ```
 
 Paste the new feed URL when prompted. To make the new source take effect
@@ -103,8 +103,8 @@ only an `https://calendar.app.google/...` destination. Set the destination
 first, then the new random-looking path segment:
 
 ```bash
-npx wrangler secret put -c wrangler.jsonc WORK_CALENDAR_URL
-npx wrangler secret put -c wrangler.jsonc WORK_CALENDAR_SLUG
+npx wrangler versions secret put -c wrangler.jsonc WORK_CALENDAR_URL
+npx wrangler versions secret put -c wrangler.jsonc WORK_CALENDAR_SLUG
 ```
 
 Verify the new path without following the redirect and confirm that the old
@@ -124,7 +124,7 @@ GitHub or in a public page.
 Generate a new value and replace the Worker secret:
 
 ```bash
-openssl rand -hex 32 | npx wrangler secret put -c wrangler.jsonc SIGNING_SECRET
+openssl rand -hex 32 | npx wrangler versions secret put -c wrangler.jsonc SIGNING_SECRET
 ```
 
 This immediately invalidates every outstanding approve and decline link. It
@@ -758,7 +758,7 @@ fetch), `lib/assets.js` (`serveFreshAsset` + asset 404 clamp).
 ### Bindings the worker reads (`env.*`)
 
 KV/R2/D1/DO are resource bindings; the rest are secrets. Bindings live in
-wrangler.jsonc; secrets on the Worker via `wrangler secret put`. Every use is
+wrangler.jsonc; secrets on the Worker via `wrangler versions secret put`. Every use is
 guarded, so a missing binding degrades, it doesn't crash.
 
 | `env.*` | Kind | What |
@@ -986,7 +986,7 @@ a token:
 ```bash
 # Cloudflare dashboard -> API Tokens -> Create Custom Token
 #   Permission: Account · Browser Rendering · Edit
-npx wrangler secret put -c wrangler.jsonc BROWSER_RUN_TOKEN
+npx wrangler versions secret put -c wrangler.jsonc BROWSER_RUN_TOKEN
 ```
 
 **That is an EDIT scope.** It lives as a Worker secret, never in GitHub, so the

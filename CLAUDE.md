@@ -128,6 +128,35 @@ worktrees may edit freely, but a worktree is not a release surface.
   `npm run deploy` still exists and still goes straight to 100%. Keep it: the
   `infra:check` deadlock below is exactly the case where a ramp's extra step is
   a liability rather than a safety net.
+- **A SECRET is a version too, so `wrangler secret put` no longer works here.**
+  Hit 2026-08-06 adding `BROWSER_RUN_TOKEN`:
+
+  ```
+  ✘ Secret edit failed. You attempted to modify a secret, but the latest
+    version of your Worker isn't currently deployed.
+  ```
+
+  That is this release model working, not a fault. `wrangler secret put` writes
+  a secret AND deploys immediately; because the newest version here is normally
+  an UPLOADED, unramped one, doing that would ship whatever is sitting in the
+  queue as a side effect of setting a secret. Wrangler refuses rather than let a
+  credential change become a release.
+
+  Use the versions form, which mints a new version and moves no traffic:
+
+  ```bash
+  npx wrangler versions secret put -c wrangler.jsonc <NAME>
+  ```
+
+  Then ramp it like any other version (`npm run deploy:promote`). Every secret
+  command in this file, MAINTENANCE.md and `cal/README.md` was the old form and
+  is now the new one; they had been unrunnable since gradual deployments landed
+  and nobody noticed, because secrets are set about once a year.
+
+  **Order matters when the secret is FOR new code.** Merge first so Workers
+  Builds uploads a version containing the feature, then set the secret on top of
+  it, then ramp. Setting it first attaches a credential to a version whose code
+  predates the thing that reads it, which is harmless and pointless.
 - **A fix for a bug that `infra:check`'s edge tier can see will DEADLOCK that
   promotion, and the merge is where it bites.** Those checks read production over
   the wire, which is the whole point of them (see the `app-owns-security-headers`
@@ -785,9 +814,9 @@ cal/
 
 ```bash
 npm install
-npx wrangler secret put -c wrangler.jsonc ICAL_URL        # Google Calendar → "secret ICS"
-npx wrangler secret put -c wrangler.jsonc RESEND_API_KEY  # resend.com, DKIM-verify aadhar.sh
-openssl rand -hex 32 | npx wrangler secret put -c wrangler.jsonc SIGNING_SECRET
+npx wrangler versions secret put -c wrangler.jsonc ICAL_URL        # Google Calendar → "secret ICS"
+npx wrangler versions secret put -c wrangler.jsonc RESEND_API_KEY  # resend.com, DKIM-verify aadhar.sh
+openssl rand -hex 32 | npx wrangler versions secret put -c wrangler.jsonc SIGNING_SECRET
 
 # Production still ships through merge -> CI -> production -> Workers Builds.
 # Local fallback, from the repository root only:
