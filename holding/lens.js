@@ -1089,8 +1089,10 @@
     // Object]" where a lens should be — but the fallback exists precisely so an
     // unknown lens name lands on lensAnatomy, and inheritance quietly voids it.
     var LENS_FN = { readiness: lensReadiness, anatomy: lensAnatomy, structured: lensStructured, ai: lensAI, terms: lensTerms, discovery: lensDiscovery };
-    var fn = Object.prototype.hasOwnProperty.call(LENS_FN, lens) ? LENS_FN[lens] : lensAnatomy;
-    var body = view === "machine" ? machineBrief() + '<div class="lx-machine-block">' + section("Selected evidence lens", { text: LENS_LABEL[lens] }, "The original inspector remains available below the briefing.", fn()) + "</div>"
+    var selectedLens = Object.prototype.hasOwnProperty.call(LENS_FN, lens) ? lens : "anatomy";
+    var fn = LENS_FN[selectedLens];
+    if (typeof fn !== "function") fn = lensAnatomy;
+    var body = view === "machine" ? machineBrief() + '<div class="lx-machine-block">' + section("Selected evidence lens", { text: LENS_LABEL[selectedLens] }, "The original inspector remains available below the briefing.", fn()) + "</div>"
       : view === "delta" ? deltaView() : fn();
     // the dollar thesis rides above every scanned lens except Delta (which runs its
     // own no-score narrative). Machine view already leads with the briefing/trace.
