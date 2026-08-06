@@ -168,6 +168,30 @@ ecosystems. The exact lockfile pin keeps a release reproducible; the Dependabot
 PR keeps it current. Wrangler's npm dependency metadata instrumentation is
 explicitly enabled in every Worker config.
 
+**CodeQL analyzes `actions` and `javascript-typescript` only, and that list is a
+repo SETTING with no file in this tree.** It lives under Security, Code scanning,
+Default setup, so nothing here can declare it and `infra:check` cannot see it.
+Read the live value with:
+
+```bash
+gh api repos/oddharsh/site/code-scanning/default-setup
+```
+
+Expect `actions`, `javascript`, `javascript-typescript`, `typescript` back. Those
+last three are aliases GitHub keeps and folds into ONE job, so the honest count is
+two jobs, not four.
+
+`rust` and `python` were dropped 2026-08-06. Between them they cost about 3 of the
+scan's 4 minutes to analyze four files: `holding/scripts/zenc/src/main.rs` and the
+three `holding/scripts/*.py` pipeline scripts. Every one of them is workstation and
+CI build tooling that runs before a deploy and never answers a request, while the
+configured threat model is `remote`. The Worker, which is the code an attacker can
+actually reach, is JavaScript and stays covered.
+
+Turn one back on the moment its language starts serving traffic. A Rust wasm module
+inside the Worker, or a Python endpoint of any kind, moves that code from the build
+side of the line to the served side, and this reasoning stops holding.
+
 `.github/workflows/promote-production.yml` runs after a successful `CI` run for
 `main` associated with a merged PR (or an explicit manual dispatch). It refuses
 unmerged commits, then advances the machine-owned `production` branch to the
@@ -674,11 +698,14 @@ merge push can still trigger the old direct production build.
 ## Understanding-first review
 
 Every pull request uses the author claim card in
-`.github/pull_request_template.md` and receives an idempotent reviewer prompt
-from `.github/workflows/understanding-review.yml`. The canonical practice is
-documented in [UNDERSTANDING-REVIEW.md](UNDERSTANDING-REVIEW.md): reconstruct
-the model, name a falsifier, inspect evidence, and leave residual uncertainty
-visible. The prompt is advisory; it is not a prose-quality or AI-scoring gate.
+`.github/pull_request_template.md`. The canonical practice is documented in
+[UNDERSTANDING-REVIEW.md](UNDERSTANDING-REVIEW.md): reconstruct the model, name
+a falsifier, inspect evidence, and leave residual uncertainty visible. It is
+advisory; it is not a prose-quality or AI-scoring gate.
+
+There is no reviewer-prompt bot anymore. A workflow posted the same comment on
+every PR until 2026-08-06; the reasoning for removing it is in that document
+under "What the automation does, and why it stopped".
 
 ## Author a new LWE or Garage explainer
 
