@@ -42,12 +42,18 @@
 // script pausing between steps is not ceremony; it is where you are supposed to
 // look at something.
 //
-// WORKSTATION-ONLY. Same rule as infra:apply: this needs a token that can write
-// to the Worker, and GitHub does not get one. CI can promote a commit to the
-// `production` branch, which is what causes an upload. It cannot move traffic.
+// RUNS ANYWHERE THAT CAN AUTHENTICATE. It was workstation-only until 2026-08-06,
+// on the rule that GitHub never holds a Cloudflare token that can write; that
+// rule was retired, and .github/workflows/ramp.yml now drives this with a
+// narrowly scoped token held as an ENVIRONMENT secret behind required
+// reviewers. lib/release-guard.mjs is the check that replaced the flat CI ban.
+//
+// infra:apply is NOT covered by that change and still refuses to run in CI. It
+// can create and destroy zone-level DNS, which no pipeline here needs to do.
 
 import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
+import { releaseCredentialError } from "./lib/release-guard.mjs";
 import { promisify } from "node:util";
 
 const exec = promisify(execFile);
@@ -71,9 +77,8 @@ const flag = (name) => {
 };
 const has = (name) => argv.includes(`--${name}`);
 
-if (process.env.CI) {
-  die("deploy:promote cannot run in CI. Moving production traffic needs a write-capable token, and GitHub deliberately holds none.");
-}
+const credentialError = releaseCredentialError();
+if (credentialError) die(credentialError);
 
 // ------------------------------------------------------------- wrangler ----
 

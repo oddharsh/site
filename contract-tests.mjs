@@ -2710,6 +2710,30 @@ test("the kitesurf selector is tried, and a rejection is remembered rather than 
   }
 });
 
+test("the ramp guard asks whether it can authenticate, not whether it is CI", async () => {
+  const { releaseCredentialError } = await import("./scripts/lib/release-guard.mjs");
+
+  // Interactive: wrangler's stored OAuth login IS the credential. Demanding an
+  // env var here would break every workstation ramp this repo has ever done.
+  assert.equal(releaseCredentialError({}), null);
+  assert.equal(releaseCredentialError({ CLOUDFLARE_API_TOKEN: "" }), null);
+
+  // In CI there is no login to fall back on. This used to be a flat `if (CI)
+  // die()`, which refused the case it was built to protect — a ramp with a real
+  // token, gated by a human — while doing nothing about the case that actually
+  // breaks: a ramp that starts unauthenticated and fails partway, possibly after
+  // traffic already moved to 10%.
+  assert.match(releaseCredentialError({ CI: "true" }) || "", /CLOUDFLARE_API_TOKEN/);
+
+  // Two accounts on this login means a non-interactive wrangler call dies with
+  // "More than one account available", which reads like a bad token and is a
+  // missing line of config. Caught here, by name, rather than mid-ramp.
+  assert.match(releaseCredentialError({ CI: "true", CLOUDFLARE_API_TOKEN: "t" }) || "", /CLOUDFLARE_ACCOUNT_ID/);
+
+  // Fully configured CI is allowed through — the whole point of the change.
+  assert.equal(releaseCredentialError({ CI: "true", CLOUDFLARE_API_TOKEN: "t", CLOUDFLARE_ACCOUNT_ID: "a" }), null);
+});
+
 test("the shared browser ceiling bills everyone to one bucket, not per caller", async () => {
   const { BROWSER_FREE_PLAN, LENS_BUDGETS, overLensBudget } = await import("./holding/_worker.js/lens.js");
 

@@ -147,8 +147,13 @@ worktrees may edit freely, but a worktree is not a release surface.
   (the one route that reports which VERSION answered — both versions read the
   same D1 changelog, so `/updates.json` structurally cannot tell them apart) and
   aborts on a non-200 or on a step that never took. `--to`, `--steps`,
-  `--status`, and `--rollback` are the other modes. It is workstation-only for
-  the same reason `infra:apply` is: moving traffic needs a token that can write.
+  `--status`, and `--rollback` are the other modes. It runs anywhere that can
+  authenticate: on a workstation from your wrangler login, and in
+  `.github/workflows/ramp.yml` from the scoped environment secret. The old flat
+  `if (process.env.CI) die()` is gone — `scripts/lib/release-guard.mjs` asks
+  whether the process can authenticate instead, because a blanket CI ban refused
+  the gated pipeline it was meant to protect while doing nothing about a ramp
+  that starts unauthenticated and dies after traffic already moved.
 
   What the ramp buys is the ability to read a change before everyone gets it. The
   script deliberately pauses between steps and tells you to go look at Workers
@@ -271,11 +276,25 @@ worktrees may edit freely, but a worktree is not a release surface.
   its remote config has drifted from this repo. Workers Builds deliberately
   does NOT pass `--strict`: it is the authoritative publisher, and a release
   should reclaim a dashboard edit instead of stalling on it.
-- **GitHub must never hold a Cloudflare token that can write.** The point is
-  that GitHub cannot publish to production; only Workers Builds can, and only
-  from `production`. A READ-ONLY token is a different thing and is fine: CI uses
-  one for `npm run infra:check`. Scope it to exactly these six reads and
-  nothing else: Account Settings:Read, Workers Scripts:Read, Workers KV
+- **GitHub's DEFAULT token is read-only, and one narrowly scoped write token is
+  allowed, in an environment, behind a reviewer.** This rule used to read "GitHub
+  must never hold a Cloudflare token that can write, full stop"; the owner
+  retired that on 2026-08-06 and the reasoning is worth keeping, because the risk
+  it was aimed at is real and unchanged: **this repository is PUBLIC.** Actions
+  secrets are not exposed by a public repo, but a workflow that runs untrusted
+  input can exfiltrate whatever it can read, so WHERE the secret lives is the
+  whole control.
+
+  The write token (`CLOUDFLARE_API_TOKEN_RAMP`, `Workers Scripts:Edit` + `D1:Edit`
+  and nothing more) is an ENVIRONMENT secret on `production-canary` and
+  `production-full`, never a repo secret. A job that does not name those
+  environments cannot see it, which is what keeps it out of reach of fork PRs.
+  `production-full` carries required reviewers, so majority traffic cannot move
+  without a human. `.github/workflows/ramp.yml` is the only consumer.
+
+  **The default is still read-only, and adding a second write token is still a
+  no.** CI's own token stays exactly as it was. Scope it to exactly these six
+  reads and nothing else: Account Settings:Read, Workers Scripts:Read, Workers KV
   Storage:Read, Workers R2 Storage:Read, D1:Read, **Workers Builds Configuration:Read**. If a
   token in this repo ever needs an `Edit` scope, the answer is no. A token
   missing one of these degrades only the section that needed it, and the check
@@ -285,11 +304,13 @@ worktrees may edit freely, but a worktree is not a release surface.
   the live Workers Builds triggers instead of trusting a recorded intent. It is
   the read half of the permission whose Edit half changes the deploy command, so
   granting it buys drift detection on the release path and grants nothing that
-  can publish. **Read, never Edit — the rule above is unchanged.**
+  can publish. **This one is Read, never Edit** — the ramp token above is a
+  separate, narrower credential and does not widen this one.
 - The one write path, `npm run infra:apply`, is **workstation-only** and reads a
   different variable (`CLOUDFLARE_API_TOKEN_WRITE`, scoped to DNS on this zone
-  alone). It refuses to run in CI and cannot touch the Worker. GitHub stays
-  unable to reach production, which is the property the release design rests on.
+  alone). It refuses to run in CI and cannot touch the Worker, and that refusal
+  is NOT covered by the 2026-08-06 change: it can create and destroy zone-level
+  DNS, which no pipeline here needs to do.
 
 > `AGENTS.md` is a symlink to this file. One source of truth, so the two cannot
 > drift again (they had, badly, by 2026-07-22). Edit this file.
