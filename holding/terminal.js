@@ -124,26 +124,71 @@
     return { status: res.status, type: res.headers.get("content-type") || "", body: await res.text() };
   }
 
-  // Run one of the three programs and keep the state its frame prints, so the
+  // ── the console is an MCP CLIENT ─────────────────────────────────────────
+  // Typing `dict https://…` here sends the SAME JSON-RPC call an agent pointed
+  // at this origin would send. Not a parallel API dressed up to look like one:
+  // one POST to /mcp, tools/call, the tool named by the command.
+  //
+  // That is the whole point of this surface. If the console had its own private
+  // endpoints, watching it would tell you nothing about what an agent gets — and
+  // the two could drift without anyone noticing. Sharing the door means a
+  // regression in the agent path breaks the console in front of you.
+  //
+  // `echoCall` prints the request before it goes out, because the request is the
+  // interesting artifact. You are meant to be able to copy it into curl.
+  var MCP_META = { "io.modelcontextprotocol/protocolVersion": "2026-07-28" };
+
+  async function mcpCall(name, args, opts) {
+    var body = { jsonrpc: "2.0", id: 1, method: "tools/call",
+      params: { name: name, arguments: args || {}, _meta: MCP_META } };
+    if (!opts || opts.echo !== false) {
+      write("");
+      write("  POST /mcp  " + JSON.stringify({ method: "tools/call", name: name, arguments: args || {} }), "ps-dim");
+    }
+    var res = await fetch("/mcp", {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+    });
+    return res.json();
+  }
+
+  // Run one of the tools THROUGH MCP and keep the state its frame prints, so the
   // next keypress continues from where the last frame left off.
   async function runProgram(name, query) {
-    var path = "/terminal/" + name + (query ? (query[0] === "?" ? query : "?" + query) : "");
-    var r = await ask(path);
-    if (r.status !== 200) { write("the program did not answer (" + r.status + ")", "ps-err"); return; }
-    write(r.body.replace(/\n+$/, ""));
+    // The command's query string is the tool's arguments. Same params the HTTP
+    // route takes, because the route and the tool are one program.
+    var args = {};
+    var qs = query ? query.replace(/^[?&]/, "") : "";
+    qs.split("&").forEach(function (pair) {
+      if (!pair) return;
+      var i = pair.indexOf("=");
+      var k = decodeURIComponent(i < 0 ? pair : pair.slice(0, i));
+      var v = i < 0 ? "" : decodeURIComponent(pair.slice(i + 1).replace(/\+/g, " "));
+      if (k) args[k] = v;
+    });
+
+    var payload = await mcpCall(name, args);
+    if (payload && payload.error) {
+      write("  " + payload.error.code + "  " + payload.error.message, "ps-err");
+      return;
+    }
+    var structured = payload && payload.result && payload.result.structuredContent;
+    var frameText = (structured && structured.frame)
+      || (payload && payload.result && payload.result.content && payload.result.content[0] && payload.result.content[0].text)
+      || "";
+    if (!frameText) { write("  the tool returned nothing renderable", "ps-err"); return; }
+    write(frameText.replace(/\n+$/, ""));
     prog = name;
     // The frame prints its own state, labelled. Reading it back is what makes a
     // keypress CONTINUE the session rather than restart it, and it means the
     // client never has to model the programs' state itself.
     //
-    // Match against the DE-ESCAPED body. The frame arrives coloured, so the
-    // label and the URL are separated by two SGR sequences ("state " closes its
-    // span, the URL opens its own) and a regex over the raw bytes never matches.
-    // It fails silently in the worst way available: every keypress rebuilds the
-    // program from its default state, which still renders a perfectly good frame
-    // — just always the first one.
-    var plain = r.body.replace(/\x1b\[[0-9;]*m/g, "");
-    var printed = plain.match(/state \/terminal\/[a-z]+(\?[A-Za-z0-9_%=&.,+\-]*)/);
+    // Strip SGR before matching anyway: MCP returns frames uncoloured on
+    // purpose, but this same parse ran against coloured HTTP bodies before and
+    // the failure was silent — every keypress rebuilt the program from its
+    // default state, which still renders a perfectly good frame, just always
+    // the first one. Cheap insurance against that returning.
+    var plain = frameText.replace(/\x1b\[[0-9;]*m/g, "");
+    var printed = plain.match(/state \/[a-z]+(\?[A-Za-z0-9_%=&.,+\-]*)/);
     state = printed ? printed[1] : "";
     setPrompt();
   }
@@ -157,18 +202,21 @@
   // ── commands ─────────────────────────────────────────────────────────────
   var HELP = [
     "",
-    "  The three programs — each one is also an MCP tool at /mcp.",
+    "  The tools. Every one of these is an MCP tool, and typing it here sends",
+    "  the SAME JSON-RPC call an agent pointed at /mcp would send:",
     "    finger [pane]         who runs this host. panes: overview writing reading",
     "                          listening photos around coffee deploys search",
     "    photos [-film X] [-q Y]   the photo archive",
     "    lens <url>            how a public URL reads to a machine",
+    "    dict <url>            will a browser ever use that compression dictionary?",
+    "    cache <url>           does that ETag ever actually 304?",
     "",
     "  Driving a program — arrow keys, or:",
     "    keys <sequence>       e.g. keys 2jj<cr>   (1-9 pane, j/k move, <cr> open, h back)",
     "",
-    "  Just type a question. Anything that is not a command below is an ask:",
-    "    ask <question>        plain language -> real tool calls -> an answer,",
-    "                          with every call it made printed above the answer",
+    "  Pointing it at somebody else's site — the same doors, from the outside:",
+    "    doors <origin>        what is behind their agent doors: llms.txt, a",
+    "                          markdown twin, an agent card, a real MCP tools/list",
     "",
     "  Being the agent — these are the real requests, not a demo.",
     "    get <path>            fetch a page as an agent does (Accept: text/markdown)",
@@ -195,7 +243,7 @@
     exit: function () {
       prog = null; state = "";
       write("");
-      write("  Session closed. Nothing was stored — reload to start again, or keep going.");
+      write("  Session closed. The ask transcript is dropped; nothing else was stored.");
       write("");
     },
 
@@ -221,13 +269,12 @@
       return runProgram("lens", "url=" + encodeURIComponent(args[0]));
     },
 
-    // Plain language in. This is also what an unrecognised line falls through
-    // to, so the console reads as something you talk to rather than something
-    // you have to know the verbs for.
-    ask: function (args) {
-      var q = args.join(" ").trim();
-      if (!q) { write("usage: ask <question>   e.g. ask what does he write about", "ps-err"); return; }
-      return runProgram("ask", "q=" + encodeURIComponent(q));
+
+    // Read another origin's agent doors and stop. `ask --at X <question>` is the
+    // same read with a model on the end of it.
+    doors: function (args) {
+      if (!args[0]) { write("usage: doors <origin>   e.g. doors https://anthropic.com", "ps-err"); return; }
+      return runProgram("lens", "url=" + encodeURIComponent(args[0]) + "&doors=1");
     },
 
     keys: function (args) {
@@ -271,11 +318,18 @@
     },
 
     mcp: async function (args) {
-      var body = args.length
-        ? { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: args[0], arguments: parseJson(args.slice(1).join(" ")) } }
-        : { jsonrpc: "2.0", id: 1, method: "tools/list", params: {} };
-      var r = await fetch("/mcp", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-      var payload = await r.json();
+      // The same door every other command here goes through — this one just
+      // lets you name the tool and its arguments yourself.
+      var payload;
+      if (args.length) {
+        payload = await mcpCall(args[0], parseJson(args.slice(1).join(" ")));
+      } else {
+        var r = await fetch("/mcp", {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: { _meta: MCP_META } }),
+        });
+        payload = await r.json();
+      }
       write("");
       if (payload.error) { write("  " + payload.error.code + "  " + payload.error.message, "ps-err"); write(""); return; }
       if (!args.length) {
@@ -319,13 +373,13 @@
     if (!args.length) return;
     var name = args[0].toLowerCase();
     var command = COMMANDS[name];
-    // An unrecognised line is a QUESTION, not an error. PowerShell would tell
-    // you the term is not recognized, and that is the right behaviour for a
-    // shell whose whole vocabulary is verbs -- but this console's point is that
-    // you can throw plain language at the site, so the fallthrough is `ask`
-    // rather than a scolding. The frame it prints names every tool the ask
-    // touched, so a typo is legible as a typo instead of vanishing.
-    if (!command) return COMMANDS.ask(args);
+    if (!command) {
+      write("");
+      write("  " + args[0] + " : not a tool on this origin.", "ps-err");
+      write("  `help` lists them; `mcp` asks the server itself.", "ps-dim");
+      write("");
+      return;
+    }
     try {
       await command(args.slice(1));
     } catch (e) {
