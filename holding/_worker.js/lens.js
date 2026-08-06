@@ -2278,11 +2278,36 @@ export async function lensProbeMdNego(pageUrl, env) {
   } catch (_e) { return { supported: false, note: "probe failed" }; }
 }
 
-// WebMCP is a page-level JS API (navigator.modelContext), so the marker lives
-// in the HTML we already fetched — no extra request.
+// WebMCP is a page-level JS API, so the marker lives in the HTML we already
+// fetched — no extra request. Two shapes reach that HTML, and until 2026-08-06
+// this only knew the first:
+//
+//   inline — the site calls document.modelContext.registerTool() itself, so the
+//     call sites are right there in the document.
+//   bridge — the site turns WebMCP on at its CDN and a LOADER tag is injected;
+//     every registerTool call lives in the external module, where a scan of the
+//     document cannot see it. Cloudflare's is `<script type="module"
+//     src="/.webmcp/bridge.js" data-packs="…">`, injected by HTMLRewriter at the
+//     edge, and it proxies the origin's own MCP server (`data-mcp-url`, default
+//     `/mcp`) into the page.
+//
+// Missing the bridge shape mattered more every week: it is one dashboard toggle,
+// so the population of sites carrying it grows without any of them writing a line
+// of code, and a scan calling all of them "no WebMCP" would have been quietly
+// wrong at increasing scale. `kind` is reported because the two are genuinely
+// different claims — inline means somebody wrote tools for this page, bridge means
+// an MCP server got hoisted into it — and a reader deserves to tell them apart.
+const WEBMCP_MARKERS = [
+  { kind: "inline", re: /navigator\.modelContext|document\.modelContext|modelContext\.(?:registerTool|provideContext)|window\.webmcp/i },
+  { kind: "bridge", re: /\/\.webmcp\/bridge\.js|\bdata-(?:packs|mcp-url)=/i },
+];
 export function lensDetectWebmcp(html) {
-  const m = String(html || "").match(/navigator\.modelContext|modelContext\.(?:registerTool|provideContext)|window\.webmcp/i);
-  return m ? { found: true, marker: m[0] } : { found: false };
+  const body = String(html || "");
+  for (const { kind, re } of WEBMCP_MARKERS) {
+    const m = body.match(re);
+    if (m) return { found: true, kind, marker: m[0] };
+  }
+  return { found: false };
 }
 
 // a well-known JSON probe only counts if the body parses AND has the right
@@ -2468,7 +2493,10 @@ export function lensReadiness({ headers, robots, sitemap, terms, discovery, agen
   items.mcpServerCard = lensReadinessItem("mcpServerCard", mcpCard.status, mcpCard.detail);
   items.a2aAgentCard = lensReadinessItem("a2aAgentCard", agent && agent.agentCard && agent.agentCard.present ? "pass" : "fail", agent && agent.agentCard && agent.agentCard.present ? agent.agentCard.detail : "no valid A2A Agent Card");
   items.agentSkills = lensReadinessItem("agentSkills", skills.status, skills.detail);
-  items.webMcp = lensReadinessItem("webMcp", agent && agent.webmcp && agent.webmcp.found ? "pass" : "fail", agent && agent.webmcp && agent.webmcp.found ? "modelContext marker found in page" : "no WebMCP marker found in the fetched HTML");
+  items.webMcp = lensReadinessItem("webMcp", agent && agent.webmcp && agent.webmcp.found ? "pass" : "fail",
+    agent && agent.webmcp && agent.webmcp.found
+      ? (agent.webmcp.kind === "bridge" ? "a CDN-injected bridge loads this origin's MCP tools into the page" : "modelContext call sites in the page")
+      : "no WebMCP marker found in the fetched HTML");
   items.x402 = lensReadinessItem("x402", terms && terms.paid && terms.paid.http402 ? "pass" : "neutral", terms && terms.paid && terms.paid.http402 ? "HTTP 402 payment requirement observed" : "not observed (optional; not scored)");
   const openapiText = openapi && openapi.ok ? String(openapi.body || "") : "";
   items.mpp = lensReadinessItem("mpp", /x-payment-info|mpp/i.test(openapiText) ? "pass" : "neutral", /x-payment-info|mpp/i.test(openapiText) ? "payment metadata found in OpenAPI" : "not observed (optional; not scored)");

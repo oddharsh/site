@@ -19,6 +19,14 @@ import { LENS_BUDGETS, compareLensTargets, lensInspect, lensObservationSummary, 
 import { queryPhotos } from "../photos.js";
 import { RN_FALLBACK, getTracksSWR } from "../rn.js";
 import { searchSite } from "../search.js";
+// holding -> serendipity, which is the reverse of the established direction
+// (serendipity already imports lib/desktop.js, lib/crawl.js, lib/mcp-protocol.js).
+// It is not a cycle: nothing under serendipity/ imports this registry. It is also
+// node-safe, which is the constraint that actually bites here — contract-tests.mjs
+// imports BOTH this file and serendipity.js under plain node, so a `cloudflare:`
+// import appearing in either would take the whole suite down at link time
+// (gotcha 16).
+import { serendipityFindEvents } from "../../../serendipity/serendipity.js";
 
 export function toolError(message) { return { _error: String(message).slice(0, 400) }; }
 
@@ -65,6 +73,23 @@ export const DATA_TOOLS = [
     description: "Inspect two public HTTP(S) URLs and compare status, content, readiness, spectrum, agent doors, and discovery surfaces.",
     inputSchema: { type: "object", properties: { left: { type: "string" }, right: { type: "string" } }, required: ["left", "right"] },
   },
+  // The one tool here whose data lives in the OTHER MCP server on this origin.
+  // It is hoisted because a browser-side agent never gets to choose a door: the
+  // WebMCP bridge Cloudflare injects reads `/mcp` and registers what it finds, so
+  // /serendipity/mcp's tools are invisible from the page. This used to be a
+  // hand-rolled `navigator.modelContext` block in index.html, which was worse
+  // three ways — homepage only, on the API Chrome 146 replaced with
+  // `document.modelContext`, and a second schema to keep in step with the pool.
+  {
+    name: "find_events",
+    description: "Search the Serendipity event pool (community events worth going to, and who's RSVP'd) by keyword. Returns events the pool's contributors actually said yes to; pass rsvp:\"all\" to include events that were only browsed.",
+    inputSchema: { type: "object", properties: {
+      q: { type: "string", description: "optional keyword filter on event name, place, or contributor" },
+      when: { type: "string", enum: ["upcoming", "past", "all"], description: "defaults to upcoming" },
+      rsvp: { type: "string", enum: ["going", "all", "discovered"], description: "defaults to going (the events with real rosters)" },
+      limit: { type: "integer", minimum: 1, maximum: 200 },
+    } },
+  },
 ];
 
 export const DATA_TOOL_NAMES = new Set(DATA_TOOLS.map((t) => t.name));
@@ -75,6 +100,10 @@ export async function callDataTool(name, args, request, env, ctx) {
   if (name === "photo_query") return queryPhotos(env, args, ctx);
   if (name === "coffee_availability") return readCoffeeAvailability(env, ctx);
   if (name === "change_radar") return readAroundChanges(env, args.limit);
+  if (name === "find_events") {
+    try { return await serendipityFindEvents(env, args); }
+    catch { return toolError("the event pool is temporarily unavailable"); }
+  }
   if (name === "now_playing") {
     const playlistId = env.RN_KV ? await env.RN_KV.get("playlist-id") : null;
     const pid = /^[0-9A-Za-z]{22}$/.test(playlistId || "") ? playlistId : RN_FALLBACK.split("/").pop();

@@ -106,14 +106,14 @@
     {
       "id": "webmcp-read-only",
       "name": "Browser-local read-only tools",
-      "description": "On the homepage, browsers that implement navigator.modelContext can discover two same-origin tools: whats_playing and find_events.",
+      "description": "Every page registers this origin's /mcp tool catalog into document.modelContext, so an agent browsing the page can call the same read-only tools without leaving it. The catalog is whatever tools/list returns; there is no separate browser-only tool set.",
       "tags": [
         "webmcp",
         "browser",
         "read-only"
       ],
       "examples": [
-        "Use the page's whats_playing tool.",
+        "Use the page's now_playing tool.",
         "Find events matching a keyword with the page's find_events tool."
       ],
       "inputModes": [
@@ -211,11 +211,11 @@
       ],
       "webmcp": {
         "page": "https://aadhar.sh/",
-        "featureDetection": "navigator.modelContext",
-        "tools": [
-          "whats_playing",
-          "find_events"
-        ],
+        "scope": "every page on this origin",
+        "featureDetection": "document.modelContext",
+        "bridge": "https://aadhar.sh/.webmcp/bridge.js",
+        "toolSource": "https://aadhar.sh/mcp",
+        "tools": "see tools/list at the MCP interface above; the browser catalog mirrors it",
         "authentication": "same-origin browser context"
       },
       "agentAuth": {

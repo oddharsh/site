@@ -45,6 +45,13 @@ from AadharshBot can verify it really came from here. See
   directive keeps `'unsafe-inline'` and will, because the CSS here is inline by
   design, so this is protection against script injection and not against style
   injection.
+- **... and what it lets through**: hashing inline scripts says nothing about
+  scripts loaded by `src` from this origin, which `'self'` permits. That is not
+  hypothetical here: since 2026-08-06 the edge injects `/.webmcp/bridge.js` into
+  every page after this worker is done, so the strictest policy this site can
+  currently ship still admits 47KB of code the repository does not contain. Named
+  rather than buried, because a page about guarantees should say where they stop;
+  details at <https://aadhar.sh/whoareyou.md>.
 - **Permissions-Policy**: camera, microphone, geolocation, USB, Topics and 10
   more, all denied.
 - **X-Frame-Options**: `DENY`.

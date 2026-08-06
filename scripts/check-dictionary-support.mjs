@@ -73,10 +73,51 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
   if (!candidates.length) {
     report("page html per-page tier", true, "no committed pretext snapshot — family tier is the only candidate");
   } else {
-    const raw = brotliDecompressSync(await readFile(`holding/p-dict/${candidates[0]}`));
-    const r = await get("https://aadhar.sh/garage/pretext", b64(raw));
-    const ce = r.headers.get("content-encoding");
-    report("page html per-page tier", ce === "dcz", `ce=${ce} vs ${candidates[0]}`);
+    // Try EVERY committed snapshot and pass if any one earns a delta, rather than
+    // picking candidates[0] and hoping. Two states make one-candidate probing wrong:
+    // readdir order is not adoption order, and a snapshot rolled since the last
+    // deploy has no delta built against it yet (deltas are build output). Both read
+    // as a broken tier when the tier is fine. "At least one committed snapshot is
+    // usable against production right now" is the property worth asserting.
+    const tried = [];
+    for (const name of candidates) {
+      const raw = brotliDecompressSync(await readFile(`holding/p-dict/${name}`));
+      const ce = (await get("https://aadhar.sh/garage/pretext", b64(raw))).headers.get("content-encoding");
+      tried.push(`${name}=${ce}`);
+      if (ce === "dcz") break;
+    }
+    report("page html per-page tier", tried.some((t) => t.endsWith("=dcz")),
+           tried.some((t) => t.endsWith("=dcz"))
+             ? `ce=dcz vs ${tried.at(-1).replace("=dcz", "")}`
+             : `no committed snapshot earned a delta (${tried.join(", ")}) — the deployed /pd/ deltas predate every one of them`);
+
+    // A snapshot is only a dictionary if a BROWSER holds those bytes, so it has to be
+    // what the wire sent, not what the build produced. The tier above cannot see the
+    // difference: it offers the committed tag, so it passes on a snapshot no browser
+    // could ever offer. That is exactly what happened when WebMCP turned on and
+    // Cloudflare started injecting `<script src="/.webmcp/bridge.js">` at the edge,
+    // downstream of this Worker — every snapshot rolled from `.build/holding` hashed
+    // to bytes nobody had, and the per-page tier fell back to the family dictionary
+    // in total silence.
+    //
+    // The invariant that catches it in general: a script the live document loads must
+    // appear in at least one committed snapshot. Hashed `/a/` refs are normalised away
+    // because those legitimately change every deploy; what is left is the set of
+    // scripts an EDGE feature can add behind the Worker's back. Fires either when
+    // injection is newly on or when a roll read the build, and the remedy is the same
+    // for both: re-roll from the wire.
+    const srcs = (html) => new Set(
+      [...String(html).matchAll(/<script[^>]+src=["']?([^"'\s>]+)/gi)]
+        .map((m) => m[1].replace(/\.[0-9a-f]{8}\.(js|css)$/, ".$1")),
+    );
+    const liveDoc = await (await fetch("https://aadhar.sh/garage/pretext", { headers: { "accept-encoding": "identity" } })).text();
+    const held = await Promise.all(candidates.map(async (name) =>
+      srcs(brotliDecompressSync(await readFile(`holding/p-dict/${name}`)).toString("utf8"))));
+    const unheld = [...srcs(liveDoc)].filter((src) => !held.some((set) => set.has(src)));
+    report("committed snapshots are WIRE bytes", unheld.length === 0,
+           unheld.length === 0
+             ? `every script the live page loads appears in a snapshot (${candidates.length} candidates)`
+             : `no snapshot carries ${unheld.join(", ")} — an edge feature is rewriting HTML after the Worker, so re-run npm run shell:roll (it reads production)`);
   }
 }
 // 3. svg — must NOT offer a dictionary (the #119 rule)

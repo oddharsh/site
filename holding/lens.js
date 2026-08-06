@@ -1368,7 +1368,9 @@
       nl.verdict === "maybe" ? "NLWeb-shaped" : "absent", nl.verdict === "maybe" ? "warn" : "off", nl.detail);
     var wm = ag.webmcp || {};
     row("WebMCP", "in-page tools for browser agents (Chrome/W3C draft)",
-      wm.found ? "markers found" : "absent", wm.found ? "ok" : "off", wm.marker);
+      wm.found ? (wm.kind === "bridge" ? "CDN bridge" : "markers found") : "absent",
+      wm.found ? "ok" : "off",
+      wm.kind === "bridge" ? "an injected loader proxies this origin's MCP server into the page — " + wm.marker : wm.marker);
     var card = ag.agentCard || {};
     row(".well-known/agent-card.json", "A2A agent card — who this agent is, what it offers",
       card.present ? "found" : "absent", card.present ? "ok" : "off", card.detail || card.note);
