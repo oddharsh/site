@@ -8,56 +8,58 @@
 // the next frame — which is how a person learns an unfamiliar program, and it
 // needs no schema shipped ahead of time. The frame IS the documentation.
 //
-// ── the session is query params, not a session ────────────────────────────
-// State lives entirely in the URL: ?pane=writing&cursor=3&open=lattice. There is
-// no Durable Object, no KV entry, no token, no TTL, and nothing to expire.
+// ── where the state lives, and why it is split ────────────────────────────
+// The PROGRAMS keep their state in the URL: ?pane=writing&cursor=3&open=lattice
+// is the whole thing. No Durable Object, no KV entry, no token, no TTL.
+// /ask is the ONE exception and it has its own DO — see below.
 //
-// That is a deliberate trade against the obvious design (a DO holding a cursor).
-// Three things fall out of it, and each one is worth more here than server-side
-// state would be:
+// Four things fall out of the URL model:
 //
-//   1. No round trip. counter.js measures a DO hop at 185-630ms because a DO is
-//      one global instance; a TUI is a latency-shaped thing where every keypress
-//      pays that. Params cost nothing.
-//   2. Sessions FORK. Two agents can explore from the same frame without
-//      colliding, and a third can resume a transcript from last week, because a
-//      state is a URL rather than a live object someone has to still be holding.
-//   3. It is inspectable. A site whose whole argument is "here is what the
-//      machine sees" should not hand an agent an opaque blob and ask it to send
-//      the blob back. You can read the state, edit it by hand, and bookmark it.
+//   1. Sessions FORK. Two agents explore from the same frame without colliding.
+//   2. A state from last week still resolves, because it was never a live object
+//      anybody had to keep holding. Bookmarkable, replayable, diffable.
+//   3. It is inspectable. A site whose argument is "here is what the machine
+//      sees" should not hand an agent an opaque blob and ask for it back.
+//   4. Any isolate can serve any frame. No affinity, nothing to fail over.
 //
-// The cost is that a frame can't hold anything the URL can't spell. No scroll
-// offsets in pixels, no partial input buffers, no undo stack. Every app here is
-// a reader over public data, so that ceiling has not bound yet. It would bind
-// the moment one of these apps needed to WRITE something, and at that point the
-// answer is a real session rather than a longer query string.
-//
-// ── this is the same argument MCP's 2026-07-28 revision made ──────────────
+// ── this is the argument MCP's 2026-07-28 revision made ───────────────────
 // That revision dropped server-side sessions: no Mcp-Session-Id to mint, no
-// session table to keep, and — the part that actually decides deployments — no
-// need to route the same session back to the same backend machine. This origin
-// already speaks it; lib/mcp-protocol.js is what serves it, and its "DUAL-ERA"
-// note is about exactly that cutover.
+// session table, and — the part that actually decides deployments — no need to
+// route a session back to the same backend. This origin already speaks it;
+// lib/mcp-protocol.js serves it, and its "DUAL-ERA" note is that cutover.
 //
-// /terminal applies the same principle ONE LAYER UP. MCP made a single tool
-// CALL stateless; this makes a whole session over those tools stateless too,
-// which is the harder half, because a session is the thing that looks like it
-// obviously needs a server to hold it. It does not. There is a fourth property
-// beyond the three above and it is the one the revision cares most about: any
-// isolate can serve any frame, so there is no affinity to preserve and nothing
-// to fail over.
+// /terminal applies the principle ONE LAYER UP. MCP made a single tool CALL
+// stateless; this makes a whole session over those tools stateless too, which is
+// the harder half, because a session is the thing that looks like it obviously
+// needs a server to hold it. The npx/uvx analogy is the useful one: fetch, run,
+// discard, reconstruct from the address next time. (Simon Willison on the
+// revision, 2026-07-31: https://simonwillison.net/2026/Jul/31/stateless-mcp/)
 //
-// The framing that made this click, and the analogy is the useful part: npx and
-// uvx against their installed counterparts. Fetch, run, discard, reconstruct
-// from the address next time. A Durable Object session is the installed
-// version — faster in principle, and something you now own, keep warm, and have
-// to evict. (Simon Willison on the revision, 2026-07-31:
-// https://simonwillison.net/2026/Jul/31/stateless-mcp/)
-import { ASK_BUDGET, ASK_LIMITS, asAgentCall, runAsk } from "./ask.js";
+// ── the exception, and the rule that decides it ───────────────────────────
+// SMALL AND ADDRESSABLE STAYS IN THE URL. GROWING AND OPAQUE GETS A DO.
+//
+// A pane and a cursor fit a query string forever. A transcript does not — the
+// practical ceiling is ~2KB, which holds a cursor and never holds a three-turn
+// exchange. `ask` was single-shot for precisely that reason: there was nowhere
+// for "what about the other one?" to live. So ask-session.js gives that ONE
+// program a Durable Object, and the other three are untouched.
+//
+// One correction worth recording, because it was used to argue the wrong thing:
+// counter.js's measured 185-630ms DO hop is a SINGLE GLOBAL INSTANCE hit from
+// everywhere. A per-session DO lands near whoever opened it — tens of ms, paid
+// once per ask, next to a model call. Latency was never the reason the programs
+// stay on URLs. Forking, bookmarking, and testability were.
+import { agentReadyFrame } from "./agent-ready.js";
+import { ENCODE_CAP, encodeReadout, fetchImageBytes, parseAvif, parseJpeg, sniff } from "./encode.js";
+import { probeRevalidation } from "./cache-lint.js";
+import { readDoors } from "./lib/doors.js";
+import { MEASURED, auditUrl } from "./dict.js";
+import { RADAR_LIMITS, radarFrame, readSamples } from "./radar.js";
 import { readAroundChanges } from "./around.js";
 import { readCoffeeAvailability } from "./coffee.js";
-import { LENS_BUDGETS, lensInspect, lensObservationSummary, overLensBudget, validateLensTarget } from "./lens.js";
+import { LENS_BUDGETS, lensFetch, lensInspect, lensObservationSummary, overLensBudget, validateLensTarget } from "./lens.js";
 import { lunaPage } from "./lib/chrome.js";
+import { CANONICAL_HOST } from "./lib/const.js";
 import { escHtml } from "./lib/http.js";
 import { AGENT_SURFACES } from "./lib/site-manifest.js";
 import {
@@ -123,6 +125,9 @@ export function readState(url, app) {
     open: str(params.get("open"), 160),
     q: str(params.get("q"), 120),
     url: str(params.get("url"), 512),
+    doors: params.get("doors") === "1",
+    at: str(params.get("at"), 300),
+    session: str(params.get("session"), 64),
     left: str(params.get("left"), 512),
     right: str(params.get("right"), 512),
     film: str(params.get("film"), 60),
@@ -146,14 +151,15 @@ export function stateUrl(state, extra = {}) {
   } else if (state.app === "photos") {
     put("q", state.q); put("film", state.film); put("camera", state.camera); put("lens", state.lens);
     put("page", state.page, 0); put("cursor", state.cursor, 0); put("open", state.open);
-  } else if (state.app === "lens") {
-    put("url", state.url); put("left", state.left); put("right", state.right);
-  } else if (state.app === "ask") {
-    put("q", state.q);
+  } else if (state.app === "lens" || state.app === "dict" || state.app === "cache" || state.app === "agent-ready" || state.app === "encode") {
+    put("url", state.url);
+    if (state.doors) put("doors", "1"); put("left", state.left); put("right", state.right);
   }
   for (const [key, value] of Object.entries(extra)) put(key, value);
   const qs = params.toString();
-  return `/terminal/${state.app}${qs ? `?${qs}` : ""}`;
+  // The tool's own root path, because that is where it lives. This string is
+  // the resumable state a caller sends back, so it has to be the real URL.
+  return `/${state.app}${qs ? `?${qs}` : ""}`;
 }
 
 /**
@@ -349,7 +355,7 @@ function renderPhotoFacets(data) {
     blank(),
     section("body", facets.camera, 4),
     blank(),
-    [s("browse the frames themselves at /terminal/photos", "dim")],
+    [s("browse the frames themselves at /photos", "dim")],
   );
 }
 
@@ -412,7 +418,7 @@ function renderSearch(data, state) {
     return rows(
       [s("type a query to search this host.", "dim")],
       blank(),
-      [s("  /terminal/finger?pane=search&q=lattice", "accent")],
+      [s("  /finger?pane=search&q=lattice", "accent")],
       blank(),
       ...wrap("Searches the public pages, writing, garage notes, and utility descriptions. The same index /search serves.", INNER).map((row) => [s(row, "dim")]),
     );
@@ -507,11 +513,11 @@ function helpBody() {
     ...FINGER_PANES.map((name, i) => kv(`${i + 1}`, name, INNER, { gutter: 10 })),
     blank(),
     rule(INNER, "examples"),
-    [s("  curl aadhar.sh/terminal/finger", "accent")],
-    [s("  curl 'aadhar.sh/terminal/finger?keys=2jj<cr>'", "accent")],
-    [s("  curl 'aadhar.sh/terminal/finger?pane=search&q=lattice'", "accent")],
-    [s("  curl 'aadhar.sh/terminal/photos?film=acros'", "accent")],
-    [s("  curl 'aadhar.sh/terminal/lens?url=https://example.com'", "accent")],
+    [s("  curl aadhar.sh/finger", "accent")],
+    [s("  curl 'aadhar.sh/finger?keys=2jj<cr>'", "accent")],
+    [s("  curl 'aadhar.sh/finger?pane=search&q=lattice'", "accent")],
+    [s("  curl 'aadhar.sh/photos?film=acros'", "accent")],
+    [s("  curl 'aadhar.sh/lens?url=https://example.com'", "accent")],
   );
 }
 
@@ -520,13 +526,13 @@ function quitBody() {
     blank(),
     [s("  connection closed.", "strong")],
     blank(),
-    ...wrap("Nothing was stored, so there is nothing to resume — start again at /terminal/finger, or jump straight back to wherever you were with the URL that frame printed.", INNER).map((row) => [s("  " + row, "dim")]),
+    ...wrap("Nothing was stored, so there is nothing to resume — start again at /finger, or jump straight back to wherever you were with the URL that frame printed.", INNER).map((row) => [s("  " + row, "dim")]),
     blank(),
   );
 }
 
 export async function fingerFrame(env, ctx, request, state, tokens) {
-  if (state.quit) return { title: "finger — aadharsh@aadhar.sh", body: quitBody(), status: keyHints([["/terminal/finger", "reconnect"]]) };
+  if (state.quit) return { title: "finger — aadharsh@aadhar.sh", body: quitBody(), status: keyHints([["/finger", "reconnect"]]) };
   const data = await driveFinger(env, ctx, request, state, tokens);
   if (state.help) return { title: "finger — help", body: helpBody(), status: keyHints([["any pane key", "leave help"], ["q", "quit"]]) };
   const body = RENDER[state.pane](data, state);
@@ -543,7 +549,7 @@ export async function photosFrame(env, ctx, state, tokens) {
     else if (key === "h" || key === "\x1b") state.open = "";
     else if (key === "q") state.quit = true;
   }
-  if (state.quit) return { title: "photos", body: quitBody(), status: keyHints([["/terminal/photos", "reconnect"]]) };
+  if (state.quit) return { title: "photos", body: quitBody(), status: keyHints([["/photos", "reconnect"]]) };
 
   const result = await queryPhotos(env, {
     q: state.q, film: state.film, camera: state.camera, lens: state.lens,
@@ -616,7 +622,7 @@ export async function photosFrame(env, ctx, state, tokens) {
         })
         : [[s("no frame matches those filters.", "dim")]],
       blank(),
-      [s("filter with &q= &film= &camera= &lens=  ·  facets at /terminal/finger?pane=photos", "dim")],
+      [s("filter with &q= &film= &camera= &lens=  ·  facets at /finger?pane=photos", "dim")],
     ),
     status: [
       keyHints([["j/k", "move"], ["<cr>", "open"], ["n/p", "page"], ["q", "quit"]]),
@@ -642,6 +648,9 @@ function lensReadout(obs) {
     kv("tier", obs.tier, INNER),
     kv("words", obs.wordCount, INNER),
     kv("bytes", obs.bytes, INNER),
+    obs.parseTruncated
+      ? kv("parsed", [s(`first ${Math.round(obs.parsedBytes / 1024)} KB of ${Math.round(obs.bytes / 1024)} KB — words and cost are for that prefix`, "warn")], INNER)
+      : blank(),
     kv("fetch", obs.elapsedMs == null ? null : `${obs.elapsedMs} ms`, INNER),
     blank(),
     rule(INNER, "agent doors"),
@@ -661,7 +670,7 @@ export async function lensFrame(env, request, state, ctx) {
       body: rows(
         ...wrap("Inspect any public URL the way a machine does: what it returns, how much of it is readable, and which agent doors it leaves open.", INNER).map((row) => [s(row)]),
         blank(),
-        [s("  curl 'aadhar.sh/terminal/lens?url=https://example.com'", "accent")],
+        [s("  curl 'aadhar.sh/lens?url=https://example.com'", "accent")],
         blank(),
         ...wrap("Private, local, and non-HTTP targets are refused. Lookups are rate-limited to 30/min per address, shared with /lens/fetch — knocking on the cheaper door does not buy a second budget.", INNER).map((row) => [s(row, "dim")]),
       ),
@@ -681,97 +690,290 @@ export async function lensFrame(env, request, state, ctx) {
   } catch {
     return { title: "lens — failed", body: [[s("the target could not be inspected.", "bad")]], status: [] };
   }
-  return { title: `lens — ${obs.finalUrl || obs.url}`, body: lensReadout(obs), status: [keyHints([["&url=", "another target"]]), stateLine(state)] };
+  // ── walking through the doors lens just knocked on ──────────────────────
+  // lens reports that an origin HAS an llms.txt, a markdown twin, an MCP
+  // endpoint. &doors=1 reads what is actually behind them. This lived in `ask`
+  // until ask was cut; it belongs here, because knocking and walking through are
+  // the same job at two depths.
+  let doorsBody = blank();
+  if (state.doors) {
+    const doors = await readDoors(target.url, env).catch(() => null);
+    if (doors) {
+      const door = (label, probe, detail) => {
+        const mark = probe.ok ? ["  open ", "ok"] : probe.unreadable ? ["unread ", "warn"] : ["  shut ", "dim"];
+        return [...fit([s(mark[0], mark[1]), s(label)], 30), s(detail || "", "dim")];
+      };
+      doorsBody = rows(
+        blank(),
+        rule(INNER, "what is behind them"),
+        door("llms.txt", doors.llms, doors.llms.ok ? `${doors.llms.bytes} bytes` : doors.llms.why || doors.llms.wrongType),
+        door("markdown twin", doors.markdown, doors.markdown.ok ? `${doors.markdown.bytes} bytes` : doors.markdown.wrongType ? `answered ${doors.markdown.wrongType}` : doors.markdown.why),
+        door("agent card", doors.agentCard, doors.agentCard.ok ? "present" : doors.agentCard.why || doors.agentCard.wrongType),
+        door("api catalog", doors.apiCatalog, doors.apiCatalog.ok ? "present" : doors.apiCatalog.why || doors.apiCatalog.wrongType),
+        door("mcp tools/list", doors.mcp, doors.mcp.ok ? `${doors.mcp.count} tools` : doors.mcp.detail || "no server"),
+        doors.mcp.ok && doors.mcp.tools.length ? rows(
+          blank(),
+          // LISTED, NEVER CALLED. tools/list asks a server to describe itself;
+          // tools/call is execution on somebody else's infrastructure.
+          rule(INNER, "their tools — listed, never called"),
+          ...doors.mcp.tools.slice(0, 8).map((t) => [...fit([s(t.name, "strong")], 24), s(t.description, "dim")]),
+        ) : blank(),
+      );
+    }
+  }
+
+  return {
+    title: `lens — ${obs.finalUrl || obs.url}`,
+    body: rows(lensReadout(obs), doorsBody),
+    status: [keyHints([["&url=", "another target"], ["&doors=1", "read through them"]]), stateLine(state)],
+  };
 }
 
-// ── ask: the natural-language door ────────────────────────────────────────
-// The frame leads with WHAT THE AGENT DID, not with the answer. That ordering
-// is the whole point of putting this in a console rather than in a chat box:
-// the interesting artifact is a machine choosing among seven tools and being
-// wrong or right in public, and an answer printed on its own hides exactly that.
-// The reproduce section closes the loop by naming the request an agent would
-// have sent to get the same thing without a model in the way.
-
-/** A compact rendering of one tool result, for the no-model path. */
-function resultRows(tool, out) {
-  if (!out || out._error) return [[s(out?._error || "the tool failed.", "bad")]];
-  const list = (items, line) => (items.length ? items.slice(0, 8).map(line) : [[s("nothing matched.", "dim")]]);
-  if (tool === "search_site") return list(out.results || [], (r) => [...fit([s(r.title || "")], INNER - 30), s(r.url || "", "accent")]);
-  if (tool === "photo_query") return list(out.photos || [], (p) => [...fit([s(p.stem, "strong")], 18), s(p.alt || "", "dim")]);
-  if (tool === "now_playing") return list(out.tracks || [], (t) => [...fit([s(t.name || "")], INNER - 26), s((t.artists || []).map((a) => a.name).join(", "), "dim")]);
-  if (tool === "coffee_availability") return out.available
-    ? list(out.slots || [], (slot) => [s(String(slot.start || ""))])
-    : [[s("no bookable slots published right now.", "warn")]];
-  if (tool === "change_radar") return list(out.changes || [], (c) => [...fit([s(c.host || c.url || "")], 32), s(c.kind || "", "dim")]);
-  if (tool === "lens_inspect") return lensReadout(out);
-  return [[s("done.", "dim")]];
+// ── radar: the instrument for a sensor somebody else is holding ───────────
+function radarIdleFrame() {
+  return {
+    title: "radar — post readings, get an instrument",
+    body: rows(
+      ...wrap("A server has no antenna and neither does an agent, so this half does not sense anything. POST signal readings and it draws them: concentric bands by strength, a meter and a trend per source.", INNER).map((row) => [s(row)]),
+      blank(),
+      [s("  node holding/scripts/radar-sample.mjs --at https://aadhar.sh", "accent")],
+      [s("  curl -X POST aadhar.sh/radar -d '{\"samples\":[{\"name\":\"AP\",\"rssi\":-58}]}'", "accent")],
+      blank(),
+      rule(INNER, "the shape"),
+      kv("name", "whatever you want on the label", INNER, { gutter: 10 }),
+      kv("rssi", "dBm, negative; anything else is dropped rather than fatal", INNER, { gutter: 10 }),
+      kv("kind", "optional tag, e.g. wifi or ble", INNER, { gutter: 10 }),
+      kv("history", "optional trailing readings, for the trend sparkline", INNER, { gutter: 10 }),
+      blank(),
+      rule(INNER, "what it will not pretend to know"),
+      ...wrap("RSSI is a scalar: it carries distance-ish information and no bearing. The rings are real; the angles are a hash of the name, stable so nothing jumps between frames, and meaningless. Bands are findphone's field calibration.", INNER).map((row) => [s(row, "dim")]),
+      blank(),
+      ...wrap("Nothing is stored. Post the whole set each time — which also means device names travel in the request, so use --anonymize when pointing the sampler at a public host.", INNER).map((row) => [s(row, "dim")]),
+    ),
+    status: keyHints([["POST", "readings"], [`${RADAR_LIMITS.samples}`, "max sources"]]),
+  };
 }
 
-const MODE_NOTE = {
-  model: "a model chose the tools",
-  router: "NO MODEL IS BOUND HERE, so the tool was chosen by keyword",
-  "router-fallback": "the model was unavailable, so the tool was chosen by keyword",
-  limited: "rate limited",
-  empty: "",
-};
+// ── dict: will a browser ever actually use your dictionary? ───────────────
+const VERDICT_STYLE = { ok: "ok", warn: "warn", veto: "bad" };
+const VERDICT_MARK = { ok: "  ok  ", warn: " warn ", veto: " VETO " };
 
-export async function askFrame(env, request, state, ctx) {
-  if (!state.q.trim()) {
+export async function dictFrame(env, request, state, ctx) {
+  if (!state.url.trim()) {
     return {
-      title: "ask — plain language, real tools",
+      title: "dict — compression dictionary lint",
       body: rows(
-        ...wrap("Ask this site something in plain language. It picks from the same seven tools an external agent gets at /mcp, calls them, and answers from what came back — and prints every call it made, so you can see the machine work rather than take its word.", INNER).map((row) => [s(row)]),
+        ...wrap("Compression dictionaries fail silently. Chromium declines to register a perfectly good one because of a cache directive on it, and nothing tells you: no console warning, no header, no failed request. Your site just serves full responses forever while you believe it is serving deltas.", INNER).map((row) => [s(row)]),
         blank(),
-        [s("  curl 'aadhar.sh/terminal/ask?q=what+does+he+write+about'", "accent")],
-        [s("  curl 'aadhar.sh/terminal/ask?q=photos+shot+on+classic+chrome'", "accent")],
-        [s("  curl 'aadhar.sh/terminal/ask?q=when+can+i+get+coffee'", "accent")],
+        [s("  curl 'aadhar.sh/dict?url=https://example.com/app.js'", "accent")],
         blank(),
-        rule(INNER, "the rules it runs under"),
-        kv("grounding", "answers only from tool results; says so when the site is silent", INNER, { gutter: 12 }),
-        kv("bounds", `${ASK_LIMITS.query} chars in, ${ASK_LIMITS.calls} tool calls, ${ASK_LIMITS.rounds} rounds`, INNER, { gutter: 12 }),
-        kv("rate", `${ASK_BUDGET.max}/min per address — the tools underneath are not limited by this`, INNER, { gutter: 12 }),
+        rule(INNER, "what it checks"),
+        ...wrap("The rules that decide registration, applied to the response headers of the resource you point it at, plus the other half of the handshake: whether a delta-serving response varies on available-dictionary. A cache that does not is not a slow page, it is ERR_CONTENT_DECODING_FAILED.", INNER).map((row) => [s(row, "dim")]),
+        blank(),
+        rule(INNER, "measured on this origin"),
+        ...MEASURED.map(([label, value]) => kv(label, value, INNER, { gutter: 26 })),
+        blank(),
+        ...wrap("There is deliberately no delta calculator here. workerd's node:zlib has zstdCompressSync and SILENTLY IGNORES its dictionary option — measured 2026-08-05, identical byte counts with the right dictionary, a wrong one, and none. A delta computed here would be plain zstd reporting a saving that does not exist.", INNER).map((row) => [s(row, "dim")]),
       ),
-      status: keyHints([["&q=", "ask something"]]),
+      status: keyHints([["&url=", "audit a resource"]]),
     };
   }
 
-  const result = await runAsk(state.q, request, env, ctx);
-  const steps = result.steps || [];
-  const trace = steps.length
-    ? steps.map((step, i) => {
-      const args = JSON.stringify(step.args || {});
-      const head = `${String(i + 1).padStart(2)} `;
-      return [
-        s(head, "dim"),
-        ...fit([s(step.tool, step.refused ? "bad" : "strong"), s(" " + (args === "{}" ? "" : args), "dim")], INNER - head.length - 22),
-        ...rightTo([s(step.summary, "label")], 22),
-      ];
-    })
-    : [[s("no tool was called.", "dim")]];
+  const target = validateLensTarget(state.url);
+  if (!target.ok) return { title: "dict — refused", body: [[s(target.error, "bad")]], status: [] };
+  if (await overLensBudget(LENS_BUDGETS.inspect, request, env, ctx)) {
+    return { title: "dict — rate limited", body: [[s("Shares Lens's 30/min budget. Try again shortly.", "warn")]], status: [] };
+  }
 
+  const audit = await auditUrl(target.url, env);
+  if (!audit.ok) {
+    return {
+      title: "dict — unreadable",
+      body: [[s(audit.unreadable ? `could not reach it: ${audit.why}` : audit.why, audit.unreadable ? "warn" : "bad")]],
+      status: stateLine(state),
+    };
+  }
+
+  const { dictionary, consumer } = audit;
   return {
-    title: `ask — ${state.q}`,
+    title: `dict — ${target.url}`,
     body: rows(
-      rule(INNER, "what the agent did"),
-      trace,
+      kv("status", audit.status, INNER, { gutter: 16 }),
+      kv("cache-control", dictionary.cacheControl || "(none)", INNER, { gutter: 16 }),
       blank(),
-      rule(INNER, "answer"),
-      // Two shapes, and which one appears says which mode ran. With a model the
-      // answer is prose it wrote from the results; without one there is no prose
-      // to write, so the RESULT itself stands in rather than a fabricated
-      // sentence. A router that invented an answer would be the one thing this
-      // whole surface is built not to do.
-      result.answer
-        ? rows(...wrap(result.answer, INNER).map((row) => [s(row)]))
-        : (steps.length && result.result ? resultRows(steps[0].tool, result.result) : [[s("no answer.", "dim")]]),
+      rule(INNER, "as a dictionary"),
+      // Every rule prints, including the ones that passed. A lint that shows only
+      // failures leaves you unsure whether it looked.
+      ...dictionary.results.map((r) => [
+        s(VERDICT_MARK[r.verdict], VERDICT_STYLE[r.verdict]),
+        ...fit([s(r.title, "strong")], 26),
+        s(r.detail, "dim"),
+      ]),
       blank(),
-      rule(INNER, "reproduce this without a model"),
-      ...(steps.filter((step) => !step.refused).slice(0, 2).map((step) =>
-        [s(asAgentCall(step.tool, step.args), "accent")])),
+      dictionary.registers
+        ? [s(dictionary.warns.length
+          ? "  Chromium will register this, but read the warnings above."
+          : "  Chromium will register this.", dictionary.warns.length ? "warn" : "ok")]
+        : [s(`  Chromium will NOT register this: ${dictionary.vetoes.map((v) => v.title).join(", ")}.`, "bad")],
+      blank(),
+      rule(INNER, "as a delta-served response"),
+      kv("content-encoding", consumer.encoding || "(none)", INNER, { gutter: 20 }),
+      kv("vary", consumer.vary || "(none)", INNER, { gutter: 20 }),
+      consumer.isDelta && !consumer.variesOnDictionary
+        ? [s("  serving a delta WITHOUT vary: available-dictionary — a shared cache will hand", "bad")]
+        : blank(),
+      consumer.isDelta && !consumer.variesOnDictionary
+        ? [s("  this to a client with no dictionary: ERR_CONTENT_DECODING_FAILED, not a slow page.", "bad")]
+        : blank(),
     ),
     status: [
-      [s("mode ", "label"), s(result.mode, result.mode === "model" ? "ok" : "warn"),
-        s(`  ${MODE_NOTE[result.mode] || ""}`, "dim")],
+      [s("verdict ", "label"), s(dictionary.registers ? "registers" : "never registers", dictionary.registers ? "ok" : "bad")],
+      stateLine(state),
+    ],
+  };
+}
+
+// ── cache: does your validator actually revalidate? ───────────────────────
+const CACHE_MARK = { ok: "  ok  ", warn: " warn ", veto: " VETO ", "bad-but-explained": " 200  " };
+const CACHE_STYLE = { ok: "ok", warn: "warn", veto: "bad", "bad-but-explained": "warn" };
+
+export async function cacheFrame(env, request, state, ctx) {
+  if (!state.url.trim()) {
+    return {
+      title: "cache — a behavioral revalidation lint",
+      body: rows(
+        ...wrap("Plenty of origins serve an ETag that can never match: compression or a template nonce varies per response, so every If-None-Match comes back 200 with a full body. The headers look perfect and nothing warns — your cache revalidates forever and never once succeeds.", INNER).map((row) => [s(row)]),
+        blank(),
+        [s("  curl 'aadhar.sh/cache?url=https://example.com/app.css'", "accent")],
+        blank(),
+        rule(INNER, "what it does"),
+        ...wrap("No header grading. It fetches the target twice to see whether the validator survives two identical requests, then replays it with If-None-Match and reports what the origin actually did. For HTML it also asks for a second representation and checks the Vary header against the answer — the shared-cache trap this site hit in production (#195).", INNER).map((row) => [s(row, "dim")]),
+        blank(),
+        kv("cost", "3-4 subrequests, headers only; bodies are cancelled unread", INNER, { gutter: 8 }),
+        kv("shares", "Lens's 30/min per-address budget", INNER, { gutter: 8 }),
+      ),
+      status: keyHints([["&url=", "probe a resource"]]),
+    };
+  }
+
+  const target = validateLensTarget(state.url);
+  if (!target.ok) return { title: "cache — refused", body: [[s(target.error, "bad")]], status: [] };
+  if (await overLensBudget(LENS_BUDGETS.inspect, request, env, ctx)) {
+    return { title: "cache — rate limited", body: [[s("Shares Lens's 30/min budget. Try again shortly.", "warn")]], status: [] };
+  }
+
+  const probe = await probeRevalidation(target.url, env);
+  if (!probe.ok) {
+    return {
+      title: "cache — unreadable",
+      body: [[s(probe.unreadable ? `could not reach it: ${probe.why}` : probe.why, probe.unreadable ? "warn" : "bad")]],
+      status: stateLine(state),
+    };
+  }
+
+  const { verdict } = probe;
+  return {
+    title: `cache — ${target.url}`,
+    body: rows(
+      kv("status", probe.status, INNER, { gutter: 16 }),
+      kv("cache-control", probe.observations.first.headers["cache-control"] || "(none)", INNER, { gutter: 16 }),
+      blank(),
+      rule(INNER, "what the origin actually did"),
+      ...verdict.findings.map((f) => [
+        s(CACHE_MARK[f.verdict] || "  ??  ", CACHE_STYLE[f.verdict] || "dim"),
+        ...fit([s(f.id, "strong")], 16),
+        s(f.detail, "dim"),
+      ]),
+      blank(),
+      verdict.healthy
+        ? [s("  Revalidation works: a warm client pays headers, not bodies.", "ok")]
+        : [s(`  Revalidation is broken here: ${verdict.vetoes.map((v) => v.id).join(", ")}.`, "bad")],
+    ),
+    status: [
+      [s("verdict ", "label"), s(verdict.healthy ? "revalidates" : "never revalidates", verdict.healthy ? "ok" : "bad")],
+      stateLine(state),
+    ],
+  };
+}
+
+// ── agent-ready: the scorecard, pointed at anyone including us ────────────
+export async function agentReadyRoute(env, request, state, ctx) {
+  // No url means audit THIS origin and show the bill. That default is the
+  // dogfood: the tool that grades other people grades its author first.
+  if (!state.url.trim()) {
+    return agentReadyFrame(`https://${CANONICAL_HOST}/`, env, { self: true });
+  }
+  const target = validateLensTarget(state.url);
+  if (!target.ok) return { title: "agent-ready — refused", body: [[s(target.error, "bad")]], status: [] };
+  if (await overLensBudget(LENS_BUDGETS.inspect, request, env, ctx)) {
+    return { title: "agent-ready — rate limited", body: [[s("Shares Lens's 30/min budget. Try again shortly.", "warn")]], status: [] };
+  }
+  return agentReadyFrame(target.url, env);
+}
+
+// ── encode: what did your encoder actually do? ────────────────────────────
+export async function encodeFrame(env, request, state, ctx) {
+  if (!state.url.trim()) {
+    return {
+      title: "encode — what did your encoder actually do?",
+      body: rows(
+        ...wrap("Point it at a JPEG or an AVIF and it reads the container: quantization tables, the scan script, component sampling factors, the av1C record. No pixels are decoded, which is the only reason this can run in a Worker at all.", INNER).map((row) => [s(row)]),
+        blank(),
+        [s("  curl 'aadhar.sh/encode?url=https://example.com/photo.jpg'", "accent")],
+        blank(),
+        rule(INNER, "what it will tell you"),
+        kv("chroma", "4:4:4 is a byte tax at delivery sizes; 4:2:0 is usually free", INNER, { gutter: 12 }),
+        kv("scan", "baseline vs progressive, and how many scans", INNER, { gutter: 12 }),
+        kv("quality", "estimated against the IJG Annex K table, with the deviation shown", INNER, { gutter: 12 }),
+        kv("depth", "8-bit vs 10-bit AVIF — the latter measured ~6% smaller here, free", INNER, { gutter: 12 }),
+        kv("metadata", "ICC/EXIF/XMP riding along on a thumbnail", INNER, { gutter: 12 }),
+        blank(),
+        ...wrap("Quality is an ESTIMATE and the frame says so. There is no quality number in a JPEG, only quantization tables, and every tool that prints one is inferring it. The method and its deviation are shown so the number can be argued with.", INNER).map((row) => [s(row, "dim")]),
+      ),
+      status: keyHints([["&url=", "read an image"]]),
+    };
+  }
+
+  const target = validateLensTarget(state.url);
+  if (!target.ok) return { title: "encode — refused", body: [[s(target.error, "bad")]], status: [] };
+  if (await overLensBudget(LENS_BUDGETS.inspect, request, env, ctx)) {
+    return { title: "encode — rate limited", body: [[s("Shares Lens's 30/min budget. Try again shortly.", "warn")]], status: [] };
+  }
+
+  const got = await fetchImageBytes(target.url, env, lensFetch);
+  if (!got.ok) {
+    return {
+      title: "encode — unreadable",
+      body: [[s(got.unreadable ? `could not fetch it: ${got.why}` : got.why, got.unreadable ? "warn" : "bad")]],
+      status: stateLine(state),
+    };
+  }
+
+  // Sniffed from magic bytes, never from content-type: a mislabelled response is
+  // common and the parse has to match the actual container.
+  const kind = sniff(got.bytes);
+  const info = kind === "jpeg" ? parseJpeg(got.bytes) : kind === "avif" ? parseAvif(got.bytes) : null;
+  if (!info) {
+    return {
+      title: `encode — ${kind || "unknown container"}`,
+      body: rows(
+        [s(kind === "heif" ? "HEIF/HEIC container." : kind ? `${kind} container.` : "unrecognised container.", "warn")],
+        blank(),
+        ...wrap(kind === "heif"
+          ? "The EXIF and recipe are reachable in here without decoding, but the encode facts live in boxes this lint does not read yet. JPEG and AVIF are the two it knows."
+          : "This reads JPEG and AVIF. Both are answerable from the container; PNG and WebP would need their own readers.", INNER).map((row) => [s(row, "dim")]),
+      ),
+      status: stateLine(state),
+    };
+  }
+  if (got.truncated) info.truncated = true;
+
+  return {
+    title: `encode — ${target.url}`,
+    body: encodeReadout(info, got.declaredLength),
+    status: [
+      [s("read ", "label"), s(`${Math.min(got.bytes.length, ENCODE_CAP).toLocaleString()} bytes of container`, "dim"),
+        s("  no pixels decoded", "dim")],
       stateLine(state),
     ],
   };
@@ -794,16 +996,20 @@ function indexFrame() {
       app("finger", "Who runs this host: writing, reading, listening, photographs, neighborhood, availability, deploy log, and a search over all of it. Drivable — send keys, get the next frame."),
       app("photos", "The photo archive, filterable by film simulation, body, lens, and caption. Opening a frame shows its exposure and the in-camera recipe it was shot with."),
       app("lens", "Inspect any public URL the way a machine does: readability, agent doors, and what one scan of it costs to read."),
-      app("ask", "Plain language in, real tool calls out. Picks from the same seven tools /mcp exposes, calls them, answers from what came back, and prints every call it made."),
+      app("cache", "Does your ETag ever actually 304? Fetches twice, replays the validator, and reports what the origin DID — the failure header-reading graders cannot see."),
+      app("encode", "What did your encoder actually do? Reads a JPEG or AVIF container — quantization tables, scan script, subsampling, bit depth — and says where bytes are being left on the table. No pixels decoded."),
+      app("agent-ready", "How much of an origin can a machine actually use — and, for this one, what that cost to build. Doors are counted, never scored."),
+      app("dict", "Will a browser ever actually use the compression dictionary you are serving? The registration rules are undocumented, unguessable, and fail in total silence. This encodes them, measured."),
+      app("radar", "An instrument with no antenna: POST signal readings from a machine that has one and it draws them as bands, meters and trends. The sensor is yours; the display is here."),
       rule(INNER, "driving"),
       ...wrap("?k=<one key> or ?keys=<up to 32>. Named keys: <cr> <esc> <tab> <sp>. Every frame prints the URL that produced it, so state is a link rather than a session. Add ?plain=1 to drop the ANSI colour.", INNER).map((row) => [s(row, "dim")]),
     ),
-    status: keyHints([["/terminal/finger", "start here"], ["?", "help inside any app"]]),
+    status: keyHints([["/finger", "start here"], ["?", "help inside any app"]]),
   };
 }
 
 // ── HTTP ──────────────────────────────────────────────────────────────────
-const TERMINAL_APPS = new Set(["finger", "photos", "lens", "ask"]);
+const TERMINAL_APPS = new Set(["finger", "photos", "lens", "radar", "dict", "cache", "agent-ready", "encode"]);
 
 async function buildFrame(name, request, env, ctx, url) {
   const tokens = tokenizeKeys(url.searchParams.get("keys") ?? url.searchParams.get("k") ?? "");
@@ -812,7 +1018,11 @@ async function buildFrame(name, request, env, ctx, url) {
   if (name === "finger") return fingerFrame(env, ctx, request, state, tokens);
   if (name === "photos") return photosFrame(env, ctx, state, tokens);
   if (name === "lens") return lensFrame(env, request, state, ctx);
-  if (name === "ask") return askFrame(env, request, state, ctx);
+  if (name === "radar") return radarIdleFrame();
+  if (name === "dict") return dictFrame(env, request, state, ctx);
+  if (name === "cache") return cacheFrame(env, request, state, ctx);
+  if (name === "agent-ready") return agentReadyRoute(env, request, state, ctx);
+  if (name === "encode") return encodeFrame(env, request, state, ctx);
   return null;
 }
 
@@ -995,37 +1205,90 @@ function frameResponse(frame, path) {
   });
 }
 
-export async function handleTerminal(request, env, ctx) {
+// ── routing: a tool is a SERVICE, the frame is a REPRESENTATION ───────────
+// Tools live at the ROOT, next to /lens and /photos and /coffee, because that is
+// where this site has always put utilities — site-manifest.json has twelve of
+// them and eleven are top-level, while all twenty-nine content pages nest. They
+// were briefly filed under /terminal/*, which organised them by how they RENDER
+// rather than by what they are, and taught exactly the wrong lesson for a site
+// whose argument is "here is how you expose services to agents".
+//
+// So the frame joins .md as a REPRESENTATION rather than a location, and every
+// tool answers three ways from one URL:
+//
+//   /dict                       Accept: text/html  -> the page
+//   /dict                       anything else      -> the frame (curl, agents)
+//   /dict.txt                                      -> the frame, explicitly
+//
+// Exactly the markdown-twin contract this site already runs on. /terminal keeps
+// its own route because it is not their parent, it is a CONSOLE that drives
+// them — the interaction is the product there, not the namespace.
+export const TOOL_NAMES = TERMINAL_APPS;
+
+/** Shared by the console and by every tool route. */
+async function serveFrame(name, request, env, ctx, { explicitText = false } = {}) {
   const url = new URL(request.url);
-  if (request.method !== "GET" && request.method !== "HEAD") {
-    return new Response("method not allowed\n", { status: 405, headers: { allow: "GET, HEAD", "content-type": "text/plain; charset=utf-8" } });
+
+  // radar is the ONE tool that takes a POST, because it is the one whose input
+  // this server cannot produce: the readings come from a machine with an
+  // antenna. Everything else stays GET-only, so the surface does not quietly
+  // become writable.
+  if (request.method === "POST" && name === "radar") {
+    let payload = null;
+    try { payload = await request.json(); } catch { payload = null; }
+    const samples = readSamples(payload);
+    const frame = radarFrame(samples, { source: String(payload?.source || "").slice(0, 60) });
+    return new Response(frameText(frame, { color: url.searchParams.get("plain") !== "1" }) + "\n", {
+      headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store", "x-robots-tag": "noindex" },
+    });
   }
-  const rest = url.pathname.replace(/^\/terminal\/?/, "").replace(/\/+$/, "");
-  const name = rest.replace(/\.(txt|md)$/, "");
-  if (name && !TERMINAL_APPS.has(name)) {
-    return new Response(`no such program: ${name}\n\ntry /terminal\n`, { status: 404, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" } });
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return new Response("method not allowed\n", {
+      status: 405,
+      headers: { allow: name === "radar" ? "GET, HEAD, POST" : "GET, HEAD", "content-type": "text/plain; charset=utf-8" },
+    });
   }
 
   const frame = await buildFrame(name, request, env, ctx, url);
-  const wantsHtml = (request.headers.get("accept") || "").includes("text/html") && !url.searchParams.has("plain") && !rest.endsWith(".txt");
+  const wantsHtml = !explicitText
+    && (request.headers.get("accept") || "").includes("text/html")
+    && !url.searchParams.has("plain");
 
   if (wantsHtml) return frameResponse(frame, url.pathname);
-  // ANSI by default over plain HTTP, because the default caller of a text/plain
-  // route from a terminal IS a terminal. ?plain=1 drops it, and MCP never asks
-  // for it at all.
-  const color = url.searchParams.get("plain") !== "1";
-  return new Response(frameText(frame, { color }) + "\n", {
+  // ANSI by default over plain HTTP, because the usual caller of a text/plain
+  // route from a terminal IS a terminal. ?plain=1 drops it; MCP never asks for it.
+  return new Response(frameText(frame, { color: url.searchParams.get("plain") !== "1" }) + "\n", {
     headers: {
       "content-type": "text/plain; charset=utf-8",
       // Frames are per-query and several are live (playlist, calendar, lens), so
-      // no shared cache should hold one. The route is also content-negotiated on
-      // Accept, which a URL-keyed edge cache cannot represent — the same trap
-      // lib/cache.js documents for the markdown twins.
+      // no shared cache should hold one. The route also negotiates on Accept,
+      // which a URL-keyed edge cache cannot represent — the trap lib/cache.js
+      // documents for the markdown twins.
       "cache-control": "no-store",
       "x-robots-tag": "noindex",
       vary: "accept",
     },
   });
+}
+
+/** /finger, /ask, /radar, /dict, /cache — and their .txt representations. */
+export async function handleTool(request, env, ctx) {
+  const url = new URL(request.url);
+  const raw = url.pathname.replace(/^\//, "").replace(/\/+$/, "");
+  const explicitText = raw.endsWith(".txt");
+  const name = raw.replace(/\.txt$/, "");
+  if (!TOOL_NAMES.has(name)) {
+    return new Response(`no such tool: ${name}\n\ntry /terminal\n`, {
+      status: 404, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" },
+    });
+  }
+  return serveFrame(name, request, env, ctx, { explicitText });
+}
+
+/** /terminal — the PowerShell console that drives the tools above. */
+export async function handleTerminal(request, env, ctx) {
+  const url = new URL(request.url);
+  return serveFrame("", request, env, ctx, { explicitText: url.pathname.endsWith(".txt") });
 }
 
 /** The MCP entry point: a frame as plain text, never coloured. */

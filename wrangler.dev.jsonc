@@ -47,7 +47,14 @@
       "/whoareyou", "/whoareyou.json", "/security",
       "/reading", "/updates", "/updates.json", "/restore",
       "/lens", "/lens/", "/lens/fetch", "/lens/shot", "/lens/browser", "/lens/compare.json",
-      "/lens/census", "/lens/census.json", "/mcp", "/terminal", "/terminal/*", "/search", "/search.json",
+      "/lens/census", "/lens/census.json", "/mcp", "/terminal", "/terminal/*", // One wildcard per tool covers both the bare route and its .txt twin.
+      // NOT cosmetic: run_worker_first caps at 100 RULES (wrangler refuses to
+      // boot at 101), and twelve exact entries put this config at 102. A site
+      // can only claim so many paths from the asset layer, which is a real
+      // ceiling on how many surfaces you can add this way.
+      "/finger*", "/radar*", "/dict*", "/cache*", "/agent-ready*", "/encode*",
+      "/photos.txt", "/lens.txt",
+      "/search", "/search.json",
       "/coffee", "/coffee/*", "/serendipity", "/serendipity/*",
       "/slots", "/book", "/approve", "/decline",
       "/llms-full.txt", "/ledger", "/ledger.json",
@@ -114,12 +121,19 @@
   // not spend the production limiter, and overLensBudget fails open anyway.
   "ratelimits": [
     { "name": "LENS_RL_INSPECT", "namespace_id": "1001", "simple": { "limit": 30, "period": 60 } },
-    { "name": "LENS_RL_SHOT",    "namespace_id": "1002", "simple": { "limit": 8,  "period": 60 } },
+    { "name": "LENS_RL_SHOT",    "namespace_id": "1002", "simple": { "limit": 3,  "period": 60 } },
     { "name": "LENS_RL_COMPARE", "namespace_id": "1003", "simple": { "limit": 4,  "period": 60 } },
-    { "name": "LENS_RL_BROWSER", "namespace_id": "1004", "simple": { "limit": 4,  "period": 60 } },
-    { "name": "ASK_RL",           "namespace_id": "1005", "simple": { "limit": 10, "period": 60 } }
+    { "name": "LENS_RL_BROWSER", "namespace_id": "1004", "simple": { "limit": 3,  "period": 60 } },
+    { "name": "LENS_RL_BROWSER_ALL", "namespace_id": "1005", "simple": { "limit": 4, "period": 60 } }
   ],
   "vars": {
+    // Not a secret: an account id is an identifier, and this one is already
+    // committed as the default in holding/scripts/gen-alt-text.py. It is a VAR
+    // because two features need it to build a REST URL and both fail SILENTLY
+    // without it — /ledger's cost line has been reading "unconfigured" in
+    // production, and the Kitesurf path in lens-render.js would have skipped
+    // straight to the binding no matter how the token was set.
+    "CF_ACCOUNT_ID": "1c99acdb6141579023fb97d24261ea58",
     "HOST_TIMEZONE": "America/New_York",
     "WORKING_HOURS_START": "9",
     "WORKING_HOURS_END": "18",
