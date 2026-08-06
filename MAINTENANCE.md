@@ -5,7 +5,7 @@ with the exact command and the gotcha that bit me last time. Deep design notes
 and the full conventions list live in [CLAUDE.md](CLAUDE.md); this is the ops sheet.
 
 One site Worker, with three source islands:
-- **holding/** (aadhar.sh): the **Cloudflare Worker with static assets** (migrated off Pages 2026-06-30). Config is `wrangler.jsonc` at the repo root: it points `main` + `assets.directory` at `.build/holding` and runs `build.mjs` via its `build.command`, so `assets.run_worker_first` (an allowlist mirroring the `ROUTES`/`PREFIX` tables in `index.js`; static is the default) applies to the built tree; `workers_dev:false` (custom domain only). **Production deploy: merge to `main`; GitHub CI promotes the exact tested commit to the machine-owned `production` branch, then Cloudflare Workers Builds deploys it.** The config self-builds, so the Workers Build Deploy command ships the minified tree; local dev uses `wrangler.dev.jsonc` (readable `holding/`, fast reload). A local `wrangler deploy` is fallback-only. Verify after every deploy with `node verify-routes.mjs https://aadhar.sh` (now also asserts `/nav.js` minified + `.src` twins resolve). All site bindings live in `wrangler.jsonc`; secrets via `wrangler secret put`.
+- **holding/** (aadhar.sh): the **Cloudflare Worker with static assets** (migrated off Pages 2026-06-30). Config is `wrangler.jsonc` at the repo root: it points `main` + `assets.directory` at `.build/holding` and runs `build.mjs` via its `build.command`, so `assets.run_worker_first` (an allowlist mirroring the `ROUTES`/`PREFIX` tables in `index.js`; static is the default) applies to the built tree; `workers_dev:false` (custom domain only). **Production deploy: merge to `main`; GitHub CI promotes the exact tested commit to the machine-owned `production` branch, then Cloudflare Workers Builds deploys it.** The config self-builds, so the Workers Build Deploy command ships the minified tree; local dev uses `wrangler.dev.jsonc` (readable `holding/`, fast reload). A local `wrangler deploy` is fallback-only. Verify after every deploy with `node verify-routes.mjs https://aadhar.sh` (now also asserts `/nav.js` minified + `.src` twins resolve). All site bindings live in `wrangler.jsonc`; secrets via `wrangler versions secret put`.
 - **cal/** (coffee booking module): **LIVE** at `aadhar.sh/coffee`, dispatched by the same `aadhar-sh` Worker. Availability still serves from an SWR calendar snapshot (KV `cal:busy`, 2s upstream deadline, stale fallback); the GET page edge-caches 30s; booking fails closed if the calendar can't be vouched for. See [cal/README.md](cal/README.md). `cal/wrangler.test.toml` is test-only; it is not a deployment target.
 - **serendipity/** (event dashboard module): **LIVE** at `aadhar.sh/serendipity`, dispatched by the same `aadhar-sh` Worker. Its D1, secrets, route-specific CSP, and dashboard cache policy remain isolated in the module and shared root bindings.
 
@@ -78,7 +78,7 @@ Create a new Google Calendar **secret address in iCal format** (or the
 equivalent read-only iCloud feed), then replace the secret:
 
 ```bash
-npx wrangler secret put -c wrangler.jsonc ICAL_URL
+npx wrangler versions secret put -c wrangler.jsonc ICAL_URL
 ```
 
 Paste the new feed URL when prompted. To make the new source take effect
@@ -103,8 +103,8 @@ only an `https://calendar.app.google/...` destination. Set the destination
 first, then the new random-looking path segment:
 
 ```bash
-npx wrangler secret put -c wrangler.jsonc WORK_CALENDAR_URL
-npx wrangler secret put -c wrangler.jsonc WORK_CALENDAR_SLUG
+npx wrangler versions secret put -c wrangler.jsonc WORK_CALENDAR_URL
+npx wrangler versions secret put -c wrangler.jsonc WORK_CALENDAR_SLUG
 ```
 
 Verify the new path without following the redirect and confirm that the old
@@ -124,7 +124,7 @@ GitHub or in a public page.
 Generate a new value and replace the Worker secret:
 
 ```bash
-openssl rand -hex 32 | npx wrangler secret put -c wrangler.jsonc SIGNING_SECRET
+openssl rand -hex 32 | npx wrangler versions secret put -c wrangler.jsonc SIGNING_SECRET
 ```
 
 This immediately invalidates every outstanding approve and decline link. It
@@ -758,7 +758,7 @@ fetch), `lib/assets.js` (`serveFreshAsset` + asset 404 clamp).
 ### Bindings the worker reads (`env.*`)
 
 KV/R2/D1/DO are resource bindings; the rest are secrets. Bindings live in
-wrangler.jsonc; secrets on the Worker via `wrangler secret put`. Every use is
+wrangler.jsonc; secrets on the Worker via `wrangler versions secret put`. Every use is
 guarded, so a missing binding degrades, it doesn't crash.
 
 | `env.*` | Kind | What |
@@ -772,7 +772,7 @@ guarded, so a missing binding degrades, it doesn't crash.
 | `COUNTER` | Durable Object | cross-script binding to cf-garage's Counter (homepage visits) |
 | `RN_SIGNING_KEY_JWK` | secret | AadharshBot Ed25519 signing key (RFC 9421). Absent → every signed outbound fetch throws, by design |
 | `RN_SIGNING_KEY_MLDSA_JWK` | secret | AadharshBot ML-DSA-44 signing key: an RFC 9964 AKP JWK whose `priv` is the 32-byte seed, base64url. Absent → requests carry `sig1` only; malformed → throws. **Set this BEFORE deploying a directory that advertises the AKP key**, or the JWKS names a key the bot isn't using |
-| `BROWSER` | Browser Rendering | binding behind `/lens/shot` + `/lens/browser` (Browser Run); absent → clean 503 |
+| `BROWSER` | Browser Run | binding behind `/lens/shot` + `/lens/browser`; absent → clean 503 |
 | `CF_ACCOUNT_ID` | var | account id for the Analytics Engine SQL API (`/ledger` reads) |
 | `BOT_LEDGER` | Analytics Engine | dataset `aadhar_bot_ledger` — AI-crawler hit counts for `/ledger` (absent → counting silently off) |
 | `ANALYTICS_READ_TOKEN` | secret | API token (Account Analytics : Read) so `/ledger` can query the dataset back; absent → invoice renders with a "meter not readable" note |
@@ -976,6 +976,58 @@ export CLOUDFLARE_API_TOKEN=...             # Account · Workers AI · Read
 ```
 `check-photo-pipeline.mjs` fails on any stem with no caption, the same way it does
 for a missing pixel tier or histogram, so an unlabelled image can't reach a deploy.
+
+### Turn on Kitesurf for the Browser view
+`/lens/browser` (the Browser view) works out of the box on the Browser Run
+BINDING (Chromium, no credential). Kitesurf, Cloudflare's WASM browser engine for
+agents, is REST-only — the binding's payload schema rejects the `browser` key
+outright — so it needs a token:
+
+```bash
+# Cloudflare dashboard -> API Tokens -> Create Custom Token
+#   Permission: Account · Browser Rendering · Edit
+npx wrangler versions secret put -c wrangler.jsonc BROWSER_RUN_TOKEN
+```
+
+**That is an EDIT scope.** It lives as a Worker secret, never in GitHub, so the
+repo's no-write-token rule is untouched — but it is not a read token and should
+not be described as one. Without it the route silently uses the binding and
+reports `engine: "chromium-binding"`, so the view degrades rather than breaks.
+
+`browser=kitesurf` is documented only in Cloudflare's launch post, not in the
+Quick Actions reference. The code therefore tries the parameter, falls back once
+on a 400, and remembers the answer for the isolate. If Cloudflare ships it into
+the binding, delete `renderOverRest` and the token with it.
+
+Read which engine actually answered, and the shape it measured:
+```bash
+curl -s 'https://aadhar.sh/lens/browser?url=https://react.dev/' | jq '.engine, .shape'
+```
+
+### Regenerate the photo search expansion
+`images/semantics.json` is what `photo_query` ranks against beyond the caption and
+the EXIF. Two tiers, and every stem records which it got:
+```bash
+node holding/scripts/gen-photo-semantics.mjs            # derived tier only
+node holding/scripts/gen-photo-semantics.mjs --vision   # + model-written terms
+```
+The **derived** tier needs no network and no credential — it is vocabulary repair,
+mapping what the camera writes to what a person types (`Nostalgic Neg` →
+"nostalgic negative", `LEICA M MONOCHROM` → "monochrome black and white", ISO ≥
+3200 → "low light"). Rerun it after adding photos; it is deterministic, so the
+diff is exactly the new stems.
+
+The **vision** tier asks the caption model for retrieval keywords under a
+different prompt than alt text, and needs `CLOUDFLARE_API_TOKEN`. It is resumable
+and writes after every photo, so a 429 against the daily neuron budget costs
+nothing already paid for.
+
+**The model never runs on the request path, and that is the point.** Embedding a
+query per request would put a Workers AI credential back in the Worker, which is
+what deleting `/ask` removed. Expanding the documents offline keeps the Worker at
+zero credentials and zero subrequests, and it still works on the free plan. Delete
+`semantics.json` and the query keeps working one tier down, reporting
+`ranking.semantic: false`.
 
 ### Regenerate the /garage/encoding study samples
 ```bash
@@ -1223,6 +1275,7 @@ until its twin agrees: `checkTwinFacts()` recomposes the User-Agent from
 | `zenc/` | The JPEG thumbnail encoder: a Rust crate wrapping zenjpeg (hybrid trellis + progressive scan search). `cargo build --release` (auto-built on first pipeline run). `zenc <in> <out> -q 84`. dependabot tracks the zenjpeg pin; replaced the from-source jpegli build in 2026-07. |
 | `download-remote-photos.sh` | Download selected R2 object keys into disposable runner storage for the GitHub Actions photo workflow; accepts `all` for the public manifest. |
 | `gen-alt-text.py` | AI alt text for grid photos -> `images/alt.json`. Run by `add-photos.sh` phase 4. Posts the committed `i/` thumbnail to Workers AI when `CLOUDFLARE_API_TOKEN` is set (captions pre-deploy), else asks `/garage/cf/caption` by stem (deployed photos only). Resumable. |
+| `gen-photo-semantics.mjs` | Retrieval terms for `photo_query` -> `images/semantics.json`. Derived tier (EXIF vocabulary repair) needs nothing; `--vision` adds model-written keywords and needs `CLOUDFLARE_API_TOKEN`. Deliberately offline so the Worker keeps zero AI credentials. Resumable. |
 | `gen-encoding-samples.sh` | Regenerate the color sample set for `/garage/encoding` through every encoder; defaults to the committed `garage/enc/c-png.png` fixture and prints byte counts. |
 | `photo-histograms.py` | Bakes four 64-bin RGB/luminance histogram channels into each per-photo `images/meta/<stem>.json` from the shipped hashed JPG tier. Requires the pinned Pillow dependency in `holding/scripts/requirements.txt` and is called by both metadata extraction and `add-photos.sh`. |
 | `gen-og-cards.mjs` | Render the 1200x630 OG/Twitter card per garage + lwe page (live demo on the Bliss desktop) into `holding/og/`. `npm run og-cards`. Drives the installed Chrome via `playwright-core`; captures production so data-driven demos render full. Hero selectors + presets in the `HERO{}` map. See "Regenerate the OG / Twitter cards". |

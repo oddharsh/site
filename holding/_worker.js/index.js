@@ -39,7 +39,7 @@ import { handleRn, handleRnAdmin, handleRnArt, handleRnMarkdown, handleRnSet, ha
 import { cronHomeProbe } from "./perf-probe.js";
 import { handleSearch, handleSearchJson } from "./search.js";
 import { handleSecurityCenter } from "./security.js";
-import { handleTerminal } from "./terminal.js";
+import { handleTerminal, handleTool } from "./terminal.js";
 import { handleSystemRestore, handleUpdatesJson, handleWindowsUpdate } from "./updates.js";
 import { handleWhoareyou, handleWhoareyouJson } from "./whoareyou.js";
 import { handleWritingIndex, handleWritingPost } from "./writing.js";
@@ -58,6 +58,7 @@ installCalTracing(tracing);
 // the homepage visit-counter Durable Object, hosted in-house (see counter.js).
 // must be a named export of the entry so the COUNTER binding can resolve it.
 export { Counter } from "./counter.js";
+
 
 // the coffee-booking expiry timer (Workflows). One durable instance per pending
 // booking replaces the old weekly cron sweep; its class_name must resolve on
@@ -285,8 +286,28 @@ const ROUTES = new Map([
   // the terminal utilities. /terminal is the index; the programs live under it and
   // are matched by the PREFIX entry below, which also owns the 404 for a name
   // that isn't one of them.
+  // ── the tools ──────────────────────────────────────────────────────────
+  // Top-level, because that is where this site puts utilities: /lens, /photos,
+  // /coffee and /reading all live here, while every content page nests. Each
+  // tool answers HTML to a browser and a frame to everything else, with an
+  // explicit .txt representation alongside — the same contract as the .md twins.
+  //
+  // /terminal is NOT their parent. It is the console that drives them, and it
+  // keeps its own route for the same reason /lens has one: there, the
+  // interaction is the product.
   ["/terminal", handleTerminal],
   ["/terminal/", routeDropSlash],
+
+  ["/finger", handleTool], ["/finger.txt", handleTool],
+  ["/radar", handleTool],  ["/radar.txt", handleTool],
+  ["/dict", handleTool],   ["/dict.txt", handleTool],
+  ["/cache", handleTool],  ["/cache.txt", handleTool],
+  ["/agent-ready", handleTool], ["/agent-ready.txt", handleTool],
+  ["/encode", handleTool], ["/encode.txt", handleTool],
+  // /photos and /lens already own their HTML pages, so they gain only the frame
+  // representation rather than a second competing route.
+  ["/photos.txt", handleTool],
+  ["/lens.txt", handleTool],
 
   ["/search", handleSearch],
   ["/search.json", handleSearchJson],
@@ -378,13 +399,18 @@ const PREFIX = [
     handle: routeWritingPost,
   },
   {
-    // The terminal programs. Matched as a prefix rather than enumerated in
-    // ROUTES so the handler owns its own "no such program" frame — a 404 that
-    // names the three that DO exist is worth more to a caller who guessed than
-    // the asset layer's bare miss.
-    label: "/terminal/<program>",
+    // The old /terminal/<tool> namespace, kept as a permanent redirect. These
+    // URLs never shipped — the restructure landed before the PR merged — so it
+    // costs nothing, and it exists so any link written during development lands
+    // on the tool rather than a 404.
+    label: "/terminal/<tool> -> /<tool>",
     match: (pathname) => pathname.startsWith("/terminal/"),
-    handle: handleTerminal,
+    handle: (request) => {
+      const url = new URL(request.url);
+      const name = url.pathname.replace(/^\/terminal\//, "").replace(/\/+$/, "");
+      const target = name ? `/${name}${url.search}` : "/terminal";
+      return new Response(null, { status: 301, headers: { location: target, "cache-control": "public, max-age=3600" } });
+    },
   },
   {
     label: "/rn/art/<hash>-<width>-<v>.<ext>",

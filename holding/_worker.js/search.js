@@ -4,6 +4,7 @@
 import { cachedRender } from "./lib/cache.js";
 import { lunaPage } from "./lib/chrome.js";
 import { escAttr, escHtml, jsonResp } from "./lib/http.js";
+import { queryTerms as queryTermsOf, terms } from "./lib/text.js";
 
 let indexCache = null;
 
@@ -20,10 +21,6 @@ async function getSearchIndex(env) {
   return indexCache;
 }
 
-function terms(query) {
-  return String(query || "").toLowerCase().trim().slice(0, 160).split(/[^\p{L}\p{N}]+/u).filter((term) => term.length > 1).slice(0, 12);
-}
-
 function snippet(text, queryTerms) {
   const source = String(text || "").replace(/\s+/g, " ").trim();
   if (!source) return "";
@@ -34,7 +31,12 @@ function snippet(text, queryTerms) {
 
 export async function searchSite(env, query, limit = 20) {
   const q = String(query || "").trim().slice(0, 160);
-  const queryTerms = terms(q);
+  // Agents ask this in sentences ("what does he think about agents"), and every
+  // stopword in one scores against the body text of nearly every page at +1.
+  // Enough of them and the ranking is decided by which page is longest. Terms
+  // survive if dropping them would leave nothing to search on.
+  const meaningful = queryTermsOf(q).terms;
+  const queryTerms = meaningful.length ? meaningful : terms(q);
   const max = Math.min(50, Math.max(1, Number(limit) || 20));
   const records = (await getSearchIndex(env)).records || [];
   if (!queryTerms.length) return { query: q, total: 0, returned: 0, results: [] };

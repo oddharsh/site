@@ -72,6 +72,36 @@
       "hint": "the other web: see any URL the way a machine does — raw HTML, JSON-LD, llms.txt",
       "flags": { "run": true, "taskbar": true, "sitemap": false, "gallery": false, "agents": true, "searchIndex": true, "webmention": false } },
 
+    { "path": "/finger", "title": "Finger", "section": "finger", "kind": "utility",
+      "description": "Look up who runs this host: writing, reading, listening, photographs, neighborhood, availability, deploy log, and a search across all of it.",
+      "hint": "who runs this host — drivable by keypress",
+      "flags": { "run": true, "taskbar": false, "sitemap": false, "gallery": false, "agents": true, "searchIndex": false, "webmention": false } },
+
+    { "path": "/radar", "title": "Radar", "section": "radar", "kind": "utility",
+      "description": "An instrument with no antenna: POST signal readings from a machine that has one and it draws them as bands, meters and trends.",
+      "hint": "signal readings in, a terminal instrument out",
+      "flags": { "run": true, "taskbar": false, "sitemap": false, "gallery": false, "agents": true, "searchIndex": false, "webmention": false } },
+
+    { "path": "/dict", "title": "Dict", "section": "dict", "kind": "utility",
+      "description": "Will a browser ever actually use the compression dictionary you are serving? The registration rules fail in total silence; this encodes them, measured.",
+      "hint": "compression dictionary lint",
+      "flags": { "run": true, "taskbar": false, "sitemap": false, "gallery": false, "agents": true, "searchIndex": false, "webmention": false } },
+
+    { "path": "/cache", "title": "Cache", "section": "cache", "kind": "utility",
+      "description": "Does your ETag ever actually 304? Fetches twice, replays the validator, and reports what the origin DID — the failure header graders cannot see.",
+      "hint": "behavioral revalidation lint",
+      "flags": { "run": true, "taskbar": false, "sitemap": false, "gallery": false, "agents": true, "searchIndex": false, "webmention": false } },
+
+    { "path": "/encode", "title": "Encode", "section": "encode", "kind": "utility",
+      "description": "What did your encoder actually do? Reads a JPEG or AVIF container — quantization tables, scan script, chroma subsampling, bit depth — and says where bytes are being left on the table. No pixels are decoded.",
+      "hint": "what did your encoder actually do?",
+      "flags": { "run": true, "taskbar": false, "sitemap": false, "gallery": false, "agents": true, "searchIndex": false, "webmention": false } },
+
+    { "path": "/agent-ready", "title": "Agent Ready", "section": "agent-ready", "kind": "utility",
+      "description": "How much of an origin a machine can actually use — the agent doors, counted rather than scored — and, for this origin, what building all of it cost in files and lines.",
+      "hint": "the scorecard, pointed at anyone including us",
+      "flags": { "run": true, "taskbar": false, "sitemap": false, "gallery": false, "agents": true, "searchIndex": false, "webmention": false } },
+
     { "path": "/terminal", "title": "Terminal", "section": "tui", "kind": "utility",
       "description": "Three terminal programs an agent can drive by keypress: finger (who runs this host), photos (the archive), and lens (how a URL reads to a machine).",
       "hint": "terminal utilities — curl them, or drive them by keypress",
