@@ -1118,32 +1118,17 @@
     // sees and fn() then calls. Nothing dangerous comes back, just "[object
     // Object]" where a lens should be — but the fallback exists precisely so an
     // unknown lens name lands on lensAnatomy, and inheritance quietly voids it.
-    var LENS_ALLOWED = { readiness: true, anatomy: true, structured: true, ai: true, terms: true, discovery: true };
-    var selectedLens = Object.prototype.hasOwnProperty.call(LENS_ALLOWED, lens) ? lens : "anatomy";
-    var lensHtml;
-    switch (selectedLens) {
-      case "readiness":
-        lensHtml = lensReadiness();
-        break;
-      case "structured":
-        lensHtml = lensStructured();
-        break;
-      case "ai":
-        lensHtml = lensAI();
-        break;
-      case "terms":
-        lensHtml = lensTerms();
-        break;
-      case "discovery":
-        lensHtml = lensDiscovery();
-        break;
-      case "anatomy":
-      default:
-        lensHtml = lensAnatomy();
-        break;
-    }
-    var body = view === "machine" ? machineBrief() + '<div class="lx-machine-block">' + section("Selected evidence lens", { text: LENS_LABEL[selectedLens] }, "The original inspector remains available below the briefing.", lensHtml) + "</div>"
-      : view === "delta" ? deltaView() : lensHtml;
+    var LENS_FN = Object.create(null);
+    LENS_FN.readiness = lensReadiness;
+    LENS_FN.anatomy = lensAnatomy;
+    LENS_FN.structured = lensStructured;
+    LENS_FN.ai = lensAI;
+    LENS_FN.terms = lensTerms;
+    LENS_FN.discovery = lensDiscovery;
+    var candidate = Object.prototype.hasOwnProperty.call(LENS_FN, lens) ? LENS_FN[lens] : null;
+    var fn = typeof candidate === "function" ? candidate : lensAnatomy;
+    var body = view === "machine" ? machineBrief() + '<div class="lx-machine-block">' + section("Selected evidence lens", { text: LENS_LABEL[lens] }, "The original inspector remains available below the briefing.", fn()) + "</div>"
+      : view === "delta" ? deltaView() : fn();
     // the dollar thesis rides above every scanned lens except Delta (which runs its
     // own no-score narrative). Machine view already leads with the briefing/trace.
     if (view !== "delta" && view !== "machine") body = verdictStrip() + body;
