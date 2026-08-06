@@ -258,6 +258,13 @@
     { "name": "LENS_RL_BROWSER_ALL", "namespace_id": "1005", "simple": { "limit": 4, "period": 60 } }
   ],
   "vars": {
+    // Not a secret: an account id is an identifier, and this one is already
+    // committed as the default in holding/scripts/gen-alt-text.py. It is a VAR
+    // because two features need it to build a REST URL and both fail SILENTLY
+    // without it — /ledger's cost line has been reading "unconfigured" in
+    // production, and the Kitesurf path in lens-render.js would have skipped
+    // straight to the binding no matter how the token was set.
+    "CF_ACCOUNT_ID": "1c99acdb6141579023fb97d24261ea58",
     "HOST_TIMEZONE": "America/New_York",
     "WORKING_HOURS_START": "9",
     "WORKING_HOURS_END": "18",
