@@ -2623,58 +2623,65 @@ test("overLensBudget fails open without a limiter and closes when one says no", 
   assert.equal(new Set(names).size, names.length, "two budgets share one binding");
 });
 
-test("the rendered gap counts substance, not framework payload", async () => {
-  const { documentShape, measureGap } = await import("./holding/_worker.js/lens-render.js");
+test("documentShape counts substance, not framework payload", async () => {
+  const { documentShape } = await import("./holding/_worker.js/lens-render.js");
 
   // A client-rendered shell: almost all of its bytes are an inline script, and
-  // none of that is anything a reader gets. Counting BYTES would call this page
-  // mostly-visible to a crawler, which is the opposite of true.
+  // none of that is anything a reader or a parser gets. This is why the shape
+  // has no `bytes` field at all — bytes would score the framework payload as
+  // content and call this page mostly-visible to a crawler.
   const raw = `<html><head><title>Shop</title></head><body><div id="root"></div>
     <script>${"var padding='x';".repeat(400)}</script></body></html>`;
-  const rendered = `<html><head><title>Shop</title></head><body><div id="root">
-    <h1>Winter jackets</h1><p>Forty two jackets, wool and down, in stock today.</p>
-    <a href="/a">one</a><a href="/b">two</a>
-    <script type="application/ld+json">{"@type":"Product"}</script></div></body></html>`;
+  const shell = documentShape(raw);
+  assert.equal(shell.words, 1, "the title counts, the 6KB script body does not");
+  assert.equal(shell.headings, 0);
+  assert.equal(shell.jsonld, 0);
 
-  const rawShape = documentShape(raw);
-  // One word, and it is the <title>. That is exactly right: the title IS text a
-  // crawler gets, and the 6KB of inline script around it is not.
-  assert.equal(rawShape.words, 1, "the title counts, the script body does not");
-  assert.ok(rawShape.bytes > 5000, "the raw document is mostly script bytes");
-
-  const gap = measureGap(raw, rendered);
-  assert.ok(gap.crawlerSeesPercent <= 10,
-    `a crawler gets almost none of the readable page, got ${gap.crawlerSeesPercent}%`);
-  assert.ok(gap.deltas.words > 10);
-  assert.equal(gap.deltas.headings, 1);
-  assert.equal(gap.deltas.links, 2);
-  assert.equal(gap.deltas.jsonld, 1, "structured data that only exists after render");
-  assert.equal(gap.rendersSmaller, false);
+  const rendered = documentShape(`<html><body><h1>Winter jackets</h1>
+    <p>Forty two jackets, wool and down, in stock today.</p>
+    <a href="/a">one</a><a href="/b">two</a><img src="/j.png">
+    <script type="application/ld+json">{"@type":"Product"}</script></body></html>`);
+  assert.ok(rendered.words > 10);
+  assert.equal(rendered.headings, 1);
+  assert.equal(rendered.links, 2);
+  assert.equal(rendered.images, 1);
+  assert.equal(rendered.jsonld, 1, "structured data that exists only after render");
 });
 
-test("the rendered gap reports an unmeasurable comparison as absent, never as zero", async () => {
-  const { measureGap } = await import("./holding/_worker.js/lens-render.js");
+test("the kitesurf selector is tried, and a rejection is remembered rather than reported", async () => {
+  const { runBrowserAction, _resetKitesurfProbe, _kitesurfParamLive } =
+    await import("./holding/_worker.js/lens-render.js");
+  const env = { CF_ACCOUNT_ID: "acct", BROWSER_RUN_TOKEN: "tok" };
+  const realFetch = globalThis.fetch;
+  const calls = [];
 
-  // Nothing came back from the renderer. "JS added nothing" and "the render
-  // returned an empty document" are different claims and only one is about the
-  // page, so the percentage is OMITTED rather than defaulted.
-  const empty = measureGap("<html><body><p>hello there friend</p></body></html>", "");
-  assert.equal("crawlerSeesPercent" in empty, false);
-  assert.equal(empty.rendered.words, 0);
+  try {
+    // `browser=kitesurf` is documented in Cloudflare's launch post and NOT in
+    // the Quick Actions reference. A 400 on the attempt carrying it must not
+    // surface as "the scanned site is broken", which is what hard-coding the
+    // parameter would have produced on every single render.
+    _resetKitesurfProbe();
+    globalThis.fetch = async (url) => {
+      calls.push(String(url));
+      return new Response("{}", { status: String(url).includes("browser=kitesurf") ? 400 : 200 });
+    };
+    const first = await runBrowserAction("snapshot", { url: "https://example.com" }, env);
+    assert.equal(calls.length, 2, "tried the selector, then retried without it");
+    assert.ok(calls[0].includes("browser=kitesurf"));
+    assert.ok(!calls[1].includes("browser=kitesurf"));
+    assert.equal(first.engine, "chromium-rest", "the engine reported is the one that answered");
+    assert.equal(_kitesurfParamLive(), false);
 
-  // A fully server-rendered page: the crawler already had everything.
-  const ssr = "<html><body><h1>Title</h1><p>All of the words are already here.</p></body></html>";
-  const full = measureGap(ssr, ssr);
-  assert.equal(full.crawlerSeesPercent, 100);
-  assert.equal(full.rendersSmaller, false);
-
-  // Rendering can SHRINK a document (a shell replaced by less markup than it
-  // shipped). The percentage clamps at 100 and would hide that, so it is
-  // reported on its own flag.
-  const shrunk = measureGap("<html><body><p>one two three four five six</p></body></html>",
-    "<html><body><p>one two</p></body></html>");
-  assert.equal(shrunk.crawlerSeesPercent, 100);
-  assert.equal(shrunk.rendersSmaller, true);
+    // Remembered for the isolate: the second render must not pay the failed
+    // attempt again, because every render would otherwise cost two REST calls.
+    calls.length = 0;
+    const second = await runBrowserAction("snapshot", { url: "https://example.com" }, env);
+    assert.equal(calls.length, 1, "the known-dead selector is not retried");
+    assert.equal(second.engine, "chromium-rest", "REST still serves, just without the dead selector");
+  } finally {
+    globalThis.fetch = realFetch;
+    _resetKitesurfProbe();
+  }
 });
 
 test("the shared browser ceiling bills everyone to one bucket, not per caller", async () => {

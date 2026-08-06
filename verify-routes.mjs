@@ -147,9 +147,6 @@ const ROUTES = [
   { path: "/lens/fetch?url=https://example.com", status: 200, ct: "application/json", headers: { accept: "text/html" }, remote: true },
   { path: "/lens/shot?url=https://example.com", status: [200, 503], flaky: true, remote: true },
   { path: "/lens/browser?url=javascript%3Aalert(1)", status: 400, ct: "application/json", headers: { accept: "text/html" } },
-  // An SSRF-rejected target is answered before any engine is reached, so this
-  // row proves the route is wired without spending a Quick Action to prove it.
-  { path: "/lens/rendered?url=javascript%3Aalert(1)", status: 400, ct: "application/json", headers: { accept: "text/html" } },
   { path: "/lens/compare.json?left=javascript%3Aalert(1)&right=https%3A%2F%2Fexample.com", status: 400, ct: "application/json" },
   { path: "/mcp", status: 405, ct: "application/json" },
 

@@ -603,23 +603,34 @@ generic hex back.
   the binding, `/lens/shot` returns a clean 503 and the Human view falls back to
   the readable-text reader, so the live iframe + all machine lenses keep working
   regardless. (`CF_ACCOUNT_ID` is read by `/ledger`'s Analytics Engine SQL
-  alongside `ANALYTICS_READ_TOKEN`, and now by `/lens/rendered` below.)
+  alongside `ANALYTICS_READ_TOKEN`, and by the Kitesurf REST path below.)
 
-  **`/lens/rendered` is the third view, and it un-retires the REST path.** It
-  reports how much of a page a crawler that does not run JavaScript already had,
-  by running the SAME extraction over the raw HTML and over the rendered DOM. The
-  binding can serve it (Chromium), but **Kitesurf cannot be reached from the
-  binding at all**: probed 2026-08-06, passing `browser` to `quickAction` returns
-  `{"code":"unrecognized_keys","keys":["browser"]}`, and an invented engine name
-  returns the byte-identical error — the payload schema is CLOSED, so it is
-  refusing the option rather than failing on an unknown value. Kitesurf is REST
-  only, and REST wants a `Browser Rendering - Edit` token in `BROWSER_RUN_TOKEN`.
-  That is an EDIT scope living as a Worker secret; it is not in GitHub, so the
-  no-write-token-in-CI rule is intact, but do not confuse it for a read scope.
-  `browser=kitesurf` is documented in Cloudflare's launch post and NOT in the
-  Quick Actions reference, so `lens-render.js` TRIES it and falls back once on a
-  400, remembering the result for the isolate, rather than hard-coding a query
-  parameter on the strength of a blog post.
+  **Kitesurf rides the EXISTING `/lens/browser`, and there is no second route.**
+  A `/lens/rendered` was built here on 2026-08-06 and deleted the same day: it
+  duplicated the Browser view, which already renders after JavaScript, already
+  asks for content + screenshot + markdown + accessibility tree in ONE Quick
+  Action, and whose `deltaStrip` already computed the HTTP-versus-rendered word
+  gap. Read `lens-browser.js` before adding a rendering surface.
+
+  What survives in `lens-render.js` is the engine seam. **Kitesurf cannot be
+  reached from the binding**: probed 2026-08-06, passing `browser` to
+  `quickAction` returns `{"code":"unrecognized_keys","keys":["browser"]}`, and an
+  invented engine name returns the byte-identical error — the payload schema is
+  CLOSED, so it refuses the option rather than failing on an unknown value. REST
+  is the only door and it wants a `Browser Rendering - Edit` token in
+  `BROWSER_RUN_TOKEN`. That is an EDIT scope living as a Worker secret; it is not
+  in GitHub, so the no-write-token-in-CI rule is intact, but do not confuse it
+  for a read scope. `browser=kitesurf` is in Cloudflare's launch post and NOT in
+  the Quick Actions reference, so the code TRIES it and, on a 400, retries
+  without it and remembers for the isolate. Only the PARAMETER is conditional —
+  REST itself keeps serving, because gating the whole REST path on a dead beta
+  flag silently demoted every later render back to the binding.
+
+  The snapshot now reports `engine` and a server-computed `shape` (words,
+  headings, links, images, JSON-LD). `shape` is counted from the FULL rendered
+  body BEFORE the 120KB content cap, which retires the old truncation bail: a
+  capped snapshot used to refuse a word comparison entirely (stripe read
+  "1874 -> 139 words" off a slice) and can now answer honestly.
 
   Screenshots are KV-cached 6h (`lens:shot:<sha256(url)>` in RN_KV) and rate-limited to
   3/min/IP; `/lens/fetch` (the parsing engine) is rate-limited 30/min/IP. Those limits

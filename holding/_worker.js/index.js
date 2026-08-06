@@ -19,7 +19,7 @@ import { cronSendWebmentions } from "./webmention-send.js";
 import { countCrawlerHit, handleLedger, handleLedgerJson } from "./ledger.js";
 import { countSpeculativeLoad, handlePrefetchActivation } from "./speculation.js";
 import { handleRumCollect, handleRumScript } from "./rum.js";
-import { handleLens, handleLensBrowser, handleLensCompare, handleLensFetch, handleLensRendered, handleLensShot } from "./lens.js";
+import { handleLens, handleLensBrowser, handleLensCompare, handleLensFetch, handleLensShot } from "./lens.js";
 import { serveAssetWith404Clamp, serveFreshAsset, servePrecompressedShell, serveStaticPage } from "./lib/assets.js";
 import { BOT_UA } from "./lib/botauth.js";
 import { CANONICAL_HOST, PAGE_CACHE_CONTROL } from "./lib/const.js";
@@ -277,7 +277,6 @@ const ROUTES = new Map([
   ["/lens/fetch", handleLensFetch],
   ["/lens/shot", handleLensShot],
   ["/lens/browser", handleLensBrowser],
-  ["/lens/rendered", handleLensRendered],
   ["/lens/compare.json", handleLensCompare],
   ["/lens/census", handleCensus],
   ["/lens/census.json", handleCensusJson],
