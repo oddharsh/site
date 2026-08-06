@@ -2,6 +2,9 @@
   "linkset": [
     {
       "anchor": "https://aadhar.sh/mcp",
+      "service-desc": [
+        { "href": "https://aadhar.sh/.well-known/mcp/server-card.json", "type": "application/json", "title": "Aadharsh site MCP server card" }
+      ],
       "service-doc": [
         { "href": "https://aadhar.sh/llms.txt", "type": "text/plain", "title": "Aadharsh site MCP and utility catalog" }
       ]
@@ -9,7 +12,7 @@
     {
       "anchor": "https://aadhar.sh/serendipity/mcp",
       "service-desc": [
-        { "href": "https://aadhar.sh/.well-known/mcp.json", "type": "application/json", "title": "Serendipity MCP server card" }
+        { "href": "https://aadhar.sh/.well-known/mcp/serendipity.json", "type": "application/json", "title": "Serendipity MCP server card" }
       ],
       "service-doc": [
         { "href": "https://aadhar.sh/serendipity/mcp-info", "type": "text/html", "title": "Serendipity MCP, for agents" }

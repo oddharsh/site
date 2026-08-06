@@ -212,6 +212,7 @@
   Link: </.well-known/http-message-signatures-directory>; rel="http-message-signatures-directory"; type="application/jwk-set+json"
   Link: </.well-known/security.txt>; rel="security-policy"; type="text/plain"
   Link: </.well-known/api-catalog>; rel="api-catalog"; type="application/linkset+json"
+  Link: </.well-known/mcp/server-card.json>; rel="service-desc"; type="application/json"; title="Aadharsh site MCP server card"
   Link: </.well-known/agent-card.json>; rel="service-desc"; type="application/json"; title="Aadharsh site agent card"
   Vary: Accept
 
@@ -269,6 +270,18 @@
 /.well-known/agent-card.json
   Content-Type: application/json; charset=utf-8
   Link: </.well-known/agent-card.json>; rel="service-desc"; type="application/json"; title="Aadharsh site agent card"
+
+# MCP server cards are static discovery metadata. Cache them at the edge long
+# enough to keep pre-connection discovery cheap; a deploy purges the old bytes.
+/.well-known/mcp/server-card.json
+  Content-Type: application/json; charset=utf-8
+  Cache-Control: public, max-age=2592000, s-maxage=2592000
+/.well-known/mcp.json
+  Content-Type: application/json; charset=utf-8
+  Cache-Control: public, max-age=2592000, s-maxage=2592000
+/.well-known/mcp/serendipity.json
+  Content-Type: application/json; charset=utf-8
+  Cache-Control: public, max-age=2592000, s-maxage=2592000
 
 /.well-known/agent-skills/serendipity-events/SKILL.md
   Content-Type: text/markdown; charset=utf-8

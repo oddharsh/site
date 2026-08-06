@@ -19,6 +19,7 @@ import { LENS_BUDGETS, compareLensTargets, lensInspect, lensObservationSummary, 
 import { queryPhotos } from "../photos.js";
 import { RN_FALLBACK, getTracksSWR } from "../rn.js";
 import { searchSite } from "../search.js";
+import { mcpTool } from "./mcp-tools.js";
 // holding -> serendipity, which is the reverse of the established direction
 // (serendipity already imports lib/desktop.js, lib/crawl.js, lib/mcp-protocol.js).
 // It is not a cycle: nothing under serendipity/ imports this registry. It is also
@@ -37,7 +38,7 @@ export function toolError(message) { return { _error: String(message).slice(0, 4
 // 4, so the cheaper door was the expensive operation. One bucket, one ceiling,
 // whichever door you knock on — and /ask, being a third door onto the
 // same functions, inherits that property for free by calling through here.
-export const DATA_TOOLS = [
+const DATA_TOOL_DEFINITIONS = [
   {
     name: "search_site",
     description: "Search the public pages, writing, garage notes, and utility descriptions on aadhar.sh.",
@@ -100,6 +101,8 @@ export const DATA_TOOLS = [
     } },
   },
 ];
+
+export const DATA_TOOLS = DATA_TOOL_DEFINITIONS.map((tool) => mcpTool(tool));
 
 export const DATA_TOOL_NAMES = new Set(DATA_TOOLS.map((t) => t.name));
 

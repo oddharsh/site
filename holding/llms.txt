@@ -137,7 +137,12 @@ document is [/llms-full.txt](https://aadhar.sh/llms-full.txt).
 - [/mcp](https://aadhar.sh/mcp): The canonical stateless, read-only MCP
   interface for site search, music, photo queries, coffee availability, Change
   Radar, and Lens inspection/comparison. Serendipity's specialized MCP remains
-  available at [/serendipity/mcp](https://aadhar.sh/serendipity/mcp).
+  available at [/serendipity/mcp](https://aadhar.sh/serendipity/mcp). The
+  pre-connection server cards are
+  [site MCP](https://aadhar.sh/.well-known/mcp/server-card.json) and
+  [Serendipity MCP](https://aadhar.sh/.well-known/mcp/serendipity.json); the
+  live `server/discover` and `tools/list` responses at each endpoint remain the
+  protocol source of truth.
 
 ## Redirects
 

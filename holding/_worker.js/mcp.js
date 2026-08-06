@@ -7,6 +7,7 @@ import { frameText, terminalToolFrame } from "./terminal.js";
 import { radarFrame, readSamples } from "./radar.js";
 import { AGENT_SURFACES } from "./lib/site-manifest.js";
 import { CACHE_EMPTY, CACHE_LIVE, CACHE_STATIC, mcpCorsHeaders, mcpGate, mcpServer } from "./lib/mcp-protocol.js";
+import { mcpTool } from "./lib/mcp-tools.js";
 
 // DUAL-ERA. The wire rules (versions, `_meta` keys, resultType, cache hints,
 // error codes, the header check) live in lib/mcp-protocol.js because
@@ -18,12 +19,16 @@ import { CACHE_EMPTY, CACHE_LIVE, CACHE_STATIC, mcpCorsHeaders, mcpGate, mcpServ
 // This server was unusually well placed for the change. The header above has
 // said "intentionally stateless" since it was written, and statelessness is
 // precisely what the new revision assumes. There was nothing to unwind.
+export const SITE_MCP_SERVER_INFO = { name: "aadhar.sh", title: "Aadharsh Site", version: "2.0.0" };
+export const SITE_MCP_CAPABILITIES = { tools: {}, resources: {} };
+export const SITE_MCP_INSTRUCTIONS = "Read-only public utilities for aadhar.sh: search, music, photos, coffee availability, Change Radar, and Lens. resources/list enumerates the site's public pages; resources/read fetches one. No mutations or private data are exposed.";
+
 const MCP = mcpServer({
   // Self-reported and explicitly NOT a security signal — the spec says clients
   // should not change behavior on it. Display, logging, debugging.
-  serverInfo: { name: "aadhar.sh", title: "Aadharsh Site", version: "2.0.0" },
-  capabilities: { tools: {}, resources: {} },
-  instructions: "Read-only public utilities for aadhar.sh: search, music, photos, coffee availability, Change Radar, and Lens. resources/list enumerates the site's public pages; resources/read fetches one. No mutations or private data are exposed.",
+  serverInfo: SITE_MCP_SERVER_INFO,
+  capabilities: SITE_MCP_CAPABILITIES,
+  instructions: SITE_MCP_INSTRUCTIONS,
 });
 
 // Which cache hint each surface earns. Tools are a static array in this file and
@@ -38,7 +43,7 @@ const CACHE_PROMPTS   = CACHE_EMPTY;
 // at the batch branch in handleSiteMcp.
 const MCP_MAX_BATCH = 16;
 
-const MCP_TOOLS = [
+const MCP_TOOL_DEFINITIONS = [
   ...DATA_TOOLS,
   // ── the terminal programs ───────────────────────────────────────────────
   // These return a rendered 80-column FRAME as text, not a record. That is the
@@ -119,6 +124,8 @@ const MCP_TOOLS = [
     }, required: ["url"] },
   },
 ];
+
+export const MCP_TOOLS = MCP_TOOL_DEFINITIONS.map((tool) => mcpTool(tool));
 
 // The site's public surfaces as MCP resources, projected from the generated
 // agent catalog (lib/site-manifest.js, itself derived from site-manifest.json).
