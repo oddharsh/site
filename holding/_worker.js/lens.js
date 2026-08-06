@@ -8,6 +8,7 @@ import { lensParseRobots, lensPathMatch, lensRobotsVerdict } from "./lib/robots.
 import { lunaPage } from "./lib/chrome.js";
 import { escAttr, escHtml, jsonResponse } from "./lib/http.js";
 import { span } from "./lib/trace.js";
+import { documentShape, hasRenderEngine, runBrowserAction } from "./lens-render.js";
 
 // The glossary. This page's whole subject is protocol names, which is fine for
 // the audience that already has them and a wall for the audience that doesn't.
@@ -144,11 +145,39 @@ export function glossify(escaped, only) {
 // number the 429 message quotes, and a message that disagrees with the ceiling
 // is worse than no message. A contract test pins the two together so they cannot
 // drift, which is the only reason duplicating it is safe.
+// How many bytes of a document lens will PARSE, as distinct from how many it
+// will fetch (2MB, above). See the measured table at the parse phase: the
+// regex chains run ~32ms/MB, so this constant is the single knob that decides
+// whether a scan fits a CPU ceiling.
+//
+// 256 KB (~8ms) bounds the worst case without touching the median page. Drop it
+// to 64 KB (~3.2ms) to fit the Workers FREE plan's 10ms-per-invocation ceiling,
+// which leaves headroom for everything else in the request.
+export const LENS_PARSE_CAP = 256 * 1024;
+
+// Browser Run's FREE plan allows one Quick Action every 10 seconds ACCOUNT-WIDE
+// (6/min), 3 concurrent browsers, and 10 minutes of browser time a day.
+// Measured 2026-08-06: two Quick Actions ~2s apart, and the second came back
+// 429. The per-IP ceilings below were written against no such limit — `shot`
+// alone allowed 8/min to a SINGLE visitor, so one person could spend the whole
+// account's minute and the next visitor got a failure that read like a bug.
+export const BROWSER_FREE_PLAN = { perMinute: 6, perDayMinutes: 10, concurrent: 3 };
+
 export const LENS_BUDGETS = {
   inspect: { binding: "LENS_RL_INSPECT", max: 30 },
-  shot:    { binding: "LENS_RL_SHOT",    max: 8  },
+  shot:    { binding: "LENS_RL_SHOT",    max: 3  },
   compare: { binding: "LENS_RL_COMPARE", max: 4  },
-  browser: { binding: "LENS_RL_BROWSER", max: 4  },
+  browser: { binding: "LENS_RL_BROWSER", max: 3  },
+  // The shared ceiling. Keyed on a CONSTANT rather than the caller's IP, so
+  // every browser-consuming route bills against one bucket and no single
+  // visitor can spend the account's allowance.
+  //
+  // Honest about what this is: the Rate Limiting binding counts per COLO, so a
+  // fixed key buys per-colo-global, not truly account-wide. Traffic spread over
+  // N colos can still total N x max. That is a large improvement over per-IP and
+  // is not a guarantee — the guarantee is the 429 handling below, which treats
+  // an upstream refusal as a normal outcome rather than a fault.
+  browserAll: { binding: "LENS_RL_BROWSER_ALL", max: 4, key: "browser-run" },
 };
 
 // Returns true when the caller is already over their per-minute budget.
@@ -177,7 +206,9 @@ export const LENS_BUDGETS = {
 export async function overLensBudget(budget, request, env) {
   const limiter = env && env[budget.binding];
   if (!limiter || typeof limiter.limit !== "function") return false;
-  const ip = request.headers.get("cf-connecting-ip") || "0.0.0.0";
+  // A budget carrying a fixed `key` is a SHARED ceiling rather than a per-caller
+  // one: everybody bills against the same bucket on purpose.
+  const ip = budget.key || request.headers.get("cf-connecting-ip") || "0.0.0.0";
   try {
     const { success } = await limiter.limit({ key: ip });
     return !success;
@@ -443,8 +474,15 @@ async function inspectLensRequest(request, env, ctx) {
     return { status: 429, payload: { ok: false, error: "Slow down — 30 lookups a minute. Try again shortly." } };
   }
 
+  // ?phases=page returns only what derives from the page's own bytes: one
+  // subrequest instead of twenty-eight. The UI asks for this first so readiness
+  // paints at ~29ms rather than behind a 656ms fan-out, then asks for the rest.
+  const phases = new URL(request.url).searchParams.get("phases") === "page"
+    ? ["page"]
+    : undefined;
+
   try {
-    return { status: 200, payload: await lensInspect(v.url, env) };
+    return { status: 200, payload: await lensInspect(v.url, env, phases ? { phases } : {}) };
   } catch (e) {
     const msg = e && e.name === "AbortError" ? "The site took too long to answer (8s timeout)." : (e && e.message) || String(e);
     return { status: 502, payload: { ok: false, error: msg } };
@@ -1139,7 +1177,7 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
       // policy than the site default (which has no frame-src → falls back to
       // default-src 'self' and blocks every cross-origin iframe). This relaxes
       // ONLY frame-src (any https origin, for the live iframe) and img-src
-      // (blob: for the Browser Rendering screenshot, https: for OG-card art);
+      // (blob: for the Browser Run screenshot, https: for OG-card art);
       // everything else stays locked down. withSecurityHeaders sees a CSP is
       // already present and leaves it alone. frame-ancestors 'none' keeps OTHER
       // sites from embedding /lens itself.
@@ -1167,6 +1205,11 @@ export async function handleLensShot(request, env, ctx) {
   // screenshots are the expensive path — tighter per-IP limit + a KV cache.
   if (await overLensBudget(LENS_BUDGETS.shot, request, env)) {
     return jsonResponse({ ok: false, error: `Snapshots are rate-limited to ${LENS_BUDGETS.shot.max}/min. Hang on a moment.` }, 429);
+  }
+  // The shared ceiling is checked AFTER the per-caller one, so a single heavy
+  // visitor is turned away by their own budget before they can spend everyone's.
+  if (await overLensBudget(LENS_BUDGETS.browserAll, request, env)) {
+    return jsonResponse({ ok: false, error: "The shared browser budget for this minute is spent. Try again shortly." }, 429);
   }
 
   const cacheKey = "lens:shot:" + (await lensSha256Hex(v.url));
@@ -1211,6 +1254,18 @@ export async function handleLensShot(request, env, ctx) {
       return jsonResponse({ ok: false, error: "Browser Run request failed: " + ((e && e.message) || e) }, 502);
     }
     const ctype = r.headers.get("content-type") || "";
+    // Browser Run refusing us is NOT the target site failing, and the old code
+    // reported both as a 502. On the free plan that is the single most likely
+    // response here — one Quick Action per 10 seconds account-wide — so the
+    // common case was being dressed up as an upstream fault, pointing whoever
+    // debugged it at the scanned site instead of at our own budget.
+    if (r.status === 429) {
+      s.setAttribute("lens.outcome", "browser_budget_spent");
+      return jsonResponse({
+        ok: false,
+        error: `Browser Run is rate-limited right now (free plan: ${BROWSER_FREE_PLAN.perMinute}/min account-wide, ${BROWSER_FREE_PLAN.perDayMinutes} min/day). The live frame and every machine lens still work.`,
+      }, 429);
+    }
     if (!r.ok || !ctype.startsWith("image/")) {
       let detail = "";
       try { detail = (await r.text()).slice(0, 300); } catch (_e) {}
@@ -1221,7 +1276,11 @@ export async function handleLensShot(request, env, ctx) {
     const buf = await r.arrayBuffer();
     s.setAttribute("lens.outcome", "ok");
     s.setAttribute("lens.png_bytes", buf.byteLength);
-    if (env.RN_KV) ctx.waitUntil(env.RN_KV.put(cacheKey, buf, { expirationTtl: 3600 }));
+    // 6h, up from 1h. On the free plan a MISS costs a slice of a 6-per-minute,
+    // 10-minute-a-day allowance, while a stale screenshot costs a slightly old
+    // picture of a page that mostly did not change. The cache is the real budget
+    // control here; the rate limits only stop a burst.
+    if (env.RN_KV) ctx.waitUntil(env.RN_KV.put(cacheKey, buf, { expirationTtl: 21600 }));
     return new Response(buf, { headers: lensPngHeaders(false) });
   });
 }
@@ -1242,7 +1301,7 @@ const LENS_BROWSER_KV_MAX = 20_000_000;
 export async function handleLensBrowser(request, env, ctx) {
   const v = validateLensTarget(new URL(request.url).searchParams.get("url") || "");
   if (!v.ok) return jsonResponse({ ok: false, error: v.error }, 400);
-  if (!env.BROWSER || typeof env.BROWSER.quickAction !== "function") return jsonResponse({ ok: false, error: "Browser Run is not configured on this deployment." }, 503);
+  if (!hasRenderEngine(env)) return jsonResponse({ ok: false, error: "Browser Run is not configured on this deployment." }, 503);
 
   // The throw-guard that used to be spelled out here now lives inside
   // overLensBudget, and the reason it existed is worth keeping: an unhandled
@@ -1250,6 +1309,12 @@ export async function handleLensBrowser(request, env, ctx) {
   // HTML 1101 page, which the client then tries to JSON.parse.
   if (await overLensBudget(LENS_BUDGETS.browser, request, env)) {
     return jsonResponse({ ok: false, error: `Browser Run snapshots are rate-limited to ${LENS_BUDGETS.browser.max}/min. Hang on a moment.` }, 429);
+  }
+  // Same shared ceiling as /lens/shot. Two routes drawing on one account-wide
+  // allowance have to bill against one bucket, or each stays politely under a
+  // limit that the pair of them blows through together.
+  if (await overLensBudget(LENS_BUDGETS.browserAll, request, env)) {
+    return jsonResponse({ ok: false, error: "The shared browser budget for this minute is spent. Try again shortly." }, 429);
   }
 
   const cacheKey = "lens:browser:" + (await lensSha256Hex(v.url));
@@ -1286,8 +1351,19 @@ export async function handleLensBrowser(request, env, ctx) {
   };
 
   let response;
+  let engine = "chromium-binding";
   try {
-    response = await span("lens.browser.quick_action", () => env.BROWSER.quickAction("snapshot", payload));
+    // Routed through the engine seam so Kitesurf can serve this when a REST
+    // token is present. Still returns a Response, because the four distinct 502
+    // shapes below are the point and must not be flattened into one.
+    const run = await span("lens.browser.quick_action", () => runBrowserAction("snapshot", payload, env));
+    if (!run) {
+      s.setAttribute("lens.outcome", "no_engine");
+      return jsonResponse({ ok: false, error: "Browser Run is not configured on this deployment." }, 503);
+    }
+    response = run.response;
+    engine = run.engine;
+    s.setAttribute("lens.render_engine", engine);
   } catch (e) {
     s.setAttribute("lens.outcome", "binding_threw");
     s.setAttribute("lens.error", (e && e.message) || String(e));
@@ -1339,6 +1415,15 @@ export async function handleLensBrowser(request, env, ctx) {
     // the real runtime listing; this field keeps that boundary explicit.
     webmcp: { status: "lab-required", detail: "Runtime WebMCP listing requires the local Browser Run Chrome-beta lab. Use scripts/lens-webmcp.mjs." },
     fetchedBy: "Cloudflare Browser Run",
+    // WHICH engine rendered this. A reader comparing two snapshots needs to know
+    // whether they came from the same one, and "Browser Run" alone stopped being
+    // a specific enough answer the moment Kitesurf existed.
+    engine,
+    // Counted from the FULL body, before the 120KB content cap above, so a
+    // truncated `content` field cannot quietly shrink the comparison. The
+    // client's deltaStrip subtracts this from the HTTP anatomy.
+    shape: documentShape(rawContent),
+    shapeTruncated: rawContent.length > 120000,
     elapsedMs: Date.now() - started,
   };
   s.setAttribute("lens.outcome", "ok");
@@ -1428,6 +1513,11 @@ export function lensObservationSummary(result) {
     title: String(title).slice(0, 240),
     wordCount: anatomy.wordCount ?? 0,
     bytes: anatomy.rawBytes ?? null,
+    // A prefix parse must be visible. Silently reporting a 2MB page's first
+    // 256KB as its word count and its cost is the same class of error as
+    // calling an unreachable door a shut one.
+    parsedBytes: anatomy.parsedBytes ?? anatomy.rawBytes ?? null,
+    parseTruncated: !!anatomy.parseTruncated,
     readiness: readiness.overall ?? null,
     level: readiness.level ?? null,
     levelName: readiness.levelName ?? null,
@@ -1442,6 +1532,10 @@ export function lensObservationSummary(result) {
       if (!base || !rate) return null;
       return { tokens: base.tokens, usdPerRead: +(base.tokens / 1e6 * rate.usdPerMtok).toFixed(4), model: rate.model };
     })(),
+    // Carried so a caller can tell a zero from an absence. Without it a
+    // page-only scan reports `doors: 0` and `readiness: null`, which reads as a
+    // verdict rather than as "that phase did not run".
+    phases: result?.phases || { page: true, discovery: true, botViews: true },
     surfaces: {
       llms: !!result?.discovery?.llmsTxt?.ok,
       markdown: !!result?.agent?.mdNegotiation?.supported,
@@ -1595,29 +1689,62 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
   if (isHtml && body) {
     await span("lens.inspect.parse", async (s) => {
     s.setAttribute("lens.body_bytes", body.length);
-    const attrs = await lensExtractAttrs(body);
+    // ── the parse budget ─────────────────────────────────────────────────
+    // This is the one genuinely CPU-BOUND thing lens does, and it was bounded
+    // only by the 2MB fetch cap. lensText and lensMarkdown are regex chains —
+    // roughly thirty sequential global replaces, each allocating a new string —
+    // so cost is linear in bytes handed to them.
+    //
+    // MEASURED (node, same V8, synthetic HTML): ~32ms per MB.
+    //    64 KB → 3.2ms    256 KB →  8.0ms    752 KB → 24.2ms    2 MB → 64.2ms
+    // Serialization of the result is noise beside it (0.1–1.1ms).
+    //
+    // 2MB of parse cannot fit anywhere near the Workers FREE ceiling of 10ms
+    // CPU per invocation, and even on Paid it is 64ms spent on a page nobody
+    // reads past the first screen of. Capping the PARSE (not the fetch) bounds
+    // the worst case without changing the common one: the median page is far
+    // under this and is unaffected.
+    // Overridable per deployment, so moving lens onto the free plan is a var
+    // flip rather than a code change: set LENS_PARSE_KB=64 in wrangler.jsonc.
+    const cap = Math.max(8, Number(env?.LENS_PARSE_KB) || 0) * 1024 || LENS_PARSE_CAP;
+    const parseable = body.length > cap ? body.slice(0, cap) : body;
+    const parseTruncated = parseable.length < body.length;
+    s.setAttribute("lens.parsed_bytes", parseable.length);
+    s.setAttribute("lens.parse_truncated", parseTruncated);
+
+    const attrs = await lensExtractAttrs(parseable);
     const jsonld = attrs.jsonld.map(lensParseJsonld);
-    const fullText = lensText(body);
+    const fullText = lensText(parseable);
     out.anatomy = {
-      rawHtml: body.length > 80000 ? body.slice(0, 80000) : body,
+      rawHtml: parseable.length > 80000 ? parseable.slice(0, 80000) : parseable,
+      // rawBytes stays the TRUE length. We know it from the fetch even when we
+      // decline to parse all of it, and reporting the prefix as the page's size
+      // would be a straightforward lie about the thing being measured.
       rawBytes: body.length,
-      headings: lensHeadings(body),
+      parsedBytes: parseable.length,
+      parseTruncated,
+      headings: lensHeadings(parseable),
       text: fullText.slice(0, 24000),
       imgTotal: attrs.imgTotal, imgNoAlt: attrs.imgNoAlt,
     };
     out.anatomy.wordCount = out.anatomy.text ? out.anatomy.text.split(/\s+/).filter(Boolean).length : 0;
     out.structured = {
-      title: (body.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [, ""])[1].replace(/\s+/g, " ").trim(),
+      title: (parseable.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [, ""])[1].replace(/\s+/g, " ").trim(),
       meta: attrs.meta, og: attrs.og, twitter: attrs.twitter, jsonld,
       microdata: { itemtypes: [...attrs.microItemtypes], props: [...attrs.microProps] },
       rdfa: { typeof: [...attrs.rdfaTypeof], properties: [...attrs.rdfaProps] },
       microformats: [...attrs.mf],
       relLinks: attrs.relLinks.map((l) => ({ ...l, href: lensAbs(l.href, finalUrl) })),
     };
-    out.ai = { markdown: lensMarkdown(body, finalUrl) };
+    out.ai = { markdown: lensMarkdown(parseable, finalUrl) };
     // context economics: the same page, priced per representation an agent
     // could ingest. Full (unsliced) lengths — the slices above are UI caps.
-    out.cost = lensCost({ html: body.length, text: fullText.length, markdown: out.ai.markdown.length, headings: out.anatomy.headings });
+    // Priced on what was actually parsed, and flagged when that is a prefix.
+    // Extrapolating to the full byte count would be inventing a number: token
+    // density is not uniform across a document, and the tail of a big page is
+    // usually markup rather than prose.
+    out.cost = lensCost({ html: parseable.length, text: fullText.length, markdown: out.ai.markdown.length, headings: out.anatomy.headings });
+    if (parseTruncated) out.cost.partial = { parsedBytes: parseable.length, rawBytes: body.length };
     s.setAttribute("lens.word_count", out.anatomy.wordCount);
     s.setAttribute("lens.markdown_bytes", out.ai.markdown.length);
     });
@@ -1627,6 +1754,23 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
     out.anatomy.wordCount = out.anatomy.text ? out.anatomy.text.split(/\s+/).filter(Boolean).length : 0;
     out.cost = lensCost({ raw: body.length });
   }
+
+  // ── the probe/derive seam ─────────────────────────────────────────────
+  // Everything above this line DERIVES from bytes already in hand: anatomy,
+  // structured data, markdown, token cost. Zero further network. Everything
+  // below needs the fan-out.
+  //
+  // A caller that only wants the derived half can stop here and pay one
+  // subrequest instead of twenty-eight, which is what lets a UI paint readiness
+  // immediately and fill the rest in behind it.
+  //
+  // The fields below are then ABSENT rather than empty. That distinction is the
+  // whole reason this is a phase flag and not a filter: a readiness score
+  // computed without discovery is not a partial score, it is a WRONG one, and
+  // `doors: 0` would read as "this site has no agent doors" when it means
+  // "nobody looked". Same rule as lib/doors.js's shut-versus-unread.
+  out.phases = { page: true, discovery: false, botViews: false };
+  if (opts.phases && !opts.phases.includes("discovery")) return out;
 
   // site-level discovery — probe the origin's well-known files + agent doors
   // in parallel.
@@ -1656,44 +1800,44 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
     // `out.elapsedMs` was already fixed above. Each probe shows up as an
     // auto-instrumented child fetch under this span, named by its URL, so "which
     // well-known file is the slow one" answers itself.
-    const [robots, sitemap, llms, llmsFull, aiTxt, secTxt, tdmrep, agentCard, openapi, aiPlugin, apiCatalog, mcp, nlweb, mdNego, webBotAuth, openidConfig, oauthServer, oauthResource, authMd, mcpServerCard, agentSkills, ucp, acp, ap2, agentsMd, dnsAid, ech, botViews] = await span("lens.discovery", (s) => {
+    // ── the fan-out, split on the seam that decides its cost ──────────────
+    // 26 of these 28 probes depend only on the ORIGIN: robots.txt, llms.txt, the
+    // well-known files, the MCP endpoint, DNS-AID. Nothing about them changes
+    // with which page you scanned, and they were being re-fetched on every scan
+    // anyway — 656ms of a measured 685ms, for answers that were already known.
+    //
+    // So they move behind an origin-keyed cache (originDiscovery below) and only
+    // the genuinely per-URL pair stays live: Markdown negotiation, which is a
+    // property of the document rather than the site, and the bot-view sampling,
+    // which refetches THIS url as six crawlers.
+    const disco = await originDiscovery(origin, new URL(finalUrl).hostname, env, { selfLens });
+    const {
+      robots, sitemap, llms, llmsFull, aiTxt, secTxt, tdmrep, agentCard, openapi, aiPlugin,
+      apiCatalog, mcp, nlweb, webBotAuth, openidConfig, oauthServer, oauthResource, authMd,
+      mcpServerCard, agentSkills, ucp, acp, ap2, agentsMd, dnsAid, ech,
+    } = disco;
+
+    const [mdNego, botViews] = await span("lens.discovery.per_url", (s) => {
       s.setAttribute("lens.origin_host", safeHost(origin));
-      s.setAttribute("lens.self_lens", selfLens);
+      s.setAttribute("lens.discovery_cached", !!disco.cached);
       return Promise.all([
-      lensProbe(origin + "/robots.txt", env), lensProbe(origin + "/sitemap.xml", env),
-      lensProbe(origin + "/llms.txt", env), lensProbe(origin + "/llms-full.txt", env),
-      lensProbe(origin + "/ai.txt", env), lensProbe(origin + "/.well-known/security.txt", env),
-      lensProbe(origin + "/.well-known/tdmrep.json", env),
-      lensProbe(origin + "/.well-known/agent-card.json", env),
-      lensProbe(origin + "/openapi.json", env),
-      lensProbe(origin + "/.well-known/ai-plugin.json", env),
-      lensProbe(origin + "/.well-known/api-catalog", env),
-      lensProbeMcp(origin, env),
-      lensProbeNlweb(origin, env),
-      isHtml && !selfLens ? lensProbeMdNego(finalUrl, env) : Promise.resolve(null),
-      lensProbe(origin + "/.well-known/http-message-signatures-directory", env),
-      lensProbe(origin + "/.well-known/openid-configuration", env),
-      lensProbe(origin + "/.well-known/oauth-authorization-server", env),
-      lensProbe(origin + "/.well-known/oauth-protected-resource", env),
-      lensProbe(origin + "/auth.md", env),
-      lensProbe(origin + "/.well-known/mcp/server-card.json", env),
-      lensProbe(origin + "/.well-known/agent-skills/index.json", env),
-      lensProbe(origin + "/.well-known/ucp", env),
-      lensProbe(origin + "/.well-known/acp.json", env),
-      lensProbe(origin + "/.well-known/ap2", env),
-      lensProbeAgentsMd(origin, env),
-      lensProbeDnsAid(new URL(finalUrl).hostname),
-      lensProbeEch(new URL(finalUrl).hostname),
-      // bot-view sampling is 6 extra fetches per scan. The census (opts.skipBotViews)
-      // only needs tier/score/doors, so it skips them to stay well under the
-      // per-invocation subrequest budget when sweeping the whole roster. Its own
-      // span because it is the single heaviest entry in this list and the only
-      // one that gets skipped — a scan missing it should look different.
-      (selfLens || opts.skipBotViews)
-        ? Promise.resolve([])
-        : span("lens.discovery.bot_views", () => lensProbeBotViews(finalUrl, env)),
+        isHtml && !selfLens ? lensProbeMdNego(finalUrl, env) : Promise.resolve(null),
+        // bot-view sampling is 6 extra fetches per scan. The census
+        // (opts.skipBotViews) only needs tier/score/doors, so it skips them to
+        // stay well under the per-invocation subrequest budget when sweeping the
+        // whole roster. Its own span because it is the single heaviest entry
+        // here and the only one that gets skipped — a scan missing it should
+        // look different.
+        (selfLens || opts.skipBotViews)
+          ? Promise.resolve([])
+          : span("lens.discovery.bot_views", () => lensProbeBotViews(finalUrl, env)),
       ]);
     });
+
+    out.phases.discovery = true;
+    out.phases.botViews = Array.isArray(botViews) && botViews.length > 0;
+    out.phases.discoveryCached = !!disco.cached;
+
     const feeds = (out.structured?.relLinks || []).filter((l) =>
       /alternate/.test(l.rel) && /(rss|atom|feed|\+xml|\+json)/i.test((l.type || "") + " " + (l.href || "")));
     out.discovery = {
@@ -1855,6 +1999,100 @@ async function lensProbeEch(hostname) {
 // the scanner recognizes through Cloudflare's DNS-over-HTTPS endpoint and keep
 // the result deliberately small: Lens is showing whether a door exists, not
 // pretending to be a full DNS debugger.
+// ── origin-level discovery, cached ────────────────────────────────────────
+// The 26 probes that depend on the ORIGIN and not on which page you scanned.
+//
+// This is where lens's cost lived. A production trace of a 752KB page measured
+// lens.inspect at 685ms, of which lens.discovery was 656 — and every byte of
+// that 656ms was re-asking one host the same 26 questions it had already
+// answered. Scanning a second page on the same site paid it again in full.
+//
+// Cached in caches.default rather than KV ON PURPOSE: KV carries a ~10K
+// writes/day budget this repo is already careful with, and a scan burst would
+// eat it. The Cache API is per-colo and costs nothing, which is the right trade
+// for data that is cheap to re-derive on a miss.
+//
+// Six hours because these files change on the order of deploys, not requests,
+// and a stale llms.txt is a far smaller error than a lens nobody can afford to
+// run. `fresh` bypasses for a caller that needs the live answer.
+const DISCOVERY_TTL = 21600;
+// Bodies are capped at 256KB each by lensProbe, so a pathological origin could
+// serialize to megabytes. Skip caching rather than truncate: truncating would
+// silently change what /lens DISPLAYS, and a cache miss only costs what the old
+// code paid every time.
+const DISCOVERY_MAX_BYTES = 1_000_000;
+
+const discoveryKey = (origin) => new Request(`https://lens-discovery.invalid/v1/${encodeURIComponent(origin)}`);
+
+export async function originDiscovery(origin, hostname, env, opts = {}) {
+  // `caches` is a Workers global and does not exist under plain node, where the
+  // contract tests import this module. Absent cache means every call is a live
+  // fan-out, which is exactly the previous behaviour.
+  const cache = typeof caches !== "undefined" ? caches.default : null;
+  const key = discoveryKey(origin);
+
+  if (cache && !opts.fresh) {
+    try {
+      const hit = await cache.match(key);
+      if (hit) {
+        const cached = await hit.json();
+        return { ...cached, cached: true };
+      }
+    } catch { /* a cache read must never cost the scan */ }
+  }
+
+  const result = await span("lens.discovery", async (s) => {
+    s.setAttribute("lens.origin_host", safeHost(origin));
+    s.setAttribute("lens.discovery_cached", false);
+    const [
+      robots, sitemap, llms, llmsFull, aiTxt, secTxt, tdmrep, agentCard, openapi, aiPlugin,
+      apiCatalog, mcp, nlweb, webBotAuth, openidConfig, oauthServer, oauthResource, authMd,
+      mcpServerCard, agentSkills, ucp, acp, ap2, agentsMd, dnsAid, ech,
+    ] = await Promise.all([
+      lensProbe(origin + "/robots.txt", env), lensProbe(origin + "/sitemap.xml", env),
+      lensProbe(origin + "/llms.txt", env), lensProbe(origin + "/llms-full.txt", env),
+      lensProbe(origin + "/ai.txt", env), lensProbe(origin + "/.well-known/security.txt", env),
+      lensProbe(origin + "/.well-known/tdmrep.json", env),
+      lensProbe(origin + "/.well-known/agent-card.json", env),
+      lensProbe(origin + "/openapi.json", env),
+      lensProbe(origin + "/.well-known/ai-plugin.json", env),
+      lensProbe(origin + "/.well-known/api-catalog", env),
+      lensProbeMcp(origin, env),
+      lensProbeNlweb(origin, env),
+      lensProbe(origin + "/.well-known/http-message-signatures-directory", env),
+      lensProbe(origin + "/.well-known/openid-configuration", env),
+      lensProbe(origin + "/.well-known/oauth-authorization-server", env),
+      lensProbe(origin + "/.well-known/oauth-protected-resource", env),
+      lensProbe(origin + "/auth.md", env),
+      lensProbe(origin + "/.well-known/mcp/server-card.json", env),
+      lensProbe(origin + "/.well-known/agent-skills/index.json", env),
+      lensProbe(origin + "/.well-known/ucp", env),
+      lensProbe(origin + "/.well-known/acp.json", env),
+      lensProbe(origin + "/.well-known/ap2", env),
+      lensProbeAgentsMd(origin, env),
+      lensProbeDnsAid(hostname),
+      lensProbeEch(hostname),
+    ]);
+    return {
+      robots, sitemap, llms, llmsFull, aiTxt, secTxt, tdmrep, agentCard, openapi, aiPlugin,
+      apiCatalog, mcp, nlweb, webBotAuth, openidConfig, oauthServer, oauthResource, authMd,
+      mcpServerCard, agentSkills, ucp, acp, ap2, agentsMd, dnsAid, ech,
+    };
+  });
+
+  if (cache) {
+    try {
+      const body = JSON.stringify(result);
+      if (body.length <= DISCOVERY_MAX_BYTES) {
+        await cache.put(key, new Response(body, {
+          headers: { "content-type": "application/json", "cache-control": `max-age=${DISCOVERY_TTL}` },
+        }));
+      }
+    } catch { /* a cache write must never cost the scan either */ }
+  }
+  return { ...result, cached: false };
+}
+
 export async function lensProbeDnsAid(hostname) {
   const names = ["_index._agents.", "_a2a._agents.", "_mcp._agents."].map((prefix) => prefix + hostname);
   try {
@@ -1936,15 +2174,28 @@ export function lensProbeBotViews(targetUrl, env) {
 }
 
 // small, forgiving probe for a single site-level file.
-export async function lensProbe(url, env) {
+// `accept` is optional and forwards to lensFetch, which has always taken one.
+// lib/doors.js needs it to ask a page for its Markdown twin at the page's own
+// URL; every existing caller omits it and gets the previous default.
+export async function lensProbe(url, env, accept) {
   try {
     const ctrl = new AbortController();
     const to = setTimeout(() => ctrl.abort(), 5000);
     let res;
-    try { res = await lensFetch(url, env, ctrl.signal); } finally { clearTimeout(to); }
-    if (!res.ok) { try { await res.body?.cancel(); } catch (_e) {} return { ok: false, status: res.status, url }; }
+    try { res = await lensFetch(url, env, ctrl.signal, accept); } finally { clearTimeout(to); }
+    if (!res.ok) {
+      try { await res.body?.cancel(); } catch (_e) {}
+      const headers = {};
+      for (const [key, value] of res.headers) headers[key.toLowerCase()] = value;
+      return { ok: false, status: res.status, url, headers };
+    }
     const cap = await lensReadCapped(res, 256 * 1024);
-    return { ok: true, status: res.status, url, contentType: res.headers.get("content-type") || "", body: cap.text, truncated: cap.truncated };
+    // `headers` is additive and exists for dict.js, whose whole subject is the
+    // response headers rather than the body. Flattened to a plain object so the
+    // audit can be a pure function of it and therefore testable without a fetch.
+    const headers = {};
+    for (const [key, value] of res.headers) headers[key.toLowerCase()] = value;
+    return { ok: true, status: res.status, url, contentType: res.headers.get("content-type") || "", headers, body: cap.text, truncated: cap.truncated };
   } catch (e) { return { ok: false, error: (e && e.message) || String(e), url }; }
 }
 
@@ -2278,11 +2529,36 @@ export async function lensProbeMdNego(pageUrl, env) {
   } catch (_e) { return { supported: false, note: "probe failed" }; }
 }
 
-// WebMCP is a page-level JS API (navigator.modelContext), so the marker lives
-// in the HTML we already fetched — no extra request.
+// WebMCP is a page-level JS API, so the marker lives in the HTML we already
+// fetched — no extra request. Two shapes reach that HTML, and until 2026-08-06
+// this only knew the first:
+//
+//   inline — the site calls document.modelContext.registerTool() itself, so the
+//     call sites are right there in the document.
+//   bridge — the site turns WebMCP on at its CDN and a LOADER tag is injected;
+//     every registerTool call lives in the external module, where a scan of the
+//     document cannot see it. Cloudflare's is `<script type="module"
+//     src="/.webmcp/bridge.js" data-packs="…">`, injected by HTMLRewriter at the
+//     edge, and it proxies the origin's own MCP server (`data-mcp-url`, default
+//     `/mcp`) into the page.
+//
+// Missing the bridge shape mattered more every week: it is one dashboard toggle,
+// so the population of sites carrying it grows without any of them writing a line
+// of code, and a scan calling all of them "no WebMCP" would have been quietly
+// wrong at increasing scale. `kind` is reported because the two are genuinely
+// different claims — inline means somebody wrote tools for this page, bridge means
+// an MCP server got hoisted into it — and a reader deserves to tell them apart.
+const WEBMCP_MARKERS = [
+  { kind: "inline", re: /navigator\.modelContext|document\.modelContext|modelContext\.(?:registerTool|provideContext)|window\.webmcp/i },
+  { kind: "bridge", re: /\/\.webmcp\/bridge\.js|\bdata-(?:packs|mcp-url)=/i },
+];
 export function lensDetectWebmcp(html) {
-  const m = String(html || "").match(/navigator\.modelContext|modelContext\.(?:registerTool|provideContext)|window\.webmcp/i);
-  return m ? { found: true, marker: m[0] } : { found: false };
+  const body = String(html || "");
+  for (const { kind, re } of WEBMCP_MARKERS) {
+    const m = body.match(re);
+    if (m) return { found: true, kind, marker: m[0] };
+  }
+  return { found: false };
 }
 
 // a well-known JSON probe only counts if the body parses AND has the right
@@ -2468,7 +2744,10 @@ export function lensReadiness({ headers, robots, sitemap, terms, discovery, agen
   items.mcpServerCard = lensReadinessItem("mcpServerCard", mcpCard.status, mcpCard.detail);
   items.a2aAgentCard = lensReadinessItem("a2aAgentCard", agent && agent.agentCard && agent.agentCard.present ? "pass" : "fail", agent && agent.agentCard && agent.agentCard.present ? agent.agentCard.detail : "no valid A2A Agent Card");
   items.agentSkills = lensReadinessItem("agentSkills", skills.status, skills.detail);
-  items.webMcp = lensReadinessItem("webMcp", agent && agent.webmcp && agent.webmcp.found ? "pass" : "fail", agent && agent.webmcp && agent.webmcp.found ? "modelContext marker found in page" : "no WebMCP marker found in the fetched HTML");
+  items.webMcp = lensReadinessItem("webMcp", agent && agent.webmcp && agent.webmcp.found ? "pass" : "fail",
+    agent && agent.webmcp && agent.webmcp.found
+      ? (agent.webmcp.kind === "bridge" ? "a CDN-injected bridge loads this origin's MCP tools into the page" : "modelContext call sites in the page")
+      : "no WebMCP marker found in the fetched HTML");
   items.x402 = lensReadinessItem("x402", terms && terms.paid && terms.paid.http402 ? "pass" : "neutral", terms && terms.paid && terms.paid.http402 ? "HTTP 402 payment requirement observed" : "not observed (optional; not scored)");
   const openapiText = openapi && openapi.ok ? String(openapi.body || "") : "";
   items.mpp = lensReadinessItem("mpp", /x-payment-info|mpp/i.test(openapiText) ? "pass" : "neutral", /x-payment-info|mpp/i.test(openapiText) ? "payment metadata found in OpenAPI" : "not observed (optional; not scored)");

@@ -350,12 +350,42 @@
     // injected and then overwritten in this same synchronous block, never once painted.
     // The server-side pane renderers it used live on: renderLensShell still SSRs them
     // for the no-JS path at /lens?url=, and this client hydrates from #lx-initial-data.
-    fetch("/lens/fetch?url=" + encodeURIComponent(url))
-      .then(function (r) {
-        var ct = r.headers.get("content-type") || "";
-        if (ct.indexOf("json") < 0) throw new Error("The lens engine returned an unexpected response.");
-        return r.json();
+    // ── two passes, because the two halves cost wildly different amounts ──
+    // A production trace put the scan at 685ms, of which the origin-level
+    // fan-out was 656 and the page fetch was 29. The page's own bytes are all
+    // the Human pane and the status bar ever needed, so they no longer wait
+    // behind twenty-six well-known probes.
+    //
+    // Pass 1 asks for `phases=page` (one subrequest) and paints what it can
+    // honestly fill. Pass 2 asks for the whole scan and repaints everything.
+    // The renderers are re-entrant, so this is two calls rather than a
+    // restructured pipeline.
+    //
+    // renderMachine is deliberately NOT called on pass 1: its panes are agent
+    // doors, terms and readiness, every one of which needs discovery. Drawing
+    // them from a page-only payload would show "no agent doors" for a site that
+    // simply had not been checked yet, which is the exact lie the phases flag
+    // exists to prevent.
+    var scan = function (phases) {
+      return fetch("/lens/fetch?url=" + encodeURIComponent(url) + (phases ? "&phases=" + phases : ""))
+        .then(function (r) {
+          var ct = r.headers.get("content-type") || "";
+          if (ct.indexOf("json") < 0) throw new Error("The lens engine returned an unexpected response.");
+          return r.json();
+        });
+    };
+
+    scan("page")
+      .then(function (j) {
+        if (!j || !j.ok) return;         // pass 2 is authoritative; stay quiet here
+        data = j;
+        renderHuman();
+        renderStatus();
+        machineBody.innerHTML = '<div class="lx-spin">Read the page. Checking agent surfaces&hellip;</div>';
       })
+      // A failed fast pass must not abort the real one, so swallow and continue.
+      .catch(function () {})
+      .then(function () { return scan(); })
       .then(function (j) {
         busy = false;
         if (!j || !j.ok) {
@@ -485,7 +515,7 @@
 
   // ---- human pane: a live browser window --------------------------------
   // Framable site → embed it live (loaded by your browser, your session, like
-  // a real tab). Site that forbids framing → a server-side Browser Rendering
+  // a real tab). Site that forbids framing → a server-side Browser Run
   // screenshot. Neither available → the readable-text reader as a last resort.
   function setHumanH(badge, sub) {
     var el = document.getElementById("lx-human-h");
@@ -563,7 +593,7 @@
   // Browser Run fires itself once a scan lands: the third pane filling on its
   // own is what makes Compare a triptych instead of two panes and a button.
   // Coarse pointers keep the opt-in button (a phone should not spend the 4/min
-  // Browser Rendering budget by default), and a 429 lands in lens-browser.js's
+  // Browser Run budget by default), and a 429 lands in lens-browser.js's
   // Try-again state, so the fallback is the old behavior exactly.
   function maybeAutoRunBrowser() {
     if (browserData || browserBusy || !data) return;
@@ -1088,8 +1118,15 @@
     // sees and fn() then calls. Nothing dangerous comes back, just "[object
     // Object]" where a lens should be — but the fallback exists precisely so an
     // unknown lens name lands on lensAnatomy, and inheritance quietly voids it.
-    var LENS_FN = { readiness: lensReadiness, anatomy: lensAnatomy, structured: lensStructured, ai: lensAI, terms: lensTerms, discovery: lensDiscovery };
-    var fn = Object.prototype.hasOwnProperty.call(LENS_FN, lens) ? LENS_FN[lens] : lensAnatomy;
+    var LENS_FN = Object.create(null);
+    LENS_FN.readiness = lensReadiness;
+    LENS_FN.anatomy = lensAnatomy;
+    LENS_FN.structured = lensStructured;
+    LENS_FN.ai = lensAI;
+    LENS_FN.terms = lensTerms;
+    LENS_FN.discovery = lensDiscovery;
+    var candidate = Object.prototype.hasOwnProperty.call(LENS_FN, lens) ? LENS_FN[lens] : null;
+    var fn = typeof candidate === "function" ? candidate : lensAnatomy;
     var body = view === "machine" ? machineBrief() + '<div class="lx-machine-block">' + section("Selected evidence lens", { text: LENS_LABEL[lens] }, "The original inspector remains available below the briefing.", fn()) + "</div>"
       : view === "delta" ? deltaView() : fn();
     // the dollar thesis rides above every scanned lens except Delta (which runs its
@@ -1368,7 +1405,9 @@
       nl.verdict === "maybe" ? "NLWeb-shaped" : "absent", nl.verdict === "maybe" ? "warn" : "off", nl.detail);
     var wm = ag.webmcp || {};
     row("WebMCP", "in-page tools for browser agents (Chrome/W3C draft)",
-      wm.found ? "markers found" : "absent", wm.found ? "ok" : "off", wm.marker);
+      wm.found ? (wm.kind === "bridge" ? "CDN bridge" : "markers found") : "absent",
+      wm.found ? "ok" : "off",
+      wm.kind === "bridge" ? "an injected loader proxies this origin's MCP server into the page — " + wm.marker : wm.marker);
     var card = ag.agentCard || {};
     row(".well-known/agent-card.json", "A2A agent card — who this agent is, what it offers",
       card.present ? "found" : "absent", card.present ? "ok" : "off", card.detail || card.note);

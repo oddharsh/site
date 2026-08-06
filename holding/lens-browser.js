@@ -62,34 +62,74 @@
   // subtract. Words are the honest axis: bytes swing wildly with inlined
   // framework code, but a page that reads 30 words over HTTP and 2,000 after
   // JavaScript has been measured, not characterized.
+  //
+  // The headline is one number — how much of the rendered page a crawler that
+  // does not run JavaScript already had — because that is the claim this whole
+  // instrument exists to support, and it was previously left as an exercise in
+  // subtraction for the reader.
+  function pct(rawWords, renWords) {
+    if (!renWords) return null;                       // absent, never 0%
+    return Math.min(100, Math.round((rawWords / renWords) * 100));
+  }
+  function structural(shape, a) {
+    // Only the axes the HTTP side actually measured. anatomy carries images and
+    // their alt coverage but no heading or link totals, so claiming a delta on
+    // those would be inventing the "before" half of a comparison.
+    var rows = [];
+    if (shape.jsonld != null) rows.push([shape.jsonld, "JSON-LD block"]);
+    if (shape.headings != null) rows.push([shape.headings, "heading"]);
+    if (shape.links != null) rows.push([shape.links, "link"]);
+    return rows.map(function (r) {
+      return r[0] + " " + r[1] + (r[0] === 1 ? "" : "s");
+    }).join(" &middot; ");
+  }
   function deltaStrip(snapshot, data) {
     var a = data && data.anatomy;
     if (!a || a.rawBytes == null) return "";
     var renBytes = (snapshot.content || "").length;
-    // A capped render can't vote on words: comparing a full HTTP body against a
-    // truncated DOM produced confident nonsense (stripe: "1874 -> 139 words" off
-    // a 120KB slice). Same honesty rule as the rest of the instrument — what
-    // wasn't measured stays uncounted.
-    if (snapshot.contentTruncated) {
-      return '<div class="lx-browser-delta"><b>HTTP vs rendered:</b> ' +
-        esc(bytes(a.rawBytes)) + " &rarr; &ge;" + esc(bytes(renBytes)) +
-        " (the rendered body hit the capture cap). A word-level comparison needs the full body, so Lens leaves it uncounted.</div>";
-    }
     var rawWords = a.wordCount || 0;
-    var renWords = (snapshot.content || "")
-      .replace(/<(script|style|noscript|template|svg)[\s\S]*?<\/\1>/gi, " ")
-      .replace(/<[^>]+>/g, " ").split(/\s+/).filter(Boolean).length;
-    var verdict;
-    if (Math.abs(renWords - rawWords) <= Math.max(10, rawWords * 0.15)) {
-      verdict = "The HTTP fetch already carries this page; JavaScript changes little a reader needs.";
-    } else if (renWords > Math.max(rawWords * 3, rawWords + 150)) {
-      verdict = "This page is thin until JavaScript runs: a plain fetch gets " + rawWords + " of the " + renWords + " words a browser ends up with.";
-    } else {
-      verdict = "JavaScript reshapes this page: the rendered copy disagrees with the HTTP fetch.";
+    var shape = snapshot.shape;
+
+    // Old snapshots cached before the server started counting have no `shape`.
+    // Fall back to parsing the delivered body, which is what this did for its
+    // whole life — and keep the truncation bail with it, because a capped DOM
+    // compared against a full HTTP body produced confident nonsense
+    // (stripe: "1874 -> 139 words" off a 120KB slice).
+    if (!shape) {
+      if (snapshot.contentTruncated) {
+        return '<div class="lx-browser-delta"><b>HTTP vs rendered:</b> ' +
+          esc(bytes(a.rawBytes)) + " &rarr; &ge;" + esc(bytes(renBytes)) +
+          " (the rendered body hit the capture cap). A word-level comparison needs the full body, so Lens leaves it uncounted.</div>";
+      }
+      shape = { words: (snapshot.content || "")
+        .replace(/<(script|style|noscript|template|svg)[\s\S]*?<\/\1>/gi, " ")
+        .replace(/<[^>]+>/g, " ").split(/\s+/).filter(Boolean).length };
     }
-    return '<div class="lx-browser-delta"><b>HTTP vs rendered:</b> ' +
-      esc(bytes(a.rawBytes)) + " &rarr; " + esc(bytes(renBytes)) + (snapshot.contentTruncated ? "+" : "") +
-      " &middot; " + rawWords + " &rarr; " + renWords + " words. " + esc(verdict) + "</div>";
+
+    // The cap no longer silences the comparison. The server counts the shape
+    // from the FULL rendered body before truncating the `content` field, so a
+    // capped snapshot still yields honest word counts — which is exactly the
+    // case the old bail existed to refuse.
+    var renWords = shape.words || 0;
+    var share = pct(rawWords, renWords);
+    var headline;
+    if (share === null) {
+      headline = "The render returned no readable text, so there is nothing to compare against the HTTP fetch.";
+    } else if (Math.abs(renWords - rawWords) <= Math.max(10, rawWords * 0.15)) {
+      headline = "A crawler that never runs JavaScript sees essentially all of this page.";
+    } else if (renWords < rawWords) {
+      headline = "Rendering SHRANK this page: the HTTP fetch already carried more words than the browser ended up showing.";
+    } else {
+      headline = "A crawler that doesn't run JavaScript sees <b>" + share + "%</b> of this page: " +
+        rawWords + " of the " + renWords + " words a browser ends up with.";
+    }
+
+    var extra = structural(shape, a);
+    return '<div class="lx-browser-delta"><b>HTTP vs rendered:</b> ' + headline +
+      '<div class="lx-cap">' + esc(bytes(a.rawBytes)) + " &rarr; " + esc(bytes(renBytes)) +
+      (snapshot.contentTruncated ? "+" : "") + " &middot; " + rawWords + " &rarr; " + renWords + " words" +
+      (extra ? " &middot; after render: " + extra : "") +
+      (snapshot.engine ? " &middot; engine: " + esc(snapshot.engine) : "") + "</div></div>";
   }
 
   function summary(snapshot, data) {

@@ -12,6 +12,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
+  lensDetectWebmcp,
   handleLensBrowser,
   handleLensCompare,
   handleLensFetch,
@@ -26,8 +27,7 @@ import { citationsIn, findEndpointIn, SELF_LINK_HOSTS } from "./holding/_worker.
 import { sign } from "./cal/src/sign.js";
 import { AGENT_SURFACES, WEBMENTION_PATHS } from "./holding/_worker.js/lib/site-manifest.js";
 import { handleWritingIndex } from "./holding/_worker.js/writing.js";
-import { handleTerminal, tokenizeKeys } from "./holding/_worker.js/terminal.js";
-import { ASK_LIMITS, runAsk } from "./holding/_worker.js/ask.js";
+import { handleTerminal, handleTool, tokenizeKeys } from "./holding/_worker.js/terminal.js";
 import { DATA_TOOLS } from "./holding/_worker.js/lib/tools.js";
 import { cronJob } from "./holding/_worker.js/lib/cron.js";
 import { serveStaticPage } from "./holding/_worker.js/lib/assets.js";
@@ -37,7 +37,7 @@ import { INDEXED_SECTIONS, TWIN_FACTS, buildTwins, checkTwinFacts, htmlFileFor, 
 import { collectBlockClasses, readDocument } from "./scripts/lib/html-to-md.mjs";
 import { MCP_TOOLS, cookieJar, parseCookies } from "./serendipity/serendipity.js";
 import { MCP_SUPPORTED as MCP_SUPPORTED_VERSIONS } from "./holding/_worker.js/lib/mcp-protocol.js";
-import { derivePhotoPool, renderPhotosPage, getImagesManifest, handlePhotoQuery, queryPhotos } from "./holding/_worker.js/photos.js";
+import { derivePhotoPool, renderPhotosPage, getImagesManifest, handlePhotoQuery, queryPhotos, _resetPhotoCaches } from "./holding/_worker.js/photos.js";
 import { renderPhotoSlots } from "./holding/_worker.js/lib/photo-grid.js";
 import { cachedRender, deadline } from "./holding/_worker.js/lib/cache.js";
 import { ifNoneMatchMatches, notModifiedIfFresh, withWeakEtag } from "./holding/_worker.js/lib/cache.js";
@@ -446,6 +446,31 @@ test("Lens fetch keeps its JSON contract regardless of Accept", async () => {
   assert.equal((await json.json()).ok, false);
 });
 
+test("the WebMCP detector sees a CDN bridge, not just hand-written call sites", () => {
+  // The detector read the document for `navigator.modelContext` and friends, which
+  // finds a site that wrote its own tools and MISSES the far larger population that
+  // flipped WebMCP on at their CDN: the loader tag is all that reaches the HTML, and
+  // every registerTool call lives in the external module. That population grows by
+  // dashboard toggle, so the blind spot widens on its own.
+  const bridge = lensDetectWebmcp('<script type="module" src="/.webmcp/bridge.js" data-packs="c2pa,mcp-server-client"></script>');
+  assert.equal(bridge.found, true, "an injected bridge loader is WebMCP");
+  assert.equal(bridge.kind, "bridge");
+
+  // Both spellings of the page API. Chrome 146 ships `document.modelContext`; the
+  // earlier drafts (and this site's own retired inline block) used `navigator`.
+  for (const marker of ["document.modelContext.registerTool({})", "navigator.modelContext.registerTool({})"]) {
+    const hit = lensDetectWebmcp(`<script>${marker}</script>`);
+    assert.equal(hit.found, true, `${marker} must register as WebMCP`);
+    assert.equal(hit.kind, "inline", "a page that calls the API itself is not a bridge");
+  }
+
+  // The claim has to stay falsifiable: a page merely TALKING about WebMCP is not a
+  // page serving it. /garage and /lwe are full of prose about specs the site does
+  // not implement, and this detector runs over arbitrary third-party HTML.
+  assert.equal(lensDetectWebmcp("<p>WebMCP is a browser standard for model context.</p>").found, false);
+  assert.equal(lensDetectWebmcp("").found, false);
+});
+
 test("Lens Browser Run endpoint validates targets before invoking the binding", async () => {
   let called = false;
   const response = await handleLensBrowser(
@@ -554,6 +579,161 @@ test("photo query filters public metadata and never exposes unlisted fields", as
   assert.equal("gps" in result.photos[0].metadata, false);
   const response = await handlePhotoQuery(new Request("https://aadhar.sh/photos/query.json?q=car"), env, context());
   assert.equal(response.status, 200);
+});
+
+// The archive the ranking tests run against. B exists to be a plausible WRONG
+// answer for "classic chrome": it carries both words in its caption without
+// being a Classic Chrome frame, which is exactly the confusion a joined
+// haystack cannot resolve and a field weighting can.
+function rankingEnv() {
+  _resetPhotoCaches();
+  return { ASSETS: staticAssets({
+    "/images/metadata.json": {
+      A: { camera: "X-T50", lens: "XF27mm", film: "Classic Chrome", date: "2026:01:02" },
+      B: { camera: "Leica Q3", lens: "Summilux", film: "Monochrome", date: "2025:01:02" },
+      C: { camera: "X-T5", lens: "XF18mm", film: "Classic Chrome", date: "2024:05:05" },
+    },
+    "/images/alt.json": {
+      A: "a bridge over a river",
+      B: "a chrome bumper on a classic car",
+      C: "a lamp on a desk",
+    },
+    "/images/hashes.json": {},
+  }) };
+}
+
+test("photo query scores each term independently instead of matching one substring", async () => {
+  // The regression this whole path exists for. The old haystack joined five
+  // fields and required `q` to appear inside the result CONTIGUOUSLY, so a
+  // query naming a film simulation and a subject could never match a photo that
+  // had both — the words were present but not adjacent.
+  const result = await queryPhotos(rankingEnv(), { q: "classic chrome bridge" });
+  assert.equal(result.ranking.mode, "all-terms");
+  assert.deepEqual(result.ranking.terms, ["classic", "chrome", "bridge"]);
+  assert.equal(result.total, 1);
+  assert.equal(result.photos[0].stem, "A");
+  // Scored on the film simulation AND the caption, which is the claim.
+  assert.deepEqual(result.photos[0].matched.slice().sort(), ["alt", "film"]);
+});
+
+test("photo ranking prefers the film simulation over the same words in a caption", async () => {
+  const result = await queryPhotos(rankingEnv(), { q: "classic chrome" });
+  assert.equal(result.total, 3, "all three mention both words somewhere");
+  // A and C are genuine Classic Chrome frames and outrank B, whose caption
+  // merely contains the words. A leads C on date, both leading B on score.
+  assert.deepEqual(result.photos.map((photo) => photo.stem), ["A", "C", "B"]);
+  assert.ok(result.photos[0].score > result.photos[2].score);
+  assert.deepEqual(result.photos[2].matched, ["alt"]);
+});
+
+test("photo query reports partial coverage rather than silently widening", async () => {
+  // "sunset" is in no field, so nothing covers both terms. The partial set is
+  // still the best available answer and comes back labelled as partial.
+  const result = await queryPhotos(rankingEnv(), { q: "monochrome sunset" });
+  assert.equal(result.ranking.mode, "partial");
+  assert.equal(result.photos[0].stem, "B");
+  assert.equal(result.photos[0].matched.includes("film"), true);
+  // Nothing matched at all is a different answer from partially matched, and a
+  // caller deciding whether to broaden its query needs the two kept apart.
+  const none = await queryPhotos(rankingEnv(), { q: "aurora borealis" });
+  assert.equal(none.ranking.mode, "no-match");
+  assert.equal(none.total, 0);
+});
+
+test("word boundaries keep chrome out of monochrome", async () => {
+  // A plain substring test passes every other assertion in this file and still
+  // scores every black-and-white frame as a Classic Chrome match, at the FILM
+  // weight — the highest there is — so the false hits outrank the true ones.
+  const result = await queryPhotos(rankingEnv(), { q: "chrome" });
+  assert.deepEqual(result.photos.map((photo) => photo.stem), ["A", "C", "B"]);
+  assert.equal(result.photos.find((photo) => photo.stem === "B").matched.includes("film"), false,
+    "B is a Monochrome frame and must not match on film");
+  // The digit-gated substring escape stays open for part numbers, which live
+  // inside a larger alphanumeric run with no boundary to match on.
+  const lens = await queryPhotos(rankingEnv(), { q: "27mm" });
+  assert.equal(lens.total, 1);
+  assert.equal(lens.photos[0].stem, "A");
+});
+
+test("photo query drops stopwords and says which it dropped", async () => {
+  const result = await queryPhotos(rankingEnv(), { q: "show me photos of a bridge" });
+  assert.deepEqual(result.ranking.terms, ["bridge"]);
+  assert.ok(result.ranking.dropped.includes("photos"));
+  assert.equal(result.total, 1);
+  assert.equal(result.photos[0].stem, "A");
+  // A query that is nothing BUT stopwords must not score every photo on noise.
+  const empty = await queryPhotos(rankingEnv(), { q: "show me some photos" });
+  assert.equal(empty.ranking.mode, "no-terms");
+  assert.equal(empty.total, 0);
+});
+
+test("photo query omits score entirely when nothing was ranked", async () => {
+  // Absent, not zero — the same rule lens follows for a phase it never ran.
+  const result = await queryPhotos(rankingEnv(), { film: "classic" });
+  assert.equal(result.ranking.mode, "filters-only");
+  assert.equal(result.total, 2);
+  assert.equal("score" in result.photos[0], false);
+  assert.equal("matched" in result.photos[0], false);
+  // Filters stay exact even while `q` is ranked, so a filter cannot be widened
+  // into a near miss.
+  assert.deepEqual(result.photos.map((photo) => photo.stem), ["A", "C"]);
+});
+
+test("a term that matches most of the corpus in a field stops counting there", async () => {
+  // The live failure: every Fuji recipe card carries "Exposure Compensation",
+  // so "long exposure" matched "exposure" in 151 of 158 cards and returned the
+  // entire archive ranked by a word that distinguished nothing. Nothing in the
+  // archive is a long exposure, so the only correct total is zero.
+  _resetPhotoCaches();
+  const metadata = {};
+  const alt = {};
+  for (let i = 0; i < 8; i += 1) {
+    metadata[`P${i}`] = {
+      camera: "X-T50", film: i < 4 ? "Classic Chrome" : "Nostalgic Neg",
+      date: `2026:01:0${i + 1}`,
+      recipe: { "Exposure Compensation": "0", "Color Chrome Effect": "Strong" },
+    };
+    alt[`P${i}`] = "a street";
+  }
+  const env = { ASSETS: staticAssets({
+    "/images/metadata.json": metadata, "/images/alt.json": alt, "/images/hashes.json": {},
+  }) };
+  const flood = await queryPhotos(env, { q: "long exposure" });
+  assert.equal(flood.total, 0, "a universal recipe word must not drag in the archive");
+  assert.equal(flood.ranking.mode, "no-match");
+  assert.deepEqual(flood.ranking.common, ["exposure"]);
+
+  // Suppression is per FIELD, not per term. "chrome" is in all 8 recipe cards
+  // AND is the film simulation of 4 of them; killing the term outright would
+  // blind the query to exactly the photos it describes best.
+  _resetPhotoCaches();
+  const film = await queryPhotos(env, { q: "classic chrome" });
+  assert.equal(film.total, 4);
+  assert.deepEqual(film.photos[0].matched, ["film"]);
+  assert.equal("common" in film.ranking, false);
+
+  // A term nothing has is ABSENT, not common, and the two must not be conflated
+  // — one says broaden your query, the other says this word is useless here.
+  _resetPhotoCaches();
+  const missing = await queryPhotos(env, { q: "aurora" });
+  assert.equal(missing.ranking.mode, "no-match");
+  assert.equal("common" in missing.ranking, false);
+});
+
+test("photo query reports whether the offline semantic tier is present", async () => {
+  const bare = await queryPhotos(rankingEnv(), { q: "bridge" });
+  assert.equal(bare.ranking.semantic, false, "no semantics.json shipped");
+  _resetPhotoCaches();
+  const env = { ASSETS: staticAssets({
+    "/images/metadata.json": { A: { camera: "X-T50", film: "Classic Chrome", date: "2026:01:02" } },
+    "/images/alt.json": { A: "a bridge over a river" },
+    "/images/hashes.json": {},
+    "/images/semantics.json": { A: { terms: "span crossing viaduct overpass" } },
+  }) };
+  const expanded = await queryPhotos(env, { q: "viaduct" });
+  assert.equal(expanded.ranking.semantic, true);
+  assert.equal(expanded.total, 1, "matched a word that appears in no caption or EXIF field");
+  assert.deepEqual(expanded.photos[0].matched, ["expansion"]);
 });
 
 function coffeeEnv() {
@@ -2287,7 +2467,7 @@ test("previews refuse every unsafe method, and the GET-shaped writes too", async
   }
 
   // ...and reads pass, or the preview is useless. /lens/* is on this list on
-  // purpose: it fetches third parties and costs Browser Rendering, but it reads
+  // purpose: it fetches third parties and costs Browser Run, but it reads
   // only, and a /lens change you cannot exercise is a /lens change you cannot review.
   for (const path of ["/", "/garage/encoding", "/whoareyou.json", "/photos", "/lens/fetch", "/lens/shot", "/coffee", "/slots"]) {
     for (const method of ["GET", "HEAD"]) {
@@ -2402,7 +2582,6 @@ test("every /access device previews a cost, and the clause order its parser depe
 
 test("every rate-limit ceiling matches the ratelimits declared in both wrangler configs", async () => {
   const { LENS_BUDGETS } = await import("./holding/_worker.js/lens.js");
-  const { ASK_BUDGET } = await import("./holding/_worker.js/ask.js");
   const { parseJsonc } = await import("./scripts/lib/jsonc.mjs");
 
   // EVERY per-IP budget on the site, not just Lens's. The orphan check at the
@@ -2411,7 +2590,7 @@ test("every rate-limit ceiling matches the ratelimits declared in both wrangler 
   // declared and would catch the next one too. A budget that lives in a module
   // this list forgets reads as an orphan and fails here, which is the correct
   // and cheap way to find out.
-  const BUDGETS = { ...LENS_BUDGETS, ask: ASK_BUDGET };
+  const BUDGETS = { ...LENS_BUDGETS };
 
   // The number in LENS_BUDGETS is what the 429 message quotes; the number in
   // wrangler.jsonc is what actually limits. A message that disagrees with the
@@ -2468,6 +2647,93 @@ test("overLensBudget fails open without a limiter and closes when one says no", 
   // from being a second unmetered door onto the same crawler.
   const names = Object.values(LENS_BUDGETS).map((b) => b.binding);
   assert.equal(new Set(names).size, names.length, "two budgets share one binding");
+});
+
+test("documentShape counts substance, not framework payload", async () => {
+  const { documentShape } = await import("./holding/_worker.js/lens-render.js");
+
+  // A client-rendered shell: almost all of its bytes are an inline script, and
+  // none of that is anything a reader or a parser gets. This is why the shape
+  // has no `bytes` field at all — bytes would score the framework payload as
+  // content and call this page mostly-visible to a crawler.
+  const raw = `<html><head><title>Shop</title></head><body><div id="root"></div>
+    <script>${"var padding='x';".repeat(400)}</script></body></html>`;
+  const shell = documentShape(raw);
+  assert.equal(shell.words, 1, "the title counts, the 6KB script body does not");
+  assert.equal(shell.headings, 0);
+  assert.equal(shell.jsonld, 0);
+
+  const rendered = documentShape(`<html><body><h1>Winter jackets</h1>
+    <p>Forty two jackets, wool and down, in stock today.</p>
+    <a href="/a">one</a><a href="/b">two</a><img src="/j.png">
+    <script type="application/ld+json">{"@type":"Product"}</script></body></html>`);
+  assert.ok(rendered.words > 10);
+  assert.equal(rendered.headings, 1);
+  assert.equal(rendered.links, 2);
+  assert.equal(rendered.images, 1);
+  assert.equal(rendered.jsonld, 1, "structured data that exists only after render");
+});
+
+test("the kitesurf selector is tried, and a rejection is remembered rather than reported", async () => {
+  const { runBrowserAction, _resetKitesurfProbe, _kitesurfParamLive } =
+    await import("./holding/_worker.js/lens-render.js");
+  const env = { CF_ACCOUNT_ID: "acct", BROWSER_RUN_TOKEN: "tok" };
+  const realFetch = globalThis.fetch;
+  const calls = [];
+
+  try {
+    // `browser=kitesurf` is documented in Cloudflare's launch post and NOT in
+    // the Quick Actions reference. A 400 on the attempt carrying it must not
+    // surface as "the scanned site is broken", which is what hard-coding the
+    // parameter would have produced on every single render.
+    _resetKitesurfProbe();
+    globalThis.fetch = async (url) => {
+      calls.push(String(url));
+      return new Response("{}", { status: String(url).includes("browser=kitesurf") ? 400 : 200 });
+    };
+    const first = await runBrowserAction("snapshot", { url: "https://example.com" }, env);
+    assert.equal(calls.length, 2, "tried the selector, then retried without it");
+    assert.ok(calls[0].includes("browser=kitesurf"));
+    assert.ok(!calls[1].includes("browser=kitesurf"));
+    assert.equal(first.engine, "chromium-rest", "the engine reported is the one that answered");
+    assert.equal(_kitesurfParamLive(), false);
+
+    // Remembered for the isolate: the second render must not pay the failed
+    // attempt again, because every render would otherwise cost two REST calls.
+    calls.length = 0;
+    const second = await runBrowserAction("snapshot", { url: "https://example.com" }, env);
+    assert.equal(calls.length, 1, "the known-dead selector is not retried");
+    assert.equal(second.engine, "chromium-rest", "REST still serves, just without the dead selector");
+  } finally {
+    globalThis.fetch = realFetch;
+    _resetKitesurfProbe();
+  }
+});
+
+test("the shared browser ceiling bills everyone to one bucket, not per caller", async () => {
+  const { BROWSER_FREE_PLAN, LENS_BUDGETS, overLensBudget } = await import("./holding/_worker.js/lens.js");
+
+  // A budget carrying a fixed key must IGNORE the caller's IP. Two different
+  // visitors have to land in the same bucket, because the allowance they are
+  // spending belongs to the account rather than to either of them.
+  const keys = [];
+  const env = { LENS_RL_BROWSER_ALL: { limit: (arg) => { keys.push(arg.key); return { success: true }; } } };
+  for (const ip of ["203.0.113.7", "198.51.100.4"]) {
+    const req = new Request("https://aadhar.sh/lens/shot?url=https://example.com", { headers: { "cf-connecting-ip": ip } });
+    await overLensBudget(LENS_BUDGETS.browserAll, req, env);
+  }
+  assert.deepEqual(keys, ["browser-run", "browser-run"], "the shared ceiling must not key on the caller");
+
+  // The per-caller ceilings on the browser routes have to stay UNDER the
+  // account's own limit, or one visitor can spend everyone's minute. Measured
+  // 2026-08-06: free plan is 1 Quick Action per 10s account-wide, and `shot`
+  // used to allow 8/min to a single IP.
+  for (const name of ["shot", "browser"]) {
+    assert.ok(LENS_BUDGETS[name].max <= BROWSER_FREE_PLAN.perMinute,
+      `${name} allows ${LENS_BUDGETS[name].max}/min to one caller, over the account's ${BROWSER_FREE_PLAN.perMinute}/min`);
+  }
+  assert.ok(LENS_BUDGETS.browserAll.max <= BROWSER_FREE_PLAN.perMinute,
+    "the shared ceiling must sit under the account allowance it exists to protect");
 });
 
 // ── /mcp: the 2026-07-28 dual-era contract ──────────────────────────────
@@ -2689,21 +2955,23 @@ const TERMINAL_ASSETS = {
 };
 const terminalEnv = () => ({ ASSETS: staticAssets(TERMINAL_ASSETS) });
 const terminalReq = (path) => new Request(`https://aadhar.sh${path}`);
-const terminalGet = (path) => handleTerminal(terminalReq(path), terminalEnv(), context());
+const terminalGet = (path) => (path === "/terminal" || path.startsWith("/terminal?")
+  ? handleTerminal(terminalReq(path), terminalEnv(), context())
+  : handleTool(terminalReq(path), terminalEnv(), context()));
 
 // Every state worth drawing, so a width regression cannot hide in the one pane
 // nobody exercised. Panes that need network (reading, listening, around,
 // coffee) still render here — their loaders fail closed to an empty list, which
 // is itself the case worth pinning.
 const TERMINAL_STATES = [
-  "/terminal", "/terminal/finger", "/terminal/finger?help=1", "/terminal/finger?keys=q",
+  "/terminal", "/finger", "/finger?help=1", "/finger?keys=q",
   ...["overview", "writing", "reading", "listening", "photos", "around", "coffee", "deploys", "search"]
-    .map((pane) => `/terminal/finger?pane=${pane}`),
-  "/terminal/finger?pane=writing&keys=jj", "/terminal/finger?pane=writing&cursor=1&open=two",
-  "/terminal/finger?pane=search&q=lattice", "/terminal/finger?pane=search&q=lattice&open=0",
-  "/terminal/finger?pane=deploys&keys=G", "/terminal/finger?pane=photos",
-  "/terminal/photos", "/terminal/photos?film=acros", "/terminal/photos?keys=j%3Ccr%3E", "/terminal/photos?open=A_1",
-  "/terminal/photos?q=nothingmatchesthis", "/terminal/lens", "/terminal/lens?url=javascript%3Aalert(1)",
+    .map((pane) => `/finger?pane=${pane}`),
+  "/finger?pane=writing&keys=jj", "/finger?pane=writing&cursor=1&open=two",
+  "/finger?pane=search&q=lattice", "/finger?pane=search&q=lattice&open=0",
+  "/finger?pane=deploys&keys=G", "/finger?pane=photos",
+  "/photos", "/photos?film=acros", "/photos?keys=j%3Ccr%3E", "/photos?open=A_1",
+  "/photos?q=nothingmatchesthis", "/lens", "/lens?url=javascript%3Aalert(1)",
 ];
 
 test("every frame is exactly 80 columns wide, in every state and both colour modes", async () => {
@@ -2733,9 +3001,9 @@ test("plain mode emits no escape bytes, and colour mode actually emits them", as
   // then has to be robust to; a `?plain=1` that was silently the only mode
   // would mean the ANSI path had quietly died and nobody noticed, because a
   // colourless frame still reads fine.
-  const plain = await (await terminalGet("/terminal/finger?plain=1")).text();
+  const plain = await (await terminalGet("/finger?plain=1")).text();
   assert.ok(!plain.includes("\x1b"), "plain=1 leaked an escape sequence");
-  const coloured = await (await terminalGet("/terminal/finger")).text();
+  const coloured = await (await terminalGet("/finger")).text();
   assert.ok(coloured.includes("\x1b["), "the default HTTP frame lost its colour");
   assert.equal(plain, coloured.replace(/\x1b\[[0-9;]*m/g, ""), "colour changed the text, not just its styling");
 });
@@ -2745,9 +3013,9 @@ test("a frame's printed state is a URL that reproduces it", async () => {
   // object, so a frame that prints a URL which does NOT come back to the same
   // frame has broken resume, fork, and every "pass the url back" instruction in
   // the MCP tool descriptions — while still looking completely correct.
-  for (const path of ["/terminal/finger?pane=writing&keys=jj", "/terminal/finger?pane=deploys&keys=G", "/terminal/photos?film=acros&keys=j"]) {
+  for (const path of ["/finger?pane=writing&keys=jj", "/finger?pane=deploys&keys=G", "/photos?film=acros&keys=j"]) {
     const first = await (await terminalGet(`${path}&plain=1`)).text();
-    const printed = first.match(/state (\/terminal\/[a-z]+(?:\?[^\s│║]*)?)/)?.[1];
+    const printed = first.match(/state (\/[a-z]+(?:\?[^\s│║]*)?)/)?.[1];
     assert.ok(printed, `${path} printed no state URL`);
     // Replay the printed state with NO keys: same frame, minus the keystrokes.
     const replayed = await (await terminalGet(printed + (printed.includes("?") ? "&" : "?") + "plain=1")).text();
@@ -2771,7 +3039,7 @@ test("the tui routes refuse to be cached or indexed", async () => {
   // A frame is per-query and several are live (playlist, calendar, lens). The
   // route also negotiates on Accept, which a URL-keyed edge cache cannot
   // represent — the same trap lib/cache.js documents for the markdown twins.
-  for (const path of ["/terminal", "/terminal/finger", "/terminal/photos"]) {
+  for (const path of ["/terminal", "/finger", "/photos"]) {
     const res = await terminalGet(path);
     assert.equal(res.headers.get("cache-control"), "no-store", path);
     assert.equal(res.headers.get("x-robots-tag"), "noindex", path);
@@ -2808,22 +3076,28 @@ test("an unknown program 404s and names the ones that exist", async () => {
   const res = await terminalGet("/terminal/nope");
   assert.equal(res.status, 404);
   assert.match(await res.text(), /\/terminal/);
-  const post = await handleTerminal(new Request("https://aadhar.sh/terminal/finger", { method: "POST" }), terminalEnv(), context());
+  const post = await handleTool(new Request("https://aadhar.sh/finger", { method: "POST" }), terminalEnv(), context());
   assert.equal(post.status, 405);
   assert.equal(post.headers.get("allow"), "GET, HEAD");
 });
 
-test("every terminal_* tool the MCP server lists is one the server can actually call", async () => {
+test("every frame tool the MCP server lists is one the server can actually call", async () => {
   // tools/list is a promise. A tool advertised but not dispatched fails only
   // when a client believes the list and calls it — which is exactly the caller
   // this surface exists for.
   const env = terminalEnv();
   const listed = (await (await handleSiteMcp(mcpPost({ jsonrpc: "2.0", id: 1, method: "tools/list", params: { ...MODERN_META } }), env, context())).json())
-    .result.tools.map((tool) => tool.name).filter((name) => name.startsWith("terminal_"));
-  assert.deepEqual(listed, ["terminal_finger", "terminal_photos", "terminal_lens"]);
+    .result.tools.map((tool) => tool.name);
+  // The MCP tool name IS the route name. One vocabulary: what you type in the
+  // console, what you curl, and what an agent calls are the same word.
+  const FRAME_TOOLS = ["finger", "photos", "radar", "dict", "cache", "lens", "agent_ready"];
+  for (const name of FRAME_TOOLS) assert.ok(listed.includes(name), `${name} has a route but is not an MCP tool`);
+  assert.ok(!listed.some((n) => n.startsWith("terminal_")), "tool names must match their routes, not the console");
 
-  for (const name of listed) {
-    const args = name === "terminal_lens" ? { url: "https://example.com" } : {};
+  for (const name of FRAME_TOOLS) {
+    const args = name === "lens" ? { url: "https://example.com" }
+      : name === "radar" ? { samples: [{ name: "AP", rssi: -58 }] }
+      : {};
     const res = await handleSiteMcp(mcpPost({
       jsonrpc: "2.0", id: 2, method: "tools/call", params: { name, arguments: args, ...MODERN_META },
     }), env, context());
@@ -2852,90 +3126,23 @@ test("the tui frame never renders a photo field the public projection withholds"
       },
     },
   }) };
-  const text = await (await handleTerminal(terminalReq("/terminal/photos?open=A_1&plain=1"), env, context())).text();
+  const text = await (await handleTool(terminalReq("/photos?open=A_1&plain=1"), env, context())).text();
   assert.ok(text.includes("Classic Chrome"), "the frame did not render at all");
   for (const secret of ["40.7128", "-74.0060", "SECRET123"]) {
     assert.ok(!text.includes(secret), `the frame leaked a withheld field: ${secret}`);
   }
 });
 
-// ── /terminal/ask — the natural-language door ────────────────────────────
+// ── /ask — the natural-language door ────────────────────────────
 // Every test here runs the ROUTER path (no AI binding), which is the mode CI
 // and local dev get. That is deliberate rather than a limitation: the router is
 // the fallback the whole route rests on when the model is unavailable, and it
 // is the only half that can be asserted deterministically.
 
-test("an ask routes to a plausible tool and never invents an answer", async () => {
-  const env = terminalEnv();
-  const cases = [
-    ["what does he think about lattices", "search_site"],
-    ["photos shot on classic chrome", "photo_query"],
-    ["when can i get coffee", "coffee_availability"],
-    ["what is he listening to right now", "now_playing"],
-    ["how does https://example.com read to a machine", "lens_inspect"],
-    ["what changed in the neighborhood", "change_radar"],
-  ];
-  for (const [question, expected] of cases) {
-    const result = await runAsk(question, terminalReq("/terminal/ask"), env, context());
-    assert.equal(result.mode, "router", question);
-    assert.equal(result.steps[0]?.tool, expected, `"${question}" routed to ${result.steps[0]?.tool}`);
-    // With no model there is nothing that COULD write prose, so the route must
-    // hand back the tool result and no answer. A non-empty answer here would
-    // mean something fabricated one.
-    assert.equal(result.answer, "", `"${question}" produced prose with no model bound`);
-  }
-});
 
-test("a film simulation reaches photo_query's film field, not its free-text q", async () => {
-  // photo_query matches q as ONE substring, so "photos shot classic chrome"
-  // as free text matches nothing. This is the regression that cost 42 frames.
-  const env = terminalEnv();
-  const filmed = await runAsk("photos shot on classic chrome", terminalReq("/terminal/ask"), env, context());
-  assert.equal(filmed.steps[0].args.film, "classic chrome");
-  assert.ok(!filmed.steps[0].args.q, "a named film must not also go to q");
-  assert.ok(filmed.result.total > 0, "the film route returned nothing");
 
-  // And an unnamed subject falls back to ONE keyword rather than the phrase.
-  const loose = await runAsk("show me photos of a doorway", terminalReq("/terminal/ask"), env, context());
-  assert.equal(loose.steps[0].tool, "photo_query");
-  assert.ok(!/\s/.test(loose.steps[0].args.q || ""), `q must be a single keyword, got "${loose.steps[0].args.q}"`);
-});
 
-test("a tool that throws degrades to a message, not a 500 for the whole ask", async () => {
-  // coffee_availability throws with no BOOKINGS binding. /mcp survives that at
-  // the JSON-RPC envelope; an ask has no envelope, so it catches per call.
-  const result = await runAsk("when can i get coffee", terminalReq("/terminal/ask"), { ASSETS: terminalEnv().ASSETS }, context());
-  assert.equal(result.steps[0].tool, "coffee_availability");
-  assert.match(result.steps[0].summary, /unavailable/);
-  const res = await terminalGet("/terminal/ask?plain=1&q=when+can+i+get+coffee");
-  assert.equal(res.status, 200, "a throwing tool must not take the frame down");
-});
 
-test("an ask is bounded on every axis that costs money", async () => {
-  // The one public route here that spends per request. Each bound is separate
-  // and each one is the only thing standing between a public LLM endpoint and
-  // somebody else's bill.
-  assert.ok(ASK_LIMITS.query <= 500 && ASK_LIMITS.calls <= 6 && ASK_LIMITS.rounds <= 3);
-  const long = "x".repeat(5000);
-  const result = await runAsk(long, terminalReq("/terminal/ask"), terminalEnv(), context());
-  assert.equal(result.question.length, ASK_LIMITS.query, "the query was not truncated");
-  // An empty question does no work at all rather than routing to a search for "".
-  const empty = await runAsk("   ", terminalReq("/terminal/ask"), terminalEnv(), context());
-  assert.equal(empty.mode, "empty");
-  assert.equal(empty.steps.length, 0);
-});
-
-test("the ask frame prints the tool call it made, and how to reproduce it", async () => {
-  // The trace is the reason this is a console rather than a chat box. A frame
-  // that printed only the answer would be the thing this surface exists not to be.
-  const text = await (await terminalGet("/terminal/ask?plain=1&q=what+does+he+think+about+lattices")).text();
-  assert.match(text, /what the agent did/);
-  assert.match(text, /search_site/);
-  assert.match(text, /reproduce this without a model/);
-  assert.match(text, /curl -sX POST aadhar\.sh\/mcp/);
-  // And it must say which mode produced it — model or keyword.
-  assert.match(text, /mode\s+router/);
-});
 
 test("the ask loop and the MCP server call ONE tool registry", async () => {
   // lib/tools.js exists so a tool description cannot be reworded in one door and
@@ -2952,51 +3159,610 @@ test("the ask loop and the MCP server call ONE tool registry", async () => {
   assert.ok(!/name: "search_site"/.test(src), "mcp.js re-declares a data tool instead of importing it");
 });
 
-test("the model loop parses both tool_call shapes Workers AI returns", async () => {
-  // THE riskiest assumption in the ask route, and the one that cannot be checked
-  // without a token: Workers AI has shipped a flat {name, arguments} and
-  // OpenAI's nested {function:{name, arguments}} across model families, with
-  // arguments as an object OR a JSON string. A model swap that changed the shape
-  // would not error — it would silently produce a no-tool answer for every
-  // question, which reads as "the model is being unhelpful" rather than as a
-  // parse bug. So the transport is stubbed and both shapes are pinned here.
-  const realFetch = globalThis.fetch;
-  const env = { ...terminalEnv(), CF_ACCOUNT_ID: "acct", WORKERS_AI_TOKEN: "tok" };
 
-  const shapes = [
-    { name: "search_site", arguments: { q: "lattice" } },                              // flat, object args
-    { function: { name: "search_site", arguments: '{"q":"lattice"}' } },               // nested, string args
-  ];
-  try {
-    for (const call of shapes) {
-      let turn = 0;
-      globalThis.fetch = async (url, init) => {
-        assert.match(String(url), /\/accounts\/acct\/ai\/run\//, "must call the account's AI endpoint");
-        assert.equal(JSON.parse(init.body).tools?.length, DATA_TOOLS.length, "the whole tool catalog must be offered");
-        turn += 1;
-        return Response.json(turn === 1
-          ? { result: { tool_calls: [call] } }
-          : { result: { response: "He writes about lattice cryptography." } });
-      };
-      const result = await runAsk("what about lattices", terminalReq("/terminal/ask"), env, context());
-      assert.equal(result.mode, "model", `shape ${JSON.stringify(call)} did not reach model mode`);
-      assert.equal(result.steps[0]?.tool, "search_site");
-      assert.deepEqual(result.steps[0]?.args, { q: "lattice" }, "arguments must normalize to an object");
-      assert.match(result.answer, /lattice/);
-    }
+// ── reading somebody else's site ─────────────────────────────────────────
 
-    // A model that names a tool this site does not have must be refused, not
-    // dispatched. The catalog is the allowlist.
-    globalThis.fetch = async () => Response.json({ result: { tool_calls: [{ name: "rm_rf", arguments: {} }] } });
-    const refused = await runAsk("delete everything", terminalReq("/terminal/ask"), env, context());
-    assert.ok(refused.steps.some((s) => s.refused), "an unknown tool name must be refused");
 
-    // And a model that is simply down falls back to the router rather than 500ing.
-    globalThis.fetch = async () => new Response("upstream on fire", { status: 503 });
-    const down = await runAsk("what about lattices", terminalReq("/terminal/ask"), env, context());
-    assert.equal(down.mode, "router-fallback");
-    assert.equal(down.steps[0].tool, "search_site");
-  } finally {
-    globalThis.fetch = realFetch;
+
+test("a door that could not be read is never reported as a door that is shut", async () => {
+  // The honesty invariant, asserted on the classifier directly. Locally every
+  // external probe fails for want of the AadharshBot signing key, and reporting
+  // that as "not served" would have this thing confidently announcing that
+  // well-known origins have no llms.txt.
+  const { classifyDoor } = await import("./holding/_worker.js/lib/doors.js");
+
+  const failed = classifyDoor({ ok: false, error: "signing key is unavailable" }, "text/plain");
+  assert.equal(failed.ok, false);
+  assert.equal(failed.unreadable, true, "a failed check was reported as a negative result");
+
+  // A real 404 IS a finding, and must not be confused with the above.
+  const missing = classifyDoor({ ok: false, status: 404 }, "text/plain");
+  assert.equal(missing.ok, false);
+  assert.ok(!missing.unreadable, "a 404 is a shut door, not an unreadable one");
+  assert.equal(missing.why, "HTTP 404");
+
+  // A 200 that answers the wrong content-type is not an open door: SPA
+  // catch-alls serve their shell for every unknown path, and counting that as
+  // present would make this reader agree with every site that has no agent
+  // surface at all.
+  const spa = classifyDoor({ ok: true, status: 200, body: "<!doctype html>", contentType: "text/html; charset=utf-8" }, "text/plain");
+  assert.equal(spa.ok, false);
+  assert.equal(spa.wrongType, "text/html");
+
+  // And the happy path still opens.
+  const open = classifyDoor({ ok: true, status: 200, body: "# llms\nhello", contentType: "text/plain" }, "text/plain");
+  assert.equal(open.ok, true);
+  assert.equal(open.bytes, 12);
+});
+
+// ── /ask sessions — the one thing here with a Durable Object ────
+
+
+
+
+
+
+// ── /radar — the instrument for somebody else's antenna ─────────
+
+test("radar drops readings that are not dBm, and bounds the rest", async () => {
+  // The caller is a shell script somebody wrote in five minutes, so a bad sample
+  // is dropped rather than fatal. dBm is negative by definition: a positive
+  // number is a unit mistake, not a very strong signal, and plotting it would
+  // put a device inside the centre ring.
+  const { readSamples, RADAR_LIMITS } = await import("./holding/_worker.js/radar.js");
+  const parsed = readSamples({ samples: [
+    { name: "ok", rssi: -58 },
+    { name: "positive", rssi: 5 },
+    { name: "absurd", rssi: -900 },
+    { name: "nan", rssi: "loud" },
+    { rssi: -70 },
+  ] });
+  assert.deepEqual(parsed.map((p) => p.name), ["ok", "unknown"]);
+  assert.equal(parsed[0].rssi, -58);
+  // Strongest first: the thing you are hunting belongs at the top.
+  assert.ok(parsed[0].rssi > parsed[1].rssi);
+  // Bounded on count and name length.
+  const many = readSamples({ samples: Array.from({ length: 200 }, (_, i) => ({ name: "x".repeat(300), rssi: -50 - i % 40 })) });
+  assert.equal(many.length, RADAR_LIMITS.samples);
+  assert.equal(many[0].name.length, RADAR_LIMITS.name);
+});
+
+test("radar bands match findphone's field calibration", async () => {
+  const { bandOf } = await import("./holding/_worker.js/radar.js");
+  assert.equal(bandOf(-40).label, "arm's reach");
+  assert.equal(bandOf(-45).label, "arm's reach");
+  assert.equal(bandOf(-55).label, "same table");
+  assert.equal(bandOf(-70).label, "same room");
+  assert.equal(bandOf(-80).label, "next room");
+  assert.equal(bandOf(-95).label, "far / noise");
+});
+
+test("the radar frame is 80 columns and says its angles are meaningless", async () => {
+  // The honesty line is load-bearing, not decoration: RSSI is a scalar and a
+  // plot with angles invites a reader to infer a direction that is not there.
+  const res = await handleTool(new Request("https://aadhar.sh/radar?plain=1", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ samples: [{ name: "AP", rssi: -58, kind: "wifi", history: [-70, -62, -58] }, { name: "Buds", rssi: -44 }] }),
+  }), terminalEnv(), context());
+  assert.equal(res.status, 200);
+  const text = await res.text();
+  for (const line of text.split("\n").filter(Boolean)) {
+    assert.equal([...line].length, 80, `radar drew a ${[...line].length}-column row`);
   }
+  assert.match(text, /ANGLES ARE DECORATIVE/);
+  assert.match(text, /-58 dBm/);
+  assert.match(text, /arm's reach/);
+  assert.equal(res.headers.get("cache-control"), "no-store");
+});
+
+test("radar is the only program that accepts a POST", async () => {
+  // The surface stays read-only apart from the one route whose input this server
+  // structurally cannot produce. A new POST-shaped program should have to argue
+  // for itself here rather than arrive by accident.
+  for (const app of ["finger", "photos", "lens", "dict"]) {
+    const res = await handleTool(new Request(`https://aadhar.sh/${app}`, { method: "POST" }), terminalEnv(), context());
+    assert.equal(res.status, 405, `${app} accepted a POST`);
+    assert.equal(res.headers.get("allow"), "GET, HEAD");
+  }
+  const radar = await handleTool(new Request("https://aadhar.sh/radar", { method: "PUT" }), terminalEnv(), context());
+  assert.equal(radar.status, 405);
+  assert.equal(radar.headers.get("allow"), "GET, HEAD, POST");
+});
+
+test("an empty or malformed radar payload explains itself instead of 500ing", async () => {
+  for (const body of ["", "not json", JSON.stringify({ samples: [] })]) {
+    const res = await handleTool(new Request("https://aadhar.sh/radar?plain=1", {
+      method: "POST", headers: { "content-type": "application/json" }, body,
+    }), terminalEnv(), context());
+    assert.equal(res.status, 200);
+    assert.match(await res.text(), /no usable readings|needs a name and an rssi/i);
+  }
+});
+
+// ── /dict — the registration lint ───────────────────────────────
+// The rules ARE the product, and they are asserted as pure functions because
+// every external fetch in this repo dies at signing in a test environment.
+
+test("each Chromium veto is caught on its own, and a clean dictionary passes", async () => {
+  const { auditDictionary } = await import("./holding/_worker.js/dict.js");
+  const base = { "use-as-dictionary": 'match="/a/*"' };
+
+  // must-revalidate and no-cache are the two that surprise people: neither means
+  // "do not store" anywhere else in HTTP, and each kills registration outright.
+  for (const [cc, expected] of [
+    ["public, max-age=600, must-revalidate", "must-revalidate"],
+    ["public, max-age=600, no-cache", "no-cache"],
+    ["no-store", "no-store"],
+  ]) {
+    const audit = auditDictionary({ ...base, "cache-control": cc });
+    assert.equal(audit.registers, false, `${cc} should not register`);
+    assert.ok(audit.vetoes.some((v) => v.id === expected), `${cc} should be vetoed by ${expected}`);
+  }
+
+  // Missing the header at all is its own veto, not a pass by omission.
+  assert.equal(auditDictionary({ "cache-control": "public, max-age=600" }).registers, false);
+
+  const good = auditDictionary({ ...base, "cache-control": "public, max-age=600, stale-while-revalidate=86400" });
+  assert.equal(good.registers, true);
+  assert.equal(good.warns.length, 0);
+  // Every rule reports, including the ones that passed — a lint that prints only
+  // failures leaves you unsure whether it looked.
+  assert.equal(good.results.length, 6);
+  assert.ok(good.results.every((r) => r.detail));
+});
+
+test("the lint knows the dictionary's life is the SWR window, not max-age", async () => {
+  // The non-obvious rule, and the one that reads as "it worked yesterday": a
+  // dictionary with a year of max-age and no stale-while-revalidate is usable
+  // for zero seconds past freshness.
+  const { auditDictionary } = await import("./holding/_worker.js/dict.js");
+  const noSwr = auditDictionary({ "use-as-dictionary": "match=\"/*\"", "cache-control": "public, max-age=31536000, immutable" });
+  assert.equal(noSwr.registers, true, "no SWR is a warning, not a veto");
+  assert.ok(noSwr.warns.some((w) => w.id === "lifetime"));
+
+  // s-maxage is a shared-cache directive and buys a browser nothing here.
+  const shared = auditDictionary({ "use-as-dictionary": "match=\"/*\"", "cache-control": "public, s-maxage=99999, stale-while-revalidate=600" });
+  assert.ok(shared.warns.some((w) => w.id === "s-maxage"));
+});
+
+test("a delta served without vary: available-dictionary is flagged as a decode failure", async () => {
+  // Not a slow page. A shared cache hands the delta to a client with no
+  // dictionary and the navigation dies on ERR_CONTENT_DECODING_FAILED.
+  const { auditConsumer } = await import("./holding/_worker.js/dict.js");
+  const unsafe = auditConsumer({ "content-encoding": "dcz", vary: "accept-encoding" });
+  assert.equal(unsafe.isDelta, true);
+  assert.equal(unsafe.variesOnDictionary, false);
+
+  const safe = auditConsumer({ "content-encoding": "dcz", vary: "accept-encoding, available-dictionary" });
+  assert.equal(safe.variesOnDictionary, true);
+  assert.equal(auditConsumer({ "content-encoding": "br", vary: "accept-encoding" }).isDelta, false);
+});
+
+test("dict refuses a private target before fetching, and explains itself with none", async () => {
+  const idle = await (await terminalGet("/dict?plain=1")).text();
+  assert.match(idle, /fail silently/);
+  assert.match(idle, /SILENTLY IGNORES/);   // the node:zlib finding is on the page, not just in source
+  const refused = await (await terminalGet("/dict?plain=1&url=http%3A%2F%2F169.254.169.254%2F")).text();
+  assert.match(refused, /refused/);
+});
+
+// ── lens cost: origin-level discovery is cached ──────────────────────────
+
+test("a second scan of the same origin reuses discovery instead of re-probing", async () => {
+  // This is where lens's cost lived: a production trace put lens.discovery at
+  // 656ms of a 685ms scan, re-asking one host the same 26 questions it had
+  // already answered. The cache is keyed by ORIGIN, not URL, because not one of
+  // those 26 depends on which page was scanned.
+  const { originDiscovery } = await import("./holding/_worker.js/lens.js");
+  const store = new Map();
+  const realCaches = globalThis.caches;
+  globalThis.caches = {
+    default: {
+      async match(req) { const hit = store.get(req.url); return hit ? new Response(hit) : undefined; },
+      async put(req, res) { store.set(req.url, await res.text()); },
+    },
+  };
+  try {
+    const first = await originDiscovery("https://example.com", "example.com", {});
+    assert.equal(first.cached, false, "a cold origin must actually probe");
+    assert.equal(store.size, 1, "the result must be cached for the next scan");
+
+    const second = await originDiscovery("https://example.com", "example.com", {});
+    assert.equal(second.cached, true, "a warm origin must not re-probe");
+    // Same answers, minus the flag — a cache that returned different data would
+    // make two surfaces on this site disagree about the same host.
+    const { cached: _a, ...firstBody } = first;
+    const { cached: _b, ...secondBody } = second;
+    assert.deepEqual(secondBody, firstBody);
+
+    // A different origin is a different key, not a stale hit.
+    const other = await originDiscovery("https://other.example", "other.example", {});
+    assert.equal(other.cached, false);
+    assert.equal(store.size, 2);
+
+    // And `fresh` bypasses for a caller that needs the live answer.
+    const forced = await originDiscovery("https://example.com", "example.com", {}, { fresh: true });
+    assert.equal(forced.cached, false);
+  } finally {
+    if (realCaches === undefined) delete globalThis.caches; else globalThis.caches = realCaches;
+  }
+});
+
+test("discovery still works with no cache at all", async () => {
+  // Under plain node `caches` does not exist, and a scan must degrade to the
+  // previous behaviour (a live fan-out every time) rather than throw.
+  const { originDiscovery } = await import("./holding/_worker.js/lens.js");
+  const realCaches = globalThis.caches;
+  delete globalThis.caches;
+  try {
+    const out = await originDiscovery("https://example.com", "example.com", {});
+    assert.equal(out.cached, false);
+    assert.ok("robots" in out && "llms" in out && "mcp" in out);
+  } finally { if (realCaches !== undefined) globalThis.caches = realCaches; }
+});
+
+test("readDoors reads lens's discovery rather than re-probing the same files", async () => {
+  // doors.js originally fetched llms.txt, the agent card and the api-catalog
+  // itself, duplicating four of lens's twenty-six probes. Worse than wasteful:
+  // two surfaces on one site could disagree about the same origin.
+  const src = readFileSync("holding/_worker.js/lib/doors.js", "utf8");
+  assert.match(src, /originDiscovery/, "doors must consume the shared discovery");
+  for (const dup of ["/llms.txt", "/.well-known/agent-card.json", "/.well-known/api-catalog"]) {
+    assert.ok(!src.includes(`lensProbe(origin + "${dup}"`), `doors re-probes ${dup} instead of reusing discovery`);
+  }
+});
+
+// ── lens phases: pay for what you asked for ──────────────────────────────
+
+test("a page-only scan omits the discovery-derived fields rather than zeroing them", async () => {
+  // The honesty rule of the split. A readiness score computed without discovery
+  // is not a partial score, it is a WRONG one, and `doors: 0` would read as
+  // "this site has no agent doors" when it means "nobody looked". So the fields
+  // are ABSENT and `phases` says which ran.
+  const { lensInspect, lensObservationSummary } = await import("./holding/_worker.js/lens.js");
+  let out;
+  try {
+    out = await lensInspect("https://example.com/", {}, { phases: ["page"] });
+  } catch { return; }   // no signing key here; the shape assertions below need a body
+
+  assert.equal(out.phases.page, true);
+  assert.equal(out.phases.discovery, false);
+  // Absent, not empty. `in` rather than a truthiness check, because {} and 0
+  // are exactly the values that would lie.
+  assert.ok(!("readiness" in out), "readiness must be absent when discovery did not run");
+  assert.ok(!("agent" in out), "agent doors must be absent when discovery did not run");
+  assert.ok(!("discovery" in out));
+
+  // And the summary carries the phase forward, so a caller downstream can still
+  // tell a zero from an absence.
+  const summary = lensObservationSummary(out);
+  assert.equal(summary.phases.discovery, false);
+});
+
+test("the default scan is unchanged — every phase still runs", async () => {
+  // The split must be opt-in. Existing callers (/lens/fetch, lens_inspect,
+  // /lens, the census) pass no phases and must keep the full behaviour.
+  const src = readFileSync("holding/_worker.js/lens.js", "utf8");
+  assert.match(src, /if \(opts\.phases && !opts\.phases\.includes\("discovery"\)\) return out;/,
+    "the early return must require an explicit phases opt-in");
+  // A summary built from a full result reports every phase true by default, so
+  // nothing downstream has to special-case the old shape.
+  const { lensObservationSummary } = await import("./holding/_worker.js/lens.js");
+  assert.deepEqual(lensObservationSummary({}).phases, { page: true, discovery: true, botViews: true });
+});
+
+// ── lens parse budget: the CPU-bound half ────────────────────────────────
+
+test("the parse is capped, and a prefix parse says so instead of under-reporting", async () => {
+  // lensText/lensMarkdown are regex chains costing ~32ms per MB (measured, node,
+  // same V8). At the old 2MB fetch cap that is ~64ms of pure CPU — impossible on
+  // the Workers free plan's 10ms ceiling and wasteful on paid. Capping the PARSE
+  // bounds the worst case; the median page is nowhere near it and is untouched.
+  const { LENS_PARSE_CAP, lensObservationSummary } = await import("./holding/_worker.js/lens.js");
+  assert.ok(LENS_PARSE_CAP > 0 && LENS_PARSE_CAP <= 512 * 1024);
+
+  // rawBytes must stay the TRUE size. We know it from the fetch even when we
+  // decline to parse all of it, and reporting the prefix as the page's size
+  // would be a plain lie about the thing being measured.
+  const truncated = lensObservationSummary({
+    anatomy: { rawBytes: 2_000_000, parsedBytes: 262_144, parseTruncated: true, wordCount: 400 },
+  });
+  assert.equal(truncated.bytes, 2_000_000, "bytes must report the whole document");
+  assert.equal(truncated.parsedBytes, 262_144);
+  assert.equal(truncated.parseTruncated, true);
+
+  // An un-truncated scan reports no prefix and parsedBytes falls back to the size.
+  const whole = lensObservationSummary({ anatomy: { rawBytes: 40_000, wordCount: 900 } });
+  assert.equal(whole.parseTruncated, false);
+  assert.equal(whole.parsedBytes, 40_000);
+});
+
+test("the parse cap is a deployment knob, not a code change", async () => {
+  // "Move lens onto the free plan" should be a var flip. The floor keeps a
+  // typo (LENS_PARSE_KB=0 or 1) from disabling parsing entirely.
+  const src = readFileSync("holding/_worker.js/lens.js", "utf8");
+  assert.match(src, /Number\(env\?\.LENS_PARSE_KB\)/, "the cap must be env-overridable");
+  assert.match(src, /Math\.max\(8, Number\(env\?\.LENS_PARSE_KB\) \|\| 0\)/, "a floor must guard against a zero or tiny override");
+});
+
+// ── /cache — the behavioral revalidation lint ───────────────────
+// judgeRevalidation is pure: the whole product is the rules, and the network
+// half dies at signing under plain node anyway.
+
+test("an ETag that changes between identical fetches is called what it is", async () => {
+  // THE failure this tool exists for. Headers look perfect, and every
+  // If-None-Match will 200 with a full body, forever.
+  const { judgeRevalidation } = await import("./holding/_worker.js/cache-lint.js");
+  const v = judgeRevalidation({
+    first: { status: 200, headers: { etag: '"abc-gzip"', "cache-control": "max-age=600" } },
+    second: { status: 200, headers: { etag: '"abc-br"' } },
+    conditional: { status: 200, headers: {} },
+  });
+  assert.equal(v.healthy, false);
+  assert.ok(v.vetoes.some((f) => f.id === "stability"), "an unstable validator must be a veto");
+  // The 200 is consistent with the unstable ETag, so it is explained rather
+  // than double-counted as a second independent failure.
+  assert.ok(v.findings.some((f) => f.id === "revalidation" && f.verdict === "bad-but-explained"));
+});
+
+test("a stable ETag the origin then ignores is its own distinct failure", async () => {
+  const { judgeRevalidation } = await import("./holding/_worker.js/cache-lint.js");
+  const v = judgeRevalidation({
+    first: { status: 200, headers: { etag: '"stable"' } },
+    second: { status: 200, headers: { etag: '"stable"' } },
+    conditional: { status: 200, headers: {} },
+  });
+  assert.ok(v.vetoes.some((f) => f.id === "revalidation"), "a stable validator answered 200 — the origin ignores conditionals");
+  assert.ok(!v.vetoes.some((f) => f.id === "stability"), "stability itself passed and must say so");
+});
+
+test("the healthy path and the no-validator path both read correctly", async () => {
+  const { judgeRevalidation } = await import("./holding/_worker.js/cache-lint.js");
+  const healthy = judgeRevalidation({
+    first: { status: 200, headers: { etag: '"v1"', "cache-control": "max-age=300" } },
+    second: { status: 200, headers: { etag: '"v1"' } },
+    conditional: { status: 304, headers: {} },
+  });
+  assert.equal(healthy.healthy, true);
+
+  const none = judgeRevalidation({ first: { status: 200, headers: {} }, second: { status: 200, headers: {} }, conditional: null });
+  assert.ok(none.vetoes.some((f) => f.id === "validator"), "no validator at all is a veto, not a silent pass");
+});
+
+test("negotiating on Accept without saying so in Vary is flagged — the #195 trap", async () => {
+  // Hit in production on THIS site: markdown negotiation answered from a warm
+  // URL-keyed cache as HTML, because the stored Vary named only accept-encoding.
+  const { judgeRevalidation } = await import("./holding/_worker.js/cache-lint.js");
+  const base = { status: 200, headers: { etag: '"x"', "content-type": "text/html", vary: "accept-encoding" } };
+  const trapped = judgeRevalidation({
+    first: base, second: base, conditional: { status: 304, headers: {} },
+    negotiated: { status: 200, headers: { "content-type": "text/markdown" } },
+  });
+  assert.ok(trapped.vetoes.some((f) => f.id === "vary"));
+
+  const honest = judgeRevalidation({
+    first: { ...base, headers: { ...base.headers, vary: "accept-encoding, accept" } },
+    second: base, conditional: { status: 304, headers: {} },
+    negotiated: { status: 200, headers: { "content-type": "text/markdown" } },
+  });
+  assert.ok(!honest.vetoes.some((f) => f.id === "vary"), "declared negotiation is fine");
+});
+
+// ── the tools are SERVICES, the frame is a representation ────────────────
+
+test("every tool is a top-level utility, not a subpage of a presentation", async () => {
+  // The site's own manifest encodes the rule: utilities live at the root
+  // (/lens, /photos, /coffee, /reading) and only CONTENT nests. Filing tools
+  // under /terminal/* organised them by how they RENDER, which is the wrong
+  // lesson for a site whose whole argument is how to expose services to agents.
+  const manifest = JSON.parse(readFileSync("site-manifest.json", "utf8"));
+  const utilities = manifest.surfaces.filter((s) => s.kind === "utility");
+
+  // The rule is not "utilities never nest" — /lens/census legitimately belongs
+  // to /lens, the way a dataset belongs to the tool that produces it. What is
+  // forbidden is nesting a utility under a PRESENTATION: /terminal is a console
+  // that drives these tools, not their parent, and filing them under it would
+  // organise the site by rendering rather than by what things are.
+  const underTerminal = utilities.filter((s) => s.path.startsWith("/terminal/"));
+  assert.deepEqual(underTerminal, [], `a tool must not live under the console: ${underTerminal.map((s) => s.path).join(", ")}`);
+
+  // Anything that does nest must nest under a utility that actually exists.
+  const paths = new Set(manifest.surfaces.map((s) => s.path));
+  for (const s of utilities.filter((s) => s.path.split("/").length > 2)) {
+    const parent = s.path.slice(0, s.path.lastIndexOf("/"));
+    assert.ok(paths.has(parent), `${s.path} nests under ${parent}, which is not a registered surface`);
+  }
+
+  for (const path of ["/finger", "/radar", "/dict", "/cache"]) {
+    const entry = manifest.surfaces.find((s) => s.path === path);
+    assert.ok(entry, `${path} must be registered as a surface`);
+    assert.equal(entry.kind, "utility");
+    assert.equal(entry.flags.agents, true, `${path} must be in the agent catalog`);
+  }
+});
+
+test("a tool answers HTML to a browser and a frame to everything else", async () => {
+  // The frame joins .md as a REPRESENTATION rather than a location: one URL,
+  // negotiated, with an explicit .txt alongside. Same contract as the twins.
+  const html = await handleTool(new Request("https://aadhar.sh/dict", { headers: { accept: "text/html" } }), terminalEnv(), context());
+  assert.match(html.headers.get("content-type"), /text\/html/);
+
+  const frame = await handleTool(new Request("https://aadhar.sh/dict"), terminalEnv(), context());
+  assert.match(frame.headers.get("content-type"), /text\/plain/);
+
+  // .txt is explicit and beats Accept, so a browser can still ask for the frame.
+  const txt = await handleTool(new Request("https://aadhar.sh/dict.txt", { headers: { accept: "text/html" } }), terminalEnv(), context());
+  assert.match(txt.headers.get("content-type"), /text\/plain/);
+  assert.ok((await txt.text()).includes("╔"), ".txt must return the frame itself");
+});
+
+test("a frame's printed state is a root URL that resolves", async () => {
+  // The state a caller sends back has to be the tool's real address. When the
+  // tools moved, a stale /terminal/<tool> here would have kept working through
+  // the redirect while teaching every agent the wrong URL.
+  const text = await (await terminalGet("/finger?plain=1&pane=writing")).text();
+  const printed = text.match(/state (\/[a-z]+[^\s│║]*)/)?.[1];
+  assert.ok(printed, "no state URL printed");
+  assert.ok(!printed.startsWith("/terminal/"), `state still points at the old namespace: ${printed}`);
+  assert.match(printed, /^\/finger/);
+});
+
+test("every tool with a route is reachable over MCP, and vice versa", async () => {
+  // THE dogfood invariant. The console, curl, and an agent must all reach the
+  // same set — a tool with an HTTP route but no MCP entry is invisible to the
+  // exact caller this whole surface is built for. dict and cache shipped that
+  // way for two commits before this test existed.
+  const { TOOL_NAMES } = await import("./holding/_worker.js/terminal.js");
+  const listed = (await (await handleSiteMcp(mcpPost({ jsonrpc: "2.0", id: 1, method: "tools/list", params: { ...MODERN_META } }), terminalEnv(), context())).json())
+    .result.tools.map((t) => t.name);
+
+  // ONE VOCABULARY, TWO SPELLINGS. A URL path uses hyphens (/agent-ready) and
+  // an MCP tool name conventionally uses underscores (agent_ready). That is a
+  // real convention clash rather than sloppiness, so the rule is a defined
+  // transliteration instead of byte equality — and it is written down here so
+  // the next tool with a two-word name does not get to invent its own answer.
+  const asToolName = (route) => route.replace(/-/g, "_");
+  for (const tool of TOOL_NAMES) {
+    assert.ok(listed.includes(asToolName(tool)),
+      `/${tool} has a route but no MCP tool (expected ${asToolName(tool)}) — an agent cannot reach it`);
+  }
+});
+
+// ── /agent-ready — the scorecard that grades its author too ──────────────
+
+test("the lift table is internally consistent and names its baseline", async () => {
+  // The bill is hand-maintained with a checked date, the same contract lens's
+  // census runs on. What a test CAN hold is that it adds up and that the
+  // baseline is a real subset — a claim like "compatibility is a weekend" is
+  // only worth making if the number behind it is derived from the table.
+  const { LIFT, BASELINE, liftTotals, LIFT_CHECKED } = await import("./holding/_worker.js/agent-ready.js");
+  assert.match(LIFT_CHECKED, /^\d{4}-\d{2}-\d{2}$/, "the bill must carry a checked date");
+
+  const names = LIFT.map(([n]) => n);
+  for (const b of BASELINE) assert.ok(names.includes(b), `baseline names ${b}, which is not in the table`);
+
+  const totals = liftTotals();
+  assert.equal(totals.lines, LIFT.reduce((n, [, , lines]) => n + lines, 0));
+  assert.equal(totals.baseline, LIFT.filter(([n]) => BASELINE.includes(n)).reduce((n, [, , l]) => n + l, 0));
+  // The headline claim: baseline is a small fraction of the whole.
+  assert.ok(totals.baseline < totals.lines / 3, "baseline should be a minority of the total, or the claim is wrong");
+  for (const [name, files, lines, buys] of LIFT) {
+    assert.ok(files > 0 && lines > 0, `${name} must carry real counts`);
+    assert.ok(buys && buys.length > 8, `${name} must say what it buys, not just what it cost`);
+  }
+});
+
+test("doors are counted, and unreadable is never counted as either", async () => {
+  // The rule this whole codebase keeps rediscovering. A check that could not run
+  // is not a pass and not a failure, and a scorecard that collapses it into
+  // either one is lying about a site it never reached.
+  const { scoreDoors } = await import("./holding/_worker.js/agent-ready.js");
+  const s = scoreDoors({
+    llms: { ok: true }, markdown: { ok: false, why: "HTTP 404" },
+    agentCard: { ok: false, unreadable: true, why: "no signing key" },
+    apiCatalog: { ok: false }, mcp: { ok: false, unreadable: true },
+  });
+  assert.equal(s.total, 5);
+  assert.equal(s.open, 1);
+  assert.equal(s.unread, 2, "unreadable doors must be counted separately");
+  // open + unread must never be conflated into a score.
+  assert.ok(!("score" in s) && !("grade" in s), "no single number may stand in for the observation");
+});
+
+test("the scorecard grades other origins, and only bills its own", async () => {
+  // A scorecard that can only flatter its author is marketing. And the bill is
+  // meaningless for an origin whose source tree we do not have, so it is shown
+  // for the self-audit alone.
+  const self = await (await terminalGet("/agent-ready?plain=1")).text();
+  assert.match(self, /what this cost to build/);
+  assert.match(self, /aadhar\.sh/);
+
+  const foreign = await (await terminalGet("/agent-ready?plain=1&url=https%3A%2F%2Fexample.com")).text();
+  assert.ok(!/what this cost to build/.test(foreign), "the bill must not appear for a foreign origin");
+  assert.match(foreign, /doors a machine can walk through/);
+
+  const refused = await (await terminalGet("/agent-ready?plain=1&url=http%3A%2F%2F169.254.169.254%2F")).text();
+  assert.match(refused, /refused/);
+});
+
+// ── /encode — read the container, decode nothing ─────────────────────────
+// These parse the repo's OWN committed encodes, which is the strongest test
+// available: 474 files this site's pipeline produced, with known properties.
+
+test("the JPEG parser agrees with the pipeline that made the files", async () => {
+  const { parseJpeg, sniff, estimateQuality } = await import("./holding/_worker.js/encode.js");
+  const { readdirSync } = await import("node:fs");
+  const files = readdirSync("holding/i").filter((f) => f.endsWith(".jpg")).slice(0, 12);
+  assert.ok(files.length > 4, "expected committed thumbnails to test against");
+
+  for (const f of files) {
+    const bytes = new Uint8Array(readFileSync(`holding/i/${f}`));
+    assert.equal(sniff(bytes), "jpeg", `${f} should sniff as jpeg`);
+    const info = parseJpeg(bytes);
+    // add-photos.sh emits 600px squares through zenc at 4:2:0, progressive.
+    assert.equal(info.width, 600, `${f} width`);
+    assert.equal(info.height, 600, `${f} height`);
+    assert.equal(info.subsampling, "4:2:0", `${f} is the delivery tier, so 4:2:0`);
+    assert.equal(info.progressive, true, `${f} should be progressive — zenc searches scan scripts`);
+    assert.ok(info.scans > 1, `${f} progressive means multiple scans, got ${info.scans}`);
+
+    // zenjpeg ships tuned tables, so they must NOT read as scaled Annex K.
+    // If this ever flips, the encoder changed underneath the pipeline.
+    const luma = info.tables.find((t) => t.id === 0);
+    assert.ok(luma, `${f} must carry a luma quantization table`);
+    assert.equal(estimateQuality(luma.values).standard, false,
+      `${f} should read as a CUSTOM table — zenjpeg does not use scaled Annex K`);
+  }
+});
+
+test("the AVIF parser reads bit depth and subsampling, and monochrome is real", async () => {
+  // 10-bit is this site's documented choice (~6% smaller at equal quality).
+  // The monochrome flag is the one I nearly "fixed" while it was correct: the
+  // first files sampled were the two Leica black-and-white frames, so a broken
+  // parser and a right one looked identical until the sample got bigger.
+  const { parseAvif, sniff } = await import("./holding/_worker.js/encode.js");
+  const { readdirSync } = await import("node:fs");
+  const files = readdirSync("holding/i").filter((f) => f.endsWith(".avif")).slice(0, 30);
+  let mono = 0, colour = 0;
+
+  for (const f of files) {
+    const bytes = new Uint8Array(readFileSync(`holding/i/${f}`));
+    assert.equal(sniff(bytes), "avif", `${f} should sniff as avif`);
+    const info = parseAvif(bytes);
+    assert.ok(info, `${f} should parse`);
+    assert.equal(info.bitDepth, 10, `${f} should be 10-bit — the measured free win`);
+    if (info.monochrome) mono += 1; else colour += 1;
+    assert.ok(["4:2:0", "grayscale"].includes(info.subsampling), `${f} unexpected subsampling ${info.subsampling}`);
+  }
+  // A parser that always answered "monochrome" would still pass every assertion
+  // above on a small enough sample. This is the one that catches it.
+  assert.ok(colour > mono, `most frames are colour; parsed ${colour} colour vs ${mono} mono`);
+});
+
+test("encode sniffs the container from magic bytes, not content-type", async () => {
+  // A mislabelled response is common, and the parse has to match the actual
+  // bytes or it reads garbage confidently.
+  const { sniff } = await import("./holding/_worker.js/encode.js");
+  assert.equal(sniff(new Uint8Array([0xFF, 0xD8, 0xFF, 0xE0, 0, 0])), "jpeg");
+  assert.equal(sniff(new Uint8Array([0x89, 0x50, 0x4E, 0x47, 0, 0, 0, 0, 0])), "png");
+  assert.equal(sniff(new Uint8Array(4)), null);
+});
+
+test("encode judges chroma and depth against this site's own measurements", async () => {
+  // The verdicts are where the site's encoding work stops being prose. 4:4:4 at
+  // delivery size and 8-bit AVIF are the two it should always flag.
+  const { judgeEncode } = await import("./holding/_worker.js/encode.js");
+  const fat = judgeEncode({ format: "jpeg", subsampling: "4:4:4", progressive: false, scans: 1, tables: [], width: 600, height: 600, icc: true }, 90000);
+  const ids = fat.warns.map((w) => w.id);
+  assert.ok(ids.includes("chroma"), "4:4:4 at delivery size must be flagged");
+  assert.ok(ids.includes("scan"), "baseline must be flagged — progressive is free bytes");
+  assert.ok(ids.includes("metadata"), "ICC riding along on a thumbnail must be flagged");
+
+  const lean = judgeEncode({ format: "jpeg", subsampling: "4:2:0", progressive: true, scans: 8, tables: [], width: 600, height: 600 }, 40000);
+  assert.equal(lean.warns.length, 0, "a well-made delivery JPEG should draw no warnings");
+
+  assert.ok(judgeEncode({ format: "avif", bitDepth: 8, subsampling: "4:2:0" }, 30000).warns.some((w) => w.id === "depth"),
+    "8-bit AVIF must be flagged — 10-bit is free");
+  assert.equal(judgeEncode({ format: "avif", bitDepth: 10, subsampling: "4:2:0" }, 30000).warns.length, 0);
 });

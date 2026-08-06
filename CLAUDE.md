@@ -157,6 +157,35 @@ worktrees may edit freely, but a worktree is not a release surface.
   `npm run deploy` still exists and still goes straight to 100%. Keep it: the
   `infra:check` deadlock below is exactly the case where a ramp's extra step is
   a liability rather than a safety net.
+- **A SECRET is a version too, so `wrangler secret put` no longer works here.**
+  Hit 2026-08-06 adding `BROWSER_RUN_TOKEN`:
+
+  ```
+  ✘ Secret edit failed. You attempted to modify a secret, but the latest
+    version of your Worker isn't currently deployed.
+  ```
+
+  That is this release model working, not a fault. `wrangler secret put` writes
+  a secret AND deploys immediately; because the newest version here is normally
+  an UPLOADED, unramped one, doing that would ship whatever is sitting in the
+  queue as a side effect of setting a secret. Wrangler refuses rather than let a
+  credential change become a release.
+
+  Use the versions form, which mints a new version and moves no traffic:
+
+  ```bash
+  npx wrangler versions secret put -c wrangler.jsonc <NAME>
+  ```
+
+  Then ramp it like any other version (`npm run deploy:promote`). Every secret
+  command in this file, MAINTENANCE.md and `cal/README.md` was the old form and
+  is now the new one; they had been unrunnable since gradual deployments landed
+  and nobody noticed, because secrets are set about once a year.
+
+  **Order matters when the secret is FOR new code.** Merge first so Workers
+  Builds uploads a version containing the feature, then set the secret on top of
+  it, then ramp. Setting it first attaches a credential to a version whose code
+  predates the thing that reads it, which is harmless and pointless.
 - **A fix for a bug that `infra:check`'s edge tier can see will DEADLOCK that
   promotion, and the merge is where it bites.** Those checks read production over
   the wire, which is the whole point of them (see the `app-owns-security-headers`
@@ -284,8 +313,8 @@ Single-page personal site at `aadhar.sh`. A Cloudflare Worker with static assets
 | `holding/tooltip.js` | Rich XP hover island for photos, tracks, artists, and car references. The homepage keeps only a tiny inline loader that idle-prefetches this module and replays a cold first hover; coarse-pointer visitors never load it. |
 | `holding/nav.js` | Site-wide XP **desktop shell**. The ONE shared external asset (deferred, SW-cached) — every page includes `<script src="/nav.js" defer>`; it injects its own `<style>` + builds, into `<body>`: the **Bliss desktop** wallpaper, **draggable desktop icons** (Notepad + the 5 profiles; icons drag freely within a visit but positions are DELIBERATELY not persisted, since the stored layout was read back in states that couldn't honour it and came back as a stack), the **taskbar** (Start orb → Run, first-level-subpage app buttons each with a per-section SVG icon, clock via Temporal), and the **Run** command palette (⌘K / Start). Also owns the **OS-window model**: body is a clipping flex desktop, each `.window`/`.np-window` is pinned + its content scrolls internally behind a **custom XP scrollbar**, windows are **draggable** (top is a hard boundary) + **resizable**, and Navigations hard-cut: the cross-document View Transition this file used to describe was removed 2026-07-30 (prerender already made navigation instant, so the animation was pure added latency). Sets each first-level route's **tab favicon** to its section icon. Run destinations: pages + profiles inline; 158 photos lazy-loaded from `/images/manifest.json` with `/images/alt.json` captions. Wired into homepage + all garage pages + worker-gen `/around`,`/whoareyou`,`/bot` + serendipity shell. |
 | `holding/quiz.js` | The **understanding-check** widget (deferred, shared, minified at deploy with a `/quiz.src.js` twin). Every garage + LWE content page ends with an active-recall quiz rendered by this one script from an inline `<script type="application/json" id="luq-data">` block: garage pages get an XP GroupBox self-test (`<section id="luq">` mount), LWE pages get the quiz as a continuation of the MSN chat (appended into `.log`, no mount). Misconception-based distractors, deterministic option shuffle, per-page best score in localStorage. The idea is Geoffrey Litt's "Understanding is the new bottleneck" (credited in the widget footer); /lens carries the same pedagogy in copy (predict-then-check mode notes, the Delta counterfactual lab as a Papert micro-world). |
-| `holding/terminal.js` | The **Windows PowerShell** console at `/terminal` (deferred, minified at deploy with a `/terminal.src.js` twin). The page SERVER-RENDERS one frame into the console as boot output, so the route reads with JS off and an agent fetching the HTML gets content rather than a mount point; this script turns that scrollback into a shell. Commands are the real thing, not a demo vocabulary: `finger`/`photos`/`lens` hit the same routes curl does, `get` performs the same Accept negotiation an agent performs, `mcp` speaks JSON-RPC to `/mcp`. Arrow keys drive a running program (they are shell history when none is), Ctrl+P/Ctrl+N are history either way. Builds output with `createTextNode` and never `innerHTML`, because the frames carry photo captions and, through `lens`, an arbitrary third party's `<title>`. |
-| `holding/_worker.js/terminal.js` + `lib/tui.js` | The three terminal programs and the 80-column frame renderer behind `/terminal/*`. **State is query params, not a session** — `?pane=writing&cursor=3&open=lattice` — so there is no DO round trip on a keypress (counter.js measures one at 185-630ms), sessions FORK, and the state is inspectable rather than an opaque token the caller hands back. Each frame prints the URL that produced it, labelled `state`, and a contract test asserts that URL reproduces the frame. `lib/tui.js` is pure (frames in, string out), which is what lets one renderer answer HTTP, MCP, and `node --test`. Its palette is MID-TONES ONLY: a terminal theme belongs to the visitor, so a near-white or near-black foreground is unreadable for half of them. |
+| `holding/terminal.js` | The **Windows PowerShell** console at `/terminal`, and an actual **MCP client**: typing `dict <url>` sends the same `POST /mcp` `tools/call` an agent sends, and echoes the request before making it. Deliberately no private endpoints — if the console had its own, watching it would say nothing about what an agent gets and the two could drift unnoticed. The page server-renders one frame as boot output, so the route reads with JS off. Builds output with `createTextNode`, never `innerHTML`, because frames carry photo captions and third-party page titles. |
+| `holding/_worker.js/terminal.js` + `lib/tui.js` | The tools and the 80-column frame renderer. Tools are TOP-LEVEL utilities (`/finger`, `/radar`, `/dict`, `/cache`), because this site puts utilities at the root and only content nests; `/terminal` is the console that DRIVES them, not their parent. The frame is a REPRESENTATION alongside `.md`: one URL answers HTML to a browser, the frame to everything else, and `<tool>.txt` explicitly. **The MCP tool name IS the route name** — what you type in the console, what you curl, and what an agent calls are one word, and a contract test asserts every tool with a route is reachable over MCP. State is query params (small and addressable), so frames fork, bookmark and replay. `lib/tui.js` is pure, which is what lets one renderer answer HTTP, MCP and `node --test`; its palette is MID-TONES ONLY because a terminal theme belongs to the visitor. |
 | the `/terminal` window | It is a **console window, not a page**, and the difference is entirely in what was REMOVED. `lunaPage` gained `windowClass`/`contentClass`/`windowAttrs` (all defaulting to empty, so the other nine callers are byte-identical) and the window declares `data-no-histnav`, which `nav.js` honours by skipping the site-wide Back/Forward injection — those are BROWSER controls, and a console carrying them reads as a terminal running inside Internet Explorer. Drag, resize, maximize and close all stay, because those are OS chrome. There is also nothing below the window: the explanatory paragraph that used to sit there was the single strongest tell, since real consoles do not come with a caption. Width is 624px so the console is exactly 80 columns, the size a real one opens at; left at the 760px page default it carried 136px of dead field to the right of every frame. Fonts stay on the design system — `"Lucida Console", var(--font-mono)`, one native Windows font in front of the existing token, no `@font-face`, no bytes. |
 | `holding/_worker.js` | The module worker (bundled by wrangler at deploy). Owns routing, photo serving from R2, manifest building, Spotify playlist scraping, AadharshBot crawler, the `/writing` Notepad pages, cache-control overrides. |
 | `holding/_headers` | Static-asset cache + security headers (CSP, Permissions-Policy, etc.). Applied to direct static-asset requests; the worker overrides cache-control for select paths. |
@@ -553,6 +582,28 @@ BOTH servers, and one fails if either file re-declares `MCP_SUPPORTED` or
 `MCP_PROTOCOL` locally instead of importing them — the drift that would pass on
 the day it was written and rot later.
 
+**`/mcp` is also the browser's tool catalog now, which is why `find_events` lives
+there.** Cloudflare's WebMCP bridge (gotcha 20) reads ONE endpoint per origin,
+`data-mcp-url`, defaulting to `/mcp`, and registers whatever `tools/list` returns
+into `document.modelContext`. Two servers on one origin is right for an agent that
+reads the agent card and picks a door, and invisible to an agent that only ever
+knocks on one. So `lib/tools.js` hoists exactly one Serendipity tool through
+`serendipityFindEvents()` in `serendipity/serendipity.js`, which dispatches into the
+same `mcpCallTool` that `/serendipity/mcp` uses — one implementation, one schema per
+door, no drift. It is deliberately ONE tool and not a proxy: `get_event` and
+`search_people` are drill-downs that only make sense inside the pool, and hoisting
+all four would put four near-duplicate names in front of a model that already has
+eight. Note the import runs holding → serendipity, the reverse of the established
+direction, which is fine (no cycle, and both files are node-safe, which is the
+constraint that actually bites — gotcha 16).
+
+This replaced a hand-rolled `navigator.modelContext` block in `index.html` that
+registered `whats_playing` and `find_events`. It was wrong three ways by then:
+homepage only, on the API Chrome 146 renamed to `document.modelContext`, and
+`whats_playing` was a second name for `now_playing`. Adding a tool to `DATA_TOOLS`
+now lights up four doors at once (JSON-RPC, `/terminal/ask`, the terminal programs,
+and every page's browser-local catalog), so weigh new entries accordingly.
+
 Cards: `.well-known/mcp.json` and `.well-known/mcp/server-card.json` are
 Serendipity's; `.well-known/agent-card.json` carries both interfaces. All of
 them advertise 2026-07-28 now.
@@ -615,18 +666,46 @@ generic hex back.
   `./holding/scripts/bump-version.sh <slug> "<title>"`, then deploy. It derives
   the next vnum from `SELECT MAX(vnum)` and inserts the checkpoint (no file edit;
   the SW that used to carry the version string retired in v136).
-- **BROWSER (Browser Rendering binding)** — powers `/lens/shot` and
+- **BROWSER (Browser Run binding)** — powers `/lens/shot` and
   `/lens/browser` inside **`/lens`** ("The Other Web", which shows any URL the way a
   machine does). `/lens`'s Human view embeds framable sites in a live cross-origin
   `<iframe>` (loaded by the visitor's own browser) and screenshots the rest
   server-side via the binding's `quickAction("screenshot", …)` (real headless
-  Chrome; the old REST-API path with `BROWSER_RENDER_TOKEN` is retired). Without
+  Chrome). Without
   the binding, `/lens/shot` returns a clean 503 and the Human view falls back to
   the readable-text reader, so the live iframe + all machine lenses keep working
-  regardless. (`CF_ACCOUNT_ID` stays a var, but only for `/ledger`'s Analytics
-  Engine SQL reads alongside `ANALYTICS_READ_TOKEN`.)
-  Screenshots are KV-cached 1h (`lens:shot:<sha256(url)>` in RN_KV) and rate-limited to
-  8/min/IP; `/lens/fetch` (the parsing engine) is rate-limited 30/min/IP. Those limits
+  regardless. (`CF_ACCOUNT_ID` is read by `/ledger`'s Analytics Engine SQL
+  alongside `ANALYTICS_READ_TOKEN`, and by the Kitesurf REST path below.)
+
+  **Kitesurf rides the EXISTING `/lens/browser`, and there is no second route.**
+  A `/lens/rendered` was built here on 2026-08-06 and deleted the same day: it
+  duplicated the Browser view, which already renders after JavaScript, already
+  asks for content + screenshot + markdown + accessibility tree in ONE Quick
+  Action, and whose `deltaStrip` already computed the HTTP-versus-rendered word
+  gap. Read `lens-browser.js` before adding a rendering surface.
+
+  What survives in `lens-render.js` is the engine seam. **Kitesurf cannot be
+  reached from the binding**: probed 2026-08-06, passing `browser` to
+  `quickAction` returns `{"code":"unrecognized_keys","keys":["browser"]}`, and an
+  invented engine name returns the byte-identical error — the payload schema is
+  CLOSED, so it refuses the option rather than failing on an unknown value. REST
+  is the only door and it wants a `Browser Rendering - Edit` token in
+  `BROWSER_RUN_TOKEN`. That is an EDIT scope living as a Worker secret; it is not
+  in GitHub, so the no-write-token-in-CI rule is intact, but do not confuse it
+  for a read scope. `browser=kitesurf` is in Cloudflare's launch post and NOT in
+  the Quick Actions reference, so the code TRIES it and, on a 400, retries
+  without it and remembers for the isolate. Only the PARAMETER is conditional —
+  REST itself keeps serving, because gating the whole REST path on a dead beta
+  flag silently demoted every later render back to the binding.
+
+  The snapshot now reports `engine` and a server-computed `shape` (words,
+  headings, links, images, JSON-LD). `shape` is counted from the FULL rendered
+  body BEFORE the 120KB content cap, which retires the old truncation bail: a
+  capped snapshot used to refuse a word comparison entirely (stripe read
+  "1874 -> 139 words" off a slice) and can now answer honestly.
+
+  Screenshots are KV-cached 6h (`lens:shot:<sha256(url)>` in RN_KV) and rate-limited to
+  3/min/IP; `/lens/fetch` (the parsing engine) is rate-limited 30/min/IP. Those limits
   are Rate Limiting bindings as of 2026-08-04, not KV counters; the RESPONSE cache is
   still KV, and only the counters moved. Both `/lens/*`
   fetch routes guard against SSRF (http(s) only, no localhost / private / link-local /
@@ -719,7 +798,7 @@ the existing layers structurally could not reach:
 | `home.grid.*`, `rn.tracks.*` | the two hydration fragments. Splits manifest-vs-alt, which `perf-probe.js` fuses into one positional AE double. `home.grid.render` reads 0ms (see the CPU note above) and earns its place on attributes alone |
 | `rn.scrape.{playlist,tracks,artists}` | the 3-tier Spotify scrape, cold-miss only. `rn.artists_cached` vs `_scraped` says whether the artist KV cache is actually saving the network |
 | `lens.inspect.{fetch,parse}`, `lens.discovery` | `out.elapsedMs` is fixed BEFORE the 28-probe fan-out (botViews is 6 of its own), so a scan's discovery phase was entirely unmeasured. Production, 752KB page: 782ms total, `elapsedMs` reported 29. `lens.inspect.parse` reads 0ms (CPU note above) and is kept for its byte/word attributes |
-| `lens.shot`, `lens.browser` | Browser Rendering. Same span name on hit and miss (differing on `lens.cache`) so hit rate is a group-by, not a join; the four distinct 502 shapes are separated by `lens.outcome` |
+| `lens.shot`, `lens.browser` | Browser Run. Same span name on hit and miss (differing on `lens.cache`) so hit rate is a group-by, not a join; the four distinct 502 shapes are separated by `lens.outcome` |
 | `cron.*` | a cron has no response, no status, and no visitor to complain |
 | `around.neighbor` | every degradation here is designed to be quiet (a disallowing robots.txt is a legitimate skip). The rollup makes "3 of 20 neighbors dark for a month" one number |
 | `census.host` | a time series with silently missing rows is worse than none; the per-host catch is correct AND is how a 16-site roster becomes 3 |
@@ -738,7 +817,7 @@ design passes the site did not converge on, and their byte budgets and file:line
 citations are stale. [`design/README.md`](design/README.md) draws that line; read
 it before treating anything in there as a target.
 
-**HARD RULES (strong owner preference):** (1) **internal/native fonts ONLY** — never ship `@font-face` with `url()`, web fonts, `@import`, or font preloads; the served pages carry ZERO font bytes (the design system's `@font-face local()` rules are reference-only, never inlined into a served page). (2) **keep perf lean** — fold design tokens in WITHOUT regressing the byte budget: on a brotli'd inline page, tokenizing repeated literals is a wash (brotli already dedupes) while token *definitions* are net-new bytes, so only the FONT tokens (`--font-*`) are inlined site-wide; color/gradient tokens are NOT inlined (they cost bytes for no brotli gain). no external stylesheet, no JS for styling. **The served pages load NO cross-origin assets, and the Cloudflare Web Analytics beacon is why that sentence needs a footnote (owner-approved 2026-07-29).** The homepage, and only the homepage, runs RUM, and BOTH of its legs are first-party: `/ledger/rum.js` proxies the beacon script, `/ledger/rum` forwards the reports, both in `_worker.js/rum.js`. Describe it precisely — the browser speaks only to this origin, while this server still calls Cloudflare on the visitor's behalf. "First-party" is the easiest claim on this site to round up into a privacy win it is not. Why RUM at all: MAINTENANCE.md has named it the outcome source for LCP/INP/CLS since the perf budget was written, and until it reports, the byte ceilings here are guesses standing in for field data; the 2026-04-30 Navigation Type release is what makes the bfcache `no-cache` choice and the hand-tuned speculation rules measurable rather than asserted. Why proxied: `static.cloudflareinsights.com` is on EasyPrivacy, so blocker-running visitors dropped out of the sample entirely, and they skew toward the engines whose bfcache/prerender behaviour is the whole point of the measurement. This is NOT an oversight to clean up. Six surfaces move together or not at all, enforced by a `build.mjs` tripwire (#7b) plus a contract test: the `<script src="/ledger/rum.js">` in `index.html` AND its `send.to` config (without `send.to` the beacon silently falls back to its hardcoded cloudflareinsights.com endpoint, which the CSP now blocks, so every report fails while the script looks fine), the `/ledger/rum*` pair in `_worker.js/index.js`, the same pair in `run_worker_first` in BOTH wrangler configs, CSPs free of `cloudflareinsights.com` in BOTH `_headers` and `_worker.js/lib/security.js`, the disclosure on `/whoareyou` AND its markdown twin `holding/md/whoareyou.md`, and the `/security` CSP summary. **UNVERIFIED, check after the next deploy:** the collector sees the worker's subrequest rather than the visitor's, so geo attribution may collapse; `cf-connecting-ip` is forwarded but whether the collector honours it from a worker is unknown. If the dashboard's country breakdown goes flat, that is this — amend the disclosure, don't quietly keep it. Zone-side automatic injection is NOT an option here: the worker serves these pages as precompressed br/dcz bodies with `encodeBody: "manual"`, and the edge cannot rewrite HTML it did not compress. Site-wide would mean putting it in `nav.js`, which every page loads — an extra request on the shell's critical path, so don't, absent a measurement. (3) **authoring stays buildless; serving is minified, on every page** — the ONLY build is `build.mjs` (deploy-time transform: minifies EVERY served HTML document (structure + inline CSS/JS), the six client scripts, `luna.css` + `lwe-base.css`, and the worker modules' `/*min*/` CSS literals into a staged `.build/` copy, shipping a readable twin beside each one — `/<name>.src.js`, `/luna.src.css`, and a `.src.html` per page, named by a banner comment on line 1; hard-fails the deploy if `luna.css` doesn't parse; and content-hashes `nav.js` + `luna.css` into immutable `/a/<name>.<hash8>.<ext>` URLs, repointing every `src=`/`href=` ref to them so the shell earns a 1-year immutable cache — the unhashed `/nav.js` + `/luna.css` stay as short-cached fallbacks for cal/coffee's absolute refs + any stale HTML). `wrangler.jsonc` self-builds via its `build.command` and points `main`+`assets` at `.build/holding`, so NO deploy path (bare `wrangler deploy`, `npm run deploy`, Workers Builds) can ship the readable originals; local dev uses `wrangler.dev.jsonc` (readable `holding/`, fast reload). Never bundle, and never extend the build past this without the owner's say-so (`luna.css` was owner-approved 2026-07 for an ~8.7KB brotli win on a render-blocking sheet; the `/a/` content-hashing of `nav.js` + `luna.css` was owner-approved 2026-07-21 to clear PSI's "efficient cache lifetimes" audit; whole-site HTML minification was owner-approved 2026-07-31, retiring the older "never minify the garage/lwe HTML" rule — the argument being that a readable twin one banner-click away keeps View Source honest, because the twin is the SAME program, which is exactly the property that separates minifying from compiling).
+**HARD RULES (strong owner preference):** (1) **internal/native fonts ONLY** — never ship `@font-face` with `url()`, web fonts, `@import`, or font preloads; the served pages carry ZERO font bytes (the design system's `@font-face local()` rules are reference-only, never inlined into a served page). (2) **keep perf lean** — fold design tokens in WITHOUT regressing the byte budget: on a brotli'd inline page, tokenizing repeated literals is a wash (brotli already dedupes) while token *definitions* are net-new bytes, so only the FONT tokens (`--font-*`) are inlined site-wide; color/gradient tokens are NOT inlined (they cost bytes for no brotli gain). no external stylesheet, no JS for styling. **The served pages load NO cross-origin assets, and TWO things now need a footnote on that sentence: the Cloudflare Web Analytics beacon (owner-approved 2026-07-29) and the WebMCP bridge (2026-08-06).** The bridge is the sharper exception, because it is the one asset here nobody in this repository wrote: enabling WebMCP makes the edge inject `<script type="module" src="/.webmcp/bridge.js">` into every document, 47.6 KB of Cloudflare's code under `cache-control: public, max-age=0, must-revalidate`, first in `<head>`. Same-origin, so the literal rule holds and the CSP's `script-src 'self'` admits it in both the enforcing and the hashed report-only policy. It is ALSO the demonstration that hashing inline scripts guarantees less than it sounds like, which is why `/security` now says so out loud. For ordinary visitors it is pure cost: `initBridge()` returns immediately unless the browser has `document.modelContext` (Chrome 146 behind a flag), so nearly everyone downloads it, gets one `console.warn`, and stops. It is disclosed on `/whoareyou`, its twin, and `/security`, and `gen-md-twins.mjs` pins the path so turning the feature off fails the deploy rather than leaving the page describing a tag that is gone. The homepage, and only the homepage, runs RUM, and BOTH of its legs are first-party: `/ledger/rum.js` proxies the beacon script, `/ledger/rum` forwards the reports, both in `_worker.js/rum.js`. Describe it precisely — the browser speaks only to this origin, while this server still calls Cloudflare on the visitor's behalf. "First-party" is the easiest claim on this site to round up into a privacy win it is not. Why RUM at all: MAINTENANCE.md has named it the outcome source for LCP/INP/CLS since the perf budget was written, and until it reports, the byte ceilings here are guesses standing in for field data; the 2026-04-30 Navigation Type release is what makes the bfcache `no-cache` choice and the hand-tuned speculation rules measurable rather than asserted. Why proxied: `static.cloudflareinsights.com` is on EasyPrivacy, so blocker-running visitors dropped out of the sample entirely, and they skew toward the engines whose bfcache/prerender behaviour is the whole point of the measurement. This is NOT an oversight to clean up. Six surfaces move together or not at all, enforced by a `build.mjs` tripwire (#7b) plus a contract test: the `<script src="/ledger/rum.js">` in `index.html` AND its `send.to` config (without `send.to` the beacon silently falls back to its hardcoded cloudflareinsights.com endpoint, which the CSP now blocks, so every report fails while the script looks fine), the `/ledger/rum*` pair in `_worker.js/index.js`, the same pair in `run_worker_first` in BOTH wrangler configs, CSPs free of `cloudflareinsights.com` in BOTH `_headers` and `_worker.js/lib/security.js`, the disclosure on `/whoareyou` AND its markdown twin `holding/md/whoareyou.md`, and the `/security` CSP summary. **UNVERIFIED, check after the next deploy:** the collector sees the worker's subrequest rather than the visitor's, so geo attribution may collapse; `cf-connecting-ip` is forwarded but whether the collector honours it from a worker is unknown. If the dashboard's country breakdown goes flat, that is this — amend the disclosure, don't quietly keep it. Zone-side automatic injection is NOT an option here: the worker serves these pages as precompressed br/dcz bodies with `encodeBody: "manual"`, and the edge cannot rewrite HTML it did not compress. **Read that as a fact about the Web Analytics injector, not about the edge** — the WebMCP injector rewrites those same precompressed documents fine (gotcha 20), so a NEW feature's ability to inject has to be checked rather than inferred from this sentence. Site-wide would mean putting it in `nav.js`, which every page loads — an extra request on the shell's critical path, so don't, absent a measurement. (3) **authoring stays buildless; serving is minified, on every page** — the ONLY build is `build.mjs` (deploy-time transform: minifies EVERY served HTML document (structure + inline CSS/JS), the six client scripts, `luna.css` + `lwe-base.css`, and the worker modules' `/*min*/` CSS literals into a staged `.build/` copy, shipping a readable twin beside each one — `/<name>.src.js`, `/luna.src.css`, and a `.src.html` per page, named by a banner comment on line 1; hard-fails the deploy if `luna.css` doesn't parse; and content-hashes `nav.js` + `luna.css` into immutable `/a/<name>.<hash8>.<ext>` URLs, repointing every `src=`/`href=` ref to them so the shell earns a 1-year immutable cache — the unhashed `/nav.js` + `/luna.css` stay as short-cached fallbacks for cal/coffee's absolute refs + any stale HTML). `wrangler.jsonc` self-builds via its `build.command` and points `main`+`assets` at `.build/holding`, so NO deploy path (bare `wrangler deploy`, `npm run deploy`, Workers Builds) can ship the readable originals; local dev uses `wrangler.dev.jsonc` (readable `holding/`, fast reload). Never bundle, and never extend the build past this without the owner's say-so (`luna.css` was owner-approved 2026-07 for an ~8.7KB brotli win on a render-blocking sheet; the `/a/` content-hashing of `nav.js` + `luna.css` was owner-approved 2026-07-21 to clear PSI's "efficient cache lifetimes" audit; whole-site HTML minification was owner-approved 2026-07-31, retiring the older "never minify the garage/lwe HTML" rule — the argument being that a readable twin one banner-click away keeps View Source honest, because the twin is the SAME program, which is exactly the property that separates minifying from compiling).
 
 > **Two traps the whole-site HTML pass hit, both on `/garage/horizon`, both worth knowing before touching served HTML.** (a) **minify-html decodes HTML entities inside quoted attribute values**, and no option turns it off: `value="&lt;script&gt;bad()&lt;/script&gt;"` ships as `value="<script>bad()</script>"`. That is spec-legal (a quoted attribute may hold raw `<`) and DOM-identical — verified in a browser, where the input's `.value` is byte-for-byte the intended payload and nothing renders from it. The consequence is that **any scanner over served HTML must WALK tags rather than search for `<script`**: the naive regex in `contract-tests.mjs` read horizon's XSS demo payload and its `<iframe srcdoc>` as two real inline scripts and failed the deploy demanding CSP hashes for them. This is the third naive scanner that page's demo content has caught. (b) **Lightning CSS 1.33 does not know the CSS Overflow 5 carousel selectors** (`::scroll-marker`, `::scroll-marker-group`, `::scroll-button()`, `:target-current`) that horizon demos on purpose; it warns and then emits them verbatim, so `minifyCss` tolerates exactly that warning family and re-proves the pass-through on every build instead of trusting the one probe that established it.
 
@@ -818,9 +897,9 @@ cal/
 
 ```bash
 npm install
-npx wrangler secret put -c wrangler.jsonc ICAL_URL        # Google Calendar → "secret ICS"
-npx wrangler secret put -c wrangler.jsonc RESEND_API_KEY  # resend.com, DKIM-verify aadhar.sh
-openssl rand -hex 32 | npx wrangler secret put -c wrangler.jsonc SIGNING_SECRET
+npx wrangler versions secret put -c wrangler.jsonc ICAL_URL        # Google Calendar → "secret ICS"
+npx wrangler versions secret put -c wrangler.jsonc RESEND_API_KEY  # resend.com, DKIM-verify aadhar.sh
+openssl rand -hex 32 | npx wrangler versions secret put -c wrangler.jsonc SIGNING_SECRET
 
 # Production still ships through merge -> CI -> production -> Workers Builds.
 # Local fallback, from the repository root only:
@@ -1040,6 +1119,13 @@ npm run deploy
     across 38 pages). Both candidates are emitted only when they beat plain q11.
     `npm run shell:roll` rolls both `a-dict` and `p-dict`; page snapshots are Brotli'd
     in the repo, ignored by the asset upload, and decompressed only at build time.
+    **The two halves read different sources, and that is load-bearing rather than
+    incidental.** `a-dict` adopts from `.build/holding/a` (so it is only valid from
+    the deployed commit), while `p-dict` fetches the LIVE pages, because an edge
+    feature can rewrite a document after this Worker and a snapshot derived from
+    source then matches nothing — see gotcha 20 for the WebMCP instance and the
+    measurement. `npm run pages:roll` rolls the page half alone, which is the repair
+    step when that happens; `--shell` is the other half.
     RFC 9842 requires RAW bytes here: a `zstd --train` artifact is self-describing,
     the server library reads its tables, Chrome reads the same bytes as content, and
     the navigation dies on `ERR_CONTENT_DECODING_FAILED`.
@@ -1191,6 +1277,63 @@ npm run deploy
     it, which is the reason that re-parse exists — keep backticks out of those
     comments.
 
+20. **An edge feature that rewrites HTML *after* the Worker invalidates anything
+    derived from the Worker's own output — silently, and dictionaries first.**
+    WebMCP was enabled on 2026-08-06 (Agent Readiness → Labs), and Cloudflare
+    implements it by injecting one loader tag with HTMLRewriter at the edge:
+
+    ```html
+    <script type="module" src="/.webmcp/bridge.js" data-packs="c2pa,mcp-server-client"></script>
+    ```
+
+    It lands FIRST in `<head>`, on every document here, worker-rendered and static
+    alike, and it survives `encodeBody: "manual"` precompression — so the CLAUDE.md
+    claim that "the edge cannot rewrite HTML it did not compress" is true of the
+    zone-side Web Analytics injector and NOT true in general. Verify per feature.
+
+    What broke: `holding/p-dict` snapshots were adopted from `.build/holding/*.html`,
+    and a shared dictionary is matched by the SHA-256 a BROWSER computes over the
+    body it stored. The staged file has no injected tag, so every snapshot hashed to
+    bytes nobody held and the 93-97% per-page tier fell back to the family
+    dictionary. Nothing errored. Proven on `/garage/pretext`: offering the committed
+    tag answered `dcz`, offering the tag of the live body answered `br`.
+
+    `shell:roll`'s page half reads PRODUCTION now, and `npm run pages:roll` rolls
+    that half alone (the shell half still reads the local built tree, so it is still
+    deployed-commit-only — that is why they split). `dcz:check` grew a
+    **committed snapshots are WIRE bytes** assertion: a script the live document
+    loads must appear in at least one snapshot. The old per-page probe could not see
+    this, because it offers the committed tag and so passes on a snapshot no browser
+    could ever offer.
+
+    Generalise past WebMCP: Rocket Loader, Email Obfuscation, zone-side beacons, an
+    A/B mutation — any of them breaks a dictionary derived from source, and the
+    symptom is a silent tier downgrade rather than an error. **Derive from the wire,
+    or verify the wire equals the build.**
+
+21. **The bridge's `c2pa` pack cannot see this site's photos, and no pipeline
+    change fixes it.** TURNED OFF in the dashboard 2026-08-06, so the injected tag
+    reads `data-packs="mcp-server-client"` and the note below is the record of why
+    rather than a proposal. Read it before anyone scopes Content Credentials again.
+    `collectImageSources()` reads
+    `img.currentSrc || img.src`, and `currentSrc` on a `<picture>` is whatever the
+    browser CHOSE — AVIF here. `detectImageFormat()` then sniffs exactly two magic
+    numbers, JPEG's SOI and the PNG signature, and returns `unknown` for everything
+    else. So the pack fetches the AVIF and reports "Unsupported image format" no
+    matter what the JPG tier carries. Signing buys nothing until that parser learns
+    BMFF, which is the reason the pack is off: it was 2 tools that walk every
+    `<img>` on the page and fetch each one to learn nothing.
+
+    The byte numbers, from `c2patool` 0.27.6 against a real shipped thumbnail
+    (`L1000069_3`, 21,505 B JPG / 11,204 B AVIF), since they are the reason this
+    stays parked: **+13.8 KB per image, near-constant**, and NOT the certificate
+    (the whole PEM chain is 1,836 B). JPG 21,505 → 35,283. AVIF 11,204 → 25,092.
+    Default settings are far worse, because c2pa-rs embeds a claim thumbnail unless
+    `[builder.thumbnail] enabled = false`: 21,505 → **101,603**. A sidecar `.c2pa`
+    leaves the pixels byte-identical at the same 13,766 B, which is the only shape
+    worth revisiting. Across 474 committed `/i/` files that is ~6.5 MB of immutable
+    assets for a signature nothing on the page can currently read.
+
 ---
 
 ## Source folder for new photos
@@ -1218,4 +1361,23 @@ curated this folder; treat it as the canonical photo source.
   production half (running that program in a Worker Loader isolate with the MCP
   bound by RPC) sat in Cloudflare's closed beta, so it never wired into
   anything. Removed 2026-07-23 after a month unreferenced by any page, script,
-  or CI job. `git log --diff-filter=D -- codemode/` finds it if the beta opens.
+  or CI job. `git log --diff-filter=D -- codemode/` finds it.
+
+  **THE BETA OPENED (checked 2026-08-05) and the answer is still no, for a
+  different reason than before.** Code Mode is documented and shipping:
+  `@cloudflare/codemode` swaps individual tool calls for one `code()` tool run in
+  a Dynamic Worker Loader (isolates, <10ms start, no concurrency cap, ~$0.002 per
+  load). The blocker that parked this is gone.
+
+  What replaced it is a fit argument. Code Mode's win scales with CATALOG SIZE —
+  it exists so a model can drive a large API without spending its context on
+  forty schemas. `/terminal/ask` has SEVEN read-only tools, whose whole schema
+  set is smaller than the prompt describing Code Mode, so the direct loop in
+  ask.js is both cheaper and simpler. It also runs MODEL-AUTHORED CODE, which is
+  sandboxed and defensible but is the opposite of the "bounded catalog, not a
+  shell" stance ask.js is built on, and $0.002 a call is real money on a public
+  endpoint that is trying to be near-free.
+
+  Revisit if either premise changes: the catalog grows past ~20 tools, or the ask
+  loop starts needing to CHAIN calls (its 4-call/2-round cap is exactly the
+  symptom Code Mode cures).

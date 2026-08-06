@@ -120,7 +120,7 @@ async function queryLedger(env) {
 //
 // Coverage is whatever Cloudflare bills through this feed (Workers, R2, D1,
 // Workers AI, Vectorize, Images, Stream as of 2026-08). Analytics Engine,
-// Browser Rendering, and KV are absent from that list, so the cost line is a
+// Browser Run, and KV are absent from that list, so the cost line is a
 // floor rather than a total — `services` records which families actually
 // answered, so the note can name them instead of implying completeness.
 async function queryBillableUsage(env) {
@@ -303,7 +303,7 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
         <li>Only worker-served requests are countable — static files served straight from the edge never wake the worker, so the true crawl count is higher than this.</li>
         <li>Identity is self-reported: a row is a user-agent claim, not a verified signature. A bot that lies about its name bills to nobody.</li>
         <li>The rate is this site's posted price (the /llms-full.txt cent), not a market quote. Robots policy and Content Signals live in <a href="/robots.txt">robots.txt</a>: reading here is welcome — this invoice is the point being made, not a demand letter.</li>
-        <li>The cost line is the only figure here that changed hands, and it is account-wide: every product on this Cloudflare account over the same window, not the crawlers' share. Billing lands daily and carries no per-request identity, so splitting it per bot would mean modelling a number and printing it next to measured ones. Coverage is whatever Cloudflare bills through that feed, which leaves out Analytics Engine, Browser Rendering, and KV — read it as a floor.</li>
+        <li>The cost line is the only figure here that changed hands, and it is account-wide: every product on this Cloudflare account over the same window, not the crawlers' share. Billing lands daily and carries no per-request identity, so splitting it per bot would mean modelling a number and printing it next to measured ones. Coverage is whatever Cloudflare bills through that feed, which leaves out Analytics Engine, Browser Run, and KV — read it as a floor.</li>
         <li>Machine-readable twin at <a href="/ledger.json">/ledger.json</a>.</li>
       </ul>
     </div>

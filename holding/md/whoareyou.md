@@ -54,6 +54,18 @@ re-hit ARIN, and the Edge Trace section's fetch of `/cdn-cgi/trace`, which your
 own browser makes to this same origin. The data lives for as long
 as it takes to render, then nothing writes it to storage.
 
+One script on every page is not mine: since 2026-08-06 the Cloudflare edge injects
+`<script type="module" src="/.webmcp/bridge.js">` into every HTML document here, after
+this worker has finished with it. It is 47KB of Cloudflare's code, served from this
+origin, and it is the reason View Source shows a tag no file in the repository
+contains. What it does: if your browser implements `document.modelContext` (today that
+means Chrome 146 with experimental web platform features on) it reads this site's own
+`/mcp` server and registers those tools into the page, so an agent browsing here can
+call them instead of scraping. Every other browser, which is nearly all of them,
+downloads it, finds no such API, writes one warning to the console, and stops. So the
+honest description is that most visitors pay 47KB for nothing, and the site is betting
+that changes.
+
 Analytics, precisely: not on this page. The homepage, and only the homepage, loads
 Cloudflare Web Analytics. Since 2026-07-29 your browser fetches that script from this
 origin (`/ledger/rum.js`) and posts its timings to this origin (`/ledger/rum`), so no
