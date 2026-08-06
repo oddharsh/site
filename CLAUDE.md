@@ -157,6 +157,35 @@ worktrees may edit freely, but a worktree is not a release surface.
   `npm run deploy` still exists and still goes straight to 100%. Keep it: the
   `infra:check` deadlock below is exactly the case where a ramp's extra step is
   a liability rather than a safety net.
+- **A SECRET is a version too, so `wrangler secret put` no longer works here.**
+  Hit 2026-08-06 adding `BROWSER_RUN_TOKEN`:
+
+  ```
+  ✘ Secret edit failed. You attempted to modify a secret, but the latest
+    version of your Worker isn't currently deployed.
+  ```
+
+  That is this release model working, not a fault. `wrangler secret put` writes
+  a secret AND deploys immediately; because the newest version here is normally
+  an UPLOADED, unramped one, doing that would ship whatever is sitting in the
+  queue as a side effect of setting a secret. Wrangler refuses rather than let a
+  credential change become a release.
+
+  Use the versions form, which mints a new version and moves no traffic:
+
+  ```bash
+  npx wrangler versions secret put -c wrangler.jsonc <NAME>
+  ```
+
+  Then ramp it like any other version (`npm run deploy:promote`). Every secret
+  command in this file, MAINTENANCE.md and `cal/README.md` was the old form and
+  is now the new one; they had been unrunnable since gradual deployments landed
+  and nobody noticed, because secrets are set about once a year.
+
+  **Order matters when the secret is FOR new code.** Merge first so Workers
+  Builds uploads a version containing the feature, then set the secret on top of
+  it, then ramp. Setting it first attaches a credential to a version whose code
+  predates the thing that reads it, which is harmless and pointless.
 - **A fix for a bug that `infra:check`'s edge tier can see will DEADLOCK that
   promotion, and the merge is where it bites.** Those checks read production over
   the wire, which is the whole point of them (see the `app-owns-security-headers`
@@ -284,8 +313,8 @@ Single-page personal site at `aadhar.sh`. A Cloudflare Worker with static assets
 | `holding/tooltip.js` | Rich XP hover island for photos, tracks, artists, and car references. The homepage keeps only a tiny inline loader that idle-prefetches this module and replays a cold first hover; coarse-pointer visitors never load it. |
 | `holding/nav.js` | Site-wide XP **desktop shell**. The ONE shared external asset (deferred, SW-cached) — every page includes `<script src="/nav.js" defer>`; it injects its own `<style>` + builds, into `<body>`: the **Bliss desktop** wallpaper, **draggable desktop icons** (Notepad + the 5 profiles; icons drag freely within a visit but positions are DELIBERATELY not persisted, since the stored layout was read back in states that couldn't honour it and came back as a stack), the **taskbar** (Start orb → Run, first-level-subpage app buttons each with a per-section SVG icon, clock via Temporal), and the **Run** command palette (⌘K / Start). Also owns the **OS-window model**: body is a clipping flex desktop, each `.window`/`.np-window` is pinned + its content scrolls internally behind a **custom XP scrollbar**, windows are **draggable** (top is a hard boundary) + **resizable**, and Navigations hard-cut: the cross-document View Transition this file used to describe was removed 2026-07-30 (prerender already made navigation instant, so the animation was pure added latency). Sets each first-level route's **tab favicon** to its section icon. Run destinations: pages + profiles inline; 158 photos lazy-loaded from `/images/manifest.json` with `/images/alt.json` captions. Wired into homepage + all garage pages + worker-gen `/around`,`/whoareyou`,`/bot` + serendipity shell. |
 | `holding/quiz.js` | The **understanding-check** widget (deferred, shared, minified at deploy with a `/quiz.src.js` twin). Every garage + LWE content page ends with an active-recall quiz rendered by this one script from an inline `<script type="application/json" id="luq-data">` block: garage pages get an XP GroupBox self-test (`<section id="luq">` mount), LWE pages get the quiz as a continuation of the MSN chat (appended into `.log`, no mount). Misconception-based distractors, deterministic option shuffle, per-page best score in localStorage. The idea is Geoffrey Litt's "Understanding is the new bottleneck" (credited in the widget footer); /lens carries the same pedagogy in copy (predict-then-check mode notes, the Delta counterfactual lab as a Papert micro-world). |
-| `holding/terminal.js` | The **Windows PowerShell** console at `/terminal` (deferred, minified at deploy with a `/terminal.src.js` twin). The page SERVER-RENDERS one frame into the console as boot output, so the route reads with JS off and an agent fetching the HTML gets content rather than a mount point; this script turns that scrollback into a shell. Commands are the real thing, not a demo vocabulary: `finger`/`photos`/`lens` hit the same routes curl does, `get` performs the same Accept negotiation an agent performs, `mcp` speaks JSON-RPC to `/mcp`. Arrow keys drive a running program (they are shell history when none is), Ctrl+P/Ctrl+N are history either way. Builds output with `createTextNode` and never `innerHTML`, because the frames carry photo captions and, through `lens`, an arbitrary third party's `<title>`. |
-| `holding/_worker.js/terminal.js` + `lib/tui.js` | The three terminal programs and the 80-column frame renderer behind `/terminal/*`. **State is query params, not a session** — `?pane=writing&cursor=3&open=lattice` — so there is no DO round trip on a keypress (counter.js measures one at 185-630ms), sessions FORK, and the state is inspectable rather than an opaque token the caller hands back. Each frame prints the URL that produced it, labelled `state`, and a contract test asserts that URL reproduces the frame. `lib/tui.js` is pure (frames in, string out), which is what lets one renderer answer HTTP, MCP, and `node --test`. Its palette is MID-TONES ONLY: a terminal theme belongs to the visitor, so a near-white or near-black foreground is unreadable for half of them. |
+| `holding/terminal.js` | The **Windows PowerShell** console at `/terminal`, and an actual **MCP client**: typing `dict <url>` sends the same `POST /mcp` `tools/call` an agent sends, and echoes the request before making it. Deliberately no private endpoints — if the console had its own, watching it would say nothing about what an agent gets and the two could drift unnoticed. The page server-renders one frame as boot output, so the route reads with JS off. Builds output with `createTextNode`, never `innerHTML`, because frames carry photo captions and third-party page titles. |
+| `holding/_worker.js/terminal.js` + `lib/tui.js` | The tools and the 80-column frame renderer. Tools are TOP-LEVEL utilities (`/finger`, `/radar`, `/dict`, `/cache`), because this site puts utilities at the root and only content nests; `/terminal` is the console that DRIVES them, not their parent. The frame is a REPRESENTATION alongside `.md`: one URL answers HTML to a browser, the frame to everything else, and `<tool>.txt` explicitly. **The MCP tool name IS the route name** — what you type in the console, what you curl, and what an agent calls are one word, and a contract test asserts every tool with a route is reachable over MCP. State is query params (small and addressable), so frames fork, bookmark and replay. `lib/tui.js` is pure, which is what lets one renderer answer HTTP, MCP and `node --test`; its palette is MID-TONES ONLY because a terminal theme belongs to the visitor. |
 | the `/terminal` window | It is a **console window, not a page**, and the difference is entirely in what was REMOVED. `lunaPage` gained `windowClass`/`contentClass`/`windowAttrs` (all defaulting to empty, so the other nine callers are byte-identical) and the window declares `data-no-histnav`, which `nav.js` honours by skipping the site-wide Back/Forward injection — those are BROWSER controls, and a console carrying them reads as a terminal running inside Internet Explorer. Drag, resize, maximize and close all stay, because those are OS chrome. There is also nothing below the window: the explanatory paragraph that used to sit there was the single strongest tell, since real consoles do not come with a caption. Width is 624px so the console is exactly 80 columns, the size a real one opens at; left at the 760px page default it carried 136px of dead field to the right of every frame. Fonts stay on the design system — `"Lucida Console", var(--font-mono)`, one native Windows font in front of the existing token, no `@font-face`, no bytes. |
 | `holding/_worker.js` | The module worker (bundled by wrangler at deploy). Owns routing, photo serving from R2, manifest building, Spotify playlist scraping, AadharshBot crawler, the `/writing` Notepad pages, cache-control overrides. |
 | `holding/_headers` | Static-asset cache + security headers (CSP, Permissions-Policy, etc.). Applied to direct static-asset requests; the worker overrides cache-control for select paths. |
@@ -637,18 +666,46 @@ generic hex back.
   `./holding/scripts/bump-version.sh <slug> "<title>"`, then deploy. It derives
   the next vnum from `SELECT MAX(vnum)` and inserts the checkpoint (no file edit;
   the SW that used to carry the version string retired in v136).
-- **BROWSER (Browser Rendering binding)** — powers `/lens/shot` and
+- **BROWSER (Browser Run binding)** — powers `/lens/shot` and
   `/lens/browser` inside **`/lens`** ("The Other Web", which shows any URL the way a
   machine does). `/lens`'s Human view embeds framable sites in a live cross-origin
   `<iframe>` (loaded by the visitor's own browser) and screenshots the rest
   server-side via the binding's `quickAction("screenshot", …)` (real headless
-  Chrome; the old REST-API path with `BROWSER_RENDER_TOKEN` is retired). Without
+  Chrome). Without
   the binding, `/lens/shot` returns a clean 503 and the Human view falls back to
   the readable-text reader, so the live iframe + all machine lenses keep working
-  regardless. (`CF_ACCOUNT_ID` stays a var, but only for `/ledger`'s Analytics
-  Engine SQL reads alongside `ANALYTICS_READ_TOKEN`.)
-  Screenshots are KV-cached 1h (`lens:shot:<sha256(url)>` in RN_KV) and rate-limited to
-  8/min/IP; `/lens/fetch` (the parsing engine) is rate-limited 30/min/IP. Those limits
+  regardless. (`CF_ACCOUNT_ID` is read by `/ledger`'s Analytics Engine SQL
+  alongside `ANALYTICS_READ_TOKEN`, and by the Kitesurf REST path below.)
+
+  **Kitesurf rides the EXISTING `/lens/browser`, and there is no second route.**
+  A `/lens/rendered` was built here on 2026-08-06 and deleted the same day: it
+  duplicated the Browser view, which already renders after JavaScript, already
+  asks for content + screenshot + markdown + accessibility tree in ONE Quick
+  Action, and whose `deltaStrip` already computed the HTTP-versus-rendered word
+  gap. Read `lens-browser.js` before adding a rendering surface.
+
+  What survives in `lens-render.js` is the engine seam. **Kitesurf cannot be
+  reached from the binding**: probed 2026-08-06, passing `browser` to
+  `quickAction` returns `{"code":"unrecognized_keys","keys":["browser"]}`, and an
+  invented engine name returns the byte-identical error — the payload schema is
+  CLOSED, so it refuses the option rather than failing on an unknown value. REST
+  is the only door and it wants a `Browser Rendering - Edit` token in
+  `BROWSER_RUN_TOKEN`. That is an EDIT scope living as a Worker secret; it is not
+  in GitHub, so the no-write-token-in-CI rule is intact, but do not confuse it
+  for a read scope. `browser=kitesurf` is in Cloudflare's launch post and NOT in
+  the Quick Actions reference, so the code TRIES it and, on a 400, retries
+  without it and remembers for the isolate. Only the PARAMETER is conditional —
+  REST itself keeps serving, because gating the whole REST path on a dead beta
+  flag silently demoted every later render back to the binding.
+
+  The snapshot now reports `engine` and a server-computed `shape` (words,
+  headings, links, images, JSON-LD). `shape` is counted from the FULL rendered
+  body BEFORE the 120KB content cap, which retires the old truncation bail: a
+  capped snapshot used to refuse a word comparison entirely (stripe read
+  "1874 -> 139 words" off a slice) and can now answer honestly.
+
+  Screenshots are KV-cached 6h (`lens:shot:<sha256(url)>` in RN_KV) and rate-limited to
+  3/min/IP; `/lens/fetch` (the parsing engine) is rate-limited 30/min/IP. Those limits
   are Rate Limiting bindings as of 2026-08-04, not KV counters; the RESPONSE cache is
   still KV, and only the counters moved. Both `/lens/*`
   fetch routes guard against SSRF (http(s) only, no localhost / private / link-local /
@@ -741,7 +798,7 @@ the existing layers structurally could not reach:
 | `home.grid.*`, `rn.tracks.*` | the two hydration fragments. Splits manifest-vs-alt, which `perf-probe.js` fuses into one positional AE double. `home.grid.render` reads 0ms (see the CPU note above) and earns its place on attributes alone |
 | `rn.scrape.{playlist,tracks,artists}` | the 3-tier Spotify scrape, cold-miss only. `rn.artists_cached` vs `_scraped` says whether the artist KV cache is actually saving the network |
 | `lens.inspect.{fetch,parse}`, `lens.discovery` | `out.elapsedMs` is fixed BEFORE the 28-probe fan-out (botViews is 6 of its own), so a scan's discovery phase was entirely unmeasured. Production, 752KB page: 782ms total, `elapsedMs` reported 29. `lens.inspect.parse` reads 0ms (CPU note above) and is kept for its byte/word attributes |
-| `lens.shot`, `lens.browser` | Browser Rendering. Same span name on hit and miss (differing on `lens.cache`) so hit rate is a group-by, not a join; the four distinct 502 shapes are separated by `lens.outcome` |
+| `lens.shot`, `lens.browser` | Browser Run. Same span name on hit and miss (differing on `lens.cache`) so hit rate is a group-by, not a join; the four distinct 502 shapes are separated by `lens.outcome` |
 | `cron.*` | a cron has no response, no status, and no visitor to complain |
 | `around.neighbor` | every degradation here is designed to be quiet (a disallowing robots.txt is a legitimate skip). The rollup makes "3 of 20 neighbors dark for a month" one number |
 | `census.host` | a time series with silently missing rows is worse than none; the per-host catch is correct AND is how a 16-site roster becomes 3 |
@@ -840,9 +897,9 @@ cal/
 
 ```bash
 npm install
-npx wrangler secret put -c wrangler.jsonc ICAL_URL        # Google Calendar → "secret ICS"
-npx wrangler secret put -c wrangler.jsonc RESEND_API_KEY  # resend.com, DKIM-verify aadhar.sh
-openssl rand -hex 32 | npx wrangler secret put -c wrangler.jsonc SIGNING_SECRET
+npx wrangler versions secret put -c wrangler.jsonc ICAL_URL        # Google Calendar → "secret ICS"
+npx wrangler versions secret put -c wrangler.jsonc RESEND_API_KEY  # resend.com, DKIM-verify aadhar.sh
+openssl rand -hex 32 | npx wrangler versions secret put -c wrangler.jsonc SIGNING_SECRET
 
 # Production still ships through merge -> CI -> production -> Workers Builds.
 # Local fallback, from the repository root only:
@@ -1304,4 +1361,23 @@ curated this folder; treat it as the canonical photo source.
   production half (running that program in a Worker Loader isolate with the MCP
   bound by RPC) sat in Cloudflare's closed beta, so it never wired into
   anything. Removed 2026-07-23 after a month unreferenced by any page, script,
-  or CI job. `git log --diff-filter=D -- codemode/` finds it if the beta opens.
+  or CI job. `git log --diff-filter=D -- codemode/` finds it.
+
+  **THE BETA OPENED (checked 2026-08-05) and the answer is still no, for a
+  different reason than before.** Code Mode is documented and shipping:
+  `@cloudflare/codemode` swaps individual tool calls for one `code()` tool run in
+  a Dynamic Worker Loader (isolates, <10ms start, no concurrency cap, ~$0.002 per
+  load). The blocker that parked this is gone.
+
+  What replaced it is a fit argument. Code Mode's win scales with CATALOG SIZE —
+  it exists so a model can drive a large API without spending its context on
+  forty schemas. `/terminal/ask` has SEVEN read-only tools, whose whole schema
+  set is smaller than the prompt describing Code Mode, so the direct loop in
+  ask.js is both cheaper and simpler. It also runs MODEL-AUTHORED CODE, which is
+  sandboxed and defensible but is the opposite of the "bounded catalog, not a
+  shell" stance ask.js is built on, and $0.002 a call is real money on a public
+  endpoint that is trying to be near-free.
+
+  Revisit if either premise changes: the catalog grows past ~20 tools, or the ask
+  loop starts needing to CHAIN calls (its 4-call/2-round cap is exactly the
+  symptom Code Mode cures).

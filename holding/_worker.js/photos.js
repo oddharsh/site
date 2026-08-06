@@ -4,6 +4,7 @@ import { cachedRender } from "./lib/cache.js";
 import { lunaPage } from "./lib/chrome.js";
 import { ARCHIVE_VERSION } from "./lib/const.js";
 import { errorResp, escAttr, escHtml, jsonResp } from "./lib/http.js";
+import { commonPairs, queryTerms, scoreFields } from "./lib/text.js";
 // the photo pool, as BUILD INPUTS: photo-index.json (which photos exist — full
 // R2 key, byte size, upload date; written by add-photos.sh at upload time) and
 // hashes.json (the content-hash map the /i/ URLs are minted from). esbuild
@@ -228,6 +229,17 @@ export async function getThumbHashes(env) {
   return _thumbHashes;
 }
 
+// Test seam, never called by the worker. _altMap and _thumbHashes are cached
+// per ISOLATE, which is right in production and becomes per-PROCESS under
+// `node --test`: the first fixture to load one pins it for every later test in
+// the file. That was invisible until the ranking tests started asserting on
+// caption text, at which point they silently scored against an earlier test's
+// alt map and failed for a reason that had nothing to do with ranking.
+export function _resetPhotoCaches() {
+  _altMap = undefined;
+  _thumbHashes = undefined;
+}
+
 const PHOTO_PUBLIC_FIELDS = [
   "camera", "lens", "aperture", "shutter", "iso", "focal", "ev", "date",
   "width", "height", "color_space", "white_balance", "color_temp", "wb_shift",
@@ -250,6 +262,40 @@ function photoMetadata(record) {
   return Object.fromEntries(PHOTO_PUBLIC_FIELDS.filter((key) => record && record[key] !== undefined).map((key) => [key, record[key]]));
 }
 
+// ── ranking ───────────────────────────────────────────────────────────────
+// Which field a term hit says a lot about what the caller meant, so the fields
+// are weighted rather than joined. `film` outranks `alt` deliberately: "classic
+// chrome" is overwhelmingly a film-simulation query, and the same two words
+// appearing in a caption about a chrome bumper is the weaker reading.
+//
+// `expansion` is the offline semantic tier (images/semantics.json). It sits
+// below the caption a model actually looked at the photo to write, and above
+// the recipe card, because it is a recall aid rather than an observation.
+const PHOTO_FIELD_WEIGHTS = [
+  ["film", 6],
+  ["alt", 5],
+  ["camera", 4],
+  ["lens", 4],
+  ["expansion", 3],
+  ["year", 3],
+  ["recipe", 2],
+  ["stem", 1],
+];
+
+function photoFields(stem, record, alt, expansion) {
+  const date = String(record.date || "").slice(0, 10).replaceAll(":", "-");
+  return {
+    film: String(record.film || ""),
+    alt: String(alt || ""),
+    camera: String(record.camera || ""),
+    lens: String(record.lens || ""),
+    expansion: String(expansion || ""),
+    year: date.slice(0, 4),
+    recipe: Object.entries(record.recipe || {}).map(([k, v]) => `${k}: ${v}`).join(" "),
+    stem: String(stem),
+  };
+}
+
 // Shared photo query used by /photos/query.json and the site MCP tool. GPS and
 // other unlisted EXIF fields never cross this boundary, even if the source
 // metadata grows later.
@@ -265,17 +311,21 @@ export async function queryPhotos(env, options = {}, ctx = null) {
   const to = String(options.to || "").trim().slice(0, 32);
   const limit = Math.min(100, Math.max(1, Number(options.limit) || 25));
   const offset = Math.min(10000, Math.max(0, Number(options.offset) || 0));
-  const [metadata, altMap, hashes] = await Promise.all([
+  const [metadata, altMap, hashes, semantics] = await Promise.all([
     getStaticPhotoJson(env, "images/metadata.json", {}),
     getAltMap(env),
     getThumbHashes(env),
+    getStaticPhotoJson(env, "images/semantics.json", null),
   ]);
   let manifest = [];
   try { manifest = await getImagesManifest(env, ctx); } catch { manifest = []; }
   const manifestByStem = new Map((manifest || []).map((photo) => [photo.stem, photo]));
-  const rows = Object.entries(metadata || {}).filter(([stem, record]) => {
-    const haystack = [stem, altMap?.[stem], record.camera, record.lens, record.film].filter(Boolean).join(" ").toLowerCase();
-    if (q && !haystack.includes(q)) return false;
+
+  // The structured parameters are FILTERS and stay exact — a caller asking for
+  // lens "XF27mm" wants that lens, not the closest thing to it. Only `q` is
+  // ranked. Mixing the two would make a filter negotiable, which is the one
+  // property a filter has.
+  const kept = Object.entries(metadata || {}).filter(([, record]) => {
     if (camera && !String(record.camera || "").toLowerCase().includes(camera)) return false;
     if (lens && !String(record.lens || "").toLowerCase().includes(lens)) return false;
     if (film && !String(record.film || "").toLowerCase().includes(film)) return false;
@@ -287,7 +337,54 @@ export async function queryPhotos(env, options = {}, ctx = null) {
     if (from && date < from) return false;
     if (to && date > to) return false;
     return true;
-  }).sort(([a], [b]) => a.localeCompare(b)).map(([stem, record]) => {
+  });
+
+  const { terms: queryTermList, dropped } = queryTerms(q);
+  let ranked = kept.map(([stem, record]) => ({ stem, record, scored: null }));
+  let mode = "filters-only";
+  let common = [];
+
+  if (q) {
+    const candidates = kept.map(([stem, record]) => ({
+      stem,
+      record,
+      fields: photoFields(stem, record, altMap?.[stem], semantics?.[stem]?.terms),
+    }));
+    // Measured against the set that survived the filters, not the whole archive:
+    // inside `film=Classic Chrome` the word "chrome" IS in every candidate and
+    // genuinely stops discriminating, which is the right answer there.
+    const { skip, common: suppressed } = commonPairs(candidates.map((row) => row.fields), PHOTO_FIELD_WEIGHTS, queryTermList);
+    common = suppressed;
+    const scoredRows = candidates.map(({ stem, record, fields }) => ({
+      stem,
+      record,
+      scored: scoreFields(fields, PHOTO_FIELD_WEIGHTS, queryTermList, skip),
+    })).filter((row) => row.scored.hits > 0);
+    // Prefer photos that answer the WHOLE query. Falling straight to a bag of
+    // terms would let one strong field on one term outrank a photo that matched
+    // every term, which is how "classic chrome bridge" returns chrome bumpers.
+    // If nothing covers every term the partial set is still the best available
+    // answer, so it is returned — labelled, never silently.
+    const full = scoredRows.filter((row) => row.scored.hits === queryTermList.length);
+    ranked = full.length ? full : scoredRows;
+    // "partial" has to mean "found something, short of everything". Reporting it
+    // for an empty result set says a search happened and nearly worked, when in
+    // fact nothing matched at all — a caller deciding whether to broaden its
+    // query needs those two apart.
+    mode = !queryTermList.length ? "no-terms"
+      : full.length ? "all-terms"
+        : scoredRows.length ? "partial" : "no-match";
+  }
+
+  // Score first, then newest, then stem. The old ordering was stem-alphabetical,
+  // which is filename order — stable, and meaningless to a reader.
+  const dateOf = (record) => String(record.date || "").slice(0, 10).replaceAll(":", "-");
+  ranked.sort((a, b) =>
+    (b.scored?.score || 0) - (a.scored?.score || 0)
+    || dateOf(b.record).localeCompare(dateOf(a.record))
+    || a.stem.localeCompare(b.stem));
+
+  const rows = ranked.map(({ stem, record, scored }) => {
     const manifestPhoto = manifestByStem.get(stem);
     const hash = hashes?.[stem] || {};
     return {
@@ -300,10 +397,24 @@ export async function queryPhotos(env, options = {}, ctx = null) {
         small: hash.s ? `/i/${stem}-400.${hash.s}.avif` : null,
       },
       metadata: photoMetadata(record),
+      // Absent rather than zero when nothing was ranked, the same rule lens
+      // follows for an unrun phase. A `score: 0` on a filter-only query would
+      // read as "scored and found wanting" when nothing was scored at all.
+      ...(scored ? { score: scored.score, matched: scored.matched } : {}),
     };
   });
+
   return {
     query: { q, camera, lens, film, recipe, from, to },
+    // How the result set was arrived at, so a caller can tell a precise answer
+    // from a best-effort one without guessing from the scores.
+    ranking: {
+      mode,
+      terms: queryTermList,
+      ...(dropped.length ? { dropped } : {}),
+      ...(common.length ? { common } : {}),
+      semantic: Boolean(semantics),
+    },
     total: rows.length,
     offset,
     limit,

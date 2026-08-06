@@ -3,7 +3,8 @@
 // functions used by the corresponding HTTP endpoints.
 import { jsonResponse } from "./lib/http.js";
 import { DATA_TOOLS, DATA_TOOL_NAMES, callDataTool } from "./lib/tools.js";
-import { terminalToolFrame } from "./terminal.js";
+import { frameText, terminalToolFrame } from "./terminal.js";
+import { radarFrame, readSamples } from "./radar.js";
 import { AGENT_SURFACES } from "./lib/site-manifest.js";
 import { CACHE_EMPTY, CACHE_LIVE, CACHE_STATIC, mcpCorsHeaders, mcpGate, mcpServer } from "./lib/mcp-protocol.js";
 
@@ -52,7 +53,7 @@ const MCP_TOOLS = [
   // shoulder. Frames are never coloured here: an ANSI escape in a context
   // window is noise the model then has to be robust to.
   {
-    name: "terminal_finger",
+    name: "finger",
     description: "Look up who runs aadhar.sh, as a drivable terminal program. Panes: overview, writing, reading, listening, photos, around, coffee, deploys, search. Send `keys` to move (1-9 pane, j/k cursor, <cr> open, h back, ? help) and pass the returned `url`'s params back to continue. Returns a rendered 80-column frame.",
     inputSchema: { type: "object", properties: {
       keys: { type: "string", description: "a key sequence, up to 32 keys, e.g. \"2jj<cr>\"" },
@@ -63,7 +64,7 @@ const MCP_TOOLS = [
     } },
   },
   {
-    name: "terminal_photos",
+    name: "photos",
     description: "Browse the published photo archive as a terminal frame, filterable by caption, film simulation, body, and lens. Opening a frame shows its exposure and the in-camera recipe it was shot with. Send `keys` (j/k cursor, <cr> open, n/p page).",
     inputSchema: { type: "object", properties: {
       keys: { type: "string" }, q: { type: "string" }, film: { type: "string" },
@@ -74,9 +75,48 @@ const MCP_TOOLS = [
     } },
   },
   {
-    name: "terminal_lens",
+    // The one tool here whose INPUT this server cannot produce. An agent with a
+    // shell has an antenna; this origin does not. So the agent samples and this
+    // draws — see radar.js on why a hosted radar is otherwise dishonest.
+    name: "radar",
+    description: "Render signal readings you have already measured (wifi/Bluetooth RSSI) as a terminal instrument: concentric strength bands, a meter and trend per source, and findphone's field calibration (-45 arm's reach, -60 same table, -72 same room). This origin has no antenna and does not sense anything; you supply the samples. Nothing is stored. Angles in the plot are decorative because RSSI carries no bearing.",
+    inputSchema: { type: "object", properties: {
+      samples: { type: "array", maxItems: 40, items: { type: "object", properties: {
+        name: { type: "string" },
+        rssi: { type: "number", description: "dBm, negative; e.g. -58" },
+        kind: { type: "string", description: "optional tag, e.g. wifi or ble" },
+        history: { type: "array", items: { type: "number" }, description: "optional trailing readings for the trend" },
+      }, required: ["name", "rssi"] } },
+      source: { type: "string", description: "optional label for what did the sampling" },
+    }, required: ["samples"] },
+  },
+  {
+    name: "encode",
+    description: "Read a JPEG or AVIF at a URL and report what its encoder actually did: chroma subsampling, baseline vs progressive and the scan count, an estimated quality with the deviation from the IJG Annex K table shown, AVIF bit depth, and whether ICC/EXIF/XMP is riding along. NO PIXELS ARE DECODED — every fact comes from the container — so this works on files a Worker could never decode.",
+    inputSchema: { type: "object", properties: { url: { type: "string" } } },
+  },
+  {
+    name: "agent_ready",
+    description: "Grade how much of an origin a machine can actually use: llms.txt, a markdown twin, an agent card, an API catalog, and a real tools/list against its MCP server. Doors are COUNTED, never scored — a check that could not run is reported as unreadable rather than as a failure. Called with no url it audits aadhar.sh itself and prints what building that cost in files and lines.",
+    inputSchema: { type: "object", properties: { url: { type: "string" } } },
+  },
+  {
+    name: "dict",
+    description: "Will a browser ever actually use the compression dictionary a URL is serving? Compression dictionaries fail in total silence — Chromium declines to register a perfectly good one because of a cache directive, with no warning anywhere. Returns a rendered frame grading every registration rule, plus whether a delta-serving response varies on available-dictionary. Same route as /dict.",
+    inputSchema: { type: "object", properties: { url: { type: "string" } } },
+  },
+  {
+    name: "cache",
+    description: "Does a URL's ETag ever actually 304? A BEHAVIORAL probe rather than a header read: fetches twice to see whether the validator survives two identical requests, then replays it with If-None-Match and reports what the origin did. Also checks Accept negotiation against Vary. Returns a rendered frame. Same route as /cache.",
+    inputSchema: { type: "object", properties: { url: { type: "string" } } },
+  },
+  {
+    name: "lens",
     description: "Inspect one public HTTP(S) URL and render the observation as a terminal frame: readability, agent doors, and what a single scan costs to read. Same rate limit and same refusals as lens_inspect; use lens_inspect instead if you want the fields rather than the frame.",
-    inputSchema: { type: "object", properties: { url: { type: "string" } }, required: ["url"] },
+    inputSchema: { type: "object", properties: {
+      url: { type: "string" },
+      doors: { type: "boolean", description: "also READ what is behind the agent doors: llms.txt, the markdown twin, the agent card, and a real tools/list against their MCP server. Their catalog is listed, never called." },
+    }, required: ["url"] },
   },
 ];
 
@@ -133,7 +173,7 @@ function errorResult(message) { return { _error: String(message).slice(0, 400) }
 
 async function callTool(name, args, request, env, ctx) {
   args = args && typeof args === "object" ? args : {};
-  // The seven data tools live in lib/tools.js, because /terminal/ask calls the
+  // The seven data tools live in lib/tools.js, because /ask calls the
   // same seven through the same function. Dispatching them here would mean two
   // switch statements that have to agree.
   if (DATA_TOOL_NAMES.has(name)) return callDataTool(name, args, request, env, ctx);
@@ -143,9 +183,17 @@ async function callTool(name, args, request, env, ctx) {
   // NOT get its own rate-limit check here: lensFrame calls the same
   // overLensBudget bucket lens_inspect does, so the ceiling is shared whichever
   // door you knock on — the rule the crawl-tool note above already states.
-  if (name === "terminal_finger") return terminalToolFrame("finger", args, request, env, ctx);
-  if (name === "terminal_photos") return terminalToolFrame("photos", args, request, env, ctx);
-  if (name === "terminal_lens") return terminalToolFrame("lens", args, request, env, ctx);
+  if (name === "finger") return terminalToolFrame("finger", args, request, env, ctx);
+  if (name === "photos") return terminalToolFrame("photos", args, request, env, ctx);
+  if (name === "lens") return terminalToolFrame("lens", args, request, env, ctx);
+  if (name === "encode") return terminalToolFrame("encode", args, request, env, ctx);
+  if (name === "agent_ready") return terminalToolFrame("agent-ready", args, request, env, ctx);
+  if (name === "dict") return terminalToolFrame("dict", args, request, env, ctx);
+  if (name === "cache") return terminalToolFrame("cache", args, request, env, ctx);
+  if (name === "radar") {
+    const samples = readSamples(args);
+    return { frame: frameText(radarFrame(samples, { source: String(args?.source || "").slice(0, 60) }), { color: false }), sources: samples.length };
+  }
   return { _unknown: true };
 }
 

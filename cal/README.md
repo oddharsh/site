@@ -46,13 +46,13 @@ Set these on the root Worker (from the repository root):
 
 ```sh
 # the public/secret iCal URL of your calendar (read-only)
-npx wrangler secret put -c wrangler.jsonc ICAL_URL
+npx wrangler versions secret put -c wrangler.jsonc ICAL_URL
 
 # resend.com API key — verify aadhar.sh via DKIM first
-npx wrangler secret put -c wrangler.jsonc RESEND_API_KEY
+npx wrangler versions secret put -c wrangler.jsonc RESEND_API_KEY
 
 # HMAC signing secret — generate once and keep it stable
-openssl rand -hex 32 | npx wrangler secret put -c wrangler.jsonc SIGNING_SECRET
+openssl rand -hex 32 | npx wrangler versions secret put -c wrangler.jsonc SIGNING_SECRET
 ```
 
 Set up Resend as usual: add `aadhar.sh`, publish its DKIM/SPF records in
@@ -78,7 +78,7 @@ the optional unlisted work-calendar redirect (`WORK_CALENDAR_URL`):
 
 ```sh
 # Google Calendar: create a new "secret address in iCal format" first.
-npx wrangler secret put -c wrangler.jsonc ICAL_URL
+npx wrangler versions secret put -c wrangler.jsonc ICAL_URL
 ```
 
 The calendar snapshot is normally freshened within five minutes. For an
@@ -93,8 +93,8 @@ curl -fsS https://aadhar.sh/coffee/slots | jq .
 To rotate the unlisted redirect, set its destination before its path segment:
 
 ```sh
-npx wrangler secret put -c wrangler.jsonc WORK_CALENDAR_URL
-npx wrangler secret put -c wrangler.jsonc WORK_CALENDAR_SLUG
+npx wrangler versions secret put -c wrangler.jsonc WORK_CALENDAR_URL
+npx wrangler versions secret put -c wrangler.jsonc WORK_CALENDAR_SLUG
 curl -fsSI "https://cal.aadhar.sh/<new-slug>"
 ```
 
@@ -105,7 +105,7 @@ Git.
 The random HMAC value is `SIGNING_SECRET`:
 
 ```sh
-openssl rand -hex 32 | npx wrangler secret put -c wrangler.jsonc SIGNING_SECRET
+openssl rand -hex 32 | npx wrangler versions secret put -c wrangler.jsonc SIGNING_SECRET
 ```
 
 Rotating it invalidates all outstanding approval and decline links but does not
