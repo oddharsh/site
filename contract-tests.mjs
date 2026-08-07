@@ -2431,6 +2431,14 @@ test("_headers page rules match the twin the worker fetches, not the request pat
     "exactly one rule may set Cache-Control on a pixel-peeper tile, or its immutable year gets clamped");
 });
 
+test("the offscreen Horizon iframe does not start ticking during initial load", async () => {
+  const horizon = await readFile(new URL("holding/garage/horizon.html", import.meta.url), "utf8");
+  const iframe = horizon.match(/<iframe\s+[^>]*id="mb-frame"[^>]*>/)?.[0];
+  assert.ok(iframe, "the state-preserving move demo must keep its uptime iframe");
+  assert.match(iframe, /\sloading="lazy"(?:\s|>)/,
+    "the deep-page iframe runs a perpetual timer and must wait until it nears the viewport");
+});
+
 test("the CSP falls back to 'unsafe-inline' only where the build cannot speak", async () => {
   const { canonicalPath, scriptHashesFor } = await import("./holding/_worker.js/lib/csp-hashes.js");
 
