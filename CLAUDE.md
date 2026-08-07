@@ -1432,11 +1432,26 @@ npm run deploy
     deploy at most 2 version(s) at a time."*
 
     So a ramp that starts from a multi-version split necessarily DROPS the smaller
-    incumbents. `trafficSplit()` gives the whole remainder to the LARGEST incumbent
-    and prints which versions stop serving, because the alternative — picking the
-    newest — shoves the entire remainder onto a version only a slice of traffic had
-    been getting, which is a big silent change inside a procedure whose only purpose
-    is changing one thing carefully.
+    incumbents, and the script cannot avoid that — it can only choose which one
+    survives.
+
+    **This paragraph described a `trafficSplit()` that does not exist, and the
+    correction is the more useful note.** That function was written in the working
+    tree on 2026-08-06 to distribute the remainder proportionally across every
+    incumbent; the 2-version cap is exactly what makes that idea unimplementable,
+    and the whole thing was discarded without ever being committed. What ships is
+    simpler and predates it: `const previous = active.find((v) => …)`, so the
+    remainder goes to **the first non-target version the API happens to list**, and
+    the split is only ever 2 wide, which is why the "too many versions" error cannot
+    recur here.
+
+    The wart worth knowing: with two incumbents, `find` is arbitrary rather than
+    largest. Hand the remainder to a version only 10% of traffic was getting and a
+    ramp step silently moves 90% of users somewhere new, inside a procedure whose
+    only purpose is changing one thing carefully. Rare (it needs a multi-version
+    split, which usually means a previous ramp stopped half-way), unlikely to be
+    noticed when it happens, and a one-line fix — sort by `pct` and take the largest
+    — if someone decides it is worth touching the release path for.
 
 21. **The bridge's `c2pa` pack cannot see this site's photos, and no pipeline
     change fixes it.** TURNED OFF in the dashboard 2026-08-06, so the injected tag
