@@ -1194,6 +1194,35 @@ export async function handleLensFetch(request, env, ctx) {
 }
 
 
+// How long a render waits for the page to settle, shared by /lens/shot and
+// /lens/browser so the two cannot drift into disagreeing about what "rendered"
+// means.
+//
+// `networkidle0` (ZERO in-flight connections for 500ms) was the setting here
+// until 2026-08-07, and on a commercial site it is unreachable: an analytics
+// beacon, an ad refresh, a websocket or any poll holds the count above zero
+// indefinitely. The page paints in a second or two, the wait runs to the full
+// timeout regardless, and Cloudflare then answers `422 / code 6002 Navigation
+// timeout` and discards the render — the screenshot is lost even though the
+// browser had it long before.
+//
+// Measured against production before this change, same worker build:
+// theverge.com failed on BOTH endpoints at ~18.8s, while example.com (static,
+// so genuinely idle) passed. Failure tracked the TARGET, never the endpoint,
+// which is why the symptom reads as intermittent rather than broken.
+//
+// `networkidle2` tolerates up to 2 lingering connections, which is where a page
+// with live telemetry actually settles, and it is the standard escape from this
+// trap. It still waits for JavaScript, which is the whole point of the Browser
+// Run view.
+//
+// The 18s ceiling stays. It is a real cost, since the free plan allows 10
+// MINUTES of browser time per day ACCOUNT-WIDE and roughly 33 timeouts exhaust
+// it, but shortening it trades that saving against false failures on genuinely
+// slow pages. The budget is better defended by making success the common case
+// than by capping the loss on each failure.
+const LENS_GOTO = { waitUntil: "networkidle2", timeout: 18000 };
+
 // /lens/shot?url=… → a faithful PNG of the page, rendered by Cloudflare
 // Browser Run (real headless Chrome, server-side). The Human view uses this
 // only when a site forbids live framing.
@@ -1240,7 +1269,7 @@ export async function handleLensShot(request, env, ctx) {
       url: v.url,
       viewport: { width: 1280, height: 800, deviceScaleFactor: 1 },
       screenshotOptions: { fullPage: true, type: "png" },
-      gotoOptions: { waitUntil: "networkidle0", timeout: 18000 },
+      gotoOptions: LENS_GOTO,
       userAgent: BOT_UA,
     };
     let r;
@@ -1346,7 +1375,7 @@ export async function handleLensBrowser(request, env, ctx) {
     formats: ["content", "screenshot", "markdown", "accessibilityTree"],
     viewport: { width: 1280, height: 800, deviceScaleFactor: 1 },
     screenshotOptions: { fullPage: true, type: "png" },
-    gotoOptions: { waitUntil: "networkidle0", timeout: 18000 },
+    gotoOptions: LENS_GOTO,
     userAgent: BOT_UA,
   };
 

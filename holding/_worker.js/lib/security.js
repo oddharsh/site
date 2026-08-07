@@ -78,7 +78,10 @@ export const ENFORCE_PAGE_HASHES = false;
 const CSP_TAIL =
   "style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; worker-src 'self'; manifest-src 'self'; upgrade-insecure-requests";
 
-const cspWith = (scriptSrc) => `default-src 'self'; script-src ${scriptSrc}; ${CSP_TAIL}`;
+const CSP_REPORT_ONLY_TAIL = CSP_TAIL.replace(/; upgrade-insecure-requests$/, "");
+
+const cspWith = (scriptSrc, tail = CSP_TAIL) =>
+  `default-src 'self'; script-src ${scriptSrc}; ${tail}`;
 
 const CSP_LOOSE = cspWith(CSP_SCRIPT_SRC_LOOSE);
 
@@ -90,8 +93,8 @@ const CSP_LOOSE = cspWith(CSP_SCRIPT_SRC_LOOSE);
 // script at all gets a bare `script-src 'self'`, which is the strictest this policy
 // can be. Do not confuse it with "no entry", which means the build could not speak
 // for this document and falls back to the loose policy.
-const cspHashed = (hashes) =>
-  cspWith(["'self'", ...hashes.map((h) => `'sha256-${h}'`)].join(" "));
+const cspHashed = (hashes, tail) =>
+  cspWith(["'self'", ...hashes.map((h) => `'sha256-${h}'`)].join(" "), tail);
 
 // Returns the CSP header pair for a document. A path with no hash entry (every
 // live worker-rendered page, and everything in readable local dev) gets the loose
@@ -102,7 +105,10 @@ export function cspHeadersFor(pathname) {
   if (ENFORCE_PAGE_HASHES) return { "content-security-policy": cspHashed(hashes) };
   return {
     "content-security-policy": CSP_LOOSE,
-    "content-security-policy-report-only": cspHashed(hashes),
+    // upgrade-insecure-requests has no report-only behavior; Chromium ignores
+    // it and emits a console error. Keep it in the enforcing policy and omit the
+    // inert directive only from this reporting twin.
+    "content-security-policy-report-only": cspHashed(hashes, CSP_REPORT_ONLY_TAIL),
   };
 }
 
@@ -226,4 +232,3 @@ export function withSecurityHeaders(response, pathname, opts) {
     ...(response.headers.has("content-encoding") ? { encodeBody: "manual" } : {}),
   });
 }
-
