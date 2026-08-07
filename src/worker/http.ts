@@ -39,6 +39,24 @@ export function withSiteHeaders(response: Response, request: Request): Response 
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
+/**
+ * Headers for a document assembled at request time from a static shell.
+ *
+ * The rewritten body is no longer the asset, so the asset's validators must not
+ * ride along with it. Every request-rendered route shares one shell and would
+ * therefore answer with one ETag: `/serendipity/event/a` and `/event/b` carried
+ * the same validator under `s-maxage=60`, and two different `/run?cmd=` errors
+ * carried the same one under `s-maxage=300`, so a conditional request for either
+ * revalidated into the other's content. Dropping the validator makes each render
+ * stand on its `cache-control` alone.
+ */
+export function withRenderedHeaders(response: Response, request: Request): Response {
+  const rendered = withSiteHeaders(response, request);
+  rendered.headers.delete("etag");
+  rendered.headers.delete("last-modified");
+  return rendered;
+}
+
 function quality(header: string, mediaType: string): number {
   for (const part of header.toLowerCase().split(",")) {
     const [type, ...parameters] = part.trim().split(";");

@@ -1,5 +1,5 @@
 import { hit, Counter } from "./counter";
-import { assetRequest, json, prefersMarkdown, redirect, text, withSiteHeaders } from "./http";
+import { assetRequest, json, prefersMarkdown, redirect, text, withRenderedHeaders, withSiteHeaders } from "./http";
 import { previewRefusal } from "./preview";
 import { BookingWorkflow } from "./workflow";
 import { requestDetailsHtml, requestProfile } from "./whoareyou";
@@ -30,6 +30,25 @@ function markdownPath(pathname: string): string {
   return pathname === "/" ? "/index.md" : `${pathname}.md`;
 }
 
+function escapeHtml(value: unknown): string {
+  return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;");
+}
+
+type SearchRecord = { path: string; title: string; description: string; section: string };
+
+/** One matcher behind both search representations, so /search and /search.json
+ *  can never disagree about what a query means. */
+async function searchSite(request: Request, env: Env, url: URL): Promise<{ query: string; results: SearchRecord[] }> {
+  const response = await asset(request, env, "/search-index.json");
+  const records = await response.json<SearchRecord[]>();
+  const query = url.searchParams.get("q")?.trim().slice(0, 120) ?? "";
+  const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const results = records
+    .filter((record) => terms.every((term) => `${record.title} ${record.description} ${record.section}`.toLowerCase().includes(term)))
+    .slice(0, 50);
+  return { query, results };
+}
+
 function isAuthoredPage(pathname: string): boolean {
   return markdownPages.has(pathname)
     || pathname.startsWith("/writing/")
@@ -42,20 +61,25 @@ async function asset(request: Request, env: Env, pathname = new URL(request.url)
 }
 
 async function fetchHandler(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-  const preview = previewRefusal(request);
-  if (preview) return preview;
-
   const url = new URL(request.url);
   const { pathname } = url;
 
   // The former calendar Worker also lived at cal.aadhar.sh. Keep that public
   // hostname as a thin canonical redirect while one implementation owns every
   // booking path and all new links point at /coffee.
+  //
+  // This runs BEFORE the preview guard on purpose. A canonical redirect writes
+  // nothing, and cal.aadhar.sh is not a production hostname by that guard's
+  // test, so guarding first classified the legacy host as a preview and refused
+  // every POST, which defeats the 308 that exists precisely to preserve method.
   if (url.hostname === "cal.aadhar.sh") {
     const suffix = pathname.startsWith("/coffee") ? pathname.slice("/coffee".length) || "/" : pathname;
     const target = new URL(`/coffee${suffix === "/" ? "" : suffix}${url.search}`, "https://aadhar.sh");
     return Response.redirect(target, 308);
   }
+
+  const preview = previewRefusal(request);
+  if (preview) return preview;
 
   if (request.method === "POST" && pathname === "/coffee/book") return coffeeBook(request, env, ctx);
   if (pathname === "/webmention") return receiveWebmention(request, env, ctx);
@@ -123,12 +147,29 @@ async function fetchHandler(request: Request, env: Env, ctx: ExecutionContext): 
   if (pathname === "/rn") return rnRedirect(env);
 
   if (pathname === "/search.json") {
-    const response = await asset(request, env, "/search-index.json");
-    const records = await response.json<Array<{ path: string; title: string; description: string; section: string }>>();
-    const query = url.searchParams.get("q")?.trim().toLowerCase().slice(0, 120) ?? "";
-    const terms = query.split(/\s+/).filter(Boolean);
-    const results = records.filter((record) => terms.every((term) => `${record.title} ${record.description} ${record.section}`.toLowerCase().includes(term))).slice(0, 50);
-    return json({ query, count: results.length, results }, { headers: { "cache-control": "public, max-age=60" } });
+    const { query, results } = await searchSite(request, env, url);
+    return json({ query: query.toLowerCase(), count: results.length, results }, { headers: { "cache-control": "public, max-age=60" } });
+  }
+
+  // The HTML search surface answers at its own address. Without this the form
+  // submitted to /search, fell through to the asset layer, and returned the
+  // empty form again: a search page that could not search.
+  if (pathname === "/search" && url.searchParams.has("q")) {
+    const { query, results } = await searchSite(request, env, url);
+    const response = await asset(request, env);
+    const summary = query
+      ? `${results.length} result${results.length === 1 ? "" : "s"} for “${escapeHtml(query)}”`
+      : "Type a word or phrase to search the authored corpus.";
+    const list = results.length
+      ? `<ol class="object-list">${results.map((record) => `<li><a href="${escapeHtml(record.path)}"><span>${escapeHtml(record.title)}</span><small>${escapeHtml(record.description)}</small></a></li>`).join("")}</ol>`
+      : query ? `<p class="empty-state">Nothing in the index matches that. The JSON representation of this query is <a href="/search.json?q=${encodeURIComponent(query)}">/search.json?q=${escapeHtml(query)}</a>.</p>` : "";
+    const transformed = new HTMLRewriter()
+      .on("#command-input", { element(element) { element.setAttribute("value", query); } })
+      .on("#search-results", { element(element) { element.setInnerContent(`<h2>${summary}</h2>${list}`, { html: true }); } })
+      .transform(response);
+    const secured = withRenderedHeaders(transformed, request);
+    secured.headers.set("cache-control", "public, max-age=0, must-revalidate");
+    return secured;
   }
 
   if (pathname === "/run") {
@@ -142,7 +183,7 @@ async function fetchHandler(request: Request, env: Env, ctx: ExecutionContext): 
       const transformed = new HTMLRewriter().on(".document header", {
         element(element) { element.after(`<p class="command-error">Windows cannot find “${command.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")}”. Check the spelling and try again.</p>`, { html: true }); },
       }).transform(response);
-      return withSiteHeaders(transformed, request);
+      return withRenderedHeaders(transformed, request);
     }
   }
 
@@ -154,7 +195,7 @@ async function fetchHandler(request: Request, env: Env, ctx: ExecutionContext): 
         element(element) { element.setInnerContent(requestDetailsHtml(profile.groups), { html: true }); },
       })
       .transform(response);
-    const secured = withSiteHeaders(transformed, request);
+    const secured = withRenderedHeaders(transformed, request);
     secured.headers.set("cache-control", "no-store");
     secured.headers.set("x-robots-tag", "noindex");
     return secured;

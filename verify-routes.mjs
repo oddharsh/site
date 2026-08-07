@@ -25,15 +25,21 @@ function typeIs(response, prefix) {
   return (response.headers.get("content-type") || "").toLowerCase().startsWith(prefix);
 }
 
+// Returns whether the response carried every header, so the caller can record
+// exactly one outcome per route. Reporting a failure here and then a pass at the
+// call site counted one route twice and made the summary line disagree with the
+// exit code.
 function secureHtml(route, response) {
   const checks = [
     ["content-security-policy", "frame-ancestors 'none'"],
     ["x-content-type-options", "nosniff"],
     ["referrer-policy", "strict-origin-when-cross-origin"],
   ];
+  let secure = true;
   for (const [header, token] of checks) {
-    if (!(response.headers.get(header) || "").includes(token)) bad(`${route} ${header}`, `missing ${token}`);
+    if (!(response.headers.get(header) || "").includes(token)) { bad(`${route} ${header}`, `missing ${token}`); secure = false; }
   }
+  return secure;
 }
 
 for (const route of manifest.pages) {
@@ -44,7 +50,7 @@ for (const route of manifest.pages) {
     else if (!typeIs(response, "text/html")) bad(`${route} HTML`, response.headers.get("content-type"));
     else if (!/^<!doctype html>/i.test(body) || !body.includes('<main class="document" id="content">')) bad(`${route} HTML`, "not a complete document");
     else if ((body.match(/<h1\b/gi) ?? []).length !== 1) bad(`${route} HTML`, "expected one h1");
-    else { secureHtml(route, response); ok(`${route} HTML`); }
+    else if (secureHtml(route, response)) ok(`${route} HTML`);
   } catch (error) { bad(`${route} HTML`, error.message); }
 
   const relative = route === "/" ? "index.md" : `${route.slice(1)}.md`;
@@ -117,6 +123,39 @@ for (const [route, payload, status] of posts) {
     else if (status === 200 && !body.includes('"jsonrpc":"2.0"')) bad(`${route} POST`, "invalid JSON-RPC envelope");
     else ok(`${route} POST ${status}`);
   } catch (error) { bad(`${route} POST`, error.message); }
+}
+
+// Rows above check status and media type, which is exactly what a page that
+// renders an EMPTY body still passes. These rows read the body, because the
+// routes below are the ones assembled at request time rather than served from
+// dist/, and a blank 200 is their characteristic failure.
+const rendered = [
+  ["/search?q=photos", "GET", null, [200], (body) => body.includes("/photos") && /result/i.test(body)],
+  ["/search?q=zzzznotathing", "GET", null, [200], (body) => /empty-state|search\.json/.test(body)],
+  ["/run?cmd=zzzznotacommand", "GET", null, [200], (body) => body.includes("Windows cannot find")],
+  ["/serendipity/event/does-not-exist", "GET", null, [404], (body) => /not found/i.test(body)],
+  ["/coffee/approve?t=nope&sig=nope", "GET", null, [401], (body) => body.includes("Link refused")],
+  ["/webmention/approve?t=nope&sig=nope", "GET", null, [401], (body) => body.includes("Link refused")],
+  ["/coffee/book", "POST", "start=0&name=x&email=x%40example.com&topic=x", [400, 409, 503], (body) => /<h[12]\b/.test(body)],
+];
+for (const [route, method, body, statuses, check] of rendered) {
+  try {
+    const response = await request(route, {
+      method,
+      headers: { accept: "text/html", ...(body ? { "content-type": "application/x-www-form-urlencoded" } : {}) },
+      ...(body ? { body } : {}),
+    });
+    const text = await response.text();
+    if (!statuses.includes(response.status)) bad(`${route} rendered`, `HTTP ${response.status}; wanted ${statuses.join("/")}`);
+    else if (!typeIs(response, "text/html")) bad(`${route} rendered`, response.headers.get("content-type"));
+    else if (!text.includes('<main class="document" id="content">')) bad(`${route} rendered`, "response is not a complete document");
+    else if (!check(text)) bad(`${route} rendered`, "document is missing its request-time content");
+    // A request-rendered document is not the shell it was built from, so it must
+    // not carry the shell's validator: every query would otherwise share one
+    // ETag and revalidate into another query's content.
+    else if (response.headers.get("etag") || response.headers.get("last-modified")) bad(`${route} rendered`, "carries the static shell's validator");
+    else ok(`${route} ${method} renders a complete document`);
+  } catch (error) { bad(`${route} rendered`, error.message); }
 }
 
 for (const route of ["/serendipity/sync", "/serendipity/cookies", "/serendipity/add-event"]) {

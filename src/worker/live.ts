@@ -1,4 +1,4 @@
-import { json, withSiteHeaders } from "./http";
+import { json, withRenderedHeaders } from "./http";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -42,7 +42,7 @@ export async function readingResponse(request: Request, env: Env): Promise<Respo
   const transformed = html
     ? new HTMLRewriter().on("#reading-list", { element(element) { element.setInnerContent(html, { html: true }); } }).transform(response)
     : response;
-  return withSiteHeaders(transformed, request);
+  return withRenderedHeaders(transformed, request);
 }
 
 function aroundHtml(report: JsonRecord | null): string | null {
@@ -60,7 +60,7 @@ export async function aroundResponse(request: Request, env: Env): Promise<Respon
   const transformed = html
     ? new HTMLRewriter().on("#around-report", { element(element) { element.setInnerContent(html, { html: true }); } }).transform(response)
     : response;
-  return withSiteHeaders(transformed, request);
+  return withRenderedHeaders(transformed, request);
 }
 
 export async function aroundJson(env: Env): Promise<Response> {
@@ -151,5 +151,5 @@ export async function ledgerResponse(request: Request, env: Env): Promise<Respon
   const transformed = html
     ? new HTMLRewriter().on("#ledger-data", { element(element) { element.setInnerContent(html, { html: true }); } }).transform(response)
     : response;
-  return withSiteHeaders(transformed, request);
+  return withRenderedHeaders(transformed, request);
 }

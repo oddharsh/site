@@ -20,7 +20,7 @@
       "/reading", "/around*", "/ledger*", "/inbox",
       "/webmention*", "/photos/query.json",
       "/images", "/images/full*", "/images/*.avif", "/images/*.jpg", "/images/*.jpeg",
-      "/rn", "/rn.md", "/rn/*", "/search.json", "/run",
+      "/rn", "/rn.md", "/rn/*", "/search", "/search.json", "/run",
       "/terminal*", "/finger*", "/radar*", "/dict*", "/cache*", "/agent-ready*", "/encode*", "/photos.txt"
     ]
   },

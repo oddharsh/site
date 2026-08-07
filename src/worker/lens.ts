@@ -1,6 +1,6 @@
 import { botHeaders, botName } from "./bot.ts";
 import { cleanText, decodeHtmlEntities } from "./html.ts";
-import { json, withSiteHeaders } from "./http.ts";
+import { json, withRenderedHeaders, withSiteHeaders } from "./http.ts";
 
 type JsonRecord = Record<string, unknown>;
 type Inspection = JsonRecord & { ok: boolean; error?: string; finalUrl?: string; status?: number };
@@ -229,7 +229,7 @@ export async function lensPage(request: Request, env: Env): Promise<Response> {
     .on("#lens-url", { element(element) { element.setAttribute("value", raw.slice(0, 2048)); } })
     .on("#lens-results", { element(element) { element.setInnerContent(inspectionHtml(result.payload), { html: true }); } })
     .transform(response);
-  const secured = withSiteHeaders(transformed, request);
+  const secured = withRenderedHeaders(transformed, request);
   secured.headers.set("cache-control", "no-store");
   secured.headers.set("x-robots-tag", "noindex");
   return secured;

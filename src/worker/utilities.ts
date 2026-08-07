@@ -1,6 +1,6 @@
 import { botName } from "./bot.ts";
 import { fetchPublicResource, inspectLens, validateLensTarget } from "./lens.ts";
-import { json, withSiteHeaders } from "./http.ts";
+import { json, withRenderedHeaders, withSiteHeaders } from "./http.ts";
 
 type Row = Record<string, unknown>;
 
@@ -103,7 +103,7 @@ export async function utilityPage(request: Request, env: Env, slug: string): Pro
     html = slug === "finger" ? await fingerTool(env) : slug === "radar" ? radarTool(raw) : slug === "dict" ? await dictTool(raw, env) : slug === "cache" ? await cacheTool(raw, env) : slug === "encode" ? await encodeTool(raw, env) : await agentReadyTool(request, raw, env);
   } catch (error) { html = `<article class="tool-report"><h2>Stopped</h2><p class="empty-state">${escapeHtml(error instanceof Error ? error.message : "The tool could not run.")}</p></article>`; }
   const transformed = new HTMLRewriter().on("#tool-input", { element(element) { if (slug === "radar") element.setInnerContent(raw); else element.setAttribute("value", raw); } }).on("#tool-output", { element(element) { element.setInnerContent(html, { html: true }); } }).transform(response);
-  const secured = withSiteHeaders(transformed, request); secured.headers.set("cache-control", "no-store"); secured.headers.set("x-robots-tag", "noindex"); return secured;
+  const secured = withRenderedHeaders(transformed, request); secured.headers.set("cache-control", "no-store"); secured.headers.set("x-robots-tag", "noindex"); return secured;
 }
 
 function safeExternalUrl(value: unknown): string | null {
@@ -132,16 +132,20 @@ export async function inboxPage(request: Request, env: Env): Promise<Response> {
     if (!source) return [];
     return [`<li id="${escapeHtml(mention.id)}"><h2><a href="${escapeHtml(source)}" rel="ugc external noopener">${escapeHtml(mention.title || mention.source)}</a></h2><p class="event-meta">${escapeHtml(mention.author || "someone")} ${escapeHtml(mention.kind || "mentioned")} ${escapeHtml(safePath(mention.target))} · ${calendarDay(mention.approved_at)}</p>${mention.excerpt ? `<p>${escapeHtml(mention.excerpt)}</p>` : ""}</li>`];
   }).join("")}</ol>`;
-  const transformed = new HTMLRewriter().on("#mention-list", { element(element) { element.setInnerContent(html, { html: true }); } }).transform(response); const secured = withSiteHeaders(transformed, request); secured.headers.set("link", `<${new URL(request.url).origin}/webmention>; rel="webmention"`); return secured;
+  const transformed = new HTMLRewriter().on("#mention-list", { element(element) { element.setInnerContent(html, { html: true }); } }).transform(response); const secured = withRenderedHeaders(transformed, request); secured.headers.set("link", `<${new URL(request.url).origin}/webmention>; rel="webmention"`); return secured;
 }
 
 async function censusRows(env: Env): Promise<Row[]> {
   try { return (await env.RESTORE_DB.prepare("SELECT ts,ymd,host,url,tier,score,level,doors,verdict,surfaces FROM lens_census ORDER BY host,ts").all<Row>()).results; } catch { return []; }
 }
 
+// Doors, not score: the census tracks how many machine-readable entrances each
+// origin answers on, which is the one readiness number this lens still measures.
+// Ranking or diffing on `score` produced a column of zeros, because nothing has
+// written that field since the lens was rebuilt.
 function groupedCensus(rows: Row[]) {
   const groups = new Map<string, Row[]>(); for (const row of rows) groups.set(String(row.host), [...(groups.get(String(row.host)) ?? []), row]);
-  return [...groups].map(([host, series]) => ({ host, url: series.at(-1)?.url, latest: series.at(-1)!, delta: Number(series.at(-1)?.score || 0) - Number(series[0]?.score || 0), series: series.map((row) => ({ ymd: row.ymd, score: row.score, tier: row.tier, doors: row.doors })) })).sort((a, b) => Number(b.latest.score ?? -1) - Number(a.latest.score ?? -1));
+  return [...groups].map(([host, series]) => ({ host, url: series.at(-1)?.url, latest: series.at(-1)!, delta: Number(series.at(-1)?.doors || 0) - Number(series[0]?.doors || 0), series: series.map((row) => ({ ymd: row.ymd, doors: row.doors, tier: row.tier })) })).sort((a, b) => Number(b.latest.doors ?? -1) - Number(a.latest.doors ?? -1));
 }
 
 export async function censusJson(env: Env): Promise<Response> {
@@ -150,6 +154,6 @@ export async function censusJson(env: Env): Promise<Response> {
 
 export async function censusPage(request: Request, env: Env): Promise<Response> {
   const [response, rows] = await Promise.all([env.ASSETS.fetch(request), censusRows(env)]); const sites = groupedCensus(rows); if (!sites.length) return withSiteHeaders(response, request);
-  const html = `<table><thead><tr><th>Site</th><th>Terms</th><th>Readiness</th><th>Level</th><th>Doors</th><th>Change</th></tr></thead><tbody>${sites.map((site) => `<tr><td><a href="/lens?url=${encodeURIComponent(String(site.url))}">${escapeHtml(site.host)}</a></td><td>${escapeHtml(site.latest.tier)}</td><td>${escapeHtml(site.latest.score ?? "—")}</td><td>${site.latest.level == null ? "—" : `L${escapeHtml(site.latest.level)}`}</td><td>${escapeHtml(site.latest.doors)}</td><td>${site.delta > 0 ? "+" : ""}${site.delta}</td></tr>`).join("")}</tbody></table>`;
-  const transformed = new HTMLRewriter().on("#census", { element(element) { element.setInnerContent(html, { html: true }); } }).transform(response); return withSiteHeaders(transformed, request);
+  const html = `<table><thead><tr><th>Site</th><th>Access</th><th>Doors</th><th>Change</th><th>Snapshots</th></tr></thead><tbody>${sites.map((site) => `<tr><td><a href="/lens?url=${encodeURIComponent(String(site.url))}">${escapeHtml(site.host)}</a></td><td>${escapeHtml(site.latest.tier)}</td><td>${escapeHtml(site.latest.doors)}</td><td>${site.delta > 0 ? "+" : ""}${site.delta}</td><td>${site.series.length}</td></tr>`).join("")}</tbody></table>`;
+  const transformed = new HTMLRewriter().on("#census", { element(element) { element.setInnerContent(html, { html: true }); } }).transform(response); return withRenderedHeaders(transformed, request);
 }

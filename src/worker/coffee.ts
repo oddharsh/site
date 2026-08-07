@@ -1,4 +1,4 @@
-import { json, withSiteHeaders } from "./http.ts";
+import { json, withRenderedHeaders } from "./http.ts";
 import { sendEmail } from "./email.ts";
 import { signValue, verifyValue } from "./signatures.ts";
 import { releaseCoffeeSlot, reserveCoffeeSlot } from "./reservation.ts";
@@ -225,16 +225,20 @@ export async function coffeePage(request: Request, env: Env, ctx: ExecutionConte
     .on("#coffee-slot", { element(element) { if (availability.available && options) { element.removeAttribute("disabled"); element.setInnerContent(`<option value="">Choose a time…</option>${options}`, { html: true }); } } })
     .on(".coffee-form button[type=submit]", { element(element) { if (availability.available && options) element.removeAttribute("disabled"); } })
     .transform(response);
-  const secured = withSiteHeaders(transformed, request); secured.headers.set("cache-control", "no-store"); secured.headers.set("x-robots-tag", "noindex"); return secured;
+  const secured = withRenderedHeaders(transformed, request); secured.headers.set("cache-control", "no-store"); secured.headers.set("x-robots-tag", "noindex"); return secured;
 }
 
 type JsonRecord = Record<string, unknown>;
 
 async function resultPage(request: Request, env: Env, title: string, message: string, status = 200): Promise<Response> {
   const target = new URL("/coffee", request.url);
-  const response = await env.ASSETS.fetch(new Request(target, request));
+  // Always ask the asset layer with a plain GET. Reusing `request` here inherits
+  // its method, and the booking result is reached by POST: static assets answer
+  // a POST with 405 and no document, so the rewriter below matched nothing and
+  // every submission, successful ones included, rendered an empty page.
+  const response = await env.ASSETS.fetch(new Request(target, { method: "GET" }));
   const transformed = new HTMLRewriter().on(".document", { element(element) { element.setInnerContent(`<header><p class="eyebrow">Control Panel · Scheduled Tasks</p><h1>Coffee</h1></header><section class="coffee-result"><h2>${escapeHtml(title)}</h2><p>${escapeHtml(message)}</p><p><a href="/coffee">Return to availability</a></p></section>`, { html: true }); } }).transform(response);
-  const secured = withSiteHeaders(transformed, request); secured.headers.set("cache-control", "no-store"); secured.headers.set("referrer-policy", "no-referrer"); secured.headers.set("x-robots-tag", "noindex");
+  const secured = withRenderedHeaders(transformed, request); secured.headers.set("cache-control", "no-store"); secured.headers.set("referrer-policy", "no-referrer"); secured.headers.set("x-robots-tag", "noindex");
   return new Response(secured.body, { status, headers: secured.headers });
 }
 
