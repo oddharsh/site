@@ -1,4 +1,5 @@
 import { botHeaders, botName } from "./bot.ts";
+import { cleanText, decodeHtmlEntities } from "./html.ts";
 import { json, withSiteHeaders } from "./http.ts";
 
 type JsonRecord = Record<string, unknown>;
@@ -145,22 +146,18 @@ export async function fetchPublicResource(raw: string, env: Env, headers?: Heade
   return fetchTarget(validation.target, env, headers, cap);
 }
 
-function decodeText(value: string): string {
-  return value.replace(/&nbsp;|&#160;/gi, " ").replace(/&amp;/gi, "&").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">").replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'").replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)));
-}
-
 function textContent(html: string): string {
-  return decodeText(html.replace(/<(script|style|template|noscript)\b[^>]*>[\s\S]*?<\/\1>/gi, " ").replace(/<!--[\s\S]*?-->/g, " ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim()).slice(0, 20000);
+  return cleanText(html.replace(/<(script|style|template|noscript)\b[^>]*>[\s\S]*?<\/\1>/gi, " ").replace(/<!--[\s\S]*?-->/g, " ").replace(/<[^>]+>/g, " ")).slice(0, 20000);
 }
 
 function firstMatch(html: string, expression: RegExp): string {
-  return decodeText(html.match(expression)?.[1]?.replace(/<[^>]+>/g, " ").trim() ?? "").slice(0, 500);
+  return cleanText(html.match(expression)?.[1]?.replace(/<[^>]+>/g, " ") ?? "").slice(0, 500);
 }
 
 function metaContent(html: string, name: string): string {
   const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const tag = html.match(new RegExp(`<meta\\b(?=[^>]*(?:name|property)=["']${escaped}["'])[^>]*>`, "i"))?.[0] ?? "";
-  return decodeText(tag.match(/\bcontent=["']([^"']*)["']/i)?.[1] ?? "").slice(0, 500);
+  return decodeHtmlEntities(tag.match(/\bcontent=["']([^"']*)["']/i)?.[1] ?? "").slice(0, 500);
 }
 
 async function discovery(origin: string, env: Env): Promise<JsonRecord> {

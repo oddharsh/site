@@ -3,6 +3,7 @@ import test from "node:test";
 import { prefersMarkdown } from "../src/worker/http.ts";
 import { validateLensTarget } from "../src/worker/lens.ts";
 import { generateCoffeeSlots, parseCalendar } from "../src/worker/coffee.ts";
+import { cleanText, decodeHtmlEntities } from "../src/worker/html.ts";
 import { parseSpotifyPage } from "../src/worker/rn.ts";
 
 function request(accept) {
@@ -28,6 +29,12 @@ test("Lens accepts only ordinary public web targets", () => {
     "http://10.0.0.1/", "http://169.254.169.254/", "http://[::1]/", "https://user:pass@example.com/",
     "https://example.com:8443/",
   ]) assert.ok(validateLensTarget(value).error, `${value} should be refused`);
+});
+
+test("HTML entities decode once without exposing nested markup", () => {
+  assert.equal(decodeHtmlEntities("&amp;lt;script&amp;gt;"), "&lt;script&gt;");
+  assert.equal(decodeHtmlEntities("A&nbsp;B &#x1f642; &#128578;"), "A B 🙂 🙂");
+  assert.equal(cleanText("  A\n &amp;amp; B  "), "A &amp; B");
 });
 
 test("coffee calendar parsing expands recurring busy time", () => {

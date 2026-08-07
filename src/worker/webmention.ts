@@ -1,4 +1,5 @@
 import { sendEmail } from "./email.ts";
+import { cleanText, decodeHtmlEntities } from "./html.ts";
 import { json, withSiteHeaders } from "./http.ts";
 import { fetchPublicResource, validateLensTarget } from "./lens.ts";
 import { signValue, verifyValue } from "./signatures.ts";
@@ -8,14 +9,6 @@ type Mention = { id: string; source: string; target: string; kind: string; autho
 
 function escapeHtml(value: unknown): string {
   return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;");
-}
-
-function decodeEntities(value: string): string {
-  return value.replace(/&amp;/gi, "&").replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">").replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)));
-}
-
-function plainText(html: string): string {
-  return decodeEntities(html.replace(/<(script|style|template|noscript)\b[^>]*>[\s\S]*?<\/\1>/gi, " ").replace(/<!--[\s\S]*?-->/g, " ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim());
 }
 
 function canonicalTarget(value: string): URL | null {
@@ -37,24 +30,47 @@ async function targetAccepted(env: Env, target: URL): Promise<boolean> {
   } catch { return false; }
 }
 
-function linkedTo(html: string, base: URL, target: URL): boolean {
-  const source = html.replace(/<!--[\s\S]*?-->/g, "").replace(/<(script|style|template|noscript)\b[^>]*>[\s\S]*?<\/\1>/gi, "");
-  for (const match of source.matchAll(/<a\b[^>]*\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi)) {
-    try {
-      const href = new URL(decodeEntities(match[1] ?? match[2] ?? match[3] ?? ""), base);
-      const linked = canonicalTarget(href.href);
-      if (linked?.href === target.href) return true;
-    } catch { /* ignore malformed links */ }
-  }
-  return false;
-}
+export async function parseMentionDocument(html: string, source: URL, target: URL): Promise<{ linked: boolean; mention: Omit<Mention, "id"> }> {
+  let linked = false;
+  let titleText = "";
+  let authorText = "";
+  let excerptText = "";
+  let ignoredDepth = 0;
 
-function metadata(html: string, source: URL, target: URL): Omit<Mention, "id"> {
-  const title = decodeEntities(html.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.replace(/<[^>]+>/g, " ").trim() ?? "").slice(0, 300) || source.hostname;
-  const authorTag = html.match(/<meta\b(?=[^>]*\bname=["']author["'])[^>]*>/i)?.[0] ?? "";
-  const author = decodeEntities(authorTag.match(/\bcontent=["']([^"']*)["']/i)?.[1] ?? "").slice(0, 200) || null;
-  const excerpt = plainText(html).slice(0, 500) || null;
-  return { source: source.href, target: target.href, kind: "mention", author, title, excerpt };
+  const transformed = new HTMLRewriter()
+    .on("script,style,template,noscript", {
+      element(element) {
+        ignoredDepth += 1;
+        element.onEndTag(() => { ignoredDepth = Math.max(0, ignoredDepth - 1); });
+      },
+    })
+    .on("a[href]", {
+      element(element) {
+        if (linked) return;
+        try {
+          const href = new URL(decodeHtmlEntities(element.getAttribute("href") ?? ""), source);
+          linked = canonicalTarget(href.href)?.href === target.href;
+        } catch { /* ignore malformed links */ }
+      },
+    })
+    .on("title", {
+      text(chunk) { if (titleText.length < 600) titleText += chunk.text; },
+    })
+    .on("meta", {
+      element(element) {
+        if (!authorText && element.getAttribute("name")?.toLowerCase() === "author") authorText = element.getAttribute("content") ?? "";
+      },
+    })
+    .on("body", {
+      text(chunk) { if (!ignoredDepth && excerptText.length < 1200) excerptText += `${chunk.text} `; },
+    })
+    .transform(new Response(html, { headers: { "content-type": "text/html; charset=utf-8" } }));
+
+  await transformed.arrayBuffer();
+  const title = cleanText(titleText).slice(0, 300) || source.hostname;
+  const author = cleanText(authorText).slice(0, 200) || null;
+  const excerpt = cleanText(excerptText).slice(0, 500) || null;
+  return { linked, mention: { source: source.href, target: target.href, kind: "mention", author, title, excerpt } };
 }
 
 async function mentionId(source: string, target: string): Promise<string> {
@@ -105,8 +121,9 @@ export async function receiveWebmention(request: Request, env: Env, ctx: Executi
     const fetched = await fetchPublicResource(sourceValidation.target.href, env, { accept: "text/html,application/xhtml+xml;q=0.9" }, 256 * 1024);
     if (["aadhar.sh", "www.aadhar.sh"].includes(fetched.finalUrl.hostname.toLowerCase())) return json({ error: "source redirects back to this site" }, { status: 400 });
     if (!fetched.response.ok || !/^text\/(?:html|plain)|application\/xhtml\+xml/i.test(fetched.response.headers.get("content-type") || "")) return json({ error: "source is not a readable HTML document" }, { status: 400 });
-    if (!linkedTo(fetched.body.text, fetched.finalUrl, target)) return json({ error: "source does not link to target" }, { status: 400 });
-    const fields = metadata(fetched.body.text, fetched.finalUrl, target);
+    const parsed = await parseMentionDocument(fetched.body.text, fetched.finalUrl, target);
+    if (!parsed.linked) return json({ error: "source does not link to target" }, { status: 400 });
+    const fields = parsed.mention;
     const mention = { id: await mentionId(fields.source, fields.target), ...fields };
     const status = await store(env, mention);
     if (status !== "approved") ctx.waitUntil(notify(env, mention).catch((error) => console.warn("webmention notification failed", String(error))));

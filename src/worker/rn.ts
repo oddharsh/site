@@ -1,3 +1,4 @@
+import { cleanText } from "./html.ts";
 import { json, text } from "./http.ts";
 import { fetchPublicResource } from "./lens.ts";
 
@@ -26,10 +27,6 @@ async function playlist(env: Env): Promise<{ id: string; payload: Playlist }> {
 
 type EmbedTrack = { uri?: string; title?: string; subtitle?: string; isExplicit?: boolean; duration?: number };
 
-function decode(value: string): string {
-  return value.replace(/&amp;/gi, "&").replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-}
-
 export function parseSpotifyPage(source: string, id: string): Playlist {
   const script = source.match(/<script\b(?=[^>]*\bid=["']__NEXT_DATA__["'])[^>]*>([\s\S]*?)<\/script>/i)?.[1];
   if (script) {
@@ -46,13 +43,13 @@ export function parseSpotifyPage(source: string, id: string): Playlist {
   }
   const tracks = source.split(/(?=<div\b(?=[^>]*\bdata-testid=["']track-row["']))/i).flatMap((chunk) => {
     const trackId = chunk.match(/listrow-title-track-spotify:track:([A-Za-z0-9]+)/i)?.[1];
-    const title = decode(chunk.match(/data-encore-id=["']listRowTitle["'][^>]*>[\s\S]*?<span\b[^>]*>([\s\S]*?)<\/span>/i)?.[1] ?? "");
+    const title = cleanText((chunk.match(/data-encore-id=["']listRowTitle["'][^>]*>[\s\S]*?<span\b[^>]*>([\s\S]*?)<\/span>/i)?.[1] ?? "").replace(/<[^>]+>/g, " "));
     if (!trackId || !title) return [];
-    const artists = decode(chunk.match(/data-encore-id=["']listRowDetails["'][^>]*>([\s\S]*?)<\/p>/i)?.[1] ?? "").replace(/\s*,\s*/g, ", ");
+    const artists = cleanText((chunk.match(/data-encore-id=["']listRowDetails["'][^>]*>([\s\S]*?)<\/p>/i)?.[1] ?? "").replace(/<[^>]+>/g, " ")).replace(/\s*,\s*/g, ", ");
     return [{ title: title.slice(0, 300), artists_text: artists.slice(0, 500), duration_ms: 0, song_link_url: `https://open.spotify.com/track/${trackId}`, spotify_url: `https://open.spotify.com/track/${trackId}`, is_explicit: /aria-label=["']Explicit["']/i.test(chunk) }];
   }).slice(0, 200);
   if (!tracks.length) throw new Error("Spotify playlist data has an unknown shape");
-  const playlistName = decode(source.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? "").replace(/\s*[-–]\s*playlist by[\s\S]*$/i, "") || "Right now";
+  const playlistName = cleanText((source.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? "").replace(/<[^>]+>/g, " ")).replace(/\s*[-–]\s*playlist by[\s\S]*$/i, "") || "Right now";
   return { playlist_id: id, playlist_name: playlistName, tracks };
 }
 
