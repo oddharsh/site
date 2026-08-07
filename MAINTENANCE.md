@@ -170,8 +170,10 @@ explicitly enabled in every Worker config.
 
 **CodeQL analyzes `actions` and `javascript-typescript` only, and that list is a
 repo SETTING with no file in this tree.** It lives under Security, Code scanning,
-Default setup, so nothing here can declare it and `infra:check` cannot see it.
-Read the live value with:
+Default setup, so no config here can derive it. It IS declared, in
+[`infra.json`](infra.json) under `repository.code_scanning`, and `npm run
+infra:check` fails on drift; this paragraph used to say the checker could not see
+it, which was true until 2026-08-07. Read the live value with:
 
 ```bash
 gh api repos/oddharsh/site/code-scanning/default-setup
@@ -179,7 +181,21 @@ gh api repos/oddharsh/site/code-scanning/default-setup
 
 Expect `actions`, `javascript`, `javascript-typescript`, `typescript` back. Those
 last three are aliases GitHub keeps and folds into ONE job, so the honest count is
-two jobs, not four.
+two jobs, not four. The declaration carries all four, because it has to match what
+the API returns rather than the tidier number.
+
+**That assertion is workstation-only, so run `infra:check` locally if you touched
+the scan config.** CI cannot make it, and that is structural rather than a setting
+nobody enabled: the endpoint wants the repository `Administration` read permission,
+which is not among the keys a workflow may grant its `GITHUB_TOKEN`. A local run
+works because `gh` logs in with a classic `repo` scope. `security-events: read`
+was tried in `ci.yml` on 2026-08-07 and measured to change nothing (still HTTP
+403), so it was removed rather than left looking load-bearing. In CI this reports
+one advisory naming the limit; it never fails a PR.
+
+Four fields are asserted, and `state` is the one to notice: a scanner that is
+simply turned off reports no findings, which reads identically to a clean scan.
+`threat_model` is asserted because the argument below depends on it.
 
 `rust` and `python` were dropped 2026-08-06. Between them they cost about 3 of the
 scan's 4 minutes to analyze four files: `holding/scripts/zenc/src/main.rs` and the

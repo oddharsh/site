@@ -141,12 +141,35 @@ worktrees may edit freely, but a worktree is not a release surface.
   The table above is now the readable copy of a machine-checked declaration
   rather than a claim nobody re-reads.
 
-  It costs no credential. The repo is public, so GitHub's rulesets endpoint is
-  public with it, and this tier runs on every PR like the DNS tier instead of
-  degrading to a note like the Cloudflare account tier. CI passes the
-  auto-provisioned `GITHUB_TOKEN` for rate-limit headroom alone (60/hr per IP
-  unauthenticated, which shared Actions runners exhaust), and a read that fails
-  is an advisory, so GitHub being down cannot redden an unrelated PR.
+  The RULESET half costs no credential. The repo is public, so GitHub's rulesets
+  endpoint is public with it, and that part runs on every PR like the DNS tier
+  instead of degrading to a note like the Cloudflare account tier. CI passes the
+  auto-provisioned `GITHUB_TOKEN` for rate-limit headroom alone there (60/hr per
+  IP unauthenticated, which shared Actions runners exhaust), and a read that
+  fails is an advisory, so GitHub being down cannot redden an unrelated PR.
+
+  **`repository.code_scanning` is the exception, and it is WORKSTATION-ONLY.**
+  CodeQL default setup declares the language list #241 curated, plus `state`,
+  `query_suite` and `threat_model`. Its endpoint answers 401 unauthenticated even
+  on a public repo, and the permission it wants is the repository
+  **Administration** read, which is **not one of the keys a workflow may grant its
+  `GITHUB_TOKEN`** (`actions`, `artifact-metadata`, `attestations`, `checks`,
+  `code-quality`, `contents`, `deployments`, `discussions`, `id-token`, `issues`,
+  `models`, `packages`, `pages`, `pull-requests`, `repository-projects`,
+  `security-events`, `statuses`). No `permissions:` block turns it on.
+
+  `security-events: read` was added to `ci.yml` for it and MEASURED to do nothing
+  (still 403, 2026-08-07), so it came back out with a note where it sat. The only
+  credential that can read it is a classic PAT with `repo`, which is exactly the
+  broad standing credential this repo keeps out of CI, so the answer is no. The
+  assertion runs on a workstation and CI reports one advisory naming the limit.
+
+  Two general lessons, and the second is the expensive one. "GitHub read,
+  therefore free" does not generalize, so check the auth requirement per endpoint
+  rather than inheriting the rulesets precedent. And a `permissions:` key that
+  merely SOUNDS right is worth measuring before trusting: `security-events`
+  covers code scanning ALERTS, while the default-setup CONFIGURATION sits under
+  Administration, and nothing about the name says so.
 
   Two assertions are worth knowing before you edit that block. `visibility` is
   checked FIRST and fails on its own, because rulesets on a private repo need a
