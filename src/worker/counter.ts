@@ -1,5 +1,12 @@
 import { DurableObject } from "cloudflare:workers";
+import { claimReservation, dropReservation } from "./reservation.ts";
 
+// Counter is the persisted Cloudflare class name and cannot be renamed without
+// a Durable Object lifecycle migration. Instances remain isolated by name: the
+// homepage uses `homepage-visits`, while each coffee slot uses its own
+// `coffee-slot:<start>:<end>` instance. Reusing the established namespace keeps
+// version uploads gradual and gives reservations the same serialized storage
+// boundary a new class would have required.
 export class Counter extends DurableObject<Env> {
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
@@ -9,6 +16,14 @@ export class Counter extends DurableObject<Env> {
       await this.ctx.storage.put("n", count);
     }
     return Response.json({ n: count });
+  }
+
+  async reserve(bookingId: string, start: number, end: number): Promise<boolean> {
+    return claimReservation(this.ctx.storage, bookingId, start, end);
+  }
+
+  async release(bookingId: string): Promise<boolean> {
+    return dropReservation(this.ctx.storage, bookingId);
   }
 }
 

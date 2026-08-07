@@ -8,7 +8,6 @@ import { aroundChanges, aroundJson, aroundResponse, countCrawler, ledgerJson, le
 import { photoQuery } from "./photos";
 import { rnMarkdown, rnRedirect, rnTracks, rnTracksHtml } from "./rn";
 import { lensBrowser, lensCompare, lensFetch, lensPage, lensShot } from "./lens";
-import { BookingSlot } from "./booking-slot";
 import { coffeeAvailability, coffeeBook, coffeeDecision, coffeePage, coffeeSlots } from "./coffee";
 import { retiredSerendipityWrite, serendipityEvent, serendipityEventsJson, serendipityMcp, serendipityPage } from "./serendipity";
 import { censusJson, censusPage, inboxPage, utilityPage } from "./utilities";
@@ -16,7 +15,7 @@ import { siteMcp } from "./mcp";
 import { decideWebmention, receiveWebmention } from "./webmention";
 import { runScheduled } from "./scheduled";
 
-export { BookingSlot, BookingWorkflow, Counter };
+export { BookingWorkflow, Counter };
 
 const markdownPages = new Set([
   "/", "/photos", "/writing", "/garage", "/lwe",

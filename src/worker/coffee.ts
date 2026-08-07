@@ -1,6 +1,7 @@
 import { json, withSiteHeaders } from "./http.ts";
 import { sendEmail } from "./email.ts";
 import { signValue, verifyValue } from "./signatures.ts";
+import { releaseCoffeeSlot, reserveCoffeeSlot } from "./reservation.ts";
 
 type CoffeeSecrets = { ICAL_URL?: string; SIGNING_SECRET?: string; RESEND_API_KEY?: string };
 type Interval = { start: number; end: number };
@@ -240,7 +241,7 @@ async function resultPage(request: Request, env: Env, title: string, message: st
 async function releaseReservation(env: Env, booking: Booking): Promise<void> {
   await Promise.all([
     env.BOOKINGS.delete(`held:${booking.start}:${booking.end}`),
-    env.BOOKING_SLOTS.getByName(`${booking.start}:${booking.end}`).release(booking.id),
+    releaseCoffeeSlot(env, booking.id, booking.start, booking.end),
   ]);
 }
 
@@ -262,8 +263,7 @@ export async function coffeeBook(request: Request, env: Env, ctx: ExecutionConte
   const selected = availability.slots.find((slot) => slot.startMs === start);
   if (!availability.available || !selected) return resultPage(request, env, "That time is no longer open", "The calendar changed or could not be verified. Please choose again.", 409);
   const booking: Booking = { id: crypto.randomUUID(), name, email, topic, start, end: selected.endMs, created: Date.now(), status: "pending" };
-  const slot = env.BOOKING_SLOTS.getByName(`${booking.start}:${booking.end}`);
-  if (!await slot.reserve(booking.id, booking.start, booking.end)) return resultPage(request, env, "That time was just taken", "Someone else reserved this time first. Please choose another.", 409);
+  if (!await reserveCoffeeSlot(env, booking.id, booking.start, booking.end)) return resultPage(request, env, "That time was just taken", "Someone else reserved this time first. Please choose another.", 409);
   try {
     await env.BOOKINGS.put(`booking:${booking.id}`, JSON.stringify(booking), { expirationTtl: 90 * 86400 });
     await env.BOOKINGS.put(`held:${booking.start}:${booking.end}`, booking.id, { expiration: Math.max(Math.floor(booking.end / 1000) + 86400, Math.floor(Date.now() / 1000) + 120) });

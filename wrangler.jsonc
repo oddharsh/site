@@ -55,13 +55,11 @@
   ],
   "durable_objects": {
     "bindings": [
-      { "name": "COUNTER", "class_name": "Counter" },
-      { "name": "BOOKING_SLOTS", "class_name": "BookingSlot" }
+      { "name": "COUNTER", "class_name": "Counter" }
     ]
   },
   "migrations": [
-    { "tag": "v1", "new_sqlite_classes": ["Counter"] },
-    { "tag": "v2", "new_sqlite_classes": ["BookingSlot"] }
+    { "tag": "v1", "new_sqlite_classes": ["Counter"] }
   ],
   "workflows": [
     { "name": "cal-booking-expiry", "binding": "BOOKING_WORKFLOW", "class_name": "BookingWorkflow" }

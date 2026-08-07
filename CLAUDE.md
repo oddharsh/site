@@ -134,8 +134,9 @@ bindings for local work. Keep both aligned. Current state boundaries:
 - `RESTORE_DB`: release history and bounded observation history.
 - `SERENDIPITY_DB`: public event pool.
 - `SOCIAL_DB`: moderated webmentions.
-- `COUNTER`, `BOOKING_SLOTS`, `BOOKING_WORKFLOW`: atomic count/slot state and
-  booking expiry.
+- `COUNTER`, `BOOKING_WORKFLOW`: the established Durable Object namespace owns
+  isolated visit-counter and atomic slot-reservation instances; the Workflow
+  owns durable booking expiry. No deploy-time lifecycle migration is required.
 - `BROWSER`, `IMAGES`, rate limits, and Analytics Engine: bounded live tools.
 
 Required secrets are `ICAL_URL`, `RESEND_API_KEY`, `RN_SIGNING_KEY_JWK`, and
@@ -162,6 +163,12 @@ the explicitly confirmed, workstation-only `npm run infra:apply` path.
 
 `npm run deploy` is the explicit straight-to-100% fallback. Never use either
 release command as part of ordinary validation.
+
+`versions upload` cannot apply Durable Object lifecycle changes. Do not add,
+rename, transfer, or delete a Durable Object class and expect the branch build
+to publish it. Reuse an established namespace when that remains one coherent
+state boundary; otherwise the change needs a separately authorized one-time
+deployment and migration plan before it can rejoin this gradual release path.
 
 Stage a release note before merge with:
 

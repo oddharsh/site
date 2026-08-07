@@ -5,6 +5,7 @@ import { validateLensTarget } from "../src/worker/lens.ts";
 import { generateCoffeeSlots, parseCalendar } from "../src/worker/coffee.ts";
 import { cleanText, decodeHtmlEntities } from "../src/worker/html.ts";
 import { parseSpotifyPage } from "../src/worker/rn.ts";
+import { claimReservation, dropReservation } from "../src/worker/reservation.ts";
 
 function request(accept) {
   return new Request("https://aadhar.sh/", { headers: { accept } });
@@ -56,6 +57,25 @@ test("coffee slots respect working hours, conflicts, and booking limits", () => 
   assert.ok(slots.every(({ start }) => start !== first));
   const capped = generateCoffeeSlots(env, [], [{ start: first, end: first + 30 * 60_000 }, { start: first + 60 * 60_000, end: first + 90 * 60_000 }], now);
   assert.ok(capped.every(({ start }) => new Date(start).getUTCDate() !== 5));
+});
+
+test("coffee reservations are exclusive, idempotent, releasable, and reusable after expiry", async () => {
+  const records = new Map();
+  const storage = {
+    get: async (key) => records.get(key),
+    put: async (key, value) => records.set(key, value),
+    delete: async (key) => records.delete(key),
+  };
+  const start = Date.UTC(2026, 7, 10, 14);
+  const end = start + 30 * 60_000;
+
+  assert.equal(await claimReservation(storage, "first", start, end, start - 1), true);
+  assert.equal(await claimReservation(storage, "first", start, end, start), true, "same booking is idempotent");
+  assert.equal(await claimReservation(storage, "second", start, end, start), false, "another booking cannot steal a live slot");
+  assert.equal(await dropReservation(storage, "second"), false, "another booking cannot release the slot");
+  assert.equal(await dropReservation(storage, "first"), true);
+  assert.equal(await claimReservation(storage, "second", start, end, start), true, "released slot can be reused");
+  assert.equal(await claimReservation(storage, "third", start, end, end + 1), true, "expired reservation can be replaced");
 });
 
 test("Spotify refresh reads the public embed document without client execution", () => {

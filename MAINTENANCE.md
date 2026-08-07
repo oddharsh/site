@@ -202,6 +202,13 @@ workstation-only and requires the separate `CLOUDFLARE_API_TOKEN_WRITE`.
 
 ## Deliberate migrations
 
+The normal Workers Builds command is `wrangler versions upload`, which cannot
+apply a Durable Object class lifecycle migration. A new, renamed, transferred,
+or deleted class therefore requires an explicit one-time deployment plan; a
+feature PR must not quietly append a migration and leave the branch publisher
+red. Coffee slot reservations intentionally reuse isolated instances in the
+established `COUNTER` namespace for this reason.
+
 - `/sw.js` is an unregister stub and must continue returning 200 while old
   installations age out.
 - Legacy `/images/<stem>.<ext>` URLs redirect to the current content-addressed

@@ -1,4 +1,5 @@
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from "cloudflare:workers";
+import { releaseCoffeeSlot } from "./reservation.ts";
 
 export interface BookingExpiryPayload {
   bookingId: string;
@@ -17,7 +18,7 @@ export class BookingWorkflow extends WorkflowEntrypoint<Env, BookingExpiryPayloa
       booking.status = "expired";
       await this.env.BOOKINGS.put(`booking:${booking.id}`, JSON.stringify(booking), { expirationTtl: 90 * 86400 });
       await this.env.BOOKINGS.delete(`held:${booking.start}:${booking.end}`);
-      await this.env.BOOKING_SLOTS.getByName(`${booking.start}:${booking.end}`).release(booking.id);
+      await releaseCoffeeSlot(this.env, booking.id, booking.start, booking.end);
     });
   }
 }
