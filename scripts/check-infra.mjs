@@ -8,7 +8,7 @@
 // adopting Terraform: infra.json is the declaration, this script is the diff,
 // and nothing here mutates Cloudflare.
 //
-// Three tiers, by what they cost to run:
+// Five tiers, by what they cost to run:
 //
 //   tree  no network.  infra.json against the repo. Binding names must line up
 //                      with wrangler.jsonc, and every declared `consumer` file
@@ -17,6 +17,10 @@
 //   dns   no secrets.  Public DoH. Every declared record, checked against two
 //                      independent resolvers. This is most of the value and it
 //                      runs in CI with no credential at all.
+//   repo  no secrets.  GitHub repository rulesets, the branch half of the
+//                      release model. Public repo, public endpoint, so this
+//                      runs on every PR with no credential; GITHUB_TOKEN buys
+//                      rate-limit headroom alone.
 //   edge  no secrets.  Zone settings that are load-bearing for something this
 //                      repo does, read as observed responses from production
 //                      rather than as dashboard toggles. A response needs no
@@ -720,6 +724,153 @@ async function checkApi(infra, wrangler, token) {
   });
 }
 
+// ----------------------------------------------------- tier: repository ----
+
+// GitHub repository rulesets, the BRANCH half of the release model. Same class
+// as the Workers Builds block: dashboard state no config in this repo can
+// derive, load-bearing for what may reach production, and silent when it drifts.
+//
+// NO CREDENTIAL, because the repo is public and the rulesets endpoint is public
+// with it. That is what puts this beside the DNS tier rather than behind a token
+// like the account tier. GITHUB_TOKEN, when present, buys rate-limit headroom
+// alone (60/hr unauthenticated per IP, which shared Actions runners do exhaust)
+// and grants nothing this needs.
+//
+// Anything we could not READ is an advisory, so GitHub being down cannot redden
+// a PR that only touched CSS. Anything we read and found wrong is fatal.
+async function ghFetch(path, token) {
+  const headers = {
+    accept: "application/vnd.github+json",
+    "x-github-api-version": "2022-11-28",
+    "user-agent": BOT_UA,
+  };
+  if (token) headers.authorization = `Bearer ${token}`;
+  const res = await fetch(`https://api.github.com${path}`, {
+    headers,
+    signal: AbortSignal.timeout(12000),
+  });
+  if (res.status === 403 || res.status === 429) {
+    const remaining = res.headers.get("x-ratelimit-remaining");
+    throw new Error(
+      remaining === "0"
+        ? "GitHub API rate limit exhausted (set GITHUB_TOKEN for headroom)"
+        : `GitHub API returned HTTP ${res.status}`,
+    );
+  }
+  if (!res.ok) throw new Error(`GitHub API returned HTTP ${res.status} for ${path}`);
+  return res.json();
+}
+
+async function checkRepo(infra) {
+  const repo = infra.repository;
+  if (!repo) return;
+  const slug = `${repo.owner}/${repo.name}`;
+  const token = process.env.GITHUB_TOKEN;
+
+  let meta, live;
+  try {
+    meta = await ghFetch(`/repos/${slug}`, token);
+    live = await ghFetch(`/repos/${slug}/rulesets`, token);
+  } catch (e) {
+    warn(`repository rulesets could not be read: ${e.message}`);
+    return;
+  }
+
+  // Visibility first, and as a PRECONDITION rather than a preference: rulesets
+  // on a private repo need a paid plan, so a flip back to private silently
+  // takes every rule below with it. Failing here names the cause; failing on
+  // four missing rules would not.
+  if (meta.visibility !== repo.visibility) {
+    fail(
+      `${slug} is ${JSON.stringify(meta.visibility)} but infra.json declares ${JSON.stringify(repo.visibility)}: rulesets need a paid plan on a private repo, so every branch rule below this line may have gone dark with it`,
+    );
+    return;
+  }
+
+  const byName = new Map(live.map((r) => [r.name, r]));
+  for (const want of repo.rulesets) {
+    const found = byName.get(want.name);
+    byName.delete(want.name);
+    if (!found) {
+      fail(`${slug} has no ruleset named ${JSON.stringify(want.name)}: the ${want.name} branch is unprotected`);
+      continue;
+    }
+
+    let detail;
+    try {
+      detail = await ghFetch(`/repos/${slug}/rulesets/${found.id}`, token);
+    } catch (e) {
+      warn(`ruleset ${want.name} could not be read in full: ${e.message}`);
+      continue;
+    }
+
+    const at = `ruleset ${want.name}`;
+    if (detail.enforcement !== want.enforcement) {
+      fail(
+        `${at} is ${JSON.stringify(detail.enforcement)}, declared ${JSON.stringify(want.enforcement)}. If this is the deliberate disable for an infra:check deadlock, flip it back (CLAUDE.md, "Branch protection sharpened this")`,
+      );
+    }
+
+    // Checked as EMPTY, never against a declared list. A list would invite
+    // somebody to add an entry here to turn a red check green, which is exactly
+    // the change the check exists to catch: every push in this repo carries the
+    // OWNER's credentials, so "bypass for repository admins" exempts precisely
+    // the actors the rule is aimed at.
+    if (detail.bypass_actors?.length) {
+      const who = detail.bypass_actors.map((a) => `${a.actor_type}#${a.actor_id} (${a.bypass_mode})`).join(", ");
+      fail(`${at} has ${detail.bypass_actors.length} bypass actor(s): ${who}. Every push here uses the owner's credentials, so a bypass exempts the actors the rule is for`);
+    }
+
+    const include = detail.conditions?.ref_name?.include || [];
+    if (want.include && include.join(",") !== want.include.join(",")) {
+      fail(`${at} covers ${JSON.stringify(include)}, declared ${JSON.stringify(want.include)}`);
+    }
+
+    const types = new Set(detail.rules.map((r) => r.type));
+    const missing = want.rules.filter((r) => !types.has(r));
+    if (missing.length) fail(`${at} lost rule(s) ${missing.join(", ")}`);
+    const extra = detail.rules.map((r) => r.type).filter((t) => !want.rules.includes(t));
+    if (extra.length) warn(`${at} carries undeclared rule(s) ${extra.join(", ")}: stricter than declared, but declare them so this file stays the source of truth`);
+
+    // A forbidden rule is not an oversight in the declaration. `production`
+    // must carry no pull_request rule, because promote-production.yml moves
+    // that ref directly and a PR requirement would break the release path.
+    for (const banned of want.forbidden_rules || []) {
+      if (types.has(banned)) fail(`${at} gained a ${banned} rule, which it must not have. ${want.why}`);
+    }
+
+    const rule = (t) => detail.rules.find((r) => r.type === t)?.parameters || {};
+
+    if (want.required_approving_review_count !== undefined && types.has("pull_request")) {
+      const got = rule("pull_request").required_approving_review_count;
+      if (got !== want.required_approving_review_count) {
+        fail(`${at} requires ${got} approving review(s), declared ${want.required_approving_review_count}. GitHub refuses to let anyone approve their own PR, so a solo repo above 0 can never merge`);
+      }
+    }
+
+    if (want.required_status_checks && types.has("required_status_checks")) {
+      const params = rule("required_status_checks");
+      const got = params.required_status_checks || [];
+      for (const req of want.required_status_checks) {
+        const hit = got.find((c) => c.context === req.context);
+        if (!hit) fail(`${at} no longer requires the ${JSON.stringify(req.context)} check`);
+        else if (hit.integration_id !== req.integration_id) {
+          fail(`${at}'s ${JSON.stringify(req.context)} check is pinned to integration_id ${hit.integration_id}, declared ${req.integration_id}. Unpinned, any caller of the commit-status API could satisfy it`);
+        }
+      }
+      if (params.strict_required_status_checks_policy !== want.strict_required_status_checks_policy) {
+        fail(`${at}'s strict_required_status_checks_policy is ${params.strict_required_status_checks_policy}, declared ${want.strict_required_status_checks_policy}. Strict makes every Dependabot PR churn a rebase on each unrelated merge`);
+      }
+    }
+  }
+
+  for (const stray of byName.keys()) {
+    warn(`${slug} carries an undeclared ruleset ${JSON.stringify(stray)}: add it to infra.json's repository block or delete it`);
+  }
+
+  pass(`${slug} is ${meta.visibility} and its ${repo.rulesets.length} declared ruleset(s) match, with no bypass actors${token ? "" : " (unauthenticated read)"}`);
+}
+
 // ------------------------------------------- tier: agent markdown surface ----
 
 // Which pages answer an agent in Markdown, measured on the wire rather than inferred
@@ -783,6 +934,7 @@ if (OFFLINE) {
 } else {
   await checkDns(infra);
   await checkEdge(infra);
+  await checkRepo(infra);
   await checkAgentMarkdown();
 
   const token = process.env.CLOUDFLARE_API_TOKEN;

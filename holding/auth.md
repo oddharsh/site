@@ -2,7 +2,10 @@
 
 Agent registration metadata for `aadhar.sh`.
 
-This site exposes public, read-only resources for agents. Registration is
+This site exposes public resources and bounded utilities for agents. Image
+processing is ephemeral, and the HTTP representation vault stores only
+normalized observations and digests; it never stores raw uploads or page
+bodies. Registration is
 available for agents that want an explicit bearer credential and scope list, but
 the credential does not unlock private account data: the current resources are
 already public.
@@ -21,6 +24,9 @@ access public `aadhar.sh` resources, including:
 - `https://aadhar.sh/search.json?q=agents`
 - `https://aadhar.sh/photos/query.json?q=car`
 - `https://aadhar.sh/coffee/availability.json`
+
+The site-level MCP also exposes ephemeral image inspection/transforms, exact
+published-photo recipe matching, and representation capture/read/compare.
 
 ## Discovery
 
@@ -62,7 +68,7 @@ Successful responses issue a short-lived public bearer credential:
 }
 ```
 
-The bearer credential is optional for today's public endpoints. If you send it,
+The bearer credential is optional for today's public endpoints and MCP tools. If you send it,
 use the standard header form:
 
 ```http

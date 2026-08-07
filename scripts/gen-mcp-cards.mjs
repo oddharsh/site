@@ -47,7 +47,7 @@ function card({ serverInfo, capabilities, description, transport, documentationU
 const siteCard = card({
   serverInfo: SITE_MCP_SERVER_INFO,
   capabilities: SITE_MCP_CAPABILITIES,
-  description: "Read-only public utilities for aadhar.sh: search, music, photos, coffee availability, Change Radar, Lens, and the site's published page resources.",
+  description: "Bounded public utilities for aadhar.sh: search, music, photos, coffee availability, Change Radar, Lens, ephemeral image inspection/transforms, exact published-photo recipe matching, an HTTP representation vault, and the site's published page resources.",
   transport: `${ROOT}/mcp`,
   documentationUrl: `${ROOT}/llms.txt`,
   tools: SITE_TOOLS,

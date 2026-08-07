@@ -133,6 +133,28 @@ worktrees may edit freely, but a worktree is not a release surface.
   `main`, and it must belong to a merged PR into `main`) are belt and braces now
   rather than the only line. Keep them: a ruleset governs refs, while those guards
   govern which commit is allowed to become a release.
+
+  **Both rulesets are DECLARED in [`infra.json`](infra.json) under `repository`,
+  and `npm run infra:check` fails on drift**, for the same reason the Workers
+  Builds block is declared there: dashboard state that no config in this repo can
+  derive, load-bearing for what reaches production, and silent when it changes.
+  The table above is now the readable copy of a machine-checked declaration
+  rather than a claim nobody re-reads.
+
+  It costs no credential. The repo is public, so GitHub's rulesets endpoint is
+  public with it, and this tier runs on every PR like the DNS tier instead of
+  degrading to a note like the Cloudflare account tier. CI passes the
+  auto-provisioned `GITHUB_TOKEN` for rate-limit headroom alone (60/hr per IP
+  unauthenticated, which shared Actions runners exhaust), and a read that fails
+  is an advisory, so GitHub being down cannot redden an unrelated PR.
+
+  Two assertions are worth knowing before you edit that block. `visibility` is
+  checked FIRST and fails on its own, because rulesets on a private repo need a
+  paid plan, so flipping the repo back to private would silently restore exactly
+  the world this note used to describe. And `bypass_actors` is asserted EMPTY
+  rather than against a declared list, on purpose: a list invites someone to add
+  an entry to `infra.json` to turn a red check green, which is the precise change
+  the check exists to catch.
 - **Reaching `production` no longer moves traffic.** Workers Builds runs
   `wrangler versions upload`, so a promotion builds the commit, uploads the
   assets, checks the secrets, and mints a servable preview URL, while production
@@ -147,8 +169,13 @@ worktrees may edit freely, but a worktree is not a release surface.
   (the one route that reports which VERSION answered — both versions read the
   same D1 changelog, so `/updates.json` structurally cannot tell them apart) and
   aborts on a non-200 or on a step that never took. `--to`, `--steps`,
-  `--status`, and `--rollback` are the other modes. It is workstation-only for
-  the same reason `infra:apply` is: moving traffic needs a token that can write.
+  `--status`, and `--rollback` are the other modes. It runs anywhere that can
+  authenticate: on a workstation from your wrangler login, and in
+  `.github/workflows/ramp.yml` from the scoped environment secret. The old flat
+  `if (process.env.CI) die()` is gone — `scripts/lib/release-guard.mjs` asks
+  whether the process can authenticate instead, because a blanket CI ban refused
+  the gated pipeline it was meant to protect while doing nothing about a ramp
+  that starts unauthenticated and dies after traffic already moved.
 
   What the ramp buys is the ability to read a change before everyone gets it. The
   script deliberately pauses between steps and tells you to go look at Workers
@@ -208,6 +235,14 @@ worktrees may edit freely, but a worktree is not a release surface.
   green on its own. The audit log records both flips. Do NOT reach for a bypass
   actor instead, because a standing exemption is permanent and silent, while a
   disabled ruleset is a deliberate act somebody can see.
+
+  Since the rulesets are declared in `infra.json`, a disabled one now fails
+  `infra:check` by name, and that resolves itself rather than deadlocking twice:
+  while enforcement is off, `validate` is not a required check either, so a red
+  run cannot block the merge it was disabled for. What the failure buys is the
+  tripwire for the actual risk here, which is nobody flipping it back. Expect one
+  red `validate` for the duration and treat a red one AFTER the re-enable as the
+  real signal.
 - Configure one Workers Build project for the site Worker with `production` as
   its production branch and repository root `.`. Keep the dashboard Build
   command blank; use the repo's Wrangler-owned build during the Deploy command,
@@ -271,11 +306,25 @@ worktrees may edit freely, but a worktree is not a release surface.
   its remote config has drifted from this repo. Workers Builds deliberately
   does NOT pass `--strict`: it is the authoritative publisher, and a release
   should reclaim a dashboard edit instead of stalling on it.
-- **GitHub must never hold a Cloudflare token that can write.** The point is
-  that GitHub cannot publish to production; only Workers Builds can, and only
-  from `production`. A READ-ONLY token is a different thing and is fine: CI uses
-  one for `npm run infra:check`. Scope it to exactly these six reads and
-  nothing else: Account Settings:Read, Workers Scripts:Read, Workers KV
+- **GitHub's DEFAULT token is read-only, and one narrowly scoped write token is
+  allowed, in an environment, behind a reviewer.** This rule used to read "GitHub
+  must never hold a Cloudflare token that can write, full stop"; the owner
+  retired that on 2026-08-06 and the reasoning is worth keeping, because the risk
+  it was aimed at is real and unchanged: **this repository is PUBLIC.** Actions
+  secrets are not exposed by a public repo, but a workflow that runs untrusted
+  input can exfiltrate whatever it can read, so WHERE the secret lives is the
+  whole control.
+
+  The write token (`CLOUDFLARE_API_TOKEN_RAMP`, `Workers Scripts:Edit` + `D1:Edit`
+  and nothing more) is an ENVIRONMENT secret on `production-canary` and
+  `production-full`, never a repo secret. A job that does not name those
+  environments cannot see it, which is what keeps it out of reach of fork PRs.
+  `production-full` carries required reviewers, so majority traffic cannot move
+  without a human. `.github/workflows/ramp.yml` is the only consumer.
+
+  **The default is still read-only, and adding a second write token is still a
+  no.** CI's own token stays exactly as it was. Scope it to exactly these six
+  reads and nothing else: Account Settings:Read, Workers Scripts:Read, Workers KV
   Storage:Read, Workers R2 Storage:Read, D1:Read, **Workers Builds Configuration:Read**. If a
   token in this repo ever needs an `Edit` scope, the answer is no. A token
   missing one of these degrades only the section that needed it, and the check
@@ -285,11 +334,13 @@ worktrees may edit freely, but a worktree is not a release surface.
   the live Workers Builds triggers instead of trusting a recorded intent. It is
   the read half of the permission whose Edit half changes the deploy command, so
   granting it buys drift detection on the release path and grants nothing that
-  can publish. **Read, never Edit — the rule above is unchanged.**
+  can publish. **This one is Read, never Edit** — the ramp token above is a
+  separate, narrower credential and does not widen this one.
 - The one write path, `npm run infra:apply`, is **workstation-only** and reads a
   different variable (`CLOUDFLARE_API_TOKEN_WRITE`, scoped to DNS on this zone
-  alone). It refuses to run in CI and cannot touch the Worker. GitHub stays
-  unable to reach production, which is the property the release design rests on.
+  alone). It refuses to run in CI and cannot touch the Worker, and that refusal
+  is NOT covered by the 2026-08-06 change: it can create and destroy zone-level
+  DNS, which no pipeline here needs to do.
 
 > `AGENTS.md` is a symlink to this file. One source of truth, so the two cannot
 > drift again (they had, badly, by 2026-07-22). Edit this file.
@@ -650,7 +701,7 @@ generic hex back.
   because that is what the 429 message quotes, and a contract test pins the two
   configs and the code together so a message cannot outlive its limit.
 - **PHOTOS_R2** — R2 bucket `aadhar-photos`, holds the SOOC originals
-  (~3 GB / 158 photos at FUJIFILM X-T5 + Leica resolution).
+  (~3 GB / 158 photos at FUJIFILM X-T50 + Leica resolution).
 - **ASSETS** — the Workers static-assets binding (wrangler.jsonc `assets`), serves files from holding/.
 - **RESTORE_DB** — D1 database `aadhar-restore` (id `88c8daf1-3a36-4f8e-a2ad-dba8a74e1b9f`),
   the **single source of truth for the deploy log**. One row per logged deploy
@@ -1310,6 +1361,39 @@ npm run deploy
     A/B mutation — any of them breaks a dictionary derived from source, and the
     symptom is a silent tier downgrade rather than an error. **Derive from the wire,
     or verify the wire equals the build.**
+
+    **The repair exposed a second bug in the same operation: `git checkout` destroys
+    mtime ordering, and both prune loops were sorting on mtime.** Checkout stamps
+    every file it writes with the checkout time, so in a fresh worktree every
+    pre-existing candidate is exactly as old as every other and "delete the oldest"
+    becomes "delete whatever readdir listed first". The first repair roll, run from
+    a clean worktree, kept a snapshot from an old release and deleted
+    `garage__pretext.73cac3ee` — the bytes production had served that same morning,
+    and therefore the only candidate a visitor from that morning could offer. The
+    hygiene rule (work from a fresh worktree) and the prune were in direct conflict,
+    and the roll is exactly where they meet.
+
+    Ordering is COMMIT time now, from one `git log --name-only` walk per directory,
+    shared by both halves (`gitTimes()` / `oldestFirst()` in the roll script).
+    Snapshots the run confirmed as currently served are un-prunable outright. The
+    check that this is right is a set intersection, not a vibe: the snapshots a roll
+    deletes must not intersect the snapshots representing bytes browsers hold.
+
+22. **A ramp step names the WHOLE traffic split, and at most 2 versions.** Both
+    halves of that bit `deploy:promote` on 2026-08-06. `wrangler versions deploy`
+    takes no delta, so `<target>@10` alone is rejected for totalling 10% and each
+    step has to name the incumbent holding the remainder. Then, because production
+    was already serving TWO versions (a secret update mints a version, and
+    `e0f1ab05` had been left at 10%), naming every incumbent produced a 3-way split
+    and wrangler refused the step outright: *"Too many versions selected. You can
+    deploy at most 2 version(s) at a time."*
+
+    So a ramp that starts from a multi-version split necessarily DROPS the smaller
+    incumbents. `trafficSplit()` gives the whole remainder to the LARGEST incumbent
+    and prints which versions stop serving, because the alternative — picking the
+    newest — shoves the entire remainder onto a version only a slice of traffic had
+    been getting, which is a big silent change inside a procedure whose only purpose
+    is changing one thing carefully.
 
 21. **The bridge's `c2pa` pack cannot see this site's photos, and no pipeline
     change fixes it.** TURNED OFF in the dashboard 2026-08-06, so the injected tag

@@ -4,8 +4,8 @@
   "serverInfo": {
     "name": "aadhar.sh",
     "title": "Aadharsh Site",
-    "version": "2.0.0",
-    "description": "Read-only public utilities for aadhar.sh: search, music, photos, coffee availability, Change Radar, Lens, and the site's published page resources."
+    "version": "2.1.0",
+    "description": "Bounded public utilities for aadhar.sh: search, music, photos, coffee availability, Change Radar, Lens, ephemeral image inspection/transforms, exact published-photo recipe matching, an HTTP representation vault, and the site's published page resources."
   },
   "transport": {
     "type": "streamable-http",
@@ -299,6 +299,311 @@
         "destructiveHint": false,
         "idempotentHint": true,
         "openWorldHint": false
+      }
+    },
+    {
+      "name": "image_inspect",
+      "title": "Image Inspect",
+      "description": "Inspect an image's dimensions, format, and animation/frame information. Image bytes are processed ephemerally and are not stored.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "image_data": {
+            "type": "string",
+            "description": "base64 image bytes, optionally as a data URL"
+          },
+          "mime_type": {
+            "type": "string"
+          },
+          "source_url": {
+            "type": "string",
+            "description": "public HTTPS image URL"
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "image_transform",
+      "title": "Image Transform",
+      "description": "Run a bounded web image transform through Cloudflare Images and return the transformed image inline plus an exact byte receipt. The output is ephemeral.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "image_data": {
+            "type": "string"
+          },
+          "mime_type": {
+            "type": "string"
+          },
+          "source_url": {
+            "type": "string"
+          },
+          "preset": {
+            "type": "string",
+            "enum": [
+              "web",
+              "thumbnail",
+              "universal",
+              "og"
+            ]
+          },
+          "width": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2400
+          },
+          "height": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2400
+          },
+          "fit": {
+            "type": "string",
+            "enum": [
+              "cover",
+              "contain",
+              "crop",
+              "scale-down",
+              "pad",
+              "squeeze"
+            ]
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "avif",
+              "webp",
+              "jpeg"
+            ]
+          },
+          "quality": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "rotate": {
+            "type": "integer",
+            "enum": [
+              0,
+              90,
+              180,
+              270
+            ]
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "image_compare",
+      "title": "Image Compare",
+      "description": "Encode one image into up to three bounded format variants and report exact byte sizes and hashes. It does not pretend to score visual quality.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "image_data": {
+            "type": "string"
+          },
+          "mime_type": {
+            "type": "string"
+          },
+          "source_url": {
+            "type": "string"
+          },
+          "formats": {
+            "type": "array",
+            "maxItems": 3,
+            "items": {
+              "type": "string",
+              "enum": [
+                "avif",
+                "webp",
+                "jpeg"
+              ]
+            }
+          },
+          "preset": {
+            "type": "string",
+            "enum": [
+              "web",
+              "thumbnail",
+              "universal",
+              "og"
+            ]
+          },
+          "width": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2400
+          },
+          "height": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2400
+          },
+          "fit": {
+            "type": "string"
+          },
+          "quality": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "photo_recipe",
+      "title": "Photo Recipe",
+      "description": "Return the exact public Fuji recipe for a named archive photo, archive URL, or exact published thumbnail bytes. Arbitrary visual lookalikes are not treated as matches.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "stem": {
+            "type": "string"
+          },
+          "source_url": {
+            "type": "string"
+          },
+          "image_data": {
+            "type": "string",
+            "description": "base64 bytes from a published thumbnail"
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "representation_capture",
+      "title": "Representation Capture",
+      "description": "Capture bounded public HTTP representations under browser, bot, Markdown, or identity request profiles and store only normalized headers, metadata, and body digests.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string"
+          },
+          "profiles": {
+            "type": "array",
+            "maxItems": 4,
+            "items": {
+              "type": "string",
+              "enum": [
+                "browser",
+                "bot",
+                "markdown",
+                "identity"
+              ]
+            }
+          }
+        },
+        "required": [
+          "url"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "representation_read",
+      "title": "Representation Read",
+      "description": "Read one normalized HTTP representation snapshot from the vault. Raw response bodies are never returned because they are never stored.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "snapshot_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "snapshot_id"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "representation_compare",
+      "title": "Representation Compare",
+      "description": "Refetch the same HTTP representation profile, compare it with a stored snapshot, and persist the new normalized observation.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "snapshot_id": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "description": "optional replacement URL, otherwise the snapshot URL"
+          }
+        },
+        "required": [
+          "snapshot_id"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": true
       }
     },
     {

@@ -2233,7 +2233,7 @@ cjxl -q 90 -e 7 &lt;stem&gt;.png &lt;stem&gt;.jxl</pre>
 #         single SDR-tonemapped AVIF + JPG, P3-tagged.
 
 # with AGTM: keep the SDR base, ALSO author a gain map + 2094-50 curve.
-#   X-T5 / Leica raw already holds the highlight data cjpegli throws away.
+#   X-T50 / Leica raw already holds the highlight data cjpegli throws away.
 avifenc --gainmap hdr.avif base.jpg -o photo-hdr.avif   # gain-map AVIF
 # OR ultra-HDR JPEG (libultrahdr) for the universal &lt;img&gt; fallback:
 ultrahdr_app -m 0 -i base.jpg -g gainmap.jpg -o photo-uhdr.jpg
