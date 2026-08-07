@@ -11,7 +11,7 @@
   ],
   "scripts": {
     "build": "node build.mjs",
-    "build:rewrite": "node scripts/build-site.mjs",
+    "build:rewrite": "npm run gen:mcp-cards && node scripts/build-site.mjs",
     "dev:rewrite": "npm run build:rewrite && wrangler dev -c wrangler.rewrite.jsonc",
     "test:rewrite": "npm run build:rewrite && node --test test/rewrite-site.test.mjs test/worker-http.test.mjs",
     "types:rewrite": "wrangler types src/worker/env.d.ts -c wrangler.rewrite.jsonc",

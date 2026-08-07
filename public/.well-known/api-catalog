@@ -3,79 +3,172 @@
     {
       "anchor": "https://aadhar.sh/mcp",
       "service-desc": [
-        { "href": "https://aadhar.sh/.well-known/mcp/server-card.json", "type": "application/json", "title": "Aadharsh site MCP server card" }
+        {
+          "href": "https://aadhar.sh/.well-known/mcp/server-card.json",
+          "type": "application/json",
+          "title": "Aadharsh Site MCP server card"
+        }
       ],
       "service-doc": [
-        { "href": "https://aadhar.sh/llms.txt", "type": "text/plain", "title": "Aadharsh site MCP and utility catalog" }
+        {
+          "href": "https://aadhar.sh/llms.txt",
+          "type": "text/plain",
+          "title": "Aadharsh Site documentation"
+        }
       ]
     },
     {
       "anchor": "https://aadhar.sh/serendipity/mcp",
       "service-desc": [
-        { "href": "https://aadhar.sh/.well-known/mcp/serendipity.json", "type": "application/json", "title": "Serendipity MCP server card" }
+        {
+          "href": "https://aadhar.sh/.well-known/mcp/serendipity.json",
+          "type": "application/json",
+          "title": "Serendipity MCP server card"
+        }
       ],
       "service-doc": [
-        { "href": "https://aadhar.sh/serendipity/mcp-info", "type": "text/html", "title": "Serendipity MCP, for agents" }
-      ]
-    },
-    {
-      "anchor": "https://aadhar.sh/rn/tracks",
-      "service-desc": [
-        { "href": "https://aadhar.sh/rn/tracks", "type": "application/json", "title": "Currently-playing playlist, as JSON" }
-      ]
-    },
-    {
-      "anchor": "https://aadhar.sh/images/manifest.json",
-      "service-desc": [
-        { "href": "https://aadhar.sh/images/manifest.json", "type": "application/json", "title": "Photo manifest (the homepage grid source)" }
-      ]
-    },
-    {
-      "anchor": "https://aadhar.sh/around/json",
-      "service-desc": [
-        { "href": "https://aadhar.sh/around/json", "type": "application/json", "title": "Neighborhood crawl, as JSON" }
-      ]
-    },
-    {
-      "anchor": "https://aadhar.sh/around/changes.json",
-      "service-desc": [
-        { "href": "https://aadhar.sh/around/changes.json", "type": "application/json", "title": "Neighborhood Change Radar, as JSON" }
+        {
+          "href": "https://aadhar.sh/serendipity/mcp-info",
+          "type": "text/html",
+          "title": "Serendipity documentation"
+        }
       ]
     },
     {
       "anchor": "https://aadhar.sh/search.json",
       "service-desc": [
-        { "href": "https://aadhar.sh/search.json?q=agents", "type": "application/json", "title": "Public site search" }
+        {
+          "href": "https://aadhar.sh/search.json?q=agents",
+          "type": "application/json",
+          "title": "Public site search"
+        }
       ]
     },
     {
       "anchor": "https://aadhar.sh/photos/query.json",
       "service-desc": [
-        { "href": "https://aadhar.sh/photos/query.json?q=car", "type": "application/json", "title": "Bounded public photo query" }
+        {
+          "href": "https://aadhar.sh/photos/query.json?q=car",
+          "type": "application/json",
+          "title": "Published photo query"
+        }
+      ]
+    },
+    {
+      "anchor": "https://aadhar.sh/images/manifest.json",
+      "service-desc": [
+        {
+          "href": "https://aadhar.sh/images/manifest.json",
+          "type": "application/json",
+          "title": "Photo manifest"
+        }
+      ]
+    },
+    {
+      "anchor": "https://aadhar.sh/rn/tracks",
+      "service-desc": [
+        {
+          "href": "https://aadhar.sh/rn/tracks",
+          "type": "application/json",
+          "title": "Current playlist"
+        }
       ]
     },
     {
       "anchor": "https://aadhar.sh/coffee/availability.json",
       "service-desc": [
-        { "href": "https://aadhar.sh/coffee/availability.json", "type": "application/json", "title": "Public coffee availability" }
+        {
+          "href": "https://aadhar.sh/coffee/availability.json",
+          "type": "application/json",
+          "title": "Coffee availability"
+        }
+      ]
+    },
+    {
+      "anchor": "https://aadhar.sh/around/json",
+      "service-desc": [
+        {
+          "href": "https://aadhar.sh/around/json",
+          "type": "application/json",
+          "title": "Neighborhood crawl"
+        }
+      ]
+    },
+    {
+      "anchor": "https://aadhar.sh/around/changes.json",
+      "service-desc": [
+        {
+          "href": "https://aadhar.sh/around/changes.json",
+          "type": "application/json",
+          "title": "Neighborhood change record"
+        }
+      ]
+    },
+    {
+      "anchor": "https://aadhar.sh/lens/fetch",
+      "service-desc": [
+        {
+          "href": "https://aadhar.sh/lens/fetch?url=https%3A%2F%2Fexample.com",
+          "type": "application/json",
+          "title": "Lens inspection"
+        }
       ]
     },
     {
       "anchor": "https://aadhar.sh/lens/compare.json",
       "service-desc": [
-        { "href": "https://aadhar.sh/lens/compare.json?left=https%3A%2F%2Fexample.com%2F&right=https%3A%2F%2Faadhar.sh%2F", "type": "application/json", "title": "Compact Lens comparison" }
+        {
+          "href": "https://aadhar.sh/lens/compare.json?left=https%3A%2F%2Fexample.com&right=https%3A%2F%2Faadhar.sh",
+          "type": "application/json",
+          "title": "Lens comparison"
+        }
+      ]
+    },
+    {
+      "anchor": "https://aadhar.sh/lens/census.json",
+      "service-desc": [
+        {
+          "href": "https://aadhar.sh/lens/census.json",
+          "type": "application/json",
+          "title": "Lens census"
+        }
+      ]
+    },
+    {
+      "anchor": "https://aadhar.sh/serendipity/events.json",
+      "service-desc": [
+        {
+          "href": "https://aadhar.sh/serendipity/events.json",
+          "type": "application/json",
+          "title": "Serendipity events"
+        }
+      ]
+    },
+    {
+      "anchor": "https://aadhar.sh/ledger.json",
+      "service-desc": [
+        {
+          "href": "https://aadhar.sh/ledger.json",
+          "type": "application/json",
+          "title": "Crawler ledger"
+        }
       ]
     },
     {
       "anchor": "https://aadhar.sh/",
       "service-doc": [
-        { "href": "https://aadhar.sh/llms.txt", "type": "text/plain", "title": "llms.txt site summary" },
-        { "href": "https://aadhar.sh/auth.md", "type": "text/markdown", "title": "Auth.md agent registration" }
+        {
+          "href": "https://aadhar.sh/llms.txt",
+          "type": "text/plain",
+          "title": "Site guide"
+        }
       ],
       "service-desc": [
-        { "href": "https://aadhar.sh/.well-known/oauth-protected-resource", "type": "application/json", "title": "OAuth protected resource metadata" },
-        { "href": "https://aadhar.sh/.well-known/oauth-authorization-server", "type": "application/json", "title": "OAuth authorization server metadata" },
-        { "href": "https://aadhar.sh/.well-known/agent-card.json", "type": "application/json", "title": "Aadharsh site agent card" }
+        {
+          "href": "https://aadhar.sh/.well-known/agent-card.json",
+          "type": "application/json",
+          "title": "Agent discovery card"
+        }
       ]
     }
   ]

@@ -1,13 +1,10 @@
 import { json, withSiteHeaders } from "./http.ts";
+import contracts from "../contracts/mcp.json";
 
 type Row = Record<string, unknown>;
 
-const tools = [
-  { name: "list_events", title: "List events", description: "List upcoming, past, or all public events in the Serendipity pool.", inputSchema: { type: "object", properties: { when: { type: "string", enum: ["upcoming", "past", "all"], default: "upcoming" }, query: { type: "string" }, limit: { type: "integer", minimum: 1, maximum: 100, default: 25 } }, additionalProperties: false }, annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false } },
-  { name: "get_event", title: "Get event", description: "Open one public event and its attendee list.", inputSchema: { type: "object", properties: { id: { type: "string" } }, required: ["id"], additionalProperties: false }, annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false } },
-  { name: "search_people", title: "Search people", description: "Find public attendees by name.", inputSchema: { type: "object", properties: { query: { type: "string" }, limit: { type: "integer", minimum: 1, maximum: 100, default: 25 } }, required: ["query"], additionalProperties: false }, annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false } },
-  { name: "stats", title: "Pool statistics", description: "Count events and public attendees.", inputSchema: { type: "object", properties: {}, additionalProperties: false }, annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false } },
-] as const;
+const server = contracts.servers.serendipity;
+const tools = server.tools.map((tool) => ({ ...tool, outputSchema: { type: "object", additionalProperties: true }, annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false } }));
 
 function escapeHtml(value: unknown): string {
   return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;");
@@ -140,8 +137,8 @@ async function handleRpc(env: Env, message: unknown): Promise<Row | null> {
   const rpc = message as Row; const hasId = "id" in rpc; const id = rpc.id;
   if (rpc.jsonrpc !== "2.0" || typeof rpc.method !== "string") return hasId ? rpcError(id, -32600, "Invalid Request") : null;
   if (String(rpc.method).startsWith("notifications/")) return null;
-  if (rpc.method === "server/discover") return rpcResult(id, { protocolVersion: "2026-07-28", capabilities: { tools: {} }, serverInfo: { name: "serendipity", title: "Serendipity", version: "3.0.0" }, instructions: "Read-only access to the public Serendipity event pool." });
-  if (rpc.method === "initialize") return rpcResult(id, { protocolVersion: "2025-06-18", capabilities: { tools: {} }, serverInfo: { name: "serendipity", title: "Serendipity", version: "3.0.0" }, instructions: "Read-only access to the public Serendipity event pool." });
+  if (rpc.method === "server/discover") return rpcResult(id, { protocolVersion: contracts.protocolVersion, capabilities: server.capabilities, serverInfo: server.serverInfo, instructions: "Read-only access to the public Serendipity event pool." });
+  if (rpc.method === "initialize") return rpcResult(id, { protocolVersion: "2025-06-18", capabilities: { tools: {} }, serverInfo: server.serverInfo, instructions: "Read-only access to the public Serendipity event pool." });
   if (rpc.method === "ping") return rpcResult(id, {});
   if (rpc.method === "tools/list") return rpcResult(id, { tools });
   if (rpc.method === "resources/list") return rpcResult(id, { resources: [] });

@@ -155,3 +155,15 @@ test("hashed stylesheet and public assets resolve from the generated tree", asyn
     await readFile(new URL(path[1], output));
   }
 });
+
+test("agent discovery is generated from the live MCP registry", async () => {
+  const contracts = JSON.parse(await readFile(new URL("../src/contracts/mcp.json", import.meta.url), "utf8"));
+  const siteCard = JSON.parse(await text(".well-known/mcp/server-card.json"));
+  const serendipityCard = JSON.parse(await text(".well-known/mcp/serendipity.json"));
+  const agentCard = JSON.parse(await text(".well-known/agent-card.json"));
+  assert.deepEqual(siteCard.tools.map(({ name }) => name), contracts.servers.site.tools.map(({ name }) => name));
+  assert.deepEqual(serendipityCard.tools.map(({ name }) => name), contracts.servers.serendipity.tools.map(({ name }) => name));
+  assert.equal(siteCard.protocolVersion, contracts.protocolVersion);
+  assert.equal(serendipityCard.protocolVersion, contracts.protocolVersion);
+  assert.doesNotMatch(JSON.stringify(agentCard), /webmcp|oauth|bearer/i);
+});

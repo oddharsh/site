@@ -12,6 +12,7 @@ import { BookingSlot } from "./booking-slot";
 import { coffeeAvailability, coffeeBook, coffeeDecision, coffeePage, coffeeSlots } from "./coffee";
 import { retiredSerendipityWrite, serendipityEvent, serendipityEventsJson, serendipityMcp, serendipityPage } from "./serendipity";
 import { censusJson, censusPage, inboxPage, utilityPage } from "./utilities";
+import { siteMcp } from "./mcp";
 
 export { BookingSlot, BookingWorkflow, Counter };
 
@@ -47,6 +48,7 @@ async function fetchHandler(request: Request, env: Env, ctx: ExecutionContext): 
   const { pathname } = url;
 
   if (request.method === "POST" && pathname === "/coffee/book") return coffeeBook(request, env, ctx);
+  if (pathname === "/mcp") return siteMcp(request, env, ctx);
   if (pathname === "/serendipity/mcp") return serendipityMcp(request, env);
   if (["/serendipity/sync", "/serendipity/sync-descriptions", "/serendipity/enrich", "/serendipity/cookies", "/serendipity/add-event", "/serendipity/cover"].includes(pathname)) return retiredSerendipityWrite();
 
@@ -58,12 +60,6 @@ async function fetchHandler(request: Request, env: Env, ctx: ExecutionContext): 
   if (pathname !== "/" && pathname.endsWith("/")) return redirect(request, pathname.slice(0, -1));
   if (pathname === "/favicon.ico") return asset(request, env, "/favicon.svg");
   if (pathname === "/hit") return hit(request, env, ctx);
-  if (pathname === "/mcp" && request.method === "GET") {
-    return json({ jsonrpc: "2.0", error: { code: -32600, message: "POST a JSON-RPC request." }, id: null }, {
-      status: 405,
-      headers: { allow: "POST", "cache-control": "no-store" },
-    });
-  }
   const tool = terminalTool(request);
   if (tool) return tool;
 
