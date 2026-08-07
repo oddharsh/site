@@ -39,7 +39,8 @@ import { handleRn, handleRnAdmin, handleRnArt, handleRnMarkdown, handleRnSet, ha
 import { cronHomeProbe } from "./perf-probe.js";
 import { handleSearch, handleSearchJson } from "./search.js";
 import { handleSecurityCenter } from "./security.js";
-import { handleTerminal, handleTool } from "./terminal.js";
+import { handleTool } from "./terminal.js";
+import { handleTerminal } from "./wire.js";
 import { handleSystemRestore, handleUpdatesJson, handleWindowsUpdate } from "./updates.js";
 import { handleWhoareyou, handleWhoareyouJson } from "./whoareyou.js";
 import { handleWritingIndex, handleWritingPost } from "./writing.js";

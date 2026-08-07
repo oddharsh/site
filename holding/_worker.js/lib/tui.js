@@ -98,20 +98,18 @@ export function ends(left, right, w) {
 // The only place escapes are ever produced. `color: false` drops them entirely,
 // which is what MCP and the markdown twin ask for: an escape sequence in a model
 // context window is pure noise that the model then has to be robust to.
-export function emit(lines, { color = true } = {}) {
-  return lines.map((spans) => {
-    if (!color) return spans.map(([t]) => t).join("").replace(/[ \t]+$/, "");
-    let out = "";
-    for (const [text, style] of spans) {
-      if (!text) continue;
-      const code = style && SGR[style];
-      out += code ? code + text + RESET : text;
-    }
-    // Trailing whitespace is stripped in BOTH modes. It carries no information,
-    // it is what makes a diff of two frames noisy, and in color mode a padded
-    // run inside a painted region would otherwise leave a colored tail.
-    return out.replace(/[ \t]+$/, "");
-  }).join("\n");
+export function emit(lines) {
+  // Plain text, always. This used to paint xterm-256 escapes and the frames
+  // drew a window border and [_][#][X] controls around them — an emulated
+  // Windows window, rendered in ASCII, inside a real one that already had those
+  // buttons. Stripped 2026-08-06: a tool's output should read like a tool's
+  // output, and the audience for a .txt route is curl and a model, neither of
+  // which wanted the chrome.
+  //
+  // Spans still CARRY their style name so no caller had to change; emit just
+  // stops turning it into an escape. Trailing whitespace goes too — it carries
+  // no information and is what makes a diff of two frames noisy.
+  return lines.map((spans) => spans.map(([t]) => t).join("").replace(/[ \t]+$/, "")).join("\n");
 }
 
 // ── shapes ────────────────────────────────────────────────────────────────
@@ -261,36 +259,25 @@ function titleBarLine(title, right, w) {
  * `body` is an array of span-lines, already sized to the INNER width
  * (w - 4: two border columns plus one space of padding on each side).
  */
-export function windowFrame({ title, right = "[_][#][X]", body, status, width: w = COLS }) {
-  const inner = w - 4;
+export function plainFrame({ title, body, status }) {
+  // A title, a blank line, and indented content. No border, because the border
+  // was drawing a window inside a window.
   const out = [];
-  out.push([s(G.dtl + G.dh.repeat(w - 2) + G.dtr, "border")]);
-  out.push([s(G.dv, "border"), ...titleBarLine(title, right, w - 2), s(G.dv, "border")]);
-  out.push([s(G.slt + G.h.repeat(w - 2) + G.srt, "border")]);
-  for (const spans of rows(...body)) {
-    out.push([s(G.dv, "border"), s(" "), ...fit(spans, inner), s(" "), s(G.dv, "border")]);
-  }
+  if (title) { out.push([s(title, "strong")]); out.push([s("")]); }
+  for (const spans of rows(...body)) out.push([s("  "), ...spans]);
   if (status !== undefined) {
-    out.push([s(G.slt + G.h.repeat(w - 2) + G.srt, "border")]);
-    for (const spans of rows(status)) {
-      out.push([s(G.dv, "border"), s(" "), ...fit(spans, inner), s(" "), s(G.dv, "border")]);
-    }
+    out.push([s("")]);
+    for (const spans of rows(status)) out.push([s("  "), ...spans]);
   }
-  out.push([s(G.dbl + G.dh.repeat(w - 2) + G.dbr, "border")]);
   return out;
 }
 
 /** A nested single-line pane inside the window body. `body` sized to w - 4. */
-export function pane({ title, body, width: w }) {
-  const inner = w - 4;
-  const head = title
-    ? [s(G.tl + G.h + " ", "border"), s(title, "label"), s(" " + G.h.repeat(Math.max(0, w - 5 - [...title].length)) + G.tr, "border")]
-    : [s(G.tl + G.h.repeat(w - 2) + G.tr, "border")];
-  return [
-    head,
-    ...rows(...body).map((spans) => [s(G.v, "border"), s(" "), ...fit(spans, inner), s(" "), s(G.v, "border")]),
-    [s(G.bl + G.h.repeat(w - 2) + G.br, "border")],
-  ];
+export function pane({ title, body, width: w = COLS }) {
+  const out = [];
+  if (title) out.push(rule(w - 4, title));
+  for (const spans of rows(...body)) out.push(spans);
+  return out;
 }
 
 /** The status bar's `KEY label` pairs, laid out as one line. */

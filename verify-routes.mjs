@@ -131,12 +131,10 @@ const ROUTES = [
     { path: "/lens-browser.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "LensBrowser" },
     { path: "/tooltip.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", maxBytes: 18000 },
     { path: "/tooltip.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "tooltip.js" },
-    // the PowerShell console. It is the only client script whose absence is
-    // INVISIBLE on the page it serves: /terminal server-renders its frame, so a
-    // missing terminal.js leaves a console that looks right and cannot be typed
-    // into. Asserted here because nothing on the page itself would notice.
-    { path: "/terminal.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "ps-console" },
-    { path: "/terminal.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "PowerShell" },
+    // /terminal.js and /terminal.src.js used to be asserted here — the console
+    // was the one client script whose absence was invisible on its own page.
+    // Both are gone: /terminal is a server-rendered view of the MCP exchange and
+    // ships no script at all.
     { path: "/luna.src.css", status: 200, ct: "text/css", marker: "axp-desktop" },
   ] : []),
   // Representation contracts: the machine paths stay fixed even if a caller
@@ -156,7 +154,9 @@ const ROUTES = [
   // and a bottom-left corner only reaches the body if a complete frame was
   // drawn. A row asserting a word would pass on a frame with no border at all.
   // `plain=1` keeps every assertion off the ANSI escapes.
-  { path: "/terminal?plain=1", status: 200, ct: "text/plain", marker: "╚" },
+  // Was a text frame with a box border. It is an HTML page now, and the marker
+  // is the thing it exists to show: the request an agent actually sends.
+  { path: "/terminal", status: 200, ct: "text/html", marker: "tools/list" },
   { path: "/terminal/", status: 301 },   // routeDropSlash 301s to /terminal
   { path: "/finger?plain=1", status: 200, ct: "text/plain", marker: "finger — aadharsh@aadhar.sh" },
   // Driving. Two keys switch to the writing pane and open its first note, and
