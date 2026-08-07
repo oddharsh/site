@@ -231,6 +231,9 @@
   // Browser Run Quick Actions. The binding is authenticated by Workers, so
   // Lens no longer needs a Browser Run API token for snapshots.
   "browser": { "binding": "BROWSER" },
+  // Image Workbench uses the managed Images transformation binding; outputs
+  // are returned inline and are not written to PHOTOS_R2.
+  "images": { "binding": "IMAGES" },
   // Per-IP crawl budgets for /lens and the /mcp tools that share its crawler.
   // These were KV counters until 2026-08-04: a read plus a WRITE on every
   // allowed request, for a number that lived 120 seconds. RN_KV's write budget

@@ -134,10 +134,13 @@ document is [/llms-full.txt](https://aadhar.sh/llms-full.txt).
 - [/coffee/availability.json](https://aadhar.sh/coffee/availability.json):
   Current bookable coffee slots in the host timezone. It fails closed and
   returns no slots when the calendar is too old or unavailable.
-- [/mcp](https://aadhar.sh/mcp): The canonical stateless, read-only MCP
-  interface for site search, music, photo queries, coffee availability, Change
-  Radar, and Lens inspection/comparison. Serendipity's specialized MCP remains
-  available at [/serendipity/mcp](https://aadhar.sh/serendipity/mcp).
+- [/mcp](https://aadhar.sh/mcp): The canonical bounded MCP interface for site
+  search, music, photo queries, coffee availability, Change Radar, Lens
+  inspection/comparison, ephemeral image inspection/transforms, exact
+  published-photo recipe matching, and an HTTP representation vault. Image
+  inputs are not persisted; the vault stores normalized headers, metadata, and
+  body digests only. Serendipity's specialized MCP remains available at
+  [/serendipity/mcp](https://aadhar.sh/serendipity/mcp).
 
 ## Redirects
 
@@ -167,9 +170,9 @@ document is [/llms-full.txt](https://aadhar.sh/llms-full.txt).
 - [/.well-known/security.txt](https://aadhar.sh/.well-known/security.txt):
   Disclosure contacts + scope statement per RFC 9116.
 - [/.well-known/agent-card.json](https://aadhar.sh/.well-known/agent-card.json):
-  Discovery-only Agent Card describing the site's read-only MCP, HTTP JSON,
-  WebMCP, and optional anonymous agent-registration interfaces. This host does
-  not expose an A2A task endpoint.
+  Discovery-only Agent Card describing the site's MCP, bounded image and HTTP
+  utilities, HTTP JSON, WebMCP, and optional anonymous agent-registration
+  interfaces. This host does not expose an A2A task endpoint.
 - `_index._agents.aadhar.sh` (SVCB): DNS for AI Discovery (DNS-AID)
   entrypoint per draft-mozleywilliams-dnsop-dnsaid. A ServiceMode SVCB
   record (`1 aadhar.sh. alpn="h2,h3" port=443 mandatory=alpn,port`)

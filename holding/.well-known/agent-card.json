@@ -1,6 +1,6 @@
 {
   "name": "Aadharsh Site Agent",
-  "description": "Discovery card for the read-only machine interfaces published by aadhar.sh. This host does not expose an A2A task endpoint; use the site-level MCP or declared HTTP JSON interfaces for public data.",
+  "description": "Discovery card for the public machine interfaces and bounded utilities published by aadhar.sh. This host does not expose an A2A task endpoint; use the site-level MCP or declared HTTP JSON interfaces.",
   "provider": {
     "organization": "Aadharsh Pannirselvam",
     "url": "https://aadhar.sh/"
@@ -82,12 +82,14 @@
     {
       "id": "site-utilities",
       "name": "Site utilities",
-      "description": "Use the canonical site-level read-only interface for search, photo metadata, coffee availability, Change Radar, current music, and compact Lens inspection/comparison.",
+      "description": "Use the canonical site-level interface for search, photo metadata, coffee availability, Change Radar, current music, compact Lens inspection/comparison, ephemeral image workbench transforms, exact photo-recipe matching, and normalized HTTP representation snapshots.",
       "tags": [
         "search",
         "photos",
         "coffee",
         "lens",
+        "images",
+        "representations",
         "read-only"
       ],
       "examples": [
@@ -139,7 +141,7 @@
           "url": "https://aadhar.sh/mcp",
           "transport": "streamable-http",
           "protocolVersion": "2026-07-28",
-          "authentication": "optional bearer credential; public read-only access works anonymously",
+          "authentication": "optional bearer credential; public access works anonymously",
           "documentationUrl": "https://aadhar.sh/llms.txt"
         },
         {
