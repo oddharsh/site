@@ -4001,3 +4001,35 @@ test("encode judges chroma and depth against this site's own measurements", asyn
     "8-bit AVIF must be flagged — 10-bit is free");
   assert.equal(judgeEncode({ format: "avif", bitDepth: 10, subsampling: "4:2:0" }, 30000).warns.length, 0);
 });
+
+test("the ramp never double-parses wrangler's already-parsed JSON", async () => {
+  // A ramp writes its changelog row exactly once, at 100%, and a failure there
+  // is caught and downgraded to a printed note on purpose — traffic has already
+  // moved, and unwinding a good release over a missing log row would be worse.
+  //
+  // That tolerance is what made this bug invisible for three releases. The D1
+  // read was written as JSON.parse(await wrangler(..., { json: true })), but the
+  // helper ALREADY parses when json is set, so the second parse received an
+  // object, stringified it to "[object Object]", and threw. Every ramp then
+  // reported that D1 was unreachable and skipped its own write. D1 was answering
+  // the whole time; `npm run checkpoints:check` queried it fine minutes later.
+  //
+  // Asserted as source text because the alternative is spawning wrangler against
+  // production D1 from the test suite, which no contract test should ever do.
+  const src = await readFile(new URL("./scripts/deploy-promote.mjs", import.meta.url), "utf8");
+
+  assert.ok(/const rows = \(await wrangler\(/.test(src),
+    "the D1 read must consume wrangler's parsed result directly");
+  assert.equal(/JSON\.parse\(\s*await wrangler\(/.test(src), false,
+    "wrangler(..., { json: true }) already returns parsed JSON — a second JSON.parse throws on the object");
+
+  // The helper's contract is the other half: if it ever stops parsing, the call
+  // site above silently starts handing a string to [0].results instead.
+  assert.ok(/return json \? JSON\.parse\(stdout\) : stdout;/.test(src),
+    "wrangler() must keep parsing when { json: true } — the call site depends on it");
+
+  // And the diagnostic must not name a cause. It covers a file read, a spawn and
+  // a shape check; blaming D1 sent the reader to check a healthy database.
+  assert.equal(/when D1 is reachable/.test(src), false,
+    "the catch-all note must not assert D1 is the cause — it cannot know that");
+});
