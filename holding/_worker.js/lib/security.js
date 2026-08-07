@@ -75,10 +75,25 @@ export const ENFORCE_PAGE_HASHES = false;
 // Everything after script-src, held once so the loose and hashed policies cannot
 // drift apart. img-src is 'self' data: per #186 — do NOT let a rebase quietly
 // restore the two spotifycdn hosts that landed here before it.
-const CSP_TAIL =
-  "style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; worker-src 'self'; manifest-src 'self'; upgrade-insecure-requests";
+const CSP_TAIL_REPORTABLE =
+  "style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; worker-src 'self'; manifest-src 'self'";
 
-const CSP_REPORT_ONLY_TAIL = CSP_TAIL.replace(/; upgrade-insecure-requests$/, "");
+// `upgrade-insecure-requests` is a NAVIGATION directive, not a violation-reporting
+// one, so a browser ignores it in a report-only policy and Chrome logs a security
+// issue saying so on every page load — which is how it was found (DevTools →
+// Security violations, 2026-08-07). The report-only twin exists to prove the
+// script-src hashes against real browsers and nothing else, and the enforcing
+// policy beside it carries the directive, so dropping it there costs nothing and
+// clears the noise. Treat any directive the spec ignores in report-only the same
+// way (`sandbox` is the other one) rather than reaching for a suppression.
+//
+// COMPOSED rather than subtracted. #249 fixed this by deriving the twin with
+// `CSP_TAIL.replace(/; upgrade-insecure-requests$/, "")`, which is correct today
+// and anchored to the end of the string: append one more directive after
+// upgrade-insecure-requests and the replace silently matches nothing, the twin
+// gets the directive back, and nothing errors. Building the long tail from the
+// short one cannot fail that way, because there is no pattern to miss.
+const CSP_TAIL = `${CSP_TAIL_REPORTABLE}; upgrade-insecure-requests`;
 
 const cspWith = (scriptSrc, tail = CSP_TAIL) =>
   `default-src 'self'; script-src ${scriptSrc}; ${tail}`;
@@ -108,7 +123,7 @@ export function cspHeadersFor(pathname) {
     // upgrade-insecure-requests has no report-only behavior; Chromium ignores
     // it and emits a console error. Keep it in the enforcing policy and omit the
     // inert directive only from this reporting twin.
-    "content-security-policy-report-only": cspHashed(hashes, CSP_REPORT_ONLY_TAIL),
+    "content-security-policy-report-only": cspHashed(hashes, CSP_TAIL_REPORTABLE),
   };
 }
 
