@@ -113,6 +113,17 @@ a{color:var(--link)}
 .uq-why{display:none;font-size:8.5pt;color:var(--ink-soft);font-family:var(--font-mono);margin:0 0 9px 6px;line-height:1.45}
 .uq-why.show{display:block}
 .uq-why b{color:var(--go)}
+/* share block: a Wordle-style grid. The preview squares use the SAME five colors
+   the emoji do, so what you see is what lands in the tweet. */
+.sharegrid{display:flex;flex-direction:column;gap:5px;align-items:center;margin:2px 0 8px}
+.sharegrid .r{display:flex;gap:5px}
+.sq{width:26px;height:26px;border-radius:3px;box-shadow:var(--bevel-raised);border:1px solid rgba(0,0,0,.18)}
+.sq.hit{background:#3a7d2c} .sq.miss{background:#5a5a52} .sq.s2{background:#0b57c9}
+.sq.bt{background:#c8811c} .sq.own{background:#d8d4c4}
+.sharekey{display:flex;flex-wrap:wrap;gap:4px 12px;justify-content:center;font-family:var(--font-mono);font-size:8pt;color:var(--ink-dim)}
+.sharekey span{display:flex;align-items:center;gap:4px}
+.sharekey i{width:10px;height:10px;border-radius:2px;display:inline-block;border:1px solid rgba(0,0,0,.2)}
+.sharecard{display:block;width:100%;height:auto;margin:8px 0 0;border:1px solid var(--sh);box-shadow:var(--bevel-sunken)}
 /* metric-alignment axis (the hero) */
 .axiswrap{margin:4px 2px 2px}
 .axislabels{display:flex;justify-content:space-between;font-family:var(--font-caption);font-weight:700;font-size:10pt}
@@ -157,11 +168,19 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
 // ---- data + config ----
 const AXES={
   quality: {teach:`that gap was plain JPEG quality. the encoder drops fine detail as quality falls, and below some point your eye stops noticing. that point is your ceiling: export any higher and you're spending bytes on detail you can't see.`},
-  chroma:  {teach:`that was chroma subsampling. your eye resolves brightness far finer than color, so JPEG stores color at lower resolution to save bytes, and 4:2:0 halves what these 4:2:2 files began with. neutral shots pay nothing; a neon sign or a saturated edge bleeds. butteraugli (a color model) punishes that bleed far harder than ssimulacra2.`},
-  encoder: {teach:`same byte budget, different encoders. newer math (zenc, jpegli) packs more quality into the same bytes than mozjpeg or sips, so the encoder you pick buys free quality at no extra size. the catch: the top two sit so close that neither your eye nor the two metrics agree who won.`},
+  chroma:  {teach:`that was chroma subsampling. your eye resolves brightness far finer than color, so JPEG stores color at lower resolution to save bytes, and 4:2:0 halves what these 4:2:2 files began with. here's the honest part: on most photos this is free. fourteen saturated crops were built and measured for this test and <b>twelve were thrown out</b> because 4:2:0 cost them nothing you could see. what survives is a high-contrast two-tone edge, which is where the halved color plane can't keep up — and butteraugli (a color model) punishes that far harder than ssimulacra2. that's also why you only get one of these per run.`},
+  encoder: {teach:`same photo, same byte budget. every tile in that call was searched onto one file size and landed within 2% of it, so the only thing that varied was the encoder's math. newer coders (zenc, jpegli) fit more picture into those bytes than mozjpeg, and sips fits the least. that gap is free quality — same size, better image, for picking a different tool.`},
   tradeoff:{teach:`same bytes, a forced trade. 4:2:0 spends them on sharp detail; 4:2:2 spends them on the source's full color. you can't buy both, because color bits come straight out of the detail budget. which one you reached for is what your eye quietly weights, and it's where ssimulacra2 (structure) and butteraugli (color) split.`},
 };
-const RUN_SIZE=12, FLOOR=2;   // sample this many per play, at least FLOOR per axis
+
+// How many calls of each axis one play gets. A QUOTA, not a floor, and its shape
+// IS the difficulty fix: the first cut of this test spent 9 of its 18 trials on
+// chroma, the axis human eyes are worst at, which is why it read as brutal. Now
+// chroma gets one call and the rest go to axes a person can actually win.
+// Scarce axes are listed first — the fill loop refuses to repeat a photo within
+// a play, so whichever axis draws last is the one that gets starved.
+const AXIS_QUOTA={chroma:1,tradeoff:2,encoder:3,quality:6};
+const RUN_SIZE=Object.values(AXIS_QUOTA).reduce((a,b)=>a+b,0);
 
 // end-of-exam understanding check: you judged with your eyes, now test the WHY.
 // misconception distractors, one right answer, every option carries its reason.
@@ -219,11 +238,17 @@ function buildRun(){
   const byAxis={}; DATA.trials.forEach(t=>{(byAxis[t.axis]=byAxis[t.axis]||[]).push(t);});
   const chosen=[], used=new Set();
   const take=t=>{chosen.push(t); used.add(t.crop);};
-  // per-axis floor, no repeated crop within a play
-  Object.values(byAxis).forEach(list=>{rnd(list); let n=0; for(const t of list){if(n>=FLOOR)break; if(!used.has(t.crop)){take(t);n++;}}});
+  // each axis to its quota, never showing the same photo twice in one play
+  for(const axis in AXIS_QUOTA){
+    let n=0;
+    for(const t of rnd((byAxis[axis]||[]).slice())){
+      if(n>=AXIS_QUOTA[axis])break;
+      if(!used.has(t.crop)){take(t);n++;}
+    }
+  }
   const rest=rnd(DATA.trials.filter(t=>!chosen.includes(t)));
-  for(const t of rest){if(chosen.length>=RUN_SIZE)break; if(!used.has(t.crop))take(t);}          // fill, still crop-unique
-  for(const t of rest){if(chosen.length>=RUN_SIZE)break; if(!chosen.includes(t))take(t);}          // fallback if short
+  for(const t of rest){if(chosen.length>=RUN_SIZE)break; if(!used.has(t.crop))take(t);}   // top up, still photo-unique
+  for(const t of rest){if(chosen.length>=RUN_SIZE)break; if(!chosen.includes(t))take(t);} // last resort if the pool is short
   state.trials=rnd(chosen); state.i=0; state.log=[];
 }
 
@@ -233,7 +258,7 @@ function screenIntro(){
    <h1>whose eye do you have?</h1>
    <p class="lede">a vision test for image compression. each call shows the same photo squeezed two or three ways, and you <b>pick the one that looks best.</b> we won't say what changed, on purpose: if we told you to watch the color, you'd watch the color. so answer on instinct.</p>
    <div class="gb"><span class="gb-legend">${RUN_SIZE} quick calls</span>
-     <p style="margin:0 0 6px">behind the scenes, every set is judged by two machine metrics too, <b style="color:var(--s2)">ssimulacra2</b> and <b style="color:var(--bt-ink)">butteraugli</b>. they're rival models of human vision, not ground truth, and they <b>disagree</b>. at the end you'll see what your eye is quietly tuned to, and which metric it thinks like.</p>
+     <p style="margin:0 0 6px">behind the scenes, every set is judged by two machine metrics too, <b style="color:var(--s2)">ssimulacra2</b> and <b style="color:var(--bt-ink)">butteraugli</b>. they're rival models of human vision, not ground truth, and they <b>disagree</b>. at the end you'll see what your eye is quietly tuned to, which metric it thinks like, and a little grid you can paste anywhere.</p>
    </div>
    <div class="row spread" style="margin-top:12px">
      <small>hover any tile to pixel-peep · <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> or click</small>
@@ -304,13 +329,17 @@ function onPick(pos,order,trial){
 function advance(){document.onkeydown=null;state.i++;
   if(state.i>=state.trials.length){screenResult();return;} screenTrial();}
 
-function acc(axis){const rows=state.log.filter(l=>l.axis===axis&&l.correct!==null);
-  return rows.length?Math.round(100*rows.filter(l=>l.correct).length/rows.length):null;}
+// n rides along because a run now asks ONE chroma call: a bare "100%" off a
+// single sample reads like a finding, and it isn't one.
+function acc(...axes){const rows=state.log.filter(l=>axes.includes(l.axis)&&l.correct!==null);
+  return rows.length?{pct:Math.round(100*rows.filter(l=>l.correct).length/rows.length),n:rows.length}:null;}
 
 function screenResult(){
   const agreeRows=state.log.filter(l=>l.correct!==null);
   const overall=agreeRows.length?Math.round(100*agreeRows.filter(l=>l.correct).length/agreeRows.length):0;
-  const sharp=acc("quality"), color=acc("chroma"), enc=acc("encoder");
+  // chroma + tradeoff are one lesson to a player ("did you see the color go?"),
+  // and folding them together is also what keeps the Color bar off a sample of 1.
+  const sharp=acc("quality"), color=acc("chroma","tradeoff"), enc=acc("encoder");
   const dis=state.log.filter(l=>l.disagree);
   const s2n=dis.filter(l=>l.sided==="s2").length, btn=dis.filter(l=>l.sided==="butter").length;
   const own=dis.filter(l=>l.sided==="neither").length, decisive=s2n+btn;
@@ -322,9 +351,18 @@ function screenResult(){
   else if(!decisive) alignCap=`on the ${dis.length} calls where the metrics split, you never picked either metric's favorite. your eye does its own thing, which is the honest truth about these razor-edge cases.`;
   else if(leaner==="neither") alignCap=`you split evenly (${s2n} vs ${btn}) on the calls where the metrics disagreed. no lean either way, itself a fair verdict: at these margins it's close to a coin flip.`;
   else alignCap=`on the ${dis.length} calls where <b style="color:var(--s2)">ssimulacra2</b> and <b style="color:var(--bt-ink)">butteraugli</b> disagreed, your eye sided with <b>${leaner}</b> ${leaner==="butteraugli"?btn:s2n} of ${decisive} times${own?` (and went rogue on ${own})`:``}. you weight <b>${leaner==="butteraugli"?"color":"structure"}</b> the way ${leaner} does. fair warning: these are the closest calls in the test, so take it with salt.`;
-  let colorAha = color===null?"" : color<=45
-    ? ` you mostly couldn't see color being thrown away, like most people: human eyes resolve almost no color detail, which is why 4:2:0 is free most of the time.`
-    : color>=70 ? ` and you caught chroma subsampling most people miss, so keep 4:2:2 on saturated work.` : ``;
+  let colorAha = color===null?"" : color.pct<=45
+    ? ` you didn't see the color being thrown away, and almost nobody does: human eyes resolve very little color detail, which is why 4:2:0 is free on most photos.`
+    : color.pct>=70 ? ` and you caught chroma subsampling most people miss, so keep 4:2:2 on saturated work.` : ``;
+  // what the shareable grid and card are built from
+  const marks=marksFrom(state.log);
+  const clearCount=agreeRows.filter(l=>l.correct).length;
+  const clearLine=`called ${clearCount} of ${agreeRows.length} clear calls right`;
+  const leanLine=!decisive
+    ? (dis.length?`no decisive lean on the ${dis.length} split calls`:`this run hit no split calls`)
+    : leaner==="neither"
+      ? `split evenly on the close calls, ${s2n}–${btn}`
+      : `eye leans ${leaner} (${leaner==="butteraugli"?"color":"structure"}) ${Math.max(s2n,btn)}–${Math.min(s2n,btn)}`;
   sbLeft.textContent="← aadhar.sh · prototype"; sbRight.textContent=decisive?`your eye leans ${leaner}`:`profile`;
   stage.innerHTML=`
     <h1>your visual system, profiled</h1>
@@ -340,23 +378,177 @@ function screenResult(){
       ${bar("Color",color,"catching chroma subsampling",true)}
       ${bar("Encoders",enc,"separating real encoders at equal bytes")}</div>
     <div class="banner info"><span class="g">the takeaway</span><span>the metrics agree on the obvious calls and only split at the margins, where the differences are near invisible.${colorAha} that margin is exactly where an export preset should live: the setting no human, and barely a metric, can flag.</span></div>
+    <div class="gb"><span class="gb-legend">share your run</span>
+      ${shareGridHTML(marks)}
+      <div class="sharekey">${shareKeyHTML(marks)}</div>
+      <div class="row" style="margin-top:10px;justify-content:center">
+        <button class="btn" id="copytext">Copy result</button>
+        <button class="btn" id="copyimg">Copy image</button>
+        <a class="btn" id="dlimg" download="pixel-peeper.png">Save PNG</a>
+        <button class="btn" id="showcard">Preview image</button></div>
+      <div id="cardwrap"></div></div>
     <div class="gb"><span class="gb-legend">what's real, what's next</span>
-      <p style="margin:0">every tile was a genuine encode (zenc · jpegli · mozjpeg · sips; real 4:2:2 / 4:2:0 on 4:2:2-native files), scored by <b style="color:var(--s2)">ssimulacra2</b> and <b style="color:var(--bt-ink)">butteraugli</b> against the original. next: <b>sharpYUV</b>, a bigger photo set, everyone's picks pooled, and the crowd threshold read into an <b>instagram export preset</b>.</p></div>
+      <p style="margin:0">every tile was a genuine encode (zenc · jpegli · mozjpeg · sips; real 4:2:2 / 4:2:0 on 4:2:2-native files), scored by <b style="color:var(--s2)">ssimulacra2</b> and <b style="color:var(--bt-ink)">butteraugli</b> against the original. encoder calls are searched onto <b>one shared byte budget</b>, so an encoder never wins by being handed a bigger file. next: <b>sharpYUV</b>, a bigger photo set, everyone's picks pooled, and the crowd threshold read into an <b>instagram export preset</b>.</p></div>
     ${quizHTML()}
     <div class="row spread" style="margin-top:14px">
-      <button class="btn" id="share">Copy my result</button><button class="btn primary" id="again">Play again ▸</button></div>`;
+      <small>your grid spoils nothing — no photo, encoder or setting is named</small>
+      <button class="btn primary" id="again">Play again ▸</button></div>`;
   requestAnimationFrame(()=>document.querySelectorAll(".fill").forEach(f=>f.style.width=(f.dataset.w||0)+"%"));
   wireQuiz();
+  wireShare(marks,overall,grade,clearLine,leanLine,lean,decisive);
   document.getElementById("again").onclick=()=>{buildRun();screenTrial();};
-  document.getElementById("share").onclick=ev=>{
-    const txt=`my eye leans ${leaner} on the aadhar.sh compression eye exam (${grade}, ${overall}% on the clear calls). ssimulacra2 vs butteraugli: whose eye do you have?`;
-    navigator.clipboard&&navigator.clipboard.writeText(txt);
-    ev.target.textContent="Copied ✓";setTimeout(()=>ev.target.textContent="Copy my result",1400);};
 }
 function bar(label,val,sub,gold){
-  const w=val===null?0:val, n=val===null?"n/a":val+"%";
+  const w=val===null?0:val.pct, n=val===null?"n/a":`${val.pct}% of ${val.n}`;
   return `<div class="bar"><div class="lab"><b>${label}</b> <span class="n">${n}</span></div>
     <div class="track"><div class="fill ${gold?'gold':''}" data-w="${w}"></div></div><small style="color:var(--ink-dim)">${sub}</small></div>`;}
+
+/* ---- share ---------------------------------------------------------------
+   A paragraph of text is not a share. This is the Wordle shape instead: one
+   square per call, so the grid says how the run WENT without naming a single
+   photo, encoder or quality setting — paste it anywhere and it spoils nothing
+   for the next player. The five colors are the page's own, and the on-page
+   preview uses them too, so what you see is what lands in the tweet. */
+const MARK={
+  hit: {e:"\u{1F7E9}",c:"#3a7d2c",t:"called it"},
+  miss:{e:"⬛",   c:"#5a5a52",t:"missed it"},
+  s2:  {e:"\u{1F7E6}",c:"#0b57c9",t:"split → sided ssimulacra2"},
+  bt:  {e:"\u{1F7E7}",c:"#c8811c",t:"split → sided butteraugli"},
+  own: {e:"⬜",   c:"#d8d4c4",t:"split → neither"},
+};
+const COLS=6;
+const marksFrom=log=>log.map(l=>!l.disagree?(l.correct?"hit":"miss")
+  :l.sided==="s2"?"s2":l.sided==="butter"?"bt":"own");
+const gridRows=m=>{const r=[];for(let i=0;i<m.length;i+=COLS)r.push(m.slice(i,i+COLS));return r;};
+
+function shareText(m,head,leanLine){
+  return `Pixel Peeper · ${head}\n`+
+    gridRows(m).map(r=>r.map(k=>MARK[k].e).join("")).join("\n")+
+    `\n${leanLine}\naadhar.sh/pixel-peeper`;
+}
+function shareGridHTML(m){
+  // one img role for the whole grid: 12 separately-announced coloured squares is
+  // noise, and the counts are the thing a screen reader actually wants.
+  const tally=Object.keys(MARK).filter(k=>m.includes(k))
+    .map(k=>`${m.filter(v=>v===k).length} ${MARK[k].t}`).join(", ");
+  return `<div class="sharegrid" role="img" aria-label="your ${m.length} calls: ${tally}">`+
+    gridRows(m).map(r=>`<div class="r">${r.map(k=>`<span class="sq ${k}" title="${MARK[k].t}"></span>`).join("")}</div>`).join("")+
+    `</div>`;
+}
+function shareKeyHTML(m){
+  const seen=[...new Set(m)];
+  return seen.map(k=>`<span><i style="background:${MARK[k].c}"></i>${MARK[k].t}</span>`).join("");
+}
+
+// The PNG. Twitter renders an image far louder than it renders text art, and
+// canvas keeps the site's no-web-fonts rule: every face here is one the OS
+// already has, exactly like the page itself.
+function drawCard(m,overall,grade,clearLine,leanLine,lean,decisive){
+  const W=1200,H=630,cv=document.createElement("canvas");cv.width=W;cv.height=H;
+  const x=cv.getContext("2d");
+  const UI='Tahoma,Verdana,Geneva,sans-serif',CAP='"Trebuchet MS",Verdana,sans-serif',MONO='"Courier New",Courier,monospace';
+  const bevel=(bx,by,bw,bh,fill)=>{x.fillStyle=fill;x.fillRect(bx,by,bw,bh);
+    x.fillStyle="rgba(255,255,255,.32)";x.fillRect(bx,by,bw,2);x.fillRect(bx,by,2,bh);
+    x.fillStyle="rgba(0,0,0,.22)";x.fillRect(bx,by+bh-2,bw,2);x.fillRect(bx+bw-2,by,2,bh);};
+
+  x.fillStyle="#ECE9D8";x.fillRect(0,0,W,H);
+  const g=x.createLinearGradient(0,0,0,56);
+  g.addColorStop(0,"#4aa3ff");g.addColorStop(.14,"#1f6fe0");g.addColorStop(.55,"#0a53c9");g.addColorStop(1,"#0a246a");
+  x.fillStyle=g;x.fillRect(0,0,W,56);
+  x.fillStyle="#fff";x.font=`bold 24px ${CAP}`;x.textBaseline="middle";
+  x.fillText("Pixel Peeper — compression eye exam",24,29);
+  x.font=`15px ${MONO}`;x.fillStyle="rgba(255,255,255,.85)";x.textAlign="right";
+  x.fillText("aadhar.sh/pixel-peeper",W-24,30);x.textAlign="left";
+
+  // left: the score
+  x.fillStyle="#636363";x.font=`15px ${MONO}`;x.fillText("your visual system, profiled",56,112);
+  x.fillStyle="#0a246a";x.font=`bold 130px ${MONO}`;x.textBaseline="alphabetic";
+  x.fillText(String(overall),56,242);
+  const wpct=x.measureText(String(overall)).width;
+  x.font=`bold 50px ${MONO}`;x.fillText("%",56+wpct+8,242);
+  x.fillStyle="#3a7d2c";x.font=`bold 34px ${CAP}`;x.fillText(grade,58,290);
+  x.fillStyle="#454545";x.font=`18px ${UI}`;x.fillText(clearLine,58,322);
+
+  // right: the run, one square per call
+  const GX=600,GY=112,S=70,GAP=12;
+  x.fillStyle="#636363";x.font=`15px ${MONO}`;x.fillText("how the calls went",GX,GY-14);
+  gridRows(m).forEach((row,ri)=>row.forEach((k,ci)=>
+    bevel(GX+ci*(S+GAP),GY+ri*(S+GAP),S,S,MARK[k].c)));
+
+  // A shared image has to explain itself — nobody who sees this in a timeline
+  // has the page's key next to it. Only the marks this run actually used.
+  let lx=GX, ly=GY+Math.ceil(m.length/COLS)*(S+GAP)+26;
+  x.font=`14px ${MONO}`;
+  [...new Set(m)].forEach(k=>{
+    const t=MARK[k].t, tw=x.measureText(t).width;
+    if(lx+18+tw>W-48){lx=GX;ly+=24;}
+    bevel(lx,ly-11,13,13,MARK[k].c);
+    x.fillStyle="#454545";x.fillText(t,lx+19,ly);
+    lx+=19+tw+22;
+  });
+
+  // the needle: which metric this eye thinks like
+  const BX=56,BY=436,BW=W-112;
+  x.fillStyle="#0b57c9";x.font=`bold 22px ${CAP}`;x.fillText("ssimulacra2",BX,BY-16);
+  x.fillStyle="#9c640d";x.textAlign="right";x.fillText("butteraugli",BX+BW,BY-16);x.textAlign="left";
+  x.fillStyle="#636363";x.font=`13px ${MONO}`;x.fillText("structure / detail",BX,BY+48);
+  x.textAlign="right";x.fillText("color / masking",BX+BW,BY+48);x.textAlign="left";
+  const bg=x.createLinearGradient(BX,0,BX+BW,0);
+  bg.addColorStop(0,"#0b57c9");bg.addColorStop(1,"#c8811c");
+  x.fillStyle=bg;x.fillRect(BX,BY,BW,20);
+  x.strokeStyle="#8a866f";x.lineWidth=1;x.strokeRect(BX+.5,BY+.5,BW-1,19);
+  if(decisive){
+    // inset so a 100%-one-way lean still draws a whole arrowhead inside the bar
+    const nx=BX+11+lean*(BW-22);
+    x.strokeStyle="#0a246a";x.lineWidth=3;
+    x.beginPath();x.moveTo(nx,BY-8);x.lineTo(nx,BY+28);x.stroke();
+    x.fillStyle="#0a246a";x.beginPath();x.moveTo(nx-9,BY-8);x.lineTo(nx+9,BY-8);x.lineTo(nx,BY+7);x.closePath();x.fill();
+  }
+  x.fillStyle="#1a1a1a";x.font=`20px ${UI}`;x.textAlign="center";
+  x.fillText(leanLine,W/2,BY+90);x.textAlign="left";
+
+  // footer
+  x.fillStyle="#ACA899";x.fillRect(0,H-52,W,1);
+  x.fillStyle="#636363";x.font=`15px ${MONO}`;
+  x.fillText("real encodes · zenc · jpegli · mozjpeg · sips · equal byte budgets",24,H-22);
+  x.textAlign="right";x.fillStyle="#0b3fae";
+  x.fillText("whose eye do you have?",W-24,H-22);x.textAlign="left";
+  return cv;
+}
+
+function wireShare(m,overall,grade,clearLine,leanLine,lean,decisive){
+  const txt=shareText(m,`${overall}% · ${grade}`,leanLine);
+  const flash=(el,msg)=>{const was=el.textContent;el.textContent=msg;setTimeout(()=>el.textContent=was,1500);};
+  let card=null; const png=()=>(card=card||drawCard(m,overall,grade,clearLine,leanLine,lean,decisive));
+  const blob=()=>new Promise(res=>png().toBlob(res,"image/png"));
+
+  document.getElementById("copytext").onclick=ev=>{
+    navigator.clipboard&&navigator.clipboard.writeText(txt);flash(ev.target,"Copied ✓");};
+
+  const ci=document.getElementById("copyimg");
+  // ClipboardItem takes the PROMISE, not the blob — Safari requires the item to
+  // be constructed inside the click, before any await. Firefox has no image
+  // clipboard write at all, so it gets the download button and nothing else.
+  if(!(window.ClipboardItem&&navigator.clipboard&&navigator.clipboard.write)) ci.hidden=true;
+  else ci.onclick=async ev=>{
+    try{await navigator.clipboard.write([new ClipboardItem({"image/png":blob()})]);flash(ev.target,"Copied ✓");}
+    catch(e){flash(ev.target,"Use Save PNG");}
+  };
+  // A REAL link, not a click handler: rendering the PNG needs an await, and a
+  // programmatic a.click() after one has left the user gesture, which Safari
+  // blocks. So the anchor simply has no href until the bytes exist, and from
+  // then on the download is the browser's own.
+  const dl=document.getElementById("dlimg");
+  dl.removeAttribute("href");
+  blob().then(b=>{dl.href=URL.createObjectURL(b);});
+  document.getElementById("showcard").onclick=ev=>{
+    const holder=document.getElementById("cardwrap");
+    if(holder.firstChild){holder.innerHTML="";ev.target.textContent="Preview image";return;}
+    const c=png();c.className="sharecard";c.setAttribute("role","img");
+    c.setAttribute("aria-label",`Pixel Peeper result card: ${overall}%, ${grade}. ${leanLine}`);
+    holder.appendChild(c);ev.target.textContent="Hide image";
+  };
+}
 
 function axisSVG(lean,decisive){
   const W=680,H=54,pad=10,x=pad+lean*(W-2*pad);
