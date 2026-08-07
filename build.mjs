@@ -911,6 +911,35 @@ if (inlineProbe.includes("/* probe */") ||
   console.log(`md twins: ${twins} pages + ${indexes} section indexes staged (${generated.length} from generated HTML: ${generated.join(", ")}; ${skipped.length} Worker-rendered surfaces carry no prose source)`);
 }
 
+// 1h) RSS feeds for the three authored sections.
+//
+// Build output for the same reason the twins are: a feed is a pure function of
+// site-manifest.json, the sitemap's <lastmod> dates, and posts.json, so there is
+// no committed copy to fall behind. Dates come from the sitemap rather than git,
+// because a whitespace fix must not republish an item to every subscriber.
+//
+// The count is asserted for the same reason the twin count is: losing a feed is
+// silent, since the pages keep serving and only subscribers notice.
+{
+  const { buildFeeds, FEEDS } = await import("./scripts/gen-feeds.mjs");
+  const feeds = buildFeeds(".");
+  if (feeds.size !== FEEDS.length) {
+    throw new Error(`feeds: generated ${feeds.size} of ${FEEDS.length} declared feeds`);
+  }
+  let items = 0;
+  for (const [route, body] of feeds) {
+    const count = (body.match(/<item>/g) || []).length;
+    // An empty feed is worse than no feed: a reader that subscribes to one keeps
+    // polling it forever and never learns anything went wrong.
+    if (!count) throw new Error(`feeds: ${route} has no items — did the manifest sections or sitemap lastmod dates change shape?`);
+    items += count;
+    const dest = `${OUT}/holding${route}`;
+    await mkdir(dest.slice(0, dest.lastIndexOf("/")), { recursive: true });
+    await writeFile(dest, body);
+  }
+  console.log(`feeds: ${feeds.size} RSS feeds, ${items} items total`);
+}
+
 
 // 2) homepage HTML: deploy the readable original as /index.src.html and
 // minify only the served copy. The worker rewrites this response as a stream,
