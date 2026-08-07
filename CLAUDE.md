@@ -655,9 +655,52 @@ homepage only, on the API Chrome 146 renamed to `document.modelContext`, and
 now lights up four doors at once (JSON-RPC, `/terminal/ask`, the terminal programs,
 and every page's browser-local catalog), so weigh new entries accordingly.
 
-Cards: `.well-known/mcp.json` and `.well-known/mcp/server-card.json` are
-Serendipity's; `.well-known/agent-card.json` carries both interfaces. All of
-them advertise 2026-07-28 now.
+**Cards are GENERATED, and one of their paths changed meaning on 2026-08-07.**
+`npm run gen:mcp-cards` projects both servers' live registries into three files,
+and a contract test deep-equals each card against that server's own `tools/list`,
+so a card cannot quietly acquire a tool the Worker does not serve. They are
+committed rather than built into `.build/` because they are read by scripts and
+tests outside the deploy path; the test is what stands in for the "pure function
+of the bytes" argument the Markdown twins won.
+
+| path | server |
+|---|---|
+| `.well-known/mcp/server-card.json` | the SITE server (`/mcp`) |
+| `.well-known/mcp/serendipity.json` | Serendipity (`/serendipity/mcp`) |
+| `.well-known/mcp.json` | Serendipity, compatibility alias |
+
+`server-card.json` served SERENDIPITY until #243. Both the api-catalog and
+`lens.js` probe that path on any origin, so on our own origin it was answering
+with the wrong server; a root server-card should describe the server at the root.
+`.well-known/mcp.json` stays as the alias for clients holding the old anchor.
+
+**The rename is not fully purgeable, and that is the part to remember.** `_headers`
+gives the cards `max-age=2592000`, so a client that fetched the old bytes reads a
+Serendipity card at the SITE card's URL for up to 30 days. A deploy purges the
+edge and cannot purge a client. It is survivable only because these are
+pre-connection metadata: `server/discover` and `tools/list` stay the protocol
+source of truth, so a stale card costs a wasted probe rather than a wrong call.
+Weigh that before repointing any long-cached well-known path again.
+
+`.well-known/agent-card.json` carries both interfaces and now names each one's
+card. All of them advertise 2026-07-28.
+
+**Tool annotations are a CLAIM, and the default is read-only.** `lib/mcp-tools.js`
+decorates every tool with a title, an object output schema, and
+`readOnlyHint/destructiveHint/idempotentHint/openWorldHint`. Its defaults describe
+what most tools here actually are (read a public thing, change nothing), and a
+tool that is not that overrides them ON ITS OWN DEFINITION, next to the code that
+makes it untrue: `representation_capture` and `representation_compare` each INSERT
+a vault row, so both declare `readOnlyHint: false, idempotentHint: false` beside
+that INSERT. The decorator takes the definition's annotations over its defaults,
+which also makes it idempotent, and it has to be: `DATA_TOOLS` is decorated once
+in `lib/tools.js` and then composed into two servers that decorate again.
+
+The contract test used to assert one annotation shape across every tool. That
+passed right up until a writing tool existed and would have kept passing while
+advertising a D1 write as an idempotent read, so it now names the exceptions
+explicitly. A blanket assertion over a set that only ever grew is worth
+distrusting on sight.
 
 ### DNS-AID (agent discovery)
 
