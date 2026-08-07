@@ -2490,6 +2490,8 @@ test("the hashed policy is well-formed and keeps 'self' for the external scripts
     // that is the whole point of the report-only phase.
     if (!ENFORCE_PAGE_HASHES) {
       assert.match(pair["content-security-policy"], /script-src 'self' 'unsafe-inline';/);
+      assert.doesNotMatch(hashed, /upgrade-insecure-requests/,
+        "a report-only policy must omit directives the browser cannot report");
     }
   } finally {
     for (const k of Object.keys(mod.PAGE_SCRIPT_HASHES)) delete mod.PAGE_SCRIPT_HASHES[k];
