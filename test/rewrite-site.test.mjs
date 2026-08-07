@@ -105,6 +105,19 @@ test("search and Run are complete native forms backed by a generated index", asy
   assert.match(await text("llms-full.txt"), /Public surfaces/);
 });
 
+test("status and live utility shells stay complete without client JavaScript", async () => {
+  const updates = await text("updates.html");
+  const restore = await text("restore.html");
+  const lens = await text("lens.html");
+  assert.match(updates, /Recently installed/);
+  assert.match(restore, /Restore point/);
+  assert.match(lens, /The Other Web/);
+  assert.match(lens, /<search class="lens-search">/);
+  assert.doesNotMatch(updates + restore + lens, /<script\b/i);
+  assert.match(await text("updates.md"), /Recently installed/);
+  assert.match(await text("restore.md"), /Restore point/);
+});
+
 test("initial document and shared stylesheet stay inside budgets", async () => {
   const html = await text("index.html");
   const [cssFile] = (await readdir(new URL("assets/", output))).filter((name) => name.endsWith(".css"));

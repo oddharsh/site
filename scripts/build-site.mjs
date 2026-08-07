@@ -11,6 +11,7 @@ import { renderSystemPage } from "../src/site/pages/system.mjs";
 import { renderRun, renderSearch } from "../src/site/pages/search.mjs";
 import { renderRestore, renderUpdates, restoreMarkdown, updatesMarkdown } from "../src/site/pages/status.mjs";
 import { renderAround, renderLedger, renderReading } from "../src/site/pages/live.mjs";
+import { renderLens } from "../src/site/pages/lens.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const output = join(root, "dist");
@@ -163,6 +164,7 @@ await write("restore.md", restoreMarkdown(checkpoints));
 await write("reading.html", renderReading({ stylesheet: `/assets/${cssName}` }));
 await write("around.html", renderAround({ stylesheet: `/assets/${cssName}` }));
 await write("ledger.html", renderLedger({ stylesheet: `/assets/${cssName}` }));
+await write("lens.html", renderLens({ stylesheet: `/assets/${cssName}` }));
 
 const publicSurfaces = siteManifest.surfaces.filter(({ flags }) => flags.run);
 await write("search.html", renderSearch({ stylesheet: `/assets/${cssName}` }));
@@ -192,6 +194,7 @@ const manifest = {
     "/reading",
     "/around",
     "/ledger",
+    "/lens",
     "/search",
     "/run",
   ],

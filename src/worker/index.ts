@@ -7,6 +7,7 @@ import { terminalTool } from "./tools";
 import { aroundChanges, aroundJson, aroundResponse, countCrawler, ledgerJson, ledgerResponse, readingResponse } from "./live";
 import { photoQuery } from "./photos";
 import { rnMarkdown, rnRedirect, rnTracks, rnTracksHtml } from "./rn";
+import { lensBrowser, lensCompare, lensFetch, lensPage, lensShot } from "./lens";
 
 export { BookingWorkflow, Counter };
 
@@ -68,6 +69,12 @@ async function fetchHandler(request: Request, env: Env, ctx: ExecutionContext): 
       retention: "none",
     }, { headers: { "cache-control": "no-store", "x-robots-tag": "noindex" } });
   }
+
+  if (pathname === "/lens/fetch") return lensFetch(request, env);
+  if (pathname === "/lens/browser") return lensBrowser(request, env);
+  if (pathname === "/lens/shot") return lensShot(request, env);
+  if (pathname === "/lens/compare.json") return lensCompare(request, env);
+  if (pathname === "/lens") return lensPage(request, env);
 
   if (pathname === "/reading") return readingResponse(request, env);
   if (pathname === "/around") return aroundResponse(request, env);

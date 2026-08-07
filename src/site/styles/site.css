@@ -393,6 +393,36 @@
   .status-card dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; margin: 8px 0 0; font-size: 12px; }
   .status-card dd { margin: 0; overflow-wrap: anywhere; }
 
+  .lens-search {
+    display: block;
+    margin-block: 24px;
+    padding: 11px;
+    background: var(--face);
+    box-shadow: var(--raised);
+  }
+
+  .lens-search form { display: grid; gap: 5px; }
+  .lens-search label { font-weight: 700; }
+  .lens-search span { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 7px; }
+  .lens-search input { min-inline-size: 0; padding: 7px 9px; border: 0; box-shadow: var(--sunken); field-sizing: content; }
+  .lens-search button { min-inline-size: 82px; border: 0; background: var(--face); box-shadow: var(--raised); }
+  .lens-search button:active { box-shadow: var(--sunken); }
+
+  .lens-results > h2 { color: #16428b; font-size: 20px; }
+  .lens-intro-grid,
+  .lens-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-block: 10px 16px; }
+  .lens-intro-grid article,
+  .lens-summary article { padding: 12px; border: 1px solid #8ba2d5; background: #f7faff; }
+  .lens-intro-grid h3,
+  .lens-summary h3 { color: #16428b; font-size: 16px; }
+  .lens-summary dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 9px; margin-block: 8px 0; }
+  .lens-summary dd { margin: 0; overflow-wrap: anywhere; }
+  .lens-outline { margin-block: 14px; padding: 12px; background: var(--face); box-shadow: var(--sunken); }
+  .lens-outline ol { margin-block: 8px 0; padding-inline-start: 24px; }
+  .lens-text { max-block-size: 32rem; overflow: auto; white-space: pre-wrap; padding: 12px; background: #fff; box-shadow: var(--sunken); font: 13px/1.5 var(--font-mono); }
+  .lens-doors { display: flex; flex-wrap: wrap; gap: 6px; margin-block: 8px; padding: 0; list-style: none; }
+  .lens-doors li { padding: 3px 7px; border: 1px solid #8ba2d5; background: var(--selection-soft); }
+
   .object-list,
   .file-list {
     display: grid;
@@ -794,6 +824,11 @@
     .photo-search span { inline-size: 100%; }
     .photo-archive { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
     .photo-archive span { font-size: 8px; }
+    .record-list li,
+    .record-list a { grid-template-columns: 1fr; gap: 2px; }
+    .lens-search span,
+    .lens-intro-grid,
+    .lens-summary { grid-template-columns: 1fr; }
   }
 
   @media (prefers-reduced-motion: reduce) {
