@@ -20,7 +20,7 @@
 # leave blank when it doesn't say. never guess.
 #
 # core EXIF (works on every body):
-#   camera          - "<Make> <Model>"  e.g. "FUJIFILM X-T5"
+#   camera          - "<Make> <Model>"  e.g. "FUJIFILM X-T50"
 #   lens            - LensModel         e.g. "XF35mmF1.4 R"
 #   aperture        - FNumber           e.g. "f/2.8"
 #   shutter         - ExposureTime      e.g. "1/120"

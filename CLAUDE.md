@@ -680,7 +680,7 @@ generic hex back.
   because that is what the 429 message quotes, and a contract test pins the two
   configs and the code together so a message cannot outlive its limit.
 - **PHOTOS_R2** — R2 bucket `aadhar-photos`, holds the SOOC originals
-  (~3 GB / 158 photos at FUJIFILM X-T5 + Leica resolution).
+  (~3 GB / 158 photos at FUJIFILM X-T50 + Leica resolution).
 - **ASSETS** — the Workers static-assets binding (wrangler.jsonc `assets`), serves files from holding/.
 - **RESTORE_DB** — D1 database `aadhar-restore` (id `88c8daf1-3a36-4f8e-a2ad-dba8a74e1b9f`),
   the **single source of truth for the deploy log**. One row per logged deploy

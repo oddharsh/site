@@ -83,7 +83,6 @@ const FILM_ALIASES = {
 // ("Leica Camera AG LEICA M MONOCHROM (Typ 246)") in a way nobody types.
 const CAMERA_ALIASES = [
   ["X-T50", "fuji fujifilm xt50 x-t50 aps-c mirrorless"],
-  ["X-T5", "fuji fujifilm xt5 x-t5 aps-c mirrorless"],
   ["MONOCHROM", "leica monochrome black and white bw m246 rangefinder full frame"],
   ["LEICA", "leica rangefinder"],
 ];

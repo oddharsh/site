@@ -273,7 +273,7 @@ function renderOverview(data) {
     kv("shell", "a resto-mod Windows XP desktop, served from a Cloudflare Worker", INNER),
     blank(),
     rule(INNER, "plan"),
-    ...wrap("Crypto investing at Archetype. This site is the workshop: prototypes in /garage, chat-style explainers in /lwe, photographs shot on a Fuji X-T5, and whatever I am reading. Everything here is public and readable by machines on purpose.", INNER).map((row) => [s(row)]),
+    ...wrap("Crypto investing at Archetype. This site is the workshop: prototypes in /garage, chat-style explainers in /lwe, photographs shot on a Fuji X-T50, and whatever I am reading. Everything here is public and readable by machines on purpose.", INNER).map((row) => [s(row)]),
     blank(),
     rule(INNER, "what this host knows"),
     kv("writing", `${posts.length} note${posts.length === 1 ? "" : "s"}`, INNER),

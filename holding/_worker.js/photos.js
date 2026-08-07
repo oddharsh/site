@@ -522,7 +522,7 @@ export function renderPhotosPage(photos, altMap) {
     title: "aadhar.sh/photos",
     path: "aadhar.sh/photos",
     width: 980,
-    description: `All ${photos.length} photos, straight out of camera. FUJIFILM X-T5 + Leica M.`,
+    description: `All ${photos.length} photos, straight out of camera. FUJIFILM X-T50 + Leica M.`,
     css: `
   h1 { font-family: var(--font-caption); color: oklch(41.92% 0.0962 250.51); font-size: 18pt; margin: 0 0 4px; font-weight: bold; }
   .lede { margin: 0 0 14px; color: oklch(38.67% 0 0); font-size: 10.5pt; }
@@ -552,7 +552,7 @@ export function renderPhotosPage(photos, altMap) {
     body: `
   <h1>Photos</h1>
   <p class="lede">
-    All ${photos.length}, straight out of camera (FUJIFILM X-T5, Leica M).
+    All ${photos.length}, straight out of camera (FUJIFILM X-T50, Leica M).
     Click any tile for the full-resolution original. Machine-readable index:
     <a href="/images/manifest.json">manifest.json</a> &middot;
     <a href="/images/alt.json">alt.json</a> &middot;
