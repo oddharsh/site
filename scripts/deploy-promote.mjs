@@ -334,15 +334,23 @@ if (steps[steps.length - 1] === 100) {
   let staged = [];
   try {
     const committed = JSON.parse(await readFile(file, "utf8"));
-    const rows = JSON.parse(await wrangler(
+    // `wrangler(..., { json: true })` already returns parsed JSON. Wrapping it in
+    // a second JSON.parse stringifies the object to "[object Object]" and throws,
+    // which the catch below then reported as D1 being unreachable — so every ramp
+    // since the staged-projection refactor skipped its own changelog write while
+    // printing a message that blamed the database. D1 was fine every time.
+    const rows = (await wrangler(
       ["d1", "execute", "aadhar-restore", "--remote", "--json", "--command", "SELECT vnum FROM checkpoints;"],
       { json: true },
     ))[0].results;
     const known = new Set(rows.map((r) => r.vnum));
     staged = committed.filter((r) => !known.has(r.vnum)).sort((a, b) => a.vnum - b.vnum);
   } catch (e) {
-    console.log(`\ncould not read the deploy log (${String(e.message || e).slice(0, 90)}).`);
-    console.log("traffic is ramped; run `npm run checkpoints:check` when D1 is reachable.");
+    // Do NOT name a cause here. This block covers a local file read, a wrangler
+    // spawn, and the shape of what comes back; asserting "D1 is unreachable" sent
+    // the one person reading it to check a database that was answering fine.
+    console.log(`\ncould not work out what to log (${String(e.message || e).slice(0, 90)}).`);
+    console.log("traffic is ramped; run `npm run checkpoints:check` to see what is still staged.");
   }
   for (const row of staged) {
     const ts = Math.floor(Date.now() / 1000);
