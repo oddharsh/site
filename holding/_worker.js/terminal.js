@@ -1142,13 +1142,20 @@ const PS_CSS = `/*min*/
    declared, and every rule below was being discarded. Resetting to auto is what
    turns them back on -- measured here, 0px to 16px. If a console ever loses its
    scrollbar again, check the inherited value first.
-   Firefox needs the standard property and does not support
-   selector(::-webkit-scrollbar), so that query hands it the colours instead.
+   Firefox needs the standard property back, and a bare "not" arm no longer
+   finds it: FF153 answers YES to selector(::-webkit-scrollbar) while
+   implementing only a narrow subset, so that query alone hands modern Firefox
+   auto and drops the tint. The :-moz-focusring arm catches those versions. See
+   /garage/horizon, whose own chip documents that probe lying about this.
+   Do NOT reach for (-moz-appearance:none) instead, which reads as the obvious
+   choice: Lightning CSS un-prefixes it to (appearance:none), Chromium supports
+   that, and the query flips true and silently restores the bug the line above
+   fixes. Diff the minified output, not the source, when changing this.
    NO BACKTICKS in here. This comment lives inside a JS template literal, so one
    would end the literal early -- which is exactly what happened, and what the
    build's post-substitution re-parse is there to catch. */
 .ps{scrollbar-color:auto}
-@supports not selector(::-webkit-scrollbar){.ps{scrollbar-color:oklch(62% .14 255) oklch(91% .02 248)}}
+@supports (not selector(::-webkit-scrollbar)) or selector(:-moz-focusring){.ps{scrollbar-color:oklch(62% .14 255) oklch(91% .02 248)}}
 .ps::-webkit-scrollbar{width:16px}
 .ps::-webkit-scrollbar-track{background:oklch(91% .02 248);border-left:1px solid oklch(78% .04 250)}
 .ps::-webkit-scrollbar-thumb{background:linear-gradient(90deg,oklch(76% .10 253) 0%,oklch(66% .14 255) 45%,oklch(58% .16 257) 100%);border:1px solid oklch(45% .13 258);border-radius:2px}
