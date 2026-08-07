@@ -189,7 +189,10 @@ fallback. Validation never authorizes a release.
 ## Infrastructure
 
 `infra.json` declares public DNS, edge rules, repository rulesets, resources,
-Worker inventory, and Workers Builds settings. IDs stay in Wrangler configs.
+Worker inventory, Workers Builds settings, and the curated CodeQL default setup.
+IDs stay in Wrangler configs. CodeQL language aliases are compared as a set;
+the assertion is workstation-only because GitHub's endpoint needs repository
+Administration read permission, which a workflow `GITHUB_TOKEN` cannot hold.
 
 ```bash
 npm run infra:check             # read-only comparison with live state

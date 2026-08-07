@@ -1,16 +1,18 @@
 ---
-title: "aadhar.sh/garage/four free Cloudflare features, live"
-description: "Live demos of four free Cloudflare Workers platform features (Durable Objects atomic counter, Workers AI photo captioning, Workers Logs structured observability, and custom trace spans) behind a tiny worker. A fifth, Browser Rendering, is wired but parked on the free tier's daily cap."
+title: "aadhar.sh/garage/four Cloudflare building blocks"
+description: "A compact field note on Durable Objects, Workers AI through AI Gateway, structured Workers Logs, custom trace spans, and Browser Rendering."
 path: "/garage/cloudflare"
 section: "garage"
 kind: "content"
-updated: "2026-06-07"
+updated: "2026-08-07"
 source: "https://aadhar.sh/garage/cloudflare"
 ---
 
-# Four free Cloudflare features, live
+# Four Cloudflare building blocks
 
-The free Workers plan quietly bundles things that used to cost money or a separate service. I wired four of them to live demos here (**Durable Objects**, **Workers AI**, **Workers Logs**, and **custom trace spans**), behind a tiny worker (`cf-garage`) routed at `/garage/cf/*`. The buttons hit real endpoints; nothing is faked. A fifth, **Browser Rendering**, I bound and deployed, then parked on the free tier's daily cap. Noted honestly below.
+Cloudflare Workers exposes several useful primitives through one runtime. This note records four of them—**Durable Objects**, **Workers AI**, **Workers Logs**, and **custom trace spans**—plus the honest boundary around **Browser Rendering**.
+
+The original interactive lab is retired. Its `/garage/cf/*` Worker is now a tiny `410 Gone` migration adapter, kept only until request logs show the old API can disappear. The durable ideas and the two offline photo pipelines remain.
 
 ## 1 · Durable Objects: an atomic counter
 
@@ -24,17 +26,20 @@ env.COUNTER.get(id).fetch()  // SQLite-backed, atomic put
 
 ## 2 · Workers AI: caption a photo
 
-Every model in the catalog, **10,000 neurons/day free**. This runs `@cf/llava-1.5-7b` over a real grid photo to generate alt-text. A small, fast vision model hallucinates charmingly now and then (it once called a cloudy sky a UFO). One binding call does it: no GPU, no key.
+The photo pipeline runs `@cf/llava-hf/llava-1.5-7b-hf` over committed thumbnail bytes to generate alt text and search terms. A small, fast vision model hallucinates charmingly now and then, so generated output stays reviewable source data rather than request-time truth.
 
 —
 
 ```
-env.AI.run("@cf/llava-1.5-7b", { image, prompt })
+POST /ai/run/@cf/llava-hf/llava-1.5-7b-hf
+cf-aig-gateway-id: default
 ```
+
+Both offline callers route through AI Gateway for payload logs, per-model usage, and cost attribution. Setting `CLOUDFLARE_AI_GATEWAY` to an empty string disables that routing. Caching stays off: rerunning an identical request is how a bad generated caption gets replaced.
 
 ## 3 · Workers Logs: structured observability
 
-**200,000 events/day, 3-day retention, free.** Every button above emitted a structured log line from the worker (`{ feature, ms, … }`), filterable and searchable in the dashboard. I can't show it *here* (the logs live in Cloudflare, not the page), but it's on: `[observability] enabled = true` in `wrangler.toml`. Click around, then watch them stream in `Workers & Pages → cf-garage → Logs`.
+Structured lines such as `{ feature, ms, … }` are filterable and searchable in the dashboard. The migration adapter keeps observability enabled specifically so retirement can follow measured traffic instead of a guess.
 
 ```
 console.log(JSON.stringify({ path, feature, ms }))
@@ -42,7 +47,7 @@ console.log(JSON.stringify({ path, feature, ms }))
 
 ## 4 · Custom spans: trace a request
 
-Workers **auto-trace** every platform call (each `fetch`, KV read, DO call) into a waterfall in Observability. As of **Jun 16 2026** you can wrap your *own* logic in spans with `ctx.tracing.enterSpan()`, nested correctly. This endpoint runs a three-step pipeline (a Durable Object peek, a subrequest, and a compute loop), each in its own span with attributes. The canonical trace lands in Observability; the waterfall below is reconstructed live from the same span timings. (Run it twice: a cold Durable Object shows up as a fat first bar, then the warm path collapses to a few ms.)
+Workers **auto-trace** platform calls such as `fetch`, KV reads, and Durable Object calls into a waterfall in Observability. Custom spans can wrap application work and attach bounded attributes, making the trace useful without inventing a second telemetry system.
 
 —
 
@@ -52,13 +57,12 @@ ctx.tracing.enterSpan("do.counter.peek", async (span) => { span.setAttribute("co
 
 ## The honest scorecard
 
-All four ride the free Workers plan and **work live above**. Click them. They're shipped: a Durable Object increments with no race, Workers AI captions a real photo on a free GPU, every click leaves a structured log line, and a hand-instrumented request shows its own spans in the trace waterfall.
+This site keeps the pieces that earn their complexity: Durable Objects serialize the counter and booking-slot instances; offline Workers AI callers route through AI Gateway; the site Worker and migration adapters emit structured observability; bounded live routes can add custom spans when a waterfall answers a real operational question.
 
-**The fifth, parked honestly: Browser Rendering.** Headless Chromium in a Worker (Puppeteer): `puppeteer.launch(env.BROWSER) → page.goto() →
-      page.screenshot()`, the basis for on-the-fly `og:image` cards. I bind it and the worker deploys; no enable toggle exists (the binding is the access). The browser *does* provision. The catch was on my side: a timeout race that abandoned the in-flight browser stranded its websocket session (the free plan caps concurrency at 2), so each probe leaked a session and the next launch errored. The handler now bounds every launch and always releases the browser, and a bare hit no-ops instead of launching, so crawlers can't burn the **10 browser-minutes/day** budget. It's unbuttoned here until the OG-image use case earns that budget; trigger it by hand at `/garage/cf/screenshot?go=1`.
+**The fifth, parked honestly: Browser Rendering.** Headless Chromium in a Worker can create screenshots and inspect rendered pages, but its binding grants access to a scarce runtime. The rewrite keeps Browser only for the bounded Lens route, behind explicit authorization and deadlines; it does not spend browser minutes on decorative cards or public demo buttons.
 
 ← back to the [garage](https://aadhar.sh/garage) · [aadhar.sh](https://aadhar.sh/)
 
-demos hit a real worker (`cf-garage`) on the free Workers plan. nothing mocked.
+the ideas remain current; the retired demo endpoints say so plainly with `410 Gone`.
 
 Source: https://aadhar.sh/garage/cloudflare
