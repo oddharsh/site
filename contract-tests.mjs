@@ -591,7 +591,7 @@ function rankingEnv() {
     "/images/metadata.json": {
       A: { camera: "X-T50", lens: "XF27mm", film: "Classic Chrome", date: "2026:01:02" },
       B: { camera: "Leica Q3", lens: "Summilux", film: "Monochrome", date: "2025:01:02" },
-      C: { camera: "X-T5", lens: "XF18mm", film: "Classic Chrome", date: "2024:05:05" },
+      C: { camera: "X-T50", lens: "XF18mm", film: "Classic Chrome", date: "2024:05:05" },
     },
     "/images/alt.json": {
       A: "a bridge over a river",
@@ -2945,8 +2945,8 @@ const TERMINAL_ASSETS = {
     { slug: "three", title: "The third note", date: "2026-03-04" },
   ],
   "/images/metadata.json": {
-    A_1: { camera: "FUJIFILM X-T5", lens: "XF27mmF2.8", film: "Classic Chrome", date: "2026:01:02", iso: 640, recipe: { "Film Simulation": "Classic Chrome", "Dynamic Range": "DR400" } },
-    A_2: { camera: "FUJIFILM X-T5", lens: "XF23mmF1.4", film: "Acros", date: "2025:05:06" },
+    A_1: { camera: "FUJIFILM X-T50", lens: "XF27mmF2.8", film: "Classic Chrome", date: "2026:01:02", iso: 640, recipe: { "Film Simulation": "Classic Chrome", "Dynamic Range": "DR400" } },
+    A_2: { camera: "FUJIFILM X-T50", lens: "XF23mmF1.4", film: "Acros", date: "2025:05:06" },
     A_3: { camera: "LEICA M11", lens: "Summicron 35", film: "", date: "2025:07:08" },
   },
   "/images/alt.json": { A_1: "A quiet corner", A_2: "Rain on glass", A_3: "A doorway" },
@@ -3120,7 +3120,7 @@ test("the tui frame never renders a photo field the public projection withholds"
     ...TERMINAL_ASSETS,
     "/images/metadata.json": {
       A_1: {
-        camera: "FUJIFILM X-T5", film: "Classic Chrome", date: "2026:01:02",
+        camera: "FUJIFILM X-T50", film: "Classic Chrome", date: "2026:01:02",
         gps: "40.7128,-74.0060", gpsLatitude: 40.7128, serialNumber: "SECRET123",
         recipe: { "Film Simulation": "Classic Chrome" },
       },
