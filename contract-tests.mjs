@@ -23,7 +23,7 @@ import {
 import { handleCoffeeAvailability, readCoffeeAvailability } from "./holding/_worker.js/coffee.js";
 import { reservationName } from "./cal/src/reservation.js";
 import { handleSiteMcp, MCP_TOOLS as SITE_MCP_TOOLS, SITE_MCP_SERVER_INFO } from "./holding/_worker.js/mcp.js";
-import { handleWebmention, handleWebmentionDecision } from "./holding/_worker.js/webmention.js";
+import { documentContent, handleWebmention, handleWebmentionDecision, linksTo } from "./holding/_worker.js/webmention.js";
 import { handleInbox } from "./holding/_worker.js/inbox.js";
 import { citationsIn, findEndpointIn, SELF_LINK_HOSTS } from "./holding/_worker.js/webmention-send.js";
 import { sign } from "./cal/src/sign.js";
@@ -4326,6 +4326,62 @@ test("the ramp never double-parses wrangler's already-parsed JSON", async () => 
   // a shape check; blaming D1 sent the reader to check a healthy database.
   assert.equal(/when D1 is reachable/.test(src), false,
     "the catch-all note must not assert D1 is the cause — it cannot know that");
+});
+
+// ── webmention link verification ────────────────────────────────────
+// The verify step is the ONLY thing standing between "someone sent a POST" and
+// "someone's page appears on my site", so what counts as a link is the whole
+// anti-forgery property. Every row below was measured against the previous
+// string-matching implementation on 2026-08-07.
+test("a link that is not really a link does not verify a mention", () => {
+  const target = "https://aadhar.sh/writing/in-flux";
+  const source = "https://mari.example/post";
+
+  // CREDITED before. Markup the author removed, code, an inert template, and a
+  // form field's value are not links, and each one let a stranger claim a
+  // mention with markup that never renders.
+  const notLinks = {
+    "an HTML comment": `<p>hi</p><!-- <a href="${target}">x</a> -->`,
+    "a commented-out draft": `<!--\n<a href="${target}">old draft</a>\n-->`,
+    "a script body": `<script>var s = '<a href="${target}">x</a>';</script>`,
+    "a textarea value": `<textarea><a href="${target}">x</a></textarea>`,
+    "a template": `<template><a href="${target}">x</a></template>`,
+    "an unterminated comment": `<!-- <a href="${target}">x</a>`,
+  };
+  for (const [what, html] of Object.entries(notLinks)) {
+    assert.equal(linksTo(html, target, source), false, `${what} must not verify a mention`);
+  }
+
+  // REFUSED before, and both are ordinary HTML a real page writes.
+  const realLinks = {
+    "protocol-relative": `<a href="//aadhar.sh/writing/in-flux">x</a>`,
+    "an uppercase host": `<a href="https://AADHAR.SH/writing/in-flux">x</a>`,
+    "a tracking query": `<a href="https://aadhar.sh/writing/in-flux?utm_source=rss">x</a>`,
+    "a fragment": `<a href="https://aadhar.sh/writing/in-flux#notes">x</a>`,
+    "a trailing slash": `<a href="https://aadhar.sh/writing/in-flux/">x</a>`,
+    "single quotes": `<a href='https://aadhar.sh/writing/in-flux'>x</a>`,
+    "a link after a comment": `<!-- old --><a href="${target}">x</a>`,
+  };
+  for (const [what, html] of Object.entries(realLinks)) {
+    assert.equal(linksTo(html, target, source), true, `${what} is a real link and must verify`);
+  }
+
+  // Still refused, and must stay refused: naming a URL is not linking to it.
+  assert.equal(linksTo(`<p>I read https://aadhar.sh/writing/in-flux today</p>`, target, source), false);
+  assert.equal(linksTo(`<a href="https://aadhar.sh/writing/other">x</a>`, target, source), false);
+  assert.equal(linksTo(`<a href="https://aadhar.sh.evil.example/writing/in-flux">x</a>`, target, source),
+    false, "a lookalike host must not verify");
+});
+
+// Stripping too much loses a link and refuses a real mention; stripping too
+// little credits a fake one. The unterminated case above pins the safe
+// direction, and this pins that ordinary content survives.
+test("inert regions are removed without eating the document", () => {
+  assert.equal(documentContent("<p>before</p><script>x</script><p>after</p>").includes("before"), true);
+  assert.equal(documentContent("<p>before</p><script>x</script><p>after</p>").includes("after"), true);
+  assert.equal(documentContent("<script>secret</script>").includes("secret"), false);
+  assert.equal(documentContent("<!-- hidden -->visible").includes("hidden"), false);
+  assert.equal(documentContent("<!-- hidden -->visible").includes("visible"), true);
 });
 
 // ── RSS feeds ────────────────────────────────────────────────────────
