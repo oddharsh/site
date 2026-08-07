@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 // deploy-promote.mjs — ramp an uploaded version onto production traffic.
 //
-//   npm run deploy:promote                  # newest version, 10% -> 50% -> 100%
+//   npm run deploy:promote                  # newest PRODUCTION build, 10% -> 50% -> 100%
 //   npm run deploy:promote -- --to 25       # one step, park it at 25%
 //   npm run deploy:promote -- --version <id>
+//   npm run deploy:promote -- --dry-run     # resolve the target, move nothing
 //   npm run deploy:promote -- --steps 5,25,100
 //   npm run deploy:promote -- --rollback    # 100% back to the previously active version
 //   npm run deploy:promote -- --status      # what is serving right now, and nothing else
@@ -117,13 +118,81 @@ async function currentDeployment() {
   }));
 }
 
+// The production branch's alias, read from infra.json so it cannot drift from
+// the branch Workers Builds actually publishes.
+//
+// Called lazily from newestVersion() rather than resolved at module scope, so
+// `--status` stays what its help text promises: what is serving right now, and
+// nothing else. Reading infra.json up here would let a malformed file break the
+// one subcommand you reach for when you are trying to find out what is going on.
+async function productionAlias() {
+  try {
+    const infra = JSON.parse(await readFile(new URL("../infra.json", import.meta.url), "utf8"));
+    const branch = infra?.release?.production_branch;
+    if (!branch) throw new Error("infra.json declares no release.production_branch");
+    // Workers Builds sanitizes a branch name into an alias by replacing runs of
+    // non-alphanumerics with a single dash. Identity for "production"; correct
+    // if the production branch is ever renamed to something with a slash.
+    return String(branch).replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase();
+  } catch (e) {
+    die(`could not read the production branch from infra.json: ${e.message}`);
+  }
+}
+
+// The newest PRODUCTION build, which is not the same thing as the newest upload.
+//
+// This returned the newest version outright until 2026-08-07, and that was a
+// live way to ramp somebody else's branch onto production traffic. Workers
+// Builds uploads a version for EVERY branch push, not just `production`
+// (infra.json's release.non_production_deploy_command), and several agents push
+// branches to this repo all day. Observed minutes before a real ramp: of the
+// three newest versions, the top was aliased `codex-site-cleanup-foundations`
+// and the second `fix-pin-cloudflare-account-id`, with the production build
+// third. A bare `npm run deploy:promote` at that moment would have walked a
+// feature branch to 100%.
+//
+// It would also have LOOKED fine. The sampler checks that traffic moved and
+// that the target returns 200s, and a feature branch that built and deployed
+// satisfies both. Nothing downstream of this line could have caught it.
+//
+// `workers/alias` is the branch a build came from and the only branch signal a
+// version carries — the objects hold no commit sha (checked against the live
+// API, not assumed). So the alias is what this filters on.
 async function newestVersion() {
+  const productionAliasName = await productionAlias();
   const list = await wrangler(["versions", "list", "--json"], { json: true });
   if (!Array.isArray(list) || !list.length) die("no uploaded versions found");
   // wrangler lists newest first; sort defensively on the timestamp it carries.
   const sorted = [...list].sort((a, b) =>
     String(b.metadata?.created_on || "").localeCompare(String(a.metadata?.created_on || "")));
-  return sorted[0].id;
+
+  const aliasOf = (v) => (v.annotations || {})["workers/alias"] || "(no alias)";
+  const production = sorted.filter((v) => aliasOf(v) === productionAliasName);
+
+  if (!production.length) {
+    // FAIL CLOSED, and this is a case that will really happen. `wrangler
+    // versions list` is hard-capped at the 10 most recent with no pagination
+    // flag, so on a busy day ten branch pushes can bury the production build
+    // entirely. Guessing here is exactly the bug being fixed, so name the
+    // candidates and let a human choose.
+    const seen = sorted.map((v) => `    ${v.id.slice(0, 8)}  ${aliasOf(v)}`).join("\n");
+    die(
+      `no \`${productionAliasName}\` build among the ${sorted.length} most recent versions.\n\n` +
+      `  wrangler lists only the 10 newest and cannot page, so a run of branch\n` +
+      `  builds can push the production one off the end. What is listed:\n\n${seen}\n\n` +
+      `  Pick the one you mean and pass it explicitly:\n` +
+      `    npm run deploy:promote -- --version <id>`,
+    );
+  }
+
+  // Say the number out loud, the same way the ramp steps do. If this line ever
+  // reads "skipping 6 newer", that is the trap this filter exists for.
+  const skipped = sorted.indexOf(production[0]);
+  if (skipped > 0) {
+    const names = sorted.slice(0, skipped).map(aliasOf).join(", ");
+    console.log(`skipping ${skipped} newer non-production version(s): ${names}`);
+  }
+  return production[0].id;
 }
 
 // -------------------------------------------------------------- sampling ----
@@ -228,6 +297,16 @@ if (steps.some((s) => !Number.isFinite(s) || s <= 0 || s > 100)) die(`bad steps:
 console.log(`target version:   ${target.slice(0, 8)}`);
 console.log(`serving now:      ${activeIds || "(nothing)"}`);
 console.log(`ramp:             ${steps.join("% -> ")}%\n`);
+
+// Resolve and print the target, move nothing. The point is to make the version
+// choice READABLE before it is acted on: the bug this flag ships with was one
+// where the wrong target was picked silently and every downstream check passed.
+// Also the only way to exercise the selection without moving production
+// traffic, since the surrounding module runs on import and cannot be tested.
+if (has("dry-run")) {
+  console.log("--dry-run: nothing was changed.");
+  process.exit(0);
+}
 
 if (previous && target.slice(0, 8) === previous.slice(0, 8)) {
   die("the target version is already the only one serving; nothing to ramp");
@@ -334,15 +413,23 @@ if (steps[steps.length - 1] === 100) {
   let staged = [];
   try {
     const committed = JSON.parse(await readFile(file, "utf8"));
-    const rows = JSON.parse(await wrangler(
+    // `wrangler(..., { json: true })` already returns parsed JSON. Wrapping it in
+    // a second JSON.parse stringifies the object to "[object Object]" and throws,
+    // which the catch below then reported as D1 being unreachable — so every ramp
+    // since the staged-projection refactor skipped its own changelog write while
+    // printing a message that blamed the database. D1 was fine every time.
+    const rows = (await wrangler(
       ["d1", "execute", "aadhar-restore", "--remote", "--json", "--command", "SELECT vnum FROM checkpoints;"],
       { json: true },
     ))[0].results;
     const known = new Set(rows.map((r) => r.vnum));
     staged = committed.filter((r) => !known.has(r.vnum)).sort((a, b) => a.vnum - b.vnum);
   } catch (e) {
-    console.log(`\ncould not read the deploy log (${String(e.message || e).slice(0, 90)}).`);
-    console.log("traffic is ramped; run `npm run checkpoints:check` when D1 is reachable.");
+    // Do NOT name a cause here. This block covers a local file read, a wrangler
+    // spawn, and the shape of what comes back; asserting "D1 is unreachable" sent
+    // the one person reading it to check a database that was answering fine.
+    console.log(`\ncould not work out what to log (${String(e.message || e).slice(0, 90)}).`);
+    console.log("traffic is ramped; run `npm run checkpoints:check` to see what is still staged.");
   }
   for (const row of staged) {
     const ts = Math.floor(Date.now() / 1000);

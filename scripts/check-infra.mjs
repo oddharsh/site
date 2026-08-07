@@ -259,6 +259,66 @@ async function checkTree(infra, wrangler, lwe) {
   }
   pass(`${consumers} DNS-referenced files present in the tree`);
 
+  // The account pin. Both wrangler configs must name the account infra.json
+  // declares, because wrangler only auto-selects while the login can see
+  // exactly one and that is not a property this repo controls — a second
+  // account appearing on the login is enough to break every non-interactive
+  // wrangler call at once (2026-08-07). Checking BOTH configs matters: the dev
+  // twin is what dev:remote and routes:check:remote reach production through,
+  // and build.mjs's drift warning compares binding sets only, so an account_id
+  // that went missing from one of them would otherwise be caught by nothing.
+  //
+  // wrangler.jsonc's account_id is the SOURCE OF TRUTH and the other three are
+  // compared against it, rather than against a copy in infra.json. That is this
+  // file's existing rule for resource ids, and it is why infra.json's account
+  // block declares the invariant without repeating the value.
+  const declaredAccount = wrangler.account_id;
+  if (!declaredAccount) {
+    fail(`wrangler.jsonc lost its account_id — wrangler picks an account by itself only while the login sees exactly one, so every non-interactive call fails the moment a second appears`);
+  } else {
+    const devWrangler = await readJsonc("wrangler.dev.jsonc").catch(() => null);
+    if (!devWrangler) {
+      fail(`wrangler.dev.jsonc is missing or unparseable, so its account_id pin cannot be checked`);
+    }
+    // FOUR copies of this id ship, not two. Both configs carry it as the
+    // deploy-time `account_id` pin AND as the runtime var CF_ACCOUNT_ID, which
+    // /ledger uses to query this account's own Analytics Engine. The var
+    // predates the pin. Check all four against one declaration so the string
+    // cannot be half-updated: an account_id and a CF_ACCOUNT_ID that disagree
+    // would deploy to one account and read analytics from another, and both
+    // halves would look fine on their own.
+    //
+    // Counted rather than assumed, so the ok line cannot claim everything is
+    // pinned while one of these is the reason the run is failing.
+    const sites = [
+      ["wrangler.jsonc vars.CF_ACCOUNT_ID", wrangler.vars?.CF_ACCOUNT_ID, "/ledger reads this account's Analytics Engine through it"],
+      ...(devWrangler ? [
+        ["wrangler.dev.jsonc account_id", devWrangler.account_id, "dev:remote and routes:check:remote reach production bindings through this config"],
+        ["wrangler.dev.jsonc vars.CF_ACCOUNT_ID", devWrangler.vars?.CF_ACCOUNT_ID, "/ledger reads this account's Analytics Engine through it"],
+      ] : []),
+    ];
+    // infra.json names the same three, so a copy added there without a check
+    // here (or the reverse) is itself drift.
+    const declared = infra.account?.must_agree || [];
+    const named = sites.map(([where]) => where);
+    if (declared.join("|") !== named.join("|")) {
+      fail(`infra.json's account.must_agree (${JSON.stringify(declared)}) does not match what checkTree verifies (${JSON.stringify(named)})`);
+    }
+    let agreed = 0;
+    for (const [where, value, why] of sites) {
+      if (!value) {
+        fail(`${where} is missing — ${why}`);
+      } else if (value !== declaredAccount) {
+        fail(`${where} (${JSON.stringify(value)}) disagrees with wrangler.jsonc's account_id (${JSON.stringify(declaredAccount)})`);
+      } else {
+        agreed++;
+      }
+    }
+    if (agreed === sites.length && sites.length === 3) {
+      pass(`account ${declaredAccount} agrees across all 4 declarations (account_id + vars.CF_ACCOUNT_ID, both configs)`);
+    }
+  }
+
   // The site Worker's name must match what the release config expects, or
   // Workers Builds refuses the build outright.
   if (wrangler.name !== infra.release.worker) {

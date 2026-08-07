@@ -24,6 +24,21 @@
   // every reload); it uses wrangler.dev.jsonc, which points at holding/ directly.
   // The two configs' bindings must match; build.mjs warns on drift.
   "name": "aadhar-sh",
+  // Pinned because wrangler picks an account only when the login has exactly
+  // ONE, and that stopped being true on 2026-08-07: a second account appeared
+  // on this login and every non-interactive wrangler call started failing with
+  // "More than one account available but unable to select one". It reads as a
+  // credential problem and is not one — nothing was revoked, wrangler simply
+  // refuses to guess, and it had been guessing correctly by accident for as
+  // long as there was only one candidate. Deleting the other account would
+  // also fix it and is the wrong fix: the pin holds however many accounts the
+  // login can see, which is the property worth having. Every wrangler caller
+  // here is non-interactive (deploy, deploy:version, deploy:promote,
+  // dev:remote, routes:check:remote, and Workers Builds), so this belongs in
+  // the config rather than in whichever shell someone remembers to export it
+  // from. infra.json's `account` block declares the same id and infra:check
+  // fails if the two stop agreeing.
+  "account_id": "1c99acdb6141579023fb97d24261ea58",
   "main": ".build/holding/_worker.js/index.js",
   "build": { "command": "node build.mjs" },
   "compatibility_date": "2026-06-01",
