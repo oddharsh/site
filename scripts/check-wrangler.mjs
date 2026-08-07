@@ -3,7 +3,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const PROJECTS = ["cf-garage", "lwe-ask"];
 
 async function readJson(relativePath) {
   const absolutePath = path.join(ROOT, relativePath);
@@ -31,25 +30,10 @@ if (rootLockDeclared !== rootDeclared) errors.push(`root: package-lock declares 
 if (installed !== expected) errors.push(`root: package-lock resolves Wrangler ${JSON.stringify(installed)}, expected ${expected}`);
 console.log(`root: Wrangler ${rootDeclared} (root lock ${installed}; ${transitiveVersions.length} transitive ${transitiveVersions.length === 1 ? "copy" : "copies"})`);
 
-for (const project of PROJECTS) {
-  const label = project;
-  const packagePath = `${project}/package.json`;
-  const pkg = await readJson(packagePath);
-  const declared = pkg.devDependencies?.wrangler || pkg.dependencies?.wrangler || "";
-  const lockPackage = lock.packages?.[project || ""] || {};
-  const lockDeclared = lockPackage.devDependencies?.wrangler || lockPackage.dependencies?.wrangler || "";
-
-  if (declared) errors.push(`${label}: package.json must not declare Wrangler; use the root pin ${expected}`);
-  if (lockDeclared) errors.push(`${label}: package-lock workspace entry must not declare Wrangler; use the root pin ${expected}`);
-  const key = `${project}/node_modules/wrangler`;
-  if (lock.packages?.[key]) errors.push(`${project}: direct Wrangler was not hoisted to the root lock`);
-  console.log(`${label}: uses root Wrangler ${expected}`);
-}
-
 if (errors.length) {
   console.error("Wrangler version check failed:");
   for (const error of errors) console.error(`- ${error}`);
   process.exit(1);
 }
 
-console.log(`All ${PROJECTS.length + 1} Worker projects use the root Wrangler ${expected}.`);
+console.log(`The root toolchain pins Wrangler ${expected}; migration adapters use it through npx.`);

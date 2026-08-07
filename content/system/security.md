@@ -1,75 +1,50 @@
 ---
 title: "Security Center"
-description: "The site's security posture, XP-style: firewall, updates, threat protection."
+description: "The current security and privacy boundaries of aadhar.sh."
 path: "/security"
 section: "status"
 kind: "page"
+updated: "2026-08-07"
 source: "https://aadhar.sh/security"
 ---
 
 # Security Center
 
-Windows used to greet you with three green shields. This is the honest version
-for aadhar.sh: what actually guards the site, and what each layer really does.
+This is the short, current version of what guards aadhar.sh. It describes the
+implementation that serves the page, not an intended future state.
 
-Three values on the live page come from your own connection (the Cloudflare colo
-that answered, the HTTP version, the TLS version), so they are not published
-here. <https://aadhar.sh/whoareyou.json> returns those for your request as JSON.
+## Browser boundary
 
-## Firewall: the Cloudflare edge
+Documents use a default-deny Content Security Policy. Scripts, styles, images,
+fonts, connections, forms, and base URLs are restricted to this origin; objects
+and framing are disabled. Canonical pages load no third-party script, no web
+font, and no analytics beacon. Most pages load no JavaScript at all.
 
-Every request hits Cloudflare's network before it reaches the origin, so the
-edge filters traffic, terminates TLS, and absorbs DDoS attempts before they get
-near me.
+The Worker also sends `Permissions-Policy`, `Referrer-Policy`,
+`X-Content-Type-Options`, and `X-Frame-Options`. Preview hosts add `noindex` and
+refuse unsafe methods plus known GET-shaped writes.
 
-## Automatic Updates: deploy-time delivery
+## Application boundary
 
-Every deploy purges the edge, shared assets carry short revalidating caches, and
-pages ship origin-fresh, so a return visit picks up changes without a hard
-reload and there is no second cache to go stale. A service worker used to do
-this job; it retired in v136 because the platform now covers it. The recent
-installs are listed at <https://aadhar.sh/updates>.
+- Remote URL tools accept only public HTTP(S) destinations and bound DNS,
+  redirects, time, and bytes.
+- Coffee booking validates fields, fails closed when availability cannot be
+  established, and serializes slot claims in a Durable Object before notifying
+  anyone.
+- Webmentions are verified against their source, constrained to generated
+  canonical targets, stored separately by moderation state, and never rendered
+  as trusted HTML.
+- Serendipity is public and read-only. Retired cookie and remote-sync mutation
+  routes return `410 Gone`.
+- Preview deployments are readable but cannot mutate production data.
 
-## Threat and identity protection: bot management and Web Bot Auth
+## Data and identity
 
-Cloudflare scores incoming bots. This site signs its *own* crawler's outbound
-requests per RFC 9421 and publishes the key at
-`/.well-known/http-message-signatures-directory`, so a site receiving a request
-from AadharshBot can verify it really came from here. See
-<https://aadhar.sh/bot.md> for the full crawler contract.
+`/whoareyou` renders only request metadata Cloudflare supplies for the current
+response and does not write it to storage. The site's own crawler can sign
+outbound requests with Web Bot Auth; its public contract is at `/bot`.
 
-## Header and transport details
-
-- **Content-Security-Policy**: `default-src 'self'; object-src 'none';
-  frame-ancestors 'none'; upgrade-insecure-requests`. No external script or
-  connect origin at all since 2026-07-29, when the homepage's Web Analytics
-  beacon moved behind this origin. Your browser talks only to this host, which
-  is not the same claim as "nothing is forwarded from here" (see
-  <https://aadhar.sh/whoareyou.md>).
-- **script-src**: every page built here ships a sha256 of each of its own inline
-  scripts, so the policy can name them individually instead of trusting inline
-  code as a class. That policy is currently sent as
-  `Content-Security-Policy-Report-Only` while it proves itself against real
-  browsers; the enforced policy still carries `'unsafe-inline'`. The style
-  directive keeps `'unsafe-inline'` and will, because the CSS here is inline by
-  design, so this is protection against script injection and not against style
-  injection.
-- **... and what it lets through**: hashing inline scripts says nothing about
-  scripts loaded by `src` from this origin, which `'self'` permits. That is not
-  hypothetical here: since 2026-08-06 the edge injects `/.webmcp/bridge.js` into
-  every page after this worker is done, so the strictest policy this site can
-  currently ship still admits 47KB of code the repository does not contain. Named
-  rather than buried, because a page about guarantees should say where they stop;
-  details at <https://aadhar.sh/whoareyou.md>.
-- **Permissions-Policy**: camera, microphone, geolocation, USB, Topics and 10
-  more, all denied.
-- **X-Frame-Options**: `DENY`.
-- **X-Content-Type-Options**: `nosniff`.
-- **Referrer-Policy**: `strict-origin-when-cross-origin`.
-- **DNSSEC**: signed (ECDSAP256SHA256, DS at the registrar).
-- **Content Signals**: search, ai-input, ai-train, all yes, deliberately open.
-
-Read-only, nothing logged or stored. <https://aadhar.sh/whoareyou.md> covers
-what your specific request revealed.
+Infrastructure changes, production traffic movement, secrets, and deployment
+credentials are not reachable through public site routes.
 
 Source: https://aadhar.sh/security

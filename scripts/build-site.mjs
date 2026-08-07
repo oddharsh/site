@@ -46,7 +46,9 @@ await cp(join(root, "assets/pixel-peeper/manifest.json"), join(output, "pixel-pe
 const css = await readFile(join(root, "src/site/styles/site.css"), "utf8");
 const cssName = `site.${digest(css)}.css`;
 await write(`assets/${cssName}`, css);
-await write("luna.css", `/* axp-desktop compatibility URL; new canonical source: /assets/${cssName} */\n${css}`);
+const peeperScript = await readFile(join(root, "src/site/scripts/pixel-peeper.js"), "utf8");
+const peeperScriptName = `pixel-peeper.${digest(peeperScript)}.js`;
+await write(`assets/${peeperScriptName}`, peeperScript);
 
 const [home, hashes, alt, posts, siteManifest, photoIndex, checkpoints] = await Promise.all([
   json("content/home.json"),
@@ -152,6 +154,7 @@ for (const slug of systemSlugs) {
     surface,
     source,
     stylesheet: `/assets/${cssName}`,
+    script: slug === "pixel-peeper" ? `/assets/${peeperScriptName}` : "",
   }));
   await write(`${slug}.md`, source);
 }
@@ -224,7 +227,7 @@ const manifest = {
     "/search",
     "/run",
   ],
-  assets: [`/assets/${cssName}`, ...photos.flatMap(({ thumbAvif, thumbJpg, thumbSmall }) => [`/${thumbAvif}`, `/${thumbJpg}`, `/${thumbSmall}`])],
+  assets: [`/assets/${cssName}`, `/assets/${peeperScriptName}`, ...photos.flatMap(({ thumbAvif, thumbJpg, thumbSmall }) => [`/${thumbAvif}`, `/${thumbJpg}`, `/${thumbSmall}`])],
 };
 await write("build-manifest.json", `${JSON.stringify(manifest, null, 2)}\n`);
 await write("webmention-targets.json", `${JSON.stringify(manifest.pages, null, 2)}\n`);

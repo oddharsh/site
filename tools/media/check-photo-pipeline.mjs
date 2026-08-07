@@ -2,8 +2,8 @@
 
 // Validate the committed public photo artifact graph. Full-resolution source
 // files stay outside git; this checks everything the site actually serves:
-// the photo index the worker bundles, metadata, per-photo EXIF/histogram JSON,
-// the hash map, and all three pixel tiers. add-photos.sh runs this as its last
+// the photo index, canonical metadata, alt text, the hash map, fingerprints,
+// and all three pixel tiers. add-photos.sh runs this as its last
 // phase, and CI runs it on every PR so an incremental add cannot silently
 // truncate the library.
 
@@ -11,12 +11,10 @@ import { createHash } from "node:crypto";
 import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildExifIndex } from "./build-exif-index.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const IMAGES = path.join(ROOT, "assets/photos/data");
 const HASHED = path.join(ROOT, "assets/photos/thumbs");
-const META = path.join(IMAGES, "meta");
 
 const json = async (file) => JSON.parse(await readFile(file, "utf8"));
 const fail = (message) => {
@@ -84,14 +82,6 @@ for (const stem of stems) {
     const actual = createHash("sha256").update(await readFile(path.join(HASHED, file))).digest("hex");
     if (actual !== fp[tier]) fail(`${stem}: fingerprint drift for ${file}`);
   }
-
-  let perPhoto;
-  try { perPhoto = await json(path.join(META, `${stem}.json`)); }
-  catch { fail(`${stem}: missing per-photo metadata`); }
-  const hist = perPhoto.hi;
-  if (!hist || !["l", "r", "g", "b"].every((channel) => Array.isArray(hist[channel]) && hist[channel].length === 64)) {
-    fail(`${stem}: histogram must contain four 64-bin channels`);
-  }
 }
 const fingerprintStrays = Object.keys(fingerprints).filter((stem) => !hashes[stem]);
 if (fingerprintStrays.length) fail(`images/fingerprints.json carries unpublished stems: ${fingerprintStrays.join(", ")}`);
@@ -100,28 +90,7 @@ const actualFiles = (await readdir(HASHED)).filter((file) => /\.(avif|jpg)$/.tes
 const orphans = actualFiles.filter((file) => !expectedFiles.has(file));
 if (orphans.length) fail(`unreferenced hashed pixel files: ${orphans.join(", ")}`);
 
-// The shared EXIF index (/images/exif.json) is what the tooltip reads for its
-// text on every hover, so a stale or partial one is a silently blanker tooltip
-// rather than an error anyone would notice. It is DERIVED from the per-photo
-// files, so rebuild it here and compare: any drift means extract-photo-metadata.sh
-// ran without regenerating it. The tooltip still self-heals per photo, but the
-// point of the index is that it should not have to.
-const exifIndex = await json(path.join(IMAGES, "exif.json"));
-const rebuilt = await buildExifIndex();
-const missing = stems.filter((stem) => !exifIndex[stem]);
-if (missing.length) {
-  fail(`${missing.length} photo(s) absent from images/exif.json: ${missing.slice(0, 8).join(", ")}` +
-       `${missing.length > 8 ? " …" : ""}\n  fix with: node tools/media/build-exif-index.mjs`);
-}
-const stale = stems.filter((stem) => JSON.stringify(exifIndex[stem]) !== JSON.stringify(rebuilt[stem]));
-if (stale.length) {
-  fail(`images/exif.json disagrees with images/meta/ for ${stale.length} photo(s): ${stale.slice(0, 8).join(", ")}` +
-       `${stale.length > 8 ? " …" : ""}\n  fix with: node tools/media/build-exif-index.mjs`);
-}
-const strays = Object.keys(exifIndex).filter((stem) => !hashes[stem]);
-if (strays.length) fail(`images/exif.json carries unpublished stems: ${strays.join(", ")}`);
-
-// alt text is a served artifact like the pixels and the EXIF, so a gap fails here
+// Alt text is a served artifact like the pixels and metadata, so a gap fails here
 // rather than shipping an unlabelled image. add-photos.sh generates captions just
 // above this check, so reaching it means the captioner was rate-limited or skipped.
 const uncaptioned = stems.filter((stem) => !(alt[stem] || "").trim());
@@ -130,4 +99,4 @@ if (uncaptioned.length) {
        `${uncaptioned.length > 8 ? " …" : ""}\n  fix with: npm run captions`);
 }
 
-console.log(`photo-pipeline: ${stems.length} photos, ${expectedFiles.size} hashed tiers, index in bijection, complete EXIF + histogram + alt-text metadata`);
+console.log(`photo-pipeline: ${stems.length} photos, ${expectedFiles.size} hashed tiers, index in bijection, complete metadata + alt text`);

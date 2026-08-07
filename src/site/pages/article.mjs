@@ -11,6 +11,9 @@ export function renderArticle({ surface, source, stylesheet }) {
       <h1>${escapeHtml(surface.title)}</h1>
       <p class="lede">${escapeHtml(surface.description)}</p>
     </header>
+    <aside class="edition-note" aria-label="Edition note">
+      <strong>Static edition.</strong> This authored lab note is preserved at its recorded date. Mentions of earlier interfaces or embedded controls are historical; the current site architecture and guarantees are documented in <a href="/security">Security Center</a>.
+    </aside>
     <article class="article${surface.section === "lwe" ? " chat" : ""}">${article}</article>`;
 
   return renderDocument({

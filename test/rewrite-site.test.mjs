@@ -28,14 +28,18 @@ test("homepage is a complete, zero-JavaScript document", async () => {
   assert.equal((html.match(/loading="lazy" decoding="async" fetchpriority="low"/g) ?? []).length, 6);
 });
 
-test("all generated authored documents remain zero JavaScript", async () => {
+test("generated documents use no JavaScript except the image comparison instrument", async () => {
   const manifest = JSON.parse(await text("build-manifest.json"));
   const webmentionTargets = JSON.parse(await text("webmention-targets.json"));
   assert.deepEqual(webmentionTargets, manifest.pages);
   for (const route of manifest.pages) {
     const file = route === "/" ? "index.html" : `${route.slice(1)}.html`;
     const html = await text(file);
-    assert.doesNotMatch(html, /<script\b/i, `${route} includes script`);
+    if (route === "/pixel-peeper") {
+      assert.match(html, /<script type="module" src="\/assets\/pixel-peeper\.[a-f0-9]{10}\.js"><\/script>/);
+    } else {
+      assert.doesNotMatch(html, /<script\b/i, `${route} includes script`);
+    }
     assert.match(html, /<main class="document" id="content">/, `${route} has no main document`);
     assert.match(html, /<link rel="webmention" href="\/webmention">/, `${route} does not advertise its receiver`);
   }
@@ -89,7 +93,8 @@ test("system documents keep live boundaries and alternate representations explic
   for (const slug of ["access", "bot", "pixel-peeper", "security", "terminal", "whoareyou"]) {
     const html = await text(`${slug}.html`);
     assert.equal((html.match(/<h1\b/g) ?? []).length, 1);
-    assert.doesNotMatch(html, /<script\b/i);
+    if (slug === "pixel-peeper") assert.match(html, /data-peeper/);
+    else assert.doesNotMatch(html, /<script\b/i);
     await readFile(new URL(`${slug}.md`, output));
   }
   assert.match(await text("whoareyou.html"), /id="request-details"/);

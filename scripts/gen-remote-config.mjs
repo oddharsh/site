@@ -11,12 +11,8 @@
 // actual Browser Run service — with your uncommitted edits in the handler.
 //
 // WHY THIS IS GENERATED AND NOT A THIRD COMMITTED CONFIG. There are already two
-// (wrangler.jsonc and wrangler.dev.jsonc), build.mjs invariant #6 exists solely
-// to warn when their binding sets drift, and that warning is the evidence that a
-// third hand-maintained copy would rot. A twin derived at the moment of use is a
-// pure function of the config it came from, which is the same argument the
-// Markdown twins and the dcz deltas already won. Output goes under .build/ and
-// is never committed.
+// hand-authored configs. A twin derived at the moment of use keeps relative
+// paths and bindings aligned without creating another source of truth.
 //
 // WHAT REMOTE CANNOT REACH, said up front because it decides what this is good
 // for: SECRETS and vars are not remotable, and neither are Durable Objects,
@@ -72,7 +68,7 @@ function main() {
   // Written to the repo ROOT, not under .build/, and that is load-bearing rather
   // than tidy-minded. Wrangler resolves `main`, `assets.directory` and the build
   // command's cwd RELATIVE TO THE CONFIG FILE, so the same config placed one
-  // directory down silently becomes `.build/.build/holding/...` and boots a
+  // directory down silently points `src/` and `dist/` at the wrong location and boots a
   // Worker with no entrypoint. Keeping the derived twin beside its source means
   // every relative path in it still means what it meant. Gitignored.
   const outArg = argv[argv.indexOf("--out") + 1];

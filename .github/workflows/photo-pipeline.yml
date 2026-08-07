@@ -51,17 +51,9 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
 
-      - name: Set up Python
-        uses: actions/setup-python@v7
-        with:
-          python-version: "3.12"
-
       - name: Install image toolchain
         run: |
           brew install exiftool ffmpeg jq libavif mozjpeg webp
-          python -m venv "$RUNNER_TEMP/photo-venv"
-          "$RUNNER_TEMP/photo-venv/bin/pip" install --requirement tools/media/requirements.txt
-          echo "$RUNNER_TEMP/photo-venv/bin" >> "$GITHUB_PATH"
 
       - name: Install repository dependencies
         run: npm ci --no-audit --no-fund
@@ -108,7 +100,6 @@ jobs:
             reencode-thumbnails)
               ./tools/media/reencode-thumbnails.sh "$source_dir"
               ./tools/media/hash-thumbnails.sh
-              python tools/media/photo-histograms.py
               npm run photos:check
               ;;
             refresh-metadata)

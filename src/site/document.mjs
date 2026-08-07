@@ -24,6 +24,7 @@ export function renderDocument({
   places = [],
   details = [],
   head = "",
+  status = "Public document · no client script",
 }) {
   const segments = path.split("/").filter(Boolean);
   const crumbs = [
@@ -92,7 +93,7 @@ export function renderDocument({
         <main class="document" id="content">${body}</main>
       </div>
     </div>
-    <footer class="status-bar"><p>Ready</p><p>Public document · no client script</p></footer>
+    <footer class="status-bar"><p>Ready</p><p>${escapeHtml(status)}</p></footer>
   </div>
 </body>
 </html>`;

@@ -7,14 +7,12 @@
 // boots this repo's Worker in-process on a real loopback port, so the same table
 // can gate a PR instead of only auditing a deployment.
 //
-//   npm run routes:check                 # boot .build/holding, sweep, exit non-zero on failure
+//   npm run routes:check                 # build dist/, boot the Worker, sweep, exit non-zero
 //
 // It points at wrangler.jsonc, NOT wrangler.dev.jsonc, deliberately: that config
-// carries `build.command`, so the harness runs build.mjs itself and serves the
-// minified tree with the /a/<hash8> shell — the bytes a deploy would ship. That
-// is also why VERIFY_BUILT=1 is set, which re-arms the build-output rows
-// (minified banners, .src twins, the luna.css size ceiling) that verify-routes
-// otherwise skips on a local base.
+// carries `build.command`, so the harness runs the static compiler and serves
+// the same `dist/` tree a deploy would ship. VERIFY_BUILT=1 makes the oracle
+// assert generated assets and discovery files as well as request behavior.
 //
 // What this does NOT prove: local KV/R2/D1 come up EMPTY, so data-backed routes
 // answer from their fallback path. Status and content-type are real; a passing

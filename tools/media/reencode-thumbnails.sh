@@ -9,8 +9,8 @@
 #   SQ    desktop square (default 600 — the ~197px tile at DPR-3; 800 would be
 #         MORE pixels than the old 800-long-edge and bigger for no visible gain)
 #   SQ_SM mobile square  (default 400 — the ~100px tile, served via <source media>)
-# AVIF for both; a single SQ JPG is the no-AVIF fallback. NB: SQ_SM must match
-# THUMB_SMALL_PX in _worker.js (the -<N>.avif suffix).
+# AVIF for both; a single SQ JPG is the no-AVIF fallback. NB: SQ_SM is part of
+# the committed `-400.avif` filename contract.
 #
 # Deliberately does NOT touch R2 (it now holds only q100 JPG share copies, not
 # originals), metadata.json (its width/height are the ORIGINAL dims), or the
@@ -139,7 +139,7 @@ while IFS= read -r stem; do
   sips -Z "$tl" "$work" >/dev/null 2>&1
   if ! sips -c "$SQ" "$SQ" "$work" --out "$sqjpg" >/dev/null 2>&1; then FAIL=$((FAIL+1)); printf "✗"; continue; fi
   # 4. desktop square: zenc (zenjpeg hybrid+scan+sharp_yuv, q84) + AVIF (yuv400 for grayscale, else yuv420).
-  #    metadata is stripped: the grid reads EXIF/histogram from metadata.json, so
+#    metadata is stripped: the public API reads EXIF from metadata.json, so
   #    embedded EXIF/XMP/ICC in the thumbnail files is dead weight (~1.5KB/AVIF
   #    avg, up to ~5KB). avifenc gets --ignore-exif/--ignore-xmp (below); zenc
   #    already emits clean JPGs, but sips can leave a grayscale ICC on B&W frames,

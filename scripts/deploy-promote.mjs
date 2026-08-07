@@ -400,7 +400,7 @@ for (const pct of steps) {
 console.log(`\ndone. ${target.slice(0, 8)} is at ${steps[steps.length - 1]}%.`);
 
 // ── record the release ────────────────────────────────────────────────────
-// The changelog entry was authored in the PR (bump-version.sh writes only the
+// The changelog entry was authored in the PR (bump-checkpoint.sh writes only the
 // committed projection), so /updates and /restore have been serving it since
 // this version started answering. What was still missing is D1's record that it
 // SHIPPED, and this is the only place that knows traffic actually moved.

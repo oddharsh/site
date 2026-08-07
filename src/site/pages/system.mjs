@@ -22,12 +22,18 @@ function liveRegion(slug) {
     return `<pre class="terminal-frame" data-terminal-font="Courier New" aria-label="Terminal ready screen">Microsoft Windows [Version aadhar.sh]\n\nC:\\aadhar.sh&gt; help\nType finger, photos, lens, dict, cache, radar, encode, or agent-ready.\n\nC:\\aadhar.sh&gt; _</pre>`;
   }
   if (slug === "pixel-peeper") {
-    return `<section class="peeper-intro"><h2>compression eye exam</h2><p>The image trials are public records. The route-scoped comparison control is rebuilt in the interaction phase; the complete manifest is available now.</p><a href="/pixel-peeper/manifest.json">Open the trial manifest</a></section>`;
+    return `<section class="peeper" data-peeper data-manifest="/pixel-peeper/manifest.json" aria-labelledby="peeper-title">
+      <h2 id="peeper-title">Compression eye exam</h2>
+      <p data-peeper-status>Loading the public trial manifest…</p>
+      <div class="peeper__choices" data-peeper-choices></div>
+      <div class="peeper__result" data-peeper-result hidden></div>
+      <noscript><p>The comparison control needs JavaScript to conceal labels and advance trials. <a href="/pixel-peeper/manifest.json">Open the complete source data</a>.</p></noscript>
+    </section>`;
   }
   return "";
 }
 
-export function renderSystemPage({ surface, source, stylesheet }) {
+export function renderSystemPage({ surface, source, stylesheet, script = "" }) {
   const slug = surface.path.slice(1);
   const { attributes } = parseFrontmatter(source);
   const article = renderMarkdown(source).replace(/^<h1>[\s\S]*?<\/h1>\n?/, "");
@@ -56,6 +62,7 @@ export function renderSystemPage({ surface, source, stylesheet }) {
       ...(attributes.updated ? [{ term: "Updated", value: attributes.updated }] : []),
       { term: "Canonical format", value: "HTML + Markdown" },
     ],
-    head: `<link rel="alternate" type="text/markdown" href="${escapeHtml(surface.path)}.md">`,
+    head: `<link rel="alternate" type="text/markdown" href="${escapeHtml(surface.path)}.md">${script ? `\n  <script type="module" src="${escapeHtml(script)}"></script>` : ""}`,
+    status: script ? "Public document · one route-scoped module" : "Public document · no client script",
   });
 }

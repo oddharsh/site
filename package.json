@@ -3,10 +3,6 @@
   "private": true,
   "description": "aadhar.sh — compiled semantic documents and one bounded Cloudflare Worker",
   "type": "module",
-  "workspaces": [
-    "cf-garage",
-    "lwe-ask"
-  ],
   "scripts": {
     "build": "npm run gen:mcp-cards && node scripts/build-site.mjs",
     "dev": "npm run build && wrangler dev -c wrangler.dev.jsonc",
@@ -24,12 +20,12 @@
     "routes:check:remote": "node scripts/check-routes-harness.mjs --remote",
     "infra:check": "node scripts/check-infra.mjs",
     "infra:apply": "node scripts/apply-infra.mjs",
-    "test": "npm run build && node --test test/rewrite-site.test.mjs test/worker-http.test.mjs",
+    "test": "npm run build && node --test test/*.test.mjs",
     "types": "wrangler types src/worker/env.d.ts -c wrangler.jsonc",
     "types:check": "wrangler types src/worker/env.d.ts -c wrangler.jsonc --check",
     "checkpoints:check": "node scripts/check-checkpoints.mjs",
     "checkpoints:sync": "node scripts/check-checkpoints.mjs --sync",
-    "inp": "node scripts/inp-lab.mjs",
+    "browser:bench": "node scripts/browser-bench.mjs",
     "release": "node scripts/release-status.mjs"
   },
   "devDependencies": {

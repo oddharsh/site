@@ -126,17 +126,11 @@ exiftool -json -q \
   '-Orientation#' \
   "$SRC_DIR" > "$TMP"
 
-# NB: metadata extraction intentionally emits only EXIF/Fuji fields. The
-# follow-up bake below adds the {l,r,g,b} histogram channels to each per-photo
-# meta file from the shipped hashed JPG tier. Keeping that as a separate step
-# makes incremental adds safe: extraction can rebuild metadata without
-# silently dropping histogram data.
-
 # transform into {stem: {camera, lens, aperture, shutter, iso, focal, date,
 # width, height}} keyed by stem (filename without extension). orientation-
 # aware width/height: for portrait shots, the camera writes landscape-
 # physical sensor dims (e.g. 7728×5152) + an EXIF Orientation tag (6 or 8)
-# telling viewers to rotate. our tooltip displays the orientation-corrected
+# telling viewers to rotate. The public record stores orientation-corrected
 # dims (5152×7728 here) so they match what the user actually sees.
 #   Orientation 5/6/7/8 → 90° transforms → swap w/h
 #   Orientation 1/2/3/4 → identity/180/flip → keep w/h as-is
@@ -201,56 +195,14 @@ fi
 
 rm -f "$TMP" "$EXTRACTED"
 
-# also emit one file per photo for the tooltip's per-photo lazy fetch:
-# /images/meta/<stem>.json. these are immutable + content-addressed, so a visitor
-# only pulls EXIF for the photos they actually hover (not the whole index), and
-# repeat visits are served from the browser cache. metadata.json stays as the full
-# index (the /images/metadata.json endpoint + a fallback). bump the ?mv version
-# (META_V in tooltip.js) whenever this regenerates so caches refresh.
-META_DIR="$PROJECT_DIR/assets/photos/data/meta"
-mkdir -p "$META_DIR"
-if [ "$MERGE" -eq 0 ]; then
-  rm -f "$META_DIR"/*.json   # drop stale per-stem files (e.g. removed photos)
-fi
-# per-photo files carry a COMPACT schema, not a verbatim copy of the metadata.json
-# entry: SHORT keys, only the fields the tooltip actually renders, and null-valued
-# fields dropped. these are fetched once per hover (the hot path), so every byte is
-# on someone's cursor. metadata.json keeps the full, readable, long-key schema — it
-# is the public /photos index (photos.js PHOTO_PUBLIC_FIELDS reads it) and the
-# archive. KEEP THIS MAP IN SYNC with tooltip.js (reader) and photo-histograms.py
-# (which merges the "hi" histogram into these same files):
-#   cm camera · ln lens · ap aperture · sp shutter · is iso · fl focal · ev ·
-#   dt date · w width · h height · wb white_balance · ct color_temp · fs flash ·
-#   fm film · dr · cc chrome · cb chrome_blue · gr grain · gs grain_size ·
-#   ht highlight_tone · st shadow_tone · sa saturation  (hi added later by histograms)
-jq -c 'to_entries[]' "$OUT" | while IFS= read -r entry; do
-  stem=$(printf '%s' "$entry" | jq -r '.key')
-  printf '%s' "$entry" | jq -c '.value | {
-    cm: .camera, ln: .lens, ap: .aperture, sp: .shutter, is: .iso, fl: .focal,
-    ev: .ev, dt: .date, w: .width, h: .height, wb: .white_balance, ct: .color_temp,
-    fs: .flash, fm: .film, dr: .dr, cc: .chrome, cb: .chrome_blue, gr: .grain,
-    gs: .grain_size, ht: .highlight_tone, st: .shadow_tone, sa: .saturation
-  } | with_entries(select(.value != null))' > "$META_DIR/$stem.json"
-done
-
 # derive the self-documenting Fuji recipe card for each photo (fujixweekly
 # idiom) into metadata.json. runs on the full index, so it also refreshes
 # photos outside a --merge batch whose recipe format may have changed.
 "$SCRIPT_DIR/build-recipes.py" 2>&1 | tail -1
 
-# bake the 64-bin histograms back into the meta files (the full run may have
-# wiped them; the tooltip reads meta.hi instead of computing client-side)
-"$SCRIPT_DIR/photo-histograms.py" 2>&1 | tail -1
-
-# roll the per-photo EXIF (minus histograms) into the one shared index the
-# tooltip warms on idle. derived data, so it MUST be rebuilt whenever the
-# per-photo files change; check-photo-pipeline.mjs fails on any drift.
-node "$SCRIPT_DIR/build-exif-index.mjs"
-
 COUNT=$(jq 'keys | length' "$OUT")
 if [ "$MERGE" -eq 1 ]; then
-  echo "✓ merged metadata for $COUNT photos → $OUT (+ per-stem files in images/meta/, histograms baked)"
+  echo "✓ merged metadata for $COUNT photos → $OUT"
 else
-  echo "✓ extracted metadata for $COUNT photos → $OUT (+ $COUNT per-stem files in images/meta/, histograms baked)"
+  echo "✓ extracted metadata for $COUNT photos → $OUT"
 fi
-echo "  next: bump META_V in tooltip.js if fields changed, commit + deploy."

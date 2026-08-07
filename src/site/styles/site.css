@@ -833,6 +833,50 @@
 
   .system-article { margin-block-start: 32px; }
 
+  .edition-note {
+    max-inline-size: 72ch;
+    margin-block: 22px;
+    padding: 9px 11px;
+    border-inline-start: 4px solid var(--accent);
+    color: oklch(35% 0.035 260);
+    background: oklch(95% 0.035 255);
+  }
+
+  .peeper {
+    margin-block-start: 24px;
+    padding: 14px;
+    background: var(--face);
+    box-shadow: var(--raised);
+  }
+
+  .peeper__choices {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
+    gap: 10px;
+    margin-block-start: 12px;
+  }
+
+  .peeper__choice {
+    display: grid;
+    gap: 7px;
+    padding: 7px;
+    border: 0;
+    border-radius: 0;
+    color: var(--ink);
+    background: var(--face);
+    box-shadow: var(--raised);
+    cursor: pointer;
+    font: inherit;
+    font-weight: 700;
+  }
+
+  .peeper__choice:active,
+  .peeper__choice[data-chosen="true"] { box-shadow: var(--sunken); }
+  .peeper__choice:disabled { cursor: default; opacity: 1; }
+  .peeper__choice img { inline-size: 100%; block-size: auto; aspect-ratio: 1; object-fit: cover; }
+  .peeper__result { margin-block-start: 14px; padding: 10px; background: #fff; box-shadow: var(--sunken); }
+  .peeper__result button { padding: 5px 14px; border: 0; border-radius: 0; background: var(--face); box-shadow: var(--raised); }
+
   .command-form {
     max-inline-size: 620px;
     display: grid;

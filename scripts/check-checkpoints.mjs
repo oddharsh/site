@@ -3,8 +3,8 @@
 // check-checkpoints.mjs — does the committed projection still match D1?
 //
 // D1 is the source of truth for the deploy log; content/data/checkpoints.json
-// is a derived read of it that build.mjs renders /updates and /restore from.
-// bump-version.sh rewrites the file after every insert, so the normal path keeps
+// is a derived read of it that scripts/build-site.mjs renders /updates and
+// /restore from. bump-checkpoint.sh stages a pending row, so the normal path keeps
 // them in step. This catches the paths it cannot: a row inserted by hand or by
 // another machine, a projection edited directly, or a bump whose D1 re-read failed
 // and printed the warning nobody read.
@@ -34,7 +34,7 @@ const SYNC = process.argv.includes("--sync");
 
 const fail = (msg) => { console.error(`checkpoints: ${msg}`); process.exit(1); };
 
-// The exact query bump-version.sh writes from, so a column or order change here
+// The exact query the promotion path writes from, so a column or order change here
 // fails loudly instead of producing a diff nobody can read.
 const QUERY = "SELECT vnum, ymd, version, slug, title FROM checkpoints ORDER BY vnum;";
 
@@ -71,7 +71,7 @@ const c = byVnum(committed), l = byVnum(live);
 const liveMax = live.length ? Math.max(...l.keys()) : 0;
 
 // PENDING entries are the projection running ahead of D1, which is now the
-// normal state between staging a release and ramping it. bump-version.sh writes
+// normal state between staging a release and ramping it. bump-checkpoint.sh writes
 // the projection inside the PR (so /updates ships the entry with the deploy it
 // describes, instead of needing a second one), and deploy:promote records the
 // row in D1 only once traffic actually reached 100%.

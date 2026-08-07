@@ -1,8 +1,0 @@
-{
-  "name": "cf-garage",
-  "private": true,
-  "version": "1.0.0",
-  "dependencies": {
-    "@cloudflare/puppeteer": "^1.2.0"
-  }
-}

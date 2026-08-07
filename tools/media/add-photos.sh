@@ -26,18 +26,15 @@
 #      serving/sharing, not cold storage of originals.
 #
 # post-processing:
-#   4. regenerates assets/photos/data/metadata.json + per-stem images/meta/<stem>.json
-#      (EXIF for the tooltip) and bakes the 64-bin RGB+luma histograms into
-#      meta.hist via photo-histograms.py — the tooltip renders the bars from
-#      that field, and the metadata regen drops it, so the bake runs right after
+#   4. regenerates the one canonical assets/photos/data/metadata.json record.
 #   5. writes the stem's entry into content/data/photo-index.json — the
-#      committed photo index the worker BUNDLES (which photos exist: R2 key,
+#      committed photo index (which photos exist: R2 key,
 #      size, upload date). This is what makes a photo appear in the grid, and
 #      it ships at deploy like every other committed artifact. (It replaced the
 #      manifest:images KV cache over a runtime R2 list(); there is no cache to
 #      bust anymore.)
 #   6. captions anything still missing alt text (gen-alt-text.py), then validates
-#      the whole artifact graph — pixels, EXIF, histograms, captions, the index —
+#      the whole artifact graph — pixels, metadata, captions, and the index —
 #      via check-photo-pipeline.mjs, which fails the run rather than let an
 #      unlabelled image reach a deploy
 #
@@ -68,8 +65,8 @@ DEST="$PROJECT_DIR/assets/photos/data"
 TMP="/tmp/aadhar-add-photos-$$"
 
 # square thumbnail edges (px). the file IS the displayed pixels (center square),
-# so no off-square bytes ship. MUST match reencode-thumbnails.sh + THUMB_SMALL_PX
-# in _worker.js (the -<N>.avif suffix). override per run with SQ=/SQ_SM=.
+# so no off-square bytes ship. MUST match reencode-thumbnails.sh and the
+# `-400.avif` filename contract checked by check-photo-pipeline.mjs.
 SQ="${SQ:-600}"        # desktop square edge (~197px tile at DPR-3)
 SQ_SM="${SQ_SM:-400}"  # mobile square edge (served via <source media> ≤560px)
 
@@ -392,18 +389,6 @@ if command -v exiftool >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
   "$SCRIPT_DIR/extract-photo-metadata.sh" "${META_MODE[@]}" "$META_SRC" 2>&1 | tail -1
 else
   echo "  exiftool or jq missing — skipping metadata regen"
-fi
-
-# bake 64-bin RGB+luma histograms into per-stem meta. the photo tooltip renders
-# the histogram from meta.hist (index.html renderHistogramSvg), and
-# extract-photo-metadata.sh above does NOT emit hist — so this MUST run after it,
-# or every incremental add strips the bars off all existing photos. computed from
-# the shipped /i/ thumbnails via hashes.json; idempotent (unchanged thumbs re-bake
-# byte-identically), so running over the whole library each add is a no-op diff.
-if command -v python3 >/dev/null 2>&1 && python3 -c "import PIL" >/dev/null 2>&1; then
-  python3 "$SCRIPT_DIR/photo-histograms.py" 2>&1 | tail -1
-else
-  echo "  Pillow (python3 PIL) missing — skipping histogram bake (run photo-histograms.py after 'pip3 install --user pillow')"
 fi
 
 # caption anything still missing alt text. runs AFTER hash-thumbnails.sh because

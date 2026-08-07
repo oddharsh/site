@@ -88,7 +88,7 @@ async function agentReadyTool(request: Request, raw: string, env: Env): Promise<
   const result = await inspectLens(request, env, raw);
   if (!result.payload.ok) throw new Error(result.payload.error || "Audit failed.");
   const readiness = result.payload.readiness as Row; const discovery = result.payload.discovery as Row;
-  return report("Agent doors", [["Final URL", result.payload.finalUrl], ["Readiness", `${readiness.score} / 100`], ["Doors found", readiness.doors], ["llms.txt", (discovery["/llms.txt"] as Row)?.present ? "present" : "absent"], ["Agent card", (discovery["/.well-known/agent-card.json"] as Row)?.present ? "present" : "absent"], ["Machine inspection", `/lens/fetch?url=${encodeURIComponent(raw)}`]]);
+  return report("Agent doors", [["Final URL", result.payload.finalUrl], ["Doors found", readiness.doors], ["Document title", readiness.title ? "present" : "absent"], ["llms.txt", (discovery["/llms.txt"] as Row)?.present ? "present" : "absent"], ["Agent card", (discovery["/.well-known/agent-card.json"] as Row)?.present ? "present" : "absent"], ["Machine inspection", `/lens/fetch?url=${encodeURIComponent(raw)}`]]);
 }
 
 export async function utilityPage(request: Request, env: Env, slug: string): Promise<Response> {

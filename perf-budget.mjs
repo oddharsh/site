@@ -10,8 +10,9 @@ import path from "node:path";
 
 const DIST = "dist";
 const CSS_BR_MAX = 8 * 1024;
+const ROUTE_SCRIPT_BR_MAX = 2 * 1024;
 const ORDINARY_HTML_BR_MAX = 24 * 1024;
-const AUTHOR_TEXT_EXCEPTIONS = new Set(["access.html", "garage/horizon.html"]);
+const AUTHOR_TEXT_EXCEPTIONS = new Set(["garage/horizon.html"]);
 let failures = 0;
 
 const fail = (message) => { failures += 1; console.error(`FAIL ${message}`); };
@@ -23,6 +24,7 @@ const br = (value) => brotliCompressSync(value, {
 const files = await readdir(DIST, { recursive: true });
 const htmlFiles = files.filter((file) => file.endsWith(".html")).sort();
 const cssFiles = files.filter((file) => /^assets\/site\.[a-f0-9]{10}\.css$/.test(file));
+const scriptFiles = files.filter((file) => /^assets\/pixel-peeper\.[a-f0-9]{10}\.js$/.test(file));
 
 if (cssFiles.length !== 1) fail(`expected one content-hashed shared stylesheet, found ${cssFiles.length}`);
 else {
@@ -35,11 +37,20 @@ else {
   else pass("shared CSS has no fonts, imports, or URL dependencies");
 }
 
+if (scriptFiles.length !== 1) fail(`expected one content-hashed route script, found ${scriptFiles.length}`);
+else {
+  const bytes = br(await readFile(path.join(DIST, scriptFiles[0])));
+  if (bytes > ROUTE_SCRIPT_BR_MAX) fail(`${scriptFiles[0]} is ${bytes} B Brotli (budget ${ROUTE_SCRIPT_BR_MAX} B)`);
+  else pass(`Pixel Peeper module ${bytes} B Brotli / ${ROUTE_SCRIPT_BR_MAX} B`);
+}
+
 let maxOrdinary = { file: "", bytes: 0 };
 for (const file of htmlFiles) {
   const body = await readFile(path.join(DIST, file), "utf8");
   const scripts = body.match(/<script\b/gi) ?? [];
-  if (scripts.length) fail(`${file} loads ${scripts.length} client script(s)`);
+  if (file === "pixel-peeper.html") {
+    if (scripts.length !== 1 || !body.includes("/assets/pixel-peeper.")) fail("pixel-peeper.html must load exactly its one route module");
+  } else if (scripts.length) fail(`${file} loads ${scripts.length} client script(s)`);
   const styles = [...body.matchAll(/<link\b[^>]*rel=["']stylesheet["'][^>]*>/gi)];
   if (styles.length !== 1 || !styles[0][0].includes("/assets/site.")) {
     fail(`${file} must load exactly the one hashed shared stylesheet`);
@@ -52,7 +63,7 @@ for (const file of htmlFiles) {
 }
 
 if (!failures) {
-  pass(`${htmlFiles.length} complete HTML documents load zero client JavaScript`);
+  pass(`${htmlFiles.length - 1} documents load zero client JavaScript; Pixel Peeper loads one bounded module`);
   pass(`largest budgeted HTML is ${maxOrdinary.file} at ${maxOrdinary.bytes} B Brotli / ${ORDINARY_HTML_BR_MAX} B`);
 }
 

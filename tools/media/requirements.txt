@@ -1,2 +1,0 @@
-# Decode the shipped JPG tier while baking deterministic photo histograms.
-Pillow==12.3.0
