@@ -116,6 +116,10 @@ test("status and live utility shells stay complete without client JavaScript", a
   assert.doesNotMatch(updates + restore + lens, /<script\b/i);
   assert.match(await text("updates.md"), /Recently installed/);
   assert.match(await text("restore.md"), /Restore point/);
+  const coffee = await text("coffee.html");
+  assert.match(coffee, /class="coffee-form"/);
+  assert.match(coffee, /action="\/coffee\/book" method="post"/);
+  assert.doesNotMatch(coffee, /<script\b/i);
 });
 
 test("initial document and shared stylesheet stay inside budgets", async () => {

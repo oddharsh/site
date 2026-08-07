@@ -423,6 +423,24 @@
   .lens-doors { display: flex; flex-wrap: wrap; gap: 6px; margin-block: 8px; padding: 0; list-style: none; }
   .lens-doors li { padding: 3px 7px; border: 1px solid #8ba2d5; background: var(--selection-soft); }
 
+  .coffee-status,
+  .coffee-notes { max-inline-size: 700px; margin-block: 22px; padding: 12px 14px; border: 1px solid #8ba2d5; background: var(--selection-soft); }
+  .coffee-status h2,
+  .coffee-notes h2 { color: #16428b; font-size: 18px; }
+  .coffee-status.available { border-color: #70a858; background: #edf8e8; }
+  .coffee-status.unavailable { border-color: #d6b14e; background: #fff8cf; }
+  .coffee-form { max-inline-size: 700px; display: grid; grid-template-columns: minmax(9em, .32fr) minmax(0, 1fr); gap: 9px 12px; align-items: start; padding: 14px; background: var(--face); box-shadow: var(--raised); }
+  .coffee-form label { padding-block-start: 5px; font-weight: 700; }
+  .coffee-form :is(input, select, textarea) { inline-size: 100%; min-inline-size: 0; padding: 6px 8px; border: 0; border-radius: 0; background: var(--paper); box-shadow: var(--sunken); }
+  .coffee-form textarea { min-block-size: 7lh; max-block-size: 20lh; resize: vertical; field-sizing: content; }
+  .coffee-form button { grid-column: 2; justify-self: start; min-inline-size: 130px; padding: 6px 14px; border: 0; background: var(--face); box-shadow: var(--raised); }
+  .coffee-form button:active { box-shadow: var(--sunken); }
+  .coffee-form button:disabled { color: var(--muted); opacity: .7; }
+  .coffee-form .honeypot { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
+  .coffee-notes ol { margin-block: 8px 0; padding-inline-start: 22px; }
+  .coffee-result { max-inline-size: 700px; margin-block-start: 22px; padding: 18px; border: 1px solid #8ba2d5; background: var(--selection-soft); }
+  .coffee-result h2 { color: #16428b; }
+
   .object-list,
   .file-list {
     display: grid;
@@ -829,6 +847,9 @@
     .lens-search span,
     .lens-intro-grid,
     .lens-summary { grid-template-columns: 1fr; }
+    .coffee-form { grid-template-columns: 1fr; }
+    .coffee-form label { padding: 0; }
+    .coffee-form button { grid-column: 1; }
   }
 
   @media (prefers-reduced-motion: reduce) {

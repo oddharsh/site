@@ -8,12 +8,15 @@ import { aroundChanges, aroundJson, aroundResponse, countCrawler, ledgerJson, le
 import { photoQuery } from "./photos";
 import { rnMarkdown, rnRedirect, rnTracks, rnTracksHtml } from "./rn";
 import { lensBrowser, lensCompare, lensFetch, lensPage, lensShot } from "./lens";
+import { BookingSlot } from "./booking-slot";
+import { coffeeAvailability, coffeeBook, coffeeDecision, coffeePage, coffeeSlots } from "./coffee";
 
-export { BookingWorkflow, Counter };
+export { BookingSlot, BookingWorkflow, Counter };
 
 const markdownPages = new Set([
   "/", "/photos", "/writing", "/garage", "/lwe",
   "/security", "/whoareyou", "/updates", "/restore", "/access",
+  "/coffee",
 ]);
 
 function markdownPath(pathname: string): string {
@@ -37,6 +40,8 @@ async function fetchHandler(request: Request, env: Env, ctx: ExecutionContext): 
 
   const url = new URL(request.url);
   const { pathname } = url;
+
+  if (request.method === "POST" && pathname === "/coffee/book") return coffeeBook(request, env, ctx);
 
   if (request.method !== "GET" && request.method !== "HEAD") {
     return json({ error: "Method not allowed" }, { status: 405, headers: { allow: "GET, HEAD" } });
@@ -75,6 +80,11 @@ async function fetchHandler(request: Request, env: Env, ctx: ExecutionContext): 
   if (pathname === "/lens/shot") return lensShot(request, env);
   if (pathname === "/lens/compare.json") return lensCompare(request, env);
   if (pathname === "/lens") return lensPage(request, env);
+  if (pathname === "/coffee/availability.json") return coffeeAvailability(env, ctx);
+  if (pathname === "/coffee/slots") return coffeeSlots(env, ctx);
+  if (pathname === "/coffee/approve") return coffeeDecision(request, env, "approve");
+  if (pathname === "/coffee/decline") return coffeeDecision(request, env, "decline");
+  if (pathname === "/coffee") return coffeePage(request, env, ctx);
 
   if (pathname === "/reading") return readingResponse(request, env);
   if (pathname === "/around") return aroundResponse(request, env);

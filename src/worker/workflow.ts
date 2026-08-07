@@ -10,11 +10,14 @@ export class BookingWorkflow extends WorkflowEntrypoint<Env, BookingExpiryPayloa
     const delay = Math.max(0, Date.parse(event.payload.expiresAt) - Date.now());
     await step.sleep("wait until pending booking expires", delay);
     await step.do("expire pending booking", async () => {
-      const raw = await this.env.BOOKINGS.get(event.payload.bookingId);
+      const raw = await this.env.BOOKINGS.get(`booking:${event.payload.bookingId}`);
       if (!raw) return;
-      const booking = JSON.parse(raw) as { status?: string };
+      const booking = JSON.parse(raw) as { id: string; status?: string; start: number; end: number };
       if (booking.status !== "pending") return;
-      await this.env.BOOKINGS.delete(event.payload.bookingId);
+      booking.status = "expired";
+      await this.env.BOOKINGS.put(`booking:${booking.id}`, JSON.stringify(booking), { expirationTtl: 90 * 86400 });
+      await this.env.BOOKINGS.delete(`held:${booking.start}:${booking.end}`);
+      await this.env.BOOKING_SLOTS.getByName(`${booking.start}:${booking.end}`).release(booking.id);
     });
   }
 }
