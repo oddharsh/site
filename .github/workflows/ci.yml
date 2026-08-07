@@ -76,6 +76,14 @@ jobs:
       - name: Validate site Worker config
         run: npx wrangler deploy --dry-run
 
+      # Type checking WITHOUT TypeScript: tsc reads the JSDoc already in these
+      # files, emits nothing, and never touches a served byte. Scoped to cal/src
+      # today (see tsconfig.json for the measured error counts of the scopes it
+      # is meant to grow into). It runs BEFORE the tests because a type error is
+      # cheaper to read than the failure it would cause downstream.
+      - name: Typecheck annotated JavaScript
+        run: npm run typecheck
+
       - name: Test homepage representation contracts
         run: npm test
 

@@ -1,0 +1,46 @@
+{
+  // Type checking WITHOUT TypeScript.
+  //
+  // The site stays JavaScript on purpose: authoring is buildless, View Source
+  // shows the same program that runs, and every module here is imported by
+  // contract-tests.mjs under plain node. Types erase at build time, so a
+  // conversion would buy nothing at runtime — workerd executes identical
+  // JavaScript either way. What IS worth having is the CHECKER, which reads the
+  // JSDoc already in these files and the generated Workers types, and emits
+  // nothing.
+  //
+  // The scope is cal/src, deliberately, and it is meant to GROW. Booking is the
+  // highest-stakes code in the repo: it moves real meetings, sends real mail,
+  // and signs its own approval links. Measured 2026-08-07, the rest of the tree
+  // is not clean yet and each remaining scope is a known quantity rather than a
+  // surprise:
+  //
+  //   cal/src                    0 errors  (checked here)
+  //   holding/_worker.js/lib    28 errors
+  //   holding/_worker.js (all) 106 errors, 72 of them one heterogeneous ROUTES
+  //                            Map inferring an over-narrow handler signature,
+  //                            which one annotation would settle
+  //
+  // None of those 106 was a live bug when measured. That is the honest case for
+  // this check: it is here to catch the NEXT one, of the shape where a property
+  // is read that the object never had and the value silently becomes 0 or
+  // undefined, which no test in this repo would notice.
+  "compilerOptions": {
+    "noEmit": true,
+    "allowJs": true,
+    "checkJs": true,
+    "target": "esnext",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    // Workers globals only. With the DOM lib loaded, its CacheStorage shadows
+    // Cloudflare's and every `caches.default` reads as an error.
+    "lib": ["esnext"],
+    "types": ["@cloudflare/workers-types"],
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    // Not `strict`. The goal is finding real mistakes in working JavaScript, not
+    // relitigating every implicit any in a codebase that was never annotated.
+    "strict": false
+  },
+  "include": ["cal/src/**/*.js"]
+}

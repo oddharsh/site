@@ -31,6 +31,15 @@ review policy and entry point for future agent runs.
   transitive package is separate from this pin.
 - minify-html 0.18.1 is the exact root pin for the deploy-time HTML pass over
   `index.html` and the worker shells.
+- TypeScript 7.0.2 and @cloudflare/workers-types are exact root pins for
+  `npm run typecheck`, which runs `tsc --noEmit` over JSDoc-annotated JavaScript.
+  **Nothing is compiled and no source is converted.** The site stays JavaScript:
+  types erase at build time, so workerd runs identical bytes either way, and a
+  conversion would cost the buildless authoring, the honest View Source, and the
+  plain-node imports contract-tests.mjs depends on. These two packages exist so
+  the checker can read the annotations; they add no runtime and no served byte.
+  Dependabot should review TypeScript releases for new checks that could fail CI
+  on unchanged code, and workers-types for binding-shape changes.
 - playwright-core is a scripts-only devDep (caret-ranged, not pinned: it drives
   the locally installed Google Chrome rather than a bundled browser). Only
   `holding/scripts/gen-og-cards.mjs` uses it, and only on demand; no CI job and
