@@ -7,6 +7,7 @@
 // phase, and CI runs it on every PR so an incremental add cannot silently
 // truncate the library.
 
+import { createHash } from "node:crypto";
 import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -25,6 +26,7 @@ const fail = (message) => {
 
 const metadata = await json(path.join(IMAGES, "metadata.json"));
 const hashes = await json(path.join(IMAGES, "hashes.json"));
+const fingerprints = await json(path.join(IMAGES, "fingerprints.json"));
 const alt = await json(path.join(IMAGES, "alt.json"));
 const stems = Object.keys(hashes).sort();
 const metadataStems = Object.keys(metadata).sort();
@@ -73,10 +75,14 @@ for (const stem of stems) {
     `${stem}.${entry.j}.jpg`,
     `${stem}-400.${entry.s}.avif`,
   ];
-  for (const file of files) {
+  const fp = fingerprints[stem];
+  if (!fp || !fp.a || !fp.j || !fp.s) fail(`${stem}: fingerprint entry must contain a, j, and s tiers`);
+  for (const [tier, file] of [["a", files[0]], ["j", files[1]], ["s", files[2]]]) {
     expectedFiles.add(file);
     try { await stat(path.join(HASHED, file)); }
     catch { fail(`${stem}: missing hashed pixel tier ${file}`); }
+    const actual = createHash("sha256").update(await readFile(path.join(HASHED, file))).digest("hex");
+    if (actual !== fp[tier]) fail(`${stem}: fingerprint drift for ${file}`);
   }
 
   let perPhoto;
@@ -87,6 +93,8 @@ for (const stem of stems) {
     fail(`${stem}: histogram must contain four 64-bin channels`);
   }
 }
+const fingerprintStrays = Object.keys(fingerprints).filter((stem) => !hashes[stem]);
+if (fingerprintStrays.length) fail(`images/fingerprints.json carries unpublished stems: ${fingerprintStrays.join(", ")}`);
 
 const actualFiles = (await readdir(HASHED)).filter((file) => /\.(avif|jpg)$/.test(file));
 const orphans = actualFiles.filter((file) => !expectedFiles.has(file));

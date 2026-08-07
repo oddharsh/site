@@ -2,7 +2,9 @@
 // read-only: one JSON-RPC request in, one JSON response out, with the same
 // functions used by the corresponding HTTP endpoints.
 import { jsonResponse } from "./lib/http.js";
+import { imageCompare, imageInspect, imageTransform, photoRecipe } from "./image-tools.js";
 import { DATA_TOOLS, DATA_TOOL_NAMES, callDataTool } from "./lib/tools.js";
+import { captureRepresentation, compareRepresentation, readRepresentation } from "./representation.js";
 import { frameText, terminalToolFrame } from "./terminal.js";
 import { radarFrame, readSamples } from "./radar.js";
 import { AGENT_SURFACES } from "./lib/site-manifest.js";
@@ -21,9 +23,9 @@ import { CACHE_EMPTY, CACHE_LIVE, CACHE_STATIC, mcpCorsHeaders, mcpGate, mcpServ
 const MCP = mcpServer({
   // Self-reported and explicitly NOT a security signal — the spec says clients
   // should not change behavior on it. Display, logging, debugging.
-  serverInfo: { name: "aadhar.sh", title: "Aadharsh Site", version: "2.0.0" },
+  serverInfo: { name: "aadhar.sh", title: "Aadharsh Site", version: "2.1.0" },
   capabilities: { tools: {}, resources: {} },
-  instructions: "Read-only public utilities for aadhar.sh: search, music, photos, coffee availability, Change Radar, and Lens. resources/list enumerates the site's public pages; resources/read fetches one. No mutations or private data are exposed.",
+  instructions: "Bounded public utilities for aadhar.sh: search, music, photos, coffee availability, Change Radar, Lens, ephemeral image inspection/transforms, exact published-photo recipe matching, and an HTTP representation vault. Image inputs are not persisted; the vault stores normalized headers, metadata, and body digests only. resources/list enumerates the site's public pages; resources/read fetches one. No private data is exposed.",
 });
 
 // Which cache hint each surface earns. Tools are a static array in this file and
@@ -38,8 +40,72 @@ const CACHE_PROMPTS   = CACHE_EMPTY;
 // at the batch branch in handleSiteMcp.
 const MCP_MAX_BATCH = 16;
 
+const HOSTED_TOOLS = [
+  {
+    name: "image_inspect",
+    description: "Inspect an image's dimensions, format, and animation/frame information. Image bytes are processed ephemerally and are not stored.",
+    inputSchema: { type: "object", properties: {
+      image_data: { type: "string", description: "base64 image bytes, optionally as a data URL" },
+      mime_type: { type: "string" },
+      source_url: { type: "string", description: "public HTTPS image URL" },
+    } },
+  },
+  {
+    name: "image_transform",
+    description: "Run a bounded web image transform through Cloudflare Images and return the transformed image inline plus an exact byte receipt. The output is ephemeral.",
+    inputSchema: { type: "object", properties: {
+      image_data: { type: "string" }, mime_type: { type: "string" }, source_url: { type: "string" },
+      preset: { type: "string", enum: ["web", "thumbnail", "universal", "og"] },
+      width: { type: "integer", minimum: 1, maximum: 2400 }, height: { type: "integer", minimum: 1, maximum: 2400 },
+      fit: { type: "string", enum: ["cover", "contain", "crop", "scale-down", "pad", "squeeze"] },
+      format: { type: "string", enum: ["avif", "webp", "jpeg"] },
+      quality: { type: "integer", minimum: 1, maximum: 100 },
+      rotate: { type: "integer", enum: [0, 90, 180, 270] },
+    } },
+  },
+  {
+    name: "image_compare",
+    description: "Encode one image into up to three bounded format variants and report exact byte sizes and hashes. It does not pretend to score visual quality.",
+    inputSchema: { type: "object", properties: {
+      image_data: { type: "string" }, mime_type: { type: "string" }, source_url: { type: "string" },
+      formats: { type: "array", maxItems: 3, items: { type: "string", enum: ["avif", "webp", "jpeg"] } },
+      preset: { type: "string", enum: ["web", "thumbnail", "universal", "og"] },
+      width: { type: "integer", minimum: 1, maximum: 2400 }, height: { type: "integer", minimum: 1, maximum: 2400 },
+      fit: { type: "string" }, quality: { type: "integer", minimum: 1, maximum: 100 },
+    } },
+  },
+  {
+    name: "photo_recipe",
+    description: "Return the exact public Fuji recipe for a named archive photo, archive URL, or exact published thumbnail bytes. Arbitrary visual lookalikes are not treated as matches.",
+    inputSchema: { type: "object", properties: {
+      stem: { type: "string" }, source_url: { type: "string" },
+      image_data: { type: "string", description: "base64 bytes from a published thumbnail" },
+    } },
+  },
+  {
+    name: "representation_capture",
+    description: "Capture bounded public HTTP representations under browser, bot, Markdown, or identity request profiles and store only normalized headers, metadata, and body digests.",
+    inputSchema: { type: "object", properties: {
+      url: { type: "string" }, profiles: { type: "array", maxItems: 4, items: { type: "string", enum: ["browser", "bot", "markdown", "identity"] } },
+    }, required: ["url"] },
+  },
+  {
+    name: "representation_read",
+    description: "Read one normalized HTTP representation snapshot from the vault. Raw response bodies are never returned because they are never stored.",
+    inputSchema: { type: "object", properties: { snapshot_id: { type: "string" } }, required: ["snapshot_id"] },
+  },
+  {
+    name: "representation_compare",
+    description: "Refetch the same HTTP representation profile, compare it with a stored snapshot, and persist the new normalized observation.",
+    inputSchema: { type: "object", properties: {
+      snapshot_id: { type: "string" }, url: { type: "string", description: "optional replacement URL, otherwise the snapshot URL" },
+    }, required: ["snapshot_id"] },
+  },
+];
+
 const MCP_TOOLS = [
   ...DATA_TOOLS,
+  ...HOSTED_TOOLS,
   // ── the terminal programs ───────────────────────────────────────────────
   // These return a rendered 80-column FRAME as text, not a record. That is the
   // point rather than a limitation: the frame names its own controls, so a
@@ -164,6 +230,18 @@ const mcpCors = mcpCorsHeaders;
 
 function errorResult(message) { return { _error: String(message).slice(0, 400) }; }
 
+async function overMcpBudget(name, max, request, env, ctx) {
+  if (!env.RN_KV) return false;
+  const ip = request.headers.get("cf-connecting-ip") || "0.0.0.0";
+  const bucket = `mcp:${name}:${ip}:${Math.floor(Date.now() / 60000)}`;
+  let n = 0;
+  try { n = parseInt((await env.RN_KV.get(bucket)) || "0", 10) || 0; } catch {}
+  if (n >= max) return true;
+  const write = env.RN_KV.put(bucket, String(n + 1), { expirationTtl: 120 }).catch(() => {});
+  if (ctx?.waitUntil) ctx.waitUntil(write); else await write;
+  return false;
+}
+
 // The crawl tools bill against the SAME per-IP buckets as their HTTP twins
 // (lens.js LENS_BUDGETS), not a private `mcp:lensrl:` one. A separate bucket let
 // a caller stack budgets: 30 inspections via /lens/fetch AND another 8 here, and
@@ -193,6 +271,28 @@ async function callTool(name, args, request, env, ctx) {
   if (name === "radar") {
     const samples = readSamples(args);
     return { frame: frameText(radarFrame(samples, { source: String(args?.source || "").slice(0, 60) }), { color: false }), sources: samples.length };
+  }
+  if (name === "image_inspect") {
+    if (await overMcpBudget("image-inspect", 20, request, env, ctx)) return errorResult("Image inspections are rate-limited to 20/min.");
+    return imageInspect(args, env);
+  }
+  if (name === "image_transform") {
+    if (await overMcpBudget("image-transform", 8, request, env, ctx)) return errorResult("Image transforms are rate-limited to 8/min.");
+    return imageTransform(args, env);
+  }
+  if (name === "image_compare") {
+    if (await overMcpBudget("image-compare", 4, request, env, ctx)) return errorResult("Image comparisons are rate-limited to 4/min.");
+    return imageCompare(args, env);
+  }
+  if (name === "photo_recipe") return photoRecipe(args, env);
+  if (name === "representation_capture") {
+    if (await overMcpBudget("representation-capture", 4, request, env, ctx)) return errorResult("Representation captures are rate-limited to 4/min.");
+    return captureRepresentation(args, env);
+  }
+  if (name === "representation_read") return readRepresentation(args, env);
+  if (name === "representation_compare") {
+    if (await overMcpBudget("representation-compare", 8, request, env, ctx)) return errorResult("Representation comparisons are rate-limited to 8/min.");
+    return compareRepresentation(args, env);
   }
   return { _unknown: true };
 }
@@ -253,6 +353,7 @@ export async function handleSiteMcp(request, env, ctx) {
         // A tool that failed is a RESULT with isError, never a JSON-RPC error:
         // the call itself succeeded, and the model is supposed to read the text.
         if (out?._error) return MCP.result(id, { content: [{ type: "text", text: out._error }], isError: true });
+        if (out?._mcp) return MCP.result(id, { content: out._mcp.content, structuredContent: out._mcp.structured });
         return MCP.result(id, { content: [{ type: "text", text: JSON.stringify(out, null, 2) }], structuredContent: out });
       }
       return hasId ? rpcError(id, -32601, `Method not found: ${msg.method}`) : null;
