@@ -1357,9 +1357,48 @@ npm run deploy
     value, 16px after `scrollbar-color: auto`.
 
     The fix is to reset to `auto` on the element and put the standard property
-    behind `@supports not selector(::-webkit-scrollbar)`, which Firefox (the one
-    engine that needs it) matches and Chromium/Safari do not. Check the
-    INHERITED value first the next time a custom scrollbar does not appear.
+    behind a query only Firefox (the one engine that needs it) matches. Check
+    the INHERITED value first the next time a custom scrollbar does not appear.
+
+    **Writing this note down did not fix the other three instances, and that is
+    the part worth generalizing.** It was filed 2026-08-05 off the `/terminal`
+    repair and reads as though the site were now correct. It was not: `luna.css`
+    had `scrollbar-color` and `::-webkit-scrollbar-*` on the same selectors
+    (`.window>.content`, `.window>.body`, `.np-text`), so EVERY window on the
+    site drew a zero-width overlay bar, and `garage/scroll.html` did too, on the
+    one page whose entire purpose is demonstrating the Luna scrollbar while its
+    copy claims "WebKit/Blink get the full gradient thumb + buttons." Both went
+    unnoticed for two days because the symptom is an absence. Measured 2026-08-07
+    in Chromium 148, changing only that property: homepage window 0px to 16px,
+    demo box 0px to 17px. When a gotcha lands here, grep the tree for the other
+    instances in the same commit; `grep -rl '::-webkit-scrollbar' holding/` was
+    the whole search.
+
+    **`@supports not selector(::-webkit-scrollbar)` no longer isolates Firefox,
+    so the original recipe above is retired.** FF153 answers YES to that probe
+    while implementing a narrow subset (a non-zero `width`/`height` disables
+    overlay bars, `display:none` acts like `scrollbar-width:none`, and nothing
+    else lands), which `/garage/horizon` already documents as its own chip lying.
+    A bare `not` arm therefore hands modern Firefox `auto` and drops the tint.
+    All three sites now use:
+
+    ```css
+    @supports (not selector(::-webkit-scrollbar)) or selector(:-moz-focusring)
+    ```
+
+    so the colours survive unless Firefox both answers the probe AND drops the
+    pseudo. Chromium evaluates the whole query false, verified in-engine.
+
+    **Do NOT reach for `(-moz-appearance:none)` as the Firefox arm.** It is the
+    obvious candidate, it is correct in the source, and Lightning CSS un-prefixes
+    it to `(appearance:none)`, which Chromium supports. The query flips true at
+    BUILD time, the reset is undone, and the bug returns while the source still
+    reads right. Of six candidates tested through the minifier, `-moz-appearance`
+    and `-moz-box-align` were rewritten; `:-moz-focusring`, `:-moz-any-link`,
+    `-moz-osx-font-smoothing` and `-moz-float-edge` survived. The general rule is
+    that a vendor-prefixed feature query has to be diffed in the MINIFIED output,
+    never trusted from source, because this minifier's job is to normalize
+    exactly the prefix the query depends on.
 
 19. **A backtick inside a CSS comment inside a `/*min*/` literal ends the JS
     template literal.** The worker's static CSS lives in backtick literals that
