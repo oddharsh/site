@@ -71,7 +71,14 @@ test("section folders are projected from the public surface registry", async () 
   for (const section of ["garage", "lwe"]) {
     const items = registry.surfaces.filter(({ path, kind }) => kind === "content" && path.startsWith(`/${section}/`));
     const html = await text(`${section}.html`);
-    for (const item of items) assert.match(html, new RegExp(`href="${item.path}"`));
+    for (const item of items) {
+      assert.match(html, new RegExp(`href="${item.path}"`));
+      const page = await text(`${item.path.slice(1)}.html`);
+      assert.match(page, /<article class="article/);
+      assert.doesNotMatch(page, /<script\b/i);
+      assert.equal((page.match(/<h1\b/g) ?? []).length, 1, `${item.path} needs one h1`);
+      await readFile(new URL(`${item.path.slice(1)}.md`, output));
+    }
   }
 });
 

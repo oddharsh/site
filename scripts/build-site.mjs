@@ -3,6 +3,7 @@ import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { renderHome } from "../src/site/pages/home.mjs";
+import { renderArticle } from "../src/site/pages/article.mjs";
 import { directoryMarkdown, renderDirectory } from "../src/site/pages/directory.mjs";
 import { photosMarkdown, renderPhotos } from "../src/site/pages/photos.mjs";
 import { renderWritingIndex, renderWritingPost, writingMarkdown } from "../src/site/pages/writing.mjs";
@@ -29,6 +30,8 @@ await mkdir(join(output, "assets"), { recursive: true });
 await cp(join(root, "public"), output, { recursive: true });
 await cp(join(root, "holding/i"), join(output, "i"), { recursive: true });
 await cp(join(root, "holding/images"), join(output, "images"), { recursive: true });
+await cp(join(root, "holding/garage/enc"), join(output, "garage/enc"), { recursive: true });
+await cp(join(root, "holding/lwe/lean"), join(output, "lwe/lean"), { recursive: true });
 
 const css = await readFile(join(root, "src/site/styles/site.css"), "utf8");
 const cssName = `site.${digest(css)}.css`;
@@ -117,6 +120,16 @@ for (const sectionPath of directorySections) {
     stylesheet: `/assets/${cssName}`,
   }));
   await write(`${name}.md`, directoryMarkdown(section, items));
+  for (const surface of items) {
+    const slug = surface.path.slice(sectionPath.length + 1);
+    const source = await readFile(join(root, "content/pages", name, `${slug}.md`), "utf8");
+    await write(`${name}/${slug}.html`, renderArticle({
+      surface,
+      source,
+      stylesheet: `/assets/${cssName}`,
+    }));
+    await write(`${name}/${slug}.md`, source);
+  }
 }
 
 const manifest = {
@@ -126,6 +139,7 @@ const manifest = {
     "/writing",
     ...posts.map(({ slug }) => `/writing/${slug}`),
     ...directorySections,
+    ...siteManifest.surfaces.filter(({ kind }) => kind === "content").map(({ path }) => path),
   ],
   assets: [`/assets/${cssName}`, ...photos.flatMap(({ thumbAvif, thumbJpg, thumbSmall }) => [`/${thumbAvif}`, `/${thumbJpg}`, `/${thumbSmall}`])],
 };
