@@ -4221,3 +4221,84 @@ test("the ramp never double-parses wrangler's already-parsed JSON", async () => 
   assert.equal(/when D1 is reachable/.test(src), false,
     "the catch-all note must not assert D1 is the cause — it cannot know that");
 });
+
+// ── RSS feeds ────────────────────────────────────────────────────────
+// Feeds are BUILD OUTPUT (scripts/gen-feeds.mjs), like the Markdown twins and
+// the dcz deltas: a pure function of site-manifest.json, the sitemap's lastmod
+// dates, and posts.json, so no committed copy can fall behind. These tests pin
+// the properties a subscriber depends on, none of which the build's own count
+// check can see.
+test("every feed is well-formed, dated, and newest-first", async () => {
+  const { buildFeeds, FEEDS, rfc822 } = await import("./scripts/gen-feeds.mjs");
+  const feeds = buildFeeds(".");
+  assert.equal(feeds.size, FEEDS.length);
+
+  for (const [route, body] of feeds) {
+    assert.match(body, /^<\?xml version="1\.0" encoding="UTF-8"\?>/, `${route} must open with the XML declaration`);
+    assert.match(body, /<rss version="2\.0"/, `${route} must declare RSS 2.0`);
+    assert.match(body, new RegExp(`<atom:link href="https://aadhar\\.sh${route.replace(/\//g, "\\/")}"`), `${route} must point at itself`);
+
+    const items = [...body.matchAll(/<item>([\s\S]*?)<\/item>/g)].map(([, item]) => item);
+    assert.ok(items.length, `${route} has no items`);
+
+    const dates = items.map((item) => {
+      const raw = item.match(/<pubDate>([^<]+)<\/pubDate>/)?.[1];
+      assert.ok(raw, `${route} has an item with no pubDate`);
+      const parsed = Date.parse(raw);
+      assert.ok(Number.isFinite(parsed), `${route} has an unparseable pubDate: ${raw}`);
+      return parsed;
+    });
+    // Newest first is the only order a reader respects.
+    assert.deepEqual(dates, [...dates].sort((a, b) => b - a), `${route} is not newest-first`);
+
+    for (const item of items) {
+      const guid = item.match(/<guid isPermaLink="true">([^<]+)<\/guid>/)?.[1];
+      const link = item.match(/<link>([^<]+)<\/link>/)?.[1];
+      assert.equal(guid, link, `${route} has an item whose guid and link disagree`);
+      assert.match(guid, /^https:\/\/aadhar\.sh\//, `${route} has a non-absolute guid`);
+      // A bare & inside a text node makes the whole document unparseable, which
+      // is the one authoring mistake that takes a feed offline silently.
+      for (const field of ["title", "description"]) {
+        const value = item.match(new RegExp(`<${field}>([\\s\\S]*?)</${field}>`))?.[1] ?? "";
+        assert.doesNotMatch(value, /&(?!amp;|lt;|gt;|quot;|apos;|#\d+;)/, `${route} has an unescaped & in an item ${field}`);
+        assert.doesNotMatch(value, /[<>]/, `${route} has a raw angle bracket in an item ${field}`);
+      }
+    }
+  }
+
+  // A date is a promise about when something changed, so an item with no
+  // authored lastmod is dropped rather than stamped `now`, which would re-sort
+  // every subscriber's timeline on each deploy.
+  assert.equal(rfc822("not-a-date"), null);
+  assert.equal(rfc822("2026-06-07"), "Sun, 07 Jun 2026 12:00:00 GMT");
+});
+
+// The feed's dates come from the sitemap, so the two cannot disagree about when
+// a page changed. That is the reason for reading it rather than minting a second
+// date source next to it.
+test("feed dates come from the sitemap the crawler already reads", async () => {
+  const { buildFeeds, sitemapDates } = await import("./scripts/gen-feeds.mjs");
+  const dates = sitemapDates(readFileSync("holding/sitemap.xml", "utf8"));
+  assert.ok(dates.size >= 40, `expected the sitemap to carry lastmod dates, found ${dates.size}`);
+
+  const garage = buildFeeds(".").get("/garage/feed.xml");
+  for (const [, item] of garage.matchAll(/<item>([\s\S]*?)<\/item>/g)) {
+    const path = item.match(/<link>https:\/\/aadhar\.sh([^<]+)<\/link>/)[1];
+    const pubDate = item.match(/<pubDate>([^<]+)<\/pubDate>/)[1];
+    assert.equal(pubDate, new Date(`${dates.get(path)}T12:00:00Z`).toUTCString(),
+      `${path} is dated differently in the feed and the sitemap`);
+  }
+});
+
+// Discovery is the half that makes a feed reachable: a reader's subscribe button
+// looks for <link rel="alternate"> on the page, not for a URL somebody guessed.
+test("each section advertises its feed", () => {
+  for (const [file, feed] of [["holding/garage/index.html", "/garage/feed.xml"], ["holding/lwe/index.html", "/lwe/feed.xml"]]) {
+    const html = readFileSync(file, "utf8");
+    assert.match(html, new RegExp(`<link rel="alternate" type="application/rss\\+xml"[^>]*href="${feed.replace(/\//g, "\\/")}"`),
+      `${file} does not advertise ${feed}`);
+  }
+  // /writing is Worker-rendered, so its shell carries the link for the index and
+  // every post at once.
+  assert.match(readFileSync("holding/_worker.js/writing.js", "utf8"), /application\/rss\+xml[^"]*"[^"]*"\s*\+?[^"]*writing\/feed\.xml|writing\/feed\.xml/);
+});
