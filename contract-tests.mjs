@@ -1343,6 +1343,7 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   const page = await readFile(new URL("holding/index.html", import.meta.url), "utf8");
   const luna = await readFile(new URL("holding/luna.css", import.meta.url), "utf8");
   const nav = await readFile(new URL("holding/nav.js", import.meta.url), "utf8");
+  const hoist = await readFile(new URL("holding/hoist.js", import.meta.url), "utf8");
 
   const build = await readFile(new URL("build.mjs", import.meta.url), "utf8");
   assert.match(worker, /pickRandom\(pool,\s*12\)/, "the per-request random draw must remain 12");
@@ -1380,6 +1381,13 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   assert.match(page, /progressiveJpeg.*currentSrc/, "progressive JPG fallbacks must be allowed to paint their scan passes");
   assert.match(page, /matchMedia\?\.\("\(prefers-reduced-motion: reduce\)"\)/, "reduced motion must skip the decode wait");
   assert.match(page, /prefers-reduced-motion: reduce/, "the reveal must honor reduced-motion preferences");
+  assert.match(hoist, /querySelectorAll\("img\[src\]"\)/, "shared hover surfaces must arm dynamically inserted images");
+  assert.match(hoist, /image\.dataset\.xpImageState = progressiveJpeg \? "ready" : "pending"/, "progressive JPG tooltip fallbacks must paint immediately");
+  assert.match(hoist, /image\.decode\(\)/, "AVIF/WebP tooltip images must reveal after decode when available");
+  assert.match(hoist, /xp-image-well/, "direct-image tooltip callers must receive a loading well");
+  assert.match(luna, /\.xp-image-well>img\[data-xp-image-state="pending"\]/, "tooltip wells must hide undecoded images without hiding their geometry");
+  assert.match(luna, /\.xp-image-well>img\[data-xp-image-state="ready"\]/, "tooltip wells must reveal decoded images");
+  assert.match(luna, /\.xp-image-well>img\[data-xp-image-state="error"\]/, "tooltip failures must retain the intentional well");
   // Removed 2026-07-29. It withheld 3 of 12 tiles to save ~34 KB out of ~136 KB,
   // and the 9 it allowed finished 48ms apart, so the row it held back showed up
   // as white squares on the first scroll for no measurable gain.

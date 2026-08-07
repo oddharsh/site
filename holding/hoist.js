@@ -111,9 +111,58 @@ export function createHoist(o) {
   // exactly these bytes. Nothing else writes into the node, which is what makes
   // the comparison sound.
   let mounted = null;
+  const armImages = () => {
+    const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    for (const image of node.querySelectorAll("img[src]")) {
+      // Most callers already give an image a <picture> or content wrapper.
+      // Direct-image callers (Run and Serendipity) need a well of their own;
+      // wrapping here keeps the reveal contract in the shared engine without
+      // making each caller learn about it.
+      let well = image.parentElement;
+      if (!well) continue;
+      if (well === node) {
+        well = document.createElement("div");
+        image.replaceWith(well);
+        well.append(image);
+      }
+      well.classList.add("xp-image-well");
+
+      // The JPEG fallback is progressive by construction where we control the
+      // image URL (and the same is true of the live Spotify art transform).
+      // Let native scan passes paint immediately; AVIF/WebP waits for a usable
+      // decode so the tooltip never exposes a half-painted grey frame.
+      const progressiveJpeg = /\.jpe?g(?:[?#]|$)/i.test(image.currentSrc || image.src);
+      image.dataset.xpImageState = progressiveJpeg ? "ready" : "pending";
+
+      let settled = false;
+      const settle = (failed = false) => {
+        if (settled) return;
+        settled = true;
+        if (failed) {
+          image.dataset.xpImageState = "error";
+          return;
+        }
+        if (reduceMotion || progressiveJpeg) {
+          image.dataset.xpImageState = "ready";
+          return;
+        }
+        const decoded = typeof image.decode === "function"
+          ? Promise.resolve().then(() => image.decode())
+          : Promise.resolve();
+        Promise.resolve(decoded).catch(() => {}).then(() => {
+          image.dataset.xpImageState = "ready";
+        });
+      };
+
+      image.addEventListener("load", () => settle(), { once: true });
+      image.addEventListener("error", () => settle(true), { once: true });
+      if (image.complete) settle(image.naturalWidth === 0);
+    }
+  };
   const render = (html) => {
     if (html === mounted) return;
     node.innerHTML = html;
+    armImages();
     mounted = html;
   };
 
