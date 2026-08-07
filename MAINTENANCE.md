@@ -184,11 +184,14 @@ last three are aliases GitHub keeps and folds into ONE job, so the honest count 
 two jobs, not four. The declaration carries all four, because it has to match what
 the API returns rather than the tidier number.
 
-That sub-check needs a credential, unlike the ruleset checks beside it: the
-endpoint answers 401 unauthenticated even though the repo is public. CI grants
-`security-events: read` on the per-run `GITHUB_TOKEN` for it. Without the scope
-the check degrades to an advisory naming what is missing, so a local run without
-`gh` auth stays green rather than lying.
+**That assertion is workstation-only, so run `infra:check` locally if you touched
+the scan config.** CI cannot make it, and that is structural rather than a setting
+nobody enabled: the endpoint wants the repository `Administration` read permission,
+which is not among the keys a workflow may grant its `GITHUB_TOKEN`. A local run
+works because `gh` logs in with a classic `repo` scope. `security-events: read`
+was tried in `ci.yml` on 2026-08-07 and measured to change nothing (still HTTP
+403), so it was removed rather than left looking load-bearing. In CI this reports
+one advisory naming the limit; it never fails a PR.
 
 Four fields are asserted, and `state` is the one to notice: a scanner that is
 simply turned off reports no findings, which reads identically to a clean scan.

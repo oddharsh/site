@@ -938,11 +938,20 @@ async function checkRepo(infra) {
 // plus the cost argument for it in MAINTENANCE.md while noting infra:check
 // could not see it.
 //
-// This one NEEDS a credential, which is the difference from the rulesets. The
-// endpoint answers 401 unauthenticated even on a public repo, so a missing
-// scope degrades to an advisory naming what is missing, the same way the
-// Cloudflare account tier does. ci.yml grants `security-events: read` on the
-// per-run GITHUB_TOKEN so CI actually runs it.
+// WORKSTATION-ONLY, and that is structural rather than a missing setting.
+// The endpoint needs the repository **Administration** permission (read), which
+// is NOT one of the keys a workflow may grant its GITHUB_TOKEN: the whole list
+// is actions, artifact-metadata, attestations, checks, code-quality, contents,
+// deployments, discussions, id-token, issues, models, packages, pages,
+// pull-requests, repository-projects, security-events and statuses. So no
+// `permissions:` block can turn this on in CI, and `security-events: read` in
+// particular does nothing here (tried on 2026-08-07: still HTTP 403).
+//
+// This is the mirror image of the Workers Builds case, where a Read variant of
+// the permission existed and made the check possible without widening anything.
+// Here the only credential that can read it is a classic PAT with `repo`, which
+// is precisely the kind of broad standing credential this repo keeps out of CI.
+// So the check runs where the owner runs it, and CI says plainly that it cannot.
 async function checkCodeScanning(repo, slug, token) {
   const want = repo.code_scanning;
   if (!want) return;
@@ -953,7 +962,7 @@ async function checkCodeScanning(repo, slug, token) {
   } catch (e) {
     warn(
       /401|403/.test(e.message)
-        ? `CodeQL default setup: skipped, the GitHub token lacks security-events:read (${e.message})`
+        ? `CodeQL default setup: not verifiable here, the endpoint needs the repository Administration permission and no GITHUB_TOKEN can hold it. Run \`npm run infra:check\` on a workstation with \`gh\` logged in (classic \`repo\` scope) to assert it (${e.message})`
         : `CodeQL default setup could not be read: ${e.message}`,
     );
     return;

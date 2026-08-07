@@ -23,13 +23,12 @@ on:
 
 permissions:
   contents: read
-  # For infra:check's CodeQL default-setup assertion alone. That endpoint answers
-  # 401 unauthenticated even on a public repo, unlike the rulesets endpoint beside
-  # it, so the declaration in infra.json cannot be verified without this. READ
-  # only: it cannot change a scan setting, and it is GitHub's own per-run token
-  # rather than a Cloudflare credential. Drop it and that one sub-check degrades
-  # to an advisory naming the missing scope; nothing else here notices.
-  security-events: read
+  # Deliberately NOT `security-events: read`. It was added on 2026-08-07 for
+  # infra:check's CodeQL default-setup assertion and measured to do nothing: that
+  # endpoint needs the repository *Administration* permission, which is not one of
+  # the keys a workflow may grant its GITHUB_TOKEN, so the call still returned 403.
+  # The assertion is workstation-only by construction. Do not re-add this line
+  # expecting it to turn the check on.
 
 concurrency:
   # A dispatch deliberately does NOT share the PR's group. The whole reason this
@@ -132,13 +131,12 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-          # Two jobs, and they are not the same job. For the repository-ruleset
-          # tier this is rate-limit headroom only: the repo is public, so that
-          # endpoint reads with no credential at all, and a token buys 1000/hr
-          # instead of the 60/hr an unauthed read gets per IP, which shared
-          # Actions runners can exhaust. For the CodeQL default-setup assertion
-          # the token is REQUIRED (401 otherwise), which is why the workflow now
-          # grants security-events:read above. Either read failing is an advisory
-          # rather than a failure.
+          # Rate-limit headroom for the repository-ruleset tier, nothing more.
+          # The repo is public, so that endpoint reads without a credential at
+          # all; what a token buys is 1000/hr instead of the 60/hr an unauthed
+          # read gets per IP, which shared Actions runners can exhaust. The
+          # workflow's `contents: read` is enough, and a rate-limited read is an
+          # advisory rather than a failure either way. It does NOT unlock the
+          # CodeQL assertion; see the permissions note at the top of this file.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run infra:check
