@@ -20,7 +20,7 @@ import {
   renderLensShell,
 } from "./holding/_worker.js/lens.js";
 import { handleCoffeeAvailability, readCoffeeAvailability } from "./holding/_worker.js/coffee.js";
-import { handleSiteMcp } from "./holding/_worker.js/mcp.js";
+import { handleSiteMcp, MCP_TOOLS as SITE_MCP_TOOLS, SITE_MCP_SERVER_INFO } from "./holding/_worker.js/mcp.js";
 import { handleWebmention, handleWebmentionDecision } from "./holding/_worker.js/webmention.js";
 import { handleInbox } from "./holding/_worker.js/inbox.js";
 import { citationsIn, findEndpointIn, SELF_LINK_HOSTS } from "./holding/_worker.js/webmention-send.js";
@@ -35,7 +35,7 @@ import { serveMarkdown } from "./holding/_worker.js/home.js";
 import { readManifest, workerModule, navFenceBody, readFenceBody } from "./scripts/gen-manifest.mjs";
 import { INDEXED_SECTIONS, TWIN_FACTS, buildTwins, checkTwinFacts, htmlFileFor, twinPath } from "./scripts/gen-md-twins.mjs";
 import { collectBlockClasses, readDocument } from "./scripts/lib/html-to-md.mjs";
-import { MCP_TOOLS, cookieJar, parseCookies } from "./serendipity/serendipity.js";
+import { MCP_TOOLS, SERENDIPITY_MCP_SERVER_INFO, cookieJar, parseCookies } from "./serendipity/serendipity.js";
 import { MCP_SUPPORTED as MCP_SUPPORTED_VERSIONS } from "./holding/_worker.js/lib/mcp-protocol.js";
 import { derivePhotoPool, renderPhotosPage, getImagesManifest, handlePhotoQuery, queryPhotos, _resetPhotoCaches } from "./holding/_worker.js/photos.js";
 import { renderPhotoSlots } from "./holding/_worker.js/lib/photo-grid.js";
@@ -851,6 +851,41 @@ test("site MCP exposes one read-only tool catalog and calls shared search", asyn
   assert.equal((await handleSiteMcp(new Request("https://aadhar.sh/mcp"), env, context())).status, 405);
 });
 
+// The annotations are a CLAIM made to every client that lists this server, so
+// the test names the exceptions instead of asserting one shape over all of them.
+// A blanket "everything is read-only" assertion passed right up until the vault
+// tools landed, and would have kept passing while advertising a tool that writes
+// a D1 row as read-only.
+const MCP_WRITE_TOOLS = new Set(["representation_capture", "representation_compare"]);
+
+test("MCP tools publish honest client metadata for calling and WebMCP", async () => {
+  const response = await handleSiteMcp(mcpPost({
+    jsonrpc: "2.0", id: "metadata", method: "tools/list", params: { ...MODERN_META },
+  }), {}, context());
+  const listed = (await response.json()).result.tools;
+  assert.deepEqual(listed, SITE_MCP_TOOLS, "tools/list must expose the canonical decorated registry");
+  assert.equal(listed.length, 24);
+  for (const tool of listed) {
+    assert.ok(tool.title, `${tool.name} needs a human-readable title`);
+    const writes = MCP_WRITE_TOOLS.has(tool.name);
+    assert.deepEqual(tool.annotations, {
+      readOnlyHint: !writes,
+      destructiveHint: false,
+      idempotentHint: !writes,
+      openWorldHint: tool.annotations.openWorldHint,
+    }, `${tool.name} annotations must be explicit`);
+    assert.deepEqual(tool.outputSchema, { type: "object", additionalProperties: true }, `${tool.name} needs an object output schema`);
+  }
+  assert.equal(listed.find((tool) => tool.name === "lens_inspect").annotations.openWorldHint, true);
+  assert.equal(listed.find((tool) => tool.name === "search_site").annotations.openWorldHint, false);
+  // Every tool that can be handed a caller-supplied URL reaches off this origin,
+  // and that is the whole meaning of openWorldHint. Pinning the set here is what
+  // makes the omission loud the next time a fetching tool is added.
+  for (const name of ["image_transform", "photo_recipe", "representation_capture"]) {
+    assert.equal(listed.find((tool) => tool.name === name).annotations.openWorldHint, true, `${name} fetches caller-supplied URLs`);
+  }
+});
+
 test("site MCP image workbench returns an image content block and exact receipt", async () => {
   const env = { IMAGES: fakeImages() };
   const list = await handleSiteMcp(new Request("https://aadhar.sh/mcp", { method: "POST", body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }), headers: { "content-type": "application/json" } }), env, context());
@@ -1338,22 +1373,69 @@ test("site MCP resources/read serves listed surfaces only, same-origin", async (
   } finally { globalThis.fetch = realFetch; }
 });
 
-// The Serendipity server card is published twice, at /.well-known/mcp.json (the
-// api-catalog's service-desc) and /.well-known/mcp/server-card.json (the path
-// Lens probes on any origin). Both are hand-written transcriptions of MCP_TOOLS,
-// so they drift the moment a tool is added or renamed. A third copy,
-// mcp/server-cards.json, sat unreferenced for weeks carrying a stale
-// list_events description; this test is why it cannot come back unnoticed.
-test("published MCP server cards enumerate the live Serendipity tool catalog", async () => {
-  const live = MCP_TOOLS.map((tool) => tool.name).sort();
-  for (const file of ["holding/.well-known/mcp.json", "holding/.well-known/mcp/server-card.json"]) {
+// Server cards are pre-connection metadata. The live `server/discover` and
+// `tools/list` responses remain the protocol source of truth, so the cards are
+// generated projections rather than a second hand-maintained tool catalog.
+test("published MCP server cards and discovery files stay aligned with both live servers", async () => {
+  const { handleMcp } = await import("./serendipity/serendipity.js");
+  const siteLive = await (await handleSiteMcp(mcpPost({
+    jsonrpc: "2.0", id: "site-tools", method: "tools/list", params: { ...MODERN_META },
+  }), {}, context())).json();
+  const serendipityPost = (body) => new Request("https://aadhar.sh/serendipity/mcp", {
+    method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json" },
+  });
+  const serendipityLive = await (await handleMcp(serendipityPost({
+    jsonrpc: "2.0", id: "serendipity-tools", method: "tools/list", params: { ...MODERN_META },
+  }), {}, null)).json();
+  const cards = [
+    {
+      file: "holding/.well-known/mcp/server-card.json",
+      endpoint: "https://aadhar.sh/mcp",
+      live: siteLive.result.tools,
+      info: { name: SITE_MCP_SERVER_INFO.name, title: SITE_MCP_SERVER_INFO.title, version: SITE_MCP_SERVER_INFO.version },
+      capabilities: { tools: true, resources: true, prompts: false },
+    },
+    {
+      file: "holding/.well-known/mcp.json",
+      endpoint: "https://aadhar.sh/serendipity/mcp",
+      live: serendipityLive.result.tools,
+      info: { name: SERENDIPITY_MCP_SERVER_INFO.name, title: SERENDIPITY_MCP_SERVER_INFO.title, version: SERENDIPITY_MCP_SERVER_INFO.version },
+      capabilities: { tools: true, resources: false, prompts: false },
+    },
+    {
+      file: "holding/.well-known/mcp/serendipity.json",
+      endpoint: "https://aadhar.sh/serendipity/mcp",
+      live: serendipityLive.result.tools,
+      info: { name: SERENDIPITY_MCP_SERVER_INFO.name, title: SERENDIPITY_MCP_SERVER_INFO.title, version: SERENDIPITY_MCP_SERVER_INFO.version },
+      capabilities: { tools: true, resources: false, prompts: false },
+    },
+  ];
+  for (const { file, endpoint, live, info, capabilities } of cards) {
     const card = JSON.parse(await readFile(new URL(file, import.meta.url), "utf8"));
-    assert.deepEqual(card.tools.map((tool) => tool.name).sort(), live, `${file} tool set drifted from MCP_TOOLS`);
-    assert.equal(card.transport.url, "https://aadhar.sh/serendipity/mcp", `${file} points at the wrong transport`);
-    for (const tool of card.tools) {
-      assert.ok((tool.description || "").trim(), `${file}: ${tool.name} needs a description`);
-    }
+    assert.equal(card.protocolVersion, "2026-07-28", `${file} must advertise the current MCP revision`);
+    assert.deepEqual(card.serverInfo, { ...info, description: card.serverInfo.description }, `${file} server identity drifted`);
+    assert.equal(card.transport.url, endpoint, `${file} points at the wrong transport`);
+    assert.deepEqual(card.capabilities, capabilities, `${file} capabilities drifted`);
+    assert.deepEqual(card.tools, live, `${file} tool metadata drifted from tools/list`);
   }
+
+  const agentCard = JSON.parse(await readFile(new URL("holding/.well-known/agent-card.json", import.meta.url), "utf8"));
+  const interfaces = agentCard["x-aadhar-sh"].interfaces.mcp;
+  assert.deepEqual(
+    interfaces.map((entry) => [entry.url, entry.serverCard]),
+    [
+      ["https://aadhar.sh/mcp", "https://aadhar.sh/.well-known/mcp/server-card.json"],
+      ["https://aadhar.sh/serendipity/mcp", "https://aadhar.sh/.well-known/mcp/serendipity.json"],
+    ],
+    "agent-card MCP interfaces must name their server cards",
+  );
+  const catalog = JSON.parse(await readFile(new URL("holding/.well-known/api-catalog", import.meta.url), "utf8"));
+  const links = new Map(catalog.linkset.map((entry) => [entry.anchor, entry]));
+  assert.equal(links.get("https://aadhar.sh/mcp")["service-desc"][0].href, "https://aadhar.sh/.well-known/mcp/server-card.json");
+  assert.equal(links.get("https://aadhar.sh/serendipity/mcp")["service-desc"][0].href, "https://aadhar.sh/.well-known/mcp/serendipity.json");
+  const llms = await readFile(new URL("holding/llms.txt", import.meta.url), "utf8");
+  assert.match(llms, /https:\/\/aadhar\.sh\/\.well-known\/mcp\/server-card\.json/);
+  assert.match(llms, /https:\/\/aadhar\.sh\/\.well-known\/mcp\/serendipity\.json/);
 });
 
 // ── the Luma session jar ────────────────────────────────────────────

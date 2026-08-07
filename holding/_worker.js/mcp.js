@@ -9,6 +9,7 @@ import { frameText, terminalToolFrame } from "./terminal.js";
 import { radarFrame, readSamples } from "./radar.js";
 import { AGENT_SURFACES } from "./lib/site-manifest.js";
 import { CACHE_EMPTY, CACHE_LIVE, CACHE_STATIC, mcpCorsHeaders, mcpGate, mcpServer } from "./lib/mcp-protocol.js";
+import { mcpTool } from "./lib/mcp-tools.js";
 
 // DUAL-ERA. The wire rules (versions, `_meta` keys, resultType, cache hints,
 // error codes, the header check) live in lib/mcp-protocol.js because
@@ -20,12 +21,20 @@ import { CACHE_EMPTY, CACHE_LIVE, CACHE_STATIC, mcpCorsHeaders, mcpGate, mcpServ
 // This server was unusually well placed for the change. The header above has
 // said "intentionally stateless" since it was written, and statelessness is
 // precisely what the new revision assumes. There was nothing to unwind.
+// Exported because the published server card is a PROJECTION of this server,
+// not a second hand-maintained description of it. scripts/gen-mcp-cards.mjs
+// imports these three, so the card cannot claim an identity the Worker does not
+// report at `initialize`.
+export const SITE_MCP_SERVER_INFO = { name: "aadhar.sh", title: "Aadharsh Site", version: "2.1.0" };
+export const SITE_MCP_CAPABILITIES = { tools: {}, resources: {} };
+export const SITE_MCP_INSTRUCTIONS = "Bounded public utilities for aadhar.sh: search, music, photos, coffee availability, Change Radar, Lens, ephemeral image inspection/transforms, exact published-photo recipe matching, and an HTTP representation vault. Image inputs are not persisted; the vault stores normalized headers, metadata, and body digests only. resources/list enumerates the site's public pages; resources/read fetches one. No private data is exposed.";
+
 const MCP = mcpServer({
   // Self-reported and explicitly NOT a security signal — the spec says clients
   // should not change behavior on it. Display, logging, debugging.
-  serverInfo: { name: "aadhar.sh", title: "Aadharsh Site", version: "2.1.0" },
-  capabilities: { tools: {}, resources: {} },
-  instructions: "Bounded public utilities for aadhar.sh: search, music, photos, coffee availability, Change Radar, Lens, ephemeral image inspection/transforms, exact published-photo recipe matching, and an HTTP representation vault. Image inputs are not persisted; the vault stores normalized headers, metadata, and body digests only. resources/list enumerates the site's public pages; resources/read fetches one. No private data is exposed.",
+  serverInfo: SITE_MCP_SERVER_INFO,
+  capabilities: SITE_MCP_CAPABILITIES,
+  instructions: SITE_MCP_INSTRUCTIONS,
 });
 
 // Which cache hint each surface earns. Tools are a static array in this file and
@@ -83,8 +92,15 @@ const HOSTED_TOOLS = [
     } },
   },
   {
+    // The two vault WRITERS, and the only tools on this server that are not
+    // read-only. Each call persists a fresh snapshot row keyed by a new id, so
+    // neither is idempotent either: calling twice leaves two observations, which
+    // is the point of a vault. Nothing is destroyed, hence destructiveHint stays
+    // false. Saying so here rather than in lib/mcp-tools.js keeps the claim
+    // beside the INSERT that decides it.
     name: "representation_capture",
     description: "Capture bounded public HTTP representations under browser, bot, Markdown, or identity request profiles and store only normalized headers, metadata, and body digests.",
+    annotations: { readOnlyHint: false, idempotentHint: false },
     inputSchema: { type: "object", properties: {
       url: { type: "string" }, profiles: { type: "array", maxItems: 4, items: { type: "string", enum: ["browser", "bot", "markdown", "identity"] } },
     }, required: ["url"] },
@@ -97,13 +113,14 @@ const HOSTED_TOOLS = [
   {
     name: "representation_compare",
     description: "Refetch the same HTTP representation profile, compare it with a stored snapshot, and persist the new normalized observation.",
+    annotations: { readOnlyHint: false, idempotentHint: false },
     inputSchema: { type: "object", properties: {
       snapshot_id: { type: "string" }, url: { type: "string", description: "optional replacement URL, otherwise the snapshot URL" },
     }, required: ["snapshot_id"] },
   },
 ];
 
-const MCP_TOOLS = [
+const MCP_TOOL_DEFINITIONS = [
   ...DATA_TOOLS,
   ...HOSTED_TOOLS,
   // ── the terminal programs ───────────────────────────────────────────────
@@ -185,6 +202,8 @@ const MCP_TOOLS = [
     }, required: ["url"] },
   },
 ];
+
+export const MCP_TOOLS = MCP_TOOL_DEFINITIONS.map((tool) => mcpTool(tool));
 
 // The site's public surfaces as MCP resources, projected from the generated
 // agent catalog (lib/site-manifest.js, itself derived from site-manifest.json).

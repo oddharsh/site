@@ -23,6 +23,7 @@ const PREFIX = "/serendipity";
 import { DESKTOP_CHROME, DESKTOP_TOP } from "../holding/_worker.js/lib/desktop.js";
 import { privateHostBlocked } from "../holding/_worker.js/lib/crawl.js";
 import { CACHE_EMPTY, CACHE_STATIC, mcpGate, mcpServer } from "../holding/_worker.js/lib/mcp-protocol.js";
+import { mcpTool } from "../holding/_worker.js/lib/mcp-tools.js";
 
 // ── tiny helpers ────────────────────────────────────────────────────────────
 const esc = (v) =>
@@ -1557,10 +1558,14 @@ async function handleCover(request, env, ctx) {
 // holding/_worker.js/lib/mcp-protocol.js and are SHARED with /mcp, deliberately
 // — two MCP servers on one origin speaking different dialects is a bug waiting
 // to be reported by a client author rather than by us.
+export const SERENDIPITY_MCP_SERVER_INFO = { name: "serendipity", title: "Serendipity", version: "2.0.0" };
+export const SERENDIPITY_MCP_CAPABILITIES = { tools: {} };
+export const SERENDIPITY_MCP_INSTRUCTIONS = "Read-only access to the Serendipity event pool: community-curated events and who's going. Start with stats or list_events, drill in with get_event, find people with search_people. Public data only.";
+
 const MCP = mcpServer({
-  serverInfo: { name: "serendipity", title: "Serendipity", version: "2.0.0" },
-  capabilities: { tools: {} },
-  instructions: "Read-only access to the Serendipity event pool: community-curated events and who's going. Start with stats or list_events, drill in with get_event, find people with search_people. Public data only.",
+  serverInfo: SERENDIPITY_MCP_SERVER_INFO,
+  capabilities: SERENDIPITY_MCP_CAPABILITIES,
+  instructions: SERENDIPITY_MCP_INSTRUCTIONS,
 });
 
 // public-safe projection of an attendee row — mirrors what attendeeRow renders.
@@ -1794,7 +1799,7 @@ async function mcpSharedEvents(d, qa, qb) {
   return { a: mcpAttendee(a), b: mcpAttendee(b), shared_count: rows.length, shared_events: rows.map(mcpEventSummary) };
 }
 
-export const MCP_TOOLS = [
+const MCP_TOOL_DEFINITIONS = [
   {
     name: "list_events",
     description: "List events in the Serendipity pool, each with a head count of who's going and an RSVP tier. The pool mixes events a contributor actually RSVP'd to or hosts (rsvp:\"going\" — first-class, the ones with real rosters) with events synced from just browsing a Luma feed (rsvp:\"invited\"/\"pending\"/etc — no roster, second-class). By default only the going (RSVP'd) events are returned, with a discovered_hidden count noting how many browsed events were omitted; pass rsvp:\"all\" to include them (first-class first) or rsvp:\"discovered\" for only the browsed ones. Each event carries attending (bool) + rsvp (raw status). Defaults to upcoming, soonest first.",
@@ -1895,6 +1900,8 @@ export const MCP_TOOLS = [
     inputSchema: { type: "object", properties: {} },
   },
 ];
+
+export const MCP_TOOLS = MCP_TOOL_DEFINITIONS.map((tool) => mcpTool(tool));
 
 // run a tool. returns a plain object on success, or { _error } for a tool-level
 // error (bad args / not found) the caller surfaces as an MCP isError result.
