@@ -13,6 +13,13 @@
   // this file — wrangler.jsonc self-builds via its build.command and ships the
   // minified .build/holding tree.
   "name": "aadhar-sh",
+  // Same pin as wrangler.jsonc, and NOT a fifth difference between the two —
+  // it is one of the values that must match. Plain `npm run dev` is local and
+  // never needs an account, but `npm run dev:remote` and
+  // `npm run routes:check:remote` both reach production bindings through this
+  // config, so they hit the same "more than one account available" wall that
+  // wrangler.jsonc's comment describes.
+  "account_id": "1c99acdb6141579023fb97d24261ea58",
   "main": "holding/_worker.js/index.js",
   "compatibility_date": "2026-06-01",
   "cache": { "enabled": false, "cross_version_cache": false },
