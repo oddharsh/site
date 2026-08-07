@@ -48,8 +48,8 @@ export function validateLensTarget(raw: string | null): { target?: URL; error?: 
   return { target };
 }
 
-async function readCapped(response: Response, cap = parseCap): Promise<{ text: string; bytes: number; truncated: boolean }> {
-  if (!response.body) return { text: "", bytes: 0, truncated: false };
+async function readCapped(response: Response, cap = parseCap): Promise<{ text: string; raw: Uint8Array; bytes: number; truncated: boolean }> {
+  if (!response.body) return { text: "", raw: new Uint8Array(), bytes: 0, truncated: false };
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
   let bytes = 0;
@@ -70,7 +70,7 @@ async function readCapped(response: Response, cap = parseCap): Promise<{ text: s
   const joined = new Uint8Array(bytes);
   let offset = 0;
   for (const chunk of chunks) { joined.set(chunk, offset); offset += chunk.byteLength; }
-  return { text: new TextDecoder().decode(joined), bytes, truncated };
+  return { text: new TextDecoder().decode(joined), raw: joined, bytes, truncated };
 }
 
 function robotsRules(source: string): { agents: string[]; allow: string[]; disallow: string[] }[] {
@@ -118,13 +118,13 @@ async function robotsGate(target: URL, env: Env): Promise<{ allowed: boolean; st
   } catch { return { allowed: false, state: "unavailable" }; }
 }
 
-async function fetchTarget(initial: URL, env: Env): Promise<{ response: Response; finalUrl: URL; body: { text: string; bytes: number; truncated: boolean }; signed: boolean }> {
+async function fetchTarget(initial: URL, env: Env, initialHeaders?: HeadersInit, cap = parseCap): Promise<{ response: Response; finalUrl: URL; body: { text: string; raw: Uint8Array; bytes: number; truncated: boolean }; signed: boolean }> {
   let target = initial;
   let signed = false;
   for (let redirects = 0; redirects <= redirectCap; redirects++) {
     const validation = validateLensTarget(target.href);
     if (!validation.target) throw new Error(validation.error);
-    const identity = await botHeaders(target, env);
+    const identity = await botHeaders(target, env, initialHeaders);
     signed ||= identity.signed;
     const response = await fetch(target, { headers: identity.headers, redirect: "manual", signal: AbortSignal.timeout(6000), cf: { cacheTtl: 0 } });
     if (response.status >= 300 && response.status < 400 && response.headers.has("location")) {
@@ -132,9 +132,17 @@ async function fetchTarget(initial: URL, env: Env): Promise<{ response: Response
       target = new URL(response.headers.get("location")!, target);
       continue;
     }
-    return { response, finalUrl: target, body: await readCapped(response), signed };
+    return { response, finalUrl: target, body: await readCapped(response, cap), signed };
   }
   throw new Error("Too many redirects.");
+}
+
+export async function fetchPublicResource(raw: string, env: Env, headers?: HeadersInit, cap = parseCap) {
+  const validation = validateLensTarget(raw);
+  if (!validation.target) throw new Error(validation.error);
+  const robots = await robotsGate(validation.target, env);
+  if (!robots.allowed) throw new Error(`AadharshBot refused this URL because robots.txt is ${robots.state}.`);
+  return fetchTarget(validation.target, env, headers, cap);
 }
 
 function decodeText(value: string): string {
@@ -190,7 +198,7 @@ export async function inspectLens(request: Request, env: Env, raw = new URL(requ
     const jsonLd = (html.match(/<script\b[^>]*type=["']application\/ld\+json["']/gi) ?? []).length;
     const doors = await discovery(fetched.finalUrl.origin, env);
     const doorCount = Object.values(doors).filter((door) => (door as JsonRecord).present).length;
-    const responseHeaders = Object.fromEntries(["content-type", "content-language", "cache-control", "etag", "last-modified", "link", "content-signal", "x-robots-tag"].flatMap((name) => {
+    const responseHeaders = Object.fromEntries(["content-type", "content-language", "cache-control", "etag", "last-modified", "link", "content-signal", "x-robots-tag", "available-dictionary", "dictionary-id", "use-as-dictionary", "content-encoding", "vary"].flatMap((name) => {
       const value = fetched.response.headers.get(name);
       return value ? [[name, value]] : [];
     }));

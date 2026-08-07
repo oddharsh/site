@@ -474,6 +474,32 @@
   .protocol-panel ul { padding-inline-start: 22px; }
   .protocol-panel pre { overflow: auto; padding: 10px; color: #fff; background: #07182f; font: 12px/1.5 var(--font-mono); }
 
+  .tool-intro { max-inline-size: 70ch; margin-block: 18px; }
+  .tool-form { max-inline-size: 760px; display: grid; grid-template-columns: minmax(10em, .3fr) minmax(0, 1fr) auto; gap: 8px; align-items: start; padding: 12px; background: var(--face); box-shadow: var(--raised); }
+  .tool-form label { padding-block-start: 6px; font-weight: 700; }
+  .tool-form :is(input, textarea) { min-inline-size: 0; inline-size: 100%; padding: 6px 8px; border: 0; background: var(--paper); box-shadow: var(--sunken); }
+  .tool-form textarea { min-block-size: 6lh; max-block-size: 18lh; resize: vertical; field-sizing: content; }
+  .tool-form button { min-inline-size: 72px; padding: 6px 12px; border: 0; background: var(--face); box-shadow: var(--raised); }
+  .tool-form button:active { box-shadow: var(--sunken); }
+  .tool-output { max-inline-size: 760px; margin-block-start: 18px; }
+  .tool-report { padding: 12px; background: var(--paper); box-shadow: var(--sunken); }
+  .tool-report h2 { color: #16428b; font-size: 18px; }
+  .tool-report dl { display: grid; grid-template-columns: minmax(10em, .35fr) minmax(0, 1fr); gap: 4px 10px; }
+  .tool-report dd { margin: 0; overflow-wrap: anywhere; font-family: var(--font-mono); }
+  .tool-report pre { max-block-size: 30rem; overflow: auto; padding: 10px; color: #fff; background: #07182f; font: 12px/1.5 var(--font-mono); white-space: pre-wrap; }
+
+  .mention-list { margin-block-start: 22px; }
+  .mention-list ol { display: grid; gap: 1px; padding: 3px; background: var(--face); box-shadow: var(--sunken); list-style: none; }
+  .mention-list li { padding: 10px 12px; background: var(--paper); }
+  .mention-list h2 { color: #16428b; font-size: 15px; }
+  .mention-list p { margin-block-start: 5px; }
+
+  .census { margin-block-start: 22px; overflow-x: auto; }
+  .census table { inline-size: 100%; min-inline-size: 620px; border-collapse: collapse; background: var(--paper); box-shadow: var(--sunken); }
+  .census :is(th, td) { padding: 7px 9px; border-block-end: 1px solid var(--face); text-align: start; }
+  .census th { color: #16428b; background: var(--selection-soft); }
+  .census td:not(:first-child) { font-family: var(--font-mono); }
+
   .object-list,
   .file-list {
     display: grid;
@@ -883,6 +909,8 @@
     .coffee-form { grid-template-columns: 1fr; }
     .coffee-form label { padding: 0; }
     .coffee-form button { grid-column: 1; }
+    .tool-form { grid-template-columns: 1fr; }
+    .tool-form label { padding: 0; }
   }
 
   @media (prefers-reduced-motion: reduce) {

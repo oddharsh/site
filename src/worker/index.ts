@@ -11,6 +11,7 @@ import { lensBrowser, lensCompare, lensFetch, lensPage, lensShot } from "./lens"
 import { BookingSlot } from "./booking-slot";
 import { coffeeAvailability, coffeeBook, coffeeDecision, coffeePage, coffeeSlots } from "./coffee";
 import { retiredSerendipityWrite, serendipityEvent, serendipityEventsJson, serendipityMcp, serendipityPage } from "./serendipity";
+import { censusJson, censusPage, inboxPage, utilityPage } from "./utilities";
 
 export { BookingSlot, BookingWorkflow, Counter };
 
@@ -20,6 +21,8 @@ const markdownPages = new Set([
   "/coffee",
   "/serendipity",
 ]);
+
+const utilityPages = new Set(["finger", "radar", "dict", "cache", "encode", "agent-ready"]);
 
 function markdownPath(pathname: string): string {
   return pathname === "/" ? "/index.md" : `${pathname}.md`;
@@ -83,6 +86,8 @@ async function fetchHandler(request: Request, env: Env, ctx: ExecutionContext): 
   if (pathname === "/lens/browser") return lensBrowser(request, env);
   if (pathname === "/lens/shot") return lensShot(request, env);
   if (pathname === "/lens/compare.json") return lensCompare(request, env);
+  if (pathname === "/lens/census.json") return censusJson(env);
+  if (pathname === "/lens/census") return censusPage(request, env);
   if (pathname === "/lens") return lensPage(request, env);
   if (pathname === "/coffee/availability.json") return coffeeAvailability(env, ctx);
   if (pathname === "/coffee/slots") return coffeeSlots(env, ctx);
@@ -92,6 +97,8 @@ async function fetchHandler(request: Request, env: Env, ctx: ExecutionContext): 
   if (pathname === "/serendipity/events.json") return serendipityEventsJson(env, request);
   if (pathname.startsWith("/serendipity/event/")) return serendipityEvent(request, env, decodeURIComponent(pathname.slice("/serendipity/event/".length)));
   if (pathname === "/serendipity") return serendipityPage(request, env);
+  if (pathname === "/inbox") return inboxPage(request, env);
+  if (utilityPages.has(pathname.slice(1))) return utilityPage(request, env, pathname.slice(1));
 
   if (pathname === "/reading") return readingResponse(request, env);
   if (pathname === "/around") return aroundResponse(request, env);

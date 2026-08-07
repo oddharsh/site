@@ -14,6 +14,7 @@ import { renderAround, renderLedger, renderReading } from "../src/site/pages/liv
 import { renderLens } from "../src/site/pages/lens.mjs";
 import { coffeeMarkdown, renderCoffee } from "../src/site/pages/coffee.mjs";
 import { renderSerendipity, renderSerendipityContribute, renderSerendipityMcpInfo, serendipityMarkdown } from "../src/site/pages/serendipity.mjs";
+import { renderCensus, renderInbox, renderToolPage } from "../src/site/pages/tools.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const output = join(root, "dist");
@@ -173,6 +174,10 @@ await write("serendipity.html", renderSerendipity({ stylesheet: `/assets/${cssNa
 await write("serendipity.md", serendipityMarkdown());
 await write("serendipity/contribute.html", renderSerendipityContribute({ stylesheet: `/assets/${cssName}` }));
 await write("serendipity/mcp-info.html", renderSerendipityMcpInfo({ stylesheet: `/assets/${cssName}` }));
+const toolSlugs = ["finger", "radar", "dict", "cache", "encode", "agent-ready"];
+for (const slug of toolSlugs) await write(`${slug}.html`, renderToolPage({ slug, stylesheet: `/assets/${cssName}` }));
+await write("inbox.html", renderInbox({ stylesheet: `/assets/${cssName}` }));
+await write("lens/census.html", renderCensus({ stylesheet: `/assets/${cssName}` }));
 
 const publicSurfaces = siteManifest.surfaces.filter(({ flags }) => flags.run);
 await write("search.html", renderSearch({ stylesheet: `/assets/${cssName}` }));
@@ -207,6 +212,9 @@ const manifest = {
     "/serendipity",
     "/serendipity/contribute",
     "/serendipity/mcp-info",
+    ...toolSlugs.map((slug) => `/${slug}`),
+    "/inbox",
+    "/lens/census",
     "/search",
     "/run",
   ],

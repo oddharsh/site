@@ -125,6 +125,15 @@ test("status and live utility shells stay complete without client JavaScript", a
   assert.match(serendipity, /id="event-pool"/);
   assert.match(contribute, /no longer accepts pasted account cookies/i);
   assert.doesNotMatch(serendipity + contribute, /<script\b/i);
+
+  for (const slug of ["finger", "radar", "dict", "cache", "encode", "agent-ready"]) {
+    const tool = await text(`${slug}.html`);
+    assert.match(tool, new RegExp(`action="/${slug}" method="get"`));
+    assert.match(tool, /id="tool-output"/);
+    assert.doesNotMatch(tool, /<script\b/i);
+  }
+  assert.match(await text("inbox.html"), /id="mention-list"/);
+  assert.match(await text("lens/census.html"), /id="census"/);
 });
 
 test("initial document and shared stylesheet stay inside budgets", async () => {
