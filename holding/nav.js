@@ -1354,7 +1354,17 @@
     }
   }
 
-  function boot() { ensureLunaCss(); buildDesktop(); buildIcons(); buildTaskbar(); initDrag(); initRaise(); initIconDrag(); initScrollbars(); initResize(); setFavicon(); injectSpeculation(); initCloseBack(); initWindowControls(); }
+  // PROTOTYPE HOOK — delete with holding/proto-explorer.js. Loads the Explorer
+  // task-pane / address-bar experiment only when ?chrome= asks for it, and only
+  // after the taskbar exists, since the pane reads its "Other places" back out
+  // of it. Costs one string comparison on every ordinary page load.
+  function bootProtoChrome() {
+    if (!/[?&]chrome=/.test(location.search)) return;
+    var s = D.createElement("script"); s.src = "/proto-explorer.js"; s.async = false;
+    D.head.appendChild(s);
+  }
+
+  function boot() { ensureLunaCss(); buildDesktop(); buildIcons(); buildTaskbar(); initDrag(); initRaise(); initIconDrag(); initScrollbars(); initResize(); setFavicon(); injectSpeculation(); initCloseBack(); initWindowControls(); bootProtoChrome(); }
   function bootAfterStaticPaint() {
     // Generated/static pages and Worker-rendered shells already carry the desktop
     // and taskbar markup plus race-proof geometry in HTML. nav.js only ENHANCES
