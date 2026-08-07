@@ -2587,8 +2587,21 @@ test("the hashed policy is well-formed and keeps 'self' for the external scripts
     // that is the whole point of the report-only phase.
     if (!ENFORCE_PAGE_HASHES) {
       assert.match(pair["content-security-policy"], /script-src 'self' 'unsafe-inline';/);
+      // A browser IGNORES upgrade-insecure-requests in a report-only policy and
+      // files a security issue saying so, on every page load (found in DevTools
+      // 2026-08-07, and in a Cloudflare URL Scanner run the same day).
       assert.doesNotMatch(hashed, /upgrade-insecure-requests/,
         "a report-only policy must omit directives the browser cannot report");
+      // The other half, which absence alone cannot express: the ENFORCING policy
+      // must still carry it. Asserting only the omission passes just as happily
+      // if the directive falls out of both.
+      assert.match(pair["content-security-policy"], /upgrade-insecure-requests/);
+      // And everything else must still match, or the two tails have drifted into
+      // being two policies rather than one policy minus an inert directive.
+      assert.equal(
+        pair["content-security-policy"].replace(/script-src [^;]*;/, ""),
+        `${pair["content-security-policy-report-only"].replace(/script-src [^;]*;/, "")}; upgrade-insecure-requests`,
+      );
     }
   } finally {
     for (const k of Object.keys(mod.PAGE_SCRIPT_HASHES)) delete mod.PAGE_SCRIPT_HASHES[k];
