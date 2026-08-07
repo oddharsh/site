@@ -3,7 +3,7 @@
 import { BOT_UA, botHeaders } from "./lib/botauth.js";
 import { cachedRender } from "./lib/cache.js";
 import { CANONICAL_HOST } from "./lib/const.js";
-import { privateHostBlocked, readResponseCapped } from "./lib/crawl.js";
+import { fetchFollowingPublicRedirects, privateHostBlocked, readResponseCapped } from "./lib/crawl.js";
 import { lensParseRobots, lensPathMatch, lensRobotsVerdict } from "./lib/robots.js";
 import { lunaPage } from "./lib/chrome.js";
 import { escAttr, escHtml, jsonResponse } from "./lib/http.js";
@@ -1524,8 +1524,13 @@ export function validateLensTarget(raw) {
   let url;
   try { url = new URL(s); } catch { return { ok: false, error: "That doesn't parse as a URL." }; }
   if (url.protocol !== "http:" && url.protocol !== "https:") return { ok: false, error: "Only http and https URLs." };
+  // Credentials in the authority are refused rather than stripped. A scan is a
+  // public read published back to the visitor, so a URL carrying a secret is
+  // either a mistake or an attempt to make this site replay it; stripping would
+  // quietly scan a different resource than the one that was typed.
+  if (url.username || url.password) return { ok: false, error: "Remove the credentials from that URL." };
   if (url.port && url.port !== "80" && url.port !== "443") return { ok: false, error: "Only ports 80 and 443 are allowed." };
-  if (privateHostBlocked(url.hostname.toLowerCase())) return { ok: false, error: "That host is on the no-fetch list (localhost / private / link-local)." };
+  if (privateHostBlocked(url.hostname)) return { ok: false, error: "That host is on the no-fetch list (localhost / private / link-local)." };
   return { ok: true, url: url.toString() };
 }
 
@@ -1958,7 +1963,17 @@ export async function lensFetch(targetUrl, env, signal, accept) {
       if (env.ASSETS)     return await env.ASSETS.fetch(selfReq);
     }
   } catch (_e) { /* fall through to a normal fetch */ }
-  return fetch(targetUrl, { method: "GET", headers, redirect: "follow", signal, cf: { cacheTtl: 0 } });
+  // Per-hop validation, not redirect:"follow". The allowlist vetted the URL the
+  // visitor typed; without this, one 302 to a blocked host still got fetched and
+  // its body read, and only the discovery fan-out was skipped afterwards. A
+  // refused hop reads as an unreachable target, which is what it is.
+  const followed = await fetchFollowingPublicRedirects(
+    targetUrl,
+    { method: "GET", headers, signal, cf: { cacheTtl: 0 } },
+    (candidate) => validateLensTarget(candidate),
+  );
+  if (!followed.ok) return new Response(null, { status: 502, statusText: "Blocked redirect" });
+  return followed.response;
 }
 
 // read a response body but stop at `max` bytes so a giant page can't blow memory.
@@ -2187,7 +2202,17 @@ export async function lensFetchAsBot(targetUrl, env, signal, userAgent) {
       if (env.ASSETS)     return await env.ASSETS.fetch(selfReq);
     }
   } catch (_e) { /* fall through to a normal fetch */ }
-  return fetch(targetUrl, { method: "GET", headers, redirect: "follow", signal, cf: { cacheTtl: 0 } });
+  // Per-hop validation, not redirect:"follow". The allowlist vetted the URL the
+  // visitor typed; without this, one 302 to a blocked host still got fetched and
+  // its body read, and only the discovery fan-out was skipped afterwards. A
+  // refused hop reads as an unreachable target, which is what it is.
+  const followed = await fetchFollowingPublicRedirects(
+    targetUrl,
+    { method: "GET", headers, signal, cf: { cacheTtl: 0 } },
+    (candidate) => validateLensTarget(candidate),
+  );
+  if (!followed.ok) return new Response(null, { status: 502, statusText: "Blocked redirect" });
+  return followed.response;
 }
 
 export async function lensProbeBotView(targetUrl, env, profile) {
