@@ -45,6 +45,7 @@ import { ifNoneMatchMatches, notModifiedIfFresh, withWeakEtag } from "./holding/
 import { privateHostBlocked } from "./holding/_worker.js/lib/crawl.js";
 import { handleHit } from "./holding/_worker.js/counter.js";
 import { cronHomeProbe, parseServerTiming } from "./holding/_worker.js/perf-probe.js";
+import { gatherWhoareyou } from "./holding/_worker.js/whoareyou.js";
 import { handleSearchJson, searchSite } from "./holding/_worker.js/search.js";
 import { getPublicAvailability } from "./cal/src/slots.js";
 import { botHeaders } from "./holding/_worker.js/lib/botauth.js";
@@ -479,6 +480,13 @@ test("track endpoints keep JSON and HTML contracts independent of Accept", async
   const body = await html.text();
   assert.match(body, /^<li\b/);
   assert.doesNotMatch(body, /<(?:!doctype|html|head|body)\b/i);
+
+  // Both representations say "read me, don't list me" with the header that can
+  // actually say it. robots.txt used to try with `Disallow: /rn/tracks` while
+  // four discovery surfaces pointed agents here, which blocked the fetch and so
+  // blocked its own noindex.
+  assert.equal(json.headers.get("x-robots-tag"), "noindex");
+  assert.equal(html.headers.get("x-robots-tag"), "noindex");
 });
 
 test("Lens fetch keeps its JSON contract regardless of Accept", async () => {
@@ -612,6 +620,42 @@ test("Lens screenshot endpoint delegates PNG rendering to the Browser Run bindin
   assert.equal(action, "screenshot");
   assert.equal(response.headers.get("content-type"), "image/png");
   assert.deepEqual(new Uint8Array(await response.arrayBuffer()), png);
+});
+
+test("neither browser route waits on a condition a live site never reaches", async () => {
+  // `networkidle0` demands ZERO in-flight connections for 500ms, which any page
+  // carrying analytics, ads, a websocket or a poll never reaches. The wait then
+  // burns the whole timeout and Cloudflare discards a render it already had
+  // (`422 / code 6002`). Both routes shipped it until 2026-08-07; measured
+  // against production, theverge.com failed on BOTH at ~18.8s while the static
+  // example.com passed, so the failure tracked the TARGET and read as flaky.
+  //
+  // This is pinned rather than left to review because the cost is invisible at
+  // the call site: the setting is one word in a payload, the failure looks like
+  // the scanned site being slow, and each timeout also spends 18s of a browser
+  // budget that is 10 MINUTES PER DAY account-wide on the free plan.
+  const captured = {};
+  const env = {
+    BROWSER: {
+      async quickAction(name, input) {
+        captured[name] = input;
+        if (name === "screenshot") return new Response(new Uint8Array([137, 80, 78, 71]), { headers: { "content-type": "image/png" } });
+        return Response.json({ result: { content: "<html></html>" }, meta: { status: 200 } });
+      },
+    },
+  };
+  const url = "?url=https%3A%2F%2Fexample.com%2F";
+  await handleLensShot(new Request(`https://aadhar.sh/lens/shot${url}`), env, context());
+  await handleLensBrowser(new Request(`https://aadhar.sh/lens/browser${url}`), env, context());
+
+  assert.deepEqual(Object.keys(captured).sort(), ["screenshot", "snapshot"], "both routes must have reached the binding");
+  for (const [action, payload] of Object.entries(captured)) {
+    assert.notEqual(payload.gotoOptions.waitUntil, "networkidle0", `${action} must not wait for total network silence`);
+    assert.equal(payload.gotoOptions.waitUntil, "networkidle2", `${action} must wait for the page to settle, not go silent`);
+    assert.ok(payload.gotoOptions.timeout > 0, `${action} must keep a bounded timeout`);
+  }
+  // One object, so a later edit cannot fix one route and leave the other.
+  assert.equal(captured.screenshot.gotoOptions, captured.snapshot.gotoOptions, "both routes must share one goto config");
 });
 
 function staticAssets(files) {
@@ -1605,6 +1649,51 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   assert.match(luna, /homepage hover island \(non-critical\)/);
 });
 
+test("robots.txt never forbids a path the site advertises to agents", async () => {
+  // Found by a Cloudflare agent-readiness scan on 2026-08-07, which counted
+  // </rn/tracks>; rel="service-desc" toward a discoverability PASS while
+  // robots.txt carried `Disallow: /rn/tracks`. Sixteen conflicts across six
+  // surfaces at the time. Both sides are this site's own declarations, so one of
+  // them was always going to be a lie, and neither side can see the other.
+  //
+  // The rule is about FETCHING, not indexing: a path that should stay out of a
+  // search index says so with X-Robots-Tag, which a crawler can only read if it
+  // is allowed to fetch the response carrying it.
+  const read = (p) => readFile(new URL(p, import.meta.url), "utf8");
+  const robots = await read("holding/robots.txt");
+
+  const disallowed = [...new Set(
+    robots.split("\n").filter((l) => /^Disallow:/i.test(l)).map((l) => l.slice(9).trim()),
+  )];
+  assert.ok(disallowed.length, "robots.txt must still carry Disallow rules");
+  // The action endpoints. Nothing advertises them and nothing should.
+  assert.deepEqual(disallowed.sort(), ["/lwe/ask", "/rn/admin", "/rn/set"]);
+
+  const { HOMEPAGE_DISCOVERY_LINK } = await import("./holding/_worker.js/lib/security.js");
+  const surfaces = {
+    "the homepage Link header": HOMEPAGE_DISCOVERY_LINK,
+    "_headers":                 await read("holding/_headers"),
+    ".well-known/api-catalog":  await read("holding/.well-known/api-catalog"),
+    "agent-card.json":          await read("holding/.well-known/agent-card.json"),
+    "auth.md":                  await read("holding/auth.md"),
+    "llms.txt":                 await read("holding/llms.txt"),
+  };
+
+  for (const [name, text] of Object.entries(surfaces)) {
+    const advertised = new Set();
+    // absolute URLs (auth.md, llms.txt, the JSON catalogs) …
+    for (const m of text.matchAll(/https:\/\/aadhar\.sh(\/[^\s"'`)>,]*)/g)) advertised.add(m[1]);
+    // … and RFC 8288 Link targets, which are relative here
+    for (const m of text.matchAll(/<(\/[^\s">]*)>\s*;\s*rel=/g)) advertised.add(m[1]);
+    for (const path of advertised) {
+      // robots.txt prefix semantics: /around also covers /around/json. Match the
+      // separator too, so /aroundabout would not count as blocked by /around.
+      const rule = disallowed.find((d) => path === d || path.startsWith(`${d}/`) || path.startsWith(`${d}.`));
+      assert.ok(!rule, `${name} advertises ${path}, which robots.txt blocks with Disallow: ${rule}`);
+    }
+  }
+});
+
 test("the RUM beacon is first-party on both legs, and every page that says so agrees", async () => {
   const page = await readFile(new URL("holding/index.html", import.meta.url), "utf8");
   const headers = await readFile(new URL("holding/_headers", import.meta.url), "utf8");
@@ -1967,6 +2056,30 @@ test("deadline distinguishes fallback values for slow vs missing", async () => {
   assert.equal(missing, null);
   const slow = await deadline(new Promise(() => {}), 10, undefined, () => {});
   assert.equal(slow, undefined);
+});
+
+test("whoareyou lets cold RDAP finish off the critical path", async () => {
+  const originalFetch = globalThis.fetch;
+  let release;
+  globalThis.fetch = () => new Promise((resolve) => { release = resolve; });
+  const background = [];
+  const started = Date.now();
+  try {
+    const result = await gatherWhoareyou(
+      new Request("https://aadhar.sh/whoareyou", { headers: { "cf-connecting-ip": "203.0.113.7" } }),
+      { waitUntil(promise) { background.push(promise); } },
+    );
+    assert.equal(result.rdap, null, "a cold enrichment should not delay the page");
+    assert.ok(Date.now() - started < 1000, "the optional lookup must leave well before its 2s network abort");
+    assert.equal(background.length, 1, "the same lookup should keep running to warm Cloudflare's edge cache");
+
+    release(new Response(JSON.stringify({ name: "TEST-NET-3" }), {
+      headers: { "content-type": "application/rdap+json" },
+    }));
+    await background[0];
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 
@@ -2407,6 +2520,14 @@ test("_headers page rules match the twin the worker fetches, not the request pat
     "exactly one rule may set Cache-Control on a pixel-peeper tile, or its immutable year gets clamped");
 });
 
+test("the offscreen Horizon iframe does not start ticking during initial load", async () => {
+  const horizon = await readFile(new URL("holding/garage/horizon.html", import.meta.url), "utf8");
+  const iframe = horizon.match(/<iframe\s+[^>]*id="mb-frame"[^>]*>/)?.[0];
+  assert.ok(iframe, "the state-preserving move demo must keep its uptime iframe");
+  assert.match(iframe, /\sloading="lazy"(?:\s|>)/,
+    "the deep-page iframe runs a perpetual timer and must wait until it nears the viewport");
+});
+
 test("the CSP falls back to 'unsafe-inline' only where the build cannot speak", async () => {
   const { canonicalPath, scriptHashesFor } = await import("./holding/_worker.js/lib/csp-hashes.js");
 
@@ -2466,6 +2587,8 @@ test("the hashed policy is well-formed and keeps 'self' for the external scripts
     // that is the whole point of the report-only phase.
     if (!ENFORCE_PAGE_HASHES) {
       assert.match(pair["content-security-policy"], /script-src 'self' 'unsafe-inline';/);
+      assert.doesNotMatch(hashed, /upgrade-insecure-requests/,
+        "a report-only policy must omit directives the browser cannot report");
     }
   } finally {
     for (const k of Object.keys(mod.PAGE_SCRIPT_HASHES)) delete mod.PAGE_SCRIPT_HASHES[k];
@@ -4040,4 +4163,36 @@ test("encode judges chroma and depth against this site's own measurements", asyn
   assert.ok(judgeEncode({ format: "avif", bitDepth: 8, subsampling: "4:2:0" }, 30000).warns.some((w) => w.id === "depth"),
     "8-bit AVIF must be flagged — 10-bit is free");
   assert.equal(judgeEncode({ format: "avif", bitDepth: 10, subsampling: "4:2:0" }, 30000).warns.length, 0);
+});
+
+test("the ramp never double-parses wrangler's already-parsed JSON", async () => {
+  // A ramp writes its changelog row exactly once, at 100%, and a failure there
+  // is caught and downgraded to a printed note on purpose — traffic has already
+  // moved, and unwinding a good release over a missing log row would be worse.
+  //
+  // That tolerance is what made this bug invisible for three releases. The D1
+  // read was written as JSON.parse(await wrangler(..., { json: true })), but the
+  // helper ALREADY parses when json is set, so the second parse received an
+  // object, stringified it to "[object Object]", and threw. Every ramp then
+  // reported that D1 was unreachable and skipped its own write. D1 was answering
+  // the whole time; `npm run checkpoints:check` queried it fine minutes later.
+  //
+  // Asserted as source text because the alternative is spawning wrangler against
+  // production D1 from the test suite, which no contract test should ever do.
+  const src = await readFile(new URL("./scripts/deploy-promote.mjs", import.meta.url), "utf8");
+
+  assert.ok(/const rows = \(await wrangler\(/.test(src),
+    "the D1 read must consume wrangler's parsed result directly");
+  assert.equal(/JSON\.parse\(\s*await wrangler\(/.test(src), false,
+    "wrangler(..., { json: true }) already returns parsed JSON — a second JSON.parse throws on the object");
+
+  // The helper's contract is the other half: if it ever stops parsing, the call
+  // site above silently starts handing a string to [0].results instead.
+  assert.ok(/return json \? JSON\.parse\(stdout\) : stdout;/.test(src),
+    "wrangler() must keep parsing when { json: true } — the call site depends on it");
+
+  // And the diagnostic must not name a cause. It covers a file read, a spawn and
+  // a shape check; blaming D1 sent the reader to check a healthy database.
+  assert.equal(/when D1 is reachable/.test(src), false,
+    "the catch-all note must not assert D1 is the cause — it cannot know that");
 });

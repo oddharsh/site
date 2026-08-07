@@ -194,8 +194,19 @@ code { font-family: var(--font-mono); font-size: 9.5pt; }
 }
 
 /* ── prototype 3: the Luna scrollbar, a faithful XP recreation ── */
-/* Firefox two-tone (thumb / track) */
-.luna-scroller { height: 150px; overflow-y: scroll; border: 1px solid oklch(61.14% 0.0611 253.60); background: oklch(99% 0.004 250); padding: 8px 12px; font-size: 9.5pt; margin-top: 4px; scrollbar-color: #6898d0 #c0d4ec; }
+/* scrollbar-color must be auto here or Chromium discards every ::-webkit rule
+   below and the demo box renders a zero-width overlay bar — this page spent a
+   while demonstrating the opposite of what it claims. It inherits a non-auto
+   value from the html rule further down, so the reset is not redundant.
+   Firefox gets the two-tone (thumb / track) through the query instead; the
+   :-moz-focusring arm is there because FF153 answers yes to the ::-webkit
+   probe, which this page's sibling /garage/horizon documents. (-moz-appearance
+   is the trap: Lightning CSS un-prefixes it to appearance, which Chromium
+   supports, so the query would flip true and undo the reset at build time.) */
+.luna-scroller { height: 150px; overflow-y: scroll; border: 1px solid oklch(61.14% 0.0611 253.60); background: oklch(99% 0.004 250); padding: 8px 12px; font-size: 9.5pt; margin-top: 4px; scrollbar-color: auto; }
+@supports (not selector(::-webkit-scrollbar)) or selector(:-moz-focusring) {
+  .luna-scroller { scrollbar-color: #6898d0 #c0d4ec; }
+}
 
 .luna-scroller::-webkit-scrollbar { width: 17px; }
 

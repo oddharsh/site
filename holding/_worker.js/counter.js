@@ -57,21 +57,6 @@ async function mirrorCount(env, n, force = false) {
   } catch {}   // a missed mirror costs staleness, never the response
 }
 
-// Rebuild the mirror from the DO when the render finds COUNT_KEY missing: the
-// first load after this shipped, or after a manual delete. The render calls this
-// from ctx.waitUntil and never awaits it, so a cold mirror costs one visitor the
-// placeholder instead of putting the DO back on the critical path. `force` skips
-// the freshness sentinel, which can outlive the value it was throttling if the
-// value alone was deleted. The peek is read-only, so a speculative prerender that
-// triggers a heal still doesn't advance the count.
-export async function seedCountMirror(env) {
-  try {
-    const stub = env.COUNTER.get(env.COUNTER.idFromName("homepage-visits"));
-    const { n } = await (await stub.fetch("https://do/?peek=1")).json();
-    if (typeof n === "number") await mirrorCount(env, n, true);
-  } catch {}
-}
-
 // ── GET /hit — the counter's tick endpoint, and an odometer if you ask for one ──
 // The homepage DISPLAYS the count as SSR'd text from a read-only peek (home.js),
 // so rendering never mutates. Advancing it happens here, and callers arrive

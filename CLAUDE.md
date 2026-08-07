@@ -141,12 +141,35 @@ worktrees may edit freely, but a worktree is not a release surface.
   The table above is now the readable copy of a machine-checked declaration
   rather than a claim nobody re-reads.
 
-  It costs no credential. The repo is public, so GitHub's rulesets endpoint is
-  public with it, and this tier runs on every PR like the DNS tier instead of
-  degrading to a note like the Cloudflare account tier. CI passes the
-  auto-provisioned `GITHUB_TOKEN` for rate-limit headroom alone (60/hr per IP
-  unauthenticated, which shared Actions runners exhaust), and a read that fails
-  is an advisory, so GitHub being down cannot redden an unrelated PR.
+  The RULESET half costs no credential. The repo is public, so GitHub's rulesets
+  endpoint is public with it, and that part runs on every PR like the DNS tier
+  instead of degrading to a note like the Cloudflare account tier. CI passes the
+  auto-provisioned `GITHUB_TOKEN` for rate-limit headroom alone there (60/hr per
+  IP unauthenticated, which shared Actions runners exhaust), and a read that
+  fails is an advisory, so GitHub being down cannot redden an unrelated PR.
+
+  **`repository.code_scanning` is the exception, and it is WORKSTATION-ONLY.**
+  CodeQL default setup declares the language list #241 curated, plus `state`,
+  `query_suite` and `threat_model`. Its endpoint answers 401 unauthenticated even
+  on a public repo, and the permission it wants is the repository
+  **Administration** read, which is **not one of the keys a workflow may grant its
+  `GITHUB_TOKEN`** (`actions`, `artifact-metadata`, `attestations`, `checks`,
+  `code-quality`, `contents`, `deployments`, `discussions`, `id-token`, `issues`,
+  `models`, `packages`, `pages`, `pull-requests`, `repository-projects`,
+  `security-events`, `statuses`). No `permissions:` block turns it on.
+
+  `security-events: read` was added to `ci.yml` for it and MEASURED to do nothing
+  (still 403, 2026-08-07), so it came back out with a note where it sat. The only
+  credential that can read it is a classic PAT with `repo`, which is exactly the
+  broad standing credential this repo keeps out of CI, so the answer is no. The
+  assertion runs on a workstation and CI reports one advisory naming the limit.
+
+  Two general lessons, and the second is the expensive one. "GitHub read,
+  therefore free" does not generalize, so check the auth requirement per endpoint
+  rather than inheriting the rulesets precedent. And a `permissions:` key that
+  merely SOUNDS right is worth measuring before trusting: `security-events`
+  covers code scanning ALERTS, while the default-setup CONFIGURATION sits under
+  Administration, and nothing about the name says so.
 
   Two assertions are worth knowing before you edit that block. `visibility` is
   checked FIRST and fails on its own, because rulesets on a private repo need a
@@ -1357,9 +1380,48 @@ npm run deploy
     value, 16px after `scrollbar-color: auto`.
 
     The fix is to reset to `auto` on the element and put the standard property
-    behind `@supports not selector(::-webkit-scrollbar)`, which Firefox (the one
-    engine that needs it) matches and Chromium/Safari do not. Check the
-    INHERITED value first the next time a custom scrollbar does not appear.
+    behind a query only Firefox (the one engine that needs it) matches. Check
+    the INHERITED value first the next time a custom scrollbar does not appear.
+
+    **Writing this note down did not fix the other three instances, and that is
+    the part worth generalizing.** It was filed 2026-08-05 off the `/terminal`
+    repair and reads as though the site were now correct. It was not: `luna.css`
+    had `scrollbar-color` and `::-webkit-scrollbar-*` on the same selectors
+    (`.window>.content`, `.window>.body`, `.np-text`), so EVERY window on the
+    site drew a zero-width overlay bar, and `garage/scroll.html` did too, on the
+    one page whose entire purpose is demonstrating the Luna scrollbar while its
+    copy claims "WebKit/Blink get the full gradient thumb + buttons." Both went
+    unnoticed for two days because the symptom is an absence. Measured 2026-08-07
+    in Chromium 148, changing only that property: homepage window 0px to 16px,
+    demo box 0px to 17px. When a gotcha lands here, grep the tree for the other
+    instances in the same commit; `grep -rl '::-webkit-scrollbar' holding/` was
+    the whole search.
+
+    **`@supports not selector(::-webkit-scrollbar)` no longer isolates Firefox,
+    so the original recipe above is retired.** FF153 answers YES to that probe
+    while implementing a narrow subset (a non-zero `width`/`height` disables
+    overlay bars, `display:none` acts like `scrollbar-width:none`, and nothing
+    else lands), which `/garage/horizon` already documents as its own chip lying.
+    A bare `not` arm therefore hands modern Firefox `auto` and drops the tint.
+    All three sites now use:
+
+    ```css
+    @supports (not selector(::-webkit-scrollbar)) or selector(:-moz-focusring)
+    ```
+
+    so the colours survive unless Firefox both answers the probe AND drops the
+    pseudo. Chromium evaluates the whole query false, verified in-engine.
+
+    **Do NOT reach for `(-moz-appearance:none)` as the Firefox arm.** It is the
+    obvious candidate, it is correct in the source, and Lightning CSS un-prefixes
+    it to `(appearance:none)`, which Chromium supports. The query flips true at
+    BUILD time, the reset is undone, and the bug returns while the source still
+    reads right. Of six candidates tested through the minifier, `-moz-appearance`
+    and `-moz-box-align` were rewritten; `:-moz-focusring`, `:-moz-any-link`,
+    `-moz-osx-font-smoothing` and `-moz-float-edge` survived. The general rule is
+    that a vendor-prefixed feature query has to be diffed in the MINIFIED output,
+    never trusted from source, because this minifier's job is to normalize
+    exactly the prefix the query depends on.
 
 19. **A backtick inside a CSS comment inside a `/*min*/` literal ends the JS
     template literal.** The worker's static CSS lives in backtick literals that
@@ -1432,11 +1494,26 @@ npm run deploy
     deploy at most 2 version(s) at a time."*
 
     So a ramp that starts from a multi-version split necessarily DROPS the smaller
-    incumbents. `trafficSplit()` gives the whole remainder to the LARGEST incumbent
-    and prints which versions stop serving, because the alternative — picking the
-    newest — shoves the entire remainder onto a version only a slice of traffic had
-    been getting, which is a big silent change inside a procedure whose only purpose
-    is changing one thing carefully.
+    incumbents, and the script cannot avoid that — it can only choose which one
+    survives.
+
+    **This paragraph described a `trafficSplit()` that does not exist, and the
+    correction is the more useful note.** That function was written in the working
+    tree on 2026-08-06 to distribute the remainder proportionally across every
+    incumbent; the 2-version cap is exactly what makes that idea unimplementable,
+    and the whole thing was discarded without ever being committed. What ships is
+    simpler and predates it: `const previous = active.find((v) => …)`, so the
+    remainder goes to **the first non-target version the API happens to list**, and
+    the split is only ever 2 wide, which is why the "too many versions" error cannot
+    recur here.
+
+    The wart worth knowing: with two incumbents, `find` is arbitrary rather than
+    largest. Hand the remainder to a version only 10% of traffic was getting and a
+    ramp step silently moves 90% of users somewhere new, inside a procedure whose
+    only purpose is changing one thing carefully. Rare (it needs a multi-version
+    split, which usually means a previous ramp stopped half-way), unlikely to be
+    noticed when it happens, and a one-line fix — sort by `pct` and take the largest
+    — if someone decides it is worth touching the release path for.
 
 21. **The bridge's `c2pa` pack cannot see this site's photos, and no pipeline
     change fixes it.** TURNED OFF in the dashboard 2026-08-06, so the injected tag
@@ -1460,6 +1537,43 @@ npm run deploy
     leaves the pixels byte-identical at the same 13,766 B, which is the only shape
     worth revisiting. Across 474 committed `/i/` files that is ~6.5 MB of immutable
     assets for a signature nothing on the page can currently read.
+
+23. **An AI Gateway id is a hard dependency, so the three Workers AI callers here
+    name one through config rather than a literal.** Cloudflare merged Workers AI
+    and AI Gateway into one control plane on 2026-08-07: `env.AI.run` takes a third
+    argument and the REST endpoint takes a `cf-aig-gateway-id` header, which buys
+    payload logs, per-model token counts and cost attribution with no dashboard
+    setup. No breaking changes, and `lwe-ask` had already been routing through its
+    own `lwe` gateway since it was written, so the only callers this changed were
+    `/garage/cf/caption` and the two photo scripts.
+
+    Verified rather than assumed, because the docs do not say whether a `default`
+    gateway exists: against `wrangler dev` with the real account, `default` returned
+    a caption in 5.4s and `definitely-not-a-real-gateway-xyz` returned
+    **`2001: Please configure AI Gateway in the Cloudflare dashboard`**. Run that
+    control before trusting any gateway id. What it proves is the part that matters
+    operationally: **a wrong or deleted gateway FAILS the inference call**, it does
+    not quietly fall back to un-gatewayed inference. Since no deploy path here may
+    create Cloudflare resources, a literal in the source would make a live demo
+    endpoint depend on a resource this repo cannot restore, so the id is
+    `cf-garage`'s `AI_GATEWAY` var and the scripts' `CLOUDFLARE_AI_GATEWAY`, both
+    defaulting to `default` and both disabled by an empty string.
+
+    **Caching is deliberately off on all three**, which is the non-obvious half.
+    `cacheTtl` / `cf-aig-cache-ttl` is a separate opt-in and it is wrong here for two
+    different reasons: `/garage/cf/caption` sends a byte-identical request on every
+    click, so one cached answer becomes every visitor's answer on a page whose lede
+    promises nothing is faked; and the photo scripts are resumable, where re-running
+    a stem is exactly how a bad caption gets replaced, which a cache keyed on the
+    identical request would make impossible. Reach for gateway caching only where a
+    repeated identical request SHOULD return a repeated identical answer, the way
+    `lwe-ask` does with its 24h TTL and explicit per-request `cacheKey`.
+
+    Two announced pieces are not shipped and nothing here should be built on them
+    yet: **model-first routing** (ask for a model abstractly, let the gateway pick a
+    provider and fail over) and **smart routing**. The first is worth watching,
+    since `lwe-ask/wrangler.toml` already carries a scar from `llama-3.1-8b` being
+    deprecated out from under `GEN_MODEL` on 2026-05-30.
 
 ---
 

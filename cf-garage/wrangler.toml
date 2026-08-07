@@ -20,6 +20,18 @@ head_sampling_rate = 1
 [ai]
 binding = "AI"
 
+[vars]
+# Routes the caption call through AI Gateway, which since the 2026-08 Workers AI /
+# AI Gateway unification is the same control plane rather than a separate product:
+# one `env.AI.run` grows a third argument and the account gets request/response
+# payloads, per-model token counts, and cost attribution with no dashboard setup.
+#
+# A VAR rather than a const in the source, because the id names a resource this
+# repo cannot create (no deploy path here may mint Cloudflare resources) and a
+# missing gateway would fail a LIVE demo endpoint. Emptying this string is the
+# off-switch, one line, no code change and no redeploy of logic.
+AI_GATEWAY = "default"
+
 # Browser Rendering (screenshot demo) — needs the binding enabled on the zone
 [browser]
 binding = "BROWSER"

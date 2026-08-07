@@ -259,6 +259,66 @@ async function checkTree(infra, wrangler, lwe) {
   }
   pass(`${consumers} DNS-referenced files present in the tree`);
 
+  // The account pin. Both wrangler configs must name the account infra.json
+  // declares, because wrangler only auto-selects while the login can see
+  // exactly one and that is not a property this repo controls — a second
+  // account appearing on the login is enough to break every non-interactive
+  // wrangler call at once (2026-08-07). Checking BOTH configs matters: the dev
+  // twin is what dev:remote and routes:check:remote reach production through,
+  // and build.mjs's drift warning compares binding sets only, so an account_id
+  // that went missing from one of them would otherwise be caught by nothing.
+  //
+  // wrangler.jsonc's account_id is the SOURCE OF TRUTH and the other three are
+  // compared against it, rather than against a copy in infra.json. That is this
+  // file's existing rule for resource ids, and it is why infra.json's account
+  // block declares the invariant without repeating the value.
+  const declaredAccount = wrangler.account_id;
+  if (!declaredAccount) {
+    fail(`wrangler.jsonc lost its account_id — wrangler picks an account by itself only while the login sees exactly one, so every non-interactive call fails the moment a second appears`);
+  } else {
+    const devWrangler = await readJsonc("wrangler.dev.jsonc").catch(() => null);
+    if (!devWrangler) {
+      fail(`wrangler.dev.jsonc is missing or unparseable, so its account_id pin cannot be checked`);
+    }
+    // FOUR copies of this id ship, not two. Both configs carry it as the
+    // deploy-time `account_id` pin AND as the runtime var CF_ACCOUNT_ID, which
+    // /ledger uses to query this account's own Analytics Engine. The var
+    // predates the pin. Check all four against one declaration so the string
+    // cannot be half-updated: an account_id and a CF_ACCOUNT_ID that disagree
+    // would deploy to one account and read analytics from another, and both
+    // halves would look fine on their own.
+    //
+    // Counted rather than assumed, so the ok line cannot claim everything is
+    // pinned while one of these is the reason the run is failing.
+    const sites = [
+      ["wrangler.jsonc vars.CF_ACCOUNT_ID", wrangler.vars?.CF_ACCOUNT_ID, "/ledger reads this account's Analytics Engine through it"],
+      ...(devWrangler ? [
+        ["wrangler.dev.jsonc account_id", devWrangler.account_id, "dev:remote and routes:check:remote reach production bindings through this config"],
+        ["wrangler.dev.jsonc vars.CF_ACCOUNT_ID", devWrangler.vars?.CF_ACCOUNT_ID, "/ledger reads this account's Analytics Engine through it"],
+      ] : []),
+    ];
+    // infra.json names the same three, so a copy added there without a check
+    // here (or the reverse) is itself drift.
+    const declared = infra.account?.must_agree || [];
+    const named = sites.map(([where]) => where);
+    if (declared.join("|") !== named.join("|")) {
+      fail(`infra.json's account.must_agree (${JSON.stringify(declared)}) does not match what checkTree verifies (${JSON.stringify(named)})`);
+    }
+    let agreed = 0;
+    for (const [where, value, why] of sites) {
+      if (!value) {
+        fail(`${where} is missing — ${why}`);
+      } else if (value !== declaredAccount) {
+        fail(`${where} (${JSON.stringify(value)}) disagrees with wrangler.jsonc's account_id (${JSON.stringify(declaredAccount)})`);
+      } else {
+        agreed++;
+      }
+    }
+    if (agreed === sites.length && sites.length === 3) {
+      pass(`account ${declaredAccount} agrees across all 4 declarations (account_id + vars.CF_ACCOUNT_ID, both configs)`);
+    }
+  }
+
   // The site Worker's name must match what the release config expects, or
   // Workers Builds refuses the build outright.
   if (wrangler.name !== infra.release.worker) {
@@ -869,6 +929,76 @@ async function checkRepo(infra) {
   }
 
   pass(`${slug} is ${meta.visibility} and its ${repo.rulesets.length} declared ruleset(s) match, with no bypass actors${token ? "" : " (unauthenticated read)"}`);
+
+  await checkCodeScanning(repo, slug, token);
+}
+
+// CodeQL default setup, declared for the same reason the rulesets are: it is a
+// curated decision living in a dashboard, and #241 recorded the language list
+// plus the cost argument for it in MAINTENANCE.md while noting infra:check
+// could not see it.
+//
+// WORKSTATION-ONLY, and that is structural rather than a missing setting.
+// The endpoint needs the repository **Administration** permission (read), which
+// is NOT one of the keys a workflow may grant its GITHUB_TOKEN: the whole list
+// is actions, artifact-metadata, attestations, checks, code-quality, contents,
+// deployments, discussions, id-token, issues, models, packages, pages,
+// pull-requests, repository-projects, security-events and statuses. So no
+// `permissions:` block can turn this on in CI, and `security-events: read` in
+// particular does nothing here (tried on 2026-08-07: still HTTP 403).
+//
+// This is the mirror image of the Workers Builds case, where a Read variant of
+// the permission existed and made the check possible without widening anything.
+// Here the only credential that can read it is a classic PAT with `repo`, which
+// is precisely the kind of broad standing credential this repo keeps out of CI.
+// So the check runs where the owner runs it, and CI says plainly that it cannot.
+async function checkCodeScanning(repo, slug, token) {
+  const want = repo.code_scanning;
+  if (!want) return;
+
+  let live;
+  try {
+    live = await ghFetch(`/repos/${slug}/code-scanning/default-setup`, token);
+  } catch (e) {
+    warn(
+      /401|403/.test(e.message)
+        ? `CodeQL default setup: not verifiable here, the endpoint needs the repository Administration permission and no GITHUB_TOKEN can hold it. Run \`npm run infra:check\` on a workstation with \`gh\` logged in (classic \`repo\` scope) to assert it (${e.message})`
+        : `CodeQL default setup could not be read: ${e.message}`,
+    );
+    return;
+  }
+
+  // state first. A scanner that is simply off reports nothing, which reads
+  // exactly like a clean scan, so every field below is moot if this drifted.
+  if (live.state !== want.state) {
+    fail(`CodeQL default setup is ${JSON.stringify(live.state)}, declared ${JSON.stringify(want.state)}. A disabled scanner reports no findings, which looks identical to a clean scan`);
+    return;
+  }
+
+  // The curated list. Compared as a SET, because the API's ordering is not a
+  // documented guarantee and reordering is not drift worth failing on.
+  const got = [...(live.languages || [])].sort();
+  const declared = [...want.languages].sort();
+  if (got.join(",") !== declared.join(",")) {
+    const added = got.filter((l) => !declared.includes(l));
+    const dropped = declared.filter((l) => !got.includes(l));
+    const parts = [];
+    if (added.length) parts.push(`gained ${added.join(", ")}`);
+    if (dropped.length) parts.push(`lost ${dropped.join(", ")}`);
+    fail(`CodeQL default setup ${parts.join(" and ")} (live ${got.join(", ")}); #241 curated this list, so re-read MAINTENANCE.md before widening it`);
+  }
+
+  // threat_model is what makes the language argument valid: `remote` is why
+  // build tooling that never answers a request is safely out of scope.
+  if (live.threat_model !== want.threat_model) {
+    fail(`CodeQL threat_model is ${JSON.stringify(live.threat_model)}, declared ${JSON.stringify(want.threat_model)}. MAINTENANCE.md argues rust and python are droppable BECAUSE the model is remote, so this change invalidates that reasoning`);
+  }
+
+  if (live.query_suite !== want.query_suite) {
+    fail(`CodeQL query_suite is ${JSON.stringify(live.query_suite)}, declared ${JSON.stringify(want.query_suite)}`);
+  }
+
+  pass(`CodeQL default setup matches: ${got.length} languages (${got.join(", ")}), ${live.query_suite} suite, ${live.threat_model} threat model`);
 }
 
 // ------------------------------------------- tier: agent markdown surface ----

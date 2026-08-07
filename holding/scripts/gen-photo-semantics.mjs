@@ -36,6 +36,7 @@
 //   node holding/scripts/gen-photo-semantics.mjs --vision --dry-run
 //
 //   export CLOUDFLARE_API_TOKEN=...   # the same token gen-alt-text.py uses
+//   export CLOUDFLARE_AI_GATEWAY=""   # opt OUT of gateway routing (defaults to "default")
 //
 // Resumable: --vision only calls the model for stems that have no vision terms
 // yet, so a 429 against the free daily neuron budget just means run it again.
@@ -56,6 +57,11 @@ const TOKEN = (process.env.CLOUDFLARE_API_TOKEN || "").trim();
 const ACCOUNT = process.env.CLOUDFLARE_ACCOUNT_ID || "1c99acdb6141579023fb97d24261ea58";
 const MODEL = "@cf/llava-hf/llava-1.5-7b-hf";
 const AI_RUN = `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT}/ai/run/${MODEL}`;
+// Same gateway the worker and gen-alt-text.py use, so all three callers of this one
+// model report into a single per-model log with cost attribution. Observability only,
+// no cf-aig-cache-ttl: --vision is resumable and re-running a stem is how bad terms
+// get replaced, which a cache keyed on the identical request would make impossible.
+const GATEWAY = (process.env.CLOUDFLARE_AI_GATEWAY ?? "default").trim();
 
 // Alt text answers "what is in this frame". This answers "what would someone
 // call this frame when looking for it", which is a different question and the
@@ -149,7 +155,11 @@ async function visionTerms(stem, hashes) {
   }
   const response = await fetch(AI_RUN, {
     method: "POST",
-    headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" },
+    headers: {
+      Authorization: `Bearer ${TOKEN}`,
+      "Content-Type": "application/json",
+      ...(GATEWAY ? { "cf-aig-gateway-id": GATEWAY } : {}),
+    },
     body,
   });
   if (!response.ok) throw new Error(`${response.status} ${(await response.text()).slice(0, 160)}`);

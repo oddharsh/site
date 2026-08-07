@@ -23,6 +23,12 @@ on:
 
 permissions:
   contents: read
+  # Deliberately NOT `security-events: read`. It was added on 2026-08-07 for
+  # infra:check's CodeQL default-setup assertion and measured to do nothing: that
+  # endpoint needs the repository *Administration* permission, which is not one of
+  # the keys a workflow may grant its GITHUB_TOKEN, so the call still returned 403.
+  # The assertion is workstation-only by construction. Do not re-add this line
+  # expecting it to turn the check on.
 
 concurrency:
   # A dispatch deliberately does NOT share the PR's group. The whole reason this
@@ -130,6 +136,7 @@ jobs:
           # all; what a token buys is 1000/hr instead of the 60/hr an unauthed
           # read gets per IP, which shared Actions runners can exhaust. The
           # workflow's `contents: read` is enough, and a rate-limited read is an
-          # advisory rather than a failure either way.
+          # advisory rather than a failure either way. It does NOT unlock the
+          # CodeQL assertion; see the permissions note at the top of this file.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run infra:check

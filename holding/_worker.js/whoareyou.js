@@ -2,8 +2,11 @@
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
 import { serveMarkdownTwin } from "./lib/assets.js";
 import { BOT_UA } from "./lib/botauth.js";
+import { deadline } from "./lib/cache.js";
 import { lunaPage } from "./lib/chrome.js";
 import { esc, wantsMarkdown } from "./lib/http.js";
+
+const RDAP_BUDGET_MS = 250;
 
 // ── /whoareyou handler ───────────────────────────────────────────────
 // shows the visitor what their HTTP request revealed. no logging, no
@@ -93,7 +96,7 @@ export async function fetchRdap(ip) {
 // gather everything one HTTP request revealed: the cf.* edge signals, the
 // request headers, a parsed UA, and the (optional, cached) RDAP enrichment.
 // shared by the /whoareyou page and the /whoareyou.json popout feed.
-export async function gatherWhoareyou(request) {
+export async function gatherWhoareyou(request, ctx) {
   const cf = request.cf || {};
   const h  = request.headers;
   const url = new URL(request.url);
@@ -143,9 +146,17 @@ export async function gatherWhoareyou(request) {
 
   const ua = parseUA(data.userAgent);
 
-  // RDAP enrichment — server-side only, never blocks rendering if it
-  // fails or times out (the page renders fine without these fields).
-  const rdap = await fetchRdap(data.ip);
+  // RDAP enrichment is optional. Give a warm edge-cached response a short place
+  // on the critical path, then render without it while the same read finishes in
+  // the background and warms the colo. fetchRdap's own 2s abort remains the
+  // outer bound; a cold or unreachable RIR no longer makes the page pay it.
+  let rdapTimedOut = false;
+  const rdapRead = fetchRdap(data.ip);
+  const rdap = await deadline(rdapRead, RDAP_BUDGET_MS, null, () => { rdapTimedOut = true; });
+  if (rdapTimedOut) {
+    if (ctx) ctx.waitUntil(rdapRead);
+    else void rdapRead;
+  }
 
   return { data, ua, rdap };
 }
@@ -225,8 +236,8 @@ export function buildWhoareyouGroups(data, ua, rdap, version) {
   ];
 }
 
-export async function handleWhoareyouJson(request, env) {
-  const { data, ua, rdap } = await gatherWhoareyou(request);
+export async function handleWhoareyouJson(request, env, ctx) {
+  const { data, ua, rdap } = await gatherWhoareyou(request, ctx);
   const version = env?.CF_VERSION_METADATA?.id;
   const body = JSON.stringify({ groups: buildWhoareyouGroups(data, ua, rdap, version) });
   return new Response(body, {
@@ -239,7 +250,7 @@ export async function handleWhoareyouJson(request, env) {
   });
 }
 
-export async function handleWhoareyou(request, env) {
+export async function handleWhoareyou(request, env, ctx) {
   // The twin DESCRIBES this page rather than mirroring it: every value here is
   // per-request, so there is nothing fixed to publish. An agent that wants the
   // actual values for its own request should GET /whoareyou.json, which the twin
@@ -250,7 +261,7 @@ export async function handleWhoareyou(request, env) {
     if (md) return md;
   }
 
-  const { data, ua, rdap } = await gatherWhoareyou(request);
+  const { data, ua, rdap } = await gatherWhoareyou(request, ctx);
 
   return lunaPage({
     title: "System Properties · aadhar.sh/whoareyou",

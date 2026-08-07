@@ -323,6 +323,12 @@ export async function handleRnArt(request, env, ctx) {
   return out;
 }
 
+// Both representations carry `x-robots-tag: noindex`, which is what robots.txt
+// used to try to say with `Disallow: /rn/tracks` and could not. The playlist is a
+// live JSON feed and an HTML fragment: worth FETCHING (the homepage Link header,
+// the api-catalog, auth.md and llms.txt all point agents at it) and worthless in
+// a search index. Disallow blocks the fetch and so blocks its own noindex; this
+// header is the one that expresses the actual intent.
 function trackResponse(payload, status = 200, format = "json") {
   if (format === "html") {
     return new Response(renderTrackListHtml(payload), {
@@ -331,6 +337,7 @@ function trackResponse(payload, status = 200, format = "json") {
         "content-type": "text/html; charset=utf-8",
         "cache-control": status >= 400 ? "public, max-age=30, must-revalidate" : "public, max-age=300, s-maxage=600",
         "x-content-type-options": "nosniff",
+        "x-robots-tag": "noindex",
         // positive proof this body is OUR fragment. A 500/522/1101 from the edge is
         // also text/html and also resolves fine, so the homepage requires this marker
         // before injecting the response into the track list.
@@ -338,7 +345,9 @@ function trackResponse(payload, status = 200, format = "json") {
       },
     });
   }
-  return jsonResp(payload, status);
+  const res = jsonResp(payload, status);
+  res.headers.set("x-robots-tag", "noindex");
+  return res;
 }
 
 // Traced as `rn.tracks.load` with the OUTCOME on the span, because this handler
