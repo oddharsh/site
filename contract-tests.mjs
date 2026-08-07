@@ -18,6 +18,7 @@ import {
   handleLensFetch,
   handleLensShot,
   renderLensShell,
+  validateLensTarget,
 } from "./holding/_worker.js/lens.js";
 import { handleCoffeeAvailability, readCoffeeAvailability } from "./holding/_worker.js/coffee.js";
 import { handleSiteMcp, MCP_TOOLS as SITE_MCP_TOOLS, SITE_MCP_SERVER_INFO } from "./holding/_worker.js/mcp.js";
@@ -42,7 +43,7 @@ import { derivePhotoPool, renderPhotosPage, getImagesManifest, handlePhotoQuery,
 import { renderPhotoSlots } from "./holding/_worker.js/lib/photo-grid.js";
 import { cachedRender, deadline } from "./holding/_worker.js/lib/cache.js";
 import { ifNoneMatchMatches, notModifiedIfFresh, withWeakEtag } from "./holding/_worker.js/lib/cache.js";
-import { privateHostBlocked } from "./holding/_worker.js/lib/crawl.js";
+import { fetchFollowingPublicRedirects, privateHostBlocked } from "./holding/_worker.js/lib/crawl.js";
 import { handleHit } from "./holding/_worker.js/counter.js";
 import { cronHomeProbe, parseServerTiming } from "./holding/_worker.js/perf-probe.js";
 import { gatherWhoareyou } from "./holding/_worker.js/whoareyou.js";
@@ -2263,6 +2264,72 @@ test("the shared SSRF host floor blocks every non-public shape", () => {
     "localhost.example.com",              // ends in a real TLD, not a bare localhost
   ];
   for (const h of allowed) assert.equal(privateHostBlocked(h), false, `should allow ${h}`);
+});
+
+// Each shape below was measured passing this floor on 2026-08-07, so these are
+// closed holes rather than hypotheticals. The v4-mapped rows are the ones worth
+// keeping honest: the whole dotted-quad table was being skipped for an address
+// spelled ::ffff:169.254.169.254, which is the metadata endpoint by another name.
+test("the SSRF floor covers the alternate spellings of a blocked host", () => {
+  const blocked = [
+    "localhost.", "127.0.0.1.", "db.internal.",     // trailing dot is a legal FQDN
+    "::", "[::]",                                    // unspecified address
+    "::ffff:127.0.0.1", "[::ffff:169.254.169.254]",  // v4-mapped IPv6
+    "::ffff:10.0.0.1", "::ffff:192.168.1.1",
+    "fe81::1", "fe9f::1", "fea0::1", "febf::1",      // fe80::/10 is 64 prefixes, not one
+    "LOCALHOST", "169.254.169.254.",                 // case and dot together
+    "",                                              // an empty host resolves to nothing good
+  ];
+  for (const h of blocked) assert.equal(privateHostBlocked(h), true, `should block ${h}`);
+
+  // The neighbours of the widened rules must still pass, or the fix overreached.
+  const allowed = ["fec0::1", "ff00::1".replace("ff00", "2001"), "::ffff:8.8.8.8", "example.com."];
+  for (const h of allowed) assert.equal(privateHostBlocked(h), false, `should allow ${h}`);
+});
+
+// A scan republishes what it fetched, so a URL carrying credentials is refused
+// rather than stripped: stripping would scan a different resource than the one
+// that was typed, and pass the secret to the third party on the way.
+test("lens targets refuse embedded credentials", () => {
+  for (const raw of ["https://user:pass@example.com/", "https://user@example.com/", "https://:pass@example.com/"]) {
+    assert.equal(validateLensTarget(raw).ok, false, `should refuse ${raw}`);
+  }
+  assert.equal(validateLensTarget("https://example.com/user:pass@notauth").ok, true, "a colon in the PATH is not a credential");
+});
+
+// The guard follows redirects one hop at a time so a public URL cannot bounce
+// into private space. Before this, the request to the blocked host was still
+// made; only the discovery fan-out that came after it was skipped.
+test("redirect following validates every hop, not just the landing", async () => {
+  const seen = [];
+  const chain = {
+    "https://example.com/start": { status: 302, location: "https://example.com/second" },
+    "https://example.com/second": { status: 302, location: "http://169.254.169.254/latest/meta-data/" },
+    "https://example.com/ok": { status: 200 },
+  };
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    seen.push(String(url));
+    const hop = chain[String(url)] ?? { status: 200 };
+    return new Response(null, { status: hop.status, headers: hop.location ? { location: hop.location } : {} });
+  };
+  try {
+    const check = (candidate) => validateLensTarget(candidate);
+    const blocked = await fetchFollowingPublicRedirects("https://example.com/start", {}, check);
+    assert.equal(blocked.ok, false, "a hop into link-local space must be refused");
+    assert.ok(!seen.includes("http://169.254.169.254/latest/meta-data/"), "the blocked host must never be requested");
+    assert.equal(seen.length, 2, "it stops at the refusal instead of continuing");
+
+    const fine = await fetchFollowingPublicRedirects("https://example.com/ok", {}, check);
+    assert.equal(fine.ok, true);
+    assert.equal(fine.finalUrl, "https://example.com/ok");
+
+    globalThis.fetch = async (url) => new Response(null, { status: 302, headers: { location: `${url}x` } });
+    const looping = await fetchFollowingPublicRedirects("https://example.com/loop", {}, check, 3);
+    assert.equal(looping.ok, false, "an endless redirect chain is bounded");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 // ── the deploy-time page renderers ──────────────────────────────────
