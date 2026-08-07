@@ -321,6 +321,79 @@
     margin-block-start: 10px;
     color: #0645ad;
   }
+
+  .object-list,
+  .file-list {
+    display: grid;
+    gap: 1px;
+    margin-block-start: 28px;
+    padding: 3px;
+    background: var(--face);
+    box-shadow: var(--sunken);
+    list-style: none;
+  }
+
+  .object-list a {
+    min-block-size: 62px;
+    display: grid;
+    gap: 3px;
+    padding: 9px 11px;
+    color: #16428b;
+    background: var(--paper);
+    text-decoration: none;
+  }
+
+  .object-list a:hover,
+  .object-list a:focus-visible,
+  .file-list a:hover,
+  .file-list a:focus-visible {
+    color: var(--paper);
+    background: var(--selection);
+    outline: 0;
+  }
+
+  .object-list span { font: 700 16px/1.2 var(--font-caption); }
+  .object-list small { color: var(--muted); }
+  .object-list a:hover small,
+  .object-list a:focus-visible small { color: inherit; }
+
+  .file-list a {
+    min-block-size: 38px;
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 9px;
+    color: var(--ink);
+    background: var(--paper);
+    text-decoration: none;
+  }
+
+  .file-list strong { font-weight: 400; }
+  .file-list time { color: var(--muted); font: 12px/1 var(--font-mono); }
+  .file-list a:hover time,
+  .file-list a:focus-visible time { color: inherit; }
+
+  .notepad {
+    inline-size: 100%;
+    min-block-size: min(70svb, 720px);
+    field-sizing: content;
+    resize: block;
+    padding: 14px;
+    color: var(--ink);
+    border: 0;
+    border-radius: 0;
+    background: var(--paper);
+    box-shadow: var(--sunken);
+    font: 14px/1.45 var(--font-mono);
+    tab-size: 4;
+  }
+
+  .notepad-note {
+    margin-block-start: 7px;
+    color: var(--muted);
+    font-size: 11px;
+  }
 }
 
 @layer utilities {

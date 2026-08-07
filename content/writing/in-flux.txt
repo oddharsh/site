@@ -1,0 +1,14 @@
+a note on this notepad
+──────────────────────
+
+you can type in here.
+
+go ahead — fix a typo, rewrite a sentence, delete the whole thing. it's a real text field, not a screenshot of one.
+
+but none of it saves. reload the page and the words snap back to whatever i last wrote. the writing on this site is always in flux: i keep changing the canonical version, and your edits live only as long as this tab stays open.
+
+that's the point. a piece of writing is never really finished — it's just abandoned at the moment you stop touching it. so this lets you touch it without consequence, and lets me keep changing my mind in public.
+
+if you want to keep something you typed, copy it out before you go. the only version that persists is mine, and even that one moves.
+
+— aadharsh

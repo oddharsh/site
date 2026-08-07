@@ -1,0 +1,10 @@
+Big screens and small screens
+─────────────────────────────
+
+What makes something a big-screen task is cultural as much as it's about incentives. We buy stocks and book flights on a laptop because we learned to treat them that way, not because a phone handles them any worse. That pull runs hardest on general-purpose modalities, humanoids or the RGB camera steering a car, where no single obvious job anchors how people use the thing. So for early adopters, the narrative around a modality outweighs whatever it saves them.
+
+Which leaves a real question: does a new modality change consumer behavior, or does it just clear the way for behavior that was already waiting?
+
+Hailing a cab on the street, phoning for one, opening Uber: same problem, three modalities. Each one resets what feels easy and what feels normal. The behavior shifts because a new interface makes a different version of the task legible.
+
+Foldables are next, folding down the wall between big-screen and small-screen work. My guess is they'll read well and stream badly. The more interesting bet is that they push traditionally big-screen tasks onto the go, and make filesystem literacy rarer than it already is.

@@ -28,6 +28,37 @@ test("homepage is a complete, zero-JavaScript document", async () => {
   assert.equal((html.match(/loading="lazy" decoding="async" fetchpriority="low"/g) ?? []).length, 6);
 });
 
+test("all generated authored documents remain zero JavaScript", async () => {
+  const manifest = JSON.parse(await text("build-manifest.json"));
+  for (const route of manifest.pages) {
+    const file = route === "/" ? "index.html" : `${route.slice(1)}.html`;
+    const html = await text(file);
+    assert.doesNotMatch(html, /<script\b/i, `${route} includes script`);
+    assert.match(html, /<main class="document" id="content">/, `${route} has no main document`);
+  }
+});
+
+test("writing publishes one editable HTML view and one canonical text view", async () => {
+  const posts = JSON.parse(await text("writing/posts.json"));
+  assert.equal(posts.length, 4);
+  for (const post of posts) {
+    const html = await text(`writing/${post.slug}.html`);
+    const plain = await text(`writing/${post.slug}.txt`);
+    assert.match(html, /<textarea class="notepad"/);
+    assert.ok(plain.trim().length > 0);
+    assert.match(html, new RegExp(`href="/writing/${post.slug}\\.txt"`));
+  }
+});
+
+test("section folders are projected from the public surface registry", async () => {
+  const registry = JSON.parse(await readFile(new URL("../site-manifest.json", import.meta.url), "utf8"));
+  for (const section of ["garage", "lwe"]) {
+    const items = registry.surfaces.filter(({ path, kind }) => kind === "content" && path.startsWith(`/${section}/`));
+    const html = await text(`${section}.html`);
+    for (const item of items) assert.match(html, new RegExp(`href="${item.path}"`));
+  }
+});
+
 test("initial document and shared stylesheet stay inside budgets", async () => {
   const html = await text("index.html");
   const [cssFile] = (await readdir(new URL("assets/", output))).filter((name) => name.endsWith(".css"));

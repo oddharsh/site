@@ -3,6 +3,8 @@ import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { renderHome } from "../src/site/pages/home.mjs";
+import { directoryMarkdown, renderDirectory } from "../src/site/pages/directory.mjs";
+import { renderWritingIndex, renderWritingPost, writingMarkdown } from "../src/site/pages/writing.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const output = join(root, "dist");
@@ -29,10 +31,12 @@ const css = await readFile(join(root, "src/site/styles/site.css"), "utf8");
 const cssName = `site.${digest(css)}.css`;
 await write(`assets/${cssName}`, css);
 
-const [home, hashes, alt] = await Promise.all([
+const [home, hashes, alt, posts, siteManifest] = await Promise.all([
   json("content/home.json"),
   json("holding/images/hashes.json"),
   json("holding/images/alt.json"),
+  json("content/writing/posts.json"),
+  json("site-manifest.json"),
 ]);
 
 const photoStems = Object.keys(hashes).slice(0, 6);
@@ -58,8 +62,42 @@ await write("index.html", renderHome({
 const markdown = `# ${home.name}\n\n${home.role}\n\n**Under construction.**\n\n${home.introduction.join("\n\n")}\n\n${home.contact}\n\n## Links\n\n${home.links.map(({ label, href }) => `- [${label}](${href})`).join("\n")}\n`;
 await write("index.md", markdown);
 
+await write("writing.html", renderWritingIndex({ posts, stylesheet: `/assets/${cssName}` }));
+await write("writing.md", writingMarkdown(posts));
+await write("writing/posts.json", `${JSON.stringify(posts, null, 2)}\n`);
+
+for (const post of posts) {
+  const text = await readFile(join(root, "content/writing", `${post.slug}.txt`), "utf8");
+  await write(`writing/${post.slug}.html`, renderWritingPost({
+    post,
+    text,
+    stylesheet: `/assets/${cssName}`,
+  }));
+  await write(`writing/${post.slug}.txt`, text);
+}
+
+const directorySections = ["/garage", "/lwe"];
+for (const sectionPath of directorySections) {
+  const section = siteManifest.surfaces.find(({ path }) => path === sectionPath);
+  const items = siteManifest.surfaces.filter(({ path, kind }) =>
+    kind === "content" && path.startsWith(`${sectionPath}/`)
+  );
+  const name = sectionPath.slice(1);
+  await write(`${name}.html`, renderDirectory({
+    section,
+    items,
+    stylesheet: `/assets/${cssName}`,
+  }));
+  await write(`${name}.md`, directoryMarkdown(section, items));
+}
+
 const manifest = {
-  pages: ["/"],
+  pages: [
+    "/",
+    "/writing",
+    ...posts.map(({ slug }) => `/writing/${slug}`),
+    ...directorySections,
+  ],
   assets: [`/assets/${cssName}`, ...photos.flatMap(({ avif, jpg }) => [`/${avif}`, `/${jpg}`])],
 };
 await write("build-manifest.json", `${JSON.stringify(manifest, null, 2)}\n`);
