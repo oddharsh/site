@@ -63,20 +63,28 @@ The questions stay constant; the amount of detail changes with the blast
 radius. A five-question quiz is appropriate for a learning page. A PR usually
 needs a short claim card and a short reconstruction, not a full exam.
 
-## What the automation does
+## What the automation does, and why it stopped
 
-`.github/workflows/understanding-review.yml` adds or refreshes one maintained
-comment on every PR. The comment contains the reviewer prompts and links back
-to this document. It is a prompt, not a score and not a merge gate.
+Nothing automated. This is a practice, not a pipeline.
 
-The workflow uses `pull_request_target` only to call the GitHub API. It does
-not check out the PR branch, run PR code, parse untrusted files, or use an AI
-grader. That keeps the default prompt safe for forked PRs and makes the
-comment idempotent when a PR is synchronized.
+`.github/workflows/understanding-review.yml` used to post the reviewer prompts
+as a maintained comment on every PR, refreshed on every push. It was deleted
+2026-08-06 because the comment was byte-identical every time it ran, and this
+repository has one human, who is the author and the reviewer of nearly every
+PR. A bot reminding you to independently reconstruct your own change is not a
+second perspective; it is a line of boilerplate standing where the second
+perspective should be, which is worse than an empty space because it looks
+answered.
 
-The PR template carries the author claim card. The reviewer prompt remains a
-separate comment so the author’s explanation does not become a substitute for
-the reviewer’s own reconstruction.
+The reviewer prompts live above, in this document. The author claim card lives
+in `.github/pull_request_template.md`, where GitHub puts it in front of you at
+the moment you are writing the description. Those two surfaces are the whole
+mechanism now.
+
+If a second regular reviewer ever joins, reconsider. The argument for deleting
+the comment rests entirely on author and reviewer being the same person, so a
+real reviewer who has not read this file is exactly the reader the prompt was
+written for.
 
 ## Anti-patterns
 

@@ -1,8 +1,18 @@
 name: Annotate Dependabot site review
 
+# `synchronize` is deliberately absent. It fired a runner on every push to a
+# Dependabot branch and rewrote the note with byte-identical text, because a
+# force-push from Dependabot is a rebase and a rebase does not change the
+# version pair the note reports. A genuinely newer version arrives as a NEW pull
+# request under `open-pull-requests-limit: 1`, which `opened` already catches.
+#
+# The residual case is a rebase that DOES move the version on the same branch.
+# The note would then name the old pair while Dependabot's own description names
+# the new one, and the description is the authoritative half, since it carries
+# the upstream release notes this checklist exists to send you toward.
 on:
   pull_request_target:
-    types: [opened, synchronize, reopened]
+    types: [opened, reopened]
 
 permissions:
   pull-requests: write

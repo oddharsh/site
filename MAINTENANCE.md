@@ -168,6 +168,30 @@ ecosystems. The exact lockfile pin keeps a release reproducible; the Dependabot
 PR keeps it current. Wrangler's npm dependency metadata instrumentation is
 explicitly enabled in every Worker config.
 
+**CodeQL analyzes `actions` and `javascript-typescript` only, and that list is a
+repo SETTING with no file in this tree.** It lives under Security, Code scanning,
+Default setup, so nothing here can declare it and `infra:check` cannot see it.
+Read the live value with:
+
+```bash
+gh api repos/oddharsh/site/code-scanning/default-setup
+```
+
+Expect `actions`, `javascript`, `javascript-typescript`, `typescript` back. Those
+last three are aliases GitHub keeps and folds into ONE job, so the honest count is
+two jobs, not four.
+
+`rust` and `python` were dropped 2026-08-06. Between them they cost about 3 of the
+scan's 4 minutes to analyze four files: `holding/scripts/zenc/src/main.rs` and the
+three `holding/scripts/*.py` pipeline scripts. Every one of them is workstation and
+CI build tooling that runs before a deploy and never answers a request, while the
+configured threat model is `remote`. The Worker, which is the code an attacker can
+actually reach, is JavaScript and stays covered.
+
+Turn one back on the moment its language starts serving traffic. A Rust wasm module
+inside the Worker, or a Python endpoint of any kind, moves that code from the build
+side of the line to the served side, and this reasoning stops holding.
+
 `.github/workflows/promote-production.yml` runs after a successful `CI` run for
 `main` associated with a merged PR (or an explicit manual dispatch). It refuses
 unmerged commits, then advances the machine-owned `production` branch to the
@@ -662,10 +686,19 @@ size (its wrangler dry-run needs a build that succeeds), so that one check repor
 
 The Workers Build project should expose its build/deploy status on the release
 commit. After enabling it, verify the live homepage route surface plus
-`/coffee`, `/coffee/slots`, and `/serendipity`. This repository's current free
-private-repo plan does not support branch/environment protection rules, so the
-promotion workflow guard is the release backstop; upgrade or make the repo
-public later if hard GitHub-side branch protection is desired.
+`/coffee`, `/coffee/slots`, and `/serendipity`. GitHub-side branch protection is
+live as of 2026-08-05: the repo is public, so repository rulesets cost nothing,
+and `main` and `production` each carry an active one with zero bypass actors.
+`validate` is a REQUIRED check on `main`, which is why a PR can sit at
+`mergeStateStatus: BLOCKED` purely because CI is red. The rulesets are declared
+in [`infra.json`](infra.json) under `repository` and `npm run infra:check` fails
+on drift; CLAUDE.md carries the argument for each rule.
+
+The promotion workflow guard is still the release backstop, and the ruleset does
+not replace it. `production` restricts deletion and non-fast-forward alone, so it
+governs how that ref may MOVE and not who may move it. What keeps a non-CI commit
+off `production` is `promote-production.yml` checking that the commit is still
+current `main` and belongs to a merged PR.
 
 Before merging the first revision that uses this path, change each Workers
 Build project's production branch from `main` to `production`. Otherwise the
@@ -674,11 +707,14 @@ merge push can still trigger the old direct production build.
 ## Understanding-first review
 
 Every pull request uses the author claim card in
-`.github/pull_request_template.md` and receives an idempotent reviewer prompt
-from `.github/workflows/understanding-review.yml`. The canonical practice is
-documented in [UNDERSTANDING-REVIEW.md](UNDERSTANDING-REVIEW.md): reconstruct
-the model, name a falsifier, inspect evidence, and leave residual uncertainty
-visible. The prompt is advisory; it is not a prose-quality or AI-scoring gate.
+`.github/pull_request_template.md`. The canonical practice is documented in
+[UNDERSTANDING-REVIEW.md](UNDERSTANDING-REVIEW.md): reconstruct the model, name
+a falsifier, inspect evidence, and leave residual uncertainty visible. It is
+advisory; it is not a prose-quality or AI-scoring gate.
+
+There is no reviewer-prompt bot anymore. A workflow posted the same comment on
+every PR until 2026-08-06; the reasoning for removing it is in that document
+under "What the automation does, and why it stopped".
 
 ## Author a new LWE or Garage explainer
 

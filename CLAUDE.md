@@ -133,6 +133,28 @@ worktrees may edit freely, but a worktree is not a release surface.
   `main`, and it must belong to a merged PR into `main`) are belt and braces now
   rather than the only line. Keep them: a ruleset governs refs, while those guards
   govern which commit is allowed to become a release.
+
+  **Both rulesets are DECLARED in [`infra.json`](infra.json) under `repository`,
+  and `npm run infra:check` fails on drift**, for the same reason the Workers
+  Builds block is declared there: dashboard state that no config in this repo can
+  derive, load-bearing for what reaches production, and silent when it changes.
+  The table above is now the readable copy of a machine-checked declaration
+  rather than a claim nobody re-reads.
+
+  It costs no credential. The repo is public, so GitHub's rulesets endpoint is
+  public with it, and this tier runs on every PR like the DNS tier instead of
+  degrading to a note like the Cloudflare account tier. CI passes the
+  auto-provisioned `GITHUB_TOKEN` for rate-limit headroom alone (60/hr per IP
+  unauthenticated, which shared Actions runners exhaust), and a read that fails
+  is an advisory, so GitHub being down cannot redden an unrelated PR.
+
+  Two assertions are worth knowing before you edit that block. `visibility` is
+  checked FIRST and fails on its own, because rulesets on a private repo need a
+  paid plan, so flipping the repo back to private would silently restore exactly
+  the world this note used to describe. And `bypass_actors` is asserted EMPTY
+  rather than against a declared list, on purpose: a list invites someone to add
+  an entry to `infra.json` to turn a red check green, which is the precise change
+  the check exists to catch.
 - **Reaching `production` no longer moves traffic.** Workers Builds runs
   `wrangler versions upload`, so a promotion builds the commit, uploads the
   assets, checks the secrets, and mints a servable preview URL, while production
@@ -213,6 +235,14 @@ worktrees may edit freely, but a worktree is not a release surface.
   green on its own. The audit log records both flips. Do NOT reach for a bypass
   actor instead, because a standing exemption is permanent and silent, while a
   disabled ruleset is a deliberate act somebody can see.
+
+  Since the rulesets are declared in `infra.json`, a disabled one now fails
+  `infra:check` by name, and that resolves itself rather than deadlocking twice:
+  while enforcement is off, `validate` is not a required check either, so a red
+  run cannot block the merge it was disabled for. What the failure buys is the
+  tripwire for the actual risk here, which is nobody flipping it back. Expect one
+  red `validate` for the duration and treat a red one AFTER the re-enable as the
+  real signal.
 - Configure one Workers Build project for the site Worker with `production` as
   its production branch and repository root `.`. Keep the dashboard Build
   command blank; use the repo's Wrangler-owned build during the Deploy command,
