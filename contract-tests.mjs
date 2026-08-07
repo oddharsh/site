@@ -1377,6 +1377,7 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   assert.match(page, /fetch\("\/photos\/grid\.html"\)/, "the homepage must hydrate its random twelve");
   assert.match(page, /\.catch\(\(\) => \{\}\)\s*\.then\(boot\)/, "a failed grid fetch must still hydrate the baked tiles");
   assert.match(page, /typeof image\.decode === "function"/, "reveal timing must follow image decode when available");
+  assert.match(page, /progressiveJpeg.*currentSrc/, "progressive JPG fallbacks must be allowed to paint their scan passes");
   assert.match(page, /matchMedia\?\.\("\(prefers-reduced-motion: reduce\)"\)/, "reduced motion must skip the decode wait");
   assert.match(page, /prefers-reduced-motion: reduce/, "the reveal must honor reduced-motion preferences");
   // Removed 2026-07-29. It withheld 3 of 12 tiles to save ~34 KB out of ~136 KB,

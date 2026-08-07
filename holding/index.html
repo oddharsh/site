@@ -794,9 +794,10 @@ footer .signature small { color: oklch(56.93% 0 0); }
         }
       };
 
-      // The browser owns the schedule: cached images skip the animation, and
-      // network images reveal only after their decode is usable. There is no
-      // artificial delay, staged tier chain, observer, or promoted layer here.
+      // The browser owns the schedule: cached images skip the animation,
+      // progressive JPGs paint immediately, and other network images reveal
+      // after their decode is usable. There is no artificial delay, staged tier
+      // chain, observer, or promoted layer here.
       const revealPhotos = (section) => {
         if (!section) return;
         const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
@@ -806,6 +807,12 @@ footer .signature small { color: oklch(56.93% 0 0); }
             settlePhoto(picture, true);
             continue;
           }
+
+          // The JPG fallback is progressive by construction. Let its scan
+          // passes paint as bytes arrive; waiting for decode here would hide
+          // the one native progressive effect the fallback already gives us.
+          const progressiveJpeg = /\.jpe?g(?:[?#]|$)/i.test(image.currentSrc);
+          if (progressiveJpeg) picture.removeAttribute("data-photo-reveal");
 
           let settled = false;
           const settle = (failed = false) => {
