@@ -2,6 +2,8 @@ import { hit, Counter } from "./counter";
 import { assetRequest, json, prefersMarkdown, redirect, text, withSiteHeaders } from "./http";
 import { previewRefusal } from "./preview";
 import { BookingWorkflow } from "./workflow";
+import { requestDetailsHtml, requestProfile } from "./whoareyou";
+import { terminalTool } from "./tools";
 
 export { BookingWorkflow, Counter };
 
@@ -40,6 +42,14 @@ async function fetchHandler(request: Request, env: Env, ctx: ExecutionContext): 
   if (pathname !== "/" && pathname.endsWith("/")) return redirect(request, pathname.slice(0, -1));
   if (pathname === "/favicon.ico") return asset(request, env, "/favicon.svg");
   if (pathname === "/hit") return hit(request, env, ctx);
+  if (pathname === "/mcp" && request.method === "GET") {
+    return json({ jsonrpc: "2.0", error: { code: -32600, message: "POST a JSON-RPC request." }, id: null }, {
+      status: 405,
+      headers: { allow: "POST", "cache-control": "no-store" },
+    });
+  }
+  const tool = terminalTool(request);
+  if (tool) return tool;
 
   if (isAuthoredPage(pathname) && prefersMarkdown(request)) {
     const response = await asset(request, env, markdownPath(pathname));
@@ -47,30 +57,51 @@ async function fetchHandler(request: Request, env: Env, ctx: ExecutionContext): 
   }
 
   if (pathname === "/whoareyou.json") {
-    const cf = request.cf ?? {};
+    const profile = requestProfile(request, env);
     return json({
-      request: {
-        ip: request.headers.get("cf-connecting-ip"),
-        userAgent: request.headers.get("user-agent"),
-        acceptLanguage: request.headers.get("accept-language"),
-        referer: request.headers.get("referer"),
-        dnt: request.headers.get("dnt") === "1",
-      },
-      edge: {
-        colo: cf.colo ?? null,
-        country: cf.country ?? null,
-        region: cf.region ?? null,
-        city: cf.city ?? null,
-        timezone: cf.timezone ?? null,
-        asn: cf.asn ?? null,
-        organization: cf.asOrganization ?? null,
-        httpProtocol: cf.httpProtocol ?? null,
-        tlsVersion: cf.tlsVersion ?? null,
-      },
+      ...profile,
       servedAt: new Date().toISOString(),
       version: env.CF_VERSION_METADATA?.id ?? null,
       retention: "none",
     }, { headers: { "cache-control": "no-store", "x-robots-tag": "noindex" } });
+  }
+
+  if (pathname === "/search.json") {
+    const response = await asset(request, env, "/search-index.json");
+    const records = await response.json<Array<{ path: string; title: string; description: string; section: string }>>();
+    const query = url.searchParams.get("q")?.trim().toLowerCase().slice(0, 120) ?? "";
+    const terms = query.split(/\s+/).filter(Boolean);
+    const results = records.filter((record) => terms.every((term) => `${record.title} ${record.description} ${record.section}`.toLowerCase().includes(term))).slice(0, 50);
+    return json({ query, count: results.length, results }, { headers: { "cache-control": "public, max-age=60" } });
+  }
+
+  if (pathname === "/run") {
+    const command = url.searchParams.get("cmd")?.trim().replace(/^\//, "") ?? "";
+    if (command) {
+      const indexResponse = await asset(request, env, "/search-index.json");
+      const records = await indexResponse.json<Array<{ path: string; title: string }>>();
+      const match = records.find((record) => record.path.slice(1) === command || record.title.toLowerCase() === command.toLowerCase());
+      if (match) return redirect(request, match.path, 302);
+      const response = await asset(request, env, "/run");
+      const transformed = new HTMLRewriter().on(".document header", {
+        element(element) { element.after(`<p class="command-error">Windows cannot find “${command.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")}”. Check the spelling and try again.</p>`, { html: true }); },
+      }).transform(response);
+      return withSiteHeaders(transformed, request);
+    }
+  }
+
+  if (pathname === "/whoareyou") {
+    const profile = requestProfile(request, env);
+    const response = await asset(request, env);
+    const transformed = new HTMLRewriter()
+      .on("#request-details", {
+        element(element) { element.setInnerContent(requestDetailsHtml(profile.groups), { html: true }); },
+      })
+      .transform(response);
+    const secured = withSiteHeaders(transformed, request);
+    secured.headers.set("cache-control", "no-store");
+    secured.headers.set("x-robots-tag", "noindex");
+    return secured;
   }
 
   if (pathname.startsWith("/images/full/")) {
@@ -87,8 +118,26 @@ async function fetchHandler(request: Request, env: Env, ctx: ExecutionContext): 
 
   if (["/images", "/images/full"].includes(pathname)) return redirect(request, "/photos");
 
+  const legacyThumb = pathname.match(/^\/images\/([A-Za-z0-9._-]+?)(-400)?\.(avif|jpe?g)$/i);
+  if (legacyThumb) {
+    const [, stem, small, extension] = legacyThumb;
+    const response = await asset(request, env, "/images/hashes.json");
+    const hashes = await response.json<Record<string, { a?: string; j?: string; s?: string }>>();
+    const hash = small ? hashes[stem]?.s : extension.toLowerCase() === "avif" ? hashes[stem]?.a : hashes[stem]?.j;
+    if (hash) return redirect(request, `/i/${stem}${small ?? ""}.${hash}.${extension.toLowerCase() === "jpeg" ? "jpg" : extension.toLowerCase()}`);
+  }
+
   const response = await asset(request, env);
-  return withSiteHeaders(response, request);
+  const headers = new Headers(response.headers);
+  if (pathname === "/.well-known/api-catalog") headers.set("content-type", "application/linkset+json; charset=utf-8");
+  if (pathname === "/.well-known/oauth-protected-resource" || pathname === "/.well-known/oauth-authorization-server") {
+    headers.set("content-type", "application/json; charset=utf-8");
+  }
+  return withSiteHeaders(new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  }), request);
 }
 
 export default {

@@ -82,6 +82,29 @@ test("section folders are projected from the public surface registry", async () 
   }
 });
 
+test("system documents keep live boundaries and alternate representations explicit", async () => {
+  for (const slug of ["access", "bot", "pixel-peeper", "security", "terminal", "whoareyou"]) {
+    const html = await text(`${slug}.html`);
+    assert.equal((html.match(/<h1\b/g) ?? []).length, 1);
+    assert.doesNotMatch(html, /<script\b/i);
+    await readFile(new URL(`${slug}.md`, output));
+  }
+  assert.match(await text("whoareyou.html"), /id="request-details"/);
+  assert.match(await text("terminal.html"), /data-terminal-font="Courier New"/);
+  await readFile(new URL("pixel-peeper/manifest.json", output));
+});
+
+test("search and Run are complete native forms backed by a generated index", async () => {
+  const search = await text("search.html");
+  const run = await text("run.html");
+  const index = JSON.parse(await text("search-index.json"));
+  assert.match(search, /Search aadhar\.sh/);
+  assert.match(run, /<datalist id="site-commands">/);
+  assert.ok(index.length >= 59);
+  assert.doesNotMatch(search + run, /<script\b/i);
+  assert.match(await text("llms-full.txt"), /Public surfaces/);
+});
+
 test("initial document and shared stylesheet stay inside budgets", async () => {
   const html = await text("index.html");
   const [cssFile] = (await readdir(new URL("assets/", output))).filter((name) => name.endsWith(".css"));

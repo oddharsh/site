@@ -1,0 +1,257 @@
+{
+  "name": "Aadharsh Site Agent",
+  "description": "Discovery card for the public machine interfaces and bounded utilities published by aadhar.sh. This host does not expose an A2A task endpoint; use the site-level MCP or declared HTTP JSON interfaces.",
+  "provider": {
+    "organization": "Aadharsh Pannirselvam",
+    "url": "https://aadhar.sh/"
+  },
+  "version": "1.3.0",
+  "documentationUrl": "https://aadhar.sh/llms.txt",
+  "supportedInterfaces": [
+    {
+      "url": "https://aadhar.sh/mcp",
+      "protocolBinding": "https://modelcontextprotocol.io/specification/2026-07-28",
+      "protocolVersion": "2026-07-28",
+      "serverCard": "https://aadhar.sh/.well-known/mcp/server-card.json"
+    },
+    {
+      "url": "https://aadhar.sh/serendipity/mcp",
+      "protocolBinding": "https://modelcontextprotocol.io/specification/2026-07-28",
+      "protocolVersion": "2026-07-28"
+    }
+  ],
+  "capabilities": {
+    "streaming": false,
+    "pushNotifications": false,
+    "extendedAgentCard": false
+  },
+  "defaultInputModes": [
+    "application/json",
+    "text/plain"
+  ],
+  "defaultOutputModes": [
+    "application/json",
+    "text/plain"
+  ],
+  "skills": [
+    {
+      "id": "serendipity-events",
+      "name": "Serendipity event research",
+      "description": "Search and inspect the public Serendipity event pool: events, attendees, contributors, and co-attendance patterns.",
+      "tags": [
+        "events",
+        "people",
+        "co-attendance",
+        "read-only"
+      ],
+      "examples": [
+        "What events are happening soon?",
+        "Who is going to this event?",
+        "Who am I seeing most often?"
+      ],
+      "inputModes": [
+        "application/json",
+        "text/plain"
+      ],
+      "outputModes": [
+        "application/json"
+      ]
+    },
+    {
+      "id": "site-json-surfaces",
+      "name": "Read public site data",
+      "description": "Read the site's public JSON surfaces, including the current playlist, photo archive indexes, neighborhood crawl, Change Radar, and crawl ledger.",
+      "tags": [
+        "http-json",
+        "music",
+        "photos",
+        "discovery",
+        "read-only"
+      ],
+      "examples": [
+        "What is Aadharsh listening to?",
+        "List the published photo archive metadata.",
+        "Show the current neighborhood crawl snapshot."
+      ],
+      "inputModes": [
+        "text/plain"
+      ],
+      "outputModes": [
+        "application/json"
+      ]
+    },
+    {
+      "id": "site-utilities",
+      "name": "Site utilities",
+      "description": "Use the canonical site-level interface for search, photo metadata, coffee availability, Change Radar, current music, compact Lens inspection/comparison, ephemeral image workbench transforms, exact photo-recipe matching, and normalized HTTP representation snapshots.",
+      "tags": [
+        "search",
+        "photos",
+        "coffee",
+        "lens",
+        "images",
+        "representations",
+        "read-only"
+      ],
+      "examples": [
+        "Search aadhar.sh for writing about agents.",
+        "Find photos shot on the X-T50 with Classic Chrome.",
+        "Compare the agent-readiness of two public sites."
+      ],
+      "inputModes": [
+        "application/json",
+        "text/plain"
+      ],
+      "outputModes": [
+        "application/json"
+      ]
+    },
+    {
+      "id": "webmcp-read-only",
+      "name": "Browser-local read-only tools",
+      "description": "Every page registers this origin's /mcp tool catalog into document.modelContext, so an agent browsing the page can call the same read-only tools without leaving it. The catalog is whatever tools/list returns; there is no separate browser-only tool set.",
+      "tags": [
+        "webmcp",
+        "browser",
+        "read-only"
+      ],
+      "examples": [
+        "Use the page's now_playing tool.",
+        "Find events matching a keyword with the page's find_events tool."
+      ],
+      "inputModes": [
+        "application/json",
+        "text/plain"
+      ],
+      "outputModes": [
+        "application/json",
+        "text/plain"
+      ]
+    }
+  ],
+  "x-aadhar-sh": {
+    "cardType": "discovery-only",
+    "a2a": {
+      "taskEndpoint": null,
+      "note": "No A2A JSON-RPC, HTTP+JSON, or gRPC task endpoint is exposed. The supportedInterfaces entry identifies the site's actual MCP interface using a custom protocol binding."
+    },
+    "interfaces": {
+      "mcp": [
+        {
+          "name": "Aadharsh Site MCP",
+          "url": "https://aadhar.sh/mcp",
+          "transport": "streamable-http",
+          "protocolVersion": "2026-07-28",
+          "authentication": "optional bearer credential; public access works anonymously",
+          "documentationUrl": "https://aadhar.sh/llms.txt",
+          "serverCard": "https://aadhar.sh/.well-known/mcp/server-card.json"
+        },
+        {
+          "name": "Serendipity MCP",
+          "url": "https://aadhar.sh/serendipity/mcp",
+          "transport": "streamable-http",
+          "protocolVersion": "2026-07-28",
+          "authentication": "optional bearer credential; public read-only access works anonymously",
+          "documentationUrl": "https://aadhar.sh/serendipity/mcp-info",
+          "serverCard": "https://aadhar.sh/.well-known/mcp/serendipity.json"
+        }
+      ],
+      "httpJson": [
+        {
+          "name": "Current playlist",
+          "url": "https://aadhar.sh/rn/tracks",
+          "authentication": "anonymous"
+        },
+        {
+          "name": "Photo manifest",
+          "url": "https://aadhar.sh/images/manifest.json",
+          "authentication": "anonymous"
+        },
+        {
+          "name": "Photo captions",
+          "url": "https://aadhar.sh/images/alt.json",
+          "authentication": "anonymous"
+        },
+        {
+          "name": "Photo metadata",
+          "url": "https://aadhar.sh/images/metadata.json",
+          "authentication": "anonymous"
+        },
+        {
+          "name": "Neighborhood crawl",
+          "url": "https://aadhar.sh/around/json",
+          "authentication": "anonymous"
+        },
+        {
+          "name": "Neighborhood Change Radar",
+          "url": "https://aadhar.sh/around/changes.json",
+          "authentication": "anonymous"
+        },
+        {
+          "name": "Site search",
+          "url": "https://aadhar.sh/search.json?q=…",
+          "authentication": "anonymous"
+        },
+        {
+          "name": "Photo query",
+          "url": "https://aadhar.sh/photos/query.json?q=…",
+          "authentication": "anonymous"
+        },
+        {
+          "name": "Coffee availability",
+          "url": "https://aadhar.sh/coffee/availability.json",
+          "authentication": "anonymous"
+        },
+        {
+          "name": "Lens comparison",
+          "url": "https://aadhar.sh/lens/compare.json?left=…&right=…",
+          "authentication": "anonymous"
+        },
+        {
+          "name": "Crawler ledger",
+          "url": "https://aadhar.sh/ledger.json",
+          "authentication": "anonymous"
+        }
+      ],
+      "webmcp": {
+        "page": "https://aadhar.sh/",
+        "scope": "every page on this origin",
+        "featureDetection": "document.modelContext",
+        "bridge": "https://aadhar.sh/.webmcp/bridge.js",
+        "toolSource": "https://aadhar.sh/mcp",
+        "tools": "see tools/list at the MCP interface above; the browser catalog mirrors it",
+        "authentication": "same-origin browser context"
+      },
+      "agentAuth": {
+        "registrationUrl": "https://aadhar.sh/agent/auth",
+        "tokenUrl": "https://aadhar.sh/oauth2/token",
+        "claimUrl": "https://aadhar.sh/agent/auth/claim",
+        "revocationUrl": "https://aadhar.sh/oauth2/revoke",
+        "supportedIdentityTypes": [
+          "anonymous"
+        ],
+        "scopes": [
+          "public.read",
+          "mcp.read",
+          "rn.read",
+          "photos.read",
+          "around.read"
+        ],
+        "documentationUrl": "https://aadhar.sh/auth.md"
+      }
+    },
+    "discovery": {
+      "llms": "https://aadhar.sh/llms.txt",
+      "apiCatalog": "https://aadhar.sh/.well-known/api-catalog",
+      "skillsIndex": "https://aadhar.sh/.well-known/agent-skills/index.json",
+      "oauthProtectedResource": "https://aadhar.sh/.well-known/oauth-protected-resource",
+      "oauthAuthorizationServer": "https://aadhar.sh/.well-known/oauth-authorization-server"
+    },
+    "outboundIdentity": {
+      "name": "AadharshBot",
+      "documentationUrl": "https://aadhar.sh/bot",
+      "jwksUrl": "https://aadhar.sh/.well-known/http-message-signatures-directory",
+      "protocol": "Web Bot Auth over RFC 9421 HTTP Message Signatures"
+    }
+  }
+}

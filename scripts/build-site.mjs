@@ -7,6 +7,8 @@ import { renderArticle } from "../src/site/pages/article.mjs";
 import { directoryMarkdown, renderDirectory } from "../src/site/pages/directory.mjs";
 import { photosMarkdown, renderPhotos } from "../src/site/pages/photos.mjs";
 import { renderWritingIndex, renderWritingPost, writingMarkdown } from "../src/site/pages/writing.mjs";
+import { renderSystemPage } from "../src/site/pages/system.mjs";
+import { renderRun, renderSearch } from "../src/site/pages/search.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const output = join(root, "dist");
@@ -32,10 +34,13 @@ await cp(join(root, "holding/i"), join(output, "i"), { recursive: true });
 await cp(join(root, "holding/images"), join(output, "images"), { recursive: true });
 await cp(join(root, "holding/garage/enc"), join(output, "garage/enc"), { recursive: true });
 await cp(join(root, "holding/lwe/lean"), join(output, "lwe/lean"), { recursive: true });
+await cp(join(root, "holding/pixel-peeper/tiles"), join(output, "pixel-peeper/tiles"), { recursive: true });
+await cp(join(root, "holding/pixel-peeper/manifest.json"), join(output, "pixel-peeper/manifest.json"));
 
 const css = await readFile(join(root, "src/site/styles/site.css"), "utf8");
 const cssName = `site.${digest(css)}.css`;
 await write(`assets/${cssName}`, css);
+await write("luna.css", `/* axp-desktop compatibility URL; new canonical source: /assets/${cssName} */\n${css}`);
 
 const [home, hashes, alt, posts, siteManifest, photoIndex] = await Promise.all([
   json("content/home.json"),
@@ -132,6 +137,32 @@ for (const sectionPath of directorySections) {
   }
 }
 
+const systemSlugs = ["access", "bot", "pixel-peeper", "security", "terminal", "whoareyou"];
+for (const slug of systemSlugs) {
+  const surface = siteManifest.surfaces.find(({ path }) => path === `/${slug}`);
+  const source = await readFile(join(root, "content/system", `${slug}.md`), "utf8");
+  await write(`${slug}.html`, renderSystemPage({
+    surface,
+    source,
+    stylesheet: `/assets/${cssName}`,
+  }));
+  await write(`${slug}.md`, source);
+}
+
+const publicSurfaces = siteManifest.surfaces.filter(({ flags }) => flags.run);
+await write("search.html", renderSearch({ stylesheet: `/assets/${cssName}` }));
+await write("run.html", renderRun({ surfaces: publicSurfaces, stylesheet: `/assets/${cssName}` }));
+
+const searchRecords = [
+  ...siteManifest.surfaces.map(({ path, title, description, section }) => ({ path, title, description, section })),
+  ...posts.map(({ slug, title, date }) => ({ path: `/writing/${slug}`, title, description: `Writing published ${date}`, section: "writing" })),
+];
+await write("search-index.json", `${JSON.stringify(searchRecords, null, 2)}\n`);
+
+const llms = `# aadhar.sh\n\nA personal site by Aadharsh Pannirselvam: photographs, writing, explainers, experiments, and bounded public utilities.\n\n## Public surfaces\n\n${siteManifest.surfaces.filter(({ flags }) => flags.agents).map(({ path, title, description }) => `- [${title}](https://aadhar.sh${path}) — ${description}`).join("\n")}\n`;
+await write("llms.txt", llms);
+await write("llms-full.txt", `${llms}\n## Writing\n\n${writingMarkdown(posts)}\n\n## Garage\n\n${directoryMarkdown(siteManifest.surfaces.find(({ path }) => path === "/garage"), siteManifest.surfaces.filter(({ path, kind }) => kind === "content" && path.startsWith("/garage/")))}\n`);
+
 const manifest = {
   pages: [
     "/",
@@ -140,6 +171,9 @@ const manifest = {
     ...posts.map(({ slug }) => `/writing/${slug}`),
     ...directorySections,
     ...siteManifest.surfaces.filter(({ kind }) => kind === "content").map(({ path }) => path),
+    ...systemSlugs.map((slug) => `/${slug}`),
+    "/search",
+    "/run",
   ],
   assets: [`/assets/${cssName}`, ...photos.flatMap(({ thumbAvif, thumbJpg, thumbSmall }) => [`/${thumbAvif}`, `/${thumbJpg}`, `/${thumbSmall}`])],
 };
