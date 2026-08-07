@@ -237,6 +237,52 @@ worktrees may edit freely, but a worktree is not a release surface.
   Builds uploads a version containing the feature, then set the secret on top of
   it, then ramp. Setting it first attaches a credential to a version whose code
   predates the thing that reads it, which is harmless and pointless.
+- **A DURABLE OBJECT LIFECYCLE CHANGE is the one thing this release path cannot
+  publish, and `--dry-run` cannot see it.** Adding, renaming, transferring, or
+  deleting a DO class needs a `[[migrations]]` entry, and `wrangler versions
+  upload` refuses to apply one: a migration mutates account-level namespace state,
+  which is exactly what an upload-without-traffic is defined not to do. So the
+  normal path (merge, then Workers Builds, then ramp) publishes everything
+  EXCEPT this.
+
+  What makes it worth a note is that nothing warns you. `wrangler deploy
+  --dry-run` never contacts the API, so CI's three dry-run steps pass on a config
+  whose migration has never been applied. The failure shows up at the one moment
+  you least want it, on the real publish.
+
+  Two consequences, both load-bearing:
+
+  1. **Prefer a NEW INSTANCE of an existing class over a new class.** Instances
+     are isolated by name and cost no migration, so a `coffee-slot:<start>:<end>`
+     and `homepage-visits` can share a class while sharing nothing else. Reach
+     for a second class only when the two really need different code, and assert
+     the declared class list in a contract test when you do, so adding one is a
+     deliberate act rather than a surprise at deploy time.
+  2. **When a class genuinely must appear or disappear, publish it with `npm run
+     deploy` once** (straight to 100%, migration applied), then go back to the
+     ramp for everything after. Deleting also needs its own entry, and the
+     migration list is CUMULATIVE: keep the old tags and append.
+
+     ```toml
+     [[migrations]]
+     tag = "v1"
+     new_sqlite_classes = ["Counter"]
+
+     [[migrations]]
+     tag = "v2"
+     deleted_classes = ["Counter"]
+     ```
+
+     Deleting a class DESTROYS its stored data, and there is no undo.
+
+  Verified rather than remembered, 2026-08-07: Cloudflare's current docs describe
+  a newer `exports`-based form and call `deleted_classes` legacy, so the syntax
+  above was checked against the pinned toolchain instead of the docs. Wrangler
+  4.118.0 does validate these keys: it warns `Unexpected fields found in
+  migrations field: "bogus_key_xyz"` on an invented one and accepts
+  `deleted_classes` silently. Run that control before trusting either form,
+  because the docs describe the newest wrangler and this repo pins an exact
+  older one.
 - **A fix for a bug that `infra:check`'s edge tier can see will DEADLOCK that
   promotion, and the merge is where it bites.** Those checks read production over
   the wire, which is the whole point of them (see the `app-owns-security-headers`
