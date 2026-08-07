@@ -534,6 +534,28 @@ test("Lens Browser Run endpoint validates targets before invoking the binding", 
   assert.equal((await response.json()).ok, false);
 });
 
+test("both browser routes report an upstream 429 as a 429, not a bad gateway", async () => {
+  // Production, 2026-08-06: /lens/browser answered 502 with a body carrying
+  // {"code":2001,"message":"Rate limit exceeded"}. /lens/shot had already been
+  // taught that Browser Run refusing US is not the scanned site failing; the
+  // sibling route had not, so the same bug shipped on half the surface. On the
+  // free plan (one Quick Action per 10s account-wide) this is the single most
+  // likely response either route will ever get, and a 502 sends whoever reads it
+  // to go inspect a third-party site that is perfectly healthy.
+  const env = { BROWSER: { quickAction: async () => new Response('{"errors":[{"code":2001}]}', { status: 429 }) } };
+  const url = "?url=https%3A%2F%2Fexample.com%2F";
+
+  for (const [name, handler] of [["shot", handleLensShot], ["browser", handleLensBrowser]]) {
+    const response = await handler(new Request(`https://aadhar.sh/lens/${name}${url}`), env, context());
+    assert.equal(response.status, 429, `/lens/${name} must pass the upstream 429 through as a 429`);
+    const body = await response.json();
+    assert.equal(body.ok, false);
+    // The message has to name OUR budget, since that is the thing the reader can
+    // act on. Naming the target would be the same lie the 502 told.
+    assert.match(body.error, /rate-limited|budget/i, `/lens/${name} must say whose limit was hit`);
+  }
+});
+
 test("Lens Browser Run endpoint normalizes a snapshot into the comparison contract", async () => {
   let action;
   let payload;
