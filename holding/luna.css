@@ -415,8 +415,8 @@ box-shadow:inset 1px 1px 0 oklch(86% 0.13 140),inset -1px -1px 0 oklch(38% 0.13 
 /* where the centred window leaves a wallpaper gutter — so they don't overlap. */
 /* Stylized CSS glyphs + brand colours, no image bytes, no trademark repros. */
 /* full-desktop layer (pointer-events pass through to the window EXCEPT on icons), */
-/* so icons can be dragged anywhere on the wallpaper. positions persist in */
-/* localStorage; default layout is a left column. */
+/* so icons can be dragged anywhere on the wallpaper. positions are per-visit only */
+/* (persisting them came back as a stack, see nav.js); default is a left column. */
 #axp-icons{position:fixed;inset:0;z-index:1;pointer-events:none}
 .axp-ico,.axp-ico:link,.axp-ico:visited,.axp-ico:hover,.axp-ico:active{color:oklch(100% 0 0);text-decoration:none}
 /* declares its own font like every other shell element (#axp-taskbar, #axp-run,
