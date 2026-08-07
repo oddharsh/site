@@ -1356,6 +1356,7 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   // Baked: a fallback the hydrator replaces, so a real src outside the
   // <noscript> twin is a thumbnail fetched and discarded milliseconds later.
   assert.match(baked, /data-photo-deferred/, "baked tiles must keep their URLs in data-* until hydration decides");
+  assert.doesNotMatch(baked, /data-photo-reveal/, "script-off fallback tiles must not start hidden");
   assert.match(baked, /data-src="\/i\/X1\.aaaaaaaa\.jpg"/, "the baked tile carries its jpg in data-src");
   assert.match(baked, /<noscript><picture>/, "every baked tile needs its script-off twin");
   assert.doesNotMatch(baked.slice(0, baked.indexOf("<noscript>")), /\ssrc="/,
@@ -1365,6 +1366,7 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   // live URLs and start on innerHTML.
   assert.match(fragment, /\ssrc="\/i\/X1\.aaaaaaaa\.jpg"/, "the fragment tile must carry a live src");
   assert.match(fragment, /<source type="image\/avif"[^>]*\ssrcset=/, "the fragment tile must carry live srcset, not data-srcset");
+  assert.match(fragment, /<picture data-photo-reveal>/, "live tiles must expose a decode-driven reveal state");
   assert.doesNotMatch(fragment, /data-photo-deferred|data-src=|data-srcset=/,
     "a fragment tile has nothing to defer for; leaving it deferred is how the grid went blank in an unrendered tab");
   assert.doesNotMatch(fragment, /<noscript>/, "the fragment only ever arrives via fetch(), so a script-off twin is dead bytes");
@@ -1374,6 +1376,9 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   assert.doesNotMatch(worker, /rel="preload" as="image"/, "a non-LCP random photo must not consume the preload lane");
   assert.match(page, /fetch\("\/photos\/grid\.html"\)/, "the homepage must hydrate its random twelve");
   assert.match(page, /\.catch\(\(\) => \{\}\)\s*\.then\(boot\)/, "a failed grid fetch must still hydrate the baked tiles");
+  assert.match(page, /typeof image\.decode === "function"/, "reveal timing must follow image decode when available");
+  assert.match(page, /matchMedia\?\.\("\(prefers-reduced-motion: reduce\)"\)/, "reduced motion must skip the decode wait");
+  assert.match(page, /prefers-reduced-motion: reduce/, "the reveal must honor reduced-motion preferences");
   // Removed 2026-07-29. It withheld 3 of 12 tiles to save ~34 KB out of ~136 KB,
   // and the 9 it allowed finished 48ms apart, so the row it held back showed up
   // as white squares on the first scroll for no measurable gain.

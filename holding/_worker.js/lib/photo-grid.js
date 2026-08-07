@@ -86,7 +86,7 @@ export function renderPhotoSlots(pick, altMap = {}, { deferred = true } = {}) {
       ? `<picture data-photo-deferred>` + sources("data-srcset") +
           `<img alt="${alt}" width="600" height="600" data-src="${escAttr(jpg)}" loading="eager" fetchpriority="low" decoding="async">` +
         `</picture>`
-      : `<picture>` + sources("srcset") +
+      : `<picture data-photo-reveal>` + sources("srcset") +
           `<img alt="${alt}" width="600" height="600" src="${escAttr(jpg)}" loading="eager" fetchpriority="low" decoding="async">` +
         `</picture>`;
 

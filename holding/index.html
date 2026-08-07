@@ -300,7 +300,15 @@ hr {
   display: block;
   box-sizing: border-box;
   text-decoration: none;
-  background: oklch(100.00% 0 0);
+  /* While a tile is waiting on its own image, the frame reads like an old
+     Explorer thumbnail well rather than a blank square. The image paints over
+     this immediately once it is decoded; there is no timer and no extra fetch. */
+  background-color: oklch(91.50% 0.0100 95.00);
+  background-image:
+    linear-gradient(45deg, oklch(100.00% 0 0 / 0.28) 25%, transparent 25%, transparent 75%, oklch(100.00% 0 0 / 0.28) 75%),
+    linear-gradient(45deg, oklch(100.00% 0 0 / 0.28) 25%, transparent 25%, transparent 75%, oklch(100.00% 0 0 / 0.28) 75%);
+  background-position: 0 0, 4px 4px;
+  background-size: 8px 8px;
   padding: 4px;
   /* skip rendering (layout + paint + style) for tiles scrolled out of view.
      the grid is 12 tiles in an internally-scrolling window, so the below-fold
@@ -334,6 +342,29 @@ hr {
   display: block;
   width: 100%;
   height: 100%;
+}
+.photos picture[data-photo-reveal],
+.photos picture[data-photo-ready] {
+  transition: opacity 140ms ease-out;
+}
+.photos picture[data-photo-reveal] {
+  opacity: 0;
+}
+.photos picture[data-photo-ready] {
+  opacity: 1;
+}
+.photos picture[data-photo-error] {
+  opacity: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .photos picture[data-photo-reveal],
+  .photos picture[data-photo-ready],
+  .photos picture[data-photo-error] {
+    transition: none;
+  }
+  .photos picture[data-photo-reveal] {
+    opacity: 1;
+  }
 }
 .photos img {
   display: block;
@@ -754,12 +785,56 @@ footer .signature small { color: oklch(56.93% 0 0); }
 
     <script>
     (() => {
+      const settlePhoto = (picture, failed = false) => {
+        picture.removeAttribute("data-photo-reveal");
+        if (failed) {
+          picture.setAttribute("data-photo-error", "");
+        } else {
+          picture.setAttribute("data-photo-ready", "");
+        }
+      };
+
+      // The browser owns the schedule: cached images skip the animation, and
+      // network images reveal only after their decode is usable. There is no
+      // artificial delay, staged tier chain, observer, or promoted layer here.
+      const revealPhotos = (section) => {
+        if (!section) return;
+        const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+        for (const picture of section.querySelectorAll("picture[data-photo-reveal]")) {
+          const image = picture.querySelector("img");
+          if (!image) {
+            settlePhoto(picture, true);
+            continue;
+          }
+
+          let settled = false;
+          const settle = (failed = false) => {
+            if (settled) return;
+            settled = true;
+            if (failed || reduceMotion) {
+              settlePhoto(picture, failed);
+              return;
+            }
+            const decoded = typeof image.decode === "function"
+              ? Promise.resolve().then(() => image.decode())
+              : Promise.resolve();
+            Promise.resolve(decoded).catch(() => {}).then(() => settlePhoto(picture));
+          };
+
+          image.addEventListener("load", () => settle(), { once: true });
+          image.addEventListener("error", () => settle(true), { once: true });
+          if (image.complete) settle(image.naturalWidth === 0);
+        }
+      };
+
       // Only ever finds tiles when the fetch failed: on success the fragment
       // replaced them with live-URL tiles that need no promotion. That is the
       // fallback path, and it is why boot() runs either way. The grid is never
       // empty.
       const boot = () => {
+        const section = document.querySelector(".photos");
         for (const picture of document.querySelectorAll(".photos picture[data-photo-deferred]")) {
+          picture.setAttribute("data-photo-reveal", "");
           for (const source of picture.querySelectorAll("source[data-srcset]")) {
             source.srcset = source.dataset.srcset;
             source.removeAttribute("data-srcset");
@@ -771,6 +846,7 @@ footer .signature small { color: oklch(56.93% 0 0); }
           }
           picture.removeAttribute("data-photo-deferred");
         }
+        revealPhotos(section);
       };
       fetch("/photos/grid.html")
         .then((r) => (r.ok ? r.text() : null))
