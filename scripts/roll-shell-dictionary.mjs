@@ -18,6 +18,55 @@
 import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { brotliCompressSync, brotliDecompressSync, constants as zc } from "node:zlib";
+import { execFileSync } from "node:child_process";
+
+// ------------------------------------------------------- adoption order ----
+
+// **How old is a committed dictionary?** mtime cannot answer that, because
+// `git checkout` stamps every file it writes with the checkout time — so in a
+// fresh worktree (which the collaboration rules ask for) every pre-existing
+// candidate is exactly as old as every other and the prune ordering degenerates
+// to readdir order. It bit the page half on 2026-08-06: a roll from a clean
+// worktree kept a snapshot from an old release and deleted the bytes production
+// had been serving that morning, which is precisely the one a returning visitor
+// could still offer.
+//
+// Commit time survives checkout, and one `git log` walk over the directory
+// answers for every file at once. Anything this run confirmed as currently
+// served is newest by definition; anything git has never seen falls back to
+// mtime, which is all an untracked stray leaves us.
+function gitTimes(dir) {
+  const times = new Map();
+  try {
+    const log = execFileSync("git", ["log", "--format=%ct", "--name-only", "--", dir],
+                             { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+    let t = 0;
+    for (const line of log.split("\n")) {
+      const row = line.trim();
+      if (/^\d+$/.test(row)) { t = Number(row); continue; }
+      const base = row.split("/").pop();
+      // First mention wins: git log walks newest-first, and what matters is the
+      // most recent commit that touched the file.
+      if (base && !times.has(base)) times.set(base, t);
+    }
+  } catch {
+    console.log(`  (no git history for ${dir}; falling back to mtime, which a fresh checkout flattens)`);
+  }
+  return times;
+}
+
+// Oldest first, so the caller can slice the head off.
+async function oldestFirst(dir, group, { keep, current = new Set() }) {
+  const times = gitTimes(dir);
+  const withTime = await Promise.all(group.map(async (g) => ({
+    g,
+    t: current.has(g.name) ? Infinity
+      : times.has(g.name) ? times.get(g.name)
+      : (await stat(`${dir}/${g.name}`)).mtimeMs / 1000,
+  })));
+  withTime.sort((a, b) => a.t - b.t);
+  return withTime.slice(0, Math.max(0, withTime.length - keep)).map((x) => x.g);
+}
 
 const ORIGIN = process.env.ROLL_ORIGIN || "https://aadhar.sh";
 
@@ -65,8 +114,8 @@ for (const a of shell) {
 }
 
 // Prune per base, so a rarely-changing asset (icons.svg) keeps its history instead of being
-// evicted by a churny neighbour (nav.js). mtime is the only ordering available — a content
-// hash carries none.
+// evicted by a churny neighbour (nav.js). Ordering is COMMIT time, not mtime, for the reason
+// gitTimes() explains — a content hash carries no ordering of its own.
 const byBase = new Map();
 for (const d of (await readdir(DICTS)).map(parse).filter(Boolean)) {
   if (!byBase.has(d.base)) byBase.set(d.base, []);
@@ -75,13 +124,11 @@ for (const d of (await readdir(DICTS)).map(parse).filter(Boolean)) {
 let pruned = 0;
 for (const [, group] of byBase) {
   if (group.length <= KEEP) continue;
-  const withTime = await Promise.all(group.map(async (g) => ({ g, t: (await stat(`${DICTS}/${g.name}`)).mtimeMs })));
-  withTime.sort((a, b) => a.t - b.t);
-  for (const { g } of withTime.slice(0, withTime.length - KEEP)) {
+  for (const g of await oldestFirst(DICTS, group, { keep: KEEP })) {
     await rm(`${DICTS}/${g.name}`, { force: true });
     pruned++;
     console.log(`pruned ${g.name}`);
-    }
+  }
 }
 console.log(`shell:roll — adopted ${adopted}, pruned ${pruned}, keeping ${KEEP} per asset.`);
 console.log("  Commit holding/a-dict/. build.mjs regenerates the deltas on its own from here.");
@@ -144,6 +191,9 @@ else {
     .filter((rel) => rel.endsWith(".html") && !rel.endsWith(".src.html"));
   const liveSlugs = new Set();
   let adopted = 0, pruned = 0, missing = 0;
+  // Every snapshot this run confirmed as CURRENTLY SERVED, whether it wrote the
+  // file or found it already there. These are never prune candidates.
+  const adoptedNow = new Set();
   const { createHash } = await import("node:crypto");
 
   // Ask for brotli and decode what comes back, rather than asking for `identity`
@@ -180,6 +230,10 @@ else {
       }
       const tag = createHash("sha256").update(bytes).digest("hex").slice(0, 16);
       const dest = `${PDICTS}/${job.slug}.${tag}.html.br`;
+      // Record it either way: an already-present snapshot is still what production
+      // is serving right now, so it must not become a prune candidate just because
+      // this run had nothing to write.
+      adoptedNow.add(`${job.slug}.${tag}.html.br`);
       if (existsSync(dest)) continue;
       await writeFile(dest, brotliCompressSync(bytes, { params: { [zc.BROTLI_PARAM_QUALITY]: 11, [zc.BROTLI_PARAM_LGWIN]: 24 } }));
       adopted++;
@@ -192,13 +246,15 @@ else {
     if (!byent.has(d.slug)) byent.set(d.slug, []);
     byent.get(d.slug).push(d);
   }
+  // Ordering is COMMIT time here for the same reason as the shell half, and this
+  // is the half where it actually bit: see gitTimes(). `adoptedNow` is what makes
+  // the current release un-prunable regardless of how git dates it.
   for (const [, group] of byent) {
     if (group.length <= KEEP_PAGES) continue;
-    const withTime = await Promise.all(group.map(async (g) => ({ g, t: (await stat(`${PDICTS}/${g.name}`)).mtimeMs })));
-    withTime.sort((a, b) => a.t - b.t);
-    for (const { g } of withTime.slice(0, withTime.length - KEEP_PAGES)) {
+    for (const g of await oldestFirst(PDICTS, group, { keep: KEEP_PAGES, current: adoptedNow })) {
       await rm(`${PDICTS}/${g.name}`, { force: true });
       pruned++;
+      console.log(`pruned page ${g.slug}.${g.tag}`);
     }
   }
   console.log(`pages:roll — adopted ${adopted}, pruned ${pruned}, skipped ${missing}, keeping ${KEEP_PAGES} per page (source: ${ORIGIN}).`);

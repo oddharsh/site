@@ -701,7 +701,7 @@ generic hex back.
   because that is what the 429 message quotes, and a contract test pins the two
   configs and the code together so a message cannot outlive its limit.
 - **PHOTOS_R2** — R2 bucket `aadhar-photos`, holds the SOOC originals
-  (~3 GB / 158 photos at FUJIFILM X-T5 + Leica resolution).
+  (~3 GB / 158 photos at FUJIFILM X-T50 + Leica resolution).
 - **ASSETS** — the Workers static-assets binding (wrangler.jsonc `assets`), serves files from holding/.
 - **RESTORE_DB** — D1 database `aadhar-restore` (id `88c8daf1-3a36-4f8e-a2ad-dba8a74e1b9f`),
   the **single source of truth for the deploy log**. One row per logged deploy
@@ -1361,6 +1361,39 @@ npm run deploy
     A/B mutation — any of them breaks a dictionary derived from source, and the
     symptom is a silent tier downgrade rather than an error. **Derive from the wire,
     or verify the wire equals the build.**
+
+    **The repair exposed a second bug in the same operation: `git checkout` destroys
+    mtime ordering, and both prune loops were sorting on mtime.** Checkout stamps
+    every file it writes with the checkout time, so in a fresh worktree every
+    pre-existing candidate is exactly as old as every other and "delete the oldest"
+    becomes "delete whatever readdir listed first". The first repair roll, run from
+    a clean worktree, kept a snapshot from an old release and deleted
+    `garage__pretext.73cac3ee` — the bytes production had served that same morning,
+    and therefore the only candidate a visitor from that morning could offer. The
+    hygiene rule (work from a fresh worktree) and the prune were in direct conflict,
+    and the roll is exactly where they meet.
+
+    Ordering is COMMIT time now, from one `git log --name-only` walk per directory,
+    shared by both halves (`gitTimes()` / `oldestFirst()` in the roll script).
+    Snapshots the run confirmed as currently served are un-prunable outright. The
+    check that this is right is a set intersection, not a vibe: the snapshots a roll
+    deletes must not intersect the snapshots representing bytes browsers hold.
+
+22. **A ramp step names the WHOLE traffic split, and at most 2 versions.** Both
+    halves of that bit `deploy:promote` on 2026-08-06. `wrangler versions deploy`
+    takes no delta, so `<target>@10` alone is rejected for totalling 10% and each
+    step has to name the incumbent holding the remainder. Then, because production
+    was already serving TWO versions (a secret update mints a version, and
+    `e0f1ab05` had been left at 10%), naming every incumbent produced a 3-way split
+    and wrangler refused the step outright: *"Too many versions selected. You can
+    deploy at most 2 version(s) at a time."*
+
+    So a ramp that starts from a multi-version split necessarily DROPS the smaller
+    incumbents. `trafficSplit()` gives the whole remainder to the LARGEST incumbent
+    and prints which versions stop serving, because the alternative — picking the
+    newest — shoves the entire remainder onto a version only a slice of traffic had
+    been getting, which is a big silent change inside a procedure whose only purpose
+    is changing one thing carefully.
 
 21. **The bridge's `c2pa` pack cannot see this site's photos, and no pipeline
     change fixes it.** TURNED OFF in the dashboard 2026-08-06, so the injected tag

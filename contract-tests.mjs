@@ -86,6 +86,54 @@ function context() {
   return { waitUntil() {} };
 }
 
+function fakeImages() {
+  return {
+    async info(bytes) { return { format: "jpeg", width: 100, height: 50, fileSize: bytes.byteLength, animated: false }; },
+    input(bytes) {
+      return {
+        transform(options) { this.options = options; return this; },
+        output(options) {
+          return {
+            async response() {
+              const marker = new TextEncoder().encode(JSON.stringify({ input: bytes.byteLength, options: this.options || {}, output: options }));
+              return new Response(marker, { headers: { "content-type": options.format } });
+            },
+          };
+        },
+      };
+    },
+  };
+}
+
+function representationD1() {
+  const rows = [];
+  return {
+    prepare(sql) {
+      return {
+        bind(...args) {
+          return {
+            async run() {
+              if (/INSERT OR REPLACE INTO http_representation_vault/i.test(sql)) {
+                const [id, url, profile, observed_at, final_url, status, content_type, content_encoding, content_length, cache_control, vary, etag, last_modified, server, age, cf_cache_status, body_bytes, body_hash, truncated, title, word_count] = args;
+                const row = { id, url, profile, observed_at, final_url, status, content_type, content_encoding, content_length, cache_control, vary, etag, last_modified, server, age, cf_cache_status, body_bytes, body_hash, truncated, title, word_count };
+                const index = rows.findIndex((existing) => existing.id === id);
+                if (index >= 0) rows[index] = row; else rows.push(row);
+              }
+              return { success: true, meta: { changes: 1 } };
+            },
+            async all() {
+              if (/WHERE id = \?/i.test(sql)) return { results: rows.filter((row) => row.id === args[0]) };
+              return { results: rows };
+            },
+          };
+        },
+        async run() { return { success: true, meta: { changes: 0 } }; },
+      };
+    },
+    rows,
+  };
+}
+
 // KV's get() takes the type either bare ("json") or inside an options object
 // ({ type, cacheTtl }). Reads that pass cacheTtl use the second form, so a stub
 // that only understands the first silently hands back a string where the caller
@@ -486,6 +534,28 @@ test("Lens Browser Run endpoint validates targets before invoking the binding", 
   assert.equal((await response.json()).ok, false);
 });
 
+test("both browser routes report an upstream 429 as a 429, not a bad gateway", async () => {
+  // Production, 2026-08-06: /lens/browser answered 502 with a body carrying
+  // {"code":2001,"message":"Rate limit exceeded"}. /lens/shot had already been
+  // taught that Browser Run refusing US is not the scanned site failing; the
+  // sibling route had not, so the same bug shipped on half the surface. On the
+  // free plan (one Quick Action per 10s account-wide) this is the single most
+  // likely response either route will ever get, and a 502 sends whoever reads it
+  // to go inspect a third-party site that is perfectly healthy.
+  const env = { BROWSER: { quickAction: async () => new Response('{"errors":[{"code":2001}]}', { status: 429 }) } };
+  const url = "?url=https%3A%2F%2Fexample.com%2F";
+
+  for (const [name, handler] of [["shot", handleLensShot], ["browser", handleLensBrowser]]) {
+    const response = await handler(new Request(`https://aadhar.sh/lens/${name}${url}`), env, context());
+    assert.equal(response.status, 429, `/lens/${name} must pass the upstream 429 through as a 429`);
+    const body = await response.json();
+    assert.equal(body.ok, false);
+    // The message has to name OUR budget, since that is the thing the reader can
+    // act on. Naming the target would be the same lie the 502 told.
+    assert.match(body.error, /rate-limited|budget/i, `/lens/${name} must say whose limit was hit`);
+  }
+});
+
 test("Lens Browser Run endpoint normalizes a snapshot into the comparison contract", async () => {
   let action;
   let payload;
@@ -591,7 +661,7 @@ function rankingEnv() {
     "/images/metadata.json": {
       A: { camera: "X-T50", lens: "XF27mm", film: "Classic Chrome", date: "2026:01:02" },
       B: { camera: "Leica Q3", lens: "Summilux", film: "Monochrome", date: "2025:01:02" },
-      C: { camera: "X-T5", lens: "XF18mm", film: "Classic Chrome", date: "2024:05:05" },
+      C: { camera: "X-T50", lens: "XF18mm", film: "Classic Chrome", date: "2024:05:05" },
     },
     "/images/alt.json": {
       A: "a bridge over a river",
@@ -779,6 +849,65 @@ test("site MCP exposes one read-only tool catalog and calls shared search", asyn
   const callBody = await call.json();
   assert.equal(callBody.result.structuredContent.returned, 1);
   assert.equal((await handleSiteMcp(new Request("https://aadhar.sh/mcp"), env, context())).status, 405);
+});
+
+test("site MCP image workbench returns an image content block and exact receipt", async () => {
+  const env = { IMAGES: fakeImages() };
+  const list = await handleSiteMcp(new Request("https://aadhar.sh/mcp", { method: "POST", body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }), headers: { "content-type": "application/json" } }), env, context());
+  const names = (await list.json()).result.tools.map((tool) => tool.name);
+  assert.ok(names.includes("image_inspect"));
+  assert.ok(names.includes("image_transform"));
+  assert.ok(names.includes("image_compare"));
+  const call = await handleSiteMcp(new Request("https://aadhar.sh/mcp", { method: "POST", body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "image_transform", arguments: { image_data: "aGVsbG8=", preset: "thumbnail" } } }), headers: { "content-type": "application/json" } }), env, context());
+  const body = await call.json();
+  assert.equal(body.result.structuredContent.engine, "cloudflare-images");
+  assert.equal(body.result.content[1].type, "image");
+  assert.equal(body.result.content[1].mimeType, "image/avif");
+});
+
+test("photo_recipe only claims exact archive identities", async () => {
+  const metadata = JSON.parse(readFileSync("holding/images/metadata.json", "utf8"));
+  const hashes = JSON.parse(readFileSync("holding/images/hashes.json", "utf8"));
+  const alt = JSON.parse(readFileSync("holding/images/alt.json", "utf8"));
+  const fingerprints = JSON.parse(readFileSync("holding/images/fingerprints.json", "utf8"));
+  const stem = Object.keys(metadata)[0];
+  const env = { ASSETS: staticAssets({ "/images/metadata.json": metadata, "/images/hashes.json": hashes, "/images/alt.json": alt, "/images/fingerprints.json": fingerprints }) };
+  const exact = await handleSiteMcp(new Request("https://aadhar.sh/mcp", { method: "POST", body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "photo_recipe", arguments: { stem } } }), headers: { "content-type": "application/json" } }), env, context());
+  const exactBody = await exact.json();
+  assert.equal(exactBody.result.structuredContent.matched, true);
+  assert.equal(exactBody.result.structuredContent.photo.stem, stem);
+  assert.equal("gps" in exactBody.result.structuredContent.photo.metadata, false);
+  const jpgPath = `holding/i/${stem}.${hashes[stem].j}.jpg`;
+  const bytes = readFileSync(jpgPath).toString("base64");
+  const byBytes = await handleSiteMcp(new Request("https://aadhar.sh/mcp", { method: "POST", body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "photo_recipe", arguments: { image_data: bytes } } }), headers: { "content-type": "application/json" } }), env, context());
+  const byBytesBody = await byBytes.json();
+  assert.equal(byBytesBody.result.structuredContent.matched, true);
+  assert.equal(byBytesBody.result.structuredContent.photo.matchKind, "published-thumbnail");
+  assert.equal(byBytesBody.result.structuredContent.photo.matchedTier, "j");
+  const miss = await handleSiteMcp(new Request("https://aadhar.sh/mcp", { method: "POST", body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "photo_recipe", arguments: { image_data: "aGVsbG8=" } } }), headers: { "content-type": "application/json" } }), env, context());
+  const missBody = await miss.json();
+  assert.equal(missBody.result.structuredContent.matched, false);
+});
+
+test("representation vault stores normalized snapshots and compares digests", async () => {
+  const db = representationD1();
+  const realFetch = globalThis.fetch;
+  let version = "one";
+  globalThis.fetch = async () => new Response(`<!doctype html><title>${version}</title><p>${version}</p>`, { headers: { "content-type": "text/html; charset=utf-8", etag: `"${version}"`, "cache-control": "public, max-age=60" } });
+  try {
+    const env = { RESTORE_DB: db };
+    const capture = await handleSiteMcp(new Request("https://aadhar.sh/mcp", { method: "POST", body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "representation_capture", arguments: { url: "https://example.com/page", profiles: ["browser"] } } }), headers: { "content-type": "application/json" } }), env, context());
+    const captured = (await capture.json()).result.structuredContent;
+    const first = captured.snapshots[0];
+    assert.ok(first.id);
+    assert.equal(first.title, "one");
+    assert.equal(db.rows[0].body, undefined);
+    version = "two";
+    const compare = await handleSiteMcp(new Request("https://aadhar.sh/mcp", { method: "POST", body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "representation_compare", arguments: { snapshot_id: first.id } } }), headers: { "content-type": "application/json" } }), env, context());
+    const compared = (await compare.json()).result.structuredContent;
+    assert.equal(compared.changed, true);
+    assert.ok(compared.changes.body_hash);
+  } finally { globalThis.fetch = realFetch; }
 });
 
 // ── webmention (inbound) ────────────────────────────────────────────────────
@@ -2969,8 +3098,8 @@ const TERMINAL_ASSETS = {
     { slug: "three", title: "The third note", date: "2026-03-04" },
   ],
   "/images/metadata.json": {
-    A_1: { camera: "FUJIFILM X-T5", lens: "XF27mmF2.8", film: "Classic Chrome", date: "2026:01:02", iso: 640, recipe: { "Film Simulation": "Classic Chrome", "Dynamic Range": "DR400" } },
-    A_2: { camera: "FUJIFILM X-T5", lens: "XF23mmF1.4", film: "Acros", date: "2025:05:06" },
+    A_1: { camera: "FUJIFILM X-T50", lens: "XF27mmF2.8", film: "Classic Chrome", date: "2026:01:02", iso: 640, recipe: { "Film Simulation": "Classic Chrome", "Dynamic Range": "DR400" } },
+    A_2: { camera: "FUJIFILM X-T50", lens: "XF23mmF1.4", film: "Acros", date: "2025:05:06" },
     A_3: { camera: "LEICA M11", lens: "Summicron 35", film: "", date: "2025:07:08" },
   },
   "/images/alt.json": { A_1: "A quiet corner", A_2: "Rain on glass", A_3: "A doorway" },
@@ -3144,7 +3273,7 @@ test("the tui frame never renders a photo field the public projection withholds"
     ...TERMINAL_ASSETS,
     "/images/metadata.json": {
       A_1: {
-        camera: "FUJIFILM X-T5", film: "Classic Chrome", date: "2026:01:02",
+        camera: "FUJIFILM X-T50", film: "Classic Chrome", date: "2026:01:02",
         gps: "40.7128,-74.0060", gpsLatitude: 40.7128, serialNumber: "SECRET123",
         recipe: { "Film Simulation": "Classic Chrome" },
       },

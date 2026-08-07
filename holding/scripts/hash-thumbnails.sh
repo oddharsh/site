@@ -99,3 +99,7 @@ print(f"hashed {len(hashes)} stems, copied {copied} new files -> {out_dir}")
 print(f"pruned {pruned_src} un-hashed source tiers, {pruned_i} superseded /i/ files")
 print(f"map: {map_path}")
 EOF
+
+# The short URL hash above is intentionally kept separate from the full-byte
+# fingerprint used by the exact photo_recipe matcher.
+node "$HOLDING/scripts/build-image-fingerprints.mjs"

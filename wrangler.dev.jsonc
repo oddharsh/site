@@ -116,6 +116,7 @@
   ],
   // Quick Actions need remote mode during local Wrangler development.
   "browser": { "binding": "BROWSER", "remote": true },
+  "images": { "binding": "IMAGES", "remote": true },
   // /lens per-IP crawl budgets — MUST match wrangler.jsonc (build.mjs warns on
   // drift). Local counters, deliberately: a dev session exercising /lens should
   // not spend the production limiter, and overLensBudget fails open anyway.

@@ -42,7 +42,7 @@ export async function handleAgentAuthRegister(request) {
     resource: "https://aadhar.sh/",
     claim_uri: `${origin}/agent/auth/claim`,
     revocation_uri: `${origin}/oauth2/revoke`,
-    note: "This public bearer credential is optional; current aadhar.sh agent resources are already public and read-only.",
+    note: "This public bearer credential is optional; current aadhar.sh agent resources and bounded MCP utilities are public. Image outputs are ephemeral and the representation vault stores normalized observations only.",
   }, 201, { "cache-control": "no-store" });
 }
 
