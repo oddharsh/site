@@ -289,7 +289,7 @@ async function callTool(name, args, request, env, ctx) {
   if (name === "cache") return terminalToolFrame("cache", args, request, env, ctx);
   if (name === "radar") {
     const samples = readSamples(args);
-    return { frame: frameText(radarFrame(samples, { source: String(args?.source || "").slice(0, 60) }), { color: false }), sources: samples.length };
+    return { frame: frameText(radarFrame(samples, { source: String(args?.source || "").slice(0, 60) })), sources: samples.length };
   }
   if (name === "image_inspect") {
     if (await overMcpBudget("image-inspect", 20, request, env, ctx)) return errorResult("Image inspections are rate-limited to 20/min.");

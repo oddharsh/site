@@ -518,7 +518,6 @@ const SHELLS = [
   ["lens.js",    "/lens.src.js",    "replaceState"],   // verify-routes.mjs marker
   ["lens-browser.js", "/lens-browser.src.js", "LensBrowser"],
   ["quiz.js",    "/quiz.src.js",    "luq-data"],       // the understanding-check widget
-  ["terminal.js", "/terminal.src.js", "ps-console"],  // the PowerShell console at /terminal
   ["tooltip.js", "/tooltip.src.js", "function start"],
   // the shared hover engine. tooltip.js imports it statically; the serendipity
   // shell and nav.js import it dynamically. Deliberately NOT content-hashed:

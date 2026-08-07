@@ -27,7 +27,8 @@ import { citationsIn, findEndpointIn, SELF_LINK_HOSTS } from "./holding/_worker.
 import { sign } from "./cal/src/sign.js";
 import { AGENT_SURFACES, WEBMENTION_PATHS } from "./holding/_worker.js/lib/site-manifest.js";
 import { handleWritingIndex } from "./holding/_worker.js/writing.js";
-import { handleTerminal, handleTool, tokenizeKeys } from "./holding/_worker.js/terminal.js";
+import { handleTool, tokenizeKeys } from "./holding/_worker.js/terminal.js";
+import { handleTerminal } from "./holding/_worker.js/wire.js";
 import { DATA_TOOLS } from "./holding/_worker.js/lib/tools.js";
 import { cronJob } from "./holding/_worker.js/lib/cron.js";
 import { serveStaticPage } from "./holding/_worker.js/lib/assets.js";
@@ -3190,16 +3191,16 @@ const TERMINAL_ASSETS = {
 };
 const terminalEnv = () => ({ ASSETS: staticAssets(TERMINAL_ASSETS) });
 const terminalReq = (path) => new Request(`https://aadhar.sh${path}`);
-const terminalGet = (path) => (path === "/terminal" || path.startsWith("/terminal?")
-  ? handleTerminal(terminalReq(path), terminalEnv(), context())
-  : handleTool(terminalReq(path), terminalEnv(), context()));
+// /terminal stopped being a frame when the console became the wire view; it is
+// an HTML page now and has its own tests below.
+const terminalGet = (path) => handleTool(terminalReq(path), terminalEnv(), context());
 
 // Every state worth drawing, so a width regression cannot hide in the one pane
 // nobody exercised. Panes that need network (reading, listening, around,
 // coffee) still render here — their loaders fail closed to an empty list, which
 // is itself the case worth pinning.
 const TERMINAL_STATES = [
-  "/terminal", "/finger", "/finger?help=1", "/finger?keys=q",
+  "/finger", "/finger?help=1", "/finger?keys=q",
   ...["overview", "writing", "reading", "listening", "photos", "around", "coffee", "deploys", "search"]
     .map((pane) => `/finger?pane=${pane}`),
   "/finger?pane=writing&keys=jj", "/finger?pane=writing&cursor=1&open=two",
@@ -3209,38 +3210,45 @@ const TERMINAL_STATES = [
   "/photos?q=nothingmatchesthis", "/lens", "/lens?url=javascript%3Aalert(1)",
 ];
 
-test("every frame is exactly 80 columns wide, in every state and both colour modes", async () => {
-  // THE structural invariant. A frame whose rows disagree on width is not a
-  // frame — the borders stop lining up and the box stops reading as a box. It
-  // breaks silently: the text is all still there, so nothing throws and no
-  // status code changes. Only counting catches it.
+test("no frame line runs past 80 columns, and none of them draws a box", async () => {
+  // What replaced "every row is EXACTLY 80 columns". That invariant existed to
+  // keep a drawn border lining up; the border is gone (2026-08-06), because a
+  // window drawn in ASCII — [_][#][X] and all — inside a real window that
+  // already had those controls was chrome pretending to be content.
+  //
+  // The useful half survives: a line that overflows 80 wraps in a terminal and
+  // silently destroys the alignment of everything a tool laid out in columns.
   for (const path of TERMINAL_STATES) {
-    for (const plain of [true, false]) {
-      const res = await terminalGet(path + (path.includes("?") ? "&" : "?") + (plain ? "plain=1" : "plain=0"));
-      assert.equal(res.status, 200, path);
-      const text = await res.text();
-      // Strip SGR before measuring: an escape occupies bytes and zero columns,
-      // which is the exact confusion the span model exists to avoid.
-      const lines = text.replace(/\x1b\[[0-9;]*m/g, "").split("\n").filter((line) => line.length);
-      assert.ok(lines.length > 3, `${path} produced no frame`);
-      for (const line of lines) {
-        assert.equal([...line].length, 80, `${path} (plain=${plain}) drew a ${[...line].length}-column row: ${line}`);
-      }
-      assert.ok(lines[0].startsWith("╔") && lines.at(-1).startsWith("╚"), `${path} is missing its frame`);
+    const res = await terminalGet(path);
+    assert.equal(res.status, 200, path);
+    const text = await res.text();
+    const lines = text.split("\n").filter((line) => line.length);
+    // Was `> 3`, which only held because five of those lines were border. A
+    // rejected target legitimately answers in two lines now.
+    assert.ok(lines.length >= 2, `${path} produced no output`);
+    for (const line of lines) {
+      assert.ok([...line].length <= 80, `${path} drew a ${[...line].length}-column row: ${line}`);
+    }
+    // The chrome, named so it cannot creep back one glyph at a time.
+    for (const glyph of ["╔", "╚", "║", "╟", "[_][#][X]"]) {
+      assert.ok(!text.includes(glyph), `${path} is drawing frame chrome again (${glyph})`);
     }
   }
 });
 
-test("plain mode emits no escape bytes, and colour mode actually emits them", async () => {
-  // Both halves matter. An escape leaking into an MCP result is noise a model
-  // then has to be robust to; a `?plain=1` that was silently the only mode
-  // would mean the ANSI path had quietly died and nobody noticed, because a
-  // colourless frame still reads fine.
-  const plain = await (await terminalGet("/finger?plain=1")).text();
-  assert.ok(!plain.includes("\x1b"), "plain=1 leaked an escape sequence");
-  const coloured = await (await terminalGet("/finger")).text();
-  assert.ok(coloured.includes("\x1b["), "the default HTTP frame lost its colour");
-  assert.equal(plain, coloured.replace(/\x1b\[[0-9;]*m/g, ""), "colour changed the text, not just its styling");
+test("a tool frame never emits an escape byte, in any mode", async () => {
+  // There is no colour mode left to get wrong. The audience for these routes is
+  // curl and a model, and an escape sequence in a context window is noise the
+  // model then has to be robust to. `?plain=1` used to be the opt-OUT; plain is
+  // now the only thing there is, and the parameter is inert rather than removed
+  // so old links keep working.
+  for (const path of ["/finger", "/finger?plain=1", "/finger?plain=0", "/dict", "/photos"]) {
+    const text = await (await terminalGet(path)).text();
+    assert.ok(!text.includes("\x1b"), `${path} leaked an escape sequence`);
+  }
+  const a = await (await terminalGet("/finger?plain=1")).text();
+  const b = await (await terminalGet("/finger")).text();
+  assert.equal(a, b, "plain=1 and the default must be the same bytes now");
 });
 
 test("a frame's printed state is a URL that reproduces it", async () => {
@@ -3274,7 +3282,7 @@ test("the tui routes refuse to be cached or indexed", async () => {
   // A frame is per-query and several are live (playlist, calendar, lens). The
   // route also negotiates on Accept, which a URL-keyed edge cache cannot
   // represent — the same trap lib/cache.js documents for the markdown twins.
-  for (const path of ["/terminal", "/finger", "/photos"]) {
+  for (const path of ["/finger", "/photos"]) {
     const res = await terminalGet(path);
     assert.equal(res.headers.get("cache-control"), "no-store", path);
     assert.equal(res.headers.get("x-robots-tag"), "noindex", path);
@@ -3282,29 +3290,54 @@ test("the tui routes refuse to be cached or indexed", async () => {
   }
 });
 
-test("a browser gets the same frame a terminal does, not a second layout", async () => {
-  // The terminal view is only honest if there is one renderer. If the HTML arm
-  // ever grew its own layout, what a person sees and what an agent reads would
-  // start to differ, and the page would be claiming something untrue.
-  //
-  // The document's rows carry per-span <span class="c-*"> for colour, so this
-  // compares TEXT CONTENT rather than raw markup: strip the tags, unescape, and
-  // the browser's console scrollback must be the terminal's frame row for row.
-  // Comparing markup would only prove the two agree on styling, which is not the
-  // claim being made.
-  const html = await (await handleTerminal(new Request("https://aadhar.sh/terminal", { headers: { accept: "text/html" } }), terminalEnv(), context())).text();
-  const text = await (await terminalGet("/terminal?plain=1")).text();
+test("/terminal shows the wire, and renders it through the real MCP handler", async () => {
+  // The page exists to show a VIEWER what an agent gets. That is only true if it
+  // runs the actual handler: a second code path that merely agreed with /mcp
+  // today is precisely the thing this page is supposed to not be.
+  const res = await handleTerminal(new Request("https://aadhar.sh/terminal", {
+    headers: { accept: "text/html" },
+  }), terminalEnv(), context());
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get("content-type") || "", /^text\/html/);
+  const html = await res.text();
 
-  const rowsInDoc = [...html.matchAll(/<div class="ps-line">([\s\S]*?)<\/div>\s*(?=<div class="ps-line">|<\/div>)/g)]
-    .map((m) => m[1].replace(/<[^>]+>/g, "").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, "&"));
-
-  for (const line of text.split("\n").filter(Boolean)) {
-    assert.ok(rowsInDoc.includes(line), `the HTML view dropped or altered a frame row: ${line}`);
+  // The exchange itself: both halves of the request, and a catalogue that came
+  // back from tools/list rather than from a hand-written list in this file.
+  assert.match(html, /tools\/list/);
+  assert.match(html, /tools\/call/);
+  assert.match(html, /jsonrpc/);
+  for (const tool of ["finger", "dict", "encode", "lens_inspect"]) {
+    assert.ok(html.includes(tool), `the catalogue is missing ${tool}`);
   }
-  // And the colour actually arrived — a document that rendered every row as bare
-  // text would pass the row comparison above while looking nothing like the
-  // frames the console prints once you type into it.
-  assert.ok(/<span class="c-bar">/.test(html), "the boot frame lost its span colouring");
+
+  // And it is not the emulator again. Named glyph by glyph and class by class,
+  // because this regressed once already by being rebuilt one layer down: the
+  // frames drew [_][#][X] in ASCII inside a real window that had those buttons.
+  for (const ghost of ["ps-line", "ps-console", "PowerShell", "[_][#][X]", "╔", "terminal.js"]) {
+    assert.ok(!html.includes(ghost), `/terminal is drawing the old console again (${ghost})`);
+  }
+});
+
+test("a browser gets the same text a terminal does, not a second layout", async () => {
+  // The claim survived the console's deletion, in a simpler form. A tool route
+  // asked for HTML wraps the SAME frameText a .txt request gets in a <pre>; if
+  // the HTML arm ever grew its own layout, what a person sees and what an agent
+  // reads would start to differ and the page would be claiming something untrue.
+  //
+  // This used to compare console scrollback rows and assert on <span class="c-*">
+  // colouring. Both are gone: there is no console, and no colour to lose.
+  const htmlReq = new Request("https://aadhar.sh/finger", { headers: { accept: "text/html" } });
+  const html = await (await handleTool(htmlReq, terminalEnv(), context())).text();
+  const text = await (await terminalGet("/finger")).text();
+
+  const pre = /<pre class="tool-out">([\s\S]*?)<\/pre>/.exec(html);
+  assert.ok(pre, "a tool asked for HTML must render the frame in a <pre>");
+  const unescaped = pre[1]
+    .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'").replace(/&amp;/g, "&");
+  for (const line of text.split("\n").filter(Boolean)) {
+    assert.ok(unescaped.includes(line), `the HTML view dropped or altered a row: ${line}`);
+  }
 });
 
 test("an unknown program 404s and names the ones that exist", async () => {
@@ -3341,7 +3374,11 @@ test("every frame tool the MCP server lists is one the server can actually call"
     // terminal_lens reaches a real fetch it cannot make here, so it is allowed to
     // come back as a rendered failure — what it may NOT do is come back unknown.
     const frame = result.structuredContent?.frame ?? "";
-    assert.ok(frame.includes("╔"), `${name} returned no frame`);
+    // Was `frame.includes("╔")`. The box is gone; what still has to be true is
+    // that a frame came back at all and that it names the tool that drew it.
+    assert.ok(frame.length > 20, `${name} returned no frame`);
+    assert.ok(frame.startsWith(name.replace("_", "-")) || frame.includes(name.replace("_", "-")),
+      `${name}'s frame does not say which tool drew it: ${frame.slice(0, 60)}`);
     assert.ok(!frame.includes("\x1b"), `${name} returned ANSI escapes into a model context`);
   }
 });
@@ -3472,7 +3509,7 @@ test("radar bands match findphone's field calibration", async () => {
   assert.equal(bandOf(-95).label, "far / noise");
 });
 
-test("the radar frame is 80 columns and says its angles are meaningless", async () => {
+test("the radar frame fits 80 columns and says its angles are meaningless", async () => {
   // The honesty line is load-bearing, not decoration: RSSI is a scalar and a
   // plot with angles invites a reader to infer a direction that is not there.
   const res = await handleTool(new Request("https://aadhar.sh/radar?plain=1", {
@@ -3483,8 +3520,10 @@ test("the radar frame is 80 columns and says its angles are meaningless", async 
   assert.equal(res.status, 200);
   const text = await res.text();
   for (const line of text.split("\n").filter(Boolean)) {
-    assert.equal([...line].length, 80, `radar drew a ${[...line].length}-column row`);
+    assert.ok([...line].length <= 80, `radar drew a ${[...line].length}-column row`);
   }
+  // The honesty line is the point of this test and survives the chrome strip
+  // untouched — it was never part of the border.
   assert.match(text, /ANGLES ARE DECORATIVE/);
   assert.match(text, /-58 dBm/);
   assert.match(text, /arm's reach/);
@@ -3829,7 +3868,8 @@ test("a tool answers HTML to a browser and a frame to everything else", async ()
   // .txt is explicit and beats Accept, so a browser can still ask for the frame.
   const txt = await handleTool(new Request("https://aadhar.sh/dict.txt", { headers: { accept: "text/html" } }), terminalEnv(), context());
   assert.match(txt.headers.get("content-type"), /text\/plain/);
-  assert.ok((await txt.text()).includes("╔"), ".txt must return the frame itself");
+  const txtBody = await txt.text();
+  assert.ok(txtBody.length > 20 && !txtBody.includes("<"), ".txt must return the frame itself, as text");
 });
 
 test("a frame's printed state is a root URL that resolves", async () => {
