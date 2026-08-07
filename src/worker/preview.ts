@@ -1,5 +1,5 @@
 const getWrites = new Set([
-  "/hit", "/approve", "/decline", "/ledger/prefetch", "/webmentions/approve", "/webmentions/delete",
+  "/hit", "/approve", "/decline", "/ledger/prefetch", "/webmention/approve", "/webmention/decline",
 ]);
 
 export function previewRefusal(request: Request): Response | null {

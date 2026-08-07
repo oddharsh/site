@@ -59,6 +59,7 @@ export function renderDocument({
   <meta name="theme-color" content="#0054e3">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="canonical" href="https://aadhar.sh${escapeHtml(path)}">
+  <link rel="webmention" href="/webmention">
   <link rel="stylesheet" href="${escapeHtml(stylesheet)}">
   ${head}
 </head>

@@ -125,12 +125,12 @@ function calendarDay(value: unknown): string {
 
 export async function inboxPage(request: Request, env: Env): Promise<Response> {
   const response = await env.ASSETS.fetch(request); let mentions: Row[] = [];
-  try { mentions = (await env.SOCIAL_DB.prepare("SELECT source,target,kind,author,title,excerpt,approved_at FROM webmentions WHERE status='approved' ORDER BY approved_at DESC LIMIT 200").all<Row>()).results; } catch { /* empty state */ }
+  try { mentions = (await env.SOCIAL_DB.prepare("SELECT id,source,target,kind,author,title,excerpt,approved_at FROM webmentions WHERE status='approved' ORDER BY approved_at DESC LIMIT 200").all<Row>()).results; } catch { /* empty state */ }
   if (!mentions.length) return withSiteHeaders(response, request);
   const html = `<ol>${mentions.flatMap((mention) => {
     const source = safeExternalUrl(mention.source);
     if (!source) return [];
-    return [`<li><h2><a href="${escapeHtml(source)}" rel="ugc external noopener">${escapeHtml(mention.title || mention.source)}</a></h2><p class="event-meta">${escapeHtml(mention.author || "someone")} ${escapeHtml(mention.kind || "mentioned")} ${escapeHtml(safePath(mention.target))} · ${calendarDay(mention.approved_at)}</p>${mention.excerpt ? `<p>${escapeHtml(mention.excerpt)}</p>` : ""}</li>`];
+    return [`<li id="${escapeHtml(mention.id)}"><h2><a href="${escapeHtml(source)}" rel="ugc external noopener">${escapeHtml(mention.title || mention.source)}</a></h2><p class="event-meta">${escapeHtml(mention.author || "someone")} ${escapeHtml(mention.kind || "mentioned")} ${escapeHtml(safePath(mention.target))} · ${calendarDay(mention.approved_at)}</p>${mention.excerpt ? `<p>${escapeHtml(mention.excerpt)}</p>` : ""}</li>`];
   }).join("")}</ol>`;
   const transformed = new HTMLRewriter().on("#mention-list", { element(element) { element.setInnerContent(html, { html: true }); } }).transform(response); const secured = withSiteHeaders(transformed, request); secured.headers.set("link", `<${new URL(request.url).origin}/webmention>; rel="webmention"`); return secured;
 }

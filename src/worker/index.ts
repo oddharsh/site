@@ -13,6 +13,7 @@ import { coffeeAvailability, coffeeBook, coffeeDecision, coffeePage, coffeeSlots
 import { retiredSerendipityWrite, serendipityEvent, serendipityEventsJson, serendipityMcp, serendipityPage } from "./serendipity";
 import { censusJson, censusPage, inboxPage, utilityPage } from "./utilities";
 import { siteMcp } from "./mcp";
+import { decideWebmention, receiveWebmention } from "./webmention";
 
 export { BookingSlot, BookingWorkflow, Counter };
 
@@ -48,6 +49,9 @@ async function fetchHandler(request: Request, env: Env, ctx: ExecutionContext): 
   const { pathname } = url;
 
   if (request.method === "POST" && pathname === "/coffee/book") return coffeeBook(request, env, ctx);
+  if (pathname === "/webmention") return receiveWebmention(request, env, ctx);
+  if (pathname === "/webmention/approve") return decideWebmention(request, env, "approve");
+  if (pathname === "/webmention/decline") return decideWebmention(request, env, "decline");
   if (pathname === "/mcp") return siteMcp(request, env, ctx);
   if (pathname === "/serendipity/mcp") return serendipityMcp(request, env);
   if (["/serendipity/sync", "/serendipity/sync-descriptions", "/serendipity/enrich", "/serendipity/cookies", "/serendipity/add-event", "/serendipity/cover"].includes(pathname)) return retiredSerendipityWrite();

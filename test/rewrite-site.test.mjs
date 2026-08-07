@@ -30,11 +30,14 @@ test("homepage is a complete, zero-JavaScript document", async () => {
 
 test("all generated authored documents remain zero JavaScript", async () => {
   const manifest = JSON.parse(await text("build-manifest.json"));
+  const webmentionTargets = JSON.parse(await text("webmention-targets.json"));
+  assert.deepEqual(webmentionTargets, manifest.pages);
   for (const route of manifest.pages) {
     const file = route === "/" ? "index.html" : `${route.slice(1)}.html`;
     const html = await text(file);
     assert.doesNotMatch(html, /<script\b/i, `${route} includes script`);
     assert.match(html, /<main class="document" id="content">/, `${route} has no main document`);
+    assert.match(html, /<link rel="webmention" href="\/webmention">/, `${route} does not advertise its receiver`);
   }
 });
 

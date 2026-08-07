@@ -221,5 +221,6 @@ const manifest = {
   assets: [`/assets/${cssName}`, ...photos.flatMap(({ thumbAvif, thumbJpg, thumbSmall }) => [`/${thumbAvif}`, `/${thumbJpg}`, `/${thumbSmall}`])],
 };
 await write("build-manifest.json", `${JSON.stringify(manifest, null, 2)}\n`);
+await write("webmention-targets.json", `${JSON.stringify(manifest.pages, null, 2)}\n`);
 
 console.log(`Built ${manifest.pages.length} page and ${manifest.assets.length} assets in dist/`);

@@ -1,4 +1,6 @@
 import { json, withSiteHeaders } from "./http.ts";
+import { sendEmail } from "./email.ts";
+import { signValue, verifyValue } from "./signatures.ts";
 
 type CoffeeSecrets = { ICAL_URL?: string; SIGNING_SECRET?: string; RESEND_API_KEY?: string };
 type Interval = { start: number; end: number };
@@ -225,27 +227,6 @@ export async function coffeePage(request: Request, env: Env, ctx: ExecutionConte
   const secured = withSiteHeaders(transformed, request); secured.headers.set("cache-control", "no-store"); secured.headers.set("x-robots-tag", "noindex"); return secured;
 }
 
-async function hmac(message: string, secret: string): Promise<string> {
-  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  const bytes = new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(message)));
-  let binary = ""; for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
-}
-
-async function verifyHmac(message: string, signature: string, secret: string): Promise<boolean> {
-  const expected = await hmac(message, secret);
-  if (expected.length !== signature.length) return false;
-  let difference = 0; for (let index = 0; index < expected.length; index++) difference |= expected.charCodeAt(index) ^ signature.charCodeAt(index);
-  return difference === 0;
-}
-
-async function sendEmail(env: Env, payload: JsonRecord): Promise<void> {
-  const token = (env as Env & CoffeeSecrets).RESEND_API_KEY;
-  if (!token) throw new Error("email transport is not configured");
-  const response = await fetch("https://api.resend.com/emails", { method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" }, body: JSON.stringify(payload), signal: AbortSignal.timeout(8000) });
-  if (!response.ok) throw new Error(`email transport returned ${response.status}`);
-}
-
 type JsonRecord = Record<string, unknown>;
 
 async function resultPage(request: Request, env: Env, title: string, message: string, status = 200): Promise<Response> {
@@ -286,8 +267,8 @@ export async function coffeeBook(request: Request, env: Env, ctx: ExecutionConte
   try {
     await env.BOOKINGS.put(`booking:${booking.id}`, JSON.stringify(booking), { expirationTtl: 90 * 86400 });
     await env.BOOKINGS.put(`held:${booking.start}:${booking.end}`, booking.id, { expiration: Math.max(Math.floor(booking.end / 1000) + 86400, Math.floor(Date.now() / 1000) + 120) });
-    const approve = await hmac(`${booking.id}|approve`, secrets.SIGNING_SECRET);
-    const decline = await hmac(`${booking.id}|decline`, secrets.SIGNING_SECRET);
+    const approve = await signValue(`${booking.id}|approve`, secrets.SIGNING_SECRET);
+    const decline = await signValue(`${booking.id}|decline`, secrets.SIGNING_SECRET);
     const base = new URL(request.url).origin;
     await sendEmail(env, { from: "aadhar.sh coffee <noreply@aadhar.sh>", to: [env.HOST_EMAIL], reply_to: email, subject: `Coffee request from ${name}`, html: `<p><strong>${escapeHtml(name)}</strong> requested coffee for ${escapeHtml(slotLabel(booking.start, booking.end, env.HOST_TIMEZONE))}.</p><blockquote>${escapeHtml(topic)}</blockquote><p><a href="${base}/coffee/approve?t=${booking.id}&amp;sig=${approve}">Approve and send invitation</a> · <a href="${base}/coffee/decline?t=${booking.id}&amp;sig=${decline}">Decline</a></p>` });
   } catch {
@@ -312,7 +293,7 @@ function base64Utf8(value: string): string {
 export async function coffeeDecision(request: Request, env: Env, action: "approve" | "decline"): Promise<Response> {
   const url = new URL(request.url); const id = url.searchParams.get("t") ?? ""; const signature = url.searchParams.get("sig") ?? "";
   const secret = (env as Env & CoffeeSecrets).SIGNING_SECRET;
-  if (!secret || !id || !signature || !await verifyHmac(`${id}|${action}`, signature, secret)) return resultPage(request, env, "Link refused", "This decision link is invalid or expired.", 401);
+  if (!secret || !id || !signature || !await verifyValue(`${id}|${action}`, signature, secret)) return resultPage(request, env, "Link refused", "This decision link is invalid or expired.", 401);
   const booking = await env.BOOKINGS.get<Booking>(`booking:${id}`, "json");
   if (!booking) return resultPage(request, env, "Booking not found", "The pending record expired or was already removed.", 404);
   if (action === "approve") {
