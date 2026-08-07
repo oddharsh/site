@@ -62,8 +62,8 @@ function profileNames(value) {
 }
 
 function wordCount(text) {
-  const plain = text.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ")
+  const plain = text.replace(/<script\b[^>]*>[\s\S]*?<\/script\b[^>]*>/gi, " ")
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style\b[^>]*>/gi, " ")
     .replace(/<[^>]+>/g, " ")
     .replace(/&(?:nbsp|amp|lt|gt|quot);/gi, " ")
     .replace(/\s+/g, " ").trim();
