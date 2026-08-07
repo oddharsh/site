@@ -15,7 +15,7 @@ export function json(value: unknown, init: ResponseInit = {}): Response {
 
 export function text(value: string, init: ResponseInit = {}): Response {
   const headers = new Headers(init.headers);
-  headers.set("content-type", "text/plain; charset=utf-8");
+  if (!headers.has("content-type")) headers.set("content-type", "text/plain; charset=utf-8");
   headers.set("x-content-type-options", "nosniff");
   return new Response(value, { ...init, headers });
 }

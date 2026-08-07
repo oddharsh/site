@@ -4,6 +4,9 @@ import { previewRefusal } from "./preview";
 import { BookingWorkflow } from "./workflow";
 import { requestDetailsHtml, requestProfile } from "./whoareyou";
 import { terminalTool } from "./tools";
+import { aroundChanges, aroundJson, aroundResponse, countCrawler, ledgerJson, ledgerResponse, readingResponse } from "./live";
+import { photoQuery } from "./photos";
+import { rnMarkdown, rnRedirect, rnTracks, rnTracksHtml } from "./rn";
 
 export { BookingWorkflow, Counter };
 
@@ -65,6 +68,19 @@ async function fetchHandler(request: Request, env: Env, ctx: ExecutionContext): 
       retention: "none",
     }, { headers: { "cache-control": "no-store", "x-robots-tag": "noindex" } });
   }
+
+  if (pathname === "/reading") return readingResponse(request, env);
+  if (pathname === "/around") return aroundResponse(request, env);
+  if (pathname === "/around/json") return aroundJson(env);
+  if (pathname === "/around/changes.json") return aroundChanges(env, url.searchParams.get("limit"));
+  if (pathname === "/ledger") return ledgerResponse(request, env);
+  if (pathname === "/ledger.json") return ledgerJson(env);
+  if (pathname === "/photos/query.json") return photoQuery(request, env);
+  if (pathname === "/rn/admin") return text("forbidden\n", { status: 403, headers: { "cache-control": "no-store" } });
+  if (pathname === "/rn/tracks") return rnTracks(env);
+  if (pathname === "/rn/tracks.html") return rnTracksHtml(env);
+  if (pathname === "/rn.md" || (pathname === "/rn" && prefersMarkdown(request))) return rnMarkdown(env);
+  if (pathname === "/rn") return rnRedirect(env);
 
   if (pathname === "/search.json") {
     const response = await asset(request, env, "/search-index.json");
@@ -141,10 +157,14 @@ async function fetchHandler(request: Request, env: Env, ctx: ExecutionContext): 
 }
 
 export default {
-  fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    return fetchHandler(request, env, ctx).catch((error: unknown) => {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    try {
+      const response = await fetchHandler(request, env, ctx);
+      countCrawler(env, request, response, ctx);
+      return response;
+    } catch (error: unknown) {
       console.error("request failed", { path: new URL(request.url).pathname, error: error instanceof Error ? error.message : String(error) });
       return text("internal error\n", { status: 500, headers: { "cache-control": "no-store" } });
-    });
+    }
   },
 } satisfies ExportedHandler<Env>;

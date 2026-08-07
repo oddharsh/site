@@ -322,6 +322,77 @@
     color: #0645ad;
   }
 
+  .system-state,
+  .ledger-sheet {
+    margin-block: 22px;
+    padding: 13px 15px;
+    border: 1px solid #8ba2d5;
+    background: var(--selection-soft);
+  }
+
+  .system-state h2,
+  .ledger-sheet h2,
+  .record-section h2 {
+    color: #16428b;
+    font-size: 18px;
+  }
+
+  .system-state code { font-family: var(--font-mono); }
+
+  .record-section { margin-block-start: 24px; }
+  .record-section > p { margin-block: 4px 10px; max-inline-size: 70ch; }
+
+  .record-list {
+    display: grid;
+    gap: 1px;
+    margin-block-start: 9px;
+    padding: 3px;
+    background: var(--face);
+    box-shadow: var(--sunken);
+    list-style: none;
+  }
+
+  .record-list li,
+  .record-list a {
+    min-inline-size: 0;
+    display: grid;
+    grid-template-columns: 10ch minmax(15ch, .7fr) minmax(0, 1fr);
+    gap: 10px;
+    padding: 7px 9px;
+    background: var(--paper);
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .record-list time,
+  .record-list strong { font-family: var(--font-mono); }
+  .record-list time { color: var(--muted); }
+
+  .restore-points li { padding: 0; }
+  .restore-points li:target a,
+  .restore-points a:hover,
+  .restore-points a:focus-visible { color: var(--paper); background: var(--selection); outline: 0; }
+  .restore-points li:target time,
+  .restore-points a:hover time,
+  .restore-points a:focus-visible time { color: inherit; }
+
+  .live-list { margin-block-start: 24px; }
+  .empty-state { padding: 14px; border: 1px solid #d6b14e; background: #fff8cf; }
+
+  .live-group + .live-group { margin-block-start: 22px; }
+  .live-group > h2 { margin-block-end: 7px; color: #16428b; font-size: 18px; }
+  .live-item { padding: 10px 0; border-block-start: 1px solid #d9d9d9; }
+  .live-item h3 { font-size: 15px; }
+  .live-item h3 a { color: #0645ad; }
+  .live-meta { color: var(--muted); font-size: 12px; }
+  .live-item blockquote { margin: 7px 0 0 14px; padding-inline-start: 10px; border-inline-start: 3px solid #8ba2d5; }
+
+  .status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 1px; margin-block-start: 18px; padding: 3px; background: var(--face); box-shadow: var(--sunken); }
+  .status-card { padding: 11px; background: var(--paper); }
+  .status-card h2 { color: #16428b; font-size: 15px; }
+  .status-card dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; margin: 8px 0 0; font-size: 12px; }
+  .status-card dd { margin: 0; overflow-wrap: anywhere; }
+
   .object-list,
   .file-list {
     display: grid;

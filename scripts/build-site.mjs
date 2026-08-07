@@ -9,6 +9,8 @@ import { photosMarkdown, renderPhotos } from "../src/site/pages/photos.mjs";
 import { renderWritingIndex, renderWritingPost, writingMarkdown } from "../src/site/pages/writing.mjs";
 import { renderSystemPage } from "../src/site/pages/system.mjs";
 import { renderRun, renderSearch } from "../src/site/pages/search.mjs";
+import { renderRestore, renderUpdates, restoreMarkdown, updatesMarkdown } from "../src/site/pages/status.mjs";
+import { renderAround, renderLedger, renderReading } from "../src/site/pages/live.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const output = join(root, "dist");
@@ -42,13 +44,14 @@ const cssName = `site.${digest(css)}.css`;
 await write(`assets/${cssName}`, css);
 await write("luna.css", `/* axp-desktop compatibility URL; new canonical source: /assets/${cssName} */\n${css}`);
 
-const [home, hashes, alt, posts, siteManifest, photoIndex] = await Promise.all([
+const [home, hashes, alt, posts, siteManifest, photoIndex, checkpoints] = await Promise.all([
   json("content/home.json"),
   json("holding/images/hashes.json"),
   json("holding/images/alt.json"),
   json("content/writing/posts.json"),
   json("site-manifest.json"),
   json("holding/_worker.js/photo-index.json"),
+  json("content/data/checkpoints.json"),
 ]);
 
 const photos = Object.entries(photoIndex).flatMap(([stem, record]) => {
@@ -149,6 +152,18 @@ for (const slug of systemSlugs) {
   await write(`${slug}.md`, source);
 }
 
+await write("updates.html", renderUpdates({ checkpoints, stylesheet: `/assets/${cssName}` }));
+await write("updates.md", updatesMarkdown(checkpoints));
+await write("updates.json", `${JSON.stringify({
+  build: checkpoints.at(-1)?.version ?? "aadhar.sh",
+  items: checkpoints.slice(-8).reverse().map(({ slug, title, version, ymd, vnum }) => ({ slug, title, version, ymd, vnum })),
+}, null, 2)}\n`);
+await write("restore.html", renderRestore({ checkpoints, stylesheet: `/assets/${cssName}` }));
+await write("restore.md", restoreMarkdown(checkpoints));
+await write("reading.html", renderReading({ stylesheet: `/assets/${cssName}` }));
+await write("around.html", renderAround({ stylesheet: `/assets/${cssName}` }));
+await write("ledger.html", renderLedger({ stylesheet: `/assets/${cssName}` }));
+
 const publicSurfaces = siteManifest.surfaces.filter(({ flags }) => flags.run);
 await write("search.html", renderSearch({ stylesheet: `/assets/${cssName}` }));
 await write("run.html", renderRun({ surfaces: publicSurfaces, stylesheet: `/assets/${cssName}` }));
@@ -172,6 +187,11 @@ const manifest = {
     ...directorySections,
     ...siteManifest.surfaces.filter(({ kind }) => kind === "content").map(({ path }) => path),
     ...systemSlugs.map((slug) => `/${slug}`),
+    "/updates",
+    "/restore",
+    "/reading",
+    "/around",
+    "/ledger",
     "/search",
     "/run",
   ],
