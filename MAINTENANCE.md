@@ -179,6 +179,7 @@ Useful commands:
 
 ```bash
 npm run deploy:promote -- --status
+npm run deploy:promote -- --dry-run
 npm run deploy:promote
 npm run deploy:promote -- --rollback
 ```

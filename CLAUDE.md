@@ -158,8 +158,10 @@ the explicitly confirmed, workstation-only `npm run infra:apply` path.
    merged commit.
 3. Workers Builds runs `wrangler versions upload`; it uploads a previewable
    version and moves no traffic.
-4. A human runs `npm run deploy:promote` to ramp 10% → 50% → 100% while checking
-   logs and the site. `--status` and `--rollback` are available.
+4. A human runs `npm run deploy:promote -- --dry-run` to resolve the target
+   without moving traffic, then `npm run deploy:promote` to ramp 10% → 50% →
+   100% while checking logs and the site. `--status` and `--rollback` are also
+   available.
 
 `npm run deploy` is the explicit straight-to-100% fallback. Never use either
 release command as part of ordinary validation.
