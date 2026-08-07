@@ -50,6 +50,22 @@ test("writing publishes one editable HTML view and one canonical text view", asy
   }
 });
 
+test("photo archive and machine manifest describe the same responsive assets", async () => {
+  const html = await text("photos.html");
+  const manifest = JSON.parse(await text("images/manifest.json"));
+  assert.equal(manifest.count, 158);
+  assert.equal(manifest.photos.length, manifest.count);
+  assert.equal((html.match(/<picture>/g) ?? []).length, manifest.count);
+  assert.equal((html.match(/<img\b/g) ?? []).length, manifest.count);
+  assert.match(html, /<search class="photo-search">/);
+  assert.match(html, /<ol class="photo-archive">/);
+  for (const photo of manifest.photos) {
+    await readFile(new URL(photo.thumb_avif.slice(1), output));
+    await readFile(new URL(photo.thumb_jpg.slice(1), output));
+    await readFile(new URL(photo.thumb_small.slice(1), output));
+  }
+});
+
 test("section folders are projected from the public surface registry", async () => {
   const registry = JSON.parse(await readFile(new URL("../site-manifest.json", import.meta.url), "utf8"));
   for (const section of ["garage", "lwe"]) {

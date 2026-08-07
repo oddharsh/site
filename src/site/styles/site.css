@@ -394,6 +394,96 @@
     color: var(--muted);
     font-size: 11px;
   }
+
+  .photo-search {
+    display: block;
+    margin-block-start: 22px;
+    padding: 9px 10px;
+    background: var(--face);
+    box-shadow: var(--raised);
+  }
+
+  .photo-search form,
+  .photo-search span {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .photo-search span { flex: 1; }
+  .photo-search input { min-inline-size: 8ch; flex: 1; field-sizing: content; }
+
+  .photo-search input,
+  .photo-search button {
+    min-block-size: 28px;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .photo-search input {
+    padding-inline: 7px;
+    background: var(--paper);
+    box-shadow: var(--sunken);
+  }
+
+  .photo-search button {
+    padding-inline: 11px;
+    background: var(--face);
+    box-shadow: var(--raised);
+  }
+
+  .photo-search button:active { box-shadow: var(--sunken); }
+
+  .photo-archive {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+    gap: 10px;
+    margin-block-start: 18px;
+    padding: 0;
+    list-style: none;
+  }
+
+  .photo-archive li {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 176px;
+    scroll-margin-block-start: 12px;
+  }
+
+  .photo-archive a {
+    display: block;
+    color: var(--muted);
+    text-align: center;
+    text-decoration: none;
+  }
+
+  .photo-archive picture {
+    display: block;
+    inline-size: 100%;
+    aspect-ratio: 1;
+    padding: 3px;
+    background: var(--face);
+    box-shadow: var(--raised);
+  }
+
+  .photo-archive img {
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+  }
+
+  .photo-archive a:hover picture,
+  .photo-archive a:focus-visible picture { background: var(--selection-soft); }
+
+  .photo-archive a:focus-visible { outline-offset: 4px; }
+
+  .photo-archive span {
+    display: block;
+    margin-block-start: 4px;
+    overflow: hidden;
+    font: 10px/1.2 var(--font-mono);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }
 
 @layer utilities {
@@ -443,6 +533,10 @@
     .menu-bar a { padding-inline: 5px; }
     .address-bar__label { display: none; }
     .document { padding: 20px 14px 28px; }
+    .photo-search form { align-items: stretch; flex-direction: column; }
+    .photo-search span { inline-size: 100%; }
+    .photo-archive { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+    .photo-archive span { font-size: 8px; }
   }
 
   @media (prefers-reduced-motion: reduce) {
