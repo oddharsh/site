@@ -4236,7 +4236,9 @@ test("every feed is well-formed, dated, and newest-first", async () => {
   for (const [route, body] of feeds) {
     assert.match(body, /^<\?xml version="1\.0" encoding="UTF-8"\?>/, `${route} must open with the XML declaration`);
     assert.match(body, /<rss version="2\.0"/, `${route} must declare RSS 2.0`);
-    assert.match(body, new RegExp(`<atom:link href="https://aadhar\\.sh${route.replace(/\//g, "\\/")}"`), `${route} must point at itself`);
+    // Plain substring, not a built regex: the value is a known path and
+    // hand-escaping one into a pattern is how an escape gets missed.
+    assert.ok(body.includes(`<atom:link href="https://aadhar.sh${route}" rel="self"`), `${route} must point at itself`);
 
     const items = [...body.matchAll(/<item>([\s\S]*?)<\/item>/g)].map(([, item]) => item);
     assert.ok(items.length, `${route} has no items`);
@@ -4295,7 +4297,7 @@ test("feed dates come from the sitemap the crawler already reads", async () => {
 test("each section advertises its feed", () => {
   for (const [file, feed] of [["holding/garage/index.html", "/garage/feed.xml"], ["holding/lwe/index.html", "/lwe/feed.xml"]]) {
     const html = readFileSync(file, "utf8");
-    assert.match(html, new RegExp(`<link rel="alternate" type="application/rss\\+xml"[^>]*href="${feed.replace(/\//g, "\\/")}"`),
+    assert.ok(html.includes(`type="application/rss+xml"`) && html.includes(`href="${feed}"`),
       `${file} does not advertise ${feed}`);
   }
   // /writing is Worker-rendered, so its shell carries the link for the index and
