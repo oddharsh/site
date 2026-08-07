@@ -98,8 +98,20 @@ const HOSTED_TOOLS = [
     // is the point of a vault. Nothing is destroyed, hence destructiveHint stays
     // false. Saying so here rather than in lib/mcp-tools.js keeps the claim
     // beside the INSERT that decides it.
+    //
+    // The write is ALSO stated in the description, which reads as redundant and
+    // is not. Cloudflare's WebMCP bridge builds its registerTool() call from
+    // exactly {name, description, inputSchema, execute}, so `annotations` is
+    // dropped on the way to the browser and these two arrive looking like every
+    // read-only tool (measured 2026-08-07 against the shipped bridge.js, by
+    // shimming document.modelContext and capturing all 24 registrations). The
+    // field is not the API's limit — developers.cloudflare.com hand-rolls its
+    // own registration on the same API and passes both `title` and
+    // `annotations` — it is this bridge not forwarding them. Description is the
+    // one field that survives, so the claim rides there too. Delete the prose
+    // only once a bridge is observed forwarding annotations.
     name: "representation_capture",
-    description: "Capture bounded public HTTP representations under browser, bot, Markdown, or identity request profiles and store only normalized headers, metadata, and body digests.",
+    description: "Capture bounded public HTTP representations under browser, bot, Markdown, or identity request profiles and store only normalized headers, metadata, and body digests. Writes: each call persists a new snapshot row, so this tool is not read-only and not idempotent.",
     annotations: { readOnlyHint: false, idempotentHint: false },
     inputSchema: { type: "object", properties: {
       url: { type: "string" }, profiles: { type: "array", maxItems: 4, items: { type: "string", enum: ["browser", "bot", "markdown", "identity"] } },
@@ -112,7 +124,7 @@ const HOSTED_TOOLS = [
   },
   {
     name: "representation_compare",
-    description: "Refetch the same HTTP representation profile, compare it with a stored snapshot, and persist the new normalized observation.",
+    description: "Refetch the same HTTP representation profile, compare it with a stored snapshot, and persist the new normalized observation. Writes: each call persists a new snapshot row, so this tool is not read-only and not idempotent.",
     annotations: { readOnlyHint: false, idempotentHint: false },
     inputSchema: { type: "object", properties: {
       snapshot_id: { type: "string" }, url: { type: "string", description: "optional replacement URL, otherwise the snapshot URL" },

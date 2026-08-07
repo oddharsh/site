@@ -919,6 +919,18 @@ test("MCP tools publish honest client metadata for calling and WebMCP", async ()
       openWorldHint: tool.annotations.openWorldHint,
     }, `${tool.name} annotations must be explicit`);
     assert.deepEqual(tool.outputSchema, { type: "object", additionalProperties: true }, `${tool.name} needs an object output schema`);
+    // A write must ALSO say so in its description, because Cloudflare's WebMCP
+    // bridge registers {name, description, inputSchema, execute} and drops
+    // `annotations` entirely — a browser agent never sees the flags asserted
+    // above. Description is the only field that reaches it, so the two have to
+    // agree. Asserting both directions is the point: prose on a read-only tool
+    // would be a false warning, and that rots as quietly as a missing one.
+    assert.equal(
+      /\bWrites:/.test(tool.description), writes,
+      writes
+        ? `${tool.name} writes, so its description must carry the "Writes:" clause the WebMCP bridge can actually see`
+        : `${tool.name} is read-only but its description claims it writes`,
+    );
   }
   assert.equal(listed.find((tool) => tool.name === "lens_inspect").annotations.openWorldHint, true);
   assert.equal(listed.find((tool) => tool.name === "search_site").annotations.openWorldHint, false);
