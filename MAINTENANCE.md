@@ -1013,6 +1013,33 @@ export CLOUDFLARE_API_TOKEN=...             # Account · Workers AI · Read
 `check-photo-pipeline.mjs` fails on any stem with no caption, the same way it does
 for a missing pixel tier or histogram, so an unlabelled image can't reach a deploy.
 
+### Release a change
+```bash
+npm run release                 # where the release is, and the ONE next command
+```
+Reads git, Cloudflare and D1 and prints one next action. Read-only and safe to
+run mid-ramp.
+
+The changelog entry is staged **in the PR**, alongside the change it describes:
+```bash
+./holding/scripts/bump-version.sh <slug> "<title>"
+```
+That writes one file and touches no network — the vnum comes from the committed
+projection, so it needs no D1, no wrangler and no account selection. Commit it
+with the work. `/updates` and `/restore` render from that file at build time, so
+the entry ships with the deploy it describes instead of needing a second one.
+
+`npm run deploy:promote` records the staged rows in D1 when traffic reaches
+**100%** — the one place that knows traffic actually moved. A ramp that stops at
+10% leaves the entry staged, which is exactly what it is. `npm run
+checkpoints:check` therefore allows the projection to run AHEAD by a contiguous
+tail of unreleased entries, and fails on anything else: behind, mismatched, or a
+gap in the tail.
+
+Traffic moves either from a workstation (`npm run deploy:promote`) or through
+`.github/workflows/ramp.yml`, which canaries at 10% and then waits on a required
+reviewer before 50% and 100%.
+
 ### Turn on Kitesurf for the Browser view
 `/lens/browser` (the Browser view) works out of the box on the Browser Run
 BINDING (Chromium, no credential). Kitesurf, Cloudflare's WASM browser engine for

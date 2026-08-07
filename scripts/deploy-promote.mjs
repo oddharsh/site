@@ -42,11 +42,18 @@
 // script pausing between steps is not ceremony; it is where you are supposed to
 // look at something.
 //
-// WORKSTATION-ONLY. Same rule as infra:apply: this needs a token that can write
-// to the Worker, and GitHub does not get one. CI can promote a commit to the
-// `production` branch, which is what causes an upload. It cannot move traffic.
+// RUNS ANYWHERE THAT CAN AUTHENTICATE. It was workstation-only until 2026-08-06,
+// on the rule that GitHub never holds a Cloudflare token that can write; that
+// rule was retired, and .github/workflows/ramp.yml now drives this with a
+// narrowly scoped token held as an ENVIRONMENT secret behind required
+// reviewers. lib/release-guard.mjs is the check that replaced the flat CI ban.
+//
+// infra:apply is NOT covered by that change and still refuses to run in CI. It
+// can create and destroy zone-level DNS, which no pipeline here needs to do.
 
 import { execFile } from "node:child_process";
+import { readFile } from "node:fs/promises";
+import { releaseCredentialError } from "./lib/release-guard.mjs";
 import { promisify } from "node:util";
 
 const exec = promisify(execFile);
@@ -70,9 +77,8 @@ const flag = (name) => {
 };
 const has = (name) => argv.includes(`--${name}`);
 
-if (process.env.CI) {
-  die("deploy:promote cannot run in CI. Moving production traffic needs a write-capable token, and GitHub deliberately holds none.");
-}
+const credentialError = releaseCredentialError();
+if (credentialError) die(credentialError);
 
 // ------------------------------------------------------------- wrangler ----
 
@@ -313,4 +319,42 @@ for (const pct of steps) {
 }
 
 console.log(`\ndone. ${target.slice(0, 8)} is at ${steps[steps.length - 1]}%.`);
-console.log("log the release: ./holding/scripts/bump-version.sh <slug> \"<title>\"");
+
+// ── record the release ────────────────────────────────────────────────────
+// The changelog entry was authored in the PR (bump-version.sh writes only the
+// committed projection), so /updates and /restore have been serving it since
+// this version started answering. What was still missing is D1's record that it
+// SHIPPED, and this is the only place that knows traffic actually moved.
+//
+// Deliberately after the last step and never before: a row here means the
+// version reached 100%, not that someone intended it to. A ramp that aborts at
+// 10% leaves the entry staged, which is exactly what it is.
+if (steps[steps.length - 1] === 100) {
+  const file = new URL("../holding/_worker.js/checkpoints.json", import.meta.url);
+  let staged = [];
+  try {
+    const committed = JSON.parse(await readFile(file, "utf8"));
+    const rows = JSON.parse(await wrangler(
+      ["d1", "execute", "aadhar-restore", "--remote", "--json", "--command", "SELECT vnum FROM checkpoints;"],
+      { json: true },
+    ))[0].results;
+    const known = new Set(rows.map((r) => r.vnum));
+    staged = committed.filter((r) => !known.has(r.vnum)).sort((a, b) => a.vnum - b.vnum);
+  } catch (e) {
+    console.log(`\ncould not read the deploy log (${String(e.message || e).slice(0, 90)}).`);
+    console.log("traffic is ramped; run `npm run checkpoints:check` when D1 is reachable.");
+  }
+  for (const row of staged) {
+    const ts = Math.floor(Date.now() / 1000);
+    try {
+      await wrangler(["d1", "execute", "aadhar-restore", "--remote", "--command",
+        `INSERT INTO checkpoints (vnum, ts, ymd, version, slug, title) VALUES (${row.vnum}, ${ts}, '${row.ymd}', '${row.version}', '${row.slug}', '${row.title}');`]);
+      console.log(`logged: v${row.vnum} ${row.version}`);
+    } catch (e) {
+      // Not fatal. Traffic already moved, and a missing log row is a changelog
+      // gap rather than an outage — reporting it beats unwinding a good release.
+      console.log(`warn:   could not log v${row.vnum} (${String(e.message || e).slice(0, 90)})`);
+    }
+  }
+  if (!staged.length) console.log("deploy log: nothing staged — this version carries no new changelog entry.");
+}

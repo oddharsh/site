@@ -4,12 +4,31 @@ on:
   pull_request:
   push:
     branches: [main]
+  # Manual re-run, because `validate` is the ONLY required check on main and
+  # there was no way to start one that never started. 2026-08-06: an Actions
+  # outage ("Failed to resolve action download info. Error: Service
+  # Unavailable") left a run stuck in `queued` that the API refused to cancel —
+  # "Cannot cancel a workflow run that is completed" — and because the
+  # concurrency group below is keyed on the PR number, that zombie swallowed
+  # every later event on the same PR. Re-running was impossible (the run "cannot
+  # be retried"), closing and reopening the PR fired nothing, and an empty commit
+  # fired CodeQL and Workers Builds but not CI. A blocked PR with no lever is a
+  # bad place to discover you have no lever.
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch or SHA to validate (defaults to the branch you launch from)"
+        required: false
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
+  # A dispatch deliberately does NOT share the PR's group. The whole reason this
+  # trigger exists is to get past a poisoned group, so joining it would inherit
+  # the problem it is here to route around.
+  group: ci-${{ github.event_name == 'workflow_dispatch' && format('manual-{0}', github.run_id) || github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -21,6 +40,10 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v7
+        with:
+          # Empty on pull_request/push, where checkout's own default is correct.
+          # Only a manual run can name a ref, and then it is the point.
+          ref: ${{ inputs.ref || '' }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v7

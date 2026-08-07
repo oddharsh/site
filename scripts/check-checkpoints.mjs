@@ -66,18 +66,22 @@ let committed;
 try { committed = JSON.parse(await readFile(FILE, "utf8")); }
 catch { fail("holding/_worker.js/checkpoints.json is missing or unparseable — run: npm run checkpoints:sync"); }
 
-if (committed.length !== live.length) {
-  const newest = live[live.length - 1];
-  fail(
-    `projection has ${committed.length} rows, D1 has ${live.length}\n` +
-    `  newest in D1: v${newest.vnum} ${newest.version}\n` +
-    `  /updates and /restore are precomputed, so they are shipping the older log\n` +
-    `  fix with: npm run checkpoints:sync && git add holding/_worker.js/checkpoints.json`,
-  );
-}
-
 const byVnum = (rows) => new Map(rows.map((r) => [r.vnum, r]));
 const c = byVnum(committed), l = byVnum(live);
+const liveMax = live.length ? Math.max(...l.keys()) : 0;
+
+// PENDING entries are the projection running ahead of D1, which is now the
+// normal state between staging a release and ramping it. bump-version.sh writes
+// the projection inside the PR (so /updates ships the entry with the deploy it
+// describes, instead of needing a second one), and deploy:promote records the
+// row in D1 only once traffic actually reached 100%.
+//
+// So "ahead" is legal and "behind" never is. A projection row BELOW D1's high
+// -water mark that D1 does not have is not pending, it is a rewrite of history.
+const pending = committed.filter((r) => !l.has(r.vnum) && r.vnum > liveMax)
+  .sort((a, b) => a.vnum - b.vnum);
+const pendingVnums = new Set(pending.map((r) => r.vnum));
+
 const diffs = [];
 for (const [vnum, row] of l) {
   const mine = c.get(vnum);
@@ -86,7 +90,18 @@ for (const [vnum, row] of l) {
     if (mine[k] !== row[k]) diffs.push(`v${vnum} ${k}: projection ${JSON.stringify(mine[k])} vs D1 ${JSON.stringify(row[k])}`);
   }
 }
-for (const vnum of c.keys()) if (!l.has(vnum)) diffs.push(`v${vnum} present in the projection, absent from D1`);
+for (const vnum of c.keys()) {
+  if (!l.has(vnum) && !pendingVnums.has(vnum)) {
+    diffs.push(`v${vnum} present in the projection, absent from D1, and BELOW D1's newest (v${liveMax}) — that is a rewrite, not a pending release`);
+  }
+}
+// The tail has to be contiguous. A gap means a vnum was minted, shipped or
+// abandoned somewhere this check cannot see, and silently renumbering around it
+// would put two different releases on one number later.
+pending.forEach((row, i) => {
+  const expected = liveMax + i + 1;
+  if (row.vnum !== expected) diffs.push(`pending v${row.vnum} breaks the sequence — expected v${expected} after D1's v${liveMax}`);
+});
 
 if (diffs.length) {
   fail(
@@ -97,4 +112,10 @@ if (diffs.length) {
   );
 }
 
-console.log(`checkpoints: projection matches D1 (${live.length} rows, newest v${live[live.length - 1].vnum} ${live[live.length - 1].version})`);
+const newest = live[live.length - 1];
+console.log(`checkpoints: projection agrees with D1 (${live.length} released, newest v${newest.vnum} ${newest.version})`);
+if (pending.length) {
+  console.log(`  ${pending.length} staged, not yet released:`);
+  for (const row of pending) console.log(`    v${row.vnum} ${row.version} — ${row.title.slice(0, 64)}`);
+  console.log("  these ship to /updates on the next deploy and land in D1 when deploy:promote reaches 100%");
+}
