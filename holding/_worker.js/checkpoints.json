@@ -761,5 +761,12 @@
     "version": "aadhar-v173-hosted-tools",
     "vnum": 173,
     "ymd": "2026-08-06"
+  },
+  {
+    "slug": "peeper-budgets",
+    "title": "Pixel Peeper: equal byte budgets across encoders, a winnable trial set, and a Wordle-style share card",
+    "version": "aadhar-v174-peeper-budgets",
+    "vnum": 174,
+    "ymd": "2026-08-07"
   }
 ]
