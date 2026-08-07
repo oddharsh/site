@@ -57,6 +57,26 @@ test("writing publishes one editable HTML view and one canonical text view", asy
   }
 });
 
+test("section indexes advertise compiler-generated RSS feeds", async () => {
+  const manifest = JSON.parse(await text("build-manifest.json"));
+  assert.deepEqual(manifest.feeds, ["/garage/feed.xml", "/lwe/feed.xml", "/writing/feed.xml"]);
+
+  for (const section of ["writing", "garage", "lwe"]) {
+    const html = await text(`${section}.html`);
+    const feed = await text(`${section}/feed.xml`);
+    assert.match(html, new RegExp(`<link rel="alternate" type="application/rss\\+xml"[^>]+href="/${section}/feed\\.xml">`));
+    assert.match(feed, /^<\?xml version="1\.0" encoding="UTF-8"\?>/);
+    assert.match(feed, /<rss version="2\.0"/);
+    assert.match(feed, new RegExp(`<atom:link href="https://aadhar\\.sh/${section}/feed\\.xml" rel="self" type="application/rss\\+xml"/>`));
+    assert.match(feed, /<guid isPermaLink="true">https:\/\/aadhar\.sh\//);
+    assert.doesNotMatch(feed, /<description>[^<]*&(?!amp;|lt;|gt;|quot;|apos;)/);
+  }
+
+  const garage = await text("garage/feed.xml");
+  assert.ok(garage.indexOf("/garage/octane") < garage.indexOf("/garage/compression"), "newer entries come first");
+  assert.match(await text("writing/feed.xml"), /<pubDate>Mon, 13 Jul 2026 00:00:00 GMT<\/pubDate>/);
+});
+
 test("photo archive and machine manifest describe the same responsive assets", async () => {
   const html = await text("photos.html");
   const manifest = JSON.parse(await text("images/manifest.json"));

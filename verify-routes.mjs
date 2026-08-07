@@ -63,6 +63,7 @@ for (const route of manifest.pages) {
 }
 
 const dynamic = [
+  ...manifest.feeds.map((route) => [route, [200], "application/rss+xml"]),
   ["/whoareyou.json", [200], "application/json"],
   ["/hit?peek=1", [200], "image/svg+xml"],
   ["/terminal.txt", [200], "text/plain"],

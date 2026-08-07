@@ -58,7 +58,7 @@ npm test                      # compiler and Worker unit/contract tests
 npm run perf-budget           # deterministic wire-shape budgets
 npm run photos:check          # all 158 photos and their metadata graph
 npm run types:check           # wrangler-generated Env stays current
-npm run routes:check          # boot production config in-process; 145-route sweep
+npm run routes:check          # boot production config in-process; 148-route sweep
 npm run check-wrangler        # one exact Wrangler pin across all workspaces
 npm run infra:check -- --offline
 npx wrangler deploy --dry-run
@@ -103,6 +103,8 @@ be remoted.
   security headers, and the shared Explorer information hierarchy.
 - Authored pages that advertise Markdown must answer an explicit
   `Accept: text/markdown`; explicit `.md` URLs remain available.
+- Writing, Garage, and LWE advertise compiler-generated RSS 2.0 feeds. Their
+  XML is build output, never an authored or separately committed twin.
 - CSS stays within 8 KiB Brotli. Ordinary documents stay within 24 KiB Brotli
   excluding two named long-form text exceptions. A page may not add a script
   without a measured, reviewed exception.

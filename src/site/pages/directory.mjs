@@ -24,6 +24,7 @@ export function renderDirectory({ section, items, stylesheet }) {
     stylesheet,
     body,
     tasks: [
+      { href: `${section.path}/feed.xml`, label: "Subscribe with RSS" },
       { href: `${section.path}.md`, label: "Read this folder as Markdown" },
       { href: "/search.json", label: "Search the site as JSON" },
     ],
@@ -32,7 +33,8 @@ export function renderDirectory({ section, items, stylesheet }) {
       { term: "Contains", value: `${items.length} items` },
       { term: "Format", value: "HTML + Markdown" },
     ],
-    head: `<link rel="alternate" type="text/markdown" href="${escapeHtml(section.path)}.md">`,
+    head: `<link rel="alternate" type="application/rss+xml" title="${escapeHtml(section.title)} RSS" href="${escapeHtml(section.path)}/feed.xml">
+  <link rel="alternate" type="text/markdown" href="${escapeHtml(section.path)}.md">`,
   });
 }
 

@@ -15,6 +15,8 @@ import { renderLens } from "../src/site/pages/lens.mjs";
 import { coffeeMarkdown, renderCoffee } from "../src/site/pages/coffee.mjs";
 import { renderSerendipity, renderSerendipityContribute, renderSerendipityMcpInfo, serendipityMarkdown } from "../src/site/pages/serendipity.mjs";
 import { renderCensus, renderInbox, renderToolPage } from "../src/site/pages/tools.mjs";
+import { renderFeed } from "../src/site/feed.mjs";
+import { parseFrontmatter } from "../src/site/markdown.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const output = join(root, "dist");
@@ -108,12 +110,22 @@ await write("images/manifest.json", `${JSON.stringify({
   count: photos.length,
 }, null, 2)}\n`);
 
+const writingEntries = await Promise.all(posts.map(async (post) => ({
+  ...post,
+  text: await readFile(join(root, "content/writing", `${post.slug}.txt`), "utf8"),
+})));
+
 await write("writing.html", renderWritingIndex({ posts, stylesheet: `/assets/${cssName}` }));
 await write("writing.md", writingMarkdown(posts));
 await write("writing/posts.json", `${JSON.stringify(posts, null, 2)}\n`);
+await write("writing/feed.xml", renderFeed("writing", writingEntries.map(({ slug, title, date, text }) => ({
+  path: `/writing/${slug}`,
+  title,
+  date,
+  description: text.replace(/\s+/g, " ").trim(),
+}))));
 
-for (const post of posts) {
-  const text = await readFile(join(root, "content/writing", `${post.slug}.txt`), "utf8");
+for (const { text, ...post } of writingEntries) {
   await write(`writing/${post.slug}.html`, renderWritingPost({
     post,
     text,
@@ -135,9 +147,17 @@ for (const sectionPath of directorySections) {
     stylesheet: `/assets/${cssName}`,
   }));
   await write(`${name}.md`, directoryMarkdown(section, items));
+  const feedEntries = [];
   for (const surface of items) {
     const slug = surface.path.slice(sectionPath.length + 1);
     const source = await readFile(join(root, "content/pages", name, `${slug}.md`), "utf8");
+    const { attributes } = parseFrontmatter(source);
+    feedEntries.push({
+      path: surface.path,
+      title: surface.title,
+      description: surface.description,
+      date: attributes.updated ?? "",
+    });
     await write(`${name}/${slug}.html`, renderArticle({
       surface,
       source,
@@ -145,6 +165,7 @@ for (const sectionPath of directorySections) {
     }));
     await write(`${name}/${slug}.md`, source);
   }
+  await write(`${name}/feed.xml`, renderFeed(name, feedEntries));
 }
 
 const systemSlugs = ["access", "bot", "pixel-peeper", "security", "terminal", "whoareyou"];
@@ -229,6 +250,7 @@ const manifest = {
     "/run",
   ],
   assets: [`/assets/${cssName}`, `/assets/${peeperScriptName}`, ...photos.flatMap(({ thumbAvif, thumbJpg, thumbSmall }) => [`/${thumbAvif}`, `/${thumbJpg}`, `/${thumbSmall}`])],
+  feeds: directorySections.map((section) => `${section}/feed.xml`).concat("/writing/feed.xml"),
 };
 await write("build-manifest.json", `${JSON.stringify(manifest, null, 2)}\n`);
 await write("webmention-targets.json", `${JSON.stringify(manifest.pages, null, 2)}\n`);

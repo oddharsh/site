@@ -41,11 +41,12 @@ npx wrangler deploy --dry-run -c lwe-ask/wrangler.toml
 git diff --check
 ```
 
-`npm run routes:check` boots `wrangler.jsonc` in-process and performs 145
+`npm run routes:check` boots `wrangler.jsonc` in-process and performs 148
 acceptance checks. It covers every generated page, available Markdown
-negotiation, security headers, live empty/fail-closed states, machine endpoints,
-MCP, retired paths, redirects, and method behavior. A restricted sandbox can
-block its loopback socket with `EPERM`; rerun it in a normal workstation shell.
+negotiation, RSS feeds, security headers, live empty/fail-closed states, machine
+endpoints, MCP, retired paths, redirects, and method behavior. A restricted
+sandbox can block its loopback socket with `EPERM`; rerun it in a normal
+workstation shell.
 
 The offline infrastructure check verifies repo declarations. Run
 `npm run infra:check` without `--offline` when current DNS, edge configuration,
@@ -65,8 +66,9 @@ and review both `/` and `/index.md`.
 2. Add `{slug,title,date}` to `content/writing/posts.json`.
 3. Run `npm run build` and `npm test`.
 
-The compiler emits an editable Notepad-like HTML view, the original `.txt`, and
-the section indexes. Editing in the browser is intentionally ephemeral.
+The compiler emits an editable Notepad-like HTML view, the original `.txt`, the
+section index, and `/writing/feed.xml`. Editing in the browser is intentionally
+ephemeral.
 
 ### Garage and LWE
 
@@ -74,6 +76,10 @@ Each page is a Markdown record with front matter under
 `content/pages/<family>/<slug>.md`. Register public metadata in
 `site-manifest.json`. The shared article renderer emits HTML and an explicit
 Markdown representation.
+
+The `updated` date in each page's front matter orders the generated
+`/<family>/feed.xml`. The compiler escapes the registry description into RSS;
+do not author or commit feed XML separately.
 
 These pages are documents, not miniature applications. Add client code only
 when an interaction itself is the subject and a static explanation cannot do

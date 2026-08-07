@@ -24,6 +24,18 @@
 /images/*.json
   Cache-Control: public, max-age=300, s-maxage=3600
 
+/writing/feed.xml
+  Content-Type: application/rss+xml; charset=utf-8
+  Cache-Control: public, max-age=0, must-revalidate, s-maxage=1800
+
+/garage/feed.xml
+  Content-Type: application/rss+xml; charset=utf-8
+  Cache-Control: public, max-age=0, must-revalidate, s-maxage=1800
+
+/lwe/feed.xml
+  Content-Type: application/rss+xml; charset=utf-8
+  Cache-Control: public, max-age=0, must-revalidate, s-maxage=1800
+
 /sw.js
   Cache-Control: no-store
   Service-Worker-Allowed: /

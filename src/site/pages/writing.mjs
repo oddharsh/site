@@ -18,6 +18,7 @@ export function renderWritingIndex({ posts, stylesheet }) {
     stylesheet,
     body,
     tasks: [
+      { href: "/writing/feed.xml", label: "Subscribe with RSS" },
       { href: "/writing/posts.json", label: "Open the post registry" },
       { href: "/writing.md", label: "Read this folder as Markdown" },
     ],
@@ -26,7 +27,8 @@ export function renderWritingIndex({ posts, stylesheet }) {
       { term: "Contains", value: `${posts.length} notes` },
       { term: "Canonical format", value: "Plain text" },
     ],
-    head: `<link rel="alternate" type="text/markdown" href="/writing.md">`,
+    head: `<link rel="alternate" type="application/rss+xml" title="Writing RSS" href="/writing/feed.xml">
+  <link rel="alternate" type="text/markdown" href="/writing.md">`,
   });
 }
 
