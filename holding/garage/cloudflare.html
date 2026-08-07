@@ -252,7 +252,16 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
         (it once called a cloudy sky a UFO). One binding call does it: no GPU, no key.</p>
       <button class="cf-btn" id="ai-btn" type="button">caption a random grid photo</button>
       <div class="cf-out" id="ai-out">&mdash;</div>
-      <pre class="cf-code">env.AI.run("@cf/llava-1.5-7b", { image, prompt })</pre>
+      <pre class="cf-code">env.AI.run("@cf/llava-1.5-7b", { image, prompt }, { gateway: { id } })</pre>
+      <p>That third argument arrived in <b>Aug&nbsp;2026</b>, when Cloudflare folded Workers&nbsp;AI and
+        <b>AI&nbsp;Gateway</b> into one control plane. Before that, the gateway was a separate proxy you
+        pointed a client at. Now it&apos;s an option on the call you were already making, and naming one
+        gets the account full request and response payloads, token counts per model, and cost
+        attribution, with nothing to set up first. Section&nbsp;3&apos;s log line knows this call took about
+        five seconds. It has never known what it cost.</p>
+      <p class="note">Caching is off here on purpose. The button sends a byte-identical request every
+        time, so one cached answer would quietly become every visitor&apos;s answer and the neuron counter
+        would stop moving. The lede promises nothing is faked, and a replay is faked.</p>
     </div>
 
     <div class="cf-feat">
@@ -374,7 +383,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
 <script type="application/json" id="luq-data">
 {
   "skin": "garage",
-  "intro": "You did click the buttons, right? Five questions to check the mental models stuck. Everything here is answered by the demos above.",
+  "intro": "You did click the buttons, right? Six questions to check the mental models stuck. Everything here is answered by the demos above.",
   "questions": [
     {
       "q": "Why did the counter demo use a Durable Object when the homepage's visitor counter already runs on KV?",
@@ -417,6 +426,28 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
         {
           "t": "Nowhere at click time: a nightly job pre-captions every photo and the button reads back the stored alt text.",
           "why": "The lede promises nothing is faked. Each click runs the model fresh, which is why it takes a few seconds and once mistook a cloudy sky for a UFO."
+        }
+      ]
+    },
+    {
+      "q": "Since the Aug 2026 merge, the caption call passes a third argument, { gateway: { id } }. What does naming a gateway there actually change?",
+      "options": [
+        {
+          "t": "Nothing about the inference: the same model runs the same way, and the account gains payload logs, per-model token counts, and cost attribution that the worker's own log line cannot produce.",
+          "ok": true,
+          "why": "Right. Unification made the gateway an option on a call I was already making, so observability stopped being a separate integration. Section 3's line times the call; only the gateway prices it."
+        },
+        {
+          "t": "It caches the response, so clicking the button twice stops spending neurons the second time.",
+          "why": "Caching is a separate opt-in (cacheTtl), and section 2 says I left it off. This button sends a byte-identical request every time, so one cached caption would become everyone's caption forever."
+        },
+        {
+          "t": "It hands model selection to the gateway, which picks a provider and fails over between them.",
+          "why": "That's model-first routing, announced alongside the merge and not shipped yet. The id names a gateway on my own account, and the model string still pins @cf/llava-1.5-7b."
+        },
+        {
+          "t": "It is mandatory now: after the merge, env.AI.run rejects a call that doesn't name a gateway.",
+          "why": "The merge shipped no breaking changes, and this page ran for months without the argument. A wrong id does break the call though: a gateway that doesn't exist returns error 2001 instead of quietly carrying on, which is why the id here is a config var with an off switch."
         }
       ]
     },

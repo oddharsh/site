@@ -104,11 +104,18 @@ export default {
         const prompt = url.searchParams.get("mode") === "alt"
           ? "Write alt text for this photo: one plain, factual sentence naming only what is clearly visible (main subject and setting). No mood, no interpretation, no guessing, no 'image of'. Under 16 words."
           : "Describe this photograph in one vivid sentence suitable as alt text. Be concrete about subject, light, and mood.";
+        // routed through the AI Gateway named in AI_GATEWAY (see wrangler.toml), which
+        // is what buys the per-model token counts and cost attribution the Workers Logs
+        // line below cannot express: `log()` knows how long the call took, never what it
+        // cost. DELIBERATELY no cacheTtl. This endpoint's default request is byte-identical
+        // on every click, so any cache would make the demo a replay after the first
+        // visitor — the same caption forever, and a neuron counter that never moves.
+        // The button promises the model runs fresh, so it runs fresh.
         const out = await env.AI.run("@cf/llava-hf/llava-1.5-7b-hf", {
           image: bytes,
           prompt,
           max_tokens: 64,
-        });
+        }, env.AI_GATEWAY ? { gateway: { id: env.AI_GATEWAY } } : undefined);
         let caption = (out.description || out.response || "").trim()
           .replace(/^(an? |the )?(image|photo|photograph|picture) (of|shows|depicts|captures)\s*/i, "")
           .replace(/\s+/g, " ").trim();
