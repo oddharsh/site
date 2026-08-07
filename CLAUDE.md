@@ -1515,6 +1515,43 @@ npm run deploy
     worth revisiting. Across 474 committed `/i/` files that is ~6.5 MB of immutable
     assets for a signature nothing on the page can currently read.
 
+23. **An AI Gateway id is a hard dependency, so the three Workers AI callers here
+    name one through config rather than a literal.** Cloudflare merged Workers AI
+    and AI Gateway into one control plane on 2026-08-07: `env.AI.run` takes a third
+    argument and the REST endpoint takes a `cf-aig-gateway-id` header, which buys
+    payload logs, per-model token counts and cost attribution with no dashboard
+    setup. No breaking changes, and `lwe-ask` had already been routing through its
+    own `lwe` gateway since it was written, so the only callers this changed were
+    `/garage/cf/caption` and the two photo scripts.
+
+    Verified rather than assumed, because the docs do not say whether a `default`
+    gateway exists: against `wrangler dev` with the real account, `default` returned
+    a caption in 5.4s and `definitely-not-a-real-gateway-xyz` returned
+    **`2001: Please configure AI Gateway in the Cloudflare dashboard`**. Run that
+    control before trusting any gateway id. What it proves is the part that matters
+    operationally: **a wrong or deleted gateway FAILS the inference call**, it does
+    not quietly fall back to un-gatewayed inference. Since no deploy path here may
+    create Cloudflare resources, a literal in the source would make a live demo
+    endpoint depend on a resource this repo cannot restore, so the id is
+    `cf-garage`'s `AI_GATEWAY` var and the scripts' `CLOUDFLARE_AI_GATEWAY`, both
+    defaulting to `default` and both disabled by an empty string.
+
+    **Caching is deliberately off on all three**, which is the non-obvious half.
+    `cacheTtl` / `cf-aig-cache-ttl` is a separate opt-in and it is wrong here for two
+    different reasons: `/garage/cf/caption` sends a byte-identical request on every
+    click, so one cached answer becomes every visitor's answer on a page whose lede
+    promises nothing is faked; and the photo scripts are resumable, where re-running
+    a stem is exactly how a bad caption gets replaced, which a cache keyed on the
+    identical request would make impossible. Reach for gateway caching only where a
+    repeated identical request SHOULD return a repeated identical answer, the way
+    `lwe-ask` does with its 24h TTL and explicit per-request `cacheKey`.
+
+    Two announced pieces are not shipped and nothing here should be built on them
+    yet: **model-first routing** (ask for a model abstractly, let the gateway pick a
+    provider and fail over) and **smart routing**. The first is worth watching,
+    since `lwe-ask/wrangler.toml` already carries a scar from `llama-3.1-8b` being
+    deprecated out from under `GEN_MODEL` on 2026-05-30.
+
 ---
 
 ## Source folder for new photos

@@ -25,6 +25,7 @@ Resumable either way: a re-run only fills stems that have no caption, so a 429
 (the free 10k neurons/day) just means run again later.
 
   export CLOUDFLARE_API_TOKEN=...   # Account · Workers AI · Read
+  export CLOUDFLARE_AI_GATEWAY=""   # opt OUT of gateway routing (defaults to "default")
   npm run captions                  # or: python3 holding/scripts/gen-alt-text.py
 
 Strippable: delete alt.json plus the worker/template lookups to revert to
@@ -49,6 +50,11 @@ ACCOUNT  = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "1c99acdb6141579023fb97d24261
 TOKEN    = os.environ.get("CLOUDFLARE_API_TOKEN", "").strip()
 AI_RUN   = f"https://api.cloudflare.com/client/v4/accounts/{ACCOUNT}/ai/run/{MODEL}"
 ENDPOINT = "https://aadhar.sh/garage/cf/caption?mode=alt&img="
+# Route through AI Gateway so this script's spend lands in the same per-model log
+# as the worker's, rather than showing up only as an unattributed dent in the daily
+# neuron budget. Empty string disables it, matching cf-garage's AI_GATEWAY var; a
+# gateway id that does not exist is a hard 2001 error, never a silent passthrough.
+GATEWAY  = os.environ.get("CLOUDFLARE_AI_GATEWAY", "default").strip()
 # a real UA — Cloudflare's WAF 403s the default "Python-urllib/*"
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 alt-gen"
 
@@ -81,11 +87,17 @@ def caption_local(stem, hashes):
         # environment, and dry-run output is what gets pasted into issues.
         print(f"      would POST {len(body)}B to Workers AI ({MODEL})", flush=True)
         return ""
-    req = urllib.request.Request(AI_RUN, data=body, headers={
+    headers = {
         "Authorization": f"Bearer {TOKEN}",
         "Content-Type": "application/json",
         "User-Agent": UA,
-    })
+    }
+    # observability only — no cf-aig-cache-ttl. This script is resumable and gets
+    # re-run to REPLACE a caption the model got wrong, and a cache keyed on the
+    # request would hand back the wrong one forever, since the request is identical.
+    if GATEWAY:
+        headers["cf-aig-gateway-id"] = GATEWAY
+    req = urllib.request.Request(AI_RUN, data=body, headers=headers)
     with urllib.request.urlopen(req, timeout=90) as r:
         d = json.load(r)
     result = d.get("result") or {}
