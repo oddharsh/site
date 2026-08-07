@@ -44,6 +44,7 @@ import { ifNoneMatchMatches, notModifiedIfFresh, withWeakEtag } from "./holding/
 import { privateHostBlocked } from "./holding/_worker.js/lib/crawl.js";
 import { handleHit } from "./holding/_worker.js/counter.js";
 import { cronHomeProbe, parseServerTiming } from "./holding/_worker.js/perf-probe.js";
+import { gatherWhoareyou } from "./holding/_worker.js/whoareyou.js";
 import { handleSearchJson, searchSite } from "./holding/_worker.js/search.js";
 import { getPublicAvailability } from "./cal/src/slots.js";
 import { botHeaders } from "./holding/_worker.js/lib/botauth.js";
@@ -1966,6 +1967,30 @@ test("deadline distinguishes fallback values for slow vs missing", async () => {
   assert.equal(missing, null);
   const slow = await deadline(new Promise(() => {}), 10, undefined, () => {});
   assert.equal(slow, undefined);
+});
+
+test("whoareyou lets cold RDAP finish off the critical path", async () => {
+  const originalFetch = globalThis.fetch;
+  let release;
+  globalThis.fetch = () => new Promise((resolve) => { release = resolve; });
+  const background = [];
+  const started = Date.now();
+  try {
+    const result = await gatherWhoareyou(
+      new Request("https://aadhar.sh/whoareyou", { headers: { "cf-connecting-ip": "203.0.113.7" } }),
+      { waitUntil(promise) { background.push(promise); } },
+    );
+    assert.equal(result.rdap, null, "a cold enrichment should not delay the page");
+    assert.ok(Date.now() - started < 1000, "the optional lookup must leave well before its 2s network abort");
+    assert.equal(background.length, 1, "the same lookup should keep running to warm Cloudflare's edge cache");
+
+    release(new Response(JSON.stringify({ name: "TEST-NET-3" }), {
+      headers: { "content-type": "application/rdap+json" },
+    }));
+    await background[0];
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 
