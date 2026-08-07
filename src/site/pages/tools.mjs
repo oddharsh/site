@@ -36,7 +36,7 @@ export function renderCensus({ stylesheet }) {
     stylesheet,
     body: `<header><p class="eyebrow">The Other Web · Longitudinal record</p><h1>The census</h1><p class="lede">One inspection is an anecdote. This table keeps the weekly record: named sites, observed agent doors, and readiness scores over time.</p></header><section class="census" id="census"><p class="empty-state">No census snapshots are recorded in this environment yet.</p></section>`,
     tasks: [{ href: "/lens/census.json", label: "Open the series as JSON" }, { href: "/lens", label: "Inspect one URL" }],
-    details: [{ term: "Cadence", value: "Weekly" }, { term: "Targets", value: "16" }, { term: "Crawler", value: "AadharshBot" }],
+    details: [{ term: "Cadence", value: "Weekly" }, { term: "Targets", value: "Published roster" }, { term: "Crawler", value: "AadharshBot" }],
     head: `<link rel="alternate" type="application/json" href="/lens/census.json">`,
   });
 }

@@ -3,6 +3,7 @@ import test from "node:test";
 import { prefersMarkdown } from "../src/worker/http.ts";
 import { validateLensTarget } from "../src/worker/lens.ts";
 import { generateCoffeeSlots, parseCalendar } from "../src/worker/coffee.ts";
+import { parseSpotifyPage } from "../src/worker/rn.ts";
 
 function request(accept) {
   return new Request("https://aadhar.sh/", { headers: { accept } });
@@ -48,4 +49,12 @@ test("coffee slots respect working hours, conflicts, and booking limits", () => 
   assert.ok(slots.every(({ start }) => start !== first));
   const capped = generateCoffeeSlots(env, [], [{ start: first, end: first + 30 * 60_000 }, { start: first + 60 * 60_000, end: first + 90 * 60_000 }], now);
   assert.ok(capped.every(({ start }) => new Date(start).getUTCDate() !== 5));
+});
+
+test("Spotify refresh reads the public embed document without client execution", () => {
+  const data = { props: { pageProps: { state: { data: { entity: { id: "abc", name: "A playlist", trackList: [{ uri: "spotify:track:xyz", title: "One", subtitle: "A B", duration: 1234, isExplicit: true }] } } } } } };
+  const payload = parseSpotifyPage(`<script type="application/json" id="__NEXT_DATA__">${JSON.stringify(data)}</script>`, "fallback");
+  assert.equal(payload.playlist_id, "abc");
+  assert.equal(payload.tracks?.[0].artists_text, "A B");
+  assert.equal(payload.tracks?.[0].song_link_url, "https://open.spotify.com/track/xyz");
 });

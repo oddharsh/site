@@ -106,7 +106,7 @@ export function parseCalendar(source: string, now = Date.now()): Interval[] {
   return busy.filter(({ start, end }) => Number.isFinite(start) && Number.isFinite(end) && end > start).sort((a, b) => a.start - b.start);
 }
 
-async function refreshCalendar(env: Env): Promise<CalendarSnapshot> {
+export async function refreshCoffeeCalendar(env: Env): Promise<CalendarSnapshot> {
   const url = (env as Env & CoffeeSecrets).ICAL_URL;
   if (!url) throw new Error("calendar source is not configured");
   const response = await fetch(url, { headers: { accept: "text/calendar" }, signal: AbortSignal.timeout(2000), cf: { cacheTtl: 0 } });
@@ -124,10 +124,10 @@ async function calendar(env: Env, ctx: ExecutionContext | null, allowBackground:
   const ageMs = snapshot ? Math.max(0, Date.now() - snapshot.ts) : Number.POSITIVE_INFINITY;
   if (snapshot && ageMs < freshMs) return { snapshot, source: "fresh", ageMs };
   if (snapshot && allowBackground && ctx) {
-    ctx.waitUntil(refreshCalendar(env).catch(() => undefined));
+    ctx.waitUntil(refreshCoffeeCalendar(env).catch(() => undefined));
     return { snapshot, source: "stale", ageMs };
   }
-  try { return { snapshot: await refreshCalendar(env), source: "live", ageMs: 0 }; }
+  try { return { snapshot: await refreshCoffeeCalendar(env), source: "live", ageMs: 0 }; }
   catch { return { snapshot, source: snapshot ? "stale" : "none", ageMs }; }
 }
 

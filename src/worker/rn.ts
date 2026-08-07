@@ -1,4 +1,5 @@
-import { json, text } from "./http";
+import { json, text } from "./http.ts";
+import { fetchPublicResource } from "./lens.ts";
 
 const fallbackId = "4IRq9W1N2tOWHhH0O3vXiF";
 
@@ -21,6 +22,47 @@ async function playlist(env: Env): Promise<{ id: string; payload: Playlist }> {
   try {
     return { id, payload: await env.RN_KV.get<Playlist>(`tracks:${id}`, "json") ?? { playlist_id: id, tracks: [] } };
   } catch { return { id, payload: { playlist_id: id, tracks: [] } }; }
+}
+
+type EmbedTrack = { uri?: string; title?: string; subtitle?: string; isExplicit?: boolean; duration?: number };
+
+function decode(value: string): string {
+  return value.replace(/&amp;/gi, "&").replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+}
+
+export function parseSpotifyPage(source: string, id: string): Playlist {
+  const script = source.match(/<script\b(?=[^>]*\bid=["']__NEXT_DATA__["'])[^>]*>([\s\S]*?)<\/script>/i)?.[1];
+  if (script) {
+    const document = JSON.parse(script) as { props?: { pageProps?: { state?: { data?: { entity?: { name?: string; title?: string; id?: string; trackList?: EmbedTrack[] } } } } } };
+    const entity = document.props?.pageProps?.state?.data?.entity;
+    if (entity && Array.isArray(entity.trackList)) return {
+      playlist_id: entity.id || id,
+      playlist_name: entity.name || entity.title || "Right now",
+      tracks: entity.trackList.slice(0, 200).map((track) => {
+        const trackId = track.uri?.match(/^spotify:track:([A-Za-z0-9]+)$/)?.[1];
+        return { title: String(track.title || "Untitled").slice(0, 300), artists_text: String(track.subtitle || "").replaceAll(" ", " ").slice(0, 500), duration_ms: Number(track.duration) || 0, song_link_url: trackId ? `https://open.spotify.com/track/${trackId}` : undefined, spotify_url: trackId ? `https://open.spotify.com/track/${trackId}` : undefined, is_explicit: Boolean(track.isExplicit) };
+      }),
+    };
+  }
+  const tracks = source.split(/(?=<div\b(?=[^>]*\bdata-testid=["']track-row["']))/i).flatMap((chunk) => {
+    const trackId = chunk.match(/listrow-title-track-spotify:track:([A-Za-z0-9]+)/i)?.[1];
+    const title = decode(chunk.match(/data-encore-id=["']listRowTitle["'][^>]*>[\s\S]*?<span\b[^>]*>([\s\S]*?)<\/span>/i)?.[1] ?? "");
+    if (!trackId || !title) return [];
+    const artists = decode(chunk.match(/data-encore-id=["']listRowDetails["'][^>]*>([\s\S]*?)<\/p>/i)?.[1] ?? "").replace(/\s*,\s*/g, ", ");
+    return [{ title: title.slice(0, 300), artists_text: artists.slice(0, 500), duration_ms: 0, song_link_url: `https://open.spotify.com/track/${trackId}`, spotify_url: `https://open.spotify.com/track/${trackId}`, is_explicit: /aria-label=["']Explicit["']/i.test(chunk) }];
+  }).slice(0, 200);
+  if (!tracks.length) throw new Error("Spotify playlist data has an unknown shape");
+  const playlistName = decode(source.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? "").replace(/\s*[-–]\s*playlist by[\s\S]*$/i, "") || "Right now";
+  return { playlist_id: id, playlist_name: playlistName, tracks };
+}
+
+export async function refreshNowPlaying(env: Env): Promise<Playlist> {
+  const id = await playlistId(env);
+  const fetched = await fetchPublicResource(`https://open.spotify.com/playlist/${id}`, env, { accept: "text/html" }, 1024 * 1024);
+  if (!fetched.response.ok || fetched.body.truncated) throw new Error("Spotify playlist is unavailable or too large");
+  const payload = parseSpotifyPage(fetched.body.text, id);
+  await env.RN_KV.put(`tracks:${id}`, JSON.stringify(payload));
+  return payload;
 }
 
 function duration(ms = 0): string {

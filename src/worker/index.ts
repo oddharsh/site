@@ -14,6 +14,7 @@ import { retiredSerendipityWrite, serendipityEvent, serendipityEventsJson, seren
 import { censusJson, censusPage, inboxPage, utilityPage } from "./utilities";
 import { siteMcp } from "./mcp";
 import { decideWebmention, receiveWebmention } from "./webmention";
+import { runScheduled } from "./scheduled";
 
 export { BookingSlot, BookingWorkflow, Counter };
 
@@ -197,5 +198,8 @@ export default {
       console.error("request failed", { path: new URL(request.url).pathname, error: error instanceof Error ? error.message : String(error) });
       return text("internal error\n", { status: 500, headers: { "cache-control": "no-store" } });
     }
+  },
+  scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): void {
+    ctx.waitUntil(runScheduled(controller.cron, env).catch((error) => console.error("scheduled task failed", { cron: controller.cron, error: error instanceof Error ? error.message : String(error) })));
   },
 } satisfies ExportedHandler<Env>;
