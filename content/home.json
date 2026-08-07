@@ -1,0 +1,17 @@
+{
+  "name": "Aadharsh Pannirselvam",
+  "role": "Researching and investing at Archetype. Building this site in the meantime.",
+  "introduction": [
+    "Welcome to my corner of the internet. I like resto-mods: machines that keep a beloved chassis and character while replacing the parts that time has improved.",
+    "This is that idea applied to a personal site. It is a small, public computer for photographs, writing, experiments, music, and internet tools—period-correct on the surface and current underneath."
+  ],
+  "contact": "If you would like to grab a coffee in New York, write to coffee@aadhar.sh or choose a public slot.",
+  "links": [
+    { "label": "Archetype", "href": "https://www.archetype.fund/" },
+    { "label": "Twitter", "href": "https://x.com/oddhash", "rel": "me" },
+    { "label": "Instagram", "href": "https://www.instagram.com/aadharsh.hif", "rel": "me" },
+    { "label": "Curius", "href": "https://curius.app/aadharsh-pannirselvam", "rel": "me" },
+    { "label": "Beli", "href": "https://beliapp.com/users/aadharsh", "rel": "me" },
+    { "label": "Spotify", "href": "https://open.spotify.com/user/aadharsh2010", "rel": "me" }
+  ]
+}

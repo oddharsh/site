@@ -11,6 +11,9 @@
   ],
   "scripts": {
     "build": "node build.mjs",
+    "build:rewrite": "node scripts/build-site.mjs",
+    "dev:rewrite": "npm run build:rewrite && wrangler dev -c wrangler.rewrite.jsonc",
+    "test:rewrite": "npm run build:rewrite && node --test test/rewrite-site.test.mjs",
     "dev": "wrangler dev -c wrangler.dev.jsonc",
     "dev:remote": "node scripts/gen-remote-config.mjs wrangler.dev.jsonc && wrangler dev -c .wrangler.remote.jsonc",
     "deploy": "wrangler deploy --x-provision=false --x-auto-create=false --strict",
