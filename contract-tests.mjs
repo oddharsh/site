@@ -621,6 +621,42 @@ test("Lens screenshot endpoint delegates PNG rendering to the Browser Run bindin
   assert.deepEqual(new Uint8Array(await response.arrayBuffer()), png);
 });
 
+test("neither browser route waits on a condition a live site never reaches", async () => {
+  // `networkidle0` demands ZERO in-flight connections for 500ms, which any page
+  // carrying analytics, ads, a websocket or a poll never reaches. The wait then
+  // burns the whole timeout and Cloudflare discards a render it already had
+  // (`422 / code 6002`). Both routes shipped it until 2026-08-07; measured
+  // against production, theverge.com failed on BOTH at ~18.8s while the static
+  // example.com passed, so the failure tracked the TARGET and read as flaky.
+  //
+  // This is pinned rather than left to review because the cost is invisible at
+  // the call site: the setting is one word in a payload, the failure looks like
+  // the scanned site being slow, and each timeout also spends 18s of a browser
+  // budget that is 10 MINUTES PER DAY account-wide on the free plan.
+  const captured = {};
+  const env = {
+    BROWSER: {
+      async quickAction(name, input) {
+        captured[name] = input;
+        if (name === "screenshot") return new Response(new Uint8Array([137, 80, 78, 71]), { headers: { "content-type": "image/png" } });
+        return Response.json({ result: { content: "<html></html>" }, meta: { status: 200 } });
+      },
+    },
+  };
+  const url = "?url=https%3A%2F%2Fexample.com%2F";
+  await handleLensShot(new Request(`https://aadhar.sh/lens/shot${url}`), env, context());
+  await handleLensBrowser(new Request(`https://aadhar.sh/lens/browser${url}`), env, context());
+
+  assert.deepEqual(Object.keys(captured).sort(), ["screenshot", "snapshot"], "both routes must have reached the binding");
+  for (const [action, payload] of Object.entries(captured)) {
+    assert.notEqual(payload.gotoOptions.waitUntil, "networkidle0", `${action} must not wait for total network silence`);
+    assert.equal(payload.gotoOptions.waitUntil, "networkidle2", `${action} must wait for the page to settle, not go silent`);
+    assert.ok(payload.gotoOptions.timeout > 0, `${action} must keep a bounded timeout`);
+  }
+  // One object, so a later edit cannot fix one route and leave the other.
+  assert.equal(captured.screenshot.gotoOptions, captured.snapshot.gotoOptions, "both routes must share one goto config");
+});
+
 function staticAssets(files) {
   return {
     async fetch(input) {
