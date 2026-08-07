@@ -3486,7 +3486,7 @@ myButton.onclick = async () =&gt; {
         <div id="mb-a" style="flex:1;border:1px solid oklch(61% 0.0611 253.6);padding:8px;min-height:56px;background:oklch(98% 0.004 250)">tray A</div>
         <div id="mb-b" style="flex:1;border:1px solid oklch(61% 0.0611 253.6);padding:8px;min-height:56px;background:oklch(98% 0.004 250)">tray B</div>
       </div>
-      <iframe id="mb-frame" title="uptime counter" style="width:170px;height:38px;border:1px solid oklch(50% 0 0);vertical-align:middle" srcdoc="&lt;body style='font:12px Courier New,monospace;margin:5px;color:#0831d9'&gt;iframe uptime: &lt;b id=c&gt;0&lt;/b&gt;s&lt;script&gt;let n=0;setInterval(()=&gt;{n++;document.getElementById('c').textContent=n},1000)&lt;/script&gt;&lt;/body&gt;"></iframe>
+      <iframe id="mb-frame" title="uptime counter" loading="lazy" style="width:170px;height:38px;border:1px solid oklch(50% 0 0);vertical-align:middle" srcdoc="&lt;body style='font:12px Courier New,monospace;margin:5px;color:#0831d9'&gt;iframe uptime: &lt;b id=c&gt;0&lt;/b&gt;s&lt;script&gt;let n=0;setInterval(()=&gt;{n++;document.getElementById('c').textContent=n},1000)&lt;/script&gt;&lt;/body&gt;"></iframe>
       <button class="xp-button" id="mb-go" type="button" style="margin-left:8px">move it &rarr;</button>
       <p class="replaces">
         On the site: the desktop shell reparents <code>.window</code> nodes when you drag them or
