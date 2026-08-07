@@ -514,7 +514,7 @@
     {
       "name": "representation_capture",
       "title": "Representation Capture",
-      "description": "Capture bounded public HTTP representations under browser, bot, Markdown, or identity request profiles and store only normalized headers, metadata, and body digests.",
+      "description": "Capture bounded public HTTP representations under browser, bot, Markdown, or identity request profiles and store only normalized headers, metadata, and body digests. Writes: each call persists a new snapshot row, so this tool is not read-only and not idempotent.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -579,7 +579,7 @@
     {
       "name": "representation_compare",
       "title": "Representation Compare",
-      "description": "Refetch the same HTTP representation profile, compare it with a stored snapshot, and persist the new normalized observation.",
+      "description": "Refetch the same HTTP representation profile, compare it with a stored snapshot, and persist the new normalized observation. Writes: each call persists a new snapshot row, so this tool is not read-only and not idempotent.",
       "inputSchema": {
         "type": "object",
         "properties": {
