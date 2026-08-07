@@ -143,7 +143,10 @@ async function processMention(source, target, request, env) {
   // Both mean the mention should stop being displayed, per the spec's
   // update/delete semantics. Only touches an EXISTING row; a first-time send
   // that fails verification simply never becomes a row.
-  if (!fetched.ok || !linksTo(fetched.html, target)) {
+  // fetched.url, not `source`: relative and protocol-relative hrefs resolve
+  // against where the document actually came FROM, which differs whenever the
+  // source redirected.
+  if (!fetched.ok || !linksTo(fetched.html, target, fetched.url)) {
     await retract(env, source, target, fetched.ok ? "source no longer links here" : `source unreachable (${fetched.status})`);
     return;
   }
@@ -203,11 +206,49 @@ async function fetchSource(url) {
 // Does the source actually link to the target? Compare on href values so a bare
 // mention of the URL in prose doesn't count as a link — the spec wants a real
 // <a href>, and that distinction is the entire anti-forgery property.
-function linksTo(html, target) {
-  const variants = new Set([target, target + "/", target.replace(/\/$/, "")]);
-  for (const m of String(html).matchAll(/<a\b[^>]*\bhref\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi)) {
-    const href = m[1].replace(/^["']|["']$/g, "").trim();
-    if (variants.has(href) || variants.has(href.replace(/[?#].*$/, ""))) return true;
+// Regions whose text is NOT document content. An <a> written inside any of them
+// is not a link: a comment is markup the author removed, a script is code, a
+// template is inert until cloned, and a textarea's contents are the field's
+// value. Scanning the raw source credited all four, which is the anti-forgery
+// property failing in the direction that matters — anyone could claim a mention
+// with markup that never renders as a link. Measured 2026-08-07 against the
+// previous implementation: a link in a comment, in a <script>, and in a
+// <textarea> were all credited.
+//
+// Stripping is the SAFE direction for this check. Removing too much loses a link
+// and refuses a real mention; removing too little credits a fake one. So an
+// unterminated region swallows the rest of the document on purpose.
+const INERT_REGIONS = /<!--[\s\S]*?(?:-->|$)|<(script|style|template|textarea|svg|noscript)\b[\s\S]*?(?:<\/\1\s*>|$)/gi;
+
+export function documentContent(html) {
+  return String(html ?? "").replace(INERT_REGIONS, " ");
+}
+
+/** Compare on the parts of a URL that identify a page: scheme, host (which is
+ *  case-insensitive), and path (which is not). Query and fragment are dropped —
+ *  a mention of ?utm_source=x is a mention of the page. */
+function canonicalForCompare(url) {
+  return `${url.protocol}//${url.hostname.toLowerCase()}${url.pathname.replace(/\/$/, "")}`;
+}
+
+// Does the source actually link to the target? Compare on href values so a bare
+// mention of the URL in prose doesn't count as a link — the spec wants a real
+// <a href>, and that distinction is the entire anti-forgery property.
+//
+// Hrefs are RESOLVED against the source URL rather than string-matched, so the
+// spellings a real page uses all count: protocol-relative (//aadhar.sh/x) and an
+// uppercase host were both refused before, and both are ordinary HTML.
+export function linksTo(html, target, sourceUrl) {
+  let wanted;
+  try { wanted = canonicalForCompare(new URL(target)); } catch { return false; }
+  for (const m of documentContent(html).matchAll(/<a\b[^>]*\bhref\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi)) {
+    const raw = m[1].replace(/^["']|["']$/g, "").trim();
+    if (!raw) continue;
+    try {
+      // `sourceUrl` is the base a browser would use. Without it a protocol-
+      // relative href cannot be resolved at all.
+      if (canonicalForCompare(new URL(raw, sourceUrl || undefined)) === wanted) return true;
+    } catch { /* an unparseable href is not a link to anything */ }
   }
   return false;
 }
@@ -237,8 +278,11 @@ function parseSource(html, sourceUrl, target) {
 // forward. Everything else is a plain mention.
 function mentionKind(html, target) {
   const window = 400;
-  const idx = String(html).indexOf(target);
-  const near = idx === -1 ? String(html) : String(html).slice(Math.max(0, idx - window), idx + window);
+  // Same content-only view the link check uses: a commented-out u-in-reply-to
+  // should not relabel a plain mention as a reply.
+  const content = documentContent(html);
+  const idx = content.indexOf(target);
+  const near = idx === -1 ? content : content.slice(Math.max(0, idx - window), idx + window);
   if (/\bu-in-reply-to\b/i.test(near)) return "reply";
   if (/\bu-like-of\b/i.test(near)) return "like";
   if (/\bu-repost-of\b/i.test(near)) return "repost";
