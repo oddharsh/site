@@ -170,8 +170,10 @@ explicitly enabled in every Worker config.
 
 **CodeQL analyzes `actions` and `javascript-typescript` only, and that list is a
 repo SETTING with no file in this tree.** It lives under Security, Code scanning,
-Default setup, so nothing here can declare it and `infra:check` cannot see it.
-Read the live value with:
+Default setup, so no config here can derive it. It IS declared, in
+[`infra.json`](infra.json) under `repository.code_scanning`, and `npm run
+infra:check` fails on drift; this paragraph used to say the checker could not see
+it, which was true until 2026-08-07. Read the live value with:
 
 ```bash
 gh api repos/oddharsh/site/code-scanning/default-setup
@@ -179,7 +181,18 @@ gh api repos/oddharsh/site/code-scanning/default-setup
 
 Expect `actions`, `javascript`, `javascript-typescript`, `typescript` back. Those
 last three are aliases GitHub keeps and folds into ONE job, so the honest count is
-two jobs, not four.
+two jobs, not four. The declaration carries all four, because it has to match what
+the API returns rather than the tidier number.
+
+That sub-check needs a credential, unlike the ruleset checks beside it: the
+endpoint answers 401 unauthenticated even though the repo is public. CI grants
+`security-events: read` on the per-run `GITHUB_TOKEN` for it. Without the scope
+the check degrades to an advisory naming what is missing, so a local run without
+`gh` auth stays green rather than lying.
+
+Four fields are asserted, and `state` is the one to notice: a scanner that is
+simply turned off reports no findings, which reads identically to a clean scan.
+`threat_model` is asserted because the argument below depends on it.
 
 `rust` and `python` were dropped 2026-08-06. Between them they cost about 3 of the
 scan's 4 minutes to analyze four files: `holding/scripts/zenc/src/main.rs` and the

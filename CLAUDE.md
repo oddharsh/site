@@ -141,12 +141,22 @@ worktrees may edit freely, but a worktree is not a release surface.
   The table above is now the readable copy of a machine-checked declaration
   rather than a claim nobody re-reads.
 
-  It costs no credential. The repo is public, so GitHub's rulesets endpoint is
-  public with it, and this tier runs on every PR like the DNS tier instead of
-  degrading to a note like the Cloudflare account tier. CI passes the
-  auto-provisioned `GITHUB_TOKEN` for rate-limit headroom alone (60/hr per IP
-  unauthenticated, which shared Actions runners exhaust), and a read that fails
-  is an advisory, so GitHub being down cannot redden an unrelated PR.
+  The RULESET half costs no credential. The repo is public, so GitHub's rulesets
+  endpoint is public with it, and that part runs on every PR like the DNS tier
+  instead of degrading to a note like the Cloudflare account tier. CI passes the
+  auto-provisioned `GITHUB_TOKEN` for rate-limit headroom alone there (60/hr per
+  IP unauthenticated, which shared Actions runners exhaust), and a read that
+  fails is an advisory, so GitHub being down cannot redden an unrelated PR.
+
+  **`repository.code_scanning` is the exception, and it is worth knowing that
+  "GitHub read, therefore free" does not generalize.** CodeQL default setup
+  declares the language list #241 curated, plus `state`, `query_suite` and
+  `threat_model`, and its endpoint answers 401 unauthenticated even on a public
+  repo. So `ci.yml` grants `security-events: read` on the per-run token, which is
+  a READ scope on GitHub's own credential and changes nothing about the standing
+  rule below that no token here may hold a Cloudflare `Edit`. Without the scope
+  that one sub-check degrades to an advisory naming what is missing. Check the
+  auth requirement per endpoint rather than assuming the rulesets precedent.
 
   Two assertions are worth knowing before you edit that block. `visibility` is
   checked FIRST and fails on its own, because rulesets on a private repo need a

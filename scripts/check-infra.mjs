@@ -929,6 +929,67 @@ async function checkRepo(infra) {
   }
 
   pass(`${slug} is ${meta.visibility} and its ${repo.rulesets.length} declared ruleset(s) match, with no bypass actors${token ? "" : " (unauthenticated read)"}`);
+
+  await checkCodeScanning(repo, slug, token);
+}
+
+// CodeQL default setup, declared for the same reason the rulesets are: it is a
+// curated decision living in a dashboard, and #241 recorded the language list
+// plus the cost argument for it in MAINTENANCE.md while noting infra:check
+// could not see it.
+//
+// This one NEEDS a credential, which is the difference from the rulesets. The
+// endpoint answers 401 unauthenticated even on a public repo, so a missing
+// scope degrades to an advisory naming what is missing, the same way the
+// Cloudflare account tier does. ci.yml grants `security-events: read` on the
+// per-run GITHUB_TOKEN so CI actually runs it.
+async function checkCodeScanning(repo, slug, token) {
+  const want = repo.code_scanning;
+  if (!want) return;
+
+  let live;
+  try {
+    live = await ghFetch(`/repos/${slug}/code-scanning/default-setup`, token);
+  } catch (e) {
+    warn(
+      /401|403/.test(e.message)
+        ? `CodeQL default setup: skipped, the GitHub token lacks security-events:read (${e.message})`
+        : `CodeQL default setup could not be read: ${e.message}`,
+    );
+    return;
+  }
+
+  // state first. A scanner that is simply off reports nothing, which reads
+  // exactly like a clean scan, so every field below is moot if this drifted.
+  if (live.state !== want.state) {
+    fail(`CodeQL default setup is ${JSON.stringify(live.state)}, declared ${JSON.stringify(want.state)}. A disabled scanner reports no findings, which looks identical to a clean scan`);
+    return;
+  }
+
+  // The curated list. Compared as a SET, because the API's ordering is not a
+  // documented guarantee and reordering is not drift worth failing on.
+  const got = [...(live.languages || [])].sort();
+  const declared = [...want.languages].sort();
+  if (got.join(",") !== declared.join(",")) {
+    const added = got.filter((l) => !declared.includes(l));
+    const dropped = declared.filter((l) => !got.includes(l));
+    const parts = [];
+    if (added.length) parts.push(`gained ${added.join(", ")}`);
+    if (dropped.length) parts.push(`lost ${dropped.join(", ")}`);
+    fail(`CodeQL default setup ${parts.join(" and ")} (live ${got.join(", ")}); #241 curated this list, so re-read MAINTENANCE.md before widening it`);
+  }
+
+  // threat_model is what makes the language argument valid: `remote` is why
+  // build tooling that never answers a request is safely out of scope.
+  if (live.threat_model !== want.threat_model) {
+    fail(`CodeQL threat_model is ${JSON.stringify(live.threat_model)}, declared ${JSON.stringify(want.threat_model)}. MAINTENANCE.md argues rust and python are droppable BECAUSE the model is remote, so this change invalidates that reasoning`);
+  }
+
+  if (live.query_suite !== want.query_suite) {
+    fail(`CodeQL query_suite is ${JSON.stringify(live.query_suite)}, declared ${JSON.stringify(want.query_suite)}`);
+  }
+
+  pass(`CodeQL default setup matches: ${got.length} languages (${got.join(", ")}), ${live.query_suite} suite, ${live.threat_model} threat model`);
 }
 
 // ------------------------------------------- tier: agent markdown surface ----

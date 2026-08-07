@@ -503,6 +503,55 @@
         "forbidden_rules": ["pull_request"],
         "why": "Forward-only, so Workers Builds cannot be handed a rewritten history. A pull_request rule here would break promote-production.yml, which is why its absence is asserted rather than merely unlisted."
       }
-    ]
+    ],
+
+    "code_scanning": {
+      "$comment": [
+        "CodeQL default setup. Same class as the rulesets above, and it arrived",
+        "here the same way: #241 curated this list, wrote the reasoning into",
+        "MAINTENANCE.md, and recorded that `infra:check` could not see it. That",
+        "sentence was true when written and is the exact shape of claim this file",
+        "exists to retire.",
+        "",
+        "UNLIKE the rulesets, this endpoint needs a CREDENTIAL. It answers 401",
+        "unauthenticated even on a public repo, so this sub-check degrades to an",
+        "advisory naming the missing scope rather than running free on every PR.",
+        "ci.yml grants the auto-provisioned GITHUB_TOKEN `security-events: read`",
+        "for it. That is a READ scope on GitHub's own per-run token, never a",
+        "Cloudflare credential and never an Edit.",
+        "",
+        "WHAT DRIFT LOOKS LIKE HERE, and why each field is worth a check.",
+        "",
+        "`languages` is the curated decision. #241 dropped `rust` and `python`",
+        "because between them they cost about 3 of the scan's 4 minutes to analyze",
+        "four files, all of it workstation and CI build tooling that never answers",
+        "a request. Re-enabling either from the Security tab silently buys that",
+        "cost back, and nothing in this tree would notice.",
+        "",
+        "The list looks like four languages and is TWO jobs. `javascript`,",
+        "`javascript-typescript` and `typescript` are aliases GitHub keeps and",
+        "folds into one analysis. The declaration matches what the API returns",
+        "rather than the honest job count, because a checker comparing against the",
+        "prettier number would fail on a correct configuration.",
+        "",
+        "`threat_model` is what makes the language argument valid. `remote` is why",
+        "build tooling that never answers a request is safely out of scope. Flip it",
+        "to include local and the case for dropping rust and python weakens, so a",
+        "silent change there would leave MAINTENANCE.md arguing from a premise the",
+        "dashboard no longer holds.",
+        "",
+        "`state` is the one that matters most and is easiest to lose: `configured`",
+        "vs the scan simply being turned off. A disabled scanner reports nothing,",
+        "which reads identically to a clean scan.",
+        "",
+        "`query_suite` is declared because `extended` is a large cost change that",
+        "somebody could reasonably click without meaning to make it permanent."
+      ],
+      "state": "configured",
+      "languages": ["actions", "javascript", "javascript-typescript", "typescript"],
+      "query_suite": "default",
+      "threat_model": "remote",
+      "why": "Two analysis jobs, not four: the last three languages are aliases GitHub folds into one. rust and python were dropped 2026-08-06 (#241) as build tooling unreachable under the `remote` threat model."
+    }
   }
 }
