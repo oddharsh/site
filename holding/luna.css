@@ -419,7 +419,11 @@ box-shadow:inset 1px 1px 0 oklch(86% 0.13 140),inset -1px -1px 0 oklch(38% 0.13 
 /* localStorage; default layout is a left column. */
 #axp-icons{position:fixed;inset:0;z-index:1;pointer-events:none}
 .axp-ico,.axp-ico:link,.axp-ico:visited,.axp-ico:hover,.axp-ico:active{color:oklch(100% 0 0);text-decoration:none}
-.axp-ico{position:absolute;pointer-events:auto;display:flex;flex-direction:column;align-items:center;gap:4px;width:76px;padding:5px 3px 4px;box-sizing:border-box;border:1px solid transparent;border-radius:2px;cursor:pointer}
+/* declares its own font like every other shell element (#axp-taskbar, #axp-run,
+   #axp-balloon), because the label would otherwise inherit from the PAGE's body.
+   /access styles a .window wrapper and never touches body, so the icons came out
+   in the UA default (Times) there while the taskbar beside them stayed Tahoma. */
+.axp-ico{position:absolute;pointer-events:auto;display:flex;flex-direction:column;align-items:center;gap:4px;width:76px;padding:5px 3px 4px;box-sizing:border-box;border:1px solid transparent;border-radius:2px;cursor:pointer;font-family:var(--font-ui,Tahoma,Verdana,Geneva,sans-serif)}
 .axp-ico.axp-dragging{opacity:.8;z-index:7;will-change:transform}   /* earn-it: released with the class on drop */
 .axp-ico:hover{background:oklch(60% 0.20 263 / .26);border-color:oklch(74% 0.10 263 / .5)}
 .axp-ico:focus-visible{outline:1px dotted oklch(100% 0 0);outline-offset:1px;background:oklch(60% 0.20 263 / .34)}
