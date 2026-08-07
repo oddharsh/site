@@ -20,7 +20,7 @@ export { BookingSlot, BookingWorkflow, Counter };
 
 const markdownPages = new Set([
   "/", "/photos", "/writing", "/garage", "/lwe",
-  "/security", "/whoareyou", "/updates", "/restore", "/access",
+  "/access", "/bot", "/pixel-peeper", "/security", "/terminal", "/whoareyou", "/updates", "/restore",
   "/coffee",
   "/serendipity",
 ]);
@@ -48,6 +48,15 @@ async function fetchHandler(request: Request, env: Env, ctx: ExecutionContext): 
 
   const url = new URL(request.url);
   const { pathname } = url;
+
+  // The former calendar Worker also lived at cal.aadhar.sh. Keep that public
+  // hostname as a thin canonical redirect while one implementation owns every
+  // booking path and all new links point at /coffee.
+  if (url.hostname === "cal.aadhar.sh") {
+    const suffix = pathname.startsWith("/coffee") ? pathname.slice("/coffee".length) || "/" : pathname;
+    const target = new URL(`/coffee${suffix === "/" ? "" : suffix}${url.search}`, "https://aadhar.sh");
+    return Response.redirect(target, 308);
+  }
 
   if (request.method === "POST" && pathname === "/coffee/book") return coffeeBook(request, env, ctx);
   if (pathname === "/webmention") return receiveWebmention(request, env, ctx);

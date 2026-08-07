@@ -58,41 +58,36 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
 
-      - name: Install homepage dependencies
+      - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
       - name: Check Wrangler versions and lockfiles
         run: npm run check-wrangler
 
-      - name: Build homepage
+      - name: Build site
         run: npm run build
 
       - name: Check photo asset invariants
         run: npm run photos:check
 
-      - name: Enforce homepage performance budget
+      - name: Enforce performance budget
         run: npm run perf-budget
 
       - name: Validate site Worker config
         run: npx wrangler deploy --dry-run
 
-      - name: Test homepage representation contracts
+      - name: Check generated Worker types
+        run: npm run types:check
+
+      - name: Test site and Worker contracts
         run: npm test
 
-      # The route oracle, pre-merge. createTestHarness() boots the site Worker
-      # in-process (honouring wrangler.jsonc's build.command, so it serves the
-      # minified .build/holding tree) and verify-routes.mjs sweeps it. This is
-      # status + content-type + markers for real; it is NOT a data check, since
-      # local KV/R2/D1 come up empty. See MAINTENANCE.md "Verify the whole route
-      # surface" for what the `remote: true` rows sit out and why.
+      # createTestHarness() boots the production config in-process and the route
+      # oracle checks every compiled page plus bounded dynamic/machine routes.
+      # Local KV/R2/D1 are intentionally empty, so fail-closed and empty states
+      # are part of this gate; the live-data sweep remains a release check.
       - name: Verify route surface against a local Worker
         run: npm run routes:check
-
-      - name: Validate LWE and Garage page contracts
-        run: npm run pages:check
-
-      - name: Test coffee Worker
-        run: npm test --workspace cal
 
       - name: Validate Cloudflare garage Worker config
         working-directory: cf-garage

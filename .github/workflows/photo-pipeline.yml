@@ -11,15 +11,10 @@ on:
           - add-photo
           - reencode-thumbnails
           - refresh-metadata
-          - add-car-photo
           - regenerate-encoding-study
         default: add-photo
       source_keys:
         description: "R2 object keys, one per line; use all for a full thumbnail re-encode"
-        required: false
-        type: string
-      car_stem:
-        description: "For add-car-photo: singer, tuthill, hwa-evo, or f355"
         required: false
         type: string
 
@@ -40,7 +35,6 @@ jobs:
     env:
       ROUTINE: ${{ inputs.routine }}
       SOURCE_KEYS: ${{ inputs.source_keys }}
-      CAR_STEM: ${{ inputs.car_stem }}
       PHOTO_SOURCE_ORIGIN: https://aadhar.sh
 
     steps:
@@ -66,7 +60,7 @@ jobs:
         run: |
           brew install exiftool ffmpeg jq libavif mozjpeg webp
           python -m venv "$RUNNER_TEMP/photo-venv"
-          "$RUNNER_TEMP/photo-venv/bin/pip" install --requirement holding/scripts/requirements.txt
+          "$RUNNER_TEMP/photo-venv/bin/pip" install --requirement tools/media/requirements.txt
           echo "$RUNNER_TEMP/photo-venv/bin" >> "$GITHUB_PATH"
 
       - name: Install repository dependencies
@@ -75,7 +69,7 @@ jobs:
       - name: Build the JPEG encoder (zenc)
         # zenjpeg hybrid + progressive scan search; Cargo.lock pins the graph,
         # dependabot tracks the zenjpeg version. macOS runners ship cargo.
-        run: cargo build --release --manifest-path holding/scripts/zenc/Cargo.toml
+        run: cargo build --release --manifest-path tools/media/zenc/Cargo.toml
 
       - name: Validate routine inputs
         run: |
@@ -83,15 +77,6 @@ jobs:
           case "$ROUTINE" in
             add-photo|reencode-thumbnails|refresh-metadata)
               [ -n "$SOURCE_KEYS" ] || { echo "source_keys is required for $ROUTINE" >&2; exit 1; }
-              ;;
-            add-car-photo)
-              [ -n "$SOURCE_KEYS" ] || { echo "source_keys is required for add-car-photo" >&2; exit 1; }
-              case "$CAR_STEM" in
-                singer|tuthill|hwa-evo|f355) ;;
-                *) echo "car_stem must be singer, tuthill, hwa-evo, or f355" >&2; exit 1 ;;
-              esac
-              key_count="$(printf '%s\n' "$SOURCE_KEYS" | awk 'NF { n++ } END { print n + 0 }')"
-              [ "$key_count" -eq 1 ] && [ "$SOURCE_KEYS" != "all" ] || { echo "add-car-photo needs exactly one source key" >&2; exit 1; }
               ;;
             regenerate-encoding-study)
               ;;
@@ -106,7 +91,7 @@ jobs:
         run: |
           set -euo pipefail
           printf '%s\n' "$SOURCE_KEYS" > "$RUNNER_TEMP/photo-source-keys.txt"
-          ./holding/scripts/download-remote-photos.sh \
+          ./tools/media/download-remote-photos.sh \
             "$RUNNER_TEMP/photo-source-keys.txt" \
             "$RUNNER_TEMP/photo-source"
 
@@ -121,23 +106,18 @@ jobs:
               npm run photos -- "$source_dir"
               ;;
             reencode-thumbnails)
-              ./holding/scripts/reencode-thumbnails.sh "$source_dir"
-              ./holding/scripts/hash-thumbnails.sh
-              python holding/scripts/photo-histograms.py
+              ./tools/media/reencode-thumbnails.sh "$source_dir"
+              ./tools/media/hash-thumbnails.sh
+              python tools/media/photo-histograms.py
               npm run photos:check
               ;;
             refresh-metadata)
-              ./holding/scripts/extract-photo-metadata.sh --merge "$source_dir"
+              ./tools/media/extract-photo-metadata.sh --merge "$source_dir"
               npm run photos:check
               ;;
-            add-car-photo)
-              key="$(find "$source_dir" -type f -print -quit)"
-              [ -n "$key" ] || { echo "no downloaded car source" >&2; exit 1; }
-              ./holding/scripts/add-car-photo.sh "$CAR_STEM" "$key"
-              ;;
             regenerate-encoding-study)
-              ./holding/scripts/gen-encoding-samples.sh
-              ./holding/scripts/gen-encoding-grids.sh
+              ./tools/media/gen-encoding-samples.sh
+              ./tools/media/gen-encoding-grids.sh
               ;;
           esac
 
@@ -150,11 +130,10 @@ jobs:
         run: |
           set -euo pipefail
           case "$ROUTINE" in
-            add-photo) paths=(holding/images holding/i); title="photos: process remote source batch";;
-            reencode-thumbnails) paths=(holding/images holding/i); title="photos: re-encode remote thumbnails";;
-            refresh-metadata) paths=(holding/images); title="photos: refresh remote metadata";;
-            add-car-photo) paths=(holding/cars); title="photos: update remote car image";;
-            regenerate-encoding-study) paths=(holding/garage/enc); title="garage: regenerate remote encoding study";;
+            add-photo) paths=(assets/photos content/data/photo-index.json); title="photos: process remote source batch";;
+            reencode-thumbnails) paths=(assets/photos); title="photos: re-encode remote thumbnails";;
+            refresh-metadata) paths=(assets/photos/data); title="photos: refresh remote metadata";;
+            regenerate-encoding-study) paths=(assets/studies/encoding); title="garage: regenerate remote encoding study";;
           esac
 
           branch="photos/remote-$GITHUB_RUN_ID"
@@ -179,6 +158,6 @@ jobs:
               '' \
               "Routine: $ROUTINE" \
               'Source: R2-backed public photo route' \
-              'Encoder: zenjpeg via holding/scripts/zenc (Cargo-pinned, dependabot-tracked)' \
+              'Encoder: zenjpeg via tools/media/zenc (Cargo-pinned, dependabot-tracked)' \
               '' \
               'The source files were downloaded to ephemeral runner storage only. Merge this PR through the normal CI and production-promotion path.')"

@@ -36,12 +36,12 @@ async function write(path, contents) {
 await rm(output, { recursive: true, force: true });
 await mkdir(join(output, "assets"), { recursive: true });
 await cp(join(root, "public"), output, { recursive: true });
-await cp(join(root, "holding/i"), join(output, "i"), { recursive: true });
-await cp(join(root, "holding/images"), join(output, "images"), { recursive: true });
-await cp(join(root, "holding/garage/enc"), join(output, "garage/enc"), { recursive: true });
-await cp(join(root, "holding/lwe/lean"), join(output, "lwe/lean"), { recursive: true });
-await cp(join(root, "holding/pixel-peeper/tiles"), join(output, "pixel-peeper/tiles"), { recursive: true });
-await cp(join(root, "holding/pixel-peeper/manifest.json"), join(output, "pixel-peeper/manifest.json"));
+await cp(join(root, "assets/photos/thumbs"), join(output, "i"), { recursive: true });
+await cp(join(root, "assets/photos/data"), join(output, "images"), { recursive: true });
+await cp(join(root, "assets/studies/encoding"), join(output, "garage/enc"), { recursive: true });
+await cp(join(root, "assets/studies/lean"), join(output, "lwe/lean"), { recursive: true });
+await cp(join(root, "assets/pixel-peeper/tiles"), join(output, "pixel-peeper/tiles"), { recursive: true });
+await cp(join(root, "assets/pixel-peeper/manifest.json"), join(output, "pixel-peeper/manifest.json"));
 
 const css = await readFile(join(root, "src/site/styles/site.css"), "utf8");
 const cssName = `site.${digest(css)}.css`;
@@ -50,11 +50,11 @@ await write("luna.css", `/* axp-desktop compatibility URL; new canonical source:
 
 const [home, hashes, alt, posts, siteManifest, photoIndex, checkpoints] = await Promise.all([
   json("content/home.json"),
-  json("holding/images/hashes.json"),
-  json("holding/images/alt.json"),
+  json("assets/photos/data/hashes.json"),
+  json("assets/photos/data/alt.json"),
   json("content/writing/posts.json"),
   json("site-manifest.json"),
-  json("holding/_worker.js/photo-index.json"),
+  json("content/data/photo-index.json"),
   json("content/data/checkpoints.json"),
 ]);
 
@@ -192,6 +192,12 @@ await write("search-index.json", `${JSON.stringify(searchRecords, null, 2)}\n`);
 const llms = `# aadhar.sh\n\nA personal site by Aadharsh Pannirselvam: photographs, writing, explainers, experiments, and bounded public utilities.\n\n## Public surfaces\n\n${siteManifest.surfaces.filter(({ flags }) => flags.agents).map(({ path, title, description }) => `- [${title}](https://aadhar.sh${path}) — ${description}`).join("\n")}\n`;
 await write("llms.txt", llms);
 await write("llms-full.txt", `${llms}\n## Writing\n\n${writingMarkdown(posts)}\n\n## Garage\n\n${directoryMarkdown(siteManifest.surfaces.find(({ path }) => path === "/garage"), siteManifest.surfaces.filter(({ path, kind }) => kind === "content" && path.startsWith("/garage/")))}\n`);
+
+const sitemapPaths = [
+  ...siteManifest.surfaces.filter(({ flags }) => flags.sitemap).map(({ path }) => path),
+  ...posts.map(({ slug }) => `/writing/${slug}`),
+];
+await write("sitemap.xml", `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${[...new Set(sitemapPaths)].map((path) => `  <url><loc>https://aadhar.sh${path}</loc></url>`).join("\n")}\n</urlset>\n`);
 
 const manifest = {
   pages: [

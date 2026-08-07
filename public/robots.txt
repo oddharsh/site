@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /
+Disallow: /images/full/
+Disallow: /coffee/approve
+Disallow: /coffee/decline
+Disallow: /webmention/approve
+Disallow: /webmention/decline
+
+User-agent: AadharshBot
+Allow: /
+
+Sitemap: https://aadhar.sh/sitemap.xml

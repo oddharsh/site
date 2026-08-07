@@ -150,15 +150,15 @@
       "type": "TXT",
       "match": "present",
       "why": "Resend's DKIM key, which signs the /coffee confirmation and invite mail. Presence-matched, not exact: Resend owns rotation, so pinning the key would turn a routine rotation into a CI failure. Deletion still fails, which is the case that matters under adkim=s.",
-      "consumer": "cal/src/email.js"
+      "consumer": "src/worker/email.ts"
     },
     {
       "name": "default._bimi.aadhar.sh",
       "type": "TXT",
       "match": "exact",
       "expect": ["v=BIMI1; l=https://aadhar.sh/bimi.svg"],
-      "why": "BIMI logo for inbox display. This record is the ONLY consumer of holding/bimi.svg anywhere in the world, which is why that file reads as detritus to every reference sweep in this tree. The `consumer` field below is what closes the loop: the checker asserts the file exists, so deleting it now goes red here instead of silently breaking mail.",
-      "consumer": "holding/bimi.svg"
+      "why": "BIMI logo for inbox display. This record is the ONLY consumer of public/bimi.svg anywhere in the world, which is why that file reads as detritus to every reference sweep in this tree. The `consumer` field below is what closes the loop: the checker asserts the file exists, so deleting it now goes red here instead of silently breaking mail.",
+      "consumer": "public/bimi.svg"
     }
   ],
 
