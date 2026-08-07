@@ -24,9 +24,9 @@ function liveRegion(slug) {
   if (slug === "pixel-peeper") {
     return `<section class="peeper" data-peeper data-manifest="/pixel-peeper/manifest.json" aria-labelledby="peeper-title">
       <h2 id="peeper-title">Compression eye exam</h2>
-      <p data-peeper-status>Loading the public trial manifest…</p>
-      <div class="peeper__choices" data-peeper-choices></div>
-      <div class="peeper__result" data-peeper-result hidden></div>
+      <p data-peeper-status aria-live="polite">Loading the public trial manifest…</p>
+      <div class="peeper__choices" data-peeper-choices><span class="peeper__choice peeper__placeholder" aria-hidden="true"><span class="peeper__placeholder-image"></span><span>Candidate A</span></span><span class="peeper__choice peeper__placeholder" aria-hidden="true"><span class="peeper__placeholder-image"></span><span>Candidate B</span></span><span class="peeper__choice peeper__placeholder" aria-hidden="true"><span class="peeper__placeholder-image"></span><span>Candidate C</span></span></div>
+      <div class="peeper__result" data-peeper-result aria-live="polite" hidden></div>
       <noscript><p>The comparison control needs JavaScript to conceal labels and advance trials. <a href="/pixel-peeper/manifest.json">Open the complete source data</a>.</p></noscript>
     </section>`;
   }

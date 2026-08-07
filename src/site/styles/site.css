@@ -39,6 +39,19 @@
 }
 
 @layer shell {
+  .skip-link {
+    position: fixed;
+    inset-block-start: 8px;
+    inset-inline-start: 8px;
+    z-index: 10;
+    padding: 7px 10px;
+    color: var(--paper);
+    background: var(--selection);
+    translate: 0 calc(-100% - 16px);
+  }
+
+  .skip-link:focus { translate: 0; }
+
   body {
     min-block-size: 100svb;
     padding: clamp(0px, 2.2vi, 24px);
@@ -874,6 +887,8 @@
   .peeper__choice[data-chosen="true"] { box-shadow: var(--sunken); }
   .peeper__choice:disabled { cursor: default; opacity: 1; }
   .peeper__choice img { inline-size: 100%; block-size: auto; aspect-ratio: 1; object-fit: cover; }
+  .peeper__placeholder { cursor: default; }
+  .peeper__placeholder-image { aspect-ratio: 1; background: oklch(88% 0.018 255); box-shadow: var(--sunken); }
   .peeper__result { margin-block-start: 14px; padding: 10px; background: #fff; box-shadow: var(--sunken); }
   .peeper__result button { padding: 5px 14px; border: 0; border-radius: 0; background: var(--face); box-shadow: var(--raised); }
 

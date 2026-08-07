@@ -25,7 +25,7 @@ if (root) {
         button.type = "button";
         button.className = "peeper__choice";
         image.src = option.src;
-        image.alt = `Candidate ${label(position)}`;
+        image.alt = "";
         image.width = 320;
         image.height = 320;
         name.textContent = `Candidate ${label(position)}`;

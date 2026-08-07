@@ -65,6 +65,7 @@ export function renderDocument({
   ${head}
 </head>
 <body>
+  <a class="skip-link" href="#content">Skip to content</a>
   <div class="explorer">
     <header class="caption">
       <span class="caption__mark" aria-hidden="true">A</span>

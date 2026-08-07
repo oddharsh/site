@@ -7,7 +7,7 @@ function paragraphs(items) {
 function photoMarkup(photo) {
   return `<a href="/photos#${escapeHtml(photo.stem)}">
     <picture>
-      <source srcset="/${escapeHtml(photo.avif)}" type="image/avif">
+      <source srcset="/${escapeHtml(photo.small)} 400w, /${escapeHtml(photo.avif)} 600w" sizes="(max-width: 900px) 31vw, 145px" type="image/avif">
       <img src="/${escapeHtml(photo.jpg)}" width="600" height="600" alt="${escapeHtml(photo.alt)}" loading="lazy" decoding="async" fetchpriority="low">
     </picture>
   </a>`;

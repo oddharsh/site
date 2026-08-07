@@ -31,15 +31,15 @@ if (!executablePath) throw new Error("Chrome or Chrome Canary was not found. Set
 
 const browser = await chromium.launch({ executablePath, headless: true });
 const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 });
-const page = await context.newPage();
 const consoleErrors = [];
-page.on("console", (message) => {
-  if (message.type() === "error") consoleErrors.push(message.text());
-});
-page.on("pageerror", (error) => consoleErrors.push(error.message));
 
 const records = [];
 for (const route of routes) {
+  const page = await context.newPage();
+  page.on("console", (message) => {
+    if (message.type() === "error") consoleErrors.push(message.text());
+  });
+  page.on("pageerror", (error) => consoleErrors.push(error.message));
   await page.addInitScript(() => {
     window.__bench = { lcp: 0, cls: 0 };
     new PerformanceObserver((list) => {
@@ -54,7 +54,7 @@ for (const route of routes) {
   });
   const startedErrors = consoleErrors.length;
   const response = await page.goto(new URL(route, base).href, { waitUntil: "load" });
-  await page.waitForTimeout(100);
+  await page.waitForTimeout(500);
   const metrics = await page.evaluate(() => {
     const navigation = performance.getEntriesByType("navigation")[0];
     const resources = performance.getEntriesByType("resource");
@@ -76,6 +76,7 @@ for (const route of routes) {
     ...metrics,
     consoleErrors: consoleErrors.slice(startedErrors),
   });
+  await page.close();
 }
 
 await browser.close();

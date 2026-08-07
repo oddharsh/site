@@ -159,8 +159,15 @@ test("hashed stylesheet and public assets resolve from the generated tree", asyn
   await readFile(new URL(`assets/${stylesheet}`, output));
   await readFile(new URL("favicon.svg", output));
 
-  for (const path of html.matchAll(/(?:src|srcset)="\/([^"]+)"/g)) {
+  for (const path of html.matchAll(/src="\/([^"]+)"/g)) {
     await readFile(new URL(path[1], output));
+  }
+  for (const set of html.matchAll(/srcset="([^"]+)"/g)) {
+    for (const candidate of set[1].split(",")) {
+      const path = candidate.trim().split(/\s+/, 1)[0];
+      assert.match(path, /^\//, `srcset candidate is root-relative: ${path}`);
+      await readFile(new URL(path.slice(1), output));
+    }
   }
 });
 

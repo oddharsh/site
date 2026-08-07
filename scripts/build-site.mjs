@@ -79,6 +79,7 @@ const homePhotos = photos.slice(0, 6).map((photo) => ({
   stem: photo.stem,
   alt: photo.alt,
   avif: photo.thumbAvif,
+  small: photo.thumbSmall,
   jpg: photo.thumbJpg,
 }));
 
