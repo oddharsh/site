@@ -2,9 +2,9 @@
 
 // check-checkpoints.mjs — does the committed projection still match D1?
 //
-// D1 is the source of truth for the deploy log; holding/_worker.js/checkpoints.json
-// is a derived read of it that build.mjs renders /updates and /restore from.
-// bump-version.sh rewrites the file after every insert, so the normal path keeps
+// D1 is the source of truth for the deploy log; content/data/checkpoints.json
+// is a derived read of it that scripts/build-site.mjs renders /updates and
+// /restore from. bump-checkpoint.sh stages a pending row, so the normal path keeps
 // them in step. This catches the paths it cannot: a row inserted by hand or by
 // another machine, a projection edited directly, or a bump whose D1 re-read failed
 // and printed the warning nobody read.
@@ -29,12 +29,12 @@ import { fileURLToPath } from "node:url";
 
 const run = promisify(execFile);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const FILE = path.join(ROOT, "holding/_worker.js/checkpoints.json");
+const FILE = path.join(ROOT, "content/data/checkpoints.json");
 const SYNC = process.argv.includes("--sync");
 
 const fail = (msg) => { console.error(`checkpoints: ${msg}`); process.exit(1); };
 
-// The exact query bump-version.sh writes from, so a column or order change here
+// The exact query the promotion path writes from, so a column or order change here
 // fails loudly instead of producing a diff nobody can read.
 const QUERY = "SELECT vnum, ymd, version, slug, title FROM checkpoints ORDER BY vnum;";
 
@@ -57,21 +57,21 @@ const liveJson = JSON.stringify(live, null, 2) + "\n";
 
 if (SYNC) {
   await writeFile(FILE, JSON.stringify(live, null, 2).replace(/\n$/, "") + "\n");
-  console.log(`checkpoints: synced ${live.length} rows from D1 -> holding/_worker.js/checkpoints.json`);
+  console.log(`checkpoints: synced ${live.length} rows from D1 -> content/data/checkpoints.json`);
   console.log("  commit it, then deploy — /updates and /restore render from this file");
   process.exit(0);
 }
 
 let committed;
 try { committed = JSON.parse(await readFile(FILE, "utf8")); }
-catch { fail("holding/_worker.js/checkpoints.json is missing or unparseable — run: npm run checkpoints:sync"); }
+catch { fail("content/data/checkpoints.json is missing or unparseable — run: npm run checkpoints:sync"); }
 
 const byVnum = (rows) => new Map(rows.map((r) => [r.vnum, r]));
 const c = byVnum(committed), l = byVnum(live);
 const liveMax = live.length ? Math.max(...l.keys()) : 0;
 
 // PENDING entries are the projection running ahead of D1, which is now the
-// normal state between staging a release and ramping it. bump-version.sh writes
+// normal state between staging a release and ramping it. bump-checkpoint.sh writes
 // the projection inside the PR (so /updates ships the entry with the deploy it
 // describes, instead of needing a second one), and deploy:promote records the
 // row in D1 only once traffic actually reached 100%.
@@ -108,7 +108,7 @@ if (diffs.length) {
     `${diffs.length} row(s) differ from D1:\n` +
     diffs.slice(0, 8).map((d) => `  - ${d}`).join("\n") +
     (diffs.length > 8 ? `\n  … and ${diffs.length - 8} more` : "") +
-    `\n  fix with: npm run checkpoints:sync && git add holding/_worker.js/checkpoints.json`,
+    `\n  fix with: npm run checkpoints:sync && git add content/data/checkpoints.json`,
   );
 }
 

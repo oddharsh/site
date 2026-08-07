@@ -1,0 +1,20 @@
+colophon
+────────
+
+this site is a resto-mod. the look comes from Windows XP Explorer — vivid Luna blue, one-pixel bevels, compact native type — while the documents underneath use the current web platform.
+
+a few of the moving parts:
+
+  · complete semantic pages are made ahead of a request. an ordinary page sends no javascript. one small, content-hashed stylesheet draws the shared explorer shell.
+
+  · photographs are shot on a Fujifilm X-T50 and a Leica, then resized, EXIF-rotated, and encoded as AVIF with a JPEG fallback. every image reserves its space before it loads.
+
+  · live utilities run in one Cloudflare Worker. authored pages do not wait on that Worker, and machine representations are first-class routes rather than text scraped back out of the screen.
+
+  · this page is an editable text field. it will not save. the canonical copy is a plain text file, and your version lasts only as long as this tab.
+
+the whole thing is a slow project — a place to learn how the modern web actually works by dressing it up like the web i grew up on.
+
+built in public. always under construction, on purpose.
+
+— aadharsh

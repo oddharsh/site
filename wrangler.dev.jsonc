@@ -1,86 +1,29 @@
 {
-  // LOCAL DEV ONLY — `wrangler dev -c wrangler.dev.jsonc` (see .claude/launch.json).
-  //
-  // This is the twin of wrangler.jsonc. The two differ in exactly four places:
-  //   - main:             holding/... here vs .build/holding/... in wrangler.jsonc
-  //   - assets.directory: holding    here vs .build/holding    in wrangler.jsonc
-  //   - no "build" block here (dev serves the readable holding/ tree directly, so
-  //     the fast edit->reload loop never pays the full holding/ -> .build copy)
-  //   - Workers Cache is disabled for both local entrypoints, so edit->reload
-  //     never observes a stale cached response; deploy enables it for CachedPages
-  // Everything else (bindings, crons, vars, migrations) MUST match wrangler.jsonc.
-  // build.mjs warns if a binding name drifts between the two. Deploys never use
-  // this file — wrangler.jsonc self-builds via its build.command and ships the
-  // minified .build/holding tree.
+  "$schema": "node_modules/wrangler/config-schema.json",
   "name": "aadhar-sh",
-  // Same pin as wrangler.jsonc, and NOT a fifth difference between the two —
-  // it is one of the values that must match. Plain `npm run dev` is local and
-  // never needs an account, but `npm run dev:remote` and
-  // `npm run routes:check:remote` both reach production bindings through this
-  // config, so they hit the same "more than one account available" wall that
-  // wrangler.jsonc's comment describes.
   "account_id": "1c99acdb6141579023fb97d24261ea58",
-  "main": "holding/_worker.js/index.js",
-  "compatibility_date": "2026-06-01",
-  "cache": { "enabled": false, "cross_version_cache": false },
-  "exports": {
-    "default": { "type": "worker", "cache": { "enabled": false } },
-    "CachedPages": { "type": "worker", "cache": { "enabled": false } }
-  },
-  "dependencies_instrumentation": { "enabled": true },
+  "main": "src/worker/index.ts",
+  "compatibility_date": "2026-08-06",
   "workers_dev": false,
-  "routes": [
-    { "pattern": "aadhar.sh/coffee*", "zone_name": "aadhar.sh" },
-    { "pattern": "aadhar.sh/serendipity*", "zone_name": "aadhar.sh" },
-    { "pattern": "cal.aadhar.sh/*", "zone_name": "aadhar.sh" }
-  ],
+  "preview_urls": false,
   "assets": {
-    "directory": "holding",
+    "directory": "./dist",
     "binding": "ASSETS",
-    // MUST match wrangler.jsonc: canonical URLs carry no trailing slash.
     "html_handling": "drop-trailing-slash",
+    "not_found_handling": "404-page",
     "run_worker_first": [
-      "/", "/index.html", "/favicon.ico", "/hit",
-      // the content-hashed shell: worker-first so it can hand out the q11 .br twin
-      "/a/*",
-      // static pages: worker-first for the dcz delta + brotli q11 twin
-      "/garage", "/garage/*", "/lwe", "/lwe/*",
-      "/pixel-peeper", "/pixel-peeper/*",
-      "/access", "/access/*",
-      "/auth.md", "/.well-known/api-catalog", "/.well-known/agent-card.json",
-      "/.well-known/oauth-protected-resource",
-      "/.well-known/oauth-authorization-server",
-      "/agent/*", "/oauth2/*",
-      "/whoareyou", "/whoareyou.json", "/security",
-      "/reading", "/updates", "/updates.json", "/restore",
-      "/lens", "/lens/", "/lens/fetch", "/lens/shot", "/lens/browser", "/lens/compare.json",
-      "/lens/census", "/lens/census.json", "/mcp", "/terminal", "/terminal/*", // One wildcard per tool covers both the bare route and its .txt twin.
-      // NOT cosmetic: run_worker_first caps at 100 RULES (wrangler refuses to
-      // boot at 101), and twelve exact entries put this config at 102. A site
-      // can only claim so many paths from the asset layer, which is a real
-      // ceiling on how many surfaces you can add this way.
-      "/finger*", "/radar*", "/dict*", "/cache*", "/agent-ready*", "/encode*",
-      "/photos.txt", "/lens.txt",
-      "/search", "/search.json",
-      "/coffee", "/coffee/*", "/serendipity", "/serendipity/*",
-      "/slots", "/book", "/approve", "/decline",
-      "/llms-full.txt", "/ledger", "/ledger.json",
-      "/ledger/rum.js", "/ledger/rum", "/ledger/prefetch",
-      "/writing", "/writing/*",
-      "/rn", "/rn.md", "/rn/tracks", "/rn/tracks.html", "/rn/admin", "/rn/set", "/rn/art/*",
-      "/bot", "/around", "/around/json", "/around/changes.json",
-      "/photos", "/photos/", "/photos/query.json", "/photos/grid.html", "/run",
-      "/images", "/images/", "/images/full", "/images/full/*",
-      "/images/manifest.json", "/images/metadata.json", "/images/meta/*",
-      "/images/*.avif", "/images/*.jpg", "/images/*.jpeg",
-      "/images/*.png", "/images/*.gif",
-      "/images/*.heic", "/images/*.heif", "/images/*.hif"
+      "/", "/index.html", "/favicon.ico", "/hit", "/mcp", "/.well-known/api-catalog",
+      "/photos", "/writing*", "/garage*", "/lwe*",
+      "/access", "/bot", "/pixel-peeper", "/security", "/updates", "/restore",
+      "/whoareyou", "/whoareyou.json",
+      "/lens*", "/coffee*", "/serendipity*",
+      "/reading", "/around*", "/ledger*", "/inbox",
+      "/webmention*", "/photos/query.json",
+      "/images", "/images/full*", "/images/*.avif", "/images/*.jpg", "/images/*.jpeg",
+      "/rn", "/rn.md", "/rn/*", "/search.json", "/run",
+      "/terminal*", "/finger*", "/radar*", "/dict*", "/cache*", "/agent-ready*", "/encode*", "/photos.txt"
     ]
   },
-  // matches wrangler.jsonc. Locally the spans open and record nothing
-  // (span.isTraced is false under `wrangler dev` — there is no trace backend to
-  // ship them to), which is exactly the property lib/trace.js is built around:
-  // instrumentation must never be the reason dev behaves differently from prod.
   "observability": {
     "enabled": true,
     "traces": { "enabled": true, "head_sampling_rate": 1 }
@@ -93,8 +36,6 @@
   ],
   "analytics_engine_datasets": [
     { "binding": "BOT_LEDGER", "dataset": "aadhar_bot_ledger" },
-    // the speculation ledger: Sec-Purpose prefetch/prerender requests, plus the
-    // activation beacons that say which of them paid off (speculation.js).
     { "binding": "SPECULATION", "dataset": "aadhar_speculation" },
     { "binding": "PERF_PROBE", "dataset": "aadhar_perf_probe" }
   ],
@@ -104,9 +45,6 @@
   "d1_databases": [
     { "binding": "RESTORE_DB", "database_name": "aadhar-restore", "database_id": "88c8daf1-3a36-4f8e-a2ad-dba8a74e1b9f" },
     { "binding": "SERENDIPITY_DB", "database_name": "serendipity", "database_id": "d3aa3215-17c3-4389-b224-cf465ddbb786" },
-    // webmentions (see wrangler.jsonc). Local dev gets its own local D1 file from
-    // this name, so /inbox and the endpoint work end-to-end under `npm run dev`
-    // without touching the remote database.
     { "binding": "SOCIAL_DB", "database_name": "aadhar-social", "database_id": "b3ab51c4-da04-40ec-9b36-c7e06611f4ab" }
   ],
   "durable_objects": {
@@ -117,30 +55,19 @@
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["Counter"] }
   ],
-  // per-booking coffee expiry timer — MUST match wrangler.jsonc (build.mjs warns on drift).
   "workflows": [
     { "name": "cal-booking-expiry", "binding": "BOOKING_WORKFLOW", "class_name": "BookingWorkflow" }
   ],
-  // Quick Actions need remote mode during local Wrangler development.
   "browser": { "binding": "BROWSER", "remote": true },
   "images": { "binding": "IMAGES", "remote": true },
-  // /lens per-IP crawl budgets — MUST match wrangler.jsonc (build.mjs warns on
-  // drift). Local counters, deliberately: a dev session exercising /lens should
-  // not spend the production limiter, and overLensBudget fails open anyway.
   "ratelimits": [
     { "name": "LENS_RL_INSPECT", "namespace_id": "1001", "simple": { "limit": 30, "period": 60 } },
-    { "name": "LENS_RL_SHOT",    "namespace_id": "1002", "simple": { "limit": 3,  "period": 60 } },
-    { "name": "LENS_RL_COMPARE", "namespace_id": "1003", "simple": { "limit": 4,  "period": 60 } },
-    { "name": "LENS_RL_BROWSER", "namespace_id": "1004", "simple": { "limit": 3,  "period": 60 } },
+    { "name": "LENS_RL_SHOT", "namespace_id": "1002", "simple": { "limit": 3, "period": 60 } },
+    { "name": "LENS_RL_COMPARE", "namespace_id": "1003", "simple": { "limit": 4, "period": 60 } },
+    { "name": "LENS_RL_BROWSER", "namespace_id": "1004", "simple": { "limit": 3, "period": 60 } },
     { "name": "LENS_RL_BROWSER_ALL", "namespace_id": "1005", "simple": { "limit": 4, "period": 60 } }
   ],
   "vars": {
-    // Not a secret: an account id is an identifier, and this one is already
-    // committed as the default in holding/scripts/gen-alt-text.py. It is a VAR
-    // because two features need it to build a REST URL and both fail SILENTLY
-    // without it — /ledger's cost line has been reading "unconfigured" in
-    // production, and the Kitesurf path in lens-render.js would have skipped
-    // straight to the binding no matter how the token was set.
     "CF_ACCOUNT_ID": "1c99acdb6141579023fb97d24261ea58",
     "HOST_TIMEZONE": "America/New_York",
     "WORKING_HOURS_START": "9",

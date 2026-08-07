@@ -1,39 +1,13 @@
 name = "lwe-ask"
 main = "src/index.js"
-compatibility_date = "2026-05-01"
+compatibility_date = "2026-08-07"
 
-# Live "ask a follow-up" for the Learning With Errors explainers. RAG over the
-# author's OWN essay passages (never third-party text): embed the question,
-# retrieve the most relevant verbatim passages from Vectorize, and have Workers
-# AI frame an answer grounded ONLY in those passages (with the passages cited).
-#
-# routed at the /lwe/ask endpoints only — the static /lwe/* pages AND the static
-# widget file /lwe/ask.js stay on Pages. NB: must NOT use `/lwe/ask*` (that wildcard
-# swallows /lwe/ask.js); the exact + subpath pair below covers /lwe/ask (POST, no
-# query) and /lwe/ask/{challenge,verify,reindex} without touching ask.js.
+# Temporary migration adapter. Delete this Worker and its routes after production
+# logs show the retired /lwe/ask API is no longer called.
 routes = [
-  { pattern = "aadhar.sh/lwe/ask",   zone_name = "aadhar.sh" },
+  { pattern = "aadhar.sh/lwe/ask", zone_name = "aadhar.sh" },
   { pattern = "aadhar.sh/lwe/ask/*", zone_name = "aadhar.sh" }
 ]
 
-# Workers AI — embeddings + generation.
-[ai]
-binding = "AI"
-
-# Vectorize — the passage index. create with:
-#   npx wrangler vectorize create lwe-passages --dimensions=768 --metric=cosine
-[[vectorize]]
-binding = "VECTORIZE"
-index_name = "lwe-passages"
-
-[vars]
-EMBED_MODEL   = "@cf/baai/bge-base-en-v1.5"        # 768-dim, matches the index
-GEN_MODEL     = "@cf/meta/llama-3.3-70b-instruct-fp8-fast"   # current (3.1-8b was deprecated 2026-05-30)
-TOP_K         = "4"
-MAX_Q_LEN     = "400"
-# secrets (wrangler secret put):
-#   SIGNING_SECRET — HMAC for the CAPTCHA challenge + askToken (openssl rand -hex 32)
-#   REINDEX_SECRET — gates the /lwe/ask/reindex route
-
-[dependencies_instrumentation]
+[observability]
 enabled = true

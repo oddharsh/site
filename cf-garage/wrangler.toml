@@ -1,49 +1,10 @@
 name = "cf-garage"
 main = "src/index.js"
-compatibility_date = "2026-06-16"
-compatibility_flags = ["nodejs_compat"]
+compatibility_date = "2026-08-07"
 
-# intercepts /garage/cf/* ahead of the site Worker (which serves the rest of /garage/*)
+# Temporary migration adapter. Delete this Worker and its route after production
+# logs show the retired /garage/cf/* API is no longer called.
 routes = [{ pattern = "aadhar.sh/garage/cf/*", zone_name = "aadhar.sh" }]
 
-# Workers Logs — free observability (200k events/day)
 [observability]
-enabled = true
-
-# Workers tracing — records request traces (incl. our custom spans) in the
-# Observability dashboard. powers the /garage/cf/trace custom-spans demo.
-[observability.traces]
-enabled = true
-head_sampling_rate = 1
-
-# Workers AI (image captioning demo)
-[ai]
-binding = "AI"
-
-[vars]
-# Routes the caption call through AI Gateway, which since the 2026-08 Workers AI /
-# AI Gateway unification is the same control plane rather than a separate product:
-# one `env.AI.run` grows a third argument and the account gets request/response
-# payloads, per-model token counts, and cost attribution with no dashboard setup.
-#
-# A VAR rather than a const in the source, because the id names a resource this
-# repo cannot create (no deploy path here may mint Cloudflare resources) and a
-# missing gateway would fail a LIVE demo endpoint. Emptying this string is the
-# off-switch, one line, no code change and no redeploy of logic.
-AI_GATEWAY = "default"
-
-# Browser Rendering (screenshot demo) — needs the binding enabled on the zone
-[browser]
-binding = "BROWSER"
-
-# Durable Object (atomic visitor counter demo) — SQLite-backed (free tier)
-[[durable_objects.bindings]]
-name = "COUNTER"
-class_name = "Counter"
-
-[[migrations]]
-tag = "v1"
-new_sqlite_classes = ["Counter"]
-
-[dependencies_instrumentation]
 enabled = true

@@ -150,43 +150,41 @@
       "type": "TXT",
       "match": "present",
       "why": "Resend's DKIM key, which signs the /coffee confirmation and invite mail. Presence-matched, not exact: Resend owns rotation, so pinning the key would turn a routine rotation into a CI failure. Deletion still fails, which is the case that matters under adkim=s.",
-      "consumer": "cal/src/email.js"
+      "consumer": "src/worker/email.ts"
     },
     {
       "name": "default._bimi.aadhar.sh",
       "type": "TXT",
       "match": "exact",
       "expect": ["v=BIMI1; l=https://aadhar.sh/bimi.svg"],
-      "why": "BIMI logo for inbox display. This record is the ONLY consumer of holding/bimi.svg anywhere in the world, which is why that file reads as detritus to every reference sweep in this tree. The `consumer` field below is what closes the loop: the checker asserts the file exists, so deleting it now goes red here instead of silently breaking mail.",
-      "consumer": "holding/bimi.svg"
+      "why": "BIMI logo for inbox display. This record is the ONLY consumer of public/bimi.svg anywhere in the world, which is why that file reads as detritus to every reference sweep in this tree. The `consumer` field below is what closes the loop: the checker asserts the file exists, so deleting it now goes red here instead of silently breaking mail.",
+      "consumer": "public/bimi.svg"
     }
   ],
 
   "resources": {
     "$comment": "IDs live in wrangler.jsonc. This lists what must exist in the account and why, and the checker joins the two by binding name.",
     "kv_namespaces": [
-      { "binding": "RN_KV", "title": "rn-cache", "why": "Playlist tracks, photo manifest, artist pics, Lens screenshots, the /around crawl snapshot." },
-      { "binding": "BOOKINGS", "title": "cal-aadhar-sh-CAL_BOOKINGS", "why": "Pending and confirmed coffee bookings, plus the per-slot held: keys." }
+      { "binding": "RN_KV", "title": "rn-cache", "why": "Public playlist and bounded scheduled-crawl snapshots." },
+      { "binding": "BOOKINGS", "title": "cal-aadhar-sh-CAL_BOOKINGS", "why": "Fail-closed calendar snapshots plus pending and confirmed coffee booking records." }
     ],
     "r2_buckets": [
-      { "binding": "PHOTOS_R2", "bucket": "aadhar-photos", "why": "The SOOC originals, ~3GB over 158 photos. The only copy that is not on the owner's SSD." }
+      { "binding": "PHOTOS_R2", "bucket": "aadhar-photos", "why": "Browser-readable full-resolution photo exports. Private camera originals remain off-site and outside git." }
     ],
     "d1_databases": [
-      { "binding": "RESTORE_DB", "database": "aadhar-restore", "why": "The deploy log. Single source for both /restore and /updates, which is what stops those two pages drifting apart." },
+      { "binding": "RESTORE_DB", "database": "aadhar-restore", "why": "The deploy log plus bounded crawler observation history." },
       { "binding": "SERENDIPITY_DB", "database": "serendipity", "why": "Event pool behind /serendipity." },
       { "binding": "SOCIAL_DB", "database": "aadhar-social", "why": "Inbound webmentions behind /inbox, plus the outbound send ledger. Deliberately NOT aadhar-restore: this is moderated, mutable content written by strangers, where checkpoints is the site's own append-only history." }
     ],
-    "vectorize_indexes": [
-      { "binding": "VECTORIZE", "index": "lwe-passages", "config": "lwe-ask/wrangler.toml", "why": "Passage index for the /lwe/ask RAG endpoint. Created once by hand; the create command survives only as a comment in that config." }
-    ]
+    "vectorize_indexes": []
   },
 
   "workers": {
     "$comment": "Worker inventory. `retired` is the interesting half: a Worker that should be gone but is not still holds its routes, and that is invisible from inside this repo.",
     "expected": [
       { "name": "aadhar-sh", "config": "wrangler.jsonc", "why": "The site Worker: homepage, Lens, coffee, Serendipity." },
-      { "name": "cf-garage", "config": "cf-garage/wrangler.toml", "why": "Intercepts /garage/cf/* ahead of the site Worker." },
-      { "name": "lwe-ask", "config": "lwe-ask/wrangler.toml", "why": "The /lwe/ask RAG endpoints." }
+      { "name": "cf-garage", "config": "cf-garage/wrangler.toml", "why": "Temporary 410 adapter for retired /garage/cf/* clients; remove after logs are quiet." },
+      { "name": "lwe-ask", "config": "lwe-ask/wrangler.toml", "why": "Temporary 410 adapter for retired /lwe/ask clients; remove after logs are quiet." }
     ],
     "retired": [
       {
@@ -273,7 +271,7 @@
         "id": "rocket-loader-off",
         "target": "homepage",
         "assert": { "bodyLacks": ["data-cf-settings", "rocket-loader"] },
-        "why": "Rocket Loader rewrites how scripts load, which would run straight over the deliberate discipline in index.html: the tiny inline tooltip loader, nav.js on defer, the speculation rules. The page is hand-tuned for its own load order."
+        "why": "Rocket Loader may rewrite script loading globally. This site deliberately has no script on ordinary pages and exactly one content-hashed route module on /pixel-peeper; an edge rewrite would replace that explicit boundary with an undeclared runtime behavior."
       },
       {
         "id": "http3-on",
@@ -293,19 +291,19 @@
         "id": "compression-on",
         "target": "homepage",
         "assert": { "compression": ["zstd", "br", "gzip"] },
-        "why": "The performance budget is denominated in compressed bytes (CLAUDE.md pins the homepage at ~15.4KB zstd; perf-budget.mjs measures gzip and Brotli envelopes). Lose compression at the zone and those numbers quietly stop describing anything real, while perf-budget.mjs keeps passing because it compresses locally."
+        "why": "The deterministic budget is denominated in compressed bytes. Lose compression at the zone and the local Brotli envelopes stop describing what visitors receive while the build still passes."
       },
       {
         "id": "compression-prefers-brotli",
         "target": "homepage",
         "assert": { "compressionPrefers": { "offer": "gzip, deflate, br, zstd", "expect": "br" } },
-        "why": "compression-on proves the edge CAN speak each encoding, one at a time. This proves which one it PICKS when a real browser offers all of them at once, which is the only version of the question a visitor ever experiences. Cloudflare's default preference is zstd, and its on-the-fly zstd is worse than its own on-the-fly brotli on this site's content: measured 2026-07-28 against /images/manifest.json, chosen because its 35,162-byte body is byte-identical every request while the homepage's is not (a random 12-photo grid moves the size ~1.4KB between renders, which is wider than the effect being measured). br 6,642 bytes, zstd 6,847: +205 bytes and +3.1%, paid by the majority of visitors, since Chrome and Edge both advertise zstd. The fix is a Compression Rule scoped to Default Content Types with the \"Enable Brotli and Gzip Compression\" preset, which drops zstd from the candidate list rather than merely ranking it lower; the recipe and the two form defaults to avoid live in MAINTENANCE.md. If Cloudflare's on-the-fly zstd ever overtakes its brotli, re-measure and flip the rule and this line together — the numbers here are something to re-run, not a constant to trust."
+        "why": "compression-on proves the edge can speak each encoding separately. This asserts the encoding selected for the combination current browsers offer. Brotli remains the declared choice; re-measure the generated corpus before changing the rule or this expectation."
       },
       {
         "id": "markdown-compressed",
         "target": "markdown-twin",
         "assert": { "compressionPrefers": { "offer": "gzip, deflate, br, zstd", "expect": "br" } },
-        "why": "Cloudflare's default content-type list carries text/x-markdown, the pre-RFC name, and NOT text/markdown, the RFC 7763 type this site serves. So every Markdown surface shipped completely uncompressed until the Compression Rule went in: /index.md, /auth.md, /whoareyou.md, /bot.md and the holding/md/ twins, 12,302 bytes that brotli takes to 5,943 — a 52% loss, measured 2026-07-28. It landed on exactly the surfaces built for agents and LLM crawlers, which fetch the .md representation by preference, and nothing in the tree noticed because no check had ever looked at a content type other than the homepage's. Serving text/x-markdown instead would win compression from the default list and is the wrong fix: it is deprecated, and agents expect the registered type. This check is the tripwire for the whole class, so if a new content type ever appears here, give it a target and a line.",
+        "why": "Cloudflare's default compression types historically omitted RFC 7763 text/markdown. The explicit rule keeps every compiler-generated Markdown representation compressed without changing it to the deprecated text/x-markdown spelling.",
         "pairs_with": "compression-prefers-brotli. That one asserts WHICH encoding is chosen; this one asserts that any is chosen at all. A rule scoped to Cloudflare's default content types would satisfy the first and fail this one."
       },
       {
@@ -330,17 +328,17 @@
         "id": "speed-brain-off",
         "target": "homepage",
         "assert": { "headerAbsent": ["speculation-rules"] },
-        "why": "index.html ships hand-tuned speculation rules with a deliberate exclusion list (/whoareyou keeps a per-request fingerprint honest, /rn* and /images* are endpoints and multi-megabyte R2 originals rather than pages). Speed Brain injected a second rule set over the top via this header: a blanket href_matches /* prefetch with no exclusions at all. Same failure shape as Polish above, where a helpful-sounding toggle silently overrides a deliberate choice the repo cannot see being overridden."
+        "why": "The blank-slate documents intentionally issue no speculative requests. A blanket edge-generated rule would spend bandwidth on request-specific pages, APIs, and full-resolution photo objects without a page-level outcome budget."
       },
       {
         "id": "markdown-for-agents-off",
         "target": "homepage",
         "request": { "accept": "text/markdown" },
         "assert": {
-          "headerPresent": ["x-markdown-tokens"],
+          "headerContains": { "content-type": "text/markdown" },
           "headerAbsent": ["content-signal"]
         },
-        "why": "This site already answers `Accept: text/markdown` ITSELF, in the worker: wantsMarkdown() in _worker.js/lib/http.js does real q-value negotiation (markdown has to outrank html, which Cloudflare's zone feature does not check), and home.js plus serveMarkdownTwin serve committed or build-generated .md twins. Cloudflare's Markdown for Agents would convert HTML at the edge over the top of that, on every route, including the ones deliberately left without a twin. Same must-stay-off shape as Polish and Speed Brain above: a helpful-sounding toggle silently overriding a deliberate choice. The two assertions are the discriminator rather than decoration. x-markdown-tokens proves SOMETHING answered in markdown, so this fails loudly if the worker's own negotiation breaks instead of quietly passing on an HTML response. content-signal proves it was not Cloudflare: per the 2026-07-13 Markdown for Agents release the edge injects a default `content-signal: ai-train=yes, search=yes, ai-input=yes` whenever the origin sends none, and this origin sends none, because the policy lives in robots.txt. So that header appearing at all means the zone feature got switched on."
+        "why": "The compiler already publishes deliberate Markdown representations and the Worker performs q-value negotiation. Cloudflare's conversion would create representations for routes that intentionally have none and introduce a second source of truth. The content type proves the application answered in Markdown; the absent content-signal distinguishes it from the edge converter."
       }
     ]
   },
@@ -369,10 +367,9 @@
       "is the dashboard's \"Deploy command\", and the other is its \"Non-production",
       "branch deploy command\". Both are declared below.",
       "",
-      "The build_command MUST stay blank. wrangler.jsonc's build.command runs",
-      "build.mjs during `wrangler deploy`, so a non-empty field here builds twice,",
-      "and a field that runs something other than build.mjs is how production once",
-      "ended up serving an unminified 78KB nav.js.",
+      "The build_command MUST stay blank. wrangler.jsonc's build.command runs the",
+      "deterministic compiler during `wrangler deploy`, so a non-empty dashboard",
+      "field would build twice or replace the checked build with another path.",
       "",
       "BOTH deploy commands carry two hidden wrangler flags that DEFAULT TO",
       "TRUE: --x-provision and --x-auto-create let a deploy create real KV/R2/D1",

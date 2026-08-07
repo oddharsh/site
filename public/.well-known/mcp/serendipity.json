@@ -1,0 +1,144 @@
+{
+  "version": "1.0",
+  "protocolVersion": "2026-07-28",
+  "serverInfo": {
+    "name": "serendipity",
+    "title": "Serendipity",
+    "version": "3.0.0",
+    "description": "Read-only access to the public Serendipity event pool."
+  },
+  "transport": {
+    "type": "streamable-http",
+    "url": "https://aadhar.sh/serendipity/mcp"
+  },
+  "capabilities": {
+    "tools": true,
+    "resources": false,
+    "prompts": false
+  },
+  "authentication": {
+    "required": false
+  },
+  "documentationUrl": "https://aadhar.sh/serendipity/mcp-info",
+  "tools": [
+    {
+      "name": "list_events",
+      "title": "List events",
+      "description": "List upcoming, past, or all public events in the Serendipity pool.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "when": {
+            "type": "string",
+            "enum": [
+              "upcoming",
+              "past",
+              "all"
+            ],
+            "default": "upcoming"
+          },
+          "query": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 25
+          }
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "get_event",
+      "title": "Get event",
+      "description": "Open one public event and its attendee list.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "search_people",
+      "title": "Search people",
+      "description": "Find public attendees by name.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 25
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "stats",
+      "title": "Pool statistics",
+      "description": "Count events and public attendees.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    }
+  ]
+}

@@ -400,7 +400,7 @@ for (const pct of steps) {
 console.log(`\ndone. ${target.slice(0, 8)} is at ${steps[steps.length - 1]}%.`);
 
 // ── record the release ────────────────────────────────────────────────────
-// The changelog entry was authored in the PR (bump-version.sh writes only the
+// The changelog entry was authored in the PR (bump-checkpoint.sh writes only the
 // committed projection), so /updates and /restore have been serving it since
 // this version started answering. What was still missing is D1's record that it
 // SHIPPED, and this is the only place that knows traffic actually moved.
@@ -409,7 +409,7 @@ console.log(`\ndone. ${target.slice(0, 8)} is at ${steps[steps.length - 1]}%.`);
 // version reached 100%, not that someone intended it to. A ramp that aborts at
 // 10% leaves the entry staged, which is exactly what it is.
 if (steps[steps.length - 1] === 100) {
-  const file = new URL("../holding/_worker.js/checkpoints.json", import.meta.url);
+  const file = new URL("../content/data/checkpoints.json", import.meta.url);
   let staged = [];
   try {
     const committed = JSON.parse(await readFile(file, "utf8"));

@@ -94,7 +94,7 @@ try {
 // /restore actually render. Pending entries are the normal in-between state.
 let staged = [];
 try {
-  const committed = JSON.parse(await readFile(new URL("../holding/_worker.js/checkpoints.json", import.meta.url), "utf8"));
+  const committed = JSON.parse(await readFile(new URL("../content/data/checkpoints.json", import.meta.url), "utf8"));
   const newestEntry = committed[committed.length - 1];
   try {
     const rows = (await runJson(["d1", "execute", "aadhar-restore", "--remote", "--json", "--command", "SELECT vnum FROM checkpoints;"]))[0].results;

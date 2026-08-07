@@ -1,62 +1,76 @@
-# Photo ingestion workflow
+# Photo pipeline
 
-This is the canonical path for adding photos. Source objects live in the
-aadhar-photos R2 bucket; the GitHub Actions photo workflow downloads only the
-requested batch into ephemeral runner storage, generates the public derived
-tiers, and opens a normal artifact PR. Git receives only the public derived
-tiers and metadata. No image decoder or source archive is required on the
-author's machine.
+The photo archive keeps original camera files private while publishing a small,
+reproducible artifact graph.
 
-## Input contract
+## Install
 
-Upload a full-quality JPG, JPEG, HEIC, HEIF, or HIF object to the aadhar-photos
-R2 bucket using the Cloudflare dashboard or another remote upload path. Keep
-the exact flat object key; that is the value entered into the workflow. HEIF/HIF
-sources remain archive objects when possible, while a browser-renderable q100
-JPG companion remains the public click-through copy.
+```bash
+brew install exiftool jq libavif mozjpeg
+cargo build --release --manifest-path tools/media/zenc/Cargo.toml
+```
 
-Run GitHub Actions → Remote photo pipeline and choose a routine:
+`zenc` is the Cargo-pinned zenjpeg wrapper used for progressive JPEG fallbacks.
+AVIF is primary; JPEG remains the universal fallback.
 
-- add-photo with one or more R2 keys, one per line;
-- reencode-thumbnails with all for the complete archive or selected keys;
-- refresh-metadata with the selected keys;
-- add-car-photo with one R2 key plus the car stem; or
-- regenerate-encoding-study, which uses the committed c-png.png fixture.
+## Add photographs
 
-The workflow runs on an ephemeral GitHub-hosted macOS runner because the
-current decoder path deliberately uses macOS sips. It builds the JPEG encoder
-(holding/scripts/zenc, a Cargo crate wrapping zenjpeg) with cargo, installs
-Homebrew's mozjpeg/libavif/exiftool/jq tools, and never commits the downloaded
-sources or the built encoder binary.
+```bash
+npm run photos -- "/path/to/photo.HIF" "/path/to/folder/"
+```
 
-## Derived output
+For each source, the pipeline:
 
-For every input, the pipeline:
+1. decodes and orientation-corrects the camera file;
+2. creates 600px AVIF and JPEG squares plus a 400px AVIF square;
+3. content-addresses those bytes under `assets/photos/thumbs/`;
+4. uploads a browser-readable full-resolution JPEG to `aadhar-photos` unless
+   `REMOTE_RENDER_ONLY=1` is set;
+5. updates `content/data/photo-index.json`;
+6. regenerates allowlisted EXIF and Fuji recipe records under
+   `assets/photos/data/` without GPS;
+7. fills missing factual alt text when model access is available; and
+8. validates every index, hash, fingerprint, metadata, caption, and pixel edge.
 
-1. decodes and bakes EXIF orientation;
-2. emits a 600px JPG fallback, a 600px AVIF, and a 400px mobile AVIF;
-3. content-addresses those three tiers under `holding/i/`;
-4. regenerates nullable EXIF/Fuji-recipe metadata;
-5. bakes four 64-bin RGB/luminance histograms from the shipped hashed JPG;
-6. validates the complete artifact graph with `npm run photos:check`;
-7. opens a PR containing the public files.
+HEIF/HIF originals stay on the owner's archive media and are never committed or
+uploaded. Their R2 companion is a high-quality, EXIF-preserving JPEG because it
+is intended for browser viewing, not cold storage.
 
-After reviewing the generated diff, merge through the normal release path.
-Once Workers Builds has deployed the merged photo PR, run the separate Bust
-remote photo manifest workflow. It deletes manifest:images and its freshness
-sentinel so the Worker re-derives the R2-backed listing against the new hashes.
-
-The local shell scripts remain the implementation source used by the runner
-and an emergency fallback; they are no longer the normal execution surface.
-
-## Toolchain refresh
-
-The JPEG encoder pins zenjpeg through Cargo (`holding/scripts/zenc`), so Dependabot's cargo ecosystem opens the version-bump PRs on the weekly cadence, the same as npm, GitHub Actions, and Pillow. This replaced the hand-rolled `Refresh image toolchain` workflow that used to track the from-source `google/jpegli` commit and regenerate the study; a bumped zenjpeg goes through normal CI and merge review like any other Dependabot PR.
-
-Homebrew formulas (mozjpeg for `jpegtran`, libavif for `avifenc`) stay outside Dependabot's reach and update on their own cadence.
-
-To validate without rerunning ingestion:
+## Validate
 
 ```bash
 npm run photos:check
 ```
+
+The gate requires exact bijection among:
+
+- `content/data/photo-index.json`
+- `assets/photos/data/{hashes,fingerprints,metadata,alt}.json`
+- the 474 files in `assets/photos/thumbs/`
+
+It also recomputes every byte fingerprint. A missing caption or metadata record
+fails before deployment.
+
+## Focused maintenance
+
+```bash
+./tools/media/extract-photo-metadata.sh "/path/to/archive"
+./tools/media/reencode-thumbnails.sh "/path/to/archive"
+./tools/media/hash-thumbnails.sh
+python3 tools/media/gen-alt-text.py
+node tools/media/gen-photo-semantics.mjs
+```
+
+Re-encoding mints new content-addressed URLs. The hash tool prunes superseded
+thumbnail files, so always run the full validation afterward.
+
+The remote GitHub Action supports add, re-encode, metadata refresh, and encoding
+study regeneration. It downloads R2 source keys to ephemeral storage and opens
+a PR with only the resulting public artifacts.
+
+## Recipe integrity
+
+Published recipe matching is exact-data work. Never claim the original camera
+recipe from visual similarity. A recipe is identified only when the published
+bytes or recorded metadata support it; approximate resemblance must remain an
+explicitly separate feature.

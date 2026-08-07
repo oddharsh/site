@@ -1,49 +1,34 @@
 {
   "name": "aadhar-sh",
   "private": true,
-  "description": "aadhar.sh - deploy-time transform only (authoring stays buildless; see build.mjs)",
+  "description": "aadhar.sh — compiled semantic documents and one bounded Cloudflare Worker",
   "type": "module",
-  "workspaces": [
-    "cal",
-    "cf-garage",
-    "lwe-ask",
-    "serendipity"
-  ],
   "scripts": {
-    "build": "node build.mjs",
-    "dev": "wrangler dev -c wrangler.dev.jsonc",
+    "build": "npm run gen:mcp-cards && node scripts/build-site.mjs",
+    "dev": "npm run build && wrangler dev -c wrangler.dev.jsonc",
     "dev:remote": "node scripts/gen-remote-config.mjs wrangler.dev.jsonc && wrangler dev -c .wrangler.remote.jsonc",
     "deploy": "wrangler deploy --x-provision=false --x-auto-create=false --strict",
     "deploy:version": "wrangler versions upload --x-provision=false --x-auto-create=false --strict",
     "deploy:promote": "node scripts/deploy-promote.mjs",
-    "og-cards": "node holding/scripts/gen-og-cards.mjs",
-    "gen:manifest": "node scripts/gen-manifest.mjs",
     "gen:mcp-cards": "node scripts/gen-mcp-cards.mjs",
-    "search:index": "node scripts/generate-search-index.mjs",
-    "photos": "bash holding/scripts/add-photos.sh",
-    "photos:check": "node holding/scripts/check-photo-pipeline.mjs",
-    "captions": "python3 holding/scripts/gen-alt-text.py",
+    "photos": "bash tools/media/add-photos.sh",
+    "photos:check": "node tools/media/check-photo-pipeline.mjs",
+    "captions": "python3 tools/media/gen-alt-text.py",
     "perf-budget": "node perf-budget.mjs",
     "check-wrangler": "node scripts/check-wrangler.mjs",
     "routes:check": "node scripts/check-routes-harness.mjs",
     "routes:check:remote": "node scripts/check-routes-harness.mjs --remote",
     "infra:check": "node scripts/check-infra.mjs",
     "infra:apply": "node scripts/apply-infra.mjs",
-    "pages:check": "node scripts/check-page-contracts.mjs",
-    "test": "node --test contract-tests.mjs",
-    "shell:roll": "node scripts/roll-shell-dictionary.mjs",
-    "pages:roll": "node scripts/roll-shell-dictionary.mjs --pages",
-    "dcz:check": "node scripts/check-dictionary-support.mjs",
+    "test": "npm run build && node --test test/*.test.mjs",
+    "types": "wrangler types src/worker/env.d.ts -c wrangler.jsonc",
+    "types:check": "wrangler types src/worker/env.d.ts -c wrangler.jsonc --check",
     "checkpoints:check": "node scripts/check-checkpoints.mjs",
     "checkpoints:sync": "node scripts/check-checkpoints.mjs --sync",
-    "inp": "node scripts/inp-lab.mjs",
+    "browser:bench": "node scripts/browser-bench.mjs",
     "release": "node scripts/release-status.mjs"
   },
   "devDependencies": {
-    "@minify-html/node": "0.18.1",
-    "esbuild": "0.28.1",
-    "lightningcss": "1.33.0",
-    "oxc-minify": "0.143.0",
     "playwright-core": "^1.62.1",
     "wrangler": "4.118.0"
   },
@@ -53,8 +38,5 @@
   "comment:overrides": "undici arrives only through miniflare, which pins it EXACTLY (7.28.0), so npm cannot move it and dependabot cannot either. 7.29.0 closes five advisories in that pin: cross-user cache disclosure + parse crash on degenerate private cache directives (high), the whitespace-around-equals variant of the same, cookie attribute injection via unsanitized domain, response desync in the retry interceptor, and CRLF injection via a blob-like body type. Same major miniflare was built against, so it is a patch bump rather than a runtime gamble. Drop this the day miniflare pins >= 7.29.0 itself.",
   "overrides": {
     "undici": "7.29.0"
-  },
-  "dependencies": {
-    "@noble/post-quantum": "0.6.1"
   }
 }

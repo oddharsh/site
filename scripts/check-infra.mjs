@@ -218,7 +218,7 @@ async function resolveWithFallback(name, type) {
 
 // ----------------------------------------------------------- tier: tree ----
 
-async function checkTree(infra, wrangler, lwe) {
+async function checkTree(infra, wrangler) {
   // Binding names in infra.json must exist in the config that owns them. This
   // is the join that lets infra.json stay ID-free: wrangler.jsonc remains the
   // single source for IDs, and this stops the two describing different worlds.
@@ -226,9 +226,6 @@ async function checkTree(infra, wrangler, lwe) {
   for (const n of wrangler.kv_namespaces || []) declared.set(n.binding, { kind: "kv", id: n.id });
   for (const b of wrangler.r2_buckets || []) declared.set(b.binding, { kind: "r2", name: b.bucket_name });
   for (const d of wrangler.d1_databases || []) declared.set(d.binding, { kind: "d1", id: d.database_id, name: d.database_name });
-  if (/binding\s*=\s*"VECTORIZE"/.test(lwe)) {
-    declared.set("VECTORIZE", { kind: "vectorize", name: (lwe.match(/index_name\s*=\s*"([^"]+)"/) || [])[1] });
-  }
 
   const wanted = [
     ...(infra.resources.kv_namespaces || []).map((r) => [r.binding, "kv", r.title]),
@@ -265,7 +262,7 @@ async function checkTree(infra, wrangler, lwe) {
   // account appearing on the login is enough to break every non-interactive
   // wrangler call at once (2026-08-07). Checking BOTH configs matters: the dev
   // twin is what dev:remote and routes:check:remote reach production through,
-  // and build.mjs's drift warning compares binding sets only, so an account_id
+  // so an account_id
   // that went missing from one of them would otherwise be caught by nothing.
   //
   // wrangler.jsonc's account_id is the SOURCE OF TRUTH and the other three are
@@ -1004,10 +1001,8 @@ async function checkCodeScanning(repo, slug, token) {
 // ------------------------------------------- tier: agent markdown surface ----
 
 // Which pages answer an agent in Markdown, measured on the wire rather than inferred
-// from filenames. The twins arrive by three different conventions — /index.md for the
-// homepage, holding/md/<name>.md for /whoareyou and /bot, build-generated twins for
-// /garage/* and /lwe/* — so a local file check would have to know all three and would
-// still be guessing about production. One request per page settles it.
+// from filenames. The compiler emits several representation families and the
+// Worker negotiates them, so a wire request remains the useful assertion.
 //
 // site-manifest.json's `flags.agents` already declares which surfaces are part of the
 // agent-facing catalog, so it is the right denominator: an agents:true page that hands
@@ -1055,9 +1050,7 @@ async function checkAgentMarkdown() {
 
 const infra = JSON.parse(await readFile(join(ROOT, "infra.json"), "utf8"));
 const wrangler = await readJsonc("wrangler.jsonc");
-const lweConfig = await readFile(join(ROOT, "lwe-ask/wrangler.toml"), "utf8");
-
-await checkTree(infra, wrangler, lweConfig);
+await checkTree(infra, wrangler);
 
 if (OFFLINE) {
   warn("--offline: skipped the DNS and API tiers");

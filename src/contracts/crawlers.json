@@ -1,0 +1,30 @@
+{
+  "neighborhood": [
+    { "name": "a16z crypto", "url": "https://a16zcrypto.com/" },
+    { "name": "Sequoia Capital", "url": "https://sequoiacap.com/" },
+    { "name": "Standard", "url": "https://www.standardvc.com/" },
+    { "name": "Topology", "url": "https://www.topology.vc/" },
+    { "name": "Paradigm", "url": "https://www.paradigm.xyz/" },
+    { "name": "Multicoin Capital", "url": "https://multicoin.capital/" },
+    { "name": "Thrive Capital", "url": "https://www.thrivecap.com/" },
+    { "name": "Hummingbird", "url": "https://www.hummingbird.vc/" },
+    { "name": "1confirmation", "url": "https://www.1confirmation.com/" },
+    { "name": "Electric Capital", "url": "https://www.electriccapital.com/" },
+    { "name": "Archetype", "url": "https://www.archetype.fund/" },
+    { "name": "Union Square Ventures", "url": "https://www.usv.com/" },
+    { "name": "Variant Fund", "url": "https://variant.fund/" },
+    { "name": "Dragonfly", "url": "https://www.dragonfly.xyz/" },
+    { "name": "Ribbit Capital", "url": "https://www.ribbitcap.com/" },
+    { "name": "Founders Fund", "url": "https://foundersfund.com/" },
+    { "name": "Pace Capital", "url": "https://pacecapital.com/" },
+    { "name": "Benchmark", "url": "https://www.benchmark.com/" },
+    { "name": "Polychain Capital", "url": "https://polychain.capital/" },
+    { "name": "Index Ventures", "url": "https://www.indexventures.com/" }
+  ],
+  "census": [
+    "https://aadhar.sh/",
+    "https://vercel.com/",
+    "https://stripe.com/",
+    "https://www.shopify.com/"
+  ]
+}

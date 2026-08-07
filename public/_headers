@@ -1,0 +1,42 @@
+/*
+  Content-Security-Policy: default-src 'self'; base-uri 'self'; connect-src 'self'; font-src 'self'; form-action 'self'; frame-ancestors 'none'; img-src 'self' data:; object-src 'none'; script-src 'self'; style-src 'self'; upgrade-insecure-requests
+  Permissions-Policy: accelerometer=(), autoplay=(), camera=(), display-capture=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), publickey-credentials-create=(), usb=()
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Cache-Control: public, max-age=0, must-revalidate, s-maxage=300
+
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/i/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/garage/enc/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/lwe/lean/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/pixel-peeper/tiles/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/images/*.json
+  Cache-Control: public, max-age=300, s-maxage=3600
+
+/writing/feed.xml
+  Content-Type: application/rss+xml; charset=utf-8
+  Cache-Control: public, max-age=0, must-revalidate, s-maxage=1800
+
+/garage/feed.xml
+  Content-Type: application/rss+xml; charset=utf-8
+  Cache-Control: public, max-age=0, must-revalidate, s-maxage=1800
+
+/lwe/feed.xml
+  Content-Type: application/rss+xml; charset=utf-8
+  Cache-Control: public, max-age=0, must-revalidate, s-maxage=1800
+
+/sw.js
+  Cache-Control: no-store
+  Service-Worker-Allowed: /
+  X-Robots-Tag: noindex

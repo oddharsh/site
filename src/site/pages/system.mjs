@@ -1,0 +1,68 @@
+import { escapeHtml, renderDocument } from "../document.mjs";
+import { parseFrontmatter, renderMarkdown } from "../markdown.mjs";
+
+const labels = {
+  access: "Device Manager",
+  bot: "Internet",
+  "pixel-peeper": "Pictures",
+  security: "Security Center",
+  terminal: "Command Prompt",
+  whoareyou: "System Properties",
+};
+
+function liveRegion(slug) {
+  if (slug === "whoareyou") {
+    return `<section class="request-panel">
+      <h2>What this request revealed</h2>
+      <dl id="request-details"><dt>Live fields</dt><dd><a href="/whoareyou.json">Open this request as JSON</a></dd></dl>
+      <p>Rendered for this response and never written to storage.</p>
+    </section>`;
+  }
+  if (slug === "terminal") {
+    return `<pre class="terminal-frame" data-terminal-font="Courier New" aria-label="Terminal ready screen">Microsoft Windows [Version aadhar.sh]\n\nC:\\aadhar.sh&gt; help\nType finger, photos, lens, dict, cache, radar, encode, or agent-ready.\n\nC:\\aadhar.sh&gt; _</pre>`;
+  }
+  if (slug === "pixel-peeper") {
+    return `<section class="peeper" data-peeper data-manifest="/pixel-peeper/manifest.json" aria-labelledby="peeper-title">
+      <h2 id="peeper-title">Compression eye exam</h2>
+      <p data-peeper-status aria-live="polite">Loading the public trial manifest…</p>
+      <div class="peeper__choices" data-peeper-choices><span class="peeper__choice peeper__placeholder" aria-hidden="true"><span class="peeper__placeholder-image"></span><span>Candidate A</span></span><span class="peeper__choice peeper__placeholder" aria-hidden="true"><span class="peeper__placeholder-image"></span><span>Candidate B</span></span><span class="peeper__choice peeper__placeholder" aria-hidden="true"><span class="peeper__placeholder-image"></span><span>Candidate C</span></span></div>
+      <div class="peeper__result" data-peeper-result aria-live="polite" hidden></div>
+      <noscript><p>The comparison control needs JavaScript to conceal labels and advance trials. <a href="/pixel-peeper/manifest.json">Open the complete source data</a>.</p></noscript>
+    </section>`;
+  }
+  return "";
+}
+
+export function renderSystemPage({ surface, source, stylesheet, script = "" }) {
+  const slug = surface.path.slice(1);
+  const { attributes } = parseFrontmatter(source);
+  const article = renderMarkdown(source).replace(/^<h1>[\s\S]*?<\/h1>\n?/, "");
+  const body = `
+    <header>
+      <p class="eyebrow">Control Panel · ${escapeHtml(labels[slug] ?? surface.title)}</p>
+      <h1>${escapeHtml(surface.title)}</h1>
+      <p class="lede">${escapeHtml(surface.description)}</p>
+    </header>
+    ${liveRegion(slug)}
+    <article class="article system-article">${article}</article>`;
+
+  return renderDocument({
+    title: surface.title,
+    description: surface.description,
+    path: surface.path,
+    stylesheet,
+    body,
+    tasks: [
+      { href: `${surface.path}.md`, label: "Read canonical Markdown" },
+      ...(slug === "whoareyou" ? [{ href: "/whoareyou.json", label: "Inspect this request as JSON" }] : []),
+      ...(slug === "pixel-peeper" ? [{ href: "/pixel-peeper/manifest.json", label: "Open the trial manifest" }] : []),
+    ],
+    details: [
+      { term: "Type", value: surface.kind === "utility" ? "Public utility" : "System document" },
+      ...(attributes.updated ? [{ term: "Updated", value: attributes.updated }] : []),
+      { term: "Canonical format", value: "HTML + Markdown" },
+    ],
+    head: `<link rel="alternate" type="text/markdown" href="${escapeHtml(surface.path)}.md">${script ? `\n  <script type="module" src="${escapeHtml(script)}"></script>` : ""}`,
+    status: script ? "Public document · one route-scoped module" : "Public document · no client script",
+  });
+}

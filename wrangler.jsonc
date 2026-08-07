@@ -1,216 +1,48 @@
 {
-  // Cloudflare Workers (static assets) config for aadhar.sh — the DEPLOY config.
-  // Migrated from the Pages project of the same name. run_worker_first is an
-  // allowlist that mirrors holding/_worker.js/index.js: static is the default,
-  // and compute only runs where a route earns it. Compression is NO LONGER left
-  // entirely to the platform: /a/* (the content-hashed shell) is worker-first so it
-  // can serve build.mjs's brotli q11 twin. The edge fly-compresses at about q4 and
-  // prefers zstd when a browser offers everything, which measured LARGER than its
-  // own brotli here (homepage: 13,264 zstd vs 12,457 br vs 10,524 br q11, 2026-07-26).
-  // Everything else still takes the platform default. (The homepage used to be the
-  // stated exception, "cannot be precompressed at all, because its bytes differ per
-  // request". It is a deterministic document now and carries the same q11 twin, dcz
-  // delta, and ETag as every other page.)
-  //
-  // UNBYPASSABLE BUILD: main + assets point at .build/holding (the minified
-  // tree), and the "build" block below runs build.mjs FIRST on every deploy.
-  // So `wrangler deploy` (bare), `npm run deploy`, and Workers Builds all ship
-  // the minified shells + luna.css — there is no longer a path that serves the
-  // readable originals by accident (which is exactly how prod ended up on an
-  // unminified 78KB nav.js). In Workers Builds, leave the dashboard's separate
-  // Build command blank and set its Deploy command to `npx wrangler deploy`;
-  // Wrangler then owns this one build instead of running it twice. Local dev
-  // must NOT use this config (it would pay the full holding/ -> .build copy on
-  // every reload); it uses wrangler.dev.jsonc, which points at holding/ directly.
-  // The two configs' bindings must match; build.mjs warns on drift.
+  "$schema": "node_modules/wrangler/config-schema.json",
   "name": "aadhar-sh",
-  // Pinned because wrangler picks an account only when the login has exactly
-  // ONE, and that stopped being true on 2026-08-07: a second account appeared
-  // on this login and every non-interactive wrangler call started failing with
-  // "More than one account available but unable to select one". It reads as a
-  // credential problem and is not one — nothing was revoked, wrangler simply
-  // refuses to guess, and it had been guessing correctly by accident for as
-  // long as there was only one candidate. Deleting the other account would
-  // also fix it and is the wrong fix: the pin holds however many accounts the
-  // login can see, which is the property worth having. Every wrangler caller
-  // here is non-interactive (deploy, deploy:version, deploy:promote,
-  // dev:remote, routes:check:remote, and Workers Builds), so this belongs in
-  // the config rather than in whichever shell someone remembers to export it
-  // from. infra.json's `account` block declares the same id and infra:check
-  // fails if the two stop agreeing.
   "account_id": "1c99acdb6141579023fb97d24261ea58",
-  "main": ".build/holding/_worker.js/index.js",
-  "build": { "command": "node build.mjs" },
-  "compatibility_date": "2026-06-01",
-  // Workers Cache sits in front of the public-response entrypoint below. The
-  // default dispatcher stays uncached because it owns mutations, per-visitor
-  // views, content-negotiated representations, and request logging; response
-  // Cache-Control remains the route-level freshness contract inside CachedPages.
-  // (The homepage was on that list until 2026-07-31, when it became a
-  // deterministic document; shouldUseWorkersCache in lib/cache.js is the
-  // authority on what routes here, and on the bails that send a request back
-  // to the uncached gateway.)
-  "cache": { "enabled": true, "cross_version_cache": false },
-  "exports": {
-    "default": { "type": "worker", "cache": { "enabled": false } },
-    "CachedPages": { "type": "worker", "cache": { "enabled": true } }
-  },
-  "dependencies_instrumentation": { "enabled": true },
-  // serve only on the custom domain (aadhar.sh); no public *.workers.dev URL.
+  "main": "src/worker/index.ts",
+  "build": { "command": "npm run build" },
+  "compatibility_date": "2026-08-06",
   "workers_dev": false,
-  // Preview URLs, on PURPOSE and against the default. `preview_urls` defaults to
-  // whatever `workers_dev` is, so the line above was silently turning these off
-  // too, and every version this repo has ever uploaded has been unservable.
-  //
-  // The two settings are independent and mean different things. `workers_dev:
-  // false` still holds: PRODUCTION has no workers.dev address, and the only way
-  // to reach the deployed site remains aadhar.sh. What this adds is a per-VERSION
-  // address, `<version-prefix>-aadhar-sh.<subdomain>.workers.dev`, which is the
-  // one thing CI could not do before: prove a branch serves, at a real URL, on
-  // real bindings, before it is production. `wrangler deploy --dry-run` and the
-  // in-process route harness both stop short of that.
-  //
-  // A preview runs production bindings and secrets — Cloudflare has no per-version
-  // override — so the Worker guards the host: writes refused, everything noindex.
-  // That guard is load-bearing, not decorative. Read lib/preview.js before
-  // touching this line, and do not enable previews with the guard removed.
   "preview_urls": true,
-  // The former coffee and Serendipity Workers are retired by this config. These
-  // route declarations move their public paths onto the same deployment; the
-  // old Worker routes/custom domain must be removed after the first successful
-  // production deploy.
   "routes": [
+    { "pattern": "cal.aadhar.sh/*", "zone_name": "aadhar.sh" },
     { "pattern": "aadhar.sh/coffee*", "zone_name": "aadhar.sh" },
-    { "pattern": "aadhar.sh/serendipity*", "zone_name": "aadhar.sh" },
-    { "pattern": "cal.aadhar.sh/*", "zone_name": "aadhar.sh" }
+    { "pattern": "aadhar.sh/serendipity*", "zone_name": "aadhar.sh" }
   ],
   "assets": {
-    "directory": ".build/holding",
+    "directory": "./dist",
     "binding": "ASSETS",
-    // canonical URLs carry NO trailing slash (sitemap.xml, both rel=canonical tags,
-    // llms.txt and nav.js's own normalization all say so). drop-trailing-slash makes
-    // the asset layer agree: /garage + /lwe serve directly, /garage/ + /lwe/ 301 to
-    // the slashless form. MUST match wrangler.dev.jsonc, or dev diverges from prod.
     "html_handling": "drop-trailing-slash",
-    // Worker-owned routes only. New static files do not cost invocations unless
-    // they are added here and to the ROUTES/PREFIX tables in index.js.
-    //
-    // /images/<thumb> stays worker-first for one narrow reason: a real 404 under
-    // /images/* must not inherit the immutable thumbnail cache rule. The old
-    // Pages SPA-fallback content-type sniff is gone; the Worker now only clamps
-    // asset 404 cache-control and passes every non-404 response through.
+    "not_found_handling": "404-page",
     "run_worker_first": [
-      "/", "/index.html", "/favicon.ico", "/hit",
-      // the content-hashed shell: worker-first so it can hand out the q11 .br twin
-      "/a/*",
-      // static pages: worker-first for the dcz delta + brotli q11 twin.
-      // The bare section paths are listed SEPARATELY because "/garage/*" does not
-      // match "/garage" — without them the two section indexes never reached the
-      // worker at all, so their twins were built, uploaded, and never served
-      // (2026-07-28). Same shape as "/lens", "/lens/" and "/photos", "/photos/".
-      "/garage", "/garage/*", "/lwe", "/lwe/*",
-      "/pixel-peeper", "/pixel-peeper/*",
-      "/access", "/access/*",
-      "/auth.md", "/.well-known/api-catalog", "/.well-known/agent-card.json",
-      "/.well-known/oauth-protected-resource",
-      "/.well-known/oauth-authorization-server",
-      "/agent/*", "/oauth2/*",
-      "/whoareyou", "/whoareyou.json", "/security",
-      "/reading", "/updates", "/updates.json", "/restore",
-      "/lens", "/lens/", "/lens/fetch", "/lens/shot", "/lens/browser", "/lens/compare.json", "/lens/census", "/lens/census.json",
-      "/mcp", "/terminal", "/terminal/*", // One wildcard per tool covers both the bare route and its .txt twin.
-      // NOT cosmetic: run_worker_first caps at 100 RULES (wrangler refuses to
-      // boot at 101), and twelve exact entries put this config at 102. A site
-      // can only claim so many paths from the asset layer, which is a real
-      // ceiling on how many surfaces you can add this way.
-      "/finger*", "/radar*", "/dict*", "/cache*", "/agent-ready*", "/encode*",
-      "/photos.txt", "/lens.txt",
-      "/search", "/search.json",
-      "/coffee", "/coffee/*", "/serendipity", "/serendipity/*",
-      "/slots", "/book", "/approve", "/decline",
-      "/llms-full.txt", "/ledger", "/ledger.json",
-      // the Web Analytics beacon, both legs first-party (see _worker.js/rum.js)
-      "/ledger/rum.js", "/ledger/rum", "/ledger/prefetch",
-      "/writing", "/writing/*",
-      "/webmention", "/webmention/*", "/inbox",
-      // "/rn.md" carries an extension, so without it here the asset layer would
-      // answer first and 404 a route the worker renders.
-      "/rn", "/rn.md", "/rn/tracks", "/rn/tracks.html", "/rn/admin", "/rn/set", "/rn/art/*",
-      "/bot", "/around", "/around/json", "/around/changes.json",
-      "/photos", "/photos/", "/photos/query.json", "/photos/grid.html", "/run",
-      "/images", "/images/", "/images/full", "/images/full/*",
-      "/images/manifest.json", "/images/metadata.json", "/images/meta/*",
-      "/images/*.avif", "/images/*.jpg", "/images/*.jpeg",
-      "/images/*.png", "/images/*.gif",
-      "/images/*.heic", "/images/*.heif", "/images/*.hif"
+      "/", "/index.html", "/favicon.ico", "/hit", "/mcp", "/.well-known/api-catalog",
+      "/photos", "/writing*", "/garage*", "/lwe*",
+      "/access", "/bot", "/pixel-peeper", "/security", "/updates", "/restore",
+      "/whoareyou", "/whoareyou.json",
+      "/lens*", "/coffee*", "/serendipity*",
+      "/reading", "/around*", "/ledger*", "/inbox",
+      "/webmention*", "/photos/query.json",
+      "/images", "/images/full*", "/images/*.avif", "/images/*.jpg", "/images/*.jpeg",
+      "/rn", "/rn.md", "/rn/*", "/search.json", "/run",
+      "/terminal*", "/finger*", "/radar*", "/dict*", "/cache*", "/agent-ready*", "/encode*", "/photos.txt"
     ]
   },
-  // `enabled` is Workers LOGS (the structured line serveWorkerRequest emits).
-  // `traces` is the separate, newer thing: Workers Traces, which auto-instruments
-  // every outbound fetch, binding call, and handler invocation as a span tree,
-  // and which lib/trace.js hangs named spans off. It is opt-in until Cloudflare
-  // default-enables automatic tracing (that flip will want a newer
-  // compatibility_date; this API works at 2026-06-01, verified 2026-07-29).
-  //
-  // head_sampling_rate is 1 (every request), which is also the default, stated
-  // here because the value is a deliberate choice rather than an omission.
-  // Sampling is per-WORKER, not per-route, so a fractional rate would thin the
-  // rare-but-expensive events this was turned on for in the first place: a
-  // /lens discovery fan-out that stalls, a cron target that has silently been
-  // skipped for weeks, a coffee booking that fails closed on a stale calendar.
-  //
-  // The allowance is 200K events/DAY (the dashboard's own banner: observability
-  // is on the free tier here, whatever the Workers plan is — an earlier version
-  // of this comment claimed the Paid plan's 10M/month, which was wrong). Above
-  // that, Cloudflare samples for you. 200K/day is ~2.3/sec sustained, and this
-  // site's real traffic is a rounding error against it, but note that a /lens
-  // scan is ~33-46 spans in ONE request: an event here is a SPAN, not a visit,
-  // so a burst of scans consumes the budget far faster than the page views do.
-  // If the banner ever says events are being sampled, lower this rather than
-  // deleting spans. Same if a span ever shows up ON the critical path.
   "observability": {
     "enabled": true,
     "traces": { "enabled": true, "head_sampling_rate": 1 }
   },
-  // the deployed version id (changes every deploy). lib/cache.js folds it into
-  // the caches.default key for rendered shells, so a deploy orphans the old
-  // edge entries atomically instead of waiting out their TTL. Not populated in
-  // local dev (the key falls back to "dev" there).
   "version_metadata": { "binding": "CF_VERSION_METADATA" },
-  // */30 — the /around neighborhood crawl (per-generation, never per-visitor;
-  // the request path only reads the KV snapshot this cron writes, around.js).
-  // 17 8 * * 1 — the weekly /lens/census sweep into D1 (index.js switches on
-  // event.cron). Odd minute so it doesn't collide with the :00/:30 crawl tick.
-  // (The old 0 4 * * 7 coffee-booking sweep is retired: each pending booking now
-  // carries its own BookingWorkflow expiry timer — see the workflows binding.)
-  // 41 5 * * * — the daily outbound webmention pass: read this site's own
-  // mention-enabled pages, find the sources they cite, and tell those sources
-  // they were cited (webmention-send.js). Daily and off-peak because it probes
-  // third-party hosts, and a citation graph does not change by the half hour.
-  // 7,37 * * * * — the homepage perf probe (perf-probe.js): render `/` in-process,
-  // parse its own Server-Timing, write the spans to Analytics Engine. Offset
-  // from the */30 around-crawl so the two never share a tick. 48 samples/day.
-  // 23 */6 * * * — the serendipity Luma re-sync (serendipity.js cronSerendipity):
-  // events per enabled contributor, then the next guest lists, then a
-  // description backfill. Four times daily keeps the pool honest AND the
-  // stored Luma session warm (Luma sessions idle-expire in weeks, and before
-  // this tick nothing exercised the stored cookie between pastes); rotations
-  // Luma issues mid-run are persisted back to D1 by the cookie jar.
-  "triggers": { "crons": ["*/30 * * * *", "17 8 * * 1", "41 5 * * *", "7,37 * * * *", "23 */6 * * *"] },
+  "triggers": { "crons": ["*/30 * * * *", "17 8 * * 1", "7,37 * * * *", "23 */6 * * *"] },
   "kv_namespaces": [
     { "binding": "RN_KV", "id": "3cb8a107c58e47dc9244e75b33401f36" },
     { "binding": "BOOKINGS", "id": "37acb65118fe485583a90a94cb89365e" }
   ],
-  // the bot ledger: identified AI-crawler hits tick in here (ledger.js);
-  // /ledger reads them back via the SQL API (needs ANALYTICS_READ_TOKEN).
   "analytics_engine_datasets": [
     { "binding": "BOT_LEDGER", "dataset": "aadhar_bot_ledger" },
-    // the speculation ledger: Sec-Purpose prefetch/prerender requests, plus the
-    // activation beacons that say which of them paid off (speculation.js).
     { "binding": "SPECULATION", "dataset": "aadhar_speculation" },
-    // the homepage perf probe's spans (perf-probe.js); read back with the same
-    // SQL API + ANALYTICS_READ_TOKEN as the ledger. AE datasets materialize on
-    // first write — no id, nothing for infra:apply to provision.
     { "binding": "PERF_PROBE", "dataset": "aadhar_perf_probe" }
   ],
   "r2_buckets": [
@@ -219,69 +51,29 @@
   "d1_databases": [
     { "binding": "RESTORE_DB", "database_name": "aadhar-restore", "database_id": "88c8daf1-3a36-4f8e-a2ad-dba8a74e1b9f" },
     { "binding": "SERENDIPITY_DB", "database_name": "serendipity", "database_id": "d3aa3215-17c3-4389-b224-cf465ddbb786" },
-    // third-party social content (webmentions), deliberately its own database:
-    // it is moderated, mutable, and written by strangers, where checkpoints is
-    // this site's own append-only history. Created 2026-07-27 and the schema
-    // applied from migrations/0001_webmentions.sql, so this id is real — a
-    // d1_databases entry pointing at an id that does not exist fails the deploy,
-    // and a --dry-run will not catch it.
     { "binding": "SOCIAL_DB", "database_name": "aadhar-social", "database_id": "b3ab51c4-da04-40ec-9b36-c7e06611f4ab" }
   ],
   "durable_objects": {
     "bindings": [
-      // in-house now (no script_name) — the Counter class is defined + exported
-      // by this worker (counter.js -> index.js). was cross-script to cf-garage.
       { "name": "COUNTER", "class_name": "Counter" }
     ]
   },
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["Counter"] }
   ],
-  // one durable expiry timer per pending coffee booking (cal/src/workflow.js,
-  // re-exported from _worker.js/index.js). Replaced the weekly cron sweep. Must
-  // match wrangler.dev.jsonc + cal/wrangler.test.toml.
   "workflows": [
     { "name": "cal-booking-expiry", "binding": "BOOKING_WORKFLOW", "class_name": "BookingWorkflow" }
   ],
-  // Browser Run Quick Actions. The binding is authenticated by Workers, so
-  // Lens no longer needs a Browser Run API token for snapshots.
   "browser": { "binding": "BROWSER" },
-  // Image Workbench uses the managed Images transformation binding; outputs
-  // are returned inline and are not written to PHOTOS_R2.
   "images": { "binding": "IMAGES" },
-  // Per-IP crawl budgets for /lens and the /mcp tools that share its crawler.
-  // These were KV counters until 2026-08-04: a read plus a WRITE on every
-  // allowed request, for a number that lived 120 seconds. RN_KV's write budget
-  // is ~10K/day and /lens is the busiest writer on the site, so the counters
-  // were the largest consumer of a budget CLAUDE.md still described as "we use
-  // a handful". The binding costs no write and adds no meaningful latency.
-  //
-  // The periods are all 60 because the binding supports 10 or 60 and nothing
-  // else, and every budget here was already per-minute. Limits are mirrored in
-  // LENS_BUDGETS (lens.js) because that is what the 429 message quotes; a
-  // contract test pins the two together so the message cannot drift from the
-  // ceiling. namespace_id is an opaque integer-as-string and only has to be
-  // unique within this Worker — it is not a resource id and infra:apply has
-  // nothing to provision. MUST match wrangler.dev.jsonc.
   "ratelimits": [
     { "name": "LENS_RL_INSPECT", "namespace_id": "1001", "simple": { "limit": 30, "period": 60 } },
-    { "name": "LENS_RL_SHOT",    "namespace_id": "1002", "simple": { "limit": 3,  "period": 60 } },
-    { "name": "LENS_RL_COMPARE", "namespace_id": "1003", "simple": { "limit": 4,  "period": 60 } },
-    { "name": "LENS_RL_BROWSER", "namespace_id": "1004", "simple": { "limit": 3,  "period": 60 } },
-    // Shared across /lens/shot + /lens/browser, keyed on a CONSTANT rather than
-    // the caller: Browser Run's free plan allows 6 Quick Actions a minute for the
-    // whole ACCOUNT, so per-caller ceilings alone cannot keep the pair of them
-    // inside it. Per-colo like every counter on this binding, so it bounds a
-    // burst rather than guaranteeing the account total.
+    { "name": "LENS_RL_SHOT", "namespace_id": "1002", "simple": { "limit": 3, "period": 60 } },
+    { "name": "LENS_RL_COMPARE", "namespace_id": "1003", "simple": { "limit": 4, "period": 60 } },
+    { "name": "LENS_RL_BROWSER", "namespace_id": "1004", "simple": { "limit": 3, "period": 60 } },
     { "name": "LENS_RL_BROWSER_ALL", "namespace_id": "1005", "simple": { "limit": 4, "period": 60 } }
   ],
   "vars": {
-    // Not a secret: an account id is an identifier, and this one is already
-    // committed as the default in holding/scripts/gen-alt-text.py. It is a VAR
-    // because two features need it to build a REST URL and both fail SILENTLY
-    // without it — /ledger's cost line has been reading "unconfigured" in
-    // production, and the Kitesurf path in lens-render.js would have skipped
-    // straight to the binding no matter how the token was set.
     "CF_ACCOUNT_ID": "1c99acdb6141579023fb97d24261ea58",
     "HOST_TIMEZONE": "America/New_York",
     "WORKING_HOURS_START": "9",
@@ -299,48 +91,7 @@
     "EVENT_TITLE": "coffee with aadharsh",
     "PENDING_TTL_DAYS": "7"
   },
-  // Secret VALUES are not here (set on the Worker with `wrangler secret put`), but the
-  // NAMES are, because a comment cannot fail a deploy. `wrangler deploy` and
-  // `wrangler versions upload` now refuse to publish unless every name below is
-  // configured on the Worker, so "the secret was never set on the new Worker" stops
-  // being something you learn from a 500 on a route nobody hits for a week.
-  //
-  // The comment this replaced had drifted in BOTH directions, which is the argument
-  // for the block. It listed EXA_API_KEY and PARALLEL_API_KEY, which are set nowhere
-  // and read nowhere, and it omitted CENSUS_KEY and RN_SIGNING_KEY_MLDSA_JWK, which
-  // the worker genuinely reads.
-  //
-  // The bar for this list is "read by code AND set on the Worker", because a name
-  // here is a deploy gate. Three live-or-referenced secrets are deliberately OUT:
-  //   BROWSER_RENDER_TOKEN  set on the Worker, read by nothing — the /lens REST-API
-  //                         path it belonged to is retired in favour of the BROWSER
-  //                         binding. It should be deleted, not declared.
-  //   COVER_SECRET          read by code, never set. The path degrades without it, so
-  //                         declaring it would fail the deploy over a working site.
-  //   ANALYTICS_READ_TOKEN  same shape: /ledger's SQL reads degrade without it.
-
-  //   BILLING_READ_TOKEN    same shape again: /ledger's account cost line renders a
-  //                         "not readable yet" note without it. Scope it to Billing:Read
-  //                         and NOTHING else, and keep it off the CI token, which is
-  //                         pinned at six reads and lives in GitHub. Account spend is a
-  //                         category above analytics; it belongs on the Worker alone.
-  // Promote any of the last three the day it becomes load-bearing.
-  //
-  // Deliberately NOT mirrored into wrangler.dev.jsonc. There is no .dev.vars in this
-  // repo, so the dev twin would log ten "missing secret" warnings on every reload of
-  // the config whose entire purpose is a fast reload. The value here is deploy-time.
   "secrets": {
-    "required": [
-      "CENSUS_KEY",
-      "ICAL_URL",
-      "RESEND_API_KEY",
-      "RN_BUST_SECRET",
-      "RN_SIGNING_KEY_JWK",
-      "RN_SIGNING_KEY_MLDSA_JWK",
-      "SIGNING_SECRET",
-      "SYNC_SECRET",
-      "WORK_CALENDAR_SLUG",
-      "WORK_CALENDAR_URL"
-    ]
+    "required": ["ICAL_URL", "RESEND_API_KEY", "RN_SIGNING_KEY_JWK", "SIGNING_SECRET"]
   }
 }
