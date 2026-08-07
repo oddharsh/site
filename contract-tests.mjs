@@ -478,6 +478,13 @@ test("track endpoints keep JSON and HTML contracts independent of Accept", async
   const body = await html.text();
   assert.match(body, /^<li\b/);
   assert.doesNotMatch(body, /<(?:!doctype|html|head|body)\b/i);
+
+  // Both representations say "read me, don't list me" with the header that can
+  // actually say it. robots.txt used to try with `Disallow: /rn/tracks` while
+  // four discovery surfaces pointed agents here, which blocked the fetch and so
+  // blocked its own noindex.
+  assert.equal(json.headers.get("x-robots-tag"), "noindex");
+  assert.equal(html.headers.get("x-robots-tag"), "noindex");
 });
 
 test("Lens fetch keeps its JSON contract regardless of Accept", async () => {
@@ -1602,6 +1609,51 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   );
   assert.match(luna, /homepage music island \(below the fold\)/);
   assert.match(luna, /homepage hover island \(non-critical\)/);
+});
+
+test("robots.txt never forbids a path the site advertises to agents", async () => {
+  // Found by a Cloudflare agent-readiness scan on 2026-08-07, which counted
+  // </rn/tracks>; rel="service-desc" toward a discoverability PASS while
+  // robots.txt carried `Disallow: /rn/tracks`. Sixteen conflicts across six
+  // surfaces at the time. Both sides are this site's own declarations, so one of
+  // them was always going to be a lie, and neither side can see the other.
+  //
+  // The rule is about FETCHING, not indexing: a path that should stay out of a
+  // search index says so with X-Robots-Tag, which a crawler can only read if it
+  // is allowed to fetch the response carrying it.
+  const read = (p) => readFile(new URL(p, import.meta.url), "utf8");
+  const robots = await read("holding/robots.txt");
+
+  const disallowed = [...new Set(
+    robots.split("\n").filter((l) => /^Disallow:/i.test(l)).map((l) => l.slice(9).trim()),
+  )];
+  assert.ok(disallowed.length, "robots.txt must still carry Disallow rules");
+  // The action endpoints. Nothing advertises them and nothing should.
+  assert.deepEqual(disallowed.sort(), ["/lwe/ask", "/rn/admin", "/rn/set"]);
+
+  const { HOMEPAGE_DISCOVERY_LINK } = await import("./holding/_worker.js/lib/security.js");
+  const surfaces = {
+    "the homepage Link header": HOMEPAGE_DISCOVERY_LINK,
+    "_headers":                 await read("holding/_headers"),
+    ".well-known/api-catalog":  await read("holding/.well-known/api-catalog"),
+    "agent-card.json":          await read("holding/.well-known/agent-card.json"),
+    "auth.md":                  await read("holding/auth.md"),
+    "llms.txt":                 await read("holding/llms.txt"),
+  };
+
+  for (const [name, text] of Object.entries(surfaces)) {
+    const advertised = new Set();
+    // absolute URLs (auth.md, llms.txt, the JSON catalogs) …
+    for (const m of text.matchAll(/https:\/\/aadhar\.sh(\/[^\s"'`)>,]*)/g)) advertised.add(m[1]);
+    // … and RFC 8288 Link targets, which are relative here
+    for (const m of text.matchAll(/<(\/[^\s">]*)>\s*;\s*rel=/g)) advertised.add(m[1]);
+    for (const path of advertised) {
+      // robots.txt prefix semantics: /around also covers /around/json. Match the
+      // separator too, so /aroundabout would not count as blocked by /around.
+      const rule = disallowed.find((d) => path === d || path.startsWith(`${d}/`) || path.startsWith(`${d}.`));
+      assert.ok(!rule, `${name} advertises ${path}, which robots.txt blocks with Disallow: ${rule}`);
+    }
+  }
 });
 
 test("the RUM beacon is first-party on both legs, and every page that says so agrees", async () => {

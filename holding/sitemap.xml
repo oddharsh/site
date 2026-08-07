@@ -4,11 +4,11 @@
 
   excluded by design:
     /rn            — 302 redirect, not a page
-    /rn/tracks     — JSON endpoint (also Disallow'd in robots.txt)
-    /rn/admin      — secret-gated action endpoint
-    /rn/set        — secret-gated action endpoint
+    /rn/tracks     — JSON endpoint, X-Robots-Tag: noindex
+    /rn/admin      — secret-gated action endpoint (Disallow'd in robots.txt)
+    /rn/set        — secret-gated action endpoint (Disallow'd in robots.txt)
     /around        — meta noindex (live data, not durable content)
-    /around/json   — JSON endpoint
+    /around/json   — JSON endpoint, X-Robots-Tag: noindex
     /whoareyou     — meta noindex + X-Robots-Tag: noindex
     /coffee        — booking app (cal/), thin + transactional
 -->
