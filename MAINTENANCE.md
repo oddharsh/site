@@ -686,10 +686,19 @@ size (its wrangler dry-run needs a build that succeeds), so that one check repor
 
 The Workers Build project should expose its build/deploy status on the release
 commit. After enabling it, verify the live homepage route surface plus
-`/coffee`, `/coffee/slots`, and `/serendipity`. This repository's current free
-private-repo plan does not support branch/environment protection rules, so the
-promotion workflow guard is the release backstop; upgrade or make the repo
-public later if hard GitHub-side branch protection is desired.
+`/coffee`, `/coffee/slots`, and `/serendipity`. GitHub-side branch protection is
+live as of 2026-08-05: the repo is public, so repository rulesets cost nothing,
+and `main` and `production` each carry an active one with zero bypass actors.
+`validate` is a REQUIRED check on `main`, which is why a PR can sit at
+`mergeStateStatus: BLOCKED` purely because CI is red. The rulesets are declared
+in [`infra.json`](infra.json) under `repository` and `npm run infra:check` fails
+on drift; CLAUDE.md carries the argument for each rule.
+
+The promotion workflow guard is still the release backstop, and the ruleset does
+not replace it. `production` restricts deletion and non-fast-forward alone, so it
+governs how that ref may MOVE and not who may move it. What keeps a non-CI commit
+off `production` is `promote-production.yml` checking that the commit is still
+current `main` and belongs to a merged PR.
 
 Before merging the first revision that uses this path, change each Workers
 Build project's production branch from `main` to `production`. Otherwise the

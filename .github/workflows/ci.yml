@@ -102,4 +102,11 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          # Rate-limit headroom for the repository-ruleset tier, nothing more.
+          # The repo is public, so that endpoint reads without a credential at
+          # all; what a token buys is 1000/hr instead of the 60/hr an unauthed
+          # read gets per IP, which shared Actions runners can exhaust. The
+          # workflow's `contents: read` is enough, and a rate-limited read is an
+          # advisory rather than a failure either way.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run infra:check
