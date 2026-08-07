@@ -346,8 +346,28 @@ body:has(.window),body:has(.np-window),body:has(.wrap){overflow:hidden !importan
    scroller out of macOS overlay bars, so Chromium/WebKit get a persistent
    16px Luna bar with working arrow buttons; Firefox takes scrollbar-color,
    its honest thin rendering (the downgrade the blueprint priced). The
-   28px .axp-sb-pad gutter is gone too — a classic bar occupies layout. */
-.window>.content,.window>.body,.np-text{scrollbar-color:oklch(63% 0.16 257) oklch(92% 0.015 250)}
+   28px .axp-sb-pad gutter is gone too — a classic bar occupies layout.
+
+   The reset to auto is what makes that first clause TRUE, and it was missing
+   until 2026-08-07. Chromium discards every ::-webkit-scrollbar rule on an
+   element whose used scrollbar-color is not auto, and scrollbar-color
+   INHERITS: chrome.js sets it on html site-wide, so these scrollers inherited
+   a non-auto value they never declared and the whole block below was dead.
+   Measured on production, changing only this property: 0px reserved before,
+   16px after. Same bug and same fix as /terminal (terminal.js, gotcha 18).
+
+   Firefox still needs the standard property, but it can no longer be found by
+   `not selector(::-webkit-scrollbar)` alone: FF153 answers YES to that probe
+   while implementing a narrow subset (see /garage/horizon, which documents its
+   own chip lying about exactly this). The :-moz-focusring arm catches those
+   versions, so the tint survives unless Firefox both answers the probe AND
+   drops that pseudo. Chromium answers false to the whole query, verified
+   in-engine. Do NOT swap it for (-moz-appearance:none), which reads as the
+   obvious choice and is the one candidate the build breaks: Lightning CSS
+   un-prefixes it to (appearance:none), which Chromium supports, so the query
+   flips true and silently restores the exact bug this rule fixes. */
+.window>.content,.window>.body,.np-text{scrollbar-color:auto}
+@supports (not selector(::-webkit-scrollbar)) or selector(:-moz-focusring){.window>.content,.window>.body,.np-text{scrollbar-color:oklch(63% 0.16 257) oklch(92% 0.015 250)}}
 .window>.content::-webkit-scrollbar,.window>.body::-webkit-scrollbar,.np-text::-webkit-scrollbar{width:16px;height:16px}
 .window>.content::-webkit-scrollbar-track,.window>.body::-webkit-scrollbar-track,.np-text::-webkit-scrollbar-track{background:oklch(92% 0.015 250);box-shadow:inset 1px 0 0 oklch(72% 0.03 250),inset -1px 0 0 oklch(100% 0 0)}
 .window>.content::-webkit-scrollbar-thumb,.window>.body::-webkit-scrollbar-thumb,.np-text::-webkit-scrollbar-thumb{border:1px solid;border-color:oklch(88% 0.05 256) oklch(46% 0.15 260) oklch(46% 0.15 260) oklch(88% 0.05 256);background:linear-gradient(90deg,oklch(80% 0.08 256),oklch(63% 0.16 257));box-shadow:inset 1px 1px 0 oklch(92% 0.06 250)}
