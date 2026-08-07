@@ -10,6 +10,7 @@ import { rnMarkdown, rnRedirect, rnTracks, rnTracksHtml } from "./rn";
 import { lensBrowser, lensCompare, lensFetch, lensPage, lensShot } from "./lens";
 import { BookingSlot } from "./booking-slot";
 import { coffeeAvailability, coffeeBook, coffeeDecision, coffeePage, coffeeSlots } from "./coffee";
+import { retiredSerendipityWrite, serendipityEvent, serendipityEventsJson, serendipityMcp, serendipityPage } from "./serendipity";
 
 export { BookingSlot, BookingWorkflow, Counter };
 
@@ -17,6 +18,7 @@ const markdownPages = new Set([
   "/", "/photos", "/writing", "/garage", "/lwe",
   "/security", "/whoareyou", "/updates", "/restore", "/access",
   "/coffee",
+  "/serendipity",
 ]);
 
 function markdownPath(pathname: string): string {
@@ -42,6 +44,8 @@ async function fetchHandler(request: Request, env: Env, ctx: ExecutionContext): 
   const { pathname } = url;
 
   if (request.method === "POST" && pathname === "/coffee/book") return coffeeBook(request, env, ctx);
+  if (pathname === "/serendipity/mcp") return serendipityMcp(request, env);
+  if (["/serendipity/sync", "/serendipity/sync-descriptions", "/serendipity/enrich", "/serendipity/cookies", "/serendipity/add-event", "/serendipity/cover"].includes(pathname)) return retiredSerendipityWrite();
 
   if (request.method !== "GET" && request.method !== "HEAD") {
     return json({ error: "Method not allowed" }, { status: 405, headers: { allow: "GET, HEAD" } });
@@ -85,6 +89,9 @@ async function fetchHandler(request: Request, env: Env, ctx: ExecutionContext): 
   if (pathname === "/coffee/approve") return coffeeDecision(request, env, "approve");
   if (pathname === "/coffee/decline") return coffeeDecision(request, env, "decline");
   if (pathname === "/coffee") return coffeePage(request, env, ctx);
+  if (pathname === "/serendipity/events.json") return serendipityEventsJson(env, request);
+  if (pathname.startsWith("/serendipity/event/")) return serendipityEvent(request, env, decodeURIComponent(pathname.slice("/serendipity/event/".length)));
+  if (pathname === "/serendipity") return serendipityPage(request, env);
 
   if (pathname === "/reading") return readingResponse(request, env);
   if (pathname === "/around") return aroundResponse(request, env);

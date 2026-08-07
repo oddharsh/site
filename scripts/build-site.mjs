@@ -13,6 +13,7 @@ import { renderRestore, renderUpdates, restoreMarkdown, updatesMarkdown } from "
 import { renderAround, renderLedger, renderReading } from "../src/site/pages/live.mjs";
 import { renderLens } from "../src/site/pages/lens.mjs";
 import { coffeeMarkdown, renderCoffee } from "../src/site/pages/coffee.mjs";
+import { renderSerendipity, renderSerendipityContribute, renderSerendipityMcpInfo, serendipityMarkdown } from "../src/site/pages/serendipity.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const output = join(root, "dist");
@@ -168,6 +169,10 @@ await write("ledger.html", renderLedger({ stylesheet: `/assets/${cssName}` }));
 await write("lens.html", renderLens({ stylesheet: `/assets/${cssName}` }));
 await write("coffee.html", renderCoffee({ stylesheet: `/assets/${cssName}` }));
 await write("coffee.md", coffeeMarkdown());
+await write("serendipity.html", renderSerendipity({ stylesheet: `/assets/${cssName}` }));
+await write("serendipity.md", serendipityMarkdown());
+await write("serendipity/contribute.html", renderSerendipityContribute({ stylesheet: `/assets/${cssName}` }));
+await write("serendipity/mcp-info.html", renderSerendipityMcpInfo({ stylesheet: `/assets/${cssName}` }));
 
 const publicSurfaces = siteManifest.surfaces.filter(({ flags }) => flags.run);
 await write("search.html", renderSearch({ stylesheet: `/assets/${cssName}` }));
@@ -199,6 +204,9 @@ const manifest = {
     "/ledger",
     "/lens",
     "/coffee",
+    "/serendipity",
+    "/serendipity/contribute",
+    "/serendipity/mcp-info",
     "/search",
     "/run",
   ],

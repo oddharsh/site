@@ -120,6 +120,11 @@ test("status and live utility shells stay complete without client JavaScript", a
   assert.match(coffee, /class="coffee-form"/);
   assert.match(coffee, /action="\/coffee\/book" method="post"/);
   assert.doesNotMatch(coffee, /<script\b/i);
+  const serendipity = await text("serendipity.html");
+  const contribute = await text("serendipity/contribute.html");
+  assert.match(serendipity, /id="event-pool"/);
+  assert.match(contribute, /no longer accepts pasted account cookies/i);
+  assert.doesNotMatch(serendipity + contribute, /<script\b/i);
 });
 
 test("initial document and shared stylesheet stay inside budgets", async () => {
