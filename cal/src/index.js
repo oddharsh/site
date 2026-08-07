@@ -26,6 +26,7 @@ import { BOOK_MAX_STALE_MS }               from "./availability.js";
 import { listOpenSlots }                   from "./slots.js";
 import { createBooking, getBooking, setStatus,
          holdSlot, releaseSlot }           from "./booking.js";
+import { releaseSlotClaim, reserveSlot }  from "./reservation.js";
 import { sendApprovalRequest, sendInvite,
          sendDecline }                     from "./email.js";
 import { sign, verify }                    from "./sign.js";
@@ -159,8 +160,26 @@ async function route_book(req, env, ctx) {
     created: Date.now(),
     status: "pending",
   });
-  // hold the slot SYNCHRONOUSLY (before responding) so a second booker in the
-  // same instant can't grab it — /slots and the next /book both read this.
+
+  // Claim the slot ATOMICALLY before anything else happens. The availability
+  // read above and the hold below are two separate steps, so two requests
+  // arriving together both found this slot free; writing the hold synchronously
+  // never closed that, because the check and the write still interleave (and KV
+  // is eventually consistent between colos besides). The result was two
+  // approvable bookings for one half hour. A per-slot Durable Object serializes
+  // the pair, so exactly one of the two callers wins. See cal/src/reservation.js.
+  if (!(await reserveSlot(env, booking))) {
+    // The record was already minted, so retire it rather than leaving a pending
+    // booking nobody can act on: `expired` is the one status the approve path
+    // refuses, and the 90-day TTL clears the row on its own.
+    await setStatus(env, booking.id, "expired");
+    return new Response(errorPage("someone just took that slot. pick another.", env),
+                        { status: 409, headers: htmlHeaders() });
+  }
+  // The KV hold stays: it is what /slots and the SSR page read to draw
+  // availability, and it carries the expiry the reservation deliberately does
+  // not. The Durable Object decides WHO gets the slot; this records THAT it is
+  // taken for every reader that is not racing for it.
   await holdSlot(env, booking);
 
   // spin up the durable expiry timer for this booking. Instance id = booking id,
@@ -250,6 +269,7 @@ async function route_decline(req, env, ctx, url) {
   }
   await setStatus(env, id, "declined");
   await releaseSlot(env, booking);         // free the slot NOW so /slots reoffers it immediately
+  await releaseSlotClaim(env, booking);   // and give up the atomic claim, so the next booker can take it
   ctx.waitUntil(sendDecline(env, booking));
   cancelExpiry(env, ctx, id);                                   // end the durable timer early
   ctx.waitUntil(caches.default.delete(calIndexKey(req, env)));  // slot freed again

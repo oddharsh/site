@@ -23,6 +23,7 @@
 
 import { WorkflowEntrypoint } from "cloudflare:workers";
 import { getBooking, releaseSlot, setStatus } from "./booking.js";
+import { releaseSlotClaim } from "./reservation.js";
 
 export class BookingWorkflow extends WorkflowEntrypoint {
   async run(event, step) {
@@ -53,6 +54,7 @@ export class BookingWorkflow extends WorkflowEntrypoint {
       if (booking && booking.status === "pending") {
         await setStatus(this.env, id, "expired");
         await releaseSlot(this.env, booking);
+        await releaseSlotClaim(this.env, booking);
       }
     });
   }

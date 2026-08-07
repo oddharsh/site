@@ -21,6 +21,7 @@ import {
   validateLensTarget,
 } from "./holding/_worker.js/lens.js";
 import { handleCoffeeAvailability, readCoffeeAvailability } from "./holding/_worker.js/coffee.js";
+import { reservationName } from "./cal/src/reservation.js";
 import { handleSiteMcp, MCP_TOOLS as SITE_MCP_TOOLS, SITE_MCP_SERVER_INFO } from "./holding/_worker.js/mcp.js";
 import { handleWebmention, handleWebmentionDecision } from "./holding/_worker.js/webmention.js";
 import { handleInbox } from "./holding/_worker.js/inbox.js";
@@ -2330,6 +2331,44 @@ test("redirect following validates every hop, not just the landing", async () =>
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+// Booking degrades to the old behaviour without a COUNTER binding, so that cal
+// stays runnable and testable with no Durable Object, the same way a missing
+// BOOKING_WORKFLOW only costs the expiry timer. That fallback is only acceptable
+// while production genuinely binds it: unbound, two simultaneous bookings take
+// the same slot again and nothing says so. This is the assertion that keeps the
+// degraded path from quietly becoming the real one.
+test("production binds the Durable Object the slot claim needs", async () => {
+  const { parseJsonc } = await import("./scripts/lib/jsonc.mjs");
+  for (const config of ["wrangler.jsonc", "wrangler.dev.jsonc"]) {
+    const parsed = parseJsonc(readFileSync(config, "utf8"));
+    const bindings = parsed.durable_objects?.bindings ?? [];
+    const counter = bindings.find((b) => b.name === "COUNTER");
+    assert.ok(counter, `${config} must bind COUNTER for the coffee slot claim`);
+    assert.equal(counter.class_name, "Counter");
+
+    // The claim rides the EXISTING class on purpose: a second class needs a
+    // new_sqlite_classes migration, and `wrangler versions upload` cannot apply
+    // one. If someone adds that migration later this assertion should be
+    // revisited deliberately rather than silently outgrown.
+    const classes = (parsed.migrations ?? []).flatMap((m) => m.new_sqlite_classes ?? []);
+    assert.deepEqual(classes, ["Counter"],
+      `${config} declares Durable Object classes ${JSON.stringify(classes)}; the slot claim assumes Counter is the only one`);
+  }
+});
+
+// One instance per slot is the entire exclusivity argument: two different times
+// must never share an instance, and one time must always resolve to the same
+// one. It also must not collide with the visit counter's instance name.
+test("slot reservations name one Durable Object instance per slot", () => {
+  const start = Date.UTC(2026, 7, 10, 14);
+  const end = start + 30 * 60_000;
+  assert.equal(reservationName(start, end), reservationName(start, end));
+  assert.notEqual(reservationName(start, end), reservationName(start + 1, end));
+  assert.notEqual(reservationName(start, end), reservationName(start, end + 1));
+  assert.notEqual(reservationName(start, end), "homepage-visits");
+  assert.match(reservationName(start, end), /^coffee-slot:\d+:\d+$/);
 });
 
 // ── the deploy-time page renderers ──────────────────────────────────
