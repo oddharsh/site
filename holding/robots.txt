@@ -13,7 +13,25 @@
 # OFF in the Cloudflare dashboard (Security -> Bots / AI Crawl Control).
 # this file alone cannot undo a managed block.
 #
-# admin / action / per-request transparency endpoints stay out of indexing.
+# Disallow means DO NOT FETCH, and this file used to spend it on four paths that
+# only ever wanted DO NOT INDEX. /rn/tracks, /whoareyou, /around and /around/json
+# are all advertised to agents by this same site — the homepage's
+# rel="service-desc" Link header, /.well-known/api-catalog, agent-card.json,
+# auth.md and llms.txt — so the site handed out URLs and then told every
+# well-behaved client not to open them. A Cloudflare agent-readiness scan on
+# 2026-08-07 counted /rn/tracks toward a discoverability PASS while this file
+# forbade fetching it: sixteen such conflicts across six surfaces.
+#
+# Worse, three of the four already answer with X-Robots-Tag: noindex, and a
+# Disallow defeats its own noindex, since a crawler that never fetches the
+# response never reads the header. That is the standard way a URL ends up
+# indexed title-only from inbound links alone. /rn/tracks sends noindex too now
+# (trackResponse in _worker.js/rn.js), so all four are covered by the header that
+# can actually express "read this, don't list it".
+#
+# What stays disallowed is the set that genuinely is not for fetching: two
+# secret-gated action endpoints and one POST-only CAPTCHA gate. Nothing
+# advertises them, and contract-tests.mjs fails if anything starts to.
 #
 # sitemap reference at the bottom per
 #   https://www.sitemaps.org/protocol.html
@@ -23,10 +41,6 @@ Content-Signal: search=yes,ai-input=yes,ai-train=yes
 Allow: /
 Disallow: /rn/admin
 Disallow: /rn/set
-Disallow: /rn/tracks
-Disallow: /whoareyou
-Disallow: /around
-Disallow: /around/json
 Disallow: /lwe/ask
 
 # The named group is intentional: these crawlers otherwise stop inheriting the
@@ -49,10 +63,6 @@ Content-Signal: search=yes,ai-input=yes,ai-train=yes
 Allow: /
 Disallow: /rn/admin
 Disallow: /rn/set
-Disallow: /rn/tracks
-Disallow: /whoareyou
-Disallow: /around
-Disallow: /around/json
 Disallow: /lwe/ask
 
 Sitemap: https://aadhar.sh/sitemap.xml
