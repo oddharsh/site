@@ -31,6 +31,7 @@
     "infra:apply": "node scripts/apply-infra.mjs",
     "pages:check": "node scripts/check-page-contracts.mjs",
     "test": "node --test contract-tests.mjs",
+    "typecheck": "tsc -p tsconfig.json",
     "shell:roll": "node scripts/roll-shell-dictionary.mjs",
     "pages:roll": "node scripts/roll-shell-dictionary.mjs --pages",
     "dcz:check": "node scripts/check-dictionary-support.mjs",
@@ -40,11 +41,13 @@
     "release": "node scripts/release-status.mjs"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "5.20260807.2",
     "@minify-html/node": "0.18.1",
     "esbuild": "0.28.1",
     "lightningcss": "1.33.0",
     "oxc-minify": "0.143.0",
     "playwright-core": "^1.62.1",
+    "typescript": "7.0.2",
     "wrangler": "4.118.0"
   },
   "engines": {

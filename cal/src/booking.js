@@ -22,8 +22,36 @@
 
 import { v4 as uuid } from "./uuid.js";
 
+// The booking record, written to KV and read back by every route that acts on
+// one. Declared so `npm run typecheck` has a shape to enforce: in a .js file
+// TypeScript treats an unannotated object literal as expandable, so a typo like
+// `booking.statis` is only an error against a declaration like this one.
+//
+// `status` is a union rather than a string because the whole approve/decline
+// flow turns on it, and `expired` in particular is the value that makes a record
+// unactionable.
+/**
+ * @typedef {object} Booking
+ * @property {string} id
+ * @property {string} name
+ * @property {string} email
+ * @property {string} topic
+ * @property {number} start          epoch ms
+ * @property {number} end            epoch ms
+ * @property {number} created        epoch ms
+ * @property {"pending"|"confirmed"|"declined"|"expired"} status
+ * @property {number} [acted_at]     epoch ms, set when the host decides
+ */
+
+/** A half-open interval on the calendar. @typedef {{start:number,end:number}} Slot */
+
 const TTL_BOOKING_DAYS = 90; // booking records expire after 90d for cleanup
 
+/**
+ * @param {any} env
+ * @param {Omit<Booking, "id">} fields
+ * @returns {Promise<Booking>}
+ */
 export async function createBooking(env, fields) {
   const id = await uuid();
   const booking = { id, ...fields };
@@ -31,6 +59,11 @@ export async function createBooking(env, fields) {
   return booking;
 }
 
+/**
+ * @param {any} env
+ * @param {string} id
+ * @returns {Promise<Booking|null>}
+ */
 export async function getBooking(env, id) {
   const raw = await env.BOOKINGS.get(`booking:${id}`);
   return raw ? JSON.parse(raw) : null;
@@ -39,6 +72,12 @@ export async function getBooking(env, id) {
 // patch a booking's status (pending → confirmed / declined / expired). Records
 // only; slot-holding is a separate concern (holdSlot/releaseSlot), because a
 // confirmed booking keeps its slot while a declined/expired one gives it back.
+/**
+ * @param {any} env
+ * @param {string} id
+ * @param {Booking["status"]} status
+ * @returns {Promise<Booking|null>}
+ */
 export async function setStatus(env, id, status) {
   const b = await getBooking(env, id);
   if (!b) return null;
@@ -55,16 +94,19 @@ async function putBooking(env, b) {
 }
 
 // ── held slots ──────────────────────────────────────────────────────────
+/** @param {Slot} b */
 const heldKey = (b) => `held:${b.start}:${b.end}`;
 
 // mark a slot held. Expires ~1d after the slot ends (absolute KV expiration),
 // floored to a safe minimum so KV never rejects a near-term slot.
+/** @param {any} env @param {Booking} b */
 export async function holdSlot(env, b) {
   const nowSec = Math.floor(Date.now() / 1000);
   const expiration = Math.max(Math.floor(b.end / 1000) + 86400, nowSec + 120);
   await env.BOOKINGS.put(heldKey(b), b.id, { expiration });
 }
 
+/** @param {any} env @param {Slot} b */
 export async function releaseSlot(env, b) {
   await env.BOOKINGS.delete(heldKey(b));
 }
@@ -73,7 +115,9 @@ export async function releaseSlot(env, b) {
 // bookings hold slots; availability treats them identically (conflict + count
 // toward the caps), so a single list is all generateSlots needs. start/end are
 // encoded in the key name, so this is one list() with no per-key gets.
+/** @param {any} env @returns {Promise<Slot[]>} */
 export async function listHeld(env) {
+  /** @type {Slot[]} */
   const held = [];
   let cursor;
   do {

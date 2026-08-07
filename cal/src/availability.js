@@ -384,7 +384,9 @@ function yw(ms, tz) {
   const d = new Date(ms);
   const localDate = new Date(d.toLocaleString("en-US", { timeZone: tz }));
   const onejan = new Date(localDate.getFullYear(), 0, 1);
-  const week = Math.ceil(((localDate - onejan) / 86400000 + onejan.getDay() + 1) / 7);
+  // .getTime() rather than subtracting the Dates directly: identical at runtime
+  // (subtraction coerces through valueOf) and it says the units out loud.
+  const week = Math.ceil(((localDate.getTime() - onejan.getTime()) / 86400000 + onejan.getDay() + 1) / 7);
   return `${localDate.getFullYear()}-W${week}`;
 }
 function dayOfWeek(ms, tz) {
