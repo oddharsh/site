@@ -68,20 +68,58 @@ afterEach(async () => {
 });
 
 // dispatch a request through the worker and flush ctx.waitUntil (the emails)
-async function dispatch(path, init = {}) {
+async function dispatch(path, init = {}, envOverrides = {}) {
   const ctx = createExecutionContext();
-  const res = await worker.fetch(new Request("https://cal.aadhar.sh" + path, init), env, ctx);
+  const res = await worker.fetch(new Request("https://cal.aadhar.sh" + path, init), { ...env, ...envOverrides }, ctx);
   await waitOnExecutionContext(ctx);
   return res;
 }
-async function postBook(fields) {
+async function postBook(fields, overrides = {}) {
   const form = new URLSearchParams();
   for (const [k, v] of Object.entries(fields)) form.set(k, String(v));
   return dispatch("/book", {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body: form.toString(),
-  });
+  }, overrides);
+}
+
+// A stand-in for the COUNTER Durable Object namespace.
+//
+// It reproduces the ONE property the real thing is being used for: requests to a
+// given instance run one at a time. Instances are keyed by name, so two slots
+// never contend, and each holds its own storage. The claim logic itself is the
+// real module — only the serialization is simulated, because that is a runtime
+// guarantee this pool cannot bind (the class lives in holding/, and importing it
+// from cal would make cal untestable without the site tree).
+function stubCounterNamespace() {
+  const instances = new Map();
+  return {
+    idFromName: (name) => name,
+    get(name) {
+      if (!instances.has(name)) instances.set(name, { records: new Map(), queue: Promise.resolve() });
+      const instance = instances.get(name);
+      return {
+        fetch: async (url, init) => {
+          // Serialize: each call waits for the previous one on this instance.
+          const run = instance.queue.then(async () => {
+            const { claimReservation, dropReservation } = await import("../src/reservation.js");
+            const storage = {
+              get: async (key) => instance.records.get(key),
+              put: async (key, value) => { instance.records.set(key, value); },
+              delete: async (key) => { instance.records.delete(key); },
+            };
+            const body = JSON.parse(init.body);
+            return new URL(url).pathname === "/release"
+              ? Response.json({ released: await dropReservation(storage, body.bookingId) })
+              : Response.json({ claimed: await claimReservation(storage, body.bookingId, body.start, body.end) });
+          });
+          instance.queue = run.then(() => undefined, () => undefined);
+          return run;
+        },
+      };
+    },
+  };
 }
 // pick a slot from the MIDDLE of the list, not slots[0]: the earliest slot sits
 // on the now+MIN_NOTICE boundary and can roll off as the wall clock advances
@@ -141,6 +179,62 @@ describe("POST /book validation", () => {
 
   it("rejects a slot that isn't currently open with 409", async () => {
     expect((await postBook({ name: "A", email: "a@b.co", topic: "hi", start: 999 })).status).toBe(409);
+  });
+
+  // The bug this closes: availability is READ, then the hold is WRITTEN. Two
+  // requests arriving together both pass the read before either write lands, so
+  // both get a booking for one half hour and the host is emailed twice.
+  //
+  // The first assertion is the regression itself. It runs with no COUNTER bound,
+  // which is exactly how this code behaved before the reservation existed, and
+  // it fails to hold the invariant — that is the point of asserting it: it
+  // documents the race rather than hiding it.
+  it("without an atomic claim, two simultaneous bookings both take the same slot", async () => {
+    const slot = await firstSlot();
+    const [a, b] = await Promise.all([
+      postBook({ name: "A", email: "a@a.co", topic: "one", start: slot.start }),
+      postBook({ name: "B", email: "b@b.co", topic: "two", start: slot.start }),
+    ]);
+    expect([a.status, b.status]).toEqual([200, 200]);
+    expect(mailCalls.length).toBe(2);   // the host is asked to approve one slot twice
+  });
+
+  it("with the atomic claim, exactly one of two simultaneous bookings wins", async () => {
+    const slot = await firstSlot();
+    const COUNTER = stubCounterNamespace();
+    const [a, b] = await Promise.all([
+      postBook({ name: "A", email: "a@a.co", topic: "one", start: slot.start }, { COUNTER }),
+      postBook({ name: "B", email: "b@b.co", topic: "two", start: slot.start }, { COUNTER }),
+    ]);
+    const statuses = [a.status, b.status].sort();
+    expect(statuses).toEqual([200, 409]);
+    expect(mailCalls.length).toBe(1);              // one approval request, not two
+    expect(await listHeld(env)).toHaveLength(1);   // one slot held
+  });
+
+  it("a different slot is never blocked by a claim on its neighbour", async () => {
+    const { slots } = await (await dispatch("/slots")).json();
+    const COUNTER = stubCounterNamespace();
+    const [a, b] = await Promise.all([
+      postBook({ name: "A", email: "a@a.co", topic: "one", start: slots[2].start }, { COUNTER }),
+      postBook({ name: "B", email: "b@b.co", topic: "two", start: slots[4].start }, { COUNTER }),
+    ]);
+    expect([a.status, b.status]).toEqual([200, 200]);
+  });
+
+  it("declining releases the claim, so the slot can be booked again", async () => {
+    const slot = await firstSlot();
+    const COUNTER = stubCounterNamespace();
+    const first = await postBook({ name: "A", email: "a@a.co", topic: "one", start: slot.start }, { COUNTER });
+    expect(first.status).toBe(200);
+    expect((await postBook({ name: "B", email: "b@b.co", topic: "two", start: slot.start }, { COUNTER })).status).toBe(409);
+
+    const id = lastBookingId();
+    const sig = await sign(`${id}|decline`, SECRET);
+    expect((await dispatch(`/decline?t=${id}&sig=${sig}`, {}, { COUNTER })).status).toBe(200);
+
+    const retry = await postBook({ name: "C", email: "c@c.co", topic: "three", start: slot.start }, { COUNTER });
+    expect(retry.status).toBe(200);
   });
 
   it("honeypot: a filled 'website' field is accepted but creates no booking and sends no mail", async () => {
