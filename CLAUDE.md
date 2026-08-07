@@ -23,6 +23,7 @@ colors that read modern in source but render period-correct.
 # production, the normal path: merge to main; CI promotes the tested commit to
 # production; Workers Builds UPLOADS it as a version and moves no traffic. Then
 # ramp it (10% -> 50% -> 100%, sampling between steps). Workstation-only.
+npm run deploy:promote -- --dry-run     # which version WOULD ramp. run this first
 npm run deploy:promote
 npm run deploy:promote -- --status      # what is serving right now
 npm run deploy:promote -- --rollback    # 100% back to the previous version
@@ -1514,6 +1515,17 @@ npm run deploy
     split, which usually means a previous ramp stopped half-way), unlikely to be
     noticed when it happens, and a one-line fix — sort by `pct` and take the largest
     — if someone decides it is worth touching the release path for.
+
+    **Run `npm run deploy:promote -- --dry-run` before any ramp.** It resolves and
+    prints the target and moves nothing, and it exists (#259) because the target is
+    no longer simply "the newest version": Workers Builds uploads one for EVERY
+    branch push, so a bare ramp used to be a live way to walk another agent's branch
+    to 100%. `newestVersion()` filters on `workers/alias` now and fails closed rather
+    than guess. That is a different axis from the split above — #259 chose the
+    TARGET, this note is about which incumbent holds the REMAINDER, and #259 touched
+    neither `previous` nor `specs` — but both are ways a ramp can move traffic
+    somewhere you did not intend, and the dry run is what shows you either one
+    before it happens.
 
 21. **The bridge's `c2pa` pack cannot see this site's photos, and no pipeline
     change fixes it.** TURNED OFF in the dashboard 2026-08-06, so the injected tag
