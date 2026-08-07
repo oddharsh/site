@@ -1,3 +1,5 @@
+import { claimReservation, dropReservation } from "../../cal/src/reservation.js";
+
 // counter.js — the homepage visit counter: an in-house Durable Object, read by
 // the document and advanced out-of-band by /hit.
 //
@@ -11,6 +13,15 @@
 // (~2375 at migration). That ran, the `seeded` storage flag is set, and the counter
 // is well past the seed, so the seed path and its once-per-instance storage read
 // came out on 2026-07-28. The `seeded` key stays in storage, harmless and unread.
+// This class also backs the coffee slot reservations, under instance names of
+// the form `coffee-slot:<start>:<end>`. Two jobs in one class is deliberate: a
+// second Durable Object class needs a `new_sqlite_classes` migration, and the
+// release path publishes with `wrangler versions upload`, which cannot apply
+// one. Instances are isolated by name, so a slot shares nothing with
+// "homepage-visits", and the storage keys differ as well ("reservation" vs "n").
+// The reservation logic itself lives in cal/src/reservation.js, pure over a
+// storage interface, so it is tested without a runtime. See that file for why
+// the pair has to be atomic at all.
 export class Counter {
   constructor(state) {
     this.state = state;
@@ -18,6 +29,24 @@ export class Counter {
 
   async fetch(request) {
     const url = new URL(request.url);
+
+    // The reservation paths come first: they are addressed by pathname and must
+    // never fall through to the odometer, which would bump a visit count on a
+    // slot instance.
+    if (url.pathname === "/reserve" || url.pathname === "/release") {
+      let payload;
+      try { payload = await request.json(); } catch { return Response.json({ error: "invalid body" }, { status: 400 }); }
+      const bookingId = String(payload?.bookingId || "");
+      if (!bookingId) return Response.json({ error: "bookingId is required" }, { status: 400 });
+      if (url.pathname === "/release") {
+        return Response.json({ released: await dropReservation(this.state.storage, bookingId) });
+      }
+      const claimed = await claimReservation(
+        this.state.storage, bookingId, Number(payload.start), Number(payload.end),
+      );
+      return Response.json({ claimed });
+    }
+
     let n = (await this.state.storage.get("n")) || 0;
 
     // read-only: bots + speculative prerenders see the value without bumping it

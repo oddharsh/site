@@ -28,7 +28,7 @@
 // and, when the source no longer links here (or is gone), retracts the mention.
 // A displayed mention should still be TRUE, the same reason /around re-crawls.
 import { validateLensTarget } from "./lens.js";
-import { privateHostBlocked, readResponseCapped } from "./lib/crawl.js";
+import { fetchFollowingPublicRedirects, privateHostBlocked, readResponseCapped } from "./lib/crawl.js";
 import { esc, extractMeta, extractTitle } from "./lib/http.js";
 import { sign, verify } from "../../cal/src/sign.js";
 import { resendSend } from "../../cal/src/email.js";
@@ -182,19 +182,35 @@ async function retract(env, source, target, why) {
 }
 
 // ── fetching the source ────────────────────────────────────────────────────
-// Identifies honestly as AadharshBot, follows redirects (a mention often comes
-// from a shortened or canonical URL), re-checks the FINAL host against the
-// blocklist so a public URL can't redirect into private space, and caps both
-// time and bytes.
+// Identifies honestly as AadharshBot, follows redirects one hop at a time (a
+// mention often comes from a shortened or canonical URL) and checks EVERY hop
+// against the blocklist, so a public URL cannot redirect into private space.
+// Caps both time and bytes.
+//
+// This used to follow redirects in one call and check only the final host. The
+// body was correctly discarded on a blocked landing, so the exposure was a blind
+// request rather than a read — but the request was still made, and the check now
+// runs before each hop instead of after all of them.
 async function fetchSource(url) {
   try {
-    const res = await fetch(url, {
-      headers: { "user-agent": "AadharshBot/1.0 (+https://aadhar.sh/bot)", accept: "text/html,application/xhtml+xml" },
-      redirect: "follow",
-      signal: AbortSignal.timeout(SOURCE_TIMEOUT_MS),
-    });
-    const finalUrl = res.url || url;
-    if (privateHostBlocked(new URL(finalUrl).hostname.toLowerCase())) return { ok: false, status: 0, html: "", url: finalUrl };
+    const followed = await fetchFollowingPublicRedirects(
+      url,
+      {
+        headers: { "user-agent": "AadharshBot/1.0 (+https://aadhar.sh/bot)", accept: "text/html,application/xhtml+xml" },
+        signal: AbortSignal.timeout(SOURCE_TIMEOUT_MS),
+      },
+      (candidate) => {
+        try {
+          const u = new URL(candidate);
+          if (u.protocol !== "http:" && u.protocol !== "https:") return { ok: false, error: "not http(s)" };
+          if (privateHostBlocked(u.hostname)) return { ok: false, error: "private host" };
+          return { ok: true };
+        } catch { return { ok: false, error: "unparseable" }; }
+      },
+    );
+    if (!followed.ok) return { ok: false, status: 0, html: "", url: followed.url || url };
+    const res = followed.response;
+    const finalUrl = followed.finalUrl || res.url || url;
     if (!res.ok) return { ok: false, status: res.status, html: "", url: finalUrl };
     const body = await readResponseCapped(res, SOURCE_BYTE_CAP);
     return { ok: true, status: res.status, html: body?.text || body || "", url: finalUrl };

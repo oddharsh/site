@@ -106,6 +106,9 @@ export function writingShell(o) {
     "<title>" + escHtml(o.title) + "</title>" +
     "<meta name=\"description\" content=\"" + escAttr(o.desc) + "\">" +
     "<link rel=\"canonical\" href=\"https://aadhar.sh" + escAttr(o.path) + "\">" +
+    // Feed discovery for the whole section, on the index and on every post, which
+    // is where a reader's "subscribe" button actually looks.
+    "<link rel=\"alternate\" type=\"application/rss+xml\" title=\"aadhar.sh — writing\" href=\"/writing/feed.xml\">" +
     "<link rel=\"icon\" type=\"image/svg+xml\" href=\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20x='7'%20y='3'%20width='18'%20height='26'%20rx='1'%20fill='%23ffffff'%20stroke='%230855dd'%20stroke-width='2'/%3E%3Crect%20x='10'%20y='9'%20width='12'%20height='1.6'%20fill='%23166aee'/%3E%3Crect%20x='10'%20y='14'%20width='12'%20height='1.6'%20fill='%23166aee'/%3E%3Crect%20x='10'%20y='19'%20width='8'%20height='1.6'%20fill='%23166aee'/%3E%3C/svg%3E\">" +
     "<style>:root{--font-caption:\"Trebuchet MS\",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:\"Courier New\",Courier,monospace}</style>" +
     "<style>" + NOTEPAD_CSS + "</style><link rel=\"stylesheet\" href=\"/luna.css\"></head><body class=\"np-page\">" + DESKTOP_TOP +

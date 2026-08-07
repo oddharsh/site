@@ -18,8 +18,10 @@ import {
   handleLensFetch,
   handleLensShot,
   renderLensShell,
+  validateLensTarget,
 } from "./holding/_worker.js/lens.js";
 import { handleCoffeeAvailability, readCoffeeAvailability } from "./holding/_worker.js/coffee.js";
+import { reservationName } from "./cal/src/reservation.js";
 import { handleSiteMcp, MCP_TOOLS as SITE_MCP_TOOLS, SITE_MCP_SERVER_INFO } from "./holding/_worker.js/mcp.js";
 import { documentContent, handleWebmention, handleWebmentionDecision, linksTo } from "./holding/_worker.js/webmention.js";
 import { handleInbox } from "./holding/_worker.js/inbox.js";
@@ -42,7 +44,7 @@ import { derivePhotoPool, renderPhotosPage, getImagesManifest, handlePhotoQuery,
 import { renderPhotoSlots } from "./holding/_worker.js/lib/photo-grid.js";
 import { cachedRender, deadline } from "./holding/_worker.js/lib/cache.js";
 import { ifNoneMatchMatches, notModifiedIfFresh, withWeakEtag } from "./holding/_worker.js/lib/cache.js";
-import { privateHostBlocked } from "./holding/_worker.js/lib/crawl.js";
+import { fetchFollowingPublicRedirects, privateHostBlocked } from "./holding/_worker.js/lib/crawl.js";
 import { handleHit } from "./holding/_worker.js/counter.js";
 import { cronHomeProbe, parseServerTiming } from "./holding/_worker.js/perf-probe.js";
 import { gatherWhoareyou } from "./holding/_worker.js/whoareyou.js";
@@ -2265,6 +2267,110 @@ test("the shared SSRF host floor blocks every non-public shape", () => {
   for (const h of allowed) assert.equal(privateHostBlocked(h), false, `should allow ${h}`);
 });
 
+// Each shape below was measured passing this floor on 2026-08-07, so these are
+// closed holes rather than hypotheticals. The v4-mapped rows are the ones worth
+// keeping honest: the whole dotted-quad table was being skipped for an address
+// spelled ::ffff:169.254.169.254, which is the metadata endpoint by another name.
+test("the SSRF floor covers the alternate spellings of a blocked host", () => {
+  const blocked = [
+    "localhost.", "127.0.0.1.", "db.internal.",     // trailing dot is a legal FQDN
+    "::", "[::]",                                    // unspecified address
+    "::ffff:127.0.0.1", "[::ffff:169.254.169.254]",  // v4-mapped IPv6
+    "::ffff:10.0.0.1", "::ffff:192.168.1.1",
+    "fe81::1", "fe9f::1", "fea0::1", "febf::1",      // fe80::/10 is 64 prefixes, not one
+    "LOCALHOST", "169.254.169.254.",                 // case and dot together
+    "",                                              // an empty host resolves to nothing good
+  ];
+  for (const h of blocked) assert.equal(privateHostBlocked(h), true, `should block ${h}`);
+
+  // The neighbours of the widened rules must still pass, or the fix overreached.
+  const allowed = ["fec0::1", "ff00::1".replace("ff00", "2001"), "::ffff:8.8.8.8", "example.com."];
+  for (const h of allowed) assert.equal(privateHostBlocked(h), false, `should allow ${h}`);
+});
+
+// A scan republishes what it fetched, so a URL carrying credentials is refused
+// rather than stripped: stripping would scan a different resource than the one
+// that was typed, and pass the secret to the third party on the way.
+test("lens targets refuse embedded credentials", () => {
+  for (const raw of ["https://user:pass@example.com/", "https://user@example.com/", "https://:pass@example.com/"]) {
+    assert.equal(validateLensTarget(raw).ok, false, `should refuse ${raw}`);
+  }
+  assert.equal(validateLensTarget("https://example.com/user:pass@notauth").ok, true, "a colon in the PATH is not a credential");
+});
+
+// The guard follows redirects one hop at a time so a public URL cannot bounce
+// into private space. Before this, the request to the blocked host was still
+// made; only the discovery fan-out that came after it was skipped.
+test("redirect following validates every hop, not just the landing", async () => {
+  const seen = [];
+  const chain = {
+    "https://example.com/start": { status: 302, location: "https://example.com/second" },
+    "https://example.com/second": { status: 302, location: "http://169.254.169.254/latest/meta-data/" },
+    "https://example.com/ok": { status: 200 },
+  };
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    seen.push(String(url));
+    const hop = chain[String(url)] ?? { status: 200 };
+    return new Response(null, { status: hop.status, headers: hop.location ? { location: hop.location } : {} });
+  };
+  try {
+    const check = (candidate) => validateLensTarget(candidate);
+    const blocked = await fetchFollowingPublicRedirects("https://example.com/start", {}, check);
+    assert.equal(blocked.ok, false, "a hop into link-local space must be refused");
+    assert.ok(!seen.includes("http://169.254.169.254/latest/meta-data/"), "the blocked host must never be requested");
+    assert.equal(seen.length, 2, "it stops at the refusal instead of continuing");
+
+    const fine = await fetchFollowingPublicRedirects("https://example.com/ok", {}, check);
+    assert.equal(fine.ok, true);
+    assert.equal(fine.finalUrl, "https://example.com/ok");
+
+    globalThis.fetch = async (url) => new Response(null, { status: 302, headers: { location: `${url}x` } });
+    const looping = await fetchFollowingPublicRedirects("https://example.com/loop", {}, check, 3);
+    assert.equal(looping.ok, false, "an endless redirect chain is bounded");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+// Booking degrades to the old behaviour without a COUNTER binding, so that cal
+// stays runnable and testable with no Durable Object, the same way a missing
+// BOOKING_WORKFLOW only costs the expiry timer. That fallback is only acceptable
+// while production genuinely binds it: unbound, two simultaneous bookings take
+// the same slot again and nothing says so. This is the assertion that keeps the
+// degraded path from quietly becoming the real one.
+test("production binds the Durable Object the slot claim needs", async () => {
+  const { parseJsonc } = await import("./scripts/lib/jsonc.mjs");
+  for (const config of ["wrangler.jsonc", "wrangler.dev.jsonc"]) {
+    const parsed = parseJsonc(readFileSync(config, "utf8"));
+    const bindings = parsed.durable_objects?.bindings ?? [];
+    const counter = bindings.find((b) => b.name === "COUNTER");
+    assert.ok(counter, `${config} must bind COUNTER for the coffee slot claim`);
+    assert.equal(counter.class_name, "Counter");
+
+    // The claim rides the EXISTING class on purpose: a second class needs a
+    // new_sqlite_classes migration, and `wrangler versions upload` cannot apply
+    // one. If someone adds that migration later this assertion should be
+    // revisited deliberately rather than silently outgrown.
+    const classes = (parsed.migrations ?? []).flatMap((m) => m.new_sqlite_classes ?? []);
+    assert.deepEqual(classes, ["Counter"],
+      `${config} declares Durable Object classes ${JSON.stringify(classes)}; the slot claim assumes Counter is the only one`);
+  }
+});
+
+// One instance per slot is the entire exclusivity argument: two different times
+// must never share an instance, and one time must always resolve to the same
+// one. It also must not collide with the visit counter's instance name.
+test("slot reservations name one Durable Object instance per slot", () => {
+  const start = Date.UTC(2026, 7, 10, 14);
+  const end = start + 30 * 60_000;
+  assert.equal(reservationName(start, end), reservationName(start, end));
+  assert.notEqual(reservationName(start, end), reservationName(start + 1, end));
+  assert.notEqual(reservationName(start, end), reservationName(start, end + 1));
+  assert.notEqual(reservationName(start, end), "homepage-visits");
+  assert.match(reservationName(start, end), /^coffee-slot:\d+:\d+$/);
+});
+
 // ── the deploy-time page renderers ──────────────────────────────────
 // build.mjs step 1e runs these in Node and writes photos.html / bot.html, which
 // step 8 then turns into the q11 twin and the dcz deltas. The whole scheme rests on
@@ -4276,4 +4382,87 @@ test("inert regions are removed without eating the document", () => {
   assert.equal(documentContent("<script>secret</script>").includes("secret"), false);
   assert.equal(documentContent("<!-- hidden -->visible").includes("hidden"), false);
   assert.equal(documentContent("<!-- hidden -->visible").includes("visible"), true);
+});
+
+// ── RSS feeds ────────────────────────────────────────────────────────
+// Feeds are BUILD OUTPUT (scripts/gen-feeds.mjs), like the Markdown twins and
+// the dcz deltas: a pure function of site-manifest.json, the sitemap's lastmod
+// dates, and posts.json, so no committed copy can fall behind. These tests pin
+// the properties a subscriber depends on, none of which the build's own count
+// check can see.
+test("every feed is well-formed, dated, and newest-first", async () => {
+  const { buildFeeds, FEEDS, rfc822 } = await import("./scripts/gen-feeds.mjs");
+  const feeds = buildFeeds(".");
+  assert.equal(feeds.size, FEEDS.length);
+
+  for (const [route, body] of feeds) {
+    assert.match(body, /^<\?xml version="1\.0" encoding="UTF-8"\?>/, `${route} must open with the XML declaration`);
+    assert.match(body, /<rss version="2\.0"/, `${route} must declare RSS 2.0`);
+    // Plain substring, not a built regex: the value is a known path and
+    // hand-escaping one into a pattern is how an escape gets missed.
+    assert.ok(body.includes(`<atom:link href="https://aadhar.sh${route}" rel="self"`), `${route} must point at itself`);
+
+    const items = [...body.matchAll(/<item>([\s\S]*?)<\/item>/g)].map(([, item]) => item);
+    assert.ok(items.length, `${route} has no items`);
+
+    const dates = items.map((item) => {
+      const raw = item.match(/<pubDate>([^<]+)<\/pubDate>/)?.[1];
+      assert.ok(raw, `${route} has an item with no pubDate`);
+      const parsed = Date.parse(raw);
+      assert.ok(Number.isFinite(parsed), `${route} has an unparseable pubDate: ${raw}`);
+      return parsed;
+    });
+    // Newest first is the only order a reader respects.
+    assert.deepEqual(dates, [...dates].sort((a, b) => b - a), `${route} is not newest-first`);
+
+    for (const item of items) {
+      const guid = item.match(/<guid isPermaLink="true">([^<]+)<\/guid>/)?.[1];
+      const link = item.match(/<link>([^<]+)<\/link>/)?.[1];
+      assert.equal(guid, link, `${route} has an item whose guid and link disagree`);
+      assert.match(guid, /^https:\/\/aadhar\.sh\//, `${route} has a non-absolute guid`);
+      // A bare & inside a text node makes the whole document unparseable, which
+      // is the one authoring mistake that takes a feed offline silently.
+      for (const field of ["title", "description"]) {
+        const value = item.match(new RegExp(`<${field}>([\\s\\S]*?)</${field}>`))?.[1] ?? "";
+        assert.doesNotMatch(value, /&(?!amp;|lt;|gt;|quot;|apos;|#\d+;)/, `${route} has an unescaped & in an item ${field}`);
+        assert.doesNotMatch(value, /[<>]/, `${route} has a raw angle bracket in an item ${field}`);
+      }
+    }
+  }
+
+  // A date is a promise about when something changed, so an item with no
+  // authored lastmod is dropped rather than stamped `now`, which would re-sort
+  // every subscriber's timeline on each deploy.
+  assert.equal(rfc822("not-a-date"), null);
+  assert.equal(rfc822("2026-06-07"), "Sun, 07 Jun 2026 12:00:00 GMT");
+});
+
+// The feed's dates come from the sitemap, so the two cannot disagree about when
+// a page changed. That is the reason for reading it rather than minting a second
+// date source next to it.
+test("feed dates come from the sitemap the crawler already reads", async () => {
+  const { buildFeeds, sitemapDates } = await import("./scripts/gen-feeds.mjs");
+  const dates = sitemapDates(readFileSync("holding/sitemap.xml", "utf8"));
+  assert.ok(dates.size >= 40, `expected the sitemap to carry lastmod dates, found ${dates.size}`);
+
+  const garage = buildFeeds(".").get("/garage/feed.xml");
+  for (const [, item] of garage.matchAll(/<item>([\s\S]*?)<\/item>/g)) {
+    const path = item.match(/<link>https:\/\/aadhar\.sh([^<]+)<\/link>/)[1];
+    const pubDate = item.match(/<pubDate>([^<]+)<\/pubDate>/)[1];
+    assert.equal(pubDate, new Date(`${dates.get(path)}T12:00:00Z`).toUTCString(),
+      `${path} is dated differently in the feed and the sitemap`);
+  }
+});
+
+// Discovery is the half that makes a feed reachable: a reader's subscribe button
+// looks for <link rel="alternate"> on the page, not for a URL somebody guessed.
+test("each section advertises its feed", () => {
+  for (const [file, feed] of [["holding/garage/index.html", "/garage/feed.xml"], ["holding/lwe/index.html", "/lwe/feed.xml"]]) {
+    const html = readFileSync(file, "utf8");
+    assert.ok(html.includes(`type="application/rss+xml"`) && html.includes(`href="${feed}"`),
+      `${file} does not advertise ${feed}`);
+  }
+  // /writing is Worker-rendered, so its shell carries the link for the index and
+  // every post at once.
+  assert.match(readFileSync("holding/_worker.js/writing.js", "utf8"), /application\/rss\+xml[^"]*"[^"]*"\s*\+?[^"]*writing\/feed\.xml|writing\/feed\.xml/);
 });
