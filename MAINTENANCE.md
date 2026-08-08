@@ -639,16 +639,23 @@ Read it for what it is. The baseline comment in `perf-budget.mjs` already
 established by hand that bundle bytes are two orders of magnitude away from being
 a latency problem, and its caveat still holds: `check startup` ranks frames but
 does not cost them, and it profiles a local machine whose CPU is not
-Cloudflare's. So this is a REGRESSION TRIPWIRE, and a breach means "go
-re-measure", never "cold start regressed".
+Cloudflare's. So this is a DIAGNOSTIC, and a breach means "go re-measure", never
+"cold start regressed".
 
 It stays advisory, and the reason is the instrument. The profile window is about
-20 ms and lands roughly 5 samples, so consecutive runs differ by 2 ms with
-nothing changed (9.6, 7.6, 6.4 across three runs here). A sampled profile at that
-resolution has no business failing a PR, so the ceiling is 50 ms: six times the
-observed value and still an order of magnitude under the limit. When it fires,
-the cpuprofile is at `.build/.perfbudget/worker-startup.cpuprofile` and opens in
-Chrome DevTools as a flamegraph.
+20 ms and lands roughly 5 samples, so consecutive runs differ with nothing
+changed: 9.6, 7.6, 6.4 across three runs, then 16.4 on a fourth (2026-08-08), a
+2.6x spread on bytes nobody had touched. A sampled profile at that resolution has
+no business failing a PR, so the ceiling is 50 ms: six times the observed value
+and still an order of magnitude under the limit. When it fires, the cpuprofile is
+at `.build/.perfbudget/worker-startup.cpuprofile` and opens in Chrome DevTools as
+a flamegraph.
+
+**It is not the regression tripwire, and it used to be described as one here.**
+That job belongs to the deterministic numbers: the bundle gzip, the per-module
+attribution, and the wire-size diff below. Diffing two draws from a 2.6x-spread
+distribution manufactures findings, which is why `perf-snapshot.mjs` records
+neither this reading nor anything else sampled.
 
 This also closes out an older open question. The standing conclusion that cold
 start here is not eval-bound came from a 2026-07-28 experiment where lazy route
@@ -667,6 +674,49 @@ and the script reads it back. A green run prints one line (module count plus the
 largest single module); a run over the advisory threshold prints the top 5 with
 sizes, so "the bundle grew" arrives with the modules that grew it instead of a
 number to bisect by hand.
+
+### The wire-size diff (the differential half)
+
+Everything above is ABSOLUTE: a number against a constant somebody typed. That
+constant rots, and the baseline history in `perf-budget.mjs` is the receipt — 86
+→ 129.23 → 204.24 KiB, with the 129.23 era spent permanently in breach while CI
+printed "hard checks green" over it. The 204.24 baseline set on 2026-08-04 was
+itself already firing by 2026-08-08 (258.34 KiB observed at `295ee97`).
+
+`scripts/perf-snapshot.mjs` is the other half, and it has no constants to rot:
+
+```bash
+npm run perf:snapshot -- record base.json --label main   # self-builds via the dry-run
+npm run perf:snapshot -- record head.json --label mine
+npm run perf:snapshot -- compare base.json head.json     # markdown to stdout
+```
+
+`.github/workflows/perf-diff.yml` runs that on every PR touching served code: it
+builds the merge base, builds HEAD, measures BOTH WITH HEAD'S COPY of the script
+(stashed in `$RUNNER_TEMP` before the first `git switch`, since the base does not
+have it and measuring each side with its own copy would report a change to the
+measurement as a change in wire size), and posts the delta as a marker-updated PR
+comment. It is deliberately **not** part of `validate`: `validate` is the one
+required check on `main`, so anything living there is a merge gate, and a perf
+number that blocks a merge teaches people to widen thresholds. This one fails on
+nothing.
+
+Two design notes worth knowing before editing it. **Everything measured is
+deterministic**, so an unchanged file produces no row and a tooling-only PR
+produces a diff that says "No change" four times; that silence is the feature,
+because a report that always has content stops being read. And the **noise floor
+is asymmetric**: pages get a 128-byte floor, client assets get none. A page
+carries `/a/<name>.<hash8>.<ext>` references, so touching one shared asset flips
+its hash and moves every page's compressed size by a few bytes (measured: a
+one-line `nav.js` edit moved 38 of 46 pages, max 41 bytes, net -0.03 KiB); an
+asset's bytes are its own content, so nothing but editing it can move them and
+every byte is signal. One floor everywhere would have hidden the 50-byte `nav.js`
+change that produced the churn. Sub-floor movers are collapsed into a counted
+aggregate line, never dropped, and they stay in the totals.
+
+The shape is lifted from `astral-sh/ruff`'s `memory_report.yaml` and its ecosystem
+job: build the merge base, build HEAD, run both, post the difference, gate on
+nothing.
 
 Cloudflare Web Analytics/RUM is the outcome source for LCP, INP, CLS, FCP, and
 page-load behavior. Until it has a useful baseline, do not turn an advisory
