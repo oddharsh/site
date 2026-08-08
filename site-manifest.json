@@ -32,6 +32,11 @@
       "hint": "scrub the site back through its real deploy history, backed by Cloudflare D1",
       "flags": { "run": true, "taskbar": false, "sitemap": false, "gallery": false, "agents": true, "searchIndex": false, "webmention": false } },
 
+    { "path": "/perf", "title": "Performance history", "section": "status", "kind": "page",
+      "description": "The wire size of this site over time: worker bundle, pages, and client assets, recorded nightly.",
+      "hint": "what this site weighs on the wire, charted over time",
+      "flags": { "run": true, "taskbar": false, "sitemap": false, "gallery": false, "agents": true, "searchIndex": false, "webmention": false } },
+
     { "path": "/around", "title": "Around", "section": "around", "kind": "utility",
       "description": "AadharshBot's scheduled crawl of the crypto-VC neighborhood.",
       "hint": "the crypto-VC neighborhood",

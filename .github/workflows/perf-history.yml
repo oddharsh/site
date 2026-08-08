@@ -1,0 +1,158 @@
+name: Wire-size history
+
+# The TREND tier. perf-diff.yml catches the step a single PR makes; this catches
+# drift, which is the failure this repo actually had. The worker bundle went
+# 86 -> 129.23 -> 204.24 -> 258.34 -> 261.74 KiB gzip and every one of those
+# numbers was found by somebody tripping over a stale constant, because nothing
+# drew the slope.
+#
+# Shape borrowed from commonwarexyz/monorepo's benchmark.yml: nightly, skip when
+# nothing was committed, append to a series that lives outside the code branch.
+# Theirs pushes to a separate repository rendered by a third-party charting
+# action; this site is a website, so /perf renders its own from what this writes.
+
+on:
+  schedule:
+    - cron: "0 9 * * *" # 09:00 UTC daily, after the day's merges have settled
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "Override the row's date (YYYY-MM-DD). For backfilling only."
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  # Never two writers on the branch at once. An append is read-modify-write over
+  # a file with no locking, so a second run mid-push would silently drop a row.
+  group: perf-history
+  cancel-in-progress: false
+
+jobs:
+  # Measuring an unchanged tree adds a point and no information, and a chart of
+  # daily duplicates reads as a steady cadence the data does not have. /perf
+  # scales its X axis by real time for the same reason, so a skipped day shows
+  # up honestly as a gap rather than as a flat segment.
+  changed:
+    name: New commits since yesterday?
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.check.outputs.run }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: check
+        run: |
+          if [ -n "${{ inputs.date }}" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"   # a manual backfill always runs
+          elif [ "$(git log --oneline --since '25 hours ago' | wc -l)" -eq 0 ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "No commits in the last 25 hours; skipping."
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  record:
+    name: Record and append
+    needs: changed
+    if: needs.changed.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      # Write is scoped to this job and reaches only `perf-history`, which no
+      # ruleset covers. It CANNOT reach `main` or `production`: both carry
+      # rulesets with zero bypass actors, and that is the property the whole
+      # release model rests on. This is a GitHub token, so the standing rule
+      # about never giving CI a Cloudflare token that can write is untouched.
+      contents: write
+
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Record a snapshot
+        run: |
+          node scripts/perf-snapshot.mjs record "$RUNNER_TEMP/snapshot.json" \
+            --label "$(git rev-parse --short HEAD)"
+
+      - name: Reduce to one history row
+        env:
+          DATE_OVERRIDE: ${{ inputs.date }}
+        run: |
+          args=()
+          [ -n "$DATE_OVERRIDE" ] && args=(--date "$DATE_OVERRIDE")
+          node scripts/perf-snapshot.mjs row "$RUNNER_TEMP/snapshot.json" "${args[@]}" \
+            > "$RUNNER_TEMP/row.jsonl"
+          cat "$RUNNER_TEMP/row.jsonl"
+
+      - name: Append to the perf-history branch
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # An ORPHAN branch, so the series carries none of the code history and
+          # a clone of it is a few hundred KB rather than the whole repo.
+          if git ls-remote --exit-code --heads origin perf-history >/dev/null 2>&1; then
+            git fetch --no-tags --depth=1 origin perf-history
+            git checkout -B perf-history origin/perf-history
+          else
+            git checkout --orphan perf-history
+            git rm -rf --cached . >/dev/null 2>&1 || true
+            rm -rf holding cal serendipity scripts .github node_modules 2>/dev/null || true
+            printf '%s\n' \
+              '# Wire-size history' '' \
+              'One JSON object per line, appended nightly by .github/workflows/perf-history.yml.' \
+              'Rendered at https://aadhar.sh/perf. Machine-owned: do not hand-edit.' \
+              > README.md
+            : > history.jsonl
+          fi
+
+          DATE=$(node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync(process.env.ROW,"utf8")).ts)')
+          # Idempotent by date. A re-run (a retry, or a same-day manual dispatch)
+          # must replace its row rather than add a second one, or the chart grows
+          # a vertical pair of points for one day.
+          if [ -s history.jsonl ]; then
+            grep -v "\"ts\":\"$DATE\"" history.jsonl > history.tmp || true
+            mv history.tmp history.jsonl
+          fi
+          cat "$RUNNER_TEMP/row.jsonl" >> history.jsonl
+          sort -o history.jsonl history.jsonl   # ts is the first key, so lexical sort is chronological
+
+          git add README.md history.jsonl
+          if git diff --cached --quiet; then
+            echo "Nothing to commit."
+            exit 0
+          fi
+          git commit -m "perf: record $DATE"
+          git push origin perf-history
+        env:
+          ROW: ${{ runner.temp }}/row.jsonl
+
+      - name: Summary
+        run: |
+          {
+            echo "### Wire-size history"
+            echo
+            echo '```json'
+            cat "$RUNNER_TEMP/row.jsonl"
+            echo '```'
+            echo
+            echo "Appended to [\`perf-history\`](https://github.com/${{ github.repository }}/blob/perf-history/history.jsonl). Rendered at [/perf](https://aadhar.sh/perf)."
+          } >> "$GITHUB_STEP_SUMMARY"

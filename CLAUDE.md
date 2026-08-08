@@ -57,6 +57,11 @@ npm run perf:snapshot -- record base.json --label main
 npm run perf:snapshot -- record head.json --label mine
 npm run perf:snapshot -- compare base.json head.json
 
+# the TREND, which is what the diff structurally cannot see. one compact JSONL
+# row per snapshot; .github/workflows/perf-history.yml appends these nightly to
+# the machine-owned `perf-history` branch and /perf charts them.
+npm run perf:snapshot -- row base.json
+
 # diff infra.json (DNS, zone/edge settings, account resources, Workers) against
 # reality. read-only; never mutates Cloudflare. add CLOUDFLARE_API_TOKEN for
 # the account tier, or --offline for the no-network tier.
@@ -121,6 +126,18 @@ worktrees may edit freely, but a worktree is not a release surface.
   threshold, and a number that merely reports trains nobody to do anything except
   read it. Modelled on `astral-sh/ruff`'s memory and ecosystem jobs, which do
   exactly this and gate on nothing.
+- **`perf-history` is a third machine-owned branch, alongside `production`.**
+  `.github/workflows/perf-history.yml` appends one JSONL row a night and `/perf`
+  charts it; nothing else writes there and nobody should hand-edit it. It exists
+  because the per-PR diff catches the STEP a change makes and structurally cannot
+  see DRIFT, which is the failure this repo actually had. A branch is the target
+  because `main`'s ruleset has zero bypass actors so no workflow may push to it,
+  and the only Cloudflare token that can write D1 is environment-gated behind a
+  reviewer for the ramp; a branch outside both rulesets is the one place a
+  nightly job can write without weakening either. The job's `contents: write` is
+  a GITHUB token, so the no-Cloudflare-write-token-in-CI rule is untouched.
+  Shape from `commonwarexyz/monorepo`'s `benchmark.yml`, which runs the same
+  split: a per-change check plus a nightly series kept outside the code branch.
 - Only a successful CI run for `main` associated with a merged PR can promote
   the exact tested commit to the machine-owned `production` branch. Cloudflare
   Workers Builds watches `production` and is the only production publisher for

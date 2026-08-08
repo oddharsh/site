@@ -47,6 +47,7 @@
     { label: "security center", path: "/security", hint: "the site's security posture, XP-style: firewall, updates, threat protection" },
     { label: "windows update", path: "/updates", hint: "what shipped lately: the deploy changelog as installed updates" },
     { label: "system restore", path: "/restore", hint: "scrub the site back through its real deploy history, backed by Cloudflare D1" },
+    { label: "performance history", path: "/perf", hint: "what this site weighs on the wire, charted over time" },
     { label: "around", path: "/around", hint: "the crypto-VC neighborhood" },
     { label: "garage", path: "/garage", hint: "prototypes + experiments" },
     { label: "serendipity", path: "/serendipity", hint: "events worth going to" },

@@ -718,6 +718,65 @@ The shape is lifted from `astral-sh/ruff`'s `memory_report.yaml` and its ecosyst
 job: build the merge base, build HEAD, run both, post the difference, gate on
 nothing.
 
+### The trend (`/perf`, and the `perf-history` branch)
+
+The diff catches the STEP one PR makes. It structurally cannot see DRIFT, and
+drift is the failure this repo actually had: 86 → 129.23 → 204.24 → 258.34 →
+261.74 KiB gzip, every number found by somebody tripping over a stale constant
+because nothing drew the slope.
+
+`.github/workflows/perf-history.yml` runs at 09:00 UTC, skips when nothing was
+committed in 25 hours, records a snapshot of `main`, reduces it to one JSONL line
+(`perf-snapshot.mjs row`, ~430 bytes), and appends it to **`perf-history`**, an
+orphan branch holding `history.jsonl` and a README. `/perf` renders it, SWR-cached
+in KV for 6h.
+
+**Why a branch and not D1 or a commit to `main`.** `main`'s ruleset has zero
+bypass actors, so no workflow can push there. D1 writes need a Cloudflare Edit
+token, and the only one that exists is environment-gated behind a required
+reviewer for the ramp. A branch outside both rulesets is the one write target a
+nightly job can reach without weakening something load-bearing. The job's
+`contents: write` is a GitHub token scoped to that job and reaches only that
+branch, so the standing rule about no Cloudflare write token in CI is untouched.
+
+`perf-history` is MACHINE-OWNED, like `production`. Do not hand-edit it. The
+append is idempotent by date (a re-run replaces its own row rather than adding a
+second point for one day) and the workflow's concurrency group is `perf-history`
+with `cancel-in-progress: false`, because an append is a read-modify-write over a
+file with no locking and two writers would silently drop a row.
+
+Three things about the page, all about honesty rather than looks:
+
+- **The chart is server-rendered SVG with zero client JS.** Served pages here
+  carry no cross-origin assets and inline scripts need per-document CSP hashes,
+  so a chart that draws itself on the server costs one `<svg>` and no exceptions.
+  Point tooltips are native `<title>` elements.
+- **Hand-entered history is drawn dashed.** `holding/_worker.js/perf-seed.json`
+  carries the four points from `perf-budget.mjs`'s baseline comment so the page
+  is useful before the series fills up. They live in the repo rather than seeded
+  into the branch so every hand-entered number goes through PR review, and they
+  render differently from measured ones because a number somebody typed into a
+  code comment and a number a runner measured last night are not the same kind of
+  fact. A contract test pins that distinction.
+- **The x-axis is time-proportional, not index-proportional.** The nightly job
+  skips days with no commits, so evenly spacing the points would draw a steady
+  cadence the data does not have. A gap in the series is a gap in the chart.
+
+If the fetch fails, `/perf` degrades to the seeded points and still renders; the
+route oracle asserts exactly that, since the local harness has no KV and cannot
+reach GitHub. The `swrKV` guard is `isValid: rows.length > 0`, so a GitHub outage
+can never overwrite a good cached history with nothing.
+
+**One trap worth knowing before editing the chart CSS.** A bare
+`.chart .s-worker { stroke; fill }` outranks `.chart polyline { fill: none }` on
+specificity, so every series fills down to the axis and the chart renders as three
+coloured blobs. It looks like a data bug and is a cascade bug. Every series rule
+is element-qualified (`polyline.s-worker`, `circle.s-worker`) for that reason, and
+a contract test fails if one goes back to being unqualified.
+
+Backfill or force a run with `workflow_dispatch`; it takes an optional `date` to
+place the row. Raw series at `/perf.json`.
+
 Cloudflare Web Analytics/RUM is the outcome source for LCP, INP, CLS, FCP, and
 page-load behavior. Until it has a useful baseline, do not turn an advisory
 asset warning into a CI failure. Use a controlled mobile/4G browser run for
