@@ -15,6 +15,22 @@
 // while preserving the ability to deploy + serve as a Cloudflare Worker.
 export const CANONICAL_HOST = "aadhar.sh";
 
+// Is this request on the one hostname the public site is published at?
+//
+// Three other hostnames reach this Worker, and none of them may be treated as
+// the canonical site: `cal.aadhar.sh` (a declared zone route, which 404s every
+// path but /coffee* by design), any `*.workers.dev` version preview, and the
+// retired `*.pages.dev` names the arm above 301s away. Two things key off this:
+// responses off the canonical host are noindexed, and they are kept out of the
+// Workers Cache entrypoint, whose key cannot see the Host at all.
+//
+// Exact match, deliberately. `www.aadhar.sh` is redirected at the zone and never
+// arrives here; if it ever did, noindexing its 301 costs nothing, while treating
+// a near-match as canonical is how a duplicate hostname gets published.
+export function isCanonicalHost(hostname) {
+  return String(hostname || "").toLowerCase() === CANONICAL_HOST;
+}
+
 // /images/full/<stem> originals are served from R2 under STABLE, non-content-
 // addressed URLs (the SOOC filename names a slot, not its bytes) and cached hard
 // on the convention that an original is never overwritten in place. When that
