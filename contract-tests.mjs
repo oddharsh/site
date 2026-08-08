@@ -3181,7 +3181,7 @@ test("the kitesurf selector is tried, and a rejection is remembered rather than 
   const calls = [];
 
   try {
-    // `browser=kitesurf` is documented in Cloudflare's launch post and NOT in
+    // `browser=kitesurf` is documented on Cloudflare's Kitesurf page and NOT in
     // the Quick Actions reference. A 400 on the attempt carrying it must not
     // surface as "the scanned site is broken", which is what hard-coding the
     // parameter would have produced on every single render.
@@ -3203,6 +3203,62 @@ test("the kitesurf selector is tried, and a rejection is remembered rather than 
     const second = await runBrowserAction("snapshot", { url: "https://example.com" }, env);
     assert.equal(calls.length, 1, "the known-dead selector is not retried");
     assert.equal(second.engine, "chromium-rest", "REST still serves, just without the dead selector");
+  } finally {
+    globalThis.fetch = realFetch;
+    _resetKitesurfProbe();
+  }
+});
+
+test("the selector rides the browser-run path, which is the only one it works on", async () => {
+  const { restUrl, runBrowserAction, _resetKitesurfProbe } =
+    await import("./holding/_worker.js/lens-render.js");
+
+  // Both spellings ROUTE — probed unauthenticated against the real account id,
+  // each answers error 10000 rather than 7003 "could not route to". So posting
+  // to the wrong one costs no error and no log line; it costs the opt-in. This
+  // is a one-word difference with no symptom, which is exactly the kind that
+  // survives a review, so it gets an assertion of its own rather than riding
+  // along inside a behavioural test.
+  const url = restUrl("acct", "snapshot", "kitesurf");
+  assert.ok(url.includes("/browser-run/snapshot"), "Kitesurf documents this path alone");
+  assert.ok(!url.includes("/browser-rendering/"), "the alias silently drops the selector");
+  assert.ok(url.endsWith("?browser=kitesurf"));
+  assert.equal(restUrl("acct", "snapshot", ""), restUrl("acct", "snapshot"), "no engine, no query string");
+
+  // And the shipped caller must use that builder rather than its own literal,
+  // which is the drift this exists to prevent.
+  const realFetch = globalThis.fetch;
+  const calls = [];
+  try {
+    _resetKitesurfProbe();
+    globalThis.fetch = async (u) => { calls.push(String(u)); return new Response("{}", { status: 200 }); };
+    await runBrowserAction("snapshot", { url: "https://example.com" }, { CF_ACCOUNT_ID: "acct", BROWSER_RUN_TOKEN: "tok" });
+    assert.ok(calls[0].includes("/browser-run/snapshot?browser=kitesurf"), calls[0]);
+  } finally {
+    globalThis.fetch = realFetch;
+    _resetKitesurfProbe();
+  }
+});
+
+test("a 200 is not evidence that kitesurf rendered, and is not reported as if it were", async () => {
+  const { runBrowserAction, _resetKitesurfProbe } =
+    await import("./holding/_worker.js/lens-render.js");
+  const realFetch = globalThis.fetch;
+
+  try {
+    _resetKitesurfProbe();
+    // An endpoint that IGNORES an unrecognised query parameter answers exactly
+    // this: 200, with the documented envelope, which carries no engine field.
+    // The old code read that as confirmation and labelled the render `kitesurf`,
+    // so a Chromium render was reported as Kitesurf on the one page whose entire
+    // premise is showing what a machine actually saw.
+    globalThis.fetch = async () => new Response(
+      JSON.stringify({ success: true, result: { content: "<html></html>" }, meta: { status: 200, title: "x" } }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+    const run = await runBrowserAction("snapshot", { url: "https://example.com" }, { CF_ACCOUNT_ID: "acct", BROWSER_RUN_TOKEN: "tok" });
+    assert.equal(run.engine, "kitesurf-requested", "a 200 means the call worked, not that Kitesurf served it");
+    assert.notEqual(run.engine, "kitesurf", "only npm run kitesurf:check can promote this label");
   } finally {
     globalThis.fetch = realFetch;
     _resetKitesurfProbe();

@@ -883,6 +883,46 @@ generic hex back.
   REST itself keeps serving, because gating the whole REST path on a dead beta
   flag silently demoted every later render back to the binding.
 
+  **The selector only works on `/browser-run/<action>`, and this posted to
+  `/browser-rendering/<action>` until 2026-08-08.** Both spellings ROUTE, which
+  is the whole problem: probed unauthenticated against the real account id, each
+  answers error 10000 `Authentication error` rather than 7003 `Could not route
+  to`, so the wrong path costs no error, no retry and no log line. It costs the
+  opt-in. Cloudflare's Kitesurf page documents the selector on `browser-run`
+  alone while the older Quick Actions reference pages still show
+  `browser-rendering`, so reading either one in isolation gets you a path that
+  looks right. `restUrl()` is exported from `lens-render.js` and asserted in a
+  contract test for exactly this reason: a one-word difference with no symptom
+  survives review.
+
+  **A 200 was being read as proof Kitesurf served, and it is not.** The
+  documented envelope is `{success, result, meta:{status,title}}` with no engine
+  field, so an endpoint that ignores an unrecognised query parameter and one that
+  honours it return the same response. The old code set `engine: "kitesurf"` on
+  any 200 carrying the selector, which meant `/lens` could report a Chromium
+  render as Kitesurf on the page whose entire premise is showing what a machine
+  actually saw. The label is `kitesurf-requested` now, and the 400-retry is
+  unchanged.
+
+  **Promoting it takes one control: does the endpoint REJECT an invented engine
+  name?** `npm run kitesurf:check` runs that control and prints a verdict — same
+  shape as the `--x-bogus-flag` control on wrangler and
+  `definitely-not-a-real-gateway-xyz` on AI Gateway, and worth running before
+  trusting any beta selector the docs describe but do not specify the failure
+  mode for. It is a SCRIPT and not a runtime probe because an ignored parameter
+  means the control RENDERS rather than erroring, and this account has 10 free
+  browser-minutes a day, so a once-per-isolate control would spend the budget
+  measuring itself. Its free tier costs nothing (invalid payload, so nothing can
+  render) and is decisive only when the error names the engine parameter;
+  `--render` buys the certain answer for two renders of a 40-byte inline
+  document. If the verdict is `enforced`, promote the label and record the date
+  and the outputs at the control.
+
+  Worth the effort because Kitesurf is FREE during its beta. The daily
+  browser-minute ceiling is what makes `/lens/browser` fragile (and what blacks
+  out the feature while you debug it), so a selector that silently does nothing
+  is not a cosmetic mislabel.
+
   The snapshot now reports `engine` and a server-computed `shape` (words,
   headings, links, images, JSON-LD). `shape` is counted from the FULL rendered
   body BEFORE the 120KB content cap, which retires the old truncation bail: a

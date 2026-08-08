@@ -25,12 +25,33 @@
 // this falls to the binding and SAYS which engine answered, because a reader
 // comparing two renders needs to know whether they came from the same one.
 //
-// ── one unverified thing, handled rather than assumed ─────────────────────
-// `browser=kitesurf` appears in Cloudflare's launch post and NOT in the Quick
-// Actions reference. So the first REST call carries it and watches for a
-// rejection; on one it retries plain and remembers, for this isolate, that the
-// parameter is not live. The alternative was hard-coding a query parameter on
-// the strength of a blog post and letting the 400 read as a broken target.
+// ── the path IS the opt-in, and the wrong one fails silently ──────────────
+// This posted to /browser-rendering/<action> until 2026-08-08. Both spellings
+// route — probed unauthenticated against the real account id, each answers
+// error 10000 "Authentication error" rather than 7003 "could not route to" —
+// so nothing was broken and nothing said so. But Kitesurf's own documentation
+// puts `browser=kitesurf` on /browser-run/<action> ALONE, and an endpoint that
+// ignores an unrecognised query parameter answers 200. A dropped opt-in and an
+// honoured one are the same response.
+//
+// ── what a 200 proves, which is less than this file used to claim ─────────
+// A 400 on the attempt carrying the selector still means the parameter is dead
+// here, and is still remembered for the isolate. A 200 means only that the call
+// succeeded. It does NOT mean Kitesurf served it: the documented envelope is
+// {success, result, meta:{status,title}} with no engine field, and there is no
+// response header we can rely on appearing. So the label is `kitesurf-requested`
+// rather than `kitesurf`, because /lens exists to say what a machine actually
+// saw and cannot start guessing about its own renderer.
+//
+// Promoting that to a bare `kitesurf` takes one control: does the endpoint
+// REJECT an invented engine name? A rejection means the parameter is parsed and
+// enforced, so a 200 carrying `kitesurf` is Kitesurf. `npm run kitesurf:check`
+// runs that control and prints the verdict.
+//
+// It is a script rather than a runtime probe on purpose. An IGNORED parameter
+// means the control renders instead of erroring, and this account gets 10 free
+// browser-minutes a day, so a once-per-isolate control would spend the budget
+// measuring itself and black out the feature it was checking.
 
 // Per-isolate memo: null = untested, false = REST rejected the selector. Not
 // persisted, because it is a fact about an API during a beta.
@@ -40,6 +61,11 @@ export function _resetKitesurfProbe() { kitesurfParamLive = null; }
 export function _kitesurfParamLive() { return kitesurfParamLive; }
 
 const REST_BASE = "https://api.cloudflare.com/client/v4/accounts";
+
+// Exported so check-kitesurf.mjs probes the SAME URL this ships, rather than a
+// second copy of the path that can agree with itself while both are wrong.
+export const restUrl = (accountId, action, engine) =>
+  `${REST_BASE}/${accountId}/browser-run/${action}${engine ? `?browser=${encodeURIComponent(engine)}` : ""}`;
 
 // Either door counts. A deployment holding only a REST token still renders, so
 // a guard that insists on the BINDING would 503 a working configuration.
@@ -59,7 +85,7 @@ export async function runBrowserAction(action, payload, env, { engine = "kitesur
   if (canRest) {
     const tryEngine = engine === "kitesurf" && kitesurfParamLive !== false;
     const call = (withEngine) => fetch(
-      `${REST_BASE}/${env.CF_ACCOUNT_ID}/browser-rendering/${action}${withEngine ? "?browser=kitesurf" : ""}`,
+      restUrl(env.CF_ACCOUNT_ID, action, withEngine ? "kitesurf" : ""),
       {
         method: "POST",
         headers: { "content-type": "application/json", authorization: `Bearer ${env.BROWSER_RUN_TOKEN}` },
@@ -76,7 +102,9 @@ export async function runBrowserAction(action, payload, env, { engine = "kitesur
       return { response, engine: "chromium-rest" };
     }
     if (tryEngine && response.ok) kitesurfParamLive = true;
-    return { response, engine: tryEngine && kitesurfParamLive ? "kitesurf" : "chromium-rest" };
+    // `kitesurf-requested`, never `kitesurf`: the selector was sent and the call
+    // came back clean, which is everything a 200 can tell us. See the header.
+    return { response, engine: tryEngine && kitesurfParamLive ? "kitesurf-requested" : "chromium-rest" };
   }
   if (!env.BROWSER || typeof env.BROWSER.quickAction !== "function") return null;
   return { response: await env.BROWSER.quickAction(action, payload), engine: "chromium-binding" };

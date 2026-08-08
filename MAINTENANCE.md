@@ -1073,10 +1073,31 @@ repo's no-write-token rule is untouched — but it is not a read token and shoul
 not be described as one. Without it the route silently uses the binding and
 reports `engine: "chromium-binding"`, so the view degrades rather than breaks.
 
-`browser=kitesurf` is documented only in Cloudflare's launch post, not in the
+`browser=kitesurf` is documented only on Cloudflare's Kitesurf page, not in the
 Quick Actions reference. The code therefore tries the parameter, falls back once
 on a 400, and remembers the answer for the isolate. If Cloudflare ships it into
 the binding, delete `renderOverRest` and the token with it.
+
+**The selector rides `/browser-run/<action>`, not `/browser-rendering/<action>`.**
+Both spellings route, so the wrong one drops the opt-in without an error. Fixed
+2026-08-08; `restUrl()` in `lens-render.js` is the single source and a contract
+test pins the path.
+
+**`engine: "kitesurf-requested"` means the selector was sent and the call came
+back 200.** It does NOT mean Kitesurf served the render: the response envelope
+carries no engine field, so an endpoint that ignores the parameter is
+indistinguishable from one that honours it. To settle it, run the control:
+
+```bash
+BROWSER_RUN_TOKEN=... npm run kitesurf:check            # free, may be inconclusive
+BROWSER_RUN_TOKEN=... npm run kitesurf:check -- --render  # decisive, ~2 tiny renders
+```
+
+It sends an invented engine name. A rejection proves the parameter is validated,
+which is what makes a 200 carrying `kitesurf` mean Kitesurf; on that verdict,
+promote the label in `lens-render.js` to a bare `kitesurf` and record the date
+and outputs at the control. Ration it: the account has 10 free browser-minutes a
+day and `--render` spends from the same budget `/lens/browser` does.
 
 Read which engine actually answered, and the shape it measured:
 ```bash
