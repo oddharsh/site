@@ -2283,9 +2283,42 @@ test("the SSRF floor covers the alternate spellings of a blocked host", () => {
   ];
   for (const h of blocked) assert.equal(privateHostBlocked(h), true, `should block ${h}`);
 
+  // Both spellings of a v4-mapped address, because the caller decides which one
+  // this function sees and it is NOT the one written above.
+  const mappedHex = ["::ffff:a9fe:a9fe", "::ffff:7f00:1", "::ffff:a00:1", "::ffff:c0a8:101"];
+  for (const h of mappedHex) assert.equal(privateHostBlocked(h), true, `should block ${h}`);
+
   // The neighbours of the widened rules must still pass, or the fix overreached.
-  const allowed = ["fec0::1", "ff00::1".replace("ff00", "2001"), "::ffff:8.8.8.8", "example.com."];
+  const allowed = ["fec0::1", "ff00::1".replace("ff00", "2001"), "::ffff:8.8.8.8", "::ffff:808:808", "example.com."];
   for (const h of allowed) assert.equal(privateHostBlocked(h), false, `should allow ${h}`);
+});
+
+// THE regression, and the reason this test exists separately from the one above.
+//
+// `new URL("https://[::ffff:169.254.169.254]/").hostname` is `[::ffff:a9fe:a9fe]`
+// — the WHATWG parser rewrites the dotted tail into hex groups. So the host this
+// guard actually receives is never the host anybody types, and a floor tested
+// only on the typed form reported a hole closed while it was open. Production
+// answered `ok: true` for the metadata address on 2026-08-08, hours after the
+// unit test above went green.
+//
+// Assert through validateLensTarget, which is the door every scan really uses.
+test("a blocked address stays blocked through the URL parser that rewrites it", () => {
+  const refused = [
+    "https://[::ffff:169.254.169.254]/",   // cloud metadata, the one that matters
+    "https://[::ffff:127.0.0.1]/",
+    "https://[::ffff:10.0.0.1]/",
+    "https://[::ffff:192.168.1.1]/",
+    "https://[::]/",
+    "https://[fe9f::1]/",
+    "https://localhost./x",
+  ];
+  for (const raw of refused) {
+    const verdict = validateLensTarget(raw);
+    assert.equal(verdict.ok, false, `${raw} normalizes to ${(() => { try { return new URL(raw).hostname; } catch { return "unparseable"; } })()} and must be refused`);
+  }
+  // A public v4-mapped address is still a public address.
+  assert.equal(validateLensTarget("https://[::ffff:8.8.8.8]/").ok, true);
 });
 
 // A scan republishes what it fetched, so a URL carrying credentials is refused

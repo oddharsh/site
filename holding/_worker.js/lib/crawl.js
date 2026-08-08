@@ -41,8 +41,20 @@ export function privateHostBlocked(host) {
   if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".local") || h.endsWith(".internal") || h.endsWith(".onion")) return true;
   if (h === "::" || h === "::1" || h.startsWith("fc") || h.startsWith("fd")) return true;
   if (/^fe[89ab][0-9a-f]:/.test(h)) return true;    // fe80::/10 link-local, all 64 prefixes
-  const mapped = h.match(/^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
-  if (mapped) return privateHostBlocked(mapped[1]);
+  // v4-mapped IPv6, in BOTH spellings, because the caller decides which one this
+  // function ever sees. `new URL("https://[::ffff:169.254.169.254]/").hostname`
+  // is `[::ffff:a9fe:a9fe]`: the WHATWG parser rewrites the dotted tail into hex
+  // groups. Handling only the dotted form meant this returned false for every
+  // address that arrived through a URL, which is every address /lens inspects.
+  // Caught in production 2026-08-08, after a unit test that called this function
+  // with a shape no caller produces reported it fixed.
+  const mappedDotted = h.match(/^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
+  if (mappedDotted) return privateHostBlocked(mappedDotted[1]);
+  const mappedHex = h.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+  if (mappedHex) {
+    const high = parseInt(mappedHex[1], 16), low = parseInt(mappedHex[2], 16);
+    return privateHostBlocked(`${high >> 8}.${high & 0xff}.${low >> 8}.${low & 0xff}`);
+  }
   const m = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
   if (m) {
     const a = +m[1], b = +m[2];
