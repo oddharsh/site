@@ -1815,6 +1815,63 @@ npm run deploy
     `git checkout` mtime problem in gotcha 20, and the same resolution: the
     conflict lives at the one operation that touches both, so handle it there.
 
+25. **A secret change between one production upload and the next is INVISIBLE to
+    the ramp, and ramping across that window silently reverts it.** Two rules
+    this file already states separately produce it, and each is right on its own.
+
+    A secret is a version (see the `versions secret put` note above), so
+    `wrangler versions secret put|delete` mints one. That version is created by
+    `create_version_api` and therefore carries **no `workers/alias`**. And since
+    #259, `newestVersion()` in `scripts/deploy-promote.mjs` filters candidates to
+    the production alias, because ramping the newest version outright was a live
+    way to walk another agent's branch build to 100%.
+
+    Together: **a secret change made after the production build can never be the
+    ramp target.** The dry run does say so, in a line that reads like routine
+    noise rather than a warning:
+
+    ```
+    skipping 1 newer non-production version(s): (no alias)
+    target version:   d285199d
+    ```
+
+    Measured 2026-08-08 while deleting the dead `BROWSER_RENDER_TOKEN`. The
+    deletion landed 52 seconds after Workers Builds uploaded `d285199d`, so that
+    build still carried the secret (13 names) while the deletion version
+    `9e53d836` did not (12). Ramping the target the script picked would have put
+    the secret back, and nothing would have said a word.
+
+    **What saves it is that a version inherits the CURRENT secret set**, and that
+    is the half worth remembering, because it turns an alarming problem into a
+    small one. `0013118a`, built four minutes after the deletion, already lacked
+    the secret; so did `404dac60`, the next production build, which is the one
+    that got ramped. **The exposure is only the window between the production
+    upload and the secret change** — one more merge, or any push to `production`,
+    closes it without help.
+
+    The rule is short: **after changing a secret, do not ramp a production
+    version that predates the change.** Check with
+    `npx wrangler versions view <id>`, which prints `Secrets:` by name. If the
+    only production build is older than your change, wait for the next one;
+    re-applying the change on top after ramping is the fallback rather than the
+    default, since a secret PUT needs the value again and those live on a
+    workstation.
+
+    Do NOT reach for "let the ramp target unaliased versions too". That is
+    precisely the guard #259 added and its reason has not gone away. If this is
+    ever worth automating, the shape is narrower: allow an unaliased version only
+    when it sits directly above the newest production build AND its
+    `workers/message` names a secret change.
+
+    Two near-misses here are worth copying past the secret itself. `--dry-run`
+    is what surfaced the skipped version at all, the second time it has earned
+    its place (gotcha 22 is the first). And the ramp was nearly run from the main
+    tree, which at that moment sat on **another session's branch** with an
+    uncommitted file. Gotcha 24 says to pull `main` before ramping; the sharper
+    form is **check you are ON it**, because a tree parked on somebody else's
+    branch satisfies a `git pull` and still reads the wrong `checkpoints.json`.
+    Ramp from a fresh worktree at `origin/main`.
+
 ---
 
 ## Source folder for new photos
