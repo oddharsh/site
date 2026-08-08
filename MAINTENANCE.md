@@ -1104,6 +1104,53 @@ Read which engine actually answered, and the shape it measured:
 curl -s 'https://aadhar.sh/lens/browser?url=https://react.dev/' | jq '.engine, .shape'
 ```
 
+### Add or change a /lens interaction recipe
+
+Recipes are the fixed scripts `/lens/browser?do=<id>` runs inside a page before
+reading it. They live in `holding/_worker.js/lens-recipes.js` and are published
+verbatim, so anyone can check what ran:
+
+```bash
+curl -s 'https://aadhar.sh/lens/browser?recipes=1' | jq '.recipes[] | {id, label}'
+curl -s 'https://aadhar.sh/lens/browser?url=https://example.com&do=expand' | jq '.interaction'
+```
+
+**Rules a new recipe has to clear, each pinned by a contract test.** It must not
+click or submit anything. It must not contain `fetch(`, `XMLHttpRequest`,
+`eval(`, `new Function`, `document.cookie`, `localStorage`, `sendBeacon` or
+`postMessage`, because a recipe is a DOM edit and never a network actor. Its id
+must match `/^[a-z][a-z0-9-]{1,15}$/`. And it reports through
+`__receipt({acted, scanned, note})` with integers and a fixed enum only, never a
+string lifted off the page: that string would be the one place attacker bytes
+could ride back into our JSON.
+
+`acted: 0` is a success, not a failure. `scanned` is what makes it readable
+("examined 37 overlays, none matched"), so populate it.
+
+**An ASYNC recipe is not buildable until the probe says so.** Both shipping
+recipes are synchronous. Anything whose effect lands after a tick needs
+`waitForTimeout` to delay the capture, and whether that key is accepted and
+lands after injection is exactly what the probe measures:
+
+```bash
+BROWSER_RUN_TOKEN=... node scripts/lens-inject-probe.mjs
+```
+
+Seven cases, one render each, spaced 11s apart against the 6/min account-wide
+ceiling. Read case 1 first: if the synchronous marker does not survive the
+capture, nothing here works. Case 3 against case 4 is the async verdict.
+
+The one case that script cannot run is the Workers binding, which only exists
+inside a Worker:
+
+```bash
+npm run dev:remote
+curl -s 'http://localhost:8787/lens/browser?url=https://example.com&do=expand' | jq '.interaction, .engine'
+```
+
+A binding that refuses `addScriptTag` surfaces as the existing `upstream_not_ok`
+502 carrying `unrecognized_keys`, the same signature the Kitesurf probe gave.
+
 ### Regenerate the photo search expansion
 `images/semantics.json` is what `photo_query` ranks against beyond the caption and
 the EXIF. Two tiers, and every stem records which it got:

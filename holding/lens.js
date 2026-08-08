@@ -28,6 +28,10 @@
 
   var data = null;       // last successful HTTP envelope
   var browserData = null; // last opt-in Browser Run snapshot
+  // The post-interaction snapshot lives BESIDE the plain one, never on top of
+  // it: overwriting browserData would destroy the "before" half of the only
+  // comparison this feature exists to make.
+  var browserRecipeData = null;
   var view = "both";     // both | human | machine | browser | delta
   var lens = "anatomy";  // default = the raw observation; must match lensState() in _worker.js/lens.js
   var counterfactuals = { markdown: false, semantic: false, contract: false, authority: false, receipt: false, dictionary: false, ech: false };
@@ -309,6 +313,7 @@
     var msg = (j && j.error) || "Something went wrong.";
     data = null;
     browserData = null;
+    browserRecipeData = null;
     machineBody.innerHTML = '<div class="lx-empty">' + esc(msg) + "</div>";
     humanBody.innerHTML = '<div class="lx-empty">No page to show.</div>';
     renderBrowser();
@@ -323,6 +328,7 @@
     if (vsMode) exitVs(false);   // a single scan replaces the head-to-head
     busy = true;
     browserData = null;
+    browserRecipeData = null;
     urlInput.value = url;
     // A new site is a fresh page: don't carry the last scan's Delta switches onto
     // it (a markdown/contract simulation from site A silently misrepresenting site
@@ -587,7 +593,7 @@
       if (button) button.addEventListener("click", runBrowser);
       return;
     }
-    window.LensBrowser.mount(browserBody, data, browserData, runBrowser);
+    window.LensBrowser.mount(browserBody, data, browserData, runBrowser, browserRecipeData);
   }
 
   // Browser Run fires itself once a scan lands: the third pane filling on its
@@ -595,6 +601,11 @@
   // Coarse pointers keep the opt-in button (a phone should not spend the 4/min
   // Browser Run budget by default), and a 429 lands in lens-browser.js's
   // Try-again state, so the fallback is the old behavior exactly.
+  //
+  // It fires the PLAIN render and never a recipe. An interaction has to stay a
+  // deliberate click: it spends from the same 3/min budget, and the plain
+  // snapshot it produces is the "before" every recipe result is measured
+  // against, so it has to happen first anyway.
   function maybeAutoRunBrowser() {
     if (browserData || browserBusy || !data) return;
     if (view !== "both" && view !== "browser") return;
@@ -604,19 +615,23 @@
     runBrowser();
   }
 
-  function runBrowser() {
+  function runBrowser(recipeId) {
     if (browserBusy || !data) return;
+    // A chip handler is an event listener, so it would otherwise pass a
+    // MouseEvent in here and encode "[object PointerEvent]" into the query.
+    if (typeof recipeId !== "string") recipeId = "";
     browserBusy = true;
     function runLoaded() {
       if (!window.LensBrowser) { browserBusy = false; renderBrowser(); return; }
       window.LensBrowser.run(browserBody, data, function (j) {
         browserBusy = false;
-        browserData = j;
+        if (recipeId) browserRecipeData = j;
+        else browserData = j;
         renderBrowser();
         renderStatus();
       }, function (e) {
         browserBusy = false;
-      }, runBrowser);
+      }, runBrowser, recipeId);
     }
     if (window.LensBrowser) {
       runLoaded();
@@ -1722,6 +1737,7 @@
     if (!state.url && data) {
       data = null;
       browserData = null;
+      browserRecipeData = null;
       humanBody.innerHTML = '<div class="lx-empty">Paste any URL above.<span>You get the page a person sees, the raw file a machine gets instead, and what that difference costs.</span></div>';
       machineBody.innerHTML = '<div class="lx-empty">The markup, metadata, and machine directives land here.</div>';
       renderBrowser();
