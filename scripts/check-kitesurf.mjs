@@ -83,8 +83,12 @@ async function main() {
     bad("no account id: wrangler.jsonc has no account_id and CLOUDFLARE_ACCOUNT_ID is unset");
     process.exit(2);
   }
-  console.log(`kitesurf selector control, account ${accountId}`);
-  console.log(`endpoint ${restUrl(accountId, "snapshot", "kitesurf")}\n`);
+  // The account is elided rather than printed. It is not a secret (wrangler.jsonc
+  // carries it in a public repo), but it reaches here from process.env and
+  // echoing an environment value into stdout is a shape worth not having in a
+  // script anyone might pipe into a log. Nothing is lost: the PATH is the thing
+  // under test, and it is the half that was wrong.
+  console.log(`kitesurf selector control against ${restUrl("<account>", "snapshot", "kitesurf")}\n`);
 
   // ── tier 1: free ────────────────────────────────────────────────────────
   console.log("free probes (invalid payload, so nothing can render):");
