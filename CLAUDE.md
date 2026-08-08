@@ -1633,6 +1633,49 @@ npm run deploy
     since `lwe-ask/wrangler.toml` already carries a scar from `llama-3.1-8b` being
     deprecated out from under `GEN_MODEL` on 2026-05-30.
 
+24. **The ramp writes the changelog from YOUR WORKING TREE, so pull `main` before
+    you ramp.** `deploy:promote` decides what to log by reading the local
+    `holding/_worker.js/checkpoints.json` and diffing it against D1
+    (`scripts/deploy-promote.mjs`, the `steps[last] === 100` block). Ramp from a
+    tree that has not pulled the merge and the file it reads still ends at the
+    previous release, so the diff is empty and the row is never written.
+
+    Hit 2026-08-08 on v175. The entry was staged in a worktree, merged, and ramped
+    from a main tree sitting one commit behind, which printed:
+
+    ```
+    done. 50377ca5 is at 100%.
+    deploy log: nothing staged — this version carries no new changelog entry.
+    ```
+
+    That sentence is TRUE about what the script could see and false about what
+    shipped, which is the whole problem. **Three things then conspire to hide it.**
+    `/updates` and `/restore` render the projection baked in at BUILD time, so the
+    deployed page cheerfully showed v175 while D1 had no record it ever shipped.
+    `checkpoints:check` cannot catch it either, because it compares the local
+    projection against D1 and a stale tree makes both agree; it reported
+    `projection agrees with D1` throughout. And the one honest signal is a single
+    line of ramp output that reads like routine confirmation.
+
+    The repair costs nothing once you see it: pull, confirm the target with
+    `--dry-run`, then re-run against a version ALREADY at 100%.
+
+    ```bash
+    git pull --ff-only
+    npm run deploy:promote -- --dry-run    # target must be the version now serving
+    npm run deploy:promote -- --to 100     # moves no traffic; runs the logging block
+    ```
+
+    Two lessons worth keeping past this bug. **A check that compares two values
+    derived from the same stale source proves nothing**, which is the same shape as
+    the contract test in the Markdown-twin note that read the wrong field names and
+    still reported a pass; when a check can only ever agree with itself, it is
+    decoration. And **the hygiene rule collides with the release step**: this repo
+    tells you to work from a fresh worktree, and that discipline is exactly what
+    puts the staged entry somewhere the ramp cannot see it. Same collision as the
+    `git checkout` mtime problem in gotcha 20, and the same resolution: the
+    conflict lives at the one operation that touches both, so handle it there.
+
 ---
 
 ## Source folder for new photos
