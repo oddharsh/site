@@ -24,6 +24,7 @@ import { DESKTOP_CHROME, DESKTOP_TOP } from "../holding/_worker.js/lib/desktop.j
 import { privateHostBlocked } from "../holding/_worker.js/lib/crawl.js";
 import { CACHE_EMPTY, CACHE_STATIC, mcpGate, mcpHttpStatus, mcpServer } from "../holding/_worker.js/lib/mcp-protocol.js";
 import { mcpTool } from "../holding/_worker.js/lib/mcp-tools.js";
+import { previewToolRefusal } from "../holding/_worker.js/lib/preview.js";
 
 // ── tiny helpers ────────────────────────────────────────────────────────────
 const esc = (v) =>
@@ -2082,6 +2083,12 @@ export async function handleMcp(request, env, d) {
       if (m.startsWith("notifications/")) return null;  // client notification — ack only
       if (m === "tools/call") {
         const name = msg.params && msg.params.name;
+        // Every tool on this server reads today, so this refuses nothing yet.
+        // It is here so that the day one of them writes, the preview guard is
+        // already in place rather than remembered — the site server learned that
+        // lesson the expensive way (lib/preview.js).
+        const refusedOnPreview = previewToolRefusal(request, MCP_TOOLS, name);
+        if (refusedOnPreview) return MCP.result(id, { content: [{ type: "text", text: refusedOnPreview }], isError: true });
         const out = await mcpCallTool(d, name, (msg.params && msg.params.arguments) || {});
         if (out && out._unknown) return rpcErr(id, -32602, "Unknown tool: " + name);
         // A failed tool is a RESULT with isError, never a JSON-RPC error: the

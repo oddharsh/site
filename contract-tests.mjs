@@ -3249,14 +3249,19 @@ test("previews refuse every unsafe method, and the GET-shaped writes too", async
     }
   }
 
-  // /mcp is the one POST exception, because it writes no binding and sends
-  // nothing (it reads this origin back through an allowlist). If that ever
-  // stops being true, this line is the one to delete.
-  assert.equal(previewDenial("/mcp", "POST"), null, "read-only JSON-RPC survives the method rule");
+  // /mcp is the one POST exception, and it is admitted so the MCP server can be
+  // exercised on a preview, NOT because nothing behind it writes. Two vault
+  // tools do; they are refused a layer down, by the next test.
+  assert.equal(previewDenial("/mcp", "POST"), null, "JSON-RPC survives the method rule");
 
   // The other direction: writes that arrive as a plain GET, which the method
-  // rule structurally cannot catch.
-  for (const path of ["/hit", "/approve", "/decline", "/webmention/approve", "/webmention/decline", "/ledger/prefetch"]) {
+  // rule structurally cannot catch. Read the entries off the module rather than
+  // restating them — a copy of the list here asserts only that the list equals
+  // itself, which is how the stale coffee paths survived. What gives this teeth
+  // is the pin in the next test.
+  const { PREVIEW_GET_WRITES } = await import("./holding/_worker.js/lib/preview.js");
+  assert.ok(PREVIEW_GET_WRITES.size >= 6, "the GET-write list must not quietly collapse");
+  for (const path of PREVIEW_GET_WRITES) {
     const denied = previewDenial(path, "GET");
     assert.ok(denied, `GET ${path} mutates production state and must be refused`);
     assert.equal(denied.status, 403);
@@ -3270,6 +3275,90 @@ test("previews refuse every unsafe method, and the GET-shaped writes too", async
       assert.equal(previewDenial(path, method), null, `${method} ${path} must still serve on a preview`);
     }
   }
+});
+
+// The guard's own list is the half a test cannot check by reading the guard. An
+// entry that names a path nothing routes reads as protection and protects
+// nothing, which is what happened to the coffee pair: it sat here as bare
+// /approve and /decline (the retired cal.aadhar.sh spellings) while the live
+// routes arrived under /coffee/*, so a signed approve link opened against a
+// preview confirmed a real booking and emailed a real person, on production's
+// SIGNING_SECRET. So pin every entry against the route tables it claims to guard.
+//
+// The tables are read as SOURCE TEXT, not imported: index.js is the one module
+// allowed to import "cloudflare:workers", and importing it here would kill the
+// whole suite at link time (gotcha 16).
+test("every preview-guarded GET write names a path the site really routes", async () => {
+  const { PREVIEW_GET_WRITES } = await import("./holding/_worker.js/lib/preview.js");
+  const dispatcher = readFileSync(new URL("./holding/_worker.js/index.js", import.meta.url), "utf8");
+  const cal = readFileSync(new URL("./cal/src/index.js", import.meta.url), "utf8");
+
+  // Exact ROUTES entries in the site dispatcher, plus cal's own matches, which
+  // reach the visitor one prefix deeper: index.js hands /coffee/* to cal, and
+  // cal strips that prefix before comparing.
+  const routed = new Set();
+  for (const [, path] of dispatcher.matchAll(/\[\s*"(\/[^"]*)"\s*,\s*[A-Za-z_$]/g)) routed.add(path);
+  assert.ok(routed.has("/hit") && routed.has("/webmention/approve"), "the ROUTES scan must actually find routes");
+  const coffeePrefixed = /pathname\.startsWith\("\/coffee\/"\)/.test(dispatcher);
+  assert.ok(coffeePrefixed, "cal is reached through the /coffee/ prefix; this test's mapping assumes it");
+  for (const [, path] of cal.matchAll(/path === "(\/[^"]*)"/g)) routed.add(`/coffee${path === "/" ? "" : path}`);
+  assert.ok(routed.has("/coffee/approve"), "the cal scan must actually find cal's routes");
+
+  for (const path of PREVIEW_GET_WRITES) {
+    assert.ok(
+      routed.has(path),
+      `${path} is guarded as a GET-shaped write, but no route table serves it — the guard is protecting a dead path`,
+    );
+  }
+});
+
+// The other stale claim, and the more exposed one: /mcp needs no signature and
+// no secret, so for as long as the guard admitted the endpoint on the grounds
+// that nothing behind it wrote, any POST to a preview's /mcp could INSERT into
+// the production representation vault. The refusal is derived from each tool's
+// own readOnlyHint, so a new writing tool is covered on the day it declares
+// itself. Swept over BOTH servers on this origin, which is what keeps the
+// serendipity call site honest while it still has nothing to refuse.
+test("MCP tools that write are refused on a preview host, and reads still run", async () => {
+  const { handleMcp: handleSerendipityMcp, MCP_TOOLS: SERENDIPITY_TOOLS } = await import("./serendipity/serendipity.js");
+  const servers = [
+    { what: "/mcp", handle: (r) => handleSiteMcp(r, {}, context()), tools: SITE_MCP_TOOLS, path: "/mcp" },
+    { what: "/serendipity/mcp", handle: (r) => handleSerendipityMcp(r, {}, null), tools: SERENDIPITY_TOOLS, path: "/serendipity/mcp" },
+  ];
+
+  let writesChecked = 0;
+  for (const server of servers) {
+    const call = (host, name) => server.handle(new Request(`https://${host}${server.path}`, {
+      method: "POST",
+      body: JSON.stringify({ jsonrpc: "2.0", id: "preview", method: "tools/call", params: { name, arguments: {}, ...MODERN_META } }),
+      headers: { "content-type": "application/json" },
+    }));
+
+    for (const tool of server.tools) {
+      if (tool.annotations.readOnlyHint !== false) continue;
+      writesChecked += 1;
+      const body = await (await call("v1-aadhar-sh.workers.dev", tool.name)).json();
+      assert.equal(body.result?.isError, true, `${server.what} ${tool.name} writes and must be refused on a preview`);
+      assert.match(body.result.content[0].text, /disabled on preview URLs/, `${tool.name}'s refusal must say why`);
+
+      // ...and the same call off a preview must NOT be refused for this reason.
+      // It may still fail on absent bindings here, which is a different answer.
+      const live = await (await call("aadhar.sh", tool.name)).json();
+      const liveText = live.result?.content?.[0]?.text || "";
+      assert.ok(!/disabled on preview URLs/.test(liveText), `${tool.name} must run normally on production`);
+    }
+
+    // A read tool has to survive the guard, or the preview loses the surface the
+    // /mcp exception exists to preserve.
+    const read = server.tools.find((t) => t.annotations.readOnlyHint !== false);
+    const readBody = await (await call("v1-aadhar-sh.workers.dev", read.name)).json();
+    const readText = readBody.result?.content?.[0]?.text || "";
+    assert.ok(!/disabled on preview URLs/.test(readText), `${server.what} ${read.name} reads and must still run on a preview`);
+  }
+
+  // The vault tools are the reason this test exists. If the count ever drops to
+  // zero the sweep above is asserting nothing, and would say so silently.
+  assert.equal(writesChecked, 2, "expected exactly the two representation-vault writers");
 });
 
 test("preview noindex reaches the responses the security wrapper otherwise skips", async () => {
