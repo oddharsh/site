@@ -4889,6 +4889,41 @@ test("the ramp never double-parses wrangler's already-parsed JSON", async () => 
     "the catch-all note must not assert D1 is the cause — it cannot know that");
 });
 
+test("no ramp sample can hang, and a stall is never reported as an origin error", async () => {
+  // SECOND TIME the D1 changelog write has been silently skipped, by a different
+  // mechanism than the double-parse above. The v177 ramp moved traffic through
+  // 10/50/100 and then exited mid-sample with `Detected unsettled top-level
+  // await`, before the write that runs after sampling. `fetch` has no default
+  // request timeout, so one stalled socket wedges the step; the repair (`--to
+  // 100`, which moves nothing and logs) is documented, and needing it is the bug.
+  //
+  // Source text for the same reason as the test above: the alternative is
+  // spawning wrangler against production from the suite.
+  const src = await readFile(new URL("./scripts/deploy-promote.mjs", import.meta.url), "utf8");
+
+  // Counted rather than matched once, so a SECOND fetch added later without a
+  // timeout fails this instead of riding the first one's signal.
+  const fetches = (src.match(/await fetch\(/g) || []).length;
+  const timeouts = (src.match(/signal: AbortSignal\.timeout\(/g) || []).length;
+  assert.ok(fetches > 0, "the ramp samples over the network — if this hits zero the test is measuring nothing");
+  assert.equal(timeouts, fetches,
+    `every network call in the ramp needs a request timeout: ${fetches} fetch(es), ${timeouts} with a signal`);
+
+  // A timeout is only safe to add because a stall is classified apart from an
+  // origin error. Conflated, a laptop's flaky wifi would trigger the ramp's
+  // roll-back advice against a healthy release.
+  assert.ok(/stalls\+\+/.test(src), "a failed request must count as a stall, not an error");
+  assert.ok(/errorVersions\.push/.test(src) && /stallReasons\.push/.test(src),
+    "errors and stalls must be reported through separate channels");
+  assert.ok(/not an origin fault/.test(src),
+    "the stall note must say whose fault it is not");
+
+  // And a step nobody could measure must not pass as a step that succeeded —
+  // at 100% that is what stops an unverified run from writing the changelog.
+  assert.ok(/if \(!s\.answered\)/.test(src),
+    "a sample where nothing answered must stop the ramp rather than be read as success");
+});
+
 // ── webmention link verification ────────────────────────────────────
 // The verify step is the ONLY thing standing between "someone sent a POST" and
 // "someone's page appears on my site", so what counts as a link is the whole
