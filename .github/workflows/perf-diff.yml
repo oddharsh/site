@@ -1,0 +1,174 @@
+name: Wire-size diff
+
+# The DIFFERENTIAL performance check, modelled on how astral-sh/ruff runs its
+# memory and ecosystem jobs: build the merge base, build HEAD, measure both with
+# the same code, post the difference, and fail on nothing.
+#
+# It lives in its own file rather than joining ci.yml on purpose. `validate` is
+# the single required check on `main`, so anything added there becomes a merge
+# gate; this is advisory by construction and must never be one. Separate file,
+# separate permissions, separate failure domain.
+#
+# It also does not replace perf-budget.mjs, which runs inside `validate` and
+# hard-fails on invariants (twins present, luna.css parses, dictionary coverage).
+# The split is: perf-budget answers "is this output structurally valid", this
+# answers "did this change move the bytes". Only the second one can catch a slow
+# 500-byte-per-PR drift, and only the first one can stop a broken deploy.
+
+on:
+  pull_request:
+    # Wire size is a function of the served tree and the things that transform
+    # it. A README edit or a new photo cannot move a byte the browser downloads,
+    # and a job that runs anyway teaches people its result is noise.
+    paths:
+      - "holding/**"
+      - "cal/**"
+      - "serendipity/**"
+      - "build.mjs"
+      - "scripts/**"
+      - "wrangler.jsonc"
+      - "package-lock.json"
+      - ".github/workflows/perf-diff.yml"
+      # The photo tiers are content-addressed binaries served straight from the
+      # edge. They are real bytes, they are just not bytes this measures.
+      - "!holding/i/**"
+      - "!holding/images/**"
+      - "!holding/cars/**"
+      - "!holding/og/**"
+      - "!holding/p-dict/**"
+      - "!holding/a-dict/**"
+      - "!**.md"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: perf-diff-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  wire-size:
+    name: wire size vs merge base
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      # Scoped to this job, and this job alone. ci.yml's permissions block is
+      # deliberately minimal and carries a note about not widening it; this is
+      # why the diff got its own file instead of a step over there.
+      pull-requests: write
+
+    steps:
+      - name: Check out with full history
+        uses: actions/checkout@v7
+        with:
+          # Needed for `git merge-base`. Nothing here pushes, so the credential
+          # is not persisted into the local git config either.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Resolve the merge base
+        id: base
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          # `fetch-depth: 0` above already populates refs/remotes/origin/*, so
+          # this is belt and braces. The explicit refspec matters: fetching a
+          # bare branch name updates FETCH_HEAD and leaves origin/<branch> alone,
+          # which is the ref `merge-base` is about to read.
+          git fetch --no-tags origin "+refs/heads/$BASE_REF:refs/remotes/origin/$BASE_REF"
+          echo "sha=$(git merge-base HEAD "origin/$BASE_REF")" >> "$GITHUB_OUTPUT"
+          echo "head=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      # BOTH sides get measured by HEAD's copy of the script, which is why it is
+      # stashed outside the tree before the first switch. Two reasons, and the
+      # second is the one that bites: the script does not exist at the merge base
+      # on the PR that introduces it, and measuring each side with its own copy
+      # would report a change to the MEASUREMENT as a change in wire size.
+      - name: Stash the measurement script
+        run: cp scripts/perf-snapshot.mjs "$RUNNER_TEMP/perf-snapshot.mjs"
+
+      - name: Record the merge base
+        env:
+          MERGE_BASE: ${{ steps.base.outputs.sha }}
+          HEAD_SHA: ${{ steps.base.outputs.head }}
+        run: |
+          git switch --detach "$MERGE_BASE"
+          # Only reinstall when the lockfile actually moved. On the common PR it
+          # did not, and a second `npm ci` is a minute of nothing.
+          if ! git diff --quiet "$MERGE_BASE" "$HEAD_SHA" -- package-lock.json; then
+            npm ci --no-audit --no-fund
+          fi
+          node "$RUNNER_TEMP/perf-snapshot.mjs" record "$RUNNER_TEMP/base.json" \
+            --label "$(git rev-parse --short HEAD)"
+
+      - name: Record HEAD
+        env:
+          MERGE_BASE: ${{ steps.base.outputs.sha }}
+          HEAD_SHA: ${{ steps.base.outputs.head }}
+        run: |
+          git switch --detach "$HEAD_SHA"
+          if ! git diff --quiet "$MERGE_BASE" "$HEAD_SHA" -- package-lock.json; then
+            npm ci --no-audit --no-fund
+          fi
+          node "$RUNNER_TEMP/perf-snapshot.mjs" record "$RUNNER_TEMP/head.json" \
+            --label "$(git rev-parse --short HEAD)"
+
+      - name: Compare
+        run: |
+          node "$RUNNER_TEMP/perf-snapshot.mjs" compare \
+            "$RUNNER_TEMP/base.json" "$RUNNER_TEMP/head.json" \
+            --out "$RUNNER_TEMP/wire-size.md"
+          cat "$RUNNER_TEMP/wire-size.md" >> "$GITHUB_STEP_SUMMARY"
+
+      # The step summary above is the fallback and always runs. The comment is
+      # the thing anyone actually reads, and it is skipped on forks because a
+      # `pull_request` from a fork gets a read-only token no matter what this
+      # file requests — better to skip it than to fail a job on a permission
+      # that cannot be granted.
+      - name: Comment the diff on the pull request
+        if: github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/github-script@v9
+        env:
+          REPORT_PATH: ${{ runner.temp }}/wire-size.md
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const fs = require("node:fs");
+            const marker = "<!-- perf-snapshot-diff -->";
+            const body = fs.readFileSync(process.env.REPORT_PATH, "utf8");
+            const issue_number = context.payload.pull_request.number;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number,
+              per_page: 100,
+            });
+            // Update in place rather than appending. A PR that gets pushed to
+            // five times should carry one current diff, not five stale ones.
+            const prior = comments.find((comment) => comment.body?.includes(marker));
+            if (prior) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: prior.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number,
+                body,
+              });
+            }

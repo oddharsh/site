@@ -49,6 +49,14 @@ npm run photos -- "/path/to/photo.HIF" "/path/to/folder/"
 # validate the committed photo artifact graph without uploading anything
 npm run photos:check
 
+# the wire-size DIFF. perf-budget checks numbers against constants that rot;
+# this compares two builds and has no constants. CI runs it against the merge
+# base on every PR touching served code and comments the delta, gating nothing.
+# each record self-builds through the wrangler dry-run (~12s).
+npm run perf:snapshot -- record base.json --label main
+npm run perf:snapshot -- record head.json --label mine
+npm run perf:snapshot -- compare base.json head.json
+
 # diff infra.json (DNS, zone/edge settings, account resources, Workers) against
 # reality. read-only; never mutates Cloudflare. add CLOUDFLARE_API_TOKEN for
 # the account tier, or --offline for the no-network tier.
@@ -97,7 +105,22 @@ worktrees may edit freely, but a worktree is not a release surface.
   site Worker plus the auxiliary Garage/LWE configs (`cf-garage/`, `lwe-ask/`),
   runs the coffee tests, and sweeps the route oracle against a Worker booted
   in-process (`npm run routes:check`, wrangler's `createTestHarness()`), so a
-  broken route fails the PR instead of the deploy.
+  broken route fails the PR instead of the deploy. All of that lives in the ONE
+  `validate` job, because `validate` is the one required check on `main` and a
+  gate that is not required is not a gate.
+- **`.github/workflows/perf-diff.yml` is deliberately OUTSIDE that job**, and the
+  separation is the whole design rather than tidiness. It builds the merge base
+  and HEAD, diffs the wire sizes, and comments the delta on the PR; it fails on
+  nothing and is not a required check. Everything in `perf-budget.mjs` compares a
+  number against a constant somebody typed, and the baseline history in that file
+  is the record of what constants cost (86 → 129.23 → 204.24 KiB gzip, with the
+  129.23 era spent permanently in breach while CI printed "hard checks green"
+  over it every run, and the 204.24 set on 2026-08-04 already firing four days
+  later). A diff has no constant to rot and nothing to re-baseline. Keep the two
+  apart on purpose: a number that BLOCKS a merge trains people to widen the
+  threshold, and a number that merely reports trains nobody to do anything except
+  read it. Modelled on `astral-sh/ruff`'s memory and ecosystem jobs, which do
+  exactly this and gate on nothing.
 - Only a successful CI run for `main` associated with a merged PR can promote
   the exact tested commit to the machine-owned `production` branch. Cloudflare
   Workers Builds watches `production` and is the only production publisher for
