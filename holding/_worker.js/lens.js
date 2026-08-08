@@ -9,6 +9,7 @@ import { lunaPage } from "./lib/chrome.js";
 import { escAttr, escHtml, jsonResponse } from "./lib/http.js";
 import { span } from "./lib/trace.js";
 import { documentShape, hasRenderEngine, runBrowserAction } from "./lens-render.js";
+import { lensRecipe, lensRecipeCatalog, lensRecipeIds, lensRecipeNonce, lensRecipeReceipt, lensRecipeScript } from "./lens-recipes.js";
 
 // The glossary. This page's whole subject is protocol names, which is fine for
 // the audience that already has them and a wall for the audience that doesn't.
@@ -382,7 +383,12 @@ function lensBrowserFragment(data) {
       '<button class="lx-browser-run" type="button" id="lx-browser-run">Run Browser Run snapshot</button></div>';
   }
   return '<div class="lx-browser-intro"><b>Browser Run snapshot ready.</b> The Browser pane is a rendered observation, separate from AadharshBot\'s HTTP fetch and the visitor\'s Human view.' +
-    '<div class="lx-cap">Switch back to Browser and run again to refresh this snapshot.</div></div>';
+    '<div class="lx-cap">Switch back to Browser and run again to refresh this snapshot.</div>' +
+    // The floor states what it cannot do rather than omitting it. The chips are
+    // buttons that fetch, so interaction genuinely needs JavaScript, and a
+    // reader with it off should learn that from the page instead of from its
+    // absence.
+    '<div class="lx-cap">Reading a page <i>after</i> interaction (opening collapsed sections, removing a consent overlay) needs JavaScript in your own browser. The scripts Lens is willing to run are published at <a href="/lens/browser?recipes=1">/lens/browser?recipes=1</a>.</div></div>';
 }
 
 function lensStatusFragment(data, state) {
@@ -753,6 +759,16 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 .lx-chip { font-size:8.8pt; padding:4px 9px; color:oklch(20% 0 0); background:linear-gradient(180deg,#fdfdfd,#e6e6dd); border:1px solid; border-color:#fff oklch(45% 0 0) oklch(45% 0 0) #fff; border-radius:3px; }
 .lx-chip:hover { background:linear-gradient(180deg,#fff,#efefe7); }
 .lx-chip:active { border-color:oklch(45% 0 0) #fff #fff oklch(45% 0 0); }
+/* the interaction chip row, sunk so it reads as a control strip rather than
+   another finding in the report it sits above. */
+.lx-browser-do { margin:8px 0 10px; padding:8px 9px; background:oklch(97% 0.004 250); border:1px solid; border-color:oklch(64% 0 0) #fff #fff oklch(64% 0 0); }
+.lx-browser-do .lx-chips { margin:6px 0 0; }
+/* Two shots side by side, stacking under the pane's own narrow width rather
+   than at a viewport breakpoint: this pane is a third of the page in Compare
+   and the whole of it in Browser. */
+.lx-shot-pair { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:8px; }
+.lx-shot-pair figure { margin:0; }
+.lx-shot-pair figcaption { font-size:8.5pt; color:oklch(45% 0 0); margin-top:3px; text-align:center; }
 
 /* toolbar: the view switcher stands alone now that the lens tabs live inside
    the Machine pane. The two controls answer different questions (what am I
@@ -1324,13 +1340,74 @@ const LENS_BROWSER_SHOT_MAX = 6_000_000;
 // raised without quietly turning every large snapshot into a failed write.
 const LENS_BROWSER_KV_MAX = 20_000_000;
 
+// The "before" side of an interaction delta, read out of the plain snapshot the
+// Browser pane's auto-run already cached. Deliberately a READ and never a
+// render: manufacturing a before would cost a second Quick Action for one
+// click, on an account with ten browser-minutes a day. No plain entry means no
+// delta is claimed, which is the honest answer rather than a guessed one.
+async function plainShape(env, plainKey) {
+  if (!env.RN_KV) return null;
+  try {
+    const hit = await env.RN_KV.get(plainKey, "json");
+    return hit && hit.ok && hit.shape ? hit.shape : null;
+  } catch (_e) { return null; }
+}
+
+// Both sides of the comparison run through the SAME documentShape(), which is
+// the only reason the number is claimable. An in-page innerText count and
+// stripped() are different counters, and comparing two incompatible counters is
+// the bug deltaStrip already carries a bail for.
+function buildInteraction(recipe, receipt, before) {
+  const base = { id: recipe.id, label: recipe.label, claim: recipe.claim, before, beforeSource: before ? "kv" : "none" };
+  // No receipt at all: the script never ran. Common and expected — a page
+  // serving `script-src 'self'` refuses an inline injection and Quick Actions
+  // expose no bypass. The client says so using the CSP it already scanned.
+  if (!receipt) return { ...base, ran: false, acted: 0, scanned: 0, note: "no-receipt", outcome: "no-receipt" };
+  if (receipt.note === "forged-receipt") return { ...base, ...receipt, outcome: "forged-receipt" };
+  const outcome = receipt.note === "threw" ? "threw"
+    : receipt.note === "none-found" ? "nothing-found"
+      : receipt.note === "acted" ? "ran" : receipt.note;
+  return { ...base, ...receipt, outcome };
+}
+
+// `outcome` exists for the span, where it has to stay separable from
+// `lens.outcome` ("the render failed") so that "the render succeeded and the
+// recipe found nothing" is still a group-by rather than a filter. The response
+// carries `note` and does not need a second spelling of it.
+function interactionPayload({ outcome: _outcome, ...rest }) { return rest; }
+
 // /lens/browser?url=… → opt-in rendered evidence for the third Lens pane.
 // This deliberately stays separate from /lens/fetch: the normal scan is an
 // identified HTTP observation, while this path executes page JavaScript in a
 // Browser Run instance and returns a rendered snapshot plus browser structure.
 export async function handleLensBrowser(request, env, ctx) {
-  const v = validateLensTarget(new URL(request.url).searchParams.get("url") || "");
+  const params = new URL(request.url).searchParams;
+
+  // The published allowlist, answered without a url and without a render, so
+  // anyone can read exactly what this route is willing to run before they let
+  // it run anything. Same route rather than a new one: run_worker_first is
+  // capped at 100 rules and a query parameter costs none of them.
+  if (params.has("recipes")) {
+    return jsonResponse({ ok: true, recipes: lensRecipeCatalog() });
+  }
+
+  const v = validateLensTarget(params.get("url") || "");
   if (!v.ok) return jsonResponse({ ok: false, error: v.error }, 400);
+
+  // Resolved BEFORE the engine check, so a typo'd recipe id answers the same
+  // 400 on a deployment with no Browser Run as on one with it. Absent `do` is
+  // today's path byte for byte.
+  //
+  // An unknown id is a 400 and not a silent fall-through to the plain render.
+  // Falling through would hand back a perfectly good snapshot that the caller
+  // believes is post-interaction, which is the one failure mode this whole
+  // feature exists to avoid.
+  const recipeId = params.get("do");
+  const recipe = recipeId == null ? null : lensRecipe(recipeId);
+  if (recipeId != null && !recipe) {
+    return jsonResponse({ ok: false, error: "Unknown interaction recipe.", recipes: lensRecipeIds() }, 400);
+  }
+
   if (!hasRenderEngine(env)) return jsonResponse({ ok: false, error: "Browser Run is not configured on this deployment." }, 503);
 
   // The throw-guard that used to be spelled out here now lives inside
@@ -1347,7 +1424,13 @@ export async function handleLensBrowser(request, env, ctx) {
     return jsonResponse({ ok: false, error: "The shared browser budget for this minute is spent. Try again shortly." }, 429);
   }
 
-  const cacheKey = "lens:browser:" + (await lensSha256Hex(v.url));
+  // The plain key keeps its exact legacy shape and a recipe run APPENDS to it.
+  // Hashing url+id together would have been tidier and would also have changed
+  // every plain key in one deploy, invalidating the namespace and buying a wave
+  // of fresh Quick Actions against a 10 min/day budget. An allowlisted [a-z] id
+  // on the end is safe, cheap, and greppable in KV.
+  const plainKey = "lens:browser:" + (await lensSha256Hex(v.url));
+  const cacheKey = recipe ? plainKey + ":" + recipe.id : plainKey;
   if (env.RN_KV) {
     try {
       const hit = await env.RN_KV.get(cacheKey, "json");
@@ -1371,14 +1454,27 @@ export async function handleLensBrowser(request, env, ctx) {
   s.setAttribute("lens.target_host", safeHost(v.url));
   s.setAttribute("lens.cache", "miss");
   const started = Date.now();
+  // Fresh per request. The page is being rendered right now and must not be
+  // able to guess this; it does not have to survive the request.
+  const nonce = recipe ? lensRecipeNonce() : "";
   const payload = {
     url: v.url,
     formats: ["content", "screenshot", "markdown", "accessibilityTree"],
     viewport: { width: 1280, height: 800, deviceScaleFactor: 1 },
     screenshotOptions: { fullPage: true, type: "png" },
+    // Same object REFERENCE, not a clone: a contract test asserts this route and
+    // /lens/shot share one config by identity, and a per-recipe clone would
+    // break it. Both shipping recipes are synchronous, so nothing here needs a
+    // settle; an async recipe would ride `waitForTimeout` (a sibling key) rather
+    // than reach in here.
     gotoOptions: LENS_GOTO,
     userAgent: BOT_UA,
+    // The ONLY place caller input reaches the payload is `url`. `content` is
+    // assembled from the frozen registry plus a server-generated nonce, and a
+    // contract test asserts no caller bytes appear anywhere else.
+    ...(recipe ? { addScriptTag: [{ content: lensRecipeScript(recipe, nonce) }] } : {}),
   };
+  if (recipe) s.setAttribute("lens.recipe", recipe.id);
 
   let response;
   let engine = "chromium-binding";
@@ -1430,7 +1526,17 @@ export async function handleLensBrowser(request, env, ctx) {
   }
   const result = envelope && envelope.result ? envelope.result : envelope || {};
   const meta = envelope && envelope.meta ? envelope.meta : {};
-  const rawContent = String(result.content || "");
+  // Strip the receipt FIRST. Everything downstream — documentShape, the 120KB
+  // cap, the body the reader sees — has to run on a document that no longer
+  // carries our own injected node. Count before stripping and `shape` counts our
+  // script; cap before stripping and the receipt falls off the end of a large
+  // page and the run reports as "never happened".
+  const settled = recipe
+    ? lensRecipeReceipt(String(result.content || ""), nonce)
+    : { receipt: null, html: String(result.content || "") };
+  const rawContent = settled.html;
+  const interaction = recipe ? buildInteraction(recipe, settled.receipt, await plainShape(env, plainKey)) : null;
+  if (recipe) s.setAttribute("lens.recipe_outcome", interaction.outcome);
   // Every other field on this snapshot is capped; the screenshot was not, and a
   // fullPage PNG has no natural ceiling. Measured 2026-08-04 against production:
   // en.wikipedia.org/wiki/World_War_II returned 24.3 MB of base64 in one
@@ -1468,6 +1574,10 @@ export async function handleLensBrowser(request, env, ctx) {
     // client's deltaStrip subtracts this from the HTTP anatomy.
     shape: documentShape(rawContent),
     shapeTruncated: rawContent.length > 120000,
+    // Absent entirely on a plain run, so every existing consumer sees the exact
+    // response it saw before. `shape` above stays the AFTER; the before lives
+    // inside here, next to the count of what the recipe actually touched.
+    ...(interaction ? { interaction: interactionPayload(interaction) } : {}),
     elapsedMs: Date.now() - started,
   };
   s.setAttribute("lens.outcome", "ok");

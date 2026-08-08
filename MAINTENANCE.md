@@ -1073,15 +1073,83 @@ repo's no-write-token rule is untouched — but it is not a read token and shoul
 not be described as one. Without it the route silently uses the binding and
 reports `engine: "chromium-binding"`, so the view degrades rather than breaks.
 
-`browser=kitesurf` is documented only in Cloudflare's launch post, not in the
+`browser=kitesurf` is documented only on Cloudflare's Kitesurf page, not in the
 Quick Actions reference. The code therefore tries the parameter, falls back once
 on a 400, and remembers the answer for the isolate. If Cloudflare ships it into
 the binding, delete `renderOverRest` and the token with it.
+
+**The selector rides `/browser-run/<action>`, not `/browser-rendering/<action>`.**
+Both spellings route, so the wrong one drops the opt-in without an error. Fixed
+2026-08-08; `restUrl()` in `lens-render.js` is the single source and a contract
+test pins the path.
+
+**`engine: "kitesurf-requested"` means the selector was sent and the call came
+back 200.** It does NOT mean Kitesurf served the render: the response envelope
+carries no engine field, so an endpoint that ignores the parameter is
+indistinguishable from one that honours it. To settle it, run the control:
+
+```bash
+BROWSER_RUN_TOKEN=... npm run kitesurf:check            # free, may be inconclusive
+BROWSER_RUN_TOKEN=... npm run kitesurf:check -- --render  # decisive, ~2 tiny renders
+```
+
+It sends an invented engine name. A rejection proves the parameter is validated,
+which is what makes a 200 carrying `kitesurf` mean Kitesurf; on that verdict,
+promote the label in `lens-render.js` to a bare `kitesurf` and record the date
+and outputs at the control. Ration it: the account has 10 free browser-minutes a
+day and `--render` spends from the same budget `/lens/browser` does.
 
 Read which engine actually answered, and the shape it measured:
 ```bash
 curl -s 'https://aadhar.sh/lens/browser?url=https://react.dev/' | jq '.engine, .shape'
 ```
+
+### Add or change a /lens interaction recipe
+
+Recipes are the fixed scripts `/lens/browser?do=<id>` runs inside a page before
+reading it. They live in `holding/_worker.js/lens-recipes.js` and are published
+verbatim, so anyone can check what ran:
+
+```bash
+curl -s 'https://aadhar.sh/lens/browser?recipes=1' | jq '.recipes[] | {id, label}'
+curl -s 'https://aadhar.sh/lens/browser?url=https://example.com&do=expand' | jq '.interaction'
+```
+
+**Rules a new recipe has to clear, each pinned by a contract test.** It must not
+click or submit anything. It must not contain `fetch(`, `XMLHttpRequest`,
+`eval(`, `new Function`, `document.cookie`, `localStorage`, `sendBeacon` or
+`postMessage`, because a recipe is a DOM edit and never a network actor. Its id
+must match `/^[a-z][a-z0-9-]{1,15}$/`. And it reports through
+`__receipt({acted, scanned, note})` with integers and a fixed enum only, never a
+string lifted off the page: that string would be the one place attacker bytes
+could ride back into our JSON.
+
+`acted: 0` is a success, not a failure. `scanned` is what makes it readable
+("examined 37 overlays, none matched"), so populate it.
+
+**An ASYNC recipe is not buildable until the probe says so.** Both shipping
+recipes are synchronous. Anything whose effect lands after a tick needs
+`waitForTimeout` to delay the capture, and whether that key is accepted and
+lands after injection is exactly what the probe measures:
+
+```bash
+BROWSER_RUN_TOKEN=... node scripts/lens-inject-probe.mjs
+```
+
+Seven cases, one render each, spaced 11s apart against the 6/min account-wide
+ceiling. Read case 1 first: if the synchronous marker does not survive the
+capture, nothing here works. Case 3 against case 4 is the async verdict.
+
+The one case that script cannot run is the Workers binding, which only exists
+inside a Worker:
+
+```bash
+npm run dev:remote
+curl -s 'http://localhost:8787/lens/browser?url=https://example.com&do=expand' | jq '.interaction, .engine'
+```
+
+A binding that refuses `addScriptTag` surfaces as the existing `upstream_not_ok`
+502 carrying `unrecognized_keys`, the same signature the Kitesurf probe gave.
 
 ### Regenerate the photo search expansion
 `images/semantics.json` is what `photo_query` ranks against beyond the caption and

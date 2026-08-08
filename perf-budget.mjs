@@ -33,7 +33,14 @@ const ASSET_ENVELOPES = {
   "nav.js":         { role: "shared deferred shell",       gzipKiB: 20, brotliKiB: 18 },
   "notepad.js":     { role: "writing-only island",         gzipKiB: 4,  brotliKiB: 3.5 },
   "lens.js":        { role: "lens-only island",             gzipKiB: 24, brotliKiB: 21 },
-  "lens-browser.js": { role: "optional browser island",    gzipKiB: 4,  brotliKiB: 3.5 },
+  // Raised from 4/3.5 on 2026-08-08 for the interaction recipes: the chip row,
+  // the before/after screenshot pair, and the six honest-null strings that say
+  // WHY a recipe found nothing (a CSP refusing inline script, a forged receipt,
+  // a wall that turned out to be cosmetic). Measured +1.4 KiB gzip, 3.0 -> 4.4.
+  // Most of that is the copy, which IS the feature: a result the reader cannot
+  // interpret is worth less than no result. Bumped deliberately rather than
+  // discovered by CI.
+  "lens-browser.js": { role: "optional browser island",    gzipKiB: 5,  brotliKiB: 4.5 },
   "quiz.js":        { role: "understanding-check island",  gzipKiB: 6,  brotliKiB: 5 },
   "tooltip.js":     { role: "optional hover island",       gzipKiB: 6,  brotliKiB: 5 },
   "hoist.js":       { role: "shared hover engine",         gzipKiB: 2,  brotliKiB: 1.5 },

@@ -775,5 +775,19 @@
     "version": "aadhar-v175-feeds-and-fixes",
     "vnum": 175,
     "ymd": "2026-08-08"
+  },
+  {
+    "slug": "explorer-chrome",
+    "title": "Every page gains an Explorer address bar and task pane, and advertises its Markdown twin",
+    "version": "aadhar-v176-explorer-chrome",
+    "vnum": 176,
+    "ymd": "2026-08-08"
+  },
+  {
+    "slug": "mcp-strict-meta",
+    "title": "Both MCP servers hold modern callers to the required clientCapabilities, refusing a malformed request at 400 instead of serving it",
+    "version": "aadhar-v177-mcp-strict-meta",
+    "vnum": 177,
+    "ymd": "2026-08-08"
   }
 ]

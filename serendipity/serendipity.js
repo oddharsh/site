@@ -22,7 +22,7 @@ const PREFIX = "/serendipity";
 // and nav.js only wires behavior, same as every other page.
 import { DESKTOP_CHROME, DESKTOP_TOP } from "../holding/_worker.js/lib/desktop.js";
 import { privateHostBlocked } from "../holding/_worker.js/lib/crawl.js";
-import { CACHE_EMPTY, CACHE_STATIC, mcpGate, mcpServer } from "../holding/_worker.js/lib/mcp-protocol.js";
+import { CACHE_EMPTY, CACHE_STATIC, mcpGate, mcpHttpStatus, mcpServer } from "../holding/_worker.js/lib/mcp-protocol.js";
 import { mcpTool } from "../holding/_worker.js/lib/mcp-tools.js";
 import { previewToolRefusal } from "../holding/_worker.js/lib/preview.js";
 
@@ -2107,7 +2107,9 @@ export async function handleMcp(request, env, d) {
     return out.length ? respond(out) : respond(null, 202);
   }
   const one = await handleOne(payload);
-  return one === null ? respond(null, 202) : respond(one);
+  // 400 on a malformed modern request, per 2026-07-28; 200 otherwise. Same rule
+  // /mcp applies, from the same function.
+  return one === null ? respond(null, 202) : respond(one, mcpHttpStatus(payload));
 }
 
 export async function handleSerendipity(request, env, ctx) {

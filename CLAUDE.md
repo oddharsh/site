@@ -671,7 +671,7 @@ What the rewrite added:
 - **`ttlMs` + `cacheScope`** on the list and read results (CacheableResult), so a
   client caches instead of polling.
 
-Two deliberate deviations, both written down at the code:
+Three deliberate deviations, all written down at the code:
 
 1. **`Mcp-Method` / `Mcp-Name` are validated when present, never required.** The
    spec requires them on Streamable HTTP POSTs; requiring them would reject every
@@ -681,6 +681,27 @@ Two deliberate deviations, both written down at the code:
    the header exists to prevent.
 2. **`ping` is kept** though 2026-07-28 removed it. Legacy clients send it and
    it costs nothing.
+3. **`protocolVersion` is not enforced as a REQUIRED `_meta` field, though
+   `clientCapabilities` is.** The spec marks both required on every modern
+   request and pins the refusal to `-32602` + HTTP 400.
+   `missingRequiredMeta()` enforces the second and structurally cannot enforce
+   the first: an absent `_meta` is how a legacy client presents itself, so a
+   dual-era server cannot both read absence as an era signal and call absence
+   malformed. It picks the era signal. What is left is a clean rule worth
+   stating, since it governs anything the revision adds next: **`protocolVersion`
+   is the self-declaration of modernity, and everything else the modern revision
+   requires is enforced against callers who made it.**
+
+   **Enforcing it broke two of our own clients, which is the transferable
+   lesson.** `wire.js` (the `/terminal` page, which renders a real `/mcp`
+   exchange) and `foreignMcpTools()` in `lib/doors.js` (the `/lens` door probe,
+   whose self-scan loops back into our own `/mcp`) both sent `protocolVersion`
+   alone. Neither would have errored visibly: `/terminal` degrades to "the tool
+   list could not be read just now" and the door probe reports the origin's MCP
+   server as unreadable. A server-side strictness change is a client-side
+   change too, and the clients here are the ones least likely to complain.
+   `-32021` (MissingRequiredClientCapability) is still unimplemented, and stays
+   that way until a tool actually requires a client capability.
 
 **BOTH servers on this origin speak it, through one module.** `/serendipity/mcp`
 (`serendipity/serendipity.js`) is a separate server with different tools and no
@@ -861,6 +882,124 @@ generic hex back.
   without it and remembers for the isolate. Only the PARAMETER is conditional —
   REST itself keeps serving, because gating the whole REST path on a dead beta
   flag silently demoted every later render back to the binding.
+
+  **The selector only works on `/browser-run/<action>`, and this posted to
+  `/browser-rendering/<action>` until 2026-08-08.** Both spellings ROUTE, which
+  is the whole problem: probed unauthenticated against the real account id, each
+  answers error 10000 `Authentication error` rather than 7003 `Could not route
+  to`, so the wrong path costs no error, no retry and no log line. It costs the
+  opt-in. Cloudflare's Kitesurf page documents the selector on `browser-run`
+  alone while the older Quick Actions reference pages still show
+  `browser-rendering`, so reading either one in isolation gets you a path that
+  looks right. `restUrl()` is exported from `lens-render.js` and asserted in a
+  contract test for exactly this reason: a one-word difference with no symptom
+  survives review.
+
+  **A 200 was being read as proof Kitesurf served, and it is not.** The
+  documented envelope is `{success, result, meta:{status,title}}` with no engine
+  field, so an endpoint that ignores an unrecognised query parameter and one that
+  honours it return the same response. The old code set `engine: "kitesurf"` on
+  any 200 carrying the selector, which meant `/lens` could report a Chromium
+  render as Kitesurf on the page whose entire premise is showing what a machine
+  actually saw. The label is `kitesurf-requested` now, and the 400-retry is
+  unchanged.
+
+  **Promoting it takes one control: does the endpoint REJECT an invented engine
+  name?** `npm run kitesurf:check` runs that control and prints a verdict — same
+  shape as the `--x-bogus-flag` control on wrangler and
+  `definitely-not-a-real-gateway-xyz` on AI Gateway, and worth running before
+  trusting any beta selector the docs describe but do not specify the failure
+  mode for. It is a SCRIPT and not a runtime probe because an ignored parameter
+  means the control RENDERS rather than erroring, and this account has 10 free
+  browser-minutes a day, so a once-per-isolate control would spend the budget
+  measuring itself. Its free tier costs nothing (invalid payload, so nothing can
+  render) and is decisive only when the error names the engine parameter;
+  `--render` buys the certain answer for two renders of a 40-byte inline
+  document. If the verdict is `enforced`, promote the label and record the date
+  and the outputs at the control.
+
+  Worth the effort because Kitesurf is FREE during its beta. The daily
+  browser-minute ceiling is what makes `/lens/browser` fragile (and what blacks
+  out the feature while you debug it), so a selector that silently does nothing
+  is not a cosmetic mislabel.
+
+  **`/lens/browser?do=<recipe>` runs a FIXED script in the page before reading
+  it**, which is how the Browser view answers "what does a machine see once the
+  consent wall is gone". Two recipes ship, `expand` and `consent`, both
+  synchronous, in [`lens-recipes.js`](holding/_worker.js/lens-recipes.js).
+  `?recipes=1` publishes the whole allowlist verbatim, and a contract test pins
+  the published script to the executed one.
+
+  The constraint that decided the shape: **a live CDP session was the obvious
+  build and is the wrong one.** Browser Sessions count against the free plan's 3
+  concurrent browsers and 1-new-instance-per-20-seconds, which Quick Actions do
+  not, so a public unauthenticated session would black out `/lens/shot` and
+  `/lens/browser`, which share the same account-wide 10 min/day.
+  `@cloudflare/puppeteer` is ~1 MB of ESM against a 204 KiB gzip bundle. And
+  holding a session needs a new DO class plus a `[[migrations]]` entry, which
+  `wrangler versions upload` structurally cannot publish (the DO note above).
+  Any one of those kills it alone. So this rides `addScriptTag` on the EXISTING
+  Quick Action: one query parameter, no new route, no new binding, no
+  dependency, one render per click, billed against the same two buckets.
+
+  **The allowlist is the security boundary and nothing may route around it.**
+  `addScriptTag` runs arbitrary JS in a third party's page, so a `js=` parameter
+  would make `/lens` an open remote-code-execution proxy running attacker code
+  from Cloudflare IPs under this account's browser identity, and a `selector=`
+  parameter is the same hole one step removed. A contract test asserts no caller
+  byte reaches the payload outside `url`.
+
+  **Nothing clicks.** `consent` REMOVES an overlay from our own copy of the DOM
+  rather than pressing the button: removal sets no cookie and records no consent
+  choice, while clicking "Accept all" from a Cloudflare IP would be this site
+  manufacturing a consent record on somebody else's page. Both recipes are pure
+  DOM, so they issue zero additional requests to the origin, and that is why
+  there is **no robots.txt gate** — the crawl footprint is identical to the plain
+  render that already happens. A future recipe that causes fetches (a scroll that
+  loads images, a click that pages in content) re-opens both arguments and
+  inherits neither.
+
+  **The receipt's nonce buys less than it looks like, and that is fine.** The
+  page reports what it did through the only channel available, `result.content`,
+  in a `<script type="application/lens-receipt">` that never executes and that
+  `documentShape()`'s existing `<script>` strip already excludes from the word
+  count, so it cannot inflate the delta by construction. The per-run nonce stops
+  a page that plants a receipt blindly. It does NOT stop a targeted page: a
+  MutationObserver's mutation record survives our node's removal, so the nonce is
+  recoverable, and no in-page value can beat that. Survivable because **the
+  receipt is not the load-bearing number** — the word delta is computed
+  server-side from the HTML the page returned, and a page cannot inflate that
+  without actually serving the words. Scoping the nonce as an IIFE argument
+  instead of a top-level `var` was still a real fix (measured in Chromium
+  2026-08-08: `typeof window.__LENS_N` came back `"string"`, free for any timer
+  on the page to read).
+
+  Ordering that is easy to get wrong: strip the receipt, THEN `documentShape()`,
+  THEN the 120KB cap. Count first and `shape` counts our own script; cap first
+  and the receipt falls off a large page, so the run reports as never having
+  happened.
+
+  `scripts/lens-inject-probe.mjs` is this feature's control, in the same idiom as
+  `kitesurf:check`: does the engine execute an injection, is the capture after
+  it, and does `waitForTimeout` land after injection. That last one is the gate
+  on any future ASYNC recipe; both shipping recipes are synchronous, so v1 sends
+  `addScriptTag` and nothing else.
+
+  **The two GATING questions are answered, measured 2026-08-08 against the real
+  binding through `npm run dev:remote`.** `env.BROWSER.quickAction` accepts
+  `addScriptTag`, and the capture happens after the injected script's
+  synchronous mutations. Both were live risks rather than paranoia: the
+  binding's payload schema is CLOSED, and the Kitesurf probe had already caught
+  it refusing a key the REST docs describe, so "documented" does not imply
+  "accepted here". Against `https://aadhar.sh/garage/horizon` the run reported
+  `acted: 7, scanned: 8` and returned HTML carrying 8 of 8 `<details>` open,
+  with neither the receipt nor the injected script surviving into `content`.
+  The engine was `chromium-binding`, since a local dev session holds no
+  `BROWSER_RUN_TOKEN`.
+
+  **`waitForTimeout` is the one thing still unmeasured, and it gates only an
+  ASYNC recipe.** Nothing shipping sends it. Probe cases 3 and 4 are that
+  question and they need the REST token, so they stay a workstation run.
 
   The snapshot now reports `engine` and a server-computed `shape` (words,
   headings, links, images, JSON-LD). `shape` is counted from the FULL rendered

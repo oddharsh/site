@@ -11,7 +11,7 @@ import { captureRepresentation, compareRepresentation, readRepresentation } from
 import { frameText, terminalToolFrame } from "./terminal.js";
 import { radarFrame, readSamples } from "./radar.js";
 import { AGENT_SURFACES } from "./lib/site-manifest.js";
-import { CACHE_EMPTY, CACHE_LIVE, CACHE_STATIC, mcpCorsHeaders, mcpGate, mcpServer } from "./lib/mcp-protocol.js";
+import { CACHE_EMPTY, CACHE_LIVE, CACHE_STATIC, mcpCorsHeaders, mcpGate, mcpHttpStatus, mcpServer } from "./lib/mcp-protocol.js";
 import { mcpTool } from "./lib/mcp-tools.js";
 import { previewToolRefusal } from "./lib/preview.js";
 
@@ -422,5 +422,7 @@ export async function handleSiteMcp(request, env, ctx) {
     return output.length ? respond(output) : respond(null, 202);
   }
   const output = await handleOne(payload);
-  return output === null ? respond(null, 202) : respond(output);
+  // 200 unless the request was malformed under the required-`_meta` rule, which
+  // 2026-07-28 pins to 400 on HTTP. Batches stay 200 (see mcpHttpStatus).
+  return output === null ? respond(null, 202) : respond(output, mcpHttpStatus(payload));
 }

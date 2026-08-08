@@ -1,3 +1,4 @@
+import { isCanonicalHost } from "./const.js";
 import { wantsMarkdown } from "./http.js";
 
 // lib/cache.js: the worker's caching kit, one primitive surface where four
@@ -249,6 +250,23 @@ export async function cachedRender(request, ctx, renderFn, keyPath, env) {
 // Verified on production before the fix: `/` returned text/html on a cache HIT and
 // text/markdown with `?cb=` appended, which is the same route bypassing this
 // predicate through the query-string bail below.
+// The HOST is the second axis this key cannot see, and it cost the same bug on a
+// different dimension. Three hostnames reach this Worker and only one of them is
+// the site: `cal.aadhar.sh` 404s every path but /coffee*, and a `*.workers.dev`
+// preview is supposed to answer noindex. Both checks live in the dispatcher, and
+// a cache HIT returns before the dispatcher runs, so neither was happening.
+//
+// MEASURED on production 2026-08-08, deliberately: GET https://aadhar.sh/reading
+// twice (MISS, then HIT at age 1), then https://cal.aadhar.sh/reading — 200, HIT,
+// age 1, the same 91,980-byte page, on a host whose origin answers 404 for it.
+// Same object, not a second copy: /photos and /writing reported byte-identical
+// `age` on both hostnames in the same second. Adding `?cb=` to any of them
+// returned the real 404, which is this predicate's query-string bail sending the
+// request to the dispatcher and is what makes the mechanism unambiguous.
+//
+// Bailing rather than varying, for the same reason as the Accept case: there is
+// no Vary that would help (the Host is not a request header the cache varies on
+// here), and the canonical host is the only one whose hit rate matters.
 export function shouldUseWorkersCache(request, cacheablePaths) {
   if (request.method !== "GET" && request.method !== "HEAD") return false;
   if (request.headers.has("range") || request.headers.has("if-none-match")) return false;
@@ -257,6 +275,7 @@ export function shouldUseWorkersCache(request, cacheablePaths) {
   // "has an accept header", since every browser sends one.
   if (wantsMarkdown(request)) return false;
   const url = new URL(request.url);
+  if (!isCanonicalHost(url.hostname)) return false;
   if (url.search) return false;
   if (cacheablePaths.has(url.pathname)) return true;
   return url.pathname.startsWith("/writing/")

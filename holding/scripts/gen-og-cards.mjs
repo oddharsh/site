@@ -51,6 +51,15 @@ const HERO = {
   "garage-blueprint": { hero: [".map"] },
   "garage-chunks":    { hero: [".method", "#cdc-chunks"] },
   "garage-cloudflare":{ hero: [".cf-feat", ".demo"] },
+  // These three name their demo wrappers rather than reusing `.demo`, so the
+  // FALLBACK sweep missed all three and they fell through to the window top.
+  // That fallback stopped being an acceptable default when the Explorer chrome
+  // shipped (#275): the `.window` now carries an address bar and a task pane, so
+  // a whole-window card reads as a screenshot of a browser rather than this
+  // file's house style, which is one demo panel floated on the desktop.
+  "garage-compression": { hero: [".cmp"] },
+  "garage-octane":    { hero: [".oct-demo"] },
+  "garage-pqc":       { hero: [".pqc-demo"] },
   "garage-encoding":  { hero: [".demo", ".sample-grid"] },
   "garage-gpt56":     { hero: [".workbench"] },
   "garage-horizon":   { hero: [".demo"] },
@@ -69,6 +78,11 @@ const HERO = {
   "lwe-encoding": { hero: ["#demo-chroma", ".demo"] },
   "lwe-fhe":      { hero: ["#demo-add", ".demo"] },
   "lwe-knots":    { hero: ["#demo-knot", ".demo"] },
+  // The FALLBACK sweep already lands here, because #demo-spec is the first
+  // `.demo` on the page. Naming it anyway, like every other lwe entry: it is the
+  // page's thesis (the bug relocated into the spec), and a demo added above it
+  // would otherwise silently become the card.
+  "lwe-lean":     { hero: ["#demo-spec", ".demo"] },
   "lwe-mpc":      { hero: ["#demo-mpc", ".demo"] },
   "lwe-pcrypto":  { hero: ["#demo-snark", ".demo"] },
   "lwe-tee":      { hero: ["#demo-tee", ".demo"] },
