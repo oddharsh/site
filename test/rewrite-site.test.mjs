@@ -127,6 +127,11 @@ test("search and Run are complete native forms backed by a generated index", asy
   const run = await text("run.html");
   const index = JSON.parse(await text("search-index.json"));
   assert.match(search, /Search aadhar\.sh/);
+  // The Worker fills #search-results at request time. Without the mount the form
+  // submits to a page that can only ever show itself back, which is what /search
+  // did before: a search page that could not search.
+  assert.match(search, /<section id="search-results">/);
+  assert.match(search, /<form class="command-form" action="\/search" method="get">/);
   assert.match(run, /<datalist id="site-commands">/);
   assert.ok(index.length >= 59);
   assert.doesNotMatch(search + run, /<script\b/i);

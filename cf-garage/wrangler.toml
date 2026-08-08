@@ -8,3 +8,20 @@ routes = [{ pattern = "aadhar.sh/garage/cf/*", zone_name = "aadhar.sh" }]
 
 [observability]
 enabled = true
+
+# The deployed Worker still carries the `Counter` Durable Object this adapter no
+# longer exports, and a script cannot simply stop exporting a class it applied a
+# migration for: the upload is rejected until a migration says the class is gone.
+# Migration tags are cumulative, so v1 stays for the account's applied history
+# and v2 removes the class. This DELETES the demo counter's stored value, which
+# is the intent, since the endpoint that read it is retired.
+#
+# `wrangler deploy --dry-run` cannot catch a missing migration because it never
+# contacts the API, so this was invisible to CI.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Counter"]
+
+[[migrations]]
+tag = "v2"
+deleted_classes = ["Counter"]

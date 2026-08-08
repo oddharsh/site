@@ -1,6 +1,6 @@
 import { sendEmail } from "./email.ts";
 import { cleanText, decodeHtmlEntities } from "./html.ts";
-import { json, withSiteHeaders } from "./http.ts";
+import { json, withRenderedHeaders } from "./http.ts";
 import { fetchPublicResource, validateLensTarget } from "./lens.ts";
 import { signValue, verifyValue } from "./signatures.ts";
 
@@ -132,9 +132,12 @@ export async function receiveWebmention(request: Request, env: Env, ctx: Executi
 }
 
 async function decisionPage(request: Request, env: Env, title: string, message: string, status: number): Promise<Response> {
-  const response = await env.ASSETS.fetch(new Request(new URL("/inbox", request.url), request));
+  // Plain GET: the moderation routes are dispatched ahead of the method gate, so
+  // inheriting the caller's method would ask the asset layer to POST and render
+  // an empty 405 body under a rewritten status code.
+  const response = await env.ASSETS.fetch(new Request(new URL("/inbox", request.url), { method: "GET" }));
   const transformed = new HTMLRewriter().on(".document", { element(element) { element.setInnerContent(`<header><p class="eyebrow">Outlook Express · Moderation</p><h1>${escapeHtml(title)}</h1><p class="lede">${escapeHtml(message)}</p></header><p><a href="/inbox">Open Inbox</a></p>`, { html: true }); } }).transform(response);
-  const secured = withSiteHeaders(transformed, request); secured.headers.set("cache-control", "no-store"); secured.headers.set("referrer-policy", "no-referrer"); secured.headers.set("x-robots-tag", "noindex");
+  const secured = withRenderedHeaders(transformed, request); secured.headers.set("cache-control", "no-store"); secured.headers.set("referrer-policy", "no-referrer"); secured.headers.set("x-robots-tag", "noindex");
   return new Response(secured.body, { status, headers: secured.headers });
 }
 

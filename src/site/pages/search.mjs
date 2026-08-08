@@ -9,7 +9,10 @@ function searchForm(action, label, button, datalist = "") {
 }
 
 export function renderSearch({ stylesheet }) {
-  const body = `<header><p class="eyebrow">Local Disk (C:) · Find</p><h1>Search aadhar.sh</h1><p class="lede">Search the authored public corpus. The JSON response keeps the same query address for scripts and agents.</p></header>${searchForm("/search", "A word or phrase", "Search")}`;
+  // #search-results is the mount the Worker fills when the form is submitted.
+  // It ships with the resting state so the page reads correctly with no query,
+  // and so a browser that never reaches the Worker still gets a whole document.
+  const body = `<header><p class="eyebrow">Local Disk (C:) · Find</p><h1>Search aadhar.sh</h1><p class="lede">Search the authored public corpus. The JSON response keeps the same query address for scripts and agents.</p></header>${searchForm("/search", "A word or phrase", "Search")}<section id="search-results"><p class="empty-state">Results appear here. Every query is answered by the server, so this page needs no script.</p></section>`;
   return renderDocument({ title: "Search aadhar.sh", description: "Search the public authored site corpus.", path: "/search", stylesheet, body, tasks: [{ href: "/search.json?q=photo", label: "Try the JSON search" }], details: [{ term: "Type", value: "Public full-text search" }, { term: "Index", value: "Built with the site" }] });
 }
 

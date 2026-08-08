@@ -1,4 +1,4 @@
-import { json, withSiteHeaders } from "./http.ts";
+import { json, withRenderedHeaders } from "./http.ts";
 import contracts from "../contracts/mcp.json";
 
 type Row = Record<string, unknown>;
@@ -59,7 +59,7 @@ export async function serendipityPage(request: Request, env: Env): Promise<Respo
   const [response, rows] = await Promise.all([env.ASSETS.fetch(request), eventRows(env)]);
   const html = poolHtml(rows);
   const transformed = html ? new HTMLRewriter().on("#event-pool", { element(element) { element.setInnerContent(html, { html: true }); } }).transform(response) : response;
-  return withSiteHeaders(transformed, request);
+  return withRenderedHeaders(transformed, request);
 }
 
 async function attendees(env: Env, eventId: string): Promise<Row[]> {
@@ -94,10 +94,10 @@ function socialLinks(person: Row): string {
 
 export async function serendipityEvent(request: Request, env: Env, id: string): Promise<Response> {
   const record = await eventRecord(env, id);
-  const shell = await env.ASSETS.fetch(new Request(new URL("/serendipity", request.url), request));
+  const shell = await env.ASSETS.fetch(new Request(new URL("/serendipity", request.url), { method: "GET" }));
   const body = record ? `<header><p class="eyebrow">Serendipity · Event</p><h1>${escapeHtml(record.event.name)}</h1><p class="lede">${escapeHtml(dateTime(record.event.start_at))}${record.event.location ? ` · ${escapeHtml(record.event.location)}` : ""}</p></header><article class="event-detail">${record.event.description ? `<p class="event-description">${escapeHtml(record.event.description)}</p>` : ""}${externalUrl(record.event.url) ? `<p><a class="native-button" href="${escapeHtml(externalUrl(record.event.url))}" rel="external noopener">Open the event page</a></p>` : ""}<h2>${record.attendees.length} public attendee${record.attendees.length === 1 ? "" : "s"}</h2>${record.attendees.length ? `<ul class="attendee-list">${record.attendees.map((person) => `<li><strong>${escapeHtml(person.name)}</strong>${person.is_host ? " · host" : ""}${person.role || person.company ? `<p>${escapeHtml([person.role, person.company].filter(Boolean).join(" at "))}</p>` : ""}${person.bio_short || person.enriched_bio ? `<p>${escapeHtml(person.bio_short || person.enriched_bio)}</p>` : ""}<p class="event-meta">Seen at ${Number(person.times_seen || 1)} event${Number(person.times_seen || 1) === 1 ? "" : "s"}${socialLinks(person)}</p></li>`).join("")}</ul>` : `<p class="empty-state">No public attendee list is attached.</p>`}</article>` : `<header><p class="eyebrow">Serendipity · Event</p><h1>Event not found</h1><p class="lede">This record is absent or no longer public.</p></header>`;
   const transformed = new HTMLRewriter().on(".document", { element(element) { element.setInnerContent(body, { html: true }); } }).transform(shell);
-  const secured = withSiteHeaders(transformed, request); secured.headers.set("cache-control", "public, max-age=0, s-maxage=60");
+  const secured = withRenderedHeaders(transformed, request); secured.headers.set("cache-control", "public, max-age=0, s-maxage=60");
   return new Response(secured.body, { status: record ? 200 : 404, headers: secured.headers });
 }
 

@@ -57,7 +57,12 @@ export async function refreshCensus(env: Env): Promise<void> {
   const rows = await Promise.all(targets.census.map(async (url) => {
     const request = new Request(`https://aadhar.sh/lens/fetch?url=${encodeURIComponent(url)}`, { headers: { "cf-connecting-ip": `census:${new URL(url).hostname}` } });
     const result = await inspectLens(request, env, url); const payload = result.payload; const readiness = payload.readiness as Row | undefined; const discovery = payload.discovery as Row | undefined;
-    return { ts, ymd, host: new URL(url).hostname.replace(/^www\./, ""), url, tier: result.status === 200 ? "public" : "unavailable", score: Number(readiness?.score) || 0, level: null, doors: Number(readiness?.doors) || 0, verdict: payload.ok ? "readable" : String(payload.error || "unavailable").slice(0, 500), surfaces: JSON.stringify(discovery ?? {}) };
+    // `doors` is the measurement this lens actually takes: how many public
+    // machine-readable entrances the origin answers on. The composite score and
+    // level the old lens reported have no successor here, so they are recorded
+    // as NULL rather than as a 0 that would read like a real reading and would
+    // pin every delta in the series to zero. Historical rows keep their values.
+    return { ts, ymd, host: new URL(url).hostname.replace(/^www\./, ""), url, tier: result.status === 200 ? "public" : "unavailable", score: null, level: null, doors: Number(readiness?.doors) || 0, verdict: payload.ok ? "readable" : String(payload.error || "unavailable").slice(0, 500), surfaces: JSON.stringify(discovery ?? {}) };
   }));
   await ensureCensusSchema(env);
   await env.RESTORE_DB.batch(rows.map((row) => env.RESTORE_DB.prepare("INSERT OR REPLACE INTO lens_census(ts,ymd,host,url,tier,score,level,doors,verdict,surfaces) VALUES(?,?,?,?,?,?,?,?,?,?)").bind(row.ts, row.ymd, row.host, row.url, row.tier, row.score, row.level, row.doors, row.verdict, row.surfaces)));

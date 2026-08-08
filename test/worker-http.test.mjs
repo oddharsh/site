@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { prefersMarkdown } from "../src/worker/http.ts";
 import { validateLensTarget } from "../src/worker/lens.ts";
@@ -6,10 +7,13 @@ import { generateCoffeeSlots, parseCalendar } from "../src/worker/coffee.ts";
 import { cleanText, decodeHtmlEntities } from "../src/worker/html.ts";
 import { parseSpotifyPage } from "../src/worker/rn.ts";
 import { claimReservation, dropReservation } from "../src/worker/reservation.ts";
+import { previewGuardedGetWrites, previewRefusal } from "../src/worker/preview.ts";
 
 function request(accept) {
   return new Request("https://aadhar.sh/", { headers: { accept } });
 }
+
+const workerSource = (name) => readFileSync(new URL(`../src/worker/${name}`, import.meta.url), "utf8");
 
 test("Markdown negotiation requires an explicit media type", () => {
   assert.equal(prefersMarkdown(request("*/*")), false);
@@ -76,6 +80,44 @@ test("coffee reservations are exclusive, idempotent, releasable, and reusable af
   assert.equal(await dropReservation(storage, "first"), true);
   assert.equal(await claimReservation(storage, "second", start, end, start), true, "released slot can be reused");
   assert.equal(await claimReservation(storage, "third", start, end, end + 1), true, "expired reservation can be replaced");
+});
+
+test("the preview guard refuses writes and passes reads", () => {
+  const preview = (method, path) => previewRefusal(new Request(`https://abc123-aadhar-sh.workers.dev${path}`, { method }));
+  assert.equal(preview("GET", "/coffee")?.status, undefined, "an ordinary read is served");
+  assert.equal(preview("POST", "/coffee/book")?.status, 403, "unsafe methods are denied by default");
+  for (const path of previewGuardedGetWrites) {
+    assert.equal(preview("GET", path)?.status, 403, `${path} writes and must be refused on a preview`);
+  }
+  assert.equal(previewRefusal(new Request("https://aadhar.sh/coffee/approve"))?.status, undefined, "production is never refused");
+});
+
+// A stale entry in the preview guard reads as protection while protecting
+// nothing, which is how /coffee/approve went unguarded: the set still named the
+// retired /approve path. Pin each entry to a route the dispatcher really has.
+test("every preview-guarded GET write is a live route", () => {
+  const dispatcher = workerSource("index.ts");
+  for (const path of previewGuardedGetWrites) {
+    assert.ok(
+      dispatcher.includes(`pathname === "${path}"`),
+      `${path} is guarded as a GET-shaped write but no longer exists in the route table`,
+    );
+  }
+});
+
+// The asset layer answers only GET and HEAD. Rebuilding a request from a POST
+// to fetch a page shell returns an empty 405 body, so the rewriter that fills
+// the shell matches nothing and the visitor gets a blank page under a 200.
+test("page shells are fetched from the asset layer with a plain GET", () => {
+  for (const name of ["coffee.ts", "webmention.ts", "serendipity.ts"]) {
+    const source = workerSource(name);
+    for (const [line] of source.matchAll(/^.*ASSETS\.fetch\(new Request\(.*$/gm)) {
+      assert.ok(
+        line.includes('method: "GET"'),
+        `${name} rebuilds an asset request without pinning the method:\n${line.trim()}`,
+      );
+    }
+  }
 });
 
 test("Spotify refresh reads the public embed document without client execution", () => {
