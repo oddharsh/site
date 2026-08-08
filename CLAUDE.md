@@ -985,6 +985,22 @@ generic hex back.
   on any future ASYNC recipe; both shipping recipes are synchronous, so v1 sends
   `addScriptTag` and nothing else.
 
+  **The two GATING questions are answered, measured 2026-08-08 against the real
+  binding through `npm run dev:remote`.** `env.BROWSER.quickAction` accepts
+  `addScriptTag`, and the capture happens after the injected script's
+  synchronous mutations. Both were live risks rather than paranoia: the
+  binding's payload schema is CLOSED, and the Kitesurf probe had already caught
+  it refusing a key the REST docs describe, so "documented" does not imply
+  "accepted here". Against `https://aadhar.sh/garage/horizon` the run reported
+  `acted: 7, scanned: 8` and returned HTML carrying 8 of 8 `<details>` open,
+  with neither the receipt nor the injected script surviving into `content`.
+  The engine was `chromium-binding`, since a local dev session holds no
+  `BROWSER_RUN_TOKEN`.
+
+  **`waitForTimeout` is the one thing still unmeasured, and it gates only an
+  ASYNC recipe.** Nothing shipping sends it. Probe cases 3 and 4 are that
+  question and they need the REST token, so they stay a workstation run.
+
   The snapshot now reports `engine` and a server-computed `shape` (words,
   headings, links, images, JSON-LD). `shape` is counted from the FULL rendered
   body BEFORE the 120KB content cap, which retires the old truncation bail: a

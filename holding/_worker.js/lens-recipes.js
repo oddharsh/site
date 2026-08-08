@@ -8,6 +8,22 @@
 // open. Those are the two places a page's visible text and its machine-readable
 // text diverge hardest, and the lens had nothing to say about either.
 //
+// ── measured, not assumed (2026-08-08, wrangler dev --remote, real binding) ─
+// `env.BROWSER.quickAction` ACCEPTS `addScriptTag`, and the capture happens
+// after the injected script's synchronous mutations. Worth measuring rather
+// than reading off the docs, because the binding's payload schema is CLOSED —
+// the Kitesurf probe got {"code":"unrecognized_keys","keys":["browser"]} for a
+// key the REST docs describe — so "documented" does not imply "accepted here".
+// Against https://aadhar.sh/garage/horizon: `acted: 7, scanned: 8`, and the
+// returned HTML carried 8 of 8 <details> open, with no receipt and no injected
+// script left in `content`.
+//
+// STILL UNMEASURED: whether `waitForTimeout` is accepted and whether it delays
+// capture past an injection's ASYNC work. Nothing shipping needs it (both
+// recipes below are synchronous, and v1 sends `addScriptTag` alone), but any
+// future async recipe does. scripts/lens-inject-probe.mjs cases 3 and 4 are
+// that question, and they need a REST token.
+//
 // ── why this is a fixed allowlist and always will be ──────────────────────
 // These scripts reach the page through Browser Run's `addScriptTag`, which runs
 // arbitrary JavaScript in the target document. A `js=` parameter, or a
