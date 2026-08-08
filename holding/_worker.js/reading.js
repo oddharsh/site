@@ -145,6 +145,7 @@ export function renderReadingPage(payload) {
   return lunaPage({
     title: "My Reading · aadhar.sh",
     path: "My Reading",
+    route: "/reading",
     width: 720,
     description: `What I've been reading, saved to Curius and mirrored natively here. ${count} link${count === 1 ? "" : "s"}, newest first.`,
     css: `

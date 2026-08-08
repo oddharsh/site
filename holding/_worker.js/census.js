@@ -276,6 +276,7 @@ export async function handleCensus(request, env, ctx) {
   return lunaPage({
     title: "The census · aadhar.sh",
     path: "The Other Web · census",
+    route: "/lens/census",
     width: 900,
     description: "A weekly, longitudinal record of how agent-ready 16 representative websites are — spectrum tier, readiness score, and agent doors, tracked over time.",
     robots: "index, follow",

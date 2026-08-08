@@ -66,6 +66,7 @@ export async function handleInbox(request, env, ctx) {
   return lunaPage({
     title: "Inbox · aadhar.sh",
     path: "Inbox — Outlook Express",
+    route: "/inbox",
     width: 860,
     description: "Webmentions from the open web: who linked to aadhar.sh, moderated and rendered as mail.",
     // The endpoint advertised on the page that displays its results, so a reader

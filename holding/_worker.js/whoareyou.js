@@ -266,6 +266,7 @@ export async function handleWhoareyou(request, env, ctx) {
   return lunaPage({
     title: "System Properties · aadhar.sh/whoareyou",
     path: "System Properties",
+    route: "/whoareyou",
     width: 720,
     description: "what one HTTP request to aadhar.sh reveals about you. read-only, never stored.",
     robots: "noindex",

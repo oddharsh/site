@@ -65,6 +65,7 @@ export async function renderWindowsUpdate(cp) {
   return lunaPage({
     title: "Windows Update · aadhar.sh",
     path: "Windows Update",
+    route: "/updates",
     width: 620,
     description: "What has shipped to this site lately, in a Windows Update reskin. Read-only.",
     robots: "noindex",
@@ -219,6 +220,7 @@ var POINTS = ${JSON.stringify(data)};
   return lunaPage({
     title: "System Restore · aadhar.sh",
     path: "System Restore",
+    route: "/restore",
     width: 680,
     description: "Roll the site back through its real deploy history, in a Windows System Restore reskin backed by Cloudflare D1. Read-only.",
     robots: "noindex",

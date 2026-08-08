@@ -117,7 +117,12 @@ const ROUTES = [
   { path: "/lens/", status: 301 },   // slashless canonical: routeDropSlash 301s to /lens
   { path: "/lens.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "replaceState" },
   { path: "/lens-browser.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "LensBrowser" },
-  { path: "/luna.css", status: 200, ct: "text/css", marker: "axp-desktop", maxBytes: builtOutput ? 45000 : undefined },
+  // maxBytes is a "did the build actually minify this" tripwire, not a byte
+  // budget: the authored sheet is ~74 KB, so anything near that means the build
+  // was bypassed. Raised 45,000 -> 50,000 when the Explorer chrome added 3.5 KB
+  // of rules (563 B brotli). Keep it comfortably under the unminified size, or
+  // it stops detecting the thing it exists to detect.
+  { path: "/luna.css", status: 200, ct: "text/css", marker: "axp-desktop", maxBytes: builtOutput ? 50000 : undefined },
   // the retired SW's unregister stub: must keep serving 200 for a year+
   { path: "/sw.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "unregister" },
   // build-output oracle (prod only — dev serves the readable holding/ tree): a

@@ -672,6 +672,7 @@ export function renderLensShell(initial, state, inputValue, compare) {
   return lunaPage({
     title: "The Other Web · aadhar.sh",
     path: "The Other Web",
+    route: "/lens",
     width: 980,
     description: lensDescription,
     // Link unfurls. The card is pre-baked by gen-og-cards.mjs (OG_ONLY=lens):
