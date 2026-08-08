@@ -768,5 +768,12 @@
     "version": "aadhar-v174-peeper-budgets",
     "vnum": 174,
     "ymd": "2026-08-07"
+  },
+  {
+    "slug": "feeds-and-fixes",
+    "title": "RSS feeds for writing, garage and learning-with-errors, the terminal shows the wire, the Luna scrollbar finally renders in Chromium, and coffee slots claim atomically",
+    "version": "aadhar-v175-feeds-and-fixes",
+    "vnum": 175,
+    "ymd": "2026-08-08"
   }
 ]
