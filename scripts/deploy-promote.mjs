@@ -68,6 +68,15 @@ const SAMPLES = 40;
 const SETTLE_MS = 20000;
 const RESAMPLE_MS = 25000;
 const SAMPLE_ATTEMPTS = 3;
+// Per-request ceiling, and the ONLY thing standing between a stalled socket and
+// a wedged release. `fetch` has no default request timeout, so before this the
+// 100% step of the v177 ramp exited with `Detected unsettled top-level await` in
+// the middle of sample(): traffic had already moved, and the D1 changelog write
+// that runs AFTER sampling never happened. The repair was documented (re-run
+// `--to 100`, which moves nothing and logs); the hang should not have needed one.
+// 8s is ~5x the whole 40-request sweep measured against production (1.5s), so a
+// timeout here means something is genuinely wrong rather than merely slow.
+const REQ_TIMEOUT_MS = 8000;
 
 // ---------------------------------------------------------------- args ----
 
@@ -201,33 +210,58 @@ async function newestVersion() {
 // purpose: gradual deployments have no per-request affinity by default, but
 // connection reuse can pin a burst of parallel requests to one version and make
 // a working ramp look like a dead one.
+// ERRORS AND STALLS ARE DIFFERENT THINGS and this used to conflate them, which
+// is why adding a timeout needed this rewrite rather than one option.
+//
+// An error is the ORIGIN answering badly: a non-2xx from the version being
+// ramped. It is conclusive, it is what the ramp exists to catch, and the right
+// response is to stop and consider rolling back.
+//
+// A stall is THIS MACHINE failing to complete a request: a timeout, a DNS
+// blip, a dropped socket on a laptop that just moved networks. It says nothing
+// about the deploy. Counting one as the other would mean a flaky cafe
+// connection could roll back a perfectly healthy release, so the ramp reports
+// them separately and only treats a total blackout (nothing answered at all) as
+// disqualifying.
 async function sample(target, previous) {
   const seen = new Map();
-  let errors = 0;
+  let errors = 0, stalls = 0;
   const errorVersions = [];
+  const stallReasons = [];
 
   for (let i = 0; i < SAMPLES; i++) {
     try {
       const res = await fetch(`${SAMPLE_URL}?s=${i}`, {
         headers: { accept: "application/json" },
         cache: "no-store",
+        // No default request timeout exists on fetch. Without this a single
+        // stalled socket hangs the whole ramp mid-step.
+        signal: AbortSignal.timeout(REQ_TIMEOUT_MS),
       });
-      const version = res.ok ? await servingVersion(res) : null;
+      // Read the body on BOTH paths. It is what identifies the version that
+      // served an error, which the old code claimed to report and could not
+      // (it passed null on the !ok branch, so `version ||` was dead and every
+      // error read `HTTP 5xx`). It also drains the response instead of leaking
+      // one connection per bad sample.
+      const version = await servingVersion(res);
       if (!res.ok) {
         errors++;
-        errorVersions.push(version || `HTTP ${res.status}`);
+        errorVersions.push(version ? `${String(version).slice(0, 8)} HTTP ${res.status}` : `HTTP ${res.status}`);
         continue;
       }
       seen.set(version || "unknown", (seen.get(version || "unknown") || 0) + 1);
     } catch (e) {
-      errors++;
-      errorVersions.push(String(e.message || e));
+      stalls++;
+      stallReasons.push(e?.name === "TimeoutError" ? `timed out after ${REQ_TIMEOUT_MS}ms` : String(e?.message || e));
     }
   }
 
   const onTarget = countMatching(seen, target);
   const onPrevious = previous ? countMatching(seen, previous) : 0;
-  return { seen, errors, errorVersions, onTarget, onPrevious, total: SAMPLES };
+  // How many requests actually came back, error or not. Zero means the sample
+  // proved nothing, which is not the same as proving the deploy is fine.
+  const answered = SAMPLES - stalls;
+  return { seen, errors, errorVersions, stalls, stallReasons, answered, onTarget, onPrevious, total: SAMPLES };
 }
 
 async function servingVersion(res) {
@@ -267,6 +301,7 @@ if (has("status")) {
     console.log(`  ${String(v).slice(0, 8)}  ${n}/${s.total} sampled`);
   }
   if (s.errors) console.log(`  ${s.errors} error(s): ${[...new Set(s.errorVersions)].join(", ")}`);
+  if (s.stalls) console.log(`  ${s.stalls} stalled from this machine: ${[...new Set(s.stallReasons)].join(", ")}`);
   process.exit(0);
 }
 
@@ -365,7 +400,9 @@ for (const pct of steps) {
     s = await sample(target, previous);
     const pctSeen = Math.round((s.onTarget / s.total) * 100);
     const note = attempt > 1 ? ` (attempt ${attempt}/${SAMPLE_ATTEMPTS})` : "";
-    console.log(`   sampled ${s.total}: ${s.onTarget} on target (${pctSeen}%), ${s.onPrevious} on previous, ${s.errors} error(s)${note}`);
+    const stalled = s.stalls ? `, ${s.stalls} stalled` : "";
+    console.log(`   sampled ${s.total}: ${s.onTarget} on target (${pctSeen}%), ${s.onPrevious} on previous, ${s.errors} error(s)${stalled}${note}`);
+    if (s.stalls) console.log(`   note: ${s.stalls} request(s) never completed from THIS machine (${[...new Set(s.stallReasons)][0]}) — not an origin fault.`);
     // Errors are conclusive on the first sighting: a 500 does not become a 200
     // by waiting, and that is the failure the whole ramp exists to catch.
     if (s.errors) break;
@@ -379,6 +416,18 @@ for (const pct of steps) {
     console.error(`   FAILED: ${s.errors} non-200 response(s): ${[...new Set(s.errorVersions)].join(", ")}`);
     console.error(`   traffic is CURRENTLY SPLIT at ${pct}% — this script does not roll back for you.`);
     console.error(`   roll back with: npm run deploy:promote -- --rollback`);
+    process.exit(1);
+  }
+  // Nothing came back at all. Distinct from an origin error and reported as
+  // such, because the remedy is different: check this machine's network and
+  // re-run, rather than roll back a deploy that may be perfectly healthy. It
+  // still stops the ramp, since a step nobody could measure is not a step that
+  // passed — and at 100% it is what keeps an unverified run from writing the
+  // changelog as though traffic were confirmed.
+  if (!s.answered) {
+    console.error(`   FAILED: not one of ${s.total} samples completed from this machine (${[...new Set(s.stallReasons)][0]}).`);
+    console.error(`   this says nothing about the deploy — it could not be measured. Traffic IS at ${pct}%.`);
+    console.error(`   check your network, then:  npm run deploy:promote -- --status`);
     process.exit(1);
   }
   if (pct < 100 && s.onTarget === 0) {
