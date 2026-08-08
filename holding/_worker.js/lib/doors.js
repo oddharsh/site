@@ -54,9 +54,17 @@ const trim = (text, max) => {
  */
 export async function foreignMcpTools(origin, env) {
   const url = origin.replace(/\/+$/, "") + "/mcp";
+  // Both `_meta` keys are REQUIRED on a modern request. `clientCapabilities` is
+  // empty because this probe reads a catalogue and offers the server nothing:
+  // no roots, no sampling, no elicitation. Sending it matters twice over — a
+  // strict foreign server is entitled to refuse us with -32602 without it, and
+  // the self-scan below loops back into our own /mcp, which does exactly that.
   const body = JSON.stringify({
     jsonrpc: "2.0", id: 1, method: "tools/list",
-    params: { _meta: { "io.modelcontextprotocol/protocolVersion": "2026-07-28" } },
+    params: { _meta: {
+      "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+      "io.modelcontextprotocol/clientCapabilities": {},
+    } },
   });
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 8000);

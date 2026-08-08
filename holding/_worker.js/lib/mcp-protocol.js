@@ -41,6 +41,7 @@ export const MCP_LEGACY_DEFAULT = "2025-06-18";
 // `_meta` keys are namespaced by the spec and the prefix is mandatory.
 const META = "io.modelcontextprotocol/";
 export const META_PROTOCOL = `${META}protocolVersion`;
+export const META_CLIENT_CAPS = `${META}clientCapabilities`;
 export const META_SERVER_INFO = `${META}serverInfo`;
 
 // From the 2026-07-28 error-code allocation policy, which reserved
@@ -49,6 +50,9 @@ export const META_SERVER_INFO = `${META}serverInfo`;
 // revision; both servers already used -32602, so nothing needed renumbering.)
 export const ERR_HEADER_MISMATCH = -32020;
 export const ERR_UNSUPPORTED_PROTOCOL = -32022;
+// Plain JSON-RPC Invalid Params, NOT from the reserved range above. The spec
+// pins the malformed-request case to this code rather than minting a new one.
+export const ERR_INVALID_PARAMS = -32602;
 
 // CacheableResult freshness hints, required on list and read results. These are
 // hints that let a client cache instead of poll; they complement listChanged
@@ -68,29 +72,69 @@ export const CACHE_EMPTY  = { ttlMs: 86_400_000, cacheScope: "public" };  // per
 // proof of modernity would misclassify a legacy client and answer it in a
 // dialect it cannot read.
 //
-// DELIBERATE DEVIATION, shared by both servers: the REQUIRED `_meta` fields are
-// not enforced. 2026-07-28 marks both `protocolVersion` and `clientCapabilities`
+// DELIBERATE DEVIATION, shared by both servers, and it is now HALF the size it
+// used to be. 2026-07-28 marks both `protocolVersion` and `clientCapabilities`
 // required on every modern request, and says a request missing either is
-// malformed and MUST be rejected with -32602 (and HTTP 400). Neither server
-// does that, for two different reasons.
+// malformed and MUST be refused with -32602 (and HTTP 400). The
+// `clientCapabilities` half is enforced below. The `protocolVersion` half
+// cannot be, and the asymmetry is the whole design:
 //
-// `protocolVersion` is FORCED. An absent `_meta` is precisely how a legacy
-// client presents itself, so rejecting on it would fail every pre-2026 caller
-// at the gate: the "Legacy client, Modern server -> Fails" row a dual-era
-// server exists to avoid. A dual-era server cannot both use absence as an era
-// signal and treat absence as malformed.
+// An absent `_meta` is precisely how a LEGACY client presents itself, so
+// refusing on a missing `protocolVersion` would fail every pre-2026 caller at
+// the gate: the "Legacy client, Modern server -> Fails" row a dual-era server
+// exists to avoid. A dual-era server cannot both read absence as an era signal
+// and call absence malformed. It has to pick one, and this one picks the era
+// signal.
 //
-// `clientCapabilities` is the enforceable half and is skipped by CHOICE. A
-// request carrying `protocolVersion` has already identified itself as modern,
-// so a missing `clientCapabilities` there could be refused without touching the
-// legacy path. Nothing on either server reads a client capability, so the check
-// would reject a modern client whose only fault is omitting a field we never
-// consult. Revisit when a tool actually needs one, which is the same moment
-// -32021 (MissingRequiredClientCapability) becomes implementable rather than
-// theoretical.
+// What that leaves is a clean rule: `protocolVersion` is the SELF-DECLARATION
+// of modernity, and everything else the modern revision requires is enforced
+// against callers who made it. See missingRequiredMeta().
 export function declaredVersion(msg) {
   const v = msg?.params?._meta?.[META_PROTOCOL];
   return typeof v === "string" && v ? v : null;
+}
+
+// The `_meta` field this MODERN request is missing, or null if it is fine.
+//
+// Only ever fires on a request that declared `protocolVersion`, which is what
+// keeps the legacy door open (see the deviation above): a caller with no
+// `_meta` at all is legacy, not malformed, and never reaches this.
+//
+// `clientCapabilities` must be an OBJECT. The spec types it as
+// ClientCapabilities, and a client sending `true` or `"none"` has not declared
+// capabilities in any readable sense; accepting the key's mere presence would
+// make this a spelling check rather than a contract. An EMPTY object is valid
+// and is the correct declaration for a client that supports no client features
+// at all, which is what both of this repo's own MCP clients send.
+export function missingRequiredMeta(msg) {
+  if (!declaredVersion(msg)) return null;
+  const caps = msg?.params?._meta?.[META_CLIENT_CAPS];
+  const ok = caps !== null && typeof caps === "object" && !Array.isArray(caps);
+  return ok ? null : META_CLIENT_CAPS;
+}
+
+// The refusal for that, which is a plain Invalid Params rather than anything
+// from the reserved range. `data.missing` is not required by the spec and is
+// there because "Invalid params" alone tells a client author nothing about
+// WHICH param, and this is a field they have probably never heard of.
+export function malformedRequest(id, missing) {
+  return { jsonrpc: "2.0", id, error: {
+    code: ERR_INVALID_PARAMS,
+    message: `Missing required _meta field: ${missing}`,
+    data: { missing: [missing] },
+  } };
+}
+
+// The HTTP status one JSON-RPC response goes out with. The spec pins the
+// malformed case to 400; everything else, including in-band JSON-RPC errors
+// like an unknown tool, stays 200.
+//
+// SINGLE messages only. A batch has no one request whose status this could
+// describe, and a batch of five where the third is malformed is not a bad
+// batch. Those keep 200 and carry the per-message error in the array, which is
+// how JSON-RPC batching works everywhere else.
+export function mcpHttpStatus(payload) {
+  return !Array.isArray(payload) && missingRequiredMeta(payload) ? 400 : 200;
 }
 
 // The refusal a client retries from. `data.supported` is the load-bearing part:
@@ -185,14 +229,22 @@ export function mcpServer({ serverInfo, capabilities, instructions }) {
   };
 }
 
-// The gate every request passes before dispatch: version first, then headers.
-// Returns a JSON-RPC error to send, or null to proceed. Shared so the two
-// servers cannot diverge on which requests they refuse.
+// The gate every request passes before dispatch: version, then the required
+// modern `_meta`, then headers. Returns a JSON-RPC error to send, or null to
+// proceed. Shared so the two servers cannot diverge on which requests they
+// refuse.
+//
+// Version goes FIRST so a caller on a version we do not speak is told that,
+// rather than being told its `_meta` is malformed under a revision it was never
+// claiming to follow. The two would be equally "correct" refusals and only one
+// of them is actionable.
 export function mcpGate(msg, request, id, hasId) {
   const declared = declaredVersion(msg);
   if (declared && !MCP_SUPPORTED.includes(declared)) {
     return hasId ? unsupportedVersion(id, declared) : null;
   }
+  const missing = missingRequiredMeta(msg);
+  if (missing) return hasId ? malformedRequest(id, missing) : null;
   const mismatch = headerMismatch(msg, request);
   if (mismatch) {
     return hasId

@@ -681,16 +681,27 @@ Three deliberate deviations, all written down at the code:
    the header exists to prevent.
 2. **`ping` is kept** though 2026-07-28 removed it. Legacy clients send it and
    it costs nothing.
-3. **The REQUIRED `_meta` fields are not enforced.** The spec marks both
-   `protocolVersion` and `clientCapabilities` required on every modern request
-   and says a request missing either MUST be refused with `-32602` / 400. The
-   `protocolVersion` half is forced: an absent `_meta` is how a legacy client
-   presents, so a dual-era server cannot both read absence as an era signal and
-   call it malformed. The `clientCapabilities` half is enforceable and skipped
-   by choice, because nothing on either server reads a client capability, so the
-   check would only reject a modern client over a field we never consult.
-   Revisit when a tool needs one; that is also when `-32021` becomes
-   implementable.
+3. **`protocolVersion` is not enforced as a REQUIRED `_meta` field, though
+   `clientCapabilities` is.** The spec marks both required on every modern
+   request and pins the refusal to `-32602` + HTTP 400.
+   `missingRequiredMeta()` enforces the second and structurally cannot enforce
+   the first: an absent `_meta` is how a legacy client presents itself, so a
+   dual-era server cannot both read absence as an era signal and call absence
+   malformed. It picks the era signal. What is left is a clean rule worth
+   stating, since it governs anything the revision adds next: **`protocolVersion`
+   is the self-declaration of modernity, and everything else the modern revision
+   requires is enforced against callers who made it.**
+
+   **Enforcing it broke two of our own clients, which is the transferable
+   lesson.** `wire.js` (the `/terminal` page, which renders a real `/mcp`
+   exchange) and `foreignMcpTools()` in `lib/doors.js` (the `/lens` door probe,
+   whose self-scan loops back into our own `/mcp`) both sent `protocolVersion`
+   alone. Neither would have errored visibly: `/terminal` degrades to "the tool
+   list could not be read just now" and the door probe reports the origin's MCP
+   server as unreadable. A server-side strictness change is a client-side
+   change too, and the clients here are the ones least likely to complain.
+   `-32021` (MissingRequiredClientCapability) is still unimplemented, and stays
+   that way until a tool actually requires a client capability.
 
 **BOTH servers on this origin speak it, through one module.** `/serendipity/mcp`
 (`serendipity/serendipity.js`) is a separate server with different tools and no

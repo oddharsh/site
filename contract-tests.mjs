@@ -3270,7 +3270,13 @@ const mcpPost = (body, headers = {}) => new Request("https://aadhar.sh/mcp", {
   body: JSON.stringify(body),
   headers: { "content-type": "application/json", ...headers },
 });
-const MODERN_META = { _meta: { "io.modelcontextprotocol/protocolVersion": "2026-07-28" } };
+// A well-formed modern request. BOTH keys are required by 2026-07-28, and the
+// server enforces the second one, so a fixture carrying only the version would
+// now be testing the refusal path in every test that used it.
+const MODERN_META = { _meta: {
+  "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+  "io.modelcontextprotocol/clientCapabilities": {},
+} };
 
 test("server/discover answers identity, versions and capabilities in one round trip", async () => {
   const res = await handleSiteMcp(mcpPost({
@@ -3309,6 +3315,58 @@ test("an unsupported protocol version is refused with the list the client can re
   // A version we do speak passes the gate.
   const ok = await handleSiteMcp(mcpPost({ jsonrpc: "2.0", id: 8, method: "tools/list", params: { ...MODERN_META } }), {}, context());
   assert.ok((await ok.json()).result.tools.length > 0);
+});
+
+test("a modern request without clientCapabilities is malformed, and a legacy one is not", async () => {
+  // 2026-07-28 marks `clientCapabilities` required on every modern request and
+  // pins the refusal to -32602 + HTTP 400. The interesting half is what must
+  // NOT be refused: this server is dual-era, so absence of `_meta` entirely is
+  // an era signal rather than a defect, and enforcing the version key the same
+  // way would shut the legacy door this server exists to hold open.
+  const bare = { "io.modelcontextprotocol/protocolVersion": "2026-07-28" };
+  const res = await handleSiteMcp(mcpPost({
+    jsonrpc: "2.0", id: 11, method: "tools/list", params: { _meta: bare },
+  }), {}, context());
+  const { error } = await res.json();
+  assert.equal(error.code, -32602, "plain Invalid Params, not a reserved-range code");
+  assert.match(error.message, /clientCapabilities/, "must name the field, which client authors have often never heard of");
+  assert.deepEqual(error.data.missing, ["io.modelcontextprotocol/clientCapabilities"]);
+  assert.equal(res.status, 400, "the spec pins this one to 400 on HTTP");
+
+  // A legacy caller sends no `_meta` at all and MUST still be served at 200.
+  const legacy = await handleSiteMcp(mcpPost({ jsonrpc: "2.0", id: 12, method: "tools/list" }), {}, context());
+  assert.equal(legacy.status, 200);
+  assert.ok((await legacy.json()).result.tools.length > 0, "no _meta is legacy, not malformed");
+
+  // Empty is a valid declaration; a non-object is not. Accepting the key's mere
+  // presence would make this a spelling check instead of a contract.
+  for (const [caps, ok] of [[{}, true], [{ roots: {} }, true], [true, false], ["none", false], [[], false], [null, false]]) {
+    const r = await handleSiteMcp(mcpPost({
+      jsonrpc: "2.0", id: 13, method: "tools/list",
+      params: { _meta: { ...bare, "io.modelcontextprotocol/clientCapabilities": caps } },
+    }), {}, context());
+    const body = await r.json();
+    assert.equal(!body.error, ok, `clientCapabilities: ${JSON.stringify(caps)} should ${ok ? "pass" : "be refused"}`);
+  }
+
+  // Version first: a caller on a version we do not speak is told THAT, not that
+  // its `_meta` is malformed under a revision it never claimed to follow.
+  const both = await handleSiteMcp(mcpPost({
+    jsonrpc: "2.0", id: 14, method: "tools/list",
+    params: { _meta: { "io.modelcontextprotocol/protocolVersion": "1900-01-01" } },
+  }), {}, context());
+  assert.equal((await both.json()).error.code, -32022, "the unsupported version is the actionable refusal");
+
+  // A batch with one bad message is not a bad batch: 200, with the error in the
+  // array where JSON-RPC batching puts it.
+  const batch = await handleSiteMcp(mcpPost([
+    { jsonrpc: "2.0", id: 15, method: "tools/list", params: { ...MODERN_META } },
+    { jsonrpc: "2.0", id: 16, method: "tools/list", params: { _meta: bare } },
+  ]), {}, context());
+  assert.equal(batch.status, 200, "a batch has no single request whose status a 400 could describe");
+  const rows = await batch.json();
+  assert.ok(rows.find((r) => r.id === 15).result, "the well-formed message is still answered");
+  assert.equal(rows.find((r) => r.id === 16).error.code, -32602);
 });
 
 test("every result carries resultType and server identity, and lists carry cache hints", async () => {
@@ -3402,7 +3460,10 @@ test("the site and serendipity MCP servers agree on the 2026-07-28 wire rules", 
   });
   // The protocol-level methods touch no database, so a null `d` is enough.
   const call = async (body, headers) => (await handleMcp(post(body, headers), {}, null)).json();
-  const modern = { _meta: { "io.modelcontextprotocol/protocolVersion": "2026-07-28" } };
+  const modern = { _meta: {
+    "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+    "io.modelcontextprotocol/clientCapabilities": {},
+  } };
 
   // server/discover: MUST exist, and must advertise the same version set as the
   // site server — a client that trusts one origin's answer should not find the
@@ -3437,6 +3498,19 @@ test("the site and serendipity MCP servers agree on the 2026-07-28 wire rules", 
     assert.equal(result.protocolVersion, expected);
     assert.equal(result.serverInfo.name, "serendipity");
   }
+
+  // The required-`_meta` rule, same function and therefore same verdict: a
+  // modern request without clientCapabilities is malformed at 400, a legacy one
+  // with no `_meta` at all is served at 200.
+  const malformed = await handleMcp(post({
+    jsonrpc: "2.0", id: 6, method: "tools/list",
+    params: { _meta: { "io.modelcontextprotocol/protocolVersion": "2026-07-28" } },
+  }), {}, null);
+  assert.equal(malformed.status, 400);
+  assert.equal((await malformed.json()).error.code, -32602);
+  const legacyOk = await handleMcp(post({ jsonrpc: "2.0", id: 7, method: "tools/list" }), {}, null);
+  assert.equal(legacyOk.status, 200);
+  assert.ok((await legacyOk.json()).result.tools.length > 0);
 
   // Routing headers: checked when present, never required.
   assert.ok((await call({ jsonrpc: "2.0", id: 4, method: "tools/list", params: { ...modern } })).result);

@@ -33,7 +33,15 @@ const WIRE_CSS = `/*min*/
 // One cheap, side-effect-free call, so rendering this page costs a cache read
 // and not a crawl. now_playing reads KV; it does not go and scrape Spotify.
 const DEMO_CALL = { name: "now_playing", arguments: {} };
-const META = { "io.modelcontextprotocol/protocolVersion": "2026-07-28" };
+// Both keys are REQUIRED on a modern request, and /mcp enforces the second one
+// (lib/mcp-protocol.js, missingRequiredMeta). Empty is the honest declaration:
+// this caller renders a page and supports no client features at all. Drop the
+// key and this page renders "the tool list could not be read just now", which
+// is the correct refusal and a terrible way to find out.
+const META = {
+  "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+  "io.modelcontextprotocol/clientCapabilities": {},
+};
 
 const rpc = (method, params) => ({ jsonrpc: "2.0", id: 1, method, params });
 const jsonBlock = (value) => escHtml(JSON.stringify(value, null, 2));
