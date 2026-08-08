@@ -3168,6 +3168,42 @@ test("Workers Cache never answers a content-negotiated request from the stored r
   assert.equal(shouldUseWorkersCache(req("https://aadhar.sh/writing/colophon"), PATHS), true, "the /writing/ prefix is cacheable");
 });
 
+// The same class of bug on the other axis the key cannot see. A hit answers
+// before the dispatcher, so every host-based decision in there is skipped:
+// cal.aadhar.sh's 404 and a preview's noindex both live past this point.
+//
+// Reproduced on production 2026-08-08 rather than reasoned about. GET
+// https://aadhar.sh/reading twice (MISS, then HIT at age 1), then
+// https://cal.aadhar.sh/reading: 200, HIT, age 1, the same 91,980-byte page, on a
+// host whose origin answers 404 for that path. /photos and /writing reported
+// byte-identical `age` on both hostnames in the same second, so it is one object
+// rather than two copies, and `?cb=` on any of them returned the real 404 through
+// the query-string bail.
+test("only the canonical hostname may be served from Workers Cache", async () => {
+  const { shouldUseWorkersCache } = await import("./holding/_worker.js/lib/cache.js");
+  const { isCanonicalHost } = await import("./holding/_worker.js/lib/const.js");
+  const PATHS = new Set(["/", "/photos", "/reading", "/writing"]);
+  const req = (url) => new Request(url, { headers: { accept: "text/html" } });
+
+  for (const path of ["/", "/photos", "/reading", "/writing/colophon"]) {
+    assert.equal(shouldUseWorkersCache(req(`https://aadhar.sh${path}`), PATHS), true, `aadhar.sh${path} is the site and stays cacheable`);
+    for (const host of ["cal.aadhar.sh", "aadhar-sh.workers.dev", "a1b2c3-aadhar-sh.workers.dev", "aadhar-sh.pages.dev"]) {
+      assert.equal(
+        shouldUseWorkersCache(req(`https://${host}${path}`), PATHS), false,
+        `${host}${path} must reach the dispatcher — a hit here publishes the canonical page on a second hostname`,
+      );
+    }
+  }
+
+  // Exact match. A near-miss treated as canonical is precisely how a duplicate
+  // hostname gets published, and a subdomain suffix test would admit all of them.
+  assert.equal(isCanonicalHost("aadhar.sh"), true);
+  assert.equal(isCanonicalHost("AADHAR.SH"), true, "the Host header's case is not significant");
+  for (const host of ["www.aadhar.sh", "cal.aadhar.sh", "aadhar.sh.evil.example", "notaadhar.sh", "", null, undefined]) {
+    assert.equal(isCanonicalHost(host), false, `${host} is not the canonical host`);
+  }
+});
+
 // ── Workers preview URLs ────────────────────────────────────────────
 // A preview version runs PRODUCTION bindings and secrets (lib/preview.js says
 // why at length), so these tests are the difference between a preview URL and
@@ -3259,6 +3295,18 @@ test("preview noindex reaches the responses the security wrapper otherwise skips
     const plain = withSecurityHeaders(response, "/photos");
     assert.equal(plain.headers.get("x-robots-tag"), null, `${what} must NOT be noindexed off a preview`);
   }
+
+  // The wrapper is only half of it: what decides `noindex` is the dispatcher, and
+  // that used to be `onPreview` alone, which left cal.aadhar.sh publishing
+  // /coffee at a second hostname (cal's templates carry no rel=canonical). The
+  // dispatcher cannot be imported here, since index.js is the one module allowed
+  // to import "cloudflare:workers" (gotcha 16), so pin the decision as source.
+  const dispatcher = readFileSync(new URL("./holding/_worker.js/index.js", import.meta.url), "utf8");
+  assert.match(
+    dispatcher,
+    /noindex:\s*!isCanonicalHost\(url\.hostname\)/,
+    "every hostname that is not the canonical site must be noindexed, not just previews",
+  );
 
   // A route that already set its own x-robots-tag keeps it (/whoareyou.json and
   // /updates.json both do), so the guard can't weaken an existing directive.
