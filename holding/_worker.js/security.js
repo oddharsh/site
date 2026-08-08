@@ -78,6 +78,7 @@ dl.sc-grid dd{margin:0;color:#15243f;font-family:var(--font-mono);font-size:8.5p
   return lunaPage({
     title: "Security Center · aadhar.sh",
     path: "Security Center",
+    route: "/security",
     width: 620,
     description: "This site's security posture in a Windows Security Center reskin. Read-only.",
     robots: "noindex",

@@ -313,6 +313,7 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
   return lunaPage({
     title: "The Crawl Ledger · aadhar.sh",
     path: "The Crawl Ledger",
+    route: "/ledger",
     width: 760,
     description: "An invoice for the AI crawlers that read aadhar.sh: every identified bot hit in the last 30 days, priced at one cent a page. Issued monthly, collected never.",
     robots: "index, nofollow",

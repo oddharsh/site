@@ -521,6 +521,7 @@ export function renderPhotosPage(photos, altMap) {
   return lunaPage({
     title: "aadhar.sh/photos",
     path: "aadhar.sh/photos",
+    route: "/photos",
     width: 980,
     description: `All ${photos.length} photos, straight out of camera. FUJIFILM X-T50 + Leica M.`,
     css: `

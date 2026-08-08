@@ -2,7 +2,9 @@
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
 import { cachedRender } from "./lib/cache.js";
 import { DESKTOP_CHROME, DESKTOP_TOP } from "./lib/desktop.js";
+import { addressBar, taskPane } from "./lib/explorer.js";
 import { escAttr, escHtml } from "./lib/http.js";
+import { twinFor } from "./lib/twins.js";
 
 // ── /writing — the Notepad view ───────────────────────────────────────────────
 // Written content lives in plain .txt files under /writing/ + a posts.json registry.
@@ -206,6 +208,17 @@ export async function renderWritingIndex(env) {
       "<span class=\"np-title\">aadhar.sh/writing</span>" +
       "<span class=\"np-controls\"><span class=\"min\" aria-hidden=\"true\"></span><span class=\"max\" aria-hidden=\"true\"></span>" +
       "<a class=\"close\" href=\"/\" title=\"back home\" aria-label=\"Close\">✕</a></span></div>" +
+    // The folder view is the one place on this site that was already a complete
+    // Explorer window bar the chrome: caption, listing, status bar. The counts
+    // below are the ones its own status bar states, so the two cannot disagree.
+    addressBar({ path: "/writing", name: "My Writing" }) +
+    taskPane({
+        path: "/writing",
+        name: "My Writing",
+        tasks: [{ href: "/writing/posts.json", label: "Open the post registry", glyph: "{" }]
+          .concat(twinFor("/writing") ? [{ href: twinFor("/writing"), label: "Read this as Markdown" }] : []),
+      details: [{ term: "Contains", value: posts.length + (posts.length === 1 ? " document" : " documents") }],
+    }) +
     "<div class=\"np-folder-body\"><p class=\"np-folder-intro\">Notes, in flux. Open one: it's a real text field you can edit, though it reverts to my canonical version on reload.</p>" +
       "<ul class=\"np-files\">" + (files || "<li><a><span class=\"np-file-name\">(nothing written yet)</span></a></li>") + "</ul></div>" +
     "<div class=\"np-status\"><span>" + posts.length + (posts.length === 1 ? " document" : " documents") + "</span>" +

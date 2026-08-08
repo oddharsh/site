@@ -77,6 +77,7 @@ function renderRun(request, { cmd = "", notFound = false } = {}) {
   return lunaPage({
     title: "Run",
     path: "aadhar.sh/run",
+    route: "/run",
     width: 460,
     description: "Type the name of a page, photo, or profile, and aadhar.sh will open it for you.",
     robots: "noindex",

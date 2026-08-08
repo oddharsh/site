@@ -118,6 +118,7 @@ Disallow: /</code></pre>
   return lunaPage({
     title: "aadhar.sh/bot",
     path: BOT_NAME,
+    route: "/bot",
     width: 660,
     description: "Identity and behavior of AadharshBot, the crawler operated by aadhar.sh.",
     css,

@@ -430,6 +430,7 @@ export function renderAroundHtml(report) {
     return lunaPage({
       title: "aadhar.sh/around",
       path: "aadhar.sh/around",
+      route: "/around",
       width: 820,
       description: "Snapshot of crypto VC homepages I keep tabs on, crawled by AadharshBot on a schedule.",
       robots: "noindex",
@@ -474,6 +475,7 @@ export function renderAroundHtml(report) {
   return lunaPage({
     title: "aadhar.sh/around",
     path: "aadhar.sh/around",
+      route: "/around",
     width: 820,
     description: "Snapshot of crypto VC homepages I keep tabs on, crawled live by AadharshBot.",
     robots: "noindex",

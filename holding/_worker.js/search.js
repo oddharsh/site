@@ -82,6 +82,7 @@ ${query.trim() ? `<p class="summary">${results.total} result${results.total === 
   const render = () => lunaPage({
     title: "aadhar.sh/search",
     path: "aadhar.sh/search",
+    route: "/search",
     width: 760,
     description: "Search the public pages and writing on aadhar.sh.",
     robots: "noindex",

@@ -1046,3 +1046,71 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
   #axp-taskbar { border-top: 1px solid CanvasText; }
   .title-bar, .np-titlebar, .titlebar { border-bottom: 1px solid CanvasText; text-shadow: none !important; }
 }
+
+/* ─────────────────────── Explorer chrome: address bar + task pane ───────────────────────
+   Two devices Luna Explorer always had and this site did not: the path as a
+   sunken well under the caption, and the left rail answering "what can I do
+   with this, where else can I go, what is this thing". Markup comes from
+   _worker.js/lib/explorer.js — baked into static pages by build.mjs, emitted
+   by lunaPage() for the Worker-rendered ones.
+
+   The pane is a SIBLING of .content, not a child, and the window itself becomes
+   the grid. Two reasons. Putting it inside .content meant it occupied grid row
+   1, so the document's second child began below the whole pane and every page
+   opened with a hole under its heading. And as a sibling it stops scrolling
+   with the document, which is what Explorer actually does: the rail stays, the
+   listing moves. Row 3 is the only flexible one, so .content keeps the
+   overflow:auto the OS-window model depends on. */
+.window:has(>.axp-tasks),.np-window:has(>.axp-tasks){display:grid;grid-template-columns:186px minmax(0,1fr);grid-template-rows:auto auto minmax(0,1fr);column-gap:14px}
+.window:has(>.axp-tasks)>.title-bar,.np-window:has(>.axp-tasks)>.np-titlebar,.window:has(>.axp-tasks)>.axp-address,.np-window:has(>.axp-tasks)>.axp-address{grid-column:1/-1}
+/* the writing folder also carries a status bar, which spans both columns under the rail. */
+.np-window:has(>.axp-tasks)>.np-status{grid-column:1/-1;grid-row:4}
+/* it opens at 560px, which has no room for a 186px rail beside the listing. */
+.np-window.np-folder:has(>.axp-tasks){max-width:760px}
+.window:has(>.axp-tasks)>.axp-tasks,.np-window:has(>.axp-tasks)>.axp-tasks{grid-column:1;grid-row:3;min-height:0;overflow-y:auto;padding:2px 0 10px 10px}
+.window:has(>.axp-tasks)>.content,.np-window:has(>.axp-tasks)>.np-folder-body{grid-column:2;grid-row:3;min-height:0;overflow:auto}
+/* nav.js appends the resize grip last; keep it out of the row flow. */
+.window:has(>.axp-tasks)>.axp-resize{grid-column:2;grid-row:3}
+
+/* address bar — sits between the caption and the workspace, so it reads as
+   window chrome rather than as page content. */
+.axp-address{display:flex;align-items:center;gap:6px;padding:3px 6px;background:#ece9d8;border-bottom:1px solid oklch(71.5% 0.014 95);font:11px/1.6 Tahoma,Verdana,Geneva,sans-serif;color:oklch(38.67% 0 0)}
+.axp-addr-label{flex:0 0 auto;padding-left:2px}
+/* the well scrolls rather than wraps, so a deep path never grows the chrome to
+   a second row and shifts the document down. */
+.axp-well{flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:4px;padding:2px 6px;background:oklch(99% 0.005 95);border:1px solid oklch(71.5% 0.014 95);box-shadow:inset 1px 1px 0 oklch(71.5% 0.014 95),inset -1px -1px 0 oklch(100% 0 0);overflow-x:auto;white-space:nowrap;scrollbar-width:none}
+.axp-well::-webkit-scrollbar{display:none}
+.axp-addr-icon{flex:0 0 auto;width:14px;height:14px;border:1px solid oklch(52% 0.13 258);border-radius:2px;background:linear-gradient(180deg,oklch(78% 0.13 250),oklch(58% 0.17 258))}
+.axp-well a{color:oklch(42.61% 0.30 263.74);text-decoration:none}
+.axp-well a:hover{text-decoration:underline}
+.axp-here{color:oklch(21.78% 0 0);font-weight:700}
+.axp-sep{padding:0 1px;color:oklch(60% 0 0)}
+
+/* task pane — Luna's pale-blue group boxes: gel caption, rounded top only. */
+.axp-pane{display:flex;flex-direction:column;gap:10px;font:11px/1.45 Tahoma,Verdana,Geneva,sans-serif}
+.axp-group{border:1px solid oklch(86.67% 0.0294 259);border-radius:3px 3px 0 0;overflow:hidden;background:linear-gradient(180deg,oklch(98% 0.012 259),oklch(94.5% 0.028 259))}
+.axp-group>h2{margin:0;padding:4px 8px;font:700 11px/1.5 "Trebuchet MS",Verdana,Geneva,sans-serif;color:oklch(47.12% 0.0555 253.58);background:linear-gradient(180deg,#fff,oklch(93.5% 0.032 259));border-bottom:1px solid oklch(88% 0.03 259)}
+.axp-group>ul{margin:0;padding:6px 8px;list-style:none;display:flex;flex-direction:column;gap:5px}
+.axp-group a{color:oklch(42.61% 0.30 263.74);text-decoration:none}
+.axp-group a:hover{text-decoration:underline}
+.axp-glyph{display:inline-block;width:12px;text-align:center;color:oklch(58% 0.180 260)}
+.axp-group dl{margin:0;padding:6px 8px}
+.axp-group dt{color:oklch(38.67% 0 0);font-size:10px}
+/* a long object name or path wraps inside the rail instead of running out under
+   the document column. */
+.axp-group dd{margin:0 0 5px;color:oklch(21.78% 0 0);font:10px/1.4 "Courier New",Courier,monospace;overflow-wrap:anywhere}
+
+/* Narrow: the document comes FIRST and the rail follows it. The pane is
+   secondary navigation, so making it the first thing on a phone would mean
+   scrolling past the furniture to reach the page every time. */
+@media (max-width:760px){
+  .window:has(>.axp-tasks),.np-window:has(>.axp-tasks){display:flex;flex-direction:column}
+  .window:has(>.axp-tasks)>.content,.np-window:has(>.axp-tasks)>.np-folder-body{order:3}
+  .window:has(>.axp-tasks)>.axp-tasks,.np-window:has(>.axp-tasks)>.axp-tasks{order:4;flex:0 0 auto;overflow:visible;padding:10px 10px 12px;border-top:1px solid oklch(80% 0.02 250)}
+  .np-window:has(>.axp-tasks)>.np-status{order:5}
+  .axp-addr-label{display:none}
+}
+@media (forced-colors: active){
+  .axp-group,.axp-well,.axp-address{border:1px solid CanvasText}
+  .axp-group>h2{border-bottom:1px solid CanvasText}
+}

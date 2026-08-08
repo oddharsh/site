@@ -887,6 +887,12 @@ if (inlineProbe.includes("/* probe */") ||
 // before the hashing, ref-rewriting, and minification passes touch them. Source
 // first, hand-authored second (so /bot keeps the twin checkTwinFacts pins),
 // generated only as the last resort.
+// Handed to 1g2 below, which may only advertise a twin the build really wrote.
+let twinFiles;
+// Set by 1g2: dresses one page with the Explorer chrome + its Markdown link.
+// The readable .src.html twins at step 7b call it too, so a twin never drifts
+// from the page it claims to be the source of.
+let dressPage = () => { throw new Error("explorer: dressPage used before 1g2 defined it"); };
 {
   const { buildTwins, checkTwinFacts } = await import("./scripts/gen-md-twins.mjs");
   const drift = checkTwinFacts(".");
@@ -894,6 +900,7 @@ if (inlineProbe.includes("/* probe */") ||
     throw new Error("md twins: a hand-authored twin disagrees with the Worker that renders its page:\n  - " + drift.join("\n  - "));
   }
   const { files, skipped, generated } = buildTwins(".", { generatedRoot: OUT });
+  twinFiles = files;
   for (const [rel, body] of files) {
     const dest = `${OUT}/holding${rel}`;
     await mkdir(dest.slice(0, dest.lastIndexOf("/")), { recursive: true });
@@ -909,6 +916,155 @@ if (inlineProbe.includes("/* probe */") ||
   // future step that moves back ahead of 1f would empty it without failing anything.
   if (!generated.length) throw new Error("md twins: no twin came from the generated tier — did the twin step move back above the deploy-time page renders?");
   console.log(`md twins: ${twins} pages + ${indexes} section indexes staged (${generated.length} from generated HTML: ${generated.join(", ")}; ${skipped.length} Worker-rendered surfaces carry no prose source)`);
+}
+
+// 1g2) the Explorer chrome, and the Markdown link that makes it worth having.
+//
+// Runs immediately after 1g because it needs the twin set that step just wrote:
+// a page may only advertise `rel=alternate` where the build actually produced
+// the file. Twins are build output, so no committed list could be right — the
+// same argument that keeps lib/csp-hashes.js empty in the source tree.
+//
+// Injection is deliberately two string splices per page and no wrapper element:
+// the address bar goes before `.content`, the pane goes just inside it, and
+// luna.css turns `.content` into a two-column grid only when it finds a pane
+// (`:has`). Wrapping the document would mean finding the matching close tag of
+// `.content` in 30-odd staged files by hand, which is the one fragile way to do
+// this.
+//
+// The homepage is excluded on purpose, and not for byte budget. It is not a
+// folder: asked for a task list it has nothing to offer but "up to itself", and
+// asked for a count it answers about whichever list it happens to render. The
+// devices describe an object inside a folder, so they go where that is true.
+{
+  const { PLACES, addressBar, taskPane } = await import("./holding/_worker.js/lib/explorer.js");
+
+  // PLACES is a literal in a Worker module (no data file at runtime), so the
+  // manifest is what keeps it honest. A section registered for the taskbar and
+  // missing from the pane is drift the pane cannot show you.
+  const manifest = JSON.parse(await readFile("site-manifest.json", "utf8"));
+  const pinned = manifest.surfaces.filter((s) => s.flags && s.flags.taskbar).map((s) => s.path).sort();
+  const declared = PLACES.map((p) => p.path).sort();
+  if (pinned.join(",") !== declared.join(",")) {
+    throw new Error(`explorer: lib/explorer.js PLACES disagrees with site-manifest.json taskbar surfaces\n  manifest: ${pinned.join(" ")}\n  explorer: ${declared.join(" ")}`);
+  }
+
+  // The twin set, as canonical request paths, for both consumers below.
+  const twinPaths = [...twinFiles.keys()]
+    .filter((rel) => rel.endsWith(".md"))
+    .map((rel) => (rel === "/index.md" ? "/" : rel.slice(0, -3)))
+    .sort();
+
+  // Generated-module convention (shell-assets.js, csp-hashes.js): rewrite the
+  // marked line in the STAGED copy so the Worker-rendered pages advertise the
+  // same twins from the same source.
+  {
+    const target = `${OUT}/holding/_worker.js/lib/twins.js`;
+    const source = await readFile(target, "utf8");
+    const marker = /^export const TWIN_PATHS = .*; \/\/ build:twins$/m;
+    if (!marker.test(source)) throw new Error("explorer: build:twins marker missing from lib/twins.js");
+    await writeFile(target, source.replace(marker, `export const TWIN_PATHS = ${JSON.stringify(twinPaths)}; // build:twins`));
+  }
+
+  // Read the object's own name out of its h1, minus the status pill the garage
+  // marks each experiment with: the pill is state, not name, and sweeping it up
+  // published "Thumbnail encoding study shipped" as a breadcrumb.
+  const nameOf = (html) => {
+    const h1 = /<h1\b[^>]*>([\s\S]*?)<\/h1>/i.exec(html);
+    if (!h1) return "";
+    return h1[1]
+      .replace(/<span\b[^>]*\bclass="[^"]*\bstatus\b[^"]*"[^>]*>[\s\S]*?<\/span>/gi, "")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/&nbsp;/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  };
+
+  const pages = (await readdir(`${OUT}/holding`, { recursive: true }))
+    .filter((f) => f.endsWith(".html") && !/\.src\.html$/.test(f) && !/^(i|images|og|cars|a)\//.test(f))
+    .filter((f) => f !== "index.html");
+
+  // One page's worth of work, shared with the twin writer at 7b.
+  dressPage = (html, rel) => {
+    const route = "/" + rel.replace(/(?:^|\/)index\.html$/, "").replace(/\.html$/, "");
+    const normalized = route === "/" ? "/" : route.replace(/\/+$/, "");
+    const twin = twinPaths.includes(normalized)
+      ? (normalized === "/" ? "/index.md" : `${normalized}.md`)
+      : null;
+
+    // A count is a folder fact. The section indexes list their children in a
+    // .shelf; every other page reports none rather than counting whatever list
+    // it happens to contain.
+    const details = [];
+    if (/\/index\.html$/.test(rel) || !rel.includes("/")) {
+      const shelf = /<ul\b[^>]*class="[^"]*\bshelf\b[^"]*"[\s\S]*?<\/ul>/.exec(html);
+      const items = shelf ? (shelf[0].match(/<li\b/g) || []).length : 0;
+      if (items) details.push({ term: "Contains", value: `${items} experiments` });
+    }
+
+    const options = {
+      path: normalized,
+      name: nameOf(html),
+      tasks: twin ? [{ href: twin, label: "Read this as Markdown" }] : [],
+      details,
+    };
+
+    let out = html, addedLink = false;
+    if (twin && !/rel="alternate"[^>]*text\/markdown/.test(out)) {
+      const tag = `<link rel="alternate" type="text/markdown" title="markdown source" href="${twin}">`;
+      // Anchor on the canonical link where there is one, else on </head>. The
+      // deploy-time documents come out of lunaPage(), which emits no canonical
+      // tag, so a canonical-only anchor inserted nothing on exactly the pages
+      // that could not advertise their twin any other way — while still counting
+      // itself a success.
+      const before = out;
+      out = /<link rel="canonical"[^>]*>/i.test(out)
+        ? out.replace(/(<link rel="canonical"[^>]*>)/i, `$1\n${tag}`)
+        : out.replace(/<\/head>/i, `${tag}\n</head>`);
+      if (out === before) throw new Error(`explorer: ${rel} has a twin but no <link rel=canonical> and no </head> to anchor the alternate link to`);
+      addedLink = true;
+    }
+
+    let addedChrome = false;
+    if (!out.includes('class="axp-tasks"')) {
+      // Match AFTER the <head> edit above. Taking the index first and splicing
+      // second put the address bar 90-odd characters early, inside the close
+      // button's own <a> tag, on every page that gained a twin link.
+      //
+      // Both devices go BEFORE .content as its siblings; luna.css grids the
+      // window around them. Putting the pane inside .content cost every page a
+      // hole under its heading, because the pane then owned grid row 1.
+      const contentOpen = /<div class="content"[^>]*>/.exec(out);
+      if (contentOpen) {
+        out = out.slice(0, contentOpen.index)
+          + addressBar(options)
+          + taskPane(options)
+          + out.slice(contentOpen.index);
+        addedChrome = true;
+      }
+    }
+    return { html: out, addedLink, addedChrome };
+  };
+
+  let dressed = 0, linked = 0;
+  for (const rel of pages) {
+    const file = `${OUT}/holding/${rel}`;
+    const html = await readFile(file, "utf8");
+    const hasChrome = html.includes('class="axp-tasks"');
+    const windowed = /<div class="content"[^>]*>/.test(html) && /<div class="window"/.test(html);
+    if (!hasChrome && !windowed) continue;
+    const result = dressPage(html, rel);
+    if (result.addedLink) linked++;
+    if (result.addedChrome) dressed++;
+    await writeFile(file, result.html);
+  }
+
+  // Both counts are tripwires for the same silent failure: a shape change in the
+  // staged markup that makes the regexes above match nothing, leaving every page
+  // quietly without its chrome or its alternate link.
+  if (dressed < 30) throw new Error(`explorer: dressed only ${dressed} staged pages (expected 30+) — did the .window/.content shape change?`);
+  if (linked < 30) throw new Error(`explorer: linked only ${linked} pages to a Markdown twin (expected 30+) — is the canonical link still in <head>?`);
+  console.log(`explorer chrome: address bar + task pane on ${dressed} staged pages; ${linked} advertise a Markdown twin; ${twinPaths.length} twin paths handed to the Worker`);
 }
 
 // 1h) RSS feeds for the three authored sections.
@@ -1581,6 +1737,13 @@ for (const [file, srcPath, marker] of SHELLS) {
     let twin = staged;
     try {
       twin = await readFile(`holding/${rel}`, "utf8");
+      // The authored file is the readable source, but it predates the Explorer
+      // chrome the build injects at 1g2, and a twin missing markup the page
+      // carries stops being the same program — which is the entire argument for
+      // minifying these pages at all. Dress the twin from the same builder.
+      if (staged.includes('class="axp-tasks"') && !twin.includes('class="axp-tasks"')) {
+        twin = dressPage(twin, rel).html;
+      }
     } catch {
       generated++;
     }

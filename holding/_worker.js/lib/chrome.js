@@ -1,8 +1,10 @@
 // lib/chrome.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
 import { DESKTOP_CHROME, DESKTOP_TOP } from "./desktop.js";
+import { addressBar, taskPane } from "./explorer.js";
 import { escAttr, escHtml } from "./http.js";
 import { SHELL_PRELOAD_LINK } from "./shell-assets.js";
+import { twinFor } from "./twins.js";
 
 // shared XP window chrome for the server-rendered pages (/around, /bot,
 // /whoareyou, /rn/set). these four used to each carry their own copy of
@@ -89,6 +91,22 @@ export function lunaPage({
   windowClass = "",
   contentClass = "",
   windowAttrs = "",
+  // The REQUEST path, which `path` above is not: that one is the window caption
+  // and callers pass free text through it ("Security Center", "The Crawl
+  // Ledger"). The Explorer chrome and the Markdown twin both need the real
+  // route, so they render only for a caller that supplies one. Defaulting to
+  // "" rather than guessing at `path` keeps a caption from being published as a
+  // URL — "Inbox — Outlook Express" would have become a breadcrumb.
+  route = "",
+  // The address bar and task pane (lib/explorer.js). /terminal opts out for the
+  // same reason it drops the history buttons: a console is not a folder, and
+  // neither device would be telling the truth about a per-query frame.
+  // `explorerName` is the object's display name, and `explorerTasks` /
+  // `explorerDetails` are facts the CALLER counted — nothing here invents one.
+  explorer = true,
+  explorerName = "",
+  explorerTasks = [],
+  explorerDetails = [],
   closeHref = "/",
   closeTitle = "back to aadhar.sh",
   closeLabel = closeTitle,
@@ -105,6 +123,22 @@ export function lunaPage({
     : "";
   const scriptHtml = `${scripts || ""}\n<script src="/nav.js" defer></script>`;
 
+  // The Markdown twin, advertised only where the build actually wrote one, and
+  // offered as this object's first task for the same reason.
+  const twin = route ? twinFor(route) : null;
+  const twinLink = twin
+    ? `\n<link rel="alternate" type="text/markdown" title="markdown source" href="${escAttr(twin)}">`
+    : "";
+  const chromeOptions = {
+    path: route || "/",
+    name: explorerName || title || "",
+    tasks: twin ? [{ href: twin, label: "Read this as Markdown" }, ...explorerTasks] : explorerTasks,
+    details: explorerDetails,
+  };
+  const showChrome = explorer && Boolean(route);
+  const addressHtml = showChrome ? `\n  ${addressBar(chromeOptions)}` : "";
+  const paneHtml = showChrome ? `${taskPane(chromeOptions)}\n` : "";
+
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -112,7 +146,7 @@ export function lunaPage({
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
-<title>${escHtml(documentTitle)}</title>${metaDescription}${metaRobots}
+<title>${escHtml(documentTitle)}</title>${metaDescription}${metaRobots}${twinLink}
 <link rel="icon" href="/favicon.ico">
 ${head || ""}<style>
 :root{--axp-maxw:${width}px}
@@ -127,8 +161,8 @@ ${DESKTOP_TOP}
   <div class="title-bar">
     <span${classAttr}><span class="icon"></span>${escHtml(windowTitle)}</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="${escAttr(closeHref)}" title="${escAttr(closeTitle)}" aria-label="${escAttr(closeLabel)}"></a></span>
-  </div>
-  <div class="content${contentClass ? " " + escAttr(contentClass) : ""}">
+  </div>${addressHtml}
+  ${paneHtml}<div class="content${contentClass ? " " + escAttr(contentClass) : ""}">
 ${body}
   </div>
 </div>
