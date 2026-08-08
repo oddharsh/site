@@ -112,6 +112,12 @@ const ROUTES = [
   { path: "/updates", status: 200, ct: "text/markdown", headers: { accept: "text/markdown" } },
   { path: "/restore", status: 200, ct: "text/markdown", headers: { accept: "text/markdown" } },
   { path: "/updates.json", status: 200, ct: "application/json" },
+  // /perf renders from a series fetched off the machine-owned `perf-history`
+  // branch. The local harness has no KV and GitHub is unreachable from it, so
+  // these rows assert the DEGRADED path on purpose: the seeded baseline history
+  // is bundled, so the page must still render a chart with the fetch failing.
+  { path: "/perf", status: 200, ct: "text/html", marker: "Performance history" },
+  { path: "/perf.json", status: 200, ct: "application/json" },
   { path: "/restore", status: 200, ct: "text/html" },
   { path: "/lens", status: 200, ct: "text/html", marker: "The Other Web", fullPage: true },
   { path: "/lens/", status: 301 },   // slashless canonical: routeDropSlash 301s to /lens

@@ -37,6 +37,7 @@ import { handleReading } from "./reading.js";
 import { handleRun } from "./run.js";
 import { handleRn, handleRnAdmin, handleRnArt, handleRnMarkdown, handleRnSet, handleRnTracks, handleRnTracksHtml } from "./rn.js";
 import { cronHomeProbe } from "./perf-probe.js";
+import { handlePerf, handlePerfJson } from "./perf.js";
 import { handleSearch, handleSearchJson } from "./search.js";
 import { handleSecurityCenter } from "./security.js";
 import { handleTool } from "./terminal.js";
@@ -289,6 +290,8 @@ const ROUTES = new Map([
   ["/updates", routeUpdates],
   ["/updates.json", handleUpdatesJson],
   ["/restore", routeRestore],
+  ["/perf", handlePerf],
+  ["/perf.json", handlePerfJson],
 
   ["/lens", routeLens],
   ["/lens/", routeDropSlash],

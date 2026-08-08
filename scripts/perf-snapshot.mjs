@@ -21,6 +21,20 @@
 //
 //   node scripts/perf-snapshot.mjs record <out.json> [--label <name>]
 //   node scripts/perf-snapshot.mjs compare <base.json> <head.json> [--out <file.md>]
+//   node scripts/perf-snapshot.mjs row <snapshot.json> [--date YYYY-MM-DD]
+//
+// `row` is the TREND half, and it exists because a per-PR diff catches the STEP
+// while only a series catches the DRIFT. This repo's worker bundle went 86 ->
+// 129.23 -> 204.24 -> 258.34 -> 261.74 KiB gzip, and every one of those numbers
+// was found by somebody tripping over a stale constant rather than by anyone
+// watching the slope. It emits ONE compact JSONL line, which
+// .github/workflows/perf-history.yml appends nightly to the machine-owned
+// `perf-history` branch and /perf renders.
+//
+// It deliberately drops the per-module and per-page detail the diff carries. A
+// trend is read at the shape level, the detail is what the PR comment already
+// answered on the day it mattered, and commonwarexyz/benchmarks is 89 MB of
+// exactly the retention problem worth not having.
 //
 // `record` runs `wrangler deploy --dry-run`, which self-builds `.build/holding`
 // through wrangler.jsonc's build.command, so it needs no prior `npm run build`.
@@ -318,6 +332,46 @@ async function compare(basePath, headPath, outPath) {
 }
 
 // ---------------------------------------------------------------------------
+// row — reduce a snapshot to one JSONL line for the trend series
+// ---------------------------------------------------------------------------
+
+// Keys are short because this file is appended to forever and read by a Worker
+// that bundles nothing to parse it. One row is ~400 bytes, so a year of dailies
+// is ~146 KB — small enough to fetch whole, which is what lets /perf render the
+// entire history server-side with no pagination and no client JS.
+//
+// `source` separates a machine-recorded row from a hand-entered historical one.
+// /perf draws them differently and says so, because a number somebody typed into
+// a code comment in 2026-06 and a number a runner measured last night are not
+// the same kind of fact, and a chart that renders them identically is quietly
+// lying about which parts of its own history it can stand behind.
+async function row(snapshotPath, date) {
+  const snap = JSON.parse(await readFile(snapshotPath, "utf8"));
+  const sum = (set, pick) => Object.values(set).reduce((n, v) => n + (pick(v) ?? 0), 0);
+
+  // Same merge the diff uses: prefer the `/a/` precompressed bytes, which are
+  // what actually leaves the edge, and fall back to the computed brotli.
+  const assets = {};
+  for (const [name, v] of Object.entries(snap.assets)) assets[name] = v.brotli;
+  for (const [name, v] of Object.entries(snap.wire)) assets[name] = v.br ?? v.raw;
+
+  const line = {
+    ts: date || new Date().toISOString().slice(0, 10),
+    sha: snap.label,
+    worker_gzip: snap.worker.gzipBytes,
+    worker_modules: Object.keys(snap.worker.modules).length,
+    assets_br: Object.values(assets).reduce((n, v) => n + v, 0),
+    assets,
+    pages_br: sum(snap.pages, (v) => v.brotli),
+    pages_n: Object.keys(snap.pages).length,
+    dcz_n: snap.dcz.count,
+    dcz_b: snap.dcz.bytes,
+    source: "nightly",
+  };
+  console.log(JSON.stringify(line));
+}
+
+// ---------------------------------------------------------------------------
 
 const [mode, ...rest] = process.argv.slice(2);
 const flag = (name) => {
@@ -332,7 +386,10 @@ if (mode === "record") {
 } else if (mode === "compare") {
   if (positional.length < 2) { console.error("usage: perf-snapshot.mjs compare <base.json> <head.json> [--out <file.md>]"); process.exit(2); }
   await compare(positional[0], positional[1], flag("--out"));
+} else if (mode === "row") {
+  if (!positional[0]) { console.error("usage: perf-snapshot.mjs row <snapshot.json> [--date YYYY-MM-DD]"); process.exit(2); }
+  await row(positional[0], flag("--date"));
 } else {
-  console.error("usage: perf-snapshot.mjs record <out.json> | compare <base.json> <head.json>");
+  console.error("usage: perf-snapshot.mjs record <out.json> | compare <base.json> <head.json> | row <snapshot.json>");
   process.exit(2);
 }

@@ -43,6 +43,12 @@ export const AGENT_SURFACES = [
     "description": "Scrub the site back through its real deploy history, backed by Cloudflare D1."
   },
   {
+    "path": "/perf",
+    "title": "Performance history",
+    "kind": "page",
+    "description": "The wire size of this site over time: worker bundle, pages, and client assets, recorded nightly."
+  },
+  {
     "path": "/around",
     "title": "Around",
     "kind": "utility",
