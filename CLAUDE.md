@@ -59,7 +59,7 @@ npm run perf:snapshot -- compare base.json head.json
 
 # the TREND, which is what the diff structurally cannot see. one compact JSONL
 # row per snapshot; .github/workflows/perf-history.yml appends these nightly to
-# the machine-owned `perf-history` branch and /perf charts them.
+# the machine-owned `perf-history` branch and /garage/dyno charts them.
 npm run perf:snapshot -- row base.json
 
 # diff infra.json (DNS, zone/edge settings, account resources, Workers) against

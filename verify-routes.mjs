@@ -116,8 +116,13 @@ const ROUTES = [
   // branch. The local harness has no KV and GitHub is unreachable from it, so
   // these rows assert the DEGRADED path on purpose: the seeded baseline history
   // is bundled, so the page must still render a chart with the fetch failing.
-  { path: "/perf", status: 200, ct: "text/html", marker: "Performance history" },
-  { path: "/perf.json", status: 200, ct: "application/json" },
+  { path: "/garage/dyno", status: 200, ct: "text/html", marker: "Dyno" },
+  { path: "/garage/dyno.json", status: 200, ct: "application/json" },
+  // The old names, kept because `agents: true` published them and the well-known
+  // cards carrying that projection are cached 30 days. An exact ROUTES entry beats
+  // the /garage/<page> PREFIX, so these must not fall through to the asset layer.
+  { path: "/perf", status: 301 },
+  { path: "/perf.json", status: 301 },
   { path: "/restore", status: 200, ct: "text/html" },
   { path: "/lens", status: 200, ct: "text/html", marker: "The Other Web", fullPage: true },
   { path: "/lens/", status: 301 },   // slashless canonical: routeDropSlash 301s to /lens
