@@ -44,30 +44,47 @@ export function isPreviewHost(hostname) {
 // them would discover the whole duplicate tree from one leaked URL.
 export const PREVIEW_ROBOTS = "noindex, nofollow";
 
-// POST routes that provably mutate NOTHING, and so survive the method rule.
-// /mcp is JSON-RPC over POST whose only side effect is reading this same origin
-// back through an allowlist (MCP_RESOURCE_PATHS in mcp.js). The bar for adding
-// to this set is that the handler writes no binding and sends no message.
+// POST routes that survive the method rule. /mcp is the only one, and it is
+// here because refusing it outright would make the MCP server the one surface a
+// preview cannot exercise, which is a surface worth reviewing before it ships.
+//
+// It is NOT here because nothing behind it writes. That WAS the bar, in this
+// comment, until the representation vault landed: `representation_capture` and
+// `representation_compare` each INSERT a D1 row, so for as long as the old text
+// stood, any POST to a preview's /mcp could write the production vault with no
+// signature and no secret. The endpoint is admitted and the WRITING TOOLS are
+// refused one layer down, by previewToolRefusal() below.
 const SAFE_UNSAFE_METHODS = new Set(["/mcp"]);
 
 // The other direction: GET-shaped mutations, which the method rule cannot catch.
 // Each of these changes durable state or sends something, from a plain GET.
 //   /hit                  ticks the visit-counter Durable Object
-//   /approve, /decline    confirm or refuse a real coffee booking, and email a
-//                         real person about it (HMAC-signed links, but the
+//   /coffee/approve,      confirm or refuse a real coffee booking, and email a
+//   /coffee/decline       real person about it (HMAC-signed links, but the
 //                         signature is made with the production SIGNING_SECRET,
 //                         which a preview also holds)
 //   /webmention/*         the same construction for webmention moderation
 //   /ledger/prefetch      writes the speculation ledger's numerator, so preview
 //                         traffic would land in a series about the real site
+//
+// Every entry has to be a pathname the dispatcher really routes, because a stale
+// one reads as protection while protecting nothing. The coffee pair spent its
+// whole life here as bare /approve and /decline, which were the retired
+// cal.aadhar.sh spellings; the live routes arrive under the /coffee prefix
+// (index.js hands /coffee/* to cal, which strips it before matching), so the
+// guard was open on exactly the two routes that email a real person. A contract
+// test now pins each entry against both route tables.
 const UNSAFE_READS = new Set([
   "/hit",
-  "/approve",
-  "/decline",
+  "/coffee/approve",
+  "/coffee/decline",
   "/webmention/approve",
   "/webmention/decline",
   "/ledger/prefetch",
 ]);
+
+// The entries, for the contract test that pins them against the route tables.
+export const PREVIEW_GET_WRITES = UNSAFE_READS;
 
 // Returns a 403 to serve, or null to let the request through. Pure over
 // (pathname, method) so the contract tests can sweep the whole route table
@@ -83,6 +100,34 @@ export function previewDenial(pathname, method) {
     return denial(`${pathname} writes production state and is disabled on preview URLs.`);
   }
   return null;
+}
+
+// The tool-level half of the /mcp exception above. Returns the refusal text to
+// hand back as an isError result, or null to let the call run.
+//
+// The predicate is the tool's OWN `readOnlyHint: false` annotation rather than a
+// second list of names here, and that is the whole point: this repo's convention
+// is that a tool which writes declares so on its definition, beside the code that
+// makes it untrue (lib/mcp-tools.js says why). Deriving the guard from that
+// declaration means the next writing tool is refused on previews the day it is
+// written, which is the same argument default-deny wins on the method rule. A
+// hand-kept name list here would rot exactly the way the coffee pair above did.
+//
+// Both MCP servers on this origin call it, so the guard is already in place if
+// Serendipity ever grows a tool that writes.
+export function previewToolRefusal(request, tools, name) {
+  let hostname = "";
+  try { hostname = new URL(request.url).hostname; } catch { return null; }
+  if (!isPreviewHost(hostname)) return null;
+
+  // An unknown name falls through to the dispatcher's own -32602, which is a
+  // better answer than a refusal implying the tool exists.
+  const tool = (tools || []).find((t) => t && t.name === name);
+  if (!tool || tool.annotations?.readOnlyHint !== false) return null;
+
+  return `${name} writes production state and is disabled on preview URLs. ` +
+    "This is a Workers preview build of aadhar.sh, running against production " +
+    "bindings and secrets. Read-only tools work.";
 }
 
 function denial(reason) {
