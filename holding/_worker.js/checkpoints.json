@@ -796,5 +796,12 @@
     "version": "aadhar-v178-lens-interaction",
     "vnum": 178,
     "ymd": "2026-08-08"
+  },
+  {
+    "slug": "perf-trend",
+    "title": "Every pull request gets a wire-size diff against its merge base, a nightly job records what the site weighs, and /perf charts the drift a threshold check cannot see",
+    "version": "aadhar-v179-perf-trend",
+    "vnum": 179,
+    "ymd": "2026-08-08"
   }
 ]
