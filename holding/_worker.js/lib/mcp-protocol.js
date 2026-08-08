@@ -67,6 +67,27 @@ export const CACHE_EMPTY  = { ttlMs: 86_400_000, cacheScope: "public" };  // per
 // this revision (2025-06-18 introduced it for HTTP), so treating a header as
 // proof of modernity would misclassify a legacy client and answer it in a
 // dialect it cannot read.
+//
+// DELIBERATE DEVIATION, shared by both servers: the REQUIRED `_meta` fields are
+// not enforced. 2026-07-28 marks both `protocolVersion` and `clientCapabilities`
+// required on every modern request, and says a request missing either is
+// malformed and MUST be rejected with -32602 (and HTTP 400). Neither server
+// does that, for two different reasons.
+//
+// `protocolVersion` is FORCED. An absent `_meta` is precisely how a legacy
+// client presents itself, so rejecting on it would fail every pre-2026 caller
+// at the gate: the "Legacy client, Modern server -> Fails" row a dual-era
+// server exists to avoid. A dual-era server cannot both use absence as an era
+// signal and treat absence as malformed.
+//
+// `clientCapabilities` is the enforceable half and is skipped by CHOICE. A
+// request carrying `protocolVersion` has already identified itself as modern,
+// so a missing `clientCapabilities` there could be refused without touching the
+// legacy path. Nothing on either server reads a client capability, so the check
+// would reject a modern client whose only fault is omitting a field we never
+// consult. Revisit when a tool actually needs one, which is the same moment
+// -32021 (MissingRequiredClientCapability) becomes implementable rather than
+// theoretical.
 export function declaredVersion(msg) {
   const v = msg?.params?._meta?.[META_PROTOCOL];
   return typeof v === "string" && v ? v : null;

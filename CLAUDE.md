@@ -671,7 +671,7 @@ What the rewrite added:
 - **`ttlMs` + `cacheScope`** on the list and read results (CacheableResult), so a
   client caches instead of polling.
 
-Two deliberate deviations, both written down at the code:
+Three deliberate deviations, all written down at the code:
 
 1. **`Mcp-Method` / `Mcp-Name` are validated when present, never required.** The
    spec requires them on Streamable HTTP POSTs; requiring them would reject every
@@ -681,6 +681,16 @@ Two deliberate deviations, both written down at the code:
    the header exists to prevent.
 2. **`ping` is kept** though 2026-07-28 removed it. Legacy clients send it and
    it costs nothing.
+3. **The REQUIRED `_meta` fields are not enforced.** The spec marks both
+   `protocolVersion` and `clientCapabilities` required on every modern request
+   and says a request missing either MUST be refused with `-32602` / 400. The
+   `protocolVersion` half is forced: an absent `_meta` is how a legacy client
+   presents, so a dual-era server cannot both read absence as an era signal and
+   call it malformed. The `clientCapabilities` half is enforceable and skipped
+   by choice, because nothing on either server reads a client capability, so the
+   check would only reject a modern client over a field we never consult.
+   Revisit when a tool needs one; that is also when `-32021` becomes
+   implementable.
 
 **BOTH servers on this origin speak it, through one module.** `/serendipity/mcp`
 (`serendipity/serendipity.js`) is a separate server with different tools and no
