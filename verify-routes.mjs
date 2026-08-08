@@ -150,6 +150,12 @@ const ROUTES = [
   { path: "/lens/fetch?url=https://example.com", status: 200, ct: "application/json", headers: { accept: "text/html" }, remote: true },
   { path: "/lens/shot?url=https://example.com", status: [200, 503], flaky: true, remote: true },
   { path: "/lens/browser?url=javascript%3Aalert(1)", status: 400, ct: "application/json", headers: { accept: "text/html" } },
+  // Both need no Browser Run and no secret, so they assert locally: the recipe
+  // allowlist refuses an unknown id rather than serving a plain render the
+  // caller would read as post-interaction, and the published catalog answers
+  // without a url so anyone can read what this route will run before it runs.
+  { path: "/lens/browser?url=https%3A%2F%2Fexample.com&do=notarecipe", status: 400, ct: "application/json" },
+  { path: "/lens/browser?recipes=1", status: 200, ct: "application/json" },
   { path: "/lens/compare.json?left=javascript%3Aalert(1)&right=https%3A%2F%2Fexample.com", status: 400, ct: "application/json" },
   { path: "/mcp", status: 405, ct: "application/json" },
 

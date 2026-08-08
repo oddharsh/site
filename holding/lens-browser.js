@@ -132,6 +132,94 @@
       (snapshot.engine ? " &middot; engine: " + esc(snapshot.engine) : "") + "</div></div>";
   }
 
+  // ── after interaction ────────────────────────────────────────────────────
+  // Mirrors the server registry in holding/_worker.js/lens-recipes.js. Kept as
+  // labels only: the SCRIPTS live server-side and are published at
+  // /lens/browser?recipes=1, so nothing here can imply a capability the server
+  // will not actually run. An id the server has retired simply 400s and lands in
+  // the existing Try-again state.
+  var RECIPES = [
+    { id: "expand", label: "Open collapsed sections", claim: "Opens every <details> disclosure widget, then re-reads the page." },
+    { id: "consent", label: "Remove the consent overlay", claim: "Removes large fixed overlays worded like a consent or newsletter wall. Presses nothing." },
+  ];
+
+  // Rendered only alongside a plain snapshot, because that snapshot IS the
+  // before. Running a recipe first would spend a render to produce an after with
+  // nothing to measure it against, so the control simply does not exist yet
+  // rather than sitting there disabled.
+  function chips() {
+    return '<div class="lx-browser-do"><b>After interaction:</b>' +
+      '<div class="lx-cap">Lens runs one fixed, published script in its own copy of the page, then re-reads it. Each click spends one of your three renders a minute.</div>' +
+      '<div class="lx-chips">' + RECIPES.map(function (r) {
+        return '<button class="lx-chip lx-do-chip" type="button" data-do="' + esc(r.id) + '" title="' + esc(r.claim) + '">' + esc(r.label) + "</button>";
+      }).join("") + "</div></div>";
+  }
+
+  // What the recipe actually did, said plainly. Every branch here is a real
+  // observation and none of them is a failure, which is why none of them is
+  // styled or worded as one.
+  function interactionStrip(after, before, data) {
+    var it = after.interaction;
+    if (!it) return "";
+    var head;
+    if (it.note === "no-receipt") {
+      // The most common real-world outcome, and the most interesting one. The
+      // HTTP scan already carried the response headers, so when a CSP explains
+      // the refusal we can name it instead of shrugging.
+      var csp = (data && data.headers && (data.headers["content-security-policy"] || data.headers["Content-Security-Policy"])) || "";
+      head = /script-src/i.test(csp)
+        ? "The injected script never ran. This page's <b>Content-Security-Policy</b> refuses inline script, so Lens could not interact with it &mdash; which is itself something a machine learns about this page."
+        : "The injected script did not run, and the HTTP response carried no policy that explains it. Lens does not know why.";
+    } else if (it.note === "forged-receipt") {
+      head = "This page returned a <b>forged result marker</b> for a script Lens did not run. Lens discarded it. That is worth knowing on its own.";
+    } else if (it.note === "threw") {
+      head = "The script ran and threw inside this page, so Lens is not claiming it changed anything.";
+    } else if (!it.acted) {
+      head = "Nothing to do here. Lens examined <b>" + (it.scanned || 0) + "</b> candidate" + (it.scanned === 1 ? "" : "s") + " and none matched.";
+    } else {
+      var n = it.acted, noun = n + " element" + (n === 1 ? "" : "s");
+      var aw = (after.shape && after.shape.words) || 0;
+      // The client's own plain snapshot wins over the server's `it.before`, and
+      // that order is deliberate rather than accidental. Both are the same
+      // documentShape() of the same URL, but the server's copy came from a KV
+      // read that can miss (eventual consistency, or a plain run that was never
+      // cached) while the pane is still holding the real thing in memory. So
+      // beforeSource can honestly say "none" while a delta is still shown.
+      var bw = before && before.shape ? before.shape.words : (it.before ? it.before.words : null);
+      if (bw == null) {
+        head = "<b>" + noun + "</b> changed. Lens has no plain snapshot to measure this against, so it is not claiming a delta.";
+      } else if (aw <= bw) {
+        // Genuinely interesting and frequently the truth: the wall was paint.
+        head = "<b>" + noun + "</b> changed and the page did not grow. The wall was cosmetic &mdash; the text was already there for a machine.";
+      } else {
+        var share = Math.min(100, Math.round(((aw - bw) / aw) * 100));
+        head = "<b>" + noun + "</b> changed, and the page went from <b>" + bw + "</b> to <b>" + aw +
+          "</b> words: <b>" + share + "%</b> of what a machine can now read was behind something it cannot click.";
+      }
+    }
+    var facts = [];
+    if (it.scanned) facts.push(it.scanned + " candidate" + (it.scanned === 1 ? "" : "s") + " examined");
+    if (after.engine) facts.push("engine: " + esc(after.engine));
+    facts.push(after.cached ? "KV cache" : "fresh Browser Run");
+    return '<div class="lx-browser-delta"><b>After &ldquo;' + esc(it.label) + '&rdquo;:</b> ' + head +
+      '<div class="lx-cap">' + facts.join(" &middot; ") + "</div>" +
+      (it.id === "consent" && it.acted
+        ? '<div class="lx-cap">Lens removed the overlay from its own copy of the page. It did not accept, refuse, or record any consent choice. If this was a paywall, you are looking at a page the publisher did not intend to show you, and Lens will not fetch anything further.</div>'
+        : "") +
+      '<div class="lx-cap"><a href="/lens/browser?recipes=1">What exactly ran</a> &mdash; the script is published verbatim.</div></div>';
+  }
+
+  // Two screenshots beside each other is the single most legible artifact this
+  // can produce, and the before is already in memory, so it costs nothing.
+  function beforeAfter(before, after) {
+    if (!before || !before.screenshot || !after.screenshot) return "";
+    return section("Before and after", { text: "PNG", kind: "ok" }, "The same page, rendered twice: once as delivered, once after the script ran.",
+      '<div class="lx-shot-pair">' +
+      '<figure><img class="lx-browser-shot" src="' + esc(before.screenshot) + '" alt="Before the interaction"><figcaption>as delivered</figcaption></figure>' +
+      '<figure><img class="lx-browser-shot" src="' + esc(after.screenshot) + '" alt="After the interaction"><figcaption>after the script</figcaption></figure>' +
+      "</div>");
+  }
+
   function summary(snapshot, data) {
     var tree = snapshot.accessibilityTree;
     var facts = {
@@ -156,13 +244,28 @@
     if (tree) out += section("Accessibility tree", { text: treeNodes(tree) + " nodes", kind: "ok" }, "The browser's structured view of roles, names, states, and hierarchy.", pre(JSON.stringify(tree, null, 2)));
     return out;
   }
-  function mount(body, data, snapshot, onRun) {
+  function wireChips(body, onRun) {
+    var nodes = body.querySelectorAll(".lx-do-chip");
+    for (var i = 0; i < nodes.length; i++) {
+      (function (node) {
+        node.addEventListener("click", function () { onRun(node.getAttribute("data-do")); });
+      })(nodes[i]);
+    }
+  }
+  function mount(body, data, snapshot, onRun, recipeSnapshot) {
     if (!data) {
       body.innerHTML = '<div class="lx-empty">Paste a URL above, then ask Browser Run to render it here.</div>';
       return;
     }
     if (snapshot) {
-      body.innerHTML = summary(snapshot, data);
+      // The plain snapshot stays the body of the pane. An interaction result is
+      // an ADDITION above it, so the reader never loses the baseline they are
+      // being asked to compare against.
+      body.innerHTML = (recipeSnapshot ? interactionStrip(recipeSnapshot, snapshot, data) : "") +
+        chips() +
+        (recipeSnapshot ? beforeAfter(snapshot, recipeSnapshot) : "") +
+        summary(snapshot, data);
+      wireChips(body, onRun);
       return;
     }
     body.innerHTML = '<div class="lx-browser-intro"><b>Third surface: the rendered browser.</b> This is separate from the HTTP Machine view and the Human view in your own browser.' +
@@ -171,9 +274,11 @@
     var button = document.getElementById("lx-browser-run");
     if (button) button.addEventListener("click", onRun);
   }
-  function run(body, data, done, onError, onRun) {
-    body.innerHTML = '<div class="lx-spin">Cloudflare Browser Run is opening a rendered session&hellip;</div>';
-    fetch("/lens/browser?url=" + encodeURIComponent(data.finalUrl || data.url))
+  function run(body, data, done, onError, onRun, recipeId) {
+    body.innerHTML = '<div class="lx-spin">Cloudflare Browser Run is opening a rendered session' +
+      (recipeId ? " and running the published script" : "") + "&hellip;</div>";
+    fetch("/lens/browser?url=" + encodeURIComponent(data.finalUrl || data.url) +
+      (recipeId ? "&do=" + encodeURIComponent(recipeId) : ""))
       .then(function (response) {
         // Read as text and parse by hand. /lens/browser answers JSON on every
         // path it controls, so a non-JSON body means something ANSWERED FOR IT:
