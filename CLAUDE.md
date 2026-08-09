@@ -49,6 +49,19 @@ npm run photos -- "/path/to/photo.HIF" "/path/to/folder/"
 # validate the committed photo artifact graph without uploading anything
 npm run photos:check
 
+# the wire-size DIFF. perf-budget checks numbers against constants that rot;
+# this compares two builds and has no constants. CI runs it against the merge
+# base on every PR touching served code and comments the delta, gating nothing.
+# each record self-builds through the wrangler dry-run (~12s).
+npm run perf:snapshot -- record base.json --label main
+npm run perf:snapshot -- record head.json --label mine
+npm run perf:snapshot -- compare base.json head.json
+
+# the TREND, which is what the diff structurally cannot see. one compact JSONL
+# row per snapshot; .github/workflows/perf-history.yml appends these nightly to
+# the machine-owned `perf-history` branch and /garage/dyno charts them.
+npm run perf:snapshot -- row base.json
+
 # diff infra.json (DNS, zone/edge settings, account resources, Workers) against
 # reality. read-only; never mutates Cloudflare. add CLOUDFLARE_API_TOKEN for
 # the account tier, or --offline for the no-network tier.
@@ -97,7 +110,34 @@ worktrees may edit freely, but a worktree is not a release surface.
   site Worker plus the auxiliary Garage/LWE configs (`cf-garage/`, `lwe-ask/`),
   runs the coffee tests, and sweeps the route oracle against a Worker booted
   in-process (`npm run routes:check`, wrangler's `createTestHarness()`), so a
-  broken route fails the PR instead of the deploy.
+  broken route fails the PR instead of the deploy. All of that lives in the ONE
+  `validate` job, because `validate` is the one required check on `main` and a
+  gate that is not required is not a gate.
+- **`.github/workflows/perf-diff.yml` is deliberately OUTSIDE that job**, and the
+  separation is the whole design rather than tidiness. It builds the merge base
+  and HEAD, diffs the wire sizes, and comments the delta on the PR; it fails on
+  nothing and is not a required check. Everything in `perf-budget.mjs` compares a
+  number against a constant somebody typed, and the baseline history in that file
+  is the record of what constants cost (86 → 129.23 → 204.24 KiB gzip, with the
+  129.23 era spent permanently in breach while CI printed "hard checks green"
+  over it every run, and the 204.24 set on 2026-08-04 already firing four days
+  later). A diff has no constant to rot and nothing to re-baseline. Keep the two
+  apart on purpose: a number that BLOCKS a merge trains people to widen the
+  threshold, and a number that merely reports trains nobody to do anything except
+  read it. Modelled on `astral-sh/ruff`'s memory and ecosystem jobs, which do
+  exactly this and gate on nothing.
+- **`perf-history` is a third machine-owned branch, alongside `production`.**
+  `.github/workflows/perf-history.yml` appends one JSONL row a night and `/perf`
+  charts it; nothing else writes there and nobody should hand-edit it. It exists
+  because the per-PR diff catches the STEP a change makes and structurally cannot
+  see DRIFT, which is the failure this repo actually had. A branch is the target
+  because `main`'s ruleset has zero bypass actors so no workflow may push to it,
+  and the only Cloudflare token that can write D1 is environment-gated behind a
+  reviewer for the ramp; a branch outside both rulesets is the one place a
+  nightly job can write without weakening either. The job's `contents: write` is
+  a GITHUB token, so the no-Cloudflare-write-token-in-CI rule is untouched.
+  Shape from `commonwarexyz/monorepo`'s `benchmark.yml`, which runs the same
+  split: a per-change check plus a nightly series kept outside the code branch.
 - Only a successful CI run for `main` associated with a merged PR can promote
   the exact tested commit to the machine-owned `production` branch. Cloudflare
   Workers Builds watches `production` and is the only production publisher for
@@ -1828,6 +1868,63 @@ npm run deploy
     puts the staged entry somewhere the ramp cannot see it. Same collision as the
     `git checkout` mtime problem in gotcha 20, and the same resolution: the
     conflict lives at the one operation that touches both, so handle it there.
+
+25. **A secret change between one production upload and the next is INVISIBLE to
+    the ramp, and ramping across that window silently reverts it.** Two rules
+    this file already states separately produce it, and each is right on its own.
+
+    A secret is a version (see the `versions secret put` note above), so
+    `wrangler versions secret put|delete` mints one. That version is created by
+    `create_version_api` and therefore carries **no `workers/alias`**. And since
+    #259, `newestVersion()` in `scripts/deploy-promote.mjs` filters candidates to
+    the production alias, because ramping the newest version outright was a live
+    way to walk another agent's branch build to 100%.
+
+    Together: **a secret change made after the production build can never be the
+    ramp target.** The dry run does say so, in a line that reads like routine
+    noise rather than a warning:
+
+    ```
+    skipping 1 newer non-production version(s): (no alias)
+    target version:   d285199d
+    ```
+
+    Measured 2026-08-08 while deleting the dead `BROWSER_RENDER_TOKEN`. The
+    deletion landed 52 seconds after Workers Builds uploaded `d285199d`, so that
+    build still carried the secret (13 names) while the deletion version
+    `9e53d836` did not (12). Ramping the target the script picked would have put
+    the secret back, and nothing would have said a word.
+
+    **What saves it is that a version inherits the CURRENT secret set**, and that
+    is the half worth remembering, because it turns an alarming problem into a
+    small one. `0013118a`, built four minutes after the deletion, already lacked
+    the secret; so did `404dac60`, the next production build, which is the one
+    that got ramped. **The exposure is only the window between the production
+    upload and the secret change** — one more merge, or any push to `production`,
+    closes it without help.
+
+    The rule is short: **after changing a secret, do not ramp a production
+    version that predates the change.** Check with
+    `npx wrangler versions view <id>`, which prints `Secrets:` by name. If the
+    only production build is older than your change, wait for the next one;
+    re-applying the change on top after ramping is the fallback rather than the
+    default, since a secret PUT needs the value again and those live on a
+    workstation.
+
+    Do NOT reach for "let the ramp target unaliased versions too". That is
+    precisely the guard #259 added and its reason has not gone away. If this is
+    ever worth automating, the shape is narrower: allow an unaliased version only
+    when it sits directly above the newest production build AND its
+    `workers/message` names a secret change.
+
+    Two near-misses here are worth copying past the secret itself. `--dry-run`
+    is what surfaced the skipped version at all, the second time it has earned
+    its place (gotcha 22 is the first). And the ramp was nearly run from the main
+    tree, which at that moment sat on **another session's branch** with an
+    uncommitted file. Gotcha 24 says to pull `main` before ramping; the sharper
+    form is **check you are ON it**, because a tree parked on somebody else's
+    branch satisfies a `git pull` and still reads the wrong `checkpoints.json`.
+    Ramp from a fresh worktree at `origin/main`.
 
 ---
 

@@ -3168,6 +3168,42 @@ test("Workers Cache never answers a content-negotiated request from the stored r
   assert.equal(shouldUseWorkersCache(req("https://aadhar.sh/writing/colophon"), PATHS), true, "the /writing/ prefix is cacheable");
 });
 
+// The same class of bug on the other axis the key cannot see. A hit answers
+// before the dispatcher, so every host-based decision in there is skipped:
+// cal.aadhar.sh's 404 and a preview's noindex both live past this point.
+//
+// Reproduced on production 2026-08-08 rather than reasoned about. GET
+// https://aadhar.sh/reading twice (MISS, then HIT at age 1), then
+// https://cal.aadhar.sh/reading: 200, HIT, age 1, the same 91,980-byte page, on a
+// host whose origin answers 404 for that path. /photos and /writing reported
+// byte-identical `age` on both hostnames in the same second, so it is one object
+// rather than two copies, and `?cb=` on any of them returned the real 404 through
+// the query-string bail.
+test("only the canonical hostname may be served from Workers Cache", async () => {
+  const { shouldUseWorkersCache } = await import("./holding/_worker.js/lib/cache.js");
+  const { isCanonicalHost } = await import("./holding/_worker.js/lib/const.js");
+  const PATHS = new Set(["/", "/photos", "/reading", "/writing"]);
+  const req = (url) => new Request(url, { headers: { accept: "text/html" } });
+
+  for (const path of ["/", "/photos", "/reading", "/writing/colophon"]) {
+    assert.equal(shouldUseWorkersCache(req(`https://aadhar.sh${path}`), PATHS), true, `aadhar.sh${path} is the site and stays cacheable`);
+    for (const host of ["cal.aadhar.sh", "aadhar-sh.workers.dev", "a1b2c3-aadhar-sh.workers.dev", "aadhar-sh.pages.dev"]) {
+      assert.equal(
+        shouldUseWorkersCache(req(`https://${host}${path}`), PATHS), false,
+        `${host}${path} must reach the dispatcher — a hit here publishes the canonical page on a second hostname`,
+      );
+    }
+  }
+
+  // Exact match. A near-miss treated as canonical is precisely how a duplicate
+  // hostname gets published, and a subdomain suffix test would admit all of them.
+  assert.equal(isCanonicalHost("aadhar.sh"), true);
+  assert.equal(isCanonicalHost("AADHAR.SH"), true, "the Host header's case is not significant");
+  for (const host of ["www.aadhar.sh", "cal.aadhar.sh", "aadhar.sh.evil.example", "notaadhar.sh", "", null, undefined]) {
+    assert.equal(isCanonicalHost(host), false, `${host} is not the canonical host`);
+  }
+});
+
 // ── Workers preview URLs ────────────────────────────────────────────
 // A preview version runs PRODUCTION bindings and secrets (lib/preview.js says
 // why at length), so these tests are the difference between a preview URL and
@@ -3213,14 +3249,19 @@ test("previews refuse every unsafe method, and the GET-shaped writes too", async
     }
   }
 
-  // /mcp is the one POST exception, because it writes no binding and sends
-  // nothing (it reads this origin back through an allowlist). If that ever
-  // stops being true, this line is the one to delete.
-  assert.equal(previewDenial("/mcp", "POST"), null, "read-only JSON-RPC survives the method rule");
+  // /mcp is the one POST exception, and it is admitted so the MCP server can be
+  // exercised on a preview, NOT because nothing behind it writes. Two vault
+  // tools do; they are refused a layer down, by the next test.
+  assert.equal(previewDenial("/mcp", "POST"), null, "JSON-RPC survives the method rule");
 
   // The other direction: writes that arrive as a plain GET, which the method
-  // rule structurally cannot catch.
-  for (const path of ["/hit", "/approve", "/decline", "/webmention/approve", "/webmention/decline", "/ledger/prefetch"]) {
+  // rule structurally cannot catch. Read the entries off the module rather than
+  // restating them — a copy of the list here asserts only that the list equals
+  // itself, which is how the stale coffee paths survived. What gives this teeth
+  // is the pin in the next test.
+  const { PREVIEW_GET_WRITES } = await import("./holding/_worker.js/lib/preview.js");
+  assert.ok(PREVIEW_GET_WRITES.size >= 6, "the GET-write list must not quietly collapse");
+  for (const path of PREVIEW_GET_WRITES) {
     const denied = previewDenial(path, "GET");
     assert.ok(denied, `GET ${path} mutates production state and must be refused`);
     assert.equal(denied.status, 403);
@@ -3234,6 +3275,90 @@ test("previews refuse every unsafe method, and the GET-shaped writes too", async
       assert.equal(previewDenial(path, method), null, `${method} ${path} must still serve on a preview`);
     }
   }
+});
+
+// The guard's own list is the half a test cannot check by reading the guard. An
+// entry that names a path nothing routes reads as protection and protects
+// nothing, which is what happened to the coffee pair: it sat here as bare
+// /approve and /decline (the retired cal.aadhar.sh spellings) while the live
+// routes arrived under /coffee/*, so a signed approve link opened against a
+// preview confirmed a real booking and emailed a real person, on production's
+// SIGNING_SECRET. So pin every entry against the route tables it claims to guard.
+//
+// The tables are read as SOURCE TEXT, not imported: index.js is the one module
+// allowed to import "cloudflare:workers", and importing it here would kill the
+// whole suite at link time (gotcha 16).
+test("every preview-guarded GET write names a path the site really routes", async () => {
+  const { PREVIEW_GET_WRITES } = await import("./holding/_worker.js/lib/preview.js");
+  const dispatcher = readFileSync(new URL("./holding/_worker.js/index.js", import.meta.url), "utf8");
+  const cal = readFileSync(new URL("./cal/src/index.js", import.meta.url), "utf8");
+
+  // Exact ROUTES entries in the site dispatcher, plus cal's own matches, which
+  // reach the visitor one prefix deeper: index.js hands /coffee/* to cal, and
+  // cal strips that prefix before comparing.
+  const routed = new Set();
+  for (const [, path] of dispatcher.matchAll(/\[\s*"(\/[^"]*)"\s*,\s*[A-Za-z_$]/g)) routed.add(path);
+  assert.ok(routed.has("/hit") && routed.has("/webmention/approve"), "the ROUTES scan must actually find routes");
+  const coffeePrefixed = /pathname\.startsWith\("\/coffee\/"\)/.test(dispatcher);
+  assert.ok(coffeePrefixed, "cal is reached through the /coffee/ prefix; this test's mapping assumes it");
+  for (const [, path] of cal.matchAll(/path === "(\/[^"]*)"/g)) routed.add(`/coffee${path === "/" ? "" : path}`);
+  assert.ok(routed.has("/coffee/approve"), "the cal scan must actually find cal's routes");
+
+  for (const path of PREVIEW_GET_WRITES) {
+    assert.ok(
+      routed.has(path),
+      `${path} is guarded as a GET-shaped write, but no route table serves it — the guard is protecting a dead path`,
+    );
+  }
+});
+
+// The other stale claim, and the more exposed one: /mcp needs no signature and
+// no secret, so for as long as the guard admitted the endpoint on the grounds
+// that nothing behind it wrote, any POST to a preview's /mcp could INSERT into
+// the production representation vault. The refusal is derived from each tool's
+// own readOnlyHint, so a new writing tool is covered on the day it declares
+// itself. Swept over BOTH servers on this origin, which is what keeps the
+// serendipity call site honest while it still has nothing to refuse.
+test("MCP tools that write are refused on a preview host, and reads still run", async () => {
+  const { handleMcp: handleSerendipityMcp, MCP_TOOLS: SERENDIPITY_TOOLS } = await import("./serendipity/serendipity.js");
+  const servers = [
+    { what: "/mcp", handle: (r) => handleSiteMcp(r, {}, context()), tools: SITE_MCP_TOOLS, path: "/mcp" },
+    { what: "/serendipity/mcp", handle: (r) => handleSerendipityMcp(r, {}, null), tools: SERENDIPITY_TOOLS, path: "/serendipity/mcp" },
+  ];
+
+  let writesChecked = 0;
+  for (const server of servers) {
+    const call = (host, name) => server.handle(new Request(`https://${host}${server.path}`, {
+      method: "POST",
+      body: JSON.stringify({ jsonrpc: "2.0", id: "preview", method: "tools/call", params: { name, arguments: {}, ...MODERN_META } }),
+      headers: { "content-type": "application/json" },
+    }));
+
+    for (const tool of server.tools) {
+      if (tool.annotations.readOnlyHint !== false) continue;
+      writesChecked += 1;
+      const body = await (await call("v1-aadhar-sh.workers.dev", tool.name)).json();
+      assert.equal(body.result?.isError, true, `${server.what} ${tool.name} writes and must be refused on a preview`);
+      assert.match(body.result.content[0].text, /disabled on preview URLs/, `${tool.name}'s refusal must say why`);
+
+      // ...and the same call off a preview must NOT be refused for this reason.
+      // It may still fail on absent bindings here, which is a different answer.
+      const live = await (await call("aadhar.sh", tool.name)).json();
+      const liveText = live.result?.content?.[0]?.text || "";
+      assert.ok(!/disabled on preview URLs/.test(liveText), `${tool.name} must run normally on production`);
+    }
+
+    // A read tool has to survive the guard, or the preview loses the surface the
+    // /mcp exception exists to preserve.
+    const read = server.tools.find((t) => t.annotations.readOnlyHint !== false);
+    const readBody = await (await call("v1-aadhar-sh.workers.dev", read.name)).json();
+    const readText = readBody.result?.content?.[0]?.text || "";
+    assert.ok(!/disabled on preview URLs/.test(readText), `${server.what} ${read.name} reads and must still run on a preview`);
+  }
+
+  // The vault tools are the reason this test exists. If the count ever drops to
+  // zero the sweep above is asserting nothing, and would say so silently.
+  assert.equal(writesChecked, 2, "expected exactly the two representation-vault writers");
 });
 
 test("preview noindex reaches the responses the security wrapper otherwise skips", async () => {
@@ -3259,6 +3384,18 @@ test("preview noindex reaches the responses the security wrapper otherwise skips
     const plain = withSecurityHeaders(response, "/photos");
     assert.equal(plain.headers.get("x-robots-tag"), null, `${what} must NOT be noindexed off a preview`);
   }
+
+  // The wrapper is only half of it: what decides `noindex` is the dispatcher, and
+  // that used to be `onPreview` alone, which left cal.aadhar.sh publishing
+  // /coffee at a second hostname (cal's templates carry no rel=canonical). The
+  // dispatcher cannot be imported here, since index.js is the one module allowed
+  // to import "cloudflare:workers" (gotcha 16), so pin the decision as source.
+  const dispatcher = readFileSync(new URL("./holding/_worker.js/index.js", import.meta.url), "utf8");
+  assert.match(
+    dispatcher,
+    /noindex:\s*!isCanonicalHost\(url\.hostname\)/,
+    "every hostname that is not the canonical site must be noindexed, not just previews",
+  );
 
   // A route that already set its own x-robots-tag keeps it (/whoareyou.json and
   // /updates.json both do), so the guard can't weaken an existing directive.
@@ -4752,6 +4889,41 @@ test("the ramp never double-parses wrangler's already-parsed JSON", async () => 
     "the catch-all note must not assert D1 is the cause — it cannot know that");
 });
 
+test("no ramp sample can hang, and a stall is never reported as an origin error", async () => {
+  // SECOND TIME the D1 changelog write has been silently skipped, by a different
+  // mechanism than the double-parse above. The v177 ramp moved traffic through
+  // 10/50/100 and then exited mid-sample with `Detected unsettled top-level
+  // await`, before the write that runs after sampling. `fetch` has no default
+  // request timeout, so one stalled socket wedges the step; the repair (`--to
+  // 100`, which moves nothing and logs) is documented, and needing it is the bug.
+  //
+  // Source text for the same reason as the test above: the alternative is
+  // spawning wrangler against production from the suite.
+  const src = await readFile(new URL("./scripts/deploy-promote.mjs", import.meta.url), "utf8");
+
+  // Counted rather than matched once, so a SECOND fetch added later without a
+  // timeout fails this instead of riding the first one's signal.
+  const fetches = (src.match(/await fetch\(/g) || []).length;
+  const timeouts = (src.match(/signal: AbortSignal\.timeout\(/g) || []).length;
+  assert.ok(fetches > 0, "the ramp samples over the network — if this hits zero the test is measuring nothing");
+  assert.equal(timeouts, fetches,
+    `every network call in the ramp needs a request timeout: ${fetches} fetch(es), ${timeouts} with a signal`);
+
+  // A timeout is only safe to add because a stall is classified apart from an
+  // origin error. Conflated, a laptop's flaky wifi would trigger the ramp's
+  // roll-back advice against a healthy release.
+  assert.ok(/stalls\+\+/.test(src), "a failed request must count as a stall, not an error");
+  assert.ok(/errorVersions\.push/.test(src) && /stallReasons\.push/.test(src),
+    "errors and stalls must be reported through separate channels");
+  assert.ok(/not an origin fault/.test(src),
+    "the stall note must say whose fault it is not");
+
+  // And a step nobody could measure must not pass as a step that succeeded —
+  // at 100% that is what stops an unverified run from writing the changelog.
+  assert.ok(/if \(!s\.answered\)/.test(src),
+    "a sample where nothing answered must stop the ramp rather than be read as success");
+});
+
 // ── webmention link verification ────────────────────────────────────
 // The verify step is the ONLY thing standing between "someone sent a POST" and
 // "someone's page appears on my site", so what counts as a link is the whole
@@ -4930,4 +5102,68 @@ test("the twin list is generated, not committed", () => {
   const source = readFileSync("holding/_worker.js/lib/twins.js", "utf8");
   assert.match(source, /^export const TWIN_PATHS = \[\]; \/\/ build:twins$/m,
     "lib/twins.js must ship empty with its build:twins marker — a committed list would advertise twins that 404 in dev");
+});
+
+// ── /garage/dyno, the wire-size trend ───────────────────────────────────────
+//
+// The page is a pure function of its rows, which is what lets it be asserted
+// here rather than only looked at. All three tests below came out of building
+// it, and the middle one is a bug that shipped to a screenshot.
+
+test("the dyno series merges hand-entered history under measured rows", async () => {
+  const { mergeHistory } = await import("./holding/_worker.js/dyno.js");
+  const seeded = mergeHistory([]);
+  assert.ok(seeded.length >= 4, "the seeded baseline history must survive an empty fetch");
+  assert.ok(seeded.every((r) => r.source === "baseline-note"));
+  // Sorted by date, so the chart's x-scale never has to.
+  assert.deepEqual([...seeded].sort((a, b) => (a.ts < b.ts ? -1 : 1)).map((r) => r.ts), seeded.map((r) => r.ts));
+
+  // A measured row for a seeded day REPLACES it. Both describe the same day and
+  // the measured one is the better fact; keeping both would draw two points on
+  // one date and a vertical line between them.
+  const clash = seeded[seeded.length - 1].ts;
+  const merged = mergeHistory([{ ts: clash, sha: "abc1234", worker_gzip: 1, source: "nightly" }]);
+  const hit = merged.filter((r) => r.ts === clash);
+  assert.equal(hit.length, 1);
+  assert.equal(hit[0].source, "nightly");
+});
+
+test("the dyno chart draws lines, not filled regions", async () => {
+  const { mergeHistory, renderDyno } = await import("./holding/_worker.js/dyno.js");
+  const rows = mergeHistory([
+    { ts: "2026-08-10", sha: "aaa1111", worker_gzip: 264540, pages_br: 476528, assets_br: 58186, source: "nightly" },
+    { ts: "2026-08-11", sha: "bbb2222", worker_gzip: 266000, pages_br: 476000, assets_br: 58200, source: "nightly" },
+  ]);
+  const html = await (await renderDyno(rows)).text();
+
+  // The bug this pins: a bare `.s-worker { stroke; fill }` outranks
+  // `polyline { fill: none }` on specificity, so every series filled down to the
+  // axis and the chart rendered as three coloured blobs. It looked like a data
+  // problem and was a cascade problem. Every series rule must be element-
+  // qualified so a line can never inherit a fill.
+  for (const series of ["s-worker", "s-pages", "s-assets"]) {
+    assert.match(html, new RegExp(`polyline\\.${series}\\{[^}]*fill:none`),
+      `${series} must set fill:none on the polyline, or the line fills into a blob`);
+    assert.doesNotMatch(html, new RegExp(`\\.chart \\.${series}\\{`),
+      `${series} must not be styled unqualified — that rule outranks polyline{fill:none}`);
+  }
+  assert.match(html, /<polyline class="s-worker"/);
+});
+
+test("the dyno page distinguishes measured points from hand-entered ones", async () => {
+  const { mergeHistory, renderDyno } = await import("./holding/_worker.js/dyno.js");
+  const html = await (await renderDyno(mergeHistory([
+    { ts: "2026-08-10", sha: "aaa1111", worker_gzip: 264540, pages_br: 476528, assets_br: 58186, source: "nightly" },
+  ]))).text();
+  // Dashed for the seeded prefix, solid for the measured tail, and the legend
+  // says which is which. A chart that renders a number somebody typed into a
+  // code comment identically to one a runner measured is lying about its own
+  // provenance, which on a page ABOUT measurement discipline is the one thing
+  // it cannot do.
+  assert.match(html, /<polyline class="s-worker dashed"/);
+  assert.match(html, /dashed: recorded by hand before this series existed/);
+  assert.match(html, /<td class="src">by hand<\/td>/);
+  assert.match(html, /<td class="src">measured<\/td>/);
+  // Zero client JS: the whole chart is server-rendered SVG.
+  assert.doesNotMatch(html.split('<svg class="chart"')[1].split("</svg>")[0], /<script/);
 });

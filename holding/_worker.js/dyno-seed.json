@@ -1,0 +1,30 @@
+[
+  {
+    "ts": "2026-06-01",
+    "sha": "pre-consolidation",
+    "worker_gzip": 88064,
+    "source": "baseline-note",
+    "note": "homepage Worker alone, before cal/ and serendipity/ were consolidated into it"
+  },
+  {
+    "ts": "2026-06-30",
+    "sha": "consolidation",
+    "worker_gzip": 132331,
+    "source": "baseline-note",
+    "note": "the one-Worker consolidation. the old three-Worker aggregate measured 130.94 KiB, so this was smaller than what it replaced"
+  },
+  {
+    "ts": "2026-08-04",
+    "sha": "rebaseline",
+    "worker_gzip": 209142,
+    "source": "baseline-note",
+    "note": "re-baselined after the 129.23 line had been in continuous breach for months. lens.js and serendipity.js are 35% of the bundle between them"
+  },
+  {
+    "ts": "2026-08-08",
+    "sha": "295ee97",
+    "worker_gzip": 264540,
+    "source": "baseline-note",
+    "note": "measured while building the wire-size diff, four days after the re-baseline and already over its 25% alert"
+  }
+]

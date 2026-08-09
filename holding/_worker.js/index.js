@@ -22,7 +22,7 @@ import { handleRumCollect, handleRumScript } from "./rum.js";
 import { handleLens, handleLensBrowser, handleLensCompare, handleLensFetch, handleLensShot } from "./lens.js";
 import { serveAssetWith404Clamp, serveFreshAsset, servePrecompressedShell, serveStaticPage } from "./lib/assets.js";
 import { BOT_UA } from "./lib/botauth.js";
-import { CANONICAL_HOST, PAGE_CACHE_CONTROL } from "./lib/const.js";
+import { CANONICAL_HOST, PAGE_CACHE_CONTROL, isCanonicalHost } from "./lib/const.js";
 import { HOMEPAGE_DISCOVERY_LINK } from "./lib/security.js";
 import { wantsMarkdown } from "./lib/http.js";
 import { isPreviewHost, previewDenial } from "./lib/preview.js";
@@ -37,6 +37,7 @@ import { handleReading } from "./reading.js";
 import { handleRun } from "./run.js";
 import { handleRn, handleRnAdmin, handleRnArt, handleRnMarkdown, handleRnSet, handleRnTracks, handleRnTracksHtml } from "./rn.js";
 import { cronHomeProbe } from "./perf-probe.js";
+import { handleDyno, handleDynoJson } from "./dyno.js";
 import { handleSearch, handleSearchJson } from "./search.js";
 import { handleSecurityCenter } from "./security.js";
 import { handleTool } from "./terminal.js";
@@ -97,6 +98,17 @@ export { BookingWorkflow } from "../../cal/src/workflow.js";
 // stored HTML says `vary: accept-encoding, available-dictionary` and nothing about
 // `accept`. The predicate now bails on a negotiated request; the reasoning and the
 // production evidence are in lib/cache.js, next to the code.
+//
+// A THIRD axis, and the same shape a third time: the HOST. Three hostnames reach
+// this Worker and only one is the site, but a hit answers before the dispatcher,
+// so cal.aadhar.sh's 404 and a preview's noindex were both being skipped.
+// Measured on production 2026-08-08: cal.aadhar.sh/reading served the canonical
+// 91,980-byte page at the same cache `age` as aadhar.sh/reading, on a host whose
+// origin 404s it. The predicate bails off the canonical host now.
+//
+// Worth stating as a rule rather than three fixes: THIS CACHE ANSWERS BEFORE
+// EVERY DECISION MADE BELOW IT. Anything the dispatcher varies on that the key
+// cannot see needs a bail here — and the key sees the path and nothing else.
 //
 // The predicate itself moved to lib/cache.js so it can be unit-tested. That is the
 // actual lesson here: it was a private function in this module, this module cannot
@@ -174,7 +186,13 @@ async function serveWorkerRequest(request, env, ctx) {
       bot: request.cf?.botManagement?.verifiedBot || undefined,
     }));
   } catch {}
-  return withSecurityHeaders(response, url.pathname, { noindex: onPreview });
+  // noindex EVERY hostname that is not the canonical site, not just previews.
+  // `cal.aadhar.sh` is a declared zone route that mostly 404s, but /coffee* really
+  // does serve there, and cal's own templates carry no rel=canonical — so the
+  // booking page was publishable at two hostnames. Keying on "is this aadhar.sh"
+  // rather than listing the hosts that are not means the next alias is covered by
+  // arriving, which is the same argument the preview guard's default-deny wins on.
+  return withSecurityHeaders(response, url.pathname, { noindex: !isCanonicalHost(url.hostname) });
 }
 
 // The named entrypoint is the only one configured to consult Workers Cache in
@@ -272,6 +290,15 @@ const ROUTES = new Map([
   ["/updates", routeUpdates],
   ["/updates.json", handleUpdatesJson],
   ["/restore", routeRestore],
+  ["/garage/dyno", handleDyno],
+  ["/garage/dyno.json", handleDynoJson],
+  // /perf shipped as the original name and lived for about an hour. The 301s are
+  // not for humans: `agents: true` puts a surface in the MCP resources projection,
+  // and _headers caches the well-known cards for 30 days, so an agent can hold the
+  // old path long after a deploy could purge it. Same argument as the /images ->
+  // /i/ redirects, on a shorter clock.
+  ["/perf", (request) => Response.redirect(new URL("/garage/dyno", request.url), 301)],
+  ["/perf.json", (request) => Response.redirect(new URL("/garage/dyno.json", request.url), 301)],
 
   ["/lens", routeLens],
   ["/lens/", routeDropSlash],

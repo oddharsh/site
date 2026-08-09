@@ -265,6 +265,12 @@ export const AGENT_SURFACES = [
     "description": "A ragged-height contact-sheet photo grid with CSS Grid Lanes, falling back to the fixed-square grid."
   },
   {
+    "path": "/garage/dyno",
+    "title": "Dyno",
+    "kind": "content",
+    "description": "The site on the rollers: worker bundle, pages, and client assets weighed nightly, charted over time."
+  },
+  {
     "path": "/garage/octane",
     "title": "Octane, priced against no framework",
     "kind": "content",

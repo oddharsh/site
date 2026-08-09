@@ -19,6 +19,21 @@
 // Not measured here (needs a real browser): LCP/FCP/INP/CLS, TTFB by field
 // cohort, and the per-viewport photo-transfer delta. Cloudflare RUM is the
 // outcome source; a controlled 4G lab run is the repeatable pre-merge signal.
+//
+// ALSO NOT MEASURED HERE, and this is the newer and more important boundary:
+// whether THIS CHANGE moved anything. Every threshold below is an absolute line
+// against a constant somebody typed, and the baseline history at
+// WORKER_BASELINE_GZIP_KIB is the record of what that costs — a number that sat
+// 58% stale for months while CI printed "hard checks green" over it every run.
+// The differential half now lives in `scripts/perf-snapshot.mjs`, run by
+// .github/workflows/perf-diff.yml, which builds the merge base and HEAD and
+// posts the delta as a PR comment. It has no constants, so it cannot go stale.
+//
+// Read the two together and the division of labour is clean: THIS script is the
+// gate (structural invariants that must never ship broken, plus a coarse alarm
+// for a change large enough that nobody could have meant it), and the diff is
+// the signal (what moved, by how much, in this PR). A slow 500-bytes-per-PR
+// drift is invisible to everything here and obvious there.
 
 import { execFileSync } from "node:child_process";
 import { readFile, readdir, stat } from "node:fs/promises";
@@ -67,11 +82,25 @@ const ASSET_ENVELOPES = {
 //              39 KiB of the bundle (the three @noble packages), and 94.4% of it
 //              is first-party code.
 //
+//   258.34 KiB OBSERVED on 2026-08-08 at 295ee97, four days after the line
+//              above was written, and already over the 255.30 KiB alert. NOT
+//              re-baselined, deliberately. Re-baselining is what turns this
+//              comment into a changelog of somebody silencing a check, and the
+//              growth has not been attributed to anything yet.
+//
 // The 129.23 baseline had therefore been BREACHED continuously rather than
 // occasionally, and because this check warns rather than fails, CI printed
 // "hard checks green" over it every run. A permanently-firing advisory carries
 // no information, which is the actual reason to re-baseline: the point is to
 // catch the NEXT unexplained 50 KiB, and it could not.
+//
+// Four days from a fresh baseline to a firing advisory is the argument for the
+// merge-base diff in one line. The constant is not wrong because somebody chose
+// it badly; it is wrong because a constant describes a moment and the bundle
+// does not hold still. What the diff gives that no re-baseline can is the
+// attribution: 258.34 against 255.30 says nothing about which PR spent the 54
+// KiB, and a per-PR module delta says exactly which one did, while the person
+// who wrote it is still reading the thread.
 //
 // Re-baselining is safe here because the startup cost was measured directly on
 // 2026-08-04 rather than assumed. The 723 KB bundle compiles in 6.25 ms cold,
@@ -97,8 +126,26 @@ const WORKER_ALERT_GROWTH = 0.25;
 //
 // Read it for what it is. That note's caveat holds: `check startup` ranks frames
 // and does not cost them, and this profiles a local machine whose CPU is not
-// Cloudflare's. So this is a REGRESSION TRIPWIRE, not a prediction of production
-// startup, and a breach here means "go re-measure", never "cold start regressed".
+// Cloudflare's. So this is a DIAGNOSTIC, not a prediction of production startup,
+// and a breach here means "go re-measure", never "cold start regressed".
+//
+// It was called a "regression tripwire" until the merge-base diff existed, and
+// that was the wrong job for it. A sampled profile whose window lands ~5 samples
+// cannot detect a regression; three consecutive runs of identical bytes read 9.6,
+// 7.6 and 6.4 ms, a 50% spread on no change at all, and a fourth on 2026-08-08
+// read 16.4 ms — 2.6x the low, still on bytes nobody had touched. The tripwire is the bundle
+// gzip above and the per-module attribution below, both deterministic, and the
+// per-PR movement in those is what scripts/perf-snapshot.mjs reports.
+//
+// That is also why the snapshot deliberately does NOT record this number.
+// Diffing two draws from a noisy distribution manufactures findings: a run that
+// happened to sample 9.6 against one that sampled 6.4 would read as a 50%
+// startup regression, in a comment whose whole credibility rests on every row
+// being real. Astral's answer to benchmark noise is to remove the noise source
+// (CodSpeed counts simulated instructions; ty's memory job pins
+// TY_MAX_PARALLELISM=1) rather than to widen a threshold around it. Here the
+// cheaper version of that answer is available: measure the deterministic thing,
+// and keep the sampled one as the flamegraph you open once it fires.
 //
 // 50ms is ~6x the observed 6.4-9.6ms and still an order of magnitude under the
 // 400ms platform limit: room for the reading to wander, none for a real

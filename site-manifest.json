@@ -32,6 +32,7 @@
       "hint": "scrub the site back through its real deploy history, backed by Cloudflare D1",
       "flags": { "run": true, "taskbar": false, "sitemap": false, "gallery": false, "agents": true, "searchIndex": false, "webmention": false } },
 
+
     { "path": "/around", "title": "Around", "section": "around", "kind": "utility",
       "description": "AadharshBot's scheduled crawl of the crypto-VC neighborhood.",
       "hint": "the crypto-VC neighborhood",
@@ -223,6 +224,11 @@
       "description": "A ragged-height contact-sheet photo grid with CSS Grid Lanes, falling back to the fixed-square grid.",
       "hint": "Grid Lanes masonry photo grid (with fixed-square fallback)",
       "flags": { "run": true, "taskbar": false, "sitemap": true, "gallery": true, "agents": true, "searchIndex": false, "webmention": true } },
+
+    { "path": "/garage/dyno", "title": "Dyno", "section": "garage", "kind": "content",
+      "description": "The site on the rollers: worker bundle, pages, and client assets weighed nightly, charted over time.",
+      "hint": "what this site weighs on the wire, one pull a night",
+      "flags": { "run": true, "taskbar": false, "sitemap": true, "gallery": true, "agents": true, "searchIndex": false, "webmention": false } },
 
     { "path": "/garage/octane", "title": "Octane, priced against no framework", "section": "garage", "kind": "content", "short": "octane",
       "description": "Nextane's 60.9% win over Next.js, re-measured on the live demo, then given the row every framework benchmark leaves out: a site that ships no framework at all.",

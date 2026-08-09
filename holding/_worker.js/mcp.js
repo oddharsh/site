@@ -1,6 +1,9 @@
-// The canonical site-level MCP surface. It is intentionally stateless and
-// read-only: one JSON-RPC request in, one JSON response out, with the same
-// functions used by the corresponding HTTP endpoints.
+// The canonical site-level MCP surface. It is intentionally stateless: one
+// JSON-RPC request in, one JSON response out, with the same functions used by
+// the corresponding HTTP endpoints. Almost every tool is read-only too, but the
+// two representation-vault tools INSERT a D1 row, so this header no longer
+// claims otherwise — a header that said "read-only" is what let /mcp sit on the
+// preview guard's safe list long after it stopped being true.
 import { jsonResponse } from "./lib/http.js";
 import { imageCompare, imageInspect, imageTransform, photoRecipe } from "./image-tools.js";
 import { DATA_TOOLS, DATA_TOOL_NAMES, callDataTool } from "./lib/tools.js";
@@ -10,6 +13,7 @@ import { radarFrame, readSamples } from "./radar.js";
 import { AGENT_SURFACES } from "./lib/site-manifest.js";
 import { CACHE_EMPTY, CACHE_LIVE, CACHE_STATIC, mcpCorsHeaders, mcpGate, mcpHttpStatus, mcpServer } from "./lib/mcp-protocol.js";
 import { mcpTool } from "./lib/mcp-tools.js";
+import { previewToolRefusal } from "./lib/preview.js";
 
 // DUAL-ERA. The wire rules (versions, `_meta` keys, resultType, cache hints,
 // error codes, the header check) live in lib/mcp-protocol.js because
@@ -379,6 +383,11 @@ export async function handleSiteMcp(request, env, ctx) {
       if (msg.method.startsWith("notifications/")) return null;
       if (msg.method === "tools/call") {
         const name = msg.params?.name;
+        // A preview runs production bindings, and two tools here write D1. The
+        // transport guard admits /mcp as a whole (lib/preview.js says why), so
+        // the refusal has to happen where the tool is known.
+        const refusedOnPreview = previewToolRefusal(request, MCP_TOOLS, name);
+        if (refusedOnPreview) return MCP.result(id, { content: [{ type: "text", text: refusedOnPreview }], isError: true });
         const out = await callTool(name, msg.params?.arguments, request, env, ctx);
         if (out?._unknown) return rpcError(id, -32602, `Unknown tool: ${name}`);
         // A tool that failed is a RESULT with isError, never a JSON-RPC error:

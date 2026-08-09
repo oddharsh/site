@@ -165,6 +165,7 @@
     <changefreq>monthly</changefreq>
     <priority>0.3</priority>
   </url>
+  <url><loc>https://aadhar.sh/garage/dyno</loc></url>
   <url>
     <loc>https://aadhar.sh/garage/octane</loc>
     <lastmod>2026-07-31</lastmod>
