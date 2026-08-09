@@ -1794,23 +1794,40 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
   const started = Date.now();
   const ctrl = new AbortController();
   const to = setTimeout(() => ctrl.abort(), 8000);
-  let res, body = "", truncated = false, ct = "", isTextual = false, isHtml = false;
+  let res, body = "", truncated = false, ct = "", isTextual = false, isHtml = false, undecodable = "";
   try {
-    ({ res, body, truncated, ct, isTextual, isHtml } = await span("lens.inspect.fetch", async (s) => {
+    ({ res, body, truncated, ct, isTextual, isHtml, undecodable } = await span("lens.inspect.fetch", async (s) => {
       const r0 = await lensFetch(targetUrl, env, ctrl.signal);
       const ct0 = r0.headers.get("content-type") || "";
-      const isTextual0 = ct0 === "" || /text|html|xml|json|javascript|\+xml|\+json/i.test(ct0);
-      const isHtml0 = /html/i.test(ct0);
+      // A SURVIVING content-encoding means nobody decoded this body, and we cannot.
+      // The runtime decodes what it fetches over the wire and strips the header on
+      // the way in, so for an external target this is always absent — which is why
+      // it is a reliable tripwire rather than a routine case. What it catches is an
+      // in-process response (SELF_FETCH) that came back still compressed: the
+      // runtime has no brotli decoder, so reading those bytes as UTF-8 yields
+      // mojibake that renders as a real page full of garbage.
+      //
+      // index.js's IDENTITY_BODY is the actual fix and this should never fire. It
+      // is here because the failure it guards is SILENT — the bug it was written
+      // for shipped mojibake on this site's own front page while every third-party
+      // URL looked perfect. Refusing to parse says so; decoding anyway does not.
+      const enc0 = (r0.headers.get("content-encoding") || "").trim().toLowerCase();
+      const undecodable0 = enc0 && enc0 !== "identity" ? enc0 : "";
+      const ct0Textual = ct0 === "" || /text|html|xml|json|javascript|\+xml|\+json/i.test(ct0);
+      const isTextual0 = ct0Textual && !undecodable0;
+      const isHtml0 = /html/i.test(ct0) && !undecodable0;
       let body0 = "", truncated0 = false;
       // read the body while the abort timer is still armed. clearing it before the
       // read (as this used to) left a slow-drip response unbounded in wall time.
       if (isTextual0) { const r = await lensReadCapped(r0, 2 * 1024 * 1024); body0 = r.text; truncated0 = r.truncated; }
+      else if (undecodable0) { try { await r0.body?.cancel(); } catch (_e) {} }
+      if (undecodable0) s.setAttribute("lens.undecodable_encoding", undecodable0);
       s.setAttribute("http.response.status_code", r0.status);
       s.setAttribute("lens.content_type", ct0 || undefined);
       s.setAttribute("lens.body_bytes", body0.length);
       s.setAttribute("lens.body_truncated", truncated0);
       s.setAttribute("lens.redirected", (r0.url || targetUrl) !== targetUrl);
-      return { res: r0, body: body0, truncated: truncated0, ct: ct0, isTextual: isTextual0, isHtml: isHtml0 };
+      return { res: r0, body: body0, truncated: truncated0, ct: ct0, isTextual: isTextual0, isHtml: isHtml0, undecodable: undecodable0 };
     }));
   } finally { clearTimeout(to); }
   sInspect.setAttribute("http.response.status_code", res.status);
@@ -1825,6 +1842,10 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
     status: res.status, contentType: ct, binary: !isTextual, truncated,
     elapsedMs: Date.now() - started, fetchedBy: BOT_UA, headers,
   };
+  // Name the refusal in the payload, not just in a span. A consumer that sees an
+  // empty anatomy deserves the reason, and "the body arrived br-encoded and this
+  // runtime cannot decode br" is a fact about the exchange worth reporting.
+  if (undecodable) out.bodyUnreadable = { reason: "undecodable-content-encoding", encoding: undecodable };
 
   // can the browser embed this URL live in an <iframe>, or does the site
   // forbid framing (so the Human view must fall back to a screenshot)?
@@ -1865,7 +1886,26 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
     // under this and is unaffected.
     // Overridable per deployment, so moving lens onto the free plan is a var
     // flip rather than a code change: set LENS_PARSE_KB=64 in wrangler.jsonc.
-    const cap = Math.max(8, Number(env?.LENS_PARSE_KB) || 0) * 1024 || LENS_PARSE_CAP;
+    //
+    // THE DEFAULT ARM HAS TO BE A REAL BRANCH, and writing it as a `||` fallback
+    // silently pinned every scan to 8 KB from the day this was written. The old
+    // line read `Math.max(8, Number(env?.LENS_PARSE_KB) || 0) * 1024 || LENS_PARSE_CAP`:
+    // with the var unset that is `Math.max(8, 0) * 1024`, or 8192, which is
+    // TRUTHY, so the `|| LENS_PARSE_CAP` arm was unreachable and the 256 KB
+    // constant was dead code. The floor meant to protect a misconfigured override
+    // became the cap for everybody.
+    //
+    // It read as a text bug rather than a truncation bug, which is why it lasted.
+    // 8 KB rarely reaches a page's <body>, so `lensText`'s narrowing match fails
+    // and it falls back to the whole document; the same cut lands mid-<style> or
+    // mid-<script>, so the strip regexes find no closing tag and leave the block
+    // in. The reader then showed CSS and feature-flag JSON as the page's "text":
+    // github.com came out as `{"locale":"en","featureFlags":[...` and this site's
+    // own homepage as its `:root{--font-caption:...` block. Measured against
+    // production 2026-08-09: every target reported parsedBytes 8192, including a
+    // 1.3 MB cloudflare.com and a 572 KB github.com.
+    const overrideKb = Number(env?.LENS_PARSE_KB) || 0;
+    const cap = overrideKb > 0 ? Math.max(8, overrideKb) * 1024 : LENS_PARSE_CAP;
     const parseable = body.length > cap ? body.slice(0, cap) : body;
     const parseTruncated = parseable.length < body.length;
     s.setAttribute("lens.parsed_bytes", parseable.length);
