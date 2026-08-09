@@ -803,5 +803,12 @@
     "version": "aadhar-v179-perf-trend",
     "vnum": 179,
     "ymd": "2026-08-08"
+  },
+  {
+    "slug": "dyno",
+    "title": "The performance trend becomes Dyno and moves into the garage, /perf redirects to it, and the lens docs stop reading a refused Browser Run call as a verdict on the engine",
+    "version": "aadhar-v180-dyno",
+    "vnum": 180,
+    "ymd": "2026-08-09"
   }
 ]
