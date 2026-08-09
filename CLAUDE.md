@@ -944,6 +944,20 @@ generic hex back.
   actually saw. The label is `kitesurf-requested` now, and the 400-retry is
   unchanged.
 
+  **A NON-200 carries no engine information whatsoever, and on the free plan that
+  is the COMMON case rather than the edge.** `kitesurfParamLive` only flips true
+  on `response.ok`, so a call the API refuses falls through to `chromium-rest`
+  regardless of whether the selector was honoured, and the span records that
+  label beside the failure. Since the daily browser-minute ceiling is what
+  usually does the refusing, a log window can fill with `chromium-rest` while
+  containing zero evidence about Kitesurf either way. Measured 2026-08-08:
+  filtering Workers Logs on `exists(lens.render_engine)` returned five
+  `lens.browser` spans over 24h, every one of them `chromium-rest` with
+  `lens.outcome: browser_budget_spent`, reaching back to a 2026-08-07 scan of
+  theverge.com on an earlier version. Read `lens.render_engine` only alongside
+  `lens.outcome`, and treat a window with no successful render as NO DATA rather
+  than as a verdict for Chromium.
+
   **Promoting it takes one control: does the endpoint REJECT an invented engine
   name?** `npm run kitesurf:check` runs that control and prints a verdict — same
   shape as the `--x-bogus-flag` control on wrangler and
