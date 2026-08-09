@@ -1926,6 +1926,49 @@ npm run deploy
     branch satisfies a `git pull` and still reads the wrong `checkpoints.json`.
     Ramp from a fresh worktree at `origin/main`.
 
+26. **`run_worker_first` caps at 100 RULES and this repo sits at exactly 100.**
+    There is no headroom. Adding two paths for `/garage/dyno` on 2026-08-08 took
+    it to 102 and wrangler refused to start the Worker at all:
+
+    ```
+    Error: Too many `run_worker_first` rules were provided;
+    102 rules provided exceeds max of 100.
+    ```
+
+    **Neither `npm run build` nor `wrangler deploy --dry-run` catches this**,
+    which is the part worth knowing before you spend an afternoon on it. Both
+    passed on the config that could not boot; `parseStaticRouting` runs at
+    session creation, so the failure needs a real Worker. `npm run routes:check`
+    is what found it, because `createTestHarness()` starts one. That is a second
+    reason the route oracle exists beyond the routes it sweeps: it is the only
+    pre-merge step that instantiates the asset-routing config.
+
+    Two things follow. **Check whether a wildcard already covers your path before
+    adding a rule** — `/garage/*`, `/lwe/*`, `/pixel-peeper/*`, `/access/*`,
+    `/coffee/*`, `/serendipity/*`, `/writing/*` and several `/images/*.<ext>`
+    entries are already there, and the two `/garage/dyno` rules turned out to be
+    redundant, which is how that change shipped at 100 rather than 102. And
+    **deduping will not buy you room**: the list holds 107 raw entries of which 7
+    are exact duplicates (`/garage/*`, `/garage`, `/lens`, `/lens/`, `/photos`,
+    `/photos/`, `/rn.md` each appear twice), and wrangler counts the 100 UNIQUE
+    ones. Real headroom means folding individual paths onto wildcards, which
+    changes what the Worker sees and is not a cosmetic edit.
+
+27. **A `github-advanced-security` failure is usually GitHub's own Copilot
+    Autofix falling over, not your diff.** Seen twice on 2026-08-08, on two
+    unrelated PRs (#289, #295), both times while the separate `CodeQL` check
+    reported *"No new alerts in code changed by this pull request."*
+
+    The signature is specific enough to recognise on sight: the check has an
+    EMPTY output title, and its single annotation points at `.github:<line>` —
+    a path that is a directory in this repo and therefore cannot have a line.
+    The job log names the real actor (`COPILOT_AGENT_INPUTS`,
+    `COPILOT_JOB_NONCE`, `Preparing Copilot...`, and a `COPILOT_AGENT_MODEL`).
+
+    Read the sibling `CodeQL` check before touching any code. If that one passed,
+    there is nothing in the change to fix. It is also NOT a required check, so it
+    never blocks a merge — both of those PRs merged and shipped with it red.
+
 ---
 
 ## Source folder for new photos
