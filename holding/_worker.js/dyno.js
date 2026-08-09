@@ -1,4 +1,7 @@
-// perf.js — /perf, the site's own performance history as a chart.
+// dyno.js — /garage/dyno, the site's own performance history as a chart.
+//
+// A dyno tells you what an engine actually puts down. This one straps the site
+// to the rollers once a night and records a pull.
 //
 // The third tier of the performance story, and the one that would actually have
 // caught this repo's real failure. perf-budget.mjs checks a number against a
@@ -21,10 +24,10 @@ import { swrKV } from "./lib/cache.js";
 import { lunaPage } from "./lib/chrome.js";
 import { esc, jsonResponse } from "./lib/http.js";
 import { span } from "./lib/trace.js";
-import seed from "./perf-seed.json" with { type: "json" };
+import seed from "./dyno-seed.json" with { type: "json" };
 
 // The machine-owned branch. `perf-history.yml` appends one line a night and
-// force-pushes nothing; /perf only ever reads.
+// force-pushes nothing; /garage/dyno only ever reads.
 //
 // A BRANCH rather than D1 or a commit to main, and the reason is the repo's own
 // rules rather than preference. `main` carries a ruleset with zero bypass
@@ -34,7 +37,7 @@ import seed from "./perf-seed.json" with { type: "json" };
 // job can reach without weakening something load-bearing.
 const HISTORY_URL = "https://raw.githubusercontent.com/oddharsh/site/perf-history/history.jsonl";
 
-const KV_KEY = "perf:history";
+const KV_KEY = "dyno:history";
 const KV_TTL = 6 * 3600;      // the source updates once a night; 6h is generous
 const FETCH_BUDGET_MS = 3000;
 
@@ -56,7 +59,7 @@ async function fetchHistory() {
   // Attributes are set on the span object rather than passed up front, because
   // the only things worth recording here (how many rows came back, whether
   // GitHub answered) are not known until after the fetch.
-  return span("perf.fetch", async (s) => {
+  return span("dyno.fetch", async (s) => {
     let res;
     try {
       res = await fetch(HISTORY_URL, {
@@ -64,11 +67,11 @@ async function fetchHistory() {
         signal: AbortSignal.timeout(FETCH_BUDGET_MS),
       });
     } catch (e) {
-      s.setAttribute("perf.outcome", "unreachable");
+      s.setAttribute("dyno.outcome", "unreachable");
       return null;
     }
-    s.setAttribute("perf.status", res.status);
-    if (!res.ok) { s.setAttribute("perf.outcome", "http-error"); return null; }
+    s.setAttribute("dyno.status", res.status);
+    if (!res.ok) { s.setAttribute("dyno.outcome", "http-error"); return null; }
     const text = await res.text();
     const rows = [];
     let malformed = 0;
@@ -80,9 +83,9 @@ async function fetchHistory() {
       // push, and the rows around it are still true.
       try { rows.push(JSON.parse(trimmed)); } catch { malformed++; }
     }
-    s.setAttribute("perf.rows", rows.length);
-    if (malformed) s.setAttribute("perf.malformed", malformed);
-    s.setAttribute("perf.outcome", "ok");
+    s.setAttribute("dyno.rows", rows.length);
+    if (malformed) s.setAttribute("dyno.malformed", malformed);
+    s.setAttribute("dyno.outcome", "ok");
     return rows;
   });
 }
@@ -204,7 +207,7 @@ const delta = (rows, key) => {
   return { a, b, pct: ((b - a) / a) * 100, from: have[0].ts, to: have[have.length - 1].ts };
 };
 
-export function renderPerf(rows) {
+export function renderDyno(rows) {
   const empty = rows.length < 2;
   const worker = delta(rows, "worker_gzip");
   const last = rows[rows.length - 1];
@@ -219,15 +222,14 @@ export function renderPerf(rows) {
     </tr>`).join("\n    ");
 
   return lunaPage({
-    title: "Performance history · aadhar.sh",
-    path: "Performance history",
-    route: "/perf",
+    title: "Dyno · aadhar.sh",
+    path: "Dyno",
+    route: "/garage/dyno",
     width: 700,
-    description: "The wire size of this site over time: worker bundle, pages, and client assets, recorded nightly.",
-    robots: "noindex",
-    explorerName: "perf",
+    description: "The site on the rollers: worker bundle, pages, and client assets weighed nightly, charted over time.",
+    explorerName: "Dyno",
     explorerDetails: [
-      `${rows.length} recorded points`,
+      `${rows.length} pull${rows.length === 1 ? "" : "s"} recorded`,
       last ? `latest ${last.ts}` : "no data",
     ],
     css: `
@@ -269,38 +271,41 @@ td.src{font-size:7.5pt;color:#8b98a8}
 .foot{font-size:8.5pt;color:#6b7280;border-top:1px solid #e2e8f0;padding-top:9px;margin-top:13px;line-height:1.55}
 `,
     body: `
-    <h1>Performance history</h1>
-    <p class="lede">What this site weighs on the wire, over time. Recorded nightly from <code>main</code> by a
-    GitHub Action, rendered here from the series it appends to.</p>
-    ${empty ? `<div class="callout">The series has not been recorded yet, or could not be read just now.
-    The four hand-entered points below come from the baseline history in <code>perf-budget.mjs</code>.</div>` : ""}
+    <h1>Dyno</h1>
+    <p class="lede">A dyno tells you what an engine actually puts down. The spec sheet is a claim; the rollers
+    are a measurement. This one straps the site down every night: a GitHub Action builds <code>main</code>,
+    weighs what would go over the wire, and records a pull.</p>
+    ${empty ? `<div class="callout">No pulls recorded yet, or the series could not be read just now. The
+    hand-entered points below come from the baseline history in <code>perf-budget.mjs</code>, which is what
+    this page exists to replace.</div>` : ""}
     ${rows.length ? chart(rows) : ""}
-    ${worker ? `<div class="callout"><b>The worker bundle is why this page exists.</b>
+    ${worker ? `<div class="callout"><b>The worker bundle is the pull worth watching.</b>
     It went from ${kib(worker.a).toFixed(0)} to ${kib(worker.b).toFixed(0)} KiB gzip between ${esc(worker.from)} and
-    ${esc(worker.to)}, ${worker.pct > 0 ? "up" : "down"} ${Math.abs(worker.pct).toFixed(0)}%. Each of those numbers was
-    found by somebody tripping over a stale threshold rather than by anyone watching the slope, which is the
+    ${esc(worker.to)}, ${worker.pct > 0 ? "up" : "down"} ${Math.abs(worker.pct).toFixed(0)}%. Every one of those numbers
+    got found by somebody tripping over a stale threshold rather than by anyone watching the slope, which is the
     specific failure a per-change check cannot catch and a series can.</div>` : ""}
-    <h2>Recent points</h2>
+    <h2>Recent pulls</h2>
     <table>
       <thead><tr><th>date</th><th>commit</th><th class="num">worker gzip</th><th class="num">pages br</th><th class="num">assets br</th><th>source</th></tr></thead>
       <tbody>
-    ${table || `<tr><td colspan="6">No points recorded.</td></tr>`}
+    ${table || `<tr><td colspan="6">No pulls recorded.</td></tr>`}
       </tbody>
     </table>
-    <p class="foot">Every number here is deterministic: identical source bytes produce identical sizes, so a flat
-    line means nothing changed rather than that nothing was measured. Sampled figures are deliberately absent
-    (<code>wrangler check startup</code> read 9.6, 7.6, 6.4 and 16.4&nbsp;ms across bytes nobody touched, and a
-    chart of that would draw weather). Raw series at <a href="/perf.json">/perf.json</a>.</p>
+    <p class="foot">Every number here is deterministic: identical source bytes weigh the same every time, so a
+    flat line means nothing changed rather than that nothing was measured. Sampled figures are deliberately
+    absent, because <code>wrangler check startup</code> read 9.6, 7.6, 6.4 and 16.4&nbsp;ms across bytes nobody
+    touched, and charting that would draw weather. A dyno with a wandering needle is a decoration. Raw series at
+    <a href="/garage/dyno.json">/garage/dyno.json</a>.</p>
 `,
   });
 }
 
-export async function handlePerf(request, env, ctx) {
+export async function handleDyno(request, env, ctx) {
   const rows = mergeHistory(await readHistory(env, ctx));
-  return renderPerf(rows);
+  return renderDyno(rows);
 }
 
-export async function handlePerfJson(request, env, ctx) {
+export async function handleDynoJson(request, env, ctx) {
   const rows = mergeHistory(await readHistory(env, ctx));
   return jsonResponse({
     generated: new Date().toISOString(),

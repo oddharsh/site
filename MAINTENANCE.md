@@ -718,7 +718,7 @@ The shape is lifted from `astral-sh/ruff`'s `memory_report.yaml` and its ecosyst
 job: build the merge base, build HEAD, run both, post the difference, gate on
 nothing.
 
-### The trend (`/perf`, and the `perf-history` branch)
+### The trend (`/garage/dyno`, and the `perf-history` branch)
 
 The diff catches the STEP one PR makes. It structurally cannot see DRIFT, and
 drift is the failure this repo actually had: 86 → 129.23 → 204.24 → 258.34 →
@@ -728,7 +728,7 @@ because nothing drew the slope.
 `.github/workflows/perf-history.yml` runs at 09:00 UTC, skips when nothing was
 committed in 25 hours, records a snapshot of `main`, reduces it to one JSONL line
 (`perf-snapshot.mjs row`, ~430 bytes), and appends it to **`perf-history`**, an
-orphan branch holding `history.jsonl` and a README. `/perf` renders it, SWR-cached
+orphan branch holding `history.jsonl` and a README. `/garage/dyno` renders it, SWR-cached
 in KV for 6h.
 
 **Why a branch and not D1 or a commit to `main`.** `main`'s ruleset has zero
@@ -751,7 +751,7 @@ Three things about the page, all about honesty rather than looks:
   carry no cross-origin assets and inline scripts need per-document CSP hashes,
   so a chart that draws itself on the server costs one `<svg>` and no exceptions.
   Point tooltips are native `<title>` elements.
-- **Hand-entered history is drawn dashed.** `holding/_worker.js/perf-seed.json`
+- **Hand-entered history is drawn dashed.** `holding/_worker.js/dyno-seed.json`
   carries the four points from `perf-budget.mjs`'s baseline comment so the page
   is useful before the series fills up. They live in the repo rather than seeded
   into the branch so every hand-entered number goes through PR review, and they
@@ -762,7 +762,7 @@ Three things about the page, all about honesty rather than looks:
   skips days with no commits, so evenly spacing the points would draw a steady
   cadence the data does not have. A gap in the series is a gap in the chart.
 
-If the fetch fails, `/perf` degrades to the seeded points and still renders; the
+If the fetch fails, `/garage/dyno` degrades to the seeded points and still renders; the
 route oracle asserts exactly that, since the local harness has no KV and cannot
 reach GitHub. The `swrKV` guard is `isValid: rows.length > 0`, so a GitHub outage
 can never overwrite a good cached history with nothing.
@@ -775,7 +775,7 @@ is element-qualified (`polyline.s-worker`, `circle.s-worker`) for that reason, a
 a contract test fails if one goes back to being unqualified.
 
 Backfill or force a run with `workflow_dispatch`; it takes an optional `date` to
-place the row. Raw series at `/perf.json`.
+place the row. Raw series at `/garage/dyno.json`.
 
 Cloudflare Web Analytics/RUM is the outcome source for LCP, INP, CLS, FCP, and
 page-load behavior. Until it has a useful baseline, do not turn an advisory

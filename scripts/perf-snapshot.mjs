@@ -29,7 +29,7 @@
 // was found by somebody tripping over a stale constant rather than by anyone
 // watching the slope. It emits ONE compact JSONL line, which
 // .github/workflows/perf-history.yml appends nightly to the machine-owned
-// `perf-history` branch and /perf renders.
+// `perf-history` branch and /garage/dyno renders.
 //
 // It deliberately drops the per-module and per-page detail the diff carries. A
 // trend is read at the shape level, the detail is what the PR comment already

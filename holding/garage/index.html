@@ -595,6 +595,24 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
 
       <li>
         <div class="title-row">
+          <span class="name"><a href="/garage/dyno">Dyno</a></span>
+          <span class="status shipped">shipped</span>
+        </div>
+        <div class="desc">
+          A dyno tells you what an engine actually puts down. This one straps the
+          site to the rollers every night: a GitHub Action builds <code>main</code>,
+          weighs the worker bundle, all 46 pages and the client assets, and records
+          a pull. The chart is the part no threshold check could draw. This worker
+          went 86 &rarr; 129 &rarr; 204 &rarr; 262 KiB gzip and every one of those
+          numbers got found by somebody tripping over a stale constant, because
+          nothing was watching the slope. Server-rendered SVG, no client
+          JavaScript, and the hand-entered prefix is drawn dashed so the page never
+          passes a typed number off as a measured one.
+        </div>
+      </li>
+
+      <li>
+        <div class="title-row">
           <span class="name"><a href="/garage/octane">Octane, priced against no framework</a></span>
           <span class="status shipped">shipped</span>
         </div>

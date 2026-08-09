@@ -43,12 +43,6 @@ export const AGENT_SURFACES = [
     "description": "Scrub the site back through its real deploy history, backed by Cloudflare D1."
   },
   {
-    "path": "/perf",
-    "title": "Performance history",
-    "kind": "page",
-    "description": "The wire size of this site over time: worker bundle, pages, and client assets, recorded nightly."
-  },
-  {
     "path": "/around",
     "title": "Around",
     "kind": "utility",
@@ -269,6 +263,12 @@ export const AGENT_SURFACES = [
     "title": "Masonry",
     "kind": "content",
     "description": "A ragged-height contact-sheet photo grid with CSS Grid Lanes, falling back to the fixed-square grid."
+  },
+  {
+    "path": "/garage/dyno",
+    "title": "Dyno",
+    "kind": "content",
+    "description": "The site on the rollers: worker bundle, pages, and client assets weighed nightly, charted over time."
   },
   {
     "path": "/garage/octane",

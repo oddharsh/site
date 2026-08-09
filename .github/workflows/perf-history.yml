@@ -9,7 +9,7 @@ name: Wire-size history
 # Shape borrowed from commonwarexyz/monorepo's benchmark.yml: nightly, skip when
 # nothing was committed, append to a series that lives outside the code branch.
 # Theirs pushes to a separate repository rendered by a third-party charting
-# action; this site is a website, so /perf renders its own from what this writes.
+# action; this site is a website, so /garage/dyno renders its own from what this writes.
 
 on:
   schedule:
@@ -119,7 +119,7 @@ jobs:
             printf '%s\n' \
               '# Wire-size history' '' \
               'One JSON object per line, appended nightly by .github/workflows/perf-history.yml.' \
-              'Rendered at https://aadhar.sh/perf. Machine-owned: do not hand-edit.' \
+              'Rendered at https://aadhar.sh/garage/dyno. Machine-owned: do not hand-edit.' \
               > README.md
             : > history.jsonl
           fi
@@ -154,5 +154,5 @@ jobs:
             cat "$RUNNER_TEMP/row.jsonl"
             echo '```'
             echo
-            echo "Appended to [\`perf-history\`](https://github.com/${{ github.repository }}/blob/perf-history/history.jsonl). Rendered at [/perf](https://aadhar.sh/perf)."
+            echo "Appended to [\`perf-history\`](https://github.com/${{ github.repository }}/blob/perf-history/history.jsonl). Rendered at [/garage/dyno](https://aadhar.sh/garage/dyno)."
           } >> "$GITHUB_STEP_SUMMARY"

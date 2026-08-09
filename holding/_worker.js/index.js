@@ -37,7 +37,7 @@ import { handleReading } from "./reading.js";
 import { handleRun } from "./run.js";
 import { handleRn, handleRnAdmin, handleRnArt, handleRnMarkdown, handleRnSet, handleRnTracks, handleRnTracksHtml } from "./rn.js";
 import { cronHomeProbe } from "./perf-probe.js";
-import { handlePerf, handlePerfJson } from "./perf.js";
+import { handleDyno, handleDynoJson } from "./dyno.js";
 import { handleSearch, handleSearchJson } from "./search.js";
 import { handleSecurityCenter } from "./security.js";
 import { handleTool } from "./terminal.js";
@@ -290,8 +290,15 @@ const ROUTES = new Map([
   ["/updates", routeUpdates],
   ["/updates.json", handleUpdatesJson],
   ["/restore", routeRestore],
-  ["/perf", handlePerf],
-  ["/perf.json", handlePerfJson],
+  ["/garage/dyno", handleDyno],
+  ["/garage/dyno.json", handleDynoJson],
+  // /perf shipped as the original name and lived for about an hour. The 301s are
+  // not for humans: `agents: true` puts a surface in the MCP resources projection,
+  // and _headers caches the well-known cards for 30 days, so an agent can hold the
+  // old path long after a deploy could purge it. Same argument as the /images ->
+  // /i/ redirects, on a shorter clock.
+  ["/perf", (request) => Response.redirect(new URL("/garage/dyno", request.url), 301)],
+  ["/perf.json", (request) => Response.redirect(new URL("/garage/dyno.json", request.url), 301)],
 
   ["/lens", routeLens],
   ["/lens/", routeDropSlash],
