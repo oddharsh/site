@@ -893,43 +893,6 @@ placeholder
   box-shadow: inset 0 -2px 0 oklch(41.92% 0.0962 250.51 / .6);
 }
 .rm-cap { font-size: 8.5pt; color: oklch(48% 0 0); margin: 6px 0 0; }
-/* card: install-element */
-/* install-element: described mockup of a declarative <install> button.
-   nothing here is a real install affordance; it's a faux-XP render of what
-   the markup WOULD paint, so the card has something to look at. scoped to
-   .ie- to avoid colliding with the other cards. */
-.ie-mock {
-  margin-top: 10px; padding: 12px; border: 1px solid oklch(61.14% 0.0611 253.60);
-  background: oklch(96% 0.004 240);
-  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-}
-.ie-app {
-  display: flex; align-items: center; gap: 8px; font-size: 9.5pt; color: oklch(35% 0 0);
-}
-.ie-app .ico {
-  width: 28px; height: 28px; flex-shrink: 0;
-  background: oklch(87.82% 0.0877 66.27); border: 1px solid oklch(41.92% 0.0962 250.51);
-  position: relative;
-}
-.ie-app .ico::before {
-  content: ""; position: absolute; inset: 5px;
-  background: oklch(69.58% 0.2043 43.49);
-  clip-path: polygon(20% 0, 100% 50%, 20% 100%, 0 50%);
-}
-/* the raised XP button the <install> element's shadow root would expose */
-.ie-btn {
-  font-family: var(--font-caption); font-size: 10pt; font-weight: bold;
-  color: oklch(21.78% 0 0); padding: 4px 14px; cursor: default;
-  background: linear-gradient(180deg, oklch(99% 0 0) 0%, oklch(90% 0.01 250) 100%);
-  border: 1px solid oklch(50% 0.02 250);
-  border-top-color: oklch(99% 0 0); border-left-color: oklch(99% 0 0);
-  box-shadow: 1px 1px 0 oklch(41.92% 0.0962 250.51 / .45);
-}
-.ie-btn::before { content: "\2913  "; /* down-to-bar install glyph */ }
-.ie-note-inline { font-size: 8.5pt; color: oklch(48% 0 0); width: 100%; margin: 4px 0 0; }
-@media (color-gamut: p3) {
-  .ie-app .ico::before { background: oklch(69.58% 0.243 43.49); }
-}
   /* standard scrollbar tint (Chrome + Safari 26 + Firefox): Luna-blue thumb,
      pale track. the garage/scroll demo styles its own element separately. */
   html { scrollbar-color: oklch(62% 0.14 255) oklch(91% 0.02 248); }
@@ -1000,8 +963,25 @@ window.__horizonCaps = (function () {
       "jpeg-xl": function () { return (false); },
       "hdr-agtm": function () { return (CSS.supports('(dynamic-range: high)') && matchMedia('(dynamic-range: high)').matches); },
       "route-matching": function () { return (false); },
-      "install-element": function () { return ("install" in navigator); },
       "css-carousel": function () { return CSS.supports("scroll-marker-group: after"); },
+      /* 2026-08-10 batch. scroll-promise is the only one without a pure CSS.supports
+         answer: scrollIntoView() exists everywhere, so presence proves nothing. It is
+         probed by CALLING it on a detached node, which has no scroll box and therefore
+         cannot move the page, and reading whether the return value is thenable. */
+      "accent-color": function () { return CSS.supports("color: AccentColor"); },
+      "caret-shape": function () { return CSS.supports("caret-shape: block"); },
+      "search-text": function () { return CSS.supports("selector(::search-text)"); },
+      "revert-rule": function () { return CSS.supports("color: revert-rule"); },
+      "attr-type": function () { return CSS.supports("height: attr(data-h type(<length>), 8px)"); },
+      "text-decoration-inset": function () { return CSS.supports("text-decoration-inset: 4px"); },
+      "animation-trigger": function () { return CSS.supports("animation-trigger: view()"); },
+      "scroll-promise": function () {
+        try {
+          var r = document.createElement("div").scrollIntoView({ behavior: "smooth", block: "nearest" });
+          return !!(r && typeof r.then === "function");
+        } catch (e) { return false; }
+      },
+      "xslt": function () { return ("XSLTProcessor" in window); },
       "invoker-commands": function () { return ("commandForElement" in HTMLButtonElement.prototype); },
       "css-scope": function () { return ("CSSScopeRule" in window); },
       "custom-highlight": function () { return (("highlights" in CSS) && (typeof Highlight !== "undefined")); },
@@ -1170,14 +1150,28 @@ window.__horizonCaps = (function () {
       so Safari answers &quot;will Safari ever do this&quot; instead of me inferring it.
     </p>
     <p class="note">
-      <strong>Last swept 2026-07-30</strong>, against Chrome&nbsp;149&ndash;153, Safari&nbsp;27
-      beta (WWDC26), and Firefox&nbsp;152&ndash;153. A page like this rots in two directions
+      <strong>Last swept 2026-08-10</strong>, against Chrome&nbsp;151&ndash;153, Safari&nbsp;26.6
+      plus Technology&nbsp;Preview&nbsp;249, and Firefox&nbsp;153&ndash;154. A page like this rots in two directions
       and only one of them is obvious: features arrive, and features I already wrote up
       quietly change status underneath me. The 07-26 sweep moved four cards
       (<code>InstallEvent.addRoutes()</code>, compression dictionaries,
       <code>appearance: base-select</code>, Temporal) and demoted one of them off
       &quot;shipped on the site&quot; entirely, which is the more interesting half. Dates
       here are when I checked, never when I guessed.
+    </p>
+    <p class="note">
+      The 08-10 pass found a <em>fourth</em> direction, and unlike the other three it
+      is a flaw in the method rather than in the sources. Every line here was written
+      reading Chrome first, so a feature that shipped in WebKit or Gecko years earlier
+      gets recorded as &quot;Chrome&nbsp;N, others no&quot; and stays wrong until
+      something forces a re-read. Two cards were exactly that. Separately, Safari
+      <strong>Technology Preview&nbsp;249</strong> moved six cards in one build, which
+      no &quot;New in Safari&nbsp;N&quot; post will ever mention, and one card
+      (<code>CloseWatcher</code>) turned out to have had <em>both</em> of its version
+      numbers wrong since it was written. Nine new cards, ten corrected status lines,
+      and the <code>&lt;install&gt;</code> card retired: aadhar.sh is not a PWA and
+      isn&apos;t becoming one, so a card forecasting an install button for it was
+      forecasting nothing.
     </p>
     <p class="note">
       The 07-30 pass found a <em>third</em> rot direction I hadn&apos;t accounted
@@ -1439,11 +1433,14 @@ pointerout   -&gt; hidePopover()
     <section class="demo" data-cap="popover-hint">
       <h2>
         <span>popover=<span class="mono">hint</span></span>
-        <span class="stat chrome">Chrome 133 &middot; FF 149 &middot; Safari no</span>
+        <span class="stat cross">Chrome 133 &middot; FF 149 &middot; Safari TP 249</span>
       </h2>
       <p class="note">
         A third popover <em>type</em>, sitting between <code>auto</code> and
-        <code>manual</code>, purpose-built for tooltips. A <code>hint</code>
+        <code>manual</code>, purpose-built for tooltips. WebKit had said nothing
+        about it for two years; Technology&nbsp;Preview&nbsp;249 added it, which is
+        the whole difference between &quot;a third engine may never come&quot; and
+        &quot;this is one Safari release from Baseline&quot;. A <code>hint</code>
         popover is light-dismissed (click outside, <kbd>Esc</kbd>) <strong>and</strong>
         won&apos;t force-close an open <code>auto</code> popover the way another
         <code>auto</code> would, so a hover-tip can float over a menu
@@ -2347,72 +2344,6 @@ navigation.addEventListener("navigate", (e) =&gt; {
       </p>
     </section>
 
-    <section class="demo" data-cap="install-element">
-      <h2>
-        <span>&lt;install&gt; element <span class="mono">/ Web Install API</span></span>
-        <span class="stat contested">Chrome flag &middot; Safari opposes</span>
-      </h2>
-      <p class="note">
-        A declarative install affordance: drop an <code>&lt;install&gt;</code>
-        element (or call <code>navigator.install()</code>) and the browser
-        paints a real &quot;install this app&quot; button wired to the same
-        flow as the omnibox install icon, no <code>beforeinstallprompt</code>
-        event plumbing, no stashing the deferred prompt, no custom button that
-        has to guess whether the app is already installed. It can also point at
-        a <em>different</em> origin&apos;s manifest, so one site can offer to
-        install another.
-      </p>
-      <p class="note">
-        There is no live demo here on purpose: it sits behind
-        <code>chrome://flags#web-app-installation-api</code> in Chromium only,
-        and <strong>WebKit opposes the design</strong>
-        (<a href="https://github.com/WebKit/standards-positions/issues/463" rel="external" class="wk opp" style="margin:0">oppose, #463</a>),
-        so it cannot graduate under this page&apos;s &quot;two engines&quot;
-        rule. Below is the markup it would take, and a faux-XP render of the
-        button it would mint:
-      </p>
-      <div class="ie-mock" aria-hidden="true">
-        <span class="ie-app"><span class="ico"></span>aadhar.sh</span>
-        <span class="ie-btn">Install</span>
-        <p class="ie-note-inline">mockup only: this button does nothing; the real one is browser-painted from the manifest</p>
-      </div>
-<pre>&lt;!-- declarative: browser paints + wires the button --&gt;
-&lt;install
-  manifest="/manifest.webmanifest"
-  installtext="Install aadhar.sh"&gt;&lt;/install&gt;
-
-// or imperative, behind the same flag:
-const result = await navigator.install();   // current-origin app
-await navigator.install("https://aadhar.sh", manifestUrl); // cross-origin
-
-// what it REPLACES today (the imperative dance):
-let deferred;
-addEventListener("beforeinstallprompt", e =&gt; {
-  e.preventDefault(); deferred = e; showMyButton();
-});
-myButton.onclick = async () =&gt; {
-  deferred.prompt();
-  await deferred.userChoice;   // and you still guess "already installed?"
-};</pre>
-      <p class="replaces">
-        On the site: aadhar.sh isn&apos;t a PWA: no manifest beyond the
-        favicon, no service-worker install story for the homepage itself
-        (<code>sw.js</code> only caches <code>/images/*</code> and the garage
-        pages). So there is nothing to wire up <em>yet</em>. The honest read is
-        that this is a forward-look for a hypothetical &quot;add aadhar.sh /
-        the coffee booker to your dock&quot; affordance, and even then,
-        because WebKit opposes, it would be a Chrome-only enhancement layered
-        on top of a manual fallback button, exactly the situation the
-        cursor-tooltip and <code>interestfor</code> cards describe. Stays in the
-        garage.
-      </p>
-      <p class="unsupported">
-        Your browser doesn&apos;t expose the Web Install API, the mockup
-        above is a dead button. To try it: Chromium with
-        <code>chrome://flags#web-app-installation-api</code> enabled.
-      </p>
-    </section>
-
     <!-- ─────────── 2026 frontier batch: carousel · invoker · scope · highlight · until-found ─────────── -->
     <style>
       /* --- CSS Carousel (::scroll-marker / ::scroll-button) --- */
@@ -2482,7 +2413,7 @@ myButton.onclick = async () =&gt; {
     <section class="demo" data-cap="invoker-commands">
       <h2>
         <span>Invoker Commands <span class="mono">command / commandfor</span></span>
-        <span class="stat cross">Chrome 135 &middot; Safari 26 &middot; FF 144</span>
+        <span class="stat cross">Chrome 135 &middot; Safari 26.2 &middot; FF 144</span>
       </h2>
       <p class="note">
         A button that drives another element declaratively: <code>commandfor</code>
@@ -2811,13 +2742,22 @@ myButton.onclick = async () =&gt; {
     <section class="demo" data-cap="close-watcher">
       <h2>
         <span>CloseWatcher API</span>
-        <span class="stat chrome">Chrome 120 &middot; Safari 26</span>
+        <span class="stat cross">Chrome 126 &middot; FF 149 &middot; Safari TP 249</span>
       </h2>
       <p class="note">
         One abstraction for &quot;close requests&quot;: <kbd>Esc</kbd> on desktop
         <em>and</em> the Android back gesture, so custom UI (sidebars, lightboxes)
         dismisses the same way native dialogs do. Open the panel, then press
         <kbd>Esc</kbd>:
+      </p>
+      <p class="note">
+        This card read &quot;Chrome&nbsp;120 &middot; Safari&nbsp;26&quot; until the
+        08-10 sweep and both numbers were wrong. Chrome shipped it in&nbsp;126,
+        Safari has never shipped it in a release at all (Technology
+        Preview&nbsp;249 is the first build that answers), and the engine the old
+        line omitted entirely, <strong>Firefox&nbsp;149</strong>, is the one that
+        actually made this two-engine. A status line assembled once and never
+        re-derived drifts in whichever direction nobody is looking.
       </p>
       <p><button class="xp-button" id="cw-open">Open panel</button></p>
       <div id="cw-panel" class="cw-panel" hidden><span>Press <kbd>Esc</kbd> (or Android back) to close, one handler covers both.</span> <button class="xp-button" id="cw-close">close</button></div>
@@ -2852,18 +2792,20 @@ myButton.onclick = async () =&gt; {
     <section class="demo" data-cap="css-if">
       <h2>
         <span>if() &amp; sibling-index() <span class="mono">/ CSS Values 5</span></span>
-        <span class="stat trial">Chrome 137+ &middot; FF 153 flag</span>
+        <span class="stat trial">sibling-index() cross &middot; if() Chrome + Safari TP</span>
       </h2>
       <p class="note">
         Two bleeding-edge CSS primitives: <code>if()</code> for inline conditionals
         (<code>style()</code>/<code>media()</code> queries as values) and
         <code>sibling-index()</code>, which yields an element&apos;s position among its
         siblings, so a staggered animation needs <em>no</em> per-item variables.
-        The two are drifting apart in status: Chrome ships the sibling functions default-on
-        and keeps <code>if()</code> experimental, and Firefox&nbsp;153 added
-        <code>sibling-index()</code> / <code>sibling-count()</code> behind
-        <code>layout.css.tree-counting-functions.enabled</code> with no <code>if()</code> in
-        sight. Each row below delays by <code>sibling-index() &times; 90ms</code> (reload to replay):
+        The two are drifting apart in status: <code>sibling-index()</code> has quietly finished
+        (Chrome&nbsp;138, Safari&nbsp;26.2, Firefox&nbsp;154 unflagged, after a spell behind
+        <code>layout.css.tree-counting-functions.enabled</code> in&nbsp;153), while
+        <code>if()</code> is still Chrome plus a Technology&nbsp;Preview. Two features this
+        far apart under one heading is how a status line goes stale with nobody editing it,
+        so read the chip as the sibling functions and the <code>if()</code> half as the
+        frontier. Each row below delays by <code>sibling-index() &times; 90ms</code> (reload to replay):
       </p>
       <ul class="si-list"><li>row one</li><li>row two</li><li>row three</li><li>row four</li><li>row five</li></ul>
       <p class="replaces">
@@ -2950,8 +2892,10 @@ myButton.onclick = async () =&gt; {
         <strong>TC39 stage&nbsp;4</strong> in March&nbsp;2026, so it is part of the
         ECMAScript&nbsp;2026 language rather than a proposal. Shipping is a separate
         question from standardising, and Safari is the reminder: Blink and Gecko both
-        shipped it in spring&nbsp;2026, Safari&nbsp;27 does <em>not</em> include it, and it
-        remains flag-gated in Technology Preview. Live output from
+        shipped it in spring&nbsp;2026 and Safari&nbsp;27 beta does <em>not</em> include it.
+        That changed in the direction you want on 2026-07-30: <strong>Technology
+        Preview&nbsp;249</strong> added <code>Temporal</code>, unflagged, which puts it a
+        Safari release away from cross-engine rather than a decision away. Live output from
         <code>Temporal.Now.zonedDateTimeISO()</code> in your browser:
       </p>
       <div class="tmp-out" id="tmp-out">checking for Temporal&hellip;</div>
@@ -3109,18 +3053,21 @@ myButton.onclick = async () =&gt; {
     </section>
 
     <!-- ───────────────────── background-clip: border-area ───────────────────── -->
-    <section class="demo" data-cap="background-clip-border-area">
+    <section class="demo" id="border-area-card" data-cap="background-clip-border-area">
       <h2>
         <span>background-clip <span class="mono">: border-area</span></span>
-        <span class="stat chrome">Chrome 150 &middot; Safari/FF no</span>
+        <span class="stat cross">Safari 18.2 &middot; Chrome 150 &middot; FF no</span>
       </h2>
       <p class="note">
         Paint a background into the border box <em>itself</em>, so a gradient border is
         one declaration instead of the old <code>border-image</code> slice dance or a
         stacked-background hack: give the element a gradient background, a transparent
         border, and <code>background-clip: border-area</code>, and the gradient fills
-        only the border stroke. Chrome&nbsp;150, default-on; not in Safari or Firefox
-        yet. The frame below is a transparent border filled by a clipped gradient:
+        only the border stroke. The version order is worth noticing, because this page
+        usually reads left to right from Chrome: <strong>Safari&nbsp;18.2 shipped it
+        first</strong>, in December&nbsp;2024, and Chrome&nbsp;150 caught up eighteen
+        months later. Firefox has neither. The frame below is a transparent border
+        filled by a clipped gradient:
       </p>
       <div style="margin-top:8px;padding:12px 14px;border:6px solid transparent;border-radius:8px;background:linear-gradient(120deg, oklch(55% 0.20 264), oklch(72% 0.15 190));background-clip:border-area;font:bold 10pt Tahoma, sans-serif;color:oklch(30% 0.03 264)">background-clip: border-area</div>
       <p class="replaces">
@@ -3302,7 +3249,7 @@ myButton.onclick = async () =&gt; {
     <section class="demo" data-cap="stretch-sizing">
       <h2>
         <span>width: stretch <span class="mono">sizing keyword</span></span>
-        <span class="stat chrome">Chrome &middot; Safari 27 beta &middot; FF prefixed</span>
+        <span class="stat cross">Chrome 138 &middot; Safari 27 &middot; FF 146</span>
       </h2>
       <p class="note">
         <code>width: 100%</code> resolves against the containing block and then adds your
@@ -3311,14 +3258,15 @@ myButton.onclick = async () =&gt; {
         <em>margin</em> box, so the margins come out of the width instead of adding to it.
         It standardises two old prefixes that did the same job:
         <code>-webkit-fill-available</code> and <code>-moz-available</code>. Chromium
-        shipped it first, Safari&nbsp;27 beta unprefixes it, Firefox still answers only to
-        <code>-moz-available</code>.
+        shipped it first, Safari&nbsp;27 beta unprefixes it, and Firefox&nbsp;146 did too, so
+        <code>-moz-available</code> is now the legacy spelling rather than the only one.
       </p>
       <p class="replaces">
         On the site: the <code>calc(100% - 2 * var(--pad))</code> pattern shows up wherever
         a pane has to fill its window and keep its inset, and every one of those is a
-        subtraction the browser could do. Once Firefox unprefixes, this collapses a
-        family of arithmetic into one keyword.
+        subtraction the browser could do. All three engines take the keyword now, which
+        collapses that family of arithmetic and retires the &quot;once Firefox
+        unprefixes&quot; caveat this card carried for months.
       </p>
       <p class="unsupported">Your browser doesn&apos;t support the unprefixed <code>stretch</code> keyword.</p>
     </section>
@@ -3357,7 +3305,7 @@ myButton.onclick = async () =&gt; {
     <section class="demo" data-cap="reference-target">
       <h2>
         <span>Reference Target <span class="mono">cross-root ARIA</span></span>
-        <span class="stat chrome">Chrome 151 &middot; Safari/FF no</span>
+        <span class="stat chrome">Chrome 151 &middot; Safari 26 flag &middot; FF 144 flag</span>
       </h2>
       <p class="note">
         The oldest real hole in shadow DOM: an ID reference cannot cross the shadow
@@ -3370,6 +3318,14 @@ myButton.onclick = async () =&gt; {
         <code>shadowrootreferencetarget</code> on the template or imperatively via
         <code>ShadowRoot.referenceTarget</code>, so the reference lands and the internals
         stay private.
+      </p>
+      <p class="note">
+        Unusually for this page, <strong>all three engines have it behind a
+        flag</strong>: Chromium since&nbsp;133 and default-on in&nbsp;151, WebKit
+        since Safari&nbsp;26, Gecko since Firefox&nbsp;144. That is a better sign
+        than the &quot;Safari/FF no&quot; this card carried before the 08-10 sweep,
+        because a flag is an implementation somebody wrote and an absence is not.
+        It is still not shippable, since a flag reaches nobody.
       </p>
       <p class="replaces">
         On the site: this is the missing piece under the declarative-shadow-DOM card
@@ -3445,7 +3401,7 @@ myButton.onclick = async () =&gt; {
     <section class="demo" data-cap="import-text">
       <h2>
         <span>Text module imports <span class="mono">with { type: &quot;text&quot; }</span></span>
-        <span class="stat trial">TC39 stage 3 &middot; Chrome &middot; FF 153 flag</span>
+        <span class="stat trial">TC39 stage 3 &middot; Chrome &middot; FF 153</span>
       </h2>
       <p class="note">
         Import attributes gave JSON modules a safe syntax
@@ -3569,12 +3525,14 @@ myButton.onclick = async () =&gt; {
     <section class="demo" data-cap="css-function">
       <h2>
         <span>@function <span class="mono">custom CSS functions</span></span>
-        <span class="stat chrome">Chrome 139 &middot; Safari/FF building</span>
+        <span class="stat chrome">Chrome 139 &middot; Safari TP 249 &middot; FF no</span>
       </h2>
       <p class="note">
         Reusable, parameterised CSS logic, like Sass mixins but native and live:
         <code>@function --bevel(--l) { result: oklch(from var(--c) calc(l - var(--l)) c h) }</code>.
-        Chrome-only so far; the others have it in progress.
+        Chrome&nbsp;139 shipped it, and Technology&nbsp;Preview&nbsp;249 put it in
+        WebKit, so the second engine is a Safari release away rather than &quot;in
+        progress&quot;. Gecko has neither.
       </p>
       <p class="replaces">
         On the site: the repeated <code>oklch(from &hellip; calc(l &minus; 0.19) &hellip;)</code> bevel
@@ -4428,7 +4386,7 @@ myButton.onclick = async () =&gt; {
     <section class="demo" data-cap="window-drag">
       <h2>
         <span>window-drag</span>
-        <span class="stat trial">Chrome preview &middot; FF positive &middot; Safari no</span>
+        <span class="stat trial">Chrome 152 &middot; FF positive &middot; Safari no</span>
       </h2>
       <p class="note">
         Marks a region of an installed desktop web app as titlebar: dragging
@@ -4436,7 +4394,8 @@ myButton.onclick = async () =&gt; {
         <code>window-drag: move</code> opts a region in,
         <code>window-drag: none</code> carves an exception back out, which is
         how you keep the close button clickable inside a draggable strip.
-        Chromium has it in preview channels rather than stable;
+        Chrome&nbsp;152 took it to beta, so the &quot;preview channels only&quot; note this
+        card carried is spent;
         <code>-webkit-app-region</code> has done roughly this for Electron for
         years, and this is the standards-track version.
       </p>
@@ -4688,6 +4647,411 @@ myButton.onclick = async () =&gt; {
     </script>
 
 
+
+    <!-- ─────────── 2026-08-10 sweep: STP 249, and the engines that got there first ─────────── -->
+    <style>
+      /* --- 08-10 batch, all classes prefixed .s8- to stay out of the sibling cards --- */
+      .s8-swatch { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+      .s8-chipbox { border: 1px solid oklch(50% 0.02 250); border-radius: 3px; padding: 8px 14px; font: bold 9.5pt Tahoma, Verdana, sans-serif; }
+      .s8-chipbox.accent { background: oklch(50% 0.225 263); color: oklch(100% 0 0); }
+      @supports (color: AccentColor) { .s8-chipbox.accent { background: AccentColor; color: AccentColorText; } }
+      .s8-chipbox.luna { background: oklch(50% 0.225 263); color: oklch(100% 0 0); }
+      .s8-caret { font: 11pt "Lucida Console", var(--font-mono); padding: 5px 8px; width: 260px; background: oklch(18% 0.01 250); color: oklch(88% 0.14 145); border: 1px solid oklch(45% 0.02 250); caret-shape: block; }
+      .s8-find { font-size: 9.5pt; line-height: 1.6; color: oklch(28% 0 0); margin: 8px 0 0; }
+      .s8-find::search-text { background: oklch(85% 0.17 95); color: oklch(25% 0.08 60); }
+      .s8-rr { border: 1px dashed oklch(60% 0.06 254); border-radius: 4px; padding: 10px 12px; margin-top: 8px; font-size: 9.5pt; }
+      .s8-attr { margin-top: 8px; display: flex; align-items: flex-end; gap: 6px; height: 74px; }
+      .s8-attr i { display: block; width: 34px; background: linear-gradient(180deg, oklch(66% 0.16 258), oklch(48% 0.20 263)); border: 1px solid oklch(38% 0.14 263); border-radius: 2px 2px 0 0; height: attr(data-h type(<length>), 8px); }
+      .s8-attr b { font: 8pt Tahoma, sans-serif; color: oklch(45% 0 0); align-self: center; }
+      .s8-tdi { font-size: 11pt; color: oklch(28% 0 0); margin-top: 8px; }
+      .s8-tdi u { text-decoration: underline 1px oklch(55% 0.20 30); text-decoration-inset: 4px; text-underline-offset: 3px; }
+      .s8-out { font: 9pt "Courier New", monospace; white-space: pre-wrap; background: oklch(97% 0 0); border: 1px solid oklch(80% 0 0); padding: 8px 10px; margin-top: 8px; color: oklch(30% 0 0); }
+      @media (color-gamut: p3) {
+        .s8-chipbox.luna { background: oklch(50% 0.26 263); }
+      }
+    </style>
+
+    <section class="demo">
+      <h2><span>Sweep note: one preview build, six cards</span></h2>
+      <p class="note">
+        The 08-10 pass turned up a rot direction the three already written up here
+        don&apos;t cover, and it is entirely self-inflicted. Every status line on this
+        page was assembled reading Chrome first, so a feature that landed in WebKit or
+        Gecko <em>years earlier</em> gets recorded as &quot;Chrome&nbsp;N, others
+        no&quot; and then sits there being wrong. Two cards above were exactly that:
+        <a href="#border-area-card">background-clip: border-area</a> shipped in Safari&nbsp;18.2 in
+        December&nbsp;2024 and Chrome only caught up in&nbsp;150, and the system-color
+        card below has been three-engine since Firefox&nbsp;103. Neither was a status
+        that changed. Both were a status I read from the wrong end.
+      </p>
+      <p class="note">
+        The other half of the pass was one build. <strong>Safari Technology
+        Preview&nbsp;249</strong> moved six cards on this page at once:
+        <code>Temporal</code>, <code>CloseWatcher</code>, <code>popover=hint</code>,
+        <code>if()</code>, <code>@function</code>, and the <code>attr()</code> function
+        below. Technology Preview notes aren&apos;t release notes, so a sweep that reads
+        &quot;New in Safari&nbsp;N&quot; posts structurally cannot see any of it, and a
+        card can sit on &quot;Safari no&quot; for a year after WebKit started answering.
+        Versions here are MDN browser-compat-data v8.0.10 (2026-08-06), cross-checked
+        against the STP&nbsp;249 release notes.
+      </p>
+    </section>
+
+    <!-- ───────────────────── AccentColor system colors ───────────────────── -->
+    <section class="demo" data-cap="accent-color">
+      <h2>
+        <span>AccentColor <span class="mono">&middot; AccentColorText</span></span>
+        <span class="stat cross">Firefox 103 &middot; Safari 16.5 &middot; Chrome 150</span>
+      </h2>
+      <p class="note">
+        Two CSS system colors that resolve to <em>the accent the visitor picked in
+        their OS</em>, plus a foreground guaranteed to be legible on it. No media
+        query, no JS, no <code>-webkit-</code> anything: write
+        <code>background: AccentColor</code> and the browser reads the platform.
+        Gecko has had it since Firefox&nbsp;103 in 2022 and WebKit since
+        Safari&nbsp;16.5; Chrome&nbsp;150 is the straggler, which is why it took a
+        Chrome-first read to miss it for this long. The left box is the visitor&apos;s
+        accent, the right is this site&apos;s hardcoded Luna blue:
+      </p>
+      <div class="s8-swatch">
+        <span class="s8-chipbox accent">AccentColor</span>
+        <span class="s8-chipbox luna">oklch(50% 0.225 263)</span>
+      </div>
+      <p class="replaces">
+        On the site: tempting and <strong>declined</strong>, and this is the clearest
+        case on the page of the doctrine beating the feature. Luna&apos;s blue is not a
+        theme, it is the subject. A title bar that turned graphite because the visitor
+        set macOS to graphite would be a more &quot;native&quot; site and a worse
+        reproduction of Windows&nbsp;XP, and every bevel here derives its shade from
+        that one hue by <code>oklch(from &hellip;)</code> arithmetic, so the accent
+        would have to win everywhere or nowhere. Where it does belong is the
+        <em>chrome around</em> the reproduction: focus rings and selection highlights
+        already ought to match the OS, and those are the two places this is worth
+        wiring.
+      </p>
+      <p class="unsupported">Your browser doesn&apos;t resolve <code>AccentColor</code>, so the left box falls back to its declared color.</p>
+    </section>
+
+    <!-- ───────────────────── caret-shape ───────────────────── -->
+    <section class="demo" data-cap="caret-shape">
+      <h2>
+        <span>caret-shape <span class="mono">block &middot; underscore &middot; bar</span></span>
+        <span class="stat chrome">Chrome 144 &middot; Safari/FF no</span>
+      </h2>
+      <p class="note">
+        The text cursor has been a thin blinking bar in every browser since there were
+        browsers, and <code>caret-shape</code> is one property that makes it a filled
+        block or an underscore instead. It is a small thing that is unusually load-bearing
+        for one specific look, because a block caret is not decoration on a terminal, it
+        is how you know it is a terminal. Click into the field below (Chrome&nbsp;144+ to
+        see it):
+      </p>
+      <p><input class="s8-caret" value="C:\&gt; " aria-label="block caret demo" spellcheck="false"></p>
+      <p class="replaces">
+        On the site: this is aimed directly at <a href="/terminal">/terminal</a>, the
+        PowerShell console, where the caret is currently a bar pretending to be a console
+        cursor. One declaration fixes it and it degrades to exactly today&apos;s behaviour
+        everywhere else, which makes it a rare frontier feature with a zero-cost fallback
+        by construction. The reason it hasn&apos;t shipped is the two-engine rule and
+        nothing else. First card here I expect to graduate on the strength of Safari
+        alone.
+      </p>
+      <p class="unsupported">No <code>caret-shape</code> here, so the field above blinks a normal bar.</p>
+    </section>
+
+    <!-- ───────────────────── ::search-text ───────────────────── -->
+    <section class="demo" data-cap="search-text">
+      <h2>
+        <span>::search-text <span class="mono">styling find-in-page</span></span>
+        <span class="stat chrome">Chrome 144 &middot; Safari/FF no</span>
+      </h2>
+      <p class="note">
+        Ctrl+F highlights have been the one piece of text on a page an author could
+        never touch. <code>::search-text</code> styles every match and
+        <code>::search-text:current</code> styles the one you are on, so find-in-page
+        finally answers to the page&apos;s palette instead of the browser&apos;s yellow.
+        Press <kbd>Ctrl</kbd>+<kbd>F</kbd> (<kbd>&#8984;</kbd>+<kbd>F</kbd> on a Mac) and
+        search for <strong>aircooled</strong>:
+      </p>
+      <p class="note">
+        Only the first half of that is actually demoed here, and the reason is a build
+        failure worth keeping. <strong>Lightning&nbsp;CSS&nbsp;1.33 cannot parse
+        <code>::search-text:current</code></strong>: it accepts the bare pseudo-element
+        without so much as a warning, then hard-errors on a pseudo-class after a
+        pseudo-element it doesn&apos;t know (<code>InvalidPseudoClassAfterPseudoElement</code>),
+        which fails this site&apos;s deploy outright. The carousel selectors two dozen
+        cards up hit the softer version of the same gap, where the minifier warns and
+        emits the selector verbatim. So the current-match rule is printed below rather
+        than applied, and the lesson generalises past this selector: shipping a new one
+        needs the toolchain to have heard of it, not only the browser.
+      </p>
+<pre>.prose::search-text          { background: gold; }
+.prose::search-text:current  { background: orangered; color: #fff; }
+/* the second line is what the minifier here refuses to parse */</pre>
+      <p class="s8-find">
+        A resto-mod keeps the aircooled character and modernizes everything under it.
+        The aircooled flat-six is the part nobody wants replaced, so the aircooled
+        engine stays and the brakes, bushings and electronics don&apos;t.
+      </p>
+      <p class="replaces">
+        On the site: the natural partner to the
+        <code>hidden=until-found</code> card above, which is already about find-in-page
+        reaching content the layout collapsed. Together they are the two halves of
+        treating <kbd>Ctrl</kbd>+<kbd>F</kbd> as a first-class way to navigate a page
+        rather than a browser feature happening next to one. Parked for the usual
+        reason, one engine, and now for a second one: the build would reject half of it.
+      </p>
+      <p class="unsupported">No <code>::search-text</code> here, so find-in-page keeps the browser&apos;s own highlight.</p>
+    </section>
+
+    <!-- ───────────────────── revert-rule ───────────────────── -->
+    <section class="demo" data-cap="revert-rule">
+      <h2>
+        <span>revert-rule <span class="mono">the fourth global keyword</span></span>
+        <span class="stat cross">Chrome 148 &middot; Safari 27 &middot; FF 150</span>
+      </h2>
+      <p class="note">
+        CSS has had <code>initial</code>, <code>inherit</code>, <code>unset</code> and
+        <code>revert</code> for years, and none of them can say &quot;undo <em>this
+        rule</em> and keep whatever the cascade had before it&quot;.
+        <code>revert-rule</code> does exactly that, which matters most inside
+        <code>@media</code> and <code>@supports</code> blocks where the alternative is
+        restating the value you were trying not to restate. Three engines already, and
+        the third one is quiet enough that this page had never written it down.
+      </p>
+      <div class="s8-rr">
+        <p style="margin:0">Both lines below declare <code>color: crimson</code>. The second reverts it inside a media query, and gets the cascade&apos;s earlier value back rather than the initial one.</p>
+      </div>
+<pre>.note { color: oklch(45% 0.03 250); }        /* the cascade's answer */
+.note.warn { color: crimson; }
+
+@media (prefers-contrast: more) {
+  .note.warn { color: revert-rule; }         /* back to oklch(45% ...) */
+  /* NOT `revert`, which would jump to the UA sheet's black */
+}</pre>
+      <p class="replaces">
+        On the site: the Luna design tokens are a cascade three layers deep (token,
+        component, per-page override), and every place a media query needs to back one
+        layer off currently re-declares the value underneath it by hand. That is the
+        exact duplication this keyword deletes. Cross-engine, cheap, and the only reason
+        it isn&apos;t already in <code>luna.css</code> is that nobody knew it had
+        finished.
+      </p>
+      <p class="unsupported">No <code>revert-rule</code> here; the keyword is dropped as invalid and the declaration above it wins.</p>
+    </section>
+
+    <!-- ───────────────────── attr() type() ───────────────────── -->
+    <section class="demo" data-cap="attr-type">
+      <h2>
+        <span>attr() <span class="mono">with type() outside content</span></span>
+        <span class="stat chrome">Chrome 133 &middot; Safari TP 249 &middot; FF 149 flag</span>
+      </h2>
+      <p class="note">
+        <code>attr()</code> has existed since CSS&nbsp;2 and has been useless since
+        CSS&nbsp;2, because it only worked in <code>content</code> and only produced a
+        string. The rewrite lets it read any attribute, cast it with
+        <code>type()</code>, and take a fallback:
+        <code>height: attr(data-h type(&lt;length&gt;), 8px)</code>. That is the whole
+        &quot;write the number into a CSS custom property with JS&quot; pattern, deleted.
+        The bars below carry no inline styles and no custom properties, only
+        <code>data-h</code>:
+      </p>
+      <div class="s8-attr">
+        <i data-h="18px"></i><i data-h="41px"></i><i data-h="29px"></i><i data-h="66px"></i><i data-h="52px"></i><i data-h="34px"></i>
+        <b>data-h only</b>
+      </div>
+      <p class="replaces">
+        On the site: the photo tooltip&apos;s histogram bars and the
+        <a href="/garage/dyno">dyno</a> charts both do the JS dance today, writing a
+        computed height into a style attribute per element. This turns that into markup
+        the server can emit and the browser can lay out with no script at all, which is
+        worth more here than it sounds: those bars are the one thing on the page that
+        currently needs JS to have a shape. Two engines and a flag away.
+      </p>
+      <p class="unsupported">No typed <code>attr()</code> here, so the bars fall back to their 8px default height.</p>
+    </section>
+
+    <!-- ───────────────────── text-decoration-inset ───────────────────── -->
+    <section class="demo" data-cap="text-decoration-inset">
+      <h2>
+        <span>text-decoration-inset</span>
+        <span class="stat trial">Firefox 146 &middot; Safari TP 249 &middot; Chrome no</span>
+      </h2>
+      <p class="note">
+        Shortens an underline in from both ends, so a rule can stop before the
+        descenders and the padding rather than running the full width of the text run.
+        Worth a card mostly for the shape of its adoption: <strong>Gecko shipped it
+        first</strong>, WebKit has it in preview, and Chrome hasn&apos;t started. Several of the 90 cards here are
+        WebKit-first, since Apple ships plenty nobody else has yet. This is the only one
+        that is <em>Gecko</em>-first, which is a useful corrective to reading the
+        frontier as a Chrome release-notes feed with a Safari column bolted on.
+      </p>
+      <p class="s8-tdi">An <u>inset underline</u> stops short of the word&apos;s edges (Firefox&nbsp;146+).</p>
+      <p class="replaces">
+        On the site: marginal. The one place it would help is the Notepad and folder-index
+        link styling, where an underline currently butts against adjacent punctuation.
+        Filed as a taste improvement rather than anything structural, and it can ship the
+        day Chrome moves, since an unsupported <code>text-decoration-inset</code> is
+        simply dropped and the underline stays full-width.
+      </p>
+      <p class="unsupported">No <code>text-decoration-inset</code> here, so the underline above runs edge to edge.</p>
+    </section>
+
+    <!-- ───────────────────── animation-trigger ───────────────────── -->
+    <section class="demo" data-cap="animation-trigger">
+      <h2>
+        <span>animation-trigger <span class="mono">scroll-triggered, not scroll-driven</span></span>
+        <span class="stat trial">Chrome 146, <code>none</code> only &middot; Safari/FF no</span>
+      </h2>
+      <p class="note">
+        The sibling of the scroll-driven animations card above, and the distinction is
+        the point. A scroll-<em>driven</em> animation is scrubbed by scroll position: you
+        scroll back, it plays back. A scroll-<em>triggered</em> one <em>starts</em> when
+        the element comes into view and then runs on its own clock, which is what almost
+        every &quot;fade in on scroll&quot; script has actually wanted since about 2013.
+        <code>animation-trigger: view() alternate</code> is meant to be that,
+        declaratively.
+      </p>
+      <p class="note">
+        There is no demo here, and finding out why is the reason this card is worth
+        more than its feature. Both chromestatus and MDN report
+        <code>animation-trigger</code> as Chrome&nbsp;146, so it reads shipped. Probing
+        the actual value grammar in Chrome&nbsp;148 says otherwise: the property parses
+        <code>none</code> and rejects <strong>every value that would trigger
+        anything</strong>, with the <code>animation-trigger-behavior</code> and
+        <code>animation-trigger-timeline</code> longhands absent too. Live from your
+        browser rather than from a table:
+      </p>
+      <div class="s8-out" id="s8-at-out">probing animation-trigger&hellip;</div>
+      <p class="note">
+        So &quot;shipped in Chrome&nbsp;146&quot; means a property name that accepts the
+        one keyword meaning <em>do nothing</em>. That is a real trap for a page like
+        this: a compat table records the property, a status line copies the table, and
+        the card claims a feature that cannot be used. The chip beside this card probes
+        <code>view()</code> specifically, so it stays red until the part worth having
+        arrives.
+      <p class="replaces">
+        On the site: nothing, deliberately. Scroll-triggered entrance animations are the
+        single most over-applied effect on the modern web and an XP desktop has no
+        vocabulary for them. Worth a card because the naming is a genuine trap:
+        <code>animation-timeline</code> and <code>animation-trigger</code> look like
+        variations on one feature and are opposites, and picking the wrong one gives you
+        an animation that runs backwards when the visitor scrolls up. The second
+        reason is the probe above: this is the clearest instance on the page of the
+        difference between a feature existing and a feature being usable.
+      </p>
+      <p class="unsupported">No <code>animation-trigger</code> here, so the box above sits still.</p>
+    </section>
+
+    <!-- ───────────────────── scrollIntoView promise ───────────────────── -->
+    <section class="demo" data-cap="scroll-promise">
+      <h2>
+        <span>scrollIntoView() <span class="mono">returns a promise</span></span>
+        <span class="stat chrome">Chrome 150 &middot; Safari/FF no</span>
+      </h2>
+      <p class="note">
+        <code>scrollIntoView({ behavior: "smooth" })</code> has never told you when it
+        finished. The entire ecosystem workaround is a <code>scrollend</code> listener
+        with a timeout beside it, because a smooth scroll that was already at its target
+        fires nothing at all and the listener hangs. Chrome&nbsp;150 makes the method
+        return a promise that settles when the scroll lands, or rejects if something
+        interrupts it.
+      </p>
+      <p><button class="xp-button" id="s8-sp-go" type="button">Run both shapes</button></p>
+      <div class="s8-out" id="s8-sp-out">Click to compare the promise against the scrollend dance.</div>
+      <p class="replaces">
+        On the site: <code>nav.js</code>&apos;s Run palette scrolls a matched result into
+        view and then wants to focus it, and today that is a <code>setTimeout</code> with
+        a number picked by feel. A promise turns a guess into an await. One engine, so
+        the guess stays, but this is the kind of card that graduates quietly the moment a
+        second engine lands, because the fallback and the feature are the same two lines.
+      </p>
+      <p class="unsupported">No promise returned here, so the demo reports what it got back instead.</p>
+    </section>
+
+    <!-- ───────────────────── XSLT removal ───────────────────── -->
+    <section class="demo" data-cap="xslt">
+      <h2>
+        <span>XSLT <span class="mono">being removed from the platform</span></span>
+        <span class="stat contested">removal in progress &middot; all three engines agree</span>
+      </h2>
+      <p class="note">
+        Every card on this page is something arriving. This one is the other direction,
+        and a page about a 2003 aesthetic ought to carry at least one. Browsers have
+        shipped an XSLT&nbsp;1.0 processor since 2000; it is a large, unsandboxed,
+        rarely-exercised C++ surface that has produced a steady drip of security bugs,
+        and Chromium, WebKit and Gecko have all now agreed to take it out. Chromium has
+        the deprecation staged across 2026.
+      </p>
+      <p class="note">
+        What makes it worth a card rather than a footnote is the migration story, which
+        is unusually honest for a removal: the replacement is a
+        <a href="https://github.com/mfreed7/xslt_polyfill" rel="external">WebAssembly build of libxslt</a>,
+        so the code doesn&apos;t disappear, it moves out of the browser&apos;s trusted
+        computing base and into the page&apos;s own sandbox. The platform loses an
+        attack surface, sites that need it keep working, and it costs a download.
+      </p>
+      <p class="replaces">
+        On the site: no XSLT anywhere, so the removal costs nothing here directly, and
+        the reason to write it down is a rule this page keeps re-learning. Old and widely
+        deployed is not the same as safe to depend on. The retired service worker, the
+        <code>THUMB_VERSION</code> query-string cache-buster and the View Transitions
+        that shipped for most of 2026 were each removed for a version of the same
+        argument, and each one felt permanent while it was in.
+      </p>
+      <p class="unsupported">No <code>XSLTProcessor</code> in this browser, so the removal has already reached you.</p>
+    </section>
+
+    <script>
+      /* Demos for the 2026-08-10 sweep batch. Same discipline as the batch above:
+         a browser missing the feature reads WHY, and nothing throws. */
+      (function () {
+        // animation-trigger: report the value grammar rather than the property name.
+        var at = document.getElementById("s8-at-out");
+        if (at) {
+          var vals = ["none", "view()", "view() alternate", "scroll()", "once", "repeat"];
+          var lines = vals.map(function (v) {
+            var ok = false;
+            try { ok = CSS.supports("animation-trigger", v); } catch (e) {}
+            return "  animation-trigger: " + v + new Array(Math.max(1, 20 - v.length)).join(" ") + (ok ? "accepted" : "rejected");
+          });
+          var longhands = ["animation-trigger-behavior: alternate", "animation-trigger-timeline: view()"].map(function (d) {
+            var ok = false;
+            try { ok = CSS.supports(d); } catch (e) {}
+            return "  " + d + "   " + (ok ? "accepted" : "rejected");
+          });
+          at.textContent = ["CSS.supports() in this browser:", ""].concat(lines, [""], longhands).join("\n");
+        }
+
+        var go = document.getElementById("s8-sp-go");
+        if (!go) return;
+        var out = document.getElementById("s8-sp-out");
+        go.addEventListener("click", function () {
+          var probe = document.createElement("div");
+          var ret;
+          try { ret = probe.scrollIntoView({ behavior: "smooth", block: "nearest" }); } catch (e) { ret = e; }
+          var isPromise = ret && typeof ret.then === "function";
+          var lines = [
+            "el.scrollIntoView({behavior:'smooth'}) returned:",
+            "  " + (isPromise ? "a Promise  (Chrome 150+)" : String(ret) + "   (the legacy void return)"),
+            ""
+          ];
+          if (isPromise) {
+            lines.push("so the call site is one line:");
+            lines.push("  await el.scrollIntoView({behavior:'smooth'}); el.focus();");
+          } else {
+            lines.push("so the call site is still the scrollend dance:");
+            lines.push("  el.scrollIntoView({behavior:'smooth'});");
+            lines.push("  var t = setTimeout(done, 600);            // because scrollend");
+            lines.push("  addEventListener('scrollend', function () {  // never fires when");
+            lines.push("    clearTimeout(t); done();                   // already in view");
+            lines.push("  }, {once: true});");
+          }
+          out.textContent = lines.join("\n");
+        });
+      })();
+    </script>
+
     <!-- ───────────────────── the long tail ───────────────────── -->
     <section class="demo">
       <h2><span>The long tail: independent engines</span></h2>
@@ -4750,7 +5114,7 @@ myButton.onclick = async () =&gt; {
 
     <footer>
       <p>&larr; back to the <a href="/garage">garage</a> &middot; <a href="/">aadhar.sh</a></p>
-      <p><small>&copy; 2026 Aadharsh Pannirselvam &middot; built in the open &middot; triangulated from chromestatus.com + chrome://flags (Canary) + webkit.org/standards-positions + MDN browser-compat-data &middot; last swept 2026-07-30</small></p>
+      <p><small>&copy; 2026 Aadharsh Pannirselvam &middot; built in the open &middot; triangulated from chromestatus.com + chrome://flags (Canary) + webkit.org/standards-positions + MDN browser-compat-data &middot; last swept 2026-08-10</small></p>
     </footer>
 
     <hr>
@@ -4792,7 +5156,6 @@ myButton.onclick = async () =&gt; {
     "jpeg-xl": "jpeg-xl",
     "hdr-agtm": "HDR-AGTM",
     "route-matching": "route-match",
-    "install-element": "install",
     "css-carousel": "CSS carousel",
     "invoker-commands": "command",
     "css-scope": "@scope",
@@ -4838,6 +5201,15 @@ myButton.onclick = async () =&gt; {
     "cpu-performance": "cpuPerformance",
     "container-timing": "container timing",
     "loaf": "LoAF",
+    "accent-color": "AccentColor",
+    "caret-shape": "caret-shape",
+    "search-text": "::search-text",
+    "revert-rule": "revert-rule",
+    "attr-type": "attr(type())",
+    "text-decoration-inset": "td-inset",
+    "animation-trigger": "animation-trigger",
+    "scroll-promise": "scroll promise",
+    "xslt": "XSLTProcessor",
   };
   var state = {};
   Object.keys(checks).forEach(function (k) { state[k] = sup(checks[k]); });
