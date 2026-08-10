@@ -29,7 +29,7 @@
 // and Durable Object / Workflow classes — workerd rejects a named value export
 // with "Incorrect type for map entry '<name>': the provided value is not of
 // type 'function or ExportedHandler'", which is how that rule was learned here.
-import { EXTRACTOR, READER_LIMIT_PER_MIN, READER_NOTE, read } from "./reader.js";
+import { EXTRACTOR, READER_LIMIT_PER_MIN, READER_NOTE, ReaderError, read } from "./reader.js";
 import { validateLensTarget } from "../../holding/_worker.js/lib/crawl.js";
 
 export default {
@@ -53,9 +53,18 @@ export default {
     try {
       return json(await read(target.url));
     } catch (error) {
-      // Every failure mode here is the TARGET's, not ours: a timeout, a refusal,
-      // a body that is not HTML. Name it plainly so the pane can say which.
-      return json({ ok: false, error: String((error && error.message) || error).slice(0, 300) }, 502);
+      // Only messages WE wrote for the visitor get published. Everything else is
+      // an internal failure whose text is not ours to hand to an unauthenticated
+      // caller — CodeQL flagged the old blanket `error.message` return as
+      // information exposure through a stack trace, and it was right.
+      //
+      // The generic arm still says whose fault it probably was, because "the
+      // reader failed" with no attribution is exactly the ambiguity this whole
+      // pane exists to remove. The real error goes to Workers Logs, where it is
+      // readable by the owner and by nobody else.
+      if (error instanceof ReaderError) return json({ ok: false, error: error.message }, 502);
+      console.error("lens-reader: unhandled failure", error);
+      return json({ ok: false, error: "The reader could not process that page. This one is on us, not the target." }, 500);
     }
   },
 };

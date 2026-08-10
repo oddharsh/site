@@ -16,6 +16,19 @@ import { parseHTML } from "linkedom";
 import TurndownService from "turndown";
 import { privateHostBlocked, validateLensTarget } from "../../holding/_worker.js/lib/crawl.js";
 
+// Errors whose MESSAGE is deliberately written for the visitor. Everything else
+// that escapes `read()` is an internal failure whose text is not ours to publish:
+// CodeQL flagged the old `String(error.message)` return as information exposure
+// through a stack trace, and it was right — a fetch or parse failure carries
+// runtime detail, and this route answers an unauthenticated public request.
+//
+// The distinction is not cosmetic. The pane's whole job is naming WHOSE fault a
+// failure was, so collapsing everything to "something went wrong" would cost the
+// feature its point; publishing raw internals would cost more.
+export class ReaderError extends Error {
+  constructor(message) { super(message); this.name = "ReaderError"; this.visitorFacing = true; }
+}
+
 export const BOT_UA = "AadharshBot/1.0 (+https://aadhar.sh/bot)";
 export const EXTRACTOR = { name: "defuddle", version: "0.19.2" };
 export const READER_LIMIT_PER_MIN = 10;
@@ -45,6 +58,12 @@ export async function read(targetUrl) {
       redirect: "follow",
       signal: controller.signal,
     });
+  } catch (error) {
+    // The two failures a visitor can actually cause, named rather than leaked.
+    if (error && error.name === "AbortError") {
+      throw new ReaderError(`That page did not respond within ${FETCH_TIMEOUT_MS / 1000}s.`);
+    }
+    throw new ReaderError("That URL could not be fetched (DNS, TLS, or the host refused the connection).");
   } finally {
     clearTimeout(timer);
   }
@@ -55,7 +74,7 @@ export async function read(targetUrl) {
   // reading a byte of the body.
   const landed = validateLensTarget(finalUrl);
   if (!landed.ok || privateHostBlocked(new URL(finalUrl).hostname)) {
-    throw new Error("That URL redirected somewhere this reader will not follow.");
+    throw new ReaderError("That URL redirected somewhere this reader will not follow.");
   }
 
   const contentType = response.headers.get("content-type") || "";

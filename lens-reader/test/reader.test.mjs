@@ -58,3 +58,16 @@ test("control counting is an upper bound and never a silent overcount", () => {
   assert.ok(counted.kept >= 1);
   assert.match(counted.note, /upper bound/);
 });
+
+test("only messages written for the visitor are publishable", async () => {
+  const { ReaderError } = await import("../src/reader.js");
+  const entry = await import("node:fs").then((fs) => fs.readFileSync(new URL("../src/index.js", import.meta.url), "utf8"));
+  // CodeQL flagged the old blanket `String(error.message)` return as information
+  // exposure through a stack trace. The fix is a marker class, so the guard is
+  // that the entrypoint gates on it and never falls back to raw message text.
+  assert.ok(new ReaderError("x").visitorFacing, "ReaderError must mark itself visitor-facing");
+  assert.match(entry, /error instanceof ReaderError/,
+    "the entrypoint must gate published messages on ReaderError");
+  assert.doesNotMatch(entry, /String\(\(?error(\s*&&\s*error)?\.message/,
+    "the entrypoint must never publish a raw error message again");
+});
