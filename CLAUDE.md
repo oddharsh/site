@@ -2057,10 +2057,10 @@ pnpm run deploy:direct
     changes what the Worker sees and is not a cosmetic edit.
 
 27. **A `github-advanced-security` failure is usually GitHub's own Copilot
-    Autofix falling over, not your diff.** Seen four times across two days: on
-    2026-08-08 on #289 and #295, and again on 2026-08-10 on #305 and #307. Every
-    one of them ran while the separate `CodeQL` check reported *"No new alerts in
-    code changed by this pull request."*
+    Autofix falling over, not your diff.** Seen five times across two days: on
+    2026-08-08 on #289 and #295, and again on 2026-08-10 on #305, #307 and #313.
+    Every one of them ran while the separate `CodeQL` check reported *"No new
+    alerts in code changed by this pull request."*
 
     The signature is specific enough to recognise on sight: the check has an
     EMPTY output title, and its single annotation points at `.github:<line>` —
@@ -2101,7 +2101,23 @@ pnpm run deploy:direct
     reporting on itself. When the API tell above leaves you unsure which variant
     you have, ask whether the PR contains code at all. And confirm the stakes from
     the ruleset rather than from the check list, since `validate` is the only
-    required context: this has now been red on four PRs while gating none of them.
+    required context: this has now been red on five PRs while gating none of them.
+
+    **#313 added two things, and the second one changes how you look.** Its lone
+    annotation was at `.github:213` — the SAME line as #307, on an unrelated
+    CSS-only diff. A line number that repeats across two PRs sharing no content
+    is a fingerprint of the harness rather than a location in anything, so read
+    it as one more signature and never go looking for what lives there.
+
+    The sharper one: **`gh pr checks` did not list the failing check at all.**
+    On #313 it printed seven rows, every one `pass` or `skipping`, with no
+    `github-advanced-security` among them, while `/commits/<sha>/check-runs`
+    reported that same check as `failure` on the same head commit. Reproduced
+    twice, minutes apart, so it is not a timing gap. The consequence is that the
+    convenient command reports the PR as GREEN while the notification says a
+    check failed, which reads exactly like a stale alert and is not one. Use the
+    `check-runs` call above as the source of truth for whether this check is red;
+    `gh pr checks` is fine for everything else.
 
 28. **Bun runs this build byte-identically and about twice as fast, and it is
     still not adopted.** `pnpm run bun:check` is the control, in the same idiom as
