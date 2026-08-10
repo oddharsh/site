@@ -3367,20 +3367,27 @@ test("preview noindex reaches the responses the security wrapper otherwise skips
   // The wrapper bails early on redirects and images, which is correct for CSP
   // and wrong for robots: both are independently indexable, so a preview that
   // marked only its HTML would still publish a duplicate photo corpus.
-  const cases = [
+  // Built fresh per pass, deliberately. `withSecurityHeaders` rebuilds every
+  // response as `new Response(response.body, …)`, which per Fetch LOCKS the
+  // body it was handed, so reusing one case object across both passes feeds the
+  // second one a disturbed stream. Node's undici allows that and bun 1.4 throws
+  // `Body object should not be disturbed or locked`, which is the spec-correct
+  // read. The assertions here are about headers, so the leniency was never load
+  // bearing; it just made the suite depend on which runtime ran it.
+  const makeCases = () => [
     ["a redirect",  new Response(null, { status: 301, headers: { location: "https://aadhar.sh/photos" } })],
     ["an image",    new Response("jpegbytes", { headers: { "content-type": "image/jpeg" } })],
     ["a document",  new Response("<!doctype html><title>x</title>", { headers: { "content-type": "text/html; charset=utf-8" } })],
     ["a json feed", new Response("{}", { headers: { "content-type": "application/json" } })],
   ];
-  for (const [what, response] of cases) {
+  for (const [what, response] of makeCases()) {
     const marked = withSecurityHeaders(response, "/photos", { noindex: true });
     assert.equal(marked.headers.get("x-robots-tag"), "noindex, nofollow", `${what} must carry noindex on a preview`);
   }
 
   // ...and production is untouched. This is the regression that would matter
   // most: a bug here deindexes the real site.
-  for (const [what, response] of cases) {
+  for (const [what, response] of makeCases()) {
     const plain = withSecurityHeaders(response, "/photos");
     assert.equal(plain.headers.get("x-robots-tag"), null, `${what} must NOT be noindexed off a preview`);
   }

@@ -2068,6 +2068,51 @@ npm run deploy
     summary, and its lone annotation at `.github:<line>`. Check the annotation
     path: a finding points at code you wrote, the artifact points at a directory.
 
+28. **Bun runs this build byte-identically and about twice as fast, and it is
+    still not adopted.** `npm run bun:check` is the control, in the same idiom as
+    `kitesurf:check`: it probes the zstd dictionary option, diffs a full node
+    build against a full bun build file by file, and runs the contract suite
+    under `bun test`. Measured 2026-08-10, node v26.7.0 against bun
+    `1.4.0-canary.1+827475e21`:
+
+    | question | result |
+    |---|---|
+    | zstd honours `dictionary` | yes, 73 none / 24 good / 73 wrong |
+    | build output byte-identical | yes, 1975 files, 0 differing |
+    | wall clock | 14.4s node against 7.1s bun |
+    | contract suite under `bun test` | 206 pass, 0 fail |
+
+    **BYTE-IDENTICAL is the bar, and it is much higher than "the build
+    succeeds".** `/a/` and `/i/` are content-addressed, so a single differing
+    byte mints a new URL, orphans every committed `a-dict` snapshot naming the
+    old hash, and moves the CSP hashes the documents are served under. A build
+    that is 2x faster and one byte different is not a faster build.
+
+    Three things keep it unadopted, and only the first is about bun. The newest
+    STABLE bun is **1.3.14** (2026-05-13), which predates the dictionary fix
+    (oven-sh/bun#34427, merged 2026-07-18) and silently ignores
+    `zstdCompressSync`'s `dictionary`; pinning the build path to a canary trades a
+    correctness bug for an unreleased revision. wrangler, miniflare and workerd
+    are the deploy path AND the route oracle, and they are node-pinned. And the
+    win is seconds on a step CI already spends far longer on in dry-runs.
+
+    **The failure here would be LOUD, which is worth knowing before this reads
+    scarier than it is.** build.mjs already feature-detects the same collapse and
+    throws (search `expected a collapse`), so bun 1.3.14 kills the build rather
+    than shipping no-op deltas. That guard exists because the no-op shipped for a
+    full deploy once. The ENGINE is silent; this build is not.
+
+    **Bun's spec-strict `Response` found a real defect in our suite**, which is
+    the byproduct worth keeping even if bun is never adopted. `withSecurityHeaders`
+    rebuilds every response as `new Response(response.body, …)`, which per Fetch
+    LOCKS the body it was handed, and one contract test pushed the same four case
+    objects through it twice. Bun threw `Body object should not be disturbed or
+    locked`; node's undici allows it. The assertions were about headers, so the
+    leniency was never load-bearing, and the test now builds its cases fresh per
+    pass. **A suite that passes on one runtime and not another is reporting a
+    fact about the runtime**, so run the other one occasionally even when you have
+    no intention of switching.
+
 ---
 
 ## Source folder for new photos
