@@ -335,7 +335,13 @@ export async function servePrecompressedShell(request, env) {
   // Only the shell's own three text types, and only safe methods. Anything else
   // (a range request, a HEAD we'd have to length-match, an unexpected extension)
   // goes down the untouched path rather than through a hand-built response.
-  if (request.method !== "GET" || !SHELL_TYPES[ext]) {
+  //
+  // env.IDENTITY_BODY joins that list: an in-process caller (SELF_FETCH, so /lens
+  // scanning this host) has no transport to decode with and the runtime ships no
+  // brotli decoder, so a precompressed body reaches it as mojibake. See the flag's
+  // note in index.js. This is the only branch that can turn it off, so keep the
+  // check at the top of the function rather than beside each emission below.
+  if (request.method !== "GET" || !SHELL_TYPES[ext] || env.IDENTITY_BODY) {
     return serveAssetWith404Clamp(request, env);
   }
 
@@ -562,7 +568,17 @@ export async function serveStaticPage(request, env, opts = {}) {
   // lookups, so do them in parallel. The twin supplies the validator even when the
   // response body is the delta: after applying it, the browser owns the CURRENT
   // page and can revalidate that representation with a 304 on its next visit.
-  const [br, delta] = await Promise.all([findBrotli(), findDelta()]);
+  //
+  // env.IDENTITY_BODY skips both lookups outright and falls through to the plain
+  // asset below. An in-process caller (SELF_FETCH, i.e. /lens reading this host)
+  // gets no transport decode and the runtime has no brotli decoder, so either of
+  // these bodies would reach it as mojibake — see the flag's note in index.js.
+  // Skipping is content-preserving here rather than a different answer: the twin
+  // is a compression of the very asset `plain` returns, so the document is the
+  // same one, and the two lookups it avoids are pure cost on this path.
+  const [br, delta] = env.IDENTITY_BODY
+    ? [null, null]
+    : await Promise.all([findBrotli(), findDelta()]);
   if (br) {
     const fresh = notModifiedIfFresh(request, br);
     if (fresh.status === 304) {
