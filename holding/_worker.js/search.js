@@ -29,6 +29,12 @@ function snippet(text, queryTerms) {
   return (start ? "…" : "") + source.slice(start, start + 220).trim() + (start + 220 < source.length ? "…" : "");
 }
 
+/**
+ * @param {any} env
+ * @param {string} query
+ * @param {string|number|null} [limit] the raw ?limit param, coerced and clamped
+ *   below — callers pass searchParams.get(), which is string|null.
+ */
 export async function searchSite(env, query, limit = 20) {
   const q = String(query || "").trim().slice(0, 160);
   // Agents ask this in sentences ("what does he think about agents"), and every
