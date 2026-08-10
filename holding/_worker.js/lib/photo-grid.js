@@ -43,12 +43,44 @@ const abs = (u) => (u && u.startsWith("/") ? u : `/images/${u}`);
 // Loading all twelve costs ~34 KB more and removes the white squares, the
 // observer, and the rootMargin tuning that has now been wrong twice.
 //
-// Every tile stays fetchpriority=low. That is unchanged and still load-bearing:
-// #156 measured the introductory prose as the LCP element at 390px and 1280px
-// alike, so no photo is on the critical path and none of them should compete
-// with one.
+// PRIORITY IS SPLIT WITHIN THE GRID, and the CEILING from #156 has not moved:
+// the introductory prose is the LCP element at 390px and 1280px alike, so no
+// tile may be raised to fetchpriority=high and none is. What changed is the
+// FLOOR. Every tile used to be low, which is ONE urgency bucket, and one bucket
+// is what makes the edge round-robin all twelve. Measured on production
+// 2026-08-10: the twelve issue in the same millisecond and then complete spread
+// over 334ms (303ms to 637ms), with completion order uncorrelated to size (a
+// 4.5KB tile landed 9th, a 34.8KB tile 11th). That is fair-share interleave,
+// and it is the wrong schedule here because the tiles are AVIF, which has no
+// progressive mode: a half-delivered tile paints nothing, so the interleave
+// costs everything and returns nothing.
+//
+// So the first six carry NO fetchpriority (the default) and the last six stay
+// low, giving the edge two buckets to order by. Cloudflare honours the
+// separation. Twenty same-tier /i/ thumbnails fetched at once with priorities
+// ALTERNATING by issue order, on confirmed `cf-cache-status: HIT`, gave mean
+// completion ranks of 6.2/12.8, 6.2/12.8, 5.7/13.3 and 8.5/10.5 over four
+// trials, where perfect separation is 4.5/14.5 and none is 9.5/9.5; the
+// all-equal control sat at exactly 9.5 every run.
+//
+// The probe METHOD is the part worth keeping. Run it against cache-BUSTED URLs
+// and 2 of 6 trials come back flat at 9.5/9.5, because miss latency swamps the
+// scheduler. A probe that busts cache is measuring a path production never
+// takes and reads as "priority does nothing." Warm the edge first, assert the
+// HIT, then measure.
+//
+// Six is a PREFIX rather than a row count: .photos is `repeat(auto-fill, 184px)`
+// with justify-content:center, so the column count moves with the window. Six is
+// the first two rows at three across (the default window) and still inside the
+// first two at four across. In DOM order a prefix is always the topmost tiles,
+// whatever the wrap, which is the property that makes this safe to hardcode.
+const PRIORITISED_TILES = 6;
+
 export function renderPhotoSlots(pick, altMap = {}, { deferred = true } = {}) {
-  return pick.map((p) => {
+  return pick.map((p, index) => {
+    // Omitted rather than spelled `auto` because they mean the same thing to the
+    // browser and one of them costs bytes on every tile.
+    const pri = index < PRIORITISED_TILES ? "" : ` fetchpriority="low"`;
     const small = p.thumb_small ? abs(p.thumb_small) : null;
     const large = p.thumb_avif ? abs(p.thumb_avif) : null;
     const jpg = abs(p.thumb_jpg);
@@ -78,16 +110,16 @@ export function renderPhotoSlots(pick, altMap = {}, { deferred = true } = {}) {
     // at all required fetch().
     const noScript = deferred
       ? `<noscript><picture>` + sources("srcset") +
-          `<img alt="${alt}" width="600" height="600" src="${escAttr(jpg)}" loading="lazy" fetchpriority="low" decoding="async">` +
+          `<img alt="${alt}" width="600" height="600" src="${escAttr(jpg)}" loading="lazy"${pri} decoding="async">` +
         `</picture></noscript>`
       : "";
 
     const picture = deferred
       ? `<picture data-photo-deferred>` + sources("data-srcset") +
-          `<img alt="${alt}" width="600" height="600" data-src="${escAttr(jpg)}" loading="eager" fetchpriority="low" decoding="async">` +
+          `<img alt="${alt}" width="600" height="600" data-src="${escAttr(jpg)}" loading="eager"${pri} decoding="async">` +
         `</picture>`
       : `<picture>` + sources("srcset") +
-          `<img alt="${alt}" width="600" height="600" src="${escAttr(jpg)}" loading="eager" fetchpriority="low" decoding="async">` +
+          `<img alt="${alt}" width="600" height="600" src="${escAttr(jpg)}" loading="eager"${pri} decoding="async">` +
         `</picture>`;
 
     return `<a href="/images/full/${encodeURI(p.full)}" target="_blank" rel="noopener"` +
