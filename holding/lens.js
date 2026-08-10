@@ -43,7 +43,9 @@
 
   // Must match LENS_TAB_LABELS in holding/_worker.js/lens.js: the tab labels are
   // phrased as the question each lens answers, so the tab row reads as a menu.
-  var LENS_LABEL = { readiness: "Agent-ready?", anatomy: "Raw response", structured: "What it claims", ai: "Model cost", terms: "Who's allowed", discovery: "Agent doors" };
+  var LENS_LABEL = { readiness: "Agent-ready?", anatomy: "Raw response", reader: "Reader's guess", structured: "What it claims", ai: "Model cost", terms: "Who's allowed", discovery: "Agent doors" };
+  var readerData = null;   // last /lens/read extraction, null until asked for
+  var readerBusy = false;
 
   function esc(s) {
     return String(s == null ? "" : s)
@@ -314,6 +316,7 @@
     data = null;
     browserData = null;
     browserRecipeData = null;
+    readerData = null;
     machineBody.innerHTML = '<div class="lx-empty">' + esc(msg) + "</div>";
     humanBody.innerHTML = '<div class="lx-empty">No page to show.</div>';
     renderBrowser();
@@ -329,6 +332,7 @@
     busy = true;
     browserData = null;
     browserRecipeData = null;
+    readerData = null;
     urlInput.value = url;
     // A new site is a fresh page: don't carry the last scan's Delta switches onto
     // it (a markdown/contract simulation from site A silently misrepresenting site
@@ -728,6 +732,25 @@
       badgeData = { text: data.status + " " + httpText(data.status), kind: data.status >= 200 && data.status < 400 ? "ok" : "warn" };
       caption = "Can a machine get a usable reading surface before it knows what the page means?";
       rows = { "response": (data.contentType || "(none)") + " · " + bytes(a.rawBytes), "shape": (a.headings ? a.headings.length : 0) + " headings · " + (a.wordCount || 0) + " words", "accessibility": alt, "headers": Object.keys(data.headers || {}).length + " received" };
+    } else if (lens === "reader") {
+      // Without this branch `reader` falls off the end of the chain into the
+      // Discovery focus, which would caption the pane with the wrong question.
+      var rd = readerData;
+      var dropped = rd && rd.ok && rd.dropped ? rd.dropped.pct : null;
+      title = "Reader focus";
+      badgeData = { text: rd == null ? "not run" : !rd.ok ? "failed" : dropped == null ? "n/a" : dropped + "% dropped",
+        kind: rd == null ? "" : !rd.ok ? "warn" : dropped >= 50 ? "warn" : "ok" };
+      caption = "How much of this page survives a reader-mode extractor, and how much of what survives is not prose.";
+      rows = rd && rd.ok ? {
+        "as served": (rd.source ? rd.source.words : "?") + " words",
+        "extractor kept": (rd.kept ? rd.kept.words : "?") + " words",
+        "control labels kept": rd.controls ? rd.controls.kept + " of " + rd.controls.total : "not counted",
+        "extractor": rd.extractor ? rd.extractor.name + " " + rd.extractor.version : "defuddle",
+      } : {
+        "status": rd == null ? "not run — this lens costs a second fetch" : "extraction failed",
+        "what it is": "a third-party extractor's opinion, not the served bytes",
+        "engine": "defuddle (MIT), in its own Worker",
+      };
     } else if (lens === "structured") {
       title = "Structured focus";
       badgeData = { text: (jsonld || micro || rdfa || mf) ? "signals found" : "mostly untyped", kind: (jsonld || micro || rdfa || mf) ? "ok" : "off" };
@@ -1136,6 +1159,7 @@
     var LENS_FN = Object.create(null);
     LENS_FN.readiness = lensReadiness;
     LENS_FN.anatomy = lensAnatomy;
+    LENS_FN.reader = lensReader;
     LENS_FN.structured = lensStructured;
     LENS_FN.ai = lensAI;
     LENS_FN.terms = lensTerms;
@@ -1151,8 +1175,51 @@
     machineBody.scrollTop = 0;
     if (view === "delta") bindCounterfactuals();
     if (lens === "readiness") bindReadinessActions();
+    var readerBtn = machineBody.querySelector("#lx-reader-run");
+    if (readerBtn) readerBtn.addEventListener("click", runReader);
     var scoreBtn = machineBody.querySelector(".lx-verdict-score");
     if (scoreBtn) scoreBtn.addEventListener("click", function () { setLens("readiness"); });
+  }
+
+  // The Reader lens. Unlike the other six it is not a projection of the scan
+  // already in hand: it needs a SECOND read, by a different engine, in a
+  // different Worker (/lens/read, lens-reader/). So this renders one of three
+  // states — the opt-in, the spinner, the result — and the module that draws the
+  // result loads lazily, exactly like lens-browser.js.
+  //
+  // It is deliberately opt-in rather than auto-firing the way Browser Run does.
+  // Browser Run auto-fires because a third pane sitting empty makes Compare read
+  // as two panes and a button; this one is a tab, so nothing looks broken while
+  // it waits, and every run is a full re-fetch of the target from our IP.
+  function lensReader() {
+    if (window.LensReader) return window.LensReader.mount(readerData, readerBusy, data);
+    // Pre-module fallback. It has to be self-contained: the module may never
+    // arrive (offline, blocked), and a bare empty pane would read as a bug.
+    return section("Reader's guess", { text: "not run" },
+      "A third-party extractor's opinion of this page, from its own Worker.",
+      '<div class="lx-reader-intro">Defuddle (MIT, kepano/defuddle) guesses which part of the document is the article and throws the rest away. ' +
+      'The Raw response tab is what the server actually sent. The interesting number is the gap.' +
+      '<button class="lx-browser-run" type="button" id="lx-reader-run">Run the extractor</button></div>');
+  }
+
+  function runReader() {
+    if (readerBusy || !data) return;
+    readerBusy = true;
+    renderMachine();
+    function loaded() {
+      if (!window.LensReader) { readerBusy = false; renderMachine(); return; }
+      window.LensReader.run(data, function (json) {
+        readerBusy = false; readerData = json; renderMachine(); renderStatus();
+      }, function () {
+        readerBusy = false; renderMachine();
+      });
+    }
+    if (window.LensReader) { loaded(); return; }
+    var script = document.createElement("script");
+    script.src = "/lens-reader.js?v=1";
+    script.onload = loaded;
+    script.onerror = function () { readerBusy = false; renderMachine(); };
+    document.head.appendChild(script);
   }
 
   function lensAnatomy() {
@@ -1529,6 +1596,11 @@
         note: "The response surface a machine can read without interpreting the page.",
         rows: ["status, content type, and payload size", "headings, links, images, and readable text", "headers and accessibility clues"]
       },
+      reader: {
+        title: "Reader's guess",
+        note: "What a reader-mode extractor thinks this page is, and how much of it that costs.",
+        rows: ["Defuddle's extraction, from its own Worker", "the gap: words as served against words kept", "control labels that survived, which read as prose to an agent"]
+      },
       structured: {
         title: "Structured",
         note: "The entities and relationships a parser can lift from the markup.",
@@ -1738,6 +1810,7 @@
       data = null;
       browserData = null;
       browserRecipeData = null;
+    readerData = null;
       humanBody.innerHTML = '<div class="lx-empty">Paste any URL above.<span>You get the page a person sees, the raw file a machine gets instead, and what that difference costs.</span></div>';
       machineBody.innerHTML = '<div class="lx-empty">The markup, metadata, and machine directives land here.</div>';
       renderBrowser();
