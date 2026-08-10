@@ -817,5 +817,12 @@
     "version": "aadhar-v181-lens-decode",
     "vnum": 181,
     "ymd": "2026-08-10"
+  },
+  {
+    "slug": "lens-reader",
+    "title": "The Other Web shows what a reader-mode extractor throws away",
+    "version": "aadhar-v182-lens-reader",
+    "vnum": 182,
+    "ymd": "2026-08-10"
   }
 ]
