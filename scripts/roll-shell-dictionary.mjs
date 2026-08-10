@@ -5,7 +5,8 @@
 //
 // This is all that remains of the old gen-shell-deltas.mjs. The deltas themselves moved
 // into build.mjs once it turned out node:zlib's zstd takes a `dictionary` option (the
-// "unreachable from Node" limit was BROTLI's, and I had over-generalized it), so they are
+// "unreachable from Node" limit was BROTLI's at the time, I had over-generalized it, and
+// node 26 has since given brotli one as well), so they are
 // build output now: no zstd CLI, no committed artifacts, nothing to forget.
 //
 // Rolling stays a deliberate human step for one reason: it WRITES INTO THE SOURCE TREE, and
