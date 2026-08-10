@@ -3,7 +3,7 @@
   "private": true,
   "description": "aadhar.sh - deploy-time transform only (authoring stays buildless; see build.mjs)",
   "type": "module",
-  "packageManager": "pnpm@11.21.0",
+  "packageManager": "pnpm@12.0.0-rc.3",
   "comment:workspaces": "pnpm does not read npm's `workspaces` field; the package list and the build allowlist live in pnpm-workspace.yaml. See that file, and CLAUDE.md gotcha 29 for why the release script is `deploy:direct` rather than `deploy`.",
   "scripts": {
     "build": "node build.mjs",
