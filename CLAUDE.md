@@ -2183,6 +2183,17 @@ pnpm run deploy:direct
     and the general shape is that a new policy against an old tree fails on the
     gap between them.
 
+    **It also fires on any job that installs an OLDER commit**, which is a case
+    worth knowing before you go debugging one. `perf-diff.yml` checks out the
+    merge base and builds it, using the WORKFLOW from your branch against the
+    TREE from the base, so a commit predating `minimumReleaseAgeExclude` gets
+    the policy with no exclude list and fails. That was self-resolving for the
+    pnpm migration itself (once this landed on main, every merge base carried
+    the list), and it generalises: a workflow that builds an old tree with a new
+    policy will fail on the gap between them, and the fix belongs in the job
+    rather than in the policy. `perf-diff` gates nothing, so it was left to
+    resolve itself; `validate` would not have that luxury.
+
     **`allowBuilds` is pnpm 11 only, and the build image runs pnpm 10.11.1.**
     pnpm 10 spells the same idea `onlyBuiltDependencies` and ignores this key
     silently, so `esbuild` and `workerd` postinstalls do not run there. Harmless

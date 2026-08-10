@@ -123,7 +123,7 @@ jobs:
       - name: Validate Reader lens Worker config and run its tests
         working-directory: lens-reader
         run: |
-          pnpm install --no-audit --no-fund
+          pnpm install
           pnpm test
           npx wrangler deploy --dry-run -c wrangler.toml
 
