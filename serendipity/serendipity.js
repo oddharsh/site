@@ -67,7 +67,9 @@ function relativeTime(date) {
 
 function fmtDateTime(s) {
   if (!s) return "";
+  /** @type {Intl.DateTimeFormatOptions} */
   const opt = { weekday: "short", month: "short", day: "numeric" };
+  /** @type {Intl.DateTimeFormatOptions} */
   const topt = { hour: "numeric", minute: "2-digit" };
   // Temporal when available: a wall-clock string shows as recorded; an instant
   // shows in UTC (matching this Worker's clock). falls back to Date otherwise.
@@ -81,7 +83,7 @@ function fmtDateTime(s) {
     }
   } catch (e) {}
   const d = new Date(s);
-  if (isNaN(d)) return "";
+  if (isNaN(d.getTime())) return "";
   return d.toLocaleDateString("en-US", opt) + " · " + d.toLocaleTimeString("en-US", topt);
 }
 
@@ -454,10 +456,10 @@ async function renderDashboard(d, path, msg, env) {
     const PAST_CAP = 30;  // past-event cards were ~88% of the payload, mostly unscrolled
     // stable: surface RSVP'd ('going') events first within each section, so the
     // real events lead and a past one isn't buried below the cap by the browsed pile.
-    const goingFirst = (arr) => arr.slice().sort((a, b) => (b.user_status === "going") - (a.user_status === "going"));
+    const goingFirst = (arr) => arr.slice().sort((a, b) => Number(b.user_status === "going") - Number(a.user_status === "going"));
     const upcoming = events.filter((e) => !e.start_at || new Date(e.start_at).getTime() >= now);
     const pastAll = events.filter((e) => e.start_at && new Date(e.start_at).getTime() < now)
-                          .sort((a, b) => new Date(b.start_at) - new Date(a.start_at));
+                          .sort((a, b) => new Date(b.start_at).getTime() - new Date(a.start_at).getTime());
     const past = goingFirst(pastAll).slice(0, PAST_CAP);
     // sign the cover-proxy URL for every card we actually render (upcoming + the
     // capped past slice) — not all of pastAll. eventCard reads e._coverHref.
@@ -1250,6 +1252,7 @@ export async function cronSerendipity(env) {
   for (const ev of soon) {
     // first set that can read this list wins; with one contributor that is one
     // try, and a restricted list falls through to the next set rather than dying.
+    /** @type {{error?: string, synced?: number}} */
     let r = { error: "no readable cookie set" };
     for (const s of fresh) { r = await syncGuests(d, ev.id, s.user_key, s.cookies_json); if (!r.error) break; }
     out.guests.push({ event: ev.id, ...r });
@@ -1644,7 +1647,7 @@ async function mcpSearchPeople(d, q, limit) {
     // split each person's events into what they're going to (upcoming) vs have
     // been to (past), so a caller can read both their trajectory and their reach.
     o.going_to = evs.filter((e) => !e.start_at || new Date(e.start_at).getTime() >= now)
-                    .sort((a, b) => new Date(a.start_at || 0) - new Date(b.start_at || 0));
+                    .sort((a, b) => new Date(a.start_at || 0).getTime() - new Date(b.start_at || 0).getTime());
     o.been_to = evs.filter((e) => e.start_at && new Date(e.start_at).getTime() < now);  // already DESC
     return o;
   });
@@ -1678,7 +1681,7 @@ async function mcpContributorEvents(d, contributor) {
     total: rows.length,
     going_to: summaries.filter((e) => !e.start_at || new Date(e.start_at).getTime() >= now),
     been_to: summaries.filter((e) => e.start_at && new Date(e.start_at).getTime() < now)
-                      .sort((a, b) => new Date(b.start_at) - new Date(a.start_at)),
+                      .sort((a, b) => new Date(b.start_at).getTime() - new Date(a.start_at).getTime()),
   };
 }
 
@@ -1922,13 +1925,13 @@ async function mcpCallTool(d, name, args) {
     let rows = await queryEvents(d);
     if (when === "upcoming") rows = rows.filter((e) => !e.start_at || new Date(e.start_at).getTime() >= now);
     else if (when === "past") rows = rows.filter((e) => e.start_at && new Date(e.start_at).getTime() < now)
-                                         .sort((a, b) => new Date(b.start_at) - new Date(a.start_at));
+                                         .sort((a, b) => new Date(b.start_at).getTime() - new Date(a.start_at).getTime());
     if (q) rows = rows.filter((e) => [e.name, e.location, e.contributors].some((v) => v && String(v).toLowerCase().includes(q)));
     const matched = rows.length;                                            // after when + q, before rsvp tier
     const goingCount = rows.filter((e) => e.user_status === "going").length;
     if (rsvp === "going") rows = rows.filter((e) => e.user_status === "going");
     else if (rsvp === "discovered") rows = rows.filter((e) => e.user_status !== "going");
-    else rows = rows.slice().sort((a, b) => (b.user_status === "going") - (a.user_status === "going")); // stable: first-class first, date order kept within tier
+    else rows = rows.slice().sort((a, b) => Number(b.user_status === "going") - Number(a.user_status === "going")); // stable: first-class first, date order kept within tier
     const total = rows.length;
     const events = rows.slice(0, limit).map(mcpEventSummary);
     const out = { when, rsvp, total, returned: events.length, events };

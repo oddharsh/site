@@ -681,7 +681,7 @@ export async function lensFrame(env, request, state, ctx) {
   if (!target.ok) {
     return { title: "lens — refused", body: [[s(target.error, "bad")]], status: keyHints([["&url=", "try another target"]]) };
   }
-  if (await overLensBudget(LENS_BUDGETS.inspect, request, env, ctx)) {
+  if (await overLensBudget(LENS_BUDGETS.inspect, request, env)) {
     return { title: "lens — rate limited", body: [[s("30 lookups a minute, shared with /lens/fetch. Try again shortly.", "warn")]], status: [] };
   }
   let obs;
@@ -781,7 +781,7 @@ export async function dictFrame(env, request, state, ctx) {
 
   const target = validateLensTarget(state.url);
   if (!target.ok) return { title: "dict — refused", body: [[s(target.error, "bad")]], status: [] };
-  if (await overLensBudget(LENS_BUDGETS.inspect, request, env, ctx)) {
+  if (await overLensBudget(LENS_BUDGETS.inspect, request, env)) {
     return { title: "dict — rate limited", body: [[s("Shares Lens's 30/min budget. Try again shortly.", "warn")]], status: [] };
   }
 
@@ -858,7 +858,7 @@ export async function cacheFrame(env, request, state, ctx) {
 
   const target = validateLensTarget(state.url);
   if (!target.ok) return { title: "cache — refused", body: [[s(target.error, "bad")]], status: [] };
-  if (await overLensBudget(LENS_BUDGETS.inspect, request, env, ctx)) {
+  if (await overLensBudget(LENS_BUDGETS.inspect, request, env)) {
     return { title: "cache — rate limited", body: [[s("Shares Lens's 30/min budget. Try again shortly.", "warn")]], status: [] };
   }
 
@@ -905,7 +905,7 @@ export async function agentReadyRoute(env, request, state, ctx) {
   }
   const target = validateLensTarget(state.url);
   if (!target.ok) return { title: "agent-ready — refused", body: [[s(target.error, "bad")]], status: [] };
-  if (await overLensBudget(LENS_BUDGETS.inspect, request, env, ctx)) {
+  if (await overLensBudget(LENS_BUDGETS.inspect, request, env)) {
     return { title: "agent-ready — rate limited", body: [[s("Shares Lens's 30/min budget. Try again shortly.", "warn")]], status: [] };
   }
   return agentReadyFrame(target.url, env);
@@ -936,7 +936,7 @@ export async function encodeFrame(env, request, state, ctx) {
 
   const target = validateLensTarget(state.url);
   if (!target.ok) return { title: "encode — refused", body: [[s(target.error, "bad")]], status: [] };
-  if (await overLensBudget(LENS_BUDGETS.inspect, request, env, ctx)) {
+  if (await overLensBudget(LENS_BUDGETS.inspect, request, env)) {
     return { title: "encode — rate limited", body: [[s("Shares Lens's 30/min budget. Try again shortly.", "warn")]], status: [] };
   }
 

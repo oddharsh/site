@@ -56,10 +56,7 @@
   "engines": {
     "node": ">=24.0.0"
   },
-  "comment:overrides": "undici arrives only through miniflare, which pins it EXACTLY (7.28.0), so npm cannot move it and dependabot cannot either. 7.29.0 closes five advisories in that pin: cross-user cache disclosure + parse crash on degenerate private cache directives (high), the whitespace-around-equals variant of the same, cookie attribute injection via unsanitized domain, response desync in the retry interceptor, and CRLF injection via a blob-like body type. Same major miniflare was built against, so it is a patch bump rather than a runtime gamble. Drop this the day miniflare pins >= 7.29.0 itself.",
-  "overrides": {
-    "undici": "7.29.0"
-  },
+  "comment:undici": "undici arrives only through miniflare, which pins it EXACTLY, so npm cannot move it and dependabot cannot either. An `overrides` block forced 7.29.0 from 2026-08-05 until this commit, for five advisories in the 7.28.0 pin. Both miniflare consumers now ask for 7.29.0 themselves, so the override is gone. The floors are what replace it: `wrangler >= 4.120.0` and `cal`'s `@cloudflare/vitest-pool-workers >= 0.20.3` are the two versions whose miniflare (5.20260801.1-alpha) carries the fixed pin. Dropping EITHER floor puts 7.28.0 back at the hoisted position, silently, because npm hoists whichever exact pin it resolves first and the vulnerable one wins that race.",
   "dependencies": {
     "@noble/post-quantum": "0.7.0"
   }

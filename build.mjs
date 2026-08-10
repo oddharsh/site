@@ -1595,8 +1595,10 @@ for (const [file, srcPath, marker] of SHELLS) {
   // luna.css change: 116 bytes against 7,615.
   //
   // This used to be a workstation script with committed artifacts, on the belief that
-  // dictionary compression was unreachable from Node. That was true of BROTLI and I wrongly
-  // generalized it: node:zlib's zstd DOES take a `dictionary` option. It is also better
+  // dictionary compression was unreachable from Node. That was true of BROTLI AT THE TIME and I
+  // wrongly generalized it: node:zlib's zstd DOES take a `dictionary` option. (node 26 has since
+  // given brotli one too, nodejs/node#61763, which retires the limit rather than the choice —
+  // dcz won on decode speed, not on either encoder's availability. See gotcha 14.) It is also better
   // than shelling out — 116 bytes where the zstd CLI produced 120 — and portable, verified
   // by having the foreign `zstd -d -D` CLI decode Node's bytes byte-exact, skippable prefix
   // and all. That interop check is the one that matters, because the real decoder is a

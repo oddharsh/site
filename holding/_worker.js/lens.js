@@ -2059,8 +2059,11 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
       webmcp: isHtml ? lensDetectWebmcp(body) : { found: false },
     });
     out.botViews = botViews;
+    // finalUrl, status and body used to be passed here and were never read:
+    // readiness is judged from the probe RESULTS, each of which carries its own
+    // status and body, rather than from the page that prompted the fan-out.
     out.readiness = lensReadiness({
-      finalUrl, status: res.status, headers, body, robots, sitemap, terms: out.terms,
+      headers, robots, sitemap, terms: out.terms,
       discovery: out.discovery, agent: out.agent, openapi, botViews,
     });
   }
@@ -2667,6 +2670,11 @@ const LENS_RATES = [
   { model: "Claude Haiku 4.5", usdPerMtok: 1.0 },
 ];
 
+/**
+ * Every tier is optional: an HTML page prices html/text/markdown/outline, a
+ * non-HTML text body prices raw alone, and add() skips whatever is absent.
+ * @param {{html?: number, text?: number, markdown?: number, headings?: {level: number, text: string}[], raw?: number}} sizes
+ */
 export function lensCost({ html, text, markdown, headings, raw }) {
   const tiers = [];
   const add = (key, label, note, chars, cpt) => {
