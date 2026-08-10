@@ -29,10 +29,17 @@
      "cors" — the two would not dedupe and the page would make the request
      TWICE. verify in devtools that exactly one /photos/grid.html appears.
 
-     NOT done for /rn/tracks.html: that hydrator is guarded on data-ssr="0", so
-     a response the worker managed to SSR would pay for a fragment nobody
-     fetches. this one has no such guard. -->
+     /rn/tracks.html gets the same treatment, and the reason it used to be
+     excluded is GONE. this comment read "NOT done for /rn/tracks.html: that
+     hydrator is guarded on data-ssr='0', so a response the worker managed to
+     SSR would pay for a fragment nobody fetches." the worker no longer SSRs the
+     playlist at all — serveHomepageWithPrerenderedTracks and SSR_DEADLINE_MS
+     are both gone, `/` is a deterministic static document now — so data-ssr is
+     ALWAYS "0", the guard never once declines, and the fetch is exactly as
+     unconditional as the grid's. neither preload can be wasted; both just move
+     discovery off a <script> the parser has to reach ~800 lines down. -->
 <link rel="preload" as="fetch" href="/photos/grid.html" crossorigin>
+<link rel="preload" as="fetch" href="/rn/tracks.html" crossorigin>
 <title>Aadharsh Pannirselvam</title>
 <meta name="description" content="Aadharsh Pannirselvam. I research and invest in interesting tech-oriented stuff and the people that make them.">
 <meta name="author" content="Aadharsh Pannirselvam">
@@ -794,21 +801,29 @@ footer .signature small { color: oklch(56.93% 0 0); }
       <ol class="np-list" id="np-list" data-ssr="0">
         <li class="np-empty">The current playlist is unavailable. <a href="/rn">Open on Spotify &#x2197;&#xFE0E;</a></li>
       </ol>
-      <noscript><p class="np-nojs">The playlist is server-rendered when available. <a href="/rn">Open it on Spotify &#x2197;&#xFE0E;</a></p></noscript>
+      <noscript><p class="np-nojs">The playlist loads with JavaScript, and it moves too fast to bake into the page. <a href="/rn">Open it on Spotify &#x2197;&#xFE0E;</a></p></noscript>
     </section>
 
-    <!-- The Worker fills the playlist in the first HTML response — but only if
-         its KV read answers inside a ~25ms budget (home.js SSR_DEADLINE_MS).
-         When that deadline fires, the section arrives with data-ssr="0" and
-         this script refetches the SAME fragment the worker would have injected
-         (/rn/tracks.html, rendered by the same renderTrackListHtml; the fetch
-         itself usually lands warm because the timed-out worker read completed
-         behind the response and warmed the colo). The x-rn-fragment check is
-         load-bearing: a 5xx interstitial is also text/html and also resolves
-         fine, so only a response that proves it is our fragment may replace
-         the honest empty state. The fragment renders its own honest states for
-         "no playlist" / "scrape broke", so swapping it in is safe in every
-         case, and /rn stays the no-JS destination (noscript above). -->
+    <!-- This is the ONLY path that fills the playlist. The comment here used to
+         open "The Worker fills the playlist in the first HTML response — but
+         only if its KV read answers inside a ~25ms budget (home.js
+         SSR_DEADLINE_MS)", which described a world that no longer exists:
+         serveHomepageWithPrerenderedTracks and that deadline are both gone, and
+         `/` is a deterministic static document whose dynamic halves all leave
+         by fetch. So data-ssr is always "0" on arrival, this fetch always runs,
+         and a <link rel=preload> up in <head> gives the parser the URL ~800
+         lines before it reaches this script.
+
+         The x-rn-fragment check is load-bearing: a 5xx interstitial is also
+         text/html and also resolves fine, so only a response that proves it is
+         our fragment may replace the honest empty state. The fragment renders
+         its own honest states for "no playlist" / "scrape broke", so swapping it
+         in is safe in every case, and /rn stays the no-JS destination.
+
+         Serving this fragment is also what warms the album art for the colo
+         that just served it (rn.js, warmArtCache), so the tooltip's first hover
+         does not pay a ~600ms cold Images transform. That happens entirely in
+         waitUntil: nothing here waits on it, and the browser never sees it. -->
     <script>
     (() => {
       const list = document.getElementById("np-list");

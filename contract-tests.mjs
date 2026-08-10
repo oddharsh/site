@@ -8,7 +8,7 @@
 
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import test from "node:test";
 
 import {
@@ -57,7 +57,9 @@ import { mapWithConcurrency, readResponseCapped } from "./holding/_worker.js/lib
 import { diffAroundRows, handleAroundChangesJson, readAroundChanges } from "./holding/_worker.js/around.js";
 import {
   ART_VERSION,
+  WARM_MAX_URLS,
   artUrls,
+  artWarmList,
   canonicalArtUrl,
   handleRnArt,
   handleRnTracks,
@@ -402,7 +404,66 @@ test("art URLs are derived from the hash, whatever alias it arrived under", () =
   assert.equal(u.src, `/rn/art/${ART_HASH_A}-240-${ART_VERSION}.jpg`);
   assert.equal(u.srcset,
     `/rn/art/${ART_HASH_A}-120-${ART_VERSION}.avif 120w, /rn/art/${ART_HASH_A}-240-${ART_VERSION}.avif 240w`);
+  // The warm tier is not a fourth URL: it has to be a URL the MARKUP already
+  // names, or the cache fills with bytes no browser ever asks for.
+  assert.equal(u.warm, `/rn/art/${ART_HASH_A}-240-${ART_VERSION}.avif`);
+  assert.ok(u.srcset.includes(u.warm));
   assert.equal(artUrls("https://mosaic.scdn.co/640/abc"), null);
+});
+
+// 40 lowercase hex, the shape ART_HASH demands, and injective in n so no two
+// fixtures can collide and quietly weaken a dedupe or cap assertion.
+const artHash = (n) => n.toString(16).padStart(40, "0");
+
+test("the art warm list covers first, dedupes, and skips what cannot be re-hosted", () => {
+  const payload = {
+    tracks: [
+      // Two tracks sharing one album cover, so the dedupe has something to do.
+      { image_url: `https://i.scdn.co/image/${artHash(1)}`,
+        artists: [{ image_url: `https://image-cdn-fa.spotifycdn.com/image/${artHash(3)}` }] },
+      { image_url: `https://i.scdn.co/image/${artHash(1)}`,
+        artists: [{ image_url: `https://i.scdn.co/image/${artHash(4)}` }] },
+      { image_url: `https://i.scdn.co/image/${artHash(2)}`, artists: [] },
+      // A collage cover and an artist with no picture: neither can be re-hosted,
+      // so neither may appear. A /rn/art/ URL for these would 404 on hover.
+      { image_url: "https://mosaic.scdn.co/640/abc", artists: [{ image_url: null }] },
+    ],
+  };
+  const urls = artWarmList(payload, "https://aadhar.sh");
+
+  assert.deepEqual(urls, [
+    `https://aadhar.sh/rn/art/${artHash(1)}-240-${ART_VERSION}.avif`,
+    `https://aadhar.sh/rn/art/${artHash(2)}-240-${ART_VERSION}.avif`,
+    `https://aadhar.sh/rn/art/${artHash(3)}-240-${ART_VERSION}.avif`,
+    `https://aadhar.sh/rn/art/${artHash(4)}-240-${ART_VERSION}.avif`,
+  ]);
+  // Covers ahead of artist pictures, because the cap truncates the tail and a
+  // row is a far bigger hover target than the artist name inside it.
+  assert.ok(urls.indexOf(`https://aadhar.sh/rn/art/${artHash(2)}-240-${ART_VERSION}.avif`)
+          < urls.indexOf(`https://aadhar.sh/rn/art/${artHash(3)}-240-${ART_VERSION}.avif`));
+
+  // Every warmed URL must be one handleRnArt will actually serve, or the warm
+  // spends a subrequest and a transformation to cache a 404.
+  for (const u of urls) {
+    assert.match(new URL(u).pathname,
+      /^\/rn\/art\/[0-9a-f]{40}-(120|240)-\d{1,4}\.(avif|jpg)$/);
+  }
+
+  assert.deepEqual(artWarmList({ tracks: [] }, "https://aadhar.sh"), []);
+  assert.deepEqual(artWarmList(null, "https://aadhar.sh"), []);
+});
+
+test("the art warm is capped, so one long playlist cannot drain the subrequest budget", () => {
+  const many = { tracks: Array.from({ length: 60 }, (_, i) => ({
+    image_url: `https://i.scdn.co/image/${artHash(i)}`,
+    artists: [{ image_url: `https://i.scdn.co/image/${artHash(i + 100)}` }],
+  })) };
+  const urls = artWarmList(many, "https://aadhar.sh");
+  assert.equal(urls.length, WARM_MAX_URLS);
+  // Workers allows 1000 subrequests per request and the warm rides in the
+  // fragment's waitUntil, so the cap is headroom rather than a hard limit. It is
+  // asserted anyway: an uncapped warm scales with a playlist anyone can lengthen.
+  assert.ok(WARM_MAX_URLS <= 50);
 });
 
 test("rendered track rows re-host recognized art and pass everything else through", () => {
@@ -1867,6 +1928,36 @@ test("getImagesManifest serves the bundled pool without env", async () => {
   // no env, no ctx: the pool must not depend on any binding
   const pool = await getImagesManifest(undefined, undefined);
   assert.ok(Array.isArray(pool) && pool.length > 0);
+});
+
+test("both homepage fragments are preloaded, and the reason that is free still holds", async () => {
+  const page = await readFile(new URL("holding/index.html", import.meta.url), "utf8");
+
+  // `crossorigin` is load-bearing even same-origin: without it the preload is
+  // mode "no-cors" and will NOT match the hydrator's fetch(), whose default is
+  // "cors". The two would not dedupe and the page would fetch each fragment
+  // TWICE, turning a latency win into an extra request for every visitor.
+  for (const href of ["/photos/grid.html", "/rn/tracks.html"]) {
+    assert.match(page, new RegExp(
+      `<link rel="preload" as="fetch" href="${href}" crossorigin>`),
+      `${href} must be preloaded with crossorigin, or its hydrator fetch is made twice`);
+  }
+
+  // A preload can only ever be free while the fetch it names is UNCONDITIONAL.
+  // The tracks hydrator is guarded on data-ssr="0", which is currently vacuous
+  // because the worker no longer server-renders the playlist at all. If SSR ever
+  // comes back, the guard starts declining and this preload starts paying for a
+  // fragment nobody fetches, so pin the premise rather than trust the comment:
+  // the last two times this stopped being true, only the comments knew.
+  assert.match(page, /<ol class="np-list" id="np-list" data-ssr="0">/,
+    "the document must ship data-ssr='0', or the preloaded fragment goes unfetched");
+  const workerDir = new URL("holding/_worker.js/", import.meta.url);
+  for (const file of await readdir(workerDir)) {
+    if (!file.endsWith(".js")) continue;
+    const src = await readFile(new URL(file, workerDir), "utf8");
+    assert.doesNotMatch(src, /SSR_DEADLINE_MS|serveHomepageWithPrerenderedTracks/,
+      `${file} reintroduces homepage SSR; revisit the /rn/tracks.html preload and the comments that call the fetch unconditional`);
+  }
 });
 
 test("homepage selects 12 photos and transfers all of them", async () => {
