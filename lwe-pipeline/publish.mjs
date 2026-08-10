@@ -60,6 +60,6 @@ console.log(`  1) commit the generated page + wired regions on a branch, open a 
 console.log(`  2) merge it — CI promotes the tested commit to production and Workers`);
 console.log(`     Builds deploys the site Worker. Nothing to bump by hand.`);
 if (existsSync(corpusFile)) {
-  console.log(`  3) cd lwe-ask && npx wrangler deploy        # the auxiliary ask Worker`);
+  console.log(`  3) cd lwe-ask && pnpm exec wrangler deploy        # the auxiliary ask Worker`);
   console.log(`  4) curl -X POST https://aadhar.sh/lwe/ask/reindex -H "x-reindex-secret: $REINDEX_SECRET"  # embed it`);
 }

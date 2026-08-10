@@ -35,7 +35,7 @@ cd site
 pnpm install --frozen-lockfile
 pnpm --filter cal-aadhar-sh test
 pnpm run build
-npx wrangler deploy --dry-run -c wrangler.jsonc
+pnpm exec wrangler deploy --dry-run -c wrangler.jsonc
 ```
 
 The following are deliberately not committed and should be recreated rather
@@ -69,7 +69,7 @@ changes, and `git ls-files --others --exclude-standard` should be empty.
 
 Run these from the repository root. They update the live `aadhar-sh` Worker
 directly; no GitHub commit or code deploy is required because the values are
-Worker secrets. Use `npx wrangler secret list -c wrangler.jsonc` to confirm the
+Worker secrets. Use `pnpm exec wrangler secret list -c wrangler.jsonc` to confirm the
 secret is present without printing its value.
 
 ### Change the availability calendar (`ICAL_URL`)
@@ -78,7 +78,7 @@ Create a new Google Calendar **secret address in iCal format** (or the
 equivalent read-only iCloud feed), then replace the secret:
 
 ```bash
-npx wrangler versions secret put -c wrangler.jsonc ICAL_URL
+pnpm exec wrangler versions secret put -c wrangler.jsonc ICAL_URL
 ```
 
 Paste the new feed URL when prompted. To make the new source take effect
@@ -87,7 +87,7 @@ delete only that derived snapshot and ask the live slots endpoint to refresh:
 
 ```bash
 BOOKINGS_NS="37acb65118fe485583a90a94cb89365e"
-npx wrangler kv key delete --namespace-id="$BOOKINGS_NS" "cal:busy" --remote
+pnpm exec wrangler kv key delete --namespace-id="$BOOKINGS_NS" "cal:busy" --remote
 curl -fsS https://aadhar.sh/coffee/slots | jq .
 ```
 
@@ -103,8 +103,8 @@ only an `https://calendar.app.google/...` destination. Set the destination
 first, then the new random-looking path segment:
 
 ```bash
-npx wrangler versions secret put -c wrangler.jsonc WORK_CALENDAR_URL
-npx wrangler versions secret put -c wrangler.jsonc WORK_CALENDAR_SLUG
+pnpm exec wrangler versions secret put -c wrangler.jsonc WORK_CALENDAR_URL
+pnpm exec wrangler versions secret put -c wrangler.jsonc WORK_CALENDAR_SLUG
 ```
 
 Verify the new path without following the redirect and confirm that the old
@@ -124,7 +124,7 @@ GitHub or in a public page.
 Generate a new value and replace the Worker secret:
 
 ```bash
-openssl rand -hex 32 | npx wrangler versions secret put -c wrangler.jsonc SIGNING_SECRET
+openssl rand -hex 32 | pnpm exec wrangler versions secret put -c wrangler.jsonc SIGNING_SECRET
 ```
 
 This immediately invalidates every outstanding approve and decline link. It
@@ -215,7 +215,7 @@ exact tested SHA. Cloudflare Workers Builds watches that branch and is the only
 production publisher. Configure one Workers Build project for the site Worker
 with `production` as the production branch and monorepo root `.`, leave its
 dashboard Build command blank, and use
-`npx wrangler versions upload --x-provision=false --x-auto-create=false` as the
+`pnpm exec wrangler versions upload --x-provision=false --x-auto-create=false` as the
 Deploy command. GitHub never holds a Cloudflare token that can write, so it
 cannot publish to production even if the workflow guard is defeated.
 
@@ -380,7 +380,7 @@ matters:
    CI token still on its old scopes. The new section degrades to a note, nothing
    fails, and the merge deploys normally under the current dashboard command.
 2. **Flip the dashboard**: Workers Builds → the site Worker → Settings → Build →
-   Deploy command → `npx wrangler versions upload --x-provision=false
+   Deploy command → `pnpm exec wrangler versions upload --x-provision=false
    --x-auto-create=false`. Leave Build command blank and the non-production
    command alone (it already uploads).
 3. **Then** rotate `CLOUDFLARE_API_TOKEN` to add `Workers Builds Configuration:Read`.
@@ -1174,7 +1174,7 @@ outright — so it needs a token:
 ```bash
 # Cloudflare dashboard -> API Tokens -> Create Custom Token
 #   Permission: Account · Browser Rendering · Edit
-npx wrangler versions secret put -c wrangler.jsonc BROWSER_RUN_TOKEN
+pnpm exec wrangler versions secret put -c wrangler.jsonc BROWSER_RUN_TOKEN
 ```
 
 **That is an EDIT scope.** It lives as a Worker secret, never in GitHub, so the
@@ -1425,7 +1425,7 @@ synchronous execution, so they cannot measure CPU. Verified in production on a
 752KB page where the parse span read 0 right after emitting 81KB of markdown.
 Those two spans are kept for their attributes. When you actually want CPU:
 ```bash
-npx wrangler tail aadhar-sh --format json | grep -o '"cpuTime":[0-9]*'
+pnpm exec wrangler tail aadhar-sh --format json | grep -o '"cpuTime":[0-9]*'
 ```
 
 Only `_worker.js/index.js` may import `cloudflare:workers` (CLAUDE.md gotcha 16)
@@ -1441,7 +1441,7 @@ records nothing. Cloudflare shipped OpenTelemetry traces in local dev that day;
 Wrangler 4.118.0 already has it, and there is nothing to install, enable, or bump.
 
 ```bash
-pnpm run dev            # or: npx wrangler dev -c wrangler.dev.jsonc --port 8799
+pnpm run dev            # or: pnpm exec wrangler dev -c wrangler.dev.jsonc --port 8799
 curl -s localhost:8799/photos/grid.html > /dev/null      # make some spans
 
 # the named spans, newest first

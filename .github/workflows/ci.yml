@@ -80,7 +80,7 @@ jobs:
         run: pnpm run perf-budget
 
       - name: Validate site Worker config
-        run: npx wrangler deploy --dry-run
+        run: pnpm exec wrangler deploy --dry-run
 
       # Type checking WITHOUT TypeScript: tsc reads the JSDoc already in these
       # files, emits nothing, and never touches a served byte. Scoped to cal/src
@@ -110,22 +110,29 @@ jobs:
 
       - name: Validate Cloudflare garage Worker config
         working-directory: cf-garage
-        run: npx wrangler deploy --dry-run -c wrangler.toml
+        run: pnpm exec wrangler deploy --dry-run -c wrangler.toml
 
       - name: Validate LWE ask Worker config
         working-directory: lwe-ask
-        run: npx wrangler deploy --dry-run -c wrangler.toml
+        run: pnpm exec wrangler deploy --dry-run -c wrangler.toml
 
       # The Reader lens Worker. It installs its OWN deps rather than riding the
       # root workspace: defuddle + linkedom are ~22 MB of node_modules that only
       # this Worker bundles, and keeping them out of the root install is what
       # stops them drifting onto the site Worker's dependency surface.
+      #
+      # --ignore-workspace is what preserves that under pnpm, and it is load
+      # bearing rather than decoration. A bare `pnpm install` here walks UP to
+      # the root pnpm-workspace.yaml, installs the five workspace projects, and
+      # never creates lens-reader/node_modules at all, so the tests then die on
+      # ERR_MODULE_NOT_FOUND with a `node_modules missing` warning as the only
+      # clue. npm had no such behaviour: it installed the local package.json.
       - name: Validate Reader lens Worker config and run its tests
         working-directory: lens-reader
         run: |
-          pnpm install
+          pnpm install --ignore-workspace
           pnpm test
-          npx wrangler deploy --dry-run -c wrangler.toml
+          pnpm exec wrangler deploy --dry-run -c wrangler.toml
 
       # infra.json against reality. The tree and DNS tiers need no credential;
       # the account tier runs only when the read-only token secret exists and
