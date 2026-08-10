@@ -5172,11 +5172,25 @@ test("the dyno page distinguishes measured points from hand-entered ones", async
 // The Reader lens is the one /lens surface that lives in a DIFFERENT Worker, so
 // nothing about it is covered by the site Worker's own dry-run or route sweep.
 // These tests stand in for that: they pin the numbers a message quotes, the
-// single SSRF guard, and the two traps this feature actually hit while it was
-// being written.
+// single SSRF guard, and the two traps this feature actually hit.
+//
+// EVERY assertion below reads SOURCE TEXT and imports nothing from lens-reader/.
+// That is a hard constraint, not a style: this suite runs under plain node with
+// the ROOT workspace's dependencies, and lens-reader/src/reader.js imports
+// defuddle, linkedom and turndown, which live only in that sub-project. Importing
+// it here fails with ERR_MODULE_NOT_FOUND in CI while passing on any workstation
+// that happens to have run `npm install` in lens-reader/ — which is exactly how
+// this was caught (PR #299, first run). Same family as gotcha 16: what this file
+// imports has to resolve under bare node, forever.
+//
+// The behavioural half lives in lens-reader/test/reader.test.mjs, run by the CI
+// step that installs those dependencies.
 
 test("the reader's rate-limit message quotes the ceiling wrangler declares", async () => {
-  const { READER_LIMIT_PER_MIN } = await import("./lens-reader/src/reader.js");
+  const src = readFileSync("./lens-reader/src/reader.js", "utf8");
+  const constant = src.match(/export const READER_LIMIT_PER_MIN = (\d+)/);
+  assert.ok(constant, "reader.js no longer exports READER_LIMIT_PER_MIN");
+  const READER_LIMIT_PER_MIN = Number(constant[1]);
   const toml = readFileSync("./lens-reader/wrangler.toml", "utf8");
   const declared = toml.match(/\[\[ratelimits\]\][\s\S]*?simple\s*=\s*\{[^}]*limit\s*=\s*(\d+)/);
   assert.ok(declared, "lens-reader/wrangler.toml declares no ratelimit");
@@ -5234,13 +5248,11 @@ test("the reader hands turndown a NODE, because a string throws in workerd", asy
     "toMarkdown must pass turndown a NODE — a string resolves turndown's browser build and throws in workerd");
   assert.doesNotMatch(fn, /turndown\(contentHtml\)|turndown\(html\)/,
     "passing turndown an HTML string works under node and fails in the Worker");
-  // The one behavioural claim node CAN settle: script bodies never reach the
-  // output, which is the same rule the Markdown twins enforce.
-  const { toMarkdown } = await import("./lens-reader/src/reader.js");
-  const md = toMarkdown("<h2>Title</h2><p>Body <strong>text</strong>.</p><script>bad()</script>");
-  assert.match(md, /^## Title/m);
-  assert.match(md, /\*\*text\*\*/);
-  assert.doesNotMatch(md, /bad\(\)/, "script bodies must never reach the markdown");
+  // The output assertions (headings convert, script bodies never reach the
+  // markdown) need the real dependencies, so they live in
+  // lens-reader/test/reader.test.mjs rather than here.
+  assert.match(fn, /service\.remove\(\["script", "style"\]\)/,
+    "toMarkdown must strip script and style before converting");
 });
 
 test("the reader reports what it dropped, never only what it kept", async () => {
@@ -5254,9 +5266,10 @@ test("the reader reports what it dropped, never only what it kept", async () => 
   assert.match(reader, /source[\s\S]{0,200}kept/, "the payload must carry both counts");
   assert.match(client, /What the extractor threw away/, "the pane must lead with the gap");
   // And it must never present itself as the served bytes.
-  const { READER_NOTE } = await import("./lens-reader/src/reader.js");
-  assert.match(READER_NOTE, /OPINION/, "the note must name the output as an opinion");
-  assert.match(READER_NOTE, /never what the server sent/);
+  const note = reader.match(/export const READER_NOTE =([\s\S]*?);\n/);
+  assert.ok(note, "reader.js no longer exports READER_NOTE");
+  assert.match(note[1], /OPINION/, "the note must name the output as an opinion");
+  assert.match(note[1], /never what the server sent/);
 });
 
 test("every machine lens tab has a label, and the reader is one of them", async () => {

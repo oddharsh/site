@@ -1122,6 +1122,20 @@ exercises the one path that cannot fail. The first version of that test reintrod
 bug deliberately and still went green — the same "a check that can only agree with
 itself is decoration" lesson as gotcha 24.
 
+**The root suite may not import ANYTHING from `lens-reader/src/`, and this is gotcha 16
+wearing different clothes.** `contract-tests.mjs` runs under plain node with the ROOT
+workspace's dependencies; `reader.js` imports defuddle, linkedom and turndown, which
+live only in that sub-project. Importing it fails with `ERR_MODULE_NOT_FOUND` in CI
+while passing on any workstation that has run `npm install` in `lens-reader/` — which
+is exactly how it was caught, on PR #299's first run, after a local suite that had been
+green all afternoon. The split is by CAPABILITY: everything provable from source text
+stays in the root suite, and everything that has to actually RUN lives in
+`lens-reader/test/`, which the CI step that installs those dependencies executes.
+
+Generalise it past this Worker: **a green local suite proves nothing about CI when the
+two have different dependency sets.** The cheap control is to hide the sub-project's
+`node_modules` and re-run, which is the CI condition rather than an approximation of it.
+
 Two smaller rules learned here. **A Worker entrypoint may export ONLY the default
 handler and DO/Workflow classes**; a named value export fails at startup with
 `Incorrect type for map entry '<name>': the provided value is not of type 'function or

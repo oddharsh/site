@@ -114,10 +114,11 @@ jobs:
       # root workspace: defuddle + linkedom are ~22 MB of node_modules that only
       # this Worker bundles, and keeping them out of the root install is what
       # stops them drifting onto the site Worker's dependency surface.
-      - name: Validate Reader lens Worker config
+      - name: Validate Reader lens Worker config and run its tests
         working-directory: lens-reader
         run: |
           npm install --no-audit --no-fund
+          npm test
           npx wrangler deploy --dry-run -c wrangler.toml
 
       # infra.json against reality. The tree and DNS tiers need no credential;
