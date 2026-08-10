@@ -5287,3 +5287,22 @@ test("every machine lens tab has a label, and the reader is one of them", async 
     assert.match(client, new RegExp(`LENS_FN\\.${key} =`), `the client has no render function for "${key}"`);
   }
 });
+
+test("the reader never renders an unmeasurable phase as 0 ms", () => {
+  const client = readFileSync("./holding/lens-reader.js", "utf8");
+  // A Worker's clock advances across I/O and never during synchronous execution,
+  // so `parse`, `extract` and `markdown` come back 0 from production while
+  // `fetch` carries real time. Measured through the live route 2026-08-10:
+  // stripe.com answered {fetch: 104, parse: 0, extract: 0, markdown: 0} where the
+  // same run under wrangler dev had reported 30 / 347 / 10.
+  //
+  // Rendering those zeros would tell a visitor that parsing a 645 KB page is
+  // free, on the one panel whose job is saying what the read cost. This is the
+  // same class of claim the rest of the lens is built to avoid, so it is pinned.
+  assert.match(client, /not measurable/,
+    "a zero-valued timing phase must render as unmeasurable, never as 0 ms");
+  assert.match(client, /never during synchronous execution/,
+    "the panel must explain WHY those phases read zero");
+  assert.doesNotMatch(client, /ms\.extract \+/,
+    "the headline total must not sum phases the clock cannot see");
+});

@@ -105,17 +105,34 @@
       }));
   }
 
+  // A Worker's clock advances across I/O and NEVER during synchronous execution,
+  // so in production `parse`, `extract` and `markdown` all read 0 while `fetch`
+  // reads real time. Measured through the live route 2026-08-10: stripe.com came
+  // back {fetch: 104, parse: 0, extract: 0, markdown: 0}, where the same run under
+  // `wrangler dev` had reported 30 / 347 / 10.
+  //
+  // Printing those zeros would tell a visitor that parsing and extracting a 645 KB
+  // page is free, on a panel whose entire job is saying what the second read cost.
+  // So a zero is rendered as "not measurable here" with the reason, and the total
+  // is labelled as the I/O it actually covers rather than as elapsed work.
+  function phase(value) {
+    if (value == null) return "?";
+    return value > 0 ? value + " ms" : "not measurable (see below)";
+  }
   function timing(d) {
     var ms = d.ms || {};
-    var total = (ms.fetch || 0) + (ms.parse || 0) + (ms.extract || 0) + (ms.markdown || 0);
-    return section("What the second read cost", { text: total + " ms" },
-      "A second full fetch of the target plus a DOM parse. This is why the lens is opt-in rather than automatic.",
+    var measured = (ms.fetch || 0);
+    var blind = ["parse", "extract", "markdown"].filter(function (k) { return ms[k] === 0; }).length;
+    return section("What the second read cost", { text: measured + " ms of network" },
+      "This lens is opt-in because it re-fetches the target in full. The CPU half is a different story, below.",
       kvTable({
-        "fetch the page again": (ms.fetch == null ? "?" : ms.fetch + " ms"),
-        "build a DOM (linkedom)": (ms.parse == null ? "?" : ms.parse + " ms"),
-        "extract (defuddle)": (ms.extract == null ? "?" : ms.extract + " ms"),
-        "to markdown (turndown)": (ms.markdown == null ? "?" : ms.markdown + " ms"),
-      }));
+        "fetch the page again": phase(ms.fetch),
+        "build a DOM (linkedom)": phase(ms.parse),
+        "extract (defuddle)": phase(ms.extract),
+        "to markdown (turndown)": phase(ms.markdown),
+      }) + (blind
+        ? '<div class="lx-cap">A Worker\'s clock advances across I/O and never during synchronous execution, so the three CPU phases cannot time themselves from inside. They are real work — the same run under a local runtime reported 30 ms, 347 ms and 10 ms — and the zeros here mean "unmeasurable", not "free". Actual CPU is readable in Workers Logs as <code>cpuTime</code>.</div>'
+        : ""));
   }
 
   function prose(d) {
