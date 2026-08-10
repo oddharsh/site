@@ -377,20 +377,31 @@ export function artWarmList(payload, origin) {
   return [...seen];
 }
 
+// THERE IS NO SET-WIDE GUARD, and the one that used to be here is why this
+// feature shipped doing nothing. It probed `urls[0]` and returned early on a
+// hit, on the stated premise that "these URLs are minted and warmed together,
+// so the first one being present means this colo has already paid for this
+// playlist." That premise is false, and measurably so: a single HOVER warms one
+// URL, `/rn/art` responses are `immutable, max-age=31536000`, and the first
+// track's cover is the likeliest thing in the list to be hovered first. So one
+// visitor hovering row 1 disabled the warm for every other cover and artist in
+// that colo, for a year, silently.
+//
+// Verified in production 2026-08-10 on the build that shipped it: `urls[0]`
+// answered `x-art-cache: hit`, and 11 of 13 artist images that the warm should
+// have covered were still cold. The 120w tier was the control, cold at 13 of 13,
+// exactly as expected since nothing warms that tier.
+//
+// Skipping the guard costs one `cache.match` per URL, because `handleRnArt`
+// ALREADY probes the cache first and returns the hit without transforming. So a
+// fully warm colo pays ~28 cache lookups and zero subrequests, which is the
+// cheap case anyway. The guard bought a rounding error and cost the feature.
 export async function warmArtCache(payload, request, env, ctx) {
-  if (!ctx || typeof caches === "undefined") return 0;
+  if (!ctx || typeof caches === "undefined") return { warmed: 0, already: 0 };
   const urls = artWarmList(payload, new URL(request.url).origin);
-  if (!urls.length) return 0;
+  if (!urls.length) return { warmed: 0, already: 0 };
 
-  // ONE probe stands in for the whole set. These URLs are minted together and
-  // warmed together, so the first one being present means this colo has already
-  // paid for this playlist. Guessing wrong costs one `cache.match` and never a
-  // stale image: every URL is content-addressed and immutable, so a warm entry
-  // can only ever be the right bytes.
-  const cache = caches.default;
-  if (await cache.match(new Request(urls[0]))) return 0;
-
-  await Promise.all(urls.map(async (u) => {
+  const outcomes = await Promise.all(urls.map(async (u) => {
     try {
       // Call the handler directly instead of fetching our own origin. A self
       // fetch would cost a second worker invocation per cover to reach this
@@ -400,9 +411,18 @@ export async function warmArtCache(payload, request, env, ctx) {
       // and a tee branch nobody reads can back-pressure the branch being written
       // to the cache. These are 5-19KB images, so buffering them is free.
       if (res.body) await res.arrayBuffer();
-    } catch { /* a cover that will not warm is a cover that loads on hover */ }
+      // handleRnArt marks its own response, so the warm can report what it
+      // actually DID rather than how many URLs it considered. That distinction
+      // is the whole reason the broken guard went unnoticed: the old attribute
+      // counted intent, and intent looked identical to success.
+      return res.headers.get("x-art-cache") === "hit" ? "already" : "warmed";
+    } catch { return "failed"; }
   }));
-  return urls.length;
+
+  return {
+    warmed:  outcomes.filter((o) => o === "warmed").length,
+    already: outcomes.filter((o) => o === "already").length,
+  };
 }
 
 // Both representations carry `x-robots-tag: noindex`, which is what robots.txt
@@ -508,10 +528,13 @@ export async function handleRnTracksHtml(request, env, ctx) {
   const res = trackResponse(result.payload, result.status, "html");
   if (ctx && result.status === 200) {
     ctx.waitUntil(span("rn.art.warm", async (s) => {
-      const warmed = await warmArtCache(result.payload, request, env, ctx);
-      // 0 is the common and healthy answer (this colo was already warm), so the
-      // count is what separates "the warm is working" from "the warm never ran".
+      const { warmed, already } = await warmArtCache(result.payload, request, env, ctx);
+      // BOTH numbers, because either one alone is ambiguous. `warmed` 0 with
+      // `already` 28 is a healthy warm colo; `warmed` 0 with `already` 0 is the
+      // feature not running at all, and the first version of this span could not
+      // tell those apart. That is precisely how the broken guard shipped green.
       s.setAttribute("rn.art.warmed", warmed);
+      s.setAttribute("rn.art.already", already);
     }).catch(() => {}));
   }
   return res;
