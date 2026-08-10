@@ -172,6 +172,9 @@ function imageReceipt(input, info, output) {
 }
 
 function mcpOutput(receipt, images = []) {
+  // MCP content is a union of block shapes; without the annotation the array
+  // infers as text-only off its first element and refuses the image blocks.
+  /** @type {({type: "text", text: string} | {type: "image", data: string, mimeType: string})[]} */
   const content = [{ type: "text", text: JSON.stringify(receipt, null, 2) }];
   for (const image of images) content.push({ type: "image", data: base64(image.bytes), mimeType: image.mime });
   return { _mcp: { structured: receipt, content } };

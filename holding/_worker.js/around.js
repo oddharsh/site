@@ -221,6 +221,11 @@ export function diffAroundRows(current, previous) {
   return changes;
 }
 
+/**
+ * @param {any} env
+ * @param {string|number|null} [requestedLimit] the raw ?limit param, coerced and
+ *   clamped below — callers pass searchParams.get(), which is string|null.
+ */
 export async function readAroundChanges(env, requestedLimit = 50) {
   const limit = Math.min(100, Math.max(1, Number(requestedLimit) || 50));
   if (!env.RESTORE_DB) {

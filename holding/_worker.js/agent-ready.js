@@ -34,6 +34,7 @@ const INNER = COLS - 4;
 //
 // Recount with: the groups below map to real paths; `wc -l` them.
 export const LIFT_CHECKED = "2026-08-05";
+/** @type {[name: string, files: number, lines: number, note: string][]} */
 export const LIFT = [
   // [capability, files, lines, what it buys]
   ["MCP server", 3, 574, "tools/list + tools/call, stateless 2026-07-28"],
