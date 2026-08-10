@@ -2048,6 +2048,26 @@ npm run deploy
     there is nothing in the change to fix. It is also NOT a required check, so it
     never blocks a merge — both of those PRs merged and shipped with it red.
 
+    **"Usually" is carrying real weight, and #299 produced BOTH variants an hour
+    apart.** The first failure there was a GENUINE finding: a real inline review
+    comment on a real source line (`lens-reader/src/index.js:79`, information
+    exposure through a stack trace), which was correct and got fixed. The second
+    was the Copilot artifact above. Same check name, same red X, opposite
+    meanings — so "it's just Copilot" is a conclusion to reach, never an
+    assumption to start from.
+
+    The tell takes one API call and separates them cleanly:
+
+    ```bash
+    gh api repos/oddharsh/site/commits/<sha>/check-runs \
+      --jq '.check_runs[] | {name, conclusion, title: .output.title}'
+    ```
+
+    A real finding carries a non-null `output.title` naming the rule AND an
+    inline comment on a source file. The artifact has `title: null`, an empty
+    summary, and its lone annotation at `.github:<line>`. Check the annotation
+    path: a finding points at code you wrote, the artifact points at a directory.
+
 ---
 
 ## Source folder for new photos
