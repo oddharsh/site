@@ -288,11 +288,31 @@ export default {
   },
 };
 
+/**
+ * A worker-owned route handler, as dispatchTraced() calls one.
+ *
+ * @typedef {(request: Request, env: any, ctx: any, url: URL) => Response | Promise<Response>} RouteHandler
+ */
+
 // Exact worker-owned routes. This table mirrors wrangler.jsonc's
 // assets.run_worker_first allowlist: static is the default, and each entry here
 // earns a Worker invocation because it renders, redirects, negotiates, proxies,
 // writes, or needs a deliberate cache-policy override.
-const ROUTES = new Map([
+//
+// The annotation below is load-bearing for `npm run typecheck` and costs nothing
+// at runtime. This table is heterogeneous on purpose: some handlers are
+// synchronous, most are async, and many take fewer than four arguments. Inferred,
+// the array takes its element type from the FIRST entry (routeFavicon, which
+// returns a bare Response) and then rejects the 72 async handlers under it.
+//
+// It sits on the DECLARATION, and the separate ROUTE_TABLE const is the whole
+// reason why. Written as a cast on the argument to new Map(), `@type` ASSERTS
+// rather than checks, and a handler returning something that is not a Response
+// passes silently. Measured 2026-08-10 by planting `["/bogus", () => ({status:
+// 200})]`: the cast form accepted it, `@satisfies` caught it but left all 72
+// errors standing, and only the declaration form does both.
+/** @type {[string, RouteHandler][]} */
+const ROUTE_TABLE = [
   ["/favicon.ico", routeFavicon],
 
   ["/auth.md", routeAuthMd],
@@ -321,8 +341,8 @@ const ROUTES = new Map([
   // and _headers caches the well-known cards for 30 days, so an agent can hold the
   // old path long after a deploy could purge it. Same argument as the /images ->
   // /i/ redirects, on a shorter clock.
-  ["/perf", (request) => Response.redirect(new URL("/garage/dyno", request.url), 301)],
-  ["/perf.json", (request) => Response.redirect(new URL("/garage/dyno.json", request.url), 301)],
+  ["/perf", (request) => Response.redirect(new URL("/garage/dyno", request.url).href, 301)],
+  ["/perf.json", (request) => Response.redirect(new URL("/garage/dyno.json", request.url).href, 301)],
 
   ["/lens", routeLens],
   ["/lens/", routeDropSlash],
@@ -426,7 +446,8 @@ const ROUTES = new Map([
 
   ["/index.html", routeIndexHtml],
   ["/", routeHomepage],
-]);
+];
+const ROUTES = new Map(ROUTE_TABLE);
 
 // Ordered prefix/pattern routes. Order is load-bearing: R2 originals and
 // per-photo metadata must win before the generic thumbnail clamp.

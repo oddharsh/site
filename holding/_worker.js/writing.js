@@ -215,7 +215,10 @@ export async function renderWritingIndex(env) {
     taskPane({
         path: "/writing",
         name: "My Writing",
-        tasks: [{ href: "/writing/posts.json", label: "Open the post registry", glyph: "{" }]
+        // glyph is optional (taskPane defaults it to "≡"), so the literal is
+        // annotated rather than inferred — concat() types against the first
+        // array, which would otherwise make the glyph mandatory.
+        tasks: /** @type {{href: string, label: string, glyph?: string}[]} */ ([{ href: "/writing/posts.json", label: "Open the post registry", glyph: "{" }])
           .concat(twinFor("/writing") ? [{ href: twinFor("/writing"), label: "Read this as Markdown" }] : []),
       details: [{ term: "Contains", value: posts.length + (posts.length === 1 ? " document" : " documents") }],
     }) +

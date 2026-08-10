@@ -9,22 +9,37 @@
   // JSDoc already in these files and the generated Workers types, and emits
   // nothing.
   //
-  // The scope is cal/src, deliberately, and it is meant to GROW. Booking is the
-  // highest-stakes code in the repo: it moves real meetings, sends real mail,
-  // and signs its own approval links. Measured 2026-08-07, the rest of the tree
-  // is not clean yet and each remaining scope is a known quantity rather than a
-  // surprise:
+  // The scope was cal/src alone when this landed and was meant to GROW; it now
+  // covers the site Worker too, which is the whole request path. Booking is
+  // still the highest-stakes code here (it moves real meetings, sends real mail,
+  // and signs its own approval links), so it stays first in the include.
   //
-  //   cal/src                    0 errors  (checked here)
-  //   holding/_worker.js/lib    28 errors
-  //   holding/_worker.js (all) 106 errors, 72 of them one heterogeneous ROUTES
-  //                            Map inferring an over-narrow handler signature,
-  //                            which one annotation would settle
+  // Widening it on 2026-08-10 cost 112 errors, resolved as:
   //
-  // None of those 106 was a live bug when measured. That is the honest case for
-  // this check: it is here to catch the NEXT one, of the shape where a property
-  // is read that the object never had and the value silently becomes 0 or
-  // undefined, which no test in this repo would notice.
+  //   72   one heterogeneous ROUTES table taking its element type from the first
+  //        entry, exactly as predicted. Settled by ONE annotation on the new
+  //        ROUTE_TABLE declaration in holding/_worker.js/index.js.
+  //   18   serendipity/serendipity.js, which the glob never names — tsc follows
+  //        imports, so widening to the Worker drags in everything it reaches.
+  //   22   scattered, and all of one family: a value that coerces at runtime and
+  //        does not typecheck. Date subtraction, boolean subtraction, isNaN(Date),
+  //        Response.redirect(URL), searchParams.get() into a numeric param.
+  //
+  // NONE of the 112 was a live bug, same as the 2026-08-07 measurement. That is
+  // still the honest case for this check: it is here to catch the NEXT one, of
+  // the shape where a property is read that the object never had and the value
+  // silently becomes 0 or undefined, which no test in this repo would notice.
+  //
+  // The coercion family is worth a note, because "harmless at runtime" is what
+  // makes it worth fixing rather than suppressing. Every one of those 22 now says
+  // its units out loud (.getTime(), Number(), .href), which is the same argument
+  // the original yw() fix made.
+  //
+  // What this check can see is narrower than it looks, and it has not changed:
+  // in a .js file an unannotated object literal stays expandable, so `x.nope` is
+  // NOT an error. The checker enforces the JSDoc you write. Widening the include
+  // buys the CALL-SITE and inference errors above; it does not retro-fit shapes
+  // onto 90 unannotated modules, and nobody should read a green run as if it had.
   "compilerOptions": {
     "noEmit": true,
     "allowJs": true,
@@ -42,5 +57,5 @@
     // relitigating every implicit any in a codebase that was never annotated.
     "strict": false
   },
-  "include": ["cal/src/**/*.js"]
+  "include": ["cal/src/**/*.js", "holding/_worker.js/**/*.js"]
 }

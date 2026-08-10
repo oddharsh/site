@@ -41,6 +41,10 @@ function titleFor(name) {
     .join(" ");
 }
 
+/**
+ * @param {any} tool
+ * @param {{title?: string, openWorldHint?: boolean}} [overrides]
+ */
 export function mcpTool(tool, { title, openWorldHint } = {}) {
   return {
     ...tool,
