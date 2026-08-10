@@ -5167,3 +5167,142 @@ test("the dyno page distinguishes measured points from hand-entered ones", async
   // Zero client JS: the whole chart is server-rendered SVG.
   assert.doesNotMatch(html.split('<svg class="chart"')[1].split("</svg>")[0], /<script/);
 });
+
+// ── the Reader lens (/lens/read, lens-reader/) ───────────────────────────────
+// The Reader lens is the one /lens surface that lives in a DIFFERENT Worker, so
+// nothing about it is covered by the site Worker's own dry-run or route sweep.
+// These tests stand in for that: they pin the numbers a message quotes, the
+// single SSRF guard, and the two traps this feature actually hit.
+//
+// EVERY assertion below reads SOURCE TEXT and imports nothing from lens-reader/.
+// That is a hard constraint, not a style: this suite runs under plain node with
+// the ROOT workspace's dependencies, and lens-reader/src/reader.js imports
+// defuddle, linkedom and turndown, which live only in that sub-project. Importing
+// it here fails with ERR_MODULE_NOT_FOUND in CI while passing on any workstation
+// that happens to have run `npm install` in lens-reader/ — which is exactly how
+// this was caught (PR #299, first run). Same family as gotcha 16: what this file
+// imports has to resolve under bare node, forever.
+//
+// The behavioural half lives in lens-reader/test/reader.test.mjs, run by the CI
+// step that installs those dependencies.
+
+test("the reader's rate-limit message quotes the ceiling wrangler declares", async () => {
+  const src = readFileSync("./lens-reader/src/reader.js", "utf8");
+  const constant = src.match(/export const READER_LIMIT_PER_MIN = (\d+)/);
+  assert.ok(constant, "reader.js no longer exports READER_LIMIT_PER_MIN");
+  const READER_LIMIT_PER_MIN = Number(constant[1]);
+  const toml = readFileSync("./lens-reader/wrangler.toml", "utf8");
+  const declared = toml.match(/\[\[ratelimits\]\][\s\S]*?simple\s*=\s*\{[^}]*limit\s*=\s*(\d+)/);
+  assert.ok(declared, "lens-reader/wrangler.toml declares no ratelimit");
+  // Same discipline as LENS_BUDGETS on the site Worker: the constant is what the
+  // 429 message quotes, the toml is what actually throttles, and a message that
+  // outlives its limit is worse than no message at all.
+  assert.equal(READER_LIMIT_PER_MIN, Number(declared[1]),
+    "the reader's 429 message would quote a limit the binding does not enforce");
+});
+
+test("the reader Worker shares the site's SSRF guard rather than copying it", async () => {
+  const reader = readFileSync("./lens-reader/src/reader.js", "utf8");
+  const entry = readFileSync("./lens-reader/src/index.js", "utf8");
+  // A second Worker aiming a visitor-supplied URL at the public internet is the
+  // same SSRF surface /lens/fetch has. Two copies of an allowlist pass review on
+  // the day they are written and diverge quietly afterwards, so this asserts the
+  // import exists AND that no local redefinition shadows it.
+  for (const [name, src] of [["reader.js", reader], ["index.js", entry]]) {
+    assert.match(src, /from "\.\.\/\.\.\/holding\/_worker\.js\/lib\/crawl\.js"/,
+      `lens-reader/src/${name} must import the shared guard, not reimplement it`);
+    assert.doesNotMatch(src, /function\s+validateLensTarget|function\s+privateHostBlocked/,
+      `lens-reader/src/${name} redefines a guard it is supposed to be importing`);
+  }
+  // And the site's export is still the shared one, so moving it did not leave
+  // lens.js with a stale private copy that only IT uses.
+  const crawl = await import("./holding/_worker.js/lib/crawl.js");
+  const lens = await import("./holding/_worker.js/lens.js");
+  assert.equal(lens.validateLensTarget, crawl.validateLensTarget,
+    "lens.js and lib/crawl.js must expose the same function object, not two copies");
+});
+
+test("the reader hands turndown a NODE, because a string throws in workerd", async () => {
+  const src = readFileSync("./lens-reader/src/reader.js", "utf8");
+  // THE trap this feature hit, and the assertion is STRUCTURAL on purpose —
+  // read the next paragraph before "improving" it into a behavioural one.
+  //
+  // turndown ships two builds. The node build falls back to @mixmark-io/domino
+  // and happily takes an HTML string; the browser build reaches for
+  // document.implementation.createHTMLDocument. Wrangler resolves the BROWSER
+  // condition, so `turndown(htmlString)` fails in a Worker while passing under
+  // node. Measured 2026-08-10 against `wrangler dev`: the string form answers
+  // {"ok":false,"error":"document is not defined"}, the node form returns real
+  // markdown. Passing a node sidesteps it entirely, since turndown's RootNode
+  // does input.cloneNode(true) for anything that is not a string.
+  //
+  // A behavioural test here is IMPOSSIBLE, not merely awkward: `node --test`
+  // resolves the node build, so it exercises the one code path that cannot
+  // fail. The first version of this test called toMarkdown() with the bug
+  // deliberately reintroduced and still went green — a check that can only ever
+  // agree with itself. So this asserts the call SHAPE, which is the thing a
+  // future edit would actually change, and the runtime claim is carried by the
+  // measurement recorded above rather than pretended at here.
+  const fn = src.match(/export function toMarkdown\([\s\S]*?\n\}/)[0];
+  assert.match(fn, /service\.turndown\(root\)/,
+    "toMarkdown must pass turndown a NODE — a string resolves turndown's browser build and throws in workerd");
+  assert.doesNotMatch(fn, /turndown\(contentHtml\)|turndown\(html\)/,
+    "passing turndown an HTML string works under node and fails in the Worker");
+  // The output assertions (headings convert, script bodies never reach the
+  // markdown) need the real dependencies, so they live in
+  // lens-reader/test/reader.test.mjs rather than here.
+  assert.match(fn, /service\.remove\(\["script", "style"\]\)/,
+    "toMarkdown must strip script and style before converting");
+});
+
+test("the reader reports what it dropped, never only what it kept", async () => {
+  const reader = readFileSync("./lens-reader/src/reader.js", "utf8");
+  const client = readFileSync("./holding/lens-reader.js", "utf8");
+  // The whole point of this lens is the GAP. A payload that reported only the
+  // extraction would read as "here is the page", which is the claim /lens exists
+  // to complicate — an extractor is guessing, and on a landing page it guesses
+  // badly (stripe.com, 2026-08-09: 55% of the words gone, hero headline first).
+  assert.match(reader, /dropped:\s*\{/, "the payload must carry a dropped tally");
+  assert.match(reader, /source[\s\S]{0,200}kept/, "the payload must carry both counts");
+  assert.match(client, /What the extractor threw away/, "the pane must lead with the gap");
+  // And it must never present itself as the served bytes.
+  const note = reader.match(/export const READER_NOTE =([\s\S]*?);\n/);
+  assert.ok(note, "reader.js no longer exports READER_NOTE");
+  assert.match(note[1], /OPINION/, "the note must name the output as an opinion");
+  assert.match(note[1], /never what the server sent/);
+});
+
+test("every machine lens tab has a label, and the reader is one of them", async () => {
+  const { LENS_TAB_ORDER } = await import("./holding/_worker.js/lens.js");
+  const server = readFileSync("./holding/_worker.js/lens.js", "utf8");
+  const client = readFileSync("./holding/lens.js", "utf8");
+  assert.ok(LENS_TAB_ORDER.includes("reader"), "the reader tab must be in the tab order");
+  // The strip renders from LENS_TAB_ORDER, so a key with no label ships an empty
+  // button rather than failing. The client keeps its own LENS_LABEL map (no
+  // module graph on /lens), which is exactly the pair that can drift.
+  const labels = server.match(/const LENS_TAB_LABELS = \{([\s\S]*?)\};/)[1];
+  for (const key of LENS_TAB_ORDER) {
+    assert.match(labels, new RegExp(`\\b${key}:`), `LENS_TAB_LABELS has no entry for "${key}"`);
+    assert.match(client, new RegExp(`\\b${key}: "`), `the client LENS_LABEL map has no entry for "${key}"`);
+    assert.match(client, new RegExp(`LENS_FN\\.${key} =`), `the client has no render function for "${key}"`);
+  }
+});
+
+test("the reader never renders an unmeasurable phase as 0 ms", () => {
+  const client = readFileSync("./holding/lens-reader.js", "utf8");
+  // A Worker's clock advances across I/O and never during synchronous execution,
+  // so `parse`, `extract` and `markdown` come back 0 from production while
+  // `fetch` carries real time. Measured through the live route 2026-08-10:
+  // stripe.com answered {fetch: 104, parse: 0, extract: 0, markdown: 0} where the
+  // same run under wrangler dev had reported 30 / 347 / 10.
+  //
+  // Rendering those zeros would tell a visitor that parsing a 645 KB page is
+  // free, on the one panel whose job is saying what the read cost. This is the
+  // same class of claim the rest of the lens is built to avoid, so it is pinned.
+  assert.match(client, /not measurable/,
+    "a zero-valued timing phase must render as unmeasurable, never as 0 ms");
+  assert.match(client, /never during synchronous execution/,
+    "the panel must explain WHY those phases read zero");
+  assert.doesNotMatch(client, /ms\.extract \+/,
+    "the headline total must not sum phases the clock cannot see");
+});

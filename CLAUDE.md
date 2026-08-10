@@ -1070,6 +1070,85 @@ generic hex back.
   as AadharshBot. Framability is read from the target's `X-Frame-Options` /
   `Content-Security-Policy: frame-ancestors` in the `/lens/fetch` pass, so no extra probe.
 
+### `lens-reader/` — the Reader lens, and the first auxiliary Worker the site calls
+
+The seventh machine tab on `/lens` ("Reader's guess") runs a THIRD-PARTY reader-mode
+extractor over the same URL and reports what it threw away. Engine is
+[Defuddle](https://github.com/kepano/defuddle) (MIT, kepano; the one behind Obsidian
+Web Clipper), pinned at `0.19.2`.
+
+**The gap is the artifact, not the extraction.** Anyone who wants to read a page can
+open it. What no other surface here shows is that an extractor is GUESSING which part
+of a document is the article, and how badly that goes on a page that is not one.
+Measured 2026-08-09: stripe.com loses 55% of its words and its hero headline;
+Wikipedia loses 22%, which is an extractor doing its job; `/garage/horizon` loses 2%
+but hands over **13 of 25 control labels** as prose, because Defuddle keeps `<button>`
+text on purpose (`dist/markdown.js`, `addRule('button', replacement: content =>
+content)`). That last number is the same failure `scripts/lib/html-to-md.mjs` rule 2
+exists to refuse, which is why the twins still use the hand-rolled converter — the
+sweep behind that decision is in the PR.
+
+So the payload never claims to be what the machine got. It names the extractor and
+version, reports `source` / `kept` / `dropped`, and both word counts come from ONE
+function on ONE fetch, because comparing against a number `lens.js` computed would be
+comparing two definitions of "word" and calling the difference an extraction loss.
+
+**It is a separate Worker for two independent reasons, either sufficient alone.**
+Defuddle needs a DOM `Document` and Workers have HTMLRewriter, so supplying one costs
+linkedom: ~190 KB gzip across the three deps against a site bundle already over its
+204.24 KiB budget. And `run_worker_first` caps at 100 rules with this repo at exactly
+100 (gotcha 26), so a `/lens/read` path on the site Worker would refuse to boot, while
+a zone route needs no entry at all. Same shape as `cf-garage` owning `/garage/cf/*`.
+
+What it DOES share with the site tree is exactly one thing: the SSRF guard.
+`validateLensTarget` moved from `lens.js` into `lib/crawl.js`, beside the
+`privateHostBlocked` floor it wraps, and both Workers import it. A second Worker aiming
+a visitor-supplied URL at the public internet is the same surface `/lens/fetch` has, and
+two copies of an allowlist pass review on the day they are written. A contract test
+asserts both files import it and neither redefines it.
+
+**Turndown ships two builds and wrangler picks the one that cannot work.** The node
+build falls back to `@mixmark-io/domino` and takes an HTML string happily; the browser
+build reaches for `document.implementation.createHTMLDocument`. Wrangler resolves the
+BROWSER condition, so `turndown(htmlString)` throws `document is not defined` in a
+Worker while passing under `node --test`. Measured both ways 2026-08-10. The fix is to
+pass a NODE (turndown's `RootNode` does `input.cloneNode(true)` for a non-string), which
+skips its parser entirely — no global shim, and three successive shims are what it costs
+to learn that the shim route is a dead end.
+
+The contract test for it is STRUCTURAL and says so at the assertion, because the
+behavioural version is impossible: `node --test` resolves the node build, so it
+exercises the one path that cannot fail. The first version of that test reintroduced the
+bug deliberately and still went green — the same "a check that can only agree with
+itself is decoration" lesson as gotcha 24.
+
+**The root suite may not import ANYTHING from `lens-reader/src/`, and this is gotcha 16
+wearing different clothes.** `contract-tests.mjs` runs under plain node with the ROOT
+workspace's dependencies; `reader.js` imports defuddle, linkedom and turndown, which
+live only in that sub-project. Importing it fails with `ERR_MODULE_NOT_FOUND` in CI
+while passing on any workstation that has run `npm install` in `lens-reader/` — which
+is exactly how it was caught, on PR #299's first run, after a local suite that had been
+green all afternoon. The split is by CAPABILITY: everything provable from source text
+stays in the root suite, and everything that has to actually RUN lives in
+`lens-reader/test/`, which the CI step that installs those dependencies executes.
+
+Generalise it past this Worker: **a green local suite proves nothing about CI when the
+two have different dependency sets.** The cheap control is to hide the sub-project's
+`node_modules` and re-run, which is the CI condition rather than an approximation of it.
+
+Two smaller rules learned here. **A Worker entrypoint may export ONLY the default
+handler and DO/Workflow classes**; a named value export fails at startup with
+`Incorrect type for map entry '<name>': the provided value is not of type 'function or
+ExportedHandler'`, which is why the testable half lives in `src/reader.js` and
+`src/index.js` is the handler alone. And the lens is **opt-in rather than auto-firing**
+the way Browser Run is: Browser Run auto-fires because an empty third pane makes Compare
+read as broken, while this is a tab, and every run is a second full fetch of the target
+from our IP (10/min/visitor, `READER_RL`).
+
+Deploy it like the other auxiliaries, from its own directory. It is declared in
+`infra.json` under `workers.expected`, so `infra:check` fails if it goes missing. If it
+is down, `/lens` is unaffected and the Reader tab reports the extractor as unreachable.
+
 ### Observability: Workers Traces + the span vocabulary
 
 Three layers, deliberately not redundant:
@@ -1968,6 +2047,26 @@ npm run deploy
     Read the sibling `CodeQL` check before touching any code. If that one passed,
     there is nothing in the change to fix. It is also NOT a required check, so it
     never blocks a merge — both of those PRs merged and shipped with it red.
+
+    **"Usually" is carrying real weight, and #299 produced BOTH variants an hour
+    apart.** The first failure there was a GENUINE finding: a real inline review
+    comment on a real source line (`lens-reader/src/index.js:79`, information
+    exposure through a stack trace), which was correct and got fixed. The second
+    was the Copilot artifact above. Same check name, same red X, opposite
+    meanings — so "it's just Copilot" is a conclusion to reach, never an
+    assumption to start from.
+
+    The tell takes one API call and separates them cleanly:
+
+    ```bash
+    gh api repos/oddharsh/site/commits/<sha>/check-runs \
+      --jq '.check_runs[] | {name, conclusion, title: .output.title}'
+    ```
+
+    A real finding carries a non-null `output.title` naming the rule AND an
+    inline comment on a source file. The artifact has `title: null`, an empty
+    summary, and its lone annotation at `.github:<line>`. Check the annotation
+    path: a finding points at code you wrote, the artifact points at a directory.
 
 ---
 

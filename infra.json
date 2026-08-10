@@ -186,7 +186,8 @@
     "expected": [
       { "name": "aadhar-sh", "config": "wrangler.jsonc", "why": "The site Worker: homepage, Lens, coffee, Serendipity." },
       { "name": "cf-garage", "config": "cf-garage/wrangler.toml", "why": "Intercepts /garage/cf/* ahead of the site Worker." },
-      { "name": "lwe-ask", "config": "lwe-ask/wrangler.toml", "why": "The /lwe/ask RAG endpoints." }
+      { "name": "lwe-ask", "config": "lwe-ask/wrangler.toml", "why": "The /lwe/ask RAG endpoints." },
+      { "name": "lens-reader", "config": "lens-reader/wrangler.toml", "why": "Intercepts /lens/read* ahead of the site Worker and serves the /lens Reader lens. SEPARATE for two independent reasons, either sufficient on its own: Defuddle needs a DOM Document, which costs ~190 KB gzip against a site bundle already over its 204.24 KiB budget; and run_worker_first caps at 100 rules with this repo at exactly 100, so a /lens/read path on the site Worker would refuse to boot (gotcha 26) while a zone route needs no entry. If this Worker goes missing, /lens keeps working and the Reader tab reports the extractor as unreachable." }
     ],
     "retired": [
       {
