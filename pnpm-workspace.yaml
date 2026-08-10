@@ -1,12 +1,30 @@
 # pnpm's settings file, and the reason package.json no longer carries a
 # `workspaces` array: pnpm does not read that field. It reads this one.
 #
-# There is no `overrides:` block here because #301 retired the undici override
-# on main while this migration was in flight. If one is ever needed again, note
-# that `pnpm import` does NOT carry overrides into the lockfile: the first
+# `pnpm import` does NOT carry overrides into the lockfile: the first
 # `pnpm install --frozen-lockfile` after adding one fails with
 # ERR_PNPM_LOCKFILE_CONFIG_MISMATCH until a single non-frozen install bakes it
 # in. That is a one-time step, and the error names the fix.
+
+# GHSA / dependabot #12: nanoid before 3.3.17 spins forever in customAlphabet
+# and customRandom when size is 0. It reaches this tree at ONE position and it
+# is dev-only, `vitest -> vite -> postcss -> nanoid`, so nothing served by a
+# Worker touches it and no code here calls either function. postcss already
+# asks for `^3.3.16`, so the range permits the fix and this override exists
+# only because pnpm will not move a transitive-only package: `pnpm update
+# nanoid -r --depth Infinity` re-resolves 320 other entries and leaves this one
+# at its locked version, measured 2026-08-10 across four invocations. Deleting
+# the entry by hand is worse than it looks — pnpm reads the shortened lockfile
+# as up to date, skips resolution, and prunes nanoid out of postcss entirely.
+#
+# The SELECTOR is the part worth copying. `nanoid@<3.3.17` matches only the
+# versions the advisory names, so this expires on its own: the day postcss
+# raises its floor past 3.3.17, or moves to the 5.x/6.x line, the selector
+# stops matching and the pin stops applying. An override written as a bare
+# `nanoid: 3.3.18` would instead hold every future resolution at a 2026 patch
+# release and nothing would say so.
+overrides:
+  nanoid@<3.3.17: ^3.3.17
 
 packages:
   - cal
