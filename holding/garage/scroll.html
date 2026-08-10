@@ -30,7 +30,7 @@ body {
   padding: 24px 12px 60px; min-height: 100vh;
 }
 .window {
-  max-width: 680px; margin: 0 auto; background: oklch(100% 0 0);
+  --axp-maxw: 680px; max-width: var(--axp-maxw); margin: 0 auto; background: oklch(100% 0 0);
   /* NO overflow:hidden here: it would steal the view() scroll source from the
      root, breaking animation-timeline:view() on .maxi descendants. The title-bar
      has its own matching border-radius so corners look correct without it. */

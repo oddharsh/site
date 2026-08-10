@@ -1060,13 +1060,21 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
    opened with a hole under its heading. And as a sibling it stops scrolling
    with the document, which is what Explorer actually does: the rail stays, the
    listing moves. Row 3 is the only flexible one, so .content keeps the
-   overflow:auto the OS-window model depends on. */
-.window:has(>.axp-tasks),.np-window:has(>.axp-tasks){display:grid;grid-template-columns:186px minmax(0,1fr);grid-template-rows:auto auto minmax(0,1fr);column-gap:14px}
+   overflow:auto the OS-window model depends on.
+
+   THE RAIL IS FURNITURE, SO IT IS ADDED TO THE WINDOW RATHER THAN TAKEN OUT OF
+   THE DOCUMENT. Every page declares its measure as `--axp-maxw` (the worker
+   pages through lunaPage's `width`, the staged ones in their own `.window`
+   rule) and a paned window grows by exactly one rail plus one gap. Without
+   this, /garage/encoding declared 720px of prose and rendered 516px of it: the
+   number a page author picked silently meant something different on any page
+   Explorer chrome reached. The 186/14 literals are tokenised because the track
+   and the compensation have to agree, and a paned window whose two numbers
+   disagree is off by exactly the amount nobody notices. */
+.window:has(>.axp-tasks),.np-window:has(>.axp-tasks){--axp-rail:186px;--axp-rail-gap:14px;display:grid;grid-template-columns:var(--axp-rail) minmax(0,1fr);grid-template-rows:auto auto minmax(0,1fr);column-gap:var(--axp-rail-gap);max-width:calc(var(--axp-maxw,720px) + var(--axp-rail) + var(--axp-rail-gap))}
 .window:has(>.axp-tasks)>.title-bar,.np-window:has(>.axp-tasks)>.np-titlebar,.window:has(>.axp-tasks)>.axp-address,.np-window:has(>.axp-tasks)>.axp-address{grid-column:1/-1}
 /* the writing folder also carries a status bar, which spans both columns under the rail. */
 .np-window:has(>.axp-tasks)>.np-status{grid-column:1/-1;grid-row:4}
-/* it opens at 560px, which has no room for a 186px rail beside the listing. */
-.np-window.np-folder:has(>.axp-tasks){max-width:760px}
 .window:has(>.axp-tasks)>.axp-tasks,.np-window:has(>.axp-tasks)>.axp-tasks{grid-column:1;grid-row:3;min-height:0;overflow-y:auto;padding:2px 0 10px 10px}
 .window:has(>.axp-tasks)>.content,.np-window:has(>.axp-tasks)>.np-folder-body{grid-column:2;grid-row:3;min-height:0;overflow:auto}
 /* nav.js appends the resize grip last; keep it out of the row flow. */
