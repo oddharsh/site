@@ -379,24 +379,36 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
     </p>
     <p>
       RFC 9842 defines two encodings for this, and Cloudflare passes both through identically, so
-      the choice is free and purely about engineering. Brotli is nominally smaller. zstd decodes
-      about twice as fast:
+      the choice is free and purely about engineering. Brotli compresses smaller. zstd decodes
+      much faster:
     </p>
     <table class="cmp">
       <thead><tr><th>measure</th><th>dcb (brotli)</th><th>dcz (zstd)</th></tr></thead>
       <tbody>
-        <tr><td>the real luna.css delta</td><td>79 bytes</td><td>80 bytes</td></tr>
-        <tr><td>source-level deltas, larger</td><td class="y">5-8% smaller</td><td>n/a</td></tr>
-        <tr><td>decode, bare 46KB asset</td><td>0.094 ms</td><td class="y">0.046 ms</td></tr>
-        <tr><td>throughput</td><td>471 MB/s</td><td class="y">954 MB/s</td></tr>
+        <tr><td>all 12 shipping deltas, total</td><td class="y">3,344 bytes</td><td>3,589 bytes</td></tr>
+        <tr><td>widest single gap (nav.js)</td><td class="y">685 bytes</td><td>729 bytes</td></tr>
+        <tr><td>decode, 47,615 B rebuilt</td><td>0.1368 ms</td><td class="y">0.0165 ms</td></tr>
+        <tr><td>throughput</td><td>332 MiB/s</td><td class="y">2,752 MiB/s</td></tr>
       </tbody>
     </table>
     <p>
-      I argued for brotli on bytes and got talked out of it, correctly. Bytes are a proxy;
-      latency is the thing you actually want. And the byte case collapses on inspection: on the
-      pair this site really ships, brotli wins by <em>one byte</em>. The 5-8% edge only appears
-      on much larger deltas than a shell asset produces. Meanwhile the decode numbers came off a
-      fast laptop, so the gap widens on the phones that need it most.
+      I argued for brotli on bytes and got talked out of it, correctly, and then the numbers I
+      argued from turned out to be wrong in <em>both</em> directions. Re-measured against real
+      dictionaries rather than stand-ins, brotli's size edge is bigger than the one byte I had
+      (245 bytes across the set, 6.8%, winning 11 of 12), and zstd's decode edge is far bigger
+      than the 2x I had (8.3x). The call held anyway, which is the interesting part.
+    </p>
+    <p>
+      It held for a structural reason: <strong>decode scales with the reconstruction, not with
+      the delta.</strong> A 685-byte dcb delta still rebuilds 47,615 bytes, so making the delta
+      smaller never makes the decode gap smaller. Break-even at 9 Mbps is about 135 bytes saved
+      per asset and dcb saves 44, so dcz wins by roughly 3x. On a slow phone the margin widens,
+      because decode scales with the CPU while 44 bytes stays 44 bytes.
+    </p>
+    <p>
+      Worth saying plainly: on the old numbers this was a coin flip, and on these it is not. The
+      size table now favours brotli by more than it ever did, and that table is the wrong axis to
+      decide on.
     </p>
     <p>
       dcz's framing is the tidier of the two as a bonus. The dictionary hash rides in a Zstandard
@@ -422,7 +434,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
     <h2>One more over-generalization</h2>
     <p>
       Dictionary compression is unreachable from Node's zlib, so the deltas started life as a
-      workstation script with committed artifacts. That sentence is true of brotli. I applied it
+      workstation script with committed artifacts. That sentence was true of brotli. I applied it
       to zstd without checking, and <code>zstdCompressSync</code> takes a <code>dictionary</code>
       option. It also beats shelling out to the CLI: 116 bytes against 120.
     </p>
@@ -432,6 +444,15 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
       step. Four things deleted because one assumption got tested. The check that mattered was
       interop: the foreign <code>zstd -d -D</code> CLI decodes Node's output byte-exact, prefix
       included, because the real decoder is a browser and not Node.
+    </p>
+    <p>
+      <strong>Update, August 2026:</strong> the brotli half expired too. Node 26 added a
+      <code>dictionary</code> option to brotli
+      (<a href="https://github.com/nodejs/node/pull/61763" rel="external">nodejs/node#61763</a>),
+      so on v26.7.0 a quality-11 compress of a 21 KB target goes from 70 bytes with no dictionary
+      to 18 with one. The limit I over-generalized was accurate about brotli the day I wrote it
+      and is now accurate about neither encoder. So a runtime limit has a shelf life, and the
+      version you measured on belongs in the note next to the measurement.
     </p>
 
     <h2>What shipped</h2>
@@ -511,9 +532,9 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
       "q": "The deltas ship as dcz even though brotli measured smaller. Why?",
       "options": [
         {
-          "t": "zstd decodes about 2x faster, and on the pair this site actually ships brotli's advantage was one byte.",
+          "t": "Decode scales with the reconstruction rather than the delta, so brotli's smaller delta never shrinks zstd's 8.3x decode lead.",
           "ok": true,
-          "why": "Bytes are a proxy for latency. The 5-8% brotli edge only shows up on deltas far larger than a shell asset produces, while the decode gap grows on slow CPUs."
+          "why": "Re-measured against real dictionaries, dcb is 245 bytes (6.8%) ahead across all 12 pairs, and dcz still wins: rebuilding 47,615 bytes costs 0.0165 ms against 0.1368. Break-even at 9 Mbps needs ~135 bytes saved per asset and dcb saves 44."
         },
         {
           "t": "Cloudflare only passes dcz through; dcb is not supported at the edge.",
@@ -521,7 +542,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
         },
         {
           "t": "Because brotli cannot use a custom dictionary, so dcb was never actually available.",
-          "why": "Brotli does custom dictionaries fine via its CLI. What it lacks is a dictionary option in Node's zlib, which is a tooling gap rather than a format limit."
+          "why": "Brotli does custom dictionaries fine. What it lacked was a dictionary option in Node's zlib, which was a tooling gap rather than a format limit, and node 26 closed even that."
         }
       ]
     },
