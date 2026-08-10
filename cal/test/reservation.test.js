@@ -23,6 +23,14 @@ function fakeStorage() {
 
 const start = Date.UTC(2026, 7, 10, 14);
 const end = start + 30 * 60_000;
+// Every claim below passes this explicitly. `claimReservation` defaults `now` to
+// `Date.now()`, and the slot above is a FIXED wall-clock instant, so a test that
+// omits the argument asserts a different thing depending on when it runs: once
+// real time passes `end`, the reservation is correctly expired and a rival's
+// claim is correctly admitted. That is the production rule working, reported as
+// a test failure. It cost a red `validate` on 2026-08-10 at 14:30:00 UTC, the
+// exact minute this slot ended, on a PR that touched none of this.
+const NOW = start - 1;
 
 describe("slot reservations", () => {
   it("names an instance after the slot, so one time is always one instance", () => {
@@ -33,30 +41,30 @@ describe("slot reservations", () => {
 
   it("lets exactly one booking win a contested slot", async () => {
     const storage = fakeStorage();
-    expect(await claimReservation(storage, "first", start, end, start - 1)).toBe(true);
-    expect(await claimReservation(storage, "second", start, end, start - 1)).toBe(false);
+    expect(await claimReservation(storage, "first", start, end, NOW)).toBe(true);
+    expect(await claimReservation(storage, "second", start, end, NOW)).toBe(false);
     expect((await readReservation(storage)).bookingId).toBe("first");
   });
 
   it("is idempotent for the booking that already holds it", async () => {
     const storage = fakeStorage();
-    await claimReservation(storage, "first", start, end, start - 1);
-    expect(await claimReservation(storage, "first", start, end, start - 1)).toBe(true);
+    await claimReservation(storage, "first", start, end, NOW);
+    expect(await claimReservation(storage, "first", start, end, NOW)).toBe(true);
   });
 
   it("only lets the holder release it", async () => {
     const storage = fakeStorage();
-    await claimReservation(storage, "first", start, end, start - 1);
+    await claimReservation(storage, "first", start, end, NOW);
     expect(await dropReservation(storage, "second")).toBe(false);
     expect((await readReservation(storage)).bookingId).toBe("first");
     expect(await dropReservation(storage, "first")).toBe(true);
     expect(await readReservation(storage)).toBe(null);
-    expect(await claimReservation(storage, "second", start, end, start - 1)).toBe(true);
+    expect(await claimReservation(storage, "second", start, end, NOW)).toBe(true);
   });
 
   it("frees a slot once the slot's own end time has passed", async () => {
     const storage = fakeStorage();
-    await claimReservation(storage, "first", start, end, start - 1);
+    await claimReservation(storage, "first", start, end, NOW);
     expect(await claimReservation(storage, "second", start, end, end - 1)).toBe(false);
     expect(await claimReservation(storage, "second", start, end, end + 1)).toBe(true);
   });
@@ -71,7 +79,9 @@ describe("slot reservations", () => {
         get: () => ({
           fetch: async (_url, init) => {
             const body = JSON.parse(init.body);
-            return Response.json({ claimed: await claimReservation(storage, body.bookingId, body.start, body.end) });
+            return Response.json({
+              claimed: await claimReservation(storage, body.bookingId, body.start, body.end, NOW),
+            });
           },
         }),
       },
