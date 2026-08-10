@@ -23,7 +23,7 @@ node garage-pipeline/generate.mjs page <id>
    project it into the Run palette:
 
 ```bash
-npm run gen:manifest
+pnpm run gen:manifest
 ```
 
 7. Add the sitemap entry and the Garage shelf card by hand.

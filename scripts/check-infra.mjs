@@ -962,7 +962,7 @@ async function checkCodeScanning(repo, slug, token) {
   } catch (e) {
     warn(
       /401|403/.test(e.message)
-        ? `CodeQL default setup: not verifiable here, the endpoint needs the repository Administration permission and no GITHUB_TOKEN can hold it. Run \`npm run infra:check\` on a workstation with \`gh\` logged in (classic \`repo\` scope) to assert it (${e.message})`
+        ? `CodeQL default setup: not verifiable here, the endpoint needs the repository Administration permission and no GITHUB_TOKEN can hold it. Run \`pnpm run infra:check\` on a workstation with \`gh\` logged in (classic \`repo\` scope) to assert it (${e.message})`
         : `CodeQL default setup could not be read: ${e.message}`,
     );
     return;

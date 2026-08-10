@@ -2,7 +2,7 @@
 //
 // Hand-rolled on purpose. The input is a CLOSED set: the 31 static pages this
 // repo authors itself, all of them well-formed and all of them checked by
-// `npm run pages:check`. A general-purpose parser would buy robustness against
+// `pnpm run pages:check`. A general-purpose parser would buy robustness against
 // markup we never write, at the cost of a dependency the DEPENDENCIES.md policy
 // would have to justify forever. zenc, gen-manifest, and check-photo-pipeline
 // were all built the same way for the same reason.

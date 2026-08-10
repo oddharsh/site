@@ -3,10 +3,10 @@
 // interactions. This is the "controlled lab run" perf-budget.mjs names in its own
 // header as the thing it deliberately does not do.
 //
-//   npm run inp                      # against wrangler dev on :8799
-//   npm run inp -- --url https://aadhar.sh
-//   npm run inp -- --throttle 6 --runs 12
-//   npm run inp -- --headed          # watch it drive
+//   pnpm run inp                      # against wrangler dev on :8799
+//   pnpm run inp --url https://aadhar.sh
+//   pnpm run inp --throttle 6 --runs 12
+//   pnpm run inp --headed          # watch it drive
 //
 // WHY THIS EXISTS
 // CrUX (and PageSpeed Insights) give you an INP number with no attribution: you
@@ -211,7 +211,7 @@ try {
     `\ncannot reach ${URL_BASE} (${e.message})\n\n` +
     (URL_BASE.includes("localhost")
       ? `Start the dev server first:\n  npx wrangler dev -c wrangler.dev.jsonc --port 8799\n\n` +
-        `Or point at production:\n  npm run inp -- --url https://aadhar.sh\n`
+        `Or point at production:\n  pnpm run inp --url https://aadhar.sh\n`
       : `Check the URL is reachable.\n`)
   );
   process.exit(1);

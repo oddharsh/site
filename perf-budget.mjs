@@ -14,7 +14,7 @@
 // user-centered threshold. A deferred page island is not allowed to veto a
 // homepage feature merely because its raw source grew.
 //
-//   node perf-budget.mjs        (or: npm run perf-budget)
+//   node perf-budget.mjs        (or: pnpm run perf-budget)
 //
 // Not measured here (needs a real browser): LCP/FCP/INP/CLS, TTFB by field
 // cohort, and the per-viewport photo-transfer delta. Cloudflare RUM is the
@@ -340,7 +340,7 @@ try {
 
   if (regressed.length) bad(`site-page dictionary: missing useful DCZ variants for ${regressed.join(", ")}`);
   if (firstDeploy.length) {
-    warn(`site-page dictionary: ${firstDeploy.join(", ")} beat both dictionary tiers with plain q11 and has no p-dict snapshot yet (never deployed) — run npm run shell:roll after this ships`);
+    warn(`site-page dictionary: ${firstDeploy.join(", ")} beat both dictionary tiers with plain q11 and has no p-dict snapshot yet (never deployed) — run pnpm run shell:roll after this ships`);
   }
   if (!missing.length) ok(`site-page dictionary: all ${pages.length} static/deterministic pages have DCZ variants`);
   else if (!regressed.length) ok(`site-page dictionary: ${pages.length - missing.length} of ${pages.length} pages have DCZ variants, no regressions`);

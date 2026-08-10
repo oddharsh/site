@@ -7,7 +7,7 @@ Workers build.
 
 ```bash
 # local fallback deploy; production uses merge -> CI promotion -> Workers Builds
-npm run deploy
+pnpm run deploy:direct
 ```
 
 Recurring chores (add photos, swap the playlist, bust caches, version bumps,

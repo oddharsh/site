@@ -32,7 +32,7 @@ review policy and entry point for future agent runs.
 - minify-html 0.18.1 is the exact root pin for the deploy-time HTML pass over
   `index.html` and the worker shells.
 - TypeScript 7.0.2 and @cloudflare/workers-types are exact root pins for
-  `npm run typecheck`, which runs `tsc --noEmit` over JSDoc-annotated JavaScript.
+  `pnpm run typecheck`, which runs `tsc --noEmit` over JSDoc-annotated JavaScript.
   **Nothing is compiled and no source is converted.** The site stays JavaScript:
   types erase at build time, so workerd runs identical bytes either way, and a
   conversion would cost the buildless authoring, the honest View Source, and the
@@ -47,4 +47,4 @@ review policy and entry point for future agent runs.
 - Pillow 12.3.0 is pinned in `holding/scripts/requirements.txt` for the
   histogram bake.
 - The root workspace lockfile is authoritative; workspace-local Wrangler pins
-  are rejected by `npm run check-wrangler`.
+  are rejected by `pnpm run check-wrangler`.

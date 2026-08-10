@@ -152,7 +152,7 @@ if (strays.length) fail(`images/exif.json carries unpublished stems: ${strays.jo
 const uncaptioned = stems.filter((stem) => !(alt[stem] || "").trim());
 if (uncaptioned.length) {
   fail(`${uncaptioned.length} photo(s) without alt text: ${uncaptioned.slice(0, 8).join(", ")}` +
-       `${uncaptioned.length > 8 ? " …" : ""}\n  fix with: npm run captions`);
+       `${uncaptioned.length > 8 ? " …" : ""}\n  fix with: pnpm run captions`);
 }
 
 console.log(`photo-pipeline: ${stems.length} photos, ${expectedFiles.size} hashed tiers, index in bijection, complete EXIF + histogram + alt-text metadata`);

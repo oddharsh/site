@@ -14,9 +14,9 @@
   // minified .build/holding tree.
   "name": "aadhar-sh",
   // Same pin as wrangler.jsonc, and NOT a fifth difference between the two —
-  // it is one of the values that must match. Plain `npm run dev` is local and
-  // never needs an account, but `npm run dev:remote` and
-  // `npm run routes:check:remote` both reach production bindings through this
+  // it is one of the values that must match. Plain `pnpm run dev` is local and
+  // never needs an account, but `pnpm run dev:remote` and
+  // `pnpm run routes:check:remote` both reach production bindings through this
   // config, so they hit the same "more than one account available" wall that
   // wrangler.jsonc's comment describes.
   "account_id": "1c99acdb6141579023fb97d24261ea58",
@@ -107,7 +107,7 @@
     { "binding": "RESTORE_DB", "database_name": "aadhar-restore", "database_id": "88c8daf1-3a36-4f8e-a2ad-dba8a74e1b9f" },
     { "binding": "SERENDIPITY_DB", "database_name": "serendipity", "database_id": "d3aa3215-17c3-4389-b224-cf465ddbb786" },
     // webmentions (see wrangler.jsonc). Local dev gets its own local D1 file from
-    // this name, so /inbox and the endpoint work end-to-end under `npm run dev`
+    // this name, so /inbox and the endpoint work end-to-end under `pnpm run dev`
     // without touching the remote database.
     { "binding": "SOCIAL_DB", "database_name": "aadhar-social", "database_id": "b3ab51c4-da04-40ec-9b36-c7e06611f4ab" }
   ],

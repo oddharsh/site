@@ -31,8 +31,8 @@ Everything on the Cloudflare free tier at personal volume.
 Install from the repository root and run the module's Workers-runtime suite:
 
 ```sh
-npm install
-npm test --workspace cal
+pnpm install
+pnpm --filter cal-aadhar-sh test
 ```
 
 `wrangler.test.toml` is a test-only fixture for the Vitest pool. Production

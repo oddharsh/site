@@ -7,7 +7,7 @@
 // replaces that whole line.
 //
 // Empty here on purpose, and the reason is the same one that keeps the CSP map
-// empty: twins are BUILD OUTPUT (`.build/holding/**/*.md`), so `npm run dev`
+// empty: twins are BUILD OUTPUT (`.build/holding/**/*.md`), so `pnpm run dev`
 // serves a tree where none of them exist. A committed list would advertise a
 // twin that answers 404 on exactly the surface it claims to describe. Empty
 // means no page advertises one in dev, which is true there; build.mjs hard-fails

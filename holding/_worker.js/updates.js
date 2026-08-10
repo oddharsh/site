@@ -37,7 +37,7 @@ export async function readCheckpoints(env) {
   // surfaces now serve literally the same bytes rather than the same query.
   //
   // D1 remains the source of truth: bump-version.sh writes it and then derives this
-  // file from it, and `npm run checkpoints:check` fails on any drift between them.
+  // file from it, and `pnpm run checkpoints:check` fails on any drift between them.
   // env is kept in the signature because the handlers pass it and a future caller
   // may want the live table; nothing here needs it today.
   return { points: checkpoints, state: checkpoints.length ? "ok" : "empty" };

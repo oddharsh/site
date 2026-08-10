@@ -406,4 +406,4 @@ if (failed.length) {
   for (const line of failed) console.error(`  - ${line}`);
   process.exit(1);
 }
-console.log("Run `npm run infra:check` to confirm the zone now matches the declaration.");
+console.log("Run `pnpm run infra:check` to confirm the zone now matches the declaration.");

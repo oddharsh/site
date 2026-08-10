@@ -1,0 +1,70 @@
+# pnpm's settings file, and the reason package.json no longer carries a
+# `workspaces` array: pnpm does not read that field. It reads this one.
+#
+# There is no `overrides:` block here because #301 retired the undici override
+# on main while this migration was in flight. If one is ever needed again, note
+# that `pnpm import` does NOT carry overrides into the lockfile: the first
+# `pnpm install --frozen-lockfile` after adding one fails with
+# ERR_PNPM_LOCKFILE_CONFIG_MISMATCH until a single non-frozen install bakes it
+# in. That is a one-time step, and the error names the fix.
+
+packages:
+  - cal
+  - cf-garage
+  - lwe-ask
+  - serendipity
+
+# Lifecycle scripts are DENIED by default (pnpm 10+), and pnpm 11 makes an
+# unapproved build a HARD ERROR that blocks `pnpm run` as well as `pnpm
+# install`. Both entries below were measured to be unnecessary for a working
+# build: every native dependency here ships its platform binary through
+# optionalDependencies, so `esbuild` and `workerd` both pass their probes with
+# their postinstalls blocked. They are approved anyway so the tree matches what
+# the packages intend, and so a future dependency that genuinely needs its
+# build step fails loudly here instead of silently degrading.
+#
+# WARNING, and it is the reason PNPM_VERSION is pinned in infra.json: this key
+# is pnpm 11 only. pnpm 10 spells it `onlyBuiltDependencies` and silently
+# ignores this one, so on a build image running pnpm 10 these postinstalls do
+# not run. Harmless today for exactly the reason above. Check it again before
+# adding a dependency that needs its build script.
+allowBuilds:
+  esbuild: true
+  sharp: set this to true or false
+  workerd: true
+
+# A package published in the last 24 hours is REFUSED, which is the window a
+# compromised release is most dangerous in and least likely to have been
+# noticed. Stated explicitly rather than left to pnpm 11's default, so the
+# number is a decision somebody made instead of a behaviour that arrived with a
+# version bump. Same reasoning as pinning every action by digest.
+#
+# The cost lands on dependency bumps, and it lands on CI rather than locally: a
+# --frozen-lockfile install re-checks the policy against the COMMITTED lockfile,
+# so a dependabot PR opened minutes after a release fails to install until
+# either the package turns 24 hours old or its version is listed below.
+# `pnpm install` regenerates the list; do not hand-edit it.
+minimumReleaseAge: 1440
+
+minimumReleaseAgeExclude:
+  - '@cloudflare/workers-types@5.20260810.1'
+  - '@oxc-minify/binding-android-arm-eabi@0.144.0'
+  - '@oxc-minify/binding-android-arm64@0.144.0'
+  - '@oxc-minify/binding-darwin-arm64@0.144.0'
+  - '@oxc-minify/binding-darwin-x64@0.144.0'
+  - '@oxc-minify/binding-freebsd-x64@0.144.0'
+  - '@oxc-minify/binding-linux-arm-gnueabihf@0.144.0'
+  - '@oxc-minify/binding-linux-arm-musleabihf@0.144.0'
+  - '@oxc-minify/binding-linux-arm64-gnu@0.144.0'
+  - '@oxc-minify/binding-linux-arm64-musl@0.144.0'
+  - '@oxc-minify/binding-linux-ppc64-gnu@0.144.0'
+  - '@oxc-minify/binding-linux-riscv64-gnu@0.144.0'
+  - '@oxc-minify/binding-linux-riscv64-musl@0.144.0'
+  - '@oxc-minify/binding-linux-s390x-gnu@0.144.0'
+  - '@oxc-minify/binding-linux-x64-gnu@0.144.0'
+  - '@oxc-minify/binding-linux-x64-musl@0.144.0'
+  - '@oxc-minify/binding-openharmony-arm64@0.144.0'
+  - '@oxc-minify/binding-win32-arm64-msvc@0.144.0'
+  - '@oxc-minify/binding-win32-ia32-msvc@0.144.0'
+  - '@oxc-minify/binding-win32-x64-msvc@0.144.0'
+  - oxc-minify@0.144.0

@@ -22,7 +22,7 @@
 // text from the index immediately and fetches the one histogram it needs when a
 // hover actually happens.
 //
-// Run by extract-photo-metadata.sh (so `npm run photos` keeps it current) and
+// Run by extract-photo-metadata.sh (so `pnpm run photos` keeps it current) and
 // verified by check-photo-pipeline.mjs, which fails on a stale or partial index.
 
 import { readdir, readFile, writeFile } from "node:fs/promises";

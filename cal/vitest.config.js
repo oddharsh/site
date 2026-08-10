@@ -4,8 +4,8 @@
 // real Workers runtime (workerd via @cloudflare/vitest-pool-workers) so KV,
 // WebCrypto, and the env vars behave exactly as in production.
 //
-//   npm test            # run once
-//   npm run test:watch  # watch mode
+//   pnpm test            # run once
+//   pnpm run test:watch  # watch mode
 //
 // vitest-pool-workers v0.16 / vitest 4 model: the pool is wired as a Vite
 // plugin — `cloudflareTest({ wrangler })` — rather than via test.poolOptions
