@@ -225,6 +225,14 @@ console.log("bun:check: all green on this build. Note that VIABLE is not ADOPTED
 console.log("  wrangler + miniflare + workerd is the deploy and route-oracle path and is node-pinned,");
 console.log("  and a canary is not something the build path may depend on. See gotcha 28.");
 try {
-  const stable = execFileSync("npm", ["view", "bun", "version"], { encoding: "utf8" }).trim();
+  // `pnpm` rather than `npm` since #306: this repo pins `packageManager`, and the
+  // one stray npm invocation here was the only thing left asking for the other
+  // client. stderr is dropped because pnpm warns about workspace configuration on
+  // stdout-only reads, and a registry lookup's grumbling should not land in the
+  // middle of a verdict. The registry is still npm's — only the client changed.
+  const stable = execFileSync("pnpm", ["view", "bun", "version"], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+  }).trim();
   console.log(`  newest STABLE bun on npm: ${stable}`);
-} catch { /* offline is fine; the verdict above does not depend on it */ }
+} catch { /* offline, or no pnpm on PATH; the verdict above does not depend on it */ }
