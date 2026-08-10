@@ -66,6 +66,7 @@ import {
   handleRnTracksHtml,
   renderTrackListHtml,
   spotifyArtHash,
+  warmArtCache,
 } from "./holding/_worker.js/rn.js";
 
 const PLAYLIST_ID = "4IRq9W1N2tOWHhH0O3vXiF";
@@ -464,6 +465,56 @@ test("the art warm is capped, so one long playlist cannot drain the subrequest b
   // fragment's waitUntil, so the cap is headroom rather than a hard limit. It is
   // asserted anyway: an uncapped warm scales with a playlist anyone can lengthen.
   assert.ok(WARM_MAX_URLS <= 50);
+});
+
+// REGRESSION. The first version of the warm probed urls[0] and returned early on
+// a cache hit, assuming the set is only ever warmed as a set. It is not: one
+// HOVER warms one URL, /rn/art is immutable for a year, and the first track's
+// cover is the likeliest thing to be hovered first. Measured in production
+// 2026-08-10 on the shipped build — urls[0] was `hit`, and 11 of 13 artist
+// images the warm should have covered were still cold.
+//
+// This drives the real handleRnArt against a fake cache and a fake upstream,
+// because the bug lived in the interaction between the two, and a test of
+// artWarmList alone could never have seen it.
+test("the art warm attempts every URL even when one is already cached", async () => {
+  const store = new Map();
+  const realFetch = globalThis.fetch;
+  const hadCaches = "caches" in globalThis;
+  globalThis.caches = {
+    default: {
+      async match(req) { const r = store.get(req.url); return r ? r.clone() : undefined; },
+      async put(req, res) { store.set(req.url, res); },
+    },
+  };
+  globalThis.fetch = async () =>
+    new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { "content-type": "image/jpeg" } });
+
+  try {
+    const payload = { tracks: [
+      { image_url: `https://i.scdn.co/image/${artHash(1)}`,
+        artists: [{ image_url: `https://i.scdn.co/image/${artHash(2)}` }] },
+      { image_url: `https://i.scdn.co/image/${artHash(3)}`, artists: [] },
+    ] };
+    const urls = artWarmList(payload, "https://aadhar.sh");
+    assert.equal(urls.length, 3);
+
+    // The exact production state: ONE url already warm because somebody hovered
+    // it. The old guard read that as "the whole set is warm" and did nothing.
+    store.set(urls[0], new Response(new Uint8Array([9]), { status: 200 }));
+
+    const waits = [];
+    const res = await warmArtCache(
+      payload, new Request("https://aadhar.sh/rn/tracks.html"), {}, { waitUntil: (p) => waits.push(p) });
+    await Promise.all(waits);
+
+    assert.equal(res.already, 1, "the pre-warmed URL must report as already cached, not as work done");
+    assert.equal(res.warmed, 2, "a warm colo entry must not stop the other URLs from being warmed");
+    for (const u of urls) assert.ok(store.has(u), `${u} was never warmed`);
+  } finally {
+    globalThis.fetch = realFetch;
+    if (!hadCaches) delete globalThis.caches;
+  }
 });
 
 test("rendered track rows re-host recognized art and pass everything else through", () => {
