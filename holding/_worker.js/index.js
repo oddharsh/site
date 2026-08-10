@@ -149,10 +149,34 @@ async function serveWorkerRequest(request, env, ctx) {
   // back" must not show. Dispatching through route() yields the real response.
   // SELF_FETCH is nulled one level down, so a lens pointed at /lens/fetch
   // resolves once and cannot recurse.
+  //
+  // IDENTITY_BODY is what keeps that dispatch READABLE, and it exists because an
+  // in-process call has no transport to undo an encoding. A real fetch() to an
+  // external origin is decoded by the runtime, which strips content-encoding on
+  // the way in — that is why /lens reports cloudflare.com and github.com as plain
+  // HTML with no encoding header at all. This dispatch skips every one of those
+  // layers, so the precompressed q11 twin (and the dcz delta) came back as raw
+  // compressed bytes with `content-encoding: br` still set, and lens decoded them
+  // as UTF-8. The result was mojibake on exactly the pages a visitor tries first,
+  // including the featured "Try: aadhar.sh" example, while every third-party URL
+  // looked perfect — which is why it survived.
+  //
+  // The worker cannot decode its way out. Probed against workerd at this repo's
+  // compatibility_date (2026-08-09): `new DecompressionStream("br")` throws "the
+  // compression format must be either 'deflate', 'deflate-raw' or 'gzip'", and an
+  // invented format throws the byte-identical error, so that is a real refusal
+  // rather than a name it did not recognise. Same control idiom as the
+  // `--x-bogus-flag` check on wrangler. So the body has to arrive uncompressed.
+  //
+  // Asking via `accept-encoding: identity` would NOT work: the precompressed page
+  // path deliberately never consults that header (gotcha 13 — the edge rewrites it
+  // to a constant, so branching on it is dead code). A flag on the child env is
+  // also the safer seam, because env is not caller-controllable and no external
+  // request can ask production to stop serving its precompressed bodies.
   const selfEnv = {
     ...env,
     SELF_FETCH: async (req) =>
-      withSecurityHeaders(await route(req, { ...env, SELF_FETCH: null }, ctx)),
+      withSecurityHeaders(await route(req, { ...env, SELF_FETCH: null, IDENTITY_BODY: true }, ctx)),
   };
 
   // Workers Logs: one structured line per worker-owned request (path, method,
