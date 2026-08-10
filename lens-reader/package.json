@@ -1,0 +1,15 @@
+{
+  "name": "lens-reader",
+  "private": true,
+  "type": "module",
+  "description": "The /lens Reader lens: a third-party extractor's opinion of a page, served from its own Worker so the site bundle never carries a DOM.",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy --x-provision=false --x-auto-create=false"
+  },
+  "dependencies": {
+    "defuddle": "0.19.2",
+    "linkedom": "0.18.12",
+    "turndown": "7.2.0"
+  }
+}

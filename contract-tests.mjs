@@ -5167,3 +5167,110 @@ test("the dyno page distinguishes measured points from hand-entered ones", async
   // Zero client JS: the whole chart is server-rendered SVG.
   assert.doesNotMatch(html.split('<svg class="chart"')[1].split("</svg>")[0], /<script/);
 });
+
+// ── the Reader lens (/lens/read, lens-reader/) ───────────────────────────────
+// The Reader lens is the one /lens surface that lives in a DIFFERENT Worker, so
+// nothing about it is covered by the site Worker's own dry-run or route sweep.
+// These tests stand in for that: they pin the numbers a message quotes, the
+// single SSRF guard, and the two traps this feature actually hit while it was
+// being written.
+
+test("the reader's rate-limit message quotes the ceiling wrangler declares", async () => {
+  const { READER_LIMIT_PER_MIN } = await import("./lens-reader/src/reader.js");
+  const toml = readFileSync("./lens-reader/wrangler.toml", "utf8");
+  const declared = toml.match(/\[\[ratelimits\]\][\s\S]*?simple\s*=\s*\{[^}]*limit\s*=\s*(\d+)/);
+  assert.ok(declared, "lens-reader/wrangler.toml declares no ratelimit");
+  // Same discipline as LENS_BUDGETS on the site Worker: the constant is what the
+  // 429 message quotes, the toml is what actually throttles, and a message that
+  // outlives its limit is worse than no message at all.
+  assert.equal(READER_LIMIT_PER_MIN, Number(declared[1]),
+    "the reader's 429 message would quote a limit the binding does not enforce");
+});
+
+test("the reader Worker shares the site's SSRF guard rather than copying it", async () => {
+  const reader = readFileSync("./lens-reader/src/reader.js", "utf8");
+  const entry = readFileSync("./lens-reader/src/index.js", "utf8");
+  // A second Worker aiming a visitor-supplied URL at the public internet is the
+  // same SSRF surface /lens/fetch has. Two copies of an allowlist pass review on
+  // the day they are written and diverge quietly afterwards, so this asserts the
+  // import exists AND that no local redefinition shadows it.
+  for (const [name, src] of [["reader.js", reader], ["index.js", entry]]) {
+    assert.match(src, /from "\.\.\/\.\.\/holding\/_worker\.js\/lib\/crawl\.js"/,
+      `lens-reader/src/${name} must import the shared guard, not reimplement it`);
+    assert.doesNotMatch(src, /function\s+validateLensTarget|function\s+privateHostBlocked/,
+      `lens-reader/src/${name} redefines a guard it is supposed to be importing`);
+  }
+  // And the site's export is still the shared one, so moving it did not leave
+  // lens.js with a stale private copy that only IT uses.
+  const crawl = await import("./holding/_worker.js/lib/crawl.js");
+  const lens = await import("./holding/_worker.js/lens.js");
+  assert.equal(lens.validateLensTarget, crawl.validateLensTarget,
+    "lens.js and lib/crawl.js must expose the same function object, not two copies");
+});
+
+test("the reader hands turndown a NODE, because a string throws in workerd", async () => {
+  const src = readFileSync("./lens-reader/src/reader.js", "utf8");
+  // THE trap this feature hit, and the assertion is STRUCTURAL on purpose —
+  // read the next paragraph before "improving" it into a behavioural one.
+  //
+  // turndown ships two builds. The node build falls back to @mixmark-io/domino
+  // and happily takes an HTML string; the browser build reaches for
+  // document.implementation.createHTMLDocument. Wrangler resolves the BROWSER
+  // condition, so `turndown(htmlString)` fails in a Worker while passing under
+  // node. Measured 2026-08-10 against `wrangler dev`: the string form answers
+  // {"ok":false,"error":"document is not defined"}, the node form returns real
+  // markdown. Passing a node sidesteps it entirely, since turndown's RootNode
+  // does input.cloneNode(true) for anything that is not a string.
+  //
+  // A behavioural test here is IMPOSSIBLE, not merely awkward: `node --test`
+  // resolves the node build, so it exercises the one code path that cannot
+  // fail. The first version of this test called toMarkdown() with the bug
+  // deliberately reintroduced and still went green — a check that can only ever
+  // agree with itself. So this asserts the call SHAPE, which is the thing a
+  // future edit would actually change, and the runtime claim is carried by the
+  // measurement recorded above rather than pretended at here.
+  const fn = src.match(/export function toMarkdown\([\s\S]*?\n\}/)[0];
+  assert.match(fn, /service\.turndown\(root\)/,
+    "toMarkdown must pass turndown a NODE — a string resolves turndown's browser build and throws in workerd");
+  assert.doesNotMatch(fn, /turndown\(contentHtml\)|turndown\(html\)/,
+    "passing turndown an HTML string works under node and fails in the Worker");
+  // The one behavioural claim node CAN settle: script bodies never reach the
+  // output, which is the same rule the Markdown twins enforce.
+  const { toMarkdown } = await import("./lens-reader/src/reader.js");
+  const md = toMarkdown("<h2>Title</h2><p>Body <strong>text</strong>.</p><script>bad()</script>");
+  assert.match(md, /^## Title/m);
+  assert.match(md, /\*\*text\*\*/);
+  assert.doesNotMatch(md, /bad\(\)/, "script bodies must never reach the markdown");
+});
+
+test("the reader reports what it dropped, never only what it kept", async () => {
+  const reader = readFileSync("./lens-reader/src/reader.js", "utf8");
+  const client = readFileSync("./holding/lens-reader.js", "utf8");
+  // The whole point of this lens is the GAP. A payload that reported only the
+  // extraction would read as "here is the page", which is the claim /lens exists
+  // to complicate — an extractor is guessing, and on a landing page it guesses
+  // badly (stripe.com, 2026-08-09: 55% of the words gone, hero headline first).
+  assert.match(reader, /dropped:\s*\{/, "the payload must carry a dropped tally");
+  assert.match(reader, /source[\s\S]{0,200}kept/, "the payload must carry both counts");
+  assert.match(client, /What the extractor threw away/, "the pane must lead with the gap");
+  // And it must never present itself as the served bytes.
+  const { READER_NOTE } = await import("./lens-reader/src/reader.js");
+  assert.match(READER_NOTE, /OPINION/, "the note must name the output as an opinion");
+  assert.match(READER_NOTE, /never what the server sent/);
+});
+
+test("every machine lens tab has a label, and the reader is one of them", async () => {
+  const { LENS_TAB_ORDER } = await import("./holding/_worker.js/lens.js");
+  const server = readFileSync("./holding/_worker.js/lens.js", "utf8");
+  const client = readFileSync("./holding/lens.js", "utf8");
+  assert.ok(LENS_TAB_ORDER.includes("reader"), "the reader tab must be in the tab order");
+  // The strip renders from LENS_TAB_ORDER, so a key with no label ships an empty
+  // button rather than failing. The client keeps its own LENS_LABEL map (no
+  // module graph on /lens), which is exactly the pair that can drift.
+  const labels = server.match(/const LENS_TAB_LABELS = \{([\s\S]*?)\};/)[1];
+  for (const key of LENS_TAB_ORDER) {
+    assert.match(labels, new RegExp(`\\b${key}:`), `LENS_TAB_LABELS has no entry for "${key}"`);
+    assert.match(client, new RegExp(`\\b${key}: "`), `the client LENS_LABEL map has no entry for "${key}"`);
+    assert.match(client, new RegExp(`LENS_FN\\.${key} =`), `the client has no render function for "${key}"`);
+  }
+});

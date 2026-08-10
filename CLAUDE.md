@@ -1070,6 +1070,71 @@ generic hex back.
   as AadharshBot. Framability is read from the target's `X-Frame-Options` /
   `Content-Security-Policy: frame-ancestors` in the `/lens/fetch` pass, so no extra probe.
 
+### `lens-reader/` — the Reader lens, and the first auxiliary Worker the site calls
+
+The seventh machine tab on `/lens` ("Reader's guess") runs a THIRD-PARTY reader-mode
+extractor over the same URL and reports what it threw away. Engine is
+[Defuddle](https://github.com/kepano/defuddle) (MIT, kepano; the one behind Obsidian
+Web Clipper), pinned at `0.19.2`.
+
+**The gap is the artifact, not the extraction.** Anyone who wants to read a page can
+open it. What no other surface here shows is that an extractor is GUESSING which part
+of a document is the article, and how badly that goes on a page that is not one.
+Measured 2026-08-09: stripe.com loses 55% of its words and its hero headline;
+Wikipedia loses 22%, which is an extractor doing its job; `/garage/horizon` loses 2%
+but hands over **13 of 25 control labels** as prose, because Defuddle keeps `<button>`
+text on purpose (`dist/markdown.js`, `addRule('button', replacement: content =>
+content)`). That last number is the same failure `scripts/lib/html-to-md.mjs` rule 2
+exists to refuse, which is why the twins still use the hand-rolled converter — the
+sweep behind that decision is in the PR.
+
+So the payload never claims to be what the machine got. It names the extractor and
+version, reports `source` / `kept` / `dropped`, and both word counts come from ONE
+function on ONE fetch, because comparing against a number `lens.js` computed would be
+comparing two definitions of "word" and calling the difference an extraction loss.
+
+**It is a separate Worker for two independent reasons, either sufficient alone.**
+Defuddle needs a DOM `Document` and Workers have HTMLRewriter, so supplying one costs
+linkedom: ~190 KB gzip across the three deps against a site bundle already over its
+204.24 KiB budget. And `run_worker_first` caps at 100 rules with this repo at exactly
+100 (gotcha 26), so a `/lens/read` path on the site Worker would refuse to boot, while
+a zone route needs no entry at all. Same shape as `cf-garage` owning `/garage/cf/*`.
+
+What it DOES share with the site tree is exactly one thing: the SSRF guard.
+`validateLensTarget` moved from `lens.js` into `lib/crawl.js`, beside the
+`privateHostBlocked` floor it wraps, and both Workers import it. A second Worker aiming
+a visitor-supplied URL at the public internet is the same surface `/lens/fetch` has, and
+two copies of an allowlist pass review on the day they are written. A contract test
+asserts both files import it and neither redefines it.
+
+**Turndown ships two builds and wrangler picks the one that cannot work.** The node
+build falls back to `@mixmark-io/domino` and takes an HTML string happily; the browser
+build reaches for `document.implementation.createHTMLDocument`. Wrangler resolves the
+BROWSER condition, so `turndown(htmlString)` throws `document is not defined` in a
+Worker while passing under `node --test`. Measured both ways 2026-08-10. The fix is to
+pass a NODE (turndown's `RootNode` does `input.cloneNode(true)` for a non-string), which
+skips its parser entirely — no global shim, and three successive shims are what it costs
+to learn that the shim route is a dead end.
+
+The contract test for it is STRUCTURAL and says so at the assertion, because the
+behavioural version is impossible: `node --test` resolves the node build, so it
+exercises the one path that cannot fail. The first version of that test reintroduced the
+bug deliberately and still went green — the same "a check that can only agree with
+itself is decoration" lesson as gotcha 24.
+
+Two smaller rules learned here. **A Worker entrypoint may export ONLY the default
+handler and DO/Workflow classes**; a named value export fails at startup with
+`Incorrect type for map entry '<name>': the provided value is not of type 'function or
+ExportedHandler'`, which is why the testable half lives in `src/reader.js` and
+`src/index.js` is the handler alone. And the lens is **opt-in rather than auto-firing**
+the way Browser Run is: Browser Run auto-fires because an empty third pane makes Compare
+read as broken, while this is a tab, and every run is a second full fetch of the target
+from our IP (10/min/visitor, `READER_RL`).
+
+Deploy it like the other auxiliaries, from its own directory. It is declared in
+`infra.json` under `workers.expected`, so `infra:check` fails if it goes missing. If it
+is down, `/lens` is unaffected and the Reader tab reports the extractor as unreachable.
+
 ### Observability: Workers Traces + the span vocabulary
 
 Three layers, deliberately not redundant:

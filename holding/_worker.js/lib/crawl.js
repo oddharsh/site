@@ -68,6 +68,36 @@ export function privateHostBlocked(host) {
   return false;
 }
 
+// Only public http(s). Reject loopback / private / link-local / cloud-metadata
+// literals + non-standard ports. (Workers can't egress to the internal network
+// anyway, but blocking the obvious literals is cheap hygiene.)
+//
+// This lived in lens.js until the Reader lens shipped. It moved HERE, next to
+// the host floor it wraps, because `lens-reader/` is a SEPARATE Worker that
+// aims the same visitor-supplied URL at the same public internet, and a second
+// copy of an SSRF allowlist is the kind of duplicate that passes review on the
+// day it is written and diverges quietly afterwards. lens.js re-exports it, so
+// every existing caller and the contract tests that name it are untouched.
+export function validateLensTarget(raw) {
+  const s0 = String(raw || "").trim();
+  if (!s0) return { ok: false, error: "Type a URL to inspect." };
+  if (/^[a-z][a-z0-9+.-]*:/i.test(s0) && !/^https?:\/\//i.test(s0)) {
+    return { ok: false, error: "Only http and https URLs." };
+  }
+  const s = /^https?:\/\//i.test(s0) ? s0 : "https://" + s0;
+  let url;
+  try { url = new URL(s); } catch { return { ok: false, error: "That doesn't parse as a URL." }; }
+  if (url.protocol !== "http:" && url.protocol !== "https:") return { ok: false, error: "Only http and https URLs." };
+  // Credentials in the authority are refused rather than stripped. A scan is a
+  // public read published back to the visitor, so a URL carrying a secret is
+  // either a mistake or an attempt to make this site replay it; stripping would
+  // quietly scan a different resource than the one that was typed.
+  if (url.username || url.password) return { ok: false, error: "Remove the credentials from that URL." };
+  if (url.port && url.port !== "80" && url.port !== "443") return { ok: false, error: "Only ports 80 and 443 are allowed." };
+  if (privateHostBlocked(url.hostname)) return { ok: false, error: "That host is on the no-fetch list (localhost / private / link-local)." };
+  return { ok: true, url: url.toString() };
+}
+
 // Follow redirects one hop at a time so every hop is checked, rather than asking
 // fetch to follow them and inspecting only where it landed.
 //

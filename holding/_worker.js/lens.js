@@ -3,7 +3,7 @@
 import { BOT_UA, botHeaders } from "./lib/botauth.js";
 import { cachedRender } from "./lib/cache.js";
 import { CANONICAL_HOST } from "./lib/const.js";
-import { fetchFollowingPublicRedirects, privateHostBlocked, readResponseCapped } from "./lib/crawl.js";
+import { fetchFollowingPublicRedirects, privateHostBlocked, readResponseCapped, validateLensTarget } from "./lib/crawl.js";
 import { lensParseRobots, lensPathMatch, lensRobotsVerdict } from "./lib/robots.js";
 import { lunaPage } from "./lib/chrome.js";
 import { escAttr, escHtml, jsonResponse } from "./lib/http.js";
@@ -277,15 +277,24 @@ export async function handleLens(request, env, ctx) {
 const LENS_TAB_LABELS = {
   readiness: "Agent-ready?",
   anatomy: "Raw response",
+  reader: "Reader's guess",
   structured: "What it claims",
   ai: "Model cost",
   terms: "Who's allowed",
   discovery: "Agent doors",
 };
 
+// Tab ORDER is evidence to verdict: raw observation first (the default lens, so
+// the first tab is the selected one on load), Agent-ready? last as the capstone.
+// `reader` sits second on purpose — it is one reader-mode extractor's opinion of
+// the very bytes the tab before it just showed, and the pairing is what makes
+// the gap between them legible. The tab strip renders from this array, so the
+// order lives in one place rather than in seven hand-written buttons.
+export const LENS_TAB_ORDER = ["anatomy", "reader", "structured", "ai", "terms", "discovery", "readiness"];
+
 function lensState(url) {
   const validViews = ["both", "human", "machine", "browser", "delta"];
-  const validLenses = ["readiness", "anatomy", "structured", "ai", "terms", "discovery"];
+  const validLenses = LENS_TAB_ORDER;
   const view = validViews.includes(url.searchParams.get("view")) ? url.searchParams.get("view") : "both";
   // Default lens is the raw observation, not the readiness report. Compare's
   // premise is "one URL, three readers", and the middle pane defaulting to a
@@ -830,6 +839,13 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 .lx-browser-intro b { color:oklch(34% 0.11 220); }
 .lx-browser-run { margin-top:7px; border:1px solid oklch(52% 0.08 220); border-radius:3px; padding:3px 8px; background:linear-gradient(180deg,#fff,oklch(89% 0.025 210)); color:oklch(30% 0.08 220); font:8.4pt Tahoma,Verdana,sans-serif; cursor:pointer; }
 .lx-browser-run:hover { background:oklch(91% 0.05 210); }
+/* Reader lens. Reuses .lx-browser-run for the opt-in button (same affordance,
+   same cost shape: one click spends a real fetch), so this adds only the intro
+   block and the credit line. The credit is deliberately quieter than the data. */
+.lx-reader-intro { padding:10px 9px; border:1px solid oklch(80% 0.05 95); background:linear-gradient(180deg,oklch(98% 0.02 95),oklch(95% 0.035 95)); color:oklch(32% 0.04 80); font-size:9pt; line-height:1.45; }
+.lx-reader-intro b { color:oklch(36% 0.09 80); }
+.lx-reader-credit { margin-top:6px; opacity:0.85; }
+.lx-reader-credit a { color:oklch(42% 0.12 250); }
 
 /* rendered machine content */
 .lx-h-title { font-family:"Trebuchet MS",Verdana,sans-serif; font-size:13pt; font-weight:bold; color:oklch(30% 0.06 255); margin:0 0 8px; }
@@ -1151,14 +1167,9 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
         <!-- The lens tabs live inside the pane they steer. Order is evidence to
              verdict: raw observation first (the default lens, so the first tab is
              the selected one on load), Agent-ready? last as the capstone. -->
-        <div class="lx-lenses" role="tablist" aria-label="machine lens">
-          <button class="lx-tab${state.lens === "anatomy" ? " is-on" : ""}" data-lens="anatomy" role="tab" aria-selected="${state.lens === "anatomy" ? "true" : "false"}" aria-controls="lx-machine-body" type="button">${LENS_TAB_LABELS.anatomy}</button>
-          <button class="lx-tab${state.lens === "structured" ? " is-on" : ""}" data-lens="structured" role="tab" aria-selected="${state.lens === "structured" ? "true" : "false"}" aria-controls="lx-machine-body" type="button">${LENS_TAB_LABELS.structured}</button>
-          <button class="lx-tab${state.lens === "ai" ? " is-on" : ""}" data-lens="ai" role="tab" aria-selected="${state.lens === "ai" ? "true" : "false"}" aria-controls="lx-machine-body" type="button">${LENS_TAB_LABELS.ai}</button>
-          <button class="lx-tab${state.lens === "terms" ? " is-on" : ""}" data-lens="terms" role="tab" aria-selected="${state.lens === "terms" ? "true" : "false"}" aria-controls="lx-machine-body" type="button">${LENS_TAB_LABELS.terms}</button>
-          <button class="lx-tab${state.lens === "discovery" ? " is-on" : ""}" data-lens="discovery" role="tab" aria-selected="${state.lens === "discovery" ? "true" : "false"}" aria-controls="lx-machine-body" type="button">${LENS_TAB_LABELS.discovery}</button>
-          <button class="lx-tab${state.lens === "readiness" ? " is-on" : ""}" data-lens="readiness" role="tab" aria-selected="${state.lens === "readiness" ? "true" : "false"}" aria-controls="lx-machine-body" type="button">${LENS_TAB_LABELS.readiness}</button>
-        </div>
+        <div class="lx-lenses" role="tablist" aria-label="machine lens">${LENS_TAB_ORDER.map((key) =>
+          `<button class="lx-tab${state.lens === key ? " is-on" : ""}" data-lens="${key}" role="tab" aria-selected="${state.lens === key ? "true" : "false"}" aria-controls="lx-machine-body" type="button">${LENS_TAB_LABELS[key]}</button>`
+        ).join("")}</div>
         <div class="lx-body" id="lx-machine-body">${seeded ? lensMachineFragment(initial, state) : '<div class="lx-empty">What the machine actually receives.<span>The raw file, the rules it is handed, and the bill for reading them.</span></div>'}</div>
       </section>
       <section class="lx-pane lx-pane-browser" id="lx-browser">
@@ -1622,28 +1633,10 @@ export function lensFramable(headers) {
   return { framable: true, reason: null };
 }
 
-// Only public http(s). Reject loopback / private / link-local / cloud-metadata
-// literals + non-standard ports. (Workers can't egress to the internal network
-// anyway, but blocking the obvious literals is cheap hygiene.)
-export function validateLensTarget(raw) {
-  const s0 = String(raw || "").trim();
-  if (!s0) return { ok: false, error: "Type a URL to inspect." };
-  if (/^[a-z][a-z0-9+.-]*:/i.test(s0) && !/^https?:\/\//i.test(s0)) {
-    return { ok: false, error: "Only http and https URLs." };
-  }
-  const s = /^https?:\/\//i.test(s0) ? s0 : "https://" + s0;
-  let url;
-  try { url = new URL(s); } catch { return { ok: false, error: "That doesn't parse as a URL." }; }
-  if (url.protocol !== "http:" && url.protocol !== "https:") return { ok: false, error: "Only http and https URLs." };
-  // Credentials in the authority are refused rather than stripped. A scan is a
-  // public read published back to the visitor, so a URL carrying a secret is
-  // either a mistake or an attempt to make this site replay it; stripping would
-  // quietly scan a different resource than the one that was typed.
-  if (url.username || url.password) return { ok: false, error: "Remove the credentials from that URL." };
-  if (url.port && url.port !== "80" && url.port !== "443") return { ok: false, error: "Only ports 80 and 443 are allowed." };
-  if (privateHostBlocked(url.hostname)) return { ok: false, error: "That host is on the no-fetch list (localhost / private / link-local)." };
-  return { ok: true, url: url.toString() };
-}
+// The target allowlist moved to lib/crawl.js, beside the host floor it wraps,
+// when `lens-reader/` (a separate Worker) needed the same guard. Re-exported
+// here because every existing caller and contract test names it on this module.
+export { validateLensTarget };
 
 function lensDoorCount(agent) {
   return ["mcp", "nlweb", "webmcp", "agentCard", "openapi", "apiCatalog"]

@@ -1,0 +1,27 @@
+name = "lens-reader"
+main = "src/index.js"
+compatibility_date = "2026-07-02"
+compatibility_flags = ["nodejs_compat"]
+
+# Intercepts /lens/read* ahead of the site Worker, exactly the way cf-garage
+# intercepts /garage/cf/*. This is a ROUTE and not a `run_worker_first` entry,
+# which is the whole reason the feature lives in its own script: that list is a
+# hard 100 and this repo sits at exactly 100 (CLAUDE.md gotcha 26), so a
+# /lens/read path on the site Worker would refuse to boot.
+routes = [{ pattern = "aadhar.sh/lens/read*", zone_name = "aadhar.sh" }]
+
+# Workers Logs — same free tier the site Worker runs on.
+[observability]
+enabled = true
+
+[observability.traces]
+enabled = true
+head_sampling_rate = 1
+
+# Per-IP budget, mirroring the /lens/* family. Extraction is pure CPU with one
+# upstream fetch, so this is cheaper than Browser Run and dearer than a parse:
+# the ceiling sits between /lens/browser (4/min) and /lens/fetch (30/min).
+[[ratelimits]]
+name = "READER_RL"
+namespace_id = "3001"
+simple = { limit = 10, period = 60 }
