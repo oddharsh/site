@@ -2034,9 +2034,10 @@ npm run deploy
     changes what the Worker sees and is not a cosmetic edit.
 
 27. **A `github-advanced-security` failure is usually GitHub's own Copilot
-    Autofix falling over, not your diff.** Seen twice on 2026-08-08, on two
-    unrelated PRs (#289, #295), both times while the separate `CodeQL` check
-    reported *"No new alerts in code changed by this pull request."*
+    Autofix falling over, not your diff.** Seen four times across two days: on
+    2026-08-08 on #289 and #295, and again on 2026-08-10 on #305 and #307. Every
+    one of them ran while the separate `CodeQL` check reported *"No new alerts in
+    code changed by this pull request."*
 
     The signature is specific enough to recognise on sight: the check has an
     EMPTY output title, and its single annotation points at `.github:<line>` —
@@ -2067,6 +2068,17 @@ npm run deploy
     inline comment on a source file. The artifact has `title: null`, an empty
     summary, and its lone annotation at `.github:<line>`. Check the annotation
     path: a finding points at code you wrote, the artifact points at a directory.
+
+    **A prose-only PR is the strongest control there is, and 2026-08-10 handed us
+    one.** #305 changed documentation, four code COMMENTS and one quiz string;
+    #307 changed a build script. Both failed this check identically, with
+    `title: null` and one annotation at `.github:211` and `.github:213`
+    respectively, while CodeQL passed on both. A diff carrying no executable
+    change cannot carry a security finding, so a check that reddens on it is
+    reporting on itself. When the API tell above leaves you unsure which variant
+    you have, ask whether the PR contains code at all. And confirm the stakes from
+    the ruleset rather than from the check list, since `validate` is the only
+    required context: this has now been red on four PRs while gating none of them.
 
 28. **Bun runs this build byte-identically and about twice as fast, and it is
     still not adopted.** `npm run bun:check` is the control, in the same idiom as
