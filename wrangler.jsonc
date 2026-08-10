@@ -14,7 +14,7 @@
   //
   // UNBYPASSABLE BUILD: main + assets point at .build/holding (the minified
   // tree), and the "build" block below runs build.mjs FIRST on every deploy.
-  // So `wrangler deploy` (bare), `npm run deploy`, and Workers Builds all ship
+  // So `wrangler deploy` (bare), `pnpm run deploy:direct`, and Workers Builds all ship
   // the minified shells + luna.css — there is no longer a path that serves the
   // readable originals by accident (which is exactly how prod ended up on an
   // unminified 78KB nav.js). In Workers Builds, leave the dashboard's separate

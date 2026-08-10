@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // check-dictionary-support.mjs — is shared-dictionary compression OPERATIONAL, per
-// surface class, against PRODUCTION? (npm run dcz:check)
+// surface class, against PRODUCTION? (pnpm run dcz:check)
 //
 // Synthesizes Available-Dictionary from the committed dictionary sets, exactly the way a
 // returning Chromium visitor would send it, and asserts the wire answer. Local builds
@@ -117,7 +117,7 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
     report("committed snapshots are WIRE bytes", unheld.length === 0,
            unheld.length === 0
              ? `every script the live page loads appears in a snapshot (${candidates.length} candidates)`
-             : `no snapshot carries ${unheld.join(", ")} — an edge feature is rewriting HTML after the Worker, so re-run npm run shell:roll (it reads production)`);
+             : `no snapshot carries ${unheld.join(", ")} — an edge feature is rewriting HTML after the Worker, so re-run pnpm run shell:roll (it reads production)`);
   }
 }
 // 3. svg — must NOT offer a dictionary (the #119 rule)

@@ -3,7 +3,7 @@
 #
 # WRITES ONE FILE AND NOTHING ELSE. No D1, no wrangler, no network, no account
 # selection. Run it inside the PR that is being released; the entry ships with
-# the merge, and `npm run deploy:promote` records it in D1 once traffic actually
+# the merge, and `pnpm run deploy:promote` records it in D1 once traffic actually
 # reaches 100%.
 #
 #   ./holding/scripts/bump-version.sh <slug> "<title>"
@@ -23,7 +23,7 @@
 # Now the order matches reality. The repo says what a release CLAIMS to be, in
 # the PR, where the title can be reviewed like any other prose. D1 says what
 # actually SHIPPED, written at 100% by the one thing that knows traffic moved.
-# `npm run checkpoints:check` allows the projection to run ahead by a contiguous
+# `pnpm run checkpoints:check` allows the projection to run ahead by a contiguous
 # tail of unreleased entries and fails on every other kind of divergence.
 set -euo pipefail
 
@@ -66,4 +66,4 @@ PY
 
 echo "next:   commit holding/_worker.js/checkpoints.json with the change it describes."
 echo "        /updates + /restore show it as soon as that version serves;"
-echo "        npm run deploy:promote records it in D1 at 100%."
+echo "        pnpm run deploy:promote records it in D1 at 100%."

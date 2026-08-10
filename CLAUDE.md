@@ -23,54 +23,54 @@ colors that read modern in source but render period-correct.
 # production, the normal path: merge to main; CI promotes the tested commit to
 # production; Workers Builds UPLOADS it as a version and moves no traffic. Then
 # ramp it (10% -> 50% -> 100%, sampling between steps). Workstation-only.
-npm run deploy:promote -- --dry-run     # which version WOULD ramp. run this first
-npm run deploy:promote
-npm run deploy:promote -- --status      # what is serving right now
-npm run deploy:promote -- --rollback    # 100% back to the previous version
+pnpm run deploy:promote --dry-run     # which version WOULD ramp. run this first
+pnpm run deploy:promote
+pnpm run deploy:promote --status      # what is serving right now
+pnpm run deploy:promote --rollback    # 100% back to the previous version
 
 # straight to 100%, no ramp. the fallback for the infra:check deadlock below,
 # and for anything where an extra step is the risk rather than the safety net.
-npm run deploy
+pnpm run deploy:direct
 
 # local dev against PRODUCTION KV/R2/Browser (D1 stays local unless you pass
 # --d1; read scripts/gen-remote-config.mjs before you do). Workstation-only.
-npm run dev:remote
+pnpm run dev:remote
 
 # the route oracle with those same remote bindings, which un-skips the 5 rows a
 # local Worker cannot assert. 3 of them go green on remote KV/R2 alone; the two
 # /lens rows also want a SECRET, and secrets are not remotable. CI cannot run this.
-npm run routes:check:remote
+pnpm run routes:check:remote
 
 # add new photos (resize, EXIF-rotate, encode to AVIF+JPG, upload to R2,
 # write the photo-index entry, bake histograms, validate artifacts; the
 # photo goes live at the next deploy — no cache bust exists or is needed)
-npm run photos -- "/path/to/photo.HIF" "/path/to/folder/"
+pnpm run photos "/path/to/photo.HIF" "/path/to/folder/"
 
 # validate the committed photo artifact graph without uploading anything
-npm run photos:check
+pnpm run photos:check
 
 # the wire-size DIFF. perf-budget checks numbers against constants that rot;
 # this compares two builds and has no constants. CI runs it against the merge
 # base on every PR touching served code and comments the delta, gating nothing.
 # each record self-builds through the wrangler dry-run (~12s).
-npm run perf:snapshot -- record base.json --label main
-npm run perf:snapshot -- record head.json --label mine
-npm run perf:snapshot -- compare base.json head.json
+pnpm run perf:snapshot record base.json --label main
+pnpm run perf:snapshot record head.json --label mine
+pnpm run perf:snapshot compare base.json head.json
 
 # the TREND, which is what the diff structurally cannot see. one compact JSONL
 # row per snapshot; .github/workflows/perf-history.yml appends these nightly to
 # the machine-owned `perf-history` branch and /garage/dyno charts them.
-npm run perf:snapshot -- row base.json
+pnpm run perf:snapshot row base.json
 
 # diff infra.json (DNS, zone/edge settings, account resources, Workers) against
 # reality. read-only; never mutates Cloudflare. add CLOUDFLARE_API_TOKEN for
 # the account tier, or --offline for the no-network tier.
-npm run infra:check
+pnpm run infra:check
 
 # the rebuild path, and the ONLY thing here that can mutate Cloudflare. plans
 # for free (public DNS, no credential); --confirm writes and needs the separate
 # CLOUDFLARE_API_TOKEN_WRITE. refuses to run in CI, by design.
-npm run infra:apply
+pnpm run infra:apply
 
 # regenerate JUST the EXIF metadata (after photos are already uploaded)
 ./holding/scripts/extract-photo-metadata.sh "/Users/aadharsh/Downloads/to post (from ssd)"
@@ -109,7 +109,7 @@ worktrees may edit freely, but a worktree is not a release surface.
 - PR CI builds the site, enforces the performance budget, dry-runs the single
   site Worker plus the auxiliary Garage/LWE configs (`cf-garage/`, `lwe-ask/`),
   runs the coffee tests, and sweeps the route oracle against a Worker booted
-  in-process (`npm run routes:check`, wrangler's `createTestHarness()`), so a
+  in-process (`pnpm run routes:check`, wrangler's `createTestHarness()`), so a
   broken route fails the PR instead of the deploy. All of that lives in the ONE
   `validate` job, because `validate` is the one required check on `main` and a
   gate that is not required is not a gate.
@@ -176,7 +176,7 @@ worktrees may edit freely, but a worktree is not a release surface.
   govern which commit is allowed to become a release.
 
   **Both rulesets are DECLARED in [`infra.json`](infra.json) under `repository`,
-  and `npm run infra:check` fails on drift**, for the same reason the Workers
+  and `pnpm run infra:check` fails on drift**, for the same reason the Workers
   Builds block is declared there: dashboard state that no config in this repo can
   derive, load-bearing for what reaches production, and silent when it changes.
   The table above is now the readable copy of a machine-checked declaration
@@ -226,7 +226,7 @@ worktrees may edit freely, but a worktree is not a release surface.
   ramps it:
 
   ```bash
-  npm run deploy:promote
+  pnpm run deploy:promote
   ```
 
   That walks 10% → 50% → 100%, and between steps it samples `/whoareyou.json`
@@ -245,7 +245,7 @@ worktrees may edit freely, but a worktree is not a release surface.
   script deliberately pauses between steps and tells you to go look at Workers
   Logs; it checks status codes, and it cannot check whether the page is *right*.
 
-  `npm run deploy` still exists and still goes straight to 100%. Keep it: the
+  `pnpm run deploy:direct` still exists and still goes straight to 100%. Keep it: the
   `infra:check` deadlock below is exactly the case where a ramp's extra step is
   a liability rather than a safety net.
 - **A SECRET is a version too, so `wrangler secret put` no longer works here.**
@@ -265,10 +265,10 @@ worktrees may edit freely, but a worktree is not a release surface.
   Use the versions form, which mints a new version and moves no traffic:
 
   ```bash
-  npx wrangler versions secret put -c wrangler.jsonc <NAME>
+  pnpm exec wrangler versions secret put -c wrangler.jsonc <NAME>
   ```
 
-  Then ramp it like any other version (`npm run deploy:promote`). Every secret
+  Then ramp it like any other version (`pnpm run deploy:promote`). Every secret
   command in this file, MAINTENANCE.md and `cal/README.md` was the old form and
   is now the new one; they had been unrunnable since gradual deployments landed
   and nobody noticed, because secrets are set about once a year.
@@ -298,8 +298,8 @@ worktrees may edit freely, but a worktree is not a release surface.
      for a second class only when the two really need different code, and assert
      the declared class list in a contract test when you do, so adding one is a
      deliberate act rather than a surprise at deploy time.
-  2. **When a class genuinely must appear or disappear, publish it with `npm run
-     deploy` once** (straight to 100%, migration applied), then go back to the
+  2. **When a class genuinely must appear or disappear, publish it with `pnpm run
+     deploy:direct` once** (straight to 100%, migration applied), then go back to the
      ramp for everything after. Deleting also needs its own entry, and the
      migration list is CUMULATIVE: keep the old tags and append.
 
@@ -333,7 +333,7 @@ worktrees may edit freely, but a worktree is not a release surface.
   every `Promote production` run after it skipped). It stays red on every branch
   until someone breaks the cycle from outside, by publishing the merged commit:
   push `main` to `production` so Workers Builds picks it up, or run the local
-  `npm run deploy` fallback. Neither is automatic and neither should be — a
+  `pnpm run deploy:direct` fallback. Neither is automatic and neither should be — a
   deploy is the owner's call. Just know that merging is not the last step for
   this class of fix, and CI will not tell you so.
 
@@ -392,9 +392,9 @@ worktrees may edit freely, but a worktree is not a release surface.
 - **No deploy path may create Cloudflare resources.** Wrangler's
   `--x-provision` and `--x-auto-create` are hidden flags that both default to
   TRUE, and they provision real KV/R2/D1 for any binding declared without an
-  id. `npm run deploy`, `npm run deploy:version`, and **both** Workers Builds
+  id. `pnpm run deploy:direct`, `pnpm run deploy:version`, and **both** Workers Builds
   commands (the Deploy command AND the Non-production branch deploy command)
-  pin them off, so resource creation stays with `npm run
+  pin them off, so resource creation stays with `pnpm run
   infra:apply` and a missing id fails loudly. **That list read "the Workers
   Builds Deploy command" until 2026-08-04, and the branch build it left out was
   running bare** — every push to every feature branch published with both flags
@@ -411,7 +411,7 @@ worktrees may edit freely, but a worktree is not a release surface.
   fails if EITHER recorded deploy command drops EITHER flag, in the tree tier
   (the declared string, no credential, every PR) and again in the API tier
   (the live dashboard value, when the token carries `Workers Builds
-  Configuration:Read`). `npm run deploy` additionally passes `--strict`, which aborts rather
+  Configuration:Read`). `pnpm run deploy:direct` additionally passes `--strict`, which aborts rather
   than prompting when the Worker's last deployment came from the dashboard and
   its remote config has drifted from this repo. Workers Builds deliberately
   does NOT pass `--strict`: it is the authoritative publisher, and a release
@@ -446,7 +446,7 @@ worktrees may edit freely, but a worktree is not a release surface.
   granting it buys drift detection on the release path and grants nothing that
   can publish. **This one is Read, never Edit** — the ramp token above is a
   separate, narrower credential and does not widen this one.
-- The one write path, `npm run infra:apply`, is **workstation-only** and reads a
+- The one write path, `pnpm run infra:apply`, is **workstation-only** and reads a
   different variable (`CLOUDFLARE_API_TOKEN_WRITE`, scoped to DNS on this zone
   alone). It refuses to run in CI and cannot touch the Worker, and that refusal
   is NOT covered by the 2026-08-06 change: it can create and destroy zone-level
@@ -787,7 +787,7 @@ now lights up four doors at once (JSON-RPC, `/terminal/ask`, the terminal progra
 and every page's browser-local catalog), so weigh new entries accordingly.
 
 **Cards are GENERATED, and one of their paths changed meaning on 2026-08-07.**
-`npm run gen:mcp-cards` projects both servers' live registries into three files,
+`pnpm run gen:mcp-cards` projects both servers' live registries into three files,
 and a contract test deep-equals each card against that server's own `tools/list`,
 so a card cannot quietly acquire a tool the Worker does not serve. They are
 committed rather than built into `.build/` because they are read by scripts and
@@ -837,7 +837,7 @@ distrusting on sight.
 
 A DNS record, so it lives in Cloudflare DNS rather than in a Worker config.
 Its intended value IS declared here, in [`infra.json`](infra.json), and
-`npm run infra:check` fails if the live record stops matching.
+`pnpm run infra:check` fails if the live record stops matching.
 `_index._agents.aadhar.sh` is a ServiceMode SVCB record
 (`1 aadhar.sh. alpn="h2,h3" port=443 mandatory=alpn,port`, TTL 3600) per
 draft-mozleywilliams-dnsop-dnsaid + RFC 9460. It points agents at this
@@ -851,7 +851,7 @@ passes a scanner but breaks any agent that connects. Same honesty rule
 as the `/whoareyou` "no third party" claim — don't advertise capability
 the site doesn't actually serve.
 
-To verify, use `npm run infra:check`, NOT `dig ... SVCB`. macOS ships dig
+To verify, use `pnpm run infra:check`, NOT `dig ... SVCB`. macOS ships dig
 9.10.6, which doesn't know the `SVCB` mnemonic and silently degrades the
 query to an `A` lookup, so it prints nothing and the record reads as
 missing when it's fine. If you want the raw answer, ask for the type by
@@ -959,7 +959,7 @@ generic hex back.
   than as a verdict for Chromium.
 
   **Promoting it takes one control: does the endpoint REJECT an invented engine
-  name?** `npm run kitesurf:check` runs that control and prints a verdict — same
+  name?** `pnpm run kitesurf:check` runs that control and prints a verdict — same
   shape as the `--x-bogus-flag` control on wrangler and
   `definitely-not-a-real-gateway-xyz` on AI Gateway, and worth running before
   trusting any beta selector the docs describe but do not specify the failure
@@ -1040,7 +1040,7 @@ generic hex back.
   `addScriptTag` and nothing else.
 
   **The two GATING questions are answered, measured 2026-08-08 against the real
-  binding through `npm run dev:remote`.** `env.BROWSER.quickAction` accepts
+  binding through `pnpm run dev:remote`.** `env.BROWSER.quickAction` accepts
   `addScriptTag`, and the capture happens after the injected script's
   synchronous mutations. Both were live risks rather than paranoia: the
   binding's payload schema is CLOSED, and the Kitesurf probe had already caught
@@ -1126,7 +1126,7 @@ itself is decoration" lesson as gotcha 24.
 wearing different clothes.** `contract-tests.mjs` runs under plain node with the ROOT
 workspace's dependencies; `reader.js` imports defuddle, linkedom and turndown, which
 live only in that sub-project. Importing it fails with `ERR_MODULE_NOT_FOUND` in CI
-while passing on any workstation that has run `npm install` in `lens-reader/` — which
+while passing on any workstation that has run `pnpm install` in `lens-reader/` — which
 is exactly how it was caught, on PR #299's first run, after a local suite that had been
 green all afternoon. The split is by CAPABILITY: everything provable from source text
 stays in the root suite, and everything that has to actually RUN lives in
@@ -1210,7 +1210,7 @@ spans real I/O.
 dependency, and no version bump** (Wrangler 4.118.0 already has it). The tracer
 reaches local dev for free because of the injection in `lib/trace.js`:
 `installTracing(tracing)` runs at module scope in `index.js`, which workerd loads
-locally too, so `npm run dev` gets the real tracer and the named spans rather
+locally too, so `pnpm run dev` gets the real tracer and the named spans rather
 than the degraded direct calls the contract tests get under plain node.
 
 The recipe is in MAINTENANCE.md under "Read a trace". Short version: the Local
@@ -1253,7 +1253,7 @@ design passes the site did not converge on, and their byte budgets and file:line
 citations are stale. [`design/README.md`](design/README.md) draws that line; read
 it before treating anything in there as a target.
 
-**HARD RULES (strong owner preference):** (1) **internal/native fonts ONLY** — never ship `@font-face` with `url()`, web fonts, `@import`, or font preloads; the served pages carry ZERO font bytes (the design system's `@font-face local()` rules are reference-only, never inlined into a served page). (2) **keep perf lean** — fold design tokens in WITHOUT regressing the byte budget: on a brotli'd inline page, tokenizing repeated literals is a wash (brotli already dedupes) while token *definitions* are net-new bytes, so only the FONT tokens (`--font-*`) are inlined site-wide; color/gradient tokens are NOT inlined (they cost bytes for no brotli gain). no external stylesheet, no JS for styling. **The served pages load NO cross-origin assets, and TWO things now need a footnote on that sentence: the Cloudflare Web Analytics beacon (owner-approved 2026-07-29) and the WebMCP bridge (2026-08-06).** The bridge is the sharper exception, because it is the one asset here nobody in this repository wrote: enabling WebMCP makes the edge inject `<script type="module" src="/.webmcp/bridge.js">` into every document, 47.6 KB of Cloudflare's code under `cache-control: public, max-age=0, must-revalidate`, first in `<head>`. Same-origin, so the literal rule holds and the CSP's `script-src 'self'` admits it in both the enforcing and the hashed report-only policy. It is ALSO the demonstration that hashing inline scripts guarantees less than it sounds like, which is why `/security` now says so out loud. For ordinary visitors it is pure cost: `initBridge()` returns immediately unless the browser has `document.modelContext` (Chrome 146 behind a flag), so nearly everyone downloads it, gets one `console.warn`, and stops. It is disclosed on `/whoareyou`, its twin, and `/security`, and `gen-md-twins.mjs` pins the path so turning the feature off fails the deploy rather than leaving the page describing a tag that is gone. The homepage, and only the homepage, runs RUM, and BOTH of its legs are first-party: `/ledger/rum.js` proxies the beacon script, `/ledger/rum` forwards the reports, both in `_worker.js/rum.js`. Describe it precisely — the browser speaks only to this origin, while this server still calls Cloudflare on the visitor's behalf. "First-party" is the easiest claim on this site to round up into a privacy win it is not. Why RUM at all: MAINTENANCE.md has named it the outcome source for LCP/INP/CLS since the perf budget was written, and until it reports, the byte ceilings here are guesses standing in for field data; the 2026-04-30 Navigation Type release is what makes the bfcache `no-cache` choice and the hand-tuned speculation rules measurable rather than asserted. Why proxied: `static.cloudflareinsights.com` is on EasyPrivacy, so blocker-running visitors dropped out of the sample entirely, and they skew toward the engines whose bfcache/prerender behaviour is the whole point of the measurement. This is NOT an oversight to clean up. Six surfaces move together or not at all, enforced by a `build.mjs` tripwire (#7b) plus a contract test: the `<script src="/ledger/rum.js">` in `index.html` AND its `send.to` config (without `send.to` the beacon silently falls back to its hardcoded cloudflareinsights.com endpoint, which the CSP now blocks, so every report fails while the script looks fine), the `/ledger/rum*` pair in `_worker.js/index.js`, the same pair in `run_worker_first` in BOTH wrangler configs, CSPs free of `cloudflareinsights.com` in BOTH `_headers` and `_worker.js/lib/security.js`, the disclosure on `/whoareyou` AND its markdown twin `holding/md/whoareyou.md`, and the `/security` CSP summary. **UNVERIFIED, check after the next deploy:** the collector sees the worker's subrequest rather than the visitor's, so geo attribution may collapse; `cf-connecting-ip` is forwarded but whether the collector honours it from a worker is unknown. If the dashboard's country breakdown goes flat, that is this — amend the disclosure, don't quietly keep it. Zone-side automatic injection is NOT an option here: the worker serves these pages as precompressed br/dcz bodies with `encodeBody: "manual"`, and the edge cannot rewrite HTML it did not compress. **Read that as a fact about the Web Analytics injector, not about the edge** — the WebMCP injector rewrites those same precompressed documents fine (gotcha 20), so a NEW feature's ability to inject has to be checked rather than inferred from this sentence. Site-wide would mean putting it in `nav.js`, which every page loads — an extra request on the shell's critical path, so don't, absent a measurement. (3) **authoring stays buildless; serving is minified, on every page** — the ONLY build is `build.mjs` (deploy-time transform: minifies EVERY served HTML document (structure + inline CSS/JS), the six client scripts, `luna.css` + `lwe-base.css`, and the worker modules' `/*min*/` CSS literals into a staged `.build/` copy, shipping a readable twin beside each one — `/<name>.src.js`, `/luna.src.css`, and a `.src.html` per page, named by a banner comment on line 1; hard-fails the deploy if `luna.css` doesn't parse; and content-hashes `nav.js` + `luna.css` into immutable `/a/<name>.<hash8>.<ext>` URLs, repointing every `src=`/`href=` ref to them so the shell earns a 1-year immutable cache — the unhashed `/nav.js` + `/luna.css` stay as short-cached fallbacks for cal/coffee's absolute refs + any stale HTML). `wrangler.jsonc` self-builds via its `build.command` and points `main`+`assets` at `.build/holding`, so NO deploy path (bare `wrangler deploy`, `npm run deploy`, Workers Builds) can ship the readable originals; local dev uses `wrangler.dev.jsonc` (readable `holding/`, fast reload). Never bundle, and never extend the build past this without the owner's say-so (`luna.css` was owner-approved 2026-07 for an ~8.7KB brotli win on a render-blocking sheet; the `/a/` content-hashing of `nav.js` + `luna.css` was owner-approved 2026-07-21 to clear PSI's "efficient cache lifetimes" audit; whole-site HTML minification was owner-approved 2026-07-31, retiring the older "never minify the garage/lwe HTML" rule — the argument being that a readable twin one banner-click away keeps View Source honest, because the twin is the SAME program, which is exactly the property that separates minifying from compiling).
+**HARD RULES (strong owner preference):** (1) **internal/native fonts ONLY** — never ship `@font-face` with `url()`, web fonts, `@import`, or font preloads; the served pages carry ZERO font bytes (the design system's `@font-face local()` rules are reference-only, never inlined into a served page). (2) **keep perf lean** — fold design tokens in WITHOUT regressing the byte budget: on a brotli'd inline page, tokenizing repeated literals is a wash (brotli already dedupes) while token *definitions* are net-new bytes, so only the FONT tokens (`--font-*`) are inlined site-wide; color/gradient tokens are NOT inlined (they cost bytes for no brotli gain). no external stylesheet, no JS for styling. **The served pages load NO cross-origin assets, and TWO things now need a footnote on that sentence: the Cloudflare Web Analytics beacon (owner-approved 2026-07-29) and the WebMCP bridge (2026-08-06).** The bridge is the sharper exception, because it is the one asset here nobody in this repository wrote: enabling WebMCP makes the edge inject `<script type="module" src="/.webmcp/bridge.js">` into every document, 47.6 KB of Cloudflare's code under `cache-control: public, max-age=0, must-revalidate`, first in `<head>`. Same-origin, so the literal rule holds and the CSP's `script-src 'self'` admits it in both the enforcing and the hashed report-only policy. It is ALSO the demonstration that hashing inline scripts guarantees less than it sounds like, which is why `/security` now says so out loud. For ordinary visitors it is pure cost: `initBridge()` returns immediately unless the browser has `document.modelContext` (Chrome 146 behind a flag), so nearly everyone downloads it, gets one `console.warn`, and stops. It is disclosed on `/whoareyou`, its twin, and `/security`, and `gen-md-twins.mjs` pins the path so turning the feature off fails the deploy rather than leaving the page describing a tag that is gone. The homepage, and only the homepage, runs RUM, and BOTH of its legs are first-party: `/ledger/rum.js` proxies the beacon script, `/ledger/rum` forwards the reports, both in `_worker.js/rum.js`. Describe it precisely — the browser speaks only to this origin, while this server still calls Cloudflare on the visitor's behalf. "First-party" is the easiest claim on this site to round up into a privacy win it is not. Why RUM at all: MAINTENANCE.md has named it the outcome source for LCP/INP/CLS since the perf budget was written, and until it reports, the byte ceilings here are guesses standing in for field data; the 2026-04-30 Navigation Type release is what makes the bfcache `no-cache` choice and the hand-tuned speculation rules measurable rather than asserted. Why proxied: `static.cloudflareinsights.com` is on EasyPrivacy, so blocker-running visitors dropped out of the sample entirely, and they skew toward the engines whose bfcache/prerender behaviour is the whole point of the measurement. This is NOT an oversight to clean up. Six surfaces move together or not at all, enforced by a `build.mjs` tripwire (#7b) plus a contract test: the `<script src="/ledger/rum.js">` in `index.html` AND its `send.to` config (without `send.to` the beacon silently falls back to its hardcoded cloudflareinsights.com endpoint, which the CSP now blocks, so every report fails while the script looks fine), the `/ledger/rum*` pair in `_worker.js/index.js`, the same pair in `run_worker_first` in BOTH wrangler configs, CSPs free of `cloudflareinsights.com` in BOTH `_headers` and `_worker.js/lib/security.js`, the disclosure on `/whoareyou` AND its markdown twin `holding/md/whoareyou.md`, and the `/security` CSP summary. **UNVERIFIED, check after the next deploy:** the collector sees the worker's subrequest rather than the visitor's, so geo attribution may collapse; `cf-connecting-ip` is forwarded but whether the collector honours it from a worker is unknown. If the dashboard's country breakdown goes flat, that is this — amend the disclosure, don't quietly keep it. Zone-side automatic injection is NOT an option here: the worker serves these pages as precompressed br/dcz bodies with `encodeBody: "manual"`, and the edge cannot rewrite HTML it did not compress. **Read that as a fact about the Web Analytics injector, not about the edge** — the WebMCP injector rewrites those same precompressed documents fine (gotcha 20), so a NEW feature's ability to inject has to be checked rather than inferred from this sentence. Site-wide would mean putting it in `nav.js`, which every page loads — an extra request on the shell's critical path, so don't, absent a measurement. (3) **authoring stays buildless; serving is minified, on every page** — the ONLY build is `build.mjs` (deploy-time transform: minifies EVERY served HTML document (structure + inline CSS/JS), the six client scripts, `luna.css` + `lwe-base.css`, and the worker modules' `/*min*/` CSS literals into a staged `.build/` copy, shipping a readable twin beside each one — `/<name>.src.js`, `/luna.src.css`, and a `.src.html` per page, named by a banner comment on line 1; hard-fails the deploy if `luna.css` doesn't parse; and content-hashes `nav.js` + `luna.css` into immutable `/a/<name>.<hash8>.<ext>` URLs, repointing every `src=`/`href=` ref to them so the shell earns a 1-year immutable cache — the unhashed `/nav.js` + `/luna.css` stay as short-cached fallbacks for cal/coffee's absolute refs + any stale HTML). `wrangler.jsonc` self-builds via its `build.command` and points `main`+`assets` at `.build/holding`, so NO deploy path (bare `wrangler deploy`, `pnpm run deploy:direct`, Workers Builds) can ship the readable originals; local dev uses `wrangler.dev.jsonc` (readable `holding/`, fast reload). Never bundle, and never extend the build past this without the owner's say-so (`luna.css` was owner-approved 2026-07 for an ~8.7KB brotli win on a render-blocking sheet; the `/a/` content-hashing of `nav.js` + `luna.css` was owner-approved 2026-07-21 to clear PSI's "efficient cache lifetimes" audit; whole-site HTML minification was owner-approved 2026-07-31, retiring the older "never minify the garage/lwe HTML" rule — the argument being that a readable twin one banner-click away keeps View Source honest, because the twin is the SAME program, which is exactly the property that separates minifying from compiling).
 
 > **Two traps the whole-site HTML pass hit, both on `/garage/horizon`, both worth knowing before touching served HTML.** (a) **minify-html decodes HTML entities inside quoted attribute values**, and no option turns it off: `value="&lt;script&gt;bad()&lt;/script&gt;"` ships as `value="<script>bad()</script>"`. That is spec-legal (a quoted attribute may hold raw `<`) and DOM-identical — verified in a browser, where the input's `.value` is byte-for-byte the intended payload and nothing renders from it. The consequence is that **any scanner over served HTML must WALK tags rather than search for `<script`**: the naive regex in `contract-tests.mjs` read horizon's XSS demo payload and its `<iframe srcdoc>` as two real inline scripts and failed the deploy demanding CSP hashes for them. This is the third naive scanner that page's demo content has caught. (b) **Lightning CSS 1.33 does not know the CSS Overflow 5 carousel selectors** (`::scroll-marker`, `::scroll-marker-group`, `::scroll-button()`, `:target-current`) that horizon demos on purpose; it warns and then emits them verbatim, so `minifyCss` tolerates exactly that warning family and re-proves the pass-through on every build instead of trusting the one probe that established it.
 
@@ -1332,14 +1332,14 @@ cal/
 ### Required secrets (before deploy)
 
 ```bash
-npm install
-npx wrangler versions secret put -c wrangler.jsonc ICAL_URL        # Google Calendar → "secret ICS"
-npx wrangler versions secret put -c wrangler.jsonc RESEND_API_KEY  # resend.com, DKIM-verify aadhar.sh
-openssl rand -hex 32 | npx wrangler versions secret put -c wrangler.jsonc SIGNING_SECRET
+pnpm install
+pnpm exec wrangler versions secret put -c wrangler.jsonc ICAL_URL        # Google Calendar → "secret ICS"
+pnpm exec wrangler versions secret put -c wrangler.jsonc RESEND_API_KEY  # resend.com, DKIM-verify aadhar.sh
+openssl rand -hex 32 | pnpm exec wrangler versions secret put -c wrangler.jsonc SIGNING_SECRET
 
 # Production still ships through merge -> CI -> production -> Workers Builds.
 # Local fallback, from the repository root only:
-npm run deploy
+pnpm run deploy:direct
 ```
 
 ### Visual notes (XP reskin lives in `cal/src/templates.js`)
@@ -1401,7 +1401,7 @@ npm run deploy
 
 9. **HISTORICAL (Pages era): `wrangler pages deploy holding`** is retired.
    Production is merge → CI promotion to `production` → Workers Builds; the
-   local fallback is `npm run deploy` from the repository root.
+   local fallback is `pnpm run deploy:direct` from the repository root.
 
 10. **Hover-only features need `(hover: none)` gating.** Touch devices fire
     synthetic `mouseover`/`mouseout` on long-press, which was causing
@@ -1562,7 +1562,7 @@ npm run deploy
     What still has to be committed is `holding/a-dict/`, the SHELL dictionary set,
     because an `/a/` asset is content-addressed: a change mints a new URL, so its
     dictionary must be bytes the BROWSER already holds and no build can derive that
-    from source. `npm run shell:roll` adopts the current shell and prunes to 3 per
+    from source. `pnpm run shell:roll` adopts the current shell and prunes to 3 per
     asset; it stays a human step because it writes into the source tree, which
     build.mjs must never do. Not urgent either — a dictionary 11 days stale still
     gave 87-93%. `a-dict` is `.assetsignore`d (build input, not a public URL).
@@ -1576,14 +1576,14 @@ npm run deploy
     per-page ratio (93-97% in the measured set) while a visitor who holds only the
     family corpus gets the broader fallback (~26% off q11: 298,933 B vs 405,909 B
     across 38 pages). Both candidates are emitted only when they beat plain q11.
-    `npm run shell:roll` rolls both `a-dict` and `p-dict`; page snapshots are Brotli'd
+    `pnpm run shell:roll` rolls both `a-dict` and `p-dict`; page snapshots are Brotli'd
     in the repo, ignored by the asset upload, and decompressed only at build time.
     **The two halves read different sources, and that is load-bearing rather than
     incidental.** `a-dict` adopts from `.build/holding/a` (so it is only valid from
     the deployed commit), while `p-dict` fetches the LIVE pages, because an edge
     feature can rewrite a document after this Worker and a snapshot derived from
     source then matches nothing — see gotcha 20 for the WebMCP instance and the
-    measurement. `npm run pages:roll` rolls the page half alone, which is the repair
+    measurement. `pnpm run pages:roll` rolls the page half alone, which is the repair
     step when that happens; `--shell` is the other half.
     RFC 9842 requires RAW bytes here: a `zstd --train` artifact is self-describing,
     the server library reads its tables, Chrome reads the same bytes as content, and
@@ -1595,7 +1595,7 @@ npm run deploy
     which doubles as proof the client speaks dcz. So "zstd where it wins" IS the
     delta path. Loader classes differ (#119): js/css dcz proven in production, html
     server-side proven (149-byte page delta decodes to the live page), svg OFF by
-    design (Chromium's image loader chokes). `npm run dcz:check` asserts both page
+    design (Chromium's image loader chokes). `pnpm run dcz:check` asserts both page
     tiers against production, reading the family dictionary out of the live `Link`
     header and the per-page candidate from `holding/p-dict`. Roll SHELL
     dictionaries FROM THE DEPLOYED BUILD (main, post-deploy), never from a feature
@@ -1667,7 +1667,7 @@ npm run deploy
     copy from the FINAL bytes (after minification and the `/a/` ref rewrite, before
     step 8 compresses). Same generated-module convention as `shell-assets.js`.
 
-    Empty is correct for `npm run dev`, which serves the readable unminified tree
+    Empty is correct for `pnpm run dev`, which serves the readable unminified tree
     whose blocks hash differently. A path with NO entry falls back to
     `'unsafe-inline'`, which is why the build hard-fails below 40 covered documents:
     a collapsed map is otherwise silent, since every page just quietly goes loose.
@@ -1796,7 +1796,7 @@ npm run deploy
     dictionary. Nothing errored. Proven on `/garage/pretext`: offering the committed
     tag answered `dcz`, offering the tag of the live body answered `br`.
 
-    `shell:roll`'s page half reads PRODUCTION now, and `npm run pages:roll` rolls
+    `shell:roll`'s page half reads PRODUCTION now, and `pnpm run pages:roll` rolls
     that half alone (the shell half still reads the local built tree, so it is still
     deployed-commit-only — that is why they split). `dcz:check` grew a
     **committed snapshots are WIRE bytes** assertion: a script the live document
@@ -1857,7 +1857,7 @@ npm run deploy
     noticed when it happens, and a one-line fix — sort by `pct` and take the largest
     — if someone decides it is worth touching the release path for.
 
-    **Run `npm run deploy:promote -- --dry-run` before any ramp.** It resolves and
+    **Run `pnpm run deploy:promote --dry-run` before any ramp.** It resolves and
     prints the target and moves nothing, and it exists (#259) because the target is
     no longer simply "the newest version": Workers Builds uploads one for EVERY
     branch push, so a bare ramp used to be a live way to walk another agent's branch
@@ -1957,8 +1957,8 @@ npm run deploy
 
     ```bash
     git pull --ff-only
-    npm run deploy:promote -- --dry-run    # target must be the version now serving
-    npm run deploy:promote -- --to 100     # moves no traffic; runs the logging block
+    pnpm run deploy:promote --dry-run    # target must be the version now serving
+    pnpm run deploy:promote --to 100     # moves no traffic; runs the logging block
     ```
 
     Two lessons worth keeping past this bug. **A check that compares two values
@@ -2007,7 +2007,7 @@ npm run deploy
 
     The rule is short: **after changing a secret, do not ramp a production
     version that predates the change.** Check with
-    `npx wrangler versions view <id>`, which prints `Secrets:` by name. If the
+    `pnpm exec wrangler versions view <id>`, which prints `Secrets:` by name. If the
     only production build is older than your change, wait for the next one;
     re-applying the change on top after ramping is the fallback rather than the
     default, since a secret PUT needs the value again and those live on a
@@ -2037,10 +2037,10 @@ npm run deploy
     102 rules provided exceeds max of 100.
     ```
 
-    **Neither `npm run build` nor `wrangler deploy --dry-run` catches this**,
+    **Neither `pnpm run build` nor `wrangler deploy --dry-run` catches this**,
     which is the part worth knowing before you spend an afternoon on it. Both
     passed on the config that could not boot; `parseStaticRouting` runs at
-    session creation, so the failure needs a real Worker. `npm run routes:check`
+    session creation, so the failure needs a real Worker. `pnpm run routes:check`
     is what found it, because `createTestHarness()` starts one. That is a second
     reason the route oracle exists beyond the routes it sweeps: it is the only
     pre-merge step that instantiates the asset-routing config.
@@ -2104,7 +2104,7 @@ npm run deploy
     required context: this has now been red on four PRs while gating none of them.
 
 28. **Bun runs this build byte-identically and about twice as fast, and it is
-    still not adopted.** `npm run bun:check` is the control, in the same idiom as
+    still not adopted.** `pnpm run bun:check` is the control, in the same idiom as
     `kitesurf:check`: it probes the zstd dictionary option, diffs a full node
     build against a full bun build file by file, and runs the contract suite
     under `bun test`. Measured 2026-08-10, node v26.7.0 against bun
@@ -2147,6 +2147,96 @@ npm run deploy
     pass. **A suite that passes on one runtime and not another is reporting a
     fact about the runtime**, so run the other one occasionally even when you have
     no intention of switching.
+
+29. **This repo runs pnpm, and the migration turned up four things that bite.**
+    Switched 2026-08-10 after measuring npm, pnpm, bun and all three yarn 4
+    linkers against this tree. Every one built identically and passed the full
+    suite, so the choice came down to cost rather than capability: a second
+    repo's dependencies cost pnpm **4 MB** of real disk against npm's **459 MB**
+    (APFS clones the store, so `du` reports 340 MB and is wrong), and warm
+    installs run 1.50s against 3.71s. Yarn was ruled out on a hard failure rather
+    than a preference — the 4.9.1 that Workers Builds ships cannot install this
+    repo at all, because its builtin TypeScript compat patch expects
+    `lib/_tsc.js` and TypeScript 7 has no such file (controls both ways: TS 5.9.3
+    installs on 4.9.1, TS 7.0.2 installs on 4.18.0). For bun, see gotcha 28.
+
+    **`pnpm <script>` runs the script, and that made `deploy` a loaded gun.**
+    The root release script is **`deploy:direct`** now, and the rename is the
+    whole point rather than tidiness. Under npm, reaching a 100% production
+    deploy required the word `run`. Under pnpm, `pnpm deploy` is a plausible
+    shorthand, and it does NOT hit pnpm's builtin `deploy` the way `pnpm deploy
+    --help` in an empty directory implies: a script of the same name wins, so it
+    starts `wrangler deploy` against production. Verified the hard way while
+    testing that assumption. `lens-reader` keeps a plain `deploy` on purpose,
+    since it publishes a demo Worker rather than aadhar.sh.
+
+    **A package published in the last 24 hours is REFUSED**, by
+    `minimumReleaseAge: 1440` in `pnpm-workspace.yaml`. It is pnpm 11's default
+    and is written down explicitly so it stays a decision. The bill arrives in CI
+    rather than locally, because `--frozen-lockfile` re-checks the policy against
+    the COMMITTED lockfile: a dependabot PR opened minutes after a release fails
+    to INSTALL until the package turns a day old or lands in
+    `minimumReleaseAgeExclude`. `pnpm install` regenerates that list. It also
+    fires on any job that installs an OLDER commit — `perf-diff.yml` builds the
+    merge base using the workflow from your branch, so a base predating the
+    exclude list gets the policy without it. Self-resolving once this is on main,
+    and the general shape is that a new policy against an old tree fails on the
+    gap between them.
+
+    **It also fires on any job that installs an OLDER commit**, which is a case
+    worth knowing before you go debugging one. `perf-diff.yml` checks out the
+    merge base and builds it, using the WORKFLOW from your branch against the
+    TREE from the base, so a commit predating `minimumReleaseAgeExclude` gets
+    the policy with no exclude list and fails. That was self-resolving for the
+    pnpm migration itself (once this landed on main, every merge base carried
+    the list), and it generalises: a workflow that builds an old tree with a new
+    policy will fail on the gap between them, and the fix belongs in the job
+    rather than in the policy. `perf-diff` gates nothing, so it was left to
+    resolve itself; `validate` would not have that luxury.
+
+    **`allowBuilds` is pnpm 11 only, and the build image runs pnpm 10.11.1.**
+    pnpm 10 spells the same idea `onlyBuiltDependencies` and ignores this key
+    silently, so `esbuild` and `workerd` postinstalls do not run there. Harmless
+    today, because every native dependency here ships its platform binary through
+    `optionalDependencies` and passes its probe with the postinstall blocked
+    (measured; npm 11.19 blocks them too and always did). It stops being harmless
+    the day something genuinely needs its build step.
+
+    **`npx` is `pnpm exec` now, and the reason is the registry.** `npx` FETCHES
+    what it cannot resolve locally — pointed at a nonexistent binary it reached
+    `registry.npmjs.org` even under `--no-install`, while `pnpm exec` failed
+    locally with no network call. On a repo that pins Wrangler exactly and runs
+    `check-wrangler` on every PR to enforce one version, a command that will
+    silently download some other one is a hole in that guarantee. **`pnpm dlx` is
+    npx's true twin and is the WRONG tool here**: all 30 call sites were `npx
+    wrangler`, wrangler is a pinned devDependency, and `dlx` would fetch from the
+    registry and ignore the pin. Use `dlx` only for something genuinely not in
+    `package.json`.
+
+    **THREE `npx` strings deliberately survive, and editing them breaks a check.**
+    Both Workers Builds commands in `infra.json`, plus the mirrored copies in
+    `wrangler.jsonc` and `check-infra.mjs`, RECORD what is typed into the
+    Cloudflare dashboard rather than commands this repo runs. `infra:check`
+    compares them against the live values, so changing them here alone fails on
+    drift it invented itself. Changing them for real means the dashboard FIRST
+    and the strings second. `pnpm exec wrangler` was verified to resolve pnpm's
+    `node_modules/.bin` and dry-run clean, so there is no pressure to.
+
+    **`lens-reader` needs `pnpm install --ignore-workspace`.** It deliberately
+    stays out of the workspace (defuddle + linkedom are ~22 MB that only that
+    Worker bundles), and under pnpm a bare `pnpm install` inside it walks UP to
+    the root `pnpm-workspace.yaml`, installs the five workspace projects, and
+    never creates `lens-reader/node_modules` at all. Its tests then die on
+    `ERR_MODULE_NOT_FOUND` with a `node_modules missing` warning as the only
+    clue. npm simply installed the local `package.json`, so this is a behaviour
+    change rather than a misconfiguration, and any future standalone project
+    inside this tree inherits it.
+
+    One more, verified rather than assumed: `pnpm import` does not carry
+    `overrides` into the lockfile, so the first `--frozen-lockfile` install after
+    adding one fails with `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH` until a single
+    non-frozen install bakes it in. That is a one-time step and the error names
+    the fix.
 
 ---
 

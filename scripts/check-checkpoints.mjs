@@ -14,8 +14,8 @@
 // failure mode is a changelog that looks fine and is wrong, which is exactly the
 // class of bug the whole site's check discipline exists for.
 //
-//   npm run checkpoints:check         compare the committed file against D1
-//   npm run checkpoints:sync          rewrite the file from D1 (then commit it)
+//   pnpm run checkpoints:check         compare the committed file against D1
+//   pnpm run checkpoints:sync          rewrite the file from D1 (then commit it)
 //
 // Needs a D1 read. Locally that is your normal wrangler login. In CI it would need
 // a D1:Read token, which is why this is NOT wired into the PR job by default — see
@@ -64,7 +64,7 @@ if (SYNC) {
 
 let committed;
 try { committed = JSON.parse(await readFile(FILE, "utf8")); }
-catch { fail("holding/_worker.js/checkpoints.json is missing or unparseable — run: npm run checkpoints:sync"); }
+catch { fail("holding/_worker.js/checkpoints.json is missing or unparseable — run: pnpm run checkpoints:sync"); }
 
 const byVnum = (rows) => new Map(rows.map((r) => [r.vnum, r]));
 const c = byVnum(committed), l = byVnum(live);
@@ -108,7 +108,7 @@ if (diffs.length) {
     `${diffs.length} row(s) differ from D1:\n` +
     diffs.slice(0, 8).map((d) => `  - ${d}`).join("\n") +
     (diffs.length > 8 ? `\n  … and ${diffs.length - 8} more` : "") +
-    `\n  fix with: npm run checkpoints:sync && git add holding/_worker.js/checkpoints.json`,
+    `\n  fix with: pnpm run checkpoints:sync && git add holding/_worker.js/checkpoints.json`,
   );
 }
 

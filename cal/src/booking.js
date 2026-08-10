@@ -23,7 +23,7 @@
 import { v4 as uuid } from "./uuid.js";
 
 // The booking record, written to KV and read back by every route that acts on
-// one. Declared so `npm run typecheck` has a shape to enforce: in a .js file
+// one. Declared so `pnpm run typecheck` has a shape to enforce: in a .js file
 // TypeScript treats an unannotated object literal as expandable, so a typo like
 // `booking.statis` is only an error against a declaration like this one.
 //

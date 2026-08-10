@@ -15,7 +15,7 @@
 // still reads as hand-written CSS, and the line says where it came from.
 //
 //   node build.mjs                                   # stage .build/
-//   npm run deploy                                   # build + wrangler deploy -c .build/wrangler.jsonc
+//   pnpm run deploy:direct                                   # build + wrangler deploy -c .build/wrangler.jsonc
 //
 // wrangler resolves `main` and `assets.directory` relative to the config file, so the
 // root wrangler.jsonc is copied verbatim into .build/ and just works against the copy.
@@ -62,7 +62,7 @@ function dczEncode(bytes, dictBytes) {
 
 // ── deploy-time invariant tripwires (explore-unknowns, phase A) ──────────────
 // Silent-failure classes this codebase has hit or is one careless edit from
-// hitting. They live here because build.mjs runs on every `npm run deploy`, the
+// hitting. They live here because build.mjs runs on every `pnpm run deploy:direct`, the
 // one reliable path (Workers Builds CI has silently skipped pushes). The three
 // deterministic checks HARD-BLOCK the deploy; the two that compare derived or
 // duplicated text only WARN (exit 0), because a false positive on the one
@@ -271,11 +271,11 @@ async function checkInvariants() {
     const { surfaces } = readManifest();
     const nav = await read("holding/nav.js");
 
-    // 8a — generated projections match `npm run gen:manifest` output exactly.
+    // 8a — generated projections match `pnpm run gen:manifest` output exactly.
     const modActual = (await read("holding/_worker.js/lib/site-manifest.js")).trim();
-    if (modActual !== workerModule(surfaces).trim()) hard.push("lib/site-manifest.js drifted from site-manifest.json — run npm run gen:manifest");
+    if (modActual !== workerModule(surfaces).trim()) hard.push("lib/site-manifest.js drifted from site-manifest.json — run pnpm run gen:manifest");
     for (const [section, marker] of [["garage", "garage-pages"], ["lwe", "lwe-pages"]]) {
-      if (readFenceBody(nav, marker) !== navFenceBody(surfaces, section)) hard.push(`nav.js generated:${marker} drifted from site-manifest.json — run npm run gen:manifest`);
+      if (readFenceBody(nav, marker) !== navFenceBody(surfaces, section)) hard.push(`nav.js generated:${marker} drifted from site-manifest.json — run pnpm run gen:manifest`);
     }
 
     // parse the live surfaces out of each hand-authored consumer.
@@ -842,14 +842,14 @@ if (inlineProbe.includes("/* probe */") ||
 // 1f) /updates and /restore as deploy-time documents.
 //
 // The only two dynamic pages whose data changes solely AT DEPLOY: bump-version.sh
-// inserts the checkpoint row moments before `npm run deploy`, and nothing else
+// inserts the checkpoint row moments before `pnpm run deploy:direct`, and nothing else
 // writes that table. So baking them costs no freshness at all — unlike /reading
 // (6h Curius refresh) or /around (30m crawl), whose feeds move on their own and
 // which are deliberately left dynamic for exactly that reason.
 //
 // D1 remains the source of truth. checkpoints.json is its committed projection,
 // written by bump-version.sh right after a successful insert, and
-// `npm run checkpoints:check` re-reads D1 and fails on drift.
+// `pnpm run checkpoints:check` re-reads D1 and fails on drift.
 {
   const nonce = `?build=${BUILD_NONCE}`;
   const updates = await import(pathToFileURL(resolve(OUT, "holding/_worker.js/updates.js")).href + nonce);
@@ -1605,7 +1605,7 @@ for (const [file, srcPath, marker] of SHELLS) {
   // browser, not Node.
   //
   // Consequences worth naming: no zstd CLI in the deploy path, no committed .dcz artifacts,
-  // no `npm run shell:deltas` step to forget, and no staleness tripwire needed at all,
+  // no `pnpm run shell:deltas` step to forget, and no staleness tripwire needed at all,
   // because a delta is now a pure function of bytes this build just produced.
   //
   // Still committed, and unavoidably so: holding/a-dict/, the DICTIONARY set. A dictionary
@@ -1990,4 +1990,4 @@ for (const [file, srcPath, marker] of SHELLS) {
     : `page-delta: none (no dictionary candidate beat plain brotli)`);
 }
 
-console.log(`staged ${OUT}/ - deploy with: wrangler deploy (self-builds via build.command) or npm run deploy`);
+console.log(`staged ${OUT}/ - deploy with: wrangler deploy (self-builds via build.command) or pnpm run deploy:direct`);

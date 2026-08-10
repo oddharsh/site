@@ -6,7 +6,7 @@
 // hashes derived from the final bytes it just wrote. Keep the
 // `// build:csp-hashes` marker — the build replaces that whole line.
 //
-// Empty here on purpose. `npm run dev` (wrangler.dev.jsonc) serves the readable
+// Empty here on purpose. `pnpm run dev` (wrangler.dev.jsonc) serves the readable
 // unminified holding/ tree, whose inline blocks hash differently from the staged
 // ones, so a committed map would be wrong for exactly the surface it claims to
 // protect. An empty map means every path falls back to the loose policy, which is

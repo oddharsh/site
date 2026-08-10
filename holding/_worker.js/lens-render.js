@@ -45,7 +45,7 @@
 //
 // Promoting that to a bare `kitesurf` takes one control: does the endpoint
 // REJECT an invented engine name? A rejection means the parameter is parsed and
-// enforced, so a 200 carrying `kitesurf` is Kitesurf. `npm run kitesurf:check`
+// enforced, so a 200 carrying `kitesurf` is Kitesurf. `pnpm run kitesurf:check`
 // runs that control and prints the verdict.
 //
 // It is a script rather than a runtime probe on purpose. An IGNORED parameter

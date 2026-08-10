@@ -21,8 +21,8 @@
 // this account has 10 free browser-minutes a day. A once-per-isolate control
 // would spend that budget measuring itself.
 //
-//     BROWSER_RUN_TOKEN=... npm run kitesurf:check          # free probes only
-//     BROWSER_RUN_TOKEN=... npm run kitesurf:check -- --render
+//     BROWSER_RUN_TOKEN=... pnpm run kitesurf:check          # free probes only
+//     BROWSER_RUN_TOKEN=... pnpm run kitesurf:check --render
 //
 // Free probes send a payload the endpoint must reject anyway (no url, no html),
 // so they cost no render. They are decisive only if the error names the engine
@@ -110,7 +110,7 @@ async function main() {
   // ── tier 2: one tiny render each ────────────────────────────────────────
   if (verdict === null && !WANT_RENDER) {
     console.log("\ninconclusive. re-run with --render to spend two renders of a 40-byte inline document:");
-    console.log("  BROWSER_RUN_TOKEN=... npm run kitesurf:check -- --render");
+    console.log("  BROWSER_RUN_TOKEN=... pnpm run kitesurf:check --render");
     process.exit(1);
   }
 

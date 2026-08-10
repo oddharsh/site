@@ -11,7 +11,7 @@
 // cold on-the-fly render would risk a timeout + a blank card. We pre-bake, commit,
 // and serve immutable. Regenerate when a demo's look changes:
 //
-//     npm run og-cards                                  # captures the LIVE site (aadhar.sh)
+//     pnpm run og-cards                                  # captures the LIVE site (aadhar.sh)
 //     OG_BASE=http://localhost:8787 node holding/scripts/gen-og-cards.mjs   # local static server instead
 //
 // Captures production by default so data-driven demos (the photo grid, the live

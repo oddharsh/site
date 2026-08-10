@@ -42,7 +42,7 @@ const builtOutput = isProd || process.env.VERIFY_BUILT === "1";
 // VERIFY_BUILT above and for the same reason: the rows are skipped locally
 // because a local Worker has empty KV/R2 and no Browser Run, and remote bindings
 // (scripts/gen-remote-config.mjs) remove exactly that limitation. Set only by
-// `npm run routes:check:remote`, which boots the harness on a generated config
+// `pnpm run routes:check:remote`, which boots the harness on a generated config
 // whose KV/R2/Browser bindings reach production. Never set in CI, because remote
 // bindings need a token that can write and CI holds a read-only one.
 const remoteRows = isProd || process.env.VERIFY_REMOTE === "1";

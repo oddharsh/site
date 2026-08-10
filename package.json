@@ -3,17 +3,13 @@
   "private": true,
   "description": "aadhar.sh - deploy-time transform only (authoring stays buildless; see build.mjs)",
   "type": "module",
-  "workspaces": [
-    "cal",
-    "cf-garage",
-    "lwe-ask",
-    "serendipity"
-  ],
+  "packageManager": "pnpm@11.20.0",
+  "comment:workspaces": "pnpm does not read npm's `workspaces` field; the package list and the build allowlist live in pnpm-workspace.yaml. See that file, and CLAUDE.md gotcha 29 for why the release script is `deploy:direct` rather than `deploy`.",
   "scripts": {
     "build": "node build.mjs",
     "dev": "wrangler dev -c wrangler.dev.jsonc",
     "dev:remote": "node scripts/gen-remote-config.mjs wrangler.dev.jsonc && wrangler dev -c .wrangler.remote.jsonc",
-    "deploy": "wrangler deploy --x-provision=false --x-auto-create=false --strict",
+    "deploy:direct": "wrangler deploy --x-provision=false --x-auto-create=false --strict",
     "deploy:version": "wrangler versions upload --x-provision=false --x-auto-create=false --strict",
     "deploy:promote": "node scripts/deploy-promote.mjs",
     "og-cards": "node holding/scripts/gen-og-cards.mjs",

@@ -37,7 +37,7 @@
 // exactly the retention problem worth not having.
 //
 // `record` runs `wrangler deploy --dry-run`, which self-builds `.build/holding`
-// through wrangler.jsonc's build.command, so it needs no prior `npm run build`.
+// through wrangler.jsonc's build.command, so it needs no prior `pnpm run build`.
 //
 // Everything measured here is DETERMINISTIC: identical source bytes produce an
 // identical snapshot, so an unchanged asset contributes no row. Sampled numbers

@@ -32,10 +32,10 @@ pushable; it is not intended to contain every piece of live operational state.
 ```bash
 git clone git@github.com:oddharsh/site.git
 cd site
-npm ci
-npm test --workspace cal
-npm run build
-npx wrangler deploy --dry-run -c wrangler.jsonc
+pnpm install --frozen-lockfile
+pnpm --filter cal-aadhar-sh test
+pnpm run build
+pnpm exec wrangler deploy --dry-run -c wrangler.jsonc
 ```
 
 The following are deliberately not committed and should be recreated rather
@@ -50,7 +50,7 @@ than copied between checkouts:
 - DNS records, the account resources the bindings point at, the Worker
   inventory, and the Workers Build project settings are still external state,
   but their intended values are now declared in [`infra.json`](infra.json) and
-  diffed by `npm run infra:check`. See "Infrastructure declaration" below.
+  diffed by `pnpm run infra:check`. See "Infrastructure declaration" below.
 - The curated photo source folder is outside the repository by design; the
   checked-in derivative metadata and image tiers are the repo-facing artifacts.
 
@@ -69,7 +69,7 @@ changes, and `git ls-files --others --exclude-standard` should be empty.
 
 Run these from the repository root. They update the live `aadhar-sh` Worker
 directly; no GitHub commit or code deploy is required because the values are
-Worker secrets. Use `npx wrangler secret list -c wrangler.jsonc` to confirm the
+Worker secrets. Use `pnpm exec wrangler secret list -c wrangler.jsonc` to confirm the
 secret is present without printing its value.
 
 ### Change the availability calendar (`ICAL_URL`)
@@ -78,7 +78,7 @@ Create a new Google Calendar **secret address in iCal format** (or the
 equivalent read-only iCloud feed), then replace the secret:
 
 ```bash
-npx wrangler versions secret put -c wrangler.jsonc ICAL_URL
+pnpm exec wrangler versions secret put -c wrangler.jsonc ICAL_URL
 ```
 
 Paste the new feed URL when prompted. To make the new source take effect
@@ -87,7 +87,7 @@ delete only that derived snapshot and ask the live slots endpoint to refresh:
 
 ```bash
 BOOKINGS_NS="37acb65118fe485583a90a94cb89365e"
-npx wrangler kv key delete --namespace-id="$BOOKINGS_NS" "cal:busy" --remote
+pnpm exec wrangler kv key delete --namespace-id="$BOOKINGS_NS" "cal:busy" --remote
 curl -fsS https://aadhar.sh/coffee/slots | jq .
 ```
 
@@ -103,8 +103,8 @@ only an `https://calendar.app.google/...` destination. Set the destination
 first, then the new random-looking path segment:
 
 ```bash
-npx wrangler versions secret put -c wrangler.jsonc WORK_CALENDAR_URL
-npx wrangler versions secret put -c wrangler.jsonc WORK_CALENDAR_SLUG
+pnpm exec wrangler versions secret put -c wrangler.jsonc WORK_CALENDAR_URL
+pnpm exec wrangler versions secret put -c wrangler.jsonc WORK_CALENDAR_SLUG
 ```
 
 Verify the new path without following the redirect and confirm that the old
@@ -124,7 +124,7 @@ GitHub or in a public page.
 Generate a new value and replace the Worker secret:
 
 ```bash
-openssl rand -hex 32 | npx wrangler versions secret put -c wrangler.jsonc SIGNING_SECRET
+openssl rand -hex 32 | pnpm exec wrangler versions secret put -c wrangler.jsonc SIGNING_SECRET
 ```
 
 This immediately invalidates every outstanding approve and decline link. It
@@ -140,11 +140,11 @@ rotation and treat all previously emailed links as compromised.
 `.github/workflows/ci.yml` is the pull-request gate. It installs locked
 dependencies, builds the site, enforces the performance budget, dry-runs
 the single site Worker plus the `cf-garage/` and `lwe-ask/` auxiliary Wrangler
-configs, and runs `cal/npm test`. Cal and Serendipity are bundled into the site
+configs, and runs `cal/pnpm test`. Cal and Serendipity are bundled into the site
 Worker; their source modules and Cal behavioral suite remain inside the
 pull-request gate.
 
-**`npm run infra:check` runs LAST in that job, and the order is deliberate.** It is
+**`pnpm run infra:check` runs LAST in that job, and the order is deliberate.** It is
 the only step asserting against live production rather than against the tree, so
 its result depends on the deployed world instead of on the diff. Steps run
 sequentially and stop at the first failure, so while it sat near the front a
@@ -159,7 +159,7 @@ not be able to hide whether the PR's own code is sound.
 It stays FATAL, so drift cannot merge unnoticed. The consequence worth knowing: a
 change whose purpose is to FIX production drift cannot turn its own check green
 before it deploys, because the thing it asserts against is the thing it repairs.
-Deploy that one with the local fallback (`npm run deploy`), then re-run CI.
+Deploy that one with the local fallback (`pnpm run deploy:direct`), then re-run CI.
 
 Dependabot (`.github/dependabot.yml`) keeps the Wrangler pin current: the npm
 ecosystem entry at the repository root bumps the single exact root pin (and the
@@ -171,7 +171,7 @@ explicitly enabled in every Worker config.
 **CodeQL analyzes `actions` and `javascript-typescript` only, and that list is a
 repo SETTING with no file in this tree.** It lives under Security, Code scanning,
 Default setup, so no config here can derive it. It IS declared, in
-[`infra.json`](infra.json) under `repository.code_scanning`, and `npm run
+[`infra.json`](infra.json) under `repository.code_scanning`, and `pnpm run
 infra:check` fails on drift; this paragraph used to say the checker could not see
 it, which was true until 2026-08-07. Read the live value with:
 
@@ -215,11 +215,11 @@ exact tested SHA. Cloudflare Workers Builds watches that branch and is the only
 production publisher. Configure one Workers Build project for the site Worker
 with `production` as the production branch and monorepo root `.`, leave its
 dashboard Build command blank, and use
-`npx wrangler versions upload --x-provision=false --x-auto-create=false` as the
+`pnpm exec wrangler versions upload --x-provision=false --x-auto-create=false` as the
 Deploy command. GitHub never holds a Cloudflare token that can write, so it
 cannot publish to production even if the workflow guard is defeated.
 
-### Ramp a release (`npm run deploy:promote`)
+### Ramp a release (`pnpm run deploy:promote`)
 
 Reaching `production` uploads a version. It does not move traffic. That is the
 whole change: a merge now produces a fully built, fully uploaded Worker version
@@ -227,11 +227,11 @@ with its own preview URL, serving nobody, and a human decides how much of the
 world sees it.
 
 ```bash
-npm run deploy:promote                  # newest version, 10% -> 50% -> 100%
-npm run deploy:promote -- --status      # what is serving right now
-npm run deploy:promote -- --to 25       # one step, park it there
-npm run deploy:promote -- --steps 5,100
-npm run deploy:promote -- --rollback    # 100% back to the previous version
+pnpm run deploy:promote                  # newest version, 10% -> 50% -> 100%
+pnpm run deploy:promote --status      # what is serving right now
+pnpm run deploy:promote --to 25       # one step, park it there
+pnpm run deploy:promote --steps 5,100
+pnpm run deploy:promote --rollback    # 100% back to the previous version
 ```
 
 Between steps it samples `/whoareyou.json` 40 times and reads the **Serving
@@ -247,9 +247,9 @@ else. It cannot tell you the page is wrong, only that it answered. Filter Worker
 Logs on `v` (the 8-char version prefix, in every structured line) and compare the
 new version against the old one on latency and on the routes you touched. That is
 the step the ramp exists to make possible; skipping it makes the ramp a slower
-way to do what `npm run deploy` already did.
+way to do what `pnpm run deploy:direct` already did.
 
-`npm run deploy` still goes straight to 100% and is the right tool for the
+`pnpm run deploy:direct` still goes straight to 100% and is the right tool for the
 `infra:check` deadlock above, where the extra step is the liability.
 
 ### Preview URLs
@@ -286,8 +286,8 @@ answer is Cloudflare Access on the hostname, not deleting the guard.
 ### Local dev and the route oracle against production data
 
 ```bash
-npm run dev:remote            # wrangler dev, KV/R2/Browser bindings remote
-npm run routes:check:remote   # the oracle, with those bindings
+pnpm run dev:remote            # wrangler dev, KV/R2/Browser bindings remote
+pnpm run routes:check:remote   # the oracle, with those bindings
 ```
 
 Both derive a config with `scripts/gen-remote-config.mjs` and never commit it
@@ -297,7 +297,7 @@ binding calls hop to the real resource.
 `routes:check:remote` un-skips the six rows `verify-routes.mjs` marks `remote`
 (`/lens/fetch`, `/lens/shot`, `/around/json`, `/photos`, `/images/full/<key>`),
 whose assertions depend on content a local Worker structurally cannot have.
-Plain `npm run routes:check` stays the CI gate and stays honest about what it
+Plain `pnpm run routes:check` stays the CI gate and stays honest about what it
 skips.
 
 Three things the generator does on purpose:
@@ -317,7 +317,7 @@ Three things the generator does on purpose:
 `wrangler.jsonc` declares the compute layer and CI dry-runs it, so a bad route
 or a missing binding already fails a PR. [`infra.json`](infra.json) covers the
 layer above that: DNS records, the account resources the bindings point at, the
-Worker inventory, and the Workers Build settings. `npm run infra:check` diffs
+Worker inventory, and the Workers Build settings. `pnpm run infra:check` diffs
 the declaration against reality. It is read-only by design and has no apply
 path; editing `infra.json` changes what the check demands of production, never
 production itself.
@@ -380,14 +380,14 @@ matters:
    CI token still on its old scopes. The new section degrades to a note, nothing
    fails, and the merge deploys normally under the current dashboard command.
 2. **Flip the dashboard**: Workers Builds → the site Worker → Settings → Build →
-   Deploy command → `npx wrangler versions upload --x-provision=false
+   Deploy command → `pnpm exec wrangler versions upload --x-provision=false
    --x-auto-create=false`. Leave Build command blank and the non-production
    command alone (it already uploads).
 3. **Then** rotate `CLOUDFLARE_API_TOKEN` to add `Workers Builds Configuration:Read`.
 
 Backwards — scope first, dashboard second — and `infra:check` starts failing on a
 drift that only the dashboard can fix, on every branch, while promotion is gated
-on that same check. The way out would again be the local `npm run deploy`
+on that same check. The way out would again be the local `pnpm run deploy:direct`
 fallback, which is a silly thing to need over a settings form.
 
 Each resource class is queried independently, so a token missing one scope
@@ -455,7 +455,7 @@ that is already encoded. Standard CDN behaviour is to pass it through, and the
 passthrough guarantee above covers the dangerous half — but double compression is
 precisely the bug gotcha 13 records, it survived three wrong suspects, and on the
 render-blocking shell it fails as a white screen rather than a slow page. So
-`npm run dcz:check` after deploying the rule is a gate, not a formality.
+`pnpm run dcz:check` after deploying the rule is a gate, not a formality.
 
 A path exclusion (`and not starts_with(http.request.uri.path, "/a/")`) is
 available as belt-and-braces and costs nothing, since those bytes are already
@@ -517,8 +517,8 @@ regression check, because a compression change on a render-blocking path fails a
 a white screen rather than as a slow page (gotcha 13 in CLAUDE.md):
 
 ```bash
-npm run infra:check     # compression-prefers-brotli AND markdown-compressed must pass
-npm run dcz:check       # deltas must still come back dcz, not recompressed
+pnpm run infra:check     # compression-prefers-brotli AND markdown-compressed must pass
+pnpm run dcz:check       # deltas must still come back dcz, not recompressed
 # the precompressed shell must be untouched, and the range-served originals must keep their ranges:
 curl -sS -o /dev/null -D - -H 'accept-encoding: gzip, deflate, br, zstd' https://aadhar.sh/a/luna.0f8b829a.css | grep -i content-encoding
 curl -sS -o /dev/null -D - -H 'range: bytes=0-99' https://aadhar.sh/images/full/XT509488.jpg | grep -iE "^HTTP|content-range|accept-ranges"
@@ -530,13 +530,13 @@ other. Expect CI red on the PR that adds the declaration until the rule is live.
 
 ### Rebuilding the zone
 
-`npm run infra:apply` is the write path, and the only thing in this repo that
+`pnpm run infra:apply` is the write path, and the only thing in this repo that
 can mutate Cloudflare. It prints a plan and stops; `--confirm` applies it.
 
 ```bash
-npm run infra:apply                # plan; needs no credential at all
-npm run infra:apply -- --confirm   # apply; needs CLOUDFLARE_API_TOKEN_WRITE
-npm run infra:apply -- --prune     # also remove undeclared values on declared names
+pnpm run infra:apply                # plan; needs no credential at all
+pnpm run infra:apply --confirm   # apply; needs CLOUDFLARE_API_TOKEN_WRITE
+pnpm run infra:apply --prune     # also remove undeclared values on declared names
 ```
 
 The plan diffs `infra.json` against public DNS over DoH, so producing one costs
@@ -576,11 +576,11 @@ third-party verification TXT than junk.
 3. Ship the Worker through the normal path (merge to `main`, CI promotes to
    `production`, Workers Builds deploys). This is what creates the proxied
    `aadhar.sh`, `www` and `cal` records, so do not hand-author them.
-4. `npm run infra:apply -- --confirm` for the mail and agent-discovery records:
+4. `pnpm run infra:apply --confirm` for the mail and agent-discovery records:
    MX, SPF, DMARC, BIMI, SVCB. Nothing else rebuilds these, which is exactly why
    this path exists.
 5. Re-verify the domain in Resend to reissue the DKIM key.
-6. `npm run infra:check` should come back green.
+6. `pnpm run infra:check` should come back green.
 
 **The edge tier.** Cloudflare exposes dozens of zone toggles and almost all of
 them are defaults nobody here has an opinion about. The five in `infra.json`'s
@@ -620,7 +620,7 @@ unminified 78KB `nav.js`. Review it by eye when you touch build settings.
 
 ### Performance budget semantics
 
-`npm run perf-budget` is intentionally split into hard build invariants and
+`pnpm run perf-budget` is intentionally split into hard build invariants and
 advisory wire-size observations. Hard failures cover CSS validity, deploy-time
 minification markers, readable source twins, and missing expected assets. The
 client asset envelopes are measured in gzip and Brotli, not raw authoring bytes;
@@ -686,9 +686,9 @@ itself already firing by 2026-08-08 (258.34 KiB observed at `295ee97`).
 `scripts/perf-snapshot.mjs` is the other half, and it has no constants to rot:
 
 ```bash
-npm run perf:snapshot -- record base.json --label main   # self-builds via the dry-run
-npm run perf:snapshot -- record head.json --label mine
-npm run perf:snapshot -- compare base.json head.json     # markdown to stdout
+pnpm run perf:snapshot record base.json --label main   # self-builds via the dry-run
+pnpm run perf:snapshot record head.json --label mine
+pnpm run perf:snapshot compare base.json head.json     # markdown to stdout
 ```
 
 `.github/workflows/perf-diff.yml` runs that on every PR touching served code: it
@@ -805,7 +805,7 @@ Then read Navigation Type (Web Analytics > Page views, bottom of the sidebar): t
 from "Prerender", which is what makes the bfcache-preserving `no-cache` policy and
 the speculation rules measurable rather than asserted.
 
-While the placeholder is in place, `npm run perf-budget` cannot read the bundle gzip
+While the placeholder is in place, `pnpm run perf-budget` cannot read the bundle gzip
 size (its wrangler dry-run needs a build that succeeds), so that one check reports
 `warn` instead of a number. Pasting the token restores it.
 
@@ -816,7 +816,7 @@ live as of 2026-08-05: the repo is public, so repository rulesets cost nothing,
 and `main` and `production` each carry an active one with zero bypass actors.
 `validate` is a REQUIRED check on `main`, which is why a PR can sit at
 `mergeStateStatus: BLOCKED` purely because CI is red. The rulesets are declared
-in [`infra.json`](infra.json) under `repository` and `npm run infra:check` fails
+in [`infra.json`](infra.json) under `repository` and `pnpm run infra:check` fails
 on drift; CLAUDE.md carries the argument for each rule.
 
 The promotion workflow guard is still the release backstop, and the ruleset does
@@ -854,8 +854,8 @@ node lwe-pipeline/generate.mjs page <id>
 node lwe-pipeline/generate.mjs wire
 node garage-pipeline/generate.mjs page <id>
 node garage-pipeline/generate.mjs wire
-npm run pages:check
-npm run og-cards   # bake the page's OG/Twitter card once it's live (see below)
+pnpm run pages:check
+pnpm run og-cards   # bake the page's OG/Twitter card once it's live (see below)
 ```
 
 The shared contract lives in
@@ -958,7 +958,7 @@ below whenever they look unreferenced again:
   deleting the file breaks mail rather than the site.
 
   **This one now goes red.** The BIMI record in [`infra.json`](infra.json)
-  carries a `consumer` field naming this path, and `npm run infra:check` fails
+  carries a `consumer` field naming this path, and `pnpm run infra:check` fails
   if the file disappears. That is the whole reason the `consumer` field exists;
   a DNS record pointing into the tree makes a file load-bearing even though
   nothing here links it. Point any future record at its file the same way.
@@ -984,7 +984,7 @@ content-type (+ markers). All-green ("0 hard failure(s)") is the gate before and
 after any deploy. The skeuomorphic `_worker.js/` module tree was extracted with
 this as the regression tripwire; keep it green on every future change.
 
-The same table runs **before** a merge through `npm run routes:check`, which
+The same table runs **before** a merge through `pnpm run routes:check`, which
 boots the Worker in-process with Wrangler's `createTestHarness()` and points the
 oracle at it (about 5s end to end, build.mjs included, since the harness honours
 `wrangler.jsonc`'s `build.command` and therefore serves the minified tree). CI
@@ -997,10 +997,10 @@ empty local KV/R2/D1 means a passing `/images/manifest.json` says the manifest
 builder works, not that the photos are there. The production sweep is still the
 one that sees real content.
 
-`npm run routes:check:remote` closes **part** of that gap on the workstation: it
+`pnpm run routes:check:remote` closes **part** of that gap on the workstation: it
 boots the same harness on a config whose KV/R2/Browser bindings reach production,
 sets `VERIFY_REMOTE=1`, and runs all 91 rows. It cannot run in CI (remote
-bindings need a write-capable token) so `npm run routes:check` remains the merge
+bindings need a write-capable token) so `pnpm run routes:check` remains the merge
 gate. See "Local dev and the route oracle against production data" above.
 
 **Part, and the boundary matters.** Remote bindings cover KV, R2, D1, and Browser
@@ -1077,7 +1077,7 @@ normal path is the remote workflow above.
 # This local command remains for recovery when Actions or R2 ingress is unavailable.
 ./holding/scripts/add-photos.sh "/path/to/photo.HIF" [more files...]
 # then it prints the deploy line; run it:
-npm run deploy   # local fallback only; normal production is merge + CI promotion
+pnpm run deploy:direct   # local fallback only; normal production is merge + CI promotion
 ```
 - Accepts JPG/PNG/HEIF/HIF. JPGs are uploaded as supplied; HEIF/HIF sources
   remain archive objects and also produce a full-resolution maximum-quality
@@ -1086,7 +1086,7 @@ npm run deploy   # local fallback only; normal production is merge + CI promotio
   writes the stem's entry into `holding/_worker.js/photo-index.json` (the
   committed pool the worker bundles — R2 key, byte size, upload date);
   regenerates EXIF metadata; bakes the four 64-bin RGB/luminance histograms;
-  and runs `npm run photos:check` as the final gate.
+  and runs `pnpm run photos:check` as the final gate.
 - A photo appears in the grid at DEPLOY, when its index entry ships with the
   worker. There is no KV manifest and nothing to bust.
 - A thumbnail can't go stale anymore: its URL is its bytes (`/i/<stem>.<hash8>`). If one looks wrong, re-run `hash-thumbnails.sh`, commit, deploy; a changed file gets a new URL automatically.
@@ -1122,7 +1122,7 @@ Outputs `holding/cars/<stem>.{avif,jpg}` (no EXIF, no R2). Bump the `?v=` on tha
 `add-photos.sh` already does this in phase 4, so a normal add needs nothing here.
 Run it by hand to backfill or to retry after a rate limit:
 ```bash
-npm run captions                            # writes holding/images/alt.json {stem: alt}
+pnpm run captions                            # writes holding/images/alt.json {stem: alt}
 ```
 Resumable: only fills uncaptioned stems, so a 429 (Workers-AI neuron budget) just means run again later.
 
@@ -1140,7 +1140,7 @@ for a missing pixel tier or histogram, so an unlabelled image can't reach a depl
 
 ### Release a change
 ```bash
-npm run release                 # where the release is, and the ONE next command
+pnpm run release                 # where the release is, and the ONE next command
 ```
 Reads git, Cloudflare and D1 and prints one next action. Read-only and safe to
 run mid-ramp.
@@ -1154,14 +1154,14 @@ projection, so it needs no D1, no wrangler and no account selection. Commit it
 with the work. `/updates` and `/restore` render from that file at build time, so
 the entry ships with the deploy it describes instead of needing a second one.
 
-`npm run deploy:promote` records the staged rows in D1 when traffic reaches
+`pnpm run deploy:promote` records the staged rows in D1 when traffic reaches
 **100%** — the one place that knows traffic actually moved. A ramp that stops at
-10% leaves the entry staged, which is exactly what it is. `npm run
+10% leaves the entry staged, which is exactly what it is. `pnpm run
 checkpoints:check` therefore allows the projection to run AHEAD by a contiguous
 tail of unreleased entries, and fails on anything else: behind, mismatched, or a
 gap in the tail.
 
-Traffic moves either from a workstation (`npm run deploy:promote`) or through
+Traffic moves either from a workstation (`pnpm run deploy:promote`) or through
 `.github/workflows/ramp.yml`, which canaries at 10% and then waits on a required
 reviewer before 50% and 100%.
 
@@ -1174,7 +1174,7 @@ outright — so it needs a token:
 ```bash
 # Cloudflare dashboard -> API Tokens -> Create Custom Token
 #   Permission: Account · Browser Rendering · Edit
-npx wrangler versions secret put -c wrangler.jsonc BROWSER_RUN_TOKEN
+pnpm exec wrangler versions secret put -c wrangler.jsonc BROWSER_RUN_TOKEN
 ```
 
 **That is an EDIT scope.** It lives as a Worker secret, never in GitHub, so the
@@ -1198,8 +1198,8 @@ carries no engine field, so an endpoint that ignores the parameter is
 indistinguishable from one that honours it. To settle it, run the control:
 
 ```bash
-BROWSER_RUN_TOKEN=... npm run kitesurf:check            # free, may be inconclusive
-BROWSER_RUN_TOKEN=... npm run kitesurf:check -- --render  # decisive, ~2 tiny renders
+BROWSER_RUN_TOKEN=... pnpm run kitesurf:check            # free, may be inconclusive
+BROWSER_RUN_TOKEN=... pnpm run kitesurf:check --render  # decisive, ~2 tiny renders
 ```
 
 It sends an invented engine name. A rejection proves the parameter is validated,
@@ -1253,7 +1253,7 @@ The one case that script cannot run is the Workers binding, which only exists
 inside a Worker:
 
 ```bash
-npm run dev:remote
+pnpm run dev:remote
 curl -s 'http://localhost:8787/lens/browser?url=https://example.com&do=expand' | jq '.interaction, .engine'
 ```
 
@@ -1301,7 +1301,7 @@ on the Bliss desktop (`holding/og/<section>-<name>.png`), wired via
 changes or a new page lands:
 
 ```bash
-npm run og-cards                    # captures LIVE aadhar.sh (data-driven demos render populated)
+pnpm run og-cards                    # captures LIVE aadhar.sh (data-driven demos render populated)
 node holding/scripts/inject-og-meta.mjs   # add the meta to any page missing it (idempotent)
 # then deploy — a deploy purges the edge so the refreshed card lands.
 ```
@@ -1318,7 +1318,7 @@ node holding/scripts/inject-og-meta.mjs   # add the meta to any page missing it 
   `HERO{}` selector, optionally a `preset` click to populate the demo, re-run.
 - The LWE + Garage generators emit the same `og:image` block, so a future
   pipeline-authored page gets a card automatically (its PNG still needs one
-  `npm run og-cards` run before the URL resolves).
+  `pnpm run og-cards` run before the URL resolves).
 - Worker-rendered routes (no static HTML for the generator to walk) live in
   `WORKER_PAGES{}` beside `HERO{}`, with their meta emitted from the page's own
   renderer instead of `inject-og-meta.mjs`. `/lens` is one: its card captures a
@@ -1329,7 +1329,7 @@ node holding/scripts/inject-og-meta.mjs   # add the meta to any page missing it 
   ```bash
   curl -s "https://aadhar.sh/lens/shot?url=https%3A%2F%2Fstripe.com%2F" -o /dev/null
   curl -s "https://aadhar.sh/lens/browser?url=https%3A%2F%2Fstripe.com%2F" -o /dev/null
-  OG_ONLY=lens npm run og-cards
+  OG_ONLY=lens pnpm run og-cards
   ```
 
 ---
@@ -1425,7 +1425,7 @@ synchronous execution, so they cannot measure CPU. Verified in production on a
 752KB page where the parse span read 0 right after emitting 81KB of markdown.
 Those two spans are kept for their attributes. When you actually want CPU:
 ```bash
-npx wrangler tail aadhar-sh --format json | grep -o '"cpuTime":[0-9]*'
+pnpm exec wrangler tail aadhar-sh --format json | grep -o '"cpuTime":[0-9]*'
 ```
 
 Only `_worker.js/index.js` may import `cloudflare:workers` (CLAUDE.md gotcha 16)
@@ -1441,7 +1441,7 @@ records nothing. Cloudflare shipped OpenTelemetry traces in local dev that day;
 Wrangler 4.118.0 already has it, and there is nothing to install, enable, or bump.
 
 ```bash
-npm run dev            # or: npx wrangler dev -c wrangler.dev.jsonc --port 8799
+pnpm run dev            # or: pnpm exec wrangler dev -c wrangler.dev.jsonc --port 8799
 curl -s localhost:8799/photos/grid.html > /dev/null      # make some spans
 
 # the named spans, newest first
@@ -1524,7 +1524,7 @@ until its twin agrees: `checkTwinFacts()` recomposes the User-Agent from
 | `add-photos.sh` | Full pipeline for new photos: resize, EXIF-rotate, encode AVIF+JPG center-square thumbs, upload the full-resolution browser copy to R2, write the stem's `photo-index.json` entry, regenerate metadata, bake histograms, and validate the artifact graph. |
 | `check-photo-pipeline.mjs` | CI-safe invariant check: every metadata stem has all three hashed tiers, per-photo metadata, and four 64-bin histogram channels, with no orphaned pixel files. Also walks the authored HTML/JS for hardcoded `/i/<stem>.<hash>` URLs (the `/garage/tooltips` demo slots have three) and fails if a re-encode has pruned the bytes one of them names. |
 | `extract-photo-metadata.sh` | Read EXIF from the SOOC folder, emit `images/metadata.json` + per-photo `images/meta/<stem>.json`. Pulls the Fuji recipe fields too. Requires exiftool + jq. **Two schemas, on purpose:** `metadata.json` is the RECORD (long, self-documenting field names, plus the derived `recipe` card) and the per-photo files are the tooltip's RENDER CACHE (short keys, tooltip-only fields, nulls dropped, ~28% smaller compressed because one is fetched per hover). Bump `META_V` in `tooltip.js` when the per-photo shape changes. |
-| `build-exif-index.mjs` | Roll every per-photo `images/meta/<stem>.json` MINUS its histogram into one `images/exif.json` (158 photos, 2.6KB brotli). Called by `extract-photo-metadata.sh`, so `npm run photos` keeps it current, and `check-photo-pipeline.mjs` rebuilds it to fail on drift. **Why it exists:** the homepage draws a random 12 of 158 per request, so warming metadata per visible slot was 12 cold requests on nearly every visit (a given slot repeats ~7.6% of the time). One immutable index is smaller than that on the first visit and free after. Histograms stay per-photo because they are 623 of a meta file's ~977 bytes, so folding them in would take the index from 2.6KB to 24KB for bars most visitors never see. |
+| `build-exif-index.mjs` | Roll every per-photo `images/meta/<stem>.json` MINUS its histogram into one `images/exif.json` (158 photos, 2.6KB brotli). Called by `extract-photo-metadata.sh`, so `pnpm run photos` keeps it current, and `check-photo-pipeline.mjs` rebuilds it to fail on drift. **Why it exists:** the homepage draws a random 12 of 158 per request, so warming metadata per visible slot was 12 cold requests on nearly every visit (a given slot repeats ~7.6% of the time). One immutable index is smaller than that on the first visit and free after. Histograms stay per-photo because they are 623 of a meta file's ~977 bytes, so folding them in would take the index from 2.6KB to 24KB for bars most visitors never see. |
 | `build-recipes.py` | Derive the self-documenting Fuji film-recipe card (`recipe`) for each photo in `images/metadata.json`, in the idiom fujixweekly.com publishes recipes in (`Dynamic Range: DR400`, `White Balance: Kelvin (5900K), -1 Red & +4 Blue`, `Clarity: -2`). Called by `extract-photo-metadata.sh`. Values are transformed from the NUMERIC EXIF tags (`FujiFilm:Sharpness`, `Clarity`, `DevelopmentDynamicRange`), never guessed back from friendly words; a non-Fuji frame gets no recipe block. Query it with `/photos/query.json?recipe=DR400`. |
 | `reencode-thumbnails.sh` | Re-encode every published grid thumb from the source folder at a new resolution (pre-cropped squares, two tiers). Follow with `hash-thumbnails.sh`, then commit + deploy. |
 | `add-car-photo.sh` | One resto-mod reference photo -> `cars/<stem>.{avif,jpg}` for the homepage car tooltips. No EXIF, no R2. |
@@ -1534,7 +1534,7 @@ until its twin agrees: `checkTwinFacts()` recomposes the User-Agent from
 | `gen-photo-semantics.mjs` | Retrieval terms for `photo_query` -> `images/semantics.json`. Derived tier (EXIF vocabulary repair) needs nothing; `--vision` adds model-written keywords and needs `CLOUDFLARE_API_TOKEN`. Deliberately offline so the Worker keeps zero AI credentials. Resumable. |
 | `gen-encoding-samples.sh` | Regenerate the color sample set for `/garage/encoding` through every encoder; defaults to the committed `garage/enc/c-png.png` fixture and prints byte counts. |
 | `photo-histograms.py` | Bakes four 64-bin RGB/luminance histogram channels into each per-photo `images/meta/<stem>.json` from the shipped hashed JPG tier. Requires the pinned Pillow dependency in `holding/scripts/requirements.txt` and is called by both metadata extraction and `add-photos.sh`. |
-| `gen-og-cards.mjs` | Render the 1200x630 OG/Twitter card per garage + lwe page (live demo on the Bliss desktop) into `holding/og/`. `npm run og-cards`. Drives the installed Chrome via `playwright-core`; captures production so data-driven demos render full. Hero selectors + presets in the `HERO{}` map. See "Regenerate the OG / Twitter cards". |
+| `gen-og-cards.mjs` | Render the 1200x630 OG/Twitter card per garage + lwe page (live demo on the Bliss desktop) into `holding/og/`. `pnpm run og-cards`. Drives the installed Chrome via `playwright-core`; captures production so data-driven demos render full. Hero selectors + presets in the `HERO{}` map. See "Regenerate the OG / Twitter cards". |
 | `inject-og-meta.mjs` | Idempotently add `og:image`/`twitter:card` meta to any garage + lwe page missing it, pointing at `/og/<section>-<name>.png`. `--check` reports gaps without writing. |
 | `hash-thumbnails.sh` | sha256 each pixel tier into `holding/i/<stem>.<hash8>.<ext>`, write `images/hashes.json`, and prune tiers no longer named by it. Run by `add-photos.sh`; a re-encode mints new URLs, so there is no version to bump. |
 | `gen-encoding-grids.sh` | Regenerate the ZOOMED 96px comparison crops (`garage/enc/z-*`) that `/lwe/encoding` fetches. Run by the `regenerate-encoding-study` routine of the photo workflow. |
@@ -1548,7 +1548,7 @@ until its twin agrees: `checkTwinFacts()` recomposes the User-Agent from
 - **Thumbnail 404s must be uncacheable.** Workers static assets no longer return homepage HTML for missing files, but a real miss under `/images/*` can still inherit the immutable cache rule unless the worker clamps it. Keep the thumbnail route worker-first; a re-encode mints a fresh `/i/` URL by itself, so there is no version to bump.
 - **zsh eats `${var}:something`.** Brace-quote KV key names with colons (`"tracks:${OLD}:fresh"`), and use `${=flag}` if you need word-splitting in ad-hoc snippets (the scripts use `#!/usr/bin/env bash` so they are safe internally).
 - **`jpegtran` / mozjpeg strip EXIF.** Rotate losslessly with `jpegtran -copy none -rotate N` *before* recompressing, and send its binary stdout to a file (`2>/dev/null > out.jpg`), not through a pipe that could mix in stderr.
-- **Production deploy = merge to `main`, CI promotion to `production`, then Workers Builds**; the single site Worker deploys the root `wrangler.jsonc`, bundling `holding/`, `cal/src/`, and `serendipity/` from that exact release branch. The deploy config points `main` + `assets` at `.build/holding` and runs `build.mjs` first through its `build.command`, so the production path self-builds and ships the minified client scripts + `luna.css`. Local dev is the exception: `wrangler dev -c wrangler.dev.jsonc` (`npm run dev`, wired into `.claude/launch.json`) serves the readable tree directly. Before merging, CI runs `npm run perf-budget`; after configuring Workers Builds, verify its release status and run `node verify-routes.mjs https://aadhar.sh` plus the `/coffee` and `/serendipity` route smoke checks.
+- **Production deploy = merge to `main`, CI promotion to `production`, then Workers Builds**; the single site Worker deploys the root `wrangler.jsonc`, bundling `holding/`, `cal/src/`, and `serendipity/` from that exact release branch. The deploy config points `main` + `assets` at `.build/holding` and runs `build.mjs` first through its `build.command`, so the production path self-builds and ships the minified client scripts + `luna.css`. Local dev is the exception: `wrangler dev -c wrangler.dev.jsonc` (`pnpm run dev`, wired into `.claude/launch.json`) serves the readable tree directly. Before merging, CI runs `pnpm run perf-budget`; after configuring Workers Builds, verify its release status and run `node verify-routes.mjs https://aadhar.sh` plus the `/coffee` and `/serendipity` route smoke checks.
 - **`_playlistId` is module-cached per isolate.** After changing `playlist-id`, redeploy to flush it (see the playlist section).
 - **The worker is bundled, not hand-concatenated.** `_worker.js/` imports sibling modules; wrangler bundles them at deploy via built-in esbuild.
 - **Authoring is buildless; SERVING is minified.** `build.mjs` (repo root; minifier devDependencies: `@minify-html/node`, `lightningcss`, `oxc-minify`) copies `holding/` to `.build/` and minifies: `index.html` (structure via minify-html, inline CSS/JS through the same Lightning CSS + Oxc settings, with marker tripwires and a readable `/index.src.html` twin), the six client scripts (`nav.js`, `notepad.js`, `lens.js`, `lens-browser.js`, `quiz.js`, `tooltip.js`), `luna.css` (owner-approved 2026-07), and the worker modules' `/*min*/` CSS literals — each with a readable `/<name>.src.*` twin (the banner in each minified file points there). It hard-fails the deploy if `luna.css` doesn't parse as valid CSS (the v143 corruption slipped through for three releases), and content-hashes `nav.js` + `luna.css` into immutable `/a/` URLs. Garage/lwe HTML, images, and `_headers` ship byte-identical to git (View Source is part of the design). Do NOT extend the build into bundling or version auto-bumps; the scripts remain independently readable islands.

@@ -51,30 +51,36 @@ jobs:
           # Only a manual run can name a ref, and then it is the point.
           ref: ${{ inputs.ref || '' }}
 
+      - name: Install pnpm
+        # No action, no digest to maintain: package.json's packageManager
+        # field is the source of truth and this pins the same version.
+        # Must precede setup-node, whose `cache: pnpm` needs pnpm on PATH.
+        run: npm install -g pnpm@11.20.0
+
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .node-version
-          cache: npm
-          cache-dependency-path: package-lock.json
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install homepage dependencies
-        run: npm ci --no-audit --no-fund
+        run: pnpm install --frozen-lockfile
 
       - name: Check Wrangler versions and lockfiles
-        run: npm run check-wrangler
+        run: pnpm run check-wrangler
 
       - name: Build homepage
-        run: npm run build
+        run: pnpm run build
 
       - name: Check photo asset invariants
-        run: npm run photos:check
+        run: pnpm run photos:check
 
       - name: Enforce homepage performance budget
-        run: npm run perf-budget
+        run: pnpm run perf-budget
 
       - name: Validate site Worker config
-        run: npx wrangler deploy --dry-run
+        run: pnpm exec wrangler deploy --dry-run
 
       # Type checking WITHOUT TypeScript: tsc reads the JSDoc already in these
       # files, emits nothing, and never touches a served byte. Scoped to cal/src
@@ -82,10 +88,10 @@ jobs:
       # is meant to grow into). It runs BEFORE the tests because a type error is
       # cheaper to read than the failure it would cause downstream.
       - name: Typecheck annotated JavaScript
-        run: npm run typecheck
+        run: pnpm run typecheck
 
       - name: Test homepage representation contracts
-        run: npm test
+        run: pnpm test
 
       # The route oracle, pre-merge. createTestHarness() boots the site Worker
       # in-process (honouring wrangler.jsonc's build.command, so it serves the
@@ -94,32 +100,39 @@ jobs:
       # local KV/R2/D1 come up empty. See MAINTENANCE.md "Verify the whole route
       # surface" for what the `remote: true` rows sit out and why.
       - name: Verify route surface against a local Worker
-        run: npm run routes:check
+        run: pnpm run routes:check
 
       - name: Validate LWE and Garage page contracts
-        run: npm run pages:check
+        run: pnpm run pages:check
 
       - name: Test coffee Worker
-        run: npm test --workspace cal
+        run: pnpm --filter cal-aadhar-sh test
 
       - name: Validate Cloudflare garage Worker config
         working-directory: cf-garage
-        run: npx wrangler deploy --dry-run -c wrangler.toml
+        run: pnpm exec wrangler deploy --dry-run -c wrangler.toml
 
       - name: Validate LWE ask Worker config
         working-directory: lwe-ask
-        run: npx wrangler deploy --dry-run -c wrangler.toml
+        run: pnpm exec wrangler deploy --dry-run -c wrangler.toml
 
       # The Reader lens Worker. It installs its OWN deps rather than riding the
       # root workspace: defuddle + linkedom are ~22 MB of node_modules that only
       # this Worker bundles, and keeping them out of the root install is what
       # stops them drifting onto the site Worker's dependency surface.
+      #
+      # --ignore-workspace is what preserves that under pnpm, and it is load
+      # bearing rather than decoration. A bare `pnpm install` here walks UP to
+      # the root pnpm-workspace.yaml, installs the five workspace projects, and
+      # never creates lens-reader/node_modules at all, so the tests then die on
+      # ERR_MODULE_NOT_FOUND with a `node_modules missing` warning as the only
+      # clue. npm had no such behaviour: it installed the local package.json.
       - name: Validate Reader lens Worker config and run its tests
         working-directory: lens-reader
         run: |
-          npm install --no-audit --no-fund
-          npm test
-          npx wrangler deploy --dry-run -c wrangler.toml
+          pnpm install --ignore-workspace
+          pnpm test
+          pnpm exec wrangler deploy --dry-run -c wrangler.toml
 
       # infra.json against reality. The tree and DNS tiers need no credential;
       # the account tier runs only when the read-only token secret exists and
@@ -145,7 +158,7 @@ jobs:
       # a PR whose whole purpose is to FIX production drift cannot turn its own check
       # green before it deploys, because the thing it asserts against is the thing it
       # repairs. That happened the same day (#195) and the documented way out is the
-      # local fallback, `npm run deploy`, followed by a re-run.
+      # local fallback, `pnpm run deploy`, followed by a re-run.
       - name: Check infrastructure declaration
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -158,4 +171,4 @@ jobs:
           # advisory rather than a failure either way. It does NOT unlock the
           # CodeQL assertion; see the permissions note at the top of this file.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npm run infra:check
+        run: pnpm run infra:check
