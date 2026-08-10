@@ -217,7 +217,12 @@ export function artUrls(raw) {
   const hash = spotifyArtHash(raw);
   if (!hash) return null;
   const at = (w, ext) => `/rn/art/${hash}-${w}-${ART_VERSION}.${ext}`;
-  return { src: at(240, "jpg"), srcset: `${at(120, "avif")} 120w, ${at(240, "avif")} 240w` };
+  const avif2x = at(240, "avif");
+  // `warm` names the ONE tier a 2x display picks, so warmArtCache does not have
+  // to parse it back out of the srcset this function just built. A field rather
+  // than a second exported builder, because the whole reason the URL scheme sits
+  // in this function is that it sits in exactly one place.
+  return { src: at(240, "jpg"), srcset: `${at(120, "avif")} 120w, ${avif2x} 240w`, warm: avif2x };
 }
 
 // The hover attributes for one art URL — and NOTHING when the art cannot be
@@ -323,6 +328,83 @@ export async function handleRnArt(request, env, ctx) {
   return out;
 }
 
+// ── warming that cache, which is the whole reason the hover felt slow ─────────
+//
+// WHY. Re-hosting the art first-party (#182) traded a globally warm CDN for a
+// cache nobody had populated yet, and `caches.default` is PER-COLO. Measured in
+// production 2026-08-10 against the live playlist, 15 unique covers: 11 answered
+// `x-art-cache: miss` at 390-840ms (~600ms median) while the 4 warm ones came
+// back in 180-270ms. Spotify's own CDN served the same image in 98-232ms and was
+// warm essentially everywhere. So the tooltip sat on its grey placeholder
+// (luna.css, `.xp-tooltip .cover.album`) for over half a second on first hover.
+//
+// The miss rate is not evenly spread, either. A playlist change mints new hashes
+// (that content-addressing is what makes the whole scheme cheap to run), so the
+// person who changed the playlist is reliably the first to hover every fresh
+// cover, in whichever colo they are sitting in. The owner sees the cold path far
+// more often than a visitor does, which is exactly how this got noticed.
+//
+// WHAT THIS COSTS A VISITOR: nothing. It runs in `ctx.waitUntil` after the
+// fragment response has already been sent, so the browser issues no extra
+// request and downloads no extra byte. What it spends is worker subrequests and
+// Cloudflare Images transformations, and it spends them in the colo that is
+// about to serve the hover.
+//
+// The transformation budget survives this because Images bills per UNIQUE
+// transformation per calendar month, so warming the same URL in twenty colos
+// still counts once. One tier across ~35 images is ~35 a playlist against the
+// Free plan's 5,000, and the plan errors rather than charging an overage.
+export const WARM_MAX_URLS = 40;
+
+// The URL set one warm may touch, as a PURE function so it is testable without
+// a `caches` global (contract-tests.mjs runs under plain node, gotcha 16).
+//
+// Covers first, then artist pictures. Both are hover surfaces, but a track row
+// is the whole row while an artist link is a few words inside it, so covers earn
+// the head of the list for when the cap bites.
+export function artWarmList(payload, origin) {
+  const tracks = Array.isArray(payload?.tracks) ? payload.tracks : [];
+  const seen = new Set();
+  const add = (raw) => {
+    const art = artUrls(raw);
+    // No hash means no re-hosted URL to warm: a mosaic collage cover, or a shape
+    // rn.js has not learned yet. artAttrs already emits nothing for those, so no
+    // request is coming and there is nothing to prepare for.
+    if (art && seen.size < WARM_MAX_URLS) seen.add(origin + art.warm);
+  };
+  for (const t of tracks) add(t.image_url);
+  for (const t of tracks) for (const a of t.artists || []) add(a.image_url);
+  return [...seen];
+}
+
+export async function warmArtCache(payload, request, env, ctx) {
+  if (!ctx || typeof caches === "undefined") return 0;
+  const urls = artWarmList(payload, new URL(request.url).origin);
+  if (!urls.length) return 0;
+
+  // ONE probe stands in for the whole set. These URLs are minted together and
+  // warmed together, so the first one being present means this colo has already
+  // paid for this playlist. Guessing wrong costs one `cache.match` and never a
+  // stale image: every URL is content-addressed and immutable, so a warm entry
+  // can only ever be the right bytes.
+  const cache = caches.default;
+  if (await cache.match(new Request(urls[0]))) return 0;
+
+  await Promise.all(urls.map(async (u) => {
+    try {
+      // Call the handler directly instead of fetching our own origin. A self
+      // fetch would cost a second worker invocation per cover to reach this
+      // same function, and `handleRnArt` already does its own cache.put.
+      const res = await handleRnArt(new Request(u), env, ctx);
+      // DRAIN the body. handleRnArt caches `out.clone()`, which tees the stream,
+      // and a tee branch nobody reads can back-pressure the branch being written
+      // to the cache. These are 5-19KB images, so buffering them is free.
+      if (res.body) await res.arrayBuffer();
+    } catch { /* a cover that will not warm is a cover that loads on hover */ }
+  }));
+  return urls.length;
+}
+
 // Both representations carry `x-robots-tag: noindex`, which is what robots.txt
 // used to try to say with `Disallow: /rn/tracks` and could not. The playlist is a
 // live JSON feed and an HTML fragment: worth FETCHING (the homepage Link header,
@@ -409,11 +491,30 @@ export async function handleRnTracks(request, env, ctx) {
   return trackResponse(result.payload, result.status, "json");
 }
 
-// `/rn/tracks.html` is the browser fragment contract used by the homepage's
-// no-SSR fallback. It intentionally returns `<li>` rows, not a full document.
+// `/rn/tracks.html` is the browser fragment contract the homepage hydrates from.
+// It intentionally returns `<li>` rows, not a full document.
+//
+// It is also the one request that reliably precedes a hover, in the colo that
+// will serve it, which is what makes it the right place to hang the art warm.
+// The JSON twin deliberately does NOT warm: `/rn/tracks` is the machine-facing
+// contract, and an agent reading it is never going to hover an album cover.
+//
+// The warm cannot delay the fragment — waitUntil runs after this response is
+// already on the wire — and it fires far less often than it looks. The fragment
+// is `s-maxage=600`, so the edge answers most requests without waking the worker
+// at all, and after the first warm the cache probe inside short-circuits.
 export async function handleRnTracksHtml(request, env, ctx) {
   const result = await loadRnTracks(request, env, ctx);
-  return trackResponse(result.payload, result.status, "html");
+  const res = trackResponse(result.payload, result.status, "html");
+  if (ctx && result.status === 200) {
+    ctx.waitUntil(span("rn.art.warm", async (s) => {
+      const warmed = await warmArtCache(result.payload, request, env, ctx);
+      // 0 is the common and healthy answer (this colo was already warm), so the
+      // count is what separates "the warm is working" from "the warm never ran".
+      s.setAttribute("rn.art.warmed", warmed);
+    }).catch(() => {}));
+  }
+  return res;
 }
 
 // The HTML representation is intentionally the same row shape used by the
