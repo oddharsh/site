@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// npm run bun:check [-- --bun /path/to/bun]
+// pnpm run bun:check [--bun /path/to/bun]
 //
 // The control for "could this repo's build run on bun instead of node?".
 //
@@ -62,7 +62,7 @@ function resolveBun() {
   const found = spawnSync("command", ["-v", "bun"], { shell: true, encoding: "utf8" });
   const path = found.stdout?.trim();
   if (!path) {
-    console.error("no bun found. install one, or point at a build:\n  npm run bun:check -- --bun /path/to/bun");
+    console.error("no bun found. install one, or point at a build:\n  pnpm run bun:check --bun /path/to/bun");
     process.exit(2);
   }
   return path;

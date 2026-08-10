@@ -299,7 +299,7 @@ export default {
 // earns a Worker invocation because it renders, redirects, negotiates, proxies,
 // writes, or needs a deliberate cache-policy override.
 //
-// The annotation below is load-bearing for `npm run typecheck` and costs nothing
+// The annotation below is load-bearing for `pnpm run typecheck` and costs nothing
 // at runtime. This table is heterogeneous on purpose: some handlers are
 // synchronous, most are async, and many take fewer than four arguments. Inferred,
 // the array takes its element type from the FIRST entry (routeFavicon, which
