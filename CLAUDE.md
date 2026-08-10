@@ -2275,6 +2275,31 @@ pnpm run deploy:direct
     works.** A lockfile is an interchange format between two machines running
     different versions, and "it installs here" tests exactly one of them.
 
+    **What waiting costs is worth writing down, because it is not nothing.**
+    Benchmarked on this repo 2026-08-10, four runs each, steady state (the
+    minimum, since pnpm 11 spanned 5.9-14.0s while the others held within 0.3s):
+
+    | | cold | warm | no-op |
+    |---|--:|--:|--:|
+    | pnpm 11.21.0 | 20.0s | **5.8s** | 1.09s |
+    | pnpm 12.0.0-rc.3 | 18.2s | **2.0s** | 0.44s |
+    | bun 1.4.0-canary | **9.1s** | **1.8s** | 0.14s |
+
+    The warm install is the number that matters, since a populated store with a
+    deleted `node_modules` is what a branch switch produces, and **pnpm 12 is
+    about 2.9x faster there**, which puts it within noise of bun. That is a
+    better argument for 12 than anything in its release notes, and it is an
+    argument for going the day it ships rather than for going now.
+
+    Two things that benchmark cannot tell you, both worth knowing before rerunning
+    it. Bun is not doing the same job: it resolves from `package.json` and writes
+    its own `bun.lock` instead of installing `pnpm-lock.yaml` (scope was checked
+    and does match, same four workspace projects, 9 top-level dirs either way).
+    And **disk figures are deliberately absent**, because `du` reported 479 MB
+    against 356 MB and both are junk for the reason gotcha 29 already records:
+    APFS clones the store, so per-file accounting double-counts. Measuring that
+    honestly needs free-space deltas.
+
     Two smaller notes. pnpm 12 adds `packageManagerDependencies`, pinning the
     package manager itself with per-platform binaries and integrity hashes,
     which is a real improvement and is also what makes the lockfile
