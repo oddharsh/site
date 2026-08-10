@@ -1990,8 +1990,26 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   assert.doesNotMatch(fragment, /data-photo-deferred|data-src=|data-srcset=/,
     "a fragment tile has nothing to defer for; leaving it deferred is how the grid went blank in an unrendered tab");
   assert.doesNotMatch(fragment, /<noscript>/, "the fragment only ever arrives via fetch(), so a script-off twin is dead bytes");
-  assert.match(fragment, /fetchpriority="low"/, "photos must never compete with the prose that is actually the LCP element");
   assert.match(worker, /\{ deferred: false \}/, "/photos/grid.html must render the live-URL form");
+
+  // Priority is split WITHIN the grid, and the two halves fail differently.
+  // The CEILING is the #156 invariant: the LCP element is the prose, so no tile
+  // may ever be raised to high. The FLOOR is the reason the split exists: one
+  // urgency bucket for all twelve is what makes the edge round-robin them, and
+  // AVIF has no progressive mode, so an interleaved tile paints nothing until
+  // it is whole. Assert the exact PARTITION rather than a count, because six
+  // low tiles in the wrong six is the same bug wearing the right total.
+  const twelve = Array.from({ length: 12 }, (_, i) => ({ ...photo[0], stem: `X${i}`, full: `X${i}.jpg` }));
+  const grid12 = renderPhotoSlots(twelve, {}, { deferred: false });
+  const tiles = grid12.split("<a href=").slice(1);
+  assert.equal(tiles.length, 12, "the fragment must render all twelve tiles");
+  assert.deepEqual(
+    tiles.map((t) => /fetchpriority="low"/.test(t)),
+    [false, false, false, false, false, false, true, true, true, true, true, true],
+    "the first six tiles ride the default urgency and the last six stay low; flattening that back to one bucket restores the fair-share interleave",
+  );
+  assert.doesNotMatch(grid12, /fetchpriority="high"/,
+    "no photo may outrank the introductory prose, which is the measured LCP element at 390px and 1280px alike");
 
   assert.doesNotMatch(worker, /rel="preload" as="image"/, "a non-LCP random photo must not consume the preload lane");
   assert.match(page, /fetch\("\/photos\/grid\.html"\)/, "the homepage must hydrate its random twelve");
@@ -2002,7 +2020,7 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   // Matches the construction, not the word, so the comment explaining why the
   // observer is gone does not trip its own tripwire.
   assert.doesNotMatch(page, /new IntersectionObserver|rootMargin:/,
-    "the photo grid must not reintroduce viewport gating; the whole set is ~136 KB at fetchpriority=low, off the LCP path");
+    "the photo grid must not reintroduce viewport gating; the whole set is ~136 KB off the LCP path, and the urgency split is what orders it now");
   assert.doesNotMatch(page, /requestIdleCallback\(load/, "the tooltip island must not transfer before hover intent");
   assert.match(nav, /getElementById\("axp-desktop"\).*getElementById\("axp-taskbar"\)/, "every server-rendered shell must opt into post-paint enhancement");
   assert.match(nav, /D\.prerendering\) return boot\(\)/, "prerendered static shells must enhance before activation");

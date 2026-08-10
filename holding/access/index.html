@@ -51,7 +51,7 @@
 /* the page's own chrome lives on .window below, but body needs the family too:
    anything the shell injects OUTSIDE .window inherits from here. */
 body{font-family:var(--font-ui)}
-.window{max-width:1440px;font-family:var(--font-ui);font-size:10.5pt;color:var(--ink)}
+.window{--axp-maxw:1440px; max-width:var(--axp-maxw);font-family:var(--font-ui);font-size:10.5pt;color:var(--ink)}
 h1{font-family:var(--font-caption);font-size:17pt;font-weight:700;color:var(--navy);margin:0 0 2px;letter-spacing:-.01em;text-wrap:balance}
 h2{font-family:var(--font-caption);font-size:12.5pt;font-weight:700;color:var(--navy2);margin:22px 0 6px}
 h3{font-family:var(--font-caption);font-size:10.5pt;font-weight:700;color:var(--navy);margin:14px 0 4px}
