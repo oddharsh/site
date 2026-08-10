@@ -61,7 +61,7 @@ background:oklch(93% 0.012 90);border-top:1px solid oklch(80% 0.02 90)}
 .np-note{display:none !important}
 .np-note:popover-open{display:flex !important}
 /* folder index ("My Writing") */
-.np-folder{height:auto;min-height:0;max-width:560px}
+.np-folder{height:auto;min-height:0;--axp-maxw:560px;max-width:var(--axp-maxw)}
 .np-folder-body{padding:14px 16px 6px}
 .np-folder-intro{margin:0 0 12px;color:oklch(40% 0 0);text-wrap:pretty}
 .np-files{list-style:none;margin:0;padding:0;border:1px solid oklch(80% 0.02 250)}

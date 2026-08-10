@@ -24,7 +24,7 @@
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}html{background:linear-gradient(180deg,oklch(56% .13 250),oklch(73% .10 236) 50%,oklch(88% .05 232) 60%,oklch(60% .16 140))}
 body{background:transparent;font-family:var(--font-ui);font-size:10.5pt;line-height:1.5;color:var(--ink,#181818);padding:24px 12px 60px;min-height:100vh}
-.window{max-width:760px;margin:0 auto;background:#fff}
+.window{--axp-maxw:760px; max-width:var(--axp-maxw);margin:0 auto;background:#fff}
 .title-bar .sol-icon{background:#ffd36b;border-radius:2px;position:relative;overflow:hidden}
 .title-bar .sol-icon:before{content:"";position:absolute;inset:3px;border:2px solid #e45f3e;border-radius:50%}
 .title-bar .sol-icon:after{content:"";position:absolute;left:7px;right:7px;top:7px;bottom:7px;background:#e45f3e;clip-path:polygon(50% 0,63% 37%,100% 50%,63% 63%,50% 100%,37% 63%,0 50%,37% 37%)}
