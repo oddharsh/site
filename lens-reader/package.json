@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "defuddle": "0.19.2",
-    "linkedom": "0.18.12",
-    "turndown": "7.2.0"
+    "linkedom": "0.18.13",
+    "turndown": "7.2.4"
   }
 }

@@ -60,7 +60,7 @@ jobs:
 
     steps:
       - name: Check out with full history
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Needed for `git merge-base`. Nothing here pushes, so the credential
           # is not persisted into the local git config either.
@@ -68,7 +68,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .node-version
           cache: npm
@@ -138,7 +138,7 @@ jobs:
       # that cannot be granted.
       - name: Comment the diff on the pull request
         if: github.event.pull_request.head.repo.full_name == github.repository
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           REPORT_PATH: ${{ runner.temp }}/wire-size.md
         with:
