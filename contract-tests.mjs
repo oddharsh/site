@@ -1592,6 +1592,45 @@ test("outbound self-link list stays in sync with the desktop shell profiles", as
   }
 });
 
+// ── shell infotips ──────────────────────────────────────────────────────────
+// infotip.js cannot be imported here: it reaches /hoist.js by absolute
+// specifier, which node's loader will not resolve (the same wall gotcha 16
+// describes). So these assert on the source text, and each one guards a
+// failure that would ship silently.
+
+test("the infotip's target selector has exactly one home", async () => {
+  const nav = await readFile(new URL("holding/nav.js", import.meta.url), "utf8");
+  const tip = await readFile(new URL("holding/infotip.js", import.meta.url), "utf8");
+  // nav.js's loader has to watch the same elements the module claims, or the
+  // first hover over a control it forgot never loads the module at all — and
+  // the failure is a tooltip that works everywhere except where you look first.
+  assert.match(nav, /var INFOTIP_TARGETS = \[/, "nav.js owns the selector list");
+  assert.match(nav, /targets: INFOTIP_TARGETS/, "and passes it to the module rather than letting it keep a copy");
+  assert.match(tip, /const TARGETS = o\.targets;/, "infotip.js takes the selector it is given");
+  assert.doesNotMatch(tip, /\.axp-pin[^"]*,\s*\.axp-trayico/, "a second selector list in infotip.js is the drift this test exists to stop");
+});
+
+test("an infotip row is dropped rather than filled in", async () => {
+  const tip = await readFile(new URL("holding/infotip.js", import.meta.url), "utf8");
+  // Same rule the photo tooltip follows: a missing value prints nothing. A
+  // card that rendered "Contains: 0 pages" or "Colo: unknown" would be stating
+  // something the shell does not know, on chrome describing the shell.
+  assert.match(tip, /\.filter\(\(p\) => p && p\[1\]\)/, "card() must drop pairs with no value");
+  assert.doesNotMatch(tip, /"unknown"|"n\/a"|\|\| 0\)\s*\+\s*" page/i, "no placeholder stands in for a value");
+});
+
+test("the shell infotip ships minified, hashed, and with a readable twin", async () => {
+  const build = await readFile(new URL("build.mjs", import.meta.url), "utf8");
+  // Missing from SHELLS it would ship unminified with no /infotip.src.js twin;
+  // missing from STRING_ASSETS its import specifier would stay unhashed and
+  // the module would serve at max-age=300 forever beside its immutable peers.
+  assert.match(build, /\["infotip\.js",\s*"\/infotip\.src\.js"/, "infotip.js belongs in SHELLS");
+  assert.match(build, /\{ file: "\/infotip\.js",\s*base: "infotip"/, "and in STRING_ASSETS, so nav.js's import() is repointed");
+  const shells = build.slice(build.indexOf("const SHELLS = ["));
+  assert.ok(shells.indexOf('"/hoist.js"') < shells.indexOf('{ file: "/infotip.js"'),
+    "hoist must be hashed before infotip, or infotip's /a/ copy keeps the unhashed specifier");
+});
+
 test("outbound endpoint discovery follows the spec's precedence", () => {
   const base = "https://example.com/post";
   // Link header wins over markup.

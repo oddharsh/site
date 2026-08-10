@@ -1355,7 +1355,76 @@
     }
   }
 
-  function boot() { ensureLunaCss(); buildDesktop(); buildIcons(); buildTaskbar(); initDrag(); initRaise(); initIconDrag(); initScrollbars(); initResize(); setFavicon(); injectSpeculation(); initCloseBack(); initWindowControls(); }
+  // ── XP infotips for the shell chrome ────────────────────────────────────────
+  // Every control here already carries a `title`, which buys the OS tooltip: one
+  // line, in the system font, after a delay nobody chose. Windows itself was
+  // richer than that — an Explorer infotip named a folder's contents, and the
+  // tray's tooltips were live readouts — so /infotip.js re-draws these in Luna
+  // and gives the ones with something to say the room to say it.
+  //
+  // Same bargain the homepage strikes with tooltip.js: the loader stays here so
+  // it can catch the very first hover, the implementation arrives lazily, and a
+  // visitor who never points at chrome (or points with a finger) transfers none
+  // of it. The module's own 400ms dwell is what hides the load — the import
+  // runs during the wait, so a cold first infotip lands about when a warm one
+  // would. The selector lives HERE, once, and is passed in: two copies of it is
+  // how the loader and the module come to disagree about what has a tip.
+  var INFOTIP_TARGETS = [
+    "#axp-start", ".axp-pin", ".axp-trayico", "#axp-sound", "#axp-clock", ".axp-ico",
+    "[data-tip]",                                   // any page's explicit opt-in
+    "input[title]", "textarea[title]", "select[title]",
+    ".title-bar [title]", ".np-window > .tb [title]", "#axp-run [title]",
+    ".axp-acc > .tb [title]", "#axp-balloon [title]"
+  ].join(",");
+  function initInfotips() {
+    if (!window.matchMedia || matchMedia("(hover: none)").matches || matchMedia("(pointer: coarse)").matches) return;
+    var mod = null, pending = null;
+    var targetFor = function (n) { return n && n.closest ? n.closest(INFOTIP_TARGETS) : null; };
+    var load = function () {
+      if (mod) return;
+      // hoist.js is infotip.js's one static import, so the parser cannot
+      // discover it until infotip.js has landed — the same serialized second
+      // fetch that cost the homepage a round trip through tooltip.js (measured
+      // 2026-07-27, see build.mjs's STRING_ASSETS note). Kicking it off here
+      // runs the two in parallel; the result is unused on purpose, since the
+      // module cache is what the static import hits, and on the homepage it is
+      // usually already warm from tooltip.js.
+      import("/hoist.js").catch(function () {});
+      mod = import("/infotip.js").then(function (m) {
+        // The tables go over as they are, and the module does the counting:
+        // every byte of derivation kept here would ship to every visitor,
+        // including the ones who never point at anything. Same for `load` —
+        // these are nav.js's own readers, so a tray infotip and its
+        // click-balloon share one fetch per page rather than race for it.
+        m.start({
+          targets: INFOTIP_TARGETS,
+          initial: pending,
+          kbd: KBD,
+          pages: PAGES,
+          load: { sys: loadSys, upd: loadUpd, writing: loadWriting }
+        });
+        pending = null;
+      }).catch(function () { mod = null; pending = null; });
+    };
+    D.addEventListener("pointerover", function (e) {
+      var t = targetFor(e.target);
+      if (!t) return;
+      pending = { target: t, clientX: e.clientX, clientY: e.clientY, at: Date.now() };
+      load();
+    }, { passive: true });
+    D.addEventListener("pointerout", function (e) {
+      if (pending && targetFor(e.target) === pending.target && targetFor(e.relatedTarget) !== pending.target) pending = null;
+    }, { passive: true });
+    D.addEventListener("focusin", function (e) {
+      var t = targetFor(e.target);
+      if (!t) return;
+      try { if (!t.matches(":focus-visible")) return; } catch (_) {}
+      pending = { target: t, focus: true };
+      load();
+    });
+  }
+
+  function boot() { ensureLunaCss(); buildDesktop(); buildIcons(); buildTaskbar(); initDrag(); initRaise(); initIconDrag(); initScrollbars(); initResize(); setFavicon(); injectSpeculation(); initCloseBack(); initWindowControls(); initInfotips(); }
   function bootAfterStaticPaint() {
     // Generated/static pages and Worker-rendered shells already carry the desktop
     // and taskbar markup plus race-proof geometry in HTML. nav.js only ENHANCES

@@ -430,17 +430,23 @@ export function bookingPage(slots, env) {
         <span class="legend">Your info</span>
         <input type="hidden" name="start" id="start" value="">
 
+        <!-- Field tips, the XP ToolTip-control shape: what the box wants, said
+             before you get it wrong. /nav.js re-draws these in Luna on hover and
+             on keyboard focus; with JS off they stay ordinary title tooltips. -->
         <div class="row">
           <label for="name">Name</label>
-          <input type="text" id="name" name="name" required maxlength="100" autocomplete="name">
+          <input type="text" id="name" name="name" required maxlength="100" autocomplete="name"
+                 title="The name that goes on the invite.">
         </div>
         <div class="row">
           <label for="email">Email</label>
-          <input type="email" id="email" name="email" required maxlength="200" autocomplete="email">
+          <input type="email" id="email" name="email" required maxlength="200" autocomplete="email"
+                 title="Where the invite lands. Nothing else is sent here.">
         </div>
         <div class="row stacked">
           <label for="topic">What would you like to talk about?</label>
           <textarea id="topic" name="topic" required maxlength="1000"
+                    title="This is what I read before saying yes, so specific beats generic."
                     placeholder="A sentence or two — specific beats generic."></textarea>
         </div>
 

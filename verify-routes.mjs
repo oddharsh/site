@@ -137,10 +137,17 @@ const ROUTES = [
   // the retired SW's unregister stub: must keep serving 200 for a year+
   { path: "/sw.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "unregister" },
   // build-output oracle (prod only — dev serves the readable holding/ tree): a
-  // deploy that skipped build.mjs ships the 78KB readable nav.js with no banner
+  // deploy that skipped build.mjs ships the readable 98KB nav.js with no banner
   // and 404s every .src twin. These are the tripwire for that exact bypass.
+  //
+  // 50,000 -> 65,000 when the shell infotips landed: the minified shell reached
+  // 49,759 B and a 241-byte gap turns a bypass tripwire into an accidental byte
+  // budget, failing on whichever unrelated change happens to cross it. The
+  // number that matters is the one this detects — a readable nav.js is ~98 KB,
+  // so 65,000 still catches the bypass with room for the shell to grow. If real
+  // byte pressure is the concern, perf-budget.mjs is where a budget belongs.
   ...(builtOutput ? [
-    { path: "/nav.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", maxBytes: 50000 },
+    { path: "/nav.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", maxBytes: 65000 },
     { path: "/nav.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "axp-histnav" },
     { path: "/notepad.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "np-window" },
     { path: "/lens.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "replaceState" },

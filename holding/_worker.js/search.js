@@ -83,7 +83,7 @@ export async function handleSearch(request, env, ctx) {
   const results = query.trim() ? await searchSite(env, query, url.searchParams.get("limit")) : { query: "", total: 0, returned: 0, results: [] };
   const rows = results.results.map((result) => `<li><a href="${escAttr(result.url)}"><b>${escHtml(result.title)}</b></a><small>${escHtml(result.kind)} · ${escHtml(result.url)}</small><p>${escHtml(result.snippet || result.description)}</p></li>`).join("\n");
   const body = `<h1>Search aadhar.sh</h1>
-<form method="get" action="/search" class="search-form"><label for="search-q">Find something</label><input id="search-q" name="q" value="${escAttr(query)}" maxlength="160" autofocus><button type="submit">Search</button></form>
+<form method="get" action="/search" class="search-form"><label for="search-q">Find something</label><input id="search-q" name="q" value="${escAttr(query)}" maxlength="160" autofocus title="Titles and body text across every public page here. One word usually beats a sentence."><button type="submit">Search</button></form>
 ${query.trim() ? `<p class="summary">${results.total} result${results.total === 1 ? "" : "s"} for <b>${escHtml(query)}</b>.</p>${rows ? `<ol class="results">${rows}</ol>` : "<p>No matching public page.</p>"}` : "<p class=\"hint\">Search the public pages, writing, garage notes, and utility descriptions.</p>"}`;
   const render = () => lunaPage({
     title: "aadhar.sh/search",

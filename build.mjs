@@ -520,6 +520,7 @@ const SHELLS = [
   ["lens-reader.js", "/lens-reader.src.js", "LensReader"],
   ["quiz.js",    "/quiz.src.js",    "luq-data"],       // the understanding-check widget
   ["tooltip.js", "/tooltip.src.js", "function start"],
+  ["infotip.js", "/infotip.src.js", "axp-infotip"],   // the shell's own tooltips
   // the shared hover engine. tooltip.js imports it statically; the serendipity
   // shell and nav.js import it dynamically. Deliberately NOT content-hashed:
   // the /a/ repointer is attribute-scoped (src=/href= only) and would never
@@ -1342,6 +1343,10 @@ for (const [file, srcPath, marker] of SHELLS) {
       [/(["'`])\/lens-reader\.js\?v=1\1/g, `$1${to}$1`] ] },
     { file: "/tooltip.js",      base: "tooltip",      mk: (to) => [
       [/import\((["'`])\/tooltip\.js\1\)/g, `import($1${to}$1)`] ] },
+    // nav.js's shell infotips. Same shape as tooltip, and it depends on hoist
+    // for the same reason, so it sits below hoist in this leaves-first list.
+    { file: "/infotip.js",      base: "infotip",      mk: (to) => [
+      [/import\((["'`])\/infotip\.js\1\)/g, `import($1${to}$1)`] ] },
   ];
   {
     // Every staged surface that can carry a loader: HTML pages, the top-level shell
