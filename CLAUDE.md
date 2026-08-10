@@ -2238,6 +2238,54 @@ pnpm run deploy:direct
     non-frozen install bakes it in. That is a one-time step and the error names
     the fix.
 
+30. **pnpm 12 writes a lockfile pnpm 10 cannot read, and the SELF-SWITCH is the
+    only thing between that and a broken release.** Measured 2026-08-10 against
+    `12.0.0-rc.3`, kept as draft #309 rather than merged. The pin here is
+    **11.21.0**.
+
+    Everything in this repo works under 12: `--frozen-lockfile` installs clean,
+    the contract suite is 206/206, typecheck exits 0, and the build is
+    BYTE-IDENTICAL to the pnpm 11 baseline across all 1975 files. What fails is
+    an older pnpm reading what it writes. pnpm 12 prepends a `---` YAML document
+    separator, and **pnpm 10.11.1, the version the Workers Builds image runs**,
+    refuses it outright:
+
+    ```
+    ERR_PNPM_BROKEN_LOCKFILE  The lockfile at ".../pnpm-lock.yaml" is broken:
+    expected a single document in the stream, but found more
+    ```
+
+    `lockfileVersion` STAYS `'9.0'`, so this is the separator alone rather than a
+    schema bump, and one upstream line could retire the entire objection.
+
+    Production would still build, and only for one reason: pnpm reads
+    `packageManager` from package.json BEFORE it opens the lockfile, downloads
+    the pinned version, and that binary parses its own format. Verified — a
+    global pnpm 11.20.0 in a tree pinned to `12.0.0-rc.3` answers
+    `12.0.0-rc.3`.
+
+    **That single point of failure is why the pin stays on 11.** Adopting 12
+    would make every production install depend on one registry fetch of the
+    pinned binary; run the build image with `manage-package-manager-versions`
+    off, or lose that fetch, and it is left holding a lockfile it cannot parse.
+    Two majors behind is the milder failure.
+
+    The general rule outlives the instance: **check that the BUILD IMAGE can
+    read what your package manager WRITES, not merely that your own install
+    works.** A lockfile is an interchange format between two machines running
+    different versions, and "it installs here" tests exactly one of them.
+
+    Two smaller notes. pnpm 12 adds `packageManagerDependencies`, pinning the
+    package manager itself with per-platform binaries and integrity hashes,
+    which is a real improvement and is also what makes the lockfile
+    self-referential. And this repo's own `minimumReleaseAge: 1440` BLOCKED the
+    first fetch of rc.3 for being thirty minutes too young, which is gotcha 29's
+    policy doing precisely its job.
+
+    The 11.20.0 → 11.21.0 bump that accompanies this note changes no lockfile
+    byte and no build byte, which is the contrast worth keeping: a patch bump
+    inside a major is free here, and the major is not.
+
 ---
 
 ## Source folder for new photos
