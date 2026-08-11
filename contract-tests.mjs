@@ -40,7 +40,14 @@ import { serveMarkdown } from "./holding/_worker.js/home.js";
 import { readManifest, workerModule, navFenceBody, readFenceBody } from "./scripts/gen-manifest.mjs";
 import { INDEXED_SECTIONS, TWIN_FACTS, buildTwins, checkTwinFacts, htmlFileFor, twinPath } from "./scripts/gen-md-twins.mjs";
 import { collectBlockClasses, readDocument } from "./scripts/lib/html-to-md.mjs";
-import { MCP_TOOLS, SERENDIPITY_MCP_SERVER_INFO, cookieJar, parseCookies } from "./serendipity/serendipity.js";
+import {
+  MCP_TOOLS,
+  SERENDIPITY_MCP_SERVER_INFO,
+  SERENDIPITY_SYNC_LIMITS,
+  cookieJar,
+  parseCookies,
+  staleGuestIds,
+} from "./serendipity/serendipity.js";
 import { MCP_SUPPORTED as MCP_SUPPORTED_VERSIONS } from "./holding/_worker.js/lib/mcp-protocol.js";
 import { derivePhotoPool, renderPhotosPage, getImagesManifest, handlePhotoQuery, queryPhotos, _resetPhotoCaches } from "./holding/_worker.js/photos.js";
 import { renderPhotoSlots } from "./holding/_worker.js/lib/photo-grid.js";
@@ -2022,6 +2029,20 @@ test("cookieJar learns a brand-new luma.* cookie from a response", () => {
   jar.absorb(setCookieRes("luma.polyjuice.sign-in-state=abc; Path=/; Secure"));
   assert.equal(jar.dirty, true);
   assert.match(jar.header(), /luma\.polyjuice\.sign-in-state=abc/);
+});
+
+test("serendipity keeps historical feed and roster backfills alive", () => {
+  assert.equal(SERENDIPITY_SYNC_LIMITS.pastPages, 4,
+    "the Worker port must retain the original app's four-page event history");
+  assert.ok(SERENDIPITY_SYNC_LIMITS.pastGuestEvents > 0,
+    "each scheduled pass must advance the past-event roster backlog");
+
+  const next = [{ id: "still-going" }, { id: "self" }, { id: null }, null];
+  assert.deepEqual(
+    staleGuestIds(["still-going", "cancelled", "self"], next, "self"),
+    ["cancelled", "self"],
+    "a fresh roster removes stale links and never retains the contributor as their own attendee",
+  );
 });
 
 // ── the bundled photo pool ──────────────────────────────────────────

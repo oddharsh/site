@@ -273,7 +273,8 @@ export default {
     } else if (job === "serendipity") {
       // 00/06/12/18:23 UTC — re-sync every enabled Luma feed into the
       // serendipity pool (serendipity.js cronSerendipity): events, then the
-      // next few guest lists, then a description backfill. Four times daily
+      // next few guest lists plus a bounded historical-roster backfill, then
+      // descriptions. Four times daily
       // keeps the pool honest AND the stored Luma session warm; without this
       // tick the pool only refreshed on a cookie re-paste. Odd minute, same
       // collision-avoidance as the others.
