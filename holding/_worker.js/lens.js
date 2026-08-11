@@ -362,7 +362,8 @@ function lensMachineFragment(data, state) {
     ["url", data.finalUrl || data.url],
     ["title", s.title || "(untitled)"],
     ["response", data.status + " " + lensHttpText(data.status)],
-    ["readiness", data.readiness && data.readiness.overall != null ? data.readiness.overall + "/100" : "unknown"],
+    ["Lens field evidence", data.readiness && data.readiness.field && data.readiness.field.overall != null ? data.readiness.field.overall + "/100" : "unknown"],
+    ["local standards mirror", data.readiness && data.readiness.overall != null ? data.readiness.overall + "/100" : "unknown"],
     ["content-type", data.contentType || "(none)"],
     ["payload", (a.rawBytes || 0) + " B" + (data.truncated ? " (capped)" : "")],
     ["headings", a.headings ? a.headings.length : 0],
@@ -683,7 +684,7 @@ export function renderLensShell(initial, state, inputValue, compare) {
         ? "Delta toggles hypothetical infrastructure. Predict, flip, check."
         : "Compare puts Human, HTTP Machine, and Browser Run side by side. Predict the machine pane; the miss is the lesson.";
   const initialScript = initial ? '<script type="application/json" id="lx-initial-data">' + lensScriptJson(initial) + "</script>" : "";
-  const lensDescription = "Paste any URL and see the human page, a transparent agent-readiness score, bot-specific access samples, raw HTML, structured data, machine terms, and the site's discovery surfaces side by side.";
+  const lensDescription = "Paste any URL and compare the human page with observed bot access, Cloudflare's standards level, Defuddle content recovery, raw HTML, structured data, machine terms, and agent doors.";
   return lunaPage({
     title: "The Other Web · aadhar.sh",
     path: "The Other Web",
@@ -846,6 +847,10 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 .lx-reader-intro b { color:oklch(36% 0.09 80); }
 .lx-reader-credit { margin-top:6px; opacity:0.85; }
 .lx-reader-credit a { color:oklch(42% 0.12 250); }
+.lx-reader-recovery { list-style:none; margin:4px 0 7px; padding:0; display:grid; gap:4px; }
+.lx-reader-recovery li { display:grid; grid-template-columns:minmax(120px,.8fr) minmax(150px,1.2fr); gap:8px; padding:5px 7px; border-left:3px solid oklch(70% 0.07 250); background:oklch(98% 0.01 250); font-size:8.3pt; }
+.lx-reader-recovery b { color:oklch(35% 0.07 255); }
+.lx-reader-recovery span { color:oklch(50% 0 0); }
 
 /* rendered machine content */
 .lx-h-title { font-family:"Trebuchet MS",Verdana,sans-serif; font-size:13pt; font-weight:bold; color:oklch(30% 0.06 255); margin:0 0 8px; }
@@ -895,6 +900,26 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 .lx-readiness-number span { font:normal 10pt Tahoma,Verdana,sans-serif; color:oklch(53% 0 0); margin-left:2px; }
 .lx-readiness-kicker { font:8pt Tahoma,Verdana,sans-serif; color:oklch(50% 0 0); text-transform:uppercase; letter-spacing:.06em; }
 .lx-readiness-level { display:flex; align-items:center; gap:6px; margin:2px 0 3px; font-size:10pt; color:oklch(30% 0.04 255); }
+.lx-composite-hero { border-color:oklch(65% 0.12 255); background:linear-gradient(105deg,oklch(95% 0.045 255),#fff 70%); }
+.lx-composite-sources { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; margin:0 0 7px; }
+.lx-composite-source { min-width:0; padding:7px 8px; border:1px solid oklch(82% 0.035 250); border-top:3px solid oklch(55% 0.13 255); border-radius:3px; background:#fff; }
+.lx-composite-source.is-waiting { border-top-color:oklch(68% 0.14 85); background:oklch(98% 0.02 85); }
+.lx-composite-source.is-missing { border-top-color:oklch(60% 0 0); background:oklch(97% 0 0); }
+.lx-composite-source-top { display:grid; grid-template-columns:auto 1fr auto; align-items:baseline; gap:5px; }
+.lx-composite-source-top > span { font:7.4pt "Courier New",monospace; color:oklch(58% 0.08 255); }
+.lx-composite-source-top b { font-size:8.5pt; color:oklch(32% 0.06 255); }
+.lx-composite-source-top strong { font:bold 13pt "Courier New",monospace; color:oklch(40% 0.13 150); white-space:nowrap; }
+.lx-composite-source-top strong span { font:7.5pt Tahoma,Verdana,sans-serif; color:oklch(55% 0 0); }
+.lx-composite-caption { min-height:34px; margin:5px 0; color:oklch(49% 0 0); font-size:7.9pt; line-height:1.35; }
+.lx-composite-caption a { color:oklch(40% 0.14 255); }
+.lx-composite-source ul { list-style:none; margin:5px 0 0; padding:5px 0 0; border-top:1px dotted oklch(84% 0.02 250); font-size:7.6pt; color:oklch(45% 0.03 255); }
+.lx-composite-source li { margin:2px 0; }
+.lx-composite-formula { display:flex; justify-content:center; align-items:baseline; gap:6px; margin:0 0 12px; padding:6px 8px; border:1px solid oklch(82% 0.04 255); background:oklch(97% 0.02 255); font:9pt "Courier New",monospace; color:oklch(44% 0.05 255); }
+.lx-composite-formula b { color:oklch(35% 0.11 255); }
+.lx-composite-formula span { color:oklch(53% 0 0); }
+.lx-composite-formula strong { margin-left:5px; color:oklch(36% 0.14 150); font-size:11pt; }
+.lx-local-mirror { display:flex; align-items:center; gap:7px; margin:4px 0 7px; color:oklch(35% 0.05 255); }
+.lx-local-mirror > b { font:bold 17pt "Courier New",monospace; color:oklch(39% 0.13 255); }
 .lx-readiness-cats { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:5px; margin:5px 0 12px; }
 .lx-readiness-cat { border:1px solid oklch(82% 0.03 250); border-radius:3px; padding:6px 8px; background:#fff; }
 .lx-readiness-cat > div { display:flex; justify-content:space-between; gap:7px; font-size:8.4pt; color:oklch(37% 0.04 255); }
@@ -999,7 +1024,8 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 .lx-stage-copy .lx-badge { margin-right:4px; }
 .lx-proof { margin-top:8px; font-size:8.2pt; color:oklch(52% 0 0); }
 .lx-proof b { color:oklch(38% 0.06 255); }
-@media (max-width:560px){ .lx-cf-grid{ grid-template-columns:1fr; } .lx-stage{ grid-template-columns:74px 1fr; } .lx-readiness-cats{ grid-template-columns:1fr; } .lx-readiness-hero{ align-items:flex-start; } .lx-next-actions div{ grid-template-columns:1fr; gap:2px; } .lx-bot-matrix{ min-width:620px; } }
+@media (max-width:700px){ .lx-composite-sources{ grid-template-columns:1fr; } .lx-composite-caption{ min-height:0; } }
+@media (max-width:560px){ .lx-cf-grid{ grid-template-columns:1fr; } .lx-stage{ grid-template-columns:74px 1fr; } .lx-readiness-cats{ grid-template-columns:1fr; } .lx-readiness-hero{ align-items:flex-start; } .lx-next-actions div{ grid-template-columns:1fr; gap:2px; } .lx-bot-matrix{ min-width:620px; } .lx-reader-recovery li{ grid-template-columns:1fr; gap:2px; } }
 
 /* state of the machine web — a compact rail on the page, full sourced cards in
    a dialog the rail's "?" opens (it used to open itself on arrival) */
@@ -1219,8 +1245,100 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
 
 // /lens/fetch?url=… → the stable machine-facing JSON contract.
 export async function handleLensFetch(request, env, ctx) {
+  if (new URL(request.url).searchParams.get("mode") === "cloudflare") {
+    return handleLensCloudflareScore(request, env, ctx);
+  }
   const result = await inspectLensRequest(request, env, ctx);
   return jsonResponse(result.payload, result.status);
+}
+
+const CLOUDFLARE_AGENT_READINESS_MCP = "https://isitagentready.com/mcp";
+const CLOUDFLARE_SCORE_TIMEOUT_MS = 9000;
+const CLOUDFLARE_SCORE_BODY_CAP = 192 * 1024;
+const CLOUDFLARE_SCORE_TTL = 6 * 60 * 60;
+
+// Cloudflare's public Agent Readiness scanner is an INDEPENDENT input to Lens,
+// not a number Lens recreates and then presents as corroboration. The MCP
+// answers with Streamable HTTP / SSE today, though JSON is valid too. Parse both
+// and retain only the normalized level: a third party's complete report neither
+// belongs in our response contract nor in KV.
+export function lensParseCloudflareAgentScore(body) {
+  const messages = [];
+  for (const line of String(body || "").split(/\r?\n/)) {
+    if (!line.startsWith("data:")) continue;
+    try { messages.push(JSON.parse(line.slice(5).trim())); } catch (_e) {}
+  }
+  if (!messages.length) {
+    try { messages.push(JSON.parse(String(body || ""))); } catch (_e) {}
+  }
+  const text = messages.map((message) => {
+    const content = message && message.result && message.result.content;
+    if (Array.isArray(content)) return content.map((item) => item && item.text || "").join("\n");
+    return JSON.stringify(message && (message.result || message) || "");
+  }).join("\n");
+  const match = text.match(/\bLevel\s+([0-5])\s*\/\s*5(?:\s*(?:--|[-:\u2013\u2014])\s*\**\s*([^\n*]+))?/i);
+  if (!match) return null;
+  const level = Number(match[1]);
+  return {
+    available: true,
+    level,
+    score: level * 20,
+    levelName: String(match[2] || "").trim().slice(0, 80) || null,
+    source: "Cloudflare Agent Readiness",
+    sourceUrl: "https://isitagentready.com/",
+  };
+}
+
+export async function handleLensCloudflareScore(request, env, ctx) {
+  const v = validateLensTarget(new URL(request.url).searchParams.get("url") || "");
+  if (!v.ok) return jsonResponse({ ok: false, error: v.error }, 400);
+  if (await overLensBudget(LENS_BUDGETS.inspect, request, env)) {
+    return jsonResponse({ ok: false, error: "Slow down — 30 lookups a minute. Try again shortly." }, 429);
+  }
+
+  const cacheKey = "lens:cloudflare-score:" + (await lensSha256Hex(v.url));
+  if (env && env.RN_KV) {
+    try {
+      const cached = await env.RN_KV.get(cacheKey, "json");
+      if (cached && cached.available) return jsonResponse({ ok: true, cached: true, ...cached });
+    } catch (_e) { /* an advisory source must not fail because its cache did */ }
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), CLOUDFLARE_SCORE_TIMEOUT_MS);
+  try {
+    const response = await fetch(CLOUDFLARE_AGENT_READINESS_MCP, {
+      method: "POST",
+      headers: {
+        accept: "application/json, text/event-stream",
+        "content-type": "application/json",
+        "user-agent": BOT_UA,
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0", id: "lens-cloudflare-score", method: "tools/call",
+        params: { name: "scan_site", arguments: { url: v.url, profile: "all" } },
+      }),
+      signal: controller.signal,
+    });
+    const capped = await lensReadCapped(response, CLOUDFLARE_SCORE_BODY_CAP);
+    const parsed = response.ok && !capped.truncated ? lensParseCloudflareAgentScore(capped.text) : null;
+    if (!parsed) {
+      return jsonResponse({
+        ok: true, available: false,
+        error: response.ok ? "Cloudflare's score could not be read." : "Cloudflare's scanner did not answer.",
+      });
+    }
+    if (env && env.RN_KV) {
+      const write = env.RN_KV.put(cacheKey, JSON.stringify(parsed), { expirationTtl: CLOUDFLARE_SCORE_TTL });
+      if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(write);
+      else await write;
+    }
+    return jsonResponse({ ok: true, cached: false, ...parsed });
+  } catch (_e) {
+    return jsonResponse({ ok: true, available: false, error: "Cloudflare's scanner is unavailable right now." });
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 
@@ -1673,6 +1791,7 @@ export function lensObservationSummary(result) {
     parsedBytes: anatomy.parsedBytes ?? anatomy.rawBytes ?? null,
     parseTruncated: !!anatomy.parseTruncated,
     readiness: readiness.overall ?? null,
+    fieldScore: readiness.field?.overall ?? null,
     level: readiness.level ?? null,
     levelName: readiness.levelName ?? null,
     tier: spectrum.tier || "unknown",
@@ -2067,6 +2186,13 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
     out.readiness = lensReadiness({
       headers, robots, sitemap, terms: out.terms,
       discovery: out.discovery, agent: out.agent, openapi, botViews,
+    });
+    out.readiness.field = lensFieldEvidence({
+      status: out.status,
+      bodyUnreadable: out.bodyUnreadable,
+      anatomy: out.anatomy,
+      agent: out.agent,
+      botViews,
     });
   }
   return out;
@@ -2918,6 +3044,61 @@ function lensReadinessItem(key, status, detail) {
     key, category: meta.category, label: meta.label, status, detail,
     optional: !!meta.optional,
     countInScore: meta.countInScore !== false && !meta.optional,
+  };
+}
+
+// What LENS itself observed on the wire. This is intentionally orthogonal to
+// the standards checklist below: it asks whether an identified machine got a
+// usable answer, whether six named crawler identities got one too, and whether
+// the site offered a machine door. Cloudflare supplies the standards opinion in
+// the composite; counting this local mirror again would double-weight it.
+export function lensFieldEvidence({ status, bodyUnreadable, anatomy, agent, botViews }) {
+  const components = [];
+  const add = (key, label, score, detail) => components.push({ key, label, score, detail });
+
+  const identifiedOk = Number.isFinite(status) && status >= 200 && status < 400 && !bodyUnreadable;
+  add(
+    "identifiedFetch", "identified fetch", Number.isFinite(status) ? (identifiedOk ? 100 : 0) : null,
+    Number.isFinite(status)
+      ? (identifiedOk ? `HTTP ${status}; the AadharshBot response was readable` : `HTTP ${status}; no readable success response`)
+      : "the identified fetch did not answer",
+  );
+
+  const views = Array.isArray(botViews) ? botViews : [];
+  const answered = views.filter((bot) => Number.isFinite(bot && bot.status));
+  const successful = answered.filter((bot) => bot.status >= 200 && bot.status < 400 && !bot.blocked && !bot.challenge);
+  const fullSample = views.length === LENS_BOT_VIEWS.length;
+  add(
+    "sampledBots", "sampled bot retrieval", fullSample ? Math.round((successful.length / views.length) * 100) : null,
+    fullSample
+      ? `${successful.length} of ${views.length} named bot identities received an unblocked response${answered.length < views.length ? `; ${views.length - answered.length} did not answer` : ""}`
+      : `${views.length} of ${LENS_BOT_VIEWS.length} bot samples ran; this component stays unknown`,
+  );
+
+  const wordCount = anatomy && Number.isFinite(anatomy.wordCount) ? anatomy.wordCount : null;
+  const bodyScore = wordCount == null ? null : wordCount >= 40 ? 100 : wordCount > 0 ? 50 : 0;
+  add(
+    "usableBody", "usable response body", bodyScore,
+    wordCount == null ? "the response body was not parsed" : `${wordCount} words survived the bounded HTTP parse`,
+  );
+
+  const strategy = agent && agent.strategy;
+  const hasAction = !!(strategy && Array.isArray(strategy.action) && strategy.action.length);
+  const hasReadable = !!(strategy && Array.isArray(strategy.readable) && strategy.readable.length);
+  const unknownDoors = !!(strategy && Array.isArray(strategy.unknowns) && strategy.unknowns.length);
+  const doorScore = !strategy ? null : hasAction ? 100 : hasReadable ? 60 : unknownDoors ? null : 0;
+  add(
+    "agentDoor", "machine door", doorScore,
+    hasAction ? strategy.action.join(", ") : hasReadable ? strategy.readable.join(", ") : unknownDoors ? "one or more door probes never answered" : "no readable or actionable machine door was found",
+  );
+
+  const known = components.filter((component) => Number.isFinite(component.score));
+  return {
+    overall: known.length === components.length
+      ? Math.round(known.reduce((sum, component) => sum + component.score, 0) / components.length)
+      : null,
+    components,
+    scoringNote: "Four equally weighted observations. Missing evidence leaves the field score unfinished; it is never reweighted.",
   };
 }
 

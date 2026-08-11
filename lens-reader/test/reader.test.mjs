@@ -13,7 +13,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { parseHTML } from "linkedom";
-import { countControls, countWords, shape, toMarkdown } from "../src/reader.js";
+import { countControls, countWords, scoreExtraction, shape, toMarkdown } from "../src/reader.js";
 
 test("markdown conversion runs at all, which is the part node can prove", () => {
   // The trap is that turndown ships two builds: node falls back to domino and
@@ -57,6 +57,27 @@ test("control counting is an upper bound and never a silent overcount", () => {
   assert.equal(counted.total, 2);
   assert.ok(counted.kept >= 1);
   assert.match(counted.note, /upper bound/);
+});
+
+test("content recovery is four transparent checks over Defuddle output", () => {
+  const score = scoreExtraction({
+    source: { words: 300 }, kept: { words: 180 },
+    controls: { total: 8, kept: 1 }, title: "A readable article", markdown: "# A readable article\n\nBody",
+  });
+  assert.equal(score.overall, 100);
+  assert.equal(score.counted, 4);
+  assert.equal(score.passed, 4);
+  assert.deepEqual(score.checks.map((check) => check.key), ["body", "title", "controls", "markdown"]);
+  assert.match(score.scoringNote, /Defuddle itself does not publish this score/);
+});
+
+test("control leakage and an empty title reduce recovery without inventing partial credit", () => {
+  const score = scoreExtraction({
+    source: { words: 120 }, kept: { words: 80 },
+    controls: { total: 4, kept: 3 }, title: "", markdown: "Body",
+  });
+  assert.equal(score.overall, 50);
+  assert.deepEqual(score.checks.map((check) => check.pass), [true, false, false, true]);
 });
 
 test("only messages written for the visitor are publishable", async () => {

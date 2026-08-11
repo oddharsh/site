@@ -75,6 +75,17 @@
       }) + '<div class="lx-cap">' + esc(reading) + "</div>");
   }
 
+  function recoveryScore(d) {
+    var r = d.recovery;
+    if (!r || r.overall == null) return "";
+    var rows = (r.checks || []).map(function (check) {
+      return '<li><b>' + (check.pass ? '&#10003;' : '&#10005;') + ' ' + esc(check.label) + '</b><span>' + esc(check.detail || "") + '</span></li>';
+    }).join("");
+    return section("Defuddle content recovery", { text: r.overall + "/100", kind: r.overall >= 75 ? "ok" : r.overall >= 50 ? "" : "warn" },
+      "Lens computes this from Defuddle's output. Defuddle itself does not publish a readability score.",
+      '<ol class="lx-reader-recovery">' + rows + '</ol><div class="lx-cap">' + esc(r.scoringNote || "") + '</div>');
+  }
+
   // The finding this lens exists to make visible, beyond the word gap. Defuddle
   // keeps <button> text ON PURPOSE (its markdown rules carry
   // addRule('button', replacement: content => content)), so a page with live
@@ -159,7 +170,7 @@
         kvTable({ "content-type": d.contentType || "(none)", "payload": bytes(d.source && d.source.bytes) }) +
         '<div class="lx-cap">Refusing is the honest answer here. Running an article heuristic over JSON would produce a number that means nothing.</div>') + CREDIT;
     }
-    return gap(d) + controls(d) + claims(d) + prose(d) + timing(d) + CREDIT;
+    return recoveryScore(d) + gap(d) + controls(d) + claims(d) + prose(d) + timing(d) + CREDIT;
   }
 
   function run(data, done, onError) {
