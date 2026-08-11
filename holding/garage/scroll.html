@@ -459,7 +459,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
 <!-- register the SW on idle so deep-link visitors install it too -->
 <!-- prerender internal pages eagerly (McMaster-style); same exclusions as homepage -->
 <script type="speculationrules">
-{ "prerender": [ { "where": { "and": [ { "href_matches": "/*" }, { "not": { "href_matches": "/whoareyou*" } } ] }, "eagerness": "moderate" } ] }
+{ "prerender": [ { "where": { "and": [ { "href_matches": "/*" }, { "not": { "href_matches": "/whoareyou*" } }, { "not": { "href_matches": "/run" } } ] }, "eagerness": "moderate" } ] }
 </script>
 <script type="application/json" id="luq-data">
 {

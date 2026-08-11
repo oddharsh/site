@@ -750,7 +750,8 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
       "where": {
         "and": [
           { "href_matches": "/*" },
-          { "not": { "href_matches": "/whoareyou*" } }
+          { "not": { "href_matches": "/whoareyou*" } },
+          { "not": { "href_matches": "/run" } }
         ]
       },
       "eagerness": "moderate"

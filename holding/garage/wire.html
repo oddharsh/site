@@ -607,7 +607,8 @@ transition:filter 60ms ease-out}</pre></figure>
       "where": {
         "and": [
           { "href_matches": "/*" },
-          { "not": { "href_matches": "/whoareyou*" } }
+          { "not": { "href_matches": "/whoareyou*" } },
+          { "not": { "href_matches": "/run" } }
         ]
       },
       "eagerness": "moderate"

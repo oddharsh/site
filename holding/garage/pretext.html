@@ -471,7 +471,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
 <script type="speculationrules">
 {
   "prerender": [
-    { "where": { "and": [ { "href_matches": "/*" }, { "not": { "href_matches": "/whoareyou*" } } ] }, "eagerness": "moderate" }
+    { "where": { "and": [ { "href_matches": "/*" }, { "not": { "href_matches": "/whoareyou*" } }, { "not": { "href_matches": "/run" } } ] }, "eagerness": "moderate" }
   ]
 }
 </script>

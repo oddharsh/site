@@ -992,6 +992,11 @@ footer .signature small { color: oklch(56.93% 0 0); }
   on-intent cost is tiny (pages are small + static) and adds no click latency.
   allowed under the existing 'unsafe-inline' script-src in the CSP.
 
+  /run is excluded for a reason that only applies to it, written out at
+  injectSpeculation() in nav.js: this block exists only when JS is on, and with
+  JS on the Start orb's click opens the palette instead of navigating, so the
+  prerender had no reader. That hover warms nav-run.js now.
+
   REMOVED 2026-07-30, and worth knowing before anyone re-adds it: an eager
   `prefetch` rule sat here matching `/garage/*` and `/lwe/*`. It fetched
   NOTHING, ever. Those patterns need the literal `/garage/` prefix, and this
@@ -1013,6 +1018,7 @@ footer .signature small { color: oklch(56.93% 0 0); }
         "and": [
           { "href_matches": "/*" },
           { "not": { "href_matches": "/whoareyou*" } },
+          { "not": { "href_matches": "/run" } },
           { "not": { "href_matches": "/rn*" } },
           { "not": { "href_matches": "/images*" } },
           { "not": { "href_matches": "/index.md" } },

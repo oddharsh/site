@@ -131,7 +131,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
 </div>
 
 <script type="speculationrules">
-{ "prerender": [ { "where": { "and": [ { "href_matches": "/*" }, { "not": { "href_matches": "/whoareyou*" } } ] }, "eagerness": "moderate" } ], "prefetch": [ { "where": { "and": [ { "or": [ { "href_matches": "/garage/*" }, { "href_matches": "/lwe/*" } ] }, { "not": { "href_matches": "/lwe/ask*" } } ] }, "eagerness": "eager" } ] }
+{ "prerender": [ { "where": { "and": [ { "href_matches": "/*" }, { "not": { "href_matches": "/whoareyou*" } }, { "not": { "href_matches": "/run" } } ] }, "eagerness": "moderate" } ], "prefetch": [ { "where": { "and": [ { "or": [ { "href_matches": "/garage/*" }, { "href_matches": "/lwe/*" } ] }, { "not": { "href_matches": "/lwe/ask*" } } ] }, "eagerness": "eager" } ] }
 </script>
 <script>
 (function(){var inp=document.getElementById('snk-in'),out=document.getElementById('snk-out');if(!inp||!out)return;function hex(b){return Array.prototype.map.call(new Uint8Array(b),function(x){return x.toString(16).padStart(2,'0')}).join('')}function go(){Promise.resolve(crypto.subtle.digest('SHA-256',new TextEncoder().encode(inp.value))).then(function(d){out.textContent='0x'+hex(d)})}inp.addEventListener('input',go);go();})();

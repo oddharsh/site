@@ -248,6 +248,19 @@
           location.assign(start.href);   // preserve the real /run fallback
         });
       });
+      // Warm the island on hover intent, the same signal the homepage tooltip
+      // loader binds to. The dwell before a click covers the fetch, so the
+      // palette opens from memory instead of from the network. loadRun()
+      // memoizes and toggleRun() awaits the same promise, so the click path is
+      // unchanged and there is no captured event to replay. The catch resets it
+      // so a failed warm leaves the click free to retry rather than inheriting a
+      // permanently rejected promise. ⌘K deliberately gets nothing here: there
+      // is no hover on the keyboard path, and warming on modifier-keydown would
+      // fire for every ⌘R/⌘T/⌘C. Touch fires a synthetic pointerover while
+      // scrolling past the taskbar (gotcha 10), so only a real hover counts.
+      start.addEventListener("pointerover", function (e) {
+        if (e.pointerType !== "touch") loadRun().catch(function () { runPromise = null; });
+      }, { passive: true });
     }
     // XP taskbar truth: the app that's in front sits DEPRESSED. Match the
     // current path's first segment against each pin's section (garage subpages
@@ -287,6 +300,12 @@
           location.assign(ic.href);   // a failed island load falls back to the real page
         });
       });
+      // same hover warm as the Start orb, for the same reason. Unlike /run these
+      // icons keep their page prerenders: each balloon carries a "full page"
+      // link, so /security and /updates are destinations a visitor really reaches.
+      ic.addEventListener("pointerover", function (e) {
+        if (e.pointerType !== "touch") loadTray().catch(function () { trayPromise = null; });
+      }, { passive: true });
     });
     tickClock();
     setInterval(tickClock, 15000);
@@ -382,13 +401,16 @@
       .then(function (j) { if (j && j.items) updData = j; cb(updData); })
       .catch(function () { cb(null); });
   }
-  function toggleTray(kind, ic) {
+  function loadTray() {
     if (!trayPromise) {
       trayPromise = import("/nav-tray.js").then(function (m) {
         return m.createTray({ sound: AXP_SND, loadSys: loadSys, loadUpd: loadUpd });
       });
     }
-    return trayPromise.then(function (tray) { tray.toggle(kind, ic); });
+    return trayPromise;
+  }
+  function toggleTray(kind, ic) {
+    return loadTray().then(function (tray) { tray.toggle(kind, ic); });
   }
 
   // ⌘K / Ctrl-K anywhere
@@ -552,6 +574,14 @@
   // excluded: /whoareyou (per-request fingerprint),
   // /rn (redirect), images + raw text. /coffee IS prerendered: GET is read-only
   // (booking is POST) so a speculative open is safe.
+  // /run is excluded because this ruleset only exists when JS is on, and with JS
+  // on the Start orb's click calls preventDefault() and opens the palette. So a
+  // hover was buying a full worker invocation and document render for a page the
+  // click never navigates to; its only reader is the island-load failure
+  // fallback. The hover now warms nav-run.js instead, which is 5 KiB against a
+  // whole prerendered document and is what actually opens. The tray icons keep
+  // their prerenders: /security and /updates are real destinations, because each
+  // balloon carries a "full page" link to them.
   // unsupported browsers ignore the script → plain navigation. skips the homepage,
   // which ships its own inline ruleset earlier in the HTML.
   function injectSpeculation() {
@@ -564,6 +594,7 @@
         where: { and: [
           { href_matches: "/*" },
           { not: { href_matches: "/whoareyou*" } },
+          { not: { href_matches: "/run" } },
           { not: { href_matches: "/rn*" } },
           { not: { href_matches: "/images*" } },
           { not: { href_matches: "/index.md" } },
