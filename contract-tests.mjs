@@ -37,7 +37,7 @@ import { handleTool, tokenizeKeys } from "./holding/_worker.js/terminal.js";
 import { handleTerminal } from "./holding/_worker.js/wire.js";
 import { DATA_TOOLS } from "./holding/_worker.js/lib/tools.js";
 import { cronJob } from "./holding/_worker.js/lib/cron.js";
-import { serveStaticPage } from "./holding/_worker.js/lib/assets.js";
+import { PAGE_FAMILY_MATCH, serveStaticPage } from "./holding/_worker.js/lib/assets.js";
 import { serveMarkdown } from "./holding/_worker.js/home.js";
 import { readManifest, workerModule, navFenceBody, readFenceBody } from "./scripts/gen-manifest.mjs";
 import { INDEXED_SECTIONS, TWIN_FACTS, buildTwins, checkTwinFacts, htmlFileFor, twinPath } from "./scripts/gen-md-twins.mjs";
@@ -367,6 +367,22 @@ test("Lens shell states the past, present, and future argument before the instru
   assert.match(html, /today&rsquo;s models scrape the human page/);
   assert.match(html, /the next web must decide how machines act/);
   assert.doesNotMatch(html, /6-minute tour|Demo path/);
+});
+
+test("Lens state facts link to the evidence, not publication homepages", async () => {
+  const html = await renderLensShell().text();
+  const links = [...html.matchAll(/<div class="lx-sow-src"><a href="([^"]+)"/g)]
+    .map((match) => new URL(match[1].replaceAll("&amp;", "&")));
+
+  assert.equal(links.length, 6, "every state-of-the-web card must carry one source");
+  for (const url of links) {
+    assert.equal(url.protocol, "https:", `${url.href} must be a public source`);
+    if (url.hostname === "www.x402scan.com") {
+      assert.equal(url.pathname, "/", "x402scan's homepage is the live statistics dashboard");
+    } else {
+      assert.notEqual(url.pathname, "/", `${url.href} is a publication homepage, not evidence`);
+    }
+  }
 });
 
 
@@ -2650,6 +2666,23 @@ test("LWE pages share one base stylesheet and the build derives one site-page di
     assert.match(html, /<link rel="stylesheet" href="\/lwe-base\.css">/);
     assert.doesNotMatch(html, /compression-dictionary/);
     assert.doesNotMatch(html.match(/<style>([\s\S]*?)<\/style>/)?.[1] || "", /\.controls \{ display: inline-flex/);
+  }
+});
+
+test("the page-family dictionary outranks exact snapshots without narrowing its scope", async () => {
+  const pattern = new URLPattern({ pathname: PAGE_FAMILY_MATCH, baseURL: "https://aadhar.sh" });
+  assert.equal(pattern.hasRegExpGroups, false, "RFC 9842 rejects URLPatterns with custom regexp groups");
+
+  const pages = (await readdir(new URL("holding", import.meta.url), { recursive: true }))
+    .filter((path) => path.endsWith(".html"));
+  const routes = pages.map((path) => {
+    const route = path.replace(/\.html$/, "").replace(/(^|\/)index$/, "$1");
+    return `/${route}`.replace(/\/$/, "") || "/";
+  });
+  for (const route of routes) {
+    assert.equal(pattern.test(`https://aadhar.sh${route}`), true, `${PAGE_FAMILY_MATCH} must match ${route}`);
+    assert.ok(PAGE_FAMILY_MATCH.length > route.length,
+      `the family match must outrank the exact-page match for ${route}`);
   }
 });
 
