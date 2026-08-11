@@ -1139,14 +1139,13 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
    the document column. */
 .axp-group dd{margin:0 0 5px;color:oklch(21.78% 0 0);font:10px/1.4 "Courier New",Courier,monospace;overflow-wrap:anywhere}
 
-/* Narrow: the document comes FIRST and the rail follows it. The pane is
-   secondary navigation, so making it the first thing on a phone would mean
-   scrolling past the furniture to reach the page every time. */
+/* Narrow: omit the furniture. Turning a 186px sidebar into a full-width strip
+   below the document makes secondary navigation look like page content and
+   leaves it stranded after an arbitrarily long scroll. The address bar keeps
+   the page's location visible without spending the scarce vertical space. */
 @media (max-width:760px){
   .window:has(>.axp-tasks),.np-window:has(>.axp-tasks){display:flex;flex-direction:column}
-  .window:has(>.axp-tasks)>.content,.np-window:has(>.axp-tasks)>.np-folder-body{order:3}
-  .window:has(>.axp-tasks)>.axp-tasks,.np-window:has(>.axp-tasks)>.axp-tasks{order:4;flex:0 0 auto;overflow:visible;padding:10px 10px 12px;border-top:1px solid oklch(80% 0.02 250)}
-  .np-window:has(>.axp-tasks)>.np-status{order:5}
+  .window:has(>.axp-tasks)>.axp-tasks,.np-window:has(>.axp-tasks)>.axp-tasks{display:none}
   .axp-addr-label{display:none}
 }
 @media (forced-colors: active){

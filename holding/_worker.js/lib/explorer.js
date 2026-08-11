@@ -127,9 +127,9 @@ export function taskPane({ path = "/", name = "", tasks = [], details = [] } = {
   // a closed details' content, so the pane rendered outside its 23px collapsed
   // box and painted straight over the article. luna.css already carries that
   // lesson for `.np-note[popover]`, whose comment inverts the same logic on
-  // purpose. Hiding it explicitly would work, but this pane is NAVIGATION, and
-  // navigation that a CSS quirk can hide is worse than navigation you scroll to.
-  // On a narrow viewport it simply moves below the document instead (luna.css).
+  // purpose. The wrapper stays explicit so luna.css can hide the whole piece of
+  // secondary navigation at its narrow breakpoint instead of turning the rail
+  // into a bottom strip that reads like page content.
   return `<div class="axp-tasks"><aside class="axp-pane" aria-label="Explorer tasks">${boxes.join("")}</aside></div>`;
 }
 
