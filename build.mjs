@@ -60,6 +60,29 @@ function dczEncode(bytes, dictBytes) {
   };
 }
 
+// Parse host-shaped CSP sources before comparing DNS labels. A raw substring
+// test is both imprecise and security-shaped: `cloudflareinsights.com.evil`
+// contains the retired domain text but is not beneath that domain, while an
+// arbitrary subdomain of cloudflareinsights.com is. Keep that distinction
+// explicit so this invariant checks origins rather than URL spelling.
+function containsRetiredRumHost(source) {
+  const candidates = source.match(/\b(?:https?:\/\/)?(?:\*\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)+(?:\:\d+)?/gi) || [];
+  for (const candidate of candidates) {
+    const withoutWildcard = candidate.replace(/^\*\./, "");
+    let hostname;
+    try {
+      hostname = new URL(/^[a-z]+:\/\//i.test(withoutWildcard)
+        ? withoutWildcard
+        : `https://${withoutWildcard}`).hostname.toLowerCase();
+    } catch {
+      continue;
+    }
+    const labels = hostname.split(".");
+    if (labels.at(-2) === "cloudflareinsights" && labels.at(-1) === "com") return true;
+  }
+  return false;
+}
+
 // ── deploy-time invariant tripwires (explore-unknowns, phase A) ──────────────
 // Silent-failure classes this codebase has hit or is one careless edit from
 // hitting. They live here because build.mjs runs on every `pnpm run deploy:direct`, the
@@ -244,7 +267,7 @@ async function checkInvariants() {
       ["holding/_headers", await read("holding/_headers")],
       ["holding/_worker.js/lib/security.js", await read("holding/_worker.js/lib/security.js")],
     ]) {
-      if (text.includes("cloudflareinsights.com")) {
+      if (containsRetiredRumHost(text)) {
         hard.push(`${name}: browser RUM is retired; remove the Cloudflare Insights CSP allowance`);
       }
     }
