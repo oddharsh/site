@@ -72,6 +72,41 @@
 .freq { display: flex; align-items: flex-end; gap: 1px; height: 46px; margin: 8px 0 2px; border-bottom: 1px solid #ddca97; }
 .freq i { display: block; flex: 1; background: linear-gradient(180deg,#b4912e,#7a5c1e); min-height: 1px; }
 .freq-ax { font-family: var(--font-mono); font-size: 6.5pt; color:#66707d; letter-spacing: .35em; }
+/* the cracker */
+.sv-side { border: 1px solid #e0cf9e; border-radius: 4px; padding: 8px 10px 10px; background: #fbf7ec; margin: 6px 0; }
+.sv-cap { font-size: 8pt; font-weight: bold; color: #9a6a16; letter-spacing: .04em; text-transform: uppercase; margin-bottom: 5px; }
+.sv-machine { background: #f4f7fb; border-color: #c3cbdb; }
+.sv-machine .sv-cap { color: #4a5568; }
+.sv-gauge { font-size: 8.5pt; margin-top: 6px; padding: 4px 8px; border-radius: 4px; background: #fffdf6; border: 1px solid #ddca97; color: #5e4716; }
+.sv-gauge.ok { background: #eef7e8; border-color: #9cc97f; color: #2c7a36; }
+.sv-gauge.thin { background: #fbf3dd; border-color: #e0cf9e; color: #9a6a16; }
+.sv-gauge.bad { background: #fdeaea; border-color: #e7a8a8; color: #c43636; }
+button.sv-go { font-weight: bold; padding: 4px 12px; }
+.sv-step { margin: 6px 0; padding: 6px 8px; background: #fff; border: 1px solid #d7dfea; border-radius: 4px; font-size: 9pt; opacity: .38; }
+.sv-step.live { opacity: 1; border-color: var(--accent); }
+.sv-step.done { opacity: 1; }
+.sv-step > b { display: block; color: #15243f; font-size: 8.5pt; margin-bottom: 3px; }
+.sv-step .sv-body { font-size: 8.5pt; color: #4a5568; }
+.sv-step .sv-body:empty { display: none; }
+/* period chart: one row per candidate key length, bar width = column IoC */
+.sv-bars { display: grid; grid-template-columns: auto 1fr auto; gap: 1px 6px; align-items: center; font-family: var(--font-mono); font-size: 8pt; margin: 3px 0; }
+.sv-bars .kk { color: #66707d; text-align: right; }
+.sv-bars .bb { height: 9px; background: #dfe5ee; border-radius: 2px; overflow: hidden; }
+.sv-bars .bb i { display: block; height: 100%; background: linear-gradient(180deg,#8fa6c4,#6b82a3); }
+.sv-bars .vv { color: #66707d; }
+/* the grid has no row element, so each of the three cells carries .win itself */
+.sv-bars .kk.win, .sv-bars .vv.win { color: #2c7a36; font-weight: bold; }
+.sv-bars .bb.win i { background: linear-gradient(180deg,#9cc97f,#5f9a41); }
+.sv-key { font-family: var(--font-mono); font-size: 11pt; font-weight: bold; letter-spacing: .12em; color: #15243f; }
+.sv-key i { font-style: normal; color: #c43636; }
+.sv-plain { font-family: var(--font-mono); font-size: 9pt; line-height: 1.45; color: #15243f; background: #f7f9fc; border: 1px solid #dfe5ee; border-radius: 3px; padding: 5px 7px; margin-top: 4px; overflow-wrap: anywhere; }
+.sv-plain b { background: #fdeaea; color: #c43636; font-weight: normal; }
+.sv-metrics { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 5px; font-size: 8.5pt; color: #4a5568; }
+.sv-metrics span b { font-family: var(--font-mono); color: #15243f; }
+.sv-final { margin-top: 6px; padding: 6px 9px; border-radius: 4px; font-size: 9pt; }
+.sv-final.hit { background: #eef7e8; border: 1px solid #9cc97f; color: #2c7a36; }
+.sv-final.near { background: #fbf3dd; border: 1px solid #e0cf9e; color: #9a6a16; }
+.sv-final.mis { background: #fdeaea; border: 1px solid #e7a8a8; color: #c43636; }
 /* columnar transposition grid */
 .ct-stage { margin: 8px 0; }
 .ct-cap { font-size: 8.5pt; color: #5e4716; margin: 0 0 3px; }
@@ -218,6 +253,54 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
           </div></div></div>
 
         <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>23:09</time></div>
+          <div class="bubble"><p>ok but I'm scoring these by hand. a machine should crank the whole search. can it just <em>break</em> one? give it something of mine, don't tell it the key, and let me watch.</p></div></div></div>
+
+        <div class="msg bot"><div class="pic"></div><div><div class="who"><b>Vigen&egrave;re</b><time>23:10</time></div>
+          <div class="bubble"><p>It can, and the whole attack is four steps. <b>One:</b> find the <b>period</b>. Slice the ciphertext into every-<em>k</em>th letter for each candidate key length and measure each slice's Index of Coincidence. At the wrong length the slices are still polyalphabetic and read flat (~.038); at the <em>right</em> one each slice is a single Caesar, so it reads English-lumpy (~.067). The period pops out of the chart. <b>Two:</b> at that length you no longer have a Vigenère, you have <em>k</em> independent Caesars, so solve each one by picking the shift whose χ² against English letter frequencies is lowest. That gets most of the key. <b>Three:</b> hill-climb the rest, because χ² only sees one column at a time and can't tell that column 3's guess makes <code>THEQ</code> where <code>THER</code> was available. Try all 26 shifts at each position, keep any that improves the <b>quadgram score of the whole plaintext</b>, repeat until nothing improves. Cross-column context is what recovers the last letters. <b>Four:</b> report a verdict, because a solver that always answers is useless. Type your own message and key:</p></div></div></div>
+
+        <!-- DEMO D: the cracker -->
+        <div class="msg bot"><div class="pic"></div><div style="min-width:0"><div class="who"><b>Vigen&egrave;re</b><time>23:10</time></div>
+          <div class="demo" id="demo-solve">
+            <div class="bar">Vigen&egrave;re shared a demo: the cracker</div>
+            <div class="pad">
+              <p class="lead">Write a message, pick a key, and the top half encrypts it. The bottom half is handed the <b>ciphertext only</b> and has to find your key from scratch. Watch the four steps run, then compare what it recovered against what you chose.</p>
+
+              <div class="sv-side">
+                <div class="sv-cap">you &middot; you know the key</div>
+                <div class="field" style="gap:5px"><span style="font-size:8.5pt;color:#6b7280">presets:</span>
+                  <button class="preset" data-sv="kryptos">Kryptos K1&ndash;K2 text</button>
+                  <button class="preset" data-sv="casual">a casual note</button>
+                  <button class="preset" data-sv="thin">too little text</button>
+                </div>
+                <div class="field"><label for="sv-pt">message</label><textarea id="sv-pt" class="grow">Between subtle shading and the absence of light lies the nuance of illusion. It was totally invisible. How is that possible? They used the earths magnetic field. The information was gathered and transmitted underground to an unknown location.</textarea></div>
+                <div class="field"><label for="sv-key">your key</label><input id="sv-key" class="grow" value="PALIMPSEST" style="max-width:180px"></div>
+                <div class="wb-out" id="sv-ct"></div>
+                <div class="sv-gauge" id="sv-gauge"></div>
+                <div class="field" style="gap:5px;margin-top:7px"><button class="preset sv-go" id="sv-go">hand the ciphertext to the cracker &rarr;</button></div>
+              </div>
+
+              <div class="sv-side sv-machine" id="sv-machine" hidden>
+                <div class="sv-cap">the cracker &middot; ciphertext only, no key</div>
+                <div class="sv-step" id="sv-s1"><b>1 &middot; period</b><div class="sv-body"></div></div>
+                <div class="sv-step" id="sv-s2"><b>2 &middot; seed each column by &chi;&sup2;</b><div class="sv-body"></div></div>
+                <div class="sv-step" id="sv-s3"><b>3 &middot; hill-climb on quadgrams</b><div class="sv-body"></div></div>
+                <div class="sv-step" id="sv-s4"><b>4 &middot; verdict</b><div class="sv-body"></div></div>
+              </div>
+            </div>
+          </div></div></div>
+
+        <div class="msg ai-note"><div class="pic" style="background:linear-gradient(180deg,#a78bdc,#6b4ec2);border-color:#523aa0"></div><div><div class="who"><b>sidekick</b><time>23:10</time></div>
+          <div class="bubble"><span class="tagai">AI &middot; where this one came from</span>
+          <p>the solver above is a JavaScript port of the periodic-cipher attack in <a href="https://github.com/0xdiid/buttcrack" rel="external">buttcrack</a> (MIT, &copy; 2026 diid), a classical-cipher cracker built to be driven by <em>agents</em> rather than by a GUI: every command is non-interactive and emits JSON, across 78 cipher types. its whole Vigenère family lives in one ~100-line file, <code>_periodic.py</code>, and the two ideas worth stealing are both in there. <b>seed by χ², then climb on the full text</b>, because per-column analysis alone can't recover a short key. and <b>dedupe candidates by resulting plaintext, keeping the shortest key</b>, so a 5-letter key and its 10-letter repeat collapse into one answer instead of competing.</p>
+          <p>what the port <em>doesn't</em> carry is the model. the real thing scores against 46,040 quadgrams with counts; this page ships the top <b>4,000 in rank order only</b>, 16 KB raw, <b>7.9 KB</b> over the wire, fetched the first time you press the button. measured cost of that cut: nothing above 100 letters, and the 61-letter K1-shaped case that the full table gets.</p></div></div></div>
+
+        <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>23:11</time></div>
+          <div class="bubble"><p>it nailed mine, then I shortened the message and it fell apart. what's the actual floor?</p></div></div></div>
+
+        <div class="msg bot"><div class="pic"></div><div><div class="who"><b>Vigen&egrave;re</b><time>23:11</time></div>
+          <div class="bubble"><p>Letters <b>per column</b> are what run out. A key of length <em>k</em> splits your text into <em>k</em> separate Caesars, and each one is solved from only its own slice, so 200 letters under a 4-letter key is a comfortable 50 per column while the same 200 under a 20-letter key is a starved 10. Measured on this exact solver and this exact table: at <b>20+ per column it solved every test</b>, at 12 it got 10 of 12, at 8 it got 6 of 12. That's the gauge under your message, and it's why <b>Kryptos K1 resists this</b> for two independent reasons at once: 63 letters under a 10-letter key is 6 per column, and the alphabet isn't <code>A&ndash;Z</code> anyway, so even a correct key decrypts to nothing. Short text starves the statistics; a keyed alphabet moves the target.</p></div></div></div>
+
+        <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>23:11</time></div>
           <div class="bubble"><p>back up to the <b>transposition</b> stage for a sec. K3 of Kryptos is pure transposition, no substitution at all, right? show me <b>columnar</b> specifically, and the double version.</p></div></div></div>
 
         <div class="msg bot"><div class="pic"></div><div><div class="who"><b>Vigen&egrave;re</b><time>23:09</time></div>
@@ -455,6 +538,357 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
 </script>
 
 <script>
+// ── Demo D: the cracker ─────────────────────────────────────────────────────
+// A JS port of the periodic-cipher attack in buttcrack (MIT, © 2026 diid),
+// src/buttcrack/ciphers/_periodic.py: seed each period column by χ², then
+// hill-climb every key position against the quadgram score of the WHOLE
+// plaintext, because cross-column context is what recovers the last letters
+// that per-column analysis alone always gets wrong. Candidates dedupe by
+// resulting plaintext keeping the shortest key, so a 5-letter key and its
+// 10-letter repeat collapse instead of competing.
+(function () {
+  var V = document.getElementById("demo-solve"); if (!V) return;
+  var $ = function (id) { return document.getElementById(id); };
+  var pt = $("sv-pt"), keyIn = $("sv-key"), ctOut = $("sv-ct"), gauge = $("sv-gauge"),
+      go = $("sv-go"), machine = $("sv-machine");
+
+  var ENG = [8.167,1.492,2.782,4.253,12.702,2.228,2.015,6.094,6.966,0.153,0.772,4.025,2.406,6.749,7.507,1.929,0.095,5.987,6.327,9.056,2.758,0.978,2.360,0.150,1.974,0.074];
+  // The model is 4,000 quadgrams in frequency order with no counts, so a score
+  // is derived from RANK on a Zipf curve. Only the ORDER of scores matters to a
+  // hill-climb, and dropping the counts is 60% of the bytes. TOP is log10 of
+  // the share "THAT" holds in the source corpus, FLOOR an unseen quadgram.
+  // Both printed by scripts/gen-quadgram-table.mjs, which builds the table.
+  var TOP = -2.4773, FLOOR = -8.7282, ZIPF = 0.75;
+  var MAX_KEY = 12, MAX_LETTERS = 900, PSEUDO = 40;
+  var LOGP = null, HI = 0, model = null;
+  // Reference English, scored once, is the "solved" end of the confidence
+  // scale; FLOOR is the random end. Same calibration buttcrack does, and it
+  // needs no data beyond the table already fetched.
+  var REF = "ITWASTOTALLYINVISIBLEHOWISTHATPOSSIBLETHEYUSEDTHEEARTHSMAGNETICFIELDTHEINFORMATIONWASGATHEREDANDTRANSMITTEDUNDERGROUNDTOANUNKNOWNLOCATIONDOESLANGLEYKNOWABOUTTHISTHEYSHOULDITSBURIEDOUTTHERESOMEWHERE";
+
+  function letters(s) { return (s || "").toUpperCase().replace(/[^A-Z]/g, ""); }
+  function esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+  function keyOf(sh) { var o = ""; for (var i = 0; i < sh.length; i++) o += String.fromCharCode(65 + sh[i]); return o; }
+
+  function buildModel(text) {
+    LOGP = new Map();
+    for (var i = 0; i + 4 <= text.length; i += 4) LOGP.set(text.substr(i, 4), TOP - ZIPF * Math.log10(i / 4 + 1));
+    HI = avg(REF);
+  }
+  function score(L) {
+    if (L.length < 4) return FLOOR * Math.max(1, L.length);
+    var t = 0;
+    for (var i = 0; i + 4 <= L.length; i++) { var v = LOGP.get(L.substr(i, 4)); t += v === undefined ? FLOOR : v; }
+    return t;
+  }
+  function avg(L) { var w = L.length - 3; return w <= 0 ? FLOOR : score(L) / w; }
+  // Sample-size aware: a mean log-probability is noisy on short text, so shrink
+  // it toward the random baseline. One lucky quadgram must not read as solved.
+  function confidence(L) {
+    var w = L.length - 3; if (w <= 0 || HI <= FLOOR) return 0;
+    var shrunk = (w * (score(L) / w) + PSEUDO * FLOOR) / (w + PSEUDO);
+    var mid = (FLOOR + HI) / 2, scale = (HI - FLOOR) / 6;
+    return 1 / (1 + Math.exp(-(shrunk - mid) / scale));
+  }
+  function ioc(L) {
+    var n = L.length; if (n < 2) return 0;
+    var f = new Array(26).fill(0), i;
+    for (i = 0; i < n; i++) f[L.charCodeAt(i) - 65]++;
+    var s = 0; for (i = 0; i < 26; i++) s += f[i] * (f[i] - 1);
+    return s / (n * (n - 1));
+  }
+  function chi2(L) {
+    var n = L.length; if (!n) return Infinity;
+    var f = new Array(26).fill(0), i;
+    for (i = 0; i < n; i++) f[L.charCodeAt(i) - 65]++;
+    var t = 0;
+    for (i = 0; i < 26; i++) { var e = ENG[i] / 100 * n; t += (f[i] - e) * (f[i] - e) / e; }
+    return t;
+  }
+  function columns(L, k) {
+    var c = [], i; for (i = 0; i < k; i++) c.push("");
+    for (i = 0; i < L.length; i++) c[i % k] += L[i];
+    return c;
+  }
+  // Average column IoC, with each column shrunk toward the flat baseline by its
+  // OWN sample size. Raw column IoC is a biased period detector: a longer
+  // candidate key cuts the text into shorter slices, and IoC on a short slice
+  // is a noisy estimate that scatters high, so the raw statistic drifts upward
+  // with k and can hand a Caesar a key length of 12. Shrinking by a pseudocount
+  // costs nothing when the slices are long and kills the noise when they are
+  // short. FLAT is the textbook IoC of uniform random letters, not a fitted
+  // number; PERIOD_PSEUDO is a judgement call, same shrinkage idea as
+  // confidence() above.
+  var FLAT = 0.0385, PERIOD_PSEUDO = 12;
+  function colIoc(L, k) {
+    var c = columns(L, k), s = 0, n = 0;
+    for (var i = 0; i < k; i++) {
+      var w = c[i].length; if (w < 2) continue;
+      s += (w * ioc(c[i]) + PERIOD_PSEUDO * FLAT) / (w + PERIOD_PSEUDO); n++;
+    }
+    return n ? s / n : 0;
+  }
+  function decrypt(L, sh) {
+    var k = sh.length, o = "";
+    for (var i = 0; i < L.length; i++) o += String.fromCharCode((L.charCodeAt(i) - 65 - sh[i % k] + 26) % 26 + 65);
+    return o;
+  }
+  function encrypt(L, sh) {
+    var k = sh.length, o = "";
+    for (var i = 0; i < L.length; i++) o += String.fromCharCode((L.charCodeAt(i) - 65 + sh[i % k]) % 26 + 65);
+    return o;
+  }
+  // Step 2: one period column is a plain Caesar, so take the shift whose
+  // decrypt sits closest to English letter frequencies.
+  function seedColumn(col) {
+    var bs = 0, bc = Infinity;
+    for (var s = 0; s < 26; s++) {
+      var p = "", i;
+      for (i = 0; i < col.length; i++) p += String.fromCharCode((col.charCodeAt(i) - 65 - s + 26) % 26 + 65);
+      var c = chi2(p);
+      if (c < bc) { bc = c; bs = s; }
+    }
+    return bs;
+  }
+  // Step 3: 26 shifts at every position, keep anything that improves the whole
+  // plaintext, repeat until a full pass changes nothing.
+  function climb(L, sh) {
+    var best = score(decrypt(L, sh)), improved = true, passes = 0, trail = [];
+    while (improved && passes < 20) {
+      improved = false; passes++;
+      for (var p = 0; p < sh.length; p++) {
+        var bs = sh[p];
+        for (var s = 0; s < 26; s++) {
+          if (s === bs) continue;
+          sh[p] = s;
+          var sc = score(decrypt(L, sh));
+          if (sc > best) { best = sc; bs = s; improved = true; }
+        }
+        sh[p] = bs;
+      }
+      trail.push({ pass: passes, key: keyOf(sh), score: best });
+    }
+    return { score: best, shifts: sh, plain: decrypt(L, sh), trail: trail };
+  }
+  // Memoised per run: step 3 solves at the chart's pick and step 4 sweeps every
+  // length, so without this the pick gets solved twice.
+  var solved = null;
+  function solveAt(L, k) {
+    var hit = solved.get(k); if (hit) return hit;
+    var seeded = columns(L, k).map(seedColumn);
+    var seedKey = keyOf(seeded), seedScore = score(decrypt(L, seeded));
+    var r = climb(L, seeded.slice());
+    r.k = k; r.seedKey = seedKey; r.seedScore = seedScore;
+    solved.set(k, r);
+    return r;
+  }
+
+  // ── the "you" half ─────────────────────────────────────────────────────────
+  function currentKey() { return letters(keyIn.value); }
+  function currentText() { return letters(pt.value).slice(0, MAX_LETTERS); }
+  function group5(s) { return s.replace(/(.{5})/g, "$1 ").trim(); }
+
+  var cipherState = null;
+  function renderYou() {
+    var L = currentText(), k = currentKey();
+    if (!L.length || !k.length) {
+      ctOut.innerHTML = '<span class="lbl">' + (k.length ? "type a message" : "type a key") + "</span>";
+      gauge.className = "sv-gauge"; gauge.textContent = "";
+      cipherState = null; go.disabled = true; return;
+    }
+    var sh = [], i;
+    for (i = 0; i < k.length; i++) sh.push(k.charCodeAt(i) - 65);
+    var ct = encrypt(L, sh);
+    cipherState = { plain: L, key: k, ct: ct };
+    go.disabled = false;
+    ctOut.innerHTML = '<span class="lbl">ciphertext </span><span class="ct">' + esc(group5(ct)) + "</span>";
+    // The gauge is the whole point: a Vigenere solver is starved by letters PER
+    // COLUMN, not by letters. Measured on this solver and this table: 20+ per
+    // column solved every test case, 12 got 10 of 12, 8 got 6 of 12.
+    var per = L.length / k.length;
+    var cls = per >= 20 ? "ok" : per >= 12 ? "thin" : "bad";
+    var verdict = per >= 20 ? "comfortable, this should solve."
+      : per >= 12 ? "marginal, it may recover most of the key and miss a letter or two."
+      : "too thin, expect it to fail and to say so.";
+    gauge.className = "sv-gauge " + cls;
+    gauge.textContent = L.length + " letters ÷ key of " + k.length + " = " + per.toFixed(1) + " letters per column · " + verdict;
+  }
+
+  // ── the machine half ───────────────────────────────────────────────────────
+  function stepEl(n) { return $("sv-s" + n); }
+  function setStep(n, state, html) {
+    var el = stepEl(n);
+    el.className = "sv-step" + (state ? " " + state : "");
+    if (html != null) el.querySelector(".sv-body").innerHTML = html;
+  }
+  function resetSteps() {
+    for (var i = 1; i <= 4; i++) setStep(i, "", "");
+  }
+  var wait = function (fn) { setTimeout(fn, 420); };
+
+  function markKey(found, truth) {
+    // Show the recovered key against the one the visitor chose, letter by
+    // letter. Lengths can differ, which is itself a result worth seeing.
+    var o = "";
+    for (var i = 0; i < found.length; i++) {
+      var same = truth && found[i] === truth[i % truth.length] && found.length === truth.length;
+      o += same ? esc(found[i]) : "<i>" + esc(found[i]) + "</i>";
+    }
+    return o;
+  }
+  function diffPlain(got, want) {
+    var o = "", i;
+    for (i = 0; i < got.length; i++) o += (want && got[i] !== want[i]) ? "<b>" + esc(got[i]) + "</b>" : esc(got[i]);
+    return o;
+  }
+
+  function run() {
+    if (!cipherState) return;
+    var state = cipherState, L = state.ct;
+    machine.hidden = false;
+    solved = new Map();
+    resetSteps();
+
+    // Step 1: period by column IoC.
+    setStep(1, "live", '<span style="color:#9a6a16">measuring…</span>');
+    wait(function () {
+      var max = Math.min(MAX_KEY, Math.max(1, Math.floor(L.length / 2))), rows = [], k;
+      for (k = 1; k <= max; k++) rows.push({ k: k, v: colIoc(L, k) });
+      // Plain argmax, deliberately: this statistic finds the period UP TO A
+      // MULTIPLE and cannot do better. A multiple of the true period slices
+      // just as cleanly (every 10th letter of a 5-key text is still one
+      // Caesar), and a key whose own letters repeat makes its half-length
+      // score well too, since PALIMPSEST has P at both 0 and 5. Preferring the
+      // shortest candidate inside some window was tried and is a tuned
+      // constant that gets one of those two cases wrong whichever way it is
+      // set. So step 1 reports the strongest length and says it is a starting
+      // point; step 4 sweeps every length and resolves which multiple it was.
+      var pick = rows.reduce(function (a, b) { return b.v > a.v ? b : a; });
+      var top = Math.max.apply(null, rows.map(function (r) { return r.v; }));
+      var html = '<div class="sv-bars">' + rows.map(function (r) {
+        var w = Math.round(r.v / (top || 1) * 100);
+        return '<span class="kk' + (r.k === pick.k ? " win" : "") + '">' + r.k + '</span>' +
+          '<span class="bb' + (r.k === pick.k ? " win" : "") + '"><i style="width:' + w + '%"></i></span>' +
+          '<span class="vv' + (r.k === pick.k ? " win" : "") + '">' + r.v.toFixed(3) + "</span>";
+      }).join("") + "</div>" +
+        '<div>each row slices the ciphertext into every-<i>k</i>th letter and averages the IoC of those slices, shrunk toward flat by how few letters each slice holds. flat ≈ .038, English ≈ .067. <b>key length ' + pick.k +
+        "</b> is strongest, and this test only ever finds the period <em>up to a multiple</em>, since every-2<i>k</i>th letter of a <i>k</i>-key text is still one Caesar. step 4 settles which.</div>";
+      setStep(1, "done", html);
+
+      // Step 2: seed by chi-squared at that length.
+      setStep(2, "live", '<span style="color:#9a6a16">solving ' + pick.k + " Caesars…</span>");
+      wait(function () {
+        var seeded = columns(L, pick.k).map(seedColumn), seedKey = keyOf(seeded);
+        var seedPlain = decrypt(L, seeded);
+        setStep(2, "done",
+          '<div>each column is now a single Caesar. lowest χ² per column gives:</div>' +
+          '<div class="sv-key" style="margin:3px 0">' + esc(seedKey) + "</div>" +
+          '<div class="sv-plain">' + esc(seedPlain.slice(0, 160)) + (seedPlain.length > 160 ? "…" : "") + "</div>");
+
+        // Step 3: hill-climb, then the full sweep for the ranked field.
+        setStep(3, "live", '<span style="color:#9a6a16">climbing…</span>');
+        wait(function () {
+          var r = solveAt(L, pick.k);
+          var trail = r.trail.map(function (t) {
+            return "pass " + t.pass + " · <b>" + esc(t.key) + "</b> · score " + Math.round(t.score);
+          }).join("<br>");
+          var moved = r.seedKey === keyOf(r.shifts)
+            ? "the climb changed nothing, χ² had already found every letter."
+            : "the climb moved " + (function () {
+                var n = 0, fk = keyOf(r.shifts);
+                for (var i = 0; i < fk.length; i++) if (fk[i] !== r.seedKey[i]) n++;
+                return n + (n === 1 ? " letter" : " letters");
+              })() + " that per-column χ² had wrong.";
+          setStep(3, "done",
+            '<div style="font-family:var(--font-mono);font-size:8pt;line-height:1.5">seed · <b>' + esc(r.seedKey) + "</b> · score " + Math.round(r.seedScore) + "<br>" + trail + "</div>" +
+            '<div style="margin-top:4px">' + moved + "</div>");
+
+          // Step 4: sweep every length, dedupe by plaintext keeping the
+          // shortest key, rank, and report against what the visitor chose.
+          setStep(4, "live", '<span style="color:#9a6a16">ranking candidates…</span>');
+          wait(function () {
+            var byPlain = new Map(), k2;
+            for (k2 = 1; k2 <= Math.min(MAX_KEY, Math.max(1, Math.floor(L.length / 2))); k2++) {
+              var c = solveAt(L, k2), prev = byPlain.get(c.plain);
+              if (!prev || k2 < prev.k) byPlain.set(c.plain, c);
+            }
+            var field = Array.from(byPlain.values()).sort(function (a, b) { return b.score - a.score; });
+            var win = field[0], runner = field[1];
+            var found = keyOf(win.shifts), conf = confidence(win.plain), got = win.plain;
+            var exact = got === state.plain;
+            var wrong = 0, i;
+            for (i = 0; i < got.length; i++) if (got[i] !== state.plain[i]) wrong++;
+            var cls = exact ? "hit" : wrong <= got.length * 0.15 ? "near" : "mis";
+            var msg = exact
+              ? "<b>solved.</b> it recovered your key from the ciphertext alone."
+              : cls === "near"
+                ? "<b>close.</b> " + wrong + " of " + got.length + " letters wrong, the marked ones. more text would finish it."
+                : "<b>failed.</b> not enough text per column for the statistics to separate the right key from a plausible wrong one.";
+            // The chart reads one statistic; the sweep is the answer. When they
+            // disagree, say so rather than quietly overwrite step 1, since the chart
+            // landing on a multiple is the expected reason, not a failure.
+            if (win.k !== pick.k) {
+              msg += " (the sweep landed on key length <b>" + win.k + "</b> where the chart read <b>" + pick.k + "</b>" +
+                (pick.k % win.k === 0 ? ", exactly the multiple step 1 warned about" : "") + ".)";
+            }
+            setStep(4, "done",
+              '<div class="sv-metrics">' +
+                "<span>key found <b>" + markKey(found, state.key) + "</b></span>" +
+                "<span>your key <b>" + esc(state.key) + "</b></span>" +
+                "<span>confidence <b>" + conf.toFixed(2) + "</b></span>" +
+                "<span>IoC <b>" + ioc(got).toFixed(3) + "</b></span>" +
+                "<span>margin over runner-up <b>" + (runner ? Math.round(win.score - runner.score) : "—") + "</b></span>" +
+              "</div>" +
+              '<div class="sv-plain">' + diffPlain(got, state.plain) + "</div>" +
+              '<div class="sv-final ' + cls + '">' + msg + "</div>");
+          });
+        });
+      });
+    });
+  }
+
+  var loading = false;
+  go.addEventListener("click", function () {
+    if (loading) return;
+    if (LOGP) { run(); return; }
+    // The quadgram model is fetched on the first press rather than shipped in
+    // the page: 16 KB raw, ~8 KB over the wire, and most visitors never click.
+    loading = true;
+    var label = go.textContent;
+    go.textContent = "fetching the quadgram model (16 KB)…";
+    fetch("/lwe/quadgrams.txt").then(function (r) {
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.text();
+    }).then(function (t) {
+      buildModel(letters(t));
+      go.textContent = label; loading = false;
+      run();
+    })["catch"](function () {
+      go.textContent = label; loading = false;
+      machine.hidden = false;
+      setStep(1, "done", '<span style="color:#c43636">could not fetch the quadgram model, so there is nothing to score against. try again in a moment.</span>');
+    });
+  });
+
+  pt.addEventListener("input", renderYou);
+  keyIn.addEventListener("input", renderYou);
+  var SV = {
+    kryptos: { pt: "Between subtle shading and the absence of light lies the nuance of illusion. It was totally invisible. How is that possible? They used the earths magnetic field. The information was gathered and transmitted underground to an unknown location.", key: "PALIMPSEST" },
+    casual: { pt: "I think we should probably get dinner somewhere downtown before the show starts, because the place next to the theater is always packed on a Friday night and I do not want to stand around waiting for a table again.", key: "LEMON" },
+    thin: { pt: "Attack at dawn on the eastern bridge.", key: "PALIMPSEST" }
+  };
+  [].forEach.call(V.querySelectorAll(".preset[data-sv]"), function (b) {
+    b.addEventListener("click", function () {
+      var p = SV[b.getAttribute("data-sv")];
+      pt.value = p.pt; keyIn.value = p.key;
+      machine.hidden = true; resetSteps(); renderYou();
+    });
+  });
+  renderYou();
+})();
+</script>
+
+<script>
 // ── Demo C: columnar transposition (single + double) ────────────────────────
 (function () {
   var V = document.getElementById("demo-colt"); if (!V) return;
@@ -518,7 +952,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
 <script type="application/json" id="luq-data">
 {
   "skin": "lwe",
-  "intro": "Before you close the window: pop quiz, 5 questions, no stakes. If the keystream, the keyed alphabet and the IoC all landed, this is quick; the misses will point at which demo to re-run.",
+  "intro": "Before you close the window: pop quiz, 6 questions, no stakes. If the keystream, the keyed alphabet, the IoC and the cracker's floor all landed, this is quick; the misses will point at which demo to re-run.",
   "questions": [
     {
       "q": "First one. A frequency count cracks a Caesar cipher in seconds, yet reads nearly flat on Vigenère ciphertext. What makes the difference?",
@@ -627,6 +1061,28 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
         {
           "t": "nothing on its own, you can't score a candidate without knowing the key",
           "why": "Keyless scoring is the entire point: you cannot read the candidate, but you can measure its statistical shape, and the shape says solved or keep cranking."
+        }
+      ]
+    },
+    {
+      "q": "Last one. The cracker solves a 200-letter message under a 4-letter key and fails on the same 200 letters under a 20-letter key. What runs out?",
+      "options": [
+        {
+          "t": "letters per column: a key of length k splits the text into k separate caesars, each solved from its own slice alone",
+          "ok": true,
+          "why": "200 under a 4-letter key is 50 letters per column; under a 20-letter key it is 10. Every column is solved from its own slice, so the key length is a divisor on your evidence. Measured on this solver: 20+ per column solved every test, 8 got 6 of 12."
+        },
+        {
+          "t": "the longer key has more possible values, so the search space got too big to brute-force",
+          "why": "Nothing here brute-forces the key, so the size of the search space never bites. Each column is solved independently in 26 tries, and a 20-letter key costs 520 evaluations rather than 26^20. What runs out is the evidence inside each column."
+        },
+        {
+          "t": "the quadgram table only has 4,000 entries, so it stops recognising longer keys",
+          "why": "The table scores plaintext and knows nothing about keys at all. Measured on this exact page: at 120 letters the full 46,040-gram table and the shipped 4,000 solve identically, so text length is the variable that moved the result while model size sat still."
+        },
+        {
+          "t": "a 20-letter key has no repeats within the message, so it behaves like a one-time pad",
+          "why": "Close to a real idea, but off by the numbers: 200 letters still cycles a 20-letter key ten times, so the period is very much there and step 1 can still find it. A key as long as the message with no reuse would be the one-time pad."
         }
       ]
     }

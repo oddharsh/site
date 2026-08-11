@@ -144,6 +144,17 @@
   Link: </luna.css>; rel=preload; as=style, </nav.js>; rel=preload; as=script
   Link: </webmention>; rel="webmention"
 
+# NB: /lwe/quadgrams.txt (the model the vigenere cracker fetches) deliberately
+# has NO rule of its own, and a longer browser max-age for it was tried and
+# reverted 2026-08-11. A more specific rule does not OVERRIDE the glob below,
+# it COMBINES with it: adding one produced
+#   Cache-Control: public, max-age=604800, …, public, max-age=0, s-maxage=86400, …
+# on the wire, two conflicting max-ages in one field, which is worse than the
+# 304 it was meant to save. Cache-Control here is one value per matching rule,
+# appended, so the only way to give a file under a glob a different policy is
+# to move it out of the glob or set the header in the worker. For a 16 KB inert
+# asset fetched once per solve, neither is worth it.
+
 # LWE concept pages: same deal as the garage mules. static content that changes
 # rarely, so let the edge serve a cheap 304 (s-maxage) instead of revalidating
 # against the origin on every back-nav and repeat visit.
