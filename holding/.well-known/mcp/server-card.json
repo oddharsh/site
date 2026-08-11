@@ -44,7 +44,15 @@
       },
       "outputSchema": {
         "type": "object",
-        "additionalProperties": true
+        "additionalProperties": true,
+        "properties": {
+          "_receipt": {
+            "$ref": "https://aadhar.sh/.well-known/result-receipt-v1.json"
+          }
+        },
+        "required": [
+          "_receipt"
+        ]
       },
       "annotations": {
         "readOnlyHint": true,
@@ -63,7 +71,15 @@
       },
       "outputSchema": {
         "type": "object",
-        "additionalProperties": true
+        "additionalProperties": true,
+        "properties": {
+          "_receipt": {
+            "$ref": "https://aadhar.sh/.well-known/result-receipt-v1.json"
+          }
+        },
+        "required": [
+          "_receipt"
+        ]
       },
       "annotations": {
         "readOnlyHint": true,
@@ -119,7 +135,15 @@
       },
       "outputSchema": {
         "type": "object",
-        "additionalProperties": true
+        "additionalProperties": true,
+        "properties": {
+          "_receipt": {
+            "$ref": "https://aadhar.sh/.well-known/result-receipt-v1.json"
+          }
+        },
+        "required": [
+          "_receipt"
+        ]
       },
       "annotations": {
         "readOnlyHint": true,
@@ -138,7 +162,15 @@
       },
       "outputSchema": {
         "type": "object",
-        "additionalProperties": true
+        "additionalProperties": true,
+        "properties": {
+          "_receipt": {
+            "$ref": "https://aadhar.sh/.well-known/result-receipt-v1.json"
+          }
+        },
+        "required": [
+          "_receipt"
+        ]
       },
       "annotations": {
         "readOnlyHint": true,
@@ -163,7 +195,15 @@
       },
       "outputSchema": {
         "type": "object",
-        "additionalProperties": true
+        "additionalProperties": true,
+        "properties": {
+          "_receipt": {
+            "$ref": "https://aadhar.sh/.well-known/result-receipt-v1.json"
+          }
+        },
+        "required": [
+          "_receipt"
+        ]
       },
       "annotations": {
         "readOnlyHint": true,
@@ -189,7 +229,15 @@
       },
       "outputSchema": {
         "type": "object",
-        "additionalProperties": true
+        "additionalProperties": true,
+        "properties": {
+          "_receipt": {
+            "$ref": "https://aadhar.sh/.well-known/result-receipt-v1.json"
+          }
+        },
+        "required": [
+          "_receipt"
+        ]
       },
       "annotations": {
         "readOnlyHint": true,
@@ -215,7 +263,15 @@
       },
       "outputSchema": {
         "type": "object",
-        "additionalProperties": true
+        "additionalProperties": true,
+        "properties": {
+          "_receipt": {
+            "$ref": "https://aadhar.sh/.well-known/result-receipt-v1.json"
+          }
+        },
+        "required": [
+          "_receipt"
+        ]
       },
       "annotations": {
         "readOnlyHint": true,
@@ -245,7 +301,15 @@
       },
       "outputSchema": {
         "type": "object",
-        "additionalProperties": true
+        "additionalProperties": true,
+        "properties": {
+          "_receipt": {
+            "$ref": "https://aadhar.sh/.well-known/result-receipt-v1.json"
+          }
+        },
+        "required": [
+          "_receipt"
+        ]
       },
       "annotations": {
         "readOnlyHint": true,
@@ -292,7 +356,15 @@
       },
       "outputSchema": {
         "type": "object",
-        "additionalProperties": true
+        "additionalProperties": true,
+        "properties": {
+          "_receipt": {
+            "$ref": "https://aadhar.sh/.well-known/result-receipt-v1.json"
+          }
+        },
+        "required": [
+          "_receipt"
+        ]
       },
       "annotations": {
         "readOnlyHint": true,
@@ -323,7 +395,15 @@
       },
       "outputSchema": {
         "type": "object",
-        "additionalProperties": true
+        "additionalProperties": true,
+        "properties": {
+          "_receipt": {
+            "$ref": "https://aadhar.sh/.well-known/result-receipt-v1.json"
+          }
+        },
+        "required": [
+          "_receipt"
+        ]
       },
       "annotations": {
         "readOnlyHint": true,
@@ -404,7 +484,15 @@
       },
       "outputSchema": {
         "type": "object",
-        "additionalProperties": true
+        "additionalProperties": true,
+        "properties": {
+          "_receipt": {
+            "$ref": "https://aadhar.sh/.well-known/result-receipt-v1.json"
+          }
+        },
+        "required": [
+          "_receipt"
+        ]
       },
       "annotations": {
         "readOnlyHint": true,
@@ -472,7 +560,15 @@
       },
       "outputSchema": {
         "type": "object",
-        "additionalProperties": true
+        "additionalProperties": true,
+        "properties": {
+          "_receipt": {
+            "$ref": "https://aadhar.sh/.well-known/result-receipt-v1.json"
+          }
+        },
+        "required": [
+          "_receipt"
+        ]
       },
       "annotations": {
         "readOnlyHint": true,
@@ -502,7 +598,15 @@
       },
       "outputSchema": {
         "type": "object",
-        "additionalProperties": true
+        "additionalProperties": true,
+        "properties": {
+          "_receipt": {
+            "$ref": "https://aadhar.sh/.well-known/result-receipt-v1.json"
+          }
+        },
+        "required": [
+          "_receipt"
+        ]
       },
       "annotations": {
         "readOnlyHint": true,
@@ -541,7 +645,15 @@
       },
       "outputSchema": {
         "type": "object",
-        "additionalProperties": true
+        "additionalProperties": true,
+        "properties": {
+          "_receipt": {
+            "$ref": "https://aadhar.sh/.well-known/result-receipt-v1.json"
+          }
+        },
+        "required": [
+          "_receipt"
+        ]
       },
       "annotations": {
         "readOnlyHint": false,
@@ -567,7 +679,15 @@
       },
       "outputSchema": {
         "type": "object",
-        "additionalProperties": true
+        "additionalProperties": true,
+        "properties": {
+          "_receipt": {
+            "$ref": "https://aadhar.sh/.well-known/result-receipt-v1.json"
+          }
+        },
+        "required": [
+          "_receipt"
+        ]
       },
       "annotations": {
         "readOnlyHint": true,
@@ -597,7 +717,15 @@
       },
       "outputSchema": {
         "type": "object",
-        "additionalProperties": true
+        "additionalProperties": true,
+        "properties": {
+          "_receipt": {
+            "$ref": "https://aadhar.sh/.well-known/result-receipt-v1.json"
+          }
+        },
+        "required": [
+          "_receipt"
+        ]
       },
       "annotations": {
         "readOnlyHint": false,
@@ -648,7 +776,15 @@
       },
       "outputSchema": {
         "type": "object",
-        "additionalProperties": true
+        "additionalProperties": true,
+        "properties": {
+          "_receipt": {
+            "$ref": "https://aadhar.sh/.well-known/result-receipt-v1.json"
+          }
+        },
+        "required": [
+          "_receipt"
+        ]
       },
       "annotations": {
         "readOnlyHint": true,
@@ -697,7 +833,15 @@
       },
       "outputSchema": {
         "type": "object",
-        "additionalProperties": true
+        "additionalProperties": true,
+        "properties": {
+          "_receipt": {
+            "$ref": "https://aadhar.sh/.well-known/result-receipt-v1.json"
+          }
+        },
+        "required": [
+          "_receipt"
+        ]
       },
       "annotations": {
         "readOnlyHint": true,
@@ -755,7 +899,15 @@
       },
       "outputSchema": {
         "type": "object",
-        "additionalProperties": true
+        "additionalProperties": true,
+        "properties": {
+          "_receipt": {
+            "$ref": "https://aadhar.sh/.well-known/result-receipt-v1.json"
+          }
+        },
+        "required": [
+          "_receipt"
+        ]
       },
       "annotations": {
         "readOnlyHint": true,
@@ -778,7 +930,15 @@
       },
       "outputSchema": {
         "type": "object",
-        "additionalProperties": true
+        "additionalProperties": true,
+        "properties": {
+          "_receipt": {
+            "$ref": "https://aadhar.sh/.well-known/result-receipt-v1.json"
+          }
+        },
+        "required": [
+          "_receipt"
+        ]
       },
       "annotations": {
         "readOnlyHint": true,
@@ -801,7 +961,15 @@
       },
       "outputSchema": {
         "type": "object",
-        "additionalProperties": true
+        "additionalProperties": true,
+        "properties": {
+          "_receipt": {
+            "$ref": "https://aadhar.sh/.well-known/result-receipt-v1.json"
+          }
+        },
+        "required": [
+          "_receipt"
+        ]
       },
       "annotations": {
         "readOnlyHint": true,
@@ -824,7 +992,15 @@
       },
       "outputSchema": {
         "type": "object",
-        "additionalProperties": true
+        "additionalProperties": true,
+        "properties": {
+          "_receipt": {
+            "$ref": "https://aadhar.sh/.well-known/result-receipt-v1.json"
+          }
+        },
+        "required": [
+          "_receipt"
+        ]
       },
       "annotations": {
         "readOnlyHint": true,
@@ -847,7 +1023,15 @@
       },
       "outputSchema": {
         "type": "object",
-        "additionalProperties": true
+        "additionalProperties": true,
+        "properties": {
+          "_receipt": {
+            "$ref": "https://aadhar.sh/.well-known/result-receipt-v1.json"
+          }
+        },
+        "required": [
+          "_receipt"
+        ]
       },
       "annotations": {
         "readOnlyHint": true,
@@ -877,7 +1061,15 @@
       },
       "outputSchema": {
         "type": "object",
-        "additionalProperties": true
+        "additionalProperties": true,
+        "properties": {
+          "_receipt": {
+            "$ref": "https://aadhar.sh/.well-known/result-receipt-v1.json"
+          }
+        },
+        "required": [
+          "_receipt"
+        ]
       },
       "annotations": {
         "readOnlyHint": true,

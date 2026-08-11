@@ -19,11 +19,9 @@
 //
 // Everything goes through lensFetch/lensProbe, so every request inherits the
 // SSRF guards (http(s) only, no localhost/private/link-local/169.254.169.254,
-// ports 80/443), the 8s timeout, the byte cap, and the AadharshBot signature.
+// ports 80/443), a bounded deadline, the byte cap, and the AadharshBot signature.
 // This module adds no new way to reach the network.
-import { botHeaders } from "./botauth.js";
-import { CANONICAL_HOST } from "./const.js";
-import { lensProbe, originDiscovery } from "../lens.js";
+import { lensProbe, lensProbeMcp, originDiscovery } from "../lens.js";
 
 // Bounds. A door reader that follows whatever it finds is a crawler; these keep
 // it to one hop and a readable amount of text.
@@ -41,69 +39,22 @@ const trim = (text, max) => {
 /**
  * tools/list against a foreign MCP server.
  *
- * A POST with a body, which signedFetch cannot express (it forwards `method` but
- * not `body`), so the signature headers are built directly and the fetch is made
- * here. The request is still signed and still identifies as AadharshBot — the
- * point of knocking on someone's endpoint under your own name.
- *
- * Stateless-revision shaped on purpose: one POST carrying `_meta`, no
- * initialize handshake, no session id to keep. A legacy server that demands the
- * handshake answers an error, and that error is reported rather than retried —
- * the retry would be a second round trip to learn something the frame can say in
- * a line.
+ * This adapter keeps the agent-readiness output stable while the underlying
+ * catalog read lives in Lens's one canonical MCP probe.
  */
 export async function foreignMcpTools(origin, env) {
-  const url = origin.replace(/\/+$/, "") + "/mcp";
-  // Both `_meta` keys are REQUIRED on a modern request. `clientCapabilities` is
-  // empty because this probe reads a catalogue and offers the server nothing:
-  // no roots, no sampling, no elicitation. Sending it matters twice over — a
-  // strict foreign server is entitled to refuse us with -32602 without it, and
-  // the self-scan below loops back into our own /mcp, which does exactly that.
-  const body = JSON.stringify({
-    jsonrpc: "2.0", id: 1, method: "tools/list",
-    params: { _meta: {
-      "io.modelcontextprotocol/protocolVersion": "2026-07-28",
-      "io.modelcontextprotocol/clientCapabilities": {},
-    } },
-  });
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 8000);
-  // Pointing this at aadhar.sh is the first thing anybody will try, and over the
-  // network that request loops back into this same Worker — which Cloudflare
-  // kills with a 522, so a self-scan would report its own MCP server as down.
-  // lensFetch already solves this by dispatching through SELF_FETCH; the POST
-  // cannot reuse lensFetch (no body), so the same escape hatch is mirrored here.
-  // Self-dispatch never leaves Cloudflare, so it needs no wire signature either,
-  // which is also why a self-scan works in local dev without the signing key.
-  let isSelf = false;
-  try { isSelf = new URL(url).hostname.toLowerCase() === CANONICAL_HOST && !!(env.SELF_FETCH || env.ASSETS); } catch { /* not self */ }
-  try {
-    const headers = await botHeaders(url, env, {
-      headers: { "content-type": "application/json", accept: "application/json" },
-      method: "POST",
-      sign: !isSelf,
-    });
-    const selfReq = isSelf ? new Request(url, { method: "POST", headers, body }) : null;
-    const res = isSelf
-      ? await (env.SELF_FETCH ? env.SELF_FETCH(selfReq) : env.ASSETS.fetch(selfReq))
-      : await fetch(url, { method: "POST", headers, body, redirect: "follow", signal: controller.signal, cf: { cacheTtl: 0 } });
-    if (!res.ok) return { ok: false, detail: `HTTP ${res.status}` };
-    const payload = await res.json();
-    if (payload?.error) return { ok: false, detail: `${payload.error.code}: ${String(payload.error.message).slice(0, 80)}` };
-    const tools = Array.isArray(payload?.result?.tools) ? payload.result.tools : [];
-    return {
-      ok: true,
-      count: tools.length,
-      tools: tools.slice(0, DOOR_LIMITS.tools).map((tool) => ({
-        name: String(tool?.name || "").slice(0, 60),
-        description: trim(tool?.description, DOOR_LIMITS.toolDesc),
-      })),
-    };
-  } catch (error) {
-    // Same distinction as readable() above: a thrown request never reached the
-    // server, so it says nothing about whether that server exists.
-    return { ok: false, unreadable: true, detail: String(error?.message || error).slice(0, 80) };
-  } finally { clearTimeout(timer); }
+  return mcpDoor(await lensProbeMcp(origin, env));
+}
+
+function mcpDoor(probe) {
+  if (!probe || probe.verdict === "unknown") return { ok: false, unreadable: true, detail: probe && probe.detail || "probe failed" };
+  if (probe.verdict !== "yes" || !Array.isArray(probe.tools)) return { ok: false, detail: probe.detail || "catalog unavailable" };
+  return {
+    ok: true,
+    count: Number.isFinite(probe.count) ? probe.count : probe.tools.length,
+    tools: probe.tools.slice(0, DOOR_LIMITS.tools),
+    resultReceipts: probe.resultReceipts || null,
+  };
 }
 
 /**
@@ -150,16 +101,14 @@ export async function readDoors(target, env) {
   // origin. One probe set, one answer, and a second read of the same host is now
   // free.
   //
-  // tools/list stays separate because lens only ever KNOCKS on /mcp (it infers a
-  // verdict from the status code); walking through and reading the catalog is
-  // this module's whole reason to exist.
-  const [markdown, disco, mcp] = await Promise.all([
+  // The MCP discovery probe now reads tools/list itself. Reuse that catalog here
+  // so one origin has one answer and readDoors adds no duplicate POST.
+  const [markdown, disco] = await Promise.all([
     // The Markdown twin at the PAGE's own URL, not the origin's: negotiation is
     // per-document, and asking the front door about a deep link answers for the
     // front door. This is the one door whose answer is the page you asked for.
     lensProbe(target, env, "text/markdown"),
     originDiscovery(origin, hostname, env),
-    foreignMcpTools(origin, env),
   ]);
   const { llms, agentCard, apiCatalog } = disco;
 
@@ -179,7 +128,6 @@ export async function readDoors(target, env) {
     llms: readable(llms, "text/plain"),
     agentCard: readable(agentCard, "json"),
     apiCatalog: readable(apiCatalog, "json"),
-    mcp,
+    mcp: mcpDoor(disco.mcp),
   };
 }
-

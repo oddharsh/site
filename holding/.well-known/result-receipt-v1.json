@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aadhar.sh/.well-known/result-receipt-v1.json",
+  "title": "aadhar.sh portable MCP result receipt",
+  "description": "A site-local, portable receipt for one successful root-MCP tool result. It is returned to the caller and is not persisted by the server. A signed proof covers the RFC 8785 canonical JSON of the receipt with only proof.signature omitted.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "version", "origin", "issuedAt", "provenance", "proof"],
+  "properties": {
+    "schema": {
+      "const": "https://aadhar.sh/.well-known/result-receipt-v1.json"
+    },
+    "version": {
+      "const": 1
+    },
+    "origin": {
+      "type": "string",
+      "format": "uri"
+    },
+    "issuedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "endpoint", "protocol", "operation", "tool", "requestDigest", "resultDigest", "producer"],
+      "properties": {
+        "kind": { "const": "mcp-tool-result" },
+        "endpoint": { "type": "string", "format": "uri" },
+        "protocol": { "const": "mcp" },
+        "operation": { "const": "tools/call" },
+        "tool": { "type": "string", "minLength": 1 },
+        "requestDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "resultDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "producer": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "version", "workerVersion"],
+          "properties": {
+            "name": { "type": "string", "minLength": 1 },
+            "version": { "type": "string", "minLength": 1 },
+            "workerVersion": { "type": ["string", "null"] }
+          }
+        }
+      }
+    },
+    "proof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "algorithm", "keyId", "canonicalization", "signature"],
+      "properties": {
+        "status": { "enum": ["signed", "unsigned"] },
+        "algorithm": { "enum": ["Ed25519", null] },
+        "keyId": {
+          "anyOf": [
+            { "type": "null" },
+            { "type": "string", "pattern": "^https://aadhar\\.sh/\\.well-known/http-message-signatures-directory#[A-Za-z0-9._~-]+$" }
+          ]
+        },
+        "canonicalization": { "const": "RFC8785" },
+        "signature": { "type": ["string", "null"], "pattern": "^[A-Za-z0-9_-]+$" },
+        "reason": { "type": "string" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "status": { "const": "signed" } }, "required": ["status"] },
+          "then": {
+            "properties": {
+              "algorithm": { "const": "Ed25519" },
+              "keyId": { "type": "string" },
+              "signature": { "type": "string" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "status": { "const": "unsigned" } }, "required": ["status"] },
+          "then": {
+            "required": ["reason"],
+            "properties": {
+              "algorithm": { "type": "null" },
+              "keyId": { "type": "null" },
+              "signature": { "type": "null" }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

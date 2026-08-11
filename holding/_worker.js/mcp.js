@@ -14,6 +14,7 @@ import { AGENT_SURFACES } from "./lib/site-manifest.js";
 import { CACHE_EMPTY, CACHE_LIVE, CACHE_STATIC, mcpCorsHeaders, mcpGate, mcpHttpStatus, mcpServer } from "./lib/mcp-protocol.js";
 import { mcpTool } from "./lib/mcp-tools.js";
 import { previewToolRefusal } from "./lib/preview.js";
+import { resultWithReceipt, withResultReceiptSchema } from "./result-receipt.js";
 
 // DUAL-ERA. The wire rules (versions, `_meta` keys, resultType, cache hints,
 // error codes, the header check) live in lib/mcp-protocol.js because
@@ -31,7 +32,7 @@ import { previewToolRefusal } from "./lib/preview.js";
 // report at `initialize`.
 export const SITE_MCP_SERVER_INFO = { name: "aadhar.sh", title: "Aadharsh Site", version: "2.1.0" };
 export const SITE_MCP_CAPABILITIES = { tools: {}, resources: {} };
-export const SITE_MCP_INSTRUCTIONS = "Bounded public utilities for aadhar.sh: search, music, photos, coffee availability, Change Radar, Lens, ephemeral image inspection/transforms, exact published-photo recipe matching, and an HTTP representation vault. Image inputs are not persisted; the vault stores normalized headers, metadata, and body digests only. resources/list enumerates the site's public pages; resources/read fetches one. No private data is exposed.";
+export const SITE_MCP_INSTRUCTIONS = "Bounded public utilities for aadhar.sh: search, music, photos, coffee availability, Change Radar, Lens, ephemeral image inspection/transforms, exact published-photo recipe matching, and an HTTP representation vault. Every successful tool result carries a portable _receipt that binds its origin, issue time, tool, input/output digests, and deployed Worker version; production receipts are Ed25519-signed and are not stored by the server. Image inputs are not persisted; the vault stores normalized headers, metadata, and body digests only. resources/list enumerates the site's public pages; resources/read fetches one. No private data is exposed.";
 
 const MCP = mcpServer({
   // Self-reported and explicitly NOT a security signal — the spec says clients
@@ -219,7 +220,12 @@ const MCP_TOOL_DEFINITIONS = [
   },
 ];
 
-export const MCP_TOOLS = MCP_TOOL_DEFINITIONS.map((tool) => mcpTool(tool));
+// The receipt contract belongs to this server rather than the shared mcpTool()
+// decorator: Serendipity uses the same decorator and does not return these
+// signed envelopes. Every root tool advertises the field its transport below
+// actually attaches, so tools/list remains a live, non-executing probe of the
+// result contract.
+export const MCP_TOOLS = MCP_TOOL_DEFINITIONS.map((tool) => withResultReceiptSchema(mcpTool(tool)));
 
 // The site's public surfaces as MCP resources, projected from the generated
 // agent catalog (lib/site-manifest.js, itself derived from site-manifest.json).
@@ -393,8 +399,15 @@ export async function handleSiteMcp(request, env, ctx) {
         // A tool that failed is a RESULT with isError, never a JSON-RPC error:
         // the call itself succeeded, and the model is supposed to read the text.
         if (out?._error) return MCP.result(id, { content: [{ type: "text", text: out._error }], isError: true });
-        if (out?._mcp) return MCP.result(id, { content: out._mcp.content, structuredContent: out._mcp.structured });
-        return MCP.result(id, { content: [{ type: "text", text: JSON.stringify(out, null, 2) }], structuredContent: out });
+        const receiptResult = await resultWithReceipt({
+          out,
+          request,
+          tool: name,
+          args: msg.params?.arguments && typeof msg.params.arguments === "object" ? msg.params.arguments : {},
+          env,
+          producer: SITE_MCP_SERVER_INFO,
+        });
+        return MCP.result(id, receiptResult);
       }
       return hasId ? rpcError(id, -32601, `Method not found: ${msg.method}`) : null;
     } catch (error) {

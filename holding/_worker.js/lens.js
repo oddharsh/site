@@ -2243,13 +2243,19 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
 // signature for external targets, the same identity the rest of the site
 // crawls under. Self-dispatch stays local and therefore has no wire signature.
 // `accept` override: the md-negotiation and MCP probes speak different Accepts.
-export async function lensFetch(targetUrl, env, signal, accept) {
+// `init` is deliberately narrow: Lens needs one read-only POST for MCP
+// tools/list, but callers cannot override redirect policy or the Cloudflare
+// cache setting that keep this fetch bounded.
+export async function lensFetch(targetUrl, env, signal, accept, init = {}) {
   env = env || {};
+  const method = String(init.method || "GET").toUpperCase();
   const baseHeaders = {
     "user-agent": BOT_UA,
     "accept": accept || "text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.7",
     "accept-language": "en-US,en;q=0.9",
   };
+  const extraHeaders = new Headers(init.headers || {});
+  for (const [name, value] of extraHeaders) baseHeaders[name] = value;
   let isSelf = false;
   try {
     const u = new URL(targetUrl);
@@ -2257,7 +2263,7 @@ export async function lensFetch(targetUrl, env, signal, accept) {
   } catch (_e) {}
   // Self-dispatch never leaves Cloudflare, so it does not need a wire
   // signature. Every external target still requires the real AadharshBot key.
-  const headers = await botHeaders(targetUrl, env, { headers: baseHeaders, sign: !isSelf });
+  const headers = await botHeaders(targetUrl, env, { headers: baseHeaders, method, sign: !isSelf });
   // Fetching our own hostname over the network loops back through this same
   // worker, and Cloudflare kills the loop with a 522 — which is why the featured
   // "Try: aadhar.sh" example (and every self-probe: robots.txt, llms.txt, …) once
@@ -2274,7 +2280,7 @@ export async function lensFetch(targetUrl, env, signal, accept) {
   try {
     const u = new URL(targetUrl);
     if (u.hostname.toLowerCase() === CANONICAL_HOST) {
-      const selfReq = new Request(u.toString(), { method: "GET", headers });
+      const selfReq = new Request(u.toString(), { method, headers, ...(method !== "GET" && method !== "HEAD" && init.body != null ? { body: init.body } : {}) });
       if (env.SELF_FETCH) return await env.SELF_FETCH(selfReq);
       if (env.ASSETS)     return await env.ASSETS.fetch(selfReq);
     }
@@ -2285,7 +2291,7 @@ export async function lensFetch(targetUrl, env, signal, accept) {
   // refused hop reads as an unreachable target, which is what it is.
   const followed = await fetchFollowingPublicRedirects(
     targetUrl,
-    { method: "GET", headers, signal, cf: { cacheTtl: 0 } },
+    { method, headers, signal, cf: { cacheTtl: 0 }, ...(method !== "GET" && method !== "HEAD" && init.body != null ? { body: init.body } : {}) },
     (candidate) => validateLensTarget(candidate),
   );
   if (!followed.ok) return new Response(null, { status: 502, statusText: "Blocked redirect" });
@@ -2865,23 +2871,82 @@ export function lensCost({ html, text, markdown, headings, raw }) {
 // human page? The research question behind the whole machine-internet thread
 // (publish-for-agents vs drive-the-human-web), probed live per site.
 
-// /mcp — Streamable HTTP MCP servers answer a GET with SSE, a JSON-RPC error,
-// 401 + WWW-Authenticate (OAuth-protected), or a POST-only 4xx in JSON. A SPA
-// answering 200 text/html is a router fallback, not a server.
+function lensMcpReceiptDeclaration(tool) {
+  const output = tool && tool.outputSchema;
+  const receipt = output && output.properties && output.properties._receipt;
+  if (!output || !Array.isArray(output.required) || !output.required.includes("_receipt") || !receipt) return null;
+  if (typeof receipt.$ref === "string") return { declared: true, schema: receipt.$ref };
+  const fields = receipt.properties || {};
+  if (receipt.type === "object" && fields.origin && (fields.issuedAt || fields.time) && fields.provenance) {
+    return { declared: true, schema: "inline" };
+  }
+  return null;
+}
+
+// /mcp — ask the server for its read-only tools/list catalog. Besides proving
+// that the endpoint speaks MCP, this lets Lens inspect output schemas for a
+// required `_receipt` without ever invoking a foreign tool. A SPA answering 200
+// text/html is a router fallback, not a server.
 export async function lensProbeMcp(origin, env) {
+  const body = JSON.stringify({
+    jsonrpc: "2.0", id: "lens-tools", method: "tools/list",
+    params: { _meta: {
+      "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+      "io.modelcontextprotocol/clientCapabilities": {},
+    } },
+  });
   try {
     const ctrl = new AbortController();
     const to = setTimeout(() => ctrl.abort(), 5000);
-    let res;
-    try { res = await lensFetch(origin + "/mcp", env, ctrl.signal, "application/json, text/event-stream"); }
+    let res, read, ct;
+    try {
+      res = await lensFetch(origin.replace(/\/+$/, "") + "/mcp", env, ctrl.signal, "application/json", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body,
+      });
+      ct = (res.headers.get("content-type") || "").split(";")[0].trim();
+      const www = res.headers.get("www-authenticate") || "";
+      if (/^text\/event-stream$/i.test(ct)) {
+        try { await res.body?.cancel(); } catch (_e) {}
+        return { verdict: "yes", detail: "SSE stream at /mcp", resultReceipts: { status: "unknown", declared: 0, total: 0, schemas: [] } };
+      }
+      if (res.status === 401 && www) {
+        try { await res.body?.cancel(); } catch (_e) {}
+        return { verdict: "likely", detail: "401 + WWW-Authenticate at /mcp (OAuth-protected server)" };
+      }
+      // Keep the deadline alive through the capped body read. Clearing it after
+      // headers alone lets an endless SSE/body stall this entire discovery fan-out.
+      read = await lensReadCapped(res, 131072);
+    }
     finally { clearTimeout(to); }
-    const ct = (res.headers.get("content-type") || "").split(";")[0].trim();
-    const www = res.headers.get("www-authenticate") || "";
-    const head = (await lensReadCapped(res, 2048)).text;
-    if (/^text\/event-stream$/i.test(ct)) return { verdict: "yes", detail: "SSE stream at /mcp" };
-    if (/jsonrpc/i.test(head)) return { verdict: "yes", detail: "JSON-RPC answer at /mcp (HTTP " + res.status + ")" };
-    if (res.status === 401 && www) return { verdict: "likely", detail: "401 + WWW-Authenticate at /mcp (OAuth-protected server)" };
+    let payload = null;
+    try { payload = JSON.parse(read.text); } catch (_e) { /* classified below */ }
+    const tools = Array.isArray(payload && payload.result && payload.result.tools) ? payload.result.tools : null;
+    if (tools) {
+      const declarations = tools.map(lensMcpReceiptDeclaration).filter(Boolean);
+      const schemas = [...new Set(declarations.map((entry) => entry.schema))].slice(0, 4);
+      const receiptStatus = declarations.length === 0 ? "absent" : declarations.length === tools.length ? "declared" : "partial";
+      return {
+        verdict: "yes",
+        detail: `tools/list at /mcp (${tools.length} tool${tools.length === 1 ? "" : "s"})`,
+        count: tools.length,
+        tools: tools.slice(0, 24).map((tool) => ({
+          name: String(tool && tool.name || "").slice(0, 60),
+          description: String(tool && tool.description || "").replace(/\r/g, "").trim().slice(0, 160),
+        })),
+        resultReceipts: { status: receiptStatus, declared: declarations.length, total: tools.length, schemas },
+      };
+    }
+    if (payload && payload.jsonrpc && payload.error) {
+      return {
+        verdict: "yes",
+        detail: `JSON-RPC error at /mcp (${payload.error.code}: ${String(payload.error.message || "error").slice(0, 80)})`,
+        resultReceipts: { status: "unknown", declared: 0, total: 0, schemas: [] },
+      };
+    }
     if ([400, 405, 406].includes(res.status) && /json/i.test(ct)) return { verdict: "maybe", detail: "HTTP " + res.status + " " + ct + " at /mcp (POST-only server?)" };
+    if (read.truncated || /jsonrpc/i.test(read.text)) return { verdict: "yes", detail: "JSON-RPC answer at /mcp (catalog unreadable)", resultReceipts: { status: "unknown", declared: 0, total: 0, schemas: [] } };
     return { verdict: "no", detail: res.status === 404 ? "no /mcp" : "HTTP " + res.status + (ct ? " " + ct : "") };
   } catch (_e) { return { verdict: "unknown", detail: "probe failed" }; }
 }
@@ -3054,6 +3119,7 @@ const LENS_READINESS_META = {
   authMd: { category: "discovery", label: "Auth.md" }, mcpServerCard: { category: "discovery", label: "MCP Server Card" },
   a2aAgentCard: { category: "discovery", label: "A2A Agent Card", optional: true, countInScore: false },
   agentSkills: { category: "discovery", label: "Agent Skills" }, webMcp: { category: "discovery", label: "WebMCP" },
+  resultReceipt: { category: "discovery", label: "Result receipts", optional: true, countInScore: false },
   x402: { category: "commerce", label: "x402", optional: true, countInScore: false }, mpp: { category: "commerce", label: "MPP", optional: true, countInScore: false },
   ucp: { category: "commerce", label: "UCP", optional: true, countInScore: false }, acp: { category: "commerce", label: "ACP", optional: true, countInScore: false },
   ap2: { category: "commerce", label: "AP2", optional: true, countInScore: false },
@@ -3192,6 +3258,18 @@ export function lensReadiness({ headers, robots, sitemap, terms, discovery, agen
     agent && agent.webmcp && agent.webmcp.found
       ? (agent.webmcp.kind === "bridge" ? "a CDN-injected bridge loads this origin's MCP tools into the page" : "modelContext call sites in the page")
       : "no WebMCP marker found in the fetched HTML");
+  const receiptProbe = agent && agent.mcp && agent.mcp.resultReceipts;
+  const receiptObserved = !!(receiptProbe && (receiptProbe.status === "declared" || receiptProbe.status === "partial"));
+  const receiptUnknown = !!(receiptProbe && receiptProbe.status === "unknown" || agent && agent.mcp && agent.mcp.verdict === "unknown");
+  items.resultReceipt = lensReadinessItem(
+    "resultReceipt",
+    receiptObserved ? "pass" : receiptUnknown ? "unknown" : "neutral",
+    receiptObserved
+      ? `${receiptProbe.declared} of ${receiptProbe.total} MCP tool output schema${receiptProbe.total === 1 ? "" : "s"} require a portable _receipt`
+      : receiptUnknown
+        ? "MCP tools/list did not expose readable output schemas"
+        : "no required _receipt field found in MCP tool output schemas (optional; not scored)",
+  );
   items.x402 = lensReadinessItem("x402", terms && terms.paid && terms.paid.http402 ? "pass" : "neutral", terms && terms.paid && terms.paid.http402 ? "HTTP 402 payment requirement observed" : "not observed (optional; not scored)");
   const openapiText = openapi && openapi.ok ? String(openapi.body || "") : "";
   items.mpp = lensReadinessItem("mpp", /x-payment-info|mpp/i.test(openapiText) ? "pass" : "neutral", /x-payment-info|mpp/i.test(openapiText) ? "payment metadata found in OpenAPI" : "not observed (optional; not scored)");

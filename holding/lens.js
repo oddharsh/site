@@ -225,6 +225,7 @@
   // checklist. Publication is not consumption; that gap is the argument.
   var CONSUMPTION = {
     markdownNegotiation: "Read mostly by coding agents; answer engines still scrape HTML.",
+    resultReceipt: "Read by MCP clients that need to carry a result beyond the original response and verify where it came from.",
     robotsTxtAiRules: "Honored by the major AI crawlers that identify themselves.",
     contentSignals: "~3.8M domains publish it; Google says it changes nothing.",
     webBotAuth: "Required for pay-per-crawl; almost no verifiers exist yet.",
@@ -957,12 +958,13 @@
   // read authority from the oauth checks, so a scan of aadhar.sh (which ships
   // /.well-known/oauth-protected-resource) showed "Delegated authority" as missing in the
   // Delta view and present in the Readiness tab at once. markdown/contract/authority now
-  // derive from these checks in both places; semantic has no single readiness check (it is
-  // computed from structured data) and receipt has no probe backing it yet.
+  // derive from these checks in both places; semantic has no single readiness check because
+  // it is computed directly from structured data.
   var CF_MAP = {
     markdown:  { checks: ["markdownNegotiation"] },
     contract:  { checks: ["apiCatalog"] },
     authority: { checks: ["oauthProtectedResource", "oauthDiscovery", "authMd"] },
+    receipt:   { checks: ["resultReceipt"] },
   };
   function cfObserved(key, checks) {
     var m = CF_MAP[key];
@@ -984,7 +986,7 @@
       { key: "semantic", label: "Entity schema", stage: "Understand", observed: !!semantic, detail: "Publish stable entities and properties a parser can validate." },
       { key: "contract", label: "Action contract", stage: "Act", observed: cfObserved("contract", checks), detail: "Describe callable operations, their parameters, and side effects. In 2026 this contract is landing as MCP servers and agent CLIs, not the OpenAPI files that mostly never shipped." },
       { key: "authority", label: "Delegated authority", stage: "Authorize", observed: cfObserved("authority", checks), detail: "Add a consent boundary with scopes and an explicit user approval." },
-      { key: "receipt", label: "A result receipt", stage: "Confirm", observed: false, detail: "Return a durable result with origin, time, and provenance. No probe measures this surface yet, so it is always shown as a projection, never as observed." },
+      { key: "receipt", label: "A result receipt", stage: "Confirm", observed: cfObserved("receipt", checks), detail: "Return a portable result with origin, time, input/output digests, and verifiable producer provenance." },
     ];
     var controls = '<div class="lx-cf-grid">' + cf.map(function (x) {
       var on = !!counterfactuals[x.key];
@@ -997,7 +999,7 @@
       return '<div class="lx-stage"><div class="lx-stage-name">' + esc(x.stage) + '</div><div class="lx-stage-copy">' + badge(state.text, state.kind) + esc(copy) + '</div></div>';
     }).join("");
     var intro = '<div class="lx-delta-intro"><b>Counterfactual lab.</b> Turn on one piece of web infrastructure and watch the route change. Green means Lens observed a signal. Amber means this page is simulating the addition locally.</div>';
-    var proof = '<div class="lx-proof"><b>Current evidence:</b> ' + esc((d.llmsTxt && d.llmsTxt.ok ? "llms.txt is present. " : "No llms.txt observed. ") + (action ? "An action surface answered. " : "No action surface answered. ") + (semantic ? "Structured data exists." : "Structured entity data is absent.")) + '</div>';
+    var proof = '<div class="lx-proof"><b>Current evidence:</b> ' + esc((d.llmsTxt && d.llmsTxt.ok ? "llms.txt is present. " : "No llms.txt observed. ") + (action ? "An action surface answered. " : "No action surface answered. ") + (semantic ? "Structured data exists. " : "Structured entity data is absent. ") + (cfObserved("receipt", checks) ? "Live MCP output schemas require result receipts." : "No result-receipt contract was observed.")) + '</div>';
     var deltaText = cf.filter(function (x) { return counterfactuals[x.key]; }).map(function (x) { return "+ " + x.stage.toLowerCase() + " · " + x.label; }).join("\n");
 
     // The wire group: transport counterfactuals that sit under the same task path.
@@ -1061,7 +1063,7 @@
     oauthDiscovery: "Publish OAuth/OIDC discovery metadata with issuer and token endpoints.", oauthProtectedResource: "Publish /.well-known/oauth-protected-resource with authorization_servers and scopes_supported.",
     authMd: "Publish /auth.md with agent registration instructions and link it to your OAuth metadata.", mcpServerCard: "Publish /.well-known/mcp/server-card.json with serverInfo, transport, and capabilities.",
     a2aAgentCard: "Publish /.well-known/agent-card.json describing the agent's interfaces, capabilities, and skills.", agentSkills: "Publish /.well-known/agent-skills/index.json with skills, URLs, and digests.",
-    webMcp: "Expose safe browser actions with navigator.modelContext and JSON Schemas.", x402: "Return a machine-readable HTTP 402 payment requirement for payable routes.",
+    webMcp: "Expose safe browser actions with navigator.modelContext and JSON Schemas.", resultReceipt: "Require a portable _receipt in MCP output schemas and bind origin, time, request/result digests, and producer identity with a verifiable signature.", x402: "Return a machine-readable HTTP 402 payment requirement for payable routes.",
     mpp: "Describe payable OpenAPI operations with x-payment-info and MPP settlement metadata.", ucp: "Publish /.well-known/ucp with protocol version, services, capabilities, and endpoints.",
     acp: "Publish /.well-known/acp.json so agents can discover commerce services and transports.", ap2: "Publish the AP2 discovery metadata when your commerce flow supports it.",
   };

@@ -16,6 +16,8 @@ import {
   lensDetectWebmcp,
   lensFieldEvidence,
   lensParseCloudflareAgentScore,
+  lensProbeMcp,
+  lensReadiness,
   handleLensBrowser,
   handleLensCompare,
   handleLensFetch,
@@ -27,6 +29,7 @@ import { lensRecipe, lensRecipeIds, lensRecipeScript } from "./holding/_worker.j
 import { handleCoffeeAvailability, readCoffeeAvailability } from "./holding/_worker.js/coffee.js";
 import { reservationName } from "./cal/src/reservation.js";
 import { handleSiteMcp, MCP_TOOLS as SITE_MCP_TOOLS, SITE_MCP_SERVER_INFO } from "./holding/_worker.js/mcp.js";
+import { canonicalJson, resultReceiptDigest, RESULT_RECEIPT_SCHEMA_URL } from "./holding/_worker.js/result-receipt.js";
 import { documentContent, handleWebmention, handleWebmentionDecision, linksTo } from "./holding/_worker.js/webmention.js";
 import { handleInbox } from "./holding/_worker.js/inbox.js";
 import { citationsIn, findEndpointIn, SELF_LINK_HOSTS } from "./holding/_worker.js/webmention-send.js";
@@ -1368,7 +1371,69 @@ test("site MCP exposes one read-only tool catalog and calls shared search", asyn
   const call = await handleSiteMcp(new Request("https://aadhar.sh/mcp", { method: "POST", body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "search_site", arguments: { q: "cloudflare" } } }), headers: { "content-type": "application/json" } }), env, context());
   const callBody = await call.json();
   assert.equal(callBody.result.structuredContent.returned, 1);
+  assert.equal(callBody.result.structuredContent._receipt.proof.status, "unsigned", "local MCP calls must state that no signing key was available");
   assert.equal((await handleSiteMcp(new Request("https://aadhar.sh/mcp"), env, context())).status, 405);
+});
+
+test("site MCP result receipts bind origin, time, arguments, result, and deployed producer", async () => {
+  const signing = await edEnv();
+  const env = {
+    ...signing,
+    CF_VERSION_METADATA: { id: "worker-version-test" },
+    ASSETS: staticAssets({
+      "/search-index.json": { records: [{ url: "/writing/agents", title: "Agents", description: "Notes on agents", text: "Cloudflare agents and tools", kind: "writing" }] },
+    }),
+  };
+  const args = { q: "cloudflare", limit: 3 };
+  const response = await handleSiteMcp(mcpPost({
+    jsonrpc: "2.0", id: "receipt", method: "tools/call",
+    params: { name: "search_site", arguments: args, ...MODERN_META },
+  }), env, context());
+  const { result } = await response.json();
+  const structured = result.structuredContent;
+  const receipt = structured._receipt;
+  const { _receipt, ...unreceipted } = structured;
+  const { signature, ...proofOptions } = receipt.proof;
+  const signedPayload = { ...receipt, proof: proofOptions };
+  const proof = receipt.proof;
+
+  assert.equal(receipt.schema, RESULT_RECEIPT_SCHEMA_URL);
+  assert.equal(receipt.origin, "https://aadhar.sh");
+  assert.ok(Number.isFinite(Date.parse(receipt.issuedAt)));
+  assert.equal(receipt.provenance.endpoint, "https://aadhar.sh/mcp");
+  assert.equal(receipt.provenance.tool, "search_site");
+  assert.equal(receipt.provenance.producer.name, SITE_MCP_SERVER_INFO.name);
+  assert.equal(receipt.provenance.producer.version, SITE_MCP_SERVER_INFO.version);
+  assert.equal(receipt.provenance.producer.workerVersion, "worker-version-test");
+  assert.equal(receipt.provenance.requestDigest, await resultReceiptDigest(args));
+  assert.equal(receipt.provenance.resultDigest, await resultReceiptDigest(unreceipted));
+  assert.deepEqual(JSON.parse(result.content[0].text), structured, "the text and structured result must carry the same receipt");
+
+  assert.equal(proof.status, "signed");
+  assert.equal(proof.algorithm, "Ed25519");
+  assert.equal(proof.canonicalization, "RFC8785");
+  assert.equal(proof.keyId, "https://aadhar.sh/.well-known/http-message-signatures-directory#test-ed");
+  const publicJwk = { ...JSON.parse(signing.RN_SIGNING_KEY_JWK), key_ops: ["verify"] };
+  delete publicJwk.d;
+  const verificationKey = await crypto.subtle.importKey("jwk", publicJwk, { name: "Ed25519" }, false, ["verify"]);
+  assert.equal(await crypto.subtle.verify(
+    "Ed25519",
+    verificationKey,
+    Buffer.from(proof.signature, "base64url"),
+    new TextEncoder().encode(canonicalJson(signedPayload)),
+  ), true, "a copied receipt must verify independently of its HTTP response");
+
+  const tampered = { ...signedPayload, proof: { ...signedPayload.proof, keyId: "https://aadhar.sh/.well-known/http-message-signatures-directory#substituted" } };
+  assert.equal(await crypto.subtle.verify(
+    "Ed25519", verificationKey, Buffer.from(signature, "base64url"), new TextEncoder().encode(canonicalJson(tampered)),
+  ), false, "the proof's key selection must be bound by the signature too");
+});
+
+test("the published result-receipt schema matches the root MCP contract", async () => {
+  const schema = JSON.parse(await readFile(new URL("./holding/.well-known/result-receipt-v1.json", import.meta.url), "utf8"));
+  assert.equal(schema.$id, RESULT_RECEIPT_SCHEMA_URL);
+  for (const field of ["origin", "issuedAt", "provenance", "proof"]) assert.ok(schema.required.includes(field));
+  assert.equal(schema.properties.proof.properties.canonicalization.const, "RFC8785");
 });
 
 // The annotations are a CLAIM made to every client that lists this server, so
@@ -1394,7 +1459,10 @@ test("MCP tools publish honest client metadata for calling and WebMCP", async ()
       idempotentHint: !writes,
       openWorldHint: tool.annotations.openWorldHint,
     }, `${tool.name} annotations must be explicit`);
-    assert.deepEqual(tool.outputSchema, { type: "object", additionalProperties: true }, `${tool.name} needs an object output schema`);
+    assert.equal(tool.outputSchema.type, "object", `${tool.name} needs an object output schema`);
+    assert.equal(tool.outputSchema.additionalProperties, true);
+    assert.ok(tool.outputSchema.required.includes("_receipt"), `${tool.name} must require its returned receipt`);
+    assert.deepEqual(tool.outputSchema.properties._receipt, { $ref: RESULT_RECEIPT_SCHEMA_URL });
     // A write must ALSO say so in its description, because Cloudflare's WebMCP
     // bridge registers {name, description, inputSchema, execute} and drops
     // `annotations` entirely — a browser agent never sees the flags asserted
@@ -4898,6 +4966,41 @@ test("readDoors reads lens's discovery rather than re-probing the same files", a
   for (const dup of ["/llms.txt", "/.well-known/agent-card.json", "/.well-known/api-catalog"]) {
     assert.ok(!src.includes(`lensProbe(origin + "${dup}"`), `doors re-probes ${dup} instead of reusing discovery`);
   }
+  assert.ok(!src.includes("foreignMcpTools(origin, env),"), "doors must reuse discovery's tools/list answer instead of posting twice");
+});
+
+test("Lens observes required result receipts from tools/list without invoking a tool", async () => {
+  const requests = [];
+  const env = {
+    SELF_FETCH: async (request) => {
+      const message = await request.clone().json();
+      requests.push({ method: request.method, rpcMethod: message.method });
+      return handleSiteMcp(request, {}, context());
+    },
+  };
+  const probe = await lensProbeMcp("https://aadhar.sh", env);
+  assert.equal(probe.verdict, "yes");
+  assert.deepEqual(requests, [{ method: "POST", rpcMethod: "tools/list" }]);
+  assert.equal(probe.count, SITE_MCP_TOOLS.length);
+  assert.deepEqual(probe.resultReceipts, {
+    status: "declared",
+    declared: SITE_MCP_TOOLS.length,
+    total: SITE_MCP_TOOLS.length,
+    schemas: [RESULT_RECEIPT_SCHEMA_URL],
+  });
+
+  const readiness = lensReadiness({
+    headers: {}, robots: null, sitemap: null, terms: {}, discovery: {}, openapi: null, botViews: [],
+    agent: {
+      mcp: probe,
+      mdNegotiation: { supported: false, note: "not probed" },
+      apiCatalog: { present: false }, agentCard: { present: false }, webmcp: { found: false },
+      strategy: { action: ["an MCP endpoint"], readable: [], unknowns: [] },
+    },
+  });
+  assert.equal(readiness.checks.resultReceipt.status, "pass");
+  assert.equal(readiness.checks.resultReceipt.countInScore, false, "observing receipts must not inflate the readiness score");
+  assert.match(readiness.checks.resultReceipt.detail, /^24 of 24 MCP tool output schemas require/);
 });
 
 // ── lens phases: pay for what you asked for ──────────────────────────────

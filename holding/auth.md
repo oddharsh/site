@@ -28,6 +28,13 @@ access public `aadhar.sh` resources, including:
 The site-level MCP also exposes ephemeral image inspection/transforms, exact
 published-photo recipe matching, and representation capture/read/compare.
 
+Every successful call to the site-level MCP returns a portable `_receipt` in
+`structuredContent`. It records the responding origin and issue time, identifies
+the MCP endpoint and tool, binds the request arguments and unreceipted result with
+SHA-256 digests, and names the deployed Worker version. Production receipts are
+signed with Ed25519; the receipt is returned to the caller and is not stored by
+the server. Serendipity's separate MCP does not currently issue these receipts.
+
 ## Discovery
 
 Fetch the OAuth Protected Resource Metadata:
@@ -101,6 +108,28 @@ token=<access_token>&token_type_hint=access_token
 
 Because the current public credentials are stateless and do not gate private
 data, revocation returns success without revealing whether a token was known.
+
+## Result Receipt Verification
+
+The site-local receipt schema is published at:
+
+```http
+GET https://aadhar.sh/.well-known/result-receipt-v1.json
+```
+
+For a signed receipt, remove only `proof.signature`, canonicalize the remaining
+object with RFC 8785, and verify the base64url signature. Accept only an Ed25519
+key named under the site's canonical public key directory,
+`https://aadhar.sh/.well-known/http-message-signatures-directory`; do not trust
+an arbitrary key URL substituted by a receipt. The proof configuration itself
+is signed, so changing its algorithm, key ID, status, or canonicalization label
+invalidates the signature.
+
+Recompute `provenance.requestDigest` over the JSON tool arguments and
+`provenance.resultDigest` over `structuredContent` with `_receipt` removed. Both
+use the lowercase `sha256:<hex>` form over RFC 8785 canonical JSON. Local
+development has no signing secret by design and therefore emits an explicit
+`proof.status: "unsigned"`; production configuration requires the signing key.
 
 ## Outbound: AadharshBot
 

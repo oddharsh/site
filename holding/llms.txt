@@ -139,7 +139,12 @@ document is [/llms-full.txt](https://aadhar.sh/llms-full.txt).
   inspection/comparison, ephemeral image inspection/transforms, exact
   published-photo recipe matching, and an HTTP representation vault. Image
   inputs are not persisted; the vault stores normalized headers, metadata, and
-  body digests only. Serendipity's specialized MCP remains available at
+  body digests only. Every successful site-MCP tool result includes a portable
+  `_receipt` with origin, issue time, request/result digests, deployed Worker
+  provenance, and an Ed25519 proof. Receipts are returned, not stored; their
+  [schema](https://aadhar.sh/.well-known/result-receipt-v1.json) and the
+  [public verification key](https://aadhar.sh/.well-known/http-message-signatures-directory)
+  are published on this origin. Serendipity's specialized MCP remains available at
   [/serendipity/mcp](https://aadhar.sh/serendipity/mcp). The pre-connection
   server cards are
   [site MCP](https://aadhar.sh/.well-known/mcp/server-card.json) and
@@ -171,7 +176,12 @@ document is [/llms-full.txt](https://aadhar.sh/llms-full.txt).
   are paying for the convenience, which is the point of the demo.
 - [/.well-known/http-message-signatures-directory](https://aadhar.sh/.well-known/http-message-signatures-directory):
   JWKS for Web Bot Auth (an Ed25519 public key the site can use to identify
-  itself when making outbound requests).
+  itself when making outbound requests) and for verifying signed site-MCP result
+  receipts.
+- [/.well-known/result-receipt-v1.json](https://aadhar.sh/.well-known/result-receipt-v1.json):
+  JSON Schema for the portable `_receipt` attached to successful site-MCP tool
+  results. The signed payload is the RFC 8785 canonical receipt with only
+  `proof.signature` omitted.
 - [/.well-known/security.txt](https://aadhar.sh/.well-known/security.txt):
   Disclosure contacts + scope statement per RFC 9116.
 - [/.well-known/agent-card.json](https://aadhar.sh/.well-known/agent-card.json):

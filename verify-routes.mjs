@@ -87,6 +87,7 @@ const ROUTES = [
   { path: "/hit?peek=1", status: 200, ct: "image/svg+xml", marker: "<svg" },
   { path: "/auth.md", status: 200, ct: "text/markdown" },
   { path: "/.well-known/api-catalog", status: 200, ct: "application/linkset+json" },
+  { path: "/.well-known/result-receipt-v1.json", status: 200, ct: "application/json", marker: "portable MCP result receipt" },
   { path: "/.well-known/agent-card.json", status: 200, ct: "application/json", marker: "discovery-only" },
   { path: "/.well-known/oauth-protected-resource", status: 200, ct: "application/json" },
   { path: "/.well-known/oauth-authorization-server", status: 200, ct: "application/json" },
