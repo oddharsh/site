@@ -1355,31 +1355,51 @@
     }
   }
 
-  // ── XP infotips for the shell chrome ────────────────────────────────────────
-  // Every control here already carries a `title`, which buys the OS tooltip: one
-  // line, in the system font, after a delay nobody chose. Windows itself was
+  // ── XP infotips, on the chrome AND the content ──────────────────────────────
+  // Almost everything here already carries a `title`, which buys the OS tooltip:
+  // one line, in the system font, after a delay nobody chose. Windows itself was
   // richer than that — an Explorer infotip named a folder's contents, and the
-  // tray's tooltips were live readouts — so /infotip.js re-draws these in Luna
+  // tray's tooltips were live readouts — so /infotip.js re-draws them in Luna
   // and gives the ones with something to say the room to say it.
+  //
+  // The rule is now the short one: ANY [title] is a tip, wherever it lives. A
+  // titled citation link on an /lwe page and a taskbar button are the same
+  // promise to a visitor, and the old shell-only list meant that promise was
+  // kept in the chrome and broken two inches lower. What the shell selectors
+  // below still buy is the title-LESS chrome (the clock has no attribute to
+  // read) and the families whose card is built from live state rather than from
+  // the string.
   //
   // Same bargain the homepage strikes with tooltip.js: the loader stays here so
   // it can catch the very first hover, the implementation arrives lazily, and a
-  // visitor who never points at chrome (or points with a finger) transfers none
-  // of it. The module's own 400ms dwell is what hides the load — the import
-  // runs during the wait, so a cold first infotip lands about when a warm one
-  // would. The selector lives HERE, once, and is passed in: two copies of it is
-  // how the loader and the module come to disagree about what has a tip.
+  // visitor who never points at anything (or points with a finger) transfers
+  // none of it. The module's own 400ms dwell is what hides the load — the
+  // import runs during the wait, so a cold first infotip lands about when a
+  // warm one would.
   var INFOTIP_TARGETS = [
     "#axp-start", ".axp-pin", ".axp-trayico", "#axp-sound", "#axp-clock", ".axp-ico",
-    "[data-tip]",                                   // any page's explicit opt-in
-    "input[title]", "textarea[title]", "select[title]",
-    ".title-bar [title]", ".np-window > .tb [title]", "#axp-run [title]",
-    ".axp-acc > .tb [title]", "#axp-balloon [title]"
+    "[data-tip]",                                   // opt-in for a control with no native tip
+    "[title]"                                       // and everything the platform already tips
   ].join(",");
+  // Four richer surfaces got here first, and each one already draws its own card
+  // from the same engine: the photo/track/artist/car island (tooltip.js), the
+  // /lens glossary (lens.js), and serendipity's event covers. A plain tip on top
+  // of any of them is two popovers for one hover. `.lx-term` matters most: those
+  // ship a `title` as their no-JS fallback and lens.js strips it once its own
+  // surface is live, so without this the race between two lazy modules would
+  // decide whether you got the good card or the flat one.
+  var INFOTIP_SKIP = ".lx-term,.photos a,.np-list li,.np-artist-link,.car-link,.ev[data-cover],iframe";
   function initInfotips() {
     if (!window.matchMedia || matchMedia("(hover: none)").matches || matchMedia("(pointer: coarse)").matches) return;
     var mod = null, pending = null;
-    var targetFor = function (n) { return n && n.closest ? n.closest(INFOTIP_TARGETS) : null; };
+    // ONE implementation of "what was hovered", handed to the module rather than
+    // restated there. Two copies of a rule this shape is how a loader and its
+    // module come to disagree about which elements have a tip — and the symptom
+    // would be a tooltip that works everywhere except wherever you looked first.
+    var targetFor = function (n) {
+      var t = n && n.closest ? n.closest(INFOTIP_TARGETS) : null;
+      return t && !t.closest(INFOTIP_SKIP) ? t : null;
+    };
     var load = function () {
       if (mod) return;
       // hoist.js is infotip.js's one static import, so the parser cannot
@@ -1397,31 +1417,43 @@
         // these are nav.js's own readers, so a tray infotip and its
         // click-balloon share one fetch per page rather than race for it.
         m.start({
-          targets: INFOTIP_TARGETS,
+          find: targetFor,
           initial: pending,
           kbd: KBD,
           pages: PAGES,
           load: { sys: loadSys, upd: loadUpd, writing: loadWriting }
         });
         pending = null;
+        // These three exist only to catch the hover that arrives before the
+        // module does, and the module runs its own listeners now. Since the
+        // selector matches every titled element on the page, leaving them
+        // attached would run a second `closest()` walk per pointerover for the
+        // rest of the session, on a path that fires on every element boundary
+        // the cursor crosses. Retiring them is the whole reason they are named.
+        D.removeEventListener("pointerover", onOver, { passive: true });
+        D.removeEventListener("pointerout", onOut, { passive: true });
+        D.removeEventListener("focusin", onFocus);
       }).catch(function () { mod = null; pending = null; });
     };
-    D.addEventListener("pointerover", function (e) {
+    function onOver(e) {
       var t = targetFor(e.target);
       if (!t) return;
       pending = { target: t, clientX: e.clientX, clientY: e.clientY, at: Date.now() };
       load();
-    }, { passive: true });
-    D.addEventListener("pointerout", function (e) {
+    }
+    function onOut(e) {
       if (pending && targetFor(e.target) === pending.target && targetFor(e.relatedTarget) !== pending.target) pending = null;
-    }, { passive: true });
-    D.addEventListener("focusin", function (e) {
+    }
+    function onFocus(e) {
       var t = targetFor(e.target);
       if (!t) return;
       try { if (!t.matches(":focus-visible")) return; } catch (_) {}
       pending = { target: t, focus: true };
       load();
-    });
+    }
+    D.addEventListener("pointerover", onOver, { passive: true });
+    D.addEventListener("pointerout", onOut, { passive: true });
+    D.addEventListener("focusin", onFocus);
   }
 
   function boot() { ensureLunaCss(); buildDesktop(); buildIcons(); buildTaskbar(); initDrag(); initRaise(); initIconDrag(); initScrollbars(); initResize(); setFavicon(); injectSpeculation(); initCloseBack(); initWindowControls(); initInfotips(); }

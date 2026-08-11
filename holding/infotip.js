@@ -52,7 +52,10 @@ const plural = (n, one) => n + " " + one + (n === 1 ? "" : "s");
 
 /**
  * @param {object} o
- * @param {string} o.targets   the selector nav.js's loader also watches (one source)
+ * @param {(el: EventTarget) => Element|null} o.find
+ *        "what was hovered", passed in rather than restated: nav.js's loader has
+ *        to answer the same question before this module exists, and two copies
+ *        of that rule is how the two come to disagree about what has a tip.
  * @param {object} [o.initial] the hover that arrived before this module did
  * @param {string} [o.kbd]     "⌘K" / "Ctrl K", already platform-resolved
  * @param {Array}  [o.pages]   nav.js's destination table, counted here (see below)
@@ -61,7 +64,7 @@ const plural = (n, one) => n + " " + one + (n === 1 ? "" : "s");
 export function start(o) {
   if (!hoverCapable()) return;
 
-  const TARGETS = o.targets;
+  const findTarget = o.find;
   const kbd = o.kbd || "";
   const load = o.load || {};
   // How many destinations live under a section, counted from the table nav.js
@@ -84,8 +87,6 @@ export function start(o) {
   // a taskbar button already carries its label, and a field its own title.
   tip.setAttribute("aria-hidden", "true");
   document.body.appendChild(tip);
-
-  const findTarget = (el) => el?.closest?.(TARGETS) || null;
 
   // ── the native tooltip has to go, but only while ours is up ────────────────
   // Removing `title` outright would cost the accessible description a field's
@@ -131,6 +132,29 @@ export function start(o) {
     ]);
   };
 
+  // "Where does this go", the way Explorer's shortcut infotip put it. A link to
+  // somewhere ELSE gets a host, because that is the thing a reader is deciding
+  // on; a link to somewhere here gets nothing, since the path is neither news
+  // nor a risk. A `mailto:` names the address it would open a client for.
+  const destination = (a) => {
+    const href = a.getAttribute("href") || "";
+    if (!href || href[0] === "#") return "";
+    let u;
+    try { u = new URL(href, location.href); } catch (_) { return ""; }
+    if (u.protocol === "mailto:") return u.pathname;
+    if (u.protocol !== "http:" && u.protocol !== "https:") return "";
+    if (u.host === location.host) return "";
+    const host = u.host.replace(/^www\./, "");
+    if (u.pathname === "/") return host;
+    // The host is the decision; the path is context, and a 70-character slug
+    // wrapped over three lines is neither. Trim the PATH only, and only with a
+    // visible ellipsis — a silently shortened URL in a tooltip about where a
+    // link goes would be the one kind of dishonesty this surface cannot afford.
+    const room = Math.max(12, 46 - host.length);
+    const path = u.pathname.length > room ? u.pathname.slice(0, room - 1) + "…" : u.pathname;
+    return host + path;
+  };
+
   // A desktop shortcut. Explorer's infotip for one named its target, and the
   // target here is honest: the host for an internet shortcut, the route for a
   // folder. Notepad's note count is the one number that needs a fetch, and it
@@ -146,10 +170,8 @@ export function start(o) {
   };
   const icoTip = (a) => {
     const name = (a.querySelector(".t") || {}).textContent || a.dataset.key || "";
-    const href = a.getAttribute("href") || "";
     const ext = a.target === "_blank";
-    let target = href;
-    if (ext) { try { const u = new URL(href); target = u.host.replace(/^www\./, "") + (u.pathname === "/" ? "" : u.pathname); } catch (_) {} }
+    const target = ext ? destination(a) : a.getAttribute("href") || "";
     const held = ext ? 0 : notes(a);
     return card(name, ext ? "" : a.dataset.tip, [
       ["Type", ext ? "Internet Shortcut" : "File folder"],
@@ -223,12 +245,28 @@ export function start(o) {
   const startTip = () => card("Run", "type the name of a page, photo, or profile",
     [["Shortcut", kbd]]);
 
-  // Everything else with a tip: title-bar controls, dialog buttons, and form
-  // fields. One line, no rows — this is the ToolTip-control shape, and padding
-  // it with a "Type:" row it does not have would be inventing content.
+  // Everything else with a tip: title-bar controls, dialog buttons, form fields,
+  // and every titled thing in the page body. One line, no rows — this is the
+  // ToolTip-control shape, and padding it with a "Type:" row it does not have
+  // would be inventing content.
   const plainTip = (t) => {
     const text = t.dataset.tip || t.getAttribute("title") || "";
     return text ? `<div class="n">${esc(text)}</div>` : "";
+  };
+
+  // A titled link in the page body — a citation, a source, a footer pointer.
+  // The title stays the whole tip when the link goes somewhere on this site,
+  // because a path is neither news nor a decision. When it LEAVES, the two
+  // facts a reader is actually weighing get their own rows, which is what the
+  // browser's status bar does badly and an Explorer shortcut infotip did well.
+  const linkTip = (a) => {
+    const to = destination(a);
+    const blank = a.target === "_blank";
+    if (!to && !blank) return plainTip(a);
+    const text = a.dataset.tip || a.getAttribute("title") || "";
+    if (!text && !to) return "";
+    return card(text || a.textContent.trim(), "",
+      [["Target", to], ["Opens", blank ? "in a new window" : ""]]);
   };
 
   const contentFor = (t) => {
@@ -244,6 +282,7 @@ export function start(o) {
     if (t.matches("#axp-clock")) return clockTip();
     if (t.matches("#axp-sound")) return soundTip(t);
     if (t.matches("#axp-start")) return startTip();
+    if (t.matches("a[href]")) return linkTip(t);
     return plainTip(t);
   };
 
