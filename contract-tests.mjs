@@ -14,6 +14,8 @@ import { brotliCompressSync, constants as zlibConstants } from "node:zlib";
 
 import {
   lensDetectWebmcp,
+  lensFieldEvidence,
+  lensParseCloudflareAgentScore,
   handleLensBrowser,
   handleLensCompare,
   handleLensFetch,
@@ -359,6 +361,14 @@ test("Lens shell is a complete document, not a fragment", () => {
   return response.text().then(assertFullDocument);
 });
 
+test("Lens shell states the past, present, and future argument before the instrument", async () => {
+  const html = await renderLensShell().text();
+  assert.match(html, /The semantic web asked publishers to mark meaning/);
+  assert.match(html, /today&rsquo;s models scrape the human page/);
+  assert.match(html, /the next web must decide how machines act/);
+  assert.doesNotMatch(html, /6-minute tour|Demo path/);
+});
+
 
 test("track HTML renderer emits rows only", () => {
   const html = renderTrackListHtml(TRACKS);
@@ -624,6 +634,71 @@ test("Lens fetch keeps its JSON contract regardless of Accept", async () => {
   assert.match(json.headers.get("content-type") || "", /^application\/json/);
   assert.equal(json.headers.get("vary"), null);
   assert.equal((await json.json()).ok, false);
+});
+
+test("Lens parses only Cloudflare's normalized readiness level from an MCP SSE answer", () => {
+  const body = 'event: message\ndata: ' + JSON.stringify({
+    jsonrpc: "2.0", id: "lens-cloudflare-score",
+    result: { content: [{ type: "text", text: "## Result\n**Level 4/5 — Agent-Optimized**\n21 checks follow" }] },
+  }) + "\n\n";
+  assert.deepEqual(lensParseCloudflareAgentScore(body), {
+    available: true,
+    level: 4,
+    score: 80,
+    levelName: "Agent-Optimized",
+    source: "Cloudflare Agent Readiness",
+    sourceUrl: "https://isitagentready.com/",
+  });
+  assert.equal(lensParseCloudflareAgentScore("not a score"), null);
+});
+
+test("Lens field evidence scores observed access without borrowing the standards rubric", () => {
+  const botViews = Array.from({ length: 6 }, (_, i) => ({ status: i === 5 ? 403 : 200, blocked: i === 5, challenge: false }));
+  const field = lensFieldEvidence({
+    status: 200,
+    anatomy: { wordCount: 300 },
+    agent: { strategy: { action: [], readable: ["markdown negotiation"], unknowns: [] } },
+    botViews,
+  });
+  assert.deepEqual(field.components.map((component) => component.score), [100, 83, 100, 60]);
+  assert.equal(field.overall, 86);
+
+  const partial = lensFieldEvidence({ status: 200, anatomy: { wordCount: 300 }, agent: null, botViews: botViews.slice(0, 5) });
+  assert.equal(partial.overall, null, "missing evidence must leave the score unfinished, not reweight it");
+});
+
+test("Lens proxies Cloudflare's public scanner but stores only the normalized score", async () => {
+  const realFetch = globalThis.fetch;
+  const writes = [];
+  let upstream = null;
+  try {
+    globalThis.fetch = async (url, init) => {
+      upstream = { url: String(url), body: JSON.parse(init.body) };
+      return new Response('data: ' + JSON.stringify({
+        jsonrpc: "2.0", id: "lens-cloudflare-score",
+        result: { content: [{ type: "text", text: "**Level 5/5 -- Agent-Native**\nprivate report details" }] },
+      }) + "\n\n", { status: 200, headers: { "content-type": "text/event-stream" } });
+    };
+    const response = await handleLensFetch(
+      new Request("https://aadhar.sh/lens/fetch?mode=cloudflare&url=https%3A%2F%2Fexample.com"),
+      { RN_KV: { get: async () => null, put: async (key, value, options) => writes.push({ key, value, options }) } },
+      context(),
+    );
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.score, 100);
+    assert.equal(payload.level, 5);
+    assert.equal(upstream.url, "https://isitagentready.com/mcp");
+    assert.equal(upstream.body.params.arguments.url, "https://example.com/");
+    assert.equal(writes.length, 1);
+    assert.deepEqual(JSON.parse(writes[0].value), {
+      available: true, level: 5, score: 100, levelName: "Agent-Native",
+      source: "Cloudflare Agent Readiness", sourceUrl: "https://isitagentready.com/",
+    });
+    assert.doesNotMatch(writes[0].value, /private report details/);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
 });
 
 test("the WebMCP detector sees a CDN bridge, not just hand-written call sites", () => {

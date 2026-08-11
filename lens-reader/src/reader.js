@@ -111,6 +111,9 @@ export async function read(targetUrl) {
   // definitions of "word" and calling the difference an extraction loss.
   const source = shape(html);
   const kept = { words: countWords(textOf(contentHtml)), bytes: contentHtml.length };
+  const title = str(result.title, 300);
+  const controls = countControls(document, contentHtml);
+  const recovery = scoreExtraction({ source, kept, controls, title, markdown });
 
   return {
     ok: true,
@@ -118,7 +121,7 @@ export async function read(targetUrl) {
     redirected: finalUrl !== targetUrl,
     extractor: EXTRACTOR,
     note: READER_NOTE,
-    title: str(result.title, 300),
+    title,
     author: str(result.author, 200),
     published: str(result.published, 100),
     site: str(result.site, 200),
@@ -134,7 +137,8 @@ export async function read(targetUrl) {
     // as prose. On /garage/horizon that is 13 of 25 distinct labels. An agent
     // reading the output has no way to tell a label from a sentence, which is
     // exactly the failure `scripts/lib/html-to-md.mjs` rule 2 refuses.
-    controls: countControls(document, contentHtml),
+    controls,
+    recovery,
     markdown: markdown.slice(0, MARKDOWN_CAP),
     markdownTruncated: markdown.length > MARKDOWN_CAP,
     ms: { fetch: fetchMs, parse: parseMs, extract: extractMs, markdown: markdownMs },
@@ -201,6 +205,49 @@ export function countControls(document, contentHtml) {
     kept: kept.length,
     examples: kept.slice(0, 6),
     note: "upper bound: a label that is also ordinary prose counts as kept",
+  };
+}
+
+// Lens's score, derived from Defuddle's output. Defuddle does not publish a
+// readability grade, so calling this "Defuddle's score" would give borrowed
+// authority to a number it never made. Four binary checks keep the calculation
+// legible enough to audit from the pane itself.
+export function scoreExtraction({ source, kept, controls, title, markdown }) {
+  const sourceWords = Math.max(0, Number(source && source.words) || 0);
+  const keptWords = Math.max(0, Number(kept && kept.words) || 0);
+  const threshold = sourceWords < 40 ? Math.max(1, Math.ceil(sourceWords * 0.5)) : 40;
+  const controlTotal = Math.max(0, Number(controls && controls.total) || 0);
+  const controlKept = Math.max(0, Number(controls && controls.kept) || 0);
+  const controlRatio = controlTotal ? controlKept / controlTotal : 0;
+  const checks = [
+    {
+      key: "body", label: "usable body recovered",
+      pass: sourceWords > 0 && keptWords >= threshold,
+      detail: `${keptWords} words kept; ${threshold} required for this source`,
+    },
+    {
+      key: "title", label: "title recovered",
+      pass: !!String(title || "").trim(),
+      detail: title ? "Defuddle returned a title" : "no title returned",
+    },
+    {
+      key: "controls", label: "control-label purity",
+      pass: controlRatio <= 0.25,
+      detail: controlTotal ? `${controlKept} of ${controlTotal} control labels survived` : "no source controls to leak into prose",
+    },
+    {
+      key: "markdown", label: "Markdown produced",
+      pass: !!String(markdown || "").trim(),
+      detail: markdown ? `${String(markdown).length} characters produced` : "the extraction was empty",
+    },
+  ];
+  const passed = checks.filter((check) => check.pass).length;
+  return {
+    overall: Math.round((passed / checks.length) * 100),
+    passed,
+    counted: checks.length,
+    checks,
+    scoringNote: "Lens computes four equally weighted checks from Defuddle's output; Defuddle itself does not publish this score.",
   };
 }
 

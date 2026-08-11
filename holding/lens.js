@@ -46,6 +46,8 @@
   var LENS_LABEL = { readiness: "Agent-ready?", anatomy: "Raw response", reader: "Reader's guess", structured: "What it claims", ai: "Model cost", terms: "Who's allowed", discovery: "Agent doors" };
   var readerData = null;   // last /lens/read extraction, null until asked for
   var readerBusy = false;
+  var cloudflareData = null; // normalized result from Cloudflare's public scanner
+  var cloudflareBusy = false;
 
   function esc(s) {
     return String(s == null ? "" : s)
@@ -173,20 +175,22 @@
   // from data.cost (already computed server-side). Null when there's no cost model
   // (non-HTML) so we don't fake a number.
   //
-  // The readiness score rides here too, since the Compare pane below now defaults
-  // to the raw observation: analysis on the strip, observation in the pane. One
-  // anchor number; the full rubric stays one tab away under Agent-ready?.
+  // Lens's own field score rides here too, since the Compare pane below defaults
+  // to the raw observation: analysis on the strip, observation in the pane. The
+  // external + extraction opinions stay in Agent-ready?, where their provenance
+  // fits; this headline must remain a claim Lens itself earned.
   function verdictStrip() {
     var c = data && data.cost;
     var r = data && data.readiness;
+    var field = r && r.field;
     // A button, not a span: the strip's own copy points at Agent-ready?, so the
     // number is the click target that opens it (renderMachine binds it).
-    var score = r && r.overall != null
-      ? '<button class="lx-verdict-score" type="button" title="' + esc((r.levelName ? "Level " + r.level + ": " + r.levelName : "agent readiness") + " — open Agent-ready?") + '">' + esc(r.overall) + "<span>/100</span></button>"
+    var score = field && field.overall != null
+      ? '<button class="lx-verdict-score" type="button" title="Lens field evidence — open Agent-ready?">' + esc(field.overall) + "<span>/100</span></button>"
       : "";
     if (!c || !c.tiers || c.tiers.length < 2) {
       return score
-        ? '<div class="lx-verdict">' + score + "This origin scores <b>" + esc(r.overall) + "/100</b> agent-ready" + (r.levelName ? " (" + esc(r.levelName) + ")" : "") + ". Every check behind the number sits under <b>Agent-ready?</b>.</div>"
+        ? '<div class="lx-verdict">' + score + "Lens observed <b>" + esc(field.overall) + "/100</b> field access. The independent Cloudflare and Defuddle inputs sit under <b>Agent-ready?</b>.</div>"
         : "";
     }
     var rate = (c.rates && c.rates[0]) || { usdPerMtok: 3 };
@@ -317,6 +321,9 @@
     browserData = null;
     browserRecipeData = null;
     readerData = null;
+    cloudflareData = null;
+    readerBusy = false;
+    cloudflareBusy = false;
     machineBody.innerHTML = '<div class="lx-empty">' + esc(msg) + "</div>";
     humanBody.innerHTML = '<div class="lx-empty">No page to show.</div>';
     renderBrowser();
@@ -333,6 +340,9 @@
     browserData = null;
     browserRecipeData = null;
     readerData = null;
+    cloudflareData = null;
+    readerBusy = false;
+    cloudflareBusy = false;
     urlInput.value = url;
     // A new site is a fresh page: don't carry the last scan's Delta switches onto
     // it (a markdown/contract simulation from site A silently misrepresenting site
@@ -721,11 +731,12 @@
 
     if (lens === "readiness") {
       var rr = data.readiness || {};
+      var rf = rr.field || {};
       var firstFix = rr.nextActions && rr.nextActions[0];
-      title = "Readiness focus";
-      badgeData = { text: (rr.overall == null ? "unknown" : rr.overall + "/100"), kind: rr.overall >= 75 ? "ok" : "warn" };
-      caption = "A score is useful only when it points to the surface an agent is missing.";
-      rows = { "level": (rr.level == null ? "unknown" : "Level " + rr.level + " · " + (rr.levelName || "")), "scored checks": (rr.passed == null ? "?" : rr.passed + " / " + rr.counted), "next gap": firstFix ? readinessCopy(firstFix).label : "none observed", "bot samples": rr.botViews ? rr.botViews.length : 0 };
+      title = "Field evidence focus";
+      badgeData = { text: (rf.overall == null ? "unknown" : rf.overall + "/100"), kind: rf.overall >= 75 ? "ok" : "warn" };
+      caption = "This is what Lens observed itself; external standards and Defuddle recovery join it only in Agent-ready?.";
+      rows = { "identified fetch": data.status == null ? "unknown" : data.status, "bot samples": rr.botViews ? rr.botViews.length : 0, "machine door": data.agent && data.agent.strategy ? data.agent.strategy.verdict : "unknown", "next standards gap": firstFix ? readinessCopy(firstFix).label : "none observed" };
     } else if (lens === "anatomy") {
       var alt = a.imgTotal ? ((a.imgTotal - a.imgNoAlt) + " / " + a.imgTotal + " images have alt") : "no images found";
       title = "Anatomy focus";
@@ -1096,14 +1107,56 @@
     });
   }
 
+  function readinessSource(index, title, value, caption, details, state) {
+    return '<div class="lx-composite-source ' + esc(state || "") + '">' +
+      '<div class="lx-composite-source-top"><span>0' + index + '</span><b>' + title + '</b><strong>' + value + '</strong></div>' +
+      '<div class="lx-composite-caption">' + caption + '</div>' +
+      (details && details.length ? '<ul>' + details.map(function (detail) { return '<li>' + detail + '</li>'; }).join("") + '</ul>' : "") +
+      '</div>';
+  }
+
+  function compositeReadiness(r) {
+    var field = r.field || {};
+    var fieldScore = Number.isFinite(field.overall) ? field.overall : null;
+    var cfScore = cloudflareData && cloudflareData.available && Number.isFinite(cloudflareData.score) ? cloudflareData.score : null;
+    var recovery = readerData && readerData.ok && readerData.recovery;
+    var recoveryScore = recovery && Number.isFinite(recovery.overall) ? recovery.overall : null;
+    var complete = cfScore != null && fieldScore != null && recoveryScore != null;
+    var overall = complete ? Math.round((cfScore + fieldScore + recoveryScore) / 3) : null;
+
+    var cloudflareValue = cloudflareBusy ? "checking…" : cfScore == null ? "—" : esc(cfScore) + '<span>/100</span>';
+    var cloudflareCaption = cloudflareBusy
+      ? "Asking Cloudflare's public scanner for its independent standards level."
+      : cfScore == null
+        ? esc((cloudflareData && cloudflareData.error) || "Cloudflare's independent score is unavailable.")
+        : '<a href="' + esc(cloudflareData.sourceUrl || "https://isitagentready.com/") + '" rel="noopener">Cloudflare Agent Readiness</a> · Level ' + esc(cloudflareData.level) + '/5' + (cloudflareData.levelName ? ' · ' + esc(cloudflareData.levelName) : "");
+    var fieldDetails = (field.components || []).map(function (component) {
+      return '<b>' + esc(component.label) + ':</b> ' + (Number.isFinite(component.score) ? esc(component.score) + '/100' : 'unknown');
+    });
+    var recoveryDetails = recovery ? (recovery.checks || []).map(function (check) {
+      return (check.pass ? '&#10003; ' : '&#10005; ') + esc(check.label);
+    }) : [];
+
+    var sources = '<div class="lx-composite-sources">' +
+      readinessSource(1, "Cloudflare standards", cloudflareValue, cloudflareCaption, [], cloudflareBusy ? "is-waiting" : cfScore == null ? "is-missing" : "is-ready") +
+      readinessSource(2, "Lens field evidence", fieldScore == null ? "—" : esc(fieldScore) + '<span>/100</span>', "Observed here: an identified fetch, six named bot samples, a usable body, and a machine door.", fieldDetails, fieldScore == null ? "is-missing" : "is-ready") +
+      readinessSource(3, "Defuddle content recovery", readerBusy ? "extracting…" : recoveryScore == null ? "—" : esc(recoveryScore) + '<span>/100</span>', readerBusy ? "Defuddle is re-reading the page in the separate Reader Worker." : recoveryScore == null ? esc((readerData && readerData.error) || "The extraction result is unavailable.") : 'Lens’s transparent checks over <a href="https://github.com/kepano/defuddle" rel="noopener">Defuddle</a> output; Defuddle does not publish this score.', recoveryDetails, readerBusy ? "is-waiting" : recoveryScore == null ? "is-missing" : "is-ready") +
+      '</div>';
+    var formula = '<div class="lx-composite-formula"><b>' +
+      (cfScore == null ? "?" : esc(cfScore)) + '</b> + <b>' + (fieldScore == null ? "?" : esc(fieldScore)) + '</b> + <b>' + (recoveryScore == null ? "?" : esc(recoveryScore)) +
+      '</b> <span>÷ 3</span> = <strong>' + (overall == null ? "unfinished" : esc(overall) + '/100') + '</strong></div>';
+    var hero = '<div class="lx-readiness-hero lx-composite-hero"><div class="lx-readiness-number">' + (overall == null ? "—" : esc(overall)) + '<span>/100</span></div>' +
+      '<div><div class="lx-readiness-kicker">Composite agent access</div><div class="lx-readiness-level"><b>' + (complete ? "Three independent views agree to make this number." : "Waiting for all three independent views.") + '</b></div>' +
+      '<div class="lx-cap">Equal thirds. If one source fails, the aggregate stays unfinished instead of moving the goalposts.</div></div></div>';
+    return hero + sources + formula;
+  }
+
   function lensReadiness() {
     var r = data.readiness;
     if (!r) return '<div class="lx-empty">Readiness checks were unavailable for this origin.</div>';
     var levelKind = r.level >= 5 ? "ok" : r.level >= 3 ? "" : "warn";
     var projection = readinessProjection(r);
-    var score = '<div class="lx-readiness-hero"><div class="lx-readiness-number">' + esc(r.overall) + '<span>/100</span></div>' +
-      '<div><div class="lx-readiness-kicker">Lens readiness score</div><div class="lx-readiness-level">' + badge("Level " + r.level, levelKind) + ' <b>' + esc(r.levelName) + '</b></div><div class="lx-cap">' + esc(r.scoringNote) + '</div></div></div>';
-    if (projection) score += '<div class="lx-projection"><b>Counterfactual projection:</b> ' + esc(projection.score + "/100 if you add " + projection.labels.join(", ") + ".") + ' <span>illustrative; the origin has not changed.</span></div>';
+    var score = compositeReadiness(r);
 
     var cats = '<div class="lx-readiness-cats">' + (r.categories || []).map(function (c) {
       var skipped = c.total === 0 && c.checkCount > 0;
@@ -1138,7 +1191,9 @@
     if (!gaps.length) gaps.push("The main access surfaces are published. Inspect the individual checks for the remaining edge cases and bot-specific policy.");
     var gapHtml = '<ul class="lx-why">' + gaps.map(function (g) { return '<li>' + esc(g) + '</li>'; }).join("") + '</ul>';
     var next = (r.nextActions || []).length ? '<div class="lx-next-actions">' + r.nextActions.map(function (a) { var copy = readinessCopy(a); return '<div><b>' + esc(copy.label) + '</b><span>' + esc(copy.fix) + '</span></div>'; }).join("") + '</div>' : '<div class="lx-none">No scored fixes are waiting.</div>';
-    return score + section("Category scores", null, "The categories mirror the IsItAgentReady rubric; Commerce is visible but optional and not scored.", cats) +
+    var localMirror = '<div class="lx-local-mirror"><b>' + esc(r.overall) + '/100</b> ' + badge("Level " + r.level, levelKind) + ' <span>' + esc(r.levelName) + '</span></div>' + cats;
+    if (projection) localMirror += '<div class="lx-projection"><b>Local standards projection:</b> ' + esc(projection.score + "/100 if you add " + projection.labels.join(", ") + ".") + ' <span>illustrative; the origin has not changed.</span></div>';
+    return score + section("Local standards mirror", null, "The detailed checklist mirrors Cloudflare's public rubric for inspection and fixes. It is not counted again in the composite.", localMirror) +
       section("The access gap", { text: "human vs bot" }, "A browser can render a page even when an agent cannot establish what it may read or do.", gapHtml) +
       section("Bot views", { text: bots.length + " sampled" }, "Six representative, read-only GETs show observed response behavior. Robots policy and enforcement are deliberately separate.", botHtml) +
       section("Checks and fixes", null, "Every failed check has a concrete next move. Copy the complete implementation brief into your coding agent.", '<button class="lx-copy-all" type="button">Copy all fixes</button>' + next + checkHtml);
@@ -1179,6 +1234,7 @@
     if (readerBtn) readerBtn.addEventListener("click", runReader);
     var scoreBtn = machineBody.querySelector(".lx-verdict-score");
     if (scoreBtn) scoreBtn.addEventListener("click", function () { setLens("readiness"); });
+    if (lens === "readiness" && view !== "delta") setTimeout(ensureReadinessSources, 0);
   }
 
   // The Reader lens. Unlike the other six it is not a projection of the scan
@@ -1187,10 +1243,8 @@
   // states — the opt-in, the spinner, the result — and the module that draws the
   // result loads lazily, exactly like lens-browser.js.
   //
-  // It is deliberately opt-in rather than auto-firing the way Browser Run does.
-  // Browser Run auto-fires because a third pane sitting empty makes Compare read
-  // as two panes and a button; this one is a tab, so nothing looks broken while
-  // it waits, and every run is a full re-fetch of the target from our IP.
+  // It remains opt-in on its own tab. Agent-ready? also asks for it automatically,
+  // because Defuddle's independent extraction is one named third of that score.
   function lensReader() {
     if (window.LensReader) return window.LensReader.mount(readerData, readerBusy, data);
     // Pre-module fallback. It has to be self-contained: the module may never
@@ -1204,13 +1258,17 @@
 
   function runReader() {
     if (readerBusy || !data) return;
+    var targetUrl = data.finalUrl || data.url;
     readerBusy = true;
     renderMachine();
     function loaded() {
+      if (!data || (data.finalUrl || data.url) !== targetUrl) return;
       if (!window.LensReader) { readerBusy = false; renderMachine(); return; }
       window.LensReader.run(data, function (json) {
+        if (!data || (data.finalUrl || data.url) !== targetUrl) return;
         readerBusy = false; readerData = json; renderMachine(); renderStatus();
       }, function () {
+        if (!data || (data.finalUrl || data.url) !== targetUrl) return;
         readerBusy = false; renderMachine();
       });
     }
@@ -1218,8 +1276,38 @@
     var script = document.createElement("script");
     script.src = "/lens-reader.js?v=1";
     script.onload = loaded;
-    script.onerror = function () { readerBusy = false; renderMachine(); };
+    script.onerror = function () {
+      if (!data || (data.finalUrl || data.url) !== targetUrl) return;
+      readerBusy = false; renderMachine();
+    };
     document.head.appendChild(script);
+  }
+
+  function runCloudflareScore() {
+    if (cloudflareBusy || !data) return;
+    var targetUrl = data.finalUrl || data.url;
+    cloudflareBusy = true;
+    renderMachine();
+    fetch("/lens/fetch?mode=cloudflare&url=" + encodeURIComponent(targetUrl))
+      .then(function (response) { return response.json(); })
+      .then(function (json) {
+        if (!data || (data.finalUrl || data.url) !== targetUrl) return;
+        cloudflareBusy = false;
+        cloudflareData = json && json.ok ? json : { available: false, error: (json && json.error) || "Cloudflare's scanner is unavailable." };
+        renderMachine();
+      })
+      .catch(function () {
+        if (!data || (data.finalUrl || data.url) !== targetUrl) return;
+        cloudflareBusy = false;
+        cloudflareData = { available: false, error: "Cloudflare's scanner is unavailable." };
+        renderMachine();
+      });
+  }
+
+  function ensureReadinessSources() {
+    if (!data || lens !== "readiness" || view === "delta") return;
+    if (!cloudflareBusy && !cloudflareData) runCloudflareScore();
+    if (!readerBusy && !readerData) runReader();
   }
 
   function lensAnatomy() {
@@ -1588,8 +1676,8 @@
     var primers = {
       readiness: {
         title: "Readiness",
-        note: "A transparent score across discoverability, content access, bot policy, and agent protocols.",
-        rows: ["the IsItAgentReady categories, with neutral commerce checks kept optional", "six representative bot identities: policy beside a sampled GET", "a concrete fix for every scored gap, plus counterfactual score projections"]
+        note: "Three opinions, kept separate until the arithmetic: standards, observed access, and recovered content.",
+        rows: ["Cloudflare's independent Agent Readiness level", "Lens field evidence from an identified fetch and six named bot samples", "Lens's transparent content-recovery checks over Defuddle output"]
       },
       anatomy: {
         title: "Anatomy",
@@ -1810,7 +1898,10 @@
       data = null;
       browserData = null;
       browserRecipeData = null;
-    readerData = null;
+      readerData = null;
+      cloudflareData = null;
+      readerBusy = false;
+      cloudflareBusy = false;
       humanBody.innerHTML = '<div class="lx-empty">Paste any URL above.<span>You get the page a person sees, the raw file a machine gets instead, and what that difference costs.</span></div>';
       machineBody.innerHTML = '<div class="lx-empty">The markup, metadata, and machine directives land here.</div>';
       renderBrowser();

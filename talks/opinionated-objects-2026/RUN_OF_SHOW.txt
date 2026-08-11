@@ -1,0 +1,41 @@
+LENS — OPINIONATED OBJECTS — 6 MINUTES
+
+0:00  Every page has two audiences.
+0:35  Ask the room for one website. Enter it on Lens.
+1:05  Compare Human / Machine / Browser. Ask for a prediction first.
+2:10  Past: describe meaning. Present: scrape presentation. Future: negotiate action.
+3:00  Reveal the three-source composite.
+4:15  Preempt “wrapper” criticism: standards, observed behavior, recovery.
+5:10  Close: machine legibility is a design choice.
+
+LIVE ORDER
+1. Open https://aadhar.sh/lens
+2. Ask: “Give me a website you actually use.”
+3. Paste the answer and run Compare.
+4. Say: “If it refuses us, that is part of the measurement.”
+5. Open Agent-ready? and wait for all three components.
+6. Point out equal thirds and the unfinished state when any input is missing.
+
+SAFE FALLBACK URLS
+- https://aadhar.sh/
+- https://stripe.com/
+- https://en.wikipedia.org/wiki/Semantic_Web
+- https://example.com/
+
+IF THE LIVE SITE FAILS
+- Continue from slide 3. It contains the complete comparison state.
+- Slide 5 contains the complete composite evidence.
+- The PNG files in screengrabs/ work without PowerPoint.
+
+ONE-SENTENCE ANSWERS
+- “Isn’t this just Cloudflare Radar?”
+  Cloudflare supplies one standards input; Lens adds observed bot behavior and an independent content-recovery result, with all three exposed separately.
+
+- “Why average them?”
+  Equal thirds make the opinion explicit; a missing source leaves the aggregate unfinished instead of changing the weights.
+
+- “Does Defuddle provide that score?”
+  No. Defuddle provides the extraction; Lens publishes four transparent binary checks over its output.
+
+- “Is a 200 response the same as agent access?”
+  No. Retrieval, interpretation, permission, and action are separate; Lens keeps those distinctions visible.
